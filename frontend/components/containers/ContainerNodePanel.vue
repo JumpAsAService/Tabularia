@@ -213,7 +213,7 @@ const canRun = computed(() => !props.readOnly && !!registry.value && !!(data.val
     />
 
     <template v-if="registry">
-      <div class="immagine">
+      <div class="image">
         <label>
           <span>{{ $t('containers.node.repository') }}</span>
           <input
@@ -315,14 +315,14 @@ const canRun = computed(() => !props.readOnly && !!registry.value && !!(data.val
       </button>
       <p class="muted outhint">{{ $t('containers.node.runHint') }}</p>
       <!-- a trial that failed before its run said anything (refused, unreachable): only its message -->
-      <p v-if="failedEarly" class="esito ko" role="alert"><XCircle :size="13" /> {{ trial!.error }}</p>
+      <p v-if="failedEarly" class="outcome ko" role="alert"><XCircle :size="13" /> {{ trial!.error }}</p>
       <template v-if="last && !running">
-        <p class="esito" :class="last.status === 'SUCCESS' ? 'ok' : 'ko'">
+        <p class="outcome" :class="last.status === 'SUCCESS' ? 'ok' : 'ko'">
           <component :is="last.status === 'SUCCESS' ? CheckCircle2 : XCircle" :size="13" />
           {{ $t(last.trial ? 'containers.node.lastTrial' : 'containers.node.lastRun', { when: fmt.ago(last.finished_at ?? last.started_at), status: last.status }) }}
           <span v-if="outputs?.output?.rows != null && last.status === 'SUCCESS'">· {{ $t('containers.node.rows', { n: fmt.count(outputs.output.rows) }) }}</span>
         </p>
-        <p v-if="last.status !== 'SUCCESS' && last.error" class="muted outhint errore">{{ last.error }}</p>
+        <p v-if="last.status !== 'SUCCESS' && last.error" class="muted outhint error">{{ last.error }}</p>
         <p v-if="last.stale" class="warn"><TriangleAlert :size="13" /> {{ $t('containers.node.changed') }}</p>
         <details v-if="last.log">
           <summary>{{ $t('containers.node.log') }}</summary>
@@ -335,10 +335,10 @@ const canRun = computed(() => !props.readOnly && !!registry.value && !!(data.val
     <fieldset class="vars">
       <legend>{{ $t('containers.node.variables') }}</legend>
       <ul v-if="registry?.variables.length || variables.length">
-        <li v-for="v in registry?.variables ?? []" :key="`r-${v.name}`" class="fisso" :title="$t('containers.node.setByRegistry')">
+        <li v-for="v in registry?.variables ?? []" :key="`r-${v.name}`" class="fixed" :title="$t('containers.node.setByRegistry')">
           <code>{{ v.name }}</code>
           <span v-if="v.secret" class="muted"><KeyRound :size="11" /> {{ $t('containers.node.secret') }}</span>
-          <span v-else class="muted valore">{{ v.value }}</span>
+          <span v-else class="muted value">{{ v.value }}</span>
         </li>
         <li v-for="(v, i) in variables" :key="`n-${v.name}`">
           <code>{{ v.name }}</code>
@@ -348,7 +348,7 @@ const canRun = computed(() => !props.readOnly && !!registry.value && !!(data.val
                   :aria-label="$t('containers.node.removeVariable')" @click="removeVariable(i)"><X :size="13" /></button>
         </li>
       </ul>
-      <form v-if="!readOnly" class="nuova" @submit.prevent="addVariable">
+      <form v-if="!readOnly" class="new-var" @submit.prevent="addVariable">
         <input v-model="newName" type="text" placeholder="NAME" spellcheck="false" autocomplete="off"
                :aria-label="$t('containers.node.variableName')" :aria-invalid="!!nameError" />
         <input v-model="newValue" type="text" :placeholder="$t('containers.node.variableValue')"
@@ -404,30 +404,30 @@ label { font-size: 12px; color: var(--muted); }
 .outhint { margin: 0; font-size: 12px; line-height: 1.5; }
 .warn { margin: 0; display: flex; gap: 6px; align-items: flex-start; font-size: 12px; color: var(--warning); }
 .mono { font-family: var(--font-mono, ui-monospace, monospace); font-size: 12px; resize: vertical; }
-.immagine { display: grid; grid-template-columns: minmax(0, 1fr) 140px; gap: 8px; }
-.immagine label { display: flex; flex-direction: column; gap: 4px; min-width: 0; }
-.immagine input { min-width: 0; }
+.image { display: grid; grid-template-columns: minmax(0, 1fr) 140px; gap: 8px; }
+.image label { display: flex; flex-direction: column; gap: 4px; min-width: 0; }
+.image input { min-width: 0; }
 .tag-row { display: flex; gap: 4px; }
 .tag-row input { flex: 1; }
 .mini { display: inline-flex; align-items: center; justify-content: center; padding: 4px 8px; }
 .trial { display: flex; flex-direction: column; gap: 6px; }
 .trial button { display: inline-flex; align-items: center; justify-content: center; gap: 6px; }
-.esito { margin: 0; display: flex; gap: 6px; align-items: flex-start; flex-wrap: wrap; font-size: 12px; }
-.esito.ok svg { color: var(--accent-2); }
-.esito.ko, .esito.ko svg { color: var(--danger); }
-.errore { overflow-wrap: anywhere; }
+.outcome { margin: 0; display: flex; gap: 6px; align-items: flex-start; flex-wrap: wrap; font-size: 12px; }
+.outcome.ok svg { color: var(--accent-2); }
+.outcome.ko, .outcome.ko svg { color: var(--danger); }
+.error { overflow-wrap: anywhere; }
 details summary { cursor: pointer; font-size: 12px; color: var(--muted); }
 .log { margin: 6px 0 0; max-height: 220px; overflow: auto; font-size: 11px; padding: 6px; border-radius: 6px; background: var(--bg-soft); white-space: pre-wrap; overflow-wrap: anywhere; }
 .vars { margin: 0; padding: 8px 10px 10px; border: 1px solid var(--border-soft); border-radius: 8px; display: flex; flex-direction: column; gap: 6px; min-width: 0; }
 .vars legend { font-size: 12px; color: var(--muted); padding: 0 4px; }
 .vars ul { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 4px; }
 .vars li { display: grid; grid-template-columns: minmax(0, 40%) minmax(0, 1fr) auto; gap: 6px; align-items: center; font-size: 12px; }
-.vars li.fisso { grid-template-columns: minmax(0, 40%) minmax(0, 1fr); }
+.vars li.fixed { grid-template-columns: minmax(0, 40%) minmax(0, 1fr); }
 .vars li code { overflow: hidden; text-overflow: ellipsis; }
-.vars .valore { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.vars .value { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .vars li input { min-width: 0; }
-.nuova { display: grid; grid-template-columns: minmax(0, 40%) minmax(0, 1fr) auto; gap: 6px; }
-.nuova input { min-width: 0; font-size: 12px; }
+.new-var { display: grid; grid-template-columns: minmax(0, 40%) minmax(0, 1fr) auto; gap: 6px; }
+.new-var input { min-width: 0; font-size: 12px; }
 .guide { display: flex; flex-direction: column; gap: 6px; padding: 9px 10px; border: 1px dashed var(--border); border-radius: 8px; background: var(--bg-soft); }
 .guide-head { display: inline-flex; align-items: center; gap: 6px; font-size: 12px; font-weight: 600; }
 .guide-labels { margin: 0; font-size: 12px; }

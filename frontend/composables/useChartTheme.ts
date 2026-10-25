@@ -1,13 +1,13 @@
-// Colori "cromo" dei grafici (assi, etichette, bordi, sfondo delle tooltip) letti
-// dai token CSS del tema corrente.
+// The charts' "chrome" colours (axes, labels, borders, tooltip background) read from the
+// current theme's CSS tokens.
 //
-// ECharts non legge le variabili CSS: ogni opzione vuole un colore già risolto.
-// La stessa funzione `readUi()` era copiata in tre componenti (audit, ScheduleLoad,
-// ChartPanel) e mancava negli altri due (RunCalendar, RunGantt), che per questo
-// restavano tarati sul tema scuro qualunque tema fosse attivo. Qui sta una volta
-// sola, con il sovrainsieme dei token che i cinque usano.
+// ECharts does not read CSS variables: every option wants a colour resolved already. The
+// same `readUi()` function was copied in three components (audit, ScheduleLoad,
+// ChartPanel) and was missing in the other two (RunCalendar, RunGantt), which for this
+// stayed tuned on the dark theme whatever theme was active. Here it sits once only, with
+// the superset of the tokens the five use.
 //
-// I colori DATO (rampe, serie) restano nei componenti: sono codifica, non cromo.
+// The DATA colours (ramps, series) stay in the components: they are encoding, not chrome.
 import { ref, watch } from 'vue'
 import { useTheme } from '~/composables/useTheme'
 
@@ -18,20 +18,20 @@ export interface ChartUi {
   borderSoft: string
   panel: string
   panel2: string
-  /** --accent-2: esito positivo */
+  /** --accent-2: positive outcome */
   success: string
-  /** --danger: esito negativo */
+  /** --danger: negative outcome */
   danger: string
-  /** --accent: in corso / selezione */
+  /** --accent: running / selection */
   accent: string
-  /** --violet: terza categoria (es. esecuzioni, refresh) */
+  /** --violet: third category (e.g. runs, refreshes) */
   violet: string
-  /** il tema ha lo sfondo chiaro (light, imperium): lo dice il suo `color-scheme` */
+  /** the theme has a light background (light, imperium): its `color-scheme` says so */
   isLight: boolean
 }
 
-// usato dal render lato server, dove non esiste `document`: sono i valori del
-// tema scuro, che è il default senza `data-theme`
+// used by the server-side render, where `document` does not exist: they are the dark
+// theme's values, which is the default without `data-theme`
 const FALLBACK: ChartUi = {
   text: '#e8ebf2',
   muted: '#8b93a7',
@@ -46,11 +46,13 @@ const FALLBACK: ChartUi = {
   isLight: false,
 }
 
-/** Un colore del tema con trasparenza, per le scale delle heatmap (i token sono
- *  esadecimali #rrggbb; un formato diverso passa com'è, senza trasparenza). */
-export function withAlpha(colore: string, alpha: number): string {
-  const m = /^#([0-9a-f]{2})([0-9a-f]{2})([0-9a-f]{2})$/i.exec(colore.trim())
-  if (!m) return colore
+/**
+ * A theme colour with transparency, for the heatmaps' scales (the tokens are #rrggbb
+ * hex; another format passes as it is, without transparency).
+ */
+export function withAlpha(colour: string, alpha: number): string {
+  const m = /^#([0-9a-f]{2})([0-9a-f]{2})([0-9a-f]{2})$/i.exec(colour.trim())
+  if (!m) return colour
   return `rgba(${parseInt(m[1], 16)}, ${parseInt(m[2], 16)}, ${parseInt(m[3], 16)}, ${alpha})`
 }
 
@@ -72,13 +74,13 @@ export function useChartTheme() {
       danger: g('--danger', FALLBACK.danger),
       accent: g('--accent', FALLBACK.accent),
       violet: g('--violet', FALLBACK.violet),
-      // non dal nome: i temi chiari sono più d'uno, e ognuno dichiara il suo color-scheme
+      // not from the name: the light themes are more than one, and each declares its color-scheme
       isLight: s.getPropertyValue('color-scheme').trim() === 'light',
     }
   }
 
   const ui = ref<ChartUi>(read())
-  // il cambio tema riscrive i token su :root: vanno riletti, non ricalcolati
+  // the theme change rewrites the tokens on :root: they must be read again, not recomputed
   watch(theme, () => {
     ui.value = read()
   })

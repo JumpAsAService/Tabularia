@@ -456,8 +456,8 @@ const basePackages = computed(() => (form.value.language === 'python' ? 'polars,
   <div class="card">
     <h4><Code2 :size="14" /> {{ $t('scripting.title') }}</h4>
     <p class="hint muted small">{{ $t('scripting.lead') }}</p>
-    <p v-if="loadError" class="errore-pagina" role="alert">{{ loadError }}</p>
-    <p v-if="state?.disabled_reason" class="nota" role="note">
+    <p v-if="loadError" class="page-error" role="alert">{{ loadError }}</p>
+    <p v-if="state?.disabled_reason" class="note" role="note">
       <TriangleAlert :size="13" />
       {{ state.disabled_reason === 'kubernetes' ? $t('scripting.offKubernetes') : $t('scripting.offConfiguration') }}
     </p>
@@ -468,25 +468,25 @@ const basePackages = computed(() => (form.value.language === 'python' ? 'polars,
     <form class="card" @submit.prevent="saveStorage">
       <h4><Database :size="14" /> {{ $t('scripting.storageTitle') }}</h4>
       <p class="hint muted small">{{ $t('scripting.storageLead') }}</p>
-      <div class="campi">
-        <label class="campo largo">
+      <div class="fields">
+        <label class="field largo">
           <span>{{ $t('scripting.endpoint') }}</span>
           <input v-model="storage.endpoint" type="url" autocomplete="off" placeholder="https://s3.example.com" :disabled="!editable || savingStorage" />
           <small>{{ $t('scripting.endpointHint') }}</small>
         </label>
-        <label class="campo">
+        <label class="field">
           <span>{{ $t('scripting.bucket') }}</span>
           <input v-model="storage.bucket" type="text" autocomplete="off" placeholder="tabularia-scripts" :disabled="!editable || savingStorage" />
         </label>
-        <label class="campo">
+        <label class="field">
           <span>{{ $t('scripting.region') }}</span>
           <input v-model="storage.region" type="text" autocomplete="off" placeholder="eu-west-1" :disabled="!editable || savingStorage" />
         </label>
-        <label class="campo">
+        <label class="field">
           <span>{{ $t('scripting.accessKey') }}</span>
           <input v-model="storage.access_key" type="text" autocomplete="off" :disabled="!editable || savingStorage" />
         </label>
-        <label class="campo">
+        <label class="field">
           <span>{{ $t('scripting.secretKey') }}</span>
           <input
             v-model="storage.secret_key"
@@ -498,7 +498,7 @@ const basePackages = computed(() => (form.value.language === 'python' ? 'polars,
         </label>
       </div>
       <p class="hint muted small"><KeyRound :size="12" /> {{ $t('scripting.keyAdvice') }}</p>
-      <div v-if="editable" class="azioni">
+      <div v-if="editable" class="actions">
         <button type="submit" class="primary" :disabled="savingStorage || !storageDirty">
           <LoaderCircle v-if="savingStorage" :size="13" class="spin" /> {{ $t('scripting.save') }}
         </button>
@@ -510,7 +510,7 @@ const basePackages = computed(() => (form.value.language === 'python' ? 'polars,
           <LoaderCircle v-if="testing" :size="13" class="spin" /><Send v-else :size="13" /> {{ $t('scripting.test') }}
         </button>
       </div>
-      <p v-if="test" class="esito" :class="test.ok ? (test.can_list ? 'attenzione' : 'ok') : 'ko'" role="status">
+      <p v-if="test" class="outcome" :class="test.ok ? (test.can_list ? 'caution' : 'ok') : 'ko'" role="status">
         <component :is="test.ok ? (test.can_list ? TriangleAlert : CheckCircle2) : XCircle" :size="14" />
         <span>
           {{ test.ok ? (test.can_list ? $t('scripting.testCanList') : $t('scripting.testOk')) : $t('scripting.testFailed') }}
@@ -521,19 +521,19 @@ const basePackages = computed(() => (form.value.language === 'python' ? 'polars,
 
     <!-- the environments -->
     <div class="card">
-      <div class="testata">
+      <div class="heading">
         <h4><Code2 :size="14" /> {{ $t('scripting.environmentsTitle') }}</h4>
         <button v-if="editable" type="button" class="primary mini" @click="startNew">
           <Plus :size="13" /> {{ $t('scripting.newEnvironment') }}
         </button>
       </div>
       <p v-if="!state.environments.length" class="hint muted small">{{ $t('scripting.noEnvironments') }}</p>
-      <ul v-else class="ambienti">
+      <ul v-else class="environments">
         <li v-for="e in state.environments" :key="e.id">
-          <button type="button" class="ambiente" @click="openEnvironment(e.id)">
-            <span class="nome">{{ e.name }}<em v-if="!e.enabled" class="spento">{{ $t('scripting.disabled') }}</em></span>
-            <span class="lingua">{{ languageLabel(e.language, e.language_version) }}</span>
-            <span class="stato-versione" :class="e.latest_status ?? ''">
+          <button type="button" class="environment" @click="openEnvironment(e.id)">
+            <span class="name">{{ e.name }}<em v-if="!e.enabled" class="off">{{ $t('scripting.disabled') }}</em></span>
+            <span class="language">{{ languageLabel(e.language, e.language_version) }}</span>
+            <span class="version-state" :class="e.latest_status ?? ''">
               <component :is="statusIcon(e.latest_status)" :size="13" :class="{ spin: e.latest_status && e.latest_status !== 'ready' && e.latest_status !== 'failed' }" />
               <template v-if="e.latest_status && e.latest_status !== 'ready'">
                 {{ $t(`scripting.status.${e.latest_status}`) }} · v{{ e.latest_number }}
@@ -553,47 +553,47 @@ const basePackages = computed(() => (form.value.language === 'python' ? 'polars,
   <!-- one environment: its settings, its variables, its versions -->
   <template v-else-if="state && open !== null">
     <form class="card" @submit.prevent="saveEnvironment">
-      <div class="testata">
+      <div class="heading">
         <button type="button" class="mini" @click="back"><ArrowLeft :size="13" /> {{ $t('scripting.back') }}</button>
         <h4>{{ open === 'new' ? $t('scripting.newEnvironment') : env?.name }}</h4>
         <!-- the latest version's state, without scrolling down to the versions -->
-        <span v-if="env?.versions.length" class="stato-versione" :class="env.versions[0].status" role="status">
+        <span v-if="env?.versions.length" class="version-state" :class="env.versions[0].status" role="status">
           <component :is="statusIcon(env.versions[0].status)" :size="13" :class="{ spin: building }" />
           v{{ env.versions[0].number }} · {{ $t(`scripting.status.${env.versions[0].status}`) }}
         </span>
-        <button v-if="editable && env" type="button" class="mini pericolo" @click="removeEnvironment">
+        <button v-if="editable && env" type="button" class="mini danger-zone" @click="removeEnvironment">
           <Trash2 :size="13" /> {{ $t('scripting.delete') }}
         </button>
       </div>
-      <div class="campi">
-        <label class="campo">
+      <div class="fields">
+        <label class="field">
           <span>{{ $t('scripting.name') }}</span>
           <input v-model="form.name" type="text" maxlength="120" required :disabled="!editable || saving" />
         </label>
-        <div class="campo-doppio">
-          <label class="campo">
+        <div class="field-double">
+          <label class="field">
             <span>{{ $t('scripting.language') }}</span>
             <select v-model="form.language" :disabled="!editable || saving || open !== 'new'">
               <option value="python">Python</option>
               <option value="r">R</option>
             </select>
           </label>
-          <label class="campo">
+          <label class="field">
             <span>{{ $t('scripting.version') }}</span>
             <select v-model="form.language_version" :disabled="!editable || saving">
               <option v-for="v in versionsOf(form.language)" :key="v" :value="v">{{ v }}</option>
             </select>
           </label>
         </div>
-        <label class="campo largo">
+        <label class="field largo">
           <span>{{ $t('scripting.description') }}</span>
           <input v-model="form.description" type="text" maxlength="4000" :disabled="!editable || saving" />
         </label>
-        <div class="campo largo">
+        <div class="field largo">
           <label for="ambiente-pacchetti">{{ $t('scripting.packages') }}</label>
-          <div v-if="editable" class="cerca-pacchetti">
+          <div v-if="editable" class="package-search">
             <div class="combo">
-              <Search :size="13" class="lente" aria-hidden="true" />
+              <Search :size="13" class="lens" aria-hidden="true" />
               <input
                 v-model="pkgQuery"
                 type="search"
@@ -611,21 +611,21 @@ const basePackages = computed(() => (form.value.language === 'python' ? 'polars,
                 @keydown="onPackageKey"
                 @blur="pkgOpen = false"
               />
-              <LoaderCircle v-if="pkgSearching" :size="13" class="spin attesa" />
-              <ul v-if="pkgOpen" id="pacchetti-trovati" role="listbox" class="trovati">
+              <LoaderCircle v-if="pkgSearching" :size="13" class="spin waiting" />
+              <ul v-if="pkgOpen" id="pacchetti-trovati" role="listbox" class="found">
                 <li
                   v-for="(h, i) in pkgHits"
                   :id="`pacchetto-${i}`"
                   :key="h.name"
                   role="option"
                   :aria-selected="i === pkgActive"
-                  :class="{ attivo: i === pkgActive }"
+                  :class="{ 'is-on': i === pkgActive }"
                   @mousedown.prevent="choosePackage(h)"
                   @mouseenter="pkgActive = i"
                 >
                   <span>{{ h.name }}</span><span v-if="h.version" class="muted">{{ h.version }}</span>
                 </li>
-                <li v-if="!pkgHits.length" class="vuoto muted">{{ $t('scripting.noPackageFound') }}</li>
+                <li v-if="!pkgHits.length" class="empty muted">{{ $t('scripting.noPackageFound') }}</li>
               </ul>
             </div>
             <template v-if="pkgChosen && pkgVersions.length">
@@ -637,21 +637,21 @@ const basePackages = computed(() => (form.value.language === 'python' ? 'polars,
               <button type="button" class="mini" @click="addPackage"><Plus :size="13" /> {{ $t('scripting.addPackage') }}</button>
             </template>
           </div>
-          <small v-if="pkgError" class="errore" role="alert">{{ pkgError }}</small>
-          <small v-else-if="chosenVersion?.wheel === false" class="avviso-pacchetto" role="note">
+          <small v-if="pkgError" class="error" role="alert">{{ pkgError }}</small>
+          <small v-else-if="chosenVersion?.wheel === false" class="package-warning" role="note">
             {{ $t('scripting.noWheel', { name: pkgChosen, version: chosenVersion.version, python: form.language_version }) }}
           </small>
           <textarea
             id="ambiente-pacchetti"
             v-model="form.packages"
-            class="pacchetti"
+            class="packages"
             rows="7"
             spellcheck="false"
             :placeholder="form.language === 'python' ? 'scikit-learn==1.5.2\nrequests' : 'dplyr\ndata.table@1.16.0'"
             :disabled="!editable || saving"
             :aria-invalid="!!packageError"
           />
-          <small v-if="packageError" class="errore" role="alert">
+          <small v-if="packageError" class="error" role="alert">
             {{ $t('scripting.packageError', { line: packageError.line, text: packageError.text }) }}
           </small>
           <small v-else>
@@ -661,22 +661,22 @@ const basePackages = computed(() => (form.value.language === 'python' ? 'polars,
         </div>
       </div>
 
-      <fieldset class="gruppo-campi">
+      <fieldset class="field-group">
         <legend>{{ $t('scripting.resources') }}</legend>
-        <div class="risorse">
-          <label class="campo"><span>{{ $t('scripting.cpuRequest') }}</span><input v-model="form.cpu_request" type="text" :disabled="!editable || saving" /></label>
-          <label class="campo"><span>{{ $t('scripting.cpuLimit') }}</span><input v-model="form.cpu_limit" type="text" :disabled="!editable || saving" /></label>
-          <label class="campo"><span>{{ $t('scripting.memoryRequest') }}</span><input v-model="form.memory_request" type="text" :disabled="!editable || saving" /></label>
-          <label class="campo"><span>{{ $t('scripting.memoryLimit') }}</span><input v-model="form.memory_limit" type="text" :disabled="!editable || saving" /></label>
-          <label class="campo"><span>{{ $t('scripting.maxTimeout') }}</span><input v-model.number="form.max_timeout_minutes" type="number" min="1" max="1440" :disabled="!editable || saving" /></label>
+        <div class="resources">
+          <label class="field"><span>{{ $t('scripting.cpuRequest') }}</span><input v-model="form.cpu_request" type="text" :disabled="!editable || saving" /></label>
+          <label class="field"><span>{{ $t('scripting.cpuLimit') }}</span><input v-model="form.cpu_limit" type="text" :disabled="!editable || saving" /></label>
+          <label class="field"><span>{{ $t('scripting.memoryRequest') }}</span><input v-model="form.memory_request" type="text" :disabled="!editable || saving" /></label>
+          <label class="field"><span>{{ $t('scripting.memoryLimit') }}</span><input v-model="form.memory_limit" type="text" :disabled="!editable || saving" /></label>
+          <label class="field"><span>{{ $t('scripting.maxTimeout') }}</span><input v-model.number="form.max_timeout_minutes" type="number" min="1" max="1440" :disabled="!editable || saving" /></label>
         </div>
       </fieldset>
 
-      <fieldset class="gruppo-campi">
+      <fieldset class="field-group">
         <legend>{{ $t('scripting.groups') }}</legend>
         <p class="hint muted small">{{ $t('scripting.groupsHint') }}</p>
-        <div class="gruppi">
-          <label v-for="g in props.groups" :key="g.id" class="spunta">
+        <div class="groups">
+          <label v-for="g in props.groups" :key="g.id" class="tick">
             <input v-model="form.group_ids" type="checkbox" :value="g.id" :disabled="!editable || saving" />
             <span>{{ g.name }}</span>
           </label>
@@ -684,7 +684,7 @@ const basePackages = computed(() => (form.value.language === 'python' ? 'polars,
         </div>
       </fieldset>
 
-      <label class="spunta">
+      <label class="tick">
         <input v-model="form.enabled" type="checkbox" :disabled="!editable || saving" />
         <span>{{ $t('scripting.enabled') }}</span>
       </label>
@@ -692,7 +692,7 @@ const basePackages = computed(() => (form.value.language === 'python' ? 'polars,
         {{ $t('scripting.usedBy', { flows: env.flows_using.join(', ') }) }}
       </p>
 
-      <div v-if="editable" class="azioni">
+      <div v-if="editable" class="actions">
         <button type="submit" class="primary" :disabled="saving || !formDirty || !form.name.trim() || !form.language_version">
           <LoaderCircle v-if="saving" :size="13" class="spin" />
           {{ open === 'new' ? $t('scripting.createAndBuild') : rebuilds ? $t('scripting.saveAndBuild') : $t('scripting.save') }}
@@ -705,24 +705,24 @@ const basePackages = computed(() => (form.value.language === 'python' ? 'polars,
       <div class="card">
         <h4><KeyRound :size="14" /> {{ $t('scripting.variablesTitle') }}</h4>
         <p class="hint muted small">{{ $t('scripting.variablesLead') }}</p>
-        <table v-if="env.variable_list.length" class="variabili">
+        <table v-if="env.variable_list.length" class="variables">
           <tbody>
             <tr v-for="v in env.variable_list" :key="v.name">
               <td><code>{{ v.name }}</code></td>
               <td>
-                <span v-if="v.from_tabularia" class="eccezione"><TriangleAlert :size="12" /> {{ $t('scripting.fromTabularia', { name: v.value }) }}</span>
+                <span v-if="v.from_tabularia" class="exception"><TriangleAlert :size="12" /> {{ $t('scripting.fromTabularia', { name: v.value }) }}</span>
                 <span v-else-if="v.secret" class="muted">•••••••• <em>{{ $t('scripting.secret') }}</em></span>
-                <code v-else class="valore">{{ v.value }}</code>
+                <code v-else class="value">{{ v.value }}</code>
               </td>
               <td class="muted small">{{ fmt.ago(v.updated_at) }}</td>
-              <td v-if="editable" class="azioni-riga">
+              <td v-if="editable" class="row-actions">
                 <button type="button" class="mini" @click="editVariable(v.name)">{{ $t('scripting.change') }}</button>
                 <button type="button" class="mini icona" :aria-label="$t('scripting.delete')" @click="deleteVariable(v.name)"><Trash2 :size="13" /></button>
               </td>
             </tr>
           </tbody>
         </table>
-        <form v-if="editable" class="nuova-variabile" @submit.prevent="saveVariable">
+        <form v-if="editable" class="new-variable" @submit.prevent="saveVariable">
           <input v-model="variable.name" type="text" :placeholder="$t('scripting.variableName')" :disabled="!!editingVariable || savingVariable" spellcheck="false" />
           <input
             v-model="variable.value"
@@ -732,41 +732,41 @@ const basePackages = computed(() => (form.value.language === 'python' ? 'polars,
             :disabled="savingVariable"
             spellcheck="false"
           />
-          <label class="spunta"><input v-model="variable.secret" type="checkbox" :disabled="variable.from_tabularia || savingVariable" /> {{ $t('scripting.secret') }}</label>
-          <label class="spunta"><input v-model="variable.from_tabularia" type="checkbox" :disabled="savingVariable" /> {{ $t('scripting.fromTabulariaToggle') }}</label>
+          <label class="tick"><input v-model="variable.secret" type="checkbox" :disabled="variable.from_tabularia || savingVariable" /> {{ $t('scripting.secret') }}</label>
+          <label class="tick"><input v-model="variable.from_tabularia" type="checkbox" :disabled="savingVariable" /> {{ $t('scripting.fromTabulariaToggle') }}</label>
           <button type="submit" class="primary mini" :disabled="savingVariable || !variable.name.trim()">
             {{ editingVariable ? $t('scripting.save') : $t('scripting.add') }}
           </button>
           <button v-if="editingVariable" type="button" class="mini" @click="clearVariable">{{ $t('scripting.cancel') }}</button>
         </form>
-        <p v-if="editable && variable.from_tabularia" class="avviso" role="note">
+        <p v-if="editable && variable.from_tabularia" class="notice" role="note">
           <TriangleAlert :size="13" /> {{ $t('scripting.fromTabulariaWarning') }}
         </p>
       </div>
 
       <!-- versions -->
       <div class="card">
-        <div class="testata">
+        <div class="heading">
           <h4>{{ $t('scripting.versionsTitle') }}</h4>
           <button v-if="editable && env.versions.length && !building" type="button" class="mini" @click="rebuild">
             <RotateCcw :size="13" /> {{ $t('scripting.rebuild') }}
           </button>
         </div>
         <p class="hint muted small">{{ $t('scripting.versionsLead') }}</p>
-        <ul class="versioni">
+        <ul class="versions">
           <li v-for="v in env.versions" :key="v.id" :class="v.status">
-            <div class="riga-versione">
+            <div class="version-row">
               <component :is="statusIcon(v.status)" :size="14" :class="{ spin: ['queued', 'building', 'checking'].includes(v.status) }" />
               <strong>v{{ v.number }}</strong>
               <span>{{ languageLabel(env.language, v.language_version) }}</span>
-              <span class="etichetta">{{ $t(`scripting.status.${v.status}`) }}</span>
-              <span v-if="v.current" class="etichetta corrente">{{ $t('scripting.current') }}</span>
+              <span class="label">{{ $t(`scripting.status.${v.status}`) }}</span>
+              <span v-if="v.current" class="label current">{{ $t('scripting.current') }}</span>
               <span class="muted small">{{ v.created_by }} · {{ fmt.ago(v.created_at) }}<template v-if="duration(v)"> · {{ duration(v) }}</template></span>
               <button v-if="editable && v.status === 'ready' && !v.current" type="button" class="mini" @click="makeCurrent(v)">
                 {{ $t('scripting.makeCurrent') }}
               </button>
             </div>
-            <p v-if="v.error" class="errore-versione"><code>{{ v.error }}</code></p>
+            <p v-if="v.error" class="version-error"><code>{{ v.error }}</code></p>
             <details v-if="v.packages">
               <summary>{{ $t('scripting.requested') }}</summary>
               <pre>{{ v.packages }}</pre>
@@ -779,14 +779,14 @@ const basePackages = computed(() => (form.value.language === 'python' ? 'polars,
               <summary>{{ $t('scripting.buildLog') }}</summary>
               <pre>{{ v.build_log }}</pre>
             </details>
-            <p v-if="v.image_ref" class="immagine muted small"><code>{{ v.image_ref }}</code></p>
+            <p v-if="v.image_ref" class="image muted small"><code>{{ v.image_ref }}</code></p>
           </li>
         </ul>
       </div>
     </template>
   </template>
 
-  <p v-if="state && !state.editable" class="nota">{{ $t('scripting.readOnly') }}</p>
+  <p v-if="state && !state.editable" class="note">{{ $t('scripting.readOnly') }}</p>
 </template>
 
 <style scoped>
@@ -794,82 +794,82 @@ const basePackages = computed(() => (form.value.language === 'python' ? 'polars,
 .card h4 { margin: 0; display: inline-flex; align-items: center; gap: 7px; }
 .hint { margin: 0; line-height: 1.5; }
 .small { font-size: 12px; }
-.errore-pagina, .errore { color: var(--danger); }
-.errore-pagina { font-size: 13px; margin: 0; }
-.nota { margin: 0; display: flex; gap: 6px; align-items: flex-start; font-size: 12.5px; padding: 8px 10px; border-radius: 8px; background: var(--bg-soft); border: 1px solid var(--border); }
-.testata { display: flex; align-items: center; gap: 10px; }
-.testata h4 { flex: 1; }
+.page-error, .error { color: var(--danger); }
+.page-error { font-size: 13px; margin: 0; }
+.note { margin: 0; display: flex; gap: 6px; align-items: flex-start; font-size: 12.5px; padding: 8px 10px; border-radius: 8px; background: var(--bg-soft); border: 1px solid var(--border); }
+.heading { display: flex; align-items: center; gap: 10px; }
+.heading h4 { flex: 1; }
 button.mini { padding: 2px 10px; min-height: 26px; font-size: 12px; display: inline-flex; align-items: center; gap: 5px; }
 button.mini.icona { padding: 2px 6px; }
-button.pericolo { color: var(--danger); }
+button.danger-zone { color: var(--danger); }
 
-.campi { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px 14px; }
-.campo { display: flex; flex-direction: column; gap: 4px; font-size: 12px; color: var(--muted); min-width: 0; }
-.campo.largo { grid-column: 1 / -1; }
-.campo small { font-size: 11.5px; line-height: 1.45; }
-.campo-doppio { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
-.cerca-pacchetti { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
+.fields { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px 14px; }
+.field { display: flex; flex-direction: column; gap: 4px; font-size: 12px; color: var(--muted); min-width: 0; }
+.field.largo { grid-column: 1 / -1; }
+.field small { font-size: 11.5px; line-height: 1.45; }
+.field-double { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+.package-search { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
 .combo { position: relative; flex: 1 1 260px; min-width: 0; }
 .combo input { width: 100%; padding-left: 28px; }
-.combo .lente { position: absolute; left: 9px; top: 50%; transform: translateY(-50%); color: var(--muted); }
-.combo .attesa { position: absolute; right: 9px; top: 50%; margin-top: -6.5px; color: var(--muted); }
-.trovati {
+.combo .lens { position: absolute; left: 9px; top: 50%; transform: translateY(-50%); color: var(--muted); }
+.combo .waiting { position: absolute; right: 9px; top: 50%; margin-top: -6.5px; color: var(--muted); }
+.found {
   position: absolute; z-index: 20; left: 0; right: 0; top: calc(100% + 4px); margin: 0; padding: 4px; list-style: none;
   max-height: 280px; overflow: auto; background: var(--panel); border: 1px solid var(--border); border-radius: 8px;
   box-shadow: 0 8px 24px color-mix(in srgb, var(--text) 12%, transparent);
 }
-.trovati li { display: flex; justify-content: space-between; gap: 10px; padding: 6px 8px; border-radius: 6px; font-size: 13px; color: var(--text); cursor: pointer; }
-.trovati li.attivo { background: var(--bg-soft); }
-.trovati li.vuoto { cursor: default; }
-.cerca-pacchetti select { flex: 0 1 260px; min-width: 0; }
-.avviso-pacchetto { color: var(--warning); }
-.pacchetti { font-family: var(--font-mono, ui-monospace, monospace); font-size: 12.5px; resize: vertical; }
-.gruppo-campi { border: 1px solid var(--border-soft); border-radius: 8px; padding: 10px 12px; margin: 0; display: flex; flex-direction: column; gap: 8px; }
-.gruppo-campi legend { font-size: 12px; color: var(--muted); padding: 0 4px; }
-.risorse { display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); gap: 8px; }
-.gruppi { display: flex; flex-wrap: wrap; gap: 6px 16px; }
-.spunta { display: inline-flex; align-items: center; gap: 6px; font-size: 13px; }
-.azioni { display: flex; gap: 8px; flex-wrap: wrap; }
-.avviso { margin: 0; display: flex; gap: 6px; align-items: flex-start; font-size: 12.5px; color: var(--warning); }
-.esito { margin: 0; display: flex; gap: 8px; align-items: flex-start; font-size: 13px; }
-.esito code { display: block; margin-top: 4px; font-size: 11.5px; white-space: pre-wrap; overflow-wrap: anywhere; color: var(--muted); }
-.esito.ok svg { color: var(--accent-2); }
-.esito.attenzione svg { color: var(--warning); }
-.esito.ko svg { color: var(--danger); }
+.found li { display: flex; justify-content: space-between; gap: 10px; padding: 6px 8px; border-radius: 6px; font-size: 13px; color: var(--text); cursor: pointer; }
+.found li.is-on { background: var(--bg-soft); }
+.found li.empty { cursor: default; }
+.package-search select { flex: 0 1 260px; min-width: 0; }
+.package-warning { color: var(--warning); }
+.packages { font-family: var(--font-mono, ui-monospace, monospace); font-size: 12.5px; resize: vertical; }
+.field-group { border: 1px solid var(--border-soft); border-radius: 8px; padding: 10px 12px; margin: 0; display: flex; flex-direction: column; gap: 8px; }
+.field-group legend { font-size: 12px; color: var(--muted); padding: 0 4px; }
+.resources { display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); gap: 8px; }
+.groups { display: flex; flex-wrap: wrap; gap: 6px 16px; }
+.tick { display: inline-flex; align-items: center; gap: 6px; font-size: 13px; }
+.actions { display: flex; gap: 8px; flex-wrap: wrap; }
+.notice { margin: 0; display: flex; gap: 6px; align-items: flex-start; font-size: 12.5px; color: var(--warning); }
+.outcome { margin: 0; display: flex; gap: 8px; align-items: flex-start; font-size: 13px; }
+.outcome code { display: block; margin-top: 4px; font-size: 11.5px; white-space: pre-wrap; overflow-wrap: anywhere; color: var(--muted); }
+.outcome.ok svg { color: var(--accent-2); }
+.outcome.caution svg { color: var(--warning); }
+.outcome.ko svg { color: var(--danger); }
 
-.ambienti { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 6px; }
-.ambiente {
+.environments { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 6px; }
+.environment {
   width: 100%; display: grid; grid-template-columns: minmax(0, 1.4fr) minmax(0, 0.8fr) minmax(0, 1fr) minmax(0, 1.4fr);
   gap: 10px; align-items: center; text-align: left; padding: 10px 12px; border: 1px solid var(--border-soft);
   border-radius: 8px; background: var(--bg-soft); font-size: 13px; min-height: 0;
 }
-.ambiente:hover { border-color: var(--border); }
-.nome { font-weight: 600; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.spento { font-style: normal; font-weight: 400; font-size: 11px; color: var(--muted); margin-left: 8px; }
-.stato-versione { display: inline-flex; align-items: center; gap: 5px; font-size: 12px; }
-.stato-versione.ready svg, .versioni li.ready > .riga-versione svg { color: var(--accent-2); }
-.stato-versione.failed, .stato-versione.failed svg, .versioni li.failed > .riga-versione svg { color: var(--danger); }
+.environment:hover { border-color: var(--border); }
+.name { font-weight: 600; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.off { font-style: normal; font-weight: 400; font-size: 11px; color: var(--muted); margin-left: 8px; }
+.version-state { display: inline-flex; align-items: center; gap: 5px; font-size: 12px; }
+.version-state.ready svg, .versions li.ready > .version-row svg { color: var(--accent-2); }
+.version-state.failed, .version-state.failed svg, .versions li.failed > .version-row svg { color: var(--danger); }
 
-.variabili { width: 100%; border-collapse: collapse; font-size: 13px; }
-.variabili td { padding: 6px 8px; border-top: 1px solid var(--border-soft); vertical-align: middle; }
-.variabili .valore { overflow-wrap: anywhere; }
-.variabili em { font-size: 11px; }
-.eccezione { display: inline-flex; gap: 5px; align-items: center; color: var(--warning); font-size: 12.5px; }
-.azioni-riga { display: flex; gap: 6px; justify-content: flex-end; }
-.nuova-variabile { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1.4fr) auto auto auto auto; gap: 8px; align-items: center; }
+.variables { width: 100%; border-collapse: collapse; font-size: 13px; }
+.variables td { padding: 6px 8px; border-top: 1px solid var(--border-soft); vertical-align: middle; }
+.variables .value { overflow-wrap: anywhere; }
+.variables em { font-size: 11px; }
+.exception { display: inline-flex; gap: 5px; align-items: center; color: var(--warning); font-size: 12.5px; }
+.row-actions { display: flex; gap: 6px; justify-content: flex-end; }
+.new-variable { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1.4fr) auto auto auto auto; gap: 8px; align-items: center; }
 
-.versioni { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 8px; }
-.versioni li { border: 1px solid var(--border-soft); border-radius: 8px; padding: 8px 10px; display: flex; flex-direction: column; gap: 6px; }
-.riga-versione { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; font-size: 13px; }
-.etichetta { font-size: 11px; padding: 1px 7px; border-radius: 999px; border: 1px solid var(--border); }
-.etichetta.corrente { border-color: color-mix(in srgb, var(--accent-2) 55%, var(--border)); color: var(--accent-2); }
-.errore-versione { margin: 0; }
-.errore-versione code { display: block; font-size: 11.5px; white-space: pre-wrap; overflow-wrap: anywhere; color: var(--danger); }
+.versions { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 8px; }
+.versions li { border: 1px solid var(--border-soft); border-radius: 8px; padding: 8px 10px; display: flex; flex-direction: column; gap: 6px; }
+.version-row { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; font-size: 13px; }
+.label { font-size: 11px; padding: 1px 7px; border-radius: 999px; border: 1px solid var(--border); }
+.label.current { border-color: color-mix(in srgb, var(--accent-2) 55%, var(--border)); color: var(--accent-2); }
+.version-error { margin: 0; }
+.version-error code { display: block; font-size: 11.5px; white-space: pre-wrap; overflow-wrap: anywhere; color: var(--danger); }
 details summary { cursor: pointer; font-size: 12px; color: var(--muted); }
 details pre { margin: 6px 0 0; max-height: 280px; overflow: auto; font-size: 11.5px; padding: 8px; border-radius: 6px; background: var(--bg-soft); white-space: pre-wrap; overflow-wrap: anywhere; }
-.immagine { margin: 0; overflow-wrap: anywhere; }
+.image { margin: 0; overflow-wrap: anywhere; }
 
 @media (max-width: 720px) {
-  .campi, .risorse, .ambiente, .nuova-variabile { grid-template-columns: 1fr; }
+  .fields, .resources, .environment, .new-variable { grid-template-columns: 1fr; }
 }
 </style>

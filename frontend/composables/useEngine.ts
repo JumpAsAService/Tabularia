@@ -1,15 +1,15 @@
-// Motore preferito dell'utente. Come il tema: un valore persistito in
-// localStorage, condiviso a livello di modulo. È il DEFAULT dove non viene
-// chiesto esplicitamente (Viewer, nuovo flusso aperto senza scelta); alla
-// CREAZIONE del flusso il motore resta scelto a mano dal menù dedicato.
+// The user's favourite engine. Like the theme: a value persisted in localStorage, shared
+// at module level. It is the DEFAULT where it is not asked explicitly (Viewer, a new flow
+// opened without a choice); at the flow's CREATION the engine stays chosen by hand from
+// the dedicated menu.
 import { ref } from 'vue'
 import { useApi } from '~/composables/useApi'
 
-// `optional`: engine che esiste solo se configurato lato server (non disponibile = non configurato, non "in arrivo")
-// `disabled_by_admin`: disponibile lato server ma VIETATO in questa installazione
-// (pannello Admin → Motori). Va distinto da `optional`: «non consentito qui» non
-// è «non configurato», e confonderli manda l'utente a cercare una variabile
-// d'ambiente che non c'entra.
+// `optional`: an engine that exists only when configured on the server (not available = not configured, not "coming")
+// `disabled_by_admin`: available on the server but FORBIDDEN in this installation (Admin
+// panel → Engines). It must be told apart from `optional`: «not allowed here» is not «not
+// configured», and mixing them up sends the user looking for an environment variable
+// that has nothing to do with it.
 export interface EngineOpt {
   id: string
   label: string
@@ -37,7 +37,7 @@ export function engineDescription(
 }
 
 const preferredEngine = ref<string>('polars')
-// catalogo degli engine disponibili, caricato una volta e condiviso
+// catalog of the available engines, loaded once and shared
 const catalog = ref<EngineOpt[]>([{ id: 'polars', label: 'Polars', available: true, description: '' }])
 let prefInit = false
 let catalogLoaded = false
@@ -51,23 +51,23 @@ export function usePreferredEngine() {
     if (saved) preferredEngine.value = saved
   }
 
-  // carica il catalogo una sola volta (idempotente): utile per il selettore in
-  // Impostazioni. Su errore lascia il fallback Polars e riproverà.
+  // loads the catalog once only (idempotent): useful for the selector in Settings. On error
+  // it leaves the Polars fallback and will retry.
   async function loadCatalog() {
     if (catalogLoaded) return
     catalogLoaded = true
     try { catalog.value = await api.engines() } catch { catalogLoaded = false }
   }
 
-  // si salva qui, quando la si sceglie: un `watch` creato dal primo componente
-  // moriva con lui, e dopo un cambio di pagina la scelta non si salvava più
+  // it is saved here, when it is chosen: a `watch` created by the first component died with
+  // it, and after a page change the choice was no longer saved
   function setPreferredEngine(id: string) {
     preferredEngine.value = id
-    try { localStorage.setItem(STORAGE_KEY, id) } catch { /* storage negato */ }
+    try { localStorage.setItem(STORAGE_KEY, id) } catch { /* storage denied */ }
   }
 
-  // motore da usare come default: la preferita se (ancora) disponibile, altrimenti
-  // il primo engine disponibile del catalogo (fallback robusto).
+  // engine to use as default: the favourite if (still) available, otherwise the catalog's
+  // first available engine (robust fallback).
   function defaultEngine(available?: { id: string; available: boolean }[]): string {
     const list = available ?? catalog.value
     const ok = list.find((e) => e.id === preferredEngine.value && e.available)

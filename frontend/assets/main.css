@@ -1,7 +1,7 @@
-/* IBM Plex Sans variable, self-hosted: disegnato per interfacce tecniche, più
-   stretto di Montserrat (che era un geometrico da display) e con un monospace
-   fratello, IBM Plex Mono, se un domani si vorrà dare una voce sola al codice.
-   Un solo woff2 (subset latin, copre l'italiano); niente CDN a runtime. */
+/* IBM Plex Sans variable, self-hosted: designed for technical interfaces, narrower
+   than Montserrat (which was a display geometric) and with a sibling monospace, IBM Plex
+   Mono, should we one day want to give the code a single voice.
+   One woff2 only (latin subset, covers Italian); no CDN at runtime. */
 @font-face {
   font-family: 'IBM Plex Sans';
   font-style: normal;
@@ -11,17 +11,17 @@
 }
 
 :root {
-  /* palette: dark blu-notte con accenti freddi (tema di default, senza
-     data-theme). Il tema chiaro è più sotto in :root[data-theme="light"]. */
+  /* palette: night-blue dark with cool accents (the default theme, without data-theme).
+     The light theme is further below in :root[data-theme="light"]. */
   --bg: #0b0e14;
   --bg-soft: #0f131c;
   --panel: #141926;
   --panel-2: #1b2130;
   --border: #262e40;
   --border-soft: #1e2534;
-  /* bordo dei CAMPI compilabili, separato da --border (che veste separatori e
-     tabelle): lo sfondo di un input differisce dal pannello per appena 1,06:1,
-     quindi è il bordo a dire dove si scrive e deve reggere i 3:1 di WCAG 1.4.11 */
+  /* the border of the fillable FIELDS, apart from --border (which dresses separators and
+     tables): an input's background differs from the panel by barely 1.06:1, so the border
+     says where one writes and must hold WCAG 1.4.11's 3:1 */
   --control-border: #5c6884;
   --text: #e8ebf2;
   --muted: #8b93a7;
@@ -34,40 +34,40 @@
   --cache-ring: var(--accent-2);
   --danger: #ff6b6b;
   --warning: #f5b53d;
-  --on-warning: #1a1205; /* testo sul riempimento --warning */
+  --on-warning: #1a1205; /* text on the --warning fill */
   --radius: 10px;
   --shadow-1: 0 1px 2px rgba(0, 0, 0, 0.4);
   --shadow-2: 0 4px 16px rgba(0, 0, 0, 0.45);
-  /* Il riempimento dei primari NON è --accent: bianco su #4f8cff fa 3,22:1 (e 3,86 su
-     #7c6cff), sotto l'AA per il testo dei bottoni. È lo stesso gradiente del tema
-     chiaro: 4,63 e 4,58. --accent resta #4f8cff per bordi, fuoco e collegamenti. */
+  /* The primaries' fill is NOT --accent: white on #4f8cff makes 3.22:1 (and 3.86 on
+     #7c6cff), under AA for the buttons' text. It is the same gradient as the light theme:
+     4.63 and 4.58. --accent stays #4f8cff for borders, focus and links. */
   --grad-accent: linear-gradient(135deg, #3b6fe0 0%, #6a5cff 100%);
-  --on-accent: #fff;                      /* testo sui bottoni primari (su accento) */
-  /* rosso PIENO con testo sopra (hover dei bottoni danger, selezioni): bianco su
-     --danger fa 2,78:1; su questo 4,59 */
+  --on-accent: #fff;                      /* text on the primary buttons (on accent) */
+  /* SOLID red with text on it (danger buttons' hover, selections): white on --danger
+     makes 2.78:1; on this 4.59 */
   --danger-fill: #d63c3c;
   --on-danger: #fff;
-  /* I colori di CODIFICA (motori, categorie, archi) quando diventano TESTO si
-     mescolano col testo del tema quanto basta per l'AA (misurato su panel e bg):
-     color-mix(in srgb, <colore> var(--enc-text-mix), var(--text)). */
+  /* The ENCODING colours (engines, categories, edges) when they become TEXT are mixed
+     with the theme's text as much as AA needs (measured on panel and bg):
+     color-mix(in srgb, <colour> var(--enc-text-mix), var(--text)). */
   --enc-text-mix: 100%;
-  /* testo sul RIEMPIMENTO --accent-2 (solo .tag.right lo usa così): scuro dove il
-     verde è chiaro. Il tema chiaro lo ribalta, avendo un verde scuro. */
+  /* text on the --accent-2 FILL (only .tag.right uses it so): dark where the green is
+     light. The light theme flips it, having a dark green. */
   --on-accent-2: #0f1117;
 
-  /* semantiche derivate: cambiano col tema (prima erano cablate nei componenti) */
-  --scrim: rgba(5, 7, 12, 0.6);           /* velo dietro ai modali */
-  --topbar-bg: rgba(20, 25, 38, 0.92);    /* barra superiore (navbar + toolbar editor) */
-  --row-even: rgba(255, 255, 255, 0.015); /* zebra tabelle */
+  /* derived semantics: they change with the theme (before, they were wired in the components) */
+  --scrim: rgba(5, 7, 12, 0.6);           /* veil behind the modals */
+  --topbar-bg: rgba(20, 25, 38, 0.92);    /* top bar (navbar + editor toolbar) */
+  --row-even: rgba(255, 255, 255, 0.015); /* table zebra */
   --row-hover: rgba(79, 140, 255, 0.06);
-  --sheen: rgba(255, 255, 255, 0.03);     /* riflesso sui titoli dei nodi */
-  --edge: #3d4a66;                        /* archi del canvas */
-  --tint-accent: rgba(79, 140, 255, 0.1); /* tinta accento (tab/badge attivi) */
-  --shimmer: rgba(255, 255, 255, 0.07);   /* bagliore mobile degli skeleton */
-  color-scheme: dark;                     /* controlli nativi (calendari, select) */
+  --sheen: rgba(255, 255, 255, 0.03);     /* sheen on the node titles */
+  --edge: #3d4a66;                        /* canvas edges */
+  --tint-accent: rgba(79, 140, 255, 0.1); /* accent tint (active tabs/badges) */
+  --shimmer: rgba(255, 255, 255, 0.07);   /* moving glow of the skeletons */
+  color-scheme: dark;                     /* native controls (calendars, selects) */
 }
 
-/* ── Tema CHIARO elegante (grigi caldi, non bianco puro) ─────────────────── */
+/* ── Elegant LIGHT theme (warm greys, not pure white) ─────────────────── */
 :root[data-theme="light"] {
   --bg: #f4f6fb;
   --bg-soft: #ffffff;
@@ -76,25 +76,25 @@
   --border: #d7dde9;
   --border-soft: #e6eaf2;
   --control-border: #7c8699;
-  /* qui --accent-2 è un verde SCURO: il testo sopra va chiaro (5,15:1), mentre il
-     nero di :root darebbe 3,67:1 */
+  /* here --accent-2 is a DARK green: the text on it goes light (5.15:1), while :root's
+     black would give 3.67:1 */
   --on-accent-2: #ffffff;
   --text: #1b2233;
   --muted: #5f6b81;
   --accent: #3b6fe0;
   --accent-hi: #2b57c4;
-  /* era #0e9f6e: 3,39:1 su bianco — e questo colore veste i messaggi di esito */
+  /* it was #0e9f6e: 3.39:1 on white — and this colour dresses the outcome messages */
   --accent-2: #0a7d56;
   --violet: #7c3aed;
   --danger: #e02424;
   --warning: #b45309;
-  --on-warning: #ffffff; /* testo sul riempimento --warning */
+  --on-warning: #ffffff; /* text on the --warning fill */
   --shadow-1: 0 1px 2px rgba(20, 30, 60, 0.08);
   --shadow-2: 0 6px 20px rgba(20, 30, 60, 0.12);
   --grad-accent: linear-gradient(135deg, #3b6fe0 0%, #6a5cff 100%);
-  --danger-fill: #e02424; /* bianco sopra: 4,72 */
+  --danger-fill: #e02424; /* white on it: 4.72 */
   --on-danger: #fff;
-  --enc-text-mix: 40%;    /* i colori di codifica nascono per lo scuro: qui vanno scuriti */
+  --enc-text-mix: 40%;    /* the encoding colours are born for the dark: here they must be darkened */
 
   --scrim: rgba(20, 28, 48, 0.35);
   --topbar-bg: rgba(255, 255, 255, 0.88);
@@ -107,7 +107,7 @@
   color-scheme: light;
 }
 
-/* ── Dracula (palette ufficiale) ─────────────────────────────────────────── */
+/* ── Dracula (official palette) ──────────────────────────────────────────── */
 :root[data-theme="dracula"] {
   --bg: #1e1f29;
   --bg-soft: #21222c;
@@ -117,7 +117,7 @@
   --border-soft: #343746;
   --control-border: #737898;
   --text: #f8f8f2;
-  /* era #7b82ab: 3,16:1 sulle intestazioni di tabella, sotto il minimo AA */
+  /* it was #7b82ab: 3.16:1 on the table headers, under the AA minimum */
   --muted: #9ca5d0;
   --accent: #bd93f9;
   --accent-hi: #d3b6fb;
@@ -125,12 +125,12 @@
   --violet: #ff79c6;
   --danger: #ff5555;
   --warning: #ffb86c;
-  --on-warning: #1a1205; /* testo sul riempimento --warning */
+  --on-warning: #1a1205; /* text on the --warning fill */
   --shadow-1: 0 1px 2px rgba(0, 0, 0, 0.4);
   --shadow-2: 0 4px 16px rgba(0, 0, 0, 0.5);
   --grad-accent: linear-gradient(135deg, #bd93f9 0%, #ff79c6 100%);
-  --on-accent: #21222c;                   /* accento chiaro → testo scuro sui bottoni */
-  --danger-fill: #d63c3c; /* bianco sopra: 4,59 (su #ff5555 era 3,14) */
+  --on-accent: #21222c;                   /* light accent → dark text on the buttons */
+  --danger-fill: #d63c3c; /* white on it: 4.59 (on #ff5555 it was 3.14) */
   --on-danger: #fff;
   --enc-text-mix: 80%;
 
@@ -145,7 +145,7 @@
   color-scheme: dark;
 }
 
-/* ── Monokai (palette classica) ──────────────────────────────────────────── */
+/* ── Monokai (classic palette) ────────────────────────────────────────── */
 :root[data-theme="monokai"] {
   --bg: #1e1f1c;
   --bg-soft: #242520;
@@ -160,15 +160,15 @@
   --accent-hi: #8ee6f5;
   --accent-2: #a6e22e;
   --violet: #ae81ff;
-  /* era #f92672: 3,93:1 sul pannello — è il colore dei messaggi di errore */
+  /* it was #f92672: 3.93:1 on the panel — it is the colour of the error messages */
   --danger: #fb4a8b;
   --warning: #fd971f;
-  --on-warning: #1a1205; /* testo sul riempimento --warning */
+  --on-warning: #1a1205; /* text on the --warning fill */
   --shadow-1: 0 1px 2px rgba(0, 0, 0, 0.4);
   --shadow-2: 0 4px 16px rgba(0, 0, 0, 0.5);
   --grad-accent: linear-gradient(135deg, #66d9ef 0%, #a6e22e 100%);
-  --on-accent: #1e1f1c;                   /* accento chiaro → testo scuro sui bottoni */
-  --danger-fill: #c8306a; /* bianco sopra: 5,14 (su #fb4a8b era 3,25) */
+  --on-accent: #1e1f1c;                   /* light accent → dark text on the buttons */
+  --danger-fill: #c8306a; /* white on it: 5.14 (on #fb4a8b it was 3.25) */
   --on-danger: #fff;
   --enc-text-mix: 85%;
 
@@ -183,47 +183,46 @@
   color-scheme: dark;
 }
 
-/* ── Imperium (marmo e porpora: i colori di Roma, in chiave moderna) ─────────
-   Un tema CHIARO. Fondi di travertino e marmo, testo d'inchiostro; la porpora di
-   Tiro, il rosso-viola del laticlavio dei senatori e del manto imperiale, per
-   l'azione, il fuoco e la pagina attiva; l'oro come dettaglio (terzo colore dei
-   grafici); il rosso pompeiano per gli errori, l'alloro per i successi, l'ocra
-   bruciata per gli avvisi. La porpora sta verso il viola (tinta 335°) e il rosso
-   degli errori verso l'arancio (8°): un bottone primario non sembra mai un
-   errore. Niente texture né capitali «romane»: il carattere sta nei colori.
-   Contrasti misurati sul pannello (#fbf8f3) salvo dove indicato. */
+/* ── Imperium (marble and purple: the colours of Rome, in a modern key) ─────────
+   A LIGHT theme. Travertine and marble backgrounds, ink text; Tyrian purple, the
+   red-violet of the senators' laticlave and of the imperial cloak, for action, focus and
+   the active page; gold as a detail (the charts' third colour); Pompeian red for errors,
+   laurel for successes, burnt ochre for warnings. The purple leans to violet (hue 335°)
+   and the errors' red to orange (8°): a primary button never looks like an error. No
+   textures nor «Roman» capitals: the character is in the colours. Contrasts measured on
+   the panel (#fbf8f3) unless stated. */
 :root[data-theme="imperium"] {
-  --bg: #f2ece3;          /* travertino */
+  --bg: #f2ece3;          /* travertine */
   --bg-soft: #fdfbf7;
-  --panel: #fbf8f3;       /* marmo */
+  --panel: #fbf8f3;       /* marble */
   --panel-2: #efe7dc;
   --border: #ddd1c2;
   --border-soft: #e9e0d4;
-  --control-border: #8a7b70; /* 3,95:1 sul fondo dei campi, 3,85 sul pannello */
-  --text: #2a1c21;        /* inchiostro: 15,4:1 */
-  --muted: #6b5c56;       /* 5,2:1 anche su panel-2 */
-  --accent: #8a1c4a;      /* porpora di Tiro: 8,5:1, 7,6 sul fondo */
-  --accent-hi: #6c1539;   /* 9,5:1 su panel-2 (intestazioni della griglia) */
-  --accent-2: #4a6a26;    /* alloro: 5,1:1 su panel-2, bianco sopra 6,2 */
+  --control-border: #8a7b70; /* 3.95:1 on the fields' background, 3.85 on the panel */
+  --text: #2a1c21;        /* ink: 15.4:1 */
+  --muted: #6b5c56;       /* 5.2:1 on panel-2 too */
+  --accent: #8a1c4a;      /* Tyrian purple: 8.5:1, 7.6 on the background */
+  --accent-hi: #6c1539;   /* 9.5:1 on panel-2 (the grid's headers) */
+  --accent-2: #4a6a26;    /* laurel: 5.1:1 on panel-2, white on it 6.2 */
   --on-accent-2: #ffffff;
-  --violet: #7a5a0e;      /* oro scurito per il chiaro: 5,2:1 su panel-2 */
+  --violet: #7a5a0e;      /* gold darkened for the light theme: 5.2:1 on panel-2 */
   --cache-ring: var(--violet);
-  --danger: #b5321e;      /* rosso pompeiano: 5,0:1 su panel-2 */
-  --warning: #a64a08;     /* ocra bruciata, lontana dall'oro: 4,75:1 su panel-2 */
+  --danger: #b5321e;      /* Pompeian red: 5.0:1 on panel-2 */
+  --warning: #a64a08;     /* burnt ochre, far from the gold: 4.75:1 on panel-2 */
   --on-warning: #ffffff;  /* 5,8:1 */
   --shadow-1: 0 1px 2px rgba(60, 30, 25, 0.08);
   --shadow-2: 0 6px 20px rgba(60, 30, 25, 0.13);
-  /* porpora, dalla più accesa alla più cupa: bianco sopra, 7,7:1 e 11,1:1 */
+  /* purple, from the brightest to the darkest: white on it, 7.7:1 and 11.1:1 */
   --grad-accent: linear-gradient(135deg, #9a2352 0%, #6e1a40 100%);
   --on-accent: #fff;
-  --danger-fill: #b5321e; /* bianco sopra: 6,1:1 */
+  --danger-fill: #b5321e; /* white on it: 6.1:1 */
   --on-danger: #fff;
-  --enc-text-mix: 40%;    /* i colori di codifica nascono per lo scuro: peggior caso 4,8:1 */
+  --enc-text-mix: 40%;    /* the encoding colours are born for the dark: worst case 4.8:1 */
 
   --scrim: rgba(42, 28, 33, 0.35);
   --topbar-bg: rgba(251, 248, 243, 0.9);
   --row-even: rgba(90, 50, 40, 0.025);
-  --row-hover: rgba(138, 28, 74, 0.06);   /* la porpora passa sotto il puntatore */
+  --row-hover: rgba(138, 28, 74, 0.06);   /* the purple goes under the pointer */
   --sheen: rgba(90, 50, 40, 0.02);
   --edge: #c2b2a3;
   --tint-accent: rgba(138, 28, 74, 0.09);
@@ -233,8 +232,8 @@
 
 * { box-sizing: border-box; }
 
-/* Le superfici che disegna il browser seguono il tema: la selezione del testo e
-   le caselle di spunta prendono l'accento invece del blu di sistema. */
+/* The surfaces the browser draws follow the theme: the text selection and the
+   checkboxes take the accent instead of the system blue. */
 :root { accent-color: var(--accent); }
 ::selection { background: color-mix(in srgb, var(--accent) 34%, transparent); color: var(--text); }
 
@@ -243,21 +242,21 @@ html, body, #__nuxt {
   height: 100%;
   background: var(--bg);
   color: var(--text);
-  /* 13.5px veniva dalla larghezza di Montserrat, che costringeva a rimpicciolire
-     per tenere compatte le tabelle. Plex è più stretto: il corpo si può alzare
-     verso i 14-15px senza perdere densità — da provare separatamente. */
+  /* 13.5px came from Montserrat's width, which forced shrinking to keep the tables
+     compact. Plex is narrower: the body can go up towards 14-15px without losing density
+     — to try separately. */
   font-family: 'IBM Plex Sans', system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif;
   font-size: 13.5px;
 }
 
-/* ── Scrollbar scure e sottili ───────────────────────────────────────── */
+/* ── Dark, thin scrollbars ────────────────────────────────────────────── */
 * { scrollbar-width: thin; scrollbar-color: var(--border) transparent; }
 *::-webkit-scrollbar { width: 8px; height: 8px; }
 *::-webkit-scrollbar-thumb { background: var(--border); border-radius: 4px; }
 *::-webkit-scrollbar-thumb:hover { background: var(--muted); }
 *::-webkit-scrollbar-track { background: transparent; }
 
-/* ── Controlli base ──────────────────────────────────────────────────── */
+/* ── Base controls ────────────────────────────────────────────────────── */
 button {
   font: inherit;
   color: var(--text);
@@ -280,34 +279,33 @@ button.primary {
   color: var(--on-accent);
   font-weight: 500;
 }
-/* l'hover SCURISCE: schiarire portava il bianco sul primario sotto l'AA (3,80 col
-   chiaro); scurito di 0,92 resta sopra 5,2 in tutti i temi. Il bagliore segue il tema. */
+/* the hover DARKENS: lightening took the white on the primary under AA (3.80 with the
+   light theme); darkened by 0.92 it stays above 5.2 in every theme. The glow follows the theme. */
 button.primary:hover { filter: brightness(0.92); box-shadow: 0 2px 12px color-mix(in srgb, var(--accent) 35%, transparent); }
 button:disabled { opacity: 0.45; cursor: not-allowed; box-shadow: none; transform: none; }
-/* Navigazione da tastiera: i campi avevano il loro anello (più sotto), i bottoni
-   no — restava quello di default del browser, poco visibile su questi fondi.
-   `outline` invece di box-shadow: segue il token dell'accento in tutti i temi e
-   non compete con l'ombra di :hover. Solo :focus-visible, così il click col
-   mouse non lo accende. */
+/* Keyboard navigation: the fields had their ring (further below), the buttons did not —
+   the browser's default stayed, barely visible on these backgrounds. `outline` instead
+   of box-shadow: it follows the accent token in every theme and does not compete with
+   :hover's shadow. Only :focus-visible, so the mouse click does not light it. */
 button:focus-visible {
   outline: 2px solid var(--accent);
   outline-offset: 2px;
 }
-/* la card di un dialogo riceve il fuoco all'apertura (tabindex="-1") perché lo
-   screen reader ne annunci il titolo: è un fuoco programmatico, non deve
-   disegnare un anello attorno all'intero riquadro */
+/* a dialog's card gets the focus at opening (tabindex="-1") so that the screen reader
+   announces its title: it is a programmatic focus, it must not draw a ring around the
+   whole box */
 [role="dialog"]:focus { outline: none; }
-/* testo per gli screen reader soltanto (es. un «importazione…» stabile accanto a un
-   testo che ticchetta, o gli annunci di inizio e fine di un import) */
+/* text for the screen readers only (e.g. a stable «importing…» next to a ticking text,
+   or the announcements of an import's start and end) */
 .sr-only {
   position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px;
   overflow: hidden; clip: rect(0 0 0 0); clip-path: inset(50%); white-space: nowrap; border: 0;
 }
 
-/* Bersagli tattili. La densità di questa interfaccia è voluta e su desktop con
-   mouse resta intatta: si allarga SOLO dove il puntatore è grossolano (dito,
-   stilo), che è la condizione reale del problema — non la larghezza dello
-   schermo, che non dice nulla sul metodo di input. */
+/* Touch targets. This interface's density is wanted and on desktop with a mouse it stays
+   intact: it widens ONLY where the pointer is coarse (finger, stylus), which is the
+   problem's real condition — not the screen's width, which says nothing about the input
+   method. */
 @media (pointer: coarse) {
   button.mini,
   button.x,
@@ -318,7 +316,7 @@ button:focus-visible {
   }
 }
 
-/* rotazione per gli spinner (es. icona Loader) */
+/* rotation for the spinners (e.g. the Loader icon) */
 .spin { animation: spin 1s linear infinite; }
 @keyframes spin { to { transform: rotate(360deg); } }
 
@@ -337,15 +335,15 @@ input[type="date"], input[type="datetime-local"], input[type="time"], textarea {
 select:focus, input:focus, textarea:focus {
   outline: none;
   border-color: var(--accent);
-  /* l'alone prende l'accento del tema (era il blu del tema scuro, in ogni tema) */
+  /* the halo takes the theme's accent (it was the dark theme's blue, in every theme) */
   box-shadow: 0 0 0 3px color-mix(in srgb, var(--accent) 18%, transparent);
 }
 textarea { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; resize: vertical; }
 
-/* autofill del browser (username/password): il popup di riempimento imporrebbe
-   uno sfondo chiaro di sistema. Lo forziamo al nostro tema scuro: il box-shadow
-   inset "ridipinge" lo sfondo (il background non è sovrascrivibile) e teniamo il
-   testo chiaro anche durante la transizione dell'autofill. */
+/* the browser's autofill (username/password): the filling popup would impose a light
+   system background. We force it to our dark theme: the inset box-shadow "repaints" the
+   background (background cannot be overridden) and we keep the text light during the
+   autofill's transition too. */
 input:-webkit-autofill,
 input:-webkit-autofill:hover,
 input:-webkit-autofill:focus,
@@ -357,20 +355,20 @@ input:-webkit-autofill:active {
   transition: background-color 9999s ease-out 0s;
 }
 
-/* calendari e dropdown nativi seguono il tema via color-scheme (ereditato dal
-   :root corrente); i colori espliciti sotto sono il fallback Firefox */
+/* native calendars and dropdowns follow the theme through color-scheme (inherited from
+   the current :root); the explicit colours below are Firefox's fallback */
 option, optgroup {
   background-color: var(--panel);
   color: var(--text);
 }
 optgroup { font-style: normal; color: var(--muted); }
 
-/* Select custom (components/ui/Select.vue): larghezze contestuali */
+/* Custom Select (components/ui/Select.vue): contextual widths */
 .sel-trigger.fsel { width: 150px; }
 .sel-trigger.csel { width: auto; max-width: 200px; min-width: 120px; }
 .sel-trigger.projsel { width: 170px; }
 .sel-trigger.movesel { width: 150px; font-size: 12px; padding: 3px 8px; }
-/* righe dei form (cast/rename/fill/agg): proporzioni tra i campi */
+/* form rows (cast/rename/fill/agg): proportions between the fields */
 .row .sel-trigger { flex: 1.5; min-width: 0; }
 .row .sel-trigger.funcsel { flex: 1; min-width: 90px; }
 .row input[type="text"] { flex: 1; width: auto; min-width: 50px; }
@@ -378,7 +376,7 @@ optgroup { font-style: normal; color: var(--muted); }
 
 .muted { color: var(--muted); }
 
-/* ── Skeleton (shimmer) per gli stati di caricamento ──────────────────── */
+/* ── Skeleton (shimmer) for the loading states ────────────────────────── */
 .sk {
   position: relative;
   overflow: hidden;
@@ -404,8 +402,8 @@ optgroup { font-style: normal; color: var(--muted); }
 }
 
 /* ── Layout editor ───────────────────────────────────────────────────── */
-/* "Aperto anche da …": una pillola SOPRA il canvas, nella sua area di griglia.
-   Non una riga in più: sposterebbe pannelli e anteprima a ogni comparsa. */
+/* "Also open by …": a pill ABOVE the canvas, in its grid area.
+   Not one more row: it would move panels and preview at every appearance. */
 .also-open {
   grid-area: canvas;
   align-self: start;
@@ -424,7 +422,7 @@ optgroup { font-style: normal; color: var(--muted); }
   color: var(--text);
   font-size: 12.5px;
   line-height: 1.3;
-  pointer-events: none; /* i nodi sotto restano cliccabili e trascinabili */
+  pointer-events: none; /* the nodes underneath stay clickable and draggable */
 }
 .also-open svg { flex: none; color: var(--accent); }
 .also-open span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
@@ -433,11 +431,11 @@ optgroup { font-style: normal; color: var(--muted); }
 
 .app {
   display: grid;
-  /* l'ultima traccia è la vista dati: 34vh di partenza, poi la misura la
-     decide chi trascina la maniglia (FlowEditor scrive gridTemplateRows) */
+  /* the last track is the data view: 34vh to start, then whoever drags the handle decides
+     the size (FlowEditor writes gridTemplateRows) */
   grid-template-rows: auto minmax(0, 1fr) 34vh;
-  /* minmax(0,1fr): senza il floor a 0 una preview con molte colonne (es. pivot)
-     allarga la traccia oltre il viewport e spinge il pannello destro fuori schermo */
+  /* minmax(0,1fr): without the floor at 0 a preview with many columns (e.g. pivot) widens
+     the track past the viewport and pushes the right panel off screen */
   grid-template-columns: 200px minmax(0, 1fr) 320px;
   grid-template-areas:
     "toolbar toolbar toolbar"
@@ -461,9 +459,9 @@ optgroup { font-style: normal; color: var(--muted); }
 .sidebar, .panel, .grid { background: var(--panel); }
 .panel { position: relative; }
 
-/* Maniglie di ridimensionamento: il pannello destro (verticale) e la vista dati
-   sotto il canvas (orizzontale). Invisibili finché non le si cerca: si accendono
-   al passaggio e sotto le dita, come il bordo di una finestra. */
+/* Resize handles: the right panel (vertical) and the data view under the canvas
+   (horizontal). Invisible until looked for: they light up on hover and under the
+   fingers, like a window's border. */
 .panel-resizer, .grid-resizer {
   position: absolute;
   z-index: 20;
@@ -487,8 +485,8 @@ optgroup { font-style: normal; color: var(--muted); }
 .grid-resizer:hover, .grid-resizer:active {
   background: color-mix(in srgb, var(--accent) 35%, transparent);
 }
-/* con la tastiera la maniglia si vede: senza, si sposterebbe qualcosa di
-   invisibile (le frecce la muovono, Shift la muove di dieci passi) */
+/* with the keyboard the handle shows: without it, something invisible would move (the
+   arrows move it, Shift moves it ten steps) */
 .panel-resizer:focus-visible, .grid-resizer:focus-visible {
   background: color-mix(in srgb, var(--accent) 55%, transparent);
   outline: none;
@@ -500,7 +498,7 @@ optgroup { font-style: normal; color: var(--muted); }
     var(--bg);
 }
 
-/* ── Nodi del canvas ─────────────────────────────────────────────────── */
+/* ── Canvas nodes ─────────────────────────────────────────────────────── */
 .node {
   --node-accent: var(--accent);
   min-width: 160px;
@@ -508,7 +506,7 @@ optgroup { font-style: normal; color: var(--muted); }
   border: 1px solid var(--border);
   border-left: 3px solid var(--node-accent);
   border-radius: var(--radius);
-  /* niente overflow:hidden: taglierebbe gli handle che sporgono dal bordo */
+  /* no overflow:hidden: it would cut the handles sticking out of the border */
   font-size: 13px;
   box-shadow: var(--shadow-1);
   transition: box-shadow 0.15s, border-color 0.15s;
@@ -526,12 +524,12 @@ optgroup { font-style: normal; color: var(--muted); }
   align-items: center;
   gap: 6px;
   background: linear-gradient(180deg, var(--sheen), transparent);
-  /* arrotonda gli angoli alti (prima lo faceva l'overflow:hidden del .node) */
+  /* rounds the top corners (before, the .node's overflow:hidden did it) */
   border-radius: calc(var(--radius) - 2px) calc(var(--radius) - 2px) 0 0;
 }
 .node-body { padding: 8px 10px; }
-/* piede del nodo: righe e colonne dall'ultima anteprima (numeri tabellari,
-   stessa voce attenuata del corpo; il «+» dice che il campione era pieno) */
+/* the node's foot: rows and columns from the last preview (tabular numbers, the same
+   dimmed voice as the body; the «+» says the sample was full) */
 .node-stats {
   display: flex;
   align-items: center;
@@ -558,9 +556,9 @@ optgroup { font-style: normal; color: var(--muted); }
 .node-stats .nocache + .incache { margin-left: 4px; }
 .node-source { --node-accent: var(--accent-2); }
 
-/* handle più visibili e reattivi, CENTRATI sul bordo del nodo (il tema di
-   default usa offset fissi calibrati su handle da 6px: con i nostri più grandi
-   finivano dentro al rettangolo) */
+/* handles more visible and reactive, CENTRED on the node's border (the default theme
+   uses fixed offsets calibrated on 6px handles: with our bigger ones they ended up inside
+   the rectangle) */
 .vue-flow__handle {
   width: 11px !important;
   height: 11px !important;
@@ -576,10 +574,10 @@ optgroup { font-style: normal; color: var(--muted); }
 .vue-flow__handle-bottom:hover { transform: translate(-50%, 50%) scale(1.35); }
 .vue-flow__handle-left:hover   { transform: translate(-50%, -50%) scale(1.35); }
 .vue-flow__handle-right:hover  { transform: translate(50%, -50%) scale(1.35); }
-/* Input IMPILATI sul bordo sinistro (join/union: tabella; foreach: driver;
-   output: sequenza). Selettore a doppia classe → batte per specificità le classi
-   di posizione che Vue Flow deriva dall'ID dell'handle (es. id="right" genera
-   .vue-flow__handle-right che altrimenti spingerebbe l'handle DENTRO il corpo). */
+/* Inputs STACKED on the left border (join/union: table; foreach: driver; output:
+   sequence). A double-class selector → beats by specificity the position classes Vue
+   Flow derives from the handle's ID (e.g. id="right" generates .vue-flow__handle-right,
+   which would otherwise push the handle INSIDE the body). */
 .vue-flow__handle.h-left-top,
 .vue-flow__handle.h-left-bottom {
   left: 0 !important;
@@ -602,10 +600,9 @@ optgroup { font-style: normal; color: var(--muted); }
 .vue-flow__handle.h-right-top:hover,
 .vue-flow__handle.h-right-bottom:hover { transform: translate(50%, -50%) scale(1.35) !important; }
 
-/* il tipo 'output' collide con un nodo BUILT-IN di Vue Flow: il tema di
-   default veste il wrapper (sfondo bianco, 150px, padding, ombre su hover e
-   selezione). Reset completo: il nostro OutputNode si disegna da solo, come
-   gli altri nodi custom. */
+/* the 'output' type collides with a BUILT-IN Vue Flow node: the default theme dresses the
+   wrapper (white background, 150px, padding, shadows on hover and selection). A full
+   reset: our OutputNode draws itself, as the other custom nodes do. */
 .vue-flow__node-output,
 .vue-flow__node-output.selectable:hover,
 .vue-flow__node-output.selected,
@@ -622,19 +619,19 @@ optgroup { font-style: normal; color: var(--muted); }
   color: inherit;
 }
 
-/* edge curati */
+/* curated edges */
 .vue-flow__edge-path { stroke: var(--edge); stroke-width: 1.6; }
 .vue-flow__edge.selected .vue-flow__edge-path,
 .vue-flow__edge:hover .vue-flow__edge-path { stroke: var(--accent); }
 .vue-flow__edge.animated .vue-flow__edge-path { stroke-dasharray: 5; animation: dashdraw 0.6s linear infinite; }
 @keyframes dashdraw { from { stroke-dashoffset: 10; } }
-/* archi di SEQUENZA (orchestrazione): colore dedicato e STATICI, per distinguerli
-   dal flusso DATI animato ora che tutti gli archi sono orizzontali */
+/* SEQUENCE edges (orchestration): a dedicated colour and STATIC, to tell them apart from
+   the animated DATA flow now that all the edges are horizontal */
 .vue-flow__edge.edge-seq .vue-flow__edge-path { stroke: #c084fc; stroke-dasharray: 4 5; animation: none; }
 .vue-flow__edge.edge-seq.selected .vue-flow__edge-path,
 .vue-flow__edge.edge-seq:hover .vue-flow__edge-path { stroke: #d8b4fe; }
 
-/* controlli Vue Flow in tema */
+/* Vue Flow controls in theme */
 .vue-flow__controls { box-shadow: var(--shadow-1); border-radius: 8px; overflow: hidden; }
 .vue-flow__controls-button {
   background: var(--panel-2);
@@ -663,12 +660,12 @@ optgroup { font-style: normal; color: var(--muted); }
   overflow: hidden;
 }
 
-/* ── Vista dati (tab Tabella | Grafico) ──────────────────────────────── */
+/* ── Data view (Table | Chart tabs) ───────────────────────────────────── */
 .grid {
-  position: relative;  /* ci vive la maniglia di ridimensionamento */
+  position: relative;  /* the resize handle lives here */
   padding: 8px 10px 10px;
-  /* nessuna altezza qui: la dà la traccia della griglia, altrimenti l'elemento
-     traboccherebbe dalla riga quando la si trascina */
+  /* no height here: the grid's track gives it, otherwise the element would overflow the
+     row when it is dragged */
   min-height: 0;
   display: flex;
   flex-direction: column;
@@ -706,9 +703,9 @@ table.data tbody tr:nth-child(even) { background: var(--row-even); }
 table.data tbody tr:hover { background: var(--row-hover); }
 table.data td.null { color: var(--muted); font-style: italic; }
 
-/* ── Data contract: l'icona di stato di una datasource ───────────────────── */
-/* Tre forme diverse (spunta, punto esclamativo, croce) oltre ai tre colori:
-   chi non distingue il rosso dal verde legge la forma. */
+/* ── Data contract: a datasource's state icon ─────────────────────────── */
+/* Three different shapes (tick, exclamation mark, cross) besides the three colours:
+   whoever cannot tell red from green reads the shape. */
 .contract-badge { display: inline-flex; align-items: center; gap: 4px; flex: none; vertical-align: middle; color: var(--muted); }
 .contract-badge.passed { color: var(--accent-2); }
 .contract-badge.warning { color: var(--warning); }

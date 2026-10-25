@@ -1,9 +1,9 @@
-// Registro delle lingue e dei cataloghi. L'inglese è la lingua BASE (fallback):
-// una chiave mancante in un'altra lingua ricade sull'inglese, mai UI rotta.
+// Register of the languages and the catalogs. English is the BASE language (fallback): a
+// key missing in another language falls back on English, never broken UI.
 //
-// Ogni lingua ha due file: quello BASE (nav/settings/login, scritto a mano) e
-// quello *.gen.ts (namespace per componente/pagina, prodotto dall'i18n sweep).
-// I namespace sono disgiunti → merge shallow.
+// Every language has two files: the BASE one (nav/settings/login, written by hand) and
+// the *.gen.ts one (namespaces per component/page, produced by the i18n sweep). The
+// namespaces are disjoint → shallow merge.
 import enBase from './locales/en'
 import itBase from './locales/it'
 import frBase from './locales/fr'
@@ -25,7 +25,7 @@ export const messages = {
 
 export type LocaleCode = keyof typeof messages
 
-// etichette mostrate nel picker (nel loro stesso idioma)
+// labels shown in the picker (in their own language)
 export const LOCALES: { code: LocaleCode; label: string }[] = [
   { code: 'en', label: 'English' },
   { code: 'it', label: 'Italiano' },

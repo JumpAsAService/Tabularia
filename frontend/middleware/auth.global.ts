@@ -1,12 +1,12 @@
-// Protegge tutte le rotte: senza sessione → /login. Libere: /login e /auth/callback (SSO).
-// «Senza sessione» è quel che sa il client (useSessionPresent): il cookie è
-// HttpOnly, e se c'è ma non vale più lo dirà il primo 401.
+// Protects every route: without a session → /login. Free: /login and /auth/callback (SSO).
+// «Without a session» is what the client knows (useSessionPresent): the cookie is
+// HttpOnly, and if it is there but no longer holds the first 401 will say so.
 export default defineNuxtRouteMiddleware((to) => {
   const present = useSessionPresent()
-  // il ritorno dall'IdP: il cookie l'ha appena scritto il gateway
+  // back from the IdP: the gateway has just written the cookie
   if (to.path === '/auth/callback') return
   if (to.path === '/login') {
-    // già dentro? evita di rimanere sulla login
+    // in already? avoids staying on the login
     if (present.value) return navigateTo('/')
     return
   }

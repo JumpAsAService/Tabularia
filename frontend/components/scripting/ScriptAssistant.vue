@@ -38,7 +38,7 @@ const emit = defineEmits<{ (e: 'apply', proposal: ScriptProposal): void }>()
 const { t } = useI18n()
 const { locale } = useLocale()
 const ai = useAi()
-const { accettata, leggi, accetta } = useAiDisclosure()
+const { accepted, read, accept } = useAiDisclosure()
 
 interface Turn {
   question: string
@@ -62,11 +62,11 @@ const input = ref<HTMLTextAreaElement | null>(null)
 let controller: AbortController | null = null
 
 const modelOptions = computed(() => props.status.models.map((m) => ({ value: m, label: m })))
-const ready = computed(() => accettata.value === true && !!model.value && !props.readOnly)
+const ready = computed(() => accepted.value === true && !!model.value && !props.readOnly)
 const failed = computed(() => props.lastRun?.status === 'FAILURE' && !props.lastRun.stale)
 
 onMounted(() => {
-  leggi()
+  read()
   let saved = ''
   try { saved = localStorage.getItem(MODEL_KEY) ?? '' } catch { /* no storage: the default model */ }
   model.value = props.status.models.includes(saved) ? saved : (props.status.default_model ?? props.status.models[0] ?? '')
@@ -158,7 +158,7 @@ function onKey(e: KeyboardEvent) {
 
 <template>
   <section class="sa" :aria-label="$t('scriptAssistant.title')">
-    <AiDisclosure :open="accettata === false" @accept="accetta" />
+    <AiDisclosure :open="accepted === false" @accept="accept" />
     <header class="sa-head">
       <h3><Sparkles :size="14" /> {{ $t('scriptAssistant.title') }}</h3>
       <button v-if="turns.length" class="sa-mini" type="button" :disabled="busy" :title="$t('scriptAssistant.newConversation')"

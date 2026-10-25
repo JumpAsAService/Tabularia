@@ -1,8 +1,8 @@
 <script setup lang="ts">
-// Account di servizio (pannello Admin): le integrazioni che entrano con un token,
-// i loro gruppi (da cui prendono i permessi, come le persone) e i loro token. In
-// fondo TUTTI i token API dell'installazione, per ritirare quello che è trapelato.
-// L'osservatore vede e non tocca (i comandi spariscono: il server direbbe 403).
+// Service accounts (Admin panel): the integrations that sign in with a token, their
+// groups (from which they take the permissions, as people do) and their tokens. At the
+// bottom ALL the installation's API tokens, to withdraw the one that leaked. The
+// observer sees and does not touch (the commands disappear: the server would say 403).
 import { computed, onMounted, ref } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { Bot, ChevronDown, ChevronRight, KeyRound, Plus, Trash2, X } from 'lucide-vue-next'
@@ -27,13 +27,13 @@ const toast = useToast()
 
 const accounts = ref<ServiceAccount[]>([])
 const allTokens = ref<AdminApiToken[]>([])
-const nuovoNome = ref('')
+const newName = ref('')
 const busy = ref(false)
-const aperto = ref<number | null>(null)
-const tokensDi = ref<ApiToken[]>([])
-// il segreto appena creato, con l'account a cui appartiene: se intanto si apre
-// un altro account non gli compare sotto col nome sbagliato
-const segreto = ref<{ account: number; value: string } | null>(null)
+const isOpen = ref<number | null>(null)
+const tokensOf = ref<ApiToken[]>([])
+// the secret just created, with the account it belongs to: if meanwhile another account
+// opens, it does not show under it with the wrong name
+const secret = ref<{ account: number; value: string } | null>(null)
 
 async function load() {
   try {
@@ -45,14 +45,14 @@ async function load() {
 }
 onMounted(load)
 
-async function crea() {
-  if (!nuovoNome.value.trim()) return
+async function create() {
+  if (!newName.value.trim()) return
   busy.value = true
   try {
-    const acc = await api.createServiceAccount(nuovoNome.value.trim())
-    nuovoNome.value = ''
+    const acc = await api.createServiceAccount(newName.value.trim())
+    newName.value = ''
     await load()
-    await apri(acc.id)
+    await open(acc.id)
   } catch (e) {
     toast.error(errMessage(e))
   } finally {
@@ -60,36 +60,36 @@ async function crea() {
   }
 }
 
-async function elimina(a: ServiceAccount) {
+async function remove(a: ServiceAccount) {
   if (!confirm(t('integrations.confirmDeleteAccount', { name: a.name }))) return
   try {
     await api.deleteServiceAccount(a.id)
-    if (aperto.value === a.id) aperto.value = null
+    if (isOpen.value === a.id) isOpen.value = null
     await load()
   } catch (e) {
     toast.error(errMessage(e))
   }
 }
 
-async function apri(id: number) {
-  segreto.value = null
-  if (aperto.value === id) {
-    aperto.value = null
+async function open(id: number) {
+  secret.value = null
+  if (isOpen.value === id) {
+    isOpen.value = null
     return
   }
-  aperto.value = id
+  isOpen.value = id
   try {
-    tokensDi.value = await api.accountTokens(id)
+    tokensOf.value = await api.accountTokens(id)
   } catch (e) {
     toast.error(errMessage(e))
   }
 }
 
-async function creaToken(a: ServiceAccount, body: TokenRequest) {
+async function createToken(a: ServiceAccount, body: TokenRequest) {
   busy.value = true
   try {
-    segreto.value = { account: a.id, value: (await api.createAccountToken(a.id, body)).token }
-    if (aperto.value === a.id) tokensDi.value = await api.accountTokens(a.id)
+    secret.value = { account: a.id, value: (await api.createAccountToken(a.id, body)).token }
+    if (isOpen.value === a.id) tokensOf.value = await api.accountTokens(a.id)
     await load()
   } catch (e) {
     toast.error(errMessage(e))
@@ -98,12 +98,12 @@ async function creaToken(a: ServiceAccount, body: TokenRequest) {
   }
 }
 
-async function revocaToken(a: ServiceAccount, tk: ApiToken) {
+async function revokeToken(a: ServiceAccount, tk: ApiToken) {
   if (!confirm(t('integrations.confirmRevoke', { name: tk.name }))) return
   busy.value = true
   try {
     await api.revokeAccountToken(a.id, tk.id)
-    tokensDi.value = tokensDi.value.filter((x) => x.id !== tk.id)
+    tokensOf.value = tokensOf.value.filter((x) => x.id !== tk.id)
     await load()
   } catch (e) {
     toast.error(errMessage(e))
@@ -112,22 +112,22 @@ async function revocaToken(a: ServiceAccount, tk: ApiToken) {
   }
 }
 
-async function revocaQualsiasi(tk: AdminApiToken) {
+async function revokeAny(tk: AdminApiToken) {
   if (!confirm(t('integrations.confirmRevokeOf', { name: tk.name, who: tk.user_name || tk.user_email }))) return
   try {
     await api.revokeAnyToken(tk.id)
     await load()
-    if (aperto.value != null) tokensDi.value = await api.accountTokens(aperto.value)
+    if (isOpen.value != null) tokensOf.value = await api.accountTokens(isOpen.value)
   } catch (e) {
     toast.error(errMessage(e))
   }
 }
 
-// gruppi: è da lì che un account prende i permessi sulle cartelle
-function gruppiDaAggiungere(a: ServiceAccount) {
+// groups: that is where an account takes the permissions on the folders
+function groupsToAdd(a: ServiceAccount) {
   return props.groups.filter((g) => !a.groups.includes(g.name)).map((g) => ({ value: g.id, label: g.name }))
 }
-async function aggiungiGruppo(a: ServiceAccount, gid: number) {
+async function addGroup(a: ServiceAccount, gid: number) {
   try {
     await projectsApi.addToGroup(a.id, gid)
     await load()
@@ -135,8 +135,8 @@ async function aggiungiGruppo(a: ServiceAccount, gid: number) {
     toast.error(errMessage(e))
   }
 }
-async function togliGruppo(a: ServiceAccount, nome: string) {
-  const g = props.groups.find((x) => x.name === nome)
+async function removeGroup(a: ServiceAccount, name: string) {
+  const g = props.groups.find((x) => x.name === name)
   if (!g) return
   try {
     await projectsApi.removeFromGroup(a.id, g.id)
@@ -146,7 +146,7 @@ async function togliGruppo(a: ServiceAccount, nome: string) {
   }
 }
 
-const umani = computed(() => allTokens.value.filter((tk) => !tk.is_service).length)
+const humans = computed(() => allTokens.value.filter((tk) => !tk.is_service).length)
 </script>
 
 <template>
@@ -154,9 +154,9 @@ const umani = computed(() => allTokens.value.filter((tk) => !tk.is_service).leng
     <h4><Bot :size="14" /> {{ $t('integrations.serviceAccountsTitle') }} <span class="muted">{{ accounts.length }}</span></h4>
     <p class="hint muted small">{{ $t('integrations.serviceAccountsLead') }}</p>
 
-    <form v-if="canWrite" class="newrow" @submit.prevent="crea">
-      <input v-model="nuovoNome" type="text" maxlength="80" :placeholder="$t('integrations.accountNamePlaceholder')" :aria-label="$t('integrations.accountNamePlaceholder')" />
-      <button class="primary" type="submit" :disabled="busy || !nuovoNome.trim()"><Plus :size="14" /> {{ $t('integrations.createAccount') }}</button>
+    <form v-if="canWrite" class="newrow" @submit.prevent="create">
+      <input v-model="newName" type="text" maxlength="80" :placeholder="$t('integrations.accountNamePlaceholder')" :aria-label="$t('integrations.accountNamePlaceholder')" />
+      <button class="primary" type="submit" :disabled="busy || !newName.trim()"><Plus :size="14" /> {{ $t('integrations.createAccount') }}</button>
     </form>
 
     <table class="rows">
@@ -173,45 +173,45 @@ const umani = computed(() => allTokens.value.filter((tk) => !tk.is_service).leng
         <template v-for="a in accounts" :key="a.id">
           <tr>
             <td>
-              <button type="button" class="rowpick" :aria-expanded="aperto === a.id" :disabled="busy" @click="apri(a.id)">
-                <ChevronDown v-if="aperto === a.id" :size="13" /><ChevronRight v-else :size="13" /> {{ a.name }}
+              <button type="button" class="rowpick" :aria-expanded="isOpen === a.id" :disabled="busy" @click="open(a.id)">
+                <ChevronDown v-if="isOpen === a.id" :size="13" /><ChevronRight v-else :size="13" /> {{ a.name }}
               </button>
               <div class="muted small mono">{{ a.email }}</div>
             </td>
             <td>
               <span v-for="g in a.groups" :key="g" class="chip">
                 {{ g }}
-                <button v-if="canWrite" type="button" class="chip-x" :aria-label="$t('integrations.removeGroupAria', { group: g })" @click="togliGruppo(a, g)"><X :size="10" /></button>
+                <button v-if="canWrite" type="button" class="chip-x" :aria-label="$t('integrations.removeGroupAria', { group: g })" @click="removeGroup(a, g)"><X :size="10" /></button>
               </span>
               <Select
-                v-if="canWrite && gruppiDaAggiungere(a).length"
+                v-if="canWrite && groupsToAdd(a).length"
                 class="addgroup"
                 :model-value="null"
-                :options="gruppiDaAggiungere(a)"
+                :options="groupsToAdd(a)"
                 :placeholder="$t('integrations.addGroup')"
-                @update:model-value="aggiungiGruppo(a, Number($event))"
+                @update:model-value="addGroup(a, Number($event))"
               />
               <span v-if="!a.groups.length && !canWrite" class="muted small">—</span>
             </td>
             <td class="small">{{ a.tokens }}</td>
             <td class="muted small nowrap">{{ a.last_seen_at ? fmt.ago(a.last_seen_at) : $t('integrations.never') }}</td>
             <td class="right nowrap">
-              <button class="mini" :title="$t('integrations.tokensOf', { name: a.name })" :aria-label="$t('integrations.tokensOf', { name: a.name })" :disabled="busy" @click="apri(a.id)"><KeyRound :size="13" /></button>
-              <button v-if="canWrite" class="mini danger" :title="$t('integrations.deleteAccount')" :aria-label="$t('integrations.deleteAccountAria', { name: a.name })" @click="elimina(a)"><Trash2 :size="13" /></button>
+              <button class="mini" :title="$t('integrations.tokensOf', { name: a.name })" :aria-label="$t('integrations.tokensOf', { name: a.name })" :disabled="busy" @click="open(a.id)"><KeyRound :size="13" /></button>
+              <button v-if="canWrite" class="mini danger" :title="$t('integrations.deleteAccount')" :aria-label="$t('integrations.deleteAccountAria', { name: a.name })" @click="remove(a)"><Trash2 :size="13" /></button>
             </td>
           </tr>
-          <tr v-if="aperto === a.id" class="detail">
+          <tr v-if="isOpen === a.id" class="detail">
             <td colspan="5">
-              <SecretOnce v-if="segreto?.account === a.id" :value="segreto.value" :label="$t('integrations.newTokenFor', { name: a.name })" @done="segreto = null" />
-              <TokenForm v-else-if="canWrite" :busy="busy" @create="creaToken(a, $event)" />
-              <ul v-if="tokensDi.length" class="toklist">
-                <li v-for="tk in tokensDi" :key="tk.id">
+              <SecretOnce v-if="secret?.account === a.id" :value="secret.value" :label="$t('integrations.newTokenFor', { name: a.name })" @done="secret = null" />
+              <TokenForm v-else-if="canWrite" :busy="busy" @create="createToken(a, $event)" />
+              <ul v-if="tokensOf.length" class="toklist">
+                <li v-for="tk in tokensOf" :key="tk.id">
                   <span class="tk-name">{{ tk.name }}</span>
                   <code class="muted">{{ tk.prefix }}…</code>
                   <span class="tag" :class="tk.scope">{{ tk.scope === 'write' ? $t('integrations.scopeWrite') : $t('integrations.scopeRead') }}</span>
                   <span class="muted small">{{ $t('integrations.expiresOn', { when: fmt.date(tk.expires_at) }) }}</span>
                   <span class="muted small">{{ tk.last_used_at ? $t('integrations.usedAgo', { when: fmt.ago(tk.last_used_at) }) : $t('integrations.never') }}</span>
-                  <button v-if="canWrite" class="mini danger" :disabled="busy" :aria-label="$t('integrations.revokeAria', { name: tk.name })" :title="$t('integrations.revoke')" @click="revocaToken(a, tk)"><Trash2 :size="12" /></button>
+                  <button v-if="canWrite" class="mini danger" :disabled="busy" :aria-label="$t('integrations.revokeAria', { name: tk.name })" :title="$t('integrations.revoke')" @click="revokeToken(a, tk)"><Trash2 :size="12" /></button>
                 </li>
               </ul>
               <p v-else class="muted small">{{ $t('integrations.noTokens') }}</p>
@@ -227,7 +227,7 @@ const umani = computed(() => allTokens.value.filter((tk) => !tk.is_service).leng
 
   <div class="card">
     <h4><KeyRound :size="14" /> {{ $t('integrations.allTokensTitle') }} <span class="muted">{{ allTokens.length }}</span></h4>
-    <p class="hint muted small">{{ $t('integrations.allTokensLead', { personal: umani }) }}</p>
+    <p class="hint muted small">{{ $t('integrations.allTokensLead', { personal: humans }) }}</p>
     <table class="rows">
       <thead>
         <tr>
@@ -254,7 +254,7 @@ const umani = computed(() => allTokens.value.filter((tk) => !tk.is_service).leng
             <template v-if="tk.last_used_ip"> · {{ tk.last_used_ip }}</template>
           </td>
           <td class="right">
-            <button v-if="canWrite" class="mini danger" :aria-label="$t('integrations.revokeAria', { name: tk.name })" :title="$t('integrations.revoke')" @click="revocaQualsiasi(tk)"><Trash2 :size="13" /></button>
+            <button v-if="canWrite" class="mini danger" :aria-label="$t('integrations.revokeAria', { name: tk.name })" :title="$t('integrations.revoke')" @click="revokeAny(tk)"><Trash2 :size="13" /></button>
           </td>
         </tr>
         <tr v-if="!allTokens.length">

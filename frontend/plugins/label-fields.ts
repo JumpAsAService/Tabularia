@@ -1,60 +1,59 @@
-// `v-label-fields` sul contenitore di un modulo (la shell dell'app, la scheda di
-// un dialogo): ogni <label> che precede il suo campo — lo schema di tutti i
-// moduli dell'app, `<label>Nome</label><input>` — diventa un'etichetta VERA del
-// campo. Prima erano testo accanto al campo: per lo screen reader Username,
-// Password e Database del dialogo connessione non avevano nome (audit 2026-10-11,
-// F5: 89 etichette così). I campi nativi ricevono `for`/`id`; il trigger del
-// Select (un bottone) riceve `aria-labelledby`. Etichette già collegate (`for`,
-// o con il campo dentro) e campi con un nome loro (`aria-label`) non si toccano.
-// Un MutationObserver ricollega i campi che compaiono dopo (v-if, dialoghi).
+// `v-label-fields` on a form's container (the app's shell, a dialog's card): every <label>
+// preceding its field — the scheme of all the app's forms, `<label>Name</label><input>` —
+// becomes a REAL label of the field. Before, they were text next to the field: for the
+// screen reader Username, Password and Database of the connection dialog had no name
+// (audit 2026-10-11, F5: 89 labels like that). The native fields get `for`/`id`; the
+// Select's trigger (a button) gets `aria-labelledby`. Labels already linked (`for`, or
+// with the field inside) and fields with a name of their own (`aria-label`) are not
+// touched. A MutationObserver links again the fields that appear later (v-if, dialogs).
 import type { Directive } from 'vue'
 
-const CAMPO = 'input:not([type=hidden]):not([type=checkbox]):not([type=radio]), select, textarea, .sel-trigger'
-let progressivo = 0
+const FIELD = 'input:not([type=hidden]):not([type=checkbox]):not([type=radio]), select, textarea, .sel-trigger'
+let progressive = 0
 
-function campoDopo(label: HTMLLabelElement): HTMLElement | null {
+function nextField(label: HTMLLabelElement): HTMLElement | null {
   for (let s = label.nextElementSibling; s; s = s.nextElementSibling) {
-    if (s.tagName === 'LABEL') return null // il campo successivo ha la sua etichetta
-    if (s.matches(CAMPO)) return s as HTMLElement
-    const dentro = s.querySelector<HTMLElement>(CAMPO)
-    if (dentro) return dentro
+    if (s.tagName === 'LABEL') return null // the next field has its label
+    if (s.matches(FIELD)) return s as HTMLElement
+    const inside = s.querySelector<HTMLElement>(FIELD)
+    if (inside) return inside
   }
   return null
 }
 
-function collega(radice: HTMLElement) {
-  for (const label of radice.querySelectorAll<HTMLLabelElement>('label')) {
+function link(root: HTMLElement) {
+  for (const label of root.querySelectorAll<HTMLLabelElement>('label')) {
     if (label.htmlFor || label.querySelector('input, select, textarea, button')) continue
-    const campo = campoDopo(label)
-    if (!campo || campo.hasAttribute('aria-label') || campo.hasAttribute('aria-labelledby')) continue
-    if (campo.classList.contains('sel-trigger')) {
-      if (!label.id) label.id = `lbl-${++progressivo}`
-      campo.setAttribute('aria-labelledby', label.id)
+    const field = nextField(label)
+    if (!field || field.hasAttribute('aria-label') || field.hasAttribute('aria-labelledby')) continue
+    if (field.classList.contains('sel-trigger')) {
+      if (!label.id) label.id = `lbl-${++progressive}`
+      field.setAttribute('aria-labelledby', label.id)
     } else {
-      if (!campo.id) campo.id = `fld-${++progressivo}`
-      label.htmlFor = campo.id
+      if (!field.id) field.id = `fld-${++progressive}`
+      label.htmlFor = field.id
     }
   }
 }
 
-const osservatori = new WeakMap<HTMLElement, MutationObserver>()
+const observers = new WeakMap<HTMLElement, MutationObserver>()
 
 const labelFields: Directive<HTMLElement> = {
-  getSSRProps: () => ({}), // si collega nel browser: lo screen reader legge il DOM vivo
+  getSSRProps: () => ({}), // it links in the browser: the screen reader reads the live DOM
   mounted(el) {
-    collega(el)
-    let pendente = false
+    link(el)
+    let pending = false
     const mo = new MutationObserver(() => {
-      if (pendente) return
-      pendente = true
-      requestAnimationFrame(() => { pendente = false; collega(el) })
+      if (pending) return
+      pending = true
+      requestAnimationFrame(() => { pending = false; link(el) })
     })
     mo.observe(el, { childList: true, subtree: true })
-    osservatori.set(el, mo)
+    observers.set(el, mo)
   },
   unmounted(el) {
-    osservatori.get(el)?.disconnect()
-    osservatori.delete(el)
+    observers.get(el)?.disconnect()
+    observers.delete(el)
   },
 }
 

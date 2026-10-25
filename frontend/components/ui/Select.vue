@@ -1,8 +1,8 @@
 <script setup lang="ts">
-// Select custom in tema: il popup delle <select> native è disegnato dall'OS e
-// non è stilizzabile — questo componente lo sostituisce ovunque. Il pannello è
-// teleportato sul body (position: fixed) così non viene mai tagliato dagli
-// overflow dei contenitori (pannello nodo, toolbar, celle di tabella).
+// Themed custom Select: the popup of native <select>s is drawn by the OS and cannot be
+// styled — this component replaces it everywhere. The panel is teleported to the body
+// (position: fixed) so it is never cut by the containers' overflow (node panel, toolbar,
+// table cells).
 import { ref, computed, nextTick, onBeforeUnmount } from 'vue'
 import { ChevronDown, Check, Search } from 'lucide-vue-next'
 import { useI18n } from 'vue-i18n'
@@ -18,7 +18,7 @@ export interface SelectOption {
   hint?: string
 }
 
-// due root (trigger + Teleport): class/style dei parent vanno esplicitamente sul trigger
+// two roots (trigger + Teleport): the parents' class/style go explicitly on the trigger
 defineOptions({ inheritAttrs: false })
 
 const props = defineProps<{
@@ -26,7 +26,7 @@ const props = defineProps<{
   options: Array<SelectOption | string | number>
   placeholder?: string
   disabled?: boolean
-  // casella di ricerca: default automatico quando le opzioni sono molte
+  // search box: automatic default when the options are many
   searchable?: boolean
 }>()
 const emit = defineEmits<{
@@ -40,11 +40,11 @@ const norm = computed<SelectOption[]>(() =>
 const labelOf = (o: SelectOption) => o.label ?? String(o.value)
 const selected = computed(() => norm.value.find((o) => o.value === props.modelValue))
 
-// ── ricerca: attiva su richiesta o quando l'elenco è lungo ────────────────
-// `||` e non `??`: un prop booleano NON passato Vue lo converte in `false`, non
-// in `undefined`, quindi con `??` la regola automatica non scattava mai — il
-// pivot del viewer con 50 colonne non aveva la casella di ricerca. Il prop
-// esplicito forza l'attivazione; l'elenco lungo la attiva da solo.
+// ── search: on when asked or when the list is long ────────────────
+// `||` and not `??`: a boolean prop NOT passed Vue turns into `false`, not into
+// `undefined`, so with `??` the automatic rule never fired — the viewer's pivot with 50
+// columns had no search box. The explicit prop forces it on; the long list turns it on
+// by itself.
 const SEARCH_THRESHOLD = 8
 const query = ref('')
 const searchable = computed(() => props.searchable || norm.value.length > SEARCH_THRESHOLD)
@@ -54,7 +54,7 @@ const filtered = computed<SelectOption[]>(() => {
   return norm.value.filter((o) => labelOf(o).toLowerCase().includes(q) || !!o.hint?.toLowerCase().includes(q))
 })
 
-// opzioni (filtrate) raggruppate preservando l'ordine (group undefined = fuori gruppo)
+// (filtered) options grouped keeping the order (group undefined = outside any group)
 const groups = computed(() => {
   const out: { group: string | null; items: SelectOption[] }[] = []
   for (const o of filtered.value) {
@@ -67,7 +67,7 @@ const groups = computed(() => {
 })
 
 const open = ref(false)
-const hi = ref(-1) // indice evidenziato (navigazione tastiera), sul flat filtrato
+const hi = ref(-1) // highlighted index (keyboard navigation), on the filtered flat list
 const triggerEl = ref<HTMLElement | null>(null)
 const panelEl = ref<HTMLElement | null>(null)
 const searchEl = ref<HTMLInputElement | null>(null)
@@ -75,8 +75,8 @@ const panelStyle = ref<Record<string, string>>({})
 
 const PANEL_MAX_H = 280
 
-// id per collegare trigger, lista e opzione evidenziata (pattern combobox/listbox
-// dell'ARIA): esistono solo a pannello aperto, cioè nel browser — niente SSR
+// ids to link trigger, list and highlighted option (ARIA's combobox/listbox pattern):
+// they exist only with the panel open, that is in the browser — no SSR
 const uid = Math.random().toString(36).slice(2, 9)
 const listId = `sel-list-${uid}`
 const optId = (i: number) => `sel-${uid}-${i}`
@@ -95,7 +95,7 @@ function positionPanel() {
     maxWidth: `${Math.max(r.width, Math.min(widest, room))}px`,
   }
   if (below < PANEL_MAX_H + 8 && r.top > below) {
-    style.bottom = `${window.innerHeight - r.top + 4}px` // si apre verso l'alto
+    style.bottom = `${window.innerHeight - r.top + 4}px` // it opens upwards
   } else {
     style.top = `${r.bottom + 4}px`
   }
@@ -107,8 +107,8 @@ function onDocMousedown(ev: MouseEvent) {
   if (triggerEl.value?.contains(t) || panelEl.value?.contains(t)) return
   close()
 }
-// lo scroll DENTRO il pannello non deve chiuderlo: solo lo scroll della pagina
-// sottostante (il pannello è position:fixed e non seguirebbe) lo chiude.
+// scrolling INSIDE the panel must not close it: only scrolling the page underneath (the
+// panel is position:fixed and would not follow) closes it.
 function onScroll(ev: Event) {
   const t = ev.target as Node
   if (panelEl.value && t && panelEl.value.contains(t)) return
@@ -124,7 +124,7 @@ async function openPanel() {
   await nextTick()
   positionPanel()
   if (searchable.value) searchEl.value?.focus()
-  // scroll fino all'opzione selezionata
+  // scroll to the selected option
   panelEl.value?.querySelector('.sel-opt.active')?.scrollIntoView({ block: 'nearest' })
   document.addEventListener('mousedown', onDocMousedown)
   window.addEventListener('scroll', onScroll, true)
@@ -160,8 +160,8 @@ function onKeydown(ev: KeyboardEvent) {
   }
   const flat = filtered.value
   if (ev.key === 'Tab') {
-    // il pannello è teleportato sul body: senza, il Tab dalla ricerca uscirebbe
-    // dal dialogo. Si chiude e si riparte dal trigger (il Tab prosegue da lì).
+    // the panel is teleported to the body: without this, Tab from the search would leave the
+    // dialog. It closes and starts again from the trigger (Tab goes on from there).
     close()
     triggerEl.value?.focus()
     return
@@ -178,7 +178,7 @@ function onKeydown(ev: KeyboardEvent) {
   } else if (ev.key === 'Enter') { ev.preventDefault(); if (flat[hi.value]) pick(flat[hi.value]) }
 }
 
-// il testo di ricerca è cambiato: riporta l'evidenziazione in cima ai risultati
+// the search text changed: brings the highlight back to the top of the results
 function onQueryInput() {
   hi.value = filtered.value.length ? 0 : -1
 }
@@ -276,7 +276,7 @@ const flatIndex = (o: SelectOption) => filtered.value.indexOf(o)
   gap: 6px;
   width: 100%;
   background: var(--bg-soft);
-  /* stesso bordo dei campi nativi: è un controllo, non un riquadro decorativo */
+  /* the same border as the native fields: it is a control, not a decorative box */
   border: 1px solid var(--control-border);
   border-radius: 8px;
   padding: 6px 10px;
@@ -300,10 +300,10 @@ const flatIndex = (o: SelectOption) => filtered.value.indexOf(o)
 </style>
 
 <style>
-/* pannello teleportato sul body: NON scoped. z-index tra i dialog (2000) e i
-   toast (3000): un Select dentro un dialog (es. ConnectionDialog) teletrasporta
-   il pannello sul body, quindi deve stare SOPRA il backdrop del dialog (non
-   dietro), ma sotto le notifiche. */
+/* panel teleported to the body: NOT scoped. z-index between the dialogs (2000) and the
+   toasts (3000): a Select inside a dialog (e.g. ConnectionDialog) teleports the panel to
+   the body, so it must sit ABOVE the dialog's backdrop (not behind), but under the
+   notifications. */
 .sel-panel {
   position: fixed;
   z-index: 2500;
@@ -316,7 +316,7 @@ const flatIndex = (o: SelectOption) => filtered.value.indexOf(o)
   box-shadow: var(--shadow-2);
   padding: 4px;
 }
-/* la casella di ricerca resta fissa; solo la lista scrolla */
+/* the search box stays still; only the list scrolls */
 .sel-search {
   display: flex;
   align-items: center;

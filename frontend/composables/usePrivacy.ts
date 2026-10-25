@@ -1,12 +1,12 @@
-// Informativa sulla privacy: una sola, scritta dall'amministratore.
+// Privacy notice: only one, written by the administrator.
 import { useApiClient } from '~/composables/useApiClient'
 
 export interface PrivacyNotice {
   enabled: boolean
-  // con i segnaposto già sostituiti dal server: è ciò che si MOSTRA
+  // with the placeholders replaced by the server already: it is what is SHOWN
   summary: string
   body: string
-  // come li ha scritti l'amministratore: è ciò che si MODIFICA
+  // as the administrator wrote them: it is what is EDITED
   summary_template: string
   body_template: string
   url: string

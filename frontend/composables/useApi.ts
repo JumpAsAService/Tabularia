@@ -1,5 +1,6 @@
-// Client dell'API dati. Passa dal gateway (che autentica e inoltra all'engine).
-// Tutte le chiamate viaggiano col cookie della sessione (HttpOnly) via useApiClient().
+// The data API's client. It goes through the gateway (which authenticates and forwards
+// to the engine). Every call travels with the session's cookie (HttpOnly) through
+// useApiClient().
 
 import { clientTranslate } from '~/plugins/i18n'
 
@@ -13,9 +14,8 @@ export interface PreviewResult {
   rows: Record<string, any>[]
   row_count: number
   truncated: boolean
-  // stato della step-cache del passo A MONTE del nodo: hit | pending | skipped
-  // (oltre il tetto: ricalcolato a ogni anteprima) | off (Viewer); assente se
-  // non c'e' un passo a monte
+  // step cache state of the node's UPSTREAM step: hit | pending | skipped (over the cap:
+  // recomputed at every preview) | off (Viewer); missing when there is no upstream step
   cache_state?: 'hit' | 'pending' | 'skipped' | 'off' | null
   cache_cap_rows?: number | null
 }
@@ -63,14 +63,14 @@ export interface Operation {
   params: Record<string, any>
 }
 
-// info di deployment esposte dal gateway (/system/info)
+// deployment info exposed by the gateway (/system/info)
 export type AppInfo = {
   name: string
   version: string
   codename?: string
   timezone: string
-  // campione automatico di sviluppo (righe; 0/assente = spento): l'editor lo
-  // applica ai nodi sorgente senza un campione scelto, come fa il gateway
+  // automatic development sample (rows; 0/missing = off): the editor applies it to the
+  // source nodes without a chosen sample, as the gateway does
   preview_default_sample_rows?: number
 }
 
@@ -100,7 +100,7 @@ export interface DbtExportPlan {
   ai?: { available: boolean; model: string | null; stored?: { descriptions: boolean; translations: boolean; models: string[] } }
 }
 
-/** Le opzioni del download, come le valida il gateway (`OpzioniDbt`). */
+/** The download's options, as the gateway validates them (`DbtOptions`). */
 export interface DbtExportOptions {
   target: DbtTarget
   package: 'project' | 'folder'
@@ -154,10 +154,10 @@ export function useApi() {
       input_key: string
       operations: Operation[]
       limit?: number
-      engine?: string // motore del flusso (polars | duckdb); assente = default
-      no_cache?: boolean // Viewer: query esplorative che non sporcano la step-cache
-      sort_keys?: string[] // ORDER BY che la copia materializzata (ClickHouse) eredita
-      slot?: string // in ogni slot conta solo l'ultima preview (vedi usePreviewSlots)
+      engine?: string // the flow's engine (polars | duckdb); missing = default
+      no_cache?: boolean // Viewer: exploratory queries that do not dirty the step cache
+      sort_keys?: string[] // ORDER BY the materialized copy (ClickHouse) inherits
+      slot?: string // in every slot only the last preview counts (see usePreviewSlots)
     }, opts: { signal?: AbortSignal } = {}): Promise<PreviewResult> {
       return await apiFetch<PreviewResult>('/tasks/preview', { method: 'POST', body, signal: opts.signal })
     },
@@ -172,22 +172,22 @@ export function useApi() {
       return await apiFetch<TaskResponse>('/tasks/transform-data', { method: 'POST', body })
     },
 
-    // catalogo degli engine disponibili (per il picker in creazione flusso)
+    // catalog of the available engines (for the picker at flow creation)
     async engines(): Promise<{ id: string; label: string; available: boolean; description: string; optional?: boolean }[]> {
       return await apiFetch('/engines')
     },
 
-    // info di deployment (fuso orario degli schedule, nome, versione)
+    // deployment info (the schedules' time zone, name, version)
     async appInfo(): Promise<AppInfo> {
       return await apiFetch('/system/info')
     },
 
-    // carico previsionale degli schedule (heatmap giorno×ora + fasce critiche)
+    // the schedules' forecast load (day×hour heatmap + critical slots)
     async scheduleLoad(days = 7): Promise<ScheduleLoad> {
       return await apiFetch<ScheduleLoad>(`/schedule/load?days=${days}`)
     },
 
-    // ── Audit log (solo admin) ────────────────────────────────────────────────
+    // ── Audit log (admin only) ────────────────────────────────────────────────
     async audit(p: {
       q?: string; action?: string; outcome?: string; target_type?: string
       limit: number; offset: number
@@ -204,15 +204,15 @@ export function useApi() {
     async auditActions(): Promise<string[]> {
       return await apiFetch<string[]>('/audit/actions')
     },
-    // le più recenti, e quante sono in tutto
+    // the newest, and how many there are in all
     async auditSessions(): Promise<Page<ActiveSession>> {
       return await apiFetch<Page<ActiveSession>>('/audit/sessions')
     },
-    // l'amministratore chiude la sessione di qualcuno: fuori alla richiesta dopo
+    // the administrator closes someone's session: out at the next request
     async revokeSession(id: string): Promise<void> {
       await apiFetch(`/audit/sessions/${encodeURIComponent(id)}`, { method: 'DELETE' })
     },
-    // le proprie sessioni
+    // one's own sessions
     async mySessions(): Promise<MySession[]> {
       return await apiFetch<MySession[]>('/auth/sessions')
     },
@@ -230,8 +230,8 @@ export function useApi() {
       return await apiFetch<AccessActivity>(`/audit/access-activity?hours=${hours}`)
     },
 
-    // grafo di lineage: senza center → grafo completo leggibile; con center →
-    // sottografo a monte/valle entro `depth` salti
+    // lineage graph: without center → the whole readable graph; with center → the subgraph
+    // upstream/downstream within `depth` hops
     async lineage(p?: {
       type?: 'flow' | 'datasource' | 'connection' | 'script'
       id?: number
@@ -273,7 +273,7 @@ export function useApi() {
       format: 'csv' | 'xlsx'
       limit?: number
       filename?: string
-      engine?: string // motore che calcola lo snapshot; il file lo scrive Polars
+      engine?: string // the engine computing the snapshot; Polars writes the file
     }): Promise<void> {
       const { task_id } = await apiFetch<{ task_id: string }>('/tasks/exports', { method: 'POST', body })
       let failures = 0
@@ -300,14 +300,16 @@ export function useApi() {
       a.click()
     },
 
-    // esporta un flusso come progetto dbt (zip). target: 'duckdb' (federato) |
-    // 'native' (warehouse di origine, SQL tradotto via sqlglot)
-    /** Cosa serve al dialogo dell'export dbt: target possibili, sorgenti, uscite (solo admin). */
+    // exports a flow as a dbt project (zip). target: 'duckdb' (federated) | 'native' (the
+    // origin warehouse, SQL translated through sqlglot)
+    /** What the dbt export's dialog needs: possible targets, sources, outputs (admin only). */
     async dbtExportPlan(flowId: number, opts: { signal?: AbortSignal } = {}): Promise<DbtExportPlan> {
       return await apiFetch<DbtExportPlan>(`/flows/${flowId}/export/dbt/plan`, { signal: opts.signal })
     },
-    /** Il progetto dbt (zip) con le scelte del dialogo. With it, the file name the gateway gives
-     *  it: null when the Content-Disposition cannot be read (cross-origin, not exposed). */
+    /**
+     * The dbt project (zip) with the dialog's choices. With it, the file name the gateway gives
+     * it: null when the Content-Disposition cannot be read (cross-origin, not exposed).
+     */
     async exportFlowDbt(flowId: number, options: DbtExportOptions, opts: { signal?: AbortSignal } = {}): Promise<{ blob: Blob; filename: string | null }> {
       let disposition: string | null = null
       const blob = await apiFetch<Blob>(`/flows/${flowId}/export/dbt`, {
@@ -316,7 +318,7 @@ export function useApi() {
       })
       return { blob, filename: fileNameFromDisposition(disposition) }
     },
-    /** Le dipendenze del flusso come eventi OpenLineage (JSON), ricostruite dalla definizione. */
+    /** The flow's dependencies as OpenLineage events (JSON), rebuilt from the definition. */
     async exportFlowOpenLineage(flowId: number): Promise<unknown[]> {
       return await apiFetch<unknown[]>(`/flows/${flowId}/openlineage`)
     },
@@ -346,9 +348,9 @@ export interface LineageGraph {
   center?: string | null
 }
 
-// ── Carico previsionale degli schedule ───────────────────────────────────────
+// ── The schedules' forecast load ───────────────────────────────────────
 export interface ScheduleLoadCell {
-  weekday: number // 0 = lunedì … 6 = domenica
+  weekday: number // 0 = Monday … 6 = Sunday
   hour: number // 0–23
   count: number
   peak_concurrent: number
@@ -387,8 +389,8 @@ export interface AuditEntry {
   ip: string | null
   user_agent: string | null
 }
-// Una sessione aperta (un browser, uno script): la vede chi la possiede in
-// «Le tue sessioni»; l'amministratore vede quelle di tutti nell'Audit.
+// An open session (a browser, a script): whoever owns it sees it in «Your sessions»; the
+// administrator sees everyone's in the Audit.
 export interface MySession {
   id: string
   created_at: string
@@ -397,7 +399,7 @@ export interface MySession {
   ip: string | null
   user_agent: string | null
   method: 'password' | 'sso' | string
-  current: boolean // quella da cui si guarda
+  current: boolean // the one being looked from
 }
 export interface ActiveSession extends MySession {
   user_id: number
@@ -420,13 +422,13 @@ export interface AccessActivity {
   total_failure: number
 }
 
-// Una pagina di risultati dalle liste paginate (ricerca server-side).
+// A page of results from the paginated lists (server-side search).
 export interface Page<T> {
   items: T[]
   total: number
 }
 
-// Query-string per gli endpoint paginati /…/search
+// Query string for the paginated /…/search endpoints
 export function pagedQuery(p: { q?: string; limit: number; offset: number }): string {
   const qs = new URLSearchParams()
   if (p.q) qs.set('q', p.q)
@@ -435,7 +437,7 @@ export function pagedQuery(p: { q?: string; limit: number; offset: number }): st
   return qs.toString()
 }
 
-// Estrae un messaggio d'errore leggibile da un errore di $fetch. A `detail` that is not text
+// Extracts a readable error message from a $fetch error. A `detail` that is not text
 // is never shown as JSON: FastAPI's validation list gives its messages, with the last part of
 // where; an object (a 409 with what uses the thing) gives its `message`.
 export function errMessage(e: any): string {

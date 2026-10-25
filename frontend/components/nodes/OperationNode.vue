@@ -16,12 +16,12 @@ const cached = computed(() => cachedNodes.has(props.id))
 
 const isJoin = computed(() => props.data?.opType === 'join')
 const isUnion = computed(() => props.data?.opType === 'union')
-// operazioni con un secondo input (ramo destro): sta a sinistra, sotto il principale
+// operations with a second input (right branch): it sits on the left, under the main one
 const needsRight = computed(() => isJoin.value || isUnion.value)
 const meta = computed(() => opMeta(props.data?.opType ?? ''))
 const paramCount = computed(() => Object.keys(props.data?.params ?? {}).length)
-// il nome dell'operazione come nella palette (tradotto), non l'id interno; e in
-// una riga cosa fa coi suoi parametri, invece di «1 parameters»
+// the operation's name as in the palette (translated), not the internal id; and in one
+// line what it does with its parameters, instead of «1 parameters»
 const title = computed(() => (meta.value.label.startsWith('ops.') ? t(meta.value.label) : props.data?.opType) || t('operationNode.operationFallback'))
 const summary = computed(() => opSummary(props.data?.opType ?? '', props.data?.params))
 </script>
@@ -32,9 +32,9 @@ const summary = computed(() => opSummary(props.data?.opType ?? '', props.data?.p
     :class="{ 'node-join': needsRight, 'node-cached': cached }"
     :style="{ '--node-accent': meta.color }"
   >
-    <!-- input principale (catena): a sinistra (in alto se c'è un secondo input) -->
+    <!-- main input (chain): on the left (at the top when there is a second input) -->
     <Handle id="left" type="target" :position="Position.Left" :class="needsRight ? 'h-left-top' : ''" />
-    <!-- secondo input (join: tabella da unire; union: ramo da accodare): a sinistra, sotto -->
+    <!-- second input (join: table to join; union: branch to append): on the left, below -->
     <template v-if="needsRight">
       <Handle id="right" type="target" :position="Position.Left" class="handle-right h-left-bottom" />
       <span class="hlabel-left">{{ $t('operationNode.tableInputLabel') }}</span>
@@ -70,7 +70,7 @@ const summary = computed(() => opSummary(props.data?.opType ?? '', props.data?.p
 </template>
 
 <style scoped>
-/* il riassunto è fatto di nomi di colonna ed espressioni: dato, quindi monospace */
+/* the summary is made of column names and expressions: data, so monospace */
 .summary {
   display: block; max-width: 220px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
   font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 11.5px;
@@ -78,7 +78,7 @@ const summary = computed(() => opSummary(props.data?.opType ?? '', props.data?.p
 .node-join { min-width: 180px; position: relative; }
 .handle-right { background: var(--accent-2) !important; }
 .node-icon { color: var(--node-accent); }
-/* etichetta del secondo input, appena fuori dal bordo sinistro all'altezza dell'handle */
+/* the second input's label, just outside the left border at the handle's height */
 .hlabel-left {
   position: absolute;
   left: -6px;

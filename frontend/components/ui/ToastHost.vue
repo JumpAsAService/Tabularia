@@ -1,6 +1,6 @@
 <script setup lang="ts">
-// Rendering della coda dei toast (vedi composables/useToast.ts).
-// Montato una volta sola in app.vue: copre tutte le pagine, editor incluso.
+// Rendering the toasts' queue (see composables/useToast.ts).
+// Mounted once only in app.vue: it covers every page, the editor included.
 import { CheckCircle2, XCircle, TriangleAlert, Info, X } from 'lucide-vue-next'
 import { useToast } from '~/composables/useToast'
 

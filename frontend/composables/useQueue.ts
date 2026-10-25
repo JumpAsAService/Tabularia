@@ -1,6 +1,6 @@
-// Coda di esecuzione (Celery) — pannello admin. Il gateway fa da proxy verso
-// l'engine; qui solo le chiamate REST. Il polling near-real-time lo gestisce la
-// pagina (setInterval), come per la RAM in tempo reale.
+// Run queue (Celery) — admin panel. The gateway proxies the engine; here only the REST
+// calls. The page handles the near-real-time polling (setInterval), as for the real-time
+// RAM.
 export interface QueueJob {
   task_id: string
   task_name: string | null
@@ -21,7 +21,7 @@ export interface QueueOverview {
   running: QueueJob[]
   reserved: QueueJob[]
   queues: { name: string; messages: number }[]
-  queued: number // accodati nel broker, non ancora presi da un worker
+  queued: number // queued in the broker, not taken by a worker yet
   reserved_count: number
   running_count: number
   waiting: number // queued + reserved

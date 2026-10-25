@@ -453,7 +453,7 @@ onBeforeUnmount(() => {
 <template>
   <Modal :open="open" :title="title" :width="1480" @close="emit('close')">
     <template #head>
-      <span class="ambiente">
+      <span class="environment">
         <FileCode2 :size="13" /> {{ environment.name }} · {{ environment.language === 'r' ? 'R' : 'Python' }}
         {{ environment.language_version ?? '' }}
       </span>
@@ -470,7 +470,7 @@ onBeforeUnmount(() => {
       <aside class="files" :aria-label="$t('scripting.editor.files')">
         <div class="side-title">{{ $t('scripting.editor.files') }}</div>
         <ul>
-          <li v-for="f in sorted" :key="f.path" :class="{ attivo: f.path === current }">
+          <li v-for="f in sorted" :key="f.path" :class="{ 'is-on': f.path === current }">
             <template v-if="renaming === f.path">
               <input v-model="renameTo" class="rename" spellcheck="false" :aria-label="$t('scripting.editor.rename')"
                      @keydown.enter.prevent="rename" @keydown.esc.stop.prevent="renaming = null" />
@@ -480,14 +480,14 @@ onBeforeUnmount(() => {
               <button type="button" class="file" :title="f.path" @click="show(f.path)">
                 <Play v-if="f.path === entry" :size="11" class="entry" :aria-label="$t('scripting.editor.runsThis')" />
                 <span>{{ f.path }}</span>
-                <span v-if="problems[f.path]?.errors" class="problemi errori"
+                <span v-if="problems[f.path]?.errors" class="problems errors"
                       :title="$t('scripting.editor.problems', { errors: problems[f.path]!.errors, warnings: problems[f.path]!.warnings })">
                   {{ problems[f.path]!.errors }}</span>
-                <span v-else-if="problems[f.path]?.warnings" class="problemi"
+                <span v-else-if="problems[f.path]?.warnings" class="problems"
                       :title="$t('scripting.editor.problems', { errors: 0, warnings: problems[f.path]!.warnings })">
                   {{ problems[f.path]!.warnings }}</span>
               </button>
-              <span v-if="!readOnly" class="azioni-file">
+              <span v-if="!readOnly" class="file-actions">
                 <button v-if="f.path !== entry" type="button" class="icona" :title="$t('scripting.editor.makeEntry')"
                         :aria-label="$t('scripting.editor.makeEntry')" @click="makeEntry(f.path)"><Play :size="12" /></button>
                 <button type="button" class="icona" :title="$t('scripting.editor.rename')" :aria-label="$t('scripting.editor.rename')"
@@ -498,25 +498,25 @@ onBeforeUnmount(() => {
             </template>
           </li>
         </ul>
-        <form v-if="!readOnly" class="nuovo" @submit.prevent="addFile">
+        <form v-if="!readOnly" class="new" @submit.prevent="addFile">
           <input v-model="newPath" spellcheck="false" :placeholder="language === 'r' ? 'R/helpers.R' : 'lib/helpers.py'"
                  :aria-label="$t('scripting.editor.newFile')" />
           <button type="submit" class="icona" :title="$t('scripting.editor.newFile')" :aria-label="$t('scripting.editor.newFile')"
                   :disabled="!newPath.trim()"><FilePlus2 :size="14" /></button>
         </form>
-        <p v-if="fileError" class="errore" role="alert">{{ fileError }}</p>
-        <p class="nota">{{ language === 'r' ? $t('scripting.editor.modulesHintR') : $t('scripting.editor.modulesHintPython') }}</p>
+        <p v-if="fileError" class="error" role="alert">{{ fileError }}</p>
+        <p class="note">{{ language === 'r' ? $t('scripting.editor.modulesHintR') : $t('scripting.editor.modulesHintPython') }}</p>
       </aside>
 
       <!-- the code, and the last run's log under it -->
-      <div class="centro">
+      <div class="middle">
         <div class="code" data-own-escape>
-          <div v-if="loading" class="stato"><LoaderCircle :size="16" class="spin" /> {{ $t('scripting.editor.loading') }}</div>
-          <div v-else-if="loadError" class="stato errore">{{ loadError }}</div>
-          <div v-else-if="!local.length" class="stato muted">{{ $t('scripting.editor.noFiles') }}</div>
-          <div ref="host" class="monaco" :class="{ nascosto: loading || !!loadError || !local.length }" />
+          <div v-if="loading" class="state"><LoaderCircle :size="16" class="spin" /> {{ $t('scripting.editor.loading') }}</div>
+          <div v-else-if="loadError" class="state error">{{ loadError }}</div>
+          <div v-else-if="!local.length" class="state muted">{{ $t('scripting.editor.noFiles') }}</div>
+          <div ref="host" class="monaco" :class="{ hidden: loading || !!loadError || !local.length }" />
         </div>
-        <details class="ultimo" :open="logOpen" @toggle="logOpen = ($event.target as HTMLDetailsElement).open">
+        <details class="last" :open="logOpen" @toggle="logOpen = ($event.target as HTMLDetailsElement).open">
           <summary>
             <template v-if="lastRun">
               <component :is="lastRun.status === 'SUCCESS' ? CheckCircle2 : XCircle" :size="13"
@@ -527,7 +527,7 @@ onBeforeUnmount(() => {
               <span v-if="lastRun.stale" class="muted">· {{ $t('scripting.editor.runStale') }}</span>
             </template>
             <span v-else class="muted">{{ $t(saved ? 'scripting.editor.noRunSaved' : 'scripting.editor.noRun') }}</span>
-            <button v-if="stopped" type="button" class="vai" @click.prevent="goToError">
+            <button v-if="stopped" type="button" class="go" @click.prevent="goToError">
               {{ $t('scripting.editor.goTo', { place: `${stopped.path}:${stopped.line}` }) }}
             </button>
           </summary>
@@ -555,15 +555,15 @@ onBeforeUnmount(() => {
       <!-- what the script finds -->
       <aside v-show="!aiAvailable || side !== 'assistant'" class="env" :aria-label="$t('scripting.editor.environment')">
         <div class="side-title"><Variable :size="13" /> {{ $t('scripting.editor.variables') }}</div>
-        <p class="nota">{{ $t('scripting.editor.variablesHint') }}</p>
+        <p class="note">{{ $t('scripting.editor.variablesHint') }}</p>
         <ul class="vars">
           <li v-for="v in variables" :key="v.name">
             <button type="button" class="var" :disabled="readOnly" @click="insertVariable(v.name)">
               <code>{{ v.name }}</code>
               <span v-if="v.source === 'tabularia'" class="tag">{{ $t('scripting.editor.setByTabularia') }}</span>
               <span v-else-if="v.source === 'secret'" class="tag"><KeyRound :size="10" /> {{ $t('scripting.editor.secret') }}</span>
-              <span v-else-if="v.source === 'exception'" class="tag eccezione">{{ $t('scripting.editor.fromTabularia', { name: v.value }) }}</span>
-              <span v-else class="valore">{{ v.value }}</span>
+              <span v-else-if="v.source === 'exception'" class="tag exception">{{ $t('scripting.editor.fromTabularia', { name: v.value }) }}</span>
+              <span v-else class="value">{{ v.value }}</span>
             </button>
           </li>
         </ul>
@@ -576,14 +576,14 @@ onBeforeUnmount(() => {
       </aside>
     </div>
     <template #footer>
-      <span class="muted piede">{{ $t(saved ? 'scripting.editor.footerSaved' : 'scripting.editor.footer') }}</span>
+      <span class="muted foot">{{ $t(saved ? 'scripting.editor.footerSaved' : 'scripting.editor.footer') }}</span>
       <button type="button" class="primary" @click="emit('close')"><X :size="13" /> {{ $t('scripting.editor.close') }}</button>
     </template>
   </Modal>
 </template>
 
 <style scoped>
-.ambiente { display: inline-flex; align-items: center; gap: 6px; font-size: 12px; color: var(--muted); margin-right: 8px; }
+.environment { display: inline-flex; align-items: center; gap: 6px; font-size: 12px; color: var(--muted); margin-right: 8px; }
 .assist-toggle { display: inline-flex; align-items: center; gap: 5px; padding: 3px 10px; font-size: 12px; margin-right: 6px; }
 .assist-toggle.on { border-color: var(--accent); color: var(--accent-hi); background: color-mix(in srgb, var(--accent) 10%, transparent); }
 .layout { display: grid; grid-template-columns: 230px minmax(0, 1fr) 260px; gap: 12px; height: min(72vh, 900px); min-height: 420px; }
@@ -593,46 +593,46 @@ onBeforeUnmount(() => {
 .side-title { display: flex; align-items: center; gap: 6px; font-size: 11px; text-transform: uppercase; letter-spacing: 0.05em; color: var(--muted); margin-top: 4px; }
 ul { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 2px; }
 .files li { display: flex; align-items: center; gap: 2px; border-radius: 6px; }
-.files li.attivo { background: var(--bg-soft); }
+.files li.is-on { background: var(--bg-soft); }
 .file { flex: 1; min-width: 0; display: flex; align-items: center; justify-content: flex-start; gap: 5px; border: 0; background: none; padding: 5px 6px; text-align: left;
   font-family: var(--font-mono, ui-monospace, monospace); font-size: 12px; color: var(--text); cursor: pointer; min-height: 0; }
 .file span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .entry { color: var(--accent-2); flex: none; }
-.azioni-file { display: none; }
-.files li:hover .azioni-file, .files li:focus-within .azioni-file { display: inline-flex; }
+.file-actions { display: none; }
+.files li:hover .file-actions, .files li:focus-within .file-actions { display: inline-flex; }
 .icona { border: 0; background: none; padding: 3px; min-height: 0; color: var(--muted); cursor: pointer; border-radius: 5px; display: inline-grid; place-items: center; }
 .icona:hover:not(:disabled) { color: var(--text); background: var(--panel-2); }
-.rename, .nuovo input { flex: 1; min-width: 0; font-family: var(--font-mono, ui-monospace, monospace); font-size: 12px; padding: 4px 6px; }
-.nuovo { display: flex; gap: 4px; align-items: center; margin-top: 4px; }
-.nota { margin: 0; font-size: 11.5px; line-height: 1.45; color: var(--muted); }
-.errore { margin: 0; font-size: 12px; color: var(--danger); }
-.centro { display: flex; flex-direction: column; gap: 8px; min-width: 0; min-height: 0; }
+.rename, .new input { flex: 1; min-width: 0; font-family: var(--font-mono, ui-monospace, monospace); font-size: 12px; padding: 4px 6px; }
+.new { display: flex; gap: 4px; align-items: center; margin-top: 4px; }
+.note { margin: 0; font-size: 11.5px; line-height: 1.45; color: var(--muted); }
+.error { margin: 0; font-size: 12px; color: var(--danger); }
+.middle { display: flex; flex-direction: column; gap: 8px; min-width: 0; min-height: 0; }
 .code { position: relative; flex: 1; min-width: 0; min-height: 0; border: 1px solid var(--border); border-radius: 8px; overflow: hidden; }
-.ultimo { flex: none; font-size: 12px; }
-.ultimo summary { display: flex; align-items: center; gap: 6px; cursor: pointer; flex-wrap: wrap; }
-.ultimo .ok { color: var(--accent-2); }
-.ultimo .ko { color: var(--danger); }
-.vai { margin-left: auto; border: 0; background: none; min-height: 0; padding: 2px 6px; font-size: 12px; color: var(--danger);
+.last { flex: none; font-size: 12px; }
+.last summary { display: flex; align-items: center; gap: 6px; cursor: pointer; flex-wrap: wrap; }
+.last .ok { color: var(--accent-2); }
+.last .ko { color: var(--danger); }
+.go { margin-left: auto; border: 0; background: none; min-height: 0; padding: 2px 6px; font-size: 12px; color: var(--danger);
   font-family: var(--font-mono, ui-monospace, monospace); cursor: pointer; border-radius: 5px; text-decoration: underline; }
-.vai:hover { background: var(--bg-soft); }
-.ultimo .log { margin: 6px 0 0; max-height: 22vh; overflow: auto; font-size: 11.5px; padding: 8px; border-radius: 6px;
+.go:hover { background: var(--bg-soft); }
+.last .log { margin: 6px 0 0; max-height: 22vh; overflow: auto; font-size: 11.5px; padding: 8px; border-radius: 6px;
   background: var(--bg-soft); white-space: pre-wrap; overflow-wrap: anywhere; }
-.problemi { margin-left: auto; flex: none; font-size: 10.5px; min-width: 16px; padding: 0 5px; border-radius: 999px; text-align: center;
+.problems { margin-left: auto; flex: none; font-size: 10.5px; min-width: 16px; padding: 0 5px; border-radius: 999px; text-align: center;
   color: var(--warning); border: 1px solid color-mix(in srgb, var(--warning) 50%, var(--border)); }
-.problemi.errori { color: var(--danger); border-color: color-mix(in srgb, var(--danger) 50%, var(--border)); }
+.problems.errors { color: var(--danger); border-color: color-mix(in srgb, var(--danger) 50%, var(--border)); }
 .monaco { position: absolute; inset: 0; }
-.monaco.nascosto { visibility: hidden; }
-.stato { position: absolute; inset: 0; display: flex; align-items: center; justify-content: center; gap: 8px; font-size: 13px; z-index: 1; }
+.monaco.hidden { visibility: hidden; }
+.state { position: absolute; inset: 0; display: flex; align-items: center; justify-content: center; gap: 8px; font-size: 13px; z-index: 1; }
 .vars .var, .mods .mod { width: 100%; display: flex; align-items: center; justify-content: flex-start; gap: 6px; flex-wrap: wrap; border: 0; background: none; padding: 4px 6px;
   border-radius: 6px; text-align: left; cursor: pointer; min-height: 0; font-size: 12px; color: var(--text); }
 .vars .var:hover:not(:disabled), .mods .mod:hover:not(:disabled) { background: var(--bg-soft); }
 .var code { font-size: 11.5px; }
 .tag { font-size: 10.5px; padding: 0 6px; border-radius: 999px; border: 1px solid var(--border); color: var(--muted); display: inline-flex; align-items: center; gap: 3px; }
-.tag.eccezione { color: var(--warning); border-color: color-mix(in srgb, var(--warning) 50%, var(--border)); }
-.valore { font-size: 11px; color: var(--muted); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; max-width: 100%; }
+.tag.exception { color: var(--warning); border-color: color-mix(in srgb, var(--warning) 50%, var(--border)); }
+.value { font-size: 11px; color: var(--muted); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; max-width: 100%; }
 .mods { max-height: 40%; overflow: auto; }
 .mod { font-family: var(--font-mono, ui-monospace, monospace); }
-.piede { flex: 1; font-size: 12px; }
+.foot { flex: 1; font-size: 12px; }
 @media (max-width: 1000px) {
   .layout { grid-template-columns: 1fr; height: auto; }
   .code { height: 60vh; flex: none; }

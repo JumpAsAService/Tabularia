@@ -1,6 +1,6 @@
 <script setup lang="ts">
-// Tutte le datasource nelle cartelle leggibili: ricerca, refresh (kind=database)
-// con stato live, eliminazione.
+// All the datasources in the readable folders: search, refresh (kind=database) with live
+// state, deletion.
 import { computed, nextTick, onMounted, onUnmounted, reactive, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { useFormat } from '~/composables/useFormat'
@@ -18,16 +18,16 @@ import { runNotes, notesText, type RunNotes } from '~/composables/usePlaceholder
 const dsApi = useDatasources()
 const projectsApi = useProjects()
 const toast = useToast()
-// il data contract della datasource aperta nel dialogo (null = chiuso)
+// the data contract of the datasource open in the dialog (null = closed)
 const contractFor = ref<DatasourceInfo | null>(null)
 const { t, locale } = useI18n()
 const fmtx = useFormat()
 
-// ricerca server-side (nome/descrizione, su tutto il dataset) + paginazione
+// server-side search (name/description, over the whole dataset) + pagination
 const { q, items, total, offset, pageSize, loading, error, load, next, prev } =
   usePagedList<DatasourceInfo>((p) => dsApi.listPaged(p), { initialQuery: String(useRoute().query.q ?? '') })
 
-// Arrivando dalla ricerca globale (?ds=<id>): la riga si apre e viene in vista, una volta.
+// Coming from the global search (?ds=<id>): the row opens and comes into view, once.
 const target = Number(useRoute().query.ds) || null
 watch(items, (list) => {
   const d = target != null ? list.find((x) => x.id === target) : undefined
@@ -42,17 +42,17 @@ onMounted(async () => {
     const projects = await projectsApi.list()
     folderName.value = Object.fromEntries(projects.map((p) => [p.id, p.name]))
   } catch {
-    /* i nomi cartella sono accessori */
+    /* the folder names are an extra */
   }
 })
 
-// ── Expander per-datasource: descrizioni dei CAMPI modificabili inline ──────
-// Come la pagina Flows: click sulla riga → si apre il dettaglio con una riga per
-// colonna dello schema (nome, tipo, descrizione libera) e il bottone Salva.
+// ── Per-datasource expander: the FIELDS' descriptions editable inline ──────
+// As the Flows page: click on the row → the detail opens with one row per schema column
+// (name, type, free description) and the Save button.
 const expanded = ref<number | null>(null)
 const drafts = reactive<Record<number, Record<string, string>>>({})
-// descrizione della DATASOURCE (cosa contiene, una riga = cosa, periodo): si
-// cura qui insieme a quelle dei campi, e si salva con lo stesso bottone
+// the DATASOURCE's description (what it holds, one line = what, period): curated here
+// together with the fields', and saved with the same button
 const aboutDrafts = reactive<Record<number, string>>({})
 const MAX_ABOUT = 4000
 const savingDescriptions = ref<number | null>(null)
@@ -123,7 +123,7 @@ const isDirty = (d: DatasourceInfo) =>
 async function saveDescriptions(d: DatasourceInfo) {
   const draft = drafts[d.id]
   if (!draft) return
-  // conserva le descrizioni di colonne non più nello schema (tornano se ricompaiono)
+  // keeps the descriptions of columns no longer in the schema (they come back if they reappear)
   const stale = Object.fromEntries(
     Object.entries(d.column_descriptions ?? {}).filter(([k]) => !d.columns.some((c) => c.name === k)),
   )
@@ -150,12 +150,12 @@ function fmtDate(iso: string | null): string {
   return iso ? fmtx.dateTime(iso) : ''
 }
 
-// ── Refresh con stato live (stesso pattern del ProjectBrowser) ──────────────
+// ── Refresh with live state (the same pattern as ProjectBrowser) ──────────────
 const ingestRuns = ref<Record<number, RunInfo>>({})
-// Annunci per gli screen reader, una volta sola per import: inizio (dal click) e
-// fine. L'avanzamento che ticchetta non si annuncia: sarebbe una voce al secondo.
+// Announcements for the screen readers, once per import: start (from the click) and end.
+// The ticking progress is not announced: it would be one voice per second.
 const announcement = ref('')
-const watched = new Set<number>() // import visti in corso: la loro fine si annuncia
+const watched = new Set<number>() // imports seen in progress: their end is announced
 function announceEnd(dsId: number, run: RunInfo) {
   if (!watched.delete(dsId)) return
   const name = items.value.find((x) => x.id === dsId)?.name ?? `#${dsId}`
@@ -172,8 +172,8 @@ function announceEnd(dsId: number, run: RunInfo) {
 let pollToken = 0
 onUnmounted(() => { pollToken++ })
 
-// il source_ref di SharePoint e' JSON {path, sheet}, quello SFTP {folder, pattern, …}:
-// in tooltip si mostra leggibile
+// SharePoint's source_ref is JSON {path, sheet}, SFTP's {folder, pattern, …}: in the
+// tooltip it is shown readable
 function sourceLabel(d: DatasourceInfo): string {
   if (d.source_type === 'api') {
     try { const r = JSON.parse(d.source_ref ?? '{}'); return `${r.method ?? 'GET'} ${r.path ?? ''}${r.mode === 'append' ? ' · append' : ''}` } catch { return d.source_ref ?? '' }
@@ -190,9 +190,9 @@ function sourceLabel(d: DatasourceInfo): string {
 const isTerminal = (r: RunInfo) => r.status === 'SUCCESS' || r.status === 'FAILURE'
 const isImporting = (id: number) => !!ingestRuns.value[id] && !isTerminal(ingestRuns.value[id])
 
-// `restored`: poll riagganciato dal flag del server, non da un click. Se l'ultimo
-// run e' gia' terminale non si ricarica la pagina: la ricarica farebbe ripartire
-// il watch → altro poll → altra ricarica, senza fine.
+// `restored`: poll reattached from the server's flag, not from a click. When the last run
+// is terminal already the page does not reload: the reload would restart the watch →
+// another poll → another reload, without end.
 async function pollIngest(dsId: number, token: number, restored = false) {
   try {
     const runs = await dsApi.listRuns(dsId)
@@ -209,8 +209,8 @@ async function pollIngest(dsId: number, token: number, restored = false) {
       if (last.status === 'SUCCESS' && !restored) await load({ quiet: true })
     }
   } catch {
-    // il segnaposto messo dal watch non deve restare appeso: altrimenti spinner
-    // per sempre e bottone di refresh disabilitato
+    // the placeholder the watch put must not stay hanging: otherwise a spinner forever and
+    // the refresh button disabled
     forgetPlaceholder(dsId)
   }
 }
@@ -221,9 +221,9 @@ function forgetPlaceholder(dsId: number) {
   }
 }
 
-// Lo stato "sta importando" non può vivere solo qui: un refresh da cinque minuti
-// sopravvive a un cambio di pagina, e quelli schedulati non partono da un click.
-// Il server segna `refreshing`; a ogni caricamento si riaggancia il polling.
+// The "importing" state cannot live only here: a five-minute refresh survives a page
+// change, and the scheduled ones do not start from a click. The server marks
+// `refreshing`; at every load the polling is reattached.
 watch(items, (list) => {
   for (const d of list) {
     if (d.refreshing && !isImporting(d.id)) {
@@ -250,13 +250,13 @@ async function remove(d: DatasourceInfo) {
   try {
     await dsApi.remove(d.id)
     toast.success(t('datasources.deletedToast', { name: d.name }))
-    await load() // ricarica la pagina (aggiorna totale/finestra)
+    await load() // reloads the page (updates total/window)
   } catch (e) {
     toast.error(errMessage(e))
   }
 }
 
-// ── Refresh schedulato (cron) — dialog condiviso ScheduleDialog ──────────────
+// ── Scheduled refresh (cron) — the shared ScheduleDialog ─────────────────────
 const scheduleFor = ref<DatasourceInfo | null>(null)
 const savingSchedule = ref(false)
 
@@ -273,7 +273,7 @@ async function saveSchedule(cron: string) {
     toast.success(cron.trim() ? t('datasources.scheduleSetToast', { cron: updated.refresh_schedule }) : t('datasources.scheduleDisabledToast'))
     scheduleFor.value = null
   } catch (e) {
-    toast.error(errMessage(e)) // 422 cron invalido, 403 permessi
+    toast.error(errMessage(e)) // 422 invalid cron, 403 permissions
   } finally {
     savingSchedule.value = false
   }
@@ -307,9 +307,8 @@ async function saveSchedule(cron: string) {
               <span v-if="d.kind === 'database'" class="tag">{{ $t('datasources.tagDb') }}</span>
               <span v-else-if="d.kind === 'flow'" class="tag">{{ $t('datasources.tagFlow') }}</span>
               <ContractBadge :contract="d.contract" :size="15" />
-              <!-- documentata per intero: l'assistente può interrogarla senza
-                   indovinare. Stesso simbolo della voce Assistente, così il
-                   nesso si legge senza spiegazioni. -->
+              <!-- documented in full: the assistant can query it without guessing. The same symbol as
+                   the Assistant item, so the link reads without explanations. -->
               <span v-if="d.ai_ready" class="ready-badge" :title="$t('datasources.aiReadyHint')">
                 <Sparkles :size="11" /> {{ $t('datasources.aiReady') }}
               </span>
@@ -317,8 +316,8 @@ async function saveSchedule(cron: string) {
                 <BookText :size="11" /> {{ $t('columnDescriptions.counter', { n: describedCount(d), total: d.columns.length }) }}
               </span>
             </span>
-            <!-- a che punto è l'import: sotto il nome, dove c'è posto in ogni
-                 lingua e che resta visibile anche sul telefono -->
+            <!-- where the import stands: under the name, where there is room in every language and
+                 which stays visible on the phone too -->
             <span v-if="isImporting(d.id)" class="dprog">
               <RunProgressText :run="ingestRuns[d.id]" :sr-label="$t('datasources.importingStatus')" />
             </span>

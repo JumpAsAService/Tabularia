@@ -1,42 +1,40 @@
-// Content-Security-Policy dell'interfaccia (audit 2026-10-08, M7).
+// The interface's Content-Security-Policy (audit 2026-10-08, M7).
 //
-// Il token di sessione sta in un cookie HttpOnly che il JavaScript non legge, ma
-// uno script iniettato potrebbe comunque usare la sessione finché la pagina è
-// aperta. La politica chiude le due strade che servono a farlo: eseguire script
-// che non sono nostri (solo i file di /_nuxt e gli script inline che Nuxt scrive,
-// autorizzati uno per uno con il loro hash) e mandare dati altrove (fetch e
-// immagini solo verso il sito stesso e il gateway).
+// The session token sits in an HttpOnly cookie JavaScript does not read, but an injected
+// script could still use the session while the page is open. The policy closes the two
+// roads needed to do it: running scripts that are not ours (only the /_nuxt files and the
+// inline scripts Nuxt writes, authorized one by one with their hash) and sending data
+// elsewhere (fetch and images only towards the site itself and the gateway).
 //
-// Gli hash si calcolano sugli script dell'<head> e della coda del <body>, quelli
-// di Nuxt, MAI sull'HTML dell'app: un contenuto reso come HTML verrebbe
-// autorizzato insieme a loro. Non in sviluppo: Vite inietta script e apre un
-// websocket per il ricaricamento a caldo.
+// The hashes are computed on the scripts of the <head> and the tail of the <body>, Nuxt's,
+// NEVER on the app's HTML: content rendered as HTML would be authorized together with
+// them. Not in development: Vite injects scripts and opens a websocket for hot reload.
 const SCRIPT = /<script\b([^>]*)>([\s\S]*?)<\/script>/gi
 
-// codice da eseguire: senza `src` e senza un tipo di dati (application/json…)
-function eseguibile(attributi: string): boolean {
-  if (/\bsrc\s*=/i.test(attributi)) return false
-  const tipo = /\btype\s*=\s*["']?([^"'\s>]+)/i.exec(attributi)?.[1]?.toLowerCase()
-  return !tipo || tipo === 'module' || tipo.includes('javascript')
+// code to run: without `src` and without a data type (application/json…)
+function runnable(attributes: string): boolean {
+  if (/\bsrc\s*=/i.test(attributes)) return false
+  const kind = /\btype\s*=\s*["']?([^"'\s>]+)/i.exec(attributes)?.[1]?.toLowerCase()
+  return !kind || kind === 'module' || kind.includes('javascript')
 }
 
-// Web Crypto, non node:crypto: c'è in Node e nei tipi che il progetto ha già
-async function sha256(testo: string): Promise<string> {
-  const byte = new Uint8Array(await crypto.subtle.digest('SHA-256', new TextEncoder().encode(testo)))
+// Web Crypto, not node:crypto: it is in Node and in the types the project has already
+async function sha256(text: string): Promise<string> {
+  const byte = new Uint8Array(await crypto.subtle.digest('SHA-256', new TextEncoder().encode(text)))
   return btoa(String.fromCharCode(...byte))
 }
 
-export async function hashDegliScript(html: string): Promise<string[]> {
-  const visti = new Set<string>()
-  for (const [, attributi, codice] of html.matchAll(SCRIPT)) {
-    if (eseguibile(attributi ?? '')) visti.add(`'sha256-${await sha256(codice ?? '')}'`)
+export async function scriptHashes(html: string): Promise<string[]> {
+  const seen = new Set<string>()
+  for (const [, attributes, code] of html.matchAll(SCRIPT)) {
+    if (runnable(attributes ?? '')) seen.add(`'sha256-${await sha256(code ?? '')}'`)
   }
-  return [...visti]
+  return [...seen]
 }
 
-// "/api" è il sito stesso; un URL assoluto (il gateway su un altro host) va
-// ammesso per origine
-function origine(url: unknown): string {
+// "/api" is the site itself; an absolute URL (the gateway on another host) is allowed by
+// origin
+function origin(url: unknown): string {
   if (typeof url !== 'string' || !/^https?:\/\//i.test(url)) return ''
   try {
     return new URL(url).origin
@@ -45,18 +43,18 @@ function origine(url: unknown): string {
   }
 }
 
-export async function politica(htmlDiNuxt: string, apiBase: unknown, grafanaUrl: unknown): Promise<string> {
-  const api = origine(apiBase)
-  const grafana = origine(grafanaUrl)
+export async function policy(nuxtHtml: string, apiBase: unknown, grafanaUrl: unknown): Promise<string> {
+  const api = origin(apiBase)
+  const grafana = origin(grafanaUrl)
   return [
     "default-src 'self'",
-    ["script-src 'self'", ...(await hashDegliScript(htmlDiNuxt))].join(' '),
-    // Vue Flow e gli attributi style del rendering lato server
+    ["script-src 'self'", ...(await scriptHashes(nuxtHtml))].join(' '),
+    // Vue Flow and the style attributes of the server-side render
     "style-src 'self' 'unsafe-inline'",
     "img-src 'self' data: blob:",
     "font-src 'self' data:",
     ["connect-src 'self'", api].filter(Boolean).join(' '),
-    // la tab Monitoring incorpora Grafana
+    // the Monitoring tab embeds Grafana
     ["frame-src 'self'", grafana].filter(Boolean).join(' '),
     "object-src 'none'",
     "base-uri 'self'",
@@ -69,7 +67,7 @@ export default defineNitroPlugin((nitroApp) => {
   if (import.meta.dev) return
   nitroApp.hooks.hook('render:html', async (html, { event }) => {
     const { apiBase, grafanaUrl } = useRuntimeConfig(event).public
-    const diNuxt = [...html.head, ...html.bodyAppend].join('\n')
-    setResponseHeader(event, 'content-security-policy', await politica(diNuxt, apiBase, grafanaUrl))
+    const nuxtScripts = [...html.head, ...html.bodyAppend].join('\n')
+    setResponseHeader(event, 'content-security-policy', await policy(nuxtScripts, apiBase, grafanaUrl))
   })
 })

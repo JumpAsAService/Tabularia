@@ -1,11 +1,11 @@
-// Motori che l'installazione consente di SCEGLIERE. Li governa un
-// amministratore dal pannello Admin; tutti gli altri ne vedono solo l'effetto —
-// un motore non consentito sparisce dalle scelte possibili del selettore.
+// The engines the installation allows to CHOOSE. An administrator governs them from the
+// Admin panel; everyone else sees only their effect — an engine not allowed disappears
+// from the selector's possible choices.
 //
-// `flows_using` è la parte che conta: disabilitare un motore NON ferma i flussi
-// che lo usano già (un interruttore non deve poter fermare un DAG schedulato),
-// quindi il pannello mostra quanti restano fuori standard. Senza quel numero la
-// standardizzazione sarebbe un interruttore senza conseguenze visibili.
+// `flows_using` is the part that counts: disabling an engine does NOT stop the flows that
+// use it already (a switch must not be able to stop a scheduled DAG), so the panel shows
+// how many stay off standard. Without that number the standardization would be a switch
+// without visible consequences.
 
 export interface EnginePolicy {
   engine_id: string

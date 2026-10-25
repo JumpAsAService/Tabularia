@@ -1,7 +1,7 @@
 <script setup lang="ts">
-// L'editor a nodi (Vue Flow) è client-only: renderizzato solo lato browser.
-// Navigazione (Progetti/Esci): dentro la Toolbar, non in overlay — così non
-// copre mai lo stato di esecuzione del flusso.
+// The node editor (Vue Flow) is client-only: rendered only in the browser. Navigation
+// (Projects/Sign out): inside the Toolbar, not in an overlay — so it never covers the
+// flow's run state.
 </script>
 
 <template>

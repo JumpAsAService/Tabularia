@@ -1,13 +1,13 @@
-// Ricerca unificata per nome su tutte le risorse: cartelle, flussi, gruppi di
-// flussi, datasource, viste salvate, connessioni.
+// Unified search by name over all the resources: folders, flows, flow groups,
+// datasources, saved views, connections.
 //
-// Il gateway applica i permessi per TIPO (le cartelle si vedono se navigabili, i
-// contenuti se leggibili, le connessioni solo con CONNECT), quindi qui non serve
-// alcun filtro: ciò che torna è già ciò che l'utente può vedere.
+// The gateway applies the permissions per KIND (folders are seen when navigable, contents
+// when readable, connections only with CONNECT), so here no filter is needed: what comes
+// back is what the user can see already.
 //
-// `counts` descrive TUTTO ciò che combacia, non la pagina e nemmeno il tipo
-// filtrato: sono i numeri da mettere nel selettore per tipo, che altrimenti
-// cambierebbero a ogni clic.
+// `counts` describes EVERYTHING that matches, not the page and not even the filtered
+// kind: they are the numbers to put in the kind selector, which would otherwise change at
+// every click.
 
 export type SearchKind = 'folder' | 'flow' | 'group' | 'datasource' | 'view' | 'script' | 'connection'
 
@@ -15,7 +15,7 @@ export interface SearchHit {
   kind: SearchKind
   id: number
   name: string
-  /** dove si trova: per una cartella è quella che la contiene */
+  /** where it is: for a folder it is the one containing it */
   project_id: number | null
   project_name: string | null
   detail: string
@@ -32,14 +32,14 @@ export interface SearchResults {
   counts: Partial<Record<SearchKind, number>>
 }
 
-/** Dove porta un risultato quando lo si apre. Le cartelle restano nell'Explore. */
+/** Where a result leads when it is opened. The folders stay in the Explore. */
 export function searchHitTarget(hit: SearchHit): string {
   switch (hit.kind) {
     case 'flow': return `/editor?flow=${hit.id}`
     case 'group': return `/flow-group?id=${hit.id}`
     case 'view': return `/viewer?view=${hit.id}`
     case 'script': return `/script?id=${hit.id}`
-    // col nome come ricerca: la lista è paginata, e la voce può stare oltre la prima pagina
+    // with the name as search: the list is paginated, and the item may sit past the first page
     case 'datasource': return `/datasources?q=${encodeURIComponent(hit.name)}&ds=${hit.id}`
     case 'connection': return `/connections?q=${encodeURIComponent(hit.name)}&conn=${hit.id}`
     case 'folder': return `/?folder=${hit.id}`

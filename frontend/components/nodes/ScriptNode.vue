@@ -29,13 +29,13 @@ const summary = computed(() => {
 </script>
 
 <template>
-  <div class="node node-script" :class="{ spento: off }" :title="off ? t('scripting.kubernetesOnly') : undefined">
+  <div class="node node-script" :class="{ off: off }" :title="off ? t('scripting.kubernetesOnly') : undefined">
     <Handle id="left" type="target" :position="Position.Left" class="h-left-top" />
     <Handle id="seq-in" type="target" :position="Position.Left" class="handle-seq h-left-bottom" />
     <div class="node-title">
       <FileCode2 :size="13" class="node-icon" />
       {{ data?.label || t('scripting.node.title') }}
-      <span v-if="language" class="lingua">{{ language === 'r' ? 'R' : 'Python' }}</span>
+      <span v-if="language" class="language">{{ language === 'r' ? 'R' : 'Python' }}</span>
     </div>
     <div class="node-body muted">{{ summary }}</div>
     <Handle id="out" type="source" :position="Position.Right" class="h-right-top" />
@@ -44,10 +44,10 @@ const summary = computed(() => {
 </template>
 
 <style scoped>
-.spento { opacity: .45; }
+.off { opacity: .45; }
 .node-script { --node-accent: #34d399; min-width: 180px; }
 .node-icon { color: var(--node-accent); }
 .node-body { max-width: 240px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .handle-seq { background: var(--node-accent) !important; }
-.lingua { margin-left: auto; font-size: 10px; padding: 0 6px; border-radius: 999px; border: 1px solid var(--border); color: var(--muted); font-weight: 500; }
+.language { margin-left: auto; font-size: 10px; padding: 0 6px; border-radius: 999px; border: 1px solid var(--border); color: var(--muted); font-weight: 500; }
 </style>

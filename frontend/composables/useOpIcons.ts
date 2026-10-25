@@ -1,5 +1,5 @@
-// Icona e colore per ogni tipo di operazione (sidebar, nodi del canvas).
-// Un posto solo: aggiungendo un'operazione all'engine basta estendere qui.
+// Icon and colour for every kind of operation (sidebar, canvas nodes). One place only:
+// adding an operation to the engine, extending here is enough.
 import type { FunctionalComponent } from 'vue'
 import {
   Shuffle,
@@ -29,7 +29,7 @@ import {
 export interface OpMeta {
   icon: FunctionalComponent
   label: string
-  color: string // accento del nodo/voce sidebar
+  color: string // accent of the node/sidebar item
 }
 
 const OP_META: Record<string, OpMeta> = {

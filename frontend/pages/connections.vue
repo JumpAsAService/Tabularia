@@ -1,7 +1,7 @@
 <script setup lang="ts">
-// Tutte le connessioni usabili (capability CONNECT): test in-place, modifica,
-// eliminazione. La creazione resta nella cartella (Explore), dove la
-// connessione vive e prende i permessi.
+// All the usable connections (CONNECT capability): in-place test, edit, deletion. The
+// creation stays in the folder (Explore), where the connection lives and takes its
+// permissions.
 import { nextTick, onMounted, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { Plug, Search, Trash2, Folder, Pencil, CheckCircle2, XCircle, LoaderCircle } from 'lucide-vue-next'
@@ -20,10 +20,10 @@ const projectsApi = useProjects()
 const toast = useToast()
 const { t } = useI18n()
 
-// ricerca server-side (nome/host/database, su tutto il dataset) + paginazione
+// server-side search (name/host/database, over the whole dataset) + pagination
 const { q, items, total, offset, pageSize, loading, error, load, next, prev } =
   usePagedList<ConnectionInfo>((p) => connApi.listPaged(p), { initialQuery: String(useRoute().query.q ?? '') })
-// arrivando dalla ricerca globale (?conn=<id>): la riga è evidenziata e in vista
+// coming from the global search (?conn=<id>): the row is highlighted and in view
 const target = Number(useRoute().query.conn) || null
 watch(items, (list) => {
   if (target != null && list.some((c) => c.id === target)) {
@@ -37,7 +37,7 @@ onMounted(async () => {
     const projects = await projectsApi.list()
     folderName.value = Object.fromEntries(projects.map((p) => [p.id, p.name]))
   } catch {
-    /* i nomi cartella sono accessori */
+    /* the folder names are an extra */
   }
 })
 
@@ -56,7 +56,7 @@ async function test(c: ConnectionInfo) {
   }
 }
 
-// ── Modifica (riusa il dialog della cartella) ───────────────────────────────
+// ── Edit (reuses the folder's dialog) ───────────────────────────────
 const editing = ref<ConnectionInfo | null>(null)
 const dialogBusy = ref(false)
 const dialogError = ref('')
@@ -83,7 +83,7 @@ async function remove(c: ConnectionInfo) {
   try {
     await connApi.remove(c.id)
     toast.success(t('connections.deletedToast', { name: c.name }))
-    await load() // ricarica la pagina (aggiorna totale/finestra)
+    await load() // reloads the page (updates total/window)
   } catch (e) {
     toast.error(errMessage(e))
   }
@@ -151,7 +151,7 @@ async function remove(c: ConnectionInfo) {
 <style scoped src="~/assets/listpage.css" />
 
 <style scoped>
-/* la connessione aperta dalla ricerca globale: si ritrova a colpo d'occhio */
+/* the connection opened from the global search: it is found at a glance */
 tr.target td { background: var(--tint-accent); }
 /* a phone: the table fits (752 px wide, the page scrolled sideways) */
 @media (max-width: 720px) {

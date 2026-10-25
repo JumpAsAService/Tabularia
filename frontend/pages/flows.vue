@@ -1,7 +1,7 @@
 <script setup lang="ts">
-// Flussi nelle cartelle leggibili, con ricerca server-side + paginazione. Ogni
-// flusso ha un expander (come le Esecuzioni) con metriche d'esecuzione, la
-// timeline (Gantt) dei run e lo storico versioni con promozione.
+// Flows in the readable folders, with a server-side search + pagination. Every flow has
+// an expander (like the Runs) with run metrics, the runs' timeline (Gantt) and the
+// version history with promotion.
 import { computed, onBeforeUnmount, onMounted, reactive, ref } from 'vue'
 import Modal from '~/components/ui/Modal.vue'
 import { usePopover } from '~/composables/usePopover'
@@ -47,16 +47,16 @@ function versionNote(note: string): string {
   return note
 }
 const fmtx = useFormat()
-// l'export dbt è degli amministratori (anche per gruppo): il progetto porta con sé
-// dati e definizioni di altre cartelle. OpenLineage resta per chiunque veda il flusso.
+// the dbt export is for administrators (by group too): the project carries data and
+// definitions of other folders. OpenLineage stays for anyone who sees the flow.
 const { user: me } = useAuth()
 const canExportDbt = computed(() => !!me.value?.is_superuser)
 
 const { q, items, total, offset, pageSize, loading, error, load, next, prev } =
   usePagedList<FlowSummary>((p) => flowsApi.listPaged(p))
 
-// motori disponibili per il picker "Nuovo flusso" (il flusso è pinnato al motore
-// scelto). DuckDB compare come "in arrivo" finché il suo engine non è pronto.
+// engines available for the "New flow" picker (the flow is pinned to the chosen engine).
+// DuckDB shows as "coming" until its engine is ready.
 const engines = ref<EngineOpt[]>([{ id: 'polars', label: 'Polars', available: true, description: '' }])
 const { preferredEngine } = usePreferredEngine()
 const newMenu = ref(false)
@@ -71,16 +71,16 @@ const folderName = ref<Record<number, string>>({})
 const engineLabel = (id: string) => engines.value.find((e) => e.id === id)?.label ?? id
 const availableEngines = computed(() => engines.value.filter((e) => e.available))
 
-// Perché un motore non è scegliibile. Sono tre ragioni diverse — non consentito
-// in questa installazione (pannello Admin → Motori), non configurato lato
-// server, non ancora pronto — e mostrarle con la stessa etichetta manderebbe a
-// cercare la causa sbagliata (una variabile d'ambiente invece dell'amministratore).
+// Why an engine cannot be chosen. They are three different reasons — not allowed in this
+// installation (Admin panel → Engines), not configured on the server, not ready yet — and
+// showing them with the same label would send one looking for the wrong cause (an
+// environment variable instead of the administrator).
 function engineTag(e: EngineOpt): string {
   if (e.disabled_by_admin) return t('flows.notAllowedTag')
   return t(e.optional ? 'flows.notConfiguredTag' : 'flows.comingSoonTag')
 }
 
-// motore di PRODUZIONE (run schedulati / esegui-in-produzione): '' = come sviluppo
+// PRODUCTION engine (scheduled runs / run-in-production): '' = as development
 async function setProductionEngine(f: FlowSummary, value: string) {
   try {
     const updated = await flowsApi.update(f.id, { production_engine: value })
@@ -91,7 +91,7 @@ async function setProductionEngine(f: FlowSummary, value: string) {
   }
 }
 
-// esegue subito il DAG col motore di produzione (come farebbe lo scheduler)
+// runs the DAG at once with the production engine (as the scheduler would)
 const runningProd = ref<number | null>(null)
 async function runProduction(f: FlowSummary) {
   runningProd.value = f.id
@@ -166,22 +166,22 @@ onMounted(async () => {
     const projects = await projectsApi.list()
     folderName.value = Object.fromEntries(projects.map((p) => [p.id, p.name]))
   } catch {
-    /* i nomi cartella sono accessori */
+    /* the folder names are an extra */
   }
   try {
     engines.value = await api.engines()
   } catch {
-    /* fallback: solo Polars (già in default) */
+    /* fallback: Polars only (in the default already) */
   }
   try {
     const conns = await connectionsApi.list()
     smtpConnections.value = conns.filter((c) => c.db_type === 'smtp').map((c) => ({ id: c.id, name: c.name }))
   } catch {
-    /* senza connessioni SMTP la sezione dell'avviso non compare, e basta */
+    /* without SMTP connections the notice's section does not show, and that is all */
   }
 })
 
-// ── Expander per-flusso: metriche + Gantt + versioni (caricati alla prima apertura)
+// ── Per-flow expander: metrics + Gantt + versions (loaded at the first opening)
 interface Detail {
   stats: FlowStats | null
   versions: FlowVersionInfo[]
@@ -213,7 +213,7 @@ async function fetchDetail(id: number) {
   }
 }
 
-// indicatore dello stato dell'ultimo run (senza aprire l'expander)
+// the last run's state indicator (without opening the expander)
 function runStatus(f: FlowSummary) {
   switch (f.last_run_status) {
     case 'SUCCESS': return { icon: CheckCircle2, cls: 'ok', label: t('flows.lastRunSuccess') }
@@ -264,8 +264,8 @@ async function exportOpenLineage(f: FlowSummary) {
   exportMenuFlow.value = null
   exporting.value = f.id
   try {
-    const eventi = await api.exportFlowOpenLineage(f.id)
-    const blob = new Blob([JSON.stringify(eventi, null, 2)], { type: 'application/json' })
+    const events = await api.exportFlowOpenLineage(f.id)
+    const blob = new Blob([JSON.stringify(events, null, 2)], { type: 'application/json' })
     const url = URL.createObjectURL(blob)
     const a = document.createElement('a')
     a.href = url
@@ -279,7 +279,7 @@ async function exportOpenLineage(f: FlowSummary) {
   }
 }
 
-// l'export dbt ha le sue opzioni: si apre il suo dialogo (solo amministratori)
+// the dbt export has its options: its dialog opens (administrators only)
 const dbtFlow = ref<FlowSummary | null>(null)
 function openDbtExport(f: FlowSummary) {
   exportMenuFlow.value = null
@@ -295,11 +295,11 @@ function fmtDur(secs: number | null | undefined): string {
   return `${Math.floor(secs / 60)}m ${Math.round(secs % 60)}s`
 }
 
-// Connessioni SMTP disponibili: senza almeno una, l'avviso non si può spedire e
-// la sezione nel dialogo non compare affatto — meglio assente che disabilitata.
+// Available SMTP connections: without at least one, the notice cannot be sent and the
+// section in the dialog does not show at all — better missing than disabled.
 const smtpConnections = ref<{ id: number; name: string }[]>([])
 
-// ── Scheduling (dialog condiviso) ────────────────────────────────────────────
+// ── Scheduling (shared dialog) ───────────────────────────────────────────────
 const scheduleFor = ref<FlowSummary | null>(null)
 const savingSchedule = ref(false)
 async function saveSchedule(cron: string, productionEngine?: string, notify?: { emails: string; connectionId: number }) {
@@ -344,10 +344,10 @@ async function saveSchedule(cron: string, productionEngine?: string, notify?: { 
       </div>
     </div>
 
-    <!-- panoramica: calendar plot dell'attività (drill-down orario al click) -->
+    <!-- overview: the activity's calendar plot (hourly drill-down on click) -->
     <RunCalendar />
 
-    <!-- carico previsionale degli schedule: fasce orarie critiche (collisioni) -->
+    <!-- the schedules' forecast load: critical time slots (collisions) -->
     <ScheduleLoad />
 
     <p v-if="error" class="err">{{ error }}</p>
@@ -357,7 +357,7 @@ async function saveSchedule(cron: string, productionEngine?: string, notify?: { 
     </p>
 
     <div v-else class="flows">
-      <div v-for="f in items" :key="f.id" class="flow" :class="{ open: expanded === f.id, bloccata: !!f.locked_reason }"
+      <div v-for="f in items" :key="f.id" class="flow" :class="{ open: expanded === f.id, blocked: !!f.locked_reason }"
            :title="f.locked_reason || undefined" :aria-disabled="f.locked_reason ? 'true' : undefined">
         <div class="flow-row">
           <button class="flow-head" :disabled="!!f.locked_reason" @click="toggle(f)">
@@ -371,7 +371,7 @@ async function saveSchedule(cron: string, productionEngine?: string, notify?: { 
                 :title="runStatus(f).label"
               />
               {{ f.name }}
-              <Lock v-if="f.locked_reason" :size="12" class="lucchetto" :aria-label="$t('projectBrowser.lockedFlow')" />
+              <Lock v-if="f.locked_reason" :size="12" class="lock" :aria-label="$t('projectBrowser.lockedFlow')" />
             </span>
             <span class="folder muted"><Folder :size="12" /> {{ folderName[f.project_id] ?? `#${f.project_id}` }}</span>
             <span
@@ -459,9 +459,9 @@ async function saveSchedule(cron: string, productionEngine?: string, notify?: { 
 
     <DbtExportDialog :flow="dbtFlow" @close="dbtFlow = null" />
 
-    <!-- scelta dell'export: dbt (con le sue opzioni) o OpenLineage. Sul guscio comune
-         dei dialoghi: fuoco dentro, Tab confinato, Esc chiude (prima era un overlay
-         senza ruolo né tastiera) -->
+    <!-- choice of the export: dbt (with its options) or OpenLineage. On the dialogs' common
+         shell: focus inside, Tab confined, Esc closes (before it was an overlay without role
+         or keyboard) -->
     <Modal :open="!!exportMenuFlow" :title="$t('flows.exportDbtTitle')" :width="400" @close="exportMenuFlow = null">
       <div v-if="exportMenuFlow" class="export-body">
         <span class="muted">{{ exportMenuFlow.name }}</span>
@@ -480,9 +480,9 @@ async function saveSchedule(cron: string, productionEngine?: string, notify?: { 
 <!-- stili condivisi delle pagine-lista: .btn-link, .mini, .err, .tag, … -->
 <style scoped src="~/assets/listpage.css" />
 <style scoped>
-.flow.bloccata { opacity: 0.45; cursor: not-allowed; }
-.flow.bloccata .flow-head { cursor: not-allowed; }
-.lucchetto { margin-left: 6px; vertical-align: -1px; color: var(--muted); }
+.flow.blocked { opacity: 0.45; cursor: not-allowed; }
+.flow.blocked .flow-head { cursor: not-allowed; }
+.lock { margin-left: 6px; vertical-align: -1px; color: var(--muted); }
 .prod-engine { font-size: 12px; padding: 2px 6px; max-width: 220px; }
 .page-head { display: flex; align-items: center; justify-content: space-between; gap: 16px; flex-wrap: wrap; }
 .page-head h1 { display: inline-flex; align-items: center; gap: 8px; }
@@ -510,16 +510,16 @@ async function saveSchedule(cron: string, productionEngine?: string, notify?: { 
 .when { text-align: right; font-size: 12.5px; white-space: nowrap; }
 .flow-actions { display: flex; align-items: center; gap: 4px; padding-right: 10px; }
 .mini.active { color: var(--accent-2); border-color: var(--accent-2); }
-/* Schermi stretti: la griglia della riga chiede ~750px e il contenitore taglia ciò
-   che sborda — le azioni finivano fuori. Restano nome e azioni, come in Datasources;
-   cartella, pianificazione e data si leggono aprendo la riga. */
+/* Narrow screens: the row's grid asks for ~750px and the container cuts what overflows —
+   the actions ended up outside. Name and actions stay, as in Datasources; folder,
+   schedule and date are read by opening the row. */
 @media (max-width: 760px) {
   .flow-head { grid-template-columns: 18px minmax(0, 1fr); }
   .flow-head .folder, .flow-head .sched-badge, .flow-head .when { display: none; }
   .flow-actions { padding-right: 6px; gap: 2px; }
 }
 
-/* dialog centrato di scelta target export dbt (duckdb federato / nativo) */
+/* centred dialog choosing the dbt export target (federated duckdb / native) */
 .export-body { display: flex; flex-direction: column; gap: 8px; }
 .export-body > .muted { font-size: 12px; margin-bottom: 2px; }
 .export-opt {
@@ -549,7 +549,7 @@ async function saveSchedule(cron: string, productionEngine?: string, notify?: { 
 .promote { display: inline-flex; align-items: center; gap: 4px; }
 .small { font-size: 12.5px; }
 
-/* dropdown "Nuovo flusso" con scelta del motore */
+/* "New flow" dropdown with the engine choice */
 .newflow { position: relative; }
 .menu-backdrop { position: fixed; inset: 0; z-index: 40; }
 .menu-pop { position: absolute; right: 0; top: calc(100% + 6px); z-index: 41; min-width: 260px; background: var(--panel); border: 1px solid var(--border); border-radius: 9px; box-shadow: 0 12px 32px rgba(0, 0, 0, 0.28); padding: 6px; }

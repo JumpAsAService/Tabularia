@@ -1,10 +1,10 @@
-// SIEM (Amministrazione → SIEM): il registro di audit inoltrato a Splunk con
-// l'HTTP Event Collector. Il token si scrive e non si rilegge.
+// SIEM (Administration → SIEM): the audit log forwarded to Splunk with the HTTP Event
+// Collector. The token is written and not read back.
 
 export interface SiemState {
   kind: string
   enabled: boolean
-  url: string // all'osservatore solo schema e host
+  url: string // to the observer only scheme and host
   token_set: boolean
   index: string | null
   source: string | null
@@ -25,7 +25,7 @@ export interface SiemState {
 export interface SiemUpdate {
   enabled?: boolean
   url?: string
-  token?: string // un testo lo sostituisce, "" lo toglie
+  token?: string // a text replaces it, "" removes it
   index?: string
   source?: string
   sourcetype?: string

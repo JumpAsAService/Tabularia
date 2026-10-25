@@ -1,6 +1,6 @@
 <script setup lang="ts">
-// Dialog di creazione/modifica di una connessione database, con test in-place.
-// La password non viene mai mostrata: in modifica, campo vuoto = non cambiarla.
+// Dialog creating/editing a database connection, with an in-place test. The password is
+// never shown: when editing, empty field = do not change it.
 import { computed, ref, watch, nextTick } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { Plug, X, CheckCircle2, XCircle, LoaderCircle, KeyRound, ShieldCheck, ShieldAlert, TriangleAlert, Info } from 'lucide-vue-next'
@@ -18,7 +18,7 @@ import {
 const props = defineProps<{
   open: boolean
   projectId: number
-  existing?: ConnectionInfo | null // valorizzata = modifica
+  existing?: ConnectionInfo | null // set = edit
   error?: string
   busy?: boolean
 }>()
@@ -30,7 +30,7 @@ const emit = defineEmits<{
 const connApi = useConnections()
 const { t } = useI18n()
 
-// fuoco iniziale sulla card, Tab confinato, Esc funzionante, fuoco restituito
+// initial focus on the card, Tab confined, Esc working, focus given back
 const card = ref<HTMLElement | null>(null)
 useDialogA11y(card, () => props.open, () => emit('cancel'))
 
@@ -44,21 +44,21 @@ const password = ref('')
 const database = ref('')
 const dbSchema = ref('')
 
-// SMTP: mittente, cifratura e domini ammessi non hanno una colonna propria e
-// viaggiano nel campo `extra` (JSON). Qui restano quattro campi normali.
+// SMTP: sender, encryption and allowed domains have no column of their own and travel in
+// the `extra` field (JSON). Here they stay four normal fields.
 const fromAddress = ref('')
 const fromName = ref('')
 const tls = ref('starttls')
-// SQL Server: come trattare il TLS (`extra.tls`)
+// SQL Server: how to treat TLS (`extra.tls`)
 const sqlTls = ref('verify')
 const allowedDomains = ref('')
 
 const isEdit = computed(() => !!props.existing)
-// object storage: stesse colonne, etichette diverse (host=endpoint, ecc.)
+// object storage: the same columns, different labels (host=endpoint, etc.)
 const isS3 = computed(() => dbType.value === 's3')
 const isSmtp = computed(() => dbType.value === 'smtp')
-// SharePoint: stesse colonne, altre etichette (host=sito, username=client id,
-// password=secret, database=tenant); la raccolta documenti vive in `extra`
+// SharePoint: the same columns, other labels (host=site, username=client id,
+// password=secret, database=tenant); the document library lives in `extra`
 const isSp = computed(() => dbType.value === 'sharepoint')
 const library = ref('')
 
@@ -132,16 +132,16 @@ watch(
     host.value = c?.host ?? ''
     port.value = c?.port != null ? String(c.port) : ''
     username.value = c?.username ?? ''
-    password.value = '' // mai precompilata
+    password.value = '' // never prefilled
     database.value = c?.database ?? ''
     dbSchema.value = c?.db_schema ?? ''
-    // `extra` è JSON opaco: se una connessione salvata a mano lo avesse rotto,
-    // il form deve comunque aprirsi — si riparte dai default
+    // `extra` is opaque JSON: if a connection saved by hand had broken it, the form must open
+    // anyway — it starts again from the defaults
     let opts: Record<string, any> = {}
     try {
       const parsed = JSON.parse(c?.extra || '{}')
       if (parsed && typeof parsed === 'object' && !Array.isArray(parsed)) opts = parsed
-    } catch { /* JSON illeggibile: campi vuoti */ }
+    } catch { /* unreadable JSON: empty fields */ }
     library.value = opts.library ?? ''
     fromAddress.value = opts.from_address ?? ''
     fromName.value = opts.from_name ?? ''
@@ -190,7 +190,7 @@ const typeOptions = computed(() =>
 // a key seen for one address says nothing about another
 watch([host, port, username], () => { seenKey.value = null; pendingKey.value = null })
 
-// la porta di default del tipo, come suggerimento (vuota = quella)
+// the kind's default port, as a hint (empty = that one)
 const DEFAULT_PORTS: Record<string, string> = {
   postgresql: '5432', mysql: '3306', mariadb: '3306', clickhouse: '8123', trino: '8080', oracle: '1521', sqlserver: '1433', smtp: '587',
   sftp: '22',
@@ -299,8 +299,8 @@ function draft(): ConnectionDraft {
     ...(isSftp.value && sftpAuth.value === 'key' && privateKey.value.trim() ? { private_key: privateKey.value } : {}),
     ...(isSftp.value && sftpAuth.value === 'key' && passphrase.value ? { private_key_passphrase: passphrase.value } : {}),
     ...(isSftp.value && seenKey.value ? { accept_host_key: seenKey.value.fingerprint, accept_host_key_type: seenKey.value.type } : {}),
-    // inviato sempre: per gli altri tipi resta un oggetto vuoto, e ometterlo in
-    // modifica vorrebbe dire «non toccarlo», che qui non è mai l'intenzione
+    // always sent: for the other kinds it stays an empty object, and omitting it when
+    // editing would mean «do not touch it», which here is never the intention
     extra: JSON.stringify(
       isApi.value
         ? {
@@ -354,15 +354,15 @@ const apiMoved = computed(() => {
 })
 const apiNeedsSecretAgain = computed(() => apiMoved.value && !password.value)
 
-// per S3 l'endpoint può essere vuoto (= AWS): basta il nome. Per SMTP serve
-// anche il mittente: senza, la connessione si salva e poi ogni invio fallisce.
+// for S3 the endpoint may be empty (= AWS): the name is enough. For SMTP the sender is
+// needed too: without it, the connection saves and then every send fails.
 const incomplete = computed(
   () =>
     !name.value.trim() ||
     (!isS3.value && !host.value.trim()) ||
     (isSmtp.value && !fromAddress.value.trim()) ||
     (isSp.value && (!username.value.trim() || !database.value.trim())) ||
-    // una SharePoint nuova senza secret si salverebbe e fallirebbe a ogni import
+    // a new SharePoint without a secret would save and fail at every import
     (isSp.value && !isEdit.value && !password.value) ||
     // SFTP: a user, and the secret of the chosen method (stored, or typed now)
     (isSftp.value && !username.value.trim()) ||
@@ -377,15 +377,15 @@ const incomplete = computed(
     apiNeedsSecretAgain.value,
 )
 
-// cambiando tipo, i campi che l'altro tipo non mostra non devono viaggiare nel
-// draft (porta e schema di un Postgres dentro una SharePoint, il tenant come
-// database di un Postgres). Only when the USER changes the type: as a watcher it
+// changing kind, the fields the other kind does not show must not travel in the draft
+// (port and schema of a Postgres inside a SharePoint, the tenant as a Postgres's
+// database). Only when the USER changes the type: as a watcher it
 // also fired when the dialog opened another connection, and blanked its database
 // and schema, which Save then stored.
-function changeType(nuovo: string) {
-  const vecchio = dbType.value
-  dbType.value = nuovo
-  if (nuovo !== vecchio && (['sharepoint', 'sftp', 'api'].includes(nuovo) || ['sharepoint', 'sftp', 'api'].includes(vecchio))) {
+function changeType(fresh: string) {
+  const old = dbType.value
+  dbType.value = fresh
+  if (fresh !== old && (['sharepoint', 'sftp', 'api'].includes(fresh) || ['sharepoint', 'sftp', 'api'].includes(old))) {
     port.value = ''
     dbSchema.value = ''
     database.value = ''
@@ -479,7 +479,7 @@ async function test() {
       return
     }
     if (isEdit.value && !password.value) {
-      // password invariata: si testa la connessione salvata
+      // password unchanged: the saved connection is tested
       await connApi.test(props.existing!.id)
     } else {
       await connApi.testDraft(props.projectId, draft())
@@ -604,8 +604,8 @@ function confirm() {
             </label>
             <input v-model="password" type="password" autocomplete="new-password" />
           </div>
-          <!-- SMTP non ha database né schema: al loro posto le opzioni che per
-               gli altri tipi non esistono -->
+          <!-- SMTP has neither database nor schema: in their place the options that do not exist for
+               the other kinds -->
           <template v-if="isSmtp">
             <div class="cd-field">
               <label>{{ $t('connectionDialog.fromAddressLabel') }}</label>
@@ -824,8 +824,8 @@ function confirm() {
   z-index: 2000;
 }
 .cd-card {
-  /* larghezza fissa = traboccava sotto i 520px di viewport; il max-height serve
-     perché questo dialogo ha dieci campi e su schermo basso usciva in verticale */
+  /* fixed width = it overflowed under a 520px viewport; the max-height is needed because
+     this dialog has ten fields and on a short screen it went out vertically */
   width: min(520px, calc(100vw - 32px));
   max-height: calc(100vh - 32px);
   overflow-y: auto;

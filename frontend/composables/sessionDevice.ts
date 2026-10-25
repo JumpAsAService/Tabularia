@@ -1,7 +1,7 @@
-// Da quale browser e sistema arriva una sessione, letto dallo user-agent che il
-// gateway ha tenuto all'accesso: «Firefox · Linux», «Chrome · Windows». Serve a
-// riconoscere a colpo d'occhio «questo sono io sul portatile», non a identificare
-// niente: lo user-agent lo dichiara il client.
+// Which browser and system a session comes from, read from the user agent the gateway
+// kept at sign-in: «Firefox · Linux», «Chrome · Windows». It serves to recognize at a
+// glance «this is me on the laptop», not to identify anything: the client declares the
+// user agent.
 const BROWSERS: [RegExp, string][] = [
   [/Edg\//, 'Edge'],
   [/OPR\/|Opera/, 'Opera'],
@@ -20,7 +20,7 @@ const SYSTEMS: [RegExp, string][] = [
   [/Linux/, 'Linux'],
 ]
 
-/** «Browser · sistema», o null se lo user-agent manca (un osservatore non lo lascia). */
+/** «Browser · system», or null when the user agent is missing (an observer does not leave one). */
 export function deviceLabel(userAgent: string | null | undefined): string | null {
   if (!userAgent) return null
   const browser = BROWSERS.find(([re]) => re.test(userAgent))?.[1] ?? userAgent.split(/[\s/]/)[0]

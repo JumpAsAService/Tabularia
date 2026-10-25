@@ -1,8 +1,8 @@
-// A che punto è un import in corso: fase, conteggi e tempo trascorso, come li
-// manda il gateway in RunInfo.progress («1.250.000 righe ricevute · 4m 05s»).
-// I secondi li conta il server (l'orologio del browser può essere sbagliato);
-// l'orologio che li fa avanzare fra un poll e l'altro sta in RunProgressText,
-// così a ogni secondo si ridisegna quel testo e non la pagina intorno.
+// Where a running import stands: phase, counts and time elapsed, as the gateway sends
+// them in RunInfo.progress («1,250,000 rows received · 4m 05s»). The server counts the
+// seconds (the browser's clock may be wrong); the clock moving them on between one poll
+// and the next sits in RunProgressText, so at every second that text is redrawn and not
+// the page around it.
 import type { RunProgress } from '~/composables/useRuns'
 
 type Translate = (key: string, params?: Record<string, unknown>) => string
@@ -14,7 +14,7 @@ export function fmtSeconds(s: number): string {
   return `${Math.floor(s / 3600)}h ${two(Math.floor(s / 60) % 60)}m`
 }
 
-/** Il testo della fase; `extraSeconds` = quanti ne sono passati da quando è arrivata. */
+/** The phase's text; `extraSeconds` = how many have passed since it arrived. */
 export function progressText(t: Translate, locale: string, p: RunProgress | null | undefined, extraSeconds = 0): string | null {
   if (!p) return null
   const time = fmtSeconds(p.seconds + Math.max(0, extraSeconds))

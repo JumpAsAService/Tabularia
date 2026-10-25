@@ -1,26 +1,27 @@
-// Wrapper di $fetch che manda il cookie della sessione (con l'intestazione
-// anti-CSRF) e gestisce il 401 (→ /login).
-// Usato da tutte le chiamate autenticate (dati + control plane).
+// A $fetch wrapper that sends the session's cookie (with the anti-CSRF header) and
+// handles the 401 (→ /login). Used by every authenticated call (data + control plane).
 import { LOCALE_COOKIE } from '~/plugins/i18n'
 
 export function useApiClient() {
   const base = useRuntimeConfig().public.apiBase as string
-  const lingua = useCookie<string | null>(LOCALE_COOKIE)
+  const language = useCookie<string | null>(LOCALE_COOKIE)
 
-  /** La lingua dell'interfaccia (il cookie che la tiene): il gateway scrive in quella
-   *  i messaggi per una persona, come i motivi di un export dbt rifiutato. Letta a
-   *  ogni chiamata: un cambio di lingua vale dalla richiesta dopo. */
-  function linguaCorrente(): string | null {
+  /**
+   * The interface's language (the cookie that keeps it): the gateway writes in it the
+   * messages for a person, like the reasons of a refused dbt export. Read at every call: a
+   * language change holds from the next request.
+   */
+  function currentLanguage(): string | null {
     if (import.meta.client) {
       const m = document.cookie.match(/(?:^|;\s*)tabularia-locale=([a-z]{2})/)
       if (m) return m[1]
     }
-    return lingua.value ?? null
+    return language.value ?? null
   }
 
   async function apiFetch<T>(path: string, opts: Record<string, any> = {}): Promise<T> {
     const headers: Record<string, string> = { ...CSRF_HEADERS, ...(opts.headers || {}) }
-    const l = linguaCorrente()
+    const l = currentLanguage()
     if (l && !headers['Accept-Language']) headers['Accept-Language'] = l
     try {
       return await $fetch<T>(`${base}${path}`, { ...opts, headers, credentials: 'include' })

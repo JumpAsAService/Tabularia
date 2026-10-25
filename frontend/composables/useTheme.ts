@@ -1,7 +1,7 @@
-// Tema chiaro/scuro. Il tema è un attributo `data-theme` su <html>; tutta la
-// palette vive in CSS variables (assets/main.css), quindi cambiare tema = flip
-// dell'attributo. Default SCURO al primo accesso; la scelta è persistita in
-// localStorage e riletta a freddo dallo script anti-flash in nuxt.config.
+// Light/dark theme. The theme is a `data-theme` attribute on <html>; the whole palette
+// lives in CSS variables (assets/main.css), so changing theme = flipping the attribute.
+// DARK by default at the first visit; the choice is persisted in localStorage and read
+// again cold by the anti-flash script in nuxt.config.
 import { ref } from 'vue'
 
 export type Theme = 'dark' | 'light' | 'dracula' | 'monokai' | 'imperium'
@@ -15,14 +15,14 @@ export const THEMES: { value: Theme; label: string }[] = [
 const VALID = new Set<string>(THEMES.map((t) => t.value))
 const STORAGE_KEY = 'tabularia-theme'
 
-// stato condiviso a livello di modulo: un solo tema per tutta l'app
+// state shared at module level: one theme for the whole app
 const theme = ref<Theme>('dark')
 let initialized = false
 
 function apply(t: Theme) {
   if (!import.meta.client) return
   document.documentElement.setAttribute('data-theme', t)
-  try { localStorage.setItem(STORAGE_KEY, t) } catch { /* storage negato: vale fino al ricaricamento */ }
+  try { localStorage.setItem(STORAGE_KEY, t) } catch { /* storage denied: it holds until the reload */ }
 }
 
 export function useTheme() {
@@ -33,17 +33,17 @@ export function useTheme() {
     apply(theme.value)
   }
 
-  // Il tema si applica e si salva QUI, nel momento in cui lo si sceglie. Prima lo
-  // faceva un `watch` creato dal primo componente che chiamava useTheme: moriva
-  // con lui, e ogni pagina ha la sua barra. Dopo un cambio di pagina il selettore
-  // cambiava il valore ma non l'attributo, e serviva ricaricare (2026-10-12).
+  // The theme is applied and saved HERE, the moment it is chosen. Before, a `watch` created
+  // by the first component calling useTheme did it: it died with it, and every page has its
+  // own bar. After a page change the selector changed the value but not the attribute, and
+  // a reload was needed (2026-10-12).
   function setTheme(t: Theme) {
     if (!VALID.has(t)) return
     theme.value = t
     apply(t)
   }
   function toggle() {
-    // toggle rapido scuro↔chiaro (i temi extra si scelgono dal picker)
+    // quick dark↔light toggle (the extra themes are chosen from the picker)
     setTheme(theme.value === 'light' ? 'dark' : 'light')
   }
 

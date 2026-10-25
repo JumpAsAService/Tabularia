@@ -1,13 +1,13 @@
-// Esecuzioni dei flussi (run history) via gateway. Il lancio richiede la
-// capability RUN sul progetto del flusso; la cronologia basta VIEW.
+// The flows' runs (run history) through the gateway. Launching requires the RUN
+// capability on the flow's project; for the history VIEW is enough.
 import type { Page } from '~/composables/useApi'
 
-// a che punto è un run non terminato (solo per quelli; vedi useRunProgress)
+// where a run not finished stands (only for those; see useRunProgress)
 export interface RunProgress {
-  // queued · running · waiting (il database non ha ancora mandato righe) ·
-  // reading · files (SharePoint) · saving · checking (data contract)
+  // queued · running · waiting (the database has not sent rows yet) · reading · files
+  // (SharePoint) · saving · checking (data contract)
   phase: string
-  seconds: number // contati dal gateway
+  seconds: number // counted by the gateway
   rows?: number | null
   file?: number | null
   files?: number | null
@@ -27,7 +27,7 @@ export interface RunInfo {
   output_key: string
   rows_written: number | null
   error: string | null
-  error_detail?: string | null // traceback completo (dettaglio del fallimento)
+  error_detail?: string | null // the whole traceback (the failure's detail)
   publish_name: string | null
   datasource_id: number | null
   // JSON: {db_type, host, database, table, mode} | s3 {bucket, key, written_key?} | sftp {host, folder, file_name, path}
@@ -44,14 +44,14 @@ export interface RunInfo {
   started_at: string | null
   finished_at: string | null
   progress?: RunProgress | null
-  // presenti solo nella ricerca globale /runs
+  // present only in the global /runs search
   flow_name?: string | null
   source_name?: string | null
   group_name?: string | null
-  launched_by_name?: string | null // nome di chi l'ha avviato (null se schedulato)
+  launched_by_name?: string | null // the name of whoever started it (null when scheduled)
 }
 
-// un bucket del calendar plot: un giorno (key=YYYY-MM-DD) o un'ora (key='00'..'23')
+// a calendar plot bucket: a day (key=YYYY-MM-DD) or an hour (key='00'..'23')
 export interface ActivityBucket {
   key: string
   total: number
@@ -72,7 +72,7 @@ export interface PublishSpec {
   project_id: number
   description?: string
   overwrite?: boolean
-  sort_keys?: string[] // ORDER BY della datasource pubblicata (vuoto = nessuno)
+  sort_keys?: string[] // the published datasource's ORDER BY (empty = none)
 }
 
 export interface DestinationSpec {
@@ -94,9 +94,9 @@ export interface DestinationSpec {
   timezone?: string
 }
 
-// Invio dell'output come allegato. I destinatari sono limitati dai domini
-// ammessi sulla CONNESSIONE e il controllo è del gateway: quello che si scrive
-// qui è una proposta, non un permesso.
+// Sending the output as an attachment. The recipients are limited by the allowed domains
+// on the CONNECTION and the gateway makes the check: what is written here is a
+// proposal, not a permission.
 export interface EmailSpec {
   connection_id: number
   to: string[]
@@ -135,9 +135,9 @@ export function useRuns() {
     launch: (flowId: number, body: RunBody) =>
       apiFetch<RunInfo>(`/flows/${flowId}/runs`, { method: 'POST', body }),
 
-    // prova a vuoto: stesso corpo, ma il DESTINATARIO lo impone il server
-    // (l'utente collegato) e publish/destination vengono scartati. Mandarsi
-    // l'allegato è l'unico modo di vedere davvero cosa riceverà chi di dovere.
+    // dry run: the same body, but the server sets the RECIPIENT (the signed-in user) and
+    // publish/destination are dropped. Sending oneself the attachment is the only way to see
+    // really what the intended people will receive.
     emailTest: (flowId: number, body: RunBody) =>
       apiFetch<RunInfo>(`/flows/${flowId}/email-test`, { method: 'POST', body }),
 
@@ -145,8 +145,8 @@ export function useRuns() {
 
     get: (id: number) => apiFetch<RunInfo>(`/runs/${id}`),
 
-    // ricerca globale PAGINATA delle esecuzioni (nei progetti leggibili): filtro
-    // per stato e ricerca testuale sul motivo, sull'intero dataset
+    // GLOBAL PAGINATED search of the runs (in the readable projects): a filter by state and a
+    // text search on the reason, over the whole dataset
     search: (params: { status?: string; q?: string; limit?: number; offset?: number }) => {
       const qs = new URLSearchParams()
       if (params.status) qs.set('status', params.status)
@@ -156,8 +156,8 @@ export function useRuns() {
       return apiFetch<Page<RunInfo>>(`/runs?${qs.toString()}`)
     },
 
-    // attività per il calendar plot: conteggi per giorno (heatmap) o, con `day`,
-    // per ora (drill-down). tz_offset allinea i bucket all'ora locale del client.
+    // activity for the calendar plot: counts per day (heatmap) or, with `day`, per hour
+    // (drill-down). tz_offset aligns the buckets to the client's local time.
     activity: (params: { days?: number; day?: string } = {}) => {
       const qs = new URLSearchParams()
       if (params.days) qs.set('days', String(params.days))

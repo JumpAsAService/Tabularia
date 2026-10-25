@@ -1,6 +1,6 @@
-// Toast globali: notifiche transitorie di successo/errore che appaiono in
-// basso a destra e spariscono da sole. Stato condiviso via useState (una sola
-// coda per l'app); il rendering è in components/ui/ToastHost.vue (app.vue).
+// Global toasts: transient success/error notifications that appear at the bottom right
+// and disappear by themselves. State shared through useState (one queue for the app);
+// the rendering is in components/ui/ToastHost.vue (app.vue).
 
 export interface Toast {
   id: number
@@ -20,7 +20,7 @@ export function useToast() {
   function push(kind: Toast['kind'], message: string, ttlMs?: number) {
     const id = nextId++
     toasts.value = [...toasts.value, { id, kind, message }]
-    // gli errori restano di più: vanno letti, non intravisti
+    // the errors stay longer: they must be read, not glimpsed
     const ttl = ttlMs ?? (kind === 'error' ? 6500 : kind === 'warning' ? 5000 : 3500)
     if (import.meta.client) setTimeout(() => dismiss(id), ttl)
   }
@@ -30,7 +30,7 @@ export function useToast() {
     dismiss,
     success: (message: string) => push('success', message),
     error: (message: string) => push('error', message),
-    // avvisi: qualcosa da sapere, non da riparare
+    // warnings: something to know, not to fix
     warning: (message: string) => push('warning', message),
     info: (message: string) => push('info', message),
   }

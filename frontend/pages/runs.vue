@@ -1,7 +1,7 @@
 <script setup lang="ts">
-// Esecuzioni: ricerca globale dei run nei progetti leggibili, per capire perché
-// i flussi falliscono. Filtro per stato + ricerca testuale sul motivo (server-side,
-// su tutto il dataset) + paginazione; click su una riga per il traceback completo.
+// Runs: the global search of the runs in the readable projects, to understand why the
+// flows fail. Filter by state + text search on the reason (server-side, over the whole
+// dataset) + pagination; click on a row for the whole traceback.
 import { ref, watch, computed } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { knownError } from '~/composables/knownErrors'
@@ -17,13 +17,13 @@ import { usePagedList } from '~/composables/usePagedList'
 const { t, te } = useI18n()
 const fmtx = useFormat()
 const runsApi = useRuns()
-const status = ref<'FAILURE' | 'SUCCESS' | ''>('FAILURE') // di default gli errori
+const status = ref<'FAILURE' | 'SUCCESS' | ''>('FAILURE') // the errors by default
 const expanded = ref<number | null>(null)
 
 const { q, items, total, offset, pageSize, loading, error, load, next, prev } = usePagedList<RunInfo>(
   (p) => runsApi.search({ ...p, status: status.value || undefined }),
 )
-// lo stato è un filtro extra: al cambio torna alla prima pagina e ricarica
+// the state is an extra filter: on change it goes back to the first page and reloads
 watch(status, () => {
   offset.value = 0
   load()
@@ -37,7 +37,7 @@ function fmtDate(s: string | null): string {
   return fmtx.dateTime(s)
 }
 
-// chi ha avviato il run: se schedulato mostriamo "schedule", altrimenti il nome
+// who started the run: when scheduled we show "schedule", otherwise the name
 // the Script or Container node's name, from what its run recorded
 function scriptLabel(r: RunInfo): string {
   if (r.kind === 'pushmail') {
@@ -145,9 +145,9 @@ const STATUSES = computed<{ value: 'FAILURE' | 'SUCCESS' | ''; label: string }[]
 
 <style scoped>
 .page-head { display: flex; align-items: center; justify-content: space-between; gap: 16px; flex-wrap: wrap; }
-/* font-size/margin espliciti: il titolo era un <h2> e prendeva i default del
-   browser (1.5em, margine 0.83em). Promosso ad <h1> per la navigazione per
-   intestazioni, li fissa qui per rendere esattamente come prima. */
+/* explicit font-size/margin: the title was an <h2> and took the browser's defaults
+   (1.5em, margin 0.83em). Promoted to <h1> for the navigation by headings, it fixes them
+   here to render exactly as before. */
 .page-head h1 { display: inline-flex; align-items: center; gap: 8px; font-size: 1.5em; margin-block: 0.83em; }
 .count { font-weight: 400; font-size: 14px; }
 .head-actions { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
@@ -156,7 +156,7 @@ const STATUSES = computed<{ value: 'FAILURE' | 'SUCCESS' | ''; label: string }[]
 .segmented { display: inline-flex; border: 1px solid var(--border); border-radius: 7px; overflow: hidden; }
 .segmented button { padding: 5px 11px; background: var(--panel-2); color: var(--muted); border: none; border-right: 1px solid var(--border); font-size: 13px; }
 .segmented button:last-child { border-right: none; }
-/* --on-accent, non #fff: su Dracula e Monokai l'accento è chiaro e vuole testo scuro */
+/* --on-accent, not #fff: on Dracula and Monokai the accent is light and wants dark text */
 .segmented button.on { background: var(--accent); color: var(--on-accent); }
 
 .runs { display: flex; flex-direction: column; gap: 6px; margin-top: 14px; }

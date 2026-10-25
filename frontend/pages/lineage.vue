@@ -1,10 +1,10 @@
 <script setup lang="ts">
-// Tab Lineage: grafo di provenienza/impatto tra flussi, datasource, connessioni
-// e destinazioni esterne. Si sceglie un oggetto su cui centrare (o si vede tutto);
+// Lineage tab: the provenance/impact graph among flows, datasources, connections and
+// external destinations. One chooses an object to centre on (or sees everything);
 // nothing loads until the user searches an object and applies it, or asks for the
 // whole graph: with many objects the whole graph is the heavy case, not the start.
-// il grafo mostra a monte (da dove vengono i dati) e a valle (chi si rompe se lo
-// tocco). Il grafo è renderizzato con Vue Flow (client-only), layout a livelli.
+// The graph shows upstream (where the data comes from) and downstream (who breaks if I
+// touch it). It is rendered with Vue Flow (client-only), a layered layout.
 import { ref, computed, watch, nextTick } from 'vue'
 import { VueFlow, useVueFlow, Handle, Position } from '@vue-flow/core'
 import type { Node, Edge } from '@vue-flow/core'
@@ -31,16 +31,16 @@ const graph = ref<LineageGraph>({ nodes: [], edges: [] })
 const loading = ref(false)
 const error = ref('')
 
-// selezione: oggetto centrale + parametri di traversata
+// selection: central object + walking parameters
 type CenterType = 'flow' | 'datasource' | 'connection' | 'script'
 const centerType = ref<CenterType | null>(null)
 const centerId = ref<number | null>(null)
 const direction = ref<'both' | 'upstream' | 'downstream'>('both')
 const depth = ref(3)
-const q = ref('') // ricerca nel picker
-const selected = ref<LineageNode | null>(null) // nodo aperto nel pannello dettaglio
+const q = ref('') // search in the picker
+const selected = ref<LineageNode | null>(null) // node open in the detail panel
 
-// filtri per tipo di nodo (tutti attivi di default)
+// filters by node kind (all on by default)
 const ALL_TYPES = ['flow', 'datasource', 'connection', 'script', 'db_sink', 's3_sink', 'sftp_sink'] as const
 const enabledTypes = ref<Set<string>>(new Set(ALL_TYPES))
 function toggleType(t: string) {
@@ -49,7 +49,7 @@ function toggleType(t: string) {
   enabledTypes.value = s
 }
 
-// ── etichette/colori per tipo di nodo e tipo di arco ─────────────────────────
+// ── labels/colours by node kind and edge kind ─────────────────────────
 const NODE_META = computed<Record<string, { label: string; icon: any; color: string }>>(() => ({
   flow: { label: t('lineage.nodeFlow'), icon: Workflow, color: '#4f8cff' },
   datasource: { label: t('lineage.nodeDatasource'), icon: Database, color: '#6ee7b7' },
@@ -119,7 +119,7 @@ const centerNodeId = computed(() =>
   centerType.value && centerId.value != null ? `${NODE_PREFIX[centerType.value]}:${centerId.value}` : null,
 )
 
-// ── liste "a monte / a valle" relative al centro (dal grafo mostrato) ─────────
+// ── "upstream / downstream" lists relative to the centre (from the graph shown) ─────────
 function neighbors(dir: 'up' | 'down'): LineageNode[] {
   const c = centerNodeId.value
   if (!c) return []
@@ -133,9 +133,9 @@ function neighbors(dir: 'up' | 'down'): LineageNode[] {
 const upstream = computed(() => neighbors('up'))
 const downstream = computed(() => neighbors('down'))
 
-// ── layout a livelli (longest-path da radici) ────────────────────────────────
-// distanza tra i livelli (orizzontale) e tra i nodi di uno stesso livello
-// (verticale). COL_W poco più della larghezza nodo (180px) → colonne ravvicinate.
+// ── layered layout (longest path from the roots) ────────────────────────────────
+// distance between the levels (horizontal) and between the nodes of one level
+// (vertical). COL_W a bit more than the node's width (180px) → close columns.
 const COL_W = 210
 const ROW_H = 80
 function layout(nodes: LineageNode[], edges: LineageEdge[]): Map<string, { x: number; y: number }> {
@@ -143,7 +143,7 @@ function layout(nodes: LineageNode[], edges: LineageEdge[]): Map<string, { x: nu
   nodes.forEach((n) => layer.set(n.id, 0))
   const outs = new Map<string, string[]>()
   edges.forEach((e) => outs.set(e.source, [...(outs.get(e.source) ?? []), e.target]))
-  // rilassamento longest-path, iterazioni limitate (robusto ai cicli orchestrate)
+  // longest-path relaxation, limited iterations (robust to orchestrate cycles)
   for (let i = 0; i < nodes.length; i++) {
     let changed = false
     for (const e of edges) {
@@ -155,7 +155,7 @@ function layout(nodes: LineageNode[], edges: LineageEdge[]): Map<string, { x: nu
     }
     if (!changed) break
   }
-  // raggruppa per livello e impila verticalmente
+  // groups by level and stacks vertically
   const byLayer = new Map<number, string[]>()
   nodes.forEach((n) => {
     const l = layer.get(n.id) ?? 0
@@ -170,14 +170,14 @@ function layout(nodes: LineageNode[], edges: LineageEdge[]): Map<string, { x: nu
   return pos
 }
 
-// ── nodi/archi effettivamente mostrati (dopo i filtri per tipo) ──────────────
+// ── nodes/edges really shown (after the kind filters) ──────────────
 const shownNodes = computed(() => graph.value.nodes.filter((n) => enabledTypes.value.has(n.type)))
 const shownEdges = computed(() => {
   const ids = new Set(shownNodes.value.map((n) => n.id))
   return graph.value.edges.filter((e) => ids.has(e.source) && ids.has(e.target))
 })
 
-// problemi nel grafo mostrato: staleness + riferimenti non risolti
+// problems in the graph shown: staleness + unresolved references
 const problems = computed(() => {
   const stale = shownNodes.value.filter((n) => n.meta?.stale).length
   const restricted = shownNodes.value.filter((n) => n.restricted).length
@@ -185,7 +185,7 @@ const problems = computed(() => {
   return { stale, restricted, neverRun, total: stale + restricted }
 })
 
-// ── traduzione grafo → nodi/archi Vue Flow ───────────────────────────────────
+// ── translating graph → Vue Flow nodes/edges ───────────────────────────────────
 const rfNodes = computed<Node[]>(() => {
   const pos = layout(shownNodes.value, shownEdges.value)
   return shownNodes.value.map((n) => ({
@@ -213,14 +213,14 @@ const rfEdges = computed<Edge[]>(() =>
       label: m?.label ?? e.kind,
       animated: e.kind === 'read' || e.kind === 'publish',
       style: { stroke: m?.color ?? '#8b93a7', strokeWidth: 1.8, strokeDasharray: m?.dashed ? '5 5' : undefined },
-      // l'etichetta è TESTO: il colore dell'arco mescolato col testo del tema quanto basta per l'AA
+      // the label is TEXT: the edge's colour mixed with the theme's text as much as AA needs
       labelStyle: { fill: `color-mix(in srgb, ${m?.color ?? '#8b93a7'} var(--enc-text-mix), var(--text))`, fontSize: 10, fontWeight: 600 },
       labelBgStyle: { fill: 'var(--panel)', fillOpacity: 0.85 },
     } as Edge
   }),
 )
 
-// ── caricamento ──────────────────────────────────────────────────────────────
+// ── loading ──────────────────────────────────────────────────────────────
 async function load() {
   if (!centerNodeId.value && !showingAll.value) {
     graph.value = { nodes: [], edges: [] }  // nothing asked for yet
@@ -262,13 +262,13 @@ function showAll() {
   load()
 }
 
-// click su un nodo → apre il pannello di dettaglio (il ricentro è un'azione lì)
+// click on a node → opens the detail panel (recentring is an action there)
 function onNodeClick(ev: any) {
   const n: LineageNode | undefined = ev?.node?.data?.node
   if (n) selected.value = n
 }
 
-// azioni del pannello: ricentra sul nodo, oppure aprilo nel suo strumento
+// the panel's actions: recentre on the node, or open it in its tool
 function recenterOn(n: LineageNode) {
   pick(n)
 }
@@ -287,12 +287,12 @@ function fmtDate(iso?: string | null) {
   return fmtx.dateTime(iso)
 }
 
-// motivo di un riferimento non risolto
+// the reason of an unresolved reference
 function restrictedLabel(n: LineageNode) {
   return n.meta?.reason === 'removed' ? t('lineage.reasonRemoved') : t('lineage.reasonNotAccessible')
 }
 
-// blast radius: tutto ciò che sta a VALLE del nodo lungo il flusso dei dati
+// blast radius: everything DOWNSTREAM of the node along the data's flow
 // (read/publish/write), not limited to the current view: the node's downstream graph
 // (8 hops, the most the gateway gives) is asked for when its panel opens
 const DATA_KINDS = new Set(['read', 'publish', 'write'])
@@ -351,7 +351,7 @@ function nodeIcon(t: string) {
       </div>
 
       <div class="ln-body">
-        <!-- sidebar: picker + parametri + liste a monte/valle -->
+        <!-- sidebar: picker + parameters + upstream/downstream lists -->
         <aside class="ln-side">
           <div class="ln-block">
             <label class="ln-label">{{ $t('lineage.centerOn') }}</label>
@@ -410,7 +410,7 @@ function nodeIcon(t: string) {
             </div>
           </div>
 
-          <!-- salute / problemi nel grafo mostrato -->
+          <!-- health / problems in the graph shown -->
           <div v-if="problems.total || problems.neverRun" class="ln-block ln-problems">
             <label class="ln-label"><AlertTriangle :size="12" /> {{ $t('lineage.health') }}</label>
             <span v-if="problems.stale" class="ln-prob stale"><Clock :size="12" /> {{ $t('lineage.staleItems', { n: problems.stale }) }}</span>
@@ -418,7 +418,7 @@ function nodeIcon(t: string) {
             <span v-if="problems.restricted" class="ln-prob restr"><AlertTriangle :size="12" /> {{ $t('lineage.unresolvedRefs', { n: problems.restricted }) }}</span>
           </div>
 
-          <!-- filtri per tipo -->
+          <!-- filters by kind -->
           <div class="ln-block">
             <label class="ln-label">{{ $t('lineage.show') }}</label>
             <div class="ln-filters">
@@ -435,7 +435,7 @@ function nodeIcon(t: string) {
             </div>
           </div>
 
-          <!-- legenda archi -->
+          <!-- edge legend -->
           <div class="ln-block">
             <label class="ln-label">{{ $t('lineage.relationships') }}</label>
             <div class="ln-legend">
@@ -482,7 +482,7 @@ function nodeIcon(t: string) {
             </VueFlow>
           </ClientOnly>
 
-          <!-- pannello di dettaglio del nodo selezionato -->
+          <!-- the selected node's detail panel -->
           <div v-if="selected" class="ln-detail">
             <button class="ln-detail-x" :title="$t('lineage.close')" :aria-label="$t('lineage.close')" @click="selected = null"><X :size="14" /></button>
             <div class="ln-detail-head">
@@ -534,7 +534,7 @@ function nodeIcon(t: string) {
               </template>
             </dl>
 
-            <!-- blast radius: cosa si tocca a valle se cambio questo nodo -->
+            <!-- blast radius: what is touched downstream if I change this node -->
             <div v-if="impact && impact.total" class="ln-impact">
               <span class="ln-impact-h">{{ $t('lineage.downstreamImpact') }}</span>
               <div class="ln-impact-row">
@@ -628,7 +628,7 @@ function nodeIcon(t: string) {
 .ln-leg i { width: 10px; height: 10px; border-radius: 3px; display: inline-block; }
 .ln-leg i.edge { width: 16px; height: 2px; border-radius: 0; }
 
-/* filtri per tipo */
+/* filters by kind */
 .ln-filters { display: flex; flex-wrap: wrap; gap: 5px; }
 .ln-filter {
   display: inline-flex; align-items: center; gap: 5px;
@@ -637,14 +637,14 @@ function nodeIcon(t: string) {
 .ln-filter i { width: 9px; height: 9px; border-radius: 3px; display: inline-block; }
 .ln-filter.off { opacity: 0.4; text-decoration: line-through; }
 
-/* salute / problemi */
+/* health / problems */
 .ln-problems { gap: 6px; }
 .ln-prob { display: inline-flex; align-items: center; gap: 6px; font-size: 12px; }
 .ln-prob.stale { color: color-mix(in srgb, #d97706 var(--enc-text-mix), var(--text)); }
 .ln-prob.never { color: var(--muted); }
 .ln-prob.restr { color: var(--danger); }
 
-/* badge di salute sui nodi del grafo */
+/* health badges on the graph's nodes */
 :deep(.ln-badge) {
   flex-shrink: 0; display: inline-flex; align-items: center; justify-content: center;
   width: 18px; height: 18px; border-radius: 5px;
@@ -653,7 +653,7 @@ function nodeIcon(t: string) {
 :deep(.ln-badge.never) { color: var(--muted); background: var(--panel-2); }
 :deep(.ln-badge.restr) { color: var(--danger); background: rgba(255, 107, 107, 0.14); }
 
-/* pannello di dettaglio */
+/* detail panel */
 .ln-detail {
   position: absolute; top: 12px; right: 12px; z-index: 8;
   width: 260px;
@@ -694,7 +694,7 @@ function nodeIcon(t: string) {
 .ln-msg { position: absolute; inset: 0; display: flex; align-items: center; justify-content: center; z-index: 5; pointer-events: none; }
 .ln-msg.err { color: var(--danger); }
 
-/* nodi del grafo */
+/* graph nodes */
 :deep(.ln-node) {
   background: var(--panel);
   border: 1px solid var(--border);
@@ -703,8 +703,8 @@ function nodeIcon(t: string) {
   padding: 0;
   width: 180px;
   box-shadow: var(--shadow-1);
-  /* il tema default di Vue Flow imposta un colore testo scuro sui nodi 'default':
-     lo forziamo al testo del tema, altrimenti è illeggibile su fondo scuro */
+  /* Vue Flow's default theme sets a dark text colour on the 'default' nodes: we force it to
+     the theme's text, otherwise it is unreadable on a dark background */
   color: var(--text);
 }
 :deep(.ln-node.ln-center) { box-shadow: 0 0 0 2px var(--accent), var(--shadow-2); }

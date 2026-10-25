@@ -1,5 +1,5 @@
 <script setup lang="ts">
-// import esplicito: nel container i componenti nuovi non vengono scansionati
+// explicit import: in the container new components are not scanned
 import IdleWarning from '~/components/ui/IdleWarning.vue'
 </script>
 

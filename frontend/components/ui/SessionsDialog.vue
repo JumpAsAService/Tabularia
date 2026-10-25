@@ -1,8 +1,7 @@
 <script setup lang="ts">
-// «Le tue sessioni»: dove si è collegati adesso (questo browser, il portatile,
-// uno script), e la possibilità di chiuderne una o tutte le altre. Chiudere è
-// vero: il gateway cancella la sessione e il suo token smette di valere subito,
-// ovunque sia stato copiato.
+// «Your sessions»: where one is connected now (this browser, the laptop, a script), and
+// the possibility to close one or all the others. Closing is real: the gateway deletes
+// the session and its token stops holding at once, wherever it was copied.
 import { ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { LoaderCircle, LogOut, MonitorSmartphone, Terminal } from 'lucide-vue-next'

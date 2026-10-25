@@ -1,9 +1,9 @@
 <script setup lang="ts">
-// L'avanzamento di un import («1.250.000 righe ricevute · 4m 05s») col suo
-// orologio: il tempo avanza qui, un secondo alla volta, e solo mentre c'è un
-// avanzamento — la pagina intorno non si ridisegna a ogni scatto.
-// Agli screen reader il testo che ticchetta non arriva (lo riannuncerebbero a
-// ogni secondo): resta `srLabel`, stabile; inizio e fine li annuncia la pagina.
+// An import's progress («1,250,000 rows received · 4m 05s») with its clock: time moves
+// here, one second at a time, and only while there is progress — the page around is not
+// redrawn at every tick.
+// The ticking text does not reach the screen readers (they would announce it again every
+// second): `srLabel` stays, stable; the page announces start and end.
 import { computed, onMounted, onUnmounted, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 import type { RunInfo } from '~/composables/useRuns'
@@ -18,7 +18,7 @@ let timer: ReturnType<typeof setInterval> | undefined
 
 function sync() {
   const p = props.run?.progress
-  arrivedAt.value = now.value = Date.now() // ogni poll porta un oggetto nuovo: si riparte da lì
+  arrivedAt.value = now.value = Date.now() // every poll brings a new object: it starts again from there
   if (p && !timer) timer = setInterval(() => { now.value = Date.now() }, 1000)
   if (!p && timer) {
     clearInterval(timer)

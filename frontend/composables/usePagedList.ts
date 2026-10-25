@@ -1,7 +1,7 @@
-// Lista paginata con ricerca SERVER-SIDE: il filtro `q` va al server e combacia
-// sull'intero dataset, non solo sulla pagina corrente. Gestisce q (debounced),
-// finestra (offset/limit), totale, stato di caricamento. Le pagine ci passano il
-// fetcher del rispettivo endpoint /…/search.
+// A paginated list with a SERVER-SIDE search: the `q` filter goes to the server and
+// matches over the whole dataset, not only the current page. It handles q (debounced),
+// window (offset/limit), total, loading state. The pages pass it their endpoint's
+// /…/search fetcher.
 import { onMounted, ref, watch, type Ref } from 'vue'
 import { errMessage, type Page } from '~/composables/useApi'
 import { skeletonPad } from '~/composables/useSkeleton'
@@ -11,7 +11,7 @@ export function usePagedList<T>(
   opts: { pageSize?: number; initialQuery?: string } = {},
 ) {
   const pageSize = opts.pageSize ?? 50
-  const q = ref(opts.initialQuery ?? '') // es. arrivando dalla ricerca globale
+  const q = ref(opts.initialQuery ?? '') // e.g. coming from the global search
   const offset = ref(0)
   const total = ref(0)
   const items = ref<T[]>([]) as Ref<T[]>
@@ -37,13 +37,13 @@ export function usePagedList<T>(
       total.value = 0
     } finally {
       if (!quiet) {
-        await skeletonPad(t0) // lo skeleton resta visibile un minimo: niente flash
+        await skeletonPad(t0) // the skeleton stays visible a minimum: no flash
         loading.value = false
       }
     }
   }
 
-  // digitando: azzera alla prima pagina e ricarica, con una piccola pausa
+  // typing: resets to the first page and reloads, with a small pause
   let deb: ReturnType<typeof setTimeout> | null = null
   watch(q, () => {
     if (deb) clearTimeout(deb)

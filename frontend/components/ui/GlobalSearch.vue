@@ -1,14 +1,14 @@
 <script setup lang="ts">
-// Ricerca generale: una casella nella barra in alto che attraversa TUTTE le
-// cartelle, non solo quella aperta. Risponde alla domanda vera di chi cerca
-// «margine» senza sapere, e senza dover sapere, se sia un flusso o una vista.
+// General search: a box in the top bar that crosses ALL the folders, not only the open
+// one. It answers the real question of whoever looks for «margine» without knowing, and
+// without needing to know, whether it is a flow or a view.
 //
-// SICUREZZA — il filtro per permessi è del GATEWAY, non di qui. `/search` applica
-// tre insiemi diversi: le cartelle sull'insieme navigabile, i contenuti su quello
-// leggibile, le connessioni sulla capability ORTOGONALE CONNECT. Questo
-// componente non filtra e non deve filtrare nulla: mostra ciò che il server ha
-// già deciso di mostrare. Se il filtro vivesse qui, basterebbe aprire la scheda
-// di rete del browser per vedere ciò che non si può vedere.
+// SECURITY — the permission filter is the GATEWAY's, not this one's. `/search` applies
+// three different sets: the folders on the navigable set, the contents on the readable
+// one, the connections on the ORTHOGONAL CONNECT capability. This component does not
+// filter and must not filter anything: it shows what the server has decided to show
+// already. If the filter lived here, opening the browser's network tab would be enough
+// to see what cannot be seen.
 import { computed, ref, watch, onUnmounted } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { Search, X, Folder, Workflow, Database, Bookmark, Plug, LoaderCircle, Rows3, Lock, FileCode2 } from 'lucide-vue-next'
@@ -20,8 +20,8 @@ const { t } = useI18n()
 const api = useSearch()
 const fmt = useFormat()
 
-const MIN = 2        // sotto i 2 caratteri ogni ricerca torna mezzo catalogo
-const DEBOUNCE = 250 // digitando non si interroga a ogni tasto
+const MIN = 2        // under 2 characters every search returns half the catalog
+const DEBOUNCE = 250 // while typing, it does not query at every key
 const LIMIT = 20
 
 const q = ref('')
@@ -30,57 +30,59 @@ const loading = ref(false)
 const error = ref('')
 const hits = ref<SearchHit[]>([])
 const total = ref(0)
-const cursor = ref(-1) // riga evidenziata dalla tastiera
+const cursor = ref(-1) // row highlighted by the keyboard
 
 const ICON: Record<SearchKind, any> = {
   folder: Folder, flow: Workflow, group: Rows3, datasource: Database, view: Bookmark, script: FileCode2, connection: Plug,
 }
 const ORDER: SearchKind[] = ['folder', 'flow', 'group', 'datasource', 'view', 'script', 'connection']
 
-/** Raggruppati per tipo: cinque elenchi corti si leggono meglio di venti righe
- *  mescolate, e il tipo è la prima cosa che serve sapere di un risultato. */
+/**
+ * Grouped by kind: five short lists read better than twenty mixed rows, and the kind is
+ * the first thing one needs to know about a result.
+ */
 const groups = computed(() =>
   ORDER
     .map((kind) => ({ kind, items: hits.value.filter((h) => h.kind === kind) }))
     .filter((g) => g.items.length),
 )
-/** Appiattito nell'ordine in cui appare: è su questo che si muove la tastiera. */
+/** Flattened in the order it appears: the keyboard moves on this. */
 const flat = computed(() => groups.value.flatMap((g) => g.items))
 
 let timer: ReturnType<typeof setTimeout> | null = null
-let seq = 0 // scarta le risposte arrivate fuori ordine
+let seq = 0 // drops the answers that arrive out of order
 
-async function run(termine: string) {
-  const mio = ++seq
+async function run(term: string) {
+  const mine = ++seq
   loading.value = true
   error.value = ''
   try {
-    const res = await api.query(termine, { limit: LIMIT })
-    if (mio !== seq) return // una richiesta più recente ha già risposto
+    const res = await api.query(term, { limit: LIMIT })
+    if (mine !== seq) return // a newer request has answered already
     hits.value = res.items
     total.value = res.total
     cursor.value = res.items.length ? 0 : -1
   } catch (e) {
-    if (mio !== seq) return
+    if (mine !== seq) return
     error.value = errMessage(e)
     hits.value = []
     total.value = 0
   } finally {
-    if (mio === seq) loading.value = false
+    if (mine === seq) loading.value = false
   }
 }
 
 watch(q, (val) => {
   if (timer) clearTimeout(timer)
-  const termine = val.trim()
+  const term = val.trim()
   open.value = true
-  if (termine.length < MIN) {
+  if (term.length < MIN) {
     hits.value = []
     total.value = 0
     loading.value = false
     return
   }
-  timer = setTimeout(() => run(termine), DEBOUNCE)
+  timer = setTimeout(() => run(term), DEBOUNCE)
 })
 
 onUnmounted(() => { if (timer) clearTimeout(timer) })
@@ -90,7 +92,7 @@ function close() {
   cursor.value = -1
 }
 
-function vai(hit: SearchHit) {
+function go(hit: SearchHit) {
   if (hit.locked_reason) return // a flow this person cannot open: it stays where it is
   close()
   q.value = ''
@@ -109,17 +111,17 @@ function onKeydown(e: KeyboardEvent) {
     cursor.value = (cursor.value - 1 + flat.value.length) % flat.value.length
   } else if (e.key === 'Enter' && cursor.value >= 0) {
     e.preventDefault()
-    vai(flat.value[cursor.value])
+    go(flat.value[cursor.value])
   }
 }
 
-const indice = (hit: SearchHit) => flat.value.indexOf(hit)
-const mostrati = computed(() => flat.value.length)
+const index = (hit: SearchHit) => flat.value.indexOf(hit)
+const shown = computed(() => flat.value.length)
 </script>
 
 <template>
   <div class="gs">
-    <!-- un <label>: cliccare la lente porta nel campo anche quando è chiuso (telefono) -->
+    <!-- a <label>: clicking the lens leads into the field even when closed (phone) -->
     <label class="box" :class="{ active: open && q }">
       <Search :size="14" />
       <input
@@ -150,24 +152,24 @@ const mostrati = computed(() => flat.value.length)
               v-for="h in g.items"
               :key="`${h.kind}-${h.id}`"
               class="hit"
-              :class="{ on: indice(h) === cursor, bloccata: !!h.locked_reason }"
+              :class="{ on: index(h) === cursor, blocked: !!h.locked_reason }"
               role="option"
-              :aria-selected="indice(h) === cursor"
+              :aria-selected="index(h) === cursor"
               :aria-disabled="h.locked_reason ? 'true' : undefined"
               :title="h.locked_reason || undefined"
-              @click="vai(h)"
-              @mouseenter="cursor = indice(h)"
+              @click="go(h)"
+              @mouseenter="cursor = index(h)"
             >
               <component :is="ICON[h.kind]" :size="14" class="hicon" />
               <span class="hname">{{ h.name }}</span>
-              <Lock v-if="h.locked_reason" :size="12" class="lucchetto" :aria-label="$t('projectBrowser.lockedFlow')" />
-              <!-- dove si trova: due risultati omonimi si distinguono solo così -->
+              <Lock v-if="h.locked_reason" :size="12" class="lock" :aria-label="$t('projectBrowser.lockedFlow')" />
+              <!-- where it is: two results with the same name are told apart only so -->
               <span v-if="h.project_name" class="hwhere"><Folder :size="11" /> {{ h.project_name }}</span>
               <span v-if="h.rows != null" class="hdetail">{{ $t('globalSearch.rows', { n: fmt.count(h.rows) }, h.rows) }}</span>
               <span v-else-if="h.detail" class="hdetail">{{ h.detail }}</span>
             </button>
           </div>
-          <p v-if="total > mostrati" class="note more">{{ $t('globalSearch.andMore', { n: total - mostrati }) }}</p>
+          <p v-if="total > shown" class="note more">{{ $t('globalSearch.andMore', { n: total - shown }) }}</p>
         </template>
       </div>
     </template>
@@ -195,12 +197,12 @@ const mostrati = computed(() => flat.value.length)
   width: 190px;
   font-size: 13px;
 }
-/* La navigazione ha la precedenza nella barra: sotto i 1600px il campo si stringe
-   e si riallarga mentre lo si usa; sul telefono resta la lente, e il campo si apre
-   al clic o col Tab. Senza transizione: animare la larghezza ricalcolerebbe il
-   layout di tutta la barra a ogni fotogramma. */
+/* The navigation takes precedence in the bar: under 1600px the field narrows and widens
+   again while in use; on the phone the lens stays, and the field opens on click or with
+   Tab. Without a transition: animating the width would recompute the whole bar's layout
+   at every frame. */
 @media (max-width: 1600px) {
-  .box input { width: 140px; } /* 20px sono di padding: il segnaposto ne vuole ~115 */
+  .box input { width: 140px; } /* 20px are padding: the placeholder wants ~115 */
   .box:focus-within input { width: 220px; }
 }
 @media (max-width: 760px) {
@@ -211,10 +213,10 @@ const mostrati = computed(() => flat.value.length)
 .box .x { padding: 1px 5px; min-height: 0; }
 
 .backdrop { position: fixed; inset: 0; z-index: 190; }
-/* `results`, non `panel`: `.panel` è già definita globalmente in main.css come
-   `position: relative` (e la usa FlowEditor). A parità di specificità vincerebbe
-   l'ordine di cascata, cioè il posizionamento di questo riquadro dipenderebbe da
-   quale foglio arriva dopo. Un nome proprio costa nulla e toglie il dubbio. */
+/* `results`, not `panel`: `.panel` is defined globally in main.css already as `position:
+   relative` (and FlowEditor uses it). At equal specificity the cascade order would win,
+   that is this box's positioning would depend on which sheet comes later. A name of its
+   own costs nothing and removes the doubt. */
 .results {
   position: absolute;
   right: 0;
@@ -256,9 +258,9 @@ const mostrati = computed(() => flat.value.length)
   color: var(--text);
 }
 .hit:hover, .hit.on { background: var(--row-hover); box-shadow: none; }
-.hit.bloccata { opacity: 0.45; cursor: not-allowed; }
-.hit.bloccata:hover, .hit.bloccata.on { background: none; }
-.lucchetto { flex: none; color: var(--muted); }
+.hit.blocked { opacity: 0.45; cursor: not-allowed; }
+.hit.blocked:hover, .hit.blocked.on { background: none; }
+.lock { flex: none; color: var(--muted); }
 .hicon { color: var(--muted); flex-shrink: 0; }
 .hname { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .hwhere {
@@ -271,7 +273,7 @@ const mostrati = computed(() => flat.value.length)
   color: var(--muted);
 }
 .hdetail { font-size: 11.5px; color: var(--muted); flex-shrink: 0; }
-/* `.spin` NON si ridefinisce: è già globale in main.css:230 con le sue keyframes */
+/* `.spin` is NOT redefined: it is global in main.css:230 already with its keyframes */
 
 @media (max-width: 900px) {
   .results { width: 320px; }

@@ -1,8 +1,8 @@
 <script setup lang="ts">
-// Il guscio di un dialogo modale: sfondo, scheda, intestazione con titolo e
-// chiusura, fuoco e tastiera. I dialoghi esistenti se lo riscrivono ciascuno per
-// conto suo (vedi docs/audit/SEMPLIFICAZIONE-2026-10-05.md, E1): questo è il
-// punto unico per quelli nuovi, e quello a cui portare i vecchi.
+// The shell of a modal dialog: backdrop, card, header with title and close, focus and
+// keyboard. The existing dialogs each rewrite it on their own (see
+// docs/audit/SEMPLIFICAZIONE-2026-10-05.md, E1): this is the single point for the new
+// ones, and the one to bring the old ones to.
 import { ref } from 'vue'
 import { X } from 'lucide-vue-next'
 import { useDialogA11y } from '~/composables/useDialogA11y'

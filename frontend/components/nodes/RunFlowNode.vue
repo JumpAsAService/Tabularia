@@ -1,6 +1,6 @@
 <script setup lang="ts">
-// Nodo di controllo: al run il gateway esegue un ALTRO flusso salvato (i suoi
-// nodi Output), dopo gli output di questo. Guardia anti-ciclo lato gateway.
+// Control node: at the run the gateway runs ANOTHER saved flow (its Output nodes), after
+// this one's outputs. A cycle guard on the gateway.
 import { computed } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { Handle, Position } from '@vue-flow/core'

@@ -1,16 +1,16 @@
-// Uscita per inattività (AUTH__SESSION_IDLE_MINUTES, che il gateway manda in
-// /auth/me). Il gateway chiude da sé una sessione da cui non arrivano richieste,
-// ma una pagina aperta ne fa anche senza nessuno davanti (la presenza nell'editor,
-// l'avanzamento di un run): per questo il conto lo tiene anche la pagina, su
-// quello che fa la PERSONA — tasti, mouse, rotella, tocchi.
+// Sign-out for inactivity (AUTH__SESSION_IDLE_MINUTES, which the gateway sends in
+// /auth/me). The gateway closes by itself a session no requests come from, but an open
+// page makes some even with nobody in front of it (the presence in the editor, a run's
+// progress): that is why the page keeps the count too, on what the PERSON does — keys,
+// mouse, wheel, touches.
 //
-// L'attività è condivisa fra le schede (localStorage): chi lavora in una non
-// viene buttato fuori dall'altra. Un minuto prima l'avviso (IdleWarning.vue);
-// allo scadere, uscita vera, come dal menu.
+// The activity is shared among the tabs (localStorage): whoever works in one is not
+// thrown out of the other. A minute before, the warning (IdleWarning.vue); at expiry, a
+// real sign-out, as from the menu.
 //
-// Il rovescio: chi legge una tabella lunga senza fare richieste è attivo per la
-// pagina ma fermo per il gateway. Allora, finché c'è attività, la pagina lo dice
-// al gateway una volta al minuto.
+// The flip side: whoever reads a long table without making requests is active for the
+// page but still for the gateway. So, while there is activity, the page tells the
+// gateway once a minute.
 import type { Me } from '~/composables/useAuth'
 
 const KEY = 'tabularia.lastActivity'
@@ -31,12 +31,12 @@ export default defineNuxtPlugin((nuxtApp) => {
     last = Date.now()
     if (last - written > 5_000) {
       written = last
-      try { localStorage.setItem(KEY, String(last)) } catch { /* storage negato: vale la scheda */ }
+      try { localStorage.setItem(KEY, String(last)) } catch { /* storage denied: the tab's holds */ }
     }
   }
   function lastActivity(): number {
     let shared = 0
-    try { shared = Number(localStorage.getItem(KEY)) || 0 } catch { /* idem */ }
+    try { shared = Number(localStorage.getItem(KEY)) || 0 } catch { /* same */ }
     return Math.max(last, shared)
   }
 
@@ -57,9 +57,9 @@ export default defineNuxtPlugin((nuxtApp) => {
       await nuxtApp.runWithContext(() => useAuth().logout('idle'))
       return
     }
-    // l'ultimo minuto, o l'ultima metà con un timeout più corto di due minuti
+    // the last minute, or the last half with a timeout shorter than two minutes
     warning.value = left <= Math.min(WARN_MS, (minutes * 60_000) / 2) ? Math.ceil(left / 1000) : null
-    // attiva sulla pagina dall'ultimo segnale: il gateway lo deve sapere
+    // active on the page since the last signal: the gateway must know
     if (seen > pinged && now - pinged >= PING_MS) {
       pinged = now
       await nuxtApp.runWithContext(() => useAuth().fetchMe())
@@ -67,7 +67,7 @@ export default defineNuxtPlugin((nuxtApp) => {
   }
 
   for (const e of EVENTS) window.addEventListener(e, mark, { passive: true, capture: true })
-  // all'accesso il conto riparte: l'attività di prima appartiene a un'altra sessione
+  // at sign-in the count starts again: the activity of before belongs to another session
   watch(() => user.value?.id, (id) => { if (id != null) { mark(); pinged = Date.now() } })
   setInterval(tick, 1_000)
 })

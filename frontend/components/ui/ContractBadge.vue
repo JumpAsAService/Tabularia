@@ -1,7 +1,7 @@
 <script setup lang="ts">
-// L'icona di stato del data contract di una datasource. Senza contratto non
-// mostra niente. La FORMA cambia con lo stato, non solo il colore, e lo stato è
-// detto anche a parole (title e nome accessibile): un'icona da sola non basta.
+// A datasource's data contract state icon. Without a contract it shows nothing. The
+// SHAPE changes with the state, not only the colour, and the state is said in words too
+// (title and accessible name): an icon alone is not enough.
 import { computed } from 'vue'
 import { Shield, ShieldAlert, ShieldCheck, ShieldX } from 'lucide-vue-next'
 import { useI18n } from 'vue-i18n'
@@ -14,8 +14,8 @@ const props = withDefaults(
 const { t } = useI18n()
 
 const ICONE = { pending: Shield, passed: ShieldCheck, warning: ShieldAlert, failed: ShieldX }
-const stato = computed(() => props.contract?.status ?? 'pending')
-const titolo = computed(() => {
+const state = computed(() => props.contract?.status ?? 'pending')
+const title = computed(() => {
   const c = props.contract
   if (!c) return ''
   if (c.blocked) return t('contracts.state.blocked')
@@ -26,8 +26,8 @@ const titolo = computed(() => {
 </script>
 
 <template>
-  <span v-if="contract" class="contract-badge" :class="stato" role="img" :aria-label="titolo" :title="titolo">
-    <component :is="ICONE[stato]" :size="size" aria-hidden="true" />
-    <span v-if="label" class="contract-badge-text">{{ $t(`contracts.short.${contract.blocked ? 'blocked' : stato}`) }}</span>
+  <span v-if="contract" class="contract-badge" :class="state" role="img" :aria-label="title" :title="title">
+    <component :is="ICONE[state]" :size="size" aria-hidden="true" />
+    <span v-if="label" class="contract-badge-text">{{ $t(`contracts.short.${contract.blocked ? 'blocked' : state}`) }}</span>
   </span>
 </template>

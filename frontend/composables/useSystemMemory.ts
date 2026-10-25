@@ -1,9 +1,9 @@
-// RAM dell'host in tempo reale (gateway → node-exporter). Serve all'utente per
-// vedere quanta memoria resta MENTRE costruisce/esegue un flusso: Polars lavora
-// in RAM e saturarla fa fallire il run.
+// The host's RAM in real time (gateway → node-exporter). It serves the user to see how
+// much memory is left WHILE building/running a flow: Polars works in RAM and saturating
+// it fails the run.
 //
-// Stato SINGLETON con refcount: più componenti possono usarlo (topbar della
-// shell + toolbar dell'editor) ma gira un solo poller.
+// SINGLETON state with a refcount: several components may use it (the shell's topbar +
+// the editor's toolbar) but only one poller runs.
 import { ref, computed, onMounted, onUnmounted } from 'vue'
 
 export interface MemoryInfo {
@@ -13,7 +13,7 @@ export interface MemoryInfo {
   used_percent: number
 }
 
-/** Scala tipo Likert a 5 livelli sulla % di RAM usata. */
+/** A 5-level Likert-like scale on the % of RAM used. */
 export interface MemoryLevel {
   step: 1 | 2 | 3 | 4 | 5
   label: string
@@ -36,18 +36,18 @@ export function formatGB(bytes: number): string {
   return `${(bytes / 1e9).toFixed(1)} GB`
 }
 
-// Quanto spesso si chiede. Ogni scheda aperta fa la sua richiesta: a 5 secondi,
-// cinquecento persone collegate erano cento richieste al secondo senza che
-// nessuno facesse niente — metà del traffico del gateway, misurato. Il dato
-// serve fresco solo dove si lavora (l'editor, mentre un flusso gira); altrove
-// basta sapere a grandi linee come sta la macchina. E una scheda che nessuno
-// sta guardando non chiede affatto: riparte, subito, quando torna in primo piano.
+// How often it asks. Every open tab makes its own request: at 5 seconds, five hundred
+// people connected were a hundred requests a second without anyone doing anything —
+// half the gateway's traffic, measured. The data needs to be fresh only where one works
+// (the editor, while a flow runs); elsewhere knowing roughly how the machine is doing is
+// enough. And a tab nobody is looking at does not ask at all: it starts again, at once,
+// when it comes back to the foreground.
 const SLOW_MS = 30000
 const FAST_MS = 10000
 
-// stato condiviso fra tutti i chiamanti
+// state shared among all the callers
 const memory = ref<MemoryInfo | null>(null)
-const unavailable = ref(false) // node-exporter giù → l'UI nasconde il badge
+const unavailable = ref(false) // node-exporter down → the UI hides the badge
 let timer: ReturnType<typeof setInterval> | null = null
 let consumers = 0
 let fastConsumers = 0
@@ -57,7 +57,7 @@ function visible(): boolean {
   return typeof document === 'undefined' || document.visibilityState === 'visible'
 }
 
-/** (Ri)arma il poller secondo chi lo sta usando e se la scheda è in vista. */
+/** (Re)arms the poller according to who is using it and whether the tab is in view. */
 function arm(immediate: boolean) {
   if (timer) {
     clearInterval(timer)
@@ -69,12 +69,12 @@ function arm(immediate: boolean) {
 }
 
 function onVisibility() {
-  arm(visible()) // tornata in vista: un dato fresco subito, poi il ritmo normale
+  arm(visible()) // back in view: fresh data at once, then the normal rhythm
 }
 
 /**
- * @param opts.fast  chi ha bisogno del dato fresco (l'editor): finché c'è almeno
- *                   un consumatore così, si chiede ogni 10 secondi invece di 30.
+ * @param opts.fast  whoever needs fresh data (the editor): while there is at least one
+ *                   such consumer, it asks every 10 seconds instead of 30.
  */
 // the installation answered 404: there is nothing to read, for the life of the page
 let absent = false
@@ -89,7 +89,7 @@ export function useSystemMemory(opts: { fast?: boolean } = {}) {
         memory.value = await apiFetch<MemoryInfo>('/system/memory')
         unavailable.value = false
       } catch (e: any) {
-        unavailable.value = true // 503/offline: non è un errore da mostrare in toast
+        unavailable.value = true // 503/offline: not an error to show in a toast
         // 404: this installation has no such reading (on Kubernetes, without node-exporter),
         // and asking every 10 s filled the console with red for nothing: asked no more
         if ((e?.response?.status ?? e?.statusCode) === 404) absent = true
@@ -98,8 +98,8 @@ export function useSystemMemory(opts: { fast?: boolean } = {}) {
     consumers++
     if (opts.fast) fastConsumers++
     if (consumers === 1) document.addEventListener('visibilitychange', onVisibility)
-    // il primo consumatore parte con un dato; uno «veloce» che si aggiunge
-    // accorcia il ritmo senza rifare la richiesta
+    // the first consumer starts with data; a «fast» one joining shortens the rhythm without
+    // making the request again
     arm(consumers === 1)
   })
 

@@ -1,43 +1,42 @@
-// Consenso informato all'uso dell'assistente: si dichiara che dall'altra parte
-// c'è un sistema automatico, e finché non lo si è letto la chat non si usa
-// (AI Act, art. 50 — obbligo di trasparenza verso chi interagisce).
+// Informed consent to using the assistant: it is declared that on the other side there
+// is an automated system, and until one has read it the chat cannot be used (AI Act,
+// art. 50 — the transparency obligation towards whoever interacts).
 //
-// Si ricorda nel BROWSER, non sull'account. Su un'installazione aperta l'ospite
-// è condiviso: l'accettazione di un visitatore non può valere per il successivo,
-// perché la persona da informare è chi guarda lo schermo, non la riga nella
-// tabella utenti. È anche il motivo per cui non passa dal server.
+// It is remembered in the BROWSER, not on the account. On an open installation the guest
+// is shared: one visitor's acceptance cannot hold for the next, because the person to
+// inform is whoever looks at the screen, not the row in the users' table. It is also why
+// it does not go through the server.
 import { ref } from 'vue'
 
-const CHIAVE = 'tabularia.aiDisclosure'
-// Da alzare quando il testo cambia nella SOSTANZA (non per una virgola): chi
-// aveva accettato la versione precedente se lo vede richiedere, ed è giusto —
-// ha acconsentito a un'altra cosa.
-const VERSIONE = '1'
+const KEY = 'tabularia.aiDisclosure'
+// To raise when the text changes in SUBSTANCE (not for a comma): whoever had accepted the
+// earlier version sees it asked again, and rightly — they consented to something else.
+const VERSION = '1'
 
-// `null` = non ancora saputo (siamo sul server, o il mount non è avvenuto).
-// Serve a non far lampeggiare il dialogo a chi ha già accettato.
-const accettata = ref<boolean | null>(null)
+// `null` = not known yet (we are on the server, or the mount has not happened). It serves
+// to keep the dialog from flashing to whoever has accepted already.
+const accepted = ref<boolean | null>(null)
 
 export function useAiDisclosure() {
-  function leggi() {
+  function read() {
     if (!import.meta.client) return
     try {
-      accettata.value = localStorage.getItem(CHIAVE) === VERSIONE
+      accepted.value = localStorage.getItem(KEY) === VERSION
     } catch {
-      // niente storage (finestra privata, cookie bloccati): si chiede ogni volta.
-      // Meglio insistere che dare per accettato ciò che non risulta.
-      accettata.value = false
+      // no storage (private window, cookies blocked): it asks every time. Better to insist than
+      // to take as accepted what does not show.
+      accepted.value = false
     }
   }
 
-  function accetta() {
-    accettata.value = true
+  function accept() {
+    accepted.value = true
     try {
-      localStorage.setItem(CHIAVE, VERSIONE)
+      localStorage.setItem(KEY, VERSION)
     } catch {
-      /* non poterlo ricordare non impedisce di proseguire adesso */
+      /* not being able to remember it does not prevent going on now */
     }
   }
 
-  return { accettata, leggi, accetta }
+  return { accepted, read, accept }
 }

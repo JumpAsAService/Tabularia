@@ -1,5 +1,5 @@
-// Stato di autenticazione: la sessione sta in un cookie HttpOnly che scrive il
-// gateway (il JavaScript non lo legge e non lo tocca) + utente corrente.
+// Authentication state: the session sits in an HttpOnly cookie the gateway writes (the
+// JavaScript neither reads nor touches it) + the current user.
 
 export interface Me {
   id: number
@@ -7,15 +7,15 @@ export interface Me {
   full_name: string
   is_active: boolean
   is_superuser: boolean
-  // LEGGE i pannelli di amministrazione senza poterci scrivere: un
-  // amministratore lo è per definizione (vedi permissions.is_observer)
+  // READS the administration panels without being able to write in them: an administrator
+  // is one by definition (see permissions.is_observer)
   is_observer?: boolean
   groups: string[]
-  // la pagina esce da sé dopo tanti minuti senza che nessuno la tocchi (0 = mai)
+  // the page signs out by itself after that many minutes without anyone touching it (0 = never)
   session_idle_minutes?: number
-  // l'installazione permette i token API personali (AUTH__PERSONAL_TOKENS)
+  // the installation allows personal API tokens (AUTH__PERSONAL_TOKENS)
   personal_tokens?: boolean
-  // la scadenza più lunga che si può dare a un token (AUTH__API_TOKEN_MAX_DAYS)
+  // the longest expiry a token can be given (AUTH__API_TOKEN_MAX_DAYS)
   api_token_max_days?: number
   // no local password: the account signs in through the identity provider (SSO)
   sso_only?: boolean
@@ -23,39 +23,39 @@ export interface Me {
   locale?: string | null
 }
 
-// Il cookie della sessione: lo scrive il gateway all'accesso, `HttpOnly`, quindi
-// uno script iniettato nella pagina non se lo porta via.
+// The session's cookie: the gateway writes it at sign-in, `HttpOnly`, so a script
+// injected into the page does not take it away.
 export const SESSION_COOKIE = 'tab_token'
 
-// Ogni richiesta che si presenta col solo cookie e modifica qualcosa porta
-// questa intestazione: un modulo di un altro sito non la può aggiungere, e il
-// gateway rifiuta la richiesta che non ce l'ha (vedi gateway/app/services/sessions.py).
+// Every request that comes with the cookie alone and changes something carries this
+// header: another site's form cannot add it, and the gateway refuses the request that
+// lacks it (see gateway/app/services/sessions.py).
 export const CSRF_HEADERS = { 'X-Tabularia-Csrf': '1' } as const
 
-// «C'è una sessione?» Il JavaScript non vede il cookie: lo vede il server che
-// rende la prima pagina, e lo dice al client nello stato della pagina. Da lì lo
-// tiene aggiornato il client: vero all'accesso, falso a un 401 o all'uscita.
-// Serve solo a scegliere la pagina (accesso o app): chi decide resta il gateway.
+// «Is there a session?» The JavaScript does not see the cookie: the server that renders
+// the first page sees it, and tells the client in the page's state. From there the client
+// keeps it updated: true at sign-in, false at a 401 or at sign-out. It serves only to
+// choose the page (sign-in or app): the gateway stays the one that decides.
 export const useSessionPresent = () =>
   useState<boolean>('auth_present', () => (import.meta.server ? !!useCookie(SESSION_COOKIE).value : false))
 
-// Vero solo durante un'uscita VOLUTA (dal menu, o per inattività): l'editor la
-// lascia passare senza chiedere delle modifiche. Un 401 qualunque (sessione
-// scaduta, revocata) no: lì il dialogo resta, e «resta» permette almeno di
-// copiare i nodi prima di rientrare.
+// True only during a WANTED sign-out (from the menu, or for inactivity): the editor lets
+// it through without asking about the changes. Any 401 (session expired, revoked) does
+// not: there the dialog stays, and «stay» at least allows copying the nodes before
+// signing in again.
 export const useLeaving = () => useState<boolean>('auth_leaving', () => false)
 
-// Il gateway ha detto 401: la sessione non c'è più. L'utente invece resta in
-// memoria fino a un'uscita voluta o a un accesso nuovo: l'editor lo usa per sapere
-// che chi guarda può modificare, e senza diventerebbe di sola lettura — cioè «niente
-// da salvare», e le modifiche se ne andrebbero senza chiedere. Il conto
-// dell'inattività guarda la presenza, e sulla pagina di accesso si ferma.
+// The gateway said 401: the session is no longer there. The user instead stays in memory
+// until a wanted sign-out or a new sign-in: the editor uses it to know that whoever looks
+// may edit, and without it it would become read-only — that is «nothing to save», and
+// the changes would go away without asking. The inactivity count looks at the presence,
+// and stops on the sign-in page.
 export function dropSession() {
   useSessionPresent().value = false
 }
 
-// I secondi che restano prima dell'uscita per inattività, nell'ultimo minuto;
-// null fuori da lì (vedi plugins/idle-logout.client.ts e IdleWarning.vue)
+// The seconds left before the sign-out for inactivity, in the last minute; null outside
+// it (see plugins/idle-logout.client.ts and IdleWarning.vue)
 export const useIdleWarning = () => useState<number | null>('idle_warning', () => null)
 
 /** Tells the gateway the language of the interface when it is not the one it
@@ -83,9 +83,9 @@ export function useAuth() {
   const user = useState<Me | null>('auth_user', () => null)
 
   async function login(email: string, password: string) {
-    // Il cookie lo scrive il gateway. Agli script il token torna anche nel corpo;
-    // con l'intestazione anti-CSRF no: alla pagina basta il cookie, e quello che
-    // non riceve non lo può perdere
+    // The gateway writes the cookie. To the scripts the token comes back in the body too;
+    // with the anti-CSRF header it does not: the cookie is enough for the page, and what it
+    // does not receive it cannot lose
     await $fetch(`${base}/auth/login`, {
       method: 'POST',
       body: { email, password },
@@ -120,8 +120,8 @@ export function useAuth() {
     await fetchMe()
   }
 
-  // SSO OIDC (opzionale): il gateway dice se è configurato. Mai un errore se
-  // spento — la pagina di login deve funzionare comunque.
+  // OIDC SSO (optional): the gateway says whether it is configured. Never an error when
+  // off — the login page must work anyway.
   async function ssoConfig(): Promise<{ enabled: boolean; button_label: string }> {
     try {
       return await $fetch<{ enabled: boolean; button_label: string }>(`${base}/auth/sso/config`)
@@ -130,12 +130,12 @@ export function useAuth() {
     }
   }
 
-  // avvia il flusso SSO: navigazione vera (non fetch), il gateway redirige all'IdP
+  // starts the SSO flow: a real navigation (not a fetch), the gateway redirects to the IdP
   function ssoLogin() {
     window.location.href = `${base}/auth/sso/login`
   }
 
-  // ritorno dall'SSO: il gateway ha già scritto il cookie, resta da chiedere chi sono
+  // back from SSO: the gateway has written the cookie already, it remains to ask who I am
   async function completeSso(): Promise<Me | null> {
     present.value = true
     useLeaving().value = false
@@ -155,12 +155,11 @@ export function useAuth() {
       // of the interface: the emails it sends this user will speak it
       if (import.meta.client) syncLocale(user.value)
     } catch (e: any) {
-      // Solo un 401 dice che la sessione non vale più (chiusa, scaduta, utente
-      // disattivato): allora si esce, come fa useApiClient. Una richiesta interrotta
-      // da un cambio di pagina, un errore di rete o un 5xx (un gateway che si
-      // riavvia) NON sono un logout: la sessione resta e la pagina dopo riprova.
-      // Prima qualunque errore faceva uscire, e chi navigava in fretta o
-      // durante un riavvio si ritrovava al login (trovato il 2026-10-10).
+      // Only a 401 says the session no longer holds (closed, expired, user disabled): then it
+      // signs out, as useApiClient does. A request broken off by a page change, a network error
+      // or a 5xx (a gateway restarting) are NOT a logout: the session stays and the next page
+      // retries. Before, any error signed out, and whoever navigated quickly or during a
+      // restart found themselves at the login (found on 2026-10-10).
       const code = e?.response?.status ?? e?.statusCode
       if (code === 401) {
         dropSession()
@@ -170,14 +169,14 @@ export function useAuth() {
     return user.value
   }
 
-  // Uscita vera: il gateway chiude la sessione, e il suo token smette di valere
-  // ovunque sia stato copiato. `reason` arriva alla pagina di accesso, che lo dice.
+  // A real sign-out: the gateway closes the session, and its token stops holding wherever
+  // it was copied. `reason` reaches the sign-in page, which says it.
   async function logout(reason?: 'idle') {
     useLeaving().value = true
     try {
       await $fetch(`${base}/auth/logout`, { method: 'POST', credentials: 'include', headers: CSRF_HEADERS })
     } catch {
-      // già chiusa, o il gateway non risponde: dal browser si esce comunque
+      // closed already, or the gateway does not answer: from the browser one signs out anyway
     }
     present.value = false
     user.value = null

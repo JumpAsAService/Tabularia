@@ -1,7 +1,7 @@
 <script setup lang="ts">
-// Calendar plot dell'ATTIVITÀ delle esecuzioni (stile GitHub): un heatmap per
-// giorno con intensità = numero di run, drill-down ORARIO al click su un giorno.
-// I conteggi distinguono esito (successi/falliti) e origine (manuali/schedulati).
+// Calendar plot of the runs' ACTIVITY (GitHub style): a heatmap per day with intensity =
+// number of runs, HOURLY drill-down on clicking a day. The counts tell the outcome
+// (successes/failures) and the origin (manual/scheduled) apart.
 import { computed, onMounted, ref, shallowRef } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { useFormat } from '~/composables/useFormat'
@@ -29,7 +29,7 @@ use([
 const runsApi = useRuns()
 const { ui } = useChartTheme()
 
-// computed (non const): così le etichette seguono il cambio lingua a runtime
+// computed (not const): so the labels follow the language change at runtime
 const RANGES = computed(() => [
   { days: 90, label: t('runCalendar.rangeLabel3Months') },
   { days: 180, label: t('runCalendar.rangeLabel6Months') },
@@ -44,7 +44,7 @@ const error = ref('')
 const daily = shallowRef<RunActivity | null>(null)
 const hourly = shallowRef<RunActivity | null>(null)
 
-// mappe key→bucket per i tooltip (senza rovistare nell'array nei formatter)
+// key→bucket maps for the tooltips (without rummaging in the array in the formatters)
 const dailyByKey = computed(
   () => new Map<string, ActivityBucket>((daily.value?.buckets ?? []).map((b) => [b.key, b])),
 )
@@ -90,9 +90,9 @@ function setRange(days: number) {
 
 onMounted(fetchDaily)
 
-// ── calendario ───────────────────────────────────────────────────────────────
+// ── calendar ─────────────────────────────────────────────────────────────────
 const weeks = computed(() => Math.ceil(rangeDays.value / 7) + 1)
-const calWidth = computed(() => Math.max(weeks.value * 16 + 60, 320)) // px; scroll-x se serve
+const calWidth = computed(() => Math.max(weeks.value * 16 + 60, 320)) // px; scroll-x when needed
 
 const maxTotal = computed(() =>
   (daily.value?.buckets ?? []).reduce((m, b) => Math.max(m, b.total), 0),
@@ -109,8 +109,8 @@ const calendarOption = computed(() => {
   const byKey = dailyByKey.value
   return {
     tooltip: {
-      // appesa al body: il wrapper ha overflow-y hidden (per lo scroll-x) e
-      // altrimenti taglierebbe la tooltip in alto
+      // attached to the body: the wrapper has overflow-y hidden (for the scroll-x) and would
+      // otherwise cut the tooltip at the top
       appendToBody: true,
       formatter: (p: any) => {
         const b = byKey.get(p.data[0])
@@ -134,9 +134,8 @@ const calendarOption = computed(() => {
       itemWidth: 11,
       itemHeight: 11,
       textStyle: { fontSize: 10, color: ui.value.muted },
-      // rampa sequenziale: è codifica del DATO (intensità), non cromo, quindi
-      // resta fissa come la scala di un grafico
-      // il colore del successo del tema, più pieno dove i run sono di più
+      // sequential ramp: it is DATA encoding (intensity), not chrome, so it stays fixed like a
+      // chart's scale; the theme's success colour, fuller where the runs are more
       inRange: { color: [withAlpha(ui.value.success, 0.28), withAlpha(ui.value.success, 0.62), ui.value.success] },
       text: [t('runCalendar.visualMapMore'), t('runCalendar.visualMapLess')],
     },
@@ -154,7 +153,7 @@ const calendarOption = computed(() => {
         color: ui.value.muted,
         nameMap: t('runCalendar.monthAbbreviations').split(','),
       },
-      // nameMap indicizzato da domenica(0); firstDay:1 avvia la settimana da lunedì
+      // nameMap indexed from Sunday(0); firstDay:1 starts the week from Monday
       dayLabel: {
         fontSize: 9,
         color: ui.value.muted,
@@ -166,7 +165,7 @@ const calendarOption = computed(() => {
   }
 })
 
-// ── drill-down orario ────────────────────────────────────────────────────────
+// ── hourly drill-down ────────────────────────────────────────────────────────
 const hourlyOption = computed(() => {
   const h = hourly.value
   if (!h) return {}
@@ -176,7 +175,7 @@ const hourlyOption = computed(() => {
   const failure = hours.map((k) => byHour.get(k)?.failure ?? 0)
   const pending = hours.map((k) => {
     const b = byHour.get(k)
-    return b ? b.total - b.success - b.failure : 0 // in corso o non terminati
+    return b ? b.total - b.success - b.failure : 0 // running or not finished
   })
   return {
     grid: { left: 34, right: 12, top: 20, bottom: 40 },
@@ -202,7 +201,7 @@ const hourlyOption = computed(() => {
       nameLocation: 'middle',
       nameGap: 26,
       nameTextStyle: { fontSize: 10, color: ui.value.muted },
-      // senza color le etichette ereditavano il grigio scuro di ECharts, illeggibile sui temi scuri
+      // without color the labels inherited ECharts' dark grey, unreadable on dark themes
       axisLabel: { fontSize: 9, interval: 1, color: ui.value.muted },
     },
     yAxis: { type: 'value', minInterval: 1, axisLabel: { fontSize: 9, color: ui.value.muted }, splitLine: { lineStyle: { opacity: 0.12 } } },
@@ -273,7 +272,7 @@ const dailyTotal = computed(() =>
 .segmented { display: inline-flex; border: 1px solid var(--border); border-radius: 7px; overflow: hidden; }
 .segmented button { padding: 4px 10px; background: var(--panel-2); color: var(--muted); border: none; border-right: 1px solid var(--border); font-size: 12px; cursor: pointer; }
 .segmented button:last-child { border-right: none; }
-/* --on-accent, non #fff: su Dracula e Monokai l'accento è chiaro e vuole testo scuro */
+/* --on-accent, not #fff: on Dracula and Monokai the accent is light and wants dark text */
 .segmented button.on { background: var(--accent); color: var(--on-accent); }
 
 .cal-scroll { overflow-x: auto; overflow-y: hidden; }

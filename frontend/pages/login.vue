@@ -5,7 +5,7 @@ import { LogIn, KeyRound, Eye, EyeOff, CircleAlert, ArrowUp, Clock, UserPlus } f
 import { passwordProblem, usePasswordRules } from '~/composables/usePasswordRules'
 import { errMessage } from '~/composables/useApi'
 import { useLocale } from '~/composables/useLocale'
-// import espliciti: nel container i componenti nuovi non vengono scansionati
+// explicit imports: in the container new components are not scanned
 import OrderingField from '~/components/ui/OrderingField.vue'
 import Select from '~/components/ui/Select.vue'
 import BrandMark from '~/components/ui/BrandMark.vue'
@@ -20,7 +20,7 @@ const email = ref('')
 const password = ref('')
 const busy = ref(false)
 const error = ref('')
-// perché si è qui senza averlo chiesto (?reason=idle: uscita per inattività)
+// why one is here without having asked (?reason=idle: signed out for inactivity)
 const notice = ref('')
 const showPassword = ref(false)
 const capsLock = ref(false)
@@ -30,9 +30,9 @@ const setup = ref(false)
 const fullName = ref('')
 const confirm = ref('')
 
-// La zona quieta del campo segue la card VERA: cambia altezza con l'SSO, con un
-// errore, con la lingua. Una misura fissa lasciava un buco nero attorno al form
-// e nascondeva proprio la fascia dove i valori si stanno sistemando.
+// The field's quiet zone follows the REAL card: it changes height with SSO, with an
+// error, with the language. A fixed size left a black hole around the form and hid
+// exactly the band where the values are settling.
 const card = ref<HTMLElement | null>(null)
 const emailEl = ref<HTMLInputElement | null>(null)
 const passwordEl = ref<HTMLInputElement | null>(null)
@@ -47,18 +47,18 @@ onMounted(() => {
   cardRo = new ResizeObserver(measure)
   cardRo.observe(card.value)
   measure()
-  // `autofocus` vale solo al caricamento della pagina: dopo un logout si arriva
-  // qui per navigazione interna e il campo resterebbe senza fuoco
+  // `autofocus` holds only at page load: after a logout one gets here by internal
+  // navigation and the field would stay without focus
   emailEl.value?.focus()
 })
 onBeforeUnmount(() => cardRo?.disconnect())
 
-// SSO OIDC: il pulsante compare solo se il gateway è configurato con un IdP
+// OIDC SSO: the button shows only when the gateway is configured with an IdP
 const sso = ref<{ enabled: boolean; button_label: string }>({ enabled: false, button_label: '' })
 onMounted(async () => {
   setup.value = await setupNeeded()
   sso.value = await ssoConfig()
-  // il callback SSO rimanda qui con ?sso_error=<codice> se qualcosa è andato storto
+  // the SSO callback sends back here with ?sso_error=<code> when something went wrong
   const query = new URLSearchParams(window.location.search)
   const code = query.get('sso_error')
   if (code) {
@@ -69,8 +69,8 @@ onMounted(async () => {
   if (query.get('reason') === 'idle') notice.value = t('login.signedOutIdle')
 })
 
-// una password sbagliata per il Blocco Maiuscole è l'errore più frequente e il
-// meno spiegato: lo si dice PRIMA dell'invio
+// a password wrong because of Caps Lock is the most frequent and least explained error:
+// it is said BEFORE sending
 function onPasswordKey(e: KeyboardEvent) {
   if (typeof e.getModifierState === 'function') capsLock.value = e.getModifierState('CapsLock')
 }
@@ -93,7 +93,7 @@ async function onSubmit() {
     const wait = /^Too many sign-in attempts\. Try again in (\d+) seconds\.$/.exec(said)
     error.value = said === 'Incorrect email or password' ? t('login.wrongCredentials')
       : wait ? t('login.tooManyAttempts', { s: wait[1] }) : said
-    // quasi sempre è la password: il fuoco torna lì, pronta da riscrivere
+    // it is almost always the password: the focus goes back there, ready to type again
     await nextTick()
     passwordEl.value?.select()
   } finally {
@@ -105,8 +105,8 @@ async function onSubmit() {
 <template>
   <main class="login">
     <OrderingField :quiet-width="quiet.w" :quiet-height="quiet.h" />
-    <!-- un velo del colore di fondo dietro la card: i valori si spengono prima di
-         arrivarle sotto, e attorno ai campi non si muove nulla -->
+    <!-- a veil of the background colour behind the card: the values fade before reaching under
+         it, and nothing moves around the fields -->
     <div class="veil" aria-hidden="true" :style="{ '--qw': quiet.w + 'px', '--qh': quiet.h + 'px' }" />
 
     <div class="lang">
@@ -181,7 +181,7 @@ async function onSubmit() {
         <template v-else>{{ busy ? $t('login.signingIn') : $t('login.signIn') }}</template>
       </button>
 
-      <!-- SSO opzionale: senza IdP configurato questo blocco non esiste -->
+      <!-- optional SSO: without an IdP configured this block does not exist -->
       <template v-if="sso.enabled && !setup">
         <div class="sep"><span>{{ $t('login.or') }}</span></div>
         <button class="sso" type="button" @click="ssoLogin()">
@@ -190,11 +190,11 @@ async function onSubmit() {
       </template>
     </form>
 
-    <!-- l'informativa si legge PRIMA di entrare: è il solo momento in cui
-         qualcuno può ancora decidere di non entrare -->
+    <!-- the notice is read BEFORE signing in: it is the only moment someone can still decide
+         not to sign in -->
     <PrivacyNotice />
 
-    <!-- i due lati del campo, nominati: a sinistra ciò che entra, a destra ciò che esce -->
+    <!-- the field's two sides, named: on the left what comes in, on the right what goes out -->
     <p class="side raw" aria-hidden="true">{{ $t('login.rawSide') }}</p>
     <p class="side ready" aria-hidden="true">{{ $t('login.readySide') }}</p>
   </main>
@@ -207,14 +207,14 @@ async function onSubmit() {
   overflow: hidden;
   display: grid;
   place-items: center;
-  /* min-height e non height: con il blocco SSO su schermo basso la card supera
-     il viewport, e un'altezza fissa ne taglierebbe la cima senza poterla
-     raggiungere. dvh segue la barra degli indirizzi mobile; 100vh è il fallback. */
+  /* min-height and not height: with the SSO block on a short screen the card exceeds the
+     viewport, and a fixed height would cut its top without any way to reach it. dvh follows
+     the mobile address bar; 100vh is the fallback. */
   min-height: 100vh;
   min-height: 100dvh;
-  /* in basso si lascia posto alla barra dell'informativa, che è FISSATA in
-     fondo: senza, su uno schermo basso — o con il blocco SSO — la card
-     finirebbe sotto la barra e non ci si arriverebbe con lo scorrimento */
+  /* at the bottom room is left for the notice's bar, which is FIXED at the bottom: without
+     it, on a short screen — or with the SSO block — the card would end up under the bar and
+     scrolling could not reach it */
   padding: 72px 16px 132px;
   background: var(--bg);
 }
@@ -225,7 +225,7 @@ async function onSubmit() {
   z-index: 1;
   top: 50%;
   left: 50%;
-  /* poco più della card: basta a spegnere i valori prima che le arrivino sotto */
+  /* a bit more than the card: enough to fade the values before they reach under it */
   width: calc(var(--qw, 440px) + 150px);
   height: calc(var(--qh, 520px) + 130px);
   transform: translate(-50%, -50%);
@@ -236,8 +236,8 @@ async function onSubmit() {
 .card {
   position: relative;
   z-index: 2;
-  /* sotto i 380px di viewport la card usciva dallo schermo e trascinava la
-     pagina a scorrere in orizzontale */
+  /* under a 380px viewport the card left the screen and dragged the page into horizontal
+     scrolling */
   width: min(380px, calc(100vw - 32px));
   display: flex;
   flex-direction: column;
@@ -246,8 +246,8 @@ async function onSubmit() {
   background: var(--panel);
   border: 1px solid var(--border);
   border-radius: 14px;
-  /* solo l'ombra del sistema, che è già tematizzata: una seconda ombra lunga era
-     una macchia nera sul tema chiaro e, derivata da --text, un alone bianco sul buio */
+  /* only the system's shadow, which is themed already: a second long shadow was a black
+     stain on the light theme and, derived from --text, a white halo on the dark */
   box-shadow: var(--shadow-2);
 }
 @media (prefers-reduced-motion: no-preference) {
@@ -295,14 +295,14 @@ h1 { margin: 0; font-size: 26px; font-weight: 600; letter-spacing: -0.01em; line
   padding: 10px 12px;
   border-radius: 9px;
   background: color-mix(in srgb, var(--danger) 12%, transparent);
-  /* --danger su tinta danger faceva 3,9:1 in light/dracula/monokai: il testo
-     prende --text, il rosso resta all'icona */
+  /* --danger on a danger tint made 3.9:1 in light/dracula/monokai: the text takes --text,
+     the red stays to the icon */
   color: var(--text);
   font-size: 13px;
   line-height: 1.4;
 }
 .err svg { flex: none; margin-top: 1px; color: var(--danger); }
-/* un avviso, non un errore: stessa forma, colori quieti */
+/* a warning, not an error: the same shape, quiet colours */
 .err.note { background: var(--panel-2); color: var(--text); }
 .err.note svg { color: var(--muted); }
 
@@ -335,8 +335,8 @@ h1 { margin: 0; font-size: 26px; font-weight: 600; letter-spacing: -0.01em; line
 .side {
   position: absolute;
   z-index: 1;
-  /* sopra la barra dell'informativa, che è fissata in fondo: senza, le due
-     etichette del campo ci finirebbero sotto */
+  /* above the notice's bar, which is fixed at the bottom: without it, the field's two labels
+     would end up under it */
   bottom: 88px;
   margin: 0;
   font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
@@ -344,19 +344,19 @@ h1 { margin: 0; font-size: 26px; font-weight: 600; letter-spacing: -0.01em; line
   letter-spacing: 0.08em;
   text-transform: uppercase;
   color: var(--muted);
-  /* i valori passano anche qui sotto: un fondo, o l'etichetta non si legge */
+  /* the values pass under here too: a background, or the label cannot be read */
   padding: 3px 8px;
   border-radius: 6px;
   background: var(--bg);
 }
 .side.raw { left: 26px; }
 .side.ready { right: 26px; }
-/* su schermi stretti o bassi le etichette finirebbero sotto la card */
+/* on narrow or short screens the labels would end up under the card */
 @media (max-width: 720px), (max-height: 640px) {
   .side { display: none; }
   .login { padding: 64px 16px 140px; }
 }
-/* viewport basso con SSO + errore + avviso maiuscole: la card si stringe */
+/* short viewport with SSO + error + caps warning: the card shrinks */
 @media (max-height: 640px) {
   .card { gap: 12px; padding: 22px 26px; }
   .tagline { margin-bottom: 0; }

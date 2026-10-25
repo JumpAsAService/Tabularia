@@ -1,6 +1,6 @@
-// Datasource nominate: il catalogo dei dataset riusabili come sorgenti nei flussi.
-// kind="flow": pubblicate da un run. kind="database": snapshot di una tabella o
-// query su una connessione esterna, aggiornabile con `refresh`.
+// Named datasources: the catalog of the datasets reusable as sources in the flows.
+// kind="flow": published by a run. kind="database": snapshot of a table or a query on an
+// external connection, updatable with `refresh`.
 import type { RunInfo } from '~/composables/useRuns'
 import { pagedQuery, type Page } from '~/composables/useApi'
 import type { ContractSummary } from '~/composables/useContracts'
@@ -16,23 +16,23 @@ export interface DatasourceInfo {
   key: string
   rows: number | null
   columns: { name: string; dtype: string; description?: string }[]
-  column_descriptions: Record<string, string> // {colonna: descrizione}, curate a mano
-  // quanto è documentata; la regola la decide il SERVER (services/documented.py)
+  column_descriptions: Record<string, string> // {column: description}, curated by hand
+  // how documented it is; the SERVER decides the rule (services/documented.py)
   described_columns: number
   total_columns: number
-  ai_ready: boolean // descrizione della tabella + tutti i campi descritti
-  sort_keys: string[] // colonne di ORDER BY (ordinano parquet + copia materializzata)
+  ai_ready: boolean // the table's description + all the fields described
+  sort_keys: string[] // ORDER BY columns (they sort parquet + materialized copy)
   kind: string
   flow_id: number | null
   connection_id: number | null
   source_type: 'table' | 'sql' | 'sharepoint' | 'sftp' | 's3' | 'api' | null
   source_ref: string | null
   refreshed_at: string | null
-  refreshing?: boolean // un ingest è in corso ORA (lo dice il server)
-  refresh_schedule: string | null // espressione cron; null = non schedulato
+  refreshing?: boolean // an ingest is running NOW (the server says it)
+  refresh_schedule: string | null // cron expression; null = not scheduled
   next_refresh_at: string | null
   updated_at: string | null
-  // il data contract, se ce n'è uno acceso: stato per l'icona (null = nessuno)
+  // the data contract, when one is on: state for the icon (null = none)
   contract?: ContractSummary | null
 }
 
@@ -42,7 +42,7 @@ export interface DbDatasourceDraft {
   connection_id: number
   source_type: 'table' | 'sql'
   source_ref: string
-  sort_keys?: string[] // ORDER BY dell'import (vuoto = nessun ordine)
+  sort_keys?: string[] // the import's ORDER BY (empty = no order)
 }
 
 // files of a folder on an SFTP server: folder + glob, every match stacked; folder and
@@ -150,7 +150,7 @@ export interface SharePointDatasourceDraft extends Partial<FileTemplatesDraft> {
   name: string
   description?: string
   connection_id: number
-  path: string // percorso nella raccolta, anche con glob: Budget/2026/*.xlsx
+  path: string // path in the library, globs too: Budget/2026/*.xlsx
   format: SharePointFormat // auto = Excel and CSV, by each file's extension
   sheet: string // Excel: empty = the first sheet
   csv: { separator: string; has_header: boolean; encoding: string }
@@ -162,18 +162,18 @@ export function useDatasources() {
   const { apiFetch } = useApiClient()
 
   return {
-    // tutte quelle nei progetti visibili (per il picker delle sorgenti)
+    // all those in the visible projects (for the sources' picker)
     list: () => apiFetch<DatasourceInfo[]>('/datasources'),
 
-    // pagina globale: ricerca server-side (sull'intero dataset) + paginazione
+    // global page: server-side search (over the whole dataset) + pagination
     listPaged: (p: { q?: string; limit: number; offset: number }) =>
       apiFetch<Page<DatasourceInfo>>(`/datasources/search?${pagedQuery(p)}`),
 
     listByProject: (projectId: number) =>
       apiFetch<DatasourceInfo[]>(`/projects/${projectId}/datasources`),
 
-    // datasource da database: crea la voce e lancia il primo ingest
-    // datasource da Excel su SharePoint: più file del glob = una tabella sola
+    // datasource from a database: creates the item and launches the first ingest
+    // datasource from Excel on SharePoint: several files of the glob = one table
     createSharePoint: (projectId: number, body: SharePointDatasourceDraft) =>
       apiFetch<DatasourceInfo>(`/projects/${projectId}/datasources/sharepoint`, { method: 'POST', body }),
     // datasource from an HTTP API: the call is made at each refresh
@@ -191,14 +191,14 @@ export function useDatasources() {
         body,
       }),
 
-    // ri-esegue la sorgente e sostituisce lo snapshot (torna il run da pollare)
+    // runs the source again and replaces the snapshot (returns the run to poll)
     refresh: (id: number) => apiFetch<RunInfo>(`/datasources/${id}/refresh`, { method: 'POST' }),
 
-    // imposta/disabilita il refresh schedulato (cron a 5 campi; '' = disabilita)
+    // sets/disables the scheduled refresh (5-field cron; '' = disable)
     setSchedule: (id: number, cron: string) =>
       apiFetch<DatasourceInfo>(`/datasources/${id}/schedule`, { method: 'PUT', body: { cron } }),
 
-    // cronologia degli ingest (il GET riconcilia gli stati)
+    // ingest history (the GET reconciles the states)
     listRuns: (id: number) => apiFetch<RunInfo[]>(`/datasources/${id}/runs`),
 
     update: (

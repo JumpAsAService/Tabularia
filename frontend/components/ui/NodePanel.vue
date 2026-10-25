@@ -46,8 +46,8 @@ const emit = defineEmits<{
   (e: 'update', patch: Record<string, any>): void
   (e: 'delete'): void
   (e: 'export', format: 'csv' | 'xlsx'): void
-  (e: 'preview'): void // anteprima a comando (nodo SQL)
-  (e: 'email-test'): void // prova a vuoto: manda l'allegato a sé stessi
+  (e: 'preview'): void // preview on command (SQL node)
+  (e: 'email-test'): void // dry run: sends the attachment to oneself
   (e: 'script-run', nodeId: string): void // «Run» of a Script or Container node (the flow saved first)
 }>()
 
@@ -79,7 +79,7 @@ const outPreview = usePlaceholderPreview((): PreviewRequest | null => {
 })
 
 function changeType(opType: string) {
-  // cambiando operazione, riparte da parametri di default puliti
+  // changing operation, it starts again from clean default parameters
   emit('update', { opType, params: defaultParams(opType) })
 }
 
@@ -87,7 +87,7 @@ function onParams(params: Record<string, any>) {
   emit('update', { params })
 }
 
-// toggle di una colonna di partizione dell'output S3
+// toggle of an S3 output's partition column
 function togglePartition(name: string) {
   const cur: string[] = [...(props.node?.data?.partitionBy ?? [])]
   const i = cur.indexOf(name)
@@ -96,9 +96,9 @@ function togglePartition(name: string) {
   emit('update', { partitionBy: cur })
 }
 
-// chiavi di ORDER BY dell'output datasource: il parquet esce ordinato e la copia
-// materializzata del viewer le eredita → pruning a valle. L'ordine di selezione
-// è l'ordine delle chiavi (prima cliccata = prima nell'ORDER BY).
+// ORDER BY keys of the datasource output: the parquet comes out sorted and the viewer's
+// materialized copy inherits them → pruning downstream. The selection order is the keys'
+// order (first clicked = first in the ORDER BY).
 function toggleSortKey(name: string) {
   const cur: string[] = [...(props.node?.data?.sortKeys ?? [])]
   const i = cur.indexOf(name)
@@ -107,11 +107,11 @@ function toggleSortKey(name: string) {
   emit('update', { sortKeys: cur })
 }
 
-// Destinatari email: il flusso li SALVA come elenco, perché è così che li
-// rilegge il resolver lato server per i run schedulati. Nel form restano una
-// riga separata da virgole, quindi si converte solo all'uscita dal campo
-// (@change e non @input: spezzare a ogni tasto cancellerebbe la virgola appena
-// digitata, che qui è il separatore).
+// Email recipients: the flow SAVES them as a list, because that is how the server-side
+// resolver reads them again for the scheduled runs. In the form they stay one
+// comma-separated line, so they are converted only on leaving the field (@change and
+// not @input: splitting at every key would delete the comma just typed, which is the
+// separator here).
 function splitAddresses(raw: string): string[] {
   return raw
     .split(/[,;\s]+/)
@@ -119,28 +119,28 @@ function splitAddresses(raw: string): string[] {
     .filter(Boolean)
 }
 
-// la prova a vuoto ignora i destinatari (li impone il server), ma senza
-// connessione e senza oggetto non c'è niente da spedire
+// the dry run ignores the recipients (the server sets them), but without a connection and
+// without a subject there is nothing to send
 function emailTestReady(): boolean {
   const d = props.node?.data ?? {}
   return d.connectionId != null && !!(d.emailSubject ?? '').trim()
 }
 
-// nodo Refresh: sceglie una datasource database da aggiornare prima del run
+// Refresh node: chooses a database datasource to update before the run
 function pickRefreshDatasource(id: number | null) {
   const ds = (props.datasources ?? []).find((d) => d.id === id)
   emit('update', { datasourceId: id, dsName: ds?.name ?? '' })
 }
-// nodo Esegui-flusso: sceglie un altro flusso da eseguire
+// Run-flow node: chooses another flow to run
 function pickRunFlow(id: number | null) {
   const f = (props.flows ?? []).find((x) => x.id === id)
   emit('update', { flowId: id, flowName: f?.name ?? '' })
 }
 
-// filtri A MONTE del nodo sorgente (vedi sourceFilterOperations in useFlowModel):
-// condizioni in AND applicate prima di tutto, in sviluppo E in produzione.
-// Ogni riga ha un id stabile (chiave del form: rimuovere una riga non deve
-// far "scivolare" i valori delle altre).
+// the source node's UPSTREAM filters (see sourceFilterOperations in useFlowModel):
+// conditions in AND applied before everything, in development AND in production. Every
+// row has a stable id (the form's key: removing a row must not make the others' values
+// "slide").
 const sourceFilters = (): SourceFilter[] => (props.node?.data?.filters ?? []) as SourceFilter[]
 function addSourceFilter() {
   const id = typeof crypto !== 'undefined' && 'randomUUID' in crypto ? crypto.randomUUID() : `${Date.now()}-${Math.random()}`
@@ -158,10 +158,10 @@ function removeSourceFilter(id: string) {
   emit('update', { filters: rest.length ? rest : null })
 }
 
-// campione di sviluppo del nodo sorgente (vedi devSampleOperation in useFlowModel).
-// Con il campione automatico acceso (gateway) `sample: null` vale «automatico»
-// e lo spegnimento va salvato esplicito ({ mode: 'off' }); senza, null è «off»
-// come sempre e le due voci coincidono.
+// the source node's development sample (see devSampleOperation in useFlowModel). With the
+// automatic sample on (gateway) `sample: null` means «automatic» and turning it off must
+// be saved explicitly ({ mode: 'off' }); without it, null is «off» as always and the two
+// items coincide.
 const autoSampleRows = computed(() => getDefaultSampleRows())
 const sampleMode = computed(() => {
   const m = props.node?.data?.sample?.mode
@@ -200,7 +200,7 @@ function setSampleValue(key: 'rows' | 'percent', raw: string) {
   emit('update', { sample: { ...cur, [key]: key === 'rows' ? Math.floor(v) : Math.min(v, 99) } })
 }
 
-// il nodo sorgente può caricare una datasource del catalogo al posto del file
+// the source node can load a catalog datasource in place of the file
 function pickDatasource(id: number | null) {
   const ds = (props.datasources ?? []).find((d) => d.id === id)
   if (!ds) return
@@ -256,8 +256,8 @@ function pickDatasource(id: number | null) {
       </template>
       <p v-else class="muted">{{ $t('nodePanel.sourceEmptyHint') }}</p>
 
-      <!-- filtri A MONTE: condizioni applicate subito dopo la lettura della
-           sorgente, SEMPRE (sviluppo e produzione), prima del campione -->
+      <!-- UPSTREAM filters: conditions applied right after reading the source, ALWAYS
+           (development and production), before the sample -->
       <div v-if="node.data.parquetKey" class="filtersbox">
         <label><Filter :size="12" /> {{ $t('nodePanel.sourceFiltersTitle') }}</label>
         <div v-for="(f, i) in sourceFilters()" :key="f.id" class="filterrow" :class="{ incomplete: !isCompleteSourceFilter(f) }">
@@ -279,8 +279,8 @@ function pickDatasource(id: number | null) {
         <p class="muted outhint">{{ $t('nodePanel.sourceFiltersHint') }}</p>
       </div>
 
-      <!-- campione di SVILUPPO: solo preview e run dall'editor; in produzione
-           (scheduler, esegui in produzione) la sorgente è letta per intero -->
+      <!-- DEVELOPMENT sample: only previews and runs from the editor; in production (scheduler,
+           run in production) the source is read whole -->
       <div v-if="node.data.parquetKey" class="samplebox">
         <label><FlaskConical :size="12" /> {{ $t('nodePanel.sampleTitle') }}</label>
         <div class="samplerow">
@@ -330,7 +330,7 @@ function pickDatasource(id: number | null) {
       </div>
     </template>
 
-    <!-- nodo Output: dove finisce il risultato della catena -->
+    <!-- Output node: where the chain's result ends up -->
     <template v-else-if="node.type === 'output'">
       <div class="row">
         <h3><HardDriveDownload :size="15" /> {{ $t('nodePanel.outputTitle') }}</h3>
@@ -397,8 +397,8 @@ function pickDatasource(id: number | null) {
         </div>
         <p v-else class="muted outhint">{{ $t('nodePanel.sortKeysNoColumns') }}</p>
 
-        <!-- copia su S3 esterno IN AGGIUNTA alla datasource: sempre in
-             sovrascrittura, e best-effort (se fallisce il run resta valido) -->
+        <!-- a copy to an external S3 AS WELL AS the datasource: always overwriting, and best effort
+             (if it fails the run stays valid) -->
         <label class="chk ovw">
           <input
             type="checkbox"
@@ -436,14 +436,13 @@ function pickDatasource(id: number | null) {
             @input="emit('update', { mirrorKey: ($event.target as HTMLInputElement).value })"
           />
           <TemplatePreview id="tp-out-mirror-key" :preview="outPreview" name="key" />
-          <!-- nessuna scelta del formato: sempre parquet. Nome e formato
-               sarebbero indipendenti, e un CSV chiamato .parquet romperebbe
-               chi lo legge a valle -->
+          <!-- no format choice: always parquet. Name and format would be independent, and a CSV
+               called .parquet would break whoever reads it downstream -->
           <p class="muted outhint">{{ $t('nodePanel.mirrorHint') }}</p>
         </template>
       </template>
 
-      <!-- destinazione S3: connessione object storage + chiave + formato + partizioni -->
+      <!-- S3 destination: object storage connection + key + format + partitions -->
       <template v-else-if="(node.data.destType ?? 'datasource') === 's3'">
         <label>{{ $t('nodePanel.s3ConnectionLabel') }}</label>
         <Select
@@ -501,9 +500,9 @@ function pickDatasource(id: number | null) {
         </p>
       </template>
 
-      <!-- destinazione email: l'output parte come allegato. I destinatari qui
-           sono una proposta: il gateway li confronta con i domini ammessi della
-           connessione, che sono il vincolo vero -->
+      <!-- email destination: the output goes as an attachment. The recipients here are a
+           proposal: the gateway compares them with the connection's allowed domains, which are
+           the real constraint -->
       <template v-else-if="(node.data.destType ?? 'datasource') === 'email'">
         <label>{{ $t('nodePanel.smtpConnectionLabel') }}</label>
         <Select
@@ -573,8 +572,8 @@ function pickDatasource(id: number | null) {
           ]"
           @update:model-value="(v: any) => emit('update', { attachmentFormat: v })"
         />
-        <!-- scelta dell'utente: default acceso. Spento, un invio fallito resta
-             fra gli errori del run e i passi successivi proseguono -->
+        <!-- the user's choice: on by default. Off, a failed send stays among the run's errors and
+             the next steps go on -->
         <label class="chk ovw">
           <input
             type="checkbox"
@@ -592,8 +591,8 @@ function pickDatasource(id: number | null) {
         <p class="muted outhint">{{ $t('nodePanel.emailDryRunHint') }}</p>
       </template>
 
-      <!-- destinazione SFTP: un file in una cartella del server. Il nome è un
-           modello: {run_id} e {flow} li aggiunge il gateway al lancio -->
+      <!-- SFTP destination: a file in a folder of the server. The name is a template: the gateway
+           adds {run_id} and {flow} at launch -->
       <template v-else-if="(node.data.destType ?? 'datasource') === 'sftp'">
         <label>{{ $t('sftp.connectionLabel') }}</label>
         <Select
@@ -701,7 +700,7 @@ function pickDatasource(id: number | null) {
       </template>
     </template>
 
-    <!-- nodo di controllo: Refresh di una datasource prima del run -->
+    <!-- control node: Refresh of a datasource before the run -->
     <template v-else-if="node.type === 'refresh'">
       <div class="row">
         <h3><RefreshCw :size="15" /> {{ $t('nodePanel.refreshDatasourceTitle') }}</h3>
@@ -721,7 +720,7 @@ function pickDatasource(id: number | null) {
       />
     </template>
 
-    <!-- nodo di controllo: Esegui un altro flusso -->
+    <!-- control node: Run another flow -->
     <template v-else-if="node.type === 'runflow'">
       <div class="row">
         <h3><PlayCircle :size="15" /> {{ $t('nodePanel.runFlowTitle') }}</h3>
@@ -939,7 +938,7 @@ label { font-size: 12px; color: var(--muted); }
 .joinhelp ol { margin: 6px 0 0; padding-left: 18px; }
 .joinhelp li { margin: 3px 0; color: var(--muted); }
 .tag {
-  /* --on-accent, non #fff: su Dracula e Monokai l'accento è chiaro */
+  /* --on-accent, not #fff: on Dracula and Monokai the accent is light */
   background: var(--accent); color: var(--on-accent); border-radius: 4px; padding: 0 5px; font-size: 11px;
 }
 .tag.right { background: var(--accent-2); color: var(--on-accent-2); }

@@ -1,6 +1,6 @@
 <script setup lang="ts">
-// Gantt delle ESECUZIONI di un flusso: ogni run una barra start→fine sull'asse
-// tempo, colorata per esito. È la timeline delle attività del flusso.
+// Gantt of a flow's RUNS: every run a start→end bar on the time axis, coloured by
+// outcome. It is the timeline of the flow's activity.
 import { computed } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { useFormat } from '~/composables/useFormat'
@@ -21,10 +21,10 @@ const props = defineProps<{ runs: RunInfo[] }>()
 
 const { ui } = useChartTheme()
 
-// esito positivo e negativo usano i token semantici dell'app, gli stessi di
-// .okline/.koline: così la legenda qui sotto e il resto dell'interfaccia dicono
-// lo stesso colore in tutti e quattro i temi. "in corso" resta giallo fisso
-// perché non esiste un token per quello stato.
+// positive and negative outcomes use the app's semantic tokens, the same as
+// .okline/.koline: so the legend below and the rest of the interface say the same colour
+// in all four themes. "running" stays a fixed yellow because there is no token for that
+// state.
 const COLORS = computed<Record<string, string>>(() => ({
   SUCCESS: ui.value.success,
   FAILURE: ui.value.danger,
@@ -36,8 +36,7 @@ function fmt(s: string): string {
   return fmtx.dateTime(s)
 }
 
-// solo gli ultimi 20 run (più recenti in alto): oltre, il grafico diventa
-// illeggibile
+// only the last 20 runs (newest at the top): beyond, the chart becomes unreadable
 const rows = computed(() =>
   props.runs.filter((r) => r.started_at).slice(0, 20),
 )
@@ -56,19 +55,19 @@ const option = computed(() => {
     }
   })
 
-  // Asse tempo adattivo. Se i run in vista stanno in UNA giornata: tacche orarie
-  // 00…23 ancorate alla mezzanotte locale (etichetta iniziale 00, non l'ora del
-  // primo run). Se coprono PIÙ giorni: lascio a ECharts tacche più larghe con
-  // etichetta giorno+ora, altrimenti 24 ore × N giorni diventa illeggibile.
+  // Adaptive time axis. When the runs in view fit in ONE day: hourly ticks 00…23 anchored
+  // to local midnight (initial label 00, not the first run's hour). When they cover SEVERAL
+  // days: I leave ECharts wider ticks with a day+hour label, otherwise 24 hours × N days
+  // becomes unreadable.
   const HOUR = 3600 * 1000
   const times = rows.value.flatMap((r) => [
     new Date(r.started_at as string).getTime(),
     r.finished_at ? new Date(r.finished_at).getTime() : Date.now(),
   ])
   const earliest = new Date(Math.min(...times))
-  // mezzanotte locale del giorno più vecchio (getTime() è UTC, il costruttore è locale)
+  // local midnight of the oldest day (getTime() is UTC, the constructor is local)
   const minT = new Date(earliest.getFullYear(), earliest.getMonth(), earliest.getDate()).getTime()
-  // max snappato all'ora rispetto a minT → le tacche restano allineate alla mezzanotte
+  // max snapped to the hour relative to minT → the ticks stay aligned to midnight
   let maxT = minT + Math.ceil((Math.max(...times) - minT) / HOUR) * HOUR
   if (maxT <= minT) maxT = minT + HOUR
   const singleDay = maxT - minT <= 24 * HOUR
@@ -102,8 +101,8 @@ const option = computed(() => {
       type: 'time',
       min: minT,
       max: maxT,
-      // una sola giornata → forzo la tacca oraria (00…23); più giorni → lascio
-      // scegliere a ECharts per non affollare l'asse
+      // a single day → I force the hourly tick (00…23); several days → I let ECharts choose so
+      // as not to crowd the axis
       ...(singleDay ? { minInterval: HOUR, maxInterval: HOUR } : {}),
       name: singleDay ? t('runGantt.axisHourOfDay') : t('runGantt.axisDayAndHour'),
       nameLocation: 'middle',
@@ -112,10 +111,10 @@ const option = computed(() => {
       axisLabel: {
         fontSize: 10,
         hideOverlap: true,
-        // senza color esplicito ECharts usa il suo grigio scuro di default, che
-        // sui quattro temi scuri è quasi illeggibile
+        // without an explicit color ECharts uses its default dark grey, which on the four dark
+        // themes is almost unreadable
         color: ui.value.muted,
-        // giornata singola: solo l'ora (00, 01…); multi-giorno: data + ora
+        // single day: only the hour (00, 01…); multi-day: date + hour
         formatter: singleDay ? '{HH}' : '{dd}/{MM} {HH}:{mm}',
       },
       axisLine: { lineStyle: { color: ui.value.border } },

@@ -1,9 +1,9 @@
 <script setup lang="ts">
-// Viewer: mini-strumento BI READ-ONLY su una Datasource Tabularia. Costruisce al
-// volo filtri + campi calcolati + pivot e li esegue con l'engine scelto via la
-// PREVIEW (che legge lo snapshot della datasource, NON la modifica). La tabella
-// e i grafici (ChartPanel, aggregazione sull'intero dataset) girano sugli stessi
-// dati trasformati. Nulla viene salvato.
+// Viewer: a READ-ONLY mini BI tool on a Tabularia Datasource. It builds filters +
+// computed fields + pivot on the fly and runs them with the chosen engine through the
+// PREVIEW (which reads the datasource's snapshot, it does NOT change it). The table and
+// the charts (ChartPanel, aggregation over the whole dataset) run on the same
+// transformed data. Nothing is saved.
 import { ref, computed } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { useFormat } from '~/composables/useFormat'
@@ -20,11 +20,11 @@ import { useProjects, type Project } from '~/composables/useProjects'
 import { useFolderPaths } from '~/composables/useFolderPaths'
 
 const api = useApi()
-// Tabella e grafico su due slot: un Apply (o un ritocco al grafico) butta giu'
-// quello precedente invece di accodarglisi dietro — vedi usePreviewSlots.
+// Table and chart on two slots: an Apply (or a touch to the chart) knocks down the
+// previous one instead of queueing behind it — see usePreviewSlots.
 const previewSlots = usePreviewSlots('vw')
 onUnmounted(() => previewSlots.cancelAll())
-let applySeq = 0 // solo l'ultimo Apply spegne lo spinner
+let applySeq = 0 // only the last Apply turns the spinner off
 const dsApi = useDatasources()
 const viewsApi = useSavedViews()
 const projectsApi = useProjects()
@@ -33,15 +33,15 @@ const { t } = useI18n()
 const { pathOf } = useFolderPaths() // datasource and view names repeat across folders
 const fmtx = useFormat()
 
-// ── sorgente + motore ─────────────────────────────────────────────────────
+// ── source + engine ─────────────────────────────────────────────────────
 const datasources = ref<DatasourceInfo[]>([])
 const dsId = ref<number | null>(null)
 const { preferredEngine, defaultEngine } = usePreferredEngine()
 const engines = ref<{ id: string; label: string; available: boolean }[]>([
   { id: 'polars', label: 'Polars', available: true },
 ])
-// default = motore preferito dell'utente (fallback Polars finché il catalogo
-// non è caricato; poi onMounted valida la disponibilità)
+// default = the user's favourite engine (Polars as fallback until the catalog is loaded;
+// then onMounted checks the availability)
 const engine = ref(preferredEngine.value)
 
 const selectedDs = computed(() => datasources.value.find((d) => d.id === dsId.value) || null)
@@ -52,7 +52,7 @@ const engineOptions = computed(() =>
   engines.value.filter((e) => e.available).map((e) => ({ value: e.id, label: e.label })),
 )
 
-// ── trasformazioni al volo ────────────────────────────────────────────────
+// ── on-the-fly transformations ────────────────────────────────────────────────
 const FILTER_OPS = computed(() => [
   { value: 'eq', label: '=' }, { value: 'ne', label: '≠' },
   { value: 'gt', label: '>' }, { value: 'ge', label: '≥' },
@@ -64,7 +64,7 @@ const FILTER_OPS = computed(() => [
 ])
 const NO_VALUE = new Set(['is_null', 'is_not_null'])
 
-// colonna temporale → input calendario nativo (come nell'editor di flussi)
+// time column → native calendar input (as in the flow editor)
 function temporalType(col: string): 'date' | 'datetime-local' | 'time' | 'text' {
   const dt = baseCols.value.find((c) => c.name === col)?.dtype || ''
   if (dt.startsWith('Datetime')) return 'datetime-local'
@@ -84,7 +84,7 @@ interface CompRow { name: string; expr: string }
 const filters = ref<FilterRow[]>([])
 const computedFields = ref<CompRow[]>([])
 
-// larghezza sidebar (ridimensionabile)
+// sidebar width (resizable)
 const sidebarW = ref(300)
 function startResize(e: MouseEvent) {
   const startX = e.clientX
@@ -100,7 +100,7 @@ function startResize(e: MouseEvent) {
   document.addEventListener('mouseup', onUp)
 }
 const pivotOn = ref(false)
-const outline = ref(false) // non ripetere i valori delle dimensioni di riga (vista compatta)
+const outline = ref(false) // do not repeat the values of the row dimensions (compact view)
 const pivot = ref<{ index: string[]; on: string[]; values: string; func: string }>({
   index: [''], on: [''], values: '', func: 'sum',
 })
@@ -108,9 +108,9 @@ const pivot = ref<{ index: string[]; on: string[]; values: string; func: string 
 const addFilter = () => filters.value.push({ column: '', operator: 'eq', value: '', value2: '' })
 const addComputed = () => computedFields.value.push({ name: '', expr: '' })
 
-// ── schema corrente (per i picker) + risultato tabella ────────────────────
-const baseCols = ref<ColumnInfo[]>([]) // colonne dopo filtri+campi (NO pivot) → chart & pivot config
-const tableCols = ref<ColumnInfo[]>([]) // colonne mostrate in tabella (con eventuale pivot)
+// ── current schema (for the pickers) + table result ────────────────────
+const baseCols = ref<ColumnInfo[]>([]) // columns after filters+fields (NO pivot) → chart & pivot config
+const tableCols = ref<ColumnInfo[]>([]) // columns shown in the table (with any pivot)
 const rows = ref<Record<string, any>[]>([])
 // more rows than ROW_LIMIT: the table shows the first ones, and says so
 const truncated = ref(false)
@@ -132,19 +132,19 @@ const isNum = (name: string) => /Int|Float|Decimal/i.test(baseCols.value.find((c
 
 function parseVal(v: string, col: string): any {
   if (v === '' || v == null) return v
-  if (v.includes(',')) return v.split(',').map((s) => s.trim()) // liste per in/not_in
+  if (v.includes(',')) return v.split(',').map((s) => s.trim()) // lists for in/not_in
   if (isNum(col)) { const n = Number(v); return Number.isNaN(n) ? v : n }
   return v
 }
 
-// base ops = filtri + campi calcolati (condivise da tabella e grafico)
+// base ops = filters + computed fields (shared by table and chart)
 const baseOps = computed<Operation[]>(() => {
   const ops: Operation[] = []
   for (const f of filters.value) {
     if (!f.column || !f.operator) continue
     const params: any = { column: f.column, operator: f.operator }
     if (f.operator === 'between') {
-      if (f.value === '' || f.value2 === '') continue // servono entrambi gli estremi
+      if (f.value === '' || f.value2 === '') continue // both bounds are needed
       params.value = [parseVal(f.value, f.column), parseVal(f.value2, f.column)]
     } else if (!NO_VALUE.has(f.operator)) {
       params.value = parseVal(f.value, f.column)
@@ -156,7 +156,8 @@ const baseOps = computed<Operation[]>(() => {
   return ops
 })
 
-// query per ChartPanel: prepende SEMPRE le base ops (il grafico aggrega i dati filtrati+calcolati)
+// query for ChartPanel: ALWAYS prepends the base ops (the chart aggregates the
+// filtered+computed data)
 async function chartQuery(ops: Operation[], limit?: number) {
   const ds = selectedDs.value
   if (!ds) return null
@@ -172,8 +173,8 @@ async function onPickDatasource(id: number | null) {
   if (ds) apply()
 }
 
-// operazioni della vista corrente: filtri + campi calcolati + eventuale pivot.
-// Condivise da tabella, grafico ed export.
+// the current view's operations: filters + computed fields + any pivot. Shared by table,
+// chart and export.
 function buildTableOps(): Operation[] {
   const ops = [...baseOps.value]
   const pIndex = pivot.value.index.filter(Boolean)
@@ -191,14 +192,14 @@ async function apply() {
   loading.value = true; error.value = ''
   try {
     const ops = buildTableOps()
-    // `baseCols` sono le colonne SENZA pivot: servono ai picker di grafico e
-    // pivot. Senza pivot coincidono con quelle della tabella, quindi si leggono
-    // dal risultato che arriva comunque — e la query dello schema sparisce.
-    // Costava quanto l'altra (un LIMIT 1 dopo un filtro deve scansionare lo
-    // stesso: su parquet non c'è indice), cioè RADDOPPIAVA ogni Apply.
-    const conPivot = ops.length > baseOps.value.length
-    if (conPivot) {
-      // solo qui la tabella ha colonne diverse da quelle su cui si configura
+    // `baseCols` are the columns WITHOUT pivot: the chart's and pivot's pickers need them.
+    // Without a pivot they match the table's, so they are read from the result that arrives
+    // anyway — and the schema query disappears. It cost as much as the other (a LIMIT 1
+    // after a filter must scan the same: there is no index on parquet), that is it DOUBLED
+    // every Apply.
+    const withPivot = ops.length > baseOps.value.length
+    if (withPivot) {
+      // only here the table has columns other than the ones it is configured on
       const base = await previewSlots.preview({ bucket: ds.bucket, input_key: ds.key, operations: baseOps.value, engine: engine.value, limit: 1, no_cache: true, sort_keys: ds.sort_keys }, 'table')
       baseCols.value = base.columns
     }
@@ -206,10 +207,10 @@ async function apply() {
     rows.value = res.rows
     truncated.value = !!res.truncated
     tableCols.value = res.columns
-    if (!conPivot) baseCols.value = res.columns
+    if (!withPivot) baseCols.value = res.columns
   } catch (e) {
-    // un Apply superato da un Apply piu' recente non e' un errore da mostrare:
-    // stato e spinner li governa quello nuovo
+    // an Apply overtaken by a newer Apply is not an error to show: the new one governs state
+    // and spinner
     if (isSuperseded(e)) return
     error.value = errMessage(e); rows.value = []
   } finally {
@@ -217,9 +218,9 @@ async function apply() {
   }
 }
 
-// Un formatter per colonna numerica, dai valori in vista: stessi decimali su tutta
-// la colonna e interi senza separatore delle migliaia (vedi useFormat). Si
-// ricalcola quando cambiano i dati, non a ogni tasto nei filtri.
+// A formatter per numeric column, from the values in view: the same decimals on the
+// whole column and integers without a thousands separator (see useFormat). Recomputed
+// when the data changes, not at every key in the filters.
 const isNumCol = (dtype: string) => /Int|Float|Decimal/i.test(dtype)
 const colFormat = computed(() => {
   const m: Record<string, (v: unknown) => string> = {}
@@ -231,8 +232,8 @@ const colFormat = computed(() => {
 const cell = (col: string, v: any) =>
   v === null || v === undefined ? '' : colFormat.value[col] ? colFormat.value[col](v) : typeof v === 'object' ? JSON.stringify(v) : String(v)
 
-// export della vista corrente (csv/xlsx), scritto da un worker: il file lo scrive
-// Polars, a prescindere dal motore scelto per la visualizzazione.
+// export of the current view (csv/xlsx), written by a worker: Polars writes the file,
+// whatever the engine chosen for the display.
 const exporting = ref('')
 async function exportView(format: 'csv' | 'xlsx') {
   const ds = selectedDs.value
@@ -249,22 +250,22 @@ async function exportView(format: 'csv' | 'xlsx') {
   }
 }
 
-// righe da mostrare: in vista "outline" i valori delle dimensioni di riga NON si
-// ripetono — il prefisso condiviso con la riga precedente viene lasciato vuoto
-// (es. la regione appare una sola volta, poi solo le province). Nessun subtotale.
+// rows to show: in the "outline" view the values of the row dimensions are NOT repeated
+// — the prefix shared with the previous row is left empty (e.g. the region shows once,
+// then only the provinces). No subtotal.
 const displayRows = computed<Record<string, any>[]>(() => {
   if (!outline.value || !pivotOn.value) return rows.value
   const idx = pivot.value.index.filter(Boolean)
-  if (idx.length < 2) return rows.value // con una sola dimensione non c'è nulla da comprimere
+  if (idx.length < 2) return rows.value // with one dimension only there is nothing to compress
   const out: Record<string, any>[] = []
   let prev: Record<string, any> | null = null
   for (const r of rows.value) {
     const d = { ...r }
     if (prev) {
-      // quanti livelli iniziali coincidono con la riga precedente
+      // how many leading levels match the previous row
       let depth = 0
       while (depth < idx.length && String(prev[idx[depth]]) === String(r[idx[depth]])) depth++
-      for (let j = 0; j < depth; j++) d[idx[j]] = '' // svuota il prefisso condiviso
+      for (let j = 0; j < depth; j++) d[idx[j]] = '' // empties the shared prefix
     }
     out.push(d)
     prev = r
@@ -272,10 +273,10 @@ const displayRows = computed<Record<string, any>[]>(() => {
   return out
 })
 
-// ── viste salvate ───────────────────────────────────────────────────────────
-// Una vista è QUESTA configurazione con un nome, dentro una cartella. Contiene
-// un riferimento alla datasource e nessuna riga: riaprirla domani rilegge lo
-// snapshot corrente — segue il dato, non lo congela.
+// ── saved views ───────────────────────────────────────────────────────────
+// A view is THIS configuration with a name, inside a folder. It holds a reference to the
+// datasource and no rows: reopening it tomorrow reads the current snapshot again — it
+// follows the data, it does not freeze it.
 const savedViews = ref<SavedView[]>([])
 const projects = ref<Project[]>([])
 const currentViewId = ref<number | null>(null)
@@ -308,9 +309,8 @@ function buildSpec(): SavedViewSpec {
   }
 }
 
-// Difensiva per costruzione: una vista salvata da una versione precedente (o con
-// un campo in meno) non deve rompere la pagina — ogni pezzo mancante ricade sul
-// valore di partenza.
+// Defensive by construction: a view saved by an earlier version (or with one field less)
+// must not break the page — every missing piece falls back on the starting value.
 function applySpec(raw: string) {
   let s: Partial<SavedViewSpec> = {}
   try { s = JSON.parse(raw || '{}') } catch { s = {} }
@@ -338,8 +338,8 @@ async function openSavedView(id: number | null) {
     const v = await viewsApi.get(id)
     const ds = datasources.value.find((d) => d.id === v.datasource_id)
     if (!ds) {
-      // la datasource è stata rimossa (o non è più leggibile): la vista resta,
-      // ma lo diciamo invece di mostrare una tabella vuota senza spiegazione
+      // the datasource was removed (or is no longer readable): the view stays, but we say so
+      // instead of showing an empty table without explanation
       error.value = t('viewer.viewDatasourceMissing', { name: v.datasource_name ?? '—' })
       return
     }
@@ -355,37 +355,37 @@ async function openSavedView(id: number | null) {
 
 function openSaveDialog() {
   if (!selectedDs.value) return
-  const corrente = savedViews.value.find((v) => v.id === currentViewId.value)
-  saveName.value = corrente?.name ?? ''
-  saveProjectId.value = corrente?.project_id ?? selectedDs.value.project_id ?? projects.value[0]?.id ?? null
+  const current_ = savedViews.value.find((v) => v.id === currentViewId.value)
+  saveName.value = current_?.name ?? ''
+  saveProjectId.value = current_?.project_id ?? selectedDs.value.project_id ?? projects.value[0]?.id ?? null
   saveOpen.value = true
 }
 
 async function saveView() {
   const ds = selectedDs.value
-  const nome = saveName.value.trim()
-  if (!ds || !nome || saveProjectId.value == null) return
+  const viewName = saveName.value.trim()
+  if (!ds || !viewName || saveProjectId.value == null) return
   saving.value = true
   try {
     const spec = JSON.stringify(buildSpec())
-    // stesso nome nella stessa cartella = aggiorno quella, invece di far
-    // sbattere l'utente contro un 409 che non saprebbe risolvere
-    const esistente = savedViews.value.find(
-      (v) => v.name === nome && v.project_id === saveProjectId.value,
+    // the same name in the same folder = I update that one, instead of making the user hit a
+    // 409 they would not know how to solve
+    const existing = savedViews.value.find(
+      (v) => v.name === viewName && v.project_id === saveProjectId.value,
     )
     // ...but only when it is a view of this same datasource: updating another
     // datasource's view would give it columns that are not there
-    if (esistente && esistente.datasource_id !== ds.id) {
-      toast.error(t('viewer.viewNameTakenOtherDs', { name: nome }))
+    if (existing && existing.datasource_id !== ds.id) {
+      toast.error(t('viewer.viewNameTakenOtherDs', { name: viewName }))
       return
     }
-    const salvata = esistente
-      ? await viewsApi.update(esistente.id, { spec, name: nome })
-      : await viewsApi.create(saveProjectId.value, { name: nome, datasource_id: ds.id, spec })
-    currentViewId.value = salvata.id
+    const savedOne = existing
+      ? await viewsApi.update(existing.id, { spec, name: viewName })
+      : await viewsApi.create(saveProjectId.value, { name: viewName, datasource_id: ds.id, spec })
+    currentViewId.value = savedOne.id
     savedViews.value = await viewsApi.list()
     saveOpen.value = false
-    toast.success(t('viewer.viewSaved', { name: nome }))
+    toast.success(t('viewer.viewSaved', { name: viewName }))
   } catch (e) {
     toast.error(errMessage(e))
   } finally {
@@ -397,14 +397,14 @@ onMounted(async () => {
   try { datasources.value = await dsApi.list() } catch (e) { error.value = errMessage(e) }
   try {
     engines.value = await api.engines()
-    // la preferita potrebbe non essere disponibile: applica il fallback robusto
+    // the favourite may not be available: applies the robust fallback
     engine.value = defaultEngine(engines.value)
   } catch { /* fallback polars */ }
-  // le viste sono accessorie: se non si caricano, il Viewer resta usabile
+  // views are an extra: if they do not load, the Viewer stays usable
   try { savedViews.value = await viewsApi.list() } catch { savedViews.value = [] }
   try { projects.value = await projectsApi.list() } catch { projects.value = [] }
-  // apertura diretta da un link (?view=<id>): è così che la cartella porta qui.
-  // Va DOPO il caricamento delle datasource, perché la vista ne deve trovare una.
+  // direct opening from a link (?view=<id>): that is how the folder leads here. It goes
+  // AFTER loading the datasources, because the view must find one.
   const linked = Number(useRoute().query.view)
   if (Number.isInteger(linked) && linked > 0) await openSavedView(linked)
 })
@@ -463,7 +463,7 @@ onMounted(async () => {
     <p v-if="!selectedDs" class="muted empty">{{ $t('viewer.emptyStateHint') }}</p>
 
     <div v-else class="body" :style="{ gridTemplateColumns: `${sidebarW}px 6px 1fr` }">
-      <!-- pannello trasformazioni al volo -->
+      <!-- panel of the on-the-fly transformations -->
       <aside class="cfg">
         <div class="cfg-sec">
           <div class="cfg-head"><Filter :size="13" /> {{ $t('viewer.filtersTitle') }} <button class="add" @click="addFilter"><Plus :size="13" /></button></div>
@@ -529,10 +529,10 @@ onMounted(async () => {
         </div>
       </aside>
 
-      <!-- maniglia di ridimensionamento della sidebar -->
+      <!-- the sidebar's resize handle -->
       <div class="resizer" :title="$t('viewer.resizeHint')" @mousedown="startResize" />
 
-      <!-- area risultato: tabella o grafico -->
+      <!-- result area: table or chart -->
       <section class="result">
         <div class="rtabs">
           <button :class="{ active: view === 'table' }" @click="view = 'table'"><Table2 :size="14" /> {{ $t('viewer.tableTab') }}</button>
@@ -587,11 +587,10 @@ onMounted(async () => {
 .viewer { display: flex; flex-direction: column; flex: 1; min-height: 0; }
 .head-actions { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
 .vwsel { width: 200px; }
-/* riquadro di salvataggio: stessa meccanica del menù "nuovo flusso" — uno
-   sfondo che cattura il click fuori, e il pannello sopra.
-   `flex-shrink: 0` + `nowrap` sono la correzione del bottone alto il doppio: la
-   barra resta su UNA riga, e a cedere qualche pixel sono i Select accanto (il
-   loro testo ha già l'ellissi), non l'etichetta del bottone andando a capo. */
+/* save box: the same mechanics as the "new flow" menu — a backdrop catching the click
+   outside, and the panel on top. `flex-shrink: 0` + `nowrap` are the fix for the button
+   twice as tall: the bar stays on ONE line, and the Selects next to it give up a few
+   pixels (their text has the ellipsis already), not the button's label wrapping. */
 .savewrap { position: relative; flex-shrink: 0; }
 .savewrap .btn-link { white-space: nowrap; }
 .menu-backdrop { position: fixed; inset: 0; z-index: 20; }
@@ -662,7 +661,7 @@ onMounted(async () => {
 .dt { border-collapse: collapse; font-size: 12px; width: max-content; min-width: 100%; }
 .dt th, .dt td {
   border-bottom: 1px solid var(--border-soft);
-  border-right: 1px solid var(--border-soft); /* separatore di colonna */
+  border-right: 1px solid var(--border-soft); /* column separator */
   padding: 5px 12px;
   text-align: left;
   white-space: nowrap;
@@ -671,12 +670,12 @@ onMounted(async () => {
 .dt th:last-child, .dt td:last-child { border-right: none; }
 .dt th { position: sticky; top: 0; background: var(--panel); z-index: 1; font-weight: 600; vertical-align: bottom; }
 .dt .dtype { display: block; font-size: 9px; color: var(--muted); font-weight: 400; text-transform: lowercase; }
-/* i numeri a destra con cifre tabellari: unità sotto unità, come promette il login */
+/* the numbers on the right with tabular digits: unit under unit, as the login promises */
 .dt td.num, .dt th.num { text-align: right; }
 .dt td.num { font-variant-numeric: tabular-nums; }
 .dt tbody tr:hover { background: var(--panel-2); }
 
-/* skeleton di caricamento (shimmer) */
+/* loading skeleton (shimmer) */
 .skeleton { padding: 12px 14px; }
 .sk-row { display: flex; gap: 12px; margin-bottom: 11px; }
 .sk-row.sk-head .sk-cell { height: 20px; opacity: 0.85; }

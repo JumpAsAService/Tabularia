@@ -18,7 +18,7 @@ import { usePreviewSlots, isSuperseded } from '~/composables/usePreviewSlots'
 import { useFlowPresence } from '~/composables/useFlowPresence'
 import { useAppInfo } from '~/composables/useAppInfo'
 import type { NodeStats } from '~/composables/useNodeStats'
-// import esplicito: nel container i componenti nuovi non vengono scansionati
+// explicit import: in the container new components are not scanned
 import FlowEdge from '~/components/edges/FlowEdge.vue'
 import ScriptNode from '~/components/nodes/ScriptNode.vue'
 import ContainerNode from '~/components/nodes/ContainerNode.vue'
@@ -88,58 +88,57 @@ const initialNodes: Node[] = [
   },
 ]
 
-// ── Stato UI ────────────────────────────────────────────────────────────
+// ── UI state ────────────────────────────────────────────────────────────
 const selectedId = ref<string | null>(SOURCE_ID)
 const operations = ref<string[]>([])
 const inputColumns = ref<ColumnInfo[]>([])
 const rightColumns = ref<ColumnInfo[]>([])
-const columnsLoading = ref(false) // risoluzione colonne del nodo selezionato in corso
-// placeholder {{colonna}} disponibili per un nodo DENTRO un container foreach
+const columnsLoading = ref(false) // resolving the selected node's columns in progress
+// {{column}} placeholders available to a node INSIDE a foreach container
 const placeholders = ref<string[]>([])
-const nodeColumns = reactive<Record<string, ColumnInfo[]>>({}) // cache output per nodo
+const nodeColumns = reactive<Record<string, ColumnInfo[]>>({}) // output cache per node
 
 let opCounter = 0
 let sourceCounter = 0
 let outputCounter = 0
 let commentCounter = 0
 
-const viewTab = ref<'table' | 'chart'>('table') // vista sotto il canvas
+const viewTab = ref<'table' | 'chart'>('table') // view under the canvas
 
-// ── Osservatore nell'editor ────────────────────────────────────────────────
-// Un osservatore entra, aggiunge nodi di TRASFORMAZIONE e ne guarda l'anteprima.
-// Non salva, non esegue, non carica file, non aggiunge sorgenti, controllo o
-// output: non perché il server glielo lascerebbe fare — /flows, /files e
-// /tasks/transform-data lo rifiutano — ma perché offrirglielo per poi dirgli
-// 403 è scortese. `is_observer` da /auth/me è EFFETTIVO: vero anche per gli
-// admin, quindi si guarda pure `is_superuser`.
-const { user: chiEntra, fetchMe, logout } = useAuth()
-// Finché non si sa chi è entrato, il cancello resta CHIUSO: un attimo senza
-// «Salva» per un amministratore è niente, un attimo con «Esegui» per un
-// osservatore è un 403 in faccia. L'editor non passa da AppShell, che è l'unico
-// posto che carica l'utente: lo si carica qui al mount.
-const soloOsservatore = computed(() =>
-  chiEntra.value === null || (!!chiEntra.value.is_observer && !chiEntra.value.is_superuser))
-const TRASFORMAZIONE = (kind: string) => kind.startsWith('op:') && kind !== 'op:foreach'
-function negatoAllOsservatore(): boolean {
-  if (!soloOsservatore.value) return false
+// ── Observer in the editor ────────────────────────────────────────────────
+// An observer comes in, adds TRANSFORMATION nodes and looks at their preview. They do
+// not save, run, upload files, add sources, controls or outputs: not because the server
+// would let them — /flows, /files and /tasks/transform-data refuse it — but because
+// offering it only to answer 403 is rude. `is_observer` from /auth/me is EFFECTIVE: true
+// for admins too, so `is_superuser` is looked at as well.
+const { user: signedIn, fetchMe, logout } = useAuth()
+// Until who signed in is known, the gate stays CLOSED: a moment without «Save» for an
+// administrator is nothing, a moment with «Run» for an observer is a 403 in the face.
+// The editor does not go through AppShell, the only place that loads the user: it is
+// loaded here at mount.
+const observerOnly = computed(() =>
+  signedIn.value === null || (!!signedIn.value.is_observer && !signedIn.value.is_superuser))
+const TRANSFORMATION = (kind: string) => kind.startsWith('op:') && kind !== 'op:foreach'
+function deniedToObserver(): boolean {
+  if (!observerOnly.value) return false
   setStatus(t('flowEditor.readOnlyNodes'), 'error')
   return true
 }
 
-// ── Pannello destro e vista dati ridimensionabili (misure ricordate) ──────
+// ── Resizable right panel and data view (sizes remembered) ──────────────
 const PANEL_MIN = 280
 const PANEL_MAX = 640
 const panelWidth = ref(
   Math.min(PANEL_MAX, Math.max(PANEL_MIN, Number(localStorage.getItem('tabularia.panelWidth')) || 340)),
 )
 
-// La tabella sotto il canvas: quanto è alta lo decide chi guarda i dati. Il
-// tetto non è un numero fisso ma «quel che resta»: al canvas devono sempre
-// rimanere abbastanza pixel da vedere i nodi che si stanno collegando.
+// The table under the canvas: whoever looks at the data decides how tall it is. The cap
+// is not a fixed number but «what is left»: the canvas must always keep enough pixels to
+// see the nodes being connected.
 const GRID_MIN = 120
 const CANVAS_MIN = 220
-// la toolbar sta nella stessa colonna di righe: se non la si toglie dal conto,
-// il canvas finisce sotto il minimo proprio quando si tira la tabella in alto
+// the toolbar sits in the same column of rows: unless it is taken out of the count, the
+// canvas ends up under the minimum exactly when the table is pulled up
 const gridMax = () => {
   const toolbar = document.querySelector('.app > .toolbar')?.getBoundingClientRect().height ?? 0
   return Math.max(GRID_MIN, window.innerHeight - toolbar - CANVAS_MIN)
@@ -151,41 +150,43 @@ function clampGrid(px: number) {
   return Math.min(gridMax(), Math.max(GRID_MIN, Math.round(px)))
 }
 gridHeight.value = clampGrid(gridHeight.value)
-// una finestra rimpicciolita non deve lasciare la tabella più alta dello schermo
-const ripiega = () => { gridHeight.value = clampGrid(gridHeight.value) }
-onMounted(() => window.addEventListener('resize', ripiega))
-onUnmounted(() => window.removeEventListener('resize', ripiega))
+// a window made smaller must not leave the table taller than the screen
+const fallBack = () => { gridHeight.value = clampGrid(gridHeight.value) }
+onMounted(() => window.addEventListener('resize', fallBack))
+onUnmounted(() => window.removeEventListener('resize', fallBack))
 
-// minmax(0,1fr) come in main.css: preview larghe (pivot) non devono spingere il pannello fuori schermo
+// minmax(0,1fr) as in main.css: wide previews (pivot) must not push the panel off screen
 const appStyle = computed(() => ({
   gridTemplateColumns: `200px minmax(0, 1fr) ${panelWidth.value}px`,
   gridTemplateRows: `auto minmax(0, 1fr) ${gridHeight.value}px`,
 }))
 
-/** Una maniglia: trascina col mouse, e con le frecce da tastiera (è un
- *  `separator`, non una decorazione: chi non usa il mouse deve poterla muovere). */
-function trascina(
+/**
+ * A handle: drag with the mouse, and with the arrow keys (it is a `separator`, not a
+ * decoration: whoever does not use the mouse must be able to move it).
+ */
+function drag(
   ev: MouseEvent,
-  cursore: 'col-resize' | 'row-resize',
-  aggiorna: (e: MouseEvent) => void,
-  ricorda: () => void,
+  cursor: 'col-resize' | 'row-resize',
+  onMove: (e: MouseEvent) => void,
+  remember: () => void,
 ) {
   ev.preventDefault()
   const onUp = () => {
-    window.removeEventListener('mousemove', aggiorna)
+    window.removeEventListener('mousemove', onMove)
     window.removeEventListener('mouseup', onUp)
     document.body.style.cursor = ''
     document.body.style.userSelect = ''
-    ricorda()
+    remember()
   }
-  window.addEventListener('mousemove', aggiorna)
+  window.addEventListener('mousemove', onMove)
   window.addEventListener('mouseup', onUp)
-  document.body.style.cursor = cursore
+  document.body.style.cursor = cursor
   document.body.style.userSelect = 'none'
 }
 
 function startPanelResize(ev: MouseEvent) {
-  trascina(
+  drag(
     ev, 'col-resize',
     (e) => { panelWidth.value = Math.min(PANEL_MAX, Math.max(PANEL_MIN, window.innerWidth - e.clientX)) },
     () => localStorage.setItem('tabularia.panelWidth', String(panelWidth.value)),
@@ -193,23 +194,23 @@ function startPanelResize(ev: MouseEvent) {
 }
 
 function startGridResize(ev: MouseEvent) {
-  trascina(
+  drag(
     ev, 'row-resize',
     (e) => { gridHeight.value = clampGrid(window.innerHeight - e.clientY) },
     () => localStorage.setItem('tabularia.gridHeight', String(gridHeight.value)),
   )
 }
 
-const PASSO = 24  // pixel per pressione; con Shift si va dieci volte più svelti
-function tastiPannello(e: KeyboardEvent) {
-  const d = e.key === 'ArrowLeft' ? PASSO : e.key === 'ArrowRight' ? -PASSO : 0
+const STEP = 24  // pixels per press; with Shift ten times faster
+function panelKeys(e: KeyboardEvent) {
+  const d = e.key === 'ArrowLeft' ? STEP : e.key === 'ArrowRight' ? -STEP : 0
   if (!d) return
   e.preventDefault()
   panelWidth.value = Math.min(PANEL_MAX, Math.max(PANEL_MIN, panelWidth.value + d * (e.shiftKey ? 10 : 1)))
   localStorage.setItem('tabularia.panelWidth', String(panelWidth.value))
 }
-function tastiVista(e: KeyboardEvent) {
-  const d = e.key === 'ArrowUp' ? PASSO : e.key === 'ArrowDown' ? -PASSO : 0
+function viewKeys(e: KeyboardEvent) {
+  const d = e.key === 'ArrowUp' ? STEP : e.key === 'ArrowDown' ? -STEP : 0
   if (!d) return
   e.preventDefault()
   gridHeight.value = clampGrid(gridHeight.value + d * (e.shiftKey ? 10 : 1))
@@ -224,23 +225,23 @@ const idleStatus = computed(() =>
     ? t('flowEditor.statusHasData')
     : t('flowEditor.statusInitial'),
 )
-// tipo di stato → icona nella toolbar (spinner / check / errore)
+// kind of state → icon in the toolbar (spinner / check / error)
 const statusKind = ref<'info' | 'ok' | 'error' | 'busy'>('info')
 const toast = useToast()
 function setStatus(msg: string, kind: 'info' | 'ok' | 'error' | 'busy' = 'info') {
   status.value = msg
   statusKind.value = kind
-  // successi ed errori anche come toast: si vedono anche a barra piena/ignorata
+  // successes and errors as toasts too: they show with the bar full/ignored too
   if (kind === 'ok') toast.success(msg)
   else if (kind === 'error') toast.error(msg)
 }
 const busy = ref(false)
-// Righe e colonne note di ogni nodo, dall'ULTIMA preview che l'ha toccato:
-// nessuna query in piu', e mai salvate nel flusso (provide → componenti nodo).
-// `rows` manca quando si conoscono solo le colonne (richiesta `cols`, limit 1).
+// The known rows and columns of each node, from the LAST preview that touched it: no
+// extra query, and never saved in the flow (provide → node components).
+// `rows` is missing when only the columns are known (`cols` request, limit 1).
 const nodeStats = reactive<Record<string, NodeStats>>({})
-// nodi per cui l'avviso «passo a monte oltre il tetto della cache» e' gia'
-// stato mostrato in questa sessione: il toast una volta, poi parla il nodo
+// nodes for which the «upstream step over the cache cap» warning has been shown already
+// in this session: the toast once, then the node speaks
 const cacheWarned = new Set<string>()
 provide('nodeStats', nodeStats)
 
@@ -302,11 +303,11 @@ onUnmounted(() => {
   window.clearTimeout(cacheTimer)
   window.clearTimeout(cacheLateTimer)
 })
-// arco sotto il puntatore: il suo componente mostra la «×» di rimozione
+// edge under the pointer: its component shows the removal «×»
 const hoveredEdgeId = ref<string | null>(null)
 provide('flowEdgeHovered', hoveredEdgeId)
-// dal tratto alla «×» il puntatore lascia l'arco un istante prima di entrare
-// nel bottone: senza una tolleranza la «×» sparirebbe sotto il cursore
+// from the stroke to the «×» the pointer leaves the edge a moment before entering the
+// button: without a tolerance the «×» would vanish under the cursor
 let edgeLeaveTimer: number | undefined
 onEdgeMouseEnter(({ edge }) => {
   window.clearTimeout(edgeLeaveTimer)
@@ -340,9 +341,9 @@ const canRun = computed(
     getNodes.value.some((n) => CONTROL_TYPES.has(n.type ?? '')),
 )
 
-// ── Flusso salvato (persistenza nel gateway) ─────────────────────────────
+// ── Saved flow (persisted in the gateway) ───────────────────────────────
 const flowId = ref<number | null>(route.query.flow ? Number(route.query.flow) : null)
-// chi ALTRO ha questo flusso aperto: l'ultimo che salva sovrascrive, quindi si avvisa
+// who ELSE has this flow open: whoever saves last overwrites, so a warning
 const { others: alsoOpenBy } = useFlowPresence(flowId)
 // Script nodes: the environments this person may write them for (the palette offers
 // the node only when there is one)
@@ -380,7 +381,7 @@ const scriptTrials = reactive<Record<string, ScriptTrial>>({})
 let editorGone = false // the page was left: the trials stop following their runs
 onUnmounted(() => { editorGone = true })
 async function runScriptNode(nodeId: string) {
-  if (negatoAllOsservatore()) return
+  if (deniedToObserver()) return
   const live = scriptTrials[nodeId]
   if (live && (live.status === 'PENDING' || live.status === 'STARTED')) return // a second click while it starts
   scriptTrials[nodeId] = { runId: null, status: 'PENDING', startedAt: Date.now(), error: '' }
@@ -432,23 +433,23 @@ const alsoOpenLabel = computed(() => {
 })
 const projectId = ref<number | null>(route.query.project ? Number(route.query.project) : null)
 const flowName = ref(t('flowEditor.unnamedFlow'))
-// motore del flusso: scelto in creazione (?engine=… dalla pagina Flows) per un
-// flusso nuovo, oppure caricato da flow.engine. Se si apre l'editor senza scelta
-// esplicita si usa il motore PREFERITO dell'utente. Passato a preview/run e salvato.
+// the flow's engine: chosen at creation (?engine=… from the Flows page) for a new flow,
+// or loaded from flow.engine. Opening the editor without an explicit choice uses the
+// user's FAVOURITE engine. Passed to preview/run and saved.
 const { preferredEngine } = usePreferredEngine()
 const flowEngine = ref<string>(route.query.engine ? String(route.query.engine) : preferredEngine.value)
-// motore di PRODUZIONE (run schedulati): solo informativo nell'editor (badge);
-// si imposta dalla pagina Flows o dal dialog di schedule
+// PRODUCTION engine (scheduled runs): informative only in the editor (badge); set from
+// the Flows page or from the schedule dialog
 const flowProductionEngine = ref<string | null>(null)
 
-// preview/transform iniettano SEMPRE l'engine del flusso corrente. (`dataApi`
-// alias: evita che i wrapper si auto-referenzino nei rimpiazzi delle chiamate.)
+// preview/transform ALWAYS inject the current flow's engine. (`dataApi` alias: avoids the
+// wrappers referencing themselves in the calls' replacements.)
 const dataApi = api
-// Quattro slot per editor — anteprima, colonne, valori distinti, grafico: in
-// ognuno una richiesta nuova butta giu' la precedente (vedi usePreviewSlots).
+// Four slots per editor — preview, columns, distinct values, chart: in each a new
+// request knocks down the previous one (see usePreviewSlots).
 const previewSlots = usePreviewSlots('ed')
 onUnmounted(() => {
-  // anche un refresh fermo nei 180 ms di attesa non deve piu' partire
+  // a refresh held in the 180 ms wait must not start any more either
   previewSeq++
   columnsSeq++
   previewSlots.cancelAll()
@@ -459,7 +460,7 @@ const apiTransform = (body: Parameters<typeof api.transform>[0]) =>
   dataApi.transform({ ...body, engine: flowEngine.value })
 const projectsList = ref<{ id: number; name: string }[]>([])
 
-// serializza SOLO ciò che serve a ricostruire il canvas (niente stato interno Vue Flow)
+// serializes ONLY what is needed to rebuild the canvas (no internal Vue Flow state)
 function serializeCanvas(): string {
   return JSON.stringify({
     nodes: getNodes.value.map((n) => ({
@@ -467,12 +468,12 @@ function serializeCanvas(): string {
       type: n.type,
       position: { x: n.position.x, y: n.position.y },
       data: n.data,
-      // container foreach: figli (parentNode) e dimensioni del riquadro
+      // foreach container: children (parentNode) and the box's size
       ...(n.parentNode ? { parentNode: n.parentNode } : {}),
       ...(n.type === 'foreach'
         ? { style: { width: `${n.dimensions?.width || 460}px`, height: `${n.dimensions?.height || 280}px` } }
         : {}),
-      // nota: persisti la dimensione del riquadro (ridimensionabile)
+      // note: persist the box's size (resizable)
       ...(n.type === 'comment'
         ? { style: { width: `${n.dimensions?.width || 220}px`, height: `${n.dimensions?.height || 120}px` } }
         : {}),
@@ -495,28 +496,27 @@ async function loadFlow(id: number) {
   flowEngine.value = f.engine || 'polars'
   flowProductionEngine.value = f.production_engine ?? null
   savedName.value = f.name
-  adottaRiferimento = true
-  adattaVista = true
+  adoptReference = true
+  fitView_ = true
   applyDefinition(JSON.parse(f.definition || '{}'))
   selectedId.value = null
-  history.reset() // un flusso appena caricato non ha niente da annullare
+  history.reset() // a flow just loaded has nothing to undo
   setStatus(t('flowEditor.flowLoaded', { name: f.name }), 'ok')
   loadScriptOutputs()
 }
 
-// Mette sul canvas una definizione (quella salvata, o un'istantanea della
-// cronologia). `keepCounters`: i contatori degli id non tornano MAI indietro —
-// dopo un annulla un nodo nuovo non deve riprendere l'id di uno appena sparito,
-// o erediterebbe le sue colonne e i suoi conteggi in cache.
+// Puts a definition on the canvas (the saved one, or a snapshot of the history).
+// `keepCounters`: the ids' counters NEVER go back — after an undo a new node must not
+// take again the id of one just gone, or it would inherit its cached columns and counts.
 function applyDefinition(def: any, keepCounters = false) {
-  // normalizza: sorgenti salvate senza bucket (flussi vecchi/esterni) ricevono
-  // quello di default, altrimenti preview/run partirebbero senza bucket (422)
+  // normalize: sources saved without a bucket (old/external flows) get the default one,
+  // otherwise preview/run would start without a bucket (422)
   let nodes = (def.nodes ?? []).map((n: any) => {
     if (n.type === 'source') {
       const data = { ...n.data, bucket: n.data?.bucket ?? bucket }
-      // sorgente = datasource del catalogo: la chiave salvata può essere
-      // STANTIA (ogni refresh sostituisce lo snapshot e cancella il vecchio
-      // blob) → si riaggancia sempre allo snapshot corrente del catalogo
+      // source = catalog datasource: the saved key may be STALE (every refresh replaces the
+      // snapshot and deletes the old blob) → it is always reattached to the catalog's current
+      // snapshot
       const ds =
         data.datasourceId != null ? datasources.value.find((d) => d.id === data.datasourceId) : null
       if (ds && ds.key) {
@@ -528,46 +528,46 @@ function applyDefinition(def: any, keepCounters = false) {
       }
       return { ...n, data }
     }
-    if (n.parentNode) return { ...n, extent: 'parent' } // figli restano nel container
+    if (n.parentNode) return { ...n, extent: 'parent' } // the children stay in the container
     return n
   })
-  // Vue Flow richiede i genitori PRIMA dei figli nell'array
+  // Vue Flow wants the parents BEFORE the children in the array
   nodes = [...nodes.filter((n: any) => !n.parentNode), ...nodes.filter((n: any) => n.parentNode)]
   setNodes(nodes)
-  // gli archi di SEQUENZA (targetHandle seq-in) ricevono una classe dedicata per
-  // distinguerli visivamente dal flusso DATI (ora sono tutti orizzontali)
+  // the SEQUENCE edges (targetHandle seq-in) get a class of their own to tell them apart
+  // visually from the DATA flow (now they are all horizontal)
   setEdges((def.edges ?? []).map((e: any) => ({
     ...e,
     class: (e.targetHandle as string) === 'seq-in' ? 'edge-seq' : undefined,
   })))
-  // riallinea i contatori agli id caricati per evitare collisioni sui nuovi nodi
+  // realigns the counters to the loaded ids to avoid collisions on new nodes
   const maxN = (prefix: string) =>
     Math.max(0, ...(def.nodes ?? [])
       .filter((n: any) => String(n.id).startsWith(prefix))
       .map((n: any) => Number(String(n.id).slice(prefix.length)) || 0))
-  const base = (attuale: number) => (keepCounters ? attuale : 0)
+  const base = (current: number) => (keepCounters ? current : 0)
   opCounter = Math.max(base(opCounter), maxN('op-'))
   sourceCounter = Math.max(base(sourceCounter), maxN('src-'))
-  outputCounter = Math.max(base(outputCounter), maxN('out-'), maxN('ctl-')) // out- e ctl- condividono il contatore
+  outputCounter = Math.max(base(outputCounter), maxN('out-'), maxN('ctl-')) // out- and ctl- share the counter
   commentCounter = Math.max(base(commentCounter), maxN('cmt-'))
 }
 
-// ── Annulla / ripeti ─────────────────────────────────────────────────────
-// La cronologia vede il canvas nella stessa forma in cui si salva: ogni
-// modifica che cambia `serializeCanvas()` diventa un passo da sola (vedi
-// useFlowHistory). Non è salvata: vive finché l'editor resta aperto.
+// ── Undo / redo ─────────────────────────────────────────────────────────
+// The history sees the canvas in the same shape it is saved in: every change that
+// changes `serializeCanvas()` becomes a step of its own (see useFlowHistory). It is not
+// saved: it lives while the editor stays open.
 const canUndo = ref(false)
 const canRedo = ref(false)
 
-// ── Modifiche non salvate ─────────────────────────────────────────────────
-// Prima si usciva dall'editor (Projects, Esci, chiudere la scheda) e il lavoro
-// spariva senza un avviso (audit 2026-10-11, F3). Il confronto è fra lo stato
-// fermo della cronologia e quello dell'ultimo caricamento o salvataggio; più il
-// nome. Un osservatore non salva: niente avvisi per lui.
+// ── Unsaved changes ──────────────────────────────────────────────────────
+// Before, one left the editor (Projects, Sign out, closing the tab) and the work
+// vanished without a warning (audit 2026-10-11, F3). The comparison is between the
+// history's still state and that of the last load or save; plus the name. An observer
+// does not save: no warnings for them.
 const savedSnap = ref<string | null>(null)
 const currentSnap = ref<string | null>(null)
 const savedName = ref('')
-let adottaRiferimento = true
+let adoptReference = true
 // A NEW flow (never saved) also counts as unsaved as soon as it holds work: a
 // source with data, a step, a link. Its reference state is adopted when the
 // canvas first settles, and a choice made before that moment (a datasource picked
@@ -579,7 +579,7 @@ const newFlowHasWork = computed(() =>
   (getEdges.value.length > 0 ||
     getNodes.value.some((n) => n.type !== 'source' || n.data?.datasourceId != null || !!n.data?.parquetKey)))
 const dirty = computed(() =>
-  !soloOsservatore.value &&
+  !observerOnly.value &&
   (newFlowHasWork.value ||
     (savedSnap.value !== null &&
       (currentSnap.value !== savedSnap.value || flowName.value.trim() !== savedName.value))))
@@ -591,11 +591,11 @@ const history = createFlowHistory({
     canUndo.value = history.canUndo()
     canRedo.value = history.canRedo()
     currentSnap.value = history.current()
-    // il primo stato fermo dopo un caricamento (o un flusso nuovo) è quello «salvato»:
-    // le misure che il canvas prende dopo aver disegnato i nodi non sono modifiche
-    if (adottaRiferimento && currentSnap.value !== null) {
+    // the first still state after a load (or a new flow) is the «saved» one: the sizes the
+    // canvas takes after drawing the nodes are not changes
+    if (adoptReference && currentSnap.value !== null) {
       savedSnap.value = currentSnap.value
-      adottaRiferimento = false
+      adoptReference = false
     }
   },
 })
@@ -605,7 +605,7 @@ watch([currentSnap, flowEngine], () => scheduleCacheStatus())
 onUnmounted(() => history.dispose())
 
 function restoreSnapshot(snapshot: string) {
-  // anteprima e colonne in volo riguardano un canvas che non c'è più
+  // preview and columns in flight concern a canvas that is no longer there
   previewSeq++
   columnsSeq++
   previewSlots.cancel('preview')
@@ -635,7 +635,7 @@ function redo() {
 const loadBlocked = ref('')
 
 async function saveFlow() {
-  if (negatoAllOsservatore()) return
+  if (deniedToObserver()) return
   if (loadBlocked.value) {
     setStatus(t('flowEditor.cannotSaveUnopened', { error: loadBlocked.value }), 'error')
     return
@@ -648,21 +648,21 @@ async function saveFlow() {
     setStatus(t('flowEditor.nameFlowPrompt'), 'error')
     return
   }
-  history.flush() // una modifica ancora «calda» fa parte di ciò che si salva
-  const definizione = serializeCanvas()
+  history.flush() // a change still «hot» is part of what is saved
+  const definition = serializeCanvas()
   try {
     if (flowId.value !== null) {
-      await flowsApi.update(flowId.value, { name: flowName.value.trim(), definition: definizione })
+      await flowsApi.update(flowId.value, { name: flowName.value.trim(), definition: definition })
     } else {
       const f = await flowsApi.create(projectId.value, {
         name: flowName.value.trim(),
-        definition: definizione,
+        definition: definition,
         engine: flowEngine.value,
       })
       flowId.value = f.id
-      router.replace({ query: { flow: String(f.id) } }) // l'URL ora punta al flusso salvato
+      router.replace({ query: { flow: String(f.id) } }) // the URL now points at the saved flow
     }
-    savedSnap.value = currentSnap.value = definizione
+    savedSnap.value = currentSnap.value = definition
     savedName.value = flowName.value.trim()
     setStatus(t('flowEditor.flowSaved', { name: flowName.value.trim() }), 'ok')
     loadScriptOutputs() // a saved change of code makes the scripts' outputs stale
@@ -671,56 +671,56 @@ async function saveFlow() {
   }
 }
 
-// Uscire con modifiche non salvate chiede cosa fare: restare, uscire senza
-// salvare, salvare e uscire. Vale per ogni navigazione dell'app; chiudere la
-// scheda o ricaricare passa dall'avviso del browser.
+// Leaving with unsaved changes asks what to do: stay, leave without saving, save and
+// leave. It holds for every navigation of the app; closing the tab or reloading goes
+// through the browser's warning.
 const leaveOpen = ref(false)
-let decidiUscita: ((esci: boolean) => void) | null = null
-let uscitaConfermata = false
-function chiediUscita(): Promise<boolean> {
+let decideLeaving: ((leave: boolean) => void) | null = null
+let leaveConfirmed = false
+function askToLeave(): Promise<boolean> {
   history.flush()
   if (!dirty.value) return Promise.resolve(true)
   leaveOpen.value = true
-  return new Promise((resolve) => { decidiUscita = resolve })
+  return new Promise((resolve) => { decideLeaving = resolve })
 }
-function rispondiUscita(esci: boolean) {
+function answerLeaving(leave: boolean) {
   leaveOpen.value = false
-  if (esci) uscitaConfermata = true
-  decidiUscita?.(esci)
-  decidiUscita = null
+  if (leave) leaveConfirmed = true
+  decideLeaving?.(leave)
+  decideLeaving = null
 }
-async function salvaEdEsci() {
+async function saveAndLeave() {
   await saveFlow()
-  rispondiUscita(!dirty.value) // se il salvataggio non è riuscito si resta, col messaggio in vista
+  answerLeaving(!dirty.value) // when the save did not succeed one stays, with the message in sight
 }
-// un'uscita voluta dall'account (per inattività) non chiede delle modifiche: la
-// sessione è già chiusa, e il dialogo resterebbe appeso su un salvataggio che
-// risponde 401. Una sessione persa per altro (scaduta, revocata) chiede ancora.
-const uscitaVoluta = useLeaving()
-onBeforeRouteLeave(() => (uscitaConfermata || uscitaVoluta.value ? true : chiediUscita()))
-// l'uscita dall'account passa di qui PRIMA di togliere la sessione: un «resta»
-// dopo il logout lascerebbe l'editor aperto senza sessione
-async function esci() {
-  if (!(await chiediUscita())) return
-  uscitaConfermata = true
+// a sign-out the account wanted (for inactivity) does not ask about the changes: the
+// session is closed already, and the dialog would hang on a save answering 401. A
+// session lost for another reason (expired, revoked) still asks.
+const wantedLeave = useLeaving()
+onBeforeRouteLeave(() => (leaveConfirmed || wantedLeave.value ? true : askToLeave()))
+// signing out of the account goes through here BEFORE removing the session: a «stay»
+// after the logout would leave the editor open without a session
+async function leave() {
+  if (!(await askToLeave())) return
+  leaveConfirmed = true
   logout()
 }
-function avvisoDelBrowser(e: BeforeUnloadEvent) {
+function browserWarning(e: BeforeUnloadEvent) {
   history.flush()
   if (!dirty.value) return
   e.preventDefault()
   e.returnValue = ''
 }
-onMounted(() => window.addEventListener('beforeunload', avvisoDelBrowser))
-onUnmounted(() => window.removeEventListener('beforeunload', avvisoDelBrowser))
+onMounted(() => window.addEventListener('beforeunload', browserWarning))
+onUnmounted(() => window.removeEventListener('beforeunload', browserWarning))
 
-// La vista si adatta quando i nodi caricati hanno le loro misure: adattarla
-// all'avvio (prima che il flusso arrivi dal server) zoomava a 2× sul vuoto.
-// `maxZoom: 1`: un flusso piccolo resta a grandezza naturale.
-let adattaVista = false
+// The view fits when the loaded nodes have their sizes: fitting it at start (before the
+// flow arrives from the server) zoomed to 2× on emptiness. `maxZoom: 1`: a small flow
+// stays at natural size.
+let fitView_ = false
 onNodesInitialized(() => {
-  if (!adattaVista) return
-  adattaVista = false
+  if (!fitView_) return
+  fitView_ = false
   fitView({ padding: 0.15, maxZoom: 1 })
 })
 
@@ -729,7 +729,7 @@ onNodesInitialized(() => {
 // user may change flows. What it builds comes back as a whole canvas, applied here
 // as one Undo step; the nodes it touched glow for a moment.
 const aiStatus = ref<AiStatus | null>(null)
-const aiReady = computed(() => !!aiStatus.value?.enabled && !!aiStatus.value.models.length && !soloOsservatore.value)
+const aiReady = computed(() => !!aiStatus.value?.enabled && !!aiStatus.value.models.length && !observerOnly.value)
 const rightTab = ref<'node' | 'assistant'>('node')
 // the node the user is pointing the assistant at: not the empty source a new flow starts with
 const assistantSelection = computed(() => {
@@ -791,8 +791,8 @@ function fitWhenMeasured(ids: string[], frames = 30) {
 }
 
 onMounted(async () => {
-  if (!chiEntra.value) await fetchMe()
-  // campione automatico di sviluppo: va noto PRIMA della prima preview
+  if (!signedIn.value) await fetchMe()
+  // automatic development sample: must be known BEFORE the first preview
   await useAppInfo().load()
   try {
     operations.value = await api.operations()
@@ -801,16 +801,16 @@ onMounted(async () => {
     return
   }
   try {
-    // la lista progetti serve al selettore in toolbar E al dialog di run
+    // the projects' list serves the toolbar's selector AND the run dialog
     projectsList.value = await projectsApi.list()
   } catch {
     projectsList.value = []
   }
-  // il catalogo PRIMA del flusso: loadFlow riaggancia le sorgenti-datasource
-  // allo snapshot corrente (le chiavi salvate diventano stantie a ogni refresh)
+  // the catalog BEFORE the flow: loadFlow reattaches the datasource sources to the
+  // current snapshot (the saved keys become stale at every refresh)
   await refreshDatasources()
-  refreshConnections() // per il nodo Output: può arrivare dopo, non blocca il load
-  refreshFlows() // per il nodo "Esegui flusso"
+  refreshConnections() // for the Output node: may come later, does not block the load
+  refreshFlows() // for the "Run flow" node
   try {
     if (flowId.value !== null) await loadFlow(flowId.value)
   } catch (e) {
@@ -821,24 +821,24 @@ onMounted(async () => {
     selectedId.value = null
   }
   if (flowId.value === null) {
-    // flusso nuovo: si parte dal canvas iniziale, che è anche il riferimento «salvato»
-    adottaRiferimento = true
-    adattaVista = true
+    // new flow: it starts from the initial canvas, which is also the «saved» reference
+    adoptReference = true
+    fitView_ = true
     history.reset()
   }
 })
 
-// ── Catalogo datasources (per il picker del nodo sorgente) ────────────────
+// ── Datasource catalog (for the source node's picker) ────────────────
 const datasources = ref<DatasourceInfo[]>([])
-// lo stato del data contract di ogni datasource, per l'icona sui nodi sorgente
+// the data contract state of each datasource, for the icon on the source nodes
 provide('datasourceContracts', computed(() => new Map(datasources.value.filter((d) => d.contract).map((d) => [d.id, d.contract!] as const))))
 
-// Riaggancia le sorgenti-datasource già sul canvas allo snapshot CORRENTE del
-// catalogo: la chiave nel nodo può essere STANTIA (un refresh/overwrite sostituisce
-// lo snapshot e cancella il vecchio blob) e la preview la userebbe → 404. Lo fa
-// per id, come lo scheduler lato server. Copre anche le sorgenti annidate
-// (join/foreach): sono tutte nodi 'source'. Al PRIMO caricamento il canvas è
-// vuoto (no-op) e ci pensa loadFlow; poi ogni refresh del catalogo ri-sincronizza.
+// Reattaches the datasource sources already on the canvas to the catalog's CURRENT
+// snapshot: the key in the node may be STALE (a refresh/overwrite replaces the snapshot
+// and deletes the old blob) and the preview would use it → 404. It does it by id, as the
+// server-side scheduler. It covers the nested sources too (join/foreach): they are all
+// 'source' nodes. At the FIRST load the canvas is empty (no-op) and loadFlow sees to
+// it; then every refresh of the catalog synchronizes again.
 function syncSourceKeys() {
   let changed = false
   for (const n of getNodes.value) {
@@ -849,21 +849,21 @@ function syncSourceKeys() {
       changed = true
     }
   }
-  if (changed) { invalidateColumns(); invalidateStats() } // le catene a valle vanno ricalcolate sul nuovo snapshot
+  if (changed) { invalidateColumns(); invalidateStats() } // the chains downstream must be recomputed on the new snapshot
 }
 
 async function refreshDatasources() {
   try {
     datasources.value = await dsApi.list()
-    // riagganciare una sorgente al suo snapshot nuovo non è una modifica
-    // dell'utente: annullarla riporterebbe a una chiave che non esiste più
+    // reattaching a source to its new snapshot is not a user's change: undoing it would
+    // bring back a key that no longer exists
     history.quietly(syncSourceKeys)
   } catch {
     datasources.value = []
   }
 }
 
-// ── Connessioni utilizzabili (per il nodo Output verso database) ──────────
+// ── Usable connections (for the Output node towards a database) ──────────
 const connectionsList = ref<ConnectionInfo[]>([])
 async function refreshConnections() {
   try {
@@ -873,7 +873,7 @@ async function refreshConnections() {
   }
 }
 
-// ── Flussi (per il picker del nodo "Esegui flusso") ───────────────────────
+// ── Flows (for the "Run flow" node's picker) ─────────────────────────────
 const flowsList = ref<{ id: number; name: string; project_id: number }[]>([])
 async function refreshFlows() {
   try {
@@ -883,9 +883,9 @@ async function refreshFlows() {
   }
 }
 
-// ── Eventi canvas ─────────────────────────────────────────────────────────
-// Nodi a valle di `fromId` lungo gli archi DATI (fromId compreso): i loro
-// conteggi non valgono piu' quando la catena a monte cambia.
+// ── Canvas events ─────────────────────────────────────────────────────────
+// Nodes downstream of `fromId` along the DATA edges (fromId included): their counts no
+// longer hold when the chain upstream changes.
 function invalidateStats(fromId?: string) {
   if (!fromId) {
     for (const k of Object.keys(nodeStats)) if (findNode(k)?.type !== 'source') delete nodeStats[k]
@@ -911,7 +911,7 @@ function removeEdgeById(id: string) {
   removeEdges([id])
   if (hoveredEdgeId.value === id) hoveredEdgeId.value = null
   if (isSeq) return
-  // senza quell'arco il nodo a valle (e tutto cio' che segue) ha un altro input
+  // without that edge the node downstream (and all that follows) has another input
   invalidateColumns()
   invalidateStats(edge.target)
   if (selectedId.value) refreshForNode(selectedId.value)
@@ -921,15 +921,15 @@ provide('flowEdgeRemove', removeEdgeById)
 onConnect((conn: Connection) => {
   const seqSource = (conn.sourceHandle as string) === 'seq-out'
   const seqTarget = (conn.targetHandle as string) === 'seq-in'
-  // gli archi di SEQUENZA collegano solo seq-out (destra) → seq-in (sinistra): un
-  // source/ingresso-dati non ha presa di sequenza, quindi niente misto coi dati
+  // the SEQUENCE edges connect only seq-out (right) → seq-in (left): a source/data entry has
+  // no sequence socket, so no mixing with the data
   if (seqSource !== seqTarget) {
     setStatus(t('flowEditor.seqConnectError'), 'error')
     return
   }
   const handle = (conn.targetHandle as string) || 'left'
-  // dati: un solo arco per (target, handle). Sequenza: più predecessori sono
-  // validi (fan-in), si rimuove solo l'eventuale arco identico duplicato.
+  // data: one edge per (target, handle). Sequence: several predecessors are valid
+  // (fan-in), only an identical duplicate edge is removed.
   const dup = getEdges.value.filter((e) =>
     seqTarget
       ? e.source === conn.source && e.target === conn.target && (e.targetHandle as string) === 'seq-in'
@@ -945,7 +945,7 @@ onConnect((conn: Connection) => {
     class: seqTarget ? 'edge-seq' : undefined,
   })
   if (!seqTarget) {
-    // solo gli archi DATI cambiano le colonne a valle; la sequenza no
+    // only the DATA edges change the columns downstream; the sequence does not
     invalidateColumns()
     invalidateStats(conn.target!)
     refreshForNode(conn.target!)
@@ -954,9 +954,9 @@ onConnect((conn: Connection) => {
   }
 })
 
-// Collegando «Refresh datasource → Sorgente», imposta sul Refresh la datasource
-// della sorgente (solo se è una datasource DATABASE, le uniche refreshabili), così
-// l'arco significa davvero "aggiorna la datasource DI questa sorgente".
+// Connecting «Refresh datasource → Source» sets the source's datasource on the Refresh
+// (only when it is a DATABASE datasource, the only refreshable ones), so the edge really
+// means "update THIS source's datasource".
 function autolinkRefreshToSource(sourceId: string, targetId: string) {
   const refresh = findNode(sourceId)
   const src = findNode(targetId)
@@ -978,14 +978,14 @@ onPaneClick(() => {
   selectedId.value = null
 })
 
-// ── Azioni ────────────────────────────────────────────────────────────────
+// ── Actions ─────────────────────────────────────────────────────────────
 function targetSourceId(): string {
   const sel = selectedNode.value
   return sel?.type === 'source' ? sel.id : (firstSource.value?.id ?? SOURCE_ID)
 }
 
 async function onUpload(file: File) {
-  if (negatoAllOsservatore()) return
+  if (deniedToObserver()) return
   const sid = targetSourceId()
   await loadFile(sid, file, undefined, (res) => {
     // a workbook with several sheets: which ones, while the first one converts
@@ -1024,7 +1024,7 @@ async function loadFile(sid: string, file: File, sheet?: string, uploaded?: (res
     const res = await api.uploadFile(file, undefined, sheet)
     updateNodeData(sid, {
       datasetId: res.dataset_id,
-      datasourceId: null, // l'upload scollega l'eventuale datasource scelta prima
+      datasourceId: null, // the upload detaches the datasource chosen earlier, if any
       parquetKey: res.parquet_key,
       filename: file.name,
       sheet: res.sheet ?? null,
@@ -1035,12 +1035,12 @@ async function loadFile(sid: string, file: File, sheet?: string, uploaded?: (res
     uploaded?.(res)
 
     if (res.status === 'ready') {
-      // file piccolo: conversione già fatta in modo sincrono
+      // small file: conversion done synchronously already
       nodeColumns[sid] = res.dataset?.columns ?? []
       setStatus(t('flowEditor.ready', { rows: res.dataset?.rows }, res.dataset?.rows ?? 2), 'ok')
       await refreshForNode(sid)
     } else {
-      // file grande: conversione async su Celery → aspetta il completamento
+      // big file: async conversion on Celery → wait for it to complete
       setStatus(t('flowEditor.convertingTask', { id: res.task_id }), 'busy')
       await pollConversion(sid, res.task_id!, res.parquet_key)
     }
@@ -1053,10 +1053,10 @@ async function loadFile(sid: string, file: File, sheet?: string, uploaded?: (res
   }
 }
 
-// Attende la conversione async di un file grande, poi popola la sorgente.
+// Waits for a big file's async conversion, then fills the source.
 async function pollConversion(sid: string, taskId: string, parquetKey: string) {
   for (let i = 0; i < 1800; i++) {
-    // ~2s * 1800 = fino a ~1h (pari al task_time_limit del backend)
+    // ~2s * 1800 = up to ~1h (equal to the backend's task_time_limit)
     await new Promise((r) => setTimeout(r, 2000))
     let st
     try {
@@ -1068,7 +1068,7 @@ async function pollConversion(sid: string, taskId: string, parquetKey: string) {
     if (findNode(sid)?.data?.parquetKey !== parquetKey) return
     if (st.status === 'SUCCESS') {
       const info: any = st.result ?? {}
-      // la fine della conversione completa il caricamento: non è un passo a sé
+      // the end of the conversion completes the upload: it is not a step of its own
       history.quietly(() => updateNodeData(sid, { rows: info.rows ?? null, columns: info.columns ?? [] }))
       nodeColumns[sid] = info.columns ?? []
       setStatus(t('flowEditor.ready', { rows: info.rows }, info.rows ?? 2), 'ok')
@@ -1085,7 +1085,7 @@ async function pollConversion(sid: string, taskId: string, parquetKey: string) {
 }
 
 function addSource(): string {
-  if (negatoAllOsservatore()) return ''
+  if (deniedToObserver()) return ''
   const id = `src-${++sourceCounter}`
   addNodes({
     id,
@@ -1132,7 +1132,7 @@ function miniMapColor(node: { type?: string; data?: any }): string {
   return NODE_TYPE_COLOR[node.type ?? ''] ?? 'var(--muted)'
 }
 
-// ── Auto-layout ("Ordina il flusso", bottone nei Controls del canvas) ────
+// ── Auto-layout ("Tidy the flow", a button in the canvas Controls) ────
 function autoLayout() {
   const { positions, childPositions, containerSizes } = computeAutoLayout(getNodes.value, getEdges.value)
   for (const [id, size] of containerSizes) {
@@ -1150,7 +1150,7 @@ function autoLayout() {
   nextTick(() => fitView({ padding: 0.15, duration: 300 }))
 }
 
-// ── Drag & drop dalla sidebar dei componenti ─────────────────────────────
+// ── Drag & drop from the components' sidebar ─────────────────────────────
 function onCanvasDragOver(ev: DragEvent) {
   ev.preventDefault()
   if (ev.dataTransfer) ev.dataTransfer.dropEffect = 'move'
@@ -1159,7 +1159,7 @@ function onCanvasDragOver(ev: DragEvent) {
 function onCanvasDrop(ev: DragEvent) {
   const kind = ev.dataTransfer?.getData('application/tabularia')
   if (!kind || loadBlocked.value) return // a flow that cannot be opened takes nothing under its notice
-  if (!TRASFORMAZIONE(kind) && negatoAllOsservatore()) return
+  if (!TRANSFORMATION(kind) && deniedToObserver()) return
   const position = screenToFlowCoordinate({ x: ev.clientX, y: ev.clientY })
 
   if (kind === 'source') {
@@ -1175,7 +1175,7 @@ function onCanvasDrop(ev: DragEvent) {
   }
 
   if (kind === 'output') {
-    // nodo terminale: dove finisce il risultato (datasource o tabella database)
+    // terminal node: where the result ends up (datasource or database table)
     const id = `out-${++outputCounter}`
     addNodes({
       id,
@@ -1214,7 +1214,7 @@ function onCanvasDrop(ev: DragEvent) {
   }
 
   if (kind === 'comment') {
-    // nota libera: annotazione sul canvas, ignorata dall'esecuzione
+    // free note: an annotation on the canvas, ignored by the run
     const id = `cmt-${++commentCounter}`
     addNodes({
       id,
@@ -1228,7 +1228,7 @@ function onCanvasDrop(ev: DragEvent) {
   }
 
   if (kind === 'op:foreach') {
-    // container del ciclo: nodo grande, i figli ci si trascinano dentro
+    // the loop's container: a big node, the children are dragged into it
     const id = `op-${++opCounter}`
     addNodes({
       id,
@@ -1245,7 +1245,7 @@ function onCanvasDrop(ev: DragEvent) {
     const opType = kind.slice(3)
     const id = `op-${++opCounter}`
 
-    // drop DENTRO un container foreach → diventa figlio (posizione relativa)
+    // drop INSIDE a foreach container → it becomes a child (relative position)
     const container = getNodes.value.find(
       (n) =>
         n.type === 'foreach' &&
@@ -1276,9 +1276,9 @@ function patchSelected(patch: Record<string, any>) {
   updateNodeData(selectedId.value, patch)
   invalidateColumns()
   invalidateStats(selectedId.value)
-  // il nodo SQL NON esegue l'anteprima a ogni modifica: una query può essere
-  // pesante e riprovarla a ogni tasto/blur è sprecato. L'anteprima è a comando
-  // (bottone «Anteprima» o Cmd/Ctrl+Enter → previewSelected).
+  // the SQL node does NOT run the preview at every change: a query may be heavy and
+  // trying it again at every key/blur is wasteful. The preview is on command («Preview»
+  // button or Cmd/Ctrl+Enter → previewSelected).
   if (findNode(selectedId.value)?.data?.opType === 'sql') return
   // a Script or Container node previews its last output: its code or its image change
   // nothing there until it runs
@@ -1286,7 +1286,7 @@ function patchSelected(patch: Record<string, any>) {
   refreshForNode(selectedId.value)
 }
 
-// anteprima a comando del nodo selezionato (usata dal nodo SQL)
+// preview on command of the selected node (used by the SQL node)
 function previewSelected() {
   if (selectedId.value) refreshForNode(selectedId.value)
 }
@@ -1297,22 +1297,22 @@ function deleteSelected() {
 
 function deleteNodes(ids: string[]) {
   if (!ids.length) return
-  // la preview e le colonne dei nodi che spariscono non devono piu' scrivere nulla
+  // the preview and the columns of the nodes going away must no longer write anything
   previewSeq++
   columnsSeq++
   previewSlots.cancel('preview')
   previewSlots.cancel('cols')
   for (const id of ids) {
-    // un container foreach porta via anche i figli (il corpo del ciclo)
+    // a foreach container takes the children away too (the loop's body)
     const node = findNode(id)
-    if (!node) continue // già andato via con il suo container
+    if (!node) continue // gone already with its container
     if (node.type === 'foreach') {
       const children = getNodes.value.filter((n) => n.parentNode === id).map((n) => n.id)
       if (children.length) removeNodes(children, true)
       children.forEach((c) => delete nodeColumns[c])
     }
-    invalidateStats(id) // il nodo e tutto cio' che lo seguiva
-    removeNodes(id, true) // rimuove anche gli archi collegati
+    invalidateStats(id) // the node and all that followed it
+    removeNodes(id, true) // removes the connected edges too
     delete nodeColumns[id]
   }
   selectedId.value = null
@@ -1322,9 +1322,9 @@ function deleteNodes(ids: string[]) {
   invalidateColumns()
 }
 
-// ── Copia / taglia / incolla / duplica ───────────────────────────────────
-// I nodi su cui agiscono: la selezione multipla del canvas (riquadro con
-// Maiusc, o Ctrl/Cmd+click) se c'è, altrimenti il nodo aperto nel pannello.
+// ── Copy / cut / paste / duplicate ───────────────────────────────────
+// The nodes they act on: the canvas's multiple selection (a box with Shift, or
+// Ctrl/Cmd+click) if there is one, otherwise the node open in the panel.
 function selectedIds(): string[] {
   const multi = getSelectedNodes.value.map((n) => n.id)
   if (multi.length > 1) return multi
@@ -1336,7 +1336,7 @@ function clipOfSelection(): FlowClip | null {
   return buildClip(canvas.nodes, canvas.edges, selectedIds())
 }
 
-let pasteCount = 0 // ogni incolla dello stesso pezzo cade un po' più in là del precedente
+let pasteCount = 0 // every paste of the same piece lands a bit further than the previous one
 
 function copySelection(): boolean {
   const clip = clipOfSelection()
@@ -1357,12 +1357,12 @@ function newNodeId(n: ClipNode): string {
 
 function pasteClip(clip: FlowClip) {
   if (loadBlocked.value) return
-  const passo = 40 * ++pasteCount
-  // un osservatore incolla ciò che può anche aggiungere a mano: le trasformazioni
-  const ammesso = (n: ClipNode) => !soloOsservatore.value || n.type === 'operation'
-  const { nodes, edges } = instantiateClip(clip, newNodeId, { x: passo, y: passo }, ammesso)
+  const step = 40 * ++pasteCount
+  // an observer pastes what they could add by hand too: the transformations
+  const allowed = (n: ClipNode) => !observerOnly.value || n.type === 'operation'
+  const { nodes, edges } = instantiateClip(clip, newNodeId, { x: step, y: step }, allowed)
   if (!nodes.length) {
-    negatoAllOsservatore()
+    deniedToObserver()
     return
   }
   addNodes(nodes.map((n) => (n.parentNode ? { ...n, extent: 'parent' as const } : n)))
@@ -1373,12 +1373,12 @@ function pasteClip(clip: FlowClip) {
     class: e.targetHandle === 'seq-in' ? 'edge-seq' : undefined,
   })))
   invalidateColumns()
-  // i nodi incollati restano selezionati: si spostano insieme, si ricopiano, si tolgono
-  const nuovi = new Set(nodes.map((n) => n.id))
+  // the pasted nodes stay selected: they move together, are copied again, are removed
+  const newOnes = new Set(nodes.map((n) => n.id))
   selectedId.value = nodes[0].id
   nextTick(() => {
     removeSelectedNodes(getSelectedNodes.value)
-    addSelectedNodes(getNodes.value.filter((n) => nuovi.has(n.id)))
+    addSelectedNodes(getNodes.value.filter((n) => newOnes.has(n.id)))
   })
   refreshForNode(nodes[0].id)
   setStatus(t('flowEditor.nodesPasted', { n: nodes.length }), 'ok')
@@ -1387,7 +1387,7 @@ function pasteClip(clip: FlowClip) {
 function duplicateSelection() {
   const clip = clipOfSelection()
   if (!clip) return
-  pasteCount = 0 // accanto all'originale; non tocca ciò che si era copiato
+  pasteCount = 0 // next to the original; it does not touch what had been copied
   pasteClip(clip)
 }
 
@@ -1396,24 +1396,24 @@ function cutSelection() {
   if (copySelection()) deleteNodes(ids)
 }
 
-// Nei campi valgono le scorciatoie del browser: lì Ctrl+Z annulla il testo,
-// Ctrl+C copia il testo, Canc cancella un carattere. Also inside a dialog and inside
+// In the fields the browser's shortcuts hold: there Ctrl+Z undoes the text, Ctrl+C
+// copies the text, Del deletes a character. Also inside a dialog and inside
 // `.nokey` (the code editor): on Chrome and Edge Monaco types through EditContext, a
 // div that is none of the above, and Ctrl+X there cut the Script node off the flow.
-function scriveInUnCampo(): boolean {
+function typingInAField(): boolean {
   const el = document.activeElement as HTMLElement | null
   return ['INPUT', 'TEXTAREA', 'SELECT'].includes((el?.tagName ?? '').toUpperCase()) || !!el?.isContentEditable
     || !!el?.closest('.nokey, [role="dialog"]')
 }
 
-// Scorciatoie del canvas: annulla/ripeti, copia/taglia/incolla/duplica, e
-// Canc / Backspace che elimina ciò che è selezionato.
+// The canvas's shortcuts: undo/redo, copy/cut/paste/duplicate, and Del / Backspace
+// deleting what is selected.
 function onKeydown(e: KeyboardEvent) {
-  // Ctrl/Cmd+S salva il flusso, anche mentre si scrive in un campo (prima apriva
-  // il «Salva pagina» del browser)
+  // Ctrl/Cmd+S saves the flow, even while typing in a field (before, it opened the
+  // browser's «Save page»)
   if ((e.ctrlKey || e.metaKey) && !e.altKey && e.key.toLowerCase() === 's') {
     e.preventDefault()
-    if (runDialogOpen.value || soloOsservatore.value) return
+    if (runDialogOpen.value || observerOnly.value) return
     // a field of the node's panel records its value on «change», which fires when it loses
     // the focus: saved at once, the flow kept the value from before the one just typed (and
     // nothing said it was not saved). The field gives its value, then takes the focus back.
@@ -1425,34 +1425,34 @@ function onKeydown(e: KeyboardEvent) {
     nextTick(() => saveFlow())
     return
   }
-  if (scriveInUnCampo() || runDialogOpen.value) return
+  if (typingInAField() || runDialogOpen.value) return
   if ((e.ctrlKey || e.metaKey) && !e.altKey) {
-    const tasto = e.key.toLowerCase()
-    if (tasto === 'z' || tasto === 'y') {
+    const key_ = e.key.toLowerCase()
+    if (key_ === 'z' || key_ === 'y') {
       e.preventDefault()
-      if (tasto === 'y' || e.shiftKey) redo()
+      if (key_ === 'y' || e.shiftKey) redo()
       else undo()
-    } else if (tasto === 'c' || tasto === 'x') {
-      // con del testo evidenziato (una cella dell'anteprima) si copia il testo
+    } else if (key_ === 'c' || key_ === 'x') {
+      // with highlighted text (a cell of the preview) the text is copied
       if (window.getSelection()?.toString()) return
       if (!selectedIds().length) return
       e.preventDefault()
-      if (tasto === 'x') cutSelection()
+      if (key_ === 'x') cutSelection()
       else copySelection()
-    } else if (tasto === 'v') {
+    } else if (key_ === 'v') {
       const clip = readClip()
       if (!clip) return
       e.preventDefault()
       pasteClip(clip)
-    } else if (tasto === 'd') {
+    } else if (key_ === 'd') {
       if (!selectedIds().length) return
-      e.preventDefault() // altrimenti il browser apre «aggiungi ai preferiti»
+      e.preventDefault() // otherwise the browser opens «add to bookmarks»
       duplicateSelection()
     }
     return
   }
   if (e.key !== 'Delete' && e.key !== 'Backspace') return
-  // un arco selezionato (click sul tratto) si toglie con lo stesso tasto del nodo
+  // a selected edge (click on the stroke) is removed with the same key as the node
   const edges = getSelectedEdges.value
   if (edges.length) {
     e.preventDefault()
@@ -1467,9 +1467,9 @@ function onKeydown(e: KeyboardEvent) {
 onMounted(() => window.addEventListener('keydown', onKeydown))
 onUnmounted(() => window.removeEventListener('keydown', onKeydown))
 
-// i picker (connessioni per l'Output, datasource per source/refresh, flussi per
-// runflow) sono caricati una volta al mount: se crei una connessione/datasource/
-// flusso in un'altra scheda e torni qui, li riaggiorniamo tornando visibili
+// the pickers (connections for the Output, datasources for source/refresh, flows for
+// runflow) are loaded once at mount: when you create a connection/datasource/flow in
+// another tab and come back here, we refresh them on becoming visible again
 function onVisible() {
   if (document.visibilityState !== 'visible') return
   refreshConnections()
@@ -1479,7 +1479,7 @@ function onVisible() {
 onMounted(() => document.addEventListener('visibilitychange', onVisible))
 onUnmounted(() => document.removeEventListener('visibilitychange', onVisible))
 
-// ── Colonne / preview ───────────────────────────────────────────────────
+// ── Columns / preview ───────────────────────────────────────────────────
 function invalidateColumns() {
   for (const k of Object.keys(nodeColumns)) if (findNode(k)?.type !== 'source') delete nodeColumns[k]
 }
@@ -1503,41 +1503,40 @@ async function ensureColumns(nodeId: string): Promise<ColumnInfo[]> {
 }
 
 const CLICK_SETTLE_MS = 180
-let columnsSeq = 0 // come previewSeq: solo l'ultima risoluzione spegne lo skeleton
+let columnsSeq = 0 // as previewSeq: only the last resolution turns the skeleton off
 async function refreshForNode(nodeId: string) {
   const inc = buildIncoming(getEdges.value)
   const node = findNode(nodeId)
   columnsLoading.value = true
   const colSeq = ++columnsSeq
   const t0 = performance.now()
-  // Chi scorre i nodi uno dopo l'altro non vuole la preview di ognuno: si
-  // aspetta un attimo, e se nel frattempo e' arrivato un altro click questo
-  // non parte nemmeno. Lo skeleton e' gia' acceso: il ritardo non si vede.
+  // Whoever goes through the nodes one after another does not want each one's preview: it
+  // waits a moment, and if another click arrived meanwhile this one does not even start.
+  // The skeleton is on already: the delay does not show.
   await new Promise((r) => setTimeout(r, CLICK_SETTLE_MS))
   if (colSeq !== columnsSeq) return
 
-  // colonne in ingresso (output del genitore sinistro); il PRIMO nodo di un
-  // corpo foreach non ha archi interni → il suo input è quello del container
+  // input columns (the left parent's output); the FIRST node of a foreach body has no
+  // internal edges → its input is the container's
   const leftId =
     inc.get(nodeId)?.left ?? (node?.parentNode ? inc.get(node.parentNode)?.left : undefined)
-  // come previewSeq in runPreview: una risoluzione PIU' VECCHIA non deve
-  // sovrascrivere le colonne del nodo selezionato dopo (il pannello mostrerebbe
-  // le colonne di un altro nodo). Il guard vale per OGNI scrittura di stato.
+  // as previewSeq in runPreview: an OLDER resolution must not overwrite the columns of the
+  // node selected afterwards (the panel would show another node's columns). The guard
+  // holds for EVERY state write.
   try {
     const cols = leftId ? await ensureColumns(leftId) : []
     if (colSeq === columnsSeq) inputColumns.value = cols
   } catch (e) {
-    // "superata" = un refresh piu' nuovo ha annullato questa richiesta: non e'
-    // "nessuna colonna", e' "non tocca piu' a me"
+    // "overtaken" = a newer refresh cancelled this request: it is not "no column", it is
+    // "no longer my turn"
     if (colSeq === columnsSeq && !isSuperseded(e)) inputColumns.value = []
   }
-  // Superato mentre aspettavo: STOP. Ogni richiesta in piu' di questo refresh
-  // vecchio annullerebbe (stesso slot) quella del refresh nuovo, che resterebbe
-  // senza colonne.
+  // Overtaken while waiting: STOP. Every extra request of this old refresh would cancel
+  // (same slot) the new refresh's, which would stay without columns.
   if (colSeq !== columnsSeq) return
 
-  // placeholder disponibili per i nodi dentro un container: colonne del driver
-  // (input in alto del container) o chiavi della prima iterazione statica
+  // placeholders available to the nodes inside a container: the driver's columns (the
+  // container's top input) or the keys of the first static iteration
   if (node?.parentNode) {
     const container = findNode(node.parentNode)
     const drvId = inc.get(node.parentNode)?.right
@@ -1558,8 +1557,8 @@ async function refreshForNode(nodeId: string) {
     placeholders.value = []
   }
 
-  // colonne del lato destro = ramo destro di join/union, o driver del foreach
-  // (per il foreach sono i placeholder {{colonna}} disponibili nel corpo)
+  // right side's columns = the right branch of join/union, or the foreach's driver (for
+  // the foreach they are the {{column}} placeholders available in the body)
   if (node?.data?.opType === 'join' || node?.data?.opType === 'union' || node?.type === 'foreach') {
     const rightId = inc.get(nodeId)?.right
     try {
@@ -1573,22 +1572,22 @@ async function refreshForNode(nodeId: string) {
     rightColumns.value = []
   }
 
-  // spegne lo skeleton delle colonne dopo il minimo di visibilità, SENZA
-  // ritardare l'avvio della preview (che parte subito qui sotto)
+  // turns the columns' skeleton off after the minimum visibility, WITHOUT delaying the
+  // preview's start (which starts right here below)
   skeletonPad(t0).then(() => {
     if (colSeq === columnsSeq) columnsLoading.value = false
   })
-  // Superato mentre risolvevo le colonne: NON lanciare la preview del nodo
-  // vecchio — occuperebbe lo slot e butterebbe giu' quella del nodo nuovo.
+  // Overtaken while resolving the columns: do NOT launch the old node's preview — it
+  // would take the slot and knock down the new node's.
   if (colSeq !== columnsSeq) return
   await runPreview(nodeId)
 }
 
-let previewSeq = 0 // solo l'ULTIMA preview lanciata scrive risultato e spegne lo skeleton
+let previewSeq = 0 // only the LAST preview launched writes the result and turns the skeleton off
 async function runPreview(nodeId: string) {
   const { sourceNode, operations: ops, afterScript } = resolveChain(getNodes.value, getEdges.value, nodeId, scriptSources.value)
-  // il seq avanza SEMPRE: anche una preview che non parte deve invalidare quella
-  // vecchia ancora in volo, o questa scriverebbe il suo risultato sul nodo nuovo
+  // the seq ALWAYS moves on: a preview that does not start must invalidate the old one
+  // still in flight too, or that one would write its result on the new node
   const seq = ++previewSeq
   if (!sourceNode?.data?.parquetKey) {
     previewSlots.cancel('preview')
@@ -1628,7 +1627,7 @@ async function runPreview(nodeId: string) {
     }
     if (seq === previewSeq) preview.value = res
   } catch (e) {
-    // "superata da una piu' recente" non e' un errore: non va mai mostrato
+    // "overtaken by a newer one" is not an error: it must never be shown
     if (seq === previewSeq && !isSuperseded(e)) {
       preview.value = null
       const message = errMessage(e)
@@ -1637,13 +1636,13 @@ async function runPreview(nodeId: string) {
       else previewError.value = message
     }
   } finally {
-    await skeletonPad(t0) // skeleton visibile almeno il minimo: niente flash
+    await skeletonPad(t0) // skeleton visible at least the minimum: no flash
     if (seq === previewSeq) previewLoading.value = false
   }
 }
 
-// ── Valori distinti di una colonna all'INPUT del nodo selezionato ─────────
-// (per il picker del filtro in/not_in: unique sulla catena a monte, cache inclusa)
+// ── Distinct values of a column at the selected node's INPUT ─────────
+// (for the in/not_in filter's picker: unique on the chain upstream, cache included)
 async function fetchDistinctValues(column: string): Promise<any[]> {
   const nodeId = selectedId.value
   if (!nodeId) return []
@@ -1652,8 +1651,8 @@ async function fetchDistinctValues(column: string): Promise<any[]> {
   let sourceNode: Node | null = null
   let ops: Operation[] = []
   if (node?.type === 'source') {
-    // filtri a monte del nodo sorgente: i valori vengono dai dati GREZZI della
-    // sorgente (non dalla catena, che conterrebbe i filtri stessi)
+    // the source node's upstream filters: the values come from the source's RAW data (not
+    // from the chain, which would hold the filters themselves)
     sourceNode = node
   } else {
     const leftId =
@@ -1677,7 +1676,7 @@ async function fetchDistinctValues(column: string): Promise<any[]> {
   return res.rows.map((r) => r[column]).filter((v) => v !== null)
 }
 
-// ── Grafico: esegue la catena del nodo + aggregazioni extra sull'engine ──
+// ── Chart: runs the node's chain + extra aggregations on the engine ──
 async function chartQuery(extraOps: Operation[], limit = 1000): Promise<PreviewResult | null> {
   const nodeId = selectedId.value ?? leafNodeId(getNodes.value, getEdges.value)
   const { sourceNode, operations: ops } = resolveChain(getNodes.value, getEdges.value, nodeId, scriptSources.value)
@@ -1690,7 +1689,7 @@ async function chartQuery(extraOps: Operation[], limit = 1000): Promise<PreviewR
   }, 'chart')
 }
 
-// ── Export (download csv/xlsx del nodo selezionato) ─────────────────────
+// ── Export (csv/xlsx download of the selected node) ─────────────────────
 async function exportSelected(format: 'csv' | 'xlsx') {
   const nodeId = selectedId.value ?? leafNodeId(getNodes.value, getEdges.value)
   const { sourceNode, operations: ops } = resolveChain(getNodes.value, getEdges.value, nodeId, scriptSources.value)
@@ -1721,11 +1720,11 @@ async function exportSelected(format: 'csv' | 'xlsx') {
   }
 }
 
-// ── Run (async via Celery) ──────────────────────────────────────────────
-// Il click su Esegui apre il dialog; il lancio vero passa dal GATEWAY quando
-// il flusso è salvato → cronologia dei run. Se il canvas ha nodi Output, ogni
-// output diventa un run (la destinazione è configurata sul nodo); senza nodi
-// Output resta il percorso classico (pubblicazione opzionale dal dialog).
+// ── Run (async through Celery) ─────────────────────────────────────────
+// The click on Run opens the dialog; the real launch goes through the GATEWAY when the
+// flow is saved → run history. When the canvas has Output nodes, every output becomes a
+// run (the destination is configured on the node); without Output nodes the classic
+// path stays (optional publishing from the dialog).
 const runDialogOpen = ref(false)
 const runDialogError = ref('')
 
@@ -1823,14 +1822,14 @@ function describeOutput(n: Node): OutputSummary {
 
 const runOutputs = computed(() => outputNodes().map(describeOutput))
 
-// nodi di controllo (refresh/runflow/script/container): richiedono l'orchestrazione server-side
+// control nodes (refresh/runflow/script/container): they require the server-side orchestration
 const hasControlNodes = () =>
   getNodes.value.some((n) => CONTROL_TYPES.has(n.type ?? ''))
 
 function run() {
-  if (negatoAllOsservatore()) return
-  // flussi con nodi di controllo → orchestrazione server (refresh→output→runflow),
-  // niente dialog: la configurazione sta sui nodi
+  if (deniedToObserver()) return
+  // flows with control nodes → server orchestration (refresh→output→runflow), no dialog:
+  // the configuration is on the nodes
   if (hasControlNodes()) {
     if (flowId.value === null) {
       setStatus(t('flowEditor.saveFlowForControlNodes'), 'error')
@@ -1841,7 +1840,7 @@ function run() {
   }
   const outs = outputNodes()
   if (outs.length) {
-    // gli output richiedono il gateway (cronologia, RBAC, credenziali)
+    // the outputs require the gateway (history, RBAC, credentials)
     if (flowId.value === null) {
       setStatus(t('flowEditor.saveFlowForOutputNodes'), 'error')
       return
@@ -1873,24 +1872,23 @@ async function executeRun(publish: PublishSpec | null) {
     return
   }
   runDialogError.value = ''
-  busy.value = true // solo per la durata del LANCIO: il canvas resta usabile durante il run
-  pollToken++ // nuovo ciclo: i poll dei run precedenti si fermano
+  busy.value = true // only for the length of the LAUNCH: the canvas stays usable during the run
+  pollToken++ // new cycle: the earlier runs' polls stop
   try {
     if (flowId.value !== null) {
-      // percorso con cronologia: il gateway registra il run e pubblica l'output
+      // path with history: the gateway records the run and publishes the output
       const launched = await runsApi.launch(flowId.value, {
         bucket: sourceNode.data.bucket ?? bucket,
         input_key: sourceNode.data.parquetKey,
         operations: ops,
         publish,
       })
-      runDialogOpen.value = false // chiuso SOLO a lancio riuscito
+      runDialogOpen.value = false // closed ONLY at a successful launch
       setStatus(t('flowEditor.runStarted', { id: launched.id }), 'busy')
-      pollRun(launched.id) // in background: niente lock sull'editor
+      pollRun(launched.id) // in the background: no lock on the editor
     } else {
-      // flusso non salvato: run diretto, senza cronologia né pubblicazione.
-      // La chiave di output la assegna il SERVER (out/<uuid> write-once): qui
-      // non la scegliamo più, si polla solo il task_id.
+      // unsaved flow: direct run, without history or publishing. The SERVER assigns the output
+      // key (out/<uuid> write-once): here we no longer choose it, only the task_id is polled.
       const res = await apiTransform({
         bucket: sourceNode.data.bucket ?? bucket,
         input_key: sourceNode.data.parquetKey,
@@ -1902,15 +1900,15 @@ async function executeRun(publish: PublishSpec | null) {
       pollTask(res.task_id)
     }
   } catch (e) {
-    // 409 nome duplicato / 403 permessi: il dialog resta aperto con l'input intatto
+    // 409 duplicate name / 403 permissions: the dialog stays open with the input intact
     runDialogError.value = errMessage(e)
   } finally {
     busy.value = false
   }
 }
 
-// orchestrazione server-side (flussi con nodi di controllo): il gateway fa
-// refresh → output → runflow. Torna subito, si polla la cronologia del flusso.
+// server-side orchestration (flows with control nodes): the gateway does refresh →
+// output → runflow. It returns at once, the flow's history is polled.
 async function executeOrchestration() {
   busy.value = true
   pollToken++
@@ -1925,8 +1923,8 @@ async function executeOrchestration() {
   }
 }
 
-// polla il RUN DI ORCHESTRAZIONE per id (lo crea run-now): traccia l'intera
-// esecuzione anche per flussi senza nodo Output, che non producono run propri.
+// polls the ORCHESTRATION RUN by id (run-now creates it): it tracks the whole run even
+// for flows without an Output node, which make no runs of their own.
 async function pollOrchestration(runId: number) {
   const token = pollToken
   // soon at first, then every two seconds, for five minutes at most
@@ -1954,9 +1952,9 @@ async function pollOrchestration(runId: number) {
   setStatus(t('flowEditor.orchestrationTimeout'), 'info')
 }
 
-// I nomi dei campi sono quelli che rilegge il resolver lato server per i run
-// schedulati (services/flow_resolver): tenerli allineati è ciò che impedisce a
-// un nodo di funzionare col pulsante Esegui e di spedire a nessuno a orario.
+// The fields' names are those the server-side resolver reads again for the scheduled
+// runs (services/flow_resolver): keeping them aligned is what prevents a node from
+// working with the Run button and sending to nobody on schedule.
 function emailSpecOf(d: any) {
   return {
     connection_id: d.connectionId,
@@ -1972,9 +1970,9 @@ function emailSpecOf(d: any) {
   }
 }
 
-// Prova a vuoto del nodo email: stesso corpo di un run vero, ma il destinatario
-// lo impone il gateway (l'utente collegato) e non si pubblica nulla. Serve a
-// vedere l'allegato davvero generato prima di mandarlo a qualcun altro.
+// Dry run of the email node: the same body as a real run, but the gateway sets the
+// recipient (the signed-in user) and nothing is published. It serves to see the
+// attachment really generated before sending it to someone else.
 async function emailTestSelected() {
   const node = selectedNode.value
   if (!node) return
@@ -2004,11 +2002,11 @@ async function emailTestSelected() {
   }
 }
 
-// un run per ogni nodo Output: la catena di ciascuno è il suo input sinistro
+// one run per Output node: each one's chain is its left input
 async function executeOutputRuns() {
   runDialogError.value = ''
   busy.value = true
-  pollToken++ // nuovo ciclo: i poll dei run precedenti si fermano
+  pollToken++ // new cycle: the earlier runs' polls stop
   try {
     for (const node of outputNodes()) {
       const label = describeOutput(node).label
@@ -2016,7 +2014,7 @@ async function executeOutputRuns() {
       if (!sourceNode?.data?.parquetKey) {
         runDialogError.value = `${label}: ${t('flowEditor.outputMissingChain')}`
         selectedId.value = node.id
-        return // dialog aperto: gli output già lanciati proseguono comunque
+        return // dialog open: the outputs launched already go on anyway
       }
       const d = node.data
       const destType = d.destType ?? 'datasource'
@@ -2086,35 +2084,35 @@ async function executeOutputRuns() {
         setStatus(`${label}: ${t('flowEditor.outputRunStarted', { id: launched.id })}`, 'busy')
         pollRun(launched.id, label)
       } catch (e) {
-        // 409 nome duplicato / 403 permessi: il dialog resta aperto sull'errore
+        // 409 duplicate name / 403 permissions: the dialog stays open on the error
         runDialogError.value = `${label}: ${errMessage(e)}`
         selectedId.value = node.id
         return
       }
     }
-    runDialogOpen.value = false // tutti lanciati
+    runDialogOpen.value = false // all launched
   } finally {
     busy.value = false
   }
 }
 
-// token di cancellazione: un nuovo CICLO di run (o l'unmount) invalida i poll
-// precedenti; i poll dello stesso ciclo (un run per nodo Output) convivono
+// cancellation token: a new CYCLE of runs (or the unmount) invalidates the earlier
+// polls; the polls of the same cycle (one run per Output node) live together
 let pollToken = 0
 onUnmounted(() => {
   pollToken++
 })
 
 async function pollRun(runId: number, label = '') {
-  const token = pollToken // cattura il ciclo corrente (bumpato da executeRun*)
+  const token = pollToken // captures the current cycle (bumped by executeRun*)
   const prefix = label ? `${label}: ` : ''
-  // ~1.5s * 2400 ≈ 1h, allineato al task_time_limit dell'engine
+  // ~1.5s * 2400 ≈ 1h, aligned with the engine's task_time_limit
   for (let i = 0; i < 2400; i++) {
     await new Promise((r) => setTimeout(r, 1500))
-    if (token !== pollToken) return // pagina chiusa o nuovo ciclo di run: stop
+    if (token !== pollToken) return // page closed or new cycle of runs: stop
     let run
     try {
-      run = await runsApi.get(runId) // il GET riconcilia lo stato lato gateway
+      run = await runsApi.get(runId) // the GET reconciles the state on the gateway
     } catch {
       continue
     }
@@ -2129,10 +2127,10 @@ async function pollRun(runId: number, label = '') {
             : d.type === 'sftp'
               ? ` → sftp://${d.host}${d.path ?? ''}`
               : ` → ${d.db_type} ${d.database ? d.database + '.' : ''}${d.table}`
-        } catch { /* riassunto illeggibile: resta il messaggio base */ }
+        } catch { /* unreadable summary: the base message stays */ }
       }
       setStatus(`${prefix}${t('flowEditor.completedRows', { rows: run.rows_written })}${target}`, 'ok')
-      if (run.datasource_id) refreshDatasources() // subito usabile nel picker
+      if (run.datasource_id) refreshDatasources() // usable in the picker at once
       return
     }
     if (run.status === 'FAILURE') {
@@ -2176,13 +2174,13 @@ async function pollTask(id: string) {
       :project-id="projectId"
       :engine="flowEngine"
       :production-engine="flowProductionEngine"
-      :read-only="soloOsservatore"
+      :read-only="observerOnly"
       @upload="onUpload"
       @add-op="addOperation"
       @add-source="addSource"
       @run="run"
       @save="saveFlow"
-      @logout="esci"
+      @logout="leave"
       :dirty="dirty"
       @update:flow-name="flowName = $event"
       @update:project-id="projectId = $event"
@@ -2195,14 +2193,14 @@ async function pollTask(id: string) {
 
     <div class="sidebar">
       <OpSidebar
-        :operations="operations" :read-only="soloOsservatore" :scripting="scriptingAvailable" :containers="containersAvailable"
+        :operations="operations" :read-only="observerOnly" :scripting="scriptingAvailable" :containers="containersAvailable"
         :scripting-off="scriptingEditor.state.value?.disabled_reason === 'kubernetes'"
         :containers-off="registriesEditor.state.value?.disabled_reason === 'kubernetes'"
       />
     </div>
 
     <div class="canvas" @drop="onCanvasDrop" @dragover="onCanvasDragOver">
-      <div v-if="loadBlocked" class="non-aperto" role="alert">
+      <div v-if="loadBlocked" class="not-open" role="alert">
         <ShieldAlert :size="22" />
         <h2>{{ $t('flowEditor.cannotOpenTitle') }}</h2>
         <p>{{ loadBlocked }}</p>
@@ -2280,7 +2278,7 @@ async function pollTask(id: string) {
         :aria-label="$t('flowEditor.resizePanel')"
         :title="$t('flowEditor.resizeHint')"
         @mousedown="startPanelResize"
-        @keydown="tastiPannello"
+        @keydown="panelKeys"
       />
       <div v-if="aiReady" class="panel-tabs" role="tablist" :aria-label="$t('flowAssistant.panelTabs')">
         <button
@@ -2329,7 +2327,7 @@ async function pollTask(id: string) {
         :script-trials="scriptTrials"
         :flow-dirty="dirty"
         :has-data-out="selectedHasDataOut"
-        :read-only="soloOsservatore"
+        :read-only="observerOnly"
         @script-run="runScriptNode"
         @update="patchSelected"
         @delete="deleteSelected"
@@ -2370,7 +2368,7 @@ async function pollTask(id: string) {
         :aria-label="$t('flowEditor.resizePreview')"
         :title="$t('flowEditor.resizeHint')"
         @mousedown="startGridResize"
-        @keydown="tastiVista"
+        @keydown="viewKeys"
       />
       <div class="viewtabs">
         <button :class="{ active: viewTab === 'table' }" @click="viewTab = 'table'">
@@ -2385,25 +2383,25 @@ async function pollTask(id: string) {
         <ChartPanel v-else :columns="preview?.columns ?? []" :query="chartQuery" />
       </div>
     </div>
-    <Modal :open="leaveOpen" :title="$t('flowEditor.leaveTitle')" :width="440" @close="rispondiUscita(false)">
+    <Modal :open="leaveOpen" :title="$t('flowEditor.leaveTitle')" :width="440" @close="answerLeaving(false)">
       <p class="leave-body">{{ $t('flowEditor.leaveBody', { name: flowName.trim() || '—' }) }}</p>
       <template #footer>
-        <button @click="rispondiUscita(false)">{{ $t('flowEditor.leaveStay') }}</button>
-        <button class="danger" @click="rispondiUscita(true)">{{ $t('flowEditor.leaveDiscard') }}</button>
-        <button class="primary" @click="salvaEdEsci">{{ $t('flowEditor.leaveSave') }}</button>
+        <button @click="answerLeaving(false)">{{ $t('flowEditor.leaveStay') }}</button>
+        <button class="danger" @click="answerLeaving(true)">{{ $t('flowEditor.leaveDiscard') }}</button>
+        <button class="primary" @click="saveAndLeave">{{ $t('flowEditor.leaveSave') }}</button>
       </template>
     </Modal>
   </div>
 </template>
 
 <style scoped>
-.non-aperto {
+.not-open {
   position: absolute; inset: 0; z-index: 20; display: flex; flex-direction: column; align-items: center;
   justify-content: center; gap: 10px; padding: 24px; text-align: center; background: var(--bg);
 }
-.non-aperto svg { color: var(--warning); }
-.non-aperto h2 { margin: 0; font-size: 16px; }
-.non-aperto p { margin: 0; max-width: 520px; font-size: 13.5px; line-height: 1.5; color: var(--muted); }
+.not-open svg { color: var(--warning); }
+.not-open h2 { margin: 0; font-size: 16px; }
+.not-open p { margin: 0; max-width: 520px; font-size: 13.5px; line-height: 1.5; color: var(--muted); }
 /* the right panel with the assistant beside the node settings */
 .panel.tabbed { display: flex; flex-direction: column; min-height: 0; }
 .panel.tabbed > .nodepanel, .panel.tabbed > .fa { flex: 1; min-height: 0; height: auto; }
@@ -2416,6 +2414,6 @@ async function pollTask(id: string) {
 .panel-tabs button:hover { color: var(--text); box-shadow: none; }
 .panel-tabs button.on { color: var(--text); border-bottom-color: var(--accent); }
 
-/* il testo del dialogo «modifiche non salvate» */
+/* the «unsaved changes» dialog's text */
 .leave-body { margin: 0; line-height: 1.5; }
 </style>

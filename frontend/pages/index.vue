@@ -1,6 +1,6 @@
 <script setup lang="ts">
-// Home (Explore): l'albero dei progetti con il contenuto della cartella.
-// L'amministrazione vive nella sua pagina (/admin), linkata dalla navbar.
+// Home (Explore): the projects' tree with the folder's content. The administration lives
+// on its own page (/admin), linked from the navbar.
 </script>
 
 <template>

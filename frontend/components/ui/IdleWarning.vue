@@ -1,7 +1,7 @@
 <script setup lang="ts">
-// L'avviso dell'ultimo minuto prima dell'uscita per inattività (vedi
-// plugins/idle-logout.client.ts). Qualunque gesto sulla pagina lo toglie; il
-// bottone è il gesto ovvio.
+// The warning of the last minute before the sign-out for inactivity (see
+// plugins/idle-logout.client.ts). Any gesture on the page removes it; the button is the
+// obvious gesture.
 import { Clock } from 'lucide-vue-next'
 import { useIdleWarning } from '~/composables/useAuth'
 

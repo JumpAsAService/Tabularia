@@ -1,9 +1,9 @@
 <script setup lang="ts">
-// Il cancello davanti all'assistente: si dice a chiare lettere che si sta per
-// scrivere a un sistema automatico, e si entra solo dopo averlo letto.
+// The gate in front of the assistant: it says in plain words that one is about to write
+// to an automated system, and one enters only after having read it.
 //
-// Non è un dialogo di comodo: non si chiude con Esc né cliccando fuori, e non
-// ha una X. Un consenso che si può scavalcare per sbaglio non è un consenso.
+// It is not a convenience dialog: it does not close with Esc nor by clicking outside,
+// and has no X. A consent that can be skipped by mistake is not a consent.
 import { ref } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { Sparkles, Check } from 'lucide-vue-next'
@@ -14,11 +14,11 @@ const emit = defineEmits<{ (e: 'accept'): void }>()
 const { t } = useI18n()
 
 const card = ref<HTMLElement | null>(null)
-// fuoco sulla card e Tab confinato; la chiusura da tastiera NON fa niente:
-// l'unica uscita è il bottone
+// focus on the card and Tab confined; closing from the keyboard does NOTHING: the only
+// way out is the button
 useDialogA11y(card, () => props.open, () => {})
 
-const PUNTI = ['generated', 'canBeWrong', 'readsOnly', 'noPersonalData'] as const
+const POINTS = ['generated', 'canBeWrong', 'readsOnly', 'noPersonalData'] as const
 </script>
 
 <template>
@@ -35,7 +35,7 @@ const PUNTI = ['generated', 'canBeWrong', 'readsOnly', 'noPersonalData'] as cons
         <h3 id="ad-title"><Sparkles :size="16" /> {{ t('aiDisclosure.title') }}</h3>
         <p class="ad-lead">{{ t('aiDisclosure.lead') }}</p>
         <ul class="ad-points">
-          <li v-for="p in PUNTI" :key="p">{{ t(`aiDisclosure.${p}`) }}</li>
+          <li v-for="p in POINTS" :key="p">{{ t(`aiDisclosure.${p}`) }}</li>
         </ul>
         <button class="primary ad-ok" type="button" @click="emit('accept')">
           <Check :size="14" /> {{ t('aiDisclosure.accept') }}

@@ -1,28 +1,28 @@
 // https://nuxt.com/docs/api/configuration/nuxt-config
-// `process` c'e' davvero: questa configurazione gira in Node. Lo dichiariamo
-// invece di aggiungere @types/node solo per tre righe — e' una dichiarazione
-// di tipo, non cambia nulla a runtime.
+// `process` is really there: this configuration runs in Node. We declare it instead of
+// adding @types/node just for three lines — it is a type declaration, it changes
+// nothing at runtime.
 declare const process: { env: Record<string, string | undefined> }
 
 export default defineNuxtConfig({
-  // SSR attivo (default). Vue Flow è client-only: viene isolato in <ClientOnly>
-  // dentro components/FlowEditor.vue, così non viene mai renderizzato sul server.
-  // DevTools SPENTI: il loro canale RPC non e' autenticato e il container di
-  // sviluppo ha i sorgenti montati in scrittura (audit 2026-09-19, A4)
+  // SSR on (default). Vue Flow is client-only: it is isolated in <ClientOnly> inside
+  // components/FlowEditor.vue, so it is never rendered on the server. DevTools OFF: their
+  // RPC channel is not authenticated and the development container has the sources
+  // mounted writable (audit 2026-09-19, A4)
   devtools: { enabled: false },
 
   runtimeConfig: {
     public: {
-      // URL del backend FastAPI (il browser lo chiama direttamente)
+      // URL of the FastAPI backend (the browser calls it directly)
       apiBase: process.env.NUXT_PUBLIC_API_BASE || 'http://localhost:8000',
-      // bucket di default sullo storage
+      // default bucket on the storage
       bucket: process.env.NUXT_PUBLIC_BUCKET || 'data-prep',
-      // Grafana visto dal browser (iframe della tab Monitoring, solo admin)
+      // Grafana as the browser sees it (the Monitoring tab's iframe, admin only)
       grafanaUrl: process.env.NUXT_PUBLIC_GRAFANA_URL || 'http://localhost:3001',
     },
   },
 
-  // nomi componenti senza prefisso di cartella (SourceNode, DataGrid, ...)
+  // component names without folder prefix (SourceNode, DataGrid, ...)
   components: [{ path: '~/components', pathPrefix: false }],
 
   vite: {
@@ -41,10 +41,9 @@ export default defineNuxtConfig({
       ],
     },
     define: {
-      // vue-i18n compila i messaggi in JIT (un albero interpretato) invece di
-      // generare codice con `new Function`: la Content-Security-Policy di
-      // server/plugins/csp.ts non ammette eval, e senza questo le traduzioni
-      // non si compilerebbero
+      // vue-i18n compiles the messages JIT (an interpreted tree) instead of generating code
+      // with `new Function`: server/plugins/csp.ts's Content-Security-Policy does not allow
+      // eval, and without this the translations would not compile
       __INTLIFY_JIT_COMPILATION__: true,
     },
   },
@@ -62,8 +61,8 @@ export default defineNuxtConfig({
     head: {
       title: 'Tabularia',
       meta: [{ name: 'viewport', content: 'width=device-width, initial-scale=1' }],
-      // anti-flash: applica il tema salvato PRIMA del primo paint (default scuro,
-      // già lo stile base; solo "light" va anticipato per non lampeggiare)
+      // anti-flash: applies the saved theme BEFORE the first paint (dark by default, the base
+      // style already; only "light" must be anticipated so as not to flash)
       script: [
         {
           innerHTML:

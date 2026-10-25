@@ -1,5 +1,5 @@
-// Banner di avvertimento dell'Explore. Li legge chiunque sia autenticato, li
-// scrive solo un amministratore (il gateway rifiuta comunque le scritture altrui).
+// The Explore's warning banners. Anyone authenticated reads them, only an administrator
+// writes them (the gateway refuses the others' writes anyway).
 
 export type BannerLevel = 'info' | 'warning' | 'danger'
 

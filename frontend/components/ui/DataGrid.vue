@@ -5,8 +5,8 @@ import type { PreviewResult } from '~/composables/useApi'
 // note: something to say instead of a table that is not an error (no preview after a Script node)
 const props = defineProps<{ result: PreviewResult | null; loading?: boolean; error?: string; note?: string }>()
 
-// numeri a destra con cifre tabellari; i VALORI restano grezzi: nell'anteprima di un
-// passo si vuole vedere il dato esatto, non una sua versione formattata
+// numbers on the right with tabular digits; the VALUES stay raw: in a step's preview one
+// wants to see the exact data, not a formatted version of it
 const isNum = (dtype: string) => /Int|Float|Decimal/i.test(dtype)
 
 function fmt(v: any): string {
@@ -15,9 +15,9 @@ function fmt(v: any): string {
   return String(v)
 }
 
-// ── Skeleton dell'anteprima ──────────────────────────────────────────────
-// stesse colonne dell'ultimo risultato (clamp 3–8) così il layout non salta;
-// larghezze pseudo-casuali ma deterministiche per un look organico e stabile
+// ── The preview's skeleton ──────────────────────────────────────────────
+// the same columns as the last result (clamp 3–8) so the layout does not jump;
+// pseudo-random but deterministic widths for an organic, stable look
 const SK_WIDTHS = [64, 40, 88, 52, 72, 46, 60, 78]
 const skCols = computed(() => Math.min(8, Math.max(3, props.result?.columns.length ?? 5)))
 const skW = (r: number, c: number) => `${SK_WIDTHS[(r * 3 + c) % SK_WIDTHS.length]}px`

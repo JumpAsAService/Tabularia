@@ -1,9 +1,9 @@
-// "Questo flusso è aperto anche da …".
+// "This flow is also open by …".
 //
-// Due persone possono aprire lo stesso flusso, e l'ULTIMO che salva sovrascrive
-// l'altro in silenzio. Per scelta non si blocca nulla: si avvisa. L'editor dice
-// "sono qui" al gateway ogni pochi secondi e riceve chi altro c'è; chi chiude la
-// scheda senza salutare scade da solo lato server.
+// Two people may open the same flow, and whoever saves LAST overwrites the other
+// silently. By choice nothing is blocked: it warns. The editor tells the gateway "I am
+// here" every few seconds and gets back who else is there; whoever closes the tab
+// without saying goodbye expires by itself on the server.
 import { onBeforeUnmount, ref, watch, type Ref } from 'vue'
 import { useApiClient } from './useApiClient'
 
@@ -17,17 +17,17 @@ export interface PresenceOther {
 export function useFlowPresence(flowId: Ref<number | null>) {
   const { apiFetch } = useApiClient()
   const others = ref<PresenceOther[]>([])
-  // un id per SCHEDA: anche una seconda scheda dello stesso utente sovrascrive
+  // one id per TAB: a second tab of the same user overwrites too
   const instance = 'ed-' + (globalThis.crypto?.randomUUID?.() ?? Math.random().toString(36).slice(2) + Date.now().toString(36)).replace(/[^A-Za-z0-9]/g, '').slice(0, 16)
   let timer: ReturnType<typeof setTimeout> | null = null
   let current: number | null = null
   let every = 15
-  let stopped = false // dopo lo smontaggio nessun battito deve piu' partire
+  let stopped = false // after the unmount no heartbeat must start any more
 
   async function beat() {
     if (stopped) return
     const id = flowId.value
-    if (id == null || document.hidden) return schedule() // scheda nascosta: niente traffico, si lascia scadere
+    if (id == null || document.hidden) return schedule() // tab hidden: no traffic, it is let expire
     try {
       const res = await apiFetch<{ others: PresenceOther[]; heartbeat_seconds: number }>(`/flows/${id}/presence`, {
         method: 'POST',
@@ -36,22 +36,22 @@ export function useFlowPresence(flowId: Ref<number | null>) {
       if (flowId.value === id) others.value = res.others
       every = res.heartbeat_seconds || every
     } catch {
-      // l'avviso è una cortesia: se il gateway non risponde (o è una versione che
-      // non conosce la rotta) l'editor deve continuare a funzionare in silenzio
+      // the warning is a courtesy: if the gateway does not answer (or is a version that does
+      // not know the route) the editor must keep working silently
       others.value = []
     }
     schedule()
   }
   function schedule() {
     if (timer) clearTimeout(timer)
-    // un beat() in volo allo smontaggio risolve DOPO: senza questo rimetterebbe
-    // il timer e la presenza continuerebbe per tutta la sessione
+    // a beat() in flight at the unmount resolves AFTER: without this it would set the timer
+    // again and the presence would go on for the whole session
     if (stopped) return
     timer = setTimeout(beat, every * 1000)
   }
   function leave(id: number | null) {
     if (id == null) return
-    // keepalive: la richiesta parte anche mentre la pagina si sta chiudendo
+    // keepalive: the request goes out even while the page is closing
     apiFetch(`/flows/${id}/presence/${instance}`, { method: 'DELETE', keepalive: true }).catch(() => {})
   }
   const onVisible = () => { if (!document.hidden) beat() }

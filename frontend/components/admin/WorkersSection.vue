@@ -149,19 +149,19 @@ function podsProblem(g: WorkerGroup): string {
     const r = refusals.value[g.kind]
     return r ? scalingError(r) : ''
   }
-  const lo = asInt(minDraft(g))
+  const low = asInt(minDraft(g))
   const hi = asInt(maxDraft(g))
-  if (lo === null || hi === null) return t('workers.pods.invalid')
-  if (lo < (s.floor ?? 1)) return scalingError({ code: 'min', limit: s.floor ?? 1 })
-  if (hi < Math.max(lo, 1)) return scalingError({ code: 'order', limit: Math.max(lo, 1) })
+  if (low === null || hi === null) return t('workers.pods.invalid')
+  if (low < (s.floor ?? 1)) return scalingError({ code: 'min', limit: s.floor ?? 1 })
+  if (hi < Math.max(low, 1)) return scalingError({ code: 'order', limit: Math.max(low, 1) })
   if (s.ceiling != null && hi > s.ceiling) return scalingError({ code: 'ceiling', limit: s.ceiling })
   return ''
 }
 const scalingError = (e: ScalingError) => t(`workers.pods.errors.${e.code}`, { limit: e.limit ?? '' })
 const podsChanged = (g: WorkerGroup) => {
-  const lo = asInt(minDraft(g))
+  const low = asInt(minDraft(g))
   const hi = asInt(maxDraft(g))
-  return lo !== null && hi !== null && (lo !== g.scaling.min || hi !== g.scaling.max)
+  return low !== null && hi !== null && (low !== g.scaling.min || hi !== g.scaling.max)
 }
 
 function forgetPods(kind: WorkerKind) {
@@ -174,12 +174,12 @@ function forgetPods(kind: WorkerKind) {
 }
 
 async function savePods(g: WorkerGroup) {
-  const lo = asInt(minDraft(g))
+  const low = asInt(minDraft(g))
   const hi = asInt(maxDraft(g))
-  if (lo === null || hi === null || podsProblem(g)) return
+  if (low === null || hi === null || podsProblem(g)) return
   saving.value = `${g.kind}-pods`
   try {
-    state.value = await api.scale(g.kind, lo, hi)
+    state.value = await api.scale(g.kind, low, hi)
     forgetPods(g.kind)
     toast.success(t('workers.pods.saved'))
   } catch (e: any) {

@@ -1,8 +1,8 @@
 <script setup lang="ts">
-// Atterraggio del login SSO. Il gateway rimanda qui DOPO aver scritto il cookie
-// della sessione (HttpOnly, lo stesso del login locale): il token non passa né
-// dall'URL né dal JavaScript, qui si chiede solo «chi sono?». Un errore arriva
-// invece nel FRAMMENTO dell'URL (#error=<codice>), che si ripulisce subito.
+// The SSO login's landing. The gateway sends back here AFTER writing the session's cookie
+// (HttpOnly, the same as the local login's): the token goes neither through the URL nor
+// through JavaScript, here only «who am I?» is asked. An error arrives instead in the
+// URL's FRAGMENT (#error=<code>), which is cleaned at once.
 import { ref, onMounted } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { KeyRound } from 'lucide-vue-next'
@@ -13,7 +13,7 @@ const error = ref('')
 
 onMounted(async () => {
   const code = new URLSearchParams(window.location.hash.replace(/^#/, '')).get('error')
-  // via il frammento dalla cronologia prima di qualsiasi altra cosa
+  // away with the fragment from the history before anything else
   history.replaceState(null, '', window.location.pathname)
 
   if (code) {

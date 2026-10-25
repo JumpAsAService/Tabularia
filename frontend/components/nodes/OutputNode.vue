@@ -1,7 +1,6 @@
 <script setup lang="ts">
-// Nodo Output (terminale): dove finisce il risultato della
-// catena — datasource del catalogo, tabella di database, file/dataset su S3,
-// allegato email o file su un server SFTP.
+// Output node (terminal): where the chain's result ends up — a catalog datasource, a
+// database table, a file/dataset on S3, an email attachment or a file on an SFTP server.
 import { computed, inject } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { Handle, Position } from '@vue-flow/core'
@@ -64,9 +63,9 @@ const summary = computed(() => {
 
 <template>
   <div class="node node-output">
-    <!-- input DATI: la catena di trasformazione (a sinistra, in alto) -->
+    <!-- DATA input: the transformation chain (on the left, at the top) -->
     <Handle id="left" type="target" :position="Position.Left" class="h-left-top" />
-    <!-- input di SEQUENZA: ordine di orchestrazione (a sinistra, sotto) -->
+    <!-- SEQUENCE input: orchestration order (on the left, below) -->
     <Handle id="seq-in" type="target" :position="Position.Left" class="handle-seq h-left-bottom" />
     <div class="node-title">
       <component :is="icon" :size="13" class="node-icon" />
@@ -79,7 +78,7 @@ const summary = computed(() => {
       <span>{{ stats.cols }}</span>
       <span v-if="stats.noCache" class="nocache" :title="stats.noCache" role="img" :aria-label="stats.noCache"><RefreshCw :size="11" /></span>
     </div>
-    <!-- uscita di SEQUENZA verso il prossimo nodo di controllo/output -->
+    <!-- SEQUENCE output towards the next control/output node -->
     <Handle id="seq-out" type="source" :position="Position.Right" class="handle-seq" />
   </div>
 </template>

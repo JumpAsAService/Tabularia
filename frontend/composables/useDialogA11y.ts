@@ -1,14 +1,13 @@
-// Accessibilità dei dialoghi modali, in un punto solo.
+// Accessibility of the modal dialogs, in one place.
 //
-// I quattro dialoghi (connessione, run, datasource DB, schedulazione) sono
-// strutturalmente identici e avevano tutti lo stesso problema: `@keydown.esc`
-// era agganciato a un <div> senza tabindex, e un div non focalizzabile non
-// riceve eventi da tastiera — quindi Esc non chiudeva nulla, a meno che il
-// fuoco fosse già dentro un campo del dialogo.
+// The four dialogs (connection, run, DB datasource, scheduling) are structurally identical
+// and all had the same problem: `@keydown.esc` was hooked on a <div> without tabindex,
+// and a non-focusable div receives no keyboard events — so Esc closed nothing, unless the
+// focus was already inside a field of the dialog.
 //
-// Qui: fuoco iniziale sulla card (così lo screen reader annuncia il titolo),
-// Esc catturato a livello di documento, Tab confinato dentro il dialogo, e
-// fuoco restituito a chi lo ha aperto alla chiusura.
+// Here: initial focus on the card (so the screen reader announces the title), Esc caught
+// at document level, Tab confined inside the dialog, and the focus given back to whoever
+// opened it at closing.
 import { nextTick, onBeforeUnmount, watch, type Ref } from 'vue'
 
 const FOCUSABILI = [
@@ -27,81 +26,81 @@ const openDialogs = new Set<{ card: Ref<HTMLElement | null>; returnTo: () => HTM
 
 export function useDialogA11y(
   card: Ref<HTMLElement | null>,
-  aperto: () => boolean,
-  chiudi: () => void,
+  isOpen: () => boolean,
+  close: () => void,
 ) {
-  // chi aveva il fuoco prima dell'apertura: ci torna alla chiusura
-  let origine: HTMLElement | null = null
+  // whoever had the focus before the opening: it goes back there at closing
+  let origin: HTMLElement | null = null
   // where the dialog that held `origine` sends its own focus back, if `origine` is gone by then
   let fallback: HTMLElement | null = null
-  const self = { card, returnTo: () => (origine?.isConnected ? origine : fallback) }
+  const self = { card, returnTo: () => (origin?.isConnected ? origin : fallback) }
 
-  function elencoFocusabili(): HTMLElement[] {
+  function focusables(): HTMLElement[] {
     if (!card.value) return []
-    // offsetParent null = elemento nascosto (v-if/v-show a monte)
+    // offsetParent null = hidden element (v-if/v-show upstream)
     return Array.from(card.value.querySelectorAll<HTMLElement>(FOCUSABILI)).filter(
       (el) => el.offsetParent !== null,
     )
   }
 
-  function suTasto(e: KeyboardEvent) {
-    if (!aperto()) return
+  function onKey(e: KeyboardEvent) {
+    if (!isOpen()) return
     // a code editor uses Esc (its suggestions, its find bar) and Tab (indenting) itself
     if ((e.target as HTMLElement | null)?.closest?.('[data-own-escape]')) return
 
     if (e.key === 'Escape') {
-      // un Select (o altro elemento a comparsa) aperto dentro il dialogo si chiude
-      // da sé: chiudere qui tutto il dialogo buttava via quello che si era scritto
+      // a Select (or another pop-up element) open inside the dialog closes by itself: closing
+      // the whole dialog here threw away what had been written
       if ((e.target as HTMLElement | null)?.closest?.('[aria-haspopup][aria-expanded="true"], [role="combobox"][aria-expanded="true"]')) return
       e.preventDefault()
       e.stopPropagation()
-      chiudi()
+      close()
       return
     }
 
     if (e.key !== 'Tab') return
 
-    const els = elencoFocusabili()
+    const els = focusables()
     if (!els.length) {
-      // niente da mettere a fuoco: il Tab non deve uscire dal dialogo
+      // nothing to focus: Tab must not leave the dialog
       e.preventDefault()
       card.value?.focus()
       return
     }
 
-    const primo = els[0]
-    const ultimo = els[els.length - 1]
-    const attivo = document.activeElement as HTMLElement | null
+    const first = els[0]
+    const last = els[els.length - 1]
+    const active = document.activeElement as HTMLElement | null
 
-    // il ciclo si chiude su se stesso: dal fondo si torna in cima e viceversa
-    if (e.shiftKey && (attivo === primo || attivo === card.value)) {
+    // the cycle closes on itself: from the bottom back to the top and vice versa
+    if (e.shiftKey && (active === first || active === card.value)) {
       e.preventDefault()
-      ultimo.focus()
-    } else if (!e.shiftKey && attivo === ultimo) {
+      last.focus()
+    } else if (!e.shiftKey && active === last) {
       e.preventDefault()
-      primo.focus()
+      first.focus()
     }
   }
 
-  watch(aperto, async (ora) => {
+  watch(isOpen, async (ora) => {
     if (typeof document === 'undefined') return
 
     if (ora) {
-      origine = document.activeElement as HTMLElement | null
-      const host = Array.from(openDialogs).find((d) => !!origine && !!d.card.value?.contains(origine))
+      origin = document.activeElement as HTMLElement | null
+      const host = Array.from(openDialogs).find((d) => !!origin && !!d.card.value?.contains(origin))
       fallback = host?.returnTo() ?? null
       openDialogs.add(self)
-      // in cattura: il dialogo vede Esc prima di qualunque handler sottostante
-      document.addEventListener('keydown', suTasto, true)
+      // in capture: the dialog sees Esc before any handler underneath
+      document.addEventListener('keydown', onKey, true)
       await nextTick()
-      // sulla card, non sul primo campo: l'apertura annuncia il dialogo
-      // invece di scaraventare l'utente dentro un input
+      // on the card, not on the first field: the opening announces the dialog instead of
+      // throwing the user into an input
       card.value?.focus()
     } else {
       openDialogs.delete(self)
-      document.removeEventListener('keydown', suTasto, true)
+      document.removeEventListener('keydown', onKey, true)
       self.returnTo()?.focus?.()
-      origine = null
+      origin = null
       fallback = null
     }
   }, { immediate: true }) // a dialog mounted already open (v-if with open=true) gets its keys and focus too
@@ -109,6 +108,6 @@ export function useDialogA11y(
   onBeforeUnmount(() => {
     if (typeof document === 'undefined') return
     openDialogs.delete(self)
-    document.removeEventListener('keydown', suTasto, true)
+    document.removeEventListener('keydown', onKey, true)
   })
 }

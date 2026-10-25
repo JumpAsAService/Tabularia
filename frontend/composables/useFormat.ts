@@ -1,8 +1,8 @@
-// Numeri e date nella lingua dell'INTERFACCIA (vue-i18n), non in quella del
-// browser né in un it-IT fisso: prima c'erano tre regimi, e un'interfaccia in
-// inglese mostrava «42.007.616» e «11/10/26, 10:27» (che un americano legge come
-// 10 novembre). I formatter costano: si costruiscono una volta per lingua e
-// opzioni, non a ogni cella (il Viewer ne creava uno per cella a ogni render).
+// Numbers and dates in the INTERFACE's language (vue-i18n), not in the browser's nor in a
+// fixed it-IT: before there were three regimes, and an English interface showed
+// «42.007.616» and «11/10/26, 10:27» (which an American reads as 10 November). The
+// formatters cost: they are built once per language and options, not at every cell (the
+// Viewer created one per cell at every render).
 import { useI18n } from 'vue-i18n'
 
 const numberCache = new Map<string, Intl.NumberFormat>()
@@ -38,19 +38,21 @@ function toDate(v: string | number | Date): Date | null {
 export function useFormat() {
   const { locale } = useI18n()
 
-  /** Un conteggio: «42,007,616» in inglese, «42.007.616» in italiano. */
+  /** A count: «42,007,616» in English, «42.007.616» in Italian. */
   function count(n: number | null | undefined): string {
     return n == null ? '—' : numberFormat(locale.value).format(n)
   }
 
-  /** Un numero con al più `maxFractionDigits` decimali. */
+  /** A number with at most `maxFractionDigits` decimals. */
   function number(n: number | null | undefined, maxFractionDigits = 2): string {
     return n == null ? '—' : numberFormat(locale.value, { maximumFractionDigits: maxFractionDigits }).format(n)
   }
 
-  /** Data e ora brevi ma mai ambigue: il mese in lettere, l'anno solo se non è
-   *  quello in corso («Oct 11, 10:27 AM», «11 ott, 10:27», «Oct 11, 2025, …»).
-   *  `seconds` per i registri dove l'ordine al secondo conta (audit). */
+  /**
+   * Short but never ambiguous date and time: the month in letters, the year only when it is
+   * not the current one («Oct 11, 10:27 AM», «11 ott, 10:27», «Oct 11, 2025, …»).
+   * `seconds` for the logs where the order to the second counts (audit).
+   */
   function dateTime(v: string | number | Date | null | undefined, opts: { seconds?: boolean } = {}): string {
     const d = v == null ? null : toDate(v)
     if (!d) return v == null ? '—' : String(v)
@@ -60,7 +62,7 @@ export function useFormat() {
     return dateFormat(locale.value, o).format(d)
   }
 
-  /** Solo la data, con lo stesso criterio. */
+  /** The date only, with the same criterion. */
   function date(v: string | number | Date | null | undefined, opts: Intl.DateTimeFormatOptions = {}): string {
     const d = v == null ? null : toDate(v)
     if (!d) return v == null ? '—' : String(v)
@@ -69,8 +71,10 @@ export function useFormat() {
     return dateFormat(locale.value, o).format(d)
   }
 
-  /** Quanto tempo fa, nella lingua dell'interfaccia: «now», «5 minutes ago»,
-   *  «3 ore fa», «yesterday». Oltre la settimana, la data. */
+  /**
+   * How long ago, in the interface's language: «now», «5 minutes ago», «3 ore fa»,
+   * «yesterday». Beyond a week, the date.
+   */
   function ago(v: string | number | Date | null | undefined): string {
     const d = v == null ? null : toDate(v)
     if (!d) return '—'
@@ -83,10 +87,12 @@ export function useFormat() {
     return dateTime(d)
   }
 
-  /** Il formatter di una colonna numerica di una griglia dati: stessi decimali su
-   *  tutta la colonna (il massimo visto, fino a 4) e interi SENZA separatore delle
-   *  migliaia — un codice o un periodo AAAAMM raggruppato («202.607») si legge
-   *  come una quantità. I decimali tengono il separatore della lingua. */
+  /**
+   * The formatter of a data grid's numeric column: the same decimals on the whole column
+   * (the most seen, up to 4) and integers WITHOUT a thousands separator — a code or a
+   * YYYYMM period grouped («202.607») reads as a quantity. The decimals keep the
+   * language's separator.
+   */
   function columnFormatter(values: unknown[]): (v: unknown) => string {
     let decimals = 0
     let integersOnly = true

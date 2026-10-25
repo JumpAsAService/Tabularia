@@ -1,11 +1,11 @@
-// Viste salvate: una configurazione del Viewer (datasource + motore + filtri +
-// campi calcolati + pivot) messa in una cartella, accanto a flussi e datasource.
+// Saved views: a Viewer configuration (datasource + engine + filters + computed fields +
+// pivot) put in a folder, next to flows and datasources.
 //
-// La vista SEGUE il dato: contiene un riferimento alla datasource e nessuna
-// riga, quindi riaprirla rilegge lo snapshot corrente. È condivisa, non
-// personale: la vede chiunque abbia VIEW sulla cartella, la modifica chi ha EDIT.
+// The view FOLLOWS the data: it holds a reference to the datasource and no rows, so
+// reopening it reads the current snapshot again. It is shared, not personal: anyone with
+// VIEW on the folder sees it, whoever has EDIT changes it.
 //
-// `spec` è JSON opaco per il gateway — la forma la possiede il Viewer, qui sotto.
+// `spec` is opaque JSON for the gateway — the Viewer owns its shape, below.
 
 export interface SavedViewSpec {
   engine: string

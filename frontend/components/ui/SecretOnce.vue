@@ -1,21 +1,21 @@
 <script setup lang="ts">
-// Un segreto che si vede UNA volta (un token API, il segreto di un webhook): in
-// chiaro, con il bottone per copiarlo e l'avviso che dopo non si rivedrà. Chi lo
-// usa lo toglie con l'evento `done` quando la persona ha finito.
+// A secret seen ONCE (an API token, a webhook's secret): in clear, with the button to copy
+// it and the warning that it will not be seen again. Whoever uses it removes it with the
+// `done` event when the person has finished.
 import { ref } from 'vue'
 import { Check, Copy, KeyRound } from 'lucide-vue-next'
 
 const props = defineProps<{ value: string; label: string }>()
 const emit = defineEmits<{ (e: 'done'): void }>()
-const copiato = ref(false)
+const copied = ref(false)
 
-async function copia() {
+async function copy() {
   try {
     await navigator.clipboard.writeText(props.value)
-    copiato.value = true
-    setTimeout(() => (copiato.value = false), 2000)
+    copied.value = true
+    setTimeout(() => (copied.value = false), 2000)
   } catch {
-    // appunti non disponibili (http, permessi): resta il testo da selezionare a mano
+    // clipboard not available (http, permissions): the text stays to select by hand
   }
 }
 </script>
@@ -25,9 +25,9 @@ async function copia() {
     <p class="secret-head"><KeyRound :size="14" /> {{ label }}</p>
     <div class="secret-row">
       <code class="secret-value">{{ value }}</code>
-      <button type="button" class="mini" :aria-label="$t('integrations.copy')" @click="copia">
-        <Check v-if="copiato" :size="13" /><Copy v-else :size="13" />
-        {{ copiato ? $t('integrations.copied') : $t('integrations.copy') }}
+      <button type="button" class="mini" :aria-label="$t('integrations.copy')" @click="copy">
+        <Check v-if="copied" :size="13" /><Copy v-else :size="13" />
+        {{ copied ? $t('integrations.copied') : $t('integrations.copy') }}
       </button>
     </div>
     <p class="secret-note">{{ $t('integrations.secretOnce') }}</p>

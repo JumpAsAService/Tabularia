@@ -1,8 +1,8 @@
 <script setup lang="ts">
-// Assistente AI: una conversazione DENTRO il catalogo dell'utente. A sinistra le
-// datasource che puo' leggere (le stesse che l'assistente puo' interrogare), al
-// centro domande, passi dell'assistente e la tabella di ogni query: i numeri
-// della risposta si controllano li' sotto.
+// AI assistant: a conversation INSIDE the user's catalog. On the left the datasources
+// they can read (the same the assistant can query), in the middle questions, the
+// assistant's steps and each query's table: the answer's numbers are checked right
+// below.
 import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 import {
@@ -19,7 +19,7 @@ import { useToast } from '~/composables/useToast'
 import { useProjects } from '~/composables/useProjects'
 import { usePreferredEngine, type EngineOpt } from '~/composables/useEngine'
 import { useLocale } from '~/composables/useLocale'
-// import espliciti: nel container i componenti nuovi non vengono scansionati
+// explicit imports: in the container new components are not scanned
 import AppShell from '~/components/AppShell.vue'
 import DataGrid from '~/components/ui/DataGrid.vue'
 import MarkdownLite from '~/components/ui/MarkdownLite.vue'
@@ -34,16 +34,16 @@ function chatTitle(title: string): string {
 }
 const toast = useToast()
 const { user } = useAuth()
-// Osservatore e non amministratore: per lui la conversazione non viene salvata
-// da nessuna parte (account condiviso su un'installazione aperta). Stessa
-// condizione del gateway: `is_observer` da /auth/me è vero anche per gli admin.
+// Observer and not administrator: for them the conversation is saved nowhere (a shared
+// account on an open installation). The same condition as the gateway: `is_observer`
+// from /auth/me is true for admins too.
 const senzaStorico = computed(() => !!user.value?.is_observer && !user.value?.is_superuser)
 const ai = useAi()
 const dsApi = useDatasources()
 const projectsApi = useProjects()
 const api = useApi()
-// il motore delle query si SCEGLIE, tra quelli disponibili e consentiti
-// dall'amministratore: il preferito dell'utente e' solo il valore di partenza
+// the queries' engine is CHOSEN, among those available and allowed by the
+// administrator: the user's favourite is only the starting value
 const { defaultEngine } = usePreferredEngine()
 const engines = ref<EngineOpt[]>([])
 const engine = ref('')
@@ -54,9 +54,9 @@ type Turn =
   | { role: 'user'; text: string }
   | { role: 'assistant'; text: string; steps: Step[]; streaming: boolean; error?: string; open: Record<string, boolean>; usage?: AiUsage; phase?: Phase; phaseOn?: string; seq?: number; model?: string }
 
-// Cosa sta facendo l'assistente in questo istante. NON e' decorazione: ogni
-// fase corrisponde a un evento vero dello stream, cosi' l'indicatore dice il
-// vero come il resto della pagina («ogni passo e' ispezionabile»).
+// What the assistant is doing at this instant. It is NOT decoration: every phase matches
+// a real event of the stream, so the indicator tells the truth as the rest of the page
+// does («every step can be inspected»).
 type Phase = 'thinking' | 'catalog' | 'fields' | 'query' | 'writing'
 const PHASE_OF_TOOL: Record<string, Phase> = {
   list_datasources: 'catalog',
@@ -72,7 +72,7 @@ const folders = ref<Record<number, string>>({})
 const filter = ref('')
 const focus = ref<number[]>([])
 const turns = ref<Turn[]>([])
-// la storia sta sul SERVER: qui basta l'id della conversazione aperta
+// the history is on the SERVER: here the open conversation's id is enough
 const chatId = ref<number | null>(null)
 const chats = ref<AiChatSummary[]>([])
 const chatsOpen = ref(false)
@@ -86,8 +86,8 @@ const input = ref<HTMLTextAreaElement | null>(null)
 const chatSearch = ref<HTMLInputElement | null>(null)
 const nf = new Intl.NumberFormat()
 
-// la ricerca guarda il titolo: e' l'unica cosa che l'elenco mostra, e cercare
-// dentro conversazioni non caricate direbbe «trovato» senza saper mostrare dove
+// the search looks at the title: it is the only thing the list shows, and searching
+// inside conversations not loaded would say «found» without being able to show where
 const chatsFiltered = computed(() => {
   const q = chatFilter.value.trim().toLowerCase()
   if (!q) return chats.value
@@ -98,17 +98,17 @@ const chatsFiltered = computed(() => {
   })
 })
 
-// Consenso informato: vale per CHIUNQUE, osservatori compresi — anzi per loro
-// soprattutto, perché su un account condiviso ogni visitatore è una persona
-// diversa e va informata di suo (per questo si ricorda nel browser e non
-// sull'utente). Entra dentro `ready`, così tutto ciò che già lo rispetta —
-// casella, invio, esempi, scelta di modello e motore — resta bloccato da solo.
-const { accettata, leggi: leggiConsenso, accetta: accettaConsenso } = useAiDisclosure()
+// Informed consent: it holds for ANYONE, observers included — for them above all,
+// because on a shared account every visitor is a different person and must be informed
+// on their own (that is why it is remembered in the browser and not on the user). It
+// goes into `ready`, so everything that respects it already — box, send, examples,
+// choice of model and engine — stays blocked by itself.
+const { accepted, read: readConsent, accept: acceptConsent } = useAiDisclosure()
 const ready = computed(() =>
-  !!status.value?.enabled && !!status.value.models.length && accettata.value === true)
-// bloccati dal consenso, non da una mancanza: serve a non dare messaggi falsi
-const attesaConsenso = computed(() =>
-  accettata.value !== true && !!status.value?.enabled && !!status.value.models.length)
+  !!status.value?.enabled && !!status.value.models.length && accepted.value === true)
+// blocked by the consent, not by something missing: it avoids false messages
+const awaitingConsent = computed(() =>
+  accepted.value !== true && !!status.value?.enabled && !!status.value.models.length)
 const modelOptions = computed(() => (status.value?.models ?? []).map((m) => ({ value: m, label: m })))
 const engineOptions = computed(() => engines.value.filter((e) => e.available).map((e) => ({ value: e.id, label: e.label || e.id })))
 const shown = computed(() => {
@@ -116,13 +116,13 @@ const shown = computed(() => {
   const list = datasources.value.filter((d) => d.key)
   return q ? list.filter((d) => d.name.toLowerCase().includes(q) || (d.description || '').toLowerCase().includes(q)) : list
 })
-// il conteggio lo fa il SERVER: la regola di «documentata» vive in un posto solo
+// the SERVER makes the count: the «documented» rule lives in one place only
 const described = (d: DatasourceInfo) => d.described_columns
 const dsName = (id: any) => datasources.value.find((d) => d.id === Number(id))?.name ?? `#${id}`
 const examples = computed(() => [t('chat.example1'), t('chat.example2'), t('chat.example3')])
 
 onMounted(async () => {
-  leggiConsenso()
+  readConsent()
   try {
     status.value = await ai.status()
     model.value = status.value.default_model ?? status.value.models[0] ?? ''
@@ -130,21 +130,21 @@ onMounted(async () => {
     statusError.value = errMessage(e)
   }
   try {
-    // catalogo FRESCO (non quello in cache della sessione): la politica dei motori puo' essere cambiata
+    // a FRESH catalog (not the session's cached one): the engines' policy may have changed
     engines.value = await api.engines()
     engine.value = defaultEngine(engines.value)
-  } catch { /* senza catalogo decide il backend */ }
+  } catch { /* without a catalog the backend decides */ }
   try {
     const [list, projects] = await Promise.all([dsApi.list(), projectsApi.list()])
     datasources.value = list.sort((a, b) => a.name.localeCompare(b.name))
     folders.value = Object.fromEntries(projects.map((p: any) => [p.id, p.name]))
-  } catch { /* il catalogo e' un aiuto: la chat funziona anche senza */ }
+  } catch { /* the catalog is a help: the chat works without it too */ }
   await refreshChats()
   input.value?.focus()
 })
 onBeforeUnmount(() => abort?.abort())
 
-/** L'etichetta della fase: una frase vera, non un rumore di fondo. */
+/** The phase's label: a true sentence, not background noise. */
 function activityLabel(turn: Extract<Turn, { role: 'assistant' }>): string {
   const on = turn.phaseOn
   switch (turn.phase) {
@@ -191,12 +191,12 @@ async function send(text?: string) {
       {
         onText: (delta) => { live.text += delta; live.phase = 'writing'; scrollDown() },
         onToolCall: (call: AiToolCall) => {
-          // una frase, poi uno strumento, poi altro testo: il seguito e' un nuovo paragrafo
+          // a sentence, then a tool, then more text: what follows is a new paragraph
           if (live.text && !live.text.endsWith('\n\n')) live.text += '\n\n'
           live.steps.push({ id: call.id, name: call.name, args: call.args ?? {}, state: 'running' })
           live.phase = PHASE_OF_TOOL[call.name] ?? 'thinking'
-          const su = dsName((call.args as any)?.datasource_id)
-          live.phaseOn = su.startsWith('#') ? undefined : su
+          const parentId = dsName((call.args as any)?.datasource_id)
+          live.phaseOn = parentId.startsWith('#') ? undefined : parentId
           scrollDown()
         },
         onToolResult: (res: AiToolResult) => {
@@ -207,7 +207,7 @@ async function send(text?: string) {
           step.count = res.count
           step.table = res.table
           step.chart = res.chart
-          live.phase = 'thinking'  // strumento finito: torna a ragionare
+          live.phase = 'thinking'  // tool finished: back to reasoning
           scrollDown()
         },
         onDone: (done) => {
@@ -245,19 +245,19 @@ function reset() {
 function toggleChats() {
   chatsOpen.value = !chatsOpen.value
   if (!chatsOpen.value) return
-  // il titolo di una conversazione appena nata lo scrive il modello subito dopo
-  // la risposta: rileggendo qui l'elenco e' sempre quello aggiornato
+  // the title of a conversation just born is written by the model right after the answer:
+  // reading the list again here it is always the updated one
   void refreshChats()
   nextTick(() => chatSearch.value?.focus())
 }
 
-// ── conversazioni salvate ───────────────────────────────────────────────────
+// ── saved conversations ───────────────────────────────────────────────────
 async function refreshChats() {
-  if (senzaStorico.value) return   // non c'è storico da chiedere
-  try { chats.value = await ai.chats() } catch { /* l'elenco non e' essenziale */ }
+  if (senzaStorico.value) return   // there is no history to ask for
+  try { chats.value = await ai.chats() } catch { /* the list is not essential */ }
 }
 
-/** Riapre una conversazione: le domande gia' fatte non si ripagano. */
+/** Reopens a conversation: the questions asked already are not paid again. */
 async function openChat(id: number) {
   if (busy.value) return
   try {
@@ -296,18 +296,20 @@ async function removeChat(id: number) {
 
 const grabbing = ref('')
 
-/** Scarica il risultato COMPLETO di un passo: la chat ne mostra al massimo 200
- *  righe, il file le contiene tutte perché il server riesegue la query salvata. */
+/**
+ * Downloads a step's COMPLETE result: the chat shows at most 200 rows of it, the file
+ * holds them all because the server runs the saved query again.
+ */
 async function grab(turn: Extract<Turn, { role: 'assistant' }>, step: Step, fmt: 'csv' | 'xlsx') {
   if (!chatId.value || turn.seq === undefined || grabbing.value) return
   grabbing.value = `${step.id}:${fmt}`
   try {
     const blob = await ai.exportStep(chatId.value, turn.seq, step.id, fmt)
-    const nome = `${step.table?.datasource || 'result'}.${fmt}`.toLowerCase().replace(/[^a-z0-9._-]+/g, '_')
+    const fileName = `${step.table?.datasource || 'result'}.${fmt}`.toLowerCase().replace(/[^a-z0-9._-]+/g, '_')
     const url = URL.createObjectURL(blob)
     const a = document.createElement('a')
     a.href = url
-    a.download = nome
+    a.download = fileName
     a.click()
     URL.revokeObjectURL(url)
   } catch (e: any) {
@@ -317,31 +319,33 @@ async function grab(turn: Extract<Turn, { role: 'assistant' }>, step: Step, fmt:
   }
 }
 
-/** La conversazione come Markdown: domande, risposte, e per ogni passo la query
- *  che l'ha prodotto. È il formato che si rilegge fra sei mesi e si incolla in
- *  un ticket, non uno screenshot. */
+/**
+ * The conversation as Markdown: questions, answers, and for every step the query that
+ * produced it. It is the format one reads again in six months and pastes into a ticket,
+ * not a screenshot.
+ */
 function downloadChat() {
-  const righe: string[] = [
+  const rows: string[] = [
     `# ${chatTitle(chats.value.find((c) => c.id === chatId.value)?.title ?? '')}`, '',
     `> ${t('aiCompliance.exportNotice')}`, '',
   ]
   for (const turn of turns.value) {
-    if (turn.role === 'user') { righe.push(`## ${t('aiCompliance.youLabel')}: ${turn.text}`, ''); continue }
-    righe.push(`**${t('aiCompliance.assistantLabel')}${turn.model ? ` · ${turn.model}` : ''}**`, '')
+    if (turn.role === 'user') { rows.push(`## ${t('aiCompliance.youLabel')}: ${turn.text}`, ''); continue }
+    rows.push(`**${t('aiCompliance.assistantLabel')}${turn.model ? ` · ${turn.model}` : ''}**`, '')
     for (const s of turn.steps) {
       const sql = (s.args as any)?.sql
-      if (sql) righe.push('```sql', String(sql), '```', '')
+      if (sql) rows.push('```sql', String(sql), '```', '')
       if (s.table) {
         const cols = s.table.columns.map((c) => c.name)
-        righe.push(`| ${cols.join(' | ')} |`, `|${cols.map(() => '---').join('|')}|`)
-        for (const r of s.table.rows) righe.push(`| ${cols.map((c) => String((r as any)[c] ?? '')).join(' | ')} |`)
-        righe.push('')
+        rows.push(`| ${cols.join(' | ')} |`, `|${cols.map(() => '---').join('|')}|`)
+        for (const r of s.table.rows) rows.push(`| ${cols.map((c) => String((r as any)[c] ?? '')).join(' | ')} |`)
+        rows.push('')
       }
     }
-    if (turn.text) righe.push(turn.text, '')
-    if (turn.usage) righe.push(`*${money(turn.usage.cost_usd)} · ${t('chat.tokens', { i: nf.format(turn.usage.input_tokens), o: nf.format(turn.usage.output_tokens) })}*`, '')
+    if (turn.text) rows.push(turn.text, '')
+    if (turn.usage) rows.push(`*${money(turn.usage.cost_usd)} · ${t('chat.tokens', { i: nf.format(turn.usage.input_tokens), o: nf.format(turn.usage.output_tokens) })}*`, '')
   }
-  const blob = new Blob([righe.join('\n')], { type: 'text/markdown;charset=utf-8' })
+  const blob = new Blob([rows.join('\n')], { type: 'text/markdown;charset=utf-8' })
   const url = URL.createObjectURL(blob)
   const a = document.createElement('a')
   a.href = url
@@ -350,18 +354,20 @@ function downloadChat() {
   URL.revokeObjectURL(url)
 }
 
-/** Il costo come lo riporta il modello, scritto nella lingua dell'utente.
- *  `null` = non determinabile, che non e' zero: meglio un trattino che un falso
- *  «gratis». Sotto il microdollaro si dice «meno di», perche' `2e-7` in
- *  un'interfaccia non e' un numero, e' un'uscita del formattatore. */
+/**
+ * The cost as the model reports it, written in the user's language.
+ * `null` = cannot be worked out, which is not zero: better a dash than a false «free».
+ * Under a microdollar it says «less than», because `2e-7` in an interface is not a
+ * number, it is the formatter's output.
+ */
 const MIN_COST = 0.000001
 function money(v: string | null | undefined): string {
   if (v == null) return '—'
   const n = Number(v)
   if (!isFinite(n)) return '—'
-  const fmtUsd = (x: number, cifre: number) =>
+  const fmtUsd = (x: number, digits: number) =>
     new Intl.NumberFormat(locale.value, {
-      style: 'currency', currency: 'USD', minimumFractionDigits: 2, maximumFractionDigits: cifre,
+      style: 'currency', currency: 'USD', minimumFractionDigits: 2, maximumFractionDigits: digits,
     }).format(x)
   if (n === 0) return fmtUsd(0, 2)
   if (n < MIN_COST) return t('chat.costUnder', { v: fmtUsd(MIN_COST, 6) })
@@ -370,7 +376,7 @@ function money(v: string | null | undefined): string {
 function onKey(e: KeyboardEvent) {
   if (e.key === 'Enter' && !e.shiftKey && !e.isComposing) { e.preventDefault(); send() }
 }
-// il campo cresce col testo, fino a un tetto
+// the field grows with the text, up to a cap
 watch(draft, async () => {
   await nextTick()
   const el = input.value
@@ -382,10 +388,10 @@ watch(draft, async () => {
 
 <template>
   <AppShell fluid>
-    <!-- il cancello: la chat non si usa finché non si è letto con chi si parla -->
-    <AiDisclosure :open="accettata === false" @accept="accettaConsenso" />
+    <!-- the gate: the chat is not used until one has read who one is talking to -->
+    <AiDisclosure :open="accepted === false" @accept="acceptConsent" />
     <div class="chat">
-      <!-- ── catalogo: cio' che l'assistente puo' leggere ─────────────────── -->
+      <!-- ── catalog: what the assistant can read ───────────────── -->
       <details class="rail" open>
         <summary class="rail-head">
           <Database :size="14" />
@@ -407,8 +413,8 @@ watch(draft, async () => {
               <span class="ds-meta">
                 <span>{{ folders[d.project_id] ?? '' }}</span>
                 <span v-if="d.rows != null" class="num">{{ $t('chat.dsRows', { n: nf.format(d.rows) }) }}</span>
-                <!-- documentata per intero: la stessa cosa che il catalogo
-                     marca «pronta per l'AI», detta qui in forma compatta -->
+                <!-- documented in full: the same thing the catalog marks «ready for the AI», said here in
+                     compact form -->
                 <span v-if="d.ai_ready" class="ds-ready" :title="$t('datasources.aiReadyHint')">
                   <Sparkles :size="11" />
                 </span>
@@ -422,7 +428,7 @@ watch(draft, async () => {
         </ul>
       </details>
 
-      <!-- ── conversazione ───────────────────────────────────────────────── -->
+      <!-- ── conversation ─────────────────────────────────────────────── -->
       <section class="talk">
         <header class="talk-head">
           <h1><Sparkles :size="18" /> {{ $t('chat.pageTitle') }}</h1>
@@ -481,7 +487,7 @@ watch(draft, async () => {
         </div>
 
         <div ref="scroller" class="stream" aria-live="polite">
-          <!-- stati in cui non si puo' chattare: spiegati, con il rimedio -->
+          <!-- states in which one cannot chat: explained, with the remedy -->
           <div v-if="statusError" class="notice err"><CircleAlert :size="15" /> {{ statusError }}</div>
           <div v-else-if="status && !status.enabled" class="notice">
             <ShieldAlert :size="15" />
@@ -531,8 +537,8 @@ watch(draft, async () => {
                     </div>
                     <DataGrid :result="s.table" />
                     <MiniChart v-if="s.chart" :spec="s.chart" :rows="s.table.rows" :name="s.table.datasource" />
-                    <!-- il file contiene il risultato INTERO, non le righe mostrate:
-                         il server riesegue la query salvata -->
+                    <!-- the file holds the WHOLE result, not the rows shown: the server runs the saved query
+                         again -->
                     <p v-if="turn.seq !== undefined && chatId" class="grabs">
                       <button type="button" class="mini" :disabled="grabbing !== ''" @click="grab(turn, s, 'csv')">
                         <Download :size="12" /> CSV
@@ -553,8 +559,8 @@ watch(draft, async () => {
                 </Transition>
               </p>
               <p v-if="turn.error" class="notice err inline"><CircleAlert :size="14" /> {{ turn.error }}</p>
-              <!-- quanto e' costato QUESTO turno: il numero viene dal modello,
-                   non da un listino scritto da noi -->
+              <!-- what THIS turn cost: the number comes from the model, not from a price list written by
+                   us -->
               <p v-if="turn.usage && !turn.streaming" class="cost">
                 <span :title="$t('chat.costHint')">{{ money(turn.usage.cost_usd) }}</span>
                 <span class="muted">· {{ $t('chat.tokens', { i: nf.format(turn.usage.input_tokens), o: nf.format(turn.usage.output_tokens) }) }}</span>
@@ -565,13 +571,13 @@ watch(draft, async () => {
 
         <form class="composer" @submit.prevent="send()">
           <div class="field">
-            <!-- in attesa del consenso l'assistente C'È: dire «non disponibile»
-                 sarebbe falso, e il motivo è già scritto nel dialogo davanti -->
+            <!-- while waiting for the consent the assistant IS there: saying «not available» would be
+                 false, and the reason is written in the dialog in front already -->
             <textarea
               ref="input"
               v-model="draft"
               rows="1"
-              :placeholder="ready || attesaConsenso ? $t('chat.placeholder') : $t('chat.placeholderOff')"
+              :placeholder="ready || awaitingConsent ? $t('chat.placeholder') : $t('chat.placeholderOff')"
               :aria-label="$t('chat.placeholder')"
               :disabled="!ready"
               @keydown="onKey"
@@ -598,7 +604,7 @@ watch(draft, async () => {
 </template>
 
 <style scoped>
-/* la pagina occupa tutta l'area sotto la barra: annulla il padding della shell (22px 24px) */
+/* the page takes the whole area under the bar: cancels the shell's padding (22px 24px) */
 .chat { display: grid; grid-template-columns: 280px minmax(0, 1fr); gap: 0; height: calc(100vh - 52px); height: calc(100dvh - 52px); margin: -22px -24px; }
 
 /* ── rail ─────────────────────────────────────────────────────────────── */
@@ -623,7 +629,7 @@ watch(draft, async () => {
 .ds-doc { display: inline-flex; align-items: center; gap: 3px; color: var(--accent-2); }
 .num { font-variant-numeric: tabular-nums; }
 
-/* ── conversazione ────────────────────────────────────────────────────── */
+/* ── conversation ──────────────────────────────────────────────────────── */
 .talk { display: flex; flex-direction: column; min-width: 0; min-height: 0; }
 .talk-head { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 14px 24px 10px; }
 .talk-head h1 { display: inline-flex; align-items: center; gap: 8px; margin: 0; font-size: 19px; font-weight: 700; }
@@ -660,7 +666,7 @@ watch(draft, async () => {
 .notice.err svg { color: var(--danger); }
 .notice.inline { margin-top: 8px; }
 
-/* ── compositore ──────────────────────────────────────────────────────── */
+/* ── composer ──────────────────────────────────────────────────────────── */
 .composer { padding: 10px 24px 14px; border-top: 1px solid var(--border-soft); background: var(--bg); }
 .composer > * { max-width: 780px; margin-inline: auto; }
 .field { display: flex; align-items: flex-end; gap: 8px; padding: 6px 6px 6px 12px; border: 1px solid var(--control-border); border-radius: 12px; background: var(--bg-soft); }
@@ -689,13 +695,13 @@ watch(draft, async () => {
   .talk-head { padding-inline: 16px; }
   .hint { margin-left: 0; }
 }
-/* sotto i 760px la shell stringe il padding a 16px 14px */
+/* under 760px the shell narrows the padding to 16px 14px */
 @media (max-width: 760px) { .chat { margin: -16px -14px; } }
 
-/* Riga di stato del turno vivo. La pulsazione e' un indicatore di caricamento,
-   della stessa famiglia dello shimmer degli scheletri: non e' un secondo momento
-   di movimento d'autore. Sotto prefers-reduced-motion resta il punto fermo, e
-   la frase — che e' l'informazione vera — cambia lo stesso. */
+/* The live turn's status line. The pulse is a loading indicator, of the same family as
+   the skeletons' shimmer: it is not a second moment of authored motion. Under
+   prefers-reduced-motion the still dot stays, and the sentence — which is the real
+   information — changes all the same. */
 .activity { display: flex; align-items: center; gap: 8px; margin: 8px 0 0; font-size: 12px; color: var(--muted); min-height: 18px; }
 .beat {
   width: 7px; height: 7px; border-radius: 999px; background: var(--accent);
@@ -714,9 +720,9 @@ watch(draft, async () => {
   .swap-enter-active, .swap-leave-active { transition: none; }
 }
 
-/* `.small` e `.mini` vivono in listpage.css, che questa pagina non importa:
-   senza queste righe la meta rendeva piu' grande del titolo che le sta sopra e
-   il cestino non era rosso. Definite qui, alla misura che il mondo prescrive. */
+/* `.small` and `.mini` live in listpage.css, which this page does not import: without
+   these lines the meta rendered bigger than the title above it and the bin was not red.
+   Defined here, at the size the world prescribes. */
 .nohistory {
   display: inline-flex; align-items: center; gap: 6px;
   font-size: 12px; color: var(--muted); padding: 3px 8px;
@@ -726,7 +732,7 @@ watch(draft, async () => {
 .chats .mini.danger { border-color: var(--danger); color: var(--danger); }
 .chats .mini.danger:hover:not(:disabled) { background: var(--danger-fill); color: var(--on-danger); }
 
-/* ricerca sulle conversazioni: la stessa pillola delle pagine a elenco */
+/* search on the conversations: the same pill as the list pages */
 .chatsearch {
   position: sticky; top: 0; z-index: 1; display: flex; align-items: center; gap: 6px;
   margin-bottom: 6px; padding: 5px 9px; background: var(--panel); border: 1px solid var(--border); border-radius: 8px;
@@ -742,7 +748,7 @@ watch(draft, async () => {
 
 .grabs { display: flex; align-items: center; gap: 6px; margin: 8px 0 0; }
 
-/* costo di un turno: presente ma sottovoce — e' un'informazione, non il contenuto */
+/* a turn's cost: present but quiet — it is information, not the content */
 .cost { margin: 6px 0 0; font-size: 12px; color: var(--muted); font-variant-numeric: tabular-nums; display: flex; gap: 6px; }
 .total { font-size: 12px; color: var(--muted); font-variant-numeric: tabular-nums; margin-left: auto; }
 .chats { border-bottom: 1px solid var(--border-soft); padding: 8px 16px; max-height: 30vh; overflow-y: auto; }

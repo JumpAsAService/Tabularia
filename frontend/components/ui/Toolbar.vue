@@ -22,25 +22,24 @@ const props = defineProps<{
   statusKind?: 'info' | 'ok' | 'error' | 'busy'
   busy?: boolean
   canRun?: boolean
-  // salvataggio flusso
+  // saving the flow
   flowName?: string
   projects?: { id: number; name: string }[]
   projectId?: number | null
-  // motore di SVILUPPO del flusso (quello con cui l'editor lavora)
+  // the flow's DEVELOPMENT engine (the one the editor works with)
   engine?: string
-  // motore di PRODUZIONE (run schedulati); null/uguale = nessuna differenza da mostrare
+  // PRODUCTION engine (scheduled runs); null/equal = no difference to show
   productionEngine?: string | null
-  // osservatore: prova le trasformazioni, non salva, non esegue, non carica.
-  // Il server impone comunque le stesse cose; qui si tolgono i bottoni che
-  // porterebbero a un 403
+  // observer: tries the transformations, does not save, run or upload. The server enforces
+  // the same things anyway; here the buttons that would lead to a 403 are removed
   readOnly?: boolean
-  // modifiche non ancora salvate (lo decide l'editor)
+  // changes not saved yet (the editor decides)
   dirty?: boolean
 }>()
 
 const ENGINE_LABELS: Record<string, string> = { polars: 'Polars', duckdb: 'DuckDB', chdb: 'chDB', clickhouse: 'ClickHouse' }
 const labelOf = (id?: string | null) => (id ? ENGINE_LABELS[id] ?? id : 'Polars')
-// etichetta leggibile del motore corrente
+// readable label of the current engine
 const engineLabel = computed(() => labelOf(props.engine))
 const badgeClass = computed(() => (props.engine && props.engine in ENGINE_LABELS ? props.engine : 'polars'))
 const hasProdDiff = computed(() => !!props.productionEngine && props.productionEngine !== (props.engine || 'polars'))
@@ -64,10 +63,10 @@ function onFile(ev: Event) {
   const input = ev.target as HTMLInputElement
   const file = input.files?.[0]
   if (file) emit('upload', file)
-  input.value = '' // permette di ricaricare lo stesso file
+  input.value = '' // allows reloading the same file
 }
 
-// icona di stato: spinner mentre lavora, check verde su successo, X rossa su errore
+// state icon: spinner while working, green check on success, red X on error
 const statusIcon = computed(() => {
   switch (props.statusKind) {
     case 'ok': return CheckCircle2
@@ -82,7 +81,7 @@ const statusIcon = computed(() => {
   <div class="toolbar-inner">
     <strong class="brand"><BrandMark :size="20" /> Tabularia</strong>
 
-    <!-- motore di esecuzione del flusso -->
+    <!-- the flow's run engine -->
     <span
       class="enginebadge"
       :class="badgeClass"
@@ -91,7 +90,7 @@ const statusIcon = computed(() => {
       <Cpu :size="12" /> {{ engineLabel }}<span v-if="hasProdDiff" class="prod">→ {{ labelOf(productionEngine) }}</span>
     </span>
 
-    <!-- nome del flusso + destinazione + salva -->
+    <!-- flow name + destination + save -->
     <input
       class="flowname"
       type="text"
@@ -133,7 +132,7 @@ const statusIcon = computed(() => {
       {{ status }}
     </span>
 
-    <!-- navigazione: DENTRO la barra, così non copre mai lo stato del run -->
+    <!-- navigation: INSIDE the bar, so it never covers the run's state -->
     <span class="sep" />
     <MemoryGauge compact />
     <span class="sep" />
@@ -143,7 +142,7 @@ const statusIcon = computed(() => {
 </template>
 
 <style scoped>
-/* modifiche non salvate: un punto e una parola, accanto al nome del flusso */
+/* unsaved changes: a dot and a word, next to the flow's name */
 .unsaved { display: inline-flex; align-items: center; gap: 5px; font-size: 11.5px; color: var(--warning); white-space: nowrap; }
 .unsaved .dot { width: 7px; height: 7px; border-radius: 50%; background: currentColor; }
 .toolbar-inner {
@@ -153,7 +152,7 @@ const statusIcon = computed(() => {
   padding: 8px 12px;
 }
 .brand { display: inline-flex; align-items: center; gap: 6px; }
-/* badge del motore di esecuzione */
+/* run engine badge */
 .enginebadge {
   display: inline-flex;
   align-items: center;

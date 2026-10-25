@@ -1,9 +1,9 @@
-// Modello del flow: traversata del grafo, serializzazione in IR, spec dei form.
+// The flow's model: walking the graph, serializing to IR, the forms' specs.
 //
-// Il grafo è un DAG "quasi lineare": la catena principale segue l'handle di
-// input sinistro ('left'); un nodo `join` ha un secondo input destro ('right')
-// che punta a una SORGENTE (dataset grezzo) da unire. Join contro una catena
-// trasformata richiederebbe supporto backend (sub-flow) → per ora: sorgente.
+// The graph is an "almost linear" DAG: the main chain follows the left input handle
+// ('left'); a `join` node has a second, right input ('right') pointing to a SOURCE (raw
+// dataset) to join. A join against a transformed chain would need backend support
+// (sub-flow) → for now: a source.
 
 import type { Node, Edge } from '@vue-flow/core'
 import type { Operation } from './useApi'
@@ -15,9 +15,11 @@ export interface Incoming {
   right?: string
 }
 
-/** Mappa target -> {left, right} in base al targetHandle degli archi DATI. Gli
- * archi di SEQUENZA (verticali, handle seq-in/seq-out) definiscono l'ordine di
- * orchestrazione e NON fanno parte della pipeline dati: qui vanno ignorati. */
+/**
+ * Map target -> {left, right} by the targetHandle of the DATA edges. The SEQUENCE edges
+ * (vertical, handles seq-in/seq-out) define the orchestration's order and are NOT part of
+ * the data pipeline: here they are ignored.
+ */
 export function buildIncoming(edges: Edge[]): Map<string, Incoming> {
   const m = new Map<string, Incoming>()
   for (const e of edges) {
@@ -30,16 +32,15 @@ export function buildIncoming(edges: Edge[]): Map<string, Incoming> {
   return m
 }
 
-// ── Filtri A MONTE di un nodo sorgente ────────────────────────────────────
-// `data.filters` = [{ id, column, operator, value }, …]: condizioni in AND
-// applicate subito dopo la lettura della sorgente, PRIMA di ogni altra
-// operazione (campione compreso). A differenza del campione fanno parte del
-// flusso: valgono in sviluppo E in produzione (e nell'export dbt). Diventano
-// normali operazioni `filter` senza marcatore. Speculare a
-// `source_filter_operations` in gateway/services/flow_resolver.py.
+// ── UPSTREAM filters of a source node ────────────────────────────────────
+// `data.filters` = [{ id, column, operator, value }, …]: conditions in AND applied right
+// after reading the source, BEFORE any other operation (sample included). Unlike the
+// sample they are part of the flow: they hold in development AND in production (and in
+// the dbt export). They become normal `filter` operations without a marker. The mirror
+// of `source_filter_operations` in gateway/services/flow_resolver.py.
 export type SourceFilter = { id: string; column?: string; operator?: string; value?: any }
 
-/** Una condizione è completa se ha colonna, operatore e (dove serve) valore. */
+/** A condition is complete when it has column, operator and (where needed) value. */
 export function isCompleteSourceFilter(f: SourceFilter | null | undefined): boolean {
   if (!f || typeof f !== 'object') return false
   if (!f.column || !f.operator || !FILTER_OPERATORS.includes(f.operator)) return false
@@ -59,25 +60,25 @@ export function sourceFilterOperations(data: any): Operation[] {
   })
 }
 
-/** Numero di condizioni a monte COMPLETE (badge sul nodo). */
+/** Number of COMPLETE upstream conditions (badge on the node). */
 export function sourceFilterCount(data: any): number {
   return sourceFilterOperations(data).length
 }
 
-// ── Campione di SVILUPPO di un nodo sorgente ──────────────────────────────
-// `data.sample` = { mode: 'first' | 'random', rows?, percent? } | null. L'editor
-// lavora SEMPRE in sviluppo: il campione diventa la prima operazione dopo la
-// sorgente (limit / sample) con il marcatore `_dev_sample`. In produzione
-// (scheduler, "esegui in produzione") il gateway NON lo inietta e rimuove
-// comunque ogni operazione marcata: i flussi di produzione girano su tutti i
-// record. Speculare a `dev_sample_operation` in gateway/services/flow_resolver.py.
+// ── DEVELOPMENT sample of a source node ──────────────────────────────
+// `data.sample` = { mode: 'first' | 'random', rows?, percent? } | null. The editor ALWAYS
+// works in development: the sample becomes the first operation after the source (limit /
+// sample) with the `_dev_sample` marker. In production (scheduler, "run in production")
+// the gateway does NOT inject it and removes every marked operation anyway: the
+// production flows run on all the records. The mirror of `dev_sample_operation` in
+// gateway/services/flow_resolver.py.
 export type SourceSample = { mode: 'first' | 'random' | 'off'; rows?: number | null; percent?: number | null }
 export const DEV_SAMPLE_MARK = '_dev_sample'
 
-// Campione AUTOMATICO (PREVIEW__DEFAULT_SAMPLE_ROWS del gateway, via
-// /system/info): un nodo SENZA `sample` legge solo le prime N righe come se
-// l'avesse chiesto; `{ mode: 'off' }` è lo spegnimento esplicito dell'utente
-// e vale «tutte le righe» anche col default acceso. 0 = spento.
+// AUTOMATIC sample (the gateway's PREVIEW__DEFAULT_SAMPLE_ROWS, through /system/info): a
+// node WITHOUT `sample` reads only the first N rows as if it had asked; `{ mode: 'off' }`
+// is the user's explicit turning off and means «all rows» even with the default on.
+// 0 = off.
 let _defaultSampleRows = 0
 export function setDefaultSampleRows(n: number) {
   _defaultSampleRows = Number.isFinite(n) && n > 0 ? Math.floor(n) : 0
@@ -91,7 +92,7 @@ export function devSampleOperation(data: any, defaultRows: number = _defaultSamp
   if (!s || typeof s !== 'object') {
     return defaultRows > 0 ? { type: 'limit', params: { n: defaultRows, [DEV_SAMPLE_MARK]: true } } : null
   }
-  if (s.mode === 'off') return null // spento dall'utente: vince sul default
+  if (s.mode === 'off') return null // turned off by the user: wins over the default
   if (s.mode === 'first') {
     const n = Math.floor(Number(s.rows ?? 0))
     if (!(n > 0)) return null
@@ -105,7 +106,7 @@ export function devSampleOperation(data: any, defaultRows: number = _defaultSamp
   return null
 }
 
-/** Etichetta breve del campione attivo (badge sul nodo), o null. */
+/** Short label of the active sample (badge on the node), or null. */
 export function sampleLabel(data: any, t: (k: string, p?: any) => string): string | null {
   const s: SourceSample | null | undefined = data?.sample
   if (!s) {
@@ -118,11 +119,10 @@ export function sampleLabel(data: any, t: (k: string, p?: any) => string): strin
 }
 
 /**
- * Risolve la catena che termina in `targetId`: risale gli input sinistri fino
- * alla sorgente, raccogliendo i nodi-operazione. Ritorna la sorgente terminale
- * e la lista IR delle operazioni (con il `right` dei join già iniettato; in
- * testa i filtri a monte della sorgente e poi il campione di sviluppo, se
- * impostati).
+ * Resolves the chain ending in `targetId`: walks up the left inputs to the source,
+ * collecting the operation nodes. Returns the terminal source and the IR list of the
+ * operations (with the joins' `right` injected already; at the head the source's
+ * upstream filters and then the development sample, when set).
  */
 export function resolveChain(
   nodes: Node[],
@@ -134,9 +134,9 @@ export function resolveChain(
 ): { sourceNode: Node | null; operations: Operation[]; afterScript?: string } {
   const inc = buildIncoming(edges)
 
-  // Nodo DENTRO un container foreach: la catena è quella a monte del container
-  // + il foreach col corpo troncato a questo nodo (la preview mostra il ciclo
-  // eseguito fino a qui, su tutte le iterazioni).
+  // A node INSIDE a foreach container: the chain is the one upstream of the container +
+  // the foreach with the body cut at this node (the preview shows the loop run up to
+  // here, over all the iterations).
   const target = nodes.find((n) => n.id === targetId)
   if (target?.parentNode) {
     const upstreamId = inc.get(target.parentNode)?.left
@@ -175,7 +175,7 @@ export function resolveChain(
 
   opIds.reverse()
   const operations = opIds.map((id) => operationFor(nodes, edges, id, undefined, scriptSources))
-  // testa della catena: filtri a monte (sempre), poi il campione (solo editor)
+  // head of the chain: upstream filters (always), then the sample (editor only)
   const sample = sourceNode ? devSampleOperation(sourceNode.data) : null
   if (sample) operations.unshift(sample)
   if (sourceNode) operations.unshift(...sourceFilterOperations(sourceNode.data))
@@ -183,10 +183,9 @@ export function resolveChain(
 }
 
 /**
- * Costruisce l'operazione IR di un nodo. Per i join, il lato destro diventa un
- * *sotto-flow* (sorgente + operazioni del ramo destro), risolto ricorsivamente:
- * così si può unire anche un ramo trasformato, incluso uno che parte dalla
- * stessa sorgente del ramo sinistro.
+ * Builds a node's IR operation. For joins, the right side becomes a *sub-flow* (source +
+ * the right branch's operations), resolved recursively: so a transformed branch can be
+ * joined too, one starting from the same source as the left branch included.
  */
 function operationFor(
   nodes: Node[], edges: Edge[], id: string, bodyUntil?: string,
@@ -211,8 +210,8 @@ function operationFor(
   }
 
   if (node.type === 'foreach') {
-    // driver = ramo collegato all'input in alto (handle 'right'): ogni riga
-    // un'iterazione, le colonne sono i placeholder disponibili
+    // driver = the branch connected to the top input (handle 'right'): every row an
+    // iteration, the columns are the placeholders available
     const driverId = buildIncoming(edges).get(id)?.right
     if (driverId) {
       const drv = resolveChain(nodes, edges, driverId, scriptSources)
@@ -223,26 +222,26 @@ function operationFor(
         }
       }
     }
-    // corpo = catena dei nodi figli dentro il container
+    // body = the chain of the child nodes inside the container
     params.body = containerBody(nodes, edges, id, bodyUntil, scriptSources)
   }
   return { type: node.data.opType, params }
 }
 
 /**
- * Catena LINEARE dei nodi figli di un container foreach: parte dal figlio senza
- * input sinistro interno e segue gli archi tra figli. `until` tronca il corpo a
- * quel nodo incluso (per la preview di un nodo interno).
+ * LINEAR chain of a foreach container's child nodes: it starts from the child without an
+ * internal left input and follows the edges between children. `until` cuts the body at
+ * that node included (for an inner node's preview).
  */
 function containerBody(nodes: Node[], edges: Edge[], containerId: string, until?: string,
   scriptSources: Record<string, { bucket: string; key: string }> = {}): Operation[] {
-  // i commenti dentro un container sono solo annotazioni: fuori dal corpo
+  // the comments inside a container are only annotations: outside the body
   const children = nodes.filter((n) => n.parentNode === containerId && n.type !== 'comment')
   if (!children.length) return []
   const childIds = new Set(children.map((c) => c.id))
   const inc = buildIncoming(edges)
 
-  // archi interni (solo left→left tra figli)
+  // internal edges (only left→left between children)
   const next = new Map<string, string>()
   for (const e of edges) {
     if (childIds.has(e.source) && childIds.has(e.target) && (((e.targetHandle as string) || 'left') === 'left')) {
@@ -262,26 +261,28 @@ function containerBody(nodes: Node[], edges: Edge[], containerId: string, until?
   return ops
 }
 
-/** Il nodo foglia dell'output principale (senza archi uscenti). I figli dei
- * container non contano: appartengono al corpo del ciclo, non alla catena. */
+/**
+ * The main output's leaf node (without outgoing edges). The containers' children do not
+ * count: they belong to the loop's body, not to the chain.
+ */
 export function leafNodeId(nodes: Node[], edges: Edge[]): string {
   const hasOutgoing = new Set(edges.map((e) => e.source))
-  // i commenti sono annotazioni: non sono nodi del flusso, mai una foglia
+  // comments are annotations: they are not flow nodes, never a leaf
   const leaves = nodes.filter((n) => !hasOutgoing.has(n.id) && !n.parentNode && n.type !== 'comment')
   return (
     leaves.find((n) => n.type === 'operation' || n.type === 'foreach') ?? leaves[0]
   )?.id ?? SOURCE_ID
 }
 
-// ── Spec dei form per operazione ──────────────────────────────────────────
-// control: come renderizzare il campo. Le colonne provengono dallo schema a
-// monte (input del nodo), non da testo libero.
+// ── Form specs per operation ──────────────────────────────────────────
+// control: how to render the field. The columns come from the schema upstream (the
+// node's input), not from free text.
 export interface FieldSpec {
   key: string
   label: string
   control:
-    | 'column' // select singola colonna
-    | 'columns' // multi-select colonne
+    | 'column' // single column select
+    | 'columns' // column multi-select
     | 'operator'
     | 'func'
     | 'dtype'
@@ -289,18 +290,18 @@ export interface FieldSpec {
     | 'text'
     | 'number'
     | 'boolean'
-    | 'value' // valore filtro (parsing intelligente)
-    | 'castlist' // {colonna: dtype}
-    | 'renamelist' // {da: a}
-    | 'filllist' // {colonna: valore}
+    | 'value' // filter value (smart parsing)
+    | 'castlist' // {column: dtype}
+    | 'renamelist' // {from: to}
+    | 'filllist' // {column: value}
     | 'agglist' // [{column, func, alias}]
-    | 'exprlist' // [{name, expr}] — colonne calcolate (espressioni SQL)
+    | 'exprlist' // [{name, expr}] — computed columns (SQL expressions)
     | 'strategy' // union: relaxed | strict
-    | 'joinkeys' // join: righe colonna sinistra → colonna destra (nomi anche diversi)
-    | 'reorder' // riordino colonne con drag-and-drop
+    | 'joinkeys' // join: left column → right column rows (different names too)
+    | 'reorder' // reordering columns with drag-and-drop
     | 'sortlist' // sort keys in order, a direction each (by[] + descending[])
-    | 'json' // textarea con JSON libero (es. items del foreach)
-    | 'sqltext' // textarea con una query SQL intera (Execute SQL); preview MANUALE
+    | 'json' // textarea with free JSON (e.g. the foreach's items)
+    | 'sqltext' // textarea with a whole SQL query (Execute SQL); MANUAL preview
   optional?: boolean
 }
 
@@ -326,7 +327,7 @@ export const OP_SPECS: Record<string, FieldSpec[]> = {
   ],
   pivot: [
     { key: 'index', label: 'params.pivot_index', control: 'columns' },
-    // più colonne = combinazioni (etichette unite da '_', vedi standard cross-engine)
+    // several columns = combinations (labels joined with '_', see the cross-engine standard)
     { key: 'on', label: 'params.pivot_on', control: 'columns' },
     { key: 'values', label: 'params.pivot_values', control: 'column' },
     { key: 'func', label: 'params.pivot_func', control: 'func' },
@@ -416,10 +417,10 @@ export const DTYPE_LABELS: Record<string, string> = {
   datetime: 'datetime',
 }
 
-/** Operatori di filtro che non richiedono un valore. */
+/** Filter operators that require no value. */
 export const NO_VALUE_OPERATORS = new Set(['is_null', 'is_not_null'])
 
-/** Parametri di default sensati quando si sceglie un'operazione. */
+/** Sensible default parameters when an operation is chosen. */
 export function defaultParams(opType: string): Record<string, any> {
   switch (opType) {
     case 'filter':

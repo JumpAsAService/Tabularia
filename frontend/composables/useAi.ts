@@ -1,9 +1,9 @@
-// Assistente AI: stato, modelli (pannello admin) e la chat in streaming.
+// AI assistant: state, models (admin panel) and the streaming chat.
 //
-// La chat arriva come Server-Sent Events su una POST: `$fetch` non li legge a
-// pezzi, quindi qui si usa `fetch` con un lettore di stream. La conversazione
-// e' salvata sul SERVER: a fine turno arriva l'id della chat, e la storia la
-// rimanda al turno dopo.
+// The chat arrives as Server-Sent Events on a POST: `$fetch` does not read them in pieces,
+// so here `fetch` with a stream reader is used. The conversation is saved on the SERVER:
+// at the end of the turn the chat's id arrives, and the history sends it back at the
+// next turn.
 import type { PreviewResult } from '~/composables/useApi'
 
 export interface AiStatus {
@@ -15,8 +15,8 @@ export interface AiStatus {
 export interface AiModel {
   model_id: string
   enabled: boolean
-  chat: boolean // false = embedding/audio/reranker: non abilitabile per la chat
-  available: boolean // false = il provider non lo elenca piu'
+  chat: boolean // false = embedding/audio/reranker: cannot be enabled for the chat
+  available: boolean // false = the provider no longer lists it
 }
 
 export type AiTable = PreviewResult & { datasource?: string }
@@ -61,8 +61,8 @@ export interface AiUsage {
   requests: number
   input_tokens: number
   output_tokens: number
-  // costo in dollari COME LO RIPORTA pydantic-ai. Stringa decimale esatta;
-  // null = non determinabile per quel modello, che NON vuol dire gratis.
+  // cost in dollars AS pydantic-ai REPORTS IT. An exact decimal string; null = cannot be
+  // worked out for that model, which does NOT mean free.
   cost_usd: string | null
 }
 
@@ -151,7 +151,7 @@ export interface AiChatDetail extends AiChatSummary {
 export interface AiChatBody {
   message: string
   model: string
-  // conversazione da proseguire; assente = nuova
+  // the conversation to continue; missing = new
   chat_id?: number | null
   engine?: string | null
   locale: string
@@ -174,7 +174,7 @@ export function useAi() {
     }
     if (!resp.ok || !resp.body) {
       let detail = ''
-      try { detail = (await resp.json())?.detail ?? '' } catch { /* corpo non JSON */ }
+      try { detail = (await resp.json())?.detail ?? '' } catch { /* body not JSON */ }
       handlers.onError(String(detail || resp.statusText || resp.status), String(resp.status))
       return
     }
@@ -185,7 +185,7 @@ export function useAi() {
       const { value, done } = await reader.read()
       if (done) break
       buffer += decoder.decode(value, { stream: true })
-      // un evento SSE finisce con una riga vuota
+      // an SSE event ends with an empty line
       let cut = buffer.indexOf('\n\n')
       while (cut !== -1) {
         dispatch(buffer.slice(0, cut), handlers)
@@ -220,14 +220,15 @@ export function useAi() {
     else if (event === 'error') h.onError(String(payload.message ?? ''), payload.code, payload)
   }
 
-  // le conversazioni salvate: sempre e solo quelle di chi chiede (il server non
-  // ne restituisce di altri)
+  // the saved conversations: always and only the asker's (the server returns no others')
   const chats = () => apiFetch<AiChatSummary[]>('/ai/chats')
   const openChat = (id: number) => apiFetch<AiChatDetail>(`/ai/chats/${id}`)
   const removeChat = (id: number) => apiFetch<void>(`/ai/chats/${id}`, { method: 'DELETE' })
 
-  /** Il risultato INTERO di un passo, non le righe mostrate: il server riesegue
-   *  la query salvata e strema il file. */
+  /**
+   * The WHOLE result of a step, not the rows shown: the server runs the saved query again
+   * and streams the file.
+   */
   const exportStep = (chatId: number, seq: number, stepId: string, fmt: 'csv' | 'xlsx') =>
     apiFetch<Blob>(
       `/ai/chats/${chatId}/turns/${seq}/steps/${encodeURIComponent(stepId)}/export?fmt=${fmt}`,

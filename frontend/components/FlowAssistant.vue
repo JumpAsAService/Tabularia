@@ -36,7 +36,7 @@ const emit = defineEmits<{ (e: 'apply', change: { definition: string; touched: s
 const { t } = useI18n()
 const { locale } = useLocale()
 const ai = useAi()
-const { accettata, leggi, accetta } = useAiDisclosure()
+const { accepted, read, accept } = useAiDisclosure()
 
 interface Step {
   id: string
@@ -71,7 +71,7 @@ const input = ref<HTMLTextAreaElement | null>(null)
 let controller: AbortController | null = null
 
 const modelOptions = computed(() => props.status.models.map((m) => ({ value: m, label: m })))
-const ready = computed(() => accettata.value === true && !!model.value)
+const ready = computed(() => accepted.value === true && !!model.value)
 const examples = computed(() => [t('flowAssistant.example1'), t('flowAssistant.example2'), t('flowAssistant.example3')])
 
 function pickModel() {
@@ -138,7 +138,7 @@ let started = false
 function start() {
   if (started || !props.active) return
   started = true
-  leggi()
+  read()
   pickModel()
   loadLatest()
 }
@@ -305,7 +305,7 @@ function stepLabel(s: Step): string {
 <template>
   <section class="fa" :aria-label="$t('flowAssistant.title')">
     <!-- the gate: the assistant is not used before the user has read who answers -->
-    <AiDisclosure :open="active && accettata === false" @accept="accetta" />
+    <AiDisclosure :open="active && accepted === false" @accept="accept" />
     <header class="fa-head">
       <h3><Sparkles :size="15" /> {{ $t('flowAssistant.title') }}</h3>
       <span class="fa-head-actions">

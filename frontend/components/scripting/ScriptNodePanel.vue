@@ -230,14 +230,14 @@ const unavailable = computed(() => {
       </button>
       <p class="muted outhint">{{ $t('scripting.node.runHint') }}</p>
       <!-- a trial that failed before its run said anything (refused, unreachable): only its message -->
-      <p v-if="failedEarly" class="esito ko" role="alert"><XCircle :size="13" /> {{ trial!.error }}</p>
+      <p v-if="failedEarly" class="outcome ko" role="alert"><XCircle :size="13" /> {{ trial!.error }}</p>
       <template v-if="last && !running">
-        <p class="esito" :class="last.status === 'SUCCESS' ? 'ok' : 'ko'">
+        <p class="outcome" :class="last.status === 'SUCCESS' ? 'ok' : 'ko'">
           <component :is="last.status === 'SUCCESS' ? CheckCircle2 : XCircle" :size="13" />
           {{ $t(last.trial ? 'scripting.node.lastTrial' : 'scripting.node.lastRun', { when: fmt.ago(last.finished_at ?? last.started_at), status: last.status }) }}
           <span v-if="outputs?.output?.rows != null && last.status === 'SUCCESS'">· {{ $t('scripting.node.rows', { n: fmt.count(outputs.output.rows) }) }}</span>
         </p>
-        <p v-if="last.status !== 'SUCCESS' && last.error" class="muted outhint errore">{{ last.error }}</p>
+        <p v-if="last.status !== 'SUCCESS' && last.error" class="muted outhint error">{{ last.error }}</p>
         <p v-if="last.stale" class="warn"><TriangleAlert :size="13" /> {{ $t('scripting.node.codeChanged') }}</p>
         <details v-if="last.log">
           <summary>{{ $t('scripting.node.log') }}</summary>
@@ -300,10 +300,10 @@ label { font-size: 12px; color: var(--muted); }
 .code button { display: inline-flex; align-items: center; justify-content: center; gap: 6px; }
 .trial { display: flex; flex-direction: column; gap: 6px; }
 .trial button { display: inline-flex; align-items: center; justify-content: center; gap: 6px; }
-.esito { margin: 0; display: flex; gap: 6px; align-items: flex-start; flex-wrap: wrap; font-size: 12px; }
-.esito.ok svg { color: var(--accent-2); }
-.esito.ko, .esito.ko svg { color: var(--danger); }
-.errore { overflow-wrap: anywhere; }
+.outcome { margin: 0; display: flex; gap: 6px; align-items: flex-start; flex-wrap: wrap; font-size: 12px; }
+.outcome.ok svg { color: var(--accent-2); }
+.outcome.ko, .outcome.ko svg { color: var(--danger); }
+.error { overflow-wrap: anywhere; }
 details summary { cursor: pointer; font-size: 12px; color: var(--muted); }
 .log { margin: 6px 0 0; max-height: 220px; overflow: auto; font-size: 11px; padding: 6px; border-radius: 6px; background: var(--bg-soft); white-space: pre-wrap; overflow-wrap: anywhere; }
 .mode { display: grid; grid-template-columns: 1fr 1fr; border: 1px solid var(--border); border-radius: 8px; overflow: hidden; }

@@ -6,8 +6,8 @@ import PasswordDialog from '~/components/ui/PasswordDialog.vue'
 import { useAppInfo } from '~/composables/useAppInfo'
 import { useScriptingEditor } from '~/composables/useScripting'
 import { useRegistriesEditor } from '~/composables/useRegistries'
-// Shell dell'app: navbar con brand, sezioni e utente. Le pagine la usano come
-// wrapper (<AppShell>…contenuto…</AppShell>); l'editor resta a tutto schermo.
+// The app's shell: navbar with brand, sections and user. The pages use it as a wrapper
+// (<AppShell>…content…</AppShell>); the editor stays full screen.
 import { computed, onMounted, ref, nextTick } from 'vue'
 import { usePopover } from '~/composables/usePopover'
 import { useI18n } from 'vue-i18n'
@@ -34,54 +34,54 @@ import {
   Server,
 } from 'lucide-vue-next'
 
-// fluid = contenuto a larghezza piena (no max-width centrato): per pagine come il
-// Viewer che sfruttano tutta la larghezza. Le liste restano centrate (default).
+// fluid = full-width content (no centred max-width): for pages like the Viewer that use
+// the whole width. The lists stay centred (default).
 defineProps<{ fluid?: boolean }>()
 
 const { t } = useI18n()
 const { user, fetchMe, logout } = useAuth()
 const { theme, setTheme } = useTheme()
-// nome e versione dal gateway: e' la release che gira davvero, non quella del bundle
+// name and version from the gateway: it is the release really running, not the bundle's
 const { info: appInfo, load: loadAppInfo } = useAppInfo()
 const { preferredEngine, setPreferredEngine, engineCatalog, loadCatalog } = usePreferredEngine()
 const { locale, setLocale, locales } = useLocale()
 const route = useRoute()
 
 const isSuper = computed(() => !!user.value?.is_superuser)
-// Chi può VEDERE i pannelli: amministratore od osservatore. La voce di menù
-// guarda questo, i comandi dentro i pannelli guardano `isSuper`.
+// Who may SEE the panels: administrator or observer. The menu item looks at this, the
+// commands inside the panels look at `isSuper`.
 const canObserve = computed(() => isSuper.value || !!user.value?.is_observer)
 
-// opzioni motore per il selettore (solo quelli disponibili)
+// engine options for the selector (only the available ones)
 const engineOptions = computed(() =>
   engineCatalog.value.filter((e) => e.available).map((e) => ({ value: e.id, label: e.label })),
 )
-// opzioni lingua per il selettore
+// language options for the selector
 const localeOptions = computed(() => locales.map((l) => ({ value: l.code, label: l.label })))
-// opzioni tema: chiaro/scuro tradotti, Dracula/Monokai nomi propri
+// theme options: light/dark translated, Dracula/Monokai proper names
 const themeOptions = computed(() => [
   { value: 'dark', label: t('settings.dark') },
   { value: 'light', label: t('settings.light') },
   { value: 'dracula', label: 'Dracula' },
   { value: 'monokai', label: 'Monokai' },
-  // i colori di Roma: marmo e porpora di Tiro (nome proprio, come i due sopra)
+  // the colours of Rome: marble and Tyrian purple (a proper name, as the two above)
   { value: 'imperium', label: 'Imperium' },
 ])
 
-// menù impostazioni (ingranaggio in alto a destra): nome utente + tema + motore + logout
+// settings menu (gear at the top right): user name + theme + engine + logout
 const menuOpen = ref(false)
 function toggleMenu() {
   menuOpen.value = !menuOpen.value
-  if (menuOpen.value) loadCatalog() // carica il catalogo engine alla prima apertura
+  if (menuOpen.value) loadCatalog() // loads the engines' catalog at the first opening
 }
 function closeMenu() {
   menuOpen.value = false
 }
 const settingsPanel = ref<HTMLElement | null>(null)
 usePopover(menuOpen, settingsPanel, closeMenu)
-// «Le tue sessioni»: dove si è collegati, e chiudere le altre
+// «Your sessions»: where one is connected, and closing the others
 const sessionsOpen = ref(false)
-// «Token API»: le credenziali dei propri script (se l'installazione le permette)
+// «API tokens»: the credentials of one's own scripts (when the installation allows them)
 const tokensOpen = ref(false)
 // «Change password»: one's own. Not for an observer only: the guest of a public
 // demo is one account many people share (the gateway refuses it too)
@@ -107,10 +107,10 @@ const links = computed(() => [
   { to: '/runs', label: t('nav.runs'), icon: History },
 ])
 
-/* Amministrazione: cinque destinazioni che nel prodotto sono UN posto, e nella
-   barra erano cinque voci allo stesso livello di Flussi o Datasource. Raccolte
-   sotto una sola voce col suo menù, come l'ingranaggio delle impostazioni: la
-   barra passa da tredici elementi a nove e dice una struttura che esiste già. */
+/* Administration: five destinations that in the product are ONE place, and in the bar
+   were five items at the same level as Flows or Datasources. Gathered under one item
+   with its menu, like the settings gear: the bar goes from thirteen elements to nine and
+   tells a structure that exists already. */
 const adminLinks = computed(() => [
   { to: '/admin', label: t('nav.admin'), icon: Shield },
   { to: '/queue', label: t('nav.queue'), icon: Cpu },
@@ -123,18 +123,22 @@ const adminOpen = ref(false)
 const adminBtn = ref<HTMLElement | null>(null)
 const adminStyle = ref<Record<string, string>>({})
 
-/** Il menù è sul body: la sua posizione va calcolata dal bottone, che può
- *  essersi spostato perché la barra scorre. */
-function posizionaAdmin() {
+/**
+ * The menu is on the body: its position must be computed from the button, which may
+ * have moved because the bar scrolls.
+ */
+function placeAdmin() {
   const r = adminBtn.value?.getBoundingClientRect()
   if (!r) return
-  // ancorato a sinistra del bottone, ma mai fuori dallo schermo a destra
+  // anchored to the button's left, but never off screen on the right
   const left = Math.min(r.left, window.innerWidth - 226)
   adminStyle.value = { left: `${Math.max(8, left)}px`, top: `${r.bottom + 6}px` }
 }
 
-/** La rotellina verticale scorre la barra in orizzontale: senza, con un mouse
- *  le voci nascoste si raggiungono solo trascinando, che non si scopre. */
+/**
+ * The vertical wheel scrolls the bar horizontally: without it, with a mouse the hidden
+ * items are reached only by dragging, which nobody discovers.
+ */
 function navWheel(ev: WheelEvent) {
   const el = ev.currentTarget as HTMLElement
   if (el.scrollWidth <= el.clientWidth || ev.deltaX) return
@@ -145,29 +149,30 @@ function navWheel(ev: WheelEvent) {
 const adminMenu = ref<HTMLElement | null>(null)
 function toggleAdmin() {
   adminOpen.value = !adminOpen.value
-  if (adminOpen.value) nextTick(() => { posizionaAdmin(); voceAdmin(0) })
+  if (adminOpen.value) nextTick(() => { placeAdmin(); adminItem(0) })
 }
-// menù vero (role=menu): le frecce scorrono le voci, Esc chiude e torna al bottone
-function voceAdmin(i: number) {
-  const voci = [...(adminMenu.value?.querySelectorAll<HTMLElement>('[role="menuitem"]') ?? [])]
-  if (voci.length) voci[(i + voci.length) % voci.length].focus()
+// a real menu (role=menu): the arrows go through the items, Esc closes and goes back to
+// the button
+function adminItem(i: number) {
+  const items = [...(adminMenu.value?.querySelectorAll<HTMLElement>('[role="menuitem"]') ?? [])]
+  if (items.length) items[(i + items.length) % items.length].focus()
 }
 function onAdminKey(e: KeyboardEvent) {
-  const voci = [...(adminMenu.value?.querySelectorAll<HTMLElement>('[role="menuitem"]') ?? [])]
-  const qui = voci.indexOf(document.activeElement as HTMLElement)
-  if (e.key === 'ArrowDown') { e.preventDefault(); voceAdmin(qui + 1) }
-  else if (e.key === 'ArrowUp') { e.preventDefault(); voceAdmin(qui - 1) }
-  else if (e.key === 'Home') { e.preventDefault(); voceAdmin(0) }
-  else if (e.key === 'End') { e.preventDefault(); voceAdmin(-1) }
+  const items = [...(adminMenu.value?.querySelectorAll<HTMLElement>('[role="menuitem"]') ?? [])]
+  const here = items.indexOf(document.activeElement as HTMLElement)
+  if (e.key === 'ArrowDown') { e.preventDefault(); adminItem(here + 1) }
+  else if (e.key === 'ArrowUp') { e.preventDefault(); adminItem(here - 1) }
+  else if (e.key === 'Home') { e.preventDefault(); adminItem(0) }
+  else if (e.key === 'End') { e.preventDefault(); adminItem(-1) }
   else if (e.key === 'Escape') { e.preventDefault(); adminOpen.value = false; adminBtn.value?.focus() }
   else if (e.key === 'Tab') adminOpen.value = false
 }
-// la voce resta accesa mentre si è in una qualsiasi delle sue pagine
+// the item stays lit while in any of its pages
 const inAdmin = computed(() => adminLinks.value.some((l) => route.path === l.to))
 
 onMounted(async () => {
   if (!user.value) await fetchMe()
-  await loadAppInfo() // solo cosmetico qui: non fallisce mai
+  await loadAppInfo() // only cosmetic here: it never fails
 })
 </script>
 
@@ -203,10 +208,9 @@ onMounted(async () => {
             <ChevronDown :size="13" class="caret" :class="{ up: adminOpen }" />
           </button>
 
-          <!-- teleportato sul body: la navigazione SCORRE, e un contenitore
-               con overflow ritaglia i figli posizionati — il menù finiva
-               tagliato e sembrava aprirsi verso l'alto. Stessa soluzione di
-               Select.vue, che per lo stesso motivo teleporta il suo pannello. -->
+          <!-- teleported to the body: the navigation SCROLLS, and a container with overflow clips
+               the positioned children — the menu ended up cut and seemed to open upwards. The same
+               solution as Select.vue, which teleports its panel for the same reason. -->
           <Teleport v-if="adminOpen" to="body">
             <div class="menu-backdrop" @click="adminOpen = false" />
             <div ref="adminMenu" class="menu adminmenu" role="menu" :style="adminStyle" @keydown="onAdminKey">
@@ -230,7 +234,7 @@ onMounted(async () => {
       <GlobalSearch />
       <MemoryGauge />
 
-      <!-- impostazioni: ingranaggio → nome utente completo, tema, logout -->
+      <!-- settings: gear → full user name, theme, logout -->
       <div class="settings">
         <button
           class="gear"
@@ -341,15 +345,15 @@ onMounted(async () => {
   color: var(--text);
   text-decoration: none;
   white-space: nowrap;
-  flex: none; /* a cedere è la navigazione, che sa scorrere: non il marchio */
+  flex: none; /* the navigation gives way, as it can scroll: not the brand */
 }
-/* La navigazione scorre QUANDO SERVE, non sotto una larghezza decisa a mano.
-   L'adattamento stava in una media query a 760px, ma l'ingombro dipende dal
-   NUMERO di voci — da amministratore sono tredici — non dalla finestra: fra i
-   760px e la larghezza che servirebbe, le voci uscivano dalla barra. È il caso
-   dello zoom del browser, che riduce i pixel CSS senza essere «uno schermo
-   piccolo». `min-width: 0` è indispensabile: senza, un figlio flex non si
-   restringe sotto il proprio contenuto e a scorrere finisce il documento. */
+/* The navigation scrolls WHEN NEEDED, not under a width decided by hand. The adaptation
+   sat in a media query at 760px, but the room taken depends on the NUMBER of items — as
+   admin there are thirteen — not on the window: between 760px and the width that would
+   be needed, the items left the bar. It is the case of the browser's zoom, which reduces
+   the CSS pixels without being «a small screen». `min-width: 0` is essential: without
+   it, a flex child does not shrink under its content and the document ends up
+   scrolling. */
 .mainnav {
   display: flex;
   align-items: center;
@@ -358,13 +362,13 @@ onMounted(async () => {
   min-width: 0;
   overflow-x: auto;
   overscroll-behavior-x: contain;
-  /* Scrollbar sottile, come ovunque nel prodotto, e visibile SOLO quando le voci
-     non entrano: senza, con un mouse non si capisce che la barra si può
-     scorrere (con il dito sì, e per questo prima era nascosta).
-     Costo dichiarato: su Firefox `scrollbar-width: thin` occupa spazio, quindi
-     quando la barra è affollata i link perdono qualche pixel in altezza e la
-     sottolineatura della voce attiva sale di altrettanto. Succede solo nello
-     stato affollato, ed è il prezzo per non nascondere l'unico appiglio. */
+  /* A thin scrollbar, as everywhere in the product, and visible ONLY when the items do not
+     fit: without it, with a mouse one does not understand the bar can scroll (with the
+     finger one does, and that is why it was hidden before).
+     Declared cost: on Firefox `scrollbar-width: thin` takes space, so when the bar is
+     crowded the links lose a few pixels in height and the active item's underline goes up
+     as much. It happens only in the crowded state, and it is the price for not hiding the
+     only handhold. */
   scrollbar-width: thin;
   scrollbar-color: var(--border) transparent;
   scrollbar-gutter: auto;
@@ -386,18 +390,18 @@ onMounted(async () => {
   color: var(--muted);
   text-decoration: none;
   border-bottom: 2px solid transparent;
-  border-top: 2px solid transparent; /* compensa: il testo resta centrato */
+  border-top: 2px solid transparent; /* compensates: the text stays centred */
   transition: color 0.15s;
 }
 .navlink:hover { color: var(--text); }
 .navlink.on { color: var(--text); border-bottom-color: var(--accent); }
 .spacer { flex: 1 1 0; min-width: 0; }
 
-/* ── Impostazioni (ingranaggio + menù) ──────────────────────────────────── */
+/* ── Settings (gear + menu) ──────────────────────────────────────────── */
 .settings { position: relative; }
 .gear { padding: 6px 8px; color: var(--muted); }
 .gear:hover, .gear.on { color: var(--text); border-color: var(--accent); }
-/* backdrop invisibile: click fuori → chiude (niente listener globali) */
+/* invisible backdrop: click outside → closes (no global listeners) */
 .menu-backdrop { position: fixed; inset: 0; z-index: 200; }
 .menu {
   position: absolute;
@@ -463,12 +467,12 @@ onMounted(async () => {
 }
 .content.fluid { max-width: none; }
 
-/* Schermi stretti: la barra ha fino a undici voci più i controlli, e a larghezza
-   ridotta spingeva la pagina a scorrere in orizzontale. La navigazione scorre
-   dentro la propria barra invece di allargare il documento; il menù a panino
-   sarebbe una riprogettazione, non un adattamento. */
-/* il menù dell'amministrazione riusa il pannello delle impostazioni: stessa
-   superficie, stesso raggio, stessa ombra — cambia solo dove si aggancia */
+/* Narrow screens: the bar has up to eleven items plus the controls, and at a reduced
+   width it pushed the page to scroll horizontally. The navigation scrolls inside its own
+   bar instead of widening the document; the hamburger menu would be a redesign, not an
+   adaptation. */
+/* the administration menu reuses the settings panel: the same surface, the same radius,
+   the same shadow — only where it hooks changes */
 .adminwrap { position: relative; display: inline-flex; height: 100%; flex: none; }
 .adminwrap .caret { opacity: 0.7; transition: transform 0.15s ease; }
 .adminwrap .caret.up { transform: rotate(180deg); }
@@ -492,10 +496,10 @@ onMounted(async () => {
 .menu-item:hover { background: var(--panel-2); }
 .menu-item.on { background: var(--tint-accent); color: var(--accent-hi); }
 
-/* La navigazione ha la precedenza: prima si stringono gli spazi, poi il nome del
-   marchio lascia il solo segno (resta per gli screen reader). La ricerca e
-   l'indicatore di memoria si stringono da sé. Misurato: con nove voci da admin, a
-   1440px Connections, Runs e Administration finivano fuori dalla parte visibile. */
+/* The navigation takes precedence: first the spaces shrink, then the brand's name leaves
+   only the mark (it stays for the screen readers). The search and the memory indicator
+   shrink by themselves. Measured: with nine admin items, at 1440px Connections, Runs and
+   Administration ended up out of the visible part. */
 @media (max-width: 1600px) {
   .topbar { gap: 16px; }
   .navlink { padding: 0 10px; }
@@ -509,7 +513,7 @@ onMounted(async () => {
 @media (max-width: 760px) {
   .topbar { gap: 12px; padding: 0 12px; }
   .mainnav { flex: 1; }
-  .spacer { display: none; } /* altrimenti divide a metà con la navigazione lo spazio libero */
+  .spacer { display: none; } /* otherwise it splits the free space in half with the navigation */
   .navlink { padding: 0 9px; }
   .content { padding: 16px 14px; }
 }

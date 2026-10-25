@@ -1,14 +1,13 @@
 <script setup lang="ts">
-// Markdown essenziale per le risposte dell'assistente, reso come NODI Vue e mai
-// come HTML: il testo di un modello non e' fidato, e qui non esiste un punto in
-// cui possa diventare markup. Copre cio' che un modello scrive davvero:
-// paragrafi, titoli, elenchi, tabelle GFM, blocchi e frammenti di codice,
-// grassetto e corsivo. Il resto resta testo.
+// Essential Markdown for the assistant's answers, rendered as Vue NODES and never as
+// HTML: a model's text is not trusted, and here there is no point where it could become
+// markup. It covers what a model really writes: paragraphs, headings, lists, GFM tables,
+// code blocks and fragments, bold and italic. The rest stays text.
 import { computed, defineComponent, h, type PropType } from 'vue'
 
 const props = defineProps<{ text: string }>()
 
-// frammenti in linea come nodi: mai HTML da stringa
+// inline fragments as nodes: never HTML from a string
 const MdInline = defineComponent({
   name: 'MdInline',
   props: { parts: { type: Array as PropType<{ t: string; v: string }[]>, required: true } },
@@ -27,7 +26,7 @@ type Block =
 
 function inline(src: string): Inline[] {
   const out: Inline[] = []
-  // `codice` | **grassetto** | *corsivo* / _corsivo_
+  // `code` | **bold** | *italic* / _italic_
   const re = /(`[^`\n]+`)|(\*\*[^*\n]+\*\*)|(\*[^*\n]+\*)|(\b_[^_\n]+_\b)/g
   let last = 0
   let m: RegExpExecArray | null

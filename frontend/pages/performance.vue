@@ -1,10 +1,10 @@
 <script setup lang="ts">
-// Prestazioni. Tre domande, tre fonti, NESSUNA tabella nuova:
-//  - quali flussi e refresh costano di più, e quanto si aspetta un worker libero
-//    → aggregati calcolati al volo dalla tabella dei run;
-//  - come vanno le preview e QUALI sono state lente → contatori a dimensione
-//    fissa su Valkey (i grafici nel tempo stanno in Monitoring/Grafana);
-//  - cosa pesa sul warehouse → il query_log che ClickHouse tiene da sé.
+// Performance. Three questions, three sources, NO new table:
+//  - which flows and refreshes cost the most, and how long a free worker is waited for
+//    → aggregates computed on the fly from the runs' table;
+//  - how the previews go and WHICH were slow → fixed-size counters on Valkey (the charts
+//    over time are in Monitoring/Grafana);
+//  - what weighs on the warehouse → the query_log ClickHouse keeps by itself.
 import { computed, onMounted, ref, watch, watchEffect } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { useFormat } from '~/composables/useFormat'
@@ -18,11 +18,11 @@ const router = useRouter()
 const { apiFetch } = useApiClient()
 const { t } = useI18n()
 const fmtx = useFormat()
-// guardia UX: la RBAC vera la impone il gateway (require_superuser)
+// UX guard: the gateway enforces the real RBAC (require_superuser)
 watchEffect(() => { if (user.value && !user.value.is_superuser && !user.value.is_observer) router.replace('/') })
 
-// Un OSSERVATORE legge la pagina; i comandi restano all'amministratore.
-// `is_observer` da /auth/me è EFFETTIVO: tiene conto dei gruppi.
+// An OBSERVER reads the page; the commands stay the administrator's.
+// `is_observer` from /auth/me is EFFECTIVE: it accounts for the groups.
 const canSee = computed(() => !!user.value?.is_superuser || !!user.value?.is_observer)
 
 interface RunItem { kind: 'flow' | 'ingest'; id: number | null; name: string | null; runs: number; failures: number; median_s: number | null; p95_s: number | null; max_s: number | null; total_s: number; median_wait_s: number | null; rows: number; last_error: string | null }
@@ -41,12 +41,12 @@ const warehouse = ref<WarehousePerf | null>(null)
 const loading = ref(false)
 const error = ref('')
 
-let loadSeq = 0 // solo l'ultimo caricamento scrive: un cambio di finestra non fa vincere la risposta vecchia
+let loadSeq = 0 // only the last load writes: a window change does not let the old answer win
 async function load() {
   const seq = ++loadSeq
   loading.value = true
   error.value = ''
-  // le tre fonti sono indipendenti: una che non risponde non spegne le altre
+  // the three sources are independent: one not answering does not turn off the others
   const [r, p, w] = await Promise.allSettled([
     apiFetch<RunsPerf>(`/admin/performance/runs?days=${days.value}`),
     apiFetch<PreviewsPerf>('/admin/performance/previews?limit=15'),
@@ -61,19 +61,19 @@ async function load() {
 onMounted(load)
 watch([days, minutes], load)
 
-const nf = { format: (n: number) => fmtx.count(n) } // nella lingua dell'interfaccia
+const nf = { format: (n: number) => fmtx.count(n) } // in the interface's language
 const secs = (s: number | null | undefined) => {
   if (s == null) return '—'
   if (s < 1) return `${Math.round(s * 1000)} ms`
   if (s < 90) return `${s.toFixed(1)} s`
-  const tot = Math.round(s) // prima si arrotonda, poi si spezza: mai "1 min 60 s"
+  const tot = Math.round(s) // round first, then split: never "1 min 60 s"
   return `${Math.floor(tot / 60)} min ${tot % 60} s`
 }
 const ms = (v: number | null | undefined) => (v == null ? '—' : secs(v / 1000))
 const bytes = (b: number) => b > 1e9 ? `${(b / 1e9).toFixed(1)} GB` : b > 1e6 ? `${(b / 1e6).toFixed(0)} MB` : `${Math.round(b / 1e3)} KB`
 const time = (iso: string | number) => fmtx.dateTime(typeof iso === 'number' ? iso * 1000 : iso)
 const total = (e: EngineStat) => e.ok + e.superseded + e.error
-// la fase che ha pesato di più: è ciò che dice DOVE guardare
+// the phase that weighed the most: it is what says WHERE to look
 const dominant = (p: Record<string, number>) => Object.entries(p).sort((a, b) => b[1] - a[1])[0]
 const share = (p: Record<string, number>, k: string) => { const s = Object.values(p).reduce((a, b) => a + b, 0); return s ? Math.round((100 * (p[k] ?? 0)) / s) : 0 }
 const failureRate = computed(() => runs.value && runs.value.totals.runs ? Math.round((100 * runs.value.totals.failures) / runs.value.totals.runs) : 0)

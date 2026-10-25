@@ -1,4 +1,4 @@
-// Control plane: progetti/cartelle, permessi, utenti, gruppi. Via gateway autenticato.
+// Control plane: projects/folders, permissions, users, groups. Through the authenticated gateway.
 
 export interface Project {
   id: number
@@ -23,16 +23,16 @@ export interface UserOut {
   is_active: boolean
   is_superuser: boolean
   created_at: string | null
-  last_seen_at: string | null // ultima attività autenticata; null = mai entrato
-  sso_only: boolean // nessuna password locale: entra solo dall'IdP
+  last_seen_at: string | null // last authenticated activity; null = never signed in
+  sso_only: boolean // no local password: signs in from the IdP only
   groups: string[]
-  // is_superuser è il flag PERSONALE; qui i gruppi di amministratori che lo rendono admin comunque
+  // is_superuser is the PERSONAL flag; here the administrators' groups that make them admin anyway
   admin_groups: string[]
-  // osservatore: legge i pannelli di amministrazione, non scrive nulla. Stessa
-  // coppia: flag personale + gruppi che lo concedono
+  // observer: reads the administration panels, writes nothing. The same pair: personal
+  // flag + groups granting it
   is_observer: boolean
   observer_groups: string[]
-  // account di servizio: un'integrazione, entra solo con un token API
+  // service account: an integration, it signs in with an API token only
   is_service?: boolean
 }
 
@@ -42,8 +42,8 @@ export interface GroupOut {
   description: string
   created_at: string | null
   member_count: number
-  is_admin: boolean // i membri sono amministratori
-  is_observer: boolean // i membri leggono i pannelli, senza scrivere
+  is_admin: boolean // the members are administrators
+  is_observer: boolean // the members read the panels, without writing
 }
 
 export const CAPABILITIES = ['view', 'run', 'edit', 'connect', 'manage'] as const
@@ -52,7 +52,7 @@ export function useProjects() {
   const { apiFetch } = useApiClient()
 
   return {
-    // progetti
+    // projects
     list: () => apiFetch<Project[]>('/projects'),
     create: (body: { name: string; description?: string; parent_id?: number | null }) =>
       apiFetch<Project>('/projects', { method: 'POST', body }),
@@ -60,13 +60,13 @@ export function useProjects() {
       apiFetch<Project>(`/projects/${id}`, { method: 'PATCH', body }),
     remove: (id: number) => apiFetch<void>(`/projects/${id}`, { method: 'DELETE' }),
 
-    // permessi
+    // permissions
     permissions: (id: number) => apiFetch<Permission[]>(`/projects/${id}/permissions`),
     grant: (id: number, body: { capability: string; user_id?: number; group_id?: number }) =>
       apiFetch<Permission>(`/projects/${id}/permissions`, { method: 'POST', body }),
     revoke: (permId: number) => apiFetch<void>(`/permissions/${permId}`, { method: 'DELETE' }),
 
-    // utenti / gruppi (per popolare i selettori dei permessi e l'admin)
+    // users / groups (to fill the permissions' selectors and the admin)
     users: () => apiFetch<UserOut[]>('/users'),
     createUser: (body: {
       email: string

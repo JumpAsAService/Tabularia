@@ -26,26 +26,26 @@ const props = defineProps<{
   params: Record<string, any>
   inputColumns: ColumnInfo[]
   rightColumns?: ColumnInfo[]
-  // le colonne del nodo sono in risoluzione (preview a monte in corso)
+  // the node's columns are being resolved (preview upstream in progress)
   columnsLoading?: boolean
-  // dentro un container foreach: placeholder {{...}} utilizzabili ovunque
+  // inside a foreach container: {{...}} placeholders usable everywhere
   placeholders?: string[]
-  // carica i valori distinti di una colonna (per il picker di in/not_in)
+  // loads a column's distinct values (for the in/not_in picker)
   fetchDistinct?: (column: string) => Promise<any[]>
 }>()
 const emit = defineEmits<{
   (e: 'update', params: Record<string, any>): void
-  (e: 'preview'): void // anteprima MANUALE (nodo SQL): non su ogni tasto
+  (e: 'preview'): void // MANUAL preview (SQL node): not on every key
 }>()
 const { t } = useI18n()
 
 const spec = computed<FieldSpec[]>(() => OP_SPECS[props.opType] ?? [])
 const leftNames = computed(() => props.inputColumns.map((c) => c.name))
 const rightNames = computed(() => (props.rightColumns ?? []).map((c) => c.name))
-// opzioni placeholder pronte all'uso ("{{colonna}}") per i selettori
+// placeholder options ready to use ("{{column}}") for the selectors
 const phOptions = computed(() => (props.placeholders ?? []).map((p) => `{{${p}}}`))
 
-// colonne selezionabili per un campo (per il join 'on' = intersezione)
+// columns selectable for a field (for the join's 'on' = intersection)
 function optionsFor(field: FieldSpec): string[] {
   if (props.opType === 'join' && field.key === 'on') {
     const r = new Set(rightNames.value)
@@ -54,8 +54,8 @@ function optionsFor(field: FieldSpec): string[] {
   return leftNames.value
 }
 
-// ── Filtro su colonne temporali → input calendario ────────────────────────
-// dtype (dal backend: 'Date', "Datetime(...)", 'Time') della colonna scelta
+// ── Filter on time columns → calendar input ────────────────────────
+// dtype (from the backend: 'Date', "Datetime(...)", 'Time') of the chosen column
 const temporalInputType = computed<'date' | 'datetime-local' | 'time' | null>(() => {
   const dt = props.inputColumns.find((c) => c.name === state.column)?.dtype ?? ''
   if (dt.startsWith('Datetime')) return 'datetime-local'
@@ -63,10 +63,10 @@ const temporalInputType = computed<'date' | 'datetime-local' | 'time' | null>(()
   if (dt === 'Time') return 'time'
   return null
 })
-// operatori a valore singolo che hanno senso col calendario
+// single-value operators that make sense with the calendar
 const SINGLE_DATE_OPERATORS = new Set(['eq', 'ne', 'gt', 'ge', 'lt', 'le'])
 
-// messaggio diagnostico quando il join non ha colonne chiave disponibili
+// diagnostic message when the join has no key columns available
 const joinOnDiag = computed(() => {
   if (!leftNames.value.length) return t('paramForm.joinDiagNoLeft')
   if (!rightNames.value.length) return t('paramForm.joinDiagNoRight')
@@ -78,18 +78,18 @@ function emptyMessage(field: FieldSpec): string {
   return t('paramForm.noColumnsAvailable')
 }
 
-// ── Stato editabile locale ────────────────────────────────────────────────
+// ── Local editable state ────────────────────────────────────────────────
 const state = reactive<Record<string, any>>({})
 const castRows = reactive<{ column: string; dtype: string }[]>([])
 const renameRows = reactive<{ from: string; to: string }[]>([])
 const fillRows = reactive<{ column: string; value: string }[]>([])
 const aggRows = reactive<{ column: string; func: string; alias: string }[]>([])
 const exprRows = reactive<{ name: string; expr: string }[]>([])
-// join: coppie chiave sinistra → chiave destra (nomi anche diversi)
+// join: left key → right key pairs (different names too)
 const joinRows = reactive<{ left: string; right: string }[]>([])
 // sort: the keys in order, a direction each
 const sortRows = reactive<{ column: string; desc: boolean }[]>([])
-// reorder: ordine corrente delle colonne (drag-and-drop)
+// reorder: the columns' current order (drag-and-drop)
 const reorderCols = reactive<string[]>([])
 const dragIndex = ref<number | null>(null)
 
@@ -102,7 +102,7 @@ function dtypeOf(column: string | undefined): string {
 let lastEmitted = ''
 const paramsKey = (p: Record<string, any> | null | undefined) => JSON.stringify({ ...(p ?? {}), id: undefined })
 
-// ricostruisce lo stato locale dai params quando cambia il nodo/operazione
+// rebuilds the local state from the params when the node/operation changes
 function rebuild() {
   lastEmitted = paramsKey(props.params) // the form now shows these: Redo after Undo differs again
   for (const k of Object.keys(state)) delete state[k]
@@ -114,18 +114,18 @@ function rebuild() {
   for (const f of spec.value) {
     switch (f.control) {
       case 'columns':
-        // un valore singolo salvato quando il campo era una tendina (es. pivot
-        // `on` prima del multi-colonna) diventa una lista di un elemento
+        // a single value saved when the field was a dropdown (e.g. pivot `on` before the
+        // multi-column) becomes a one-item list
         state[f.key] = Array.isArray(p[f.key]) ? [...p[f.key]] : (typeof p[f.key] === 'string' && p[f.key] ? [p[f.key]] : [])
         break
       case 'value':
         state.__value = typedValueText(p.value)
-        // estremi del between temporale (se il valore salvato è una coppia)
+        // bounds of the time between (when the saved value is a pair)
         state.__lo = Array.isArray(p.value) ? String(p.value[0] ?? '') : ''
         state.__hi = Array.isArray(p.value) ? String(p.value[1] ?? '') : ''
-        // valori del picker in/not_in (lista salvata)
+        // values of the in/not_in picker (saved list)
         state.__inValues = Array.isArray(p.value) ? [...p.value] : []
-        // modalità testo libero: riattivata se il valore salvato usa placeholder
+        // free-text mode: turned on again when the saved value uses placeholders
         state.__phmode = JSON.stringify(p.value ?? '').includes('{{')
         break
       case 'json':
@@ -145,27 +145,27 @@ function rebuild() {
         break
       case 'exprlist':
         for (const c of p.columns ?? []) exprRows.push({ name: c.name ?? '', expr: c.expr ?? '' })
-        if (!exprRows.length) exprRows.push({ name: '', expr: '' }) // parti con una riga pronta
+        if (!exprRows.length) exprRows.push({ name: '', expr: '' }) // start with a row ready
         break
       case 'joinkeys':
-        // accetta sia 'on' (nomi uguali, flussi esistenti) sia 'left_on'/'right_on'
+        // accepts both 'on' (equal names, existing flows) and 'left_on'/'right_on'
         if (Array.isArray(p.left_on) && Array.isArray(p.right_on)) {
           const n = Math.min(p.left_on.length, p.right_on.length)
           for (let i = 0; i < n; i++) joinRows.push({ left: String(p.left_on[i]), right: String(p.right_on[i]) })
         } else if (Array.isArray(p.on)) {
           for (const c of p.on) joinRows.push({ left: String(c), right: String(c) })
         }
-        if (!joinRows.length) joinRows.push({ left: '', right: '' }) // una riga pronta
+        if (!joinRows.length) joinRows.push({ left: '', right: '' }) // a row ready
         break
       case 'reorder':
-        syncReorder() // ordine salvato + eventuali colonne nuove a monte (in coda)
+        syncReorder() // saved order + any new columns upstream (at the end)
         break
       case 'sortlist': {
         // `by` one column or a list; `descending` one yes/no for all (flows saved
         // before) or one per column
         const by: string[] = Array.isArray(p.by) ? p.by : p.by ? [p.by] : []
         by.forEach((c, i) => sortRows.push({ column: String(c), desc: Array.isArray(p.descending) ? !!p.descending[i] : !!p.descending }))
-        if (!sortRows.length) sortRows.push({ column: '', desc: false }) // una riga pronta
+        if (!sortRows.length) sortRows.push({ column: '', desc: false }) // a row ready
         break
       }
       default:
@@ -187,8 +187,8 @@ watch(
   { deep: true },
 )
 
-// reorder: preserva l'ordine corrente per le colonne esistenti e appende le nuove.
-// Le colonne a monte arrivano async → risincronizza quando cambiano.
+// reorder: keeps the current order for the existing columns and appends the new ones.
+// The columns upstream arrive async → resynchronize when they change.
 function syncReorder() {
   const all = leftNames.value
   if (!all.length) return
@@ -208,12 +208,12 @@ function dropReorder(target: number) {
   emitUpdate()
 }
 
-// ── Picker dei valori distinti per in/not_in ──────────────────────────────
+// ── Picker of the distinct values for in/not_in ──────────────────────────────
 const IN_OPERATORS = new Set(['in', 'not_in'])
 const isInOperator = computed(() => IN_OPERATORS.has(state.operator))
 const distinctValues = ref<any[] | null>(null)
 const distinctLoading = ref(false)
-const distinctCache = new Map<string, any[]>() // per colonna, entro questo nodo
+const distinctCache = new Map<string, any[]>() // per column, within this node
 
 async function loadDistinct(column: string) {
   if (!props.fetchDistinct || !column) return
@@ -246,7 +246,7 @@ function onInValues(values: any[]) {
   emitUpdate()
 }
 
-// ── Costruzione dei params dal form ───────────────────────────────────────
+// ── Building the params from the form ───────────────────────────────────────
 function build(): Record<string, any> {
   const out: Record<string, any> = {}
   for (const f of spec.value) {
@@ -259,13 +259,13 @@ function build(): Record<string, any> {
       case 'value':
         if (NO_VALUE_OPERATORS.has(state.operator)) break
         if (IN_OPERATORS.has(state.operator)) {
-          // lista dal picker (i tipi restano quelli originali dei dati)
+          // list from the picker (the types stay the data's original ones)
           if ((state.__inValues ?? []).length) out.value = [...state.__inValues]
         } else if (temporalInputType.value && !state.__phmode && state.operator === 'between') {
-          // coppia di date dai calendari: manda solo se entrambe presenti
+          // pair of dates from the calendars: sent only when both are there
           if (state.__lo && state.__hi) out.value = [state.__lo, state.__hi]
         } else if (temporalInputType.value && !state.__phmode && SINGLE_DATE_OPERATORS.has(state.operator)) {
-          if (state.__value) out.value = state.__value // stringa ISO dal calendario
+          if (state.__value) out.value = state.__value // ISO string from the calendar
         } else {
           // read as the column stores values; an empty box sends nothing
           const value = typedValue(state.__value, dtypeOf(state.column))
@@ -284,7 +284,7 @@ function build(): Record<string, any> {
           try {
             out[f.key] = JSON.parse(raw)
           } catch {
-            /* JSON non valido: non inviare il campo finché non è corretto */
+            /* invalid JSON: do not send the field until it is correct */
           }
         }
         break
@@ -316,7 +316,7 @@ function build(): Record<string, any> {
         const rows = joinRows.filter((r) => r.left && r.right)
         if (rows.length) {
           if (rows.every((r) => r.left === r.right)) {
-            out.on = rows.map((r) => r.left) // nomi uguali → 'on' (compatibile, cross-engine)
+            out.on = rows.map((r) => r.left) // equal names → 'on' (compatible, cross-engine)
           } else {
             out.left_on = rows.map((r) => r.left)
             out.right_on = rows.map((r) => r.right)
@@ -346,8 +346,8 @@ function emitUpdate() {
   lastEmitted = paramsKey(out)
   emit('update', out)
 }
-// nodo SQL: l'anteprima si lancia SOLO a comando (bottone / Cmd-Ctrl+Enter),
-// mai a ogni tasto. Prima salva il testo corrente nei params, poi chiede il run.
+// SQL node: the preview is launched ONLY on command (button / Cmd-Ctrl+Enter), never at
+// every key. First it saves the current text in the params, then asks for the run.
 function emitPreviewNow() {
   emitUpdate()
   emit('preview')
@@ -365,15 +365,15 @@ function isChecked(key: string, name: string): boolean {
   return (state[key] ?? []).includes(name)
 }
 
-// gestione righe delle liste
+// handling the lists' rows
 function addCast() { castRows.push({ column: '', dtype: 'int' }); }
 function addRename() { renameRows.push({ from: '', to: '' }); }
 function addFill() { fillRows.push({ column: '', value: '' }); }
 function addAgg() { aggRows.push({ column: '', func: 'sum', alias: '' }); aggQuery.value = '' }
 
-// ricerca fra le colonne da SPUNTARE (controllo `columns`: chiavi del group by,
-// select, drop, …): con tabelle larghe la lista di checkbox è lunga. Filtra
-// solo la vista; le spunte già date restano (anche se nascoste dal filtro).
+// search among the columns to TICK (the `columns` control: group by keys, select,
+// drop, …): with wide tables the checkbox list is long. It filters only the view; the
+// ticks given already stay (even when hidden by the filter).
 const COL_SEARCH_THRESHOLD = 8
 const colQuery = reactive<Record<string, string>>({})
 function filterCols(key: string, names: string[]): string[] {
@@ -385,9 +385,9 @@ function checkedCount(key: string): number {
   return Array.isArray(v) ? v.length : 0
 }
 
-// ricerca fra le righe di aggregazione (con molti campi la lista è lunga):
-// filtra per colonna / funzione / alias tenendo l'INDICE originale, così
-// rimozione e v-model lavorano sulla riga giusta. Compare oltre una soglia.
+// search among the aggregation rows (with many fields the list is long): filters by
+// column / function / alias keeping the original INDEX, so removal and v-model work on
+// the right row. It shows past a threshold.
 const AGG_SEARCH_THRESHOLD = 2
 const aggQuery = ref('')
 const visibleAggRows = computed(() => {
@@ -418,12 +418,12 @@ function moveSort(i: number, by: number) {
 }
 function flipSort(r: { desc: boolean }) { r.desc = !r.desc; emitUpdate() }
 
-// opzioni colonne per i due lati del join (schemi distinti)
+// column options for the two sides of the join (distinct schemas)
 const leftColOptions = computed(() => leftNames.value.map((n) => ({ value: n, label: n })))
 const rightColOptions = computed(() => rightNames.value.map((n) => ({ value: n, label: n })))
 
-// ── Opzioni per il Select custom ──────────────────────────────────────────
-// colonne (+ placeholder raggruppati); withEmpty aggiunge la voce "—"
+// ── Options for the custom Select ──────────────────────────────────────────
+// columns (+ grouped placeholders); withEmpty adds the "—" item
 function columnSelectOptions(f?: FieldSpec, withEmpty = false) {
   const cols = (f ? optionsFor(f) : leftNames.value).map((n) => ({ value: n, label: n }))
   const ph = phOptions.value.map((p) => ({ value: p, label: p, group: 'placeholder' }))
@@ -438,7 +438,7 @@ const STRATEGY_OPTIONS = Object.entries(STRATEGY_LABELS).map(([value, label]) =>
 
 <template>
   <div class="paramform">
-    <!-- colonne in risoluzione: skeleton al posto del falso "nessuna colonna" -->
+    <!-- columns being resolved: a skeleton in place of the false "no column" -->
     <div v-if="columnsLoading && !inputColumns.length" class="skcols" aria-busy="true">
       <span class="sk" style="width: 68%" />
       <span class="sk" style="width: 52%" />
@@ -451,10 +451,10 @@ const STRATEGY_OPTIONS = Object.entries(STRATEGY_LABELS).map(([value, label]) =>
     <div v-for="f in spec" :key="f.key" class="field">
       <label>{{ $t(f.label) }}</label>
 
-      <!-- multi-select colonne (+ placeholder del foreach, se presenti) -->
+      <!-- column multi-select (+ the foreach's placeholders, if any) -->
       <div v-if="f.control === 'columns'" class="checks-wrap">
-        <!-- ricerca fra le colonne da spuntare (es. chiavi del group by su
-             tabelle larghe): filtra la lista, le spunte restano tutte -->
+        <!-- search among the columns to tick (e.g. group by keys on wide tables): filters the
+             list, the ticks all stay -->
         <div v-if="optionsFor(f).length + phOptions.length > COL_SEARCH_THRESHOLD" class="rowsearch">
           <Search :size="13" />
           <input v-model="colQuery[f.key]" type="text" :placeholder="$t('paramForm.searchColumnsPlaceholder')" />
@@ -481,7 +481,7 @@ const STRATEGY_OPTIONS = Object.entries(STRATEGY_LABELS).map(([value, label]) =>
         </div>
       </div>
 
-      <!-- select singola colonna (+ placeholder del foreach, se presenti) -->
+      <!-- single column select (+ the foreach's placeholders, if any) -->
       <Select
         v-else-if="f.control === 'column'"
         :model-value="state[f.key]"
@@ -491,7 +491,7 @@ const STRATEGY_OPTIONS = Object.entries(STRATEGY_LABELS).map(([value, label]) =>
         @update:model-value="(v: any) => { state[f.key] = v; emitUpdate() }"
       />
 
-      <!-- select enumerati (etichette leggibili, valore = id backend) -->
+      <!-- enumerated selects (readable labels, value = backend id) -->
       <Select
         v-else-if="f.control === 'operator'"
         :model-value="state.operator"
@@ -517,11 +517,11 @@ const STRATEGY_OPTIONS = Object.entries(STRATEGY_LABELS).map(([value, label]) =>
         @update:model-value="(v: any) => { state[f.key] = v; emitUpdate() }"
       />
 
-      <!-- valore filtro -->
+      <!-- filter value -->
       <template v-else-if="f.control === 'value'">
         <span v-if="NO_VALUE_OPERATORS.has(state.operator)" class="muted">{{ $t('paramForm.noValueRequired') }}</span>
 
-        <!-- in / not_in → multiselect con ricerca sui valori distinti reali -->
+        <!-- in / not_in → multiselect with search on the real distinct values -->
         <ValuePicker
           v-else-if="isInOperator"
           :model-value="state.__inValues ?? []"
@@ -531,7 +531,7 @@ const STRATEGY_OPTIONS = Object.entries(STRATEGY_LABELS).map(([value, label]) =>
           @update:model-value="onInValues"
         />
 
-        <!-- colonna temporale + between → doppio calendario (da → a, inclusivi) -->
+        <!-- time column + between → double calendar (from → to, inclusive) -->
         <div v-else-if="temporalInputType && !state.__phmode && state.operator === 'between'" class="daterange">
           <input :type="temporalInputType" v-model="state.__lo" @change="emitUpdate" />
           <span class="muted">→</span>
@@ -539,13 +539,13 @@ const STRATEGY_OPTIONS = Object.entries(STRATEGY_LABELS).map(([value, label]) =>
           <button v-if="phOptions.length" class="phbtn" :title="$t('paramForm.usePlaceholder')" @click="state.__phmode = true">{&#8288;{ }&#8288;}</button>
         </div>
 
-        <!-- colonna temporale + confronto singolo → calendario -->
+        <!-- time column + single comparison → calendar -->
         <div v-else-if="temporalInputType && !state.__phmode && SINGLE_DATE_OPERATORS.has(state.operator)" class="daterange">
           <input :type="temporalInputType" v-model="state.__value" @change="emitUpdate" />
           <button v-if="phOptions.length" class="phbtn" :title="$t('paramForm.usePlaceholder')" @click="state.__phmode = true">{&#8288;{ }&#8288;}</button>
         </div>
 
-        <!-- tutti gli altri casi → testo libero (numeri, stringhe, liste, placeholder) -->
+        <!-- every other case → free text (numbers, strings, lists, placeholders) -->
         <div v-else class="daterange">
           <input
             type="text"
@@ -562,7 +562,7 @@ const STRATEGY_OPTIONS = Object.entries(STRATEGY_LABELS).map(([value, label]) =>
         </div>
       </template>
 
-      <!-- JSON libero (es. iterazioni statiche del foreach) -->
+      <!-- free JSON (e.g. the foreach's static iterations) -->
       <textarea
         v-else-if="f.control === 'json'"
         v-model="state[`__json_${f.key}`]"
@@ -571,7 +571,7 @@ const STRATEGY_OPTIONS = Object.entries(STRATEGY_LABELS).map(([value, label]) =>
         @change="emitUpdate"
       />
 
-      <!-- Execute SQL: query intera; anteprima MANUALE (mai a ogni tasto) -->
+      <!-- Execute SQL: the whole query; MANUAL preview (never at every key) -->
       <div v-else-if="f.control === 'sqltext'" class="sqlblock">
         <textarea
           v-model="state[f.key]"
@@ -594,14 +594,14 @@ const STRATEGY_OPTIONS = Object.entries(STRATEGY_LABELS).map(([value, label]) =>
         </div>
       </div>
 
-      <!-- scalari semplici -->
+      <!-- plain scalars -->
       <input v-else-if="f.control === 'number'" type="number" v-model="state[f.key]" @change="emitUpdate" />
       <label v-else-if="f.control === 'boolean'" class="chk">
         <input type="checkbox" v-model="state[f.key]" @change="emitUpdate" /> {{ $t('paramForm.yesLabel') }}
       </label>
       <input v-else-if="f.control === 'text'" type="text" v-model="state[f.key]" @change="emitUpdate" />
 
-      <!-- cast: righe colonna → dtype -->
+      <!-- cast: column → dtype rows -->
       <div v-else-if="f.control === 'castlist'" class="rows">
         <div v-for="(r, i) in castRows" :key="i" class="row">
           <Select
@@ -622,7 +622,7 @@ const STRATEGY_OPTIONS = Object.entries(STRATEGY_LABELS).map(([value, label]) =>
         <button @click="addCast">{{ $t('paramForm.addRow') }}</button>
       </div>
 
-      <!-- rename: righe da → a -->
+      <!-- rename: from → to rows -->
       <div v-else-if="f.control === 'renamelist'" class="rows">
         <div v-for="(r, i) in renameRows" :key="i" class="row">
           <Select
@@ -638,7 +638,7 @@ const STRATEGY_OPTIONS = Object.entries(STRATEGY_LABELS).map(([value, label]) =>
         <button @click="addRename">{{ $t('paramForm.addRow') }}</button>
       </div>
 
-      <!-- fill_null: righe colonna → valore -->
+      <!-- fill_null: column → value rows -->
       <div v-else-if="f.control === 'filllist'" class="rows">
         <div v-for="(r, i) in fillRows" :key="i" class="row">
           <Select
@@ -654,7 +654,7 @@ const STRATEGY_OPTIONS = Object.entries(STRATEGY_LABELS).map(([value, label]) =>
         <button @click="addFill">{{ $t('paramForm.addRow') }}</button>
       </div>
 
-      <!-- compute: righe nome → espressione SQL -->
+      <!-- compute: name → SQL expression rows -->
       <div v-else-if="f.control === 'exprlist'" class="rows">
         <div v-for="(r, i) in exprRows" :key="i" class="exprrow">
           <div class="exprhead">
@@ -675,7 +675,7 @@ const STRATEGY_OPTIONS = Object.entries(STRATEGY_LABELS).map(([value, label]) =>
         </p>
       </div>
 
-      <!-- join: coppie chiave sinistra → chiave destra (nomi anche diversi) -->
+      <!-- join: left key → right key pairs (different names too) -->
       <div v-else-if="f.control === 'joinkeys'" class="rows">
         <div v-for="(r, i) in joinRows" :key="i" class="row">
           <Select
@@ -697,7 +697,7 @@ const STRATEGY_OPTIONS = Object.entries(STRATEGY_LABELS).map(([value, label]) =>
         <span v-if="!leftNames.length || !rightNames.length" class="muted">{{ joinOnDiag }}</span>
       </div>
 
-      <!-- reorder: lista di colonne trascinabile (drag per riordinare) -->
+      <!-- reorder: a draggable list of columns (drag to reorder) -->
       <div v-else-if="f.control === 'reorder'" class="reorder">
         <div
           v-for="(name, i) in reorderCols"
@@ -752,7 +752,7 @@ const STRATEGY_OPTIONS = Object.entries(STRATEGY_LABELS).map(([value, label]) =>
         <p v-if="sortRows.length > 1" class="sqlhint">{{ $t('paramForm.sortHint') }}</p>
       </div>
 
-      <!-- group_by: righe colonna/funzione/alias -->
+      <!-- group_by: column/function/alias rows -->
       <div v-else-if="f.control === 'agglist'" class="rows">
         <div v-if="aggRows.length > AGG_SEARCH_THRESHOLD" class="rowsearch">
           <Search :size="13" />
@@ -814,7 +814,7 @@ label { font-size: 12px; color: var(--muted); }
 .moves { display: flex; flex-direction: column; flex-shrink: 0; }
 .moves .mv { padding: 0 4px; line-height: 0; border-radius: 4px; }
 .moves .mv:disabled { opacity: 0.3; cursor: default; }
-/* reorder: lista trascinabile di colonne */
+/* reorder: a draggable list of columns */
 .reorder { display: flex; flex-direction: column; gap: 3px; max-height: 260px; overflow-y: auto; }
 .reorder-row {
   display: flex; align-items: center; gap: 8px; padding: 6px 8px;

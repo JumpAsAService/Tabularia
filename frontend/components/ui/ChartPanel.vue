@@ -1,8 +1,8 @@
 <script setup lang="ts">
-// Grafico del nodo selezionato. TUTTI i tipi lavorano su aggregati calcolati
-// dall'engine sull'INTERO dataset (group_by appesa alla catena del nodo,
-// streaming + cache) — mai sul campione della preview. Anche lo scatter è
-// aggregato: ogni punto è un gruppo (es. un prodotto), X e Y due aggregazioni.
+// The selected node's chart. ALL the kinds work on aggregates the engine computes over
+// the WHOLE dataset (a group_by appended to the node's chain, streaming + cache) — never
+// on the preview's sample. The scatter is aggregated too: every point is a group (e.g. a
+// product), X and Y two aggregations.
 import { ref, computed, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { useFormat } from '~/composables/useFormat'
@@ -32,23 +32,23 @@ const { t } = useI18n()
 const fmtx = useFormat()
 
 const props = defineProps<{
-  columns: ColumnInfo[] // colonne in uscita dal nodo selezionato
+  columns: ColumnInfo[] // columns out of the selected node
   query: (ops: Operation[], limit?: number) => Promise<PreviewResult | null>
   // the chart's settings, for who keeps them (a saved view): given back when it opens
   settings?: ChartSettings | null
 }>()
 const emit = defineEmits<{ (e: 'update:settings', s: ChartSettings): void }>()
 
-// palette categorica VALIDATA (lightness band, CVD, contrasto): tinte mid-tone
-// che restano leggibili sia su fondo scuro sia chiaro. MAX 5 serie: mai ciclare
-// le tinte oltre gli slot — le eccedenti si segnalano.
+// VALIDATED categorical palette (lightness band, CVD, contrast): mid-tone hues that stay
+// readable on both dark and light backgrounds. MAX 5 series: never cycle the hues past
+// the slots — the extra ones are flagged.
 const PALETTE = ['#3987e5', '#199e70', '#c98500', '#9085e9', '#d55181']
-const OTHER_COLOR = '#8b93a7' // grigio neutro per la fetta "Altro"
+const OTHER_COLOR = '#8b93a7' // neutral grey for the "Other" slice
 const MAX_SERIES = PALETTE.length
 
-// colori "cromo" (assi, testi, sfondi tooltip) dal tema corrente: la lettura dei
-// token vive in un composable condiviso — era copiata identica qui, in
-// ScheduleLoad e in audit.vue, e mancava del tutto in RunCalendar e RunGantt.
+// "chrome" colours (axes, texts, tooltip backgrounds) from the current theme: reading the
+// tokens lives in a shared composable — it was copied identically here, in ScheduleLoad
+// and in audit.vue, and was missing altogether in RunCalendar and RunGantt.
 const { ui } = useChartTheme()
 
 const CHART_TYPES = [
@@ -71,18 +71,18 @@ const chartTypeLabels = computed<Record<ChartType, string>>(() => ({
 }))
 
 const AGGS = ['count', 'sum', 'mean', 'min', 'max', 'median', 'n_unique']
-const ADDITIVE = new Set(['count', 'sum']) // combinabili client-side (fetta "Altro")
+const ADDITIVE = new Set(['count', 'sum']) // combinable client-side (the "Other" slice)
 
-// opzioni funzione col label leggibile (senza count per gli assi dello scatter)
+// function options with a readable label (without count for the scatter's axes)
 const funcOptions = (noCount = false) =>
   AGGS.filter((a) => !noCount || a !== 'count').map((a) => ({ value: a, label: AGG_LABELS[a] ?? a }))
 
 const chartType = ref<ChartType>('bar')
-const xCol = ref('') // dimensione (o "punto" per lo scatter)
-const byCol = ref('') // stratificazione in serie (vuoto = nessuna)
+const xCol = ref('') // dimension (or "point" for the scatter)
+const byCol = ref('') // stratification into series (empty = none)
 const func = ref('count')
 const yCol = ref('')
-// scatter: due aggregazioni indipendenti
+// scatter: two independent aggregations
 const xFunc = ref('sum')
 const xNumCol = ref('')
 const yFunc = ref('sum')
@@ -113,26 +113,26 @@ const allCols = computed(() => props.columns.map((c) => c.name))
 
 const isScatter = computed(() => chartType.value === 'scatter')
 const isPartWhole = computed(() => chartType.value === 'pie' || chartType.value === 'treemap')
-const supportsBy = computed(() => !isPartWhole.value) // pie/treemap: la categoria È la X
+const supportsBy = computed(() => !isPartWhole.value) // pie/treemap: the category IS the X
 const needsY = computed(() => !isScatter.value && func.value !== 'count' && func.value !== 'n_unique')
 
 const rows = ref<Record<string, any>[]>([])
 const loading = ref(false)
 const error = ref('')
-const droppedSeries = ref(0) // serie oltre i 5 slot della palette
+const droppedSeries = ref(0) // series past the palette's 5 slots
 
-// Solo l'ULTIMO refresh scrive lo stato. Le query del grafico ora si annullano
-// a vicenda (chi ospita il pannello le manda su uno slot): senza questa guardia
-// una richiesta annullata, tornando DOPO la piu' recente, scriverebbe "errore"
-// e svuoterebbe le righe sopra il grafico appena disegnato.
+// Only the LAST refresh writes the state. The chart's queries now cancel each other
+// (whoever hosts the panel sends them on a slot): without this guard a cancelled request,
+// coming back AFTER the newest, would write "error" and empty the rows above the chart
+// just drawn.
 let refreshSeq = 0
 async function refresh() {
   const seq = ++refreshSeq
   error.value = ''
   droppedSeries.value = 0
   if (!xCol.value || (needsY.value && !yCol.value) || (isScatter.value && (!xNumCol.value || !yNumCol.value))) {
-    // configurazione incompleta: la query in volo (se c'e') ha un seq vecchio e non
-    // spegnerebbe piu' lo spinner — si spegne qui, e le righe non restano stantie
+    // incomplete configuration: the query in flight (if any) has an old seq and would no
+    // longer turn the spinner off — it is turned off here, and the rows do not stay stale
     loading.value = false
     rows.value = []
     return
@@ -142,7 +142,7 @@ async function refresh() {
     const by = supportsBy.value && byCol.value ? [byCol.value] : []
     let ops: Operation[]
     if (isScatter.value) {
-      // ogni punto = un gruppo; X e Y = due aggregazioni sull'intero dataset
+      // every point = a group; X and Y = two aggregations over the whole dataset
       ops = [
         {
           type: 'group_by',
@@ -197,12 +197,12 @@ watch(
 // chart stayed blank («Choose the columns…») with them chosen, until a control changed
 watch([chartType, xCol, byCol, yCol, func, xFunc, xNumCol, yFunc, yNumCol, topN], refresh, { immediate: true })
 
-// Testo → HTML sicuro. Serve SOLO dentro i formatter dei tooltip di ECharts,
-// che sono l'unico punto del frontend in cui costruiamo HTML da una stringa.
+// Text → safe HTML. Needed ONLY inside ECharts' tooltip formatters, which are the only
+// point of the frontend where we build HTML from a string.
 const esc = (v: unknown) =>
   String(v).replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[c] as string)
 
-const fmt = { format: (n: number) => fmtx.number(n, 2) } // nella lingua dell'interfaccia
+const fmt = { format: (n: number) => fmtx.number(n, 2) } // in the interface's language
 
 const seriesName = computed(() => {
   if (isScatter.value) return `${yFunc.value}(${yNumCol.value})`
@@ -210,7 +210,7 @@ const seriesName = computed(() => {
   return `${func.value}(${yCol.value || xCol.value})`
 })
 
-// ── Pivot client-side per il "by" (top MAX_SERIES per totale) ───────────────
+// ── Client-side pivot for the "by" (top MAX_SERIES by total) ─────────────────
 function pivotBydata() {
   const by = byCol.value
   const totals = new Map<string, number>()
@@ -222,7 +222,7 @@ function pivotBydata() {
   const kept = ranked.slice(0, MAX_SERIES)
   droppedSeries.value = Math.max(0, ranked.length - kept.length)
 
-  // categorie X: per linee = ordine naturale (già sortato per X); per barre = per totale
+  // X categories: for lines = natural order (sorted by X already); for bars = by total
   const catTotals = new Map<string, number>()
   const catOrder: string[] = []
   for (const r of rows.value) {
@@ -246,8 +246,8 @@ function pivotBydata() {
   return { cats, series }
 }
 
-// ── Opzione ECharts ──────────────────────────────────────────────────────────
-// stili "cromo" derivati dal tema corrente (computed su `ui`)
+// ── ECharts option ──────────────────────────────────────────────────────────
+// "chrome" styles derived from the current theme (computed on `ui`)
 const AXIS_STYLE = computed(() => ({
   axisLabel: { color: ui.value.muted, hideOverlap: true },
   axisLine: { lineStyle: { color: ui.value.border } },
@@ -262,30 +262,30 @@ const TOOLTIP_BASE = computed(() => ({
 const LEGEND_BASE = computed(() => ({ textStyle: { color: ui.value.muted, fontSize: 11 }, top: 0, icon: 'circle' }))
 
 const option = computed(() => {
-  const tipo = chartType.value
+  const kind = chartType.value
   const AXIS = AXIS_STYLE.value
   const TOOLTIP = TOOLTIP_BASE.value
   const LEGEND = LEGEND_BASE.value
   const c = ui.value
 
-  if (tipo === 'pie' || tipo === 'treemap') {
-    // top-5 categorie + "Altro" (solo per funzioni additive: una media di medie
-    // sarebbe sbagliata → in quel caso solo le top-5)
+  if (kind === 'pie' || kind === 'treemap') {
+    // top-5 categories + "Other" (only for additive functions: an average of averages would
+    // be wrong → in that case only the top-5)
     const top = rows.value.slice(0, MAX_SERIES)
     const rest = rows.value.slice(MAX_SERIES)
     const data = top.map((r, i) => ({
       name: String(r[xCol.value]),
       value: r.__valore,
-      itemStyle: tipo === 'pie' ? { color: PALETTE[i] } : undefined,
+      itemStyle: kind === 'pie' ? { color: PALETTE[i] } : undefined,
     }))
     if (rest.length && ADDITIVE.has(func.value)) {
       data.push({
         name: t('chartPanel.otherGroup', { n: rest.length }),
         value: rest.reduce((s, r) => s + (Number(r.__valore) || 0), 0),
-        itemStyle: tipo === 'pie' ? { color: OTHER_COLOR } : undefined,
+        itemStyle: kind === 'pie' ? { color: OTHER_COLOR } : undefined,
       })
     }
-    if (tipo === 'pie') {
+    if (kind === 'pie') {
       return {
         backgroundColor: 'transparent',
         tooltip: { ...TOOLTIP, trigger: 'item' },
@@ -293,14 +293,14 @@ const option = computed(() => {
           name: seriesName.value,
           type: 'pie',
           radius: ['42%', '72%'], // donut
-          itemStyle: { borderColor: c.panel, borderWidth: 2 }, // spacer tra fette
+          itemStyle: { borderColor: c.panel, borderWidth: 2 }, // spacer between slices
           label: { color: c.text, fontSize: 11, formatter: '{b}\n{d}%' },
           labelLine: { lineStyle: { color: c.border } },
           data,
         }],
       }
     }
-    // treemap = magnitudine → UNA tinta con shading per valore (non identità)
+    // treemap = magnitude → ONE hue with shading by value (not identity)
     return {
       backgroundColor: 'transparent',
       tooltip: { ...TOOLTIP, trigger: 'item' },
@@ -311,7 +311,7 @@ const option = computed(() => {
         nodeClick: false,
         breadcrumb: { show: false },
         itemStyle: { color: PALETTE[0], borderColor: c.panel, borderWidth: 2 },
-        colorAlpha: [0.45, 1], // shading sequenziale per valore
+        colorAlpha: [0.45, 1], // sequential shading by value
         label: { color: c.text, fontSize: 11, formatter: '{b}' },
         data: rows.value.slice(0, Math.max(topN.value, 1)).map((r) => ({
           name: String(r[xCol.value]),
@@ -321,7 +321,7 @@ const option = computed(() => {
     }
   }
 
-  if (tipo === 'scatter') {
+  if (kind === 'scatter') {
     const by = byCol.value
     let seriesDefs: { name: string; rows: Record<string, any>[] }[]
     if (by) {
@@ -345,12 +345,11 @@ const option = computed(() => {
       tooltip: {
         ...TOOLTIP,
         trigger: 'item',
-        // esc() OBBLIGATORIO su ogni pezzo dinamico: un formatter FUNZIONE non
-        // passa dall'escape di ECharts (quello lo fa solo sul formatter
-        // predefinito) e il risultato finisce in innerHTML. `p.data.name` è il
-        // valore grezzo di una cella e i nomi di colonna vengono dal dataset:
-        // senza escape, un `<img src=x onerror=...>` in una colonna di testo
-        // esegue script in chi passa il puntatore su un pallino.
+        // esc() REQUIRED on every dynamic piece: a FUNCTION formatter does not go through
+        // ECharts' escaping (it does that only on the default formatter) and the result ends up
+        // in innerHTML. `p.data.name` is a cell's raw value and the column names come from the
+        // dataset: without escaping, an `<img src=x onerror=...>` in a text column runs script in
+        // whoever hovers on a dot.
         // Audit 2026-09-19, A6.
         formatter: (p: any) =>
           `${esc(p.data.name)}<br/>${esc(xFunc.value)}(${esc(xNumCol.value)}): <b>${esc(fmt.format(p.data.value[0]))}</b>` +
@@ -369,7 +368,7 @@ const option = computed(() => {
   }
 
   // bar / line / area
-  const isBar = tipo === 'bar'
+  const isBar = kind === 'bar'
   let cats: string[]
   let seriesList: any[]
   if (byCol.value) {
@@ -386,7 +385,7 @@ const option = computed(() => {
             symbol: 'circle',
             symbolSize: 7,
             showSymbol: cats.length <= 30,
-            ...(tipo === 'area' ? { areaStyle: { opacity: 0.12 } } : {}),
+            ...(kind === 'area' ? { areaStyle: { opacity: 0.12 } } : {}),
           },
     )
   } else {
@@ -403,7 +402,7 @@ const option = computed(() => {
             symbol: 'circle',
             symbolSize: 8,
             showSymbol: vals.length <= 30,
-            ...(tipo === 'area' ? { areaStyle: { opacity: 0.15 } } : {}),
+            ...(kind === 'area' ? { areaStyle: { opacity: 0.15 } } : {}),
           },
     ]
   }
@@ -411,7 +410,7 @@ const option = computed(() => {
     backgroundColor: 'transparent',
     color: PALETTE,
     grid: { left: 8, right: 16, top: seriesList.length > 1 ? 30 : 28, bottom: 8, containLabel: true },
-    ...(seriesList.length > 1 ? { legend: LEGEND } : {}), // ≥2 serie → legenda sempre
+    ...(seriesList.length > 1 ? { legend: LEGEND } : {}), // ≥2 series → legend always
     tooltip: {
       ...TOOLTIP,
       trigger: isBar ? 'item' : 'axis',
@@ -430,7 +429,7 @@ const option = computed(() => {
 
 <template>
   <div class="chartpanel">
-    <!-- controlli in una riga sopra il grafico -->
+    <!-- controls in one row above the chart -->
     <div class="controls">
       <div class="typebtns">
         <button

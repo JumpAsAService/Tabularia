@@ -1,7 +1,7 @@
 <script setup lang="ts">
-// Dialog di creazione di una datasource da database: connessione + tabella
-// oppure SQL libero ("vista"). Alla conferma parte il primo ingest (snapshot
-// parquet); il refresh successivo si fa dalla lista datasource.
+// Dialog creating a datasource from a database: connection + table or free SQL ("view").
+// At confirmation the first ingest starts (parquet snapshot); the next refresh is done
+// from the datasources' list.
 // The dialog follows the chosen connection: a database (table or SQL), SharePoint
 // (path + sheet), SFTP or S3 (folder + glob + reading options), an HTTP API (the
 // call). The file sources share the «dynamic» part: placeholders in the names,
@@ -22,7 +22,7 @@ import { useFolderPaths } from '~/composables/useFolderPaths'
 
 const props = defineProps<{
   open: boolean
-  connections: ConnectionInfo[] // quelle usabili dall'utente (CONNECT)
+  connections: ConnectionInfo[] // the ones the user can use (CONNECT)
   error?: string
   busy?: boolean
 }>()
@@ -38,7 +38,7 @@ const emit = defineEmits<{
 const connApi = useConnections()
 const { pathOf } = useFolderPaths() // connection names repeat across folders
 
-// fuoco iniziale sulla card, Tab confinato, Esc funzionante, fuoco restituito
+// initial focus on the card, Tab confined, Esc working, focus given back
 const card = ref<HTMLElement | null>(null)
 useDialogA11y(card, () => props.open, () => emit('cancel'))
 
@@ -48,15 +48,16 @@ const connectionId = ref<number | null>(null)
 const sourceType = ref<'table' | 'sql'>('table')
 const tableName = ref('')
 const sql = ref('')
-// chiavi di ORDER BY, testo separato da virgole: pre-ingest non conosciamo le
-// colonne (solo i nomi delle tabelle), quindi l'utente le digita — è la SUA
-// tabella. Vuoto = nessun ordine. Un nome sbagliato dà l'errore parlante del DB.
+// ORDER BY keys, comma-separated text: before the ingest we do not know the columns
+// (only the tables' names), so the user types them — it is THEIR table. Empty = no
+// order. A wrong name gives the DB's clear error.
 const sortKeysText = ref('')
 
-// Connessione SharePoint: niente tabella né SQL — un PERCORSO (anche con glob), the
-// format (Excel, CSV or both by extension) e il FOGLIO of the workbooks. Più file corrispondenti diventano una tabella sola, e ogni riga dice
-// da quale file arriva. Il file deve essere machine readable: intestazione in
-// prima riga, un nome per colonna. Non ci sono opzioni per aggirarlo, apposta.
+// SharePoint connection: no table nor SQL — a PATH (globs too), the format (Excel, CSV or
+// both by extension) and the SHEET of the workbooks. Several matching files become one
+// table, and every row says which file it comes from. The file must be machine readable:
+// header in the first row, one name per column. There are no options to get around it,
+// on purpose.
 const { t } = useI18n()
 const selected = computed(() => props.connections.find((c) => c.id === connectionId.value) ?? null)
 const isSp = computed(() => selected.value?.db_type === 'sharepoint')
@@ -68,7 +69,7 @@ const spTotal = ref(0)
 const spCheck = ref<FilesCheck | null>(null)
 const spChecking = ref(false)
 const spError = ref('')
-let spSeq = 0 // solo l'ULTIMO controllo scrive: due Invio di fila non si sovrappongono
+let spSeq = 0 // only the LAST check writes: two Enters in a row do not overlap
 async function checkFiles() {
   if (connectionId.value == null || !spPath.value.trim() || spChecking.value) return
   const seq = ++spSeq
@@ -210,7 +211,7 @@ const sheetModel = computed<string>({
 const sheetList = computed(() => (isSp.value ? spSheets.value : ftSheets.value))
 const sheetFile = computed(() => (isSp.value ? spCheck.value : ftCheck.value)?.sheets?.file)
 
-// tabelle della connessione scelta (best-effort: se fallisce si digita a mano)
+// the chosen connection's tables (best effort: if it fails one types by hand)
 const tables = ref<string[]>([])
 const tablesLoading = ref(false)
 const tablesError = ref('')

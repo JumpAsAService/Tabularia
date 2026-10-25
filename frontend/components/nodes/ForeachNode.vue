@@ -1,7 +1,7 @@
 <script setup lang="ts">
-// Container del ciclo: i nodi trascinati DENTRO diventano il corpo (figli Vue
-// Flow con parentNode). Input a sinistra: sopra = dati, sotto = driver (una
-// riga = un'iterazione, le colonne sono i placeholder {{colonna}}).
+// The loop's container: the nodes dragged INSIDE become the body (Vue Flow children with
+// parentNode). Inputs on the left: top = data, bottom = driver (a row = an iteration,
+// the columns are the {{column}} placeholders).
 import { Handle, Position } from '@vue-flow/core'
 import { NodeResizer } from '@vue-flow/node-resizer'
 import { Repeat } from 'lucide-vue-next'
@@ -11,7 +11,7 @@ defineProps<{ id: string; data: any }>()
 
 <template>
   <div class="foreach-box">
-    <!-- maniglie di ridimensionamento su bordi e angoli -->
+    <!-- resize handles on edges and corners -->
     <NodeResizer
       :min-width="280"
       :min-height="160"
@@ -55,7 +55,7 @@ defineProps<{ id: string; data: any }>()
 .ico { color: #f472b6; }
 .hint { font-weight: 400; font-size: 10px; margin-left: auto; }
 .handle-driver { background: #f472b6 !important; }
-/* etichetta del driver, appena fuori dal bordo sinistro all'altezza dell'handle */
+/* the driver's label, just outside the left border at the handle's height */
 .hlabel-left {
   position: absolute;
   left: -6px;

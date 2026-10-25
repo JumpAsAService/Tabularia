@@ -1,6 +1,6 @@
 <script setup lang="ts">
-// «Token API»: le credenziali dei propri script. Valgono con i propri permessi,
-// mai di più; di sola lettura non modificano niente. Il segreto si vede una volta.
+// «API tokens»: the credentials of one's own scripts. They hold with one's own
+// permissions, never more; read-only ones change nothing. The secret is seen once.
 import { ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { LoaderCircle, Trash2, BookOpen } from 'lucide-vue-next'
@@ -23,7 +23,7 @@ const items = ref<ApiToken[]>([])
 const loading = ref(false)
 const busy = ref(false)
 const error = ref('')
-const appenaCreato = ref<string | null>(null)
+const justCreated = ref<string | null>(null)
 
 async function load() {
   loading.value = true
@@ -36,14 +36,14 @@ async function load() {
     loading.value = false
   }
 }
-watch(() => props.open, (o) => { if (o) { appenaCreato.value = null; load() } }, { immediate: true })
+watch(() => props.open, (o) => { if (o) { justCreated.value = null; load() } }, { immediate: true })
 
-async function crea(body: TokenRequest) {
+async function create(body: TokenRequest) {
   busy.value = true
   error.value = ''
   try {
-    const nuovo = await api.createMyToken(body)
-    appenaCreato.value = nuovo.token
+    const fresh = await api.createMyToken(body)
+    justCreated.value = fresh.token
     await load()
   } catch (e) {
     error.value = errMessage(e)
@@ -52,7 +52,7 @@ async function crea(body: TokenRequest) {
   }
 }
 
-async function revoca(tk: ApiToken) {
+async function revoke(tk: ApiToken) {
   if (!confirm(t('integrations.confirmRevoke', { name: tk.name }))) return
   busy.value = true
   try {
@@ -70,8 +70,8 @@ async function revoca(tk: ApiToken) {
   <Modal :open="open" :title="$t('integrations.myTokensTitle')" :width="680" @close="emit('close')">
     <p class="lead muted">{{ $t('integrations.myTokensLead') }}</p>
 
-    <SecretOnce v-if="appenaCreato" :value="appenaCreato" :label="$t('integrations.newToken')" @done="appenaCreato = null" />
-    <TokenForm v-else :busy="busy" @create="crea" />
+    <SecretOnce v-if="justCreated" :value="justCreated" :label="$t('integrations.newToken')" @done="justCreated = null" />
+    <TokenForm v-else :busy="busy" @create="create" />
 
     <p v-if="error" class="err" role="alert">{{ error }}</p>
     <p v-if="loading" class="muted"><LoaderCircle :size="13" class="spin" /> {{ $t('sessions.loading') }}</p>
@@ -93,7 +93,7 @@ async function revoca(tk: ApiToken) {
           <td class="muted nowrap">{{ fmt.date(tk.expires_at) }}</td>
           <td class="muted nowrap">{{ tk.last_used_at ? fmt.ago(tk.last_used_at) : $t('integrations.never') }}</td>
           <td class="right">
-            <button class="mini danger" :disabled="busy" :aria-label="$t('integrations.revokeAria', { name: tk.name })" :title="$t('integrations.revoke')" @click="revoca(tk)">
+            <button class="mini danger" :disabled="busy" :aria-label="$t('integrations.revokeAria', { name: tk.name })" :title="$t('integrations.revoke')" @click="revoke(tk)">
               <Trash2 :size="13" />
             </button>
           </td>
@@ -103,7 +103,7 @@ async function revoca(tk: ApiToken) {
     <p v-else class="muted empty">{{ $t('integrations.noTokens') }}</p>
 
     <template #footer>
-      <!-- la documentazione la serve il gateway stesso: sempre raggiungibile, sempre della versione installata -->
+      <!-- the gateway itself serves the documentation: always reachable, always of the installed version -->
       <a class="doclink" :href="`${apiBase}/docs`" target="_blank" rel="noopener">
         <BookOpen :size="14" /> {{ $t('integrations.apiGuide') }}
       </a>

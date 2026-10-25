@@ -1,15 +1,15 @@
 import { computed } from 'vue'
 
-// Righe e colonne di un nodo, dall'ultima anteprima che l'ha toccato: le
-// fornisce l'editor (provide 'nodeStats'), nessuna query in piu'. Le etichette
-// sono gia' tradotte; `rows` manca quando si conoscono solo le colonne.
+// A node's rows and columns, from the last preview that touched it: the editor provides
+// them (provide 'nodeStats'), no extra query. The labels are translated already; `rows`
+// is missing when only the columns are known.
 export type CacheState = 'hit' | 'pending' | 'skipped' | 'off'
 export type NodeStats = { rows?: number; truncated?: boolean; cols: number; cacheState?: CacheState | null; cacheCap?: number | null }
 export type NodeStatsLabels = {
   rows: string | null
   cols: string
   title: string
-  // il passo a monte supera il tetto della cache: tooltip per il nodo e riga per il pannello
+  // the upstream step exceeds the cache's cap: tooltip for the node and line for the panel
   noCache: string | null
   cacheHint: string | null
 }

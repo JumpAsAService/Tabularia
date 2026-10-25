@@ -1,17 +1,17 @@
-// Integrazioni: token API (propri e degli account di servizio), account di
-// servizio, webhook. Il gateway le descrive in docs/api.md.
+// Integrations: API tokens (one's own and the service accounts'), service accounts,
+// webhooks. The gateway describes them in docs/api.md.
 
 export interface ApiToken {
   id: number
   name: string
-  prefix: string // l'inizio del token: per riconoscerlo, non per usarlo
+  prefix: string // the token's beginning: to recognize it, not to use it
   scope: 'read' | 'write'
   created_at: string
   expires_at: string
   last_used_at: string | null
   last_used_ip: string | null
 }
-// alla creazione, e solo lì: il segreto
+// at creation, and only there: the secret
 export interface ApiTokenCreated extends ApiToken {
   token: string
 }
@@ -76,14 +76,14 @@ export interface WebhookDelivery {
 export function useIntegrations() {
   const { apiFetch } = useApiClient()
   return {
-    // i propri token
+    // one's own tokens
     myTokens: () => apiFetch<ApiToken[]>('/auth/tokens'),
     createMyToken: (body: TokenRequest) => apiFetch<ApiTokenCreated>('/auth/tokens', { method: 'POST', body }),
     revokeMyToken: (id: number) => apiFetch<void>(`/auth/tokens/${id}`, { method: 'DELETE' }),
-    // tutti i token (amministrazione)
+    // all the tokens (administration)
     allTokens: () => apiFetch<AdminApiToken[]>('/admin/api-tokens'),
     revokeAnyToken: (id: number) => apiFetch<void>(`/admin/api-tokens/${id}`, { method: 'DELETE' }),
-    // account di servizio
+    // service accounts
     serviceAccounts: () => apiFetch<ServiceAccount[]>('/service-accounts'),
     createServiceAccount: (name: string) => apiFetch<ServiceAccount>('/service-accounts', { method: 'POST', body: { name } }),
     deleteServiceAccount: (id: number) => apiFetch<void>(`/service-accounts/${id}`, { method: 'DELETE' }),
@@ -106,5 +106,5 @@ export function useIntegrations() {
   }
 }
 
-// scadenze proposte per un token: il tetto vero lo decide il gateway
+// expiries offered for a token: the gateway decides the real cap
 export const TOKEN_DURATIONS = [30, 90, 180, 365]

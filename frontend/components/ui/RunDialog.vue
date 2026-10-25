@@ -1,8 +1,8 @@
 <script setup lang="ts">
-// Dialog di lancio del run: esegui e basta, oppure pubblica l'output come
-// datasource nominata (riusabile come sorgente in altri flussi). Se il canvas
-// ha nodi Output, il dialog mostra COSA verrà scritto (un run per output): la
-// configurazione sta sui nodi, qui si conferma soltanto.
+// The run's launch dialog: just run, or publish the output as a named datasource
+// (reusable as a source in other flows). When the canvas has Output nodes, the dialog
+// shows WHAT will be written (one run per output): the configuration is on the nodes,
+// here one only confirms.
 import { ref, watch } from 'vue'
 import { Play, X, Database, HardDriveDownload } from 'lucide-vue-next'
 import type { PublishSpec } from '~/composables/useRuns'
@@ -10,19 +10,19 @@ import { useDialogA11y } from '~/composables/useDialogA11y'
 
 const props = defineProps<{
   open: boolean
-  canPublish: boolean // richiede un flusso salvato (il run entra nella cronologia)
+  canPublish: boolean // requires a saved flow (the run goes into the history)
   projects: { id: number; name: string }[]
   defaultProjectId: number | null
-  error?: string // errore di lancio (409 nome duplicato, 403…): il dialog resta aperto
+  error?: string // launch error (409 duplicate name, 403…): the dialog stays open
   busy?: boolean
-  outputs?: { id: string; label: string; detail: string }[] // nodi Output del canvas
+  outputs?: { id: string; label: string; detail: string }[] // the canvas's Output nodes
 }>()
 const emit = defineEmits<{
   (e: 'confirm', publish: PublishSpec | null): void
   (e: 'cancel'): void
 }>()
 
-// fuoco iniziale sulla card, Tab confinato, Esc funzionante, fuoco restituito
+// initial focus on the card, Tab confined, Esc working, focus given back
 const card = ref<HTMLElement | null>(null)
 useDialogA11y(card, () => props.open, () => emit('cancel'))
 
@@ -75,7 +75,7 @@ function confirm() {
 
         <p class="muted rd-sub">{{ $t('runDialog.subtitle') }}</p>
 
-        <!-- con nodi Output nel canvas: un run per output, configurati sui nodi -->
+        <!-- with Output nodes on the canvas: one run per output, configured on the nodes -->
         <template v-if="outputs?.length">
           <div class="rd-outputs">
             <div v-for="o in outputs" :key="o.id" class="rd-output">

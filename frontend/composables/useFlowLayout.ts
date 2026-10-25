@@ -1,22 +1,21 @@
-// Auto-layout del canvas ("Ordina il flusso"). Nessuna libreria esterna:
-// il grafo è un DAG quasi-lineare, quindi basta una passeggiata.
+// The canvas's auto-layout ("Tidy the flow"). No external library: the graph is an
+// almost-linear DAG, so a walk is enough.
 //
-// Schema: la catena principale scorre sinistra→destra su una riga; ogni ramo
-// destro (lato right di un join, driver di un foreach) va su una riga SOPRA,
-// col suo ultimo nodo allineato in X al nodo che alimenta (l'arco scende
-// nell'input in alto). I figli di un container foreach vengono messi in fila
-// dentro il container, che si ridimensiona per contenerli.
+// Scheme: the main chain runs left→right on a row; every right branch (the right side of
+// a join, a foreach's driver) goes on a row ABOVE, with its last node aligned in X with
+// the node it feeds (the edge comes down into the top input). The children of a foreach
+// container are lined up inside the container, which resizes to hold them.
 
 import type { Edge, GraphNode } from '@vue-flow/core'
 import { buildIncoming } from './useFlowModel'
 
-const GAP_X = 70 // spazio orizzontale tra nodi consecutivi
-const GAP_Y = 70 // spazio verticale tra righe
-const BASE = 60 // margine dall'origine del canvas
-const OP_W = 190 // fallback se il nodo non è ancora stato misurato
+const GAP_X = 70 // horizontal space between consecutive nodes
+const GAP_Y = 70 // vertical space between rows
+const BASE = 60 // margin from the canvas's origin
+const OP_W = 190 // fallback when the node has not been measured yet
 const OP_H = 80
-const PAD = 24 // padding interno del container foreach
-const HEADER = 56 // spazio per la barra del titolo del container
+const PAD = 24 // inner padding of the foreach container
+const HEADER = 56 // room for the container's title bar
 
 interface Size {
   width: number
@@ -24,12 +23,12 @@ interface Size {
 }
 
 export interface LayoutResult {
-  positions: Map<string, { x: number; y: number }> // nodi top-level (assolute)
-  childPositions: Map<string, { x: number; y: number }> // figli foreach (relative al container)
+  positions: Map<string, { x: number; y: number }> // top-level nodes (absolute)
+  childPositions: Map<string, { x: number; y: number }> // foreach children (relative to the container)
   containerSizes: Map<string, Size>
 }
 
-// GraphNode e non Node: le dimensioni misurate dal DOM stanno sul nodo VIVO
+// GraphNode and not Node: the sizes measured from the DOM sit on the LIVE node
 function widthOf(n: GraphNode, containers: Map<string, Size>): number {
   const c = containers.get(n.id)
   if (c) return c.width
@@ -46,9 +45,9 @@ function heightOf(n: GraphNode, containers: Map<string, Size>): number {
   return OP_H
 }
 
-/** Figli di un container in ordine di catena (poi gli eventuali sciolti). */
+/** A container's children in chain order (then any loose ones). */
 function orderedChildren(nodes: GraphNode[], edges: Edge[], containerId: string): GraphNode[] {
-  // i commenti sono annotazioni: non entrano nella catena del corpo
+  // comments are annotations: they do not enter the body's chain
   const kids = nodes.filter((n) => n.parentNode === containerId && n.type !== 'comment')
   if (!kids.length) return []
   const ids = new Set(kids.map((k) => k.id))
@@ -75,16 +74,16 @@ function orderedChildren(nodes: GraphNode[], edges: Edge[], containerId: string)
 
 export function computeAutoLayout(nodes: GraphNode[], edges: Edge[]): LayoutResult {
   const inc = buildIncoming(edges)
-  // i commenti restano dove l'utente li ha messi: fuori dall'auto-layout
+  // the comments stay where the user put them: outside the auto-layout
   const top = nodes.filter((n) => !n.parentNode && n.type !== 'comment')
   const byId = new Map(top.map((n) => [n.id, n]))
 
-  // 1) container foreach: figli in fila, dimensioni adattate al contenuto
+  // 1) foreach containers: children lined up, sizes fitted to the content
   const childPositions = new Map<string, { x: number; y: number }>()
   const containerSizes = new Map<string, Size>()
   for (const c of top.filter((n) => n.type === 'foreach')) {
     const kids = orderedChildren(nodes, edges, c.id)
-    if (!kids.length) continue // vuoto: lascia le dimensioni che ha (spazio per il drop)
+    if (!kids.length) continue // empty: leaves the sizes it has (room for the drop)
     let x = PAD
     let maxH = 0
     for (const k of kids) {
@@ -98,11 +97,11 @@ export function computeAutoLayout(nodes: GraphNode[], edges: Edge[]): LayoutResu
     })
   }
 
-  // 2) componenti: da ogni foglia si risale la catena sinistra; i rami destri
-  //    ricorsivamente su righe sopra (righe locali negative, poi normalizzate)
+  // 2) components: from every leaf it walks up the left chain; the right branches
+  //    recursively on rows above (negative local rows, then normalized)
   const hasOut = new Set(edges.map((e) => e.source))
   let leaves = top.filter((n) => !hasOut.has(n.id))
-  if (!leaves.length) leaves = top // paranoia: grafo senza foglie
+  if (!leaves.length) leaves = top // paranoia: a graph without leaves
 
   const globalX = new Map<string, number>()
   const globalRow = new Map<string, number>()
@@ -112,7 +111,7 @@ export function computeAutoLayout(nodes: GraphNode[], edges: Edge[]): LayoutResu
     if (globalRow.has(leaf.id)) continue
     const localX = new Map<string, number>()
     const localRow = new Map<string, number>()
-    let cursor = 0 // ogni ramo destro prende la prima riga libera sopra
+    let cursor = 0 // every right branch takes the first free row above
 
     const placeChain = (leafId: string, row: number, alignRightX: number | null) => {
       const chain: GraphNode[] = []
@@ -126,12 +125,12 @@ export function computeAutoLayout(nodes: GraphNode[], edges: Edge[]): LayoutResu
         cur = inc.get(cur)?.left
       }
       if (!chain.length) return
-      // fan-out: la catena si aggancia a un nodo già piazzato in questo componente
+      // fan-out: the chain hooks onto a node already placed in this component
       const stopAt = cur && localRow.has(cur) ? cur : null
 
       const xs: number[] = new Array(chain.length)
       if (alignRightX != null) {
-        // ramo: l'ultimo nodo allineato al nodo alimentato, i precedenti a sinistra
+        // branch: the last node aligned with the fed node, the earlier ones on the left
         let x = alignRightX
         for (let i = chain.length - 1; i >= 0; i--) {
           xs[i] = x
@@ -158,8 +157,8 @@ export function computeAutoLayout(nodes: GraphNode[], edges: Edge[]): LayoutResu
 
     placeChain(leaf.id, 0, null)
 
-    // normalizza il componente (x minima a 0, righe [0..span-1]) e riversa
-    // nel globale in una banda sotto i componenti già piazzati
+    // normalizes the component (minimum x at 0, rows [0..span-1]) and pours it into the
+    // global one in a band under the components already placed
     let minRow = 0
     let minX = Infinity
     for (const r of localRow.values()) minRow = Math.min(minRow, r)
@@ -171,7 +170,7 @@ export function computeAutoLayout(nodes: GraphNode[], edges: Edge[]): LayoutResu
     nextRow += -minRow + 1
   }
 
-  // 3) righe → y assolute, ogni riga alta quanto il suo nodo più alto
+  // 3) rows → absolute y, every row as tall as its tallest node
   const rowHeight = new Map<number, number>()
   for (const n of top) {
     const r = globalRow.get(n.id)

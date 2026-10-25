@@ -1,6 +1,6 @@
-// Registra vue-i18n. La lingua iniziale arriva da un COOKIE (non localStorage)
-// così l'SSR renderizza già nella lingua giusta: niente flash né mismatch di
-// idratazione. Il cambio lingua avviene poi via composables/useLocale.
+// Registers vue-i18n. The initial language comes from a COOKIE (not localStorage) so SSR
+// renders in the right language already: no flash nor hydration mismatch. The language
+// change then happens through composables/useLocale.
 import { createI18n } from 'vue-i18n'
 import { messages, DEFAULT_LOCALE, isLocale } from '~/i18n'
 
@@ -17,7 +17,7 @@ export default defineNuxtPlugin((nuxtApp) => {
 
   const i18n = createI18n({
     legacy: false, // Composition API
-    globalInjection: true, // $t disponibile nei template
+    globalInjection: true, // $t available in the templates
     locale,
     fallbackLocale: DEFAULT_LOCALE,
     messages,
@@ -25,7 +25,7 @@ export default defineNuxtPlugin((nuxtApp) => {
 
   nuxtApp.vueApp.use(i18n)
   if (import.meta.client) clientTranslate = (key) => i18n.global.t(key)
-  // <html lang> dal server, e aggiornato al cambio lingua: la sintesi vocale legge
-  // l'interfaccia con la voce della lingua giusta (prima il server non lo scriveva)
+  // <html lang> from the server, and updated at the language change: speech synthesis reads
+  // the interface with the right language's voice (before, the server did not write it)
   useHead({ htmlAttrs: { lang: computed(() => i18n.global.locale.value) } })
 })

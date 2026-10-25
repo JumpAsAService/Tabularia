@@ -1,9 +1,9 @@
 <script setup lang="ts">
-// Dialogo del download dbt (solo amministratori): il progetto per il team data come
-// lo vuole il loro repository — dove gira (target), progetto completo o cartella da
-// copiare in un progetto esistente, nomi, sorgenti che hanno già, schema,
-// materializzazioni, test del contratto, email. Le scelte restano nel browser, per
-// flusso: chi riesporta lo stesso flusso ritrova le sue.
+// The dbt download's dialog (administrators only): the project for the data team as their
+// repository wants it — where it runs (target), complete project or folder to copy into
+// an existing project, names, sources they have already, schema, materializations, the
+// contract's tests, email. The choices stay in the browser, per flow: whoever exports the
+// same flow again finds theirs.
 import { computed, onBeforeUnmount, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { Download, X } from 'lucide-vue-next'
@@ -40,18 +40,18 @@ const declared = ref<Record<string, boolean>>({})
 const mats = ref<Record<string, DbtMaterialization>>({})
 const tests = ref(true)
 const emails = ref(true)
-const aiDescrizioni = ref(false)
-const aiTraduzioni = ref(false)
+const aiDescriptions = ref(false)
+const aiTranslations = ref(false)
 
 const TARGETS: DbtTarget[] = ['clickhouse', 'duckdb', 'native']
-const memoria = (id: number) => `tabularia.dbtExport.${id}`
+const memory = (id: number) => `tabularia.dbtExport.${id}`
 
 type PlanTarget = DbtExportPlan['targets'][number]
 /** A target can be chosen when the plan offers it, or, in the folder package, when it only needs
  *  sources the team's own project already declares (`requires`: ClickHouse with an Oracle source):
  *  the gateway accepts it there, with those sources sent «already declared». */
-const utilizzabile = (x: PlanTarget | null | undefined, pacchetto: 'project' | 'folder') =>
-  !!x && (x.available || (pacchetto === 'folder' && x.requires?.package === 'folder'))
+const usable = (x: PlanTarget | null | undefined, pack: 'project' | 'folder') =>
+  !!x && (x.available || (pack === 'folder' && x.requires?.package === 'folder'))
 
 // The component stays mounted between openings: each opening (and each closing) gets a new
 // number and aborts the requests of the one before. An answer that still arrives for an
@@ -77,7 +77,7 @@ watch(
       if (mine !== opening) return
       plan.value = p
       preimposta(p)
-      ripristina(f.id, p)
+      restore(f.id, p)
     } catch (e) {
       if (mine === opening) error.value = errMessage(e)
     } finally {
@@ -107,19 +107,19 @@ function preimposta(p: DbtExportPlan) {
   mats.value = Object.fromEntries(p.outputs.map((o) => [o.key, o.materialized]))
   tests.value = true
   emails.value = true
-  aiDescrizioni.value = false
-  aiTraduzioni.value = false
+  aiDescriptions.value = false
+  aiTranslations.value = false
 }
 
-/** Le scelte dell'ultimo download di questo flusso, solo quelle ancora valide. */
-function ripristina(id: number, p: DbtExportPlan) {
+/** The choices of this flow's last download, only those still valid. */
+function restore(id: number, p: DbtExportPlan) {
   try {
-    const raw = localStorage.getItem(memoria(id))
+    const raw = localStorage.getItem(memory(id))
     if (!raw) return
     const s = JSON.parse(raw) as Partial<DbtExportOptions>
     if (s.package === 'project' || s.package === 'folder') pkg.value = s.package
     // the package first: a target that needs the folder package is valid only with it
-    if (s.target && utilizzabile(p.targets.find((x) => x.id === s.target), pkg.value)) target.value = s.target
+    if (s.target && usable(p.targets.find((x) => x.id === s.target), pkg.value)) target.value = s.target
     if (typeof s.folder === 'string') folder.value = s.folder
     if (typeof s.prefix === 'string') prefix.value = s.prefix
     if (typeof s.layers === 'boolean') layers.value = s.layers
@@ -127,8 +127,8 @@ function ripristina(id: number, p: DbtExportPlan) {
     if (typeof s.tests === 'boolean') tests.value = s.tests
     if (typeof s.emails === 'boolean') emails.value = s.emails
     // only the options the dialog offers for this plan: the AI on, or texts kept for this version
-    if (aiOfferta(p, 'descriptions') && typeof s.ai_descriptions === 'boolean') aiDescrizioni.value = s.ai_descriptions
-    if (aiOfferta(p, 'translations') && typeof s.ai_translations === 'boolean') aiTraduzioni.value = s.ai_translations
+    if (aiOffered(p, 'descriptions') && typeof s.ai_descriptions === 'boolean') aiDescriptions.value = s.ai_descriptions
+    if (aiOffered(p, 'translations') && typeof s.ai_translations === 'boolean') aiTranslations.value = s.ai_translations
     for (const [k, v] of Object.entries(s.sources ?? {})) {
       if (v?.name) sourceNames.value[k] = v.name
       if (v?.declared) declared.value[k] = true
@@ -138,27 +138,27 @@ function ripristina(id: number, p: DbtExportPlan) {
       if (m && o.materializations.includes(m)) mats.value[o.key] = m
     }
   } catch {
-    /* niente memoria (navigazione privata, dati cancellati): i valori di default */
+    /* no memory (private browsing, data deleted): the default values */
   }
 }
 
-function ricorda(id: number, o: DbtExportOptions) {
+function remember(id: number, o: DbtExportOptions) {
   try {
-    localStorage.setItem(memoria(id), JSON.stringify(o))
+    localStorage.setItem(memory(id), JSON.stringify(o))
   } catch {
-    /* non si ricorda: pazienza */
+    /* not remembered: never mind */
   }
 }
 
-const corrente = computed(() => plan.value?.targets.find((x) => x.id === target.value) ?? null)
-const sorgenti = computed(() => corrente.value?.sources ?? [])
+const current_ = computed(() => plan.value?.targets.find((x) => x.id === target.value) ?? null)
+const planSources = computed(() => current_.value?.sources ?? [])
 // the sources the chosen target needs «already declared» (folder package only): ticked, locked, sent
-const obbligate = computed(() => new Set(pkg.value === 'folder' ? (corrente.value?.requires?.declared ?? []) : []))
-const cartella = computed(() =>
+const required = computed(() => new Set(pkg.value === 'folder' ? (current_.value?.requires?.declared ?? []) : []))
+const folderName = computed(() =>
   pkg.value === 'folder' ? folder.value.trim() || plan.value?.default_folder || '' : folder.value.trim(),
 )
 
-// le stesse forme che il gateway accetta: un valore sbagliato si vede qui, non al download
+// the same forms the gateway accepts: a wrong value shows here, not at the download
 const RE = {
   folder: /^[a-z0-9_]{0,40}$/,
   prefix: /^([a-z][a-z0-9_]{0,19})?$/,
@@ -172,11 +172,11 @@ const RE = {
 const effectiveSourceNames = computed(() => {
   const names: Record<string, string> = {}
   const used = new Set<string>()
-  for (const s of sorgenti.value) {
+  for (const s of planSources.value) {
     const typed = (sourceNames.value[s.key] ?? '').trim()
     if (typed) used.add((names[s.key] = typed))
   }
-  for (const s of sorgenti.value) {
+  for (const s of planSources.value) {
     if (names[s.key]) continue
     const base = s.default_base || s.default_name
     let name = base
@@ -188,15 +188,15 @@ const effectiveSourceNames = computed(() => {
 
 // each error says the rule it breaks, on its own field (and to assistive technology too)
 type FieldError = { rule: 'folder' | 'prefix' | 'schema' | 'source' } | { rule: 'duplicate'; name: string; table: string }
-const errori = computed(() => {
+const errors = computed(() => {
   const e: Record<string, FieldError> = {}
-  if (!RE.folder.test(cartella.value)) e.folder = { rule: 'folder' }
+  if (!RE.folder.test(folderName.value)) e.folder = { rule: 'folder' }
   if (!RE.prefix.test(prefix.value.trim())) e.prefix = { rule: 'prefix' }
   if (pkg.value === 'project' && !RE.schema.test(schema.value.trim())) e.schema = { rule: 'schema' }
   // dbt refuses two sources with the same name that both list the same table (a shared name
   // with different tables is fine): the name each source will have, typed or default
   const seen = new Map<string, string>()
-  for (const s of sorgenti.value) {
+  for (const s of planSources.value) {
     const typed = (sourceNames.value[s.key] ?? '').trim()
     if (!RE.source.test(typed)) {
       e[`source:${s.key}`] = { rule: 'source' }
@@ -216,15 +216,15 @@ function errorText(x: FieldError | undefined): string {
   if (x.rule === 'duplicate') return t('dbtExportDialog.duplicateSource', { name: x.name, table: x.table })
   return t({ folder: 'dbtExportDialog.invalidFolder', prefix: 'dbtExportDialog.invalidPrefix', schema: 'dbtExportDialog.invalidSchema', source: 'dbtExportDialog.invalidSource' }[x.rule])
 }
-const valido = computed(() => !Object.keys(errori.value).length && utilizzabile(corrente.value, pkg.value))
+const valid = computed(() => !Object.keys(errors.value).length && usable(current_.value, pkg.value))
 
-function opzioni(): DbtExportOptions {
+function options(): DbtExportOptions {
   const sources: DbtExportOptions['sources'] = {}
-  for (const s of sorgenti.value) {
+  for (const s of planSources.value) {
     const name = (sourceNames.value[s.key] ?? '').trim()
     // «already declared» only means something for a folder copied into the team's project: a
     // complete project has no other sources.yml that declares the source
-    const isDeclared = pkg.value === 'folder' && (obbligate.value.has(s.key) || !!declared.value[s.key])
+    const isDeclared = pkg.value === 'folder' && (required.value.has(s.key) || !!declared.value[s.key])
     if (name || isDeclared) sources[s.key] = { name: name || null, declared: isDeclared }
   }
   const materializations: DbtExportOptions['materializations'] = {}
@@ -235,7 +235,7 @@ function opzioni(): DbtExportOptions {
   return {
     target: target.value,
     package: pkg.value,
-    folder: cartella.value,
+    folder: folderName.value,
     prefix: prefix.value.trim(),
     layers: layers.value,
     sources,
@@ -247,8 +247,8 @@ function opzioni(): DbtExportOptions {
     emails: emails.value,
     // only what the dialog offers: with the AI off, an option nothing was kept for would ask the
     // AI and the gateway would refuse the export
-    ...(aiDescrizioniOfferte.value ? { ai_descriptions: aiDescrizioni.value } : {}),
-    ...(aiTraduzioniOfferte.value ? { ai_translations: aiTraduzioni.value } : {}),
+    ...(aiDescriptionsOffered.value ? { ai_descriptions: aiDescriptions.value } : {}),
+    ...(aiTranslationsOffered.value ? { ai_translations: aiTranslations.value } : {}),
   }
 }
 
@@ -258,15 +258,15 @@ function opzioni(): DbtExportOptions {
  *  package is chosen again. */
 function remembered(o: DbtExportOptions): DbtExportOptions {
   const sources: DbtExportOptions['sources'] = {}
-  for (const s of sorgenti.value) {
+  for (const s of planSources.value) {
     const name = (sourceNames.value[s.key] ?? '').trim()
     if (name || declared.value[s.key]) sources[s.key] = { name: name || null, declared: !!declared.value[s.key] }
   }
   return { ...o, folder: folder.value.trim(), sources, schema: schema.value.trim() || undefined }
 }
 
-/** Il motivo vero di un rifiuto: col download la risposta d'errore arriva come Blob. */
-async function motivo(e: any): Promise<string> {
+/** The real reason of a refusal: with the download the error answer arrives as a Blob. */
+async function reason(e: any): Promise<string> {
   const d = e?.data
   if (typeof Blob !== 'undefined' && d instanceof Blob) {
     try {
@@ -274,26 +274,26 @@ async function motivo(e: any): Promise<string> {
       if (typeof j?.detail === 'string') return j.detail
       if (Array.isArray(j?.detail)) return j.detail.map((x: any) => x?.msg ?? String(x)).join('; ')
     } catch {
-      /* non era JSON */
+      /* it was not JSON */
     }
   }
   return errMessage(e)
 }
 
-async function scarica() {
+async function download() {
   const f = props.flow
-  if (!f || busy.value || !valido.value) return
+  if (!f || busy.value || !valid.value) return
   const mine = opening
   const { signal } = requests
   busy.value = true
   error.value = ''
-  const o = opzioni()
+  const o = options()
   const memo = remembered(o)
   try {
     const { blob, filename } = await api.exportFlowDbt(f.id, o, { signal })
     // closed meanwhile (or opened on another flow): this zip is no one's any more
     if (mine !== opening) return
-    ricorda(f.id, memo)
+    remember(f.id, memo)
     const url = URL.createObjectURL(blob)
     const a = document.createElement('a')
     a.href = url
@@ -305,7 +305,7 @@ async function scarica() {
     URL.revokeObjectURL(url)
     emit('close')
   } catch (e) {
-    const m = await motivo(e)
+    const m = await reason(e)
     if (mine === opening) error.value = m
   } finally {
     if (mine === opening) busy.value = false
@@ -314,30 +314,30 @@ async function scarica() {
 
 /** An AI option is offered when the AI is on, or when the AI kept texts of that kind for the flow's
  *  current version: a re-export reuses them without a call, so the same version gives the same zip. */
-function aiOfferta(p: DbtExportPlan | null, kind: 'descriptions' | 'translations'): boolean {
+function aiOffered(p: DbtExportPlan | null, kind: 'descriptions' | 'translations'): boolean {
   return !!p?.ai && (p.ai.available || !!p.ai.stored?.[kind])
 }
-const aiDescrizioniOfferte = computed(() => aiOfferta(plan.value, 'descriptions'))
-const aiTraduzioniOfferte = computed(() => aiOfferta(plan.value, 'translations'))
+const aiDescriptionsOffered = computed(() => aiOffered(plan.value, 'descriptions'))
+const aiTranslationsOffered = computed(() => aiOffered(plan.value, 'translations'))
 // Who writes what the ticked options bring: the models that wrote the kept texts for a kind that has
 // some, the configured model for a kind nothing was kept for (the AI on).
-const aiSuggerimento = computed(() => {
+const aiHint = computed(() => {
   const ai = plan.value?.ai
-  const scelte = [aiDescrizioniOfferte.value && aiDescrizioni.value && 'descriptions', aiTraduzioniOfferte.value && aiTraduzioni.value && 'translations']
+  const choices = [aiDescriptionsOffered.value && aiDescriptions.value && 'descriptions', aiTranslationsOffered.value && aiTranslations.value && 'translations']
     .filter((k): k is 'descriptions' | 'translations' => !!k)
-  if (!ai || !scelte.length) return ''
-  const modelli = new Set<string>()
-  if (scelte.some((k) => ai.stored?.[k])) for (const m of ai.stored?.models ?? []) modelli.add(m)
-  if (ai.available && ai.model && scelte.some((k) => !ai.stored?.[k])) modelli.add(ai.model)
-  const model = [...modelli].sort().join(', ')
+  if (!ai || !choices.length) return ''
+  const models = new Set<string>()
+  if (choices.some((k) => ai.stored?.[k])) for (const m of ai.stored?.models ?? []) models.add(m)
+  if (ai.available && ai.model && choices.some((k) => !ai.stored?.[k])) models.add(ai.model)
+  const model = [...models].sort().join(', ')
   if (ai.available) return t('dbtExportDialog.aiHint', { model: model || ai.model || '' })
   return model ? t('dbtExportDialog.aiStoredHint', { model }) : t('dbtExportDialog.aiStoredHintUnnamed')
 })
 
-const voce = (id: DbtTarget) => plan.value?.targets.find((x) => x.id === id)
-const etichettaTarget = (id: DbtTarget) =>
+const item = (id: DbtTarget) => plan.value?.targets.find((x) => x.id === id)
+const targetLabel = (id: DbtTarget) =>
   ({ clickhouse: t('dbtExportDialog.targetClickhouse'), duckdb: t('dbtExportDialog.targetDuckdb'), native: t('dbtExportDialog.targetNative') })[id]
-const suggerimentoTarget = (id: DbtTarget) =>
+const targetHint = (id: DbtTarget) =>
   ({ clickhouse: t('dbtExportDialog.targetClickhouseHint'), duckdb: t('dbtExportDialog.targetDuckdbHint'), native: t('dbtExportDialog.targetNativeHint') })[id]
 </script>
 
@@ -356,13 +356,13 @@ const suggerimentoTarget = (id: DbtTarget) =>
         <template v-else-if="plan">
           <fieldset class="dx-group">
             <legend>{{ $t('dbtExportDialog.target') }}</legend>
-            <label v-for="id in TARGETS" :key="id" class="dx-choice" :class="{ off: !utilizzabile(voce(id), pkg) }">
-              <input v-model="target" type="radio" name="dx-target" :value="id" :disabled="!utilizzabile(voce(id), pkg)" />
+            <label v-for="id in TARGETS" :key="id" class="dx-choice" :class="{ off: !usable(item(id), pkg) }">
+              <input v-model="target" type="radio" name="dx-target" :value="id" :disabled="!usable(item(id), pkg)" />
               <span>
-                <strong>{{ etichettaTarget(id) }}</strong>
-                <small v-if="voce(id)?.available">{{ suggerimentoTarget(id) }}</small>
-                <small v-else-if="utilizzabile(voce(id), pkg)">{{ $t('dbtExportDialog.targetOnlyDeclared') }}</small>
-                <small v-else class="dx-why">{{ $t('dbtExportDialog.unavailable') }}: {{ voce(id)?.reason }}</small>
+                <strong>{{ targetLabel(id) }}</strong>
+                <small v-if="item(id)?.available">{{ targetHint(id) }}</small>
+                <small v-else-if="usable(item(id), pkg)">{{ $t('dbtExportDialog.targetOnlyDeclared') }}</small>
+                <small v-else class="dx-why">{{ $t('dbtExportDialog.unavailable') }}: {{ item(id)?.reason }}</small>
               </span>
             </label>
           </fieldset>
@@ -380,48 +380,48 @@ const suggerimentoTarget = (id: DbtTarget) =>
             <div class="dx-row">
               <label class="dx-field">
                 <span>{{ $t('dbtExportDialog.folder') }}</span>
-                <input v-model="folder" type="text" spellcheck="false" :class="{ bad: errori.folder }"
-                       :aria-invalid="errori.folder ? 'true' : undefined" :aria-describedby="errori.folder ? 'dx-bad-folder' : undefined"
+                <input v-model="folder" type="text" spellcheck="false" :class="{ bad: errors.folder }"
+                       :aria-invalid="errors.folder ? 'true' : undefined" :aria-describedby="errors.folder ? 'dx-bad-folder' : undefined"
                        :placeholder="pkg === 'folder' ? plan.default_folder : $t('dbtExportDialog.folderRoot')" />
               </label>
               <label class="dx-field">
                 <span>{{ $t('dbtExportDialog.prefix') }}</span>
-                <input v-model="prefix" type="text" spellcheck="false" placeholder="tab_" :class="{ bad: errori.prefix }"
-                       :aria-invalid="errori.prefix ? 'true' : undefined" :aria-describedby="errori.prefix ? 'dx-bad-prefix' : undefined" />
+                <input v-model="prefix" type="text" spellcheck="false" placeholder="tab_" :class="{ bad: errors.prefix }"
+                       :aria-invalid="errors.prefix ? 'true' : undefined" :aria-describedby="errors.prefix ? 'dx-bad-prefix' : undefined" />
               </label>
               <label v-if="pkg === 'project'" class="dx-field">
                 <span>{{ $t('dbtExportDialog.schema') }}</span>
-                <input v-model="schema" type="text" spellcheck="false" :class="{ bad: errori.schema }"
-                       :aria-invalid="errori.schema ? 'true' : undefined" :aria-describedby="errori.schema ? 'dx-bad-schema' : undefined"
+                <input v-model="schema" type="text" spellcheck="false" :class="{ bad: errors.schema }"
+                       :aria-invalid="errors.schema ? 'true' : undefined" :aria-describedby="errors.schema ? 'dx-bad-schema' : undefined"
                        :placeholder="target === 'duckdb' ? 'main' : 'dbt_tabularia'" />
               </label>
             </div>
             <label class="dx-check"><input v-model="layers" type="checkbox" /> {{ $t('dbtExportDialog.layers') }}</label>
-            <p v-if="errori.folder" id="dx-bad-folder" class="dx-bad">{{ errorText(errori.folder) }}</p>
-            <p v-if="errori.prefix" id="dx-bad-prefix" class="dx-bad">{{ errorText(errori.prefix) }}</p>
-            <p v-if="errori.schema" id="dx-bad-schema" class="dx-bad">{{ errorText(errori.schema) }}</p>
+            <p v-if="errors.folder" id="dx-bad-folder" class="dx-bad">{{ errorText(errors.folder) }}</p>
+            <p v-if="errors.prefix" id="dx-bad-prefix" class="dx-bad">{{ errorText(errors.prefix) }}</p>
+            <p v-if="errors.schema" id="dx-bad-schema" class="dx-bad">{{ errorText(errors.schema) }}</p>
           </fieldset>
 
-          <fieldset v-if="sorgenti.length" class="dx-group">
+          <fieldset v-if="planSources.length" class="dx-group">
             <legend>{{ $t('dbtExportDialog.sources') }}</legend>
             <p class="muted dx-hint">{{ pkg === 'folder' ? $t('dbtExportDialog.sourcesHint') : $t('dbtExportDialog.sourcesProjectHint') }}</p>
-            <div v-for="(s, i) in sorgenti" :key="s.key" class="dx-source">
+            <div v-for="(s, i) in planSources" :key="s.key" class="dx-source">
               <div class="dx-source-what">
                 <strong>{{ s.connection }} · {{ s.schema }}</strong>
                 <small class="muted">{{ s.tables.join(', ') }}</small>
               </div>
               <input v-model="sourceNames[s.key]" type="text" spellcheck="false" :placeholder="effectiveSourceNames[s.key]"
-                     :aria-label="`${$t('dbtExportDialog.sourceName')} ${s.connection} ${s.schema}`" :class="{ bad: errori[`source:${s.key}`] }"
-                     :aria-invalid="errori[`source:${s.key}`] ? 'true' : undefined" :aria-describedby="errori[`source:${s.key}`] ? `dx-bad-source-${i}` : undefined" />
+                     :aria-label="`${$t('dbtExportDialog.sourceName')} ${s.connection} ${s.schema}`" :class="{ bad: errors[`source:${s.key}`] }"
+                     :aria-invalid="errors[`source:${s.key}`] ? 'true' : undefined" :aria-describedby="errors[`source:${s.key}`] ? `dx-bad-source-${i}` : undefined" />
               <!-- a source the chosen target cannot read: the team's project must declare it, so it stays ticked -->
-              <label v-if="obbligate.has(s.key)" class="dx-check">
+              <label v-if="required.has(s.key)" class="dx-check">
                 <input type="checkbox" checked disabled :aria-describedby="`dx-req-source-${i}`" /> {{ $t('dbtExportDialog.declared') }}
               </label>
               <label v-else-if="pkg === 'folder'" class="dx-check"><input v-model="declared[s.key]" type="checkbox" /> {{ $t('dbtExportDialog.declared') }}</label>
-              <p v-if="obbligate.has(s.key)" :id="`dx-req-source-${i}`" class="muted dx-hint dx-source-note">
-                {{ $t('dbtExportDialog.declaredRequired', { target: etichettaTarget(target) }) }}
+              <p v-if="required.has(s.key)" :id="`dx-req-source-${i}`" class="muted dx-hint dx-source-note">
+                {{ $t('dbtExportDialog.declaredRequired', { target: targetLabel(target) }) }}
               </p>
-              <p v-if="errori[`source:${s.key}`]" :id="`dx-bad-source-${i}`" class="dx-bad dx-source-bad">{{ errorText(errori[`source:${s.key}`]) }}</p>
+              <p v-if="errors[`source:${s.key}`]" :id="`dx-bad-source-${i}`" class="dx-bad dx-source-bad">{{ errorText(errors[`source:${s.key}`]) }}</p>
             </div>
           </fieldset>
 
@@ -440,15 +440,15 @@ const suggerimentoTarget = (id: DbtTarget) =>
             <label class="dx-check"><input v-model="tests" type="checkbox" /> {{ $t('dbtExportDialog.tests') }}</label>
             <label class="dx-check"><input v-model="emails" type="checkbox" /> {{ $t('dbtExportDialog.emails') }}</label>
             <!-- with the AI off, only what it kept for this version: reusing it asks the AI nothing -->
-            <label v-if="aiDescrizioniOfferte" class="dx-check">
-              <input v-model="aiDescrizioni" type="checkbox" />
+            <label v-if="aiDescriptionsOffered" class="dx-check">
+              <input v-model="aiDescriptions" type="checkbox" />
               {{ plan.ai?.available ? $t('dbtExportDialog.aiDescriptions') : $t('dbtExportDialog.aiStoredDescriptions') }}
             </label>
-            <label v-if="aiTraduzioniOfferte" class="dx-check">
-              <input v-model="aiTraduzioni" type="checkbox" />
+            <label v-if="aiTranslationsOffered" class="dx-check">
+              <input v-model="aiTranslations" type="checkbox" />
               {{ plan.ai?.available ? $t('dbtExportDialog.aiTranslations') : $t('dbtExportDialog.aiStoredTranslations') }}
             </label>
-            <p v-if="aiSuggerimento" class="muted dx-hint">{{ aiSuggerimento }}</p>
+            <p v-if="aiHint" class="muted dx-hint">{{ aiHint }}</p>
           </fieldset>
         </template>
 
@@ -458,7 +458,7 @@ const suggerimentoTarget = (id: DbtTarget) =>
           <span class="dx-spacer" />
           <!-- also while preparing: closing cancels the download -->
           <button @click="emit('close')">{{ $t('dbtExportDialog.cancel') }}</button>
-          <button class="primary" :disabled="busy || loading || !plan || !valido" @click="scarica">
+          <button class="primary" :disabled="busy || loading || !plan || !valid" @click="download">
             <Download :size="14" /> {{ busy ? $t('dbtExportDialog.downloading') : $t('dbtExportDialog.download') }}
           </button>
         </div>

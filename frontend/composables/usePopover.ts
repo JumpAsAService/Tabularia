@@ -1,46 +1,45 @@
-// Un pannello che si apre da un bottone (impostazioni, «New», «Save view»):
-// all'apertura il fuoco entra nel pannello, Esc lo chiude e il fuoco torna a chi
-// l'ha aperto. Non è modale: il Tab può uscirne, e fuori il pannello si chiude.
-// (Prima: nessuno di questi pannelli si chiudeva con Esc, e il fuoco restava sul
-// bottone — audit 2026-10-11, F6.)
+// A panel opening from a button (settings, «New», «Save view»): at opening the focus goes
+// into the panel, Esc closes it and the focus goes back to whoever opened it. It is not
+// modal: Tab may leave it, and outside the panel closes. (Before: none of these panels
+// closed with Esc, and the focus stayed on the button — audit 2026-10-11, F6.)
 import { nextTick, onBeforeUnmount, watch, type Ref } from 'vue'
 
 const FOCUSABILI = 'a[href], button:not([disabled]), input:not([disabled]), select:not([disabled]), textarea:not([disabled]), [tabindex]:not([tabindex="-1"])'
 
-export function usePopover(aperto: Ref<boolean>, pannello: Ref<HTMLElement | null>, chiudi: () => void) {
-  let origine: HTMLElement | null = null
+export function usePopover(isOpen: Ref<boolean>, panel: Ref<HTMLElement | null>, close: () => void) {
+  let origin: HTMLElement | null = null
 
-  function suTasto(e: KeyboardEvent) {
+  function onKey(e: KeyboardEvent) {
     if (e.key !== 'Escape') return
-    // un Select aperto dentro il pannello si chiude da sé, prima
+    // a Select open inside the panel closes by itself, first
     if ((e.target as HTMLElement | null)?.closest?.('[aria-expanded="true"]')) return
     e.preventDefault()
-    chiudi()
+    close()
   }
-  function suFuocoFuori(e: FocusEvent) {
-    const dove = e.relatedTarget as Node | null
-    // un Select teleportato fuori dal pannello resta «dentro» finché è aperto
-    if (!dove || pannello.value?.contains(dove) || (dove as HTMLElement).closest?.('.sel-panel')) return
-    origine = null // il fuoco è andato altrove di proposito: non lo si riporta indietro
-    chiudi()
+  function onFocusOut(e: FocusEvent) {
+    const where = e.relatedTarget as Node | null
+    // a Select teleported out of the panel stays «inside» while it is open
+    if (!where || panel.value?.contains(where) || (where as HTMLElement).closest?.('.sel-panel')) return
+    origin = null // the focus went elsewhere on purpose: it is not brought back
+    close()
   }
 
-  watch(aperto, async (ora) => {
+  watch(isOpen, async (ora) => {
     if (typeof document === 'undefined') return
     if (ora) {
-      origine = document.activeElement as HTMLElement | null
-      document.addEventListener('keydown', suTasto)
+      origin = document.activeElement as HTMLElement | null
+      document.addEventListener('keydown', onKey)
       await nextTick()
-      pannello.value?.addEventListener('focusout', suFuocoFuori)
-      pannello.value?.querySelector<HTMLElement>(FOCUSABILI)?.focus()
+      panel.value?.addEventListener('focusout', onFocusOut)
+      panel.value?.querySelector<HTMLElement>(FOCUSABILI)?.focus()
     } else {
-      document.removeEventListener('keydown', suTasto)
-      origine?.focus?.()
-      origine = null
+      document.removeEventListener('keydown', onKey)
+      origin?.focus?.()
+      origin = null
     }
   })
 
   onBeforeUnmount(() => {
-    if (typeof document !== 'undefined') document.removeEventListener('keydown', suTasto)
+    if (typeof document !== 'undefined') document.removeEventListener('keydown', onKey)
   })
 }

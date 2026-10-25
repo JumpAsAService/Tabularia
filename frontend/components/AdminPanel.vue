@@ -1,8 +1,8 @@
 <script setup lang="ts">
-// Amministrazione (solo superuser), divisa in SEZIONI con navigazione a sinistra:
-// utenti, gruppi, banner. Prima era tutto impilato in un'unica schermata e le
-// azioni distruttive stavano accanto ai form di creazione. Il feedback passa dai
-// toast; le conferme dai confirm() del browser, come nel resto dell'app.
+// Administration (superuser only), split into SECTIONS with navigation on the left:
+// users, groups, banners. Before, everything was stacked on one screen and the
+// destructive actions sat next to the creation forms. The feedback goes through the
+// toasts; the confirmations through the browser's confirm(), as in the rest of the app.
 import { computed, onMounted, ref } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { useFormat } from '~/composables/useFormat'
@@ -11,7 +11,7 @@ import {
   User as UserIcon, Users as UsersIcon, X, XCircle, Sparkles, Bot, Webhook as WebhookIcon,
   SlidersHorizontal, Radar, Server, KeyRound, Code2, Boxes, DatabaseBackup,
 } from 'lucide-vue-next'
-// import espliciti: nel container i componenti nuovi non vengono scansionati
+// explicit imports: in the container new components are not scanned
 import ServiceAccountsSection from '~/components/admin/ServiceAccountsSection.vue'
 import WebhooksSection from '~/components/admin/WebhooksSection.vue'
 import SettingsSection from '~/components/admin/SettingsSection.vue'
@@ -42,122 +42,122 @@ const privacyApi = usePrivacy()
 const engineApi = useEnginePolicy()
 const aiApi = useAi()
 const integr = useIntegrations()
-const impostazioniApi = useEngineSettings()
-const pannelloApi = usePanelSettings()
+const settingsApi = useEngineSettings()
+const panelApi = usePanelSettings()
 const siemApi = useSiem()
 const backupsApi = useBackups()
 const workersApi = useWorkers()
 const scriptingApi = useScripting()
 const registriesApi = useRegistries()
-// modelli AI: catalogo del provider + scelta dell'amministratore. `null` =
-// assistente non configurato o provider irraggiungibile (la sezione lo dice)
-const modelli = ref<AiModel[] | null>(null)
-const modelliErrore = ref('')
+// AI models: the provider's catalog + the administrator's choice. `null` = assistant not
+// configured or provider unreachable (the section says so)
+const models = ref<AiModel[] | null>(null)
+const modelsError = ref('')
 const toast = useToast()
 const { user: me } = useAuth()
-// Un OSSERVATORE apre i pannelli e non li tocca. Si nasconde invece di
-// disabilitare: un modulo grigio invita a provarci e poi frustra, mentre il
-// server risponderebbe 403 comunque. I dati personali che si vedono qui sono
-// già mascherati dal server (services/masking.py).
+// An OBSERVER opens the panels and does not touch them. Hidden instead of disabled: a
+// grey form invites trying and then frustrates, while the server would answer 403
+// anyway. The personal data seen here is masked by the server already
+// (services/masking.py).
 const canWrite = computed(() => !!me.value?.is_superuser)
 const { t } = useI18n()
 const fmtx = useFormat()
 
-type Sezione = 'users' | 'groups' | 'service' | 'webhooks' | 'banners' | 'privacy' | 'engines' | 'settings' | 'workers' | 'scripting' | 'registries' | 'siem' | 'backups' | 'ai'
-const sezione = ref<Sezione>('users')
+type Section = 'users' | 'groups' | 'service' | 'webhooks' | 'banners' | 'privacy' | 'engines' | 'settings' | 'workers' | 'scripting' | 'registries' | 'siem' | 'backups' | 'ai'
+const section = ref<Section>('users')
 // the Settings section with changes not saved: asked before going to another section
-const impostazioniDaSalvare = ref(false)
-function vaiA(id: Sezione) {
-  if (id === sezione.value) return
-  if (sezione.value === 'settings' && impostazioniDaSalvare.value && !confirm(t('panelSettings.leaveConfirm'))) return
-  sezione.value = id
+const settingsToSave = ref(false)
+function goTo(id: Section) {
+  if (id === section.value) return
+  if (section.value === 'settings' && settingsToSave.value && !confirm(t('panelSettings.leaveConfirm'))) return
+  section.value = id
 }
 
 const users = ref<UserOut[]>([])
 const groups = ref<GroupOut[]>([])
 const banners = ref<Banner[]>([])
 const privacy = ref<PrivacyNotice | null>(null)
-const salvandoPrivacy = ref(false)
-const motori = ref<EnginePolicy[]>([])
+const savingPrivacy = ref(false)
+const engines = ref<EnginePolicy[]>([])
 
 const nu = ref({ email: '', password: '', full_name: '', is_superuser: false, is_observer: false })
 const ng = ref({ name: '', description: '' })
 const nb = ref<{ message: string; level: BannerLevel }>({ message: '', level: 'warning' })
-const gruppoSelezionato = ref<number | null>(null)
-const daAggiungere = ref<number | null>(null)
+const selectedGroup = ref<number | null>(null)
+const toAdd = ref<number | null>(null)
 
-// ricerca: sottostringa, senza distinzione fra maiuscole e minuscole
+// search: substring, case-insensitive
 const qUsers = ref('')
 const qGroups = ref('')
 
-function combacia(q: string, ...campi: (string | null | undefined)[]): boolean {
+function combacia(q: string, ...fields: (string | null | undefined)[]): boolean {
   const ago = q.trim().toLowerCase()
   if (!ago) return true
-  return campi.filter(Boolean).join(' ').toLowerCase().includes(ago)
+  return fields.filter(Boolean).join(' ').toLowerCase().includes(ago)
 }
 
-// le PERSONE: gli account di servizio hanno la loro sezione
-const persone = computed(() => users.value.filter((u) => !u.is_service))
-const utentiFiltrati = computed(() =>
-  persone.value.filter((u) => combacia(qUsers.value, u.email, u.full_name, u.groups.join(' '))),
+// the PEOPLE: the service accounts have their own section
+const people = computed(() => users.value.filter((u) => !u.is_service))
+const filteredUsers = computed(() =>
+  people.value.filter((u) => combacia(qUsers.value, u.email, u.full_name, u.groups.join(' '))),
 )
-// conteggi delle due sezioni che caricano da sé (account di servizio, webhook)
-const nServizio = ref(0)
+// counts of the two sections that load by themselves (service accounts, webhooks)
+const nService = ref(0)
 const nWebhook = ref(0)
-// quante impostazioni del motore sono cambiate dal pannello (le altre valgono dall'ambiente)
-const nImpostazioni = ref(0)
+// how many engine settings were changed from the panel (the others hold from the environment)
+const nSettings = ref(0)
 const nWorker = ref(0)
 // the scripting environments defined
-const nAmbienti = ref(0)
-const nRegistri = ref(0)
+const nEnvironments = ref(0)
+const nRegistries = ref(0)
 // without Kubernetes (Docker Compose) the two sections are shown greyed out, not opened
 const scriptingOff = ref(false)
 const registriesOff = ref(false)
-// l'inoltro dell'audit al SIEM: acceso o no
-const siemAcceso = ref(false)
+// forwarding the audit to the SIEM: on or not
+const siemOn = ref(false)
 // the database backups in the object storage
 const nBackup = ref(0)
 // on Docker Compose the backups are greyed out like the other features of a cluster
 const backupsOff = ref(false)
-// le cartelle, per il filtro dei webhook
-const cartelle = ref<Project[]>([])
-const gruppiFiltrati = computed(() =>
+// the folders, for the webhooks' filter
+const folders = ref<Project[]>([])
+const filteredGroups = computed(() =>
   groups.value.filter((g) => combacia(qGroups.value, g.name, g.description)),
 )
 
-const sezioni = computed(() => [
-  { id: 'users' as Sezione, label: t('adminPanel.usersTitle'), icon: UserIcon, badge: persone.value.length },
-  { id: 'groups' as Sezione, label: t('adminPanel.groupsTitle'), icon: UsersIcon, badge: groups.value.length },
-  { id: 'service' as Sezione, label: t('integrations.serviceAccountsTitle'), icon: Bot, badge: nServizio.value },
-  { id: 'webhooks' as Sezione, label: t('integrations.webhooksTitle'), icon: WebhookIcon, badge: nWebhook.value },
-  { id: 'banners' as Sezione, label: t('adminPanel.bannersTitle'), icon: TriangleAlert, badge: banners.value.length },
-  { id: 'privacy' as Sezione, label: t('adminPanel.privacyTitle'), icon: ShieldCheck, badge: 0 },
-  // il conteggio è quanti motori sono CONSENTITI: è il numero che descrive lo
-  // stato dell'installazione, non quanti ne esistono
-  { id: 'engines' as Sezione, label: t('adminPanel.enginesTitle'), icon: Cpu, badge: motori.value.filter((m) => m.allowed).length },
-  { id: 'settings' as Sezione, label: t('engineSettings.navTitle'), icon: SlidersHorizontal, badge: nImpostazioni.value },
-  { id: 'backups' as Sezione, label: t('backups.navTitle'), icon: DatabaseBackup, badge: nBackup.value, off: backupsOff.value },
+const sections = computed(() => [
+  { id: 'users' as Section, label: t('adminPanel.usersTitle'), icon: UserIcon, badge: people.value.length },
+  { id: 'groups' as Section, label: t('adminPanel.groupsTitle'), icon: UsersIcon, badge: groups.value.length },
+  { id: 'service' as Section, label: t('integrations.serviceAccountsTitle'), icon: Bot, badge: nService.value },
+  { id: 'webhooks' as Section, label: t('integrations.webhooksTitle'), icon: WebhookIcon, badge: nWebhook.value },
+  { id: 'banners' as Section, label: t('adminPanel.bannersTitle'), icon: TriangleAlert, badge: banners.value.length },
+  { id: 'privacy' as Section, label: t('adminPanel.privacyTitle'), icon: ShieldCheck, badge: 0 },
+  // the count is how many engines are ALLOWED: it is the number describing the
+  // installation's state, not how many exist
+  { id: 'engines' as Section, label: t('adminPanel.enginesTitle'), icon: Cpu, badge: engines.value.filter((m) => m.allowed).length },
+  { id: 'settings' as Section, label: t('engineSettings.navTitle'), icon: SlidersHorizontal, badge: nSettings.value },
+  { id: 'backups' as Section, label: t('backups.navTitle'), icon: DatabaseBackup, badge: nBackup.value, off: backupsOff.value },
   // the workers alive now
-  { id: 'workers' as Sezione, label: t('workers.navTitle'), icon: Server, badge: nWorker.value },
-  { id: 'scripting' as Sezione, label: t('scripting.navTitle'), icon: Code2, badge: nAmbienti.value, off: scriptingOff.value },
-  { id: 'registries' as Sezione, label: t('registries.navTitle'), icon: Boxes, badge: nRegistri.value, off: registriesOff.value },
-  { id: 'siem' as Sezione, label: t('siem.navTitle'), icon: Radar, badge: siemAcceso.value ? 1 : 0 },
-  // quanti modelli sono ABILITATI: zero = l'assistente non e' usabile da nessuno
-  { id: 'ai' as Sezione, label: t('adminPanel.aiTitle'), icon: Sparkles, badge: (modelli.value ?? []).filter((m) => m.enabled).length },
+  { id: 'workers' as Section, label: t('workers.navTitle'), icon: Server, badge: nWorker.value },
+  { id: 'scripting' as Section, label: t('scripting.navTitle'), icon: Code2, badge: nEnvironments.value, off: scriptingOff.value },
+  { id: 'registries' as Section, label: t('registries.navTitle'), icon: Boxes, badge: nRegistries.value, off: registriesOff.value },
+  { id: 'siem' as Section, label: t('siem.navTitle'), icon: Radar, badge: siemOn.value ? 1 : 0 },
+  // how many models are ENABLED: zero = the assistant cannot be used by anyone
+  { id: 'ai' as Section, label: t('adminPanel.aiTitle'), icon: Sparkles, badge: (models.value ?? []).filter((m) => m.enabled).length },
 ])
 
-// stessa convenzione delle altre pagine: formattatore locale, tollerante
-function quando(iso: string | null): string {
+// the same convention as the other pages: local formatter, tolerant
+function when(iso: string | null): string {
   return fmtx.dateTime(iso)
 }
 
-const gruppoCorrente = computed(() => groups.value.find((g) => g.id === gruppoSelezionato.value) ?? null)
-// i membri si ricavano dagli utenti già caricati: nessuna chiamata in più
-const membri = computed(() =>
-  gruppoCorrente.value ? users.value.filter((u) => u.groups.includes(gruppoCorrente.value!.name)) : [],
+const currentGroup = computed(() => groups.value.find((g) => g.id === selectedGroup.value) ?? null)
+// the members are worked out from the users loaded already: no extra call
+const members = computed(() =>
+  currentGroup.value ? users.value.filter((u) => u.groups.includes(currentGroup.value!.name)) : [],
 )
-const nonMembri = computed(() =>
-  gruppoCorrente.value ? users.value.filter((u) => !u.groups.includes(gruppoCorrente.value!.name)) : [],
+const nonMembers = computed(() =>
+  currentGroup.value ? users.value.filter((u) => !u.groups.includes(currentGroup.value!.name)) : [],
 )
 
 async function loadAll() {
@@ -166,24 +166,24 @@ async function loadAll() {
     groups.value = await api.groups()
     banners.value = await bannersApi.list()
     try { privacy.value = await privacyApi.get() } catch { privacy.value = null }
-    motori.value = await engineApi.list()
-    cartelle.value = await api.list()
+    engines.value = await engineApi.list()
+    folders.value = await api.list()
   } catch (e) {
     toast.error(errMessage(e))
   }
-  // i conteggi delle due sezioni che caricano da sé, per la navigazione
+  // the counts of the two sections that load by themselves, for the navigation
   try {
-    ;[nServizio.value, nWebhook.value] = (await Promise.all([integr.serviceAccounts(), integr.webhooks()])).map((x) => x.length)
-  } catch { /* le sezioni lo diranno quando si aprono */ }
+    ;[nService.value, nWebhook.value] = (await Promise.all([integr.serviceAccounts(), integr.webhooks()])).map((x) => x.length)
+  } catch { /* the sections will say so when they open */ }
   try {
     // the processes per worker are engine settings too, but they have their own section
-    const [gw, eng] = await Promise.allSettled([pannelloApi.gateway(), impostazioniApi.get()])
-    nImpostazioni.value = (gw.status === 'fulfilled' ? gw.value.items.filter((v) => v.value !== null).length : 0)
+    const [gw, eng] = await Promise.allSettled([panelApi.gateway(), settingsApi.get()])
+    nSettings.value = (gw.status === 'fulfilled' ? gw.value.items.filter((v) => v.value !== null).length : 0)
       + (eng.status === 'fulfilled' ? eng.value.items.filter((v) => v.value !== null && isSettingsCategory(v.category)).length : 0)
-  } catch { /* la sezione lo dirà quando si apre */ }
+  } catch { /* the section will say so when it opens */ }
   try {
-    siemAcceso.value = (await siemApi.get()).enabled
-  } catch { /* la sezione lo dirà quando si apre */ }
+    siemOn.value = (await siemApi.get()).enabled
+  } catch { /* the section will say so when it opens */ }
   try {
     const bk = await backupsApi.get()
     nBackup.value = bk.items.length
@@ -194,33 +194,32 @@ async function loadAll() {
   } catch { /* the section says why when it opens */ }
   try {
     const sc = await scriptingApi.get()
-    nAmbienti.value = sc.environments.length
+    nEnvironments.value = sc.environments.length
     scriptingOff.value = sc.disabled_reason === 'kubernetes'
   } catch { /* the section says why when it opens */ }
   try {
     const rg = await registriesApi.get()
-    nRegistri.value = rg.registries.length
+    nRegistries.value = rg.registries.length
     registriesOff.value = rg.disabled_reason === 'kubernetes'
   } catch { /* the section says why when it opens */ }
-  // a parte: l'assistente puo' non essere configurato, e non e' un errore del pannello
+  // apart: the assistant may not be configured, and that is not a panel error
   try {
-    modelli.value = await aiApi.models()
-    modelliErrore.value = ''
+    models.value = await aiApi.models()
+    modelsError.value = ''
   } catch (e) {
-    modelli.value = null
-    modelliErrore.value = errMessage(e)
+    models.value = null
+    modelsError.value = errMessage(e)
   }
 }
 onMounted(loadAll)
 
-// flussi rimasti su un motore non più consentito: è la lista di lavoro della
-// migrazione. Disabilitare non ferma nulla, quindi senza questo numero il
-// cambiamento non avrebbe alcuna conseguenza visibile.
-const daMigrare = computed(() =>
-  motori.value.filter((m) => !m.allowed).reduce((n, m) => n + m.flows_using, 0),
+// flows left on an engine no longer allowed: it is the migration's work list. Disabling
+// stops nothing, so without this number the change would have no visible consequence.
+const toMigrate = computed(() =>
+  engines.value.filter((m) => !m.allowed).reduce((n, m) => n + m.flows_using, 0),
 )
 
-// ── utenti ──────────────────────────────────────────────────────────────────
+// ── users ───────────────────────────────────────────────────────────────────
 // the one rule of a new password (gateway core/passwords.py), checked before sending
 const { rules: passwordRules, load: loadPasswordRules } = usePasswordRules()
 onMounted(loadPasswordRules)
@@ -255,9 +254,9 @@ async function toggleActive(u: UserOut) {
   }
 }
 
-// Admin PERSONALE. Chi lo è già tramite un gruppo resta admin anche senza: per
-// questo l'interruttore su sé stessi è fermo solo quando nessun gruppo lo copre
-// (il server lo rifiuterebbe comunque: non ci si chiude fuori da soli).
+// PERSONAL admin. Whoever is one through a group stays admin without it too: that is why
+// the switch on oneself is still only when no group covers it (the server would refuse
+// it anyway: one does not lock oneself out).
 const selfLockout = (u: UserOut) => u.id === me.value?.id && u.is_superuser && !u.admin_groups.length
 
 async function toggleAdmin(u: UserOut) {
@@ -271,10 +270,10 @@ async function toggleAdmin(u: UserOut) {
   }
 }
 
-// Osservatore: apre i pannelli di amministrazione in LETTURA (audit, sessioni,
-// utenti, motori, prestazioni), con i dati personali mascherati e nessun
-// comando. È il flag dell'account dimostrativo: un ospite può guardare tutto
-// senza toccare niente. Indipendente da admin, che legge già per definizione.
+// Observer: opens the administration panels for READING (audit, sessions, users,
+// engines, performance), with the personal data masked and no commands. It is the demo
+// account's flag: a guest can look at everything without touching anything. Independent
+// from admin, which reads by definition already.
 async function toggleObserver(u: UserOut) {
   if (!u.is_observer && !confirm(t('adminPanel.confirmObserveUser', { email: u.email }))) return
   try {
@@ -301,7 +300,7 @@ async function deleteUser(u: UserOut) {
   }
 }
 
-// ── gruppi ──────────────────────────────────────────────────────────────────
+// ── groups ──────────────────────────────────────────────────────────────────
 async function createGroup() {
   if (!ng.value.name.trim()) {
     toast.error(t('adminPanel.groupNameRequired'))
@@ -317,7 +316,7 @@ async function createGroup() {
   }
 }
 
-// Gruppo di amministratori: tutti i membri, presenti e futuri, sono admin
+// Administrators' group: all the members, present and future, are admins
 async function toggleGroupAdmin(g: GroupOut) {
   if (!g.is_admin && !confirm(t('adminPanel.confirmPromoteGroup', { name: g.name, n: g.member_count }))) return
   try {
@@ -329,8 +328,8 @@ async function toggleGroupAdmin(g: GroupOut) {
   }
 }
 
-// Come sopra, per tutti i membri presenti e futuri: è la via da usare con l'SSO,
-// dove il flag personale viene riscritto a ogni login dall'IdP
+// As above, for all the members present and future: it is the way to use with SSO, where
+// the IdP rewrites the personal flag at every login
 async function toggleGroupObserver(g: GroupOut) {
   if (!g.is_observer && !confirm(t('adminPanel.confirmObserveGroup', { name: g.name, n: g.member_count }))) return
   try {
@@ -346,7 +345,7 @@ async function deleteGroup(g: GroupOut) {
   if (!confirm(t('adminPanel.confirmDeleteGroup', { name: g.name }))) return
   try {
     await api.deleteGroup(g.id)
-    if (gruppoSelezionato.value === g.id) gruppoSelezionato.value = null
+    if (selectedGroup.value === g.id) selectedGroup.value = null
     toast.success(t('adminPanel.groupDeleted', { name: g.name }))
     await loadAll()
   } catch (e) {
@@ -355,11 +354,11 @@ async function deleteGroup(g: GroupOut) {
 }
 
 async function addMember() {
-  if (!daAggiungere.value || !gruppoCorrente.value) return
+  if (!toAdd.value || !currentGroup.value) return
   try {
-    await api.addToGroup(daAggiungere.value, gruppoCorrente.value.id)
+    await api.addToGroup(toAdd.value, currentGroup.value.id)
     toast.success(t('adminPanel.userAddedToGroup'))
-    daAggiungere.value = null
+    toAdd.value = null
     await loadAll()
   } catch (e) {
     toast.error(errMessage(e))
@@ -367,9 +366,9 @@ async function addMember() {
 }
 
 async function removeMember(u: UserOut) {
-  if (!gruppoCorrente.value) return
+  if (!currentGroup.value) return
   try {
-    await api.removeFromGroup(u.id, gruppoCorrente.value.id)
+    await api.removeFromGroup(u.id, currentGroup.value.id)
     toast.success(t('adminPanel.userRemovedFromGroup'))
     await loadAll()
   } catch (e) {
@@ -377,13 +376,13 @@ async function removeMember(u: UserOut) {
   }
 }
 
-// ── informativa sulla privacy ───────────────────────────────────────────────
-// Una sola, si modifica in posto. Il testo di partenza descrive quello che il
-// prodotto raccoglie davvero: chi installa resta libero di riscriverlo — è lui
-// il titolare — ma parte da qualcosa di vero.
-async function salvaPrivacy() {
+// ── privacy notice ───────────────────────────────────────────────────────────
+// Only one, edited in place. The starting text describes what the product really
+// collects: whoever installs stays free to rewrite it — they are the controller — but
+// starts from something true.
+async function savePrivacy() {
   if (!privacy.value) return
-  salvandoPrivacy.value = true
+  savingPrivacy.value = true
   try {
     privacy.value = await privacyApi.update({
       enabled: privacy.value.enabled,
@@ -395,7 +394,7 @@ async function salvaPrivacy() {
   } catch (e) {
     toast.error(errMessage(e))
   } finally {
-    salvandoPrivacy.value = false
+    savingPrivacy.value = false
   }
 }
 
@@ -426,28 +425,28 @@ async function deleteBanner(b: Banner) {
   }
 }
 
-function etichettaLivello(l: string): string {
+function levelLabel(l: string): string {
   return t(`banners.level${l.charAt(0).toUpperCase()}${l.slice(1)}`)
 }
 
-// ── modelli AI ──────────────────────────────────────────────────────────────
-async function toggleModello(m: AiModel) {
+// ── AI models ──────────────────────────────────────────────────────────────
+async function toggleModel(m: AiModel) {
   try {
-    const aggiornato = await aiApi.setModel(m.model_id, !m.enabled)
-    modelli.value = (modelli.value ?? []).map((x) => (x.model_id === aggiornato.model_id ? aggiornato : x))
-    toast.success(t(aggiornato.enabled ? 'adminPanel.aiModelEnabled' : 'adminPanel.aiModelDisabled', { model: m.model_id }))
+    const updated = await aiApi.setModel(m.model_id, !m.enabled)
+    models.value = (models.value ?? []).map((x) => (x.model_id === updated.model_id ? updated : x))
+    toast.success(t(updated.enabled ? 'adminPanel.aiModelEnabled' : 'adminPanel.aiModelDisabled', { model: m.model_id }))
   } catch (e) {
     toast.error(errMessage(e))
   }
 }
 
-// ── motori ──────────────────────────────────────────────────────────────────
-async function toggleMotore(m: EnginePolicy) {
+// ── engines ────────────────────────────────────────────────────────────────
+async function toggleEngine(m: EnginePolicy) {
   try {
-    const aggiornato = await engineApi.set(m.engine_id, !m.allowed)
-    motori.value = motori.value.map((x) => (x.engine_id === aggiornato.engine_id ? aggiornato : x))
+    const updated = await engineApi.set(m.engine_id, !m.allowed)
+    engines.value = engines.value.map((x) => (x.engine_id === updated.engine_id ? updated : x))
     toast.success(
-      t(aggiornato.allowed ? 'adminPanel.engineAllowed' : 'adminPanel.engineDisallowed', { engine: m.engine_id }),
+      t(updated.allowed ? 'adminPanel.engineAllowed' : 'adminPanel.engineDisallowed', { engine: m.engine_id }),
     )
   } catch (e) {
     toast.error(errMessage(e))
@@ -462,16 +461,16 @@ async function toggleMotore(m: EnginePolicy) {
     </div>
 
     <div class="layout">
-      <!-- navigazione di sezione: solo per l'amministrazione -->
+      <!-- section navigation: for administration only -->
       <nav class="sidenav">
         <button
-          v-for="s in sezioni"
+          v-for="s in sections"
           :key="s.id"
           class="navitem"
-          :class="{ on: sezione === s.id, spenta: 'off' in s && s.off }"
+          :class="{ on: section === s.id, 'is-off': 'off' in s && s.off }"
           :aria-disabled="'off' in s && s.off ? 'true' : undefined"
           :title="'off' in s && s.off ? $t(s.id === 'backups' ? 'backups.kubernetesOnly' : 'scripting.kubernetesOnly') : undefined"
-          @click="!('off' in s && s.off) && vaiA(s.id)"
+          @click="!('off' in s && s.off) && goTo(s.id)"
         >
           <component :is="s.icon" :size="15" />
           <span class="lbl">{{ s.label }}</span>
@@ -480,21 +479,21 @@ async function toggleMotore(m: EnginePolicy) {
       </nav>
 
       <section class="content">
-        <!-- ── UTENTI ─────────────────────────────────────────────────────── -->
-        <template v-if="sezione === 'users'">
+        <!-- ── USERS ───────────────────────────────────────────────────────── -->
+        <template v-if="section === 'users'">
           <div class="card">
-            <h4><UserIcon :size="14" /> {{ $t('adminPanel.usersTitle') }} <span class="muted">{{ persone.length }}</span></h4>
+            <h4><UserIcon :size="14" /> {{ $t('adminPanel.usersTitle') }} <span class="muted">{{ people.length }}</span></h4>
 
             <div class="rowsearch">
               <Search :size="13" />
               <input v-model="qUsers" type="text" :placeholder="$t('adminPanel.searchPlaceholder')" :aria-label="$t('adminPanel.searchPlaceholder')" />
-              <span class="muted count">{{ utentiFiltrati.length }}/{{ persone.length }}</span>
+              <span class="muted count">{{ filteredUsers.length }}/{{ people.length }}</span>
               <button v-if="qUsers" class="x" :title="$t('adminPanel.clearSearch')" @click="qUsers = ''">
                 <X :size="12" />
               </button>
             </div>
 
-            <!-- la tabella cresce: resta scorrevole, con l'intestazione ferma in cima -->
+            <!-- the table grows: it stays scrollable, with the header still at the top -->
             <div class="tablewrap">
               <table class="rows">
                 <thead>
@@ -507,7 +506,7 @@ async function toggleMotore(m: EnginePolicy) {
                   </tr>
                 </thead>
                 <tbody>
-                  <tr v-for="u in utentiFiltrati" :key="u.id">
+                  <tr v-for="u in filteredUsers" :key="u.id">
                     <td>
                       {{ u.email }}
                       <span v-if="u.is_superuser" class="tag">{{ $t('adminPanel.adminTag') }}</span>
@@ -532,9 +531,9 @@ async function toggleMotore(m: EnginePolicy) {
                       <span v-for="g in u.groups" :key="g" class="chip" :class="{ adm: u.admin_groups.includes(g) }">{{ g }}</span>
                       <span v-if="!u.groups.length" class="muted small">—</span>
                     </td>
-                    <td class="muted small nowrap">{{ quando(u.created_at) }}</td>
+                    <td class="muted small nowrap">{{ when(u.created_at) }}</td>
                     <td class="muted small nowrap">
-                      {{ u.last_seen_at ? quando(u.last_seen_at) : $t('adminPanel.neverSeen') }}
+                      {{ u.last_seen_at ? when(u.last_seen_at) : $t('adminPanel.neverSeen') }}
                     </td>
                     <td class="right nowrap">
                       <button
@@ -582,7 +581,7 @@ async function toggleMotore(m: EnginePolicy) {
                       ><Trash2 :size="13" /></button>
                     </td>
                   </tr>
-                  <tr v-if="!utentiFiltrati.length">
+                  <tr v-if="!filteredUsers.length">
                     <td colspan="5" class="muted">
                       {{ qUsers ? $t('adminPanel.noSearchResults') : $t('adminPanel.noUsers') }}
                     </td>
@@ -603,15 +602,15 @@ async function toggleMotore(m: EnginePolicy) {
           </div>
         </template>
 
-        <!-- ── GRUPPI ─────────────────────────────────────────────────────── -->
-        <template v-else-if="sezione === 'groups'">
+        <!-- ── GROUPS ──────────────────────────────────────────────────────── -->
+        <template v-else-if="section === 'groups'">
           <div class="card">
             <h4><UsersIcon :size="14" /> {{ $t('adminPanel.groupsTitle') }} <span class="muted">{{ groups.length }}</span></h4>
 
             <div class="rowsearch">
               <Search :size="13" />
               <input v-model="qGroups" type="text" :placeholder="$t('adminPanel.searchPlaceholder')" :aria-label="$t('adminPanel.searchPlaceholder')" />
-              <span class="muted count">{{ gruppiFiltrati.length }}/{{ groups.length }}</span>
+              <span class="muted count">{{ filteredGroups.length }}/{{ groups.length }}</span>
               <button v-if="qGroups" class="x" :title="$t('adminPanel.clearSearch')" @click="qGroups = ''">
                 <X :size="12" />
               </button>
@@ -629,21 +628,21 @@ async function toggleMotore(m: EnginePolicy) {
                 </thead>
                 <tbody>
                   <tr
-                    v-for="g in gruppiFiltrati"
+                    v-for="g in filteredGroups"
                     :key="g.id"
                     class="clickable"
-                    :class="{ sel: g.id === gruppoSelezionato }"
-                    @click="gruppoSelezionato = g.id"
+                    :class="{ sel: g.id === selectedGroup }"
+                    @click="selectedGroup = g.id"
                   >
                     <td>
-                      <!-- la riga si sceglie col mouse; questo bottone è la via da tastiera -->
-                      <button type="button" class="rowpick" :aria-pressed="g.id === gruppoSelezionato" @click.stop="gruppoSelezionato = g.id">{{ g.name }}</button>
+                      <!-- the row is chosen with the mouse; this button is the keyboard way -->
+                      <button type="button" class="rowpick" :aria-pressed="g.id === selectedGroup" @click.stop="selectedGroup = g.id">{{ g.name }}</button>
                       <span v-if="g.is_admin" class="tag">{{ $t('adminPanel.adminTag') }}</span>
                       <span v-else-if="g.is_observer" class="tag obs">{{ $t('adminPanel.observerTag') }}</span>
                       <div v-if="g.description" class="muted small">{{ g.description }}</div>
                     </td>
                     <td class="muted small">{{ g.member_count }}</td>
-                    <td class="muted small nowrap">{{ quando(g.created_at) }}</td>
+                    <td class="muted small nowrap">{{ when(g.created_at) }}</td>
                     <td class="right nowrap">
                       <button
                         class="mini"
@@ -668,7 +667,7 @@ async function toggleMotore(m: EnginePolicy) {
                       </button>
                     </td>
                   </tr>
-                  <tr v-if="!gruppiFiltrati.length">
+                  <tr v-if="!filteredGroups.length">
                     <td colspan="4" class="muted">
                       {{ qGroups ? $t('adminPanel.noSearchResults') : $t('adminPanel.noGroups') }}
                     </td>
@@ -678,14 +677,14 @@ async function toggleMotore(m: EnginePolicy) {
             </div>
           </div>
 
-          <!-- membri del gruppo scelto: aggiunta e rimozione stanno qui, dove
-               si vede subito chi c'è dentro -->
-          <div v-if="gruppoCorrente" class="card">
-            <h4><UsersIcon :size="14" /> {{ $t('adminPanel.membersTitle', { name: gruppoCorrente.name }) }}</h4>
+          <!-- the chosen group's members: adding and removing sit here, where one sees at once who is
+               inside -->
+          <div v-if="currentGroup" class="card">
+            <h4><UsersIcon :size="14" /> {{ $t('adminPanel.membersTitle', { name: currentGroup.name }) }}</h4>
             <div class="tablewrap">
               <table class="rows">
                 <tbody>
-                  <tr v-for="u in membri" :key="u.id">
+                  <tr v-for="u in members" :key="u.id">
                     <td>{{ u.email }}</td>
                     <td class="right">
                       <button class="mini" v-if="canWrite" :title="$t('adminPanel.removeFromGroupTitle')" @click="removeMember(u)">
@@ -693,7 +692,7 @@ async function toggleMotore(m: EnginePolicy) {
                       </button>
                     </td>
                   </tr>
-                  <tr v-if="!membri.length"><td class="muted">{{ $t('adminPanel.noMembers') }}</td></tr>
+                  <tr v-if="!members.length"><td class="muted">{{ $t('adminPanel.noMembers') }}</td></tr>
                 </tbody>
               </table>
             </div>
@@ -701,12 +700,12 @@ async function toggleMotore(m: EnginePolicy) {
             <template v-if="canWrite">
             <h4 class="subhead"><Plus :size="13" /> {{ $t('adminPanel.addToGroupTitle') }}</h4>
             <Select
-              v-model="daAggiungere"
-              :options="nonMembri.map((u) => ({ value: u.id, label: u.email }))"
+              v-model="toAdd"
+              :options="nonMembers.map((u) => ({ value: u.id, label: u.email }))"
               :placeholder="$t('adminPanel.userPlaceholder')"
               :aria-label="$t('adminPanel.userPlaceholder')"
             />
-            <button :disabled="!daAggiungere" @click="addMember">{{ $t('adminPanel.addButton') }}</button>
+            <button :disabled="!toAdd" @click="addMember">{{ $t('adminPanel.addButton') }}</button>
             </template>
           </div>
 
@@ -718,8 +717,8 @@ async function toggleMotore(m: EnginePolicy) {
           </div>
         </template>
 
-        <!-- ── MOTORI ─────────────────────────────────────────────────────── -->
-        <template v-else-if="sezione === 'privacy'">
+        <!-- ── ENGINES ─────────────────────────────────────────────────────── -->
+        <template v-else-if="section === 'privacy'">
           <div class="card">
             <h4><ShieldCheck :size="14" /> {{ $t('adminPanel.privacyTitle') }}</h4>
             <p class="muted small hint">{{ $t('adminPanel.privacyHint') }}</p>
@@ -736,19 +735,19 @@ async function toggleMotore(m: EnginePolicy) {
               <label class="dlabel" for="pv-url">{{ $t('adminPanel.privacyUrl') }}</label>
               <input id="pv-url" v-model="privacy.url" type="url" :disabled="!canWrite"
                      placeholder="https://" />
-              <button v-if="canWrite" class="primary" :disabled="salvandoPrivacy" @click="salvaPrivacy">
+              <button v-if="canWrite" class="primary" :disabled="savingPrivacy" @click="savePrivacy">
                 {{ $t('adminPanel.privacySave') }}
               </button>
             </template>
           </div>
         </template>
 
-        <template v-else-if="sezione === 'engines'">
+        <template v-else-if="section === 'engines'">
           <div class="card">
             <h4><Cpu :size="14" /> {{ $t('adminPanel.enginesTitle') }}</h4>
             <p class="muted small hint">{{ $t('adminPanel.enginesHint') }}</p>
             <p class="muted small hint">
-              {{ daMigrare ? $t('adminPanel.enginesToMigrate', { count: daMigrare }) : $t('adminPanel.enginesAllCompliant') }}
+              {{ toMigrate ? $t('adminPanel.enginesToMigrate', { count: toMigrate }) : $t('adminPanel.enginesAllCompliant') }}
             </p>
             <div class="tablewrap">
               <table class="rows">
@@ -760,13 +759,13 @@ async function toggleMotore(m: EnginePolicy) {
                   </tr>
                 </thead>
                 <tbody>
-                  <tr v-for="m in motori" :key="m.engine_id">
+                  <tr v-for="m in engines" :key="m.engine_id">
                     <td>
                       {{ m.engine_id }}
                       <span v-if="!m.allowed" class="tag off">{{ $t('adminPanel.notAllowedTag') }}</span>
                     </td>
-                    <!-- evidenziato solo quando il motore NON è consentito: lì
-                         il numero è lavoro da fare, altrove è solo un fatto -->
+                    <!-- highlighted only when the engine is NOT allowed: there the number is work to do,
+                         elsewhere it is only a fact -->
                     <td class="small" :class="!m.allowed && m.flows_using ? 'warn' : 'muted'">{{ m.flows_using }}</td>
                     <td class="right">
                       <button
@@ -774,7 +773,7 @@ async function toggleMotore(m: EnginePolicy) {
                         v-if="canWrite"
                         :title="m.allowed ? $t('adminPanel.disallowEngineTitle') : $t('adminPanel.allowEngineTitle')"
                         :aria-label="m.allowed ? $t('adminPanel.disallowEngineTitle') : $t('adminPanel.allowEngineTitle')"
-                        @click="toggleMotore(m)"
+                        @click="toggleEngine(m)"
                       >
                         <component :is="m.allowed ? CheckCircle2 : XCircle" :size="13" />
                       </button>
@@ -785,41 +784,41 @@ async function toggleMotore(m: EnginePolicy) {
             </div>
           </div>
         </template>
-        <template v-else-if="sezione === 'siem'">
-          <SiemSection @state="siemAcceso = $event" />
+        <template v-else-if="section === 'siem'">
+          <SiemSection @state="siemOn = $event" />
         </template>
 
-        <template v-else-if="sezione === 'backups'">
+        <template v-else-if="section === 'backups'">
           <BackupsSection @count="nBackup = $event" />
         </template>
-        <template v-else-if="sezione === 'settings'">
-          <SettingsSection @count="nImpostazioni = $event" @dirty="impostazioniDaSalvare = $event" />
+        <template v-else-if="section === 'settings'">
+          <SettingsSection @count="nSettings = $event" @dirty="settingsToSave = $event" />
         </template>
 
-        <template v-else-if="sezione === 'workers'">
+        <template v-else-if="section === 'workers'">
           <WorkersSection @count="nWorker = $event" />
         </template>
 
-        <template v-else-if="sezione === 'scripting'">
-          <ScriptingSection :groups="groups" @count="nAmbienti = $event" />
+        <template v-else-if="section === 'scripting'">
+          <ScriptingSection :groups="groups" @count="nEnvironments = $event" />
         </template>
-        <template v-else-if="sezione === 'registries'">
-          <RegistriesSection :groups="groups" :users="users" @count="nRegistri = $event" />
-        </template>
-
-        <template v-else-if="sezione === 'service'">
-          <ServiceAccountsSection :can-write="canWrite" :groups="groups" @count="nServizio = $event" />
+        <template v-else-if="section === 'registries'">
+          <RegistriesSection :groups="groups" :users="users" @count="nRegistries = $event" />
         </template>
 
-        <template v-else-if="sezione === 'webhooks'">
-          <WebhooksSection :can-write="canWrite" :projects="cartelle" @count="nWebhook = $event" />
+        <template v-else-if="section === 'service'">
+          <ServiceAccountsSection :can-write="canWrite" :groups="groups" @count="nService = $event" />
         </template>
 
-        <template v-else-if="sezione === 'ai'">
+        <template v-else-if="section === 'webhooks'">
+          <WebhooksSection :can-write="canWrite" :projects="folders" @count="nWebhook = $event" />
+        </template>
+
+        <template v-else-if="section === 'ai'">
           <div class="card">
             <h4><Sparkles :size="14" /> {{ $t('adminPanel.aiTitle') }}</h4>
             <p class="muted small hint">{{ $t('adminPanel.aiHint') }}</p>
-            <p v-if="modelli === null" class="muted small hint">{{ modelliErrore || $t('adminPanel.aiUnavailable') }}</p>
+            <p v-if="models === null" class="muted small hint">{{ modelsError || $t('adminPanel.aiUnavailable') }}</p>
             <div v-else class="tablewrap">
               <table class="rows">
                 <thead>
@@ -830,7 +829,7 @@ async function toggleMotore(m: EnginePolicy) {
                   </tr>
                 </thead>
                 <tbody>
-                  <tr v-for="m in modelli" :key="m.model_id">
+                  <tr v-for="m in models" :key="m.model_id">
                     <td>
                       {{ m.model_id }}
                       <span v-if="!m.chat" class="tag off">{{ $t('adminPanel.aiNotChatTag') }}</span>
@@ -843,7 +842,7 @@ async function toggleMotore(m: EnginePolicy) {
                         class="mini"
                         :title="m.enabled ? $t('adminPanel.aiDisableTitle') : $t('adminPanel.aiEnableTitle')"
                         :aria-label="m.enabled ? $t('adminPanel.aiDisableTitle') : $t('adminPanel.aiEnableTitle')"
-                        @click="toggleModello(m)"
+                        @click="toggleModel(m)"
                       >
                         <component :is="m.enabled ? CheckCircle2 : XCircle" :size="13" />
                       </button>
@@ -872,9 +871,9 @@ async function toggleMotore(m: EnginePolicy) {
                 </thead>
                 <tbody>
                   <tr v-for="b in banners" :key="b.id">
-                    <td><span class="tag" :class="b.level">{{ etichettaLivello(b.level) }}</span></td>
+                    <td><span class="tag" :class="b.level">{{ levelLabel(b.level) }}</span></td>
                     <td>{{ b.message }}</td>
-                    <td class="muted small nowrap">{{ quando(b.created_at) }}</td>
+                    <td class="muted small nowrap">{{ when(b.created_at) }}</td>
                     <td class="right">
                       <button class="mini danger" v-if="canWrite" :title="$t('adminPanel.deleteBannerTitle')" @click="deleteBanner(b)">
                         <Trash2 :size="13" />
@@ -908,7 +907,7 @@ async function toggleMotore(m: EnginePolicy) {
 </template>
 
 <style scoped>
-.navitem.spenta { opacity: .45; cursor: not-allowed; }
+.navitem.is-off { opacity: .45; cursor: not-allowed; }
 .rowpick { padding: 0; border: 0; background: none; font: inherit; color: inherit; text-align: left; cursor: pointer; }
 .rowpick:hover { color: var(--accent); box-shadow: none; }
 .page-head { margin-bottom: 16px; }
@@ -964,7 +963,7 @@ async function toggleMotore(m: EnginePolicy) {
 .card h4 { margin: 0; display: inline-flex; align-items: center; gap: 7px; }
 .subhead { margin-top: 14px !important; color: var(--muted); font-size: 12.5px; }
 .hint { margin: 0; }
-/* stessa barra di ricerca del group by */
+/* the same search bar as the group by's */
 .rowsearch {
   display: flex;
   align-items: center;
@@ -986,7 +985,7 @@ async function toggleMotore(m: EnginePolicy) {
 }
 .rowsearch .count { font-size: 11px; font-variant-numeric: tabular-nums; }
 .rowsearch .x { padding: 1px 6px; }
-/* la tabella scorre invece di allungare la pagina all'infinito */
+/* the table scrolls instead of lengthening the page forever */
 .tablewrap { max-height: 420px; overflow-y: auto; }
 table.rows { width: 100%; border-collapse: collapse; font-size: 13px; }
 table.rows th {
@@ -1032,13 +1031,13 @@ td.right { text-align: right; width: 80px; }
   margin-left: 6px;
 }
 .tag.off { color: var(--muted); }
-/* admin per appartenenza a un gruppo: stesso colore, ma tratteggiato — il
-   privilegio non è suo, è del gruppo */
+/* admin by membership of a group: the same colour, but dashed — the privilege is not
+   theirs, it is the group's */
 .tag.via { border-style: dashed; text-transform: none; letter-spacing: 0; }
 .chip.adm { border-color: var(--accent-hi); color: var(--accent-hi); }
 td.warn { color: var(--warning, #d08700); font-weight: 600; }
-/* osservatore: grigio, non nel colore d'accento — è un permesso di sola
-   lettura, non un privilegio da evidenziare come l'amministrazione */
+/* observer: grey, not in the accent colour — it is a read-only permission, not a
+   privilege to highlight like the administration */
 .tag.obs { color: var(--muted); }
 .tag.sso { color: var(--muted); }
 .tag.info { color: var(--accent-hi, #4c8dff); }

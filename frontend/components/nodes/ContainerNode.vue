@@ -25,13 +25,13 @@ const registryName = computed(() => registry.value?.name ?? props.data?.registry
 </script>
 
 <template>
-  <div class="node node-container" :class="{ spento: off }" :title="off ? t('scripting.kubernetesOnly') : undefined">
+  <div class="node node-container" :class="{ off: off }" :title="off ? t('scripting.kubernetesOnly') : undefined">
     <Handle id="left" type="target" :position="Position.Left" class="h-left-top" />
     <Handle id="seq-in" type="target" :position="Position.Left" class="handle-seq h-left-bottom" />
     <div class="node-title">
       <Container :size="13" class="node-icon" />
       {{ data?.label || t('containers.node.title') }}
-      <span v-if="registryName" class="registro">{{ registryName }}</span>
+      <span v-if="registryName" class="registry">{{ registryName }}</span>
     </div>
     <div class="node-body muted"><code>{{ summary }}</code></div>
     <Handle id="out" type="source" :position="Position.Right" class="h-right-top" />
@@ -40,11 +40,11 @@ const registryName = computed(() => registry.value?.name ?? props.data?.registry
 </template>
 
 <style scoped>
-.spento { opacity: .45; }
+.off { opacity: .45; }
 .node-container { --node-accent: #818cf8; min-width: 180px; }
 .node-icon { color: var(--node-accent); }
 .node-body { max-width: 260px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .node-body code { font-size: 11px; }
 .handle-seq { background: var(--node-accent) !important; }
-.registro { margin-left: auto; max-width: 110px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 10px; padding: 0 6px; border-radius: 999px; border: 1px solid var(--border); color: var(--muted); font-weight: 500; }
+.registry { margin-left: auto; max-width: 110px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 10px; padding: 0 6px; border-radius: 999px; border: 1px solid var(--border); color: var(--muted); font-weight: 500; }
 </style>

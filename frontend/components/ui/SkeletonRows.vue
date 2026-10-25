@@ -1,5 +1,5 @@
 <script setup lang="ts">
-// Righe shimmer generiche per il caricamento delle pagine-lista.
+// Generic shimmer rows for loading the list pages.
 withDefaults(defineProps<{ rows?: number }>(), { rows: 4 })
 
 const WIDTHS = ['34%', '52%', '41%', '61%', '38%', '47%']

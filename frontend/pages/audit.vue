@@ -1,7 +1,7 @@
 <script setup lang="ts">
-// Audit log (solo admin): chi entra, chi fa login, quali flussi/datasource/
-// connessioni vengono creati/modificati/eseguiti, quali dati vengono scaricati,
-// chi cambia i permessi. In alto le sessioni attive; sotto il registro filtrabile.
+// Audit log (admin only): who signs in, who logs in, which flows/datasources/connections
+// are created/changed/run, which data is downloaded, who changes the permissions. At the
+// top the active sessions; below the filterable log.
 import { ref, computed, watch, onMounted } from 'vue'
 import { use } from 'echarts/core'
 import { CanvasRenderer } from 'echarts/renderers'
@@ -28,7 +28,7 @@ watch(() => user.value, (u) => { if (u && !u.is_superuser && !u.is_observer) rou
 
 const api = useApi()
 
-// ── filtri + paginazione del registro ────────────────────────────────────────
+// ── the log's filters + pagination ────────────────────────────────────────
 const q = ref('')
 const action = ref('')
 const outcome = ref('')
@@ -60,11 +60,11 @@ watch([q, action, outcome], () => { offset.value = 0; load() })
 function next() { if (offset.value + pageSize < total.value) { offset.value += pageSize; load() } }
 function prev() { if (offset.value > 0) { offset.value = Math.max(0, offset.value - pageSize); load() } }
 
-// ── sessioni attive ──────────────────────────────────────────────────────────
-// Una per browser o script. L'amministratore ne chiude una (l'osservatore guarda):
-// quel browser esce alla richiesta dopo.
+// ── active sessions ──────────────────────────────────────────────────────────
+// One per browser or script. The administrator closes one (the observer looks): that
+// browser leaves at the next request.
 const sessions = ref<ActiveSession[]>([])
-const sessionsTotal = ref(0) // tutte le aperte: l'elenco porta solo le più recenti
+const sessionsTotal = ref(0) // all the open ones: the list carries only the newest
 async function loadSessions() {
   try {
     const page = await api.auditSessions()
@@ -89,12 +89,12 @@ async function revoke(s: ActiveSession) {
   }
 }
 
-// ── grafico accessi ultime 24h ───────────────────────────────────────────────
+// ── sign-ins chart, last 24h ───────────────────────────────────────────────
 const access = ref<AccessActivity | null>(null)
 async function loadAccess() {
   try { access.value = await api.auditAccessActivity(24) } catch { /* ignore */ }
 }
-// cromo dal tema corrente: la lettura dei token vive nel composable condiviso
+// chrome from the current theme: reading the tokens lives in the shared composable
 const { ui } = useChartTheme()
 
 const accessOption = computed(() => {
@@ -132,13 +132,13 @@ onMounted(async () => {
   await Promise.all([load(), loadSessions(), loadAccess()])
 })
 
-// ── presentazione ─────────────────────────────────────────────────────────────
-// I colori qui erano 21 esadecimali scritti a mano che riproducevano ESATTAMENTE
-// i token del tema scuro (#6ee7b7 = --accent-2, #ff6b6b = --danger, #4f8cff =
-// --accent, #a78bfa = --violet, #8b93a7 = --muted). Non erano codifica del dato:
-// erano la tavolozza dell'app ricopiata, e sugli altri tre temi risultavano
-// sbagliati — sul chiaro il verde menta su fondo bianco è quasi invisibile.
-// Essendo un computed, legge i token vivi e segue il cambio tema.
+// ── presentation ─────────────────────────────────────────────────────────────
+// The colours here were 21 hex values written by hand that reproduced EXACTLY the dark
+// theme's tokens (#6ee7b7 = --accent-2, #ff6b6b = --danger, #4f8cff = --accent, #a78bfa
+// = --violet, #8b93a7 = --muted). They were not data encoding: they were the app's
+// palette copied over, and on the other three themes they came out wrong — on the light
+// one the mint green on a white background is almost invisible. Being a computed, it
+// reads the live tokens and follows the theme change.
 const ACTION_META = computed<Record<string, { icon: any; color: string; label: string }>>(() => {
   const u = ui.value
   return {
@@ -214,7 +214,7 @@ const ACTION_META = computed<Record<string, { icon: any; color: string; label: s
     'connection.update': { icon: Plug, color: u.accent, label: t('audit.connectionUpdateAction') },
     'connection.delete': { icon: Plug, color: u.danger, label: t('audit.connectionDeleteAction') },
     'connection.host_key_accept': { icon: Plug, color: u.accent, label: t('sftp.auditHostKeyAccept') },
-    // ambra: è l'unico che non corrisponde ad alcun token, resta fisso
+    // amber: the only one that matches no token, it stays fixed
     'export.download': { icon: Download, color: '#fbbf24', label: t('audit.downloadAction') },
     'permission.grant': { icon: Shield, color: u.success, label: t('audit.permissionGrantAction') },
     'permission.revoke': { icon: Shield, color: u.danger, label: t('audit.permissionRevokeAction') },
@@ -255,7 +255,7 @@ function meta(a: string) {
   return ACTION_META.value[a] ?? { icon: Circle, color: ui.value.muted, label: a }
 }
 function fmtDate(iso: string) {
-  return fmtx.dateTime(iso, { seconds: true }) // nel registro l'ordine al secondo conta
+  return fmtx.dateTime(iso, { seconds: true }) // in the log the order to the second counts
 }
 function fmtAgo(iso: string | null) {
   if (!iso) return '—'
@@ -282,7 +282,7 @@ const REASONS: Record<string, string> = {
 function reasonLabel(r: string): string {
   return REASONS[r] ? t(REASONS[r]) : r
 }
-// riassunto compatto del detail (JSON completo nel title)
+// compact summary of the detail (whole JSON in the title)
 function detailSummary(e: AuditEntry): string {
   const d = e.detail
   if (!d) return ''
@@ -309,7 +309,7 @@ function detailSummary(e: AuditEntry): string {
         <button class="mini" :title="$t('audit.refreshTitle')" :aria-label="$t('audit.refreshTitle')" @click="load(); loadSessions(); loadAccess()"><RefreshCw :size="14" /></button>
       </div>
 
-      <!-- accessi ultime 24h -->
+      <!-- sign-ins, last 24h -->
       <section class="acc">
         <div class="acc-head">
           <span class="acc-title">{{ $t('audit.accessTitle') }}</span>
@@ -322,7 +322,7 @@ function detailSummary(e: AuditEntry): string {
         <VChart class="acc-chart" :option="accessOption" autoresize />
       </section>
 
-      <!-- sessioni attive -->
+      <!-- active sessions -->
       <section class="sess">
         <div class="sess-head">
           <span class="sess-title">{{ $t('audit.sessionsTitle') }}</span>
@@ -354,7 +354,7 @@ function detailSummary(e: AuditEntry): string {
         </div>
       </section>
 
-      <!-- filtri -->
+      <!-- filters -->
       <div class="filters">
         <span class="searchbox"><Search :size="14" /><input v-model="q" type="text" :placeholder="$t('audit.searchPlaceholder')" :aria-label="$t('audit.searchPlaceholder')" /></span>
         <select v-model="action" class="fsel">
@@ -370,7 +370,7 @@ function detailSummary(e: AuditEntry): string {
         <span class="muted count">{{ $t('audit.eventCount', { n: total }) }}</span>
       </div>
 
-      <!-- registro -->
+      <!-- log -->
       <div class="tbl-wrap">
         <p v-if="error" class="msg err">{{ error }}</p>
         <table v-else class="tbl">
@@ -424,7 +424,7 @@ function detailSummary(e: AuditEntry): string {
 .spacer { flex: 1; }
 .mini { padding: 5px 9px; font-size: 12px; }
 
-/* accessi 24h */
+/* sign-ins 24h */
 .acc { background: var(--panel); border: 1px solid var(--border); border-radius: 11px; padding: 12px 14px; }
 .acc-head { display: flex; align-items: baseline; gap: 12px; }
 .acc-title { font-size: 13px; font-weight: 600; }
@@ -433,7 +433,7 @@ function detailSummary(e: AuditEntry): string {
 .acc-stats .ko { color: var(--danger); }
 .acc-chart { width: 100%; height: 160px; }
 
-/* sessioni */
+/* sessions */
 .sess { background: var(--panel); border: 1px solid var(--border); border-radius: 11px; padding: 12px 14px; }
 .sess-head { display: flex; align-items: baseline; gap: 12px; margin-bottom: 10px; }
 .sess-title { font-size: 13px; font-weight: 600; }
@@ -452,7 +452,7 @@ function detailSummary(e: AuditEntry): string {
 .sess-revoke:hover { color: var(--danger); border-color: var(--danger); box-shadow: none; }
 .empty { font-size: 12.5px; }
 
-/* filtri */
+/* filters */
 .filters { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
 .searchbox { display: inline-flex; align-items: center; gap: 6px; border: 1px solid var(--border); border-radius: 7px; padding: 5px 9px; background: var(--panel-2); }
 .searchbox input { border: none; background: transparent; padding: 0; min-width: 220px; }
@@ -460,7 +460,7 @@ function detailSummary(e: AuditEntry): string {
 .fsel { width: auto; padding: 6px 9px; font-size: 12.5px; }
 .count { font-size: 12.5px; }
 
-/* tabella */
+/* table */
 .tbl-wrap { border: 1px solid var(--border); border-radius: 11px; overflow: hidden; background: var(--panel); }
 .tbl { width: 100%; border-collapse: collapse; font-size: 12.5px; }
 .tbl th { text-align: left; font-size: 11px; text-transform: uppercase; letter-spacing: 0.03em; color: var(--muted); padding: 9px 12px; border-bottom: 1px solid var(--border); background: var(--panel-2); white-space: nowrap; }

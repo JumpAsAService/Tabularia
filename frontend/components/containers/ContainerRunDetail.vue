@@ -72,7 +72,7 @@ const io = computed(() => [
       <p v-else-if="info.log_expired" class="muted small">{{ $t('scripting.run.logExpired') }}</p>
       <p v-else class="muted small">{{ $t('scripting.run.noLog') }}</p>
     </details>
-    <p v-if="info.image" class="muted small immagine"><code>{{ info.image }}</code></p>
+    <p v-if="info.image" class="muted small image"><code>{{ info.image }}</code></p>
   </div>
 </template>
 
@@ -88,6 +88,6 @@ summary { cursor: pointer; font-size: 12px; color: var(--muted); }
 .vars li { display: flex; gap: 8px; align-items: center; }
 .log { margin: 6px 0 0; max-height: 420px; overflow: auto; font-size: 11.5px; padding: 8px; border-radius: 6px; background: var(--bg-soft); white-space: pre-wrap; overflow-wrap: anywhere; }
 .small { font-size: 12px; margin: 0; }
-.immagine { overflow-wrap: anywhere; }
+.image { overflow-wrap: anywhere; }
 @media (max-width: 720px) { dl { grid-template-columns: 1fr 1fr; } dl .largo { grid-column: 1 / -1; } }
 </style>

@@ -1,16 +1,16 @@
 <script setup lang="ts">
-// Arco del canvas con un'affordance di rimozione: una «×» al centro, visibile
-// quando l'arco è selezionato o sotto il puntatore. Il tratto è quello di Vue
-// Flow (BaseEdge), così le classi `animated` ed `edge-seq` continuano a
-// governarne colore e tratteggio; la rimozione vera la fa l'editor (inject).
+// A canvas edge with a removal affordance: a «×» in the middle, visible when the edge is
+// selected or under the pointer. The stroke is Vue Flow's (BaseEdge), so the `animated`
+// and `edge-seq` classes keep governing colour and dashes; the editor does the real
+// removal (inject).
 import { computed, inject, ref, type Ref } from 'vue'
 import { BaseEdge, EdgeLabelRenderer, getBezierPath, type Position } from '@vue-flow/core'
 import { X } from 'lucide-vue-next'
 import { useI18n } from 'vue-i18n'
 
-// Vue Flow passa tutte le EdgeProps con v-bind; qui si dichiarano solo quelle
-// usate, in linea: un tipo importato in defineProps richiederebbe TypeScript
-// nel container di sviluppo, che non lo ha. Le altre restano attributi.
+// Vue Flow passes all the EdgeProps with v-bind; here only those used are declared,
+// inline: a type imported in defineProps would need TypeScript in the development
+// container, which does not have it. The others stay attributes.
 const props = defineProps<{
   id: string
   sourceX: number
@@ -23,7 +23,7 @@ const props = defineProps<{
   style?: Record<string, any>
   selected?: boolean
 }>()
-// due radici (tratto + etichetta): gli attributi non dichiarati non hanno dove cadere
+// two roots (stroke + label): the undeclared attributes have nowhere to fall
 defineOptions({ inheritAttrs: false })
 const { t } = useI18n()
 const remove = inject<(id: string) => void>('flowEdgeRemove', () => {})

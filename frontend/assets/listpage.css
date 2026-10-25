@@ -1,5 +1,5 @@
-/* Stile condiviso delle pagine-elenco (Flows / Datasources / Connections).
-   Importato come <style scoped src="~/assets/listpage.css"> in ogni pagina. */
+/* Shared style of the list pages (Flows / Datasources / Connections).
+   Imported as <style scoped src="~/assets/listpage.css"> in every page. */
 .page-head {
   display: flex;
   align-items: center;
@@ -43,7 +43,7 @@
   border-radius: 8px;
   text-decoration: none;
   background: var(--grad-accent);
-  /* --on-accent, non #fff: su Dracula e Monokai il gradiente è chiaro */
+  /* --on-accent, not #fff: on Dracula and Monokai the gradient is light */
   color: var(--on-accent);
   font-size: 13px;
   font-weight: 500;
@@ -88,7 +88,7 @@ table.list tbody tr:hover td { background: var(--panel-2); }
 .nowrap { white-space: nowrap; }
 .right { text-align: right; white-space: nowrap; }
 .right .mini { margin-left: 4px; }
-/* min-height: il minimo AA per un bersaglio è 24px e il solo padding ne dava 22 */
+/* min-height: the AA minimum for a target is 24px and the padding alone gave 22 */
 button.mini { padding: 3px 8px; min-height: 24px; }
 button.danger, .mini.danger { border-color: var(--danger); color: var(--danger); }
 button.danger:hover { background: var(--danger-fill); color: var(--on-danger); }

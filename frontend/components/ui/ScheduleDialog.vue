@@ -1,6 +1,6 @@
 <script setup lang="ts">
-// Dialog di schedulazione (cron) riusabile: refresh datasource ed esecuzione
-// flussi. Mostra la descrizione testuale live del cron (stile crontab.guru) via
+// Reusable scheduling (cron) dialog: datasource refresh and flow runs. It shows the
+// cron's live text description (crontab.guru style) through
 // cronstrue, in the language of the interface.
 import { ref, watch, computed } from 'vue'
 import { useI18n } from 'vue-i18n'
@@ -15,26 +15,26 @@ const CRON_LOCALES: Record<string, string> = { en: 'en', it: 'it', fr: 'fr', de:
 
 const props = defineProps<{
   open: boolean
-  title: string // nome dell'oggetto (datasource/flusso)
-  subtitle?: string // cosa fa lo schedule
-  current: string | null // cron attuale (per prefill e per mostrare "Disattiva")
+  title: string // the object's name (datasource/flow)
+  subtitle?: string // what the schedule does
+  current: string | null // the current cron (for prefill and to show "Disable")
   busy?: boolean
-  // (solo flussi) motori selezionabili per i run schedulati + scelta attuale;
-  // se assenti il selettore non compare (datasources)
+  // (flows only) engines selectable for the scheduled runs + the current choice; when
+  // missing the selector does not show (datasources)
   engines?: { id: string; label: string }[]
   productionEngine?: string | null
-  // (solo flussi) avviso quando un'esecuzione programmata fallisce: connessioni
-  // SMTP disponibili e impostazione attuale. Assenti = la sezione non compare.
+  // (flows only) notice when a scheduled run fails: available SMTP connections and the
+  // current setting. Missing = the section does not show.
   smtpConnections?: { id: number; name: string }[]
   notifyEmails?: string | null
   notifyConnectionId?: number | null
 }>()
 const emit = defineEmits<{
-  // productionEngine: '' = come sviluppo; undefined = invariato (nessun selettore o disattivazione)
+  // productionEngine: '' = as development; undefined = unchanged (no selector or disabling)
   (e: 'save', cron: string, productionEngine?: string, notify?: { emails: string; connectionId: number }): void
   (e: 'cancel'): void
 }>()
-// fuoco iniziale sulla card, Tab confinato, Esc funzionante, fuoco restituito
+// initial focus on the card, Tab confined, Esc working, focus given back
 const card = ref<HTMLElement | null>(null)
 useDialogA11y(card, () => props.open, () => emit('cancel'))
 
@@ -43,8 +43,10 @@ const prodChoice = () => (props.engines?.length ? prodEngine.value : undefined)
 
 const notifyTo = ref('')
 const notifyConn = ref<number>(0)
-/** Indirizzi vuoti = avviso spento: si manda la coppia vuota, non `undefined`,
- *  altrimenti togliere gli indirizzi non lo spegnerebbe mai. */
+/**
+ * Empty addresses = notice off: the empty pair is sent, not `undefined`, otherwise
+ * removing the addresses would never turn it off.
+ */
 const notifyChoice = () =>
   props.smtpConnections?.length
     ? { emails: notifyTo.value.trim(), connectionId: notifyTo.value.trim() ? notifyConn.value : 0 }
@@ -52,8 +54,8 @@ const notifyChoice = () =>
 
 const api = useApi()
 const cronInput = ref('')
-// fuso del deployment in cui gli orari cron vengono interpretati (dal gateway);
-// caricato una volta alla prima apertura
+// the deployment's zone the cron times are read in (from the gateway); loaded once at
+// the first opening
 const tz = ref('UTC')
 let tzLoaded = false
 watch(
@@ -134,9 +136,8 @@ const cronDescription = computed<{ text: string; ok: boolean }>(() => {
           </select>
         </template>
 
-        <!-- L'avviso sta qui e non in una pagina a parte perché è la seconda
-             metà dello schedule: si può dimenticare un flusso solo se qualcosa
-             avverte quando smette di funzionare. -->
+        <!-- The notice sits here and not on a page of its own because it is the second half of
+             the schedule: one can forget a flow only if something warns when it stops working. -->
         <template v-if="smtpConnections?.length">
           <label class="sd-engine-label">{{ $t('scheduleDialog.notifyLabel') }}</label>
           <input

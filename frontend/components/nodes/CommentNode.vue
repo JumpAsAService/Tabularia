@@ -1,8 +1,7 @@
 <script setup lang="ts">
-// Nota libera sul canvas: annotazione dell'utente. NON fa parte del flusso e
-// viene IGNORATA dall'esecuzione (nessun handle, non si collega a niente).
-// Ridimensionabile come il container foreach; il testo si modifica in-place con
-// un doppio click (o dal pannello laterale).
+// A free note on the canvas: the user's annotation. It is NOT part of the flow and is
+// IGNORED by the run (no handle, it connects to nothing). Resizable like the foreach
+// container; the text is edited in place with a double click (or from the side panel).
 import { ref, nextTick } from 'vue'
 import { NodeResizer } from '@vue-flow/node-resizer'
 import { useVueFlow } from '@vue-flow/core'
@@ -36,7 +35,7 @@ function commit() {
       :line-style="{ borderWidth: '1px', borderColor: 'rgba(251, 191, 36, 0.4)' }"
     />
     <div class="comment-head"><StickyNote :size="12" /> {{ $t('commentNode.label') }}</div>
-    <!-- la classe nodrag evita che scrivere/selezionare sposti il nodo -->
+    <!-- the nodrag class keeps writing/selecting from moving the node -->
     <textarea
       v-if="editing"
       ref="ta"

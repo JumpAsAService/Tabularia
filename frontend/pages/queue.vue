@@ -1,8 +1,8 @@
 <script setup lang="ts">
-// Queue: stato near-real-time dei worker Celery e dei job —
-// in esecuzione e in attesa — con la possibilità di FERMARE un job in corso.
-// Il numero di worker è dinamico (in produzione può essere diverso): mostriamo
-// quelli online in quel momento. Polling ogni 2s; nessun websocket.
+// Queue: near-real-time state of the Celery workers and the jobs — running and waiting —
+// with the possibility to STOP a running job. The number of workers is dynamic (in
+// production it may differ): we show those online at that moment. Polling every 2s; no
+// websocket.
 import { computed, onMounted, onUnmounted, ref, watchEffect } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { Cpu, Square, RefreshCw, CircleAlert, Loader } from 'lucide-vue-next'
@@ -15,13 +15,13 @@ const toast = useToast()
 const queueApi = useQueue()
 const { t } = useI18n()
 
-// guardia UX (il gateway impone la RBAC vera: /queue è require_superuser)
+// UX guard (the gateway enforces the real RBAC: /queue is require_superuser)
 watchEffect(() => {
   if (user.value && !user.value.is_superuser && !user.value.is_observer) router.replace('/')
 })
 
-// Un OSSERVATORE legge la pagina; i comandi restano all'amministratore.
-// `is_observer` da /auth/me è EFFETTIVO: tiene conto dei gruppi.
+// An OBSERVER reads the page; the commands stay the administrator's.
+// `is_observer` from /auth/me is EFFECTIVE: it accounts for the groups.
 const canSee = computed(() => !!user.value?.is_superuser || !!user.value?.is_observer)
 const canWrite = computed(() => !!user.value?.is_superuser)
 
@@ -74,7 +74,7 @@ onUnmounted(() => {
   if (timer) clearTimeout(timer)
 })
 
-// nomi task tecnici → chiavi i18n per le etichette leggibili
+// technical task names → i18n keys for the readable labels
 const LABELS: Record<string, string> = {
   'app.tasks.jobs.transform_data_task': 'taskTransform',
   'app.tasks.jobs.ingest_database_task': 'taskIngest',
@@ -111,7 +111,7 @@ const reserved = computed(() => data.value?.reserved ?? [])
 
       <p v-if="error" class="err"><CircleAlert :size="14" /> {{ error }}</p>
 
-      <!-- riepilogo -->
+      <!-- summary -->
       <div class="stats">
         <div class="stat">
           <span class="n">{{ workers.length }}</span><span class="l">{{ $t('queue.workersOnline') }}</span>
@@ -150,7 +150,7 @@ const reserved = computed(() => data.value?.reserved ?? [])
         </div>
       </div>
 
-      <!-- in esecuzione -->
+      <!-- running -->
       <div class="section-title">{{ $t('queue.runningSectionTitle') }} <span class="muted">({{ running.length }})</span></div>
       <p v-if="!running.length && !loading" class="muted">{{ $t('queue.noJobsRunning') }}</p>
       <div v-else class="jobs">
@@ -166,7 +166,7 @@ const reserved = computed(() => data.value?.reserved ?? [])
         </div>
       </div>
 
-      <!-- in attesa -->
+      <!-- waiting -->
       <div class="section-title">
         {{ $t('queue.waitingSectionTitle') }} <span class="muted">({{ data?.waiting ?? 0 }})</span>
       </div>
@@ -197,7 +197,7 @@ const reserved = computed(() => data.value?.reserved ?? [])
 
 <style scoped>
 .page-head { display: flex; align-items: center; justify-content: space-between; gap: 16px; }
-/* dimensioni fissate: vedi nota in runs.vue — <h1> deve rendere come il <h2> */
+/* fixed sizes: see the note in runs.vue — <h1> must render like the <h2> */
 .page-head h1 { display: inline-flex; align-items: center; gap: 8px; font-size: 1.5em; margin-block: 0.83em; }
 .head-actions { display: flex; align-items: center; gap: 10px; }
 .live { display: inline-flex; align-items: center; gap: 6px; font-size: 12px; color: var(--muted); }

@@ -1,5 +1,5 @@
-// Lingua dell'interfaccia, a livello di utente. Come tema/motore: scelta
-// persistita (qui in un COOKIE, così l'SSR la conosce) e condivisa in tutta l'app.
+// The interface's language, per user. Like theme/engine: a persisted choice (here in a
+// COOKIE, so SSR knows it) shared across the whole app.
 import { useI18n } from 'vue-i18n'
 import { LOCALES, isLocale, type LocaleCode } from '~/i18n'
 import { LOCALE_COOKIE } from '~/plugins/i18n'
@@ -17,7 +17,7 @@ export function useLocale() {
   function setLocale(code: LocaleCode) {
     if (!isLocale(code)) return
     locale.value = code
-    cookie.value = code // <html lang> segue `locale` da plugins/i18n.ts
+    cookie.value = code // <html lang> follows `locale` from plugins/i18n.ts
     // the emails the product sends this user follow the language chosen here
     syncLocale(user.value, code)
   }

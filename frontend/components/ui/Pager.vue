@@ -1,6 +1,6 @@
 <script setup lang="ts">
-// Controlli di paginazione: "X–Y di Z" + precedente/successivo. Si mostra solo
-// se il totale supera una pagina.
+// Pagination controls: "X–Y of Z" + previous/next. Shown only when the total exceeds a
+// page.
 import { computed } from 'vue'
 import { ChevronLeft, ChevronRight } from 'lucide-vue-next'
 

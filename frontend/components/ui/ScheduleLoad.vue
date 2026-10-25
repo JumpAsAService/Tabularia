@@ -1,9 +1,9 @@
 <script setup lang="ts">
-// Carico PREVISIONALE degli schedule: proietta i cron attivi (flussi + refresh
-// datasource) sui prossimi N giorni e mostra dove si accavallano. Heatmap
-// giorno×ora del carico + elenco delle fasce critiche (collisioni nello stesso
-// minuto oltre la capacità dei worker → job in coda). Complementare al calendar
-// plot dei run PASSATI: qui si guarda al FUTURO, per scegliere slot liberi.
+// The schedules' FORECAST load: projects the active crons (flows + datasource refreshes)
+// over the next N days and shows where they overlap. Day×hour heatmap of the load + list
+// of the critical slots (collisions in the same minute beyond the workers' capacity →
+// queued jobs). Complementary to the PAST runs' calendar plot: here one looks at the
+// FUTURE, to choose free slots.
 import { ref, computed, watch, onMounted } from 'vue'
 import { use } from 'echarts/core'
 import { CanvasRenderer } from 'echarts/renderers'
@@ -52,17 +52,17 @@ async function load() {
 watch(days, load)
 onMounted(load)
 
-// split = bande alternate dello sfondo griglia: SENZA un areaStyle esplicito
-// ECharts usa un default grigio-chiaro che sui temi scuri diventa bande bianche.
-// Restano qui e non nel composable: sono una scelta di QUESTO grafico, non cromo
-// condiviso — il composable espone `isLight`, la decisione la prende il chiamante.
+// split = alternating bands of the grid's background: WITHOUT an explicit areaStyle
+// ECharts uses a light-grey default that on dark themes becomes white bands. They stay
+// here and not in the composable: they are a choice of THIS chart, not shared chrome —
+// the composable exposes `isLight`, the caller takes the decision.
 const DARK_SPLIT = ['rgba(255,255,255,0.03)', 'rgba(255,255,255,0.06)']
 const LIGHT_SPLIT = ['rgba(0,0,0,0.025)', 'rgba(0,0,0,0.05)']
 const { ui } = useChartTheme()
 const split = computed(() => (ui.value.isLight ? LIGHT_SPLIT : DARK_SPLIT))
 
 const maxCount = computed(() => Math.max(1, ...(data.value?.cells.map((c) => c.count) ?? [1])))
-// lookup per il tooltip (peak per cella)
+// lookup for the tooltip (peak per cell)
 const peakByCell = computed(() => {
   const m = new Map<string, number>()
   for (const c of data.value?.cells ?? []) m.set(`${c.weekday}-${c.hour}`, c.peak_concurrent)
@@ -101,7 +101,7 @@ const option = computed(() => {
     visualMap: {
       min: 0, max: maxCount.value, calculable: true, orient: 'horizontal', left: 'center', bottom: 0,
       itemWidth: 12, itemHeight: 90, textStyle: { color: c.muted, fontSize: 10 },
-      // l'accento del tema, più pieno dove il carico è più alto
+      // the theme's accent, fuller where the load is higher
       inRange: { color: [withAlpha(c.accent, 0.12), withAlpha(c.accent, 0.6), c.accent] },
     },
     series: [{
@@ -143,7 +143,7 @@ function fmtBand(col: { weekday: number; hour: number; minute: number }) {
       <template v-else>
         <VChart class="sl-chart" :option="option" autoresize />
 
-        <!-- fasce critiche: collisioni oltre la capacità dei worker -->
+        <!-- critical slots: collisions beyond the workers' capacity -->
         <div class="sl-crit">
           <template v-if="data.collisions.length">
             <div class="sl-crit-h">

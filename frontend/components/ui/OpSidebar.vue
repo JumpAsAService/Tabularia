@@ -1,7 +1,6 @@
 <script setup lang="ts">
-// Palette dei componenti: trascina una voce sul canvas per creare il nodo.
-// Il tipo viaggia nel dataTransfer (application/tabularia), letto dal drop
-// handler di FlowEditor.
+// The components' palette: drag an item onto the canvas to create the node. The type
+// travels in the dataTransfer (application/tabularia), read by FlowEditor's drop handler.
 import { computed, ref } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { Container, FileCode2, GripVertical, HardDriveDownload, StickyNote, Search } from 'lucide-vue-next'
@@ -9,7 +8,7 @@ import { opMeta, SOURCE_META } from '~/composables/useOpIcons'
 
 const { t } = useI18n()
 
-// readOnly: osservatore — solo trasformazioni, niente sorgenti, controllo, output
+// readOnly: observer — transformations only, no sources, controls, outputs
 // scripting: the person may write Script nodes (an environment is there for them)
 // containers: the person may use Container nodes (a registry is granted to them)
 // scriptingOff / containersOff: an installation without Kubernetes (Docker Compose): the
@@ -19,7 +18,7 @@ const props = defineProps<{
   scriptingOff?: boolean; containersOff?: boolean
 }>()
 
-// ── ricerca: filtra le voci della palette per etichetta (o nome operazione) ──
+// ── search: filters the palette's items by label (or operation name) ──
 const query = ref('')
 const match = (...texts: string[]) => {
   const q = query.value.trim().toLowerCase()
@@ -27,14 +26,14 @@ const match = (...texts: string[]) => {
   return texts.some((t) => (t ?? '').toLowerCase().includes(q))
 }
 
-// foreach ha una voce dedicata nel gruppo "Controllo" (è un container, non
-// un'operazione normale della catena)
+// foreach has a dedicated item in the "Control" group (it is a container, not a normal
+// operation of the chain)
 const transformOps = computed(() =>
   props.operations.filter((o) => o !== 'foreach' && match(t(opMeta(o).label), o)),
 )
 const hasForeach = computed(() => props.operations.includes('foreach'))
 
-// visibilità delle singole voci fisse e dei rispettivi gruppi
+// visibility of the single fixed items and of their groups
 const showSource = computed(() => !props.readOnly && match(t(SOURCE_META.label), 'source'))
 const showForeach = computed(() => !props.readOnly && hasForeach.value && match(t(opMeta('foreach').label), 'foreach'))
 // «Refresh datasource» and «Run flow» are no longer offered: a flow group refreshes
@@ -113,7 +112,7 @@ function onDragStart(ev: DragEvent, kind: string) {
       <div
         v-if="showScript"
         class="item"
-        :class="{ spento: scriptingOff }"
+        :class="{ off: scriptingOff }"
         :draggable="!scriptingOff"
         :title="scriptingOff ? $t('scripting.kubernetesOnly') : undefined"
         :aria-disabled="scriptingOff ? 'true' : undefined"
@@ -127,7 +126,7 @@ function onDragStart(ev: DragEvent, kind: string) {
       <div
         v-if="showContainer"
         class="item"
-        :class="{ spento: containersOff }"
+        :class="{ off: containersOff }"
         :draggable="!containersOff"
         :title="containersOff ? $t('scripting.kubernetesOnly') : undefined"
         :aria-disabled="containersOff ? 'true' : undefined"
@@ -174,7 +173,7 @@ function onDragStart(ev: DragEvent, kind: string) {
 </template>
 
 <style scoped>
-.item.spento { opacity: .45; cursor: not-allowed; }
+.item.off { opacity: .45; cursor: not-allowed; }
 .opsidebar {
   height: 100%;
   overflow-y: auto;
@@ -183,10 +182,10 @@ function onDragStart(ev: DragEvent, kind: string) {
   flex-direction: column;
   gap: 3px;
 }
-/* barra di ricerca fissa in cima mentre la lista scorre */
+/* search bar fixed at the top while the list scrolls */
 .searchbar {
   position: sticky;
-  top: -10px; /* compensa il padding dell'aside */
+  top: -10px; /* compensates the aside's padding */
   z-index: 1;
   display: flex;
   align-items: center;

@@ -1,6 +1,6 @@
 <script setup lang="ts">
-// Nodo di controllo (non un'operazione dell'engine): al run il gateway aggiorna
-// la datasource indicata PRIMA degli output, così il flusso gira su dati freschi.
+// Control node (not an engine operation): at the run the gateway updates the given
+// datasource BEFORE the outputs, so the flow runs on fresh data.
 import { computed } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { Handle, Position } from '@vue-flow/core'
@@ -13,7 +13,7 @@ const summary = computed(() => props.data?.dsName?.trim() || t('refreshNode.choo
 
 <template>
   <div class="node node-ctl">
-    <!-- handle di SEQUENZA (orizzontali): definiscono l'ordine di orchestrazione -->
+    <!-- SEQUENCE handles (horizontal): they define the orchestration order -->
     <Handle id="seq-in" type="target" :position="Position.Left" class="handle-seq" />
     <div class="node-title">
       <RefreshCw :size="13" class="node-icon" />

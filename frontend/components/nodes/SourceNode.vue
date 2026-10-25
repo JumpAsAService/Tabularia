@@ -9,16 +9,16 @@ import { sampleLabel, sourceFilterCount } from '~/composables/useFlowModel'
 
 const props = defineProps<{ id: string; data: any }>()
 const { t } = useI18n()
-// lo stato del data contract della datasource letta: chi consuma un dato vede
-// sul nodo se chi lo produce sta mantenendo la promessa
+// the data contract state of the datasource read: whoever consumes data sees on the node
+// whether whoever produces it is keeping the promise
 const contracts = inject<ComputedRef<Map<number, ContractSummary>> | null>('datasourceContracts', null)
 const contract = computed(() => (props.data?.datasourceId != null ? contracts?.value.get(props.data.datasourceId) ?? null : null))
 </script>
 
 <template>
   <div class="node node-source">
-    <!-- ingresso di SEQUENZA: collega qui un «Refresh datasource» perché venga
-         aggiornata PRIMA che la sorgente ne legga i dati -->
+    <!-- SEQUENCE entry: connect a «Refresh datasource» here so that it is updated BEFORE the
+         source reads its data -->
     <Handle id="seq-in" type="target" :position="Position.Left" class="handle-seq" />
     <div class="node-title"><FileText :size="13" /> {{ $t('sourceNode.title') }}</div>
     <div class="node-body">
@@ -42,7 +42,7 @@ const contract = computed(() => (props.data?.datasourceId != null ? contracts?.v
 <style scoped>
 .srcname { display: flex; align-items: center; gap: 5px; }
 .sheet { display: inline-flex; align-items: center; gap: 4px; font-size: 11px; color: var(--muted); }
-/* handle di sequenza (orchestrazione), stesso viola degli archi di controllo */
+/* sequence handle (orchestration), the same violet as the control edges */
 .handle-seq { background: #c084fc !important; }
 .filters { display: inline-flex; align-items: center; gap: 4px; margin-top: 3px; font-size: 11px; color: color-mix(in srgb, #60a5fa var(--enc-text-mix), var(--text)); font-weight: 500; }
 .sample { display: inline-flex; align-items: center; gap: 4px; margin-top: 3px; font-size: 11px; color: color-mix(in srgb, #fbbf24 var(--enc-text-mix), var(--text)); font-weight: 500; }

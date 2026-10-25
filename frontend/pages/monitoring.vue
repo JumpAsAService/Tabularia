@@ -1,7 +1,7 @@
 <script setup lang="ts">
-// Monitoring: la dashboard Grafana "Data Prep — Overview"
-// embeddata in kiosk mode (niente chrome di Grafana, solo i pannelli).
-// Richiede GF_SECURITY_ALLOW_EMBEDDING + anonimo Viewer (vedi docker-compose).
+// Monitoring: the Grafana dashboard "Data Prep — Overview" embedded in kiosk mode (no
+// Grafana chrome, only the panels). Requires GF_SECURITY_ALLOW_EMBEDDING + anonymous
+// Viewer (see docker-compose).
 import { computed, watchEffect } from 'vue'
 import { ExternalLink } from 'lucide-vue-next'
 
@@ -9,13 +9,13 @@ const { user } = useAuth()
 const router = useRouter()
 const config = useRuntimeConfig()
 
-// il contenuto è telemetria, non dati: la guardia è solo UX coerente con /admin
+// the content is telemetry, not data: the guard is only UX consistent with /admin
 watchEffect(() => {
   if (user.value && !user.value.is_superuser && !user.value.is_observer) router.replace('/')
 })
 
-// Un OSSERVATORE legge la pagina; i comandi restano all'amministratore.
-// `is_observer` da /auth/me è EFFETTIVO: tiene conto dei gruppi.
+// An OBSERVER reads the page; the commands stay the administrator's.
+// `is_observer` from /auth/me is EFFECTIVE: it accounts for the groups.
 const canSee = computed(() => !!user.value?.is_superuser || !!user.value?.is_observer)
 const canWrite = computed(() => !!user.value?.is_superuser)
 

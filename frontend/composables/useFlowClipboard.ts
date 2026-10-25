@@ -1,11 +1,11 @@
-// Copia e incolla dei nodi dell'editor.
+// Copying and pasting the editor's nodes.
 //
-// Ciò che si copia è un pezzo di flusso nella stessa forma in cui si salva: i
-// nodi scelti, i figli dei container scelti, e gli archi che stanno TUTTI dentro
-// la selezione (un arco verso un nodo non copiato non avrebbe dove attaccarsi).
-// Sta nel localStorage e non in una variabile: così si incolla anche in un altro
-// flusso o in un'altra scheda. Non si usa la clipboard di sistema: chiede un
-// permesso al browser, e a chi incolla in un documento arriverebbe del JSON.
+// What is copied is a piece of flow in the same shape it is saved in: the chosen nodes,
+// the chosen containers' children, and the edges lying ALL inside the selection (an edge
+// towards a node not copied would have nowhere to attach). It sits in localStorage and
+// not in a variable: so one can paste into another flow or another tab too. The system
+// clipboard is not used: it asks the browser for a permission, and whoever pastes into a
+// document would get JSON.
 
 export interface ClipNode {
   id: string
@@ -31,15 +31,15 @@ export interface FlowClip {
 }
 
 const STORAGE_KEY = 'tabularia.flowClipboard'
-let memoria: FlowClip | null = null // se il localStorage non c'è (navigazione privata, quota)
+let memory: FlowClip | null = null // if localStorage is not there (private browsing, quota)
 
 const clone = <T>(v: T): T => JSON.parse(JSON.stringify(v))
 
-/** Il pezzo di flusso da copiare. `null` se non c'è niente di selezionato. */
+/** The piece of flow to copy. `null` when nothing is selected. */
 export function buildClip(nodes: ClipNode[], edges: ClipEdge[], selected: string[]): FlowClip | null {
   const byId = new Map(nodes.map((n) => [n.id, n]))
   const chosen = new Set(selected.filter((id) => byId.has(id)))
-  // un container si porta dietro il suo contenuto
+  // a container brings its content along
   for (const n of nodes) if (n.parentNode && chosen.has(n.parentNode)) chosen.add(n.id)
   if (!chosen.size) return null
 
@@ -49,8 +49,8 @@ export function buildClip(nodes: ClipNode[], edges: ClipEdge[], selected: string
     const copy = clone(n)
     const parent = n.parentNode ? byId.get(n.parentNode) : undefined
     if (parent && !chosen.has(parent.id)) {
-      // figlio copiato senza il suo container: diventa un nodo libero, nel punto
-      // in cui si vedeva (la sua posizione era relativa al container)
+      // a child copied without its container: it becomes a free node, at the point where it
+      // was seen (its position was relative to the container)
       copy.position = { x: parent.position.x + n.position.x, y: parent.position.y + n.position.y }
       delete copy.parentNode
     }
@@ -63,8 +63,10 @@ export function buildClip(nodes: ClipNode[], edges: ClipEdge[], selected: string
   }
 }
 
-/** Una copia pronta da aggiungere al canvas: id nuovi, posizione spostata, archi ricuciti.
- *  `allow` scarta i nodi che chi incolla non può aggiungere. */
+/**
+ * A copy ready to add to the canvas: new ids, position moved, edges stitched again.
+ * `allow` drops the nodes whoever pastes cannot add.
+ */
 export function instantiateClip(
   clip: FlowClip,
   newId: (node: ClipNode) => string,
@@ -80,16 +82,16 @@ export function instantiateClip(
     copy.id = ids.get(n.id)!
     const parent = n.parentNode ? original.get(n.parentNode) : undefined
     if (n.parentNode && ids.has(n.parentNode)) {
-      copy.parentNode = ids.get(n.parentNode) // dentro il container copiato: posizione relativa, invariata
+      copy.parentNode = ids.get(n.parentNode) // inside the copied container: relative position, unchanged
     } else {
-      // nodo libero, o figlio rimasto senza container (scartato): posizione assoluta
+      // free node, or a child left without its container (dropped): absolute position
       delete copy.parentNode
       const base = parent ? { x: parent.position.x + n.position.x, y: parent.position.y + n.position.y } : n.position
       copy.position = { x: base.x + offset.x, y: base.y + offset.y }
     }
     return copy
   })
-  // i container prima dei figli: il canvas li vuole in quest'ordine
+  // the containers before the children: the canvas wants them in this order
   nodes.sort((a, b) => Number(!!a.parentNode) - Number(!!b.parentNode))
 
   const edges = clip.edges
@@ -103,11 +105,11 @@ export function instantiateClip(
 }
 
 export function writeClip(clip: FlowClip): void {
-  memoria = clip
+  memory = clip
   try {
     localStorage.setItem(STORAGE_KEY, JSON.stringify(clip))
   } catch {
-    // resta la copia in memoria: vale per questa scheda
+    // the copy in memory stays: it holds for this tab
   }
 }
 
@@ -119,7 +121,7 @@ export function readClip(): FlowClip | null {
       if (clip?.v === 1 && Array.isArray(clip.nodes) && Array.isArray(clip.edges) && clip.nodes.length) return clip
     }
   } catch {
-    // contenuto illeggibile o localStorage assente: si ripiega sulla memoria
+    // unreadable content or localStorage missing: it falls back on the memory
   }
-  return memoria
+  return memory
 }

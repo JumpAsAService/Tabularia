@@ -1,36 +1,35 @@
-// Cronologia dell'editor: annulla / ripeti.
+// The editor's history: undo / redo.
 //
-// A ISTANTANEE e non a comandi: uno stato è la stessa stringa che si salva
-// (`serializeCanvas`), e un passo nasce da solo ogni volta che quella stringa
-// cambia e poi resta ferma per un attimo. Così non c'è un elenco di azioni
-// «annullabili» da tenere aggiornato: trascinare, collegare, cambiare un
-// parametro, riordinare, e qualunque cosa l'editor imparerà a fare domani,
-// passano tutte da qui senza che nessuno se ne ricordi.
+// By SNAPSHOTS and not by commands: a state is the same string that is saved
+// (`serializeCanvas`), and a step is born by itself every time that string changes and
+// then stays still for a moment. So there is no list of «undoable» actions to keep
+// updated: dragging, connecting, changing a parameter, reordering, and whatever the
+// editor learns to do tomorrow, all go through here without anyone remembering it.
 //
-// La pausa (`settleMs`) è ciò che fa di un trascinamento UN passo e non cento, e
-// di una parola scritta in un campo un passo e non uno per lettera.
+// The pause (`settleMs`) is what makes a drag ONE step and not a hundred, and a word typed
+// in a field one step and not one per letter.
 //
-// Tre cose NON devono diventare passi, e per tutte vale lo stesso meccanismo —
-// «il prossimo stato fermo lo si adotta com'è» (`settling`):
-//   - il caricamento del flusso, e le misure che il canvas prende dopo aver
-//     disegnato i nodi (cambiano la stringa senza che nessuno abbia fatto niente);
-//   - il ripristino fatto da annulla/ripeti: se contasse come modifica
-//     cancellerebbe la strada del «ripeti»;
-//   - gli aggiornamenti che non vengono dall'utente (una sorgente riagganciata
-//     al suo snapshot nuovo): annullarli riporterebbe a una chiave che non c'è più.
+// Three things must NOT become steps, and the same mechanism holds for all of them —
+// «the next still state is adopted as it is» (`settling`):
+//   - loading the flow, and the sizes the canvas takes after drawing the nodes (they
+//     change the string without anyone having done anything);
+//   - the restore made by undo/redo: if it counted as a change it would delete the
+//     «redo» road;
+//   - the updates that do not come from the user (a source reattached to its new
+//     snapshot): undoing them would bring back a key that is no longer there.
 
 export interface FlowHistoryOptions {
-  /** Lo stato del canvas, nella forma in cui si salva. */
+  /** The canvas's state, in the form it is saved in. */
   serialize: () => string
-  /** Rimette il canvas in uno stato preso da `serialize`. */
+  /** Puts the canvas back in a state taken from `serialize`. */
   restore: (snapshot: string) => void
-  /** Chiamata quando cambia ciò che si può annullare o ripetere. */
+  /** Called when what can be undone or redone changes. */
   onChange?: () => void
-  /** Quanti passi si tengono. */
+  /** How many steps are kept. */
   limit?: number
-  /** Quanto deve restare fermo lo stato perché il passo si chiuda (ms). */
+  /** How long the state must stay still for the step to close (ms). */
   settleMs?: number
-  // per i test: un orologio finto
+  // for the tests: a fake clock
   schedule?: (fn: () => void, ms: number) => unknown
   cancel?: (handle: unknown) => void
 }
@@ -52,7 +51,7 @@ export function createFlowHistory(opts: FlowHistoryOptions) {
     timer = schedule(settle, settleMs)
   }
 
-  // Lo stato è fermo: o lo si adotta com'è, o diventa un passo.
+  // The state is still: either it is adopted as it is, or it becomes a step.
   function settle() {
     timer = null
     const now = opts.serialize()
@@ -68,7 +67,7 @@ export function createFlowHistory(opts: FlowHistoryOptions) {
     opts.onChange?.()
   }
 
-  /** Chiude subito il passo in sospeso, se c'è. */
+  /** Closes the pending step at once, if any. */
   function flush() {
     if (timer === null) return
     cancel(timer)
@@ -76,24 +75,24 @@ export function createFlowHistory(opts: FlowHistoryOptions) {
   }
 
   function step(from: string[], to: string[]): boolean {
-    flush() // una modifica ancora «calda» è un passo a sé: va chiusa prima di muoversi
+    flush() // a change still «hot» is a step of its own: it must be closed before moving
     const target = from.pop()
     if (target === undefined || present === null) return false
     to.push(present)
     present = target
     settling = true
     opts.restore(target)
-    arm() // ciò che il canvas aggiusta dopo il ripristino si adotta, non si registra
+    arm() // what the canvas adjusts after the restore is adopted, not recorded
     opts.onChange?.()
     return true
   }
 
   return {
-    /** Lo stato può essere cambiato (lo chiama chi osserva il canvas). */
+    /** The state may have changed (whoever watches the canvas calls it). */
     touch: arm,
     undo: () => step(past, future),
     redo: () => step(future, past),
-    /** Flusso nuovo o appena caricato: si riparte da qui, senza passi. */
+    /** A new flow or one just loaded: it starts again from here, without steps. */
     reset() {
       past.length = 0
       future.length = 0
@@ -102,22 +101,22 @@ export function createFlowHistory(opts: FlowHistoryOptions) {
       arm()
       opts.onChange?.()
     },
-    /** Esegue una modifica che NON viene dall'utente: non diventa un passo. */
+    /** Runs a change that does NOT come from the user: it does not become a step. */
     quietly(change: () => void) {
-      flush() // ciò che l'utente stava facendo resta un passo suo
+      flush() // what the user was doing stays a step of theirs
       change()
       settling = true
       arm()
     },
     flush,
-    /** L'editor si chiude: nessun passo deve più chiudersi. */
+    /** The editor closes: no step must close any more. */
     dispose() {
       if (timer !== null) cancel(timer)
       timer = null
     },
     canUndo: () => past.length > 0,
     canRedo: () => future.length > 0,
-    /** L'ultimo stato fermo (null finché il primo non si è assestato). */
+    /** The last still state (null until the first has settled). */
     current: () => present,
   }
 }

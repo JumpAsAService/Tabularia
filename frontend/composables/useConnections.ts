@@ -1,5 +1,5 @@
-// Connessioni a database esterni. Tutte le operazioni richiedono la capability
-// CONNECT sulla cartella della connessione; la password non esce mai dalle API.
+// Connections to external databases. Every operation requires the CONNECT capability on
+// the connection's folder; the password never leaves the API.
 import type { ApiCallDraft, SharePointFormat } from '~/composables/useDatasources'
 import type { FileTemplatesDraft, FilesCheck } from '~/composables/usePlaceholders'
 import { pagedQuery, type Page } from '~/composables/useApi'
@@ -17,8 +17,8 @@ export interface ConnectionInfo {
   database: string
   db_schema: string
   has_password: boolean
-  // opzioni del tipo, JSON (solo SMTP: from_address, from_name, tls,
-  // allowed_domains). Non contiene segreti, per questo torna al client.
+  // the kind's options, JSON (SMTP only: from_address, from_name, tls, allowed_domains). It
+  // holds no secrets, that is why it goes back to the client.
   extra: string
   // SFTP: a private key is stored (never the key itself), and the server's host
   // key accepted by a test (empty = never accepted: every use is refused)
@@ -94,18 +94,18 @@ export const DB_TYPES = [
   { value: 'mariadb', label: 'MariaDB' },
   { value: 'clickhouse', label: 'ClickHouse' },
   { value: 'trino', label: 'Trino' },
-  // database = service name (FREEPDB1, ORCLPDB1); schema = owner, vuoto = l'utente
+  // database = service name (FREEPDB1, ORCLPDB1); schema = owner, empty = the user
   { value: 'oracle', label: 'Oracle' },
-  // extra.tls: verify (certificato verificato) | trust (autofirmato) | none
+  // extra.tls: verify (verified certificate) | trust (self-signed) | none
   { value: 'sqlserver', label: 'Microsoft SQL Server' },
   // object storage: host=endpoint, username=access key, database=bucket, schema=region
   { value: 's3', label: 'S3 / object storage' },
-  // posta: le tre impostazioni senza colonna naturale (mittente, TLS, domini
-  // ammessi) vivono in `extra`
+  // mail: the three settings without a natural column (sender, TLS, allowed domains) live
+  // in `extra`
   { value: 'smtp', label: 'SMTP / email' },
-  // file Excel su SharePoint via Microsoft Graph: host=URL del sito,
-  // username=client id dell'app Entra ID, password=secret, database=tenant id,
-  // extra.library=raccolta documenti
+  // Excel files on SharePoint through Microsoft Graph: host=the site's URL, username=the
+  // Entra ID app's client id, password=secret, database=tenant id, extra.library=document
+  // library
   { value: 'sharepoint', label: 'SharePoint' },
   // files on an SSH server: host, port 22, user, password OR private key
   // (extra.auth); the server's host key is accepted by the first test
@@ -122,10 +122,10 @@ export function useConnections() {
     apiFetch<HostKeyResult>(`/connections/${id}/test`, { method: 'POST', body: key })
 
   return {
-    // tutte quelle usabili dall'utente (per il picker delle sorgenti DB)
+    // all those the user can use (for the DB sources' picker)
     list: () => apiFetch<ConnectionInfo[]>('/connections'),
 
-    // pagina globale: ricerca server-side (sull'intero dataset) + paginazione
+    // global page: server-side search (over the whole dataset) + pagination
     listPaged: (p: { q?: string; limit: number; offset: number }) =>
       apiFetch<Page<ConnectionInfo>>(`/connections/search?${pagedQuery(p)}`),
 
@@ -153,14 +153,14 @@ export function useConnections() {
     // the password comes along, still encrypted, for whoever has CONNECT
     duplicate: (id: number) => apiFetch<ConnectionInfo>(`/connections/${id}/duplicate`, { method: 'POST' }),
 
-    // test di una connessione GIÀ salvata. SFTP: without `key` it shows a key that
+    // test of a connection saved ALREADY. SFTP: without `key` it shows a key that
     // is not accepted (needs_acceptance); with `key` it accepts exactly that one
     // {sqlserver: {installed, docs}}; {} when the engine does not say
     drivers: () => apiFetch<Record<string, DriverInfo>>('/connections/drivers'),
 
     test: (id: number, key?: KeyAcceptance) => (key ? accept(id, key) : apiFetch<HostKeyResult>(`/connections/${id}/test`, { method: 'POST' })),
 
-    // test del form PRIMA di salvare, col solo segreto scritto nel form; stores nothing
+    // test of the form BEFORE saving, with only the secret written in the form; stores nothing
     testDraft: (projectId: number, body: ConnectionDraft, key?: KeyAcceptance) => {
       const { accept_host_key: _a, accept_host_key_type: _b, ...rest } = body
       return apiFetch<HostKeyResult>(`/projects/${projectId}/connections/test`, { method: 'POST', body: { ...rest, ...(key ?? {}) } })
@@ -175,7 +175,7 @@ export function useConnections() {
     sftpFiles: (id: number, body: { folder: string; pattern: string } & Partial<FileTemplatesDraft>) =>
       apiFetch<FilesCheck>(`/connections/${id}/sftp/files`, { method: 'POST', body }),
 
-    // i file Excel che un percorso/glob prende su una connessione SharePoint
+    // the Excel files a path/glob takes on a SharePoint connection
     sharepointFiles: (id: number, body: { path: string; format?: SharePointFormat } & Partial<FileTemplatesDraft>) =>
       apiFetch<FilesCheck>(`/connections/${id}/sharepoint/files`, { method: 'POST', body }),
 

@@ -1,7 +1,7 @@
 <script setup lang="ts">
-// Il modulo per creare un token API: nome, livello, scadenza. Lo usano i token
-// personali e quelli degli account di servizio; chi lo usa fa la chiamata.
-// Le scadenze proposte non vanno oltre quella che il gateway accetta.
+// The form to create an API token: name, level, expiry. The personal tokens and the
+// service accounts' ones use it; whoever uses it makes the call. The expiries offered do
+// not go past the one the gateway accepts.
 import { computed, ref } from 'vue'
 import { Plus } from 'lucide-vue-next'
 import Select from '~/components/ui/Select.vue'
@@ -12,17 +12,17 @@ defineProps<{ busy?: boolean }>()
 const emit = defineEmits<{ (e: 'create', body: TokenRequest): void }>()
 
 const { user } = useAuth()
-const durate = computed(() => {
+const durations = computed(() => {
   const max = user.value?.api_token_max_days ?? Math.max(...TOKEN_DURATIONS)
-  const sotto = TOKEN_DURATIONS.filter((d) => d < max)
-  return [...sotto, max]
+  const below = TOKEN_DURATIONS.filter((d) => d < max)
+  return [...below, max]
 })
 
 const name = ref('')
 const scope = ref<'read' | 'write'>('read')
-const days = ref(Math.min(90, durate.value[durate.value.length - 1]))
+const days = ref(Math.min(90, durations.value[durations.value.length - 1]))
 
-function invia() {
+function send() {
   if (!name.value.trim()) return
   emit('create', { name: name.value.trim(), scope: scope.value, expires_in_days: days.value })
   name.value = ''
@@ -30,7 +30,7 @@ function invia() {
 </script>
 
 <template>
-  <form class="tf" @submit.prevent="invia">
+  <form class="tf" @submit.prevent="send">
     <label class="tf-field tf-name">
       <span>{{ $t('integrations.tokenName') }}</span>
       <input v-model="name" type="text" maxlength="80" :placeholder="$t('integrations.tokenNamePlaceholder')" required />
@@ -50,7 +50,7 @@ function invia() {
       <span>{{ $t('integrations.expires') }}</span>
       <Select
         :model-value="days"
-        :options="durate.map((d) => ({ value: d, label: $t('integrations.days', { n: d }) }))"
+        :options="durations.map((d) => ({ value: d, label: $t('integrations.days', { n: d }) }))"
         @update:model-value="days = Number($event)"
       />
     </label>

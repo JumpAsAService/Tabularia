@@ -1,11 +1,10 @@
 <script setup lang="ts">
-// Informativa sulla privacy, in fondo alla pagina di accesso: si legge PRIMA di
-// entrare, non dopo. Barra larga quanto la finestra, come su qualunque sito —
-// un'informativa che non si vede non informa nessuno, e scriverla in piccolo in
-// un angolo è il modo educato di non dirla.
+// Privacy notice, at the bottom of the sign-in page: it is read BEFORE signing in, not
+// after. A bar as wide as the window, as on any site — a notice that cannot be seen
+// informs nobody, and writing it small in a corner is the polite way not to say it.
 //
-// Non si chiude: non è un avviso da togliersi davanti, è ciò che sta scritto
-// sulla porta. Per questo non ricorda nulla nel browser.
+// It does not close: it is not a warning to get out of one's way, it is what is written
+// on the door. That is why it remembers nothing in the browser.
 import { computed, onMounted, ref } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { ShieldCheck, X, ExternalLink } from 'lucide-vue-next'
@@ -15,28 +14,28 @@ import { useDialogA11y } from '~/composables/useDialogA11y'
 
 const { t } = useI18n()
 const api = usePrivacy()
-const nota = ref<PrivacyNotice | null>(null)
-const aperta = ref(false)
+const note = ref<PrivacyNotice | null>(null)
+const openOne = ref(false)
 const card = ref<HTMLElement | null>(null)
-useDialogA11y(card, () => aperta.value, () => { aperta.value = false })
+useDialogA11y(card, () => openOne.value, () => { openOne.value = false })
 
-const daMostrare = computed(() => !!nota.value?.enabled && !!nota.value.summary)
+const toShow = computed(() => !!note.value?.enabled && !!note.value.summary)
 
 onMounted(async () => {
-  // un'informativa che non si carica non deve impedire di entrare
-  try { nota.value = await api.get() } catch { nota.value = null }
+  // a notice that does not load must not prevent signing in
+  try { note.value = await api.get() } catch { note.value = null }
 })
 </script>
 
 <template>
-  <aside v-if="daMostrare" class="pv" role="region" :aria-label="t('privacy.title')">
+  <aside v-if="toShow" class="pv" role="region" :aria-label="t('privacy.title')">
     <div class="pv-in">
       <ShieldCheck :size="18" aria-hidden="true" />
-      <p class="pv-text">{{ nota!.summary }}</p>
+      <p class="pv-text">{{ note!.summary }}</p>
       <div class="pv-acts">
-        <!-- neutro: sulla pagina di accesso l'azione principale è «Sign in» -->
-        <button class="pv-btn ghost" type="button" @click="aperta = true">{{ t('privacy.details') }}</button>
-        <a v-if="nota!.url" class="pv-btn ghost" :href="nota!.url" target="_blank" rel="noopener">
+        <!-- neutral: on the sign-in page the main action is «Sign in» -->
+        <button class="pv-btn ghost" type="button" @click="openOne = true">{{ t('privacy.details') }}</button>
+        <a v-if="note!.url" class="pv-btn ghost" :href="note!.url" target="_blank" rel="noopener">
           {{ t('privacy.full') }} <ExternalLink :size="12" />
         </a>
       </div>
@@ -44,16 +43,16 @@ onMounted(async () => {
   </aside>
 
   <Teleport to="body">
-    <div v-if="aperta" class="pv-backdrop" @mousedown.self="aperta = false">
+    <div v-if="openOne" class="pv-backdrop" @mousedown.self="openOne = false">
       <div ref="card" class="pv-card" role="dialog" aria-modal="true" aria-labelledby="pv-title" tabindex="-1">
         <div class="pv-head">
           <h3 id="pv-title"><ShieldCheck :size="15" /> {{ t('privacy.title') }}</h3>
-          <button class="pv-x" type="button" :aria-label="t('privacy.close')" @click="aperta = false">
+          <button class="pv-x" type="button" :aria-label="t('privacy.close')" @click="openOne = false">
             <X :size="14" />
           </button>
         </div>
-        <MarkdownLite :text="nota?.body || ''" />
-        <a v-if="nota?.url" class="pv-btn pv-link" :href="nota.url" target="_blank" rel="noopener">
+        <MarkdownLite :text="note?.body || ''" />
+        <a v-if="note?.url" class="pv-btn pv-link" :href="note.url" target="_blank" rel="noopener">
           {{ t('privacy.full') }} <ExternalLink :size="12" />
         </a>
       </div>
@@ -63,8 +62,8 @@ onMounted(async () => {
 
 <style scoped>
 .pv {
-  /* in fondo alla finestra e larga quanto lei, come su qualunque sito: è il
-     posto in cui la gente si aspetta di trovarla, ed è per questo che la trova */
+  /* at the bottom of the window and as wide as it, as on any site: it is the place where
+     people expect to find it, and that is why they find it */
   position: fixed; left: 0; right: 0; bottom: 0; z-index: 30;
   background: var(--panel);
   border-top: 1px solid var(--border);
@@ -84,14 +83,14 @@ onMounted(async () => {
   display: inline-flex; align-items: center; gap: 5px;
   padding: 7px 16px; min-height: 34px;
   border: 1px solid transparent; border-radius: 8px;
-  background: var(--grad-accent); color: var(--on-accent); /* bianco su --accent: 1,65 in monokai */
+  background: var(--grad-accent); color: var(--on-accent); /* white on --accent: 1.65 in monokai */
   font: inherit; font-size: 13.5px; font-weight: 600;
   text-decoration: none; cursor: pointer; white-space: nowrap;
 }
 .pv-btn:hover { filter: brightness(0.92); }
 .pv-btn.ghost { background: transparent; color: var(--text); border-color: var(--border); }
 .pv-btn.ghost:hover { border-color: var(--accent); filter: none; }
-/* su schermo stretto il testo va sopra e i bottoni sotto, larghi */
+/* on a narrow screen the text goes above and the buttons below, wide */
 @media (max-width: 640px) {
   .pv-in { flex-wrap: wrap; padding: 12px 16px; gap: 10px; }
   .pv-text { flex: 1 1 100%; font-size: 13.5px; }

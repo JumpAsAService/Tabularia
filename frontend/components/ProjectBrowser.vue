@@ -1,20 +1,19 @@
 <script setup lang="ts">
-// Explore: navigazione a CARTELLE con una sola lista di risorse.
+// Explore: FOLDER navigation with a single list of resources.
 //
-// Prima erano due riquadri: un albero fisso da 320px a sinistra e, a destra,
-// fino a sette sezioni impilate di cui QUATTRO erano la stessa identica tabella
-// (flussi, datasource, viste, connessioni). Il risultato era affollato e senza
-// ritmo: nulla diceva a colpo d'occhio cosa contenesse una cartella.
+// Before there were two boxes: a fixed 320px tree on the left and, on the right, up to
+// seven stacked sections of which FOUR were the very same table (flows, datasources,
+// views, connections). The result was crowded and without rhythm: nothing said at a
+// glance what a folder held.
 //
-// Ora: breadcrumb per il percorso, le sottocartelle come righe della lista
-// insieme a tutto il resto, un selettore per tipo coi conteggi, e una ricerca
-// per nome. L'amministrazione della cartella (permessi, sottocartelle,
-// eliminazione) esce dallo scorrimento dei dati e vive in un pannello laterale
-// a scomparsa: le azioni distruttive non si incontrano più per caso mentre si
-// leggono i propri flussi.
+// Now: a breadcrumb for the path, the subfolders as rows of the list together with
+// everything else, a kind selector with the counts, and a search by name. The folder's
+// administration (permissions, subfolders, deletion) leaves the data's scrolling and
+// lives in a sliding side panel: the destructive actions are no longer met by chance
+// while reading one's own flows.
 //
-// La ricerca qui è LOCALE (filtra ciò che è già caricato): istantanea e senza
-// rete. Quella che attraversa le cartelle è `/search` (vedi useSearch.ts).
+// The search here is LOCAL (it filters what is loaded already): instant and without
+// network. The one crossing the folders is `/search` (see useSearch.ts).
 import { computed, nextTick, onMounted, onUnmounted, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { knownError } from '~/composables/knownErrors'
@@ -101,7 +100,7 @@ const error = ref('')
 const flows = ref<FlowSummary[]>([])
 const flowGroups = ref<FlowGroup[]>([])
 const dsList = ref<DatasourceInfo[]>([])
-const contractFor = ref<DatasourceInfo | null>(null) // la datasource di cui è aperto il data contract
+const contractFor = ref<DatasourceInfo | null>(null) // the datasource whose data contract is open
 const savedViews = ref<SavedView[]>([])
 const scripts = ref<SavedScript[]>([])
 const connections = ref<ConnectionInfo[]>([])
@@ -115,11 +114,13 @@ const loading = ref(false)
 const isSuper = computed(() => !!user.value?.is_superuser)
 const current = computed(() => projects.value.find((p) => p.id === currentId.value) ?? null)
 
-// ── Percorso e navigazione ──────────────────────────────────────────────────
+// ── Path and navigation ──────────────────────────────────────────────────
 const byId = computed(() => new Map(projects.value.map((p) => [p.id, p])))
 
-/** Catena radice → cartella corrente. Sostituisce l'albero: il percorso si
- *  legge in una riga invece che in una colonna larga 320px. */
+/**
+ * The root → current folder chain. It replaces the tree: the path reads in one line
+ * instead of in a 320px-wide column.
+ */
 const breadcrumb = computed<Project[]>(() => {
   const out: Project[] = []
   let cur = current.value
@@ -141,22 +142,22 @@ function childrenOf(parentId: number | null): Project[] {
 
 function openFolder(id: number | null) {
   currentId.value = id
-  // il percorso sta nell'URL: ricaricare la pagina o tornare indietro col
-  // browser riporta dove si era, e `/search` può linkare una cartella
+  // the path is in the URL: reloading the page or going back with the browser brings back
+  // where one was, and `/search` can link a folder
   navigateTo(id == null ? '/' : `/?folder=${id}`, { replace: true })
   loadFolder(id)
 }
 
-// ── Riga unificata: un solo tipo di riga per sei tipi di risorsa ────────────
+// ── Unified row: one kind of row for six kinds of resource ────────────
 type Kind = 'folder' | 'flow' | 'group' | 'datasource' | 'view' | 'script' | 'connection'
 interface Row {
   kind: Kind
   id: number
   name: string
   meta: string
-  /** import in corso con l'avanzamento: la cella lo mostra col suo orologio */
+  /** import in progress with its progress: the cell shows it with its clock */
   progressRun?: RunInfo
-  /** valorizzato = la riga è un collegamento; altrimenti è solo testo */
+  /** set = the row is a link; otherwise it is only text */
   to?: string
   /** a flow this person cannot open (a container registry they have no access to):
    *  listed, greyed out, with the reason; no link, no action */
@@ -194,17 +195,17 @@ const rows = computed<Row[]>(() => {
     out.push({ kind: 'group', id: g.id, name: g.name, meta, to: `/flow-group?id=${g.id}`, raw: g })
   }
   for (const d of dsList.value) {
-    const stato = ingestRuns.value[d.id]
-    const inCorso = !!stato && !isTerminal(stato)
-    const meta = inCorso
+    const state = ingestRuns.value[d.id]
+    const running = !!state && !isTerminal(state)
+    const meta = running
       ? t('projectBrowser.importingLabel')
-      : stato?.status === 'FAILURE'
+      : state?.status === 'FAILURE'
         ? t('projectBrowser.importFailedLabel')
         : [d.rows != null ? t('projectBrowser.rowsCount', { n: fmtx.count(d.rows) }) : '', fmtDate(d.refreshed_at ?? d.updated_at),
-            stato?.status === 'SUCCESS' && runNotes(stato.notes) ? notesText(runNotes(stato.notes)!, t) : '']
+            state?.status === 'SUCCESS' && runNotes(state.notes) ? notesText(runNotes(state.notes)!, t) : '']
             .filter(Boolean)
             .join(' · ')
-    out.push({ kind: 'datasource', id: d.id, name: d.name, meta, raw: d, progressRun: inCorso && stato?.progress ? stato : undefined })
+    out.push({ kind: 'datasource', id: d.id, name: d.name, meta, raw: d, progressRun: running && state?.progress ? state : undefined })
   }
   for (const v of savedViews.value) {
     out.push({ kind: 'view', id: v.id, name: v.name, meta: v.datasource_name ?? '', to: `/viewer?view=${v.id}`, raw: v })
@@ -222,7 +223,7 @@ const rows = computed<Row[]>(() => {
   return out
 })
 
-// ── Ricerca locale + filtro per tipo ────────────────────────────────────────
+// ── Local search + kind filter ────────────────────────────────────────
 const q = ref('')
 const kindFilter = ref<Kind | null>(null)
 
@@ -230,8 +231,10 @@ const matching = computed(() => {
   const ago = q.value.trim().toLowerCase()
   return ago ? rows.value.filter((r) => r.name.toLowerCase().includes(ago)) : rows.value
 })
-/** I conteggi seguono la RICERCA ma non il filtro per tipo: cliccando un
- *  segmento i numeri degli altri non devono sparire. */
+/**
+ * The counts follow the SEARCH but not the kind filter: clicking a segment, the others'
+ * numbers must not disappear.
+ */
 const counts = computed(() => {
   const c: Record<string, number> = {}
   for (const r of matching.value) c[r.kind] = (c[r.kind] ?? 0) + 1
@@ -246,7 +249,7 @@ const segments = computed(() =>
     .map((k) => ({ kind: k, n: counts.value[k] })),
 )
 
-// ── Caricamento ─────────────────────────────────────────────────────────────
+// ── Loading ─────────────────────────────────────────────────────────────
 async function loadProjects() {
   error.value = ''
   try {
@@ -267,7 +270,7 @@ async function loadFolder(id: number | null) {
   canManage.value = false
   canConnect.value = false
   expandedFlowId.value = null
-  ingestToken++ // ferma i poll della cartella precedente
+  ingestToken++ // stops the previous folder's polls
   ingestRuns.value = {}
   if (id == null) return
 
@@ -281,8 +284,8 @@ async function loadFolder(id: number | null) {
     try {
       dsList.value = await dsApi.listByProject(id)
       for (const d of dsList.value) {
-        // `refreshing` lo dice il server: vale anche per un refresh partito da
-        // un'altra pagina, da un altro utente o dallo scheduler
+        // the server says `refreshing`: it holds for a refresh started from another page, by
+        // another user or by the scheduler too
         if (d.kind === 'database' && (d.rows == null || d.refreshing)) pollIngest(d.id, ingestToken)
       }
     } catch { dsList.value = [] }
@@ -290,12 +293,12 @@ async function loadFolder(id: number | null) {
     try { savedViews.value = await viewsApi.listByProject(id) } catch { savedViews.value = [] }
     // only the scripts this person may see; none without scripting
     try { scripts.value = await scriptsApi.listByProject(id) } catch { scripts.value = [] }
-    // le connessioni richiedono CONNECT: il rifiuto è informazione, non errore
+    // connections require CONNECT: the refusal is information, not an error
     try {
       connections.value = await connApi.listByProject(id)
       canConnect.value = true
     } catch { connections.value = []; canConnect.value = false }
-    // se i permessi si leggono, abbiamo MANAGE
+    // if the permissions can be read, we have MANAGE
     try {
       permissions.value = await api.permissions(id)
       canManage.value = true
@@ -312,10 +315,10 @@ onMounted(async () => {
   const linked = Number(route.query.folder)
   currentId.value = Number.isInteger(linked) && linked > 0 ? linked : null
   await loadFolder(currentId.value)
-  try { engines.value = await coreApi.engines() } catch { /* resta Polars */ }
+  try { engines.value = await coreApi.engines() } catch { /* Polars stays */ }
 })
 
-// creando o modificando in un'altra scheda, tornando qui si ricarica
+// creating or editing in another tab, coming back here reloads
 function onVisible() {
   if (document.visibilityState !== 'visible') return
   loadProjects()
@@ -328,7 +331,7 @@ onUnmounted(() => {
   ingestToken++
 })
 
-// ── Cronologia run (espandibile, con auto-aggiornamento) ────────────────────
+// ── Run history (expandable, auto-refreshing) ────────────────────
 const expandedFlowId = ref<number | null>(null)
 const flowRuns = ref<RunInfo[]>([])
 const runsLoading = ref(false)
@@ -336,8 +339,8 @@ const isTerminal = (r: RunInfo) => r.status === 'SUCCESS' || r.status === 'FAILU
 
 async function loadRuns(flowId: number) {
   try {
-    const rows = await runsApi.listByFlow(flowId) // il GET riconcilia gli stati
-    if (expandedFlowId.value !== flowId) return // risposta stantia
+    const rows = await runsApi.listByFlow(flowId) // the GET reconciles the states
+    if (expandedFlowId.value !== flowId) return // stale answer
     flowRuns.value = rows
     if (rows.some((r) => !isTerminal(r))) {
       setTimeout(() => { if (expandedFlowId.value === flowId) loadRuns(flowId) }, 2500)
@@ -365,7 +368,7 @@ function fmtDuration(run: RunInfo): string {
   return s < 60 ? `${s}s` : `${Math.floor(s / 60)}m ${s % 60}s`
 }
 
-// ── Import/refresh delle datasource database ────────────────────────────────
+// ── Import/refresh of the database datasources ──────────────────────────────
 const ingestRuns = ref<Record<number, RunInfo>>({})
 let ingestToken = 0
 // imports seen running here: their end gets a message (one found already over does not)
@@ -395,7 +398,7 @@ async function pollIngest(dsId: number, token: number) {
     if (last.status === 'SUCCESS' && currentId.value) {
       dsList.value = await dsApi.listByProject(currentId.value)
     }
-  } catch { /* transitorio: riproverà al prossimo refresh */ }
+  } catch { /* transient: it will retry at the next refresh */ }
 }
 
 async function refreshDatasource(ds: DatasourceInfo) {
@@ -408,7 +411,7 @@ async function refreshDatasource(ds: DatasourceInfo) {
   }
 }
 
-// ── Eliminazioni e spostamento ──────────────────────────────────────────────
+// ── Deletions and moving ──────────────────────────────────────────────
 // Every kind of row moves to another folder; the gateway checks the rights on both
 // folders. The row leaves this list in place, with no reload of the folder (a
 // blanked list reads as a crash).
@@ -595,40 +598,40 @@ async function duplicateRow(row: Row) {
 }
 
 async function removeRow(row: Row) {
-  const chiedi = (k: string) => confirm(t(k, { name: row.name }))
+  const ask = (k: string) => confirm(t(k, { name: row.name }))
   try {
     if (row.kind === 'flow') {
-      if (!chiedi('projectBrowser.confirmDeleteFlow')) return
+      if (!ask('projectBrowser.confirmDeleteFlow')) return
       await flowsApi.remove(row.id)
       flows.value = flows.value.filter((f) => f.id !== row.id)
       toast.success(t('projectBrowser.flowDeleted', { name: row.name }))
     } else if (row.kind === 'group') {
-      if (!chiedi('projectBrowser.confirmDeleteFlowGroup')) return
+      if (!ask('projectBrowser.confirmDeleteFlowGroup')) return
       await groupsApi.remove(row.id)
       flowGroups.value = flowGroups.value.filter((g) => g.id !== row.id)
       toast.success(t('projectBrowser.flowGroupDeleted', { name: row.name }))
     } else if (row.kind === 'datasource') {
-      if (!chiedi('projectBrowser.confirmDeleteDatasource')) return
+      if (!ask('projectBrowser.confirmDeleteDatasource')) return
       await dsApi.remove(row.id)
       dsList.value = dsList.value.filter((d) => d.id !== row.id)
       toast.success(t('projectBrowser.datasourceDeleted', { name: row.name }))
     } else if (row.kind === 'view') {
-      if (!chiedi('projectBrowser.confirmDeleteSavedView')) return
+      if (!ask('projectBrowser.confirmDeleteSavedView')) return
       await viewsApi.remove(row.id)
       savedViews.value = savedViews.value.filter((v) => v.id !== row.id)
       toast.success(t('projectBrowser.savedViewDeleted', { name: row.name }))
     } else if (row.kind === 'script') {
-      if (!chiedi('projectBrowser.confirmDeleteScript')) return
+      if (!ask('projectBrowser.confirmDeleteScript')) return
       await scriptsApi.remove(row.id)
       scripts.value = scripts.value.filter((x) => x.id !== row.id)
       toast.success(t('projectBrowser.scriptDeleted', { name: row.name }))
     } else if (row.kind === 'connection') {
-      if (!chiedi('projectBrowser.confirmDeleteConnection')) return
+      if (!ask('projectBrowser.confirmDeleteConnection')) return
       await connApi.remove(row.id)
       connections.value = connections.value.filter((c) => c.id !== row.id)
       toast.success(t('projectBrowser.connectionDeleted', { name: row.name }))
     } else if (row.kind === 'folder') {
-      if (!chiedi('projectBrowser.confirmDeleteFolder')) return
+      if (!ask('projectBrowser.confirmDeleteFolder')) return
       await api.remove(row.id)
       await loadProjects()
       toast.success(t('projectBrowser.folderDeleted', { name: row.name }))
@@ -636,11 +639,11 @@ async function removeRow(row: Row) {
   } catch (e) { toast.error(errMessage(e)) }
 }
 
-// ── Creazione: un solo punto d'ingresso ─────────────────────────────────────
+// ── Creation: a single entry point ─────────────────────────────────────
 interface EngineOpt { id: string; label: string; available: boolean; description: string; optional?: boolean; disabled_by_admin?: boolean }
 const engines = ref<EngineOpt[]>([{ id: 'polars', label: 'Polars', available: true, description: '' }])
 const newMenu = ref(false)
-const engineStep = ref(false) // secondo livello del menù: scelta del motore
+const engineStep = ref(false) // the menu's second level: choosing the engine
 const newFolderName = ref('')
 
 function closeNew() { newMenu.value = false; engineStep.value = false; newFolderName.value = '' }
@@ -649,8 +652,8 @@ usePopover(newMenu, newPop, closeNew)
 
 function createFlowWith(engineId: string) {
   closeNew()
-  const dove = currentId.value != null ? `&project=${currentId.value}` : ''
-  navigateTo(`/editor?engine=${engineId}${dove}`)
+  const where = currentId.value != null ? `&project=${currentId.value}` : ''
+  navigateTo(`/editor?engine=${engineId}${where}`)
 }
 
 function createFlowGroup() {
@@ -664,19 +667,19 @@ function createScript() {
 }
 
 async function createFolder() {
-  const nome = newFolderName.value.trim()
-  if (!nome) return
+  const folderName = newFolderName.value.trim()
+  if (!folderName) return
   try {
-    const p = await api.create({ name: nome, parent_id: currentId.value })
+    const p = await api.create({ name: folderName, parent_id: currentId.value })
     closeNew()
     await loadProjects()
     openFolder(p.id)
   } catch (e) { toast.error(errMessage(e)) }
 }
 
-// ── Pannello laterale: amministrazione della cartella ───────────────────────
+// ── Side panel: the folder's administration ───────────────────────
 const settingsOpen = ref(false)
-// il cassetto ha uno sfondo che copre la pagina: è modale come i dialoghi
+// the drawer has a backdrop covering the page: it is modal like the dialogs
 const drawerEl = ref<HTMLElement | null>(null)
 useDialogA11y(drawerEl, () => settingsOpen.value && canManage.value && !!current.value, () => { settingsOpen.value = false })
 const grantSubjectType = ref<'group' | 'user'>('group')
@@ -718,14 +721,14 @@ async function deleteCurrentFolder() {
   try {
     await api.remove(p.id)
     settingsOpen.value = false
-    const su = p.parent_id ?? null
+    const parent = p.parent_id ?? null
     await loadProjects()
-    openFolder(su)
+    openFolder(parent)
     toast.success(t('projectBrowser.folderDeleted', { name: p.name }))
   } catch (e) { toast.error(errMessage(e)) }
 }
 
-// ── Dialoghi ────────────────────────────────────────────────────────────────
+// ── Dialogs ────────────────────────────────────────────────────────────────
 const showConnDialog = ref(false)
 const editingConn = ref<ConnectionInfo | null>(null)
 const connBusy = ref(false)
@@ -735,26 +738,26 @@ const dbDsBusy = ref(false)
 const dbDsError = ref('')
 const usableConnections = ref<ConnectionInfo[]>([])
 
-// ── la riga intera apre ciò che nomina ──────────────────────────────────────
-// Il controllo vero resta il NOME (bottone o link): da tastiera e per uno screen
-// reader c'è un solo punto per riga, e i bottoni a destra restano a sé. Il clic
-// sul resto della riga fa la stessa cosa del nome, tranne quando cade su un altro
-// controllo o chiude una selezione di testo.
+// ── the whole row opens what it names ──────────────────────────────────────
+// The real control stays the NAME (button or link): from the keyboard and for a screen
+// reader there is one point per row, and the buttons on the right stay apart. A click on
+// the rest of the row does the same as the name, except when it lands on another
+// control or closes a text selection.
 const router = useRouter()
 function apribile(r: Row): boolean {
   return r.kind === 'folder' || r.kind === 'connection' || !!r.to
 }
-function clicRiga(e: MouseEvent, r: Row) {
+function rowClick(e: MouseEvent, r: Row) {
   if (!apribile(r)) return
-  // la colonna delle azioni non apre: fra un bottone e l'altro un clic mancato
-  // non deve portare via dalla pagina
+  // the actions' column does not open: between one button and the next a missed click must
+  // not take one away from the page
   if ((e.target as HTMLElement | null)?.closest('button, a, input, select, textarea, label, [role="listbox"], [role="option"], .racts')) return
   if (window.getSelection()?.toString()) return
-  const nuovaScheda = e.button === 1 || e.ctrlKey || e.metaKey || e.shiftKey
+  const newTab = e.button === 1 || e.ctrlKey || e.metaKey || e.shiftKey
   if (e.type === 'auxclick' && e.button !== 1) return
   if (r.to) {
-    // come farebbe il link: Ctrl/Cmd/Maiusc o il clic centrale aprono altrove
-    if (nuovaScheda) {
+    // as the link would: Ctrl/Cmd/Shift or the middle click open elsewhere
+    if (newTab) {
       e.preventDefault()
       window.open(router.resolve(r.to).href, '_blank', 'noopener')
     } else {
@@ -891,14 +894,14 @@ async function createSftpDatasource(draft: SftpDatasourceDraft) {
   }
 }
 
-// cambiando cartella si azzerano ricerca e filtro: sono domande sul contenuto
-// corrente, non preferenze durature
+// changing folder resets search and filter: they are questions about the current
+// content, not lasting preferences
 watch(currentId, () => { q.value = ''; kindFilter.value = null; settingsOpen.value = false })
 </script>
 
 <template>
   <div class="explore">
-    <!-- percorso + ricerca + unica azione primaria -->
+    <!-- path + search + the single primary action -->
     <div class="bar">
       <nav class="crumbs" :aria-label="$t('projectBrowser.pathLabel')">
         <button class="crumb" :class="{ on: currentId === null }" @click="openFolder(null)">
@@ -943,7 +946,7 @@ watch(currentId, () => { q.value = ''; kindFilter.value = null; settingsOpen.val
               <button v-if="scriptingEditor.available.value" class="menu-item" @click="createScript">
                 <span class="mi-top"><FileCode2 :size="14" /> {{ $t('projectBrowser.newScriptButton') }}</span>
               </button>
-              <button v-else-if="scriptingEditor.state.value?.disabled_reason === 'kubernetes'" class="menu-item spento"
+              <button v-else-if="scriptingEditor.state.value?.disabled_reason === 'kubernetes'" class="menu-item off"
                       disabled :title="$t('scripting.kubernetesOnly')">
                 <span class="mi-top"><FileCode2 :size="14" /> {{ $t('projectBrowser.newScriptButton') }}</span>
                 <span class="mi-desc">{{ $t('scripting.kubernetesOnly') }}</span>
@@ -983,7 +986,7 @@ watch(currentId, () => { q.value = ''; kindFilter.value = null; settingsOpen.val
       ><Settings2 :size="13" /></button>
     </div>
 
-    <!-- filtro per tipo: i numeri dicono cosa c'è dentro, prima di guardare -->
+    <!-- kind filter: the numbers say what is inside, before looking -->
     <div v-if="segments.length > 1" class="segs">
       <button class="seg" :class="{ on: kindFilter === null }" @click="kindFilter = null">
         {{ $t('projectBrowser.allSegment') }} <span class="n">{{ matching.length }}</span>
@@ -1012,11 +1015,11 @@ watch(currentId, () => { q.value = ''; kindFilter.value = null; settingsOpen.val
       <tbody>
         <template v-for="r in visibleRows" :key="`${r.kind}-${r.id}`">
           <tr
-            :class="{ folderrow: r.kind === 'folder', apribile: apribile(r), bloccata: !!r.locked }"
+            :class="{ folderrow: r.kind === 'folder', apribile: apribile(r), blocked: !!r.locked }"
             :title="r.locked || undefined"
             :aria-disabled="r.locked ? 'true' : undefined"
-            @click="clicRiga($event, r)"
-            @auxclick="clicRiga($event, r)"
+            @click="rowClick($event, r)"
+            @auxclick="rowClick($event, r)"
           >
             <td class="rname">
               <span v-if="renaming === rowKey(r)" class="asname renaming">
@@ -1043,7 +1046,7 @@ watch(currentId, () => { q.value = ''; kindFilter.value = null; settingsOpen.val
               </NuxtLink>
               <span v-else class="asname plain">
                 <component :is="KIND_ICON[r.kind]" :size="15" class="kicon" /> {{ r.name }}
-                <Lock v-if="r.locked" :size="12" class="lucchetto" :aria-label="$t('projectBrowser.lockedFlow')" />
+                <Lock v-if="r.locked" :size="12" class="lock" :aria-label="$t('projectBrowser.lockedFlow')" />
               </span>
               <span v-if="r.kind === 'datasource' && r.raw.kind === 'database'" class="tag">db</span>
               <ContractBadge v-if="r.kind === 'datasource'" :contract="r.raw.contract" :size="15" />
@@ -1160,7 +1163,7 @@ watch(currentId, () => { q.value = ''; kindFilter.value = null; settingsOpen.val
       </tbody>
     </table>
 
-    <!-- Amministrazione della cartella: fuori dallo scorrimento dei dati -->
+    <!-- The folder's administration: outside the data's scrolling -->
     <template v-if="settingsOpen && canManage && current">
       <div class="drawer-backdrop" @click="settingsOpen = false" />
       <aside ref="drawerEl" v-label-fields class="drawer" role="dialog" aria-modal="true" tabindex="-1" :aria-label="$t('projectBrowser.folderSettingsTitle')">
@@ -1240,10 +1243,10 @@ watch(currentId, () => { q.value = ''; kindFilter.value = null; settingsOpen.val
 </template>
 
 <style scoped>
-.menu-item.spento { opacity: .45; cursor: not-allowed; }
+.menu-item.off { opacity: .45; cursor: not-allowed; }
 .explore { display: flex; flex-direction: column; min-height: 0; }
 
-/* ── barra: percorso, ricerca, azione ─────────────────────────────────────── */
+/* ── bar: path, search, action ─────────────────────────────────────── */
 .bar { display: flex; align-items: center; gap: 10px; margin-bottom: 12px; }
 .crumbs { display: flex; align-items: center; gap: 2px; min-width: 0; flex: 1; overflow: hidden; }
 .crumb {
@@ -1275,11 +1278,11 @@ watch(currentId, () => { q.value = ''; kindFilter.value = null; settingsOpen.val
 .searchbox input { border: none; background: transparent; outline: none; color: var(--text); width: 190px; font-size: 13px; }
 .searchbox .x { padding: 1px 5px; min-height: 0; }
 .newwrap { position: relative; flex-shrink: 0; }
-/* `.btn-link` vive in assets/listpage.css, che qui NON è importato: con gli stili
-   scoped quella regola non arriva, e senza questa il bottone cadrebbe sulla
-   regola base `button` perdendo il riempimento d'accento, cioè il peso visivo
-   dell'unica azione primaria della pagina. Valori copiati da listpage.css perché
-   il `Nuovo` di Explore sia identico a quello di Flussi e Datasource. */
+/* `.btn-link` lives in assets/listpage.css, which is NOT imported here: with scoped
+   styles that rule does not arrive, and without this the button would fall on the base
+   `button` rule losing the accent fill, that is the visual weight of the page's only
+   primary action. Values copied from listpage.css so that Explore's `New` is identical
+   to the Flows and Datasources ones. */
 .btn-link {
   display: inline-flex;
   align-items: center;
@@ -1328,7 +1331,7 @@ watch(currentId, () => { q.value = ''; kindFilter.value = null; settingsOpen.val
 .mi-desc { font-size: 11.5px; color: var(--muted); line-height: 1.35; }
 .pref, .soon { font-size: 10px; text-transform: uppercase; letter-spacing: 0.04em; color: var(--muted); }
 
-/* ── filtro per tipo ──────────────────────────────────────────────────────── */
+/* ── kind filter ───────────────────────────────────────────────────────── */
 .segs { display: flex; gap: 6px; margin-bottom: 10px; flex-wrap: wrap; }
 .seg {
   padding: 4px 11px;
@@ -1342,26 +1345,26 @@ watch(currentId, () => { q.value = ''; kindFilter.value = null; settingsOpen.val
 .seg.on { color: var(--text); background: var(--tint-accent); border-color: var(--accent); }
 .seg .n { font-variant-numeric: tabular-nums; opacity: 0.75; margin-left: 4px; }
 
-/* ── lista unica ──────────────────────────────────────────────────────────── */
-/* niente linea sotto OGNI riga: separa l'hover, non un reticolo di hairline */
-/* `separate` e non `collapse`: con le celle collassate gli angoli arrotondati non
-   si disegnano, e la riga cliccabile deve leggersi come un bottone */
+/* ── single list ───────────────────────────────────────────────────────── */
+/* no line under EVERY row: the hover separates, not a grid of hairlines */
+/* `separate` and not `collapse`: with collapsed cells the rounded corners are not drawn,
+   and the clickable row must read as a button */
 table.rows { width: 100%; border-collapse: separate; border-spacing: 0; font-size: 13px; }
 table.rows td { padding: 7px 8px; transition: background 0.12s; }
 table.rows tr:hover td { background: var(--row-hover); }
 table.rows tr > td:first-child { border-radius: 8px 0 0 8px; }
 table.rows tr > td:last-child { border-radius: 0 8px 8px 0; }
-/* la riga che apre qualcosa: si prende per intero, risponde al clic e al fuoco */
+/* the row that opens something: taken whole, it answers the click and the focus */
 table.rows tr.apribile { cursor: pointer; }
-table.rows tr.bloccata { opacity: 0.45; cursor: not-allowed; }
-table.rows tr.bloccata:hover td { background: none; }
-.lucchetto { margin-left: 6px; vertical-align: -1px; color: var(--muted); }
+table.rows tr.blocked { opacity: 0.45; cursor: not-allowed; }
+table.rows tr.blocked:hover td { background: none; }
+.lock { margin-left: 6px; vertical-align: -1px; color: var(--muted); }
 table.rows tr.apribile:hover td,
 table.rows tr.apribile:has(.asname:focus-visible) td { background: var(--tint-accent); }
 table.rows tr.apribile:hover .asname,
 table.rows tr.apribile:has(.asname:focus-visible) .asname { color: var(--accent); }
 table.rows tr.apribile:active td { background: color-mix(in srgb, var(--accent) 18%, transparent); }
-/* i controlli dentro la riga tengono il loro puntatore */
+/* the controls inside the row keep their pointer */
 table.rows tr.apribile .racts { cursor: default; }
 tr.folderrow .kicon { color: var(--accent-2); }
 .kicon { color: var(--muted); flex-shrink: 0; }
@@ -1395,8 +1398,8 @@ tr.folderrow .kicon { color: var(--accent-2); }
   box-shadow: 0 0 0 3px var(--tint-accent);
 }
 .rmeta { font-size: 12px; white-space: nowrap; }
-/* una descrizione lunga non deve allargare la tabella fino a spingere le azioni
-   fuori dallo schermo (fra 721 e ~1170px succedeva): si taglia, intera nel tooltip */
+/* a long description must not widen the table to push the actions off screen (between
+   721 and ~1170px it happened): it is cut, whole in the tooltip */
 .rmeta-text { display: block; max-width: 36ch; overflow: hidden; text-overflow: ellipsis; }
 .racts { text-align: right; white-space: nowrap; display: flex; gap: 4px; justify-content: flex-end; }
 .tag {
@@ -1411,8 +1414,9 @@ tr.folderrow .kicon { color: var(--accent-2); }
   color: var(--muted);
 }
 .empty { padding: 28px 4px; }
-/* come `.btn-link`: vive in listpage.css, qui non importato. Senza, il messaggio
-   d'errore uscirebbe del colore del testo normale, cioè non sembrerebbe un errore. */
+/* as `.btn-link`: it lives in listpage.css, not imported here. Without it, the error
+   message would come out in the normal text's colour, that is it would not look like an
+   error. */
 .err { color: var(--danger); }
 .movesel { width: 130px; font-size: 12px; }
 .activebtn { border-color: var(--accent); }
@@ -1428,7 +1432,7 @@ tr.folderrow .kicon { color: var(--accent-2); }
 .rpub { display: inline-flex; align-items: center; gap: 4px; color: var(--accent-hi); }
 .rerr { color: var(--danger); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 
-/* ── pannello laterale ────────────────────────────────────────────────────── */
+/* ── side panel ────────────────────────────────────────────────────────── */
 .drawer-backdrop { position: fixed; inset: 0; background: var(--scrim); z-index: 120; }
 .drawer {
   position: fixed;
@@ -1456,7 +1460,7 @@ table.perm td.subject { display: flex; align-items: center; gap: 6px; }
 table.perm td.right { text-align: right; width: 32px; }
 .cap { font-size: 11px; padding: 1px 8px; border-radius: 10px; background: var(--panel-2); border: 1px solid var(--border); }
 .grant { display: flex; gap: 6px; flex-wrap: wrap; }
-/* l'eliminazione sta in fondo al pannello, staccata: non si incontra per caso */
+/* the deletion sits at the bottom of the panel, apart: it is not met by chance */
 .dangerzone { margin-top: auto; padding-top: 14px; border-top: 1px solid var(--border-soft); }
 button.mini { padding: 2px 8px; min-height: 24px; }
 button.danger, .mini.danger { border-color: var(--danger); color: var(--danger); }
