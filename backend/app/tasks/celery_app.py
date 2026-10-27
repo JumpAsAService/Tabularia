@@ -99,6 +99,7 @@ celery_app.conf.update(
     task_default_queue="celery",
     task_routes={
         "app.tasks.jobs.preview_task": {"queue": "preview"},
+        "app.tasks.jobs.db_query_task": {"queue": "preview"},
         # a contract's checks asked for by hand are as interactive as a preview
         "app.tasks.contract_jobs.*": {"queue": "preview"},
     },

@@ -7,6 +7,8 @@ Permissions:
 - creating, changing, moving, renaming, duplicating, deleting, restoring a version:
   EDIT on the folder (both folders for a move);
 - a run reads with the authority of whoever runs it (services/sql_scripts.resolve);
+  on a database connection it needs CONNECT on the connection's folder, and so does
+  choosing that connection for a script;
 - administrators see and change every script.
 
 Unlike saved Python/R scripts, they need no Kubernetes: every installation has them.
@@ -34,6 +36,13 @@ from app.services.copy_names import commit_copy, free_copy_name
 router = APIRouter(route_class=ReleasingRoute, tags=["sql-scripts"])
 
 
+class ConnectionRef(BaseModel):
+    id: int
+    name: str  # empty when the connection no longer exists
+    db_type: str = ""
+    usable: bool  # CONNECT on its folder: this person can run the script
+
+
 class SqlScriptOut(BaseModel):
     id: int
     name: str
@@ -41,6 +50,7 @@ class SqlScriptOut(BaseModel):
     project_id: int
     current_version: int
     engine: Optional[str] = None  # of the current version
+    connection: Optional[ConnectionRef] = None  # of the current version; null = the catalog
     created_at: UtcDateTime
     updated_at: UtcDateTime
     editable: bool  # EDIT on its folder: the page offers saving, moving, deleting
@@ -77,6 +87,7 @@ class RunRequest(BaseModel):
     limit: int = Field(default=sql_scripts.DEFAULT_ROWS, ge=1, le=sql_scripts.MAX_ROWS)
     # the saved script being run, for the audit and the preview slot; null = a draft
     script_id: Optional[int] = None
+    connection_id: Optional[int] = None  # null = the catalog
 
 
 class CatalogColumn(BaseModel):
@@ -105,10 +116,32 @@ def _name(session: Session, project_id: int, name: str, exclude_id: Optional[int
     return name
 
 
+def _connection_ref(session: Session, user: User, connection_id: Optional[int]) -> Optional[ConnectionRef]:
+    if connection_id is None:
+        return None
+    conn = sql_scripts.queryable_connection(session, connection_id)
+    if conn is None:
+        return ConnectionRef(id=connection_id, name="", usable=False)
+    return ConnectionRef(id=conn.id, name=conn.name, db_type=conn.db_type,
+                         usable=perm_service.has_capability(session, user, conn.project_id, Capability.CONNECT))
+
+
+def _checked(session: Session, user: User, content: Any, current: Optional[dict] = None) -> dict:
+    """The content to save. A connection the script did not have already must exist and
+    be one this person may use: nobody points a script at a database they could not query
+    themselves. (Its name is shown to the script's readers, to say why they cannot run it.)"""
+    checked = sql_scripts.check_content(content)
+    cid = checked["connection_id"]
+    if cid is not None and cid != (current or {}).get("connection_id"):
+        sql_scripts.usable_connection(session, user, cid)
+    return checked
+
+
 def _out(session: Session, user: User, s: SqlScript, content: Optional[dict] = None) -> SqlScriptOut:
     content = content if content is not None else sql_scripts.content_of(session, s)
     return SqlScriptOut(id=s.id, name=s.name, description=s.description, project_id=s.project_id,
                         current_version=s.current_version, engine=content.get("engine"),
+                        connection=_connection_ref(session, user, content.get("connection_id")),
                         created_at=s.created_at, updated_at=s.updated_at,
                         editable=perm_service.has_capability(session, user, s.project_id, Capability.EDIT))
 
@@ -171,11 +204,12 @@ def get_sql_script(script_id: int, user: User = Depends(get_current_user), sessi
 @router.post("/sql-scripts/run")
 async def run_sql(body: RunRequest, request: Request, user: User = Depends(get_current_user),
                   session: Session = Depends(get_session)) -> dict[str, Any]:
-    """Runs the SQL in the editor (saved or not) on the catalog: the first rows of the
-    result. With `script_id` the run is recorded against that script, which the person
-    must be able to see."""
+    """Runs the SQL in the editor (saved or not) on the catalog or on a connection: the
+    first rows of the result. With `script_id` the run is recorded against that script,
+    which the person must be able to see."""
     script = sql_scripts.get_visible(session, user, body.script_id) if body.script_id is not None else None
-    return await sql_scripts.run(session, user, body.sql, body.engine, body.limit, script=script, request=request)
+    return await sql_scripts.run(session, user, body.sql, body.engine, body.limit, script=script, request=request,
+                                 connection_id=body.connection_id)
 
 
 # ── create, change, copy, delete ──────────────────────────────────────────────
@@ -186,7 +220,7 @@ def create_sql_script(project_id: int, body: SqlScriptCreate, request: Request,
         raise HTTPException(status_code=404, detail="Folder not found")
     ensure_can(session, user, project_id, Capability.EDIT)
     name = _name(session, project_id, body.name)
-    content = sql_scripts.check_content(body.content if body.content is not None else sql_scripts.empty_content())
+    content = _checked(session, user, body.content if body.content is not None else sql_scripts.empty_content())
     script = SqlScript(name=name, description=body.description.strip(), project_id=project_id, owner_id=user.id,
                        current_version=0)
     session.add(script)
@@ -220,8 +254,9 @@ def update_sql_script(script_id: int, body: SqlScriptUpdate, request: Request,
     if target != script.project_id:
         changes["project_id"] = {"from": script.project_id, "to": target}
     if body.content is not None:
-        checked = sql_scripts.check_content(body.content)
-        if checked != sql_scripts.content_of(session, script):
+        current = sql_scripts.content_of(session, script)
+        checked = _checked(session, user, body.content, current)
+        if checked != current:
             changes["version"] = sql_scripts.add_version(session, script, checked, "edited", user).version
     script.name, script.project_id = name, target
     if body.description is not None and body.description.strip() != script.description:

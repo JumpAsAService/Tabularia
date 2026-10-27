@@ -1,6 +1,7 @@
 # Spec: SQL scripts
 
-Status: piece 1 in progress. Decided with the owner on 2026-10-27.
+Status: pieces 1 and 2 done (the catalog, connections); 3 and 4 to do. Decided with the
+owner on 2026-10-27.
 
 ## Objective
 
@@ -36,8 +37,12 @@ show on every installation.
   the AI assistant's queries are: it is a free query over the data.
 - **Connections** (piece 2): running SQL on a connection needs CONNECT on the connection's
   folder, as creating a database datasource does; whoever has only VIEW reads the SQL and
-  does not run it. The barrier on the database is a read-only user, as for database
-  datasources: the documentation says so.
+  does not run it. Choosing a connection for a script needs CONNECT on it too (nobody points a
+  script at a database they could not query themselves); an editor without it still saves
+  the SQL of a script that has its connection already, and the script's readers see the
+  connection's name, to know why they cannot run it. The barrier on the database
+  is a read-only user, as for database datasources: the documentation says so, with a
+  time limit on that user.
 
 ## The object
 
@@ -75,16 +80,33 @@ changes the content makes a version; an older one can be restored (it becomes th
 5. The result comes back as the Viewer's: columns, the first rows (capped), truncated or
    not, and the time taken.
 
+## Running on a connection
+
+1. The gateway checks CONNECT on the connection's folder (404 when the connection is gone
+   or is not a database, 403 without CONNECT) and sends the SQL as it is to the engine's
+   `POST /db/query`, with the connection (password still encrypted) and the script's
+   slot.
+2. The engine runs it on the preview worker (`db_query_task`), as a preview: a newer run
+   on the same slot knocks it down, `PREVIEW_TIMEOUT_SECONDS` revokes it. The SQL is
+   wrapped as a SQL datasource's (`build_query`) and capped in the database's dialect at
+   one row more than shown (`LIMIT`, `FETCH FIRST`, `TOP`; SQL Server's SQL with a CTE is
+   not wrapped, and the reader stops instead), so the database stops there.
+3. The answer is a preview's: columns, rows, truncated or not. The database's refusal comes
+   back in its words (`db_errors.describe_db_error`).
+4. The side panel lists the connection's tables (`/connections/{id}/tables`) and, when one
+   is opened, its columns (`/connections/{id}/columns`, the schema of a read of one row).
+
 ## The page
 
 `/sql-script?id=` (or `?project=` for a new one):
 
-- the name, the folder, the engine (the ones the administrator allows), Run (Ctrl+Enter),
-  Save, the versions with restore;
+- the name, the folder, where the SQL runs (the catalog or a database connection the
+  person may use), the engine on the catalog (the ones the administrator allows), Run
+  (Ctrl+Enter), Save, the versions with restore;
 - the SQL editor (Monaco, the one of the script editor), with completion of the
   datasources' names and of their columns;
-- beside it, the readable datasources with their folder and columns: a click inserts the
-  name;
+- beside it, the readable datasources with their folder and columns, or the connection's
+  tables: a click inserts the name;
 - under it, the result in a grid, with the rows, the time, and the error of a failed run
   in plain words;
 - a person with VIEW only reads the SQL and runs it; nothing to save.

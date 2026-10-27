@@ -128,7 +128,11 @@ class FakeEngine:
         # database connections: bodies on POST /db/inspect, the answer per action, and the
         # optional drivers GET /db/drivers reports (None = an engine without that route)
         self.db_inspects: list[dict] = []
-        self.db_responses: dict[str, tuple[int, dict]] = {"test": (200, {"ok": True}), "tables": (200, {"tables": []})}
+        self.db_responses: dict[str, tuple[int, dict]] = {"test": (200, {"ok": True}), "tables": (200, {"tables": []}),
+                                                          "columns": (200, {"columns": []})}
+        # SQL scripts on a connection: bodies on POST /db/query and the answer to serve
+        self.db_queries: list[dict] = []
+        self.db_query_response: tuple[int, dict] = (200, {"columns": [], "rows": [], "row_count": 0, "truncated": False})
         self.drivers: dict | None = {"sqlserver": {"installed": True}}
         self.dbt_exports: list[dict] = []  # bodies received on POST /dbt/export
         self.dbt_export_response: tuple[int, dict] | None = None  # an error answer to serve (e.g. a 422 with a code)
@@ -197,6 +201,10 @@ class FakeEngine:
             body = _json_body(request)
             self.db_inspects.append(body)
             status, payload = self.db_responses[body.get("action", "test")]
+            return httpx.Response(status, json=payload)
+        if path == "/db/query" and request.method == "POST":
+            self.db_queries.append(_json_body(request))
+            status, payload = self.db_query_response
             return httpx.Response(status, json=payload)
         if path == "/db/drivers" and request.method == "GET":
             if self.drivers is None:

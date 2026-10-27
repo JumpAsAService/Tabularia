@@ -510,7 +510,7 @@ async def _engine_inspect(payload: dict, action: str, path: str = "", language: 
     elif payload.get("db_type") == "api":
         resp = await client.post("/http-api/inspect", json={"connection": payload, "action": action, **extra})
     else:
-        resp = await client.post("/db/inspect", json={"connection": payload, "action": action})
+        resp = await client.post("/db/inspect", json={"connection": payload, "action": action, **extra})
     if resp.status_code >= 400:
         try:
             detail = resp.json().get("detail", resp.text)
@@ -1070,3 +1070,21 @@ async def list_connection_tables(
     conn = _get_connection(session, conn_id)
     ensure_can(session, user, conn.project_id, Capability.CONNECT)
     return await _engine_inspect(engine_connection_payload(conn), "tables", language=request_language(request))
+
+
+@router.get("/connections/{conn_id}/columns")
+async def list_connection_columns(
+    conn_id: int,
+    table: str = Query(..., min_length=1, max_length=500),
+    request: Request = None,
+    user: User = Depends(get_current_user),
+    session: Session = Depends(get_session),
+):
+    """A table's columns and their types (a read of one row): the SQL script editor's
+    list and completion. CONNECT on the connection's folder."""
+    conn = _get_connection(session, conn_id)
+    ensure_can(session, user, conn.project_id, Capability.CONNECT)
+    if conn.db_type in NOT_DATABASES or conn.db_type == "s3":
+        raise HTTPException(status_code=422, detail="This connection has no tables")
+    return await _engine_inspect(engine_connection_payload(conn), "columns", language=request_language(request),
+                                 table=table)

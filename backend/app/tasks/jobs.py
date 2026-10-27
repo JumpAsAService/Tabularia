@@ -160,6 +160,29 @@ def preview_task(
 # the whole installation, and a copy that finds interactive previews waiting gives up
 # (the next preview of that node asks for it again).
 CACHE_COPY_PRIORITY = 9
+
+
+@celery_app.task(name="app.tasks.jobs.db_query_task")
+def db_query_task(connection: dict[str, Any], sql: str, limit: int = 200) -> dict:
+    """A SQL script run on a database connection: the first `limit` rows, tagged as
+    preview_task's answer (the route maps `error` to the HTTP status). On the preview
+    queue: a person waits for it, as for a preview."""
+    from app.engine.base import ColumnInfo, PreviewResult
+    from app.engine.query_tag import was_interrupted
+    from app.ingest.converters import IngestError
+    from app.ingest.db_source import DbConnectionSpec, query_rows
+
+    try:
+        df, truncated = query_rows(DbConnectionSpec(**connection), sql, limit)
+        result = PreviewResult(columns=[ColumnInfo(name=n, dtype=str(t)) for n, t in df.schema.items()],
+                               rows=df.to_dicts(), row_count=df.height, truncated=truncated, cache_state="off")
+        return {"ok": True, "result": result.model_dump()}
+    except Exception as e:
+        if was_interrupted(e):
+            return {"ok": False, "error": "superseded", "detail": "Preview superseded by a more recent request"}
+        if isinstance(e, IngestError):  # the database's message, clear already (db_errors)
+            return {"ok": False, "error": "unprocessable", "detail": str(e)}
+        raise
 _COPY_LOCK = "dataprep:stepcache:copying"
 _COPY_LOCK_SECONDS = 600  # a copy killed halfway does not hold the turn for ever
 # compare-and-delete: the turn is given back only by the copy that holds it

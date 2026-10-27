@@ -12,7 +12,12 @@ read, and changes the text only where they are named — `"Vendite Nord 2024"` b
 `ds_12 AS "Vendite Nord 2024"` — so the engine gets aliases it can check against an
 allowlist, and never a bucket or a key the person wrote.
 
-A version's `content`: {"sql": "SELECT …", "engine": "duckdb" | null, "connection_id": null}.
+On a database connection the SQL goes to the database as it is, wrapped as a SQL
+datasource's; running it needs CONNECT on the connection's folder, as importing from it
+does, and the barrier on the database is a read-only user.
+
+A version's `content`: {"sql": "SELECT …", "engine": "duckdb" | null, "connection_id": 3 | null};
+with a connection the engine is null.
 """
 from __future__ import annotations
 
@@ -29,7 +34,7 @@ from sqlglot.errors import SqlglotError
 from sqlmodel import Session, select
 
 from app.core.engine_client import get_engine_client
-from app.models import Datasource, SqlScript, SqlScriptVersion, User
+from app.models import Connection, Datasource, SqlScript, SqlScriptVersion, User
 from app.models.permission import Capability
 from app.services import audit
 from app.services import permissions as perm_service
@@ -39,6 +44,9 @@ from app.services.permissions import is_admin
 MAX_SQL_CHARS = 100_000
 MAX_ROWS = 1000  # the engine's preview cap
 DEFAULT_ROWS = 200
+
+# the connections a SQL script can run on: the databases (not mail, files or APIs)
+QUERYABLE = ("postgresql", "mysql", "mariadb", "clickhouse", "trino", "oracle", "sqlserver")
 
 # the dialect the SQL is READ in, to find the datasources it names; the engine runs it
 DIALECTS = {"polars": "postgres", "duckdb": "duckdb", "chdb": "clickhouse", "clickhouse": "clickhouse",
@@ -91,9 +99,27 @@ def check_content(content: Any) -> dict:
     engine = content.get("engine") or None
     if engine is not None and engine not in KNOWN_ENGINES:
         raise HTTPException(status_code=422, detail=f"Unknown engine: {engine}")
-    if content.get("connection_id") is not None:
-        raise HTTPException(status_code=422, detail="Running SQL on a connection is not available yet")
-    return {"sql": sql, "engine": engine, "connection_id": None}
+    connection_id = content.get("connection_id")
+    if connection_id is not None and (isinstance(connection_id, bool) or not isinstance(connection_id, int)):
+        raise HTTPException(status_code=422, detail="The script's connection is a number")
+    return {"sql": sql, "engine": None if connection_id is not None else engine, "connection_id": connection_id}
+
+
+# ── connections ──────────────────────────────────────────────────────────────
+def queryable_connection(session: Session, connection_id: int) -> Optional[Connection]:
+    conn = session.get(Connection, connection_id)
+    return conn if conn is not None and conn.db_type in QUERYABLE else None
+
+
+def usable_connection(session: Session, user: User, connection_id: int) -> Connection:
+    """The database connection `user` may run SQL on: CONNECT on its folder."""
+    conn = queryable_connection(session, connection_id)
+    if conn is None:
+        raise HTTPException(status_code=404, detail="The script's database connection no longer exists: choose another")
+    if not perm_service.has_capability(session, user, conn.project_id, Capability.CONNECT):
+        raise HTTPException(status_code=403, detail=f"Running SQL on «{conn.name}» needs the CONNECT permission "
+                                                    "on its folder: ask whoever manages it")
+    return conn
 
 
 # ── versions ─────────────────────────────────────────────────────────────────
@@ -270,49 +296,96 @@ def _engine_message(detail: str, resolved: Resolved) -> str:
     ).replace(": to combine other data use a Join or Union node.", ".")
 
 
+def _engine_failure(resp, message) -> HTTPException:
+    """The engine's refusal of a run, as the gateway's answer."""
+    if resp.status_code == 504:
+        return HTTPException(status_code=504, detail="The query took too long and was stopped")
+    try:
+        detail = str(resp.json().get("detail"))
+    except ValueError:
+        detail = resp.text
+    return HTTPException(status_code=422 if resp.status_code < 500 else 502, detail=message(detail)[:2000])
+
+
+def _slot(user: User, script: Optional[SqlScript]) -> str:
+    # one slot per script and person: a new run of the same script knocks down the previous
+    return f"u{user.id}:sql:{script.id if script is not None else 'draft'}"
+
+
+def _audit_run(session: Session, user: User, script: Optional[SqlScript], request: Optional[Request],
+               outcome: str, detail: dict) -> None:
+    audit.record_audit(
+        session, actor=user, action=audit.SQL_SCRIPT_RUN, outcome=outcome, target_type="sql_script",
+        target_id=script.id if script is not None else None, target_label=script.name if script is not None else "",
+        detail=detail, request=request,
+    )
+
+
 async def run(session: Session, user: User, sql: str, engine: Optional[str], limit: int,
-              script: Optional[SqlScript] = None, request: Optional[Request] = None) -> dict[str, Any]:
-    """Runs the SQL on the catalog, as a preview: the first `limit` rows. Every run is
-    audited with its SQL, whatever its outcome."""
+              script: Optional[SqlScript] = None, request: Optional[Request] = None,
+              connection_id: Optional[int] = None) -> dict[str, Any]:
+    """Runs the SQL, as a preview: the first `limit` rows, on the catalog or on a
+    database connection. Every run is audited with its SQL, whatever its outcome."""
+    limit = max(1, min(int(limit or DEFAULT_ROWS), MAX_ROWS))
+    if connection_id is not None:
+        return await _run_on_connection(session, user, sql, connection_id, limit, script, request)
     engine = await pick_engine(session, engine)
     resolved = resolve(session, user, sql, engine)
     if not resolved.tables:
         raise _refuse("The query reads no datasource: name one in FROM")
     first = next(iter(resolved.tables.values()))
     body = {
-        "bucket": first.bucket, "input_key": first.key, "limit": max(1, min(int(limit or DEFAULT_ROWS), MAX_ROWS)),
+        "bucket": first.bucket, "input_key": first.key, "limit": limit,
         "no_cache": True, "engine": engine,
         "operations": [{"type": "sql", "params": {
             "query": resolved.query,
             "tables": {alias: {"source": {"bucket": ds.bucket, "key": ds.key}} for alias, ds in resolved.tables.items()},
         }}],
-        # one slot per script and person: a new run of the same script knocks down the previous
-        "slot": f"u{user.id}:sql:{script.id if script is not None else 'draft'}",
+        "slot": _slot(user, script),
     }
     started = time.monotonic()
     outcome, rows, detail = "failure", 0, ""
     try:
         resp = await get_engine_client().post("/tasks/preview", json=body, timeout=300)
         if resp.status_code >= 400:
-            try:
-                detail = str(resp.json().get("detail"))
-            except ValueError:
-                detail = resp.text
-            status = 422 if resp.status_code < 500 else 502
-            raise HTTPException(status_code=status, detail=_engine_message(detail, resolved)[:2000])
+            raise _engine_failure(resp, lambda d: _engine_message(d, resolved))
         res = resp.json()
         outcome, rows = "success", len(res.get("rows") or [])
     finally:
-        audit.record_audit(
-            session, actor=user, action=audit.SQL_SCRIPT_RUN, outcome=outcome, target_type="sql_script",
-            target_id=script.id if script is not None else None, target_label=script.name if script is not None else "",
-            detail={"sql": sql[:2000], "engine": engine, "rows": rows,
-                    "datasources": [{"id": ds.id, "name": ds.name} for ds in resolved.tables.values()]},
-            request=request,
-        )
+        _audit_run(session, user, script, request, outcome,
+                   {"sql": sql[:2000], "engine": engine, "rows": rows,
+                    "datasources": [{"id": ds.id, "name": ds.name} for ds in resolved.tables.values()]})
     return {
         "columns": res.get("columns") or [], "rows": res.get("rows") or [], "row_count": rows,
         "truncated": bool(res.get("truncated")), "engine": engine,
         "elapsed_ms": int((time.monotonic() - started) * 1000),
-        "datasources": [{"id": ds.id, "name": ds.name} for ds in resolved.tables.values()],
+        "datasources": [{"id": ds.id, "name": ds.name} for ds in resolved.tables.values()], "connection": None,
+    }
+
+
+async def _run_on_connection(session: Session, user: User, sql: str, connection_id: int, limit: int,
+                             script: Optional[SqlScript], request: Optional[Request]) -> dict[str, Any]:
+    """The SQL on the database, as it is: the database reads it and says what is wrong."""
+    from app.routes.connections import engine_connection_payload  # routes → services: late import
+
+    conn = usable_connection(session, user, connection_id)
+    if not strip_comments(sql or "").strip().rstrip(";").strip():
+        raise _refuse("The query is empty")
+    started = time.monotonic()
+    outcome, rows = "failure", 0
+    try:
+        resp = await get_engine_client().post("/db/query", timeout=300, json={
+            "connection": engine_connection_payload(conn), "sql": sql, "limit": limit, "slot": _slot(user, script)})
+        if resp.status_code >= 400:
+            raise _engine_failure(resp, lambda d: d)
+        res = resp.json()
+        outcome, rows = "success", len(res.get("rows") or [])
+    finally:
+        _audit_run(session, user, script, request, outcome,
+                   {"sql": sql[:2000], "rows": rows, "connection": {"id": conn.id, "name": conn.name}})
+    return {
+        "columns": res.get("columns") or [], "rows": res.get("rows") or [], "row_count": rows,
+        "truncated": bool(res.get("truncated")), "engine": None,
+        "elapsed_ms": int((time.monotonic() - started) * 1000), "datasources": [],
+        "connection": {"id": conn.id, "name": conn.name, "db_type": conn.db_type},
     }

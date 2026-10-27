@@ -1,23 +1,26 @@
 <script setup lang="ts">
 // A SQL script: SQL kept in a folder, with its versions, run on the datasources the
-// person may read (docs/specs/sql-scripts.md). The SQL names a datasource by its name in
-// double quotes, with its folder's in front when two share it; «Run» (Ctrl/Cmd+Enter) runs
+// person may read or on a database connection (docs/specs/sql-scripts.md). On the catalog
+// the SQL names a datasource by its name in double quotes, with its folder's in front when
+// two share it; on a connection it is the database's own SQL. «Run» (Ctrl/Cmd+Enter) runs
 // the selection or the whole SQL and shows the first rows. Whoever may only read the folder
-// runs it and tries changes, and saves nothing.
+// runs it and tries changes, and saves nothing; a script on a connection runs only for
+// whoever may use that connection.
 //
 // /sql-script?id=N opens a script; /sql-script?project=P starts a new one in folder P.
 import { computed, defineAsyncComponent, onMounted, onUnmounted, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { onBeforeRouteLeave, onBeforeRouteUpdate } from 'vue-router'
 import { ChevronRight, DatabaseSearch, History, LoaderCircle, Play, RotateCcw, Save, Search, Square, Table2, X } from 'lucide-vue-next'
+import { DB_TYPES, useConnections, type ConnectionInfo } from '~/composables/useConnections'
 import { errMessage } from '~/composables/useApi'
 import { useFormat } from '~/composables/useFormat'
 import { useFolderPaths } from '~/composables/useFolderPaths'
 import { usePreferredEngine } from '~/composables/useEngine'
 import { versionNote } from '~/composables/useSavedScripts'
 import {
-  sqlName, useSqlScripts,
-  type SqlCatalogItem, type SqlRunResult, type SqlScriptDetail, type SqlScriptVersion,
+  QUERYABLE_DB_TYPES, sqlIdent, sqlName, sqlTableRef, useSqlScripts,
+  type SqlCatalogItem, type SqlRunResult, type SqlScriptDetail, type SqlScriptVersion, type SqlTable,
 } from '~/composables/useSqlScripts'
 import Select from '~/components/ui/Select.vue'
 import DataGrid from '~/components/ui/DataGrid.vue'
@@ -30,6 +33,7 @@ const fmtx = useFormat()
 const toast = useToast()
 const route = useRoute()
 const api = useSqlScripts()
+const connectionsApi = useConnections()
 const folderPaths = useFolderPaths()
 const { engineCatalog, loadCatalog, defaultEngine } = usePreferredEngine()
 
@@ -45,8 +49,9 @@ const name = ref('')
 const description = ref('')
 const sql = ref('')
 const engine = ref<string | null>(null)
+const connectionId = ref<number | null>(null) // null = the catalog
 const savedAs = ref('')
-const snapshot = () => JSON.stringify([name.value.trim(), description.value.trim(), sql.value, engine.value])
+const snapshot = () => JSON.stringify([name.value.trim(), description.value.trim(), sql.value, engine.value, connectionId.value])
 const dirty = computed(() => snapshot() !== savedAs.value)
 
 const canEdit = computed(() => (detail.value ? detail.value.editable : true))
@@ -63,6 +68,33 @@ function labelOf(id: string): string {
   return engineCatalog.value.find((e) => e.id === id)?.label ?? id
 }
 
+// ── where the SQL runs: the catalog, or a database connection ────────────────
+// the connections this person may use (CONNECT on their folder), databases only
+const connections = ref<ConnectionInfo[]>([])
+async function loadConnections() {
+  try {
+    connections.value = (await connectionsApi.list()).filter((c) => QUERYABLE_DB_TYPES.includes(c.db_type))
+  } catch { connections.value = [] }
+}
+const dbLabel = (dbType: string) => DB_TYPES.find((d) => d.value === dbType)?.label ?? dbType
+const connection = computed(() => connections.value.find((c) => c.id === connectionId.value) ?? null)
+// the script's connection when this person cannot use it, or when it was deleted
+const foreignConnection = computed(() => {
+  const c = detail.value?.connection
+  return c && c.id === connectionId.value && !connection.value ? c : null
+})
+const dbType = computed(() => connection.value?.db_type ?? foreignConnection.value?.db_type ?? null)
+const sourceOptions = computed(() => [
+  { value: null, label: t('sqlScript.sourceCatalog'), hint: t('sqlScript.sourceCatalogHint') },
+  ...connections.value.map((c) => ({ value: c.id, label: c.name, hint: dbLabel(c.db_type) })),
+  ...(foreignConnection.value
+    ? [{ value: foreignConnection.value.id, label: foreignConnection.value.name || t('sqlScript.connectionGone'),
+         hint: foreignConnection.value.db_type ? dbLabel(foreignConnection.value.db_type) : '' }]
+    : []),
+])
+// a script on a connection this person may not use: they read it, and do not run it
+const cannotRun = computed(() => connectionId.value != null && !connection.value)
+
 function apply(d: SqlScriptDetail) {
   detail.value = d
   scriptId.value = d.id
@@ -71,6 +103,7 @@ function apply(d: SqlScriptDetail) {
   description.value = d.description
   sql.value = d.content.sql
   engine.value = d.content.engine
+  connectionId.value = d.content.connection_id
   savedAs.value = snapshot()
 }
 
@@ -105,7 +138,7 @@ async function save() {
     return
   }
   saving.value = true
-  const content = { sql: sql.value, engine: engine.value, connection_id: null }
+  const content = { sql: sql.value, engine: connectionId.value == null ? engine.value : null, connection_id: connectionId.value }
   try {
     if (scriptId.value != null) {
       apply(await api.update(scriptId.value, { name: n, description: description.value.trim(), content }))
@@ -134,14 +167,17 @@ let controller: AbortController | null = null
 
 async function run(text?: string) {
   const query = (text ?? editorRef.value?.runText() ?? sql.value).trim()
-  if (!query) return
+  if (!query || cannotRun.value) return
   controller?.abort()
   controller = new AbortController()
   const mine = controller
   running.value = true
   runError.value = ''
   try {
-    result.value = await api.run({ sql: query, engine: engine.value ?? fallbackEngine.value, script_id: scriptId.value }, mine.signal)
+    result.value = await api.run({
+      sql: query, script_id: scriptId.value, connection_id: connectionId.value,
+      engine: connectionId.value == null ? engine.value ?? fallbackEngine.value : null,
+    }, mine.signal)
   } catch (e: any) {
     if (e?.name === 'AbortError' || mine.signal.aborted) return
     result.value = null
@@ -163,9 +199,10 @@ function stop() {
 const resultLine = computed(() => {
   const r = result.value
   if (!r) return ''
+  const rows = t('sqlScript.rows', { n: fmtx.count(r.row_count), more: r.truncated ? '+' : '' }, r.truncated ? 2 : r.row_count)
+  if (r.connection) return t('sqlScript.resultLineConnection', { rows, ms: fmtx.count(r.elapsed_ms), connection: r.connection.name })
   return t('sqlScript.resultLine', {
-    rows: fmtx.count(r.row_count), more: r.truncated ? '+' : '', ms: fmtx.count(r.elapsed_ms), engine: labelOf(r.engine),
-    read: r.datasources.map((d) => d.name).join(', '),
+    rows, ms: fmtx.count(r.elapsed_ms), engine: labelOf(r.engine ?? ''), read: r.datasources.map((d) => d.name).join(', '),
   })
 })
 
@@ -184,8 +221,76 @@ function insertName(d: SqlCatalogItem) {
   editorRef.value?.insert(sqlName(d, catalog.value))
 }
 function insertColumn(c: string) {
-  editorRef.value?.insert(/^[A-Za-z_][A-Za-z0-9_]*$/.test(c) ? c : `"${c.replace(/"/g, '""')}"`)
+  editorRef.value?.insert(sqlIdent(c, dbType.value))
 }
+
+// ── a connection's tables beside the editor; their columns read when opened ──
+const dbTables = ref<string[]>([])
+const dbTablesState = ref<'idle' | 'loading' | 'error'>('idle')
+const dbTablesError = ref('')
+const dbColumns = ref<Record<string, { name: string; dtype: string }[] | 'loading' | { error: string }>>({})
+const openTable = ref<string | null>(null)
+let tablesFor: number | null = null
+async function loadTables() {
+  const id = connection.value?.id ?? null
+  tablesFor = id
+  dbTables.value = []
+  dbColumns.value = {}
+  openTable.value = null
+  if (id == null) return
+  dbTablesState.value = 'loading'
+  try {
+    const { tables } = await connectionsApi.tables(id)
+    if (tablesFor !== id) return
+    dbTables.value = tables
+    dbTablesState.value = 'idle'
+  } catch (e) {
+    if (tablesFor !== id) return
+    dbTablesError.value = errMessage(e)
+    dbTablesState.value = 'error'
+  }
+}
+watch(() => connection.value?.id ?? null, loadTables)
+async function toggleTable(table: string) {
+  openTable.value = openTable.value === table ? null : table
+  const id = connection.value?.id
+  if (openTable.value == null || id == null || Array.isArray(dbColumns.value[table])) return
+  dbColumns.value = { ...dbColumns.value, [table]: 'loading' }
+  try {
+    const { columns } = await connectionsApi.columns(id, table)
+    if (tablesFor === id) dbColumns.value = { ...dbColumns.value, [table]: columns }
+  } catch (e) {
+    if (tablesFor === id) dbColumns.value = { ...dbColumns.value, [table]: { error: errMessage(e) } }
+  }
+}
+const columnsOf = (table: string) => { const c = dbColumns.value[table]; return Array.isArray(c) ? c : null }
+const columnsError = (table: string) => { const c = dbColumns.value[table]; return c && typeof c === 'object' && !Array.isArray(c) ? c.error : '' }
+const shownTables = computed(() => {
+  const q = catalogQuery.value.trim().toLowerCase()
+  return q ? dbTables.value.filter((n) => n.toLowerCase().includes(q)) : dbTables.value
+})
+function insertTable(table: string) {
+  if (dbType.value) editorRef.value?.insert(sqlTableRef(table, dbType.value))
+}
+
+// what the editor completes: the datasources, or the connection's tables
+const editorTables = computed<SqlTable[]>(() => {
+  if (connectionId.value == null) {
+    return catalog.value.filter((d) => d.has_data).map((d) => ({
+      name: d.name, insert: sqlName(d, catalog.value), detail: d.path,
+      columns: d.columns.map((c) => ({ name: c.name, insert: sqlIdent(c.name, null), type: c.type })),
+    }))
+  }
+  const type = dbType.value
+  if (!type) return []
+  return dbTables.value.map((table) => {
+    const cols = dbColumns.value[table]
+    return {
+      name: table.split('.').pop() ?? table, insert: sqlTableRef(table, type), detail: connection.value?.name ?? '',
+      columns: Array.isArray(cols) ? cols.map((c) => ({ name: c.name, insert: sqlIdent(c.name, type), type: c.dtype })) : [],
+    }
+  })
+})
 
 // ── versions ─────────────────────────────────────────────────────────────────
 const versions = ref<SqlScriptVersion[]>([])
@@ -253,6 +358,7 @@ onMounted(() => {
   folderPaths.load()
   loadCatalog()
   loadCatalogList()
+  loadConnections()
   load()
 })
 onUnmounted(() => {
@@ -292,6 +398,15 @@ watch(() => route.query.id, (id) => {
           <span v-if="detail" class="tag">v{{ detail.current_version }}</span>
           <span v-if="dirty && canEdit && detail" class="tag unsaved">{{ $t('sqlScript.unsaved') }}</span>
           <Select
+            class="source"
+            :model-value="connectionId"
+            :options="sourceOptions"
+            :disabled="!!viewing"
+            :aria-label="$t('sqlScript.source')"
+            @update:model-value="(v: number | null) => (connectionId = v)"
+          />
+          <Select
+            v-if="connectionId == null"
             class="engine"
             :model-value="engine"
             :options="engineOptions"
@@ -302,7 +417,7 @@ watch(() => route.query.id, (id) => {
           <button v-if="running" type="button" @click="stop">
             <Square :size="13" /> {{ $t('sqlScript.stop') }}
           </button>
-          <button v-else type="button" :disabled="loading || !editorText.trim()" :title="$t('sqlScript.runTitle')" @click="run()">
+          <button v-else type="button" :disabled="loading || !editorText.trim() || cannotRun" :title="$t('sqlScript.runTitle')" @click="run()">
             <Play :size="14" /> {{ $t('sqlScript.run') }}
           </button>
           <button v-if="canEdit" class="primary" :disabled="saving || loading || !!viewing || (!dirty && scriptId != null)" @click="save">
@@ -318,7 +433,10 @@ watch(() => route.query.id, (id) => {
 
       <div v-else class="work">
         <section class="main">
-          <p v-if="!canEdit" class="note small" role="note">{{ $t('sqlScript.readOnly') }}</p>
+          <p v-if="cannotRun" class="note small" role="note">
+            {{ foreignConnection?.name ? $t('sqlScript.cannotRun', { name: foreignConnection.name }) : $t('sqlScript.connectionGoneNote') }}
+          </p>
+          <p v-else-if="!canEdit" class="note small" role="note">{{ $t('sqlScript.readOnly') }}</p>
           <div v-if="viewing" class="viewing" role="status">
             <History :size="14" />
             <span>{{ $t('sqlScript.viewingVersion', { n: viewing.version }) }}</span>
@@ -331,7 +449,7 @@ watch(() => route.query.id, (id) => {
             <SqlEditor
               ref="editorRef"
               v-model="editorText"
-              :catalog="catalog"
+              :tables="editorTables"
               :read-only="!!viewing"
               @run="run"
             />
@@ -361,7 +479,52 @@ watch(() => route.query.id, (id) => {
             </label>
           </div>
 
-          <div class="card catalog" :aria-label="$t('sqlScript.catalog')">
+          <div v-if="connectionId != null" class="card catalog" :aria-label="$t('sqlScript.tables')">
+            <h2>{{ $t('sqlScript.tables') }} <span v-if="dbTables.length" class="muted small">{{ dbTables.length }}</span></h2>
+            <p class="muted small help">
+              {{ connection ? $t('sqlScript.tablesHelp', { name: connection.name, type: dbLabel(connection.db_type) }) : $t('sqlScript.tablesUnavailable') }}
+            </p>
+            <template v-if="connection">
+              <label class="search">
+                <Search :size="13" aria-hidden="true" />
+                <input v-model="catalogQuery" type="search" :placeholder="$t('sqlScript.tablesSearch')" :aria-label="$t('sqlScript.tablesSearch')" />
+              </label>
+              <SkeletonRows v-if="dbTablesState === 'loading'" :rows="4" />
+              <p v-else-if="dbTablesState === 'error'" class="err small" role="alert">{{ dbTablesError }}</p>
+              <ul v-else class="items">
+                <li v-for="tb in shownTables" :key="tb">
+                  <div class="item-head">
+                    <button
+                      type="button"
+                      class="chev"
+                      :aria-expanded="openTable === tb"
+                      :aria-label="$t('sqlScript.columnsOf', { name: tb })"
+                      @click="toggleTable(tb)"
+                    >
+                      <ChevronRight :size="13" />
+                    </button>
+                    <button type="button" class="dsname" :disabled="!!viewing" :title="$t('sqlScript.insertName')" @click="insertTable(tb)">
+                      <span class="nm">{{ tb }}</span>
+                    </button>
+                  </div>
+                  <template v-if="openTable === tb">
+                    <p v-if="dbColumns[tb] === 'loading'" class="muted small nodata">{{ $t('sqlScript.columnsLoading') }}</p>
+                    <p v-else-if="columnsError(tb)" class="err small nodata">{{ columnsError(tb) }}</p>
+                    <ul v-else-if="columnsOf(tb)" class="cols">
+                      <li v-for="c in columnsOf(tb)" :key="c.name">
+                        <button type="button" :disabled="!!viewing" @click="insertColumn(c.name)">
+                          <span class="cn">{{ c.name }}</span><span class="muted ct">{{ c.dtype }}</span>
+                        </button>
+                      </li>
+                    </ul>
+                  </template>
+                </li>
+              </ul>
+              <p v-if="dbTablesState === 'idle' && !shownTables.length" class="muted small">{{ $t('sqlScript.tablesEmpty') }}</p>
+            </template>
+          </div>
+
+          <div v-else class="card catalog" :aria-label="$t('sqlScript.catalog')">
             <h2>{{ $t('sqlScript.catalog') }} <span class="muted small">{{ catalog.length }}</span></h2>
             <p class="muted small help">{{ $t('sqlScript.catalogHelp') }}</p>
             <label class="search">
@@ -434,6 +597,7 @@ watch(() => route.query.id, (id) => {
 .head-actions { display: flex; align-items: center; gap: 8px; margin-left: auto; flex-shrink: 0; flex-wrap: wrap; }
 .head-actions button { display: inline-flex; align-items: center; gap: 6px; white-space: nowrap; }
 .engine { width: 190px; }
+.source { width: 210px; }
 .tag {
   font-size: 10px; text-transform: uppercase; letter-spacing: 0.04em; padding: 1px 7px;
   border-radius: 8px; background: var(--panel-2); border: 1px solid var(--border); color: var(--muted);
@@ -489,6 +653,7 @@ watch(() => route.query.id, (id) => {
 .vacts { display: flex; gap: 6px; margin-top: 3px; }
 @media (max-width: 900px) {
   .work { grid-template-columns: minmax(0, 1fr); }
-  .engine { width: 160px; }
+  .engine, .source { width: 160px; }
+  .head-actions { flex: 1 1 100%; flex-shrink: 1; min-width: 0; margin-left: 0; }
 }
 </style>

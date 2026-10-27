@@ -55,6 +55,11 @@ def test_the_sql_is_wrapped_in_a_subselect_and_loses_the_semicolon():
     assert q == "SELECT * FROM (SELECT 1 AS a) AS _q"
 
 
+def test_a_comment_on_the_last_line_does_not_swallow_the_wrapper():
+    q = build_query(_pg(), DbSourceSpec(mode="sql", ref="SELECT 1 AS a -- why\n;"))
+    assert q == "SELECT * FROM (SELECT 1 AS a -- why\n) AS _q"
+
+
 def test_table_with_a_quoting_character_is_refused():
     with pytest.raises(DbSourceError):
         build_query(_pg(), DbSourceSpec(mode="table", ref='ord"ers'))

@@ -202,6 +202,9 @@ def build_query(conn: DbConnectionSpec, source: DbSourceSpec) -> str:
         sql = source.ref.strip().rstrip(";").strip()
         if not sql:
             raise DbSourceError("The SQL query is empty")
+        if "--" in sql.rsplit("\n", 1)[-1]:
+            # a comment on the last line would swallow the wrapper's closing parenthesis
+            sql += "\n"
         if conn.db_type == "sqlserver":
             return _tsql_query(sql, conn, source)
         # Oracle wants no AS before a table's alias, nor an alias with «_»
@@ -888,6 +891,60 @@ _TABLES_QUERY = {
         " AND TABLE_SCHEMA NOT IN ('sys', 'INFORMATION_SCHEMA') ORDER BY 1"
     ),
 }
+
+
+def with_row_cap(conn: DbConnectionSpec, query: str, rows: int) -> str:
+    """`query` (as build_query makes it) reading at most `rows` rows, so the database
+    stops there instead of computing what nobody reads. SQL Server's user SQL that
+    build_query left unwrapped (a CTE, an ORDER BY) gets no cap: the reader stops
+    after `rows` rows."""
+    if conn.db_type == "oracle":
+        return f"{query} FETCH FIRST {rows} ROWS ONLY"
+    if conn.db_type == "sqlserver":
+        if query.startswith("SELECT * FROM "):
+            return f"SELECT TOP {rows} * FROM " + query[len("SELECT * FROM "):]
+        return query
+    return f"{query} LIMIT {rows}"
+
+
+def _read_some(conn: DbConnectionSpec, query: str, limit: int) -> tuple[pa.Schema, list]:
+    """The schema and the batches of the first `limit` rows (and one more, when there
+    is one: it tells a result that goes on). The connection closes as soon as they are
+    read."""
+    gen = _guarded(_open_batches(conn, query, get_settings().ingest.db_read_timeout_seconds), conn)
+    try:
+        schema = next(gen)
+        batches, rows = [], 0
+        for batch in gen:
+            batches.append(batch)
+            rows += batch.num_rows
+            if rows > limit:
+                break
+        return schema, batches
+    except StopIteration:
+        raise DbSourceError("The driver returned no schema")
+    finally:
+        gen.close()
+
+
+def query_rows(conn: DbConnectionSpec, sql: str, limit: int) -> tuple[pl.DataFrame, bool]:
+    """A SQL script run on a connection: the first `limit` rows of `sql` and whether
+    there are more. One read statement, wrapped as a SQL datasource's (build_query):
+    not a security barrier, which is the CONNECT capability and a read-only user."""
+    query = build_query(conn, DbSourceSpec(mode="sql", ref=sql))
+    logger.info("db-query %s@%s (%s)", conn.db_type, conn.host, query[:200])
+    schema, batches = _read_some(conn, with_row_cap(conn, query, limit + 1), limit)
+    df = pl.from_arrow(pa.Table.from_batches(batches, schema))
+    return df.head(limit), df.height > limit
+
+
+def list_columns(conn: DbConnectionSpec, table: str) -> list[dict]:
+    """The columns of a table, with their types, as the import would read them: from
+    the schema of a read of one row."""
+    query = build_query(conn, DbSourceSpec(mode="table", ref=table))
+    schema, batches = _read_some(conn, with_row_cap(conn, query, 1), 1)
+    df = pl.from_arrow(pa.Table.from_batches(batches, schema))
+    return [{"name": n, "dtype": str(t)} for n, t in df.schema.items()]
 
 
 def _collect_first_column(conn: DbConnectionSpec, query: str) -> list[str]:

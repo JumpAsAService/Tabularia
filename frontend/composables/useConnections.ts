@@ -184,5 +184,8 @@ export function useConnections() {
     s3Files: (id: number, body: { bucket: string; folder: string; pattern: string } & Partial<FileTemplatesDraft>) =>
       apiFetch<FilesCheck>(`/connections/${id}/s3/files`, { method: 'POST', body }),
     tables: (id: number) => apiFetch<{ tables: string[] }>(`/connections/${id}/tables`),
+    // a table's columns and types (the SQL script editor)
+    columns: (id: number, table: string) =>
+      apiFetch<{ columns: { name: string; dtype: string }[] }>(`/connections/${id}/columns`, { query: { table } }),
   }
 }

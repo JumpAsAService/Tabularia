@@ -1,16 +1,17 @@
 <script setup lang="ts">
 // The SQL editor of a SQL script: Monaco with SQL highlighting, the completion of the
-// datasources the person may read (their names as the SQL writes them) and of their
-// columns, and Ctrl/Cmd+Enter to run — the selection when there is one, else everything.
+// tables the SQL can read (the datasources of the catalog, or a connection's tables: their
+// names as the SQL writes them) and of their columns, and Ctrl/Cmd+Enter to run — the
+// selection when there is one, else everything.
 // Monaco is loaded the first time an editor opens, never with the page.
 import { onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 import type * as Monaco from 'monaco-editor'
 import { loadMonaco, type MonacoApi } from '~/composables/useMonaco'
 import { useTheme } from '~/composables/useTheme'
-import { sqlName, type SqlCatalogItem } from '~/composables/useSqlScripts'
+import type { SqlTable } from '~/composables/useSqlScripts'
 
-const props = defineProps<{ modelValue: string; catalog: SqlCatalogItem[]; readOnly?: boolean }>()
+const props = defineProps<{ modelValue: string; tables: SqlTable[]; readOnly?: boolean }>()
 const emit = defineEmits<{ (e: 'update:modelValue', v: string): void; (e: 'run', sql: string): void }>()
 
 const { t } = useI18n()
@@ -41,39 +42,63 @@ function insert(text: string) {
 
 defineExpose({ runText, insert, focus: () => editor?.focus() })
 
+// the qualified name being typed at the cursor: parts bare or quoted, joined by dots, the
+// last one possibly open
+const QUALIFIED = /(?:(?:[\w$#]+|"[^"]*"|`[^`]*`|\[[^\]]*\])\.)*(?:[\w$#]*|"[^"]*|`[^`]*|\[[^\]]*)$/
+
+/** Whether the end of `before` is inside a `--` comment or a '…' text of its line. */
+function inCommentOrText(before: string): boolean {
+  let quote = ''
+  for (let i = 0; i < before.length; i++) {
+    const c = before[i]
+    if (quote) {
+      if (c === quote) quote = ''
+    } else if (c === "'" || c === '"' || c === '`') {
+      quote = c
+    } else if (c === '-' && before[i + 1] === '-') {
+      return true
+    }
+  }
+  return quote === "'"
+}
+
 function registerCompletions(m: MonacoApi) {
   disposables.push(m.languages.registerCompletionItemProvider('sql', {
-    triggerCharacters: ['"', '.', ' '],
+    triggerCharacters: ['"', '`', '[', '.', ' '],
     provideCompletionItems(model, position) {
       const word = model.getWordUntilPosition(position)
       const line = model.getLineContent(position.lineNumber)
+      // in a comment or a text nothing is proposed: Enter would put a name in place of a word
+      if (inCommentOrText(line.slice(0, position.column - 1))) return { suggestions: [] }
       // an opening quote typed already is replaced too: the name brings its own quotes
-      const startCol = line[word.startColumn - 2] === '"' ? word.startColumn - 1 : word.startColumn
+      const startCol = '"`['.includes(line[word.startColumn - 2] ?? 'x') ? word.startColumn - 1 : word.startColumn
       const range = new m.Range(position.lineNumber, startCol, position.lineNumber, word.endColumn)
-      const all = props.catalog
-      const tables = all.filter((d) => d.has_data).map((d) => ({
-        label: sqlName(d, all), kind: m.languages.CompletionItemKind.Struct,
-        detail: d.path, insertText: sqlName(d, all), range, sortText: `0${d.name.toLowerCase()}`,
+      // a table's name replaces the whole qualified name typed so far (`catalogo.list`,
+      // `"Vendite"."Cl`), not only its last word
+      const typed = QUALIFIED.exec(line.slice(0, position.column - 1))?.[0] ?? ''
+      const tableRange = new m.Range(position.lineNumber, Math.min(startCol, position.column - typed.length),
+                                     position.lineNumber, word.endColumn)
+      const all = props.tables
+      const tables = all.map((d) => ({
+        label: d.insert, kind: m.languages.CompletionItemKind.Struct,
+        detail: d.detail, insertText: d.insert, range: tableRange, sortText: `0${d.name.toLowerCase()}`,
       }))
-      // the columns of the datasources the SQL already names, then of all the others
+      // the columns of the tables the SQL already names, then of all the others
       const text = model.getValue().toLowerCase()
-      const named = new Set(all.filter((d) => text.includes(d.name.toLowerCase())).map((d) => d.id))
-      const seen = new Map<string, { names: string[]; near: boolean }>()
+      const seen = new Map<string, { insert: string; names: string[]; near: boolean }>()
       for (const d of all) {
+        const near = text.includes(d.name.toLowerCase())
         for (const c of d.columns) {
-          const item = seen.get(c.name) ?? { names: [], near: false }
+          const item = seen.get(c.name) ?? { insert: c.insert, names: [], near: false }
           item.names.push(d.name)
-          item.near ||= named.has(d.id)
+          item.near ||= near
           seen.set(c.name, item)
         }
       }
-      const columns = [...seen.entries()].map(([name, v]) => {
-        const quoted = /^[A-Za-z_][A-Za-z0-9_]*$/.test(name) ? name : `"${name.replace(/"/g, '""')}"`
-        return {
-          label: quoted, kind: m.languages.CompletionItemKind.Field, detail: v.names.slice(0, 3).join(', '),
-          insertText: quoted, range, sortText: `${v.near ? 1 : 2}${name.toLowerCase()}`,
-        }
-      })
+      const columns = [...seen.entries()].map(([name, v]) => ({
+        label: v.insert, kind: m.languages.CompletionItemKind.Field, detail: v.names.slice(0, 3).join(', '),
+        insertText: v.insert, range, sortText: `${v.near ? 1 : 2}${name.toLowerCase()}`,
+      }))
       return { suggestions: [...tables, ...columns].slice(0, 3000) }
     },
   }))

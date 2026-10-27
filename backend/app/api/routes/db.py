@@ -4,6 +4,8 @@
   immediate feedback in the UI while the user sets the source up.
 - POST /db/ingest: queues the Celery task that runs the query and writes the parquet
   streaming; polled on GET /tasks/{task_id} as every run.
+- POST /db/query: a SQL script on a connection, the first rows, on the preview worker
+  and waited for as a preview.
 
 The credentials arrive encrypted (password_encrypted, the Fernet key shared with the
 gateway) and are decrypted only when the connection opens.
@@ -12,10 +14,11 @@ import logging
 from typing import Literal, Optional
 
 from fastapi import APIRouter, HTTPException
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 
 from app.api.models import TaskResponse
 from app.core.config import get_settings
+from app.engine.base import PreviewResult
 from app.ingest.converters import IngestError
 from app.ingest.db_errors import describe_db_error
 from app.ingest.db_source import (
@@ -24,6 +27,7 @@ from app.ingest.db_source import (
     DbSourceSpec,
     DriverNotInstalledError,
     installed_drivers,
+    list_columns,
     list_tables,
     test_connection,
 )
@@ -44,7 +48,8 @@ class DbInspectRequest(BaseModel):
     # a dict and not DbConnectionSpec: the S3 connections have other fields
     # (endpoint/access_key/…) and are dispatched on `db_type`
     connection: dict
-    action: Literal["test", "tables"] = "test"
+    action: Literal["test", "tables", "columns"] = "test"
+    table: str = ""  # for «columns»
 
 
 @router.get("/drivers")
@@ -80,6 +85,8 @@ def inspect(request: DbInspectRequest):
         if request.action == "test":
             test_connection(conn)
             return {"ok": True}
+        if request.action == "columns":
+            return {"columns": list_columns(conn, request.table)}
         return {"tables": list_tables(conn)}
     except DriverNotInstalledError as e:
         # a code, so that the gateway says it in the user's language
@@ -88,6 +95,28 @@ def inspect(request: DbInspectRequest):
         raise HTTPException(status_code=422, detail=str(e))
     except Exception as e:  # driver errors: connection refused, auth, DNS…
         raise HTTPException(status_code=400, detail=_friendly(e, request.connection))
+
+
+class DbQueryRequest(BaseModel):
+    connection: DbConnectionSpec
+    sql: str
+    limit: int = Field(default=200, ge=1, le=1000)
+    slot: Optional[str] = None  # as a preview's: a newer run on the same slot knocks this one down
+
+
+@router.post("/query", response_model=PreviewResult)
+def query(request: DbQueryRequest):
+    """A SQL script run on a connection: the first rows, as a preview's. On the preview
+    worker, with the preview's time limit."""
+    from app.api.routes.tasks import _PREVIEW_ERROR_STATUS, on_preview_worker
+
+    payload = on_preview_worker(
+        "app.tasks.jobs.db_query_task",
+        {"connection": request.connection.model_dump(), "sql": request.sql, "limit": request.limit}, request.slot)
+    if not payload.get("ok"):
+        raise HTTPException(status_code=_PREVIEW_ERROR_STATUS.get(payload.get("error"), 400),
+                            detail=payload.get("detail", "Query failed"))
+    return PreviewResult(**payload["result"])
 
 
 class NotifyRequest(BaseModel):

@@ -96,6 +96,52 @@ _SUPERSEDED = "Preview superseded by a more recent request"
 EXPORT_QUEUE_WAIT_SECONDS = 600
 
 
+def on_preview_worker(task_name: str, kwargs: dict, slot: str | None) -> dict:
+    """Sends a task to the preview worker and waits for its tagged answer. With a
+    `slot`, a newer request on the same slot knocks this one down (409); after
+    PREVIEW_TIMEOUT_SECONDS the task is revoked (504)."""
+    # the id decided HERE: it is needed before sending, to book the slot
+    task_id = str(uuid.uuid4())
+    previous = None
+    if slot:
+        previous = preview_slots.claim(slot, task_id, int(PREVIEW_TIMEOUT_SECONDS) + 60)
+    async_result = celery_app.send_task(
+        task_name, kwargs=kwargs, queue="preview", task_id=task_id,
+    )
+    if previous and previous != task_id:
+        # Knocks down the preview that held the slot. Queued: the worker discards it on
+        # arrival. Running: SIGUSR1 = SoftTimeLimitExceeded INSIDE the task — the process
+        # survives (no 1.5 s reload) and the engine cleans up (client, query on the
+        # server). SIGTERM would kill it.
+        celery_app.control.revoke(previous, terminate=True, signal="SIGUSR1")
+
+    deadline = time.monotonic() + PREVIEW_TIMEOUT_SECONDS
+    try:
+        while True:
+            try:
+                payload = async_result.get(timeout=_PREVIEW_POLL_SECONDS)
+                break
+            except CeleryTimeoutError:
+                # Superseded while waiting? A preview still QUEUED is not marked revoked
+                # until the worker reaches it: without this check the API's thread would
+                # stay here until then.
+                if slot and preview_slots.owner(slot) not in (None, task_id):
+                    raise HTTPException(status_code=409, detail=_SUPERSEDED)
+                if time.monotonic() >= deadline:
+                    async_result.revoke(terminate=True)  # stops the preview in progress
+                    raise HTTPException(
+                        status_code=504, detail="Preview timed out: the worker did not answer in time"
+                    )
+            except TaskRevokedError:
+                raise HTTPException(status_code=409, detail=_SUPERSEDED)
+    finally:
+        async_result.forget()  # do not pile up results in the backend
+        if slot:
+            preview_slots.release(slot, task_id)
+
+    return payload
+
+
 @router.post("/preview", response_model=PreviewResult)
 def preview_flow(request: PreviewRequest):
     """
@@ -123,45 +169,7 @@ def preview_flow(request: PreviewRequest):
         kwargs["sort_keys"] = request.sort_keys
     if request.principal:  # the same rule: only when set (the editor's previews do not send it)
         kwargs["principal"] = request.principal
-    # the id decided HERE: it is needed before sending, to book the slot
-    task_id = str(uuid.uuid4())
-    previous = None
-    if request.slot:
-        previous = preview_slots.claim(request.slot, task_id, int(PREVIEW_TIMEOUT_SECONDS) + 60)
-    async_result = celery_app.send_task(
-        "app.tasks.jobs.preview_task", kwargs=kwargs, queue="preview", task_id=task_id,
-    )
-    if previous and previous != task_id:
-        # Knocks down the preview that held the slot. Queued: the worker discards it on
-        # arrival. Running: SIGUSR1 = SoftTimeLimitExceeded INSIDE the task — the process
-        # survives (no 1.5 s reload) and the engine cleans up (client, query on the
-        # server). SIGTERM would kill it.
-        celery_app.control.revoke(previous, terminate=True, signal="SIGUSR1")
-
-    deadline = time.monotonic() + PREVIEW_TIMEOUT_SECONDS
-    try:
-        while True:
-            try:
-                payload = async_result.get(timeout=_PREVIEW_POLL_SECONDS)
-                break
-            except CeleryTimeoutError:
-                # Superseded while waiting? A preview still QUEUED is not marked revoked
-                # until the worker reaches it: without this check the API's thread would
-                # stay here until then.
-                if request.slot and preview_slots.owner(request.slot) not in (None, task_id):
-                    raise HTTPException(status_code=409, detail=_SUPERSEDED)
-                if time.monotonic() >= deadline:
-                    async_result.revoke(terminate=True)  # stops the preview in progress
-                    raise HTTPException(
-                        status_code=504, detail="Preview timed out: the worker did not answer in time"
-                    )
-            except TaskRevokedError:
-                raise HTTPException(status_code=409, detail=_SUPERSEDED)
-    finally:
-        async_result.forget()  # do not pile up results in the backend
-        if request.slot:
-            preview_slots.release(request.slot, task_id)
-
+    payload = on_preview_worker("app.tasks.jobs.preview_task", kwargs, request.slot)
     if not payload.get("ok"):
         status = _PREVIEW_ERROR_STATUS.get(payload.get("error"), 400)
         raise HTTPException(status_code=status, detail=payload.get("detail", "Preview failed"))

@@ -6,6 +6,8 @@ datasource they cannot read is one that does not exist; the SQL is changed only 
 datasource is named, comments go, the rest stays the person's to the character; a name two
 folders share needs its folder; only one SELECT runs; every run is audited with its SQL;
 versions, restore, duplicate, move, delete, the folder that holds one, the search.
+On a connection (piece 2): CONNECT on its folder runs the SQL and chooses the connection;
+the SQL goes to the database as it is; VIEW alone reads the script and does not run it.
 """
 import json
 
@@ -14,7 +16,7 @@ from fastapi import FastAPI, HTTPException
 from sqlmodel import select
 
 from app.db.session import get_session
-from app.models import AuditLog, SqlScript, SqlScriptVersion
+from app.models import AuditLog, Connection, SqlScript, SqlScriptVersion
 from app.routes import sql_scripts as routes
 from app.services import audit, sql_scripts
 from tests.conftest import make_datasource, make_permission, make_project, make_user
@@ -174,7 +176,7 @@ def test_versions_restore_duplicate_move_delete(app, session):
     restored = me.post(f"/sql-scripts/{sid}/versions/1/restore", headers=CSRF).json()
     assert restored["current_version"] == 3 and restored["content"]["sql"] == "SELECT 1"
     assert me.patch(f"/sql-scripts/{sid}", json={"content": {"sql": "x" * (sql_scripts.MAX_SQL_CHARS + 1)}}, headers=CSRF).status_code == 422
-    assert me.patch(f"/sql-scripts/{sid}", json={"content": {"sql": "SELECT 1", "connection_id": 4}}, headers=CSRF).status_code == 422
+    assert me.patch(f"/sql-scripts/{sid}", json={"content": {"sql": "SELECT 1", "connection_id": 4}}, headers=CSRF).status_code == 404
 
     empty = make_project(session, name="Analisi").id
     copy = me.post(f"/sql-scripts/{sid}/duplicate", headers=CSRF).json()
@@ -205,3 +207,106 @@ def test_the_catalog_lists_what_the_person_reads(app, session):
         ("Clienti", "Vendite", True), ("Ordini Nord 2024", "Vendite", True), ("Vuota", "Vendite", False)]
     ordini = next(i for i in items if i["name"] == "Ordini Nord 2024")
     assert ordini["columns"] == [{"name": "id", "type": "Int64"}, {"name": "importo", "type": "Float64"}]
+
+
+# ── on a connection ───────────────────────────────────────────────────────────
+def _connection(session, project_id, db_type="postgresql", name="Gestionale"):
+    c = Connection(name=name, project_id=project_id, db_type=db_type, host="db", database="erp",
+                   username="lettore", password_encrypted="cifrata")
+    session.add(c)
+    session.commit()
+    session.refresh(c)
+    return c.id
+
+
+def test_a_script_on_a_connection_runs_with_connect(app, session, fake_engine):
+    sales, _, secret, _ = _world(session)
+    pg = _connection(session, secret)
+    smtp = _connection(session, secret, db_type="smtp", name="Posta")
+    boss = _sign_in(app, session, "capo@x.local")
+    reader = _sign_in(app, session, "lettore@x.local")
+    from app.models import User
+
+    by = {u.email: u.id for u in session.exec(select(User)).all()}
+    make_permission(session, user_id=by["capo@x.local"], project_id=sales, capability="edit")
+    make_permission(session, user_id=by["lettore@x.local"], project_id=sales, capability="view")
+    sql = "SELECT cliente, sum(importo) FROM ordini -- the ERP's own table\nGROUP BY 1;"
+
+    # choosing a connection needs CONNECT on its folder, and a database
+    new = {"name": "Dal gestionale", "content": {"sql": sql, "connection_id": pg}}
+    assert boss.post(f"/projects/{sales}/sql-scripts", json=new, headers=CSRF).status_code == 403
+    make_permission(session, user_id=by["capo@x.local"], project_id=secret, capability="connect")
+    mail = {"name": "Posta", "content": {"sql": sql, "connection_id": smtp}}
+    assert boss.post(f"/projects/{sales}/sql-scripts", json=mail, headers=CSRF).status_code == 404
+    r = boss.post(f"/projects/{sales}/sql-scripts", json={**new, "content": {**new["content"], "engine": "duckdb"}},
+                  headers=CSRF)
+    assert r.status_code == 201, r.text
+    sid = r.json()["id"]
+    assert r.json()["content"] == {"sql": sql, "engine": None, "connection_id": pg}  # no engine on a database
+    assert r.json()["connection"] == {"id": pg, "name": "Gestionale", "db_type": "postgresql", "usable": True}
+
+    # the SQL goes as it is, with the connection's encrypted password and the script's slot
+    fake_engine.db_query_response = (200, {"columns": [{"name": "cliente", "dtype": "String"}], "rows": [{"cliente": "Ada"}],
+                                           "row_count": 1, "truncated": True})
+    out = boss.post("/sql-scripts/run", json={"sql": sql, "connection_id": pg, "script_id": sid, "limit": 50}, headers=CSRF)
+    assert out.status_code == 200, out.text
+    assert out.json()["rows"] == [{"cliente": "Ada"}] and out.json()["truncated"] and out.json()["engine"] is None
+    assert out.json()["connection"] == {"id": pg, "name": "Gestionale", "db_type": "postgresql"}
+    body = fake_engine.db_queries[-1]
+    assert (body["sql"], body["limit"], body["slot"]) == (sql, 50, f"u{by['capo@x.local']}:sql:{sid}")
+    assert body["connection"]["password_encrypted"] == "cifrata" and body["connection"]["database"] == "erp"
+    assert fake_engine.previews == []  # nothing on the catalog
+
+    # VIEW on the script's folder reads it, and does not run it without CONNECT
+    seen = reader.get(f"/sql-scripts/{sid}").json()
+    assert seen["content"]["sql"] == sql and seen["connection"]["usable"] is False
+    r = reader.post("/sql-scripts/run", json={"sql": sql, "connection_id": pg, "script_id": sid}, headers=CSRF)
+    assert r.status_code == 403 and "CONNECT permission" in r.json()["detail"]
+    assert len(fake_engine.db_queries) == 1
+
+    # the database's refusal comes back as it is; a run that ran out of time says so
+    fake_engine.db_query_response = (422, {"detail": 'PostgreSQL: relation "ordini" does not exist (42P01)'})
+    r = boss.post("/sql-scripts/run", json={"sql": sql, "connection_id": pg}, headers=CSRF)
+    assert r.status_code == 422 and r.json()["detail"] == 'PostgreSQL: relation "ordini" does not exist (42P01)'
+    fake_engine.db_query_response = (504, {"detail": "Preview timed out: the worker did not answer in time"})
+    r = boss.post("/sql-scripts/run", json={"sql": sql, "connection_id": pg}, headers=CSRF)
+    assert r.status_code == 504 and r.json()["detail"] == "The query took too long and was stopped"
+    assert boss.post("/sql-scripts/run", json={"sql": " -- nothing\n", "connection_id": pg}, headers=CSRF).status_code == 422
+
+    runs = session.exec(select(AuditLog).where(AuditLog.action == audit.SQL_SCRIPT_RUN).order_by(AuditLog.id)).all()
+    assert [(r.outcome, json.loads(r.detail).get("connection")) for r in runs] == [
+        ("success", {"id": pg, "name": "Gestionale"}), ("failure", {"id": pg, "name": "Gestionale"}),
+        ("failure", {"id": pg, "name": "Gestionale"})]
+
+    # an editor without CONNECT changes the SQL of a script that has the connection already,
+    # and cannot point it at another one
+    make_permission(session, user_id=by["lettore@x.local"], project_id=sales, capability="edit")
+    other = _connection(session, secret, name="Magazzino")
+    assert reader.patch(f"/sql-scripts/{sid}", json={"content": {"sql": "SELECT 2", "connection_id": pg}},
+                        headers=CSRF).status_code == 200
+    assert reader.patch(f"/sql-scripts/{sid}", json={"content": {"sql": "SELECT 2", "connection_id": other}},
+                        headers=CSRF).status_code == 403
+
+    # a connection deleted: the script says so
+    session.delete(session.get(Connection, pg))
+    session.commit()
+    assert boss.get(f"/sql-scripts/{sid}").json()["connection"] == {"id": pg, "name": "", "db_type": "", "usable": False}
+    r = boss.post("/sql-scripts/run", json={"sql": "SELECT 1", "connection_id": pg}, headers=CSRF)
+    assert r.status_code == 404 and "no longer exists" in r.json()["detail"]
+
+
+def test_a_tables_columns_need_connect(app, session, fake_engine):
+    from app.routes import connections as connection_routes
+
+    app.include_router(connection_routes.router)
+    _, _, secret, _ = _world(session)
+    pg = _connection(session, secret)
+    me = _sign_in(app, session, "capo@x.local")
+    assert me.get(f"/connections/{pg}/columns", params={"table": "public.ordini"}).status_code == 403
+    from app.models import User
+
+    make_permission(session, user_id=session.exec(select(User)).one().id, project_id=secret, capability="connect")
+    fake_engine.db_responses["columns"] = (200, {"columns": [{"name": "id", "dtype": "Int64"}]})
+    r = me.get(f"/connections/{pg}/columns", params={"table": "public.ordini"})
+    assert r.status_code == 200 and r.json() == {"columns": [{"name": "id", "dtype": "Int64"}]}
+    assert fake_engine.db_inspects[-1]["action"] == "columns" and fake_engine.db_inspects[-1]["table"] == "public.ordini"
