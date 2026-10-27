@@ -148,6 +148,13 @@ SCRIPT_DELETE = "script.delete"
 SCRIPT_RESTORE = "script.restore"
 SCRIPT_RUN = "script.run"
 SCRIPT_SCHEDULE = "script.schedule"
+# SQL scripts (routes/sql_scripts.py); every run is a free query on the data, as the
+# assistant's, and is recorded with its SQL
+SQL_SCRIPT_CREATE = "sql_script.create"
+SQL_SCRIPT_UPDATE = "sql_script.update"
+SQL_SCRIPT_DELETE = "sql_script.delete"
+SQL_SCRIPT_RESTORE = "sql_script.restore"
+SQL_SCRIPT_RUN = "sql_script.run"
 SAVED_VIEW_CREATE = "saved_view.create"
 SAVED_VIEW_UPDATE = "saved_view.update"
 SAVED_VIEW_DELETE = "saved_view.delete"

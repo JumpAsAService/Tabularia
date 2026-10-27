@@ -556,6 +556,24 @@ def _join(how, customers, **kw):
 
 
 @pytest.mark.parametrize("name", ENGINES)
+def test_sql_reads_the_tables_it_brings(storage, orders, customers, name):
+    """A SQL script on the catalog: the operation brings each datasource as a named table,
+    the source among them, and the query joins them by name."""
+    tables = {"ds_1": {"source": {"bucket": orders.bucket, "key": orders.key}}, "ds_2": {"source": customers}}
+    query = ("SELECT o.id, c.regione FROM ds_1 AS o JOIN ds_2 AS c ON o.cliente = c.cliente "
+             "WHERE o.importo > 50")
+    check(name, storage, orders, [{"type": "sql", "params": {"query": query, "tables": tables}}],
+          [{"id": 1, "regione": "Lazio"}, {"id": 2, "regione": "Lombardia"}, {"id": 5, "regione": "Lazio"}])
+
+
+@pytest.mark.parametrize("name", ENGINES)
+def test_sql_cannot_read_a_table_it_was_not_given(storage, orders, customers, name):
+    tables = {"ds_2": {"source": customers}}
+    with pytest.raises(Exception):
+        run(name, storage, orders, [{"type": "sql", "params": {"query": "SELECT * FROM ds_3", "tables": tables}}])
+
+
+@pytest.mark.parametrize("name", ENGINES)
 def test_join_inner_null_key_never_matches_and_collision_suffix(storage, orders, customers, name):
     res = check(name, storage, orders, [_join("inner", customers)], [
         {"id": 1, "cliente": "Rossi", "regione": "Lazio", "canale": "GDO", "canale_right": "c1"},

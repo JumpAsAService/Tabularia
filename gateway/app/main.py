@@ -48,6 +48,7 @@ from app.routes.privacy import router as privacy_router
 from app.routes.engine_policy import router as engine_policy_router
 from app.routes.saved_views import router as saved_views_router
 from app.routes.scripts import router as scripts_router
+from app.routes.sql_scripts import router as sql_scripts_router
 from app.routes.flow_groups import router as flow_groups_router
 from app.routes.search import router as search_router
 from app.routes.projects import router as projects_router
@@ -288,6 +289,7 @@ if settings.app.role != "orchestrator":
     app.include_router(ai_router)
     app.include_router(saved_views_router)
     app.include_router(scripts_router)
+    app.include_router(sql_scripts_router)
     app.include_router(flow_groups_router)
     app.include_router(search_router)
     app.include_router(projects_router)

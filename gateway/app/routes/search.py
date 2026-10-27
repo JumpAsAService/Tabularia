@@ -33,7 +33,7 @@ router = APIRouter(route_class=ReleasingRoute, tags=["search"])
 
 # presentation order at equal relevance: the containers first, then what is opened
 # most often. It also makes the sorting deterministic.
-_KIND_ORDER = {"folder": 0, "flow": 1, "group": 2, "datasource": 3, "view": 4, "script": 5, "connection": 6}
+_KIND_ORDER = {"folder": 0, "flow": 1, "group": 2, "datasource": 3, "view": 4, "script": 5, "sql": 6, "connection": 7}
 
 
 def _like(q: str) -> str:
@@ -52,7 +52,7 @@ def _like(q: str) -> str:
 @router.get("/search", response_model=SearchOut)
 def search_everything(
     q: str = Query("", description="searches by name over all the resources"),
-    kind: str | None = Query(None, description="limits to one kind: folder|flow|group|datasource|view|script|connection"),
+    kind: str | None = Query(None, description="limits to one kind: folder|flow|group|datasource|view|script|sql|connection"),
     limit: int = Query(30, ge=1, le=200),
     offset: int = Query(0, ge=0),
     user: User = Depends(get_current_user),
@@ -126,6 +126,18 @@ def search_everything(
             hits.append(SearchHit(
                 kind="script", id=sc.id, name=sc.name,
                 project_id=sc.project_id, project_name=folder_names.get(sc.project_id),
+            ))
+
+    # SQL scripts: VIEW on the folder (services/sql_scripts.py)
+    from app.models import SqlScript
+    from app.services import sql_scripts
+
+    stmt = sql_scripts.visible_query(session, user)
+    if stmt is not None:
+        for q in session.exec(stmt.where(SqlScript.name.ilike(pattern, escape="\\"))).all():
+            hits.append(SearchHit(
+                kind="sql", id=q.id, name=q.name,
+                project_id=q.project_id, project_name=folder_names.get(q.project_id),
             ))
 
     # CONNECT is orthogonal to VIEW: whoever reads a folder does not necessarily see its

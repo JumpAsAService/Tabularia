@@ -102,3 +102,24 @@ def test_the_clickhouse_sql_node_applies_the_guard():
     assert "FROM self" in op("SELECT 1 AS a", {"query": "SELECT a FROM self"}, None)
     with pytest.raises(EngineError):
         op("SELECT 1 AS a", {"query": "SELECT a FROM self UNION ALL SELECT 1 FROM merge('default', '.*')"}, None)
+
+
+# ── the tables a SQL script on the catalog brings ─────────────────────────────
+def test_the_tables_of_the_operation_are_readable_and_nothing_else():
+    ensure_reads_only_input("SELECT o.a, c.b FROM ds_1 AS o JOIN ds_2 AS c ON o.a = c.a", "clickhouse", {"ds_1", "ds_2"})
+    ensure_reads_only_input("SELECT a FROM ds_1 WHERE a IN (SELECT a FROM ds_2)", "bigquery", {"ds_1", "ds_2"})
+    for query in ("SELECT * FROM ds_3", "SELECT * FROM ds_1 JOIN system.tables USING (a)",
+                  "SELECT * FROM db.ds_1", "SELECT * FROM merge('system', '^query_log$')"):
+        with pytest.raises(EngineError):
+            ensure_reads_only_input(query, "clickhouse", {"ds_1", "ds_2"})
+
+
+def test_table_names_are_checked():
+    from app.engine.sql_guard import MAX_TABLES, table_names
+
+    assert table_names({"tables": {"ds_12": {"source": {}}}}) == {"ds_12": {"source": {}}}
+    assert table_names({}) == {}
+    for bad in ({"self": {}}, {"DS_1": {}}, {"ds-1": {}}, {"ds_1 ; drop": {}}, {"ds_1": "x"}, "nope",
+                {f"t{i}": {} for i in range(MAX_TABLES + 1)}):
+        with pytest.raises(EngineError):
+            table_names({"tables": bad})

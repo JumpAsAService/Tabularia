@@ -21,6 +21,7 @@ from app.engine.base import DataSource
 from app.engine.context import OperationContext
 from app.engine.dtypes import resolve_dtype as _dtype
 from app.engine.exceptions import EngineError, UnknownOperationError
+from app.engine.sql_guard import table_names
 
 # the type of an operation function
 OperationFn = Callable[[pl.LazyFrame, dict[str, Any], OperationContext], pl.LazyFrame]
@@ -652,10 +653,11 @@ _SQL_FILE_FUNCS = re.compile(r"\b(?:read|scan)_(?:csv|parquet|ipc|ndjson|json)\s
 @register("sql")
 def op_sql(lf: pl.LazyFrame, params: dict[str, Any], ctx: OperationContext) -> pl.LazyFrame:
     """
-    params: {"query": "SELECT ... FROM self ..."}
+    params: {"query": "SELECT ... FROM self ...", "tables": {"ds_12": <right side>, ...}?}
 
     Runs a SQL query in Polars' dialect on the incoming frame, exposed as the table
-    `self` (alias `input`). Polars SQL is an engine CLOSED over the frames in memory —
+    `self` (alias `input`), and on the `tables` the operation brings (a SQL script on the
+    catalog), each built as a join's right side. Polars SQL is an engine CLOSED over the frames in memory —
     no Python, no I/O — and stays LAZY (`SQLContext.execute` returns a LazyFrame →
     streamable and cacheable), in line with the declarative engine. The table functions
     that read files are blocked upstream.
@@ -669,7 +671,9 @@ def op_sql(lf: pl.LazyFrame, params: dict[str, Any], ctx: OperationContext) -> p
             "allowed. The only table available is the node's input (`self`)."
         )
     try:
-        result = pl.SQLContext(frames={"self": lf, "input": lf}).execute(query)
+        frames = {"self": lf, "input": lf}
+        frames.update({name: _build_right(ref, ctx) for name, ref in table_names(params).items()})
+        result = pl.SQLContext(frames=frames).execute(query)
         result.collect_schema()  # validates syntax and columns AT ONCE (metadata, no data)
         return result
     except EngineError:

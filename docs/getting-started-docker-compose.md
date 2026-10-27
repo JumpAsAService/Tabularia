@@ -344,6 +344,10 @@ rates from Frankfurter, no key needed:
 output name becomes a date at each run, in the time zone you choose:
 [Dynamic dates in inputs and outputs](placeholders.md).
 
+**SQL on the catalog.** Explore → New → **SQL script**: SQL over the datasources you can
+read, run with Ctrl+Enter, saved with its versions in a folder and shared with it:
+[SQL scripts](sql-scripts.md).
+
 **Data contracts.** The **Data contract** button of a datasource (in Datasources and
 Explore) declares its columns, types and rules on the values; every new load is checked,
 with a warning or an error, and the contract exports to ODCS. See the

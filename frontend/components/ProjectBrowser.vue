@@ -47,6 +47,7 @@ import {
   PencilLine,
   Lock,
   FileCode2,
+  DatabaseSearch,
 } from 'lucide-vue-next'
 import { errMessage, useApi } from '~/composables/useApi'
 import { useFlows, type FlowSummary } from '~/composables/useFlows'
@@ -62,6 +63,7 @@ import { useSavedViews, type SavedView } from '~/composables/useSavedViews'
 import { useFlowGroups, type FlowGroup } from '~/composables/useFlowGroups'
 import { useSavedScripts, type SavedScript } from '~/composables/useSavedScripts'
 import { useScriptingEditor } from '~/composables/useScripting'
+import { useSqlScripts, type SqlScript } from '~/composables/useSqlScripts'
 import ContractBadge from '~/components/ui/ContractBadge.vue'
 import ContractDialog from '~/components/ui/ContractDialog.vue'
 import {
@@ -83,6 +85,7 @@ const connApi = useConnections()
 const viewsApi = useSavedViews()
 const groupsApi = useFlowGroups()
 const scriptsApi = useSavedScripts()
+const sqlApi = useSqlScripts()
 // «New → Script» only for whoever may use a scripting environment (Kubernetes)
 const scriptingEditor = useScriptingEditor()
 onMounted(() => { scriptingEditor.load() })
@@ -103,6 +106,7 @@ const dsList = ref<DatasourceInfo[]>([])
 const contractFor = ref<DatasourceInfo | null>(null) // the datasource whose data contract is open
 const savedViews = ref<SavedView[]>([])
 const scripts = ref<SavedScript[]>([])
+const sqlScripts = ref<SqlScript[]>([])
 const connections = ref<ConnectionInfo[]>([])
 const canConnect = ref(false)
 const canManage = ref(false)
@@ -149,7 +153,7 @@ function openFolder(id: number | null) {
 }
 
 // ── Unified row: one kind of row for six kinds of resource ────────────
-type Kind = 'folder' | 'flow' | 'group' | 'datasource' | 'view' | 'script' | 'connection'
+type Kind = 'folder' | 'flow' | 'group' | 'datasource' | 'view' | 'script' | 'sql' | 'connection'
 interface Row {
   kind: Kind
   id: number
@@ -172,6 +176,7 @@ const KIND_ICON: Record<Kind, any> = {
   datasource: Database,
   view: Bookmark,
   script: FileCode2,
+  sql: DatabaseSearch,
   connection: Plug,
 }
 
@@ -214,6 +219,10 @@ const rows = computed<Row[]>(() => {
     const meta = [sc.environment_name ?? '', `v${sc.current_version}`, fmtDate(sc.updated_at)].filter(Boolean).join(' · ')
     out.push({ kind: 'script', id: sc.id, name: sc.name, meta, to: `/script?id=${sc.id}`, raw: sc })
   }
+  for (const q of sqlScripts.value) {
+    const meta = [`v${q.current_version}`, fmtDate(q.updated_at)].filter(Boolean).join(' · ')
+    out.push({ kind: 'sql', id: q.id, name: q.name, meta, to: `/sql-script?id=${q.id}`, raw: q })
+  }
   for (const c of connections.value) {
     out.push({
       kind: 'connection', id: c.id, name: c.name,
@@ -244,7 +253,7 @@ const visibleRows = computed(() =>
   kindFilter.value ? matching.value.filter((r) => r.kind === kindFilter.value) : matching.value,
 )
 const segments = computed(() =>
-  (['folder', 'flow', 'group', 'datasource', 'view', 'script', 'connection'] as Kind[])
+  (['folder', 'flow', 'group', 'datasource', 'view', 'script', 'sql', 'connection'] as Kind[])
     .filter((k) => counts.value[k])
     .map((k) => ({ kind: k, n: counts.value[k] })),
 )
@@ -265,6 +274,7 @@ async function loadFolder(id: number | null) {
   dsList.value = []
   savedViews.value = []
   scripts.value = []
+  sqlScripts.value = []
   connections.value = []
   permissions.value = []
   canManage.value = false
@@ -293,6 +303,7 @@ async function loadFolder(id: number | null) {
     try { savedViews.value = await viewsApi.listByProject(id) } catch { savedViews.value = [] }
     // only the scripts this person may see; none without scripting
     try { scripts.value = await scriptsApi.listByProject(id) } catch { scripts.value = [] }
+    try { sqlScripts.value = await sqlApi.listByProject(id) } catch { sqlScripts.value = [] }
     // connections require CONNECT: the refusal is information, not an error
     try {
       connections.value = await connApi.listByProject(id)
@@ -463,6 +474,9 @@ async function moveRow(row: Row, target: number | null) {
     } else if (row.kind === 'script') {
       await scriptsApi.update(row.id, { project_id: target })
       scripts.value = scripts.value.filter((x) => x.id !== row.id)
+    } else if (row.kind === 'sql') {
+      await sqlApi.update(row.id, { project_id: target })
+      sqlScripts.value = sqlScripts.value.filter((x) => x.id !== row.id)
     } else if (row.kind === 'connection') {
       await connApi.update(row.id, { project_id: target })
       connections.value = connections.value.filter((c) => c.id !== row.id)
@@ -483,7 +497,7 @@ async function moveRow(row: Row, target: number | null) {
 const renaming = ref<string | null>(null)
 const renameDraft = ref('')
 const renameBusy = ref(false)
-const RENAMABLE = new Set<Kind>(['folder', 'flow', 'group', 'datasource', 'view', 'script'])
+const RENAMABLE = new Set<Kind>(['folder', 'flow', 'group', 'datasource', 'view', 'script', 'sql'])
 
 function startRename(row: Row) {
   renaming.value = rowKey(row)
@@ -527,6 +541,9 @@ async function commitRename(row: Row) {
     } else if (row.kind === 'script') {
       await scriptsApi.update(row.id, { name })
       scripts.value = rename(scripts.value)
+    } else if (row.kind === 'sql') {
+      await sqlApi.update(row.id, { name })
+      sqlScripts.value = rename(sqlScripts.value)
     } else if (row.kind === 'folder') {
       await api.update(row.id, { name })
       projects.value = projects.value.map((p) => (p.id === row.id ? { ...p, name } : p))
@@ -582,6 +599,10 @@ async function duplicateRow(row: Row) {
       const copy = await scriptsApi.duplicate(row.id)
       scripts.value = [...scripts.value, copy].sort(byName)
       name = copy.name
+    } else if (row.kind === 'sql') {
+      const copy = await sqlApi.duplicate(row.id)
+      sqlScripts.value = [...sqlScripts.value, copy].sort(byName)
+      name = copy.name
     } else if (row.kind === 'connection') {
       const copy = await connApi.duplicate(row.id)
       connections.value = [...connections.value, copy].sort(byName)
@@ -625,6 +646,11 @@ async function removeRow(row: Row) {
       await scriptsApi.remove(row.id)
       scripts.value = scripts.value.filter((x) => x.id !== row.id)
       toast.success(t('projectBrowser.scriptDeleted', { name: row.name }))
+    } else if (row.kind === 'sql') {
+      if (!ask('projectBrowser.confirmDeleteSqlScript')) return
+      await sqlApi.remove(row.id)
+      sqlScripts.value = sqlScripts.value.filter((x) => x.id !== row.id)
+      toast.success(t('projectBrowser.sqlScriptDeleted', { name: row.name }))
     } else if (row.kind === 'connection') {
       if (!ask('projectBrowser.confirmDeleteConnection')) return
       await connApi.remove(row.id)
@@ -664,6 +690,11 @@ function createFlowGroup() {
 function createScript() {
   closeNew()
   if (currentId.value != null) navigateTo(`/script?project=${currentId.value}`)
+}
+
+function createSqlScript() {
+  closeNew()
+  if (currentId.value != null) navigateTo(`/sql-script?project=${currentId.value}`)
 }
 
 async function createFolder() {
@@ -942,6 +973,9 @@ watch(currentId, () => { q.value = ''; kindFilter.value = null; settingsOpen.val
               </button>
               <button class="menu-item" @click="createFlowGroup">
                 <span class="mi-top"><Rows3 :size="14" /> {{ $t('projectBrowser.newFlowGroupButton') }}</span>
+              </button>
+              <button class="menu-item" @click="createSqlScript">
+                <span class="mi-top"><DatabaseSearch :size="14" /> {{ $t('projectBrowser.newSqlScriptButton') }}</span>
               </button>
               <button v-if="scriptingEditor.available.value" class="menu-item" @click="createScript">
                 <span class="mi-top"><FileCode2 :size="14" /> {{ $t('projectBrowser.newScriptButton') }}</span>

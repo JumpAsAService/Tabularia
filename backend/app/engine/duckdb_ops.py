@@ -42,6 +42,7 @@ from app.engine.operations import (
     sample_threshold,
     sort_keys,
 )
+from app.engine.sql_guard import table_names
 
 DuckOpFn = Callable[..., "duckdb.DuckDBPyRelation"]
 
@@ -482,8 +483,9 @@ def op_unpivot(rel, params, a, ctx):
 # ── Execute SQL (whole query in a SANDBOX) ────────────────────────────────────
 @_register("sql")
 def op_sql(rel, params, a, ctx):
-    """Runs a DuckDB SQL query on the incoming frame (table `self`, alias `input`) in an
-    isolated SANDBOX connection.
+    """Runs a DuckDB SQL query on the incoming frame (table `self`, alias `input`), and on
+    the `tables` the operation brings (a SQL script on the catalog), in an isolated
+    SANDBOX connection.
 
     Security: the input is loaded into a table, then every external access is switched
     off (`enable_external_access=false` + `lock_configuration=true`):
@@ -496,6 +498,10 @@ def op_sql(rel, params, a, ctx):
 
     in_tmp = ctx.tempfile()
     rel.write_parquet(in_tmp)  # materializes the input (streaming to disk)
+    others = {}
+    for name, ref in table_names(params).items():  # built as a join's right side, then copied in
+        others[name] = ctx.tempfile()
+        ctx.build_right(ref).write_parquet(others[name])
 
     # A database on disk, not in memory, with this process's budget and its own
     # spill directory: `self` holds the whole upstream, and in memory it took about
@@ -507,6 +513,8 @@ def op_sql(rel, params, a, ctx):
         duckdb_budget.apply(sbx)
         sbx.execute(f"CREATE TABLE self AS SELECT * FROM read_parquet('{in_tmp}')")
         sbx.execute("CREATE VIEW input AS SELECT * FROM self")
+        for name, path in others.items():  # names checked by table_names: plain lowercase
+            sbx.execute(f"CREATE TABLE {name} AS SELECT * FROM read_parquet('{path}')")
         sbx.execute("SET enable_external_access=false")  # no files, network, attach or install
         sbx.execute("SET lock_configuration=true")  # and the query cannot turn it back on
         try:

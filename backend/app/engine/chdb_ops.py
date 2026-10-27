@@ -26,7 +26,7 @@ from app.engine.operations import (
     MAX_PIVOT_COLUMNS, PIVOT_LABEL_SEP, SAMPLE_BUCKETS, check_filter_value, check_strict_union, non_iso_values, pivot_label, sample_threshold, sort_keys,
     temporal_value_error, TEXT_TRUE, TEXT_FALSE,
 )
-from app.engine.sql_guard import ensure_reads_only_input
+from app.engine.sql_guard import ensure_reads_only_input, table_names
 
 ChdbOpFn = Callable[..., str]
 
@@ -399,8 +399,9 @@ _SQL_FORBIDDEN_KW = re.compile(
 @_register("sql")
 def op_sql(sql, params, ctx):
     """A free SQL query (ClickHouse dialect) on the node's input, exposed as the CTE `self`
-    (alias `input`) — the same convention as Polars/DuckDB. Composable as any other op
-    (it stays a nestable SELECT).
+    (alias `input`) — the same convention as Polars/DuckDB — and on the `tables` the
+    operation brings (a SQL script on the catalog), each a CTE built as a join's right
+    side. Composable as any other op (it stays a nestable SELECT).
 
     Security: the analytical SQL is free, but the table functions of external access or
     execution (file/url/s3/remote/executable/…), comments and multiple statements are
@@ -409,8 +410,10 @@ def op_sql(sql, params, ctx):
     query = str(_require(params, "query")).strip().rstrip(";").strip()
     if not query:
         raise EngineError("sql: the query is empty")
-    # the node TRANSFORMS its input: it must be referred to as `self` or `input`
-    if not re.search(r"\bfrom\s+(?:self|input)\b", query, re.IGNORECASE):
+    tables = table_names(params)
+    # the node TRANSFORMS its input: it must be referred to as `self` or `input` (or one of its tables)
+    names = "|".join(["self", "input", *tables])
+    if not re.search(rf"\bfrom\s+(?:{names})\b", query, re.IGNORECASE):
         raise EngineError("sql: the query must read from the node's input — use `FROM self` (or `FROM input`).")
     # no comments (they would hide from the checks) and no more than one statement
     if "--" in query or "/*" in query:
@@ -424,12 +427,13 @@ def op_sql(sql, params, ctx):
         )
     # an ALLOWLIST of the tables: the denylist above stays as the first line, but alone
     # it was not enough (`merge()`, `information_schema`: see sql_guard)
-    ensure_reads_only_input(query, "clickhouse")
+    ensure_reads_only_input(query, "clickhouse", set(tables))
     # exposes the input as `self` (and the alias `input`); it stays a nestable SELECT.
     # A query with ITS OWN `WITH` gets our CTEs at the head of its list: two WITHs in a
     # row are not valid SQL (found by the dbt export oracle, 2026-10-10: on ClickHouse a
     # sql node with WITH failed with SYNTAX_ERROR, on Polars it did not)
-    ours = f"input AS ({sql}), self AS (SELECT * FROM input)"
+    ours = f"input AS ({sql}), self AS (SELECT * FROM input)" + "".join(
+        f", {name} AS ({ctx.build_right(ref)})" for name, ref in tables.items())
     own = re.match(r"(?is)^\s*with\s+", query)
     if own:
         return f"WITH {ours}, {query[own.end():]}"

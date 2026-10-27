@@ -10,7 +10,7 @@ import { GridComponent, TooltipComponent, LegendComponent } from 'echarts/compon
 import VChart from 'vue-echarts'
 import {
   ScrollText, Search, RefreshCw, ChevronLeft, ChevronRight, Circle,
-  LogIn, LogOut, Workflow, Database, Plug, Download, Shield, CheckCircle2, XCircle, AlertTriangle, KeyRound, SlidersHorizontal, Radar, Rows3, Server, Folder, Code2, Boxes, DatabaseBackup, Sparkles, Megaphone, FileCheck, Mail, Cpu } from 'lucide-vue-next'
+  LogIn, LogOut, Workflow, Database, Plug, Download, Shield, CheckCircle2, XCircle, AlertTriangle, KeyRound, SlidersHorizontal, Radar, Rows3, Server, Folder, Code2, DatabaseSearch, Boxes, DatabaseBackup, Sparkles, Megaphone, FileCheck, Mail, Cpu } from 'lucide-vue-next'
 import { useApi, type AuditEntry, type ActiveSession, type AccessActivity } from '~/composables/useApi'
 import { useI18n } from 'vue-i18n'
 import { useFormat } from '~/composables/useFormat'
@@ -183,6 +183,11 @@ const ACTION_META = computed<Record<string, { icon: any; color: string; label: s
     'script.update': { icon: Code2, color: u.accent, label: t('audit.scriptUpdateAction') },
     'script.delete': { icon: Code2, color: u.danger, label: t('audit.scriptDeleteAction') },
     'script.restore': { icon: Code2, color: u.accent, label: t('audit.scriptRestoreAction') },
+    'sql_script.create': { icon: DatabaseSearch, color: u.accent, label: t('audit.sqlScriptCreateAction') },
+    'sql_script.update': { icon: DatabaseSearch, color: u.accent, label: t('audit.sqlScriptUpdateAction') },
+    'sql_script.delete': { icon: DatabaseSearch, color: u.danger, label: t('audit.sqlScriptDeleteAction') },
+    'sql_script.restore': { icon: DatabaseSearch, color: u.accent, label: t('audit.sqlScriptRestoreAction') },
+    'sql_script.run': { icon: DatabaseSearch, color: u.violet, label: t('audit.sqlScriptRunAction') },
     'auth.sso_login': { icon: KeyRound, color: u.success, label: t('audit.ssoLoginAction') },
     'auth.sso_login_failed': { icon: KeyRound, color: u.danger, label: t('audit.ssoLoginFailedAction') },
     'auth.first_run_setup': { icon: KeyRound, color: u.success, label: t('audit.firstRunSetupAction') },

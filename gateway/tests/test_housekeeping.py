@@ -10,7 +10,8 @@ from datetime import datetime, timedelta
 from sqlmodel import select
 
 from app.models import (
-    AiChat, AiChatTurn, AiSpend, DataContractResult, FlowVersion, SavedScript, SavedScriptVersion,
+    AiChat, AiChatTurn, AiSpend, DataContractResult, FlowVersion, SavedScript, SavedScriptVersion, SqlScript,
+    SqlScriptVersion,
 )
 from app.services import housekeeping
 from tests.conftest import make_flow, make_project, make_user
@@ -54,6 +55,17 @@ def test_the_latest_versions_stay_and_the_one_in_use(session):
     assert [v.version for v in session.exec(select(SavedScriptVersion).order_by(SavedScriptVersion.version)).all()] == [2, 5, 6, 7]
 
 
+def test_a_sql_script_keeps_its_latest_versions_and_the_current_one(session):
+    script = SqlScript(name="q", project_id=1, current_version=1)
+    session.add(script)
+    session.commit()
+    for v in range(1, 6):
+        session.add(SqlScriptVersion(script_id=script.id, version=v, content="{}"))
+    session.commit()
+    assert housekeeping.sql_script_versions(session, 2) == 2  # v2, v3: v1 is the current one
+    assert [v.version for v in session.exec(select(SqlScriptVersion).order_by(SqlScriptVersion.version)).all()] == [1, 4, 5]
+
+
 def test_old_conversations_go_with_their_turns_the_ledger_stays(session):
     user = make_user(session, email="u@x.local")
     old = AiChat(user_id=user.id, updated_at=NOW - timedelta(days=120))
@@ -76,7 +88,7 @@ def test_one_pass_says_what_it_touched(session):
         _report(session, 1)
     session.commit()
     done = housekeeping.one_pass(session, at=NOW)
-    assert done == {"runs": 0, "data_contract_results": 0, "flow_versions": 0, "saved_script_versions": 0, "ai_chats": 0}
+    assert done == {"runs": 0, "data_contract_results": 0, "flow_versions": 0, "saved_script_versions": 0, "sql_script_versions": 0, "ai_chats": 0}
 
 
 def test_a_kind_that_fails_does_not_stop_the_others(session, monkeypatch):

@@ -34,7 +34,7 @@ from app.engine.operations import (
     MAX_PIVOT_COLUMNS, PIVOT_LABEL_SEP, SAMPLE_BUCKETS, check_filter_value, check_strict_union, non_iso_values, pivot_label, sample_threshold, sort_keys,
     temporal_value_error, TEXT_TRUE, TEXT_FALSE,
 )
-from app.engine.sql_guard import ensure_reads_only_input
+from app.engine.sql_guard import ensure_reads_only_input, table_names
 
 BqOpFn = Callable[..., str]
 
@@ -383,11 +383,14 @@ _SQL_FORBIDDEN = re.compile(
 @_register("sql")
 def op_sql(sql, params, ctx):
     """A free query on the node's input, exposed as the CTE `self` (alias `input`), the
-    other engines' convention. Composable as any other op."""
+    other engines' convention, and on the `tables` the operation brings (a SQL script on
+    the catalog), each a CTE built as a join's right side. Composable as any other op."""
     query = str(_require(params, "query")).strip().rstrip(";").strip()
     if not query:
         raise EngineError("sql: the query is empty")
-    if not re.search(r"\bfrom\s+(?:self|input)\b", query, re.IGNORECASE):
+    tables = table_names(params)
+    names = "|".join(["self", "input", *tables])
+    if not re.search(rf"\bfrom\s+(?:{names})\b", query, re.IGNORECASE):
         raise EngineError("sql: the query must read from the node's input — use `FROM self` (or `FROM input`).")
     if "--" in query or "/*" in query:
         raise EngineError("sql: comments (-- and /* */) are not allowed in the SQL node.")
@@ -400,8 +403,9 @@ def op_sql(sql, params, ctx):
         )
     # an ALLOWLIST: `dataset.table` can be written WITHOUT backticks too, and the other
     # users' step cache lives in a dataset of the same project
-    ensure_reads_only_input(query, "bigquery")
-    return f"WITH input AS ({sql}), self AS (SELECT * FROM input) {ctx.map_quoted(query)}"
+    ensure_reads_only_input(query, "bigquery", set(tables))
+    others = "".join(f", {name} AS ({ctx.build_right(ref)})" for name, ref in tables.items())
+    return f"WITH input AS ({sql}), self AS (SELECT * FROM input){others} {ctx.map_quoted(query)}"
 
 
 # ── join / union ──────────────────────────────────────────────────────────────

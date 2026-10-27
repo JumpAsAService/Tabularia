@@ -40,7 +40,7 @@ from app.models import AiChat, AiModel, AiPrompt, Datasource, User
 from app.services.permissions import is_observer_only
 from app.services import ai_agent, ai_chats, ai_flow_agent, ai_pricing, ai_prompts, ai_script_agent, audit
 from app.services.ai_models import enabled_model_ids, ensure_configured, is_chat_model, provider_models
-from app.services.engine_policy import allowed_engines
+from app.services.engine_policy import pick_engine
 from app.services.permissions import readable_project_ids
 from app.core.routing import ReleasingRoute
 
@@ -236,27 +236,6 @@ class ChatRequest(BaseModel):
     locale: str = Field(default="en", max_length=10)
     # datasources in focus on the page: context for the assistant, not a permission
     focus: list[int] = Field(default_factory=list, max_length=8)
-
-
-async def pick_engine(session: Session, requested: Optional[str]) -> Optional[str]:
-    """The engine of the assistant's queries: one AVAILABLE on the engine and ALLOWED by
-    the administrator. When the client asks for one that is not, the error says which
-    may be chosen; when it does not ask, the first usable one is taken (Polars, if
-    there)."""
-    allowed = allowed_engines(session)
-    try:
-        resp = await get_engine_client().get("/engines", timeout=15)
-        resp.raise_for_status()
-        usable = [e["id"] for e in resp.json() if e.get("available") and e.get("id") in allowed]
-    except Exception:  # noqa: BLE001 — catalog not readable: trust the policy alone
-        usable = sorted(allowed)
-    if requested:
-        if requested not in usable:
-            raise HTTPException(status_code=422, detail=f"This engine cannot be used: {requested}. Available: {', '.join(usable) or 'none'}")
-        return requested
-    if not usable:
-        raise HTTPException(status_code=422, detail="No engine is available for the assistant")
-    return "polars" if "polars" in usable else usable[0]
 
 
 def _sse(event: str, data: dict[str, Any]) -> bytes:

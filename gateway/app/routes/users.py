@@ -360,6 +360,7 @@ def remove_user(session: Session, user_id: int) -> None:
     from app.models import (
         AiChat, AiChatTurn, AiModel, ApiToken, AuditLog, Banner, Connection, Datasource, DisabledEngine, Flow,
         FlowGroup, FlowVersion, Permission, PrivacyNotice, Project, Run, SavedScript, SavedScriptVersion, SavedView,
+        SqlScript, SqlScriptVersion,
         Upload, UserSession, Webhook,
     )
 
@@ -407,6 +408,8 @@ def remove_user(session: Session, user_id: int) -> None:
         (SavedScript, SavedScript.owner_id),
         (SavedScript, SavedScript.run_scheduled_by),
         (SavedScriptVersion, SavedScriptVersion.created_by),
+        (SqlScript, SqlScript.owner_id),
+        (SqlScriptVersion, SqlScriptVersion.created_by),
         (AiModel, AiModel.updated_by),
         (Banner, Banner.created_by),
         (DisabledEngine, DisabledEngine.disabled_by),

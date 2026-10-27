@@ -167,6 +167,10 @@ def delete_project(
 
     if session.exec(select(SavedScript).where(SavedScript.project_id == project_id)).first():
         raise HTTPException(status_code=409, detail="The folder contains scripts: move or delete them first")
+    from app.models import SqlScript
+
+    if session.exec(select(SqlScript).where(SqlScript.project_id == project_id)).first():
+        raise HTTPException(status_code=409, detail="The folder contains SQL scripts: move or delete them first")
     # a webhook limited to this folder: removing it silently would widen it to all, and the
     # foreign key would prevent it anyway with a 500
     from app.models import Webhook

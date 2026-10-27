@@ -20,6 +20,8 @@ There is no server there to read anything else from.
 """
 from __future__ import annotations
 
+import re
+
 import sqlglot
 from sqlglot import exp
 from sqlglot.errors import SqlglotError
@@ -28,6 +30,11 @@ from sqlglot.optimizer.scope import traverse_scope
 from app.engine.exceptions import EngineError
 
 INPUT_NAMES = frozenset({"self", "input"})
+
+# the names of the other tables a query may read (a SQL script on the catalog: the gateway
+# names each datasource it resolved `ds_<id>`), checked before they reach the allowlist
+TABLE_NAME = re.compile(r"^[a-z_][a-z0-9_]{0,62}$")
+MAX_TABLES = 20
 
 # table functions that make rows out of nothing: they read nothing, they stay allowed
 HARMLESS_TABLE_FUNCTIONS = frozenset({
@@ -53,11 +60,29 @@ def _function_name(node: exp.Expression) -> str:
     return (name or node.key or "").lower()
 
 
-def ensure_reads_only_input(query: str, dialect: str) -> None:
-    """Raises EngineError when the query names a table that is not its input.
+def table_names(params: dict) -> dict[str, dict]:
+    """The `tables` of a `sql` operation, {name: right side as a join's}, checked: a
+    handful, plain lowercase names, never one of the input's."""
+    tables = params.get("tables") or {}
+    if not isinstance(tables, dict):
+        raise EngineError("sql: `tables` must map names to sources")
+    if len(tables) > MAX_TABLES:
+        raise EngineError(f"sql: at most {MAX_TABLES} tables in one query")
+    for name, ref in tables.items():
+        if not isinstance(name, str) or not TABLE_NAME.match(name) or name in INPUT_NAMES:
+            raise EngineError(f"sql: {name!r} is not a valid table name")
+        if not isinstance(ref, dict):
+            raise EngineError(f"sql: the table {name} has no source")
+    return tables
+
+
+def ensure_reads_only_input(query: str, dialect: str, tables: frozenset[str] | set[str] = frozenset()) -> None:
+    """Raises EngineError when the query names a table that is not its input, nor one of
+    the `tables` the operation brings.
 
     A query sqlglot cannot parse is REFUSED: letting through what was not understood
     would reopen the hole this module closes."""
+    allowed = INPUT_NAMES | {t.lower() for t in tables}
     try:
         tree = sqlglot.parse_one(query, read=dialect)
     except SqlglotError as e:
@@ -77,7 +102,7 @@ def ensure_reads_only_input(query: str, dialect: str) -> None:
             for source in scope.sources.values():
                 if isinstance(source, exp.Table):
                     real.add(id(source))
-                    _check_table(source)
+                    _check_table(source, allowed)
     except SqlglotError as e:
         raise EngineError(f"sql: the query could not be parsed, so it was not run. Detail: {str(e)[:200]}") from e
 
@@ -93,7 +118,7 @@ def ensure_reads_only_input(query: str, dialect: str) -> None:
         if isinstance(table.this, exp.Identifier) and not table.db and not table.catalog \
                 and table.name.lower() in cte_names:
             continue
-        _check_table(table)
+        _check_table(table, allowed)
 
     # 3) Everything in FROM/JOIN position must be a source the analysis recognized. The
     #    node's TYPE cannot be trusted: in the ClickHouse dialect sqlglot parses
@@ -103,7 +128,7 @@ def ensure_reads_only_input(query: str, dialect: str) -> None:
     #    class of problem had already cost the merge() incident. Here the POSITION is
     #    looked at, which the dialect cannot fake.
     for branch in tree.find_all(exp.From, exp.Join):
-        _check_source(branch.this, cte_names)
+        _check_source(branch.this, cte_names, allowed)
 
     # 4) ClickHouse: `x IN table_name` reads a table without a FROM
     for node in tree.find_all(exp.In):
@@ -117,7 +142,7 @@ def ensure_reads_only_input(query: str, dialect: str) -> None:
             raise EngineError(_REFUSAL.format(what=f"The function `{name}`"))
 
 
-def _check_source(node: exp.Expression | None, cte_names: set[str]) -> None:
+def _check_source(node: exp.Expression | None, cte_names: set[str], allowed: frozenset[str] = INPUT_NAMES) -> None:
     """Validates what appears as the source of a FROM or a JOIN.
 
     The POSITION is looked at and not the node's type, because the type is not reliable:
@@ -130,25 +155,25 @@ def _check_source(node: exp.Expression | None, cte_names: set[str]) -> None:
         if isinstance(node.this, exp.Identifier) and not node.db and not node.catalog \
                 and node.name.lower() in cte_names:
             return  # a CTE is a legitimate source
-        _check_table(node)
+        _check_table(node, allowed)
         return
     if isinstance(node, (exp.Subquery, exp.Unnest, exp.Values, exp.Lateral)):
         return  # their content went through the scopes already
     if isinstance(node, exp.Column):
         # `self`/`input` and the CTEs are BARE names; anything qualified (`db.table`) in
         # a source position is a foreign table
-        if not node.table and node.name.lower() in (INPUT_NAMES | cte_names):
+        if not node.table and node.name.lower() in (allowed | cte_names):
             return
         raise EngineError(_REFUSAL.format(what=f"The table `{node.sql()[:80]}`"))
     if isinstance(node, exp.Dot):
         raise EngineError(_REFUSAL.format(what=f"The reference `{node.sql()[:80]}`"))
 
 
-def _check_table(table: exp.Table) -> None:
+def _check_table(table: exp.Table, allowed: frozenset[str] = INPUT_NAMES) -> None:
     if not isinstance(table.this, exp.Identifier):
         name = _function_name(table.this)
         if name in HARMLESS_TABLE_FUNCTIONS:
             return
         raise EngineError(_REFUSAL.format(what=f"The table function `{name or table.this.sql()[:40]}`"))
-    if table.db or table.catalog or table.name.lower() not in INPUT_NAMES:
+    if table.db or table.catalog or table.name.lower() not in allowed:
         raise EngineError(_REFUSAL.format(what=f"The table `{table.sql()[:80]}`"))

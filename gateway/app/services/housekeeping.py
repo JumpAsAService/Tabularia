@@ -5,7 +5,7 @@ storage; what piles up in Postgres is history, and every hour the orchestrators 
 - the data contracts' reports: the latest ORCHESTRATOR__CONTRACT_RESULTS_KEPT per
   datasource (a refresh every five minutes adds 288 a day), never one whose notice is
   still to be sent;
-- the versions of a flow and of a saved script: the latest ORCHESTRATOR__VERSIONS_KEPT,
+- the versions of a flow, of a saved script and of a SQL script: the latest ORCHESTRATOR__VERSIONS_KEPT,
   the one in use always (a flow with a Script node keeps its code in every version);
 - the assistant's conversations untouched for ORCHESTRATOR__AI_CHAT_RETENTION_DAYS, the
   spending ledger aside (it is the bill, not the conversation).
@@ -89,6 +89,20 @@ def script_versions(session: Session, kept: int) -> int:
             LIMIT :batch)""", kept=kept)
 
 
+def sql_script_versions(session: Session, kept: int) -> int:
+    if kept <= 0:
+        return 0
+    return _in_batches(session, """
+        DELETE FROM sql_script_versions WHERE id IN (
+            SELECT t.id FROM (
+                SELECT id, script_id, version,
+                       ROW_NUMBER() OVER (PARTITION BY script_id ORDER BY version DESC) AS n
+                FROM sql_script_versions) t
+            WHERE t.n > :kept AND NOT EXISTS (
+                SELECT 1 FROM sql_scripts s WHERE s.id = t.script_id AND s.current_version = t.version)
+            LIMIT :batch)""", kept=kept)
+
+
 def ai_chats(session: Session, days: int, at: datetime | None = None) -> int:
     if days <= 0:
         return 0
@@ -131,6 +145,7 @@ def one_pass(session: Session, at: datetime | None = None) -> dict[str, int]:
         "data_contract_results": lambda: contract_results(session, o.contract_results_kept),
         "flow_versions": lambda: flow_versions(session, o.versions_kept),
         "saved_script_versions": lambda: script_versions(session, o.versions_kept),
+        "sql_script_versions": lambda: sql_script_versions(session, o.versions_kept),
         "ai_chats": lambda: ai_chats(session, o.ai_chat_retention_days, at=at),
     }
     done: dict[str, int] = {}
