@@ -1,7 +1,8 @@
 <script setup lang="ts">
 // The flow group editor: a grid where each row is a step and the cells of a row
 // run at the same time (a flow to run, a database datasource to refresh, a saved
-// script to run, or an image of a container registry, docs/specs/saved-scripts.md). A
+// script to run, a SQL script's datasource to write, docs/specs/sql-scripts.md, or an
+// image of a container registry, docs/specs/saved-scripts.md). A
 // Container cell holds its own settings, set in the Container node's panel.
 // Flows and datasources come from the panel on the right, by drag and drop, or
 // from the picker inside an empty cell (the keyboard way). A filled cell can be
@@ -17,7 +18,7 @@ import { onBeforeRouteLeave, onBeforeRouteUpdate } from 'vue-router'
 import {
   Rows3, Workflow, DatabaseZap, GripVertical, Plus, X, Play, CalendarClock, Save, Search, History,
   CircleCheck, CircleX, LoaderCircle, Hourglass, SkipForward, CircleSlash, EyeOff, Ban, Check, FileCode2,
-  Container as ContainerIcon, Settings2, Mail,
+  Container as ContainerIcon, Settings2, Mail, DatabaseSearch,
 } from 'lucide-vue-next'
 import { errMessage } from '~/composables/useApi'
 import { knownError } from '~/composables/knownErrors'
@@ -26,6 +27,7 @@ import { useFolderPaths } from '~/composables/useFolderPaths'
 import { useFlows, type FlowSummary } from '~/composables/useFlows'
 import { useDatasources, type DatasourceInfo } from '~/composables/useDatasources'
 import { useSavedScripts, type SavedScript } from '~/composables/useSavedScripts'
+import { useSqlScripts, type SqlScript } from '~/composables/useSqlScripts'
 import { useRegistriesEditor } from '~/composables/useRegistries'
 import ContainerNodePanel from '~/components/containers/ContainerNodePanel.vue'
 import PushmailCellPanel from '~/components/containers/PushmailCellPanel.vue'
@@ -44,6 +46,7 @@ const groupsApi = useFlowGroups()
 const flowsApi = useFlows()
 const dsApi = useDatasources()
 const scriptsApi = useSavedScripts()
+const sqlScriptsApi = useSqlScripts()
 const registriesEditor = useRegistriesEditor()
 const connApi = useConnections()
 const folderPaths = useFolderPaths()
@@ -173,9 +176,11 @@ function place(item: { kind: FlowGroupCellKind; id: number }, r: number, c: numb
 const flows = ref<FlowSummary[]>([])
 const datasources = ref<DatasourceInfo[]>([])
 const scripts = ref<SavedScript[]>([])
-const KIND_ICON = { flow: Workflow, refresh: DatabaseZap, script: FileCode2, container: ContainerIcon, pushmail: Mail } as const
-const KIND_LABEL = { flow: 'flowGroups.kindFlow', refresh: 'flowGroups.kindRefresh', script: 'flowGroups.kindScript', container: 'flowGroups.kindContainer', pushmail: 'pushmail.kind' } as const
-const SECTION_LABEL = { flow: 'flowGroups.catalogFlows', refresh: 'flowGroups.catalogRefresh', script: 'flowGroups.catalogScripts', container: 'flowGroups.catalogImages', pushmail: 'pushmail.catalog' } as const
+// the SQL scripts that write a datasource: a cell writes it
+const sqlScripts = ref<SqlScript[]>([])
+const KIND_ICON = { flow: Workflow, refresh: DatabaseZap, script: FileCode2, container: ContainerIcon, pushmail: Mail, sql: DatabaseSearch } as const
+const KIND_LABEL = { flow: 'flowGroups.kindFlow', refresh: 'flowGroups.kindRefresh', script: 'flowGroups.kindScript', container: 'flowGroups.kindContainer', pushmail: 'pushmail.kind', sql: 'flowGroups.kindSql' } as const
+const SECTION_LABEL = { flow: 'flowGroups.catalogFlows', refresh: 'flowGroups.catalogRefresh', script: 'flowGroups.catalogScripts', container: 'flowGroups.catalogImages', pushmail: 'pushmail.catalog', sql: 'flowGroups.catalogSql' } as const
 // the SMTP connections one may send through: a Pushmail cell is offered when there is one
 const connections = ref<ConnectionInfo[]>([])
 const smtpConnections = computed(() => connections.value.filter((c) => c.db_type === 'smtp'))
@@ -209,6 +214,10 @@ const items = computed<Item[]>(() => [
     .filter((d) => d.kind === 'database')
     .map((d) => ({ key: `refresh:${d.id}`, kind: 'refresh' as const, id: d.id, name: d.name, path: folderPaths.pathOf(d.project_id) ?? '' })),
   ...scripts.value.map((x) => ({ key: `script:${x.id}`, kind: 'script' as const, id: x.id, name: x.name, path: folderPaths.pathOf(x.project_id) ?? '' })),
+  ...sqlScripts.value.filter((x) => x.output).map((x) => ({
+    key: `sql:${x.id}`, kind: 'sql' as const, id: x.id, name: x.name,
+    path: `${folderPaths.pathOf(x.project_id) ?? ''} → ${x.output!.name}`,
+  })),
   // an image of a registry one may use: a new Container cell each time
   ...(registriesEditor.available.value
     ? [{ key: 'container:new', kind: 'container' as const, id: 0, name: t('flowGroups.newContainer'), path: t('flowGroups.newContainerHint') }]
@@ -271,6 +280,7 @@ const catalog = computed(() => {
     flows: items.value.filter((i) => i.kind === 'flow' && hit(i)),
     refresh: items.value.filter((i) => i.kind === 'refresh' && hit(i)),
     script: items.value.filter((i) => i.kind === 'script' && hit(i)),
+    sql: items.value.filter((i) => i.kind === 'sql' && hit(i)),
     container: items.value.filter((i) => i.kind === 'container'),
     pushmail: items.value.filter((i) => i.kind === 'pushmail'),
   }
@@ -363,8 +373,11 @@ async function load() {
 
 async function loadCatalog() {
   // a list that does not load leaves the panel empty, not the page broken
-  const [f, d, sc, , cn] = await Promise.allSettled([flowsApi.list(), dsApi.list(), scriptsApi.list(), registriesEditor.load(), connApi.list()])
+  const [f, d, sc, , cn, sq] = await Promise.allSettled([
+    flowsApi.list(), dsApi.list(), scriptsApi.list(), registriesEditor.load(), connApi.list(), sqlScriptsApi.list(),
+  ])
   connections.value = cn.status === 'fulfilled' ? cn.value : []
+  sqlScripts.value = sq.status === 'fulfilled' ? sq.value : []
   flows.value = f.status === 'fulfilled' ? f.value : []
   datasources.value = d.status === 'fulfilled' ? d.value : []
   // only the scripts one sees; none where scripting is off
@@ -791,7 +804,8 @@ async function saveSchedule(cron: string) {
           <p class="cat-hint muted">{{ $t('flowGroups.catalogHint') }}</p>
 
           <template v-for="section in ([
-            'flows', 'refresh', ...(scripts.length ? ['script'] as const : []), ...(catalog.container.length ? ['container'] as const : []),
+            'flows', 'refresh', ...(scripts.length ? ['script'] as const : []),
+            ...(sqlScripts.some((x) => x.output) ? ['sql'] as const : []), ...(catalog.container.length ? ['container'] as const : []),
             ...(catalog.pushmail.length ? ['pushmail'] as const : []),
           ] as const)" :key="section">
             <div class="cat-group">
@@ -963,6 +977,7 @@ button.mini { padding: 2px 8px; min-height: 24px; }
 .kicon.flow { color: var(--accent); }
 .kicon.refresh { color: var(--violet); }
 .kicon.script { color: var(--warning); }
+.kicon.sql { color: var(--accent-2); }
 .kicon.container { color: #38bdf8; }
 .kicon.pushmail { color: #f472b6; }
 /* the name is never cut short: two flows may differ only at its end */

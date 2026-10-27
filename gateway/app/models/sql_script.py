@@ -1,11 +1,11 @@
 """SQL scripts: SQL kept as an object of a folder, with its versions.
 docs/specs/sql-scripts.md; the rules in services/sql_scripts.py.
 
-- `SqlScript`: the object — name, folder, the version shown and run. Who sees it: VIEW
-  on its folder.
+- `SqlScript`: the object — name, folder, the version shown and run, the schedule that
+  writes its result into its datasource. Who sees it: VIEW on its folder.
 - `SqlScriptVersion`: every save that changes what the script runs is a version, as for
   flows; an older one can be restored (it becomes the newest). `content` is JSON: the
-  SQL, the engine, the connection (null = the catalog).
+  SQL, the engine, the connection (null = the catalog), the datasource it writes.
 """
 from datetime import datetime, timezone
 from typing import Optional
@@ -28,6 +28,11 @@ class SqlScript(SQLModel, table=True):
     project_id: int = Field(foreign_key="projects.id", index=True)
     owner_id: Optional[int] = Field(default=None, foreign_key="users.id")
     current_version: int = 1
+    # the schedule that writes the result into the script's datasource, run with the
+    # authority of `run_scheduled_by` (5-field cron, as a flow group's)
+    run_schedule: Optional[str] = None
+    run_scheduled_by: Optional[int] = Field(default=None, foreign_key="users.id")
+    next_run_at: Optional[datetime] = Field(default=None, index=True)
     created_at: datetime = Field(default_factory=_now)
     updated_at: datetime = Field(default_factory=_now)
 

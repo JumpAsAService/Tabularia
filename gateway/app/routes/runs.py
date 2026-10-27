@@ -27,7 +27,7 @@ from app.db.session import get_session
 from app.deps.auth import get_current_user
 from app.deps.permissions import ensure_can
 from app.services import permissions as perm_service
-from app.models import Connection, Datasource, Flow, FlowGroup, Project, Run, SavedScript, User
+from app.models import Connection, Datasource, Flow, FlowGroup, Project, Run, SavedScript, SqlScript, User
 from app.models.permission import Capability
 from app.models.run import LIVE_INGEST, TERMINAL_STATES
 from app.routes.connections import NOT_DATABASES, allowed_email_domains, engine_connection_payload
@@ -1536,6 +1536,7 @@ def runs_activity(
                 # folder AND its environment, as get_run
                 and_(SavedScript.project_id.in_(readable),
                      SavedScript.environment_id.in_(_usable_envs(session, user) or [-1])),
+                SqlScript.project_id.in_(readable),
                 Run.launched_by == user.id,
             )
         )
@@ -1555,6 +1556,7 @@ def runs_activity(
         .join(Datasource, Run.datasource_id == Datasource.id, isouter=True)
         .join(FlowGroup, Run.flow_group_id == FlowGroup.id, isouter=True)
         .join(SavedScript, Run.saved_script_id == SavedScript.id, isouter=True)
+        .join(SqlScript, Run.sql_script_id == SqlScript.id, isouter=True)
         .group_by(literal_column("cell"))  # the alias: the expression carries bound parameters
     )
     for c in conds:
@@ -1607,6 +1609,16 @@ async def get_run(
                 if not (perm_service.is_admin(session, user) or run.launched_by == user.id):
                     raise HTTPException(status_code=404, detail="Run not found")
             elif not saved_scripts.can_see(session, user, script):
+                raise HTTPException(status_code=404, detail="Run not found")
+        elif run.kind == "sql":
+            # a SQL script's write: whoever sees the script; an orphan only to whoever launched it
+            from app.services import sql_scripts
+
+            sql_script = session.get(SqlScript, run.sql_script_id) if run.sql_script_id else None
+            if sql_script is None:
+                if not (perm_service.is_admin(session, user) or run.launched_by == user.id):
+                    raise HTTPException(status_code=404, detail="Run not found")
+            elif not sql_scripts.can_see(session, user, sql_script):
                 raise HTTPException(status_code=404, detail="Run not found")
         elif run.flow_id is None and run.parent_run_id is not None:
             # a container cell's run: read as its flow group's run is
@@ -1664,6 +1676,7 @@ def search_runs(
                 # folder AND its environment, as get_run
                 and_(SavedScript.project_id.in_(readable),
                      SavedScript.environment_id.in_(_usable_envs(session, user) or [-1])),
+                SqlScript.project_id.in_(readable),
                 Run.launched_by == user.id,
             )
         )
@@ -1682,6 +1695,7 @@ def search_runs(
                 Datasource.name.ilike(like),
                 FlowGroup.name.ilike(like),
                 SavedScript.name.ilike(like),
+                SqlScript.name.ilike(like),
                 User.full_name.ilike(like),
                 User.email.ilike(like),
             )
@@ -1693,10 +1707,11 @@ def search_runs(
             .join(Datasource, Run.datasource_id == Datasource.id, isouter=True)
             .join(FlowGroup, Run.flow_group_id == FlowGroup.id, isouter=True)
             .join(SavedScript, Run.saved_script_id == SavedScript.id, isouter=True)
+            .join(SqlScript, Run.sql_script_id == SqlScript.id, isouter=True)
             .join(User, Run.launched_by == User.id, isouter=True)
         )
 
-    items_stmt = _with_joins(select(Run, Flow, Datasource, FlowGroup, SavedScript, User))
+    items_stmt = _with_joins(select(Run, Flow, Datasource, FlowGroup, SavedScript, SqlScript, User))
     count_stmt = _with_joins(select(func.count()).select_from(Run))
     for c in conds:
         items_stmt = items_stmt.where(c)
@@ -1707,12 +1722,13 @@ def search_runs(
     ).all()
 
     out: list[RunSearchOut] = []
-    for run, flow, ds, group, script, launcher in rows:
+    for run, flow, ds, group, script, sql_script, launcher in rows:
         item = RunSearchOut.model_validate(run, from_attributes=True)
         item.flow_name = flow.name if flow else None
         item.source_name = ds.name if ds else None
         item.group_name = group.name if group else None
         item.script_name = script.name if script else None
+        item.sql_script_name = sql_script.name if sql_script else None
         # who started it: for the scheduled ones the client shows "schedule"
         item.launched_by_name = (launcher.full_name or launcher.email) if launcher else None
         out.append(item)

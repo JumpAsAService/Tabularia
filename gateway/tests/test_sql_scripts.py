@@ -242,7 +242,7 @@ def test_a_script_on_a_connection_runs_with_connect(app, session, fake_engine):
                   headers=CSRF)
     assert r.status_code == 201, r.text
     sid = r.json()["id"]
-    assert r.json()["content"] == {"sql": sql, "engine": None, "connection_id": pg}  # no engine on a database
+    assert r.json()["content"] == {"sql": sql, "engine": None, "connection_id": pg, "output": None}  # no engine on a database
     assert r.json()["connection"] == {"id": pg, "name": "Gestionale", "db_type": "postgresql", "usable": True}
 
     # the SQL goes as it is, with the connection's encrypted password and the script's slot

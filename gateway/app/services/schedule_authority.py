@@ -209,6 +209,13 @@ def gaps_of_group(session: Session, user: User, group: FlowGroup) -> list[str]:
                 ds = session.get(Datasource, cell.id)
                 if ds is not None:
                     gaps.extend(_refresh_gaps(session, user, ds))
+            elif cell.kind == "sql":
+                from app.models import SqlScript
+                from app.services import sql_script_runs
+
+                sql_script = session.get(SqlScript, cell.id)
+                if sql_script is not None:
+                    gaps.extend(sql_script_runs.gaps(session, user, sql_script))
     return list(dict.fromkeys(gaps))
 
 

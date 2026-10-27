@@ -1,11 +1,12 @@
 // Flow groups: a grid of steps kept in a folder like a flow. Each step is a row of
-// cells run at the same time (a flow to run, or a database datasource to
-// refresh); the rows run in order, and the first failed step stops the group.
+// cells run at the same time (a flow to run, a database datasource to refresh, a
+// SQL script's datasource to write…); the rows run in order, and the first failed
+// step stops the group.
 //
 // The gateway checks every cell when the grid is saved and again when it runs;
 // `cells` in the detail is the label of each cell as the reader may see it.
 
-export type FlowGroupCellKind = 'flow' | 'refresh' | 'script' | 'container' | 'pushmail'
+export type FlowGroupCellKind = 'flow' | 'refresh' | 'script' | 'container' | 'pushmail' | 'sql'
 
 /** A Pushmail cell: one email through an SMTP connection, one .xlsx per datasource. */
 export interface PushmailAttachment { datasourceId: number | null; fileName: string; maxRows: number }

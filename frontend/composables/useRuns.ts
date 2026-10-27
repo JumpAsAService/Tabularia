@@ -48,6 +48,7 @@ export interface RunInfo {
   flow_name?: string | null
   source_name?: string | null
   group_name?: string | null
+  sql_script_name?: string | null // a SQL script writing its datasource (kind "sql")
   launched_by_name?: string | null // the name of whoever started it (null when scheduled)
 }
 

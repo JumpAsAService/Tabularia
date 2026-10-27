@@ -409,6 +409,7 @@ def remove_user(session: Session, user_id: int) -> None:
         (SavedScript, SavedScript.run_scheduled_by),
         (SavedScriptVersion, SavedScriptVersion.created_by),
         (SqlScript, SqlScript.owner_id),
+        (SqlScript, SqlScript.run_scheduled_by),
         (SqlScriptVersion, SqlScriptVersion.created_by),
         (AiModel, AiModel.updated_by),
         (Banner, Banner.created_by),

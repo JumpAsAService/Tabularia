@@ -9,6 +9,13 @@ export interface SqlScriptContent {
   engine: string | null
   /** null = the catalog */
   connection_id: number | null
+  /** the datasource the script writes its whole result into; null = none */
+  output?: SqlScriptOutput | null
+}
+
+export interface SqlScriptOutput {
+  name: string
+  project_id: number
 }
 
 export interface SqlScript {
@@ -20,10 +27,18 @@ export interface SqlScript {
   engine: string | null
   /** the current version's connection; null = the catalog */
   connection: SqlScriptConnection | null
+  /** the datasource it writes; null = none (only those go in a flow group) */
+  output: SqlScriptOutput | null
   created_at: string
   updated_at: string
   /** EDIT on its folder: saving, moving, deleting */
   editable: boolean
+  /** RUN on its folder: writing its datasource, scheduling it */
+  runnable: boolean
+  /** 5-field cron writing its datasource; null = not scheduled */
+  run_schedule: string | null
+  run_scheduled_by: number | null
+  next_run_at: string | null
 }
 
 export interface SqlScriptConnection {
@@ -37,6 +52,23 @@ export interface SqlScriptConnection {
 
 export interface SqlScriptDetail extends SqlScript {
   content: SqlScriptContent
+  /** the datasource it writes, once written, when this person may read it */
+  datasource: { id: number; name: string; project_id: number; rows: number | null; updated_at: string | null } | null
+}
+
+/** A write of the script's datasource. */
+export interface SqlScriptRun {
+  run_id: number
+  status: 'PENDING' | 'STARTED' | 'SUCCESS' | 'FAILURE' | string
+  trigger_type: string
+  started_at: string | null
+  finished_at: string | null
+  error: string | null
+  launched_by: string | null
+  rows: number | null
+  datasource_id: number | null
+  /** a flow group's run, when one of its cells wrote it */
+  parent_run_id: number | null
 }
 
 export interface SqlScriptVersion {
@@ -108,6 +140,11 @@ export function useSqlScripts() {
     // the whole result as a file, written by a worker: followed and saved with useApi's followExport
     export: (body: { sql: string; format: 'csv' | 'xlsx'; engine?: string | null; script_id?: number | null; connection_id?: number | null }) =>
       apiFetch<{ task_id: string; filename: string }>('/sql-scripts/export', { method: 'POST', body }),
+    // writing the datasource from the saved version, its writes, its schedule
+    refresh: (id: number) => apiFetch<SqlScriptRun>(`/sql-scripts/${id}/refresh`, { method: 'POST' }),
+    runs: (id: number, limit = 10) => apiFetch<SqlScriptRun[]>(`/sql-scripts/${id}/runs`, { query: { limit } }),
+    setSchedule: (id: number, cron: string) =>
+      apiFetch<SqlScriptDetail>(`/sql-scripts/${id}/schedule`, { method: 'PUT', body: { cron } }),
   }
 }
 

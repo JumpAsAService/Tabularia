@@ -5,24 +5,32 @@
 // two share it; on a connection it is the database's own SQL. «Run» (Ctrl/Cmd+Enter) runs
 // the selection or the whole SQL and shows the first rows. Whoever may only read the folder
 // runs it and tries changes, and saves nothing; a script on a connection runs only for
-// whoever may use that connection.
+// whoever may use that connection. A script may name a datasource: the whole result of
+// its saved version is written there now («Refresh now»), on its schedule, or by a flow
+// group's cell.
 //
 // /sql-script?id=N opens a script; /sql-script?project=P starts a new one in folder P.
 import { computed, defineAsyncComponent, onMounted, onUnmounted, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { onBeforeRouteLeave, onBeforeRouteUpdate } from 'vue-router'
-import { ChevronRight, DatabaseSearch, Download, FileSpreadsheet, History, LoaderCircle, Play, RotateCcw, Save, Search, Square, Table2, X } from 'lucide-vue-next'
+import {
+  CalendarClock, ChevronRight, CircleCheck, CircleX, Database, DatabaseSearch, Download, FileSpreadsheet, History,
+  LoaderCircle, Play, RefreshCw, RotateCcw, Save, Search, Square, Table2, X,
+} from 'lucide-vue-next'
 import { DB_TYPES, useConnections, type ConnectionInfo } from '~/composables/useConnections'
 import { errMessage, useApi } from '~/composables/useApi'
 import { useFormat } from '~/composables/useFormat'
 import { useFolderPaths } from '~/composables/useFolderPaths'
+import { useProjects, type Project } from '~/composables/useProjects'
+import { FIRST_PAUSE_MS, nextPause } from '~/composables/waits'
 import { usePreferredEngine } from '~/composables/useEngine'
 import { versionNote } from '~/composables/useSavedScripts'
 import {
   QUERYABLE_DB_TYPES, sqlIdent, sqlName, sqlTableRef, useSqlScripts,
-  type SqlCatalogItem, type SqlRunResult, type SqlScriptDetail, type SqlScriptVersion, type SqlTable,
+  type SqlCatalogItem, type SqlRunResult, type SqlScriptDetail, type SqlScriptRun, type SqlScriptVersion, type SqlTable,
 } from '~/composables/useSqlScripts'
 import Select from '~/components/ui/Select.vue'
+import ScheduleDialog from '~/components/ui/ScheduleDialog.vue'
 import DataGrid from '~/components/ui/DataGrid.vue'
 
 // Monaco weighs a few MB: loaded with the editor, not with the page
@@ -50,8 +58,12 @@ const description = ref('')
 const sql = ref('')
 const engine = ref<string | null>(null)
 const connectionId = ref<number | null>(null) // null = the catalog
+// the datasource the whole result is written into: an empty name = none
+const outName = ref('')
+const outProject = ref<number | null>(null)
 const savedAs = ref('')
-const snapshot = () => JSON.stringify([name.value.trim(), description.value.trim(), sql.value, engine.value, connectionId.value])
+const snapshot = () => JSON.stringify([name.value.trim(), description.value.trim(), sql.value, engine.value, connectionId.value,
+  outName.value.trim(), outName.value.trim() ? outProject.value : null])
 const dirty = computed(() => snapshot() !== savedAs.value)
 
 const canEdit = computed(() => (detail.value ? detail.value.editable : true))
@@ -104,6 +116,8 @@ function apply(d: SqlScriptDetail) {
   sql.value = d.content.sql
   engine.value = d.content.engine
   connectionId.value = d.content.connection_id
+  outName.value = d.content.output?.name ?? ''
+  outProject.value = d.content.output?.project_id ?? null
   savedAs.value = snapshot()
 }
 
@@ -122,7 +136,7 @@ async function load() {
   loading.value = true
   try {
     apply(await api.get(scriptId.value))
-    await loadVersions()
+    await Promise.all([loadVersions(), loadWrites()])
   } catch (e) {
     loadError.value = errMessage(e)
   } finally {
@@ -138,7 +152,8 @@ async function save() {
     return
   }
   saving.value = true
-  const content = { sql: sql.value, engine: connectionId.value == null ? engine.value : null, connection_id: connectionId.value }
+  const output = outName.value.trim() ? { name: outName.value.trim(), project_id: outProject.value ?? projectId.value! } : null
+  const content = { sql: sql.value, engine: connectionId.value == null ? engine.value : null, connection_id: connectionId.value, output }
   try {
     if (scriptId.value != null) {
       apply(await api.update(scriptId.value, { name: n, description: description.value.trim(), content }))
@@ -313,6 +328,110 @@ const editorTables = computed<SqlTable[]>(() => {
   })
 })
 
+// ── its datasource: written from the saved version now, on a schedule, by a flow group ──
+const projectsApi = useProjects()
+const projects = ref<Project[]>([])
+async function loadProjects() {
+  try { projects.value = await projectsApi.list() } catch { projects.value = [] }
+}
+const folderOptions = computed(() => projects.value.map((p) => ({ value: p.id, label: p.name, hint: folderPaths.pathOf(p.parent_id) })))
+function onOutName() {
+  // a name typed first: the script's own folder until another is chosen
+  if (outName.value.trim() && outProject.value == null) outProject.value = projectId.value
+}
+const savedOutput = computed(() => detail.value?.content.output ?? null)
+
+const writes = ref<SqlScriptRun[]>([])
+const lastWrite = computed(() => writes.value[0] ?? null)
+const writing = computed(() => lastWrite.value != null && ['PENDING', 'STARTED'].includes(lastWrite.value.status))
+const launching = ref(false)
+let following: number | null = null
+let pageGone = false
+
+async function loadWrites() {
+  if (scriptId.value == null) {
+    writes.value = []
+    return
+  }
+  try { writes.value = await api.runs(scriptId.value, 5) } catch { /* the card keeps what it showed */ }
+  if (writing.value && lastWrite.value) follow(lastWrite.value.run_id)
+}
+
+async function refreshNow() {
+  if (scriptId.value == null || launching.value || writing.value) return
+  if (dirty.value) {
+    toast.error(t('sqlScript.saveBeforeRefresh'))
+    return
+  }
+  launching.value = true
+  try {
+    const run = await api.refresh(scriptId.value)
+    writes.value = [run, ...writes.value.filter((w) => w.run_id !== run.run_id)]
+    follow(run.run_id)
+  } catch (e) {
+    toast.error(errMessage(e))
+  } finally {
+    launching.value = false
+  }
+}
+
+// checks often at first, then less (composables/waits.ts); the datasource's line follows
+async function follow(runId: number) {
+  if (following === runId) return
+  following = runId
+  let delay = FIRST_PAUSE_MS
+  const since = Date.now()
+  while (!pageGone && following === runId) {
+    await new Promise((r) => setTimeout(r, delay))
+    delay = nextPause(delay, since, 5000)
+    if (pageGone || following !== runId || scriptId.value == null) return
+    try { writes.value = await api.runs(scriptId.value, 5) } catch { continue }
+    const w = writes.value.find((x) => x.run_id === runId)
+    if (!w || w.status === 'SUCCESS' || w.status === 'FAILURE') {
+      following = null
+      const target = savedOutput.value?.name ?? ''
+      if (w?.status === 'SUCCESS') {
+        toast.success(t('sqlScript.writeSucceeded', { name: target }))
+        try {
+          const d = await api.get(scriptId.value)
+          if (detail.value) detail.value = { ...detail.value, datasource: d.datasource }
+        } catch { /* the link comes with the next load */ }
+      } else if (w) {
+        toast.error(t('sqlScript.writeFailed', { name: target }))
+      }
+      return
+    }
+  }
+}
+function writeLine(w: SqlScriptRun): string {
+  const when = fmtx.dateTime(w.finished_at ?? w.started_at ?? '')
+  const by = w.trigger_type === 'schedule' ? t('sqlScript.bySchedule')
+    : w.parent_run_id != null ? t('sqlScript.byGroup')
+      : w.launched_by ? t('sqlScript.byPerson', { who: w.launched_by }) : ''
+  const what = w.status === 'SUCCESS' ? t('sqlScript.writeOk', { when, rows: fmtx.count(w.rows ?? 0) }, w.rows ?? 0)
+    : w.status === 'FAILURE' ? t('sqlScript.writeKo', { when }) : t('sqlScript.writeRunning')
+  return by ? `${what} · ${by}` : what
+}
+
+// the schedule: RUN on the folder; it writes with the rights of whoever sets it
+const scheduleOpen = ref(false)
+const savingSchedule = ref(false)
+async function saveSchedule(cron: string) {
+  if (scriptId.value == null || savingSchedule.value) return
+  savingSchedule.value = true
+  try {
+    const d = await api.setSchedule(scriptId.value, cron)
+    // only the schedule changed: unsaved edits stay on screen
+    if (detail.value) detail.value = { ...detail.value, run_schedule: d.run_schedule, run_scheduled_by: d.run_scheduled_by, next_run_at: d.next_run_at }
+    scheduleOpen.value = false
+    toast.success(d.run_schedule ? t('flowGroups.scheduleSaved') : t('flowGroups.scheduleCleared'))
+  } catch (e) {
+    toast.error(errMessage(e))
+  } finally {
+    savingSchedule.value = false
+  }
+}
+
 // ── versions ─────────────────────────────────────────────────────────────────
 const versions = ref<SqlScriptVersion[]>([])
 const restoring = ref<number | null>(null)
@@ -380,9 +499,11 @@ onMounted(() => {
   loadCatalog()
   loadCatalogList()
   loadConnections()
+  loadProjects()
   load()
 })
 onUnmounted(() => {
+  pageGone = true
   controller?.abort()
   document.removeEventListener('keydown', onKey)
   window.removeEventListener('beforeunload', onBeforeUnload)
@@ -394,6 +515,8 @@ watch(() => route.query.id, (id) => {
   if (next === scriptId.value) return // a script just created took its address
   scriptId.value = next
   versions.value = []
+  writes.value = []
+  following = null
   load()
 })
 </script>
@@ -508,6 +631,60 @@ watch(() => route.query.id, (id) => {
             </label>
           </div>
 
+          <div v-if="canEdit || savedOutput" class="card dest" :aria-label="$t('sqlScript.datasource')">
+            <h2><Database :size="15" /> {{ $t('sqlScript.datasource') }}</h2>
+            <p class="muted small help">{{ $t('sqlScript.datasourceHelp') }}</p>
+            <label class="field">
+              <span>{{ $t('sqlScript.datasourceName') }}</span>
+              <input v-model="outName" type="text" maxlength="200" :readonly="!canEdit || !!viewing"
+                     :placeholder="$t('sqlScript.datasourceNamePlaceholder')" @input="onOutName" />
+            </label>
+            <label v-if="outName.trim()" class="field">
+              <span>{{ $t('sqlScript.datasourceFolder') }}</span>
+              <Select
+                :model-value="outProject"
+                :options="folderOptions"
+                :disabled="!canEdit || !!viewing"
+                :aria-label="$t('sqlScript.datasourceFolder')"
+                searchable
+                @update:model-value="(v: number | null) => (outProject = v)"
+              />
+            </label>
+            <template v-if="savedOutput && scriptId != null">
+              <p v-if="detail?.datasource" class="small dsline">
+                <NuxtLink :to="`/datasources?q=${encodeURIComponent(detail.datasource.name)}&ds=${detail.datasource.id}`">{{ detail.datasource.name }}</NuxtLink>
+                <span v-if="detail.datasource.rows != null" class="muted"> · {{ $t('sqlScript.rows', { n: fmtx.count(detail.datasource.rows), more: '' }, detail.datasource.rows) }}</span>
+              </p>
+              <p v-else class="muted small">{{ $t('sqlScript.datasourceNotYet') }}</p>
+              <div v-if="lastWrite" class="lastwrite small" :class="lastWrite.status.toLowerCase()" role="status">
+                <LoaderCircle v-if="writing" :size="13" class="spin" />
+                <CircleCheck v-else-if="lastWrite.status === 'SUCCESS'" :size="13" />
+                <CircleX v-else :size="13" />
+                <span>{{ writeLine(lastWrite) }}</span>
+              </div>
+              <p v-if="lastWrite?.status === 'FAILURE' && lastWrite.error" class="err small werr">{{ lastWrite.error }}</p>
+              <div v-if="detail?.runnable" class="dest-actions">
+                <button type="button" :disabled="launching || writing || cannotRun || !!viewing" :title="$t('sqlScript.refreshNowTitle')" @click="refreshNow">
+                  <LoaderCircle v-if="launching || writing" :size="13" class="spin" /><RefreshCw v-else :size="13" />
+                  {{ $t('sqlScript.refreshNow') }}
+                </button>
+                <button
+                  type="button"
+                  :title="detail.run_schedule ? $t('flowGroups.scheduleTitle', { cron: detail.run_schedule }) : $t('flowGroups.schedule')"
+                  @click="scheduleOpen = true"
+                >
+                  <CalendarClock :size="13" />
+                  <span v-if="detail.run_schedule" class="cron">{{ detail.run_schedule }}</span>
+                  <template v-else>{{ $t('flowGroups.schedule') }}</template>
+                </button>
+              </div>
+              <p v-if="detail?.next_run_at && detail.run_schedule" class="muted small">
+                {{ $t('flowGroups.nextRun', { when: fmtx.dateTime(detail.next_run_at) }) }}
+              </p>
+            </template>
+            <p v-else-if="outName.trim()" class="muted small">{{ $t('sqlScript.datasourceSaveFirst') }}</p>
+          </div>
+
           <div v-if="connectionId != null" class="card catalog" :aria-label="$t('sqlScript.tables')">
             <h2>{{ $t('sqlScript.tables') }} <span v-if="dbTables.length" class="muted small">{{ dbTables.length }}</span></h2>
             <p class="muted small help">
@@ -612,6 +789,16 @@ watch(() => route.query.id, (id) => {
           </div>
         </aside>
       </div>
+
+      <ScheduleDialog
+        :open="scheduleOpen"
+        :title="name"
+        :subtitle="$t('sqlScript.scheduleSubtitle')"
+        :current="detail?.run_schedule ?? null"
+        :busy="savingSchedule"
+        @save="saveSchedule"
+        @cancel="scheduleOpen = false"
+      />
     </div>
   </AppShell>
 </template>
@@ -681,6 +868,15 @@ watch(() => route.query.id, (id) => {
 .versions li.seen { background: var(--bg-soft); }
 .vtop { display: flex; align-items: center; gap: 7px; flex-wrap: wrap; }
 .vacts { display: flex; gap: 6px; margin-top: 3px; }
+.field input { font: inherit; color: var(--text); }
+.dsline { margin: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.lastwrite { display: flex; align-items: center; gap: 6px; color: var(--muted); }
+.lastwrite.success svg { color: var(--accent-2); }
+.lastwrite.failure svg { color: var(--danger); }
+.werr { margin: -4px 0 0; overflow-wrap: anywhere; }
+.dest-actions { display: flex; gap: 8px; flex-wrap: wrap; }
+.dest-actions button { display: inline-flex; align-items: center; gap: 6px; }
+.cron { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 12px; }
 @media (max-width: 900px) {
   .work { grid-template-columns: minmax(0, 1fr); }
   .engine, .source { width: 160px; }

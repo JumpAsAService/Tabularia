@@ -1,7 +1,7 @@
 # Spec: SQL scripts
 
-Status: pieces 1 to 3 done (the catalog, connections, export); 4 to do. Decided with the
-owner on 2026-10-27.
+Status: pieces 1 to 4 done (the catalog, connections, export, the datasource with its
+schedule and its flow group cell). Decided with the owner on 2026-10-27.
 
 ## Objective
 
@@ -59,10 +59,16 @@ show on every installation.
 changes the content makes a version; an older one can be restored (it becomes the newest).
 
 ```json
-{"sql": "SELECT …", "engine": "duckdb", "connection_id": null}
+{"sql": "SELECT …", "engine": "duckdb", "connection_id": null,
+ "output": {"name": "Vendite del mese", "project_id": 4}}
 ```
 
-`engine` null = the installation's default engine; `connection_id` null = the catalog.
+`engine` null = the installation's default engine; `connection_id` null = the catalog;
+`output` null = the script writes no datasource.
+
+`sql_scripts` also holds the schedule (migration 0025): `run_schedule` (5-field cron),
+`run_scheduled_by`, `next_run_at`, as a flow group's. `runs.sql_script_id` names the
+script a write belongs to.
 
 ## Running on the catalog
 
@@ -108,6 +114,44 @@ the file from it. Either way the person follows it and takes the file once throu
 `/tasks/exports/{id}` and `/tasks/exports/{id}/file`. The file is named after the script;
 every export is audited (`sql_script.export`) with its SQL and what it read.
 
+## Saving as a datasource
+
+Decided with the owner: the datasource **follows the script** (every write runs the
+current version, there is one SQL to keep), it is written **now, on the script's own
+schedule, or by a flow group's cell**, and the SQL stays read-only.
+
+- **The output** (`content.output`, a name and a folder) is part of the script and of its
+  versions. Choosing a folder the script did not write to already needs EDIT on it; a
+  datasource already under that name must be one a flow or a script wrote (`kind="flow"`),
+  never a database's or a file's snapshot.
+- **A write** (services/sql_script_runs.py `launch`) is one run, `kind="sql"` with
+  `sql_script_id`: on the catalog the run's chain goes to the engine's
+  `POST /tasks/transform-data` on the script's engine, on a connection the SQL goes to
+  `POST /db/ingest` as a SQL datasource's refresh. The run carries the publish fields of
+  a flow Output (overwrite, the datasource's own folder of snapshots), so the gateway's
+  reconciliation publishes it at SUCCESS exactly as an Output's: the datasource is born
+  at the first write, keeps its id after, changes only when a write succeeds, and its
+  data contract is checked first. No new engine code.
+- **Authority**: whoever starts it — the person on the page (`POST
+  /sql-scripts/{id}/refresh`), the schedule's author, whoever runs the group — needs VIEW
+  on the script, RUN on its folder, EDIT on the datasource's folder, and what a run
+  needs (the datasources the SQL names readable by them, CONNECT on the connection).
+- **One write at a time** per script: an advisory lock and the live run (409 otherwise).
+- **The schedule** (`PUT /sql-scripts/{id}/schedule`, RUN on the folder) is refused when
+  its author could not write now. The scheduler takes the slot, then starts the write
+  with the author's rights; a write those rights no longer allow is recorded as a failed
+  run with its reason, and the schedule stays. A change by someone else that widens the
+  script — another SQL, another connection, the datasource in another folder, a move —
+  switches the script's schedule off, and those of the flow groups that run it scheduled
+  by someone else; the audit log says why (`sql_script.schedule`, `flow_group.schedule`).
+- **A flow group cell** (`kind: "sql"`, the script's id) writes the datasource in its
+  step and waits for the write to end; a write already going is waited for, and counts
+  when it started after the previous step ended. Only a script with an output goes in a
+  group; a script in a group cannot be deleted. The group's schedule checks the cell's
+  rights before starting (`schedule_authority.gaps_of_group`).
+- `GET /sql-scripts/{id}/runs` lists the latest writes, bringing one still going up to
+  date with the engine; the run history and its search name the script.
+
 ## The page
 
 `/sql-script?id=` (or `?project=` for a new one):
@@ -121,14 +165,18 @@ every export is audited (`sql_script.export`) with its SQL and what it read.
   tables: a click inserts the name;
 - under it, the result in a grid, with the rows, the time, and the error of a failed run
   in plain words;
-- a person with VIEW only reads the SQL and runs it; nothing to save.
+- a person with VIEW only reads the SQL and runs it; nothing to save;
+- the **Datasource** card: its name and folder, a link to it once written, the last
+  write, *Refresh now* and *Schedule* (RUN on the folder).
 
 ## Elsewhere
 
 - **Explore**: a new kind of object (icon, filter, New → SQL script, open, rename, move,
   duplicate, delete); **search**: a new kind.
 - **Audit**: `sql_script.create`, `sql_script.update`, `sql_script.delete`,
-  `sql_script.restore`, `sql_script.run`, `sql_script.export`.
+  `sql_script.restore`, `sql_script.run`, `sql_script.export`, `sql_script.publish`,
+  `sql_script.schedule`.
+- **Flow groups**: a SQL script cell (see «Saving as a datasource»).
 - **API tokens**: read tokens list and read the scripts they may see.
 
 ## Pieces

@@ -9,6 +9,9 @@ Permissions:
 - a run reads with the authority of whoever runs it (services/sql_scripts.resolve);
   on a database connection it needs CONNECT on the connection's folder, and so does
   choosing that connection for a script;
+- writing the script's datasource («Refresh now») and scheduling it: RUN on the
+  folder, EDIT on the datasource's folder, and what a run needs
+  (services/sql_script_runs); choosing that folder needs EDIT on it;
 - administrators see and change every script.
 
 Unlike saved Python/R scripts, they need no Kubernetes: every installation has them.
@@ -18,20 +21,23 @@ from __future__ import annotations
 from datetime import datetime, timezone
 from typing import Any, Literal, Optional
 
-from fastapi import APIRouter, Depends, HTTPException, Request, status
+from fastapi import APIRouter, Depends, HTTPException, Query, Request, status
 from pydantic import BaseModel, Field
+from sqlalchemy import update as sa_update
 from sqlmodel import Session, select
 
 from app.core.routing import ReleasingRoute
 from app.db.session import get_session
 from app.deps.auth import get_current_user
 from app.deps.permissions import ensure_can
-from app.models import Project, SqlScript, SqlScriptVersion, User
+from app.models import Project, Run, SqlScript, SqlScriptVersion, User
 from app.models.permission import Capability
+from app.models.run import TERMINAL_STATES
 from app.schemas.models import UtcDateTime
-from app.services import audit, sql_scripts
+from app.services import audit, sql_script_runs, sql_scripts
 from app.services import permissions as perm_service
 from app.services.copy_names import commit_copy, free_copy_name
+from app.services.schedule import ScheduleError, next_fire, validate_schedule
 
 router = APIRouter(route_class=ReleasingRoute, tags=["sql-scripts"])
 
@@ -51,13 +57,46 @@ class SqlScriptOut(BaseModel):
     current_version: int
     engine: Optional[str] = None  # of the current version
     connection: Optional[ConnectionRef] = None  # of the current version; null = the catalog
+    output: Optional[dict[str, Any]] = None  # the datasource it writes ({name, project_id}); null = none
     created_at: UtcDateTime
     updated_at: UtcDateTime
     editable: bool  # EDIT on its folder: the page offers saving, moving, deleting
+    runnable: bool  # RUN on its folder: the page offers writing its datasource and scheduling it
+    run_schedule: Optional[str] = None
+    run_scheduled_by: Optional[int] = None
+    next_run_at: Optional[UtcDateTime] = None
+
+
+class DatasourceRef(BaseModel):
+    """The datasource the script writes, once it exists, for whoever may read it."""
+    id: int
+    name: str
+    project_id: int
+    rows: Optional[int] = None
+    updated_at: Optional[UtcDateTime] = None
 
 
 class SqlScriptDetail(SqlScriptOut):
     content: dict[str, Any]
+    datasource: Optional[DatasourceRef] = None
+
+
+class SqlScriptRunOut(BaseModel):
+    """A write of the script's datasource."""
+    run_id: int
+    status: str
+    trigger_type: str
+    started_at: Optional[UtcDateTime]
+    finished_at: Optional[UtcDateTime]
+    error: Optional[str]
+    launched_by: Optional[str]
+    rows: Optional[int] = None
+    datasource_id: Optional[int] = None
+    parent_run_id: Optional[int] = None  # a flow group's run, when a cell wrote it
+
+
+class ScheduleUpdate(BaseModel):
+    cron: Optional[str] = None  # five fields; empty or None clears it
 
 
 class SqlScriptCreate(BaseModel):
@@ -137,12 +176,53 @@ def _connection_ref(session: Session, user: User, connection_id: Optional[int]) 
 def _checked(session: Session, user: User, content: Any, current: Optional[dict] = None) -> dict:
     """The content to save. A connection the script did not have already must exist and
     be one this person may use: nobody points a script at a database they could not query
-    themselves. (Its name is shown to the script's readers, to say why they cannot run it.)"""
+    themselves. (Its name is shown to the script's readers, to say why they cannot run it.)
+    The same for a datasource it did not write already: EDIT on its folder, and not a
+    database's or a file's snapshot under that name."""
     checked = sql_scripts.check_content(content)
     cid = checked["connection_id"]
     if cid is not None and cid != (current or {}).get("connection_id"):
         sql_scripts.usable_connection(session, user, cid)
+    output = checked["output"]
+    if output is not None and output != (current or {}).get("output"):
+        sql_script_runs.check_output(session, user, output)
     return checked
+
+
+def _schedule_off(script: SqlScript, user: User, reasons: list[str]) -> Optional[dict]:
+    """A schedule carries its author's authority: a change by someone else that makes the
+    script read or write more switches it off. Returns the audit detail."""
+    if not script.run_schedule or script.run_scheduled_by in (None, user.id) or not reasons:
+        return None
+    author = script.run_scheduled_by
+    script.run_schedule = script.run_scheduled_by = script.next_run_at = None
+    return {"turned_off": True, "reason": "; ".join(reasons), "author": author}
+
+
+def _groups_off(session: Session, user: User, script: SqlScript, reasons: list[str]) -> list[tuple]:
+    """The flow groups that run the script, scheduled by someone else: a change that makes
+    the script reach more switches their schedules off too, as a change of their own would."""
+    if not reasons:
+        return []
+    off = []
+    for group in sql_scripts.groups_using(session, script.id):
+        if group.run_schedule and group.run_scheduled_by not in (None, user.id):
+            detail = {"turned_off": True, "author": group.run_scheduled_by,
+                      "reason": f"the SQL script '{script.name}' it runs changed: {'; '.join(reasons)}"}
+            group.run_schedule = group.run_scheduled_by = group.next_run_at = None
+            session.add(group)
+            off.append((group.id, group.name, detail))
+    return off
+
+
+def _record_off(session: Session, user: User, script: SqlScript, mine: Optional[dict], groups: list[tuple],
+                request) -> None:
+    if mine:
+        audit.record_audit(session, actor=user, action=audit.SQL_SCRIPT_SCHEDULE, target_type="sql_script",
+                           target_id=script.id, target_label=script.name, detail=mine, request=request)
+    for group_id, name, detail in groups:
+        audit.record_audit(session, actor=user, action=audit.FLOW_GROUP_SCHEDULE, target_type="flow_group",
+                           target_id=group_id, target_label=name, detail=detail, request=request)
 
 
 def _out(session: Session, user: User, s: SqlScript, content: Optional[dict] = None) -> SqlScriptOut:
@@ -150,13 +230,22 @@ def _out(session: Session, user: User, s: SqlScript, content: Optional[dict] = N
     return SqlScriptOut(id=s.id, name=s.name, description=s.description, project_id=s.project_id,
                         current_version=s.current_version, engine=content.get("engine"),
                         connection=_connection_ref(session, user, content.get("connection_id")),
+                        output=sql_script_runs.output_of(content),
                         created_at=s.created_at, updated_at=s.updated_at,
-                        editable=perm_service.has_capability(session, user, s.project_id, Capability.EDIT))
+                        editable=perm_service.has_capability(session, user, s.project_id, Capability.EDIT),
+                        runnable=perm_service.has_capability(session, user, s.project_id, Capability.RUN),
+                        run_schedule=s.run_schedule, run_scheduled_by=s.run_scheduled_by, next_run_at=s.next_run_at)
 
 
 def _detail(session: Session, user: User, s: SqlScript) -> SqlScriptDetail:
     content = sql_scripts.content_of(session, s)
-    return SqlScriptDetail(**_out(session, user, s, content).model_dump(), content=content)
+    output = sql_script_runs.output_of(content)
+    target = sql_script_runs.target_of(session, output) if output is not None else None
+    ref = None
+    if target is not None and perm_service.has_capability(session, user, target.project_id, Capability.VIEW):
+        ref = DatasourceRef(id=target.id, name=target.name, project_id=target.project_id, rows=target.rows,
+                            updated_at=target.updated_at)
+    return SqlScriptDetail(**_out(session, user, s, content).model_dump(), content=content, datasource=ref)
 
 
 def _many(session: Session, user: User, stmt) -> list[SqlScriptOut]:
@@ -271,11 +360,17 @@ def update_sql_script(script_id: int, body: SqlScriptUpdate, request: Request,
         changes["name"] = {"from": script.name, "to": name}
     if target != script.project_id:
         changes["project_id"] = {"from": script.project_id, "to": target}
+    reasons: list[str] = []
     if body.content is not None:
         current = sql_scripts.content_of(session, script)
         checked = _checked(session, user, body.content, current)
         if checked != current:
+            reasons = sql_scripts.widens(current, checked)
             changes["version"] = sql_scripts.add_version(session, script, checked, "edited", user).version
+    groups_off = _groups_off(session, user, script, reasons)
+    if target != script.project_id:
+        reasons.append("it was moved to another folder")
+    schedule_off = _schedule_off(script, user, reasons)
     script.name, script.project_id = name, target
     if body.description is not None and body.description.strip() != script.description:
         script.description = body.description.strip()
@@ -288,6 +383,7 @@ def update_sql_script(script_id: int, body: SqlScriptUpdate, request: Request,
     session.refresh(script)
     audit.record_audit(session, actor=user, action=audit.SQL_SCRIPT_UPDATE, target_type="sql_script",
                        target_id=script.id, target_label=script.name, request=request, detail=changes)
+    _record_off(session, user, script, schedule_off, groups_off, request)
     return _detail(session, user, script)
 
 
@@ -315,7 +411,19 @@ def delete_sql_script(script_id: int, request: Request, user: User = Depends(get
                       session: Session = Depends(get_session)):
     script = sql_scripts.get_visible(session, user, script_id)
     ensure_can(session, user, script.project_id, Capability.EDIT)
+    # in line with «Refresh now» and the scheduler: nothing starts between the check and the delete
+    sql_script_runs.in_line_for_the_script(session, script.id)
+    if sql_script_runs.live_run(session, script.id) is not None:
+        raise HTTPException(status_code=409, detail="The script is writing its datasource: delete it once it has finished")
+    groups = [g.name for g in sql_scripts.groups_using(session, script.id)]
+    if groups:
+        names = ", ".join(f"«{n}»" for n in groups[:10]) + (" …" if len(groups) > 10 else "")
+        raise HTTPException(status_code=409, detail={
+            "message": f"The script is used by the flow groups {names}: remove it from there first",
+            "flows": [], "groups": groups})
     label = script.name
+    # its runs stay in the history, no longer attached to it; its datasource stays
+    session.exec(sa_update(Run).where(Run.sql_script_id == script.id).values(sql_script_id=None))
     for row in session.exec(select(SqlScriptVersion).where(SqlScriptVersion.script_id == script.id)).all():
         session.delete(row)
     session.flush()
@@ -356,7 +464,11 @@ def restore_version(script_id: int, version: int, request: Request, user: User =
         raise HTTPException(status_code=404, detail="Version not found")
     if version == script.current_version:
         return _detail(session, user, script)
-    content = sql_scripts.check_content(sql_scripts.content_of(session, script, version))
+    current = sql_scripts.content_of(session, script)
+    content = _checked(session, user, sql_scripts.content_of(session, script, version), current)
+    reasons = sql_scripts.widens(current, content)
+    groups_off = _groups_off(session, user, script, reasons)
+    schedule_off = _schedule_off(script, user, reasons)
     row = sql_scripts.add_version(session, script, content, f"restored from v{version}", user)
     script.updated_at = datetime.now(timezone.utc)
     session.add(script)
@@ -365,4 +477,71 @@ def restore_version(script_id: int, version: int, request: Request, user: User =
     audit.record_audit(session, actor=user, action=audit.SQL_SCRIPT_RESTORE, target_type="sql_script",
                        target_id=script.id, target_label=script.name, request=request,
                        detail={"from": version, "version": row.version})
+    _record_off(session, user, script, schedule_off, groups_off, request)
+    return _detail(session, user, script)
+
+
+# ── its datasource: writing it now, its runs, its schedule (RUN on the folder) ─────
+@router.post("/sql-scripts/{script_id}/refresh", response_model=SqlScriptRunOut, status_code=status.HTTP_202_ACCEPTED)
+async def refresh_sql_script(script_id: int, request: Request, user: User = Depends(get_current_user),
+                             session: Session = Depends(get_session)):
+    """Writes the script's whole result into its datasource, from its current version and
+    with the caller's authority. The run is followed through /sql-scripts/{id}/runs."""
+    script = sql_scripts.get_visible(session, user, script_id)
+    ensure_can(session, user, script.project_id, Capability.RUN)
+    run = await sql_script_runs.launch(session, user, script, "manual", request=request)
+    return _run_out(run, user.email)
+
+
+def _run_out(run: Run, launched_by: Optional[str]) -> SqlScriptRunOut:
+    return SqlScriptRunOut(run_id=run.id, status=run.status, trigger_type=run.trigger_type, started_at=run.started_at,
+                           finished_at=run.finished_at, error=run.error, launched_by=launched_by,
+                           rows=run.rows_written, datasource_id=run.datasource_id, parent_run_id=run.parent_run_id)
+
+
+@router.get("/sql-scripts/{script_id}/runs", response_model=list[SqlScriptRunOut])
+async def list_sql_script_runs(script_id: int, limit: int = Query(10, ge=1, le=100),
+                               user: User = Depends(get_current_user), session: Session = Depends(get_session)):
+    """The latest writes of the script's datasource, newest first; one still going is
+    brought up to date with the engine (and published when it has succeeded)."""
+    from app.routes.runs import _reconcile
+
+    script = sql_scripts.get_visible(session, user, script_id)
+    runs = list(session.exec(select(Run).where(Run.sql_script_id == script.id, Run.kind == "sql")
+                             .order_by(Run.id.desc()).limit(limit)).all())  # type: ignore[union-attr]
+    for i, r in enumerate(runs):
+        if r.status not in TERMINAL_STATES:
+            runs[i] = await _reconcile(session, r)
+    names = {u.id: u.email for u in session.exec(select(User).where(
+        User.id.in_({r.launched_by for r in runs if r.launched_by}))).all()} if runs else {}  # type: ignore[attr-defined]
+    return [_run_out(r, names.get(r.launched_by)) for r in runs]
+
+
+@router.put("/sql-scripts/{script_id}/schedule", response_model=SqlScriptDetail)
+async def set_sql_script_schedule(script_id: int, body: ScheduleUpdate, request: Request,
+                                  user: User = Depends(get_current_user), session: Session = Depends(get_session)):
+    """Sets (5-field cron) or clears the schedule that writes the script's datasource.
+    Scheduled writes use the authority of whoever sets it, checked again every time."""
+    script = sql_scripts.get_visible(session, user, script_id)
+    ensure_can(session, user, script.project_id, Capability.RUN)
+    cron = (body.cron or "").strip()
+    if not cron:
+        script.run_schedule = script.run_scheduled_by = script.next_run_at = None
+    else:
+        try:
+            cron = validate_schedule(cron)
+        except ScheduleError as e:
+            raise HTTPException(status_code=422, detail=str(e))
+        missing = sql_script_runs.gaps(session, user, script)
+        if missing:
+            raise HTTPException(status_code=422, detail=f"The schedule would not write: {missing[0]}")
+        script.run_schedule, script.run_scheduled_by = cron, user.id
+        script.next_run_at = next_fire(cron, datetime.now(timezone.utc)).replace(tzinfo=None)
+    script.updated_at = datetime.now(timezone.utc)
+    session.add(script)
+    session.commit()
+    session.refresh(script)
+    audit.record_audit(session, actor=user, action=audit.SQL_SCRIPT_SCHEDULE, target_type="sql_script",
+                       target_id=script.id, target_label=script.name, detail={"cron": script.run_schedule},
+                       request=request)
     return _detail(session, user, script)

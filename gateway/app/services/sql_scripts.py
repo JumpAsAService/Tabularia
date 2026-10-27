@@ -16,8 +16,9 @@ On a database connection the SQL goes to the database as it is, wrapped as a SQL
 datasource's; running it needs CONNECT on the connection's folder, as importing from it
 does, and the barrier on the database is a read-only user.
 
-A version's `content`: {"sql": "SELECT …", "engine": "duckdb" | null, "connection_id": 3 | null};
-with a connection the engine is null.
+A version's `content`: {"sql": "SELECT …", "engine": "duckdb" | null, "connection_id": 3 | null,
+"output": {"name": "Vendite", "project_id": 4} | null}; with a connection the engine is null.
+`output` is the datasource the script writes its whole result into (services/sql_script_runs).
 """
 from __future__ import annotations
 
@@ -54,7 +55,7 @@ DIALECTS = {"polars": "postgres", "duckdb": "duckdb", "chdb": "clickhouse", "cli
 
 
 def empty_content() -> dict:
-    return {"sql": "", "engine": None, "connection_id": None}
+    return {"sql": "", "engine": None, "connection_id": None, "output": None}
 
 
 # ── who sees what ────────────────────────────────────────────────────────────
@@ -102,7 +103,34 @@ def check_content(content: Any) -> dict:
     connection_id = content.get("connection_id")
     if connection_id is not None and (isinstance(connection_id, bool) or not isinstance(connection_id, int)):
         raise HTTPException(status_code=422, detail="The script's connection is a number")
-    return {"sql": sql, "engine": None if connection_id is not None else engine, "connection_id": connection_id}
+    output = content.get("output") or None
+    if output is not None:
+        if not isinstance(output, dict):
+            raise HTTPException(status_code=422, detail="The script's datasource is an object: a name and a folder")
+        name, project_id = str(output.get("name") or "").strip(), output.get("project_id")
+        if not name or len(name) > 200:
+            raise HTTPException(status_code=422, detail="The script's datasource needs a name (at most 200 characters)")
+        if isinstance(project_id, bool) or not isinstance(project_id, int):
+            raise HTTPException(status_code=422, detail="The script's datasource needs a folder")
+        output = {"name": name, "project_id": project_id}
+    return {"sql": sql, "engine": None if connection_id is not None else engine, "connection_id": connection_id,
+            "output": output}
+
+
+def widens(before: dict, after: dict) -> list[str]:
+    """What a change makes the script read or write that it did not: another SQL, another
+    connection, a datasource in another folder. A schedule set by someone else does not
+    spend its author's authority on it (routes/sql_scripts.py switches it off)."""
+    reasons = []
+    if (before.get("sql") or "").strip() != (after.get("sql") or "").strip():
+        reasons.append("its SQL changed")
+    if after.get("connection_id") != before.get("connection_id"):
+        reasons.append("it runs on another connection" if after.get("connection_id") is not None
+                       else "it runs on the catalog instead of its connection")
+    b, a = before.get("output") or {}, after.get("output") or {}
+    if a and a.get("project_id") != b.get("project_id"):
+        reasons.append("it writes its datasource in another folder")
+    return reasons
 
 
 # ── connections ──────────────────────────────────────────────────────────────
@@ -120,6 +148,15 @@ def usable_connection(session: Session, user: User, connection_id: int) -> Conne
         raise HTTPException(status_code=403, detail=f"Running SQL on «{conn.name}» needs the CONNECT permission "
                                                     "on its folder: ask whoever manages it")
     return conn
+
+
+def groups_using(session: Session, script_id: int) -> list:
+    """The flow groups with a cell that writes the script's datasource."""
+    from app.models import FlowGroup
+    from app.services.flow_groups import definition_of
+
+    return [g for g in session.exec(select(FlowGroup).where(FlowGroup.definition.contains('"sql"'))).all()  # type: ignore[union-attr]
+            if any(c is not None and c.kind == "sql" and c.id == script_id for row in definition_of(g).steps for c in row)]
 
 
 # ── versions ─────────────────────────────────────────────────────────────────

@@ -28,7 +28,7 @@ from sqlalchemy import update
 from sqlmodel import Session, select
 
 from app.db.session import engine
-from app.models import Connection, Datasource, Flow, FlowGroup, Run, SavedScript, User
+from app.models import Connection, Datasource, Flow, FlowGroup, Run, SavedScript, SqlScript, User
 from app.models.run import TERMINAL_STATES
 from app.routes.runs import _reconcile, launch_ingest_run, start_refresh_if_free
 from app.services.blobgc import sweep_blob_deletions
@@ -51,7 +51,8 @@ def recompute_all(session: Session) -> int:
     now = datetime.now(timezone.utc)
     n = 0
     for model, schedule, nxt in ((Datasource, "refresh_schedule", "next_refresh_at"), (Flow, "run_schedule", "next_run_at"),
-                                 (FlowGroup, "run_schedule", "next_run_at"), (SavedScript, "run_schedule", "next_run_at")):
+                                 (FlowGroup, "run_schedule", "next_run_at"), (SavedScript, "run_schedule", "next_run_at"),
+                                 (SqlScript, "run_schedule", "next_run_at")):
         for obj in session.exec(select(model).where(getattr(model, schedule).is_not(None))).all():
             try:
                 setattr(obj, nxt, next_fire(getattr(obj, schedule), now).replace(tzinfo=None))
@@ -307,6 +308,69 @@ async def _fire_script(session: Session, script: SavedScript, now: datetime, see
     logger.info("scheduler: run of saved script %s (%s) queued", script_id, name)
 
 
+# ── SQL script: writing its datasource ──────────────────────────────────────
+def _advance_sql_script(session: Session, script: SqlScript, now: datetime) -> None:
+    try:
+        script.next_run_at = next_fire(script.run_schedule, now).replace(tzinfo=None)
+    except Exception:
+        script.run_schedule = None
+        script.next_run_at = None
+    session.add(script)
+    session.commit()
+
+
+def _disable_sql_script(session: Session, script: SqlScript, reason: str) -> None:
+    logger.warning("scheduler: schedule of SQL script %s turned off (%s)", script.id, reason)
+    script.run_schedule = script.run_scheduled_by = script.next_run_at = None
+    session.add(script)
+    session.commit()
+
+
+async def _fire_sql_script(session: Session, script: SqlScript, now: datetime, seen: datetime | None = None) -> None:
+    """The slot taken, then the write started with the author's authority. A write the
+    author can no longer do is recorded as a failed run with its reason; one still going
+    makes this slot skip."""
+    from fastapi import HTTPException
+
+    from app.services import sql_script_runs, sql_scripts
+
+    seen = script.next_run_at if seen is None else seen
+    user = session.get(User, script.run_scheduled_by) if script.run_scheduled_by else None
+    if user is None or not user.is_active:
+        _disable_sql_script(session, script, "the schedule's author is gone or deactivated")
+        return
+    if not sql_scripts.can_see(session, user, script) \
+            or not perm_service.has_capability(session, user, script.project_id, Capability.RUN):
+        _disable_sql_script(session, script, f"{user.email} can no longer run the script")
+        return
+    script_id, name = script.id, script.name
+    values: dict = {}
+    try:
+        values["next_run_at"] = next_fire(script.run_schedule, now).replace(tzinfo=None)
+    except Exception:
+        values.update(run_schedule=None, next_run_at=None)
+    taken = session.exec(
+        update(SqlScript)
+        .where(SqlScript.id == script_id, SqlScript.next_run_at == seen, SqlScript.next_run_at <= now.replace(tzinfo=None))
+        .values(**values)
+    )
+    session.commit()
+    if taken.rowcount != 1:
+        return  # another process took the slot
+    script = session.get(SqlScript, script_id)
+    try:
+        await sql_script_runs.launch(session, user, script, "schedule")
+    except HTTPException as e:
+        if e.status_code == 409 and e.detail == sql_script_runs.ALREADY_RUNNING:
+            logger.info("scheduler: SQL script %s (%s) still writing, slot skipped", script_id, name)
+            return
+        sql_script_runs.failed_run(session, user, script, "schedule",
+                                   f"Scheduled write not started, with the rights of {user.email}: {e.detail}")
+        logger.warning("scheduler: SQL script %s (%s) not written: %s", script_id, name, e.detail)
+        return
+    logger.info("scheduler: SQL script %s (%s) writing its datasource", script_id, name)
+
+
 # ── loop ────────────────────────────────────────────────────────────────────
 async def _tick() -> None:
     now = datetime.now(timezone.utc)
@@ -395,6 +459,21 @@ async def _tick() -> None:
                 except Exception:
                     logger.exception("scheduler: run of saved script %s failed", script.id)
                     _advance_script(session, script, now)
+
+        due_sql = session.exec(
+            select(SqlScript).where(
+                SqlScript.run_schedule.is_not(None),  # type: ignore[union-attr]
+                SqlScript.next_run_at.is_not(None),  # type: ignore[union-attr]
+                SqlScript.next_run_at <= now_naive,
+            )
+        ).all()
+        for sql_script, seen in [(x, x.next_run_at) for x in due_sql]:
+            try:
+                await _fire_sql_script(session, sql_script, now, seen)
+            except Exception:
+                logger.exception("scheduler: write of SQL script %s failed", sql_script.id)
+                session.rollback()
+                _advance_sql_script(session, sql_script, now)
 
         # data contracts: freshness is the only rule that breaks by itself, as time goes by —
         # here it is checked again

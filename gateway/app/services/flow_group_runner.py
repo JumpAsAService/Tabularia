@@ -25,6 +25,10 @@ orchestration (services/orchestrator.py), which hands it here from `run_it`.
   under a child orchestration row that holds the script's live slot, as a flow cell
   does; a run of the script already in progress is waited for, and its outcome counts
   when it started after the previous step ended.
+- A **sql** cell writes a SQL script's datasource from its current version
+  (services/sql_script_runs.py), as «Refresh now» on its page does; a write of the
+  script already going is waited for, and its outcome counts when it started after the
+  previous step ended.
 - When every cell of a step has finished, a failure among them stops the group:
   the following steps are skipped and the run ends FAILURE. The cells keep their
   own errors; the run's error only counts them, because the reader of a group may
@@ -52,7 +56,7 @@ from sqlalchemy import update
 from sqlalchemy.exc import IntegrityError
 from sqlmodel import Session, select
 
-from app.models import Datasource, Flow, FlowGroup, Run, SavedScript, User
+from app.models import Datasource, Flow, FlowGroup, Run, SavedScript, SqlScript, User
 from app.models.permission import Capability
 from app.models.run import TERMINAL_STATES
 from app.schemas.models import FlowGroupCell
@@ -188,6 +192,8 @@ async def _run_cell(run_id: int, user_id: int, trigger: str, cells: _Cells, step
                 error = await _container_cell(run_id, user_id, trigger, cell, cells, step, col)
             elif cell.kind == "pushmail":
                 error = await _pushmail_cell(run_id, user_id, trigger, cell, cells, step, col)
+            elif cell.kind == "sql":
+                error = await _sql_cell(run_id, user_id, trigger, cell.id, cells, step, col, since)
             else:
                 error = await _refresh_cell(run_id, user_id, trigger, cell.id, cells, step, col)
         except (orch.NoLongerOurs, asyncio.CancelledError):
@@ -335,6 +341,45 @@ async def _script_cell(run_id: int, user_id: int, trigger: str, script_id: int, 
         finally:
             with orch._alive_lock:
                 orch._alive.discard(child_id)
+
+
+async def _sql_cell(run_id: int, user_id: int, trigger: str, script_id: int, cells: _Cells, step: int, col: int,
+                    since: datetime | None) -> str | None:
+    from app.services import sql_script_runs
+
+    with Session(orch.engine) as s:
+        script = s.get(SqlScript, script_id)
+        user = s.get(User, user_id)
+        if script is None:
+            return f"SQL script {script_id} no longer exists"
+        if user is None or not user.is_active:
+            return USER_GONE
+        name = script.name
+        for _ in range(SLOT_ATTEMPTS):
+            live = sql_script_runs.live_run(s, script_id)
+            if live is not None:
+                # a write already going: its outcome counts when it read after the previous step
+                if since is None or (live.started_at is not None and live.started_at >= since):
+                    return await _wait_for(s, run_id, live.id, name, cells, step, col, take_outcome=True)
+                await _wait_for(s, run_id, live.id, name, cells, step, col, take_outcome=False)
+                continue
+            try:
+                run = await sql_script_runs.launch(s, user, script, trigger, parent_run_id=run_id)
+            except HTTPException as e:
+                if e.status_code == 409 and e.detail == sql_script_runs.ALREADY_RUNNING:
+                    continue  # one started in between: wait for it
+                return f"'{name}': {e.detail}"
+            break
+        else:
+            return f"'{name}': its write could not be started"
+        await cells.set(step, col, run_id=run.id, waited=False)
+        try:
+            run = await orch._wait_run(s, run)
+        except asyncio.CancelledError:
+            raise
+        if run.status != "SUCCESS":
+            return f"'{name}': {run.error or run.status}"
+        return None
 
 
 async def _container_cell(run_id: int, user_id: int, trigger: str, cell: FlowGroupCell, cells: _Cells,

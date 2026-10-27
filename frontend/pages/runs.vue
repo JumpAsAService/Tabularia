@@ -6,7 +6,7 @@ import { ref, watch, computed } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { knownError } from '~/composables/knownErrors'
 import { useFormat } from '~/composables/useFormat'
-import { History, Search, RefreshCw, ChevronRight, Workflow, Database, CalendarClock, User, Rows3, TriangleAlert, FileCode2, Container, Mail } from 'lucide-vue-next'
+import { History, Search, RefreshCw, ChevronRight, Workflow, Database, DatabaseSearch, CalendarClock, User, Rows3, TriangleAlert, FileCode2, Container, Mail } from 'lucide-vue-next'
 import { useRuns, type RunInfo } from '~/composables/useRuns'
 import { runNotes, notesText } from '~/composables/usePlaceholders'
 import MissingValues from '~/components/ui/MissingValues.vue'
@@ -104,8 +104,8 @@ const STATUSES = computed<{ value: 'FAILURE' | 'SUCCESS' | ''; label: string }[]
           <ChevronRight :size="14" class="chev" :class="{ rot: expanded === r.id }" />
           <span class="stpill" :class="r.status.toLowerCase()">{{ te(`runs.pill_${r.status}`) ? t(`runs.pill_${r.status}`) : r.status }}</span>
           <span class="who">
-            <component :is="r.kind === 'ingest' ? Database : r.kind === 'script' ? FileCode2 : r.kind === 'container' ? Container : r.kind === 'pushmail' ? Mail : r.flow_group_id ? Rows3 : Workflow" :size="13" />
-            {{ r.flow_name || r.source_name || r.group_name || (r.kind === 'ingest' ? $t('runs.refreshDatasource') : $t('runs.runNumber', { id: r.id })) }}
+            <component :is="r.kind === 'ingest' ? Database : r.kind === 'sql' ? DatabaseSearch : r.kind === 'script' ? FileCode2 : r.kind === 'container' ? Container : r.kind === 'pushmail' ? Mail : r.flow_group_id ? Rows3 : Workflow" :size="13" />
+            {{ r.flow_name || r.sql_script_name || r.source_name || r.group_name || (r.kind === 'ingest' ? $t('runs.refreshDatasource') : $t('runs.runNumber', { id: r.id })) }}
             <span v-if="r.kind === 'script' || r.kind === 'container' || r.kind === 'pushmail'" class="muted">· {{ scriptLabel(r) }}</span>
           </span>
           <span v-if="r.status === 'SUCCESS' && runNotes(r.notes)" class="msg run-note">

@@ -92,22 +92,59 @@ default), an Excel file the format's ~1 million. Over the cap the export stops a
 so; on a connection the database is asked for no more rows than the cap and one. A result
 larger than that belongs in a datasource.
 
+## Writing the result into a datasource
+
+A script can keep its whole result in a datasource, for flows, saved views and the
+other scripts to read. In the **Datasource** card beside the editor give it a name and a
+folder, then **Save**: the name and the folder are part of the script, and of its
+versions. Choosing the folder needs Edit on it; a datasource already there under that
+name is overwritten only when a flow or a script wrote it, never a database's or a
+file's.
+
+**Refresh now** writes the whole result of the **saved** version (save first: unsaved
+changes are not written). The first write creates the datasource; every write after
+replaces its data and keeps its id, so whatever reads it keeps working. The datasource
+changes only when a write succeeds, and its data contract, when it has one, is checked
+before. On the catalog the script's engine writes it; on a connection the database's
+whole result is read, as for a SQL datasource. The card shows the last write: when, how
+many rows, who started it, and why it failed.
+
+Writing needs **Run** on the script's folder and **Edit** on the datasource's, and what
+a run needs: the datasources the SQL names readable by whoever writes, CONNECT on the
+connection. One write at a time: a second one waits for the first to end. Every write is
+in the audit log (`sql_script.publish`) with its SQL.
+
+### On a schedule
+
+**Schedule** sets a cron: the scheduler writes the datasource from the saved version,
+with the rights of whoever set it, checked again every time. A write that those rights
+no longer allow is not started: it shows as a failed write with its reason, and the
+schedule stays, to write again once the rights are back. When someone else changes the
+script's SQL, its connection or the datasource's folder, or moves the script, the
+schedule switches itself off (the audit log says why), because it would run their SQL
+with the author's rights; the author's own changes keep it.
+
+### In a flow group
+
+A script that writes a datasource goes in a flow group ([the spec](specs/flow-group.md)) as a cell
+(**SQL scripts** in the panel on the right): the cell writes the datasource in its step,
+after the steps before it, and the next step reads the new data. Its failure stops the
+group as any cell's. Use a group when the script reads what flows produce: the group
+runs them first, then the script, on one schedule. A script in a group cannot be
+deleted until it is taken out.
+
 ## Saving and sharing
 
 **Create** the first time, then **Save** (Ctrl+S): a save that changes the SQL, the
-engine or the connection is a new version. **Versions** on the side lists them; *View*
+engine, the connection or the datasource is a new version. **Versions** on the side lists them; *View*
 shows an older one read-only, *Restore* makes it the newest. Old versions beyond
 `ORCHESTRATOR__VERSIONS_KEPT` are pruned, the current one never.
 
 | On the script's folder | You can |
 |---|---|
 | View | open it, read its SQL, run it (on a connection: with CONNECT on it), try changes without saving them |
+| Run | write its datasource now, schedule it |
 | Edit | save, rename, move, duplicate, delete it |
 
 Administrators see every script. SQL scripts show in Explore and in the search. A folder
 that holds one cannot be deleted until it is moved or deleted.
-
-## Coming next
-
-Saving the result as a datasource and refreshing it on a schedule: see the pieces in
-[the spec](specs/sql-scripts.md#pieces).

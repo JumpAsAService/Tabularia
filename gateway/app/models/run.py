@@ -88,6 +88,7 @@ class Run(SQLModel, table=True):
     id: Optional[int] = Field(default=None, primary_key=True)
     # kind="flow": a flow's run (flow_id set).
     # kind="ingest": refresh of a database datasource (datasource_id set).
+    # kind="sql": a SQL script writing its datasource (sql_script_id set).
     kind: str = Field(default="flow", index=True)
     flow_id: Optional[int] = Field(default=None, foreign_key="flows.id", index=True)
     # set on a flow group's own run (kind="orchestration", flow_id None); the runs
@@ -97,6 +98,9 @@ class Run(SQLModel, table=True):
     # (kind="orchestration", queued and claimed as a flow's) and the script run under
     # it (kind="script"), which holds the attempts, the log and the output
     saved_script_id: Optional[int] = Field(default=None, foreign_key="saved_scripts.id", index=True)
+    # a SQL script writing its result into its datasource (kind="sql"): an engine task
+    # whose output is published as a flow's Output is (docs/specs/sql-scripts.md)
+    sql_script_id: Optional[int] = Field(default=None, foreign_key="sql_scripts.id", index=True)
     # a group run only: the state of every cell, parallel to the group's grid
     # ([[{"state", "run_id", "error"}, ...], ...]); written by the process running
     # the group, read by the editor

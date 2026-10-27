@@ -256,9 +256,9 @@ class PushmailCell(BaseModel):
 
 class FlowGroupCell(BaseModel):
     # run a flow, refresh a database datasource, run a saved script, run an image,
-    # send datasources by email
-    kind: Literal["flow", "refresh", "script", "container", "pushmail"]
-    id: int  # of the flow, datasource or script; a container or pushmail cell's own number in the group
+    # send datasources by email, write a SQL script's datasource
+    kind: Literal["flow", "refresh", "script", "container", "pushmail", "sql"]
+    id: int  # of the flow, datasource, script or SQL script; a container or pushmail cell's own number in the group
     # a container cell's settings, as a Container node's data (registryId, repository,
     # tag, command, args, variables, cpu, memory, timeoutSeconds, retries…)
     container: Optional[dict[str, Any]] = None
@@ -651,6 +651,7 @@ class RunOut(BaseModel):
     flow_id: Optional[int] = None
     flow_group_id: Optional[int] = None  # the run of a flow group (no flow, no datasource)
     saved_script_id: Optional[int] = None  # a saved script's run (docs/specs/saved-scripts.md)
+    sql_script_id: Optional[int] = None  # a SQL script writing its datasource (docs/specs/sql-scripts.md)
     status: str
     launched_by: Optional[int]
     trigger_type: str = "manual"  # "manual" | "schedule"
@@ -686,6 +687,7 @@ class RunSearchOut(RunOut):
     source_name: Optional[str] = None
     group_name: Optional[str] = None
     script_name: Optional[str] = None
+    sql_script_name: Optional[str] = None
     launched_by_name: Optional[str] = None  # None when scheduled or the user was removed
 
 

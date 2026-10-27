@@ -27,7 +27,7 @@ from app.core.routing import ReleasingRoute
 from app.db.session import get_session
 from app.deps.auth import get_current_user
 from app.deps.permissions import ensure_can
-from app.models import Datasource, Flow, FlowGroup, Project, Run, SavedScript, User
+from app.models import Datasource, Flow, FlowGroup, Project, Run, SavedScript, SqlScript, User
 from app.models.permission import Capability
 from app.models.run import TERMINAL_STATES
 from app.schemas.models import (
@@ -44,7 +44,7 @@ from app.schemas.models import (
 from app.services import audit, orchestrator
 from app.services import permissions as perm_service
 from app.services.copy_names import commit_copy, free_copy_name
-from app.services import flow_access, saved_scripts
+from app.services import flow_access, saved_scripts, sql_script_runs, sql_scripts
 from app.services.flow_groups import definition_of
 from app.services.pushmail import pushmail_errors
 from app.services.schedule import ScheduleError, next_fire, validate_schedule
@@ -74,8 +74,9 @@ def _cells(definition: FlowGroupDefinition):
 
 
 _KIND_NAME = {"flow": "flow", "refresh": "datasource", "script": "saved script", "container": "container",
-              "pushmail": "pushmail"}
-_OBJECT_KINDS = ("flow", "refresh", "script")  # cells naming an object; container and pushmail cells hold their settings
+              "pushmail": "pushmail", "sql": "SQL script"}
+# cells naming an object; container and pushmail cells hold their settings
+_OBJECT_KINDS = ("flow", "refresh", "script", "sql")
 _SETTINGS_KINDS = ("container", "pushmail")
 
 
@@ -109,10 +110,10 @@ def _container_blocked(session: Session, user: User, definition: FlowGroupDefini
 
 
 def _objects(session: Session, definition: FlowGroupDefinition) -> dict[str, dict[int, Any]]:
-    """The flows, datasources and saved scripts a definition names, by kind of cell,
-    read with one query per kind."""
+    """The flows, datasources, saved scripts and SQL scripts a definition names, by kind
+    of cell, read with one query per kind."""
     ids = {k: {c.id for c in _cells(definition) if c.kind == k} for k in _OBJECT_KINDS}
-    model = {"flow": Flow, "refresh": Datasource, "script": SavedScript}
+    model = {"flow": Flow, "refresh": Datasource, "script": SavedScript, "sql": SqlScript}
     return {k: ({o.id: o for o in session.exec(select(model[k]).where(model[k].id.in_(ids[k]))).all()} if ids[k] else {})
             for k in _OBJECT_KINDS}
 
@@ -122,6 +123,8 @@ def _sees(session: Session, user: User, kind: str, obj, readable: set[int]) -> b
     else it does not exist (docs/specs/saved-scripts.md)."""
     if kind == "script":
         return saved_scripts.can_see(session, user, obj)
+    if kind == "sql":
+        return sql_scripts.can_see(session, user, obj)
     return obj.project_id in readable
 
 
@@ -156,6 +159,9 @@ def _checked(session: Session, user: User, definition: FlowGroupDefinition,
                 errors.append(f"step {n}: {_KIND_NAME[cell.kind]} {cell.id} not found")
             elif cell.kind == "refresh" and obj.kind != "database":
                 errors.append(f"step {n}: '{obj.name}' is published by a flow, it cannot be refreshed")
+            elif cell.kind == "sql" and sql_script_runs.output_of(sql_scripts.content_of(session, obj)) is None:
+                errors.append(f"step {n}: '{obj.name}' does not save its result as a datasource: "
+                              "give it one on its page first")
             elif not perm_service.has_capability(session, user, obj.project_id, Capability.RUN):
                 # a cell is something the group RUNS: seeing it is not enough to put it
                 # in a group that someone's schedule will run
@@ -494,12 +500,16 @@ def _runs_out(session: Session, user: User, runs: list[Run]) -> list[FlowGroupRu
     scripts = {x.id: x for x in session.exec(select(SavedScript).where(SavedScript.id.in_(script_ids))).all()} if script_ids else {}
     flow_ids = {c.get("id") for c in named if c.get("kind") == "flow"}
     ds_ids = {c.get("id") for c in named if c.get("kind") == "refresh"}
+    sql_ids = {c.get("id") for c in named if c.get("kind") == "sql"}
     folder_of = {
         ("flow", i): p for i, p in session.exec(select(Flow.id, Flow.project_id).where(Flow.id.in_(flow_ids))).all()
     } if flow_ids else {}
     if ds_ids:
         folder_of.update({("refresh", i): p for i, p in
                           session.exec(select(Datasource.id, Datasource.project_id).where(Datasource.id.in_(ds_ids))).all()})
+    if sql_ids:
+        folder_of.update({("sql", i): p for i, p in
+                          session.exec(select(SqlScript.id, SqlScript.project_id).where(SqlScript.id.in_(sql_ids))).all()})
     readable = perm_service.readable_project_ids(session, user)
     for cell in named:
         if cell.get("kind") in _SETTINGS_KINDS:
