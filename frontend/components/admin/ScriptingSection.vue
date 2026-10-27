@@ -233,9 +233,10 @@ async function removeEnvironment() {
   } catch (err: any) {
     const detail = err?.data?.detail
     if (detail?.code === 'in_use') {
-      // flows with Script nodes of it, or saved scripts of it
+      // flows with Script nodes of it, saved scripts or notebooks of it
       toast.error(detail.flows?.length ? t('scripting.inUse', { flows: detail.flows.join(', ') })
-        : t('scripting.inUseByScripts', { scripts: (detail.scripts ?? []).join(', ') }))
+        : detail.notebooks?.length ? t('scripting.inUseByNotebooks', { notebooks: detail.notebooks.join(', ') })
+          : t('scripting.inUseByScripts', { scripts: (detail.scripts ?? []).join(', ') }))
     } else {
       toast.error(errMessage(err))
     }
@@ -449,7 +450,7 @@ function addPackage() {
 }
 
 const groupName = (id: number) => props.groups.find((g) => g.id === id)?.name ?? `#${id}`
-const basePackages = computed(() => (form.value.language === 'python' ? 'polars, pyarrow' : 'arrow'))
+const basePackages = computed(() => (form.value.language === 'python' ? 'polars, pyarrow, marimo' : 'arrow'))
 </script>
 
 <template>

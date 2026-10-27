@@ -1,0 +1,76 @@
+{{- if .Values.scripts.enabled }}
+{{/*
+The marimo notebooks' pods (docs/specs/notebooks.md, «Runtime»), in the scripts
+namespace: marimo answers without a password of its own, so only Tabularia's gateway and
+orchestrator may reach it — the gateway proxies the browser to it, the orchestrator reads
+the editor's file to keep it as the draft. Always, whatever scripts.blockTabularia says.
+
+With blockTabularia, the policy of the users' code (user-code-networkpolicy.yaml) keeps
+them from Tabularia's namespace, as every script; the second policy lets them reach the
+gateway's pods there, on its port, to read datasources (gateway/app/routes/notebook_data.py,
+which takes nothing but a notebook's token). Network policies add up: the rest of that
+policy holds. Without blockTabularia there is no egress policy, and none is added here:
+an egress policy alone would cut them off from everything else.
+*/}}
+{{- $tabularia := dict "kubernetes.io/metadata.name" .Release.Namespace }}
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: {{ include "tabularia.fullname" . }}-notebooks-ingress
+  namespace: {{ include "tabularia.scriptsNamespace" . }}
+  labels:
+    {{- include "tabularia.labels" . | nindent 4 }}
+spec:
+  podSelector:
+    matchLabels:
+      app.kubernetes.io/component: notebook
+  policyTypes:
+    - Ingress
+  ingress:
+    - from:
+        - namespaceSelector:
+            matchLabels:
+              {{- toYaml $tabularia | nindent 14 }}
+          podSelector:
+            matchLabels:
+              app.kubernetes.io/name: {{ include "tabularia.name" . }}
+              app.kubernetes.io/instance: {{ .Release.Name }}
+            matchExpressions:
+              - key: app.kubernetes.io/component
+                operator: In
+                values: [gateway, orchestrator]
+      ports:
+        - protocol: TCP
+          port: 2718   # marimo
+        - protocol: TCP
+          port: 2719   # the editor's file, read-only
+{{- if .Values.scripts.blockTabularia }}
+---
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: {{ include "tabularia.fullname" . }}-notebooks-egress
+  namespace: {{ include "tabularia.scriptsNamespace" . }}
+  labels:
+    {{- include "tabularia.labels" . | nindent 4 }}
+spec:
+  podSelector:
+    matchLabels:
+      app.kubernetes.io/component: notebook
+  policyTypes:
+    - Egress
+  egress:
+    - to:
+        - namespaceSelector:
+            matchLabels:
+              {{- toYaml $tabularia | nindent 14 }}
+          podSelector:
+            matchLabels:
+              app.kubernetes.io/name: {{ include "tabularia.name" . }}
+              app.kubernetes.io/instance: {{ .Release.Name }}
+              app.kubernetes.io/component: gateway
+      ports:
+        - protocol: TCP
+          port: 8000   # the gateway's container port (its Service may expose another)
+{{- end }}
+{{- end }}

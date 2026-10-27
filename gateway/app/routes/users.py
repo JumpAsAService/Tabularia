@@ -360,7 +360,7 @@ def remove_user(session: Session, user_id: int) -> None:
     from app.models import (
         AiChat, AiChatTurn, AiModel, ApiToken, AuditLog, Banner, Connection, Datasource, DisabledEngine, Flow,
         FlowGroup, FlowVersion, Permission, PrivacyNotice, Project, Run, SavedScript, SavedScriptVersion, SavedView,
-        SqlScript, SqlScriptVersion,
+        SqlScript, SqlScriptVersion, Notebook, NotebookSession, NotebookVersion,
         Upload, UserSession, Webhook,
     )
 
@@ -376,6 +376,9 @@ def remove_user(session: Session, user_id: int) -> None:
     session.exec(sa_delete(UserSession).where(UserSession.user_id == user_id))
     session.exec(sa_delete(ApiToken).where(ApiToken.user_id == user_id))
     session.exec(sa_delete(Upload).where(Upload.owner_id == user_id))
+    # the notebook pods reading with the account's rights: no session holds their Jobs
+    # any more, and the reaper deletes them at its next round
+    session.exec(sa_delete(NotebookSession).where(NotebookSession.user_id == user_id))
     # the client addresses of the account go with it (services/ip_retention.py);
     # the rows stay, with the email of the time
     from app.services import ip_retention
@@ -411,6 +414,11 @@ def remove_user(session: Session, user_id: int) -> None:
         (SqlScript, SqlScript.owner_id),
         (SqlScript, SqlScript.run_scheduled_by),
         (SqlScriptVersion, SqlScriptVersion.created_by),
+        # a notebook version left without its author: the app no longer starts (it reads
+        # with that author's rights) until someone saves or restores a version
+        (Notebook, Notebook.owner_id),
+        (Notebook, Notebook.draft_by),
+        (NotebookVersion, NotebookVersion.created_by),
         (AiModel, AiModel.updated_by),
         (Banner, Banner.created_by),
         (DisabledEngine, DisabledEngine.disabled_by),

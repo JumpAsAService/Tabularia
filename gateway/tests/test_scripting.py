@@ -316,7 +316,7 @@ def test_a_build_goes_from_queued_to_ready_and_current(app, session, cluster):
     assert '"containerimage.digest"' in container["command"][2]
     dockerfile = next(e["value"] for e in container["env"] if e["name"] == "TABULARIA_DOCKERFILE")
     assert dockerfile.startswith("FROM python:3.12-slim\n")
-    assert "polars\npyarrow\nscikit-learn==1.5.2\nTABULARIA_PACKAGES\n" in dockerfile and "USER 10001" in dockerfile
+    assert "polars\npyarrow\nmarimo\nscikit-learn==1.5.2\nTABULARIA_PACKAGES\n" in dockerfile and "USER 10001" in dockerfile
     assert {"secretName": "registry-push", "items": [{"key": ".dockerconfigjson", "path": "config.json"}]} in \
         [v.get("secret") for v in pod["volumes"]]
     assert build["spec"]["backoffLimit"] == 0 and build["spec"]["activeDeadlineSeconds"] == 3600

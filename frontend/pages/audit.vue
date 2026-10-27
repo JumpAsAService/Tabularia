@@ -10,7 +10,7 @@ import { GridComponent, TooltipComponent, LegendComponent } from 'echarts/compon
 import VChart from 'vue-echarts'
 import {
   ScrollText, Search, RefreshCw, ChevronLeft, ChevronRight, Circle,
-  LogIn, LogOut, Workflow, Database, Plug, Download, Shield, CheckCircle2, XCircle, AlertTriangle, KeyRound, SlidersHorizontal, Radar, Rows3, Server, Folder, Code2, DatabaseSearch, Boxes, DatabaseBackup, Sparkles, Megaphone, FileCheck, Mail, Cpu } from 'lucide-vue-next'
+  LogIn, LogOut, Workflow, Database, Plug, Download, Shield, CheckCircle2, XCircle, AlertTriangle, KeyRound, SlidersHorizontal, Radar, Rows3, Server, Folder, Code2, DatabaseSearch, Boxes, DatabaseBackup, Sparkles, Megaphone, FileCheck, Mail, Cpu, NotebookPen } from 'lucide-vue-next'
 import { useApi, type AuditEntry, type ActiveSession, type AccessActivity } from '~/composables/useApi'
 import { useI18n } from 'vue-i18n'
 import { useFormat } from '~/composables/useFormat'
@@ -191,6 +191,14 @@ const ACTION_META = computed<Record<string, { icon: any; color: string; label: s
     'sql_script.export': { icon: DatabaseSearch, color: u.violet, label: t('audit.sqlScriptExportAction') },
     'sql_script.publish': { icon: DatabaseSearch, color: u.violet, label: t('audit.sqlScriptPublishAction') },
     'sql_script.schedule': { icon: DatabaseSearch, color: u.violet, label: t('audit.sqlScriptScheduleAction') },
+    'notebook.create': { icon: NotebookPen, color: u.accent, label: t('audit.notebookCreateAction') },
+    'notebook.update': { icon: NotebookPen, color: u.accent, label: t('audit.notebookUpdateAction') },
+    'notebook.delete': { icon: NotebookPen, color: u.danger, label: t('audit.notebookDeleteAction') },
+    'notebook.restore': { icon: NotebookPen, color: u.accent, label: t('audit.notebookRestoreAction') },
+    'notebook.start': { icon: NotebookPen, color: u.violet, label: t('audit.notebookStartAction') },
+    'notebook.stop': { icon: NotebookPen, color: u.accent, label: t('audit.notebookStopAction') },
+    'notebook.save': { icon: NotebookPen, color: u.accent, label: t('audit.notebookSaveAction') },
+    'notebook.read': { icon: NotebookPen, color: u.violet, label: t('audit.notebookReadAction') },
     'auth.sso_login': { icon: KeyRound, color: u.success, label: t('audit.ssoLoginAction') },
     'auth.sso_login_failed': { icon: KeyRound, color: u.danger, label: t('audit.ssoLoginFailedAction') },
     'auth.first_run_setup': { icon: KeyRound, color: u.success, label: t('audit.firstRunSetupAction') },

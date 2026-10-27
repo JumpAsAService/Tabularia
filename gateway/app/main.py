@@ -27,6 +27,7 @@ from app.services.engine_panel_settings import push_loop as engine_settings_loop
 from app.services.kube_scaling import reapply_loop as scaling_loop
 from app.services.siem import forwarding_loop as siem_loop
 from app.services.script_builds import build_loop as script_builds_loop
+from app.services.notebook_runtime import reaper_loop as notebooks_loop
 from app.services.settings_rollout import rollout_loop as settings_rollout_loop
 from app.routes.auth import router as auth_router
 from app.routes.sso import router as sso_router
@@ -49,6 +50,10 @@ from app.routes.engine_policy import router as engine_policy_router
 from app.routes.saved_views import router as saved_views_router
 from app.routes.scripts import router as scripts_router
 from app.routes.sql_scripts import router as sql_scripts_router
+from app.routes.notebooks import router as notebooks_router
+from app.routes.notebook_sessions import router as notebook_sessions_router
+from app.routes.notebook_proxy import router as notebook_proxy_router
+from app.routes.notebook_data import router as notebook_data_router
 from app.routes.flow_groups import router as flow_groups_router
 from app.routes.search import router as search_router
 from app.routes.projects import router as projects_router
@@ -103,6 +108,9 @@ def start_background_work(stop: asyncio.Event) -> list[asyncio.Task]:
         # on Kubernetes, the images of the scripting environments: built, then checked
         # (it returns at once elsewhere)
         asyncio.create_task(script_builds_loop(stop)),
+        # on Kubernetes, the notebooks' pods: the idle ones stopped, the editors' files kept
+        # as drafts, the ones that do not start failed saying why (it returns at once elsewhere)
+        asyncio.create_task(notebooks_loop(stop)),
         # on Kubernetes, the pods restarted one at a time after a setting read at start
         # changed, when an administrator asks (it returns at once elsewhere)
         asyncio.create_task(settings_rollout_loop(stop)),
@@ -290,6 +298,13 @@ if settings.app.role != "orchestrator":
     app.include_router(saved_views_router)
     app.include_router(scripts_router)
     app.include_router(sql_scripts_router)
+    app.include_router(notebooks_router)
+    # the notebooks' pods: their sessions and «Save version» first, then the proxy to
+    # marimo (its paths would take /notebooks/{id}/edit/save otherwise), and what the
+    # pods read, with their own token
+    app.include_router(notebook_sessions_router)
+    app.include_router(notebook_proxy_router)
+    app.include_router(notebook_data_router)
     app.include_router(flow_groups_router)
     app.include_router(search_router)
     app.include_router(projects_router)

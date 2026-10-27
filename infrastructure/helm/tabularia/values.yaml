@@ -776,6 +776,21 @@ scripts:
   baseImages: {}
   pypiIndexUrl: ""         # empty = PyPI
   cranUrl: ""              # empty = https://cran.r-project.org; or a CRAN mirror
+  # The marimo notebooks (docs/specs/notebooks.md): a pod per notebook being used, its
+  # app or its editor, in the scripts namespace with the image of the notebook's Python
+  # environment, started when someone opens it and stopped when nobody uses it. Only the
+  # gateway's and the orchestrator's pods may reach them, and they may reach the gateway
+  # only to read datasources (templates/notebooks-networkpolicy.yaml). The browser talks
+  # to marimo over a WebSocket through the ingress: no longer read timeout is needed,
+  # the gateway pings it every 20 s and marimo reconnects by itself.
+  notebooks:
+    idleMinutes: 15            # a pod nobody used for this long is stopped
+    maxLifetimeHours: 12       # the longest a pod lives, used or not
+    maxLive: 20                # notebook pods at once, apps and editors together
+    startTimeoutSeconds: 300   # a pod not answering by then has failed to start
+    # a notebook's token holds only from its own pod's address; false only behind a
+    # service mesh (Istio, Linkerd), whose sidecars hide the pods' addresses
+    podIpCheck: true
 
 # Administration → Container registries: the registries the images of the Container
 # node come from, with their credentials, how to trust their certificate (a company

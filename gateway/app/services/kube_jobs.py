@@ -141,6 +141,24 @@ async def delete_job(namespace: str, name: str) -> None:
             raise
 
 
+async def list_jobs(namespace: str, selector: str) -> list[dict]:
+    """The Jobs of the namespace with the label selector (a notebook's pods: their reaper)."""
+    out = await _call("GET", f"{_jobs(namespace)}?labelSelector={quote(selector)}")
+    return list(out.get("items") or [])
+
+
+async def pod_log(namespace: str, pod: str, container: str, tail_lines: int = 200) -> str:
+    """The end of the log of one container of a Pod ("" when it never started): a Pod with
+    two containers needs the name."""
+    try:
+        return await _call("GET", f"/api/v1/namespaces/{namespace}/pods/{pod}/log?container={quote(container)}"
+                                  f"&tailLines={tail_lines}", text=True)
+    except KubeError as e:
+        if e.status in (400, 404):
+            return ""
+        raise
+
+
 async def delete_jobs(namespace: str, selector: str) -> None:
     await _call("DELETE", f"{_jobs(namespace)}?labelSelector={quote(selector)}&propagationPolicy=Background")
 

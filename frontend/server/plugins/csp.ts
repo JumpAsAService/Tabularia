@@ -54,8 +54,9 @@ export async function policy(nuxtHtml: string, apiBase: unknown, grafanaUrl: unk
     "img-src 'self' data: blob:",
     "font-src 'self' data:",
     ["connect-src 'self'", api].filter(Boolean).join(' '),
-    // the Monitoring tab embeds Grafana
-    ["frame-src 'self'", grafana].filter(Boolean).join(' '),
+    // the Monitoring tab embeds Grafana; the notebooks' app and editor are marimo behind
+    // the gateway (the site itself when the API is under /api)
+    ["frame-src 'self'", grafana, api].filter(Boolean).join(' '),
     "object-src 'none'",
     "base-uri 'self'",
     "form-action 'self'",

@@ -58,8 +58,10 @@ R_SYSTEM_LIBRARIES = (
     "zlib1g-dev", "libbz2-dev", "liblzma-dev", "libzstd-dev", "libicu-dev", "libgit2-dev", "libfontconfig1-dev",
     "libfreetype-dev", "libharfbuzz-dev", "libfribidi-dev", "libpng-dev", "libjpeg-dev", "libtiff-dev",
 )
-# always installed: what a script needs to read its input from S3 and write its output
-BASE_PACKAGES = {"python": ["polars", "pyarrow"], "r": ["arrow"]}
+# always installed: what a script needs to read its input from S3 and write its output;
+# in Python marimo too, which serves the notebooks (docs/specs/notebooks.md) from the
+# same images as the scripts
+BASE_PACKAGES = {"python": ["polars", "pyarrow", "marimo"], "r": ["arrow"]}
 # the user the scripts run as, in every image
 SCRIPT_UID = 10001
 LABEL_ENV = "tabularia.io/environment"

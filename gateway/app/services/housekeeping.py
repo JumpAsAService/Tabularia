@@ -103,6 +103,20 @@ def sql_script_versions(session: Session, kept: int) -> int:
             LIMIT :batch)""", kept=kept)
 
 
+def notebook_versions(session: Session, kept: int) -> int:
+    if kept <= 0:
+        return 0
+    return _in_batches(session, """
+        DELETE FROM notebook_versions WHERE id IN (
+            SELECT t.id FROM (
+                SELECT id, notebook_id, version,
+                       ROW_NUMBER() OVER (PARTITION BY notebook_id ORDER BY version DESC) AS n
+                FROM notebook_versions) t
+            WHERE t.n > :kept AND NOT EXISTS (
+                SELECT 1 FROM notebooks s WHERE s.id = t.notebook_id AND s.current_version = t.version)
+            LIMIT :batch)""", kept=kept)
+
+
 def ai_chats(session: Session, days: int, at: datetime | None = None) -> int:
     if days <= 0:
         return 0
@@ -146,6 +160,7 @@ def one_pass(session: Session, at: datetime | None = None) -> dict[str, int]:
         "flow_versions": lambda: flow_versions(session, o.versions_kept),
         "saved_script_versions": lambda: script_versions(session, o.versions_kept),
         "sql_script_versions": lambda: sql_script_versions(session, o.versions_kept),
+        "notebook_versions": lambda: notebook_versions(session, o.versions_kept),
         "ai_chats": lambda: ai_chats(session, o.ai_chat_retention_days, at=at),
     }
     done: dict[str, int] = {}

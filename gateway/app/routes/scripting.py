@@ -544,6 +544,11 @@ async def delete_environment(environment_id: int, request: Request, session: Ses
     scripts = scripts_using_environment(session, env.id)
     if scripts:
         raise HTTPException(status_code=409, detail={"code": "in_use", "flows": [], "scripts": scripts})
+    from app.services.notebooks import notebooks_using_environment
+
+    used_by = notebooks_using_environment(session, env.id)
+    if used_by:
+        raise HTTPException(status_code=409, detail={"code": "in_use", "flows": [], "scripts": [], "notebooks": used_by})
     if not script_builds.disabled_reason():
         try:
             await script_builds.cancel_environment(env.id)

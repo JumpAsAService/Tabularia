@@ -576,8 +576,8 @@ class OrchestratorSettings(BaseModel):
     # env: ORCHESTRATOR__CONTRACT_RESULTS_KEPT — the latest data contract reports kept per
     # datasource; 0 keeps them all (services/housekeeping.py)
     contract_results_kept: int = Field(default=100, ge=0)
-    # env: ORCHESTRATOR__VERSIONS_KEPT — the latest versions kept per flow and per saved
-    # script, the one in use always; 0 keeps them all
+    # env: ORCHESTRATOR__VERSIONS_KEPT — the latest versions kept per flow, per saved or
+    # SQL script and per notebook, the one in use always; 0 keeps them all
     versions_kept: int = Field(default=50, ge=0)
     # env: ORCHESTRATOR__AI_CHAT_RETENTION_DAYS — the assistant's conversations untouched for
     # this long are deleted (not the spending ledger); 0 keeps them
@@ -773,6 +773,26 @@ class ContainersSettings(BaseModel):
         return v.strip()
 
 
+class NotebooksSettings(BaseModel):
+    """The pods of the marimo notebooks (docs/specs/notebooks.md), on Kubernetes with
+    the scripting environments: they run in the scripts namespace, from the images of
+    the environments (services/notebook_runtime.py). The Helm chart sets GATEWAY_URL."""
+    # a pod nobody has used for this long is stopped (an editor's file becomes the draft)
+    idle_minutes: int = Field(default=15, ge=1, le=24 * 60)
+    # the longest a pod lives, used or not (the Job's activeDeadlineSeconds)
+    max_lifetime_hours: int = Field(default=12, ge=1, le=7 * 24)
+    # how many notebook pods may run at once, apps and editors together
+    max_live: int = Field(default=20, ge=1, le=1000)
+    # a pod not answering after this long has failed to start, saying why
+    start_timeout_seconds: int = Field(default=300, ge=30, le=3600)
+    # the gateway's address inside the cluster, which the pods call to read datasources
+    # (http://<release>-gateway.<namespace>.svc.cluster.local:8000); empty = they cannot
+    gateway_url: str = ""
+    # a notebook token is honoured only from its own pod's address. Off only where the
+    # gateway cannot see that address: a service mesh (Istio, Linkerd) shows its sidecar's
+    pod_ip_check: bool = True
+
+
 class Settings(BaseSettings):
     """
     The gateway's configuration. Priority: init > env > default.
@@ -800,6 +820,7 @@ class Settings(BaseSettings):
     kubernetes: KubernetesSettings = Field(default_factory=KubernetesSettings)
     scripts: ScriptsSettings = Field(default_factory=ScriptsSettings)
     containers: ContainersSettings = Field(default_factory=ContainersSettings)
+    notebooks: NotebooksSettings = Field(default_factory=NotebooksSettings)
 
     def is_production(self) -> bool:
         return self.app.env_name.lower() in ("production", "prod")

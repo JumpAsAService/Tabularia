@@ -24,6 +24,9 @@ dependencies = [
     "alembic>=1.16",
     "packaging>=24.0",
     "ruff>=0.17.1",
+    # the notebooks' proxy (routes/notebook_proxy.py): the client towards marimo's WebSocket,
+    # and the server uvicorn uses for the browser's
+    "websockets>=15.0",
 ]
 
 [dependency-groups]

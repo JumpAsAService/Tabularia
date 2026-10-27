@@ -553,6 +553,8 @@ def render(found: Found, texts: dict) -> str:
                 out += [f"Read by both services, so listed under [{page['components']['shared']}]"
                         f"(#{slug(page['components']['shared'])}): {listed}.", ""]
             out += [header] + [row(v) for v in rows] + [""]
+            if s.get("outro"):  # a note after the table, with its own heading when it needs one
+                out += [s["outro"].strip(), ""]
 
     out += [f"## {page['components']['frontend']}", "", page["frontend_intro"].strip(), "",
             "| Variable | Default | Helm value | Description |", "|---|---|---|---|"]

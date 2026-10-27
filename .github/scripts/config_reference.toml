@@ -153,6 +153,22 @@ component = "gateway"
 title = "AI assistant"
 prefixes = ["AI"]
 intro = "Optional: a chat over the catalog and an assistant in the flow editor, against any OpenAI-compatible endpoint. Off until `AI__BASE_URL` and `AI__SECRET_KEY` are set, and no model is usable until an administrator enables it. On the external ClickHouse the assistant can run as a read-only user: see [the AI user](engines/clickhouse-ai-user.md). The dbt export uses it too ([dbt export](dbt-export.md))."
+outro = """
+#### The agents' instructions
+
+Administration → AI → *Agent instructions* shows the system prompt of every AI agent: the
+data assistant, the flow and script assistants, the conversation titles, and the dbt
+export's descriptions and SQL translations. An administrator can rewrite an agent's text
+or restore the default; observers read it. A change applies from the next request, on every
+gateway replica, and goes to the audit log (`ai.prompt_update`, `ai.prompt_reset`).
+
+What the administrators write is only the agent's text. At every request Tabularia appends
+a context that cannot be edited: today's date, the engine's SQL dialect and the row cap,
+the flow or the script being edited, the dialects of a translation, and, last, the language
+of the user's interface (the answer is written in it whatever language the question or the
+data are in). The panel shows that context with example values. Texts the AI already wrote
+for a version of a flow in a dbt export stay: a new text applies to later versions.
+"""
 
 [[section]]
 id = "gateway-preview"
@@ -214,6 +230,13 @@ component = "gateway"
 title = "Container registries (Kubernetes)"
 prefixes = ["CONTAINERS"]
 intro = "Administration → Container registries: the registries the images of the Container node come from, their credentials, how to trust their certificate and the repositories allowed ([Container registries](container-registries.md)). Off unless `CONTAINERS__ENABLED` is true; the chart sets it with `containers.enabled`."
+
+[[section]]
+id = "gateway-notebooks"
+component = "gateway"
+title = "Notebooks (Kubernetes)"
+prefixes = ["NOTEBOOKS"]
+intro = "The marimo notebooks' pods: one per notebook being used, its app or its editor, in the scripts namespace with the image of the notebook's Python environment, started when someone opens it and stopped when nobody uses it. On with the scripting environments (`SCRIPTS__ENABLED`); the chart sets the gateway's address and these limits from `scripts.notebooks`."
 
 [[section]]
 id = "engine-api"
@@ -856,6 +879,35 @@ text = "How much of the end of a container's log the run keeps and the run page 
 
 [var.SCRIPTS__LINT]
 text = "The code editor underlines what Ruff finds in a Script node's Python code (undefined names, syntax errors, unused imports), and the imports the environment does not have, while it is typed. Each check runs Ruff in the gateway for a few milliseconds, at most twice a second per person."
+
+[var.NOTEBOOKS__IDLE_MINUTES]
+text = "A notebook's pod nobody has used for this long is stopped (an open page keeps it alive); an editor's unsaved file becomes the notebook's draft first."
+
+[var.NOTEBOOKS__MAX_LIFETIME_HOURS]
+text = "The longest a notebook's pod lives, used or not; the next visit starts a new one."
+
+[var.NOTEBOOKS__MAX_LIVE]
+text = "How many notebook pods may run at once, apps and editors together; past it, opening another one says so."
+
+[var.NOTEBOOKS__POD_IP_CHECK]
+text = "A notebook's token is honoured only when the call comes from its own pod's address, and never with a forwarding header (`X-Forwarded-For`, `Forwarded`, `X-Real-IP`): a token the notebook's code printed is useless anywhere else. Turn it off only where the gateway cannot see the pods' addresses, behind a service mesh's sidecars (Istio, Linkerd)."
+
+[var.NOTEBOOKS__START_TIMEOUT_SECONDS]
+text = "A notebook's pod that has not answered after this long has failed to start, and says why (no node free, an image not downloaded)."
+
+[var.TABULARIA_URL]
+section = "gateway-notebooks"
+helm = "set in the notebooks' pods"
+text = "Not to set: the gateway gives it to every notebook's pod, from `NOTEBOOKS__GATEWAY_URL`; the `tabularia` module in the pod reads datasources there."
+
+[var.TABULARIA_NOTEBOOK_TOKEN]
+section = "gateway-notebooks"
+helm = "set in the notebooks' pods"
+text = "Not to set: the token of a notebook's session, which the gateway puts in the pod's Secret; it holds only on the notebooks' data endpoints, and only while the session lives."
+
+[var.NOTEBOOKS__GATEWAY_URL]
+helm = "set by the chart"
+text = "The gateway's address inside the cluster, which the notebooks' pods call to read datasources. The chart sets it to the gateway's Service; empty, a notebook cannot read datasources."
 
 # ── Engine ───────────────────────────────────────────────────────────────────
 

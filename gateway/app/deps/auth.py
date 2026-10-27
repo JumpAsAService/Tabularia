@@ -5,6 +5,7 @@ from datetime import datetime, timedelta, timezone
 
 import jwt
 from fastapi import Depends, HTTPException, Request, status
+from starlette.requests import HTTPConnection
 from fastapi.security import OAuth2PasswordBearer
 from sqlalchemy import exists
 from sqlalchemy.engine import Engine
@@ -257,6 +258,44 @@ def get_current_user(
     # the user just loaded.
     _touch_last_seen(session, user, open_, request)
     return user
+
+
+def cookie_user(conn: HTTPConnection, session: Session) -> User | None:
+    """The person of the session cookie, for the notebooks' proxy (routes/notebook_proxy.py),
+    or None. The same checks as `get_current_user` on the cookie (a session still open, an
+    active account), without the anti-CSRF header: marimo's own requests do not send it,
+    so the proxy checks their `Origin` instead (`same_origin`). WebSockets too."""
+    token = conn.cookies.get(sessions.COOKIE)
+    if not token or api_tokens.is_a_token(token):
+        return None
+    try:
+        payload = decode_access_token(token)
+        user_id, sid = int(payload["sub"]), str(payload["sid"])
+    except (jwt.PyJWTError, KeyError, ValueError, TypeError):
+        return None
+    found = _load_user(session, user_id, sid)
+    if found is None or not found[0].is_active:
+        return None
+    user, open_ = found
+    _touch_last_seen(session, user, open_, conn)  # type: ignore[arg-type] — reads headers and client only
+    return user
+
+
+def same_origin(conn: HTTPConnection) -> bool:
+    """The request comes from a page of Tabularia's own origin: its `Origin` names the
+    host it was sent to (or an origin of APP__CORS_ORIGINS). Browsers send `Origin` with
+    every WebSocket and every request that is not a GET; another site cannot forge it."""
+    from urllib.parse import urlsplit
+
+    from app.core.config import get_settings
+
+    origin = conn.headers.get("origin")
+    if not origin or origin == "null":
+        return False
+    if origin.rstrip("/") in {o.rstrip("/") for o in get_settings().app.cors_origins}:
+        return True
+    host = (conn.headers.get("host") or "").lower()
+    return bool(host) and urlsplit(origin).netloc.lower() == host
 
 
 def require_superuser(

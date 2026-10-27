@@ -319,6 +319,21 @@ gateway needs to build the images there.
 - name: SCRIPTS__CRAN_URL
   value: {{ . | quote }}
 {{- end }}
+{{- $n := $s.notebooks | default dict }}
+# the marimo notebooks' pods (templates/notebooks-networkpolicy.yaml): they call the
+# gateway's Service to read datasources
+- name: NOTEBOOKS__GATEWAY_URL
+  value: {{ printf "http://%s-gateway.%s.svc:%v" (include "tabularia.fullname" .) .Release.Namespace .Values.service.gatewayPort | quote }}
+- name: NOTEBOOKS__IDLE_MINUTES
+  value: {{ $n.idleMinutes | default 15 | quote }}
+- name: NOTEBOOKS__MAX_LIFETIME_HOURS
+  value: {{ $n.maxLifetimeHours | default 12 | quote }}
+- name: NOTEBOOKS__MAX_LIVE
+  value: {{ $n.maxLive | default 20 | quote }}
+- name: NOTEBOOKS__START_TIMEOUT_SECONDS
+  value: {{ $n.startTimeoutSeconds | default 300 | quote }}
+- name: NOTEBOOKS__POD_IP_CHECK
+  value: {{ ne $n.podIpCheck false | quote }}
 {{- end -}}
 
 {{/*

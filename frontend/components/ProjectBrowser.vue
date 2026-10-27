@@ -48,6 +48,7 @@ import {
   Lock,
   FileCode2,
   DatabaseSearch,
+  NotebookPen,
 } from 'lucide-vue-next'
 import { errMessage, useApi } from '~/composables/useApi'
 import { useFlows, type FlowSummary } from '~/composables/useFlows'
@@ -64,6 +65,7 @@ import { useFlowGroups, type FlowGroup } from '~/composables/useFlowGroups'
 import { useSavedScripts, type SavedScript } from '~/composables/useSavedScripts'
 import { useScriptingEditor } from '~/composables/useScripting'
 import { useSqlScripts, type SqlScript } from '~/composables/useSqlScripts'
+import { useNotebooks, type Notebook } from '~/composables/useNotebooks'
 import ContractBadge from '~/components/ui/ContractBadge.vue'
 import ContractDialog from '~/components/ui/ContractDialog.vue'
 import {
@@ -86,9 +88,13 @@ const viewsApi = useSavedViews()
 const groupsApi = useFlowGroups()
 const scriptsApi = useSavedScripts()
 const sqlApi = useSqlScripts()
+const notebooksApi = useNotebooks()
 // «New → Script» only for whoever may use a scripting environment (Kubernetes)
 const scriptingEditor = useScriptingEditor()
 onMounted(() => { scriptingEditor.load() })
+// «New → Notebook» the same, with a Python environment among them (marimo is Python)
+const notebooksAvailable = computed(() => scriptingEditor.available.value
+  && !!scriptingEditor.state.value?.environments.some((e) => e.language === 'python'))
 const { user } = useAuth()
 const toast = useToast()
 const { t } = useI18n()
@@ -107,6 +113,7 @@ const contractFor = ref<DatasourceInfo | null>(null) // the datasource whose dat
 const savedViews = ref<SavedView[]>([])
 const scripts = ref<SavedScript[]>([])
 const sqlScripts = ref<SqlScript[]>([])
+const notebooks = ref<Notebook[]>([])
 const connections = ref<ConnectionInfo[]>([])
 const canConnect = ref(false)
 const canManage = ref(false)
@@ -153,7 +160,7 @@ function openFolder(id: number | null) {
 }
 
 // ── Unified row: one kind of row for six kinds of resource ────────────
-type Kind = 'folder' | 'flow' | 'group' | 'datasource' | 'view' | 'script' | 'sql' | 'connection'
+type Kind = 'folder' | 'flow' | 'group' | 'datasource' | 'view' | 'script' | 'sql' | 'notebook' | 'connection'
 interface Row {
   kind: Kind
   id: number
@@ -177,6 +184,7 @@ const KIND_ICON: Record<Kind, any> = {
   view: Bookmark,
   script: FileCode2,
   sql: DatabaseSearch,
+  notebook: NotebookPen,
   connection: Plug,
 }
 
@@ -223,6 +231,10 @@ const rows = computed<Row[]>(() => {
     const meta = [`v${q.current_version}`, fmtDate(q.updated_at)].filter(Boolean).join(' · ')
     out.push({ kind: 'sql', id: q.id, name: q.name, meta, to: `/sql-script?id=${q.id}`, raw: q })
   }
+  for (const n of notebooks.value) {
+    const meta = [n.environment_name ?? '', `v${n.current_version}`, fmtDate(n.updated_at)].filter(Boolean).join(' · ')
+    out.push({ kind: 'notebook', id: n.id, name: n.name, meta, to: `/notebook?id=${n.id}`, raw: n })
+  }
   for (const c of connections.value) {
     out.push({
       kind: 'connection', id: c.id, name: c.name,
@@ -253,7 +265,7 @@ const visibleRows = computed(() =>
   kindFilter.value ? matching.value.filter((r) => r.kind === kindFilter.value) : matching.value,
 )
 const segments = computed(() =>
-  (['folder', 'flow', 'group', 'datasource', 'view', 'script', 'sql', 'connection'] as Kind[])
+  (['folder', 'flow', 'group', 'datasource', 'view', 'script', 'sql', 'notebook', 'connection'] as Kind[])
     .filter((k) => counts.value[k])
     .map((k) => ({ kind: k, n: counts.value[k] })),
 )
@@ -275,6 +287,7 @@ async function loadFolder(id: number | null) {
   savedViews.value = []
   scripts.value = []
   sqlScripts.value = []
+  notebooks.value = []
   connections.value = []
   permissions.value = []
   canManage.value = false
@@ -304,6 +317,7 @@ async function loadFolder(id: number | null) {
     // only the scripts this person may see; none without scripting
     try { scripts.value = await scriptsApi.listByProject(id) } catch { scripts.value = [] }
     try { sqlScripts.value = await sqlApi.listByProject(id) } catch { sqlScripts.value = [] }
+    try { notebooks.value = await notebooksApi.listByProject(id) } catch { notebooks.value = [] }
     // connections require CONNECT: the refusal is information, not an error
     try {
       connections.value = await connApi.listByProject(id)
@@ -477,6 +491,9 @@ async function moveRow(row: Row, target: number | null) {
     } else if (row.kind === 'sql') {
       await sqlApi.update(row.id, { project_id: target })
       sqlScripts.value = sqlScripts.value.filter((x) => x.id !== row.id)
+    } else if (row.kind === 'notebook') {
+      await notebooksApi.update(row.id, { project_id: target })
+      notebooks.value = notebooks.value.filter((x) => x.id !== row.id)
     } else if (row.kind === 'connection') {
       await connApi.update(row.id, { project_id: target })
       connections.value = connections.value.filter((c) => c.id !== row.id)
@@ -497,7 +514,7 @@ async function moveRow(row: Row, target: number | null) {
 const renaming = ref<string | null>(null)
 const renameDraft = ref('')
 const renameBusy = ref(false)
-const RENAMABLE = new Set<Kind>(['folder', 'flow', 'group', 'datasource', 'view', 'script', 'sql'])
+const RENAMABLE = new Set<Kind>(['folder', 'flow', 'group', 'datasource', 'view', 'script', 'sql', 'notebook'])
 
 function startRename(row: Row) {
   renaming.value = rowKey(row)
@@ -544,6 +561,9 @@ async function commitRename(row: Row) {
     } else if (row.kind === 'sql') {
       await sqlApi.update(row.id, { name })
       sqlScripts.value = rename(sqlScripts.value)
+    } else if (row.kind === 'notebook') {
+      await notebooksApi.update(row.id, { name })
+      notebooks.value = rename(notebooks.value)
     } else if (row.kind === 'folder') {
       await api.update(row.id, { name })
       projects.value = projects.value.map((p) => (p.id === row.id ? { ...p, name } : p))
@@ -603,6 +623,10 @@ async function duplicateRow(row: Row) {
       const copy = await sqlApi.duplicate(row.id)
       sqlScripts.value = [...sqlScripts.value, copy].sort(byName)
       name = copy.name
+    } else if (row.kind === 'notebook') {
+      const copy = await notebooksApi.duplicate(row.id)
+      notebooks.value = [...notebooks.value, copy].sort(byName)
+      name = copy.name
     } else if (row.kind === 'connection') {
       const copy = await connApi.duplicate(row.id)
       connections.value = [...connections.value, copy].sort(byName)
@@ -651,6 +675,11 @@ async function removeRow(row: Row) {
       await sqlApi.remove(row.id)
       sqlScripts.value = sqlScripts.value.filter((x) => x.id !== row.id)
       toast.success(t('projectBrowser.sqlScriptDeleted', { name: row.name }))
+    } else if (row.kind === 'notebook') {
+      if (!ask('projectBrowser.confirmDeleteNotebook')) return
+      await notebooksApi.remove(row.id)
+      notebooks.value = notebooks.value.filter((x) => x.id !== row.id)
+      toast.success(t('projectBrowser.notebookDeleted', { name: row.name }))
     } else if (row.kind === 'connection') {
       if (!ask('projectBrowser.confirmDeleteConnection')) return
       await connApi.remove(row.id)
@@ -690,6 +719,11 @@ function createFlowGroup() {
 function createScript() {
   closeNew()
   if (currentId.value != null) navigateTo(`/script?project=${currentId.value}`)
+}
+
+function createNotebook() {
+  closeNew()
+  if (currentId.value != null) navigateTo(`/notebook?project=${currentId.value}`)
 }
 
 function createSqlScript() {
@@ -983,6 +1017,14 @@ watch(currentId, () => { q.value = ''; kindFilter.value = null; settingsOpen.val
               <button v-else-if="scriptingEditor.state.value?.disabled_reason === 'kubernetes'" class="menu-item off"
                       disabled :title="$t('scripting.kubernetesOnly')">
                 <span class="mi-top"><FileCode2 :size="14" /> {{ $t('projectBrowser.newScriptButton') }}</span>
+                <span class="mi-desc">{{ $t('scripting.kubernetesOnly') }}</span>
+              </button>
+              <button v-if="notebooksAvailable" class="menu-item" @click="createNotebook">
+                <span class="mi-top"><NotebookPen :size="14" /> {{ $t('projectBrowser.newNotebookButton') }}</span>
+              </button>
+              <button v-else-if="scriptingEditor.state.value?.disabled_reason === 'kubernetes'" class="menu-item off"
+                      disabled :title="$t('scripting.kubernetesOnly')">
+                <span class="mi-top"><NotebookPen :size="14" /> {{ $t('projectBrowser.newNotebookButton') }}</span>
                 <span class="mi-desc">{{ $t('scripting.kubernetesOnly') }}</span>
               </button>
               <button class="menu-item" @click="openDbDsDialog">

@@ -10,8 +10,8 @@ from datetime import datetime, timedelta
 from sqlmodel import select
 
 from app.models import (
-    AiChat, AiChatTurn, AiSpend, DataContractResult, FlowVersion, SavedScript, SavedScriptVersion, SqlScript,
-    SqlScriptVersion,
+    AiChat, AiChatTurn, AiSpend, DataContractResult, FlowVersion, Notebook, NotebookVersion, SavedScript,
+    SavedScriptVersion, SqlScript, SqlScriptVersion,
 )
 from app.services import housekeeping
 from tests.conftest import make_flow, make_project, make_user
@@ -66,6 +66,17 @@ def test_a_sql_script_keeps_its_latest_versions_and_the_current_one(session):
     assert [v.version for v in session.exec(select(SqlScriptVersion).order_by(SqlScriptVersion.version)).all()] == [1, 4, 5]
 
 
+def test_a_notebook_keeps_its_latest_versions_and_the_current_one(session):
+    notebook = Notebook(name="n", project_id=1, environment_id=1, current_version=2)
+    session.add(notebook)
+    session.commit()
+    for v in range(1, 6):
+        session.add(NotebookVersion(notebook_id=notebook.id, version=v, content="{}"))
+    session.commit()
+    assert housekeeping.notebook_versions(session, 2) == 2  # v1, v3: v2 is the current one
+    assert [v.version for v in session.exec(select(NotebookVersion).order_by(NotebookVersion.version)).all()] == [2, 4, 5]
+
+
 def test_old_conversations_go_with_their_turns_the_ledger_stays(session):
     user = make_user(session, email="u@x.local")
     old = AiChat(user_id=user.id, updated_at=NOW - timedelta(days=120))
@@ -88,7 +99,7 @@ def test_one_pass_says_what_it_touched(session):
         _report(session, 1)
     session.commit()
     done = housekeeping.one_pass(session, at=NOW)
-    assert done == {"runs": 0, "data_contract_results": 0, "flow_versions": 0, "saved_script_versions": 0, "sql_script_versions": 0, "ai_chats": 0}
+    assert done == {"runs": 0, "data_contract_results": 0, "flow_versions": 0, "saved_script_versions": 0, "sql_script_versions": 0, "notebook_versions": 0, "ai_chats": 0}
 
 
 def test_a_kind_that_fails_does_not_stop_the_others(session, monkeypatch):

@@ -44,6 +44,9 @@ const props = defineProps<{
   // script must, may or does not write TABULARIA_OUTPUT
   inputs?: ScriptInputColumns[]
   output?: 'required' | 'optional' | 'none'
+  // one file and nothing else: a notebook's marimo file. No list of files, no last run,
+  // no assistant (it writes scripts, not notebooks)
+  single?: boolean
 }>()
 const emit = defineEmits<{
   (e: 'update', patch: { files: ScriptFile[]; entrypoint: string }): void
@@ -292,7 +295,7 @@ const side = ref<'env' | 'assistant'>('env')
 // and kept while the variables are shown: the conversation stays
 const assistantOpened = ref(false)
 watch(side, (s) => { if (s === 'assistant') assistantOpened.value = true })
-const aiAvailable = computed(() => !!aiStatus.value?.enabled && !!aiStatus.value.models.length && !props.readOnly)
+const aiAvailable = computed(() => !!aiStatus.value?.enabled && !!aiStatus.value.models.length && !props.readOnly && !props.single)
 onMounted(async () => {
   try { aiStatus.value = await aiApi.status() } catch { /* no assistant: the panel stays as it was */ }
 })
@@ -465,9 +468,9 @@ onBeforeUnmount(() => {
     <!-- nokey: the flow editor's keys (Space pans, Backspace deletes the selected node) stay
          out of the code. Monaco types through EditContext on Chrome and Edge: an element
          Vue Flow does not recognise as a text field -->
-    <div class="layout nokey" :class="{ wide: aiAvailable && side === 'assistant' }">
+    <div class="layout nokey" :class="{ wide: aiAvailable && side === 'assistant', single }">
       <!-- the node's files -->
-      <aside class="files" :aria-label="$t('scripting.editor.files')">
+      <aside v-if="!single" class="files" :aria-label="$t('scripting.editor.files')">
         <div class="side-title">{{ $t('scripting.editor.files') }}</div>
         <ul>
           <li v-for="f in sorted" :key="f.path" :class="{ 'is-on': f.path === current }">
@@ -516,7 +519,7 @@ onBeforeUnmount(() => {
           <div v-else-if="!local.length" class="state muted">{{ $t('scripting.editor.noFiles') }}</div>
           <div ref="host" class="monaco" :class="{ hidden: loading || !!loadError || !local.length }" />
         </div>
-        <details class="last" :open="logOpen" @toggle="logOpen = ($event.target as HTMLDetailsElement).open">
+        <details v-if="!single" class="last" :open="logOpen" @toggle="logOpen = ($event.target as HTMLDetailsElement).open">
           <summary>
             <template v-if="lastRun">
               <component :is="lastRun.status === 'SUCCESS' ? CheckCircle2 : XCircle" :size="13"
@@ -588,6 +591,7 @@ onBeforeUnmount(() => {
 .assist-toggle.on { border-color: var(--accent); color: var(--accent-hi); background: color-mix(in srgb, var(--accent) 10%, transparent); }
 .layout { display: grid; grid-template-columns: 230px minmax(0, 1fr) 260px; gap: 12px; height: min(72vh, 900px); min-height: 420px; }
 .layout.wide { grid-template-columns: 210px minmax(0, 1fr) 360px; }
+.layout.single { grid-template-columns: minmax(0, 1fr) 260px; }
 .env.assist { overflow: hidden; }
 .files, .env { display: flex; flex-direction: column; gap: 6px; min-height: 0; overflow: auto; }
 .side-title { display: flex; align-items: center; gap: 6px; font-size: 11px; text-transform: uppercase; letter-spacing: 0.05em; color: var(--muted); margin-top: 4px; }
@@ -634,7 +638,7 @@ ul { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: col
 .mod { font-family: var(--font-mono, ui-monospace, monospace); }
 .foot { flex: 1; font-size: 12px; }
 @media (max-width: 1000px) {
-  .layout { grid-template-columns: 1fr; height: auto; }
+  .layout, .layout.single { grid-template-columns: 1fr; height: auto; }
   .code { height: 60vh; flex: none; }
 }
 </style>

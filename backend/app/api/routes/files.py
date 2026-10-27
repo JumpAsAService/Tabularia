@@ -13,7 +13,7 @@ import shutil
 import tempfile
 from typing import Optional
 
-from fastapi import APIRouter, File, Form, HTTPException, UploadFile
+from fastapi import APIRouter, File, Form, HTTPException, Query, UploadFile
 
 from app.engine import EngineError
 from app.ingest import (
@@ -101,6 +101,26 @@ def copy_object(bucket: str, source_key: str, target_key: str):
         if str(e.response.get("Error", {}).get("Code", "")) in ("404", "NoSuchKey"):
             raise HTTPException(404, f"no data file at {source_key}") from e
         raise
+
+
+@router.get("/presigned")
+def presigned_link(bucket: str, key: str, expires: int = Query(600, ge=60, le=3600)):
+    """A link to download a datasource's data file, valid for `expires` seconds: a
+    notebook's pod reads it straight from the storage (docs/specs/notebooks.md, «Data»).
+    INTERNAL, for the gateway, which asks for it only after checking that the person may
+    read that datasource; limited to the managed data prefixes and to the storage's own
+    bucket."""
+    from app.core.config import get_settings
+    from app.utils import get_storage_service
+
+    if not key.startswith(("datasets/", "out/")) or ".." in key.split("/"):
+        raise HTTPException(422, "key outside the managed data prefixes")
+    if bucket != get_settings().storage.bucket:
+        raise HTTPException(422, "bucket outside the storage's own")
+    storage = get_storage_service()
+    if not storage.object_exists(bucket, key):
+        raise HTTPException(404, "it has no data yet: refresh it first")
+    return {"url": storage.get_presigned_url(bucket, key, expiration=expires)}
 
 
 @router.delete("/object", status_code=204)

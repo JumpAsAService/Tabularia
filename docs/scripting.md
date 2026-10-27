@@ -9,10 +9,12 @@ For whoever runs Tabularia on Kubernetes, and whoever writes the scripts.
 - **The Script node** of the flow editor runs a step's code, one file or several, as a
   Kubernetes Job in one of those environments ([the design](specs/script-node.md)).
 - **Saved scripts** keep code in a folder, with its versions, its inputs and its output,
-  run on their own, on a schedule, in flow groups and by Script nodes
+  run on their own, on a schedule, in [flow groups](capabilities/flow-groups.md) and by Script nodes
   ([below](#saved-scripts)).
 - **The Scripting tab** shows what you may use: your scripts, your environments with
   their packages and variables, your container registries.
+- **Notebooks** run marimo in the Python environments, as web apps that read the
+  datasources ([marimo notebooks as apps](capabilities/notebooks.md)).
 
 All of it needs Kubernetes. On Docker Compose, Scripting environments, the palette's
 **Script** and the Script nodes of a flow brought from a cluster are greyed out, with
@@ -223,8 +225,8 @@ be read back.
 **New environment** asks for a name, a language and its version, and the packages.
 Packages go one per line:
 
-- **Python**, as in `requirements.txt`: `scikit-learn==1.5.2`. `polars` and `pyarrow` are
-  always installed.
+- **Python**, as in `requirements.txt`: `scikit-learn==1.5.2`. `polars`, `pyarrow` and
+  `marimo` (for the [notebooks](capabilities/notebooks.md)) are always installed.
 - **R**: `dplyr`, or `data.table@1.16.0` for a fixed version. `arrow`, with S3 support,
   is always installed. CRAN publishes sources, so R packages compile during the build:
   the images carry the system libraries the usual packages need, and a build with
@@ -387,7 +389,7 @@ the scripts bucket, where the files of the other runs are. Read and write throug
 
 ### The assistant
 
-Where the installation has an [AI assistant](../README.md#ai-assistant), **Assistant**
+Where the installation has an [AI assistant](integrations/ai.md), **Assistant**
 in the editor's header puts it beside the code, in place of the environment's panel.
 Ask for a change, or a script that does something with the inputs: it answers and may
 **propose files**, whole, listed with what each change adds and removes. **Apply** writes

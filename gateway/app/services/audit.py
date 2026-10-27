@@ -158,6 +158,18 @@ SQL_SCRIPT_RUN = "sql_script.run"
 SQL_SCRIPT_EXPORT = "sql_script.export"
 SQL_SCRIPT_PUBLISH = "sql_script.publish"  # a write of the script's datasource
 SQL_SCRIPT_SCHEDULE = "sql_script.schedule"
+# notebooks: marimo notebooks kept in a folder (routes/notebooks.py); a move is an
+# update with its folders, as for saved scripts
+NOTEBOOK_CREATE = "notebook.create"
+NOTEBOOK_UPDATE = "notebook.update"
+NOTEBOOK_DELETE = "notebook.delete"
+NOTEBOOK_RESTORE = "notebook.restore"
+# their pods (services/notebook_runtime.py): an app or an editor started, stopped (by
+# someone, or idle), a version saved from the editor, a datasource read by a notebook
+NOTEBOOK_START = "notebook.start"
+NOTEBOOK_STOP = "notebook.stop"
+NOTEBOOK_SAVE = "notebook.save"
+NOTEBOOK_READ = "notebook.read"
 SAVED_VIEW_CREATE = "saved_view.create"
 SAVED_VIEW_UPDATE = "saved_view.update"
 SAVED_VIEW_DELETE = "saved_view.delete"
