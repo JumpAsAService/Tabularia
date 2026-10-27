@@ -50,3 +50,5 @@
 .prose th, .prose td { text-align: left; vertical-align: top; padding: 10px 12px; border-bottom: 1px solid var(--tile-3); }
 .prose th { font-weight: 600; background: var(--tile); }
 .prose td code, .prose th code { white-space: normal; }
+/* a table written without headings (| | |) gets an empty header row: hide it */
+.prose thead:not(:has(th:not(:empty))) { display: none; }

@@ -16,6 +16,8 @@ Where it lives:
 
 A runnable Keycloak example lives in [`../examples/keycloak/`](../examples/keycloak/); the
 step-by-step guide for an installation with Helm is [Single sign-on with Keycloak](../sso-keycloak.md).
+What the mapped groups can then do is decided by folder permissions: see
+[Permissions](../governance/permissions.md) and the [Security and governance](../governance/README.md) overview.
 
 ---
 

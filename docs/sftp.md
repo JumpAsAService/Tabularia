@@ -12,7 +12,8 @@ managed SFTP service). It does two things:
 
 Like the other connections it lives in a folder and needs **CONNECT** on that folder
 to be created, tested and used. Any host may be reached, as for databases: CONNECT is
-the barrier, so give it to the people who may move data to and from that server.
+the barrier, so give it to the people who may move data to and from that server. The
+other ways data comes in are listed in [Sources](sources/README.md).
 
 ## The connection
 
@@ -67,7 +68,7 @@ changed key, like any other.
 
 ## Datasource «SFTP folder»
 
-From a folder: **New → From database**, choose the SFTP connection, then:
+From a folder: **New → Datasource from a database**, choose the SFTP connection, then:
 
 | Field | Meaning |
 |---|---|

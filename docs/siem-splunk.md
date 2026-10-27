@@ -1,10 +1,11 @@
 # Audit log to Splunk
 
-For the security team and whoever runs Tabularia. **Administration → SIEM** sends
-every entry of the audit log to Splunk through the HTTP Event Collector (HEC),
-within about fifteen seconds. Application logs and metrics are not part of it:
-those are collected at the infrastructure level (Universal Forwarder, the Docker
-logging driver).
+**Administration → SIEM** sends every entry of the audit log to Splunk through the
+HTTP Event Collector (HEC), within about fifteen seconds, for the security team and
+whoever runs Tabularia. Application logs and metrics are not part of it: those are
+collected at the infrastructure level (Universal Forwarder, the Docker logging
+driver; see [Monitoring](integrations/monitoring.md)). The other integrations are
+listed in [Integrations](integrations/README.md).
 
 ## In Splunk
 

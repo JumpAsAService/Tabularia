@@ -8,7 +8,7 @@ read and wrote next to the lineage it already receives from other tools.
 
 Nothing changes in Tabularia when it is on: events leave *after* the commit that
 closes a run, from a background thread, and a collector that is down or slow never
-fails a run.
+fails a run. The other integrations are listed in [Integrations](integrations/README.md).
 
 ## Turn it on
 

@@ -6,7 +6,9 @@ CRM, an internal service, a public open-data endpoint. A datasource **«API call
 makes one or more requests to it at each refresh, turns the records of the answers
 into one table and keeps it as a snapshot, refreshed by hand or on a schedule like
 every other database datasource. It is input only: flows read it, nothing is sent
-back to the API.
+back to the API. It is created from a folder in Explore with **New → Datasource from a
+database**, choosing the API connection; the other sources are listed in
+[Sources](sources/README.md).
 
 Like the other connections it lives in a folder and needs **CONNECT** on that folder
 to be created, tested and used. **Any address is allowed** — public, private,

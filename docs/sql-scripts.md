@@ -116,7 +116,7 @@ in the audit log (`sql_script.publish`) with its SQL.
 
 ### On a schedule
 
-**Schedule** sets a cron: the scheduler writes the datasource from the saved version,
+**Schedule** sets a cron ([scheduling](capabilities/scheduling.md)): the scheduler writes the datasource from the saved version,
 with the rights of whoever set it, checked again every time. A write that those rights
 no longer allow is not started: it shows as a failed write with its reason, and the
 schedule stays, to write again once the rights are back. When someone else changes the
@@ -126,7 +126,7 @@ with the author's rights; the author's own changes keep it.
 
 ### In a flow group
 
-A script that writes a datasource goes in a flow group ([the spec](specs/flow-group.md)) as a cell
+A script that writes a datasource goes in a [flow group](capabilities/flow-groups.md) as a cell
 (**SQL scripts** in the panel on the right): the cell writes the datasource in its step,
 after the steps before it, and the next step reads the new data. Its failure stops the
 group as any cell's. Use a group when the script reads what flows produce: the group

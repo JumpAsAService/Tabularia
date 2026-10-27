@@ -1,7 +1,7 @@
 # A dedicated ClickHouse user for the AI assistant
 
 The engine talks to the external ClickHouse with one account, and that account
-can read everything on the server. The AI assistant hands a free-form `SELECT`
+can read everything on the server. The AI assistant ([AI in Tabularia](../integrations/ai.md)) hands a free-form `SELECT`
 to every user with VIEW on a datasource, so its queries get **two** barriers:
 
 1. the SQL node allow-list (`backend/app/engine/sql_guard.py`): a query can name

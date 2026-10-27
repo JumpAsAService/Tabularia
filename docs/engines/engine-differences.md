@@ -15,7 +15,8 @@ Every flow carries two engine settings:
   production*. When unset, production uses the development engine.
 
 This is deliberate: you can design on Polars locally and run the scheduled DAG on an
-external ClickHouse or on BigQuery. It also means **the engine can change between the result you saw and
+external ClickHouse or on BigQuery (how to choose and enable them:
+[Engines](../capabilities/engines.md)). It also means **the engine can change between the result you saw and
 the result you ship**. Every run records the engine it actually ran on — check it in the
 run history when a number surprises you.
 
@@ -121,5 +122,6 @@ Legitimate dialect differences. Know them, choose accordingly.
 
 The catalogue above is the result of an audit that ran the same inputs through the four
 in-process and ClickHouse engines and compared them; the BigQuery entries come from the
-same oracle suite run live against a GCP project on 2026-09-18. The full list, with severities, file references and the exact
-inputs and outputs of each case, is in [`../audit/AUDIT-2026-09-13.md`](../audit/AUDIT-2026-09-13.md).
+same oracle suite run live against a GCP project on 2026-09-18. The guarantees are locked
+by that suite, [`backend/tests/test_data_correctness.py`](../../backend/tests/test_data_correctness.py),
+where each case declares its hand-computed expected result.

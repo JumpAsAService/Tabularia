@@ -56,7 +56,7 @@ variables.
 
 ## In a flow group
 
-A flow group can run an image as a step of its own: **Container (an image)** in the
+A [flow group](capabilities/flow-groups.md) can run an image as a step of its own: **Container (an image)** in the
 group's catalog, or in the picker of an empty cell. The cell opens the same panel,
 without a flow's «Run»: registry, image, tag, command, arguments, variables, resources,
 timeout and retries. The cell has no data in and none out; its failure stops the group.

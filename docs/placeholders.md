@@ -193,4 +193,11 @@ missing values, append), `test_s3_source.py`, the outputs in `test_sftp.py`,
 `test_s3_destination.py`, `test_email_destination.py`; the gateway's part in
 `gateway/tests/test_placeholders_gateway.py`. Against real servers (throwaway MinIO,
 OpenSSH and SMTP containers) and through the dev stack: `e2e/placeholders/`.
+
+## Related
+
+- [Capabilities](capabilities/README.md): where placeholders fit among the other features
+- [Flows](capabilities/flows.md): the Output nodes whose names hold placeholders
+- [Sources](sources/README.md): the datasources that read files and APIs by date
+
 <!-- {% endraw %} -->

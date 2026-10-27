@@ -11,7 +11,8 @@ login and the login page shows no SSO button.
 
 This folder is for trying SSO on a laptop with Docker Compose. To connect your company's
 Keycloak to Tabularia installed with Helm, follow
-[Single sign-on with Keycloak](../../sso-keycloak.md).
+[Single sign-on with Keycloak](../../sso-keycloak.md). The groups that arrive are ordinary Tabularia groups:
+what they may see and do is set on folders ([Permissions](../../governance/permissions.md)).
 
 ## What's here
 

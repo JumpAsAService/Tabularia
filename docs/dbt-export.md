@@ -9,7 +9,8 @@ in your CI, read it in your catalog: the flow is no longer locked in the tool.
 
 It is an **exporter, not a second engine**: Tabularia keeps running the flow as it
 does; the dbt project is a faithful, versionable copy of the same transformations
-that you own from then on.
+that you own from then on. The other integrations are listed in
+[Integrations](integrations/README.md).
 
 ## Three targets
 

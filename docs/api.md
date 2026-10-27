@@ -5,7 +5,7 @@ CI job, a department script. Everything the interface does goes through this
 API; the complete, always-current reference is the OpenAPI page the gateway
 serves itself, at `https://<your host>/api/docs` (`http://localhost:8000/docs` in
 development). This guide covers the part an integration needs and promises to
-keep stable.
+keep stable. The other integrations are listed in [Integrations](integrations/README.md).
 
 ## Signing in: API tokens
 

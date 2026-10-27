@@ -6,7 +6,8 @@ Helm chart and administers the Keycloak realm. Every step below was run against
 Keycloak 26 and the chart on a test cluster.
 
 Signing in with an email and a password keeps working next to it, for the administrator
-the chart creates: it is the way in when Keycloak is down.
+the chart creates: it is the way in when Keycloak is down. The other integrations are
+listed in [Integrations](integrations/README.md).
 
 ## How it works
 

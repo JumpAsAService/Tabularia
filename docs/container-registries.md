@@ -6,6 +6,11 @@ trusts its certificate, the credentials, and the repositories whose images may r
 people who write flows then pick an image of an allowed repository; they never type a
 registry address or a password.
 
+A registry is not one of the folder [connections](connections/README.md) to databases,
+buckets and servers: it is granted to groups and users rather than placed in a folder, it
+is tested from the gateway, and its images are downloaded by the cluster's nodes, not by
+Tabularia's workers.
+
 It is a Kubernetes feature, like [Python and R in flows](scripting.md): the containers
 run as Kubernetes Jobs.
 

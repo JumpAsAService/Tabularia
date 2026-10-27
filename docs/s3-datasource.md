@@ -1,13 +1,14 @@
 <!-- {% raw %} GitHub Pages: no Liquid in this page -->
 # S3: the files of a bucket as a datasource
 
-An **S3 connection** — the one the S3 Output already uses: endpoint (empty = AWS),
-access key and secret, region, default bucket — reaches any S3-compatible object
-storage: AWS, MinIO, Cloudflare R2, Wasabi, Scaleway, Google Cloud Storage through its
-S3 API. Besides receiving a flow's output, it can now be **read**: a datasource
-**«S3 folder»** reads the files of a folder of a bucket that match a glob, stacks them
-into one table and keeps it as a snapshot, refreshed by hand or on a schedule like
-every other database datasource. It is the [SFTP folder](sftp.md) on object storage.
+A datasource **«S3 folder»** reads the files of a folder of a bucket that match a glob,
+stacks them into one table and keeps it as a snapshot, refreshed by hand or on a
+schedule like every other imported datasource. It reads through an **S3 connection** —
+the one the S3 Output uses: endpoint (empty = AWS), access key and secret, region,
+default bucket — and so reaches any S3-compatible object storage: AWS, MinIO, Cloudflare
+R2, Wasabi, Scaleway, Google Cloud Storage through its S3 API. It is the
+[SFTP folder](sftp.md) on object storage; the other sources are listed in
+[Sources](sources/README.md).
 
 Like the other connections it lives in a folder and needs **CONNECT** on that folder to
 be used; the secret is encrypted at rest (Fernet), travels encrypted to the worker and
@@ -16,7 +17,7 @@ rights on the bucket — nothing else: the datasource never writes or deletes th
 
 ## Datasource «S3 folder»
 
-From a folder: **New → From database**, choose the S3 connection, then:
+From a folder: **New → Datasource from a database**, choose the S3 connection, then:
 
 | Field | Meaning |
 |---|---|

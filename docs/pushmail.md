@@ -2,7 +2,7 @@
 
 For whoever sets up flow groups that send data to people.
 
-A **Pushmail** cell of a flow group sends one email through an SMTP connection, with
+A **Pushmail** cell of a [flow group](capabilities/flow-groups.md) sends one email through an SMTP connection, with
 **one `.xlsx` file per datasource**. It runs as a step of the group like any other cell:
 after the steps before it (a refresh, the flows that publish the datasources), on the
 group's schedule, and its failure stops the group.
