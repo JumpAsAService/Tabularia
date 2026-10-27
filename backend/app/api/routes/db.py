@@ -6,16 +6,20 @@
   streaming; polled on GET /tasks/{task_id} as every run.
 - POST /db/query: a SQL script on a connection, the first rows, on the preview worker
   and waited for as a preview.
+- POST /db/exports: a SQL script's whole result on a connection as csv/xlsx, written by a
+  worker and followed and taken as every export (GET /tasks/exports/{id}, …/file).
 
 The credentials arrive encrypted (password_encrypted, the Fernet key shared with the
 gateway) and are decrypted only when the connection opens.
 """
 import logging
+import uuid
 from typing import Literal, Optional
 
 from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel, Field
 
+from app.api import exports
 from app.api.models import TaskResponse
 from app.core.config import get_settings
 from app.engine.base import PreviewResult
@@ -31,6 +35,7 @@ from app.ingest.db_source import (
     list_tables,
     test_connection,
 )
+from app.tasks.celery_app import celery_app
 
 logger = logging.getLogger(__name__)
 
@@ -117,6 +122,27 @@ def query(request: DbQueryRequest):
         raise HTTPException(status_code=_PREVIEW_ERROR_STATUS.get(payload.get("error"), 400),
                             detail=payload.get("detail", "Query failed"))
     return PreviewResult(**payload["result"])
+
+
+class DbExportStart(BaseModel):
+    connection: DbConnectionSpec
+    sql: str
+    format: Literal["csv", "xlsx"] = "csv"
+    filename: Optional[str] = None
+    owner: str = Field(..., min_length=1, description="Who asked for the export, as the gateway names them")
+
+
+@router.post("/exports", response_model=TaskResponse)
+def start_export(request: DbExportStart):
+    """Starts the export of a SQL script's result on a connection; it is followed and
+    downloaded, once, as the Viewer's (the routes of /tasks/exports)."""
+    task_id = str(uuid.uuid4())
+    exports.remember_owner(task_id, request.owner)
+    kwargs = {"connection": request.connection.model_dump(), "sql": request.sql, "format": request.format}
+    if request.filename is not None:
+        kwargs["filename"] = request.filename
+    celery_app.send_task("app.tasks.jobs.db_export_task", kwargs=kwargs, task_id=task_id)
+    return TaskResponse(task_id=task_id, status="submitted", message=f"Exporting a query as {request.format}")
 
 
 class NotifyRequest(BaseModel):

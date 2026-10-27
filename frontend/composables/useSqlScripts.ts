@@ -105,6 +105,9 @@ export function useSqlScripts() {
     run: (body: { sql: string; engine?: string | null; limit?: number; script_id?: number | null; connection_id?: number | null },
       signal?: AbortSignal) =>
       apiFetch<SqlRunResult>('/sql-scripts/run', { method: 'POST', body, signal }),
+    // the whole result as a file, written by a worker: followed and saved with useApi's followExport
+    export: (body: { sql: string; format: 'csv' | 'xlsx'; engine?: string | null; script_id?: number | null; connection_id?: number | null }) =>
+      apiFetch<{ task_id: string; filename: string }>('/sql-scripts/export', { method: 'POST', body }),
   }
 }
 

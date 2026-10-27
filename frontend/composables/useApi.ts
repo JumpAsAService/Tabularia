@@ -134,6 +134,33 @@ export function useApi() {
   const { apiFetch } = useApiClient()
   const base = useRuntimeConfig().public.apiBase as string
 
+  // follows an export started already (the Viewer's, a SQL script's) and, once it is
+  // ready, has the browser save its file
+  async function followExport(task_id: string, filename?: string): Promise<void> {
+    let failures = 0
+    for (let wait = 400; ; wait = Math.min(wait * 2, 2000)) {
+      await new Promise((resolve) => setTimeout(resolve, wait))
+      let state: ExportStatus
+      try {
+        state = await apiFetch<ExportStatus>(`/tasks/exports/${task_id}`)
+        failures = 0
+      } catch (e: any) {
+        // a network blip does not lose an export that is still being written
+        const code = e?.response?.status ?? e?.statusCode
+        if ((code && code < 500) || ++failures >= 5) throw e
+        continue
+      }
+      if (state.status === 'failed') {
+        throw Object.assign(new Error(state.detail ?? 'Export failed'), { data: { detail: state.detail }, statusCode: state.code })
+      }
+      if (state.status === 'ready') break
+    }
+    const a = document.createElement('a')
+    a.href = `${base}/tasks/exports/${task_id}/file`
+    a.download = filename ?? ''
+    a.click()
+  }
+
   return {
     async operations(): Promise<string[]> {
       return await apiFetch<string[]>('/tasks/operations')
@@ -276,29 +303,10 @@ export function useApi() {
       engine?: string // the engine computing the snapshot; Polars writes the file
     }): Promise<void> {
       const { task_id } = await apiFetch<{ task_id: string }>('/tasks/exports', { method: 'POST', body })
-      let failures = 0
-      for (let wait = 400; ; wait = Math.min(wait * 2, 2000)) {
-        await new Promise((resolve) => setTimeout(resolve, wait))
-        let state: ExportStatus
-        try {
-          state = await apiFetch<ExportStatus>(`/tasks/exports/${task_id}`)
-          failures = 0
-        } catch (e: any) {
-          // a network blip does not lose an export that is still being written
-          const code = e?.response?.status ?? e?.statusCode
-          if ((code && code < 500) || ++failures >= 5) throw e
-          continue
-        }
-        if (state.status === 'failed') {
-          throw Object.assign(new Error(state.detail ?? 'Export failed'), { data: { detail: state.detail }, statusCode: state.code })
-        }
-        if (state.status === 'ready') break
-      }
-      const a = document.createElement('a')
-      a.href = `${base}/tasks/exports/${task_id}/file`
-      a.download = body.filename ?? ''
-      a.click()
+      await followExport(task_id, body.filename)
     },
+
+    followExport,
 
     // exports a flow as a dbt project (zip). target: 'duckdb' (federated) | 'native' (the
     // origin warehouse, SQL translated through sqlglot)

@@ -307,15 +307,28 @@ def _engine_failure(resp, message) -> HTTPException:
     return HTTPException(status_code=422 if resp.status_code < 500 else 502, detail=message(detail)[:2000])
 
 
+def _catalog_chain(resolved: Resolved) -> dict:
+    """The engine's chain of a run on the catalog: the first datasource as the source and
+    one `sql` operation reading every datasource under its alias."""
+    first = next(iter(resolved.tables.values()))
+    return {
+        "bucket": first.bucket, "input_key": first.key,
+        "operations": [{"type": "sql", "params": {
+            "query": resolved.query,
+            "tables": {alias: {"source": {"bucket": ds.bucket, "key": ds.key}} for alias, ds in resolved.tables.items()},
+        }}],
+    }
+
+
 def _slot(user: User, script: Optional[SqlScript]) -> str:
     # one slot per script and person: a new run of the same script knocks down the previous
     return f"u{user.id}:sql:{script.id if script is not None else 'draft'}"
 
 
 def _audit_run(session: Session, user: User, script: Optional[SqlScript], request: Optional[Request],
-               outcome: str, detail: dict) -> None:
+               outcome: str, detail: dict, action: str = audit.SQL_SCRIPT_RUN) -> None:
     audit.record_audit(
-        session, actor=user, action=audit.SQL_SCRIPT_RUN, outcome=outcome, target_type="sql_script",
+        session, actor=user, action=action, outcome=outcome, target_type="sql_script",
         target_id=script.id if script is not None else None, target_label=script.name if script is not None else "",
         detail=detail, request=request,
     )
@@ -333,16 +346,7 @@ async def run(session: Session, user: User, sql: str, engine: Optional[str], lim
     resolved = resolve(session, user, sql, engine)
     if not resolved.tables:
         raise _refuse("The query reads no datasource: name one in FROM")
-    first = next(iter(resolved.tables.values()))
-    body = {
-        "bucket": first.bucket, "input_key": first.key, "limit": limit,
-        "no_cache": True, "engine": engine,
-        "operations": [{"type": "sql", "params": {
-            "query": resolved.query,
-            "tables": {alias: {"source": {"bucket": ds.bucket, "key": ds.key}} for alias, ds in resolved.tables.items()},
-        }}],
-        "slot": _slot(user, script),
-    }
+    body = {**_catalog_chain(resolved), "limit": limit, "no_cache": True, "engine": engine, "slot": _slot(user, script)}
     started = time.monotonic()
     outcome, rows, detail = "failure", 0, ""
     try:
@@ -389,3 +393,48 @@ async def _run_on_connection(session: Session, user: User, sql: str, connection_
         "elapsed_ms": int((time.monotonic() - started) * 1000), "datasources": [],
         "connection": {"id": conn.id, "name": conn.name, "db_type": conn.db_type},
     }
+
+
+def export_filename(script: Optional[SqlScript], fmt: str) -> str:
+    """The file's name: the script's, without what a file name cannot hold."""
+    name = re.sub(r'[\\/:*?"<>|\x00-\x1f]+', " ", script.name if script is not None else "")
+    name = re.sub(r"\s+", " ", name).strip(" .")
+    return f"{name or 'sql-script'}.{fmt}"
+
+
+async def export(session: Session, user: User, sql: str, engine: Optional[str], fmt: str,
+                 script: Optional[SqlScript] = None, request: Optional[Request] = None,
+                 connection_id: Optional[int] = None) -> dict[str, Any]:
+    """Starts the export of the whole result as a csv or xlsx file, written by a worker as
+    the Viewer's: the person then follows it and takes the file through /tasks/exports,
+    as its owner. Checked as a run (the datasources the person may read, CONNECT on the
+    connection) and audited with its SQL."""
+    from app.routes.proxy import export_owner  # routes → services: late import
+
+    filename = export_filename(script, fmt)
+    if connection_id is not None:
+        from app.routes.connections import engine_connection_payload
+
+        conn = usable_connection(session, user, connection_id)
+        if not strip_comments(sql or "").strip().rstrip(";").strip():
+            raise _refuse("The query is empty")
+        path, body = "/db/exports", {"connection": engine_connection_payload(conn), "sql": sql}
+        detail: dict[str, Any] = {"connection": {"id": conn.id, "name": conn.name}}
+    else:
+        engine = await pick_engine(session, engine)
+        resolved = resolve(session, user, sql, engine)
+        if not resolved.tables:
+            raise _refuse("The query reads no datasource: name one in FROM")
+        path, body = "/tasks/exports", {**_catalog_chain(resolved), "engine": engine}
+        detail = {"engine": engine, "datasources": [{"id": ds.id, "name": ds.name} for ds in resolved.tables.values()]}
+    outcome = "failure"
+    try:
+        resp = await get_engine_client().post(path, timeout=60, json={
+            **body, "format": fmt, "filename": filename, "owner": export_owner(user)})
+        if resp.status_code >= 400:
+            raise _engine_failure(resp, lambda d: d)
+        outcome = "success"
+    finally:
+        _audit_run(session, user, script, request, outcome, {"sql": sql[:2000], "format": fmt, **detail},
+                   action=audit.SQL_SCRIPT_EXPORT)
+    return {"task_id": resp.json()["task_id"], "filename": filename}

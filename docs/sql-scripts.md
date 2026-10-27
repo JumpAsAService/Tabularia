@@ -79,6 +79,19 @@ A run reads with **your** permissions, whoever wrote the script: a datasource yo
 read gives the same error as one that does not exist. Every run is in the audit log
 (`sql_script.run`) with its SQL and the datasources it read, or the connection.
 
+## Exporting the whole result
+
+The run shows the first 200 rows; **CSV** and **Excel**, beside the result, download all
+of them. The export runs what *Run* runs (the selection, or the whole script), with the
+same checks: the datasources you may read, CONNECT on the connection. A worker writes the
+file, as for the Viewer's export, and the browser saves it when it is ready, named after
+the script. Every export is in the audit log (`sql_script.export`) with its SQL.
+
+The caps are the Viewer's: a CSV holds at most `EXPORT__MAX_ROWS` rows (5 million by
+default), an Excel file the format's ~1 million. Over the cap the export stops and says
+so; on a connection the database is asked for no more rows than the cap and one. A result
+larger than that belongs in a datasource.
+
 ## Saving and sharing
 
 **Create** the first time, then **Save** (Ctrl+S): a save that changes the SQL, the
@@ -96,5 +109,5 @@ that holds one cannot be deleted until it is moved or deleted.
 
 ## Coming next
 
-Exporting the whole result as CSV or Excel, saving the result as a datasource and
-refreshing it on a schedule: see the pieces in [the spec](specs/sql-scripts.md#pieces).
+Saving the result as a datasource and refreshing it on a schedule: see the pieces in
+[the spec](specs/sql-scripts.md#pieces).

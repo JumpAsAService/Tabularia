@@ -1,6 +1,6 @@
 # Spec: SQL scripts
 
-Status: pieces 1 and 2 done (the catalog, connections); 3 and 4 to do. Decided with the
+Status: pieces 1 to 3 done (the catalog, connections, export); 4 to do. Decided with the
 owner on 2026-10-27.
 
 ## Objective
@@ -96,6 +96,18 @@ changes the content makes a version; an older one can be restored (it becomes th
 4. The side panel lists the connection's tables (`/connections/{id}/tables`) and, when one
    is opened, its columns (`/connections/{id}/columns`, the schema of a read of one row).
 
+## Exporting
+
+`POST /sql-scripts/export` (`sql`, `format` csv|xlsx, `engine`, `connection_id`,
+`script_id`) checks what a run checks and starts an export the person owns
+(`user:{id}`, as the Viewer's): on the catalog the run's chain goes to the engine's
+`POST /tasks/exports`, without a row limit; on a connection the SQL goes to
+`POST /db/exports`, whose `db_export_task` reads the database into a temporary parquet
+snapshot (the import's reader, capped at the format's cap and one) and has Polars write
+the file from it. Either way the person follows it and takes the file once through
+`/tasks/exports/{id}` and `/tasks/exports/{id}/file`. The file is named after the script;
+every export is audited (`sql_script.export`) with its SQL and what it read.
+
 ## The page
 
 `/sql-script?id=` (or `?project=` for a new one):
@@ -116,7 +128,7 @@ changes the content makes a version; an older one can be restored (it becomes th
 - **Explore**: a new kind of object (icon, filter, New → SQL script, open, rename, move,
   duplicate, delete); **search**: a new kind.
 - **Audit**: `sql_script.create`, `sql_script.update`, `sql_script.delete`,
-  `sql_script.restore`, `sql_script.run`.
+  `sql_script.restore`, `sql_script.run`, `sql_script.export`.
 - **API tokens**: read tokens list and read the scripts they may see.
 
 ## Pieces

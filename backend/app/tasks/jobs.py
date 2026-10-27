@@ -766,11 +766,7 @@ def export_task(
             get_engine("polars").export(source=snapshot, operations=[], fmt=format, out_path=path, limit=limit, max_rows=max_rows)
         else:
             get_engine("polars").export(source=src, operations=operations, fmt=format, out_path=path, limit=limit, max_rows=max_rows)
-        out_bucket = get_settings().storage.bucket
-        key = f"{EXPORT_PREFIX}{self.request.id or uuid.uuid4().hex}.{format}"
-        storage.upload_file(path, out_bucket, key)
-        return {"ok": True, "bucket": out_bucket, "key": key, "format": format,
-                "filename": filename or f"export.{format}", "size": os.path.getsize(path)}
+        return _deliver_export(self.request.id, path, format, filename)
     except SourceNotFoundError as e:
         return {"ok": False, "error": "not_found", "detail": str(e)}
     except (UnknownOperationError, OperationError) as e:
@@ -782,6 +778,64 @@ def export_task(
     finally:
         os.unlink(path)
         if snapshot is not None:  # it has fed the file (or failed): either way it goes
+            try:
+                storage.delete_object(snapshot.bucket, snapshot.key)
+            except Exception as e:  # noqa: BLE001 — a leftover snapshot must not fail the export
+                logger.warning("export snapshot %s not deleted: %s", snapshot.key, e)
+
+
+def _deliver_export(task_id: str | None, path: str, format: str, filename: str | None) -> dict:
+    """Leaves the written file under `exports/`, where the API takes it from."""
+    import os
+    import uuid
+
+    out_bucket = get_settings().storage.bucket
+    key = f"{EXPORT_PREFIX}{task_id or uuid.uuid4().hex}.{format}"
+    get_storage_service().upload_file(path, out_bucket, key)
+    return {"ok": True, "bucket": out_bucket, "key": key, "format": format,
+            "filename": filename or f"export.{format}", "size": os.path.getsize(path)}
+
+
+@celery_app.task(bind=True, name="app.tasks.jobs.db_export_task")
+def db_export_task(self, connection: dict[str, Any], sql: str, format: str = "csv",
+                   filename: str | None = None) -> dict:
+    """A SQL script's whole result on a database connection, as a csv or xlsx file: the
+    database's rows go to a temporary parquet snapshot (the import's reader, asked for no
+    more rows than the format's cap and one), and Polars writes the file from it, with
+    the caps and the errors of `export_task`. Tagged as export_task's answer."""
+    import os
+    import tempfile
+    import uuid
+
+    from celery.exceptions import SoftTimeLimitExceeded
+
+    from app.engine.exceptions import EngineError
+    from app.engine.polars_engine import PolarsEngine
+    from app.ingest.converters import IngestError
+    from app.ingest.db_source import DbConnectionSpec, DbSourceSpec, ingest_db_to_parquet
+
+    storage = get_storage_service()
+    snapshot = DataSource(bucket=get_settings().storage.bucket, key=f"tmp/export_{uuid.uuid4().hex}.parquet")
+    max_rows = get_settings().export.max_rows or None
+    cap = max_rows if format == "csv" else PolarsEngine.XLSX_MAX_ROWS
+    fd, path = tempfile.mkstemp(suffix=f".{format}")
+    os.close(fd)
+    written = False
+    try:
+        ingest_db_to_parquet(DbConnectionSpec(**connection), DbSourceSpec(mode="sql", ref=sql),
+                             snapshot.bucket, snapshot.key, storage=storage, cap=cap + 1 if cap else None)
+        written = True
+        get_engine("polars").export(source=snapshot, operations=[], fmt=format, out_path=path, max_rows=max_rows)
+        return _deliver_export(self.request.id, path, format, filename)
+    except IngestError as e:  # the database's message, clear already (db_errors)
+        return {"ok": False, "error": "unprocessable", "detail": str(e)}
+    except EngineError as e:
+        return {"ok": False, "error": "bad_request", "detail": str(e)}
+    except SoftTimeLimitExceeded:
+        return {"ok": False, "error": "timeout", "detail": "The export took longer than the time limit of the workers"}
+    finally:
+        os.unlink(path)
+        if written:
             try:
                 storage.delete_object(snapshot.bucket, snapshot.key)
             except Exception as e:  # noqa: BLE001 — a leftover snapshot must not fail the export

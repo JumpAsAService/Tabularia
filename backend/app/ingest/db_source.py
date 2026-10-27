@@ -772,8 +772,10 @@ def ingest_db_to_parquet(
     key: str,
     storage=None,
     progress: Callable[..., None] | None = None,
+    cap: int | None = None,
 ) -> dict:
     """Runs the source and writes `bucket/key` (parquet). Returns the rows and the schema.
+    With `cap` the database is asked for at most that many rows (a SQL script's export).
 
     `progress(phase, rows=…)`, for whoever watches the import: «waiting» until the
     database sends the first row (connection, computing, sorting), «reading» at every
@@ -785,6 +787,8 @@ def ingest_db_to_parquet(
         storage = get_storage_service()
 
     query = build_query(conn, source)
+    if cap:
+        query = with_row_cap(conn, query, cap)
     logger.info("db-ingest %s@%s → %s (%s)", conn.db_type, conn.host, key, query[:200])
 
     # the driver's errors → the database server's message, not the Python exception

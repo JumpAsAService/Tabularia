@@ -16,7 +16,7 @@ Unlike saved Python/R scripts, they need no Kubernetes: every installation has t
 from __future__ import annotations
 
 from datetime import datetime, timezone
-from typing import Any, Optional
+from typing import Any, Literal, Optional
 
 from fastapi import APIRouter, Depends, HTTPException, Request, status
 from pydantic import BaseModel, Field
@@ -88,6 +88,14 @@ class RunRequest(BaseModel):
     # the saved script being run, for the audit and the preview slot; null = a draft
     script_id: Optional[int] = None
     connection_id: Optional[int] = None  # null = the catalog
+
+
+class ExportRequest(BaseModel):
+    sql: str = Field(max_length=sql_scripts.MAX_SQL_CHARS)
+    engine: Optional[str] = Field(default=None, max_length=40)
+    format: Literal["csv", "xlsx"] = "csv"
+    script_id: Optional[int] = None
+    connection_id: Optional[int] = None
 
 
 class CatalogColumn(BaseModel):
@@ -210,6 +218,16 @@ async def run_sql(body: RunRequest, request: Request, user: User = Depends(get_c
     script = sql_scripts.get_visible(session, user, body.script_id) if body.script_id is not None else None
     return await sql_scripts.run(session, user, body.sql, body.engine, body.limit, script=script, request=request,
                                  connection_id=body.connection_id)
+
+
+@router.post("/sql-scripts/export")
+async def export_sql(body: ExportRequest, request: Request, user: User = Depends(get_current_user),
+                     session: Session = Depends(get_session)) -> dict[str, Any]:
+    """Starts the export of the whole result of the SQL in the editor as csv or xlsx; the
+    person follows it and takes the file through /tasks/exports, as the Viewer's export."""
+    script = sql_scripts.get_visible(session, user, body.script_id) if body.script_id is not None else None
+    return await sql_scripts.export(session, user, body.sql, body.engine, body.format, script=script, request=request,
+                                    connection_id=body.connection_id)
 
 
 # ── create, change, copy, delete ──────────────────────────────────────────────

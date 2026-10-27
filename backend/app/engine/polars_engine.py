@@ -277,14 +277,14 @@ class PolarsEngine(DeferredStepCache, Engine):
                         if n > cap:
                             raise EngineError(
                                 f"the result has more than {cap:,} rows: over the cap of the CSV export. "
-                                f"Write it with an Output node (datasource, table or bucket), or reduce it with filter/limit."
+                                f"Reduce it (a filter, a limit), or write it with a flow's Output node (datasource, table or bucket)."
                             )
                 elif fmt == "xlsx":
                     n = lf.select(pl.len()).collect(engine="streaming").item()
                     if n > self.XLSX_MAX_ROWS:
                         raise EngineError(
                             f"the result has {n:,} rows: over the limit of the Excel "
-                            f"format (~1,048,575). Download it as CSV, or reduce it with filter/limit."
+                            f"format (~1,048,575). Download it as CSV, or reduce it (a filter, a limit)."
                         )
                     lf.collect(engine="streaming").write_excel(out_path)
                 else:

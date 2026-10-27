@@ -188,6 +188,7 @@ const ACTION_META = computed<Record<string, { icon: any; color: string; label: s
     'sql_script.delete': { icon: DatabaseSearch, color: u.danger, label: t('audit.sqlScriptDeleteAction') },
     'sql_script.restore': { icon: DatabaseSearch, color: u.accent, label: t('audit.sqlScriptRestoreAction') },
     'sql_script.run': { icon: DatabaseSearch, color: u.violet, label: t('audit.sqlScriptRunAction') },
+    'sql_script.export': { icon: DatabaseSearch, color: u.violet, label: t('audit.sqlScriptExportAction') },
     'auth.sso_login': { icon: KeyRound, color: u.success, label: t('audit.ssoLoginAction') },
     'auth.sso_login_failed': { icon: KeyRound, color: u.danger, label: t('audit.ssoLoginFailedAction') },
     'auth.first_run_setup': { icon: KeyRound, color: u.success, label: t('audit.firstRunSetupAction') },

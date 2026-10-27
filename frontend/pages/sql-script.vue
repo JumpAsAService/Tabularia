@@ -11,9 +11,9 @@
 import { computed, defineAsyncComponent, onMounted, onUnmounted, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { onBeforeRouteLeave, onBeforeRouteUpdate } from 'vue-router'
-import { ChevronRight, DatabaseSearch, History, LoaderCircle, Play, RotateCcw, Save, Search, Square, Table2, X } from 'lucide-vue-next'
+import { ChevronRight, DatabaseSearch, Download, FileSpreadsheet, History, LoaderCircle, Play, RotateCcw, Save, Search, Square, Table2, X } from 'lucide-vue-next'
 import { DB_TYPES, useConnections, type ConnectionInfo } from '~/composables/useConnections'
-import { errMessage } from '~/composables/useApi'
+import { errMessage, useApi } from '~/composables/useApi'
 import { useFormat } from '~/composables/useFormat'
 import { useFolderPaths } from '~/composables/useFolderPaths'
 import { usePreferredEngine } from '~/composables/useEngine'
@@ -187,6 +187,27 @@ async function run(text?: string) {
       running.value = false
       controller = null
     }
+  }
+}
+
+// the whole result as a file (what «Run» runs: the selection, or everything), written by a
+// worker as the Viewer's export
+const { followExport } = useApi()
+const exporting = ref<'' | 'csv' | 'xlsx'>('')
+async function exportResult(format: 'csv' | 'xlsx') {
+  const query = (editorRef.value?.runText() ?? sql.value).trim()
+  if (!query || cannotRun.value || exporting.value) return
+  exporting.value = format
+  try {
+    const { task_id, filename } = await api.export({
+      sql: query, format, script_id: scriptId.value, connection_id: connectionId.value,
+      engine: connectionId.value == null ? engine.value ?? fallbackEngine.value : null,
+    })
+    await followExport(task_id, filename)
+  } catch (e) {
+    toast.error(errMessage(e))
+  } finally {
+    exporting.value = ''
   }
 }
 
@@ -459,6 +480,14 @@ watch(() => route.query.id, (id) => {
           <div class="card result" aria-live="polite">
             <h2><Table2 :size="15" /> {{ $t('sqlScript.result') }}
               <span v-if="resultLine && !running && !runError" class="muted small rline">{{ resultLine }}</span>
+              <span v-if="result && !runError" class="exports">
+                <button type="button" class="mini" :disabled="running || !!exporting || cannotRun" :title="$t('sqlScript.exportCsvTitle')" @click="exportResult('csv')">
+                  <LoaderCircle v-if="exporting === 'csv'" :size="12" class="spin" /><Download v-else :size="12" /> CSV
+                </button>
+                <button type="button" class="mini" :disabled="running || !!exporting || cannotRun" :title="$t('sqlScript.exportExcelTitle')" @click="exportResult('xlsx')">
+                  <LoaderCircle v-if="exporting === 'xlsx'" :size="12" class="spin" /><FileSpreadsheet v-else :size="12" /> Excel
+                </button>
+              </span>
             </h2>
             <DataGrid
               v-if="running || result || runError"
@@ -618,7 +647,8 @@ watch(() => route.query.id, (id) => {
 .viewing { display: flex; align-items: center; gap: 8px; padding: 7px 10px; border-radius: 8px; font-size: 12.5px;
   border: 1px solid color-mix(in srgb, var(--accent) 45%, var(--border)); background: var(--bg-soft); }
 .viewing span { flex: 1; }
-.viewing .mini, .vacts .mini { display: inline-flex; align-items: center; gap: 4px; }
+.viewing .mini, .vacts .mini, .exports .mini { display: inline-flex; align-items: center; gap: 4px; }
+.exports { margin-left: auto; display: inline-flex; gap: 6px; }
 .field { display: flex; flex-direction: column; gap: 5px; font-size: 12px; color: var(--muted); }
 .field textarea { resize: vertical; font: inherit; color: var(--text); }
 .small { font-size: 12px; }

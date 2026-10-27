@@ -387,7 +387,8 @@ async def export(
 _TASK_ID = re.compile(r"^[0-9a-f-]{36}$")
 
 
-def _export_owner(user: User) -> str:
+def export_owner(user: User) -> str:
+    """Who an export belongs to, as the engine knows it (SQL scripts start theirs too)."""
     return f"user:{user.id}"
 
 
@@ -401,7 +402,7 @@ async def start_export(
     if not isinstance(payload, dict):
         raise HTTPException(status_code=422, detail="The request body must be a JSON object")
     await run_in_threadpool(_authorize_export, request, session, user, payload)
-    payload["owner"] = _export_owner(user)  # never the browser's word for it
+    payload["owner"] = export_owner(user)  # never the browser's word for it
     return await _forward(request, "POST", "/tasks/exports", content=json.dumps(payload).encode(), session=session, user=user)
 
 
@@ -409,14 +410,14 @@ async def start_export(
 async def export_status(request: Request, task_id: str, user: User = Depends(_user)):
     if not _TASK_ID.match(task_id):
         raise HTTPException(status_code=404, detail="Export not found")
-    return await _forward(request, "GET", f"/tasks/exports/{task_id}", params={"owner": _export_owner(user)})
+    return await _forward(request, "GET", f"/tasks/exports/{task_id}", params={"owner": export_owner(user)})
 
 
 @router.get("/tasks/exports/{task_id}/file")
 async def export_file(request: Request, task_id: str, user: User = Depends(_user)):
     if not _TASK_ID.match(task_id):
         raise HTTPException(status_code=404, detail="Export not found")
-    return await _forward(request, "GET", f"/tasks/exports/{task_id}/file", params={"owner": _export_owner(user)})
+    return await _forward(request, "GET", f"/tasks/exports/{task_id}/file", params={"owner": export_owner(user)})
 
 
 @router.get("/tasks/{task_id}")

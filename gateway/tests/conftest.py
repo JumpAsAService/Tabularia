@@ -133,6 +133,8 @@ class FakeEngine:
         # SQL scripts on a connection: bodies on POST /db/query and the answer to serve
         self.db_queries: list[dict] = []
         self.db_query_response: tuple[int, dict] = (200, {"columns": [], "rows": [], "row_count": 0, "truncated": False})
+        # exports started on the engine (POST /tasks/exports, /db/exports): (route, body)
+        self.exports: list[tuple[str, dict]] = []
         self.drivers: dict | None = {"sqlserver": {"installed": True}}
         self.dbt_exports: list[dict] = []  # bodies received on POST /dbt/export
         self.dbt_export_response: tuple[int, dict] | None = None  # an error answer to serve (e.g. a 422 with a code)
@@ -206,6 +208,9 @@ class FakeEngine:
             self.db_queries.append(_json_body(request))
             status, payload = self.db_query_response
             return httpx.Response(status, json=payload)
+        if path in ("/tasks/exports", "/db/exports") and request.method == "POST":
+            self.exports.append((path, _json_body(request)))
+            return httpx.Response(200, json={"task_id": f"t-export-{len(self.exports)}", "status": "submitted", "message": ""})
         if path == "/db/drivers" and request.method == "GET":
             if self.drivers is None:
                 return httpx.Response(404, json={"detail": "Not Found"})

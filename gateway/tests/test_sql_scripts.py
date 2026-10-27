@@ -310,3 +310,50 @@ def test_a_tables_columns_need_connect(app, session, fake_engine):
     r = me.get(f"/connections/{pg}/columns", params={"table": "public.ordini"})
     assert r.status_code == 200 and r.json() == {"columns": [{"name": "id", "dtype": "Int64"}]}
     assert fake_engine.db_inspects[-1]["action"] == "columns" and fake_engine.db_inspects[-1]["table"] == "public.ordini"
+
+
+def test_the_whole_result_exports_with_the_runs_checks(app, session, fake_engine):
+    sales, _, secret, ds = _world(session)
+    pg = _connection(session, secret)
+    boss = _sign_in(app, session, "capo@x.local")
+    reader = _sign_in(app, session, "lettore@x.local")
+    stranger = _sign_in(app, session, "altro@x.local")
+    from app.models import User
+
+    by = {u.email: u.id for u in session.exec(select(User)).all()}
+    make_permission(session, user_id=by["capo@x.local"], project_id=sales, capability="edit")
+    make_permission(session, user_id=by["capo@x.local"], project_id=secret, capability="connect")
+    make_permission(session, user_id=by["lettore@x.local"], project_id=sales, capability="view")
+    r = boss.post(f"/projects/{sales}/sql-scripts", json={"name": 'Ordini: "nord"/sud', "content": {"sql": "SELECT 1"}},
+                  headers=CSRF)
+    sid = r.json()["id"]
+
+    # on the catalog: the run's chain, the whole result, owned by whoever asked
+    out = reader.post("/sql-scripts/export", json={"sql": 'SELECT id FROM "Clienti"', "format": "xlsx", "script_id": sid,
+                                                   "engine": "duckdb"}, headers=CSRF)
+    assert out.status_code == 200, out.text
+    assert out.json() == {"task_id": "t-export-1", "filename": "Ordini nord sud.xlsx"}
+    path, body = fake_engine.exports[-1]
+    c = ds["clienti"]
+    assert path == "/tasks/exports" and body["owner"] == f"user:{by['lettore@x.local']}"
+    assert (body["bucket"], body["input_key"], body["engine"], body["format"]) == ("data-prep", "datasets/2/c.parquet", "duckdb", "xlsx")
+    assert body["operations"][0]["params"]["query"] == f'SELECT id FROM ds_{c} AS "Clienti"'
+    assert "limit" not in body and "slot" not in body
+    # a datasource the person cannot read is not there, as for a run
+    assert stranger.post("/sql-scripts/export", json={"sql": 'SELECT 1 FROM "Clienti"'}, headers=CSRF).status_code == 422
+    assert stranger.post("/sql-scripts/export", json={"sql": "SELECT 1", "script_id": sid}, headers=CSRF).status_code == 404
+
+    # on a connection: CONNECT, the SQL as it is, a draft's name
+    r = reader.post("/sql-scripts/export", json={"sql": "SELECT 1", "connection_id": pg}, headers=CSRF)
+    assert r.status_code == 403
+    out = boss.post("/sql-scripts/export", json={"sql": "SELECT * FROM ordini", "connection_id": pg}, headers=CSRF)
+    assert out.status_code == 200 and out.json()["filename"] == "sql-script.csv"
+    path, body = fake_engine.exports[-1]
+    assert path == "/db/exports" and body["sql"] == "SELECT * FROM ordini" and body["format"] == "csv"
+    assert body["connection"]["password_encrypted"] == "cifrata" and body["owner"] == f"user:{by['capo@x.local']}"
+    assert len(fake_engine.exports) == 2 and fake_engine.previews == [] and fake_engine.db_queries == []
+
+    exported = session.exec(select(AuditLog).where(AuditLog.action == audit.SQL_SCRIPT_EXPORT).order_by(AuditLog.id)).all()
+    assert [(e.outcome, json.loads(e.detail)["format"]) for e in exported] == [("success", "xlsx"), ("success", "csv")]
+    assert json.loads(exported[0].detail)["datasources"] == [{"id": c, "name": "Clienti"}] and exported[0].target_id == sid
+    assert json.loads(exported[1].detail)["connection"] == {"id": pg, "name": "Gestionale"}
