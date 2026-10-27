@@ -1167,7 +1167,7 @@ export default {
     "mirrorKeyLabel": "Pfad im Bucket",
     "mirrorKeyPlaceholder": "z. B. published/verkauf/latest.parquet",
     "modeAppend": "Anhängen (INSERT)",
-    "modeReplace": "Ersetzen (TRUNCATE + INSERT)",
+    "modeReplace": "Ersetzen (leeren + INSERT)",
     "noDriverConnectedHint": "Kein Driver verbunden: definieren Sie unten die statischen Iterationen.",
     "noNodeSelected": "Kein Knoten ausgewählt.",
     "noteHint": "Nur eine Anmerkung: sie ist nicht Teil des Flows und wird nicht ausgeführt.",

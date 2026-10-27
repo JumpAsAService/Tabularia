@@ -1167,7 +1167,7 @@ export default {
     "mirrorKeyLabel": "Ruta en el bucket",
     "mirrorKeyPlaceholder": "p. ej. published/ventas/latest.parquet",
     "modeAppend": "Añadir (INSERT)",
-    "modeReplace": "Reemplazar (TRUNCATE + INSERT)",
+    "modeReplace": "Reemplazar (vaciar + INSERT)",
     "noDriverConnectedHint": "Ningún driver conectado: define las iteraciones estáticas a continuación.",
     "noNodeSelected": "Ningún nodo seleccionado.",
     "noteHint": "Solo una anotación: no forma parte del flujo y no se ejecuta.",

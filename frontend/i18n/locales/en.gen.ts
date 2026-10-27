@@ -1187,7 +1187,7 @@ export default {
     "mirrorKeyLabel": "Path in the bucket",
     "mirrorKeyPlaceholder": "e.g. published/sales/latest.parquet",
     "modeAppend": "Append (INSERT)",
-    "modeReplace": "Replace (TRUNCATE + INSERT)",
+    "modeReplace": "Replace (empty + INSERT)",
     "noDriverConnectedHint": "No driver connected: define the static iterations below.",
     "noNodeSelected": "No node selected.",
     "noteHint": "Just an annotation: it isn't part of the flow and doesn't get executed.",

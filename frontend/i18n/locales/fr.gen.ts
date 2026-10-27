@@ -1167,7 +1167,7 @@ export default {
     "mirrorKeyLabel": "Chemin dans le bucket",
     "mirrorKeyPlaceholder": "ex. published/ventes/latest.parquet",
     "modeAppend": "Ajouter (INSERT)",
-    "modeReplace": "Remplacer (TRUNCATE + INSERT)",
+    "modeReplace": "Remplacer (vider + INSERT)",
     "noDriverConnectedHint": "Aucun driver connecté : définissez les itérations statiques ci-dessous.",
     "noNodeSelected": "Aucun nœud sélectionné.",
     "noteHint": "Une simple annotation : elle ne fait pas partie du flux et n'est pas exécutée.",

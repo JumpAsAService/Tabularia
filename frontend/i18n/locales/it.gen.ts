@@ -1187,7 +1187,7 @@ export default {
     "mirrorKeyLabel": "Percorso nel bucket",
     "mirrorKeyPlaceholder": "es. published/vendite/latest.parquet",
     "modeAppend": "Accoda (INSERT)",
-    "modeReplace": "Sostituisci (TRUNCATE + INSERT)",
+    "modeReplace": "Sostituisci (svuota + INSERT)",
     "noDriverConnectedHint": "Nessun driver connesso: definisci le iterazioni statiche qui sotto.",
     "noNodeSelected": "Nessun nodo selezionato.",
     "noteHint": "Solo un'annotazione: non fa parte del flusso e non viene eseguita.",

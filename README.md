@@ -82,7 +82,7 @@ engines, from an in-process library to a serverless warehouse.
 
 - **Connect to your databases.** Read directly from Postgres, MySQL, MariaDB,
   ClickHouse, Trino, Oracle, Microsoft SQL Server and SharePoint (Excel and CSV); write results
-  back to a database table (Oracle and SQL Server are sources only, for now) or publish
+  back to a database table, on all of them, or publish
   them as a reusable datasource. SQL Server's driver is Microsoft's, under Microsoft's
   licence, so it is not in the published images: you add it to yours
   ([SQL Server](docs/sqlserver.md)). Files (CSV/Excel/JSON/parquet) work too, uploaded,

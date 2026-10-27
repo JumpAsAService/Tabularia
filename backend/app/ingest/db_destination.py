@@ -20,11 +20,20 @@ A driver per dialect (the sources' own):
 - mysql / mariadb   → PyMySQL executemany in chunks
 - trino             → a parametric multi-row INSERT (slow by nature: Trino is not meant
                       for OLTP, but it works)
+- oracle            → python-oracledb (Thin) executemany: array DML in chunks
+- sqlserver         → mssql-python's Arrow bulk copy into a temporary table, then one
+                      transaction (the optional driver, as for reading)
+
+Oracle and SQL Server have no CREATE TABLE IF NOT EXISTS (before Oracle 23ai): the table
+is looked up first and created only when missing. Names follow each one's rules, as when
+reading: on Oracle an unquoted name is UPPERCASE (`vendite` is VENDITE), on SQL Server
+names go in square brackets.
 """
 from __future__ import annotations
 
 import logging
 import os
+import re
 import tempfile
 from typing import Any, Iterator, Literal
 
@@ -35,13 +44,16 @@ from pydantic import BaseModel
 from app.core.config import get_settings
 from app.ingest.converters import IngestError
 from app.ingest.db_errors import describe_db_error
-from app.ingest.db_source import _IDENT_QUOTE, BATCH_ROWS, DbConnectionSpec
+from app.ingest.db_source import (
+    _IDENT_QUOTE, BATCH_ROWS, DbConnectionSpec, _oracle_connect, _oracle_ident, _sqlserver_connect, _tsql_ident,
+)
 
 logger = logging.getLogger(__name__)
 
 # rows per INSERT on the paths without a native bulk load
 MYSQL_CHUNK_ROWS = 5_000  # multi-row VALUES: under max_allowed_packet
 TRINO_CHUNK_ROWS = 500  # every INSERT is a Trino query: small chunks
+ORACLE_CHUNK_ROWS = 10_000  # one array DML round trip per chunk
 
 
 class DbDestinationError(IngestError):
@@ -56,10 +68,16 @@ class DbDestinationSpec(BaseModel):
 
 def _qualified_table(conn: DbConnectionSpec, table_ref: str) -> tuple[str, list[str]]:
     """The table name quoted per dialect + the unquoted parts (schema, table)."""
-    q = _IDENT_QUOTE[conn.db_type]
     parts = [p.strip() for p in table_ref.split(".") if p.strip()]
     if not parts:
         raise DbDestinationError("The destination table name is empty")
+    if conn.db_type in ("oracle", "sqlserver"):
+        # each with the rules of reading (db_source): Oracle's uppercase, T-SQL's brackets
+        if len(parts) == 1 and conn.db_schema:
+            parts = [conn.db_schema, parts[0]]
+        quoted = [(_oracle_ident if conn.db_type == "oracle" else _tsql_ident)(p) for p in parts]
+        return ".".join(quoted), [p[1:-1] for p in quoted]
+    q = _IDENT_QUOTE[conn.db_type]
     if any(q in p for p in parts):
         raise DbDestinationError(f"Invalid table name: it contains {q!r}")
     if len(parts) == 1 and conn.db_schema:
@@ -348,12 +366,196 @@ def _write_trino(
     return rows
 
 
+# ── Oracle ───────────────────────────────────────────────────────────────────
+_ORACLE_SIMPLE_NAME = re.compile(r"^[A-Za-z][A-Za-z0-9_$#]*$")
+
+
+def _oracle_sql_type(t: pa.DataType) -> str:
+    if pa.types.is_boolean(t):
+        return "NUMBER(1)"
+    if pa.types.is_integer(t):
+        if pa.types.is_unsigned_integer(t) and t.bit_width >= 64:
+            return "NUMBER(20)"
+        # as the other databases: unsigned 32-bit does not fit a signed one
+        return "NUMBER(19)" if t.bit_width >= 64 or pa.types.is_unsigned_integer(t) else "NUMBER(10)"
+    if pa.types.is_floating(t):
+        return "BINARY_DOUBLE"
+    if pa.types.is_decimal(t):
+        return f"NUMBER({t.precision}, {t.scale})" if t.precision <= 38 else "NUMBER"
+    if pa.types.is_timestamp(t):
+        return "TIMESTAMP(6)"
+    if pa.types.is_date(t):
+        return "DATE"
+    # the longest text a standard Oracle keeps in a VARCHAR2: a longer value stops the
+    # write with ORA-12899, and needs a table created beforehand with a CLOB column
+    return "VARCHAR2(4000)"
+
+
+def _oracle_column_names(schema: pa.Schema, existing: list[str], qualified: str) -> list[str]:
+    """The table's own name for each output column. A new table takes Oracle's
+    convention (a plain name in UPPERCASE, so `SELECT regione` works); an existing one is
+    matched by name ignoring case, as an unquoted name would be."""
+    for f in schema:
+        if '"' in f.name:
+            raise DbDestinationError(f"Invalid column name for oracle: {f.name!r}")
+    if not existing:
+        return [f.name.upper() if _ORACLE_SIMPLE_NAME.match(f.name) else f.name for f in schema]
+    by_upper: dict[str, str] = {}
+    for name in existing:
+        by_upper.setdefault(name.upper(), name)
+    names, missing = [], []
+    for f in schema:
+        if f.name in existing:
+            names.append(f.name)
+        elif f.name.upper() in by_upper:
+            names.append(by_upper[f.name.upper()])
+        else:
+            missing.append(f.name)
+    if missing:
+        raise DbDestinationError(
+            f"Column(s) {', '.join(missing)} of the output are not in the table {qualified}: "
+            "add them to the table or rename them in the flow"
+        )
+    return names
+
+
+def _write_oracle(
+    conn: DbConnectionSpec, dest: DbDestinationSpec, qualified: str, parts: list[str],
+    schema: pa.Schema, batches: Iterator[pa.RecordBatch],
+) -> int:
+    import oracledb
+
+    c = _oracle_connect(conn)
+    rows = 0
+    try:
+        cur = c.cursor()
+        if len(parts) > 1:
+            owner_sql, params = ":o", {"o": parts[-2], "t": parts[-1]}
+        else:
+            owner_sql, params = "SYS_CONTEXT('USERENV', 'CURRENT_SCHEMA')", {"t": parts[-1]}
+        cur.execute(
+            f"SELECT column_name FROM all_tab_columns WHERE owner = {owner_sql} AND table_name = :t ORDER BY column_id",
+            params,
+        )
+        existing = [r[0] for r in cur.fetchall()]
+        names = _oracle_column_names(schema, existing, qualified)
+        columns = ", ".join(f'"{n}"' for n in names)
+        if not existing:
+            # DDL commits by itself in Oracle: the table is made before the data's transaction
+            cols = ", ".join(f'"{n}" {_oracle_sql_type(f.type)}' for n, f in zip(names, schema))
+            cur.execute(f"CREATE TABLE {qualified} ({cols})")
+        if dest.mode == "replace":
+            # DELETE and not TRUNCATE: TRUNCATE is DDL and commits, so a failure half way
+            # through the inserts would leave the table empty; DELETE rolls back with them
+            cur.execute(f"DELETE FROM {qualified}")
+        insert = f"INSERT INTO {qualified} ({columns}) VALUES ({', '.join(f':{i + 1}' for i in range(len(schema)))})"
+        bools = [i for i, f in enumerate(schema) if pa.types.is_boolean(f.type)]
+        # a datetime binds as DATE by default, which drops the fractional seconds
+        sizes = [oracledb.DB_TYPE_TIMESTAMP if pa.types.is_timestamp(f.type) else None for f in schema]
+        for batch in batches:
+            for chunk in _row_chunks(batch, schema, ORACLE_CHUNK_ROWS):
+                if bools:  # NUMBER(1): before 23ai Oracle has no boolean to bind
+                    chunk = [tuple(int(v) if i in bools and v is not None else v for i, v in enumerate(r)) for r in chunk]
+                cur.setinputsizes(*sizes)
+                cur.executemany(insert, chunk)
+                rows += len(chunk)
+        for stmt in _post_statements(dest.post_sql):
+            cur.execute(stmt)
+        c.commit()
+    except Exception:
+        try:
+            c.rollback()
+        except Exception:
+            pass
+        raise
+    finally:
+        c.close()
+    return rows
+
+
+# ── SQL Server ───────────────────────────────────────────────────────────────
+def _sqlserver_sql_type(t: pa.DataType) -> str:
+    if pa.types.is_boolean(t):
+        return "BIT"
+    if pa.types.is_integer(t):
+        if pa.types.is_unsigned_integer(t) and t.bit_width >= 64:
+            return "DECIMAL(20, 0)"
+        return "BIGINT" if t.bit_width >= 64 or pa.types.is_unsigned_integer(t) else "INT"
+    if pa.types.is_floating(t):
+        return "FLOAT"
+    if pa.types.is_decimal(t):
+        return f"DECIMAL({t.precision}, {t.scale})" if t.precision <= 38 else "FLOAT"
+    if pa.types.is_timestamp(t):
+        return "DATETIME2(6)"
+    if pa.types.is_date(t):
+        return "DATE"
+    return "NVARCHAR(MAX)"
+
+
+def _write_sqlserver(
+    conn: DbConnectionSpec, dest: DbDestinationSpec, qualified: str, parts: list[str],
+    schema: pa.Schema, batches: Iterator[pa.RecordBatch],
+) -> int:
+    # The driver's bulk copy streams the Arrow batches straight into TDS (tens of
+    # thousands of rows a second faster than executemany), but on a connection of its
+    # own, outside our transaction. So the rows land in a global temporary table first
+    # (SQL Server drops it by itself if we die), and then ONE transaction of ours makes
+    # the table if missing, empties it for «replace», copies the rows over by column
+    # name and runs the post-SQL: all or nothing, as on the other databases.
+    import uuid
+
+    for f in schema:
+        if "]" in f.name:
+            raise DbDestinationError(f"Invalid column name for sqlserver: {f.name!r}")
+    columns = ", ".join(_tsql_ident(f.name) for f in schema)
+    shape = ", ".join(f"{_tsql_ident(f.name)} {_sqlserver_sql_type(f.type)}" for f in schema)
+    staging = f"[##tabularia_{uuid.uuid4().hex}]"
+    c = _sqlserver_connect(conn)
+    try:
+        c.autocommit = True
+        cur = c.cursor()
+        cur.execute(f"CREATE TABLE {staging} ({shape})")
+        reader = pa.RecordBatchReader.from_batches(schema, batches)
+        copied = cur.bulkcopy_arrow(staging, reader, timeout=0, keep_nulls=True)
+        rows = int(copied.get("rows_copied") or 0)
+
+        c.autocommit = False
+        try:
+            cur.execute("SELECT OBJECT_ID(?, 'U')", (qualified,))
+            if cur.fetchone()[0] is None:
+                cur.execute(f"CREATE TABLE {qualified} ({shape})")
+            if dest.mode == "replace":
+                # DELETE rather than TRUNCATE: it needs the DELETE permission only (TRUNCATE
+                # wants ALTER) and works on a table other tables reference
+                cur.execute(f"DELETE FROM {qualified}")
+            cur.execute(f"INSERT INTO {qualified} ({columns}) SELECT {columns} FROM {staging}")
+            for stmt in _post_statements(dest.post_sql):
+                cur.execute(stmt)
+            c.commit()  # T-SQL DDL is transactional: a table made here goes if anything fails
+        except Exception:
+            try:
+                c.rollback()
+            except Exception:
+                pass
+            raise
+    finally:
+        try:
+            c.autocommit = True
+            c.cursor().execute(f"DROP TABLE IF EXISTS {staging}")
+        except Exception:
+            pass
+        c.close()
+    return rows
+
+
 _WRITERS = {
     "postgresql": _write_postgresql,
     "mysql": _write_mysql,
     "mariadb": _write_mysql,
     "clickhouse": _write_clickhouse,
     "trino": _write_trino,
+    "oracle": _write_oracle,
+    "sqlserver": _write_sqlserver,
 }
 
 
@@ -390,8 +592,10 @@ def write_parquet_to_db(
 
         storage = get_storage_service()
 
+    writer = _WRITERS.get(conn.db_type)
+    if writer is None:
+        raise DbDestinationError(f"Tabularia cannot write into a {conn.db_type} database")
     qualified, parts = _qualified_table(conn, dest.table)
-    writer = _WRITERS[conn.db_type]
 
     fd, tmp = tempfile.mkstemp(suffix=".parquet", prefix="db_dest_")
     os.close(fd)

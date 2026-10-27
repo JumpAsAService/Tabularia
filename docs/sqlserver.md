@@ -1,7 +1,8 @@
 # Microsoft SQL Server: the driver you add yourself
 
 Tabularia reads tables, views and SQL queries from Microsoft SQL Server (tried on
-SQL Server 2022), refreshes them and schedules them like the other databases. It does
+SQL Server 2022), refreshes them and schedules them like the other
+[databases](sources/databases.md). It does
 so through **mssql-python**, Microsoft's driver, which streams the results as Arrow
 batches.
 
@@ -133,5 +134,6 @@ default), trust a self-signed one, or no encryption. A SQL source is sent as wri
 CTEs and `ORDER BY` included, but it must be one query that reads: a batch carrying
 `; DELETE …`, or a `SELECT … INTO` that would create a table, is refused before it
 reaches the server. Integer `decimal` up to 18 digits arrives as Int64, other decimals
-and `money` as Float64, `datetimeoffset` as UTC. SQL Server is a source only: an
-Output node cannot write to it.
+and `money` as Float64, `datetimeoffset` as UTC. An Output node **Database table** writes
+into SQL Server too, with the driver's bulk copy and one transaction: see
+[Databases](connections/databases.md#sql-server).

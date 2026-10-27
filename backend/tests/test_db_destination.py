@@ -195,3 +195,43 @@ def test_mysql_append_does_not_empty(monkeypatch):
     _write_mysql(conn, dest, qualified, parts, schema, iter([batch]))
     joined = " ".join(s if isinstance(s, str) else s[1] for s in log)
     assert "DELETE FROM" not in joined and "TRUNCATE" not in joined
+
+
+# ── Oracle and SQL Server: names by their own rules ────────────────────────────
+def test_qualified_table_oracle_plain_names_are_uppercase():
+    q, parts = _qualified_table(_conn(db_type="oracle", db_schema="sales"), "vendite")
+    assert q == '"SALES"."VENDITE"' and parts == ["SALES", "VENDITE"]
+
+
+def test_qualified_table_oracle_quoted_names_keep_their_case():
+    q, parts = _qualified_table(_conn(db_type="oracle"), '"conti 2024"')
+    assert q == '"conti 2024"' and parts == ["conti 2024"]
+
+
+def test_qualified_table_sqlserver_brackets():
+    q, parts = _qualified_table(_conn(db_type="sqlserver", db_schema="dbo"), "[conti 2024]")
+    assert q == "[dbo].[conti 2024]" and parts == ["dbo", "conti 2024"]
+
+
+def test_oracle_new_table_columns_take_the_uppercase_convention():
+    from app.ingest.db_destination import _oracle_column_names
+
+    schema = pa.schema([("regione", pa.string()), ("ricavo netto", pa.float64())])
+    assert _oracle_column_names(schema, [], '"T"') == ["REGIONE", "ricavo netto"]
+
+
+def test_oracle_existing_columns_are_matched_ignoring_case():
+    from app.ingest.db_destination import _oracle_column_names
+
+    schema = pa.schema([("amount", pa.float64()), ("customer", pa.string())])
+    assert _oracle_column_names(schema, ["CUSTOMER", "Amount"], '"T"') == ["Amount", "CUSTOMER"]
+    with pytest.raises(DbDestinationError, match="region"):
+        _oracle_column_names(pa.schema([("region", pa.string())]), ["CUSTOMER"], '"T"')
+
+
+def test_an_unknown_dialect_is_a_clear_error(storage):
+    from app.ingest.db_destination import write_parquet_to_db
+
+    conn = DbConnectionSpec.model_construct(db_type="sybase", host="h", database="d", db_schema="")
+    with pytest.raises(DbDestinationError, match="cannot write into a sybase"):
+        write_parquet_to_db(conn, DbDestinationSpec(table="t"), "b", "k", storage=storage)
