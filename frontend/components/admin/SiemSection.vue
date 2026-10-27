@@ -23,10 +23,10 @@ const saving = ref(false)
 const testing = ref(false)
 const test = ref<SiemTest | null>(null)
 // the form: what is written, apart from what is saved
-const modulo = ref({ url: '', token: '', index: '', sourcetype: '', source: '', host: '', verify_tls: true })
+const draft = ref({ url: '', token: '', index: '', sourcetype: '', source: '', host: '', verify_tls: true })
 
 function fill(s: SiemState) {
-  modulo.value = {
+  draft.value = {
     url: s.url, token: '', index: s.index ?? '', sourcetype: s.sourcetype ?? '', source: s.source ?? '',
     host: s.host ?? '', verify_tls: s.verify_tls,
   }
@@ -54,13 +54,13 @@ onMounted(() => {
 })
 onBeforeUnmount(() => clearInterval(timer))
 
-const modificabile = computed(() => !!state.value?.editable)
+const editable = computed(() => !!state.value?.editable)
 
 // what changed compared with the saved one
 const changes = computed(() => {
   const s = state.value
   if (!s) return {}
-  const m = modulo.value
+  const m = draft.value
   const out: Record<string, string | boolean> = {}
   if (m.url.trim() !== s.url) out.url = m.url.trim()
   if (m.token.trim()) out.token = m.token.trim()
@@ -137,11 +137,11 @@ const situation = computed<{ tone: 'off' | 'ok' | 'error' | 'waiting'; text: str
       <div class="state" :class="situation.tone" role="status">
         <component :is="situation.tone === 'ok' ? CheckCircle2 : situation.tone === 'off' ? Power : situation.tone === 'error' ? XCircle : TriangleAlert" :size="15" />
         <span>{{ situation.text }}</span>
-        <button v-if="modificabile && state.enabled" type="button" class="mini" :disabled="saving" @click="turnOn(false)">
+        <button v-if="editable && state.enabled" type="button" class="mini" :disabled="saving" @click="turnOn(false)">
           {{ $t('siem.turnOff') }}
         </button>
         <button
-          v-else-if="modificabile"
+          v-else-if="editable"
           type="button"
           class="primary mini"
           :disabled="saving || !state.url || !state.token_set || toSave"
@@ -173,53 +173,53 @@ const situation = computed<{ tone: 'off' | 'ok' | 'error' | 'waiting'; text: str
     <div class="fields">
       <label class="field largo">
         <span>{{ $t('siem.url') }}</span>
-        <input v-model="modulo.url" type="url" autocomplete="off" placeholder="https://splunk.example.com:8088" :disabled="!modificabile || saving" />
+        <input v-model="draft.url" type="url" autocomplete="off" placeholder="https://splunk.example.com:8088" :disabled="!editable || saving" />
         <small>{{ $t('siem.urlHint') }}</small>
       </label>
       <label class="field largo">
         <span>{{ $t('siem.token') }}</span>
         <input
-          v-model="modulo.token"
+          v-model="draft.token"
           type="password"
           autocomplete="new-password"
           :placeholder="state.token_set ? $t('siem.tokenSet') : 'xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx'"
-          :disabled="!modificabile || saving"
+          :disabled="!editable || saving"
         />
         <small>
           {{ state.token_set ? $t('siem.tokenSetHint') : $t('siem.tokenHint') }}
-          <button v-if="modificabile && state.token_set" type="button" class="link" @click="removeToken">{{ $t('siem.removeToken') }}</button>
+          <button v-if="editable && state.token_set" type="button" class="link" @click="removeToken">{{ $t('siem.removeToken') }}</button>
         </small>
       </label>
       <label class="field">
         <span>{{ $t('siem.index') }}</span>
-        <input v-model="modulo.index" type="text" :placeholder="$t('siem.indexPlaceholder')" :disabled="!modificabile || saving" />
+        <input v-model="draft.index" type="text" :placeholder="$t('siem.indexPlaceholder')" :disabled="!editable || saving" />
       </label>
       <label class="field">
         <span>{{ $t('siem.sourcetype') }}</span>
-        <input v-model="modulo.sourcetype" type="text" placeholder="tabularia:audit" :disabled="!modificabile || saving" />
+        <input v-model="draft.sourcetype" type="text" placeholder="tabularia:audit" :disabled="!editable || saving" />
       </label>
       <label class="field">
         <span>{{ $t('siem.source') }}</span>
-        <input v-model="modulo.source" type="text" placeholder="tabularia" :disabled="!modificabile || saving" />
+        <input v-model="draft.source" type="text" placeholder="tabularia" :disabled="!editable || saving" />
       </label>
       <label class="field">
         <span>{{ $t('siem.host') }}</span>
-        <input v-model="modulo.host" type="text" placeholder="tabularia" :disabled="!modificabile || saving" />
+        <input v-model="draft.host" type="text" placeholder="tabularia" :disabled="!editable || saving" />
       </label>
     </div>
 
     <label class="tick">
-      <input v-model="modulo.verify_tls" type="checkbox" :disabled="!modificabile || saving" />
+      <input v-model="draft.verify_tls" type="checkbox" :disabled="!editable || saving" />
       <span>{{ $t('siem.verifyTls') }}</span>
     </label>
-    <p v-if="!modulo.verify_tls" class="notice" role="note"><TriangleAlert :size="13" /> {{ $t('siem.verifyTlsOff') }}</p>
+    <p v-if="!draft.verify_tls" class="notice" role="note"><TriangleAlert :size="13" /> {{ $t('siem.verifyTlsOff') }}</p>
     <p v-else class="hint muted small">{{ $t('siem.verifyTlsHint') }}</p>
 
-    <div v-if="modificabile" class="actions">
+    <div v-if="editable" class="actions">
       <button type="submit" class="primary" :disabled="saving || !toSave">
         <LoaderCircle v-if="saving" :size="13" class="spin" /> {{ $t('siem.save') }}
       </button>
-      <button type="button" :disabled="testing || saving || !(modulo.url && (state.token_set || modulo.token))" @click="send">
+      <button type="button" :disabled="testing || saving || !(draft.url && (state.token_set || draft.token))" @click="send">
         <LoaderCircle v-if="testing" :size="13" class="spin" /><Send v-else :size="13" /> {{ $t('siem.test') }}
       </button>
     </div>
@@ -230,7 +230,7 @@ const situation = computed<{ tone: 'off' | 'ok' | 'error' | 'waiting'; text: str
         <code v-if="!test.ok">{{ test.message }}</code>
       </span>
     </p>
-    <p v-if="!modificabile" class="note">{{ $t('siem.readOnly') }}</p>
+    <p v-if="!editable" class="note">{{ $t('siem.readOnly') }}</p>
   </form>
 </template>
 

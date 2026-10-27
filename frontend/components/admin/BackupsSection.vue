@@ -22,7 +22,7 @@ const state = ref<BackupState | null>(null)
 const error = ref('')
 const saving = ref(false)
 const starting = ref(false)
-const modulo = ref({ enabled: true, schedule: '', keep: 14 })
+const draft = ref({ enabled: true, schedule: '', keep: 14 })
 
 const PRESETS = [
   { cron: '0 3 * * *', key: 'presetNightly' },
@@ -31,7 +31,7 @@ const PRESETS = [
 ] as const
 
 function fill(s: BackupState) {
-  modulo.value = { enabled: s.enabled, schedule: s.schedule, keep: s.keep }
+  draft.value = { enabled: s.enabled, schedule: s.schedule, keep: s.keep }
 }
 
 async function load(quiet = false) {
@@ -63,12 +63,12 @@ onMounted(async () => {
 })
 onBeforeUnmount(() => clearTimeout(timer))
 
-const modificabile = computed(() => !!state.value?.editable)
+const editable = computed(() => !!state.value?.editable)
 
 const changes = computed<BackupUpdate>(() => {
   const s = state.value
   if (!s) return {}
-  const m = modulo.value
+  const m = draft.value
   const out: BackupUpdate = {}
   if (m.enabled !== s.enabled) out.enabled = m.enabled
   if (m.schedule.trim() !== s.schedule) out.schedule = m.schedule.trim()
@@ -150,7 +150,7 @@ const situation = computed<{ tone: 'off' | 'ok' | 'error' | 'waiting'; text: str
           <component :is="situation.tone === 'ok' ? CheckCircle2 : situation.tone === 'off' ? Power : situation.tone === 'error' ? XCircle : TriangleAlert" v-else :size="15" />
           <span>{{ situation.text }}</span>
           <button
-            v-if="modificabile"
+            v-if="editable"
             type="button"
             class="primary mini"
             :disabled="starting || !!state.running_since || !!state.requested_at"
@@ -181,9 +181,9 @@ const situation = computed<{ tone: 'off' | 'ok' | 'error' | 'waiting'; text: str
     <p class="hint muted small">{{ $t('backups.settingsLead') }}</p>
 
     <label class="tick">
-      <input v-model="modulo.enabled" type="checkbox" :disabled="!modificabile || saving" />
+      <input v-model="draft.enabled" type="checkbox" :disabled="!editable || saving" />
       <span>{{ $t('backups.enabled') }}</span>
-      <button v-if="modificabile && state.changed.enabled" type="button" class="link" @click="save({ reset: ['enabled'] })">
+      <button v-if="editable && state.changed.enabled" type="button" class="link" @click="save({ reset: ['enabled'] })">
         {{ $t('backups.reset', { value: state.defaults.enabled ? $t('backups.on') : $t('backups.off') }) }}
       </button>
     </label>
@@ -191,32 +191,32 @@ const situation = computed<{ tone: 'off' | 'ok' | 'error' | 'waiting'; text: str
     <div class="fields">
       <label class="field">
         <span>{{ $t('backups.schedule') }}</span>
-        <input v-model="modulo.schedule" type="text" spellcheck="false" autocomplete="off" placeholder="0 3 * * *" :disabled="!modificabile || saving" />
+        <input v-model="draft.schedule" type="text" spellcheck="false" autocomplete="off" placeholder="0 3 * * *" :disabled="!editable || saving" />
         <small>
           {{ $t('backups.scheduleHint', { tz: state.timezone }) }}
-          <button v-if="modificabile && state.changed.schedule" type="button" class="link" @click="save({ reset: ['schedule'] })">
+          <button v-if="editable && state.changed.schedule" type="button" class="link" @click="save({ reset: ['schedule'] })">
             {{ $t('backups.reset', { value: state.defaults.schedule }) }}
           </button>
         </small>
-        <span v-if="modificabile" class="preset">
-          <button v-for="p in PRESETS" :key="p.cron" type="button" class="chip" :disabled="saving" @click="modulo.schedule = p.cron">
+        <span v-if="editable" class="preset">
+          <button v-for="p in PRESETS" :key="p.cron" type="button" class="chip" :disabled="saving" @click="draft.schedule = p.cron">
             {{ $t(`backups.${p.key}`) }}
           </button>
         </span>
       </label>
       <label class="field">
         <span>{{ $t('backups.keep') }}</span>
-        <input v-model.number="modulo.keep" type="number" min="1" max="1000" :disabled="!modificabile || saving" />
+        <input v-model.number="draft.keep" type="number" min="1" max="1000" :disabled="!editable || saving" />
         <small>
           {{ $t('backups.keepHint') }}
-          <button v-if="modificabile && state.changed.keep" type="button" class="link" @click="save({ reset: ['keep'] })">
+          <button v-if="editable && state.changed.keep" type="button" class="link" @click="save({ reset: ['keep'] })">
             {{ $t('backups.reset', { value: state.defaults.keep }) }}
           </button>
         </small>
       </label>
     </div>
 
-    <div v-if="modificabile" class="actions">
+    <div v-if="editable" class="actions">
       <button type="submit" class="primary" :disabled="saving || !toSave">
         <LoaderCircle v-if="saving" :size="13" class="spin" /> {{ $t('backups.save') }}
       </button>
@@ -230,14 +230,14 @@ const situation = computed<{ tone: 'off' | 'ok' | 'error' | 'waiting'; text: str
     <p v-if="!state.items.length" class="muted small">{{ $t('backups.listEmpty') }}</p>
     <table v-else class="listing">
       <thead>
-        <tr><th>{{ $t('backups.colWhen') }}</th><th>{{ $t('backups.colName') }}</th><th class="num">{{ $t('backups.colSize') }}</th><th v-if="modificabile" /></tr>
+        <tr><th>{{ $t('backups.colWhen') }}</th><th>{{ $t('backups.colName') }}</th><th class="num">{{ $t('backups.colSize') }}</th><th v-if="editable" /></tr>
       </thead>
       <tbody>
         <tr v-for="b in state.items" :key="b.name">
           <td>{{ when(b.name) }}</td>
           <td><code>{{ b.name }}</code></td>
           <td class="num">{{ bytes(b.size) }}</td>
-          <td v-if="modificabile" class="num">
+          <td v-if="editable" class="num">
             <a class="download" :href="api.downloadUrl(b.name)" :download="b.name"><Download :size="13" /> {{ $t('backups.download') }}</a>
           </td>
         </tr>

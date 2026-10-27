@@ -320,7 +320,7 @@ onBeforeUnmount(() => {
 })
 const notSavable = computed(() => items.value.some((v) => key(v) in text.value && !!localProblem(v)))
 const toSave = (v: PanelSetting) => v.key in changes.value[v.source]
-const modificabile = (v: PanelSetting) => editable.value && !v.off
+const canEdit = (v: PanelSetting) => editable.value && !v.off
 
 function cancel() {
   text.value = {}
@@ -593,7 +593,7 @@ const zones = computed(() => {
                 type="checkbox"
                 role="switch"
                 :checked="isOn(v)"
-                :disabled="!modificabile(v) || saving"
+                :disabled="!canEdit(v) || saving"
                 @change="write(v, String(($event.target as HTMLInputElement).checked))"
               />
               <span>{{ isOn(v) ? $t('panelSettings.on') : $t('panelSettings.off') }}</span>
@@ -608,7 +608,7 @@ const zones = computed(() => {
                 :list="v.kind === 'timezone' && zones.length ? 'fusi-orari' : undefined"
                 :placeholder="v.kind === 'cpu' ? '2, 500m' : v.kind === 'memory' ? '4Gi, 512Mi' : shownOne(v) === null ? $t('panelSettings.automatic') : ''"
                 :value="field(v)"
-                :disabled="!modificabile(v) || saving"
+                :disabled="!canEdit(v) || saving"
                 :aria-invalid="!!problem(v)"
                 :aria-describedby="numeric(v) ? `${fieldId(v)}-intervallo` : undefined"
                 @input="write(v, ($event.target as HTMLInputElement).value)"
@@ -631,7 +631,7 @@ const zones = computed(() => {
                 :title="v.source === 'gateway' ? $t('panelSettings.notAppliedGatewayHint', { seconds: refreshSeconds }) : $t('engineSettings.notAppliedHint')"
               >{{ $t('engineSettings.notApplied') }}</span>
               <button
-                v-if="editable && ((v.value !== null && !azzera.has(key(v))) || (modificabile(v) && key(v) in text))"
+                v-if="editable && ((v.value !== null && !azzera.has(key(v))) || (canEdit(v) && key(v) in text))"
                 type="button"
                 class="back"
                 :disabled="saving"
