@@ -24,7 +24,6 @@ import os
 import re
 from contextlib import AbstractContextManager
 from dataclasses import dataclass
-from datetime import date
 from typing import Any, Callable, Literal, Optional
 
 from pydantic import BaseModel, Field
@@ -39,7 +38,7 @@ from sqlmodel import Session, select
 from app.core.config import get_settings
 from app.core.engine_client import get_engine_client
 from app.models import Datasource, Project, User
-from app.services import audit
+from app.services import ai_prompts, audit
 from app.services.permissions import readable_project_ids
 
 logger = logging.getLogger(__name__)
@@ -57,7 +56,6 @@ _DIALECTS = {
     "clickhouse": ("ClickHouse SQL", "`"),
     "bigquery": ("GoogleSQL (BigQuery)", "`"),
 }
-_LANGUAGES = {"it": "Italian", "en": "English", "fr": "French", "de": "German", "es": "Spanish"}
 # SELECT only: the `sql` node wraps the query in a WITH of its own already
 # (input/self), so a query that STARTS with WITH is not valid on any engine
 _SELECT_ONLY = re.compile(r"^\s*select\b", re.IGNORECASE)
@@ -86,6 +84,8 @@ class ChatDeps:
     # already): [{id, name}]. Only a context hint: every tool checks the access again
     # anyway.
     focus: list[dict[str, Any]] | None = None
+    # the text of the instructions in force (services/ai_prompts.py), read by the route
+    prompt: str = ""
 
 
 def _columns(ds: Datasource) -> list[dict[str, Any]]:
@@ -181,38 +181,29 @@ class _EngineRefusal(Exception):
         self.status, self.detail = status, detail
 
 
+def dialect_of(engine: Optional[str]) -> tuple[str, str]:
+    return _DIALECTS.get((engine or "polars").lower(), _DIALECTS["polars"])
+
+
+def context(engine: Optional[str], locale: str, focus: list[dict[str, Any]] | None = None) -> str:
+    """What Tabularia adds to the text at every request (services/ai_prompts.py)."""
+    dialect, quote = dialect_of(engine)
+    lines = [
+        ai_prompts.CONTEXT_HEADER,
+        f"- {ai_prompts.today()}",
+        f"- SQL dialect: {dialect}. Quote column names that contain spaces or symbols with {quote}.",
+        f"- Query results are capped at {get_settings().ai.max_result_rows} rows.",
+    ]
+    if focus:
+        names = ", ".join(f"{d['name']} (id {d['id']})" for d in focus)
+        lines.append(f"- The user has selected these datasources as the scope of the conversation: {names}. "
+                     "Work on them, skipping list_datasources, unless the user asks about something else.")
+    return "\n".join(lines) + "\n\n" + ai_prompts.language_line(locale)
+
+
 def _instructions(ctx: RunContext[ChatDeps]) -> str:
     deps = ctx.deps
-    dialect, quote = _DIALECTS.get((deps.engine or "polars").lower(), _DIALECTS["polars"])
-    language = _LANGUAGES.get(deps.locale[:2].lower(), "English")
-    cap = get_settings().ai.max_result_rows
-    scope = ""
-    if deps.focus:
-        names = ", ".join(f"{d['name']} (id {d['id']})" for d in deps.focus)
-        scope = f"\n\nThe user has selected these datasources as the scope of the conversation: {names}. Work on them, skipping list_datasources, unless the user asks about something else."
-    return _BASE_INSTRUCTIONS(language, dialect, quote, cap) + scope
-
-
-def _BASE_INSTRUCTIONS(language: str, dialect: str, quote: str, cap: int) -> str:
-    return f"""You are the data assistant of Tabularia, a self-hosted data-preparation platform. \
-You help the user understand the data in the catalog: find the right datasource, query it, and explain what the numbers say.
-
-Today is {date.today().isoformat()}. Answer in {language}, concisely, in Markdown.
-
-How to work:
-1. You only know what the tools tell you. Start from `list_datasources` unless the conversation already identified the datasource. Each datasource may carry a description written by its owners (what it contains, what one row is, the period, caveats): use it to pick the right table, and tell the user when two candidates look alike.
-2. Before querying a datasource, call `describe_datasource`: the full datasource description, column names, types and the hand-written field descriptions tell you what the table and each column MEAN. Trust the descriptions over your guesses about a column name.
-3. Query with `query_datasource`. The table is always called `self`. Write one statement that STARTS with SELECT, in {dialect}: no leading WITH (the engine already wraps your query in one), use subqueries in FROM instead. Quote column names that contain spaces or symbols with {quote}. Aggregate in SQL (GROUP BY, COUNT, SUM, AVG…) instead of fetching raw rows: results are capped at {cap} rows.
-4. If a query fails, read the error, fix the SQL and try again. If it keeps failing, say so plainly.
-
-Rules:
-- A question about two datasources is one query, not two: join them with `join_datasource_id` instead of querying each and combining the numbers yourself. Adding up figures from two separate results is exactly how a wrong total gets stated confidently.
-- When the answer is a ranking, a share of a total or a series over time, pass `chart` to `query_datasource` so the result is drawn as well as listed — and always when the user asks for a chart. Omit it for a single number or a couple of rows.
-- Every figure you state must come from a query result in this conversation. Never estimate, never invent, and do the arithmetic (totals, shares, differences) in SQL rather than in your head.
-- Name the datasource you used. If the data cannot answer the question, say what is missing.
-- Never describe what a datasource contains from its name alone: quote its description, or its columns, from a tool result. If it has no description, say so and look at the columns. The same holds for fields: a column without a description is undescribed, and a meaning you infer from its name or its values must be presented as your reading, never as catalog documentation.
-- You cannot modify data, run flows or see datasources the user has no access to. If nothing is available, tell the user to ask for access to a folder.
-- The interface shows the result table of each query under your answer: do not repeat long tables in text, summarise them and point at what matters."""
+    return ai_prompts.compose(deps.prompt or ai_prompts.ASSISTANT, context(deps.engine, deps.locale, deps.focus))
 
 
 agent: Agent[ChatDeps, str] = Agent(
@@ -436,14 +427,8 @@ def build_model(model_id: str):
 # ── the conversation's title ─────────────────────────────────────────────────
 TITLE_MAX_CHARS = 60
 
-_TITLE_INSTRUCTIONS = (
-    "You name conversations. Given the user's first question, reply with a title of "
-    "three to six words that says what the conversation is about. Reply with the title "
-    "ALONE: no quotes, no final period, no preamble. Write it in {language}."
-)
 
-
-async def suggest_title(model_id: str, question: str, locale: str = "en") -> tuple[str | None, Any]:
+async def suggest_title(model_id: str, question: str, locale: str = "en", prompt: str = "") -> tuple[str | None, Any]:
     """A short title for the conversation, asked of the model.
 
     It is worth a tiny call once only, at the first turn: the title then stays forever
@@ -463,7 +448,7 @@ async def suggest_title(model_id: str, question: str, locale: str = "en") -> tup
     try:
         agent = Agent(
             build_model(model_id),
-            instructions=_TITLE_INSTRUCTIONS.format(language=_LANGUAGES.get(locale[:2].lower(), "English")),
+            instructions=ai_prompts.compose(prompt or ai_prompts.TITLE, ai_prompts.language_line(locale, "the title")),
         )
         payload = await agent.run(question_text[:1000], usage_limits=UsageLimits(request_limit=1))
         usage = payload.usage

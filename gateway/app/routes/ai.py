@@ -3,6 +3,9 @@
 - `GET  /ai/status`            for everyone: is the assistant on? with which models?
 - `GET  /ai/models`            superuser: the provider's catalog + the admin's choice
 - `PUT  /ai/models/{id}`       superuser: enables/disables a model (audit)
+- `GET  /ai/prompts`           observer: the agents' instructions, the text and the context added
+- `PUT  /ai/prompts/{agent}`   superuser: changes an agent's text (audit)
+- `DELETE /ai/prompts/{agent}` superuser: back to the default text (audit)
 - `POST /ai/chat`              for everyone: one conversation turn, over SSE
 
 The conversation is NOT saved on the server: the history goes back to the client at
@@ -33,9 +36,9 @@ from app.db.session import engine as db_engine, get_session
 from app.deps.auth import get_current_user, require_observer, require_superuser
 from app.deps.permissions import ensure_can
 from app.models.permission import Capability
-from app.models import AiChat, AiModel, Datasource, User
+from app.models import AiChat, AiModel, AiPrompt, Datasource, User
 from app.services.permissions import is_observer_only
-from app.services import ai_agent, ai_chats, ai_flow_agent, ai_pricing, ai_script_agent, audit
+from app.services import ai_agent, ai_chats, ai_flow_agent, ai_pricing, ai_prompts, ai_script_agent, audit
 from app.services.ai_models import enabled_model_ids, ensure_configured, is_chat_model, provider_models
 from app.services.engine_policy import allowed_engines
 from app.services.permissions import readable_project_ids
@@ -118,6 +121,108 @@ async def set_ai_model(
         target_type="ai_model", target_label=model_id, request=request,
     )
     return AiModelOut(model_id=model_id, enabled=body.enabled, chat=is_chat_model(model_id), available=model_id in offered)
+
+
+# ── the agents' instructions ─────────────────────────────────────────────────
+class AiPromptOut(BaseModel):
+    agent: str
+    text: str
+    default: str
+    custom: bool
+    # what Tabularia adds at every request, with example values: shown, not editable
+    context: str
+    updated_at: Optional[datetime] = None
+    updated_by: Optional[str] = None
+
+
+class AiPromptUpdate(BaseModel):
+    text: str = Field(min_length=1, max_length=ai_prompts.MAX_CHARS)
+
+
+def _example_context(agent: str, locale: str) -> str:
+    """The context with example values in place of the request's ones."""
+    if agent == "assistant":
+        return ai_agent.context(None, locale)
+    if agent == "flow":
+        return ai_flow_agent.context(None, locale, "‹flow name›", "op-3")
+    if agent == "script":
+        return ai_script_agent.context(ai_script_agent.ScriptDeps(
+            user=None, session_factory=_new_session, engine=None, model_id="", locale=locale,  # type: ignore[arg-type]
+            language_version="3.12", environment="‹environment›", packages=["‹packages›"], variables=["‹variables›"],
+            files=[{"path": "main.py", "content": "‹the files' content›"}], entrypoint="main.py",
+        ))
+    if agent == "title":
+        return ai_prompts.language_line(locale, "the title")
+    if agent == "dbt_translate":
+        from app.services.dbt_ai import translation_context
+
+        return translation_context("‹source dialect›", "‹target dialect›", ["‹the model's columns›"])
+    return ""
+
+
+def _prompt_out(session: Session, user: User, agent: str, locale: str) -> AiPromptOut:
+    from app.services.masking import mask_email
+    from app.services.permissions import is_admin
+
+    row = session.get(AiPrompt, agent)
+    custom = row is not None and bool(row.text.strip())
+    by = row.updated_by if custom else None
+    return AiPromptOut(
+        agent=agent, text=row.text if custom else ai_prompts.DEFAULTS[agent], default=ai_prompts.DEFAULTS[agent],
+        custom=custom, context=_example_context(agent, locale),
+        updated_at=row.updated_at if custom else None,
+        updated_by=(by if is_admin(session, user) else mask_email(by)) if by else None,
+    )
+
+
+def _agent(agent: str) -> str:
+    if agent not in ai_prompts.AGENTS:
+        raise HTTPException(status_code=404, detail=f"Unknown agent: {agent}")
+    return agent
+
+
+@router.get("/prompts", response_model=list[AiPromptOut])
+def list_ai_prompts(
+    locale: str = "en", user: User = Depends(require_observer), session: Session = Depends(get_session),
+) -> list[AiPromptOut]:
+    return [_prompt_out(session, user, a, locale[:10]) for a in ai_prompts.AGENTS]
+
+
+@router.put("/prompts/{agent}", response_model=AiPromptOut)
+def set_ai_prompt(
+    agent: str,
+    body: AiPromptUpdate,
+    locale: str = "en",
+    request: Request = None,  # type: ignore[assignment]
+    user: User = Depends(require_superuser),
+    session: Session = Depends(get_session),
+) -> AiPromptOut:
+    _agent(agent)
+    text = body.text.strip()
+    if not text:
+        raise HTTPException(status_code=422, detail="The instructions cannot be empty: restore the default instead")
+    ai_prompts.save(session, agent, text, user.email)
+    audit.record_audit(
+        session, actor=user, action=audit.AI_PROMPT_UPDATE, target_type="ai_prompt", target_label=agent,
+        detail={"chars": len(text)}, request=request,
+    )
+    return _prompt_out(session, user, agent, locale[:10])
+
+
+@router.delete("/prompts/{agent}", response_model=AiPromptOut)
+def reset_ai_prompt(
+    agent: str,
+    locale: str = "en",
+    request: Request = None,  # type: ignore[assignment]
+    user: User = Depends(require_superuser),
+    session: Session = Depends(get_session),
+) -> AiPromptOut:
+    _agent(agent)
+    if ai_prompts.reset(session, agent):
+        audit.record_audit(
+            session, actor=user, action=audit.AI_PROMPT_RESET, target_type="ai_prompt", target_label=agent, request=request,
+        )
+    return _prompt_out(session, user, agent, locale[:10])
 
 
 # ── chat ─────────────────────────────────────────────────────────────────────
@@ -464,6 +569,7 @@ async def chat(
         slot_key=slot_key,
         locale=body.locale, request=request, chat_id=chat_id,
         focus=ai_agent.readable_focus(session, user, body.focus),
+        prompt=ai_prompts.text(session, "assistant"),
     )
     stream = _turn_stream(
         agent=ai_agent.agent, message=body.message, history=history, deps=deps,
@@ -528,7 +634,7 @@ async def flow_assist(
         request=request, chat_id=chat_id, draft=draft,
         flow_id=flow.id if flow is not None else None, flow_name=flow.name if flow is not None else "",
         project_id=flow.project_id if flow is not None else None, selected=body.selected,
-        preview_key=uuid4().hex[:10],
+        preview_key=uuid4().hex[:10], prompt=ai_prompts.text(session, "flow"),
     )
 
     def changes() -> dict[str, Any]:
@@ -624,7 +730,7 @@ async def script_assist(
         packages=[p.strip() for p in (version.packages if version else "").splitlines() if p.strip()],
         variables=[v for v in body.variables if v], files=[f.model_dump() for f in body.files],
         entrypoint=body.entrypoint, inputs=[i.model_dump() for i in body.inputs], output=body.output,
-        saved=body.saved, error=error,
+        saved=body.saved, error=error, prompt=ai_prompts.text(session, "script"),
     )
     stream = _turn_stream(
         agent=ai_script_agent.script_agent, message=body.message, history=history, deps=deps,
@@ -660,7 +766,9 @@ class _NothingToSave(Exception):
 async def _name_chat(chat_id: int, turn_id: int, model_id: str, question: str, locale: str) -> None:
     """Names the conversation just born, outside the user's turn."""
     try:
-        title, usage = await ai_agent.suggest_title(model_id, question, locale)
+        with _new_session() as session:
+            prompt = ai_prompts.text(session, "title")
+        title, usage = await ai_agent.suggest_title(model_id, question, locale, prompt)
         with _new_session() as session:
             if title:
                 ai_chats.rename(session, chat_id, title)

@@ -17,7 +17,6 @@ from __future__ import annotations
 import json
 import re
 from dataclasses import dataclass, field
-from datetime import date
 from typing import Any, Literal, Optional
 
 import httpx
@@ -28,7 +27,7 @@ from app.core.config import get_settings
 from app.core.engine_client import get_engine_client
 from app.models import Datasource, Flow, Project
 from app.models.permission import Capability
-from app.services import ai_agent, audit
+from app.services import ai_agent, ai_prompts, audit
 from app.services import permissions as perm_service
 from app.services.flow_resolver import _Resolver
 from app.services.objects import collect_storage_keys, ensure_can_read_keys, ensure_reads_pinned
@@ -367,32 +366,25 @@ _REFERENCE = """Operations and their params (column names are case-sensitive):
 - join {how, on: [..]} or {how, left_on: [..], right_on: [..]}; how: inner left right full semi anti cross. Needs a right input. union {strategy: relaxed|strict} stacks the rows of the right input."""
 
 
+def context(engine: Optional[str], locale: str, flow_name: str = "", selected: Optional[str] = None) -> str:
+    """What Tabularia adds to the text at every request (services/ai_prompts.py)."""
+    dialect, quote = ai_agent.dialect_of(engine)
+    flow = f"the flow «{flow_name}»" if flow_name else "a new flow, not saved yet"
+    lines = [
+        ai_prompts.CONTEXT_HEADER,
+        f"- {ai_prompts.today()}",
+        f"- The user is editing {flow}, which runs on the {engine or 'default'} engine. "
+        f"SQL expressions are in {dialect}; quote odd column names with {quote}.",
+    ]
+    if selected:
+        lines.append(f"- The user has node {selected} selected: «this step» means that node.")
+    return ("\n".join(lines) + "\n\n" + _REFERENCE.replace("{dialect}", dialect)
+            + "\n\n" + ai_prompts.language_line(locale))
+
+
 def _instructions(ctx: RunContext[FlowDeps]) -> str:
     deps = ctx.deps
-    dialect, quote = ai_agent._DIALECTS.get((deps.engine or "polars").lower(), ai_agent._DIALECTS["polars"])
-    language = ai_agent._LANGUAGES.get(deps.locale[:2].lower(), "English")
-    flow = f"the flow «{deps.flow_name}»" if deps.flow_name else "a new flow, not saved yet"
-    selected = f" The user has node {deps.selected} selected: «this step» means that node." if deps.selected else ""
-    return f"""You are the flow-building assistant inside Tabularia's flow editor. The user is editing {flow}, which runs on the {deps.engine or "default"} engine. \
-You change the flow on the user's canvas with your tools, step by step, and check every step on a preview of the data.{selected}
-
-Today is {date.today().isoformat()}. Answer in {language}, concisely, in Markdown.
-
-How to work:
-1. Call get_flow first, in every turn: the user may have changed the canvas since your last message. Work with the nodes that are there.
-2. Find data with list_datasources and describe_datasource (descriptions say what a table and each column mean; trust them over a column's name). Put a datasource on the canvas with add_source.
-3. Build the flow one step at a time with add_step, each after the node it reads. Every change returns the step's columns and first rows, or the error: read them. If a step fails or the columns are not what you expected, fix it with change_step before going on. Use preview to look at more rows of a node.
-4. Prefer the specific operations to sql; quote odd column names in expressions with {quote}.
-5. Previews run on a development sample of the data (the first rows), not on all of it: never state totals or counts from a preview as facts about the whole data.
-6. Add an Output (add_output) only when the user wants the result saved as a datasource. An Output whose name exists in its folder writes into that datasource only with overwrite.
-
-Rules:
-- Touch only what the request needs: never remove or rewrite steps the user did not ask about.
-- You cannot save, run or schedule the flow. When you are done, say in a few lines what you changed, step by step. Name nodes by their id in plain text (op-3), without code formatting.
-- Do not explain how to undo or save: the editor tells the user under your answer.
-- If something is impossible with these operations, say so instead of forcing it.
-
-{_REFERENCE.replace("{dialect}", dialect)}"""
+    return ai_prompts.compose(deps.prompt or ai_prompts.FLOW, context(deps.engine, deps.locale, deps.flow_name, deps.selected))
 
 
 flow_agent: Agent[FlowDeps, str] = Agent(

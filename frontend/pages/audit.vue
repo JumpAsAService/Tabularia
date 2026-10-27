@@ -221,6 +221,8 @@ const ACTION_META = computed<Record<string, { icon: any; color: string; label: s
     'ai.model_enable': { icon: Sparkles, color: u.accent, label: t('audit.aiModelEnableAction') },
     'ai.model_disable': { icon: Sparkles, color: u.muted, label: t('audit.aiModelDisableAction') },
     'ai.query': { icon: Sparkles, color: u.muted, label: t('audit.aiQueryAction') },
+    'ai.prompt_update': { icon: Sparkles, color: u.accent, label: t('audit.aiPromptUpdateAction') },
+    'ai.prompt_reset': { icon: Sparkles, color: u.muted, label: t('audit.aiPromptResetAction') },
     'banner.create': { icon: Megaphone, color: u.accent, label: t('audit.bannerCreateAction') },
     'banner.delete': { icon: Megaphone, color: u.danger, label: t('audit.bannerDeleteAction') },
     'contract.save': { icon: FileCheck, color: u.accent, label: t('audit.contractSaveAction') },

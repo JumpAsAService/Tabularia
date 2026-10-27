@@ -166,6 +166,55 @@ export default {
     "summary": "{rows} Zeilen · {cols} Spalten",
     "summaryTruncated": "{rows} Zeilen (gekürzt) · {cols} Spalten",
   },
+  "aiPrompts": {
+    "title": "Anweisungen der Agenten",
+    "lead": "Der Text, den jeder KI-Agent als Systemanweisungen erhält. Sie können ihn umschreiben oder zum Standard zurückkehren; ein neuer Text gilt ab der nächsten Anfrage. Darunter der Kontext, den Tabularia immer hinzufügt: das Datum, die Engine, die Dateien des Skripts und zuletzt die Oberflächensprache der fragenden Person.",
+    "agents": {
+      "assistant": {
+        "name": "Datenassistent",
+        "purpose": "Der Chat der Assistent-Seite: findet Datasources und fragt sie ab"
+      },
+      "flow": {
+        "name": "Flow-Assistent",
+        "purpose": "Erstellt und ändert Schritte im Flow-Editor"
+      },
+      "script": {
+        "name": "Skript-Assistent",
+        "purpose": "Schreibt und korrigiert Python- oder R-Code im Skript-Editor"
+      },
+      "title": {
+        "name": "Titel der Unterhaltungen",
+        "purpose": "Gibt jeder neuen Unterhaltung einen kurzen Namen"
+      },
+      "dbt_describe": {
+        "name": "Beschreibungen des dbt-Exports",
+        "purpose": "Schreibt die Beschreibungen von Flows und Spalten im dbt-Projekt"
+      },
+      "dbt_translate": {
+        "name": "SQL-Übersetzungen des dbt-Exports",
+        "purpose": "Übersetzt Abfragen, die die Engine nicht umwandelt, in einen anderen Dialekt"
+      }
+    },
+    "tagDefault": "Standard",
+    "tagCustom": "Angepasst",
+    "tagUnsaved": "Nicht gespeichert",
+    "unsaved": "Nicht gespeicherte Änderungen bei {n} Agenten",
+    "text": "Anweisungen",
+    "chars": "{n} / {max} Zeichen",
+    "changedBy": "Geändert von {who} {when}",
+    "dbtNote": "Was die KI für eine Version eines Flows schon geschrieben hat, bleibt: ein neuer Text gilt für spätere Versionen.",
+    "save": "Speichern",
+    "saved": "Anweisungen gespeichert: {agent}",
+    "discard": "Änderungen verwerfen",
+    "restore": "Standard wiederherstellen",
+    "restoreConfirm": "Zu den Standardanweisungen für „{agent}“ zurückkehren? Der geänderte Text geht verloren.",
+    "restored": "Standardanweisungen wiederhergestellt: {agent}",
+    "readOnly": "Nur ein Administrator kann die Anweisungen ändern.",
+    "contextTitle": "Von Tabularia jeder Anfrage hinzugefügt",
+    "contextHint": "Nicht bearbeitbar. Hier mit Beispielwerten: jede Anfrage enthält die echten, und die Sprache ist die Oberflächensprache der schreibenden Person.",
+    "noContext": "Nichts: das Modell erhält nur diesen Text und die zu beschreibenden Daten.",
+    "loading": "Anweisungen werden geladen…"
+  },
   "adminPanel": {
     "privacyPlaceholders": "Verfügbarer Platzhalter: {audit_retention} — wird zur in der Umgebung konfigurierten Aufbewahrungsfrist. Ihn statt der Zahl zu schreiben verhindert, dass Hinweis und Konfiguration auseinanderlaufen.",
     "privacyTitle": "Datenschutz",
@@ -523,6 +572,8 @@ export default {
     "reasonWrongCurrent": "aktuelles Passwort falsch",
     "aiModelEnableAction": "KI-Modell aktiviert",
     "aiModelDisableAction": "KI-Modell deaktiviert",
+    "aiPromptUpdateAction": "Anweisungen eines KI-Agenten geändert",
+    "aiPromptResetAction": "Anweisungen eines KI-Agenten wiederhergestellt",
     "aiQueryAction": "Frage an den Assistenten",
     "bannerCreateAction": "Banner erstellt",
     "bannerDeleteAction": "Banner gelöscht",

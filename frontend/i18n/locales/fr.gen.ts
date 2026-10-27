@@ -166,6 +166,55 @@ export default {
     "summary": "{rows} lignes · {cols} colonnes",
     "summaryTruncated": "{rows} lignes (tronquées) · {cols} colonnes",
   },
+  "aiPrompts": {
+    "title": "Instructions des agents",
+    "lead": "Le texte que chaque agent IA reçoit comme instructions système. Vous pouvez le réécrire ou revenir à celui par défaut ; un nouveau texte s'applique dès la requête suivante. En dessous, le contexte que Tabularia ajoute toujours : la date, le moteur, les fichiers du script et, en dernier, la langue de l'interface de la personne qui demande.",
+    "agents": {
+      "assistant": {
+        "name": "Assistant de données",
+        "purpose": "Le chat de la page Assistant : trouve les datasources et les interroge"
+      },
+      "flow": {
+        "name": "Assistant des flux",
+        "purpose": "Construit et modifie les étapes dans l'éditeur de flux"
+      },
+      "script": {
+        "name": "Assistant des scripts",
+        "purpose": "Écrit et corrige le code Python ou R dans l'éditeur de scripts"
+      },
+      "title": {
+        "name": "Titres des conversations",
+        "purpose": "Donne un nom court à chaque nouvelle conversation"
+      },
+      "dbt_describe": {
+        "name": "Descriptions de l'export dbt",
+        "purpose": "Écrit les descriptions des flux et des colonnes dans le projet dbt"
+      },
+      "dbt_translate": {
+        "name": "Traductions SQL de l'export dbt",
+        "purpose": "Traduit dans un autre dialecte les requêtes que le moteur ne convertit pas"
+      }
+    },
+    "tagDefault": "Par défaut",
+    "tagCustom": "Modifiées",
+    "tagUnsaved": "Non enregistrées",
+    "unsaved": "Modifications non enregistrées dans {n} agents",
+    "text": "Instructions",
+    "chars": "{n} / {max} caractères",
+    "changedBy": "Modifiées par {who} {when}",
+    "dbtNote": "Ce que l'IA a déjà écrit pour une version d'un flux reste : un nouveau texte s'applique aux versions suivantes.",
+    "save": "Enregistrer",
+    "saved": "Instructions enregistrées : {agent}",
+    "discard": "Annuler les modifications",
+    "restore": "Rétablir les instructions par défaut",
+    "restoreConfirm": "Revenir aux instructions par défaut pour « {agent} » ? Le texte modifié sera perdu.",
+    "restored": "Instructions par défaut rétablies : {agent}",
+    "readOnly": "Seul un administrateur peut modifier les instructions.",
+    "contextTitle": "Ajouté par Tabularia à chaque requête",
+    "contextHint": "Non modifiable. Affiché ici avec des valeurs d'exemple : chaque requête porte les vraies, et la langue est celle de l'interface de la personne qui écrit.",
+    "noContext": "Rien : le modèle reçoit seulement ce texte, plus les données à décrire.",
+    "loading": "Chargement des instructions…"
+  },
   "adminPanel": {
     "privacyPlaceholders": "Espace réservé disponible : {audit_retention} — devient la durée de conservation configurée dans l'environnement. L'écrire au lieu du nombre évite que l'avis et la configuration divergent.",
     "privacyTitle": "Confidentialité",
@@ -523,6 +572,8 @@ export default {
     "reasonWrongCurrent": "mot de passe actuel incorrect",
     "aiModelEnableAction": "Modèle d'IA activé",
     "aiModelDisableAction": "Modèle d'IA désactivé",
+    "aiPromptUpdateAction": "Instructions d'un agent IA modifiées",
+    "aiPromptResetAction": "Instructions d'un agent IA rétablies",
     "aiQueryAction": "Question à l'assistant",
     "bannerCreateAction": "Bandeau créé",
     "bannerDeleteAction": "Bandeau supprimé",

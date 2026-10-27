@@ -166,6 +166,55 @@ export default {
     "summary": "{rows} righe · {cols} colonne",
     "summaryTruncated": "{rows} righe (troncate) · {cols} colonne",
   },
+  "aiPrompts": {
+    "title": "Istruzioni degli agenti",
+    "lead": "Il testo che ogni agente AI riceve come istruzioni di sistema. Puoi riscriverlo o tornare a quello predefinito; il nuovo testo vale dalla richiesta successiva. Sotto, il contesto che Tabularia aggiunge sempre: la data, il motore, i file dello script e, per ultima, la lingua dell'interfaccia di chi chiede.",
+    "agents": {
+      "assistant": {
+        "name": "Assistente dati",
+        "purpose": "La chat della pagina Assistente: trova le datasource e le interroga"
+      },
+      "flow": {
+        "name": "Assistente dei flussi",
+        "purpose": "Costruisce e modifica i passi nell'editor dei flussi"
+      },
+      "script": {
+        "name": "Assistente degli script",
+        "purpose": "Scrive e corregge il codice Python o R nell'editor degli script"
+      },
+      "title": {
+        "name": "Titoli delle conversazioni",
+        "purpose": "Dà un nome breve a ogni nuova conversazione"
+      },
+      "dbt_describe": {
+        "name": "Descrizioni dell'export dbt",
+        "purpose": "Scrive le descrizioni di flussi e colonne nel progetto dbt"
+      },
+      "dbt_translate": {
+        "name": "Traduzioni SQL dell'export dbt",
+        "purpose": "Traduce in un altro dialetto le query che il motore non converte"
+      }
+    },
+    "tagDefault": "Predefinite",
+    "tagCustom": "Modificate",
+    "tagUnsaved": "Non salvate",
+    "unsaved": "Modifiche non salvate in {n} agenti",
+    "text": "Istruzioni",
+    "chars": "{n} / {max} caratteri",
+    "changedBy": "Modificate da {who} {when}",
+    "dbtNote": "Quello che l'AI ha già scritto per una versione di un flusso resta: un nuovo testo vale per le versioni successive.",
+    "save": "Salva",
+    "saved": "Istruzioni salvate: {agent}",
+    "discard": "Annulla le modifiche",
+    "restore": "Ripristina le predefinite",
+    "restoreConfirm": "Tornare alle istruzioni predefinite per «{agent}»? Il testo modificato si perde.",
+    "restored": "Istruzioni predefinite ripristinate: {agent}",
+    "readOnly": "Solo un amministratore può modificare le istruzioni.",
+    "contextTitle": "Aggiunto da Tabularia a ogni richiesta",
+    "contextHint": "Non modificabile. Qui con valori d'esempio: a ogni richiesta ci sono quelli veri, e la lingua è quella dell'interfaccia di chi scrive.",
+    "noContext": "Niente: il modello riceve solo questo testo, più i dati da descrivere.",
+    "loading": "Caricamento delle istruzioni…"
+  },
   "adminPanel": {
     "privacyPlaceholders": "Segnaposto disponibili: {audit_retention} — diventa la finestra di conservazione configurata nell'ambiente. Scriverlo invece del numero impedisce che l'informativa e la configurazione si allontanino.",
     "privacyTitle": "Privacy",
@@ -523,6 +572,8 @@ export default {
     "reasonWrongCurrent": "password attuale errata",
     "aiModelEnableAction": "Modello AI attivato",
     "aiModelDisableAction": "Modello AI disattivato",
+    "aiPromptUpdateAction": "Istruzioni di un agente AI modificate",
+    "aiPromptResetAction": "Istruzioni di un agente AI ripristinate",
     "aiQueryAction": "Domanda all'assistente",
     "bannerCreateAction": "Banner creato",
     "bannerDeleteAction": "Banner eliminato",

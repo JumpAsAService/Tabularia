@@ -132,6 +132,9 @@ ENGINE_DISALLOW = "engine.disallow"
 AI_MODEL_ENABLE = "ai.model_enable"
 AI_MODEL_DISABLE = "ai.model_disable"
 AI_QUERY = "ai.query"
+# the text of an agent's instructions changed from the panel, or put back to the default
+AI_PROMPT_UPDATE = "ai.prompt_update"
+AI_PROMPT_RESET = "ai.prompt_reset"
 # saved views (Viewer configurations inside a folder). Prefix "saved_view" and not
 # "view": `VIEW` is the name of a capability already.
 # sending a run's output by email: it is the ONLY destination that sends data out

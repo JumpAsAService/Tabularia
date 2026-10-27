@@ -203,6 +203,21 @@ Optional: a chat over the catalog and an assistant in the flow editor, against a
 | `AI__DBT_EXPORT_TIMEOUT_SECONDS` | number, > 0 and ≤ 3600 | `180` | `extraEnv` | Seconds for all the AI calls of one dbt export (descriptions and translations). Keep it, plus `ENGINE__DBT_EXPORT_TIMEOUT_SECONDS`, under the ingress' read timeout (300 s in the chart). Also adjustable in Administration → Settings. |
 | `AI__MAX_CHATS_LISTED` | integer, 1–500 | `100` | `extraEnv` | Conversations listed per person; older ones are not deleted, only left out of the list. Also adjustable in Administration → Settings. |
 
+#### The agents' instructions
+
+Administration → AI → *Agent instructions* shows the system prompt of every AI agent: the
+data assistant, the flow and script assistants, the conversation titles, and the dbt
+export's descriptions and SQL translations. An administrator can rewrite an agent's text
+or restore the default; observers read it. A change applies from the next request, on every
+gateway replica, and goes to the audit log (`ai.prompt_update`, `ai.prompt_reset`).
+
+What the administrators write is only the agent's text. At every request Tabularia appends
+a context that cannot be edited: today's date, the engine's SQL dialect and the row cap,
+the flow or the script being edited, the dialects of a translation, and, last, the language
+of the user's interface (the answer is written in it whatever language the question or the
+data are in). The panel shows that context with example values. Texts the AI already wrote
+for a version of a flow in a dbt export stay: a new text applies to later versions.
+
 ### Development sample
 
 | Variable | Type | Default | Helm value | Description |

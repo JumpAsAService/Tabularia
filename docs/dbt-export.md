@@ -292,6 +292,10 @@ the same texts. A new version asks again. An empty translation is never kept, an
 translation the engine's checks reject is forgotten (unless another export has stored a
 new one since), so the next export asks again.
 
+The instructions the AI gets for both are editable in Administration → AI → *Agent
+instructions* ([configuration](configuration.md#the-agents-instructions)); by default the
+descriptions are written in English.
+
 With the AI switched off, the dialog still offers what the AI kept for the flow's
 current version: «Use the AI descriptions kept for this version» and «Use the AI
 translations kept for this version», each only when the version has such texts. Ticked,

@@ -20,6 +20,7 @@ import BackupsSection from '~/components/admin/BackupsSection.vue'
 import WorkersSection from '~/components/admin/WorkersSection.vue'
 import ScriptingSection from '~/components/admin/ScriptingSection.vue'
 import RegistriesSection from '~/components/admin/RegistriesSection.vue'
+import AiPromptsSection from '~/components/admin/AiPromptsSection.vue'
 import PasswordDialog from '~/components/ui/PasswordDialog.vue'
 import { passwordProblem, usePasswordRules } from '~/composables/usePasswordRules'
 import { useSiem } from '~/composables/useSiem'
@@ -852,6 +853,7 @@ async function toggleEngine(m: EnginePolicy) {
               </table>
             </div>
           </div>
+          <AiPromptsSection :can-write="canWrite" />
         </template>
 
         <!-- ── BANNER ─────────────────────────────────────────────────────── -->

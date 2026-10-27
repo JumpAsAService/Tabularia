@@ -19,6 +19,20 @@ export interface AiModel {
   available: boolean // false = the provider no longer lists it
 }
 
+// an agent's instructions (Administration → AI): the text, editable by the administrators,
+// and the context Tabularia adds at every request, shown with example values
+export type AiAgent = 'assistant' | 'flow' | 'script' | 'title' | 'dbt_describe' | 'dbt_translate'
+
+export interface AiPrompt {
+  agent: AiAgent
+  text: string
+  default: string
+  custom: boolean
+  context: string
+  updated_at: string | null
+  updated_by: string | null
+}
+
 export type AiTable = PreviewResult & { datasource?: string }
 
 export interface AiToolCall {
@@ -240,6 +254,11 @@ export function useAi() {
     models: () => apiFetch<AiModel[]>('/ai/models'),
     setModel: (modelId: string, enabled: boolean) =>
       apiFetch<AiModel>(`/ai/models/${encodeURIComponent(modelId)}`, { method: 'PUT', body: { enabled } }),
+    prompts: (locale: string) => apiFetch<AiPrompt[]>(`/ai/prompts?locale=${encodeURIComponent(locale)}`),
+    setPrompt: (agent: AiAgent, text: string, locale: string) =>
+      apiFetch<AiPrompt>(`/ai/prompts/${agent}?locale=${encodeURIComponent(locale)}`, { method: 'PUT', body: { text } }),
+    resetPrompt: (agent: AiAgent, locale: string) =>
+      apiFetch<AiPrompt>(`/ai/prompts/${agent}?locale=${encodeURIComponent(locale)}`, { method: 'DELETE' }),
     chat,
     flowAssist,
     scriptAssist,

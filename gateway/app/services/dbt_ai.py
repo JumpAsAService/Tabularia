@@ -39,7 +39,7 @@ from sqlmodel import Session, select
 from app.core.config import get_settings
 from app.core.engine_client import get_engine_client
 from app.models import Datasource, DbtAiText, Flow, FlowVersion, User
-from app.services import ai_chats, ai_pricing
+from app.services import ai_chats, ai_pricing, ai_prompts
 from app.services.ai_models import enabled_model_ids
 from app.services.dbt_export import DbtExportError
 
@@ -289,17 +289,6 @@ class _Descriptions(BaseModel):
     items: list[_Item]
 
 
-_INSTRUCTIONS = (
-    "You document a dbt project exported from Tabularia, a visual data-preparation tool. "
-    "You get the flows (their steps, sources and outputs) and the columns that have no description, "
-    "each with its type and a few sample values. For every item write a description in English: "
-    "for a flow, two or three sentences on what it produces and from what; for a column, one sentence "
-    "on what it holds. Use only what you are given; when the meaning is not clear, say plainly what the "
-    "column contains instead of guessing a business meaning. No markdown, no quotes, no preamble. "
-    "Return every item with its key unchanged."
-)
-
-
 def _steps(flow: Flow) -> dict[str, Any]:
     """The flow as the AI sees it: the names of the sources and the outputs, the steps in order."""
     try:
@@ -437,7 +426,7 @@ async def _samples_within(ds: Datasource, deadline: float) -> dict[str, list[str
 async def _ask(model_id: str, items: list[dict], session: Session, user: User, deadline: float) -> dict[str, str]:
     """The descriptions the AI writes for `items`, by key: an item its answer leaves out,
     or answers with nothing, is not there."""
-    outcome = await _run(model_id, _Descriptions, _INSTRUCTIONS, json.dumps({"items": items}, ensure_ascii=False),
+    outcome = await _run(model_id, _Descriptions, ai_prompts.text(session, "dbt_describe"), json.dumps({"items": items}, ensure_ascii=False),
                           session, user, deadline)
     waits = {v["key"] for v in items}
     return {v.key: text for v in (outcome.items or []) if v.key in waits and (text := _clean(v.description))}
@@ -457,14 +446,10 @@ class _Translation(BaseModel):
     sql: str
 
 
-_TRANSLATION_INSTRUCTIONS = (
-    "You translate SQL between dialects for a dbt project. Translate the query you get from {source} to {target}. "
-    "Every construct must exist in {target}: rewrite the ones that do not (for example, in ClickHouse SIMILAR TO "
-    "becomes match() with an anchored regular expression, and there is no LATERAL nor TABLESAMPLE). "
-    "Keep exactly these output columns, with these names, in this order: {columns}. Keep every table reference "
-    "exactly as written — placeholders such as __s_0 or __m_1, and schema.table names: translate only syntax "
-    "and functions. Return one SELECT statement, with no comments and no trailing semicolon, in the field sql."
-)
+def translation_context(source: str, target: str, columns: list[str]) -> str:
+    """What Tabularia adds to the text of the translations (services/ai_prompts.py)."""
+    return (f"{ai_prompts.CONTEXT_HEADER}\n- Source dialect: {source}.\n- Target dialect: {target}.\n"
+            f"- Output columns, in order: {', '.join(columns) or '(the same as the query)'}.")
 
 
 async def translate(session: Session, user: User, flow: Flow, params: dict,
@@ -507,7 +492,7 @@ async def translate(session: Session, user: User, flow: Flow, params: dict,
         if discarded is not None:
             question += (f"\n\n-- Your previous translation was rejected: {discarded[1]}\n-- Previous translation:\n"
                         + "\n".join("-- " + r for r in discarded[0][:5000].splitlines()))
-        instructions = _TRANSLATION_INSTRUCTIONS.format(source=source, target=target, columns=", ".join(columns) or "(the same as the query)")
+        instructions = ai_prompts.compose(ai_prompts.text(session, "dbt_translate"), translation_context(source, target, columns))
         outcome = await _run(model_id, _Translation, instructions, question, session, user, deadline)
         proposal = str(outcome.sql or "").strip().rstrip(";").strip()
         if proposal:   # an empty one is rejected by the engine: kept, it would be served again, and paid again

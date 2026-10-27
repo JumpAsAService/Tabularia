@@ -166,6 +166,55 @@ export default {
     "summary": "{rows} rows · {cols} columns",
     "summaryTruncated": "{rows} rows (truncated) · {cols} columns",
   },
+  "aiPrompts": {
+    "title": "Agent instructions",
+    "lead": "The text each AI agent receives as its system instructions. You can rewrite it or go back to the default; a new text applies from the next request. Below, the context Tabularia always adds: the date, the engine, the script's files and, last, the interface language of whoever is asking.",
+    "agents": {
+      "assistant": {
+        "name": "Data assistant",
+        "purpose": "The chat on the Assistant page: finds datasources and queries them"
+      },
+      "flow": {
+        "name": "Flow assistant",
+        "purpose": "Builds and changes steps in the flow editor"
+      },
+      "script": {
+        "name": "Script assistant",
+        "purpose": "Writes and fixes Python or R code in the script editor"
+      },
+      "title": {
+        "name": "Conversation titles",
+        "purpose": "Gives every new conversation a short name"
+      },
+      "dbt_describe": {
+        "name": "dbt export descriptions",
+        "purpose": "Writes the descriptions of flows and columns in the dbt project"
+      },
+      "dbt_translate": {
+        "name": "dbt export SQL translations",
+        "purpose": "Translates into another dialect the queries the engine does not convert"
+      }
+    },
+    "tagDefault": "Default",
+    "tagCustom": "Customised",
+    "tagUnsaved": "Unsaved",
+    "unsaved": "Unsaved changes in {n} agents",
+    "text": "Instructions",
+    "chars": "{n} / {max} characters",
+    "changedBy": "Changed by {who} {when}",
+    "dbtNote": "What the AI already wrote for a version of a flow stays: a new text applies to later versions.",
+    "save": "Save",
+    "saved": "Instructions saved: {agent}",
+    "discard": "Discard changes",
+    "restore": "Restore the default",
+    "restoreConfirm": "Go back to the default instructions for “{agent}”? The changed text is lost.",
+    "restored": "Default instructions restored: {agent}",
+    "readOnly": "Only an administrator can change the instructions.",
+    "contextTitle": "Added by Tabularia to every request",
+    "contextHint": "Not editable. Shown here with example values: every request carries the real ones, and the language is the interface language of whoever is writing.",
+    "noContext": "Nothing: the model receives only this text, plus the data to describe.",
+    "loading": "Loading the instructions…"
+  },
   "adminPanel": {
     "privacyPlaceholders": "Available placeholder: {audit_retention} — becomes the retention window configured in the environment. Writing it instead of the number keeps the notice and the configuration from drifting apart.",
     "privacyTitle": "Privacy",
@@ -523,6 +572,8 @@ export default {
     "reasonWrongCurrent": "wrong current password",
     "aiModelEnableAction": "AI model enabled",
     "aiModelDisableAction": "AI model disabled",
+    "aiPromptUpdateAction": "AI agent instructions changed",
+    "aiPromptResetAction": "AI agent instructions restored",
     "aiQueryAction": "Question to the assistant",
     "bannerCreateAction": "Banner created",
     "bannerDeleteAction": "Banner deleted",
