@@ -440,7 +440,8 @@ def test_every_tool_is_described_for_the_model():
     for t in REGISTRY.values():
         assert t.description and t.title and t.level in ("read", "write"), t.name
         assert t.input_schema()["type"] == "object", t.name
-    assert {t.name for t in available("mcp", "read")} == {t.name for t in REGISTRY.values() if t.level == "read"}
+    assert {t.name for t in available("mcp", "read")} == {t.name for t in REGISTRY.values()
+                                                         if t.level == "read" and t.only in (None, "mcp")}
     assert "confirm_plan" not in {t.name for t in available("chat")}  # only the person's click applies a chat's plan
 
 
@@ -468,3 +469,118 @@ def test_old_drafts_go_and_pending_plans_expire(session):
     assert [d.id for d in session.exec(select(AgentDraft)).all()] == [fresh.id]
     session.expire_all()
     assert session.get(AgentPlan, late.id).status == "expired" and session.get(AgentPlan, waiting.id).status == "pending"
+
+
+# ── what the person confirms is what they saw (bug hunt 2026-10-28) ───────────
+
+def _browser(app, email="anna@x.local"):
+    browser = TestClient(app)
+    assert browser.post("/auth/login", json={"email": email, "password": PASSWORD}, headers=CSRF).status_code == 200
+    return browser
+
+
+def test_a_plan_changed_after_the_person_saw_it_is_not_applied(app, world, session):
+    """The agent keeps adding to a pending plan while its page (or the chat's card) is
+    open: «Confirm» applies the plan as the person saw it, or nothing."""
+    c = TestClient(app)
+    draft, plan = _new_flow_plan(c, world["write"], world)
+    browser = _browser(app)
+    seen = browser.get(f"/agent/plans/{plan['plan_id']}").json()
+    assert seen["revision"]
+    # meanwhile the agent adds a run the person has not seen
+    ok(c, world["write"], "plan_run_flow", draft_id=draft)
+    r = browser.post(f"/agent/plans/{plan['plan_id']}/confirm", json={"revision": seen["revision"]}, headers=CSRF)
+    assert r.status_code == 409 and "changed" in r.json()["detail"]
+    assert session.exec(select(Flow)).first() is None
+    session.expire_all()
+    assert session.get(AgentPlan, plan["plan_id"]).status == "pending"
+    # looked at again, it is confirmed as it is now
+    again = browser.get(f"/agent/plans/{plan['plan_id']}").json()
+    assert again["revision"] != seen["revision"] and len(again["actions"]) == 2
+    done = browser.post(f"/agent/plans/{plan['plan_id']}/confirm", json={"revision": again["revision"]}, headers=CSRF)
+    assert done.json()["status"] == "applied"
+
+
+def test_an_action_is_never_written_into_a_plan_already_being_applied(app, world, session, monkeypatch):
+    """A plan tool reads the pending plan, the person's click claims it, the tool writes:
+    the action must not land on the plan being applied (it would never run, while the
+    agent says it is in the plan) — it goes to a new plan."""
+    from app.services.agent import plans as plans_service
+
+    c = TestClient(app)
+    draft, plan = _new_flow_plan(c, world["write"], world)
+    real = plans_service._current_plan
+
+    def claimed_meanwhile(s, ctx):
+        found = real(s, ctx)
+        if found is not None and found.id == plan["plan_id"]:
+            s.exec(plans_service.update(AgentPlan).where(AgentPlan.id == found.id).values(status="applying"))
+            s.commit()
+            monkeypatch.setattr(plans_service, "_current_plan", real)
+        return found
+
+    monkeypatch.setattr(plans_service, "_current_plan", claimed_meanwhile)
+    out = ok(c, world["write"], "plan_run_flow", flow_id=_saved_flow(session, world))
+    assert out["plan_id"] != plan["plan_id"] and [a["kind"] for a in out["actions"]] == ["run_flow"]
+    session.expire_all()
+    assert [a["kind"] for a in json.loads(session.get(AgentPlan, plan["plan_id"]).actions)] == ["save_flow"]
+
+
+def test_what_an_output_runs_and_sends_is_on_the_plan(app, world, session):
+    """A database Output's post-SQL runs on the database at every run, an email's cc and
+    body go out with it: the plan shows them, not only the table and the recipients."""
+    c = TestClient(app)
+    _, plan = _new_flow_plan(c, world["write"], world, kind="database", connection_id=world["db"],
+                             table="public.open_orders", post_sql="DELETE FROM public.customers")
+    assert "DELETE FROM public.customers" in plan["actions"][0]["words"]
+    page = _browser(app).get(f"/agent/plans/{plan['plan_id']}").json()
+    assert page["actions"][0]["outputs"][0]["post_sql"] == "DELETE FROM public.customers"
+    mail = Connection(name="Open mail", project_id=world["sales"], db_type="smtp", host="smtp.example", password_encrypted="x")
+    session.add(mail)
+    session.commit()
+    _, plan = _new_flow_plan(c, world["write"], world, kind="email", connection_id=mail.id, to=["boss@acme.com"],
+                             cc=["someone@elsewhere.example"], subject="Open orders", body="See the file.")
+    page = _browser(app).get(f"/agent/plans/{plan['plan_id']}").json()
+    out = [o for a in page["actions"] for o in a.get("outputs") or [] if o["kind"] == "email"][0]
+    assert out["cc"] == "someone@elsewhere.example" and out["body"] == "See the file."
+
+
+def test_an_api_token_does_not_confirm_a_plan_made_in_the_chat(app, world, session):
+    """Only the person's click applies a chat's plan: not a script with a token on the
+    page's route."""
+    plan = AgentPlan(user_id=world["anna"], origin="chat", chat_id=1, expires_at=now() + timedelta(minutes=10))
+    session.add(plan)
+    session.commit()
+    c = TestClient(app)
+    r = c.post(f"/agent/plans/{plan.id}/confirm", headers={"Authorization": f"Bearer {world['write']}"})
+    assert r.status_code == 403
+    session.expire_all()
+    assert session.get(AgentPlan, plan.id).status == "pending"
+
+
+def test_a_batch_has_a_ceiling(app, world):
+    c = TestClient(app)
+    body = [{"jsonrpc": "2.0", "id": i, "method": "ping"} for i in range(mcp_routes.MAX_BATCH + 1)]
+    r = c.post("/mcp", json=body, headers={"Authorization": f"Bearer {world['read']}"})
+    assert r.status_code == 400 and "batch" in r.json()["error"]["message"].lower()
+    r = c.post("/mcp", json=body[:mcp_routes.MAX_BATCH], headers={"Authorization": f"Bearer {world['read']}"})
+    assert r.status_code == 200 and len(r.json()) == mcp_routes.MAX_BATCH
+
+
+def test_a_changed_output_shows_what_it_wrote_and_what_it_will_write(app, world, session):
+    """The difference of a saved flow names an Output's target before and after: an email
+    sent elsewhere, a post-SQL added, are a visible change, not «output to email» twice."""
+    c = TestClient(app)
+    flow_id = _saved_flow(session, world)
+    draft = ok(c, world["write"], "flow_draft_open", flow_id=flow_id)["draft_id"]
+    row = session.get(AgentDraft, draft)
+    definition = json.loads(row.definition)
+    definition["nodes"][2]["data"] = {"destType": "database", "connectionId": world["db"], "table": "public.x",
+                                      "mode": "append", "postSql": "DELETE FROM public.customers"}
+    row.definition = json.dumps(definition)
+    session.add(row)
+    session.commit()
+    plan = ok(c, world["write"], "plan_save_flow", draft_id=draft)
+    line = next(x for x in plan["actions"][0]["changes"] if x.startswith("~ out-1"))
+    assert "output to datasource «open orders»" in line and "DELETE FROM public.customers" in line
+    assert "DELETE FROM public.customers" in plan["actions"][0]["words"]

@@ -1,6 +1,13 @@
 """Tabularia's AI assistant (pydantic-ai): chat over the catalog's data.
 
-Three tools, all under the SAME access control as the rest of the product — the
+The Assistant page's agent takes its tools from the agent's registry (services/agent:
+the same as over MCP, built in services/agent/chat.py): it reads, and builds through
+plans the person confirms. Its dependencies, its instructions and these three reading
+tools are here — the registry's `list_datasources`, `describe_datasource` and
+`query_datasource` are these functions, and the flow editor's assistant uses the first
+two as well.
+
+The three, all under the SAME access control as the rest of the product — the
 assistant sees and queries only the datasources the user can READ (VIEW capability on
 the folder, inherited):
 
@@ -32,7 +39,7 @@ from fastapi import Request
 
 os.environ.setdefault("PYDANTIC_AI_NO_BANNER", "1")  # no banner in the gateway's logs
 
-from pydantic_ai import Agent, ModelRetry, RunContext  # noqa: E402
+from pydantic_ai import ModelRetry, RunContext  # noqa: E402
 from sqlmodel import Session, select
 
 from app.core.config import get_settings
@@ -86,6 +93,19 @@ class ChatDeps:
     focus: list[dict[str, Any]] | None = None
     # the text of the instructions in force (services/ai_prompts.py), read by the route
     prompt: str = ""
+    # ── the Assistant page's agent (services/agent/chat.py) ──
+    # the registry's tools it is given: `read` (an observer) or `write`
+    level: Literal["read", "write"] = "read"
+    # an observer's conversation is saved nowhere: no chat is ever created for it
+    ephemeral: bool = False
+    # the person's message: the title of a conversation created before its turn ends
+    question: str = ""
+    # the conversation's plans in words, for the context (oldest first)
+    plans: list[str] | None = None
+    # the turn so far: the registry's context, the plan it touched, the questions it asked
+    tools: Any = None
+    plan_id: int | None = None
+    questions: list[dict[str, Any]] | None = None
 
 
 def _columns(ds: Datasource) -> list[dict[str, Any]]:
@@ -185,7 +205,8 @@ def dialect_of(engine: Optional[str]) -> tuple[str, str]:
     return _DIALECTS.get((engine or "polars").lower(), _DIALECTS["polars"])
 
 
-def context(engine: Optional[str], locale: str, focus: list[dict[str, Any]] | None = None) -> str:
+def context(engine: Optional[str], locale: str, focus: list[dict[str, Any]] | None = None,
+            level: str = "write", plans: list[str] | None = None) -> str:
     """What Tabularia adds to the text at every request (services/ai_prompts.py)."""
     dialect, quote = dialect_of(engine)
     lines = [
@@ -194,24 +215,24 @@ def context(engine: Optional[str], locale: str, focus: list[dict[str, Any]] | No
         f"- SQL dialect: {dialect}. Quote column names that contain spaces or symbols with {quote}.",
         f"- Query results are capped at {get_settings().ai.max_result_rows} rows.",
     ]
+    if level != "write":
+        lines.append("- This user can only read: the tools that build, change, run or schedule are not available. "
+                     "If they ask for a change, say they need an account that may make changes.")
     if focus:
         names = ", ".join(f"{d['name']} (id {d['id']})" for d in focus)
         lines.append(f"- The user has selected these datasources as the scope of the conversation: {names}. "
                      "Work on them, skipping list_datasources, unless the user asks about something else.")
+    if plans:
+        lines.append("- The plans of this conversation, as they stand now (the user confirms or cancels them with the "
+                     "buttons of their cards, outside your turns):")
+        lines += [f"  - {p}" for p in plans]
     return "\n".join(lines) + "\n\n" + ai_prompts.language_line(locale)
 
 
 def _instructions(ctx: RunContext[ChatDeps]) -> str:
     deps = ctx.deps
-    return ai_prompts.compose(deps.prompt or ai_prompts.ASSISTANT, context(deps.engine, deps.locale, deps.focus))
-
-
-agent: Agent[ChatDeps, str] = Agent(
-    deps_type=ChatDeps,
-    instructions=_instructions,
-    retries=2,
-    name="tabularia-assistant",
-)
+    return ai_prompts.compose(deps.prompt or ai_prompts.ASSISTANT,
+                              context(deps.engine, deps.locale, deps.focus, deps.level, deps.plans))
 
 
 def _words(text: str) -> str:
@@ -223,7 +244,6 @@ def _words(text: str) -> str:
 _STOPWORDS = {"di", "del", "della", "dei", "the", "of", "de", "la", "le", "il", "lo", "der", "die", "das", "el", "los", "las", "du", "des"}
 
 
-@agent.tool
 async def list_datasources(ctx: RunContext[ChatDeps], search: str = "") -> dict[str, Any]:
     """List the datasources this user can read, each with the description its owners wrote. `search` is matched word by word against name and description, ignoring case, underscores and dashes; leave it empty to list everything. If nothing matches, everything available is returned with a note."""
     deps = ctx.deps
@@ -252,7 +272,6 @@ async def list_datasources(ctx: RunContext[ChatDeps], search: str = "") -> dict[
             "note": f"Nothing matches '{search}'. These are ALL the datasources available to the user: pick from them or say none fits."}
 
 
-@agent.tool
 async def describe_datasource(ctx: RunContext[ChatDeps], datasource_id: int) -> dict[str, Any]:
     """Columns (name, type, and the curated description of what each field means), row count and a few sample rows of one datasource."""
     deps = ctx.deps
@@ -338,7 +357,6 @@ def _chart_spec(chart: Optional[Any], columns: list[dict[str, Any]]) -> tuple[Op
     return spec, None
 
 
-@agent.tool
 async def query_datasource(
     ctx: RunContext[ChatDeps], datasource_id: int, sql: str, limit: int = 50,
     join_datasource_id: Optional[int] = None,

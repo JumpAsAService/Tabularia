@@ -5,6 +5,7 @@
 // at the end of the turn the chat's id arrives, and the history sends it back at the
 // next turn.
 import type { PreviewResult } from '~/composables/useApi'
+import type { AgentPlan } from '~/composables/useAgentPlans'
 
 export interface AiStatus {
   enabled: boolean
@@ -39,6 +40,8 @@ export interface AiToolCall {
   id: string
   name: 'list_datasources' | 'describe_datasource' | 'query_datasource' | string
   args: Record<string, any>
+  // the Assistant page's agent: the tool's title in the registry (English), for a tool the page has no words for
+  title?: string
 }
 
 export interface AiChartSpec {
@@ -60,6 +63,26 @@ export interface AiToolResult {
   // the flow editor's tools: the node made or changed, and a step whose preview failed
   node?: string
   warning?: string
+  // how long the call took
+  duration_ms?: number
+  // the Assistant page's agent: the name of what the tool read or made, the plan it added to
+  subject?: string
+  plan_id?: number
+}
+
+/** A question of the Assistant page's agent (`ask_user`), with its choices: the first is the recommended one. */
+export interface AgentQuestion {
+  question: string
+  options: { label: string; description: string; recommended: boolean }[]
+}
+
+// the answers' format, a line per question: the gateway reads it again (services/agent/questions.py)
+export const ANSWER_ARROW = ' → '
+
+/** The person's answers to a card, as their next message: «question → answer», a line each. */
+export function answersMessage(questions: AgentQuestion[], answers: string[]): string {
+  const line = (s: string) => s.replace(/\s+/g, ' ').trim()
+  return questions.map((q, i) => `${line(q.question)}${ANSWER_ARROW}${line(answers[i] ?? '')}`).join('\n')
 }
 
 export interface AiChatHandlers {
@@ -97,6 +120,9 @@ export interface AiDone {
   touched?: string[]
   // the script editor's assistant: the files it proposes (null when it proposed none)
   proposal?: ScriptProposal | null
+  // the Assistant page's agent: the questions that ended the turn, the plan it proposed or changed
+  questions?: AgentQuestion[] | null
+  plan?: AgentPlan | null
 }
 
 export interface ScriptProposal {
@@ -143,10 +169,20 @@ export interface AiTurn {
   seq: number
   question: string
   answer: string
-  steps: { id?: string; name: string; args: any; table?: AiTable; chart?: AiChartSpec; node?: string }[]
+  steps: {
+    id?: string; name: string; args: any; table?: AiTable; chart?: AiChartSpec; node?: string
+    // how the call ended (false: refused, with the reason), how long it took, its words and result
+    ok?: boolean; error?: string; duration_ms?: number; title?: string; subject?: string; plan_id?: number
+  }[]
   model_id: string
   usage: AiUsage
   created_at: string
+  // the Assistant page's agent: the questions that ended the turn and the answers the next
+  // message gave (null: it said something else; missing: the last turn), the plan as it is now
+  questions?: AgentQuestion[]
+  answers?: (string | null)[] | null
+  plan_id?: number
+  plan?: AgentPlan
 }
 
 export interface AiChatSummary extends AiChatTotal {

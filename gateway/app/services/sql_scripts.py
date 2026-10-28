@@ -423,17 +423,20 @@ def _audit_run(session: Session, user: User, script: Optional[SqlScript], reques
 
 async def run(session: Session, user: User, sql: str, engine: Optional[str], limit: int,
               script: Optional[SqlScript] = None, request: Optional[Request] = None,
-              connection_id: Optional[int] = None) -> dict[str, Any]:
+              connection_id: Optional[int] = None, slot: Optional[str] = None) -> dict[str, Any]:
     """Runs the SQL, as a preview: the first `limit` rows, on the catalog or on a
-    database connection. Every run is audited with its SQL, whatever its outcome."""
+    database connection. Every run is audited with its SQL, whatever its outcome.
+    `slot`: the preview slot a newer run knocks down (default: one per script and
+    person, as the editor's; the agent gives one per call)."""
     limit = max(1, min(int(limit or DEFAULT_ROWS), MAX_ROWS))
+    slot = slot or _slot(user, script)
     if connection_id is not None:
-        return await _run_on_connection(session, user, sql, connection_id, limit, script, request)
+        return await _run_on_connection(session, user, sql, connection_id, limit, script, request, slot)
     engine = await pick_engine(session, engine)
     resolved = resolve(session, user, sql, engine)
     if not resolved.tables:
         raise _refuse("The query reads no datasource: name one in FROM")
-    body = {**_catalog_chain(resolved), "limit": limit, "no_cache": True, "engine": engine, "slot": _slot(user, script)}
+    body = {**_catalog_chain(resolved), "limit": limit, "no_cache": True, "engine": engine, "slot": slot}
     started = time.monotonic()
     outcome, rows, detail = "failure", 0, ""
     try:
@@ -455,7 +458,7 @@ async def run(session: Session, user: User, sql: str, engine: Optional[str], lim
 
 
 async def _run_on_connection(session: Session, user: User, sql: str, connection_id: int, limit: int,
-                             script: Optional[SqlScript], request: Optional[Request]) -> dict[str, Any]:
+                             script: Optional[SqlScript], request: Optional[Request], slot: str) -> dict[str, Any]:
     """The SQL on the database, as it is: the database reads it and says what is wrong."""
     from app.routes.connections import engine_connection_payload  # routes → services: late import
 
@@ -466,7 +469,7 @@ async def _run_on_connection(session: Session, user: User, sql: str, connection_
     outcome, rows = "failure", 0
     try:
         resp = await get_engine_client().post("/db/query", timeout=300, json={
-            "connection": engine_connection_payload(conn), "sql": sql, "limit": limit, "slot": _slot(user, script)})
+            "connection": engine_connection_payload(conn), "sql": sql, "limit": limit, "slot": slot})
         if resp.status_code >= 400:
             raise _engine_failure(resp, lambda d: d)
         res = resp.json()

@@ -171,8 +171,8 @@ export default {
     "lead": "The text each AI agent receives as its system instructions. You can rewrite it or go back to the default; a new text applies from the next request. Below, the context Tabularia always adds: the date, the engine, the script's files and, last, the interface language of whoever is asking.",
     "agents": {
       "assistant": {
-        "name": "Data assistant",
-        "purpose": "The chat on the Assistant page: finds datasources and queries them"
+        "name": "Assistant",
+        "purpose": "The chat on the Assistant page: finds and queries the data, and builds flows and more through plans the user confirms"
       },
       "flow": {
         "name": "Flow assistant",
@@ -1812,12 +1812,12 @@ export default {
     "railEmpty": "You have no access to any datasource yet: ask for access to a folder.",
     "dsRows": "{n} rows",
     "dsDescribed": "{n} of {total} fields described: descriptions help the assistant write the right query",
-    "emptyTitle": "Ask your data",
-    "emptyBody": "Ask a question in plain language. The assistant finds the datasource, reads the fields and their descriptions, runs a query and shows you the table the numbers come from.",
+    "emptyTitle": "Ask your data, or build with it",
+    "emptyBody": "Ask a question in plain language: the assistant finds the datasource, reads the fields and their descriptions, runs a query and shows you the table the numbers come from. It also builds flows, runs and schedules them: it asks what it is not sure about, and changes nothing until you confirm its plan.",
     "example1": "Which datasources can I use and what do they contain?",
     "example2": "What are the 5 most frequent values in the most relevant column?",
     "example3": "Summarise the trend by year with totals and changes.",
-    "placeholder": "Ask a question about the data…",
+    "placeholder": "Ask about your data, or what to build…",
     "placeholderOff": "The assistant is not available",
     "send": "Send",
     "stop": "Stop",
@@ -1837,7 +1837,91 @@ export default {
     "noModelsTitle": "No model enabled",
     "noModelsAdmin": "Enable at least one model in the Admin panel, AI models section.",
     "noModelsUser": "An administrator must enable at least one model.",
-    "openAdmin": "Open the Admin panel"
+    "openAdmin": "Open the Admin panel",
+    "example4": "Every morning, send me the orders still open seven days after they were placed.",
+    "actBuilding": "Building the flow",
+    "actPlanning": "Preparing the plan",
+    "tool": {
+      "search": "Searching the catalog: «{q}»",
+      "list_folders": "Listing the folders",
+      "list_connections": "Listing the connections",
+      "list_environments": "Listing the scripting environments",
+      "get_flow": "Reading the flow {name}",
+      "list_runs": "Looking at the latest runs",
+      "get_run": "Reading the run {id}",
+      "get_plan": "Reading the plan {id}",
+      "cancel_plan": "Cancelling the plan {id}",
+      "plan_schedule": "Planning the schedule {cron}",
+      "plan_schedule_off": "Planning to turn a schedule off",
+      "flow_draft_new": "Starting the flow «{name}»",
+      "flow_draft_open": "Opening the flow {name} to change it",
+      "flow_add_source": "Adding {name} as a source",
+      "flow_add_step": "Adding a step: {op}",
+      "flow_change_step": "Changing the step {node}",
+      "flow_connect": "Connecting {from} to {to}",
+      "flow_remove_node": "Removing {node}",
+      "flow_add_output": "Adding an Output: {kind}",
+      "flow_preview": "Previewing {node}",
+      "flow_draft_show": "Looking at the draft",
+      "plan_save_flow": "Planning to save the flow",
+      "plan_run_flow": "Planning a run of the flow",
+      "list_tables": "Listing a database's tables",
+      "list_columns": "Listing a table's columns",
+      "list_files": "Listing the files of a pattern",
+      "plan_create_datasource": "Planning a new datasource",
+      "plan_refresh_datasource": "Planning a refresh",
+      "get_sql_script": "Reading a SQL script",
+      "run_sql_preview": "Trying the SQL",
+      "plan_sql_script": "Planning a SQL script",
+      "plan_run_sql_script": "Planning to write a SQL script's datasource",
+      "get_flow_group": "Reading a flow group",
+      "plan_flow_group": "Planning a flow group",
+      "plan_run_flow_group": "Planning a run of a flow group",
+      "get_notebook": "Reading a notebook",
+      "plan_notebook": "Planning a notebook"
+    },
+    "step": {
+      "found": "{n} found",
+      "node": "node {node}",
+      "plan": "plan {id}",
+      "attempts": "{n} attempts",
+      "attempt": "Attempt {n} failed: {error}",
+      "attemptN": "Attempt {n}",
+      "noReason": "no reason given",
+      "failedAttempts": "Failed attempts",
+      "showDetails": "details",
+      "hideDetails": "hide details",
+      "noArguments": "No arguments.",
+      "ms": "{ms} ms",
+      "seconds": "{s} s",
+      "state": {
+        "running": "(running)",
+        "ok": "(done)",
+        "error": "(failed)"
+      }
+    },
+    "ask": {
+      "title": "The assistant asks",
+      "titleAnswered": "You answered",
+      "titleSkipped": "Not answered: the conversation went on",
+      "recommended": "Recommended",
+      "other": "Other",
+      "otherPlaceholder": "Your answer",
+      "otherLabel": "Your own answer to: {question}",
+      "send": "Send answers",
+      "answerAll": "Answer every question to send."
+    },
+    "plan": {
+      "title": "Plan {id}",
+      "lead": "Nothing has changed yet: it is applied only when you confirm, with your permissions checked again.",
+      "openPage": "Open its page",
+      "updatedBelow": "Changed further down: the latest version is there.",
+      "confirm": "Confirm",
+      "confirmLabel": "Confirm plan {id} and apply it",
+      "change": "Change",
+      "cancel": "Cancel",
+      "changeHint": "Tell the assistant what to change…"
+    }
   },
   "datasourceAbout": {
     "heading": "Datasource description",
@@ -2153,7 +2237,21 @@ export default {
       "save_flow_change": "Change the flow «{name}»",
       "run_flow": "Run the flow «{name}» now",
       "schedule_flow": "Schedule the flow «{name}»",
-      "schedule_flow_off": "Turn off the schedule of «{name}»"
+      "schedule_flow_off": "Turn off the schedule of «{name}»",
+      "create_datasource": "Create the datasource «{name}»",
+      "refresh_datasource": "Refresh the datasource «{name}» now",
+      "schedule_datasource": "Schedule the refresh of «{name}»",
+      "schedule_datasource_off": "Turn off the scheduled refresh of «{name}»",
+      "save_sql_script_new": "Create the SQL script «{name}»",
+      "save_sql_script_change": "Change the SQL script «{name}»",
+      "run_sql_script": "Write the datasource of «{name}» now",
+      "schedule_sql_script": "Schedule the SQL script «{name}»",
+      "save_flow_group_new": "Create the flow group «{name}»",
+      "save_flow_group_change": "Change the flow group «{name}»",
+      "run_flow_group": "Run the flow group «{name}» now",
+      "schedule_flow_group": "Schedule the flow group «{name}»",
+      "save_notebook_new": "Create the notebook «{name}»",
+      "save_notebook_change": "Change the notebook «{name}»"
     },
     "inFolder": "In {folder}",
     "engine": "engine {engine}",
@@ -2177,7 +2275,10 @@ export default {
       "database": "The table {target} on «{connection}», {mode}",
       "s3": "The {format} file {target} on S3, through «{connection}»",
       "sftp": "The {format} file {target} on SFTP, through «{connection}»",
-      "email": "An email to {target} with the result attached ({format}), subject «{subject}», through «{connection}»"
+      "email": "An email to {target} with the result attached ({format}), subject «{subject}», through «{connection}»",
+      "cc": "Copy to {cc}",
+      "postSql": "Then, at every run, this SQL on the database:",
+      "body": "The message:"
     },
     "modeAppend": "rows added",
     "modeReplace": "rows replaced",
@@ -2195,7 +2296,25 @@ export default {
     "cancelling": "Cancelling…",
     "confirmedToast": "Plan applied",
     "failedToast": "The plan stopped at an error",
-    "cancelledToast": "Plan cancelled"
+    "cancelledToast": "Plan cancelled",
+    "fromConnection": "From «{connection}» ({type})",
+    "throughConnection": "It imports again through «{connection}».",
+    "source": {
+      "table": "The table {text}",
+      "sql": "A query on the database",
+      "files": "The files {text}",
+      "apiCall": "The API call, as it is made at every refresh"
+    },
+    "imports": "What it imports",
+    "firstImport": "Its first import starts as soon as it is created.",
+    "runsOnDatabase": "Runs on the database «{connection}»",
+    "runsOnCatalog": "Runs on the catalog, engine {engine}",
+    "defaultEngine": "the default one",
+    "writesDatasource": "Writes the datasource «{name}» in {folder}",
+    "sqlCode": "The SQL",
+    "notebookSource": "The notebook's source",
+    "environment": "Environment «{environment}»",
+    "notebookRights": "Its app will read data with your rights, as the author of the version it runs."
   },
   "panelSettings": {
     "title": "Settings",
@@ -2517,8 +2636,8 @@ export default {
         "help": "The limit on the calls to the model and its tools while answering one message."
       },
       "ai_max_flow_requests": {
-        "label": "Model rounds in the flow editor",
-        "help": "The same, for the flow editor's assistant, which needs a round for every step it builds and checks."
+        "label": "Model rounds when an assistant builds",
+        "help": "The same, for the assistants that build — the flow editor's, and the Assistant page's for whoever may make changes — which need a round for every step they build and check."
       },
       "ai_max_history_messages": {
         "label": "Messages of history sent back",

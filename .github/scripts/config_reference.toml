@@ -428,7 +428,7 @@ text = "Rows a query of the assistant may return, to the model and to the chat."
 text = "Model round-trips per message of the data chat: the cap on its tool-calling loop."
 
 [var.AI__MAX_FLOW_REQUESTS]
-text = "The same for the flow editor's assistant, which takes a round-trip for every step it builds and checks."
+text = "The same for the assistants that build — the flow editor's, and the Assistant page's for whoever may make changes — which take a round-trip for every step they build and check."
 
 [var.AI__MAX_HISTORY_MESSAGES]
 text = "Past messages of a conversation replayed to the model: higher remembers more and costs more per turn."

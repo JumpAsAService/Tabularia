@@ -171,8 +171,8 @@ export default {
     "lead": "Der Text, den jeder KI-Agent als Systemanweisungen erhält. Sie können ihn umschreiben oder zum Standard zurückkehren; ein neuer Text gilt ab der nächsten Anfrage. Darunter der Kontext, den Tabularia immer hinzufügt: das Datum, die Engine, die Dateien des Skripts und zuletzt die Oberflächensprache der fragenden Person.",
     "agents": {
       "assistant": {
-        "name": "Datenassistent",
-        "purpose": "Der Chat der Assistent-Seite: findet Datasources und fragt sie ab"
+        "name": "Assistent",
+        "purpose": "Der Chat der Assistent-Seite: findet und befragt die Daten und baut Flows und mehr über Pläne, die der Benutzer bestätigt"
       },
       "flow": {
         "name": "Flow-Assistent",
@@ -1805,12 +1805,12 @@ export default {
     "railEmpty": "Sie haben noch keinen Zugriff auf eine Datenquelle: Bitten Sie um Zugriff auf einen Ordner.",
     "dsRows": "{n} Zeilen",
     "dsDescribed": "{n} von {total} Feldern beschrieben: Beschreibungen helfen dem Assistenten, die richtige Abfrage zu schreiben",
-    "emptyTitle": "Fragen Sie Ihre Daten",
-    "emptyBody": "Stellen Sie eine Frage in natürlicher Sprache. Der Assistent findet die Datenquelle, liest die Felder und ihre Beschreibungen, führt eine Abfrage aus und zeigt die Tabelle, aus der die Zahlen stammen.",
+    "emptyTitle": "Fragen Sie Ihre Daten oder bauen Sie damit",
+    "emptyBody": "Stellen Sie eine Frage in natürlicher Sprache: Der Assistent findet die Datenquelle, liest die Felder und ihre Beschreibungen, führt eine Abfrage aus und zeigt die Tabelle, aus der die Zahlen stammen. Er baut auch Flows, führt sie aus und plant sie: Er fragt nach, wo er unsicher ist, und ändert nichts, bevor Sie seinen Plan bestätigen.",
     "example1": "Welche Datenquellen kann ich nutzen und was enthalten sie?",
     "example2": "Was sind die 5 häufigsten Werte in der wichtigsten Spalte?",
     "example3": "Fasse die Entwicklung pro Jahr mit Summen und Veränderungen zusammen.",
-    "placeholder": "Frage zu den Daten stellen…",
+    "placeholder": "Fragen Sie zu Ihren Daten oder was gebaut werden soll…",
     "placeholderOff": "Der Assistent ist nicht verfügbar",
     "send": "Senden",
     "stop": "Stoppen",
@@ -1830,7 +1830,91 @@ export default {
     "noModelsTitle": "Kein Modell aktiviert",
     "noModelsAdmin": "Aktivieren Sie mindestens ein Modell im Admin-Bereich, Abschnitt KI-Modelle.",
     "noModelsUser": "Ein Administrator muss mindestens ein Modell aktivieren.",
-    "openAdmin": "Admin-Bereich öffnen"
+    "openAdmin": "Admin-Bereich öffnen",
+    "example4": "Schick mir jeden Morgen die Bestellungen, die sieben Tage nach dem Eingang noch offen sind.",
+    "actBuilding": "Baut den Flow",
+    "actPlanning": "Bereitet den Plan vor",
+    "tool": {
+      "search": "Katalog wird durchsucht: «{q}»",
+      "list_folders": "Ordner werden aufgelistet",
+      "list_connections": "Verbindungen werden aufgelistet",
+      "list_environments": "Scripting-Umgebungen werden aufgelistet",
+      "get_flow": "Flow {name} wird gelesen",
+      "list_runs": "Letzte Ausführungen werden angesehen",
+      "get_run": "Ausführung {id} wird gelesen",
+      "get_plan": "Plan {id} wird gelesen",
+      "cancel_plan": "Plan {id} wird abgebrochen",
+      "plan_schedule": "Zeitplan {cron} wird eingeplant",
+      "plan_schedule_off": "Abschalten eines Zeitplans wird eingeplant",
+      "flow_draft_new": "Flow «{name}» wird begonnen",
+      "flow_draft_open": "Flow {name} wird zum Ändern geöffnet",
+      "flow_add_source": "{name} wird als Quelle hinzugefügt",
+      "flow_add_step": "Schritt wird hinzugefügt: {op}",
+      "flow_change_step": "Schritt {node} wird geändert",
+      "flow_connect": "{from} wird mit {to} verbunden",
+      "flow_remove_node": "{node} wird entfernt",
+      "flow_add_output": "Output wird hinzugefügt: {kind}",
+      "flow_preview": "Vorschau von {node}",
+      "flow_draft_show": "Entwurf wird angesehen",
+      "plan_save_flow": "Speichern des Flows wird eingeplant",
+      "plan_run_flow": "Ausführung des Flows wird eingeplant",
+      "list_tables": "Tabellen einer Datenbank werden aufgelistet",
+      "list_columns": "Spalten einer Tabelle werden aufgelistet",
+      "list_files": "Dateien eines Musters werden aufgelistet",
+      "plan_create_datasource": "Neue Datenquelle wird eingeplant",
+      "plan_refresh_datasource": "Aktualisierung wird eingeplant",
+      "get_sql_script": "SQL-Skript wird gelesen",
+      "run_sql_preview": "SQL wird ausprobiert",
+      "plan_sql_script": "SQL-Skript wird eingeplant",
+      "plan_run_sql_script": "Schreiben der Datenquelle eines SQL-Skripts wird eingeplant",
+      "get_flow_group": "Flow-Gruppe wird gelesen",
+      "plan_flow_group": "Flow-Gruppe wird eingeplant",
+      "plan_run_flow_group": "Ausführung einer Flow-Gruppe wird eingeplant",
+      "get_notebook": "Notebook wird gelesen",
+      "plan_notebook": "Notebook wird eingeplant"
+    },
+    "step": {
+      "found": "{n} gefunden",
+      "node": "Knoten {node}",
+      "plan": "Plan {id}",
+      "attempts": "{n} Versuche",
+      "attempt": "Versuch {n} fehlgeschlagen: {error}",
+      "attemptN": "Versuch {n}",
+      "noReason": "ohne Angabe eines Grundes",
+      "failedAttempts": "Fehlgeschlagene Versuche",
+      "showDetails": "Details",
+      "hideDetails": "Details ausblenden",
+      "noArguments": "Keine Argumente.",
+      "ms": "{ms} ms",
+      "seconds": "{s} s",
+      "state": {
+        "running": "(läuft)",
+        "ok": "(erledigt)",
+        "error": "(fehlgeschlagen)"
+      }
+    },
+    "ask": {
+      "title": "Der Assistent fragt",
+      "titleAnswered": "Sie haben geantwortet",
+      "titleSkipped": "Nicht beantwortet: das Gespräch ging weiter",
+      "recommended": "Empfohlen",
+      "other": "Andere",
+      "otherPlaceholder": "Ihre Antwort",
+      "otherLabel": "Ihre eigene Antwort auf: {question}",
+      "send": "Antworten senden",
+      "answerAll": "Beantworten Sie alle Fragen, um zu senden."
+    },
+    "plan": {
+      "title": "Plan {id}",
+      "lead": "Noch hat sich nichts geändert: Er wird erst angewendet, wenn Sie bestätigen, und Ihre Berechtigungen werden dann erneut geprüft.",
+      "openPage": "Seite öffnen",
+      "updatedBelow": "Weiter unten geändert: Dort steht die neueste Fassung.",
+      "confirm": "Bestätigen",
+      "confirmLabel": "Plan {id} bestätigen und anwenden",
+      "change": "Ändern",
+      "cancel": "Abbrechen",
+      "changeHint": "Sagen Sie dem Assistenten, was er ändern soll…"
+    }
   },
   "datasourceAbout": {
     "heading": "Beschreibung der Datenquelle",
@@ -2146,7 +2230,21 @@ export default {
       "save_flow_change": "Den Flow «{name}» ändern",
       "run_flow": "Den Flow «{name}» jetzt ausführen",
       "schedule_flow": "Den Flow «{name}» planen",
-      "schedule_flow_off": "Die Planung von «{name}» ausschalten"
+      "schedule_flow_off": "Die Planung von «{name}» ausschalten",
+      "create_datasource": "Die Datasource «{name}» erstellen",
+      "refresh_datasource": "Die Datasource «{name}» jetzt aktualisieren",
+      "schedule_datasource": "Die Aktualisierung von «{name}» planen",
+      "schedule_datasource_off": "Die geplante Aktualisierung von «{name}» ausschalten",
+      "save_sql_script_new": "Das SQL-Skript «{name}» erstellen",
+      "save_sql_script_change": "Das SQL-Skript «{name}» ändern",
+      "run_sql_script": "Die Datasource von «{name}» jetzt schreiben",
+      "schedule_sql_script": "Das SQL-Skript «{name}» planen",
+      "save_flow_group_new": "Die Flow-Gruppe «{name}» erstellen",
+      "save_flow_group_change": "Die Flow-Gruppe «{name}» ändern",
+      "run_flow_group": "Die Flow-Gruppe «{name}» jetzt ausführen",
+      "schedule_flow_group": "Die Flow-Gruppe «{name}» planen",
+      "save_notebook_new": "Das Notebook «{name}» erstellen",
+      "save_notebook_change": "Das Notebook «{name}» ändern"
     },
     "inFolder": "In {folder}",
     "engine": "Engine {engine}",
@@ -2170,7 +2268,10 @@ export default {
       "database": "Die Tabelle {target} auf «{connection}», {mode}",
       "s3": "Die {format}-Datei {target} auf S3, über «{connection}»",
       "sftp": "Die {format}-Datei {target} auf SFTP, über «{connection}»",
-      "email": "Eine E-Mail an {target} mit dem Ergebnis im Anhang ({format}), Betreff «{subject}», über «{connection}»"
+      "email": "Eine E-Mail an {target} mit dem Ergebnis im Anhang ({format}), Betreff «{subject}», über «{connection}»",
+      "cc": "In Kopie an {cc}",
+      "postSql": "Danach, bei jeder Ausführung, dieses SQL auf der Datenbank:",
+      "body": "Die Nachricht:"
     },
     "modeAppend": "Zeilen hinzugefügt",
     "modeReplace": "Zeilen ersetzt",
@@ -2188,7 +2289,25 @@ export default {
     "cancelling": "Wird abgebrochen…",
     "confirmedToast": "Plan angewendet",
     "failedToast": "Der Plan wurde von einem Fehler gestoppt",
-    "cancelledToast": "Plan abgebrochen"
+    "cancelledToast": "Plan abgebrochen",
+    "fromConnection": "Aus «{connection}» ({type})",
+    "throughConnection": "Sie importiert erneut über «{connection}».",
+    "source": {
+      "table": "Die Tabelle {text}",
+      "sql": "Eine Abfrage auf der Datenbank",
+      "files": "Die Dateien {text}",
+      "apiCall": "Der API-Aufruf, wie er bei jeder Aktualisierung erfolgt"
+    },
+    "imports": "Was sie importiert",
+    "firstImport": "Ihr erster Import startet, sobald sie erstellt ist.",
+    "runsOnDatabase": "Läuft auf der Datenbank «{connection}»",
+    "runsOnCatalog": "Läuft auf dem Katalog, Engine {engine}",
+    "defaultEngine": "die Standard-Engine",
+    "writesDatasource": "Schreibt die Datasource «{name}» in {folder}",
+    "sqlCode": "Das SQL",
+    "notebookSource": "Der Quelltext des Notebooks",
+    "environment": "Umgebung «{environment}»",
+    "notebookRights": "Seine App liest die Daten mit deinen Rechten, als Autor der Version, die sie ausführt."
   },
   "panelSettings": {
     "title": "Einstellungen",
@@ -2510,8 +2629,8 @@ export default {
         "help": "Die Grenze für die Aufrufe des Modells und seiner Tools beim Beantworten einer Nachricht."
       },
       "ai_max_flow_requests": {
-        "label": "Modellrunden im Flow-Editor",
-        "help": "Dasselbe für den Assistenten des Flow-Editors, der für jeden Schritt, den er baut und prüft, eine Runde braucht."
+        "label": "Modellrunden, wenn ein Assistent baut",
+        "help": "Dasselbe für die Assistenten, die bauen — den des Flow-Editors und den der Assistent-Seite für alle, die Änderungen vornehmen dürfen —, die für jeden Schritt, den sie bauen und prüfen, eine Runde brauchen."
       },
       "ai_max_history_messages": {
         "label": "Mitgesendete Nachrichten aus dem Verlauf",

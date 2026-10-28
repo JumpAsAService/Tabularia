@@ -23,6 +23,8 @@ from app.services.agent.common import folder_paths, in_thread
 from app.services.agent.registry import ToolContext, ToolError
 
 OutputKind = Literal["datasource", "database", "s3", "sftp", "email"]
+# how much of a post-SQL the plan's words carry (its page shows it whole)
+POST_SQL_WORDS = 400
 
 
 class OutputSettings(BaseModel):
@@ -85,6 +87,11 @@ def node_data(s: OutputSettings, flow_folder: Optional[int]) -> dict[str, Any]:
     return d
 
 
+def _excerpt(text: str, chars: int = POST_SQL_WORDS) -> str:
+    one = " ".join(text.split())
+    return f"`{one}`" if len(one) <= chars else f"`{one[:chars]}…` ({len(one)} characters)"
+
+
 def _connection(session: Session, user: User, connection_id: Any, kinds: str) -> Connection:
     conn = session.get(Connection, connection_id) if isinstance(connection_id, int) else None
     if conn is None or not perm_service.has_capability(session, user, conn.project_id, Capability.CONNECT):
@@ -125,10 +132,14 @@ def _check(session: Session, user: User, d: dict) -> tuple[dict, dict[str, tuple
         if not table:
             raise ToolError("A database Output needs table.")
         mode = "replacing its rows" if d.get("mode") == "replace" else "adding rows"
+        # the post-SQL runs on the database at every run, with the connection's user: the
+        # person confirming reads it whole (the plan's page), the model its beginning
+        post_sql = str(d.get("postSql") or "").strip()
         words = f"writes the table {table} on «{conn.name}» ({conn.db_type}), {mode}" + \
-            (", then runs its post-SQL" if str(d.get("postSql") or "").strip() else "")
+            (f", then runs this post-SQL on the database: {_excerpt(post_sql)}" if post_sql else "")
         return {"kind": dest, "words": words, "target": table, "connection": conn.name,
-                "mode": "replace" if d.get("mode") == "replace" else "append"}, {}, ""
+                "mode": "replace" if d.get("mode") == "replace" else "append",
+                **({"post_sql": post_sql} if post_sql else {})}, {}, ""
     if dest == "s3":
         conn = _connection(session, user, d.get("connectionId"), "S3")
         if conn.db_type != "s3":
@@ -188,7 +199,8 @@ def _check(session: Session, user: User, d: dict) -> tuple[dict, dict[str, tuple
         words = (f"emails the result as {fmt} «{attachment}» to {', '.join(to)}" + (f" (cc {', '.join(cc)})" if cc else "")
                  + f", subject «{d.get('emailSubject')}», through «{conn.name}»")
         return {"kind": dest, "words": words, "target": ", ".join(to), "cc": ", ".join(cc), "connection": conn.name,
-                "subject": str(d.get("emailSubject") or ""), "format": fmt}, \
+                "subject": str(d.get("emailSubject") or ""), "format": fmt, "body": str(d.get("emailBody") or ""),
+                "body_is_html": bool(d.get("emailHtml"))}, \
             {"subject": (str(d.get("emailSubject") or ""), "text"), "attachment name": (attachment, "file")}, ""
     raise ToolError(f"Unknown Output kind {dest}: datasource, database, s3, sftp or email.")
 

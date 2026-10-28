@@ -139,7 +139,8 @@ ai:
   defaultModel: ""
   maxResultRows: 200
   maxRequests: 12
-  # the flow editor's assistant: one round-trip per step it builds and checks
+  # the assistants that build (the flow editor's, the Assistant page's): one round-trip
+  # per step they build and check
   maxFlowRequests: 30
   # Spending caps, in dollars. Per turn it is always on; per user per day and for
   # the whole installation per day are off at 0. Without them anyone who can

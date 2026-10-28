@@ -3,17 +3,24 @@
 // they can read (the same the assistant can query), in the middle questions, the
 // assistant's steps and each query's table: the answer's numbers are checked right
 // below.
+//
+// The assistant also BUILDS (docs/specs/mcp-agent.md): it asks what it is not sure about
+// with a card of choices, and before changing anything it proposes a plan, shown as a
+// card that only the person's «Confirm» applies. Every tool call is a step, with its retries
+// grouped under it.
 import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 import {
-  Sparkles, Send, Square, Plus, Database, Search, Check, FileText, ListTree, TableProperties,
-  Code2, CircleAlert, ChevronRight, ShieldAlert, History, Trash2, Download,
+  Sparkles, Send, Square, Plus, Database, Search, Check, FileText,
+  CircleAlert, ChevronRight, ShieldAlert, History, Trash2, Download,
 } from 'lucide-vue-next'
 import { errMessage, useApi } from '~/composables/useApi'
 import MiniChart from '~/components/ui/MiniChart.vue'
 import AiDisclosure from '~/components/ui/AiDisclosure.vue'
 import { useAiDisclosure } from '~/composables/useAiDisclosure'
-import { useAi, type AiChartSpec, type AiChatSummary, type AiChatTotal, type AiStatus, type AiTable, type AiToolCall, type AiToolResult, type AiUsage } from '~/composables/useAi'
+import { useAi, type AgentQuestion, type AiChatSummary, type AiChatTotal, type AiStatus, type AiToolCall, type AiToolResult, type AiUsage } from '~/composables/useAi'
+import { argsOf, type AgentStep } from '~/composables/useAgentSteps'
+import type { AgentPlan } from '~/composables/useAgentPlans'
 import { useDatasources, type DatasourceInfo } from '~/composables/useDatasources'
 import { useToast } from '~/composables/useToast'
 import { useProjects } from '~/composables/useProjects'
@@ -25,6 +32,9 @@ import DataGrid from '~/components/ui/DataGrid.vue'
 import MarkdownLite from '~/components/ui/MarkdownLite.vue'
 import AiSpeaker from '~/components/ui/AiSpeaker.vue'
 import Select from '~/components/ui/Select.vue'
+import AgentSteps from '~/components/agent/AgentSteps.vue'
+import AgentQuestionCard from '~/components/agent/AgentQuestionCard.vue'
+import AgentPlanCard from '~/components/agent/AgentPlanCard.vue'
 
 const { t } = useI18n()
 // A chat without a title yet (or with the Italian default written before 1.2.0)
@@ -49,19 +59,29 @@ const engines = ref<EngineOpt[]>([])
 const engine = ref('')
 const { locale } = useLocale()
 
-type Step = { id: string; name: string; args: Record<string, any>; state: 'running' | 'ok' | 'error'; error?: string; count?: number; table?: AiTable; chart?: AiChartSpec }
+type Step = AgentStep
 type Turn =
   | { role: 'user'; text: string }
-  | { role: 'assistant'; text: string; steps: Step[]; streaming: boolean; error?: string; open: Record<string, boolean>; usage?: AiUsage; phase?: Phase; phaseOn?: string; seq?: number; model?: string }
+  | {
+      role: 'assistant'; text: string; steps: Step[]; streaming: boolean; error?: string; usage?: AiUsage; phase?: Phase
+      phaseOn?: string; seq?: number; model?: string
+      // the questions that ended the turn, and the answers given (null: none — see AgentQuestionCard)
+      questions?: AgentQuestion[]; answers?: (string | null)[] | null
+      // the plan the turn proposed or changed, as it is now
+      plan?: AgentPlan
+    }
+type BotTurn = Extract<Turn, { role: 'assistant' }>
 
 // What the assistant is doing at this instant. It is NOT decoration: every phase matches
 // a real event of the stream, so the indicator tells the truth as the rest of the page
 // does («every step can be inspected»).
-type Phase = 'thinking' | 'catalog' | 'fields' | 'query' | 'writing'
-const PHASE_OF_TOOL: Record<string, Phase> = {
-  list_datasources: 'catalog',
-  describe_datasource: 'fields',
-  query_datasource: 'query',
+type Phase = 'thinking' | 'catalog' | 'fields' | 'query' | 'building' | 'planning' | 'writing'
+function phaseOf(tool: string): Phase {
+  if (tool === 'describe_datasource') return 'fields'
+  if (tool === 'query_datasource') return 'query'
+  if (tool.startsWith('flow_')) return 'building'
+  if (tool.startsWith('plan_') || tool === 'cancel_plan') return 'planning'
+  return 'catalog'
 }
 
 const status = ref<AiStatus | null>(null)
@@ -80,6 +100,8 @@ const chatFilter = ref('')
 const chatTotal = ref<AiChatTotal | null>(null)
 const draft = ref('')
 const busy = ref(false)
+// «Change» on a plan: the field says what to write
+const changeHint = ref(false)
 let abort: AbortController | null = null
 const scroller = ref<HTMLElement | null>(null)
 const input = ref<HTMLTextAreaElement | null>(null)
@@ -119,7 +141,9 @@ const shown = computed(() => {
 // the SERVER makes the count: the «documented» rule lives in one place only
 const described = (d: DatasourceInfo) => d.described_columns
 const dsName = (id: any) => datasources.value.find((d) => d.id === Number(id))?.name ?? `#${id}`
-const examples = computed(() => [t('chat.example1'), t('chat.example2'), t('chat.example3')])
+// the fourth asks to build: not offered to whom only reads
+const examples = computed(() => [t('chat.example1'), t('chat.example2'), t('chat.example3'),
+  ...(noHistory.value ? [] : [t('chat.example4')])])
 
 onMounted(async () => {
   readConsent()
@@ -145,12 +169,14 @@ onMounted(async () => {
 onBeforeUnmount(() => abort?.abort())
 
 /** The phase's label: a true sentence, not background noise. */
-function activityLabel(turn: Extract<Turn, { role: 'assistant' }>): string {
+function activityLabel(turn: BotTurn): string {
   const on = turn.phaseOn
   switch (turn.phase) {
     case 'catalog': return t('chat.actCatalog')
     case 'fields': return on ? t('chat.actFieldsOn', { name: on }) : t('chat.actFields')
     case 'query': return on ? t('chat.actQueryOn', { name: on }) : t('chat.actQuery')
+    case 'building': return t('chat.actBuilding')
+    case 'planning': return t('chat.actPlanning')
     case 'writing': return t('chat.actWriting')
     default: return t('chat.actThinking')
   }
@@ -160,13 +186,34 @@ function toggleFocus(id: number) {
   focus.value = focus.value.includes(id) ? focus.value.filter((x) => x !== id) : [...focus.value, id].slice(-8)
 }
 
-function stepLabel(s: Step): string {
-  if (s.name === 'list_datasources') return s.state === 'ok' ? t('chat.stepListDone', { n: s.count ?? 0 }) : t('chat.stepList')
-  if (s.name === 'describe_datasource') return t('chat.stepDescribe', { name: dsName(s.args.datasource_id) })
-  if (s.name === 'query_datasource') return t('chat.stepQuery', { name: dsName(s.args.datasource_id) })
-  return s.name
+// ── the cards: questions and plans ──────────────────────────────────────────
+const lastBot = computed(() => {
+  for (let i = turns.value.length - 1; i >= 0; i--) if (turns.value[i].role === 'assistant') return i
+  return -1
+})
+/** A card of questions takes answers only under the latest answer, once, and not while another
+ *  answer is being written (its own turn is still closing when the card arrives). */
+function questionsLocked(ti: number, turn: BotTurn): boolean {
+  return (busy.value && !turn.streaming) || ti !== lastBot.value || !!turn.answers?.some((a) => a != null)
 }
-const stepIcon = (s: Step) => (s.name === 'list_datasources' ? ListTree : s.name === 'describe_datasource' ? TableProperties : Code2)
+function answerCard(turn: BotTurn, message: string, answers: string[]) {
+  if (busy.value || !ready.value) return
+  turn.answers = answers
+  void send(message)
+}
+// a plan changed in several turns: in full only under the latest of them
+const planShownAt = computed(() => {
+  const at = new Map<number, number>()
+  turns.value.forEach((turn, i) => { if (turn.role === 'assistant' && turn.plan) at.set(turn.plan.id, i) })
+  return at
+})
+function onPlanUpdate(plan: AgentPlan) {
+  for (const turn of turns.value) if (turn.role === 'assistant' && turn.plan?.id === plan.id) turn.plan = plan
+}
+function onPlanChange() {
+  changeHint.value = true
+  input.value?.focus()
+}
 
 async function scrollDown() {
   await nextTick()
@@ -178,10 +225,11 @@ async function send(text?: string) {
   const message = (text ?? draft.value).trim()
   if (!message || busy.value || !ready.value) return
   draft.value = ''
+  changeHint.value = false
   turns.value.push({ role: 'user', text: message })
-  const reply: Turn = { role: 'assistant', text: '', steps: [], streaming: true, open: {}, phase: 'thinking', model: model.value }
+  const reply: Turn = { role: 'assistant', text: '', steps: [], streaming: true, phase: 'thinking', model: model.value }
   turns.value.push(reply)
-  const live = turns.value[turns.value.length - 1] as Extract<Turn, { role: 'assistant' }>
+  const live = turns.value[turns.value.length - 1] as BotTurn
   busy.value = true
   abort = new AbortController()
   scrollDown()
@@ -193,8 +241,8 @@ async function send(text?: string) {
         onToolCall: (call: AiToolCall) => {
           // a sentence, then a tool, then more text: what follows is a new paragraph
           if (live.text && !live.text.endsWith('\n\n')) live.text += '\n\n'
-          live.steps.push({ id: call.id, name: call.name, args: call.args ?? {}, state: 'running' })
-          live.phase = PHASE_OF_TOOL[call.name] ?? 'thinking'
+          live.steps.push({ id: call.id, name: call.name, title: call.title, args: call.args ?? {}, state: 'running' })
+          live.phase = phaseOf(call.name)
           const parentId = dsName((call.args as any)?.datasource_id)
           live.phaseOn = parentId.startsWith('#') ? undefined : parentId
           scrollDown()
@@ -203,10 +251,14 @@ async function send(text?: string) {
           const step = live.steps.find((s) => s.id === res.id) ?? live.steps[live.steps.length - 1]
           if (!step) return
           step.state = res.ok ? 'ok' : 'error'
-          step.error = res.error
+          step.error = res.error ?? res.warning
           step.count = res.count
           step.table = res.table
           step.chart = res.chart
+          step.node = res.node
+          step.subject = res.subject
+          step.planId = res.plan_id
+          step.durationMs = res.duration_ms
           live.phase = 'thinking'  // tool finished: back to reasoning
           scrollDown()
         },
@@ -215,9 +267,16 @@ async function send(text?: string) {
           chatTotal.value = done.chat_total
           live.usage = done.usage
           if (done.seq !== null) live.seq = done.seq
+          if (done.questions?.length) live.questions = done.questions
+          if (done.plan) live.plan = done.plan
           void refreshChats()
         },
-        onError: (msg) => { live.error = msg },
+        onError: (msg, _code, extra) => {
+          live.error = msg
+          // a turn stopped halfway may have opened the conversation and proposed a plan already
+          if (extra?.chat_id) chatId.value = extra.chat_id
+          if (extra?.plan) live.plan = extra.plan
+        },
       },
       abort.signal,
     )
@@ -229,7 +288,8 @@ async function send(text?: string) {
     busy.value = false
     abort = null
     scrollDown()
-    input.value?.focus()
+    // a card of questions takes the focus itself
+    if (!live.questions?.length) input.value?.focus()
   }
 }
 
@@ -239,6 +299,7 @@ function reset() {
   turns.value = []
   chatId.value = null
   chatTotal.value = null
+  changeHint.value = false
   input.value?.focus()
 }
 
@@ -265,14 +326,17 @@ async function openChat(id: number) {
     turns.value = d.messages.flatMap((t) => ([
       { role: 'user', text: t.question } as Turn,
       {
-        role: 'assistant', text: t.answer, streaming: false, open: {}, usage: t.usage, seq: t.seq, model: t.model_id,
-        steps: t.steps.map((p, i) => ({
-          id: p.id ?? `${t.seq}-${i}`, name: p.name, args: p.args ?? {}, state: 'ok' as const,
-          table: p.table, chart: p.chart,
+        role: 'assistant', text: t.answer, streaming: false, usage: t.usage, seq: t.seq, model: t.model_id,
+        steps: t.steps.map((p, i): Step => ({
+          id: p.id ?? `${t.seq}-${i}`, name: p.name, title: p.title, args: argsOf(p.args),
+          state: p.ok === false ? 'error' : 'ok', error: p.error, table: p.table, chart: p.chart, node: p.node,
+          subject: p.subject, planId: p.plan_id, durationMs: p.duration_ms,
         })),
+        questions: t.questions, answers: t.answers, plan: t.plan,
       } as Turn,
     ]))
     chatId.value = d.id
+    changeHint.value = false
     chatTotal.value = { turns: d.turns, input_tokens: d.input_tokens, output_tokens: d.output_tokens, cost_usd: d.cost_usd }
     if (d.model_id && (status.value?.models ?? []).includes(d.model_id)) model.value = d.model_id
     if (d.engine) engine.value = d.engine
@@ -300,7 +364,7 @@ const grabbing = ref('')
  * Downloads a step's COMPLETE result: the chat shows at most 200 rows of it, the file
  * holds them all because the server runs the saved query again.
  */
-async function grab(turn: Extract<Turn, { role: 'assistant' }>, step: Step, fmt: 'csv' | 'xlsx') {
+async function grab(turn: BotTurn, step: Step, fmt: 'csv' | 'xlsx') {
   if (!chatId.value || turn.seq === undefined || grabbing.value) return
   grabbing.value = `${step.id}:${fmt}`
   try {
@@ -343,6 +407,15 @@ function downloadChat() {
       }
     }
     if (turn.text) rows.push(turn.text, '')
+    if (turn.questions?.length) {
+      turn.questions.forEach((q, i) => rows.push(`- ${q.question}${turn.answers?.[i] ? ` → ${turn.answers[i]}` : ''}`))
+      rows.push('')
+    }
+    if (turn.plan && planShownAt.value.get(turn.plan.id) === turns.value.indexOf(turn)) {
+      rows.push(`**${t('chat.plan.title', { id: turn.plan.id })} — ${t(`agentPlan.status.${turn.plan.status}`)}**`, '')
+      turn.plan.actions.forEach((a) => rows.push(`${a.n}. ${a.words}`))
+      rows.push('')
+    }
     if (turn.usage) rows.push(`*${money(turn.usage.cost_usd)} · ${t('chat.tokens', { i: nf.format(turn.usage.input_tokens), o: nf.format(turn.usage.output_tokens) })}*`, '')
   }
   const blob = new Blob([rows.join('\n')], { type: 'text/markdown;charset=utf-8' })
@@ -519,17 +592,8 @@ watch(draft, async () => {
             </div>
             <article v-else class="msg bot" :aria-label="$t('aiCompliance.assistantLabel')">
               <AiSpeaker who="ai" :model="turn.model" />
-              <ol v-if="turn.steps.length" class="steps">
-                <li v-for="s in turn.steps" :key="s.id" class="step" :class="s.state">
-                  <div class="step-line">
-                    <component :is="stepIcon(s)" :size="13" class="step-ico" />
-                    <span>{{ stepLabel(s) }}</span>
-                    <button v-if="s.name === 'query_datasource' && s.args.sql" class="linkish" type="button" :aria-expanded="!!turn.open[s.id]" @click="turn.open[s.id] = !turn.open[s.id]">
-                      {{ turn.open[s.id] ? $t('chat.hideSql') : $t('chat.showSql') }}
-                    </button>
-                  </div>
-                  <pre v-if="turn.open[s.id] && s.args.sql" class="sql"><code>{{ s.args.sql }}</code></pre>
-                  <p v-if="s.state === 'error' && s.error" class="step-err">{{ s.error }}</p>
+              <AgentSteps v-if="turn.steps.length" :steps="turn.steps" :ds-name="dsName">
+                <template #evidence="{ step: s }">
                   <div v-if="s.table" class="evidence">
                     <div class="evidence-head">
                       <span>{{ s.table.datasource }}</span>
@@ -549,9 +613,24 @@ watch(draft, async () => {
                       <span v-if="s.table.truncated" class="muted small">{{ $t('chat.grabsWhole') }}</span>
                     </p>
                   </div>
-                </li>
-              </ol>
+                </template>
+              </AgentSteps>
               <MarkdownLite v-if="turn.text" :text="turn.text" />
+              <AgentQuestionCard
+                v-if="turn.questions?.length"
+                :questions="turn.questions"
+                :answers="turn.answers"
+                :locked="questionsLocked(ti, turn)"
+                :autofocus="ti === turns.length - 1"
+                @send="(message, answers) => answerCard(turn, message, answers)"
+              />
+              <AgentPlanCard
+                v-if="turn.plan"
+                :plan="turn.plan"
+                :superseded="planShownAt.get(turn.plan.id) !== ti"
+                @update="onPlanUpdate"
+                @change="onPlanChange"
+              />
               <p v-if="turn.streaming" class="activity" aria-live="polite">
                 <span class="beat" aria-hidden="true" />
                 <Transition name="swap" mode="out-in">
@@ -577,7 +656,7 @@ watch(draft, async () => {
               ref="input"
               v-model="draft"
               rows="1"
-              :placeholder="ready || awaitingConsent ? $t('chat.placeholder') : $t('chat.placeholderOff')"
+              :placeholder="changeHint ? $t('chat.plan.changeHint') : ready || awaitingConsent ? $t('chat.placeholder') : $t('chat.placeholderOff')"
               :aria-label="$t('chat.placeholder')"
               :disabled="!ready"
               @keydown="onKey"
@@ -644,15 +723,6 @@ watch(draft, async () => {
 .msg { margin-top: 16px; }
 .msg.user { display: flex; flex-direction: column; align-items: flex-end; }
 .msg.user p { margin: 0; max-width: 78%; padding: 8px 12px; border-radius: 12px 12px 3px 12px; background: var(--panel-2); border: 1px solid var(--border-soft); font-size: 13.5px; line-height: 1.5; white-space: pre-wrap; overflow-wrap: anywhere; }
-.steps { margin: 0 0 10px; padding: 0; list-style: none; display: flex; flex-direction: column; gap: 6px; }
-.step-line { display: flex; align-items: center; flex-wrap: wrap; gap: 6px; font-size: 12px; color: var(--muted); }
-.step.ok .step-ico { color: var(--accent-2); }
-.step.error .step-ico { color: var(--danger); }
-.step-err { margin: 3px 0 0 19px; font-size: 12px; color: var(--muted); overflow-wrap: anywhere; }
-.linkish { padding: 0; border: 0; background: transparent; color: var(--accent-hi); font-size: 12px; box-shadow: none; text-decoration: underline; text-underline-offset: 2px; }
-.linkish:hover { color: var(--text); box-shadow: none; }
-.sql { margin: 5px 0 0 19px; padding: 8px 10px; border: 1px solid var(--border-soft); border-radius: 8px; background: var(--bg-soft); font-size: 12px; overflow-x: auto; }
-.sql code { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; white-space: pre-wrap; overflow-wrap: anywhere; }
 .evidence { margin: 6px 0 2px 19px; border: 1px solid var(--border); border-radius: 10px; overflow: hidden; background: var(--panel); }
 .evidence-head { display: flex; justify-content: space-between; gap: 10px; padding: 6px 10px; font-size: 12px; font-weight: 500; border-bottom: 1px solid var(--border-soft); }
 .evidence :deep(.datagrid) { max-height: 260px; overflow: auto; }

@@ -171,8 +171,8 @@ export default {
     "lead": "Le texte que chaque agent IA reçoit comme instructions système. Vous pouvez le réécrire ou revenir à celui par défaut ; un nouveau texte s'applique dès la requête suivante. En dessous, le contexte que Tabularia ajoute toujours : la date, le moteur, les fichiers du script et, en dernier, la langue de l'interface de la personne qui demande.",
     "agents": {
       "assistant": {
-        "name": "Assistant de données",
-        "purpose": "Le chat de la page Assistant : trouve les datasources et les interroge"
+        "name": "Assistant",
+        "purpose": "Le chat de la page Assistant : trouve et interroge les données, et construit des flux et plus encore par des plans que l'utilisateur confirme"
       },
       "flow": {
         "name": "Assistant des flux",
@@ -1805,12 +1805,12 @@ export default {
     "railEmpty": "Vous n'avez encore accès à aucune source : demandez l'accès à un dossier.",
     "dsRows": "{n} lignes",
     "dsDescribed": "{n} champs décrits sur {total} : les descriptions aident l'assistant à écrire la bonne requête",
-    "emptyTitle": "Interrogez vos données",
-    "emptyBody": "Posez une question en langage naturel. L'assistant trouve la source, lit les champs et leurs descriptions, exécute une requête et vous montre la table d'où viennent les chiffres.",
+    "emptyTitle": "Interrogez vos données, ou construisez avec elles",
+    "emptyBody": "Posez une question en langage naturel : l'assistant trouve la source, lit les champs et leurs descriptions, exécute une requête et vous montre la table d'où viennent les chiffres. Il construit aussi des flux, les exécute et les planifie : il demande ce dont il n'est pas sûr et ne change rien tant que vous n'avez pas confirmé son plan.",
     "example1": "Quelles sources puis-je utiliser et que contiennent-elles ?",
     "example2": "Quelles sont les 5 valeurs les plus fréquentes de la colonne la plus pertinente ?",
     "example3": "Résume l'évolution par année avec totaux et variations.",
-    "placeholder": "Posez une question sur les données…",
+    "placeholder": "Posez une question sur vos données, ou dites quoi construire…",
     "placeholderOff": "L'assistant n'est pas disponible",
     "send": "Envoyer",
     "stop": "Arrêter",
@@ -1830,7 +1830,91 @@ export default {
     "noModelsTitle": "Aucun modèle activé",
     "noModelsAdmin": "Activez au moins un modèle dans le panneau Admin, section Modèles IA.",
     "noModelsUser": "Un administrateur doit activer au moins un modèle.",
-    "openAdmin": "Ouvrir le panneau Admin"
+    "openAdmin": "Ouvrir le panneau Admin",
+    "example4": "Chaque matin, envoie-moi les commandes encore ouvertes sept jours après leur saisie.",
+    "actBuilding": "Construit le flux",
+    "actPlanning": "Prépare le plan",
+    "tool": {
+      "search": "Recherche dans le catalogue : « {q} »",
+      "list_folders": "Liste des dossiers",
+      "list_connections": "Liste des connexions",
+      "list_environments": "Liste des environnements de scripting",
+      "get_flow": "Lecture du flux {name}",
+      "list_runs": "Coup d'œil aux dernières exécutions",
+      "get_run": "Lecture de l'exécution {id}",
+      "get_plan": "Lecture du plan {id}",
+      "cancel_plan": "Annulation du plan {id}",
+      "plan_schedule": "Planification {cron} ajoutée au plan",
+      "plan_schedule_off": "Arrêt d'une planification ajouté au plan",
+      "flow_draft_new": "Début du flux « {name} »",
+      "flow_draft_open": "Ouverture du flux {name} pour le modifier",
+      "flow_add_source": "Ajout de {name} comme source",
+      "flow_add_step": "Ajout d'une étape : {op}",
+      "flow_change_step": "Modification de l'étape {node}",
+      "flow_connect": "Liaison de {from} à {to}",
+      "flow_remove_node": "Retrait de {node}",
+      "flow_add_output": "Ajout d'un Output : {kind}",
+      "flow_preview": "Aperçu de {node}",
+      "flow_draft_show": "Coup d'œil au brouillon",
+      "plan_save_flow": "Enregistrement du flux ajouté au plan",
+      "plan_run_flow": "Exécution du flux ajoutée au plan",
+      "list_tables": "Liste des tables d'une base de données",
+      "list_columns": "Liste des colonnes d'une table",
+      "list_files": "Liste des fichiers d'un motif",
+      "plan_create_datasource": "Nouvelle source ajoutée au plan",
+      "plan_refresh_datasource": "Actualisation ajoutée au plan",
+      "get_sql_script": "Lecture d'un script SQL",
+      "run_sql_preview": "Essai du SQL",
+      "plan_sql_script": "Script SQL ajouté au plan",
+      "plan_run_sql_script": "Écriture de la source d'un script SQL ajoutée au plan",
+      "get_flow_group": "Lecture d'un groupe de flux",
+      "plan_flow_group": "Groupe de flux ajouté au plan",
+      "plan_run_flow_group": "Exécution d'un groupe de flux ajoutée au plan",
+      "get_notebook": "Lecture d'un notebook",
+      "plan_notebook": "Notebook ajouté au plan"
+    },
+    "step": {
+      "found": "{n} trouvés",
+      "node": "nœud {node}",
+      "plan": "plan {id}",
+      "attempts": "{n} essais",
+      "attempt": "Essai {n} échoué : {error}",
+      "attemptN": "Essai {n}",
+      "noReason": "aucune raison indiquée",
+      "failedAttempts": "Essais échoués",
+      "showDetails": "détails",
+      "hideDetails": "masquer les détails",
+      "noArguments": "Aucun argument.",
+      "ms": "{ms} ms",
+      "seconds": "{s} s",
+      "state": {
+        "running": "(en cours)",
+        "ok": "(terminé)",
+        "error": "(échoué)"
+      }
+    },
+    "ask": {
+      "title": "L'assistant demande",
+      "titleAnswered": "Vous avez répondu",
+      "titleSkipped": "Sans réponse : la conversation a continué",
+      "recommended": "Recommandé",
+      "other": "Autre",
+      "otherPlaceholder": "Votre réponse",
+      "otherLabel": "Votre propre réponse à : {question}",
+      "send": "Envoyer les réponses",
+      "answerAll": "Répondez à toutes les questions pour envoyer."
+    },
+    "plan": {
+      "title": "Plan {id}",
+      "lead": "Rien n'a encore changé : il ne s'applique que lorsque vous confirmez, vos autorisations étant alors vérifiées à nouveau.",
+      "openPage": "Ouvrir sa page",
+      "updatedBelow": "Modifié plus bas : la dernière version s'y trouve.",
+      "confirm": "Confirmer",
+      "confirmLabel": "Confirmer le plan {id} et l'appliquer",
+      "change": "Modifier",
+      "cancel": "Annuler",
+      "changeHint": "Dites à l'assistant ce qu'il faut modifier…"
+    }
   },
   "datasourceAbout": {
     "heading": "Description de la source de données",
@@ -2146,7 +2230,21 @@ export default {
       "save_flow_change": "Modifier le flux « {name} »",
       "run_flow": "Exécuter maintenant le flux « {name} »",
       "schedule_flow": "Planifier le flux « {name} »",
-      "schedule_flow_off": "Désactiver la planification de « {name} »"
+      "schedule_flow_off": "Désactiver la planification de « {name} »",
+      "create_datasource": "Créer la datasource « {name} »",
+      "refresh_datasource": "Actualiser maintenant la datasource « {name} »",
+      "schedule_datasource": "Planifier l'actualisation de « {name} »",
+      "schedule_datasource_off": "Désactiver l'actualisation planifiée de « {name} »",
+      "save_sql_script_new": "Créer le script SQL « {name} »",
+      "save_sql_script_change": "Modifier le script SQL « {name} »",
+      "run_sql_script": "Écrire maintenant la datasource de « {name} »",
+      "schedule_sql_script": "Planifier le script SQL « {name} »",
+      "save_flow_group_new": "Créer le groupe de flux « {name} »",
+      "save_flow_group_change": "Modifier le groupe de flux « {name} »",
+      "run_flow_group": "Exécuter maintenant le groupe de flux « {name} »",
+      "schedule_flow_group": "Planifier le groupe de flux « {name} »",
+      "save_notebook_new": "Créer le notebook « {name} »",
+      "save_notebook_change": "Modifier le notebook « {name} »"
     },
     "inFolder": "Dans {folder}",
     "engine": "moteur {engine}",
@@ -2170,7 +2268,10 @@ export default {
       "database": "La table {target} sur « {connection} », {mode}",
       "s3": "Le fichier {format} {target} sur S3, via « {connection} »",
       "sftp": "Le fichier {format} {target} sur SFTP, via « {connection} »",
-      "email": "Un e-mail à {target} avec le résultat en pièce jointe ({format}), objet « {subject} », via « {connection} »"
+      "email": "Un e-mail à {target} avec le résultat en pièce jointe ({format}), objet « {subject} », via « {connection} »",
+      "cc": "En copie à {cc}",
+      "postSql": "Puis, à chaque exécution, ce SQL sur la base de données :",
+      "body": "Le message :"
     },
     "modeAppend": "lignes ajoutées",
     "modeReplace": "lignes remplacées",
@@ -2188,7 +2289,25 @@ export default {
     "cancelling": "Annulation…",
     "confirmedToast": "Plan appliqué",
     "failedToast": "Le plan s'est arrêté sur une erreur",
-    "cancelledToast": "Plan annulé"
+    "cancelledToast": "Plan annulé",
+    "fromConnection": "Depuis « {connection} » ({type})",
+    "throughConnection": "Elle importe à nouveau via « {connection} ».",
+    "source": {
+      "table": "La table {text}",
+      "sql": "Une requête sur la base de données",
+      "files": "Les fichiers {text}",
+      "apiCall": "L'appel API, tel qu'il est fait à chaque actualisation"
+    },
+    "imports": "Ce qu'elle importe",
+    "firstImport": "Sa première importation démarre dès sa création.",
+    "runsOnDatabase": "S'exécute sur la base de données « {connection} »",
+    "runsOnCatalog": "S'exécute sur le catalogue, moteur {engine}",
+    "defaultEngine": "celui par défaut",
+    "writesDatasource": "Écrit la datasource « {name} » dans {folder}",
+    "sqlCode": "Le SQL",
+    "notebookSource": "Le code source du notebook",
+    "environment": "Environnement « {environment} »",
+    "notebookRights": "Son app lira les données avec vos droits, en tant qu'auteur de la version qu'elle exécute."
   },
   "panelSettings": {
     "title": "Réglages",
@@ -2510,8 +2629,8 @@ export default {
         "help": "La limite des appels au modèle et à ses outils pour répondre à un message."
       },
       "ai_max_flow_requests": {
-        "label": "Tours du modèle dans l'éditeur de flux",
-        "help": "Pareil, pour l'assistant de l'éditeur de flux, qui a besoin d'un tour pour chaque étape qu'il construit et vérifie."
+        "label": "Tours du modèle quand un assistant construit",
+        "help": "Pareil, pour les assistants qui construisent — celui de l'éditeur de flux et celui de la page Assistant pour qui peut faire des modifications —, qui ont besoin d'un tour pour chaque étape qu'ils construisent et vérifient."
       },
       "ai_max_history_messages": {
         "label": "Messages d'historique renvoyés",

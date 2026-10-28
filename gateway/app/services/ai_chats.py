@@ -25,6 +25,7 @@ from app.models.ai_chat import _now
 logger = logging.getLogger(__name__)
 
 MAX_TITLE = 80
+MAX_QUESTION = 8000
 # the default title written before 1.2.0: a chat that still has it gets the title
 # of its first real question. Now an empty title is the default, and the
 # interface writes «New conversation» in its own language.
@@ -113,7 +114,8 @@ def save_turn(
         select(func.coalesce(func.max(AiChatTurn.seq), -1)).where(AiChatTurn.chat_id == chat_id)
     ).one() + 1
     turn = AiChatTurn(
-        chat_id=chat_id, seq=next_, question=question[:2000],
+        # whole (the request caps it at 8000): the answers to a question card are read in it again
+        chat_id=chat_id, seq=next_, question=question[:MAX_QUESTION],
         messages=json.dumps(messages, ensure_ascii=False, default=str),
         model_id=model_id, input_tokens=input_tokens or 0, output_tokens=output_tokens or 0,
         requests=requests or 0,
@@ -190,8 +192,26 @@ def detail(session: Session, user: User, chat_id: int) -> dict[str, Any]:
         "id": chat.id, "title": chat.title, "model_id": chat.model_id, "engine": chat.engine,
         "created_at": chat.created_at, "updated_at": chat.updated_at,
         **summary(session, chat),
-        "messages": [_turn_for_ui(t) for t in turns],
+        "messages": _with_cards(session, user, [_turn_for_ui(t) for t in turns]),
     }
+
+
+def _with_cards(session: Session, user: User, items: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    """The Assistant page's cards, as they stand now: a card of questions with the answers
+    the next message gave (none when the person wrote something else), and a plan with its
+    state of now — applied, cancelled, expired — not of when it was proposed."""
+    from app.services.agent.chat import plan_cards
+    from app.services.agent.questions import answers_of
+
+    for i, item in enumerate(items):
+        if item.get("questions"):
+            after = items[i + 1]["question"] if i + 1 < len(items) else None
+            item["answers"] = answers_of(item["questions"], after) if after is not None else None
+    cards = plan_cards(session, user, {item["plan_id"] for item in items if item.get("plan_id")})
+    for item in items:
+        if item.get("plan_id") in cards:
+            item["plan"] = cards[item["plan_id"]]
+    return items
 
 
 def follow_flow(session: Session, chat: AiChat, flow_id: Optional[int]) -> None:
@@ -227,13 +247,22 @@ def latest_flow_chat(session: Session, user: User, flow_id: int) -> Optional[AiC
 
 def _turn_for_ui(turn: AiChatTurn) -> dict[str, Any]:
     """A turn as the chat shows it: the question, the answer's text, the steps taken, and
-    what it cost.
+    what it cost — and, on the Assistant page, the questions the agent asked (its card)
+    and the plan the turn proposed or changed.
 
     It is rebuilt from the saved messages instead of keeping a second copy of the text: a
-    single copy cannot diverge from the other."""
+    single copy cannot diverge from the other. A step says how it ended: a call the tool
+    refused (the model tried again) is a step that failed, with the reason."""
+    from app.services.agent import REGISTRY
+    from app.services.agent.questions import card_of
+
     text: list[str] = []
     steps: list[dict[str, Any]] = []
     by_id: dict[str, dict[str, Any]] = {}
+    # the calls that end the turn (ask_user): not steps, the card of questions
+    ending: dict[str, Any] = {}
+    questions: Optional[list[dict[str, Any]]] = None
+    plan_id: Optional[int] = None
     try:
         messages = json.loads(turn.messages)
     except ValueError:
@@ -244,21 +273,45 @@ def _turn_for_ui(turn: AiChatTurn) -> dict[str, Any]:
             if kind == "text" and part.get("content"):
                 text.append(str(part["content"]))
             elif kind == "tool-call":
+                name = part.get("tool_name")
+                known = REGISTRY.get(str(name))
+                if known is not None and known.ends_turn:
+                    ending[str(part.get("tool_call_id"))] = part.get("args")
+                    continue
                 step = {
                     "id": part.get("tool_call_id"),
-                    "name": part.get("tool_name"),
+                    "name": name,
                     "args": part.get("args"),
                 }
+                if known is not None:
+                    step["title"] = known.title
                 steps.append(step)
                 if step["id"]:
                     by_id[str(step["id"])] = step
+            elif kind == "retry-prompt":
+                step = by_id.get(str(part.get("tool_call_id")))
+                if step is not None:
+                    step["ok"] = False
+                    step["error"] = _retry_words(part.get("content"))
             elif kind == "tool-return":
+                call_id = str(part.get("tool_call_id"))
+                if call_id in ending:  # the turn ended with it: the questions shown
+                    card = card_of(ending[call_id])
+                    if card is not None:
+                        questions = card["questions"]
+                    continue
+                step = by_id.get(call_id)
+                if step is None:
+                    continue
+                step["ok"] = part.get("outcome", "success") == "success"
+                metadata = part.get("metadata")
+                if isinstance(metadata, dict) and isinstance(metadata.get("ms"), (int, float)):
+                    step["duration_ms"] = metadata["ms"]
+                content = part.get("content")
+                if not isinstance(content, dict):
+                    continue
                 # the TABLE that backs the answer: without it, a reopened conversation would show the
                 # steps and not the evidence
-                step = by_id.get(str(part.get("tool_call_id")))
-                content = part.get("content")
-                if step is None or not isinstance(content, dict):
-                    continue
                 if isinstance(content.get("rows"), list) and "row_count" in content:
                     step["table"] = {
                         k: content.get(k)
@@ -268,7 +321,14 @@ def _turn_for_ui(turn: AiChatTurn) -> dict[str, Any]:
                     step["chart"] = content["chart"]
                 if content.get("node"):  # the flow editor's tools: the node made or changed
                     step["node"] = str(content["node"])
-    return {
+                if content.get("error"):
+                    step["ok"], step["error"] = False, str(content["error"])[:500]
+                if isinstance(content.get("name"), str) and content["name"]:
+                    step["subject"] = content["name"][:120]
+                known = REGISTRY.get(str(step.get("name")))
+                if isinstance(content.get("plan_id"), int) and known is not None and known.level == "write":
+                    plan_id = step["plan_id"] = content["plan_id"]
+    out = {
         "seq": turn.seq,
         "question": turn.question,
         # each text part is a paragraph of its own: the model writes some before a
@@ -284,12 +344,28 @@ def _turn_for_ui(turn: AiChatTurn) -> dict[str, Any]:
         },
         "created_at": turn.created_at,
     }
+    if questions:
+        out["questions"] = questions
+    if plan_id is not None:
+        out["plan_id"] = plan_id
+    return out
+
+
+def _retry_words(content: Any) -> str:
+    """Why a call was refused: the tool's words, or the arguments' errors."""
+    if isinstance(content, list):
+        content = "; ".join(str(e.get("msg", e)) if isinstance(e, dict) else str(e) for e in content[:6])
+    return str(content or "")[:500]
 
 
 def remove(session: Session, user: User, chat_id: int) -> None:
     from sqlalchemy import delete as sa_delete
 
+    from app.services.agent.plans import forget_chat
+
     chat = _chat_of(session, user, chat_id)
+    # its plans still waiting have no card any more: they are cancelled, its drafts go
+    forget_chat(session, user.id, chat.id)
     session.exec(sa_delete(AiChatTurn).where(AiChatTurn.chat_id == chat.id))
     session.delete(chat)
     session.commit()

@@ -24,7 +24,7 @@ audit it.
 
 | Use | Where | Sends to the model | Never sends |
 |---|---|---|---|
-| **Data assistant** | **Assistant** page ([Ask your data](../capabilities/ask-your-data.md)) | the question and the conversation; names, folders, row counts and descriptions of the datasources the person can read; columns, types and field descriptions; 5 sample rows of each datasource it describes; the rows its queries return, up to `AI__MAX_RESULT_ROWS` (200), text cut at 300 characters | datasources the person cannot read; storage paths and credentials; connections |
+| **Data assistant** | **Assistant** page ([Ask your data](../capabilities/ask-your-data.md)) | the question and the conversation; names, folders, row counts and descriptions of the datasources the person can read; columns, types and field descriptions; 5 sample rows of each datasource it describes; the rows its queries return, up to `AI__MAX_RESULT_ROWS` (200), text cut at 300 characters; when it builds, what the flow assistant gets (the first rows of every step) and the names, types and folders of the connections the person may use | datasources the person cannot read; storage paths and credentials; a connection's address, user or secret |
 | **Flow assistant** | flow editor, right panel, **Assistant** tab | the request; the flow on the canvas (its nodes and their settings) and the selected node; the same catalogue tools as the data assistant (sample rows included); the first 5 rows of every step it adds or changes, and up to 30 rows when it previews a node | data the person cannot read; the flow's saved versions |
 | **Script assistant** | Script node and saved script editor, **Assistant** (Kubernetes only) | the request; the code; the environment's language, version and packages; the **names** of the variables the script finds; names and types of its inputs' columns; after a failed run, **only the error of its log** (the Python traceback, the R error) | any row of data; the values of variables; what the script printed |
 | **Conversation titles** | data assistant | the first question of a conversation (up to 1,000 characters), once | anything else |
@@ -46,7 +46,11 @@ the names and types of the columns and the error of a failed run: never a row of
 within the caps above. Pick the provider accordingly, and keep personal data out of the
 datasources whose readers use the assistant.
 
-**What the assistants can change.** The data assistant changes nothing. The flow
+**What the assistants can change.** The assistant of the Assistant page changes nothing
+by itself: what it builds — flows, their runs and schedules, and the other objects its
+tools offer — becomes a plan that the person reads in a card under the answer and applies
+with its «Confirm» button (or on the plan's page); the assistant has no way to confirm it,
+and the person's permissions are checked again when it is applied. The flow
 assistant changes only the canvas in the browser: what it built comes back as one Undo
 step, and it never saves, runs or schedules the flow. The script assistant proposes
 whole files that the person applies or discards; it never saves or runs the script.
@@ -55,7 +59,7 @@ whole files that the person applies or discards; it never saves or runs the scri
 
 | Use | Who |
 |---|---|
-| Data assistant | anyone signed in; it reads what the person can read (VIEW), checked at every call. Observers can ask, but their conversations are not saved |
+| Data assistant | anyone signed in; it reads what the person can read (VIEW) and builds only where they may (EDIT, RUN, CONNECT), checked at every call and again when a plan is applied. Observers can ask, reading only, but their conversations are not saved |
 | Flow assistant | EDIT on the flow's folder (any signed-in person on a flow not saved yet); not observers |
 | Script assistant | the use of the script's environment; not observers |
 | dbt export with AI | whoever may export the flow ([dbt export](../dbt-export.md)) |
@@ -108,7 +112,7 @@ provider's invoice. A dash means the model could not be priced, which is not zer
 | Variable | Default | Caps |
 |---|---|---|
 | `AI__MAX_REQUESTS` | 12 | model round-trips per question of the data assistant |
-| `AI__MAX_FLOW_REQUESTS` | 30 | the same for the flow assistant |
+| `AI__MAX_FLOW_REQUESTS` | 30 | the same for the assistants that build: the flow assistant, and the Assistant page for whoever may make changes |
 | `AI__MAX_COST_PER_TURN_USD` | 0.5 | dollars per question |
 | `AI__MAX_INPUT_TOKENS_PER_TURN` | 400000 | input tokens per question |
 | `AI__MAX_COST_PER_DAY_USD` | 0 (none) | dollars per person per day |

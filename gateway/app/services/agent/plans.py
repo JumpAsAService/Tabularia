@@ -9,6 +9,9 @@ Applying it — the chat's «Confirm» button, `POST /agent/plans/{id}/confirm`,
 - only the plan's owner, only while pending and not expired (30 minutes from its last
   change); a plan is claimed with a conditional UPDATE (pending → applying), so a second
   click or another replica never applies it again;
+- as the person saw it: the page and the chat's card send back the plan's `revision`,
+  and a plan changed since (the agent goes on adding to it) is not applied; an action is
+  added with a conditional UPDATE too, so it never lands on a plan already claimed;
 - each action is checked AGAIN and applied in order through the routes the interface
   uses, so every rule holds (permissions, schedules' authority, allowed domains, audit,
   with `via` and the plan's id); the first failure stops the rest;
@@ -33,13 +36,17 @@ from sqlmodel import Session, select
 from app.core.config import get_settings
 from app.models import AgentPlan
 from app.services import audit
-from app.services.agent.common import absolute, now, plan_link
+from app.services.agent.common import absolute, fingerprint, now, plan_link
 from app.services.agent.registry import ToolContext, ToolError, tool
 
 logger = logging.getLogger(__name__)
 
 PLAN_TTL = timedelta(minutes=30)
 MAX_ACTIONS = 20
+# a plan another call changed between reading and writing it: read again, this many times
+ADD_ATTEMPTS = 3
+# the lines of a difference a tool returns to the model (the plan's page shows them all)
+MAX_CHANGES_SHOWN = 200
 # a plan left `applying` by a process that stopped half way: closed as failed after this
 APPLYING_STUCK_AFTER = timedelta(hours=1)
 
@@ -79,8 +86,12 @@ def own_plan(session: Session, ctx: ToolContext, plan_id: int) -> AgentPlan:
 
 
 def actions_of(plan: AgentPlan) -> list[dict]:
+    return _parsed(plan.actions)
+
+
+def _parsed(actions: Optional[str]) -> list[dict]:
     try:
-        out = json.loads(plan.actions or "[]")
+        out = json.loads(actions or "[]")
     except ValueError:
         return []
     return out if isinstance(out, list) else []
@@ -93,6 +104,11 @@ def results_of(plan: AgentPlan) -> Optional[list[dict]]:
         return json.loads(plan.result)
     except ValueError:
         return None
+
+
+def revision(plan: AgentPlan) -> str:
+    """The plan's actions as they are now, in a short fingerprint: what the person saw."""
+    return fingerprint(plan.actions)[:16]
 
 
 def _summary(actions: list[dict]) -> str:
@@ -123,8 +139,10 @@ def plan_view(ctx: ToolContext, plan: AgentPlan) -> dict:
     if plan.status == "pending":
         out["expires_at"] = plan.expires_at.isoformat() + "Z"
     for a, view in zip(actions, out["actions"]):
-        if a.get("diff_lines"):
-            view["changes"] = a["diff_lines"]
+        lines = a.get("diff_lines")
+        if lines:
+            view["changes"] = lines if len(lines) <= MAX_CHANGES_SHOWN else \
+                lines[:MAX_CHANGES_SHOWN] + [f"… {len(lines) - MAX_CHANGES_SHOWN} more lines, on the plan's page"]
     results = results_of(plan)
     if results is not None:
         out["result"] = [
@@ -148,29 +166,44 @@ def _current_plan(session: Session, ctx: ToolContext) -> Optional[AgentPlan]:
 def add_action(ctx: ToolContext, action: dict, key: str) -> dict:
     """Adds `action` ({kind, words, …}) to the caller's pending plan (a new one when there
     is none); an action with the same `key` (the same object) is replaced in its place.
-    Each change gives the person another 30 minutes to look at it."""
+    Each change gives the person another 30 minutes to look at it.
+
+    The write is conditional — still pending, its actions still those read — so it never
+    lands on a plan someone claimed meanwhile (it would never run, while the agent says it
+    is in the plan), nor overwrites an action another call added: it reads again instead."""
     if action.get("kind") not in ACTIONS:
         raise RuntimeError(f"unknown action kind {action.get('kind')}")
     action = {**action, "key": key}
-    with ctx.session_factory() as session:
-        plan = _current_plan(session, ctx)
-        if plan is None:
-            plan = AgentPlan(user_id=ctx.user.id, origin=ctx.origin, chat_id=ctx.chat_id, token_name=ctx.token_name)
-        actions = actions_of(plan)
-        at = next((i for i, a in enumerate(actions) if a.get("key") == key), None)
-        if at is not None:
-            actions[at] = action
-        elif len(actions) >= MAX_ACTIONS:
-            raise ToolError(f"A plan holds at most {MAX_ACTIONS} actions: have this one confirmed first.")
-        else:
-            actions.append(action)
-        plan.actions = json.dumps(actions, ensure_ascii=False, default=str)
-        plan.summary = _summary(actions)
-        plan.expires_at = now() + PLAN_TTL
-        session.add(plan)
-        session.commit()
-        session.refresh(plan)
-        return plan_view(ctx, plan)
+    for _ in range(ADD_ATTEMPTS):
+        with ctx.session_factory() as session:
+            plan = _current_plan(session, ctx)
+            actions = actions_of(plan) if plan is not None else []
+            at = next((i for i, a in enumerate(actions) if a.get("key") == key), None)
+            if at is not None:
+                actions[at] = action
+            elif len(actions) >= MAX_ACTIONS:
+                raise ToolError(f"A plan holds at most {MAX_ACTIONS} actions: have this one confirmed first.")
+            else:
+                actions.append(action)
+            values = {"actions": json.dumps(actions, ensure_ascii=False, default=str), "summary": _summary(actions),
+                      "expires_at": now() + PLAN_TTL}
+            if plan is None:
+                plan = AgentPlan(user_id=ctx.user.id, origin=ctx.origin, chat_id=ctx.chat_id, token_name=ctx.token_name,
+                                 **values)
+                session.add(plan)
+                session.commit()
+                session.refresh(plan)
+                return plan_view(ctx, plan)
+            plan_id = plan.id
+            written = session.exec(
+                update(AgentPlan)
+                .where(AgentPlan.id == plan_id, AgentPlan.status == "pending", AgentPlan.actions == plan.actions)
+                .values(**values)
+            ).rowcount
+            session.commit()
+            if written == 1:
+                return plan_view(ctx, session.get(AgentPlan, plan_id))
+    raise ToolError("The plan is being changed or applied right now: call the tool again.")
 
 
 def planned(ctx: ToolContext, kind: str, **match: Any) -> Optional[dict]:
@@ -190,25 +223,32 @@ def _words_of(e: Exception) -> str:
     return str(e) or type(e).__name__
 
 
-async def apply_plan(ctx: ToolContext, plan_id: int, only_origin: Optional[str] = None) -> dict:
+async def apply_plan(ctx: ToolContext, plan_id: int, only_origin: Optional[str] = None,
+                     seen: Optional[str] = None) -> dict:
     """Applies the plan, once, for its owner. Returns the plan's view with the outcome
     of each action. `only_origin`: confirm_plan applies only the plans made over MCP (a
-    chat's plan waits for the person's click)."""
+    chat's plan waits for the person's click). `seen`: the plan's `revision` the person
+    looked at (its page, the chat's card): a plan changed since is not applied."""
     with ctx.session_factory() as session:
         plan = own_plan(session, ctx, plan_id)
         if only_origin and plan.origin != only_origin:
             raise ToolError(f"Plan {plan_id} was made in Tabularia's chat: the user confirms it there.")
         if plan.status != "pending":
             raise ToolError(f"Plan {plan_id} is {plan.status}: it cannot be applied. Make a new plan if needed.")
+        if seen is not None and seen != revision(plan):
+            raise ToolError(f"Plan {plan_id} changed after it was shown: look at it again before confirming it.")
+        # the actions read here are the ones applied: a plan changed in between is not claimed
+        read = plan.actions
         claimed = session.exec(
             update(AgentPlan)
-            .where(AgentPlan.id == plan_id, AgentPlan.status == "pending", AgentPlan.expires_at > now())
+            .where(AgentPlan.id == plan_id, AgentPlan.status == "pending", AgentPlan.expires_at > now(),
+                   AgentPlan.actions == read)
             .values(status="applying")
         ).rowcount
         session.commit()
         if claimed != 1:
-            raise ToolError(f"Plan {plan_id} is being applied or no longer pending.")
-        actions = actions_of(plan)
+            raise ToolError(f"Plan {plan_id} is being applied, changed meanwhile or no longer pending: look at it again.")
+        actions = _parsed(read)
         origin, token_name = plan.origin, plan.token_name
 
     state = getattr(ctx.request, "state", None) if ctx.request is not None else None
@@ -277,6 +317,23 @@ def cancel_plan_of(ctx: ToolContext, plan_id: int) -> dict:
         return plan_view(ctx, plan)
 
 
+# ── a conversation that goes ──────────────────────────────────────────────────
+def forget_chat(session: Session, user_id: int, chat_id: int) -> int:
+    """A conversation is deleted: its plans still pending are cancelled — nobody can see
+    them in a card any more, and they must not stay confirmable from their page — and its
+    drafts go. In the caller's transaction (without commit). Returns the plans cancelled."""
+    from sqlalchemy import delete
+
+    from app.models import AgentDraft
+
+    n = session.exec(update(AgentPlan).where(AgentPlan.user_id == user_id, AgentPlan.origin == "chat",
+                                             AgentPlan.chat_id == chat_id, AgentPlan.status == "pending")
+                     .values(status="cancelled")).rowcount or 0
+    session.exec(delete(AgentDraft).where(AgentDraft.user_id == user_id, AgentDraft.origin == "chat",
+                                          AgentDraft.chat_id == chat_id))
+    return n
+
+
 # ── housekeeping ──────────────────────────────────────────────────────────────
 def expire_and_trim(session: Session, at=None, retention_days: int = 0) -> int:
     """Pending plans past their expiry become expired; plans left applying by a process
@@ -326,8 +383,8 @@ async def confirm_plan(ctx: ToolContext, a: PlanIdArgs) -> dict:
 
 
 # ── schedules: one tool, a planner per kind of object ───────────────────────
-# kind → (ctx, the tool's arguments) → the plan's view. The flows' is in flow_tools.py;
-# datasources, SQL scripts and flow groups add theirs.
+# kind → (ctx, the tool's arguments) → the plan's view. The flows' is in flow_tools.py,
+# the others in datasource_tools.py, sql_tools.py and group_tools.py.
 SCHEDULERS: dict[str, Callable[[ToolContext, Any], Awaitable[dict]]] = {}
 
 
@@ -340,9 +397,12 @@ def scheduler(kind: str):
 
 
 class PlanScheduleArgs(BaseModel):
-    kind: str = Field("flow", description="What to schedule: flow.")
+    kind: str = Field("flow", description="What to schedule: flow, datasource (its refresh), sql_script (the write of "
+                                          "its datasource) or flow_group.")
     id: Optional[int] = Field(None, description="The saved object's id.")
     draft_id: Optional[int] = Field(None, description="flow: a draft whose save is in the plan already (plan_save_flow).")
+    planned_action: Optional[int] = Field(None, ge=1, description="datasource, sql_script, flow_group: an object this plan "
+                                                                  "creates, which has no id yet — the n of the action that creates it.")
     cron: Optional[str] = Field(None, max_length=100, description="5-field cron in the installation's time zone, e.g. '0 7 * * 1-5' (07:00 on weekdays); null or empty turns the schedule off.")
     notify_emails: Optional[str] = Field(None, max_length=2000, description="flow: addresses told when a scheduled run fails, comma-separated (with notify_connection_id).")
     notify_connection_id: Optional[int] = Field(None, description="flow: the SMTP connection that sends the failure notice.")

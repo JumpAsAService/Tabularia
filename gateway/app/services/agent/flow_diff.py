@@ -28,6 +28,26 @@ def _edges(draft: ai_flow_agent.FlowDraft) -> set[tuple[str, str, str]]:
     return {(str(e.get("source")), str(e.get("target")), str(e.get("targetHandle") or "left")) for e in draft.edges}
 
 
+# what an Output writes, where and to whom, by kind: the settings a line shows (and a change of
+# which shows as a change of the line)
+_OUTPUT_FIELDS = {
+    "database": ("connectionId", "table", "mode", "postSql"),
+    "s3": ("connectionId", "s3Bucket", "s3Key", "s3Format", "partitionBy"),
+    "sftp": ("connectionId", "sftpFolder", "sftpFileName", "sftpFormat"),
+    "email": ("connectionId", "emailTo", "emailCc", "emailSubject", "attachmentName", "attachmentFormat"),
+}
+
+
+def node_line(draft: ai_flow_agent.FlowDraft, node: dict) -> str:
+    """A node of `draft` in a line; an Output with where it writes and to whom."""
+    summary = ai_flow_agent._summary(draft, node)
+    if summary.get("kind") == "output":
+        d = node.get("data") or {}
+        fields = _OUTPUT_FIELDS.get(str(d.get("destType") or "datasource"), ())
+        summary["settings"] = {k: d[k] for k in fields if d.get(k) not in (None, "", [])}
+    return node_words(summary)
+
+
 def node_words(summary: dict) -> str:
     """A node in a line: «op-3: filter {"column": …}»."""
     kind = summary.get("kind")
@@ -39,6 +59,8 @@ def node_words(summary: dict) -> str:
         writes = summary.get("writes") or {}
         text = ("output to datasource «" + str(writes.get("datasource")) + "»") if "datasource" in writes \
             else f"output to {writes.get('type')}"
+        if summary.get("settings"):
+            text += " " + json.dumps(summary["settings"], ensure_ascii=False, default=str)
     elif kind == "note":
         text = f"note «{summary.get('text', '')[:60]}»"
     else:
@@ -53,11 +75,10 @@ def diff(old_definition: Any, new_definition: Any) -> dict:
     old, new = _parse(old_definition), _parse(new_definition)
     old_nodes = {n["id"]: n for n in old.nodes}
     new_nodes = {n["id"]: n for n in new.nodes}
-    added = [node_words(ai_flow_agent._summary(new, n)) for nid, n in new_nodes.items() if nid not in old_nodes]
-    removed = [node_words(ai_flow_agent._summary(old, n)) for nid, n in old_nodes.items() if nid not in new_nodes]
+    added = [node_line(new, n) for nid, n in new_nodes.items() if nid not in old_nodes]
+    removed = [node_line(old, n) for nid, n in old_nodes.items() if nid not in new_nodes]
     changed = [
-        {"node": nid, "before": node_words(ai_flow_agent._summary(old, old_nodes[nid])),
-         "after": node_words(ai_flow_agent._summary(new, n))}
+        {"node": nid, "before": node_line(old, old_nodes[nid]), "after": node_line(new, n)}
         for nid, n in new_nodes.items() if nid in old_nodes and _essence(n) != _essence(old_nodes[nid])
     ]
     old_edges, new_edges = _edges(old), _edges(new)

@@ -430,8 +430,9 @@ class AiSettings(BaseModel):
     max_result_rows: int = Field(default=200, ge=1, le=2000)
     # the model's rounds per message: the cap on the loop of tool calls
     max_requests: int = Field(default=12, ge=1, le=50)
-    # the same for the flow editor's assistant, whose turns take a model round-trip per
-    # step it builds and checks (env: AI__MAX_FLOW_REQUESTS)
+    # the same for the assistants that build — the flow editor's, and the Assistant page's
+    # for a person who may make changes — whose turns take a model round-trip per step
+    # they build and check (env: AI__MAX_FLOW_REQUESTS)
     max_flow_requests: int = Field(default=30, ge=1, le=80)
     # the history messages the client may send back at every turn
     max_history_messages: int = Field(default=60, ge=0, le=400)

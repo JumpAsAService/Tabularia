@@ -374,8 +374,8 @@ async def plan_save_flow(ctx: ToolContext, a: PlanSaveArgs) -> dict:
     }
     if saved_definition is None:
         to_check = None
-        action["node_lines"] = [flow_diff.node_words(ai_flow_agent._summary(ai_flow_agent.FlowDraft(definition), n))
-                                for n in nodes]
+        whole = ai_flow_agent.FlowDraft(definition)
+        action["node_lines"] = [flow_diff.node_line(whole, n) for n in nodes]
         words = f"Create the flow «{snap['name']}» in {folder or 'its folder'} (engine {snap['engine']}), {len(nodes)} nodes"
     else:
         changes = flow_diff.diff(saved_definition, definition)

@@ -171,8 +171,8 @@ export default {
     "lead": "Il testo che ogni agente AI riceve come istruzioni di sistema. Puoi riscriverlo o tornare a quello predefinito; il nuovo testo vale dalla richiesta successiva. Sotto, il contesto che Tabularia aggiunge sempre: la data, il motore, i file dello script e, per ultima, la lingua dell'interfaccia di chi chiede.",
     "agents": {
       "assistant": {
-        "name": "Assistente dati",
-        "purpose": "La chat della pagina Assistente: trova le datasource e le interroga"
+        "name": "Assistente",
+        "purpose": "La chat della pagina Assistente: trova e interroga i dati, e costruisce flussi e altro con piani che l'utente conferma"
       },
       "flow": {
         "name": "Assistente dei flussi",
@@ -1812,12 +1812,12 @@ export default {
     "railEmpty": "Non hai ancora accesso a nessuna datasource: chiedi l'accesso a una cartella.",
     "dsRows": "{n} righe",
     "dsDescribed": "{n} campi descritti su {total}: le descrizioni aiutano l'assistente a scrivere la query giusta",
-    "emptyTitle": "Chiedi ai tuoi dati",
-    "emptyBody": "Fai una domanda in linguaggio naturale. L'assistente cerca la datasource, legge i campi e le loro descrizioni, esegue una query e ti mostra la tabella da cui vengono i numeri.",
+    "emptyTitle": "Chiedi ai tuoi dati, o costruisci con loro",
+    "emptyBody": "Fai una domanda in linguaggio naturale: l'assistente cerca la datasource, legge i campi e le loro descrizioni, esegue una query e ti mostra la tabella da cui vengono i numeri. Costruisce anche flussi, li esegue e li pianifica: chiede ciò di cui non è sicuro e non cambia nulla finché non confermi il suo piano.",
     "example1": "Quali datasource posso usare e cosa contengono?",
     "example2": "Quali sono i 5 valori più frequenti nella colonna più rilevante?",
     "example3": "Riassumi l'andamento per anno con totali e variazioni.",
-    "placeholder": "Scrivi una domanda sui dati…",
+    "placeholder": "Chiedi dei tuoi dati, o cosa costruire…",
     "placeholderOff": "L'assistente non è disponibile",
     "send": "Invia",
     "stop": "Interrompi",
@@ -1837,7 +1837,91 @@ export default {
     "noModelsTitle": "Nessun modello abilitato",
     "noModelsAdmin": "Abilita almeno un modello nel pannello Admin, sezione Modelli AI.",
     "noModelsUser": "Un amministratore deve abilitare almeno un modello.",
-    "openAdmin": "Apri il pannello Admin"
+    "openAdmin": "Apri il pannello Admin",
+    "example4": "Ogni mattina mandami gli ordini ancora aperti sette giorni dopo l'inserimento.",
+    "actBuilding": "Costruisce il flusso",
+    "actPlanning": "Prepara il piano",
+    "tool": {
+      "search": "Cerco nel catalogo: «{q}»",
+      "list_folders": "Elenco le cartelle",
+      "list_connections": "Elenco le connessioni",
+      "list_environments": "Elenco gli ambienti di scripting",
+      "get_flow": "Leggo il flusso {name}",
+      "list_runs": "Guardo le ultime esecuzioni",
+      "get_run": "Leggo l'esecuzione {id}",
+      "get_plan": "Leggo il piano {id}",
+      "cancel_plan": "Annullo il piano {id}",
+      "plan_schedule": "Metto nel piano la pianificazione {cron}",
+      "plan_schedule_off": "Metto nel piano lo spegnimento di una pianificazione",
+      "flow_draft_new": "Inizio il flusso «{name}»",
+      "flow_draft_open": "Apro il flusso {name} per modificarlo",
+      "flow_add_source": "Aggiungo {name} come sorgente",
+      "flow_add_step": "Aggiungo un passo: {op}",
+      "flow_change_step": "Modifico il passo {node}",
+      "flow_connect": "Collego {from} a {to}",
+      "flow_remove_node": "Tolgo {node}",
+      "flow_add_output": "Aggiungo un Output: {kind}",
+      "flow_preview": "Guardo l'anteprima di {node}",
+      "flow_draft_show": "Guardo la bozza",
+      "plan_save_flow": "Metto nel piano il salvataggio del flusso",
+      "plan_run_flow": "Metto nel piano un'esecuzione del flusso",
+      "list_tables": "Elenco le tabelle di un database",
+      "list_columns": "Elenco le colonne di una tabella",
+      "list_files": "Elenco i file di un percorso",
+      "plan_create_datasource": "Metto nel piano una nuova datasource",
+      "plan_refresh_datasource": "Metto nel piano un aggiornamento",
+      "get_sql_script": "Leggo uno script SQL",
+      "run_sql_preview": "Provo l'SQL",
+      "plan_sql_script": "Metto nel piano uno script SQL",
+      "plan_run_sql_script": "Metto nel piano la scrittura della datasource di uno script SQL",
+      "get_flow_group": "Leggo un gruppo di flussi",
+      "plan_flow_group": "Metto nel piano un gruppo di flussi",
+      "plan_run_flow_group": "Metto nel piano un'esecuzione di un gruppo di flussi",
+      "get_notebook": "Leggo un notebook",
+      "plan_notebook": "Metto nel piano un notebook"
+    },
+    "step": {
+      "found": "{n} trovati",
+      "node": "nodo {node}",
+      "plan": "piano {id}",
+      "attempts": "{n} tentativi",
+      "attempt": "Tentativo {n} fallito: {error}",
+      "attemptN": "Tentativo {n}",
+      "noReason": "nessun motivo indicato",
+      "failedAttempts": "Tentativi falliti",
+      "showDetails": "dettagli",
+      "hideDetails": "nascondi dettagli",
+      "noArguments": "Nessun argomento.",
+      "ms": "{ms} ms",
+      "seconds": "{s} s",
+      "state": {
+        "running": "(in corso)",
+        "ok": "(fatto)",
+        "error": "(fallito)"
+      }
+    },
+    "ask": {
+      "title": "L'assistente chiede",
+      "titleAnswered": "Hai risposto",
+      "titleSkipped": "Senza risposta: la conversazione è andata avanti",
+      "recommended": "Consigliata",
+      "other": "Altro",
+      "otherPlaceholder": "La tua risposta",
+      "otherLabel": "La tua risposta a: {question}",
+      "send": "Invia le risposte",
+      "answerAll": "Rispondi a tutte le domande per inviare."
+    },
+    "plan": {
+      "title": "Piano {id}",
+      "lead": "Non è ancora cambiato nulla: si applica solo quando confermi, ricontrollando i tuoi permessi.",
+      "openPage": "Apri la sua pagina",
+      "updatedBelow": "Modificato più sotto: lì c'è l'ultima versione.",
+      "confirm": "Conferma",
+      "confirmLabel": "Conferma il piano {id} e applicalo",
+      "change": "Modifica",
+      "cancel": "Annulla",
+      "changeHint": "Di' all'assistente cosa cambiare…"
+    }
   },
   "datasourceAbout": {
     "heading": "Descrizione della datasource",
@@ -2153,7 +2237,21 @@ export default {
       "save_flow_change": "Modificare il flusso «{name}»",
       "run_flow": "Eseguire subito il flusso «{name}»",
       "schedule_flow": "Pianificare il flusso «{name}»",
-      "schedule_flow_off": "Spegnere la pianificazione di «{name}»"
+      "schedule_flow_off": "Spegnere la pianificazione di «{name}»",
+      "create_datasource": "Creare la datasource «{name}»",
+      "refresh_datasource": "Aggiornare subito la datasource «{name}»",
+      "schedule_datasource": "Pianificare l'aggiornamento di «{name}»",
+      "schedule_datasource_off": "Spegnere l'aggiornamento pianificato di «{name}»",
+      "save_sql_script_new": "Creare lo script SQL «{name}»",
+      "save_sql_script_change": "Modificare lo script SQL «{name}»",
+      "run_sql_script": "Scrivere subito la datasource di «{name}»",
+      "schedule_sql_script": "Pianificare lo script SQL «{name}»",
+      "save_flow_group_new": "Creare il gruppo di flussi «{name}»",
+      "save_flow_group_change": "Modificare il gruppo di flussi «{name}»",
+      "run_flow_group": "Eseguire subito il gruppo di flussi «{name}»",
+      "schedule_flow_group": "Pianificare il gruppo di flussi «{name}»",
+      "save_notebook_new": "Creare il notebook «{name}»",
+      "save_notebook_change": "Modificare il notebook «{name}»"
     },
     "inFolder": "In {folder}",
     "engine": "motore {engine}",
@@ -2177,7 +2275,10 @@ export default {
       "database": "La tabella {target} su «{connection}», {mode}",
       "s3": "Il file {format} {target} su S3, tramite «{connection}»",
       "sftp": "Il file {format} {target} su SFTP, tramite «{connection}»",
-      "email": "Un'email a {target} con il risultato allegato ({format}), oggetto «{subject}», tramite «{connection}»"
+      "email": "Un'email a {target} con il risultato allegato ({format}), oggetto «{subject}», tramite «{connection}»",
+      "cc": "In copia a {cc}",
+      "postSql": "Poi, a ogni esecuzione, questo SQL sul database:",
+      "body": "Il messaggio:"
     },
     "modeAppend": "righe aggiunte",
     "modeReplace": "righe sostituite",
@@ -2195,7 +2296,25 @@ export default {
     "cancelling": "Annullamento…",
     "confirmedToast": "Piano applicato",
     "failedToast": "Il piano si è fermato a un errore",
-    "cancelledToast": "Piano annullato"
+    "cancelledToast": "Piano annullato",
+    "fromConnection": "Da «{connection}» ({type})",
+    "throughConnection": "Importa di nuovo tramite «{connection}».",
+    "source": {
+      "table": "La tabella {text}",
+      "sql": "Una query sul database",
+      "files": "I file {text}",
+      "apiCall": "La chiamata API, come viene fatta a ogni aggiornamento"
+    },
+    "imports": "Cosa importa",
+    "firstImport": "La prima importazione parte appena è creata.",
+    "runsOnDatabase": "Gira sul database «{connection}»",
+    "runsOnCatalog": "Gira sul catalogo, motore {engine}",
+    "defaultEngine": "quello predefinito",
+    "writesDatasource": "Scrive la datasource «{name}» in {folder}",
+    "sqlCode": "Il SQL",
+    "notebookSource": "Il sorgente del notebook",
+    "environment": "Ambiente «{environment}»",
+    "notebookRights": "La sua app leggerà i dati con i tuoi permessi, come autore della versione che esegue."
   },
   "panelSettings": {
     "title": "Impostazioni",
@@ -2517,8 +2636,8 @@ export default {
         "help": "Il tetto alle chiamate al modello e ai suoi strumenti per rispondere a un messaggio."
       },
       "ai_max_flow_requests": {
-        "label": "Giri del modello nell'editor dei flussi",
-        "help": "Lo stesso, per l'assistente dell'editor dei flussi, che fa un giro per ogni passo che costruisce e controlla."
+        "label": "Giri del modello quando un assistente costruisce",
+        "help": "Lo stesso, per gli assistenti che costruiscono — quello dell'editor dei flussi e quello della pagina Assistente per chi può fare modifiche — che fanno un giro per ogni passo che costruiscono e controllano."
       },
       "ai_max_history_messages": {
         "label": "Messaggi di storia rimandati",

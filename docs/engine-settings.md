@@ -106,7 +106,7 @@ Container node) or greyed out (an engine that is not configured).
 | Model proposed first | `AI__DEFAULT_MODEL` | text | live |
 | Rows of an assistant's query | `AI__MAX_RESULT_ROWS` | 1 – 2,000 | live |
 | Model rounds per message | `AI__MAX_REQUESTS` | 1 – 50 | live |
-| Model rounds in the flow editor | `AI__MAX_FLOW_REQUESTS` | 1 – 80 | live |
+| Model rounds when an assistant builds | `AI__MAX_FLOW_REQUESTS` | 1 – 80 | live |
 | Messages of history sent back | `AI__MAX_HISTORY_MESSAGES` | 0 – 400 | live |
 | Most spent per answer | `AI__MAX_COST_PER_TURN_USD` | 0 USD – 100 USD | live |
 | Most spent per user per day | `AI__MAX_COST_PER_DAY_USD` | 0 USD – 10000 USD | live |

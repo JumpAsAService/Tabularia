@@ -61,7 +61,12 @@ Read (all tokens, the chat):
 `search(query, kinds?)`, `list_folders()`, `list_datasources(search?)`,
 `describe_datasource(id)`, `query_datasource(id, sql, …)` (the existing tool),
 `list_connections(kind?)` (name, type, folder — no secret ever), `list_environments()`,
-`get_flow(id)`, `get_sql_script(id)`, `get_flow_group(id)`, `get_notebook(id)`,
+`get_flow(id)`, `get_sql_script(id)`, `get_flow_group(id)`, `get_notebook(id)` (never
+someone's unsaved draft: only that there is one, and whose),
+`run_sql_preview(sql, engine | connection)` (a SQL script's run without saving, with its
+rules: the datasources the user reads, or CONNECT), `list_tables(connection)`,
+`list_columns(connection, table)`, `list_files(connection, …)` (what an existing
+connection offers, as the datasource dialogs show it),
 `list_runs(object?, status?)`, `get_run(id)`, `get_plan(id)`.
 
 Drafts of flows (no change to any saved object):
@@ -75,10 +80,14 @@ database, s3, sftp, email — with the existing checks: allowed domains, CONNECT
 Plan building (each adds an action and returns the plan so far):
 `plan_save_flow(draft)`, `plan_run_flow(flow_or_draft, mode)`,
 `plan_schedule(object, cron | null)` (flows, datasources, SQL scripts, flow groups),
-`plan_create_datasource(folder, connection, source)` (table, SQL, S3, SFTP, API),
+`plan_create_datasource(folder, connection, source)` (table, SQL, S3, SFTP, SharePoint, API),
 `plan_refresh_datasource(id)`, `plan_sql_script(folder | id, sql, engine | connection, output?)`,
 `plan_run_sql_script(id)`, `plan_flow_group(folder | id, name, steps)`, `plan_run_flow_group(id)`,
 `plan_notebook(folder | id, name, environment, source)`, `cancel_plan(id)`.
+An object the plan creates has no id yet: running or scheduling it names the action that
+creates it (`planned_action`, its number in the plan), as a flow's run names its draft.
+Planning a change of an object the plan changes already goes on from that change, in its
+place.
 
 Chat only: `ask_user(questions)` — ends the turn and shows the card.
 MCP only: `confirm_plan(plan_id)`.
@@ -91,6 +100,14 @@ expired; each action is validated again and applied **in order** through the sam
 functions and routes the interface uses (so every rule holds: permissions, schedules'
 authority, contracts, allowed domains, audit), stopping at the first failure; the result
 of each action is stored and returned with links. A plan applied is never applied twice.
+
+What the person confirms is what they saw (2026-10-28): the page and the chat's card send
+back the plan's `revision`, and a plan the agent changed since is refused until it is
+looked at again; an action is never added to a plan already being applied. The plan shows
+everything that will run or be sent — an Output's post-SQL, an email's copies and message,
+an API call's headers and body, a container's command, a script's or notebook's whole
+code. A plan made in the chat is confirmed by a person signed in, never with an API token.
+Deleting a conversation cancels its pending plans and drops its drafts.
 
 ## Pieces
 

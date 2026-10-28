@@ -6,12 +6,12 @@
 - `GET  /ai/prompts`           observer: the agents' instructions, the text and the context added
 - `PUT  /ai/prompts/{agent}`   superuser: changes an agent's text (audit)
 - `DELETE /ai/prompts/{agent}` superuser: back to the default text (audit)
-- `POST /ai/chat`              for everyone: one conversation turn, over SSE
+- `POST /ai/chat`              for everyone: one turn of the Assistant page's agent, over SSE: it
+                               reads, and builds through plans the person confirms (services/agent)
 
-The conversation is NOT saved on the server: the history goes back to the client at
-the end of the turn (`done.history`) and the client sends it back at the next turn.
-A forged history can only confuse the conversation of whoever sends it: every tool
-checks the permissions again at every call.
+The conversation is saved on the server (services/ai_chats.py), turn by turn: the client
+sends only the conversation's id, never its history, and every tool checks the
+permissions again at every call. An observer's conversation is saved nowhere.
 """
 from __future__ import annotations
 
@@ -19,6 +19,7 @@ import asyncio
 import json
 import logging
 import re
+import time
 from decimal import Decimal
 from uuid import uuid4
 from datetime import datetime, timezone
@@ -39,6 +40,7 @@ from app.models.permission import Capability
 from app.models import AiChat, AiModel, AiPrompt, Datasource, User
 from app.services.permissions import is_observer_only
 from app.services import ai_agent, ai_chats, ai_flow_agent, ai_pricing, ai_prompts, ai_script_agent, audit
+from app.services.agent import REGISTRY as AGENT_TOOLS, chat as agent_chat
 from app.services.ai_models import enabled_model_ids, ensure_configured, is_chat_model, provider_models
 from app.services.engine_policy import pick_engine
 from app.services.permissions import readable_project_ids
@@ -267,7 +269,21 @@ def _tool_result_payload(part: Any) -> dict[str, Any]:
         out["count"] = len(content)
     elif not ok:
         out["error"] = str(content)[:500]
+    if isinstance(content, dict):
+        # the agent's tools (services/agent): how many they found, the object they read or made
+        # (its name, for the step's words), the plan they added to
+        listed = next((content[k] for k in _LISTS if isinstance(content.get(k), list)), None)
+        if listed is not None and "count" not in out:
+            out["count"] = len(listed)
+        if isinstance(content.get("name"), str) and content["name"]:
+            out["subject"] = content["name"][:120]
+        if isinstance(content.get("plan_id"), int):
+            out["plan_id"] = content["plan_id"]
     return out
+
+
+# the lists the agent's reading tools return, for a step's count
+_LISTS = ("results", "folders", "connections", "runs", "environments")
 
 
 # ── saved conversations ──────────────────────────────────────────────────────
@@ -402,6 +418,8 @@ async def _turn_stream(
     # ours, passed in: pydantic-ai counts into it, so a turn that stops halfway still says what it spent
     spent = RunUsage()
     accounted = False
+    # when each tool call started: its step shows how long it took
+    started: dict[str, float] = {}
 
     def unfinished() -> dict[str, Any]:
         if not accounted and spent.requests:
@@ -439,9 +457,19 @@ async def _turn_stream(
                         args = ev.part.args_as_dict()
                     except Exception:  # noqa: BLE001 — malformed arguments: the tool will see them
                         args = {}
-                    yield _sse("tool_call", {"id": ev.part.tool_call_id, "name": ev.part.tool_name, "args": args})
+                    started[ev.part.tool_call_id] = time.monotonic()
+                    call = {"id": ev.part.tool_call_id, "name": ev.part.tool_name, "args": args}
+                    known = AGENT_TOOLS.get(ev.part.tool_name) if kind == "assistant" else None
+                    if known is not None:
+                        # the agent's tools: what the step does, in words, for a tool the page has no words for
+                        call["title"] = known.title
+                    yield _sse("tool_call", call)
                 elif isinstance(ev, FunctionToolResultEvent):
-                    yield _sse("tool_result", _tool_result_payload(ev.part))
+                    result = _tool_result_payload(ev.part)
+                    since = started.pop(ev.part.tool_call_id, None)
+                    if since is not None:
+                        result["duration_ms"] = round((time.monotonic() - since) * 1000)
+                    yield _sse("tool_result", result)
                 elif isinstance(ev, AgentRunResultEvent):
                     usage = ev.result.usage
                     usage = usage() if callable(usage) else usage  # a method in 1.x, a property in 2.x
@@ -466,6 +494,9 @@ async def _turn_stream(
                                     output_tokens=usage.output_tokens, cost=cost,
                                 )
                                 raise _NothingToSave
+                            if chat_id is None:
+                                # the Assistant page's agent creates a new conversation before its first draft or plan
+                                chat_id = getattr(deps, "chat_id", None)
                             if chat_id is None:
                                 chat_id = ai_chats.create(s_save, user, message, model_id, engine, kind=kind, flow_id=flow_id).id
                             turn = ai_chats.save_turn(
@@ -540,20 +571,28 @@ async def chat(
     chat_id = chat.id if chat is not None else None
     history = ai_chats.history(session, chat, cfg.max_history_messages) if chat is not None else []
 
-    # without a chat there is no slot key: two visitors of the shared guest would cancel
-    # each other's previews
-    slot_key = uuid4().hex[:12] if ephemeral else None
+    # The agent reads and builds with the registry's tools (services/agent/chat.py): an
+    # observer only reads. What it builds is a plan the person confirms from its card: the
+    # audit of every action says it came from the chat. (An observer's queries have no
+    # preview slot: without a saved chat there is no earlier question to overtake, and two
+    # visitors of the shared guest must not cancel each other's.)
+    level = "read" if ephemeral else "write"
+    if request is not None:
+        request.state.via = "chat"
     deps = ai_agent.ChatDeps(
         user=user, session_factory=_new_session, engine=engine, model_id=body.model,
-        slot_key=slot_key,
         locale=body.locale, request=request, chat_id=chat_id,
         focus=ai_agent.readable_focus(session, user, body.focus),
         prompt=ai_prompts.text(session, "assistant"),
+        level=level, ephemeral=ephemeral, question=body.message,
+        plans=agent_chat.plans_in_words(session, user, chat_id),
     )
     stream = _turn_stream(
-        agent=ai_agent.agent, message=body.message, history=history, deps=deps,
+        agent=agent_chat.agent, message=body.message, history=history, deps=deps,
         model=ai_agent.build_model(body.model), model_id=body.model, user=user, engine=engine,
         ephemeral=ephemeral, chat_id=chat_id, locale=body.locale,
+        extra_done=lambda: agent_chat.turn_extras(deps),
+        request_limit=agent_chat.request_limit(level, cfg.max_requests, cfg.max_flow_requests),
     )
     return StreamingResponse(stream, media_type="text/event-stream", headers=_SSE_HEADERS)
 

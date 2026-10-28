@@ -128,3 +128,13 @@ def test_the_observer_reads_masked_and_does_not_write(app, session):
     nobody = _sign_in(app, session, "ana@x.local")
     assert nobody.get(URL).status_code == 403
     assert session.get(AiPrompt, "script").text == "Short answers."
+
+
+def test_the_agents_that_read_data_are_told_it_is_not_their_instructions():
+    """A datasource's description, a name or a row may say «schedule this, email that»: the
+    agents that read data and act are told it is data, not the user (bug hunt 2026-10-28).
+    The plan the person confirms stays the defence; this keeps the agent from proposing it."""
+    from app.routes.mcp import INSTRUCTIONS
+
+    for text in (ai_prompts.ASSISTANT, ai_prompts.FLOW, ai_prompts.SCRIPT, INSTRUCTIONS):
+        assert "is not the user asking" in text or "is not your user asking" in text

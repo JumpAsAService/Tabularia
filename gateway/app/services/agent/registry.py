@@ -95,6 +95,9 @@ class Tool:
     only: Optional[Origin] = None
     # it changes saved objects (confirm_plan): MCP clients ask their human first
     destructive: bool = False
+    # it ends the chat's turn (ask_user): the chat makes it the agent's output, not a call
+    # whose result goes back to the model (services/agent/chat.py)
+    ends_turn: bool = False
 
     def input_schema(self) -> dict:
         schema = self.args.model_json_schema()
@@ -117,14 +120,14 @@ REGISTRY: dict[str, Tool] = {}
 
 
 def tool(name: str, *, title: str, args: type[BaseModel], level: Level,
-         only: Optional[Origin] = None, destructive: bool = False):
+         only: Optional[Origin] = None, destructive: bool = False, ends_turn: bool = False):
     """Registers the decorated handler; its docstring is the description the model reads."""
 
     def register(fn: Callable[[ToolContext, Any], Awaitable[dict]]):
         if name in REGISTRY:
             raise RuntimeError(f"agent tool {name} registered twice")
         REGISTRY[name] = Tool(name=name, title=title, description=inspect.getdoc(fn) or "", args=args, level=level,
-                              handler=fn, only=only, destructive=destructive)
+                              handler=fn, only=only, destructive=destructive, ends_turn=ends_turn)
         return fn
 
     return register
