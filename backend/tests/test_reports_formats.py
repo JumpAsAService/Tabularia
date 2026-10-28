@@ -94,6 +94,12 @@ def test_bad_patterns_are_named():
         f.check_pattern("hello")
     f.check_pattern("dd/MM/yyyy")
     f.check_pattern("€ #,##0.00")
+    # a spreadsheet's scaling by thousands printed «1,234,567.0,,»: refused, with the way
+    with pytest.raises(f.FormatError, match="divide"):
+        f.check_pattern("#,##0.0,,")
+    with pytest.raises(f.FormatError, match="divide"):
+        f.check_pattern('#,##0,"K"')
+    f.check_pattern('#,##0 "pcs, boxed"')  # a comma inside quoted text is text
     # a quote left open at the end of a date's format vanished without a word
     with pytest.raises(f.FormatError, match="quote is not closed"):
         f.check_pattern("dd MMM yyyy'")

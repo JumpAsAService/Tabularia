@@ -162,15 +162,28 @@ def test_an_administrator_can_and_the_next_sign_in_brings_a_new_one(session):
 
 
 def test_the_folder_outlives_the_account_as_an_ordinary_one(session):
+    """What the person made there belongs to the organisation: the folder stays, as an
+    ordinary one only the administrators see."""
+    from tests.conftest import make_datasource
+
     boss = _boss(session)
     leo, other = _create(session, boss, "leo@example.com"), _create(session, boss, "other@example.com")
     mine = _folder_of(session, leo).id
+    make_datasource(session, name="leo's sales", project_id=mine, key="datasets/leo.parquet")
     user_routes.delete_user(leo.id, session=session, current=boss)
     folder = session.get(Project, mine)
     assert folder is not None and folder.owner_id is None and folder.name == "leo"
     assert _listed(session, boss)[mine].personal_of is None
     assert mine not in _listed(session, other)
-    project_routes.delete_project(mine, user=boss, session=session)   # an ordinary, empty folder
+
+
+def test_an_empty_folder_goes_with_the_account(session):
+    """Nothing in it: an orphan folder named after someone gone was only clutter."""
+    boss = _boss(session)
+    leo = _create(session, boss, "leo@example.com")
+    mine = _folder_of(session, leo).id
+    user_routes.delete_user(leo.id, session=session, current=boss)
+    assert session.get(Project, mine) is None
 
 
 def test_a_deactivated_account_keeps_it(session):

@@ -370,9 +370,20 @@ def delete_user(
     if user_id == current.id:
         raise HTTPException(status_code=409, detail="You cannot delete your own account")
     email = _get_user(session, user_id).email
+    personal = personal_folders.personal_folder_id(session, user_id)
     remove_user(session, user_id)
     audit.record_audit(session, actor=current, action=audit.USER_DELETE, request=request,
                        target_type="user", target_id=user_id, target_label=email)
+    if personal is not None:
+        # an empty personal folder goes with the account (an orphan named after someone gone
+        # is only clutter); one holding anything stays, as the rest of their content does —
+        # the folders' own deletion decides, refusing a folder that is not empty
+        from app.routes.projects import delete_project
+
+        try:
+            delete_project(personal, user=current, session=session, request=request)
+        except HTTPException:
+            session.rollback()
 
 
 def remove_user(session: Session, user_id: int) -> None:

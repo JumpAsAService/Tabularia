@@ -177,6 +177,11 @@ def _section(text: str) -> _Section:
         if core is None:
             m = _NUMBER_CORE.search(part)
             if m:
+                if part[m.end():].startswith(","):
+                    # a spreadsheet's scaling (#,##0,, = millions) printed «1,234,567.0,,»
+                    raise FormatError("a comma after the digits (scaling by thousands) is not part of a format: "
+                                      "divide in the expression, e.g. [amount] / 1000000, and write the unit "
+                                      'in double quotes, e.g. #,##0.0 "M"')
                 core = m.group(0)
                 prefix.append(part[:m.start()])
                 suffix.append(part[m.end():])
