@@ -30,7 +30,7 @@ installation has reports, Docker Compose included.
 | Sending | from a flow group's [Pushmail](../pushmail.md#reports) cell, after the steps that refresh the data; a report has no schedule of its own |
 | From code | `GET /reports/{id}/render` with an API token ([API](../api.md#download-a-report)), `tabularia.report()` in a [marimo notebook](notebooks.md#reports) |
 | Rights | VIEW on the folder to open and download it, EDIT to design it; the data is read with the rights of whoever reads the report |
-| Limits | 10,000 rows per dataset and 250 pages per render by default ([`REPORTS__*`](../configuration.md#reports-1)) |
+| Limits | 1,000,000 rows per dataset and 200 pages per render by default ([`REPORTS__*`](../configuration.md#reports-1)) |
 
 ## The designer
 
@@ -61,7 +61,11 @@ A page has three bands:
 | **Body** | flows over the pages. Items whose heights overlap make a row and are placed side by side; a **table** takes its row alone, grows with its data and pushes down what is under it (an item dropped beside a table goes under it) |
 
 Every position and size is in millimetres, to a tenth. Items snap to the millimetre grid
-while you drag them; the edges and centres of the other items always guide.
+while you drag them; the edges and centres of the other items always guide. Held near an
+edge of the page's area, a dragged item scrolls it. Where items overlap, the one drawn
+last is on top: in the header and the footer the one added last, in the body the one
+lower on the page (then the one more to the right), in the designer as in the PDF: a
+rectangle meant as a background starts at or above the texts it frames.
 
 ### Elements
 
@@ -85,9 +89,12 @@ In **Data**, a field dragged onto a table becomes a new column, and anywhere els
 body a text that shows it; a click on a field adds it as a column to the selected table.
 A table reads one dataset: a field of another is refused.
 
-The keys: **Ctrl+S** saves, **Ctrl+Z** and **Ctrl+Shift+Z** undo and redo, the arrows
-move the selected item by 1 mm (5 mm with **Shift**), **Ctrl+D** duplicates it,
-**Ctrl+C** and **Ctrl+V** copy and paste, **Del** removes it.
+The keys: **Ctrl+S** saves, **Ctrl+Z** and **Ctrl+Shift+Z** undo and redo; on the page,
+the arrows move the selected item by 1 mm (5 mm with **Shift**), **Ctrl+D** duplicates
+it, **Ctrl+C** and **Ctrl+V** copy and paste, **Del** removes it. A copy can be pasted
+into another report, open in another tab too; if it read a dataset that report does not
+have, it reads its only dataset, or waits for one to be chosen, and says so. **Tab**
+goes through the bands' names and the items; **Enter** on a band's name selects it.
 
 ### Saving and the preview
 
@@ -95,11 +102,16 @@ move the selected item by 1 mm (5 mm with **Shift**), **Ctrl+D** duplicates it,
 every save: a field that does not exist, a function with the wrong arguments, a text
 added to a number. A save it refuses lists the problems in the bar; the first item is
 selected and the message sits under its field, with the character where the mistake
-is. The expression fields check what they can while you type, and say it at once.
+is. The expression fields check what they can while you type, and say it at once; after
+a pause the server checks the report as a save would (the types, where a field may be
+used, the formats) and says what it finds under the same fields. If someone else saved
+the report since you opened it, **Save** says so and asks before your version becomes
+the newest: theirs stays among the versions.
 
 **Preview** renders the report as it is on screen, saved or not, with the values of its
 parameters you choose there: the same renderer as the PDF, so what you see is what will
-print.
+print. A report with mistakes is not rendered: the preview lists them, and a click on one
+takes you to its field in **Design**.
 
 ![In the designer a table is dragged under the chart; the fields Month, ricavo, costo and margine are dragged into it one after the other; a group by categoria adds the group's row and its total; Preview renders the first page](../media/guide/reports/designer-table-group-preview.gif)
 
@@ -277,9 +289,16 @@ header repeated at the top of every page. Its properties:
 | **On screen** | **Sort by a column with a click on its header**, **Close and open the groups**: what the reader may do in the viewer |
 
 A group's total row reads «Total» and the group's label, across the columns before the
-first one that has a total. A group that goes on over the next page repeats its label
-there. **Keep the last rows with their total** never leaves a total alone at the top of a
-page.
+first one that has a total; when the first column has a total too, the label takes a row
+of its own above the values. A group whose value is missing is named «(blank)». A group
+that goes on over the next page repeats its label there. **Keep the last rows with their
+total** never leaves a total alone at the top of a page. A table with no rows says «No
+data», with no total of nothing.
+
+Columns whose widths add up to more than the table are narrowed to fit it, and a value
+wider than its column (a long number in a narrow column) would run into the next one:
+the preview and the viewer say both, naming the table and the columns, so the design can
+be fixed. So does an item that goes past the edge of the paper.
 
 **Conditional formatting** gives a column's cells a style when a condition about their
 row is true: `[MarginPct] < 0.3` in red and bold. A column may have several rules; when
@@ -318,12 +337,16 @@ in the email.
 
 The options: **One series per value of** (the first series repeated for each value of a
 field, up to 24), **Stacked**, **Values on the chart**, **Legend**, **Order** and **Top**
-(the first N, the rest gathered as «Other»), **Minimum**, **Maximum**, **Target** (a
-number or an aggregate), **Bands** (their limits, `50, 80`) and a **Format** for the
-values. With **Order** «As the data comes» the categories follow their own value,
-ascending, so `FORMAT([day], "yyyy-MM")` lists months in time while `"MMM yy"` would
-sort them alphabetically; ascending or descending sorts them by the first series' value
-instead. A chart draws at most 2,000 categories: set **Top**, or aggregate.
+(the N largest values of the first series, the rest gathered as «Other»), **Minimum**,
+**Maximum**, **Target** (a number or an aggregate), **Bands** (their limits, `50, 80`)
+and a **Format** for the values. With **Order** «In the data's order» the categories come
+as they first appear in the dataset's rows, so the `ORDER BY` of its SQL decides: sort
+the query by the axis (`ORDER BY anno_mese`) and the months follow one another in time,
+whatever they print as (`"MMM yy"` too); the series of **One series per value of** and a
+KPI's trend follow the same order. «By value, smallest first» and «By value, largest
+first» sort the categories by the first series' value instead. With **Top**, the N
+largest are kept and shown in the order chosen. A chart draws at most 2,000 categories:
+set **Top**, or aggregate.
 
 A **KPI** card shows one aggregate in large type, with its **Label** and **Format**;
 **Compared with**, another aggregate, adds the change in percent with an arrow and a
@@ -359,7 +382,9 @@ order.
 *Sorted by **Margin %** with a click on its header (the arrow), the first group closed to its total row; **Reset view** puts the report back as designed.*
 
 The other buttons: **Copy API link** (the address a script downloads the report from,
-with the values on screen, and a Python example), the **versions** (every save; who may
+with the values on screen that are not the defaults, so a default such as
+`{today-30}` keeps moving with the calendar, and the same as a Python or a curl
+example), the **versions** (every save; who may
 edit restores an older one, which becomes the newest), and **Edit**, which opens the
 designer for who may edit. A report that cannot be rendered says why in words: a value
 that does not fit, a dataset you may not read, too much data, too many pages, the time
@@ -371,11 +396,31 @@ limit.
 |---|---|
 | **PDF** | the page as designed: positions exact to a tenth of a millimetre, the font embedded, the header and footer on every page, «Page X of Y». The same data gives the same file |
 | **Excel** | one sheet per table and matrix, named by **Sheet name in Excel**: the groups as outline levels (closed and opened with Excel's **+** and **−**), the subtotals and totals as `SUBTOTAL` formulas with their values, numbers that stay numbers in the report's formats, the header frozen and repeated on printed pages, a page break per group where the report has one; one more sheet lists the parameters' values. A text is never turned into a formula |
-| **Email** | the summary in the body of a [Pushmail](../pushmail.md#reports) email: the report's texts, its KPI cards, the totals of its first table's groups and its charts as images, 640 pixels wide; the detail goes as the attached PDF or Excel |
+| **Email** | the summary in the body of a [Pushmail](../pushmail.md#reports) email, 640 pixels wide: the report's texts, its KPI cards, its charts as images and the totals of every table and matrix ([below](#the-summary-in-the-email)); the detail goes as the attached PDF or Excel |
 
 ![Page 1 of the example PDF: the title, the printing date, the line in the accent colour, three KPI cards with sparklines, the combo chart of revenue and margin by month, and the table grouped by category with the first group's total; the report's name and Page 1 of 3 in the footer](../media/guide/reports/pdf-monthly-margin-page-1.png)
 
 *Page 1 of 3 of the example's PDF with every category, from January 2025.*
+
+### The summary in the email
+
+The summary follows the body of the report, in its order:
+
+- its texts, its KPI cards and its charts;
+- each **table** as its totals: the total row of each of its outermost groups and the
+  grand total, with the columns that have a total; a **matrix** as its rows and its total
+  column. Five columns of values at most fit the width of an email: a wider matrix shows
+  its total column alone, a wider table its first five, and says how many more are in the
+  attached report;
+- a table with nothing to total (no group with a total row, no grand total) is left out,
+  and so is the row of texts right above it that introduces it, its title; a table with no
+  text above it is introduced by its **Sheet name in Excel**, when it has one.
+
+Gmail cuts a message longer than about 100 KB: a long summary shows fewer groups per table
+(«… and 40 more: the whole report is attached»), then leaves out the last tables («2 more
+tables are in the attached report»). The same summary goes as plain text, a line per
+total («Total Salami — Revenue 4,854,308 · Margin 1,299,924»), for a mail client that
+shows no HTML.
 
 ## Sending it by email
 
@@ -421,8 +466,10 @@ people may open the same report and one of them gets an explanation instead of t
 pages. SQL on a connection needs **CONNECT** on the connection's folder.
 
 Because a scheduled group sends with its author's rights, someone else who changes what
-a report **reads** (adds a dataset, changes one's SQL, connection, datasource, view or
-filters) switches off the schedules of the groups that send it; the audit log says why,
+a report **reads** switches off the schedules of the groups that send it: a dataset added,
+or one whose SQL, connection, datasource, view or filters changed; a new default of a
+parameter the group's cell does not set itself; a change to a SQL script or to the filters,
+computed fields or pivot of a saved view that the report reads. The audit log says why,
 and the author schedules the group again after looking. A change of layout, or one made
 by the schedule's own author, keeps them. A report that a flow group sends cannot be
 deleted until it is taken out of the group's cells.
@@ -525,11 +572,13 @@ outcome and where it came from: the interface, the API, a notebook or a flow gro
 
 ## Limits and good to know
 
-- A dataset reads at most `REPORTS__MAX_ROWS` rows (10,000 by default): one more stops
-  the render and names the dataset. A report is a document, not an export: aggregate in
-  the SQL, or filter. A render makes at most `REPORTS__MAX_PAGES` pages (250); its
+- A dataset reads at most `REPORTS__MAX_ROWS` rows (1,000,000 by default): one more stops
+  the render and names the dataset. The query is cut at the source, so a `SELECT *` on a
+  big table costs no more than that many rows. A report is a document, not an export:
+  aggregate in the SQL where you can — a million rows take some half a minute and a GiB
+  of the worker's memory, a thousand totals almost nothing. A render makes at most `REPORTS__MAX_PAGES` pages (200); its
   layout runs in a process of its own with `REPORTS__RENDER_MEMORY_MB` of memory
-  (1024: some 250 pages of tables) and `REPORTS__RENDER_SECONDS` of time (120). See the
+  (1024: some 200 pages of tables) and `REPORTS__RENDER_SECONDS` of time (120). See the
   [configuration](../configuration.md#reports-1).
 - Charts are drawn by a chart service: the `chart-renderer` service on Docker Compose, a
   sidecar of the worker pods on Kubernetes. When it does not answer, a report with charts

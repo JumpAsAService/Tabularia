@@ -45,9 +45,11 @@ computes on all the node's rows, not on the 100 shown: choose the kind (**Bars**
 **Lines**, **Area**, **Pie**, **Treemap**, **Scatter**), the column for the X axis, an
 optional column that splits it into series, and a function: count, sum, average,
 minimum, maximum, median or distinct count. Bars keep the top N categories (20 by
-default); a pie or a treemap shows the five largest and, for a count or a sum, gathers
-the rest under «Other». At most five series are drawn, and the chart says how many it
-left out. A scatter plots one point per group, with an aggregation on each axis.
+default), a treemap the top N too; a pie shows the five largest and, for a count or a
+sum, gathers every other category of the data under «Other». A pie, a treemap and a
+funnel draw only what is above zero: they say how many categories they leave out, and
+with nothing above zero they say so instead of drawing. At most five series are drawn,
+and the chart says how many it left out. A scatter plots one point per group, with an aggregation on each axis.
 
 ### More chart kinds
 

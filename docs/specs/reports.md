@@ -6,17 +6,19 @@ designer and the viewer, done; 4, the Pushmail cell, the API and `tabularia.repo
 notebooks, done; 5, the new chart kinds in the Viewer and in the chat, done; 6, the
 documentation, done: the user's guide is
 [docs/capabilities/reports.md](../capabilities/reports.md), with an example report on the
-Sample data. Still open:
+Sample data. The bug hunt of the same day closed the live check of expressions
+(`POST /reports/check`, called by the editor as one types) and the preview's problems tied
+to their item and field. Still open:
 
-- no live check of expressions by the server while one types: the editor checks what it
-  can on its side, the server's check comes at the save (a route that checks a definition
-  not yet saved is missing);
-- the preview's errors come back as a message to read, not as problems tied to an item
-  and a field as the save's do;
+- the preview's bar takes a parameter whose choices come from a dataset as free text: the
+  choices are read from the saved report only;
+- a saved view or a SQL script that a report reads can be deleted without a word: the
+  report then fails, naming the dataset, and so does the email of a group that sends it;
 - an optional parameter that has a default cannot be emptied: an empty field takes the
   default, so «no value» can be chosen only for a parameter without one;
-- an interactive hotspot (a column to sort, a group to close) arrives from the engine as a
-  point, and the viewer rebuilds its box from the table's layout.
+- an interactive hotspot (a column to sort, a group to close) carries the box of its cell
+  from the engine (`box`); the viewer still rebuilds a box from the table's layout for the
+  pages of a render that has none.
 
 ## Objective
 
@@ -82,8 +84,8 @@ The prototype (2,000 orders, regions and customers, credit notes, hostile names;
   tenth of a millimetre, «Page X of Y», byte-identical output for the same data (golden
   tests possible). Memory is the risk: the compiler's cache grows ~130 MB per render in a
   live process, so **every render runs in a child process** of an engine worker, with a
-  memory limit and a timeout (cancelling = killing it), and limits of rows (10,000) and
-  pages (250) per render, which the default memory holds (about 4 MiB a page).
+  memory limit and a timeout (cancelling = killing it), and limits of rows (1,000,000) and
+  pages (200) per render, which the default memory holds (some 4.5 MiB a page, measured).
   Keep-together of a group's last row with its subtotal is a template rule (Typst alone
   leaves widows). Fonts shipped complete (IBM Plex Sans TTF), with a check that reports
   substitutions. Numbers and dates formatted by the server.
@@ -191,7 +193,7 @@ All lengths are millimetres (numbers, a tenth at most), colours `#rrggbb`.
   - `fields`: the columns the editor last saw (refreshed by «Refresh fields»), for
     completion and checking; the render uses what the data has. `calculated`: fields of
     the report's own, expressions per row.
-  - At most `REPORTS__MAX_ROWS` rows per dataset (default 10,000): above, the render
+  - At most `REPORTS__MAX_ROWS` rows per dataset (default 1,000,000; measured, a million rows take some 1.1 GiB and 27 s in the worker): above, the render
     stops and says which dataset and how many rows ("aggregate in SQL, or filter").
 - **Sections**: page header and footer (fixed heights, on every page; `on_first_page`,
   `on_last_page` false hides them there) and the body. Body items are laid out in
@@ -208,7 +210,7 @@ All lengths are millimetres (numbers, a tenth at most), colours `#rrggbb`.
   background, align, vertical align, padding, border, `format` (below), `can_grow`.
 - `image`: `asset` = an image uploaded into the report (PNG, JPEG or SVG, 512 KiB at
   most, stored with the definition as base64); `fit` contain | cover | stretch. No URLs.
-- `line` (from x, y to x+w, y+h), `rect` (border, radius, fill).
+- `line` (from x, y to x+w, y+h), `rect` (its `style`: border, radius, background).
 - `table`: `dataset`; `columns` [{`header`, `value` (expression), `width`, `align`,
   `format`, `total` (an aggregate expression or null), `style`, `rules`: [{`when`,
   `style`}] (conditional formatting)}]; `groups` [{`by` (expression), `label`
@@ -216,7 +218,8 @@ All lengths are millimetres (numbers, a tenth at most), colours `#rrggbb`.
   `total`), `page_break` none | between | after, `sort` asc | desc, `keep_together`}];
   `detail` (show the rows, or only groups); `sort` [{`by`, `dir`}]; `filter` (expression);
   `repeat_header`; `grand_total`; `zebra`; `matrix` {`columns_by` (expression), `value`
-  (aggregate), `total`} turns it into a matrix (one column per value, at most 60);
+  (aggregate), `total`} turns it into a matrix (one column per value, at most 60; its first
+  column gives only a header, a width and a style, no `value`);
   `interactive`: {`sort`: column sorting on screen, `toggle`: groups collapsed/expanded
   on screen}.
 - `chart`: `dataset`, `kind` bar | column | line | area | pie | donut | combo | waterfall |
@@ -224,6 +227,10 @@ All lengths are millimetres (numbers, a tenth at most), colours `#rrggbb`.
   `series` [{`value` (aggregate), `name`, `as` bar | line (combo), `axis` left | right}],
   `split_by` (expression: one series per value), `options` {`stacked`, `labels`,
   `legend`, `sort`, `top`, `min`, `max`, `target`, `bands` (gauge, bullet), `format`}.
+  `sort` none: the categories (and the series of `split_by`, and a KPI's sparkline) in
+  the order they first appear in the rows, i.e. the dataset's `ORDER BY`; asc | desc: by
+  the first series' value. `top` N keeps the N largest values of the first series, in the
+  order chosen, the rest as «Other».
 - `kpi`: `dataset`, `label`, `value` (aggregate), `compare` (aggregate, optional: the
   change in % with its arrow and colour), `format`, `sparkline` {`category`, `value`}.
 
@@ -277,13 +284,19 @@ and formatted texts), charts to SVG through the chart service, then:
 - pdf: Typst on a fixed template (`backend/app/reports/template.typ`), the model passed
   as JSON input, fonts shipped (IBM Plex Sans), compiled in a CHILD process with a
   memory limit (`REPORTS__RENDER_MEMORY_MB`, default 1024) and a timeout
-  (`REPORTS__RENDER_SECONDS`, default 120), at most `REPORTS__MAX_PAGES` (default 250);
-- svg: the same compile, one SVG per page (the on-screen view);
+  (`REPORTS__RENDER_SECONDS`, default 120), at most `REPORTS__MAX_PAGES` (default 200);
+- svg: the same compile, one SVG per page (the on-screen view), with its hotspots: where
+  a click sorts a column or opens a group, each with the `box` {x, y, w, h} of its cell in
+  mm from the page's top left (a header's box as tall as its row);
 - xlsx: xlsxwriter, one sheet per table/matrix (outline levels, SUBTOTAL formulas with
   cached values, formats, frozen header, print titles, page breaks per group), plus a
   sheet with the parameters; strings never become formulas;
-- html (email body): the body's texts, KPIs and the first table's group totals as inline
-  tables, charts as PNG @2x rendered by Typst and attached by `cid`.
+- html (email body): the body's texts, KPIs and charts (PNG @2x rendered by Typst,
+  attached by `cid`), every table and matrix as the totals of its outermost groups and
+  its grand total (at most five columns of values; a table with nothing to total is left
+  out, with the row of texts above it that introduces it), under Gmail's ~102 KB: fewer
+  groups per table, then fewer tables, and what is cut is said; the same as plain text
+  in the MHTML, for the email's text part.
 
 `state` carries the on-screen interactivity (a column sort, groups toggled): the same
 renderer, so the screen is the PDF. The chart service: `frontend` image, `node
