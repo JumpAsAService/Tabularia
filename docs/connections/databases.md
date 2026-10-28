@@ -10,7 +10,8 @@ port, how it is encrypted, its driver, what it can do, and an example.
 
 | | PostgreSQL | MySQL, MariaDB | ClickHouse | Trino | Oracle | SQL Server |
 |---|---|---|---|---|---|---|
-| Default port | 5432 | 3306 | 8123 | 8080 | 1521 | 1433 |
+| Default port | 5432 | 3306 | 8123; 8443 encrypted | 8080; 8443 encrypted | 1521; 2484 encrypted | 1433 |
+| Encryption (TLS) | verify, trust or none | verify, trust or none | verify, trust or none (HTTPS) | verify, trust or none (HTTPS) | verify, trust or none (TCPS) | verify, trust or none |
 | Driver | ADBC (libpq) | PyMySQL | clickhouse-connect (HTTP) | Trino's Python client | python-oracledb, Thin mode | mssql-python, added by you |
 | Datasource from a table or SQL | yes | yes | yes | yes | yes | yes |
 | SQL scripts on the connection | yes | yes | yes | yes | yes | yes |
@@ -30,9 +31,76 @@ CONNECT on the connection's folder (see [Connections](README.md#the-connect-perm
 | Username, Password | The database account. When editing, an empty password keeps the stored one. |
 | Database | The database to open. Trino calls it **Catalog**, Oracle **Service name**. |
 | Schema | Optional. Put in front of a table name written without one, so `ordini` reads as `vendite.ordini`. Oracle: the owner of the tables. |
+| Encryption (TLS) | Verify the server's certificate (the default), trust it, or no encryption: see [Encryption](#encryption-tls). |
+| Certificate authority (PEM) | Optional, with verify: the certificate of your company's own authority, when it signed the database's certificate. |
 
 The form's **Test connection** opens a connection and runs `SELECT 1`. The MySQL,
 MariaDB, ClickHouse, Oracle and SQL Server drivers give up connecting after 10 seconds.
+
+### Encryption (TLS)
+
+Every type has the same choice, **Encryption (TLS)**, used by everything that opens the
+connection: the test, the table list, imports and refreshes, SQL scripts and the Output
+node.
+
+| Option | What happens |
+|---|---|
+| **Encrypted, verify the server's certificate** | The default for a new connection. The connection is encrypted, and the server's certificate must be signed by an authority Tabularia trusts and issued for the name in **Host**; otherwise the connection stops before the password is sent. |
+| **Encrypted, trust the server's certificate (self-signed)** | Encrypted, and the certificate is taken as it is. For a server with a self-signed certificate inside your network: it keeps out whoever listens, not whoever pretends to be the server. |
+| **Not encrypted (not recommended)** | Password and data travel in clear. A server that accepts only encrypted connections refuses it. |
+
+With verify, Tabularia trusts the public authorities of the engine's image. When your
+company's own authority signed the database's certificate, paste that authority's
+certificate in **Certificate authority (PEM)**, from `-----BEGIN CERTIFICATE-----` to
+`-----END CERTIFICATE-----` (an intermediate and its root together are fine): Tabularia
+then trusts that authority, and only that one, for this connection. It is not a secret,
+so anyone who can open the connection sees it; a private key pasted by mistake is
+refused. The engine hands it to the driver in memory, or, for the drivers that read it
+only from a file (libpq, Trino's client), as a file of the worker's own that is deleted
+when the connection closes. SQL Server is the exception: Microsoft's driver reads only
+the system's authorities, so a company authority goes into the backend image, as the
+driver does ([SQL Server](../sqlserver.md)).
+
+Encrypted, an empty port is the encrypted protocol's where it has its own: 8443 for
+ClickHouse and Trino (HTTPS), 2484 for Oracle (TCPS). PostgreSQL, MySQL, MariaDB and SQL
+Server encrypt on their usual port.
+
+**Connections saved before the option existed** (Tabularia 1.2.2 and earlier) have none
+and keep working exactly as they did. The form shows what they do as **As before**, until
+someone picks an option:
+
+| Database | As before |
+|---|---|
+| PostgreSQL, MySQL, MariaDB | encrypted when the server offers it, the certificate not verified |
+| ClickHouse | HTTPS with the certificate verified on ports 8443 and 443, plain HTTP on the others |
+| Trino | HTTPS with the certificate verified when there is a password, plain HTTP without |
+| Oracle | not encrypted |
+| SQL Server | verify: it had the option already |
+
+The same holds for a connection created through the API without the option; to choose,
+send it in `extra`, as `{"tls": "verify", "ca_cert": "-----BEGIN CERTIFICATE-----…"}`.
+
+When the certificate does not pass, the test says why and what to choose:
+
+```text
+PostgreSQL: the TLS certificate of pg.corp.example:5432 cannot be verified (certificate
+verify failed). If your company's own authority signed it, paste that authority's
+certificate in the connection; if it is self-signed, choose «trust the server's certificate».
+```
+
+The other answers name a certificate issued for another name (an IP address in **Host**
+while the certificate names the server), a server that does not offer encryption, and one
+that accepts only encrypted connections.
+
+**Example.** The DBA hands you `corp-root-ca.pem`, the authority that signed the
+certificate of `pg.corp.example`. New connection, PostgreSQL, host `pg.corp.example`,
+**Encrypted, verify the server's certificate**, the content of `corp-root-ca.pem` in
+**Certificate authority (PEM)**, then **Test connection**. With host `10.0.4.12` instead
+the test fails: the certificate names `pg.corp.example`, not the address.
+
+The [dbt export](../dbt-export.md) carries the choice into the native profile
+(`sslmode` for dbt-postgres, `secure` and `verify` for dbt-clickhouse), with the authority
+as `certs/ca.pem`.
 
 ### Reading: a datasource from a database
 
@@ -131,9 +199,9 @@ time limit on the database as well: Tabularia stops waiting for a SQL script aft
 
 - **Driver**: ADBC's PostgreSQL driver, built on libpq, which streams Arrow batches from
   the server; the destination loads with `COPY`.
-- **TLS**: the connection string sets no `sslmode`, so libpq's default applies:
-  encrypted when the server offers it, without checking its certificate. There is no
-  option in the form to require a verified certificate.
+- **TLS**: verify is libpq's `sslmode=verify-full` (the system's authorities through
+  `sslrootcert=system`, or your company's), trust is `require`, none is `disable`. A
+  server with `hostssl` lines only in `pg_hba.conf` refuses the unencrypted option.
 - **Types**: `numeric` arrives as a decimal number (Float64), so amounts add up.
 - **Table list**: the tables and views of every schema except `pg_catalog` and
   `information_schema`.
@@ -195,8 +263,9 @@ Two types with the same driver and the same behaviour; choose the one you run.
 - **Driver**: PyMySQL with an unbuffered cursor (the server streams the rows), character
   set `utf8mb4`. Writes set the session's time zone to UTC, so a `TIMESTAMP` column
   stores the instant the flow computed.
-- **TLS**: Tabularia does not ask the driver for TLS: the connection is not encrypted.
-  Keep it on a private network, or behind a tunnel.
+- **TLS**: with verify or trust PyMySQL requires encryption, so a server without it is
+  refused rather than read in clear; none switches it off. A server with
+  `require_secure_transport=ON` refuses the unencrypted option.
 - **Table list**: the tables of the connection's database.
 
 ```sql
@@ -227,10 +296,10 @@ keeps the last thirty days.
 | Database | `analytics` (empty = `default`) |
 
 - **Driver**: clickhouse-connect over ClickHouse's **HTTP** interface, not the native
-  protocol: port 8123 for plain HTTP, 8443 (or 443) for HTTPS, chosen by the port. Port
-  9000 does not work. ClickHouse Cloud and most managed services use 8443.
-- **TLS**: on 8443 and 443 the connection is HTTPS and the server's certificate is
-  verified.
+  protocol: port 8443 for HTTPS, 8123 for plain HTTP. Port 9000 does not work.
+  ClickHouse Cloud and most managed services use 8443.
+- **TLS**: verify and trust speak HTTPS (8443 when the port is empty), none plain HTTP
+  (8123). A connection without the option chooses by the port, as before.
 - **Time**: ClickHouse may sort a whole table before sending the first row: an import or
   a write waits up to `INGEST__DB_READ_TIMEOUT_SECONDS` (3000 s by default) while the
   server says nothing. Date and time columns keep their types.
@@ -274,9 +343,10 @@ on the spot, without making a datasource.
 | Schema | `sales` (empty = `default`) |
 
 - **Driver**: Trino's Python client, which pages the results.
-- **TLS and authentication**: without a password the client speaks plain HTTP and only
-  names the user; with a password it switches to **HTTPS** with basic authentication, as
-  Trino requires.
+- **TLS and authentication**: verify and trust speak **HTTPS** (8443 when the port is
+  empty), none plain HTTP. A password goes with basic authentication, and only over
+  HTTPS, as Trino requires: none with a password is refused. A connection without the
+  option uses HTTPS only when it has a password, as before.
 - **Table list**: the tables of the connection's schema.
 - **Writing**: possible, but slow by nature (Trino is not built for loading rows: every
   500 rows are one `INSERT` query), and atomic only on connectors with transactions. For
@@ -297,7 +367,9 @@ another catalog (`postgresql.public.customers`), since Trino reads across its ca
 
 - **Driver**: python-oracledb in **Thin** mode: pure Python, no Oracle Instant Client to
   install, results fetched in Arrow blocks.
-- **TLS**: plain TCP. There is no option for TCPS.
+- **TLS**: verify and trust connect with **TCPS** (2484 when the port is empty); verify
+  checks that the certificate names the host. No wallet is needed: a company authority
+  goes in the connection. None, and a connection without the option, is plain TCP.
 - **Names**: Oracle's rule applies. Without quotes a name reads in upper case
   (`hr.employees` is `HR.EMPLOYEES`); in quotes it stays as written (`HR."accounts 2024"`).
   The table list gives the names in the form that reads back.
@@ -357,7 +429,7 @@ way leaves yesterday's rows in place.
 | Username | `reporting` (SQL Server authentication) |
 | Database | `Sales` |
 | Schema | `dbo` (optional) |
-| Encryption (TLS) | **Encrypted, verify the server's certificate** (default), **Encrypted, trust the server's certificate (self-signed)**, or **Not encrypted** |
+| Encryption (TLS) | **Encrypted, verify the server's certificate** (default), **Encrypted, trust the server's certificate (self-signed)**, or **Not encrypted**. No certificate authority field: the driver reads the system's, so a company authority goes into the backend image |
 
 - **Driver**: mssql-python, Microsoft's driver, with Microsoft's ODBC driver inside. It is
   **not in the published images**, for licensing reasons: you add it to your backend
@@ -413,8 +485,9 @@ reporting.RefreshMarginSummary`, say) runs inside it.
 
 ## Limits and good to know
 
-- **MySQL, MariaDB and Oracle connections are not encrypted**, and PostgreSQL does not
-  verify the server's certificate: keep them on networks you trust.
+- A connection saved before the encryption option keeps its old behaviour, which for
+  Oracle is no encryption and for PostgreSQL, MySQL and MariaDB no certificate check:
+  open it and choose **verify** (see [Encryption](#encryption-tls)).
 - The post-insert SQL is split on every `;`, including one inside a quoted string: keep
   semicolons out of literals there.
 - A datasource is a snapshot: what changes in the database shows in Tabularia at the next

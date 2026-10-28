@@ -46,7 +46,13 @@ def _friendly(e: Exception, connection: Optional[dict] = None) -> str:
     """The database server's message (see app.ingest.db_errors), not the transport's
     Python exception."""
     c = connection or {}
-    return describe_db_error(e, c.get("db_type"), c.get("host"), c.get("port"))
+    port = c.get("port")
+    if not port:  # the port the driver used: the protocol's default (HTTPS, TCPS when encrypted)
+        try:
+            port = DbConnectionSpec(**c).port_or_default
+        except Exception:  # noqa: BLE001 — not a database connection (S3, SMTP): no port to say
+            port = None
+    return describe_db_error(e, c.get("db_type"), c.get("host"), port)
 
 
 class DbInspectRequest(BaseModel):

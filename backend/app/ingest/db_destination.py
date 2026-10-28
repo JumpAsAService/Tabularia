@@ -38,7 +38,7 @@ import logging
 import os
 import re
 import tempfile
-from typing import Any, Iterator, Literal
+from typing import Iterator, Literal
 
 import pyarrow as pa
 import pyarrow.parquet as pq
@@ -48,7 +48,8 @@ from app.core.config import get_settings
 from app.ingest.converters import IngestError
 from app.ingest.db_errors import describe_db_error
 from app.ingest.db_source import (
-    _IDENT_QUOTE, BATCH_ROWS, DbConnectionSpec, _oracle_connect, _oracle_ident, _sqlserver_connect, _tsql_ident,
+    _IDENT_QUOTE, BATCH_ROWS, DbConnectionSpec, _clickhouse_client, _mysql_connect, _oracle_connect, _oracle_ident,
+    _pg_connect, _sqlserver_connect, _trino_connect, _tsql_ident,
 )
 
 logger = logging.getLogger(__name__)
@@ -149,19 +150,11 @@ def _write_postgresql(
     schema: pa.Schema, batches: Iterator[pa.RecordBatch],
 ) -> int:
     import uuid
-    from urllib.parse import quote as _urlquote
 
-    from adbc_driver_postgresql import dbapi as adbc_pg
-
-    uri = (
-        f"postgresql://{_urlquote(conn.username, safe='')}:"
-        f"{_urlquote(conn.resolve_password(), safe='')}@"
-        f"{conn.host}:{conn.port_or_default}/{conn.database}"
-    )
     staging = f"tabularia_stg_{uuid.uuid4().hex[:12]}"  # lowercase: the same name quoted or not
     columns = _quoted_columns(conn, schema)
     rows = [0]
-    with adbc_pg.connect(uri) as c:
+    with _pg_connect(conn) as c:
         with c.cursor() as cur:
             # naive timestamps are UTC: a customer's timestamptz column reads them in the
             # session's zone, which would otherwise be the server's
@@ -188,18 +181,15 @@ def _write_clickhouse(
     conn: DbConnectionSpec, dest: DbDestinationSpec, qualified: str, parts: list[str],
     schema: pa.Schema, batches: Iterator[pa.RecordBatch],
 ) -> int:
-    import clickhouse_connect
+    # INSERT … SELECT from the staging and the post-SQL (an OPTIMIZE) may stay silent for long
+    with _clickhouse_client(conn, send_receive_timeout=get_settings().ingest.db_read_timeout_seconds) as client:
+        return _write_clickhouse_with(client, conn, dest, qualified, parts, schema, batches)
 
-    client = clickhouse_connect.get_client(
-        host=conn.host,
-        port=conn.port_or_default,
-        username=conn.username or "default",
-        password=conn.resolve_password(),
-        database=conn.database or "default",
-        connect_timeout=10,
-        # INSERT … SELECT from the staging and the post-SQL (an OPTIMIZE) may stay silent for long
-        send_receive_timeout=get_settings().ingest.db_read_timeout_seconds,
-    )
+
+def _write_clickhouse_with(
+    client, conn: DbConnectionSpec, dest: DbDestinationSpec, qualified: str, parts: list[str],
+    schema: pa.Schema, batches: Iterator[pa.RecordBatch],
+) -> int:
     # ClickHouse has no transactions on a streaming INSERT: writing straight into the
     # table (TRUNCATE + batched inserts) would leave it PARTIAL if something fails half
     # way — with replace, even empty (data lost). So everything is written to a STAGING
@@ -256,7 +246,6 @@ def _write_clickhouse(
             client.command(f"DROP TABLE IF EXISTS {stg_qualified}")  # staging (old data, or copied already)
         except Exception:
             pass
-        client.close()
     return rows
 
 
@@ -285,20 +274,9 @@ def _write_mysql(
     conn: DbConnectionSpec, dest: DbDestinationSpec, qualified: str, parts: list[str],
     schema: pa.Schema, batches: Iterator[pa.RecordBatch],
 ) -> int:
-    import pymysql
-
-    c = pymysql.connect(
-        host=conn.host,
-        port=conn.port_or_default,
-        user=conn.username,
-        password=conn.resolve_password(),
-        database=conn.database or None,
-        connect_timeout=10,
-        charset="utf8mb4",
-        # naive timestamps are UTC: a TIMESTAMP column would otherwise read them in
-        # the server's zone and store an instant one or two hours off
-        init_command="SET time_zone = '+00:00'",
-    )
+    # naive timestamps are UTC: a TIMESTAMP column would otherwise read them in the
+    # server's zone and store an instant one or two hours off
+    c = _mysql_connect(conn, init_command="SET time_zone = '+00:00'")
     placeholders = ", ".join(["%s"] * len(schema))
     insert = f"INSERT INTO {qualified} ({_quoted_columns(conn, schema)}) VALUES ({placeholders})"
     rows = 0
@@ -330,24 +308,6 @@ def _write_trino(
 ) -> int:
     import trino
 
-    password = conn.resolve_password()
-    kwargs: dict[str, Any] = {
-        "host": conn.host,
-        "port": conn.port_or_default,
-        "user": conn.username or "tabularia",
-        "catalog": conn.database or None,
-        "schema": conn.db_schema or "default",
-    }
-    if password:
-        kwargs["http_scheme"] = "https"
-        kwargs["auth"] = trino.auth.BasicAuthentication(conn.username, password)
-    # an explicit transaction: DELETE + INSERT must be atomic, otherwise an error half
-    # way leaves the table emptied or partial. NB: transactions in Trino depend on the
-    # CONNECTOR (Iceberg/Delta support them, plain Hive does not); where they are not
-    # supported commit/rollback degrade to the previous behavior.
-    kwargs["isolation_level"] = trino.transaction.IsolationLevel.READ_UNCOMMITTED
-    c = trino.dbapi.connect(**kwargs)
-
     def _run(cur, sql: str, params=None) -> None:
         cur.execute(sql, params) if params else cur.execute(sql)
         cur.fetchall()  # the Trino client completes the query only by consuming it
@@ -355,28 +315,31 @@ def _write_trino(
     one_row = "(" + ", ".join(["?"] * len(schema)) + ")"
     prefix = f"INSERT INTO {qualified} ({_quoted_columns(conn, schema)}) VALUES "
     rows = 0
-    try:
-        cur = c.cursor()
-        _run(cur, _create_table_sql(conn, qualified, schema))
-        c.commit()  # the DDL outside the data's transaction
-        if dest.mode == "replace":
-            _run(cur, f"DELETE FROM {qualified}")  # Trino does not have TRUNCATE everywhere
-        for batch in batches:
-            for chunk in _row_chunks(batch, schema, TRINO_CHUNK_ROWS):
-                sql = prefix + ", ".join([one_row] * len(chunk))
-                _run(cur, sql, [v for row in chunk for v in row])
-                rows += len(chunk)
-        for stmt in _post_statements(dest.post_sql):
-            _run(cur, stmt)
-        c.commit()  # DELETE + INSERT together: all or nothing
-    except Exception:
+    # an explicit transaction: DELETE + INSERT must be atomic, otherwise an error half
+    # way leaves the table emptied or partial. NB: transactions in Trino depend on the
+    # CONNECTOR (Iceberg/Delta support them, plain Hive does not); where they are not
+    # supported commit/rollback degrade to the previous behavior.
+    with _trino_connect(conn, isolation_level=trino.transaction.IsolationLevel.READ_UNCOMMITTED) as c:
         try:
-            c.rollback()
+            cur = c.cursor()
+            _run(cur, _create_table_sql(conn, qualified, schema))
+            c.commit()  # the DDL outside the data's transaction
+            if dest.mode == "replace":
+                _run(cur, f"DELETE FROM {qualified}")  # Trino does not have TRUNCATE everywhere
+            for batch in batches:
+                for chunk in _row_chunks(batch, schema, TRINO_CHUNK_ROWS):
+                    sql = prefix + ", ".join([one_row] * len(chunk))
+                    _run(cur, sql, [v for row in chunk for v in row])
+                    rows += len(chunk)
+            for stmt in _post_statements(dest.post_sql):
+                _run(cur, stmt)
+            c.commit()  # DELETE + INSERT together: all or nothing
         except Exception:
-            pass
-        raise
-    finally:
-        c.close()
+            try:
+                c.rollback()
+            except Exception:
+                pass
+            raise
     return rows
 
 

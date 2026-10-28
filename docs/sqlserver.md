@@ -130,10 +130,19 @@ Then, in Tabularia, the SQL Server type is no longer marked *not installed here*
 
 Host, port (1433 by default; a named instance as `host\INSTANCE` without a port),
 database, user and password, and how to encrypt: verify the server's certificate (the
-default), trust a self-signed one, or no encryption. A SQL source is sent as written,
-CTEs and `ORDER BY` included, but it must be one query that reads: a batch carrying
-`; DELETE …`, or a `SELECT … INTO` that would create a table, is refused before it
-reaches the server. Integer `decimal` up to 18 digits arrives as Int64, other decimals
+default), trust a self-signed one, or no encryption. The driver verifies against the
+system's authorities only, so the form has no certificate authority field for SQL
+Server: when your company's own authority signed the server's certificate, add it to
+the image you build above, as root:
+
+```dockerfile
+COPY corp-root-ca.crt /usr/local/share/ca-certificates/
+RUN update-ca-certificates
+```
+
+A SQL source is sent as written, CTEs and `ORDER BY` included, but it must be one query
+that reads: a batch carrying `; DELETE …`, or a `SELECT … INTO` that would create a
+table, is refused before it reaches the server. Integer `decimal` up to 18 digits arrives as Int64, other decimals
 and `money` as Float64, `datetimeoffset` as UTC. An Output node **Database table** writes
 into SQL Server too, with array inserts in one transaction: see
 [Databases](connections/databases.md#sql-server).

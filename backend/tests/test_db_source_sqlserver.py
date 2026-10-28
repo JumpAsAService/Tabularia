@@ -7,6 +7,7 @@ import pyarrow as pa
 import pytest
 
 from app.ingest import db_source as ds
+from app.ingest.converters import IngestError
 from app.ingest.db_source import DbConnectionSpec, DbSourceError, DbSourceSpec, build_query
 
 
@@ -59,7 +60,7 @@ def test_connection_string(monkeypatch):
     ds._sqlserver_connect(DbConnectionSpec(db_type="sqlserver", host="srv\\SQLEXPRESS", username="u", password="x", database="d"))
     assert seen_ones[0] == "Server={h,1433};UID={u};PWD={p;w}}d};Database={vendite};Encrypt=yes;TrustServerCertificate=yes"
     assert seen_ones[1].startswith("Server={srv\\SQLEXPRESS};") and seen_ones[1].endswith("Encrypt=yes;TrustServerCertificate=no")
-    with pytest.raises(DbSourceError, match="TLS"):
+    with pytest.raises(IngestError, match="TLS"):
         ds._sqlserver_connect(_conn(extra={"tls": "boh"}))
 
 

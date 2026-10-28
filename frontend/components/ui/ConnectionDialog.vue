@@ -49,11 +49,38 @@ const dbSchema = ref('')
 const fromAddress = ref('')
 const fromName = ref('')
 const tls = ref('starttls')
-// SQL Server: how to treat TLS (`extra.tls`)
-const sqlTls = ref('verify')
 const allowedDomains = ref('')
 
+// Databases: the encryption (`extra.tls`) and, to verify a server whose certificate a
+// company's own authority signed, that authority's certificate (`extra.ca_cert`: PEM,
+// public; Microsoft's SQL Server driver reads the system's store only, so not there).
+// A connection saved before the choice has no `tls`: it keeps what its driver did
+// («legacy», offered only to it, sent as no `tls` at all) until someone picks another.
+// A new one starts verified.
+type DbTls = 'legacy' | 'verify' | 'trust' | 'none'
+const DB_KINDS = ['postgresql', 'mysql', 'mariadb', 'clickhouse', 'trino', 'oracle', 'sqlserver']
+const dbTls = ref<DbTls>('verify')
+const caCert = ref('')
+const wasLegacy = ref(false)
+
 const isEdit = computed(() => !!props.existing)
+const isDb = computed(() => DB_KINDS.includes(dbType.value))
+// what a connection without the choice keeps doing, as its driver did
+const LEGACY_LABELS: Record<string, string> = {
+  postgresql: 'connectionDialog.dbTlsLegacyPrefer',
+  mysql: 'connectionDialog.dbTlsLegacyPrefer',
+  mariadb: 'connectionDialog.dbTlsLegacyPrefer',
+  clickhouse: 'connectionDialog.dbTlsLegacyClickhouse',
+  trino: 'connectionDialog.dbTlsLegacyTrino',
+  oracle: 'connectionDialog.dbTlsLegacyPlain',
+}
+const tlsOptions = computed(() => [
+  ...(wasLegacy.value && LEGACY_LABELS[dbType.value] ? [{ value: 'legacy', label: t(LEGACY_LABELS[dbType.value]) }] : []),
+  { value: 'verify', label: t('connectionDialog.dbTlsVerify') },
+  { value: 'trust', label: t('connectionDialog.dbTlsTrust') },
+  { value: 'none', label: t('connectionDialog.dbTlsNone') },
+])
+const takesCa = computed(() => dbTls.value === 'verify' && dbType.value !== 'sqlserver')
 // object storage: the same columns, different labels (host=endpoint, etc.)
 const isS3 = computed(() => dbType.value === 's3')
 const isSmtp = computed(() => dbType.value === 'smtp')
@@ -146,7 +173,10 @@ watch(
     fromAddress.value = opts.from_address ?? ''
     fromName.value = opts.from_name ?? ''
     tls.value = opts.tls ?? 'starttls'
-    sqlTls.value = c?.db_type === 'sqlserver' ? (opts.tls ?? 'verify') : 'verify'
+    const savedTls = ['verify', 'trust', 'none'].includes(opts.tls) ? (opts.tls as DbTls) : null
+    wasLegacy.value = !!c && DB_KINDS.includes(c.db_type) && c.db_type !== 'sqlserver' && !savedTls
+    dbTls.value = savedTls ?? (wasLegacy.value ? 'legacy' : 'verify')
+    caCert.value = typeof opts.ca_cert === 'string' ? opts.ca_cert : ''
     allowedDomains.value = Array.isArray(opts.allowed_domains)
       ? opts.allowed_domains.join(', ')
       : (opts.allowed_domains ?? '')
@@ -195,7 +225,11 @@ const DEFAULT_PORTS: Record<string, string> = {
   postgresql: '5432', mysql: '3306', mariadb: '3306', clickhouse: '8123', trino: '8080', oracle: '1521', sqlserver: '1433', smtp: '587',
   sftp: '22',
 }
-const portPlaceholder = computed(() => DEFAULT_PORTS[dbType.value] ?? '')
+// encrypted, ClickHouse and Trino speak HTTPS and Oracle TCPS on a port of their own
+const TLS_PORTS: Record<string, string> = { clickhouse: '8443', trino: '8443', oracle: '2484' }
+const portPlaceholder = computed(() =>
+  (isDb.value && (dbTls.value === 'verify' || dbTls.value === 'trust') && TLS_PORTS[dbType.value]) || (DEFAULT_PORTS[dbType.value] ?? ''),
+)
 
 // «(i)» beside the type: the fields of that type filled with an example, under the same
 // labels as the form, and a tip. It follows the authentication chosen for SFTP and HTTP
@@ -218,17 +252,15 @@ const exampleRows = computed<[string, string][]>(() => {
     [L(dbLabel), database],
     ...(schema ? [[L('connectionDialog.schemaLabel'), schema] as [string, string]] : []),
   ]
+  const verified: [string, string] = [L('connectionDialog.dbTlsLabel'), L('connectionDialog.dbTlsVerify')]
   switch (dbType.value) {
-    case 'postgresql': return db('db.example.com', '5432', 'tabularia_reader', 'sales', 'public')
-    case 'mysql': return db('mysql.example.com', '3306', 'reporting', 'shop', '')
-    case 'mariadb': return db('mariadb.example.com', '3306', 'reporting', 'shop', '')
-    case 'clickhouse': return db('clickhouse.example.com', '8443', 'reader', 'analytics', '')
-    case 'trino': return db('trino.example.com', '8443', 'analyst', 'hive', 'sales', 'connectionDialog.catalogLabel')
-    case 'oracle': return db('oracle.example.com', '1521', 'REPORTING', 'ORCLPDB1', 'HR', 'connectionDialog.serviceNameLabel')
-    case 'sqlserver': return [
-      ...db('sql.example.com', '1433', 'reporting', 'Sales', 'dbo'),
-      [L('connectionDialog.sqlTlsLabel'), L('connectionDialog.sqlTlsVerify')],
-    ]
+    case 'postgresql': return [...db('db.example.com', '5432', 'tabularia_reader', 'sales', 'public'), verified]
+    case 'mysql': return [...db('mysql.example.com', '3306', 'reporting', 'shop', ''), verified]
+    case 'mariadb': return [...db('mariadb.example.com', '3306', 'reporting', 'shop', ''), verified]
+    case 'clickhouse': return [...db('clickhouse.example.com', '8443', 'reader', 'analytics', ''), verified]
+    case 'trino': return [...db('trino.example.com', '8443', 'analyst', 'hive', 'sales', 'connectionDialog.catalogLabel'), verified]
+    case 'oracle': return [...db('oracle.example.com', '2484', 'REPORTING', 'ORCLPDB1', 'HR', 'connectionDialog.serviceNameLabel'), verified]
+    case 'sqlserver': return [...db('sql.example.com', '1433', 'reporting', 'Sales', 'dbo'), verified]
     case 's3': return [
       [L('connectionDialog.endpointLabel'), 'https://s3.eu-west-1.amazonaws.com'],
       [L('connectionDialog.accessKeyLabel'), 'AKIAIOSFODNN7EXAMPLE'],
@@ -326,8 +358,11 @@ function draft(): ConnectionDraft {
           }
         : isSp.value
           ? { library: library.value.trim() }
-          : dbType.value === 'sqlserver'
-            ? { tls: sqlTls.value }
+          : isDb.value
+            ? {
+                ...(dbTls.value !== 'legacy' ? { tls: dbTls.value } : {}),
+                ...(takesCa.value && caCert.value.trim() ? { ca_cert: caCert.value.trim() } : {}),
+              }
             : {},
     ),
   }
@@ -385,6 +420,8 @@ const incomplete = computed(
 function changeType(fresh: string) {
   const old = dbType.value
   dbType.value = fresh
+  // «as before» is what THIS connection's driver did: another type has no «before»
+  if (fresh !== old && dbTls.value === 'legacy' && !LEGACY_LABELS[fresh]) dbTls.value = 'verify'
   if (fresh !== old && (['sharepoint', 'sftp', 'api'].includes(fresh) || ['sharepoint', 'sftp', 'api'].includes(old))) {
     port.value = ''
     dbSchema.value = ''
@@ -479,8 +516,9 @@ async function test() {
       return
     }
     if (isEdit.value && !password.value) {
-      // password unchanged: the saved connection is tested
-      await connApi.test(props.existing!.id)
+      // password unchanged: the saved connection is tested, with the encryption chosen in
+      // the form (a choice changed and not saved yet is what the test is for)
+      await connApi.test(props.existing!.id, undefined, isDb.value ? draft().extra : undefined)
     } else {
       await connApi.testDraft(props.projectId, draft())
     }
@@ -748,17 +786,27 @@ function confirm() {
                 :placeholder="isS3 ? 'eu-south-1' : dbType === 'postgresql' ? 'public' : dbType === 'oracle' ? 'HR' : dbType === 'sqlserver' ? 'dbo' : ''"
               />
             </div>
-            <div v-if="dbType === 'sqlserver'" class="cd-field cd-wide">
-              <label>{{ $t('connectionDialog.sqlTlsLabel') }}</label>
-              <Select
-                v-model="sqlTls"
-                :options="[
-                  { value: 'verify', label: $t('connectionDialog.sqlTlsVerify') },
-                  { value: 'trust', label: $t('connectionDialog.sqlTlsTrust') },
-                  { value: 'none', label: $t('connectionDialog.sqlTlsNone') },
-                ]"
-              />
-            </div>
+            <template v-if="isDb">
+              <div class="cd-field cd-wide">
+                <label>{{ $t('connectionDialog.dbTlsLabel') }}</label>
+                <Select v-model="dbTls" :options="tlsOptions" />
+              </div>
+              <p v-if="dbTls === 'none'" class="cd-hostkey none cd-wide">
+                <ShieldAlert :size="13" />
+                <span>{{ $t('connectionDialog.dbTlsNoneWarning') }}</span>
+              </p>
+              <div v-if="takesCa" class="cd-field cd-wide">
+                <label>{{ $t('connectionDialog.dbCaLabel') }} <span class="cd-hint">{{ $t('connectionDialog.dbCaHint') }}</span></label>
+                <textarea
+                  v-model="caCert"
+                  rows="3"
+                  spellcheck="false"
+                  autocomplete="off"
+                  class="cd-key"
+                  placeholder="-----BEGIN CERTIFICATE-----"
+                />
+              </div>
+            </template>
           </template>
           <div class="cd-field cd-wide">
             <label>{{ $t('connectionDialog.descriptionLabel') }} <span class="cd-hint">{{ $t('connectionDialog.optionalHint') }}</span></label>

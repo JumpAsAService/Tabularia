@@ -15,6 +15,7 @@ FIRST the Arrow schema, THEN the RecordBatches):
 """
 from __future__ import annotations
 
+import contextlib
 import importlib.util
 import logging
 import os
@@ -30,6 +31,7 @@ import pyarrow.parquet as pq
 from pydantic import BaseModel
 
 from app.core.config import get_settings
+from app.ingest import db_tls
 from app.ingest.converters import IngestError
 from app.ingest.db_errors import describe_db_error
 
@@ -107,12 +109,30 @@ class DbConnectionSpec(BaseModel):
     password_encrypted: str = ""
     database: str = ""   # Oracle: the SERVICE NAME (FREEPDB1, ORCLPDB1)
     db_schema: str = ""  # Postgres schema / Trino schema / Oracle owner; empty = the default
-    # options of the type, from the connection's `extra` field (SQL Server: {"tls": …})
+    # options of the type, from the connection's `extra` field: the encryption,
+    # {"tls": verify|trust|none, "ca_cert": PEM} (see db_tls)
     extra: dict = {}
 
     @property
+    def tls(self) -> str:
+        """verify | trust | none, or legacy: a connection saved before the choice (db_tls)."""
+        return db_tls.tls_mode(self.db_type, self.extra)
+
+    @property
+    def ca_cert(self) -> str:
+        return db_tls.ca_pem(self.extra)
+
+    @property
     def port_or_default(self) -> int:
-        return self.port or DEFAULT_PORTS[self.db_type]
+        """The port, or the default of the protocol the connection speaks: ClickHouse's and
+        Trino's HTTPS, Oracle's TCPS when it encrypts."""
+        if self.port:
+            return self.port
+        try:
+            tls_port = db_tls.encrypted_port(self.db_type, self.tls)
+        except db_tls.DbTlsError:  # said where the connection opens; here only a number
+            tls_port = None
+        return tls_port or DEFAULT_PORTS[self.db_type]
 
     def resolve_password(self) -> str:
         if self.password_encrypted:
@@ -261,15 +281,39 @@ def _with_order_by(base: str, conn: DbConnectionSpec, source: DbSourceSpec) -> s
 # ─────────────────────────────────────────────────────────────────────────────
 # Driver: generatori "schema poi batch"
 # ─────────────────────────────────────────────────────────────────────────────
-def _batches_postgresql(conn: DbConnectionSpec, query: str) -> Iterator[Any]:
-    from adbc_driver_postgresql import dbapi as adbc_pg
+# libpq's sslmode for each choice. verify-full checks the chain AND the name; with no
+# company authority, `sslrootcert=system` takes the system's (libpq 16+: the ADBC driver
+# carries 18). The legacy mode sets nothing: libpq's default, prefer.
+_PG_SSLMODE = {"verify": "verify-full", "trust": "require", "none": "disable"}
 
+
+def _pg_uri(conn: DbConnectionSpec, ca_path: str | None = None) -> str:
     uri = (
         f"postgresql://{_urlquote(conn.username, safe='')}:"
         f"{_urlquote(conn.resolve_password(), safe='')}@"
         f"{conn.host}:{conn.port_or_default}/{conn.database}"
     )
-    with adbc_pg.connect(uri) as c:
+    mode = conn.tls
+    if mode in _PG_SSLMODE:
+        uri += f"?sslmode={_PG_SSLMODE[mode]}"
+        if mode == "verify":
+            uri += "&sslrootcert=" + _urlquote(ca_path or "system", safe="/")
+    return uri
+
+
+@contextlib.contextmanager
+def _pg_connect(conn: DbConnectionSpec):
+    """An ADBC connection to PostgreSQL with the connection's encryption. libpq reads a
+    company authority only from a file: it lives as long as the connection."""
+    from adbc_driver_postgresql import dbapi as adbc_pg
+
+    with db_tls.ca_file(conn.ca_cert) as ca_path:
+        with adbc_pg.connect(_pg_uri(conn, ca_path)) as c:
+            yield c
+
+
+def _batches_postgresql(conn: DbConnectionSpec, query: str) -> Iterator[Any]:
+    with _pg_connect(conn) as c:
         with c.cursor() as cur:
             cur.execute(query)
             reader = cur.fetch_record_batch()  # RecordBatchReader: true streaming
@@ -365,9 +409,27 @@ def _fix_clickhouse_temporals(batch, targets: dict):
     return pa.RecordBatch.from_arrays(cols, schema=pa.schema(fields))
 
 
-def _batches_clickhouse(conn: DbConnectionSpec, query: str, read_timeout: int | None = None) -> Iterator[Any]:
+@contextlib.contextmanager
+def _clickhouse_client(conn: DbConnectionSpec, **options):
+    """A clickhouse-connect client over HTTP or HTTPS as the connection chooses. Legacy:
+    the library's own rule, HTTPS (verified) on the ports 8443 and 443. A company
+    authority goes to urllib3 in memory (`ca_cert_data`), in a pool of this client's."""
     import clickhouse_connect
 
+    mode = conn.tls
+    pool = None
+    if mode in ("verify", "trust"):
+        options["interface"] = "https"
+        options["verify"] = mode == "verify"
+        if mode == "trust":
+            _quiet_unverified_https()
+        elif conn.ca_cert:
+            from clickhouse_connect.driver.httputil import get_pool_manager
+
+            db_tls.ssl_context("verify", conn.ca_cert)  # a clear error for a broken PEM, before urllib3's
+            pool = options["pool_mgr"] = get_pool_manager(verify=True, ca_cert_data=conn.ca_cert)
+    elif mode == "none":
+        options["interface"] = "http"
     client = clickhouse_connect.get_client(
         host=conn.host,
         port=conn.port_or_default,
@@ -375,10 +437,26 @@ def _batches_clickhouse(conn: DbConnectionSpec, query: str, read_timeout: int | 
         password=conn.resolve_password(),
         database=conn.database or "default",
         connect_timeout=10,
-        # None = the library's default (300 s): connection test and table listing
-        **({"send_receive_timeout": read_timeout} if read_timeout else {}),
+        **options,
     )
     try:
+        yield client
+    finally:
+        client.close()
+        if pool is not None:
+            pool.clear()
+
+
+def _quiet_unverified_https() -> None:
+    """«trust» is the user's choice: urllib3 need not warn about it at every request."""
+    import urllib3
+
+    urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
+
+
+def _batches_clickhouse(conn: DbConnectionSpec, query: str, read_timeout: int | None = None) -> Iterator[Any]:
+    # None = the library's default (300 s): connection test and table listing
+    with _clickhouse_client(conn, **({"send_receive_timeout": read_timeout} if read_timeout else {})) as client:
         # ClickHouse types from a LIMIT 0 schema: they find the temporal columns (which
         # the Arrow export makes raw integers) to convert back.
         targets = _clickhouse_temporal_targets(
@@ -401,24 +479,36 @@ def _batches_clickhouse(conn: DbConnectionSpec, query: str, read_timeout: int | 
                 pa.field(f.name, targets[i][0], nullable=f.nullable) if i in targets else f
                 for i, f in enumerate(empty.schema)
             ])
-    finally:
-        client.close()
 
 
-def _batches_mysql(conn: DbConnectionSpec, query: str) -> Iterator[Any]:
+def _mysql_connect(conn: DbConnectionSpec, **options):
+    """A PyMySQL connection with the connection's encryption. Legacy: the driver's own
+    default (1.2+: encrypted when the server offers it, not verified). With verify or
+    trust the driver REQUIRES encryption: a server without it is refused, not read in
+    plain text."""
     import pymysql
-    import pymysql.cursors
 
-    c = pymysql.connect(
+    mode = conn.tls
+    if mode in ("verify", "trust"):
+        options["ssl"] = db_tls.ssl_context(mode, conn.ca_cert)
+    elif mode == "none":
+        options["ssl_disabled"] = True
+    return pymysql.connect(
         host=conn.host,
         port=conn.port_or_default,
         user=conn.username,
         password=conn.resolve_password(),
         database=conn.database or None,
-        cursorclass=pymysql.cursors.SSCursor,  # unbuffered: the server streams
         connect_timeout=10,
         charset="utf8mb4",
+        **options,
     )
+
+
+def _batches_mysql(conn: DbConnectionSpec, query: str) -> Iterator[Any]:
+    import pymysql.cursors
+
+    c = _mysql_connect(conn, cursorclass=pymysql.cursors.SSCursor)  # unbuffered: the server streams
     try:
         with c.cursor() as cur:
             cur.execute(query)
@@ -427,28 +517,49 @@ def _batches_mysql(conn: DbConnectionSpec, query: str) -> Iterator[Any]:
         c.close()
 
 
-def _batches_trino(conn: DbConnectionSpec, query: str) -> Iterator[Any]:
+@contextlib.contextmanager
+def _trino_connect(conn: DbConnectionSpec, **options):
+    """A Trino DBAPI connection with the connection's encryption. Legacy: HTTPS (verified)
+    only with a password, which the client refuses to send over HTTP. The client
+    (requests) reads a company authority only from a file: it lives as long as the
+    connection."""
     import trino
 
     password = conn.resolve_password()
+    mode = conn.tls
+    if mode == "none" and password:
+        raise DbSourceError("Trino: a password travels only over HTTPS: choose an encrypted option "
+                            "in the connection, or remove the password.")
     kwargs: dict[str, Any] = {
         "host": conn.host,
         "port": conn.port_or_default,
         "user": conn.username or "tabularia",
         "catalog": conn.database or None,
         "schema": conn.db_schema or "default",
+        **options,
     }
-    if password:
-        # the Trino client refuses basic auth over http: with a password, https
+    if mode in ("verify", "trust") or (mode == db_tls.LEGACY and password):
         kwargs["http_scheme"] = "https"
+    if mode == "trust":
+        kwargs["verify"] = False
+        _quiet_unverified_https()
+    if password:
         kwargs["auth"] = trino.auth.BasicAuthentication(conn.username, password)
-    c = trino.dbapi.connect(**kwargs)
-    try:
+    with db_tls.ca_file(conn.ca_cert) as ca_path:
+        if ca_path:
+            kwargs["verify"] = ca_path
+        c = trino.dbapi.connect(**kwargs)
+        try:
+            yield c
+        finally:
+            c.close()
+
+
+def _batches_trino(conn: DbConnectionSpec, query: str) -> Iterator[Any]:
+    with _trino_connect(conn) as c:
         cur = c.cursor()
         cur.execute(query)
         yield from _dbapi_batches(cur)
-    finally:
-        c.close()
 
 
 # ── Oracle ──────────────────────────────────────────────────────────────────
@@ -473,6 +584,21 @@ def _oracle_type(t) -> str:
     return getattr(t, "name", str(t))
 
 
+def _oracle_tls(conn: DbConnectionSpec) -> dict:
+    """python-oracledb's TCPS parameters for the connection's encryption: verify checks the
+    chain and that the certificate names the host (`ssl_server_dn_match`); trust only
+    encrypts. Legacy and none: plain TCP, as before. The authority goes in memory, in the
+    context; no wallet is needed for a server's certificate."""
+    mode = conn.tls
+    if mode not in ("verify", "trust"):
+        return {}
+    return {
+        "protocol": "tcps",
+        "ssl_context": db_tls.ssl_context(mode, conn.ca_cert),
+        "ssl_server_dn_match": mode == "verify",
+    }
+
+
 def _oracle_connect(conn: DbConnectionSpec):
     import oracledb
 
@@ -485,6 +611,7 @@ def _oracle_connect(conn: DbConnectionSpec):
         port=conn.port_or_default,
         service_name=conn.database,
         tcp_connect_timeout=10,
+        **_oracle_tls(conn),
     )
 
 
@@ -597,9 +724,9 @@ def _sqlserver_connect(conn: DbConnectionSpec):
             raise
         raise driver_not_installed("sqlserver") from e
 
-    tls = (conn.extra or {}).get("tls") or "verify"
-    if tls not in _TLS_SQLSERVER:
-        raise DbSourceError(f"SQL Server: unknown TLS option {tls!r} (verify, trust, none).")
+    # no company authority here: Microsoft's ODBC driver takes the authorities from the
+    # system's store only (docs/sqlserver.md: add it to the image, as the driver)
+    tls = conn.tls
     # a named instance (`host\\SQLEXPRESS`) is reached without a port (SQL Browser)
     server = conn.host if ("\\" in conn.host and not conn.port) else f"{conn.host},{conn.port_or_default}"
     parts = [f"Server={_odbc_value(server)}", f"UID={_odbc_value(conn.username)}", f"PWD={_odbc_value(conn.resolve_password())}"]

@@ -158,7 +158,11 @@ export function useConnections() {
     // {sqlserver: {installed, docs}}; {} when the engine does not say
     drivers: () => apiFetch<Record<string, DriverInfo>>('/connections/drivers'),
 
-    test: (id: number, key?: KeyAcceptance) => (key ? accept(id, key) : apiFetch<HostKeyResult>(`/connections/${id}/test`, { method: 'POST' })),
+    // a database: `extra` = the encryption of the form being edited, tried with the stored password
+    test: (id: number, key?: KeyAcceptance, extra?: string) =>
+      key
+        ? accept(id, key)
+        : apiFetch<HostKeyResult>(`/connections/${id}/test`, { method: 'POST', ...(extra !== undefined ? { body: { extra } } : {}) }),
 
     // test of the form BEFORE saving, with only the secret written in the form; stores nothing
     testDraft: (projectId: number, body: ConnectionDraft, key?: KeyAcceptance) => {

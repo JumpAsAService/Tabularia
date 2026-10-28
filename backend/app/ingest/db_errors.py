@@ -29,6 +29,11 @@ verbatim in tests/test_db_errors.py:
 - SQL Server (mssql-python): `.ddbc_error` with the server's text behind the
   `[Microsoft][SQL Server]` prefixes; the network arrives as a Winsock code (`TCP
   Provider: Error code 0x2AFA`), TLS as an OpenSSL error of the `SSL Provider`.
+- TLS, for all but SQL Server's own: a certificate that cannot be verified (Python's ssl,
+  libpq), issued for another name, a server without encryption when the connection asks
+  for it. Captured from the real drivers on 2026-10-28 against PostgreSQL 18, MySQL 8.4,
+  ClickHouse 24.8 with a company authority's certificate, and a TLS server for Oracle's
+  TCPS and Trino's HTTPS.
 - Network, for all: DNS, connection refused, timeout, TLS, recognized from the text of
   the exception chain.
 
@@ -75,6 +80,19 @@ _READONLY_HINT = "The connection's user is read-only: it cannot be used as a des
 _SERVER_MEMORY_HINT = "The database server ran out of memory for this query: reduce the data."
 _NET_HINT = "The server is unreachable: check host, port and network."
 _SERVICE_HINT = "Check the service name in the connection's Database field."
+# the encryption of the connections (db_tls): the choices as the connection's form names them
+_TLS_UNTRUSTED_HINT = (
+    "If your company's own authority signed it, paste that authority's certificate in the "
+    "connection; if it is self-signed, choose «trust the server's certificate»."
+)
+_TLS_NAME_HINT = (
+    "Write as host the name the certificate is issued for, or choose «trust the server's "
+    "certificate» in the connection."
+)
+_TLS_REQUIRED_HINT = "The server accepts only encrypted connections: choose an encrypted option in the connection."
+_TLS_UNAVAILABLE_HINT = (
+    "Enable TLS on the server, or choose «not encrypted» in the connection if the network is trusted."
+)
 
 # ClickHouse: code → hint (names from ErrorCodes.cpp)
 _CH_HINTS = {
@@ -104,6 +122,7 @@ _PG_HINTS = {
 _MYSQL_HINTS = {
     1045: _AUTH_HINT, 1044: _PERM_HINT, 1142: _PERM_HINT, 1143: _PERM_HINT,
     3024: _TIMEOUT_HINT, 1290: _READONLY_HINT,
+    3159: _TLS_REQUIRED_HINT,  # require_secure_transport, and the connection not encrypted
     2003: _NET_HINT, 2005: _NET_HINT, 2006: _NET_HINT, 2013: _NET_HINT,
 }
 
@@ -138,6 +157,12 @@ _SQLSERVER_TLS_HINT = (
     "Give the server a certificate that can be verified, or choose «trust the server's "
     "certificate» in the connection (self-signed certificates)."
 )
+_TLS_NAME_RE = re.compile(
+    r"does not match host name|(?:Hostname|IP address) mismatch, certificate is not valid|"
+    r"name on the server certificate does not match", re.I)   # libpq, Python's ssl, python-oracledb
+_TLS_UNTRUSTED_RE = re.compile(r"certificate verify failed(?::\s*([^()\n'\"\]]+))?", re.I)
+_TLS_UNAVAILABLE_RE = re.compile(
+    r"server does not support SSL, but SSL was required|SSL is required but the server doesn't support it", re.I)
 
 _ORACLE_CODE_RE = re.compile(r"\b((?:ORA|DPY)-\d{4,5}):\s*([^\n]+)")
 # a PL/SQL block that does not compile: ORA-06550 gives only the place, the next line why
@@ -325,7 +350,24 @@ def _postgres(chain: list[BaseException], texts: list[str]) -> Optional[tuple[st
         # picks the hint, it is not shown
         hint_state = state or ("28P01" if "password authentication failed" in message else None)
         text = f"{message} (SQLSTATE {state})." if state else f"{message}."
+        if "no pg_hba.conf entry" in message and message.endswith("no encryption"):
+            return text, _TLS_REQUIRED_HINT   # pg_hba admits this client only over TLS
         return text, _PG_HINTS.get(hint_state or "")
+    return None
+
+
+def _tls(texts: list[str], host: Optional[str], port: Optional[int]) -> Optional[tuple[str, Optional[str]]]:
+    """The certificate or the encryption the connection asked for, whatever the driver."""
+    blob = "\n".join(texts)
+    where = f"{host}:{port}" if host and port else (host or "the server")
+    if _TLS_NAME_RE.search(blob):
+        return f"the TLS certificate of {where} is not issued for the name {host or 'in the connection'}.", _TLS_NAME_HINT
+    m = _TLS_UNTRUSTED_RE.search(blob)
+    if m:
+        cause = "certificate verify failed" + (f": {m.group(1).strip()}" if m.group(1) and m.group(1).strip() else "")
+        return f"the TLS certificate of {where} cannot be verified ({cause}).", _TLS_UNTRUSTED_HINT
+    if _TLS_UNAVAILABLE_RE.search(blob):
+        return f"{where} does not offer TLS encryption.", _TLS_UNAVAILABLE_HINT
     return None
 
 
@@ -383,8 +425,9 @@ def describe_db_error(
         for extractor, name in (
             (lambda: _clickhouse(texts), "ClickHouse"),
             (lambda: _trino(chain), "Trino"),
-            (lambda: _oracle(chain), "Oracle"),
             (lambda: _sqlserver(chain, texts, host, port), "SQL Server"),
+            (lambda: _tls(texts, host, port), None),
+            (lambda: _oracle(chain), "Oracle"),
             (lambda: _mysql(chain), "MySQL"),
             (lambda: _postgres(chain, texts), "PostgreSQL"),
         ):

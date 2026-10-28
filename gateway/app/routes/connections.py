@@ -44,7 +44,7 @@ from app.db.session import get_session
 from app.deps.auth import get_current_user
 from app.deps.permissions import ensure_can
 from app.models import Connection, Datasource, Flow, Project, User
-from app.services import audit
+from app.services import audit, db_tls
 from app.models.permission import Capability
 from app.schemas.models import (
     ApiCallSpec, ConnectionCreate, ConnectionOut, ConnectionTest, ConnectionUpdate, Page, PlaceholderPreviewQuery,
@@ -62,8 +62,6 @@ router = APIRouter(route_class=ReleasingRoute, tags=["connections"])
 SUPPORTED_DB_TYPES = {"postgresql", "mysql", "mariadb", "clickhouse", "trino", "oracle", "sqlserver", "s3", "smtp", "sharepoint", "sftp", "api"}
 # connection types that are not databases: no table to read, none to write
 NOT_DATABASES = ("smtp", "sharepoint", "sftp", "api")
-# SQL Server: how to treat TLS (`extra.tls`); empty = verify
-_TLS_SQLSERVER = ("verify", "trust", "none")
 
 
 def _to_out(conn: Connection) -> ConnectionOut:
@@ -93,7 +91,7 @@ def _valid_extra(extra: str | None, db_type: str | None = None) -> str:
     """The kind's options are opaque text to the gateway, but they must be a JSON OBJECT:
     accepting a broken one would move the error from whoever saves the connection to
     whoever, days later, wonders why the email does not go. Those the engine really
-    reads (SQL Server's TLS) are checked here."""
+    reads (the databases' encryption, SMTP, SFTP, API) are checked here."""
     import json as _json
 
     raw = (extra or "{}").strip() or "{}"
@@ -103,8 +101,9 @@ def _valid_extra(extra: str | None, db_type: str | None = None) -> str:
         raise HTTPException(status_code=422, detail="The connection options are not valid JSON")
     if not isinstance(data, dict):
         raise HTTPException(status_code=422, detail="The connection options must be a JSON object")
-    if db_type == "sqlserver" and data.get("tls") not in (None, "", *_TLS_SQLSERVER):
-        raise HTTPException(status_code=422, detail="SQL Server: the TLS option must be verify, trust or none")
+    tls_error = db_tls.option_error(db_type or "", data)
+    if tls_error:
+        raise HTTPException(status_code=422, detail=tls_error)
     if db_type == "smtp":
         errors = _smtp_option_errors(data)
         if errors:
@@ -148,18 +147,10 @@ def _domain_list(raw) -> list[str] | None:
 
 
 def _db_options(db_type: str, extra: str | None) -> dict:
-    """The kind's options the engine uses to connect (today: SQL Server's TLS). The other
-    databases have none: an empty object."""
-    if db_type != "sqlserver":
-        return {}
-    import json as _json
-
-    try:
-        data = _json.loads(extra or "{}")
-    except _json.JSONDecodeError:
-        data = {}
-    tls = data.get("tls") if isinstance(data, dict) else None
-    return {"tls": tls if tls in _TLS_SQLSERVER else "verify"}
+    """The kind's options the engine uses to connect a database: its encryption (see
+    services/db_tls.py). A connection saved before the choice sends none: the engine keeps
+    its driver's old behaviour."""
+    return db_tls.engine_options(db_type, extra)
 
 
 def smtp_options(conn: Connection) -> dict:
@@ -883,6 +874,8 @@ async def test_draft_connection(
     elif body.db_type == "s3":
         payload = _s3_payload(body.host, body.username, secret, body.database, body.db_schema)
     else:
+        if body.db_type in db_tls.DB_TYPES:
+            _valid_extra(body.extra, body.db_type)   # the encryption, checked as when saving
         payload = {
             "db_type": body.db_type,
             "host": body.host,
@@ -897,9 +890,13 @@ async def test_draft_connection(
 
 
 class HostKeyAcceptance(BaseModel):
-    """SFTP: the key the user accepts — the one a previous test showed."""
+    """SFTP: the key the user accepts — the one a previous test showed. A database: the
+    encryption of the form being edited (`extra`, only `tls` and `ca_cert` are taken), to
+    test it with the stored password before saving: same host, same account, so the secret
+    goes nowhere it did not go already."""
     expected_fingerprint: str = ""
     expected_type: str = ""
+    extra: str | None = None
 
 
 def _refuse_unoffered_key(result: dict, expected: str, address: str, language: str) -> None:
@@ -935,7 +932,10 @@ async def test_connection(
     ensure_can(session, user, conn.project_id, Capability.CONNECT)
     language = request_language(request)
     if conn.db_type != "sftp":
-        return await _engine_inspect(engine_connection_payload(conn), "test", language=language)
+        payload = engine_connection_payload(conn)
+        if body is not None and body.extra is not None and conn.db_type in db_tls.DB_TYPES:
+            payload["extra"] = _db_options(conn.db_type, _valid_extra(body.extra, conn.db_type))
+        return await _engine_inspect(payload, "test", language=language)
     expected = (body.expected_fingerprint if body else "").strip()
     address = f"{conn.host}:{conn.port or 22}"
     result = await _engine_inspect(engine_connection_payload(conn), "test", language=language, expected_fingerprint=expected,

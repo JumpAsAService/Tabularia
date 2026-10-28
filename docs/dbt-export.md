@@ -219,9 +219,19 @@ MySQL *database* engine is dropped and made again (it holds no data). `CLICKHOUS
   flow becomes a model there, not a write into the source database.
 
 On the **native ClickHouse** target the profile sets the same `join_use_nulls` and
-`max_query_size`, and `secure` follows the rule Tabularia's own client follows: TLS on
-ports 8443 and 443, not on the others (`CLICKHOUSE_SECURE=true|false` overrides it; the
-README says which).
+`max_query_size`, and `secure` follows the connection's
+[encryption](connections/databases.md#encryption-tls): on with verify or trust (trust
+adds `verify: false`), off with none; a connection saved before the option keeps the rule
+Tabularia's own client follows, TLS on ports 8443 and 443 and not on the others
+(`CLICKHOUSE_SECURE=true|false` overrides it; the README says which). On the **native
+PostgreSQL** target the profile's `sslmode` is the connection's: `verify-full` for verify
+(with `sslrootcert: system`, the system's authorities), `require` for trust, `disable` for
+none, nothing for a connection saved before the option. A company authority comes with
+the project as `certs/ca.pem`: dbt-postgres names it in `sslrootcert`, dbt-clickhouse
+reads it with `SSL_CERT_FILE=certs/ca.pem`. On the federated targets the profile names
+host, port, database and user only: the README says how to encrypt an encrypted
+connection there (`PGSSLMODE` for DuckDB's PostgreSQL, the ClickHouse server's own
+settings for its table engines).
 
 ### Download options
 

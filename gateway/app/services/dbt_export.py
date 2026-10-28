@@ -36,6 +36,7 @@ from app.core.config import get_settings
 from app.core.engine_client import get_engine_client
 from app.models import Connection, Datasource, Flow, FlowVersion, Project, User
 from app.services import contracts as contract_service
+from app.services import db_tls
 from app.services.flow_resolver import FlowResolveError, resolve_output_chains
 
 logger = logging.getLogger(__name__)
@@ -1060,11 +1061,36 @@ def _sources_yaml(p: _Project, name_for: callable, database_for: callable) -> li
     return list(sources.values())
 
 
+_PG_SSLMODE = {"verify": "verify-full", "trust": "require"}
+
+
+def _federated_tls_note(conn: Connection, reader: str) -> Optional[str]:
+    """What the project does not carry of an encrypted connection read through federation:
+    the profile names host, port, database and user only."""
+    mode = db_tls.mode(conn.db_type, conn.extra)
+    if mode not in ("verify", "trust"):
+        return None
+    how = "verifying its certificate" if mode == "verify" else "without verifying its certificate"
+    if reader == "duckdb" and conn.db_type == "postgresql":
+        env = f"`PGSSLMODE={_PG_SSLMODE[mode]}`" + (" with `PGSSLROOTCERT` naming the company authority's certificate"
+                                                    if db_tls.engine_options(conn.db_type, conn.extra).get("ca_cert") else "")
+        return (f"Tabularia reaches «{conn.name}» encrypted, {how}. DuckDB reads it through libpq: run dbt with {env} "
+                "to do the same (the secret above does not say it).")
+    if reader == "duckdb":
+        return (f"Tabularia reaches «{conn.name}» encrypted, {how}: the DuckDB secret above does not say it, "
+                "add the encryption to it as DuckDB's MySQL extension documents.")
+    return (f"Tabularia reaches «{conn.name}» encrypted, {how}. ClickHouse reads it itself, through its "
+            f"{conn.db_type} table engine: that encryption is the ClickHouse server's setting, not this project's.")
+
+
 def _duckdb_payload(flow: Flow, p: _Project, conns: dict[int, Connection]) -> dict:
     attachments = {}
     for conn in conns.values():
         if conn.db_type not in _FEDERABLE:
             raise _not_federable(conn)
+        note = _federated_tls_note(conn, "duckdb")
+        if note:
+            p.note.append(note)
         attachments[conn.id] = {
             "alias": f"db_{conn.id}", "db_type": conn.db_type, "pw_env": f"TABULARIA_DB_{conn.id}_PASSWORD",
             "conn": {"host": conn.host, "port": conn.port or _FEDERABLE[conn.db_type][0], "database": conn.database, "username": conn.username},
@@ -1160,7 +1186,10 @@ def _native_payload(flow: Flow, p: _Project, conns: dict[int, Connection]) -> di
             source_map[key] = {"ident": f"__s_{i}", "macro": _macro_source(name(c, schema), table), "columns": _columns(ds), "types": _dtypes(ds), "label": table}
     native = {
         "db_type": conn.db_type, "pw_env": f"TABULARIA_DB_{conn.id}_PASSWORD", "target_schema": p.options.schema_ or "dbt_tabularia",
-        "conn": {"host": conn.host, "port": conn.port or _PORT[conn.db_type], "database": conn.database, "username": conn.username},
+        "conn": {"host": conn.host, "port": conn.port or db_tls.default_port(conn.db_type, conn.extra, _PORT[conn.db_type]),
+                 "database": conn.database, "username": conn.username,
+                 # the encryption Tabularia uses, into the profile (absent: saved before the choice)
+                 **db_tls.engine_options(conn.db_type, conn.extra)},
     }
     return {
         "flow_name": flow.name, "flow_description": flow.description or "", "mode": "native",
@@ -1202,6 +1231,10 @@ def _clickhouse_payload(flow: Flow, p: _Project, conns: dict[int, Connection]) -
         "id": c.id, "name": c.name, "db_type": c.db_type, "host": c.host, "port": c.port or _PORT.get(c.db_type),
         "database": c.database, "username": c.username, "pw_env": f"TABULARIA_DB_{c.id}_PASSWORD",
     } for c in conns.values()]
+    for c in conns.values():
+        note = _federated_tls_note(c, "clickhouse") if c.db_type != "clickhouse" else None
+        if note:
+            p.note.append(note)
     return {
         "flow_name": flow.name, "flow_description": flow.description or "", "mode": "clickhouse",
         "models": p.models, "seeds": p.seeds, "source_map": source_map, "sources": sources, "notes": p.note,

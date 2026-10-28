@@ -2571,6 +2571,43 @@ def tls_for_port(port: Any) -> bool:
     return str(port) in ("8443", "443")
 
 
+# The connection's encryption (`tls`: verify | trust | none; absent = saved before the choice,
+# its driver's old behaviour) carried into the native profile, and the file of a company's
+# authority (`ca_cert`, with verify) shipped with the project: it is public.
+CA_FILE = "certs/ca.pem"
+_PG_SSLMODE = {"verify": "verify-full", "trust": "require", "none": "disable"}
+
+
+def _clickhouse_secure(c: dict) -> bool:
+    tls = c.get("tls")
+    return tls in ("verify", "trust") if tls else tls_for_port(c.get("port"))
+
+
+def _native_tls_lines(db_type: str, c: dict) -> list[str]:
+    tls = c.get("tls")
+    if db_type == "postgresql":
+        if tls not in _PG_SSLMODE:
+            return []   # libpq's default, prefer: as Tabularia reaches it
+        lines = [f"      sslmode: {_PG_SSLMODE[tls]}"]
+        if tls == "verify":
+            # libpq 16+ reads the system's authorities with «system»; a company's from the project
+            lines.append(f"      sslrootcert: {CA_FILE if c.get('ca_cert') else 'system'}")
+        return lines
+    if db_type == "clickhouse" and tls == "trust":
+        return ["      verify: false"]
+    return []
+
+
+def _native_tls_notes(db_type: str, c: dict) -> list[str]:
+    if not c.get("ca_cert"):
+        return []
+    if db_type == "postgresql":
+        return [f"`{CA_FILE}` is the certificate of the authority the connection verifies the server against: the profile "
+                "names it by a relative path, so run dbt from the project's folder (or write its full path in `sslrootcert`)."]
+    return [f"`{CA_FILE}` is the certificate of the authority the connection verifies ClickHouse against. dbt-clickhouse reads "
+            f"the system's authorities only: run dbt with `SSL_CERT_FILE={CA_FILE}`, or add it to the system's store."]
+
+
 def _clickhouse_profile(project: str, ch: dict) -> str:
     """profiles.yml of the ClickHouse target: the engine's ClickHouse host and port as
     starting values, dbt's user and password ONLY from env_var. `join_use_nulls`: without
@@ -2675,12 +2712,14 @@ def _native_profile(project: str, native: dict) -> str:
     # connection values are text the admin typed: quoted (YAML) and neutralised (dbt renders the profile)
     if adapter == "postgres":
         lines += [f"      host: {_y(c['host'])}", f"      port: {c['port']}", f"      user: {_y(c['username'])}",
-                  f"      password: \"{pw}\"", f"      dbname: {_y(c['database'])}", f"      schema: {_y_name(schema)}"]
+                  f"      password: \"{pw}\"", f"      dbname: {_y(c['database'])}", f"      schema: {_y_name(schema)}",
+                  *_native_tls_lines(db_type, c)]
     elif adapter == "clickhouse":
         lines += [f"      host: {_y(c['host'])}", f"      port: {c['port']}", f"      user: {_y(c['username'])}",
                   # TLS where Tabularia uses it (dbt-clickhouse does not infer it from the port: `secure: false`
                   # spoke plain HTTP to a TLS port 8443)
-                  f"      password: \"{pw}\"", f"      schema: {_y_name(schema)}", _secure_line(str(tls_for_port(c["port"])).lower()),
+                  f"      password: \"{pw}\"", f"      schema: {_y_name(schema)}", _secure_line(str(_clickhouse_secure(c)).lower()),
+                  *_native_tls_lines(db_type, c),
                   # as the ClickHouse target: the missing side of an outer join is NULL, not 0 / ''
                   "      custom_settings:", *_clickhouse_settings()]
     return "\n".join(lines) + "\n"
@@ -2904,6 +2943,8 @@ def build_dbt_project(
             files[where.macro("create_tabularia_sources")] = _clickhouse_sources_macro(clickhouse["federated"])
     elif native:
         files["profiles.yml"] = _native_profile(project, native)
+        if (native.get("conn") or {}).get("ca_cert"):
+            files[CA_FILE] = native["conn"]["ca_cert"].strip() + "\n"
     else:
         extensions = sorted({_DUCK_ATTACH_TYPE[a["db_type"]] for a in (attachments or []) if a["db_type"] in _FEDERABLE})
         secrets = "\n".join(_duck_secret(a) for a in (attachments or []))
@@ -2993,11 +3034,17 @@ def build_dbt_project(
         if native["db_type"] == "postgresql":
             notes = ["The models' SQL was translated by sqlglot and not run on Postgres at export time: run `dbt build` "
                      "once on a copy before relying on it (a function sqlglot does not translate fails there)."] + notes
+        c = native.get("conn") or {}
         if native["db_type"] == "clickhouse":
-            port = (native.get("conn") or {}).get("port")
-            notes = [f"The profile reaches ClickHouse on port {port} " + ("over TLS (`secure: true`), as Tabularia does on 8443 and 443"
-                     if tls_for_port(port) else "without TLS, as Tabularia does on a port other than 8443 and 443")
-                     + ": `CLICKHOUSE_SECURE=true|false` changes it."] + notes
+            port = c.get("port")
+            if c.get("tls"):
+                how = ("over TLS (`secure: true`" + (", the certificate not verified" if c["tls"] == "trust" else "") + ")"
+                       if _clickhouse_secure(c) else "without TLS") + ", as the connection is set in Tabularia"
+            else:
+                how = ("over TLS (`secure: true`), as Tabularia does on 8443 and 443" if tls_for_port(port)
+                       else "without TLS, as Tabularia does on a port other than 8443 and 443")
+            notes = [f"The profile reaches ClickHouse on port {port} {how}: `CLICKHOUSE_SECURE=true|false` changes it."] + notes
+        notes = _native_tls_notes(native["db_type"], c) + notes
     else:
         intro = (
             f"Generated by Tabularia from the flow **{flow_name}**. Targets **dbt-duckdb**, which\n"
@@ -3150,6 +3197,9 @@ def _integration(flow_name, intro, provenance, flow_description, what, models, s
         c = native.get("conn") or {}
         profile = (f"Your **dbt-{_NATIVE_ADAPTER[native['db_type']]}** profile on the {native['db_type']} database "
                    f"`{c.get('database')}` at `{c.get('host')}:{c.get('port')}`: the models run there, next to the data.\n")
+        tls_lines = _native_tls_lines(native["db_type"], c)
+        if tls_lines:
+            profile += ("\nIt reaches the database encrypted as Tabularia does:\n\n```yaml\n" + "\n".join(tls_lines) + "\n```\n")
         if native["db_type"] == "clickhouse":
             profile += ("\nIt needs `join_use_nulls` (without it the missing side of an outer join is 0 or `''` instead of "
                         "NULL):\n\n" + settings_)
