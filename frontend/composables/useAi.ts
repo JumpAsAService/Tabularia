@@ -45,10 +45,17 @@ export interface AiToolCall {
 }
 
 export interface AiChartSpec {
-  type: 'bar' | 'hbar' | 'line' | 'area' | 'pie' | 'donut' | 'scatter'
+  type: 'bar' | 'hbar' | 'line' | 'area' | 'pie' | 'donut' | 'scatter' | 'combo' | 'waterfall' | 'funnel' | 'treemap'
+    | 'heatmap' | 'gauge' | 'kpi' | 'bullet'
+  // the categories; empty for a gauge, the periods (or empty) for a KPI
   x: string
   y: string
+  // the combo's line, the bullet's and the gauge's target, what a KPI is compared with
+  y2?: string
+  // the series of bars and lines, the heatmap's rows
   series?: string
+  // the end of a gauge's or a bullet's scale
+  max?: number
   title?: string
 }
 

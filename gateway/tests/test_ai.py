@@ -439,3 +439,96 @@ async def test_two_conversations_do_not_cancel_each_other(session, ai_on, fake_e
     slot_a, slot_b = fake_engine.previews[-2]["slot"], fake_engine.previews[-1]["slot"]
     assert slot_a != slot_b
     assert slot_a.endswith(":c7:ai") and slot_b.endswith(":c9:ai")
+
+
+# ── the chart under the answer ───────────────────────────────────────────────
+COLUMNS = [{"name": n, "dtype": d} for n, d in
+           (("mese", "Int32"), ("canale", "String"), ("ricavo", "Float64"), ("obiettivo", "Float64"))]
+
+
+@pytest.mark.parametrize("chart, expected", [
+    # the kinds of before keep the spec they had
+    ({"type": "bar", "x": "canale", "y": "ricavo", "series": "mese"},
+     {"type": "bar", "x": "canale", "y": "ricavo", "series": "mese"}),
+    # one number: no categories, a target and the end of the scale
+    ({"type": "gauge", "y": "ricavo", "y2": "obiettivo", "max": "100"},
+     {"type": "gauge", "x": "", "y": "ricavo", "y2": "obiettivo", "max": 100.0}),
+    ({"type": "kpi", "x": "mese", "y": "ricavo"}, {"type": "kpi", "x": "mese", "y": "ricavo"}),
+    ({"type": "kpi", "y": "ricavo", "y2": "obiettivo"}, {"type": "kpi", "x": "", "y": "ricavo", "y2": "obiettivo"}),
+    ({"type": "combo", "x": "mese", "y": "ricavo", "y2": "obiettivo"},
+     {"type": "combo", "x": "mese", "y": "ricavo", "y2": "obiettivo"}),
+    ({"type": "bullet", "x": "canale", "y": "ricavo", "y2": "obiettivo", "max": 5e6},
+     {"type": "bullet", "x": "canale", "y": "ricavo", "y2": "obiettivo", "max": 5e6}),
+    ({"type": "heatmap", "x": "mese", "y": "ricavo", "series": "canale"},
+     {"type": "heatmap", "x": "mese", "y": "ricavo", "series": "canale"}),
+    # what a kind does not read is dropped, not refused
+    ({"type": "funnel", "x": "canale", "y": "ricavo", "y2": "obiettivo", "series": "mese", "max": 9},
+     {"type": "funnel", "x": "canale", "y": "ricavo"}),
+    ({"type": "gauge", "y": "ricavo", "max": float("inf")}, {"type": "gauge", "x": "", "y": "ricavo"}),
+    ({"type": "Waterfall", "x": "mese", "y": "ricavo", "title": "t" * 300},
+     {"type": "waterfall", "x": "mese", "y": "ricavo", "title": "t" * 120}),
+    ({"type": "treemap", "x": "canale", "y": "ricavo"}, {"type": "treemap", "x": "canale", "y": "ricavo"}),
+])
+def test_every_chart_kind_keeps_what_it_reads(chart, expected):
+    spec, reason = ai_agent._chart_spec(chart, COLUMNS)
+    assert reason is None and spec == expected
+
+
+@pytest.mark.parametrize("chart, says", [
+    ({"type": "combo", "x": "mese", "y": "ricavo"}, "chart_y2"),
+    ({"type": "bullet", "x": "canale", "y": "ricavo"}, "chart_y2"),
+    ({"type": "heatmap", "x": "mese", "y": "ricavo"}, "chart_series"),
+    ({"type": "gauge", "y": "ricavo", "y2": "budget"}, "budget"),
+    ({"type": "kpi", "x": "mese"}, "(none given)"),
+    ({"type": "funnel", "y": "ricavo"}, "(none given)"),  # only a gauge and a KPI go without categories
+    ({"type": "gauge", "y": "ricavo", "max": "lots"}, "chart_max"),
+    ({"type": "radar", "x": "mese", "y": "ricavo"}, "bullet"),  # the reason lists the kinds there are
+])
+def test_a_chart_missing_what_it_needs_is_refused_with_the_reason(chart, says):
+    spec, reason = ai_agent._chart_spec(chart, COLUMNS)
+    assert spec is None and says in reason
+
+
+def _enum(prop: dict) -> list:
+    """The values of an optional Literal in a JSON schema."""
+    return next(p["enum"] for p in prop.get("anyOf", [prop]) if "enum" in p)
+
+
+@pytest.mark.anyio
+async def test_the_model_is_offered_every_kind_and_a_gauge_reaches_the_page(session, ai_on, fake_engine, monkeypatch):
+    admin, user, visible, _ = _catalog(session)
+    await ai_routes.set_ai_model("gpt-oss-120b", ai_routes.AiModelUpdate(enabled=True), user=admin, session=session)
+    monkeypatch.setattr(ai_routes, "_new_session", lambda: nullcontext(session))
+    offered: dict = {}
+
+    async def model(messages, info):
+        last = messages[-1]
+        if isinstance(last, ModelRequest) and any(isinstance(p, ToolReturnPart) for p in last.parts):
+            yield "Siamo all'87,5%."
+            return
+        tool = next(t for t in info.function_tools if t.name == "query_datasource")
+        offered.update(tool.parameters_json_schema["properties"])
+        yield {0: DeltaToolCall(name="query_datasource", tool_call_id="g1", json_args=json.dumps({
+            "datasource_id": visible.id, "sql": "SELECT sum(imp) AS ricavo, 100 AS obiettivo FROM self",
+            "chart_type": "gauge", "chart_y": "ricavo", "chart_y2": "obiettivo", "chart_max": 150,
+        }))}
+
+    monkeypatch.setattr(ai_agent, "build_model", lambda model_id: FunctionModel(stream_function=model))
+    fake_engine.preview_response = (200, {"columns": [{"name": "ricavo", "dtype": "Float64"}, {"name": "obiettivo", "dtype": "Int32"}],
+                                          "rows": [{"ricavo": 87.5, "obiettivo": 100}], "row_count": 1, "truncated": False})
+    body = ai_routes.ChatRequest(message="a che punto siamo con l'obiettivo?", model="gpt-oss-120b", engine=None, locale="it")
+    events = await _events(await ai_routes.chat(body, request=None, user=user, session=session))
+
+    assert _enum(offered["chart_type"]) == list(ai_agent.CHART_TYPES)
+    assert {"chart_y2", "chart_max"} <= set(offered)
+    result = next(d for n, d in events if n == "tool_result")
+    assert result["ok"] is True
+    assert result["chart"] == {"type": "gauge", "x": "", "y": "ricavo", "y2": "obiettivo", "max": 150.0}
+
+
+def test_the_assistant_page_agent_offers_the_same_kinds():
+    from app.services.agent import read_tools
+
+    props = read_tools.QueryDatasourceArgs.model_json_schema()["properties"]
+    assert _enum(props["chart_type"]) == list(ai_agent.CHART_TYPES)
+    assert {"chart_y2", "chart_max"} <= set(props)

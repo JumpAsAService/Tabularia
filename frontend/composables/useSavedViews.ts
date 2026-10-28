@@ -30,6 +30,14 @@ export interface ChartSettings {
   yFunc: string
   yNum: string
   topN: number
+  // the kinds after the first six (views saved before have none of these): the second
+  // measure (combo, bullet), the KPI's periods, the gauge's scale and target
+  func2?: string
+  y2?: string
+  trend?: string
+  min?: number | null
+  max?: number | null
+  target?: number | null
 }
 
 export interface SavedView {

@@ -6,27 +6,54 @@
 //
 // The rows are those shown in the table above already: no extra query, and the chart
 // cannot disagree with the numbers next to it.
+//
+// The kinds past the first ones (combo, waterfall, funnel, heatmap, gauge, KPI, bullet)
+// are drawn by composables/chartKinds.ts, as in the Viewer.
 import { computed, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { use } from 'echarts/core'
 import { CanvasRenderer } from 'echarts/renderers'
-import { BarChart, LineChart, PieChart, ScatterChart } from 'echarts/charts'
-import { GridComponent, TooltipComponent, LegendComponent } from 'echarts/components'
+import { BarChart, LineChart, PieChart, ScatterChart, TreemapChart, GaugeChart, FunnelChart, HeatmapChart } from 'echarts/charts'
+import { GridComponent, TooltipComponent, LegendComponent, VisualMapContinuousComponent } from 'echarts/components'
 import VChart from 'vue-echarts'
 import { Download } from 'lucide-vue-next'
 import type { AiChartSpec } from '~/composables/useAi'
 import { useChartTheme } from '~/composables/useChartTheme'
+import { useFormat } from '~/composables/useFormat'
+import KpiCard from '~/components/ui/KpiCard.vue'
+import {
+  PALETTE,
+  bulletOption,
+  comboOption,
+  funnelOption,
+  gaugeOption,
+  heatmapOption,
+  lastChange,
+  toNumber,
+  useKindCtx,
+  waterfallOption,
+  type KpiChange,
+} from '~/composables/chartKinds'
 
-use([CanvasRenderer, BarChart, LineChart, PieChart, ScatterChart, GridComponent, TooltipComponent, LegendComponent])
+use([
+  CanvasRenderer, BarChart, LineChart, PieChart, ScatterChart, TreemapChart, GaugeChart, FunnelChart, HeatmapChart,
+  GridComponent, TooltipComponent, LegendComponent, VisualMapContinuousComponent,
+])
 
 const props = defineProps<{ spec: AiChartSpec; rows: Record<string, any>[]; name?: string }>()
 const { t } = useI18n()
 const { ui } = useChartTheme()
+const kindCtx = useKindCtx(ui)
 const chart = ref<any>(null)
 
-const PALETTE = ['#3987e5', '#199e70', '#c98500', '#9085e9', '#d55181']
 const num = (v: unknown) => (typeof v === 'number' ? v : Number(v))
-const fmt = new Intl.NumberFormat()
+const fmtx = useFormat()
+const fmt = { format: (n: number) => fmtx.number(n, 2) } // in the interface's language
+const label = (v: unknown) => String(v ?? '—')
+// the periods of a KPI in their order, whatever the query's: numbers as numbers, texts
+// with their digits read as numbers (2025-2 before 2025-10)
+const byCell = (a: unknown, b: unknown) =>
+  typeof a === 'number' && typeof b === 'number' ? a - b : label(a).localeCompare(label(b), undefined, { numeric: true })
 
 // text → safe HTML: ECharts' formatters end up in innerHTML
 const esc = (v: unknown) =>
@@ -47,9 +74,74 @@ const seriesList = computed(() => {
     .slice(0, PALETTE.length)
 })
 
+/** The KPI: the last period's value with its change and trend, or one row against `y2`. */
+const kpi = computed(() => {
+  const { type, x, y, y2 } = props.spec
+  if (type !== 'kpi' || !props.rows.length) return null
+  const k = kindCtx.value
+  const versus = (value: number | null, base: unknown): KpiChange | null => {
+    const b = toNumber(base)
+    return value != null && b ? { ratio: (value - b) / Math.abs(b), text: k.t('chartPanel.vsValue', { name: y2 }) } : null
+  }
+  if (x && props.rows.length > 1) {
+    const rows = [...props.rows].sort((a, b) => byCell(a[x], b[x]))
+    const last = rows[rows.length - 1]
+    const spark = { cats: rows.map((r) => label(r[x])), values: rows.map((r) => toNumber(r[y])) }
+    const value = toNumber(last[y])
+    return { label: `${y} · ${label(last[x])}`, value, spark, change: y2 ? versus(value, last[y2]) : lastChange(k, spark) }
+  }
+  const value = toNumber(props.rows[0][y])
+  return { label: y, value, spark: null, change: y2 ? versus(value, props.rows[0][y2]) : null }
+})
+
+/** The kinds the Viewer shares, from the rows as the assistant returned them. */
+function sharedOption() {
+  const k = kindCtx.value
+  const { type, x, y, y2, series } = props.spec
+  const rows = props.rows
+  const cats = rows.map((r) => label(r[x]))
+  const values = (col?: string) => rows.map((r) => (col ? toNumber(r[col]) : null))
+  switch (type) {
+    case 'gauge':
+      return gaugeOption(k, { value: toNumber(rows[0]?.[y]), name: y, target: y2 ? toNumber(rows[0]?.[y2]) : null,
+                             max: props.spec.max ?? null }, true)
+    case 'waterfall': return waterfallOption(k, { cats, values: values(y), name: y })
+    case 'funnel': return funnelOption(k, { cats, values: values(y), name: y })
+    case 'combo': return comboOption(k, { cats, bars: values(y), line: values(y2), barName: y, lineName: y2 ?? '' })
+    case 'bullet':
+      return bulletOption(k, { cats, values: values(y), targets: values(y2), name: y, targetName: y2 ?? '',
+                              max: props.spec.max ?? null })
+    case 'heatmap': {
+      // the two axes in the order the rows bring them: the query chose it
+      const xCats = [...new Set(cats)]
+      const yCats = [...new Set(rows.map((r) => label(series ? r[series] : '')))]
+      const xi = new Map(xCats.map((v, i) => [v, i]))
+      const yi = new Map(yCats.map((v, i) => [v, i]))
+      const cells: [number, number, number][] = []
+      for (const r of rows) {
+        const v = toNumber(r[y])
+        if (v != null) cells.push([xi.get(label(r[x]))!, yi.get(label(series ? r[series] : ''))!, v])
+      }
+      return heatmapOption(k, { xCats, yCats, cells, name: y })
+    }
+  }
+  return null
+}
+
+// a chart with a row per category grows with them, up to a point: past it the labels thin out
+const height = computed(() => {
+  const n = (col?: string) => new Set(props.rows.map((r) => label(col ? r[col] : ''))).size
+  const { type, x, series } = props.spec
+  if (type === 'bullet') return Math.min(Math.max(240, 30 * n(x) + 50), 520)
+  if (type === 'heatmap') return Math.min(Math.max(240, 26 * n(series) + 90), 520)
+  return 240
+})
+
 const option = computed(() => {
   const c = ui.value
   const { type, x, y } = props.spec
+  const shared = sharedOption()
+  if (shared) return shared
   const axis = { axisLine: { lineStyle: { color: c.border } }, axisLabel: { color: c.muted, fontSize: 11 } }
   const base = {
     backgroundColor: 'transparent',
@@ -69,6 +161,25 @@ const option = computed(() => {
         radius: type === 'donut' ? ['46%', '72%'] : '72%',
         label: { color: c.text, fontSize: 11 },
         data: props.rows.map((r) => ({ name: String(r[x] ?? '—'), value: num(r[y]) })),
+      }],
+    }
+  }
+
+  if (type === 'treemap') {
+    // magnitude → ONE hue, shaded by value (as the Viewer's)
+    return {
+      ...base,
+      tooltip: { ...base.tooltip, trigger: 'item', formatter: (p: any) => `${esc(p.name)}: <b>${esc(fmt.format(p.value))}</b>` },
+      series: [{
+        type: 'treemap',
+        roam: false,
+        nodeClick: false,
+        breadcrumb: { show: false },
+        left: 0, right: 0, top: 0, bottom: 0,
+        itemStyle: { color: PALETTE[0], borderColor: c.panel, borderWidth: 2 },
+        colorAlpha: [0.45, 1],
+        label: { color: c.text, fontSize: 11, formatter: '{b}' },
+        data: props.rows.map((r) => ({ name: label(r[x]), value: num(r[y]) })).filter((d) => d.value > 0),
       }],
     }
   }
@@ -132,10 +243,14 @@ defineExpose({ downloadPng })
 <template>
   <figure class="mini">
     <figcaption v-if="spec.title">{{ spec.title }}</figcaption>
-    <VChart ref="chart" class="canvas" :option="option" autoresize />
-    <button type="button" class="png" :title="t('chat.downloadPng')" :aria-label="t('chat.downloadPng')" @click="downloadPng">
-      <Download :size="12" />
-    </button>
+    <!-- a KPI is text in the page, with its trend line: there is no picture of it to save -->
+    <KpiCard v-if="kpi" dense :label="kpi.label" :value="kpi.value" :change="kpi.change" :spark="kpi.spark" />
+    <template v-else>
+      <VChart ref="chart" class="canvas" :style="{ height: `${height}px` }" :option="option" autoresize />
+      <button type="button" class="png" :title="t('chat.downloadPng')" :aria-label="t('chat.downloadPng')" @click="downloadPng">
+        <Download :size="12" />
+      </button>
+    </template>
   </figure>
 </template>
 

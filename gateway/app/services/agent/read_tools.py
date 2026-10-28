@@ -130,10 +130,12 @@ class QueryDatasourceArgs(BaseModel):
     join_left_on: Optional[str] = None
     join_right_on: Optional[str] = None
     join_how: Optional[Literal["inner", "left", "full"]] = None
-    chart_type: Optional[Literal["bar", "hbar", "line", "area", "pie", "donut", "scatter"]] = None
+    chart_type: Optional[ai_agent.ChartType] = None
     chart_x: Optional[str] = None
     chart_y: Optional[str] = None
+    chart_y2: Optional[str] = None
     chart_series: Optional[str] = None
+    chart_max: Optional[float] = None
     chart_title: Optional[str] = None
 
 
@@ -143,7 +145,7 @@ async def query_datasource(ctx: ToolContext, a: QueryDatasourceArgs) -> dict:
 
     To answer a question that spans TWO datasources, set `join_datasource_id` to the second one together with `join_left_on` and `join_right_on` (the key columns on each side, comma-separated if the key has several parts). The two are joined before your SQL runs, and `self` is the joined result. `join_how` is inner by default; use left to keep rows that have no match. A column on both sides that is not a key gets the suffix `_right`.
 
-    `chart_type` with `chart_x` (the categories) and `chart_y` (the numeric column) draws the result as a chart in the chat; leave them unset otherwise."""
+    `chart_type` with `chart_x` (the categories) and `chart_y` (the numeric column) draws the result as a chart in the chat; leave them unset otherwise. bar or hbar rank, line or area follow time, pie, donut or treemap show shares, scatter relates two measures, funnel shows stages, waterfall signed steps to a total. combo draws `chart_y2` as a line on its own axis; bullet sets each category's `chart_y` against its target `chart_y2`; heatmap spreads `chart_y` over `chart_x` and the rows in `chart_series`. gauge (one number on a scale up to `chart_max`, target `chart_y2`) and kpi (a headline number; with `chart_x` a period, the last one with its change and trend) need no `chart_x`, and are for when the user asks for an indicator."""
     return await ai_agent.query_datasource(_assistant(ctx), **a.model_dump())
 
 

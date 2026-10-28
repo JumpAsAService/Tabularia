@@ -2,14 +2,19 @@
 // The selected node's chart. ALL the kinds work on aggregates the engine computes over
 // the WHOLE dataset (a group_by appended to the node's chain, streaming + cache) — never
 // on the preview's sample. The scatter is aggregated too: every point is a group (e.g. a
-// product), X and Y two aggregations.
-import { ref, computed, watch } from 'vue'
+// product), X and Y two aggregations. The gauge and the KPI are ONE aggregate over the
+// whole dataset (the KPI's trend line a second query, by period).
+//
+// The kinds past the first six (combo, waterfall, funnel, heatmap, KPI, gauge, bullet) are
+// drawn by composables/chartKinds.ts, which the chat's chart shares; their look follows
+// the reports' presets.
+import { ref, computed, watch, h, toRaw, type FunctionalComponent, type VNode } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { useFormat } from '~/composables/useFormat'
 import { use } from 'echarts/core'
 import { CanvasRenderer } from 'echarts/renderers'
-import { BarChart, LineChart, PieChart, TreemapChart, ScatterChart } from 'echarts/charts'
-import { GridComponent, TooltipComponent, LegendComponent } from 'echarts/components'
+import { BarChart, LineChart, PieChart, TreemapChart, ScatterChart, GaugeChart, FunnelChart, HeatmapChart } from 'echarts/charts'
+import { GridComponent, TooltipComponent, LegendComponent, VisualMapContinuousComponent } from 'echarts/components'
 import VChart from 'vue-echarts'
 import {
   RefreshCw,
@@ -19,14 +24,36 @@ import {
   ChartPie,
   LayoutGrid,
   ChartScatter,
+  ChartNoAxesCombined,
+  Funnel,
+  Grid3x3,
+  TrendingUp,
+  Gauge,
 } from 'lucide-vue-next'
 import type { ColumnInfo, Operation, PreviewResult } from '~/composables/useApi'
 import type { ChartSettings } from '~/composables/useSavedViews'
 import { errMessage } from '~/composables/useApi'
 import { AGG_LABELS } from '~/composables/useFlowModel'
 import { useChartTheme } from '~/composables/useChartTheme'
+import KpiCard from '~/components/ui/KpiCard.vue'
+import {
+  PALETTE,
+  bulletOption,
+  comboOption,
+  funnelOption,
+  gaugeOption,
+  heatmapOption,
+  lastChange,
+  toNumber,
+  useKindCtx,
+  waterfallOption,
+  type Spark,
+} from '~/composables/chartKinds'
 
-use([CanvasRenderer, BarChart, LineChart, PieChart, TreemapChart, ScatterChart, GridComponent, TooltipComponent, LegendComponent])
+use([
+  CanvasRenderer, BarChart, LineChart, PieChart, TreemapChart, ScatterChart, GaugeChart, FunnelChart, HeatmapChart,
+  GridComponent, TooltipComponent, LegendComponent, VisualMapContinuousComponent,
+])
 
 const { t } = useI18n()
 const fmtx = useFormat()
@@ -39,10 +66,8 @@ const props = defineProps<{
 }>()
 const emit = defineEmits<{ (e: 'update:settings', s: ChartSettings): void }>()
 
-// VALIDATED categorical palette (lightness band, CVD, contrast): mid-tone hues that stay
-// readable on both dark and light backgrounds. MAX 5 series: never cycle the hues past
-// the slots — the extra ones are flagged.
-const PALETTE = ['#3987e5', '#199e70', '#c98500', '#9085e9', '#d55181']
+// PALETTE (chartKinds.ts): the VALIDATED categorical palette, MAX 5 series — never cycle
+// the hues past the slots, the extra ones are flagged.
 const OTHER_COLOR = '#8b93a7' // neutral grey for the "Other" slice
 const MAX_SERIES = PALETTE.length
 
@@ -51,15 +76,41 @@ const MAX_SERIES = PALETTE.length
 // and in audit.vue, and was missing altogether in RunCalendar and RunGantt.
 const { ui } = useChartTheme()
 
-const CHART_TYPES = [
-  { id: 'bar', icon: BarChart3 },
-  { id: 'line', icon: ChartLine },
-  { id: 'area', icon: ChartArea },
-  { id: 'pie', icon: ChartPie },
-  { id: 'treemap', icon: LayoutGrid },
-  { id: 'scatter', icon: ChartScatter },
+// Two kinds lucide has no picture for, drawn in its grammar (a 24-unit box, 2px round
+// strokes, the bars as strokes on the L of the axes, like its chart-column)
+const lucideLike = (paths: string[]): FunctionalComponent<{ size?: number }> => (p) =>
+  h('svg', {
+    xmlns: 'http://www.w3.org/2000/svg', width: p.size ?? 24, height: p.size ?? 24, viewBox: '0 0 24 24',
+    fill: 'none', stroke: 'currentColor', 'stroke-width': 2, 'stroke-linecap': 'round', 'stroke-linejoin': 'round',
+  }, paths.map((d): VNode => h('path', { d })))
+const AXES = 'M3 3v16a2 2 0 0 0 2 2h16'
+const WaterfallIcon = lucideLike([AXES, 'M8 17V9', 'M13 9v3', 'M18 17v-5']) // up, down, the total
+const BulletIcon = lucideLike([AXES, 'M7 8h8', 'M18 5v6', 'M7 15h5', 'M15 12v6']) // a bar each, and its target
+
+// the first six as they always were, then the kinds that compose, then those of one number
+const CHART_GROUPS = [
+  [
+    { id: 'bar', icon: BarChart3 },
+    { id: 'line', icon: ChartLine },
+    { id: 'area', icon: ChartArea },
+    { id: 'pie', icon: ChartPie },
+    { id: 'treemap', icon: LayoutGrid },
+    { id: 'scatter', icon: ChartScatter },
+  ],
+  [
+    { id: 'combo', icon: ChartNoAxesCombined },
+    { id: 'waterfall', icon: WaterfallIcon },
+    { id: 'funnel', icon: Funnel },
+    { id: 'heatmap', icon: Grid3x3 },
+  ],
+  [
+    { id: 'kpi', icon: TrendingUp },
+    { id: 'gauge', icon: Gauge },
+    { id: 'bullet', icon: BulletIcon },
+  ],
 ] as const
-type ChartType = (typeof CHART_TYPES)[number]['id']
+type ChartType = (typeof CHART_GROUPS)[number][number]['id']
+const KNOWN_TYPES = new Set<string>(CHART_GROUPS.flat().map((ct) => ct.id))
 
 const chartTypeLabels = computed<Record<ChartType, string>>(() => ({
   bar: t('chartPanel.barChart'),
@@ -68,6 +119,13 @@ const chartTypeLabels = computed<Record<ChartType, string>>(() => ({
   pie: t('chartPanel.pieChart'),
   treemap: t('chartPanel.treemapChart'),
   scatter: t('chartPanel.scatterChart'),
+  combo: t('chartPanel.comboChart'),
+  waterfall: t('chartPanel.waterfallChart'),
+  funnel: t('chartPanel.funnelChart'),
+  heatmap: t('chartPanel.heatmapChart'),
+  kpi: t('chartPanel.kpiChart'),
+  gauge: t('chartPanel.gaugeChart'),
+  bullet: t('chartPanel.bulletChart'),
 }))
 
 const AGGS = ['count', 'sum', 'mean', 'min', 'max', 'median', 'n_unique']
@@ -88,23 +146,55 @@ const xNumCol = ref('')
 const yFunc = ref('sum')
 const yNumCol = ref('')
 const topN = ref(20)
+// a second measure: the combo's line, the bullet's target
+const func2 = ref('sum')
+const y2Col = ref('')
+// the KPI's periods: its trend line and its change (empty = the number alone)
+const trendCol = ref('')
+// the gauge's scale and target (null = automatic, none)
+const scaleMin = ref<number | null>(null)
+const scaleMax = ref<number | null>(null)
+const target = ref<number | null>(null)
 
-// the settings in from who keeps them, and out at every change
+const numOrNull = (v: unknown) => (typeof v === 'number' && Number.isFinite(v) ? v : null)
+
+// the settings in from who keeps them, and out at every change. A view saved before the
+// later kinds has none of their fields: they go back to their starting values, and what
+// it had opens as it was.
 function applySettings(s: ChartSettings | null | undefined) {
   if (!s) return
-  chartType.value = (s.type as ChartType) || chartType.value
+  if (KNOWN_TYPES.has(s.type)) chartType.value = s.type as ChartType
   for (const [r, v] of [[xCol, s.x], [byCol, s.by], [func, s.func], [yCol, s.y], [xFunc, s.xFunc],
                         [xNumCol, s.xNum], [yFunc, s.yFunc], [yNumCol, s.yNum]] as const) {
     if (typeof v === 'string') r.value = v
   }
   if (typeof s.topN === 'number') topN.value = s.topN
+  func2.value = typeof s.func2 === 'string' ? s.func2 : 'sum'
+  y2Col.value = typeof s.y2 === 'string' ? s.y2 : ''
+  trendCol.value = typeof s.trend === 'string' ? s.trend : ''
+  scaleMin.value = numOrNull(s.min)
+  scaleMax.value = numOrNull(s.max)
+  target.value = numOrNull(s.target)
 }
+// What goes out comes back as the prop: applied again, an echo would be harmless while
+// one change makes one emit — but a kind that picks its column by itself makes two in a
+// row, and the first echo, arriving after, put the column back to empty. The settings
+// this panel emitted are not applied again.
+const emitted = new WeakSet<object>()
 applySettings(props.settings)
-watch(() => props.settings, (s) => applySettings(s))
-watch([chartType, xCol, byCol, func, yCol, xFunc, xNumCol, yFunc, yNumCol, topN], () => emit('update:settings', {
-  type: chartType.value, x: xCol.value, by: byCol.value, func: func.value, y: yCol.value, xFunc: xFunc.value,
-  xNum: xNumCol.value, yFunc: yFunc.value, yNum: yNumCol.value, topN: topN.value,
-}))
+watch(() => props.settings, (s) => {
+  if (!s || !emitted.has(toRaw(s))) applySettings(s)
+})
+watch([chartType, xCol, byCol, func, yCol, xFunc, xNumCol, yFunc, yNumCol, topN, func2, y2Col, trendCol, scaleMin,
+       scaleMax, target], () => {
+  const s: ChartSettings = {
+    type: chartType.value, x: xCol.value, by: byCol.value, func: func.value, y: yCol.value, xFunc: xFunc.value,
+    xNum: xNumCol.value, yFunc: yFunc.value, yNum: yNumCol.value, topN: topN.value, func2: func2.value,
+    y2: y2Col.value, trend: trendCol.value, min: scaleMin.value, max: scaleMax.value, target: target.value,
+  }
+  emitted.add(s)
+  emit('update:settings', s)
+})
 
 const numericCols = computed(() =>
   props.columns.filter((c) => /Int|Float|Decimal/i.test(c.dtype)).map((c) => c.name),
@@ -112,14 +202,59 @@ const numericCols = computed(() =>
 const allCols = computed(() => props.columns.map((c) => c.name))
 
 const isScatter = computed(() => chartType.value === 'scatter')
-const isPartWhole = computed(() => chartType.value === 'pie' || chartType.value === 'treemap')
-const supportsBy = computed(() => !isPartWhole.value) // pie/treemap: the category IS the X
-const needsY = computed(() => !isScatter.value && func.value !== 'count' && func.value !== 'n_unique')
+// one number over the whole dataset: no X
+const isOne = computed(() => chartType.value === 'gauge' || chartType.value === 'kpi')
+// the X stratified into series (bar, line, area, scatter), or the heatmap's rows (required
+// there); the others read one category, the X itself
+const supportsBy = computed(() => ['bar', 'line', 'area', 'scatter', 'heatmap'].includes(chartType.value))
+const needsY = computed(() => {
+  if (isScatter.value) return false
+  // over the whole dataset there is no X whose values to count: a distinct count needs its column
+  if (isOne.value) return func.value !== 'count'
+  return func.value !== 'count' && func.value !== 'n_unique'
+})
+const yOptions = computed(() => (isOne.value && func.value === 'n_unique' ? allCols.value : numericCols.value))
+const usesY2 = computed(() => chartType.value === 'combo' || chartType.value === 'bullet')
+const needsY2 = computed(() => usesY2.value && func2.value !== 'count' && func2.value !== 'n_unique')
+const y2Label = computed(() => (chartType.value === 'combo' ? t('chartPanel.lineMeasure') : t('chartPanel.target')))
+// the «top» limits what is drawn: shown wherever it does (a line split in series draws them all)
+const showsTop = computed(() =>
+  ['bar', 'treemap', 'combo', 'waterfall', 'funnel', 'heatmap', 'bullet'].includes(chartType.value) ||
+  ((chartType.value === 'line' || chartType.value === 'area') && !byCol.value))
+
+// a kind that reads one more column starts with one chosen, instead of an empty chart
+watch(chartType, (kind) => {
+  if (kind === 'heatmap' && !byCol.value) {
+    const others = allCols.value.filter((c) => c !== xCol.value)
+    byCol.value = others.find((c) => !numericCols.value.includes(c)) ?? others[0] ?? ''
+  }
+  if (usesY2.value && needsY2.value && !y2Col.value) {
+    y2Col.value = numericCols.value.find((c) => c !== yCol.value) ?? numericCols.value[0] ?? ''
+  }
+})
 
 const rows = ref<Record<string, any>[]>([])
+const spark = ref<Spark | null>(null) // the KPI's trend
+// What the rows are made of. Moving to a kind that reads other columns, the rows of the
+// one before are not drawn by it (a bar's first category as a gauge's number) while the
+// new ones are on their way; between kinds of the same shape (bars → lines) the chart
+// stays up and changes when they arrive, as it always did.
+const shapeOf = (kind: ChartType) =>
+  kind === 'gauge' || kind === 'kpi' ? 'one' : kind === 'scatter' ? 'points' : kind === 'heatmap' ? 'grid'
+    : kind === 'combo' || kind === 'bullet' ? 'two' : 'one-measure'
+const rowsShape = ref('')
+const drawable = computed(() => rows.value.length > 0 && rowsShape.value === shapeOf(chartType.value))
 const loading = ref(false)
 const error = ref('')
 const droppedSeries = ref(0) // series past the palette's 5 slots
+const capped = ref(false) // the heatmap got only its largest cells
+
+const HEAT_CELLS = 1000
+const SPARK_POINTS = 24
+// the gauge's and the KPI's group: a constant column (a group_by with no key is not
+// something every engine takes); `count` counts it, that is the rows
+const ALL = '__all'
+const ONE_GROUP: Operation = { type: 'compute', params: { columns: [{ name: ALL, expr: '1' }] } }
 
 // Only the LAST refresh writes the state. The chart's queries now cancel each other
 // (whoever hosts the panel sends them on a slot): without this guard a cancelled request,
@@ -128,17 +263,25 @@ const droppedSeries = ref(0) // series past the palette's 5 slots
 let refreshSeq = 0
 async function refresh() {
   const seq = ++refreshSeq
+  const shape = shapeOf(chartType.value)
   error.value = ''
   droppedSeries.value = 0
-  if (!xCol.value || (needsY.value && !yCol.value) || (isScatter.value && (!xNumCol.value || !yNumCol.value))) {
+  capped.value = false
+  if ((!xCol.value && !isOne.value) || (needsY.value && !yCol.value) || (isScatter.value && (!xNumCol.value || !yNumCol.value)) ||
+      (chartType.value === 'heatmap' && !byCol.value) || (needsY2.value && !y2Col.value)) {
     // incomplete configuration: the query in flight (if any) has an old seq and would no
     // longer turn the spinner off — it is turned off here, and the rows do not stay stale
     loading.value = false
     rows.value = []
+    spark.value = null
     return
   }
   loading.value = true
   try {
+    if (isOne.value) {
+      await refreshOne(seq, shape)
+      return
+    }
     const by = supportsBy.value && byCol.value ? [byCol.value] : []
     let ops: Operation[]
     if (isScatter.value) {
@@ -159,22 +302,29 @@ async function refresh() {
       ]
     } else {
       const aggCol = yCol.value || xCol.value
+      const aggregations = [{ column: aggCol, func: func.value, alias: '__value' }]
+      if (usesY2.value) aggregations.push({ column: y2Col.value || xCol.value, func: func2.value, alias: '__value2' })
+      // the sequences go along their X; the rest from the largest
+      const alongX = ['line', 'area', 'combo', 'waterfall'].includes(chartType.value)
       ops = [
-        {
-          type: 'group_by',
-          params: { by: [xCol.value, ...by], aggregations: [{ column: aggCol, func: func.value, alias: '__value' }] },
-        },
-        chartType.value === 'line' || chartType.value === 'area'
+        { type: 'group_by', params: { by: [xCol.value, ...by], aggregations } },
+        alongX
           ? { type: 'sort', params: { by: xCol.value, descending: false } }
           : { type: 'sort', params: { by: '__value', descending: true } },
-        { type: 'limit', params: { n: by.length ? 1000 : Math.max(topN.value, 1) } },
+        { type: 'limit', params: { n: chartType.value === 'heatmap' ? HEAT_CELLS : by.length ? 1000 : Math.max(topN.value, 1) } },
       ]
     }
     const res = await props.query(ops, 1000)
-    if (seq === refreshSeq) rows.value = res?.rows ?? []
+    if (seq === refreshSeq) {
+      rows.value = res?.rows ?? []
+      rowsShape.value = shape
+      spark.value = null
+      capped.value = chartType.value === 'heatmap' && rows.value.length >= HEAT_CELLS
+    }
   } catch (e) {
     if (seq === refreshSeq) {
       rows.value = []
+      spark.value = null
       error.value = errMessage(e)
     }
   } finally {
@@ -182,12 +332,38 @@ async function refresh() {
   }
 }
 
+// The gauge's and the KPI's number: one aggregate over the whole dataset. Then, for a KPI
+// with its periods, the same aggregate per period: the last SPARK_POINTS of them (asked
+// from the latest, drawn in their order). One query after the other: on the same slot,
+// two together would cancel each other.
+async function refreshOne(seq: number, shape: string) {
+  const agg = { column: needsY.value ? yCol.value : ALL, func: func.value, alias: '__value' }
+  const total = await props.query([ONE_GROUP, { type: 'group_by', params: { by: [ALL], aggregations: [agg] } }], 1)
+  if (seq !== refreshSeq) return
+  let trend: Spark | null = null
+  const period = chartType.value === 'kpi' ? trendCol.value : ''
+  if (period) {
+    const res = await props.query([
+      ONE_GROUP,
+      { type: 'group_by', params: { by: [period], aggregations: [agg] } },
+      { type: 'sort', params: { by: period, descending: true } },
+      { type: 'limit', params: { n: SPARK_POINTS } },
+    ], SPARK_POINTS)
+    if (seq !== refreshSeq) return
+    const points = (res?.rows ?? []).filter((r) => r[period] != null).reverse()
+    trend = { cats: points.map((r) => String(r[period])), values: points.map((r) => toNumber(r.__value)) }
+  }
+  rows.value = total?.rows ?? []
+  rowsShape.value = shape
+  spark.value = trend
+}
+
 watch(
   () => props.columns,
   (cols) => {
     if (!cols.length) return
     if (!cols.some((c) => c.name === xCol.value)) xCol.value = cols[0].name
-    for (const r of [yCol, byCol, xNumCol, yNumCol]) {
+    for (const r of [yCol, byCol, xNumCol, yNumCol, y2Col, trendCol]) {
       if (r.value && !cols.some((c) => c.name === r.value)) r.value = ''
     }
   },
@@ -195,7 +371,9 @@ watch(
 )
 // immediate: the columns' watch above already set the axes before this one existed, and the
 // chart stayed blank («Choose the columns…») with them chosen, until a control changed
-watch([chartType, xCol, byCol, yCol, func, xFunc, xNumCol, yFunc, yNumCol, topN], refresh, { immediate: true })
+// (the gauge's scale and target are drawn, not asked: they do not query again)
+watch([chartType, xCol, byCol, yCol, func, xFunc, xNumCol, yFunc, yNumCol, topN, func2, y2Col, trendCol], refresh,
+      { immediate: true })
 
 // Text → safe HTML. Needed ONLY inside ECharts' tooltip formatters, which are the only
 // point of the frontend where we build HTML from a string.
@@ -209,6 +387,46 @@ const seriesName = computed(() => {
   if (func.value === 'count') return t('chartPanel.countLabel')
   return `${func.value}(${yCol.value || xCol.value})`
 })
+const seriesName2 = computed(() =>
+  func2.value === 'count' ? t('chartPanel.countLabel') : `${func2.value}(${y2Col.value || xCol.value})`)
+
+// what the shared builders (chartKinds.ts) need: the theme and the numbers in the interface's language
+const kindCtx = useKindCtx(ui)
+
+const kpi = computed(() => {
+  if (chartType.value !== 'kpi' || !drawable.value) return null
+  return {
+    value: toNumber(rows.value[0].__value),
+    spark: spark.value?.cats.length ? spark.value : null,
+    change: spark.value ? lastChange(kindCtx.value, spark.value) : null,
+  }
+})
+
+// the heatmap's two axes: the topN categories of each with the largest totals, in their
+// natural order (months, days, names: 2 before 10)
+function heatAxes() {
+  const pick = (col: string) => {
+    const totals = new Map<string, number>()
+    for (const r of rows.value) {
+      const k = String(r[col])
+      totals.set(k, (totals.get(k) ?? 0) + Math.abs(toNumber(r.__value) ?? 0))
+    }
+    return [...totals.entries()].sort((a, b) => b[1] - a[1]).slice(0, Math.max(topN.value, 1)).map(([k]) => k)
+      .sort((a, b) => a.localeCompare(b, undefined, { numeric: true }))
+  }
+  const xCats = pick(xCol.value)
+  const yCats = pick(byCol.value)
+  const xi = new Map(xCats.map((c, i) => [c, i]))
+  const yi = new Map(yCats.map((c, i) => [c, i]))
+  const cells: [number, number, number][] = []
+  for (const r of rows.value) {
+    const x = xi.get(String(r[xCol.value]))
+    const y = yi.get(String(r[byCol.value]))
+    const v = toNumber(r.__value)
+    if (x !== undefined && y !== undefined && v != null) cells.push([x, y, v])
+  }
+  return { xCats, yCats, cells }
+}
 
 // ── Client-side pivot for the "by" (top MAX_SERIES by total) ─────────────────
 function pivotBydata() {
@@ -267,6 +485,26 @@ const option = computed(() => {
   const TOOLTIP = TOOLTIP_BASE.value
   const LEGEND = LEGEND_BASE.value
   const c = ui.value
+
+  // the later kinds: drawn by the builders the chat shares
+  const kc = kindCtx.value
+  const catsOf = () => rows.value.map((r) => String(r[xCol.value]))
+  const valsOf = (key = '__value') => rows.value.map((r) => toNumber(r[key]))
+  switch (kind) {
+    case 'kpi': return {} // a KpiCard, not a chart
+    case 'gauge':
+      return gaugeOption(kc, { value: toNumber(rows.value[0]?.__value), name: seriesName.value, min: scaleMin.value,
+                              max: scaleMax.value, target: target.value })
+    case 'waterfall': return waterfallOption(kc, { cats: catsOf(), values: valsOf(), name: seriesName.value })
+    case 'funnel': return funnelOption(kc, { cats: catsOf(), values: valsOf(), name: seriesName.value })
+    case 'heatmap': return heatmapOption(kc, { ...heatAxes(), name: seriesName.value })
+    case 'combo':
+      return comboOption(kc, { cats: catsOf(), bars: valsOf(), line: valsOf('__value2'), barName: seriesName.value,
+                              lineName: seriesName2.value })
+    case 'bullet':
+      return bulletOption(kc, { cats: catsOf(), values: valsOf(), targets: valsOf('__value2'), name: seriesName.value,
+                               targetName: seriesName2.value })
+  }
 
   if (kind === 'pie' || kind === 'treemap') {
     // top-5 categories + "Other" (only for additive functions: an average of averages would
@@ -431,18 +669,26 @@ const option = computed(() => {
   <div class="chartpanel">
     <!-- controls in one row above the chart -->
     <div class="controls">
-      <div class="typebtns">
-        <button
-          v-for="ct in CHART_TYPES"
-          :key="ct.id"
-          :class="{ active: chartType === ct.id }"
-          :title="chartTypeLabels[ct.id]"
-          @click="chartType = ct.id"
-        ><component :is="ct.icon" :size="14" /></button>
+      <div class="typebtns" role="group" :aria-label="$t('chartPanel.chartType')">
+        <template v-for="(group, gi) in CHART_GROUPS" :key="gi">
+          <span v-if="gi" class="typesep" aria-hidden="true" />
+          <button
+            v-for="ct in group"
+            :key="ct.id"
+            type="button"
+            :class="{ active: chartType === ct.id }"
+            :title="chartTypeLabels[ct.id]"
+            :aria-label="chartTypeLabels[ct.id]"
+            :aria-pressed="chartType === ct.id"
+            @click="chartType = ct.id"
+          ><component :is="ct.icon" :size="14" aria-hidden="true" /></button>
+        </template>
       </div>
 
-      <label>{{ isScatter ? $t('chartPanel.point') : 'X' }}</label>
-      <Select v-model="xCol" :options="allCols" class="csel" />
+      <template v-if="!isOne">
+        <label>{{ isScatter ? $t('chartPanel.point') : 'X' }}</label>
+        <Select v-model="xCol" :options="allCols" class="csel" />
+      </template>
 
       <template v-if="isScatter">
         <label>X</label>
@@ -458,20 +704,46 @@ const option = computed(() => {
         <Select v-model="func" :options="funcOptions()" class="fsel" />
         <template v-if="needsY">
           <label>Y</label>
-          <Select v-model="yCol" :options="numericCols" :placeholder="$t('chartPanel.numericColumnPlaceholder')" class="csel" />
+          <Select v-model="yCol" :options="yOptions" :placeholder="$t('chartPanel.numericColumnPlaceholder')" class="csel" />
         </template>
       </template>
+
+      <!-- the second measure: the combo's line, the bullet's target (its name and its pickers
+           wrap together, never the name alone at the end of a row) -->
+      <span v-if="usesY2" class="cgrp">
+        <label>{{ y2Label }}</label>
+        <Select v-model="func2" :options="funcOptions()" class="fsel" :aria-label="`${y2Label}: f`" />
+        <Select v-if="needsY2" v-model="y2Col" :options="numericCols" :placeholder="$t('chartPanel.numericColumnPlaceholder')" class="csel"
+                :aria-label="`${y2Label}: Y`" />
+      </span>
 
       <template v-if="supportsBy">
         <label>by</label>
         <Select
           v-model="byCol"
-          :options="[{ value: '', label: '—' }, ...allCols.filter((c) => c !== xCol)]"
+          :options="chartType === 'heatmap' ? allCols.filter((c) => c !== xCol) : [{ value: '', label: '—' }, ...allCols.filter((c) => c !== xCol)]"
           class="csel"
         />
       </template>
 
-      <template v-if="chartType === 'bar' || chartType === 'treemap'">
+      <span v-if="chartType === 'kpi'" class="cgrp">
+        <label>{{ $t('chartPanel.trend') }}</label>
+        <Select v-model="trendCol" :options="[{ value: '', label: '—' }, ...allCols]" class="csel" :aria-label="$t('chartPanel.trend')" />
+      </span>
+
+      <template v-if="chartType === 'gauge'">
+        <label class="numf">{{ $t('chartPanel.min') }}
+          <input type="number" class="numin" :value="scaleMin ?? ''" :placeholder="$t('chartPanel.auto')"
+                 @input="scaleMin = numOrNull(($event.target as HTMLInputElement).valueAsNumber)" /></label>
+        <label class="numf">{{ $t('chartPanel.max') }}
+          <input type="number" class="numin" :value="scaleMax ?? ''" :placeholder="$t('chartPanel.auto')"
+                 @input="scaleMax = numOrNull(($event.target as HTMLInputElement).valueAsNumber)" /></label>
+        <label class="numf">{{ $t('chartPanel.target') }}
+          <input type="number" class="numin" :value="target ?? ''" placeholder="—"
+                 @input="target = numOrNull(($event.target as HTMLInputElement).valueAsNumber)" /></label>
+      </template>
+
+      <template v-if="showsTop">
         <label>top</label>
         <input v-model.number="topN" type="number" min="1" max="200" class="topn" />
       </template>
@@ -480,10 +752,12 @@ const option = computed(() => {
       <span v-if="loading" class="muted">{{ $t('chartPanel.computingFullDataset') }}</span>
       <span v-else-if="error" class="err">{{ error }}</span>
       <span v-else-if="droppedSeries" class="muted">{{ $t('chartPanel.droppedSeries', { n: droppedSeries }) }}</span>
+      <span v-else-if="capped" class="muted">{{ $t('chartPanel.largestCells', { n: HEAT_CELLS }) }}</span>
     </div>
 
     <div class="plot">
-      <VChart v-if="rows.length" :option="option" autoresize />
+      <KpiCard v-if="kpi" :label="seriesName" :value="kpi.value" :change="kpi.change" :spark="kpi.spark" />
+      <VChart v-else-if="drawable" :option="option" autoresize />
       <p v-else-if="!loading" class="muted empty">
         {{ $t('chartPanel.chooseColumnsHint') }}
       </p>
@@ -503,8 +777,13 @@ const option = computed(() => {
 .controls select { width: auto; max-width: 180px; padding: 4px 8px; font-size: 12px; }
 .controls select.fsel { max-width: 110px; }
 .topn { width: 64px; padding: 4px 8px; font-size: 12px; }
-.typebtns { display: flex; gap: 2px; }
+.typebtns { display: flex; align-items: center; gap: 2px; flex-wrap: wrap; }
 .typebtns button { padding: 4px 8px; }
+/* the three families of kinds: what compares, what composes, the one number */
+.typesep { width: 1px; height: 18px; margin: 0 4px; background: var(--border); }
+.numf, .cgrp { display: inline-flex; align-items: center; gap: 6px; }
+.cgrp > label { font-size: 11px; color: var(--muted); }
+.numin { width: 96px; padding: 4px 8px; font-size: 12px; }
 .typebtns button.active { border-color: var(--accent); background: color-mix(in srgb, var(--accent) 12%, transparent); }
 button.mini { padding: 4px 8px; }
 .plot { flex: 1; min-height: 0; }

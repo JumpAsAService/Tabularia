@@ -27,11 +27,12 @@ from __future__ import annotations
 
 import json
 import logging
+import math
 import os
 import re
 from contextlib import AbstractContextManager
 from dataclasses import dataclass
-from typing import Any, Callable, Literal, Optional
+from typing import Any, Callable, Literal, Optional, get_args
 
 from pydantic import BaseModel, Field
 
@@ -321,9 +322,15 @@ def _join_operation(session, user, ds_id, left_on, right_on, how):
     return {"type": "join", "params": params}, other_one.name
 
 
-CHART_TYPES = ("bar", "hbar", "line", "area", "pie", "donut", "scatter")
-
-
+ChartType = Literal["bar", "hbar", "line", "area", "pie", "donut", "scatter", "combo", "waterfall", "funnel",
+                    "treemap", "heatmap", "gauge", "kpi", "bullet"]
+CHART_TYPES: tuple[str, ...] = get_args(ChartType)
+# what each kind reads besides chart_y (the chat draws them in components/ui/MiniChart.vue)
+_ONE_NUMBER = frozenset({"gauge", "kpi"})  # chart_x optional: a KPI's periods, nothing for a gauge
+_NEEDS_Y2 = {"combo": "the measure drawn as a line", "bullet": "the target of each category"}
+_TAKES_Y2 = frozenset({*_NEEDS_Y2, "gauge", "kpi"})  # + a gauge's target, what a KPI is compared with
+_TAKES_SERIES = frozenset({"bar", "hbar", "line", "area", "pie", "donut", "scatter", "heatmap"})
+_TAKES_MAX = frozenset({"gauge", "bullet"})
 
 
 def _chart_spec(chart: Optional[Any], columns: list[dict[str, Any]]) -> tuple[Optional[dict[str, Any]], Optional[str]]:
@@ -338,19 +345,36 @@ def _chart_spec(chart: Optional[Any], columns: list[dict[str, Any]]) -> tuple[Op
     if kind not in CHART_TYPES:
         return None, f"Unknown chart type {kind!r}. Use one of: {', '.join(CHART_TYPES)}."
     names = {str(c.get("name")) for c in columns if isinstance(c, dict)}
-    x, y = str(chart.get("x") or ""), str(chart.get("y") or "")
-    missing = [n for n in (x, y) if n not in names]
+    x, y, y2 = str(chart.get("x") or ""), str(chart.get("y") or ""), str(chart.get("y2") or "")
+    if kind in _NEEDS_Y2 and not y2:
+        return None, f"A {kind} chart needs chart_y2: {_NEEDS_Y2[kind]}."
+    needed = [x, y] if x or kind not in _ONE_NUMBER else [y]
+    if y2 and kind in _TAKES_Y2:
+        needed.append(y2)
+    missing = [n for n in needed if n not in names]
     if missing:
         return None, (
-            f"The chart names columns the query does not return: {', '.join(missing)}. "
+            f"The chart names columns the query does not return: {', '.join(n or '(none given)' for n in missing)}. "
             f"Available: {', '.join(sorted(names))}."
         )
-    series = chart.get("series")
+    series = chart.get("series") if kind in _TAKES_SERIES else None
+    if kind == "heatmap" and series is None:
+        return None, "A heatmap needs chart_series: the column whose values are the rows of the grid."
     if series is not None and str(series) not in names:
         return None, f"The series column {series!r} is not in the result."
-    spec = {"type": kind, "x": x, "y": y}
+    spec: dict[str, Any] = {"type": kind, "x": x, "y": y}
+    if y2 and kind in _TAKES_Y2:
+        spec["y2"] = y2
     if series is not None:
         spec["series"] = str(series)
+    top = chart.get("max")
+    if top is not None and kind in _TAKES_MAX:
+        try:
+            top = float(top)
+        except (TypeError, ValueError):
+            return None, "chart_max must be a number: the end of the scale."
+        if math.isfinite(top):
+            spec["max"] = top
     title = chart.get("title")
     if title:
         spec["title"] = str(title)[:120]
@@ -363,17 +387,28 @@ async def query_datasource(
     join_left_on: Optional[str] = None,
     join_right_on: Optional[str] = None,
     join_how: Optional[Literal["inner", "left", "full"]] = None,
-    chart_type: Optional[Literal["bar", "hbar", "line", "area", "pie", "donut", "scatter"]] = None,
+    chart_type: Optional[ChartType] = None,
     chart_x: Optional[str] = None,
     chart_y: Optional[str] = None,
+    chart_y2: Optional[str] = None,
     chart_series: Optional[str] = None,
+    chart_max: Optional[float] = None,
     chart_title: Optional[str] = None,
 ) -> dict[str, Any]:
     """Run ONE read-only SELECT on a datasource. The table is named `self` (e.g. `SELECT paese, COUNT(*) AS n FROM self GROUP BY paese ORDER BY n DESC`). Returns columns, rows (capped) and whether the result was truncated.
 
     To answer a question that spans TWO datasources, set `join_datasource_id` to the second one together with `join_left_on` and `join_right_on` (the key columns on each side, comma-separated if the key has several parts). The two are joined before your SQL runs, and `self` is the joined result — so write the query against the columns of both. `join_how` is inner by default; use left to keep rows that have no match. A column that exists on both sides and is not a key gets the suffix `_right`. Call `describe_datasource` on both first, so you join on columns that exist.
 
-    To draw the result as a chart under the table, set `chart_type` together with `chart_x` (the categories) and `chart_y` (the numeric column) — both must be columns your query actually returns. `chart_series` optionally splits the data into several series, `chart_title` is a short title in the user's language. Use bar for a ranking, hbar when the labels are long or the categories many, line or area for a series over time, pie or donut for shares of a total, scatter for two numeric measures. Leave them unset for a single number, for a couple of rows that already read fine, or for a non-numeric result: a chart of three rows is noise."""
+    To draw the result as a chart under the table, set `chart_type` together with `chart_x` (the categories) and `chart_y` (the numeric column) — both must be columns your query actually returns. `chart_series` optionally splits the data into several series, `chart_title` is a short title in the user's language. Use bar for a ranking, hbar when the labels are long or the categories many, line or area for a series over time, pie or donut for shares of a total, scatter for two numeric measures. More kinds, each with what it reads:
+    - combo: two measures of different scale over the same categories, `chart_y` as bars and `chart_y2` as a line on its own axis (revenue and margin % by month);
+    - waterfall: how signed amounts add up to a total, step by step in the rows' order;
+    - funnel: the stages of a process, from the largest;
+    - treemap: the shares of many categories, where a pie would crowd;
+    - heatmap: one measure across two dimensions, `chart_x` the columns and `chart_series` the rows (weekday × channel);
+    - gauge: one number against its scale, from the first row: `chart_y2` a target column, `chart_max` the end of the scale (100 for a percentage); `chart_x` not needed;
+    - kpi: one headline number. With `chart_x` a period and one row per period, it shows the last period's `chart_y`, its change from the one before and a trend line; or `chart_y2` the value to compare with;
+    - bullet: each category's measure (`chart_y`) against its target (`chart_y2`).
+    Leave them unset for a single number (unless the user asks for an indicator: then kpi or gauge), for a couple of rows that already read fine, or for a non-numeric result: a chart of three rows is noise."""
     deps = ctx.deps
     cap = get_settings().ai.max_result_rows
     limit = max(1, min(int(limit or 50), cap))
@@ -405,7 +440,8 @@ async def query_datasource(
         }
         # the chart is the user's: it is validated, nothing new runs
         spec, reason = _chart_spec(
-            {"type": chart_type, "x": chart_x, "y": chart_y, "series": chart_series, "title": chart_title}
+            {"type": chart_type, "x": chart_x, "y": chart_y, "y2": chart_y2, "series": chart_series, "max": chart_max,
+             "title": chart_title}
             if chart_type else None,
             columns,
         )
