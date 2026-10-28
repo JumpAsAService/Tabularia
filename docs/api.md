@@ -116,7 +116,7 @@ announced in `CHANGELOG.md` one minor release in advance.
 | Refresh a datasource | `POST /datasources/{id}/refresh` | `202` with the run; database datasources only |
 | Export | `POST /tasks/export` | CSV (streamed) or Excel; see below |
 | Download a report | `GET /reports/{id}/render?format=pdf&<parameter>=<value>` | the file, waited for; see [Download a report](#download-a-report) |
-| Reports | `GET /reports`, `GET /reports/{id}/parameters` | those you can see; a report's parameters with their defaults and choices |
+| Reports | `GET /reports`, `GET /reports/search?q=…&sort=trending`, `GET /reports/{id}/parameters` | those you can see (all, or a page searched and ordered as the Reports tab: `trending`, `name`, `updated`); a report's parameters with their defaults and choices |
 | Lineage | `GET /lineage` | the graph of flows, datasources, connections, scripts, SQL scripts, notebooks and flow groups; `?type=flow\|datasource\|connection\|script\|sql\|notebook\|group&id=…` centres it |
 
 All paths are relative to the gateway: `https://<host>/api` behind the reference
@@ -279,7 +279,7 @@ curl -fG -H "Authorization: Bearer $TABULARIA_TOKEN" -o sales.xlsx \
 |---|---|
 | `400` | a value does not fit a parameter: `{"detail": {"message": "Parameter «since»: '2026-02-30' is not a date: write it as yyyy-mm-dd", "parameter": "since"}}`. The same for a required parameter without a value, a value outside its choices, a name the report does not have |
 | `404` | no report with that id, or one in a folder the account cannot see |
-| `422` | the report cannot be rendered: a dataset the account may not read, said with its name as one that does not exist (`The dataset «orders»: there is no datasource «Salaries» you can read`), a dataset over the row limit (`REPORTS__MAX_ROWS`, 1,000,000 by default: aggregate in SQL, or filter), too many pages |
+| `422` | the report cannot be rendered: a dataset the account may not read, said with its name as one that does not exist (`The dataset «orders»: there is no datasource «Salaries» you can read`), a dataset over the row limit (`REPORTS__MAX_ROWS`, 3,000,000 by default: aggregate in SQL, or filter), too many pages |
 | `502` | the engine could not render it (the chart service down, for a report with charts) |
 | `503` | the engine is not answering (restarting, its node drained): try again in a moment |
 | `504` | not ready within `REPORTS__API_WAIT_SECONDS`: the render was stopped |

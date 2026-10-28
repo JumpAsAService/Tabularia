@@ -31,6 +31,7 @@ export const DOCS_GROUPS: { title: string, icon: DocsIcon, intro: string, items:
       ['/docs/capabilities/preview-and-analysis', 'Preview and analysis'],
       ['/docs/capabilities/ask-your-data', 'Ask your data with AI'],
       ['/docs/capabilities/reports', 'Pixel-perfect reports'],
+      ['/docs/capabilities/report-functions', 'Report functions'],
       ['/docs/scripting', 'Python and R'],
       ['/docs/sql-scripts', 'SQL scripts'],
       ['/docs/capabilities/notebooks', 'marimo notebooks as apps'],
@@ -46,7 +47,7 @@ export const DOCS_GROUPS: { title: string, icon: DocsIcon, intro: string, items:
   {
     title: 'Sources',
     icon: 'sources',
-    intro: 'Every way data comes in: files, databases, buckets, SFTP folders, HTTP APIs, SharePoint, and the results of your own flows.',
+    intro: 'Every way data comes in: files, databases, buckets, SFTP folders, HTTP APIs, SharePoint, Google Sheets, and the results of your own flows.',
     items: [
       ['/docs/sources', 'All sources'],
       ['/docs/sources/files', 'Uploaded files'],
@@ -55,6 +56,7 @@ export const DOCS_GROUPS: { title: string, icon: DocsIcon, intro: string, items:
       ['/docs/sftp', 'SFTP folders'],
       ['/docs/api-datasource', 'HTTP APIs'],
       ['/docs/sources/sharepoint', 'Excel on SharePoint'],
+      ['/docs/sources/google-sheets', 'Google Sheets'],
       ['/docs/sources/flow-outputs', 'Results of flows and scripts'],
     ],
   },
@@ -70,6 +72,7 @@ export const DOCS_GROUPS: { title: string, icon: DocsIcon, intro: string, items:
       ['/docs/sftp', 'SFTP servers'],
       ['/docs/api-datasource', 'HTTP APIs'],
       ['/docs/sources/sharepoint', 'SharePoint'],
+      ['/docs/sources/google-sheets', 'Google Sheets'],
       ['/docs/connections/smtp', 'SMTP email'],
       ['/docs/container-registries', 'Container registries'],
       ['/docs/connections/destinations', 'Writing data out'],

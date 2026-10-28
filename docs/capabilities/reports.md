@@ -22,7 +22,7 @@ installation has reports, Docker Compose included.
 
 | | |
 |---|---|
-| Where | Explore → **New** → **Report**, in a folder; it opens in the designer. Readers open it from Explore in the viewer |
+| Where | Explore → **New** → **Report**, in a folder; it opens in the designer. Readers open it in the viewer from Explore or from **Analysis → Reports**, the most read first |
 | What it reads | up to 20 **datasets**: SQL on the catalog or on a database connection, a datasource, a saved view, a saved SQL script |
 | What it shows | texts and expressions, images, lines, rectangles, tables and matrices with groups and totals, 14 kinds of chart, KPI cards |
 | Parameters | text, number, date or yes/no, one value or several, fixed choices or choices from a dataset; in the SQL as `{name}` |
@@ -30,7 +30,7 @@ installation has reports, Docker Compose included.
 | Sending | from a flow group's [Pushmail](../pushmail.md#reports) cell, after the steps that refresh the data; a report has no schedule of its own |
 | From code | `GET /reports/{id}/render` with an API token ([API](../api.md#download-a-report)), `tabularia.report()` in a [marimo notebook](notebooks.md#reports) |
 | Rights | VIEW on the folder to open and download it, EDIT to design it; the data is read with the rights of whoever reads the report |
-| Limits | 1,000,000 rows per dataset and 200 pages per render by default ([`REPORTS__*`](../configuration.md#reports-1)) |
+| Limits | 3,000,000 rows per dataset and 200 pages per render by default ([`REPORTS__*`](../configuration.md#reports-1)) |
 
 ## The designer
 
@@ -140,7 +140,7 @@ Tabularia quotes it». Tabularia's own [placeholders](../placeholders.md) work t
 **Fields** are the columns the designer last read from the data (**Refresh fields**):
 they feed the completion and the checks; the render uses what the data has.
 **Refresh fields** also counts the dataset's rows with the parameters' defaults and shows
-the number under the dataset: past 100,000 rows an orange warning gives the time a render
+the number under the dataset: past 500,000 rows an orange warning gives the time a render
 will take, past `REPORTS__MAX_ROWS` a red one says the report will not render. Aggregate
 in the SQL and format in the report: `SELECT region, SUM(amount) AS amount FROM orders
 GROUP BY region` gives the report one row per region, not one per order.
@@ -201,6 +201,11 @@ group's total row) is the value of the group's first row.
 *The completion (**Ctrl+Space**, or `[` for the fields): the dataset's fields with their types, the calculated ones, then the functions with their arguments; the highlighted one says what it does.*
 
 ### Functions
+
+Every function with its cases and an example on the sample data, with the result it
+prints, is in [Report functions](report-functions.md), with recipes for a real report:
+the margin percentage, the growth on the month before, the share of a category, running
+totals, thresholds, dates in titles.
 
 | Function | Arguments | Gives |
 |---|---|---|
@@ -382,9 +387,11 @@ table by it (again for descending), and a click on a group's label closes or ope
 groups closed on screen. The API, the flow groups and the notebooks render it in its own
 order.
 
-![A table of the example on screen: sorted by Margin % ascending, the group Insaccati cotti closed to its total, the group Insaccati da cuocere open with its months, Reset view at the top](../media/guide/reports/viewer-sorted-and-closed-group.png)
+![The viewer of Margin growth by month: the year of From is typed over, 2025 becomes 2026, View report renders one page; a click on the header vs month before sorts each category's months by their growth, the arrow beside the header; a click on the label of Insaccati cotti closes the group to its total row; Reset view appears in the bar](../media/guide/reports/viewer-parameter-sort-group.gif)
 
-*Sorted by **Margin %** with a click on its header (the arrow), the first group closed to its total row; **Reset view** puts the report back as designed.*
+*«Margin growth by month» from January 2026: a click on the header **vs month before**
+sorts every group by it (the running revenue follows the new order), a click on the
+group's label closes it to its total; **Reset view** puts the report back as designed.*
 
 The other buttons: **Copy API link** (the address a script downloads the report from,
 with the values on screen that are not the defaults, so a default such as
@@ -394,6 +401,47 @@ edit restores an older one, which becomes the newest), and **Edit**, which opens
 designer for who may edit. A report that cannot be rendered says why in words: a value
 that does not fit, a dataset you may not read, too much data, too many pages, the time
 limit.
+
+## The Reports tab
+
+**Analysis → Reports** in the top bar lists every report you may open, from every
+folder, the most read first; **Analysis** also holds the
+[Viewer](preview-and-analysis.md#the-viewer). Each row shows the report's name and
+description, how many datasets and parameters it has, its folder with the folders above
+it, its readers, when it was last opened, and when it was last changed, with its version
+and its author. A click on a row opens it in the viewer; on the right, **Open**,
+**Edit in the designer** (with EDIT on its folder) and **Copy API link**, the same as in
+the viewer, with the report's defaults.
+
+![The Reports tab: five reports of the folder Sales reports and of its subfolder Channels, the most read first, each with its description, datasets and parameters, its folder, a bar with its readers in the last 30 days (5 people, 4, 3, 2, 1), when it was last opened, and when it was changed, with its version and author; on the right Open, Edit in the designer and Copy API link](../media/guide/reports/reports-tab.png)
+
+*The tab as an analyst with EDIT on `Sales reports` sees it: «Monthly margin», opened by
+five people this month, comes first.*
+
+**Readers · 30 days** is what the default order, **Most read**, follows: the people who
+opened the report in the viewer in the last 30 days, with a short bar against the most
+read report of the page. Under it, the openings in those days and the openings ever. A
+person counts once a day per report: reloading the page, choosing other values or opening
+it from three tabs is still one opening. The day is the installation's (`APP__TIMEZONE`).
+At the same number of people the report opened more times comes first, then the one
+opened more times ever, then the one changed last. **Name** and **Recently changed** order
+the list the other ways.
+
+Only the viewer counts: a download through the API, a flow group's email and a notebook
+render the report without anyone reading it on screen, and the designer's preview is its
+author at work. Who opened a report is kept for 30 days and then removed every hour; the
+report keeps its total and the moment it was last opened. The list never says who read a
+report, only how many.
+
+The search box looks in the names, the descriptions and the folders: `finance` finds the
+reports of a folder *Finance* and of every folder inside it. The list shows 50 reports a
+page.
+
+![Analysis then Reports in the top bar: the list, the most read first; the order changed to Name and back to Most read; channels typed in the search finds the two reports of the folder Sales reports › Channels; margin finds three reports by their names and descriptions; a click on Margin growth by month opens it in the viewer](../media/guide/reports/reports-tab-trending-search.gif)
+
+*From the **Analysis** menu: the most read first, then by name; the search finds by
+folder (`channels`) and by name or description (`margin`); a click on a row opens the
+report.*
 
 ## PDF, Excel and the email
 
@@ -569,19 +617,22 @@ datasource is; who sends it from a flow group needs, besides, what the
 | EDIT | create it, design and save it, rename, move, duplicate and delete it, restore a version |
 
 Whoever has VIEW only is taken to the viewer when they open the designer's address.
-Administrators see every report. Reports show in Explore, with their own icon, and in the
-search. Every save, rename, move, duplicate, delete and restore is in the
-[audit log](../governance/audit-log.md) (`report.create`, `report.update`…), and so is
-every render (`report.render`), with its format, the values of its parameters, the
+Administrators see every report. Reports show in Explore, with their own icon, in the
+search and in the [Reports tab](#the-reports-tab). Every save, rename, move, duplicate,
+delete and restore is in the [audit log](../governance/audit-log.md) (`report.create`,
+`report.update`…), and so is every render (`report.render`), with its format, the values of its parameters, the
 outcome and where it came from: the interface, the API, a notebook or a flow group.
 
 ## Limits and good to know
 
-- A dataset reads at most `REPORTS__MAX_ROWS` rows (1,000,000 by default): one more stops
+- A dataset reads at most `REPORTS__MAX_ROWS` rows (3,000,000 by default): one more stops
   the render and names the dataset. The query is cut at the source, so a `SELECT *` on a
   big table costs no more than that many rows. A report is a document, not an export:
-  aggregate in the SQL where you can — a million rows take some half a minute and a GiB
-  of the worker's memory, a thousand totals almost nothing. A render makes at most `REPORTS__MAX_PAGES` pages (200); its
+  aggregate in the SQL where you can. The report works out its groups, totals, charts and
+  KPIs over the rows in columns, with DuckDB: a million rows grouped with their totals
+  take a second or two and some 500 MB of the worker's memory, a thousand totals almost
+  nothing. Shown row by row they would not fit the pages: a table with more rows to show
+  than its pages can hold stops at once and says so. A render makes at most `REPORTS__MAX_PAGES` pages (200); its
   layout runs in a process of its own with `REPORTS__RENDER_MEMORY_MB` of memory
   (1024: some 200 pages of tables) and `REPORTS__RENDER_SECONDS` of time (120). See the
   [configuration](../configuration.md#reports-1).
@@ -598,6 +649,7 @@ outcome and where it came from: the interface, the API, a notebook or a flow gro
 
 ## Related
 
+- [Report functions](report-functions.md): every function with examples on the sample data
 - [Pushmail](../pushmail.md#reports): sending a report from a flow group
 - [Flow groups](flow-groups.md) and [Scheduling](scheduling.md)
 - [API: download a report](../api.md#download-a-report),

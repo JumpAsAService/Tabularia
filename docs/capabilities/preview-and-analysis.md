@@ -10,7 +10,7 @@ access to the folder can reopen. Nothing in either place changes the data.
 
 | | Flow editor | Viewer |
 |---|---|---|
-| Where | The data view under the canvas: **Table** and **Chart** tabs | **Viewer** in the navigation, or a saved view opened from **Explore** |
+| Where | The data view under the canvas: **Table** and **Chart** tabs | **Analysis → Viewer** in the navigation, or a saved view opened from **Explore** |
 | Reads | The chain up to the selected node | One datasource |
 | Rows shown | First 100 of the selected node | First 500 of the result |
 | Computed on | The whole input, or the source's development sample | The whole datasource |
@@ -142,7 +142,7 @@ in **Sample / Private tables**, with one row per product category and month:
 `categoria`, `anno_mese` (`202510` for October 2025), `ricavo`, `costo`, `margine`,
 `chili`, `ordini`, `margine_pct`.
 
-1. Open **Viewer** and choose `Margin by Category and Month`.
+1. Open **Analysis → Viewer** and choose `Margin by Category and Month`.
 2. **Filters**: `margine_pct` < `30`, then **Apply**. The table lists the months in
    which a category earned less than 30% of its revenue.
 3. **Computed fields**: `ricavo_al_kg` = `round(ricavo / chili, 2)`, revenue per kilo.

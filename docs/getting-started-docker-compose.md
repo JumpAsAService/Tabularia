@@ -290,9 +290,9 @@ completed: 20 rows → datasource "shipped_orders_by_channel_year"*.
 ![The run, completed](media/getting-started/10-run.png)
 
 **11. The result.** **Datasources** in the top bar lists it (search `shipped`); click it
-to read and edit its description and its fields' descriptions. **Viewer** opens it for
-filters, pivots and charts without changing it. **Runs** has the run: the page opens on
-*Failed*, click **All**.
+to read and edit its description and its fields' descriptions. **Analysis → Viewer**
+opens it for filters, pivots and charts without changing it. **Runs** has the run: the
+page opens on *Failed*, click **All**.
 
 ![The published datasource](media/getting-started/11-datasources.png)
 

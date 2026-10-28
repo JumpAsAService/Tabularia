@@ -19,7 +19,7 @@ does not do, with an example on the sample data of the Docker Compose stack.
 | Low-code flows | A pipeline drawn on a canvas: sources, 19 transformations and a loop, outputs, each step previewed on the whole table | [Flows](flows.md) |
 | Preview and analysis | The data of every step as a table or a chart, the Viewer with filters, computed fields and pivots, saved views, CSV and Excel downloads | [Preview and analysis](preview-and-analysis.md) |
 | Ask your data | Questions in plain language over the datasources you may read, answered with the query and the table behind the numbers | [Ask your data](ask-your-data.md) |
-| Pixel-perfect reports | Paginated reports designed in the browser: bands in millimetres, tables grouped with subtotals over many pages, 14 kinds of chart and KPI cards, parameters; read on screen, downloaded as PDF or Excel, sent by email | [Reports](reports.md) |
+| Pixel-perfect reports | Paginated reports designed in the browser: bands in millimetres, tables grouped with subtotals over many pages, 14 kinds of chart and KPI cards, parameters; read on screen, downloaded as PDF or Excel, sent by email | [Reports](reports.md), [functions](report-functions.md) |
 
 ### Code and containers
 

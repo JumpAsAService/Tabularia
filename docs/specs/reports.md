@@ -8,7 +8,9 @@ documentation, done: the user's guide is
 [docs/capabilities/reports.md](../capabilities/reports.md), with an example report on the
 Sample data. The bug hunt of the same day closed the live check of expressions
 (`POST /reports/check`, called by the editor as one types) and the preview's problems tied
-to their item and field. Still open:
+to their item and field. The same day the datasets went into columns: read as Arrow
+tables, their filters, groups, totals, charts and KPIs computed by DuckDB in the worker,
+with the interpreter's results to the value («Data in columns»). Still open:
 
 - the preview's bar takes a parameter whose choices come from a dataset as free text: the
   choices are read from the saved report only;
@@ -84,7 +86,7 @@ The prototype (2,000 orders, regions and customers, credit notes, hostile names;
   tenth of a millimetre, «Page X of Y», byte-identical output for the same data (golden
   tests possible). Memory is the risk: the compiler's cache grows ~130 MB per render in a
   live process, so **every render runs in a child process** of an engine worker, with a
-  memory limit and a timeout (cancelling = killing it), and limits of rows (1,000,000) and
+  memory limit and a timeout (cancelling = killing it), and limits of rows (3,000,000) and
   pages (200) per render, which the default memory holds (some 4.5 MiB a page, measured).
   Keep-together of a group's last row with its subtotal is a template rule (Typst alone
   leaves widows). Fonts shipped complete (IBM Plex Sans TTF), with a check that reports
@@ -193,8 +195,9 @@ All lengths are millimetres (numbers, a tenth at most), colours `#rrggbb`.
   - `fields`: the columns the editor last saw (refreshed by «Refresh fields»), for
     completion and checking; the render uses what the data has. `calculated`: fields of
     the report's own, expressions per row.
-  - At most `REPORTS__MAX_ROWS` rows per dataset (default 1,000,000; measured, a million rows take some 1.1 GiB and 27 s in the worker): above, the render
-    stops and says which dataset and how many rows ("aggregate in SQL, or filter").
+  - At most `REPORTS__MAX_ROWS` rows per dataset (default 3,000,000; measured, a million
+    rows take some 470 MiB and 1.3 s in the worker, «Data in columns» below): above, the
+    render stops and says which dataset and how many rows ("aggregate in SQL, or filter").
 - **Sections**: page header and footer (fixed heights, on every page; `on_first_page`,
   `on_last_page` false hides them there) and the body. Body items are laid out in
   **rows**: items whose vertical ranges overlap form a row, placed at their x, y within
@@ -267,7 +270,9 @@ Formats (`format` of a text, column, chart or KPI, and `FORMAT()`): numbers `0`,
 Separators and names follow the report's `locale`. Errors (a field that does not exist,
 a function with the wrong arguments, a text added to a number) are found when the
 definition is saved, with the item and the position, and at render time name the item.
-NULL propagates through arithmetic; aggregates skip it; division by zero is NULL.
+NULL propagates through arithmetic; aggregates skip it; division by zero is NULL. Over the
+rows of a dataset the expressions are translated into DuckDB's SQL with these very
+semantics («Data in columns»); the tree is still walked where a value goes on the page.
 
 ### Rendering (engine)
 
@@ -303,6 +308,64 @@ renderer, so the screen is the PDF. The chart service: `frontend` image, `node
 /app/chart-renderer/render.mjs --serve 8090`; Compose service `chart-renderer`
 (internal), Helm a sidecar of the worker pods on 127.0.0.1 (`REPORTS__CHART_URL`).
 
+### Data in columns (2026-10-28)
+
+A render's datasets are read as Arrow tables and stay so (`app/reports/frames.py`): a query
+on a connection and a catalog chain give a Polars DataFrame (the engines'
+`preview(frame=True)`, never `to_dicts()`), read column by column into the values the
+expressions see — decimals as floats through their exact text, date-times into the
+report's time zone with Python's own zoneinfo, non-finite numbers as NULL, texts that
+repeat dictionary-encoded; rows given as they are become columns when every column holds
+one kind of value. A DuckDB inside the worker's process reads them in place, with the
+worker child's share of memory and CPUs (`app/engine/duckdb_budget.py`, as the engine's
+DuckDB: no setting of its own), spilling into a directory of its own, closed with the
+render.
+
+- **Over every row, DuckDB.** A table's filter and sort keys, its group keys, a matrix's
+  columns, a chart's categories and series, a sparkline's categories, the values an
+  aggregate takes, the calculated fields are translated into DuckDB's SQL
+  (`app/reports/sql.py`) with the interpreter's semantics to the letter: Python's types (an
+  int and a float print differently; where the type changes from row to row,
+  `IF([amount] < 0, -[amount], 0)`, a flag beside the value says which), NULL propagating,
+  a division by zero NULL (DuckDB's is infinity), `&` writing NULL as nothing, texts
+  compared by code point, `ROUND` half away from zero on the shortest decimal, `DATEADD`
+  stopping at the month's end, `DATEDIFF` towards zero, ISO weekdays, a date out of
+  Python's range stopping the query. A part with no field outside an aggregate (a
+  parameter, a placeholder, `TODAY()`, an aggregate of the dataset in a filter) is a
+  constant, evaluated once by the interpreter; what only Python writes the same — `FORMAT`,
+  `TEXT`, a number or a date joined with `&`, `UPPER` and `LOWER` («ß» is «SS») — is
+  computed by Python once per distinct value and looked up.
+- **Orders are Python's.** The distinct values of a key are sorted by the interpreter's own
+  key (`casefold`, NULL last, the direction), and numpy puts the rows in that order with
+  stable counting sorts; a chart's categories keep the order they first come in.
+- **Groups and totals.** The groups of a level, the categories of a chart, the cells of a
+  matrix, the series of a split are *families* of sets of rows, aggregated together: one
+  `GROUP BY` on the member's number per level and aggregate (not ROLLUP or GROUPING SETS:
+  a level orders its rows its own way for `FIRST` and `LAST`, the table its rows by its
+  sort). Counts, distinct counts, minima, maxima, firsts, lasts and sums of integers are
+  DuckDB's; **sums and averages of decimals are Python's `sum`** over the values DuckDB
+  computed, in the rows' order: DuckDB's parallel sums round otherwise, and a total must be
+  the interpreter's to the last bit. The evaluator asks a set for an aggregate, its first
+  row's field, a running total, and walks the rest of the expression (the arithmetic
+  around the aggregates, the formats, the labels) as before.
+- **Only the page becomes Python's values**: the detail rows of the open groups, one value
+  per group, category, KPI. More detail rows than `REPORTS__MAX_PAGES` pages could hold at
+  the least height of a row (1.2 mm) stop the render at once, naming the table.
+- **Never a different result.** An item with an expression that cannot be translated for
+  certain (some 5% of random valid expressions: an `IF` between a date and a date-time, a
+  date-time moved by a fraction of a day…), or whose query fails, is built again by the
+  interpreter over the dataset's rows, made then. The tests build every report of the
+  suite both ways and compare the whole model and the PDF and SVG bytes
+  (`tests/reports_both_ways.py`), random expressions row by row and per group, random
+  reports, the values of every column type; the golden PDF is unchanged.
+- **Measured** (8 columns, a calculated field, a KPI and a table grouped by category and
+  month with its totals, as PDF; the worker's process, the layout's child apart; the
+  source's DataFrame included): 100,000 rows 0.8 s and 240 MiB (2.7 s before); a million
+  1.3 s and 470 MiB (27 s and 1.0 GiB before, the rows as Python's dicts); 5 million 5.2 s
+  and 1.2 GiB; 10 million 10.4 s and 2.2 GiB (before out of reach, some 10 GiB). A matrix
+  by a column with its subtotals adds half a second at a million rows (38 s before), ten
+  seconds at ten million.
+
 ### Gateway API
 
 - `GET|POST /projects/{id}/reports`, `GET|PATCH|DELETE /reports/{id}`, `/duplicate`,
@@ -315,12 +378,18 @@ renderer, so the screen is the PDF. The chart service: `frontend` image, `node
   `Content-Disposition`; a token with read scope is enough; repeated `?region=a&region=b`
   for a multi parameter. 400 with the parameter's name when a value does not fit.
 - `GET /reports/{id}/parameters` — the parameters with their choices resolved (the form).
+- `GET /reports/search?q=&sort=trending|name|updated&limit=&offset=` — the Reports tab:
+  a page of the reports one sees, with their folder path, author and readers (people and
+  openings in 30 days, openings ever, the last one); `POST /reports/{id}/views` — the
+  viewer opened it, counted once per person and day (`report_views`, migration 0033,
+  trimmed by the housekeeping past 30 days; `reports.views_total` keeps the total). A
+  call with an API token counts nothing. See services/report_views.py.
 - `POST /reports/{id}/fields` `{dataset}` → the dataset's columns (editor), and its rows
   with the parameters' defaults counted up to the cap (`rows`, `over`, `max_rows`; the
   engine's `POST /reports/count` on the preview queue, 20 s at most): absent when they
   cannot be counted (a required parameter without a default, an engine that fails or
   takes longer), never an error. The designer shows the number under the dataset, an
-  orange warning with the time a render takes past 100,000 rows, a red one past the cap.
+  orange warning with the time a render takes past 500,000 rows, a red one past the cap.
 
 ### Pieces
 

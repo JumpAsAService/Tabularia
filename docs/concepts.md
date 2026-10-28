@@ -28,7 +28,10 @@ Everything lives in a folder, and folders nest. **Explore** shows the tree: a fo
 lists its subfolders, flows, datasources, views, connections, scripts, SQL scripts,
 notebooks, reports and flow groups.
 Root folders are created by administrators; a subfolder by whoever has **MANAGE** on
-its parent.
+its parent. Every person also has a **personal folder**, born with their account and
+named after their email (`leonardtriv` for `leonardtriv@example.com`): first in Explore as
+**My folder**, seen only by them and the administrators until they share it
+([Personal folders](governance/permissions.md#personal-folders)).
 
 ![Explore inside the Sample folder: three subfolders, four saved views and two connections, each with its description and actions](media/guide/explore/explore-sample-folder.png)
 
