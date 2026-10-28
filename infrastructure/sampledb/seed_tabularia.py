@@ -341,7 +341,11 @@ class Builder:
         return "out"
 
     def edge(self, a, b, handle="left"):
-        self.edges.append({"id": f"e-{a}-{handle}-{b}", "source": a, "target": b, "sourceHandle": "out", "targetHandle": handle})
+        # a Source node has one output handle, without a name (SourceNode.vue): an edge
+        # naming `out` there is drawn from a handle that does not exist, as a loop
+        source = next(n for n in self.nodes if n["id"] == a)["type"] == "source"
+        self.edges.append({"id": f"e-{a}-{handle}-{b}", "source": a, "target": b,
+                           "sourceHandle": None if source else "out", "targetHandle": handle})
 
     def chain(self, *ids):
         for a, b in zip(ids, ids[1:]):
