@@ -655,6 +655,8 @@ export default {
     "sqlScriptRunAction": "Script SQL exécuté",
     "sqlScriptExportAction": "Script SQL exporté",
     "sqlScriptPublishAction": "Datasource d'un script SQL écrite",
+    "agentPlanApplyAction": "Plan de l'agent appliqué",
+    "agentPlanCancelAction": "Plan de l'agent annulé",
     "sqlScriptScheduleAction": "Script SQL planifié",
     "tokenCreateAction": "Jeton créé",
     "tokenRevokeAction": "Jeton révoqué",
@@ -2114,6 +2116,80 @@ export default {
       "empty": "Aucun worker ne s'est manifesté depuis une minute."
     }
   },
+  "agentPlan": {
+    "title": "Plan {id}",
+    "titleBare": "Plan",
+    "noId": "Aucun plan à afficher : l'adresse demande ?id=",
+    "notFound": "Ce plan n'existe pas, ou il n'est pas à vous.",
+    "fromMcp": "Proposé par un agent hors de Tabularia, via MCP, avec le jeton « {token} ».",
+    "fromMcpNoToken": "Proposé par un agent hors de Tabularia, via MCP.",
+    "fromChat": "Proposé par l'assistant dans le chat.",
+    "nothingYet": "Rien n'a encore changé : les actions ci-dessous s'appliquent dans l'ordre seulement quand vous confirmez, et vos autorisations sont alors vérifiées à nouveau.",
+    "expiresAt": "Expire à {time}, 30 minutes après sa dernière modification.",
+    "status": {
+      "pending": "Vous attend",
+      "applying": "En cours d'application",
+      "applied": "Appliqué",
+      "failed": "Arrêté par une erreur",
+      "cancelled": "Annulé",
+      "expired": "Expiré"
+    },
+    "statusHelp": {
+      "applied": "Toutes les actions ont été appliquées.",
+      "failed": "Les actions avant l'erreur ont été appliquées, celles d'après non.",
+      "cancelled": "Rien n'en a été appliqué.",
+      "expired": "Personne ne l'a confirmé dans les 30 minutes après sa dernière modification : demandez un nouveau plan à l'agent."
+    },
+    "actionsTitle": "Ce qu'il fait",
+    "kind": {
+      "save_flow_new": "Créer le flux « {name} »",
+      "save_flow_change": "Modifier le flux « {name} »",
+      "run_flow": "Exécuter maintenant le flux « {name} »",
+      "schedule_flow": "Planifier le flux « {name} »",
+      "schedule_flow_off": "Désactiver la planification de « {name} »"
+    },
+    "inFolder": "Dans {folder}",
+    "engine": "moteur {engine}",
+    "modeDevelopment": "Sur son moteur de développement, avec les échantillons de développement.",
+    "modeProduction": "Sur son moteur de production, tous les enregistrements.",
+    "cron": "Quand : {text}",
+    "cronCode": "cron {cron}, fuseau horaire {tz}",
+    "notify": "Une exécution en échec est signalée à {emails}",
+    "writes": "Ce qu'il écrit",
+    "steps": "Étapes",
+    "changes": "Modifications",
+    "changesHelp": "+ ajouté, − retiré, ~ modifié",
+    "line": {
+      "added": "Ajouté : ",
+      "removed": "Retiré : ",
+      "changed": "Modifié : "
+    },
+    "output": {
+      "datasource": "La datasource « {target} » dans {folder}",
+      "datasourceOverwrite": "La datasource « {target} » dans {folder}, ses données remplacées à chaque exécution",
+      "database": "La table {target} sur « {connection} », {mode}",
+      "s3": "Le fichier {format} {target} sur S3, via « {connection} »",
+      "sftp": "Le fichier {format} {target} sur SFTP, via « {connection} »",
+      "email": "Un e-mail à {target} avec le résultat en pièce jointe ({format}), objet « {subject} », via « {connection} »"
+    },
+    "modeAppend": "lignes ajoutées",
+    "modeReplace": "lignes remplacées",
+    "firstRows": "Premières lignes",
+    "previewError": "Les premières lignes n'ont pas pu être lues : {error}",
+    "result": {
+      "ok": "Fait",
+      "error": "Erreur :",
+      "skipped": "Non appliquée",
+      "open": "Ouvrir"
+    },
+    "confirm": "Confirmer et appliquer",
+    "confirming": "Application…",
+    "cancel": "Annuler le plan",
+    "cancelling": "Annulation…",
+    "confirmedToast": "Plan appliqué",
+    "failedToast": "Le plan s'est arrêté sur une erreur",
+    "cancelledToast": "Plan annulé"
+  },
   "panelSettings": {
     "title": "Réglages",
     "lead": "Ce qu'un administrateur peut modifier sans toucher au déploiement, rangé par composant. La plupart s'appliquent en {seconds} secondes sur tous les processus. La valeur de départ reste celle de l'installation (l'environnement, les values Helm), et un clic suffit pour y revenir. Les adresses, les identifiants et les options liées au cluster n'y figurent pas : ils relèvent de l'installation.",
@@ -2250,6 +2326,10 @@ export default {
       "ai": {
         "title": "Assistant IA",
         "lead": "Le modèle, ses limites et ce qu'il peut dépenser."
+      },
+      "mcp": {
+        "title": "Agents via MCP",
+        "lead": "Des agents hors de Tabularia (Claude Desktop, un IDE, un autre agent de l'entreprise) qui utilisent ses outils avec un jeton d'API."
       },
       "dbt": {
         "title": "Export dbt",
@@ -2460,6 +2540,14 @@ export default {
       "ai_dbt_export_timeout_seconds": {
         "label": "Temps d'IA d'un export dbt",
         "help": "Secondes pour l'ensemble des appels à l'IA d'un export dbt (descriptions, traductions). L'ingress coupe une requête à 300 s : ce délai et l'attente du moteur ci-dessous doivent ensemble rester en dessous."
+      },
+      "mcp_enabled": {
+        "label": "Serveur MCP",
+        "help": "Les agents hors de Tabularia peuvent se connecter à /mcp avec un jeton d'API : les jetons en lecture seule lisent seulement, ceux en écriture proposent des plans. Désactivé : /mcp répond 404 et les jetons restent valables sur le reste de l'API."
+      },
+      "mcp_confirm_in_tabularia_only": {
+        "label": "Plans confirmés seulement dans Tabularia",
+        "help": "Activé : un agent ne peut pas appliquer ses plans lui-même ; la personne ouvre la page du plan dans Tabularia et le confirme là."
       },
       "engine_dbt_export_timeout_seconds": {
         "label": "Attente du moteur pour construire un export dbt",

@@ -370,6 +370,11 @@ def remove_user(session: Session, user_id: int) -> None:
     if chat_ids:
         session.exec(sa_delete(AiChatTurn).where(AiChatTurn.chat_id.in_(chat_ids)))
         session.exec(sa_delete(AiChat).where(AiChat.id.in_(chat_ids)))
+    # the agent's drafts and plans too (services/agent): personal, with the first rows of data
+    from app.models import AgentDraft, AgentPlan
+
+    session.exec(sa_delete(AgentDraft).where(AgentDraft.user_id == user_id))
+    session.exec(sa_delete(AgentPlan).where(AgentPlan.user_id == user_id))
     session.exec(sa_delete(Permission).where(Permission.user_id == user_id))
     session.exec(sa_delete(ContainerRegistryAccess).where(ContainerRegistryAccess.user_id == user_id))
     session.exec(sa_delete(UserGroupLink).where(UserGroupLink.user_id == user_id))

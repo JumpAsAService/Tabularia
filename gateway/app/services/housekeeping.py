@@ -9,6 +9,9 @@ storage; what piles up in Postgres is history, and every hour the orchestrators 
   the one in use always (a flow with a Script node keeps its code in every version);
 - the assistant's conversations untouched for ORCHESTRATOR__AI_CHAT_RETENTION_DAYS, the
   spending ledger aside (it is the bill, not the conversation).
+- the agent's drafts unused for a day, and its plans: the pending ones past their 30
+  minutes become expired, the others go with the conversations' retention
+  (services/agent).
 
 0 keeps everything of that kind. Postgres does not give back what an UPDATE or a DELETE
 frees: the old rows stay until a vacuum marks their space for reuse. So a pass that
@@ -139,6 +142,18 @@ def ai_chats(session: Session, days: int, at: datetime | None = None) -> int:
     return removed_ones
 
 
+def agent_drafts(session: Session, at: datetime | None = None) -> int:
+    from app.services.agent.flow_tools import expired_drafts
+
+    return expired_drafts(session, at=at)
+
+
+def agent_plans(session: Session, days: int, at: datetime | None = None) -> int:
+    from app.services.agent.plans import expire_and_trim
+
+    return expire_and_trim(session, at=at, retention_days=days)
+
+
 def vacuum(session: Session, tables: list[str]) -> None:
     """Marks the space the pass freed for reuse (Postgres only; outside a transaction)."""
     bind = session.get_bind()
@@ -162,6 +177,8 @@ def one_pass(session: Session, at: datetime | None = None) -> dict[str, int]:
         "sql_script_versions": lambda: sql_script_versions(session, o.versions_kept),
         "notebook_versions": lambda: notebook_versions(session, o.versions_kept),
         "ai_chats": lambda: ai_chats(session, o.ai_chat_retention_days, at=at),
+        "agent_drafts": lambda: agent_drafts(session, at=at),
+        "agent_plans": lambda: agent_plans(session, o.ai_chat_retention_days, at=at),
     }
     done: dict[str, int] = {}
     for table, step in steps.items():

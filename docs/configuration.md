@@ -53,11 +53,11 @@ SFTP, S3, APIs, SharePoint) belong to each connection, encrypted with
 | Read by | Variables |
 |---|---|
 | [Shared by the gateway and the engine](#shared-by-the-gateway-and-the-engine) | 7 |
-| [Gateway](#gateway) | 159 |
+| [Gateway](#gateway) | 161 |
 | [Engine and workers](#engine-and-workers) | 93 |
 | [Frontend](#frontend) | 3 |
 | [Compose and Helm only](#compose-and-helm-only) | 13 |
-| **Total** | **275** |
+| **Total** | **277** |
 
 ## Before production
 
@@ -217,6 +217,15 @@ the flow or the script being edited, the dialects of a translation, and, last, t
 of the user's interface (the answer is written in it whatever language the question or the
 data are in). The panel shows that context with example values. Texts the AI already wrote
 for a version of a flow in a dbt export stay: a new text applies to later versions.
+
+### Agents over MCP
+
+The MCP server at `/mcp` (on the gateway, under `APP__ROOT_PATH` when set): agents outside Tabularia — Claude Desktop, an IDE, another company agent — use the same tools as the assistant, signed in with an [API token](api.md). A read-only token only reads; a write token builds flows in drafts and proposes plans, and a plan changes nothing until it is confirmed, by the agent's human (`confirm_plan`) or by the person on the plan's page in Tabularia. Every applied action is in the audit log with `via: mcp` and the token's name. It needs no AI model: the model is the client's. Stateless (JSON answers, no sessions), so any gateway replica serves any call.
+
+| Variable | Type | Default | Helm value | Description |
+|---|---|---|---|---|
+| `MCP__ENABLED` | boolean | `true` | `extraEnv` | Turns the MCP server on. Off, `/mcp` answers 404 and the API tokens keep working on the rest of the API. Also adjustable in Administration → Settings. |
+| `MCP__CONFIRM_IN_TABULARIA_ONLY` | boolean | `false` | `extraEnv` | On, an agent cannot apply its own plans (`confirm_plan` refuses with the plan's link): a person signed in to Tabularia confirms each plan on its page. Also adjustable in Administration → Settings. |
 
 ### Development sample
 

@@ -116,6 +116,9 @@ ITEMS: tuple[Item, ...] = (
     Item("ai.max_input_tokens_per_turn", "ai", "int", "tokens", 1000, 2_000_000),
     Item("ai.max_chats_listed", "ai", "int", "chats", 1, 500),
     Item("ai.dbt_export_timeout_seconds", "ai", "float", "seconds", 10, 3600),
+    # ── agents over MCP (docs/specs/mcp-agent.md) ──
+    Item("mcp.enabled", "mcp", "bool"),
+    Item("mcp.confirm_in_tabularia_only", "mcp", "bool"),
     # ── dbt export, previews, uploads, backups, monitoring, lineage ──
     Item("engine.dbt_export_timeout_seconds", "dbt", "float", "seconds", 10, 3600),
     Item("preview.default_sample_rows", "previews", "int", "rows", 0, 10_000_000),

@@ -99,7 +99,8 @@ def test_one_pass_says_what_it_touched(session):
         _report(session, 1)
     session.commit()
     done = housekeeping.one_pass(session, at=NOW)
-    assert done == {"runs": 0, "data_contract_results": 0, "flow_versions": 0, "saved_script_versions": 0, "sql_script_versions": 0, "notebook_versions": 0, "ai_chats": 0}
+    assert done == {"runs": 0, "data_contract_results": 0, "flow_versions": 0, "saved_script_versions": 0, "sql_script_versions": 0, "notebook_versions": 0, "ai_chats": 0,
+                    "agent_drafts": 0, "agent_plans": 0}
 
 
 def test_a_kind_that_fails_does_not_stop_the_others(session, monkeypatch):

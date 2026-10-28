@@ -10,7 +10,7 @@ import { GridComponent, TooltipComponent, LegendComponent } from 'echarts/compon
 import VChart from 'vue-echarts'
 import {
   ScrollText, Search, RefreshCw, ChevronLeft, ChevronRight, Circle,
-  LogIn, LogOut, Workflow, Database, Plug, Download, Shield, CheckCircle2, XCircle, AlertTriangle, KeyRound, SlidersHorizontal, Radar, Rows3, Server, Folder, Code2, DatabaseSearch, Boxes, DatabaseBackup, Sparkles, Megaphone, FileCheck, Mail, Cpu, NotebookPen } from 'lucide-vue-next'
+  LogIn, LogOut, Workflow, Database, Plug, Download, Shield, CheckCircle2, XCircle, AlertTriangle, KeyRound, SlidersHorizontal, Radar, Rows3, Server, Folder, Code2, DatabaseSearch, Boxes, DatabaseBackup, Sparkles, Megaphone, FileCheck, Mail, Cpu, NotebookPen, Bot } from 'lucide-vue-next'
 import { useApi, type AuditEntry, type ActiveSession, type AccessActivity } from '~/composables/useApi'
 import { useI18n } from 'vue-i18n'
 import { useFormat } from '~/composables/useFormat'
@@ -191,6 +191,8 @@ const ACTION_META = computed<Record<string, { icon: any; color: string; label: s
     'sql_script.export': { icon: DatabaseSearch, color: u.violet, label: t('audit.sqlScriptExportAction') },
     'sql_script.publish': { icon: DatabaseSearch, color: u.violet, label: t('audit.sqlScriptPublishAction') },
     'sql_script.schedule': { icon: DatabaseSearch, color: u.violet, label: t('audit.sqlScriptScheduleAction') },
+    'agent.plan_apply': { icon: Bot, color: u.violet, label: t('audit.agentPlanApplyAction') },
+    'agent.plan_cancel': { icon: Bot, color: u.muted, label: t('audit.agentPlanCancelAction') },
     'notebook.create': { icon: NotebookPen, color: u.accent, label: t('audit.notebookCreateAction') },
     'notebook.update': { icon: NotebookPen, color: u.accent, label: t('audit.notebookUpdateAction') },
     'notebook.delete': { icon: NotebookPen, color: u.danger, label: t('audit.notebookDeleteAction') },

@@ -135,6 +135,10 @@ AI_QUERY = "ai.query"
 # the text of an agent's instructions changed from the panel, or put back to the default
 AI_PROMPT_UPDATE = "ai.prompt_update"
 AI_PROMPT_RESET = "ai.prompt_reset"
+# the agent's plans (docs/specs/mcp-agent.md): one applied, with the outcome of each
+# action (each action is recorded by its own route too, with `via`), or cancelled
+AGENT_PLAN_APPLY = "agent.plan_apply"
+AGENT_PLAN_CANCEL = "agent.plan_cancel"
 # saved views (Viewer configurations inside a folder). Prefix "saved_view" and not
 # "view": `VIEW` is the name of a capability already.
 # sending a run's output by email: it is the ONLY destination that sends data out
@@ -244,6 +248,14 @@ def record_audit(
         via = current_name(request)
         if via:
             detail = {**(detail or {}), "token": via}
+        # done by the agent (services/agent): from the chat or over MCP, and which plan
+        state = getattr(request, "state", None) if request is not None else None
+        agent_via = getattr(state, "via", None) if state is not None else None
+        if isinstance(agent_via, str) and agent_via:
+            detail = {**(detail or {}), "via": agent_via}
+            plan_id = getattr(state, "agent_plan", None)
+            if plan_id:
+                detail["plan"] = plan_id
         entry = AuditLog(
             actor_id=actor.id if actor else None,
             actor_label=actor_label or (actor.email if actor else "anonimo"),

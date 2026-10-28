@@ -655,6 +655,8 @@ export default {
     "sqlScriptRunAction": "SQL-Skript ausgeführt",
     "sqlScriptExportAction": "SQL-Skript exportiert",
     "sqlScriptPublishAction": "Datasource eines SQL-Skripts geschrieben",
+    "agentPlanApplyAction": "Plan des Agenten angewendet",
+    "agentPlanCancelAction": "Plan des Agenten abgebrochen",
     "sqlScriptScheduleAction": "SQL-Skript geplant",
     "tokenCreateAction": "Token erstellt",
     "tokenRevokeAction": "Token widerrufen",
@@ -2114,6 +2116,80 @@ export default {
       "empty": "Kein Worker hat sich in der letzten Minute gemeldet."
     }
   },
+  "agentPlan": {
+    "title": "Plan {id}",
+    "titleBare": "Plan",
+    "noId": "Kein Plan anzuzeigen: Die Adresse braucht ?id=",
+    "notFound": "Diesen Plan gibt es nicht, oder er gehört nicht dir.",
+    "fromMcp": "Vorgeschlagen von einem Agenten außerhalb von Tabularia, über MCP, mit dem Token «{token}».",
+    "fromMcpNoToken": "Vorgeschlagen von einem Agenten außerhalb von Tabularia, über MCP.",
+    "fromChat": "Vorgeschlagen vom Assistenten im Chat.",
+    "nothingYet": "Noch hat sich nichts geändert: Die Aktionen unten werden erst angewendet, wenn du bestätigst, der Reihe nach, und deine Berechtigungen werden dann erneut geprüft.",
+    "expiresAt": "Läuft um {time} ab, 30 Minuten nach der letzten Änderung.",
+    "status": {
+      "pending": "Wartet auf dich",
+      "applying": "Wird angewendet",
+      "applied": "Angewendet",
+      "failed": "Von einem Fehler gestoppt",
+      "cancelled": "Abgebrochen",
+      "expired": "Abgelaufen"
+    },
+    "statusHelp": {
+      "applied": "Alle Aktionen wurden angewendet.",
+      "failed": "Die Aktionen vor dem Fehler wurden angewendet, die danach nicht.",
+      "cancelled": "Nichts davon wurde angewendet.",
+      "expired": "Niemand hat ihn innerhalb von 30 Minuten nach der letzten Änderung bestätigt: Bitte den Agenten um einen neuen Plan."
+    },
+    "actionsTitle": "Was er tut",
+    "kind": {
+      "save_flow_new": "Den Flow «{name}» erstellen",
+      "save_flow_change": "Den Flow «{name}» ändern",
+      "run_flow": "Den Flow «{name}» jetzt ausführen",
+      "schedule_flow": "Den Flow «{name}» planen",
+      "schedule_flow_off": "Die Planung von «{name}» ausschalten"
+    },
+    "inFolder": "In {folder}",
+    "engine": "Engine {engine}",
+    "modeDevelopment": "Auf seiner Entwicklungs-Engine, mit den Entwicklungsstichproben.",
+    "modeProduction": "Auf seiner Produktions-Engine, alle Datensätze.",
+    "cron": "Wann: {text}",
+    "cronCode": "Cron {cron}, Zeitzone {tz}",
+    "notify": "Ein fehlgeschlagener Lauf wird an {emails} gemeldet",
+    "writes": "Was er schreibt",
+    "steps": "Schritte",
+    "changes": "Änderungen",
+    "changesHelp": "+ hinzugefügt, − entfernt, ~ geändert",
+    "line": {
+      "added": "Hinzugefügt: ",
+      "removed": "Entfernt: ",
+      "changed": "Geändert: "
+    },
+    "output": {
+      "datasource": "Die Datasource «{target}» in {folder}",
+      "datasourceOverwrite": "Die Datasource «{target}» in {folder}, ihre Daten bei jedem Lauf ersetzt",
+      "database": "Die Tabelle {target} auf «{connection}», {mode}",
+      "s3": "Die {format}-Datei {target} auf S3, über «{connection}»",
+      "sftp": "Die {format}-Datei {target} auf SFTP, über «{connection}»",
+      "email": "Eine E-Mail an {target} mit dem Ergebnis im Anhang ({format}), Betreff «{subject}», über «{connection}»"
+    },
+    "modeAppend": "Zeilen hinzugefügt",
+    "modeReplace": "Zeilen ersetzt",
+    "firstRows": "Erste Zeilen",
+    "previewError": "Die ersten Zeilen konnten nicht gelesen werden: {error}",
+    "result": {
+      "ok": "Erledigt",
+      "error": "Fehler:",
+      "skipped": "Nicht angewendet",
+      "open": "Öffnen"
+    },
+    "confirm": "Bestätigen und anwenden",
+    "confirming": "Wird angewendet…",
+    "cancel": "Plan abbrechen",
+    "cancelling": "Wird abgebrochen…",
+    "confirmedToast": "Plan angewendet",
+    "failedToast": "Der Plan wurde von einem Fehler gestoppt",
+    "cancelledToast": "Plan abgebrochen"
+  },
   "panelSettings": {
     "title": "Einstellungen",
     "lead": "Was ein Administrator ändern darf, ohne das Deployment anzufassen, in einem Kasten pro Komponente. Die meisten gelten innerhalb von {seconds} Sekunden für alle Prozesse. Der Ausgangswert bleibt der der Installation (die Umgebung, die Helm-Values), und ein Klick führt zu ihm zurück. Adressen, Zugangsdaten und die an den Cluster gebundenen Schalter stehen nicht hier: Sie gehören zur Installation.",
@@ -2250,6 +2326,10 @@ export default {
       "ai": {
         "title": "KI-Assistent",
         "lead": "Das Modell, seine Grenzen und was er ausgeben darf."
+      },
+      "mcp": {
+        "title": "Agenten über MCP",
+        "lead": "Agenten außerhalb von Tabularia (Claude Desktop, eine IDE, ein anderer Unternehmensagent), die seine Werkzeuge mit einem API-Token nutzen."
       },
       "dbt": {
         "title": "dbt-Export",
@@ -2460,6 +2540,14 @@ export default {
       "ai_dbt_export_timeout_seconds": {
         "label": "KI-Zeit eines dbt-Exports",
         "help": "Sekunden für alle KI-Aufrufe eines dbt-Exports (Beschreibungen, Übersetzungen). Der Ingress bricht eine Anfrage nach 300 s ab: Dieser Wert und die Wartezeit auf die Engine darunter müssen zusammen unter dieser Grenze bleiben."
+      },
+      "mcp_enabled": {
+        "label": "MCP-Server",
+        "help": "Agenten außerhalb von Tabularia können sich mit einem API-Token unter /mcp verbinden: Nur-Lese-Token lesen nur, Schreib-Token schlagen Pläne vor. Aus: /mcp antwortet 404, und die Token funktionieren im Rest der API weiter."
+      },
+      "mcp_confirm_in_tabularia_only": {
+        "label": "Pläne nur in Tabularia bestätigen",
+        "help": "An: Ein Agent kann seine Pläne nicht selbst anwenden; die Person öffnet die Seite des Plans in Tabularia und bestätigt ihn dort."
       },
       "engine_dbt_export_timeout_seconds": {
         "label": "Wartezeit auf die Engine beim Erstellen eines dbt-Exports",

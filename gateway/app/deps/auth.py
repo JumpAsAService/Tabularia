@@ -168,10 +168,13 @@ def _load_user(session: Session, user_id: int, sid: str) -> tuple[User, UserSess
     ))
 
 
-def _token_user(request: Request, token: str, session: Session) -> User:
+def _token_user(request: Request, token: str, session: Session, level_checked_by_caller: bool = False) -> User:
     """An API token (`tab_…`): the user and the token in one SELECT, by fingerprint.
     Only from the `Authorization` header: an API token put in the session's cookie does
-    not hold (the cookie is the browser's, the token the scripts')."""
+    not hold (the cookie is the browser's, the token the scripts').
+
+    `level_checked_by_caller`: the MCP endpoint, one POST for every tool, checks the
+    token's level per tool itself (`request.state.api_token_scope`)."""
     state = getattr(request, "state", None)
     if getattr(state, "token_from_cookie", False):
         raise _refused(request)
@@ -198,9 +201,11 @@ def _token_user(request: Request, token: str, session: Session) -> User:
         # administrator role lost, SSO). When they become one, their tokens are withdrawn;
         # this covers the ways that do not
         raise _refused(request)
-    api_tokens.check_level(row, request)
+    if not level_checked_by_caller:
+        api_tokens.check_level(row, request)
     if state is not None:
         state.api_token = row.name  # per l'audit: «fatto con il token …»
+        state.api_token_scope = row.scope
     _touch_token(session, user, row, request)
     return user
 

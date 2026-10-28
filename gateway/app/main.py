@@ -68,6 +68,8 @@ from app.routes.scheduling import router as scheduling_router
 from app.routes.audit import router as audit_router
 from app.routes.system import router as system_router
 from app.routes.ai import router as ai_router
+from app.routes.agent_plans import router as agent_plans_router
+from app.routes.mcp import router as mcp_router
 from app.routes.queue import router as queue_router
 from app.routes.proxy import router as proxy_router
 from app.core.body_limit import BodyLimitMiddleware
@@ -295,6 +297,10 @@ if settings.app.role != "orchestrator":
     app.include_router(privacy_router)
     app.include_router(engine_policy_router)
     app.include_router(ai_router)
+    # the agent's plans (the page that confirms one) and the MCP server for agents outside
+    # Tabularia (docs/specs/mcp-agent.md)
+    app.include_router(agent_plans_router)
+    app.include_router(mcp_router)
     app.include_router(saved_views_router)
     app.include_router(scripts_router)
     app.include_router(sql_scripts_router)

@@ -11,7 +11,7 @@ import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { onBeforeRouteLeave } from 'vue-router'
 import {
-  Activity, ArrowDownToLine, Boxes, Braces, ChevronRight, Cloud, Container, Cpu, Database, DatabaseBackup,
+  Activity, ArrowDownToLine, Bot, Boxes, Braces, ChevronRight, Cloud, Container, Cpu, Database, DatabaseBackup,
   FileCode, FileOutput, FolderInput, GitBranch, Globe, Hammer, HardDrive, History, KeyRound, Layers,
   LoaderCircle, NotebookPen, Package, RefreshCw, RotateCcw, Search, Server, ShieldCheck, SlidersHorizontal, Sparkles, Timer,
   Upload, Webhook, Workflow, X,
@@ -52,7 +52,7 @@ const openOnes = ref<Set<string>>(new Set())
 const search = ref('')
 
 const ICONE: Record<string, any> = {
-  signin: KeyRound, sso: ShieldCheck, orchestration: Workflow, history: History, webhooks: Webhook, ai: Sparkles,
+  signin: KeyRound, sso: ShieldCheck, orchestration: Workflow, history: History, webhooks: Webhook, ai: Sparkles, mcp: Bot,
   dbt: Package, previews: Upload, backups: DatabaseBackup, monitoring: Activity, openlineage: GitBranch,
   processes: Cpu, kubernetes: Boxes, scripts: FileCode, builds: Hammer, notebooks: NotebookPen, containers: Container,
   execution: Timer, cache: Layers, embedded: HardDrive, engine_api: Server, import: ArrowDownToLine,

@@ -474,6 +474,19 @@ class AiSettings(BaseModel):
         return bool(self.base_url.strip()) and bool(self.secret_key.get_secret_value().strip())
 
 
+class McpSettings(BaseModel):
+    """The MCP server at `/mcp` (docs/specs/mcp-agent.md): agents outside Tabularia
+    (Claude Desktop, an IDE, another company agent) use the same tools as the chat, signed
+    in with an API token. It needs no AI model: the model is the client's.
+
+    env: MCP__ENABLED, MCP__CONFIRM_IN_TABULARIA_ONLY"""
+
+    # off: `/mcp` answers 404, the tokens keep working on the rest of the API
+    enabled: bool = True
+    # on: `confirm_plan` refuses and points to the plan's page, where a person confirms it
+    confirm_in_tabularia_only: bool = False
+
+
 class WebhookSettings(BaseModel):
     """Calls to external systems at the end of a run (see services/webhooks.py)."""
 
@@ -809,6 +822,7 @@ class Settings(BaseSettings):
     app: AppSettings = Field(default_factory=AppSettings)
     preview: PreviewSettings = Field(default_factory=PreviewSettings)
     ai: AiSettings = Field(default_factory=AiSettings)
+    mcp: McpSettings = Field(default_factory=McpSettings)
     scheduling: SchedulingSettings = Field(default_factory=SchedulingSettings)
     orchestrator: OrchestratorSettings = Field(default_factory=OrchestratorSettings)
     backup: BackupSettings = Field(default_factory=BackupSettings)

@@ -115,6 +115,13 @@ Container node) or greyed out (an engine that is not configured).
 | Conversations listed per user | `AI__MAX_CHATS_LISTED` | 1 – 500 | live |
 | AI time of a dbt export | `AI__DBT_EXPORT_TIMEOUT_SECONDS` | 10 s – 1 h | live |
 
+**Agents over MCP**
+
+| Setting | Variable | Panel range | Applies |
+|---|---|---|---|
+| MCP server | `MCP__ENABLED` | on / off | live |
+| Plans confirmed only in Tabularia | `MCP__CONFIRM_IN_TABULARIA_ONLY` | on / off | live |
+
 **dbt export**
 
 | Setting | Variable | Panel range | Applies |

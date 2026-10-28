@@ -90,7 +90,7 @@ export interface RolloutState {
 
 // the boxes, in the order of the page; the engine's categories are its groups
 export const GROUPS: Record<SettingSection, string[]> = {
-  gateway: ['signin', 'sso', 'orchestration', 'history', 'webhooks', 'ai', 'dbt', 'previews', 'backups',
+  gateway: ['signin', 'sso', 'orchestration', 'history', 'webhooks', 'ai', 'mcp', 'dbt', 'previews', 'backups',
     'monitoring', 'openlineage', 'processes'],
   kubernetes: ['kubernetes', 'scripts', 'builds', 'notebooks', 'containers'],
   engine: ['execution', 'cache', 'embedded', 'engine_api', 'import', 'export', 'sftp', 's3', 'api',

@@ -171,6 +171,13 @@ for a version of a flow in a dbt export stay: a new text applies to later versio
 """
 
 [[section]]
+id = "gateway-mcp"
+component = "gateway"
+title = "Agents over MCP"
+prefixes = ["MCP"]
+intro = "The MCP server at `/mcp` (on the gateway, under `APP__ROOT_PATH` when set): agents outside Tabularia — Claude Desktop, an IDE, another company agent — use the same tools as the assistant, signed in with an [API token](api.md). A read-only token only reads; a write token builds flows in drafts and proposes plans, and a plan changes nothing until it is confirmed, by the agent's human (`confirm_plan`) or by the person on the plan's page in Tabularia. Every applied action is in the audit log with `via: mcp` and the token's name. It needs no AI model: the model is the client's. Stateless (JSON answers, no sessions), so any gateway replica serves any call."
+
+[[section]]
 id = "gateway-preview"
 component = "gateway"
 title = "Development sample"
@@ -444,6 +451,12 @@ text = "Seconds for all the AI calls of one dbt export (descriptions and transla
 
 [var.AI__MAX_CHATS_LISTED]
 text = "Conversations listed per person; older ones are not deleted, only left out of the list."
+
+[var.MCP__ENABLED]
+text = "Turns the MCP server on. Off, `/mcp` answers 404 and the API tokens keep working on the rest of the API."
+
+[var.MCP__CONFIRM_IN_TABULARIA_ONLY]
+text = "On, an agent cannot apply its own plans (`confirm_plan` refuses with the plan's link): a person signed in to Tabularia confirms each plan on its page."
 
 [var.SCHEDULING__WORKER_CAPACITY]
 text = "Flow runs one worker is assumed to carry at once: used only to highlight the crowded minutes in the schedule load heatmap. Match it to the run workers' `CELERY__WORKER_CONCURRENCY`."

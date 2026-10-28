@@ -655,6 +655,8 @@ export default {
     "sqlScriptRunAction": "SQL script run",
     "sqlScriptExportAction": "SQL script exported",
     "sqlScriptPublishAction": "SQL script datasource written",
+    "agentPlanApplyAction": "Agent plan applied",
+    "agentPlanCancelAction": "Agent plan cancelled",
     "sqlScriptScheduleAction": "SQL script scheduled",
     "tokenCreateAction": "Token created",
     "tokenRevokeAction": "Token revoked",
@@ -2121,6 +2123,80 @@ export default {
       "empty": "No worker has reported in the last minute."
     }
   },
+  "agentPlan": {
+    "title": "Plan {id}",
+    "titleBare": "Plan",
+    "noId": "No plan to show: the address needs ?id=",
+    "notFound": "This plan does not exist, or it is not yours.",
+    "fromMcp": "Proposed by an agent outside Tabularia, over MCP, with the token «{token}».",
+    "fromMcpNoToken": "Proposed by an agent outside Tabularia, over MCP.",
+    "fromChat": "Proposed by the assistant in the chat.",
+    "nothingYet": "Nothing has changed yet: the actions below are applied in order only when you confirm, and your permissions are checked again then.",
+    "expiresAt": "Expires at {time}, 30 minutes after its last change.",
+    "status": {
+      "pending": "Waiting for you",
+      "applying": "Being applied",
+      "applied": "Applied",
+      "failed": "Stopped by an error",
+      "cancelled": "Cancelled",
+      "expired": "Expired"
+    },
+    "statusHelp": {
+      "applied": "Every action was applied.",
+      "failed": "The actions before the error were applied, the ones after it were not.",
+      "cancelled": "Nothing of it was applied.",
+      "expired": "Nobody confirmed it within 30 minutes of its last change: ask the agent for a new plan."
+    },
+    "actionsTitle": "What it does",
+    "kind": {
+      "save_flow_new": "Create the flow «{name}»",
+      "save_flow_change": "Change the flow «{name}»",
+      "run_flow": "Run the flow «{name}» now",
+      "schedule_flow": "Schedule the flow «{name}»",
+      "schedule_flow_off": "Turn off the schedule of «{name}»"
+    },
+    "inFolder": "In {folder}",
+    "engine": "engine {engine}",
+    "modeDevelopment": "On its development engine, with the development samples.",
+    "modeProduction": "On its production engine, every record.",
+    "cron": "When: {text}",
+    "cronCode": "cron {cron}, time zone {tz}",
+    "notify": "A failed run is notified to {emails}",
+    "writes": "What it writes",
+    "steps": "Steps",
+    "changes": "Changes",
+    "changesHelp": "+ added, − removed, ~ changed",
+    "line": {
+      "added": "Added: ",
+      "removed": "Removed: ",
+      "changed": "Changed: "
+    },
+    "output": {
+      "datasource": "The datasource «{target}» in {folder}",
+      "datasourceOverwrite": "The datasource «{target}» in {folder}, its data replaced at every run",
+      "database": "The table {target} on «{connection}», {mode}",
+      "s3": "The {format} file {target} on S3, through «{connection}»",
+      "sftp": "The {format} file {target} on SFTP, through «{connection}»",
+      "email": "An email to {target} with the result attached ({format}), subject «{subject}», through «{connection}»"
+    },
+    "modeAppend": "rows added",
+    "modeReplace": "rows replaced",
+    "firstRows": "First rows",
+    "previewError": "The first rows could not be read: {error}",
+    "result": {
+      "ok": "Done",
+      "error": "Error:",
+      "skipped": "Not applied",
+      "open": "Open"
+    },
+    "confirm": "Confirm and apply",
+    "confirming": "Applying…",
+    "cancel": "Cancel the plan",
+    "cancelling": "Cancelling…",
+    "confirmedToast": "Plan applied",
+    "failedToast": "The plan stopped at an error",
+    "cancelledToast": "Plan cancelled"
+  },
   "panelSettings": {
     "title": "Settings",
     "lead": "What an administrator may change without touching the deployment, in a box per component. Most apply within {seconds} seconds on every process. The starting value stays the installation's (the environment, the Helm values) and one click goes back to it. Addresses, credentials and the switches tied to the cluster are not here: they belong to the installation.",
@@ -2257,6 +2333,10 @@ export default {
       "ai": {
         "title": "AI assistant",
         "lead": "The model, its limits and what it may spend."
+      },
+      "mcp": {
+        "title": "Agents over MCP",
+        "lead": "Agents outside Tabularia (Claude Desktop, an IDE, another company agent) that use its tools with an API token."
       },
       "dbt": {
         "title": "dbt export",
@@ -2467,6 +2547,14 @@ export default {
       "ai_dbt_export_timeout_seconds": {
         "label": "AI time of a dbt export",
         "help": "Seconds for all the AI calls of one dbt export (descriptions, translations). The ingress cuts a request at 300 s: keep this and the engine's wait below together under it."
+      },
+      "mcp_enabled": {
+        "label": "MCP server",
+        "help": "Agents outside Tabularia may connect to /mcp with an API token: read-only tokens only read, write tokens propose plans. Off: /mcp answers 404 and the tokens keep working on the rest of the API."
+      },
+      "mcp_confirm_in_tabularia_only": {
+        "label": "Plans confirmed only in Tabularia",
+        "help": "On: an agent cannot apply its plans itself; the person opens the plan's page in Tabularia and confirms it there."
       },
       "engine_dbt_export_timeout_seconds": {
         "label": "Wait for the engine to build a dbt export",
