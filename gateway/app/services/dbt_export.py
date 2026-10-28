@@ -312,9 +312,9 @@ class _Project:
         if key in self.references:
             return self.references[key]
         ds = self.session.exec(select(Datasource).where(Datasource.key == key)).first()
-        if ds is not None and ds.kind == "database" and ds.source_type in ("sharepoint", "sftp", "api", "s3"):
-            # files (Excel on SharePoint, a folder on an SFTP server or in a bucket) or an
-            # HTTP API: for dbt there is no database to read them from → seed
+        if ds is not None and ds.kind == "database" and ds.source_type in ("sharepoint", "sftp", "api", "s3", "gsheets"):
+            # files (Excel on SharePoint, a folder on an SFTP server or in a bucket), an
+            # HTTP API or a Google Sheets tab: for dbt there is no database to read them from → seed
             source_ref = {"seed": self._seed(ds, key)}
         elif ds is not None and ds.kind == "database":
             conn = self.session.get(Connection, ds.connection_id) if ds.connection_id else None

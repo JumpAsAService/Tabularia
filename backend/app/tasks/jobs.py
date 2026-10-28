@@ -511,6 +511,35 @@ def ingest_sftp_task(
     return result
 
 
+@celery_app.task(name="app.tasks.jobs.ingest_gsheets_task")
+def ingest_gsheets_task(
+    connection: dict[str, Any],
+    source: dict[str, Any],
+    bucket: str,
+    output_key: str,
+    contract: dict[str, Any] | None = None,
+) -> dict:
+    """Reads one tab of a Google Sheets spreadsheet (or its range) and writes the
+    parquet: the same shape as the other ingests, so the gateway treats it the same
+    way (run, snapshot swap, refresh). The service account's key arrives encrypted and
+    is decrypted only to sign the token request."""
+    from app.ingest.gsheets import GsheetsConnectionSpec, GsheetsSourceSpec, ingest_gsheets_to_parquet
+
+    conn = GsheetsConnectionSpec(**connection)
+    src = GsheetsSourceSpec(**source)
+    logger.info(f"🚀 Starting ingest_gsheets_task: {src.spreadsheet_id} [{src.sheet or src.sheet_id}] → {output_key}")
+    advances = _Progress()
+    result = ingest_gsheets_to_parquet(conn, src, bucket=bucket, key=output_key, storage=get_storage_service(),
+                                       progress=advances)
+    logger.info(f"✅ Completed ingest_gsheets_task: {output_key} ({result['rows_written']} rows)")
+    if contract:
+        from app.contracts.service import check_before_publish
+
+        advances("checking", rows=result["rows_written"])
+        result["contract"] = check_before_publish(bucket, output_key, contract)
+    return result
+
+
 @celery_app.task(name="app.tasks.jobs.ingest_s3_task")
 def ingest_s3_task(
     connection: dict[str, Any],

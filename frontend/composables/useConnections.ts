@@ -59,6 +59,30 @@ export interface ApiTryResult {
   next?: string | null
 }
 
+// what the test of a Google Sheets connection answers: the account, and how many
+// spreadsheets are shared with it (null without the Drive API, which only lists them)
+export interface GsheetsTestResult {
+  ok: boolean
+  client_email: string
+  project_id: string
+  drive: boolean
+  spreadsheets: number | null
+  more: boolean
+}
+
+// a spreadsheet shared with the service account (Drive), a spreadsheet's tabs, the
+// first rows of a tab as the import reads them
+export interface GsheetsSpreadsheet { id: string; name: string; modified_at: string; owner: string }
+export interface GsheetsTabInfo { sheet_id: number; title: string; index: number; hidden: boolean; grid: boolean; rows: number; columns: number }
+export interface GsheetsBook { id: string; title: string; tabs: GsheetsTabInfo[]; selected_sheet_id: number | null }
+export interface GsheetsPreview {
+  columns: { name: string; dtype: string }[]
+  rows: unknown[][]
+  range: string
+  formula_errors: number
+}
+export interface GsheetsTabRef { spreadsheet_id: string; sheet_id: number | null; sheet: string; range: string }
+
 export interface KeyAcceptance {
   expected_fingerprint: string
   expected_type?: string
@@ -113,6 +137,9 @@ export const DB_TYPES = [
   // an HTTP API: host = base URL, password = the secret of the auth, extra = {auth,
   // key_name, key_in, token_url, scope, client_auth, headers, test_path}
   { value: 'api', label: 'HTTP API (REST/JSON)' },
+  // a Google Cloud service account, read only: password = its JSON key; host = its
+  // email and database = its project, both read from the key by the gateway
+  { value: 'gsheets', label: 'Google Sheets' },
 ]
 
 export function useConnections() {
@@ -187,6 +214,14 @@ export function useConnections() {
     // the connection's default)
     s3Files: (id: number, body: { bucket: string; folder: string; pattern: string } & Partial<FileTemplatesDraft>) =>
       apiFetch<FilesCheck>(`/connections/${id}/s3/files`, { method: 'POST', body }),
+    // Google Sheets: the spreadsheets shared with the account (needs the Drive API), the
+    // tabs of one given by link or id, the first rows of a tab with their types
+    gsheetsSpreadsheets: (id: number) =>
+      apiFetch<{ spreadsheets: GsheetsSpreadsheet[]; more: boolean }>(`/connections/${id}/gsheets/spreadsheets`, { method: 'POST' }),
+    gsheetsTabs: (id: number, spreadsheet: string) =>
+      apiFetch<GsheetsBook>(`/connections/${id}/gsheets/tabs`, { method: 'POST', body: { spreadsheet } }),
+    gsheetsPreview: (id: number, tab: GsheetsTabRef) =>
+      apiFetch<GsheetsPreview>(`/connections/${id}/gsheets/preview`, { method: 'POST', body: tab }),
     tables: (id: number) => apiFetch<{ tables: string[] }>(`/connections/${id}/tables`),
     // a table's columns and types (the SQL script editor)
     columns: (id: number, table: string) =>

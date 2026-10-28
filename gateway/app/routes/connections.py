@@ -26,6 +26,12 @@ secret, `extra` = {auth, key_name, key_in, token_url, scope, client_auth, header
 test_path}. A new host (or OAuth2 token URL) needs the secret typed again: it must
 not follow the connection to another server. Any address is allowed: CONNECT is
 the barrier, as for databases and SFTP.
+
+Google Sheets (db_type="gsheets"): a service account. The encrypted secret = its whole
+JSON key; `host` = the account's email and `database` = its Google Cloud project, both
+read from the key when it is saved (the form does not choose them: they are what the
+messages name — «share the spreadsheet with <email>», «enable the API in <project>»).
+The Google endpoints are fixed in the engine, never taken from the key's JSON.
 """
 import logging
 import re
@@ -48,7 +54,7 @@ from app.services import audit, db_tls
 from app.models.permission import Capability
 from app.schemas.models import (
     ApiCallSpec, ConnectionCreate, ConnectionOut, ConnectionTest, ConnectionUpdate, Page, PlaceholderPreviewQuery,
-    S3FilesQuery, SftpFilesQuery, SharePointFilesQuery,
+    S3FilesQuery, SftpFilesQuery, SharePointFilesQuery, GsheetsTab, GsheetsTabsQuery,
 )
 from app.services.pagination import paginate
 from app.services import permissions as perm_service
@@ -59,9 +65,10 @@ logger = logging.getLogger(__name__)
 
 router = APIRouter(route_class=ReleasingRoute, tags=["connections"])
 
-SUPPORTED_DB_TYPES = {"postgresql", "mysql", "mariadb", "clickhouse", "trino", "oracle", "sqlserver", "s3", "smtp", "sharepoint", "sftp", "api"}
+SUPPORTED_DB_TYPES = {"postgresql", "mysql", "mariadb", "clickhouse", "trino", "oracle", "sqlserver", "s3", "smtp", "sharepoint", "sftp", "api",
+                      "gsheets"}
 # connection types that are not databases: no table to read, none to write
-NOT_DATABASES = ("smtp", "sharepoint", "sftp", "api")
+NOT_DATABASES = ("smtp", "sharepoint", "sftp", "api", "gsheets")
 
 
 def _to_out(conn: Connection) -> ConnectionOut:
@@ -206,6 +213,8 @@ def engine_connection_payload(conn: Connection) -> dict:
         return _s3_payload(conn.host, conn.username, conn.password_encrypted, conn.database, conn.db_schema)
     if conn.db_type == "api":
         return _api_payload(conn.host, conn.username, conn.password_encrypted, conn.extra)
+    if conn.db_type == "gsheets":
+        return _gsheets_payload(conn.password_encrypted, conn.host, conn.database)
     return {
         "db_type": conn.db_type,
         "host": conn.host,
@@ -245,6 +254,46 @@ def _check_sharepoint(host: str, username: str, database: str) -> None:
         raise HTTPException(status_code=422, detail="Invalid SharePoint site URL: expected https://<company>.sharepoint.com/sites/<name>")
     if not (username or "").strip() or not (database or "").strip():
         raise HTTPException(status_code=422, detail="The tenant id and the client id of the app registered in Entra ID are required")
+
+
+# ── Google Sheets ──────────────────────────────────────────────────────────────
+_GSHEETS_KEY_MAX = 20_000  # a service account's JSON key is some 2.4 KB
+
+
+def gsheets_identity(key_text: str) -> tuple[str, str]:
+    """The account's email and project from a service account's JSON key, or a 422
+    saying which file it is instead. The key itself is never echoed back."""
+    import json as _json
+
+    text = (key_text or "").strip()
+    if not text:
+        raise HTTPException(status_code=422, detail="Google Sheets: paste the service account's JSON key, or choose its file")
+    if len(text) > _GSHEETS_KEY_MAX:
+        raise HTTPException(status_code=422, detail="Google Sheets: this is too long for a service account's JSON key")
+    try:
+        key = _json.loads(text)
+    except ValueError:
+        raise HTTPException(status_code=422, detail="Google Sheets: this is not JSON. Paste the whole key file, "
+                                                    "from { to }, as Google downloaded it") from None
+    if isinstance(key, dict) and ("installed" in key or "web" in key):
+        raise HTTPException(status_code=422, detail="Google Sheets: this is an OAuth client's file, not a service "
+                                                    "account's key. In the Google Cloud console: IAM & Admin → Service "
+                                                    "accounts → the account → Keys → Add key → JSON")
+    if not isinstance(key, dict) or key.get("type") != "service_account":
+        raise HTTPException(status_code=422, detail="Google Sheets: this is not a service account's key (its \"type\" "
+                                                    "must be \"service_account\"). Download a JSON key from IAM & Admin "
+                                                    "→ Service accounts → the account → Keys")
+    email = str(key.get("client_email") or "").strip()
+    private_key = str(key.get("private_key") or "")
+    if not email or "@" not in email or not private_key.lstrip().startswith("-----BEGIN") or "PRIVATE KEY-----" not in private_key:
+        raise HTTPException(status_code=422, detail="Google Sheets: the key has no client_email or no private_key: "
+                                                    "download a new JSON key of the service account")
+    return email, str(key.get("project_id") or "").strip()
+
+
+def _gsheets_payload(key_encrypted: str, email: str, project: str) -> dict:
+    """The key still encrypted; the email and the project only for the messages."""
+    return {"db_type": "gsheets", "key_encrypted": key_encrypted, "client_email": email or "", "project_id": project or ""}
 
 
 # ── HTTP API ───────────────────────────────────────────────────────────────────
@@ -499,6 +548,8 @@ async def _engine_inspect(payload: dict, action: str, path: str = "", language: 
         resp = await client.post("/sftp/inspect", json={"connection": payload, "action": action, **extra})
     elif payload.get("db_type") == "api":
         resp = await client.post("/http-api/inspect", json={"connection": payload, "action": action, **extra})
+    elif payload.get("db_type") == "gsheets":
+        resp = await client.post("/gsheets/inspect", json={"connection": payload, "action": action, **extra})
     else:
         resp = await client.post("/db/inspect", json={"connection": payload, "action": action, **extra})
     if resp.status_code >= 400:
@@ -617,6 +668,10 @@ def create_connection(
         _check_sftp(body.host, body.port, body.username, sftp_auth(body.extra), bool(body.password), bool(body.private_key))
     if body.db_type == "api":
         _check_api(body.host, body.username, body.extra, bool(body.password))
+    if body.db_type == "gsheets":
+        # the account and its project come from the key, whatever the form sent
+        body.host, body.database = gsheets_identity(body.password)
+        body.port, body.username, body.db_schema, body.extra = None, "", "", "{}"
     name = body.name.strip()
     if not name:
         raise HTTPException(status_code=422, detail="The connection needs a name")
@@ -729,6 +784,15 @@ def update_connection(
                 status_code=422,
                 detail="SFTP: a new host, port or user needs the password (or the private key) typed again",
             )
+
+    if conn.db_type == "gsheets":
+        # the account is the key's: a new key brings its email and project, nothing else changes them
+        body.port = body.username = body.db_schema = None
+        body.extra = None
+        if body.password is not None:
+            body.host, body.database = gsheets_identity(body.password)
+        else:
+            body.host = body.database = None
 
     api_before = (conn.host, api_options(conn.extra).get("token_url") or "") if conn.db_type == "api" else None
     if api_before is not None:
@@ -867,6 +931,9 @@ async def test_draft_connection(
         _valid_extra(body.extra, "api")
         _check_api(body.host, body.username, body.extra, bool(body.password))
         return await _engine_inspect(_api_payload(body.host, body.username, secret, body.extra), "test")
+    if body.db_type == "gsheets":
+        email, project = gsheets_identity(body.password)
+        return await _engine_inspect(_gsheets_payload(secret, email, project), "test")
     if body.db_type == "sharepoint":
         _check_sharepoint(body.host, body.username, body.database)
         payload = _sharepoint_payload(body.host, body.username, secret, body.database, body.extra)
@@ -1025,6 +1092,54 @@ async def list_sharepoint_files(
     # the format says which files the path takes (Excel, CSV or both)
     return await _engine_inspect(engine_connection_payload(conn), "files", path=body.path,
                                  source={"path": body.path, "format": body.format, **body.template_fields()})
+
+
+def _gsheets_connection(session: Session, user: User, conn_id: int) -> Connection:
+    conn = _get_connection(session, conn_id)
+    ensure_can(session, user, conn.project_id, Capability.CONNECT)
+    if conn.db_type != "gsheets":
+        raise HTTPException(status_code=422, detail="This is not a Google Sheets connection")
+    return conn
+
+
+@router.post("/connections/{conn_id}/gsheets/spreadsheets")
+async def list_gsheets_spreadsheets(
+    conn_id: int,
+    user: User = Depends(get_current_user),
+    session: Session = Depends(get_session),
+):
+    """The spreadsheets shared with the service account (through the Drive API), to
+    choose one while the datasource is set up. Without the Drive API: a 400 saying so,
+    and the dialog takes the spreadsheet's link instead. CONNECT on the connection's
+    folder: it is a call made with its key."""
+    conn = _gsheets_connection(session, user, conn_id)
+    return await _engine_inspect(engine_connection_payload(conn), "spreadsheets")
+
+
+@router.post("/connections/{conn_id}/gsheets/tabs")
+async def list_gsheets_tabs(
+    conn_id: int,
+    body: GsheetsTabsQuery,
+    user: User = Depends(get_current_user),
+    session: Session = Depends(get_session),
+):
+    """A spreadsheet given by its link or id: its title and its tabs, and the tab the
+    link pointed at (`#gid=`), BEFORE the datasource is saved."""
+    conn = _gsheets_connection(session, user, conn_id)
+    return await _engine_inspect(engine_connection_payload(conn), "tabs", spreadsheet=body.spreadsheet.strip())
+
+
+@router.post("/connections/{conn_id}/gsheets/preview")
+async def preview_gsheets_tab(
+    conn_id: int,
+    body: GsheetsTab,
+    user: User = Depends(get_current_user),
+    session: Session = Depends(get_session),
+):
+    """The first rows of a tab as the import will read them, with the types of the
+    columns: the header's problems show here, before the datasource exists."""
+    conn = _gsheets_connection(session, user, conn_id)
+    return await _engine_inspect(engine_connection_payload(conn), "preview", source=body.model_dump())
 
 
 @router.post("/connections/{conn_id}/s3/files")

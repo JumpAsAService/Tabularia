@@ -19,11 +19,12 @@ snapshots, refreshes, descriptions, sort keys, data contracts, permissions and l
 | SFTP folder | The files of a server folder that match a glob, stacked into one table | An SFTP connection | By hand, on a schedule, or in a flow group | [SFTP folders](../sftp.md) |
 | API call | The records of one or more requests to a REST/JSON API | An HTTP API connection | By hand, on a schedule, or in a flow group | [HTTP APIs](../api-datasource.md) |
 | SharePoint | Excel and CSV files of a document library that match a path or a glob | A SharePoint connection | By hand, on a schedule, or in a flow group | [Excel on SharePoint](sharepoint.md) |
+| Google Sheets | One tab of a spreadsheet, whole or a range | A Google Sheets connection (a service account, read-only) | By hand, on a schedule, or in a flow group | [Google Sheets](google-sheets.md) |
 | Flow output | The result of a flow, written by an Output node «Tabularia Datasource» | None of its own: the flow's sources | At every run of the flow: by hand, on its schedule, or in a flow group | [Flow and SQL script results](flow-outputs.md) |
 | SQL script result | The whole result of a saved SQL script | None, or the database connection the script runs on | «Refresh now», on the script's schedule, or in a flow group | [Flow and SQL script results](flow-outputs.md#sql-scripts) |
 | Python or R script output | What a saved script writes at `TABULARIA_OUTPUT`, with «Also publish it as a datasource» | None of its own: a scripting environment (Kubernetes installations) | At every run of the script: by hand, on its schedule, or in a flow group | [Python and R](../scripting.md#output) |
 
-Database, S3, SFTP, API and SharePoint datasources are **imported**: Tabularia reads an
+Database, S3, SFTP, API, SharePoint and Google Sheets datasources are **imported**: Tabularia reads an
 outside system through a connection and keeps a copy. In the Datasources page they carry
 the tag «db». Flow, SQL script and Python or R results are **written**: a flow or a
 script computes them, and they carry the tag «flow». An uploaded file is neither: it is
@@ -32,7 +33,7 @@ the source of one flow, and reaches the catalog when that flow publishes it.
 Imported datasources are created from a folder in Explore: **New → Datasource from a
 database**. The dialog follows the connection you choose: a database asks for a table or
 a SQL query, SharePoint for a path, SFTP and S3 for a folder and a glob, an HTTP API for
-the call. The first import starts as soon as you confirm with **Create & import**.
+the call, Google Sheets for a spreadsheet and one of its tabs. The first import starts as soon as you confirm with **Create & import**.
 
 Connections are described in [Connections](../connections/README.md); the database ones,
 dialect by dialect, in [Databases](../connections/databases.md).
@@ -122,8 +123,8 @@ sorted: filters and charts on them in the Viewer read less. A change applies fro
 next refresh. Prefer columns the source database has an index on.
 
 A datasource written by a flow takes its order from the flow's Output node, at every
-run. File, SharePoint and API datasources keep the rows in the order of the files or of
-the responses and take no sort keys.
+run. File, SharePoint, API and Google Sheets datasources keep the rows in the order of the
+files, of the responses or of the sheet and take no sort keys.
 
 ### Data contract
 

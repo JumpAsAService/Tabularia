@@ -497,6 +497,19 @@ def sharepoint_dataset(conn: Connection, ref: dict):
                         facets={"dataSource": datasource_dataset.DatasourceDatasetFacet(name=conn.name, uri=f"https://{site}")})
 
 
+def gsheets_dataset(conn: Connection, ref: dict):
+    """A tab of a spreadsheet: the spreadsheet's address, the tab after the #."""
+    from openlineage.client.event_v2 import InputDataset
+    from openlineage.client.facet_v2 import datasource_dataset
+
+    name = f"/spreadsheets/d/{ref.get('spreadsheet_id') or ''}"
+    if ref.get("sheet"):
+        name += f"#{ref['sheet']}"
+    return InputDataset(namespace="https://docs.google.com", name=name,
+                        facets={"dataSource": datasource_dataset.DatasourceDatasetFacet(
+                            name=conn.name, uri="https://docs.google.com/spreadsheets")})
+
+
 def origin_inputs(session: Session, ds: Datasource) -> tuple[list, dict]:
     """Where a DATABASE datasource takes its data from: the inputs of its refresh and the
     job's facets (the query, when it is a query)."""
@@ -509,6 +522,12 @@ def origin_inputs(session: Session, ds: Datasource) -> tuple[list, dict]:
         except json.JSONDecodeError:
             ref = {}
         return [sharepoint_dataset(conn, ref)], {}
+    if conn.db_type == "gsheets":
+        try:
+            ref = json.loads(ds.source_ref or "{}")
+        except json.JSONDecodeError:
+            ref = {}
+        return [gsheets_dataset(conn, ref if isinstance(ref, dict) else {})], {}
     if conn.db_type == "api":
         try:
             ref = json.loads(ds.source_ref or "{}")

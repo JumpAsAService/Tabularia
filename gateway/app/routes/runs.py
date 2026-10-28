@@ -760,6 +760,20 @@ async def launch_ingest_run(
                 **contract,
             },
         )
+    elif conn.db_type == "gsheets":
+        # same road again: `source_ref` is the JSON {spreadsheet_id, sheet_id, sheet, range}
+        ref = json.loads(ds.source_ref or "{}")
+        resp = await client.post(
+            "/gsheets/ingest",
+            timeout=CHECK,
+            json={
+                "connection": engine_connection_payload(conn),
+                "source": {k: ref[k] for k in ("spreadsheet_id", "sheet_id", "sheet", "range") if k in ref},
+                "bucket": bucket,
+                "output_key": output_key,
+                **contract,
+            },
+        )
     elif conn.db_type == "sftp":
         # same road again: `source_ref` is the JSON {folder, pattern, format, sheet, csv}
         ref = json.loads(ds.source_ref or "{}")
@@ -856,7 +870,7 @@ _ENGINE_TOLD = ("The worker running it stopped before the end",)
 # (backend/app/ingest/db_errors.py, MESSAGE_PREFIXES): an «out of memory» there is the
 # database's, not the worker's, and must not be replaced with the OOM message.
 _DB_MESSAGE_PREFIXES = ("PostgreSQL:", "ClickHouse:", "MySQL:", "MariaDB:", "Trino:", "Oracle:", "SQL Server:", "S3:", "Database:", "SFTP:",
-                        "API:")
+                        "API:", "Google Sheets:")
 
 
 def _sftp_written(summary: str | None, outcome) -> str | None:

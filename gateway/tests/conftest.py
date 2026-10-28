@@ -124,6 +124,15 @@ class FakeEngine:
         self.placeholder_previews: list[dict] = []
         self.placeholder_errors: dict[str, str] = {}
         self.placeholder_values: dict[str, str] = {}  # {template: its value}; others answer with themselves
+        # Google Sheets connections: bodies on POST /gsheets/inspect and the answer per action
+        self.gsheets_inspects: list[dict] = []
+        self.gsheets_responses: dict[str, tuple[int, dict]] = {
+            "test": (200, {"ok": True, "client_email": "reader@acme.iam.gserviceaccount.com", "project_id": "acme",
+                           "drive": True, "spreadsheets": 2, "more": False}),
+            "spreadsheets": (200, {"spreadsheets": [], "more": False}),
+            "tabs": (200, {"id": "x", "title": "Sales", "tabs": [], "selected_sheet_id": None}),
+            "preview": (200, {"columns": [], "rows": []}),
+        }
         # «S3 folder» datasource: bodies on POST /s3/inspect and the answer per action
         self.s3_inspects: list[dict] = []
         self.s3_responses: dict[str, tuple[int, dict]] = {
@@ -244,12 +253,18 @@ class FakeEngine:
             self.s3_inspects.append(body)
             status, payload = self.s3_responses[body.get("action", "files")]
             return httpx.Response(status, json=payload)
+        if path == "/gsheets/inspect" and request.method == "POST":
+            body = _json_body(request)
+            self.gsheets_inspects.append(body)
+            status, payload = self.gsheets_responses[body.get("action", "test")]
+            return httpx.Response(status, json=payload)
         if path == "/http-api/inspect" and request.method == "POST":
             body = _json_body(request)
             self.api_inspects.append(body)
             status, payload = self.api_responses[body.get("action", "test")]
             return httpx.Response(status, json=payload)
-        if path in ("/db/ingest", "/sharepoint/ingest", "/sftp/ingest", "/http-api/ingest", "/s3/ingest") and request.method == "POST":
+        if path in ("/db/ingest", "/sharepoint/ingest", "/sftp/ingest", "/http-api/ingest", "/s3/ingest",
+                    "/gsheets/ingest") and request.method == "POST":
             import json as _json
 
             self.ingests.append((path, _json.loads(request.content or b"{}")))

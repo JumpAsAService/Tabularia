@@ -647,7 +647,7 @@ function pickDatasource(id: number | null) {
         <label>{{ $t('nodePanel.connectionLabel') }}</label>
         <Select
           :model-value="node.data.connectionId ?? null"
-          :options="(connections ?? []).filter((c) => !['s3', 'smtp', 'sharepoint', 'sftp', 'api'].includes(c.db_type)).map((c) => ({
+          :options="(connections ?? []).filter((c) => !['s3', 'smtp', 'sharepoint', 'sftp', 'api', 'gsheets'].includes(c.db_type)).map((c) => ({
             value: c.id,
             label: c.database ? `${c.name} (${c.db_type} · ${c.database})` : `${c.name} (${c.db_type})`,
             hint: pathOf(c.project_id),

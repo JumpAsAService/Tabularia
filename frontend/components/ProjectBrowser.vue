@@ -57,7 +57,7 @@ import { useRuns, type RunInfo } from '~/composables/useRuns'
 import RunProgressText from '~/components/ui/RunProgressText.vue'
 import { usePopover } from '~/composables/usePopover'
 import { useDialogA11y } from '~/composables/useDialogA11y'
-import { useDatasources, type ApiDatasourceDraft, type DatasourceInfo, type DbDatasourceDraft, type S3DatasourceDraft, type SharePointDatasourceDraft, type SftpDatasourceDraft } from '~/composables/useDatasources'
+import { useDatasources, type ApiDatasourceDraft, type DatasourceInfo, type DbDatasourceDraft, type GsheetsDatasourceDraft, type S3DatasourceDraft, type SharePointDatasourceDraft, type SftpDatasourceDraft } from '~/composables/useDatasources'
 import { runNotes, notesText } from '~/composables/usePlaceholders'
 import { useConnections, type ConnectionInfo, type ConnectionDraft } from '~/composables/useConnections'
 import { connectionChanges } from '~/composables/connectionChanges'
@@ -985,6 +985,23 @@ async function createApiDatasource(draft: ApiDatasourceDraft) {
   }
 }
 
+async function createGsheetsDatasource(draft: GsheetsDatasourceDraft) {
+  if (!currentId.value) return
+  dbDsBusy.value = true
+  dbDsError.value = ''
+  try {
+    const ds = await dsApi.createGsheets(currentId.value, draft)
+    toast.success(t('projectBrowser.datasourceCreated', { name: draft.name }))
+    showDbDsDialog.value = false
+    dsList.value = await dsApi.listByProject(currentId.value)
+    pollIngest(ds.id, ingestToken)
+  } catch (e) {
+    dbDsError.value = errMessage(e)
+  } finally {
+    dbDsBusy.value = false
+  }
+}
+
 async function createS3Datasource(draft: S3DatasourceDraft) {
   if (!currentId.value) return
   dbDsBusy.value = true
@@ -1379,6 +1396,7 @@ watch(currentId, () => { q.value = ''; kindFilter.value = null; settingsOpen.val
       @confirm-sftp="createSftpDatasource"
       @confirm-s3="createS3Datasource"
       @confirm-api="createApiDatasource"
+      @confirm-gsheets="createGsheetsDatasource"
       @cancel="showDbDsDialog = false"
     />
   </div>

@@ -25,7 +25,7 @@ export interface DatasourceInfo {
   kind: string
   flow_id: number | null
   connection_id: number | null
-  source_type: 'table' | 'sql' | 'sharepoint' | 'sftp' | 's3' | 'api' | null
+  source_type: 'table' | 'sql' | 'sharepoint' | 'sftp' | 's3' | 'api' | 'gsheets' | null
   source_ref: string | null
   refreshed_at: string | null
   refreshing?: boolean // an ingest is running NOW (the server says it)
@@ -158,6 +158,18 @@ export interface SharePointDatasourceDraft extends Partial<FileTemplatesDraft> {
 
 export type SharePointFormat = 'auto' | 'excel' | 'csv'
 
+// one tab of a Google Sheets spreadsheet (and an optional A1 range), read at every refresh
+export interface GsheetsDatasourceDraft {
+  name: string
+  description?: string
+  connection_id: number
+  spreadsheet_id: string
+  spreadsheet_name: string // shown only: the id finds it
+  sheet_id: number | null // the tab's gid: a renamed tab is still found
+  sheet: string
+  range: string // A1:F500, B3:H, A:F; empty = the whole tab
+}
+
 export function useDatasources() {
   const { apiFetch } = useApiClient()
 
@@ -179,6 +191,9 @@ export function useDatasources() {
     // datasource from an HTTP API: the call is made at each refresh
     createApi: (projectId: number, body: ApiDatasourceDraft) =>
       apiFetch<DatasourceInfo>(`/projects/${projectId}/datasources/api`, { method: 'POST', body }),
+    // datasource from a tab of a Google Sheets spreadsheet
+    createGsheets: (projectId: number, body: GsheetsDatasourceDraft) =>
+      apiFetch<DatasourceInfo>(`/projects/${projectId}/datasources/gsheets`, { method: 'POST', body }),
     // datasource from an SFTP folder: the matching files stacked into one table
     createSftp: (projectId: number, body: SftpDatasourceDraft) =>
       apiFetch<DatasourceInfo>(`/projects/${projectId}/datasources/sftp`, { method: 'POST', body }),

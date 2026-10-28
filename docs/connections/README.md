@@ -1,7 +1,8 @@
 # Connections
 
 A **connection** holds the address and the credentials of a system outside Tabularia —
-a database, a bucket, a mail server, an SFTP server, a SharePoint site, an HTTP API — so
+a database, a bucket, a mail server, an SFTP server, a SharePoint site, an HTTP API, a
+Google account for spreadsheets — so
 that datasources, flows, SQL scripts and flow groups can read from it or write to it
 without anyone typing a password twice. It lives in a folder, it is used by whoever has
 the **CONNECT** permission there, and its secret is encrypted and never shown again.
@@ -21,6 +22,7 @@ This page maps every type and the rules they share; each type has its own page.
 | SMTP / email | — | Output node «Email with attachment»; Pushmail cells of flow groups; failure notices of scheduled flows; data contract notifications | 587 | user and password, optional | [SMTP](smtp.md) |
 | SFTP (files) | a datasource «SFTP folder» | Output node «SFTP server (file)» | 22 | password or private key, and the server's host key | [SFTP](../sftp.md) |
 | SharePoint | a datasource from Excel files of a document library | — | HTTPS (Microsoft Graph) | an app registered in Entra ID: client ID and secret | [SharePoint](../sources/sharepoint.md) |
+| Google Sheets | a datasource from one tab of a spreadsheet | — | HTTPS (Google APIs) | a service account's JSON key, read-only | [Google Sheets](../sources/google-sheets.md) |
 | HTTP API (REST/JSON) | a datasource «API call» | — | the base URL's | none, API key, bearer token, basic, OAuth2 client credentials | [HTTP APIs](../api-datasource.md) |
 
 All the destinations of an Output node, with an example each, are on
@@ -86,8 +88,8 @@ See [Permissions](../governance/permissions.md) for the whole model.
 
 ### Secrets
 
-The password, secret key, client secret, API token or SFTP private key (with its
-passphrase) is encrypted with Fernet under `SECURITY__FERNET_KEY` the moment it is saved.
+The password, secret key, client secret, API token, SFTP private key (with its
+passphrase) or Google service account key is encrypted with Fernet under `SECURITY__FERNET_KEY` the moment it is saved.
 The API never returns it: a connection says only `has_password` (and `has_private_key`
 for SFTP). It reaches the engine still encrypted, and the worker decrypts it only to
 open the connection. When you edit a connection, an empty password field keeps the
@@ -111,6 +113,7 @@ connection. What it does:
 | SMTP | connects, encrypts as chosen and signs in; it sends nothing |
 | SFTP | reads the server's host key and, once the key is accepted, signs in ([SFTP](../sftp.md#the-host-key-trust-on-first-use)) |
 | SharePoint | gets a token from Entra ID, then finds the site and its document library |
+| Google Sheets | gets a token with the service account's key, checks that the Google Sheets API is enabled, and counts the spreadsheets shared with the account ([Google Sheets](../sources/google-sheets.md#the-connection)) |
 | HTTP API | a `GET` of the base URL, or of the test path when one is set, with the credentials ([HTTP APIs](../api-datasource.md)) |
 
 A failure shows the server's own message (refused, wrong password, unknown database,
@@ -207,7 +210,7 @@ refresh the datasources or query the ERP from a SQL script, give them CONNECT on
 ## Related
 
 - [Databases](databases.md), [S3](s3.md), [SMTP](smtp.md), [SFTP](../sftp.md),
-  [SharePoint](../sources/sharepoint.md), [HTTP APIs](../api-datasource.md),
+  [SharePoint](../sources/sharepoint.md), [Google Sheets](../sources/google-sheets.md), [HTTP APIs](../api-datasource.md),
   [SQL Server driver](../sqlserver.md)
 - [Writing data out](destinations.md)
 - [Sources](../sources/README.md), [Database sources](../sources/databases.md)

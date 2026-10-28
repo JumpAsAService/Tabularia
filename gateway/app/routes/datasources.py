@@ -39,6 +39,7 @@ from app.schemas.models import (
     SftpDatasourceCreate,
     S3DatasourceCreate,
     ApiDatasourceCreate,
+    GsheetsDatasourceCreate,
     Page,
     RunOut,
     ScheduleUpdate,
@@ -92,6 +93,8 @@ def _checked_sort_keys(ds: Datasource, keys: list[str]) -> list[str]:
         raise HTTPException(status_code=422, detail="API imports keep the rows in the order of the responses: no sort keys")
     if ds.source_type == "s3":
         raise HTTPException(status_code=422, detail="S3 imports keep the rows in file order: no sort keys")
+    if ds.source_type == "gsheets":
+        raise HTTPException(status_code=422, detail="Google Sheets imports keep the rows in the sheet's order: no sort keys")
     keys = clean_sort_keys(keys)
     try:
         known = [c.get("name") for c in json.loads(ds.columns or "[]") if isinstance(c, dict)]
@@ -596,6 +599,67 @@ async def create_api_datasource(
         target_id=ds.id, target_label=ds.name,
         detail={"project_id": project_id, "connection_id": conn.id, "source_type": "api",
                 "method": ref["method"], "path": ref["path"], "mode": ref["mode"]},
+        request=request,
+    )
+    return _to_out(ds)
+
+
+@router.post(
+    "/projects/{project_id}/datasources/gsheets",
+    response_model=DatasourceOut,
+    status_code=status.HTTP_201_CREATED,
+)
+async def create_gsheets_datasource(
+    project_id: int,
+    body: GsheetsDatasourceCreate,
+    request: Request,
+    user: User = Depends(get_current_user),
+    session: Session = Depends(get_session),
+):
+    """A datasource from one tab of a Google Sheets spreadsheet (and an optional range).
+
+    A `kind="database"` datasource like the SharePoint one — manual and scheduled
+    refresh, import history, snapshot swap — with `source_type="gsheets"` and
+    `source_ref` = JSON {spreadsheet_id, spreadsheet_name, sheet_id, sheet, range}:
+    only WHO brings the data changes (see launch_ingest_run). EDIT on the folder +
+    CONNECT on the connection's folder, as for every database datasource."""
+    if session.get(Project, project_id) is None:
+        raise HTTPException(status_code=404, detail="Folder not found")
+    ensure_can(session, user, project_id, Capability.EDIT)
+    conn = session.get(Connection, body.connection_id)
+    if conn is None:
+        raise HTTPException(status_code=404, detail="Connection not found")
+    ensure_can(session, user, conn.project_id, Capability.CONNECT)
+    if conn.db_type != "gsheets":
+        raise HTTPException(status_code=422, detail="A Google Sheets connection is required")
+    name = body.name.strip()
+    if not name:
+        raise HTTPException(status_code=422, detail="The datasource needs a name")
+    if body.sheet_id is None and not body.sheet.strip():
+        raise HTTPException(status_code=422, detail="Choose the spreadsheet's tab")
+    if session.exec(select(Datasource).where(Datasource.project_id == project_id, Datasource.name == name)).first():
+        raise HTTPException(status_code=409, detail=f"There is already a datasource '{name}' in this folder")
+    ref = {"spreadsheet_id": body.spreadsheet_id, "spreadsheet_name": body.spreadsheet_name.strip(),
+           "sheet_id": body.sheet_id, "sheet": body.sheet.strip(), "range": body.range.strip().upper()}
+    ds = Datasource(
+        name=name, description=body.description, project_id=project_id, owner_id=user.id,
+        bucket=get_settings().engine.bucket, key="",  # no snapshot until the first import succeeds
+        kind="database", connection_id=conn.id, source_type="gsheets", source_ref=json.dumps(ref),
+    )
+    session.add(ds)
+    session.commit()
+    session.refresh(ds)
+    try:
+        await launch_ingest_run(session, user, ds, conn)
+    except Exception:
+        session.delete(ds)  # engine down (a ConnectError too) or refused: no half datasource
+        session.commit()
+        raise
+    audit.record_audit(
+        session, actor=user, action=audit.DS_CREATE, target_type="datasource",
+        target_id=ds.id, target_label=ds.name,
+        detail={"project_id": project_id, "connection_id": conn.id, "source_type": "gsheets",
+                "spreadsheet_id": ref["spreadsheet_id"], "sheet": ref["sheet"], "range": ref["range"]},
         request=request,
     )
     return _to_out(ds)

@@ -3,7 +3,7 @@
 // never shown: when editing, empty field = do not change it.
 import { computed, ref, watch, nextTick } from 'vue'
 import { useI18n } from 'vue-i18n'
-import { Plug, X, CheckCircle2, XCircle, LoaderCircle, KeyRound, ShieldCheck, ShieldAlert, TriangleAlert, Info } from 'lucide-vue-next'
+import { Plug, X, CheckCircle2, XCircle, LoaderCircle, KeyRound, ShieldCheck, ShieldAlert, TriangleAlert, Info, FileUp, Share2 } from 'lucide-vue-next'
 import { errMessage } from '~/composables/useApi'
 import { useDialogA11y } from '~/composables/useDialogA11y'
 import {
@@ -13,6 +13,7 @@ import {
   type DriverInfo,
   type ConnectionInfo,
   type HostKeyResult,
+  type GsheetsTestResult,
 } from '~/composables/useConnections'
 
 const props = defineProps<{
@@ -130,6 +131,33 @@ const apiHeaders = ref('')
 const testPath = ref('')
 const apiUsesUser = computed(() => apiAuth.value === 'basic' || apiAuth.value === 'oauth2')
 
+// Google Sheets: a service account's JSON key, pasted or read from its file, travels as
+// the password (encrypted at rest, never shown again). The gateway reads the account's
+// email and project from it; here the same two are read only to show, before saving,
+// whom to share the spreadsheets with.
+const isGs = computed(() => dbType.value === 'gsheets')
+const gsKey = ref('')
+const gsFile = ref<HTMLInputElement | null>(null)
+const gsAccount = computed<{ email: string; project: string } | null>(() => {
+  const text = gsKey.value.trim()
+  if (!text) return null
+  try {
+    const k = JSON.parse(text)
+    if (k && k.type === 'service_account' && typeof k.client_email === 'string') {
+      return { email: k.client_email, project: typeof k.project_id === 'string' ? k.project_id : '' }
+    }
+  } catch { /* not JSON yet: the gateway's message says what it is */ }
+  return null
+})
+// a key typed that is not a service account's: said at once, not only by the gateway
+const gsKeyWrong = computed(() => !!gsKey.value.trim() && !gsAccount.value)
+async function pickKeyFile(ev: Event) {
+  const input = ev.target as HTMLInputElement
+  const file = input.files?.[0]
+  if (file) gsKey.value = (await file.text()).trim()
+  input.value = '' // the same file chosen again is read again
+}
+
 function headersToText(h: unknown): string {
   if (!h || typeof h !== 'object' || Array.isArray(h)) return ''
   return Object.entries(h as Record<string, string>).map(([k, v]) => `${k}: ${v}`).join('\n')
@@ -189,6 +217,7 @@ watch(
     clientAuth.value = opts.client_auth === 'basic' ? 'basic' : 'body'
     apiHeaders.value = headersToText(opts.headers)
     testPath.value = opts.test_path ?? ''
+    gsKey.value = '' // never shown, like the password
     privateKey.value = '' // never shown, like the password
     passphrase.value = ''
     seenKey.value = null
@@ -294,6 +323,10 @@ const exampleRows = computed<[string, string][]>(() => {
         ? [L('sftp.privateKeyLabel'), '-----BEGIN OPENSSH PRIVATE KEY----- …']
         : [L('connectionDialog.passwordLabel'), SECRET],
     ]
+    case 'gsheets': return [
+      [L('gsheets.keyLabel'), '{ "type": "service_account", "project_id": "acme-data", "private_key": "-----BEGIN PRIVATE KEY----- …", "client_email": "tabularia-reader@acme-data.iam.gserviceaccount.com", … }'],
+      [L('gsheets.accountLabel'), 'tabularia-reader@acme-data.iam.gserviceaccount.com'],
+    ]
     case 'api': {
       const rows: [string, string][] = [[L('apiSource.baseUrlLabel'), 'https://api.example.com/v1']]
       const auth = apiAuth.value
@@ -325,7 +358,7 @@ function draft(): ConnectionDraft {
     username: isApi.value && !apiUsesUser.value ? '' : username.value,
     // SFTP with the key method, or an API without authentication: the password field
     // is hidden, nothing to send
-    password: (isSftp.value && sftpAuth.value === 'key') || (isApi.value && apiAuth.value === 'none') ? '' : password.value,
+    password: isGs.value ? gsKey.value.trim() : (isSftp.value && sftpAuth.value === 'key') || (isApi.value && apiAuth.value === 'none') ? '' : password.value,
     database: database.value.trim(),
     db_schema: dbSchema.value.trim(),
     ...(isSftp.value && sftpAuth.value === 'key' && privateKey.value.trim() ? { private_key: privateKey.value } : {}),
@@ -394,7 +427,10 @@ const apiNeedsSecretAgain = computed(() => apiMoved.value && !password.value)
 const incomplete = computed(
   () =>
     !name.value.trim() ||
-    (!isS3.value && !host.value.trim()) ||
+    (!isS3.value && !isGs.value && !host.value.trim()) ||
+    // Google Sheets: a new connection needs its key, and a key typed must be one
+    (isGs.value && !isEdit.value && !gsKey.value.trim()) ||
+    (isGs.value && gsKeyWrong.value) ||
     (isSmtp.value && !fromAddress.value.trim()) ||
     (isSp.value && (!username.value.trim() || !database.value.trim())) ||
     // a new SharePoint without a secret would save and fail at every import
@@ -422,7 +458,8 @@ function changeType(fresh: string) {
   dbType.value = fresh
   // «as before» is what THIS connection's driver did: another type has no «before»
   if (fresh !== old && dbTls.value === 'legacy' && !LEGACY_LABELS[fresh]) dbTls.value = 'verify'
-  if (fresh !== old && (['sharepoint', 'sftp', 'api'].includes(fresh) || ['sharepoint', 'sftp', 'api'].includes(old))) {
+  if (fresh !== old && (['sharepoint', 'sftp', 'api', 'gsheets'].includes(fresh) || ['sharepoint', 'sftp', 'api', 'gsheets'].includes(old))) {
+    if (old === 'gsheets') host.value = '' // the account's email, not an address
     port.value = ''
     dbSchema.value = ''
     database.value = ''
@@ -515,6 +552,14 @@ async function test() {
       await testSftp()
       return
     }
+    if (isGs.value) {
+      // a key typed now is tested before saving; none typed: the stored one
+      const res = (isEdit.value && !gsKey.value.trim()
+        ? await connApi.test(props.existing!.id)
+        : await connApi.testDraft(props.projectId, draft())) as unknown as GsheetsTestResult
+      testResult.value = { ok: true, message: gsTestMessage(res) }
+      return
+    }
     if (isEdit.value && !password.value) {
       // password unchanged: the saved connection is tested, with the encryption chosen in
       // the form (a choice changed and not saved yet is what the test is for)
@@ -528,6 +573,13 @@ async function test() {
   } finally {
     testing.value = false
   }
+}
+
+function gsTestMessage(res: GsheetsTestResult): string {
+  const email = res.client_email
+  if (!res.drive) return t('gsheets.testOkNoDrive', { email, project: res.project_id })
+  if (!res.spreadsheets) return t('gsheets.testOkNone', { email })
+  return t(res.more ? 'gsheets.testOkMore' : 'gsheets.testOk', { email, n: res.spreadsheets })
 }
 
 function confirm() {
@@ -558,7 +610,7 @@ function confirm() {
             <label>{{ $t('connectionDialog.nameLabel') }}</label>
             <input v-model="name" type="text" :placeholder="$t('connectionDialog.namePlaceholder')" />
           </div>
-          <div class="cd-field cd-type" :class="{ 'cd-wide': isS3 || isSp || isApi }">
+          <div class="cd-field cd-type" :class="{ 'cd-wide': isS3 || isSp || isApi || isGs }">
             <label>{{ $t('connectionDialog.typeLabel') }}</label>
             <Select :model-value="dbType" :options="typeOptions" @update:model-value="changeType" />
             <button
@@ -589,7 +641,7 @@ function confirm() {
             <p class="cd-example-tip">{{ exampleTip }}</p>
             <p class="cd-example-note">{{ $t('connectionExamples.madeUp') }}</p>
           </section>
-          <div v-if="!isS3 && !isSp && !isApi" class="cd-field">
+          <div v-if="!isS3 && !isSp && !isApi && !isGs" class="cd-field">
             <label>{{ $t('connectionDialog.portLabel') }} <span class="cd-hint">{{ $t('connectionDialog.portHintDefault') }}</span></label>
             <input v-model="port" type="text" inputmode="numeric" :placeholder="portPlaceholder" />
           </div>
@@ -600,7 +652,7 @@ function confirm() {
               <a :href="missingDriver.docs" target="_blank" rel="noopener noreferrer">{{ $t('connectionDialog.driverNotInstalledLink') }}</a>
             </p>
           </div>
-          <div class="cd-field cd-wide">
+          <div v-if="!isGs" class="cd-field cd-wide">
             <label>{{ isSp ? $t('sharepoint.siteLabel') : isS3 ? $t('connectionDialog.endpointLabel') : isSmtp ? $t('connectionDialog.smtpHostLabel') : isSftp ? $t('sftp.hostLabel') : isApi ? $t('apiSource.baseUrlLabel') : $t('connectionDialog.hostLabel') }} <span v-if="isS3" class="cd-hint">{{ $t('connectionDialog.hostHintAws') }}</span></label>
             <input
               v-model="host"
@@ -621,7 +673,7 @@ function confirm() {
               ]"
             />
           </div>
-          <div v-if="!isApi || apiUsesUser" class="cd-field">
+          <div v-if="(!isApi || apiUsesUser) && !isGs" class="cd-field">
             <label>{{ isSp ? $t('sharepoint.clientIdLabel') : isS3 ? $t('connectionDialog.accessKeyLabel') : isApi && apiAuth === 'oauth2' ? $t('apiSource.clientIdLabel') : $t('connectionDialog.usernameLabel') }}</label>
             <input v-model="username" type="text" autocomplete="off" />
           </div>
@@ -635,7 +687,7 @@ function confirm() {
               ]"
             />
           </div>
-          <div v-if="(!isSftp || sftpAuth === 'password') && !(isApi && apiAuth === 'none')" class="cd-field">
+          <div v-if="(!isSftp || sftpAuth === 'password') && !(isApi && apiAuth === 'none') && !isGs" class="cd-field">
             <label>
               {{ isSp ? $t('sharepoint.secretLabel') : isS3 ? $t('connectionDialog.secretKeyLabel') : isApi ? $t(`apiSource.secret_${apiAuth}`) : $t('connectionDialog.passwordLabel') }}
               <span v-if="isEdit" class="cd-hint">{{ $t('connectionDialog.passwordHintUnchanged') }}</span>
@@ -667,6 +719,40 @@ function confirm() {
             <div class="cd-field">
               <label>{{ $t('connectionDialog.allowedDomainsLabel') }} <span class="cd-hint">{{ $t('connectionDialog.allowedDomainsHint') }}</span></label>
               <input v-model="allowedDomains" type="text" placeholder="example.com, customers.example.com" />
+            </div>
+          </template>
+          <template v-else-if="isGs">
+            <div class="cd-field cd-wide">
+              <label for="cd-gs-key">
+                {{ $t('gsheets.keyLabel') }}
+                <span class="cd-hint">{{ isEdit ? $t('gsheets.keyKept') : $t('gsheets.keyHint') }}</span>
+              </label>
+              <textarea
+                id="cd-gs-key"
+                v-model="gsKey"
+                rows="5"
+                spellcheck="false"
+                autocomplete="off"
+                class="cd-key cd-gs-key"
+                placeholder='{ "type": "service_account", … }'
+              />
+              <span class="cd-gs-actions">
+                <button type="button" class="cd-gs-file" @click="gsFile?.click()"><FileUp :size="13" /> {{ $t('gsheets.chooseFile') }}</button>
+                <input ref="gsFile" type="file" accept=".json,application/json" class="sr-only" tabindex="-1" :aria-label="$t('gsheets.chooseFile')" @change="pickKeyFile" />
+              </span>
+            </div>
+            <p v-if="gsKeyWrong" class="cd-hostkey none cd-wide cd-gs-wrong" role="status">
+              <ShieldAlert :size="13" />
+              <span>{{ $t('gsheets.keyNotServiceAccount') }}</span>
+            </p>
+            <div v-else-if="gsAccount || (isEdit && existing?.host)" class="cd-field cd-wide cd-gs-account" role="status">
+              <p class="cd-hostkey ok">
+                <Share2 :size="13" />
+                <span>{{ $t('gsheets.shareWith') }} <code>{{ gsAccount?.email ?? existing?.host }}</code></span>
+              </p>
+              <p v-if="gsAccount?.project ?? existing?.database" class="cd-hostkey none">
+                {{ $t('gsheets.projectLabel') }} <code>{{ gsAccount?.project ?? existing?.database }}</code>
+              </p>
             </div>
           </template>
           <template v-else-if="isApi">
@@ -830,6 +916,9 @@ function confirm() {
           <template v-else-if="isApi">
             {{ $t('apiSource.note') }}
           </template>
+          <template v-else-if="isGs">
+            {{ $t('gsheets.note') }}
+          </template>
           <template v-else>
             {{ $t('connectionDialog.noteDb') }}
           </template>
@@ -897,6 +986,9 @@ function confirm() {
 .cd-note { font-size: 11.5px; margin: 0; }
 .cd-test { display: flex; align-items: flex-start; gap: 6px; font-size: 12px; margin: 0; overflow-wrap: anywhere; }
 .cd-test svg { flex: none; margin-top: 1px; }
+.cd-gs-actions { display: flex; justify-content: flex-end; margin-top: 3px; }
+.cd-gs-file { display: inline-flex; align-items: center; gap: 6px; font-size: 12px; padding: 3px 10px; }
+.cd-gs-account { gap: 2px; }
 .cd-key { resize: vertical; font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 11.5px; }
 .cd-hostkey { display: flex; align-items: flex-start; gap: 6px; font-size: 12px; margin: 0; overflow-wrap: anywhere; }
 .cd-hostkey svg { flex: none; margin-top: 1px; }

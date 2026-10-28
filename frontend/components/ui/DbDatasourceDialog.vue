@@ -8,10 +8,10 @@
 // variables, refresh mode — with a live preview of what the names give now.
 import { computed, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
-import { Database, X, Table2, Code2, LoaderCircle, FileSpreadsheet, FolderSearch, FileText } from 'lucide-vue-next'
+import { Database, X, Table2, Code2, LoaderCircle, FileSpreadsheet, FolderSearch, FileText, Eye, Link2, List } from 'lucide-vue-next'
 import { errMessage } from '~/composables/useApi'
-import { useConnections, type ConnectionInfo } from '~/composables/useConnections'
-import { cleanApiCall, emptyApiCall, type SharePointFormat, type ApiCallDraft, type ApiDatasourceDraft, type DbDatasourceDraft, type S3DatasourceDraft, type SharePointDatasourceDraft, type SftpDatasourceDraft } from '~/composables/useDatasources'
+import { useConnections, type ConnectionInfo, type GsheetsBook, type GsheetsPreview, type GsheetsSpreadsheet } from '~/composables/useConnections'
+import { cleanApiCall, emptyApiCall, type SharePointFormat, type ApiCallDraft, type ApiDatasourceDraft, type DbDatasourceDraft, type GsheetsDatasourceDraft, type S3DatasourceDraft, type SharePointDatasourceDraft, type SftpDatasourceDraft } from '~/composables/useDatasources'
 import { cleanFileTemplates, emptyFileTemplates, usePlaceholderPreview, type FileTemplatesDraft, type FilesCheck, type PreviewRequest } from '~/composables/usePlaceholders'
 import ApiCallForm from '~/components/ui/ApiCallForm.vue'
 import DynamicSourceFields from '~/components/ui/DynamicSourceFields.vue'
@@ -32,6 +32,7 @@ const emit = defineEmits<{
   (e: 'confirm-sftp', draft: SftpDatasourceDraft): void
   (e: 'confirm-s3', draft: S3DatasourceDraft): void
   (e: 'confirm-api', draft: ApiDatasourceDraft): void
+  (e: 'confirm-gsheets', draft: GsheetsDatasourceDraft): void
   (e: 'cancel'): void
 }>()
 
@@ -124,8 +125,113 @@ const s3Bucket = ref('')
 // HTTP API connection: the call is made at each refresh (ApiCallForm)
 const isApi = computed(() => selected.value?.db_type === 'api')
 const apiCall = ref<ApiCallDraft>(emptyApiCall())
+// Google Sheets connection: a spreadsheet (chosen among those shared with the account,
+// or pasted as a link), one of its tabs and an optional A1 range; the first rows can be
+// previewed with the types the import will give them
+const isGs = computed(() => selected.value?.db_type === 'gsheets')
+const gsList = ref<GsheetsSpreadsheet[] | null>(null) // null = not loaded, or no Drive API
+const gsListMore = ref(false)
+const gsListError = ref('')
+const gsListLoading = ref(false)
+const gsPaste = ref(false) // the link field instead of the list
+const gsChosen = ref('') // the id picked from the list
+const gsLink = ref('')
+const gsBook = ref<GsheetsBook | null>(null)
+const gsSheetId = ref<number | null>(null)
+const gsRange = ref('')
+const gsLoading = ref(false)
+const gsError = ref('')
+const gsPreview = ref<GsheetsPreview | null>(null)
+const gsPreviewing = ref(false)
+const gsPreviewError = ref('')
+let gsSeq = 0 // the last opening of a spreadsheet, or preview, writes
+let gsListSeq = 0 // the last list asked for writes
+const GS_RANGE = /^([A-Za-z]{1,3}\d{0,7}:[A-Za-z]{1,3}\d{0,7})?$/
+const gsRangeOk = computed(() => GS_RANGE.test(gsRange.value.trim()))
+const gsTabOptions = computed(() => (gsBook.value?.tabs ?? []).filter((tab) => tab.grid).map((tab) => ({
+  value: tab.sheet_id,
+  label: tab.title,
+  hint: tab.hidden ? t('sheetPicker.hidden') : t('gsheets.tabSize', { rows: tab.rows, columns: tab.columns }),
+})))
+const gsSheetTitle = computed(() => gsBook.value?.tabs.find((tab) => tab.sheet_id === gsSheetId.value)?.title ?? '')
+function gsReset() {
+  gsSeq++
+  gsListSeq++
+  gsList.value = null
+  gsListMore.value = false
+  gsListError.value = ''
+  gsListLoading.value = false
+  gsPaste.value = false
+  gsChosen.value = ''
+  gsLink.value = ''
+  gsBook.value = null
+  gsSheetId.value = null
+  gsRange.value = ''
+  gsLoading.value = false
+  gsError.value = ''
+  gsPreview.value = null
+  gsPreviewError.value = ''
+}
+async function gsLoadList(id: number) {
+  const seq = ++gsListSeq
+  gsListLoading.value = true
+  try {
+    const res = await connApi.gsheetsSpreadsheets(id)
+    if (seq !== gsListSeq) return
+    gsList.value = res.spreadsheets
+    gsListMore.value = res.more
+    if (!res.spreadsheets.length) gsPaste.value = true
+  } catch (e) {
+    // no Drive API (or no rights on it): the link still works
+    if (seq === gsListSeq) { gsListError.value = errMessage(e); gsPaste.value = true }
+  } finally {
+    if (seq === gsListSeq) gsListLoading.value = false
+  }
+}
+// the spreadsheet's tabs: from the list's choice, or from the link pasted
+async function gsOpen(spreadsheet: string) {
+  if (connectionId.value == null || !spreadsheet.trim()) return
+  const seq = ++gsSeq
+  gsLoading.value = true
+  gsError.value = ''
+  gsBook.value = null
+  gsPreview.value = null
+  try {
+    const book = await connApi.gsheetsTabs(connectionId.value, spreadsheet.trim())
+    if (seq !== gsSeq) return
+    gsBook.value = book
+    const grids = book.tabs.filter((tab) => tab.grid)
+    gsSheetId.value = book.selected_sheet_id ?? (grids.find((tab) => !tab.hidden) ?? grids[0])?.sheet_id ?? null
+  } catch (e) {
+    if (seq === gsSeq) gsError.value = errMessage(e)
+  } finally {
+    if (seq === gsSeq) gsLoading.value = false
+  }
+}
+watch(gsChosen, (id) => { if (id) gsOpen(id) })
+watch(gsLink, () => { if (gsPaste.value) { gsBook.value = null; gsError.value = '' } })
+watch([gsSheetId, gsRange], () => { gsPreview.value = null; gsPreviewError.value = '' })
+async function gsShowPreview() {
+  if (connectionId.value == null || !gsBook.value || gsSheetId.value == null || !gsRangeOk.value) return
+  const seq = gsSeq
+  gsPreviewing.value = true
+  gsPreviewError.value = ''
+  try {
+    const res = await connApi.gsheetsPreview(connectionId.value, {
+      spreadsheet_id: gsBook.value.id, sheet_id: gsSheetId.value, sheet: gsSheetTitle.value, range: gsRange.value.trim(),
+    })
+    if (seq === gsSeq) gsPreview.value = res
+  } catch (e) {
+    if (seq === gsSeq) gsPreviewError.value = errMessage(e)
+  } finally {
+    gsPreviewing.value = false
+  }
+}
+const fmtModified = (iso: string) => (iso ? new Date(iso).toLocaleDateString() : '')
+const gsCell = (v: unknown) => (v === null || v === undefined ? '' : String(v))
+
 // not a database: no table, no SQL, no sort keys
-const isFileSource = computed(() => isSp.value || isFolderSource.value || isApi.value)
+const isFileSource = computed(() => isSp.value || isFolderSource.value || isApi.value || isGs.value)
 // the moving part of the SharePoint, SFTP and S3 sources (DynamicSourceFields)
 const dyn = ref<FileTemplatesDraft>(emptyFileTemplates())
 const appendWithoutKeys = computed(() => dyn.value.mode === 'append' && !dyn.value.keys.length)
@@ -248,6 +354,8 @@ watch(
     ftChecking.value = false
     ftSeq++
     apiCall.value = emptyApiCall()
+    gsReset()
+    if (connectionId.value != null && isGs.value) gsLoadList(connectionId.value)
     tables.value = []
     tablesError.value = ''
     if (connectionId.value != null && !isFileSource.value) loadTables(connectionId.value)
@@ -262,6 +370,8 @@ watch(connectionId, (id) => {
   spError.value = ''
   ftFiles.value = null
   ftError.value = ''
+  gsReset()
+  if (props.open && id != null && isGs.value) gsLoadList(id)
   if (props.open && id != null && !isFileSource.value) loadTables(id)
 })
 
@@ -284,6 +394,8 @@ const incomplete = () =>
     : isFolderSource.value
       ? !ftPattern.value.trim() || ftSeparator.value.length !== 1 || appendWithoutKeys.value
         || (isS3.value && !s3Bucket.value.trim() && !(selected.value?.database ?? '').trim())
+      : isGs.value
+        ? !gsBook.value || gsSheetId.value == null || !gsRangeOk.value
       : isApi.value
         ? apiCall.value.mode === 'append' && !apiCall.value.keys.length
         : sourceType.value === 'table' ? !tableName.value.trim() : !sql.value.trim())
@@ -300,6 +412,19 @@ function confirm() {
       sheet: spSheet.value.trim(),
       csv: { separator: ftSeparator.value, has_header: ftHeader.value, encoding: ftEncoding.value },
       ...cleanFileTemplates(dyn.value),
+    })
+    return
+  }
+  if (isGs.value) {
+    emit('confirm-gsheets', {
+      name: name.value.trim(),
+      description: description.value,
+      connection_id: connectionId.value!,
+      spreadsheet_id: gsBook.value!.id,
+      spreadsheet_name: gsBook.value!.title,
+      sheet_id: gsSheetId.value,
+      sheet: gsSheetTitle.value,
+      range: gsRange.value.trim().toUpperCase(),
     })
     return
   }
@@ -467,6 +592,78 @@ function confirm() {
           <DynamicSourceFields v-model="dyn" :preview="preview" :keys-placeholder="isSp ? '_param_day, _file' : undefined" />
         </template>
 
+        <template v-if="isGs">
+          <label>{{ $t('gsheets.spreadsheetLabel') }}
+            <span v-if="!gsPaste && gsList" class="dd-soft">{{ $t('gsheets.sharedWith', { email: selected?.host ?? '' }) }}</span>
+          </label>
+          <p v-if="gsListLoading" class="muted dd-hint"><LoaderCircle :size="12" class="spin" /> {{ $t('gsheets.loadingList') }}</p>
+          <template v-else-if="!gsPaste && gsList?.length">
+            <Select
+              v-model="gsChosen"
+              class="dd-gs-list"
+              searchable
+              :options="gsList.map((f) => ({ value: f.id, label: f.name, hint: [f.owner, fmtModified(f.modified_at)].filter(Boolean).join(' · ') }))"
+              :placeholder="$t('gsheets.chooseSpreadsheet')"
+            />
+            <p v-if="gsListMore" class="muted dd-hint">{{ $t('gsheets.listMore', { n: gsList.length }) }}</p>
+            <button type="button" class="dd-link" @click="gsPaste = true; gsChosen = ''; gsBook = null"><Link2 :size="12" /> {{ $t('gsheets.pasteInstead') }}</button>
+          </template>
+          <template v-else>
+            <div class="dd-row">
+              <input
+                v-model="gsLink"
+                type="text"
+                spellcheck="false"
+                class="dd-gs-link"
+                :aria-label="$t('gsheets.linkLabel')"
+                placeholder="https://docs.google.com/spreadsheets/d/…"
+                @keydown.enter.prevent="gsOpen(gsLink)"
+              />
+              <button type="button" class="dd-gs-open" :disabled="gsLoading || !gsLink.trim()" @click="gsOpen(gsLink)">
+                <LoaderCircle v-if="gsLoading" :size="13" class="spin" /><FileSpreadsheet v-else :size="13" /> {{ $t('gsheets.openTabs') }}
+              </button>
+            </div>
+            <p v-if="gsListError" class="muted dd-hint dd-gs-nolist">{{ $t('gsheets.noList', { error: gsListError }) }}</p>
+            <p v-else-if="gsList && !gsList.length" class="muted dd-hint">{{ $t('gsheets.noneShared', { email: selected?.host ?? '' }) }}</p>
+            <button v-if="gsList?.length" type="button" class="dd-link" @click="gsPaste = false; gsLink = ''; gsBook = null"><List :size="12" /> {{ $t('gsheets.backToList') }}</button>
+          </template>
+          <p v-if="gsLoading && !gsPaste" class="muted dd-hint"><LoaderCircle :size="12" class="spin" /> {{ $t('gsheets.loadingTabs') }}</p>
+          <p v-if="gsError" class="dd-err dd-gs-error" role="alert">{{ gsError }}</p>
+          <template v-if="gsBook">
+            <!-- a link says nothing of what it opened: the title, said; the list shows it already -->
+            <p v-if="gsPaste" class="muted dd-hint dd-gs-title"><FileSpreadsheet :size="12" /> {{ gsBook.title }}</p>
+            <div class="dd-gs-tab">
+              <div>
+                <label>{{ $t('gsheets.tabLabel') }}</label>
+                <Select v-model="gsSheetId" :options="gsTabOptions" />
+              </div>
+              <div>
+                <label>{{ $t('gsheets.rangeLabel') }} <span class="dd-soft">{{ $t('dbDatasourceDialog.optionalHint') }}</span></label>
+                <input v-model="gsRange" type="text" spellcheck="false" class="dd-mono dd-gs-range" :aria-invalid="!gsRangeOk" placeholder="A1:F500" />
+              </div>
+            </div>
+            <p v-if="!gsRangeOk" class="dd-err">{{ $t('gsheets.rangeInvalid') }}</p>
+            <div class="dd-row dd-gs-preview-row">
+              <button type="button" class="dd-gs-preview" :disabled="gsPreviewing || gsSheetId == null || !gsRangeOk" @click="gsShowPreview">
+                <LoaderCircle v-if="gsPreviewing" :size="13" class="spin" /><Eye v-else :size="13" /> {{ $t('gsheets.preview') }}
+              </button>
+            </div>
+            <p v-if="gsPreviewError" class="dd-err dd-gs-error" role="alert">{{ gsPreviewError }}</p>
+            <div v-else-if="gsPreview" class="dd-gs-table" role="region" :aria-label="$t('gsheets.previewTitle')" tabindex="0">
+              <table>
+                <thead>
+                  <tr><th v-for="c in gsPreview.columns" :key="c.name">{{ c.name }}<span class="dd-gs-type">{{ c.dtype }}</span></th></tr>
+                </thead>
+                <tbody>
+                  <tr v-for="(r, i) in gsPreview.rows.slice(0, 8)" :key="i"><td v-for="(v, j) in r" :key="j" :class="{ nul: v === null }">{{ v === null ? 'null' : gsCell(v) }}</td></tr>
+                </tbody>
+              </table>
+              <p v-if="!gsPreview.rows.length" class="muted">{{ $t('gsheets.previewEmpty') }}</p>
+            </div>
+          </template>
+          <p class="muted dd-hint">{{ $t('gsheets.machineReadable') }}</p>
+        </template>
+
         <ApiCallForm v-if="isApi" v-model="apiCall" :connection-id="connectionId" />
 
         <div v-if="!isFileSource" class="dd-mode">
@@ -548,6 +745,18 @@ function confirm() {
 .dd-files ul { list-style: none; margin: 6px 0 0; padding: 0; display: grid; gap: 3px; }
 .dd-files li { display: flex; align-items: center; gap: 6px; font-family: ui-monospace, SFMono-Regular, Menlo, monospace; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .dd-files li svg { flex: none; color: var(--accent-2); }
+.dd-link { align-self: flex-start; display: inline-flex; align-items: center; gap: 5px; font-size: 12px; padding: 2px 8px; border: 0; background: none; color: var(--accent); box-shadow: none; }
+.dd-link:hover { text-decoration: underline; text-underline-offset: 3px; }
+.dd-gs-title { color: var(--text); }
+.dd-gs-tab { display: grid; grid-template-columns: minmax(0, 1fr) 11em; gap: 6px 10px; }
+.dd-gs-tab > div { display: flex; flex-direction: column; gap: 3px; }
+.dd-gs-table { max-height: 220px; overflow: auto; border: 1px solid var(--border-soft); border-radius: 8px; background: var(--bg-soft); font-size: 12px; }
+.dd-gs-table table { border-collapse: collapse; width: max-content; min-width: 100%; }
+.dd-gs-table th, .dd-gs-table td { padding: 4px 10px; border-bottom: 1px solid var(--border-soft); text-align: left; white-space: nowrap; font-variant-numeric: tabular-nums; }
+.dd-gs-table th { position: sticky; top: 0; background: var(--panel-2); font-weight: 600; }
+.dd-gs-type { display: block; font-weight: 400; font-size: 11px; color: var(--muted); font-family: ui-monospace, SFMono-Regular, Menlo, monospace; }
+.dd-gs-table td.nul { color: var(--muted); font-style: italic; }
+.dd-gs-table p { margin: 6px 10px; }
 .dd-backdrop {
   position: fixed;
   inset: 0;

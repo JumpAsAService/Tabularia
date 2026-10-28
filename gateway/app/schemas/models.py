@@ -966,6 +966,35 @@ class SharePointFilesQuery(FileTemplatesSpec):
     format: Literal["auto", "excel", "csv"] = "excel"
 
 
+# ── Google Sheets ─────────────────────────────────────────────────────────────
+# a spreadsheet's id (44 characters in practice) and a range in A1 notation inside a tab
+GSHEETS_ID = r"^[A-Za-z0-9_-]{20,200}$"
+GSHEETS_RANGE = r"^(|[A-Za-z]{1,3}[0-9]{0,7}:[A-Za-z]{1,3}[0-9]{0,7})$"
+
+
+class GsheetsTab(BaseModel):
+    """One tab of a spreadsheet: its id (`gid` in the link: a renamed tab is still found
+    by it), its title when chosen, and an optional A1 range inside it."""
+    spreadsheet_id: str = Field(pattern=GSHEETS_ID)
+    sheet_id: Optional[int] = Field(default=None, ge=0)
+    sheet: str = Field(default="", max_length=255)
+    range: str = Field(default="", max_length=30, pattern=GSHEETS_RANGE)
+
+
+class GsheetsDatasourceCreate(GsheetsTab):
+    """A datasource from one tab of a Google Sheets spreadsheet, read at every refresh."""
+    name: str
+    description: str = ""
+    connection_id: int
+    # the spreadsheet's title when it was chosen: shown, never used to find it
+    spreadsheet_name: str = Field(default="", max_length=500)
+
+
+class GsheetsTabsQuery(BaseModel):
+    """The spreadsheet as the user pasted it: its link (from the browser) or its id."""
+    spreadsheet: str = Field(min_length=1, max_length=2000)
+
+
 class PlaceholderPreviewQuery(BaseModel):
     """The live preview of templates in a form: each one's value now («today:
     export_20261018.csv»), or what is wrong with it. `kind` input (a datasource's

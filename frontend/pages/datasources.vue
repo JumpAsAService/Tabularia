@@ -64,7 +64,7 @@ const describedCount = (d: DatasourceInfo) => Object.keys(d.column_descriptions 
 // refresh; typed by hand only while no import has succeeded yet.
 const keyDrafts = reactive<Record<number, string[]>>({})
 const keyText = reactive<Record<number, string>>({})
-const canEditKeys = (d: DatasourceInfo) => d.kind === 'database' && !['sharepoint', 'sftp', 's3', 'api'].includes(d.source_type ?? '')
+const canEditKeys = (d: DatasourceInfo) => d.kind === 'database' && !['sharepoint', 'sftp', 's3', 'api', 'gsheets'].includes(d.source_type ?? '')
 const draftKeys = (d: DatasourceInfo): string[] =>
   d.columns.length
     ? keyDrafts[d.id] ?? []
@@ -183,6 +183,9 @@ function sourceLabel(d: DatasourceInfo): string {
   }
   if (d.source_type === 's3') {
     try { const r = JSON.parse(d.source_ref ?? '{}'); return `s3://${[r.bucket || '…', r.folder, r.pattern].filter(Boolean).join('/')}` } catch { return d.source_ref ?? '' }
+  }
+  if (d.source_type === 'gsheets') {
+    try { const r = JSON.parse(d.source_ref ?? '{}'); return [r.spreadsheet_name || r.spreadsheet_id, r.sheet, r.range].filter(Boolean).join(' · ') } catch { return d.source_ref ?? '' }
   }
   if (d.source_type !== 'sharepoint') return d.source_ref ?? ''
   try { const r = JSON.parse(d.source_ref ?? '{}'); return `${r.path} · ${r.sheet}` } catch { return d.source_ref ?? '' }
