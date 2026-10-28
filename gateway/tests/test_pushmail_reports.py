@@ -240,3 +240,52 @@ def test_a_report_a_group_sends_cannot_be_deleted(world):
     update_flow_group(out.id, FlowGroupUpdate(definition={"steps": [[other]]}), request=None, user=world["admin"], session=s)
     delete_report(report.id, request=None, user=world["admin"], session=s)
     assert s.get(Report, report.id) is None
+
+
+async def test_a_change_of_what_a_report_reads_stops_the_schedules_of_others(world, db_engine):
+    """A group scheduled by A sends a report with A's rights. B, who may edit the report,
+    makes it read something else: A's schedule must not spend A's rights on B's choice
+    (as for SQL scripts) — it is switched off, and the audit says why. A change of the
+    layout alone reads nothing more, and A's own change keeps A's schedule."""
+    from app.routes.reports import ReportUpdate, restore_version, update_report
+
+    s = world["session"]
+    report = _report(world)
+    group = s.get(FlowGroup, _create(world, world["admin"], _with_report(world, report.id)).id)
+
+    def schedule():
+        group.run_schedule, group.run_scheduled_by = "0 7 * * *", world["admin"].id
+        s.add(group)
+        s.commit()
+
+    def content(**over):
+        c = json.loads(s.exec(select(ReportVersion).where(ReportVersion.report_id == report.id)
+                              .order_by(ReportVersion.version.desc())).first().content)
+        return {**c, **over}
+
+    editor = make_user(s, email="editor@x.local")
+    for cap in (Capability.VIEW, Capability.EDIT):
+        make_permission(s, user_id=editor.id, project_id=world["p"].id, capability=cap)
+    schedule()
+    layout = content(sections={"body": {"items": [{"id": "t", "type": "text", "x": 0, "y": 0, "w": 50, "h": 6,
+                                                   "value": "Sales"}]}})
+    await update_report(report.id, ReportUpdate(content=layout), request=None, user=editor, session=s)
+    s.refresh(group)
+    assert group.run_schedule == "0 7 * * *"
+    wider = content(datasets=[{"name": "orders", "source": {"kind": "sql",
+                                                            "sql": 'SELECT region, amount FROM "Regioni"'}}])
+    await update_report(report.id, ReportUpdate(content=wider), request=None, user=editor, session=s)
+    s.refresh(group)
+    assert (group.run_schedule, group.run_scheduled_by) == (None, None)
+    (outcome, detail, target), = _audits(db_engine, "flow_group.schedule")
+    assert target == group.id and detail["turned_off"] and detail["author"] == world["admin"].id
+    assert "Monthly sales" in detail["reason"] and "orders" in detail["reason"]
+    # its author's own change keeps it; a version brought back by someone else does not
+    schedule()
+    await update_report(report.id, ReportUpdate(content=content(datasets=[{"name": "orders", "source": {
+        "kind": "sql", "sql": 'SELECT region, amount FROM "Vendite"'}}])), request=None, user=world["admin"], session=s)
+    s.refresh(group)
+    assert group.run_schedule == "0 7 * * *"
+    await restore_version(report.id, 2, request=None, user=editor, session=s)
+    s.refresh(group)
+    assert group.run_schedule is None

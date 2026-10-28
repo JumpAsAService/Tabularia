@@ -227,6 +227,29 @@ async def create_report(project_id: int, body: ReportCreate, request: Request,
     return _detail(session, user, report)
 
 
+def _groups_off(session: Session, user: User, report: Report, reasons: list[str]) -> list[tuple]:
+    """The flow groups that send the report, scheduled by someone else: a change that makes
+    the report read more switches their schedules off, as for SQL scripts — a schedule
+    carries its author's rights, and those are not spent on someone else's choice."""
+    if not reasons:
+        return []
+    off = []
+    for group in reports.groups_using(session, report.id):
+        if group.run_schedule and group.run_scheduled_by not in (None, user.id):
+            detail = {"turned_off": True, "author": group.run_scheduled_by,
+                      "reason": f"the report '{report.name}' it sends changed: {'; '.join(reasons)}"}
+            group.run_schedule = group.run_scheduled_by = group.next_run_at = None
+            session.add(group)
+            off.append((group.id, group.name, detail))
+    return off
+
+
+def _record_off(session: Session, user: User, groups: list[tuple], request: Optional[Request]) -> None:
+    for group_id, name, detail in groups:
+        audit.record_audit(session, actor=user, action=audit.FLOW_GROUP_SCHEDULE, target_type="flow_group",
+                           target_id=group_id, target_label=name, detail=detail, request=request)
+
+
 @router.patch("/reports/{report_id}", response_model=ReportDetail)
 async def update_report(report_id: int, body: ReportUpdate, request: Request,
                         user: User = Depends(get_current_user), session: Session = Depends(get_session)):
@@ -247,11 +270,13 @@ async def update_report(report_id: int, body: ReportUpdate, request: Request,
     if target != report.project_id:
         actions.append((audit.REPORT_MOVE, {"from": report.project_id, "to": target}))
     changes: dict[str, Any] = {}
+    groups_off: list[tuple] = []
     if body.content is not None:
         current = reports.content_of(session, report)
         content = await reports.checked(session, user, body.content, current)
         if content != current:
             changes["version"] = reports.add_version(session, report, content, "edited", user).version
+            groups_off = _groups_off(session, user, report, reports.widens(current, content))
     if body.description is not None and body.description.strip() != report.description:
         report.description = body.description.strip()
         changes["description"] = True
@@ -266,6 +291,7 @@ async def update_report(report_id: int, body: ReportUpdate, request: Request,
     session.refresh(report)
     for action, detail in actions:
         _record(session, user, action, report, request, detail)
+    _record_off(session, user, groups_off, request)
     return _detail(session, user, report)
 
 
@@ -342,11 +368,13 @@ async def restore_version(report_id: int, version: int, request: Request, user: 
     current = reports.content_of(session, report)
     content = await reports.checked(session, user, reports.content_of(session, report, version), current)
     row = reports.add_version(session, report, content, f"restored from v{version}", user)
+    groups_off = _groups_off(session, user, report, reports.widens(current, content))
     report.updated_at = datetime.now(timezone.utc)
     session.add(report)
     session.commit()
     session.refresh(report)
     _record(session, user, audit.REPORT_RESTORE, report, request, {"from": version, "version": row.version})
+    _record_off(session, user, groups_off, request)
     return _detail(session, user, report)
 
 

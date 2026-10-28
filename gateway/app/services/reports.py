@@ -88,6 +88,24 @@ def get_visible(session: Session, user: User, report_id: int) -> Report:
     return report
 
 
+def widens(before: dict, after: dict) -> list[str]:
+    """What a change makes the report read that it did not: a dataset added, or one whose
+    source changed (another SQL, connection, datasource, view, script or filters). The
+    layout only shows what the datasets read. A flow group scheduled by someone else does
+    not spend its author's rights on it (routes/reports.py switches its schedule off), as
+    for SQL scripts."""
+    def sources(content: dict) -> dict:
+        return {d.get("name"): d.get("source") for d in content.get("datasets") or [] if isinstance(d, dict)}
+
+    b, a = sources(before), sources(after)
+    reasons = []
+    if added := [n for n in a if n not in b]:
+        reasons.append(f"it reads the new datasets {', '.join(map(str, added))}")
+    if changed := [n for n in a if n in b and a[n] != b[n]]:
+        reasons.append(f"its datasets {', '.join(map(str, changed))} read something else")
+    return reasons
+
+
 def groups_using(session: Session, report_id: int) -> list:
     """The flow groups with a Pushmail cell that sends the report."""
     from app.models import FlowGroup

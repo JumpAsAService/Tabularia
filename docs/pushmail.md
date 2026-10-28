@@ -93,6 +93,14 @@ sent:
 A report that a flow group sends cannot be deleted: the delete says which groups send
 it (`409`). Take it out of their Pushmail cells first.
 
+Because a scheduled group sends with its author's rights, someone else who changes what
+the report **reads** — a dataset added, or one that reads other SQL, another datasource,
+view or filters — switches the schedules of the groups that send it off, as a change to
+a SQL script does: the author's rights are not spent on another person's choice. The
+Audit page records it (`flow_group.schedule`, with the reason); the author schedules the
+group again after looking. A change of the layout alone, or one by the schedule's own
+author, keeps it.
+
 ## What is checked, and when
 
 When the group is saved, a Pushmail cell that is new or changed is checked with the
