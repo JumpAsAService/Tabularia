@@ -49,11 +49,12 @@ import secrets
 import time
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
+from types import SimpleNamespace
 from typing import Optional
 
 import httpx
 from fastapi import HTTPException, Request
-from sqlalchemy import delete, text
+from sqlalchemy import delete, text, update
 from sqlalchemy.engine import Engine
 from sqlalchemy.exc import IntegrityError
 from sqlmodel import Session, func, select
@@ -512,14 +513,19 @@ async def refresh(session: Session, row: NotebookSession, force: bool = False) -
 async def _fail(session: Session, row: NotebookSession, why: str) -> None:
     """The session failed: the row stays (the page shows why) until it is tried again or
     the reaper clears it; its Job goes now."""
+    # whoever fails it first tells the lineage: a replica following the start and the
+    # reaper can get here together, and the run would fail twice in the catalog
+    first = session.exec(update(NotebookSession).where(  # type: ignore[arg-type]
+        NotebookSession.id == row.id, NotebookSession.status != "failed").values(status="failed")).rowcount == 1
     row.status, row.error, row.pod_ip = "failed", f"The notebook could not start: {why}"[:4000], None
     session.add(row)
     session.commit()
     _checked.pop(row.id, None)
     logger.info("notebooks: session %s of notebook %s failed: %s", row.id, row.notebook_id, why[:300])
-    from app.services import openlineage
+    if first:
+        from app.services import openlineage
 
-    openlineage.notebook_session(session, row, "FAIL", error=row.error)
+        openlineage.notebook_session(session, row, "FAIL", error=row.error)
     with contextlib.suppress(KubeError):
         await kube_jobs.delete_job(row.namespace, row.job_name)
 
@@ -625,11 +631,15 @@ async def stop(session: Session, row: NotebookSession, *, actor: Optional[User],
         logger.warning("notebooks: the Job %s not deleted now (%s)", row.job_name, e)
     notebook = session.get(Notebook, row.notebook_id)
     row_id, mode, was = row.id, row.mode, row.status
-    if was != "failed":  # its run ends with it (told before the row goes; a failed one was told already)
+    ended = SimpleNamespace(notebook_id=row.notebook_id, mode=row.mode, version=row.version, job_name=row.job_name,
+                            started_at=row.started_at)
+    gone = session.exec(delete(NotebookSession).where(NotebookSession.id == row_id)).rowcount  # type: ignore[arg-type]
+    if gone and was != "failed":
+        # its run ends with it, told by whoever removed the row: a person and the reaper
+        # stopping it together tell it once (a failed one was told already)
         from app.services import openlineage
 
-        openlineage.notebook_session(session, row, "COMPLETE" if was == "ready" else "ABORT")
-    session.exec(delete(NotebookSession).where(NotebookSession.id == row_id))  # type: ignore[arg-type]
+        openlineage.notebook_session(session, ended, "COMPLETE" if was == "ready" else "ABORT")
     session.commit()
     _checked.pop(row_id, None)
     if quiet or was == "failed" or notebook is None:
@@ -641,7 +651,14 @@ async def stop(session: Session, row: NotebookSession, *, actor: Optional[User],
 
 def forget(session: Session, notebook_id: int) -> None:
     """A notebook being deleted: its sessions and visitors go with it, their Jobs with the
-    reaper's next round (no session holds them any more)."""
+    reaper's next round (no session holds them any more). The runs of its live sessions
+    end in the lineage catalog now: once deleted, the notebook has no name to tell."""
+    from app.services import openlineage
+
+    if openlineage.enabled():
+        for row in session.exec(select(NotebookSession).where(NotebookSession.notebook_id == notebook_id,
+                                                              NotebookSession.status != "failed")).all():
+            openlineage.notebook_session(session, row, "COMPLETE" if row.status == "ready" else "ABORT")
     session.exec(delete(NotebookVisitor).where(NotebookVisitor.notebook_id == notebook_id))  # type: ignore[arg-type]
     session.exec(delete(NotebookSession).where(NotebookSession.notebook_id == notebook_id))  # type: ignore[arg-type]
 

@@ -486,13 +486,13 @@ class _Model:
         # random, so no text of the flow can spell a placeholder out; it never reaches the zip
         self._mark = secrets.token_hex(6)
 
-    def native_text(self, finale: str, duck: str) -> str:
+    def native_text(self, warehouse_sql: str, duck: str) -> str:
         """SQL written directly in the warehouse's dialect (ClickHouse functions sqlglot would
         misread): a placeholder in the model, which sqlglot translates without touching it;
         `put_back_texts` puts the text back after the translation. `duck`: the same in DuckDB,
         for the probe."""
         placeholder = f"__tabularia_{self._mark}_t{len(self.placeholders)}__()"
-        self.placeholders[placeholder] = finale
+        self.placeholders[placeholder] = warehouse_sql
         self.for_probe[placeholder] = duck
         return placeholder
 
@@ -1042,7 +1042,7 @@ def _mean_of_instants(model: "_Model", func: str, c: str, duck: str) -> str:
     return duck
 
 
-def _aggregato(model: "_Model", func: str, col: str, kind: Optional[str], order: Optional[list] = None,
+def _aggregate(model: "_Model", func: str, col: str, kind: Optional[str], order: Optional[list] = None,
                kind_of_: Optional[Callable] = None) -> tuple[str, Optional[str]]:
     """An aggregate as the engine computes it, and the type it gives (None: not known).
     The engine brings a HUGEINT back to BIGINT (a sum of integers or of booleans, which
@@ -1203,7 +1203,7 @@ def _compile_op(model: _Model, ref: str, s: _S, op_type: str, params: dict,
             if func not in _AGG:
                 raise DbtExportError(f"group_by: unsupported function '{func}'", "groupby_unsupported_func", func=func)
             alias = agg.get("alias") or f"{col}_{func}"
-            expr, t = _aggregato(model, func, col, s.kind(col), s.order, s.kind)
+            expr, t = _aggregate(model, func, col, s.kind(col), s.order, s.kind)
             parts.append(f"{expr} AS {q(alias)}")
             out_cols.append(alias)
             out_t[alias] = t
@@ -1251,13 +1251,13 @@ def _compile_op(model: _Model, ref: str, s: _S, op_type: str, params: dict,
         if _as_is(model):
             # ClickHouse's query on the ClickHouse target, as the engine runs it (only `self` pointed
             # at the step before); its names are ClickHouse's: known only where it gives them
-            finale = _rewrite_query(text, ref, read="clickhouse", write="clickhouse")
+            as_written = _rewrite_query(text, ref, read="clickhouse", write="clickhouse")
             try:
                 query = _rewrite_query(text, ref, read="clickhouse")
             except DbtExportError:
-                query = finale
+                query = as_written
             output = _query_columns(query, ref, s)
-            source = model.native_text(f"(\n{finale}\n)", f"({query})")
+            source = model.native_text(f"(\n{as_written}\n)", f"({query})")
             if output:
                 return model.add(f"SELECT {_column_list(output)} FROM {source} AS _q"), _S(output)
             model.probe.switch_off()
@@ -1361,7 +1361,7 @@ def _compile_op(model: _Model, ref: str, s: _S, op_type: str, params: dict,
             using = f"CAST({using} AS BIGINT)"      # as the engine: HUGEINT back to BIGINT
         # the new columns are not known (the data decides them), their type is: the aggregate's
         return (model.add(f"PIVOT {ref} ON {on_sql} USING {using} GROUP BY {idx_sql}"),
-                _S([], {c: s.kind(c) for c in index}, _aggregato(model, func, values, s.kind(values))[1]))
+                _S([], {c: s.kind(c) for c in index}, _aggregate(model, func, values, s.kind(values))[1]))
 
     if op_type == "unpivot":
         on = params.get("on")
@@ -1639,7 +1639,7 @@ def _mask(sql: str) -> str:
     return "".join(out)
 
 
-def _formatta(sql: str) -> str:
+def _format_sql(sql: str) -> str:
     """One clause per line and, for a long SELECT, one column per line. Touches ONLY the
     spaces outside strings and parentheses: the SQL stays the same."""
     m = _mask(sql)
@@ -1690,8 +1690,8 @@ def compile_model_sql(source: dict, operations: list, resolve: SourceResolver, n
     SQL, the output columns, their DuckDB types). `text`: the dialect the
     flow's compute expressions and sql nodes are written in (its engine's: polars,
     duckdb, clickhouse, bigquery; None = duckdb). `info`, if given, receives
-    `segnaposti` (the texts written in the warehouse's dialect, which `put_back_texts`
-    puts back in the translated SQL) and `da_rivedere` ([(step, dialect)]: text the team
+    `placeholders` (the texts written in the warehouse's dialect, which `put_back_texts`
+    puts back in the translated SQL) and `to_review` ([(step, dialect)]: text the team
     must review). `used`: the CTE names the project's other models already have (shared, and
     filled with this model's): no model repeats one (see `_Model._used`)."""
     model = _Model(_Namer("s"), native=native, dialect=dialect, text=text or "duckdb", used=used)
@@ -1703,15 +1703,15 @@ def compile_model_sql(source: dict, operations: list, resolve: SourceResolver, n
     finally:
         model.probe.close()
     body = ",\n".join(
-        f"{name} AS (\n" + (f"    -- {note}\n" if note else "") + f"{_indent(_formatta(sql))}\n)"
+        f"{name} AS (\n" + (f"    -- {note}\n" if note else "") + f"{_indent(_format_sql(sql))}\n)"
         for name, sql, note in model.ctes
     )
-    finale = _column_list(out.cols) if (native and out.cols) else "*"
+    select_list = _column_list(out.cols) if (native and out.cols) else "*"
     if info is not None:
-        info["segnaposti"] = dict(model.placeholders)
-        info["per_sonda"] = dict(model.for_probe)
-        info["da_rivedere"] = list(dict.fromkeys(model.to_review))
-    return f"WITH\n{body}\nSELECT {finale}\nFROM {final}", out.cols, out.types
+        info["placeholders"] = dict(model.placeholders)
+        info["for_probe"] = dict(model.for_probe)
+        info["to_review"] = list(dict.fromkeys(model.to_review))
+    return f"WITH\n{body}\nSELECT {select_list}\nFROM {final}", out.cols, out.types
 
 
 def cte_names(sql: str, dialect: str | None) -> set[str]:
@@ -1729,7 +1729,7 @@ def cte_names(sql: str, dialect: str | None) -> set[str]:
 def put_back_texts(sql: str, info: dict | None) -> str:
     """The translated SQL with the texts written in the warehouse's dialect in place of
     their placeholders (see `_Model.native_text`)."""
-    for placeholder, text in ((info or {}).get("segnaposti") or {}).items():
+    for placeholder, text in ((info or {}).get("placeholders") or {}).items():
         sql = re.sub(re.escape(placeholder[:-2]) + r"\s*\(\s*\)", lambda _m, t=text: t, sql, flags=re.IGNORECASE)
     return sql
 
@@ -1963,7 +1963,7 @@ def _without_unsigned(tree):
     return tree
 
 
-def _tempi_clickhouse(tree):
+def _clickhouse_times(tree):
     """DuckDB's dates and times as the ClickHouse engine types them: DATE is a Date32 and a
     TIMESTAMP a DateTime64(6). sqlglot writes Date (1970-2149: a birth date of 1955 wrapped to
     2134) and DateTime (whole seconds, 1970-2106). ClickHouse 24 has no time of day (its TIME
@@ -2006,7 +2006,7 @@ def _fix_for_dialect(tree, dialect: str):
                     excerpt = exp.Floor(this=excerpt)
                 node.replace(exp.Cast(this=excerpt, to=exp.DataType.build("BIGINT")))
     if dialect == "clickhouse":
-        _tempi_clickhouse(tree)
+        _clickhouse_times(tree)
         # DuckDB's upper/lower/substring/reverse/left/right/lpad work on characters, ClickHouse's
         # on bytes ('città' → 'CITTà'): their *UTF8 forms, as the ClickHouse engine uses
         utf8 = {exp.Upper: "upperUTF8", exp.Lower: "lowerUTF8", exp.Reverse: "reverseUTF8", exp.Substring: "substringUTF8",
@@ -2711,7 +2711,7 @@ def _y_key(s: Any) -> str:
 
 
 # YAML 1.1 (PyYAML, so dbt) reads these plain scalars as booleans or null, in any case
-_YAML_PAROLE = frozenset("y n yes no on off true false null".split())
+_YAML_WORDS = frozenset("y n yes no on off true false null".split())
 
 
 def _y_name(s: Any, key: bool = False) -> str:
@@ -2719,7 +2719,7 @@ def _y_name(s: Any, key: bool = False) -> str:
     read it as that string (an identifier that is not `on`, `yes`, `null`…), otherwise
     quoted — a flow «On» became the profile `True`, an output «Yes» a model named True."""
     t = str(s)
-    if re.fullmatch(r"[A-Za-z_][A-Za-z0-9_]*", t) and t.lower() not in _YAML_PAROLE:
+    if re.fullmatch(r"[A-Za-z_][A-Za-z0-9_]*", t) and t.lower() not in _YAML_WORDS:
         return t
     return _y_key(t) if key else _y(t)
 
@@ -2834,7 +2834,7 @@ def _model_header(m: dict) -> str:
     if m.get("ai_translated"):
         head += f"-- Translated by AI from {_comment(m.get('ai_translated_from') or 'another dialect')}: review it before use.\n\n"
     review: dict[str, list[str]] = {}
-    for step, why in m.get("da_rivedere") or []:
+    for step, why in m.get("to_review") or []:
         review.setdefault(why, []).append(step)
     for why, steps in review.items():
         head += f"-- {_TO_REVIEW.get(why, 'Review')}: {_comment(', '.join(steps))}.\n"
@@ -2888,7 +2888,7 @@ def build_dbt_project(
     · **duckdb** (federation): `attachments` = [{alias, db_type, conn, pw_env}].
     · **native** (warehouse): `native` = {db_type, conn, pw_env, target_schema}.
     · **clickhouse** (the customer's ClickHouse, federated sources): `clickhouse` =
-      {host, port, secure, target_schema, federati: [{name, engine, conn, schema}]}.
+      {host, port, secure, target_schema, federated: [{name, engine, conn, schema}]}.
     `layout` (the download dialog): {package: project|folder, folder, layers}. A FOLDER
     for an existing project has no profile nor dbt_project.yml: it has an INTEGRATION.md
     that says what to copy and what to add to theirs. `schema`: the models' schema in
@@ -2900,8 +2900,8 @@ def build_dbt_project(
 
     if clickhouse is not None:
         files["profiles.yml"] = _clickhouse_profile(project, clickhouse)
-        if clickhouse.get("federati"):
-            files[where.macro("create_tabularia_sources")] = _clickhouse_sources_macro(clickhouse["federati"])
+        if clickhouse.get("federated"):
+            files[where.macro("create_tabularia_sources")] = _clickhouse_sources_macro(clickhouse["federated"])
     elif native:
         files["profiles.yml"] = _native_profile(project, native)
     else:
@@ -2958,7 +2958,7 @@ def build_dbt_project(
 
     preparation = where_they_go = ""
     if clickhouse is not None:
-        federated = clickhouse.get("federati") or []
+        federated = clickhouse.get("federated") or []
         intro = (
             f"Generated by Tabularia from the flow **{flow_name}**. Targets **dbt-clickhouse** on your\n"
             "ClickHouse: the source databases are read live through ClickHouse's PostgreSQL/MySQL table\n"
@@ -3140,7 +3140,7 @@ def _integration(flow_name, intro, provenance, flow_description, what, models, s
         copy.append(f"- `seeds{where.below}/` — {len(seeds)} seeds (with their column types)")
     if tests:
         copy.append(f"- `tests{where.below}/` — {len(tests)} singular tests from the data contract")
-    if clickhouse is not None and clickhouse.get("federati"):
+    if clickhouse is not None and clickhouse.get("federated"):
         copy.append(f"- `macros{where.below}/` — `create_tabularia_sources`, which creates the source databases in ClickHouse")
     settings_ = ("```yaml\n      custom_settings:\n" + "\n".join(_clickhouse_settings()) + "\n```\n")
     if clickhouse is not None:

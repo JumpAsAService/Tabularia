@@ -16,6 +16,7 @@ flow) are not supported yet.
 from __future__ import annotations
 
 import os
+import re
 import shutil
 import tempfile
 from typing import Any, Callable
@@ -481,6 +482,9 @@ def op_unpivot(rel, params, a, ctx):
 
 
 # ── Execute SQL (whole query in a SANDBOX) ────────────────────────────────────
+_NAMES_INPUT = re.compile(r"\b(?:self|input)\b", re.IGNORECASE)
+
+
 @_register("sql")
 def op_sql(rel, params, a, ctx):
     """Runs a DuckDB SQL query on the incoming frame (table `self`, alias `input`), and on
@@ -496,8 +500,13 @@ def op_sql(rel, params, a, ctx):
     if not query:
         raise EngineError("sql: the query is empty")
 
-    in_tmp = ctx.tempfile()
-    rel.write_parquet(in_tmp)  # materializes the input (streaming to disk)
+    # the input is copied in only when the query names it: a SQL script on the catalog
+    # reads its datasources as `tables`, the first of them being the input too, and
+    # copying it twice doubled the wait of a preview on a large datasource
+    in_tmp = None
+    if _NAMES_INPUT.search(query):
+        in_tmp = ctx.tempfile()
+        rel.write_parquet(in_tmp)  # materializes the input (streaming to disk)
     others = {}
     for name, ref in table_names(params).items():  # built as a join's right side, then copied in
         others[name] = ctx.tempfile()
@@ -511,8 +520,9 @@ def op_sql(rel, params, a, ctx):
     try:
         sbx.execute(f"SET temp_directory = '{os.path.join(work_dir, 'spill')}'")
         duckdb_budget.apply(sbx)
-        sbx.execute(f"CREATE TABLE self AS SELECT * FROM read_parquet('{in_tmp}')")
-        sbx.execute("CREATE VIEW input AS SELECT * FROM self")
+        if in_tmp is not None:
+            sbx.execute(f"CREATE TABLE self AS SELECT * FROM read_parquet('{in_tmp}')")
+            sbx.execute("CREATE VIEW input AS SELECT * FROM self")
         for name, path in others.items():  # names checked by table_names: plain lowercase
             sbx.execute(f"CREATE TABLE {name} AS SELECT * FROM read_parquet('{path}')")
         sbx.execute("SET enable_external_access=false")  # no files, network, attach or install

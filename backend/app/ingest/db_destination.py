@@ -3,26 +3,28 @@
 
 UNIFORM semantics on every dialect (the Output node's contract):
 1. CREATE TABLE IF NOT EXISTS with types mapped from the Arrow schema;
-2. mode="replace" → TRUNCATE (the table's definition stays, the data does not);
+2. mode="replace" → the table emptied (its definition stays, the data does not);
    mode="append"  → appended to what is there;
 3. streaming inserts in batches;
 4. any post-insert statements (separated by `;`), on the same connection.
 
 Columns are matched by NAME on every database: a column the existing table lacks
-stops the write, columns the flow lacks take their DEFAULT. On ClickHouse "replace"
-loads a staging copy of the target's own definition and swaps it in atomically, so
-engine, ORDER BY, partitions, TTL and defaults stay the customer's (materialized
-views on the target see inserts, not swaps: they do not see replaced data).
+stops the write, columns the flow lacks take their DEFAULT, and the values take the
+table's types as on any INSERT. On ClickHouse "replace" loads a staging copy of the
+target's own definition and swaps it in atomically, so engine, ORDER BY, partitions,
+TTL and defaults stay the customer's (materialized views on the target see inserts,
+not swaps: they do not see replaced data).
 
 A driver per dialect (the sources' own):
-- postgresql        → ADBC (adbc_ingest: bulk COPY, native Arrow)
+- postgresql        → ADBC (adbc_ingest: bulk COPY, native Arrow) into a temporary
+                      table of the session, then one INSERT … SELECT by column name
 - clickhouse        → clickhouse-connect (insert_arrow)
 - mysql / mariadb   → PyMySQL executemany in chunks
 - trino             → a parametric multi-row INSERT (slow by nature: Trino is not meant
                       for OLTP, but it works)
 - oracle            → python-oracledb (Thin) executemany: array DML in chunks
-- sqlserver         → mssql-python's Arrow bulk copy into a temporary table, then one
-                      transaction (the optional driver, as for reading)
+- sqlserver         → mssql-python executemany: column-wise parameter arrays in chunks
+                      (the optional driver, as for reading)
 
 Oracle and SQL Server have no CREATE TABLE IF NOT EXISTS (before Oracle 23ai): the table
 is looked up first and created only when missing. Names follow each one's rules, as when
@@ -31,6 +33,7 @@ names go in square brackets.
 """
 from __future__ import annotations
 
+import datetime as dt
 import logging
 import os
 import re
@@ -54,6 +57,7 @@ logger = logging.getLogger(__name__)
 MYSQL_CHUNK_ROWS = 5_000  # multi-row VALUES: under max_allowed_packet
 TRINO_CHUNK_ROWS = 500  # every INSERT is a Trino query: small chunks
 ORACLE_CHUNK_ROWS = 10_000  # one array DML round trip per chunk
+SQLSERVER_CHUNK_ROWS = 10_000  # the same, with the driver's column-wise parameter arrays
 
 
 class DbDestinationError(IngestError):
@@ -144,6 +148,7 @@ def _write_postgresql(
     conn: DbConnectionSpec, dest: DbDestinationSpec, qualified: str, parts: list[str],
     schema: pa.Schema, batches: Iterator[pa.RecordBatch],
 ) -> int:
+    import uuid
     from urllib.parse import quote as _urlquote
 
     from adbc_driver_postgresql import dbapi as adbc_pg
@@ -153,17 +158,26 @@ def _write_postgresql(
         f"{_urlquote(conn.resolve_password(), safe='')}@"
         f"{conn.host}:{conn.port_or_default}/{conn.database}"
     )
+    staging = f"tabularia_stg_{uuid.uuid4().hex[:12]}"  # lowercase: the same name quoted or not
+    columns = _quoted_columns(conn, schema)
     rows = [0]
     with adbc_pg.connect(uri) as c:
         with c.cursor() as cur:
+            # naive timestamps are UTC: a customer's timestamptz column reads them in the
+            # session's zone, which would otherwise be the server's
+            cur.execute("SET TIME ZONE 'UTC'")
             cur.execute(_create_table_sql(conn, qualified, schema))
             if dest.mode == "replace":
                 cur.execute(f"TRUNCATE TABLE {qualified}")
+            # Binary COPY wants each column in the table's exact type: the flow's BIGINT
+            # into a customer's INTEGER column, or a float into a NUMERIC, fails. So COPY
+            # fills a temporary table of this session (no one else sees it, it goes with
+            # the connection) and one INSERT … SELECT by column name moves the rows,
+            # converting them as any INSERT does.
             reader = pa.RecordBatchReader.from_batches(schema, _counted(batches, rows))
-            cur.adbc_ingest(
-                parts[-1], reader, mode="append",
-                db_schema_name=parts[0] if len(parts) > 1 else None,
-            )
+            cur.adbc_ingest(staging, reader, mode="create", temporary=True)
+            cur.execute(f"INSERT INTO {qualified} ({columns}) SELECT {columns} FROM {staging}")
+            cur.execute(f"DROP TABLE {staging}")
             for stmt in _post_statements(dest.post_sql):
                 cur.execute(stmt)
         c.commit()
@@ -195,7 +209,6 @@ def _write_clickhouse(
     q = _IDENT_QUOTE["clickhouse"]
     stg_parts = parts[:-1] + [f"{parts[-1]}__tab_stg_{uuid.uuid4().hex[:8]}"]
     stg_qualified = ".".join(f"{q}{p}{q}" for p in stg_parts)
-    stg_name = stg_parts[-1] if len(stg_parts) == 1 else ".".join(stg_parts)
     columns = _quoted_columns(conn, schema)
     rows = 0
     try:
@@ -220,8 +233,9 @@ def _write_clickhouse(
         else:
             client.command(_create_table_sql(conn, stg_qualified, schema))
         for batch in batches:
-            # insert_arrow names the columns: they land by name in the staging
-            client.insert_arrow(stg_name, pa.Table.from_batches([batch], schema=schema))
+            # insert_arrow names the columns: they land by name in the staging. It puts the
+            # table's name in the INSERT as it gets it: quoted, as everywhere else
+            client.insert_arrow(stg_qualified, pa.Table.from_batches([batch], schema=schema))
             rows += batch.num_rows
         if dest.mode == "replace":
             # ATOMIC swap: the destination goes from the old data to the new in one stroke
@@ -419,6 +433,60 @@ def _oracle_column_names(schema: pa.Schema, existing: list[str], qualified: str)
     return names
 
 
+_ORACLE_COLUMNS = "SELECT column_name FROM all_tab_columns WHERE owner = {} AND table_name = :t ORDER BY column_id"
+
+
+def _oracle_existing_columns(cur, parts: list[str]) -> list[str]:
+    """The columns of the table the name reaches, [] when there is none. A synonym counts
+    as Oracle resolves it (the schema's own, then a PUBLIC one for a name without schema):
+    the rows go to its table, whose columns are the ones to match. Without this, writing
+    through a synonym tried to create a table of that name (ORA-00955)."""
+    owner = ":o" if len(parts) > 1 else "SYS_CONTEXT('USERENV', 'CURRENT_SCHEMA')"
+    params = {"t": parts[-1], **({"o": parts[-2]} if len(parts) > 1 else {})}
+    cur.execute(_ORACLE_COLUMNS.format(owner), params)
+    found = [r[0] for r in cur.fetchall()]
+    if found:
+        return found
+    owners = owner if len(parts) > 1 else f"{owner}, 'PUBLIC'"
+    cur.execute(
+        f"SELECT table_owner, table_name FROM all_synonyms WHERE owner IN ({owners}) AND synonym_name = :t "
+        "ORDER BY CASE owner WHEN 'PUBLIC' THEN 1 ELSE 0 END",
+        params,
+    )
+    target = cur.fetchone()
+    if target is None:
+        return []
+    cur.execute(_ORACLE_COLUMNS.format(":o"), {"o": target[0], "t": target[1]})
+    return [r[0] for r in cur.fetchall()]
+
+
+def _oracle_post_statements(post_sql: str) -> list[str]:
+    """The post-SQL statements, split on `;`, except a PL/SQL block (`BEGIN … END;`,
+    `DECLARE …`, the usual way to call DBMS_STATS or refresh a materialized view), which
+    is ONE statement whose `;` are its own: it runs whole, without SQL*Plus's `/`."""
+    text = re.sub(r"\n\s*/\s*$", "", (post_sql or "").strip())
+    if re.match(r"(?:BEGIN|DECLARE)\b", text, re.IGNORECASE):
+        return [text]
+    return _post_statements(text)
+
+
+def _oracle_post_sql(c, cur, conn: DbConnectionSpec, dest: DbDestinationSpec, qualified: str, rows: int) -> None:
+    """Runs the post-SQL in the data's transaction. Oracle commits around every DDL
+    (CREATE INDEX, GRANT, DBMS_STATS…): after one the rows are in the table for good, so a
+    later failure must not read as «nothing was changed», which made people run an
+    append again and get its rows twice."""
+    committed = False
+    for stmt in _oracle_post_statements(dest.post_sql):
+        try:
+            cur.execute(stmt)
+        except Exception as e:
+            if (committed or not c.transaction_in_progress) and (rows or dest.mode == "replace"):
+                raise DbDestinationError(_post_sql_failed(rows, qualified, dest.mode, describe_db_error(
+                    e, conn.db_type, conn.host, conn.port_or_default))) from e
+            raise
+        committed = committed or not c.transaction_in_progress
+
+
 def _write_oracle(
     conn: DbConnectionSpec, dest: DbDestinationSpec, qualified: str, parts: list[str],
     schema: pa.Schema, batches: Iterator[pa.RecordBatch],
@@ -429,15 +497,7 @@ def _write_oracle(
     rows = 0
     try:
         cur = c.cursor()
-        if len(parts) > 1:
-            owner_sql, params = ":o", {"o": parts[-2], "t": parts[-1]}
-        else:
-            owner_sql, params = "SYS_CONTEXT('USERENV', 'CURRENT_SCHEMA')", {"t": parts[-1]}
-        cur.execute(
-            f"SELECT column_name FROM all_tab_columns WHERE owner = {owner_sql} AND table_name = :t ORDER BY column_id",
-            params,
-        )
-        existing = [r[0] for r in cur.fetchall()]
+        existing = _oracle_existing_columns(cur, parts)
         names = _oracle_column_names(schema, existing, qualified)
         columns = ", ".join(f'"{n}"' for n in names)
         if not existing:
@@ -449,18 +509,22 @@ def _write_oracle(
             # through the inserts would leave the table empty; DELETE rolls back with them
             cur.execute(f"DELETE FROM {qualified}")
         insert = f"INSERT INTO {qualified} ({columns}) VALUES ({', '.join(f':{i + 1}' for i in range(len(schema)))})"
-        bools = [i for i, f in enumerate(schema) if pa.types.is_boolean(f.type)]
+        # values the driver cannot bind as they come: a boolean goes as 1/0 (NUMBER(1):
+        # before 23ai Oracle has no boolean to bind), a time of day as text (Oracle has
+        # no such type, a VARCHAR2 column holds it)
+        convert = {i: int if pa.types.is_boolean(f.type) else dt.time.isoformat
+                   for i, f in enumerate(schema) if pa.types.is_boolean(f.type) or pa.types.is_time(f.type)}
         # a datetime binds as DATE by default, which drops the fractional seconds
         sizes = [oracledb.DB_TYPE_TIMESTAMP if pa.types.is_timestamp(f.type) else None for f in schema]
         for batch in batches:
             for chunk in _row_chunks(batch, schema, ORACLE_CHUNK_ROWS):
-                if bools:  # NUMBER(1): before 23ai Oracle has no boolean to bind
-                    chunk = [tuple(int(v) if i in bools and v is not None else v for i, v in enumerate(r)) for r in chunk]
+                if convert:
+                    chunk = [tuple(convert[i](v) if v is not None and i in convert else v for i, v in enumerate(r))
+                             for r in chunk]
                 cur.setinputsizes(*sizes)
                 cur.executemany(insert, chunk)
                 rows += len(chunk)
-        for stmt in _post_statements(dest.post_sql):
-            cur.execute(stmt)
+        _oracle_post_sql(c, cur, conn, dest, qualified, rows)
         c.commit()
     except Exception:
         try:
@@ -489,6 +553,8 @@ def _sqlserver_sql_type(t: pa.DataType) -> str:
         return "DATETIME2(6)"
     if pa.types.is_date(t):
         return "DATE"
+    if pa.types.is_binary(t) or pa.types.is_large_binary(t) or pa.types.is_fixed_size_binary(t):
+        return "VARBINARY(MAX)"  # bytes bound into NVARCHAR would turn into garbage text
     return "NVARCHAR(MAX)"
 
 
@@ -496,54 +562,44 @@ def _write_sqlserver(
     conn: DbConnectionSpec, dest: DbDestinationSpec, qualified: str, parts: list[str],
     schema: pa.Schema, batches: Iterator[pa.RecordBatch],
 ) -> int:
-    # The driver's bulk copy streams the Arrow batches straight into TDS (tens of
-    # thousands of rows a second faster than executemany), but on a connection of its
-    # own, outside our transaction. So the rows land in a global temporary table first
-    # (SQL Server drops it by itself if we die), and then ONE transaction of ours makes
-    # the table if missing, empties it for «replace», copies the rows over by column
-    # name and runs the post-SQL: all or nothing, as on the other databases.
-    import uuid
-
+    # One transaction on one connection: the table made if missing, emptied for
+    # «replace», the rows inserted by column name with array-bound executemany, the
+    # post-SQL, one commit. NOT the driver's Arrow bulk copy: it runs on a connection of
+    # its own, so it can only load a GLOBAL temporary table, which every login of the
+    # server can list, read and insert into while the copy runs (GRANT and DENY do not
+    # apply to temporary tables): the output would be open to all of them.
     for f in schema:
         if "]" in f.name:
             raise DbDestinationError(f"Invalid column name for sqlserver: {f.name!r}")
     columns = ", ".join(_tsql_ident(f.name) for f in schema)
     shape = ", ".join(f"{_tsql_ident(f.name)} {_sqlserver_sql_type(f.type)}" for f in schema)
-    staging = f"[##tabularia_{uuid.uuid4().hex}]"
+    insert = f"INSERT INTO {qualified} ({columns}) VALUES ({', '.join('?' * len(schema))})"
     c = _sqlserver_connect(conn)
+    rows = 0
     try:
-        c.autocommit = True
-        cur = c.cursor()
-        cur.execute(f"CREATE TABLE {staging} ({shape})")
-        reader = pa.RecordBatchReader.from_batches(schema, batches)
-        copied = cur.bulkcopy_arrow(staging, reader, timeout=0, keep_nulls=True)
-        rows = int(copied.get("rows_copied") or 0)
-
         c.autocommit = False
+        cur = c.cursor()
+        cur.execute("SELECT OBJECT_ID(?, 'U')", (qualified,))
+        if cur.fetchone()[0] is None:
+            cur.execute(f"CREATE TABLE {qualified} ({shape})")
+        if dest.mode == "replace":
+            # DELETE rather than TRUNCATE: it needs the DELETE permission only (TRUNCATE
+            # wants ALTER) and works on a table other tables reference
+            cur.execute(f"DELETE FROM {qualified}")
+        for batch in batches:
+            for chunk in _row_chunks(batch, schema, SQLSERVER_CHUNK_ROWS):
+                cur.executemany(insert, chunk)
+                rows += len(chunk)
+        for stmt in _post_statements(dest.post_sql):
+            cur.execute(stmt)
+        c.commit()  # T-SQL DDL is transactional: a table made here goes if anything fails
+    except Exception:
         try:
-            cur.execute("SELECT OBJECT_ID(?, 'U')", (qualified,))
-            if cur.fetchone()[0] is None:
-                cur.execute(f"CREATE TABLE {qualified} ({shape})")
-            if dest.mode == "replace":
-                # DELETE rather than TRUNCATE: it needs the DELETE permission only (TRUNCATE
-                # wants ALTER) and works on a table other tables reference
-                cur.execute(f"DELETE FROM {qualified}")
-            cur.execute(f"INSERT INTO {qualified} ({columns}) SELECT {columns} FROM {staging}")
-            for stmt in _post_statements(dest.post_sql):
-                cur.execute(stmt)
-            c.commit()  # T-SQL DDL is transactional: a table made here goes if anything fails
-        except Exception:
-            try:
-                c.rollback()
-            except Exception:
-                pass
-            raise
-    finally:
-        try:
-            c.autocommit = True
-            c.cursor().execute(f"DROP TABLE IF EXISTS {staging}")
+            c.rollback()
         except Exception:
             pass
+        raise
+    finally:
         c.close()
     return rows
 
@@ -563,6 +619,29 @@ def _counted(batches: Iterator[pa.RecordBatch], counter: list[int]) -> Iterator[
     for b in batches:
         counter[0] += b.num_rows
         yield b
+
+
+def _plain_schema(schema: pa.Schema) -> pa.Schema:
+    """The output's schema in the types every writer takes. A timestamp with a zone
+    becomes the naive UTC instant, the project's standard (the ClickHouse engine with the
+    s3 transport writes them with the UTC zone; a zone other than UTC reached Oracle,
+    MySQL and SQL Server as its wall clock): the integer underneath does not change. A
+    dictionary column (a Polars Categorical) becomes its values; a column of nulls only,
+    text."""
+    fields = []
+    for f in schema:
+        t = f.type.value_type if pa.types.is_dictionary(f.type) else f.type
+        if pa.types.is_timestamp(t) and t.tz:
+            t = pa.timestamp(t.unit)
+        elif pa.types.is_null(t):
+            t = pa.string()
+        fields.append(f if t == f.type else pa.field(f.name, t, f.nullable))
+    return pa.schema(fields)
+
+
+def _plain_batches(batches: Iterator[pa.RecordBatch], schema: pa.Schema) -> Iterator[pa.RecordBatch]:
+    for b in batches:
+        yield b if b.schema.equals(schema) else b.cast(schema)
 
 
 def _row_chunks(batch: pa.RecordBatch, schema: pa.Schema, size: int) -> Iterator[list[tuple]]:
@@ -602,13 +681,14 @@ def write_parquet_to_db(
     try:
         storage.download_file(bucket, key, tmp)
         pf = pq.ParquetFile(tmp)
-        schema = pf.schema_arrow
+        schema = _plain_schema(pf.schema_arrow)
         logger.info(
             "db-dest %s@%s ← %s → %s (%s, %d columns)",
             conn.db_type, conn.host, key, qualified, dest.mode, len(schema),
         )
         try:
-            rows = writer(conn, dest, qualified, parts, schema, pf.iter_batches(batch_size=BATCH_ROWS))
+            batches = _plain_batches(pf.iter_batches(batch_size=BATCH_ROWS), schema)
+            rows = writer(conn, dest, qualified, parts, schema, batches)
         except IngestError:
             raise
         except Exception as e:  # the driver's error → the database server's message

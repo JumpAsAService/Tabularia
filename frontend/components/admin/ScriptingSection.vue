@@ -591,7 +591,7 @@ const basePackages = computed(() => (form.value.language === 'python' ? 'polars,
           <input v-model="form.description" type="text" maxlength="4000" :disabled="!editable || saving" />
         </label>
         <div class="field largo">
-          <label for="ambiente-pacchetti">{{ $t('scripting.packages') }}</label>
+          <label for="environment-packages">{{ $t('scripting.packages') }}</label>
           <div v-if="editable" class="package-search">
             <div class="combo">
               <Search :size="13" class="lens" aria-hidden="true" />
@@ -600,7 +600,7 @@ const basePackages = computed(() => (form.value.language === 'python' ? 'polars,
                 type="search"
                 role="combobox"
                 aria-autocomplete="list"
-                aria-controls="pacchetti-trovati"
+                aria-controls="packages-found"
                 :aria-expanded="pkgOpen"
                 :aria-activedescendant="pkgOpen && pkgActive >= 0 ? `pacchetto-${pkgActive}` : undefined"
                 :aria-label="form.language === 'python' ? $t('scripting.searchPyPI') : $t('scripting.searchCRAN')"
@@ -613,7 +613,7 @@ const basePackages = computed(() => (form.value.language === 'python' ? 'polars,
                 @blur="pkgOpen = false"
               />
               <LoaderCircle v-if="pkgSearching" :size="13" class="spin waiting" />
-              <ul v-if="pkgOpen" id="pacchetti-trovati" role="listbox" class="found">
+              <ul v-if="pkgOpen" id="packages-found" role="listbox" class="found">
                 <li
                   v-for="(h, i) in pkgHits"
                   :id="`pacchetto-${i}`"
@@ -643,7 +643,7 @@ const basePackages = computed(() => (form.value.language === 'python' ? 'polars,
             {{ $t('scripting.noWheel', { name: pkgChosen, version: chosenVersion.version, python: form.language_version }) }}
           </small>
           <textarea
-            id="ambiente-pacchetti"
+            id="environment-packages"
             v-model="form.packages"
             class="packages"
             rows="7"
@@ -718,7 +718,7 @@ const basePackages = computed(() => (form.value.language === 'python' ? 'polars,
               <td class="muted small">{{ fmt.ago(v.updated_at) }}</td>
               <td v-if="editable" class="row-actions">
                 <button type="button" class="mini" @click="editVariable(v.name)">{{ $t('scripting.change') }}</button>
-                <button type="button" class="mini icona" :aria-label="$t('scripting.delete')" @click="deleteVariable(v.name)"><Trash2 :size="13" /></button>
+                <button type="button" class="mini icon-only" :aria-label="$t('scripting.delete')" @click="deleteVariable(v.name)"><Trash2 :size="13" /></button>
               </td>
             </tr>
           </tbody>
@@ -801,7 +801,7 @@ const basePackages = computed(() => (form.value.language === 'python' ? 'polars,
 .heading { display: flex; align-items: center; gap: 10px; }
 .heading h4 { flex: 1; }
 button.mini { padding: 2px 10px; min-height: 26px; font-size: 12px; display: inline-flex; align-items: center; gap: 5px; }
-button.mini.icona { padding: 2px 6px; }
+button.mini.icon-only { padding: 2px 6px; }
 button.danger-zone { color: var(--danger); }
 
 .fields { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px 14px; }

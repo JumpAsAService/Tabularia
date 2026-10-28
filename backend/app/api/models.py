@@ -12,7 +12,7 @@ class TransformOperation(BaseModel):
 
 
 class TransformDataRequest(BaseModel):
-    bucket: str = Field(..., description="Nome del bucket S3")
+    bucket: str = Field(..., description="The S3 bucket's name")
     input_key: str = Field(..., description="Key of the input file")
     output_key: str = Field(..., description="Key of the output file")
     operations: list[TransformOperation] = Field(..., description="The operations to apply")
@@ -35,7 +35,7 @@ class TransformDataRequest(BaseModel):
     email: Optional[dict[str, Any]] = Field(
         default=None, description="Sending the output as an email attachment"
     )
-    engine: Optional[str] = Field(default=None, description="Engine da usare (es. polars); None = default")
+    engine: Optional[str] = Field(default=None, description="The engine to use (e.g. polars); None = the default")
     # the data contract of the datasource the output will be published to: evaluated on
     # the parquet just written, the report comes back with the task's result
     contract: Optional[dict[str, Any]] = Field(default=None, description="The data contract to evaluate on the output")
@@ -59,13 +59,13 @@ class TaskStatusResponse(BaseModel):
 
 
 class PreviewRequest(BaseModel):
-    bucket: str = Field(..., description="Nome del bucket S3")
-    input_key: str = Field(..., description="Chiave del parquet di input")
+    bucket: str = Field(..., description="The S3 bucket's name")
+    input_key: str = Field(..., description="Key of the input parquet")
     operations: list[TransformOperation] = Field(
-        default_factory=list, description="Flow da applicare (IR dichiarativa)"
+        default_factory=list, description="The flow to apply (declarative IR)"
     )
     limit: int = Field(default=100, ge=1, le=1000, description="The most rows in the sample")
-    engine: Optional[str] = Field(default=None, description="Engine da usare (es. polars); None = default")
+    engine: Optional[str] = Field(default=None, description="The engine to use (e.g. polars); None = the default")
     no_cache: bool = Field(default=False, description="Neither write nor read the step cache (the Viewer's exploratory queries)")
     # The preview's slot: in every slot only the LAST request counts — a new one knocks
     # down the previous (see api/preview_slots.py). Absent = as before.
@@ -99,8 +99,8 @@ class PreviewRequest(BaseModel):
 class ExportRequest(BaseModel):
     """Downloading a chain's result directly (partial too, up to an intermediate node):
     csv streamed, xlsx with the format's row cap."""
-    bucket: str = Field(..., description="Nome del bucket S3")
-    input_key: str = Field(..., description="Chiave del parquet di input")
+    bucket: str = Field(..., description="The S3 bucket's name")
+    input_key: str = Field(..., description="Key of the input parquet")
     operations: list[TransformOperation] = Field(
         default_factory=list, description="The chain up to the node to export"
     )

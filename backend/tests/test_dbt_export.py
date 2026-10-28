@@ -430,7 +430,7 @@ def test_the_clickhouse_project_has_profile_macro_and_readme():
     sources = ch.sources([{"name": "db_1_vendite", "database": None, "schema": "vendite", "connection_id": 1,
                             "tables": [{"name": "ordini", "description": "", "columns": []}]}])
     files = _project(sources=sources, attachments=None, clickhouse={"host": "ch.local", "port": 8443, "secure": True, "target_schema": "dbt_tabularia",
-                                                                      "federati": list(ch.federated.values())})
+                                                                      "federated": list(ch.federated.values())})
     prof = files["profiles.yml"]
     assert "type: clickhouse" in prof and "env_var('CLICKHOUSE_HOST', 'ch.local')" in prof and "env_var('CLICKHOUSE_PORT', '8443')" in prof
     assert "env_var('CLICKHOUSE_PASSWORD')" in prof and "join_use_nulls: 1" in prof and "attach" not in prof
@@ -549,7 +549,7 @@ def test_the_clickhouse_folder_carries_the_macro_and_says_join_use_nulls():
                            {"name": "loro", "schema": "crm", "connection_id": 1, "declared": True, "tables": [{"name": "contatti"}]}])
     assert set(ch.federated) == {"tab_src_1_vendite"}                     # the declared one makes no federated database
     files = _project(sources=sources, attachments=None, layout={"package": "folder", "folder": "f"},
-                      clickhouse={"host": "ch.local", "port": 8443, "secure": True, "federati": list(ch.federated.values())})
+                      clickhouse={"host": "ch.local", "port": 8443, "secure": True, "federated": list(ch.federated.values())})
     assert "macros/f/create_tabularia_sources.sql" in files and "profiles.yml" not in files
     guide = files["INTEGRATION.md"]
     assert "join_use_nulls: 1" in guide and "dbt run-operation create_tabularia_sources --log-level-file none" in guide
@@ -1719,7 +1719,7 @@ def test_an_error_of_the_exporter_on_a_complete_node_is_not_blamed_on_the_flow(o
         raise TypeError("a bug of the exporter")
     monkeypatch.setattr(d, "_column_list", failing)
     monkeypatch.setattr(d, "_predicate", failing)
-    monkeypatch.setattr(d, "_aggregato", failing)
+    monkeypatch.setattr(d, "_aggregate", failing)
     monkeypatch.setattr(d, "_expression", failing)
     with pytest.raises(HTTPException) as e:
         _zip(_export_request(models=[{"name": "uno", "source": {"key": "k"}, "operations": [op]}]))
@@ -2052,7 +2052,7 @@ def _native_cast_in_duckdb(src: str, dt: str, dialect: str) -> str:
     DuckDB form, the one the probe reads."""
     info: dict = {}
     sql = _native_cast(src, dt, dialect, info)
-    return d.put_back_texts(sql, {"segnaposti": info.get("per_sonda")})
+    return d.put_back_texts(sql, {"placeholders": info.get("for_probe")})
 
 
 def _equal_to_values(got: list, exp: list, values: list, ctx: str):
@@ -2878,7 +2878,7 @@ def _export_wide(models: list):
 
 
 def test_the_clickhouse_profiles_raise_max_query_size_and_the_check_uses_the_same_limit():
-    for profile in (_project(attachments=None, clickhouse={"host": "h", "federati": []})["profiles.yml"],
+    for profile in (_project(attachments=None, clickhouse={"host": "h", "federated": []})["profiles.yml"],
                     d._native_profile("p", {**_NATIVE_CH, "target_schema": "s"})):
         assert _profile_settings(profile)["max_query_size"] == str(d.MAX_QUERY_SIZE)
     assert d.MAX_QUERY_SIZE > 262144

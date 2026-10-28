@@ -200,10 +200,16 @@ def save(
     """Creates or replaces the contract (document validated already). A changed document is
     a new version, and the state goes back to «to check»: the report that was there spoke
     of another contract. `notify` = (addresses, SMTP connection) checked already; None =
-    as before. Does NOT commit."""
+    as before. Does NOT commit.
+
+    The datasource's row stays locked until the commit, and the contract is read again
+    under it: two saves at once take the next versions in turn, instead of the same one
+    and a 500 on the second."""
     now = datetime.now(timezone.utc)
     text = json.dumps(document, ensure_ascii=False, sort_keys=True)
-    c = get(session, ds.id)
+    session.exec(select(Datasource.id).where(Datasource.id == ds.id).with_for_update())
+    c = session.exec(select(DataContract).where(DataContract.datasource_id == ds.id)
+                     .execution_options(populate_existing=True)).first()
     if c is None:
         last = session.exec(
             select(DataContractVersion.version)

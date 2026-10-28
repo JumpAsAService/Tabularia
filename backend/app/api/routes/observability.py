@@ -60,7 +60,7 @@ def warehouse(minutes: int = Query(60, ge=5, le=1440), limit: int = Query(20, ge
             parameters={"m": minutes, "n": limit},
         ).result_rows
     except Exception as e:
-        logger.warning("warehouse query_log non leggibile: %s", e)
+        logger.warning("warehouse query_log cannot be read: %s", e)
         return {"enabled": True, "queries": [], "error": str(e)[:200]}
     return {
         "enabled": True,

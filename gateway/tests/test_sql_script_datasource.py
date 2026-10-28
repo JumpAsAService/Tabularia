@@ -115,10 +115,15 @@ def test_refresh_now_writes_the_whole_result_and_the_datasource_keeps_its_id(app
     assert (ds.project_id, ds.kind, ds.rows, ds.description) == (report, "flow", 7, "Written by the SQL script «Totali»")
     assert runs[0]["datasource_id"] == ds.id
     assert boss.get(f"/sql-scripts/{sid}").json()["datasource"]["id"] == ds.id
-    # who may not read the datasource's folder does not see it from the script
+    # who may not read the datasource's folder does not see it from the script, nor from its writes
     assert other.get(f"/sql-scripts/{sid}").json()["datasource"] is None
+    assert [(x["datasource_id"], x["rows"]) for x in other.get(f"/sql-scripts/{sid}/runs").json()] == [(None, None)]
 
-    # the next write goes to the datasource's own folder and keeps its id
+    # the next write goes to the datasource's own folder and keeps its id, and the
+    # description someone wrote on the datasource since (people and the AI read it)
+    ds.description = "Gli ordini per cliente, aggiornati ogni notte"
+    session.add(ds)
+    session.commit()
     r = boss.post(f"/sql-scripts/{sid}/refresh", headers=CSRF)
     assert r.status_code == 202
     assert fake_engine.transforms[-1]["output_key"].startswith(f"datasets/{ds.id}/")
@@ -127,6 +132,7 @@ def test_refresh_now_writes_the_whole_result_and_the_datasource_keeps_its_id(app
     session.expire_all()
     assert session.exec(select(Datasource).where(Datasource.name == "Totali ordini")).one().id == ds.id
     assert session.get(Datasource, ds.id).rows == 9
+    assert session.get(Datasource, ds.id).description == "Gli ordini per cliente, aggiornati ogni notte"
 
     written = session.exec(select(AuditLog).where(AuditLog.action == audit.SQL_SCRIPT_PUBLISH)).all()
     detail = json.loads(written[0].detail)
@@ -207,6 +213,31 @@ async def test_the_schedule_runs_with_its_authors_rights_and_records_what_stops_
     assert session.get(SqlScript, sid).run_schedule == "0 6 * * *"  # it fires again: the rights may come back
 
 
+@pytest.mark.anyio
+async def test_a_scheduled_write_the_engine_does_not_take_leaves_its_reason(app, session, fake_engine, monkeypatch):
+    """The engine unreachable: the slot is spent, and the script's writes say why, as for
+    a write the author's rights no longer allow (the server's log alone said it before)."""
+    import httpx
+
+    sales, report, _, _, _, _ = _world(session)
+    boss, _, by = _people(app, session, sales, report)
+    sid = _script(boss, sales, report)
+    assert boss.put(f"/sql-scripts/{sid}/schedule", json={"cron": "0 6 * * *"}, headers=CSRF).status_code == 200
+
+    def down(request):
+        raise httpx.ConnectError("connection refused", request=request)
+    monkeypatch.setattr("app.core.engine_client._client",
+                        httpx.AsyncClient(transport=httpx.MockTransport(down), base_url="http://engine"))
+    script = session.get(SqlScript, sid)
+    script.next_run_at = datetime.now(timezone.utc).replace(tzinfo=None) - timedelta(minutes=1)
+    session.commit()
+    await scheduler._fire_sql_script(session, script, datetime.now(timezone.utc))
+    run = session.exec(select(Run).where(Run.sql_script_id == sid)).one()
+    assert (run.status, run.trigger_type, run.launched_by) == ("FAILURE", "schedule", by["capo@x.local"])
+    assert run.error == "Scheduled write not started: the engine could not be reached (ConnectError)"
+    assert session.get(SqlScript, sid).next_run_at > datetime.now(timezone.utc).replace(tzinfo=None)
+
+
 def test_someone_elses_widening_change_switches_the_schedule_off(app, session, fake_engine):
     sales, report, _, _, _, _ = _world(session)
     boss, other, by = _people(app, session, sales, report)
@@ -248,6 +279,25 @@ def test_only_a_script_that_writes_a_datasource_goes_in_a_group(app, session, fa
     assert r.json()["cells"] == [[{"name": "Totali", "project_id": sales, "missing": False, "hidden": False}]]
     # in a group, the script is not deleted
     r = boss.delete(f"/sql-scripts/{sid}", headers=CSRF)
+    assert r.status_code == 409 and r.json()["detail"]["groups"] == ["notte"]
+    # …nor does it stop writing its datasource, which would stop the group at that cell
+    # (a change of the datasource's name or folder is fine)
+    r = boss.patch(f"/sql-scripts/{sid}", headers=CSRF, json={"content": {"sql": 'SELECT * FROM "Ordini"', "output": None}})
+    assert r.status_code == 409 and r.json()["detail"]["groups"] == ["notte"]
+    assert "write the script's datasource" in r.json()["detail"]["message"]
+    v1 = boss.get(f"/sql-scripts/{sid}").json()["current_version"]
+    assert boss.patch(f"/sql-scripts/{sid}", headers=CSRF, json={"content": {
+        "output": {"name": "Totali bis", "project_id": report}}}).status_code == 200
+    # restoring a version without a datasource is the same change
+    from app.services import sql_scripts as sql_service
+
+    script = session.get(SqlScript, sid)
+    sql_service.add_version(session, script, {"sql": "SELECT 1", "engine": None, "connection_id": None, "output": None},
+                            "edited", session.get(User, by["capo@x.local"]))
+    session.commit()
+    nothing = session.get(SqlScript, sid).current_version
+    assert boss.post(f"/sql-scripts/{sid}/versions/{v1}/restore", headers=CSRF).status_code == 200
+    r = boss.post(f"/sql-scripts/{sid}/versions/{nothing}/restore", headers=CSRF)
     assert r.status_code == 409 and r.json()["detail"]["groups"] == ["notte"]
 
 
@@ -296,3 +346,40 @@ async def test_a_sql_cell_writes_in_its_step_and_its_failure_stops_the_group(ses
     else:
         assert head.status == "SUCCESS" and child.status == "SUCCESS" and refreshed == [erp]
         assert published is not None and published.rows == 3
+
+
+@pytest.mark.anyio
+async def test_a_sql_cell_follows_a_write_already_going_to_its_end(session, db_engine, fake_engine, monkeypatch):
+    """A cell that finds the script writing already waits for that write: its state comes
+    from the engine, not only from the row (the scheduler brings a run up to date once a
+    minute: the group waited a minute more, or for ever without the scheduler)."""
+    import asyncio
+
+    from app.services import sql_script_runs, sql_scripts
+
+    _group_world(session, db_engine, monkeypatch)
+    sales, report, _, _, _, _ = _world(session)
+    admin = make_user(session, email="admin@x.local", is_superuser=True)
+    script = SqlScript(name="Totali", project_id=sales, current_version=0)
+    session.add(script)
+    session.flush()
+    sql_scripts.add_version(session, script, {"sql": 'SELECT * FROM "Ordini"', "engine": None, "connection_id": None,
+                                              "output": {"name": "Totali ordini", "project_id": report}}, "created", admin)
+    session.commit()
+    going = await sql_script_runs.launch(session, admin, script, "manual")  # someone's «Refresh now»
+    fake_engine.default_state = {"status": "SUCCESS", "result": {"rows_written": 4, "columns": []}, "error": None}
+    group = FlowGroup(name="notte", project_id=sales, definition=json.dumps({"steps": [[{"kind": "sql", "id": script.id}]]}))
+    session.add(group)
+    session.commit()
+    run = Run(kind="orchestration", flow_group_id=group.id, task_id="", status="STARTED", launched_by=admin.id,
+              trigger_type="manual", claimed_by=orch.INSTANCE, heartbeat_at=orch._now(), input_key="",
+              output_bucket="", output_key="")
+    session.add(run)
+    session.commit()
+    run_id, going_id = run.id, going.id
+    await asyncio.wait_for(orch.run_it(run_id), timeout=10)
+    with Session(db_engine) as s:
+        head = s.get(Run, run_id)
+        cells = json.loads(head.group_cells)
+        assert head.status == "SUCCESS" and s.get(Run, going_id).status == "SUCCESS"
+        assert cells[0][0]["run_id"] == going_id and len(fake_engine.transforms) == 1

@@ -809,11 +809,11 @@ const usableConnections = ref<ConnectionInfo[]>([])
 // the rest of the row does the same as the name, except when it lands on another
 // control or closes a text selection.
 const router = useRouter()
-function apribile(r: Row): boolean {
+function openable(r: Row): boolean {
   return r.kind === 'folder' || r.kind === 'connection' || !!r.to
 }
 function rowClick(e: MouseEvent, r: Row) {
-  if (!apribile(r)) return
+  if (!openable(r)) return
   // the actions' column does not open: between one button and the next a missed click must
   // not take one away from the page
   if ((e.target as HTMLElement | null)?.closest('button, a, input, select, textarea, label, [role="listbox"], [role="option"], .racts')) return
@@ -1091,7 +1091,7 @@ watch(currentId, () => { q.value = ''; kindFilter.value = null; settingsOpen.val
       <tbody>
         <template v-for="r in visibleRows" :key="`${r.kind}-${r.id}`">
           <tr
-            :class="{ folderrow: r.kind === 'folder', apribile: apribile(r), blocked: !!r.locked }"
+            :class="{ folderrow: r.kind === 'folder', openable: openable(r), blocked: !!r.locked }"
             :title="r.locked || undefined"
             :aria-disabled="r.locked ? 'true' : undefined"
             @click="rowClick($event, r)"
@@ -1431,17 +1431,17 @@ table.rows tr:hover td { background: var(--row-hover); }
 table.rows tr > td:first-child { border-radius: 8px 0 0 8px; }
 table.rows tr > td:last-child { border-radius: 0 8px 8px 0; }
 /* the row that opens something: taken whole, it answers the click and the focus */
-table.rows tr.apribile { cursor: pointer; }
+table.rows tr.openable { cursor: pointer; }
 table.rows tr.blocked { opacity: 0.45; cursor: not-allowed; }
 table.rows tr.blocked:hover td { background: none; }
 .lock { margin-left: 6px; vertical-align: -1px; color: var(--muted); }
-table.rows tr.apribile:hover td,
-table.rows tr.apribile:has(.asname:focus-visible) td { background: var(--tint-accent); }
-table.rows tr.apribile:hover .asname,
-table.rows tr.apribile:has(.asname:focus-visible) .asname { color: var(--accent); }
-table.rows tr.apribile:active td { background: color-mix(in srgb, var(--accent) 18%, transparent); }
+table.rows tr.openable:hover td,
+table.rows tr.openable:has(.asname:focus-visible) td { background: var(--tint-accent); }
+table.rows tr.openable:hover .asname,
+table.rows tr.openable:has(.asname:focus-visible) .asname { color: var(--accent); }
+table.rows tr.openable:active td { background: color-mix(in srgb, var(--accent) 18%, transparent); }
 /* the controls inside the row keep their pointer */
-table.rows tr.apribile .racts { cursor: default; }
+table.rows tr.openable .racts { cursor: default; }
 tr.folderrow .kicon { color: var(--accent-2); }
 .kicon { color: var(--muted); flex-shrink: 0; }
 .rname { width: 55%; }

@@ -148,12 +148,19 @@ export function useSqlScripts() {
   }
 }
 
-/** How a datasource is written in the SQL: its name in double quotes, with the folder's
- * in front when another readable datasource has the same name. */
-export function sqlName(item: SqlCatalogItem, all: SqlCatalogItem[]): string {
-  const q = (s: string) => `"${s.replace(/"/g, '""')}"`
+/** How a datasource is written in the SQL: its name quoted, with the folder's in front
+ * when another readable datasource has the same name. `dialect`: as sqlIdent's. */
+export function sqlName(item: SqlCatalogItem, all: SqlCatalogItem[], dialect: string | null = null): string {
+  const q = (s: string) => sqlIdent(s, dialect, true)
   const homonyms = all.filter((d) => d.name.toLowerCase() === item.name.toLowerCase()).length > 1
   return homonyms ? `${q(item.folder)}.${q(item.name)}` : q(item.name)
+}
+
+/** The dialect of a SQL on the catalog, for sqlIdent: BigQuery quotes names in backticks
+ * (in double quotes it reads a text, `"importo"` the word itself); the other engines
+ * take double quotes. */
+export function catalogDialect(engine: string | null): string | null {
+  return engine === 'bigquery' ? 'bigquery' : null
 }
 
 // How each database quotes a name, and which names need no quotes: Postgres and Trino
@@ -166,12 +173,15 @@ const DIALECT_QUOTES: Record<string, { open: string; close: string; bare: RegExp
   mariadb: { open: '`', close: '`', bare: /^[A-Za-z_][A-Za-z0-9_]*$/ },
   clickhouse: { open: '`', close: '`', bare: /^[A-Za-z_][A-Za-z0-9_]*$/ },
   sqlserver: { open: '[', close: ']', bare: /^[A-Za-z_][A-Za-z0-9_]*$/ },
+  // the catalog on BigQuery (catalogDialect)
+  bigquery: { open: '`', close: '`', bare: /^[A-Za-z_][A-Za-z0-9_]*$/ },
 }
 
-/** A column's name as a SQL of `dbType` writes it (null = the catalog: the engines' SQL). */
-export function sqlIdent(name: string, dbType: string | null): string {
+/** A column's name as a SQL of `dbType` writes it (null = the catalog: the engines' SQL);
+ * `always`: quoted even when it need not be. */
+export function sqlIdent(name: string, dbType: string | null, always = false): string {
   const d = (dbType && DIALECT_QUOTES[dbType]) || { open: '"', close: '"', bare: /^[A-Za-z_][A-Za-z0-9_]*$/ }
-  return d.bare.test(name) ? name : `${d.open}${name.replaceAll(d.close, d.close + d.close)}${d.close}`
+  return !always && d.bare.test(name) ? name : `${d.open}${name.replaceAll(d.close, d.close + d.close)}${d.close}`
 }
 
 /** A table as the connection lists it, written for its SQL. Oracle and SQL Server list

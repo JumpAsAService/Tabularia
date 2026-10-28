@@ -357,3 +357,88 @@ def test_the_whole_result_exports_with_the_runs_checks(app, session, fake_engine
     assert [(e.outcome, json.loads(e.detail)["format"]) for e in exported] == [("success", "xlsx"), ("success", "csv")]
     assert json.loads(exported[0].detail)["datasources"] == [{"id": c, "name": "Clienti"}] and exported[0].target_id == sid
     assert json.loads(exported[1].detail)["connection"] == {"id": pg, "name": "Gestionale"}
+
+
+# ── found by the bug hunt of 2026-10-28 ───────────────────────────────────────
+def test_an_engine_refusal_names_a_datasource_with_a_backslash(session):
+    """The name is put back as text, not read as a regular expression's replacement."""
+    from app.models import Datasource
+
+    ds = Datasource(id=5, name="Vendite\\2024", project_id=1, bucket="data-prep", key="datasets/5/v.parquet")
+    resolved = sql_scripts.Resolved(query="", tables={"ds_5": ds})
+    assert sql_scripts._engine_message("sql: column x not found in ds_5", resolved) == "column x not found in Vendite\\2024"
+
+
+def test_two_folders_of_the_same_name_holding_the_same_name_say_what_to_do(session):
+    """The folder's name tells two datasources apart only when the folders' names differ:
+    the error says so, instead of suggesting the same name again."""
+    sales, buying = make_project(session, name="Vendite"), make_project(session, name="Acquisti")
+    for parent in (sales, buying):
+        data = make_project(session, name="Dati", parent_id=parent.id)
+        make_datasource(session, name="Ordini", project_id=data.id, key=f"datasets/{data.id}/o.parquet")
+    me = make_user(session, email="ana@x.local")
+    for p in (sales, buying):
+        make_permission(session, user_id=me.id, project_id=p.id)
+    with pytest.raises(HTTPException) as e:
+        sql_scripts.resolve(session, me, 'SELECT * FROM "Dati"."Ordini"', "duckdb")
+    assert e.value.detail == ("«Dati.Ordini» is in more than one folder called «Dati» (Acquisti / Dati, Vendite / Dati): "
+                              "rename one of the folders, or one of the datasources")
+
+
+def _statements(db_engine, table):
+    """The SELECTs on `table` the block runs, counted."""
+    from sqlalchemy import event
+
+    seen = []
+
+    def count(conn, cursor, statement, *args):
+        if statement.lstrip().upper().startswith("SELECT") and f"FROM {table}" in statement:
+            seen.append(statement)
+
+    event.listen(db_engine, "before_cursor_execute", count)
+    return seen, lambda: event.remove(db_engine, "before_cursor_execute", count)
+
+
+def test_the_catalog_and_the_lists_read_in_a_few_queries(app, session, db_engine):
+    """Every folder's path was read with a query of every folder, every script's content
+    with a query of its own: a catalog of 300 folders made 300 reads of the whole tree."""
+    root = make_project(session, name="Dati").id  # an id: the requests leave the objects detached
+    for i in range(12):
+        folder = make_project(session, name=f"Area {i}", parent_id=root)
+        make_datasource(session, name=f"Tabella {i}", project_id=folder.id, key=f"datasets/{i}/t.parquet")
+    me = _sign_in(app, session, "capo@x.local", is_superuser=True)
+    for i in range(8):
+        assert me.post(f"/projects/{root}/sql-scripts", headers=CSRF,
+                       json={"name": f"Q{i}", "content": {"sql": f"SELECT {i}"}}).status_code == 201
+
+    folders, stop = _statements(db_engine, "projects")
+    try:
+        items = me.get("/sql-scripts/catalog").json()
+    finally:
+        stop()
+    assert len(items) == 12 and items[0]["path"] == "Dati / Area 0"
+    assert len(folders) <= 3, len(folders)
+
+    versions, stop = _statements(db_engine, "sql_script_versions")
+    try:
+        listed = me.get("/sql-scripts").json()
+        in_folder = me.get(f"/projects/{root}/sql-scripts").json()
+    finally:
+        stop()
+    assert [s["name"] for s in listed] == [f"Q{i}" for i in range(8)] == [s["name"] for s in in_folder]
+    assert len(versions) == 2, len(versions)
+
+
+def test_a_change_of_some_of_the_content_keeps_the_rest(app, session, fake_engine):
+    """A PATCH with only the SQL (an API's caller) does not drop the script's datasource,
+    engine or connection."""
+    sales, _, _, _ = _world(session)
+    me = _sign_in(app, session, "capo@x.local", is_superuser=True)
+    content = {"sql": 'SELECT * FROM "Clienti"', "engine": "duckdb", "output": {"name": "Copia", "project_id": sales}}
+    sid = me.post(f"/projects/{sales}/sql-scripts", json={"name": "Q", "content": content}, headers=CSRF).json()["id"]
+    r = me.patch(f"/sql-scripts/{sid}", json={"content": {"sql": 'SELECT id FROM "Clienti"'}}, headers=CSRF)
+    assert r.status_code == 200
+    assert r.json()["content"] == {**content, "sql": 'SELECT id FROM "Clienti"', "connection_id": None}
+    # what is named null goes
+    r = me.patch(f"/sql-scripts/{sid}", json={"content": {"output": None}}, headers=CSRF)
+    assert r.json()["content"]["output"] is None and r.json()["content"]["engine"] == "duckdb"

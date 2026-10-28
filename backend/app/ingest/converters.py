@@ -39,7 +39,7 @@ def _sink(lf: pl.LazyFrame, dst: str) -> None:
     try:
         lf.sink_parquet(dst)
     except Exception as e:  # noqa: BLE001
-        logger.warning("sink_parquet streaming fallito (%s), fallback in-memory", e)
+        logger.warning("sink_parquet streaming failed (%s), in-memory fallback", e)
         lf.collect(engine='streaming').write_parquet(dst)
 
 

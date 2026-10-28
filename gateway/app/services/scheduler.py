@@ -24,6 +24,7 @@ import asyncio
 import logging
 from datetime import datetime, timezone
 
+import httpx
 from sqlalchemy import update
 from sqlmodel import Session, select
 
@@ -99,7 +100,7 @@ def _take_ds_slot(session: Session, ds: Datasource, now: datetime, seen: datetim
 
 
 def _disable_ds(session: Session, ds: Datasource, reason: str) -> None:
-    logger.warning("scheduler: refresh datasource %s disabilitato (%s)", ds.id, reason)
+    logger.warning("scheduler: refresh of datasource %s turned off (%s)", ds.id, reason)
     ds.refresh_schedule = None
     ds.refresh_scheduled_by = None
     ds.next_refresh_at = None
@@ -136,7 +137,7 @@ async def _fire_ds(session: Session, ds: Datasource, now: datetime, seen: dateti
     if run is None:
         logger.info("scheduler: datasource %s (%s) is already refreshing, scheduled slot skipped", ds_id, name)
         return
-    logger.info("scheduler: refresh schedulato lanciato per datasource %s (%s)", ds_id, name)
+    logger.info("scheduler: scheduled refresh launched for datasource %s (%s)", ds_id, name)
 
 
 # ── flows: scheduled run ────────────────────────────────────────────────────
@@ -368,6 +369,15 @@ async def _fire_sql_script(session: Session, script: SqlScript, now: datetime, s
                                    f"Scheduled write not started, with the rights of {user.email}: {e.detail}")
         logger.warning("scheduler: SQL script %s (%s) not written: %s", script_id, name, e.detail)
         return
+    except Exception as e:
+        # the engine unreachable, or a bug: the slot is spent, the script's writes say why
+        # (the next slot tries again); the details stay in the server's log
+        logger.exception("scheduler: SQL script %s (%s) not written", script_id, name)
+        session.rollback()
+        why = "the engine could not be reached" if isinstance(e, httpx.TransportError) else "internal error"
+        sql_script_runs.failed_run(session, user, session.get(SqlScript, script_id), "schedule",
+                                   f"Scheduled write not started: {why} ({type(e).__name__})")
+        return
     logger.info("scheduler: SQL script %s (%s) writing its datasource", script_id, name)
 
 
@@ -394,7 +404,7 @@ async def _tick() -> None:
                 try:
                     await _reconcile(session, r)
                 except Exception:
-                    logger.exception("scheduler: reconcile del run %s fallito", r.id)
+                    logger.exception("scheduler: reconcile of run %s failed", r.id)
         except Exception:
             logger.exception("scheduler: the runs' reconcile pass failed")
 
@@ -412,7 +422,7 @@ async def _tick() -> None:
             try:
                 await _fire_ds(session, ds, now, seen)
             except Exception:
-                logger.exception("scheduler: refresh datasource %s fallito", ds.id)
+                logger.exception("scheduler: refresh of datasource %s failed", ds.id)
                 _advance_ds(session, ds, now)
 
         due_flows = session.exec(

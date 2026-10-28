@@ -91,4 +91,4 @@ def seed_admin() -> None:
         )
         session.add(admin)
         session.commit()
-        logger.info("Admin '%s' creato (superuser).", s.auth.admin_email)
+        logger.info("Admin '%s' created (superuser).", s.auth.admin_email)

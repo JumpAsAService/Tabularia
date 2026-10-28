@@ -45,6 +45,9 @@ HOSTILE_CLICKHOUSE = [
     "SELECT joinGet('db.t', 'v', a) FROM self",
     "SELECT dictGetString('d', 'attr', toUInt64(a)) FROM self",
     "SELECT getSetting('s3_max_connections') FROM self",
+    # `file()` is a SCALAR function too: chDB read any file of the worker with it, and the
+    # denylist of chdb_ops misses it quoted (`"file"(…)`, as a newer sqlglot parses it)
+    "SELECT file('/etc/hostname') AS leak FROM self",
     # a CTE defined INSIDE a subquery does not authorize the table of the same name outside
     "SELECT * FROM (WITH mv_abc AS (SELECT 1 AS a) SELECT * FROM mv_abc) AS s, self, mv_abc",
     # ARRAY JOIN: sqlglot parses the dotted reference as a COLUMN and not as a table, so
@@ -73,6 +76,11 @@ def test_unparseable_sql_is_refused_not_waved_through():
     with pytest.raises(EngineError) as e:
         ensure_reads_only_input("SELECT * FROM self WHERE ((( ", "clickhouse")
     assert "could not be parsed" in str(e.value)
+    # sqlglot 30.13's ClickHouse parser fails with an AttributeError on a quoted function
+    # name: a refusal in words, not an internal error (a newer one parses it, and the
+    # allowlist refuses it)
+    with pytest.raises(EngineError):
+        ensure_reads_only_input("SELECT * FROM self JOIN \"file\"('/etc/hostname') AS t ON 1 = 1", "clickhouse")
 
 
 @pytest.mark.parametrize("sql", [

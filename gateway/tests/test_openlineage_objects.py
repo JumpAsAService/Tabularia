@@ -364,3 +364,142 @@ def test_off_a_notebook_session_sends_nothing(session, scene, capture, monkeypat
     ol.notebook_session(session, SimpleNamespace(notebook_id=nb.id, mode="app", version=1, job_name="j", started_at=_t(0)), "START")
     ol.wait_idle()
     assert capture.events == []
+
+
+# ── found in the bug hunt of 2026-10-28 ──────────────────────────────────────
+def test_error_messages_leave_without_email_addresses(session, scene):
+    # whose rights a run had, a recipient an SMTP server refused: «no e-mail addresses
+    # leave the installation» holds for the error message too
+    script = SavedScript(name="Pulizia", project_id=scene.folder.id, environment_id=1, current_version=1)
+    session.add(script)
+    session.commit()
+    orch = make_run(session, kind="orchestration", saved_script_id=script.id, status="FAILURE", task_id="",
+                    error="anna.rossi@cliente.it cannot run scripts in the environment «py» "
+                          "(550 5.1.1 <bruno@acme.example>: Recipient address rejected)")
+    _, end = ol.to_json(ol.run_events(session, orch))
+    message = end["run"]["facets"]["errorMessage"]["message"]
+    assert message == ("<address> cannot run scripts in the environment «py» "
+                       "(550 5.1.1 <<address>>: Recipient address rejected)")
+
+    nb = Notebook(name="Esplora", project_id=scene.folder.id, environment_id=1)
+    session.add(nb)
+    session.commit()
+    row = SimpleNamespace(notebook_id=nb.id, mode="app", version=1, job_name="nb-1-app-x", started_at=_t(0))
+    (fail,) = ol.to_json(ol.notebook_session_events(session, row, "FAIL", error="The author, ana@x.local, cannot read"))
+    assert fail["run"]["facets"]["errorMessage"]["message"] == "The author, <address>, cannot read"
+
+
+def test_an_app_and_an_editor_reading_the_same_datasource_each_keep_their_reads(session, scene):
+    nb = Notebook(name="Esplora", project_id=scene.folder.id, environment_id=1)
+    session.add(nb)
+    session.commit()
+    # the app and the editor live at once and re-run their cells: each read is the first
+    # of its session once, not at every turn of the other one
+    firsts = [notebook_reads.record(session, nb.id, scene.orders.id, key, mode)
+              for _ in range(3) for key, mode in (("nb-1-app-aaa", "app"), ("nb-1-edit-bbb", "edit"))]
+    assert firsts == [True, True, False, False, False, False]
+    # each session's closing event has what it read, whoever read it last
+    assert notebook_reads.read_in_session(session, nb.id, "nb-1-app-aaa") == [scene.orders.id]
+    assert notebook_reads.read_in_session(session, nb.id, "nb-1-edit-bbb") == [scene.orders.id]
+    # the notebook read it once, for the Lineage page and the static job
+    assert notebook_reads.read_by(session, [nb.id]) == {nb.id: [scene.orders.id]}
+    assert notebook_reads.readers_of(session, [scene.orders.id]) == [nb.id]
+    assert [i["name"] for i in ol.to_json(ol.job_events_for(session, "notebook", nb))[0]["inputs"]] == ["/Sample/Ops/orders"]
+
+
+def test_a_flow_groups_events_read_the_folders_once(session, scene, db_engine):
+    from sqlalchemy import event
+
+    flows = [make_flow(session, name=f"flow{i}", project_id=scene.folder.id, definition=json.dumps(
+        {"nodes": [{"id": "s", "type": "source", "data": {"datasourceId": scene.orders.id}},
+                   {"id": "t", "type": "source", "data": {"datasourceId": scene.customers.id}}], "edges": []}))
+             for i in range(5)]
+    group = FlowGroup(name="Nightly", project_id=scene.folder.id,
+                      definition=json.dumps({"steps": [[{"kind": "flow", "id": f.id} for f in flows]]}))
+    session.add(group)
+    session.commit()
+    run = make_run(session, kind="orchestration", flow_group_id=group.id, status="SUCCESS", task_id="")
+    for i, f in enumerate(flows):
+        child = make_run(session, kind="orchestration", flow_id=f.id, parent_run_id=run.id, status="SUCCESS", task_id="")
+        out = make_datasource(session, name=f"out{i}", project_id=scene.folder.id, key=f"datasets/o{i}.parquet")
+        make_run(session, kind="flow", flow_id=f.id, parent_run_id=child.id, status="SUCCESS", task_id=f"o{i}",
+                 publish_name=out.name, publish_project_id=scene.folder.id, datasource_id=out.id)
+    session.commit()  # a fresh transaction, as the orchestrator's that closes the group
+    statements: list[str] = []
+    event.listen(db_engine, "before_cursor_execute", lambda c, cur, stmt, *a: statements.append(stmt))
+    _, end = ol.to_json(ol.run_events(session, run))
+    assert len(end["outputs"]) == 5 and {i["name"] for i in end["inputs"]} == {"/Sample/Ops/orders", "/Sample/Ops/customers"}
+    # every dataset and job names its folder: the folders are read once, not at every name
+    # (they were 36 full reads of the folders here, over a hundred for a group of ten flows)
+    assert sum("FROM projects" in s for s in statements) == 1
+    # a write in the session forgets them: a renamed folder is not named as it was
+    scene.folder.name = "Operations"
+    session.add(scene.folder)
+    session.commit()
+    assert ol.datasource_name(session, scene.orders) == "/Sample/Operations/orders"
+
+
+def test_the_lineage_graph_reads_the_scripts_in_a_fixed_number_of_queries(session, scene, db_engine, monkeypatch):
+    from sqlalchemy import event
+
+    from app.services import script_builds
+
+    monkeypatch.setattr(script_builds, "disabled_reason", lambda: None)  # the saved scripts are drawn
+
+    def scripts(n, start):
+        for i in range(start, start + n):
+            sql = _sql_script(session, scene, {"sql": f'SELECT * FROM "Ops".orders o{i}', "engine": "duckdb",
+                                               "connection_id": None, "output": {"name": "Totali", "project_id": scene.folder.id}},
+                              name=f"q{i}")
+            sql.current_version = 1
+            saved = SavedScript(name=f"s{i}", project_id=scene.folder.id, environment_id=1, current_version=2)
+            session.add_all([sql, saved])
+            session.commit()
+            session.add_all([SavedScriptVersion(script_id=saved.id, version=1, content=json.dumps({"inputs": []})),
+                             SavedScriptVersion(script_id=saved.id, version=2, content=json.dumps(
+                                 {"inputs": [{"alias": "C", "datasource_id": scene.customers.id}],
+                                  "output": {"publish": True, "name": "Totali", "project_id": scene.folder.id}}))])
+            session.commit()
+
+    def look():
+        statements: list[str] = []
+
+        def count(c, cur, stmt, *a):
+            statements.append(stmt)
+        event.listen(db_engine, "before_cursor_execute", count)
+        try:
+            g = lineage_service.build_full_graph(session, scene.boss)
+        finally:
+            event.remove(db_engine, "before_cursor_execute", count)
+        return g, len(statements)
+
+    totals = make_datasource(session, name="Totali", project_id=scene.folder.id, key="datasets/91/v1.parquet")
+    scripts(3, 0)
+    g, few = look()
+    scripts(30, 3)
+    g, many = look()
+    assert many == few   # one query per kind of script, not one (or two) per script: 18 → 108 here
+    edges = {(e["source"], e["target"], e["kind"]) for e in g.edges}
+    sql_nodes = [n for n in g.nodes if n.startswith("sql:")]
+    script_nodes = [n for n in g.nodes if n.startswith("script:")]
+    assert len(sql_nodes) == len(script_nodes) == 33
+    # the current version, its reads and its output — as content_of would give them
+    assert all((f"ds:{scene.orders.id}", n, "read") in edges and (n, f"ds:{totals.id}", "publish") in edges for n in sql_nodes)
+    assert all((f"ds:{scene.customers.id}", n, "read") in edges and (n, f"ds:{totals.id}", "publish") in edges
+               for n in script_nodes)
+
+
+def test_a_sql_scripts_write_that_could_not_start_is_told_as_a_failed_run(session, scene, capture):
+    from app.services import sql_script_runs
+
+    script = _sql_script(session, scene, {"sql": 'SELECT * FROM "orders"', "engine": "duckdb", "connection_id": None,
+                                          "output": {"name": "Totali", "project_id": scene.folder.id}})
+    run = sql_script_runs.failed_run(session, scene.boss, script, "schedule",
+                                     "Scheduled write not started, with the rights of capo@x.it: RUN missing")
+    ol.wait_idle()
+    # as a flow's scheduled run that cannot start: the catalog sees it fail, without the address
+    start, end = capture.events
+    assert (start["eventType"], end["eventType"]) == ("START", "FAIL")
+    assert end["job"]["name"] == "Sample/Ops/Totali (SQL script)" and end["run"]["runId"] == ol.run_uuid(run.id)
+    assert end["run"]["facets"]["errorMessage"]["message"] == "Scheduled write not started, with the rights of <address>: RUN missing"
+    assert end["run"]["facets"]["tabularia"]["trigger"] == "schedule"

@@ -477,9 +477,12 @@ before anything starts, saying which.
 
 Optional. What the script writes at `TABULARIA_OUTPUT` is kept and shown at the end of
 the run, on its page; with **Also publish it as a datasource**, it becomes a datasource
-in the folder you choose (EDIT needed there), replaced at every run or not. A script
-that writes nothing (it sends emails, it loads another system) only has its outcome
-and its log.
+in the folder you choose (EDIT needed there), replaced at every run or not. When it
+replaces one, the datasource's data contract, if it has one, is checked first: a broken
+blocking rule leaves the datasource as it was and fails the run, and the refusal is in
+the contract's history. A description written on the datasource stays across the runs
+(the first one says which script writes it). A script that writes nothing (it sends
+emails, it loads another system) only has its outcome and its log.
 
 ### Running and scheduling
 

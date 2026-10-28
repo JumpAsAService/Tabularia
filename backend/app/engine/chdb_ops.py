@@ -303,7 +303,7 @@ _AGG = {
 }
 
 
-def _aggregato(func: str, col_sql: str, cond: str | None = None) -> str:
+def _aggregate(func: str, col_sql: str, cond: str | None = None) -> str:
     """The aggregation in ClickHouse SQL (with the -If combinator when there is a condition).
     Sample std/var: NULL with fewer than two values, as Polars, DuckDB and BigQuery
     (ClickHouse gives NaN, which «fill the NULLs» downstream does not replace)."""
@@ -325,7 +325,7 @@ def op_group_by(sql, params, ctx):
         if func not in _AGG:
             raise EngineError(f"group_by: unsupported aggregation function '{func}'")
         alias = agg.get("alias") or f"{col}_{func}"
-        expr = f"uniqExact({_qi(col)})" if func == "n_unique" else _aggregato(func, _qi(col))
+        expr = f"uniqExact({_qi(col)})" if func == "n_unique" else _aggregate(func, _qi(col))
         parts.append(f"{expr} AS {_qi(alias)}")
     return f"SELECT {', '.join(parts)} FROM {_sub(sql)} GROUP BY {by_sql}"
 
@@ -566,7 +566,7 @@ def op_pivot(sql, params, ctx):
         colname = PIVOT_LABEL_SEP.join(pivot_label(v) for v in combo)
         # the -If combinator: aggregates only the combination's rows; no rows (or only
         # NULLs) → NULL, except count/n_unique → 0 (Int64 as elsewhere)
-        expr = _aggregato(func, _qi(values), cond)
+        expr = _aggregate(func, _qi(values), cond)
         if func in ("count", "n_unique"):
             expr = f"toInt64({expr})"
         cols.append(f"{expr} AS {_qi(colname)}")

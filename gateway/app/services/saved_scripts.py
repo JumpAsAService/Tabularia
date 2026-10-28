@@ -227,7 +227,10 @@ def content_of(session: Session, script: SavedScript, version: Optional[int] = N
 
 
 def add_version(session: Session, script: SavedScript, content: dict, note: str, user: User) -> SavedScriptVersion:
-    """The next version, which becomes the one that runs."""
+    """The next version, which becomes the one that runs. The script's row stays locked
+    until the commit: two saves at once take the next numbers in turn, instead of the
+    same one and a 500 on the second."""
+    session.exec(select(SavedScript.id).where(SavedScript.id == script.id).with_for_update())
     last = session.exec(select(SavedScriptVersion.version).where(SavedScriptVersion.script_id == script.id)
                         .order_by(SavedScriptVersion.version.desc())).first() or 0  # type: ignore[attr-defined]
     row = SavedScriptVersion(script_id=script.id, version=last + 1, content=json.dumps(content), note=note,

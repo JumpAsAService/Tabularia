@@ -162,6 +162,41 @@ def test_sql_sandbox_blocks_file_read(storage, src):
         )
 
 
+def test_sql_copies_the_input_only_when_the_query_names_it(tmp_path):
+    """A SQL script on the catalog reads its datasources as `tables`, the first one being
+    the input too: copying the input into the sandbox as well doubled a preview's wait
+    (20M rows: 5.0 s → 2.7 s)."""
+    import duckdb
+
+    from app.engine.duckdb_ops import get_duck_operation
+
+    class Input:  # the chain's input: records whether it was copied
+        copied = 0
+
+        def write_parquet(self, path):
+            Input.copied += 1
+            duckdb.sql("SELECT 7 AS a").write_parquet(path)
+
+    class Ctx:
+        limit_output = None
+        con = duckdb.connect()
+        n = 0
+
+        def tempfile(self):
+            Ctx.n += 1
+            return str(tmp_path / f"t{Ctx.n}.parquet")
+
+        def build_right(self, ref):
+            return self.con.sql("SELECT 1 AS a UNION ALL SELECT 2")
+
+    op = get_duck_operation("sql")
+    tables = {"ds_1": {"source": {"bucket": BUCKET, "key": "datasets/x.parquet"}}}
+    out = op(Input(), {"query": "SELECT sum(a) AS s FROM ds_1", "tables": tables}, None, Ctx())
+    assert out.fetchall() == [(3,)] and Input.copied == 0
+    out = op(Input(), {"query": "SELECT a FROM ds_1 UNION ALL SELECT a FROM self", "tables": tables}, None, Ctx())
+    assert sorted(out.fetchall()) == [(1,), (2,), (7,)] and Input.copied == 1
+
+
 def test_sql_run_writes_output(storage, src):
     dest = DataSource(bucket=BUCKET, key="out/duck_sql.parquet")
     res = _engine(storage).run(src, [{"type": "sql", "params": {"query": "SELECT paese FROM self WHERE vendite > 100"}}], dest)

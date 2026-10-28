@@ -68,7 +68,7 @@ async def sweep_blob_deletions(session: Session, now: datetime | None = None) ->
         try:
             resp = await client.delete("/files/object", params={"bucket": bucket, "key": key}, timeout=CHECK)
         except Exception as e:  # engine unreachable → retry at the next tick
-            logger.warning("sweep blob %s/%s rimandato: %s", bucket, key, e)
+            logger.warning("sweep blob %s/%s postponed: %s", bucket, key, e)
             continue
         if resp.status_code < 400 or resp.status_code == 404:
             # By id and not `session.delete(row)`: with several processes making the same pass the

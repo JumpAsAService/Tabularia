@@ -477,7 +477,7 @@ onBeforeUnmount(() => {
             <template v-if="renaming === f.path">
               <input v-model="renameTo" class="rename" spellcheck="false" :aria-label="$t('scripting.editor.rename')"
                      @keydown.enter.prevent="rename" @keydown.esc.stop.prevent="renaming = null" />
-              <button type="button" class="icona" :aria-label="$t('scripting.editor.rename')" @click="rename"><Check :size="13" /></button>
+              <button type="button" class="icon-btn" :aria-label="$t('scripting.editor.rename')" @click="rename"><Check :size="13" /></button>
             </template>
             <template v-else>
               <button type="button" class="file" :title="f.path" @click="show(f.path)">
@@ -491,11 +491,11 @@ onBeforeUnmount(() => {
                   {{ problems[f.path]!.warnings }}</span>
               </button>
               <span v-if="!readOnly" class="file-actions">
-                <button v-if="f.path !== entry" type="button" class="icona" :title="$t('scripting.editor.makeEntry')"
+                <button v-if="f.path !== entry" type="button" class="icon-btn" :title="$t('scripting.editor.makeEntry')"
                         :aria-label="$t('scripting.editor.makeEntry')" @click="makeEntry(f.path)"><Play :size="12" /></button>
-                <button type="button" class="icona" :title="$t('scripting.editor.rename')" :aria-label="$t('scripting.editor.rename')"
+                <button type="button" class="icon-btn" :title="$t('scripting.editor.rename')" :aria-label="$t('scripting.editor.rename')"
                         @click="startRename(f.path)"><Pencil :size="12" /></button>
-                <button type="button" class="icona" :title="$t('scripting.editor.delete')" :aria-label="$t('scripting.editor.delete')"
+                <button type="button" class="icon-btn" :title="$t('scripting.editor.delete')" :aria-label="$t('scripting.editor.delete')"
                         @click="remove(f.path)"><Trash2 :size="12" /></button>
               </span>
             </template>
@@ -504,7 +504,7 @@ onBeforeUnmount(() => {
         <form v-if="!readOnly" class="new" @submit.prevent="addFile">
           <input v-model="newPath" spellcheck="false" :placeholder="language === 'r' ? 'R/helpers.R' : 'lib/helpers.py'"
                  :aria-label="$t('scripting.editor.newFile')" />
-          <button type="submit" class="icona" :title="$t('scripting.editor.newFile')" :aria-label="$t('scripting.editor.newFile')"
+          <button type="submit" class="icon-btn" :title="$t('scripting.editor.newFile')" :aria-label="$t('scripting.editor.newFile')"
                   :disabled="!newPath.trim()"><FilePlus2 :size="14" /></button>
         </form>
         <p v-if="fileError" class="error" role="alert">{{ fileError }}</p>
@@ -604,8 +604,8 @@ ul { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: col
 .entry { color: var(--accent-2); flex: none; }
 .file-actions { display: none; }
 .files li:hover .file-actions, .files li:focus-within .file-actions { display: inline-flex; }
-.icona { border: 0; background: none; padding: 3px; min-height: 0; color: var(--muted); cursor: pointer; border-radius: 5px; display: inline-grid; place-items: center; }
-.icona:hover:not(:disabled) { color: var(--text); background: var(--panel-2); }
+.icon-btn { border: 0; background: none; padding: 3px; min-height: 0; color: var(--muted); cursor: pointer; border-radius: 5px; display: inline-grid; place-items: center; }
+.icon-btn:hover:not(:disabled) { color: var(--text); background: var(--panel-2); }
 .rename, .new input { flex: 1; min-width: 0; font-family: var(--font-mono, ui-monospace, monospace); font-size: 12px; padding: 4px 6px; }
 .new { display: flex; gap: 4px; align-items: center; margin-top: 4px; }
 .note { margin: 0; font-size: 11.5px; line-height: 1.45; color: var(--muted); }

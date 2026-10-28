@@ -313,7 +313,7 @@ def _pin_start(values: dict[str, Any]) -> None:
     if _start is None:
         _start = {k: v for k, v in values.items() if BY_KEY[k].rollout}
         if _start:
-            logger.info("regolazioni read when this process starts, from the panel: %s", _start)
+            logger.info("panel settings read when this process starts: %s", _start)
 
 
 def _current() -> dict[str, Any]:
@@ -373,12 +373,12 @@ def wait_at_first_start(maximum: float = WAIT_AT_START) -> bool:
             if _client().get(KEY) is not None:
                 wait = time.monotonic() - start
                 if wait >= 2:  # a warning: Celery's logging is not set up yet at import
-                    logger.warning("regolazioni: waited %ds for the gateway's values (Valkey had none)", int(wait))
+                    logger.warning("panel settings: waited %ds for the gateway's values (Valkey had none)", int(wait))
                 return True
         except Exception:  # noqa: BLE001 — Valkey not up yet: the broker waits for it too
             pass
         if time.monotonic() >= deadline:
-            logger.warning("regolazioni: no values from the gateway after %ss: this process starts with the "
+            logger.warning("panel settings: no values from the gateway after %ss: this process starts with the "
                            "environment's for the settings read at start", int(maximum))
             return False
         time.sleep(2)

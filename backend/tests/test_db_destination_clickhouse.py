@@ -151,3 +151,33 @@ def test_a_failing_post_sql_says_the_data_is_already_written(ch, table, storage,
     message = str(e.value)
     assert message.startswith("The data was written: 2 rows are in") and "post-SQL broken" in message and advice in message
     assert _rows(ch, table) == [("alice",), ("bob",)]
+
+
+def test_a_table_name_that_needs_quotes(ch, storage):
+    """insert_arrow puts the table's name in its INSERT as it gets it: the staging's
+    name went unquoted, so a table with a space or a dash in its name failed to load."""
+    name = f"zz dest-{uuid.uuid4().hex[:6]}"
+    try:
+        _write(storage, name, "append", {"customer": ["acme"]})
+        _write(storage, name, "replace", {"customer": ["bob"]})
+        assert _rows(ch, f"`{name}`") == [("bob",)]
+    finally:
+        ch.command(f"DROP TABLE IF EXISTS `{name}`")
+
+
+def test_the_flow_other_types(ch, table, storage):
+    """A real flow's parquet: categoricals, a column of nulls only, timestamps with the UTC
+    zone (the ClickHouse engine with the s3 transport writes them so)."""
+    import datetime as dt
+
+    at = dt.datetime(2024, 3, 15, 12, 30, 15, 250000)
+    data = pa.table({"customer": ["acme"], "kind": pa.array(["a"]).dictionary_encode(),
+                     "nothing": pa.array([None], pa.null()), "at": pa.array([at], pa.timestamp("us", tz="UTC"))})
+    fd, path = tempfile.mkstemp(suffix=".parquet")
+    os.close(fd)
+    pq.write_table(data, path)
+    storage.upload_file(path, "b", "k.parquet")
+    os.remove(path)
+    write_parquet_to_db(_conn(), DbDestinationSpec(table=table, mode="replace"), "b", "k.parquet", storage=storage)
+    assert ch.query(f"SELECT customer, kind, nothing, toString(at) FROM {table}").result_rows == [
+        ("acme", "a", None, "2024-03-15 12:30:15.250000")]

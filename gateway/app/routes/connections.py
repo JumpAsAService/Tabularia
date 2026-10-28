@@ -204,7 +204,7 @@ def _smtp_payload(conn: Connection) -> dict:
 
 
 def engine_connection_payload(conn: Connection) -> dict:
-    """Il payload `connection` per l'engine: password/secret ANCORA cifrata."""
+    """The engine's `connection` payload: the password/secret still ENCRYPTED."""
     if conn.db_type == "sharepoint":
         return _sharepoint_payload(conn.host, conn.username, conn.password_encrypted, conn.database, conn.extra)
     if conn.db_type == "smtp":

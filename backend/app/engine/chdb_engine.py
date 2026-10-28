@@ -219,7 +219,7 @@ class ChdbEngine(DeferredStepCache, Engine):
         path = self._write_outfile(ctx, sql)
         self.storage.upload_file(path, self.cache.bucket, self.cache.object_key(final))
         self.cache.mark(final)
-        logger.info("materializzato step %d in cache", len(operations))
+        logger.info("materialized step %d in cache", len(operations))
 
     @contextmanager
     def _materialize_session(self, source: DataSource):

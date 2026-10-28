@@ -1,9 +1,9 @@
 """notebook reads: the datasources each notebook has read, for the Lineage page and
 OpenLineage (services/notebook_reads.py)
 
-Only additions: one table, empty — a row per notebook and datasource, written the first
-time a session of the notebook reads that datasource. The code of the previous version
-neither writes nor reads it.
+Only additions: one table, empty — a row per notebook, mode (app | edit) and datasource,
+written the first time a session of the notebook reads that datasource. The code of the
+previous version neither writes nor reads it.
 
 Revision 0029, after 0028 — 2026-10-28.
 Forward only, and compatible with the code of the previous version (expand/contract):
@@ -32,10 +32,9 @@ def upgrade() -> None:
     sa.ForeignKeyConstraint(['datasource_id'], ['datasources.id'], ondelete='CASCADE'),
     sa.ForeignKeyConstraint(['notebook_id'], ['notebooks.id'], ondelete='CASCADE'),
     sa.PrimaryKeyConstraint('id'),
-    sa.UniqueConstraint('notebook_id', 'datasource_id', name='uq_notebook_read')
+    sa.UniqueConstraint('notebook_id', 'datasource_id', 'mode', name='uq_notebook_read')
     )
     op.create_index(op.f('ix_notebook_reads_datasource_id'), 'notebook_reads', ['datasource_id'], unique=False)
-    op.create_index(op.f('ix_notebook_reads_notebook_id'), 'notebook_reads', ['notebook_id'], unique=False)
 
 
 def downgrade() -> None:

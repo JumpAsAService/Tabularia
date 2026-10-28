@@ -104,8 +104,8 @@ async function remove(w: Webhook) {
   }
 }
 
-async function openLog(id: number, ricarica = false) {
-  if (isOpen.value === id && !ricarica) {
+async function openLog(id: number, reload = false) {
+  if (isOpen.value === id && !reload) {
     isOpen.value = null
     return
   }
@@ -118,7 +118,7 @@ async function openLog(id: number, ricarica = false) {
   }
 }
 
-async function rispedisci(d: WebhookDelivery, wid: number) {
+async function resend(d: WebhookDelivery, wid: number) {
   try {
     await api.redeliver(d.id)
     setTimeout(() => openLog(wid, true), 2500)
@@ -247,7 +247,7 @@ function toggleEvent(e: WebhookEvent) {
                       </details>
                     </td>
                     <td class="right">
-                      <button v-if="canWrite" class="mini" :title="$t('integrations.redeliver')" :aria-label="$t('integrations.redeliverAria', { id: d.id })" @click="rispedisci(d, w.id)"><RotateCcw :size="12" /></button>
+                      <button v-if="canWrite" class="mini" :title="$t('integrations.redeliver')" :aria-label="$t('integrations.redeliverAria', { id: d.id })" @click="resend(d, w.id)"><RotateCcw :size="12" /></button>
                     </td>
                   </tr>
                 </tbody>

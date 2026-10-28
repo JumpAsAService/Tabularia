@@ -38,13 +38,13 @@ class DataPrepCollector:
         except redis.RedisError:
             return  # Valkey unreachable: no custom metrics this time
 
-        yield GaugeMetricFamily("dataprep_cache_hits", "Step cache: riusi totali", value=hits)
-        yield GaugeMetricFamily("dataprep_cache_misses", "Step cache: miss totali", value=misses)
+        yield GaugeMetricFamily("dataprep_cache_hits", "Step cache: total reuses", value=hits)
+        yield GaugeMetricFamily("dataprep_cache_misses", "Step cache: total misses", value=misses)
         yield GaugeMetricFamily("dataprep_cache_entries", "Step cache: current entries", value=entries)
 
         # the storage's size per prefix (cache/, datasets/, raw/, out/)
         g_bytes = GaugeMetricFamily(
-            "dataprep_storage_bytes", "Byte per prefisso di storage", labels=["prefix"]
+            "dataprep_storage_bytes", "Bytes per storage prefix", labels=["prefix"]
         )
         for prefix, val in (storage_bytes or {}).items():
             g_bytes.add_metric([prefix], float(val))

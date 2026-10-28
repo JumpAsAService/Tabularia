@@ -316,7 +316,10 @@ def duplicate_flow(
 def _snapshot_version(session: Session, flow: Flow, user: User, note: str) -> None:
     """Auto-version: records the flow's CURRENT definition as a new version. Skips when the
     same as the last (a save that does not change the DAG makes no noise in the
-    history)."""
+    history). The flow is read again with its row locked until the commit: two saves
+    at once take the next numbers in turn (not the same one, a 500 on the second), and
+    the history ends with the definition the flow holds."""
+    session.refresh(flow, with_for_update=True)
     last = session.exec(
         select(FlowVersion)
         .where(FlowVersion.flow_id == flow.id)
@@ -925,7 +928,7 @@ def set_flow_schedule(
     audit.record_audit(
         session, actor=user, action=audit.FLOW_SCHEDULE, target_type="flow",
         target_id=flow.id, target_label=flow.name,
-        detail={"cron": flow.run_schedule or "(disattivato)", "production_engine": flow.production_engine,
+        detail={"cron": flow.run_schedule, "production_engine": flow.production_engine,
                 "notify": bool(flow.notify_emails and flow.notify_connection_id)}, request=request,
     )
     return flow

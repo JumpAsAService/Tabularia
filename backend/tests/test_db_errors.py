@@ -313,6 +313,12 @@ _OracleLike.__module__ = "oracledb.exceptions"
         'Oracle: Service "NONESISTE" is not registered with the listener at host "172.22.0.17" port 1521. '
         "(Similar to ORA-12514) (DPY-6001). Check the service name in the connection's Database field.",
     ),
+    (
+        # a PL/SQL block (an Output's post-SQL) that does not compile: the why is on the PLS line
+        "ORA-06550: line 1, column 7:\nPLS-00201: identifier 'NO_SUCH_PROC_ZZ' must be declared\n"
+        "ORA-06550: line 1, column 7:\nPL/SQL: Statement ignored\nHelp: https://docs.oracle.com/error-help/db/ora-06550/",
+        "Oracle: line 1, column 7: identifier 'NO_SUCH_PROC_ZZ' must be declared (ORA-06550).",
+    ),
 ])
 def test_oracle(message, expected):
     assert describe_db_error(_OracleLike(message), "oracle", "oracletest", 1521) == expected

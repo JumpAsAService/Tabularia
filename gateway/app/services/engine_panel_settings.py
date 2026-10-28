@@ -158,7 +158,7 @@ async def push_discarding(values: dict[str, Any]) -> dict[str, Any]:
         bad_ones = {e.get("key") for e in errors} & set(current_ones)
         if with_gateway and {e.get("key") for e in errors} & set(FROM_GATEWAY):
             # an engine older than the upload limit from the panel: without it
-            logger.warning("regolazioni del motore: the engine refuses %s: sent without", errors)
+            logger.warning("engine settings: the engine refuses %s: sent without them", errors)
             with_gateway = False
             continue
         if not bad_ones:  # the engine refuses, but none of what is there: no insisting

@@ -15,7 +15,7 @@ const LABELS: Record<string, string> = {
   warning: 'banners.levelWarning',
   danger: 'banners.levelDanger',
 }
-const icona = (level: string) => ICONS[level] ?? Info
+const iconOf = (level: string) => ICONS[level] ?? Info
 const label = (level: string) => LABELS[level] ?? LABELS.info
 
 onMounted(async () => {
@@ -31,7 +31,7 @@ onMounted(async () => {
 <template>
   <div v-if="banners.length" class="banners">
     <div v-for="b in banners" :key="b.id" class="banner" :class="b.level" role="status">
-      <component :is="icona(b.level)" :size="16" :aria-label="$t(label(b.level))" />
+      <component :is="iconOf(b.level)" :size="16" :aria-label="$t(label(b.level))" />
       <span>{{ b.message }}</span>
     </div>
   </div>

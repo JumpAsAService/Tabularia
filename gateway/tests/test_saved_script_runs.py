@@ -46,6 +46,7 @@ class Engine:
         self.deletes: list[dict] = []
         self.found = True
         self.missing: set[str] = set()  # datasource keys whose file is gone
+        self.report: dict | None = None  # the contract's report on the output, when one is sent
 
     def handle(self, req: httpx.Request) -> httpx.Response:
         body = json.loads(req.content)
@@ -60,7 +61,8 @@ class Engine:
                 return httpx.Response(200, json={"found": False})
             return httpx.Response(200, json={"found": True, "rows": 3, "bytes": 500,
                                              "columns": [{"name": "region", "dtype": "String"},
-                                                         {"name": "total", "dtype": "Int64"}]})
+                                                         {"name": "total", "dtype": "Int64"}],
+                                             **({"contract": self.report} if body.get("contract") else {})})
         if req.url.path == "/scripts/objects/delete":
             self.deletes.append(body)
             return httpx.Response(200, json={"deleted": len(body["keys"]), "failed": []})
@@ -328,3 +330,86 @@ async def test_a_retry_starts_without_what_the_failed_attempt_wrote(session, clu
     out_key = _env_of(cluster.created[0][2])["TABULARIA_OUTPUT"].split("/", 3)[3]
     # once between the attempts, once with the step's files at the end
     assert sum(out_key in d["keys"] for d in engine.deletes) == 2
+
+
+# ── publishing over a datasource that is there (bug hunt 2026-10-28) ─────────
+CONTRACT = {"description": "", "rules": [{"id": "r1", "kind": "not_null", "column": "region", "severity": "error"}]}
+BROKEN = {"outcome": "failed", "version": 1, "rows": 3, "errors": 1, "warnings": 0, "rules": [
+    {"id": "r1", "kind": "not_null", "severity": "error", "column": "region", "passed": False, "violations": 2}]}
+WARNING = {"outcome": "warning", "version": 1, "rows": 3, "errors": 0, "warnings": 1, "rules": []}
+
+
+def _published(session, env, *, description="", contract=False):
+    """A script publishing «Totals by region» over the one a run of it wrote before."""
+    from app.services import contracts
+
+    p = make_project(session, name="Reports")
+    before = make_datasource(session, name="Totals by region", project_id=p.id, kind="flow", rows=50,
+                             key="datasets/7/before.parquet", description=description)
+    if contract:
+        contracts.save(session, before, CONTRACT, True, None)
+        session.commit()
+    script = _script(session, env, p.id,
+                     output={"publish": True, "name": "Totals by region", "project_id": p.id, "overwrite": True})
+    return before, script
+
+
+async def test_a_publish_keeps_the_description_someone_wrote(session, cluster, engine, queue):
+    """People and the AI assistant read it to choose the table; the script has no field
+    for it, and every run wrote its own over it. The first publish still says who writes it."""
+    admin = make_user(session, email="a@x.local", is_superuser=True)
+    env = _environment(session)
+    before, script = _published(session, env, description="Totals per region, every night")
+    assert (await _run(session, admin, script)).status == "SUCCESS"
+    session.refresh(before)
+    assert before.key == _child(session).output_key and before.description == "Totals per region, every night"
+    other = make_project(session, name="Other")
+    first = _script(session, env, other.id, output={"publish": True, "name": "New one", "project_id": other.id})
+    assert (await _run(session, admin, first)).status == "SUCCESS"
+    ds = session.exec(select(Datasource).where(Datasource.name == "New one")).one()
+    assert ds.description == "Written by the saved script «Totals»"
+
+
+async def test_a_publish_violating_the_datasources_contract_does_not_replace_it(session, cluster, engine, queue):
+    """As a flow's, a refresh's, a SQL script's: the contract is checked on the output
+    before it replaces the datasource; a blocking rule broken leaves the datasource as it
+    was, fails the run saying why, and the refusal is in the contract's history."""
+    from app.models import DataContractResult
+    from app.services import contracts
+
+    admin = make_user(session, email="a@x.local", is_superuser=True)
+    env = _environment(session)
+    before, script = _published(session, env, contract=True)
+    engine.report = BROKEN
+    head = await _run(session, admin, script)
+    assert engine.imports[-1]["contract"]["version"] == 1  # the contract went with the output
+    child = _child(session)
+    assert head.status == "FAILURE" and "Data contract violated" in head.error
+    assert child.status == "FAILURE" and "Data contract violated" in child.error and child.datasource_id is None
+    session.refresh(before)
+    assert (before.key, before.rows) == ("datasets/7/before.parquet", 50)
+    c = contracts.get(session, before.id)
+    assert contracts.summary(c)["status"] == "failed" and c.blocked_run_id == child.id
+    refused = session.exec(select(DataContractResult)).one()
+    assert (refused.trigger, refused.blocked, refused.run_id) == ("publish", True, child.id)
+
+
+async def test_a_publish_with_warnings_only_replaces_it_and_says_so(session, cluster, engine, queue):
+    from app.services import contracts
+
+    admin = make_user(session, email="a@x.local", is_superuser=True)
+    env = _environment(session)
+    before, script = _published(session, env, contract=True)
+    engine.report = WARNING
+    assert (await _run(session, admin, script)).status == "SUCCESS"
+    session.refresh(before)
+    assert (before.key, before.rows) == (_child(session).output_key, 3)
+    assert contracts.summary(contracts.get(session, before.id))["status"] == "warning"
+
+
+async def test_without_a_contract_nothing_is_sent_to_check(session, cluster, engine, queue):
+    admin = make_user(session, email="a@x.local", is_superuser=True)
+    env = _environment(session)
+    before, script = _published(session, env)
+    assert (await _run(session, admin, script)).status == "SUCCESS"
+    assert "contract" not in engine.imports[-1]

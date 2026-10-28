@@ -43,10 +43,12 @@ HARMLESS_TABLE_FUNCTIONS = frozenset({
 })
 
 # SCALAR functions that read other things from the server (dictionaries, Join tables,
-# settings and macros): they do not appear as tables, they must be named
+# settings and macros, files): they do not appear as tables, they must be named. `file`
+# reads any file of the process on chDB, and the denylist of chdb_ops does not see it
+# quoted (`"file"(…)`); here the parse tree sees it whatever its quotes.
 _FORBIDDEN_SCALARS = (
     "dictget", "dicthas", "dictisin", "joinget", "getsetting", "getserversetting",
-    "getmacro", "hascolumnintable", "getclienthttpheader",
+    "getmacro", "hascolumnintable", "getclienthttpheader", "file",
 )
 
 _REFUSAL = (
@@ -85,7 +87,7 @@ def ensure_reads_only_input(query: str, dialect: str, tables: frozenset[str] | s
     allowed = INPUT_NAMES | {t.lower() for t in tables}
     try:
         tree = sqlglot.parse_one(query, read=dialect)
-    except SqlglotError as e:
+    except (SqlglotError, AttributeError, TypeError) as e:  # sqlglot's own bugs on odd SQL too
         raise EngineError(
             "sql: the query could not be parsed, so it was not run (the SQL node checks that the query "
             f"reads only the input). Simplify it or use the dedicated nodes. Detail: {str(e)[:200]}"

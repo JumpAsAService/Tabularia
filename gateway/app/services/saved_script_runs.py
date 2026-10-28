@@ -20,8 +20,10 @@ and the output.
 4. What the script wrote at TABULARIA_OUTPUT, if anything, copied into Tabularia's
    storage: the script's page previews it, and with `output.publish` it becomes a
    datasource as an Output node's result does (EDIT on that folder, again with the
-   run's authority). Writing nothing is fine: the script may send emails or load
-   another system.
+   run's authority). Over a datasource that is there, as every writer's data: its
+   data contract is checked on the copy first (a blocking rule broken leaves it as it
+   was and fails the run), and the description someone wrote on it stays. Writing
+   nothing is fine: the script may send emails or load another system.
 5. The step's files deleted from the scripts bucket, whatever happened.
 """
 from __future__ import annotations
@@ -40,6 +42,7 @@ from app.core.crypto import decrypt_secret
 from app.core.engine_client import get_engine_client
 from app.models import Datasource, Run, SavedScript, ScriptEnvironment, ScriptEnvironmentVersion, ScriptStorage, User
 from app.models.permission import Capability
+from app.services import contracts as contract_service
 from app.services import kube_jobs, saved_scripts, script_builds, script_nodes
 from app.services import permissions as perm_service
 from app.services.script_runs import (
@@ -173,6 +176,43 @@ async def prepare_inputs(session: Session, inputs: list[tuple[str, Datasource]],
     return env, described, keys
 
 
+# ── output ────────────────────────────────────────────────────────────────────
+def replaced_datasource(session: Session, publish: dict) -> Optional[Datasource]:
+    """The datasource the output will replace, as `_publish_datasource` decides: the one
+    under its name in its folder, written by a flow or a script, when the script
+    overwrites (otherwise the output is a datasource of its own)."""
+    from app.routes.runs import _find_datasource
+
+    if not publish.get("overwrite", True):
+        return None
+    ds = _find_datasource(session, publish["project_id"], str(publish["name"]))
+    return ds if ds is not None and ds.kind == "flow" else None
+
+
+def _publish(session: Session, child: Run, script: SavedScript, publish: dict, target: Optional[Datasource],
+             out: dict) -> None:
+    """The output becomes the datasource, as a flow Output's at SUCCESS (routes/runs.py
+    `_reconcile`): with a blocking rule of the replaced datasource's contract broken it
+    does not, and the refusal goes to the contract's history. Does NOT commit."""
+    from app.routes.runs import _publish_datasource, _record_contract
+
+    report = out.get("contract") if isinstance(out.get("contract"), dict) and target is not None else None
+    if report is not None and contract_service.payload(session, target.id) is None:
+        report = None  # the contract was removed or turned off meanwhile: it decides nothing
+    if report is not None and report.get("outcome") == "failed":
+        contract_service.record_result(session, contract_service.get(session, target.id), report, trigger="publish",
+                                       run_id=child.id, snapshot_key=child.output_key, blocked=True)
+        raise ScriptFailed(contract_service.broken_rules_message(report))
+    child.publish_name, child.publish_project_id = str(publish["name"]), publish["project_id"]
+    child.publish_overwrite = bool(publish.get("overwrite", True))
+    # a description someone wrote on the datasource stays: people and the AI assistant
+    # read it to choose the table, and the script has no field for it
+    child.publish_description = target.description if target is not None and target.description \
+        else f"Written by the saved script «{script.name}»"
+    _publish_datasource(session, child, {"columns": out.get("columns") or [], "rows_written": out.get("rows")})
+    _record_contract(session, child, report, "publish")
+
+
 # ── a run ─────────────────────────────────────────────────────────────────────
 def _environment(session: Session, user: User, script: SavedScript) -> tuple[ScriptEnvironment, ScriptEnvironmentVersion]:
     reason = script_builds.disabled_reason()
@@ -196,8 +236,6 @@ async def execute(session: Session, user: User, script: SavedScript, *, parent_r
                   trigger_type: str) -> Run:
     """Runs the script's current version with `user`'s authority under the
     orchestration `parent_run_id`; returns its script run. Raises ScriptFailed."""
-    from app.routes.runs import _publish_datasource
-
     if not saved_scripts.can_see(session, user, script):
         raise ScriptFailed(f"{user.email} can no longer see the saved script «{script.name}»")
     if not perm_service.has_capability(session, user, script.project_id, Capability.RUN):
@@ -300,9 +338,13 @@ async def execute(session: Session, user: User, script: SavedScript, *, parent_r
         if not ok:
             raise ScriptFailed(f"the saved script «{script.name}» failed: {reason}")
 
+        # the datasource the output will replace, read now (the script may have run for
+        # hours): its data contract is checked on the copy, before it replaces anything
+        target = replaced_datasource(session, publish) if publish.get("publish") else None
+        contract = contract_service.payload(session, target.id) if target is not None else None
         resp = await get_engine_client().post("/scripts/output/import", json={
             "connection": storage_payload(storage), "key": out_key, "bucket": default_bucket,
-            "output_key": engine_out_key})
+            "output_key": engine_out_key, **({"contract": contract} if contract else {})})
         if resp.status_code >= 400:
             raise ScriptFailed(f"the saved script «{script.name}»: its output could not be read: {_detail(resp)}")
         out = resp.json()
@@ -313,10 +355,7 @@ async def execute(session: Session, user: User, script: SavedScript, *, parent_r
         info["columns"] = out.get("columns") or []
         save(rows_written=out.get("rows"))
         if publish.get("publish"):
-            child.publish_name, child.publish_project_id = str(publish["name"]), publish["project_id"]
-            child.publish_overwrite = bool(publish.get("overwrite", True))
-            child.publish_description = f"Written by the saved script «{script.name}»"
-            _publish_datasource(session, child, {"columns": out.get("columns") or [], "rows_written": out.get("rows")})
+            _publish(session, child, script, publish, target, out)
         save(status="SUCCESS", finished_at=_now())
         return child
     except ScriptFailed as e:

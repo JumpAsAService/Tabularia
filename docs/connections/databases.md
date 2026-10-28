@@ -74,19 +74,20 @@ At every run:
    (below);
 2. with **Replace**, the old rows are removed;
 3. the rows are inserted in batches, columns matched **by name**: a column the table lacks
-   stops the write, a column of the table the flow lacks takes its default;
+   stops the write, a column of the table the flow lacks takes its default, and the values
+   take the table's own types, as an `INSERT` would convert them;
 4. the post-insert statements run.
 
 How each database makes this safe:
 
 | Database | Replace | If something fails half way |
 |---|---|---|
-| PostgreSQL | `TRUNCATE`, bulk load with `COPY` (ADBC), post-SQL, one commit | nothing is changed: one transaction |
-| MySQL, MariaDB | `DELETE` (not `TRUNCATE`, which commits on its own), multi-row inserts of 5,000 rows, post-SQL, one commit | nothing is changed: one transaction |
+| PostgreSQL | `TRUNCATE`, bulk load with `COPY` (ADBC) into a temporary table of the session, one `INSERT … SELECT` by column name, post-SQL, one commit | nothing is changed: one transaction |
+| MySQL, MariaDB | `DELETE` (not `TRUNCATE`, which commits on its own), multi-row inserts of 5,000 rows, post-SQL, one commit | nothing is changed: one transaction (a DDL in the post-SQL, such as `CREATE INDEX`, commits the rows before it runs) |
 | ClickHouse | the rows go to a staging copy of the table, then `EXCHANGE TABLES` swaps it in one step; append ends with one `INSERT … SELECT` from the staging | the table is untouched until the swap or the final insert; a failing post-SQL leaves the rows written, and the error says so and whether running again is safe |
 | Trino | `DELETE`, inserts of 500 rows, post-SQL, one commit | all or nothing only where the connector supports transactions (Iceberg, Delta Lake); not on plain Hive |
-| Oracle | `DELETE` (not `TRUNCATE`, which commits on its own), array inserts of 10,000 rows, post-SQL, one commit | nothing is changed: one transaction (a table created by this write stays, empty: Oracle commits DDL on its own) |
-| SQL Server | the rows are bulk-loaded into a temporary table first; then `DELETE`, one `INSERT … SELECT` by column name, post-SQL, one commit | nothing is changed: one transaction, the table created by this write included |
+| Oracle | `DELETE` (not `TRUNCATE`, which commits on its own), array inserts of 10,000 rows, post-SQL, one commit | nothing is changed: one transaction (a table created by this write stays, empty: Oracle commits DDL on its own). A DDL in the post-SQL (`CREATE INDEX`, `GRANT`, `DBMS_STATS`) commits the rows before it runs: if the post-SQL fails after it, the error says the rows are written |
+| SQL Server | `DELETE`, array inserts of 10,000 rows, post-SQL, one commit | nothing is changed: one transaction, the table created by this write included |
 
 The types of a table created by Tabularia:
 
@@ -99,6 +100,10 @@ The types of a table created by Tabularia:
 | date | `DATE` | `DATE` | `Nullable(Date32)` | `DATE` | `DATE` | `DATE` |
 | date and time (UTC) | `TIMESTAMP` | `DATETIME(6)` | `Nullable(DateTime64(6, 'UTC'))` | `TIMESTAMP(6)` | `TIMESTAMP(6)` | `DATETIME2(6)` |
 | text and anything else | `TEXT` | `TEXT` | `Nullable(String)` | `VARCHAR` | `VARCHAR2(4000)` | `NVARCHAR(MAX)` |
+
+A date and time with a time zone is written as its UTC instant, as every date and time in
+Tabularia; a time of day goes into the text column (`13:45:30`); bytes go into a
+`VARBINARY(MAX)` column on SQL Server.
 
 A ClickHouse table created by Tabularia is a `MergeTree` with `ORDER BY tuple()`. To
 choose the engine, the sort key or the partitions, create the table yourself first:
@@ -149,7 +154,12 @@ GRANT CONNECT ON DATABASE shop TO tabularia_writer;
 GRANT USAGE, CREATE ON SCHEMA reporting TO tabularia_writer;
 ```
 
-The writer owns the tables it creates, so **Replace** may truncate them.
+The writer owns the tables it creates, so **Replace** may truncate them; on a table
+someone else owns, grant it `TRUNCATE` besides `INSERT`. The rows reach the table through
+a temporary table of the writer's own session, which needs the `TEMPORARY` privilege on
+the database (every role has it unless the DBA revoked it from `PUBLIC`). The writer's
+session is in UTC, so a `timestamptz` column stores the instant the flow computed; the
+post-insert SQL runs in UTC too (`now()::date` is the UTC date).
 
 **Example, on the sample data.** The connection **Sample ERP (Postgres)** of the samples
 (host `sampledb-postgres`, database `shop`, schema `vendite`) reads the order lines. A
@@ -304,6 +314,9 @@ another catalog (`postgresql.public.customers`), since Trino reads across its ca
   are `VARCHAR2(4000)`: for longer values create the table yourself with a `CLOB`. Oracle
   stores an empty text as NULL. The user needs `INSERT` (and `DELETE` for **Replace**) on
   the table, and `CREATE TABLE` only if Tabularia is to create it.
+- **Post-insert SQL**: statements separated by `;`, or one PL/SQL block run whole
+  (`BEGIN DBMS_STATS.GATHER_TABLE_STATS('REPORTING', 'REVENUE_BY_REGION'); END;`,
+  without the `/` of SQL*Plus); a procedure also runs with `CALL`, without a block.
 
 ```sql
 CREATE USER reporting IDENTIFIED BY "change-me";
@@ -355,10 +368,12 @@ way leaves yesterday's rows in place.
   before it reaches the server.
 - **Types**: integer decimals up to 18 digits arrive as integers, other decimals and
   `money` as decimal numbers, `datetimeoffset` in UTC.
-- **Writing**: the rows are bulk-loaded through the driver's Arrow bulk copy into a
-  temporary table (`##tabularia_…`, which SQL Server drops by itself), then copied into
-  the target in one transaction. The user needs `SELECT`, `INSERT` (and `DELETE` for
-  **Replace**) on the table, and `CREATE TABLE` only if Tabularia is to create it.
+- **Writing**: the rows go straight into the target as array inserts of 10,000 rows, in
+  one transaction on one connection. Not through the driver's bulk copy: it runs on a
+  connection of its own and could only load a global temporary table (`##…`), which
+  every login of the server can read and fill while it exists. The user needs `SELECT`,
+  `INSERT` (and `DELETE` for **Replace**) on the table, and `CREATE TABLE` only if
+  Tabularia is to create it.
 
 ```sql
 CREATE LOGIN tabularia_reader WITH PASSWORD = 'Change-me-1';
@@ -381,9 +396,9 @@ CREATE USER tabularia_writer FOR LOGIN tabularia_writer;
 GRANT SELECT, INSERT, DELETE ON reporting.DailyMargin TO tabularia_writer;
 ```
 
-The rows travel by bulk copy, so 500,000 rows take a few seconds; the target changes in
-one transaction, and the post-insert SQL (`EXEC reporting.RefreshMarginSummary`, say)
-runs inside it.
+The rows travel as array inserts, about 15,000 to 20,000 a second (500,000 rows in half
+a minute); the target changes in one transaction, and the post-insert SQL (`EXEC
+reporting.RefreshMarginSummary`, say) runs inside it.
 
 ## Permissions
 

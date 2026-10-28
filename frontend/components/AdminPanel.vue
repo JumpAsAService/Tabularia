@@ -91,7 +91,7 @@ const toAdd = ref<number | null>(null)
 const qUsers = ref('')
 const qGroups = ref('')
 
-function combacia(q: string, ...fields: (string | null | undefined)[]): boolean {
+function matchesQuery(q: string, ...fields: (string | null | undefined)[]): boolean {
   const ago = q.trim().toLowerCase()
   if (!ago) return true
   return fields.filter(Boolean).join(' ').toLowerCase().includes(ago)
@@ -100,7 +100,7 @@ function combacia(q: string, ...fields: (string | null | undefined)[]): boolean 
 // the PEOPLE: the service accounts have their own section
 const people = computed(() => users.value.filter((u) => !u.is_service))
 const filteredUsers = computed(() =>
-  people.value.filter((u) => combacia(qUsers.value, u.email, u.full_name, u.groups.join(' '))),
+  people.value.filter((u) => matchesQuery(qUsers.value, u.email, u.full_name, u.groups.join(' '))),
 )
 // counts of the two sections that load by themselves (service accounts, webhooks)
 const nService = ref(0)
@@ -123,7 +123,7 @@ const backupsOff = ref(false)
 // the folders, for the webhooks' filter
 const folders = ref<Project[]>([])
 const filteredGroups = computed(() =>
-  groups.value.filter((g) => combacia(qGroups.value, g.name, g.description)),
+  groups.value.filter((g) => matchesQuery(qGroups.value, g.name, g.description)),
 )
 
 const sections = computed(() => [

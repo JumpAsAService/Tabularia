@@ -416,7 +416,7 @@ function testIcon(ok: boolean | null) {
           </label>
         </div>
         <small class="hint muted">{{ $t('registries.credentialsHint') }}</small>
-        <button v-if="editable && reg?.password_set" type="button" class="mini allinea" @click="forgetPassword">
+        <button v-if="editable && reg?.password_set" type="button" class="mini align-start" @click="forgetPassword">
           {{ $t('registries.forgetPassword') }}
         </button>
       </fieldset>
@@ -445,7 +445,7 @@ function testIcon(ok: boolean | null) {
                           :disabled="!editable || saving" />
               </td>
               <td v-if="editable" class="row-actions">
-                <button type="button" class="mini icona" :aria-label="$t('registries.removeAccess', { name: accessName(a) })"
+                <button type="button" class="mini icon-only" :aria-label="$t('registries.removeAccess', { name: accessName(a) })"
                         @click="form.access.splice(i, 1)"><Trash2 :size="13" /></button>
               </td>
             </tr>
@@ -558,7 +558,7 @@ function testIcon(ok: boolean | null) {
               <td class="muted small">{{ fmt.ago(v.updated_at) }}</td>
               <td v-if="editable" class="row-actions">
                 <button type="button" class="mini" @click="editVariable(v.name)">{{ $t('registries.change') }}</button>
-                <button type="button" class="mini icona" :aria-label="$t('registries.delete')" @click="deleteVariable(v.name)"><Trash2 :size="13" /></button>
+                <button type="button" class="mini icon-only" :aria-label="$t('registries.delete')" @click="deleteVariable(v.name)"><Trash2 :size="13" /></button>
               </td>
             </tr>
           </tbody>
@@ -593,9 +593,9 @@ function testIcon(ok: boolean | null) {
 .heading { display: flex; align-items: center; gap: 10px; }
 .heading h4 { flex: 1; }
 button.mini { padding: 2px 10px; min-height: 26px; font-size: 12px; display: inline-flex; align-items: center; gap: 5px; }
-button.mini.icona { padding: 2px 6px; }
+button.mini.icon-only { padding: 2px 6px; }
 button.danger-zone { color: var(--danger); }
-button.allinea { align-self: flex-start; }
+button.align-start { align-self: flex-start; }
 
 .fields { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px 14px; }
 .field { display: flex; flex-direction: column; gap: 4px; font-size: 12px; color: var(--muted); min-width: 0; }

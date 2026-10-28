@@ -94,7 +94,7 @@ class PolarsEngine(DeferredStepCache, Engine):
 
             if was_interrupted(e):  # a superseded preview: do NOT redo it all in memory
                 raise
-            logger.warning("sink_parquet streaming fallito (%s), fallback in-memory", e)
+            logger.warning("sink_parquet streaming failed (%s), in-memory fallback", e)
             lf.collect(engine="streaming").write_parquet(path)
 
     def _lazy_from_cache(
@@ -168,7 +168,7 @@ class PolarsEngine(DeferredStepCache, Engine):
 
         self.storage.upload_file(path, self.cache.bucket, self.cache.object_key(final))
         self.cache.mark(final)
-        logger.info("materializzato step %d in cache", len(operations))
+        logger.info("materialized step %d in cache", len(operations))
 
     def _materialize_session(self, source: DataSource):
         return self._session()
@@ -269,7 +269,7 @@ class PolarsEngine(DeferredStepCache, Engine):
                     except EngineError:
                         raise
                     except _POLARS_ERRORS as e:  # a node streaming does not support
-                        logger.warning("sink_csv streaming fallito (%s), fallback in-memory", e)
+                        logger.warning("sink_csv streaming failed (%s), in-memory fallback", e)
                         lf_csv.collect(engine="streaming").write_csv(out_path)
                     if cap and os.path.getsize(out_path) > 0:
                         # read back from the file: counts the true rows even with line breaks in the values

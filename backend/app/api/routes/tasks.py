@@ -385,7 +385,7 @@ def queue_overview():
             except Exception:
                 pass
     except Exception:
-        logger.warning("queue: backlog broker non leggibile", exc_info=True)
+        logger.warning("queue: the broker's backlog cannot be read", exc_info=True)
     queued = sum(broker.values())
 
     return {

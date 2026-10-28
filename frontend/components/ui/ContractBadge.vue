@@ -13,7 +13,7 @@ const props = withDefaults(
 )
 const { t } = useI18n()
 
-const ICONE = { pending: Shield, passed: ShieldCheck, warning: ShieldAlert, failed: ShieldX }
+const ICONS = { pending: Shield, passed: ShieldCheck, warning: ShieldAlert, failed: ShieldX }
 const state = computed(() => props.contract?.status ?? 'pending')
 const title = computed(() => {
   const c = props.contract
@@ -27,7 +27,7 @@ const title = computed(() => {
 
 <template>
   <span v-if="contract" class="contract-badge" :class="state" role="img" :aria-label="title" :title="title">
-    <component :is="ICONE[state]" :size="size" aria-hidden="true" />
+    <component :is="ICONS[state]" :size="size" aria-hidden="true" />
     <span v-if="label" class="contract-badge-text">{{ $t(`contracts.short.${contract.blocked ? 'blocked' : state}`) }}</span>
   </span>
 </template>

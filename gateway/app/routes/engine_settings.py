@@ -76,7 +76,7 @@ def _no_token(request: Request, _admin: User = Depends(require_superuser)) -> No
 OLD_ENGINE = "The engine is an older version that does not support the settings panel: update it"
 
 
-async def _state(session: Session, chi: User, request: Request) -> SettingsOut:
+async def _state(session: Session, asker: User, request: Request) -> SettingsOut:
     try:
         cat = await rm.catalog()
     except httpx.HTTPStatusError as e:
@@ -86,7 +86,7 @@ async def _state(session: Session, chi: User, request: Request) -> SettingsOut:
     except (httpx.HTTPError, ValueError):
         raise HTTPException(status_code=503, detail="The engine is not responding: the settings cannot be read right now")
     rows = rm.saved(session)
-    full = is_admin(session, chi)
+    full = is_admin(session, asker)
     items = []
     for v in cat["items"]:
         if v["key"] in rm.FROM_GATEWAY:
@@ -110,8 +110,8 @@ async def _state(session: Session, chi: User, request: Request) -> SettingsOut:
 
 
 @router.get("", response_model=SettingsOut)
-async def read(request: Request, session: Session = Depends(get_session), chi: User = Depends(require_observer)):
-    return await _state(session, chi, request)
+async def read(request: Request, session: Session = Depends(get_session), asker: User = Depends(require_observer)):
+    return await _state(session, asker, request)
 
 
 @router.put("", response_model=SettingsOut, dependencies=[Depends(_no_token)])

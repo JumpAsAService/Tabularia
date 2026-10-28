@@ -75,3 +75,50 @@ def test_a_session_that_cannot_start_is_a_failed_run(app, session, cluster, capt
     ol.wait_idle()
     assert [e["eventType"] for e in capture.events] == ["START", "FAIL"]
     assert "marimo is not in the image" in capture.events[1]["run"]["facets"]["errorMessage"]["message"]
+
+
+# ── found in the bug hunt of 2026-10-28 ──────────────────────────────────────
+def test_a_notebook_deleted_while_its_pod_runs_ends_its_run(app, session, cluster, engine, pod, capture):
+    # told before the notebook goes: once deleted it has no name, and the run stayed open
+    # in the catalog for ever
+    _, ana, _, _, _, _, nid = _setup(app, session)
+    ana.post(f"/notebooks/{nid}/sessions", json={"mode": "app"}, headers=CSRF)
+    cluster.pod = "ready"
+    _ready(ana, nid)
+    assert ana.delete(f"/notebooks/{nid}", headers=CSRF).status_code == 204
+    ol.wait_idle()
+    assert [e["eventType"] for e in capture.events] == ["START", "COMPLETE"]
+    assert len({e["run"]["runId"] for e in capture.events}) == 1
+
+
+def test_a_session_stopped_or_failed_twice_at_once_ends_its_run_once(app, session, db_engine, cluster, engine, pod, capture):
+    # a person and the reaper, or two replicas, get to the same session together: each
+    # with the row as it read it; the catalog hears the end once
+    import asyncio
+
+    from sqlmodel import Session
+
+    from app.models import NotebookSession
+    from app.services import notebook_runtime as runtime
+
+    _, ana, _, _, _, _, nid = _setup(app, session)
+    ana.post(f"/notebooks/{nid}/sessions", json={"mode": "app"}, headers=CSRF)
+    cluster.pod = "ready"
+    _ready(ana, nid)
+    mine = select(NotebookSession).where(NotebookSession.notebook_id == nid)
+    with Session(db_engine) as other:
+        first, second = session.exec(mine).one(), other.exec(mine).one()
+        asyncio.run(runtime.stop(session, first, actor=None, reason="stopped"))
+        asyncio.run(runtime.stop(other, second, actor=None, reason="idle"))
+    ol.wait_idle()
+    assert [e["eventType"] for e in capture.events] == ["START", "COMPLETE"]
+
+    capture.events.clear()
+    cluster.pod = "pending"
+    ana.post(f"/notebooks/{nid}/sessions", json={"mode": "app"}, headers=CSRF)
+    with Session(db_engine) as other:
+        first, second = session.exec(mine).one(), other.exec(mine).one()
+        asyncio.run(runtime._fail(session, first, "no node could take it"))
+        asyncio.run(runtime._fail(other, second, "it did not start within 300 s"))
+    ol.wait_idle()
+    assert [e["eventType"] for e in capture.events] == ["START", "FAIL"]

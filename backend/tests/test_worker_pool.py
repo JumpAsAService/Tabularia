@@ -118,23 +118,23 @@ def test_the_state_says_what_the_panel_shows():
     assert 0 < s["memory_share"] < 1 and s["memory_floor"] > 0
 
 
-def test_a_reported_worker_is_live_until_its_state_expires(regolazioni_isolate):
+def test_a_reported_worker_is_live_until_its_state_expires(isolated_panel_settings):
     report({"name": "celery@a", "processes": 2})
     report({"name": "celery@b", "processes": 4})
     assert [w["name"] for w in live_workers()] == ["celery@a", "celery@b"]
-    regolazioni_isolate.delete(worker_pool.KEY_PREFIX + "celery@a")  # what the TTL does
+    isolated_panel_settings.delete(worker_pool.KEY_PREFIX + "celery@a")  # what the TTL does
     assert [w["name"] for w in live_workers()] == ["celery@b"]
-    assert regolazioni_isolate.smembers(worker_pool.REGISTRY) == {"celery@b"}
+    assert isolated_panel_settings.smembers(worker_pool.REGISTRY) == {"celery@b"}
 
 
-def test_the_step_resizes_and_reports_at_start_and_then_on_a_timer(regolazioni_isolate):
+def test_the_step_resizes_and_reports_at_start_and_then_on_a_timer(isolated_panel_settings):
     panel_settings.write({"workers.run_concurrency": 4})
     c = Consumer(processes=2)
     step = PoolFromPanel(None)
     step.start(c)
     assert c.pool.num_processes == 4 and step.started_with == 2
     assert c.timer.calls[0][0] == worker_pool.TICK
-    assert json.loads(regolazioni_isolate.get(worker_pool.KEY_PREFIX + "celery@w1"))["processes"] == 4
+    assert json.loads(isolated_panel_settings.get(worker_pool.KEY_PREFIX + "celery@w1"))["processes"] == 4
     panel_settings.write({})  # the value removed: back to the size it started with
     step.tick(c)
     assert c.pool.num_processes == 2
@@ -142,7 +142,7 @@ def test_the_step_resizes_and_reports_at_start_and_then_on_a_timer(regolazioni_i
     assert live_workers() == []
 
 
-def test_a_worker_shutting_down_keeps_its_tasks_alive_until_it_exits(regolazioni_isolate, monkeypatch):
+def test_a_worker_shutting_down_keeps_its_tasks_alive_until_it_exits(isolated_panel_settings, monkeypatch):
     # Celery 5's warm shutdown (a rolling update, a drain, a scale-in): the consumer's steps
     # stop, then the pool waits for the running tasks, and `shutdown` comes only after them.
     # Meanwhile the main process's thread keeps the state alive: the tasks are not lost.
@@ -158,7 +158,7 @@ def test_a_worker_shutting_down_keeps_its_tasks_alive_until_it_exits(regolazioni
     step.stop(c)  # what Celery calls first
     assert live_workers() == []  # out of the panel at once
     assert worker_pool.lost("t", meta) == "" and worker_pool.lost("t", meta) == ""
-    regolazioni_isolate.delete(worker_pool.KEY_PREFIX + "celery@w1")  # its TTL, had nobody written it
+    isolated_panel_settings.delete(worker_pool.KEY_PREFIX + "celery@w1")  # its TTL, had nobody written it
     worker_pool.keep_alive("celery@w1", step.started_at)  # what the thread does every TICK
     assert worker_pool.lost("t", meta) == "" and live_workers() == []
     step.start(c)  # the consumer back (a broker connection restored): listed again, one thread still
@@ -169,7 +169,7 @@ def test_a_worker_shutting_down_keeps_its_tasks_alive_until_it_exits(regolazioni
     assert worker_pool.lost("t", meta) == worker_pool.LOST  # still running then: it went with the process
 
 
-def test_a_failing_check_never_stops_the_worker(regolazioni_isolate):
+def test_a_failing_check_never_stops_the_worker(isolated_panel_settings):
     panel_settings.write({"workers.run_concurrency": 4})
     c = Consumer(processes=2)
 
@@ -180,7 +180,7 @@ def test_a_failing_check_never_stops_the_worker(regolazioni_isolate):
     step = PoolFromPanel(None)
     step.started_with = 2
     step.tick(c)  # no exception
-    assert json.loads(regolazioni_isolate.get(worker_pool.KEY_PREFIX + "celery@w1"))["processes"] == 2
+    assert json.loads(isolated_panel_settings.get(worker_pool.KEY_PREFIX + "celery@w1"))["processes"] == 2
 
 
 def test_with_autoscale_celery_keeps_sizing_the_pool():
@@ -223,18 +223,18 @@ def _worker(fake, name, started_at):
     fake.set(worker_pool.KEY_PREFIX + name, json.dumps({"name": name, "started_at": started_at}))
 
 
-def test_a_task_of_a_worker_still_in_the_same_life_is_not_lost(regolazioni_isolate):
-    _worker(regolazioni_isolate, "celery@w1", started_at=100.0)
+def test_a_task_of_a_worker_still_in_the_same_life_is_not_lost(isolated_panel_settings):
+    _worker(isolated_panel_settings, "celery@w1", started_at=100.0)
     assert worker_pool.lost("t", {"pid": 7, "hostname": "celery@w1", "since": 150.0}) == ""
 
 
-def test_a_task_of_a_worker_that_started_again_is_lost(regolazioni_isolate):
+def test_a_task_of_a_worker_that_started_again_is_lost(isolated_panel_settings):
     # an OOMKilled container starts again in the same pod, with the same name
-    _worker(regolazioni_isolate, "celery@w1", started_at=200.0)
+    _worker(isolated_panel_settings, "celery@w1", started_at=200.0)
     assert worker_pool.lost("t", {"pid": 7, "hostname": "celery@w1", "since": 150.0}) == worker_pool.LOST
 
 
-def test_a_task_of_a_worker_gone_is_lost_once_it_stays_gone(regolazioni_isolate, monkeypatch):
+def test_a_task_of_a_worker_gone_is_lost_once_it_stays_gone(isolated_panel_settings, monkeypatch):
     clock = [1000.0]
     monkeypatch.setattr(worker_pool.time, "time", lambda: clock[0])
     meta = {"pid": 7, "hostname": "celery@gone", "since": 900.0}
@@ -244,14 +244,14 @@ def test_a_task_of_a_worker_gone_is_lost_once_it_stays_gone(regolazioni_isolate,
     clock[0] += 2
     assert worker_pool.lost("t", meta) == worker_pool.LOST
     # back meanwhile (it wrote again after the blip): not lost
-    _worker(regolazioni_isolate, "celery@gone", started_at=800.0)
+    _worker(isolated_panel_settings, "celery@gone", started_at=800.0)
     assert worker_pool.lost("t", meta) == ""
 
 
 @pytest.mark.parametrize("meta", [
     None, "x", {"pid": 7}, {"pid": 7, "hostname": "celery@old"},  # an older worker's meta: no verdict
 ])
-def test_without_the_facts_no_verdict(regolazioni_isolate, meta, monkeypatch):
+def test_without_the_facts_no_verdict(isolated_panel_settings, meta, monkeypatch):
     monkeypatch.setattr(worker_pool, "CONFIRM_SECONDS", 0)
     assert worker_pool.lost("t", meta) == ""
 

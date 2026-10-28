@@ -76,7 +76,7 @@ watch(
       const p = await api.dbtExportPlan(f.id, { signal })
       if (mine !== opening) return
       plan.value = p
-      preimposta(p)
+      presetFrom(p)
       restore(f.id, p)
     } catch (e) {
       if (mine === opening) error.value = errMessage(e)
@@ -94,7 +94,7 @@ onBeforeUnmount(() => {
   requests.abort()
 })
 
-function preimposta(p: DbtExportPlan) {
+function presetFrom(p: DbtExportPlan) {
   // with nothing available, the target the folder package can still take (if any) is the one shown
   target.value = p.targets.find((x) => x.available)?.id ?? p.targets.find((x) => x.requires)?.id ?? 'clickhouse'
   pkg.value = 'project'

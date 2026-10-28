@@ -10,7 +10,7 @@
 // opened it at closing.
 import { nextTick, onBeforeUnmount, watch, type Ref } from 'vue'
 
-const FOCUSABILI = [
+const FOCUSABLE = [
   'a[href]',
   'button:not([disabled])',
   'input:not([disabled])',
@@ -38,7 +38,7 @@ export function useDialogA11y(
   function focusables(): HTMLElement[] {
     if (!card.value) return []
     // offsetParent null = hidden element (v-if/v-show upstream)
-    return Array.from(card.value.querySelectorAll<HTMLElement>(FOCUSABILI)).filter(
+    return Array.from(card.value.querySelectorAll<HTMLElement>(FOCUSABLE)).filter(
       (el) => el.offsetParent !== null,
     )
   }

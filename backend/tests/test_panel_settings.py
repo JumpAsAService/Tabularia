@@ -83,8 +83,8 @@ def test_written_they_hold_and_removed_the_environment_returns():
     assert get_settings().export.max_rows == settings_from_env().export.max_rows
 
 
-def test_an_invalid_value_in_valkey_is_discarded_and_the_others_stay(regolazioni_isolate):
-    regolazioni_isolate.set(panel_settings.KEY, json.dumps(
+def test_an_invalid_value_in_valkey_is_discarded_and_the_others_stay(isolated_panel_settings):
+    isolated_panel_settings.set(panel_settings.KEY, json.dumps(
         {"export.max_rows": 99, "ingest.parquet_row_group_rows": 3, "storage.endpoint": "http://x"}))
     panel_settings.forget()
     s = get_settings()
@@ -93,20 +93,20 @@ def test_an_invalid_value_in_valkey_is_discarded_and_the_others_stay(regolazioni
     assert s.storage.endpoint == settings_from_env().storage.endpoint
 
 
-def test_the_other_processes_see_them_within_the_reread_time(regolazioni_isolate, monkeypatch):
+def test_the_other_processes_see_them_within_the_reread_time(isolated_panel_settings, monkeypatch):
     now = [1000.0]
     monkeypatch.setattr(panel_settings.time, "monotonic", lambda: now[0])
     panel_settings.forget()
     assert get_settings().export.max_rows == settings_from_env().export.max_rows
     # another process (the gateway, through the API) writes
-    regolazioni_isolate.set(panel_settings.KEY, json.dumps({"export.max_rows": 42}))
+    isolated_panel_settings.set(panel_settings.KEY, json.dumps({"export.max_rows": 42}))
     now[0] += panel_settings.REREAD_EVERY / 2
     assert get_settings().export.max_rows != 42  # not read again at every call
     now[0] += panel_settings.REREAD_EVERY
     assert get_settings().export.max_rows == 42
 
 
-def test_valkey_down_the_last_values_stay(regolazioni_isolate, monkeypatch):
+def test_valkey_down_the_last_values_stay(isolated_panel_settings, monkeypatch):
     now = [1000.0]
     monkeypatch.setattr(panel_settings.time, "monotonic", lambda: now[0])
     panel_settings.write({"export.max_rows": 77})
@@ -257,14 +257,14 @@ def test_the_writing_respects_the_gateways_threshold():
 # ── from the black-box test (2026-10-12) ───────────────────────────────
 
 @pytest.mark.parametrize("grezzo", ["[1, 2]", "42", '"abc"', "null"])
-def test_json_that_is_not_an_object_does_not_bring_down_get_settings(regolazioni_isolate, grezzo, monkeypatch):
+def test_json_that_is_not_an_object_does_not_bring_down_get_settings(isolated_panel_settings, grezzo, monkeypatch):
     """`validate` used to call `.items()` on a list: an exception at every read, inside any
     request or task sent."""
     now = [1000.0]
     monkeypatch.setattr(panel_settings.time, "monotonic", lambda: now[0])
     panel_settings.write({"export.max_rows": 77})
     assert get_settings().export.max_rows == 77  # read once: they are the last valid ones
-    regolazioni_isolate.set(panel_settings.KEY, grezzo)
+    isolated_panel_settings.set(panel_settings.KEY, grezzo)
     now[0] += panel_settings.REREAD_EVERY * 2
     assert get_settings().export.max_rows == 77  # they stay, no exception
 
@@ -274,10 +274,10 @@ def test_json_that_is_not_an_object_does_not_bring_down_get_settings(regolazioni
     {"celery.task_time_limit": 3200, "celery.task_soft_time_limit": 2900},  # the soft limit under the environment's read timeout
     {"celery.task_time_limit": 3200},  # under the environment's soft limit
 ])
-def test_from_valkey_an_inconsistent_pair_never_applies(regolazioni_isolate, written):
+def test_from_valkey_an_inconsistent_pair_never_applies(isolated_panel_settings, written):
     """Removing an item may break a constraint checked already: it is checked again until
     everything holds (a hard 3200 used to apply with a soft 3300)."""
-    regolazioni_isolate.set(panel_settings.KEY, json.dumps(written))
+    isolated_panel_settings.set(panel_settings.KEY, json.dumps(written))
     panel_settings.forget()
     c, i = get_settings().celery, get_settings().ingest
     assert c.task_soft_time_limit < c.task_time_limit
@@ -333,13 +333,13 @@ def test_a_rollout_one_waits_for_the_process_to_start_again():
     assert panel_settings.start_values() == {"celery.max_tasks_per_child": 7}
 
 
-def test_a_variable_read_at_import_takes_the_panel_value_of_the_start(regolazioni_isolate, monkeypatch):
+def test_a_variable_read_at_import_takes_the_panel_value_of_the_start(isolated_panel_settings, monkeypatch):
     monkeypatch.delenv("CHDB_MAX_MEMORY_USAGE", raising=False)
     assert panel_settings.value_at_start("CHDB_MAX_MEMORY_USAGE") == 1_500_000_000  # the default
     panel_settings.forget()
     monkeypatch.setenv("CHDB_MAX_MEMORY_USAGE", "2000000000")
     assert panel_settings.value_at_start("CHDB_MAX_MEMORY_USAGE") == 2_000_000_000  # the environment's
-    regolazioni_isolate.set(panel_settings.KEY, json.dumps({"chdb.max_memory_usage": 3_000_000_000}))
+    isolated_panel_settings.set(panel_settings.KEY, json.dumps({"chdb.max_memory_usage": 3_000_000_000}))
     panel_settings.forget()
     assert panel_settings.value_at_start("CHDB_MAX_MEMORY_USAGE") == 3_000_000_000  # the panel's
     s = get_settings()  # not a settings field: nothing to lay on the settings
@@ -350,7 +350,7 @@ def test_a_variable_read_at_import_takes_the_panel_value_of_the_start(regolazion
     assert (item["env_value"], item["value"]) == (2_000_000_000, 3_000_000_000)
 
 
-def test_valkey_down_at_start_the_environment_applies(regolazioni_isolate, monkeypatch):
+def test_valkey_down_at_start_the_environment_applies(isolated_panel_settings, monkeypatch):
     class Giu:
         def get(self, *_):
             raise ConnectionError("Valkey non risponde")
@@ -368,7 +368,7 @@ def test_an_integer_too_large_for_a_decimal_is_refused_not_raised():
     assert _errors({"api.min_interval_seconds": 10 ** 400})[0]["code"] == "max"
 
 
-def test_a_malformed_variable_read_at_import_stops_the_process(regolazioni_isolate, monkeypatch):
+def test_a_malformed_variable_read_at_import_stops_the_process(isolated_panel_settings, monkeypatch):
     """As before these settings were in the panel: «2GB» does not quietly become the default."""
     monkeypatch.setenv("CHDB_MAX_MEMORY_USAGE", "2GB")
     panel_settings.forget()
@@ -393,23 +393,23 @@ def test_the_hard_limit_back_to_the_environment_respects_the_gateway_threshold()
     assert panel_settings.validate({}, settings_from_env(), hard_limit_max=3000)[1] == []
 
 
-def test_no_values_is_written_and_a_starting_worker_waits_for_them(regolazioni_isolate, monkeypatch):
+def test_no_values_is_written_and_a_starting_worker_waits_for_them(isolated_panel_settings, monkeypatch):
     """A key deleted when there were no values could not tell «none» from «not sent yet»:
     a worker started on an empty Valkey froze the environment's values for its whole life."""
     panel_settings.write({})
-    assert regolazioni_isolate.get(panel_settings.KEY) == "{}"
+    assert isolated_panel_settings.get(panel_settings.KEY) == "{}"
     assert panel_settings.wait_at_first_start(maximum=0) is True
-    regolazioni_isolate.delete(panel_settings.KEY)
+    isolated_panel_settings.delete(panel_settings.KEY)
     monkeypatch.setattr(panel_settings.time, "sleep", lambda s: None)
     assert panel_settings.wait_at_first_start(maximum=0) is False
 
 
-def test_a_resized_pool_keeps_the_memory_the_panel_set(regolazioni_isolate):
+def test_a_resized_pool_keeps_the_memory_the_panel_set(isolated_panel_settings):
     """The pool resized from Administration → Workers took the environment's memory ceiling
     again, over the panel's the worker started with."""
     from app.tasks import worker_pool
 
-    regolazioni_isolate.set(panel_settings.KEY, json.dumps({"celery.max_memory_per_child_kb": 3_000_000}))
+    isolated_panel_settings.set(panel_settings.KEY, json.dumps({"celery.max_memory_per_child_kb": 3_000_000}))
     panel_settings.forget()
     assert worker_pool.per_process_kb(4) == 3_000_000
 

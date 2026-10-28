@@ -509,7 +509,7 @@ async def interrupt(run_id: int) -> None:
 # ── Taking from the queue ─────────────────────────────────────────────────────
 def claim(limit: int) -> tuple[list[int], list[int]]:
     """Takes from the queue up to `limit` orchestrations and signs them as this process's.
-    Returns `(prese, respinte)`: the latter are MANUAL launches of a flow that is running
+    Returns `(taken, refused)`: the latter are MANUAL launches of a flow that is running
     already, to close as failed.
 
     Every take is an UPDATE conditional on the state: when two processes try the same
@@ -620,7 +620,7 @@ async def run_it(run_id: int) -> None:
         await interrupt(run_id)
         raise
     except Exception:
-        logger.exception("orchestrate: run %s fallito", run_id)
+        logger.exception("orchestrate: run %s failed", run_id)
         await _finalize_orch_run(run_id, "FAILURE", "internal error during the orchestration")
 
 

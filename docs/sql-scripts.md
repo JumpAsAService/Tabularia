@@ -26,11 +26,15 @@ ORDER BY ordini DESC
 
 A name is unique only in its folder. When two datasources you can read share it, write the
 folder's name in front, `"Marketing"."Clienti"`: the error says so and lists the folders.
-Renaming a datasource breaks the scripts that name it, as it would any SQL.
+When the two folders have the same name too (`Vendite / Dati` and `Acquisti / Dati`), the
+folder's name does not tell them apart: the error says so, and one of the folders or of the
+datasources needs another name. Renaming a datasource breaks the scripts that name it, as
+it would any SQL.
 
 The dialect is the engine's: Polars SQL, DuckDB, ClickHouse or BigQuery, chosen at the top
-of the page (the administrator decides which engines may be chosen). `--` and `/* */`
-comments are fine.
+of the page (the administrator decides which engines may be chosen). On BigQuery a name is
+quoted in backticks, `` `Importo totale` `` (in double quotes it is a text): the list
+beside the editor writes it so. `--` and `/* */` comments are fine.
 
 ## On a database connection
 
@@ -105,7 +109,8 @@ file's.
 changes are not written). The first write creates the datasource; every write after
 replaces its data and keeps its id, so whatever reads it keeps working. The datasource
 changes only when a write succeeds, and its data contract, when it has one, is checked
-before. On the catalog the script's engine writes it; on a connection the database's
+before. A description written on the datasource stays across the writes (the first one
+says which script writes it). On the catalog the script's engine writes it; on a connection the database's
 whole result is read, as for a SQL datasource. The card shows the last write: when, how
 many rows, who started it, and why it failed.
 
@@ -131,7 +136,7 @@ A script that writes a datasource goes in a [flow group](capabilities/flow-group
 after the steps before it, and the next step reads the new data. Its failure stops the
 group as any cell's. Use a group when the script reads what flows produce: the group
 runs them first, then the script, on one schedule. A script in a group cannot be
-deleted until it is taken out.
+deleted, nor lose its datasource, until it is taken out.
 
 ### Lineage
 

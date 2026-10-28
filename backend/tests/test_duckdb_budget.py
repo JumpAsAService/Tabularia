@@ -53,7 +53,7 @@ def test_a_tiny_share_still_leaves_a_floor(monkeypatch):
     (["celery", "-A", "app.tasks.celery_app", "worker", "-E", "-Q", "celery"], "workers.run_concurrency"),
     (["celery", "-A", "app.tasks.celery_app", "worker", "-E", "--queues=preview"], "workers.preview_concurrency"),
 ])
-def test_the_panels_pool_size_is_the_share(monkeypatch, regolazioni_isolate, argv, key):
+def test_the_panels_pool_size_is_the_share(monkeypatch, isolated_panel_settings, argv, key):
     """Admin → Workers grows a pool started with 2 processes to 6: every connection gets a
     sixth, not a half (six halves of the container: the kernel killed it whole)."""
     from app.core import panel_settings

@@ -754,7 +754,7 @@ def set_schedule(
     audit.record_audit(
         session, actor=user, action=audit.DS_SCHEDULE, target_type="datasource",
         target_id=ds.id, target_label=ds.name,
-        detail={"cron": ds.refresh_schedule or "(disattivato)"}, request=request,
+        detail={"cron": ds.refresh_schedule}, request=request,
     )
     return _to_out(ds)
 

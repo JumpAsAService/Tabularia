@@ -6,7 +6,9 @@
   should: with it, a script could find the files of other runs in progress.
 - POST /scripts/output/import: the output a script wrote in the scripts bucket,
   checked to be a parquet file and copied into Tabularia's storage, where the nodes
-  after the script read it like any other step.
+  after the script read it like any other step. With a `contract` (the datasource a
+  saved script's output is about to replace has one), the copy is evaluated on a
+  worker and the report comes back with the answer: the gateway decides.
 - POST /scripts/input/export: a declared input of a saved script, the datasource's
   current parquet file copied from Tabularia's storage to the scripts bucket, where
   the script reads it (docs/specs/saved-scripts.md).
@@ -20,6 +22,7 @@ import logging
 import os
 import tempfile
 import uuid
+from typing import Any
 
 from botocore.exceptions import BotoCoreError, ClientError
 from fastapi import APIRouter, HTTPException
@@ -77,6 +80,8 @@ class OutputImportRequest(BaseModel):
     key: str  # in the scripts bucket
     bucket: str  # Tabularia's
     output_key: str
+    # the data contract of the datasource the output will replace, with its version
+    contract: dict[str, Any] | None = None
 
 
 @router.post("/output/import")
@@ -110,7 +115,30 @@ def output_import(request: OutputImportRequest):
         get_storage_service().upload_file(path, request.bucket, request.output_key)
     finally:
         os.unlink(path)
-    return {"found": True, "rows": rows, "bytes": head.get("ContentLength"), "columns": columns}
+    out = {"found": True, "rows": rows, "bytes": head.get("ContentLength"), "columns": columns}
+    if request.contract:
+        out["contract"] = _check_contract(request.bucket, request.output_key, request.contract)
+    return out
+
+
+def _check_contract(bucket: str, key: str, contract: dict) -> dict:
+    """The contract on the copy, evaluated by a worker as every writing task's data is
+    (the API runs no Polars on whole datasets), with `check_before_publish`'s verdict.
+    A worker that does not answer within a task's longest time counts as an evaluation
+    that failed: a blocking contract never passes unchecked."""
+    from app.contracts.service import not_evaluated
+    from app.core.config import get_settings
+    from app.tasks.celery_app import celery_app
+
+    result = celery_app.send_task("app.tasks.contract_jobs.check_before_publish_task",
+                                  kwargs={"bucket": bucket, "key": key, "contract": contract})
+    try:
+        return result.get(timeout=get_settings().celery.task_time_limit + 60)
+    except Exception as e:  # noqa: BLE001 — the worker lost, the time limit, the broker
+        logger.warning("contract on %s not evaluated: %s", key, type(e).__name__)
+        return not_evaluated(contract, e)
+    finally:
+        result.forget()
 
 
 def _columns(path: str) -> list[dict]:

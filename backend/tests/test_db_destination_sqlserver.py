@@ -139,3 +139,47 @@ def test_many_rows_in_chunks(db, table, storage):
     out = _write(storage, table, "replace", {"id": list(range(n)), "g": [i % 7 for i in range(n)]})
     assert out["rows_written"] == n
     assert _rows(db, f"SELECT COUNT(*), SUM(CAST(id AS BIGINT)) FROM [{table}]") == [(n, n * (n - 1) // 2)]
+
+
+def test_the_rows_never_sit_where_other_logins_can_read_them(db, table):
+    """The driver's bulk copy runs on a connection of its own, so it could only load a
+    GLOBAL temporary table (##…), which every login of the server can list, read and
+    insert into while it exists (GRANT and DENY do not apply to temporary tables). The
+    rows go straight into the table, in the write's own transaction."""
+    from app.ingest.db_destination import _qualified_table, _write_sqlserver
+
+    schema = pa.schema([("id", pa.int64())])
+    seen: list = []
+
+    def batches():
+        yield pa.record_batch([pa.array([1, 2])], schema=schema)
+        seen.extend(_rows(db, "SELECT name FROM tempdb.sys.tables WHERE name LIKE '##%'"))  # half way
+        yield pa.record_batch([pa.array([3])], schema=schema)
+
+    conn = _conn()
+    qualified, parts = _qualified_table(conn, table)
+    assert _write_sqlserver(conn, DbDestinationSpec(table=table), qualified, parts, schema, batches()) == 3
+    assert seen == []
+    assert _rows(db, f"SELECT id FROM [{table}] ORDER BY id") == [(1,), (2,), (3,)]
+
+
+def test_the_flow_other_types(db, table, storage):
+    """What a real flow's parquet holds besides the plain types: Polars's large strings and
+    categoricals, a column of nulls only, a time of day, bytes, and timestamps with the UTC
+    zone (the ClickHouse engine with the s3 transport writes them so)."""
+    utc = pa.array([dt.datetime(2024, 3, 15, 12, 30, 15, 250000), None], pa.timestamp("us", tz="UTC"))
+    data = pa.table({
+        "id": [1, 2], "name": pa.array(["Caffè", None], pa.large_string()),
+        "kind": pa.array(["a", "b"]).dictionary_encode(), "nothing": pa.array([None, None], pa.null()),
+        "slot": pa.array([dt.time(13, 45, 30), None], pa.time64("us")), "raw": pa.array([b"\x00\x01", None]),
+        "at": utc, "at_rome": utc.cast(pa.timestamp("us", tz="Europe/Rome")),
+    })
+    fd, path = tempfile.mkstemp(suffix=".parquet")
+    os.close(fd)
+    pq.write_table(data, path)
+    storage.upload_file(path, "b", "k.parquet")
+    os.remove(path)
+    write_parquet_to_db(_conn(), DbDestinationSpec(table=table, mode="replace"), "b", "k.parquet", storage=storage)
+    at = dt.datetime(2024, 3, 15, 12, 30, 15, 250000)  # the UTC instant, whatever the zone's label
+    assert _rows(db, f"SELECT name, kind, nothing, slot, raw, at, at_rome FROM [{table}] ORDER BY id") == [
+        ("Caffè", "a", None, "13:45:30.0000000", b"\x00\x01", at, at), (None, "b", None, None, None, None, None)]

@@ -48,13 +48,18 @@ def check_before_publish(bucket: str, key: str, contract: dict) -> dict:
         return evaluate_key(bucket, key, contract)
     except Exception as e:  # noqa: BLE001
         logger.exception("contract cannot be evaluated on %s/%s", bucket, key)
-        blocking = any(r.get("severity") != "warning" for r in (contract.get("rules") or []) if isinstance(r, dict))
-        return {
-            "outcome": "failed" if blocking else "warning",
-            "version": contract.get("version"),
-            "rows": None,
-            "errors": 1 if blocking else 0,
-            "warnings": 0 if blocking else 1,
-            "rules": [],
-            "error": str(e).splitlines()[0][:300] if str(e) else type(e).__name__,
-        }
+        return not_evaluated(contract, e)
+
+
+def not_evaluated(contract: dict, e: BaseException) -> dict:
+    """The report of a contract that could not be evaluated (see `check_before_publish`)."""
+    blocking = any(r.get("severity") != "warning" for r in (contract.get("rules") or []) if isinstance(r, dict))
+    return {
+        "outcome": "failed" if blocking else "warning",
+        "version": contract.get("version"),
+        "rows": None,
+        "errors": 1 if blocking else 0,
+        "warnings": 0 if blocking else 1,
+        "rules": [],
+        "error": str(e).splitlines()[0][:300] if str(e) else type(e).__name__,
+    }

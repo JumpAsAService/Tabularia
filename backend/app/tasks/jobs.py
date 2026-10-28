@@ -229,11 +229,11 @@ def materialize_step_task(self, engine: str, bucket: str, key: str, operations: 
         if fn is None:
             return {"ok": False, "skipped": True}
         written = fn(DataSource(bucket=bucket, key=key), operations)
-        logger.info("materialize_step_task %s ops=%d scritto=%s %.0f ms", engine, len(operations), written,
+        logger.info("materialize_step_task %s ops=%d written=%s %.0f ms", engine, len(operations), written,
                     (_time_mod.perf_counter() - t0) * 1000)
         return {"ok": True, "written": bool(written)}
     except Exception as e:  # noqa: BLE001
-        logger.warning("materialize_step_task %s fallito: %s", engine, e)
+        logger.warning("materialize_step_task %s failed: %s", engine, e)
         return {"ok": False, "error": str(e)[:300]}
     finally:
         try:
@@ -467,7 +467,7 @@ def ingest_sharepoint_task(
                                           progress=advances, last_refresh=last_refresh, previous=previous)
     logger.info(
         f"✅ Completed ingest_sharepoint_task: {output_key} "
-        f"({result['rows_written']} righe da {len(result['files'])} file)"
+        f"({result['rows_written']} rows from {len(result['files'])} files)"
     )
     if contract:
         from app.contracts.service import check_before_publish
@@ -649,7 +649,7 @@ def convert_to_parquet_task(
         options=IngestOptions(**options),
     )
 
-    logger.info(f"✅ Completed convert_to_parquet_task: {parquet_key} ({info.rows} righe)")
+    logger.info(f"✅ Completed convert_to_parquet_task: {parquet_key} ({info.rows} rows)")
     return {"status": "success", **info.model_dump()}
 
 
@@ -696,7 +696,7 @@ def evict_cache_task() -> dict:
         try:
             removed += get_engine("bigquery").cache.evict_expired(settings.cache.ttl_seconds)
         except Exception as e:  # noqa: BLE001 — the sweep must not stop for an optional engine
-            logger.warning("sweep della cache BigQuery non riuscito: %s", e)
+            logger.warning("sweep of the BigQuery cache failed: %s", e)
     return {"removed": removed, "ttl_seconds": settings.cache.ttl_seconds}
 
 

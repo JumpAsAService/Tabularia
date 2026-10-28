@@ -45,13 +45,13 @@ const starting = ref(false)
 // what the fields hold: a string, because a half-typed field is not a value
 const text = ref<Record<string, string>>({})
 // the ones that go back to the environment's value when saved
-const azzera = ref<Set<string>>(new Set())
+const toReset = ref<Set<string>>(new Set())
 // the server's refusals at the last save, per setting
 const refusals = ref<Record<string, SettingError>>({})
 const openOnes = ref<Set<string>>(new Set())
 const search = ref('')
 
-const ICONE: Record<string, any> = {
+const ICONS: Record<string, any> = {
   signin: KeyRound, sso: ShieldCheck, orchestration: Workflow, history: History, webhooks: Webhook, ai: Sparkles, mcp: Bot,
   dbt: Package, previews: Upload, backups: DatabaseBackup, monitoring: Activity, openlineage: GitBranch,
   processes: Cpu, kubernetes: Boxes, scripts: FileCode, builds: Hammer, notebooks: NotebookPen, containers: Container,
@@ -66,7 +66,7 @@ const i18nBase = (v: PanelSetting) =>
   v.source === 'engine' ? `engineSettings.items.${settingI18nKey(v.key)}` : `panelSettings.items.${settingI18nKey(v.key)}`
 const name = (v: PanelSetting) => t(`${i18nBase(v)}.label`)
 const help = (v: PanelSetting) => t(`${i18nBase(v)}.help`)
-const fieldId = (v: PanelSetting) => `impostazione-${v.source}-${settingI18nKey(v.key)}`
+const fieldId = (v: PanelSetting) => `setting-field-${v.source}-${settingI18nKey(v.key)}`
 const groupTitle = (s: SettingSection, g: string) =>
   s === 'engine' ? t(`engineSettings.categories.${g}.title`) : t(`panelSettings.groups.${g}.title`)
 const groupLead = (s: SettingSection, g: string) =>
@@ -135,13 +135,13 @@ const inGroupErrors = (list: PanelSetting[]) => list.some((v) => !!problem(v))
 
 const MIB = 1024 ** 2
 // the unit a number is typed in: bytes in GiB or MiB after their range, kilobytes in GiB
-function scala(v: PanelSetting): { factor: number, unit: string } {
+function inputScale(v: PanelSetting): { factor: number, unit: string } {
   if (v.unit === 'bytes') return (v.max ?? 0) >= 8 * GIB ? { factor: GIB, unit: 'gib' } : { factor: MIB, unit: 'mib' }
   if (v.unit === 'kilobytes') return { factor: MIB, unit: 'gib' }
   return { factor: 1, unit: v.unit }
 }
 const unit = (v: PanelSetting) => {
-  const u = scala(v).unit
+  const u = inputScale(v).unit
   return u && te(`panelSettings.units.${u}`) ? t(`panelSettings.units.${u}`) : ''
 }
 const numeric = (v: PanelSetting) => v.kind === 'int' || v.kind === 'float'
@@ -167,7 +167,7 @@ function show(v: PanelSetting, x: unknown): string {
   if (v.kind === 'bool') return x ? t('panelSettings.on') : t('panelSettings.off')
   if (typeof x === 'string') return x === '' ? t('panelSettings.empty') : x
   if (typeof x !== 'number') return String(x)
-  const { factor } = scala(v)
+  const { factor } = inputScale(v)
   const u = unit(v)
   const n = `${localNumber(x / factor, factor === 1 ? 3 : 4)}${u ? ` ${u}` : ''}`
   if (v.unit === 'seconds' && x >= 60) return `${n} (${duration(x)})`
@@ -178,7 +178,7 @@ function show(v: PanelSetting, x: unknown): string {
 // ── the fields ──────────────────────────────────────────────────────────────
 
 const savedValue = (v: PanelSetting) => (v.value !== null ? v.value : v.envValue)
-const shownOne = (v: PanelSetting) => (azzera.value.has(key(v)) ? v.envValue : savedValue(v))
+const shownOne = (v: PanelSetting) => (toReset.value.has(key(v)) ? v.envValue : savedValue(v))
 
 function separators() {
   const parts = new Intl.NumberFormat(locale.value).formatToParts(12345.6)
@@ -189,10 +189,10 @@ function separators() {
 }
 
 // a value as its field shows it (four decimals in GiB or MiB: 4096 bytes is not «0»)
-function formattato(v: PanelSetting, x: unknown): string {
+function formatted(v: PanelSetting, x: unknown): string {
   if (x === null || x === undefined) return ''
   if (typeof x === 'number') {
-    const { factor } = scala(v)
+    const { factor } = inputScale(v)
     return new Intl.NumberFormat(locale.value, { maximumFractionDigits: factor === 1 ? 3 : 4 }).format(x / factor)
   }
   return String(x)
@@ -201,7 +201,7 @@ function formattato(v: PanelSetting, x: unknown): string {
 function field(v: PanelSetting): string {
   const k = key(v)
   if (k in text.value) return text.value[k]
-  return formattato(v, shownOne(v))
+  return formatted(v, shownOne(v))
 }
 const isOn = (v: PanelSetting) => {
   const k = key(v)
@@ -211,8 +211,8 @@ const isOn = (v: PanelSetting) => {
 function write(v: PanelSetting, s: string) {
   const k = key(v)
   text.value = { ...text.value, [k]: s }
-  azzera.value.delete(k)
-  azzera.value = new Set(azzera.value)
+  toReset.value.delete(k)
+  toReset.value = new Set(toReset.value)
   const { [k]: _via, ...others } = refusals.value
   refusals.value = others
 }
@@ -221,7 +221,7 @@ function reset(v: PanelSetting) {
   const k = key(v)
   const { [k]: _via, ...others } = text.value
   text.value = others
-  if (v.value !== null) azzera.value = new Set([...azzera.value, k])
+  if (v.value !== null) toReset.value = new Set([...toReset.value, k])
   // the button goes away: the focus back on the field, not lost on the page
   nextTick(() => document.getElementById(fieldId(v))?.focus())
 }
@@ -248,7 +248,7 @@ function value(v: PanelSetting): unknown {
   if (!/^-?\d+(\.\d+)?$/.test(s)) return undefined
   const x = Number(s)
   if (!Number.isFinite(x)) return undefined
-  const { factor } = scala(v)
+  const { factor } = inputScale(v)
   // a whole number typed in a larger unit (1,5 GiB): to the nearest byte
   return v.kind === 'int' && factor !== 1 ? Math.round(x * factor) : x * factor
 }
@@ -293,11 +293,11 @@ const changes = computed(() => {
   const out: { gateway: Record<string, unknown>, engine: Record<string, unknown> } = { gateway: {}, engine: {} }
   for (const v of items.value) {
     const k = key(v)
-    if (azzera.value.has(k)) {
+    if (toReset.value.has(k)) {
       if (v.value !== null) out[v.source][v.key] = null
     } else if (k in text.value) {
       // the shown value typed again (a rounded 1,4305 GiB) is not a change
-      if (text.value[k] === formattato(v, savedValue(v))) continue
+      if (text.value[k] === formatted(v, savedValue(v))) continue
       const x = value(v)
       if (x !== undefined && x !== savedValue(v)) out[v.source][v.key] = x
     }
@@ -324,7 +324,7 @@ const canEdit = (v: PanelSetting) => editable.value && !v.off
 
 function cancel() {
   text.value = {}
-  azzera.value = new Set()
+  toReset.value = new Set()
   refusals.value = {}
 }
 
@@ -337,7 +337,7 @@ async function save() {
   let otherError = ''
   let saved = 0
   // each side saves all or none: what a refused side had changed stays in the fields
-  const fallite = new Set<string>()
+  const failedSources = new Set<string>()
   // the lost-run threshold lowered: the engine's hard limit (which must stay under it)
   // goes down first, or the gateway would refuse against the old one
   const stale = items.value.find((v) => v.source === 'gateway' && v.key === 'engine.run_stale_timeout_seconds')
@@ -353,20 +353,20 @@ async function save() {
       else await api.saveEngine(values)
       saved += Object.keys(values).length
     } catch (e: any) {
-      fallite.add(source)
+      failedSources.add(source)
       const errors: SettingError[] | undefined = e?.data?.detail?.errors
       if (errors?.length) for (const x of errors) refused[`${source}:${x.key}`] = x
       else otherError = errMessage(e)
     }
   }
   const written = { ...text.value }
-  const returned = new Set(azzera.value)
+  const returned = new Set(toReset.value)
   await load()
-  if (fallite.size) {
+  if (failedSources.size) {
     // the refused side's changes stay in their fields, with the reasons; the other side is saved
-    const stays = (k: string) => fallite.has(k.split(':', 1)[0])
+    const stays = (k: string) => failedSources.has(k.split(':', 1)[0])
     text.value = Object.fromEntries(Object.entries(written).filter(([k]) => stays(k)))
-    azzera.value = new Set([...returned].filter(stays))
+    toReset.value = new Set([...returned].filter(stays))
     refusals.value = refused
     openOnes.value = new Set([...openOnes.value, ...items.value
       .filter((v) => key(v) in refused).map((v) => `${sectionOf(v)}:${v.group}`)])
@@ -401,7 +401,7 @@ const kubeCommand = computed(() => {
 // the components whose pods could not be read: not offered for a restart, the reason said
 const withError = computed(() => (rollout.value?.components ?? []).filter((c) => c.error))
 const withOrchestrator = computed(() => toStart.value.some((c) => c.component === 'orchestrator'))
-const rolloutModificabile = computed(() => !!rollout.value?.editable)
+const rolloutEditable = computed(() => !!rollout.value?.editable)
 
 async function startRollout() {
   if (!toStart.value.length) return
@@ -475,7 +475,7 @@ const zones = computed(() => {
   <div class="card">
     <h4><SlidersHorizontal :size="14" /> {{ $t('panelSettings.title') }}</h4>
     <p class="hint muted small">{{ $t('panelSettings.lead', { seconds: refreshSeconds }) }}</p>
-    <p class="hint muted small legenda"><RefreshCw :size="12" class="icona-rollout" /> {{ $t('panelSettings.rolloutLegend') }}</p>
+    <p class="hint muted small legend"><RefreshCw :size="12" class="rollout-icon" /> {{ $t('panelSettings.rolloutLegend') }}</p>
     <p v-if="!panelEnabled" class="note">{{ $t('engineSettings.lockedByEnv') }}</p>
     <p v-else-if="!loading_ && !editable" class="note">{{ $t('engineSettings.readOnly') }}</p>
   </div>
@@ -488,7 +488,7 @@ const zones = computed(() => {
       {{ $t('panelSettings.rollout.podsError', { component: component(c.component), error: c.error }) }}
     </p>
     <section v-if="pendingOnes.length" class="card rollout" :aria-label="$t('panelSettings.rollout.region')">
-      <h4><RefreshCw :size="14" class="icona-rollout" /> {{ $t('panelSettings.rollout.title', { n: pendingOnes.length }, pendingOnes.length) }}</h4>
+      <h4><RefreshCw :size="14" class="rollout-icon" /> {{ $t('panelSettings.rollout.title', { n: pendingOnes.length }, pendingOnes.length) }}</h4>
       <p class="hint small">{{ pendingOnes.map((c) => component(c.component)).join(', ') }}</p>
 
       <template v-if="rollout?.mode === 'kubernetes'">
@@ -500,13 +500,13 @@ const zones = computed(() => {
               {{ $t('panelSettings.rollout.left', { old: c.old ?? 0, pods: c.pods ?? 0 }) }}
               <template v-if="c.waiting_for.length"> · {{ $t('panelSettings.rollout.waitingFor', { pods: c.waiting_for.join(', ') }) }}</template>
             </span>
-            <button v-if="rolloutModificabile" type="button" class="back" @click="stopRollout(c)"><X :size="12" /> {{ $t('panelSettings.rollout.stop') }}</button>
+            <button v-if="rolloutEditable" type="button" class="back" @click="stopRollout(c)"><X :size="12" /> {{ $t('panelSettings.rollout.stop') }}</button>
           </li>
         </ul>
         <template v-if="toStart.length">
           <p class="hint muted small">{{ $t('panelSettings.rollout.howKube') }}</p>
           <p v-if="withOrchestrator" class="note">{{ $t('panelSettings.rollout.orchestratorWarning') }}</p>
-          <div v-if="rolloutModificabile" class="actions">
+          <div v-if="rolloutEditable" class="actions">
             <button type="button" class="primary" :disabled="starting || changeCount > 0" @click="startRollout">
               <LoaderCircle v-if="starting" :size="13" class="spin" /><RefreshCw v-else :size="13" />
               {{ $t('panelSettings.rollout.start', { n: toStart.length }, toStart.length) }}
@@ -522,7 +522,7 @@ const zones = computed(() => {
           <code ref="commandEl">{{ rollout.mode === 'compose' ? command : kubeCommand }}</code>
           <button type="button" class="back" @click="copy">{{ $t('panelSettings.rollout.copy') }}</button>
         </div>
-        <div v-if="rolloutModificabile" class="actions">
+        <div v-if="rolloutEditable" class="actions">
           <button type="button" :disabled="starting" @click="startRollout">{{ $t('panelSettings.rollout.done') }}</button>
         </div>
       </template>
@@ -534,8 +534,8 @@ const zones = computed(() => {
     </div>
     <p v-if="search.trim() && !boxes.length" class="muted small">{{ $t('panelSettings.noMatch') }}</p>
 
-    <section v-for="s in boxes" :key="s.section" class="section" :aria-labelledby="`sezione-${s.section}`">
-      <h3 :id="`sezione-${s.section}`">{{ $t(`panelSettings.sections.${s.section}.title`) }}</h3>
+    <section v-for="s in boxes" :key="s.section" class="section" :aria-labelledby="`settings-section-${s.section}`">
+      <h3 :id="`settings-section-${s.section}`">{{ $t(`panelSettings.sections.${s.section}.title`) }}</h3>
       <p class="hint muted small">{{ $t(`panelSettings.sections.${s.section}.lead`) }}</p>
       <p v-if="s.section === 'engine' && engineError" class="card page-error" role="alert">{{ $t('panelSettings.engineDown', { error: engineError }) }}</p>
 
@@ -549,13 +549,13 @@ const zones = computed(() => {
       >
         <summary>
           <ChevronRight :size="14" class="arrow" />
-          <component :is="ICONE[g.group] ?? SlidersHorizontal" :size="15" class="icona" />
+          <component :is="ICONS[g.group] ?? SlidersHorizontal" :size="15" class="group-icon" />
           <span class="title">
             <span class="group-name">{{ groupTitle(s.section, g.group) }}</span>
             <span class="lead">{{ groupLead(s.section, g.group) }}</span>
           </span>
           <span class="counts">
-            <span v-if="inGroupRollout(g.items)" class="icona-rollout" :title="$t('panelSettings.groupHasRollout')"><RefreshCw :size="12" /></span>
+            <span v-if="inGroupRollout(g.items)" class="rollout-icon" :title="$t('panelSettings.groupHasRollout')"><RefreshCw :size="12" /></span>
             <span v-if="inGroupToSave(g.items)" class="chip to-save">{{ $t('panelSettings.unsavedN', { n: inGroupToSave(g.items) }) }}</span>
             <span v-if="inGroupFromPanel(g.items)" class="chip from-panel">{{ $t('panelSettings.fromPanelN', { n: inGroupFromPanel(g.items) }) }}</span>
             <span class="muted small">{{ g.items.length }}</span>
@@ -570,7 +570,7 @@ const zones = computed(() => {
               {{ name(v) }}
               <span
                 v-if="v.rollout.length"
-                class="icona-rollout"
+                class="rollout-icon"
                 role="img"
                 :aria-label="$t('panelSettings.appliesAfter', { components: v.rollout.map(component).join(', ') })"
                 :title="$t('panelSettings.appliesAfter', { components: v.rollout.map(component).join(', ') })"
@@ -605,7 +605,7 @@ const zones = computed(() => {
                 :inputmode="numeric(v) ? 'decimal' : 'text'"
                 autocomplete="off"
                 :spellcheck="false"
-                :list="v.kind === 'timezone' && zones.length ? 'fusi-orari' : undefined"
+                :list="v.kind === 'timezone' && zones.length ? 'time-zones' : undefined"
                 :placeholder="v.kind === 'cpu' ? '2, 500m' : v.kind === 'memory' ? '4Gi, 512Mi' : shownOne(v) === null ? $t('panelSettings.automatic') : ''"
                 :value="field(v)"
                 :disabled="!canEdit(v) || saving"
@@ -631,7 +631,7 @@ const zones = computed(() => {
                 :title="v.source === 'gateway' ? $t('panelSettings.notAppliedGatewayHint', { seconds: refreshSeconds }) : $t('engineSettings.notAppliedHint')"
               >{{ $t('engineSettings.notApplied') }}</span>
               <button
-                v-if="editable && ((v.value !== null && !azzera.has(key(v))) || (canEdit(v) && key(v) in text))"
+                v-if="editable && ((v.value !== null && !toReset.has(key(v))) || (canEdit(v) && key(v) in text))"
                 type="button"
                 class="back"
                 :disabled="saving"
@@ -645,7 +645,7 @@ const zones = computed(() => {
       </details>
     </section>
 
-    <datalist v-if="zones.length" id="fusi-orari">
+    <datalist v-if="zones.length" id="time-zones">
       <option v-for="z in zones" :key="z" :value="z" />
     </datalist>
 
@@ -664,10 +664,10 @@ const zones = computed(() => {
 .card h4 { margin: 0; display: inline-flex; align-items: center; gap: 7px; }
 .hint { margin: 0; line-height: 1.5; }
 .small { font-size: 12px; }
-.legenda { display: inline-flex; align-items: center; gap: 6px; }
+.legend { display: inline-flex; align-items: center; gap: 6px; }
 .note { margin: 0; font-size: 12.5px; padding: 8px 10px; border-radius: 8px; background: var(--bg-soft); border: 1px solid var(--border); }
 .page-error { color: var(--danger); font-size: 13px; }
-.icona-rollout { display: inline-flex; align-items: center; color: var(--accent-hi); }
+.rollout-icon { display: inline-flex; align-items: center; color: var(--accent-hi); }
 
 .rollout { border-color: color-mix(in srgb, var(--accent) 45%, var(--border)); background: color-mix(in srgb, var(--accent) 6%, var(--panel)); }
 .rollout .running { margin: 0; padding: 0; list-style: none; display: flex; flex-direction: column; gap: 6px; font-size: 12.5px; }
@@ -698,7 +698,7 @@ const zones = computed(() => {
 .arrow { flex: none; color: var(--muted); transition: transform 0.15s ease; }
 .box[open] > summary .arrow { transform: rotate(90deg); }
 .box[open] > summary { border-bottom: 1px solid var(--border-soft); border-radius: var(--radius) var(--radius) 0 0; }
-.icona { flex: none; color: var(--muted); }
+.group-icon { flex: none; color: var(--muted); }
 .title { display: flex; flex-direction: column; min-width: 0; flex: 1; }
 .group-name { font-size: 13.5px; font-weight: 600; color: var(--text); }
 .lead { font-size: 12px; color: var(--muted); line-height: 1.45; }

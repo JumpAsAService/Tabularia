@@ -114,7 +114,7 @@ def record(*, engine: str, outcome: str, total_ms: float, phases: dict[str, floa
             p.expire(SLOWEST_KEY, SLOWEST_WINDOW_SECONDS * 2)
         p.execute()
     except Exception as e:  # Valkey down, or anything else: the preview succeeded already
-        logger.debug("preview_stats.record ignorato: %s", e)
+        logger.debug("preview_stats.record ignored: %s", e)
 
 
 def slowest(limit: int = SLOWEST_KEEP, now: float | None = None) -> list[dict]:
@@ -144,7 +144,7 @@ def slowest(limit: int = SLOWEST_KEEP, now: float | None = None) -> list[dict]:
 
 
 def snapshot() -> dict:
-    """Istogrammi correnti, per il collector Prometheus e per la tab admin."""
+    """The current histograms, for the Prometheus collector and the admin tab."""
     try:
         p = _r().pipeline()
         p.hgetall(HIST_KEY); p.hgetall(SUM_KEY); p.hgetall(PHASE_KEY)

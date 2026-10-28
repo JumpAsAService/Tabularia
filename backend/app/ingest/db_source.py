@@ -338,7 +338,7 @@ def _clickhouse_temporal_targets(ch_types) -> dict:
 
 
 def _cast_ch_temporal(arr, target):
-    """Reinterpreta l'intero grezzo di ClickHouse come date32/timestamp."""
+    """ClickHouse's raw integer read again as a date32/timestamp."""
     arrow_t, scale = target
     if pa.types.is_date(arrow_t):
         return pc.cast(pc.cast(arr, pa.int32()), arrow_t)  # days since 1970

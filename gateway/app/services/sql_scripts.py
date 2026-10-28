@@ -27,10 +27,11 @@ import json
 import re
 import time
 from dataclasses import dataclass, field
-from typing import Any, Optional
+from typing import Any, Iterable, Optional
 
 import sqlglot
 from fastapi import HTTPException, Request
+from sqlalchemy import and_
 from sqlglot import exp
 from sqlglot.errors import SqlglotError
 from sqlmodel import Session, select
@@ -167,8 +168,7 @@ def version_row(session: Session, script: SqlScript, version: Optional[int] = No
         SqlScriptVersion.version == (version or script.current_version))).first()
 
 
-def content_of(session: Session, script: SqlScript, version: Optional[int] = None) -> dict:
-    row = version_row(session, script, version)
+def _parsed(row: Optional[SqlScriptVersion]) -> dict:
     if row is None:
         return empty_content()
     try:
@@ -177,8 +177,28 @@ def content_of(session: Session, script: SqlScript, version: Optional[int] = Non
         return empty_content()
 
 
+def content_of(session: Session, script: SqlScript, version: Optional[int] = None) -> dict:
+    return _parsed(version_row(session, script, version))
+
+
+def current_contents(session: Session, scripts: list[SqlScript]) -> dict[int, dict]:
+    """The current version's content of each script, read at once: the lists show every
+    script's engine, connection and datasource."""
+    ids = [s.id for s in scripts]
+    if not ids:
+        return {}
+    rows = session.exec(select(SqlScriptVersion).join(SqlScript, and_(
+        SqlScript.id == SqlScriptVersion.script_id, SqlScript.current_version == SqlScriptVersion.version,
+    )).where(SqlScript.id.in_(ids))).all()  # type: ignore[union-attr]
+    by_script = {r.script_id: r for r in rows}
+    return {s.id: _parsed(by_script.get(s.id)) for s in scripts}
+
+
 def add_version(session: Session, script: SqlScript, content: dict, note: str, user: User) -> SqlScriptVersion:
-    """The next version, which becomes the current one."""
+    """The next version, which becomes the current one. The script's row stays locked
+    until the commit: two saves at once take the next numbers in turn, instead of the
+    same one and a 500 on the second."""
+    session.exec(select(SqlScript.id).where(SqlScript.id == script.id).with_for_update())
     last = session.exec(select(SqlScriptVersion.version).where(SqlScriptVersion.script_id == script.id)
                         .order_by(SqlScriptVersion.version.desc())).first() or 0  # type: ignore[attr-defined]
     row = SqlScriptVersion(script_id=script.id, version=last + 1, content=json.dumps(content), note=note,
@@ -192,6 +212,14 @@ def add_version(session: Session, script: SqlScript, content: dict, note: str, u
 # ── the catalog a person may query ───────────────────────────────────────────
 def folder_names(session: Session) -> dict[int, str]:
     return {i: p.name for i, p in perm_service._all_projects(session).items()}
+
+
+def folder_paths(session: Session) -> dict[int, str]:
+    """Every folder's whole path, «Vendite / Nord», from one read of the tree."""
+    projects = perm_service._all_projects(session)
+    parents = {i: p.parent_id for i, p in projects.items()}
+    return {pid: " / ".join(projects[i].name for i in reversed(perm_service.ancestor_ids(parents, pid)))
+            for pid in projects}
 
 
 def readable_datasources(session: Session, user: User) -> list[Datasource]:
@@ -298,6 +326,12 @@ def resolve(session: Session, user: User, sql: str, engine: Optional[str]) -> Re
         label = f"{folder}.{name}" if folder else name
         if not matches:
             raise _refuse(f"There is no datasource «{label}» you can read")
+        if len(matches) > 1 and folder:
+            # the folder's name does not tell them apart either: only a new name will
+            paths = folder_paths(session)
+            where = ", ".join(sorted(paths.get(d.project_id, "?") for d in matches))
+            raise _refuse(f"«{label}» is in more than one folder called «{folder}» ({where}): "
+                          "rename one of the folders, or one of the datasources")
         if len(matches) > 1:
             where = ", ".join(sorted(folders.get(d.project_id, "?") for d in matches))
             raise _refuse(f"«{name}» is in more than one folder ({where}): write it as "
@@ -348,21 +382,32 @@ def _named_tables(sql: str, dialect: str) -> tuple[tuple[str, str], ...]:
     return tuple(out)
 
 
+def by_name(datasources: Iterable[Datasource]) -> dict[str, list[Datasource]]:
+    """The datasources by lower-case name, as `named_datasources` looks them up."""
+    index: dict[str, list[Datasource]] = {}
+    for ds in datasources:
+        index.setdefault(ds.name.lower(), []).append(ds)
+    return index
+
+
 def named_datasources(session: Session, sql: str, engine: Optional[str],
-                      candidates: Optional[list[Datasource]] = None) -> list[Datasource]:
+                      index: Optional[dict[str, list[Datasource]]] = None,
+                      folders: Optional[dict[int, str]] = None) -> list[Datasource]:
     """The datasources the SQL names, as `resolve` finds them but without refusing
-    anything: for the lineage, which reads a script without running it. Among
-    `candidates` (default: every datasource); a name it cannot place is left out."""
+    anything: for the lineage, which reads a script without running it. Among `index`
+    (`by_name` of the candidates; default: every datasource), with the folders'
+    names `folders` (`folder_names`) — whoever asks for many scripts builds both once.
+    A name it cannot place is left out."""
     tables = _named_tables(sql or "", DIALECTS.get(engine or "polars", "postgres"))
     if not tables:
         return []
-    by_name: dict[str, list[Datasource]] = {}
-    for ds in candidates if candidates is not None else session.exec(select(Datasource)).all():
-        by_name.setdefault(ds.name.lower(), []).append(ds)
-    folders = folder_names(session) if any(folder for _, folder in tables) else {}
+    if index is None:
+        index = by_name(session.exec(select(Datasource)).all())
+    if folders is None:
+        folders = folder_names(session) if any(folder for _, folder in tables) else {}
     out: dict[int, Datasource] = {}
     for name, folder in tables:
-        matches = by_name.get(name.lower(), [])
+        matches = index.get(name.lower(), [])
         if folder:
             matches = [d for d in matches if folders.get(d.project_id, "").lower() == folder.lower()]
         if len(matches) > 1:
@@ -376,7 +421,7 @@ def _engine_message(detail: str, resolved: Resolved) -> str:
     """The engine's refusal in the words of a SQL script: the aliases back to the names,
     and no talk of the `sql` node's input."""
     for alias, ds in resolved.tables.items():
-        detail = re.sub(rf"\b{alias}\b", ds.name, detail)
+        detail = re.sub(rf"\b{alias}\b", lambda _m, name=ds.name: name, detail)  # a name, not a template
     detail = re.sub(r"^sql: ", "", detail)
     return detail.replace(
         "the query can read only the input of the node (`self` or `input`). ", "the query can read only datasources. "

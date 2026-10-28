@@ -324,7 +324,7 @@ class BigQueryContext:
                 if job.state != "DONE":
                     self.client.cancel_job(job.job_id, location=self.location)
             except Exception as e:  # noqa: BLE001
-                logger.warning("annullamento job BigQuery %s non riuscito: %s", getattr(job, "job_id", "?"), e)
+                logger.warning("cancelling the BigQuery job %s failed: %s", getattr(job, "job_id", "?"), e)
 
     # ── introspection (dry run: free) ────────────────────────────────────
     def schema_of(self, sql: str) -> list[tuple[str, str]]:
@@ -408,8 +408,8 @@ class BigQueryContext:
 
     def cost_line(self) -> str:
         usd = self.bytes_billed / 1024**4 * USD_PER_TIB
-        return (f"query={self.queries} dry_run={self.dry_runs} letti={self.bytes_processed / 1e6:.1f}MB "
-                f"fatturati={self.bytes_billed / 1e6:.1f}MB (~{usd:.4f}$)")
+        return (f"query={self.queries} dry_run={self.dry_runs} read={self.bytes_processed / 1e6:.1f}MB "
+                f"billed={self.bytes_billed / 1e6:.1f}MB (~{usd:.4f}$)")
 
 
 class BigQueryEngine(Engine):
@@ -569,7 +569,7 @@ class BigQueryEngine(Engine):
         )
         ctx.phases["materialize"] = ctx.phases.get("materialize", 0.0) + (time.perf_counter() - t0) * 1000
         self.cache.mark(final)
-        logger.info("materializzato step %d in cache BigQuery (%s)", len(operations), final[:12])
+        logger.info("materialized step %d in the BigQuery cache (%s)", len(operations), final[:12])
 
     def _defer_materialization(self, source: DataSource, ops: list[Operation]) -> None:
         """Queues (in memory) the materialization of `ops`, unless it is cached already: the
@@ -663,7 +663,7 @@ class BigQueryEngine(Engine):
             truncated = df.height > limit
             if truncated:
                 df = df.head(limit)
-            logger.info("bigquery preview | %s | righe=%d", ctx.cost_line(), df.height)
+            logger.info("bigquery preview | %s | rows=%d", ctx.cost_line(), df.height)
             self._record_phases(ctx)
             parent = ops[:-1]
             if not parent:
@@ -758,7 +758,7 @@ class BigQueryEngine(Engine):
             rows_written = self._write_parquet(ctx, job, out_path)
             ctx.phases["fetch"] = (time.perf_counter() - t0) * 1000
             self.storage.upload_file(out_path, destination.bucket, destination.key)
-            logger.info("bigquery run | %s | righe=%d", ctx.cost_line(), rows_written)
+            logger.info("bigquery run | %s | rows=%d", ctx.cost_line(), rows_written)
             written = pl.scan_parquet(out_path)
             return RunResult(
                 destination=destination, rows_written=int(rows_written), columns=_columns_of(written.collect_schema()),

@@ -48,9 +48,9 @@ def upload_file(
     file: UploadFile = File(..., description="The file to ingest"),
     format: Optional[FileFormat] = Form(None, description="Forces the format (default: from the extension)"),
     separator: Optional[str] = Form(None, description="CSV separator (absent = read from the file)"),
-    has_header: bool = Form(True, description="Il CSV ha l'header?"),
+    has_header: bool = Form(True, description="Does the CSV have a header?"),
     sheet: Optional[str] = Form(None, description="Excel sheet (default: the first)"),
-    dtype_overrides: Optional[str] = Form(None, description='JSON {colonna: dtype}, es. {"id":"int"}'),
+    dtype_overrides: Optional[str] = Form(None, description='JSON {column: dtype}, e.g. {"id":"int"}'),
 ):
     options = IngestOptions(
         format=format,

@@ -20,12 +20,14 @@ import json
 import logging
 from collections import deque
 from datetime import datetime
-from typing import Optional
+from typing import Callable, Optional
 
 from sqlalchemy import func
 from sqlmodel import Session, select
 
-from app.models import Connection, Datasource, Flow, Run, User
+from app.models import (
+    Connection, Datasource, Flow, Run, SavedScript, SavedScriptVersion, SqlScript, SqlScriptVersion, User,
+)
 from app.services import run_history
 from app.services import permissions as perm_service
 
@@ -117,6 +119,27 @@ def _add_image(g: _Graph, data: dict, runner: str) -> None:
     g.add_node(node, type="container", label=repository,
                meta={"registry_id": data.get("registryId"), "tag": str(data.get("tag") or "").strip() or "latest"})
     g.add_edge(runner, node, EDGE_ORCHESTRATE)
+
+
+def current_contents(session: Session, objects: list, model, version_model,
+                      empty: Callable[[], dict]) -> dict[int, dict]:
+    """id → the content of the current version of saved scripts or SQL scripts, in ONE
+    query (`content_of` asks one per object, and the graph reads every script at every
+    look). As `content_of`: none or unreadable → `empty()`."""
+    out = {o.id: empty() for o in objects}
+    if not out:
+        return out
+    rows = session.exec(
+        select(version_model.script_id, version_model.content)
+        .join(model, (model.id == version_model.script_id) & (model.current_version == version_model.version))
+        .where(model.id.in_(list(out)))  # type: ignore[attr-defined]
+    ).all()
+    for script_id, content in rows:
+        try:
+            out[script_id] = {**empty(), **json.loads(content)}
+        except ValueError:
+            pass
+    return out
 
 
 def build_full_graph(session: Session, user: User) -> _Graph:
@@ -249,13 +272,18 @@ def build_full_graph(session: Session, user: User) -> _Graph:
     from app.services import saved_scripts
     from app.services.script_builds import disabled_reason
 
+    # the datasource with a name in a folder (what a script publishes or writes): one lookup
+    ds_at: dict[tuple[int, str], Datasource] = {}
+    for d in datasources:
+        ds_at.setdefault((d.project_id, d.name), d)
     stmt = saved_scripts.visible_query(session, user) if disabled_reason() is None else None
     scripts = list(session.exec(stmt).all()) if stmt is not None else []
     script_ids = {x.id for x in scripts}
+    contents = current_contents(session, scripts, SavedScript, SavedScriptVersion, saved_scripts.empty_content)
     for x in scripts:
         g.add_node(_sid(x.id), type="script", label=x.name, project_id=x.project_id,
                    meta={"scheduled": bool(x.run_schedule), "version": x.current_version})
-        content = saved_scripts.content_of(session, x)
+        content = contents[x.id]
         for item in content.get("inputs") or []:
             ds_id = item.get("datasource_id")
             if not isinstance(ds_id, int):
@@ -264,8 +292,7 @@ def build_full_graph(session: Session, user: User) -> _Graph:
             g.add_edge(source, _sid(x.id), EDGE_READ)                # datasource → script
         out = content.get("output") or {}
         if out.get("publish"):
-            published = next((d for d in datasources if d.project_id == out.get("project_id")
-                              and d.name == out.get("name")), None)
+            published = ds_at.get((out.get("project_id"), out.get("name")))
             if published is not None:
                 g.add_edge(_sid(x.id), _dsid(published.id), EDGE_PUBLISH)  # script → datasource
     if script_ids:
@@ -284,10 +311,15 @@ def build_full_graph(session: Session, user: User) -> _Graph:
     from app.services import sql_scripts
 
     stmt = sql_scripts.visible_query(session, user)
-    sql_ids: set[int] = set()
-    for x in (session.exec(stmt).all() if stmt is not None else []):
-        sql_ids.add(x.id)
-        content = sql_scripts.content_of(session, x)
+    queries = list(session.exec(stmt).all()) if stmt is not None else []
+    sql_ids = {x.id for x in queries}
+    contents = current_contents(session, queries, SqlScript, SqlScriptVersion, sql_scripts.empty_content)
+    # what the SQL names is looked up among the readable datasources, by name and folder:
+    # both built once, not once per script
+    by_name = sql_scripts.by_name(datasources) if queries else {}
+    folders = sql_scripts.folder_names(session) if queries else {}
+    for x in queries:
+        content = contents[x.id]
         g.add_node(_qid(x.id), type="sql_script", label=x.name, project_id=x.project_id,
                    meta={"scheduled": bool(x.run_schedule), "version": x.current_version,
                          "engine": content.get("engine")})
@@ -295,12 +327,11 @@ def build_full_graph(session: Session, user: User) -> _Graph:
             if content["connection_id"] in conn_by_id:
                 g.add_edge(_cid(content["connection_id"]), _qid(x.id), EDGE_READ)  # connection → script
         else:
-            for ds in sql_scripts.named_datasources(session, content.get("sql") or "", content.get("engine"), datasources):
+            for ds in sql_scripts.named_datasources(session, content.get("sql") or "", content.get("engine"), by_name, folders):
                 g.add_edge(_dsid(ds.id), _qid(x.id), EDGE_READ)                     # datasource → script
         out = content.get("output")
         if isinstance(out, dict):
-            written = next((d for d in datasources if d.project_id == out.get("project_id")
-                            and d.name == out.get("name")), None)
+            written = ds_at.get((out.get("project_id"), out.get("name")))
             if written is not None:
                 g.add_edge(_qid(x.id), _dsid(written.id), EDGE_PUBLISH)          # script → datasource
 

@@ -3,9 +3,10 @@
 OpenLineage (services/openlineage.py), where a session is a run and the datasources it
 reads are its inputs.
 
-A row per notebook and datasource, touched once per session: the first read of a
-datasource in a session moves the row to that session, the reads after it change
-nothing — a notebook re-runs its cells often, the database is written once.
+A row per notebook, mode and datasource, touched once per session: the first read of a
+datasource in a session moves its mode's row to that session, the reads after it change
+nothing — a notebook re-runs its cells often, the database is written once. The app and
+the editor of a notebook each have a row of their own: they may run at once.
 """
 from __future__ import annotations
 
@@ -27,17 +28,15 @@ def record(session: Session, notebook_id: int, datasource_id: int, session_key: 
     """Records that the session `session_key` (its Job's name) read the datasource; True
     when it is the session's first read of it. Commits."""
     now = _now()
+    mine = (NotebookRead.notebook_id == notebook_id, NotebookRead.datasource_id == datasource_id, NotebookRead.mode == mode)
     moved = session.exec(
-        update(NotebookRead)
-        .where(NotebookRead.notebook_id == notebook_id, NotebookRead.datasource_id == datasource_id,
-               NotebookRead.last_session != session_key)
-        .values(last_session=session_key, mode=mode, read_at=now)
+        update(NotebookRead).where(*mine, NotebookRead.last_session != session_key)
+        .values(last_session=session_key, read_at=now)
     )
     if moved.rowcount:
         session.commit()
         return True
-    if session.exec(select(NotebookRead.id).where(NotebookRead.notebook_id == notebook_id,
-                                                  NotebookRead.datasource_id == datasource_id)).first() is not None:
+    if session.exec(select(NotebookRead.id).where(*mine)).first() is not None:
         session.rollback()
         return False  # read already in this session
     session.add(NotebookRead(notebook_id=notebook_id, datasource_id=datasource_id, last_session=session_key,
@@ -58,16 +57,16 @@ def read_in_session(session: Session, notebook_id: int, session_key: str) -> lis
 
 
 def read_by(session: Session, notebook_ids: Iterable[int]) -> dict[int, list[int]]:
-    """notebook id → the datasources it has ever read."""
+    """notebook id → the datasources it has ever read, in its app or its editor."""
     ids = list(notebook_ids)
-    out: dict[int, list[int]] = {}
+    out: dict[int, dict[int, None]] = {}
     if not ids:
-        return out
+        return {}
     for nb, ds in session.exec(select(NotebookRead.notebook_id, NotebookRead.datasource_id)
                                .where(NotebookRead.notebook_id.in_(ids))  # type: ignore[attr-defined]
                                .order_by(NotebookRead.id)).all():
-        out.setdefault(nb, []).append(ds)
-    return out
+        out.setdefault(nb, {})[ds] = None
+    return {nb: list(read) for nb, read in out.items()}
 
 
 def readers_of(session: Session, datasource_ids: Iterable[int]) -> list[int]:

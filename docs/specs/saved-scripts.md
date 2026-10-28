@@ -115,8 +115,12 @@ the missing input.
   columns), from Tabularia's storage, as the editor previews a Script node today.
 - With `output.publish`: the file becomes a datasource in `output.project_id`, by the
   same path an Output node takes (EDIT on that folder, checked with the run's authority;
-  overwrite keeps the datasource's id). Inside a flow the publish setting is ignored:
-  there the nodes after the Script node decide where the data goes.
+  overwrite keeps the datasource's id). Over a datasource that is there, as every
+  writer's data: its data contract goes with the output to `POST /scripts/output/import`,
+  which has a worker evaluate it on the copy (the runs' queue), and a broken blocking
+  rule leaves the datasource as it was, fails the run and is recorded in the contract's
+  history; the description someone wrote on it stays. Inside a flow the publish setting
+  is ignored: there the nodes after the Script node decide where the data goes.
 
 ## Runs
 

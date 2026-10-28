@@ -172,12 +172,15 @@ async def launch(session: Session, user: User, script: SqlScript, trigger_type: 
         # that ran, and the datasources the SQL named or the connection it ran on
         read = {"version": script.current_version, "connection_id": content.get("connection_id"),
                 "datasources": [d["id"] for d in detail.get("datasources") or []]}
+        # a description someone wrote on the datasource since stays: people and the AI
+        # assistant read it to choose the table, and the script has no field for it
+        description = target.description if target is not None and target.description \
+            else f"Written by the SQL script «{script.name}»"
         run = Run(kind="sql", sql_script_id=script.id, task_id=task_id, launched_by=user.id,
                   trigger_type=trigger_type, parent_run_id=parent_run_id, engine=engine, input_key=input_key,
                   output_bucket=bucket, output_key=output_key, publish_name=output["name"],
                   publish_project_id=output["project_id"], publish_overwrite=True,
-                  publish_description=f"Written by the SQL script «{script.name}»", publish_sort_keys="[]",
-                  script=json.dumps(read))
+                  publish_description=description, publish_sort_keys="[]", script=json.dumps(read))
         session.add(run)
         session.commit()
         session.refresh(run)
@@ -201,4 +204,7 @@ def failed_run(session: Session, user: Optional[User], script: SqlScript, trigge
     session.add(run)
     session.commit()
     session.refresh(run)
+    from app.services import openlineage
+
+    openlineage.run_closed(session, run)  # a failed run as any other: the catalog sees its FAIL, as a flow's
     return run

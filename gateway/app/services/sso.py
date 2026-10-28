@@ -112,7 +112,7 @@ def unreachable(what: str, url: str, e: BaseException) -> "SsoError":
 
 
 def discovery(cfg: Optional[OidcSettings] = None, *, force: bool = False) -> dict:
-    """Documento di discovery dell'IdP (authorize/token/JWKS), cache con TTL."""
+    """The IdP's discovery document (authorize/token/JWKS), cached with a TTL."""
     cfg = cfg or get_settings().oidc
     cached = _discovery_cache.get(cfg.discovery_url)
     if cached and not force and time.time() - cached[0] < cfg.discovery_ttl_seconds:

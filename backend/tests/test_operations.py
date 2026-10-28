@@ -190,6 +190,16 @@ def test_sql_blocks_file_reads():
         apply("sql", {"query": "SELECT * FROM read_csv('/app/app/core/config.py')"})
     with pytest.raises(EngineError, match="are not allowed"):
         apply("sql", {"query": "select * from READ_PARQUET ('/tmp/x.parquet')"})
+    # Polars takes the function's name quoted, and a comment before its parenthesis: the
+    # name alone is refused (a SQL script on the catalog read the worker's files this way)
+    for query in ("SELECT * FROM \"read_csv\"('/etc/hostname')",
+                  "SELECT * FROM `READ_CSV`('/etc/hostname')",
+                  "SELECT * FROM self JOIN read_json/* x */('/x.json') t ON true",
+                  "SELECT * FROM read_ipc -- x\n('/x.arrow')"):
+        with pytest.raises(EngineError, match="are not allowed"):
+            apply("sql", {"query": query})
+    # a column whose name only contains one of them is no function
+    assert apply("sql", {"query": "SELECT paese AS my_read_csv_count FROM self"}).columns == ["my_read_csv_count"]
 
 
 def test_sql_empty_query_refused():

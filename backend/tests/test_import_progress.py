@@ -92,7 +92,7 @@ def test_the_engine_returns_the_progress(monkeypatch, info, expected):
     assert tasks_route.get_task_status("t-1").progress == expected
 
 
-def test_a_task_whose_worker_died_is_failed(monkeypatch, regolazioni_isolate):
+def test_a_task_whose_worker_died_is_failed(monkeypatch, isolated_panel_settings):
     """A worker OOMKilled or whose pod went leaves its tasks STARTED in the result backend:
     the engine says they failed, and why, instead of «running» for an hour."""
     from app.tasks import worker_pool
@@ -104,11 +104,11 @@ def test_a_task_whose_worker_died_is_failed(monkeypatch, regolazioni_isolate):
             self.status, self.state, self.info = "STARTED", "STARTED", info
 
     monkeypatch.setattr(tasks_route, "AsyncResult", _Result)
-    regolazioni_isolate.set(worker_pool.KEY_PREFIX + "celery@gone", '{"started_at": 200.0}')  # started again since
+    isolated_panel_settings.set(worker_pool.KEY_PREFIX + "celery@gone", '{"started_at": 200.0}')  # started again since
     out = tasks_route.get_task_status("t-1")
     assert out.status == "FAILURE" and out.error == worker_pool.LOST and out.progress is None
     monkeypatch.setattr(tasks_route.exports, "ensure_owner", lambda task_id, owner: None)
     assert tasks_route.export_status("t-1") == {"status": "failed", "code": 503, "detail": worker_pool.LOST}
-    regolazioni_isolate.set(worker_pool.KEY_PREFIX + "celery@gone", '{"started_at": 50.0}')  # the same life: running
+    isolated_panel_settings.set(worker_pool.KEY_PREFIX + "celery@gone", '{"started_at": 50.0}')  # the same life: running
     out = tasks_route.get_task_status("t-1")
     assert out.status == "STARTED" and out.progress == {"phase": "reading", "rows": 3}

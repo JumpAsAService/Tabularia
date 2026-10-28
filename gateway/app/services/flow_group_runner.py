@@ -360,8 +360,9 @@ async def _sql_cell(run_id: int, user_id: int, trigger: str, script_id: int, cel
             if live is not None:
                 # a write already going: its outcome counts when it read after the previous step
                 if since is None or (live.started_at is not None and live.started_at >= since):
-                    return await _wait_for(s, run_id, live.id, name, cells, step, col, take_outcome=True)
-                await _wait_for(s, run_id, live.id, name, cells, step, col, take_outcome=False)
+                    return await _wait_for(s, run_id, live.id, name, cells, step, col, take_outcome=True,
+                                           engine_task=True)
+                await _wait_for(s, run_id, live.id, name, cells, step, col, take_outcome=False, engine_task=True)
                 continue
             try:
                 run = await sql_script_runs.launch(s, user, script, trigger, parent_run_id=run_id)
@@ -500,12 +501,18 @@ def _node_id(run: Run) -> str | None:
 
 
 async def _wait_for(s: Session, run_id: int, live_id: int, name: str, cells: _Cells, step: int, col: int,
-                    take_outcome: bool) -> str | None:
-    """Waits for a run already in progress; with `take_outcome`, its outcome is the cell's."""
+                    take_outcome: bool, engine_task: bool = False) -> str | None:
+    """Waits for a run already in progress; with `take_outcome`, its outcome is the cell's.
+    `engine_task`: a run whose state is the engine's task (a SQL script's write), brought
+    up to date at every look; an orchestration's row is kept up to date by its process."""
     await cells.set(step, col, run_id=live_id, waited=take_outcome)
     from app.services.waits import waits
 
     for pause in waits(orch._orc().poll_interval_seconds):
+        if engine_task:
+            live = s.get(Run, live_id)
+            if live is not None and live.status not in TERMINAL_STATES:
+                await orch._reconcile(s, live)
         row = s.exec(select(Run.status, Run.error).where(Run.id == live_id)).first()
         if row is None:
             return f"'{name}': the run in progress it waited for is gone" if take_outcome else None

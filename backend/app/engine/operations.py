@@ -646,8 +646,10 @@ def op_compute(lf: pl.LazyFrame, params: dict[str, Any], ctx: OperationContext) 
 # Table functions that read FILES from the worker's disk: Polars SQL supports them,
 # but here they are FORBIDDEN — a query could read secrets or other people's parquet
 # (`SELECT * FROM read_csv('/app/.../secrets.toml')`). The only table available is
-# the node's input.
-_SQL_FILE_FUNCS = re.compile(r"\b(?:read|scan)_(?:csv|parquet|ipc|ndjson|json)\s*\(", re.IGNORECASE)
+# the node's input. The NAME is refused wherever it stands, not «name(»: Polars also
+# takes it quoted (`"read_csv"(…)`, `` `read_csv`(…) ``) and with a comment before its
+# parenthesis, and both read the file all the same.
+_SQL_FILE_FUNCS = re.compile(r"\b(?:read|scan)_(?:csv|parquet|ipc|ndjson|json)\b", re.IGNORECASE)
 
 
 @register("sql")

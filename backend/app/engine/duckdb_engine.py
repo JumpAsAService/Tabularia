@@ -214,7 +214,7 @@ class DuckDBEngine(DeferredStepCache, Engine):
             raise EngineError(f"Error while running the flow: {e}") from e
         self.storage.upload_file(path, self.cache.bucket, self.cache.object_key(final))
         self.cache.mark(final)
-        logger.info("materializzato step %d in cache", len(operations))
+        logger.info("materialized step %d in cache", len(operations))
 
     @staticmethod
     def _cleanup(tmp: list[str]) -> None:

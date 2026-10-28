@@ -37,7 +37,7 @@ def login(body: LoginRequest, request: Request, response: Response, session: Ses
     if wait > 0:
         audit.record_audit(
             session, actor=None, actor_label=body.email, action=audit.LOGIN_FAILED,
-            outcome="failure", detail={"reason": "troppi tentativi"}, request=request,
+            outcome="failure", detail={"reason": "throttled"}, request=request,
         )
         raise HTTPException(
             status_code=status.HTTP_429_TOO_MANY_REQUESTS,
@@ -46,7 +46,7 @@ def login(body: LoginRequest, request: Request, response: Response, session: Ses
         )
     user = session.exec(select(User).where(User.email == body.email)).first()
     # the hash the password is checked against: the session will be born only if it is
-    # still that one (see sessions.apri)
+    # still that one (see sessions.open_session)
     verified = user.hashed_password if user is not None else None
     # an SSO-only user (no local password): signs in from the IdP only; a service
     # account signs in with a token only. bcrypt runs in every case, against a hash
@@ -59,14 +59,14 @@ def login(body: LoginRequest, request: Request, response: Response, session: Ses
         # failed login: who tried and from where is recorded (the email tried)
         audit.record_audit(
             session, actor=user, actor_label=body.email, action=audit.LOGIN_FAILED,
-            outcome="failure", detail={"reason": "credenziali errate"}, request=request,
+            outcome="failure", detail={"reason": "wrong credentials"}, request=request,
         )
         login_throttle.record_failure(session, ip, body.email)
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Incorrect email or password")
     if not user.is_active:
         audit.record_audit(
             session, actor=user, action=audit.LOGIN_FAILED, outcome="failure",
-            detail={"reason": "utente disattivato"}, request=request,
+            detail={"reason": "deactivated"}, request=request,
         )
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="This user has been deactivated")
     login_throttle.record_success(session, ip, body.email)
@@ -77,7 +77,7 @@ def login(body: LoginRequest, request: Request, response: Response, session: Ses
         # the password changed (or the account was disabled) while checking
         audit.record_audit(
             session, actor=user, actor_label=body.email, action=audit.LOGIN_FAILED,
-            outcome="failure", detail={"reason": "password cambiata durante l'accesso"}, request=request,
+            outcome="failure", detail={"reason": "password changed while signing in"}, request=request,
         )
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Incorrect email or password")
     audit.record_audit(session, actor=user, action=audit.LOGIN, request=request)

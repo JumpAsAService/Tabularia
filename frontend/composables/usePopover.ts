@@ -4,7 +4,7 @@
 // closed with Esc, and the focus stayed on the button — audit 2026-10-11, F6.)
 import { nextTick, onBeforeUnmount, watch, type Ref } from 'vue'
 
-const FOCUSABILI = 'a[href], button:not([disabled]), input:not([disabled]), select:not([disabled]), textarea:not([disabled]), [tabindex]:not([tabindex="-1"])'
+const FOCUSABLE = 'a[href], button:not([disabled]), input:not([disabled]), select:not([disabled]), textarea:not([disabled]), [tabindex]:not([tabindex="-1"])'
 
 export function usePopover(isOpen: Ref<boolean>, panel: Ref<HTMLElement | null>, close: () => void) {
   let origin: HTMLElement | null = null
@@ -31,7 +31,7 @@ export function usePopover(isOpen: Ref<boolean>, panel: Ref<HTMLElement | null>,
       document.addEventListener('keydown', onKey)
       await nextTick()
       panel.value?.addEventListener('focusout', onFocusOut)
-      panel.value?.querySelector<HTMLElement>(FOCUSABILI)?.focus()
+      panel.value?.querySelector<HTMLElement>(FOCUSABLE)?.focus()
     } else {
       document.removeEventListener('keydown', onKey)
       origin?.focus?.()

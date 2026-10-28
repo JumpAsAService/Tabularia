@@ -326,6 +326,9 @@ def _groups(session: Session, env: ScriptEnvironment, group_ids: list[int]) -> N
 
 def _new_version(session: Session, env: ScriptEnvironment, language_version: str, packages: str,
                  who: User) -> ScriptEnvironmentVersion:
+    # the environment's row held until the commit: two builds at once take the next
+    # numbers in turn (not the same one, a 500 on the second)
+    session.exec(select(ScriptEnvironment.id).where(ScriptEnvironment.id == env.id).with_for_update())
     number = (session.exec(select(func.max(ScriptEnvironmentVersion.number))
                            .where(ScriptEnvironmentVersion.environment_id == env.id)).one() or 0) + 1
     v = ScriptEnvironmentVersion(environment_id=env.id, number=number, language_version=language_version,

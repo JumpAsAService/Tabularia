@@ -140,6 +140,8 @@ _SQLSERVER_TLS_HINT = (
 )
 
 _ORACLE_CODE_RE = re.compile(r"\b((?:ORA|DPY)-\d{4,5}):\s*([^\n]+)")
+# a PL/SQL block that does not compile: ORA-06550 gives only the place, the next line why
+_PLSQL_CAUSE_RE = re.compile(r"\bPLS-\d{5}:\s*([^\n]+)")
 
 _CH_EXC_RE = re.compile(r"Code:\s*(\d+)\.\s*DB::Exception:\s*")
 _CH_NAME_RE = re.compile(r"\(([A-Z][A-Z0-9_]{2,})\)")
@@ -261,6 +263,9 @@ def _oracle(chain: list[BaseException]) -> Optional[tuple[str, Optional[str]]]:
         else:
             code, message = codes[-1]
         message = re.sub(r"\s*\(CONNECTION_ID=[^)]*\)", "", message).strip().rstrip(".")
+        cause = _PLSQL_CAUSE_RE.search(text) if code == "ORA-06550" else None
+        if cause:
+            message = f"{message} {cause.group(1).strip().rstrip('.')}"
         return f"{message} ({code}).", _ORACLE_HINTS.get(code)
     return None
 

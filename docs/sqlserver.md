@@ -135,5 +135,5 @@ CTEs and `ORDER BY` included, but it must be one query that reads: a batch carry
 `; DELETE …`, or a `SELECT … INTO` that would create a table, is refused before it
 reaches the server. Integer `decimal` up to 18 digits arrives as Int64, other decimals
 and `money` as Float64, `datetimeoffset` as UTC. An Output node **Database table** writes
-into SQL Server too, with the driver's bulk copy and one transaction: see
+into SQL Server too, with array inserts in one transaction: see
 [Databases](connections/databases.md#sql-server).

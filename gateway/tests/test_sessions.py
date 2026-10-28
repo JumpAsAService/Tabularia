@@ -454,10 +454,10 @@ def test_a_password_changed_while_signing_in_opens_no_session(app, session, monk
     from app.routes import auth as auth_routes
 
     uid = _user(session, "a@x.local")
-    vera = auth_routes.verify_password
+    real_check = auth_routes.verify_password
 
     def check_and_change_meanwhile(password, hashed):
-        outcome = vera(password, hashed)
+        outcome = real_check(password, hashed)
         # the administrator's change, arriving with the check done
         u = session.get(User, uid)
         u.hashed_password = hash_password("la-password-nuova")
@@ -472,7 +472,27 @@ def test_a_password_changed_while_signing_in_opens_no_session(app, session, monk
     session.expire_all()
     assert session.exec(select(UserSession).where(UserSession.user_id == uid)).all() == []
     item = session.exec(select(AuditLog).where(AuditLog.action == "auth.login_failed")).first()
-    assert item is not None and "cambiata" in (item.detail or "")
+    assert item is not None and "password changed while signing in" in (item.detail or "")
+
+
+def test_a_refused_sign_in_records_its_reason_in_english(app, session, monkeypatch):
+    """The reasons of a refused sign-in reach the audit page, which translates them, and the
+    SIEM, which does not: they are written in English as every other reason (they were
+    Italian up to 1.2.2, and the page still reads those)."""
+    import json
+
+    from app.services import login_throttle
+
+    _user(session, "w@x.local")
+    _user(session, "off@x.local", is_active=False)
+    client = TestClient(app)
+    assert client.post("/auth/login", json={"email": "w@x.local", "password": "not-this-one"}).status_code == 401
+    assert client.post("/auth/login", json={"email": "off@x.local", "password": PASSWORD}).status_code == 403
+    monkeypatch.setattr(login_throttle, "request_wait", lambda *a, **k: 5.0)
+    assert client.post("/auth/login", json={"email": "w@x.local", "password": PASSWORD}).status_code == 429
+    session.expire_all()
+    rows = session.exec(select(AuditLog).where(AuditLog.action == "auth.login_failed").order_by(AuditLog.id)).all()
+    assert [json.loads(r.detail)["reason"] for r in rows] == ["wrong credentials", "deactivated", "throttled"]
 
 
 def test_the_listings_carry_no_expired_or_still_sessions(app, session, monkeypatch):

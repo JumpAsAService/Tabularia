@@ -291,7 +291,8 @@ function recenterOn(n: LineageNode) {
 function openNode(n: LineageNode) {
   const id = Number(n.id.split(':')[1])
   if (n.type === 'flow') navigateTo(`/editor?flow=${id}`)
-  else if (n.type === 'datasource') navigateTo('/datasources')
+  // with its name as search, as the global search opens it: the list is paginated
+  else if (n.type === 'datasource') navigateTo(`/datasources?q=${encodeURIComponent(n.label)}&ds=${id}`)
   else if (n.type === 'script') navigateTo(`/script?id=${id}`)
   else if (n.type === 'sql_script') navigateTo(`/sql-script?id=${id}`)
   else if (n.type === 'notebook') navigateTo(`/notebook?id=${id}`)

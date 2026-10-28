@@ -351,7 +351,7 @@ function close() {
       </div>
       <p v-else class="cd-intro">{{ $t('contracts.intro') }}</p>
 
-      <div class="cd-legenda">
+      <div class="cd-legend">
         <span><i class="point warning" /> <strong>{{ $t('contracts.severity.warning') }}</strong> — {{ $t('contracts.severityHint.warning') }}</span>
         <span><i class="point error" /> <strong>{{ $t('contracts.severity.error') }}</strong> — {{ $t('contracts.severityHint.error') }}</span>
       </div>
@@ -488,8 +488,8 @@ function close() {
 .cd-state { margin-bottom: 10px; }
 .cd-state p { margin: 0 0 4px; font-size: 12.5px; }
 .cd-refusal { display: flex; gap: 6px; align-items: flex-start; color: var(--danger); font-weight: 600; }
-.cd-legenda { display: grid; gap: 4px; margin-bottom: 12px; padding: 8px 10px; border: 1px solid var(--border-soft); border-radius: 8px; font-size: 12px; color: var(--muted); }
-.cd-legenda strong { color: var(--text); }
+.cd-legend { display: grid; gap: 4px; margin-bottom: 12px; padding: 8px 10px; border: 1px solid var(--border-soft); border-radius: 8px; font-size: 12px; color: var(--muted); }
+.cd-legend strong { color: var(--text); }
 .point { display: inline-block; width: 8px; height: 8px; border-radius: 50%; margin-right: 4px; }
 .point.warning { background: var(--warning); }
 .point.error { background: var(--danger); }
@@ -551,6 +551,6 @@ function close() {
 .cd-history td { padding: 4px 6px 4px 0; border-top: 1px solid var(--border-soft); }
 .cd-space { flex: 1; }
 .cd-remove { display: inline-flex; align-items: center; gap: 6px; color: var(--danger); }
-.spin { animation: cd-gira 1s linear infinite; }
-@keyframes cd-gira { to { transform: rotate(360deg); } }
+.spin { animation: cd-spin 1s linear infinite; }
+@keyframes cd-spin { to { transform: rotate(360deg); } }
 </style>

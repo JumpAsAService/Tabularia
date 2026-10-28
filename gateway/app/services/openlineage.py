@@ -47,6 +47,7 @@ import json
 import logging
 import os
 import queue
+import re
 import threading
 import time
 import uuid
@@ -54,6 +55,7 @@ from datetime import datetime, timezone
 from types import SimpleNamespace
 from typing import Any, Callable, Iterable
 
+from sqlalchemy import event
 from sqlmodel import Session, select
 
 from app.core.config import get_settings
@@ -185,12 +187,30 @@ def run_uuid(run_id: int) -> str:
     return str(uuid.uuid5(uuid.NAMESPACE_URL, f"tabularia://{namespace()}/runs/{run_id}"))
 
 
+_FOLDERS = "openlineage_folders"  # session.info: the folder paths of the events being built
+
+
+@event.listens_for(Session, "after_flush")
+@event.listens_for(Session, "after_transaction_end")
+def _forget_folders(session, *_args) -> None:
+    session.info.pop(_FOLDERS, None)
+
+
 def _project_path(session: Session, project_id: int | None) -> str:
+    """The folder's path. Every dataset and job of an event names one: the folders are read
+    ONCE per transaction (a flow group's events named them over a hundred times, and every
+    time read the whole table); a write in the session forgets them."""
     if project_id is None:
         return ""
-    projects = perm_service._all_projects(session)
-    ids = perm_service.ancestor_ids({i: p.parent_id for i, p in projects.items()}, project_id)
-    return "/".join(projects[i].name for i in reversed(ids) if i in projects) if ids else ""
+    folders = session.info.get(_FOLDERS)
+    if folders is None:
+        projects = perm_service._all_projects(session)
+        folders = session.info[_FOLDERS] = {"names": {i: p.name for i, p in projects.items()},
+                                            "parents": {i: p.parent_id for i, p in projects.items()}, "paths": {}}
+    if project_id not in folders["paths"]:
+        ids = perm_service.ancestor_ids(folders["parents"], project_id)
+        folders["paths"][project_id] = "/".join(folders["names"][i] for i in reversed(ids) if i in folders["names"])
+    return folders["paths"][project_id]
 
 
 def job_name_for_flow(session: Session, flow: Flow) -> str:
@@ -629,7 +649,7 @@ def flow_outputs(session: Session, flow: Flow) -> list:
             conn = session.get(Connection, d.get("connectionId")) if d.get("connectionId") else None
             if conn is not None:
                 outputs.append(email_dataset(conn.host, conn.port or 587, flow_email_name(session, flow), conn.name))
-    return outputs
+    return _unique(outputs)  # two Outputs to one datasource, two emails through one server: one dataset
 
 
 def _job(session: Session, flow: Flow, extra_facets: dict | None = None):
@@ -893,6 +913,17 @@ def _now() -> str:
     return datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%S.%f")[:-3] + "Z"
 
 
+# an e-mail address in a run's error: whose rights a run had («anna@acme.example cannot run
+# scripts in…»), a recipient an SMTP server refused, the user of a URL. Bounded as the
+# standard bounds them (64 before the @): a long error is scanned in linear time
+_ADDRESS = re.compile(r"[\w.%+-]{1,64}@[\w-]{1,63}(?:\.[\w-]{1,63})+")
+
+
+def _error_text(message: str) -> str:
+    """A run's error as it leaves the installation: without e-mail addresses."""
+    return _ADDRESS.sub("<address>", message[:2000])
+
+
 def _iso(t: datetime | None) -> str:
     if t is None:
         return _now()
@@ -1154,7 +1185,7 @@ def run_events(session: Session, run: Run) -> list:
     start = RunEvent(eventTime=_iso(run.started_at), producer=PRODUCER, run=ol_run, job=job, eventType=RunState.START, inputs=inputs, outputs=_without_statistics(outputs))
     end_facets = dict(run_facets)
     if run.status != "SUCCESS" and run.error:
-        end_facets["errorMessage"] = error_message_run.ErrorMessageRunFacet(message=run.error[:2000], programmingLanguage="python")
+        end_facets["errorMessage"] = error_message_run.ErrorMessageRunFacet(message=_error_text(run.error), programmingLanguage="python")
     end = RunEvent(
         eventTime=_iso(run.finished_at), producer=PRODUCER, run=OlRun(runId=run_uuid(run.id), facets=end_facets), job=job,
         eventType=RunState.COMPLETE if run.status == "SUCCESS" else RunState.FAIL, inputs=inputs, outputs=outputs,
@@ -1190,7 +1221,7 @@ def notebook_session_events(session: Session, row: Any, state: str, error: str |
     facets: dict[str, Any] = {"tabularia": _tabularia_run_facet_class()(kind="notebook", trigger="manual",
                                                                         version=row.version, mode=row.mode)}
     if state == "FAIL" and error:
-        facets["errorMessage"] = error_message_run.ErrorMessageRunFacet(message=error[:2000], programmingLanguage="python")
+        facets["errorMessage"] = error_message_run.ErrorMessageRunFacet(message=_error_text(error), programmingLanguage="python")
     if state == "START":
         inputs, when = [], _iso(row.started_at)
     elif state == "RUNNING":
@@ -1362,6 +1393,7 @@ def _rename_events(bind: Any, changed: dict) -> tuple[list, list[tuple[str, str,
                 sent.add(("flow", flow.id))
                 old.append(("jobs", namespace(), old_name))
                 old += [("jobs", namespace(), f"{old_name}.{label}") for label in _output_labels(s, flow.id) + _step_labels(flow)]
+                old += _old_email_datasets(s, flow, old_name)
                 continue
             if kind in OBJECT_KINDS:
                 obj = s.get(OBJECT_KINDS[kind][0], oid)
@@ -1419,17 +1451,36 @@ def _old_pushmail_datasets(session: Session, group: FlowGroup, old_name: str) ->
     return out
 
 
+def _old_email_datasets(session: Session, flow: Flow, old_name: str) -> list[tuple[str, str, str]]:
+    """The email of a renamed flow's email Output nodes, under the flow's old name
+    (`/<old job>/email`, one per SMTP server: see `flow_email_name`)."""
+    out = []
+    for n in _definition(flow).get("nodes") or []:
+        d = n.get("data") or {}
+        if n.get("type") != "output" or d.get("destType") != "email" or not d.get("connectionId"):
+            continue
+        conn = session.get(Connection, d["connectionId"])
+        if conn is not None:
+            ns = email_dataset(conn.host, conn.port or 587, "").namespace
+            out.append(("datasets", ns, "/" + old_name.strip("/") + "/email"))
+    return list(dict.fromkeys(out))
+
+
 def _readers_touching(session: Session, datasources: list[Datasource]) -> list[tuple[str, Any]]:
     """The saved scripts that declare one of these datasources as an input and the
     notebooks that have read one (by id)."""
     if not datasources:
         return []
+    from app.models import SavedScriptVersion
     from app.services import notebook_reads, saved_scripts
+    from app.services.lineage import current_contents
 
     ids = {d.id for d in datasources}
     out: list[tuple[str, Any]] = []
-    for script in session.exec(select(SavedScript)).all():
-        if any(isinstance(i, dict) and i.get("datasource_id") in ids for i in saved_scripts.content_of(session, script).get("inputs") or []):
+    scripts = list(session.exec(select(SavedScript)).all())
+    contents = current_contents(session, scripts, SavedScript, SavedScriptVersion, saved_scripts.empty_content)
+    for script in scripts:
+        if any(isinstance(i, dict) and i.get("datasource_id") in ids for i in contents[script.id].get("inputs") or []):
             out.append(("saved_script", script))
     for notebook_id in notebook_reads.readers_of(session, ids):
         notebook = session.get(Notebook, notebook_id)

@@ -111,8 +111,12 @@ the moment it stops (by hand, idle, or replaced by a new version). Tabularia sen
 - `RUNNING` the first time the session reads a datasource with `tabularia.read`, with
   that datasource as its input — once per datasource and session, however many times
   the cells run again;
-- `COMPLETE` when the session stops, with every datasource it read; `FAIL` when the pod
-  could not start, with the reason; `ABORT` when it was stopped before it started.
+- `COMPLETE` when the session stops (or the notebook is deleted while it runs), with
+  every datasource it read; `FAIL` when the pod could not start, with the reason;
+  `ABORT` when it was stopped before it started.
+
+The app and the editor of a notebook can run at the same time: each session has its own
+reads, so one reading a datasource does not take it from the other's closing event.
 
 This follows the standard: a run's datasets accumulate over its events, and `RUNNING`
 is the event meant for what a run learns while it runs. The closing event repeats
@@ -158,7 +162,8 @@ renames them in the catalog too. Right after the change Tabularia sends:
 On **Marquez** (the collector's endpoint is `api/v1/lineage`) the old names are then
 deleted through its API (`DELETE /api/v1/namespaces/{namespace}/jobs|datasets/{name}`,
 a soft delete): the old dataset, the old job, the old Output, Script, Container and
-refresh jobs, a group's old cell jobs and the emails of its Pushmail cells. Other
+refresh jobs, a group's old cell jobs and the emails of its Pushmail cells, the email
+of a flow's email Outputs. Other
 collectors receive the `RENAME` facet and drop the old name their own way. The id in
 the `tabularia` facet ties the old and the new dataset in any case.
 
@@ -191,11 +196,12 @@ changing a flow's definition. Both need VIEW on the flow's folder.
 Only metadata: folder and object names, descriptions, datasource names and column
 names with their types and descriptions, table names, the text of the SQL query of a
 query-based datasource and of a SQL script, bucket paths, image references, SMTP
-servers, row counts, run times and the error message of a failed run. No rows of
-data, no user names or e-mail addresses (not even a Pushmail's recipients), no credentials
-(connection passwords never reach the gateway's events). Mind that a query text or
-an error message can quote a literal value: if that matters, keep the collector inside
-the same trust boundary as Tabularia.
+servers, row counts, run times and the error message of a failed run, with any e-mail
+address in it replaced by `<address>` (an error can name whose rights a run had, or a
+recipient an SMTP server refused). No rows of data, no user names or e-mail addresses
+(not even a Pushmail's recipients), no credentials (connection passwords never reach
+the gateway's events). Mind that a query text or an error message can quote a literal
+value: if that matters, keep the collector inside the same trust boundary as Tabularia.
 
 ## Guarantees and limits
 
@@ -223,4 +229,3 @@ the same trust boundary as Tabularia.
   id is a UUID derived from the run's id in Tabularia, the same from any process.
 - **Dataset level.** Column-level lineage is not emitted yet.
 - `Foreach` loops report the datasets of the flow, not each iteration.
-- A notebook deleted while its pod runs ends its session without a closing event.

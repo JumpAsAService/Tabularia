@@ -66,7 +66,7 @@ class ActiveSession(BaseModel):
 
 
 def _to_out(e: AuditLog, full: bool = True) -> AuditEntryOut:
-    """An audit item. `pieno=False` for an OBSERVER: WHAT was done stays — which is the point
+    """An audit item. `full=False` for an OBSERVER: WHAT was done stays — which is the point
     of the log — and who did it, from where and with what disappear. The person acted on
     too, when the target is an email (sessions closed, users promoted or added to a
     group): it would be the same person as the actor, in clear next to their mask. The
@@ -194,7 +194,7 @@ def access_activity(
     tz = get_settings().app.tzinfo()
     now = datetime.now(tz)
     hour_start = now.replace(minute=0, second=0, microsecond=0)
-    # bucket [start-h+1 … start], uno per ora
+    # buckets [start-h+1 … start], one per hour
     starts = [hour_start - timedelta(hours=hours - 1 - i) for i in range(hours)]
     index = {s.replace(tzinfo=None): i for i, s in enumerate(starts)}  # key: naive local hour
     success = [0] * hours

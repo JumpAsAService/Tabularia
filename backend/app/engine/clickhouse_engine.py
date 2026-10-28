@@ -661,7 +661,7 @@ class ClickHouseEngine(DeferredStepCache, Engine):
             return
         self._write(ctx, sql, DataSource(bucket=self.cache.bucket, key=self.cache.object_key(final)))
         self.cache.mark(final)
-        logger.info("materializzato step %d in cache", len(operations))
+        logger.info("materialized step %d in cache", len(operations))
 
     @contextmanager
     def _materialize_session(self, source: DataSource):

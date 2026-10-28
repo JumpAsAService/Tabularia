@@ -272,3 +272,29 @@ def test_a_folder_rename_renames_its_notebooks_and_a_datasource_rename_reaches_t
     # whoever reads it by id points at the new name: the notebook, the saved script
     assert [i["name"] for i in jobs["Demo/Flows/Explore (notebook)"]["inputs"]] == ["/Demo/Flows/orders 2026"]
     assert [i["name"] for i in jobs["Reports/Clean (script)"]["inputs"]] == ["/Demo/Flows/orders 2026"]
+
+
+def test_a_renamed_flow_or_folder_loses_the_old_email_of_its_email_output(session, world, catalog):
+    # the email of an Output node is the dataset «/<flow's job>/email» on its SMTP server:
+    # under the old name it stayed in Marquez, as a Pushmail cell's did before groups lost theirs
+    smtp = Connection(name="mail", db_type="smtp", project_id=world["folder"].id, host="mail.x", port=25)
+    session.add(smtp)
+    session.commit()
+    mailer = make_flow(session, name="Daily", project_id=world["folder"].id, definition=json.dumps({"nodes": [
+        {"id": "o1", "type": "output", "data": {"destType": "email", "connectionId": smtp.id}},
+        {"id": "o2", "type": "output", "data": {"destType": "email", "connectionId": smtp.id}}], "edges": []}))
+    make_run(session, task_id="t-1", flow_id=mailer.id, kind="flow", status="SUCCESS",
+             email=json.dumps({"connection_id": smtp.id, "host": "mail.x", "ok": True}))
+
+    update_flow(mailer.id, FlowUpdate(name="Daily report"), _Req(), world["admin"], session)
+    _settle()
+    (job,) = [e for e in catalog.events if e.get("job", {}).get("name") == "Sample/Flows/Daily report"]
+    assert [(o["namespace"], o["name"]) for o in job["outputs"]] == [("smtp://mail.x:25", "/Sample/Flows/Daily report/email")]
+    assert sorted(catalog.deleted) == [("datasets", "smtp://mail.x:25", "/Sample/Flows/Daily/email"),
+                                       ("jobs", "tabularia", "Sample/Flows/Daily"),
+                                       ("jobs", "tabularia", "Sample/Flows/Daily.email")]
+
+    catalog.deleted.clear()
+    update_project(world["root"].id, ProjectUpdate(name="Demo"), world["admin"], session)
+    _settle()
+    assert ("datasets", "smtp://mail.x:25", "/Sample/Flows/Daily report/email") in catalog.deleted

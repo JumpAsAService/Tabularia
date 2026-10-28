@@ -80,7 +80,7 @@ class StepCache:
         self.atime_zset = ATIME_ZSET + suffix if not namespace else f"{INDEX_SET}{suffix}:atime"
 
     def object_key(self, h: str) -> str:
-        """Chiave storage del parquet materializzato per l'hash `h`."""
+        """The storage key of the materialized parquet of the hash `h`."""
         return f"{CACHE_PREFIX}/{h}.parquet"
 
     def blob_exists(self, h: str) -> bool:

@@ -57,7 +57,7 @@ from app.engine.dbt_export import (
     transpile_model,
     _fix_for_dialect,
     _slug,
-    _tempi_clickhouse,
+    _clickhouse_times,
     _typed,
 )
 
@@ -141,7 +141,7 @@ def export_dbt(req: ExportRequest) -> StreamingResponse:
         if ch:
             cfg = get_settings().clickhouse_external
             clickhouse = {"host": cfg.host, "port": cfg.port, "secure": cfg.secure, "target_schema": (req.clickhouse or {}).get("target_schema"),
-                          "federati": list(ch.federated.values())}
+                          "federated": list(ch.federated.values())}
         files = build_dbt_project(
             req.flow_name, models, req.attachments if req.mode == "duckdb" else None, sources,
             native=req.native if req.mode == "native" else None, seeds=seeds, tests=tests,
@@ -208,7 +208,7 @@ def _type_in_dialect(duck_t: str, dialect: str | None) -> str:
     if dialect == "postgres" and kind.this == sqlglot.exp.DataType.Type.UBIGINT:
         kind = sqlglot.exp.DataType.build("DECIMAL(20, 0)")     # Postgres has no unsigned integer (UInt64)
     if dialect == "clickhouse":
-        kind = _tempi_clickhouse(kind)                          # Date32, DateTime64(6), a time as text
+        kind = _clickhouse_times(kind)                          # Date32, DateTime64(6), a time as text
     return kind.sql(dialect=dialect or "duckdb")
 
 
@@ -403,7 +403,7 @@ def _compile(req: ExportRequest, seeds: list[dict], ch: TargetClickHouse | None 
                     raise DbtExportError(f"the model «{m.name}» has no source")
                 raw, cols, types_ = compile_model_sql(m.source, m.operations, resolve, native=native, dialect=dialect, info=info,
                                                     text=m.dialect, used=used)
-                to_review = info.get("da_rivedere") or []
+                to_review = info.get("to_review") or []
                 if to_review and notes is not None:
                     notes.extend(_review_note(m.name, to_review))
                 if native and m.name in req.overrides:
@@ -426,7 +426,7 @@ def _compile(req: ExportRequest, seeds: list[dict], ch: TargetClickHouse | None 
                     except DbtExportError as e:
                         if e.code == "translation_failed":
                             # to whoever translates it (the AI): the model in DuckDB, without our placeholders
-                            e.params.update(model=m.name, sql=put_back_texts(raw, {"segnaposti": info.get("per_sonda")}), source_dialect="duckdb",
+                            e.params.update(model=m.name, sql=put_back_texts(raw, {"placeholders": info.get("for_probe")}), source_dialect="duckdb",
                                             target_dialect=dialect, columns=cols)
                         raise
                 else:
@@ -452,7 +452,7 @@ def _compile(req: ExportRequest, seeds: list[dict], ch: TargetClickHouse | None 
             # the column rules dbt's generic tests do not run as Tabularia does become singular tests
             columns, of_column = column_tests(m.columns)
             models.append({"name": m.name, "kind": m.kind, "sql": sql, "materialized": m.materialized, "description": m.description,
-                           "da_rivedere": info.get("da_rivedere"),
+                           "to_review": info.get("to_review"),
                            "columns": columns, "schema": m.schema_, "alias": m.alias, "tags": m.tags,
                            "meta": {**m.meta, "ai_translated": True} if m.name in translated else m.meta,
                            "ai_translated": m.name in translated, "ai_translated_from": translated.get(m.name)})

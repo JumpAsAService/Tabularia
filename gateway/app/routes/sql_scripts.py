@@ -30,7 +30,7 @@ from app.core.routing import ReleasingRoute
 from app.db.session import get_session
 from app.deps.auth import get_current_user
 from app.deps.permissions import ensure_can
-from app.models import Project, Run, SqlScript, SqlScriptVersion, User
+from app.models import Datasource, Project, Run, SqlScript, SqlScriptVersion, User
 from app.models.permission import Capability
 from app.models.run import TERMINAL_STATES
 from app.schemas.models import UtcDateTime
@@ -189,6 +189,23 @@ def _checked(session: Session, user: User, content: Any, current: Optional[dict]
     return checked
 
 
+def _not_in_groups(session: Session, script: SqlScript, message: str) -> None:
+    """409 when flow groups run the script: `message` says what they stop."""
+    groups = [g.name for g in sql_scripts.groups_using(session, script.id)]
+    if groups:
+        names = ", ".join(f"«{n}»" for n in groups[:10]) + (" …" if len(groups) > 10 else "")
+        raise HTTPException(status_code=409, detail={"message": message.format(names=names), "flows": [],
+                                                     "groups": groups})
+
+
+def _keeps_its_datasource(session: Session, script: SqlScript, current: dict, content: dict) -> None:
+    """A script that a flow group's cell writes keeps a datasource: without one the cell
+    stops the group at its step."""
+    if current.get("output") and not content.get("output"):
+        _not_in_groups(session, script, "The flow groups {names} write the script's datasource: "
+                                         "remove it from there first")
+
+
 def _schedule_off(script: SqlScript, user: User, reasons: list[str]) -> Optional[dict]:
     """A schedule carries its author's authority: a change by someone else that makes the
     script read or write more switches it off. Returns the audit detail."""
@@ -249,7 +266,11 @@ def _detail(session: Session, user: User, s: SqlScript) -> SqlScriptDetail:
 
 
 def _many(session: Session, user: User, stmt) -> list[SqlScriptOut]:
-    return [_out(session, user, s) for s in session.exec(stmt).all()] if stmt is not None else []
+    if stmt is None:
+        return []
+    scripts = list(session.exec(stmt).all())
+    contents = sql_scripts.current_contents(session, scripts)
+    return [_out(session, user, s, contents[s.id]) for s in scripts]
 
 
 # ── lists ─────────────────────────────────────────────────────────────────────
@@ -274,20 +295,16 @@ def sql_catalog(user: User = Depends(get_current_user), session: Session = Depen
     its completion."""
     import json
 
-    from app.services.saved_script_runs import folder_path
-
     folders = sql_scripts.folder_names(session)
-    paths: dict[int, str] = {}
+    paths = sql_scripts.folder_paths(session)
     out = []
     for ds in sql_scripts.readable_datasources(session, user):
-        if ds.project_id not in paths:
-            paths[ds.project_id] = folder_path(session, ds.project_id)
         try:
             cols = [CatalogColumn(name=str(c.get("name", "")), type=str(c.get("dtype", "")))
                     for c in json.loads(ds.columns or "[]") if isinstance(c, dict)]
         except ValueError:
             cols = []
-        out.append(CatalogItem(id=ds.id, name=ds.name, folder=folders.get(ds.project_id, ""), path=paths[ds.project_id],
+        out.append(CatalogItem(id=ds.id, name=ds.name, folder=folders.get(ds.project_id, ""), path=paths.get(ds.project_id, ""),
                                rows=ds.rows, columns=cols, has_data=bool(ds.key)))
     return out
 
@@ -365,7 +382,9 @@ def update_sql_script(script_id: int, body: SqlScriptUpdate, request: Request,
     reasons: list[str] = []
     if body.content is not None:
         current = sql_scripts.content_of(session, script)
-        checked = _checked(session, user, body.content, current)
+        # what the request does not name stays as it is (null names it: «no datasource»)
+        checked = _checked(session, user, {**current, **body.content}, current)
+        _keeps_its_datasource(session, script, current, checked)
         if checked != current:
             reasons = sql_scripts.widens(current, checked)
             changes["version"] = sql_scripts.add_version(session, script, checked, "edited", user).version
@@ -418,12 +437,7 @@ def delete_sql_script(script_id: int, request: Request, user: User = Depends(get
     sql_script_runs.in_line_for_the_script(session, script.id)
     if sql_script_runs.live_run(session, script.id) is not None:
         raise HTTPException(status_code=409, detail="The script is writing its datasource: delete it once it has finished")
-    groups = [g.name for g in sql_scripts.groups_using(session, script.id)]
-    if groups:
-        names = ", ".join(f"«{n}»" for n in groups[:10]) + (" …" if len(groups) > 10 else "")
-        raise HTTPException(status_code=409, detail={
-            "message": f"The script is used by the flow groups {names}: remove it from there first",
-            "flows": [], "groups": groups})
+    _not_in_groups(session, script, "The script is used by the flow groups {names}: remove it from there first")
     label = script.name
     # its runs stay in the history, no longer attached to it; its datasource stays
     session.exec(sa_update(Run).where(Run.sql_script_id == script.id).values(sql_script_id=None))
@@ -469,6 +483,7 @@ def restore_version(script_id: int, version: int, request: Request, user: User =
         return _detail(session, user, script)
     current = sql_scripts.content_of(session, script)
     content = _checked(session, user, sql_scripts.content_of(session, script, version), current)
+    _keeps_its_datasource(session, script, current, content)
     reasons = sql_scripts.widens(current, content)
     groups_off = _groups_off(session, user, script, reasons)
     schedule_off = _schedule_off(script, user, reasons)
@@ -496,10 +511,14 @@ async def refresh_sql_script(script_id: int, request: Request, user: User = Depe
     return _run_out(run, user.email)
 
 
-def _run_out(run: Run, launched_by: Optional[str]) -> SqlScriptRunOut:
+def _run_out(run: Run, launched_by: Optional[str], sees_datasource: bool = True) -> SqlScriptRunOut:
+    """`sees_datasource`: VIEW on the folder of the datasource it wrote. Who lacks it reads
+    the script's writes without the datasource's id and rows, as the script's page shows
+    it no link."""
     return SqlScriptRunOut(run_id=run.id, status=run.status, trigger_type=run.trigger_type, started_at=run.started_at,
                            finished_at=run.finished_at, error=run.error, launched_by=launched_by,
-                           rows=run.rows_written, datasource_id=run.datasource_id, parent_run_id=run.parent_run_id)
+                           rows=run.rows_written if sees_datasource else None,
+                           datasource_id=run.datasource_id if sees_datasource else None, parent_run_id=run.parent_run_id)
 
 
 @router.get("/sql-scripts/{script_id}/runs", response_model=list[SqlScriptRunOut])
@@ -517,7 +536,14 @@ async def list_sql_script_runs(script_id: int, limit: int = Query(10, ge=1, le=1
             runs[i] = await _reconcile(session, r)
     names = {u.id: u.email for u in session.exec(select(User).where(
         User.id.in_({r.launched_by for r in runs if r.launched_by}))).all()} if runs else {}  # type: ignore[attr-defined]
-    return [_run_out(r, names.get(r.launched_by)) for r in runs]
+    folder_of = {d.id: d.project_id for d in session.exec(select(Datasource).where(
+        Datasource.id.in_({r.datasource_id for r in runs if r.datasource_id}))).all()} if runs else {}  # type: ignore[attr-defined]
+
+    def sees(r: Run) -> bool:
+        folder = folder_of.get(r.datasource_id)
+        return folder is not None and perm_service.has_capability(session, user, folder, Capability.VIEW)
+
+    return [_run_out(r, names.get(r.launched_by), sees(r)) for r in runs]
 
 
 @router.put("/sql-scripts/{script_id}/schedule", response_model=SqlScriptDetail)

@@ -285,8 +285,8 @@ function fmtAgo(iso: string | null) {
   if (s < 86400) return t('audit.timeHoursAgo', { n: Math.floor(s / 3600) })
   return t('audit.timeDaysAgo', { n: Math.floor(s / 86400) })
 }
-// The reasons the gateway writes, in the language of the interface. Some were
-// written in Italian (sign-in) and stay so in older lines; unknown ones as they are.
+// The reasons the gateway writes, in the language of the interface. The sign-in ones
+// were written in Italian up to 1.2.2 and stay so in older lines; unknown ones as they are.
 const REASONS: Record<string, string> = {
   'troppi tentativi': 'audit.reasonThrottled',
   throttled: 'audit.reasonThrottled',
@@ -295,6 +295,7 @@ const REASONS: Record<string, string> = {
   'utente disattivato': 'audit.reasonDeactivated',
   deactivated: 'audit.reasonDeactivated',
   "password cambiata durante l'accesso": 'audit.reasonPasswordChangedMeanwhile',
+  'password changed while signing in': 'audit.reasonPasswordChangedMeanwhile',
   password: 'audit.reasonPassword',
   observer: 'audit.reasonObserver',
   'wrong current password': 'audit.reasonWrongCurrent',
@@ -310,7 +311,9 @@ function detailSummary(e: AuditEntry): string {
   if (d.reason) parts.push(reasonLabel(String(d.reason)))
   if (d.format) parts.push(`${d.format}`)
   if (d.filename && !d.format) parts.push(String(d.filename))
-  if (d.cron) parts.push(t('audit.cronLabel', { cron: d.cron }))
+  // a schedule turned off is a null cron ('(disattivato)' in the lines up to 1.2.2)
+  if (d.cron === null || d.cron === '(disattivato)') parts.push(t('audit.scheduleOff'))
+  else if (d.cron) parts.push(t('audit.cronLabel', { cron: d.cron }))
   if (Array.isArray(d.changed) && d.changed.length) parts.push(t('audit.fieldsLabel', { fields: d.changed.join(', ') }))
   if (d.capability) parts.push(String(d.capability))
   if (d.db_type) parts.push(String(d.db_type))

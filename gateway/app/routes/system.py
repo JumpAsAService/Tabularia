@@ -115,5 +115,5 @@ async def system_memory(user: User = Depends(get_current_user)) -> MemoryOut:
     try:
         return await _read_memory()
     except Exception as e:  # node-exporter down/unreachable → the UI hides the badge
-        logger.warning("system/memory non disponibile: %s", e)
+        logger.warning("system/memory not available: %s", e)
         raise HTTPException(status_code=503, detail="Memory metrics are not available")

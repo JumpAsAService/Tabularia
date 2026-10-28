@@ -956,6 +956,20 @@ async def _revoke_task(run: Run) -> None:
         logger.warning("run %s: revoking task %s failed: %s", run.id, run.task_id, e)
 
 
+def _email_sent(summary: str | None, outcome: object) -> str:
+    """The worker's outcome over the summary written at launch, not in its place: the
+    connection and the server it went through, a Pushmail cell's name and datasources
+    stay — the run page and the lineage (services/openlineage.py) name the email after
+    them. Replaced, a Pushmail run lost its cell's name and its lineage everything."""
+    try:
+        launched = json.loads(summary or "{}")
+    except json.JSONDecodeError:
+        launched = {}
+    if isinstance(launched, dict) and isinstance(outcome, dict):
+        return json.dumps({**launched, **outcome})
+    return json.dumps(outcome)[:2000]
+
+
 def _email_not_sent(summary: str | None) -> str | None:
     """The email summary of a run that did not succeed, still marked pending: the
     worker reports the outcome only when the task returns, so a run that fails
@@ -970,7 +984,9 @@ def _email_not_sent(summary: str | None) -> str | None:
     if not isinstance(data, dict) or data.get("ok") is not None:
         return None
     data.update(ok=False, error="not sent: the run did not succeed")
-    return json.dumps(data)[:2000]
+    # whole, as the launch wrote it: cut, the JSON of an email to many people no
+    # longer read (the column is TEXT)
+    return json.dumps(data)
 
 
 def _contract_target_id(session: Session, run: Run) -> int | None:
@@ -1200,7 +1216,7 @@ async def _reconcile(session: Session, run: Run) -> Run:
         if result.get("mirror") is not None:
             values["mirror"] = json.dumps(result.get("mirror"))[:2000]
         if result.get("email") is not None:
-            values["email"] = json.dumps(result.get("email"))[:2000]
+            values["email"] = _email_sent(run.email, result.get("email"))
         written = _sftp_written(run.destination, result.get("destination"))
         if written is not None:
             values["destination"] = written
@@ -1371,7 +1387,7 @@ def _finalize_ingest(session: Session, run: Run, result: dict) -> None:
     # already: DEFERRED deletion (grace).
     if old_key and old_key != ds.key:
         schedule_blob_deletion(
-            session, old_bucket, old_key, reason=f"snapshot datasource {ds.id} superato"
+            session, old_bucket, old_key, reason=f"snapshot of datasource {ds.id} replaced"
         )
     session.flush()
 
@@ -1423,7 +1439,7 @@ def _publish_datasource(session: Session, run: Run, result: dict) -> None:
             # transaction as the overwrite.
             if old_key and old_key != run.output_key:
                 schedule_blob_deletion(
-                    session, old_bucket, old_key, reason=f"datasource {existing.id} sovrascritta"
+                    session, old_bucket, old_key, reason=f"datasource {existing.id} overwritten"
                 )
             session.flush()  # does NOT commit: _reconcile does (atomic with the claim)
             return
@@ -1470,7 +1486,7 @@ def _publish_datasource(session: Session, run: Run, result: dict) -> None:
         run.publish_name,
     )
     schedule_blob_deletion(
-        session, run.output_bucket, run.output_key, reason=f"publish run {run.id} fallito"
+        session, run.output_bucket, run.output_key, reason=f"publishing of run {run.id} failed"
     )
     session.flush()
 
@@ -1497,7 +1513,7 @@ async def list_runs(
 def runs_activity(
     days: int = Query(180, ge=1, le=730, description="width of the daily window"),
     day: str | None = Query(None, description="YYYY-MM-DD (local): returns the day's HOURLY detail"),
-    tz_offset: int = Query(0, description="getTimezoneOffset() del client, in minuti (local = utc - offset)"),
+    tz_offset: int = Query(0, description="the client's getTimezoneOffset(), in minutes (local = utc - offset)"),
     user: User = Depends(get_current_user),
     session: Session = Depends(get_session),
 ):

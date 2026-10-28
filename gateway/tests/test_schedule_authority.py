@@ -272,3 +272,14 @@ def test_reach_of_names_everything():
                                            ("output", {"destType": "database", "connectionId": 5}),
                                            ("output", {"projectId": 6})))
     assert {("datasource", 3), ("flow", 4), ("connection", 5), ("folder", 6)} <= reach
+
+
+def test_a_schedule_turned_off_is_a_null_cron_in_the_audit(world):
+    """As the flow groups, scripts and SQL scripts write it: the audit page shows «schedule
+    off» in the reader's language (it was «(disattivato)» in every language up to 1.2.2)."""
+    from app.schemas.models import FlowScheduleUpdate
+
+    w = world
+    flow_routes.set_flow_schedule(w["flow"].id, FlowScheduleUpdate(cron=""), _req(), user=w["author"], session=w["session"])
+    (entry,) = _audits(w["session"], audit.FLOW_SCHEDULE)
+    assert "cron" in entry and entry["cron"] is None

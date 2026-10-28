@@ -131,7 +131,9 @@ schedule, or by a flow group's cell**, and the SQL stays read-only.
   a flow Output (overwrite, the datasource's own folder of snapshots), so the gateway's
   reconciliation publishes it at SUCCESS exactly as an Output's: the datasource is born
   at the first write, keeps its id after, changes only when a write succeeds, and its
-  data contract is checked first. No new engine code.
+  data contract is checked first. Its description is the datasource's own once it has
+  one (people and the AI assistant read it); the first write says which script writes
+  it. No new engine code.
 - **Authority**: whoever starts it — the person on the page (`POST
   /sql-scripts/{id}/refresh`), the schedule's author, whoever runs the group — needs VIEW
   on the script, RUN on its folder, EDIT on the datasource's folder, and what a run
@@ -147,10 +149,14 @@ schedule, or by a flow group's cell**, and the SQL stays read-only.
 - **A flow group cell** (`kind: "sql"`, the script's id) writes the datasource in its
   step and waits for the write to end; a write already going is waited for, and counts
   when it started after the previous step ended. Only a script with an output goes in a
-  group; a script in a group cannot be deleted. The group's schedule checks the cell's
+  group; a script in a group cannot be deleted, nor lose its output (a change or a
+  restore without one: 409). The group's schedule checks the cell's
   rights before starting (`schedule_authority.gaps_of_group`).
 - `GET /sql-scripts/{id}/runs` lists the latest writes, bringing one still going up to
-  date with the engine; the run history and its search name the script.
+  date with the engine; the run history and its search name the script. Who cannot read
+  the datasource's folder reads them without its id and rows.
+- `PATCH /sql-scripts/{id}` with a `content` changes what it names: a key left out stays
+  as it is, a key set to null clears it (`"output": null`: no datasource).
 
 ## The page
 

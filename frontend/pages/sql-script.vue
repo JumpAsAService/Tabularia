@@ -26,7 +26,7 @@ import { FIRST_PAUSE_MS, nextPause } from '~/composables/waits'
 import { usePreferredEngine } from '~/composables/useEngine'
 import { versionNote } from '~/composables/useSavedScripts'
 import {
-  QUERYABLE_DB_TYPES, sqlIdent, sqlName, sqlTableRef, useSqlScripts,
+  QUERYABLE_DB_TYPES, catalogDialect, sqlIdent, sqlName, sqlTableRef, useSqlScripts,
   type SqlCatalogItem, type SqlRunResult, type SqlScriptDetail, type SqlScriptRun, type SqlScriptVersion, type SqlTable,
 } from '~/composables/useSqlScripts'
 import Select from '~/components/ui/Select.vue'
@@ -253,11 +253,13 @@ const shownCatalog = computed(() => {
   const q = catalogQuery.value.trim().toLowerCase()
   return q ? catalog.value.filter((d) => `${d.name} ${d.path}`.toLowerCase().includes(q)) : catalog.value
 })
+// how the catalog's names are written: BigQuery quotes them in backticks
+const onCatalog = computed(() => catalogDialect(engine.value ?? fallbackEngine.value))
 function insertName(d: SqlCatalogItem) {
-  editorRef.value?.insert(sqlName(d, catalog.value))
+  editorRef.value?.insert(sqlName(d, catalog.value, onCatalog.value))
 }
 function insertColumn(c: string) {
-  editorRef.value?.insert(sqlIdent(c, dbType.value))
+  editorRef.value?.insert(sqlIdent(c, connectionId.value == null ? onCatalog.value : dbType.value))
 }
 
 // ── a connection's tables beside the editor; their columns read when opened ──
@@ -313,8 +315,8 @@ function insertTable(table: string) {
 const editorTables = computed<SqlTable[]>(() => {
   if (connectionId.value == null) {
     return catalog.value.filter((d) => d.has_data).map((d) => ({
-      name: d.name, insert: sqlName(d, catalog.value), detail: d.path,
-      columns: d.columns.map((c) => ({ name: c.name, insert: sqlIdent(c.name, null), type: c.type })),
+      name: d.name, insert: sqlName(d, catalog.value, onCatalog.value), detail: d.path,
+      columns: d.columns.map((c) => ({ name: c.name, insert: sqlIdent(c.name, onCatalog.value), type: c.type })),
     }))
   }
   const type = dbType.value

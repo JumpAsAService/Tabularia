@@ -116,9 +116,50 @@ def test_a_column_the_table_lacks_stops_the_write(db, table, storage):
 
 def test_a_failing_post_sql_leaves_the_old_data(db, table, storage):
     _write(storage, table, "replace", {"id": [1, 2]})
-    with pytest.raises(DbDestinationError):
+    with pytest.raises(DbDestinationError) as err:
         _write(storage, table, "replace", {"id": [9]}, post_sql="UPDATE no_such_table_zz SET x = 1")
+    assert "was written" not in str(err.value)
     assert _rows(db, f"SELECT id FROM {table} ORDER BY id") == [(1,), (2,)]
+
+
+def test_a_ddl_in_the_post_sql_commits_the_rows_and_the_error_says_so(db, table, storage):
+    """Oracle commits around every DDL: once a CREATE INDEX has run, a later failure cannot
+    take the rows back. A plain «failed» made people run an append again: twice the rows."""
+    _write(storage, table, "replace", {"id": [1]})
+    with pytest.raises(DbDestinationError, match="The data was written: 1 rows .*Do not run the flow again"):
+        _write(storage, table, "append", {"id": [2]},
+               post_sql=f"CREATE INDEX IX_{table[4:]} ON {table} (id); UPDATE no_such_table_zz SET x = 1")
+    assert _rows(db, f"SELECT id FROM {table} ORDER BY id") == [(1,), (2,)]
+
+
+@pytest.mark.parametrize("terminator", ["", "\n/"])
+def test_a_plsql_block_runs_whole_as_post_sql(db, table, storage, terminator):
+    # the way Oracle gathers statistics or refreshes a view: its `;` are not separators
+    _write(storage, table, "replace", {"id": [1, 2]},
+           post_sql=f"BEGIN\n  DBMS_STATS.GATHER_TABLE_STATS(USER, '{table}');\nEND;{terminator}")
+    assert _rows(db, f"SELECT num_rows FROM user_tables WHERE table_name = '{table}'") == [(2,)]
+
+
+def test_the_flow_other_types(db, table, storage):
+    """What a real flow's parquet holds besides the plain types: Polars's large strings and
+    categoricals, a column of nulls only, a time of day, and timestamps with the UTC zone
+    (the ClickHouse engine with the s3 transport writes them so)."""
+    utc = pa.array([dt.datetime(2024, 3, 15, 12, 30, 15, 250000), None], pa.timestamp("us", tz="UTC"))
+    data = pa.table({
+        "id": [1, 2], "name": pa.array(["Caffè", None], pa.large_string()),
+        "kind": pa.array(["a", "b"]).dictionary_encode(), "nothing": pa.array([None, None], pa.null()),
+        "slot": pa.array([dt.time(13, 45, 30), None], pa.time64("us")), "at": utc,
+        "at_rome": utc.cast(pa.timestamp("us", tz="Europe/Rome")),
+    })
+    fd, path = tempfile.mkstemp(suffix=".parquet")
+    os.close(fd)
+    pq.write_table(data, path)
+    storage.upload_file(path, "b", "k.parquet")
+    os.remove(path)
+    write_parquet_to_db(_conn(), DbDestinationSpec(table=table, mode="replace"), "b", "k.parquet", storage=storage)
+    at = dt.datetime(2024, 3, 15, 12, 30, 15, 250000)  # the UTC instant, whatever the zone's label
+    assert _rows(db, f"SELECT name, kind, nothing, slot, at, at_rome FROM {table} ORDER BY id") == [
+        ("Caffè", "a", None, "13:45:30", at, at), (None, "b", None, None, None, None)]
 
 
 def test_the_post_sql_runs_in_the_same_transaction(db, table, storage):
@@ -140,3 +181,22 @@ def test_many_rows_in_chunks(db, table, storage):
     out = _write(storage, table, "replace", {"id": list(range(n)), "g": [i % 7 for i in range(n)]})
     assert out["rows_written"] == n
     assert _rows(db, f"SELECT COUNT(*), SUM(id) FROM {table}") == [(n, n * (n - 1) // 2)]
+
+
+def test_a_synonym_writes_into_its_table(db, table, storage):
+    """Writing through a synonym, as Oracle applications do: its table's columns are the
+    ones matched, and the rows land there. The lookup saw no table of that name and
+    tried to create one (ORA-00955)."""
+    import oracledb
+
+    synonym = f"ZZS_{table[4:]}"
+    db.cursor().execute(f"CREATE TABLE {table} (CUSTOMER VARCHAR2(50), AMOUNT NUMBER)")
+    try:
+        db.cursor().execute(f"CREATE SYNONYM {synonym} FOR {table}")
+    except oracledb.DatabaseError as e:
+        pytest.skip(f"the test user cannot create a synonym: {e}")
+    try:
+        _write(storage, synonym.lower(), "replace", {"amount": [9.5], "customer": ["acme"]})
+        assert _rows(db, f"SELECT customer, amount FROM {table}") == [("acme", 9.5)]
+    finally:
+        db.cursor().execute(f"DROP SYNONYM {synonym}")

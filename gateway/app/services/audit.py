@@ -258,7 +258,7 @@ def record_audit(
                 detail["plan"] = plan_id
         entry = AuditLog(
             actor_id=actor.id if actor else None,
-            actor_label=actor_label or (actor.email if actor else "anonimo"),
+            actor_label=actor_label or (actor.email if actor else "anonymous"),
             action=action,
             outcome=outcome,
             target_type=target_type,

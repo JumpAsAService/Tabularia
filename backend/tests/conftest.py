@@ -27,7 +27,7 @@ BUCKET = os.getenv("TEST_BUCKET") or "data-prep"
 
 
 @pytest.fixture(autouse=True)
-def regolazioni_isolate(monkeypatch):
+def isolated_panel_settings(monkeypatch):
     """Every test starts without panel values, on a fake Valkey of its own: those set on the
     development Valkey would change the results (another row group or cap). Whoever tests
     them writes them here (`panel_settings.write`)."""

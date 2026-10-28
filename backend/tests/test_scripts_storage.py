@@ -127,6 +127,7 @@ class FakeStorage:
 
     def upload_file(self, path, bucket, key):
         self.uploads.append((bucket, key, open(path, "rb").read()))
+        self.objects[(bucket, key)] = self.uploads[-1][2]
 
 
 def _parquet() -> bytes:
@@ -137,11 +138,11 @@ def _parquet() -> bytes:
     return buf.getvalue()
 
 
-def _import(key: str):
+def _import(key: str, contract: dict | None = None):
     spec = S3ConnectionSpec(endpoint_url="http://minio:9000", access_key="scripts", bucket="scripts",
                             secret_key_encrypted=encrypt_secret(SECRET))
     return routes.output_import(routes.OutputImportRequest(connection=spec, key=key, bucket="data-prep",
-                                                           output_key="out/abc.parquet"))
+                                                           output_key="out/abc.parquet", contract=contract))
 
 
 def test_a_scripts_output_is_copied_into_tabularias_storage(s3, monkeypatch):
@@ -153,6 +154,84 @@ def test_a_scripts_output_is_copied_into_tabularias_storage(s3, monkeypatch):
     assert out == {"found": True, "rows": 3, "bytes": len(fake.objects["env-1/step/output.parquet"]),
                    "columns": [{"name": "x", "dtype": "Int64"}]}
     assert storage.uploads[0][:2] == ("data-prep", "out/abc.parquet")
+
+
+# ── the data contract of the datasource a saved script's output replaces ──────
+BLOCKING = {"version": 4, "rules": [{"id": "r1", "kind": "range", "column": "x", "max": 2, "severity": "error"}]}
+
+
+class Worker:
+    """celery_app.send_task: the task run here, or a worker that never answers."""
+
+    def __init__(self, answers: bool = True):
+        self.sent: list[tuple[str, dict]] = []
+        self.answers = answers
+
+    def send_task(self, name, kwargs):
+        from celery.exceptions import TimeoutError as CeleryTimeoutError
+
+        from app.tasks import contract_jobs
+
+        self.sent.append((name, kwargs))
+        answers = self.answers
+
+        class Result:
+            def get(self, timeout):
+                if not answers:
+                    raise CeleryTimeoutError("The operation timed out.")
+                return getattr(contract_jobs, name.rsplit(".", 1)[1])(**kwargs)
+
+            def forget(self):
+                pass
+
+        return Result()
+
+
+@pytest.fixture
+def copied(s3, monkeypatch):
+    """A script's output in its bucket, and Tabularia's storage it is copied to."""
+    from app.contracts import service
+
+    fake = s3(FakeScriptsBucket())
+    fake.objects["env-1/step/output.parquet"] = _parquet()
+    storage = FakeStorage()
+    monkeypatch.setattr("app.utils.get_storage_service", lambda: storage)
+    monkeypatch.setattr(service, "get_storage_service", lambda: storage)
+    return "env-1/step/output.parquet"
+
+
+def test_the_contract_is_evaluated_on_the_copy_by_a_worker(copied, monkeypatch):
+    from app.tasks.celery_app import celery_app
+
+    worker = Worker()
+    monkeypatch.setattr(celery_app, "send_task", worker.send_task)
+    out = _import(copied, BLOCKING)
+    assert worker.sent == [("app.tasks.contract_jobs.check_before_publish_task",
+                            {"bucket": "data-prep", "key": "out/abc.parquet", "contract": BLOCKING})]
+    report = out["contract"]
+    assert (report["outcome"], report["version"], report["rules"][0]["violations"]) == ("failed", 4, 1)
+    # without a contract: nothing to evaluate, the answer as before
+    assert "contract" not in _import(copied) and len(worker.sent) == 1
+
+
+def test_a_worker_that_does_not_answer_does_not_let_a_blocking_contract_pass(copied, monkeypatch):
+    from app.tasks.celery_app import celery_app
+
+    monkeypatch.setattr(celery_app, "send_task", Worker(answers=False).send_task)
+    report = _import(copied, BLOCKING)["contract"]
+    assert (report["outcome"], report["errors"], report["error"]) == ("failed", 1, "The operation timed out.")
+
+
+def test_the_evaluation_of_a_scripts_output_goes_to_the_runs_queue():
+    """A run's data, as heavy as the data: not on the previews' worker, which must stay
+    free for the people in the editor (the checks asked for by hand stay there)."""
+    from app.tasks.celery_app import celery_app
+
+    def queue(name):
+        return celery_app.amqp.router.route({}, name)["queue"].name
+
+    assert queue("app.tasks.contract_jobs.check_before_publish_task") == "celery"
+    assert queue("app.tasks.contract_jobs.evaluate_contract_task") == "preview"
 
 
 def test_an_output_that_was_not_written_or_is_not_parquet(s3, monkeypatch):

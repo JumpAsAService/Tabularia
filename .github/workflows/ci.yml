@@ -1,8 +1,8 @@
 # The tests of every change: the engine's suite (four engines, with real ClickHouse,
 # PostgreSQL, MinIO and Valkey), the gateway's suite (with a real PostgreSQL for the
-# migrations) and the type check of the interface. Runs on every push, to any branch, and
-# every pull request; the release workflow calls it on the commit it is about to publish and
-# publishes nothing unless it is green.
+# migrations), the type check of the interface and its translations. Runs on every push, to
+# any branch, and every pull request; the release workflow calls it on the commit it is about
+# to publish and publishes nothing unless it is green.
 #
 # The suites run inside the development images (the published ones have no pytest), by
 # .github/scripts/ci_tests.sh, which runs the same way on a laptop. Not here: live BigQuery,
@@ -106,3 +106,8 @@ jobs:
       # vue-tsc is not a dependency of the app: pinned here, pointed at Nuxt's tsconfig
       - name: Type check
         run: npx -y -p typescript@5.6.3 -p vue-tsc@2.2.10 vue-tsc --noEmit -p .nuxt/tsconfig.json
+
+      # what the type check cannot see: the translations against each other and against the
+      # keys the code names (tests/i18n.test.mjs)
+      - name: Translations
+        run: npm test
