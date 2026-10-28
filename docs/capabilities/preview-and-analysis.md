@@ -14,7 +14,7 @@ access to the folder can reopen. Nothing in either place changes the data.
 | Reads | The chain up to the selected node | One datasource |
 | Rows shown | First 100 of the selected node | First 500 of the result |
 | Computed on | The whole input, or the source's development sample | The whole datasource |
-| Charts | Bars, Lines, Area, Pie, Treemap, Scatter, aggregated on all rows | The same |
+| Charts | Bars, Lines, Area, Pie, Treemap, Scatter, Bars and line, Waterfall, Funnel, Heatmap, KPI, Gauge, Bullet, aggregated on all rows | The same |
 | Download | **Download this node's data**: CSV or Excel | **Export CSV** and **Export Excel** of the current view |
 | Kept | With the flow | As a **saved view** in a folder |
 | Step cache | Yes | No: every **Apply** reads the datasource |
@@ -48,6 +48,24 @@ minimum, maximum, median or distinct count. Bars keep the top N categories (20 b
 default); a pie or a treemap shows the five largest and, for a count or a sum, gathers
 the rest under «Other». At most five series are drawn, and the chart says how many it
 left out. A scatter plots one point per group, with an aggregation on each axis.
+
+### More chart kinds
+
+After the first six, the row of chart kinds has two more groups. The first composes:
+**Bars and line** (a second measure drawn as a line over the bars), **Waterfall** (how
+each category adds to or takes from the total, which comes last), **Funnel** (stages from
+the largest down) and **Heatmap** (X by a second column, **by**, the colour by the
+value). The second shows one number: **KPI** (the aggregate of the whole table in large
+type; with **trend**, a column such as a month, its sparkline and the change of the last
+period against the one before), **Gauge** (the number on an arc, with **min**, **max**
+and a **target**) and **Bullet** (a bar per category against a second measure, its
+target). They are computed on all rows like the others, look as they do in the
+[pixel-perfect reports](reports.md#charts-and-kpis), and the assistant draws them in its
+answers too.
+
+![The Viewer on Margin by Category and Month with the Gauge chart: the average of margine_pct, 28.57, on an arc from 0 to 50 with a target mark at 30, «Target 30 · 95.2%» under it; the row of chart kinds above, in three groups](../media/guide/analysis/viewer-gauge.png)
+
+*The Viewer with **Gauge**: the average margin percentage of the sample data against a target of 30; the row of kinds above, the first six, those that compose, those of one number.*
 
 **Download this node's data**, in the node's panel, writes the node's whole result as
 CSV or Excel: a worker writes the file and the browser saves it.

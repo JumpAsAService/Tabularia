@@ -22,8 +22,8 @@ and what each common action needs.
 
 ### Folders
 
-Flows, datasources, connections, saved views, SQL scripts, Python and R scripts and
-flow groups all belong to exactly one folder. Folders nest. Only administrators create
+Flows, datasources, connections, saved views, SQL scripts, Python and R scripts,
+notebooks, reports and flow groups all belong to exactly one folder. Folders nest. Only administrators create
 top-level folders; whoever has MANAGE on a folder creates folders inside it.
 
 A permission on a folder holds for every subfolder, however deep. The folders above the
@@ -36,7 +36,7 @@ in a branch of its own.
 
 | Capability | Lets you | Includes |
 |---|---|---|
-| **VIEW** | see the folder's content; open flows, datasources, saved views and scripts; preview and export data; ask the assistant about the datasources | |
+| **VIEW** | see the folder's content; open flows, datasources, saved views, scripts and reports; preview and export data; read a report and download it; ask the assistant about the datasources | |
 | **RUN** | run flows, refresh datasources, write a SQL script's datasource, run scripts and flow groups, and schedule all of them | VIEW |
 | **EDIT** | create, change, rename, move, duplicate and delete content; write a datasource's data contract; publish a flow's result into the folder | RUN, VIEW |
 | **MANAGE** | grant and revoke permissions on the folder, create subfolders, move and delete folders | EDIT, RUN, VIEW, CONNECT |

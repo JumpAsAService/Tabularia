@@ -190,8 +190,9 @@ Error bodies are JSON with a `detail` field. Its language follows the
 
 ## Download a report
 
-A pixel-perfect report (a page designed in **Reports**, kept in a folder) can be
-downloaded from any script, with its parameters, as the web app renders it:
+A [pixel-perfect report](capabilities/reports.md) (a page designed in the report designer,
+kept in a folder) can be downloaded from any script, with its parameters, as the web app
+renders it:
 
 ```
 GET /reports/{id}/render?format=pdf&region=North&since=2026-09-01

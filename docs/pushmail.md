@@ -58,9 +58,9 @@ email: over it the cell fails, saying so, and nothing is sent.
 
 ## Reports
 
-A report in the cell is rendered when the email leaves, by the worker that writes it,
-from the report's **current version**: a change saved in the designer goes out with the
-next email.
+A [report](capabilities/reports.md) in the cell is rendered when the email leaves, by
+the worker that writes it, from the report's **current version**: a change saved in the
+designer goes out with the next email.
 
 - **Format.** **PDF** is the report as designed, page by page; **Excel** has its tables,
   groups and subtotals as rows, one sheet per table, and a sheet with the parameters.

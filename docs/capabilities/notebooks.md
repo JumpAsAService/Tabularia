@@ -148,7 +148,7 @@ when it stops.
 
 ### Reports
 
-A pixel-perfect report comes into the notebook as a file, rendered with the same rights
+A [pixel-perfect report](reports.md) comes into the notebook as a file, rendered with the same rights
 as the reads, exactly as the [API](../api.md#download-a-report) renders it:
 
 ```python

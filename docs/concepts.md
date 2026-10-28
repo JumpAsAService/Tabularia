@@ -17,6 +17,7 @@ into detail.
 | Saved view | A Viewer configuration (filters, pivots, charts) over a datasource; never the rows | a folder | [Preview and analysis](capabilities/preview-and-analysis.md) |
 | Script | Python or R code with its versions, run on Kubernetes | a folder | [Python and R](scripting.md) |
 | SQL script | SQL over the catalog or over a database connection | a folder | [SQL scripts](sql-scripts.md) |
+| Report | A paginated, pixel-perfect document over datasets, with parameters: read on screen, downloaded as PDF or Excel, sent by email | a folder | [Reports](capabilities/reports.md) |
 | Flow group | Flows, refreshes, scripts, SQL scripts, images and emails in steps | a folder | [Flow groups](capabilities/flow-groups.md) |
 | Run | One execution, with its outcome, timings, engine and log | the **Runs** page | below |
 | User, group, service account | Who signs in or calls the API, and how they are grouped | **Administration** | [Permissions](governance/permissions.md) |
@@ -24,8 +25,8 @@ into detail.
 ## Folders and permissions
 
 Everything lives in a folder, and folders nest. **Explore** shows the tree: a folder
-lists its subfolders, flows, datasources, views, connections, scripts, SQL scripts and
-flow groups.
+lists its subfolders, flows, datasources, views, connections, scripts, SQL scripts,
+notebooks, reports and flow groups.
 Root folders are created by administrators; a subfolder by whoever has **MANAGE** on
 its parent.
 
@@ -131,6 +132,9 @@ container printed is kept with the run for `ORCHESTRATOR__LOG_RETENTION_DAYS` da
   datasource refreshes, scripts, SQL scripts, container images, [Pushmail](pushmail.md)
   emails), the steps one after the other, and a failed step stops the group:
   [Flow groups](capabilities/flow-groups.md).
+- A **report** is a page designed in millimetres over datasets, with parameters, read on
+  screen and downloaded as PDF or Excel; it has no schedule of its own: a flow group's
+  Pushmail cell sends it after the data is refreshed: [Reports](capabilities/reports.md).
 - A **schedule** is a cron expression on a flow, a datasource refresh, a script, a SQL
   script or a flow group, read in the installation's time zone (`APP__TIMEZONE`). A
   scheduled run acts with the permissions of the person who set the schedule:

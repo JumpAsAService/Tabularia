@@ -1,7 +1,22 @@
 # Spec: pixel-perfect reports
 
-Status: designed 2026-10-29 with the owner; to start after TLS options and the audit of
-users and groups.
+Status: implemented, 2026-10-28. Pieces 1 and 2, the engine and the gateway, done (with
+the fix that keeps a closed group from bringing back the header before it); 3, the
+designer and the viewer, done; 4, the Pushmail cell, the API and `tabularia.report()` in
+notebooks, done; 5, the new chart kinds in the Viewer and in the chat, done; 6, the
+documentation, done: the user's guide is
+[docs/capabilities/reports.md](../capabilities/reports.md), with an example report on the
+Sample data. Still open:
+
+- no live check of expressions by the server while one types: the editor checks what it
+  can on its side, the server's check comes at the save (a route that checks a definition
+  not yet saved is missing);
+- the preview's errors come back as a message to read, not as problems tied to an item
+  and a field as the save's do;
+- an optional parameter that has a default cannot be emptied: an empty field takes the
+  default, so «no value» can be chosen only for a parameter without one;
+- an interactive hotspot (a column to sort, a group to close) arrives from the engine as a
+  point, and the viewer rebuilds its box from the table's layout.
 
 ## Objective
 
@@ -167,7 +182,7 @@ All lengths are millimetres (numbers, a tenth at most), colours `#rrggbb`.
     typed literal (`DATE '…'`, `TIMESTAMP '…'`). A report parameter inside a string
     (`'{region}'`) is refused with a clear message («write {region} without quotes:
     Tabularia quotes it»): text pasted inside quotes is how injections start (a backslash
-    escapes in MySQL). `{{` is a literal brace.
+    escapes in MySQL). A doubled opening brace is a literal brace.
   - `datasource` / `view`: the datasource as it is, or a saved view (its filters, computed
     fields, pivot), plus `filters` (`column`, `op` among = <> < <= > >= in contains, a
     value or `{parameter}`) applied before.

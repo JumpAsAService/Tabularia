@@ -78,6 +78,7 @@ from.
 | Data leaving | `export.download` (a CSV or Excel export), `email.send` (an Output node's email, a Pushmail cell, a contract notice), `sql_script.export` |
 | Free queries on the data | `sql_script.run` (with its SQL and what it read), `ai.query` (each query the assistant runs for someone) |
 | SQL scripts | `sql_script.create`, `sql_script.update`, `sql_script.delete`, `sql_script.restore`, `sql_script.publish`, `sql_script.schedule` |
+| Reports | `report.create`, `report.update`, `report.delete`, `report.move`, `report.rename`, `report.duplicate`, `report.restore`, `report.render` (every render, with its format, the values of its parameters, the outcome and where it came from: the interface, the API, a notebook or a flow group) |
 | Python and R scripts | `script.create`, `script.update`, `script.delete`, `script.restore`, `script.run`, `script.schedule`, `scripting.trial` (a Script node run from the editor) |
 | Containers | `container.trial` (a Container node run from the editor), `registry.create`, `registry.update`, `registry.delete`, `registry.test`, `registry.cluster_test`, `registry.variable_set`, `registry.variable_delete` |
 | Scripting environments | `scripting.storage_update`, `scripting.storage_test`, `scripting.environment_create`, `scripting.environment_update`, `scripting.environment_delete`, `scripting.version_current`, `scripting.variable_set`, `scripting.variable_delete` |
