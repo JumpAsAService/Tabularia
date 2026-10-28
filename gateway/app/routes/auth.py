@@ -270,6 +270,9 @@ def me(user: User = Depends(get_current_user), session: Session = Depends(get_se
         # whether to show the administration with.
         is_superuser=is_admin(session, user),
         is_observer=is_observer(session, user),
+        # an integration signed in with its token (said `false` before: the field was
+        # inherited from UserOut and never filled)
+        is_service=user.is_service,
         groups=list(names),
         # no local password: the settings menu says the identity provider manages it
         sso_only=user.hashed_password is None,

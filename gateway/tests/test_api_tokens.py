@@ -208,7 +208,7 @@ def test_the_administrator_creates_a_service_account_and_its_tokens(app, session
     t = boss.post(f"/service-accounts/{acc['id']}/tokens", json={"name": "dag", "scope": "write", "expires_in_days": 30}, headers=CSRF)
     assert t.status_code == 201
     me = TestClient(app).get("/auth/me", headers=_bearer(t.json()["token"])).json()
-    assert me["email"] == acc["email"]
+    assert me["email"] == acc["email"] and me["is_service"] is True  # an integration knows it is one
     assert boss.get("/service-accounts").json()[0]["tokens"] == 1
     # signs in only with the token: password and SSO do not (no local password)
     assert TestClient(app).post("/auth/login", json={"email": acc["email"], "password": "x"}).status_code == 401

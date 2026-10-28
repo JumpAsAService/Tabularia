@@ -1,5 +1,5 @@
 <script setup lang="ts">
-// Monitoring: the Grafana dashboard "Data Prep — Overview" embedded in kiosk mode (no
+// Monitoring: the Grafana dashboard "Tabularia — Overview" embedded in kiosk mode (no
 // Grafana chrome, only the panels). Requires GF_SECURITY_ALLOW_EMBEDDING + anonymous
 // Viewer (see docker-compose).
 import { computed, watchEffect } from 'vue'

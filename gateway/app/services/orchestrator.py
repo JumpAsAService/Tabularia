@@ -60,7 +60,7 @@ from app.models.permission import Capability
 from app.models.run import ORCHESTRATION_INTERRUPTED, STEP_INTERRUPTED, TERMINAL_STATES  # noqa: F401 — riesportata
 from app.routes.runs import (
     _launch_flow_run, _reconcile, _revoke_task, close_if_queued_too_long, launch_ingest_run, live_refresh,
-    start_refresh_if_free,
+    resolve_run_engine, start_refresh_if_free,
 )
 from app.schemas.models import RunCreate
 from app.services import permissions as perm_service
@@ -596,6 +596,10 @@ async def run_it(run_id: int) -> None:
                     logger.warning("orchestrate: scheduled run %s of flow %s not started: %s", run_id, flow_id, gaps)
                     await _finalize_orch_run(run_id, "FAILURE", schedule_authority.not_started(user, gaps))
                     return
+            # the engine the flow runs with in this mode, as its Outputs record it: the run
+            # the API hands back (GET /runs/{id}) says it too
+            run.engine = resolve_run_engine(flow, run.engine_mode or "development")
+            session.commit()
             try:
                 # the child runs (output/refresh) refer to the orchestration run: so the calendar
                 # counts only the latter, not the child duplicates

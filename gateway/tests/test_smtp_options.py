@@ -91,3 +91,31 @@ async def test_launching_with_a_malformed_connection_is_a_422_not_a_500(session,
         await _launch_flow_run(session, admin, flow, body)
     assert e.value.status_code == 422
     assert fake_engine.transforms == []
+
+
+@pytest.mark.anyio
+async def test_the_forms_test_of_a_new_connection_uses_its_options(session, monkeypatch):
+    """«Test connection» before saving tried STARTTLS whatever the form said: the draft's
+    options fell into the databases' branch and were dropped («STARTTLS extension not
+    supported» from a server without encryption, chosen as such)."""
+    import app.routes.connections as rc
+
+    admin = make_user(session, email="a@x.local", is_superuser=True)
+    p = make_project(session, name="P")
+    seen = {}
+
+    async def fake(payload, action, path="", **kw):
+        seen.update(payload)
+        return {"ok": True}
+
+    monkeypatch.setattr(rc, "_engine_inspect", fake)
+    body = ConnectionCreate(name="mail", db_type="smtp", host="mailpit", port=1025, username="", password="",
+                            extra=json.dumps({"tls": "none", "from_address": "reports@example.com"}))
+    await rc.test_draft_connection(p.id, body, user=admin, session=session)
+    assert seen["db_type"] == "smtp" and seen["tls"] == "none" and seen["port"] == 1025
+    assert seen["from_address"] == "reports@example.com"
+    seen.clear()
+    with pytest.raises(HTTPException) as e:
+        await rc.test_draft_connection(p.id, body.model_copy(update={"extra": json.dumps({"tls": "tls1.2"})}),
+                                       user=admin, session=session)
+    assert e.value.status_code == 422 and not seen

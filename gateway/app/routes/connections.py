@@ -180,14 +180,13 @@ def allowed_email_domains(conn: Connection) -> list[str]:
     return domains
 
 
-def _smtp_payload(conn: Connection) -> dict:
-    opts = smtp_options(conn)
+def _smtp_payload(host: str, port: int | None, username: str, secret_encrypted: str, opts: dict) -> dict:
     return {
         "db_type": "smtp",
-        "host": conn.host,
-        "port": conn.port or 587,
-        "username": conn.username,
-        "password_encrypted": conn.password_encrypted,
+        "host": host,
+        "port": port or 587,
+        "username": username,
+        "password_encrypted": secret_encrypted,
         "from_address": opts.get("from_address") or "",
         "from_name": opts.get("from_name") or "",
         "tls": opts.get("tls") or "starttls",
@@ -199,7 +198,7 @@ def engine_connection_payload(conn: Connection) -> dict:
     if conn.db_type == "sharepoint":
         return _sharepoint_payload(conn.host, conn.username, conn.password_encrypted, conn.database, conn.extra)
     if conn.db_type == "smtp":
-        return _smtp_payload(conn)
+        return _smtp_payload(conn.host, conn.port, conn.username, conn.password_encrypted, smtp_options(conn))
     if conn.db_type == "sftp":
         return _sftp_payload(conn.host, conn.port, conn.username, conn.password_encrypted, conn.private_key_encrypted,
                              conn.extra, conn.host_key_type, conn.host_key_fingerprint)
@@ -873,6 +872,12 @@ async def test_draft_connection(
         payload = _sharepoint_payload(body.host, body.username, secret, body.database, body.extra)
     elif body.db_type == "s3":
         payload = _s3_payload(body.host, body.username, secret, body.database, body.db_schema)
+    elif body.db_type == "smtp":
+        import json as _json
+
+        # the form's encryption and sender, checked as when saving (not the databases' options)
+        payload = _smtp_payload(body.host, body.port, body.username, secret,
+                                _json.loads(_valid_extra(body.extra, "smtp")))
     else:
         if body.db_type in db_tls.DB_TYPES:
             _valid_extra(body.extra, body.db_type)   # the encryption, checked as when saving

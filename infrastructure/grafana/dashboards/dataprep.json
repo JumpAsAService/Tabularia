@@ -1,6 +1,6 @@
 {
   "uid": "dataprep-overview",
-  "title": "Data Prep — Overview",
+  "title": "Tabularia — Overview",
   "tags": [
     "dataprep"
   ],
@@ -22,7 +22,7 @@
     {
       "id": 1,
       "type": "stat",
-      "title": "Voci in cache",
+      "title": "Cache entries",
       "gridPos": {
         "h": 6,
         "w": 6,
@@ -82,8 +82,8 @@
     {
       "id": 3,
       "type": "timeseries",
-      "title": "Memoria per container (working set)",
-      "description": "container_memory_working_set_bytes: la memoria che conta per l'OOM killer. NON usare container_memory_usage_bytes qui: include la page cache (reclamabile), che con Polars su file grandi gonfia il grafico fino alla dimensione del file senza alcun rischio reale.",
+      "title": "Memory per container (working set)",
+      "description": "container_memory_working_set_bytes: the memory the OOM killer counts. Not container_memory_usage_bytes: it includes the page cache (reclaimable), which with Polars on large files inflates the chart up to the file's size with no real risk.",
       "gridPos": {
         "h": 8,
         "w": 12,
@@ -115,7 +115,7 @@
     {
       "id": 4,
       "type": "timeseries",
-      "title": "Task Celery attivi",
+      "title": "Active Celery tasks",
       "gridPos": {
         "h": 8,
         "w": 12,
@@ -141,7 +141,7 @@
     {
       "id": 5,
       "type": "timeseries",
-      "title": "Target su (scrape)",
+      "title": "Targets up (scrape)",
       "gridPos": {
         "h": 6,
         "w": 24,
@@ -174,7 +174,7 @@
     {
       "id": 6,
       "type": "timeseries",
-      "title": "Durata run (transform) — p95 e media",
+      "title": "Run duration (transform) — p95 and mean",
       "gridPos": {
         "h": 8,
         "w": 12,
@@ -204,7 +204,7 @@
         {
           "refId": "B",
           "expr": "rate(celery_task_runtime_sum{name=\"app.tasks.jobs.transform_data_task\"}[5m]) / rate(celery_task_runtime_count{name=\"app.tasks.jobs.transform_data_task\"}[5m])",
-          "legendFormat": "media",
+          "legendFormat": "mean",
           "datasource": {
             "type": "prometheus",
             "uid": "victoriametrics"
@@ -215,7 +215,7 @@
     {
       "id": 7,
       "type": "timeseries",
-      "title": "Crescita storage per prefisso (cache/, datasets/, ...)",
+      "title": "Storage growth by prefix (cache/, datasets/, …)",
       "gridPos": {
         "h": 8,
         "w": 12,
@@ -247,7 +247,7 @@
     {
       "id": 8,
       "type": "timeseries",
-      "title": "Memoria worker Polars (working set)",
+      "title": "Polars worker memory (working set)",
       "gridPos": {
         "h": 8,
         "w": 24,
@@ -279,8 +279,8 @@
     {
       "id": 9,
       "type": "timeseries",
-      "title": "Preview — p50 e p95 per motore",
-      "description": "Durata delle preview riuscite. Istogramma tenuto dall'app su Valkey (contatori a dimensione fissa), non una riga per preview.",
+      "title": "Preview — p50 and p95 by engine",
+      "description": "Duration of the successful previews. A histogram the application keeps in Valkey (fixed-size counters), not a row per preview.",
       "datasource": {
         "type": "prometheus",
         "uid": "victoriametrics"
@@ -339,8 +339,8 @@
     {
       "id": 10,
       "type": "timeseries",
-      "title": "Preview al minuto, per esito",
-      "description": "«superseded» = preview fermata perché superata da una più recente: è lavoro risparmiato, non un errore.",
+      "title": "Previews per minute, by outcome",
+      "description": "«superseded» = a preview stopped because a newer one replaced it: work saved, not an error.",
       "datasource": {
         "type": "prometheus",
         "uid": "victoriametrics"
@@ -394,8 +394,8 @@
     {
       "id": 11,
       "type": "timeseries",
-      "title": "Preview — dove va il tempo",
-      "description": "Quota del tempo per fase: connessione, step-cache, costruzione della query, query sul motore, decodifica. Dice DOVE guardare quando le preview rallentano.",
+      "title": "Preview — where the time goes",
+      "description": "Share of the time by phase: connection, step cache, building the query, the engine's query, decoding. It says WHERE to look when previews slow down.",
       "datasource": {
         "type": "prometheus",
         "uid": "victoriametrics"

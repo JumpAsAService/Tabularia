@@ -755,3 +755,22 @@ def test_a_dead_after_lowered_from_the_panel_keeps_the_old_one_while_the_others_
     assert orch.death_threshold() == 20
     dead[0] = 300  # raised: the new one at once
     assert orch.death_threshold() == 300
+
+
+async def test_the_flows_run_records_the_engine_it_runs_with(session, queue_, monkeypatch):
+    """GET /runs/{id} of a «Run now» (the orchestration row the API hands back) said
+    `"engine": null`: only its Outputs recorded one. It now records the flow's engine for
+    the mode it runs in — the production one in production, as the Outputs do."""
+    user_, folder = queue_
+    flow = _flow(session, user_, folder, engine="polars", production_engine="duckdb")
+
+    async def orchestrate(s, u, f, **kw):
+        return []
+
+    monkeypatch.setattr(orch, "orchestrate", orchestrate)
+    for mode, expected in (("production", "duckdb"), ("development", "polars")):
+        run = orch.create_orchestration_run(session, user_, flow, "manual", mode)
+        assert orch.claim(5)[0] == [run.id]
+        await orch.run_it(run.id)
+        done = _state(session, run.id)
+        assert (done.status, done.engine) == ("SUCCESS", expected)

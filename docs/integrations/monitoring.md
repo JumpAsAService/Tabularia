@@ -64,7 +64,7 @@ the Viewer).
 
 ### The pages in the interface
 
-- **Monitoring** embeds the Grafana dashboard *Data Prep — Overview* in kiosk mode,
+- **Monitoring** embeds the Grafana dashboard *Tabularia — Overview* in kiosk mode,
   refreshed every 10 seconds: preview p50 and p95 by engine, previews per minute by
   outcome, where the preview time goes, cache hits and misses, Celery tasks running,
   run durations, storage growth by prefix, memory per container, and which scrape
