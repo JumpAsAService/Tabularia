@@ -315,7 +315,12 @@ renderer, so the screen is the PDF. The chart service: `frontend` image, `node
   `Content-Disposition`; a token with read scope is enough; repeated `?region=a&region=b`
   for a multi parameter. 400 with the parameter's name when a value does not fit.
 - `GET /reports/{id}/parameters` — the parameters with their choices resolved (the form).
-- `POST /reports/{id}/fields` `{dataset}` → the dataset's columns (editor).
+- `POST /reports/{id}/fields` `{dataset}` → the dataset's columns (editor), and its rows
+  with the parameters' defaults counted up to the cap (`rows`, `over`, `max_rows`; the
+  engine's `POST /reports/count` on the preview queue, 20 s at most): absent when they
+  cannot be counted (a required parameter without a default, an engine that fails or
+  takes longer), never an error. The designer shows the number under the dataset, an
+  orange warning with the time a render takes past 100,000 rows, a red one past the cap.
 
 ### Pieces
 

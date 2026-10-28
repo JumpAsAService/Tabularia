@@ -154,6 +154,10 @@ class FakeEngine:
         self.report_check_response: tuple[int, dict] | None = None
         self.report_choices: list[dict] = []
         self.report_choices_response: tuple[int, dict] | None = None
+        # a dataset's rows counted (POST /reports/count): None = an engine without the route;
+        # an exception is raised as the engine client would (a timeout)
+        self.report_counts: list[dict] = []
+        self.report_count_response: tuple[int, dict] | Exception | None = None
         # an export followed by its owner: its state per task (default: ready) and the file
         self.export_states: dict[str, list[dict]] = {}  # task_id -> states served in turn (the last one stays)
         self.export_polls: list[tuple[str, str | None]] = []  # (path, owner)
@@ -290,6 +294,11 @@ class FakeEngine:
         if path == "/reports/choices" and request.method == "POST" and self.report_choices_response is not None:
             self.report_choices.append(_json_body(request))
             return httpx.Response(self.report_choices_response[0], json=self.report_choices_response[1])
+        if path == "/reports/count" and request.method == "POST" and self.report_count_response is not None:
+            self.report_counts.append(_json_body(request))
+            if isinstance(self.report_count_response, Exception):
+                raise self.report_count_response
+            return httpx.Response(self.report_count_response[0], json=self.report_count_response[1])
         if path.startswith("/tasks/exports/") and request.method == "GET":
             self.export_polls.append((path, request.url.params.get("owner")))
             tid = path.split("/")[3]

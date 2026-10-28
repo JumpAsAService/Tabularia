@@ -11,7 +11,9 @@ import {
   SquareFunction, Table2, Trash2, Type, Variable,
 } from 'lucide-vue-next'
 import RdFieldIcon from '~/components/report/designer/RdFieldIcon.vue'
+import RdRowCount from '~/components/report/designer/RdRowCount.vue'
 import { DRAG_TYPE, dragged, useDesign, type DragPayload } from '~/composables/reportDesignStore'
+import { countFor } from '~/composables/reportRowCount'
 import {
   columnFor, fieldRef, newItem, type DDataset, type DField, type DText, type InsertKind,
 } from '~/composables/reportDesignModel'
@@ -207,6 +209,7 @@ const fieldTitle = computed(() => (store.selected.value?.item.type === 'table'
               <Trash2 :size="13" />
             </button>
           </div>
+          <RdRowCount class="rds-rows" :count="countFor(store.rowCounts.value[ds.name], ds.source)" />
           <template v-if="isOpen(ds.name)">
             <p v-if="fieldErrors?.[ds.name] && !(ds.fields ?? []).length" class="rds-nofields bad" role="alert">{{ fieldErrors[ds.name] }}</p>
             <p v-else-if="!(ds.fields ?? []).length && !(ds.calculated ?? []).length" class="rds-nofields">
@@ -318,6 +321,7 @@ const fieldTitle = computed(() => (store.selected.value?.item.type === 'table'
 .rds-setname { flex: 1; min-width: 0; display: flex; flex-direction: column; padding: 2px 4px; }
 .rds-mono { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 12.5px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .rds-src { font-size: 11px; color: var(--muted); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.rds-rows { margin: 0 8px 4px 26px; }
 .rds-nofields { margin: 4px 8px 6px 26px; font-size: 11.5px; color: var(--muted); line-height: 1.4; overflow-wrap: anywhere; }
 .rds-nofields.bad { color: var(--danger); }
 .rds-fields { margin: 2px 0 2px 18px; padding-left: 6px; border-left: 1px solid var(--border-soft); }

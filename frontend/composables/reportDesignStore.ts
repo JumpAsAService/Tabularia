@@ -10,6 +10,7 @@ import {
   allowedIn, bodyPageHeight, contentWidth, copyItem, emptyDefinition, liveShown, mm1, rowConflicts, samePath, stillStanding, tableHeight,
   tableRows, withSeen, type BandName, type DDefinition, type DItem, type DTable, type DesignProblem, type DField, type InsertKind,
 } from '~/composables/reportDesignModel'
+import type { CountedRows } from '~/composables/reportRowCount'
 
 const HISTORY = 200
 const PAUSE_MS = 350
@@ -59,6 +60,9 @@ export function createDesignStore() {
   /** a line for the status bar: what the editor did on its own (an item moved out of a
    *  table's row), cleared by the next gesture */
   const notice = ref('')
+  /** the rows of each dataset, as «Refresh fields» last counted them, with the source
+   *  counted (reportRowCount.ts): not part of the definition */
+  const rowCounts = ref<Record<string, CountedRows>>({})
 
   // ── snapshots ──
   const assets = new Map<string, string>()
@@ -138,6 +142,7 @@ export function createDesignStore() {
     selectedBand.value = null
     problems.value = []
     liveProblems.value = []
+    rowCounts.value = {}
   }
 
   // ── a table's height follows its rows when they change (a group added, the theme's
@@ -323,7 +328,7 @@ export function createDesignStore() {
   }
 
   return {
-    doc, text, selectedId, selectedBand, selected, problems, zoom, snap, gesture, chartPicker, notice, sideTab,
+    doc, text, selectedId, selectedBand, selected, problems, zoom, snap, gesture, chartPicker, notice, sideTab, rowCounts,
     undo, redo, canUndo, canRedo, reset, record,
     find, select, add, remove, duplicate, copy, paste, freeSpot, keepInside, settleRow,
     datasetOf, fieldsOf, params,

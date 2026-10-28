@@ -377,6 +377,12 @@ export default {
       "tooNarrow": "Los márgenes laterales dejan menos de 2 cm de página.",
       "tooShort": "Los márgenes, el encabezado y el pie dejan menos de 2 cm al cuerpo."
     },
+    "rows": {
+      "plain": "ninguna fila | {n} fila | {n} filas",
+      "slow": "unas {n} filas: el informe tardará unos {s} segundos y mucha memoria — agregue en SQL (GROUP BY) para que sea rápido",
+      "over": "más de {n} filas: el informe no se generará — añada un GROUP BY o un filtro",
+      "title": "Contadas con los valores predeterminados de los parámetros al leer los campos"
+    },
     "dataset": {
       "newTitle": "Nuevo conjunto de datos",
       "editTitle": "Conjunto {name}",
@@ -392,6 +398,9 @@ export default {
       "runsOn": "Se ejecuta en",
       "engine": "Motor",
       "paramsHelp": "Un parámetro va en el SQL como {'{'}nombre{'}'}, sin comillas: Tabularia escribe su valor como literal (un texto entre comillas, una fecha como fecha, una lista para IN {'{'}nombres{'}'}). También funcionan los marcadores como {'{'}today-30{'}'}.",
+      "aggregateHelp": "Agregue en SQL, dé formato en el informe:",
+      "aggregateExample": "SELECT region, SUM(importe) AS importe FROM pedidos GROUP BY region",
+      "aggregateWhy": "lee una fila por región, no una por pedido.",
       "insertParam": "Insertar en el SQL",
       "datasource": "Datasource",
       "view": "Vista guardada",

@@ -7,6 +7,8 @@
   the position inside the expression — what the editor shows when a report is saved.
 - POST /reports/choices: the choices of a parameter taken from a dataset, for the form; on
   the preview worker, waited for as a preview.
+- POST /reports/count: how many rows a dataset gives, up to REPORTS__MAX_ROWS (the
+  designer's hint next to the dataset); on the preview worker, waited for `seconds` at most.
 """
 import uuid
 from typing import Any, Literal, Optional
@@ -60,6 +62,13 @@ class ReportCheck(BaseModel):
     columns: Optional[dict[str, dict[str, str]]] = None
 
 
+class ReportCount(BaseModel):
+    # what to count, as one of a render's `datasets`
+    dataset: dict
+    slot: Optional[str] = Field(default=None, max_length=200)  # a newer count on the same slot knocks this one down
+    seconds: float = Field(default=20, gt=0, le=300)  # past it the count is stopped (504): it is only a hint
+
+
 @router.post("/check")
 def check(request: ReportCheck) -> dict:
     return {"problems": [p.as_dict() for p in rd.check(request.definition, request.columns)]}
@@ -73,6 +82,20 @@ def choices(request: ReportChoices) -> dict:
     if not payload.get("ok"):
         status = {**_PREVIEW_ERROR_STATUS, "unavailable": 503}.get(payload.get("error"), 400)
         raise HTTPException(status_code=status, detail=payload.get("detail", "The choices could not be read"))
+    return payload["result"]
+
+
+@router.post("/count")
+def count(request: ReportCount) -> dict:
+    """{"rows", "over", "max_rows"}: the rows of the dataset counted up to the cap a render
+    reads (`rows` at most `max_rows`, `over` when there are more), without reading them."""
+    from app.api.routes.tasks import _PREVIEW_ERROR_STATUS, on_preview_worker
+
+    payload = on_preview_worker("app.tasks.report_jobs.report_count_task", {"dataset": request.dataset}, request.slot,
+                                seconds=request.seconds)
+    if not payload.get("ok"):
+        raise HTTPException(status_code=_PREVIEW_ERROR_STATUS.get(payload.get("error"), 400),
+                            detail=payload.get("detail", "The rows could not be counted"))
     return payload["result"]
 
 

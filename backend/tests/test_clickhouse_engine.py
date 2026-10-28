@@ -274,3 +274,18 @@ def test_not_configured():
 
     with pytest.raises(EngineError):
         ClickHouseEngine(storage=object(), cache=object(), cfg=ClickHouseExternalSettings(host=""))
+
+
+def test_the_rows_counted_up_to_the_cap(storage, src):
+    """A report's dataset counted (Engine.count_rows): one row past the cap at most, the
+    chain's filters and SQL included."""
+    engine = _engine(storage)
+    assert engine.count_rows(src, [], 100) == 4
+    assert engine.count_rows(src, [], 2) == 3
+    ops = [{"type": "filter", "params": {"column": "paese", "operator": "eq", "value": "IT"}}]
+    assert engine.count_rows(src, ops, 100) == 2
+    grouped = [{"type": "sql", "params": {"query": "SELECT paese, sum(vendite) AS v FROM self GROUP BY paese"}}]
+    assert engine.count_rows(src, grouped, 100) == 3
+    own = "WITH big AS (SELECT * FROM self WHERE vendite >= 100) SELECT paese FROM big ORDER BY paese"
+    assert engine.count_rows(src, [{"type": "sql", "params": {"query": own}}], 100) == 3
+    assert engine.count_rows(src, [{"type": "sql", "params": {"query": own}}], 1) == 2

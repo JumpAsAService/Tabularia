@@ -398,3 +398,72 @@ def test_a_dataset_s_fields(app, session, fake_engine):
     make_permission(session, user_id=_uid(session, "reader@x.local"), project_id=w["sales"], capability="edit")
     r = reader.post(f"/reports/{w['report']}/fields", json={"dataset": "x", "definition": draft}, headers=CSRF)
     assert r.status_code == 200 and len(r.json()["fields"]) == 3
+
+
+def test_the_rows_of_a_dataset_come_with_its_fields(app, session, fake_engine):
+    """«Refresh fields» counts the rows too: with the reader's rights and the parameters'
+    defaults (what the viewer reads when the report opens), up to the engine's cap. A count
+    that cannot be made — a required parameter without a default, an engine that fails or
+    takes too long — leaves the fields as they were: never an error of its own."""
+    import httpx
+
+    from app.services import reports as service
+
+    w = _world(session)
+    reader = _reader(app, session, w)
+    uid = _uid(session, "reader@x.local")
+    fake_engine.db_query_response = (200, {"columns": [{"name": "area", "dtype": "String"}], "rows": []})
+    fake_engine.report_count_response = (200, {"rows": 840_000, "over": False, "max_rows": 1_000_000})
+    r = reader.post(f"/reports/{w['report']}/fields", json={"dataset": "erp"}, headers=CSRF)
+    assert r.status_code == 200 and r.json() == {"dataset": "erp", "fields": [{"name": "area", "type": "string"}],
+                                                 "rows": 840_000, "over": False, "max_rows": 1_000_000}
+    [asked] = fake_engine.report_counts
+    assert asked["slot"] == f"u{uid}:report:{w['report']}:count" and asked["seconds"] == service.COUNT_SECONDS == 20
+    # the default of `regions`, as a literal of the connection's dialect, and its payload
+    assert asked["dataset"]["sql"] == "SELECT * FROM invoices WHERE area IN ('N') AND note <> 'it''s'"
+    assert asked["dataset"]["connection"]["password_encrypted"] == "encrypted"
+
+    # over the cap: said as the engine says it
+    fake_engine.report_count_response = (200, {"rows": 1_000_000, "over": True, "max_rows": 1_000_000})
+    r = reader.post(f"/reports/{w['report']}/fields", json={"dataset": "kpis"}, headers=CSRF)
+    assert (r.json()["rows"], r.json()["over"], r.json()["max_rows"]) == (1_000_000, True, 1_000_000)
+    assert fake_engine.report_counts[-1]["dataset"]["operations"][0]["params"]["value"] == ["N"]
+
+    # `region` is required and has no default: a count would depend on a value nobody gave
+    before = len(fake_engine.report_counts)
+    r = reader.post(f"/reports/{w['report']}/fields", json={"dataset": "plain"}, headers=CSRF)
+    assert r.status_code == 200 and "rows" not in r.json() and len(r.json()["fields"]) == 3
+    r = reader.post(f"/reports/{w['report']}/fields", json={"dataset": "orders"}, headers=CSRF)
+    assert r.status_code == 200 and "rows" not in r.json()
+    assert len(fake_engine.report_counts) == before
+
+    # the engine fails, takes too long, or has no such route: the fields all the same
+    for answer in ((500, {"detail": "boom"}), (504, {"detail": "Preview timed out"}), httpx.ReadTimeout("slow"), None):
+        fake_engine.report_count_response = answer
+        r = reader.post(f"/reports/{w['report']}/fields", json={"dataset": "erp"}, headers=CSRF)
+        assert r.status_code == 200 and r.json() == {"dataset": "erp", "fields": [{"name": "area", "type": "string"}]}
+    fake_engine.report_count_response = (200, {"rows": "many"})  # an answer that is not one
+    r = reader.post(f"/reports/{w['report']}/fields", json={"dataset": "erp"}, headers=CSRF)
+    assert r.status_code == 200 and "rows" not in r.json()
+
+    # a dataset the reader may not read: the fields' refusal, as before, and nothing counted
+    fake_engine.report_count_response = (200, {"rows": 1, "over": False, "max_rows": 1_000_000})
+    before = len(fake_engine.report_counts)
+    stranger = _reader(app, session, w, email="stranger@x.local", connect=False)
+    r = stranger.post(f"/reports/{w['report']}/fields", json={"dataset": "erp"}, headers=CSRF)
+    assert r.status_code == 422 and "erp" in r.json()["detail"] and len(fake_engine.report_counts) == before
+
+
+def test_an_optional_parameter_without_a_default_is_counted_as_the_render_reads_it(app, session, fake_engine):
+    """No value is NULL in the SQL, as in a render with nothing given; a required one that
+    the dataset does not use does not stop its count."""
+    w = _world(session)
+    reader = _reader(app, session, w)
+    make_permission(session, user_id=_uid(session, "reader@x.local"), project_id=w["sales"], capability="edit")
+    fake_engine.report_count_response = (200, {"rows": 3, "over": False, "max_rows": 1_000_000})
+    draft = {"v": 1, "parameters": [{"name": "area", "type": "text"}, {"name": "must", "type": "number", "required": True}],
+             "datasets": [{"name": "x", "source": {"kind": "sql", "engine": "duckdb",
+                                                   "sql": 'SELECT * FROM "Orders" WHERE region = {area}'}}]}
+    r = reader.post(f"/reports/{w['report']}/fields", json={"dataset": "x", "definition": draft}, headers=CSRF)
+    assert r.status_code == 200 and r.json()["rows"] == 3
+    assert "WHERE region = NULL" in fake_engine.report_counts[-1]["dataset"]["operations"][0]["params"]["query"]

@@ -116,3 +116,32 @@ class Engine(ABC):
     ) -> None:
         # not abstract: an engine may not support the direct export
         raise NotImplementedError(f"{type(self).__name__} does not support export")
+
+    # Where a count goes when the chain ends with a `sql` step: inside it, around its query
+    # (the SQL engines: a second step nests the first one's WITH in its own, and ClickHouse
+    # does not resolve the names), or after it (Polars, whose SQL reads no WITH inside a
+    # subquery and runs one step after another lazily).
+    count_inside_sql = True
+
+    def count_rows(
+        self,
+        source: DataSource,
+        operations: list[Operation] | list[dict[str, Any]],
+        at_most: int,
+    ) -> int:
+        """How many rows the chain gives, counted up to `at_most` + 1 and no further (one
+        more says «more»): the chain capped and counted, read as a preview without the
+        cache. Polars and the SQL engines stop reading at the cap."""
+        ops = [op.model_dump() if isinstance(op, Operation) else dict(op) for op in operations]
+        rows = at_most + 1
+        last = ops[-1] if ops else None
+        if self.count_inside_sql and last is not None and last.get("type") == "sql":
+            params = dict(last.get("params") or {})
+            query = str(params.get("query") or "").strip().rstrip(";").strip()
+            params["query"] = f"SELECT COUNT(*) AS n FROM (SELECT * FROM ({query}\n) AS _c LIMIT {rows}) AS _d"
+            ops[-1] = {**last, "params": params}
+        else:
+            ops += [{"type": "limit", "params": {"n": rows}},
+                    {"type": "sql", "params": {"query": "SELECT COUNT(*) AS n FROM self"}}]
+        result = self.preview(source, ops, limit=1, use_cache=False)
+        return int(next(iter(result.rows[0].values()), 0) or 0) if result.rows else 0

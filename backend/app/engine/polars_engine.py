@@ -59,6 +59,7 @@ class PolarsEngine(DeferredStepCache, Engine):
     # produce slightly different parquet for the same chain → they must not share the
     # step cache's blobs (keyed on the plan's hash)
     engine_name = "polars"
+    count_inside_sql = False  # Engine.count_rows: a step after the last `sql` one
 
     def __init__(self, storage=None, cache: StepCache | None = None):
         # a late import, not to force the dependency at import time

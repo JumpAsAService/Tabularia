@@ -25,6 +25,7 @@ import RdSeg from '~/components/report/designer/RdSeg.vue'
 import { DESIGN, createDesignStore } from '~/composables/reportDesignStore'
 import { useReportDesign } from '~/composables/useReportDesign'
 import { createLiveCheck } from '~/composables/reportLiveCheck'
+import { rowCountOf, sourceKey, type RowCount } from '~/composables/reportRowCount'
 import { errMessage } from '~/composables/useApi'
 import { useFolderPaths } from '~/composables/useFolderPaths'
 import {
@@ -239,6 +240,7 @@ async function refreshFields(dataset: string) {
     const got = await api.fields(reportId.value, dataset, forSave(store.doc.value))
     const ds = store.doc.value.datasets.find((d) => d.name === dataset)
     if (ds) ds.fields = got.fields
+    keepRowCount(dataset, rowCountOf(got), ds?.source)
     const { [dataset]: _, ...rest } = fieldErrors.value
     fieldErrors.value = rest
     toast.success(t('reportDesigner.data.fieldsRead', { n: got.fields.length, name: dataset }, got.fields.length))
@@ -251,6 +253,11 @@ async function refreshFields(dataset: string) {
     if (next && store.doc.value.datasets.some((d) => d.name === next)) refreshFields(next)
   }
 }
+/** the rows «Refresh fields» counted, kept with the source counted; none, and an older count goes */
+function keepRowCount(dataset: string, count: RowCount | null, source: unknown) {
+  const { [dataset]: _, ...rest } = store.rowCounts.value
+  store.rowCounts.value = count ? { ...rest, [dataset]: { ...count, source: sourceKey(source) } } : rest
+}
 function onDatasetApplied(dataset: string) {
   const ds = store.doc.value.datasets.find((d) => d.name === dataset)
   if (ds && !(ds.fields ?? []).length) refreshFields(dataset)
@@ -261,6 +268,7 @@ function removeDataset(dataset: string) {
   const msg = users.length ? t('reportDesigner.data.removeDatasetUsed', { name: dataset, items: users.join(', ') }) : t('reportDesigner.data.removeDatasetConfirm', { name: dataset })
   if (!confirm(msg)) return
   store.doc.value.datasets = store.doc.value.datasets.filter((d) => d.name !== dataset)
+  keepRowCount(dataset, null, null)
 }
 function removeParameter(param: string) {
   if (!confirm(t('reportDesigner.data.removeParameterConfirm', { name: param }))) return

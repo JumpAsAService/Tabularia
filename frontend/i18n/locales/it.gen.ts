@@ -377,6 +377,12 @@ export default {
       "tooNarrow": "I margini laterali lasciano meno di 2 cm di pagina.",
       "tooShort": "I margini, l'intestazione e il piè di pagina lasciano meno di 2 cm al corpo."
     },
+    "rows": {
+      "plain": "nessuna riga | {n} riga | {n} righe",
+      "slow": "circa {n} righe: il report impiegherà circa {s} secondi e molta memoria — aggrega nell'SQL (GROUP BY) per renderlo veloce",
+      "over": "più di {n} righe: il report non verrà generato — aggiungi un GROUP BY o un filtro",
+      "title": "Contate con i valori predefiniti dei parametri, quando sono stati letti i campi"
+    },
     "dataset": {
       "newTitle": "Nuovo dataset",
       "editTitle": "Dataset {name}",
@@ -392,6 +398,9 @@ export default {
       "runsOn": "Esegue su",
       "engine": "Motore",
       "paramsHelp": "Un parametro va nell'SQL come {'{'}nome{'}'}, senza virgolette: Tabularia ne scrive il valore come letterale (un testo tra apici, una data come data, una lista per IN {'{'}nomi{'}'}). Funzionano anche i segnaposto come {'{'}today-30{'}'}.",
+      "aggregateHelp": "Aggrega nell'SQL, formatta nel report:",
+      "aggregateExample": "SELECT regione, SUM(importo) AS importo FROM ordini GROUP BY regione",
+      "aggregateWhy": "legge una riga per regione, non una per ordine.",
       "insertParam": "Inserisci nell'SQL",
       "datasource": "Datasource",
       "view": "Vista salvata",

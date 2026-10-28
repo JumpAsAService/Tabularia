@@ -41,9 +41,11 @@ export function useReportDesign() {
   const check = (id: number, definition: unknown, signal?: AbortSignal) =>
     apiFetch<{ problems: unknown[] }>('/reports/check', { method: 'POST', body: { report_id: id, definition }, signal })
 
-  /** A dataset's columns as the data has them, read from the definition being edited. */
+  /** A dataset's columns as the data has them, read from the definition being edited, and
+   *  its rows with the parameters' defaults, counted up to the engine's cap (`rows`,
+   *  `over`, `max_rows`: absent when they could not be counted; reportRowCount.ts). */
   const fields = (id: number, dataset: string, definition: DDefinition) =>
-    apiFetch<{ dataset: string; fields: DField[] }>(`/reports/${id}/fields`, {
+    apiFetch<{ dataset: string; fields: DField[]; rows?: number; over?: boolean; max_rows?: number }>(`/reports/${id}/fields`, {
       method: 'POST', body: { dataset, definition },
     })
 

@@ -1069,6 +1069,52 @@ def query_rows(conn: DbConnectionSpec, sql: str, limit: int) -> tuple[pl.DataFra
     return df.head(limit), df.height > limit
 
 
+def _tsql_count(query: str, rows: int) -> str:
+    """SQL Server's count of a query build_query sent as it is: in T-SQL a derived table
+    holds neither a CTE nor an ORDER BY without TOP, so the WITH goes in front of the count
+    and an ORDER BY that only orders is dropped (the count does not depend on it). A
+    SELECT is capped with TOP; a UNION is counted whole."""
+    import sqlglot
+    from sqlglot import exp
+
+    statement = sqlglot.parse_one(query, read="tsql")
+    ahead = statement.args.get("with")
+    if ahead is not None:
+        statement.set("with", None)
+    if isinstance(statement, exp.Select):
+        if statement.args.get("limit") is None and statement.args.get("offset") is None:
+            statement.set("order", None)
+            statement = statement.limit(rows)
+    counted = exp.select("COUNT(*)").from_(statement.subquery("_c"))
+    if ahead is not None:
+        counted.set("with", ahead)
+    return counted.sql(dialect="tsql")
+
+
+def count_query(conn: DbConnectionSpec, sql: str, rows: int) -> str:
+    """The query that counts the rows of a SQL script's `sql`, up to `rows`: wrapped as
+    query_rows reads it, capped (with_row_cap), counted by the database."""
+    query = build_query(conn, DbSourceSpec(mode="sql", ref=sql))
+    if conn.db_type == "sqlserver":
+        try:
+            return _tsql_count(query, rows)
+        except Exception:  # noqa: BLE001 — sqlglot does not read it: build_query wrapped it, and TOP caps that
+            pass
+    alias = " c" if conn.db_type == "oracle" else " AS _c"
+    return f"SELECT COUNT(*) FROM ({with_row_cap(conn, query, rows)}){alias}"
+
+
+def count_rows(conn: DbConnectionSpec, sql: str, at_most: int) -> int:
+    """How many rows `sql` gives on the connection, counted by the database up to
+    `at_most` + 1 and no further (one more says «more»): no row travels."""
+    query = count_query(conn, sql, at_most + 1)
+    logger.info("db-count %s@%s (%s)", conn.db_type, conn.host, query[:200])
+    _, batches = _read_some(conn, query, 1)
+    batch = next((b for b in batches if b.num_rows), None)
+    value = batch.column(0)[0].as_py() if batch is not None else 0
+    return int(value or 0)
+
+
 def list_columns(conn: DbConnectionSpec, table: str) -> list[dict]:
     """The columns of a table, with their types, as the import would read them: from
     the schema of a read of one row."""

@@ -281,6 +281,31 @@ class DuckDBEngine(DeferredStepCache, Engine):
             con.close()
             self._cleanup(tmp)
 
+    def count_rows(
+        self,
+        source: DataSource,
+        operations: list[Operation] | list[dict[str, Any]],
+        at_most: int,
+    ) -> int:
+        """As the base's, but the count goes on the relation: the chain's last step keeps
+        a preview's limit (a `sql` step followed by others computed its whole result)."""
+        ops = _coerce_ops(operations)
+        tmp: list[str] = []
+        con = self._connection(tmp)
+        try:
+            ctx = DuckContext(con, self.storage, tmp, preview_limit=at_most + 1, direct=self.direct)
+            hashes = plan_hashes(self._source_id(source), [op.model_dump() for op in ops])
+            try:
+                rel = self._rel_from_cache(ctx, source, ops, hashes, use_cache=False)
+                return int(rel.limit(at_most + 1).aggregate("count(*)").fetchone()[0])
+            except EngineError:
+                raise
+            except Exception as e:
+                raise EngineError(f"Error while running the flow: {e}") from e
+        finally:
+            con.close()
+            self._cleanup(tmp)
+
     # ── Run (materializza l'output in streaming su disco) ─────────────────
     def run(
         self,

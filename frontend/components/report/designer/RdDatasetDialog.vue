@@ -2,7 +2,8 @@
 // A dataset of the report, added or changed: SQL on the catalog or on a connection (the
 // editor of the SQL scripts, with the catalog's completion), a datasource or a saved view
 // with filters applied before, or a saved SQL script; its calculated fields; its fields as
-// the data has them («Refresh fields», read from the definition being edited). A
+// the data has them («Refresh fields», read from the definition being edited), with its
+// rows counted (a SELECT * on a big table shows here, before a preview reads it). A
 // parameter goes in the SQL as {name}, without quotes: the server writes it as a literal.
 import { computed, defineAsyncComponent, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
@@ -11,6 +12,7 @@ import Modal from '~/components/ui/Modal.vue'
 import Select from '~/components/ui/Select.vue'
 import RdExprInput from '~/components/report/designer/RdExprInput.vue'
 import RdFieldIcon from '~/components/report/designer/RdFieldIcon.vue'
+import RdRowCount from '~/components/report/designer/RdRowCount.vue'
 import RdSeg from '~/components/report/designer/RdSeg.vue'
 import { useDesign } from '~/composables/reportDesignStore'
 import { useReportDesign } from '~/composables/useReportDesign'
@@ -24,6 +26,7 @@ import { usePreferredEngine } from '~/composables/useEngine'
 import { useFolderPaths } from '~/composables/useFolderPaths'
 import { errMessage } from '~/composables/useApi'
 import { renameEverywhere } from '~/composables/reportExpressions'
+import { countFor, rowCountOf, sourceKey, type CountedRows } from '~/composables/reportRowCount'
 import {
   FILTER_OPS, NAME_RE, fieldKind, samePath, valueAt, type DCalculated, type DDataset, type DField, type DFilter, type DSource,
 } from '~/composables/reportDesignModel'
@@ -56,6 +59,8 @@ const draft = ref<Draft | null>(null)
 const original = ref<string | null>(null)
 /** the source the draft's fields were read from: another source, and they are read again */
 const fieldsFor = ref('')
+/** the rows counted with the fields, kept with the source counted (reportRowCount.ts) */
+const counted = ref<CountedRows | null>(null)
 
 function fromDataset(d: DDataset | null): Draft {
   const s = d?.source
@@ -85,6 +90,7 @@ watch(() => props.open, (o) => {
   draft.value = fromDataset(d)
   original.value = d?.name ?? null
   fieldsFor.value = d ? JSON.stringify(d.source) : ''
+  counted.value = d ? store.rowCounts.value[d.name] ?? null : null
   refreshError.value = ''
   loadLists()
 }, { immediate: true })
@@ -230,6 +236,8 @@ async function refreshFields() {
     const got = await designApi.fields(props.reportId, ds.name, def)
     if (draft.value) draft.value.fields = got.fields
     fieldsFor.value = JSON.stringify(ds.source)
+    const count = rowCountOf(got)
+    counted.value = count ? { ...count, source: sourceKey(ds.source) } : null
   } catch (e) {
     refreshError.value = errMessage(e)
   } finally {
@@ -256,6 +264,9 @@ function apply() {
     renameEverywhere(doc, { dataset: [old, ds.name] })
   }
   store.problems.value = store.problems.value.filter((p) => p.dataset !== old)
+  // the count goes with the dataset while its source is the one counted
+  const { [old ?? ds.name]: _, [ds.name]: __, ...others } = store.rowCounts.value
+  store.rowCounts.value = countFor(counted.value, ds.source) ? { ...others, [ds.name]: counted.value! } : others
   emit('applied', ds.name)
   emit('close')
 }
@@ -272,6 +283,8 @@ function calcLive(i: number) {
     && p.seen === JSON.stringify(valueAt({ calculated: d.calculated }, p.path) ?? null)) ?? null
 }
 const fieldsForCalc = computed(() => (draft.value?.fields.length ? draft.value.fields : null))
+/** the rows counted, while the draft's source is still the one counted */
+const rowCount = computed(() => countFor(counted.value, built()?.source))
 </script>
 
 <template>
@@ -305,6 +318,9 @@ const fieldsForCalc = computed(() => (draft.value?.fields.length ? draft.value.f
         <div class="rdd-editor" data-own-escape>
           <SqlEditor ref="editorRef" v-model="sqlText" :tables="editorTables" />
         </div>
+        <p class="rp-help rdd-agg">
+          {{ $t('reportDesigner.dataset.aggregateHelp') }} <code>{{ $t('reportDesigner.dataset.aggregateExample') }}</code> {{ $t('reportDesigner.dataset.aggregateWhy') }}
+        </p>
         <div class="rdd-params">
           <p class="rp-help">{{ $t('reportDesigner.dataset.paramsHelp') }}</p>
           <div v-if="params.length" class="rdd-chips">
@@ -370,7 +386,8 @@ const fieldsForCalc = computed(() => (draft.value?.fields.length ? draft.value.f
           </button>
         </div>
         <p v-if="refreshError" class="rp-err" role="alert">{{ refreshError }}</p>
-        <p v-else-if="!draft.fields.length" class="rp-help">{{ $t('reportDesigner.dataset.fieldsHelp') }}</p>
+        <RdRowCount v-else :count="rowCount" />
+        <p v-if="!refreshError && !draft.fields.length" class="rp-help">{{ $t('reportDesigner.dataset.fieldsHelp') }}</p>
         <ul v-else class="rdd-fields">
           <li v-for="f in draft.fields" :key="f.name"><RdFieldIcon :type="f.type" :size="12" /> <span class="rdd-mono">{{ f.name }}</span></li>
         </ul>
@@ -403,6 +420,7 @@ const fieldsForCalc = computed(() => (draft.value?.fields.length ? draft.value.f
 .rdd-fields li :deep(svg) { color: var(--accent-hi); }
 .rdd-fields .rdd-mono { color: var(--text); font-size: 12px; }
 .rdd-need { color: var(--warning); }
+.rdd-agg code { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 11px; color: var(--text); overflow-wrap: anywhere; }
 .rdd-alert {
   padding: 8px 10px; border-radius: 8px; font-size: 12px; line-height: 1.4; overflow-wrap: anywhere;
   color: var(--danger); background: color-mix(in srgb, var(--danger) 8%, transparent); border: 1px solid color-mix(in srgb, var(--danger) 40%, transparent);

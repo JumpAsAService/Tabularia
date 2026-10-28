@@ -377,6 +377,12 @@ export default {
       "tooNarrow": "Die seitlichen Ränder lassen weniger als 2 cm Seite.",
       "tooShort": "Ränder, Seitenkopf und Seitenfuß lassen dem Hauptteil weniger als 2 cm."
     },
+    "rows": {
+      "plain": "keine Zeilen | {n} Zeile | {n} Zeilen",
+      "slow": "etwa {n} Zeilen: der Bericht braucht etwa {s} Sekunden und viel Speicher — aggregieren Sie in SQL (GROUP BY), damit er schnell wird",
+      "over": "mehr als {n} Zeilen: der Bericht wird nicht erstellt — fügen Sie ein GROUP BY oder einen Filter hinzu",
+      "title": "Mit den Standardwerten der Parameter gezählt, als die Felder gelesen wurden"
+    },
     "dataset": {
       "newTitle": "Neuer Datensatz",
       "editTitle": "Datensatz {name}",
@@ -392,6 +398,9 @@ export default {
       "runsOn": "Läuft auf",
       "engine": "Engine",
       "paramsHelp": "Ein Parameter steht im SQL als {'{'}name{'}'}, ohne Anführungszeichen: Tabularia schreibt seinen Wert als Literal (ein Text in Anführungszeichen, ein Datum als Datum, eine Liste für IN {'{'}namen{'}'}). Platzhalter wie {'{'}today-30{'}'} funktionieren auch.",
+      "aggregateHelp": "In SQL aggregieren, im Bericht formatieren:",
+      "aggregateExample": "SELECT region, SUM(betrag) AS betrag FROM bestellungen GROUP BY region",
+      "aggregateWhy": "liest eine Zeile pro Region, nicht eine pro Bestellung.",
       "insertParam": "Ins SQL einfügen",
       "datasource": "Datasource",
       "view": "Gespeicherte Ansicht",

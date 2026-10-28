@@ -145,6 +145,13 @@ class FieldOut(BaseModel):
 class FieldsOut(BaseModel):
     dataset: str
     fields: list[FieldOut]
+    # the rows with the parameters' defaults, counted up to the engine's cap (REPORTS__MAX_ROWS):
+    # `rows` at most `max_rows`, `over` when there are more (a render would stop). Absent when
+    # they could not be counted: a required parameter without a default, an engine that failed
+    # or took longer than services/reports.COUNT_SECONDS
+    rows: Optional[int] = None
+    over: Optional[bool] = None
+    max_rows: Optional[int] = None
 
 
 class Choice(BaseModel):
@@ -591,11 +598,12 @@ async def report_parameters(report_id: int, request: Request, user: User = Depen
     return out
 
 
-@router.post("/reports/{report_id}/fields", response_model=FieldsOut)
+@router.post("/reports/{report_id}/fields", response_model=FieldsOut, response_model_exclude_none=True)
 async def report_fields(report_id: int, body: FieldsRequest, user: User = Depends(get_current_user),
                         session: Session = Depends(get_session)):
     """A dataset's columns («Refresh fields» in the editor), read with the caller's
-    rights: of the saved definition (VIEW), or of the editor's (EDIT)."""
+    rights: of the saved definition (VIEW), or of the editor's (EDIT); and its rows,
+    counted at the same time, when they can be (never an error of their own)."""
     report = reports.get_visible(session, user, report_id)
     if body.definition is not None:
         ensure_can(session, user, report.project_id, Capability.EDIT)
@@ -605,5 +613,12 @@ async def report_fields(report_id: int, body: FieldsRequest, user: User = Depend
             raise p.http(body.definition) from None
     else:
         definition = reports.content_of(session, report)
-    found = await reports.fields(session, user, definition, body.dataset, f"u{user.id}:report:{report.id}:fields")
-    return FieldsOut(dataset=body.dataset, fields=[FieldOut(**f) for f in found])
+    slot = f"u{user.id}:report:{report.id}"
+    counting = asyncio.ensure_future(reports.count_rows(await reports.to_count(session, user, definition, body.dataset),
+                                                        f"{slot}:count"))
+    try:
+        found = await reports.fields(session, user, definition, body.dataset, f"{slot}:fields")
+    except BaseException:
+        counting.cancel()
+        raise
+    return FieldsOut(dataset=body.dataset, fields=[FieldOut(**f) for f in found], **(await counting or {}))

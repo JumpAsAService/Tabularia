@@ -76,3 +76,27 @@ def report_choices_task(
         return {"ok": True, "result": render.choices(definition, dataset, datasets, params, value, label, limit, locale)}
     except ReportError as e:
         return {"ok": False, "error": e.tag, "detail": e.message}
+
+
+@celery_app.task(name="app.tasks.report_jobs.report_count_task")
+def report_count_task(dataset: dict) -> dict:
+    """How many rows a dataset gives, up to REPORTS__MAX_ROWS (app/reports/count.py): the
+    designer's hint next to the dataset. On the preview queue, tagged as preview_task's
+    answer; its queries carry the task's id, so that one knocked down is stopped on the
+    server too."""
+    from celery import current_task
+
+    from app.engine.query_tag import query_tag, was_interrupted
+    from app.reports import count
+    from app.reports.errors import ReportError
+
+    task_id = getattr(getattr(current_task, "request", None), "id", None)
+    try:
+        with query_tag(f"tab-prev:{task_id}" if task_id else None):
+            return {"ok": True, "result": count.count(dataset, count.max_rows())}
+    except ReportError as e:
+        return {"ok": False, "error": e.tag, "detail": e.message}
+    except Exception as e:
+        if was_interrupted(e):
+            return {"ok": False, "error": "superseded", "detail": "The count was superseded or stopped"}
+        raise

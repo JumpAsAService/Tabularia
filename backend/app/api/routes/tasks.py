@@ -96,10 +96,11 @@ _SUPERSEDED = "Preview superseded by a more recent request"
 EXPORT_QUEUE_WAIT_SECONDS = 600
 
 
-def on_preview_worker(task_name: str, kwargs: dict, slot: str | None) -> dict:
+def on_preview_worker(task_name: str, kwargs: dict, slot: str | None, seconds: float | None = None) -> dict:
     """Sends a task to the preview worker and waits for its tagged answer. With a
     `slot`, a newer request on the same slot knocks this one down (409); after
-    PREVIEW_TIMEOUT_SECONDS the task is revoked (504)."""
+    PREVIEW_TIMEOUT_SECONDS (or `seconds`, when shorter: what is only a hint) the task is
+    revoked (504)."""
     # the id decided HERE: it is needed before sending, to book the slot
     task_id = str(uuid.uuid4())
     previous = None
@@ -115,7 +116,7 @@ def on_preview_worker(task_name: str, kwargs: dict, slot: str | None) -> dict:
         # server). SIGTERM would kill it.
         celery_app.control.revoke(previous, terminate=True, signal="SIGUSR1")
 
-    deadline = time.monotonic() + PREVIEW_TIMEOUT_SECONDS
+    deadline = time.monotonic() + min(PREVIEW_TIMEOUT_SECONDS, seconds or PREVIEW_TIMEOUT_SECONDS)
     try:
         while True:
             try:

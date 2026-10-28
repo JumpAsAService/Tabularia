@@ -139,6 +139,11 @@ Tabularia quotes it». Tabularia's own [placeholders](../placeholders.md) work t
 
 **Fields** are the columns the designer last read from the data (**Refresh fields**):
 they feed the completion and the checks; the render uses what the data has.
+**Refresh fields** also counts the dataset's rows with the parameters' defaults and shows
+the number under the dataset: past 100,000 rows an orange warning gives the time a render
+will take, past `REPORTS__MAX_ROWS` a red one says the report will not render. Aggregate
+in the SQL and format in the report: `SELECT region, SUM(amount) AS amount FROM orders
+GROUP BY region` gives the report one row per region, not one per order.
 **Calculated fields** are expressions computed for every row, used as any other field.
 
 ![The dataset dialog: the dataset margins, SQL on the catalog with DuckDB, a query with category and since as parameters, two calculated fields Month and MarginPct, and the fields read](../media/guide/reports/dataset-dialog-sql.png)

@@ -377,6 +377,12 @@ export default {
       "tooNarrow": "Les marges latérales laissent moins de 2 cm de page.",
       "tooShort": "Les marges, l'en-tête et le pied de page laissent moins de 2 cm au corps."
     },
+    "rows": {
+      "plain": "aucune ligne | {n} ligne | {n} lignes",
+      "slow": "environ {n} lignes : le rapport prendra environ {s} secondes et beaucoup de mémoire — agrégez en SQL (GROUP BY) pour qu'il soit rapide",
+      "over": "plus de {n} lignes : le rapport ne sera pas généré — ajoutez un GROUP BY ou un filtre",
+      "title": "Comptées avec les valeurs par défaut des paramètres, à la lecture des champs"
+    },
     "dataset": {
       "newTitle": "Nouveau jeu de données",
       "editTitle": "Jeu {name}",
@@ -392,6 +398,9 @@ export default {
       "runsOn": "S'exécute sur",
       "engine": "Moteur",
       "paramsHelp": "Un paramètre s'écrit dans le SQL {'{'}nom{'}'}, sans guillemets : Tabularia écrit sa valeur comme littéral (un texte entre apostrophes, une date comme date, une liste pour IN {'{'}noms{'}'}). Les marqueurs comme {'{'}today-30{'}'} fonctionnent aussi.",
+      "aggregateHelp": "Agrégez en SQL, mettez en forme dans le rapport :",
+      "aggregateExample": "SELECT region, SUM(montant) AS montant FROM commandes GROUP BY region",
+      "aggregateWhy": "lit une ligne par région, pas une par commande.",
       "insertParam": "Insérer dans le SQL",
       "datasource": "Datasource",
       "view": "Vue enregistrée",

@@ -884,3 +884,62 @@ async def fields(session: Session, user: User, definition: dict, dataset: str, s
         raise _in_dataset(dataset, sql_scripts._engine_failure(resp, lambda d: d))
     return [{"name": str(c.get("name")), "type": _field_type(str(c.get("dtype") or ""))}
             for c in resp.json().get("columns") or [] if isinstance(c, dict)]
+
+
+# ── a dataset's rows, counted for the editor ─────────────────────────────────
+COUNT_SECONDS = 20  # the engine counts this long at most: «Refresh fields» does not wait for more
+
+
+async def to_count(session: Session, user: User, definition: dict, dataset: str) -> Optional[dict]:
+    """The dataset as a render with the parameters' defaults reads it — what the viewer
+    shows when the report opens — resolved with `user`'s rights, to be counted
+    (`count_rows`). None when the count could not mean anything or the dataset cannot be
+    read (the fields say why): a required parameter it uses has no default."""
+    ds = next((d for d in definition.get("datasets") or [] if d.get("name") == dataset), None)
+    if ds is None:
+        return None
+    params = {p["name"]: p for p in definition.get("parameters") or []}
+    values: dict[str, Any] = {}
+    missing: set[str] = set()
+    for p in params.values():
+        try:
+            values[p["name"]] = (await report_params.values_for({**definition, "parameters": [p]}, {}))[p["name"]]
+        except HTTPException:  # required without a default, or a default that does not fit
+            values[p["name"]] = [] if p.get("multi") else None
+            missing.add(p["name"])
+    try:
+        if missing:
+            src = ds["source"]
+            if src["kind"] in ("sql", "sql_script"):
+                sql, conn, engine = _sql_of(session, user, src)
+                used = report_params.check_sql(sql, _dialect(conn, engine), params)[0]
+            else:
+                used = _filter_params(src)
+            if used & missing:
+                return None
+        return (await resolve_datasets(session, user, definition, values, only={dataset}))[dataset]
+    except HTTPException:
+        return None
+
+
+async def count_rows(resolved: Optional[dict], slot: str) -> Optional[dict]:
+    """{"rows", "over", "max_rows"}: the rows of a dataset `to_count` resolved, counted by
+    the engine up to the cap a render reads (POST /reports/count) within COUNT_SECONDS.
+    None when they could not be counted — a failure, too long, an engine without the
+    route: a hint next to the fields, never an error."""
+    if resolved is None:
+        return None
+    try:
+        resp = await get_engine_client().post("/reports/count", timeout=COUNT_SECONDS + 10, json={
+            "dataset": resolved, "slot": slot, "seconds": COUNT_SECONDS})
+    except Exception as e:  # noqa: BLE001 — the fields come without the count
+        logger.info("report: the rows were not counted: %s", type(e).__name__)
+        return None
+    if resp.status_code >= 400:
+        logger.info("report: the rows were not counted: the engine answered %s", resp.status_code)
+        return None
+    try:
+        got = resp.json()
+        return {"rows": int(got["rows"]), "over": bool(got["over"]), "max_rows": int(got["max_rows"])}
+    except (ValueError, KeyError, TypeError):
+        return None
