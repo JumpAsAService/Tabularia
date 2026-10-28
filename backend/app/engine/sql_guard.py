@@ -78,6 +78,28 @@ def table_names(params: dict) -> dict[str, dict]:
     return tables
 
 
+def rename_tables(query: str, dialect: str, names: dict[str, str]) -> str:
+    """The query with its references to the tables of `names` (case-insensitive, without a
+    schema, not one of its own CTEs) renamed, by their position in the text: nothing else
+    is rewritten, so the query stays as its author wrote it. Call it after
+    `ensure_reads_only_input`, which refuses a query sqlglot cannot read."""
+    wanted = {k.lower(): v for k, v in names.items()}
+    tree = sqlglot.parse_one(query, read=dialect)
+    own = {c.alias_or_name.lower() for c in tree.find_all(exp.CTE)}
+    edits: list[tuple[int, int, str]] = []
+    for table in tree.find_all(exp.Table):
+        name = table.name.lower()
+        if table.db or name not in wanted or name in own or not isinstance(table.this, exp.Identifier):
+            continue
+        start, end = table.this.meta.get("start"), table.this.meta.get("end")
+        if start is None or end is None:
+            raise EngineError("sql: the query's tables could not be placed in its text: write them without quotes")
+        edits.append((start, end, wanted[name]))
+    for start, end, name in sorted(edits, reverse=True):
+        query = query[:start] + name + query[end + 1:]
+    return query
+
+
 def ensure_reads_only_input(query: str, dialect: str, tables: frozenset[str] | set[str] = frozenset()) -> None:
     """Raises EngineError when the query names a table that is not its input, nor one of
     the `tables` the operation brings.

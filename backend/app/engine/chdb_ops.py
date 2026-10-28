@@ -26,7 +26,7 @@ from app.engine.operations import (
     MAX_PIVOT_COLUMNS, PIVOT_LABEL_SEP, SAMPLE_BUCKETS, check_filter_value, check_strict_union, non_iso_values, pivot_label, sample_threshold, sort_keys,
     temporal_value_error, TEXT_TRUE, TEXT_FALSE,
 )
-from app.engine.sql_guard import ensure_reads_only_input, table_names
+from app.engine.sql_guard import ensure_reads_only_input, rename_tables, table_names
 
 ChdbOpFn = Callable[..., str]
 
@@ -429,11 +429,19 @@ def op_sql(sql, params, ctx):
     # it was not enough (`merge()`, `information_schema`: see sql_guard)
     ensure_reads_only_input(query, "clickhouse", set(tables))
     # exposes the input as `self` (and the alias `input`); it stays a nestable SELECT.
+    # Every level names its CTEs apart (__tab_input_2, __tab_self_2…) and the query's
+    # references to self/input/its tables are renamed to them: a step below, nested in
+    # ours, defines the same names, and ClickHouse's analyzer (24.8) then fails with
+    # «Unknown table expression identifier» — two SQL nodes in a row did.
     # A query with ITS OWN `WITH` gets our CTEs at the head of its list: two WITHs in a
     # row are not valid SQL (found by the dbt export oracle, 2026-10-10: on ClickHouse a
     # sql node with WITH failed with SYNTAX_ERROR, on Polars it did not)
-    ours = f"input AS ({sql}), self AS (SELECT * FROM input)" + "".join(
-        f", {name} AS ({ctx.build_right(ref)})" for name, ref in tables.items())
+    level = 1 + max((int(n) for n in re.findall(r"\b__tab_self_(\d+)\b", sql)), default=0)
+    names_at = {"input": f"__tab_input_{level}", "self": f"__tab_self_{level}",
+                **{name: f"{name}__{level}" for name in tables}}
+    query = rename_tables(query, "clickhouse", names_at)
+    ours = f"{names_at['input']} AS ({sql}), {names_at['self']} AS (SELECT * FROM {names_at['input']})" + "".join(
+        f", {names_at[name]} AS ({ctx.build_right(ref)})" for name, ref in tables.items())
     own = re.match(r"(?is)^\s*with\s+", query)
     if own:
         return f"WITH {ours}, {query[own.end():]}"

@@ -196,6 +196,20 @@ def test_sql_node_with_its_own_with(storage, src):
     assert res.row_count >= 1 and {c.name for c in res.columns} == {"paese", "vendite", "tutte"}
 
 
+
+def test_sql_steps_in_a_row(storage, src):
+    """Two SQL nodes in a row failed on ClickHouse 24.8 with «Unknown table expression
+    identifier 'self'»: the first step's `WITH input …, self …` went inside the second's
+    CTE of the same names, and the new analyzer does not take it. Every level now has
+    names of its own."""
+    first = {"type": "sql", "params": {"query": "SELECT paese, sum(vendite) AS v FROM self GROUP BY paese"}}
+    second = {"type": "sql", "params": {"query": "SELECT count() AS n, sum(v) AS tot FROM input"}}
+    own_with = {"type": "sql", "params": {"query": "WITH alti AS (SELECT * FROM self WHERE v > 0) SELECT paese, v FROM alti"}}
+    res = _engine(storage).preview(src, [first, second], limit=5)
+    assert [c.name for c in res.columns] == ["n", "tot"] and res.rows[0]["n"] >= 1
+    res = _engine(storage).preview(src, [first, own_with, second], limit=5)
+    assert res.rows[0]["n"] >= 1
+
 def test_preview_truncated(storage, src):
     res = _engine(storage).preview(src, [], limit=2)
     assert res.row_count == 2 and res.truncated

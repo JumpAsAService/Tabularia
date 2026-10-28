@@ -107,10 +107,25 @@ def test_the_clickhouse_sql_node_applies_the_guard():
     from app.engine.chdb_ops import get_chdb_operation
 
     op = get_chdb_operation("sql")
-    assert "FROM self" in op("SELECT 1 AS a", {"query": "SELECT a FROM self"}, None)
+    # it reads the input under the names of its level (see rename_tables)
+    assert op("SELECT 1 AS a", {"query": "SELECT a FROM self"}, None).endswith("SELECT a FROM __tab_self_1")
     with pytest.raises(EngineError):
         op("SELECT 1 AS a", {"query": "SELECT a FROM self UNION ALL SELECT 1 FROM merge('default', '.*')"}, None)
 
+
+
+def test_rename_tables_renames_the_references_and_nothing_else():
+    from app.engine.sql_guard import rename_tables
+
+    names = {"self": "__tab_self_2", "input": "__tab_input_2", "ds_1": "ds_1__2"}
+    q = 'SELECT "self".a, i.b FROM `Self` JOIN input AS i USING (a) WHERE a IN (SELECT a FROM ds_1)'
+    assert rename_tables(q, "clickhouse", names) == (
+        # a quoted name is replaced with its quotes: ours need none
+        'SELECT "self".a, i.b FROM __tab_self_2 JOIN __tab_input_2 AS i USING (a) WHERE a IN (SELECT a FROM ds_1__2)')
+    # a CTE of the query's own, a table with a schema, a column called self: left alone
+    own = "WITH self AS (SELECT 1 AS a) SELECT a, 'self' AS input FROM self"
+    assert rename_tables(own, "clickhouse", names) == own
+    assert rename_tables("SELECT * FROM db.self", "clickhouse", names) == "SELECT * FROM db.self"
 
 # ── the tables a SQL script on the catalog brings ─────────────────────────────
 def test_the_tables_of_the_operation_are_readable_and_nothing_else():
