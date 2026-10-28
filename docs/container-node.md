@@ -54,6 +54,10 @@ command, the image's command the arguments), to change it. The variables the ima
 declares are offered with their default value: one click adds one to the node's
 variables.
 
+![The flow editor with a Source, a Container node «Demand forecast» and an Output; the node's panel shows the registry Acme registry, the image analytics/demand-forecast, the tag 1.4.0, what the image does by default and the variables it declares, and the arguments --days and 30](media/guide/containers/container-node-panel.png)
+
+*A Container node between a Source and an Output. Its panel names the registry, the image and the tag, reads from the registry what the image runs by default (`python /app/run.py --days 7`), its platform, size and the variables it declares, and takes `--days` and `30` as arguments.*
+
 ## In a flow group
 
 A [flow group](capabilities/flow-groups.md) can run an image as a step of its own: **Container (an image)** in the
@@ -154,6 +158,10 @@ The image above, used in a flow that reads the sample «Margin by Category and M
 8. **Run** in the toolbar runs the whole flow. In **Runs**, the node's run shows the
    registry and the image with its digest, the command, the attempts, the exit code and
    the log.
+
+![The same flow after Run in the node's panel: «Last run from here now: SUCCESS · 184 rows», the log with the container's two lines, and the preview under the canvas with the rows the container wrote](media/guide/containers/container-node-run-log.png)
+
+*Step 7: **Run** in the node's panel has run the image in the cluster. The panel says it succeeded with 184 rows, **Log** shows what the container printed, and the data view has the rows it wrote (scroll right for `horizon_days`).*
 
 ## A run
 

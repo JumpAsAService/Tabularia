@@ -16,7 +16,8 @@ use there:
   ClickHouse for the flows (step 12);
 - Tabularia's images copied into the private registry, and Python and R scripts built
   and run through it;
-- images of your own run as steps of a flow (the Container node), from that registry.
+- images of your own run as steps of a flow (the Container node), from that registry;
+- if you like, the sample data of the Docker Compose stack, to play with (step 13).
 
 It is meant for people who know a terminal and want to try Tabularia as it will run in
 production, or test a change of the chart before a customer does. To simply try
@@ -623,6 +624,63 @@ After a minute, **Administration → Engines** lists ClickHouse. Choose it as yo
 the **Viewer**: its rows come from ClickHouse. Every later `helm upgrade` takes both
 files, in this order.
 
+## 13. Optional: play with sample data
+
+The Docker Compose stack comes with a fictional cured-meats company to try Tabularia on:
+an order system on PostgreSQL, a CRM on ClickHouse, and a `Sample` folder in Tabularia
+built on them. The same on this cluster: the two databases run in `tabularia-deps`, next
+to Tabularia's PostgreSQL and Valkey, and a Job fills them, then builds the folder
+through Tabularia's API, signed in as the administrator of step 1.
+
+The Job's image is built from the clone and handed to the nodes directly, without the
+registry: it runs once and is never downloaded again.
+
+```bash
+docker build -t tabularia-sampledb:local infrastructure/sampledb
+kind load docker-image tabularia-sampledb:local --name tabularia
+kubectl create secret generic sampledb-admin --namespace tabularia-deps \
+  --from-literal=email="$ADMIN_EMAIL" --from-literal=password="$ADMIN_PASSWORD"
+kubectl apply -f infrastructure/kind/samples.yaml
+until kubectl get job sampledb-init --namespace tabularia-deps -o jsonpath='{.status.conditions[*].type}' \
+  | grep -qE 'Complete|Failed'; do sleep 5; done
+kubectl logs --namespace tabularia-deps job/sampledb-init --tail=1
+```
+
+The `until` waits for the Job to end; `kubectl logs --namespace tabularia-deps --follow
+job/sampledb-init`, in another terminal, shows it working. The data takes seconds at the
+`small` scale; the Job then imports the tables and runs the eleven sample flows once,
+about two minutes in all. The last line is `DONE. The «Sample» folder is ready: …`; a
+flow that failed is named instead, and running the Job again (below) retries only those.
+
+Reload Explore: the `Sample` folder holds the two connections (*Sample ERP (Postgres)*,
+*Sample CRM (ClickHouse)*), four saved views, and three folders: *Flows* (eleven flows,
+three of them scheduled), *Private tables* (the company's tables and the flows' results)
+and *Public tables* (a calendar, the regions). As on Docker Compose, the folder has no
+permissions on it: other people see it once the administrator shares it.
+
+- **More data**: `SAMPLES_SCALE` in `infrastructure/kind/samples.yaml` is `small`;
+  `medium` (3.5 million order lines) takes a few minutes. Choose it before the first
+  `apply`: the Job generates the data only into empty databases.
+- **Run it again** (a flow that failed, a folder deleted by mistake): it duplicates
+  nothing.
+
+  ```bash
+  kubectl delete job sampledb-init --namespace tabularia-deps
+  kubectl apply -f infrastructure/kind/samples.yaml
+  until kubectl get job sampledb-init --namespace tabularia-deps -o jsonpath='{.status.conditions[*].type}' \
+    | grep -qE 'Complete|Failed'; do sleep 5; done
+  kubectl logs --namespace tabularia-deps job/sampledb-init --tail=1
+  ```
+
+- **Who reaches the databases**: Tabularia's workers, which already reach
+  `tabularia-deps` (step 8), at `sampledb-postgres.tabularia-deps.svc.cluster.local:5432`
+  and `sampledb-clickhouse.tabularia-deps.svc.cluster.local:8123`. A network policy keeps
+  the scripts and the Container nodes out, as for Tabularia's own database.
+- **Remove them**: `kubectl delete -f infrastructure/kind/samples.yaml` and
+  `kubectl delete secret sampledb-admin --namespace tabularia-deps`. The `Sample` folder
+  stays in Tabularia, with its tables, until you delete it in Explore; its connections
+  and the flows that read them then fail.
+
 ## What this cluster shows
 
 | Here | In a company's cluster |
@@ -705,3 +763,7 @@ restarts, remove it and run the guide again.
   `s3Endpoint` is the bucket's address as the ClickHouse service sees it.
 - **A variable is empty in a new terminal**: run `source "$WORK/env"` (and set `WORK`
   first if it is empty too).
+- **The sample Job's pod is in `ErrImageNeverPull`**: the image is not on that node.
+  Run the `kind load` of step 13 again, with the cluster's name, then delete the Job and
+  apply the file again. It waits in `Init` while the databases start: `kubectl logs
+  --namespace tabularia-deps job/sampledb-init -c wait-for-databases` says which one.

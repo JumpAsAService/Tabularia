@@ -1,0 +1,145 @@
+# The sample data of the Docker Compose stack (infrastructure/sampledb), for the kind
+# guide (docs/deploy/kind.md, "Play with sample data"): a cured-meats company's order
+# system (PostgreSQL) and CRM (ClickHouse), and a Job that fills them and builds the
+# «Sample» folder in Tabularia through the gateway: the two connections, the tables,
+# eleven flows run once, four saved views.
+#
+# In the namespace tabularia-deps, which Tabularia's workers already reach, next to its
+# PostgreSQL and Valkey. Before applying this file: the image `tabularia-sampledb:local`
+# loaded into the nodes (`kind load docker-image`), and a Secret "sampledb-admin" with
+# the administrator's `email` and `password`. Fake data with fake passwords (shop/shop,
+# analytics/analytics): for a trial cluster, never next to real data.
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata: { name: sampledb-postgres, namespace: tabularia-deps }
+spec:
+  accessModes: [ReadWriteOnce]
+  resources: { requests: { storage: 5Gi } }
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata: { name: sampledb-postgres, namespace: tabularia-deps }
+spec:
+  selector: { matchLabels: { app: sampledb-postgres } }
+  strategy: { type: Recreate }
+  template:
+    metadata: { labels: { app: sampledb-postgres } }
+    spec:
+      containers:
+        - name: postgres
+          image: postgres:16-alpine
+          env:
+            - { name: POSTGRES_DB, value: shop }
+            - { name: POSTGRES_USER, value: shop }
+            - { name: POSTGRES_PASSWORD, value: shop }
+            - { name: PGDATA, value: /var/lib/postgresql/data/pgdata }
+          ports: [{ containerPort: 5432 }]
+          resources: { requests: { cpu: 100m, memory: 256Mi }, limits: { memory: 1Gi } }
+          readinessProbe: { exec: { command: [pg_isready, -U, shop, -d, shop] }, periodSeconds: 5 }
+          volumeMounts: [{ name: data, mountPath: /var/lib/postgresql/data }]
+      volumes: [{ name: data, persistentVolumeClaim: { claimName: sampledb-postgres } }]
+---
+apiVersion: v1
+kind: Service
+metadata: { name: sampledb-postgres, namespace: tabularia-deps }
+spec:
+  selector: { app: sampledb-postgres }
+  ports: [{ port: 5432 }]
+---
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata: { name: sampledb-clickhouse, namespace: tabularia-deps }
+spec:
+  accessModes: [ReadWriteOnce]
+  resources: { requests: { storage: 5Gi } }
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata: { name: sampledb-clickhouse, namespace: tabularia-deps }
+spec:
+  selector: { matchLabels: { app: sampledb-clickhouse } }
+  strategy: { type: Recreate }
+  template:
+    metadata: { labels: { app: sampledb-clickhouse } }
+    spec:
+      containers:
+        - name: clickhouse
+          image: clickhouse/clickhouse-server:24.8
+          env:
+            - { name: CLICKHOUSE_DB, value: analytics }
+            - { name: CLICKHOUSE_USER, value: analytics }
+            - { name: CLICKHOUSE_PASSWORD, value: analytics }
+            - { name: CLICKHOUSE_DEFAULT_ACCESS_MANAGEMENT, value: "1" }
+          ports: [{ containerPort: 8123 }]
+          resources: { requests: { cpu: 100m, memory: 512Mi }, limits: { memory: 2Gi } }
+          readinessProbe: { httpGet: { path: /ping, port: 8123 }, periodSeconds: 5 }
+          volumeMounts: [{ name: data, mountPath: /var/lib/clickhouse }]
+      volumes: [{ name: data, persistentVolumeClaim: { claimName: sampledb-clickhouse } }]
+---
+apiVersion: v1
+kind: Service
+metadata: { name: sampledb-clickhouse, namespace: tabularia-deps }
+spec:
+  selector: { app: sampledb-clickhouse }
+  ports: [{ port: 8123 }]
+---
+# Tabularia's namespace reads them, the Job below fills them; the scripts and the
+# Container nodes, which may reach this namespace, do not.
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata: { name: sampledb, namespace: tabularia-deps }
+spec:
+  podSelector:
+    matchExpressions: [{ key: app, operator: In, values: [sampledb-postgres, sampledb-clickhouse] }]
+  policyTypes: [Ingress]
+  ingress:
+    - from:
+        - namespaceSelector: { matchLabels: { kubernetes.io/metadata.name: tabularia } }
+        - podSelector: { matchLabels: { app: sampledb-init } }
+---
+# Runs once: fills the databases when they are empty (SAMPLES_SCALE: small, medium,
+# robusta), then builds the «Sample» folder. Running it again duplicates nothing.
+apiVersion: batch/v1
+kind: Job
+metadata: { name: sampledb-init, namespace: tabularia-deps }
+spec:
+  backoffLimit: 1
+  template:
+    metadata: { labels: { app: sampledb-init } }
+    spec:
+      restartPolicy: Never
+      initContainers:
+        - name: wait-for-databases
+          image: tabularia-sampledb:local
+          imagePullPolicy: Never
+          command: [python, -c]
+          args:
+            - |
+              import socket, time
+              for host, port in (("sampledb-postgres", 5432), ("sampledb-clickhouse", 8123)):
+                  while True:
+                      try:
+                          socket.create_connection((host, port), 2).close()
+                          break
+                      except OSError:
+                          print(f"waiting for {host}:{port}", flush=True)
+                          time.sleep(3)
+      containers:
+        - name: seed
+          image: tabularia-sampledb:local
+          imagePullPolicy: Never
+          command: [python, seed_tabularia.py]
+          env:
+            - { name: SAMPLES_SCALE, value: small }
+            - { name: GATEWAY_URL, value: "http://tabularia-tabularia-gateway.tabularia.svc.cluster.local:8000" }
+            - name: AUTH__ADMIN_EMAIL
+              valueFrom: { secretKeyRef: { name: sampledb-admin, key: email } }
+            - name: AUTH__ADMIN_PASSWORD
+              valueFrom: { secretKeyRef: { name: sampledb-admin, key: password } }
+            # the names the connections get in Tabularia: its workers, in another
+            # namespace, reach the databases by these
+            - { name: PG_HOST, value: sampledb-postgres.tabularia-deps.svc.cluster.local }
+            - { name: PG_PORT, value: "5432" }
+            - { name: CH_HOST, value: sampledb-clickhouse.tabularia-deps.svc.cluster.local }
+            - { name: CH_PORT, value: "8123" }
+          resources: { requests: { cpu: 200m, memory: 512Mi }, limits: { memory: 2Gi } }

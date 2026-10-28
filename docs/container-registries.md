@@ -55,6 +55,10 @@ of the users' code.
 | **Allowed repositories** | which images may run (below) |
 | **Usable in flows** | off keeps the registry, and its images can no longer be chosen |
 
+![The New registry form: name Acme registry, address registry.acme.internal:5000, HTTPS with a company authority and its certificate pasted, a user and a hidden password, the allowed repositories analytics/*, and access given to the group Data team](media/guide/containers/registry-new-dialog.png)
+
+*A new registry, the one of [the example below](#example-the-company-registry): a company authority with its certificate, a user and a password, the repositories under `analytics/`, and the group `Data team` allowed to use them.*
+
 The password or token is encrypted with the installation's key and never shown again:
 leave the field empty to keep it, or **Remove the password** to reach the registry
 anonymously.
@@ -207,6 +211,10 @@ its own authority, and the data team pushes its images under `analytics/`.
    **Try in the cluster**. «The cluster can download it.», with the digest, means the
    nodes trust the authority and accept the robot's credentials. If they do not trust it,
    install the authority on the nodes first ([kind guide](deploy/kind.md#3-nodes-that-trust-the-authority)).
+
+![The registry's page after the checks: «The registry answers», the tags 1.3.2 and 1.4.0 of analytics/demand-forecast, «The cluster can download it» with the image's digest, and two variables, one of them secret](media/guide/containers/registry-test-and-cluster-check.png)
+
+*The same registry once saved: **Test** answers from the gateway, **Tags of a repository** lists what the Container node will offer, **Try in the cluster** says a node downloaded `analytics/demand-forecast:1.4.0` by its digest, and **Variables** holds one plain and one secret value for every container of the registry.*
 
 From then on, the data team finds **Container** in the palette of the flow editor, with
 the registry and its `analytics/` images: [a forecast step in a flow](container-node.md#example-a-forecast-step-in-a-flow).
