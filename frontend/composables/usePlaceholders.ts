@@ -154,6 +154,8 @@ export interface PreviewRequest {
   last_refresh_initial?: string
   targets?: Record<string, TemplateTarget>
   flow?: string
+  /** a Pushmail cell's: written in the language of whoever runs the group, as its email */
+  pushmail?: boolean
 }
 
 export interface FieldPreview { value: string | null; last: string | null; error: string | null }

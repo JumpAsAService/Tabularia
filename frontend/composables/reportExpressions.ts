@@ -6,6 +6,7 @@
 // unknown function, a wrong number of arguments, a field the dataset does not have, a
 // parameter the report does not have. Types, scopes and formats are checked by the
 // server when the report is saved.
+import type { DDefinition } from '~/composables/reportDesignModel'
 
 export type TokenKind = 'num' | 'str' | 'field' | 'ph' | 'name' | 'fn' | 'kw' | 'op' | 'punct' | 'space' | 'bad'
 export interface Token { kind: TokenKind; text: string; pos: number; end: number; value?: string }
@@ -162,7 +163,11 @@ export function highlightTokens(text: string): Token[] {
 interface PTok { kind: 'num' | 'str' | 'field' | 'ph' | 'name' | 'op' | '(' | ')' | ',' | 'end'; value: string; pos: number; end: number }
 
 class Stop extends Error {
-  constructor(public err: ExprError) { super(err.code) }
+  err: ExprError
+  constructor(err: ExprError) {
+    super(err.code)
+    this.err = err
+  }
 }
 const stop = (code: string, pos: number, length: number, args?: ExprError['args']): never => {
   throw new Stop({ code, pos, length, args })
@@ -411,6 +416,82 @@ export function concatParts(expr: string): { lit: boolean; text: string }[] {
   }
   flush()
   return parts
+}
+
+// ── renames ──────────────────────────────────────────────────────────────────
+/** An expression with a dataset or a parameter renamed where the language names them: a
+ *  dataset as the last argument of an aggregate (`SUM([amount], "orders")`, `COUNT("orders")`),
+ *  a parameter in `PARAM("region")`. Texts elsewhere, fields and the rest of the expression
+ *  are left as written, spaces and capitals included. */
+export function renameInExpression(expr: string, what: { dataset?: [string, string]; param?: [string, string] }): string {
+  const toks = highlightTokens(expr)
+  const frames: { name: string | null; args: Token[][] }[] = []
+  const swap = new Map<Token, string>()
+  const quoted = (s: string) => `"${s.replaceAll('"', '""')}"`
+  const textOf = (t: Token) => (t.kind === 'str' && t.text.length >= 2 && t.text.endsWith('"') ? t.text.slice(1, -1).replaceAll('""', '"') : null)
+  function judge(f: { name: string | null; args: Token[][] }) {
+    const last = f.args[f.args.length - 1]
+    if (last.length !== 1) return
+    const v = textOf(last[0])
+    if (v == null) return
+    const scoped = AGGREGATES.has(f.name ?? '') && (f.args.length >= 2 || f.name === 'COUNT')
+    if (what.dataset && scoped && v === what.dataset[0]) swap.set(last[0], quoted(what.dataset[1]))
+    if (what.param && f.name === 'PARAM' && f.args.length === 1 && v === what.param[0]) swap.set(last[0], quoted(what.param[1]))
+  }
+  let lastFn: string | null = null
+  for (const t of toks) {
+    if (t.kind === 'space') continue
+    const top = frames[frames.length - 1]
+    if (t.kind === 'punct' && t.text === '(') {
+      top?.args[top.args.length - 1].push(t)
+      frames.push({ name: lastFn, args: [[]] })
+    } else if (t.kind === 'punct' && t.text === ')') {
+      const f = frames.pop()
+      if (f) judge(f)
+      const outer = frames[frames.length - 1]
+      outer?.args[outer.args.length - 1].push(t)
+    } else if (t.kind === 'punct' && t.text === ',' && top) {
+      top.args.push([])
+    } else {
+      top?.args[top.args.length - 1].push(t)
+    }
+    lastFn = t.kind === 'fn' ? t.text.toUpperCase() : null
+  }
+  return swap.size ? toks.map((t) => swap.get(t) ?? t.text).join('') : expr
+}
+
+// what is text, never an expression: a header, a title, a series' name, a KPI's label…
+const NOT_EXPRESSIONS = new Set(['id', 'type', 'kind', 'asset', 'fit', 'dataset', 'header', 'title', 'name', 'color',
+  'background', 'align', 'valign', 'weight', 'page_break', 'sort', 'dir', 'as', 'axis', 'format'])
+
+/** The expressions of the whole report with a dataset or a parameter renamed where the
+ *  language names them (renameInExpression): the items of every band, the calculated
+ *  fields, the choices of the parameters. Changed in place. */
+export function renameEverywhere(def: DDefinition, what: { dataset?: [string, string]; param?: [string, string] }) {
+  const walk = (obj: any, kpi = false) => {
+    if (Array.isArray(obj)) {
+      obj.forEach((x, i) => { if (typeof x === 'string') obj[i] = renameInExpression(x, what); else walk(x) })
+      return
+    }
+    if (!obj || typeof obj !== 'object') return
+    for (const [k, v] of Object.entries(obj)) {
+      if (typeof v === 'string') {
+        if (!NOT_EXPRESSIONS.has(k) && !(kpi && k === 'label')) obj[k] = renameInExpression(v, what)
+      } else if (k !== 'style') {
+        walk(v)
+      }
+    }
+  }
+  for (const b of ['page_header', 'body', 'page_footer'] as const) {
+    for (const it of def.sections[b].items) walk(it, it.type === 'kpi')
+  }
+  for (const d of def.datasets) for (const c of d.calculated ?? []) c.expr = renameInExpression(c.expr, what)
+  for (const p of def.parameters) {
+    if (p.choices && 'dataset' in p.choices) {
+      p.choices.value = renameInExpression(p.choices.value, what)
+      if (p.choices.label) p.choices.label = renameInExpression(p.choices.label, what)
+    }
+  }
 }
 
 // ── where the caret is: what to complete, which call it is inside ────────────

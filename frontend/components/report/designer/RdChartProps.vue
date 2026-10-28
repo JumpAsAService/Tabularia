@@ -28,6 +28,8 @@ const has = (prefix: string) => store.problems.value.some((p) => p.item === id.v
 const scaled = computed(() => ['gauge', 'bullet'].includes(props.item.kind))
 const axes = computed(() => ['bar', 'column', 'line', 'area', 'combo', 'waterfall', 'scatter'].includes(props.item.kind))
 const stackable = computed(() => ['bar', 'column', 'area', 'combo'].includes(props.item.kind))
+// a funnel and a treemap lay out by value whatever the order, a gauge has one value
+const ordered = computed(() => !['funnel', 'treemap', 'gauge'].includes(props.item.kind))
 
 function opts(): DChartOptions {
   if (!props.item.options) props.item.options = {}
@@ -40,10 +42,11 @@ const legendOptions = computed(() => [
   { value: true, label: t('reportDesigner.chart.legendShow') },
   { value: false, label: t('reportDesigner.chart.legendHide') },
 ])
+// the engine's order (docs/specs/reports.md, `options.sort`): the rows', or the first series' value
 const sortOptions = computed(() => [
   { value: 'none', label: t('reportDesigner.chart.sortNone') },
-  { value: 'asc', label: t('reportDesigner.table.asc') },
-  { value: 'desc', label: t('reportDesigner.table.desc') },
+  { value: 'asc', label: t('reportDesigner.chart.sortAsc') },
+  { value: 'desc', label: t('reportDesigner.chart.sortDesc') },
 ])
 const asOptions = computed(() => [
   { value: 'bar', label: t('reportDesigner.chart.asBar') },
@@ -139,16 +142,14 @@ function addSeries() {
       <label v-if="stackable" class="rp-check"><input type="checkbox" :checked="!!o.stacked" @change="opts().stacked = ($event.target as HTMLInputElement).checked" /> {{ $t('reportDesigner.chart.stacked') }}</label>
       <label class="rp-check"><input type="checkbox" :checked="!!o.labels" @change="opts().labels = ($event.target as HTMLInputElement).checked" /> {{ $t('reportDesigner.chart.labels') }}</label>
     </div>
-    <div class="rp-row">
-      <label class="rp-f">
-        <span>{{ $t('reportDesigner.chart.legend') }}</span>
-        <Select :model-value="o.legend ?? null" :options="legendOptions" :aria-label="$t('reportDesigner.chart.legend')" @update:model-value="opts().legend = $event" />
-      </label>
-      <label class="rp-f">
-        <span>{{ $t('reportDesigner.chart.sort') }}</span>
-        <Select :model-value="o.sort ?? 'none'" :options="sortOptions" :aria-label="$t('reportDesigner.chart.sort')" @update:model-value="opts().sort = $event" />
-      </label>
-    </div>
+    <label class="rp-f">
+      <span>{{ $t('reportDesigner.chart.legend') }}</span>
+      <Select :model-value="o.legend ?? null" :options="legendOptions" :aria-label="$t('reportDesigner.chart.legend')" @update:model-value="opts().legend = $event" />
+    </label>
+    <label v-if="ordered" class="rp-f">
+      <span>{{ $t('reportDesigner.chart.sort') }}</span>
+      <Select :model-value="o.sort ?? 'none'" :options="sortOptions" :aria-label="$t('reportDesigner.chart.sort')" @update:model-value="opts().sort = $event" />
+    </label>
     <div class="rp-row">
       <label class="rp-f narrow">
         <span>{{ $t('reportDesigner.chart.top') }}</span>
@@ -156,6 +157,7 @@ function addSeries() {
       </label>
       <RdFormatInput :model-value="o.format" :label="$t('reportDesigner.style.format')" :item="id" path="options.format" @update:model-value="opts().format = $event" />
     </div>
+    <p v-if="ordered" class="rp-help">{{ $t('reportDesigner.chart.sortHint') }}</p>
     <template v-if="scaled">
       <div class="rp-row">
         <label class="rp-f">
@@ -172,6 +174,7 @@ function addSeries() {
         <input type="text" class="rcp-mono" :value="targetText" spellcheck="false" :placeholder="$t('reportDesigner.chart.targetPh')" @input="setTarget(($event.target as HTMLInputElement).value)" />
       </label>
       <p v-if="store.problemAt(id, 'options.target')" class="rp-err" role="alert">{{ store.problemAt(id, 'options.target')?.message }}</p>
+      <p v-else-if="store.liveAt(id, 'options.target')" class="rp-err">{{ store.liveAt(id, 'options.target')?.message }}</p>
       <label class="rp-f">
         <span>{{ $t('reportDesigner.chart.bands') }}</span>
         <input type="text" class="rcp-mono" :value="bandsText" spellcheck="false" placeholder="50, 80" @change="setBands(($event.target as HTMLInputElement).value)" />

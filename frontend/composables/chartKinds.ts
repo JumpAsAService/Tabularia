@@ -80,8 +80,10 @@ export function niceMax(v: number): number {
 
 const tooltip = (c: ChartUi) => ({ backgroundColor: c.panel2, borderColor: c.border, textStyle: { color: c.text, fontSize: 12 } })
 const legend = (c: ChartUi) => ({ textStyle: { color: c.muted, fontSize: 11 }, top: 0, icon: 'circle' })
+// a long category is cut with an ellipsis (the tooltip has it whole): uncut, the labels
+// overlapped and all but one were hidden, that one clipped at the chart's edge
 const axis = (c: ChartUi) => ({
-  axisLabel: { color: c.muted, hideOverlap: true },
+  axisLabel: { color: c.muted, hideOverlap: true, interval: 0, width: 120, overflow: 'truncate' as const },
   axisLine: { lineStyle: { color: c.border } },
   axisTick: { show: false },
 })
@@ -93,6 +95,67 @@ const valueAxis = (k: KindCtx, short = false) => ({
   axisLabel: { color: k.ui.muted, formatter: (v: number) => (short ? k.short(v) : k.num(v)) },
   splitLine: { lineStyle: { color: k.ui.border } },
 })
+
+// ── pie: the first categories, and the others as one slice ───────────────────
+export interface PieSlice { name: string; value: number | null }
+/** Over the whole dataset: the measure of the categories above zero, how many they are
+ *  and (`every`) how many categories there are in all. */
+export interface PieTotals { value: number; count: number; every?: number }
+
+/** Above zero: a part a pie, a treemap or a funnel can draw. */
+const drawable = (v: number | null | undefined): v is number => typeof v === 'number' && v > 0
+
+/**
+ * A pie's slices: the first `keep` rows above zero (the query sorts them from the largest),
+ * and every other category above zero as one «Other» slice, from `totals` — the rows hold
+ * only the first categories, so their own sum would leave the rest out. Without totals, or
+ * not `additive` (a measure whose parts do not add up: an average of averages is no
+ * average), there is no «Other». A category at zero or below, or with no value, is no
+ * slice: a pie cannot draw it (ECharts drew an all-zero pie as equal slices); `leftOut`
+ * counts them, over the whole dataset when the totals say it, else among the rows.
+ */
+export function pieSlices(rows: PieSlice[], keep: number, totals: PieTotals | null, additive = true):
+  { slices: PieSlice[]; other: PieTotals | null; leftOut: number } {
+  const slices = rows.filter((r) => drawable(r.value)).slice(0, keep)
+  const leftOut = totals?.every != null ? Math.max(0, totals.every - totals.count) : rows.filter((r) => !drawable(r.value)).length
+  if (!totals || !additive) return { slices, other: null, leftOut }
+  const count = totals.count - slices.length
+  const value = totals.value - slices.reduce((s, r) => s + (r.value ?? 0), 0)
+  return { slices, other: count > 0 && value > 0 ? { count, value } : null, leftOut }
+}
+
+/** How many of these values a pie, a treemap or a funnel leaves out. */
+export const notAboveZero = (values: (number | null)[]) => values.filter((v) => !drawable(v)).length
+
+// ── treemap: each category a box, sized by its value ─────────────────────────
+export function treemapOption(k: KindCtx, d: { cats: string[]; values: (number | null)[]; name: string }) {
+  const c = k.ui
+  // magnitude → ONE hue, from pale to full by value. Each box gets its colour: ECharts'
+  // own mapping gives the first level its palette, a hue per box, whatever the series says
+  const items = d.cats.flatMap((name, i) => (drawable(d.values[i]) ? [{ name, value: d.values[i] as number }] : []))
+  const lo = Math.min(...items.map((it) => it.value))
+  const hi = Math.max(...items.map((it) => it.value))
+  const alpha = (v: number) => (hi > lo ? 0.45 + (0.55 * (v - lo)) / (hi - lo) : 1)
+  return {
+    backgroundColor: 'transparent',
+    tooltip: {
+      ...tooltip(c),
+      trigger: 'item',
+      formatter: (p: any) => `${esc(p.name)}: <b>${esc(typeof p.value === 'number' ? k.num(p.value) : '—')}</b>`,
+    },
+    series: [{
+      type: 'treemap',
+      name: d.name,
+      roam: false,
+      nodeClick: false,
+      breadcrumb: { show: false },
+      left: 0, right: 0, top: 0, bottom: 0,
+      itemStyle: { borderColor: c.panel, borderWidth: 2 },
+      label: { color: c.text, fontSize: 11, formatter: '{b}' },
+      data: items.map((it) => ({ ...it, itemStyle: { color: withAlpha(PALETTE[0], alpha(it.value)) } })),
+    }],
+  }
+}
 
 // ── gauge: one number on its scale ───────────────────────────────────────────
 export interface GaugeData {
@@ -233,9 +296,11 @@ export function waterfallOption(k: KindCtx, d: { cats: string[]; values: (number
 // ── funnel: stages, from the largest ──────────────────────────────────────────
 export function funnelOption(k: KindCtx, d: { cats: string[]; values: (number | null)[]; name: string }) {
   const c = k.ui
+  // the stages above zero, on a scale from zero: a negative one widened the scale and the
+  // funnel became an hourglass
   const items = d.cats
     .map((name, i) => ({ name, value: d.values[i] }))
-    .filter((it): it is { name: string; value: number } => it.value != null)
+    .filter((it): it is { name: string; value: number } => drawable(it.value))
     .sort((a, b) => b.value - a.value)
   const first = items[0]?.value ?? 0
   const n = items.length
@@ -252,6 +317,7 @@ export function funnelOption(k: KindCtx, d: { cats: string[]; values: (number | 
       type: 'funnel',
       name: d.name,
       sort: 'descending',
+      min: 0,
       gap: 2,
       // the stages on the left, their names on the right: a name stays whole, on two
       // lines if it must, and never sits on a fill it could vanish into
@@ -433,6 +499,7 @@ export function bulletOption(k: KindCtx, d: BulletData) {
         yAxisIndex: 0,
         silent: true,
         barWidth: '64%',
+        barMaxWidth: 28, // one category alone was a band as tall as the chart
         data: d.cats.map(() => hi),
         itemStyle: { color: withAlpha(PALETTE[0], 0.14), borderRadius: 3 },
         tooltip: { show: false },
@@ -443,6 +510,7 @@ export function bulletOption(k: KindCtx, d: BulletData) {
         name: d.name,
         yAxisIndex: 1,
         barWidth: '30%',
+        barMaxWidth: 12,
         data: d.values,
         itemStyle: { color: PALETTE[0], borderRadius: [0, 3, 3, 0] },
         z: 2,

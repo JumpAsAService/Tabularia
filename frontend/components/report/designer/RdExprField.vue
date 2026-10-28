@@ -1,7 +1,7 @@
 <script setup lang="ts">
 // An expression of an item, with its label: the value is `obj[prop]`, the problems of the
 // last save are those of `path` in the item (or the dataset, the parameter), and they go
-// away once the text is changed.
+// away once the text is changed; so do those of the live check, which follow the text.
 import { computed } from 'vue'
 import RdExprInput from '~/components/report/designer/RdExprInput.vue'
 import { useDesign } from '~/composables/reportDesignStore'
@@ -24,6 +24,7 @@ const store = useDesign()
 const uid = `rxf-${Math.random().toString(36).slice(2, 9)}`
 
 const problem = computed(() => store.problemAt(props.item, props.path))
+const live = computed(() => store.liveAt(props.item, props.path))
 const value = computed({
   get: () => (props.obj[props.prop] ?? '') as string,
   set: (v: string) => { props.obj[props.prop] = props.optional && !v.trim() ? null : v },
@@ -39,6 +40,7 @@ const value = computed({
       :fields="fields ?? null"
       :params="store.params.value"
       :problem="problem"
+      :live="live"
       :text-mode="textMode"
       :placeholder="placeholder"
       :label="label"

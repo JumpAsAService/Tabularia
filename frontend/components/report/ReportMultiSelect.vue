@@ -61,8 +61,15 @@ const summary = computed(() => {
 function toggle(v: string) {
   emit('update:modelValue', chosen.value.has(v) ? props.modelValue.filter((x) => x !== v) : [...props.modelValue, v])
 }
-function all() { emit('update:modelValue', props.options.map((o) => o.value)) }
-function none() { emit('update:modelValue', []) }
+// with a search typed, «All» and «None» act on the choices it shows, as they read
+function all() {
+  const add = shown.value.map((o) => o.value).filter((v) => !chosen.value.has(v))
+  emit('update:modelValue', [...props.modelValue, ...add])
+}
+function none() {
+  const hidden = new Set(shown.value.map((o) => o.value))
+  emit('update:modelValue', query.value.trim() ? props.modelValue.filter((v) => !hidden.has(v)) : [])
+}
 function flip() {
   if (open.value) return close()
   open.value = true

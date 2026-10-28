@@ -27,8 +27,10 @@ const props = defineProps<{
   placeholder?: string
   label?: string
   id?: string
-  /** the server's verdict on the saved text: shown until the text changes */
+  /** the server's verdict at the last save: shown until the text changes */
   problem?: { message: string; pos: number | null; length: number } | null
+  /** the server's live check of the text as it is now (reportLiveCheck.ts): after ours */
+  live?: { message: string; pos: number | null; length: number } | null
   multiline?: boolean
   disabled?: boolean
 }>()
@@ -42,24 +44,30 @@ const focused = ref(false)
 const caret = ref(0)
 const uid = `rx-${Math.random().toString(36).slice(2, 9)}`
 
-// ── the check done here, after a pause ──
+// ── the check done here: what is fixed goes at once, a new mistake is said after a
+// pause (not while it is being typed) ──
 const localError = ref<ExprError | null>(null)
 let timer: ReturnType<typeof setTimeout> | null = null
-function scheduleCheck() {
-  if (timer) clearTimeout(timer)
-  timer = setTimeout(runCheck, 300)
+function checkOf(v: string): ExprError | null {
+  const expr = !props.textMode || v.startsWith('=')
+  if (!expr || !v.trim() || (props.textMode && v.trim() === '=')) return null
+  return checkExpression(v, { fields: props.fields ? props.fields.map((f) => f.name) : null, params: props.params ?? [] })
+}
+const same = (a: ExprError | null, b: ExprError | null) => !!a && !!b && a.code === b.code && a.pos === b.pos && a.length === b.length
+/** The text changed to `v`: the mistake shown goes if it is not there any more. */
+function recheck(v: string) {
+  if (timer) { clearTimeout(timer); timer = null }
+  const now = checkOf(v)
+  if (same(now, localError.value)) return
+  localError.value = null
+  if (now) timer = setTimeout(runCheck, 300)
 }
 function runCheck() {
   timer = null
-  if (!isExpr.value || !text.value.trim() || (props.textMode && text.value.trim() === '=')) {
-    localError.value = null
-    return
-  }
-  localError.value = checkExpression(text.value, {
-    fields: props.fields ? props.fields.map((f) => f.name) : null,
-    params: props.params ?? [],
-  })
+  localError.value = checkOf(text.value)
 }
+// typing, a completion, an undo: whatever changed the text
+watch(text, recheck)
 watch(() => [props.fields, props.params], runCheck, { deep: true })
 onBeforeUnmount(() => { if (timer) clearTimeout(timer) })
 runCheck()
@@ -68,10 +76,12 @@ const localMessage = (e: ExprError) => {
   const key = `reportDesigner.expr.${e.code}`
   return te(key) ? t(key, e.args ?? {}) : t('reportDesigner.expr.unexpected', { what: '' })
 }
-/** what is shown: the server's verdict first, else ours */
+/** what is shown: the save's verdict first, then ours (at once, in the interface's
+ *  language), then the live check's */
 const shown = computed(() => {
   if (props.problem) return { message: props.problem.message, pos: props.problem.pos, length: props.problem.length, server: true }
   if (localError.value) return { message: localMessage(localError.value), pos: localError.value.pos, length: localError.value.length, server: false }
+  if (props.live) return { message: props.live.message, pos: props.live.pos, length: props.live.length, server: false }
   return null
 })
 
@@ -187,7 +197,6 @@ function accept(o: Option) {
     el.focus()
     el.setSelectionRange(at, at)
     caret.value = at
-    scheduleCheck()
   })
 }
 
@@ -199,7 +208,6 @@ function onInput(e: Event) {
   caret.value = el.selectionStart ?? v.length
   emit('update:modelValue', v)
   emit('edited')
-  scheduleCheck()
   nextTick(() => refresh())
 }
 

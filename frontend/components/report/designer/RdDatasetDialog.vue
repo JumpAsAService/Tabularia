@@ -23,8 +23,9 @@ import {
 import { usePreferredEngine } from '~/composables/useEngine'
 import { useFolderPaths } from '~/composables/useFolderPaths'
 import { errMessage } from '~/composables/useApi'
+import { renameEverywhere } from '~/composables/reportExpressions'
 import {
-  FILTER_OPS, NAME_RE, fieldKind, samePath, type DCalculated, type DDataset, type DField, type DFilter, type DSource,
+  FILTER_OPS, NAME_RE, fieldKind, samePath, valueAt, type DCalculated, type DDataset, type DField, type DFilter, type DSource,
 } from '~/composables/reportDesignModel'
 
 const SqlEditor = defineAsyncComponent(() => import('~/components/sql/SqlEditor.vue'))
@@ -246,11 +247,13 @@ function apply() {
   if (at >= 0) doc.datasets.splice(at, 1, ds)
   else doc.datasets.push(ds)
   if (old && old !== ds.name) {
-    // what read the dataset by its old name reads it by the new one
+    // what read the dataset by its old name reads it by the new one, the aggregates that
+    // name it (SUM([amount], "old")) included
     for (const b of ['page_header', 'body', 'page_footer'] as const) {
       for (const it of doc.sections[b].items) if ('dataset' in it && it.dataset === old) it.dataset = ds.name
     }
     for (const p of doc.parameters) if (p.choices && 'dataset' in p.choices && p.choices.dataset === old) p.choices.dataset = ds.name
+    renameEverywhere(doc, { dataset: [old, ds.name] })
   }
   store.problems.value = store.problems.value.filter((p) => p.dataset !== old)
   emit('applied', ds.name)
@@ -260,6 +263,14 @@ function apply() {
 const params = computed(() => store.doc.value.parameters)
 const braced = (name: string) => `{${name}}`
 const calcProblem = (i: number) => serverProblems.value.find((p) => samePath(p.path, `calculated[${i}]`)) ?? null
+/** the live check's verdict on a calculated field, while the draft still holds what it judged */
+function calcLive(i: number) {
+  const d = draft.value
+  if (!d || !original.value) return null
+  return store.liveProblems.value.find((p) => p.dataset === original.value && /^calculated\[\d+\]/.test(p.path)
+    && samePath(p.path.replace(/\.expr$/, ''), `calculated[${i}]`)
+    && p.seen === JSON.stringify(valueAt({ calculated: d.calculated }, p.path) ?? null)) ?? null
+}
 const fieldsForCalc = computed(() => (draft.value?.fields.length ? draft.value.fields : null))
 </script>
 
@@ -345,7 +356,7 @@ const fieldsForCalc = computed(() => (draft.value?.fields.length ? draft.value.f
         <div v-for="(c, i) in draft.calculated" :key="i" class="rdd-calc">
           <input v-model="c.name" type="text" class="rdd-mono rdd-cname" maxlength="256" :placeholder="$t('reportDesigner.dataset.calcName')" :aria-label="$t('reportDesigner.dataset.calcName')" />
           <RdExprInput v-model="c.expr" :fields="fieldsForCalc" :params="store.params.value" :label="$t('reportDesigner.dataset.calcExpr')" placeholder="[revenue] - [cost]"
-                       :problem="calcProblem(i)" />
+                       :problem="calcProblem(i)" :live="calcLive(i)" />
           <button type="button" class="rp-icon danger" :aria-label="$t('reportDesigner.props.remove')" :title="$t('reportDesigner.props.remove')" @click="draft.calculated.splice(i, 1)"><Trash2 :size="13" /></button>
         </div>
       </div>

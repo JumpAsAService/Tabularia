@@ -22,8 +22,6 @@ const { t } = useI18n()
 const toast = useToast()
 
 const RULER = 22
-const GUTTER_L = 104
-const GUTTER_R = 128
 const PAD_Y = 28
 
 const def = computed(() => store.doc.value)
@@ -48,6 +46,72 @@ const bandHeight = computed<Record<BandName, number>>(() => ({
 }))
 const sheetH = computed(() => bandTop.value.page_footer + bandHeight.value.page_footer + margins.value[2])
 
+// ── the desk's margins, as wide as what is written in them in this language: the bands'
+// names on the left (they wrap at their spaces), a selected table's rows on the right ──
+const NAME_FONT = "600 10.5px 'IBM Plex Sans', system-ui, sans-serif"
+const NAME_SPACING = 0.525 // 0.05em
+const SIZE_FONT = "11px 'IBM Plex Sans', system-ui, sans-serif"
+const TAG_FONT = "600 9.5px 'IBM Plex Sans', system-ui, sans-serif"
+const TAG_SPACING = 0.285 // 0.03em
+const LABEL_PAD = 18 // a band label's padding, left and right
+const LABEL_GAP = 10 // between a band label and the sheet
+const NAME_LINE = 13
+const SIZE_LINE = 14
+let measurer: CanvasRenderingContext2D | null = null
+const fontsReady = ref(0)
+function textWidth(text: string, font: string, spacing = 0): number {
+  void fontsReady.value // measured again once the font has arrived
+  if (!measurer && typeof document !== 'undefined') measurer = document.createElement('canvas').getContext('2d')
+  if (!measurer) return text.length * 7
+  measurer.font = font
+  return measurer.measureText(text).width + spacing * text.length
+}
+/** How many lines a text takes in `width`, cut at its spaces (a word wider than the
+ *  width is broken by the browser, `overflow-wrap: anywhere`). */
+function linesOf(text: string, font: string, width: number, spacing = 0): number {
+  let lines = 1
+  let line = 0
+  const space = textWidth(' ', font, spacing)
+  for (const word of text.split(/\s+/).filter(Boolean)) {
+    const w = textWidth(word, font, spacing)
+    if (line && line + space + w > width) { lines++; line = w } else line += (line ? space : 0) + w
+    if (w > width) lines += Math.floor(w / width)
+  }
+  return lines
+}
+const names = computed(() => Object.fromEntries(BANDS.map((b) => [b, t(`reportDesigner.bands.${b}`).toUpperCase()])) as Record<BandName, string>)
+const sizeText = (b: BandName) => (b === 'body' ? t('reportDesigner.canvas.grows') : `${fmt(bandHeight.value[b])} mm`)
+/** the width of a band label's text: its whole name on one line when that is not too wide,
+ *  else its longest word; the body's «grows with its data» wraps */
+const labelText = computed(() => {
+  const all = Object.values(names.value)
+  let need = Math.max(...all.map((n) => textWidth(n, NAME_FONT, NAME_SPACING)))
+  if (need > 112) need = Math.max(...all.flatMap((n) => n.split(/\s+/)).map((w) => textWidth(w, NAME_FONT, NAME_SPACING)))
+  const grows = t('reportDesigner.canvas.grows').split(/\s+/).map((w) => textWidth(w, SIZE_FONT))
+  return Math.ceil(Math.min(140, Math.max(64, need, ...grows, textWidth('888.8 mm', SIZE_FONT))))
+})
+const gutterL = computed(() => labelText.value + LABEL_PAD + LABEL_GAP + 6)
+// the rows' tags: the widest of them in this language, 12 px from the sheet
+const gutterR = computed(() => {
+  const tags = [t('reportDesigner.face.tagHead'), t('reportDesigner.face.tagGroupHead', { n: 6 }), t('reportDesigner.face.tagDetail'),
+    t('reportDesigner.face.tagCells'), t('reportDesigner.face.tagGroupFoot', { n: 6 }), t('reportDesigner.face.tagTotal')]
+  return Math.ceil(Math.max(...tags.map((x) => textWidth(x.toUpperCase(), TAG_FONT, TAG_SPACING)))) + 14 + 12 + 12
+})
+/** Where each band's label goes: at its band's top, or under the label above it when the
+ *  bands are too thin at this zoom for both (nothing is written over anything). */
+const labelTops = computed(() => {
+  const out = {} as Record<BandName, number>
+  let floor = -Infinity
+  for (const b of BANDS) {
+    const top = Math.max(yOf(b, 0), floor)
+    const height = linesOf(names.value[b], NAME_FONT, labelText.value, NAME_SPACING) * NAME_LINE
+      + linesOf(sizeText(b), SIZE_FONT, labelText.value) * SIZE_LINE + 10
+    out[b] = top
+    floor = top + height + 4
+  }
+  return out
+})
+
 // ── the stage: the sheet centred, the rulers stuck to the edges ──
 const stage = ref<HTMLElement | null>(null)
 const sheet = ref<HTMLElement | null>(null)
@@ -55,17 +119,23 @@ const stageW = ref(1000)
 let observer: ResizeObserver | null = null
 onMounted(() => {
   if (!stage.value) return
-  observer = new ResizeObserver(() => { stageW.value = stage.value?.clientWidth ?? 1000 })
+  // read after the frame: the sheet's new width can bring or take a scrollbar, which would
+  // resize the stage again inside the same notification (the browser's «ResizeObserver loop»)
+  observer = new ResizeObserver(() => requestAnimationFrame(() => {
+    const w = stage.value?.clientWidth
+    if (w && w !== stageW.value) stageW.value = w
+  }))
   observer.observe(stage.value)
   stageW.value = stage.value.clientWidth
   // a page wider than the stage at 100%: it opens fitted to the width
-  if (stageW.value - RULER < page.value.w * (96 / 25.4) * store.zoom.value + GUTTER_L + GUTTER_R) fitWidth()
+  if (stageW.value - RULER < page.value.w * (96 / 25.4) * store.zoom.value + gutterL.value + gutterR.value) fitWidth()
+  document.fonts?.ready.then(() => { fontsReady.value++ })
 })
 onBeforeUnmount(() => observer?.disconnect())
 
 const sheetW = computed(() => page.value.w * ppm.value)
-const areaW = computed(() => Math.max(stageW.value - RULER - 2, sheetW.value + GUTTER_L + GUTTER_R))
-const sheetLeft = computed(() => GUTTER_L + Math.max(0, (areaW.value - GUTTER_L - GUTTER_R - sheetW.value) / 2))
+const areaW = computed(() => Math.max(stageW.value - RULER - 2, sheetW.value + gutterL.value + gutterR.value))
+const sheetLeft = computed(() => gutterL.value + Math.max(0, (areaW.value - gutterL.value - gutterR.value - sheetW.value) / 2))
 const areaH = computed(() => sheetH.value * ppm.value + PAD_Y * 2)
 /** where the content box starts on the stage's area, in px */
 const originX = computed(() => sheetLeft.value + margins.value[3] * ppm.value)
@@ -73,7 +143,7 @@ const yOf = (band: BandName, mm: number) => PAD_Y + (bandTop.value[band] + mm) *
 
 /** The zoom that fits the page's width in the stage. */
 function fitWidth() {
-  const room = (stage.value?.clientWidth ?? 1000) - RULER - GUTTER_L - GUTTER_R - 24
+  const room = (stage.value?.clientWidth ?? 1000) - RULER - gutterL.value - gutterR.value - 24
   store.zoom.value = Math.max(0.25, Math.min(4, Math.round((room / (page.value.w * 96 / 25.4)) * 100) / 100))
 }
 
@@ -116,6 +186,8 @@ const selBox = computed(() => {
 const invalid = computed(() => store.itemsWithProblems.value)
 const moving = ref<{ id: string; type: ItemType } | null>(null)
 const refusedBand = ref<BandName | null>(null)
+/** the band refused the item for its height, not its kind: said as such */
+const refusedTall = ref(false)
 const conflictIds = computed(() => {
   const out = new Set<string>()
   for (const c of rowConflicts(def.value.sections.body.items)) { out.add(c.table.id); out.add(c.other.id) }
@@ -126,6 +198,15 @@ const dropHint = ref<DropHint | null>(null)
 const dragging = computed(() => !!moving.value || !!dropHint.value)
 
 const tableRows = computed(() => def.value.sections.body.items.filter((i) => i.type === 'table'))
+/** The items in the order the PDF draws them, what comes later on top: the header's and the
+ *  footer's as listed, the body's by their top and then their left (the engine lays the body
+ *  out row by row, backend/app/reports/model.py) — a rectangle under a text it frames is
+ *  drawn first, here as there. */
+const drawn = computed<Record<BandName, DItem[]>>(() => {
+  const body = def.value.sections.body.items.map((it, i) => ({ it, i }))
+    .sort((a, b) => a.it.y - b.it.y || a.it.x - b.it.x || a.i - b.i).map((x) => x.it)
+  return { page_header: def.value.sections.page_header.items, body, page_footer: def.value.sections.page_footer.items }
+})
 const showRowZones = computed(() => dragging.value || store.selected.value?.item.type === 'table')
 
 function bandAt(sheetMm: number): BandName {
@@ -182,14 +263,19 @@ interface Gesture {
   w0: number
   h0: number
   moved: boolean
+  /** the stage's scroll when the gesture began: scrolling while dragging moves the item too */
+  scx?: number
+  scy?: number
 }
 let g: Gesture | null = null
+let lastPointer: PointerEvent | null = null
+let edgeTimer = 0
 
 function begin(e: PointerEvent, gesture: Gesture) {
   if (e.button !== 0) return
   e.preventDefault()
   e.stopPropagation()
-  g = gesture
+  g = { ...gesture, scx: stage.value?.scrollLeft ?? 0, scy: stage.value?.scrollTop ?? 0 }
   store.notice.value = ''
   stage.value?.focus({ preventScroll: true })
   window.addEventListener('pointermove', onMove)
@@ -219,8 +305,10 @@ const snapGrid = (v: number) => (store.snap.value ? Math.round(v) : mm1(v))
 
 function onMove(e: PointerEvent) {
   if (!g) return
-  const dx = (e.clientX - g.sx) / ppm.value
-  const dy = (e.clientY - g.sy) / ppm.value
+  lastPointer = e
+  const dx = (e.clientX - g.sx + (stage.value?.scrollLeft ?? 0) - (g.scx ?? 0)) / ppm.value
+  const dy = (e.clientY - g.sy + (stage.value?.scrollTop ?? 0) - (g.scy ?? 0)) / ppm.value
+  if (g.moved && !edgeTimer) edgeTimer = requestAnimationFrame(edgeScroll)
   if (!g.moved) {
     if (Math.hypot(e.clientX - g.sx, e.clientY - g.sy) < 3) return
     g.moved = true
@@ -239,6 +327,7 @@ function moveItem(it: DItem, dx: number, dy: number, e: PointerEvent) {
   // into another band, when it can hold the item
   const target = bandAt(sheetPoint(e).y)
   refusedBand.value = null
+  refusedTall.value = false
   if (target !== g.band) {
     const fits = target === 'body' || boxOf(it).h <= bandHeight.value[target] + 1e-6
     if (allowedIn(target, it.type) && fits) {
@@ -251,6 +340,7 @@ function moveItem(it: DItem, dx: number, dy: number, e: PointerEvent) {
       store.selectedBand.value = target
     } else {
       refusedBand.value = target
+      refusedTall.value = allowedIn(target, it.type)
     }
   }
   const band = g.band
@@ -345,7 +435,31 @@ function moveBand(dy: number) {
   badge.value = `${fmt(def.value.sections[band].height)} mm`
 }
 
+/** Near an edge of the stage while dragging, the stage scrolls (the body grows under an
+ *  item taken down), and the item follows the pointer as if it had moved. */
+function edgeScroll() {
+  edgeTimer = 0
+  const el = stage.value
+  const p = lastPointer
+  if (!g || !g.moved || !el || !p) return
+  const r = el.getBoundingClientRect()
+  const EDGE = 32
+  const speed = (over: number) => Math.round(Math.min(EDGE, Math.max(0, over)) / 2) + 2
+  const vy = p.clientY > r.bottom - EDGE ? speed(p.clientY - (r.bottom - EDGE))
+    : p.clientY < r.top + RULER + EDGE ? -speed(r.top + RULER + EDGE - p.clientY) : 0
+  const vx = p.clientX > r.right - EDGE ? speed(p.clientX - (r.right - EDGE))
+    : p.clientX < r.left + RULER + EDGE ? -speed(r.left + RULER + EDGE - p.clientX) : 0
+  if (!vx && !vy) return
+  const before = [el.scrollLeft, el.scrollTop]
+  el.scrollBy(vx, vy)
+  if (el.scrollLeft === before[0] && el.scrollTop === before[1]) return // at the end: the next move goes on
+  edgeTimer = requestAnimationFrame(edgeScroll)
+  onMove(p)
+}
+
 function onUp() {
+  if (edgeTimer) { cancelAnimationFrame(edgeTimer); edgeTimer = 0 }
+  lastPointer = null
   window.removeEventListener('pointermove', onMove)
   window.removeEventListener('pointerup', onUp)
   window.removeEventListener('pointercancel', onUp)
@@ -354,7 +468,10 @@ function onUp() {
   if (done?.moved && done.kind === 'move' && done.id) {
     const hit = store.find(done.id)
     if (refusedBand.value && hit) {
-      store.notice.value = t('reportDesigner.canvas.bandRefuses', { band: t(`reportDesigner.bands.${refusedBand.value}`) })
+      const band = t(`reportDesigner.bands.${refusedBand.value}`)
+      store.notice.value = refusedTall.value
+        ? t('reportDesigner.canvas.bandTooLow', { band, h: fmt(bandHeight.value[refusedBand.value]) })
+        : t('reportDesigner.canvas.bandRefuses', { band })
     }
     if (hit && hit.band === 'body' && store.settleRow(hit.item)) {
       store.notice.value = t('reportDesigner.canvas.movedUnderTable')
@@ -362,6 +479,7 @@ function onUp() {
   }
   moving.value = null
   refusedBand.value = null
+  refusedTall.value = false
   guides.value = null
   badge.value = ''
   store.gesture.value = false
@@ -619,11 +737,16 @@ const bandLabel = (b: BandName) => t(`reportDesigner.bands.${b}`)
           :key="`l-${b}`"
           class="rdc-blabel"
           :class="{ on: store.selectedBand.value === b && !store.selectedId.value }"
-          :style="{ right: `${areaW - sheetLeft + 10}px`, top: `${yOf(b, 0)}px` }"
+          :style="{ right: `${areaW - sheetLeft + LABEL_GAP}px`, top: `${labelTops[b]}px`, maxWidth: `${labelText + LABEL_PAD}px` }"
+          role="button"
+          tabindex="0"
+          :aria-pressed="store.selectedBand.value === b && !store.selectedId.value"
           @pointerdown.prevent="pickBand(b)"
+          @keydown.enter.prevent="pickBand(b)"
+          @keydown.space.prevent="pickBand(b)"
         >
           <span class="rdc-bname">{{ bandLabel(b) }}</span>
-          <span class="rdc-bsize">{{ b === 'body' ? $t('reportDesigner.canvas.grows') : `${fmt(bandHeight[b])} mm` }}</span>
+          <span class="rdc-bsize">{{ sizeText(b) }}</span>
         </div>
 
         <div
@@ -651,7 +774,7 @@ const bandLabel = (b: BandName) => t(`reportDesigner.bands.${b}`)
             @pointerdown.self="pickBand(b)"
           >
             <span v-if="b !== 'body' && refuses(b)" class="rdc-refuse">
-              {{ $t('reportDesigner.canvas.bandHolds') }}
+              {{ refusedBand === b && refusedTall ? $t('reportDesigner.canvas.bandTooLowShort') : $t('reportDesigner.canvas.bandHolds') }}
             </span>
             <!-- a table's row is its own: the room beside it, while one works near it -->
             <template v-if="b === 'body' && showRowZones">
@@ -661,7 +784,7 @@ const bandLabel = (b: BandName) => t(`reportDesigner.bands.${b}`)
               </template>
             </template>
             <RdItem
-              v-for="it in def.sections[b].items"
+              v-for="it in drawn[b]"
               :key="it.id"
               :item="it"
               :def="def"
@@ -786,12 +909,14 @@ const bandLabel = (b: BandName) => t(`reportDesigner.bands.${b}`)
 .rdc-blabel {
   position: absolute; display: flex; flex-direction: column; align-items: flex-end; gap: 2px; padding: 4px 8px 4px 10px;
   border-radius: 8px; cursor: pointer; transition: background 0.15s, color 0.15s; transform: translateY(-1px);
+  box-sizing: border-box; text-align: right; overflow-wrap: anywhere;
 }
 .rdc-blabel:hover { background: var(--panel); }
+.rdc-blabel:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
 .rdc-blabel.on { background: var(--tint-accent); }
-.rdc-bname { font-size: 10.5px; font-weight: 600; letter-spacing: 0.05em; text-transform: uppercase; color: var(--muted); white-space: nowrap; }
+.rdc-bname { font-size: 10.5px; line-height: 13px; font-weight: 600; letter-spacing: 0.05em; text-transform: uppercase; color: var(--muted); }
 .rdc-blabel.on .rdc-bname { color: var(--accent-hi); }
-.rdc-bsize { font-size: 11px; color: var(--muted); opacity: 0.8; font-variant-numeric: tabular-nums; white-space: nowrap; }
+.rdc-bsize { font-size: 11px; line-height: 14px; color: var(--muted); opacity: 0.8; font-variant-numeric: tabular-nums; }
 
 .rdc-sheet {
   position: absolute; background: #ffffff; border-radius: 2px;

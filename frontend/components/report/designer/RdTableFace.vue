@@ -2,7 +2,9 @@
 // A table (or a matrix) in the design view: its rows as the report will lay them out —
 // the header, each group's header, the detail, the groups' totals, the grand total — with
 // the expressions in the cells. The structure, not the data: the preview has the data.
-// With `tags`, each row's role is written beside the page, on the right.
+// With `tags`, each row's role is written beside the page, on the right (the canvas leaves
+// room for the widest in this language): smaller when the rows are thin at this zoom, not
+// at all when they are too thin to hold a word.
 import { computed } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { PAPER, PT_MM, rowHeight, tableRows, type DDefinition, type DTable, type TableRow } from '~/composables/reportDesignModel'
@@ -51,6 +53,7 @@ const tagOf = (r: TableRow) => {
 }
 
 const empty = computed(() => !props.table.matrix && !props.table.columns.length)
+const tagMode = computed(() => (rowPx.value >= 18 ? 'full' : rowPx.value >= 11 ? 'small' : null))
 </script>
 
 <template>
@@ -90,7 +93,7 @@ const empty = computed(() => !props.table.matrix && !props.table.columns.length)
             </template>
           </div>
         </template>
-        <span v-if="tags" class="ttag" :style="{ left: `${tagLeft ?? 0}px` }">{{ tagOf(r) }}</span>
+        <span v-if="tags && tagMode" class="ttag" :class="tagMode" :style="{ left: `${tagLeft ?? 0}px`, ...(tagMode === 'small' ? { lineHeight: `${Math.floor(rowPx) - 3}px` } : {}) }">{{ tagOf(r) }}</span>
       </div>
     </template>
   </div>
@@ -119,8 +122,8 @@ const empty = computed(() => !props.table.matrix && !props.table.columns.length)
 }
 .ttag {
   position: absolute; top: 50%; transform: translateY(-50%); white-space: nowrap; pointer-events: none;
-  max-width: 112px; overflow: hidden; text-overflow: ellipsis;
   font: 600 9.5px/1 'IBM Plex Sans', system-ui, sans-serif; letter-spacing: 0.03em; text-transform: uppercase;
   color: var(--muted); padding: 3px 6px; border-radius: 6px; background: var(--panel); border: 1px solid var(--border);
 }
+.ttag.small { font-size: 8.5px; padding: 0 4px; border-radius: 4px; }
 </style>

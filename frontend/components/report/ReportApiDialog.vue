@@ -1,8 +1,8 @@
 <script setup lang="ts">
 // The report for scripts: the address that downloads it (GET /reports/{id}/render, with
-// the values on screen) and the same in Python. A script needs an API token, which is
-// never shown here: the example reads it from the TABULARIA_TOKEN variable, and the
-// dialog leads to where tokens are made.
+// the values on screen) and the same in Python or with curl. A script needs an API token,
+// which is never shown here: the examples read it from the TABULARIA_TOKEN variable, and
+// the dialog leads to where tokens are made.
 import { computed, nextTick, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { Check, Copy, KeyRound } from 'lucide-vue-next'
@@ -31,17 +31,31 @@ const FORMATS: { id: ApiFormat; key: string; ext: string }[] = [
   { id: 'html', key: 'report.apiFormatHtml', ext: 'mhtml' },
 ]
 const link = computed(() => (props.open ? api.apiUrl(props.reportId, format.value, props.params) : ''))
+const fileName = computed(() =>
+  `${(props.reportName || 'report').replace(/[\\/:*?"<>|]+/g, '_')}.${FORMATS.find((f) => f.id === format.value)!.ext}`)
+
+type Lang = 'python' | 'curl'
+const lang = ref<Lang>('python')
+const LANGS: { id: Lang; key: string }[] = [{ id: 'python', key: 'report.apiPython' }, { id: 'curl', key: 'report.apiCurl' }]
+// a text inside a shell's single quotes: a quote closes, is escaped and opens again
+const sh = (s: string) => `'${s.replace(/'/g, "'\\''")}'`
 
 // a text as Python writes it: JSON's quoting is valid Python for these texts
 const py = (s: string) => JSON.stringify(s)
 const example = computed(() => {
   if (!props.open) return ''
+  if (lang.value === 'curl') {
+    return [
+      `# ${t('report.apiExampleToken')}`,
+      `curl -fsS -H "Authorization: Bearer $TABULARIA_TOKEN" -o ${sh(fileName.value)} \\`,
+      `  ${sh(link.value)}`,
+      '',
+    ].join('\n')
+  }
   const root = api.apiUrl(props.reportId, format.value).split('?')[0]
   const entries = Object.entries(props.params).filter(([, v]) => v !== null && v !== '' && !(Array.isArray(v) && !v.length))
   const pairs = [`"format": ${py(format.value)}`, ...entries.map(([k, v]) =>
     `${py(k)}: ${Array.isArray(v) ? `[${v.map((x) => py(String(x))).join(', ')}]` : py(String(v))}`)]
-  const ext = FORMATS.find((f) => f.id === format.value)!.ext
-  const file = `${(props.reportName || 'report').replace(/[\\/:*?"<>|]+/g, '_')}.${ext}`
   return [
     'import os',
     'import requests',
@@ -56,7 +70,7 @@ const example = computed(() => {
     '    timeout=180,',
     ')',
     'response.raise_for_status()',
-    `with open(${py(file)}, "wb") as f:`,
+    `with open(${py(fileName.value)}, "wb") as f:`,
     '    f.write(response.content)',
     '',
   ].join('\n')
@@ -87,16 +101,20 @@ async function copy(what: 'link' | 'example') {
   timer = setTimeout(() => { done.value = '' }, 2000)
 }
 
+function shownCopied() {
+  done.value = 'link'
+  if (timer) clearTimeout(timer)
+  timer = setTimeout(() => { done.value = '' }, 2500)
+}
 watch(() => props.open, (o) => {
   if (!o) return
   format.value = 'pdf'
-  done.value = props.copied ? 'link' : ''
-  if (props.copied) {
-    if (timer) clearTimeout(timer)
-    timer = setTimeout(() => { done.value = '' }, 2500)
-  }
+  done.value = ''
+  if (props.copied) shownCopied()
   nextTick(() => linkEl.value?.select())
 })
+// the copy that opened the dialog may answer after it opened
+watch(() => props.copied, (c) => { if (c && props.open) shownCopied() })
 </script>
 
 <template>
@@ -130,13 +148,23 @@ watch(() => props.open, (o) => {
 
       <div class="block">
         <span class="head">
-          <span class="lbl">{{ $t('report.apiPython') }}</span>
+          <span class="fmt" role="group" :aria-label="$t('report.apiExample')">
+            <button
+              v-for="l in LANGS"
+              :key="l.id"
+              type="button"
+              class="mini seg"
+              :aria-pressed="lang === l.id"
+              :class="{ on: lang === l.id }"
+              @click="lang = l.id"
+            >{{ $t(l.key) }}</button>
+          </span>
           <button type="button" class="mini copy" :class="{ ok: done === 'example' }" @click="copy('example')">
             <Check v-if="done === 'example'" :size="12" /><Copy v-else :size="12" />
             {{ done === 'example' ? $t('report.apiCopied') : $t('report.apiCopyExample') }}
           </button>
         </span>
-        <pre ref="exampleEl" class="code" tabindex="0" :aria-label="$t('report.apiPython')"><code>{{ example }}</code></pre>
+        <pre ref="exampleEl" class="code" tabindex="0" :aria-label="$t(lang === 'curl' ? 'report.apiCurl' : 'report.apiPython')"><code>{{ example }}</code></pre>
       </div>
 
       <p class="muted small">{{ $t('report.apiTokenNote') }}</p>

@@ -18,7 +18,9 @@ const PRESETS = [
   ['MMMM yyyy', 'October 2026'], ['HH:mm', '14:05'],
 ]
 const options = computed(() => PRESETS.map(([value, example]) => ({ value, label: value, hint: t('reportDesigner.props.formatExample', { example }) })))
-const problem = computed(() => store.problemAt(props.item, props.path))
+const saved = computed(() => store.problemAt(props.item, props.path))
+// the save's verdict, else the live check's on the pattern as it is now
+const problem = computed(() => saved.value ?? store.liveAt(props.item, props.path))
 
 function set(v: string | null) {
   emit('update:modelValue', v && v.trim() ? v : null)
@@ -35,7 +37,7 @@ function set(v: string | null) {
       <Select class="rff-presets" :model-value="null" :options="options" :placeholder="$t('reportDesigner.props.formatPresets')"
               :aria-label="$t('reportDesigner.props.formatPresets')" @update:model-value="set" />
     </div>
-    <p v-if="problem" class="rff-err" role="alert">{{ problem.message }}</p>
+    <p v-if="problem" class="rff-err" :role="saved ? 'alert' : undefined">{{ problem.message }}</p>
   </div>
 </template>
 

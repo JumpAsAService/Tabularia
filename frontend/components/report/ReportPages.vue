@@ -9,7 +9,8 @@
 // - `zoom`: 'fit' fits the page to the width; a number is the scale of the real size
 //   (1 = 100%, a millimetre is 96/25.4 px). The scroll position is kept, as a fraction,
 //   when the zoom changes, and as it is when new pages replace the old ones (a sort, a
-//   group closed): the new images are decoded before they are swapped in, so nothing jumps.
+//   group closed): the new images in view are decoded before they are swapped in, so
+//   nothing jumps; the others load as they come near.
 // - `busy`: a render is running. Without pages yet, a page-shaped skeleton; with pages,
 //   they stay readable, a thin bar says something is coming.
 // - `definition`: the report the pages come from, to place the hotspots on the table's
@@ -44,10 +45,20 @@ const GUTTER = 24 // px around the pages: the desk under the paper
 const scroller = ref<HTMLElement | null>(null)
 const width = ref(0)
 
-// ── the images: Blob URLs, swapped once the new ones are decoded ─────────────
+// ── the images: Blob URLs, swapped once the new ones in view are decoded ─────
 const shown = ref<string[]>([])
 const shownSvgs = ref<string[]>([])
 let generation = 0
+// the page most in view, from 1 (see «which page is in view» below)
+const current = ref(1)
+// the pages decoded before a swap: the one in view and its neighbours. The others load
+// as they come near (loading="lazy"): decoding the 167 pages of a long report before
+// showing any took some twelve seconds, and the memory of every page at once
+const DECODE_AROUND = 2
+// new pages on their way in (decoding): the region is still busy, the old pages still dim —
+// the owner's render is over, but what is on screen is not its pages yet
+const swapping = ref(false)
+const pending = computed(() => props.busy || swapping.value)
 
 function revokeLater(urls: string[]) {
   // the <img> has its new source by the next frame; the old URL can go
@@ -56,8 +67,10 @@ function revokeLater(urls: string[]) {
 
 watch(() => props.pages, async (pages) => {
   const mine = ++generation
+  swapping.value = true
   const urls = pages.map((svg) => URL.createObjectURL(new Blob([svg], { type: 'image/svg+xml' })))
-  await Promise.all(urls.map((u) => {
+  const at = Math.min(current.value, urls.length) - 1
+  await Promise.all(urls.slice(Math.max(0, at - 1), at + DECODE_AROUND + 1).map((u) => {
     const img = new Image()
     img.src = u
     return img.decode().catch(() => undefined) // an image that fails shows its alt text
@@ -69,6 +82,7 @@ watch(() => props.pages, async (pages) => {
   const old = shown.value
   shown.value = urls
   shownSvgs.value = pages
+  swapping.value = false
   revokeLater(old)
 }, { immediate: true })
 
@@ -147,7 +161,6 @@ const hotKey = (h: ReportHotspot) => `${h.kind}:${h.item}:${h.column ?? ''}:${JS
 
 // ── which page is in view, and going to one ──────────────────────────────────
 // the page whose top passed a third of the view; the last one when the view is at the end
-const current = ref(1)
 // a page asked for (scrollToPage): it is the current one at once, and the pages the
 // smooth scroll passes on its way do not change it — two quick «next» go two pages on
 let seeking: { page: number; until: number } | null = null
@@ -203,11 +216,11 @@ const skeleton = computed(() => pageSizeMm(undefined, props.definition))
     tabindex="0"
     role="region"
     :aria-label="label || $t('report.pagesRegion')"
-    :aria-busy="busy ? 'true' : 'false'"
+    :aria-busy="pending ? 'true' : 'false'"
     @scroll.passive="onScroll"
   >
-    <div v-if="busy && shown.length" class="rp-progress" aria-hidden="true"><span /></div>
-    <div class="rp-stack" :class="{ dim: busy && shown.length }" :style="{ padding: `${GUTTER}px` }">
+    <div v-if="pending && shown.length" class="rp-progress" aria-hidden="true"><span /></div>
+    <div class="rp-stack" :class="{ dim: pending && shown.length }" :style="{ padding: `${GUTTER}px` }">
       <template v-if="shown.length">
         <div
           v-for="(url, i) in shown"
@@ -215,7 +228,7 @@ const skeleton = computed(() => pageSizeMm(undefined, props.definition))
           class="rp-page"
           :style="{ width: px(sizes[i].w), aspectRatio: `${sizes[i].w} / ${sizes[i].h}` }"
         >
-          <img :src="url" :alt="$t('report.pageAlt', { n: i + 1, total: shown.length })" draggable="false" />
+          <img :src="url" :alt="$t('report.pageAlt', { n: i + 1, total: shown.length })" loading="lazy" decoding="async" draggable="false" />
           <button
             v-for="h in byPage.get(i + 1) ?? []"
             :key="hotKey(h)"
@@ -230,7 +243,7 @@ const skeleton = computed(() => pageSizeMm(undefined, props.definition))
         </div>
       </template>
       <div
-        v-else-if="busy"
+        v-else-if="pending"
         class="rp-page rp-skeleton"
         :style="{ width: px(skeleton.w), aspectRatio: `${skeleton.w} / ${skeleton.h}` }"
         aria-hidden="true"

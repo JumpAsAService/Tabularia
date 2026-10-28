@@ -113,6 +113,9 @@ function typed(p: ReportParameter, raw: string) {
   set(p.name, p.multi ? raw.split(',').map((x) => x.trim()).filter(Boolean) : raw)
 }
 const anyDate = computed(() => params.value.some((p) => p.type === 'date'))
+// a value the email cannot leave without: required, and no default to fall back on (the
+// save would refuse the group, the run would fail the cell)
+const missing = (p: ReportParameter) => p.required && !shownDefault(p) && !list(p.name).length
 // braces in a message are its parameters: the example comes in as one
 const DATE_EXAMPLE = '{start_of_month-1m}'
 </script>
@@ -123,7 +126,7 @@ const DATE_EXAMPLE = '{start_of_month-1m}'
     <p v-else-if="error" class="line warn" role="alert"><TriangleAlert :size="12" /> {{ t('pushmail.paramsError', { error }) }}</p>
     <p v-else-if="!params.length" class="muted line">{{ t('pushmail.paramsNone') }}</p>
     <div v-else class="rpp-fields">
-      <div v-for="p in params" :key="p.name" class="pf">
+      <div v-for="p in params" :key="p.name" class="pf" :class="{ invalid: missing(p) }">
         <label class="pl" :for="fieldId(p)">
           <span class="pname" :title="p.label">{{ p.label }}</span>
           <span v-if="p.required" class="req" aria-hidden="true">*</span>
@@ -135,6 +138,8 @@ const DATE_EXAMPLE = '{start_of_month-1m}'
           :options="choiceOptions(p)"
           :placeholder="placeholder(p)"
           :aria-label="p.label"
+          :invalid="missing(p)"
+          :describedby="missing(p) ? `${fieldId(p)}-msg` : undefined"
           @update:model-value="(v: string[]) => set(p.name, v)"
         />
         <Select
@@ -144,6 +149,8 @@ const DATE_EXAMPLE = '{start_of_month-1m}'
           :options="listOptions(p)"
           :placeholder="placeholder(p) || t('pushmail.paramChoose')"
           :aria-label="p.label"
+          :aria-invalid="missing(p) ? 'true' : undefined"
+          :aria-describedby="missing(p) ? `${fieldId(p)}-msg` : undefined"
           @update:model-value="(v: string) => set(p.name, v)"
         />
         <input
@@ -154,11 +161,14 @@ const DATE_EXAMPLE = '{start_of_month-1m}'
           :value="text(p.name)"
           :placeholder="placeholder(p)"
           :class="{ mono: p.type === 'date' }"
+          :aria-invalid="missing(p) ? 'true' : undefined"
+          :aria-describedby="missing(p) ? `${fieldId(p)}-msg` : undefined"
           autocomplete="off"
           spellcheck="false"
           @input="typed(p, ($event.target as HTMLInputElement).value)"
         />
-        <p v-if="p.choices_error" class="pmsg warn" :title="t('report.choicesError', { error: p.choices_error })">
+        <p v-if="missing(p)" :id="`${fieldId(p)}-msg`" class="pmsg err">{{ t('report.needsValue') }}</p>
+        <p v-else-if="p.choices_error" class="pmsg warn" :title="t('report.choicesError', { error: p.choices_error })">
           <TriangleAlert :size="11" /> <span class="clamp">{{ t('report.choicesError', { error: p.choices_error }) }}</span>
         </p>
         <p v-else-if="p.multi && control(p) === 'text'" class="pmsg muted">{{ t('report.multiHint') }}</p>
@@ -168,7 +178,7 @@ const DATE_EXAMPLE = '{start_of_month-1m}'
       <TriangleAlert :size="12" /> {{ t('pushmail.paramsDropped', { names: dropped.join(', ') }, dropped.length) }}
     </p>
     <p v-if="params.length" class="muted line hint">
-      {{ t('pushmail.paramsHint') }}<template v-if="anyDate"> {{ t('pushmail.paramsDateHint', { example: DATE_EXAMPLE }) }}</template>
+      {{ anyDate ? `${t('pushmail.paramsHint')} ${t('pushmail.paramsDateHint', { example: DATE_EXAMPLE })}` : t('pushmail.paramsHint') }}
     </p>
   </div>
 </template>
@@ -186,6 +196,8 @@ const DATE_EXAMPLE = '{start_of_month-1m}'
 .line.hint { display: block; line-height: 1.45; }
 .line.warn, .pmsg.warn { color: var(--warning); }
 .pmsg { margin: 0; font-size: 11px; display: flex; align-items: center; gap: 4px; min-width: 0; }
+.pmsg.err { color: var(--danger); }
+.pf.invalid input, .pf.invalid :deep(.sel-trigger), .pf.invalid :deep(.ms-trigger) { border-color: var(--danger); }
 .pmsg svg { flex-shrink: 0; }
 @media (max-width: 520px) { .rpp-fields { grid-template-columns: minmax(0, 1fr); } }
 .clamp { display: -webkit-box; -webkit-line-clamp: 2; line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }

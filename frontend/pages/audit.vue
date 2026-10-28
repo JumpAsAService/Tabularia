@@ -318,7 +318,7 @@ const REASONS: Record<string, string> = {
 }
 const REPORT_FROM: Record<string, string> = {
   interface: 'audit.reportFrom_interface', editor: 'audit.reportFrom_editor', api: 'audit.reportFrom_api',
-  flow_group: 'audit.reportFrom_flow_group',
+  flow_group: 'audit.reportFrom_flow_group', notebook: 'audit.reportFrom_notebook',
 }
 function reasonLabel(r: string): string {
   return REASONS[r] ? t(REASONS[r]) : r
@@ -329,7 +329,8 @@ function detailSummary(e: AuditEntry): string {
   if (!d) return ''
   const parts: string[] = []
   if (d.reason) parts.push(reasonLabel(String(d.reason)))
-  if (d.format) parts.push(`${d.format}`)
+  // a report drawn on screen is rendered as SVG: what the person did is look at it
+  if (d.format) parts.push(e.action === 'report.render' && d.format === 'svg' ? t('audit.reportOnScreen') : `${d.format}`)
   // a report's render: where it was asked from (the screen, the designer, the API, a flow group)
   if (e.action === 'report.render' && typeof d.from === 'string' && REPORT_FROM[d.from]) parts.push(t(REPORT_FROM[d.from]))
   if (d.filename && !d.format) parts.push(String(d.filename))

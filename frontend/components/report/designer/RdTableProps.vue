@@ -94,8 +94,19 @@ function setMatrix(on: boolean) {
     if (!tb.columns.length) tb.columns.push({ header: '', value: '' })
     if (!tb.groups?.length) groups().push({ by: '', header: false, footer: false })
     tb.detail = false
+    if (tb.interactive?.sort) tb.interactive.sort = false
   } else {
+    // a table again: its rows shown, and nothing the matrix left empty (a group without
+    // its key, the rows' column without a value) for the save to refuse
     tb.matrix = null
+    tb.detail = true
+    tb.groups = (tb.groups ?? []).filter((g) => g.by.trim())
+    const first = tb.columns[0]
+    if (first && !first.value.trim()) {
+      const inner = tb.groups[tb.groups.length - 1]?.by
+      if (inner) first.value = inner
+      else tb.columns.splice(0, 1)
+    }
   }
 }
 function setRowHeader(v: string) {
@@ -269,7 +280,8 @@ function interactive() {
   <RdSection :title="$t('reportDesigner.table.onScreen')" skey="table-screen">
     <p class="rp-help">{{ $t('reportDesigner.table.onScreenHelp') }}</p>
     <div class="rp-checks">
-      <label class="rp-check"><input type="checkbox" :checked="!!item.interactive?.sort" @change="interactive().sort = ($event.target as HTMLInputElement).checked" /> {{ $t('reportDesigner.table.interactiveSort') }}</label>
+      <!-- a matrix is not sorted by a column (the engine leaves it as it is) -->
+      <label v-if="!item.matrix" class="rp-check"><input type="checkbox" :checked="!!item.interactive?.sort" @change="interactive().sort = ($event.target as HTMLInputElement).checked" /> {{ $t('reportDesigner.table.interactiveSort') }}</label>
       <label class="rp-check"><input type="checkbox" :checked="!!item.interactive?.toggle" @change="interactive().toggle = ($event.target as HTMLInputElement).checked" /> {{ $t('reportDesigner.table.interactiveToggle') }}</label>
     </div>
   </RdSection>

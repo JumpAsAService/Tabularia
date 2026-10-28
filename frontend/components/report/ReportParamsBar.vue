@@ -85,7 +85,7 @@ const anyRequired = (ps: ReportParameter[]) => ps.some((p) => p.required)
   <form class="pbar" novalidate @submit.prevent="emit('submit')">
     <div v-for="p in parameters" :key="p.name" class="pf" :class="{ invalid: !!errors?.[p.name] }">
       <label class="pl" :for="fieldId(p)">
-        <span class="pname">{{ p.label }}</span>
+        <span class="pname" :title="p.label">{{ p.label }}</span>
         <span v-if="p.required" class="req" aria-hidden="true">*</span>
       </label>
       <ReportMultiSelect

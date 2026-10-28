@@ -11,6 +11,7 @@ import RdExprInput from '~/components/report/designer/RdExprInput.vue'
 import RdSeg from '~/components/report/designer/RdSeg.vue'
 import { useDesign } from '~/composables/reportDesignStore'
 import { NAME_RE, PARAM_TYPES, RESERVED_PARAMS, type DParameter, type ParamType } from '~/composables/reportDesignModel'
+import { renameEverywhere } from '~/composables/reportExpressions'
 
 const props = defineProps<{ open: boolean; name: string | null }>()
 const emit = defineEmits<{ (e: 'close'): void }>()
@@ -112,17 +113,17 @@ function apply() {
   emit('close')
 }
 
-/** A parameter renamed: PARAM("old") in the expressions and {old} in the SQL and the
- *  filters follow it. */
+/** A parameter renamed: PARAM("old") in the expressions (however it is written) and {old}
+ *  in the SQL and the filters follow it. */
 function rename(old: string, name: string) {
   const doc = store.doc.value
-  const esc = old.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
-  const text = JSON.stringify({ datasets: doc.datasets, sections: doc.sections })
-    .replace(new RegExp(`PARAM\\(\\\\"${esc}\\\\"\\)`, 'g'), `PARAM(\\"${name}\\")`)
-    .replace(new RegExp(`(?<!\\{)\\{${esc}\\}(?!\\})`, 'g'), `{${name}}`)
-  const back = JSON.parse(text)
-  doc.datasets = back.datasets
-  doc.sections = back.sections
+  const braces = new RegExp(`(?<!\\{)\\{${old}\\}(?!\\})`, 'g') // a name is letters, digits and _
+  for (const d of doc.datasets) {
+    const s = d.source
+    if (s.kind === 'sql') s.sql = s.sql.replace(braces, `{${name}}`)
+    if ('filters' in s) for (const f of s.filters ?? []) if (typeof f.value === 'string') f.value = f.value.replace(braces, `{${name}}`)
+  }
+  renameEverywhere(doc, { param: [old, name] })
 }
 </script>
 

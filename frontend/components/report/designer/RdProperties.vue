@@ -103,31 +103,35 @@ const fitOptions = computed(() => [
   { value: 'cover', label: t('reportDesigner.props.fitCover') },
   { value: 'stretch', label: t('reportDesigner.props.fitStretch') },
 ])
-const KINDS: Record<string, string> = { png: 'image/png', jpg: 'image/jpeg', jpeg: 'image/jpeg', svg: 'image/svg+xml' }
-function onFile(e: Event) {
+/** What an image file is, from its first bytes (as the server judges it), whatever its name says. */
+function imageKind(head: Uint8Array): string | null {
+  if (head[0] === 0x89 && head[1] === 0x50 && head[2] === 0x4e && head[3] === 0x47) return 'image/png'
+  if (head[0] === 0xff && head[1] === 0xd8 && head[2] === 0xff) return 'image/jpeg'
+  const text = new TextDecoder().decode(head).replace(/^\uFEFF/, '').trimStart().toLowerCase()
+  return text.startsWith('<svg') || text.startsWith('<?xml') ? 'image/svg+xml' : null
+}
+async function onFile(e: Event) {
   const input = e.target as HTMLInputElement
   const file = input.files?.[0]
   input.value = ''
   const it = item.value
   if (!file || it?.type !== 'image') return
-  const ext = file.name.split('.').pop()?.toLowerCase() ?? ''
-  const mime = Object.values(KINDS).includes(file.type) ? file.type : KINDS[ext]
-  if (!mime) {
-    toast.error(t('reportDesigner.props.imageKind'))
-    return
-  }
   if (file.size > MAX_IMAGE_BYTES) {
     toast.error(t('reportDesigner.props.imageTooLarge', { kib: Math.ceil(file.size / 1024), max: MAX_IMAGE_BYTES / 1024 }))
     return
   }
-  const reader = new FileReader()
-  reader.onload = () => {
-    const raw = String(reader.result ?? '')
-    const data = raw.split(',', 2)[1] ?? ''
-    it.asset = `data:${mime};base64,${data}`
-    store.clearProblem(it.id, 'asset')
+  const bytes = new Uint8Array(await file.arrayBuffer())
+  // a file that is not what it says (a page saved as .png, a broken download) is refused
+  // here, not drawn as a broken picture and refused at the save
+  const mime = imageKind(bytes.subarray(0, 256))
+  if (!mime) {
+    toast.error(t('reportDesigner.props.imageKind'))
+    return
   }
-  reader.readAsDataURL(file)
+  let binary = ''
+  for (let i = 0; i < bytes.length; i += 0x8000) binary += String.fromCharCode(...bytes.subarray(i, i + 0x8000))
+  it.asset = `data:${mime};base64,${btoa(binary)}`
+  store.clearProblem(it.id, 'asset')
 }
 
 // ── band and report ──

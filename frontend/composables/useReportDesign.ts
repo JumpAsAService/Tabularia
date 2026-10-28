@@ -1,6 +1,6 @@
 // The report designer's calls (docs/specs/reports.md, «Gateway API»): saving a definition
-// as a new version, the preview of a definition not saved yet, a dataset's fields, a copy,
-// a version restored. They need EDIT on the report's folder. The reading calls and how a
+// as a new version, the preview and the check of a definition not saved yet, a dataset's
+// fields, a copy, a version restored. They need EDIT on the report's folder. The reading calls and how a
 // render is followed are the viewer's (useReports.ts): the preview is followed with its
 // `followRender` and read with its `screenOf`.
 import {
@@ -19,8 +19,9 @@ export function useReportDesign() {
   const reports = useReports()
 
   /** A new version of the definition (and the name, when it changed). A 422 carries the
-   *  problems: `{message, where, item, errors: [{item, field, pos, length, message}]}`. */
-  const save = (id: number, body: { name?: string; content: DDefinition }) =>
+   *  problems: `{message, where, item, problems: [{item, field, pos, length, message}]}`;
+   *  with `base_version`, a 409 says another version became the current one since. */
+  const save = (id: number, body: { name?: string; content: DDefinition; base_version?: number }) =>
     apiFetch<ReportDetail>(`/reports/${id}`, { method: 'PATCH', body: { ...body, content: body.content as unknown as ReportDefinition } })
 
   /** The pages of a definition not saved yet, on screen (svg): started, followed, read. */
@@ -34,6 +35,12 @@ export function useReportDesign() {
     return { ...screen, warnings: outcome.warnings, pages_count: outcome.pages }
   }
 
+  /** The server's check of a definition not saved yet (the gateway's rules and the
+   *  engine's, with the datasets' fields): `{problems: [{item, field, pos, length, message}]}`,
+   *  as a refused save lists them. Asked by the live check (reportLiveCheck.ts). */
+  const check = (id: number, definition: unknown, signal?: AbortSignal) =>
+    apiFetch<{ problems: unknown[] }>('/reports/check', { method: 'POST', body: { report_id: id, definition }, signal })
+
   /** A dataset's columns as the data has them, read from the definition being edited. */
   const fields = (id: number, dataset: string, definition: DDefinition) =>
     apiFetch<{ dataset: string; fields: DField[] }>(`/reports/${id}/fields`, {
@@ -45,6 +52,7 @@ export function useReportDesign() {
     parameters: reports.parameters,
     save,
     preview,
+    check,
     fields,
     duplicate: (id: number) => apiFetch<ReportDetail>(`/reports/${id}/duplicate`, { method: 'POST' }),
     restore: (id: number, version: number) =>

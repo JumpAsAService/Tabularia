@@ -26,7 +26,7 @@ import { useFolderPaths } from '~/composables/useFolderPaths'
 import { useDialogA11y } from '~/composables/useDialogA11y'
 import { versionNote } from '~/composables/useSavedScripts'
 import {
-  isPlainState, stateAfter, useReports,
+  explicitParams, isPlainState, stateAfter, useReports, withChoices,
   type ReportDetail, type ReportFormValue, type ReportHotspot, type ReportParameter, type ReportParams,
   type ReportScreen, type ReportState, type ReportVersion,
 } from '~/composables/useReports'
@@ -133,11 +133,7 @@ async function refreshChoices() {
   try {
     const fresh = await api.parameters(reportId.value, toParams(form.value))
     if (mine !== choicesSeq) return
-    const byName = new Map(fresh.map((p) => [p.name, p]))
-    parameters.value = parameters.value.map((p) => {
-      const f = byName.get(p.name)
-      return f ? { ...p, choices: f.choices, choices_truncated: f.choices_truncated, choices_error: f.choices_error } : p
-    })
+    parameters.value = withChoices(parameters.value, fresh)
   } catch { /* the lists keep what they had */ }
 }
 function onForm(values: Record<string, ReportFormValue>) {
@@ -177,11 +173,12 @@ async function load() {
     if (reportId.value !== id) return
     detail.value = d
     parameters.value = params
-    // the choices that follow a value given in the link
+    // the choices that follow a value given in the link (only the lists: that answer has
+    // the link's values as its defaults)
     const given = urlValues()
     const known = Object.fromEntries(Object.entries(given).filter(([k]) => params.some((p) => p.name === k)))
     if (Object.keys(known).length && params.length > 1) {
-      try { parameters.value = await api.parameters(id, known) } catch { /* the first answer holds */ }
+      try { parameters.value = withChoices(params, await api.parameters(id, known)) } catch { /* the first answer holds */ }
     }
     formFromUrl()
   } catch (e: any) {
@@ -200,7 +197,8 @@ const waiting = ref(false)
 function showPages() {
   const missing = missingRequired(chosen.value)
   waiting.value = missing.length > 0
-  if (!waiting.value) renderScreen()
+  if (waiting.value) dropPages()
+  else renderScreen()
 }
 
 // «View report»: the values go in the address (Back returns to these), then the pages
@@ -281,12 +279,16 @@ async function renderScreen(after?: () => string) {
     const next = await api.screenOf(outcome)
     if (controller !== mine) return
     screen.value = next
-    warnings.value = outcome.warnings
+    // the same note twice says nothing more (a table on every page notes the same column)
+    warnings.value = [...new Set(outcome.warnings)]
     applied.value = params
     fieldErrors.value = {}
     if (after) announce.value = after()
   } catch (e) {
     if (isAbort(e) || controller !== mine) return
+    // the pages of the values before go: the downloads, the API link and «Page 1 of 4»
+    // would be those of values no longer on screen
+    dropPages()
     const p = problemOf(e)
     problem.value = p
     if (p.parameter) fieldErrors.value = { ...fieldErrors.value, [p.parameter]: p.message }
@@ -296,6 +298,11 @@ async function renderScreen(after?: () => string) {
       controller = null
     }
   }
+}
+
+function dropPages() {
+  screen.value = { pages: [], hotspots: [] }
+  warnings.value = []
 }
 
 // a click on the pages: the view changes, the report is rendered again with it
@@ -394,15 +401,19 @@ async function download(format: 'pdf' | 'xlsx') {
 const apiOpen = ref(false)
 const apiCopied = ref(false)
 const tokensOpen = ref(false)
-async function copyApiLink() {
+// the values on screen that are not the defaults: a default left out moves with the
+// calendar when the script runs ({today-30}), as it does in the viewer's own address
+const apiParams = computed(() => explicitParams(parameters.value, applied.value))
+function copyApiLink() {
   if (reportId.value == null) return
   apiCopied.value = false
-  try {
-    await navigator.clipboard.writeText(api.apiUrl(reportId.value, 'pdf', applied.value))
+  // the dialog first: a clipboard that never answers (Chrome, with the page not focused)
+  // kept it closed for good
+  apiOpen.value = true
+  navigator.clipboard?.writeText(api.apiUrl(reportId.value, 'pdf', apiParams.value)).then(() => {
     apiCopied.value = true
     toast.success(t('report.apiLinkCopied'))
-  } catch { /* the dialog shows it, selected */ }
-  apiOpen.value = true
+  }, () => { /* the dialog shows it, selected */ })
 }
 function openTokens() {
   apiOpen.value = false
@@ -499,7 +510,7 @@ const notesOpen = ref(false)
             <button type="button" class="tagbtn" :title="$t('report.versionsTitle')" @click="openVersions">
               <History :size="13" /> v{{ detail.current_version }}
             </button>
-            <button type="button" :title="$t('report.copyApiLinkTitle')" @click="copyApiLink">
+            <button type="button" :disabled="!pageCount" :title="$t('report.copyApiLinkTitle')" @click="copyApiLink">
               <Link :size="14" /> <span class="lbl">{{ $t('report.copyApiLink') }}</span>
             </button>
             <button type="button" :disabled="!!downloading || !pageCount" :title="$t('report.downloadPdfTitle')" :aria-label="$t('report.downloadPdfTitle')" @click="download('pdf')">
@@ -551,7 +562,7 @@ const notesOpen = ref(false)
             </div>
 
             <div class="mid">
-              <button v-if="warnings.length" type="button" class="mini notesbtn" :aria-expanded="notesOpen" @click="notesOpen = !notesOpen">
+              <button v-if="warnings.length" type="button" class="mini notesbtn" :aria-expanded="notesOpen" aria-controls="rv-notes" @click="notesOpen = !notesOpen">
                 <TriangleAlert :size="12" /> {{ $t('report.notes', { n: warnings.length }, warnings.length) }}
               </button>
               <span v-if="busy" class="status muted"><LoaderCircle :size="12" class="spin" /> {{ $t('report.rendering') }}</span>
@@ -575,7 +586,7 @@ const notesOpen = ref(false)
               </button>
             </div>
           </div>
-          <ul v-if="notesOpen && warnings.length" class="notes">
+          <ul v-if="notesOpen && warnings.length" id="rv-notes" class="notes" :aria-label="$t('report.notes', { n: warnings.length }, warnings.length)">
             <li v-for="(w, i) in warnings" :key="i">{{ w }}</li>
           </ul>
 
@@ -648,7 +659,7 @@ const notesOpen = ref(false)
         :open="apiOpen"
         :report-id="detail.id"
         :report-name="detail.name"
-        :params="applied"
+        :params="apiParams"
         :copied="apiCopied"
         @close="apiOpen = false"
         @tokens="openTokens"
@@ -702,9 +713,13 @@ const notesOpen = ref(false)
 .status { display: inline-flex; align-items: center; gap: 6px; font-size: 12px; white-space: nowrap; }
 .notesbtn { color: var(--warning); border-color: color-mix(in srgb, var(--warning) 40%, var(--border)); white-space: nowrap; }
 .notes {
-  margin: 0; padding: 8px 14px 8px 30px; font-size: 12px; color: var(--muted); line-height: 1.5;
-  background: var(--panel); border-bottom: 1px solid var(--border-soft); max-height: 120px; overflow: auto;
+  /* what the layout had to give up (a narrowed column, a value cut, an item past the
+     paper's edge): sentences to read, in the text's colour, as many as fit a third of the view */
+  margin: 0; padding: 8px 14px 8px 30px; font-size: 12.5px; color: var(--text); line-height: 1.5;
+  background: var(--panel); border-bottom: 1px solid var(--border-soft); max-height: 30vh; overflow: auto;
+  display: flex; flex-direction: column; gap: 4px; overflow-wrap: anywhere;
 }
+.notes li::marker { color: var(--warning); }
 .stage { flex: 1; min-height: 0; position: relative; display: flex; flex-direction: column; }
 .stage > :deep(.rp) { flex: 1; }
 

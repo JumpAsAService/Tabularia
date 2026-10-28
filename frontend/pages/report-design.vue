@@ -24,10 +24,11 @@ import RdPreview from '~/components/report/designer/RdPreview.vue'
 import RdSeg from '~/components/report/designer/RdSeg.vue'
 import { DESIGN, createDesignStore } from '~/composables/reportDesignStore'
 import { useReportDesign } from '~/composables/useReportDesign'
+import { createLiveCheck } from '~/composables/reportLiveCheck'
 import { errMessage } from '~/composables/useApi'
 import { useFolderPaths } from '~/composables/useFolderPaths'
 import {
-  boxOf, contentWidth, forSave, mm1, normalize, problemsOf, type BandName, type DDataset, type DItem, type DesignProblem,
+  boxOf, contentWidth, forCheck, forSave, mm1, normalize, problemsOf, type BandName, type DDataset, type DItem, type DesignProblem,
 } from '~/composables/reportDesignModel'
 
 const { t } = useI18n()
@@ -80,7 +81,9 @@ async function load() {
 }
 
 // ── saving ───────────────────────────────────────────────────────────────────
-async function save(): Promise<boolean> {
+/** A new version. On the version this editor opened (`base_version`): one saved meanwhile
+ *  by someone else, or in another tab, is not undone without a word — asked first. */
+async function save(force = false): Promise<boolean> {
   if (saving.value || reportId.value == null || loading.value) return false
   const n = name.value.trim()
   if (!n) {
@@ -91,12 +94,16 @@ async function save(): Promise<boolean> {
   saving.value = true
   const text = store.text.value
   try {
-    const d = await api.save(reportId.value, { ...(n !== savedName.value ? { name: n } : {}), content: forSave(store.doc.value) })
+    const d = await api.save(reportId.value, {
+      ...(n !== savedName.value ? { name: n } : {}), content: forSave(store.doc.value),
+      ...(force || version.value == null ? {} : { base_version: version.value }),
+    })
     savedName.value = d.name
     name.value = d.name
     version.value = d.current_version
     savedText.value = text
     store.problems.value = []
+    if (store.text.value === text) store.liveProblems.value = [] // the server took it as it is
     toast.success(t('reportDesigner.saved', { n: d.current_version }))
     return true
   } catch (e: any) {
@@ -104,6 +111,9 @@ async function save(): Promise<boolean> {
     const detail = e?.data?.detail
     if (code === 422 && detail && typeof detail === 'object' && !Array.isArray(detail)) {
       showProblems(problemsOf(store.doc.value, detail))
+    } else if (code === 409 && !force && version.value != null && await savedElsewhere()) {
+      saving.value = false
+      return save(true)
     } else {
       toast.error(errMessage(e))
     }
@@ -113,7 +123,17 @@ async function save(): Promise<boolean> {
   }
 }
 
-/** The problems of a refused save (or preview): the first one's item is selected and its
+/** A 409 of a save: another version became the current one since this editor opened the
+ *  report. Whether to save these changes over it (it stays among the versions). A 409
+ *  for the name (another report has it) is not this: false. */
+async function savedElsewhere(): Promise<boolean> {
+  let now: number | null = null
+  try { now = (await api.get(reportId.value!)).current_version } catch { return false }
+  if (now == null || now === version.value) return false
+  return confirm(t('reportDesigner.savedElsewhere', { mine: version.value!, now }))
+}
+
+/** The problems of a refused save: the first one's item is selected and its
  *  field shows the message; a dataset's or a parameter's bring the Data tab forward. */
 function showProblems(list: DesignProblem[]) {
   store.setProblems(list)
@@ -144,6 +164,19 @@ function problemWhere(p: DesignProblem): string {
   if (p.parameter) return t('reportDesigner.problemParameter', { name: p.parameter })
   return p.path || t('reportDesigner.problemReport')
 }
+
+// ── the server's check while one edits (reportLiveCheck.ts): after a pause, its problems
+// at their fields; without an answer, the editor's own check is all there is ──
+const live = createLiveCheck({
+  call: (definition, signal) => api.check(reportId.value!, definition, signal),
+  current: () => store.text.value,
+  onProblems: (list) => store.setLiveProblems(problemsOf(store.doc.value, { problems: list })),
+  onClear: () => { store.liveProblems.value = [] },
+})
+watch([() => store.text.value, () => store.gesture.value], ([text, moving]) => {
+  if (loading.value || loadError.value || reportId.value == null || moving) return
+  live.schedule(text, () => forCheck(store.doc.value))
+})
 
 async function done() {
   if (reportId.value == null) return
@@ -190,19 +223,32 @@ const setupOpen = ref(false)
 const datasetDialog = ref<{ open: boolean; name: string | null }>({ open: false, name: null })
 const parameterDialog = ref<{ open: boolean; name: string | null }>({ open: false, name: null })
 const refreshing = ref<string | null>(null)
+/** why a dataset's fields could not be read, shown under it until they are */
+const fieldErrors = ref<Record<string, string>>({})
+const waiting: string[] = []
 
 async function refreshFields(dataset: string) {
-  if (reportId.value == null || refreshing.value) return
+  if (reportId.value == null) return
+  // one read at a time; the others wait their turn instead of being dropped
+  if (refreshing.value) {
+    if (refreshing.value !== dataset && !waiting.includes(dataset)) waiting.push(dataset)
+    return
+  }
   refreshing.value = dataset
   try {
     const got = await api.fields(reportId.value, dataset, forSave(store.doc.value))
     const ds = store.doc.value.datasets.find((d) => d.name === dataset)
     if (ds) ds.fields = got.fields
+    const { [dataset]: _, ...rest } = fieldErrors.value
+    fieldErrors.value = rest
     toast.success(t('reportDesigner.data.fieldsRead', { n: got.fields.length, name: dataset }, got.fields.length))
   } catch (e) {
+    fieldErrors.value = { ...fieldErrors.value, [dataset]: errMessage(e) }
     toast.error(errMessage(e))
   } finally {
     refreshing.value = null
+    const next = waiting.shift()
+    if (next && store.doc.value.datasets.some((d) => d.name === next)) refreshFields(next)
   }
 }
 function onDatasetApplied(dataset: string) {
@@ -236,6 +282,10 @@ function typing(target: EventTarget | null): boolean {
   const el = target as HTMLElement | null
   return !!el?.closest?.('input, textarea, select, [contenteditable="true"], .monaco-editor, [role="combobox"], .sel-panel')
 }
+function onCanvas(target: EventTarget | null): boolean {
+  const el = target as HTMLElement | null
+  return !el || el === document.body || !!el.closest?.('.rdc-stage')
+}
 const dialogOpen = () => setupOpen.value || datasetDialog.value.open || parameterDialog.value.open || !!document.querySelector('[role="dialog"][aria-modal="true"]')
 
 function onKey(e: KeyboardEvent) {
@@ -246,7 +296,7 @@ function onKey(e: KeyboardEvent) {
     save()
     return
   }
-  if (loading.value || dialogOpen() || typing(e.target)) return
+  if (loading.value || dialogOpen() || typing(e.target) || e.defaultPrevented) return
   if (mod && key === 'z') {
     e.preventDefault()
     if (e.shiftKey) store.redo()
@@ -258,10 +308,18 @@ function onKey(e: KeyboardEvent) {
     store.redo()
     return
   }
-  if (mode.value !== 'design') return
+  // what acts on the items acts where they are: the page, not a button of a panel
+  // (an arrow on an alignment, Delete after a click on a checkbox's label)
+  if (mode.value !== 'design' || !onCanvas(e.target)) return
   const sel = store.selected.value
   if (mod && key === 'v') {
-    if (store.paste()) e.preventDefault()
+    const got = store.paste()
+    if (!got) return
+    e.preventDefault()
+    if (got.missing) {
+      const now = 'dataset' in got.item ? got.item.dataset : null
+      toast.info(now ? t('reportDesigner.pastedOther', { dataset: got.missing, now }) : t('reportDesigner.pastedNone', { dataset: got.missing }))
+    }
     return
   }
   if (!sel) return
@@ -309,6 +367,7 @@ onMounted(() => {
   load()
 })
 onBeforeUnmount(() => {
+  live.stop()
   document.removeEventListener('keydown', onKey)
   window.removeEventListener('beforeunload', onBeforeUnload)
 })
@@ -366,7 +425,7 @@ useHead(() => ({ title: name.value ? `${name.value} · ${t('reportDesigner.title
 
       <RdSeg v-model="mode" :options="modeOptions" :label="$t('reportDesigner.modeLabel')" class="rdz-mode" />
 
-      <button type="button" class="primary rdz-save" :disabled="saving || loading || !!loadError || (!dirty && version != null)" :title="`${$t('reportDesigner.save')} (Ctrl+S)`" @click="save">
+      <button type="button" class="primary rdz-save" :disabled="saving || loading || !!loadError || (!dirty && version != null)" :title="`${$t('reportDesigner.save')} (Ctrl+S)`" @click="save()">
         <LoaderCircle v-if="saving" :size="14" class="spin" /><Save v-else :size="14" /> {{ $t('reportDesigner.save') }}
       </button>
       <button type="button" class="rdz-done" :disabled="loading || !!loadError || saving" :title="$t('reportDesigner.doneTitle')" @click="done">
@@ -393,6 +452,7 @@ useHead(() => ({ title: name.value ? `${name.value} · ${t('reportDesigner.title
         v-show="mode === 'design'"
         class="rdz-left"
         :refreshing="refreshing"
+        :field-errors="fieldErrors"
         :source-label="sourceLabel"
         @edit-dataset="datasetDialog = { open: true, name: $event }"
         @remove-dataset="removeDataset"
@@ -407,7 +467,9 @@ useHead(() => ({ title: name.value ? `${name.value} · ${t('reportDesigner.title
           ref="previewRef"
           :report-id="reportId"
           :zoom="previewZoom"
-          @problems="showProblems"
+          :where="problemWhere"
+          @problems="store.setProblems"
+          @go="goToProblem"
           @scale="(s: number) => (previewScale = s)"
         />
       </main>
@@ -469,8 +531,9 @@ useHead(() => ({ title: name.value ? `${name.value} · ${t('reportDesigner.title
 }
 .rdz-plist button:hover { background: var(--panel-2); box-shadow: none; }
 .rdz-plist button :deep(svg) { color: var(--danger); flex: none; }
-.rdz-pwhere { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 12px; color: var(--muted); white-space: nowrap; flex: none; }
-.rdz-pmsg { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.rdz-plist button { align-items: baseline; }
+.rdz-pwhere { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 12px; color: var(--muted); flex: 0 1 auto; max-width: 38%; overflow-wrap: anywhere; }
+.rdz-pmsg { flex: 1; min-width: 0; overflow-wrap: anywhere; line-height: 1.4; }
 .rdz-error { margin: 32px; color: var(--danger); }
 .rdz-loading { padding: 24px; }
 .rdz-work {
@@ -480,8 +543,13 @@ useHead(() => ({ title: name.value ? `${name.value} · ${t('reportDesigner.title
 .rdz-left, .rdz-right { min-height: 0; overflow: hidden; }
 .rdz-center { min-width: 0; min-height: 0; display: flex; flex-direction: column; background: var(--bg); }
 .rdz-center > * { flex: 1; min-height: 0; }
+/* a laptop (1280 to 1440 px): the page gets what the panels can spare */
+@media (max-width: 1440px) {
+  .rdz-work { grid-template-columns: 228px minmax(0, 1fr) 300px; }
+  .rdz-folder { max-width: 140px; }
+}
 @media (max-width: 1180px) {
   .rdz-folder, .rdz-setup { display: none; }
-  .rdz-work { grid-template-columns: 220px minmax(0, 1fr) 290px; }
+  .rdz-work { grid-template-columns: 216px minmax(0, 1fr) 288px; }
 }
 </style>

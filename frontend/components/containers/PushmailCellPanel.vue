@@ -19,7 +19,7 @@ import TemplatePreview from '~/components/ui/TemplatePreview.vue'
 import RdSeg from '~/components/report/designer/RdSeg.vue'
 import PushmailReportParams from '~/components/containers/PushmailReportParams.vue'
 import {
-  PUSHMAIL_MAX_REPORTS, type PushmailAttachment, type PushmailConfig, type PushmailReport,
+  PUSHMAIL_MAX_REPORTS, pushmailPreviewRequest, type PushmailAttachment, type PushmailConfig, type PushmailReport,
 } from '~/composables/useFlowGroups'
 
 
@@ -121,13 +121,7 @@ const warn = computed(() => {
   return chosen.length > 1 || chosen.some((a) => (rowsOf(a).sent ?? 0) > BIG_ROWS)
 })
 
-const preview = usePlaceholderPreview((): PreviewRequest | null => {
-  const templates: Record<string, string> = { subject: props.config.subject ?? '' }
-  const targets: Record<string, 'text' | 'file'> = { subject: 'text' }
-  props.config.attachments.forEach((a, i) => { templates[`file_${i}`] = (a.fileName ?? '').trim(); targets[`file_${i}`] = 'file' })
-  cellReports.value.forEach((r, i) => { templates[`report_${i}`] = (r.fileName ?? '').trim(); targets[`report_${i}`] = 'file' })
-  return { kind: 'output', templates, targets, timezone: props.config.timezone ?? '', flow: props.groupName }
-})
+const preview = usePlaceholderPreview((): PreviewRequest | null => pushmailPreviewRequest(props.config, props.groupName))
 const fmt = (n: number) => n.toLocaleString()
 // braces in a message are its parameters: the placeholder comes in as one
 const DATE_EXAMPLE = '{today:yyyy-MM-dd}'
@@ -205,7 +199,7 @@ const DATE_EXAMPLE = '{today:yyyy-MM-dd}'
         <span class="lbl">{{ t('pushmail.reportsLabel') }}</span>
         <span class="muted">{{ t('pushmail.reportsHint') }}</span>
       </div>
-      <div v-for="(r, i) in cellReports" :key="`r${i}`" class="att rep" :data-report="i">
+      <div v-for="(r, i) in cellReports" :key="`r${i}`" class="att rep" :class="{ gone: unknownReport(r) }" :data-report="i">
         <div class="arow">
           <FileText :size="14" class="ricon" aria-hidden="true" />
           <Select class="ads" :model-value="r.reportId" :options="reportOptions" searchable
@@ -217,6 +211,7 @@ const DATE_EXAMPLE = '{today:yyyy-MM-dd}'
           <button type="button" class="x" :title="t('pushmail.removeReport')" :aria-label="t('pushmail.removeReport')"
                   @click="removeReport(i)"><X :size="13" /></button>
         </div>
+        <p v-if="unknownReport(r)" class="gone-msg" role="note"><TriangleAlert :size="13" aria-hidden="true" /> {{ t('pushmail.reportGone') }}</p>
         <label class="fname">
           <span>{{ t('pushmail.fileNameLabel', { example: DATE_EXAMPLE }) }}</span>
           <span class="withext">
@@ -281,6 +276,9 @@ const DATE_EXAMPLE = '{today:yyyy-MM-dd}'
 .warn svg { color: #f59e0b; flex-shrink: 0; margin-top: 1px; }
 .warn p { margin: 0; }
 .ricon { color: var(--muted); flex-shrink: 0; }
+.rep.gone { border-color: color-mix(in srgb, var(--warning) 55%, var(--border)); }
+.gone-msg { margin: 0; display: flex; align-items: flex-start; gap: 6px; font-size: 12px; line-height: 1.45; color: var(--warning); }
+.gone-msg svg { flex-shrink: 0; margin-top: 1px; }
 .fmt { flex-shrink: 0; }
 .rep .fname { display: flex; flex-direction: column; gap: 3px; }
 .params { display: flex; flex-direction: column; gap: 4px; padding-top: 2px; }

@@ -7,15 +7,30 @@
 // does not copy its half megabyte at every step.
 import { computed, inject, ref, watch, type InjectionKey } from 'vue'
 import {
-  allowedIn, bodyPageHeight, contentWidth, copyItem, emptyDefinition, mm1, rowConflicts, samePath, stillStanding, tableHeight, tableRows,
-  withSeen, type BandName, type DDefinition, type DItem, type DTable, type DesignProblem, type DField, type InsertKind,
+  allowedIn, bodyPageHeight, contentWidth, copyItem, emptyDefinition, liveShown, mm1, rowConflicts, samePath, stillStanding, tableHeight,
+  tableRows, withSeen, type BandName, type DDefinition, type DItem, type DTable, type DesignProblem, type DField, type InsertKind,
 } from '~/composables/reportDesignModel'
 
 const HISTORY = 200
 const PAUSE_MS = 350
 export const BANDS: BandName[] = ['page_header', 'body', 'page_footer']
 
+// the item copied: kept by the page and in the browser's storage, so that a report open in
+// another tab pastes it too (the last copy wins, as with the system's clipboard)
+const CLIPBOARD_KEY = 'tabularia-report-clipboard'
 let clipboard: string | null = null
+function readClipboard(): string | null {
+  try { return localStorage.getItem(CLIPBOARD_KEY) ?? clipboard } catch { return clipboard }
+}
+function writeClipboard(text: string) {
+  clipboard = text
+  try {
+    localStorage.setItem(CLIPBOARD_KEY, text)
+  } catch {
+    // too large (an image) or not allowed: not an older copy instead of this one
+    try { localStorage.removeItem(CLIPBOARD_KEY) } catch { /* storage unavailable: the page's copy */ }
+  }
+}
 
 /** What is being dragged from the panels onto the page: an element to insert, a field of a
  *  dataset, a ready-made text. Kept here because a drag's data cannot be read until the drop. */
@@ -31,6 +46,8 @@ export function createDesignStore() {
   const selectedId = ref<string | null>(null)
   const selectedBand = ref<BandName | null>(null)
   const problems = ref<DesignProblem[]>([])
+  /** what the live check found (reportLiveCheck.ts), shown at its field */
+  const liveProblems = ref<DesignProblem[]>([])
   const zoom = ref(1)
   const snap = ref(true)
   /** a drag or a resize under way: the history waits for its end */
@@ -120,6 +137,7 @@ export function createDesignStore() {
     selectedId.value = null
     selectedBand.value = null
     problems.value = []
+    liveProblems.value = []
   }
 
   // ── a table's height follows its rows when they change (a group added, the theme's
@@ -190,17 +208,31 @@ export function createDesignStore() {
 
   function copy(id: string) {
     const hit = find(id)
-    if (hit) clipboard = JSON.stringify({ band: hit.band, item: hit.item })
+    if (hit) writeClipboard(JSON.stringify({ band: hit.band, item: hit.item }))
   }
-  function paste(): boolean {
-    if (!clipboard) return false
-    const { band: from, item } = JSON.parse(clipboard) as { band: BandName; item: DItem }
+  /** The copied item pasted, in the band chosen when it can hold it. Copied from another
+   *  report, it may read a dataset this one does not have: it reads this one's only
+   *  dataset, or none until one is chosen (`missing` says which it read). */
+  function paste(): { item: DItem; missing: string | null } | null {
+    const raw = readClipboard()
+    if (!raw) return null
+    let got: { band: BandName; item: DItem }
+    try { got = JSON.parse(raw) } catch { return null }
+    const { band: from, item } = got
+    if (!item?.type || !from) return null
     const band = selectedBand.value && allowedIn(selectedBand.value, item.type) ? selectedBand.value : allowedIn(from, item.type) ? from : 'body'
     const pasted = copyItem(doc.value, item)
+    let missing: string | null = null
+    if ('dataset' in pasted && pasted.dataset && !doc.value.datasets.some((d) => d.name === pasted.dataset)) {
+      missing = pasted.dataset
+      const only = doc.value.datasets.length === 1 ? doc.value.datasets[0].name : null
+      if (pasted.type === 'text') pasted.dataset = null
+      else pasted.dataset = only ?? ''
+    }
     keepInside(band, pasted)
     add(band, pasted)
     settleRow(pasted)
-    return true
+    return { item: pasted, missing }
   }
 
   /** The item moved inside its band and the page (after a paste, a change of size). */
@@ -277,12 +309,26 @@ export function createDesignStore() {
   }
   const itemsWithProblems = computed(() => new Set(problems.value.map((p) => p.item).filter(Boolean) as string[]))
 
+  // ── the live check's problems (reportLiveCheck.ts): at their field only, while it holds
+  // what the server judged; the save's problems, when there are, come first ──
+  function setLiveProblems(list: DesignProblem[]) {
+    liveProblems.value = withSeen(doc.value, list)
+  }
+  function liveAt(item: string | null, path: string): DesignProblem | null {
+    return liveProblems.value.find((p) => p.item === item && samePath(p.path, path) && liveShown(doc.value, p)) ?? null
+  }
+  /** a dataset's or a parameter's live problems (a calculated field, a default), shown in its dialog */
+  function liveOf(kind: 'dataset' | 'parameter', name: string): DesignProblem[] {
+    return liveProblems.value.filter((p) => p[kind] === name && liveShown(doc.value, p))
+  }
+
   return {
     doc, text, selectedId, selectedBand, selected, problems, zoom, snap, gesture, chartPicker, notice, sideTab,
     undo, redo, canUndo, canRedo, reset, record,
     find, select, add, remove, duplicate, copy, paste, freeSpot, keepInside, settleRow,
     datasetOf, fieldsOf, params,
     problemAt, clearProblem, itemsWithProblems, setProblems,
+    liveProblems, setLiveProblems, liveAt, liveOf,
   }
 }
 

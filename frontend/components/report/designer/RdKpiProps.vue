@@ -44,7 +44,8 @@ function setSpark(on: boolean) {
       {{ $t('reportDesigner.kpi.showSparkline') }}
     </label>
     <template v-if="item.sparkline">
-      <RdExprField :obj="item.sparkline" prop="category" :label="$t('reportDesigner.kpi.sparkCategory')" path="sparkline.category" :item="id" :fields="fields" placeholder="[month]" />
+      <RdExprField :obj="item.sparkline" prop="category" :label="$t('reportDesigner.kpi.sparkCategory')" path="sparkline.category" :item="id" :fields="fields" placeholder="[month]"
+                   :hint="$t('reportDesigner.kpi.sparkHint')" />
       <RdExprField :obj="item.sparkline" prop="value" :label="$t('reportDesigner.kpi.sparkValue')" path="sparkline.value" :item="id" :fields="fields" placeholder="SUM([amount])" />
     </template>
   </RdSection>

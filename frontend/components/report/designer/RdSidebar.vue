@@ -4,7 +4,7 @@
 // ready-made texts (the page number, the date it was printed). «Data»: the datasets with
 // their fields — dragged onto the page they become a text, onto a table a column — their
 // calculated fields, and the report's parameters.
-import { computed, ref } from 'vue'
+import { computed, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 import {
   ChartColumn, ChevronRight, Database, Gauge, Grid3x3, Image, LoaderCircle, Minus, Pencil, Plus, RefreshCw, Square,
@@ -16,7 +16,7 @@ import {
   columnFor, fieldRef, newItem, type DDataset, type DField, type DText, type InsertKind,
 } from '~/composables/reportDesignModel'
 
-defineProps<{ refreshing?: string | null; sourceLabel: (d: DDataset) => string }>()
+defineProps<{ refreshing?: string | null; fieldErrors?: Record<string, string>; sourceLabel: (d: DDataset) => string }>()
 const emit = defineEmits<{
   (e: 'edit-dataset', name: string | null): void
   (e: 'remove-dataset', name: string): void
@@ -94,6 +94,17 @@ function toggle(name: string) {
   openSets.value = next
 }
 const isOpen = (name: string) => openSets.value.has(name) || store.doc.value.datasets.length === 1
+// a dataset just added shows its fields (they are what one works with next), and the only
+// one, open until then, stays open when a second comes
+watch(() => store.doc.value.datasets.map((d) => d.name), (now, before) => {
+  if (!before) return
+  const added = now.filter((n) => !before.includes(n))
+  if (!added.length) return
+  const next = new Set(openSets.value)
+  if (before.length === 1 && now.includes(before[0])) next.add(before[0])
+  for (const n of added) next.add(n)
+  openSets.value = next
+})
 
 /** A field added with a click: a column of the selected table when it reads this
  *  dataset, else a text in the body. */
@@ -177,13 +188,13 @@ const fieldTitle = computed(() => (store.selected.value?.item.type === 'table'
       </div>
       <p v-if="!store.doc.value.datasets.length" class="rds-empty">{{ $t('reportDesigner.data.noDatasets') }}</p>
       <ul class="rds-sets">
-        <li v-for="ds in store.doc.value.datasets" :key="ds.name" class="rds-set" :class="{ bad: store.problems.value.some((p) => p.dataset === ds.name) }">
+        <li v-for="ds in store.doc.value.datasets" :key="ds.name" class="rds-set" :class="{ bad: store.problems.value.some((p) => p.dataset === ds.name) || store.liveOf('dataset', ds.name).length > 0 }">
           <div class="rds-sethead">
             <button type="button" class="rds-chev" :aria-expanded="isOpen(ds.name)" :aria-label="$t('reportDesigner.data.fieldsOf', { name: ds.name })" @click="toggle(ds.name)">
               <ChevronRight :size="13" />
             </button>
             <div class="rds-setname">
-              <span class="rds-mono">{{ ds.name }}</span>
+              <span class="rds-mono" :title="ds.name">{{ ds.name }}</span>
               <span class="rds-src">{{ sourceLabel(ds) }}</span>
             </div>
             <button type="button" class="rds-icon" :title="$t('reportDesigner.data.refreshFields')" :aria-label="$t('reportDesigner.data.refreshFields')" :disabled="refreshing === ds.name" @click="emit('refresh-fields', ds.name)">
@@ -197,7 +208,8 @@ const fieldTitle = computed(() => (store.selected.value?.item.type === 'table'
             </button>
           </div>
           <template v-if="isOpen(ds.name)">
-            <p v-if="!(ds.fields ?? []).length && !(ds.calculated ?? []).length" class="rds-nofields">
+            <p v-if="fieldErrors?.[ds.name] && !(ds.fields ?? []).length" class="rds-nofields bad" role="alert">{{ fieldErrors[ds.name] }}</p>
+            <p v-else-if="!(ds.fields ?? []).length && !(ds.calculated ?? []).length" class="rds-nofields">
               {{ $t('reportDesigner.data.noFields') }}
             </p>
             <ul class="rds-fields">
@@ -207,7 +219,7 @@ const fieldTitle = computed(() => (store.selected.value?.item.type === 'table'
                   class="rds-field"
                   draggable="true"
                   :data-field="f.name"
-                  :title="fieldTitle"
+                  :title="`${f.name} · ${f.type}\n${fieldTitle}`"
                   @dragstart="start($event, { kind: 'field', dataset: ds.name, field: f })"
                   @dragend="end"
                   @click="useField(ds, f)"
@@ -223,7 +235,7 @@ const fieldTitle = computed(() => (store.selected.value?.item.type === 'table'
                   class="rds-field calc"
                   draggable="true"
                   :data-field="c.name"
-                  :title="`${c.expr}\n${fieldTitle}`"
+                  :title="`${c.name} = ${c.expr}\n${fieldTitle}`"
                   @dragstart="start($event, { kind: 'field', dataset: ds.name, field: { name: c.name, type: 'calculated' } })"
                   @dragend="end"
                   @click="useField(ds, { name: c.name, type: 'calculated' })"
@@ -247,7 +259,7 @@ const fieldTitle = computed(() => (store.selected.value?.item.type === 'table'
         <li v-for="p in store.doc.value.parameters" :key="p.name" class="rds-param" :class="{ bad: store.problems.value.some((x) => x.parameter === p.name) }">
           <Variable :size="13" class="rds-pi" />
           <button type="button" class="rds-pname" @click="emit('edit-parameter', p.name)">
-            <span class="rds-mono">{{ p.name }}</span>
+            <span class="rds-mono" :title="p.label ? `${p.name} · ${p.label}` : p.name">{{ p.name }}</span>
             <span class="rds-src">{{ $t(`reportDesigner.param.types.${p.type}`) }}<template v-if="p.multi"> · {{ $t('reportDesigner.param.multiShort') }}</template><template v-if="p.required"> · {{ $t('reportDesigner.param.requiredShort') }}</template></span>
           </button>
           <button type="button" class="rds-icon danger" :title="$t('reportDesigner.data.removeParameter')" :aria-label="$t('reportDesigner.data.removeParameter')" @click="emit('remove-parameter', p.name)">
@@ -306,7 +318,8 @@ const fieldTitle = computed(() => (store.selected.value?.item.type === 'table'
 .rds-setname { flex: 1; min-width: 0; display: flex; flex-direction: column; padding: 2px 4px; }
 .rds-mono { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 12.5px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .rds-src { font-size: 11px; color: var(--muted); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.rds-nofields { margin: 4px 8px 6px 26px; font-size: 11.5px; color: var(--muted); line-height: 1.4; }
+.rds-nofields { margin: 4px 8px 6px 26px; font-size: 11.5px; color: var(--muted); line-height: 1.4; overflow-wrap: anywhere; }
+.rds-nofields.bad { color: var(--danger); }
 .rds-fields { margin: 2px 0 2px 18px; padding-left: 6px; border-left: 1px solid var(--border-soft); }
 .rds-field {
   width: 100%; justify-content: flex-start; gap: 6px; padding: 3px 6px; border: 0; background: transparent;

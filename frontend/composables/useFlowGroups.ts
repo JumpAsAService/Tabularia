@@ -5,6 +5,7 @@
 //
 // The gateway checks every cell when the grid is saved and again when it runs;
 // `cells` in the detail is the label of each cell as the reader may see it.
+import type { PreviewRequest } from '~/composables/usePlaceholders'
 
 export type FlowGroupCellKind = 'flow' | 'refresh' | 'script' | 'container' | 'pushmail' | 'sql'
 
@@ -36,6 +37,18 @@ export interface PushmailConfig {
   attachments: PushmailAttachment[]
   /** absent in a cell saved before reports could be sent */
   reports?: PushmailReport[]
+}
+
+/** What a Pushmail cell previews (POST /placeholders/preview): its subject and its files'
+ *  names, as the email will write them. `pushmail` has the gateway write them in the
+ *  language of whoever runs the group, as the email does: `{today:MMMM yyyy}` reads
+ *  «ottobre 2026» there, not the interface's «October 2026». */
+export function pushmailPreviewRequest(config: PushmailConfig, groupName: string): PreviewRequest {
+  const templates: Record<string, string> = { subject: config.subject ?? '' }
+  const targets: Record<string, 'text' | 'file'> = { subject: 'text' }
+  config.attachments.forEach((a, i) => { templates[`file_${i}`] = (a.fileName ?? '').trim(); targets[`file_${i}`] = 'file' })
+  ;(config.reports ?? []).forEach((r, i) => { templates[`report_${i}`] = (r.fileName ?? '').trim(); targets[`report_${i}`] = 'file' })
+  return { kind: 'output', templates, targets, timezone: config.timezone ?? '', flow: groupName, pushmail: true }
 }
 
 export interface FlowGroupCell {

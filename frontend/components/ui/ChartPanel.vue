@@ -44,9 +44,13 @@ import {
   gaugeOption,
   heatmapOption,
   lastChange,
+  notAboveZero,
+  pieSlices,
   toNumber,
+  treemapOption,
   useKindCtx,
   waterfallOption,
+  type PieTotals,
   type Spark,
 } from '~/composables/chartKinds'
 
@@ -235,6 +239,7 @@ watch(chartType, (kind) => {
 
 const rows = ref<Record<string, any>[]>([])
 const spark = ref<Spark | null>(null) // the KPI's trend
+const pieTotals = ref<PieTotals | null>(null) // the pie's every category, for «Other» and those left out
 // What the rows are made of. Moving to a kind that reads other columns, the rows of the
 // one before are not drawn by it (a bar's first category as a gauge's number) while the
 // new ones are on their way; between kinds of the same shape (bars → lines) the chart
@@ -244,6 +249,8 @@ const shapeOf = (kind: ChartType) =>
     : kind === 'combo' || kind === 'bullet' ? 'two' : 'one-measure'
 const rowsShape = ref('')
 const drawable = computed(() => rows.value.length > 0 && rowsShape.value === shapeOf(chartType.value))
+// the query answered, with no row (the filters leave none): «No data», not «choose the columns»
+const noRows = computed(() => !rows.value.length && rowsShape.value === shapeOf(chartType.value))
 const loading = ref(false)
 const error = ref('')
 const droppedSeries = ref(0) // series past the palette's 5 slots
@@ -273,6 +280,7 @@ async function refresh() {
     // longer turn the spinner off — it is turned off here, and the rows do not stay stale
     loading.value = false
     rows.value = []
+    rowsShape.value = ''
     spark.value = null
     return
   }
@@ -315,21 +323,52 @@ async function refresh() {
       ]
     }
     const res = await props.query(ops, 1000)
+    if (seq !== refreshSeq) return
+    // the pie's «Other»: the measure over every category, which the rows (the first
+    // ones only) cannot add up to. After the first query: on the same slot, two together
+    // would cancel each other
+    const totals = chartType.value === 'pie' ? await pieTotalsOf(yCol.value || xCol.value) : null
     if (seq === refreshSeq) {
       rows.value = res?.rows ?? []
       rowsShape.value = shape
       spark.value = null
+      pieTotals.value = totals
       capped.value = chartType.value === 'heatmap' && rows.value.length >= HEAT_CELLS
     }
   } catch (e) {
     if (seq === refreshSeq) {
       rows.value = []
+      rowsShape.value = ''
       spark.value = null
       error.value = errMessage(e)
     }
   } finally {
     if (seq === refreshSeq) loading.value = false
   }
+}
+
+// Over every category: the measure of those above zero added up, how many they are and
+// how many categories there are in all — the categories' aggregates, then one group of
+// them all (a pie draws only what is above zero)
+async function pieTotalsOf(column: string): Promise<PieTotals | null> {
+  const res = await props.query([
+    { type: 'group_by', params: { by: [xCol.value], aggregations: [{ column, func: func.value, alias: '__value' }] } },
+    { type: 'compute', params: { columns: [
+      { name: ALL, expr: '1' },
+      { name: '__up', expr: 'CASE WHEN __value > 0 THEN 1 ELSE 0 END' },
+      { name: '__pos', expr: 'CASE WHEN __value > 0 THEN __value ELSE 0 END' },
+    ] } },
+    { type: 'group_by', params: { by: [ALL], aggregations: [
+      { column: '__pos', func: 'sum', alias: '__total' },
+      { column: '__up', func: 'sum', alias: '__cats' },
+      { column: ALL, func: 'count', alias: '__every' },
+    ] } },
+  ], 1)
+  const row = res?.rows?.[0]
+  const value = toNumber(row?.__total)
+  const count = toNumber(row?.__cats)
+  const every = toNumber(row?.__every)
+  return value == null || count == null ? null : { value, count, ...(every != null ? { every } : {}) }
 }
 
 // The gauge's and the KPI's number: one aggregate over the whole dataset. Then, for a KPI
@@ -464,10 +503,32 @@ function pivotBydata() {
   return { cats, series }
 }
 
+// ── the parts of a whole: only what is above zero ───────────────────────────
+// the pie: top-5 categories + "Other", every category past them over the whole dataset
+// (only for additive functions: an average of averages would be wrong → only the top-5)
+const pie = computed(() => pieSlices(
+  rows.value.map((r) => ({ name: String(r[xCol.value]), value: toNumber(r.__value) })),
+  MAX_SERIES,
+  pieTotals.value,
+  ADDITIVE.has(func.value),
+))
+const PARTS = new Set<ChartType>(['pie', 'treemap', 'funnel'])
+// the categories a pie, a treemap or a funnel leaves out (at zero or below, or empty), and
+// none to draw at all: an all-zero pie was drawn as equal slices
+const notDrawn = computed(() => {
+  if (!drawable.value || !PARTS.has(chartType.value)) return 0
+  if (chartType.value === 'pie') return pie.value.leftOut
+  return notAboveZero(rows.value.slice(0, Math.max(topN.value, 1)).map((r) => toNumber(r.__value)))
+})
+const nothingToDraw = computed(() => drawable.value && PARTS.has(chartType.value)
+  && !rows.value.some((r) => (toNumber(r.__value) ?? 0) > 0))
+
 // ── ECharts option ──────────────────────────────────────────────────────────
 // "chrome" styles derived from the current theme (computed on `ui`)
 const AXIS_STYLE = computed(() => ({
-  axisLabel: { color: ui.value.muted, hideOverlap: true },
+  // a long category cut with an ellipsis (the tooltip has it whole): uncut, all the labels
+  // but one were hidden, that one clipped at the chart's edge
+  axisLabel: { color: ui.value.muted, hideOverlap: true, interval: 0, width: 120, overflow: 'truncate' as const },
   axisLine: { lineStyle: { color: ui.value.border } },
   axisTick: { show: false },
 }))
@@ -506,57 +567,30 @@ const option = computed(() => {
                                targetName: seriesName2.value })
   }
 
-  if (kind === 'pie' || kind === 'treemap') {
-    // top-5 categories + "Other" (only for additive functions: an average of averages would
-    // be wrong → in that case only the top-5)
-    const top = rows.value.slice(0, MAX_SERIES)
-    const rest = rows.value.slice(MAX_SERIES)
-    const data = top.map((r, i) => ({
-      name: String(r[xCol.value]),
-      value: r.__value,
-      itemStyle: kind === 'pie' ? { color: PALETTE[i] } : undefined,
-    }))
-    if (rest.length && ADDITIVE.has(func.value)) {
-      data.push({
-        name: t('chartPanel.otherGroup', { n: rest.length }),
-        value: rest.reduce((s, r) => s + (Number(r.__value) || 0), 0),
-        itemStyle: kind === 'pie' ? { color: OTHER_COLOR } : undefined,
-      })
+  if (kind === 'pie') {
+    const { slices, other } = pie.value
+    const data = slices.map((s, i) => ({ ...s, itemStyle: { color: PALETTE[i] } }))
+    if (other) {
+      data.push({ name: t('chartPanel.otherGroup', { n: other.count }), value: other.value, itemStyle: { color: OTHER_COLOR } })
     }
-    if (kind === 'pie') {
-      return {
-        backgroundColor: 'transparent',
-        tooltip: { ...TOOLTIP, trigger: 'item' },
-        series: [{
-          name: seriesName.value,
-          type: 'pie',
-          radius: ['42%', '72%'], // donut
-          itemStyle: { borderColor: c.panel, borderWidth: 2 }, // spacer between slices
-          label: { color: c.text, fontSize: 11, formatter: '{b}\n{d}%' },
-          labelLine: { lineStyle: { color: c.border } },
-          data,
-        }],
-      }
-    }
-    // treemap = magnitude → ONE hue with shading by value (not identity)
     return {
       backgroundColor: 'transparent',
       tooltip: { ...TOOLTIP, trigger: 'item' },
       series: [{
         name: seriesName.value,
-        type: 'treemap',
-        roam: false,
-        nodeClick: false,
-        breadcrumb: { show: false },
-        itemStyle: { color: PALETTE[0], borderColor: c.panel, borderWidth: 2 },
-        colorAlpha: [0.45, 1], // sequential shading by value
-        label: { color: c.text, fontSize: 11, formatter: '{b}' },
-        data: rows.value.slice(0, Math.max(topN.value, 1)).map((r) => ({
-          name: String(r[xCol.value]),
-          value: r.__value,
-        })),
+        type: 'pie',
+        radius: ['42%', '72%'], // donut
+        itemStyle: { borderColor: c.panel, borderWidth: 2 }, // spacer between slices
+        label: { color: c.text, fontSize: 11, formatter: '{b}\n{d}%' },
+        labelLine: { lineStyle: { color: c.border } },
+        data,
       }],
     }
+  }
+  if (kind === 'treemap') {
+    const top = rows.value.slice(0, Math.max(topN.value, 1))
+    return treemapOption(kc, { cats: top.map((r) => String(r[xCol.value])), values: top.map((r) => toNumber(r.__value)),
+                               name: seriesName.value })
   }
 
   if (kind === 'scatter') {
@@ -753,10 +787,13 @@ const option = computed(() => {
       <span v-else-if="error" class="err">{{ error }}</span>
       <span v-else-if="droppedSeries" class="muted">{{ $t('chartPanel.droppedSeries', { n: droppedSeries }) }}</span>
       <span v-else-if="capped" class="muted">{{ $t('chartPanel.largestCells', { n: HEAT_CELLS }) }}</span>
+      <span v-else-if="notDrawn && !nothingToDraw" class="muted">{{ $t('chartPanel.notDrawn', { n: notDrawn }, notDrawn) }}</span>
     </div>
 
     <div class="plot">
       <KpiCard v-if="kpi" :label="seriesName" :value="kpi.value" :change="kpi.change" :spark="kpi.spark" />
+      <p v-else-if="nothingToDraw" class="muted empty">{{ $t('chartPanel.nothingAboveZero') }}</p>
+      <p v-else-if="noRows && !loading && !error" class="muted empty">{{ $t('chartPanel.noRows') }}</p>
       <VChart v-else-if="drawable" :option="option" autoresize />
       <p v-else-if="!loading" class="muted empty">
         {{ $t('chartPanel.chooseColumnsHint') }}

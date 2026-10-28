@@ -1,8 +1,9 @@
 <script setup lang="ts">
 // The preview of the report as it is now, saved or not: the pages the PDF will have (the
 // render's svg format, through the viewer's ReportPages), with values for the parameters
-// to try in a small bar, the render's notes, and its error — a mistake of the definition
-// is taken back to its item, as a save does.
+// to try in a small bar, the render's notes, and its error. The mistakes of the definition
+// come back as a save's do, each with its item and field (the gateway's 422 `problems`, or
+// the engine's text of an older gateway): listed here, each one a way to its field in Design.
 import { computed, onBeforeUnmount, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { CircleAlert, LoaderCircle, Play, RefreshCw, TriangleAlert } from 'lucide-vue-next'
@@ -14,8 +15,12 @@ import { stateAfter, type ReportDefinition, type ReportHotspot, type ReportParam
 import { forSave, problemFromText, problemsOf, type DesignProblem } from '~/composables/reportDesignModel'
 import { errMessage } from '~/composables/useApi'
 
-const props = defineProps<{ reportId: number; zoom: number | 'fit' }>()
-const emit = defineEmits<{ (e: 'problems', list: DesignProblem[]): void; (e: 'scale', s: number): void }>()
+const props = defineProps<{ reportId: number; zoom: number | 'fit'; where: (p: DesignProblem) => string }>()
+const emit = defineEmits<{
+  (e: 'problems', list: DesignProblem[]): void
+  (e: 'go', p: DesignProblem): void
+  (e: 'scale', s: number): void
+}>()
 const store = useDesign()
 const { t } = useI18n()
 const api = useReportDesign()
@@ -28,10 +33,14 @@ function shownDefault(v: unknown): string {
   return Array.isArray(v) ? v.join(', ') : String(v)
 }
 function choiceOptions(p: (typeof parameters.value)[number]) {
-  const c = p.choices && 'values' in p.choices ? p.choices.values : null
+  // a yes/no is chosen, not typed: «true» written by hand is easy to get wrong
+  const yesNo = p.type === 'boolean' && !p.multi ? [true, false] : null
+  const c = yesNo ?? (p.choices && 'values' in p.choices ? p.choices.values : null)
   if (!c) return null
-  return [{ value: '', label: shownDefault(p.default) ? t('reportDesigner.preview.defaultValue', { value: shownDefault(p.default) }) : t('reportDesigner.preview.anyValue') },
-    ...c.map((v) => ({ value: String(v), label: String(v) }))]
+  const label = (v: unknown) => (typeof v === 'boolean' ? (v ? t('report.yes') : t('report.no')) : String(v))
+  const def = p.default == null || p.default === '' ? '' : Array.isArray(p.default) ? shownDefault(p.default) : label(p.default)
+  return [{ value: '', label: def ? t('reportDesigner.preview.defaultValue', { value: def }) : t('reportDesigner.preview.anyValue') },
+    ...c.map((v) => ({ value: String(v), label: label(v) }))]
 }
 function params(): ReportParams {
   const out: ReportParams = {}
@@ -48,7 +57,7 @@ const busy = ref(false)
 const pages = ref<string[]>([])
 const hotspots = ref<ReportHotspot[]>([])
 const warnings = ref<string[]>([])
-const error = ref<{ message: string; definition: boolean } | null>(null)
+const error = ref<{ message: string; problems: DesignProblem[] } | null>(null)
 const shownDef = ref<ReportDefinition | null>(null)
 const view = ref<ReportState>({ items: {} })
 const renderedText = ref('')
@@ -73,16 +82,18 @@ async function run(keepView = false) {
     renderedText.value = text
   } catch (e: any) {
     if (e?.name === 'AbortError' || controller !== mine) return
+    warnings.value = [] // the notes of an earlier render are not this one's
     const detail = e?.data?.detail
     const code = e?.statusCode ?? e?.response?.status
     if (code === 422 && detail && typeof detail === 'object' && !Array.isArray(detail) && 'message' in detail) {
       const list = problemsOf(store.doc.value, detail)
       emit('problems', list)
-      error.value = { message: list[0]?.message ?? errMessage(e), definition: true }
+      error.value = { message: list[0]?.message ?? errMessage(e), problems: list }
     } else {
+      // a gateway that renders before it checks: the engine's text, read for its item
       const named = code === 422 && typeof detail === 'string' ? problemFromText(detail) : null
       if (named) emit('problems', [named])
-      error.value = { message: errMessage(e), definition: !!named }
+      error.value = { message: errMessage(e), problems: named ? [named] : [] }
     }
   } finally {
     if (controller === mine) {
@@ -142,11 +153,19 @@ watch(warnings, () => { notesOpen.value = false })
     </ul>
     <div class="rpv-stage">
       <div v-if="error" class="rpv-state" role="alert">
-        <CircleAlert v-if="error.definition" :size="22" class="rpv-icon" aria-hidden="true" />
+        <CircleAlert v-if="error.problems.length" :size="22" class="rpv-icon" aria-hidden="true" />
         <TriangleAlert v-else :size="22" class="rpv-icon" aria-hidden="true" />
-        <h2>{{ error.definition ? $t('reportDesigner.preview.definitionError') : $t('reportDesigner.preview.renderError') }}</h2>
-        <p class="rpv-msg">{{ error.message }}</p>
-        <p class="rpv-hint">{{ error.definition ? $t('reportDesigner.preview.definitionHint') : $t('reportDesigner.preview.renderHint') }}</p>
+        <h2>{{ error.problems.length ? $t('reportDesigner.preview.definitionError') : $t('reportDesigner.preview.renderError') }}</h2>
+        <ul v-if="error.problems.length" class="rpv-problems">
+          <li v-for="(p, i) in error.problems.slice(0, 8)" :key="i">
+            <button type="button" @click="emit('go', p)">
+              <span class="rpv-where">{{ where(p) }}</span>
+              <span class="rpv-pmsg">{{ p.message }}</span>
+            </button>
+          </li>
+        </ul>
+        <p v-else class="rpv-msg">{{ error.message }}</p>
+        <p class="rpv-hint">{{ error.problems.length ? $t('reportDesigner.preview.definitionHint') : $t('reportDesigner.preview.renderHint') }}</p>
         <button type="button" @click="run()"><RefreshCw :size="14" /> {{ $t('reportDesigner.preview.again') }}</button>
       </div>
       <ReportPages
@@ -175,7 +194,10 @@ watch(warnings, () => { notesOpen.value = false })
 .rpv-run { flex-shrink: 0; white-space: nowrap; padding: 5px 11px; }
 .rpv-stale { font-size: 12px; color: var(--warning); white-space: nowrap; flex-shrink: 0; }
 .rpv-notes { color: var(--warning); border-color: color-mix(in srgb, var(--warning) 40%, var(--border)); white-space: nowrap; flex-shrink: 0; display: inline-flex; gap: 4px; align-items: center; }
-.rpv-list { margin: 0; padding: 8px 12px 8px 30px; font-size: 12px; color: var(--text); background: var(--panel); border-bottom: 1px solid var(--border-soft); display: flex; flex-direction: column; gap: 3px; }
+.rpv-list {
+  margin: 0; padding: 8px 12px 8px 30px; font-size: 12px; line-height: 1.45; color: var(--text); background: var(--panel);
+  border-bottom: 1px solid var(--border-soft); display: flex; flex-direction: column; gap: 3px; max-height: 28vh; overflow: auto; overflow-wrap: anywhere;
+}
 .rpv-stage { flex: 1; min-height: 0; position: relative; display: flex; flex-direction: column; }
 .rpv-state {
   margin: 48px auto; max-width: 520px; display: flex; flex-direction: column; align-items: center; gap: 8px; text-align: center;
@@ -185,4 +207,12 @@ watch(warnings, () => { notesOpen.value = false })
 .rpv-icon { color: var(--warning); }
 .rpv-msg { margin: 0; font-size: 13px; color: var(--text); overflow-wrap: anywhere; line-height: 1.45; }
 .rpv-hint { margin: 0 0 6px; font-size: 12px; color: var(--muted); line-height: 1.45; }
+.rpv-problems { list-style: none; margin: 4px 0; padding: 0; display: flex; flex-direction: column; gap: 2px; align-self: stretch; text-align: left; }
+.rpv-problems button {
+  width: 100%; justify-content: flex-start; align-items: baseline; gap: 8px; border: 0; background: transparent; box-shadow: none;
+  padding: 6px 8px; font-size: 12.5px; text-align: left; line-height: 1.4;
+}
+.rpv-problems button:hover { background: var(--panel-2); box-shadow: none; }
+.rpv-where { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 11.5px; color: var(--muted); white-space: nowrap; flex: none; }
+.rpv-pmsg { min-width: 0; overflow-wrap: anywhere; }
 </style>

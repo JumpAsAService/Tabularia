@@ -122,9 +122,14 @@ export interface ReportState {
   items: Record<string, ReportItemState>
 }
 
+/** A box on a page, in millimetres from its top left corner. */
+export interface PageBox { x: number; y: number; w: number; h: number }
+
 /** Where a click on a page does something. `x`, `y`: millimetres from the page's top
  *  left corner — `x` where the cell's content starts (after its padding), `y` on the
- *  baseline of its text (measured on the pages: Typst places the mark there); `page` from 1. */
+ *  baseline of its text (measured on the pages: Typst places the mark there); `page` from 1.
+ *  `box`: the clickable cell as the engine laid it out, in the same millimetres (renders
+ *  from before it have none: see `placeHotspots`). */
 export interface ReportHotspot {
   kind: 'sort' | 'toggle'
   item: string
@@ -137,12 +142,13 @@ export interface ReportHotspot {
   page: number
   x: number
   y: number
+  box?: PageBox | null
 }
 
 /** A hotspot with the box it covers on its page (mm), and the column's header when the
  *  definition names it (the button's label). See `placeHotspots`. */
 export interface PlacedHotspot extends ReportHotspot {
-  box: { x: number; y: number; w: number; h: number }
+  box: PageBox
   header?: string
 }
 
@@ -299,6 +305,26 @@ export function useReports() {
   }
 }
 
+/** The parameters with the choices of `fresh`, asked again with the values chosen so far
+ *  (a choice may follow another parameter). Only the lists: `fresh` holds the values
+ *  given as its «defaults», and the form keeps the report's own. */
+export function withChoices(own: ReportParameter[], fresh: ReportParameter[]): ReportParameter[] {
+  const byName = new Map(fresh.map((p) => [p.name, p]))
+  return own.map((p) => {
+    const f = byName.get(p.name)
+    return f ? { ...p, choices: f.choices, choices_truncated: f.choices_truncated, choices_error: f.choices_error } : p
+  })
+}
+
+/** The values a link or a script should carry: those that are not the parameter's
+ *  default. One left out takes its default when the report is rendered, so a default such
+ *  as «the last 30 days» keeps moving with the calendar instead of the day it was copied. */
+export function explicitParams(parameters: Pick<ReportParameter, 'name' | 'default'>[], params: ReportParams): ReportParams {
+  const texts = (v: unknown) => JSON.stringify((v === null || v === undefined ? [] : Array.isArray(v) ? v : [v]).map(String))
+  const defaults = new Map(parameters.map((p) => [p.name, texts(p.default)]))
+  return Object.fromEntries(Object.entries(params).filter(([name, v]) => defaults.get(name) !== texts(v)))
+}
+
 /** Parameters as a query string: a list repeats its name (`?region=a&region=b`), an
  *  empty value is left out (the report's default then holds). */
 export function paramsQuery(params: ReportParams): string {
@@ -313,6 +339,8 @@ export function paramsQuery(params: ReportParams): string {
 }
 
 // ── where a hotspot is: its box on the page ──────────────────────────────────
+// The engine gives the box of the clickable cell (`box`). Renders from before it gave only
+// the point, and the box is rebuilt from the table's layout, as follows.
 // The template's cells (backend/app/reports/template.typ): 1.5 mm of padding left and
 // right, 1.1 mm above and below a header, 1.3 mm in a group's row, and 3 mm more to the
 // left per level of group. Typst's line of text goes from the cap height to the baseline:
@@ -338,17 +366,30 @@ function findItem(definition: ReportDefinition | null | undefined, id: string): 
   return null
 }
 
+/** The engine's box, when it is one: four finite numbers, a width and a height. */
+function engineBox(box: unknown): PageBox | null {
+  if (!box || typeof box !== 'object') return null
+  const { x, y, w, h } = box as Record<string, unknown>
+  const finite = [x, y, w, h].every((n) => typeof n === 'number' && Number.isFinite(n))
+  return finite && (w as number) > 0 && (h as number) > 0 ? { x: x as number, y: y as number, w: w as number, h: h as number } : null
+}
+
 /**
- * The boxes the hotspots cover, in mm on their page. A header's box spans its column (to
- * the next column's start, the last one to the table's right edge); a group's row spans
- * the table. The table's edges and the columns' headers come from the definition the
- * pages were rendered from; without it, the boxes are a fair guess around the text.
+ * The boxes the hotspots cover, in mm on their page: the engine's `box` when it gives one.
+ * Otherwise rebuilt: a header's box spans its column (to the next column's start, the
+ * last one to the table's right edge); a group's row spans the table. The table's edges
+ * and the columns' headers come from the definition the pages were rendered from;
+ * without it, the boxes are a fair guess around the text.
  */
 export function placeHotspots(hotspots: ReportHotspot[], definition?: ReportDefinition | null): PlacedHotspot[] {
   const line = (definition?.theme?.size ?? 9) * PT_MM * CAP
   const leftMargin = definition?.page?.margins?.[3] ?? null
   return hotspots.map((h) => {
     const item = findItem(definition, h.item)
+    const header = h.kind === 'sort' && Array.isArray(item?.columns) && h.column != null ? item!.columns[h.column]?.header : undefined
+    const named = typeof header === 'string' && header ? { header } : {}
+    const measured = engineBox(h.box)
+    if (measured) return { ...h, box: measured, ...named }
     const tableLeft = item && leftMargin != null ? leftMargin + item.x : null
     const tableRight = item && tableLeft != null ? tableLeft + item.w : null
     if (h.kind === 'toggle') {
@@ -362,12 +403,7 @@ export function placeHotspots(hotspots: ReportHotspot[], definition?: ReportDefi
     const next = row.length ? Math.min(...row.map((o) => o.x)) : null
     const left = h.x - PAD_X
     const right = next != null ? next - PAD_X : (tableRight ?? left + 25)
-    const header = Array.isArray(item?.columns) && h.column != null ? item!.columns[h.column]?.header : undefined
-    return {
-      ...h,
-      box: { x: left, y: h.y - line - PAD_HEAD, w: Math.max(4, right - left), h: line + 2 * PAD_HEAD },
-      ...(typeof header === 'string' && header ? { header } : {}),
-    }
+    return { ...h, box: { x: left, y: h.y - line - PAD_HEAD, w: Math.max(4, right - left), h: line + 2 * PAD_HEAD }, ...named }
   })
 }
 

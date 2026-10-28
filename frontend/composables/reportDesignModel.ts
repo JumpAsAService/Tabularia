@@ -409,6 +409,20 @@ export function forSave(def: DDefinition): DDefinition {
   return copy
 }
 
+// a 1×1 PNG: what an image becomes in a definition sent to be checked
+const CHECK_IMAGE = 'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNkYAAAAAYAAjCB0C8AAAAASUVORK5CYII='
+
+/** The definition as the live check reads it: as it would be saved, its images (up to half
+ *  a megabyte each, and checked at the save) replaced by a pixel, so a pause in the typing
+ *  does not send them every time. */
+export function forCheck(def: DDefinition): DDefinition {
+  const copy = forSave(def)
+  for (const b of ['page_header', 'body', 'page_footer'] as BandName[]) {
+    for (const it of copy.sections[b].items) if (it.type === 'image' && it.asset) it.asset = CHECK_IMAGE
+  }
+  return copy
+}
+
 // ── the problems of a refused save ───────────────────────────────────────────
 /** A mistake mapped to where the designer shows it: an item (its id) and the property
  *  inside it (`columns[0].value`), a dataset, a parameter, or the report itself. */
@@ -467,7 +481,8 @@ function one(def: DDefinition, raw: any): DesignProblem {
   }
 }
 
-/** The problems of a 422: the engine's list (`errors`), or the gateway's one problem. */
+/** The problems of a 422 or of the live check: the list (`problems` of the check and of a
+ *  refused preview, `errors` of a refused save), or the gateway's one problem. */
 export function problemsOf(def: DDefinition, detail: unknown): DesignProblem[] {
   if (!detail || typeof detail !== 'object') {
     return typeof detail === 'string' && detail
@@ -475,7 +490,9 @@ export function problemsOf(def: DDefinition, detail: unknown): DesignProblem[] {
       : []
   }
   const d = detail as Record<string, any>
-  const list = Array.isArray(d.errors) && d.errors.length ? d.errors : [d]
+  // the check's answer with no problems is an empty list; a refusal always has its message
+  const list = Array.isArray(d.problems) && (d.problems.length || !('message' in d)) ? d.problems
+    : Array.isArray(d.errors) && d.errors.length ? d.errors : [d]
   return list.filter((x: any) => x && typeof x === 'object').map((x: any) => one(def, x))
 }
 
@@ -526,6 +543,17 @@ export function stillStanding(def: DDefinition, list: DesignProblem[]): DesignPr
     if (root === undefined) return false
     return p.seen === undefined || !p.path || JSON.stringify(valueAt(root, p.path) ?? null) === p.seen
   })
+}
+
+/** A problem of the live check, shown at its field: only while the field holds what the
+ *  server judged (a change hides it at once, before the next answer), and not on an empty
+ *  field, which is being written (the save says what is missing). */
+export function liveShown(def: DDefinition, p: DesignProblem): boolean {
+  const root = problemRoot(def, p)
+  if (root === undefined || !p.path) return false
+  const now = valueAt(root, p.path)
+  if (now == null || (typeof now === 'string' && !now.trim())) return false
+  return p.seen === undefined || JSON.stringify(now) === p.seen
 }
 
 /** A path written by the editor (`columns.0.value`) as the problems write it (`columns[0].value`). */

@@ -30,6 +30,7 @@ import {
   heatmapOption,
   lastChange,
   toNumber,
+  treemapOption,
   useKindCtx,
   waterfallOption,
   type KpiChange,
@@ -106,6 +107,7 @@ function sharedOption() {
       return gaugeOption(k, { value: toNumber(rows[0]?.[y]), name: y, target: y2 ? toNumber(rows[0]?.[y2]) : null,
                              max: props.spec.max ?? null }, true)
     case 'waterfall': return waterfallOption(k, { cats, values: values(y), name: y })
+    case 'treemap': return treemapOption(k, { cats, values: values(y), name: y })
     case 'funnel': return funnelOption(k, { cats, values: values(y), name: y })
     case 'combo': return comboOption(k, { cats, bars: values(y), line: values(y2), barName: y, lineName: y2 ?? '' })
     case 'bullet':
@@ -142,7 +144,8 @@ const option = computed(() => {
   const { type, x, y } = props.spec
   const shared = sharedOption()
   if (shared) return shared
-  const axis = { axisLine: { lineStyle: { color: c.border } }, axisLabel: { color: c.muted, fontSize: 11 } }
+  // a long category cut with an ellipsis (the tooltip has it whole)
+  const axis = { axisLine: { lineStyle: { color: c.border } }, axisLabel: { color: c.muted, fontSize: 11, hideOverlap: true, interval: 0, width: 120, overflow: 'truncate' as const } }
   const base = {
     backgroundColor: 'transparent',
     color: PALETTE,
@@ -160,26 +163,8 @@ const option = computed(() => {
         type: 'pie',
         radius: type === 'donut' ? ['46%', '72%'] : '72%',
         label: { color: c.text, fontSize: 11 },
-        data: props.rows.map((r) => ({ name: String(r[x] ?? '—'), value: num(r[y]) })),
-      }],
-    }
-  }
-
-  if (type === 'treemap') {
-    // magnitude → ONE hue, shaded by value (as the Viewer's)
-    return {
-      ...base,
-      tooltip: { ...base.tooltip, trigger: 'item', formatter: (p: any) => `${esc(p.name)}: <b>${esc(fmt.format(p.value))}</b>` },
-      series: [{
-        type: 'treemap',
-        roam: false,
-        nodeClick: false,
-        breadcrumb: { show: false },
-        left: 0, right: 0, top: 0, bottom: 0,
-        itemStyle: { color: PALETTE[0], borderColor: c.panel, borderWidth: 2 },
-        colorAlpha: [0.45, 1],
-        label: { color: c.text, fontSize: 11, formatter: '{b}' },
-        data: props.rows.map((r) => ({ name: label(r[x]), value: num(r[y]) })).filter((d) => d.value > 0),
+        // a slice is a part above zero: ECharts drew an all-zero pie as equal slices
+        data: props.rows.map((r) => ({ name: String(r[x] ?? '—'), value: num(r[y]) })).filter((d) => d.value > 0),
       }],
     }
   }
@@ -245,6 +230,7 @@ defineExpose({ downloadPng })
     <figcaption v-if="spec.title">{{ spec.title }}</figcaption>
     <!-- a KPI is text in the page, with its trend line: there is no picture of it to save -->
     <KpiCard v-if="kpi" dense :label="kpi.label" :value="kpi.value" :change="kpi.change" :spark="kpi.spark" />
+    <p v-else-if="!rows.length" class="nodata">{{ t('chartPanel.noRows') }}</p>
     <template v-else>
       <VChart ref="chart" class="canvas" :style="{ height: `${height}px` }" :option="option" autoresize />
       <button type="button" class="png" :title="t('chat.downloadPng')" :aria-label="t('chat.downloadPng')" @click="downloadPng">
@@ -258,6 +244,7 @@ defineExpose({ downloadPng })
 .mini { position: relative; margin: 8px 0 0; padding: 0; }
 .mini figcaption { font-size: 12px; color: var(--muted); margin-bottom: 4px; }
 .canvas { height: 240px; width: 100%; }
+.nodata { margin: 0; font-size: 12px; color: var(--muted); }
 /* the button sits on the chart but not over the data: top corner, it appears on hover */
 .png {
   position: absolute; top: 0; right: 0; padding: 3px 6px; min-height: 22px;
