@@ -150,6 +150,12 @@ run stays.
 sources' development sample, without the nodes after it, in the trials' namespace.
 What it writes becomes the preview of the nodes after it, until the node changes.
 
+The **Lineage** page draws the image (registry and repository) with the flows and
+flow groups that run it. With [OpenLineage](openlineage.md) on, a run of the node is a
+child job of the flow's run (a cell's, of the group's run), reading the datasources
+whose data reaches it, with the image — registry, repository, tag and digest — in the
+`tabularia_container` job facet. An editor's **Run** is not reported.
+
 ## Where it runs
 
 | | |

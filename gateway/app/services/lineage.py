@@ -1,5 +1,8 @@
 """Cross-flow lineage: builds the provenance/impact graph among flows, datasources,
-connections and external destinations (DB tables, S3 objects).
+connections and external destinations (DB tables, S3 objects), and the other objects
+that read or write: saved scripts, SQL scripts, notebooks (the datasources they have
+read, recorded by services/notebook_reads.py), flow groups (what they run, the images
+of their Container cells, the emails of their Pushmail cells).
 
 The graph is DERIVED on demand, without a dedicated table: half of the edges are
 persisted in `datasources` already (flow_id = produced-by, connection_id =
@@ -29,12 +32,12 @@ from app.services import permissions as perm_service
 logger = logging.getLogger(__name__)
 
 # edge kinds (direction = the way the data/control flows)
-EDGE_READ = "read"          # datasource → flow (consumption)
-EDGE_PUBLISH = "publish"    # flow → datasource (production)
+EDGE_READ = "read"          # datasource → flow, script, SQL script, notebook, email (consumption)
+EDGE_PUBLISH = "publish"    # flow, script, SQL script → datasource (production)
 EDGE_INGEST = "ingest"      # connection → datasource (DB snapshot)
-EDGE_WRITE = "write"        # flow → external sink (DB table / S3)
-EDGE_REFRESH = "refresh"    # flow → datasource (refresh, control)
-EDGE_ORCHESTRATE = "orchestrate"  # flow → flow ("Run flow" node)
+EDGE_WRITE = "write"        # flow → external sink (DB table / S3); flow group → email
+EDGE_REFRESH = "refresh"    # flow, flow group → datasource (refresh, control)
+EDGE_ORCHESTRATE = "orchestrate"  # flow → flow ("Run flow" node); flow group → what it runs; → image
 
 
 def _fid(i: int) -> str:
@@ -51,6 +54,18 @@ def _sid(i: int) -> str:
 
 def _cid(i: int) -> str:
     return f"conn:{i}"
+
+
+def _qid(i: int) -> str:
+    return f"sql:{i}"
+
+
+def _nid(i: int) -> str:
+    return f"notebook:{i}"
+
+
+def _gid(i: int) -> str:
+    return f"group:{i}"
 
 
 class _Graph:
@@ -90,6 +105,18 @@ def _restricted_flow(g: _Graph, flow_id: int, unknown: set[int]) -> str:
     nid = _fid(flow_id)
     g.add_node(nid, type="flow", label=f"Flow #{flow_id}", restricted=True, meta={"reason": "unknown"})
     return nid
+
+
+def _add_image(g: _Graph, data: dict, runner: str) -> None:
+    """The image a Container node or cell runs (registry + repository, whatever the
+    tag), and the edge from what runs it."""
+    repository = str(data.get("repository") or "").strip()
+    if not repository:
+        return
+    node = f"image:{data.get('registryId')}|{repository}"
+    g.add_node(node, type="container", label=repository,
+               meta={"registry_id": data.get("registryId"), "tag": str(data.get("tag") or "").strip() or "latest"})
+    g.add_edge(runner, node, EDGE_ORCHESTRATE)
 
 
 def build_full_graph(session: Session, user: User) -> _Graph:
@@ -252,6 +279,89 @@ def build_full_graph(session: Session, user: User) -> _Graph:
                 if sid in script_ids:
                     g.add_edge(_fid(f.id), _sid(sid), EDGE_ORCHESTRATE)  # flow → script it runs
 
+    # ── SQL scripts (docs/specs/sql-scripts.md): the datasources their SQL names (or
+    # the connection they run on), the datasource they write ──────────────────────
+    from app.services import sql_scripts
+
+    stmt = sql_scripts.visible_query(session, user)
+    sql_ids: set[int] = set()
+    for x in (session.exec(stmt).all() if stmt is not None else []):
+        sql_ids.add(x.id)
+        content = sql_scripts.content_of(session, x)
+        g.add_node(_qid(x.id), type="sql_script", label=x.name, project_id=x.project_id,
+                   meta={"scheduled": bool(x.run_schedule), "version": x.current_version,
+                         "engine": content.get("engine")})
+        if content.get("connection_id") is not None:
+            if content["connection_id"] in conn_by_id:
+                g.add_edge(_cid(content["connection_id"]), _qid(x.id), EDGE_READ)  # connection → script
+        else:
+            for ds in sql_scripts.named_datasources(session, content.get("sql") or "", content.get("engine"), datasources):
+                g.add_edge(_dsid(ds.id), _qid(x.id), EDGE_READ)                     # datasource → script
+        out = content.get("output")
+        if isinstance(out, dict):
+            written = next((d for d in datasources if d.project_id == out.get("project_id")
+                            and d.name == out.get("name")), None)
+            if written is not None:
+                g.add_edge(_qid(x.id), _dsid(written.id), EDGE_PUBLISH)          # script → datasource
+
+    # ── notebooks (docs/specs/notebooks.md): the datasources they have read ──────
+    from app.services import notebook_reads, notebooks
+
+    stmt = notebooks.visible_query(session, user)
+    visible_notebooks = list(session.exec(stmt).all()) if stmt is not None else []
+    reads = notebook_reads.read_by(session, [n.id for n in visible_notebooks])
+    for nb in visible_notebooks:
+        g.add_node(_nid(nb.id), type="notebook", label=nb.name, project_id=nb.project_id,
+                   meta={"version": nb.current_version})
+        for ds_id in reads.get(nb.id, []):
+            source = _dsid(ds_id) if ds_id in ds_by_id else _restricted_ds(g, ds_id, unknown_ds)
+            g.add_edge(source, _nid(nb.id), EDGE_READ)                               # datasource → notebook
+
+    # ── flow groups: what each runs (flows, refreshes, scripts, SQL scripts), the
+    # images of their Container cells, the emails of their Pushmail cells ──────────
+    from app.models import FlowGroup
+    from app.services import container_nodes
+    from app.services.flow_groups import definition_of
+
+    for grp in session.exec(select(FlowGroup).where(FlowGroup.project_id.in_(readable))).all():
+        cells = [c for row in definition_of(grp).steps for c in row if c is not None]
+        g.add_node(_gid(grp.id), type="flow_group", label=grp.name, project_id=grp.project_id,
+                   meta={"scheduled": bool(grp.run_schedule), "cells": len(cells)})
+        for c in cells:
+            if c.kind == "flow":
+                target = _fid(c.id) if c.id in flow_ids else _restricted_flow(g, c.id, unknown_flow)
+                g.add_edge(_gid(grp.id), target, EDGE_ORCHESTRATE)
+            elif c.kind == "refresh":
+                target = _dsid(c.id) if c.id in ds_by_id else _restricted_ds(g, c.id, unknown_ds)
+                g.add_edge(_gid(grp.id), target, EDGE_REFRESH)
+            elif c.kind == "script" and c.id in script_ids:
+                g.add_edge(_gid(grp.id), _sid(c.id), EDGE_ORCHESTRATE)
+            elif c.kind == "sql" and c.id in sql_ids:
+                g.add_edge(_gid(grp.id), _qid(c.id), EDGE_ORCHESTRATE)
+            elif c.kind == "container":
+                _add_image(g, c.container or {}, _gid(grp.id))
+            elif c.kind == "pushmail" and c.pushmail is not None:
+                mail = f"mail:{grp.id}|{c.id}"
+                conn = conn_by_id.get(c.pushmail.connectionId)
+                g.add_node(mail, type="email_sink", label=c.pushmail.label.strip() or "Pushmail",
+                           meta={"connection_id": c.pushmail.connectionId,
+                                 "connection_name": conn.name if conn else None,
+                                 "recipients": len([a for a in c.pushmail.to + c.pushmail.cc if a.strip()]),
+                                 "attachments": len(c.pushmail.attachments)})
+                g.add_edge(_gid(grp.id), mail, EDGE_WRITE)                            # group → email
+                for a in c.pushmail.attachments:
+                    if a.datasourceId is None:
+                        continue
+                    source = _dsid(a.datasourceId) if a.datasourceId in ds_by_id else _restricted_ds(g, a.datasourceId, unknown_ds)
+                    g.add_edge(source, mail, EDGE_READ)                                # datasource → email
+
+    # the images the flows' Container nodes run
+    for f in flows:
+        if '"container"' not in (f.definition or ""):
+            continue
+        for node in container_nodes.container_nodes(f.definition):
+            _add_image(g, node.get("data") or {}, _fid(f.id))
+
     # ── the reason of the unresolved references: removed vs not accessible ─────────
     # one query per kind checks the EXISTENCE (not the content: nothing of an object in a
     # project that is not readable is revealed beyond "it exists").
@@ -267,7 +377,7 @@ def build_full_graph(session: Session, user: User) -> _Graph:
     # ── DIRECT staleness: a flow reads a DB datasource refreshed AFTER its last
     # successful run (its outputs are on overtaken data) ─────────────────────────
     for e in g.edges:
-        if e["kind"] != EDGE_READ or not e["source"].startswith("ds:"):
+        if e["kind"] != EDGE_READ or not e["source"].startswith("ds:") or not e["target"].startswith("flow:"):
             continue
         ds = ds_by_id.get(int(e["source"].split(":")[1]))
         if not ds or not ds.refreshed_at:

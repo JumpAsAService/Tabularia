@@ -151,9 +151,11 @@ refresh, schedule change, rename, move and deletion is in the audit log. See
 ### Lineage
 
 The **Lineage** page draws, for what you can read, which connection a datasource is
-imported from, which flow or script writes it, and which flows read it. With
-OpenLineage turned on, every refresh and every write is also reported to your data
-catalog as a job with its inputs and outputs: see [OpenLineage](../openlineage.md).
+imported from, which flow, saved script or SQL script writes it, which flows,
+scripts, SQL scripts and notebooks read it, which flow groups refresh it or send it by
+email. With OpenLineage turned on, every refresh and every write is also reported to
+your data catalog as a job with its inputs and outputs, and every notebook session
+with what it read: see [OpenLineage](../openlineage.md).
 
 ## Related
 

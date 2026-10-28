@@ -399,6 +399,9 @@ async def _start(session: Session, notebook: Notebook, mode: str, user: User,
             raise BeingEdited(notebook, session.get(User, existing.user_id))
         return existing
     session.refresh(row)
+    from app.services import openlineage  # the session is a run of the notebook's job
+
+    openlineage.notebook_session(session, row, "START")
     try:
         await _create_pod(row, env, version, source, token, plain, secret)
     except KubeError as e:
@@ -514,6 +517,9 @@ async def _fail(session: Session, row: NotebookSession, why: str) -> None:
     session.commit()
     _checked.pop(row.id, None)
     logger.info("notebooks: session %s of notebook %s failed: %s", row.id, row.notebook_id, why[:300])
+    from app.services import openlineage
+
+    openlineage.notebook_session(session, row, "FAIL", error=row.error)
     with contextlib.suppress(KubeError):
         await kube_jobs.delete_job(row.namespace, row.job_name)
 
@@ -619,6 +625,10 @@ async def stop(session: Session, row: NotebookSession, *, actor: Optional[User],
         logger.warning("notebooks: the Job %s not deleted now (%s)", row.job_name, e)
     notebook = session.get(Notebook, row.notebook_id)
     row_id, mode, was = row.id, row.mode, row.status
+    if was != "failed":  # its run ends with it (told before the row goes; a failed one was told already)
+        from app.services import openlineage
+
+        openlineage.notebook_session(session, row, "COMPLETE" if was == "ready" else "ABORT")
     session.exec(delete(NotebookSession).where(NotebookSession.id == row_id))  # type: ignore[arg-type]
     session.commit()
     _checked.pop(row_id, None)

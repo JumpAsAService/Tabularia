@@ -207,3 +207,68 @@ def test_empty_names_are_refused(session, world, catalog):
         with pytest.raises(HTTPException) as e:
             call()
         assert e.value.status_code == 422
+
+
+# ── the other objects that run: SQL scripts, saved scripts, notebooks, flow groups ──
+def test_a_renamed_sql_script_or_flow_group_takes_its_new_name_and_loses_the_old_one(session, world, catalog):
+    from app.models import FlowGroup, SqlScript, SqlScriptVersion
+    from app.routes.flow_groups import update_flow_group
+    from app.routes.sql_scripts import SqlScriptUpdate, update_sql_script
+    from app.schemas.models import FlowGroupUpdate
+
+    folder = world["folder"]
+    smtp = Connection(name="mail", db_type="smtp", project_id=folder.id, host="mail.x", port=25)
+    script = SqlScript(name="Totals", project_id=folder.id)
+    group = FlowGroup(name="Nightly", project_id=folder.id, definition=json.dumps({"steps": [[
+        {"kind": "container", "id": 1, "container": {"label": "Forecast", "registryId": 1, "repository": "team/f"}},
+        {"kind": "pushmail", "id": 2, "pushmail": {"label": "Daily", "connectionId": None, "to": ["a@x.it"]}},
+    ]]}))
+    session.add_all([smtp, script, group])
+    session.commit()
+    group.definition = group.definition.replace('"connectionId": null', f'"connectionId": {smtp.id}')
+    session.add(SqlScriptVersion(script_id=script.id, version=1, content=json.dumps(
+        {"sql": 'SELECT * FROM "orders"', "connection_id": None, "output": {"name": "Totals", "project_id": folder.id}})))
+    session.commit()
+
+    update_sql_script(script.id, SqlScriptUpdate(name="Totals 2026"), _Req(), world["admin"], session)
+    update_flow_group(group.id, FlowGroupUpdate(name="Every night"), _Req(), world["admin"], session)
+    _settle()
+
+    jobs = _jobs(catalog.events)
+    assert [i["name"] for i in jobs["Sample/Flows/Totals 2026 (SQL script)"]["inputs"]] == ["/Sample/Flows/orders"]
+    assert "Sample/Flows/Every night (flow group)" in jobs
+    assert sorted(catalog.deleted) == [
+        ("datasets", "smtp://mail.x:25", "/Sample/Flows/Nightly/Daily"),
+        ("jobs", "tabularia", "Sample/Flows/Nightly (flow group)"),
+        ("jobs", "tabularia", "Sample/Flows/Nightly (flow group).container Forecast"),
+        ("jobs", "tabularia", "Sample/Flows/Nightly (flow group).pushmail Daily"),
+        ("jobs", "tabularia", "Sample/Flows/Totals (SQL script)"),
+    ]
+
+
+def test_a_folder_rename_renames_its_notebooks_and_a_datasource_rename_reaches_their_reads(session, world, catalog):
+    from app.models import Notebook, SavedScript, SavedScriptVersion
+    from app.services import notebook_reads
+
+    nb = Notebook(name="Explore", project_id=world["folder"].id, environment_id=1)
+    reader = SavedScript(name="Clean", project_id=world["other"].id, environment_id=1)
+    session.add_all([nb, reader])
+    session.commit()
+    session.add(SavedScriptVersion(script_id=reader.id, version=1, content=json.dumps(
+        {"inputs": [{"alias": "ORD", "datasource_id": world["orders"].id}]})))
+    session.commit()
+    notebook_reads.record(session, nb.id, world["orders"].id, "nb-1-app-x", "app")
+
+    update_project(world["root"].id, ProjectUpdate(name="Demo"), world["admin"], session)
+    _settle()
+    jobs = _jobs(catalog.events)
+    assert [i["name"] for i in jobs["Demo/Flows/Explore (notebook)"]["inputs"]] == ["/Demo/Flows/orders"]
+    assert ("jobs", "tabularia", "Sample/Flows/Explore (notebook)") in catalog.deleted
+
+    catalog.events.clear()
+    update_datasource(world["orders"].id, DatasourceUpdate(name="orders 2026"), world["admin"], session)
+    _settle()
+    jobs = _jobs(catalog.events)
+    # whoever reads it by id points at the new name: the notebook, the saved script
+    assert [i["name"] for i in jobs["Demo/Flows/Explore (notebook)"]["inputs"]] == ["/Demo/Flows/orders 2026"]
+    assert [i["name"] for i in jobs["Reports/Clean (script)"]["inputs"]] == ["/Demo/Flows/orders 2026"]

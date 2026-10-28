@@ -114,6 +114,12 @@ only while the pod lives: a token the code prints in the app is useless anywhere
 Behind a service mesh (Istio, Linkerd) the gateway sees the sidecar's address instead of
 the pod's: there, set `scripts.notebooks.podIpCheck: false` (`NOTEBOOKS__POD_IP_CHECK`).
 
+**Lineage.** The Lineage page draws a notebook as a reader of every datasource it has
+read with `tabularia.read`; with [OpenLineage](../openlineage.md) on, each session of its
+pod (app or editor) is a run of the job `<folder>/<name> (notebook)`: START when the pod
+starts, RUNNING at the first read of each datasource, COMPLETE with everything it read
+when it stops.
+
 ### Starting and stopping
 
 There is no pod for a notebook nobody is using. The first request to the app, or to the

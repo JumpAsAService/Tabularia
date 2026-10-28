@@ -1,0 +1,23 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://github.com/JumpAsAService/Tabularia/blob/main/docs/openlineage/TabulariaContainerJobFacet.json",
+  "title": "TabulariaContainerJobFacet",
+  "description": "A job facet Tabularia attaches to the job of a Container node of a flow or a Container cell of a flow group, under the key `tabularia_container`: the image it ran.",
+  "type": "object",
+  "allOf": [
+    { "$ref": "https://openlineage.io/spec/2-0-2/OpenLineage.json#/$defs/JobFacet" },
+    {
+      "type": "object",
+      "properties": {
+        "registry": { "type": "string", "description": "The name of the container registry in Tabularia" },
+        "registryHost": { "type": ["string", "null"], "description": "The registry's host, e.g. ghcr.io or registry.acme.internal:5000" },
+        "repository": { "type": "string", "description": "The image's repository, as the registry names it" },
+        "tag": { "type": ["string", "null"], "description": "The tag the node or cell asked for (latest when empty)" },
+        "digest": { "type": ["string", "null"], "description": "The digest the tag was resolved to when the run started: every attempt ran this image" },
+        "image": { "type": ["string", "null"], "description": "The full image reference the Pod ran, by digest" }
+      },
+      "required": ["registry", "repository"],
+      "additionalProperties": true
+    }
+  ]
+}

@@ -506,7 +506,9 @@ the audit log says why.
 
 A script used by a flow or a group cannot be deleted: the page says which ones use it.
 The **Lineage** shows saved scripts too: the datasources they read, the one they
-publish, the flows that run them.
+publish, the flows and flow groups that run them. With [OpenLineage](openlineage.md)
+on, every run of a saved script is a run of the job `<folder>/<name> (script)` in
+your catalog, and a flow's Script node a child job of the flow's run.
 
 ## Audit
 

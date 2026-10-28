@@ -348,9 +348,17 @@ def test_output_on_s3_mirror_copy_and_email(session, scene):
     _, end = ol.to_json(ol.run_events(session, mirror))
     assert [(o["namespace"], o["name"]) for o in end["outputs"]] == [("tabularia://tabularia", "/Sample/Flows/Margin"), ("s3://mirror", "/margin/latest.parquet")]
 
-    email = make_run(session, kind="flow", flow_id=scene.flow.id, status="SUCCESS", task_id="t11", email=json.dumps({"to": ["a@x.it"], "sent": True}))
+    # an email is a dataset, as a Pushmail cell's: the SMTP server and the flow, never the recipients
+    email = make_run(session, kind="flow", flow_id=scene.flow.id, status="SUCCESS", task_id="t11",
+                     email=json.dumps({"host": "smtp.example.com", "to": ["a@x.it"], "sent": True}))
     _, end = ol.to_json(ol.run_events(session, email))
-    assert end["job"]["name"].endswith(".email") and end["outputs"] == []      # an email is not a dataset
+    assert end["job"]["name"].endswith(".email")
+    assert [(o["namespace"], o["name"]) for o in end["outputs"]] == [("smtp://smtp.example.com:587", "/Sample/Flows/" + scene.flow.name + "/email")]
+    assert "a@x.it" not in json.dumps(end)
+    # without the server it cannot be named: no dataset rather than a wrong one
+    bare = make_run(session, kind="flow", flow_id=scene.flow.id, status="SUCCESS", task_id="t12", email=json.dumps({"to": ["a@x.it"], "sent": True}))
+    _, end = ol.to_json(ol.run_events(session, bare))
+    assert end["outputs"] == []
 
 
 def test_a_failed_orchestration_carries_the_message_and_an_uploaded_file_is_an_input(session, scene):

@@ -451,7 +451,9 @@ async def _pushmail_cell(run_id: int, user_id: int, trigger: str, cell: FlowGrou
                     input_key="", output_bucket="", output_key="",
                     email=json.dumps({"connection_id": conn.id, "host": conn.host, "to": to + cc, "subject": cfg.subject,
                                       "attachments": [datasources[a.datasourceId].name for a in cfg.attachments],
-                                      "cell": name, "ok": None}))
+                                      # by id too, for the lineage: a name can change
+                                      "datasource_ids": [a.datasourceId for a in cfg.attachments],
+                                      "cell": name, "cell_id": cell.id, "ok": None}))
         s.add(child)
         s.commit()
         s.refresh(child)

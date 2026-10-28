@@ -145,8 +145,8 @@ A cell whose rights are missing at run time fails, and the group stops.
 
 ## Out of scope for this version
 
-Nested groups, retrying a cell, conditional steps, a cap on parallel cells, groups in
-the lineage graph, failure emails for groups (the flows inside keep theirs),
+Nested groups, retrying a cell, conditional steps, a cap on parallel cells, failure
+emails for groups (the flows inside keep theirs),
 webhooks for the group run itself (the runs inside keep theirs).
 
 ## Testing

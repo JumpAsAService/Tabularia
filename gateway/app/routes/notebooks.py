@@ -38,7 +38,7 @@ from app.deps.permissions import ensure_can
 from app.models import Notebook, NotebookSession, NotebookVersion, Project, ScriptEnvironment, User
 from app.models.permission import Capability
 from app.schemas.models import UtcDateTime
-from app.services import audit, notebooks, script_builds, script_nodes
+from app.services import audit, notebooks, openlineage, script_builds, script_nodes
 from app.services import permissions as perm_service
 from app.services.copy_names import commit_copy, free_copy_name
 
@@ -255,6 +255,9 @@ def update_notebook(notebook_id: int, body: NotebookUpdate, request: Request, us
     _need_on()
     notebook = notebooks.get_visible(session, user, notebook_id)
     ensure_can(session, user, notebook.project_id, Capability.EDIT)
+    # the catalog's names before a rename or a move (the folder path is part of the job's name)
+    lineage_names = (openlineage.catalog_names(session, objects=[("notebook", notebook)])
+                     if body.name is not None or body.project_id is not None else {})
     changes: dict[str, Any] = {}
     target = notebook.project_id
     if body.project_id is not None and body.project_id != notebook.project_id:
@@ -295,6 +298,7 @@ def update_notebook(notebook_id: int, body: NotebookUpdate, request: Request, us
     session.add(notebook)
     session.commit()
     session.refresh(notebook)
+    openlineage.renamed(session, lineage_names)
     audit.record_audit(session, actor=user, action=audit.NOTEBOOK_UPDATE, target_type="notebook",
                        target_id=notebook.id, target_label=notebook.name, request=request, detail=changes)
     return _detail(session, user, notebook)

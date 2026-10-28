@@ -34,7 +34,7 @@ from app.models import Project, Run, SqlScript, SqlScriptVersion, User
 from app.models.permission import Capability
 from app.models.run import TERMINAL_STATES
 from app.schemas.models import UtcDateTime
-from app.services import audit, sql_script_runs, sql_scripts
+from app.services import audit, openlineage, sql_script_runs, sql_scripts
 from app.services import permissions as perm_service
 from app.services.copy_names import commit_copy, free_copy_name
 from app.services.schedule import ScheduleError, next_fire, validate_schedule
@@ -348,6 +348,8 @@ def update_sql_script(script_id: int, body: SqlScriptUpdate, request: Request,
     version, which becomes the current one."""
     script = sql_scripts.get_visible(session, user, script_id)
     ensure_can(session, user, script.project_id, Capability.EDIT)
+    lineage_names = openlineage.catalog_names(session, objects=[("sql_script", script)]) \
+        if body.name is not None or body.project_id is not None else {}
     changes: dict[str, Any] = {}
     target = script.project_id
     if body.project_id is not None and body.project_id != script.project_id:
@@ -381,6 +383,7 @@ def update_sql_script(script_id: int, body: SqlScriptUpdate, request: Request,
     session.add(script)
     session.commit()
     session.refresh(script)
+    openlineage.renamed(session, lineage_names)
     audit.record_audit(session, actor=user, action=audit.SQL_SCRIPT_UPDATE, target_type="sql_script",
                        target_id=script.id, target_label=script.name, request=request, detail=changes)
     _record_off(session, user, script, schedule_off, groups_off, request)

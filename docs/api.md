@@ -78,7 +78,7 @@ announced in `CHANGELOG.md` one minor release in advance.
 | Datasources | `GET /datasources` | each with `bucket` and `key`, which the export needs; `GET /datasources/{id}/runs` for its refreshes |
 | Refresh a datasource | `POST /datasources/{id}/refresh` | `202` with the run; database datasources only |
 | Export | `POST /tasks/export` | CSV (streamed) or Excel; see below |
-| Lineage | `GET /lineage` | the graph of flows and datasources |
+| Lineage | `GET /lineage` | the graph of flows, datasources, connections, scripts, SQL scripts, notebooks and flow groups; `?type=flow\|datasource\|connection\|script\|sql\|notebook\|group&id=…` centres it |
 
 All paths are relative to the gateway: `https://<host>/api` behind the reference
 ingress or compose file, `http://localhost:8000` in development.

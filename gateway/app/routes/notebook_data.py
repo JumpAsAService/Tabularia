@@ -10,9 +10,14 @@
 - How: a link to the datasource's own parquet, valid for a few minutes, made by the
   engine (it holds the storage's keys, the gateway does not); the pod downloads it.
   Nothing is copied. Every read is audited (`notebook.read`).
+- Lineage: the first read of a datasource in a session is recorded
+  (services/notebook_reads.py), for the Lineage page, and told to OpenLineage as an
+  input of the session's run.
 """
 from __future__ import annotations
 
+import logging
+from types import SimpleNamespace
 from typing import Optional, Union
 
 from fastapi import APIRouter, Depends, HTTPException, Request
@@ -24,11 +29,12 @@ from app.core.engine_client import get_engine_client
 from app.core.routing import ReleasingRoute
 from app.db.session import get_session
 from app.models import Datasource, Notebook, NotebookSession, User
-from app.services import audit, permissions as perm_service
+from app.services import audit, notebook_reads, openlineage, permissions as perm_service
 from app.services import notebook_runtime as runtime
 from app.services.objects import ensure_can_read_keys, ensure_reads_pinned
 
 router = APIRouter(route_class=ReleasingRoute, tags=["notebooks"], include_in_schema=False)
+logger = logging.getLogger(__name__)
 
 LINK_SECONDS = 600  # how long a download link holds
 
@@ -155,6 +161,9 @@ async def read_datasource(body: ReadIn, request: Request, caller: Caller = Depen
     target = {"bucket": ds.bucket, "key": ds.key}
     notebook, row, user = caller.notebook, caller.row, caller.user
     detail = {"notebook": notebook.id, "notebook_name": notebook.name, "mode": row.mode}
+    # the session as it is now: read again after the engine answers, its row may be gone
+    pod = SimpleNamespace(notebook_id=row.notebook_id, mode=row.mode, version=row.version, job_name=row.job_name,
+                          started_at=row.started_at)
     session.close()  # nothing more to read while the engine answers
     r = await get_engine_client().get("/files/presigned", params={**target, "expires": LINK_SECONDS})
     if r.status_code >= 400:
@@ -166,4 +175,13 @@ async def read_datasource(body: ReadIn, request: Request, caller: Caller = Depen
                             detail=f"The data of «{ds.name}» cannot be read: {why or f'the engine answered {r.status_code}'}")
     audit.record_audit(session, actor=user, action=audit.NOTEBOOK_READ, target_type="datasource",
                        target_id=found["id"], target_label=found["name"], request=request, detail=detail)
+    try:
+        first = notebook_reads.record(session, pod.notebook_id, found["id"], pod.job_name, pod.mode)
+    except Exception as e:  # noqa: BLE001 — the read is done: its lineage must not undo it
+        session.rollback()
+        logger.warning("notebooks: the read of datasource %s by notebook %s not recorded (%s)", found["id"],
+                       pod.notebook_id, type(e).__name__)
+        first = False
+    if first:
+        openlineage.notebook_session(session, pod, "RUNNING", datasource_id=found["id"])
     return {"url": r.json()["url"], **found}

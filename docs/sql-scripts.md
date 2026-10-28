@@ -133,6 +133,14 @@ group as any cell's. Use a group when the script reads what flows produce: the g
 runs them first, then the script, on one schedule. A script in a group cannot be
 deleted until it is taken out.
 
+### Lineage
+
+The **Lineage** page draws a SQL script with the datasources its SQL names (or the
+connection it runs on), the datasource it writes and the flow groups that run it.
+With [OpenLineage](openlineage.md) on, every write is a run of the job
+`<folder>/<name> (SQL script)`: the datasources the write read (on a connection, the
+tables of the SQL), the datasource it wrote, the SQL in the `sql` facet.
+
 ## Saving and sharing
 
 **Create** the first time, then **Save** (Ctrl+S): a save that changes the SQL, the

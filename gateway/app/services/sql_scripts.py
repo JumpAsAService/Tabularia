@@ -22,6 +22,7 @@ A version's `content`: {"sql": "SELECT …", "engine": "duckdb" | null, "connect
 """
 from __future__ import annotations
 
+import functools
 import json
 import re
 import time
@@ -320,6 +321,55 @@ def resolve(session: Session, user: User, sql: str, engine: Optional[str]) -> Re
         query = query[:start] + replacement + query[end + 1:]
     out.query = query
     return out
+
+
+@functools.lru_cache(maxsize=512)
+def _named_tables(sql: str, dialect: str) -> tuple[tuple[str, str], ...]:
+    """(name, folder) of every table the SQL names, CTEs left out: the parse is cached
+    by text, the Lineage page reads every script at every look."""
+    text = strip_comments(sql or "").strip().rstrip(";").strip()
+    if not text:
+        return ()
+    try:
+        trees = [t for t in sqlglot.parse(text, read=dialect) if t is not None]
+    except SqlglotError:
+        return ()
+    if len(trees) != 1:
+        return ()
+    ctes = {c.alias_or_name.lower() for c in trees[0].find_all(exp.CTE)}
+    out: list[tuple[str, str]] = []
+    for table in trees[0].find_all(exp.Table):
+        if not isinstance(table.this, exp.Identifier) or table.catalog:
+            continue
+        if not table.db and table.name.lower() in ctes:
+            continue
+        if (table.name, table.db) not in out:
+            out.append((table.name, table.db))
+    return tuple(out)
+
+
+def named_datasources(session: Session, sql: str, engine: Optional[str],
+                      candidates: Optional[list[Datasource]] = None) -> list[Datasource]:
+    """The datasources the SQL names, as `resolve` finds them but without refusing
+    anything: for the lineage, which reads a script without running it. Among
+    `candidates` (default: every datasource); a name it cannot place is left out."""
+    tables = _named_tables(sql or "", DIALECTS.get(engine or "polars", "postgres"))
+    if not tables:
+        return []
+    by_name: dict[str, list[Datasource]] = {}
+    for ds in candidates if candidates is not None else session.exec(select(Datasource)).all():
+        by_name.setdefault(ds.name.lower(), []).append(ds)
+    folders = folder_names(session) if any(folder for _, folder in tables) else {}
+    out: dict[int, Datasource] = {}
+    for name, folder in tables:
+        matches = by_name.get(name.lower(), [])
+        if folder:
+            matches = [d for d in matches if folders.get(d.project_id, "").lower() == folder.lower()]
+        if len(matches) > 1:
+            matches = [d for d in matches if d.name == name]
+        if len(matches) == 1:
+            out.setdefault(matches[0].id, matches[0])
+    return list(out.values())
 
 
 def _engine_message(detail: str, resolved: Resolved) -> str:

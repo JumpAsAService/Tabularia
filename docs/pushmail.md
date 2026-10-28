@@ -69,3 +69,8 @@ Each send is a run of its own under the group's run (`pushmail`), with the outco
 recipients, the subject, the files and their sizes, the rows sent and the ones cut. The
 cell in the grid shows its state and, when it failed, why (the relay refused the
 message, the files were over the size cap, a recipient outside the allowed domains).
+
+The **Lineage** page draws the cell's email with the datasources it attaches. With
+[OpenLineage](openlineage.md) on, the send is a child job of the group's run, reading
+the datasources and writing the email as a dataset `smtp://<host>:<port>` +
+`/<folder>/<group>/<cell>`: never the recipients' addresses.

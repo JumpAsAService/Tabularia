@@ -1,5 +1,5 @@
-"""Cross-flow lineage: the provenance/impact graph among flows, datasources, connections
-and external destinations. Derived on demand and filtered by RBAC (readable
+"""Cross-flow lineage: the provenance/impact graph among flows, datasources, connections,
+external destinations, saved scripts, SQL scripts, notebooks and flow groups. Derived on demand and filtered by RBAC (readable
 projects). See app/services/lineage.py for the graph's model.
 """
 import logging
@@ -25,7 +25,8 @@ router = APIRouter(route_class=ReleasingRoute, tags=["lineage"])
 
 class LineageNode(BaseModel):
     id: str
-    type: str                       # flow | datasource | connection | script | db_sink | s3_sink | sftp_sink
+    type: str                       # flow | datasource | connection | script | sql_script | notebook | flow_group |
+                                    # container | db_sink | s3_sink | sftp_sink | email_sink
     label: str
     project_id: Optional[int] = None
     kind: Optional[str] = None      # datasource: flow | database
@@ -84,7 +85,8 @@ def emit_flow_openlineage(flow_id: int, user: User = Depends(get_current_user), 
 
 @router.get("/lineage", response_model=LineageGraph)
 def get_lineage(
-    type: Optional[Literal["flow", "datasource", "connection", "script"]] = Query(None, description="kind of the central object"),
+    type: Optional[Literal["flow", "datasource", "connection", "script", "sql", "notebook", "group"]] = Query(
+        None, description="kind of the central object"),
     id: Optional[int] = Query(None, description="id of the central object"),
     direction: Literal["both", "upstream", "downstream"] = "both",
     depth: int = Query(3, ge=1, le=8),
@@ -99,7 +101,8 @@ def get_lineage(
     if type is None or id is None:
         return _serialize(full, None)
 
-    center = {"flow": "flow", "datasource": "ds", "connection": "conn", "script": "script"}[type] + f":{id}"
+    center = {"flow": "flow", "datasource": "ds", "connection": "conn", "script": "script", "sql": "sql",
+              "notebook": "notebook", "group": "group"}[type] + f":{id}"
     if center not in full.nodes:
         # the object is not readable or does not exist: 404 (we do not reveal the existence of
         # objects outside the user's projects)

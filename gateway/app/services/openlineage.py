@@ -9,12 +9,16 @@ towards Marquez or any other compatible collector:
 - a flow's run = a job (name = the folder's path + the flow's name), the runs of its
   Output nodes = child jobs with `ParentRunFacet`;
 - the refresh of a datasource from a database or SharePoint = a job of its own;
+- a SQL script's write, a saved script's run, a notebook's session (its reads), a
+  flow group's run (with its Container and Pushmail cells as child jobs) and the
+  Script and Container nodes of a flow = jobs too (see `run_events` and
+  `notebook_session`);
 - inputs: the datasource read (with the name it has in Tabularia, under the folder's
   path; the parquet in the bucket as a symlink, the id in the `tabularia` facet),
   the database table, the SQL query (tables extracted with sqlglot, text in the
   `sql` facet), the SharePoint file; outputs: the published datasource, the table
-  written, the S3/GCS object, the mirror copy. An email is not a dataset and does not
-  show up.
+  written, the S3/GCS object, the mirror copy, the email of an Output node or of a
+  Pushmail cell (the SMTP server, never the recipients).
 
 External datasets follow OpenLineage's naming conventions (namespace
 `postgres://host:port`, name `db.schema.table`; `s3://bucket` + path), so a catalog
@@ -53,7 +57,7 @@ from typing import Any, Callable, Iterable
 from sqlmodel import Session, select
 
 from app.core.config import get_settings
-from app.models import Connection, Datasource, Flow, Run
+from app.models import Connection, Datasource, Flow, FlowGroup, Notebook, Run, SavedScript, SqlScript
 from app.services import permissions as perm_service
 
 logger = logging.getLogger(__name__)
@@ -138,8 +142,10 @@ def _sender_loop(queue_: "queue.Queue") -> None:
             _emit(events)
             if isinstance(run_id, int):
                 logger.info("openlineage: %d events for run %s", len(events), run_id)
-            else:
+            elif old_ones:
                 logger.info("openlineage: %d events for a %s, %d old names removed", len(events), run_id, _remove_old_names(old_ones))
+            else:
+                logger.info("openlineage: %d events for %s", len(events), run_id)
         except Exception as e:  # noqa: BLE001 — the run is closed already: lineage must weigh on nothing
             logger.warning("openlineage: events of run %s not sent: %s", run_id, str(e)[:300])
         finally:
@@ -195,6 +201,22 @@ def job_name_for_flow(session: Session, flow: Flow) -> str:
 def job_name_for_refresh(session: Session, ds: Datasource) -> str:
     path = _project_path(session, ds.project_id)
     return f"{path}/{ds.name} (refresh)" if path else f"{ds.name} (refresh)"
+
+
+# the other objects that run: «<folder path>/<name> (<kind>)». The kind in the name keeps
+# a SQL script, a saved script, a notebook and a flow group apart from a flow of the
+# same name in the same folder (each kind has names unique per folder, not across kinds)
+OBJECT_KINDS = {"sql_script": (SqlScript, "SQL script"), "saved_script": (SavedScript, "script"),
+                "notebook": (Notebook, "notebook"), "flow_group": (FlowGroup, "flow group")}
+
+
+def job_name_for(session: Session, kind: str, obj: Any) -> str:
+    """The catalog's job of a flow, a SQL script, a saved script, a notebook or a flow group."""
+    if kind == "flow":
+        return job_name_for_flow(session, obj)
+    path = _project_path(session, obj.project_id)
+    name = f"{path}/{obj.name}" if path else obj.name
+    return f"{name} ({OBJECT_KINDS[kind][1]})"
 
 
 _PORTS = {"postgresql": 5432, "mysql": 3306, "mariadb": 3306, "clickhouse": 8443, "trino": 8080, "oracle": 1521, "sqlserver": 1433}
@@ -508,24 +530,55 @@ def _definition(flow: Flow) -> dict:
 def flow_inputs(session: Session, flow: Flow) -> list:
     """What the flow reads: the datasources of the source nodes, or the uploaded file when
     the source does not come from the catalog. Without duplicates."""
-    seen_ones: set[tuple[str, str]] = set()
+    return _source_datasets(session, [n for n in _definition(flow).get("nodes") or [] if n.get("type") == "source"])
+
+
+def _source_datasets(session: Session, nodes: list[dict]) -> list:
+    """The datasets of these source nodes, without duplicates."""
     inputs = []
-    for n in _definition(flow).get("nodes") or []:
-        if n.get("type") != "source":
-            continue
+    for n in nodes:
         d = n.get("data") or {}
         ds = session.get(Datasource, d["datasourceId"]) if d.get("datasourceId") is not None else None
         if ds is not None:
-            dataset = datasource_dataset(session, ds)
+            inputs.append(datasource_dataset(session, ds))
         elif d.get("parquetKey"):
-            dataset = object_dataset("", d.get("bucket") or get_settings().engine.bucket, d["parquetKey"], "parquet")
-        else:
-            continue
+            inputs.append(object_dataset("", d.get("bucket") or get_settings().engine.bucket, d["parquetKey"], "parquet"))
+    return _unique(inputs)
+
+
+def _unique(datasets: Iterable) -> list:
+    seen_ones: set[tuple[str, str]] = set()
+    out = []
+    for dataset in datasets:
         key = (dataset.namespace, dataset.name)
         if key not in seen_ones:
             seen_ones.add(key)
-            inputs.append(dataset)
-    return inputs
+            out.append(dataset)
+    return out
+
+
+def upstream_inputs(session: Session, flow: Flow, node_id: str | None) -> list:
+    """What reaches a node of the flow (a Script or Container node's input): the source
+    nodes upstream of it along the data edges."""
+    from app.services.flow_resolver import _is_seq_edge
+
+    definition = _definition(flow)
+    nodes = {n.get("id"): n for n in definition.get("nodes") or [] if isinstance(n, dict)}
+    into: dict[str, list[str]] = {}
+    for e in definition.get("edges") or []:
+        if isinstance(e, dict) and not _is_seq_edge(e):
+            into.setdefault(e.get("target"), []).append(e.get("source"))
+    sources, seen, todo = [], {node_id}, list(into.get(node_id, []))
+    while todo:
+        nid = todo.pop()
+        if nid in seen or nid not in nodes:
+            continue
+        seen.add(nid)
+        if nodes[nid].get("type") == "source":
+            sources.append(nodes[nid])
+        todo.extend(into.get(nid, []))
+    order = {n.get("id"): i for i, n in enumerate(definition.get("nodes") or []) if isinstance(n, dict)}
+    return _source_datasets(session, sorted(sources, key=lambda n: order.get(n.get("id"), 0)))
 
 
 def _find_datasource(session: Session, project_id: int | None, name: str) -> Datasource | None:
@@ -570,7 +623,12 @@ def flow_outputs(session: Session, flow: Flow) -> list:
             if conn is not None and (d.get("sftpFileName") or "").strip():
                 outputs.append(sftp_dataset(_sftp_address(conn), _sftp_path(d.get("sftpFolder") or "", d["sftpFileName"].strip()),
                                             d.get("sftpFormat") or "csv", output=True))
-        # email: not a dataset
+        elif kind == "email":
+            # as a Pushmail cell's: the SMTP server, and the flow's path with the node's
+            # name; never the recipients
+            conn = session.get(Connection, d.get("connectionId")) if d.get("connectionId") else None
+            if conn is not None:
+                outputs.append(email_dataset(conn.host, conn.port or 587, flow_email_name(session, flow), conn.name))
     return outputs
 
 
@@ -593,6 +651,241 @@ def job_events_for_flow(session: Session, flow: Flow) -> list:
 
     return [JobEvent(eventTime=_now(), producer=PRODUCER, job=_job(session, flow),
                      inputs=flow_inputs(session, flow), outputs=flow_outputs(session, flow))]
+
+
+# ── the other objects: SQL scripts, saved scripts, notebooks, flow groups ────
+def _json(text: str | None) -> dict:
+    try:
+        d = json.loads(text or "{}")
+    except (TypeError, ValueError):
+        return {}
+    return d if isinstance(d, dict) else {}
+
+
+def _datasource_inputs(session: Session, ids: Iterable) -> list:
+    """The datasources with these ids, as inputs; a removed one is left out."""
+    out = []
+    for i in ids:
+        ds = session.get(Datasource, i) if isinstance(i, int) and not isinstance(i, bool) else None
+        if ds is not None:
+            out.append(datasource_dataset(session, ds))
+    return _unique(out)
+
+
+def _intended_output(session: Session, project_id: int, name: str):
+    """The datasource an object writes under `name` in its folder: as it is now, or with
+    the name it will have when it does not exist yet (as `flow_outputs` does)."""
+    from openlineage.client.event_v2 import OutputDataset
+
+    ds = _find_datasource(session, project_id, (name or "").strip())
+    if ds is not None:
+        return datasource_dataset(session, ds, output=True)
+    path = _project_path(session, project_id)
+    return OutputDataset(namespace=f"tabularia://{namespace()}", name=f"/{path}/{name.strip()}".replace("//", "/"))
+
+
+def _job_type(job_type: str) -> dict:
+    from openlineage.client.facet_v2 import job_type_job
+
+    return {"jobType": job_type_job.JobTypeJobFacet(processingType="BATCH", integration="TABULARIA", jobType=job_type)}
+
+
+def _object_job(session: Session, kind: str, obj: Any, job_type: str, extra_facets: dict | None = None):
+    from openlineage.client.event_v2 import Job
+    from openlineage.client.facet_v2 import documentation_job
+
+    facets: dict[str, Any] = _job_type(job_type)
+    if getattr(obj, "description", ""):
+        facets["documentation"] = documentation_job.DocumentationJobFacet(description=obj.description)
+    facets.update(extra_facets or {})
+    return Job(namespace=namespace(), name=job_name_for(session, kind, obj), facets=facets)
+
+
+def sql_script_lineage(session: Session, script: SqlScript, run: Run | None = None) -> tuple[list, list, dict]:
+    """(inputs, outputs, job facets) of a SQL script. For a write, from what the run
+    recorded when it started (the version, the datasources the SQL named or the
+    connection it ran on); without a run, from the current version. On a connection the
+    inputs are the tables the SQL reads, found with sqlglot as for a SQL datasource's
+    refresh — a query sqlglot does not understand gives none, its text stays in the
+    `sql` facet."""
+    from openlineage.client.facet_v2 import sql_job
+
+    from app.services import sql_scripts
+
+    info = _json(run.script) if run is not None else {}
+    content = sql_scripts.content_of(session, script, info.get("version"))
+    sql = content.get("sql") or ""
+    connection_id = info["connection_id"] if "connection_id" in info else content.get("connection_id")
+    if connection_id is not None:
+        conn = session.get(Connection, connection_id)
+        inputs = [table_dataset(conn, t) for t in _tables_in_sql(conn, sql)] if conn is not None else []
+        dialect = _SCHEMES.get(conn.db_type) if conn is not None else None
+    else:
+        if "datasources" in info:
+            inputs = _datasource_inputs(session, info["datasources"])
+        else:
+            inputs = _unique(datasource_dataset(session, d)
+                             for d in sql_scripts.named_datasources(session, sql, content.get("engine")))
+        engine = (run.engine if run is not None and run.engine else None) or content.get("engine") or "polars"
+        dialect = sql_scripts.DIALECTS.get(engine, "postgres")
+    facets = {"sql": sql_job.SQLJobFacet(query=sql, dialect=dialect)} if sql.strip() else {}
+    outputs = []
+    if run is not None and run.datasource_id is not None:
+        ds = session.get(Datasource, run.datasource_id)
+        if ds is not None:
+            outputs.append(datasource_dataset(session, ds, output=True, rows=run.rows_written))
+    elif run is not None:
+        if run.publish_name and run.publish_project_id is not None:
+            outputs.append(_intended_output(session, run.publish_project_id, run.publish_name))
+    else:
+        out = content.get("output")
+        if isinstance(out, dict) and out.get("name") and isinstance(out.get("project_id"), int):
+            outputs.append(_intended_output(session, out["project_id"], out["name"]))
+    return inputs, outputs, facets
+
+
+def saved_script_lineage(session: Session, script: SavedScript, child: Run | None = None) -> tuple[list, list]:
+    """(inputs, outputs) of a saved script: its declared inputs (those the run copied,
+    when there is a run) and the datasource it publishes."""
+    from app.services import saved_scripts
+
+    info = _json(child.script) if child is not None else {}
+    content: dict | None = None
+    if isinstance(info.get("inputs"), list):
+        declared = info["inputs"]
+    else:
+        content = saved_scripts.content_of(session, script)
+        declared = content.get("inputs") or []
+    inputs = _datasource_inputs(session, [i.get("datasource_id") for i in declared if isinstance(i, dict)])
+    outputs = []
+    if child is not None and child.datasource_id is not None:
+        ds = session.get(Datasource, child.datasource_id)
+        if ds is not None:
+            outputs.append(datasource_dataset(session, ds, output=True, rows=child.rows_written))
+    elif child is None or child.status != "SUCCESS":
+        # not run, or failed: what it publishes when it succeeds (a success that wrote
+        # nothing published nothing)
+        publish = (content if content is not None else saved_scripts.content_of(session, script)).get("output") or {}
+        if publish.get("publish") and publish.get("name") and isinstance(publish.get("project_id"), int):
+            outputs.append(_intended_output(session, publish["project_id"], str(publish["name"])))
+    return inputs, outputs
+
+
+def notebook_inputs(session: Session, notebook_id: int, session_key: str | None = None) -> list:
+    """The datasources a notebook has read: in one session (its Job's name), or ever."""
+    from app.services import notebook_reads
+
+    ids = (notebook_reads.read_in_session(session, notebook_id, session_key) if session_key
+           else notebook_reads.read_by(session, [notebook_id]).get(notebook_id, []))
+    return _datasource_inputs(session, ids)
+
+
+def job_events_for(session: Session, kind: str, obj: Any) -> list:
+    """The STATIC lineage of a flow, a SQL script, a saved script, a notebook or a flow
+    group: a `JobEvent` with what it reads and writes, without running it."""
+    from openlineage.client.event_v2 import JobEvent
+
+    if kind == "flow":
+        return job_events_for_flow(session, obj)
+    if kind == "sql_script":
+        inputs, outputs, facets = sql_script_lineage(session, obj)
+        job = _object_job(session, kind, obj, "SQL_SCRIPT", facets)
+    elif kind == "saved_script":
+        inputs, outputs = saved_script_lineage(session, obj)
+        job = _object_job(session, kind, obj, "SCRIPT")
+    elif kind == "notebook":
+        inputs, outputs = notebook_inputs(session, obj.id), []
+        job = _object_job(session, kind, obj, "NOTEBOOK")
+    else:  # a flow group: what it reads and writes is told by its runs
+        inputs, outputs = [], []
+        job = _object_job(session, kind, obj, "FLOW_GROUP")
+    return [JobEvent(eventTime=_now(), producer=PRODUCER, job=job, inputs=inputs, outputs=outputs)]
+
+
+def _group_cell_jobs(group: FlowGroup) -> list[str]:
+    """The child jobs of a flow group's cells that exist only inside it (Container and
+    Pushmail cells): `<group's job>.<these>`."""
+    from app.services import container_nodes
+    from app.services.flow_groups import definition_of
+
+    labels = []
+    for row in definition_of(group).steps:
+        for cell in row:
+            if cell is not None and cell.kind == "container":
+                labels.append("container " + container_nodes.label({"id": f"container-cell-{cell.id}", "data": cell.container or {}}))
+            elif cell is not None and cell.kind == "pushmail" and cell.pushmail is not None:
+                labels.append("pushmail " + (cell.pushmail.label.strip() or "Pushmail"))
+    return list(dict.fromkeys(labels))
+
+
+def _step_labels(flow: Flow) -> list[str]:
+    """The jobs of a flow's Script and Container nodes: `<flow's job>.<these>`."""
+    from app.services import container_nodes, script_nodes
+
+    definition = _definition(flow)
+    return list(dict.fromkeys([f"script {script_nodes.label(n)}" for n in script_nodes.script_nodes(definition)]
+                              + [f"container {container_nodes.label(n)}" for n in container_nodes.container_nodes(definition)]))
+
+
+@functools.cache
+def _container_facet_class():
+    import attr
+    from openlineage.client.facet_v2 import JobFacet
+
+    @attr.define
+    class TabulariaContainerJobFacet(JobFacet):
+        registry: str = attr.field()
+        repository: str = attr.field()
+        registryHost: str | None = attr.field(default=None)  # noqa: N815
+        tag: str | None = attr.field(default=None)
+        digest: str | None = attr.field(default=None)
+        image: str | None = attr.field(default=None)
+
+        @staticmethod
+        def _get_schema() -> str:
+            return f"{PRODUCER}/blob/main/docs/openlineage/TabulariaContainerJobFacet.json"
+
+    return TabulariaContainerJobFacet
+
+
+def _container_facet(session: Session, info: dict):
+    """The image a Container node or cell ran: the registry, the repository, the tag it
+    asked for and the digest it was resolved to when the run started."""
+    from app.models import ContainerRegistry
+
+    registry = session.get(ContainerRegistry, info["registry_id"]) if isinstance(info.get("registry_id"), int) else None
+    return _container_facet_class()(registry=str(info.get("registry") or ""), repository=str(info.get("repository") or ""),
+                                    registryHost=registry.host if registry is not None else None,
+                                    tag=info.get("reference"), digest=info.get("digest"), image=info.get("image"))
+
+
+def email_dataset(host: str, port: int, name: str, connection_name: str | None = None):
+    """The email a Pushmail cell sends, as a dataset: namespace = the SMTP server
+    (`smtp://host:port`), name = `/<folder path>/<flow group>/<cell>`. Never the
+    recipients: their addresses do not leave the installation."""
+    from openlineage.client.event_v2 import OutputDataset
+    from openlineage.client.facet_v2 import datasource_dataset
+
+    ns = f"smtp://{(host or '').split('://')[-1].rstrip('/')}:{port}"
+    return OutputDataset(namespace=ns, name=name, outputFacets={},
+                         facets={"dataSource": datasource_dataset.DatasourceDatasetFacet(name=connection_name or ns, uri=ns)})
+
+
+def flow_email_name(session: Session, flow: Flow) -> str:
+    """The email an Output node of the flow sends, as a dataset name: the flow's path and
+    `email` (a run does not know which Output node it was, so a flow's emails through
+    one SMTP server are one dataset)."""
+    return "/" + job_name_for_flow(session, flow).strip("/") + "/email"
+
+
+def _pushmail_dataset_name(group_path: str, group_name: str, cell: str) -> str:
+    return "/" + "/".join(p for p in (group_path, group_name, cell) if p)
+
+
+def _group_of(session: Session, run: Run) -> FlowGroup | None:
+    """The flow group whose run `run` is a cell of."""
+    padre = session.get(Run, run.parent_run_id) if run.parent_run_id is not None else None
+    return session.get(FlowGroup, padre.flow_group_id) if padre is not None and padre.flow_group_id else None
 
 
 # ── runs: the events of a closed run ─────────────────────────────────────────
@@ -629,6 +922,14 @@ def _run_outputs(session: Session, run: Run) -> list:
         elif dest.get("type") == "sftp" and dest.get("host") and (dest.get("path") or dest.get("file_name")):
             outputs.append(sftp_dataset(dest["host"], _sftp_path(dest.get("folder") or "", dest.get("file_name") or ""),
                                         dest.get("format"), output=True, rows=run.rows_written, written=dest.get("path")))
+    if run.email and run.kind == "flow" and run.flow_id is not None:
+        e = _json(run.email)
+        conn = session.get(Connection, e["connection_id"]) if isinstance(e.get("connection_id"), int) else None
+        flow = session.get(Flow, run.flow_id)
+        if flow is not None and (conn is not None or e.get("host")):
+            outputs.append(email_dataset(conn.host if conn is not None else e["host"],
+                                         (conn.port if conn is not None else None) or 587,
+                                         flow_email_name(session, flow), conn.name if conn is not None else None))
     if run.mirror:
         try:
             m = json.loads(run.mirror)
@@ -663,25 +964,38 @@ def _without_statistics(outputs: list) -> list:
 
 
 def _parent_facet(session: Session, run: Run):
-    """The `ParentRunFacet` ONLY for the flow's own Output nodes, which the catalog puts
-    under the flow's job («Flow.output»).
+    """The `ParentRunFacet` ONLY for the steps that exist only inside their parent: a
+    flow's own Output, Script and Container nodes (under the flow's job, «Flow.output»),
+    and a flow group's Container and Pushmail cells (under the group's job).
 
-    Marquez renames every child «<parent>.<child>»: a datasource refresh or a sub-flow's
-    output (`Run flow`), which carry the root's parent_run_id, would end up in a job
-    other than the one they have when they run alone. For them the link to the
-    orchestration is in the run's `tabularia` facet (`parentRunId`), not in the jobs'
-    hierarchy."""
+    Marquez renames every child «<parent>.<child>»: a datasource refresh, a sub-flow's
+    output (`Run flow`), and every object a flow group runs that has a life of its own
+    (a flow, a refresh, a SQL script, a saved script) would end up in a job other than
+    the one they have when they run alone. For them the link to the orchestration or
+    the group that contained them is in the run's `tabularia` facet (`parentRunId`), not
+    in the jobs' hierarchy."""
     from openlineage.client.facet_v2 import parent_run
 
-    if run.parent_run_id is None or run.kind != "flow":
+    if run.parent_run_id is None:
         return None
-    padre = session.get(Run, run.parent_run_id)
-    if padre is None or padre.flow_id != run.flow_id:
+    if run.kind in ("flow", "script", "container") and run.flow_id is not None:
+        padre = session.get(Run, run.parent_run_id)
+        if padre is None or padre.flow_id != run.flow_id:
+            return None
+        flow = session.get(Flow, padre.flow_id)
+        if flow is None:
+            return None
+        parent_job = job_name_for_flow(session, flow)
+    elif run.kind in ("container", "pushmail") and run.flow_id is None:
+        group = _group_of(session, run)
+        if group is None:
+            return None
+        parent_job = job_name_for(session, "flow_group", group)
+    else:
         return None
-    flow = session.get(Flow, padre.flow_id)
     return parent_run.ParentRunFacet(
         run=parent_run.Run(runId=run_uuid(run.parent_run_id)),
-        job=parent_run.Job(namespace=namespace(), name=job_name_for_flow(session, flow)),
+        job=parent_run.Job(namespace=namespace(), name=parent_job),
     )
 
 
@@ -692,11 +1006,13 @@ def _tabularia_run_facet_class():
 
     @attr.define
     class TabulariaRunFacet(RunFacet):
-        runId: int = attr.field()  # noqa: N815
         kind: str = attr.field()
         trigger: str = attr.field()
+        runId: int | None = attr.field(default=None)  # noqa: N815 — none for a notebook's session
         engine: str | None = attr.field(default=None)
         parentRunId: str | None = attr.field(default=None)  # noqa: N815
+        version: int | None = attr.field(default=None)  # the SQL script's, saved script's or notebook's
+        mode: str | None = attr.field(default=None)  # a notebook's session: app | edit
 
         @staticmethod
         def _get_schema() -> str:
@@ -705,57 +1021,133 @@ def _tabularia_run_facet_class():
     return TabulariaRunFacet
 
 
-def _tabularia_run_facet(run: Run):
+def _tabularia_run_facet(run: Run, engine: str | None = None, version: int | None = None):
     """The run's `tabularia` facet: the run's id in Tabularia, who launched it
-    (manual/scheduled), the engine and the orchestration that contains it — even when
-    the job is NOT a child in the catalog's hierarchy."""
-    return _tabularia_run_facet_class()(runId=run.id, kind=run.kind, trigger=run.trigger_type or "manual", engine=run.engine or None,
+    (manual/scheduled), the engine and the orchestration or flow group that contains
+    it — even when the job is NOT a child in the catalog's hierarchy."""
+    return _tabularia_run_facet_class()(runId=run.id, kind=run.kind, trigger=run.trigger_type or "manual",
+                                        engine=engine or run.engine or None, version=version,
                                         parentRunId=run_uuid(run.parent_run_id) if run.parent_run_id is not None else None)
+
+
+def _describe(session: Session, run: Run, top: bool = True):
+    """(job, inputs, outputs, run facets) of a closed run, or None when the run is not
+    told (a step's preparation, an editor's trial, an object gone). A flow group's run
+    carries what its cells read and wrote, as a flow's orchestration carries its
+    Outputs'."""
+    from openlineage.client.event_v2 import Job
+
+    run_facets: dict[str, Any] = {"tabularia": _tabularia_run_facet(run)}
+    if run.kind == "orchestration" and run.flow_group_id is not None:
+        group = session.get(FlowGroup, run.flow_group_id)
+        if group is None:
+            return None
+        inputs, outputs = [], []
+        if top:
+            for child in session.exec(select(Run).where(Run.parent_run_id == run.id).order_by(Run.id)).all():
+                described = _describe(session, child, top=False)
+                if described is not None:
+                    inputs += described[1]
+                    outputs += described[2]
+        return _object_job(session, "flow_group", group, "FLOW_GROUP"), _unique(inputs), _unique(outputs), run_facets
+    if run.kind == "orchestration" and run.saved_script_id is not None:
+        script = session.get(SavedScript, run.saved_script_id)
+        if script is None:
+            return None
+        # the script's run proper is the kind="script" row under this one: its inputs,
+        # its output, the environment it ran in
+        child = session.exec(select(Run).where(Run.parent_run_id == run.id, Run.kind == "script")
+                             .order_by(Run.id.desc())).first()
+        inputs, outputs = saved_script_lineage(session, script, child)
+        run_facets["tabularia"] = _tabularia_run_facet(run, engine=child.engine if child is not None else None,
+                                                       version=_json(child.script).get("script_version") if child is not None else None)
+        return _object_job(session, "saved_script", script, "SCRIPT"), inputs, outputs, run_facets
+    if run.kind == "orchestration":
+        flow = session.get(Flow, run.flow_id) if run.flow_id else None
+        if flow is None:
+            return None
+        children = session.exec(select(Run).where(Run.parent_run_id == run.id, Run.kind == "flow")).all()
+        return _job(session, flow), flow_inputs(session, flow), [o for f in children for o in _run_outputs(session, f)], run_facets
+    if run.kind == "flow":
+        flow = session.get(Flow, run.flow_id) if run.flow_id else None
+        if flow is None or _json(run.destination).get("type") in ("script_input", "container_input"):
+            return None  # the input given to a Script or Container node: a step inside the flow, not an Output
+        # «<flow>.<output>» ALWAYS, with or without an orchestration: Marquez prefixes a child
+        # with the parent's name by itself, and a run launched from the editor (without a
+        # parent) would otherwise end up in a job other than the same Output orchestrated
+        job = Job(namespace=namespace(), name=f"{job_name_for_flow(session, flow)}.{_output_label(run)}", facets=_job_type("OUTPUT"))
+        return job, flow_inputs(session, flow), _run_outputs(session, run), run_facets
+    if run.kind == "ingest":
+        ds = session.get(Datasource, run.datasource_id) if run.datasource_id else None
+        if ds is None:
+            return None
+        inputs, job_facets = origin_inputs(session, ds)
+        job_facets.update(_job_type("REFRESH"))
+        job = Job(namespace=namespace(), name=job_name_for_refresh(session, ds), facets=job_facets)
+        return job, inputs, [datasource_dataset(session, ds, output=True, rows=run.rows_written if run.status == "SUCCESS" else None)], run_facets
+    if run.kind == "sql":
+        script = session.get(SqlScript, run.sql_script_id) if run.sql_script_id else None
+        if script is None:
+            return None
+        inputs, outputs, facets = sql_script_lineage(session, script, run)
+        run_facets["tabularia"] = _tabularia_run_facet(run, version=_json(run.script).get("version"))
+        return _object_job(session, "sql_script", script, "SQL_SCRIPT", facets), inputs, outputs, run_facets
+    if run.kind in ("script", "container"):
+        info = _json(run.script)
+        if info.get("trial"):
+            return None  # the editor's trial: not a run of the flow
+        facets = _job_type("SCRIPT" if run.kind == "script" else "CONTAINER")
+        if run.kind == "container":
+            facets["tabularia_container"] = _container_facet(session, info)
+        if run.flow_id is not None:
+            # a flow's Script or Container node: what reaches its input from the flow's
+            # sources, and the datasources a saved script it runs declares; what it hands
+            # to the nodes after it is not a dataset (they write the Outputs)
+            flow = session.get(Flow, run.flow_id)
+            if flow is None:
+                return None
+            parent_job = job_name_for_flow(session, flow)
+            inputs = upstream_inputs(session, flow, info.get("node_id")) if info.get("input") else []
+            inputs = _unique(inputs + _datasource_inputs(session, [i.get("datasource_id") for i in info.get("inputs") or []
+                                                                   if isinstance(i, dict)]))
+        elif run.kind == "container":
+            group = _group_of(session, run)  # a flow group's Container cell: no data in, none out
+            if group is None:
+                return None
+            parent_job, inputs = job_name_for(session, "flow_group", group), []
+        else:
+            return None  # a saved script's own run: told by its orchestration
+        label = str(info.get("label") or info.get("node_id") or run.kind)
+        return Job(namespace=namespace(), name=f"{parent_job}.{run.kind} {label}", facets=facets), inputs, [], run_facets
+    if run.kind == "pushmail":
+        group = _group_of(session, run)
+        if group is None:
+            return None
+        email = _json(run.email)
+        cell = str(email.get("cell") or "Pushmail")
+        conn = session.get(Connection, email["connection_id"]) if isinstance(email.get("connection_id"), int) else None
+        host = conn.host if conn is not None else email.get("host")
+        outputs = [email_dataset(host, (conn.port if conn is not None else None) or 587,
+                                 _pushmail_dataset_name(_project_path(session, group.project_id), group.name, cell),
+                                 conn.name if conn is not None else None)] if host else []
+        job = Job(namespace=namespace(), name=f"{job_name_for(session, 'flow_group', group)}.pushmail {cell}", facets=_job_type("PUSHMAIL"))
+        return job, _datasource_inputs(session, email.get("datasource_ids") or []), outputs, run_facets
+    return None
 
 
 def run_events(session: Session, run: Run) -> list:
     """The run's START and COMPLETE/FAIL, built when the run has CLOSED: the two events
     arrive together, with the true times, and Marquez works out the duration."""
-    from openlineage.client.event_v2 import Job, Run as OlRun, RunEvent, RunState
-    from openlineage.client.facet_v2 import error_message_run, job_type_job, parent_run
+    from openlineage.client.event_v2 import Run as OlRun, RunEvent, RunState
+    from openlineage.client.facet_v2 import error_message_run
 
-    run_facets: dict[str, Any] = {"tabularia": _tabularia_run_facet(run)}
-    if run.kind == "orchestration":
-        flow = session.get(Flow, run.flow_id) if run.flow_id else None
-        if flow is None:
-            return []
-        job = _job(session, flow)
-        inputs = flow_inputs(session, flow)
-        children = session.exec(select(Run).where(Run.parent_run_id == run.id, Run.kind == "flow")).all()
-        outputs = [o for f in children for o in _run_outputs(session, f)]
-    elif run.kind == "flow":
-        flow = session.get(Flow, run.flow_id) if run.flow_id else None
-        if flow is None:
-            return []
-        extra: dict[str, Any] = {"jobType": job_type_job.JobTypeJobFacet(processingType="BATCH", integration="TABULARIA", jobType="OUTPUT")}
-        # «<flow>.<output>» ALWAYS, with or without an orchestration: Marquez prefixes a child
-        # with the parent's name by itself, and a run launched from the editor (without a
-        # parent) would otherwise end up in a job other than the same Output orchestrated
-        job = Job(namespace=namespace(), name=f"{job_name_for_flow(session, flow)}.{_output_label(run)}", facets=extra)
-        padre = _parent_facet(session, run)
-        if padre is not None:
-            run_facets["parent"] = padre
-        inputs = flow_inputs(session, flow)
-        outputs = _run_outputs(session, run)
-    elif run.kind == "ingest":
-        ds = session.get(Datasource, run.datasource_id) if run.datasource_id else None
-        if ds is None:
-            return []
-        inputs, job_facets = origin_inputs(session, ds)
-        job_facets["jobType"] = job_type_job.JobTypeJobFacet(processingType="BATCH", integration="TABULARIA", jobType="REFRESH")
-        job = Job(namespace=namespace(), name=job_name_for_refresh(session, ds), facets=job_facets)
-        outputs = [datasource_dataset(session, ds, output=True, rows=run.rows_written if run.status == "SUCCESS" else None)]
-        padre = _parent_facet(session, run)
-        if padre is not None:
-            run_facets["parent"] = padre
-    else:
+    described = _describe(session, run)
+    if described is None:
         return []
-
+    job, inputs, outputs, run_facets = described
+    padre = _parent_facet(session, run)
+    if padre is not None:
+        run_facets["parent"] = padre
     ol_run = OlRun(runId=run_uuid(run.id), facets=run_facets)
     # the outputs are declared at START already (without statistics): with an empty START
     # and a full COMPLETE the catalog would see two versions of the job at every run
@@ -768,6 +1160,63 @@ def run_events(session: Session, run: Run) -> list:
         eventType=RunState.COMPLETE if run.status == "SUCCESS" else RunState.FAIL, inputs=inputs, outputs=outputs,
     )
     return [start, end]
+
+
+# ── a notebook's session: a run that lasts as long as its pod ────────────────
+def notebook_run_uuid(session_key: str) -> str:
+    """A session's run id, from its Job's name (unique per pod): the same from every
+    replica and from the reaper that stops it."""
+    return str(uuid.uuid5(uuid.NAMESPACE_URL, f"tabularia://{namespace()}/notebook-sessions/{session_key}"))
+
+
+NOTEBOOK_STATES = ("START", "RUNNING", "COMPLETE", "FAIL", "ABORT")
+
+
+def notebook_session_events(session: Session, row: Any, state: str, error: str | None = None,
+                            datasource_id: int | None = None) -> list:
+    """One event of a notebook's session (`row`: a NotebookSession, or anything with its
+    notebook_id, mode, version, job_name and started_at). The job is the notebook, the
+    run is the session: START when its pod starts, RUNNING with the datasource it reads
+    the first time it reads it (OpenLineage accumulates a run's datasets across its
+    events), COMPLETE when it stops — with every datasource it read, for the collectors
+    that look at the closing event only —, FAIL when the pod could not start, ABORT when
+    it was stopped before it started."""
+    from openlineage.client.event_v2 import Run as OlRun, RunEvent, RunState
+    from openlineage.client.facet_v2 import error_message_run
+
+    notebook = session.get(Notebook, row.notebook_id)
+    if notebook is None or state not in NOTEBOOK_STATES:
+        return []
+    facets: dict[str, Any] = {"tabularia": _tabularia_run_facet_class()(kind="notebook", trigger="manual",
+                                                                        version=row.version, mode=row.mode)}
+    if state == "FAIL" and error:
+        facets["errorMessage"] = error_message_run.ErrorMessageRunFacet(message=error[:2000], programmingLanguage="python")
+    if state == "START":
+        inputs, when = [], _iso(row.started_at)
+    elif state == "RUNNING":
+        ds = session.get(Datasource, datasource_id) if datasource_id is not None else None
+        if ds is None:
+            return []
+        inputs, when = [datasource_dataset(session, ds)], _now()
+    else:
+        inputs, when = notebook_inputs(session, row.notebook_id, row.job_name), _now()
+    return [RunEvent(eventTime=when, producer=PRODUCER, run=OlRun(runId=notebook_run_uuid(row.job_name), facets=facets),
+                     job=_object_job(session, "notebook", notebook, "NOTEBOOK"), eventType=getattr(RunState, state),
+                     inputs=inputs, outputs=[])]
+
+
+def notebook_session(session: Session, row: Any, state: str, error: str | None = None,
+                     datasource_id: int | None = None) -> None:
+    """Tells the catalog a moment of a notebook's session (see `notebook_session_events`).
+    It does not block, it does not raise."""
+    if not enabled():
+        return
+    try:
+        events = notebook_session_events(session, row, state, error, datasource_id)
+        if events:
+            _enqueue(f"notebook {row.notebook_id} ({state.lower()})", events)
+    except Exception:  # noqa: BLE001
+        logger.exception("openlineage: event of a session of notebook %s not built", getattr(row, "notebook_id", None))
 
 
 def to_json(events: Iterable) -> list[dict]:
@@ -827,8 +1276,10 @@ def wait_idle(timeout: float = 10.0) -> None:
 
 
 # ── renames and moves: the new name in the catalog, the old one removed ──────
-def catalog_names(session: Session, flows: Iterable[Flow] = (), datasources: Iterable[Datasource] = ()) -> dict:
-    """The names flows and datasources have in the catalog NOW. Taken before a
+def catalog_names(session: Session, flows: Iterable[Flow] = (), datasources: Iterable[Datasource] = (),
+                  objects: Iterable[tuple[str, Any]] = ()) -> dict:
+    """The names flows, datasources and the other objects that run (`objects`: pairs
+    (kind, object), kinds of OBJECT_KINDS) have in the catalog NOW. Taken before a
     rename or a move (the folder path is part of every name), and handed to
     `renamed` after the commit. Empty when OpenLineage is off."""
     if not enabled():
@@ -838,6 +1289,8 @@ def catalog_names(session: Session, flows: Iterable[Flow] = (), datasources: Ite
         names[("flow", flow.id)] = job_name_for_flow(session, flow)
     for ds in datasources:
         names[("datasource", ds.id)] = datasource_name(session, ds)
+    for kind, obj in objects:
+        names[(kind, obj.id)] = job_name_for(session, kind, obj)
     return names
 
 
@@ -849,7 +1302,13 @@ def folder_names(session: Session, project_id: int) -> dict:
     ids = perm_service.descendant_ids(perm_service.folder_parents(session), {project_id})
     flows = session.exec(select(Flow).where(Flow.project_id.in_(ids))).all()
     datasources = session.exec(select(Datasource).where(Datasource.project_id.in_(ids))).all()
-    return catalog_names(session, flows, datasources)
+    objects = [(kind, obj) for kind, (model, _) in OBJECT_KINDS.items()
+               for obj in session.exec(select(model).where(model.project_id.in_(ids))).all()]
+    return catalog_names(session, flows, datasources, objects)
+
+
+def _current_name(session: Session, kind: str, obj: Any) -> str:
+    return datasource_name(session, obj) if kind == "datasource" else job_name_for(session, kind, obj)
 
 
 def renamed(session: Session, before: dict) -> None:
@@ -860,12 +1319,15 @@ def renamed(session: Session, before: dict) -> None:
     if not before or not enabled():
         return
     try:
-        flows = {f.id: f for f in session.exec(select(Flow).where(Flow.id.in_([i for k, i in before if k == "flow"]))).all()}
-        dss = {d.id: d for d in session.exec(select(Datasource).where(Datasource.id.in_([i for k, i in before if k == "datasource"]))).all()}
+        models = {"flow": Flow, "datasource": Datasource, **{k: m for k, (m, _) in OBJECT_KINDS.items()}}
+        found: dict[str, dict] = {}
+        for kind in {k for k, _ in before}:
+            model = models[kind]
+            found[kind] = {o.id: o for o in session.exec(select(model).where(model.id.in_([i for k, i in before if k == kind]))).all()}
         changed = {}
         for (kind, oid), old_name in before.items():
-            obj = (flows if kind == "flow" else dss).get(oid)
-            if obj is not None and (job_name_for_flow(session, obj) if kind == "flow" else datasource_name(session, obj)) != old_name:
+            obj = found.get(kind, {}).get(oid)
+            if obj is not None and _current_name(session, kind, obj) != old_name:
                 changed[(kind, oid)] = old_name
         if changed:
             _enqueue("rename", functools.partial(_rename_events, session.get_bind(), changed))
@@ -876,17 +1338,19 @@ def renamed(session: Session, before: dict) -> None:
 def _rename_events(bind: Any, changed: dict) -> tuple[list, list[tuple[str, str, str]]]:
     """The events that tell the catalog the new names, and the old names to remove
     as (jobs | datasets, namespace, name). A flow comes back as its static job and
-    loses its old job and its Output jobs (they return with its next run); a
-    datasource comes back as a dataset that names the one it was, with its refresh
-    job; the flows that read or write a renamed datasource come back pointing at
-    the new name."""
+    loses its old job and its Output, Script and Container jobs (they return with its
+    next run); a SQL script, a saved script, a notebook and a flow group come back as
+    their static job and lose the old one (a group, its cells' jobs and its Pushmail
+    emails too); a datasource comes back as a dataset that names the one it was, with
+    its refresh job; the flows that read or write a renamed datasource, and the saved
+    scripts and notebooks that read it, come back pointing at the new name."""
     from openlineage.client.event_v2 import DatasetEvent, StaticDataset
     from openlineage.client.facet_v2 import lifecycle_state_change_dataset as lifecycle
 
     events: list = []
     old: list[tuple[str, str, str]] = []
     ds_namespace = f"tabularia://{namespace()}"
-    sent_flows: set[int] = set()
+    sent: set[tuple[str, int]] = set()
     renamed_ds: list[Datasource] = []
     with Session(bind) as s:
         for (kind, oid), old_name in changed.items():
@@ -895,9 +1359,20 @@ def _rename_events(bind: Any, changed: dict) -> tuple[list, list[tuple[str, str,
                 if flow is None:
                     continue
                 events += job_events_for_flow(s, flow)
-                sent_flows.add(flow.id)
+                sent.add(("flow", flow.id))
                 old.append(("jobs", namespace(), old_name))
-                old += [("jobs", namespace(), f"{old_name}.{label}") for label in _output_labels(s, flow.id)]
+                old += [("jobs", namespace(), f"{old_name}.{label}") for label in _output_labels(s, flow.id) + _step_labels(flow)]
+                continue
+            if kind in OBJECT_KINDS:
+                obj = s.get(OBJECT_KINDS[kind][0], oid)
+                if obj is None:
+                    continue
+                events += job_events_for(s, kind, obj)
+                sent.add((kind, obj.id))
+                old.append(("jobs", namespace(), old_name))
+                if kind == "flow_group":
+                    old += [("jobs", namespace(), f"{old_name}.{label}") for label in _group_cell_jobs(obj)]
+                    old += _old_pushmail_datasets(s, obj, old_name)
                 continue
             ds = s.get(Datasource, oid)
             if ds is None:
@@ -916,9 +1391,51 @@ def _rename_events(bind: Any, changed: dict) -> tuple[list, list[tuple[str, str,
                 old.append(("jobs", namespace(), f"{old_name[1:]} (refresh)"))  # «/a/b» was the job «a/b (refresh)»
             renamed_ds.append(ds)
         for flow in _flows_touching(s, renamed_ds):
-            if flow.id not in sent_flows:
+            if ("flow", flow.id) not in sent:
                 events += job_events_for_flow(s, flow)
+        for kind, obj in _readers_touching(s, renamed_ds):
+            if (kind, obj.id) not in sent:
+                events += job_events_for(s, kind, obj)
     return events, old
+
+
+def _old_pushmail_datasets(session: Session, group: FlowGroup, old_name: str) -> list[tuple[str, str, str]]:
+    """The emails of a renamed flow group's Pushmail cells, under the group's old name
+    (`/<folder path>/<group>/<cell>`, from the old job «<folder path>/<group> (flow group)»)."""
+    from app.services.flow_groups import definition_of
+
+    suffix = f" ({OBJECT_KINDS['flow_group'][1]})"
+    old_group = old_name[:-len(suffix)] if old_name.endswith(suffix) else old_name
+    out = []
+    for row in definition_of(group).steps:
+        for cell in row:
+            if cell is None or cell.kind != "pushmail" or cell.pushmail is None or cell.pushmail.connectionId is None:
+                continue
+            conn = session.get(Connection, cell.pushmail.connectionId)
+            if conn is None:
+                continue
+            ns = email_dataset(conn.host, conn.port or 587, "").namespace
+            out.append(("datasets", ns, _pushmail_dataset_name("", old_group, cell.pushmail.label.strip() or "Pushmail")))
+    return out
+
+
+def _readers_touching(session: Session, datasources: list[Datasource]) -> list[tuple[str, Any]]:
+    """The saved scripts that declare one of these datasources as an input and the
+    notebooks that have read one (by id)."""
+    if not datasources:
+        return []
+    from app.services import notebook_reads, saved_scripts
+
+    ids = {d.id for d in datasources}
+    out: list[tuple[str, Any]] = []
+    for script in session.exec(select(SavedScript)).all():
+        if any(isinstance(i, dict) and i.get("datasource_id") in ids for i in saved_scripts.content_of(session, script).get("inputs") or []):
+            out.append(("saved_script", script))
+    for notebook_id in notebook_reads.readers_of(session, ids):
+        notebook = session.get(Notebook, notebook_id)
+        if notebook is not None:
+            out.append(("notebook", notebook))
+    return out
 
 
 def _output_labels(session: Session, flow_id: int) -> list[str]:

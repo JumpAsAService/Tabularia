@@ -33,7 +33,7 @@ from app.models import Datasource, Project, Run, SavedScript, SavedScriptVersion
 from app.models.run import TERMINAL_STATES
 from app.models.permission import Capability
 from app.schemas.models import UtcDateTime
-from app.services import audit, orchestrator, saved_script_runs, saved_scripts, script_builds, script_nodes
+from app.services import audit, openlineage, orchestrator, saved_script_runs, saved_scripts, script_builds, script_nodes
 from app.services import permissions as perm_service
 from app.services.copy_names import commit_copy, free_copy_name
 from app.services.schedule import ScheduleError, next_fire, validate_schedule
@@ -304,6 +304,8 @@ def update_script(script_id: int, body: ScriptUpdate, request: Request, user: Us
     _need_on()
     script = saved_scripts.get_visible(session, user, script_id)
     ensure_can(session, user, script.project_id, Capability.EDIT)
+    lineage_names = openlineage.catalog_names(session, objects=[("saved_script", script)]) \
+        if body.name is not None or body.project_id is not None else {}
     changes: dict[str, Any] = {}
     target = script.project_id
     if body.project_id is not None and body.project_id != script.project_id:
@@ -349,6 +351,7 @@ def update_script(script_id: int, body: ScriptUpdate, request: Request, user: Us
     session.add(script)
     session.commit()
     session.refresh(script)
+    openlineage.renamed(session, lineage_names)
     audit.record_audit(session, actor=user, action=audit.SCRIPT_UPDATE, target_type="saved_script",
                        target_id=script.id, target_label=script.name, request=request, detail=changes)
     _record_schedule_off(session, user, script, schedule_off, request)

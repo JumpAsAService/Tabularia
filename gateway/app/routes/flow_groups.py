@@ -41,7 +41,7 @@ from app.schemas.models import (
     FlowGroupScheduleUpdate,
     FlowGroupUpdate,
 )
-from app.services import audit, orchestrator
+from app.services import audit, openlineage, orchestrator
 from app.services import permissions as perm_service
 from app.services.copy_names import commit_copy, free_copy_name
 from app.services import flow_access, saved_scripts, sql_script_runs, sql_scripts
@@ -327,6 +327,8 @@ def update_flow_group(group_id: int, body: FlowGroupUpdate, request: Request,
                       user: User = Depends(get_current_user), session: Session = Depends(get_session)):
     group = _get_group(session, group_id)
     ensure_can(session, user, group.project_id, Capability.EDIT)
+    lineage_names = openlineage.catalog_names(session, objects=[("flow_group", group)]) \
+        if body.name is not None or body.project_id is not None else {}
     detail: dict = {}
     schedule_off: dict | None = None
 
@@ -375,6 +377,7 @@ def update_flow_group(group_id: int, body: FlowGroupUpdate, request: Request,
     session.add(group)
     session.commit()
     session.refresh(group)
+    openlineage.renamed(session, lineage_names)
     audit.record_audit(
         session, actor=user, action=audit.FLOW_GROUP_UPDATE, target_type="flow_group",
         target_id=group.id, target_label=group.name, detail=detail or None, request=request,

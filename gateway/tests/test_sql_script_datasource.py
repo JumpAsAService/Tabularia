@@ -100,6 +100,8 @@ def test_refresh_now_writes_the_whole_result_and_the_datasource_keeps_its_id(app
     assert (body["input_key"], body["engine"]) == ("datasets/1/o.parquet", "duckdb")
     assert body["operations"][0]["params"]["query"] == f'SELECT * FROM ds_{ordini} AS "Ordini"'
     assert body["output_key"].startswith("datasets/new/") and "limit" not in body
+    # what the write reads, recorded for its lineage (services/openlineage.py)
+    assert json.loads(session.get(Run, first["run_id"]).script) == {"version": 1, "connection_id": None, "datasources": [ordini]}
     # one write at a time
     fake_engine.set_task("t-transform-1", "STARTED")
     again = boss.post(f"/sql-scripts/{sid}/refresh", headers=CSRF)

@@ -1,6 +1,6 @@
 <script setup lang="ts">
-// Lineage tab: the provenance/impact graph among flows, datasources, connections and
-// external destinations. One chooses an object to centre on (or sees everything);
+// Lineage tab: the provenance/impact graph among flows, datasources, connections,
+// external destinations, saved scripts, SQL scripts, notebooks and flow groups. One chooses an object to centre on (or sees everything);
 // nothing loads until the user searches an object and applies it, or asks for the
 // whole graph: with many objects the whole graph is the heavy case, not the start.
 // The graph shows upstream (where the data comes from) and downstream (who breaks if I
@@ -12,7 +12,8 @@ import { Background } from '@vue-flow/background'
 import { Controls } from '@vue-flow/controls'
 import {
   Share2, Workflow, Database, Plug, CloudUpload, HardDriveDownload, Search,
-  AlertTriangle, Clock, ExternalLink, X, Crosshair, Server, FileCode2,
+  AlertTriangle, Clock, ExternalLink, X, Crosshair, Server, FileCode2, DatabaseSearch, NotebookPen, Rows3,
+  Container as ContainerIcon, Mail,
 } from 'lucide-vue-next'
 import { useApi, errMessage, type LineageGraph, type LineageNode, type LineageEdge } from '~/composables/useApi'
 import { useSearch, type SearchHit } from '~/composables/useSearch'
@@ -32,7 +33,7 @@ const loading = ref(false)
 const error = ref('')
 
 // selection: central object + walking parameters
-type CenterType = 'flow' | 'datasource' | 'connection' | 'script'
+type CenterType = 'flow' | 'datasource' | 'connection' | 'script' | 'sql' | 'notebook' | 'group'
 const centerType = ref<CenterType | null>(null)
 const centerId = ref<number | null>(null)
 const direction = ref<'both' | 'upstream' | 'downstream'>('both')
@@ -41,7 +42,10 @@ const q = ref('') // search in the picker
 const selected = ref<LineageNode | null>(null) // node open in the detail panel
 
 // filters by node kind (all on by default)
-const ALL_TYPES = ['flow', 'datasource', 'connection', 'script', 'db_sink', 's3_sink', 'sftp_sink'] as const
+const ALL_TYPES = [
+  'flow', 'datasource', 'connection', 'script', 'sql_script', 'notebook', 'flow_group', 'container',
+  'db_sink', 's3_sink', 'sftp_sink', 'email_sink',
+] as const
 const enabledTypes = ref<Set<string>>(new Set(ALL_TYPES))
 function toggleType(t: string) {
   const s = new Set(enabledTypes.value)
@@ -55,9 +59,14 @@ const NODE_META = computed<Record<string, { label: string; icon: any; color: str
   datasource: { label: t('lineage.nodeDatasource'), icon: Database, color: '#6ee7b7' },
   connection: { label: t('lineage.nodeConnection'), icon: Plug, color: '#a78bfa' },
   script: { label: t('lineage.nodeScript'), icon: FileCode2, color: '#34d399' },
+  sql_script: { label: t('lineage.nodeSqlScript'), icon: DatabaseSearch, color: '#2dd4bf' },
+  notebook: { label: t('lineage.nodeNotebook'), icon: NotebookPen, color: '#fb923c' },
+  flow_group: { label: t('lineage.nodeFlowGroup'), icon: Rows3, color: '#818cf8' },
+  container: { label: t('lineage.nodeContainer'), icon: ContainerIcon, color: '#94a3b8' },
   db_sink: { label: t('lineage.nodeDbSink'), icon: HardDriveDownload, color: '#fbbf24' },
   s3_sink: { label: t('lineage.nodeS3Sink'), icon: CloudUpload, color: '#38bdf8' },
   sftp_sink: { label: t('sftp.lineageNode'), icon: Server, color: '#f472b6' },
+  email_sink: { label: t('lineage.nodeEmail'), icon: Mail, color: '#f87171' },
 }))
 const EDGE_META = computed<Record<string, { label: string; color: string; dashed?: boolean }>>(() => ({
   read: { label: t('lineage.edgeRead'), color: '#4f8cff' },
@@ -69,8 +78,14 @@ const EDGE_META = computed<Record<string, { label: string; color: string; dashed
 }))
 
 // ── picker: search the catalog, choose, then Apply ───────────────────────────
-const CENTER_OF_KIND: Record<string, CenterType> = { flow: 'flow', datasource: 'datasource', connection: 'connection', script: 'script' }
-const NODE_PREFIX: Record<CenterType, string> = { flow: 'flow', datasource: 'ds', connection: 'conn', script: 'script' }
+// the search's kinds (useSearch) → the centre's type; the node types they are drawn as
+const CENTER_OF_KIND: Record<string, CenterType> = {
+  flow: 'flow', datasource: 'datasource', connection: 'connection', script: 'script', sql: 'sql', notebook: 'notebook', group: 'group',
+}
+const NODE_TYPE_OF_KIND: Record<string, string> = { sql: 'sql_script', group: 'flow_group' }
+const NODE_PREFIX: Record<CenterType, string> = {
+  flow: 'flow', datasource: 'ds', connection: 'conn', script: 'script', sql: 'sql', notebook: 'notebook', group: 'group',
+}
 const hits = ref<SearchHit[]>([])
 const searching = ref(false)
 const chosen = ref<{ type: CenterType; id: number } | null>(null)
@@ -113,7 +128,8 @@ function apply() {
 }
 const hitType = (h: SearchHit) =>
   h.kind === 'flow' ? t('lineage.typeFlow') : h.kind === 'datasource' ? t('lineage.typeDatasource')
-    : h.kind === 'script' ? t('lineage.nodeScript') : t('lineage.typeConnection')
+    : h.kind === 'connection' ? t('lineage.typeConnection')
+      : NODE_META.value[NODE_TYPE_OF_KIND[h.kind] ?? h.kind]?.label ?? h.kind
 
 const centerNodeId = computed(() =>
   centerType.value && centerId.value != null ? `${NODE_PREFIX[centerType.value]}:${centerId.value}` : null,
@@ -277,11 +293,14 @@ function openNode(n: LineageNode) {
   if (n.type === 'flow') navigateTo(`/editor?flow=${id}`)
   else if (n.type === 'datasource') navigateTo('/datasources')
   else if (n.type === 'script') navigateTo(`/script?id=${id}`)
+  else if (n.type === 'sql_script') navigateTo(`/sql-script?id=${id}`)
+  else if (n.type === 'notebook') navigateTo(`/notebook?id=${id}`)
+  else if (n.type === 'flow_group') navigateTo(`/flow-group?id=${id}`)
 }
+const OPENABLE = new Set(['flow', 'datasource', 'script', 'sql_script', 'notebook', 'flow_group'])
 const canRecenter = (n: LineageNode | null) =>
-  !!n && (n.type === 'flow' || n.type === 'datasource' || n.type === 'connection' || n.type === 'script') && !n.restricted
-const canOpen = (n: LineageNode | null) =>
-  !!n && (n.type === 'flow' || n.type === 'datasource' || n.type === 'script') && !n.restricted
+  !!n && (OPENABLE.has(n.type) || n.type === 'connection') && !n.restricted
+const canOpen = (n: LineageNode | null) => !!n && OPENABLE.has(n.type) && !n.restricted
 
 function fmtDate(iso?: string | null) {
   return fmtx.dateTime(iso)
@@ -325,7 +344,7 @@ function impactOf(n: LineageNode, full: LineageGraph) {
   return {
     flows: byType('flow'),
     datasources: byType('datasource'),
-    sinks: byType('db_sink') + byType('s3_sink') + byType('sftp_sink'),
+    sinks: byType('db_sink') + byType('s3_sink') + byType('sftp_sink') + byType('email_sink'),
     total: seen.size,
   }
 }
@@ -367,7 +386,7 @@ function nodeIcon(t: string) {
                 @click="choose(h)"
                 @dblclick="choose(h); apply()"
               >
-                <component :is="nodeIcon(h.kind)" :size="13" />
+                <component :is="nodeIcon(NODE_TYPE_OF_KIND[h.kind] ?? h.kind)" :size="13" />
                 <span class="ln-pick-text">
                   <span class="ln-pick-label">{{ h.name }}</span>
                   <span v-if="folderPaths.pathOf(h.project_id) || h.project_name" class="ln-pick-path">{{ folderPaths.pathOf(h.project_id) || h.project_name }}</span>
@@ -515,6 +534,26 @@ function nodeIcon(t: string) {
                 <dt>{{ $t('lineage.version') }}</dt><dd>v{{ selected.meta?.version ?? '—' }}</dd>
                 <dt>{{ $t('lineage.scheduled') }}</dt><dd>{{ selected.meta?.scheduled ? $t('lineage.yes') : $t('lineage.no') }}</dd>
               </template>
+              <template v-else-if="selected.type === 'sql_script'">
+                <dt>{{ $t('lineage.version') }}</dt><dd>v{{ selected.meta?.version ?? '—' }}</dd>
+                <dt>{{ $t('lineage.engine') }}</dt><dd>{{ selected.meta?.engine ?? '—' }}</dd>
+                <dt>{{ $t('lineage.scheduled') }}</dt><dd>{{ selected.meta?.scheduled ? $t('lineage.yes') : $t('lineage.no') }}</dd>
+              </template>
+              <template v-else-if="selected.type === 'notebook'">
+                <dt>{{ $t('lineage.version') }}</dt><dd>v{{ selected.meta?.version ?? '—' }}</dd>
+              </template>
+              <template v-else-if="selected.type === 'flow_group'">
+                <dt>{{ $t('lineage.cells') }}</dt><dd>{{ selected.meta?.cells ?? '—' }}</dd>
+                <dt>{{ $t('lineage.scheduled') }}</dt><dd>{{ selected.meta?.scheduled ? $t('lineage.yes') : $t('lineage.no') }}</dd>
+              </template>
+              <template v-else-if="selected.type === 'container'">
+                <dt>{{ $t('lineage.tag') }}</dt><dd>{{ selected.meta?.tag ?? '—' }}</dd>
+              </template>
+              <template v-else-if="selected.type === 'email_sink'">
+                <dt>{{ $t('lineage.nodeConnection') }}</dt><dd>{{ selected.meta?.connection_name ?? '—' }}</dd>
+                <dt>{{ $t('lineage.recipients') }}</dt><dd>{{ selected.meta?.recipients ?? '—' }}</dd>
+                <dt>{{ $t('lineage.attachments') }}</dt><dd>{{ selected.meta?.attachments ?? '—' }}</dd>
+              </template>
               <template v-else-if="selected.type === 'connection'">
                 <dt>{{ $t('lineage.type') }}</dt><dd>{{ selected.meta?.db_type ?? '—' }}</dd>
                 <dt>{{ $t('lineage.database') }}</dt><dd>{{ selected.meta?.database || '—' }}</dd>
@@ -621,6 +660,11 @@ function nodeIcon(t: string) {
 .ln-chip.c-db_sink { border-color: rgba(251, 191, 36, 0.4); }
 .ln-chip.c-s3_sink { border-color: rgba(56, 189, 248, 0.4); }
 .ln-chip.c-sftp_sink { border-color: rgba(244, 114, 182, 0.4); }
+.ln-chip.c-sql_script { border-color: rgba(45, 212, 191, 0.4); }
+.ln-chip.c-notebook { border-color: rgba(251, 146, 60, 0.4); }
+.ln-chip.c-flow_group { border-color: rgba(129, 140, 248, 0.4); }
+.ln-chip.c-container { border-color: rgba(148, 163, 184, 0.4); }
+.ln-chip.c-email_sink { border-color: rgba(248, 113, 113, 0.4); }
 .empty { font-size: 12px; }
 
 .ln-legend { display: flex; flex-direction: column; gap: 5px; }
@@ -716,6 +760,11 @@ function nodeIcon(t: string) {
 :deep(.ln-db_sink) { border-left-color: #fbbf24; }
 :deep(.ln-s3_sink) { border-left-color: #38bdf8; }
 :deep(.ln-sftp_sink) { border-left-color: #f472b6; }
+:deep(.ln-sql_script) { border-left-color: #2dd4bf; }
+:deep(.ln-notebook) { border-left-color: #fb923c; }
+:deep(.ln-flow_group) { border-left-color: #818cf8; }
+:deep(.ln-container) { border-left-color: #94a3b8; }
+:deep(.ln-email_sink) { border-left-color: #f87171; }
 .ln-inner { display: flex; align-items: center; gap: 8px; padding: 8px 10px; }
 .ln-ic { flex-shrink: 0; color: var(--muted); }
 .ln-txt { display: flex; flex-direction: column; min-width: 0; }

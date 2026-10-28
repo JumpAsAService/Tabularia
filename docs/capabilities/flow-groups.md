@@ -234,6 +234,11 @@ whoever makes it, and does not take the schedule. Administrators see every group
   flow's setting, not a group's.
 - The grid holds no data between steps: a step hands over through datasources (an
   import, a flow's Output, a SQL script's datasource), which the next step reads.
+- The **Lineage** page draws a group with what it runs, the images of its Container
+  cells and the emails of its Pushmail cells. With [OpenLineage](../openlineage.md) on,
+  a group's run is the parent of its Container and Pushmail cells and carries what all
+  its cells read and wrote; the flows, refreshes and scripts it runs keep their own
+  jobs and name the group's run.
 
 ## Related
 

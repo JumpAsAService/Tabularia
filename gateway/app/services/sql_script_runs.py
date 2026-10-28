@@ -19,6 +19,7 @@ a time per script.
 """
 from __future__ import annotations
 
+import json
 import logging
 from typing import Optional
 
@@ -167,11 +168,16 @@ async def launch(session: Session, user: User, script: SqlScript, trigger_type: 
         task_id = resp.json().get("task_id")
         if not task_id:
             raise _refuse(502, "The engine did not return a task_id")
+        # what this write reads, for its lineage (services/openlineage.py): the version
+        # that ran, and the datasources the SQL named or the connection it ran on
+        read = {"version": script.current_version, "connection_id": content.get("connection_id"),
+                "datasources": [d["id"] for d in detail.get("datasources") or []]}
         run = Run(kind="sql", sql_script_id=script.id, task_id=task_id, launched_by=user.id,
                   trigger_type=trigger_type, parent_run_id=parent_run_id, engine=engine, input_key=input_key,
                   output_bucket=bucket, output_key=output_key, publish_name=output["name"],
                   publish_project_id=output["project_id"], publish_overwrite=True,
-                  publish_description=f"Written by the SQL script «{script.name}»", publish_sort_keys="[]")
+                  publish_description=f"Written by the SQL script «{script.name}»", publish_sort_keys="[]",
+                  script=json.dumps(read))
         session.add(run)
         session.commit()
         session.refresh(run)

@@ -204,6 +204,10 @@ async def run_container(session: Session, user: User, flow: Optional[Flow], defi
         child.script = json.dumps(info)
         session.add(child)
         session.commit()
+        if values.get("status") in TERMINAL_STATES and not info.get("trial"):
+            from app.services import openlineage
+
+            openlineage.run_closed(session, child)  # after the commit, as every run's closing
 
     try:
         if has_input:
