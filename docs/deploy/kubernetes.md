@@ -84,6 +84,11 @@ overrides them with `--reload`, which must not reach production.
   the gateway (not stripped; the gateway knows its prefix through `APP__ROOT_PATH`).
   The browser calls the API relatively (`NUXT_PUBLIC_API_BASE=/api`). Routing the
   gateway's own paths instead cannot work: they are also pages of the frontend.
+- **The notebooks' host** (with scripts): a second host name, `/api` to the gateway
+  alone, where the marimo notebooks' apps and editors are served (`scripts.notebooks.host`,
+  `NOTEBOOKS__ORIGIN`): there the gateway answers only for them, so a notebook's code
+  cannot use the session of whoever opens it. A sibling of the interface's host, with
+  its certificate. See [An address of their own](../capabilities/notebooks.md#an-address-of-their-own).
 - **Internal**: the engine API is reached only by the gateway, through
   `ENGINE__BASE_URL` (cluster DNS, e.g. `http://engine:8000`). Keep it off the ingress:
   it answers only requests carrying the gateway's internal token, derived from

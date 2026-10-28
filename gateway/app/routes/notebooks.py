@@ -13,6 +13,8 @@ Permissions:
   (routes/notebook_sessions.py, «Save version»): changing it here or restoring a
   version is refused with 409 — it would overwrite the editor's work, or be overwritten
   by its next save;
+- a new source sent with the version it was written on (`base_version`) is refused with
+  409 when another version became current since: it would undo that one silently;
 - administrators see and change every notebook;
 - how many people may have the app open at once (`max_visitors`) is set with EDIT,
   from 1 to NOTEBOOKS__MAX_VISITORS_CEILING; null = the installation's default
@@ -95,6 +97,9 @@ class NotebookUpdate(BaseModel):
     project_id: Optional[int] = None  # a move
     environment_id: Optional[int] = None
     content: Optional[dict[str, Any]] = None
+    # the version the new content was written on: when another one became current since
+    # (saved in marimo's editor, restored), the change is refused instead of undoing it
+    base_version: Optional[int] = None
     # sent as null: back to the installation's default; left out: unchanged
     max_visitors: Optional[int] = Field(default=None, ge=1)
 
@@ -255,6 +260,9 @@ def update_notebook(notebook_id: int, body: NotebookUpdate, request: Request, us
     _need_on()
     notebook = notebooks.get_visible(session, user, notebook_id)
     ensure_can(session, user, notebook.project_id, Capability.EDIT)
+    # read again and held until the commit: a save that landed a moment ago is the
+    # current version `base_version` is compared with
+    session.refresh(notebook, with_for_update=True)
     # the catalog's names before a rename or a move (the folder path is part of the job's name)
     lineage_names = (openlineage.catalog_names(session, objects=[("notebook", notebook)])
                      if body.name is not None or body.project_id is not None else {})
@@ -281,6 +289,10 @@ def update_notebook(notebook_id: int, body: NotebookUpdate, request: Request, us
         checked = notebooks.check_content(name, body.content)
         if checked != notebooks.content_of(session, notebook):
             _not_being_edited(session, notebook)
+            if body.base_version is not None and body.base_version != notebook.current_version:
+                raise HTTPException(status_code=409, detail=f"«{notebook.name}» changed since you opened it (now "
+                                                            f"version {notebook.current_version}): reload it, "
+                                                            "then make your change again")
             new_content = checked
     notebook.name, notebook.project_id = name, target
     if body.description is not None and body.description.strip() != notebook.description:
@@ -351,9 +363,10 @@ def delete_notebook(notebook_id: int, request: Request, user: User = Depends(get
     ensure_can(session, user, notebook.project_id, Capability.EDIT)
     label = notebook.name
     # its live pods: the sessions go now, their Jobs with the reaper's next round
-    from app.services import notebook_runtime
+    from app.services import notebook_frames, notebook_runtime
 
     notebook_runtime.forget(session, notebook.id)
+    notebook_frames.forget_notebook(session, notebook.id)
     for row in session.exec(select(NotebookVersion).where(NotebookVersion.notebook_id == notebook.id)).all():
         session.delete(row)
     session.flush()

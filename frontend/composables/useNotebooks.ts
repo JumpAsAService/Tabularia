@@ -60,6 +60,8 @@ export interface NotebookUpdate {
   project_id?: number
   environment_id?: number
   content?: NotebookContent
+  /** the version `content` was written on: refused (409) when another one is current now */
+  base_version?: number
   /** null: back to the installation's default; left out: unchanged */
   max_visitors?: number | null
 }
@@ -80,6 +82,16 @@ export interface NotebookSession {
   /** the app's: the people with it open now, and the most it takes at once */
   visitors?: number | null
   max_visitors?: number | null
+}
+
+/** What opens a notebook's frame (POST /notebooks/{id}/ticket). */
+export interface NotebookTicket {
+  /** the notebooks' own address with a ticket used once, within a minute; null when they are
+   *  served on the interface's address (NOTEBOOKS__ALLOW_SAME_ORIGIN) */
+  url: string | null
+  /** NOTEBOOKS__ALLOW_SAME_ORIGIN: a notebook's code could act as whoever opens it */
+  same_origin: boolean
+  expires_in: number
 }
 
 /** The 409 of a second editor: who is editing already. */
@@ -126,7 +138,11 @@ export function useNotebooks() {
     /** a new version from the file marimo last saved; none when it did not change */
     saveFromEditor: (id: number, note: string | null) =>
       apiFetch<NotebookDetail>(`/notebooks/${id}/edit/save`, { method: 'POST', body: { note } }),
-    /** where marimo answers, through the gateway (the trailing slash is marimo's base URL) */
+    /** a ticket for the app's or the editor's frame, on the notebooks' own address */
+    ticket: (id: number, mode: NotebookMode) =>
+      apiFetch<NotebookTicket>(`/notebooks/${id}/ticket`, { method: 'POST', body: { mode } }),
+    /** where marimo answers on the interface's own address (NOTEBOOKS__ALLOW_SAME_ORIGIN; the
+     *  trailing slash is marimo's base URL) */
     frameUrl: (id: number, mode: NotebookMode) => `${base}/notebooks/${id}/${mode}/`,
   }
 }

@@ -329,6 +329,11 @@ if settings.app.role != "orchestrator":
     app.include_router(proxy_router)
     app.include_router(performance_routes.router)
     app.include_router(cluster_routes.router)
+    # the notebooks' own address (NOTEBOOKS__ORIGIN): its host reaches only the proxy to
+    # marimo, never the rest of the API (routes/notebook_proxy.py, `install`)
+    from app.routes import notebook_proxy
+
+    notebook_proxy.install(app)
 
 
 @app.get("/", tags=["health"])

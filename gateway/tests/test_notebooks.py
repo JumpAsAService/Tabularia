@@ -207,6 +207,30 @@ def test_versions_and_their_authors(app, session, scripting):
     assert actions == ["notebook.create", "notebook.update", "notebook.update", "notebook.restore"]
 
 
+def test_a_source_written_on_an_older_version_is_refused(app, session, scripting):
+    """The page sends the version its source was written on: a change made on version 1
+    while cleo saved version 2 (in marimo's editor, say) must not undo hers silently, nor
+    make ana the author the app reads as."""
+    _, ana, _, cleo, env_id, folder = _world(app, session)
+    nid = _create(ana, folder, env_id).json()["id"]
+    theirs = SOURCE + "# cleo's\n"
+    assert cleo.patch(f"/notebooks/{nid}", json={"content": {"source": theirs}, "base_version": 1},
+                      headers=CSRF).json()["current_version"] == 2
+    r = ana.patch(f"/notebooks/{nid}", json={"content": {"source": SOURCE + "# ana's\n"}, "base_version": 1},
+                  headers=CSRF)
+    assert r.status_code == 409 and "changed since you opened it (now version 2)" in r.json()["detail"]
+    n = ana.get(f"/notebooks/{nid}").json()
+    assert n["current_version"] == 2 and n["content"]["source"] == theirs and n["author"]["email"] == "cleo@x.local"
+    # the rest changes without the source; the source on the current version; the source of
+    # the current version is no change, whatever it was written on
+    assert ana.patch(f"/notebooks/{nid}", json={"description": "x"}, headers=CSRF).json()["current_version"] == 2
+    assert ana.patch(f"/notebooks/{nid}", json={"content": {"source": theirs}, "base_version": 1},
+                     headers=CSRF).json()["current_version"] == 2
+    r = ana.patch(f"/notebooks/{nid}", json={"content": {"source": SOURCE + "# ana's\n"}, "base_version": 2},
+                  headers=CSRF)
+    assert r.status_code == 200 and r.json()["current_version"] == 3
+
+
 def test_the_draft(app, session, scripting):
     _, ana, _, _, env_id, folder = _world(app, session)
     nid = _create(ana, folder, env_id).json()["id"]

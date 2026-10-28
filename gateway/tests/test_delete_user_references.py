@@ -23,7 +23,7 @@ REFERENCES = {
     ("datasources", "refresh_scheduled_by"), ("disabled_engines", "disabled_by"), ("flow_groups", "owner_id"),
     ("flow_groups", "run_scheduled_by"), ("flow_versions", "created_by"), ("flows", "owner_id"),
     ("flows", "run_scheduled_by"), ("permissions", "user_id"), ("privacy_notice", "updated_by"),
-    ("notebook_sessions", "user_id"), ("notebook_visitors", "user_id"), ("notebook_versions", "created_by"), ("notebooks", "draft_by"), ("notebooks", "owner_id"),
+    ("notebook_sessions", "user_id"), ("notebook_tickets", "user_id"), ("notebook_visitors", "user_id"), ("notebook_versions", "created_by"), ("notebooks", "draft_by"), ("notebooks", "owner_id"),
     ("projects", "owner_id"), ("runs", "launched_by"), ("saved_script_versions", "created_by"),
     ("saved_scripts", "owner_id"), ("saved_scripts", "run_scheduled_by"), ("saved_views", "owner_id"),
     ("sql_script_versions", "created_by"), ("sql_scripts", "owner_id"), ("sql_scripts", "run_scheduled_by"), ("uploads", "owner_id"),

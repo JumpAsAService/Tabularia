@@ -321,6 +321,8 @@ export default {
       "closeTitle": "Detener el editor: lo que guardó queda como borrador del notebook",
       "viewOnlyTitle": "Puedes abrir la app, no editarla",
       "viewOnly": "Para editar un notebook hace falta el derecho de edición sobre su carpeta.",
+      "frameFailedTitle": "El notebook no se puede abrir aquí",
+      "sameOrigin": "Esta instalación muestra los notebooks en la propia dirección de Tabularia (NOTEBOOKS__ALLOW_SAME_ORIGIN): el código de un notebook puede actuar en Tabularia en tu nombre. Solo sirve para probarlos en un equipo; abre solo los de autores de confianza.",
     },
   },
   "sqlScript": {

@@ -204,7 +204,7 @@ def _token_user(request: Request, token: str, session: Session, level_checked_by
     if not level_checked_by_caller:
         api_tokens.check_level(row, request)
     if state is not None:
-        state.api_token = row.name  # per l'audit: «fatto con il token …»
+        state.api_token = row.name  # for the audit: «done with the token …»
         state.api_token_scope = row.scope
     _touch_token(session, user, row, request)
     return user
@@ -266,10 +266,11 @@ def get_current_user(
 
 
 def cookie_user(conn: HTTPConnection, session: Session) -> User | None:
-    """The person of the session cookie, for the notebooks' proxy (routes/notebook_proxy.py),
-    or None. The same checks as `get_current_user` on the cookie (a session still open, an
-    active account), without the anti-CSRF header: marimo's own requests do not send it,
-    so the proxy checks their `Origin` instead (`same_origin`). WebSockets too."""
+    """The person of the session cookie, for the notebooks' proxy on the interface's own
+    address (routes/notebook_proxy.py, only with NOTEBOOKS__ALLOW_SAME_ORIGIN), or None.
+    The same checks as `get_current_user` on the cookie (a session still open, an active
+    account), without the anti-CSRF header: marimo's own requests do not send it, so the
+    proxy checks their `Origin` instead (`same_origin`). WebSockets too."""
     token = conn.cookies.get(sessions.COOKIE)
     if not token or api_tokens.is_a_token(token):
         return None
@@ -278,6 +279,14 @@ def cookie_user(conn: HTTPConnection, session: Session) -> User | None:
         user_id, sid = int(payload["sub"]), str(payload["sid"])
     except (jwt.PyJWTError, KeyError, ValueError, TypeError):
         return None
+    return session_user(conn, session, user_id, sid)
+
+
+def session_user(conn: HTTPConnection, session: Session, user_id: int, sid: str) -> User | None:
+    """The person of Tabularia's session `sid`, or None: the session still open (not
+    closed, expired or still for too long) and the account active, as `get_current_user`
+    checks them. Its activity is touched as any request's. For the notebooks' proxy, whose
+    frames hold while the session that opened them does (services/notebook_frames.py)."""
     found = _load_user(session, user_id, sid)
     if found is None or not found[0].is_active:
         return None

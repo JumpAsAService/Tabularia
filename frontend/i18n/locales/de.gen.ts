@@ -321,6 +321,8 @@ export default {
       "closeTitle": "Den Editor stoppen: Was er gespeichert hat, bleibt als Entwurf des Notebooks",
       "viewOnlyTitle": "Sie können die App öffnen, aber nicht bearbeiten",
       "viewOnly": "Zum Bearbeiten eines Notebooks braucht es das Bearbeitungsrecht für seinen Ordner.",
+      "frameFailedTitle": "Das Notebook lässt sich hier nicht öffnen",
+      "sameOrigin": "Diese Installation zeigt Notebooks unter der Adresse von Tabularia selbst (NOTEBOOKS__ALLOW_SAME_ORIGIN): Der Code eines Notebooks kann in Tabularia in Ihrem Namen handeln. Nur zum Ausprobieren auf einem Rechner gedacht; öffnen Sie nur Notebooks von Autoren, denen Sie vertrauen.",
     },
   },
   "sqlScript": {

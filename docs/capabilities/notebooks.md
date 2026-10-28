@@ -19,7 +19,7 @@ it.
 | Data | `tabularia.read("Folder/Name")` returns a polars DataFrame, read when the code asks, nothing copied |
 | Whose rights | the app reads with the rights of whoever saved the version it runs; the editor with the editor's |
 | When it runs | its pod starts when someone opens it (a few seconds) and stops after 15 minutes with nobody on it |
-| Requires | Kubernetes, with the scripting environments ([Python and R](../scripting.md)) |
+| Requires | Kubernetes, with the scripting environments ([Python and R](../scripting.md)), and a host name of their own for the apps and editors ([An address of their own](#an-address-of-their-own)) |
 
 ## How it works
 
@@ -64,7 +64,8 @@ everyone; the next visit starts it again.
 
 The app reads data with the rights of **the person who saved the version it runs**: the
 author of the current version, shown on the notebook's page («The app reads Tabularia's
-data with the rights of …, who saved this version»). Nobody else's rights are ever used:
+data with the rights of …, who saved this version»). Its reads never use anyone else's
+rights:
 
 - **Saving a version makes you its author.** Whoever saves a version, from the editor or
   from the page, or restores an older one, becomes the person the app reads as, from
@@ -81,6 +82,10 @@ data with the rights of …, who saved this version»). Nobody else's rights are
 
 The editor reads with **the editor's own rights**: what you see while you write is what
 you may read.
+
+What the code shows runs in the browser of whoever opens the app, HTML and JavaScript
+included; on the notebooks' [address of their own](#an-address-of-their-own) it cannot
+use their Tabularia session.
 
 Rights are checked again at every start of a pod and at **every read**: a permission
 taken away stops the next `tabularia.read`, without restarting anything.
@@ -204,6 +209,68 @@ Out of the pod, the notebooks follow the scripts' policy (`scripts.blockTabulari
 pods, on their port, for the reads. The download goes straight to Tabularia's object
 storage, at the address the engine uses: that address must be reachable from the scripts
 namespace, as the scripts bucket is.
+
+### An address of their own
+
+marimo shows whatever a notebook's code writes, HTML and JavaScript included (`mo.Html`,
+`mo.iframe`, a widget): that is how a notebook draws its charts and controls, and that
+code runs in the browser of whoever opens the app or the editor. Served from Tabularia's
+own address, it would run with their Tabularia session: someone who may edit a notebook
+could act as whoever opens it, an administrator included, and read or change whatever
+they may.
+
+So the apps and the editors are served from **an address of their own**,
+`NOTEBOOKS__ORIGIN`, for example `https://notebooks.example.com` next to
+`https://tabularia.example.com`:
+
+- There the gateway answers only for the notebooks' apps and editors: none of
+  Tabularia's API is on that address, and Tabularia's own address does not answer
+  requests sent from it. A notebook's code finds nothing of Tabularia to call.
+- Tabularia's page opens the notebook's frame with a ticket that works once, within a
+  minute, for that person, that notebook and that mode (app or editor), with the same
+  rights it takes to open them. The frame then holds with a cookie of its own, valid
+  only for that notebook and only while the person's Tabularia session lasts: signing
+  out closes the frames too. Tabularia's session cookie and API tokens are never
+  accepted there.
+- Only the Tabularia page that opened it may show the notebook in a frame.
+
+**Setting it up.** A host name that reaches the same Ingress as Tabularia and, with TLS,
+a certificate for it. A *sibling* of the interface's host is best (`notebooks.example.com`
+with `tabularia.example.com`): the browser treats the frame's cookie as the site's own.
+Another domain works too, because the cookie is *partitioned*: a third party's cookie
+that Chrome, Edge and Firefox keep even when they block the others, for this one site.
+With Helm:
+
+```yaml
+scripts:
+  notebooks:
+    host: notebooks.example.com
+```
+
+The chart adds the host to the Ingress, towards the gateway alone under `/api`, with a
+certificate when the Ingress has TLS (`scripts.notebooks.tlsSecretName`; cert-manager
+makes it from the Ingress's annotations), and tells the gateway (`NOTEBOOKS__ORIGIN`) and
+the frontend (`NUXT_PUBLIC_NOTEBOOKS_ORIGIN`, which lets Tabularia's pages frame it).
+Without the chart, set both variables to the same address and send that host's `/api` to
+the gateway with its `Host` header unchanged (the gateway tells the two addresses apart
+by it; ingress controllers keep it). The address is `https`, or `http` only for `localhost` and its subdomains:
+the guides for [kind](../deploy/kind.md) and [minikube](../deploy/minikube.md) use
+`http://notebooks.localhost:8080`, which a browser finds on its own computer without any
+DNS. Never list it in `APP__CORS_ORIGINS`: the gateway refuses to start.
+
+**Without it** the apps and the editors do not open, and their pages say: «Notebooks
+need an address of their own (NOTEBOOKS__ORIGIN): an administrator must set it».
+`NOTEBOOKS__ALLOW_SAME_ORIGIN=true` (`scripts.notebooks.allowSameOrigin`) serves them on
+Tabularia's own address instead, as before: only to try notebooks alone on one machine,
+never where other people sign in. The pages of the app and of the editor then show a
+warning.
+
+**What remains.** The notebooks share their one address. A notebook's code can
+therefore reach another notebook that the same person opened in the same browser within
+the hour: read that app as they see it and, while their editor of it is running, run
+code in it with their rights. It cannot start anyone's editor (only Tabularia's page
+does) and reaches nothing else of Tabularia. Give EDIT on folders with notebooks to
+people you would trust with what their colleagues can read.
 
 ## Example: margin by category
 
@@ -349,13 +416,15 @@ Every create, change, restore, start, stop, save from the editor and read is in 
   number of visitors at once (see [Visitors at once, and memory](#visitors-at-once-and-memory)).
   `columns=` reads only the columns you need.
 - The settings are in the [configuration reference](../configuration.md#notebooks-kubernetes):
-  `NOTEBOOKS__IDLE_MINUTES`, `NOTEBOOKS__MAX_LIFETIME_HOURS`, `NOTEBOOKS__MAX_LIVE`,
-  `NOTEBOOKS__MAX_VISITORS_PER_APP`, `NOTEBOOKS__MAX_VISITORS_CEILING`,
-  `NOTEBOOKS__START_TIMEOUT_SECONDS`. With Helm they are `scripts.notebooks.idleMinutes`,
-  `maxLifetimeHours`, `maxLive`, `maxVisitorsPerApp`, `maxVisitorsCeiling` and
-  `startTimeoutSeconds`; the chart also sets the address the pods call
+  `NOTEBOOKS__ORIGIN`, `NOTEBOOKS__ALLOW_SAME_ORIGIN`, `NOTEBOOKS__IDLE_MINUTES`,
+  `NOTEBOOKS__MAX_LIFETIME_HOURS`, `NOTEBOOKS__MAX_LIVE`, `NOTEBOOKS__MAX_VISITORS_PER_APP`,
+  `NOTEBOOKS__MAX_VISITORS_CEILING`, `NOTEBOOKS__START_TIMEOUT_SECONDS`. With Helm they are
+  `scripts.notebooks.host` (with `origin` and `tlsSecretName`), `allowSameOrigin`,
+  `idleMinutes`, `maxLifetimeHours`, `maxLive`, `maxVisitorsPerApp`, `maxVisitorsCeiling`
+  and `startTimeoutSeconds`; the chart also sets the address the pods call
   (`NOTEBOOKS__GATEWAY_URL`). The two about visitors are also in Administration →
-  Settings.
+  Settings; the address is set only at installation, since the Ingress and the frontend
+  need it too.
 - marimo is open-source software under the Apache-2.0 licence; its name is used here
   only to describe the feature.
 

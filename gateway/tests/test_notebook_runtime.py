@@ -16,9 +16,11 @@ Fixed here:
 - the notebook token reads datasources by id, path or name, VIEW checked at every read
   (taken away → the next read fails), audited; it holds nowhere else, only from its pod's
   address, and not after its session ends;
-- the proxy: the root starts the pod and answers a page that reloads, then marimo's
-  answers; Origin required on what is not a GET and on WebSockets; the editor only for
-  the person editing; framing only by Tabularia's own pages;
+- the proxy (here on the interface's own address, NOTEBOOKS__ALLOW_SAME_ORIGIN; the
+  notebooks' own address is tests/test_notebook_frames.py's): the root starts the pod and
+  answers a page that reloads, then marimo's answers; Origin required on what is not a
+  GET and on WebSockets; the editor only for the person editing; framing only by
+  Tabularia's own pages;
 - the environment's variables reach the pod as they reach a script (the secret ones
   only in its Secret), never replacing the notebook's own;
 - while the editor is open the source changes only there: PATCH and restore 409 with who
@@ -44,7 +46,7 @@ from fastapi import FastAPI
 from fastapi.testclient import TestClient
 from sqlmodel import Session, select
 from starlette.applications import Starlette
-from starlette.responses import JSONResponse, PlainTextResponse
+from starlette.responses import JSONResponse, PlainTextResponse, StreamingResponse
 from starlette.routing import Route, WebSocketRoute
 from starlette.websockets import WebSocketDisconnect
 
@@ -124,6 +126,12 @@ class Pod:
                                          "Content-Security-Policy": "default-src 'self'; frame-ancestors 'none'",
                                          "Set-Cookie": "marimo=1"})
 
+        async def broken(request):
+            async def body():  # the pod going away in the middle of an answer
+                yield b"half of it"
+                raise RuntimeError("the pod went away")
+            return StreamingResponse(body())
+
         async def socket(ws):
             await ws.accept()
             await ws.send_text(f"hello {ws.url.path}?{ws.url.query}")
@@ -133,12 +141,16 @@ class Pod:
                     if message == "bye":
                         await ws.close(code=1000)
                         return
+                    if message.startswith("big "):  # a message of that many bytes
+                        await ws.send_text("x" * int(message.split()[1]))
+                        continue
                     await ws.send_text(f"echo {message}")
             except WebSocketDisconnect:
                 pass
 
         self.app = Starlette(routes=[
             Route("/notebook.py", notebook_file),
+            Route("/{base:path}/broken", broken),
             Route("/{path:path}", anything, methods=["GET", "HEAD", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"]),
             WebSocketRoute("/{path:path}", socket),
         ])
@@ -167,10 +179,13 @@ def pod(monkeypatch):
 def cluster(monkeypatch, tmp_path):
     c = NotebookCluster()
     (tmp_path / "token").write_text("sa-token\n")
+    # the proxy's tests here run on the interface's own address (NOTEBOOKS__ALLOW_SAME_ORIGIN);
+    # the notebooks' own address, its tickets and its cookie are tests/test_notebook_frames.py's
     for k, v in {"KUBERNETES__TOKEN_FILE": str(tmp_path / "token"), "KUBERNETES__CA_FILE": "",
                  "SCRIPTS__ENABLED": "true", "SCRIPTS__NAMESPACE": "tab-scripts",
                  "SCRIPTS__REGISTRY": "registry.example.com/tab", "SCRIPTS__REGISTRY_PULL_SECRET": "registry-pull",
-                 "NOTEBOOKS__GATEWAY_URL": "http://tab-gateway.tab.svc:8000/"}.items():
+                 "NOTEBOOKS__GATEWAY_URL": "http://tab-gateway.tab.svc:8000/",
+                 "NOTEBOOKS__ALLOW_SAME_ORIGIN": "true"}.items():
         monkeypatch.setenv(k, v)
     get_settings.cache_clear()
     monkeypatch.setattr(kube_jobs, "_transport", httpx.MockTransport(c.handle))
@@ -212,6 +227,7 @@ def app(session):
               notebook_data.router):
         app.include_router(r)
     app.dependency_overrides[get_session] = lambda: session
+    notebook_proxy.install(app)  # the notebooks' own host, as main.py
     return app
 
 
@@ -975,3 +991,185 @@ def test_two_replicas_racing_for_the_last_place_on_postgres(monkeypatch):
         with admin.connect() as c:
             c.execute(sql(f'DROP DATABASE IF EXISTS "{name}" WITH (FORCE)'))
         admin.dispose()
+
+
+# ── the proxy and the pod, hardened (bug hunt 2026-10-28) ────────────────────
+def _ready_app(app, session, cluster):
+    _, ana, _, cleo, _, _, nid = _setup(app, session)
+    cleo.get(f"/notebooks/{nid}/app/")
+    cluster.pod = "ready"
+    _ready(cleo, nid)
+    return ana, cleo, nid
+
+
+def test_the_app_takes_visitors_only_through_its_websocket(app, session, cluster, pod):
+    """marimo opens a kernel for every `…/sse?session_id=` too (its server-sent events,
+    an alternative to the WebSocket its page does not use here): through the proxy it
+    was a kernel, and a copy of the data, outside the cap of visitors. And httpx removes
+    the dot segments of a path, so `x/../sse` reached it as well."""
+    ana, cleo, nid = _ready_app(app, session, cluster)
+    base = f"/notebooks/{nid}/app"
+    for path in ("sse?session_id=s1", "x/%2e%2e/sse?session_id=s2", "%2e/sse"):
+        r = cleo.get(f"{base}/{path}")
+        assert r.status_code == 404, path
+    assert not [p for p in pod.requests if p["path"].endswith("/sse")]
+    # a path with dot segments reaches nothing, in either mode; the rest goes on
+    assert cleo.get(f"{base}/assets/%2e%2e/%2e%2e/edit/").status_code == 404
+    assert cleo.get(f"{base}/assets/index.js").status_code == 200
+    with pytest.raises(WebSocketDisconnect) as closed:
+        with cleo.websocket_connect(f"{base}/x/%2e%2e/ws", headers=ORIGIN) as ws:
+            ws.receive_text()
+    assert closed.value.code == 1008
+    assert runtime.visitors(session, nid) == 0
+
+
+def test_the_pod_is_reached_directly_never_through_the_environments_proxy(app, session, cluster, pod, monkeypatch):
+    """A gateway with HTTP_PROXY (to reach an AI provider, say) must still reach the pods
+    at their address: through the proxy they are not there."""
+    ana, cleo, nid = _ready_app(app, session, cluster)
+    for name in ("HTTP_PROXY", "HTTPS_PROXY", "ALL_PROXY", "http_proxy", "https_proxy", "all_proxy"):
+        monkeypatch.setenv(name, "http://127.0.0.1:9")  # nothing answers there
+    for name in ("NO_PROXY", "no_proxy"):
+        monkeypatch.delenv(name, raising=False)
+    r = cleo.get(f"/notebooks/{nid}/app/")
+    assert r.status_code == 200 and r.json()["marimo"] == f"/notebooks/{nid}/app/"
+    with cleo.websocket_connect(f"/notebooks/{nid}/app/ws?session_id=a", headers=ORIGIN) as ws:
+        assert ws.receive_text().startswith("hello")
+    # the editor's file too («Save version», the draft)
+    cleo.post(f"/notebooks/{nid}/sessions", json={"mode": "edit"}, headers=CSRF)
+    _ready(cleo, nid)
+    pod.file = SOURCE + "# by proxy\n"
+    r = cleo.post(f"/notebooks/{nid}/edit/save", json={}, headers=CSRF)
+    assert r.status_code == 200 and r.json()["current_version"] == 2, r.text
+
+
+def test_a_proxied_request_loads_no_certificates(app, session, cluster, pod, monkeypatch):
+    """httpx loads the system's certificates for every client it makes: ~45 ms of the event
+    loop, at every request of marimo's page (dozens of files), for plain HTTP to the pod."""
+    import ssl
+
+    _, cleo, nid = _ready_app(app, session, cluster)
+    loaded = []
+    real = ssl.SSLContext.load_verify_locations
+    monkeypatch.setattr(ssl.SSLContext, "load_verify_locations",
+                        lambda self, *a, **k: loaded.append(a or k) or real(self, *a, **k))
+    for _ in range(3):
+        assert cleo.get(f"/notebooks/{nid}/app/assets/index.js").status_code == 200
+    assert loaded == []
+
+
+def test_a_message_too_large_from_the_pod_closes_its_websocket(app, session, cluster, pod, monkeypatch):
+    """What the pod sends is held whole in the gateway's memory before it goes on: past
+    the bound the socket closes (1009) instead of the gateway taking gigabytes."""
+    from app.routes import notebook_proxy
+
+    monkeypatch.setattr(notebook_proxy, "MAX_MESSAGE_BYTES", 1024)
+    _, cleo, nid = _ready_app(app, session, cluster)
+    with cleo.websocket_connect(f"/notebooks/{nid}/app/ws", headers=ORIGIN) as ws:
+        ws.receive_text()
+        ws.send_text("big 1000")
+        assert len(ws.receive_text()) == 1000
+        ws.send_text("big 5000")
+        with pytest.raises(WebSocketDisconnect) as closed:
+            ws.receive_text()
+    assert closed.value.code == 1009
+
+
+def test_an_answer_broken_halfway_closes_the_connection_to_the_pod(app, session, cluster, pod, monkeypatch):
+    """The pod going away in the middle of an answer: the gateway's client to it is closed
+    (Starlette skips the response's background task when its stream fails)."""
+    made: list[httpx.AsyncClient] = []
+
+    class Recording(httpx.AsyncClient):
+        def __init__(self, *a, **k):
+            super().__init__(*a, **k)
+            made.append(self)
+
+    _, cleo, nid = _ready_app(app, session, cluster)
+    monkeypatch.setattr(httpx, "AsyncClient", Recording)
+    with pytest.raises(httpx.HTTPError):
+        cleo.get(f"/notebooks/{nid}/app/broken")
+    assert made and all(c.is_closed for c in made)
+
+
+# ── the module in the pod ────────────────────────────────────────────────────
+@pytest.fixture
+def pod_module(monkeypatch):
+    """app/notebook_pod/tabularia.py as the pod imports it, talking to a gateway on this
+    machine; polars is not in the gateway's image: a stand-in that reads the bytes."""
+    import importlib.util
+    import sys
+    import types
+    from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
+
+    seen: list[dict] = []
+
+    class Gateway(BaseHTTPRequestHandler):
+        def log_message(self, *a):
+            pass
+
+        def _json(self, data):
+            body = json.dumps(data).encode()
+            self.send_response(200)
+            self.send_header("content-type", "application/json")
+            self.send_header("content-length", str(len(body)))
+            self.end_headers()
+            self.wfile.write(body)
+
+        def do_GET(self):
+            seen.append({"path": self.path, "authorization": self.headers.get("authorization"),
+                         "forwarded": self.headers.get("x-forwarded-for")})
+            if self.path == "/notebook-data/datasources":
+                return self._json([{"id": 1, "name": "sales"}])
+            if self.path == "/slow.parquet":  # headers, half the file, then nothing
+                self.send_response(200)
+                self.send_header("content-length", "100")
+                self.end_headers()
+                self.wfile.write(b"x" * 10)
+                self.wfile.flush()
+                time.sleep(3)
+                return None
+            self.send_response(404)
+            self.end_headers()
+            return None
+
+        def do_POST(self):
+            self.rfile.read(int(self.headers.get("content-length") or 0))
+            seen.append({"path": self.path, "authorization": self.headers.get("authorization")})
+            port = self.server.server_address[1]
+            return self._json({"url": f"http://127.0.0.1:{port}/slow.parquet", "id": 1, "name": "sales"})
+
+    server = ThreadingHTTPServer(("127.0.0.1", 0), Gateway)
+    thread = threading.Thread(target=server.serve_forever, daemon=True)
+    thread.start()
+    monkeypatch.setenv("TABULARIA_URL", f"http://127.0.0.1:{server.server_address[1]}/")
+    monkeypatch.setenv("TABULARIA_NOTEBOOK_TOKEN", "nbk_test")
+    monkeypatch.setitem(sys.modules, "polars", types.SimpleNamespace(
+        read_parquet=lambda path, columns=None: open(path, "rb").read()))
+    spec = importlib.util.spec_from_file_location("tabularia_in_the_pod", runtime.POD_MODULE)
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+    module.seen = seen
+    yield module
+    server.shutdown()
+    thread.join(5)
+
+
+def test_the_pod_calls_the_gateway_directly_never_through_a_proxy(pod_module, monkeypatch):
+    """The environment's variables reach the pod: an HTTP_PROXY there (for the internet)
+    sent the calls to the gateway through the proxy, and the gateway refuses a call that
+    does not come from the pod's own address ("holds only from its own pod")."""
+    for name in ("HTTP_PROXY", "http_proxy", "ALL_PROXY", "all_proxy"):
+        monkeypatch.setenv(name, "http://127.0.0.1:9")  # nothing answers there
+    for name in ("NO_PROXY", "no_proxy"):
+        monkeypatch.delenv(name, raising=False)
+    assert pod_module.datasources() == [{"id": 1, "name": "sales"}]
+    assert pod_module.seen[-1]["authorization"] == "Bearer nbk_test"
+
+
+def test_a_download_that_stalls_fails_instead_of_hanging_the_cell(pod_module, monkeypatch):
+    monkeypatch.setattr(pod_module, "_DOWNLOAD_TIMEOUT", 0.5)
+    started = time.monotonic()
+    with pytest.raises(pod_module.TabulariaError, match="could not be downloaded"):
+        pod_module.read("sales")
+    assert time.monotonic() - started < 2.5

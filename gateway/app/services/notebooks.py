@@ -148,7 +148,9 @@ def content_of(session: Session, notebook: Notebook, version: Optional[int] = No
 
 def add_version(session: Session, notebook: Notebook, content: dict, note: str, user: User) -> NotebookVersion:
     """The next version, which becomes the one the app runs — with the rights of `user`,
-    who saved it."""
+    who saved it. The notebook's row stays locked until the commit: two saves at once
+    take the next numbers in turn, instead of the same one and a 500 on the second."""
+    session.exec(select(Notebook.id).where(Notebook.id == notebook.id).with_for_update())
     last = session.exec(select(NotebookVersion.version).where(NotebookVersion.notebook_id == notebook.id)
                         .order_by(NotebookVersion.version.desc())).first() or 0  # type: ignore[attr-defined]
     row = NotebookVersion(notebook_id=notebook.id, version=last + 1, content=json.dumps(content), note=note,

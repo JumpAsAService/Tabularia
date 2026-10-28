@@ -144,9 +144,15 @@ async function save() {
   saving.value = true
   try {
     if (notebookId.value != null) {
+      // the source only when it changed here, with the version it was written on: the one
+      // loaded may be behind a version saved since in marimo's editor, and sending it back
+      // would undo that one, as a version by whoever saves (the app would then read with
+      // their rights); the gateway refuses a change written on an older version
+      const changed = source.value !== detail.value?.content.source
       apply(await api.update(notebookId.value, {
         name: n, description: description.value.trim(), environment_id: environmentId.value,
-        content: { source: source.value }, max_visitors: visitorsValue.value,
+        ...(changed ? { content: { source: source.value }, base_version: detail.value?.current_version } : {}),
+        max_visitors: visitorsValue.value,
       }))
       await loadVersions()
       toast.success(t('notebook.saved', { name: n }))

@@ -157,6 +157,14 @@ def base_url(notebook_id: int, mode: str) -> str:
     return f"{get_settings().app.root_path}/notebooks/{notebook_id}/{mode}"
 
 
+def pod_client(timeout: httpx.Timeout | float) -> httpx.AsyncClient:
+    """A client for a notebook's pod: plain HTTP to its address. No certificates to load
+    (httpx loads the system's for every client it makes, ~45 ms of the event loop, and the
+    proxy makes one at every request of marimo's page), and never through the
+    environment's proxy (HTTP_PROXY…): the pod is reached where it is."""
+    return httpx.AsyncClient(timeout=timeout, verify=False, trust_env=False)
+
+
 def row_of(session: Session, notebook_id: int, mode: str) -> Optional[NotebookSession]:
     return session.exec(select(NotebookSession).where(NotebookSession.notebook_id == notebook_id,
                                                       NotebookSession.mode == mode)).first()
@@ -552,7 +560,7 @@ async def read_file(row: NotebookSession) -> Optional[str]:
         return None
     url = f"http://{row.pod_ip}:{FILES_PORT}/notebook.py"
     try:
-        async with httpx.AsyncClient(timeout=FILE_TIMEOUT) as c:
+        async with pod_client(FILE_TIMEOUT) as c:
             async with c.stream("GET", url) as r:
                 if r.status_code != 200:
                     return None

@@ -43,9 +43,11 @@ function origin(url: unknown): string {
   }
 }
 
-export async function policy(nuxtHtml: string, apiBase: unknown, grafanaUrl: unknown): Promise<string> {
+export async function policy(nuxtHtml: string, apiBase: unknown, grafanaUrl: unknown,
+  notebooksOrigin?: unknown): Promise<string> {
   const api = origin(apiBase)
   const grafana = origin(grafanaUrl)
+  const notebooks = origin(notebooksOrigin)
   return [
     "default-src 'self'",
     ["script-src 'self'", ...(await scriptHashes(nuxtHtml))].join(' '),
@@ -55,8 +57,9 @@ export async function policy(nuxtHtml: string, apiBase: unknown, grafanaUrl: unk
     "font-src 'self' data:",
     ["connect-src 'self'", api].filter(Boolean).join(' '),
     // the Monitoring tab embeds Grafana; the notebooks' app and editor are marimo behind
-    // the gateway (the site itself when the API is under /api)
-    ["frame-src 'self'", grafana, api].filter(Boolean).join(' '),
+    // the gateway, on the notebooks' own address (NUXT_PUBLIC_NOTEBOOKS_ORIGIN; the API's
+    // only where an installation serves them on the interface's, NOTEBOOKS__ALLOW_SAME_ORIGIN)
+    ["frame-src 'self'", grafana, api, notebooks].filter(Boolean).join(' '),
     "object-src 'none'",
     "base-uri 'self'",
     "form-action 'self'",
@@ -67,8 +70,8 @@ export async function policy(nuxtHtml: string, apiBase: unknown, grafanaUrl: unk
 export default defineNitroPlugin((nitroApp) => {
   if (import.meta.dev) return
   nitroApp.hooks.hook('render:html', async (html, { event }) => {
-    const { apiBase, grafanaUrl } = useRuntimeConfig(event).public
+    const { apiBase, grafanaUrl, notebooksOrigin } = useRuntimeConfig(event).public
     const nuxtScripts = [...html.head, ...html.bodyAppend].join('\n')
-    setResponseHeader(event, 'content-security-policy', await policy(nuxtScripts, apiBase, grafanaUrl))
+    setResponseHeader(event, 'content-security-policy', await policy(nuxtScripts, apiBase, grafanaUrl, notebooksOrigin))
   })
 })

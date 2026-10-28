@@ -71,3 +71,7 @@ ingress:
 #   registry:
 #     repository: "<registry address>:80/tabularia"
 #     insecure: true
+#   # where the marimo notebooks open: your browser finds notebooks.localhost by itself
+#   notebooks:
+#     host: notebooks.localhost
+#     origin: http://notebooks.localhost:8080

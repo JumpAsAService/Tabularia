@@ -7,6 +7,8 @@ published as web apps. docs/specs/notebooks.md; the rules in services/notebooks.
 - `NotebookVisitor`: one open app in a browser (marimo's WebSocket through the proxy),
   so that every gateway replica counts the same visitors (services/notebook_runtime.py,
   «Visitors»).
+- `NotebookTicket`: a one-minute, one-use ticket that opens a notebook's app or editor on
+  the notebooks' own address (services/notebook_frames.py).
 - `NotebookVersion`: every save that changes the notebook is a version; an older one can
   be restored (it becomes the newest). `content` is JSON: {"source": "<the marimo .py
   file>"}. The app reads with the rights of the version's `created_by`: whoever saved
@@ -104,3 +106,24 @@ class NotebookVisitor(SQLModel, table=True):
     user_id: int = Field(foreign_key="users.id", index=True, ondelete="CASCADE")
     opened_at: datetime = Field(default_factory=_naive_now)
     last_seen_at: datetime = Field(default_factory=_naive_now)
+
+
+class NotebookTicket(SQLModel, table=True):
+    """A ticket to open a notebook's app or editor on the notebooks' own address
+    (NOTEBOOKS__ORIGIN; services/notebook_frames.py): Tabularia's page asks for it, the
+    frame uses it once, within a minute, and gets the notebook's cookie for it. In the
+    database because the gateway's replicas share nothing else. Naive UTC times, as the
+    sessions."""
+    __tablename__ = "notebook_tickets"
+
+    id: Optional[int] = Field(default=None, primary_key=True)
+    # SHA-256 of the ticket: the ticket itself is only in the frame's address
+    token_fp: str = Field(max_length=64, unique=True, index=True)
+    notebook_id: int = Field(foreign_key="notebooks.id", index=True, ondelete="CASCADE")
+    mode: str = Field(max_length=8)  # app | edit
+    user_id: int = Field(foreign_key="users.id", index=True, ondelete="CASCADE")
+    # the Tabularia session that asked for it: the notebook's cookie holds while it does
+    sid: str = Field(max_length=64)
+    # the origin of the page that asked, the only one that may frame the notebook
+    frame_origin: str = Field(max_length=255)
+    expires_at: datetime = Field(index=True)

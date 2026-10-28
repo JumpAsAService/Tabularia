@@ -264,6 +264,34 @@ gateway needs to build the images there.
 {{- .Values.scripts.trialNamespace | default (printf "%s-scripts-dev" .Release.Namespace) -}}
 {{- end -}}
 
+{{/*
+The notebooks' own address (scripts.notebooks.host, .origin): the host the Ingress
+sends to the gateway alone, and the origin the browser writes — https://<host> with the
+Ingress's TLS, http://<host> without, or scripts.notebooks.origin when it has a port.
+Empty without scripts. docs/capabilities/notebooks.md, «An address of their own».
+*/}}
+{{- define "tabularia.notebooksHost" -}}
+{{- $n := .Values.scripts.notebooks | default dict -}}
+{{- if .Values.scripts.enabled -}}
+{{- if $n.host -}}
+{{- $n.host | lower -}}
+{{- else if $n.origin -}}
+{{- regexReplaceAll ":[0-9]+$" (urlParse $n.origin).host "" | lower -}}
+{{- end -}}
+{{- end -}}
+{{- end -}}
+
+{{- define "tabularia.notebooksOrigin" -}}
+{{- $n := .Values.scripts.notebooks | default dict -}}
+{{- if .Values.scripts.enabled -}}
+{{- if $n.origin -}}
+{{- $n.origin | trimSuffix "/" -}}
+{{- else if $n.host -}}
+{{- printf "%s://%s" (ternary "https" "http" (not (empty .Values.ingress.tls))) ($n.host | lower) -}}
+{{- end -}}
+{{- end -}}
+{{- end -}}
+
 {{- define "tabularia.containersNamespace" -}}
 {{- .Values.containers.namespace | default (printf "%s-containers" .Release.Namespace) -}}
 {{- end -}}
@@ -338,6 +366,14 @@ gateway needs to build the images there.
   value: {{ $n.startTimeoutSeconds | default 300 | quote }}
 - name: NOTEBOOKS__POD_IP_CHECK
   value: {{ ne $n.podIpCheck false | quote }}
+# the notebooks' own address, where their apps and editors are served: without one they
+# do not open, unless allowSameOrigin (one machine only)
+{{- with (include "tabularia.notebooksOrigin" .) }}
+- name: NOTEBOOKS__ORIGIN
+  value: {{ . | quote }}
+{{- end }}
+- name: NOTEBOOKS__ALLOW_SAME_ORIGIN
+  value: {{ $n.allowSameOrigin | default false | quote }}
 {{- end -}}
 
 {{/*

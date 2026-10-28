@@ -11,24 +11,29 @@ docs/specs/notebooks.md («Runtime»); the rules in services/notebook_runtime.py
 
 The app's session says how many people have it open (`visitors`, on every replica) and
 how many it takes at once (`max_visitors`); the editor's says neither.
+
+The frame of the app or of the editor opens on the notebooks' own address with a ticket
+(`POST /notebooks/{id}/ticket`, services/notebook_frames.py): asked by Tabularia's page,
+signed in in the browser, with the rights that start the session.
 """
 from __future__ import annotations
 
 from typing import Literal, Optional
 
-from fastapi import APIRouter, Depends, Request, Response
+from fastapi import APIRouter, Depends, HTTPException, Request, Response
 from fastapi.responses import JSONResponse
 from pydantic import BaseModel, Field
 from sqlmodel import Session, select
 
 from app.core.routing import ReleasingRoute
 from app.db.session import get_session
-from app.deps.auth import get_current_user
+from app.deps.auth import get_current_user, same_origin
 from app.deps.permissions import ensure_can
 from app.models import Notebook, NotebookSession, User
 from app.models.permission import Capability
 from app.routes.notebooks import NotebookDetail, _detail
 from app.schemas.models import UtcDateTime
+from app.services import notebook_frames as frames
 from app.services import notebook_runtime as runtime
 from app.services import notebooks
 from app.services import permissions as perm_service
@@ -60,6 +65,19 @@ class SessionStart(BaseModel):
 
 class SaveIn(BaseModel):
     note: Optional[str] = Field(default=None, max_length=500)
+
+
+class TicketIn(BaseModel):
+    mode: Literal["app", "edit"]
+
+
+class TicketOut(BaseModel):
+    # where the frame opens: the notebooks' own address with the ticket; None when they
+    # are served on the interface's (NOTEBOOKS__ALLOW_SAME_ORIGIN), at the usual path
+    url: Optional[str] = None
+    # NOTEBOOKS__ALLOW_SAME_ORIGIN: the page warns that a notebook's code acts as you
+    same_origin: bool = False
+    expires_in: int = 0  # seconds left to use the ticket
 
 
 def person(user: Optional[User]) -> Optional[Person]:
@@ -136,3 +154,28 @@ async def save_from_editor(notebook_id: int, body: SaveIn, request: Request,
     session.refresh(notebook)
     return _detail(session, user, notebook)
 
+
+@router.post("/notebooks/{notebook_id}/ticket", response_model=TicketOut)
+def frame_ticket(notebook_id: int, body: TicketIn, request: Request, user: User = Depends(get_current_user),
+                 session: Session = Depends(get_session)):
+    """A ticket that opens the app (VIEW) or the editor (EDIT) in the page's frame, on the
+    notebooks' own address: used once, within a minute, for this person, notebook and
+    mode. Only from a page of Tabularia signed in in the browser (its session, its
+    `Origin`): the frame holds while that session does, and only that page may frame it.
+    Without an address of their own the notebooks do not open (409), unless
+    NOTEBOOKS__ALLOW_SAME_ORIGIN."""
+    notebook = notebooks.get_visible(session, user, notebook_id)
+    if body.mode == "edit":
+        ensure_can(session, user, notebook.project_id, Capability.EDIT)
+    if not frames.configured():
+        if not frames.same_origin_allowed():
+            raise HTTPException(status_code=409, detail=frames.NEEDS_ORIGIN)
+        return TicketOut(same_origin=True)
+    sid = getattr(request.state, "sid", None)
+    page = frames.page_origin(request)
+    if not sid or page is None or not same_origin(request):
+        raise HTTPException(status_code=403, detail="A notebook opens from its page in Tabularia, signed in in the "
+                                                    "browser")
+    ticket = frames.issue(session, notebook_id=notebook.id, mode=body.mode, user_id=user.id, sid=sid,
+                          frame_origin=page)
+    return TicketOut(url=frames.frame_url(notebook.id, body.mode, ticket), expires_in=frames.TICKET_SECONDS)

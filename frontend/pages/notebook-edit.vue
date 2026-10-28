@@ -1,7 +1,8 @@
 <script setup lang="ts">
 // marimo's own editor for a notebook, full screen (docs/specs/notebooks.md): a bar with
 // «Save version», «Open app» and «Close editor», then marimo in edit mode, served by the
-// gateway on the same origin. The editor's pod reads Tabularia's data with the rights of
+// gateway on the notebooks' own address (composables/useNotebookFrame.ts says why). The
+// editor's pod reads Tabularia's data with the rights of
 // whoever edits — the bar says so. One person at a time: a second one is told who is
 // editing.
 //
@@ -18,6 +19,7 @@ import { errMessage } from '~/composables/useApi'
 import { usePopover } from '~/composables/usePopover'
 import { useFolderPaths } from '~/composables/useFolderPaths'
 import { personName, useNotebooks, type NotebookDetail } from '~/composables/useNotebooks'
+import { useNotebookFrame } from '~/composables/useNotebookFrame'
 import { useNotebookSession } from '~/composables/useNotebookSession'
 import BrandMark from '~/components/ui/BrandMark.vue'
 import NotebookStage from '~/components/notebooks/NotebookStage.vue'
@@ -28,13 +30,13 @@ const route = useRoute()
 const api = useNotebooks()
 const folderPaths = useFolderPaths()
 const edit = useNotebookSession('edit')
+const frame = useNotebookFrame('edit')
 
 const notebookId = computed(() => Number(route.query.id) || null)
 const detail = ref<NotebookDetail | null>(null)
 const loadError = ref('')
 
 const folderPath = computed(() => folderPaths.pathOf(detail.value?.project_id) ?? '')
-const frameSrc = computed(() => (notebookId.value != null ? api.frameUrl(notebookId.value, 'edit') : ''))
 const ready = computed(() => edit.phase.value === 'ready')
 // VIEW only (an observer, a reader of the folder): the app, never the editor
 const readOnly = computed(() => !!detail.value && !detail.value.editable)
@@ -50,6 +52,7 @@ async function open() {
   detail.value = null
   loadError.value = ''
   edit.leave()
+  frame.leave()
   if (id == null) {
     loadError.value = t('notebook.session.noId')
     return
@@ -63,6 +66,12 @@ async function open() {
   if (!detail.value.editable) return
   await edit.start(id)
 }
+
+// the editor ready: a fresh ticket for its frame, every time (a ticket opens it once)
+watch(() => edit.phase.value, (phase) => {
+  if (phase === 'ready' && notebookId.value != null) frame.open(notebookId.value)
+  else frame.leave()
+})
 
 function openApp() {
   if (notebookId.value == null) return
@@ -197,6 +206,10 @@ watch(notebookId, open)
         </NuxtLink>
       </div>
     </header>
+    <p v-if="frame.sameOrigin.value" class="sameorigin" role="note">
+      <ShieldAlert :size="14" aria-hidden="true" />
+      <span>{{ t('notebook.session.sameOrigin') }}</span>
+    </p>
 
     <NotebookStage v-if="loadError" kind="failed" :title="t('notebook.session.loadFailed')" :detail="loadError">
       <NuxtLink class="btn" to="/">{{ t('notebook.session.home') }}</NuxtLink>
@@ -223,10 +236,21 @@ watch(notebookId, open)
       :title="t('notebook.session.startingEditor')"
       :elapsed="edit.elapsed.value"
     />
+    <NotebookStage
+      v-else-if="frame.problem.value"
+      kind="failed"
+      :title="t('notebook.session.frameFailedTitle')"
+      :detail="frame.problem.value"
+    >
+      <button type="button" class="primary" @click="notebookId != null && frame.open(notebookId)">
+        <RotateCw :size="14" aria-hidden="true" /> {{ t('notebook.session.retry') }}
+      </button>
+    </NotebookStage>
+    <NotebookStage v-else-if="!frame.src.value" kind="starting" :title="t('notebook.session.startingEditor')" />
     <iframe
       v-else
       class="frame"
-      :src="frameSrc"
+      :src="frame.src.value"
       :title="t('notebook.session.editFrame', { name: detail?.name ?? '' })"
       allow="clipboard-read; clipboard-write; fullscreen"
     />
@@ -330,6 +354,20 @@ watch(notebookId, open)
 }
 .btn:hover { border-color: var(--accent); box-shadow: var(--shadow-1); }
 .frame { flex: 1; min-height: 0; width: 100%; border: 0; display: block; background: var(--bg); }
+/* NOTEBOOKS__ALLOW_SAME_ORIGIN: always in sight while the notebook is open */
+.sameorigin {
+  flex-shrink: 0;
+  margin: 0;
+  display: flex;
+  align-items: flex-start;
+  gap: 6px;
+  padding: 6px 12px;
+  font-size: 12px;
+  color: var(--warning);
+  background: color-mix(in srgb, var(--warning) 8%, var(--panel));
+  border-bottom: 1px solid color-mix(in srgb, var(--warning) 45%, var(--border));
+}
+.sameorigin svg { flex-shrink: 0; margin-top: 2px; }
 @media (max-width: 1100px) {
   /* the note takes its own row under the name and the buttons */
   .bar { flex-wrap: wrap; }

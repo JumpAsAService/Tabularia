@@ -37,3 +37,22 @@ NOTE: single sign-on is enabled. Admission is open by default — everyone the
 provider authenticates gets an account. Set oidc.allowedEmailDomains or
 oidc.requireAllowlistedGroup if your issuer is the whole company directory.
 {{- end }}
+{{- if .Values.scripts.enabled }}
+{{- $nb := include "tabularia.notebooksOrigin" . }}
+{{- if $nb }}
+
+The marimo notebooks' apps and editors open from {{ $nb }}
+{{- if not (hasSuffix ".localhost" (include "tabularia.notebooksHost" .)) }}: give that
+host a DNS name{{ if .Values.ingress.tls }} and a certificate{{ end }}, as the interface's{{ end }}.
+{{- else if not (dig "notebooks" "allowSameOrigin" false .Values.scripts) }}
+
+NOTE: the marimo notebooks' apps and editors will not open: set scripts.notebooks.host,
+a host name of their own next to the interface's (docs/capabilities/notebooks.md,
+«An address of their own»).
+{{- else }}
+
+WARNING: scripts.notebooks.allowSameOrigin serves the notebooks on the interface's own
+host: whoever may edit a notebook can act in Tabularia as whoever opens it. For trying
+them alone on one machine only; set scripts.notebooks.host instead.
+{{- end }}
+{{- end }}

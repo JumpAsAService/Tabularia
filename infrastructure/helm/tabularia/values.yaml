@@ -799,6 +799,26 @@ scripts:
     # a notebook's token holds only from its own pod's address; false only behind a
     # service mesh (Istio, Linkerd), whose sidecars hide the pods' addresses
     podIpCheck: true
+    # The apps and the editors are served from a host of their own: marimo shows whatever
+    # HTML a notebook's code writes, and on the interface's host that code could act in
+    # Tabularia as whoever opens the notebook. A sibling of the interface's host is best
+    # (notebooks.example.com next to tabularia.example.com); it needs a DNS name, and a
+    # certificate when the Ingress has TLS. The chart adds it to the Ingress, towards the
+    # gateway alone under ingress.apiPrefix, and tells the gateway (NOTEBOOKS__ORIGIN) and
+    # the frontend. Empty: the apps and the editors do not open, unless allowSameOrigin.
+    # docs/capabilities/notebooks.md, «An address of their own».
+    host: ""                 # e.g. notebooks.example.com; on kind or minikube, notebooks.localhost
+    # the address as the browser writes it, when it is not https://<host> (http://<host>
+    # without ingress.tls): with a port, as the guides' http://notebooks.localhost:8080
+    origin: ""
+    # with ingress.tls: the Secret with the certificate of `host`, unless a tls entry lists
+    # it already; empty = "<release>-notebooks-tls" (cert-manager makes it from the
+    # Ingress's annotations; otherwise create it)
+    tlsSecretName: ""
+    # serve the apps and editors on the interface's own host instead, as before: ONLY to
+    # try notebooks alone on one machine, never where other people sign in (whoever may
+    # edit a notebook could act as whoever opens it). The pages say so while it is on.
+    allowSameOrigin: false
 
 # Administration → Container registries: the registries the images of the Container
 # node come from, with their credentials, how to trust their certificate (a company

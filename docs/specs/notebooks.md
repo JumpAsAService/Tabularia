@@ -1,6 +1,6 @@
 # Spec: marimo notebooks
 
-Status: designed 2026-10-27 with the owner; pieces 1–3 written and tried on minikube; piece 4 written (kind and the browsers still to try).
+Status: designed 2026-10-27 with the owner; pieces 1–3 written and tried on minikube; piece 4 written (kind and the browsers still to try); the origin of their own written 2026-10-28 (kind and the browsers still to try).
 
 ## Objective
 
@@ -26,6 +26,9 @@ object shows and says that it needs Kubernetes.
 - **Kubernetes only.**
 - marimo is Apache-2.0, compatible with Tabularia's AGPL-3.0; its name is used only to
   describe the feature.
+- **An origin of their own** (2026-10-28, after the bug hunt's Critical): apps and
+  editors are served from `NOTEBOOKS__ORIGIN`, never from the interface's origin; see
+  «An origin of their own» below.
 
 ## Model
 
@@ -40,6 +43,9 @@ object shows and says that it needs Kubernetes.
   an edit session is live (starting or ready), the source changes only in marimo's
   editor: `PATCH /notebooks/{id}` with a different source and a restore answer 409, saying
   who has it open; **Save version** (`POST /notebooks/{id}/edit/save`) goes on.
+  The page sends a new source with the version it was written on (`base_version`): when
+  another version became current since, the change is refused (409) instead of undoing
+  it (bug hunt 2026-10-28); a save that does not change the source does not send it.
 - `NotebookSession` (piece 2): one row per live pod — notebook, mode (`app`|`edit`),
   user whose rights it carries, version, Job name, pod IP, status, `started_at`,
   `last_seen_at`. One app session and at most one edit session per notebook.
@@ -147,13 +153,79 @@ Decision of the owner: a **cap of visitors at once per app**.
 
 ## Proxy (piece 3)
 
-- `/api/notebooks/{id}/app/…` and `/api/notebooks/{id}/edit/…`: HTTP through httpx,
-  WebSocket through a websocket client, both to the pod IP. Authentication by the
-  session cookie; the WebSocket handshake and every non-GET request must come from the
-  app's own origin (marimo's requests carry no CSRF header). The ingress gets a long
-  read timeout on these paths.
-- The editor shows inside a Tabularia page (an iframe on the same origin) with a toolbar:
-  **Save version**, versions, **Open app**. The app opens on its own page.
+- `/api/notebooks/{id}/app/…` and `/api/notebooks/{id}/edit/…`, on the notebooks' own
+  origin (below): HTTP through httpx, WebSocket through a websocket client, both to the
+  pod IP. Authentication by the notebook's cookie there (by Tabularia's session cookie
+  only with `NOTEBOOKS__ALLOW_SAME_ORIGIN`); the WebSocket handshake and every non-GET
+  request must come from a page of the origin they are sent to (marimo's requests carry
+  no CSRF header). The ingress gets a long read timeout on these paths.
+- Refused (2026-10-28): an app's `…/sse` (marimo's server-sent events open a kernel per
+  stream, a visitor outside the cap; its page uses the WebSocket) and any path with dot
+  segments (httpx removes them: `x/../sse` reached `sse`). The pod is reached directly,
+  never through the gateway's environment proxy, with no certificates loaded per
+  request; a message of the pod larger than 64 MiB closes its WebSocket (1009).
+- The editor shows inside a Tabularia page (an iframe of the notebooks' origin) with a
+  toolbar: **Save version**, versions, **Open app**. The app opens on its own page, in
+  the same kind of iframe.
+
+## An origin of their own (decided 2026-10-28)
+
+The bug hunt of 2026-10-28 (docs/audit/CACCIA-BUG-2026-10-28-NOTEBOOKS.md, #1, Critical):
+marimo does not sanitise the HTML of an app's outputs (`mo.Html('<iframe srcdoc=…>')`;
+`mo.iframe` serves the author's HTML as `./@file/….html` on the same origin), so a
+notebook's author ran JavaScript on Tabularia's origin, with the session of whoever
+opened the app or the editor: someone with EDIT became administrator as soon as an
+administrator opened their app. A CSP or a `sandbox` breaks marimo (scripts,
+`localStorage`, the WebSocket's `Origin`) or is bypassed by the author's `@file/*.js`.
+Decision: the notebooks get an origin of their own.
+
+- **Setting** `NOTEBOOKS__ORIGIN` (`scripts.notebooks.host`, with `origin` when the
+  browser writes a port, `tlsSecretName`): scheme and host, `https` or `http` only for
+  `localhost`/`*.localhost` (the cookie is `Secure`), never in `APP__CORS_ORIGINS` (the
+  gateway refuses to start). The frontend gets it as `NUXT_PUBLIC_NOTEBOOKS_ORIGIN`, for
+  its CSP's `frame-src`. Installation-only (the Ingress and the frontend need it too):
+  not in Administration → Settings.
+- **Separation by host**: a request whose `Host` is the notebooks' goes to an
+  application holding only the proxy's routes (`notebook_proxy.install`, an ASGI
+  middleware in front of the gateway): the rest of the API, `POST
+  /notebooks/{id}/edit/save` included, does not exist there (404). On the interface's
+  host the proxy's routes answer 404.
+- **Ticket**: `POST /notebooks/{id}/ticket {"mode": "app"|"edit"}`, with the rights that
+  start the session (VIEW, EDIT), only from a browser session (its `sid`) and a page of
+  the interface (`Origin` same-origin or in `APP__CORS_ORIGINS`). A random ticket in
+  `notebook_tickets` (migration 0031: SHA-256, notebook, mode, user, sid, the asking
+  page's origin, expiry), used once (the delete decides between replicas) within 60 s.
+  Answer: `{url: "<origin><root>/notebooks/{id}/{mode}/?ticket=…", same_origin: false,
+  expires_in: 60}`; without an origin, 409 «Notebooks need an address of their own
+  (NOTEBOOKS__ORIGIN): an administrator must set it», or, with
+  `NOTEBOOKS__ALLOW_SAME_ORIGIN`, `{url: null, same_origin: true}` and the old paths.
+- **Exchange**: the root with `?ticket=` uses it up and answers 303 to `./` (other query
+  parameters kept, `Referrer-Policy: no-referrer`) with the notebook's cookie: a JWT
+  signed with a key derived from `JWT__SECRET` (a session token is never one, nor the
+  other way round) — user, sid, notebook, mode, the asking page's origin —, `HttpOnly;
+  Secure; SameSite=None; Partitioned`, `Path=<root>/notebooks/{id}/{mode}/`, an hour,
+  written again on the root and on non-GET requests once ten minutes old. A used ticket
+  with a good cookie (the frame reloaded) goes on; otherwise a page says to open the
+  notebook from Tabularia.
+- **On the notebooks' host** the proxy reads only that cookie, checks that its session
+  is still open (sign-out, revocation, idle timeout close the frame) and the person's
+  rights at every request, as before; an open WebSocket's minute check ignores the
+  cookie's age, not its session. `Origin` must be the notebooks' origin itself.
+- **Framing**: the answers carry `Content-Security-Policy: frame-ancestors <the asking
+  page's origin>` (marimo's own CSP rewritten or completed), no `X-Frame-Options`; the
+  pages without a cookie (words only) carry no restriction.
+- **Editors start only from Tabularia's page** (`POST /notebooks/{id}/sessions`): on the
+  notebooks' host the root of an editor without a session answers «The editor is not
+  running» instead of starting one, so a notebook's code cannot open another notebook's
+  editor with the rights of whoever looks. The app still starts from its frame (it reads
+  with its author's rights).
+- **What remains**: the notebooks share one origin; a notebook's code can reach another
+  notebook the same person opened in the same browser within the cookie's hour (its app;
+  its editor while running). Documented; one host per notebook (a wildcard) would close
+  it.
+- **Pages**: `/notebook-app` and `/notebook-edit` ask a fresh ticket every time the frame
+  is shown (composables/useNotebookFrame.ts), and show the 409's words; with
+  `same_origin` they show a warning strip.
 
 ## Pieces
 

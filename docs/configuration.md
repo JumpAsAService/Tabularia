@@ -33,7 +33,7 @@ default shown below. Keep comments on their own line: not every tool strips a tr
 schedules, flow orchestration), in one process or split into `api` and `orchestrator`
 copies (`APP__ROLE`). The *engine* is one image with several roles: the internal engine
 API, the run and preview workers, and the beat scheduler; they all read the same
-settings. The *frontend* reads three public values at startup. A variable only matters to
+settings. The *frontend* reads a few public values at startup. A variable only matters to
 the service it is listed under; giving it to the others is harmless.
 
 **Secrets** are never printed here. *required* means the process refuses to start
@@ -53,11 +53,11 @@ SFTP, S3, APIs, SharePoint) belong to each connection, encrypted with
 | Read by | Variables |
 |---|---|
 | [Shared by the gateway and the engine](#shared-by-the-gateway-and-the-engine) | 7 |
-| [Gateway](#gateway) | 161 |
+| [Gateway](#gateway) | 163 |
 | [Engine and workers](#engine-and-workers) | 93 |
-| [Frontend](#frontend) | 3 |
+| [Frontend](#frontend) | 4 |
 | [Compose and Helm only](#compose-and-helm-only) | 13 |
-| **Total** | **277** |
+| **Total** | **280** |
 
 ## Before production
 
@@ -75,6 +75,7 @@ changed between versions):
 - `SECURITY__KEYS_DIR` — on Kubernetes leave it empty and set `SECURITY__FERNET_KEY`; with Compose, back the `keys` volume up with the database.
 - `AI__MAX_COST_PER_DAY_USD` — set it, and `AI__MAX_COST_PER_DAY_TOTAL_USD`, wherever people you do not know can sign in (every question is paid with your key).
 - `AUTH__FIRST_RUN_SETUP` — leave it off: the administrator comes from `AUTH__ADMIN_PASSWORD`.
+- `NOTEBOOKS__ORIGIN` — with notebooks, set it to a host name of their own next to the interface's, routed to the gateway: without it their apps and editors do not open.
 - `GRAFANA_ADMIN_PASSWORD` — change it wherever Grafana is reachable by others.
 
 ## Shared by the gateway and the engine
@@ -383,6 +384,8 @@ The marimo notebooks' pods: one per notebook being used, its app or its editor, 
 | `NOTEBOOKS__START_TIMEOUT_SECONDS` | integer, 30–3600 | `300` | set by the chart | A notebook's pod that has not answered after this long has failed to start, and says why (no node free, an image not downloaded). |
 | `NOTEBOOKS__GATEWAY_URL` | string | empty | set by the chart | The gateway's address inside the cluster, which the notebooks' pods call to read datasources. The chart sets it to the gateway's Service; empty, a notebook cannot read datasources. |
 | `NOTEBOOKS__POD_IP_CHECK` | boolean | `true` | set by the chart | A notebook's token is honoured only when the call comes from its own pod's address, and never with a forwarding header (`X-Forwarded-For`, `Forwarded`, `X-Real-IP`): a token the notebook's code printed is useless anywhere else. Turn it off only where the gateway cannot see the pods' addresses, behind a service mesh's sidecars (Istio, Linkerd). |
+| `NOTEBOOKS__ORIGIN` | string | empty | `scripts.notebooks.host` (with `origin`) | **Production:** with notebooks, set it to a host name of their own next to the interface's, routed to the gateway: without it their apps and editors do not open. The address the notebooks' apps and editors are served from, an origin of their own such as `https://notebooks.example.com`: marimo shows whatever HTML and JavaScript a notebook's code writes, and on the interface's address that code would act in Tabularia with the session of whoever opens the notebook. There the gateway answers only for the notebooks, and only with a cookie that Tabularia's page obtains for one notebook with a one-use ticket. A host other than the interface's, a sibling one best; `https`, or `http` only for `localhost` and its subdomains; never in `APP__CORS_ORIGINS`. The frontend needs the same value (`NUXT_PUBLIC_NOTEBOOKS_ORIGIN`). Empty: the apps and the editors do not open, unless `NOTEBOOKS__ALLOW_SAME_ORIGIN`. See [An address of their own](capabilities/notebooks.md#an-address-of-their-own). |
+| `NOTEBOOKS__ALLOW_SAME_ORIGIN` | boolean | `false` | `scripts.notebooks.allowSameOrigin` | Without `NOTEBOOKS__ORIGIN`, serve the notebooks' apps and editors on the interface's own address, as before: whoever may edit a notebook could then act in Tabularia as whoever opens it. Only to try notebooks alone on one machine, never where other people sign in; the pages show a warning while it is on. |
 | `TABULARIA_NOTEBOOK_TOKEN` | string | empty | set in the notebooks' pods | Not to set: the token of a notebook's session, which the gateway puts in the pod's Secret; it holds only on the notebooks' data endpoints, and only while the session lives. |
 | `TABULARIA_URL` | string | empty | set in the notebooks' pods | Not to set: the gateway gives it to every notebook's pod, from `NOTEBOOKS__GATEWAY_URL`; the `tabularia` module in the pod reads datasources there. |
 
@@ -613,6 +616,7 @@ sets them in the `frontend` service itself, not from `.env`.
 | `NUXT_PUBLIC_API_BASE` | `http://localhost:8000` | `frontend.publicApiBase` | The gateway's URL as the browser calls it: `/api` when one host serves interface and API, or a full URL on another host. |
 | `NUXT_PUBLIC_BUCKET` | `data-prep` | `externalServices.storage.bucket` | Default bucket; must match `STORAGE__BUCKET`. |
 | `NUXT_PUBLIC_GRAFANA_URL` | `http://localhost:3001` | `frontend.publicGrafanaUrl` | Grafana as the browser reaches it, embedded in the Monitoring tab (administrators only). Optional. |
+| `NUXT_PUBLIC_NOTEBOOKS_ORIGIN` | empty | from `scripts.notebooks.host` | The notebooks' own address, the gateway's `NOTEBOOKS__ORIGIN`: the pages' Content-Security-Policy lets them show the notebooks' apps and editors from it. |
 
 ## Compose and Helm only
 

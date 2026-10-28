@@ -19,6 +19,9 @@ export default defineNuxtConfig({
       bucket: process.env.NUXT_PUBLIC_BUCKET || 'data-prep',
       // Grafana as the browser sees it (the Monitoring tab's iframe, admin only)
       grafanaUrl: process.env.NUXT_PUBLIC_GRAFANA_URL || 'http://localhost:3001',
+      // the notebooks' own address (the gateway's NOTEBOOKS__ORIGIN): the frames of their
+      // apps and editors, which the page's Content-Security-Policy must allow
+      notebooksOrigin: process.env.NUXT_PUBLIC_NOTEBOOKS_ORIGIN || '',
     },
   },
 

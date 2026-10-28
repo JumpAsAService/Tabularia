@@ -49,7 +49,7 @@ default shown below. Keep comments on their own line: not every tool strips a tr
 schedules, flow orchestration), in one process or split into `api` and `orchestrator`
 copies (`APP__ROLE`). The *engine* is one image with several roles: the internal engine
 API, the run and preview workers, and the beat scheduler; they all read the same
-settings. The *frontend* reads three public values at startup. A variable only matters to
+settings. The *frontend* reads a few public values at startup. A variable only matters to
 the service it is listed under; giving it to the others is harmless.
 
 **Secrets** are never printed here. *required* means the process refuses to start
@@ -930,6 +930,15 @@ text = "Not to set: the token of a notebook's session, which the gateway puts in
 helm = "set by the chart"
 text = "The gateway's address inside the cluster, which the notebooks' pods call to read datasources. The chart sets it to the gateway's Service; empty, a notebook cannot read datasources."
 
+[var.NOTEBOOKS__ORIGIN]
+helm = "`scripts.notebooks.host` (with `origin`)"
+production = "with notebooks, set it to a host name of their own next to the interface's, routed to the gateway: without it their apps and editors do not open."
+text = "The address the notebooks' apps and editors are served from, an origin of their own such as `https://notebooks.example.com`: marimo shows whatever HTML and JavaScript a notebook's code writes, and on the interface's address that code would act in Tabularia with the session of whoever opens the notebook. There the gateway answers only for the notebooks, and only with a cookie that Tabularia's page obtains for one notebook with a one-use ticket. A host other than the interface's, a sibling one best; `https`, or `http` only for `localhost` and its subdomains; never in `APP__CORS_ORIGINS`. The frontend needs the same value (`NUXT_PUBLIC_NOTEBOOKS_ORIGIN`). Empty: the apps and the editors do not open, unless `NOTEBOOKS__ALLOW_SAME_ORIGIN`. See [An address of their own](capabilities/notebooks.md#an-address-of-their-own)."
+
+[var.NOTEBOOKS__ALLOW_SAME_ORIGIN]
+helm = "`scripts.notebooks.allowSameOrigin`"
+text = "Without `NOTEBOOKS__ORIGIN`, serve the notebooks' apps and editors on the interface's own address, as before: whoever may edit a notebook could then act in Tabularia as whoever opens it. Only to try notebooks alone on one machine, never where other people sign in; the pages show a warning while it is on."
+
 # ── Engine ───────────────────────────────────────────────────────────────────
 
 [var.APP__ENGINE_API_THREADS]
@@ -1209,6 +1218,10 @@ text = "Default bucket; must match `STORAGE__BUCKET`."
 
 [var.NUXT_PUBLIC_GRAFANA_URL]
 text = "Grafana as the browser reaches it, embedded in the Monitoring tab (administrators only). Optional."
+
+[var.NUXT_PUBLIC_NOTEBOOKS_ORIGIN]
+helm = "from `scripts.notebooks.host`"
+text = "The notebooks' own address, the gateway's `NOTEBOOKS__ORIGIN`: the pages' Content-Security-Policy lets them show the notebooks' apps and editors from it."
 
 [var.SMTP__VERIFY_TLS]
 text = "Verify the SMTP server's certificate and name, with STARTTLS and with implicit TLS (465). `false` is the explicit opt-out for a relay with a self-signed certificate: the connection is still encrypted, but to a server nobody vouched for, and it receives the SMTP password."

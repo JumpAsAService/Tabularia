@@ -433,6 +433,9 @@ scripts:
     pullSecret: registry
     caCert: |
 $(sed 's/^/      /' "$WORK/ca.crt")
+  notebooks:
+    host: notebooks.localhost
+    origin: http://notebooks.localhost:8080
 containers:
   enabled: true
 EOF
@@ -450,6 +453,10 @@ What some of them do:
   only, not kind's whole network: that network holds the nodes too.
 - `scripts.registry.caCert` is the authority of step 2: the image builds verify the
   registry with it.
+- `scripts.notebooks` is the address of their own where the marimo notebooks' apps and
+  editors open (step 10): a second host of the ingress, towards the gateway alone.
+  Browsers find `notebooks.localhost` on this computer by themselves, without DNS or
+  `/etc/hosts`; `origin` adds kind's port 8080.
 - `containers.enabled` creates the namespaces where the Container nodes run,
   `tabularia-containers` and `tabularia-containers-dev`, at the `baseline` Pod Security
   level.
@@ -504,6 +511,15 @@ in the cluster, pushed to the private registry with the company's authority, che
 and marked **Ready** after a few minutes. Script nodes can use it: see
 [Python and R in flows](../scripting.md). Scripts can also be kept on their own, next to
 flows and views: **Explore → New → Script**.
+
+A Python environment also runs **marimo notebooks**: **Explore → New → Notebook
+(marimo)**, then **Open app** or **Open editor**. Tabularia's page at
+`http://localhost:8080` shows the notebook in a frame from
+`http://notebooks.localhost:8080`, the address of step 8: a notebook's code runs there,
+away from your Tabularia session ([An address of their own](../capabilities/notebooks.md#an-address-of-their-own)).
+**Check:** `curl -s -o /dev/null -w '%{http_code}\n' http://notebooks.localhost:8080/api/health`
+answers `404` (the gateway answers there only for the notebooks), and so does
+`http://notebooks.localhost:8080/` (no interface on that host).
 
 ## 11. Images of your own
 
@@ -620,6 +636,7 @@ files, in this order.
 | the policy in `tabularia-deps` | a managed database and queue on private addresses, which the scripts cannot reach unless listed in `userCodePrivateCIDRs` |
 | PostgreSQL, Valkey and MinIO in `tabularia-deps` | managed services, or the company's own charts; the cloud bucket of step 7 is already what a company uses |
 | the ingress on `localhost:8080` | the company's ingress, with TLS and a host name |
+| the notebooks on `notebooks.localhost:8080` | a host name of their own next to the interface's (`notebooks.example.com`), with its certificate |
 
 PostgreSQL here keeps its data on a volume of the node it runs on (kind's local storage):
 draining that node (`kubectl drain`) stops it, and Tabularia with it, until the node is

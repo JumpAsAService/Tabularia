@@ -17,7 +17,32 @@ get them wrong for this application:
   proxy-read-timeout     previews are synchronous and wait for the engine
 
 If you use a controller other than nginx, translate the annotations in values.
+
+The notebooks' apps and editors have a host of their own (scripts.notebooks.host,
+docs/capabilities/notebooks.md «An address of their own»): a second rule sends it,
+under the same prefix, to the gateway alone, which answers there only for them. With
+TLS on the Ingress it gets a certificate too, from scripts.notebooks.tlsSecretName
+(cert-manager makes it from the annotations) unless a tls entry lists it already.
 */}}
+{{- $nbHost := include "tabularia.notebooksHost" . }}
+{{- if $nbHost }}
+{{- range .Values.ingress.hosts }}
+{{- if eq (.host | lower) $nbHost }}
+{{- fail (printf "scripts.notebooks.host (%s) must be a host of its own, not the interface's (ingress.hosts): a notebook's code would act in Tabularia as whoever opens it" $nbHost) }}
+{{- end }}
+{{- end }}
+{{- end }}
+{{- $tls := .Values.ingress.tls | default list }}
+{{- if and $tls $nbHost }}
+{{- $covered := false }}
+{{- range $tls }}
+{{- if has $nbHost (.hosts | default list) }}{{ $covered = true }}{{ end }}
+{{- end }}
+{{- if not $covered }}
+{{- $secret := .Values.scripts.notebooks.tlsSecretName | default (printf "%s-notebooks-tls" (include "tabularia.fullname" .)) }}
+{{- $tls = append $tls (dict "hosts" (list $nbHost) "secretName" $secret) }}
+{{- end }}
+{{- end }}
 apiVersion: networking.k8s.io/v1
 kind: Ingress
 metadata:
@@ -32,7 +57,7 @@ spec:
   {{- with .Values.ingress.className }}
   ingressClassName: {{ . }}
   {{- end }}
-  {{- with .Values.ingress.tls }}
+  {{- with $tls }}
   tls:
     {{- toYaml . | nindent 4 }}
   {{- end }}
@@ -58,5 +83,18 @@ spec:
                 port:
                   number: {{ if eq .service "gateway" }}{{ $.Values.service.gatewayPort }}{{ else }}{{ $.Values.service.frontendPort }}{{ end }}
           {{- end }}
+    {{- end }}
+    {{- if $nbHost }}
+    # the notebooks' own host: the gateway alone, under the same prefix
+    - host: {{ $nbHost | quote }}
+      http:
+        paths:
+          - path: {{ .Values.ingress.apiPrefix }}
+            pathType: Prefix
+            backend:
+              service:
+                name: {{ include "tabularia.fullname" . }}-gateway
+                port:
+                  number: {{ .Values.service.gatewayPort }}
     {{- end }}
 {{- end }}

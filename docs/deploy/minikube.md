@@ -386,6 +386,13 @@ Then add a **Script** node to a flow. [Python and R in flows](../scripting.md) e
 node, the editor and the variables. You can also keep a script on its own in a folder,
 with its versions: **Explore → New → Script (Python or R)**.
 
+A Python environment also runs **marimo notebooks**, apps your colleagues open in the
+browser: **Explore → New → Notebook (marimo)**. They open from an address of their own,
+`http://notebooks.localhost:8080`, which the `scripts:` block already names: your browser
+finds it on your computer by itself, through the same `port-forward`. If you changed the
+port of the `port-forward`, change it in `origin` too. [marimo notebooks as
+apps](../capabilities/notebooks.md) explains them, and why the separate address.
+
 > The registry's address changes if you turn the add-on off and on again. Then put the
 > new address in `my-values.yaml` and run the `helm upgrade` of point 2 again.
 
@@ -506,7 +513,8 @@ is in effect only when every pod shows `1/1` again.
 **The browser cannot open http://localhost:8080**
 - The `port-forward` window was closed, or minikube stopped: start them again.
 - *"address already in use"* in the `port-forward` window: another program uses port 8080.
-  Use `8081:80` in the command and open http://localhost:8081.
+  Use `8081:80` in the command and open http://localhost:8081 (with notebooks, write
+  `http://notebooks.localhost:8081` in `origin` and run the `helm upgrade` again).
 
 **Signing in fails**: use the `adminEmail` and `adminPassword` of `my-values.yaml`. The
 administrator is created on the very first start only: changing `adminPassword`

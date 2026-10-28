@@ -360,7 +360,7 @@ def remove_user(session: Session, user_id: int) -> None:
     from app.models import (
         AiChat, AiChatTurn, AiModel, ApiToken, AuditLog, Banner, Connection, Datasource, DisabledEngine, Flow,
         FlowGroup, FlowVersion, Permission, PrivacyNotice, Project, Run, SavedScript, SavedScriptVersion, SavedView,
-        SqlScript, SqlScriptVersion, Notebook, NotebookSession, NotebookVersion, NotebookVisitor,
+        SqlScript, SqlScriptVersion, Notebook, NotebookSession, NotebookTicket, NotebookVersion, NotebookVisitor,
         Upload, UserSession, Webhook,
     )
 
@@ -387,6 +387,8 @@ def remove_user(session: Session, user_id: int) -> None:
     # the apps the account has open: their places free at once (the WebSockets close at
     # their next check, the account being gone)
     session.exec(sa_delete(NotebookVisitor).where(NotebookVisitor.user_id == user_id))
+    # and the tickets it asked for to open them (a minute's worth)
+    session.exec(sa_delete(NotebookTicket).where(NotebookTicket.user_id == user_id))
     # the client addresses of the account go with it (services/ip_retention.py);
     # the rows stay, with the email of the time
     from app.services import ip_retention

@@ -811,6 +811,42 @@ class NotebooksSettings(BaseModel):
     # a notebook token is honoured only from its own pod's address. Off only where the
     # gateway cannot see that address: a service mesh (Istio, Linkerd) shows its sidecar's
     pod_ip_check: bool = True
+    # The address the apps and editors are served from (routes/notebook_proxy.py), an
+    # origin of their own: `https://notebooks.example.com`. marimo shows whatever HTML a
+    # notebook's code writes, so its author runs JavaScript in the browser of whoever
+    # opens it; served apart from the interface, that code cannot reach Tabularia's API
+    # with their session. A host other than the interface's (a sibling subdomain is best);
+    # https, or http on this machine only (localhost, *.localhost): its cookie is Secure.
+    # Empty = the apps and the editors do not open, unless allow_same_origin.
+    origin: str = ""
+    # serve them from the interface's own address instead, as before: ONLY to try the
+    # notebooks alone on one machine, never where other people sign in — whoever may
+    # edit a notebook could then act in Tabularia as whoever opens it
+    allow_same_origin: bool = False
+
+    @field_validator("origin")
+    @classmethod
+    def _an_origin(cls, v: str) -> str:
+        from urllib.parse import urlsplit
+
+        v = (v or "").strip().rstrip("/")
+        if not v:
+            return ""
+        try:
+            parts = urlsplit(v)
+            port = parts.port  # a port that is not a number raises here
+        except ValueError:
+            parts, port = None, None
+        if (parts is None or parts.scheme not in ("http", "https") or not parts.hostname or parts.path
+                or parts.query or parts.fragment or parts.username is not None):
+            raise ValueError(f"NOTEBOOKS__ORIGIN is an address without a path, e.g. https://notebooks.example.com: "
+                             f"not '{v}'")
+        host = parts.hostname.lower()
+        if parts.scheme == "http" and not (host == "localhost" or host.endswith(".localhost")):
+            raise ValueError("NOTEBOOKS__ORIGIN needs https (the notebooks' cookie is Secure, and browsers keep "
+                             "one on plain http only for localhost and its subdomains)")
+        default = 443 if parts.scheme == "https" else 80
+        return f"{parts.scheme}://{host}" + (f":{port}" if port not in (None, default) else "")
 
 
 class Settings(BaseSettings):
@@ -857,6 +893,17 @@ class Settings(BaseSettings):
 
             self.security.fernet_key = read_or_create(
                 self.security.keys_dir, "fernet.key", lambda: Fernet.generate_key().decode())
+        return self
+
+    @model_validator(mode="after")
+    def _notebooks_apart(self) -> "Settings":
+        """The notebooks' origin is never one the API answers with credentials: listed in
+        APP__CORS_ORIGINS, a notebook's JavaScript would call the API with the session of
+        whoever opens it, which the origin of their own is there to prevent."""
+        origin = self.notebooks.origin
+        if origin and origin in {o.strip().rstrip("/").lower() for o in self.app.cors_origins}:
+            raise ValueError(f"NOTEBOOKS__ORIGIN ({origin}) cannot be in APP__CORS_ORIGINS: the notebooks' code would "
+                             "call the API with the session of whoever opens them")
         return self
 
     def check_required_secrets(self) -> None:

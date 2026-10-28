@@ -61,6 +61,11 @@ spec:
             - name: NUXT_PUBLIC_GRAFANA_URL
               value: {{ . | quote }}
             {{- end }}
+            # the notebooks' own address (scripts.notebooks.host): the pages may frame it
+            {{- with (include "tabularia.notebooksOrigin" .) }}
+            - name: NUXT_PUBLIC_NOTEBOOKS_ORIGIN
+              value: {{ . | quote }}
+            {{- end }}
           readinessProbe:
             # "/" redirects to the login page, so probe the page itself.
             httpGet: { path: /login, port: http }

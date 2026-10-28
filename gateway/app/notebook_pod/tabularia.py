@@ -17,6 +17,7 @@ nothing is copied, and the data is as fresh as the datasource.
 """
 from __future__ import annotations
 
+import http.client
 import json
 import os
 import shutil
@@ -26,7 +27,14 @@ import urllib.request
 
 __all__ = ["TabulariaError", "datasources", "read"]
 
-_TIMEOUT = 60  # the gateway's answers; the download itself has no limit
+_TIMEOUT = 60  # the gateway's answers
+# the download: as long as it keeps coming, but a storage that stops sending fails the
+# read after this long instead of holding the cell forever
+_DOWNLOAD_TIMEOUT = 60
+# the gateway is called at its address in the cluster, never through a proxy of the
+# environment's variables (HTTP_PROXY, for the internet): the gateway takes the token only
+# from the pod's own address. The download follows them: the storage may be outside
+_DIRECT = urllib.request.build_opener(urllib.request.ProxyHandler({}))
 
 
 class TabulariaError(Exception):
@@ -44,7 +52,7 @@ def _call(method: str, path: str, body: dict | None = None) -> dict | list:
         headers={"content-type": "application/json", "authorization": f"Bearer {token}"},
     )
     try:
-        with urllib.request.urlopen(req, timeout=_TIMEOUT) as r:
+        with _DIRECT.open(req, timeout=_TIMEOUT) as r:
             return json.loads(r.read() or b"null")
     except urllib.error.HTTPError as e:
         try:
@@ -52,8 +60,8 @@ def _call(method: str, path: str, body: dict | None = None) -> dict | list:
         except ValueError:
             detail = None
         raise TabulariaError(detail if isinstance(detail, str) else f"Tabularia answered {e.code}") from None
-    except urllib.error.URLError as e:
-        raise TabulariaError(f"Tabularia cannot be reached: {e.reason}") from None
+    except OSError as e:  # URLError, or no answer within _TIMEOUT
+        raise TabulariaError(f"Tabularia cannot be reached: {getattr(e, 'reason', None) or e}") from None
 
 
 def datasources() -> list[dict]:
@@ -69,10 +77,10 @@ def read(datasource: str | int, columns: list[str] | None = None):
     found = _call("POST", "/notebook-data/read", {"datasource": datasource})
     fd, path = tempfile.mkstemp(suffix=".parquet")  # /tmp is the pod's scratch volume
     try:
-        with os.fdopen(fd, "wb") as out, urllib.request.urlopen(found["url"]) as src:
+        with os.fdopen(fd, "wb") as out, urllib.request.urlopen(found["url"], timeout=_DOWNLOAD_TIMEOUT) as src:
             shutil.copyfileobj(src, out, 1 << 20)
         return pl.read_parquet(path, columns=columns)
-    except urllib.error.URLError as e:
+    except (OSError, http.client.HTTPException) as e:  # URLError, a timeout, a body cut short
         raise TabulariaError(f"The data of «{found.get('name', datasource)}» could not be downloaded: {e}") from None
     finally:
         try:

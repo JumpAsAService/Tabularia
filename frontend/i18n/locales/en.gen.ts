@@ -321,6 +321,8 @@ export default {
       "closeTitle": "Stop the editor: what it saved stays as the notebook's draft",
       "viewOnlyTitle": "You can open the app, not edit it",
       "viewOnly": "Editing a notebook takes the right to edit its folder.",
+      "frameFailedTitle": "The notebook cannot open here",
+      "sameOrigin": "This installation shows notebooks on Tabularia's own address (NOTEBOOKS__ALLOW_SAME_ORIGIN): a notebook's code can act in Tabularia as you. Meant for trying notebooks on one machine; open only those whose authors you trust.",
     },
   },
   "sqlScript": {
