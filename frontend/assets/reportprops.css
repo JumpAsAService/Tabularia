@@ -1,0 +1,45 @@
+/* The report designer's properties panel (components/report/designer/Rd*Props.vue):
+   imported scoped by each of them, as the list pages import listpage.css. */
+.rp-f { display: flex; flex-direction: column; gap: 4px; min-width: 0; flex: 1; font-size: 12px; color: var(--muted); font-weight: 500; }
+.rp-f.narrow { flex: 0 0 96px; }
+.rp-f > input[type='text'] { padding: 5px 8px; font-size: 13px; }
+.rp-f :deep(.sel-trigger) { padding: 5px 8px; }
+.rp-row { display: flex; gap: 8px; align-items: flex-end; min-width: 0; }
+.rp-check { display: flex; align-items: center; gap: 7px; font-size: 12.5px; color: var(--text); cursor: pointer; line-height: 1.3; }
+.rp-check input { width: auto; margin: 0; flex: none; }
+.rp-checks { display: flex; flex-direction: column; gap: 7px; }
+.rp-help { margin: 0; font-size: 11.5px; color: var(--muted); line-height: 1.45; }
+.rp-err { margin: 0; font-size: 12px; color: var(--danger); line-height: 1.4; overflow-wrap: anywhere; }
+.rp-list { display: flex; flex-direction: column; gap: 8px; }
+.rp-lhead { display: flex; align-items: center; justify-content: space-between; gap: 8px; font-size: 12px; color: var(--muted); font-weight: 500; }
+.rp-lhead .mini, .rp-add { display: inline-flex; align-items: center; gap: 4px; white-space: nowrap; flex-shrink: 0; }
+.rp-card { border: 1px solid var(--border-soft); border-radius: 8px; background: var(--bg-soft); }
+.rp-card.bad { border-color: color-mix(in srgb, var(--danger) 65%, var(--border)); }
+.rp-chead { display: flex; align-items: center; gap: 2px; padding: 3px 4px 3px 6px; min-width: 0; }
+.rp-ctitle {
+  flex: 1; min-width: 0; justify-content: flex-start; gap: 6px; border: 0; background: transparent; padding: 3px 2px;
+  box-shadow: none; font-size: 12.5px;
+}
+.rp-ctitle:hover { box-shadow: none; }
+.rp-ctitle:active { transform: none; }
+.rp-chev { flex: none; color: var(--muted); transition: transform 0.15s ease; }
+.rp-ctitle[aria-expanded='true'] .rp-chev { transform: rotate(90deg); }
+.rp-cname { font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 55%; }
+.rp-cexpr {
+  flex: 1; min-width: 0; font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 11.5px; color: var(--muted);
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis; text-align: left;
+}
+.rp-glevel { font-size: 11px; font-weight: 600; color: var(--muted); white-space: nowrap; padding-right: 4px; }
+.rp-cbody { display: flex; flex-direction: column; gap: 10px; padding: 6px 10px 10px; border-top: 1px solid var(--border-soft); }
+.rp-icon {
+  border: 0; background: transparent; padding: 4px; min-height: 0; box-shadow: none; color: var(--muted); border-radius: 6px; flex: none;
+}
+.rp-icon:hover:not(:disabled) { color: var(--text); background: var(--panel-2); box-shadow: none; }
+.rp-icon.danger:hover:not(:disabled) { color: var(--danger); }
+.rp-more summary { cursor: pointer; font-size: 12px; color: var(--muted); padding: 2px 0; }
+.rp-more[open] summary { margin-bottom: 8px; }
+.rp-rule { display: flex; flex-direction: column; gap: 8px; padding: 8px; border: 1px dashed var(--border); border-radius: 8px; }
+.rp-rulehead { display: flex; gap: 6px; align-items: flex-end; min-width: 0; }
+.rp-rulehead > :first-child { flex: 1; min-width: 0; }
+.rp-f :deep(.rseg), .rp-rule > :deep(.rseg) { align-self: stretch; }
+@media (prefers-reduced-motion: reduce) { .rp-chev { transition: none; } }

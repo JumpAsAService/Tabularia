@@ -10,7 +10,7 @@ import { GridComponent, TooltipComponent, LegendComponent } from 'echarts/compon
 import VChart from 'vue-echarts'
 import {
   ScrollText, Search, RefreshCw, ChevronLeft, ChevronRight, Circle,
-  LogIn, LogOut, Workflow, Database, Plug, Download, Shield, CheckCircle2, XCircle, AlertTriangle, KeyRound, SlidersHorizontal, Radar, Rows3, Server, Folder, Code2, DatabaseSearch, Boxes, DatabaseBackup, Sparkles, Megaphone, FileCheck, Mail, Cpu, NotebookPen, Bot } from 'lucide-vue-next'
+  LogIn, LogOut, Workflow, Database, Plug, Download, Shield, CheckCircle2, XCircle, AlertTriangle, KeyRound, SlidersHorizontal, Radar, Rows3, Server, Folder, Code2, DatabaseSearch, Boxes, DatabaseBackup, Sparkles, Megaphone, FileCheck, Mail, Cpu, NotebookPen, Bot, FileChartColumn } from 'lucide-vue-next'
 import { useApi, type AuditEntry, type ActiveSession, type AccessActivity } from '~/composables/useApi'
 import { useI18n } from 'vue-i18n'
 import { useFormat } from '~/composables/useFormat'
@@ -201,6 +201,14 @@ const ACTION_META = computed<Record<string, { icon: any; color: string; label: s
     'notebook.stop': { icon: NotebookPen, color: u.accent, label: t('audit.notebookStopAction') },
     'notebook.save': { icon: NotebookPen, color: u.accent, label: t('audit.notebookSaveAction') },
     'notebook.read': { icon: NotebookPen, color: u.violet, label: t('audit.notebookReadAction') },
+    'report.create': { icon: FileChartColumn, color: u.accent, label: t('audit.reportCreateAction') },
+    'report.update': { icon: FileChartColumn, color: u.accent, label: t('audit.reportUpdateAction') },
+    'report.delete': { icon: FileChartColumn, color: u.danger, label: t('audit.reportDeleteAction') },
+    'report.move': { icon: FileChartColumn, color: u.accent, label: t('audit.reportMoveAction') },
+    'report.rename': { icon: FileChartColumn, color: u.accent, label: t('audit.reportRenameAction') },
+    'report.duplicate': { icon: FileChartColumn, color: u.accent, label: t('audit.reportDuplicateAction') },
+    'report.restore': { icon: FileChartColumn, color: u.accent, label: t('audit.reportRestoreAction') },
+    'report.render': { icon: FileChartColumn, color: u.violet, label: t('audit.reportRenderAction') },
     'auth.sso_login': { icon: KeyRound, color: u.success, label: t('audit.ssoLoginAction') },
     'auth.sso_login_failed': { icon: KeyRound, color: u.danger, label: t('audit.ssoLoginFailedAction') },
     'auth.first_run_setup': { icon: KeyRound, color: u.success, label: t('audit.firstRunSetupAction') },
@@ -308,6 +316,10 @@ const REASONS: Record<string, string> = {
   observer: 'audit.reasonObserver',
   'wrong current password': 'audit.reasonWrongCurrent',
 }
+const REPORT_FROM: Record<string, string> = {
+  interface: 'audit.reportFrom_interface', editor: 'audit.reportFrom_editor', api: 'audit.reportFrom_api',
+  flow_group: 'audit.reportFrom_flow_group',
+}
 function reasonLabel(r: string): string {
   return REASONS[r] ? t(REASONS[r]) : r
 }
@@ -318,6 +330,8 @@ function detailSummary(e: AuditEntry): string {
   const parts: string[] = []
   if (d.reason) parts.push(reasonLabel(String(d.reason)))
   if (d.format) parts.push(`${d.format}`)
+  // a report's render: where it was asked from (the screen, the designer, the API, a flow group)
+  if (e.action === 'report.render' && typeof d.from === 'string' && REPORT_FROM[d.from]) parts.push(t(REPORT_FROM[d.from]))
   if (d.filename && !d.format) parts.push(String(d.filename))
   // a schedule turned off is a null cron ('(disattivato)' in the lines up to 1.2.2)
   if (d.cron === null || d.cron === '(disattivato)') parts.push(t('audit.scheduleOff'))

@@ -11,7 +11,7 @@
 // to see what cannot be seen.
 import { computed, ref, watch, onUnmounted } from 'vue'
 import { useI18n } from 'vue-i18n'
-import { Search, X, Folder, Workflow, Database, Bookmark, Plug, LoaderCircle, Rows3, Lock, FileCode2, DatabaseSearch, NotebookPen } from 'lucide-vue-next'
+import { Search, X, Folder, Workflow, Database, Bookmark, Plug, LoaderCircle, Rows3, Lock, FileCode2, DatabaseSearch, NotebookPen, FileChartColumn } from 'lucide-vue-next'
 import { errMessage } from '~/composables/useApi'
 import { useFormat } from '~/composables/useFormat'
 import { useSearch, searchHitTarget, type SearchHit, type SearchKind } from '~/composables/useSearch'
@@ -33,9 +33,9 @@ const total = ref(0)
 const cursor = ref(-1) // row highlighted by the keyboard
 
 const ICON: Record<SearchKind, any> = {
-  folder: Folder, flow: Workflow, group: Rows3, datasource: Database, view: Bookmark, script: FileCode2, sql: DatabaseSearch, notebook: NotebookPen, connection: Plug,
+  folder: Folder, flow: Workflow, group: Rows3, datasource: Database, view: Bookmark, script: FileCode2, sql: DatabaseSearch, notebook: NotebookPen, report: FileChartColumn, connection: Plug,
 }
-const ORDER: SearchKind[] = ['folder', 'flow', 'group', 'datasource', 'view', 'script', 'sql', 'notebook', 'connection']
+const ORDER: SearchKind[] = ['folder', 'flow', 'group', 'datasource', 'view', 'script', 'sql', 'notebook', 'report', 'connection']
 
 /**
  * Grouped by kind: five short lists read better than twenty mixed rows, and the kind is
