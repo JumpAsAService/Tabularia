@@ -43,3 +43,12 @@ def test_an_output_preview_refuses_what_the_run_would_refuse():
     out = _preview(kind="output", templates={"file_name": "{today:yyyy/MM}.csv", "key": "x/{last_refresh}"},
                    targets={"file_name": "file", "key": "path"})
     assert "'/'" in out.fields["file_name"].error and "Output" in out.fields["key"].error
+
+
+def test_a_preview_writes_names_in_the_language_asked():
+    month = date.today().month
+    out = _preview(kind="output", templates={"subject": "{today:MMMM}"}, targets={"subject": "text"}, lang="it")
+    assert out.fields["subject"].error is None
+    assert out.fields["subject"].value == ("gennaio febbraio marzo aprile maggio giugno luglio agosto settembre ottobre "
+                                           "novembre dicembre").split()[month - 1]
+    assert _preview(templates={"p": "{today:MMM}"}).fields["p"].value == date.today().strftime("%b")

@@ -28,7 +28,7 @@ from email.message import EmailMessage
 from email.utils import make_msgid
 from html import escape
 from pathlib import Path
-from typing import Any, Literal
+from typing import Any, Literal, NamedTuple
 
 from pydantic import BaseModel, Field, model_validator
 
@@ -82,7 +82,8 @@ class PushmailSpec(BaseModel):
     timezone: str = Field(default="UTC", max_length=64)
     run_id: int | None = None
     flow: str = ""
-    # the language of the note on the rows left out: the one of whoever runs the group
+    # the language of the note on the rows left out and of the names of months and days in the
+    # subject and the file names ({today:MMMM}): the one of whoever runs the group
     lang: Literal["en", "it", "fr", "de", "es"] = "en"
 
     @model_validator(mode="after")
@@ -116,7 +117,7 @@ def _file_names(spec: PushmailSpec, now: datetime) -> tuple[str, list[str], list
     from app.core import placeholders as ph
 
     try:
-        ctx = ph.output_context(now, spec.timezone, spec.run_id, spec.flow)
+        ctx = ph.output_context(now, spec.timezone, spec.run_id, spec.flow, spec.lang)
         subject = ph.render_output(spec.subject, ctx, "text", "subject") if any(c in spec.subject for c in "{}") else spec.subject
         names = [ph.render_output(t, ctx, "file", "file name") if any(c in t for c in "{}") else t
                  for t in [a.file_name for a in spec.attachments] + [r.file_name for r in spec.reports]]
@@ -151,18 +152,25 @@ def _render(r: PushmailReport, fmt: str, workdir: Path, now: datetime) -> Path:
         raise EmailDestinationError(f"the report «{r.name}»: {e.message}") from None
 
 
-def _summary(mhtml: bytes) -> tuple[str, list[tuple[str, bytes, str]]]:
-    """A report's summary from its MHTML (app.reports.email_html): what its <body> holds,
-    and its images, (Content-ID, PNG, file name) each."""
+class _Summary(NamedTuple):
+    html: str  # what the summary's <body> holds
+    text: str  # the same for a mail client without HTML
+    images: list[tuple[str, bytes, str]]  # (Content-ID, PNG, file name) each
+
+
+def _summary(mhtml: bytes) -> _Summary:
+    """A report's summary from its MHTML (app.reports.email_html)."""
     doc = email.message_from_bytes(mhtml, policy=email.policy.default)
-    html, images = "", []
+    html, text, images = "", "", []
     for part in doc.walk():
         if part.get_content_type() == "text/html":
             html = part.get_content()
+        elif part.get_content_type() == "text/plain":
+            text = part.get_content()
         elif part.get_content_maintype() == "image":
             images.append((str(part["Content-ID"] or "").strip("<>"), part.get_content(), part.get_filename() or "chart.png"))
     m = re.search(r"<body[^>]*>(.*)</body>", html, re.S | re.I)
-    return (m.group(1) if m else html), images
+    return _Summary(m.group(1) if m else html, text.strip() or _html_to_text(html), images)
 
 
 def _with_summary(body: str, is_html: bool, summary: str) -> str:
@@ -211,7 +219,7 @@ def send_pushmail(conn: SmtpConnectionSpec, spec: PushmailSpec, now: datetime | 
 
     files: list[tuple[str, bytes]] = []
     cut: list[tuple[str, int, int]] = []
-    summary: tuple[str, list[tuple[str, bytes, str]]] | None = None
+    summary: _Summary | None = None
     rows_sent = size = 0
 
     def add(path: str | Path, n: int) -> bytes:
@@ -260,12 +268,11 @@ def send_pushmail(conn: SmtpConnectionSpec, spec: PushmailSpec, now: datetime | 
     if summary is not None:
         # the cell's text first, the report's summary under it; the images inside the HTML
         # part (multipart/related), so a mail client shows them in place, not as files
-        html, images = summary
         plain = _html_to_text(body) if spec.body_is_html else body.rstrip()
-        msg.set_content("\n\n".join(t for t in (plain, _html_to_text(html)) if t))
-        msg.add_alternative(_with_summary(body, spec.body_is_html, html), subtype="html")
+        msg.set_content("\n\n".join(t for t in (plain, summary.text) if t))
+        msg.add_alternative(_with_summary(body, spec.body_is_html, summary.html), subtype="html")
         html_part = msg.get_payload()[-1]
-        for cid, data, filename in images:
+        for cid, data, filename in summary.images:
             html_part.add_related(data, maintype="image", subtype="png", cid=f"<{cid}>", filename=filename,
                                   disposition="inline")
     elif spec.body_is_html:

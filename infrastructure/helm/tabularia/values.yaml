@@ -335,12 +335,14 @@ engine:
 # a child process of the worker, the charts drawn by the chartRenderer sidecar below.
 reports:
   # The most rows a report reads from each of its datasets: one more stops the render and
-  # names the dataset (aggregate it in SQL, or filter it).
-  maxRows: 10000
-  # The most pages of one report (with renderMemoryMb below: 1024 lays out some 250).
-  maxPages: 250
+  # names the dataset (aggregate it in SQL, or filter it). A million rows take some 1.1 GiB
+  # of the worker's memory while the report renders (measured): with worker.concurrency
+  # renders at once, keep worker.resources.limits.memory above concurrency × that.
+  maxRows: 1000000
+  # The most pages of one report (with renderMemoryMb below: 1024 holds 200 with a margin).
+  maxPages: 200
   # The memory and the time of the child process that lays the pages out (Typst). It needs
-  # about 4 MiB a page of tables: 1024 lays out some 250 pages. For longer reports raise it,
+  # about 4.5 MiB a page of tables (the screen's SVG pages a little more): 1024 holds 200. For longer reports raise it,
   # and worker.resources.limits.memory by as much for every render that may run at once
   # (worker.concurrency).
   renderMemoryMb: 1024

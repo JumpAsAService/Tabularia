@@ -35,6 +35,21 @@ test('the named formatters write the engine\'s texts and the locale\'s numbers',
   assert.ok(svg.includes('Mio.'))
 })
 
+test('a long name ends in «…», a pie keeps its share on a line of its own, small numbers keep their digits', () => {
+  const long = 'Società Cooperativa Agricola Allevatori dell\'Appennino Tosco-Emiliano'
+  const svg = render(chart({
+    xAxis: { type: 'category', data: [long, 'b'], axisLabel: { interval: 0, formatter: { $fmt: 'short', max: 20 } } },
+    yAxis: { type: 'value', axisLabel: { formatter: { $fmt: 'compact', locale: 'en' } } },
+    series: [{ type: 'bar', data: [0.05, 0.15] }],
+  }, 600))
+  assert.ok(svg.includes('Società Cooperativa…') && !svg.includes('Allevatori'))
+  const ticks = [...svg.matchAll(/>(0\.\d+)</g)].map((m) => m[1])
+  assert.ok(ticks.length >= 3 && new Set(ticks).size === ticks.length, `the ticks of a small scale are told apart: ${ticks}`)
+  const pie = render(chart({ series: [{ type: 'pie', data: [{ name: long, value: 3 }, { name: 'b', value: 1 }],
+    label: { formatter: { $fmt: 'namePercent', locale: 'it', max: 20 } } }] }, 600, 300))
+  assert.ok(pie.includes('Società Cooperativa…') && pie.includes('75%'))
+})
+
 test('a name is a value, never a formatter or code', () => {
   const svg = render(chart({
     xAxis: { type: 'category', data: ['fmt:compact', '<script>alert(1)</script>', '{a}{b}'], axisLabel: { interval: 0 } },
@@ -54,6 +69,15 @@ test('only the formatters of the list, and no images', () => {
   const option = JSON.parse('{"__proto__": {"polluted": true}, "series": []}')
   render(chart(option))
   assert.equal({}.polluted, undefined)
+})
+
+test('the lines of a label on two lines are a font size apart, not on top of each other', () => {
+  // zrender takes a line's height from the width of «国»: the table of the PDF's font has no CJK
+  const svg = render(chart({ series: [{ type: 'treemap', data: [{ name: 'Alpha', value: 10, t: '12,345' }],
+    label: { fontSize: 8, formatter: { $fmt: 'nameLabel' } } }] }))
+  const ys = [...svg.matchAll(/font-size:8px;[^>]*y="(-?[\d.]+)"[^>]*>(Alpha|12,345)</g)].map((m) => Number(m[1]))
+  assert.equal(ys.length, 2)
+  assert.ok(ys[1] - ys[0] >= 8, `lines ${ys[1] - ys[0]} px apart`)
 })
 
 test('the service answers SVG, says what is wrong, and has a health check', async () => {

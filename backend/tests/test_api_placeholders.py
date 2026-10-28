@@ -196,12 +196,32 @@ def test_dates_do_not_leak_a_time():
     ("{now:HHmm}", "2230"),                      # mm right after the hours: minutes
     ("{now:mm:ss}", "30:05"),                    # mm right before the seconds: minutes
     ("{now:yyyyMMdd'T'HHmmss}", "20261017T223005"),
+    # the names of months and days, in English when the context has no language
+    ("{today:MMMM yyyy}", "October 2026"),
+    ("{today:dd MMM yy}", "17 Oct 26"),
+    ("{today:EEEE dd MMMM}", "Saturday 17 October"),
+    ("{today:EEE ddMMyyyy}", "Sat 17102026"),
+    ("{today:MMMM mm}", "October 10"),             # mm is still the month away from hours and seconds
+    ("{now:EEE HH:mm}", "Sat 22:30"),
 ])
 def test_readable_date_formats(template, expected):
     assert ph.render(template, ctx()) == expected
 
 
-@pytest.mark.parametrize("template", ["{today:dd-qq-yyyy}", "{today:ddd}", "{today:yyy}"])
+@pytest.mark.parametrize("lang, expected", [
+    ("en", "Saturday 17 October 2026 · Oct"), ("it", "sabato 17 ottobre 2026 · ott"),
+    ("de", "Samstag 17 Oktober 2026 · Okt."), ("es", "sábado 17 octubre 2026 · oct"),
+    ("fr", "samedi 17 octobre 2026 · oct."),
+])
+def test_names_of_months_and_days_are_written_in_the_context_s_language(lang, expected):
+    c = ctx()
+    c.lang = lang
+    assert ph.render("{today:EEEE dd MMMM yyyy} · {today:MMM}", c) == expected
+    assert ph.render("{today:%Y-%m}", c) == "2026-10"  # strftime is strftime, in every language
+
+
+@pytest.mark.parametrize("template", ["{today:dd-qq-yyyy}", "{today:ddd}", "{today:yyy}", "{today:MMMMM}",
+                                      "{today:EE}", "{today:E}"])
 def test_an_unknown_readable_token_is_refused(template):
     with pytest.raises(ph.PlaceholderError):
         ph.check(template)
@@ -214,7 +234,7 @@ def test_an_unknown_readable_token_is_refused(template):
     ("{today:%z}", "date"),
     ("{today:%Z}", "date"),
     ("{now:hh:mm}", "HH"),
-    ("{today:MMMM}", "twice"),
+    ("{today:dddd}", "twice"),
     ("{today:yyyy-MM-ddTHH:mm}", "'T'"),
     ("{today:''}", "no date"),
     ("{today:-}", "no date"),

@@ -48,6 +48,13 @@ def test_output_placeholders(template, expected):
     assert out(template) == expected
 
 
+def test_an_output_writes_names_in_its_language_and_english_without_one():
+    it = ph.output_context(NOW, "UTC", 42, "Chiusura", lang="it")
+    assert ph.render_output("Margine {today:MMMM yyyy}", it, "text", "subject") == "Margine ottobre 2026"
+    assert ph.render_output("margine_{today:MMM_yyyy}", it, "file", "file name") == "margine_ott_2026"
+    assert out("margin_{today:MMMM}") == "margin_October"
+
+
 def test_an_output_resolves_in_its_time_zone():
     assert out("{date}_{datetime}", tz="Asia/Tokyo") == "2026-10-18_2026-10-18_073005"
     assert out("{today}", tz="Europe/Rome") == "2026-10-18"

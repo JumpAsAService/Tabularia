@@ -80,7 +80,7 @@ def render(definition: dict, datasets: dict[str, dict], params: dict[str, Any] |
     loc = formats.locale(report.locale)
     tz = ph.zone(report.timezone)
     now_local = (now or datetime.now(timezone.utc)).astimezone(tz)
-    pctx = ph.Context(now=now_local, tz=tz)
+    pctx = ph.Context(now=now_local, tz=tz, lang=loc.code)
     values = rdata.parameters(report, params or {}, pctx)
     ctx = ex.Context(loc=loc, now=now_local, params=values, report=title, ph_context=pctx)
 
@@ -94,7 +94,7 @@ def render(definition: dict, datasets: dict[str, dict], params: dict[str, Any] |
     ctx.datasets = {name: ds.rows for name, ds in data.items()}
 
     m = rmodel.build(report, data, values, ctx, state=state, title=title, max_pages=limits.max_pages,
-                     interactive=fmt == "svg")
+                     interactive=fmt == "svg", layout=fmt in ("pdf", "svg"))
     out = workdir / f"report.{EXTENSION[fmt]}"
     if fmt == "xlsx":
         size = report.page.size if isinstance(report.page.size, str) else None
@@ -150,7 +150,7 @@ def choices(definition: dict, dataset: str, datasets: dict[str, dict], params: d
     loc = formats.locale(locale if locale in formats.LOCALES else report.locale)
     tz = ph.zone(report.timezone)
     now_local = (now or datetime.now(timezone.utc)).astimezone(tz)
-    pctx = ph.Context(now=now_local, tz=tz)
+    pctx = ph.Context(now=now_local, tz=tz, lang=loc.code)
     values = rdata.parameters(report, params or {}, pctx, strict=False)
     ctx = ex.Context(loc=loc, now=now_local, params=values, ph_context=pctx)
     ds = rdata.read_dataset(dataset, (datasets or {}).get(dataset), max_rows or Limits.from_settings().max_rows, tz)

@@ -551,10 +551,12 @@ class ReportsSettings(BaseModel):
     env: REPORTS__CHART_URL — the chart service (ECharts to SVG): a sidecar of the worker
     pod on Kubernetes, the `chart-renderer` service on Compose; empty = no charts."""
 
-    # coherent with the memory: about 4 MiB a page of tables, so 1024 MiB lays out some 250
-    # pages, and 10,000 rows of a table fill about 200
-    max_rows: int = Field(default=10_000, ge=1, le=1_000_000)
-    max_pages: int = Field(default=250, ge=1, le=10_000)
+    # measured: a million rows (8 columns) grouped with totals take some 27 s and 1.1 GiB in
+    # the worker's process (a report holds its rows as Python values); the layout's child
+    # process apart, which the pages bound: 186 pages of grouped tables, some 750 MiB for the
+    # PDF and 830 for the screen's SVG pages, so 1024 MiB holds 200 with a margin
+    max_rows: int = Field(default=1_000_000, ge=1, le=10_000_000)
+    max_pages: int = Field(default=200, ge=1, le=10_000)
     render_memory_mb: int = Field(default=1024, ge=128)
     render_seconds: int = Field(default=120, ge=5)
     chart_url: str = "http://127.0.0.1:8090"

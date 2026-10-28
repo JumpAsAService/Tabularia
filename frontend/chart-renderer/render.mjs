@@ -33,13 +33,16 @@ function loadEcharts() {
 const echarts = loadEcharts();
 
 const WIDTHS = JSON.parse(readFileSync(new URL('./font-widths.json', import.meta.url), 'utf8'));
+// a character the font lacks: a wide one (CJK…) takes an em, as in a browser — zrender also takes
+// the height of a line from the width of «国», so at 0.6 em the lines of a label overlapped
+const fallback = (ch) => (ch.codePointAt(0) >= 0x2e80 ? 1 : 0.6);
 echarts.setPlatformAPI({
   measureText(text, font) {
     const size = Number((/(\d+(?:\.\d+)?)px/.exec(font || '') || [0, 12])[1]);
     const weight = /\b(bold|bolder|[7-9]00)\b/.test(font || '') ? '700' : /\b(500|600)\b/.test(font || '') ? '600' : '400';
     const table = WIDTHS[weight];
     let w = 0;
-    for (const ch of String(text ?? '')) w += (table[ch] ?? 0.6) * size;
+    for (const ch of String(text ?? '')) w += (table[ch] ?? fallback(ch)) * size;
     return { width: w };
   },
 });
@@ -53,19 +56,35 @@ const valueOf = (p) => {
   return Array.isArray(v) ? v[v.length - 1] : v;
 };
 const textOf = (p) => (p && p.data && typeof p.data.t === 'string' ? p.data.t : null);
+// a name cut to `max` characters with «…» (no `max`: whole), so a wrapped label stays a few lines
+const cut = (a) => {
+  const max = Number.isInteger(a.max) && a.max > 1 ? a.max : Infinity;
+  return (text) => {
+    const chars = [...String(text ?? '')];
+    return chars.length > max ? `${chars.slice(0, max - 1).join('').trimEnd()}…` : chars.join('');
+  };
+};
 
 const FORMATTERS = {
   label: () => (p) => textOf(p) ?? String(valueOf(p) ?? ''),
+  short: (a) => {
+    const name = cut(a);
+    return (v) => name(valueOf(v));
+  },
   nameLabel: (a) => {
     const sep = a.sep === ' ' ? ' ' : '\n';
-    return (p) => (textOf(p) ? `${p.name}${sep}${textOf(p)}` : String(p.name ?? ''));
+    const name = cut(a);
+    return (p) => (textOf(p) ? `${name(p.name)}${sep}${textOf(p)}` : name(p.name));
   },
+  // the share on a line of its own: a long name wraps or is cut, the share never
   namePercent: (a) => {
     const f = new Intl.NumberFormat(locale(a), { style: 'percent', maximumFractionDigits: 1 });
-    return (p) => `${p.name} ${f.format((Number(p.percent) || 0) / 100)}`;
+    const name = cut(a);
+    return (p) => `${name(p.name)}\n${f.format((Number(p.percent) || 0) / 100)}`;
   },
+  // three significant digits: the ticks of a small scale (0.05, 0.15) are not all «0.1»
   compact: (a) => {
-    const f = new Intl.NumberFormat(locale(a), { notation: 'compact', maximumFractionDigits: 1 });
+    const f = new Intl.NumberFormat(locale(a), { notation: 'compact', maximumSignificantDigits: 3 });
     return (v) => f.format(Number(valueOf(v)));
   },
   percent: (a) => {

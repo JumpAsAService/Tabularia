@@ -99,6 +99,23 @@ def test_the_pages_on_screen_are_svg_with_where_to_click(tmp_path, chart_service
     assert all(1 <= h["page"] <= r.pages and h["x"] > 0 and h["y"] > 0 for h in out["hotspots"])
 
 
+def test_a_hotspot_carries_the_box_of_its_cell(tmp_path, chart_service):
+    """The cell a click sorts or opens, in mm from the page's top left as `x`, `y`: a header
+    spans its column and its row, a group's row spans the table (12 mm of margin, 186 wide)."""
+    out = json.loads(run(tmp_path, chart_service, "svg").path.read_text())
+    for h in out["hotspots"]:
+        b = h["box"]
+        assert b["x"] <= h["x"] <= b["x"] + b["w"] and b["y"] <= h["y"] <= b["y"] + b["h"], h
+        assert 3 < b["h"] < 12, h
+    first_page = [h for h in out["hotspots"] if h["page"] == 1]
+    heads = sorted((h for h in first_page if h["kind"] == "sort"), key=lambda h: h["column"])
+    assert [round(h["box"]["w"], 1) for h in heads] == [24.0, 22.0, 96.0, 16.0, 28.0]  # the widths, 1fr = the rest
+    assert round(heads[0]["box"]["x"], 1) == 12.0 and len({(h["box"]["y"], h["box"]["h"]) for h in heads}) == 1
+    assert all(abs(a["box"]["x"] + a["box"]["w"] - b["box"]["x"]) < 0.01 for a, b in zip(heads, heads[1:]))
+    groups = [h for h in first_page if h["kind"] == "toggle"]
+    assert groups and all((round(h["box"]["x"], 1), round(h["box"]["w"], 1)) == (12.0, 186.0) for h in groups)
+
+
 
 def test_a_closed_group_ends_the_repetition_of_the_header_before_it(tmp_path):
     """The Sample margins with «Insaccati da cuocere» closed: «Insaccati cotti» ends at the foot
@@ -201,12 +218,52 @@ def test_excel_keeps_values_groups_and_subtotal_formulas(tmp_path, chart_service
     assert "[Red]" in styles
 
 
+def test_sheet_names_drop_what_excel_refuses_and_stay_readable():
+    from app.reports import xlsx
+
+    used: set[str] = set()
+    names = [xlsx._sheet_name(t, used) for t in ("Sales: Q1/Q2 [draft] * ?", "Sales: Q1/Q2 [draft] * ?", "History",
+                                                  "'quoted'", "", "A very long title that Excel cuts at 31 characters")]
+    assert names == ["Sales Q1 Q2 draft", "Sales Q1 Q2 draft (2)", "History (2)", "quoted", "Table",
+                     "A very long title that Excel cu"]
+    assert all(len(n) <= 31 for n in names)
+
+
+def test_a_total_row_with_no_column_free_for_its_label_writes_it_on_a_row_of_its_own(tmp_path, chart_service):
+    """Every column has a total: the label («Totale Regione: Centro», «Totale») goes on a row
+    above the values, in the PDF (looked at) and in Excel, instead of being lost."""
+    d = samples.definition()
+    detail = next(it for it in d["sections"]["body"]["items"] if it["id"] == "detail")
+    detail["columns"] = [c for c in detail["columns"] if c.get("total")]
+    detail["groups"] = detail["groups"][:1]
+    z = zipfile.ZipFile(run(tmp_path, chart_service, "xlsx", definition=d).path)
+    strings = re.findall(r"<t[^>]*>([^<]*)</t>", z.read("xl/sharedStrings.xml").decode())
+    sheet = z.read("xl/worksheets/sheet1.xml").decode()
+    label = strings.index("Totale Regione: Centro")
+    row = int(re.search(rf'<c r="A(\d+)"[^>]*t="s"[^>]*><v>{label}</v>', sheet).group(1))
+    # the values of that total on the next row, as SUBTOTAL formulas
+    assert re.search(rf'<c r="A{row + 1}"[^>]*><f>SUBTOTAL\(9,A\d+:A{row}\)</f>', sheet)
+    assert "Totale" in strings
+
+
 # ── the email ────────────────────────────────────────────────────────────────
 def _mhtml(path) -> tuple[str, list]:
     message = email.message_from_bytes(path.read_bytes())
     assert message.get_content_type() == "multipart/related" and message.get_param("type") == "text/html"
-    html_part, *images = message.get_payload()
-    return html_part.get_payload(decode=True).decode("utf-8"), images
+    html_part, *rest = message.get_payload()
+    assert html_part.get_content_type() == "text/html"
+    return html_part.get_payload(decode=True).decode("utf-8"), [p for p in rest if p.get_content_maintype() == "image"]
+
+
+def _mhtml_text(path) -> str:
+    """The summary for a mail client without HTML, carried in the MHTML next to the HTML."""
+    message = email.message_from_bytes(path.read_bytes())
+    part = next(p for p in message.get_payload() if p.get_content_type() == "text/plain")
+    return part.get_payload(decode=True).decode("utf-8")
+
+
+def _text_item(id_: str, y: float, value: str) -> dict:
+    return {"id": id_, "type": "text", "x": 0, "y": y, "w": 186, "h": 6, "value": value}
 
 
 def test_the_email_body_carries_its_charts_by_cid_and_stays_small(tmp_path, chart_service):
@@ -235,7 +292,70 @@ def test_a_long_summary_is_cut_under_gmail_s_limit(tmp_path, chart_service):
     r = run(tmp_path, chart_service, "html", rows=3000, definition=d, limits={"max_pages": 5000})
     html, images = _mhtml(r.path)
     assert len(html.encode("utf-8")) < 102 * 1024 and images == []
-    assert "il dettaglio completo è nel PDF" in html
+    hidden = int(re.search(r"… e altri ([\d.]+): il report completo è in allegato", html).group(1).replace(".", ""))
+    assert hidden + html.count("Totale ORD-") == 3000
+
+
+def test_every_table_and_matrix_gives_its_totals_and_a_title_goes_with_its_table(tmp_path, chart_service):
+    d = samples.definition()
+    d["sections"]["body"]["items"] += [
+        # a list with nothing to total: left out of the email, and so is the text that introduces it
+        _text_item("list_title", 140, "Ultimi ordini"),
+        {"id": "list", "type": "table", "dataset": "orders", "x": 0, "y": 148, "w": 186, "h": 20,
+         "columns": [{"header": "Ordine", "value": "[order]"}]},
+        _text_item("matrix_title", 172, "Ricavo per regione e semestre"),
+        {"id": "m", "type": "table", "dataset": "orders", "x": 0, "y": 180, "w": 186, "h": 20, "grand_total": True,
+         "columns": [{"header": "Regione", "value": "[region]"}], "groups": [{"by": "[region]"}],
+         "matrix": {"columns_by": 'IF(MONTH([day]) <= 6, "H1", "H2")', "value": "SUM([amount])", "format": "#,##0"}},
+    ]
+    r = run(tmp_path, chart_service, "html", definition=d)
+    html = _mhtml(r.path)[0]
+    assert "Ultimi ordini" not in html and "ORD-00001" not in html
+    # the text right above the detail table introduces it: it stays, with the table's totals
+    assert (html.index("Le note di credito") < html.index("Totale Regione: Centro")
+            < html.index("Ricavo per regione e semestre"))
+    matrix = html[html.index("Ricavo per regione e semestre"):]
+    assert all(f">{name}<" in matrix for name in ("H1", "H2", "Totale", *samples.REGIONS))
+    text = _mhtml_text(r.path)
+    assert "Ultimi ordini" not in text and "Ricavo per regione e semestre" in text
+    centro = next(line for line in text.splitlines() if line.startswith("Totale Regione: Centro"))
+    assert re.fullmatch(r"Totale Regione: Centro — Qtà [\d.]+ · Ricavo [\d.]+,\d\d", centro), centro
+
+
+def test_a_table_with_no_text_above_it_is_named_by_its_title_in_the_email(tmp_path, chart_service):
+    d = samples.definition()
+    detail = next(it for it in d["sections"]["body"]["items"] if it["id"] == "detail")
+    d["sections"]["body"]["items"] = [{**detail, "id": f"t{i}", "y": 30 * i, "title": f"Ordini {i}"} for i in (1, 2)]
+    r = run(tmp_path, chart_service, "html", definition=d)
+    html, text = _mhtml(r.path)[0], _mhtml_text(r.path)
+    assert html.index("Ordini 1") < html.index("Totale Regione: Centro") < html.index("Ordini 2")
+    assert text.index("Ordini 1") < text.index("Totale Regione: Centro") < text.index("Ordini 2")
+
+
+def test_a_summary_too_heavy_for_every_table_says_how_many_are_left_out(tmp_path, chart_service):
+    d = samples.definition()
+    detail = next(it for it in d["sections"]["body"]["items"] if it["id"] == "detail")
+    tables = [{**detail, "id": f"t{i}", "y": 100 + 10 * i, "groups": [{"by": '[customer] & " ' + "·" * 200 + '"'}]}
+              for i in range(40)]
+    d["sections"]["body"]["items"] = tables
+    r = run(tmp_path, chart_service, "html", definition=d)
+    html = _mhtml(r.path)[0]
+    assert len(html.encode("utf-8")) < 102 * 1024
+    left = int(re.search(r"altre (\d+) tabelle sono nel report allegato", html).group(1))
+    shown = html.count('<table role="presentation" width="100%" cellpadding="0" cellspacing="0" '
+                       'style="border-collapse')
+    assert 0 < left < 40 and shown + left == 40
+
+
+def test_a_wide_matrix_shows_its_total_column_and_says_what_is_left_out(tmp_path, chart_service):
+    d = samples.definition()
+    d["sections"]["body"]["items"] = [
+        {"id": "m", "type": "table", "dataset": "orders", "x": 0, "y": 0, "w": 186, "h": 20,
+         "columns": [{"header": "Regione", "value": "[region]"}], "groups": [{"by": "[region]"}],
+         "matrix": {"columns_by": "MONTH([day])", "value": "SUM([amount])", "format": "#,##0"}}]
+    html = _mhtml(run(tmp_path, chart_service, "html", definition=d).path)[0]
+    assert "altre 9 colonne sono nel report allegato" in html
+    assert html.count('<th align="right"') == 1 and ">Totale</th>" in html
 
 
 # ── choices of a parameter ───────────────────────────────────────────────────

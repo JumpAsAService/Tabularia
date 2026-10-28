@@ -94,6 +94,13 @@ def test_bad_patterns_are_named():
         f.check_pattern("hello")
     f.check_pattern("dd/MM/yyyy")
     f.check_pattern("€ #,##0.00")
+    # a quote left open at the end of a date's format vanished without a word
+    with pytest.raises(f.FormatError, match="quote is not closed"):
+        f.check_pattern("dd MMM yyyy'")
+    # a spreadsheet's colour printed «[Red]-1,235»: refused, with what to do instead
+    with pytest.raises(f.FormatError, match=r"\[Red\].*rule"):
+        f.check_pattern("#,##0;[Red]-#,##0")
+    assert f.format_number(-5, '#,##0;"[minus]" #,##0', f.locale("en")) == "[minus] 5"  # quoted, it is text
 
 
 @pytest.mark.parametrize("pattern, excel", [

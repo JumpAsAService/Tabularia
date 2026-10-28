@@ -90,6 +90,13 @@ def test_an_html_body_gets_the_note_as_html(sent, sales):
     assert "<p>Hello</p>" in html and "Sales: the first 10 rows of 1,200." in html
 
 
+def test_the_subject_and_the_names_write_months_in_the_language_of_the_cell(sent, regions):
+    pm.send_pushmail(_conn(), _spec(_att(regions, "regioni_{today:MMMM_yyyy}"), subject="Margine {today:MMMM yyyy}",
+                                    lang="it"), now=NOW)
+    (msg, _), = sent
+    assert msg["Subject"] == "Margine ottobre 2026" and list(_files(msg)) == ["regioni_ottobre_2026.xlsx"]
+
+
 def test_two_files_with_the_same_name_are_told_apart(sent, sales, regions):
     pm.send_pushmail(_conn(), _spec(_att(sales, "report"), _att(regions, "Report.xlsx")), now=NOW)
     (msg, _), = sent

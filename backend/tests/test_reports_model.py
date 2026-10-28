@@ -68,9 +68,9 @@ def test_groups_subtotals_and_a_grand_total():
     t = m.tables[0]
     assert kinds(t) == ["g", "d", "d", "d", "f", "g", "d", "f", "g", "d", "f", "t"]
     headers = [r.label for r in t.rows if r.kind == "g"]
-    assert headers == ["N", "S", ""]  # NULL last
+    assert headers == ["N", "S", "(blank)"]  # NULL last, and named
     footers = [(r.label, r.cells[1].text) for r in t.rows if r.kind in ("f", "t")]
-    assert footers == [("Total N", "25.00"), ("Total S", "30.00"), ("Total ", "1.00"), ("Total", "56.00")]
+    assert footers == [("Total N", "25.00"), ("Total S", "30.00"), ("Total (blank)", "1.00"), ("Total", "56.00")]
     assert [r.span for r in t.rows if r.kind == "f"] == [1, 1, 1]
 
 
@@ -160,12 +160,35 @@ def test_the_screen_s_state_sorts_a_column_and_closes_groups():
     assert kinds(fixed).count("d") == 4
 
 
+def test_a_matrix_offers_no_column_to_sort():
+    """Its columns are values, not the table's columns: a click on «x» marked it sorted and
+    changed nothing. Its groups still open and close."""
+    t = table(interactive={"sort": True, "toggle": True}, groups=[{"by": "[region]"}, {"by": "[customer]"}],
+              matrix={"columns_by": "[kind]", "value": "SUM([amount])"})
+    m = build(report(t), state={"items": {"t": {"sort": {"column": 1, "dir": "desc"}}}}, interactive=True)
+    doc = m.doc["body"][0]
+    assert doc["hot"] == {"sort": False, "toggle": True} and doc["sorted"] is None
+
+
 def test_a_matrix_has_a_column_per_value():
     t = build(report(table(matrix={"columns_by": "[kind]", "value": "SUM([amount])", "format": "#,##0"},
                            groups=[{"by": "[region]"}], grand_total=True)), ROWS[:4]).tables[0]
     assert [h["t"] for h in t.head[0]] == ["Customer", "x", "y", "Total"]
     rows = [[c.text for c in r.cells] for r in t.rows]
     assert rows == [["N", "5", "20", "25"], ["S", "", "30", "30"], ["Total", "5", "50", "55"]]
+
+
+def test_a_matrix_column_is_a_header_and_a_width_without_a_value():
+    """A matrix draws its first column from its groups: the column gives only its header,
+    width and style. Requiring a value made the designer save a made-up one; a plain table
+    still needs one in every column."""
+    t = table(matrix={"columns_by": "[kind]", "value": "SUM([amount])"}, groups=[{"by": "[region]"}],
+              columns=[{"header": "Region", "width": 40}])
+    assert rd.check(report(t), any_field=True) == []
+    assert [h["t"] for h in build(report(t), ROWS[:4]).tables[0].head[0]][:1] == ["Region"]
+    plain = table(columns=[{"header": "Region", "width": 40}])
+    assert [(p.field, "value" in p.message) for p in rd.check(report(plain), any_field=True)] == \
+        [("columns[0].value", True)]
 
 
 def test_a_matrix_with_two_levels_of_columns_and_its_limit():
@@ -176,6 +199,53 @@ def test_a_matrix_with_two_levels_of_columns_and_its_limit():
     many = [{"region": str(i), "customer": "a", "amount": 1.0, "qty": 1, "kind": "x"} for i in range(61)]
     with pytest.raises(ReportError, match="61 columns, the most is 60"):
         build(report(table(matrix={"columns_by": "[region]", "value": "SUM([amount])"}, groups=[])), many)
+
+
+def test_an_empty_table_says_no_data_with_no_total_of_nothing():
+    for t in (table(grand_total=True), table(grand_total=True, groups=[]),
+              table(grand_total=True, matrix={"columns_by": "[kind]", "value": "SUM([amount])"})):
+        m = build(report(t), [])
+        assert m.tables[0].rows == [] and m.doc["body"][0]["rows"] == [] and m.doc["empty"] == "No data"
+
+
+def test_a_missing_value_is_named_where_it_labels_something_and_a_kpi_without_data_shows_a_dash():
+    rows = [{"region": None, "customer": "a", "amount": 1.0, "qty": 1, "kind": None}]
+    chart = {"id": "c", "type": "chart", "dataset": "d", "kind": "column", "x": 0, "y": 30, "w": 100, "h": 50,
+             "category": "[region]", "split_by": "[kind]", "series": [{"value": "SUM([amount])"}]}
+    matrix = table(id="m", y=90, groups=[{"by": "[customer]"}], matrix={"columns_by": "[kind]", "value": "SUM([amount])"})
+    kpi = {"id": "k", "type": "kpi", "dataset": "d", "x": 0, "y": 150, "w": 60, "h": 24, "value": "SUM([qty]) / 0"}
+    m = build(report(table(), chart, matrix, kpi, locale="it"), rows)
+    assert [r.label for r in m.tables[0].rows if r.kind in ("g", "f")] == ["(vuoto)", "Totale (vuoto)"]
+    o = m.charts[0].option
+    assert o["xAxis"]["data"] == ["(vuoto)"] and o["series"][0]["name"] == "(vuoto)"
+    assert [h["t"] for h in m.tables[1].head[0]] == ["Customer", "(vuoto)", "Totale"]
+    assert m.blocks[-1] == ("kpi", {"label": "", "value": "—", "change": None})
+
+
+def test_columns_wider_than_their_table_are_narrowed_to_fit_it_and_said():
+    t = table(w=186, columns=[{"header": f"C{i}", "value": "[amount]", "width": 25} for i in range(12)], groups=[])
+    m = build(report(t))
+    widths = [c["w"] for c in m.doc["body"][0]["cols"]]
+    assert sum(widths) == pytest.approx(186, abs=0.1) and len(set(widths)) == 1
+    assert any("300 mm" in w and "186 mm" in w for w in m.warnings), m.warnings
+    assert build(report(table())).warnings == []  # a table that fits says nothing
+
+
+def test_values_wider_than_their_column_are_said():
+    rows = [dict(r, amount=r["amount"] * 1e7) for r in ROWS]
+    t = table(columns=[{"header": "Customer", "value": "[customer]"},
+                       {"header": "Amount", "value": "[amount]", "width": 12, "format": "#,##0.00", "total": "SUM([amount])"}])
+    warnings = build(report(t), rows).warnings
+    assert [w for w in warnings if "run into" in w] == [
+        "table «t»: values wider than their column run into the next one, in the column «Amount» (12 mm): widen "
+        "them, or give them a shorter format"]
+
+
+def test_an_item_past_the_edge_of_the_paper_is_said():
+    d = report(table(w=186), {"id": "far", "type": "text", "x": 150, "y": 30, "w": 80, "h": 6, "value": "x"},
+               page={"size": "A5", "margins": [15, 12, 15, 12]})
+    warnings = build(d).warnings
+    assert any("«t»" in w and "paper" in w for w in warnings) and any("«far»" in w for w in warnings), warnings
 
 
 def test_an_empty_table_keeps_its_header():
@@ -230,7 +300,7 @@ def test_charts_become_echarts_options_with_named_formatters_only():
     o = job.option
     assert o["xAxis"]["data"] == ["a", "c", "Other"]  # a tie keeps the categories' order
     assert o["series"][0]["data"] == [{"value": 30.0, "t": "30.0"}, {"value": 30.0, "t": "30.0"},
-                                      {"value": -4.0, "t": "-4.0"}]
+                                      {"value": -4.0, "t": "-4.0", "label": {"position": "bottom"}}]
     assert o["series"][0]["label"]["formatter"] == {"$fmt": "label"}
     assert (job.width, job.height) == (378, 189)
 
@@ -245,6 +315,101 @@ def test_charts_become_echarts_options_with_named_formatters_only():
             yield node
 
     assert not any(s.startswith(("fmt:", "image://", "function")) for s in strings(o))
+
+
+MONTHS = [{"m": "Mar 26", "v": 1.0, "s": "b"}, {"m": "Feb 26", "v": 3.0, "s": "b"}, {"m": "Jan 26", "v": 5.0, "s": "a"},
+          {"m": "Jan 26", "v": 1.0, "s": "b"}, {"m": "Apr 26", "v": 2.0, "s": "c"}]
+
+
+@pytest.mark.parametrize("options, axis", [
+    ({}, ["Mar 26", "Feb 26", "Jan 26", "Apr 26"]),  # the data's order, not the alphabet's
+    ({"top": 2}, ["Feb 26", "Jan 26", "Other"]),  # the two largest, still in the data's order
+    ({"sort": "asc"}, ["Mar 26", "Apr 26", "Feb 26", "Jan 26"]),
+    ({"sort": "desc"}, ["Jan 26", "Feb 26", "Apr 26", "Mar 26"]),
+    ({"sort": "asc", "top": 2}, ["Feb 26", "Jan 26", "Other"]),  # top is the largest, whatever the order
+])
+def test_a_chart_s_categories_come_in_the_data_s_order_unless_sorted_by_value(options, axis):
+    d = report({"id": "c", "type": "chart", "dataset": "d", "kind": "column", "x": 0, "y": 0, "w": 100, "h": 50,
+                "category": "[m]", "series": [{"value": "SUM([v])", "name": "V"}], "options": options})
+    o = build(d, MONTHS).charts[0].option
+    assert o["xAxis"]["data"] == axis
+    by = dict(zip(o["xAxis"]["data"], (p["value"] for p in o["series"][0]["data"])))
+    assert by.get("Other", 3.0) == 3.0 and by["Jan 26"] == 6.0
+
+
+def test_series_split_by_a_field_and_a_sparkline_follow_the_data_s_order_too():
+    split = report({"id": "c", "type": "chart", "dataset": "d", "kind": "line", "x": 0, "y": 0, "w": 100, "h": 50,
+                    "category": "[m]", "split_by": "[s]", "series": [{"value": "SUM([v])"}]})
+    assert [s["name"] for s in build(split, MONTHS).charts[0].option["series"]] == ["b", "a", "c"]
+    kpi = report({"id": "k", "type": "kpi", "dataset": "d", "x": 0, "y": 0, "w": 60, "h": 24, "value": "SUM([v])",
+                  "sparkline": {"category": "[m]", "value": "SUM([v])"}})
+    spark = build(kpi, MONTHS).charts[0].option
+    assert spark["xAxis"]["data"] == ["Mar 26", "Feb 26", "Jan 26", "Apr 26"]
+    assert spark["series"][0]["data"] == [1.0, 3.0, 6.0, 2.0]
+
+
+def _chart(kind, rows, **item):
+    it = {"id": "c", "type": "chart", "dataset": "d", "kind": kind, "x": 0, "y": 0, "w": 90, "h": 55,
+          "category": "[region]", "series": [{"value": "SUM([amount])", "name": "Amount"}], **item}
+    return build(report(it), rows).charts[0].option
+
+
+def test_a_few_categories_show_every_label_on_more_lines_and_many_show_those_that_fit():
+    few = _chart("column", ROWS)["xAxis"]["axisLabel"]
+    assert few["interval"] == 0 and few["overflow"] == "break" and few["formatter"] == {"$fmt": "short", "max": 40}
+    many = [{"region": f"Region {i}", "amount": 1.0} for i in range(60)]
+    crowded = _chart("column", many)["xAxis"]["axisLabel"]
+    assert crowded["hideOverlap"] is True and "interval" not in crowded
+    bars = _chart("bar", ROWS)["yAxis"]["axisLabel"]
+    assert bars["overflow"] == "break" and bars["interval"] == 0
+
+
+def test_labels_of_negative_values_sit_at_the_bar_s_end_and_overlapping_ones_are_hidden():
+    rows = [{"region": "N", "amount": -10.0}, {"region": "S", "amount": 5.0}]
+    column = _chart("column", rows, options={"labels": True})["series"][0]
+    assert column["data"][0]["label"] == {"position": "bottom"} and "label" not in column["data"][1]
+    assert column["labelLayout"] == {"hideOverlap": True}
+    bar = _chart("bar", rows, options={"labels": True})["series"][0]
+    assert bar["data"][0]["label"] == {"position": "left"}
+
+
+def test_a_waterfall_that_goes_below_zero_stacks_across_zero():
+    rows = [{"region": "a", "amount": -10.0}, {"region": "b", "amount": 4.0}]
+    series = _chart("waterfall", rows)["series"]
+    assert all(s["stackStrategy"] == "all" for s in series)
+    assert [p["value"] for p in series[1]["data"]] == [10.0, 4.0, -6.0] and series[0]["data"] == [-10.0, -10.0, 0]
+    # a fall and a total under zero write their values under the bar, not over the title
+    assert [p.get("label") for p in series[1]["data"]] == [{"position": "bottom"}, None, {"position": "bottom"}]
+
+
+def test_a_chart_with_nothing_to_draw_says_so():
+    for kind, rows in (("column", []), ("pie", [{"region": "a", "amount": -1.0}]), ("funnel", [{"region": "a", "amount": 0.0}]),
+                       ("gauge", [])):
+        o = _chart(kind, rows, category=None if kind == "gauge" else "[region]")
+        titles = o["title"] if isinstance(o["title"], list) else [o["title"]]
+        assert any(t.get("text") == "No data" for t in titles), (kind, o.get("title"))
+    assert "title" not in _chart("column", ROWS)
+
+
+def test_pie_and_funnel_labels_keep_their_values_and_leave_out_what_has_no_size():
+    pie = _chart("pie", ROWS)["series"][0]
+    assert pie["label"]["formatter"] == {"$fmt": "namePercent", "locale": "en", "max": 40}
+    assert pie["label"]["overflow"] == "break" and pie["showEmptyCircle"] is False and pie["minShowLabelAngle"] > 0
+    funnel = _chart("funnel", [{"region": "a", "amount": 5.0}, {"region": "b", "amount": -1.0}, {"region": "c", "amount": 2.0}])
+    s = funnel["series"][0]
+    assert [p["name"] for p in s["data"]] == ["a", "c"] and s["label"]["position"] == "right"
+
+
+def test_a_gauge_keeps_its_pointer_on_the_arc_and_a_bullet_shows_negative_values():
+    gauge = _chart("gauge", ROWS, category=None, options={"min": 0, "max": 10, "format": "#,##0"})["series"][0]
+    assert gauge["data"][0]["value"] == 10 and gauge["detail"]["formatter"] == {"$fmt": "const", "text": "56"}
+    bullet = _chart("bullet", [{"region": "a", "amount": -30.0}, {"region": "b", "amount": 20.0}], options={"labels": True})
+    assert bullet["xAxis"]["min"] < -30 and bullet["series"][-1]["label"]["textBorderWidth"] > 0
+
+
+def test_a_heatmap_s_scale_says_its_lowest_and_highest_value():
+    o = _chart("heatmap", ROWS, split_by="[kind]", options={"format": "#,##0.0"})
+    assert o["visualMap"]["text"] == ["30.0", "1.0"]
 
 
 @pytest.mark.parametrize("kind", rd.CHART_KINDS)

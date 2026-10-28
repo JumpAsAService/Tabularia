@@ -618,9 +618,9 @@ What one render of a pixel-perfect report may read and use. The run workers rend
 
 | Variable | Type | Default | Helm value | Description |
 |---|---|---|---|---|
-| `REPORTS__MAX_ROWS` | integer, 1–1,000,000 | `10000` | `reports.maxRows` | The most rows a report reads from each of its datasets; one more stops the render and names the dataset (aggregate it in SQL, or filter it). |
-| `REPORTS__MAX_PAGES` | integer, 1–10,000 | `250` | `reports.maxPages` | The most pages of one report: a longer one stops with the number it would have. |
-| `REPORTS__RENDER_MEMORY_MB` | integer, ≥ 128 | `1024` | `reports.renderMemoryMb` | The memory of the child process that lays out a report's pages (Typst), in MiB: it needs about 4 MiB a page of tables, so 1024 lays out some 250 pages. Past it the render stops and says so; give the worker as much more memory for every render that may run at once. |
+| `REPORTS__MAX_ROWS` | integer, 1–10,000,000 | `1000000` | `reports.maxRows` | The most rows a report reads from each of its datasets; one more stops the render and names the dataset (aggregate it in SQL, or filter it). The rows stay in the worker's memory while the report renders: a million take some 1.1 GiB and half a minute (measured), so give the worker that much for every render that may run at once. |
+| `REPORTS__MAX_PAGES` | integer, 1–10,000 | `200` | `reports.maxPages` | The most pages of one report: a longer one stops with the number it would have. |
+| `REPORTS__RENDER_MEMORY_MB` | integer, ≥ 128 | `1024` | `reports.renderMemoryMb` | The memory of the child process that lays out a report's pages (Typst), in MiB: it needs about 4.5 MiB a page of tables (measured), so 1024 holds 200. Past it the render stops and says so; give the worker as much more memory for every render that may run at once. |
 | `REPORTS__RENDER_SECONDS` | integer, ≥ 5 | `120` | `reports.renderSeconds` | How long the layout of one report may take: past it the child process is killed and the render stops. |
 | `REPORTS__CHART_URL` | string | `http://127.0.0.1:8090` | set on the run workers from `reports.chartRenderer` | Where the workers find the chart service: the sidecar on 127.0.0.1 on Kubernetes (`reports.chartRenderer`), the `chart-renderer` service on Compose. Empty = no charts: a report that has one fails, saying so. |
 

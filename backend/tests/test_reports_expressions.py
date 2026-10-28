@@ -110,6 +110,10 @@ def test_wrong_arguments_and_types():
     assert "there is no parameter «regoin»: did you mean \"region\"?" in error('PARAM("regoin")').message
     assert 'PARAM("region")' in error("{region}").message
     assert "unknown placeholder" in error("{yesterdy}").message
+    # a report has no datasource's variables nor a last refresh: the message names what it has
+    assert error("{yesterdy}").message == ("unknown placeholder {yesterdy}: use {today}, {yesterday}, {start_of_month}, "
+                                           "{start_of_week}, {start_of_year} or {now}")
+    assert error("{last_refresh}").message.startswith("unknown placeholder {last_refresh}: use {today}")
     assert "is not a format" in error('FORMAT([amount], "abc")').message
 
 
@@ -229,6 +233,9 @@ def test_dates():
     assert ev('DATEDIFF("d", DATE(2026, 1, 1), DATE(2026, 3, 1))') == 59
     assert ev('DATEDIFF("m", DATE(2026, 1, 31), DATE(2026, 2, 28))') == 0
     assert ev('DATEDIFF("y", DATE(2020, 6, 1), DATE(2026, 5, 31))') == 5
+    # whole days between date-times: 10.5 hours back is no day, not one (it was floored to -1)
+    assert ev('DATEDIFF("d", NOW(), TODAY())') == 0 and ev('DATEDIFF("d", TODAY(), NOW())') == 0
+    assert ev('DATEDIFF("d", NOW(), DATE(2026, 10, 26))') == -2 and ev('DATEDIFF("w", NOW(), DATE(2026, 10, 21))') == -1
     assert ev("YEAR(DATE(2026, 10, 28)) * 10000 + MONTH(DATE(2026, 10, 28)) * 100 + DAY(DATE(2026, 10, 28))") == 20261028
     assert ev("WEEKDAY(DATE(2026, 10, 28))") == 3  # Wednesday, Monday = 1
     assert ev("TODAY()") == date(2026, 10, 28) and ev("NOW()") == datetime(2026, 10, 28, 10, 30)
@@ -243,6 +250,13 @@ def test_placeholders_of_tabularia_are_dates_in_the_report_time_zone():
     assert ev("{today-1m}") == date(2026, 9, 28)
     assert ev("{now-2h}") == datetime(2026, 10, 28, 8, 30)
     assert ev("{today:yyyyMMdd}") == "20261028"
+    assert ev("{today:MMMM yyyy}") == "October 2026"
+
+
+def test_a_placeholder_writes_names_in_the_report_s_language():
+    node = rd.parse("{today:EEEE dd MMMM}")
+    context = ex.Context(loc=formats.locale("it"), now=NOW, ph_context=ph.Context(now=NOW, tz=ROME, lang="it"))
+    assert ex.Evaluator()(node, context) == "mercoledì 28 ottobre"
 
 
 def test_parameters():

@@ -28,12 +28,14 @@ from typing import Any
 from app.reports import charts
 from app.reports import definition as rd
 from app.reports import expressions as ex
-from app.reports import formats
+from app.reports import formats, glyphs
 from app.reports.data import DataSet
 from app.reports.errors import ReportError
 
 MM_PX = 96 / 25.4  # CSS pixels in a millimetre: the chart service draws in px
 MAX_GLUED = 5  # the longest run of rows kept together (a deep nest of footers)
+CELL_PAD = 1.5  # mm left and right of a cell's text (template.typ, cell-inset)
+MIN_SHARE = 10.0  # mm a column without a width keeps when the others are too wide
 PALETTE = {"muted": "#6b7590", "rule": "#d9dde5", "band": "#e9eef9", "head": "#f1f3f5", "negative": "#c92a2a",
            "positive": "#2b8a3e", "total": "#1f2933"}
 
@@ -214,7 +216,7 @@ def _subtotal_fn(col: rd.Column) -> int | None:
 
 class _Builder:
     def __init__(self, report: rd.Report, data: dict[str, DataSet], ctx: ex.Context, state: dict | None,
-                 interactive: bool):
+                 interactive: bool, layout: bool = True):
         self.r = report
         self.data = data
         self.ctx = ctx
@@ -227,6 +229,7 @@ class _Builder:
         self.blocks: list[tuple[str, Any]] = []
         self.warnings: list[str] = []
         self.in_body = False  # the email shows the body's texts, KPIs and charts
+        self.layout = layout  # the pages are laid out (pdf, svg): what does not fit them is said
 
     def tables(self) -> list[TableOut]:
         return [t for kind, t in self.blocks if kind == "table"]
@@ -246,6 +249,11 @@ class _Builder:
 
     def show(self, v: Any, pattern: str | None) -> str:
         return formats.display(v, pattern, self.loc)
+
+    def name(self, v: Any) -> str:
+        """A value that names something — a group, a chart's category or series, a matrix's
+        column: a missing one is named too («(blank)»), never an empty label."""
+        return self.loc.texts["blank"] if v is None else self.show(v, None)
 
     def rows_of(self, name: str | None) -> list[dict]:
         if name is None:
@@ -310,7 +318,9 @@ class _Builder:
         rows = self.rows_of(it.dataset)
         ctx = self.ctx.at(scopes=[rows])
         value = self.value(it, "value", it.value, ctx)
-        out: dict[str, Any] = {"label": it.label, "value": self.show(value, it.format), "change": None, "spark": None}
+        # no value (no rows, a division by zero): a dash, not an empty card
+        shown = "—" if value is None else self.show(value, it.format)
+        out: dict[str, Any] = {"label": it.label, "value": shown, "change": None, "spark": None}
         if it.compare:
             base = self.value(it, "compare", it.compare, ctx)
             if isinstance(value, (int, float)) and isinstance(base, (int, float)) and base:
@@ -331,7 +341,9 @@ class _Builder:
 
     # ── charts ──
     def partition(self, it: Any, where: str, by: str, rows: list[dict]) -> list[tuple[Any, list[dict]]]:
-        """The rows by the value of `by`, in its order (NULL last)."""
+        """The rows by the value of `by`, each value where it first comes in the rows: a
+        chart's axis, its series and a sparkline follow the dataset's own order (its SQL's
+        ORDER BY), never the alphabet of what the values print as."""
         node = rd.parse(by)
         ctx = self.ctx.at(scopes=[rows])
         buckets: dict[tuple, tuple[Any, list[dict]]] = {}
@@ -342,7 +354,7 @@ class _Builder:
                 buckets.setdefault(sort_key(k), (k, []))[1].append(r)
         except ex.EvalError as e:
             raise ReportError(f"item «{it.id}», {where}: {e}") from None
-        return [buckets[k] for k in sorted(buckets, key=cmp_to_key(lambda a, b: _compare(a, b, "asc")))]
+        return list(buckets.values())
 
     def add_chart(self, option: dict, w_mm: float, h_mm: float, alt: str) -> str:
         name = f"chart/{len(self.charts) + 1}.svg"
@@ -380,7 +392,7 @@ class _Builder:
                         except ex.EvalError as e:
                             raise ReportError(f"item «{it.id}»: {e}") from None
                         points.append((self._num(x), self._num(y), self.show(y, fmt)))
-                data.points.append((self.show(key, None) if it.split_by else (s.name or ""), points))
+                data.points.append((self.name(key) if it.split_by else (s.name or ""), points))
         else:
             self._categories(it, rows, base, data)
         option = charts.option(data, it, self.r.theme, self.loc)
@@ -407,20 +419,26 @@ class _Builder:
         def measure(sub: list[dict], s: rd.Series, i: int) -> Any:
             return self.value(it, f"series[{i}].value", s.value, base.at(scopes=[rows, sub]))
 
-        # the order: by the first series' value when asked, and the top N with the rest as «Other»
-        if it.options.sort != "none" or it.options.top:
-            keyed = [(self._num(measure(sub, first, 0)), k, sub) for k, sub in cats]
-            direction = it.options.sort if it.options.sort != "none" else "desc"
-            keyed.sort(key=cmp_to_key(lambda a, b: _compare(sort_key(a[0]), sort_key(b[0]), direction)))
-            cats = [(k, sub) for _, k, sub in keyed]
+        # the order (docs/specs/reports.md, `options.sort`): the data's, or the first series'
+        # value; `top` keeps the N largest values, in that order, and gathers the rest as «Other»
+        o = it.options
         other: list[dict] = []
-        if it.options.top and len(cats) > it.options.top:
-            other = [r for _, sub in cats[it.options.top:] for r in sub]
-            cats = cats[:it.options.top]
+        if o.sort != "none" or o.top:
+            values = {id(sub): sort_key(self._num(measure(sub, first, 0))) for _, sub in cats}
+
+            def by_value(direction: str) -> Any:
+                return cmp_to_key(lambda a, b: _compare(values[id(a[1])], values[id(b[1])], direction))
+
+            if o.top and len(cats) > o.top:
+                kept = {id(sub) for _, sub in sorted(cats, key=by_value("desc"))[:o.top]}
+                other = [r for _, sub in cats if id(sub) not in kept for r in sub]
+                cats = [c for c in cats if id(c[1]) in kept]
+            if o.sort != "none":
+                cats.sort(key=by_value(o.sort))
         if len(cats) > charts.MAX_CATEGORIES:
             raise ReportError(f"item «{it.id}»: {len(cats):,} categories, the most a chart draws is "
                               f"{charts.MAX_CATEGORIES:,}: set its option «top», or aggregate")
-        data.categories = [self.show(k, None) for k, _ in cats] + ([self.loc.texts["other"]] if other else [])
+        data.categories = [self.name(k) for k, _ in cats] + ([self.loc.texts["other"]] if other else [])
         subsets = [sub for _, sub in cats] + ([other] if other else [])
         if it.split_by:
             splits = self.partition(it, "split_by", it.split_by, rows)
@@ -430,7 +448,7 @@ class _Builder:
             for key, srows in splits:
                 ids = {id(r) for r in srows}
                 values = [measure([r for r in sub if id(r) in ids], first, 0) for sub in subsets]
-                data.series.append(charts.SeriesData(self.show(key, None), [self._num(v) for v in values],
+                data.series.append(charts.SeriesData(self.name(key), [self._num(v) for v in values],
                                                      [self.show(v, it.options.format) for v in values],
                                                      first.as_ or "bar", first.axis))
         else:
@@ -469,10 +487,16 @@ class _Builder:
 
         for it in items:
             if it.type in rd.GROWING:
+                noted = len(self.blocks)
                 close()
                 if self.visible(it):
                     out = self.table(it)
                     blocks.append({"k": "table", "gap": _round_mm(max(it.y - prev_bottom, 0)), **self.typst_table(out)})
+                    above = self.blocks[noted:]
+                    if above and all(kind == "text" for kind, _ in above):
+                        # a row of texts right above a table introduces it (its title): the email
+                        # shows them with the table's summary, or not at all
+                        self.blocks[noted:] = [("caption", what) for _, what in above]
                     self.note("table", out)
                 prev_bottom = it.y + it.h
                 continue
@@ -498,7 +522,8 @@ class _Builder:
         it = t.item
         sorted_by = None
         st = self.state.get(it.id) or {}
-        if it.interactive.sort and isinstance(st.get("sort"), dict):
+        sortable = it.interactive.sort and it.matrix is None  # a matrix's columns are values, not columns to sort by
+        if sortable and isinstance(st.get("sort"), dict):
             sorted_by = {"col": st["sort"].get("column"), "dir": st["sort"].get("dir", "asc")}
         rows = []
         for row in t.rows:
@@ -521,12 +546,64 @@ class _Builder:
                 out.update(lv=row.level, label=row.label, span=row.span,
                            c=[c.text if not c.style else {"t": c.text, "st": c.style} for c in row.cells[row.span:]])
             rows.append(out)
+        widths = self.column_widths(t)
         return {"x": _round_mm(it.x), "w": _round_mm(it.w), "id": it.id,
-                "cols": [{"w": c.width, "align": c.align or ("right" if c.kind == "number" else "left"), "st": c.style}
-                         for c in t.cols],
+                "cols": [{"w": w, "align": c.align or ("right" if c.kind == "number" else "left"), "st": c.style}
+                         for w, c in zip(widths, t.cols)],
                 "head": t.head, "rows": rows, "repeat": it.repeat_header, "levels": t.levels,
-                "hot": {"sort": it.interactive.sort, "toggle": it.interactive.toggle} if self.interactive else None,
+                "hot": {"sort": sortable, "toggle": it.interactive.toggle} if self.interactive else None,
                 "sorted": sorted_by}
+
+
+    # ── what does not fit ──
+    def column_widths(self, t: TableOut) -> list[float | None]:
+        """The columns' widths in mm, None sharing what is left: fixed widths wider than the
+        table are narrowed to fit it (the last columns would print past the paper), and a
+        column too narrow for its values is said — they would run into the next one."""
+        it = t.item
+        widths: list[float | None] = [c.width for c in t.cols]
+        fixed = sum(w for w in widths if w)
+        shared = sum(1 for w in widths if not w)
+        room = max(it.w - MIN_SHARE * shared, it.w * 0.3)
+        if fixed > room + 0.05:
+            widths = [_round_mm(w * room / fixed) if w else None for w in widths]
+            if self.layout:
+                self.warnings.append(f"table «{it.id}»: its columns are {fixed:.0f} mm wide, the table {it.w:.0f} mm: "
+                                     "they are narrowed to fit it, widen the table or narrow them")
+        if not self.layout:
+            return widths
+        left = it.w - sum(w for w in widths if w)
+        actual = [w if w else left / shared for w in widths]
+        size = self.r.theme.size
+        narrow: list[str] = []
+        for j, (c, w) in enumerate(zip(t.cols, actual)):
+            room_j = w - 2 * CELL_PAD + 0.2
+            for row in t.rows:
+                if row.kind not in ("d", "f", "t") or j >= len(row.cells) or (row.kind != "d" and j < row.span):
+                    continue
+                cell = row.cells[j]
+                st = {**c.style, **(cell.style or {})} if cell.style else c.style
+                weight, pt = 700 if row.kind != "d" else st.get("weight", 400), st.get("size", size)
+                # a word shorter than the room over the widest character fits: not measured
+                fits = room_j / (glyphs.widest(weight) * pt * glyphs.PT_MM)
+                if any(len(word) > fits and glyphs.width_mm(word, pt, weight) > room_j for word in cell.text.split()):
+                    narrow.append(f"«{c.header}» ({w:.0f} mm)" if c.header else f"{j + 1} ({w:.0f} mm)")
+                    break
+        if narrow:
+            names = ", ".join(narrow[:5]) + (f" and {len(narrow) - 5} more" if len(narrow) > 5 else "")
+            self.warnings.append(f"table «{it.id}»: values wider than their column run into the next one, in the "
+                                 f"column{'s' if len(narrow) > 1 else ''} {names}: widen them, or give them a "
+                                 "shorter format")
+        return widths
+
+    def past_the_paper(self, it: Any, where: str) -> None:
+        """An item that goes past the edge of the paper is cut there: say so."""
+        w, _ = self.r.page.dimensions()
+        top, right, bottom, left = self.r.page.margins
+        x0, x1 = sorted((it.x, it.x + it.w))
+        if left + x1 > w + 0.5 or left + x0 < -0.5:
+            self.warnings.append(f"{where} «{it.id}» goes past the edge of the paper and is cut there: "
+                                 "move it or make it narrower")
 
 
 class _Table:
@@ -537,7 +614,8 @@ class _Table:
         self.it = it
         self.loc = b.loc
         state = b.state.get(it.id) or {}
-        self.sort_state = state.get("sort") if it.interactive.sort and isinstance(state.get("sort"), dict) else None
+        sortable = it.interactive.sort and it.matrix is None
+        self.sort_state = state.get("sort") if sortable and isinstance(state.get("sort"), dict) else None
         toggle = it.interactive.toggle
         self.collapse_all = bool(state.get("collapse_all")) if toggle else False
         self.collapsed = {json.dumps(p) for p in state.get("collapsed") or []} if toggle else set()
@@ -576,7 +654,7 @@ class _Table:
         else:
             for i, node in enumerate(tree):
                 self.group(node, i, len(tree), [rows], rows, [], [])
-        if it.grand_total:
+        if it.grand_total and rows:  # an empty table says «No data» (the template), not a total of nothing
             self.footer(None, ctx.at(row=None, scopes=[rows]), keep=True)
         head = [[{"t": c.header, "span": 1, "rspan": 1, "align": c.align or ("right" if c.kind == "number" else "left")}
                  for c in self.cols]]
@@ -657,7 +735,7 @@ class _Table:
         header = None
         if g.header:
             label = self.value(f"groups[{level}].label", g.label, gctx) if g.label else node["key"]
-            header = Row("g", level, label=self.b.show(label, None), key=path, closed=closed, repeat=has_content)
+            header = Row("g", level, label=self.b.name(label), key=path, closed=closed, repeat=has_content)
             self.out.append(header)
         headers = [*open_headers, header] if header is not None and header.repeat else open_headers
         if not closed:
@@ -669,7 +747,7 @@ class _Table:
                 self.details(rows, here)
         if g.footer:
             label = self.value(f"groups[{level}].label", g.label, gctx) if g.label else node["key"]
-            self.footer(level, gctx, keep=g.keep_together, label=f"{self.loc.texts['total']} {self.b.show(label, None)}",
+            self.footer(level, gctx, keep=g.keep_together, label=f"{self.loc.texts['total']} {self.b.name(label)}",
                         first=first)
         if g.page_break == "after" or (g.page_break == "between" and index < siblings - 1):
             self.out.append(Row("pb"))
@@ -756,7 +834,9 @@ class _Table:
         first = it.columns[0] if it.columns else None
         label_col = ColOut(first.header if first else "", first.width if first else None, "left", None,
                            _style(first.style) if first else {})
-        self.cols = [label_col] + [ColOut("", m.width, "right", m.format, {}) for _ in order]
+        # a value column is named by its path of values (the head draws the levels apart)
+        self.cols = [label_col] + [ColOut(" · ".join(self.b.name(v) for v in distinct[k]), m.width, "right",
+                                          m.format, {}) for k in order]
         if m.total:
             self.cols.append(ColOut(self.loc.texts["total"], m.width, "right", m.format, {"weight": 700}))
         head = self.matrix_head(order, distinct, label_col.header, len(levels), m.total)
@@ -764,9 +844,9 @@ class _Table:
             tree = self.partition(rows, 0)
             for i, node in enumerate(tree):
                 self.matrix_group(node, i, len(tree), [rows], rows, [], [])
-        else:
+        elif rows:
             self.matrix_row(self.loc.texts["total"], [rows], "d")
-        if it.grand_total and it.groups:
+        if it.grand_total and it.groups and rows:
             self.glue_previous(True)
             self.matrix_row(self.loc.texts["total"], [rows], "t")
         return TableOut(it, it.title or it.id, self.cols, head, self.out, max(len(it.groups) - 1, 0))
@@ -784,11 +864,11 @@ class _Table:
                     j += 1
                 span = j - i if lv < depth - 1 else 1
                 if lv < depth - 1:
-                    row.append({"t": self.b.show(distinct[order[i]][lv], None), "span": span, "rspan": 1,
+                    row.append({"t": self.b.name(distinct[order[i]][lv]), "span": span, "rspan": 1,
                                 "align": "center"})
                     i = j
                 else:
-                    row.append({"t": self.b.show(distinct[order[i]][lv], None), "span": 1, "rspan": 1, "align": "right"})
+                    row.append({"t": self.b.name(distinct[order[i]][lv]), "span": 1, "rspan": 1, "align": "right"})
                     i += 1
             if lv == 0 and total:
                 row.append({"t": self.loc.texts["total"], "span": 1, "rspan": depth, "align": "right"})
@@ -829,7 +909,7 @@ class _Table:
         here = [*scopes, node["rows"]]
         path = [*path, key_id(node["key"])]
         gctx = self.b.ctx.at(row=None, scopes=here, rownumber=index + 1)
-        label = self.b.show(self.value(f"groups[{level}].label", g.label, gctx) if g.label else node["key"], None)
+        label = self.b.name(self.value(f"groups[{level}].label", g.label, gctx) if g.label else node["key"])
         if node["children"] is None:  # the innermost group is a row of the matrix
             self.matrix_row(label, here, "d")
             return
@@ -864,9 +944,13 @@ def _texts_of(doc: Any, out: set[str]) -> None:
 
 
 def build(report: rd.Report, data: dict[str, DataSet], params: dict[str, Any], ctx: ex.Context,
-          state: dict | None = None, title: str = "", max_pages: int = 400, interactive: bool = False) -> Model:
-    """The model of a report whose data has been read."""
-    b = _Builder(report, data, ctx, state, interactive)
+          state: dict | None = None, title: str = "", max_pages: int = 400, interactive: bool = False,
+          layout: bool = True) -> Model:
+    """The model of a report whose data has been read; `layout`: its pages will be laid out
+    (pdf, svg), and what does not fit them is said in its warnings."""
+    b = _Builder(report, data, ctx, state, interactive, layout)
+    for section, it in report.items() if layout else ():
+        b.past_the_paper(it, "table" if it.type in rd.GROWING else "item")
     w, h = report.page.dimensions()
     theme = report.theme
     if theme.font.strip().lower() != "ibm plex sans":
@@ -883,8 +967,6 @@ def build(report: rd.Report, data: dict[str, DataSet], params: dict[str, Any], c
         "hot": interactive,
         "empty": b.loc.texts["empty"],
     }
-    from app.reports import glyphs
-
     seen: set[str] = set()
     _texts_of(doc, seen)
     missing = glyphs.missing(seen)

@@ -128,11 +128,22 @@
   })
 }
 
-#let hot(data) = if m.hot { [#metadata(data)<hot>] }
+// where a click sorts a column or opens a group: the cell's `body` as before, with two marks — after
+// the text the point the screen always had (`x` where the content starts, `y` on its baseline), and
+// before it the content's own box, measured where it is laid out, with the cell's padding `pad` (mm)
+// around it; the final query widens a header's box to its row's (template's end)
+#let hot(data, body, pad) = if not m.hot { body } else {
+  layout(size => {
+    let h = measure(block(width: size.width, body)).height
+    [#metadata((w: size.width.mm() + 2 * pad.x, h: h.mm() + 2 * pad.y, pad: pad))<hot-box>]
+    body + [#metadata(data)<hot>]
+  })
+}
 
 // ── tables ─────────────────────────────────────────────────────────────────────────────────
 #let rule = 0.4pt + rgb(T.rule)
-#let cell-inset = (x: 1.5mm, y: 1.1mm)
+#let cell-pad = (x: 1.5, y: 1.1)  // mm
+#let cell-inset = (x: cell-pad.x * 1mm, y: cell-pad.y * 1mm)
 
 #let table-part(t, rows) = {
   let n = t.cols.len()
@@ -159,6 +170,9 @@
       let out = ()
       if r.span > 0 {
         out.push(cell(colspan: r.span, fill: fill, align: right + horizon, styled(base, r.label)))
+      } else if r.label != "" {
+        // every column has a total: the label on a row of its own, above the values
+        out.push(cell(colspan: n, fill: fill, align: left + horizon, styled(base, r.label)))
       }
       for (j, c) in r.c.enumerate() {
         let (txt, st) = content-of(c)
@@ -176,7 +190,7 @@
         if t.sorted.dir == "desc" { " ↓" } else { " ↑" }
       } else { "" }
       let body = styled((weight: 600), h.t + mark)
-      if sorting and hi == 0 { body = body + hot((kind: "sort", item: t.id, column: j)) }
+      if sorting and hi == 0 { body = hot((kind: "sort", item: t.id, column: j), body, cell-pad) }
       head.push(table.cell(colspan: h.span, rowspan: h.rspan, fill: rgb(T.head), align: horizontal(h.align) + horizon, body))
     }
   }
@@ -190,16 +204,18 @@
     if r.k == "g" {
       let mark = if toggling and "key" in r { if r.closed { "+ " } else { "− " } } else { "" }
       let body = styled((weight: if r.lv == 0 { 700 } else { 600 }), mark + r.t)
-      if toggling and "key" in r { body = body + hot((kind: "toggle", item: t.id, key: r.key, closed: r.closed)) }
+      let pad = (x: 1.5 + r.lv * 3, y: 1.3)
+      if toggling and "key" in r { body = hot((kind: "toggle", item: t.id, key: r.key, closed: r.closed), body, pad) }
       let c = table.cell(colspan: n, fill: if r.lv == 0 { rgb(T.band) } else { rgb(T.band).lighten(50%) },
-        inset: (x: 1.5mm + r.lv * 3mm, y: 1.3mm), body)
+        inset: (x: pad.x * 1mm, y: pad.y * 1mm), body)
       // every group row is a header of its level, repeated or not: a header ends the repetition
       // of the one before it at that level — a closed group written as a plain cell let the
       // previous group's header come back on the next page with nothing under it
       cells.push(table.header(level: r.lv + 2, repeat: r.rep, c))
       i += 1
-    } else if r.at("glue", default: false) {
-      // the rows kept together: one unbreakable cell over the whole table, the same columns inside
+    } else if r.at("glue", default: false) or (r.k in ("f", "t") and r.span == 0) {
+      // the rows kept together: one unbreakable cell over the whole table, the same columns inside (a
+      // total whose label has a row of its own too, so the label never ends a page alone)
       let run = (r,)
       let j = i + 1
       while j < rows.len() and run.last().at("glue", default: false) {
@@ -276,10 +292,30 @@
   [#metadata(n)<pages>]
 }
 
-// where the screen can click: the sortable headers and the groups that open and close
+// where the screen can click: the sortable headers and the groups that open and close, each with
+// its cell's box. A header's row is as tall as its tallest cell (a header that wraps): its boxes
+// take the row's top and bottom, from every box of the table's header on that page.
 #if m.hot {
-  context [#metadata(query(<hot>).map(e => {
-    let p = e.location().position()
-    e.value + (page: p.page, x: p.x.mm(), y: p.y.mm())
-  }))<hotspots>]
+  context {
+    let boxes = query(<hot-box>).map(e => {
+      let p = e.location().position()
+      let v = e.value
+      (page: p.page, x: p.x.mm() - v.pad.x, y: p.y.mm() - v.pad.y, w: v.w, h: v.h)
+    })
+    let marks = query(<hot>)
+    let rows = (:)
+    for (e, b) in marks.zip(boxes) {
+      if e.value.kind == "sort" {
+        let key = e.value.item + "/" + str(b.page)
+        let r = rows.at(key, default: (top: b.y, bottom: b.y + b.h))
+        rows.insert(key, (top: calc.min(r.top, b.y), bottom: calc.max(r.bottom, b.y + b.h)))
+      }
+    }
+    [#metadata(marks.zip(boxes).map(((e, b)) => {
+      let p = e.location().position()
+      let r = rows.at(e.value.item + "/" + str(b.page), default: none)
+      let (y, h) = if e.value.kind == "sort" and r != none { (r.top, r.bottom - r.top) } else { (b.y, b.h) }
+      e.value + (page: p.page, x: p.x.mm(), y: p.y.mm(), box: (x: b.x, y: y, w: b.w, h: h))
+    }))<hotspots>]
+  }
 }

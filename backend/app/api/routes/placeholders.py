@@ -35,6 +35,8 @@ class PreviewRequest(BaseModel):
     targets: dict[str, Target] = Field(default_factory=dict)
     flow: str = Field(default="", max_length=500)
     run_id: int | None = None
+    # the language of the names of months and days ({today:MMMM}): a Pushmail's, a report's
+    lang: Literal["en", "it", "de", "es", "fr"] = "en"
 
 
 class FieldPreview(BaseModel):
@@ -59,6 +61,7 @@ def _input(req: PreviewRequest, now: datetime) -> PreviewAnswer:
         if has_initial:
             ph.resolve_initial(req.last_refresh_initial, now, ph.zone(req.timezone))
         base = ph.make_context(now, req.timezone, req.last_refresh, req.last_refresh_initial, {})
+        base.lang = req.lang
         combos = ph.combinations(req.variables, base, get_settings().placeholders.max_values)
     except ph.PlaceholderError as e:
         answer.error = str(e)
@@ -79,7 +82,7 @@ def _input(req: PreviewRequest, now: datetime) -> PreviewAnswer:
 def _output(req: PreviewRequest, now: datetime) -> PreviewAnswer:
     answer = PreviewAnswer(fields={}, now=now.isoformat(timespec="seconds"))
     try:
-        ctx = ph.output_context(now, req.timezone, req.run_id, req.flow)
+        ctx = ph.output_context(now, req.timezone, req.run_id, req.flow, req.lang)
     except ph.PlaceholderError as e:
         answer.error = str(e)
         return answer

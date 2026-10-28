@@ -23,7 +23,9 @@ from decimal import ROUND_HALF_UP, Decimal, InvalidOperation
 from functools import lru_cache
 from typing import Any
 
-LOCALES = ("en", "it", "de", "es", "fr")
+from app.core import calendar_names
+
+LOCALES = calendar_names.LANGUAGES
 
 
 @dataclass(frozen=True)
@@ -46,63 +48,64 @@ class Locale:
 _LOCALES = {
     "en": Locale(
         "en", ".", ",", 1,
-        ("January", "February", "March", "April", "May", "June", "July", "August", "September", "October",
-         "November", "December"),
-        ("Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"),
-        ("Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday"),
-        ("Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"),
+        *calendar_names.names("en"),
         "d MMM yyyy", "d MMM yyyy HH:mm",
         {"page": "Page {page} of {pages}", "total": "Total", "true": "Yes", "false": "No", "other": "Other",
          "parameters": "Parameters", "parameter": "Parameter", "value": "Value",
-         "more": "… and {n} more: the whole detail is in the PDF", "empty": "No data"},
+         "more": "… and {n} more: the whole report is attached", "empty": "No data", "blank": "(blank)",
+         "more_column": "{n} more column is in the attached report",
+         "more_columns": "{n} more columns are in the attached report",
+         "more_table": "{n} more table is in the attached report",
+         "more_tables": "{n} more tables are in the attached report"},
     ),
     "it": Locale(
         "it", ",", ".", 1,
-        ("gennaio", "febbraio", "marzo", "aprile", "maggio", "giugno", "luglio", "agosto", "settembre", "ottobre",
-         "novembre", "dicembre"),
-        ("gen", "feb", "mar", "apr", "mag", "giu", "lug", "ago", "set", "ott", "nov", "dic"),
-        ("lunedì", "martedì", "mercoledì", "giovedì", "venerdì", "sabato", "domenica"),
-        ("lun", "mar", "mer", "gio", "ven", "sab", "dom"),
+        *calendar_names.names("it"),
         "dd/MM/yyyy", "dd/MM/yyyy HH:mm",
         {"page": "Pagina {page} di {pages}", "total": "Totale", "true": "Sì", "false": "No", "other": "Altro",
          "parameters": "Parametri", "parameter": "Parametro", "value": "Valore",
-         "more": "… e altri {n}: il dettaglio completo è nel PDF", "empty": "Nessun dato"},
+         "more": "… e altri {n}: il report completo è in allegato", "empty": "Nessun dato", "blank": "(vuoto)",
+         "more_column": "un'altra colonna è nel report allegato",
+         "more_columns": "altre {n} colonne sono nel report allegato",
+         "more_table": "un'altra tabella è nel report allegato",
+         "more_tables": "altre {n} tabelle sono nel report allegato"},
     ),
     "de": Locale(
         "de", ",", ".", 1,
-        ("Januar", "Februar", "März", "April", "Mai", "Juni", "Juli", "August", "September", "Oktober",
-         "November", "Dezember"),
-        ("Jan.", "Feb.", "März", "Apr.", "Mai", "Juni", "Juli", "Aug.", "Sept.", "Okt.", "Nov.", "Dez."),
-        ("Montag", "Dienstag", "Mittwoch", "Donnerstag", "Freitag", "Samstag", "Sonntag"),
-        ("Mo.", "Di.", "Mi.", "Do.", "Fr.", "Sa.", "So."),
+        *calendar_names.names("de"),
         "dd.MM.yyyy", "dd.MM.yyyy HH:mm",
         {"page": "Seite {page} von {pages}", "total": "Summe", "true": "Ja", "false": "Nein", "other": "Sonstige",
          "parameters": "Parameter", "parameter": "Parameter", "value": "Wert",
-         "more": "… und {n} weitere: das vollständige Detail steht im PDF", "empty": "Keine Daten"},
+         "more": "… und {n} weitere: der vollständige Bericht ist angehängt", "empty": "Keine Daten", "blank": "(leer)",
+         "more_column": "eine weitere Spalte steht im angehängten Bericht",
+         "more_columns": "{n} weitere Spalten stehen im angehängten Bericht",
+         "more_table": "eine weitere Tabelle steht im angehängten Bericht",
+         "more_tables": "{n} weitere Tabellen stehen im angehängten Bericht"},
     ),
     "es": Locale(
         "es", ",", ".", 2,
-        ("enero", "febrero", "marzo", "abril", "mayo", "junio", "julio", "agosto", "septiembre", "octubre",
-         "noviembre", "diciembre"),
-        ("ene", "feb", "mar", "abr", "may", "jun", "jul", "ago", "sept", "oct", "nov", "dic"),
-        ("lunes", "martes", "miércoles", "jueves", "viernes", "sábado", "domingo"),
-        ("lun", "mar", "mié", "jue", "vie", "sáb", "dom"),
+        *calendar_names.names("es"),
         "dd/MM/yyyy", "dd/MM/yyyy HH:mm",
         {"page": "Página {page} de {pages}", "total": "Total", "true": "Sí", "false": "No", "other": "Otros",
          "parameters": "Parámetros", "parameter": "Parámetro", "value": "Valor",
-         "more": "… y {n} más: el detalle completo está en el PDF", "empty": "Sin datos"},
+         "more": "… y {n} más: el informe completo va adjunto", "empty": "Sin datos", "blank": "(vacío)",
+         "more_column": "una columna más está en el informe adjunto",
+         "more_columns": "{n} columnas más están en el informe adjunto",
+         "more_table": "una tabla más está en el informe adjunto",
+         "more_tables": "{n} tablas más están en el informe adjunto"},
     ),
     "fr": Locale(
         "fr", ",", " ", 1,
-        ("janvier", "février", "mars", "avril", "mai", "juin", "juillet", "août", "septembre", "octobre",
-         "novembre", "décembre"),
-        ("janv.", "févr.", "mars", "avr.", "mai", "juin", "juil.", "août", "sept.", "oct.", "nov.", "déc."),
-        ("lundi", "mardi", "mercredi", "jeudi", "vendredi", "samedi", "dimanche"),
-        ("lun.", "mar.", "mer.", "jeu.", "ven.", "sam.", "dim."),
+        *calendar_names.names("fr"),
         "dd/MM/yyyy", "dd/MM/yyyy HH:mm",
         {"page": "Page {page} sur {pages}", "total": "Total", "true": "Oui", "false": "Non", "other": "Autres",
          "parameters": "Paramètres", "parameter": "Paramètre", "value": "Valeur",
-         "more": "… et {n} de plus : le détail complet est dans le PDF", "empty": "Aucune donnée"},
+         "more": "… et {n} de plus : le rapport complet est en pièce jointe",
+         "empty": "Aucune donnée", "blank": "(vide)",
+         "more_column": "une colonne de plus est dans le rapport joint",
+         "more_columns": "{n} colonnes de plus sont dans le rapport joint",
+         "more_table": "un tableau de plus est dans le rapport joint",
+         "more_tables": "{n} tableaux de plus sont dans le rapport joint"},
     ),
 }
 
@@ -156,6 +159,9 @@ def _literal_parts(section: str) -> list[tuple[bool, str]]:
     return parts
 
 
+_BRACKETS = re.compile(r"\[[^\]]*\]")
+
+
 def _section(text: str) -> _Section:
     prefix, suffix, core = [], [], None
     percent = False
@@ -163,6 +169,10 @@ def _section(text: str) -> _Section:
         if literal:
             (suffix if core is not None else prefix).append(part)
             continue
+        bracket = _BRACKETS.search(part)
+        if bracket:  # a spreadsheet's colour or condition would print as it is
+            raise FormatError(f"«{bracket.group(0)}» is not part of a format: a colour goes in a column's rule "
+                              "(Excel writes negatives in red by itself), and text in double quotes")
         percent = percent or "%" in part
         if core is None:
             m = _NUMBER_CORE.search(part)
@@ -264,9 +274,10 @@ _DATE_LETTERS = frozenset("yMdEHms")
 @lru_cache(maxsize=512)
 def date_tokens(pattern: str) -> tuple[str, ...]:
     tokens = tuple(_DATE_TOKEN.findall(pattern))
-    for t in tokens:
-        if t.startswith("'") and t != "''" and (len(t) < 2 or not t.endswith("'")):
-            raise FormatError(f"a quote is not closed in the format «{pattern}»: text goes between 'quotes'")
+    # a lone quote matches no token: findall skips it, so the tokens fall short of the pattern
+    if "".join(tokens) != pattern or any(t.startswith("'") and t != "''" and (len(t) < 2 or not t.endswith("'"))
+                                         for t in tokens):
+        raise FormatError(f"a quote is not closed in the format «{pattern}»: text goes between 'quotes'")
     return tokens
 
 
@@ -347,10 +358,8 @@ def check_pattern(pattern: str) -> None:
     """FormatError when a pattern can be read neither as a number's nor as a date's."""
     if is_number_pattern(pattern):
         number_pattern(pattern)
-    elif not is_date_pattern(pattern):
+    elif not any(t[0] in _DATE_LETTERS for t in date_tokens(pattern)):  # a quote left open is said as such
         raise FormatError(f"«{pattern}» is not a format: use e.g. #,##0.00, 0.0%, dd/MM/yyyy or MMMM yyyy")
-    else:
-        date_tokens(pattern)
 
 
 # ── Excel ────────────────────────────────────────────────────────────────────

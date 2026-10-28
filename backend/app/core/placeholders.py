@@ -13,6 +13,8 @@ Output (attachment name and subject).
     {today-1}  {today-7d}  {today+1d} {today-2w} {today-1m} {today-1y}
     {now-2h}   {now-30min} {now+15s}  (hours, minutes, seconds: date-times only)
     {today:yyyyMMdd} {today:%Y%m%d} {now:epoch} {now:epoch_ms} {now:iso}
+    {today:MMMM yyyy} {today:EEE dd MMM}  the names of months and days, in the context's
+                                      language (a Pushmail's, a report's), else English
     {symbol}                          a list variable of the datasource (no offset, no format)
     {day} {day_end}                   a range variable: a date (or date-time) per value
     {run_id} {flow}                   Outputs: the run's number, the flow's name
@@ -49,6 +51,8 @@ from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 
 from pydantic import BaseModel, Field, model_validator
 
+from app.core import calendar_names
+
 DATE_BASES = ("today", "yesterday", "start_of_month", "start_of_week", "start_of_year")
 DATETIME_BASES = ("now", "last_refresh")
 BUILTINS = frozenset(DATE_BASES + DATETIME_BASES)
@@ -73,9 +77,11 @@ _STRFTIME = re.compile(r"%[-_]?[aAbBcdDeFgGhHIjklmMpPrRsSTuUVwWxXyYzZ%]")
 # readable formats, as people write them for an API (yyyy-MM-dd, ddmmyyyy, HH:mm:ss); text between
 # single quotes is literal ('T'), and '' is an apostrophe (inside quotes too, as in Java's patterns).
 # `mm` follows Excel's rule: minutes right after hours or right before seconds, the month otherwise —
-# so ddmmyyyy is a date. Every other letter is refused: text goes in quotes.
-_READABLE = re.compile(r"''|'(?:[^']|'')*'|yyyy|yy|MM|mm|dd|HH|hh|ss|[A-Za-z]|[^A-Za-z']+|'")
+# so ddmmyyyy is a date. MMMM MMM EEEE EEE are the names of the month and of the day (October, Oct,
+# Saturday, Sat), as the reports' formats write them. Every other letter is refused: text goes in quotes.
+_READABLE = re.compile(r"''|'(?:[^']|'')*'|yyyy|yy|MMMM|MMM|MM|mm|dd|EEEE|EEE|HH|hh|ss|[A-Za-z]|[^A-Za-z']+|'")
 _READABLE_TOKENS = {"yyyy": "%Y", "yy": "%y", "MM": "%m", "dd": "%d", "HH": "%H", "ss": "%S"}
+_READABLE_NAMES = frozenset({"MMMM", "MMM", "EEEE", "EEE"})
 _QUOTED = re.compile(r"'(?:[^']|'')*'")
 _STEP = re.compile(r"^\s*(\d{1,4})\s*(min|d|w|m|y|h)\s*$")
 
@@ -85,39 +91,57 @@ def _is_strftime(fmt: str) -> bool:
     return "%" in _QUOTED.sub("", fmt)
 
 
-def _readable_to_strftime(fmt: str, shown: str = "") -> str:
-    """The strftime pattern of a readable format; PlaceholderError says what is wrong."""
+def _readable(fmt: str, shown: str = "") -> list[tuple[str, str]]:
+    """A readable format as its pieces, each («text», what is written as it is), («strftime»,
+    a directive) or («name», MMMM MMM EEEE or EEE); PlaceholderError says what is wrong."""
     where = shown or f"'{fmt}'"
     tokens = _READABLE.findall(fmt)
-    out: list[str] = []
+    out: list[tuple[str, str]] = []
     letters = [i for i, t in enumerate(tokens) if t[:1].isalpha()]
     for i, t in enumerate(tokens):
         if t == "''":
-            out.append("'")
+            out.append(("text", "'"))
         elif t == "'":
             raise PlaceholderError(f"a quote is not closed in the format of {where}: text goes between 'quotes'")
         elif t.startswith("'"):
-            out.append(t[1:-1].replace("''", "'").replace("%", "%%"))
+            out.append(("text", t[1:-1].replace("''", "'")))
         elif not t[:1].isalpha():
-            out.append(t.replace("%", "%%"))
+            out.append(("text", t))
         elif t == "hh":
             raise PlaceholderError(f"{where}: hh (12-hour clock) is not supported: use HH (00-23)")
         elif t == "mm":
             k = letters.index(i)
             before = tokens[letters[k - 1]] if k > 0 else ""
             after = tokens[letters[k + 1]] if k + 1 < len(letters) else ""
-            out.append("%M" if before == "HH" or after == "ss" else "%m")
+            out.append(("strftime", "%M" if before == "HH" or after == "ss" else "%m"))
         elif t in _READABLE_TOKENS:
-            out.append(_READABLE_TOKENS[t])
+            out.append(("strftime", _READABLE_TOKENS[t]))
+        elif t in _READABLE_NAMES:
+            out.append(("name", t))
         else:
             raise PlaceholderError(
-                f"unknown letter '{t}' in the format of {where}: use yyyy yy MM dd HH mm ss, and put letters that are "
-                f"text in quotes: '{t}' (or write a strftime pattern such as %Y-%m-%d, or epoch, epoch_ms, iso)"
+                f"unknown letter '{t}' in the format of {where}: use yyyy yy MMMM MMM MM dd EEEE EEE HH mm ss, and "
+                f"put letters that are text in quotes: '{t}' (or write a strftime pattern such as %Y-%m-%d, or epoch, "
+                "epoch_ms, iso)"
             )
         if t[:1].isalpha() and i > 0 and tokens[i - 1] == t:
             raise PlaceholderError(f"{where}: {t} is written twice in a row ({t}{t}): write it once")
     if not letters:
         raise PlaceholderError(f"{where}: the format has no date or time part (yyyy, MM, dd, HH, mm, ss)")
+    return out
+
+
+def _format_readable(value: date | datetime, fmt: str, shown: str, lang: str) -> str:
+    names = calendar_names.names(lang)
+    out: list[str] = []
+    for kind, piece in _readable(fmt, shown):
+        if kind == "text":
+            out.append(piece)
+        elif kind == "strftime":
+            out.append(value.strftime(piece))
+        else:
+            out.append({"MMMM": names.months, "MMM": names.months_short, "EEEE": names.days,
+                        "EEE": names.days_short}[piece][value.month - 1 if piece[0] == "M" else value.weekday()])
     return "".join(out)
 
 
@@ -168,7 +192,7 @@ def _check_format(ph: Placeholder, is_date: bool = False) -> None:
     if not fmt or fmt in ("epoch", "epoch_ms", "iso"):
         return
     if not _is_strftime(fmt):  # no % outside quotes = a readable format (yyyy-MM-dd…)
-        _readable_to_strftime(fmt, ph.text)
+        _readable(fmt, ph.text)
         return
     rest = _STRFTIME.sub("", fmt)
     if "%" in rest:
@@ -325,6 +349,8 @@ class Context:
     # run_id and flow (text)
     variables: dict[str, Value] = field(default_factory=dict)
     output: bool = False
+    # the language of the names of months and days (MMMM, EEEE): a Pushmail's, a report's
+    lang: str = "en"
 
 
 def _parse_instant(text: str, tz: ZoneInfo) -> datetime:
@@ -359,7 +385,7 @@ def make_context(now_utc: datetime, tz_name: str, last_refresh: str | None, init
 def with_values(ctx: Context, values: dict[str, Value]) -> Context:
     """The same moment and zone with the values of one combination of the variables."""
     return Context(now=ctx.now, tz=ctx.tz, last_refresh=ctx.last_refresh, variables={**ctx.variables, **values},
-                   output=ctx.output)
+                   output=ctx.output, lang=ctx.lang)
 
 
 def _add_months(d: date, n: int) -> date:
@@ -448,7 +474,7 @@ def evaluate(ph: Placeholder, ctx: Context) -> Value:
     return _shift(_base(name, ctx), ph, ctx.tz)
 
 
-def format_value(value: Value, ph: Placeholder, tz: ZoneInfo, output: bool = False) -> str:
+def format_value(value: Value, ph: Placeholder, tz: ZoneInfo, output: bool = False, lang: str = "en") -> str:
     if isinstance(value, str):
         return value
     fmt = ph.fmt or (_ALIAS_DEFAULT_FORMAT.get(ph.name, "") if output else "")
@@ -459,10 +485,8 @@ def format_value(value: Value, ph: Placeholder, tz: ZoneInfo, output: bool = Fal
     if not fmt or fmt == "iso":
         return value.isoformat(timespec="seconds") if isinstance(value, datetime) else value.isoformat()
     _check_format(Placeholder(raw=ph.raw, name=ph.name, fmt=fmt))
-    if not _is_strftime(fmt):
-        fmt = _readable_to_strftime(fmt, ph.text)
     try:
-        return value.strftime(fmt)
+        return value.strftime(fmt) if _is_strftime(fmt) else _format_readable(value, fmt, ph.text, lang)
     except ValueError as e:
         raise PlaceholderError(f"bad format in {ph.text}: {e}") from e
 
@@ -475,7 +499,7 @@ def render(template: str, ctx: Context, quote: Callable[[str], str] | None = Non
         if isinstance(part, str):
             out.append(part)
             continue
-        value = format_value(evaluate(part, ctx), part, ctx.tz, ctx.output)
+        value = format_value(evaluate(part, ctx), part, ctx.tz, ctx.output, ctx.lang)
         out.append(quote(value) if quote else value)
     return "".join(out)
 
@@ -556,11 +580,13 @@ def safe_flow_name(flow: str) -> str:
     return re.sub(r"[^\w.-]+", "_", flow or "").strip("._") or "flow"
 
 
-def output_context(now_utc: datetime, tz_name: str, run_id: int | None, flow: str) -> Context:
+def output_context(now_utc: datetime, tz_name: str, run_id: int | None, flow: str, lang: str = "en") -> Context:
     """The context of an Output's templates: the dates in the Output's zone (UTC
-    unless set), the run's number and the flow's name."""
+    unless set), the run's number and the flow's name; `lang` writes the names of
+    months and days (English by default)."""
     ctx = make_context(now_utc, tz_name, None, "", {})
     ctx.output = True
+    ctx.lang = lang
     if run_id is not None:
         ctx.variables["run_id"] = str(run_id)
     ctx.variables["flow"] = flow or ""

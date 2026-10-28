@@ -164,7 +164,9 @@ class Rule(_Model):
 
 class Column(_Model):
     header: str = Field("", max_length=500)
-    value: Expr
+    # a table's columns need one; a matrix's first column gives only its header, width and
+    # style (its rows are the groups' labels), so there it may be left out
+    value: Expr | None = None
     width: float | None = Field(None, gt=0, le=2000, allow_inf_nan=False)
     align: Literal["left", "center", "right"] | None = None
     format: Pattern | None = None
@@ -546,6 +548,8 @@ class _Checks:
         for i, s in enumerate(it.sort):
             self.expr(s.by, it.id, f"sort[{i}].by", self.env(ds, aggregates=False))
         for i, c in enumerate(it.columns):
+            if c.value is None and not it.matrix:
+                self.problems.append(Problem("a column of a table needs a value", it.id, f"columns[{i}].value"))
             self.expr(c.value, it.id, f"columns[{i}].value", self.env(ds))
             self.expr(c.total, it.id, f"columns[{i}].total", self.env(ds))
             self.pattern(c.format, it.id, f"columns[{i}].format")

@@ -42,6 +42,7 @@ from app.reports import formats
 
 MAX_EXPRESSION_CHARS = 4000
 MAX_DEPTH = 64
+PLACEHOLDERS = (*ph.DATE_BASES, "now")  # the placeholders an expression may write
 
 
 class ExpressionError(ValueError):
@@ -536,10 +537,14 @@ class _Checker:
             if name in self.env.params:
                 raise _err(node, f'{{{name}}} is a parameter: in an expression write PARAM("{name}")', name)
             try:
+                p = ph.parse("{" + node.raw + "}")[0]
+                if isinstance(p, ph.Placeholder) and p.name not in PLACEHOLDERS:
+                    # a report has no datasource's variables, and no last refresh
+                    known = ", ".join("{" + n + "}" for n in PLACEHOLDERS[:-1])
+                    raise ph.PlaceholderError(f"unknown placeholder {p.text}: use {known} or {{{PLACEHOLDERS[-1]}}}")
                 ph.check("{" + node.raw + "}")
             except ph.PlaceholderError as e:
                 raise _err(node, str(e)) from None
-            p = ph.parse("{" + node.raw + "}")[0]
             if p.fmt:
                 return TEXT
             return DATETIME if p.name in ph.DATETIME_BASES or p.unit in ("h", "min", "s") else DATE
@@ -1051,11 +1056,11 @@ class Evaluator:
 
     def _placeholder(self, node: Placeholder, ctx: Context) -> Any:
         p = ph.parse("{" + node.raw + "}")[0]
-        pctx = ctx.ph_context or ph.Context(now=ctx.now, tz=ctx.now.tzinfo)  # type: ignore[arg-type]
+        pctx = ctx.ph_context or ph.Context(now=ctx.now, tz=ctx.now.tzinfo, lang=ctx.loc.code)  # type: ignore[arg-type]
         try:
             value = ph.evaluate(p, pctx)
             if p.fmt:
-                return ph.format_value(value, p, pctx.tz)
+                return ph.format_value(value, p, pctx.tz, lang=pctx.lang)
         except ph.PlaceholderError as e:
             raise EvalError(str(e)) from None
         if isinstance(value, datetime):
@@ -1247,7 +1252,8 @@ def _scalar(name: str, v: list[Any], ctx: Context) -> Any:
             raise EvalError("DATEDIFF counts between two dates")
         a, b = _cmp_pair(a, b)
         if unit in ("d", "w"):
-            days = (b - a).days
+            # whole days, towards zero: between date-times 10 hours back are no day (`.days` floors to -1)
+            days = int((b - a) / timedelta(days=1))
             return days if unit == "d" else int(days / 7)
         months = (b.year - a.year) * 12 + b.month - a.month
         if months > 0 and b.day < a.day:

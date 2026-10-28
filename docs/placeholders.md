@@ -34,6 +34,7 @@ would break the catalogue and the dbt export.
 | `{today-1}` `{today-7d}` `{today+1d}` `{today-2w}` `{today-1m}` `{today-1y}` | offsets: a bare number is days; `m` months, **clamped to the end of the month** (31 March − 1m = 28 February) |
 | `{now-2h}` `{now-30min}` `{now+15s}` | hours, minutes, seconds: on date-times only |
 | `{today:yyyyMMdd}` `{today:dd/MM/yyyy}` `{now:yyyy-MM-dd'T'HH:mm}` | a readable format: `yyyy` `yy` `MM` `dd` `HH` `mm` `ss`, text in `'quotes'`. `mm` is the minutes right after the hours or right before the seconds, the month otherwise (Excel's rule): `ddmmyyyy` is a date |
+| `{today:MMMM yyyy}` `{today:EEE dd MMM}` | the names: `MMMM` `MMM` the month (`October`, `Oct`), `EEEE` `EEE` the day of the week (`Saturday`, `Sat`). In the language of a [Pushmail](pushmail.md) cell's subject and file names (`ottobre 2026`) and of a [report](capabilities/reports.md), in English everywhere else |
 | `{today:%Y%m%d}` | a strftime format (a `%` outside quotes makes it one); `%s` is refused, use `:epoch` |
 | `{now:epoch}` `{now:epoch_ms}` `{now:iso}` | seconds or milliseconds since 1970; ISO 8601 |
 | `{symbol}` | a **list** variable of the datasource (no offset, no format) |

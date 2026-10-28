@@ -18,7 +18,7 @@
     "#868e96"
    ],
    "textStyle": {
-    "fontFamily": "IBM Plex Sans",
+    "fontFamily": "IBM Plex Sans, Helvetica Neue, Arial, sans-serif",
     "fontSize": 9,
     "color": "#1f2933"
    },
@@ -62,9 +62,13 @@
     ],
     "axisLabel": {
      "fontSize": 9,
-     "hideOverlap": true,
-     "overflow": "truncate",
-     "width": 102
+     "interval": 0,
+     "overflow": "break",
+     "width": 102,
+     "formatter": {
+      "$fmt": "short",
+      "max": 40
+     }
     },
     "axisTick": {
      "alignWithLabel": true
@@ -97,7 +101,10 @@
       },
       {
        "value": -5.0,
-       "t": "-5.00"
+       "t": "-5.00",
+       "label": {
+        "position": "left"
+       }
       },
       {
        "value": 30.0,
@@ -115,6 +122,9 @@
       "formatter": {
        "$fmt": "label"
       }
+     },
+     "labelLayout": {
+      "hideOverlap": true
      },
      "barMaxWidth": 28
     }
@@ -140,7 +150,7 @@
     "#868e96"
    ],
    "textStyle": {
-    "fontFamily": "IBM Plex Sans",
+    "fontFamily": "IBM Plex Sans, Helvetica Neue, Arial, sans-serif",
     "fontSize": 9,
     "color": "#1f2933"
    },
@@ -184,9 +194,13 @@
     ],
     "axisLabel": {
      "fontSize": 9,
-     "hideOverlap": true,
-     "overflow": "truncate",
-     "width": 81
+     "interval": 0,
+     "overflow": "break",
+     "width": 66,
+     "formatter": {
+      "$fmt": "short",
+      "max": 40
+     }
     },
     "axisTick": {
      "alignWithLabel": true
@@ -220,7 +234,10 @@
       },
       {
        "value": -5.0,
-       "t": "-5.00"
+       "t": "-5.00",
+       "label": {
+        "position": "bottom"
+       }
       },
       {
        "value": 30.0,
@@ -238,6 +255,9 @@
       "formatter": {
        "$fmt": "label"
       }
+     },
+     "labelLayout": {
+      "hideOverlap": true
      },
      "yAxisIndex": 0,
      "barMaxWidth": 48
@@ -264,14 +284,14 @@
     "#868e96"
    ],
    "textStyle": {
-    "fontFamily": "IBM Plex Sans",
+    "fontFamily": "IBM Plex Sans, Helvetica Neue, Arial, sans-serif",
     "fontSize": 9,
     "color": "#1f2933"
    },
    "grid": {
     "left": 6,
     "right": 10,
-    "top": 36,
+    "top": 42,
     "bottom": 6,
     "containLabel": true
    },
@@ -308,9 +328,13 @@
     ],
     "axisLabel": {
      "fontSize": 9,
-     "hideOverlap": true,
-     "overflow": "truncate",
-     "width": 81
+     "interval": 0,
+     "overflow": "break",
+     "width": 66,
+     "formatter": {
+      "$fmt": "short",
+      "max": 40
+     }
     },
     "axisTick": {
      "alignWithLabel": true
@@ -360,6 +384,9 @@
        "$fmt": "label"
       }
      },
+     "labelLayout": {
+      "hideOverlap": true
+     },
      "yAxisIndex": 0,
      "symbol": "circle",
      "symbolSize": 4,
@@ -391,6 +418,9 @@
        "$fmt": "label"
       }
      },
+     "labelLayout": {
+      "hideOverlap": true
+     },
      "yAxisIndex": 0,
      "symbol": "circle",
      "symbolSize": 4,
@@ -421,14 +451,14 @@
     "#868e96"
    ],
    "textStyle": {
-    "fontFamily": "IBM Plex Sans",
+    "fontFamily": "IBM Plex Sans, Helvetica Neue, Arial, sans-serif",
     "fontSize": 9,
     "color": "#1f2933"
    },
    "grid": {
     "left": 6,
     "right": 10,
-    "top": 36,
+    "top": 42,
     "bottom": 6,
     "containLabel": true
    },
@@ -465,9 +495,13 @@
     ],
     "axisLabel": {
      "fontSize": 9,
-     "hideOverlap": true,
-     "overflow": "truncate",
-     "width": 81
+     "interval": 0,
+     "overflow": "break",
+     "width": 66,
+     "formatter": {
+      "$fmt": "short",
+      "max": 40
+     }
     },
     "axisTick": {
      "alignWithLabel": true
@@ -517,6 +551,9 @@
        "$fmt": "label"
       }
      },
+     "labelLayout": {
+      "hideOverlap": true
+     },
      "yAxisIndex": 0,
      "symbol": "circle",
      "symbolSize": 4,
@@ -551,6 +588,9 @@
        "$fmt": "label"
       }
      },
+     "labelLayout": {
+      "hideOverlap": true
+     },
      "yAxisIndex": 0,
      "symbol": "circle",
      "symbolSize": 4,
@@ -584,7 +624,7 @@
     "#868e96"
    ],
    "textStyle": {
-    "fontFamily": "IBM Plex Sans",
+    "fontFamily": "IBM Plex Sans, Helvetica Neue, Arial, sans-serif",
     "fontSize": 9,
     "color": "#1f2933"
    },
@@ -647,13 +687,16 @@
       }
      ],
      "avoidLabelOverlap": true,
+     "showEmptyCircle": false,
+     "minShowLabelAngle": 3,
      "label": {
       "fontSize": 8,
       "formatter": {
        "$fmt": "namePercent",
-       "locale": "en"
+       "locale": "en",
+       "max": 40
       },
-      "overflow": "truncate",
+      "overflow": "break",
       "width": 85
      },
      "labelLine": {
@@ -683,7 +726,7 @@
     "#868e96"
    ],
    "textStyle": {
-    "fontFamily": "IBM Plex Sans",
+    "fontFamily": "IBM Plex Sans, Helvetica Neue, Arial, sans-serif",
     "fontSize": 9,
     "color": "#1f2933"
    },
@@ -746,13 +789,16 @@
       }
      ],
      "avoidLabelOverlap": true,
+     "showEmptyCircle": false,
+     "minShowLabelAngle": 3,
      "label": {
       "fontSize": 8,
       "formatter": {
        "$fmt": "namePercent",
-       "locale": "en"
+       "locale": "en",
+       "max": 40
       },
-      "overflow": "truncate",
+      "overflow": "break",
       "width": 85
      },
      "labelLine": {
@@ -782,14 +828,14 @@
     "#868e96"
    ],
    "textStyle": {
-    "fontFamily": "IBM Plex Sans",
+    "fontFamily": "IBM Plex Sans, Helvetica Neue, Arial, sans-serif",
     "fontSize": 9,
     "color": "#1f2933"
    },
    "grid": {
     "left": 6,
     "right": 10,
-    "top": 36,
+    "top": 42,
     "bottom": 6,
     "containLabel": true
    },
@@ -826,9 +872,13 @@
     ],
     "axisLabel": {
      "fontSize": 9,
-     "hideOverlap": true,
-     "overflow": "truncate",
-     "width": 81
+     "interval": 0,
+     "overflow": "break",
+     "width": 66,
+     "formatter": {
+      "$fmt": "short",
+      "max": 40
+     }
     },
     "axisTick": {
      "alignWithLabel": true
@@ -875,7 +925,10 @@
       },
       {
        "value": -5.0,
-       "t": "-5.00"
+       "t": "-5.00",
+       "label": {
+        "position": "bottom"
+       }
       },
       {
        "value": 30.0,
@@ -893,6 +946,9 @@
       "formatter": {
        "$fmt": "label"
       }
+     },
+     "labelLayout": {
+      "hideOverlap": true
      },
      "yAxisIndex": 0,
      "barMaxWidth": 48
@@ -926,6 +982,9 @@
        "$fmt": "label"
       }
      },
+     "labelLayout": {
+      "hideOverlap": true
+     },
      "yAxisIndex": 1,
      "symbol": "circle",
      "symbolSize": 4,
@@ -956,7 +1015,7 @@
     "#868e96"
    ],
    "textStyle": {
-    "fontFamily": "IBM Plex Sans",
+    "fontFamily": "IBM Plex Sans, Helvetica Neue, Arial, sans-serif",
     "fontSize": 9,
     "color": "#1f2933"
    },
@@ -1001,9 +1060,13 @@
     ],
     "axisLabel": {
      "fontSize": 9,
-     "hideOverlap": true,
-     "overflow": "truncate",
-     "width": 64
+     "interval": 0,
+     "overflow": "break",
+     "width": 52,
+     "formatter": {
+      "$fmt": "short",
+      "max": 40
+     }
     },
     "axisTick": {
      "alignWithLabel": true
@@ -1028,6 +1091,7 @@
     {
      "type": "bar",
      "stack": "w",
+     "stackStrategy": "all",
      "silent": true,
      "data": [
       0.0,
@@ -1046,6 +1110,7 @@
     {
      "type": "bar",
      "stack": "w",
+     "stackStrategy": "all",
      "name": "Amount",
      "data": [
       {
@@ -1060,6 +1125,9 @@
        "t": "-5.00",
        "itemStyle": {
         "color": "#c92a2a"
+       },
+       "label": {
+        "position": "bottom"
        }
       },
       {
@@ -1092,6 +1160,9 @@
       "formatter": {
        "$fmt": "label"
       }
+     },
+     "labelLayout": {
+      "hideOverlap": true
      }
     }
    ]
@@ -1116,7 +1187,7 @@
     "#868e96"
    ],
    "textStyle": {
-    "fontFamily": "IBM Plex Sans",
+    "fontFamily": "IBM Plex Sans, Helvetica Neue, Arial, sans-serif",
     "fontSize": 9,
     "color": "#1f2933"
    },
@@ -1153,8 +1224,8 @@
    "series": [
     {
      "type": "funnel",
-     "left": "10%",
-     "right": "10%",
+     "left": "2%",
+     "width": "58%",
      "top": 22,
      "bottom": 6,
      "sort": "descending",
@@ -1174,21 +1245,22 @@
        "name": "d",
        "value": 1.0,
        "t": "1.00"
-      },
-      {
-       "name": "b",
-       "value": -5.0,
-       "t": "-5.00"
       }
      ],
      "label": {
-      "position": "inside",
+      "position": "right",
       "fontSize": 8,
-      "color": "#fff",
+      "color": "#1f2933",
+      "overflow": "break",
+      "width": 122,
       "formatter": {
        "$fmt": "nameLabel",
-       "sep": " "
+       "sep": " ",
+       "max": 40
       }
+     },
+     "labelLine": {
+      "length": 8
      }
     }
    ]
@@ -1213,7 +1285,7 @@
     "#868e96"
    ],
    "textStyle": {
-    "fontFamily": "IBM Plex Sans",
+    "fontFamily": "IBM Plex Sans, Helvetica Neue, Arial, sans-serif",
     "fontSize": 9,
     "color": "#1f2933"
    },
@@ -1300,7 +1372,8 @@
       "fontSize": 8,
       "overflow": "truncate",
       "formatter": {
-       "$fmt": "nameLabel"
+       "$fmt": "nameLabel",
+       "max": 40
       }
      },
      "upperLabel": {
@@ -1346,7 +1419,7 @@
     "#868e96"
    ],
    "textStyle": {
-    "fontFamily": "IBM Plex Sans",
+    "fontFamily": "IBM Plex Sans, Helvetica Neue, Arial, sans-serif",
     "fontSize": 9,
     "color": "#1f2933"
    },
@@ -1390,9 +1463,13 @@
     ],
     "axisLabel": {
      "fontSize": 9,
-     "hideOverlap": true,
-     "overflow": "truncate",
-     "width": 81
+     "interval": 0,
+     "overflow": "break",
+     "width": 66,
+     "formatter": {
+      "$fmt": "short",
+      "max": 40
+     }
     },
     "axisTick": {
      "alignWithLabel": true
@@ -1406,9 +1483,13 @@
     ],
     "axisLabel": {
      "fontSize": 9,
-     "hideOverlap": true,
-     "overflow": "truncate",
-     "width": 85
+     "interval": 0,
+     "overflow": "break",
+     "width": 102,
+     "formatter": {
+      "$fmt": "short",
+      "max": 40
+     }
     },
     "axisTick": {
      "alignWithLabel": true
@@ -1423,12 +1504,13 @@
     "bottom": 0,
     "itemWidth": 8,
     "itemHeight": 90,
+    "text": [
+     "30.00",
+     "-5.00"
+    ],
+    "textGap": 4,
     "textStyle": {
      "fontSize": 8
-    },
-    "formatter": {
-     "$fmt": "compact",
-     "locale": "en"
     },
     "inRange": {
      "color": [
@@ -1490,6 +1572,9 @@
        "$fmt": "label"
       }
      },
+     "labelLayout": {
+      "hideOverlap": true
+     },
      "itemStyle": {
       "borderColor": "#fff",
       "borderWidth": 1
@@ -1517,14 +1602,14 @@
     "#868e96"
    ],
    "textStyle": {
-    "fontFamily": "IBM Plex Sans",
+    "fontFamily": "IBM Plex Sans, Helvetica Neue, Arial, sans-serif",
     "fontSize": 9,
     "color": "#1f2933"
    },
    "grid": {
     "left": 6,
     "right": 10,
-    "top": 36,
+    "top": 42,
     "bottom": 6,
     "containLabel": true
    },
@@ -1618,6 +1703,9 @@
       "formatter": {
        "$fmt": "label"
       }
+     },
+     "labelLayout": {
+      "hideOverlap": true
      }
     },
     {
@@ -1647,6 +1735,9 @@
       "formatter": {
        "$fmt": "label"
       }
+     },
+     "labelLayout": {
+      "hideOverlap": true
      }
     }
    ]
@@ -1671,7 +1762,7 @@
     "#868e96"
    ],
    "textStyle": {
-    "fontFamily": "IBM Plex Sans",
+    "fontFamily": "IBM Plex Sans, Helvetica Neue, Arial, sans-serif",
     "fontSize": 9,
     "color": "#1f2933"
    },
@@ -1806,7 +1897,7 @@
     "#868e96"
    ],
    "textStyle": {
-    "fontFamily": "IBM Plex Sans",
+    "fontFamily": "IBM Plex Sans, Helvetica Neue, Arial, sans-serif",
     "fontSize": 9,
     "color": "#1f2933"
    },
@@ -1851,9 +1942,13 @@
      ],
      "axisLabel": {
       "fontSize": 9,
-      "hideOverlap": true,
-      "overflow": "truncate",
-      "width": 85
+      "interval": 0,
+      "overflow": "break",
+      "width": 102,
+      "formatter": {
+       "$fmt": "short",
+       "max": 40
+      }
      },
      "axisTick": {
       "alignWithLabel": true
@@ -1870,9 +1965,13 @@
      ],
      "axisLabel": {
       "fontSize": 9,
-      "hideOverlap": true,
-      "overflow": "truncate",
-      "width": 85
+      "interval": 0,
+      "overflow": "break",
+      "width": 102,
+      "formatter": {
+       "$fmt": "short",
+       "max": 40
+      }
      },
      "axisTick": {
       "alignWithLabel": true
@@ -1896,7 +1995,7 @@
      }
     },
     "max": 40.0,
-    "min": 0
+    "min": -6
    },
    "series": [
     {
@@ -1947,7 +2046,10 @@
       },
       {
        "value": -5.0,
-       "t": "-5.00"
+       "t": "-5.00",
+       "label": {
+        "position": "left"
+       }
       },
       {
        "value": 30.0,
@@ -1958,13 +2060,18 @@
        "t": "1.00"
       }
      ],
+     "labelLayout": {
+      "hideOverlap": true
+     },
      "label": {
       "show": true,
       "position": "right",
       "fontSize": 8,
       "formatter": {
        "$fmt": "label"
-      }
+      },
+      "textBorderColor": "#ffffff",
+      "textBorderWidth": 2
      }
     },
     {

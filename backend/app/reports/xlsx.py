@@ -27,7 +27,9 @@ _SHEET_BAD = re.compile(r"[\[\]:*?/\\]")
 
 
 def _sheet_name(title: str, used: set[str]) -> str:
-    base = _SHEET_BAD.sub(" ", title or "").strip().strip("'")[:31] or "Table"
+    """The title as Excel accepts a sheet's name: none of []:*?/\\, no quote at its ends, 31
+    characters, unique in the book (and not «History», which Excel keeps for itself)."""
+    base = " ".join(_SHEET_BAD.sub(" ", title or "").split()).strip("'").strip()[:31].rstrip() or "Table"
     name, n = base, 2
     while name.lower() in used or name.lower() == "history":
         suffix = f" ({n})"
@@ -148,6 +150,13 @@ def _table(ws: Any, t: TableOut, fmts: _Formats, loc: formats.Locale, page: dict
             label = fmts.get(align="right", **props)
             if row.span:
                 ws.write_string(r, 0, row.label, label)
+            elif row.label:  # every column has a total: the label on a row of its own, above the values
+                ws.write_string(r, 0, row.label, fmts.get(align="left", **props))
+                for c in range(1, ncols):
+                    ws.write_blank(r, c, None, fmts.get(**props))
+                if not grand:
+                    ws.set_row(r, None, None, {"level": min(row.level, 7)})
+                r += 1
             for c in range(1, row.span):
                 ws.write_blank(r, c, None, label)
             first = sheet_row.get(row.first, header_rows) if not grand else header_rows

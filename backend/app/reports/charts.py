@@ -8,9 +8,10 @@ travel with each point (`t`); where ECharts computes the values itself (an axis'
 it formats them through a formatter named from the service's closed list:
 
     {"$fmt": "label"}                      the point's text (`t`), else its value
+    {"$fmt": "short", "max": n}            a category's name, cut to n characters with «…»
     {"$fmt": "nameLabel", "sep": " "}      the category and the point's text (on two lines without sep)
-    {"$fmt": "namePercent", "locale": l}   the category and its share, as a pie shows it
-    {"$fmt": "compact", "locale": l}       1,2 Mio, 3.4K… (Intl, compact notation)
+    {"$fmt": "namePercent", "locale": l}   the category and, on a line of its own, its share (a pie)
+    {"$fmt": "compact", "locale": l}       1,23 Mio, 3.4K, 0.05… (Intl, compact notation)
     {"$fmt": "percent", "locale": l, "decimals": n}
     {"$fmt": "const", "text": "…"}         a text decided here (a gauge's value)
 
@@ -29,6 +30,8 @@ from app.reports.errors import ReportError
 
 MAX_CATEGORIES = 2000
 MAX_SERIES = 24
+MAX_LABEL_CHARS = 40  # a name on an axis or a slice: longer ones end in «…», so it takes three lines at most
+MM_PX = 96 / 25.4
 # the PDF's font first (Typst draws the chart with it); then what a browser has, for the
 # screen's pages, where a chart inside an <img> cannot use the page's fonts (Plex alone fell
 # back to a serif)
@@ -71,8 +74,11 @@ def _value_formatter(fmt: str | None, loc: formats.Locale) -> dict:
     return {"$fmt": "compact", "locale": loc.code}
 
 
-def _points(s: SeriesData) -> list[dict | None]:
-    return [None if v is None else {"value": v, "t": t} for v, t in zip(s.values, s.labels)]
+def _points(s: SeriesData, below: str | None = None) -> list[dict | None]:
+    """The values with their texts; `below`: where the label of a value under zero goes (a
+    bar's label sits at its end, which for a negative bar is the other side)."""
+    return [None if v is None else {"value": v, "t": t, **({"label": {"position": below}} if below and v < 0 else {})}
+            for v, t in zip(s.values, s.labels)]
 
 
 def _legend_rows(names: list[str], width: int) -> int:
@@ -94,7 +100,9 @@ def _base(data: ChartData, theme: rd.Theme, legend: bool, width: int) -> dict:
         "animation": False,
         "color": _palette(theme),
         "textStyle": {"fontFamily": FONT, "fontSize": 9, "color": theme.color},
-        "grid": {"left": 6, "right": 10, "top": top + 14 * lines, "bottom": 6, "containLabel": True},
+        # a legend's line is 16 px, and the value axis' top label sticks out of the plot by half a line
+        "grid": {"left": 6, "right": 10, "top": top + (16 * lines + 4 if lines else 0), "bottom": 6,
+                 "containLabel": True},
         "legend": {"show": legend, "top": top - 2 if data.title else 2, "left": "center", "itemWidth": 10,
                    "itemHeight": 7, "itemGap": 8, "textStyle": {"fontSize": 9, "overflow": "truncate", "width": 120}},
     }
@@ -104,17 +112,30 @@ def _base(data: ChartData, theme: rd.Theme, legend: bool, width: int) -> dict:
     return option
 
 
-def _across(width_px: int, categories: list) -> int:
-    """The room of a label on a horizontal category axis: its band, but never so little that
-    a label is cut to «20…» — when they crowd, ECharts hides the ones that overlap
-    (`hideOverlap`) and those it shows stay whole."""
-    return max(width_px // max(len(categories), 1) - 4, 90)
+def _x_axis(categories: list[str], width_px: int) -> dict:
+    """A horizontal category axis. When the categories have room (a few regions, the months
+    of a year) every label is written, on more lines if it needs them; when they crowd (the
+    days of a year) ECharts writes those that do not overlap, whole — never «20…»."""
+    band = (width_px - 60) / max(len(categories), 1)  # the plot is the chart less its value axis
+    if band >= 36:
+        label = {"fontSize": 9, "interval": 0, "overflow": "break", "width": int(band - 4),
+                 "formatter": {"$fmt": "short", "max": MAX_LABEL_CHARS}}
+    else:
+        label = {"fontSize": 9, "hideOverlap": True, "overflow": "truncate", "width": 90}
+    return {"type": "category", "data": categories, "axisLabel": label, "axisTick": {"alignWithLabel": True}}
 
 
-def _category_axis(data: ChartData, width: int) -> dict:
-    return {"type": "category", "data": data.categories,
-            "axisLabel": {"fontSize": 9, "hideOverlap": True, "overflow": "truncate", "width": width},
-            "axisTick": {"alignWithLabel": True}}
+def _y_axis(categories: list[str], width_px: int, height_px: int) -> dict:
+    """A vertical category axis (bars, a bullet, a heatmap's rows): a label wraps in its
+    third of the width while the rows have room for two lines, and is cut with «…» beyond."""
+    band = (height_px - 40) / max(len(categories), 1)
+    width = max(int(width_px * 0.3), 40)
+    if band >= 22:
+        label = {"fontSize": 9, "interval": 0, "overflow": "break", "width": width,
+                 "formatter": {"$fmt": "short", "max": MAX_LABEL_CHARS}}
+    else:
+        label = {"fontSize": 9, "hideOverlap": True, "overflow": "truncate", "width": width}
+    return {"type": "category", "data": categories, "axisLabel": label, "axisTick": {"alignWithLabel": True}}
 
 
 def _value_axis(data: ChartData, loc: formats.Locale, o: rd.ChartOptions) -> dict:
@@ -131,22 +152,50 @@ def _label(o: rd.ChartOptions, position: str) -> dict:
     return {"show": o.labels, "position": position, "fontSize": 8, "formatter": {"$fmt": "label"}}
 
 
+HIDE_OVERLAP = {"hideOverlap": True}  # the values written on a chart: those that would overlap are left out
+
+
+def _has_values(data: ChartData) -> bool:
+    """Whether the chart has something to draw (a pie, a funnel, a treemap draw sizes: above zero)."""
+    if data.kind == "scatter":
+        return any(x is not None and y is not None for _, pts in data.points for x, y, _ in pts)
+    values = [v for s in data.series for v in s.values if v is not None]
+    if data.kind in ("pie", "donut", "funnel", "treemap"):
+        return any(v > 0 for v in values)
+    return bool(values)
+
+
+def _no_data(option: dict, loc: formats.Locale) -> dict:
+    note = {"text": loc.texts["empty"], "left": "center", "top": "middle",
+            "textStyle": {"fontSize": 10, "fontWeight": "normal", "color": "#6b7590"}}
+    option["title"] = [option["title"], note] if "title" in option else note
+    return option
+
+
 def option(data: ChartData, it: rd.ChartItem, theme: rd.Theme, loc: formats.Locale) -> dict:
-    """The ECharts option of a chart item."""
+    """The ECharts option of a chart item; one with nothing to draw says «No data»."""
+    out = _option(data, it, theme, loc)
+    return out if _has_values(data) else _no_data(out, loc)
+
+
+def _option(data: ChartData, it: rd.ChartItem, theme: rd.Theme, loc: formats.Locale) -> dict:
     o = it.options
     kind = data.kind
     many = len(data.series) > 1 or len(data.points) > 1
     legend = o.legend if o.legend is not None else (many and kind not in ("pie", "donut", "funnel", "treemap", "heatmap",
                                                                           "gauge", "bullet"))
-    width_px = max(int(it.w * 96 / 25.4), 40)
+    width_px = max(int(it.w * MM_PX), 40)
+    height_px = max(int(it.h * MM_PX), 20)
     base = _base(data, theme, bool(legend), width_px)
     if kind in ("column", "line", "area", "combo"):
         right = any(s.axis == "right" for s in data.series)
         series = []
         for s in data.series:
             line = kind in ("line", "area") or (kind == "combo" and s.as_ == "line")
-            entry: dict[str, Any] = {"type": "line" if line else "bar", "name": s.name, "data": _points(s),
-                                     "label": _label(o, "top"), "yAxisIndex": 1 if s.axis == "right" and right else 0}
+            entry: dict[str, Any] = {"type": "line" if line else "bar", "name": s.name,
+                                     "data": _points(s, None if line or o.stacked else "bottom"),
+                                     "label": _label(o, "top"), "labelLayout": HIDE_OVERLAP,
+                                     "yAxisIndex": 1 if s.axis == "right" and right else 0}
             if line:
                 entry.update(symbol="circle", symbolSize=4, lineStyle={"width": 1.6}, connectNulls=False)
                 if kind == "area":
@@ -158,25 +207,28 @@ def option(data: ChartData, it: rd.ChartItem, theme: rd.Theme, loc: formats.Loca
             series.append(entry)
         yaxis = [_value_axis(data, loc, o)] + ([{**_value_axis(data, loc, o), "splitLine": {"show": False}}]
                                                if right else [])
-        return {**base, "xAxis": _category_axis(data, _across(width_px, data.categories)),
-                "yAxis": yaxis, "series": series}
+        return {**base, "xAxis": _x_axis(data.categories, width_px), "yAxis": yaxis, "series": series}
     if kind == "bar":
-        series = [{"type": "bar", "name": s.name, "data": _points(s), "label": _label(o, "right"), "barMaxWidth": 28,
+        series = [{"type": "bar", "name": s.name, "data": _points(s, None if o.stacked else "left"),
+                   "label": _label(o, "right"), "labelLayout": HIDE_OVERLAP, "barMaxWidth": 28,
                    **({"stack": "total"} if o.stacked else {})} for s in data.series]
         if o.labels:  # room for the value written after the longest bar
             longest = max((len(t) for s in data.series for t in s.labels), default=0)
             base["grid"]["right"] = 10 + int(longest * 8 * 0.6)
-        return {**base, "yAxis": {**_category_axis(data, max(int(width_px * 0.3), 40)), "inverse": True},
+        y = _y_axis(data.categories, width_px, height_px - base["grid"]["top"])
+        return {**base, "yAxis": {**y, "inverse": True},
                 "xAxis": _value_axis(data, loc, o), "series": series}
     if kind in ("pie", "donut"):
         s = data.series[0]
         points = [{"name": c, "value": v, "t": t} for c, v, t in zip(data.categories, s.values, s.labels)
                   if v is not None and v > 0]
+        # a slice's share on a line of its own under its name, which wraps and is cut with «…» past
+        # MAX_LABEL_CHARS: the share is never what is cut; slices too thin for a label go without
         return {**base, "series": [{
             "type": "pie", "radius": ["45%", "70%"] if kind == "donut" else [0, "70%"], "center": ["50%", "54%"],
-            "data": points, "avoidLabelOverlap": True,
-            "label": {"fontSize": 8, "formatter": {"$fmt": "namePercent", "locale": loc.code}, "overflow": "truncate",
-                      "width": max(width_px // 4, 50)},
+            "data": points, "avoidLabelOverlap": True, "showEmptyCircle": False, "minShowLabelAngle": 3,
+            "label": {"fontSize": 8, "formatter": {"$fmt": "namePercent", "locale": loc.code, "max": MAX_LABEL_CHARS},
+                      "overflow": "break", "width": max(width_px // 4, 50)},
             "labelLine": {"length": 6, "length2": 6}}]}
     if kind == "waterfall":
         s = data.series[0]
@@ -190,25 +242,31 @@ def option(data: ChartData, it: rd.ChartItem, theme: rd.Theme, loc: formats.Loca
             else:
                 running += v
                 bases.append(running)
-                bars.append({"value": -v, "t": t, "itemStyle": {"color": BAD}})
+                bars.append({"value": -v, "t": t, "itemStyle": {"color": BAD}, "label": {"position": "bottom"}})
         total = formats.display(running, data.fmt, loc)
         bases.append(0)
-        bars.append({"value": running, "t": total, "itemStyle": {"color": theme.accent}})
-        cats = ChartData(kind, data.fmt, data.title, [*data.categories, data.total_label])
-        return {**base, "xAxis": _category_axis(cats, _across(width_px, cats.categories)),
+        bars.append({"value": running, "t": total, "itemStyle": {"color": theme.accent},
+                     **({"label": {"position": "bottom"}} if running < 0 else {})})
+        # the invisible bases and the steps stacked across zero: by sign (ECharts' default) a step
+        # down from a total under zero was drawn from zero upwards
+        return {**base, "xAxis": _x_axis([*data.categories, data.total_label], width_px),
                 "yAxis": _value_axis(data, loc, o),
-                "series": [{"type": "bar", "stack": "w", "silent": True, "data": bases,
+                "series": [{"type": "bar", "stack": "w", "stackStrategy": "all", "silent": True, "data": bases,
                             "itemStyle": {"color": "transparent"}, "label": {"show": False}},
-                           {"type": "bar", "stack": "w", "name": s.name, "data": bars, "barMaxWidth": 48,
-                            "label": {**_label(o, "top"), "show": True}}]}
+                           {"type": "bar", "stack": "w", "stackStrategy": "all", "name": s.name, "data": bars,
+                            "barMaxWidth": 48, "label": {**_label(o, "top"), "show": True},
+                            "labelLayout": HIDE_OVERLAP}]}
     if kind == "funnel":
         s = data.series[0]
+        # the stages that have a size, their names and values beside them: inside, a small stage cut them
         points = sorted(({"name": c, "value": v, "t": t} for c, v, t in zip(data.categories, s.values, s.labels)
-                         if v is not None), key=lambda p: -p["value"])
-        return {**base, "series": [{"type": "funnel", "left": "10%", "right": "10%", "top": base["grid"]["top"],
+                         if v is not None and v > 0), key=lambda p: -p["value"])
+        return {**base, "series": [{"type": "funnel", "left": "2%", "width": "58%", "top": base["grid"]["top"],
                                     "bottom": 6, "sort": "descending", "gap": 2, "data": points,
-                                    "label": {"position": "inside", "fontSize": 8, "color": "#fff",
-                                              "formatter": {"$fmt": "nameLabel", "sep": " "}}}]}
+                                    "label": {"position": "right", "fontSize": 8, "color": theme.color,
+                                              "overflow": "break", "width": int(width_px * 0.36),
+                                              "formatter": {"$fmt": "nameLabel", "sep": " ", "max": MAX_LABEL_CHARS}},
+                                    "labelLine": {"length": 8}}]}
     if kind == "treemap":
         if it.split_by:
             nodes = []
@@ -224,7 +282,8 @@ def option(data: ChartData, it: rd.ChartItem, theme: rd.Theme, loc: formats.Loca
         return {**base, "series": [{
             "type": "treemap", "roam": False, "nodeClick": False, "breadcrumb": {"show": False},
             "left": 0, "right": 0, "top": base["grid"]["top"] - 6, "bottom": 0, "data": nodes,
-            "label": {"fontSize": 8, "overflow": "truncate", "formatter": {"$fmt": "nameLabel"}},
+            "label": {"fontSize": 8, "overflow": "truncate",
+                      "formatter": {"$fmt": "nameLabel", "max": MAX_LABEL_CHARS}},
             "upperLabel": {"show": bool(it.split_by), "height": 14, "fontSize": 8, "color": "#fff"},
             "levels": [{"itemStyle": {"borderWidth": 0, "gapWidth": 2}},
                        {"itemStyle": {"gapWidth": 1, "borderColorSaturation": 0.6}}]}]}
@@ -236,26 +295,27 @@ def option(data: ChartData, it: rd.ChartItem, theme: rd.Theme, loc: formats.Loca
                     cells.append({"value": [xi, yi, v], "t": t})
                     values.append(v)
         lo, hi = (min(values), max(values)) if values else (0, 1)
-        names = ChartData(kind, categories=[s.name for s in data.series])
         base["grid"]["bottom"] = 30
-        return {**base, "xAxis": _category_axis(data, _across(width_px, data.categories)),
-                "yAxis": _category_axis(names, max(int(width_px * 0.25), 40)),
+        # the scale's ends written by the server, in the chart's format
+        ends = [formats.display(hi, data.fmt, loc), formats.display(lo, data.fmt, loc)] if values else ["", ""]
+        return {**base, "xAxis": _x_axis(data.categories, width_px),
+                "yAxis": _y_axis([s.name for s in data.series], width_px, height_px - base["grid"]["top"] - 30),
                 "visualMap": {"min": lo, "max": hi if hi > lo else lo + 1, "calculable": False, "orient": "horizontal",
-                              "left": "center", "bottom": 0, "itemWidth": 8, "itemHeight": 90,
-                              "textStyle": {"fontSize": 8}, "formatter": _value_formatter(data.fmt, loc),
+                              "left": "center", "bottom": 0, "itemWidth": 8, "itemHeight": 90, "text": ends,
+                              "textGap": 4, "textStyle": {"fontSize": 8},
                               "inRange": {"color": ["#f1f3ff", theme.accent]}},
-                "series": [{"type": "heatmap", "data": cells, "label": _label(o, "inside"),
+                "series": [{"type": "heatmap", "data": cells, "label": _label(o, "inside"), "labelLayout": HIDE_OVERLAP,
                             "itemStyle": {"borderColor": "#fff", "borderWidth": 1}}]}
     if kind == "scatter":
         series = [{"type": "scatter", "name": name, "symbolSize": 5,
                    "data": [{"value": [x, y], "t": t} for x, y, t in pts if x is not None and y is not None],
-                   "label": _label(o, "top")} for name, pts in data.points]
+                   "label": _label(o, "top"), "labelLayout": HIDE_OVERLAP} for name, pts in data.points]
         return {**base, "xAxis": {**_value_axis(data, loc, rd.ChartOptions()), "scale": True},
                 "yAxis": {**_value_axis(data, loc, o), "scale": True}, "series": series}
     if kind == "gauge":
         return _gauge(data, it, theme, base)
     if kind == "bullet":
-        return _bullet(data, it, theme, loc, base)
+        return _bullet(data, it, theme, loc, base, height_px)
     raise ReportError(f"item «{it.id}»: unknown chart kind {kind}")  # pragma: no cover
 
 
@@ -301,7 +361,8 @@ def _gauge(data: ChartData, it: rd.ChartItem, theme: rd.Theme, base: dict) -> di
             "title": {"show": bool(s.name), "offsetCenter": [0, title_at], "fontSize": 9},
             "detail": {"offsetCenter": [0, detail_at], "fontSize": 16, "fontWeight": "bold", "color": theme.color,
                        "formatter": {"$fmt": "const", "text": label}},
-            "data": [{"value": value if value is not None else lo, "name": s.name}]}
+            # the pointer and the arc stay between the ends; the text says the value as it is
+            "data": [{"value": min(max(value, lo), hi) if value is not None else lo, "name": s.name}]}
     series = [main]
     if target is not None:
         series.append({"type": "gauge", "min": lo, "max": hi, "startAngle": 210, "endAngle": -30, "radius": "88%",
@@ -313,13 +374,17 @@ def _gauge(data: ChartData, it: rd.ChartItem, theme: rd.Theme, base: dict) -> di
     return {**base, "series": series}
 
 
-def _bullet(data: ChartData, it: rd.ChartItem, theme: rd.Theme, loc: formats.Locale, base: dict) -> dict:
+def _bullet(data: ChartData, it: rd.ChartItem, theme: rd.Theme, loc: formats.Locale, base: dict,
+            height_px: int) -> dict:
     o = it.options
     s = data.series[0]
     targets = data.targets or [None] * len(data.categories)
     bands = sorted(o.bands)
     top = max([*(v or 0 for v in s.values), *(t or 0 for t in targets), *(bands or [0])])
     hi = o.max if o.max is not None else bands[-1] if bands and bands[-1] >= top else _nice_max(top * 1.05)
+    # a value under zero is drawn to the left of zero, not left out of the axis
+    bottom = min([0.0, *(v for v in s.values if v is not None), *(t for t in targets if t is not None)])
+    lo = o.min if o.min is not None else -_nice_max(-bottom * 1.05) if bottom < 0 else 0
     series: list[dict] = []
     prev = 0.0
     shades = ["#adb5bd", "#ced4da", "#e9ecef", "#f1f3f5"]
@@ -328,16 +393,17 @@ def _bullet(data: ChartData, it: rd.ChartItem, theme: rd.Theme, loc: formats.Loc
                        "itemStyle": {"color": shades[min(i, len(shades) - 1)]}, "data": [b - prev] * len(data.categories)})
         prev = b
     # the value on a second category axis laid over the first: each bar centred in its own row
+    # its value written after the bar, readable over the target's mark
     series.append({"type": "bar", "name": s.name, "barWidth": "26%", "yAxisIndex": 1, "z": 3,
-                   "itemStyle": {"color": theme.color}, "data": _points(s), "label": _label(o, "right")})
+                   "itemStyle": {"color": theme.color}, "data": _points(s, "left"), "labelLayout": HIDE_OVERLAP,
+                   "label": {**_label(o, "right"), "textBorderColor": "#ffffff", "textBorderWidth": 2}})
     marks = [{"value": [t, i]} for i, t in enumerate(targets) if t is not None]
     if marks:
         series.append({"type": "scatter", "symbol": "rect", "symbolSize": [3, 14], "z": 4, "yAxisIndex": 0,
                        "itemStyle": {"color": BAD}, "data": marks})
-    axis = {**_category_axis(data, max(int(it.w * 96 / 25.4 * 0.25), 40)), "inverse": True}
+    axis = {**_y_axis(data.categories, max(int(it.w * MM_PX), 40), height_px - base["grid"]["top"]), "inverse": True}
     return {**base, "yAxis": [axis, {**axis, "show": False}],
-            "xAxis": {**_value_axis(data, loc, o), "max": hi, "min": o.min if o.min is not None else 0},
-            "series": series}
+            "xAxis": {**_value_axis(data, loc, o), "max": hi, "min": lo}, "series": series}
 
 
 def sparkline(categories: list[str], values: list[Any], accent: str) -> dict:
