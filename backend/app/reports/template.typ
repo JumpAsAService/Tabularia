@@ -193,7 +193,10 @@
       if toggling and "key" in r { body = body + hot((kind: "toggle", item: t.id, key: r.key, closed: r.closed)) }
       let c = table.cell(colspan: n, fill: if r.lv == 0 { rgb(T.band) } else { rgb(T.band).lighten(50%) },
         inset: (x: 1.5mm + r.lv * 3mm, y: 1.3mm), body)
-      if r.rep { cells.push(table.header(level: r.lv + 2, repeat: true, c)) } else { cells.push(c) }
+      // every group row is a header of its level, repeated or not: a header ends the repetition
+      // of the one before it at that level — a closed group written as a plain cell let the
+      // previous group's header come back on the next page with nothing under it
+      cells.push(table.header(level: r.lv + 2, repeat: r.rep, c))
       i += 1
     } else if r.at("glue", default: false) {
       // the rows kept together: one unbreakable cell over the whole table, the same columns inside

@@ -29,7 +29,10 @@ from app.reports.errors import ReportError
 
 MAX_CATEGORIES = 2000
 MAX_SERIES = 24
-FONT = "IBM Plex Sans"
+# the PDF's font first (Typst draws the chart with it); then what a browser has, for the
+# screen's pages, where a chart inside an <img> cannot use the page's fonts (Plex alone fell
+# back to a serif)
+FONT = "IBM Plex Sans, Helvetica Neue, Arial, sans-serif"
 SERVICE_TIMEOUT_SECONDS = 30
 _EXTRA = ["#14a38b", "#e0a23b", "#c2477a", "#6b7590", "#8a63d2", "#2f9e44", "#d9480f", "#1c7ed6", "#868e96"]
 GOOD, BAD, MID = "#2b8a3e", "#c92a2a", "#e0a23b"

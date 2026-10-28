@@ -12,6 +12,7 @@ import threading
 import zipfile
 from datetime import datetime, timezone
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
+from pathlib import Path
 
 import pytest
 from fastapi import HTTPException
@@ -96,6 +97,23 @@ def test_the_pages_on_screen_are_svg_with_where_to_click(tmp_path, chart_service
     toggles = [h for h in out["hotspots"] if h["kind"] == "toggle"]
     assert {"key": ["Isole"], "closed": True}.items() <= next(h for h in toggles if h["key"] == ["Isole"]).items()
     assert all(1 <= h["page"] <= r.pages and h["x"] > 0 and h["y"] > 0 for h in out["hotspots"])
+
+
+
+def test_a_closed_group_ends_the_repetition_of_the_header_before_it(tmp_path):
+    """The Sample margins with «Insaccati da cuocere» closed: «Insaccati cotti» ends at the foot
+    of page 1, and page 2 opened again with its header — nothing under it — because a closed
+    group was a plain cell, not a header ending the repetition of the one before."""
+    data = json.loads((Path(__file__).parent / "report_margins.json").read_text())
+    rows = [dict(zip([c["name"] for c in data["columns"]], r)) for r in data["rows"]]
+    state = {"items": {"detail": {"collapsed": [["Insaccati da cuocere"]]}}}
+    r = render.render(data["definition"], {"margins": {"rows": rows, "columns": data["columns"]}},
+                      {"from_month": 202401}, "svg", tmp_path, state=state, limits=render.Limits(chart_url=""),
+                      now=NOW)
+    toggles = [h for h in json.loads(r.path.read_text())["hotspots"] if h["kind"] == "toggle"]
+    first_page = {h["key"][0] for h in toggles if h["page"] == 1}
+    second_page = [h["key"][0] for h in toggles if h["page"] == 2]
+    assert "Insaccati cotti" in first_page and second_page[0] == "Insaccati da cuocere", second_page
 
 
 # ── limits ───────────────────────────────────────────────────────────────────
