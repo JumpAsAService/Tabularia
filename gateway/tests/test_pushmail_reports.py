@@ -289,3 +289,115 @@ async def test_a_change_of_what_a_report_reads_stops_the_schedules_of_others(wor
     await restore_version(report.id, 2, request=None, user=editor, session=s)
     s.refresh(group)
     assert group.run_schedule is None
+
+
+async def test_a_new_default_the_cell_relies_on_stops_the_schedules_of_others(world, db_engine):
+    """The cell gives «region» and leaves «since» to the report's default. B changes that
+    default from 30 days to ten years: A's email would carry ten years of rows chosen by
+    B, with A's rights — A's schedule is switched off. A new default of «region», which
+    the cell gives itself, changes nothing that is sent."""
+    from app.routes.reports import ReportUpdate, update_report
+
+    s = world["session"]
+    report = _report(world)
+    group = s.get(FlowGroup, _create(world, world["admin"], _with_report(world, report.id)).id)
+    editor = make_user(s, email="editor@x.local")
+    for cap in (Capability.VIEW, Capability.EDIT):
+        make_permission(s, user_id=editor.id, project_id=world["p"].id, capability=cap)
+    group.run_schedule, group.run_scheduled_by = "0 7 * * *", world["admin"].id
+    s.add(group)
+    s.commit()
+
+    def with_defaults(region=None, since="{today-30}"):
+        c = json.loads(s.exec(select(ReportVersion).where(ReportVersion.report_id == report.id)
+                              .order_by(ReportVersion.version.desc())).first().content)
+        c["parameters"][0]["default"] = region
+        c["parameters"][1]["default"] = since
+        return c
+
+    await update_report(report.id, ReportUpdate(content=with_defaults(region="South")), request=None, user=editor,
+                        session=s)
+    s.refresh(group)
+    assert group.run_schedule == "0 7 * * *"
+    await update_report(report.id, ReportUpdate(content=with_defaults(region="South", since="{today-3650}")),
+                        request=None, user=editor, session=s)
+    s.refresh(group)
+    assert (group.run_schedule, group.run_scheduled_by) == (None, None)
+    (_, detail, _), = _audits(db_engine, "flow_group.schedule")
+    assert "the default of «since» changed" in detail["reason"]
+
+
+async def test_a_change_of_a_sql_script_a_report_reads_stops_the_schedules_of_others(world, db_engine):
+    """A report reads a saved SQL script: whoever changes the script changes what the report
+    reads. A group scheduled by A sends it: B's change of the script must not spend A's
+    rights either — A's schedule is switched off, as for a change of the report itself."""
+    from app.models import SqlScript, SqlScriptVersion
+    from app.routes.sql_scripts import update_sql_script
+    from app.routes import sql_scripts as script_routes
+
+    s = world["session"]
+    script = SqlScript(name="Top", project_id=world["p"].id, current_version=1)
+    s.add(script)
+    s.commit()
+    s.add(SqlScriptVersion(script_id=script.id, version=1, content=json.dumps(
+        {"sql": 'SELECT region, amount FROM "Vendite"', "engine": None, "connection_id": None, "output": None})))
+    s.commit()
+    report = _report(world)
+    row = s.exec(select(ReportVersion).where(ReportVersion.report_id == report.id)).one()
+    content = json.loads(row.content)
+    content["datasets"].append({"name": "top", "source": {"kind": "sql_script", "script_id": script.id}})
+    row.content = json.dumps(content)
+    s.add(row)
+    s.commit()
+    group = s.get(FlowGroup, _create(world, world["admin"], _with_report(world, report.id)).id)
+    group.run_schedule, group.run_scheduled_by = "0 7 * * *", world["admin"].id
+    s.add(group)
+    s.commit()
+    editor = make_user(s, email="editor@x.local")
+    for cap in (Capability.VIEW, Capability.EDIT):
+        make_permission(s, user_id=editor.id, project_id=world["p"].id, capability=cap)
+    update_sql_script(script.id, script_routes.SqlScriptUpdate(content={"sql": 'SELECT * FROM "Regioni"'}),
+                      request=None, user=editor, session=s)
+    s.refresh(group)
+    assert (group.run_schedule, group.run_scheduled_by) == (None, None)
+    (_, detail, target), = _audits(db_engine, "flow_group.schedule")
+    assert target == group.id and "Top" in detail["reason"] and "Monthly sales" in detail["reason"]
+
+
+async def test_a_change_of_a_saved_view_a_report_reads_stops_the_schedules_of_others(world, db_engine):
+    """The same for a saved view a report reads: B removes its filter, A's email would carry
+    every row with A's rights — A's schedule is switched off. A change the report does not
+    read (the Viewer's chart) keeps it."""
+    from app.models import SavedView
+    from app.routes.saved_views import update_saved_view
+    from app.schemas.models import SavedViewUpdate
+
+    s = world["session"]
+    spec = {"filters": [{"column": "region", "operator": "eq", "value": "North"}], "chart": {"type": "bar"}}
+    view = SavedView(name="North only", project_id=world["p"].id, datasource_id=world["sales"].id, spec=json.dumps(spec))
+    s.add(view)
+    s.commit()
+    report = _report(world)
+    row = s.exec(select(ReportVersion).where(ReportVersion.report_id == report.id)).one()
+    content = json.loads(row.content)
+    content["datasets"].append({"name": "north", "source": {"kind": "view", "view_id": view.id}})
+    row.content = json.dumps(content)
+    s.add(row)
+    s.commit()
+    group = s.get(FlowGroup, _create(world, world["admin"], _with_report(world, report.id)).id)
+    group.run_schedule, group.run_scheduled_by = "0 7 * * *", world["admin"].id
+    s.add(group)
+    s.commit()
+    editor = make_user(s, email="editor@x.local")
+    for cap in (Capability.VIEW, Capability.EDIT):
+        make_permission(s, user_id=editor.id, project_id=world["p"].id, capability=cap)
+    update_saved_view(view.id, SavedViewUpdate(spec=json.dumps({**spec, "chart": {"type": "line"}})), request=None,
+                      user=editor, session=s)
+    s.refresh(group)
+    assert group.run_schedule == "0 7 * * *"
+    update_saved_view(view.id, SavedViewUpdate(spec=json.dumps({**spec, "filters": []})), request=None,
+                      user=editor, session=s)
+    s.refresh(group)
+    assert (group.run_schedule, group.run_scheduled_by) == (None, None)
+    (_, detail, target), = _audits(db_engine, "flow_group.schedule")
+    assert target == group.id and "North only" in detail["reason"] and "Monthly sales" in detail["reason"]

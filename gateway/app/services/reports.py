@@ -37,6 +37,7 @@ from dataclasses import dataclass, field
 from datetime import date
 from typing import Any, Mapping, Optional
 
+import httpx
 from fastapi import HTTPException, Request
 from sqlalchemy import and_
 from sqlmodel import Session, select
@@ -106,6 +107,32 @@ def widens(before: dict, after: dict) -> list[str]:
     return reasons
 
 
+def new_defaults(before: dict, after: dict) -> set[str]:
+    """The parameters whose default a change replaced: a Pushmail cell that gives them no
+    value reads with the new one (`{today-3650}` instead of `{today-30}`)."""
+    def defaults(content: dict) -> dict:
+        return {p.get("name"): p.get("default") for p in content.get("parameters") or [] if isinstance(p, dict)}
+
+    b, a = defaults(before), defaults(after)
+    return {n for n in a if n in b and a[n] != b[n]}
+
+
+def given_by(group: Any, report_id: int) -> set[str]:
+    """The parameters every Pushmail cell of the group that sends the report gives a value."""
+    from app.services.flow_groups import definition_of
+
+    given: Optional[set[str]] = None
+    for row in definition_of(group).steps:
+        for c in row:
+            if c is None or c.kind != "pushmail" or c.pushmail is None:
+                continue
+            for r in c.pushmail.reports:
+                if r.reportId == report_id:
+                    names = {k for k, v in r.params.items() if v not in (None, "", [])}
+                    given = names if given is None else given & names
+    return given or set()
+
+
 def groups_using(session: Session, report_id: int) -> list:
     """The flow groups with a Pushmail cell that sends the report."""
     from app.models import FlowGroup
@@ -117,11 +144,47 @@ def groups_using(session: Session, report_id: int) -> list:
                    for row in definition_of(g).steps for c in row)]
 
 
+def groups_reading(session: Session, kind: str, object_id: int) -> list[tuple[Report, Any]]:
+    """The flow groups that send a report one of whose datasets (its current version) reads
+    the SQL script (`kind` sql_script) or the saved view (`view`), with that report:
+    whoever changes the script or the view changes what the report reads."""
+    key = {"sql_script": "script_id", "view": "view_id"}[kind]
+    rows = session.exec(select(Report, ReportVersion).join(ReportVersion, and_(
+        Report.id == ReportVersion.report_id, Report.current_version == ReportVersion.version,
+    )).where(ReportVersion.content.contains(f'"{kind}"'))).all()  # type: ignore[union-attr]
+    out = []
+    for report, row in rows:
+        if any(isinstance(d, dict) and (d.get("source") or {}).get("kind") == kind
+               and (d.get("source") or {}).get(key) == object_id for d in _parsed(row).get("datasets") or []):
+            out.extend((report, group) for group in groups_using(session, report.id))
+    return out
+
+
+def turn_off_groups(session: Session, user: User, affected: list[tuple[Any, str]]) -> list[tuple]:
+    """The schedules of these flow groups (each with the reason) set by someone other than
+    `user`, switched off: (id, name, the audit's detail) of each, to record once committed."""
+    off = []
+    for group, reason in affected:
+        if group.run_schedule and group.run_scheduled_by not in (None, user.id):
+            detail = {"turned_off": True, "author": group.run_scheduled_by, "reason": reason}
+            group.run_schedule = group.run_scheduled_by = group.next_run_at = None
+            session.add(group)
+            off.append((group.id, group.name, detail))
+    return off
+
+
+def record_groups_off(session: Session, user: User, off: list[tuple], request: Optional[Request]) -> None:
+    for group_id, name, detail in off:
+        audit.record_audit(session, actor=user, action=audit.FLOW_GROUP_SCHEDULE, target_type="flow_group",
+                           target_id=group_id, target_label=name, detail=detail, request=request)
+
+
 # ── versions ─────────────────────────────────────────────────────────────────
 def version_row(session: Session, report: Report, version: Optional[int] = None) -> Optional[ReportVersion]:
+    """A version of the report (None: the current one); None when it has no such version."""
     return session.exec(select(ReportVersion).where(
         ReportVersion.report_id == report.id,
-        ReportVersion.version == (version or report.current_version))).first()
+        ReportVersion.version == (report.current_version if version is None else version))).first()
 
 
 def _parsed(row: Optional[ReportVersion]) -> dict:
@@ -256,6 +319,8 @@ def check_references(session: Session, user: User, definition: dict, current: Op
                 # script's when it is chosen (it is checked again at every render)
                 sql, conn, engine = _sql_of(session, user if changed else None, src)
                 used |= report_params.check_sql(sql, _dialect(conn, engine), params)[0]
+                if changed and conn is None:  # the datasources it names, as a render finds them
+                    _resolve_catalog(session, user, sql, engine, params)
             elif changed and src["kind"] in ("datasource", "view"):
                 if src["kind"] == "datasource":
                     target = _datasource(session, user, src["datasource_id"])
@@ -274,42 +339,104 @@ def check_references(session: Session, user: User, definition: dict, current: Op
                           "it cannot use that parameter", where)
 
 
-async def check_with_engine(definition: dict) -> None:
+def known_columns(session: Session, user: User, definition: dict) -> dict[str, dict[str, str]]:
+    """The columns of the datasets that read a datasource as it is, which the gateway knows
+    (those this person may read): what the engine checks the expressions against, instead
+    of the `fields` the editor last saw — a column renamed or dropped since is found at
+    the save. A view, a SQL, a script: the editor's `fields`."""
+    out: dict[str, dict[str, str]] = {}
+    for ds in definition.get("datasets") or []:
+        src = ds.get("source") or {}
+        if src.get("kind") != "datasource":
+            continue
+        target = session.get(Datasource, src.get("datasource_id"))
+        if target is None or not _readable(session, user, target.project_id):
+            continue
+        try:
+            cols = json.loads(target.columns or "[]")
+        except ValueError:
+            continue
+        found = {str(c["name"]): _field_type(str(c.get("dtype") or ""))
+                 for c in cols if isinstance(c, dict) and c.get("name")}
+        if found:
+            out[ds["name"]] = found
+    return out
+
+
+async def engine_problems(definition: Any, columns: Optional[dict] = None) -> list[dict]:
     """The expressions, fields and formats, checked by the engine (POST /reports/check):
-    422 with every error the engine found, by item and position. An engine that cannot
-    answer — not reachable, or one without reports yet — does not stop the save: the
-    render checks them all the same."""
+    every problem it found, as it says them ({item, field, pos, length, message}). An
+    engine that cannot answer — not reachable, or one without reports yet — finds none:
+    the render checks them all the same."""
+    body: dict[str, Any] = {"definition": report_definition.without_images(definition)}
+    if columns:
+        body["columns"] = columns
     try:
-        resp = await get_engine_client().post("/reports/check", timeout=CHECK,
-                                              json={"definition": report_definition.without_images(definition)})
+        resp = await get_engine_client().post("/reports/check", timeout=CHECK, json=body)
     except Exception as e:  # noqa: BLE001 — the render will check
-        logger.warning("report not checked by the engine at save: %s", type(e).__name__)
-        return
+        logger.warning("report not checked by the engine: %s", type(e).__name__)
+        return []
     if resp.status_code != 200:
         if resp.status_code not in (404, 405):
-            logger.warning("report not checked by the engine at save: engine answered %s", resp.status_code)
-        return
+            logger.warning("report not checked by the engine: engine answered %s", resp.status_code)
+        return []
     try:
         answer = resp.json()
     except ValueError:
-        return
-    errors = [e for e in answer.get("errors") or answer.get("problems") or [] if isinstance(e, dict)][:100]
-    if errors:
-        first = errors[0]
-        raise HTTPException(status_code=422, detail={
-            "message": str(first.get("message") or "The report has an error")[:2000],
-            "where": first.get("where") or first.get("field") or "", "item": first.get("item"), "errors": errors})
+        return []
+    found = []
+    for e in [e for e in answer.get("problems") or answer.get("errors") or [] if isinstance(e, dict)][:100]:
+        pos = e.get("pos", e.get("position"))
+        found.append({"item": e.get("item") if isinstance(e.get("item"), str) else None,
+                      "field": report_definition.by_name(str(e.get("field") or e.get("where") or ""), definition),
+                      "pos": pos if isinstance(pos, int) and not isinstance(pos, bool) else None,
+                      "length": e.get("length") if isinstance(e.get("length"), int) else 0,
+                      "message": sentence(str(e.get("message") or "The report has an error"))[:2000]})
+    return found
+
+
+@dataclass
+class Review:
+    """A definition looked over: as it will be saved (None when it has problems), and its
+    problems as the engine says them, the gateway's first; `where` is the first one's
+    place as a refused save names it."""
+    definition: Optional[dict]
+    problems: list[dict]
+    where: Optional[str] = None
+
+    def refusal(self) -> HTTPException:
+        return report_definition.refusal(self.problems, self.where)
+
+
+async def review(session: Session, user: User, definition: Any, current: Optional[dict] = None) -> Review:
+    """Every problem of a definition: the gateway's (its structure, then what it points to,
+    which must be readable by `user`; the first one only, each check stops there) and the
+    engine's (its expressions against the datasets' fields, all of them), a place said
+    once. What a save refuses, what the editor's preview refuses, what the editor shows
+    while one types (POST /reports/check)."""
+    found: list[dict] = []
+    checked, where = None, None
+    try:
+        checked = report_definition.check(definition)
+        check_references(session, user, checked, current)
+    except Problem as p:
+        found.append(p.as_dict(definition))
+        checked, where = None, p.where
+    columns = known_columns(session, user, checked) if checked is not None else None
+    seen = {(f["item"], f["field"]) for f in found}
+    for e in await engine_problems(definition, columns):
+        if (e["item"], e["field"]) not in seen:
+            seen.add((e["item"], e["field"]))
+            found.append(e)
+    return Review(checked if not found else None, found, where)
 
 
 async def checked(session: Session, user: User, definition: Any, current: Optional[dict] = None) -> dict:
-    """The definition to save, or a 422 saying what is wrong and where."""
-    try:
-        definition = report_definition.check(definition)
-        check_references(session, user, definition, current)
-    except Problem as p:
-        raise p.http() from None
-    await check_with_engine(definition)
-    return definition
+    """The definition to save, or a 422 saying every problem and where."""
+    looked = await review(session, user, definition, current)
+    if looked.problems:
+        raise looked.refusal()
+    return looked.definition  # type: ignore[return-value]
 
 
 # ── resolving the datasets with the reader's rights ──────────────────────────
@@ -321,6 +448,12 @@ def _text(e: HTTPException) -> str:
 def _within(message: str) -> str:
     """A message put after «The dataset «x»: »: its first letter in lower case."""
     return message[:1].lower() + message[1:] if message[1:2].islower() else message
+
+
+def sentence(message: str) -> str:
+    """A message of the engine's as the gateway says its own, alone: its first letter in
+    capitals («there is no field…» → «There is no field…»)."""
+    return message[:1].upper() + message[1:] if message[:1].islower() else message
 
 
 def _in_dataset(name: str, e: HTTPException) -> HTTPException:
@@ -479,6 +612,17 @@ def _finish(session: Session, user: User, plan: _Plan, params: dict, values: Map
     return {**chain, "engine": plan.engine}
 
 
+def _resolve_catalog(session: Session, user: User, sql: str, engine: Optional[str], params: dict) -> None:
+    """A SQL on the catalog read as a render reads it, without asking the engine: every
+    parameter a value of its type, every placeholder a date. 422 for a datasource that
+    `user` cannot read (or that does not exist), or a SQL that cannot be read."""
+    dialect = _dialect(None, engine)
+    bodies = report_params.check_sql(sql, dialect, params)[1]
+    values = {name: _neutral(p) for name, p in params.items()}
+    sql_scripts.resolve(session, user, report_params.fill(sql, dialect, params, values,
+                                                          {b: "2000-01-01" for b in bodies}), engine)
+
+
 def reading_problem(session: Session, user: User, definition: dict) -> Optional[str]:
     """Why `user` could not read every dataset of the definition, or None: the checks of a
     render (`resolve_datasets`) without asking the engine anything — for a flow group's
@@ -486,17 +630,13 @@ def reading_problem(session: Session, user: User, definition: dict) -> Optional[
     a value of their type and the placeholders a date: only who may read what counts
     here, the render checks the rest with the real values."""
     params = {p["name"]: p for p in definition.get("parameters") or []}
-    values = {name: _neutral(p) for name, p in params.items()}
     for ds in definition.get("datasets") or []:
         src = ds["source"]
         try:
             if src["kind"] in ("sql", "sql_script"):
                 sql, conn, engine = _sql_of(session, user, src)
                 if conn is None:
-                    dialect = _dialect(None, engine)
-                    bodies = report_params.check_sql(sql, dialect, params)[1]
-                    filled = report_params.fill(sql, dialect, params, values, {b: "2000-01-01" for b in bodies})
-                    sql_scripts.resolve(session, user, filled, engine)
+                    _resolve_catalog(session, user, sql, engine, params)
             elif src["kind"] == "datasource":
                 _datasource(session, user, src["datasource_id"])
             else:
@@ -522,7 +662,8 @@ async def resolve_datasets(session: Session, user: User, definition: dict, value
         except HTTPException as e:
             raise _in_dataset(ds["name"], e) from None
     bodies = {b for p in plans for b in p.placeholders}
-    resolved = await report_params.resolve_placeholders(bodies, definition.get("timezone") or "UTC") if bodies else {}
+    resolved = await report_params.resolve_placeholders(bodies, definition.get("timezone") or "UTC",
+                                                        report_params.lang_of(definition)) if bodies else {}
     texts = {}
     for body, (text, error) in resolved.items():
         if error:
@@ -554,7 +695,7 @@ async def dataset_choices(definition: dict, datasets: Mapping[str, dict], values
     if resp.status_code in (404, 405):
         return None
     if resp.status_code >= 400:
-        raise sql_scripts._engine_failure(resp, lambda d: f"The choices of «{param['name']}»: {d}")
+        raise sql_scripts._engine_failure(resp, lambda d: f"The choices of «{param['name']}»: {_within(d)}")
     answer = resp.json()
     return {"choices": [c for c in answer.get("choices") or [] if isinstance(c, dict)][:MAX_CHOICES],
             "truncated": bool(answer.get("truncated"))}
@@ -670,14 +811,19 @@ async def render(session: Session, user: User, report: Optional[Report], definit
         resp = await get_engine_client().post("/reports/render", timeout=60, json={
             "definition": definition, "datasets": datasets,
             "params": {k: report_params.to_json(v) for k, v in values.items()}, "format": fmt, "filename": name,
-            "owner": export_owner(user), "locale": definition.get("locale") or "en", "state": state or {}})
+            "owner": export_owner(user), "locale": definition.get("locale") or "en", "state": state or {},
+            # REPORT() and the PDF's title: the name as written, not as a file may hold it
+            **({"title": report.name} if report is not None else {})})
         if resp.status_code >= 400:
-            raise sql_scripts._engine_failure(resp, lambda d: d)
+            raise sql_scripts._engine_failure(resp, sentence)
         answer = resp.json()
         outcome = "success"
         return Started(task_id=answer["task_id"], filename=answer.get("filename") or name, detail=detail)
     except HTTPException as e:
         detail["error"] = _text(e)[:500]
+        raise
+    except httpx.TransportError:  # answered 503 by the gateway's handler (main.py)
+        detail["error"] = "The engine is not answering"
         raise
     finally:
         if outcome == "failure" or audit_success:

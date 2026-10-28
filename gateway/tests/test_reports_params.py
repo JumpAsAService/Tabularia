@@ -213,3 +213,65 @@ async def test_a_default_placeholder_the_engine_cannot_resolve(fake_engine):
     with pytest.raises(HTTPException) as e:
         await rp.values_for(DEFINITION, {"region": ["North"]})
     assert _bad(e)[:2] == (400, "since")
+
+
+# ── the quotes each database has of its own ───────────────────────────────────
+@pytest.mark.parametrize("key, sql", [
+    # Oracle's q-quotes: the apostrophe inside does not close them
+    ("oracle", "SELECT * FROM t WHERE note = q'[it's {region}]'"),
+    ("oracle", "SELECT * FROM t WHERE note = Q'{it's {region}}'"),
+    ("oracle", "SELECT * FROM t WHERE note = nq'<it's {region}>'"),
+    ("oracle", "SELECT * FROM t WHERE note = q'!it's {region}!'"),
+    # ClickHouse's heredocs, on a connection and on the catalog (chDB)
+    ("clickhouse", "SELECT * FROM t WHERE note = $$ {region} it's $$"),
+    ("chdb", "SELECT * FROM t WHERE note = $doc$ {region} it's $doc$"),
+    # BigQuery's triple quotes
+    ("bigquery", "SELECT * FROM t WHERE note = '''it's {region}'''"),
+    ("bigquery", 'SELECT * FROM t WHERE note = """say "hi" {region}"""'),
+])
+def test_a_parameter_inside_a_database_s_own_quotes_is_refused(key, sql):
+    # read as plain quotes, the parameter would seem outside them and its value would land
+    # inside the database's string, where a value ending the quotes could follow
+    assert _refused(rp.check_sql, sql, rp.dialect_of(key), PARAMS) == \
+        "Write {region} without quotes: Tabularia quotes it"
+
+
+@pytest.mark.parametrize("key, sql, filled", [
+    ("oracle", "SELECT * FROM t WHERE note = q'[it's]' AND r = {region}",
+     "SELECT * FROM t WHERE note = q'[it's]' AND r = 'N'"),
+    ("oracle", "SELECT q'(a)' AS x, '{today}' AS d FROM t WHERE r = {region}",
+     "SELECT q'(a)' AS x, '2026-10-28' AS d FROM t WHERE r = 'N'"),
+    ("clickhouse", "SELECT $$it's$$ AS x FROM t WHERE r = {region}", "SELECT $$it's$$ AS x FROM t WHERE r = 'N'"),
+    ("bigquery", "SELECT '''it's''' AS x FROM t WHERE r = {region}", "SELECT '''it's''' AS x FROM t WHERE r = 'N'"),
+])
+def test_a_database_s_own_quotes_hide_what_they_hold(key, sql, filled):
+    assert _fill(sql, key, region="N") == filled
+    if key != "oracle":  # sqlglot does not read Oracle's q-quotes
+        tree = sqlglot.parse_one(filled, read=rp.dialect_of(key).sqlglot)
+        assert tree.find(exp.EQ).expression.this == "N"
+
+
+async def test_a_value_given_twice_counts_once(fake_engine):
+    fake_engine.placeholder_values = {"{today-30}": "2026-09-28"}
+    values = await rp.values_for(DEFINITION, {"region": ["North"], "regions": ["a", "b", "a", "b"]})
+    assert values["regions"] == ["a", "b"]
+    many = {**DEFINITION, "parameters": [{"name": "n", "type": "number", "multi": True}]}
+    assert (await rp.values_for(many, {"n": ["1", "1.0", "2"]}))["n"] == [1, 2]
+
+
+async def test_a_plus_in_a_query_string_is_a_space(fake_engine):
+    # «?since={today+7}» typed in an address: the + arrives as a space
+    with pytest.raises(HTTPException) as e:
+        await rp.values_for(DEFINITION, {"region": ["North"], "since": ["{today 7}"]})
+    assert _bad(e)[:2] == (400, "since") and "%2B" in _bad(e)[2]
+
+
+async def test_the_names_of_months_and_days_are_in_the_report_s_language(fake_engine):
+    # {today:MMMM} in a default, a value or a dataset's SQL: «ottobre» in an Italian report
+    fake_engine.placeholder_values = {"{today-30}": "2026-09-28"}
+    await rp.values_for({**DEFINITION, "locale": "it"}, {"region": ["North"]})
+    assert fake_engine.placeholder_previews[-1]["lang"] == "it"
+    await rp.resolve_placeholders({"today:MMMM"}, "Europe/Rome", "de")
+    assert fake_engine.placeholder_previews[-1]["lang"] == "de"
+    await rp.values_for({**DEFINITION, "locale": "xx"}, {"region": ["North"]})
+    assert fake_engine.placeholder_previews[-1]["lang"] == "en"

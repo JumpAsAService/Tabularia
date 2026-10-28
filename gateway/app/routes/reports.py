@@ -6,8 +6,8 @@ Permissions:
 - seeing one (lists, search, opening it, its versions, its parameters, its fields) and
   rendering it: VIEW on its folder; whoever lacks it gets 404, as if it did not exist;
 - creating, changing, moving, renaming, duplicating, deleting, restoring a version, and
-  the editor's preview of a definition not saved yet: EDIT on the folder (both folders
-  for a move); a definition saved must point only to what its author may read;
+  the editor's preview and check of a definition not saved yet: EDIT on the folder (both
+  folders for a move); a definition saved must point only to what its author may read;
 - what a render reads is checked dataset by dataset with the rights of whoever asks
   for it (services/reports.py): a dataset they may not read stops it, with its name;
 - the API (GET /reports/{id}/render) answers to an API token of either level, with its
@@ -26,6 +26,7 @@ from typing import Any, Literal, Optional
 
 from fastapi import APIRouter, Depends, HTTPException, Query, Request, status
 from pydantic import BaseModel, Field
+from sqlalchemy.exc import IntegrityError
 from sqlmodel import Session, select
 
 from app.core.config import get_settings
@@ -73,6 +74,9 @@ class ReportUpdate(BaseModel):
     description: Optional[str] = Field(default=None, max_length=2000)
     project_id: Optional[int] = None  # a move
     content: Optional[dict[str, Any]] = None
+    # the version the new content was written on: refused (409) when another became the
+    # current one since, which the new content would undo without anyone seeing it
+    base_version: Optional[int] = None
 
 
 class VersionOut(BaseModel):
@@ -96,6 +100,30 @@ class PreviewRequest(RenderRequest):
     definition: dict[str, Any]
     report_id: Optional[int] = None
     project_id: Optional[int] = None
+
+
+class CheckRequest(BaseModel):
+    """A definition being edited, of a saved report (`report_id`) or of a new one in a
+    folder (`project_id`)."""
+    definition: dict[str, Any]
+    report_id: Optional[int] = None
+    project_id: Optional[int] = None
+
+
+class ProblemOut(BaseModel):
+    """A problem as the engine says it, and a refused save lists them: the item (its id,
+    none for the report, a dataset or a parameter), the property (`columns[0].value`,
+    `datasets[orders].source.sql`), the position in an expression (0 = its first
+    character) and how many characters."""
+    item: Optional[str] = None
+    field: str = ""
+    pos: Optional[int] = None
+    length: int = 0
+    message: str
+
+
+class CheckOut(BaseModel):
+    problems: list[ProblemOut]
 
 
 class RenderStarted(BaseModel):
@@ -143,8 +171,35 @@ def _name(session: Session, project_id: int, name: str, exclude_id: Optional[int
         raise HTTPException(status_code=422, detail="The report needs a name")
     clash = session.exec(select(Report.id).where(Report.project_id == project_id, Report.name == name)).first()
     if clash is not None and clash != exclude_id:
-        raise HTTPException(status_code=409, detail=f"There is already a report '{name}' in this folder")
+        raise _taken(name)
     return name
+
+
+def _taken(name: str) -> HTTPException:
+    return HTTPException(status_code=409, detail=f"There is already a report '{name}' in this folder")
+
+
+def _commit_named(session: Session, name: str) -> None:
+    """Two saves at the same moment may give a folder the same name twice: the folder's
+    unique name refuses the second one, which gets the 409 of a name taken (the Explore
+    then tries the next «New report (n)») instead of a server error."""
+    try:
+        session.commit()
+    except IntegrityError:
+        session.rollback()
+        raise _taken(name) from None
+
+
+def _being_edited(session: Session, user: User, report_id: Optional[int],
+                  project_id: Optional[int]) -> Optional[Report]:
+    """A definition being edited is of a saved report, or of a new one in a folder: EDIT on
+    that folder. The saved report, or None."""
+    report = reports.get_visible(session, user, report_id) if report_id is not None else None
+    folder = report.project_id if report is not None else project_id
+    if folder is None or session.get(Project, folder) is None:
+        raise HTTPException(status_code=404, detail="Folder not found")
+    ensure_can(session, user, folder, Capability.EDIT)
+    return report
 
 
 def _out(session: Session, user: User, r: Report, content: Optional[dict] = None) -> ReportOut:
@@ -219,35 +274,34 @@ async def create_report(project_id: int, body: ReportCreate, request: Request,
     report = Report(name=name, description=body.description.strip(), project_id=project_id, owner_id=user.id,
                     current_version=0)
     session.add(report)
-    session.flush()
+    try:
+        session.flush()
+    except IntegrityError:
+        session.rollback()
+        raise _taken(name) from None
     reports.add_version(session, report, content, "created", user)
-    session.commit()
+    _commit_named(session, name)
     session.refresh(report)
     _record(session, user, audit.REPORT_CREATE, report, request, {"project_id": project_id})
     return _detail(session, user, report)
 
 
-def _groups_off(session: Session, user: User, report: Report, reasons: list[str]) -> list[tuple]:
+def _groups_off(session: Session, user: User, report: Report, before: dict, after: dict) -> list[tuple]:
     """The flow groups that send the report, scheduled by someone else: a change that makes
     the report read more switches their schedules off, as for SQL scripts — a schedule
-    carries its author's rights, and those are not spent on someone else's choice."""
-    if not reasons:
+    carries its author's rights, and those are not spent on someone else's choice. More
+    is a dataset that reads something else, or a new default of a parameter the group's
+    cell gives no value."""
+    reasons, defaults = reports.widens(before, after), reports.new_defaults(before, after)
+    if not reasons and not defaults:
         return []
-    off = []
+    affected = []
     for group in reports.groups_using(session, report.id):
-        if group.run_schedule and group.run_scheduled_by not in (None, user.id):
-            detail = {"turned_off": True, "author": group.run_scheduled_by,
-                      "reason": f"the report '{report.name}' it sends changed: {'; '.join(reasons)}"}
-            group.run_schedule = group.run_scheduled_by = group.next_run_at = None
-            session.add(group)
-            off.append((group.id, group.name, detail))
-    return off
-
-
-def _record_off(session: Session, user: User, groups: list[tuple], request: Optional[Request]) -> None:
-    for group_id, name, detail in groups:
-        audit.record_audit(session, actor=user, action=audit.FLOW_GROUP_SCHEDULE, target_type="flow_group",
-                           target_id=group_id, target_label=name, detail=detail, request=request)
+        mine = reasons + [f"the default of «{name}» changed" for name in
+                          sorted(defaults - reports.given_by(group, report.id))]
+        if mine:
+            affected.append((group, f"the report '{report.name}' it sends changed: {'; '.join(mine)}"))
+    return reports.turn_off_groups(session, user, affected)
 
 
 @router.patch("/reports/{report_id}", response_model=ReportDetail)
@@ -272,11 +326,18 @@ async def update_report(report_id: int, body: ReportUpdate, request: Request,
     changes: dict[str, Any] = {}
     groups_off: list[tuple] = []
     if body.content is not None:
+        content = await reports.checked(session, user, body.content, reports.content_of(session, report))
+        # read again and held until the commit: a save that landed while this one was
+        # checked is the current version `base_version` is compared with
+        session.refresh(report, with_for_update=True)
         current = reports.content_of(session, report)
-        content = await reports.checked(session, user, body.content, current)
         if content != current:
+            if body.base_version is not None and body.base_version != report.current_version:
+                raise HTTPException(status_code=409, detail=(
+                    f"«{report.name}» changed since you opened it (now version {report.current_version}): "
+                    "reload it, then make your change again"))
             changes["version"] = reports.add_version(session, report, content, "edited", user).version
-            groups_off = _groups_off(session, user, report, reports.widens(current, content))
+            groups_off = _groups_off(session, user, report, current, content)
     if body.description is not None and body.description.strip() != report.description:
         report.description = body.description.strip()
         changes["description"] = True
@@ -287,11 +348,11 @@ async def update_report(report_id: int, body: ReportUpdate, request: Request,
     report.name, report.project_id = name, target
     report.updated_at = datetime.now(timezone.utc)
     session.add(report)
-    session.commit()
+    _commit_named(session, name)
     session.refresh(report)
     for action, detail in actions:
         _record(session, user, action, report, request, detail)
-    _record_off(session, user, groups_off, request)
+    reports.record_groups_off(session, user, groups_off, request)
     return _detail(session, user, report)
 
 
@@ -368,13 +429,13 @@ async def restore_version(report_id: int, version: int, request: Request, user: 
     current = reports.content_of(session, report)
     content = await reports.checked(session, user, reports.content_of(session, report, version), current)
     row = reports.add_version(session, report, content, f"restored from v{version}", user)
-    groups_off = _groups_off(session, user, report, reports.widens(current, content))
+    groups_off = _groups_off(session, user, report, current, content)
     report.updated_at = datetime.now(timezone.utc)
     session.add(report)
     session.commit()
     session.refresh(report)
     _record(session, user, audit.REPORT_RESTORE, report, request, {"from": version, "version": row.version})
-    _record_off(session, user, groups_off, request)
+    reports.record_groups_off(session, user, groups_off, request)
     return _detail(session, user, report)
 
 
@@ -394,25 +455,43 @@ async def render_report(report_id: int, body: RenderRequest, request: Request,
 async def preview_report(body: PreviewRequest, request: Request, user: User = Depends(get_current_user),
                          session: Session = Depends(get_session)):
     """The editor's preview of a definition not saved yet: EDIT on the report's folder,
-    or on the folder a new one goes in."""
-    report = reports.get_visible(session, user, body.report_id) if body.report_id is not None else None
-    project_id = report.project_id if report is not None else body.project_id
-    if project_id is None or session.get(Project, project_id) is None:
-        raise HTTPException(status_code=404, detail="Folder not found")
-    ensure_can(session, user, project_id, Capability.EDIT)
-    try:
-        definition = report_definition.check(body.definition)
-    except Problem as p:
-        raise p.http() from None
-    started = await reports.render(session, user, report, definition, body.format, reports.given_params(body.params),
-                                   state=body.state, origin="editor", request=request)
+    or on the folder a new one goes in. Checked first, as a save is: problems are a 422
+    that lists them by item and property, as a refused save does; what only reading the
+    data finds (a dataset too large, one that cannot be read) is said as a render says it."""
+    report = _being_edited(session, user, body.report_id, body.project_id)
+    looked = await reports.review(session, user, body.definition)
+    if looked.problems:
+        raise looked.refusal()
+    started = await reports.render(session, user, report, looked.definition, body.format,
+                                   reports.given_params(body.params), state=body.state, origin="editor",
+                                   request=request)
     return RenderStarted(task_id=started.task_id, filename=started.filename)
 
 
-async def _wait_for_file(task_id: str, owner: str) -> None:
-    """Until the engine has written the file: 504 past REPORTS__API_WAIT_SECONDS (the
-    render is stopped), the engine's reason when it failed. Asked often at first, then
-    once a second."""
+@router.post("/reports/check", response_model=CheckOut)
+async def check_report(body: CheckRequest, user: User = Depends(get_current_user),
+                       session: Session = Depends(get_session)):
+    """The problems of a definition being edited, as a save would say them, without saving
+    it: the gateway's and the engine's (the expressions against the datasets' fields). The
+    editor asks while one types. EDIT on the report's folder, or on the folder a new one
+    goes in."""
+    report = _being_edited(session, user, body.report_id, body.project_id)
+    current = reports.content_of(session, report) if report is not None else None
+    return CheckOut(problems=(await reports.review(session, user, body.definition, current)).problems)
+
+
+async def _stop(task_id: str) -> None:
+    try:
+        await get_engine_client().delete(f"/tasks/{task_id}", timeout=CHECK)
+    except Exception:  # noqa: BLE001 — the hourly sweep removes what is left
+        pass
+
+
+async def _wait_for_file(task_id: str, owner: str, request: Optional[Request] = None) -> None:
+    """Until the engine has written the file: 504 past REPORTS__API_WAIT_SECONDS, the
+    engine's reason when it failed. A caller that stops waiting (its timeout, a script
+    stopped) stops the render too: a script that tries again does not pile renders up
+    on the export queue. Asked often at first, then once a second."""
     client = get_engine_client()
     deadline = time.monotonic() + get_settings().reports.api_wait_seconds
     delay = 0.25
@@ -425,12 +504,12 @@ async def _wait_for_file(task_id: str, owner: str) -> None:
         if state.get("status") == "failed":
             code = int(state.get("code") or 500)
             raise HTTPException(status_code=422 if code < 500 else 502,
-                                detail=str(state.get("detail") or "The render failed"))
+                                detail=reports.sentence(str(state.get("detail") or "The render failed")))
+        if request is not None and await request.is_disconnected():
+            await _stop(task_id)
+            raise HTTPException(status_code=499, detail="The caller stopped waiting: the render was stopped")
         if time.monotonic() + delay > deadline:
-            try:
-                await client.delete(f"/tasks/{task_id}", timeout=CHECK)
-            except Exception:  # noqa: BLE001 — the hourly sweep removes what is left
-                pass
+            await _stop(task_id)
             seconds = get_settings().reports.api_wait_seconds
             raise HTTPException(status_code=504, detail=f"The report was not ready within {seconds} s "
                                                         "(REPORTS__API_WAIT_SECONDS)")
@@ -454,7 +533,7 @@ async def render_report_file(report_id: int, request: Request,
     owner = export_owner(user)
     _release_db(session, user)  # nothing holds a database connection while the engine works
     try:
-        await _wait_for_file(started.task_id, owner)
+        await _wait_for_file(started.task_id, owner, request)
     except HTTPException as e:
         reports._audit_render(session, user, report, request, "failure", {**started.detail, "error": str(e.detail)[:500]})
         raise
@@ -477,18 +556,22 @@ async def report_parameters(report_id: int, request: Request, user: User = Depen
     for name in given:
         if name not in {p["name"] for p in params}:
             raise report_params.bad_value(name, "the report has no parameter by this name")
-    values: dict[str, Any] = {}
-    for p in params:
+    async def value_of(p: dict, one: dict) -> Any:
         try:
-            one = {p["name"]: given[p["name"]]} if p["name"] in given else {}
-            values[p["name"]] = (await report_params.values_for({**definition, "parameters": [p]}, one))[p["name"]]
+            return (await report_params.values_for({**definition, "parameters": [p]}, one))[p["name"]]
         except HTTPException:
-            values[p["name"]] = [] if p.get("multi") else None
+            return [] if p.get("multi") else None
+
+    # the values given steer the choices (one can follow another); the default shown is the
+    # report's own, whatever was given
+    values = {p["name"]: await value_of(p, {p["name"]: given[p["name"]]} if p["name"] in given else {})
+              for p in params}
+    defaults = {p["name"]: values[p["name"]] if p["name"] not in given else await value_of(p, {}) for p in params}
     out = []
     for p in params:
         item = ParameterOut(name=p["name"], label=p.get("label") or p["name"], type=p["type"],
                             multi=bool(p.get("multi")), required=bool(p.get("required")),
-                            default=report_params.to_json(values[p["name"]]))
+                            default=report_params.to_json(defaults[p["name"]]))
         choices = p.get("choices") or {}
         if "values" in choices:
             item.choices = [Choice(value=v, label=str(v)) for v in choices["values"]]
@@ -519,7 +602,7 @@ async def report_fields(report_id: int, body: FieldsRequest, user: User = Depend
         try:
             definition = report_definition.check_dataset(body.definition, body.dataset)
         except Problem as p:
-            raise p.http() from None
+            raise p.http(body.definition) from None
     else:
         definition = reports.content_of(session, report)
     found = await reports.fields(session, user, definition, body.dataset, f"u{user.id}:report:{report.id}:fields")

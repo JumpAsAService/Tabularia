@@ -34,10 +34,10 @@ Tokens start with `tab_`. They come in two kinds:
 Every token has:
 
 - **An access level.** *Read only* refuses every request that changes something
-  (any method other than GET/HEAD/OPTIONS) with `403`; the two POSTs that only
-  read, `POST /tasks/export` (with `POST /tasks/exports`) and `POST /tasks/preview`,
-  are allowed. *Read and
-  write* can do whatever its account can do. A token never adds permissions: it
+  (any method other than GET/HEAD/OPTIONS) with `403`; the POSTs that only read,
+  `POST /tasks/export` (with `POST /tasks/exports`), `POST /tasks/preview` and
+  `POST /reports/{id}/render`, are allowed. *Read and write* can do whatever its
+  account can do. A token never adds permissions: it
   is at most as powerful as its account.
 - **An expiry** of at most `AUTH__API_TOKEN_MAX_DAYS` days, one year by default.
 - **A secret that is shown once**, at creation. Tabularia keeps only its SHA-256
@@ -184,6 +184,7 @@ account that started an export can see it.
 | `404` | not found, or not visible to this account |
 | `409` | conflict: the flow is already running, the datasource is already refreshing |
 | `422` | the request is malformed: the body says which field |
+| `503` | the engine or the database is not answering: try again in a moment |
 
 Error bodies are JSON with a `detail` field. Its language follows the
 `Accept-Language` header where a translation exists.
@@ -206,15 +207,20 @@ GET /reports/{id}/render?format=pdf&region=North&since=2026-09-01
   A value is text, as typed in the report's form: a number with a dot for decimals
   (`1234.5`), a date as `yyyy-mm-dd`, `true` or `false`. A date may also be a
   [placeholder](placeholders.md), resolved in the report's time zone when it is rendered:
-  `since={start_of_month-1m}` is the first day of last month.
+  `since={start_of_month-1m}` is the first day of last month. Encode the values: in a
+  query string `+` is a space, so `{today+7}` is written `%7Btoday%2B7%7D` (`requests`'
+  `params` and curl's `--data-urlencode` do it for you). A value repeated for a parameter
+  that takes several counts once.
 - **The token**: *read only* is enough. The report reads with the rights of the token's
   account: it needs **VIEW** on the report's folder, and every dataset the report reads
   must be one that account may read (the datasources, the views, the SQL scripts, and
   **CONNECT** on a database connection).
-- **The answer** is the file, with its name in `Content-Disposition` (`Monthly sales.pdf`).
+- **The answer** is the file, with its name in `Content-Disposition` (`Monthly sales.pdf`;
+  a name with accents comes twice, as written and without them, so `curl -OJ` keeps it).
   The request stays open while a worker renders it, up to `REPORTS__API_WAIT_SECONDS`
-  (120 seconds by default); past that the render is stopped. Every download is in the
-  audit log (`report.render`, from `api`).
+  (120 seconds by default); past that the render is stopped, and so it is when the script
+  stops waiting first (its own timeout): a script that tries again does not pile renders
+  up. Every download is in the audit log (`report.render`, from `api`).
 
 The report's id is in its address (`/report?id=12`), and **Copy API link** in the
 report's toolbar gives the address with the values on screen. `GET /reports` lists the
@@ -273,8 +279,9 @@ curl -fG -H "Authorization: Bearer $TABULARIA_TOKEN" -o sales.xlsx \
 |---|---|
 | `400` | a value does not fit a parameter: `{"detail": {"message": "Parameter «since»: '2026-02-30' is not a date: write it as yyyy-mm-dd", "parameter": "since"}}`. The same for a required parameter without a value, a value outside its choices, a name the report does not have |
 | `404` | no report with that id, or one in a folder the account cannot see |
-| `422` | the report cannot be rendered: a dataset the account may not read, said with its name as one that does not exist (`The dataset «orders»: there is no datasource «Salaries» you can read`), a dataset over the row limit (`REPORTS__MAX_ROWS`, 10,000 by default: aggregate in SQL, or filter), too many pages |
+| `422` | the report cannot be rendered: a dataset the account may not read, said with its name as one that does not exist (`The dataset «orders»: there is no datasource «Salaries» you can read`), a dataset over the row limit (`REPORTS__MAX_ROWS`, 1,000,000 by default: aggregate in SQL, or filter), too many pages |
 | `502` | the engine could not render it (the chart service down, for a report with charts) |
+| `503` | the engine is not answering (restarting, its node drained): try again in a moment |
 | `504` | not ready within `REPORTS__API_WAIT_SECONDS`: the render was stopped |
 
 To send a report by email instead, on a schedule and right after the data is refreshed,

@@ -249,7 +249,7 @@ async def render_report(body: ReportIn, request: Request, caller: Caller = Depen
     owner = export_owner(user)
     _release_db(session, user)  # nothing holds a database connection while the engine works
     try:
-        await _wait_for_file(started.task_id, owner)
+        await _wait_for_file(started.task_id, owner, request)
     except HTTPException as e:
         reports._audit_render(session, user, report, request, "failure", {**started.detail, "error": str(e.detail)[:500]})
         raise

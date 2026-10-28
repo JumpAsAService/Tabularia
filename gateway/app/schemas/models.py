@@ -978,6 +978,9 @@ class PlaceholderPreviewQuery(BaseModel):
     last_refresh_initial: str = Field(default="", max_length=100)
     targets: dict[str, Literal["file", "path", "text"]] = Field(default_factory=dict)
     flow: str = Field(default="", max_length=500)  # an Output: the flow's name, for {flow}
+    # a flow group's Pushmail cell: the names of months and days ({today:MMMM}) in the
+    # language its email is written in, that of whoever runs the group; else English
+    pushmail: bool = False
 
     @field_validator("templates")
     @classmethod

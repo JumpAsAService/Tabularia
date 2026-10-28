@@ -163,9 +163,10 @@ def groups_using(session: Session, script_id: int) -> list:
 
 # ── versions ─────────────────────────────────────────────────────────────────
 def version_row(session: Session, script: SqlScript, version: Optional[int] = None) -> Optional[SqlScriptVersion]:
+    """A version of the script; None = the current one (0 is no version: `or` read it as None)."""
     return session.exec(select(SqlScriptVersion).where(
         SqlScriptVersion.script_id == script.id,
-        SqlScriptVersion.version == (version or script.current_version))).first()
+        SqlScriptVersion.version == (script.current_version if version is None else version))).first()
 
 
 def _parsed(row: Optional[SqlScriptVersion]) -> dict:

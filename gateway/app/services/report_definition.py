@@ -2,15 +2,18 @@
 docs/specs/reports.md, «The definition»; the report in services/reports.py.
 
 The structure is closed: an unknown key is refused by name, so a mistake is told at the
-save and not, later, by a render that ignores it. Only the items' `style` and a chart's
-`options` are open (their keys belong to the editor and the renderer), with simple
-values and colours as `#rrggbb`. Lengths are millimetres with a tenth at most, and every
-item lies on the page: inside the header's or the footer's height, inside the width
-between the margins. A table takes its row of the body alone.
+save and not, later, by a render that ignores it. The keys and their bounds are the
+engine's (backend/app/reports/definition.py), `style` and a chart's `options` included:
+what is accepted here is what the engine reads, and a definition the engine renders is
+accepted here. Lengths are millimetres with a tenth at most, and every item lies on the
+page: inside the header's or the footer's height, inside the width between the margins.
+A table takes its row of the body alone.
 
 What the gateway cannot judge is left to the engine, asked at the save when it can
 answer (`POST /reports/check`, services/reports.py): the expressions' grammar, the
-fields and functions they name, the formats.
+fields and functions they name, the formats. A problem is said as the engine says its
+own (`Problem.as_dict`): the item, the property inside it, the position in an
+expression, the message.
 
 Images are stored in the definition as a data URL, `data:image/png;base64,…`, of 512
 KiB at most: PNG, JPEG, or an SVG that is plainly safe — no script, no foreignObject,
@@ -35,6 +38,9 @@ from app.services.engine_policy import KNOWN_ENGINES
 MAX_DEFINITION_BYTES = 4 * 1024 * 1024  # the definition as JSON, images included
 MAX_IMAGE_BYTES = 512 * 1024
 MAX_PARAMETERS, MAX_DATASETS, MAX_ITEMS, MAX_COLUMNS, MAX_GROUPS, MAX_SERIES = 50, 20, 400, 60, 6, 12
+MAX_BAND_ITEMS = 200  # a page header's or footer's, as the engine's
+MAX_BAND_HEIGHT, MAX_MATRIX_WIDTH = 500, 500  # mm, as the engine's
+MAX_NAME = 256  # a field's or a calculated field's name, as the engine's
 MAX_SQL_CHARS = 100_000  # as a SQL script's
 MAX_EXPR = 4000
 
@@ -49,9 +55,11 @@ ITEM_TYPES = ("text", "image", "line", "rect", "table", "chart", "kpi")
 PAGE_ITEM_TYPES = ("text", "image", "line", "rect")  # what a page header or footer holds
 DATASET_NAME = re.compile(r"^[A-Za-z_][A-Za-z0-9_]{0,63}$")
 ITEM_ID = re.compile(r"^[A-Za-z0-9_-]{1,64}$")
-STYLE_KEY = re.compile(r"^[a-z][a-z0-9_]{0,31}$")
 COLOR = re.compile(r"^#[0-9a-fA-F]{6}$")
 DATA_URL = re.compile(r"^data:image/(png|jpeg|svg\+xml);base64,([A-Za-z0-9+/=\s]+)$")
+# the paths of a problem: an item's (made relative to it), a dataset's or a parameter's
+_ITEM_PATH = re.compile(r"^sections\.(?:page_header|body|page_footer)\.items(?:\[\d+\])?\.?(.*)$")
+_LIST_PATH = re.compile(r"^(datasets|parameters)\[(\d+)\](.*)$")
 
 
 class Problem(Exception):
@@ -61,9 +69,43 @@ class Problem(Exception):
         super().__init__(message)
         self.message, self.where, self.item = message, where, item
 
-    def http(self) -> HTTPException:
-        return HTTPException(status_code=422, detail={"message": self.message, "where": self.where,
-                                                      "item": self.item, "errors": []})
+    def as_dict(self, definition: Any = None) -> dict:
+        """As the engine says its problems (POST /reports/check): `field` is the property
+        inside the item (`columns[0].value`), or a dataset's or a parameter's path by its
+        name (`datasets[orders].source.sql`), as the engine writes them."""
+        field = self.where
+        if self.item is not None and (m := _ITEM_PATH.match(field)):
+            field = m.group(1)
+        return {"item": self.item, "field": by_name(field, definition), "pos": None, "length": 0,
+                "message": self.message}
+
+    def http(self, definition: Any = None) -> HTTPException:
+        return refusal([self.as_dict(definition)], self.where)
+
+
+def by_name(field: str, definition: Any) -> str:
+    """A dataset's or a parameter's path by its name, as the engine writes it
+    (`datasets[0].source` → `datasets[orders].source`); by its place when the name is
+    not one, or two have it."""
+    m = _LIST_PATH.match(field)
+    if m is None or not isinstance(definition, dict) or not isinstance(definition.get(m.group(1)), list):
+        return field
+    names = [e.get("name") if isinstance(e, dict) else None for e in definition[m.group(1)]]
+    k = int(m.group(2))
+    name = names[k] if k < len(names) else None
+    if isinstance(name, str) and DATASET_NAME.match(name) and names.count(name) == 1:
+        return f"{m.group(1)}[{name}]{m.group(3)}"
+    return field
+
+
+def refusal(problems: list[dict], where: Optional[str] = None) -> HTTPException:
+    """The 422 of a definition with problems: the first one's message, item and place
+    (`where`: the gateway's path from the root, else the first problem's field), and
+    every problem (`problems`, and `errors`, the same list as a save first said it)."""
+    first = problems[0]
+    return HTTPException(status_code=422, detail={
+        "message": first["message"], "where": first["field"] if where is None else where, "item": first["item"],
+        "errors": problems, "problems": problems})
 
 
 # ── small checks ──────────────────────────────────────────────────────────────
@@ -130,39 +172,70 @@ def _color(value: Any, where: str, what: str, item: Optional[str] = None) -> Non
         raise Problem(f"{what} is a colour as #rrggbb", where, item)
 
 
-def _open(value: Any, where: str, what: str, item: Optional[str] = None, depth: int = 0) -> None:
-    """`style` and `options`: keys of the editor and the renderer, simple values; a key
-    that names a colour holds #rrggbb."""
+_WEIGHTS = ("normal", "semibold", "bold", 400, 600, 700)
+_STYLE = ("size", "weight", "italic", "color", "background", "align", "valign", "padding", "border", "radius", "format",
+          "can_grow")
+_OPTIONS = ("stacked", "labels", "legend", "sort", "top", "min", "max", "target", "bands", "format")
+
+
+def _style(value: Any, where: str, what: str, item: Optional[str] = None) -> None:
+    """An item's, a column's or a rule's `style`: the engine's keys and bounds (its Style),
+    no other, so a key written here always shows in the report."""
     if value is None:
         return
-    if not isinstance(value, dict) or len(value) > 40:
-        raise Problem(f"{what} is an object of at most 40 keys", where, item)
-    for k, v in value.items():
-        at = f"{where}.{k}"
-        if not isinstance(k, str) or not STYLE_KEY.match(k):
-            raise Problem(f"{what}: «{str(k)[:40]}» is not a key (lower case letters, digits, _)", where, item)
-        if isinstance(v, str):
-            if len(v) > 500:
-                raise Problem(f"{what}.{k} is at most 500 characters", at, item)
-            if ("color" in k or k in ("background", "fill")) and v:
-                _color(v, at, f"{what}.{k}", item)
-        elif isinstance(v, (list, dict)):
-            if depth >= 2 or len(v) > 40:
-                raise Problem(f"{what}.{k} is too deep or too long", at, item)
-            for sub in (v.values() if isinstance(v, dict) else v):
-                if isinstance(sub, (list, dict)):
-                    _open(sub if isinstance(sub, dict) else {"v": sub}, at, f"{what}.{k}", item, depth + 1)
-                elif not (sub is None or isinstance(sub, (bool, int, float, str))) \
-                        or (isinstance(sub, str) and len(sub) > 500):
-                    raise Problem(f"{what}.{k} holds simple values", at, item)
-            if isinstance(v, dict):
-                for kk, sub in v.items():
-                    if "color" in str(kk) and isinstance(sub, str) and sub:
-                        _color(sub, f"{at}.{kk}", f"{what}.{k}.{kk}", item)
-        elif isinstance(v, float) and not math.isfinite(v):
-            raise Problem(f"{what}.{k} is a finite number", at, item)
-        elif not (v is None or isinstance(v, (bool, int, float))):
-            raise Problem(f"{what}.{k} holds a simple value", at, item)
+    st = _keys(value, where, _STYLE, what=what, item=item)
+    if st.get("size") is not None:
+        _number(st["size"], f"{where}.size", f"{what}'s size (points)", 4, 96, item)
+    weight = st.get("weight")
+    if weight is not None and (isinstance(weight, bool) or weight not in _WEIGHTS):
+        raise Problem(f"{what}'s weight is normal, semibold or bold", f"{where}.weight", item)
+    _bool(st.get("italic"), f"{where}.italic", f"{what}'s italic", item)
+    _color(st.get("color"), f"{where}.color", f"{what}'s colour", item)
+    _color(st.get("background"), f"{where}.background", f"{what}'s background", item)
+    _choice(st.get("align"), ("left", "center", "right"), f"{where}.align", f"{what}'s alignment", item)
+    _choice(st.get("valign"), ("top", "middle", "bottom"), f"{where}.valign", f"{what}'s vertical alignment", item)
+    for key in ("padding", "radius"):
+        if st.get(key) is not None:
+            _number(st[key], f"{where}.{key}", f"{what}'s {key}", 0, 50, item)
+    if st.get("border") is not None:
+        border = _keys(st["border"], f"{where}.border", ("width", "color"), what=f"{what}'s border", item=item)
+        if border.get("width") is not None:
+            _number(border["width"], f"{where}.border.width", f"{what}'s border width", 0, 5, item)
+        _color(border.get("color"), f"{where}.border.color", f"{what}'s border colour", item)
+    _text(st.get("format"), f"{where}.format", f"{what}'s format", 64, item)
+    if "can_grow" in st and not isinstance(st["can_grow"], bool):
+        raise Problem(f"{what}'s can_grow is true or false", f"{where}.can_grow", item)
+
+
+def _options(value: Any, where: str, what: str, item: str) -> None:
+    """A chart's `options`: the engine's keys and bounds (its ChartOptions)."""
+    if value is None:
+        return
+    o = _keys(value, where, _OPTIONS, what=what, item=item)
+    for flag in ("stacked", "labels"):
+        if flag in o and not isinstance(o[flag], bool):
+            raise Problem(f"{what}.{flag} is true or false", f"{where}.{flag}", item)
+    _bool(o.get("legend"), f"{where}.legend", f"{what}.legend", item)
+    if "sort" in o:
+        _choice(o["sort"], ("none", "asc", "desc"), f"{where}.sort", f"{what}.sort", item, required=True)
+    top = o.get("top")
+    if top is not None and (isinstance(top, bool) or not isinstance(top, int) or not 1 <= top <= 500):
+        raise Problem(f"{what}.top is a whole number between 1 and 500", f"{where}.top", item)
+    for key in ("min", "max"):
+        if o.get(key) is not None:
+            _number(o[key], f"{where}.{key}", f"{what}.{key}", -1e300, 1e300, item)
+    target = o.get("target")
+    if isinstance(target, str):
+        _expr(target, f"{where}.target", f"{what}.target", item)
+    elif target is not None:
+        _number(target, f"{where}.target", f"{what}.target", -1e300, 1e300, item)
+    if "bands" in o:
+        bands = o["bands"]
+        if not isinstance(bands, list) or len(bands) > 10:
+            raise Problem(f"{what}.bands are a list of at most 10 numbers", f"{where}.bands", item)
+        for k, b in enumerate(bands):
+            _number(b, f"{where}.bands[{k}]", f"{what}.bands", -1e300, 1e300, item)
+    _text(o.get("format"), f"{where}.format", f"{what}.format", 64, item)
 
 
 # ── images ────────────────────────────────────────────────────────────────────
@@ -234,7 +307,9 @@ def svg_problem(data: bytes) -> Optional[str]:
     return None
 
 
-def check_image(value: Any, where: str, item: Optional[str]) -> None:
+def check_image(value: Any, where: str, item: Optional[str]) -> str:
+    """The image as it is kept: its data URL with the base64 in one piece (the engine
+    reads it strictly, and a base64 wrapped in lines would not render)."""
     def bad(message: str) -> Problem:
         return Problem(f"The image «{item}»: {message}", where, item)
 
@@ -243,8 +318,9 @@ def check_image(value: Any, where: str, item: Optional[str]) -> None:
     m = DATA_URL.match(value)
     if not m:
         raise bad("an image is a PNG, a JPEG or an SVG uploaded into the report (no links)")
+    encoded = re.sub(r"\s+", "", m.group(2))
     try:
-        data = base64.b64decode(re.sub(r"\s+", "", m.group(2)), validate=True)
+        data = base64.b64decode(encoded, validate=True)
     except (binascii.Error, ValueError):
         raise bad("it is not valid base64") from None
     if len(data) > MAX_IMAGE_BYTES:
@@ -254,17 +330,25 @@ def check_image(value: Any, where: str, item: Optional[str]) -> None:
         raise bad("it is not a PNG")
     if kind == "jpeg" and not data.startswith(b"\xff\xd8\xff"):
         raise bad("it is not a JPEG")
-    if kind == "svg+xml" and (why := svg_problem(data)):
-        raise bad(f"this SVG cannot be used: {why}. Export it again as a plain SVG, or as a PNG")
+    if kind == "svg+xml":
+        why = svg_problem(data)
+        # how the engine knows an SVG (backend/app/reports/definition.py image_bytes)
+        if why is None and (not data[:1024].lstrip().lower().startswith((b"<svg", b"<?xml"))
+                            or b"<svg" not in data[:4096].lower()):
+            why = "it does not start with <svg or <?xml"
+        if why:
+            raise bad(f"this SVG cannot be used: {why}. Export it again as a plain SVG, or as a PNG")
+    return f"data:image/{kind};base64,{encoded}"
 
 
 # ── the definition ────────────────────────────────────────────────────────────
 def page_box(page: dict) -> tuple[float, float]:
-    """The width and height between the margins, in mm."""
+    """The width and height between the margins, in mm. Landscape puts the longer side
+    across, whatever the order of a size of one's own (as the engine does)."""
     size = page.get("size", "A4")
     w, h = (size["w"], size["h"]) if isinstance(size, dict) else PAGE_SIZES[size]
     if page.get("orientation") == "landscape":
-        w, h = h, w
+        w, h = max(w, h), min(w, h)
     top, right, bottom, left = page.get("margins") or [15, 12, 15, 12]
     return w - left - right, h - top - bottom
 
@@ -419,7 +503,7 @@ def _dataset(ds: Any, i: int, names: set[str], parameters: dict) -> dict:
             raise Problem(f"{what}'s fields are a list of at most 1000", f"{where}.fields")
         for k, f in enumerate(fields):
             f = _keys(f, f"{where}.fields[{k}]", ("name", "type"), ("name",), what=f"{what}'s field")
-            _text(f["name"], f"{where}.fields[{k}].name", f"{what}'s field name", 300, required=True)
+            _text(f["name"], f"{where}.fields[{k}].name", f"{what}'s field name", MAX_NAME, required=True)
             _choice(f.get("type"), FIELD_TYPES, f"{where}.fields[{k}].type", f"{what}'s field type")
     calculated = ds.get("calculated")
     if calculated is not None:
@@ -429,7 +513,7 @@ def _dataset(ds: Any, i: int, names: set[str], parameters: dict) -> dict:
         for k, c in enumerate(calculated):
             at = f"{where}.calculated[{k}]"
             c = _keys(c, at, ("name", "expr"), ("name", "expr"), what=f"{what}'s calculated field")
-            _text(c["name"], f"{at}.name", f"{what}'s calculated field name", 300, required=True)
+            _text(c["name"], f"{at}.name", f"{what}'s calculated field name", MAX_NAME, required=True)
             if c["name"] in seen:
                 raise Problem(f"{what} has two calculated fields called «{c['name']}»", f"{at}.name")
             seen.add(c["name"])
@@ -444,8 +528,9 @@ def _items(items: Any, where: str, section: str, box: tuple[float, float], datas
     is the body's, which grows over pages (an item fits one page)."""
     if items is None:
         return []
-    if not isinstance(items, list) or len(items) > MAX_ITEMS:
-        raise Problem(f"The {section}'s items are a list of at most {MAX_ITEMS}", where)
+    most = MAX_ITEMS if section == "body" else MAX_BAND_ITEMS
+    if not isinstance(items, list) or len(items) > most:
+        raise Problem(f"The {section}'s items are a list of at most {most}", where)
     width, height = box
     out = []
     for i, it in enumerate(items):
@@ -471,7 +556,7 @@ _TYPE_KEYS = {
     "text": ("value", "dataset"),
     "image": ("asset", "fit"),
     "line": (),
-    "rect": ("border", "radius", "fill"),
+    "rect": (),
     "table": ("dataset", "title", "columns", "groups", "detail", "sort", "filter", "repeat_header", "grand_total",
               "zebra", "matrix", "interactive"),
     "chart": ("dataset", "title", "kind", "category", "series", "split_by", "options"),
@@ -481,6 +566,10 @@ _TYPE_KEYS = {
 
 def _item(it: dict, at: str, kind: str, item_id: str, width: float, height: Optional[float], datasets: set[str],
           section: str) -> None:
+    if kind == "rect" and (top := next((k for k in ("fill", "border", "radius") if k in it), None)):
+        # the engine draws a rectangle from its style, as every item: one place for each
+        raise Problem(f"The item «{item_id}»: a rectangle's fill, border and radius go in its style "
+                      "(style.background, style.border, style.radius)", f"{at}.{top}", item_id)
     _keys(it, at, _BASE + _TYPE_KEYS[kind], ("x", "y", "w", "h"), what=f"The item «{item_id}»", item=item_id)
     what = f"The item «{item_id}»"
     page_h = height if height is not None else 5000
@@ -498,7 +587,7 @@ def _item(it: dict, at: str, kind: str, item_id: str, width: float, height: Opti
             raise Problem(f"{what} goes past the right margin by {x + w - width:.1f} mm", at, item_id)
         if height is not None and y + h > height + 1e-6:
             raise Problem(f"{what} goes past the {section}'s height by {y + h - height:.1f} mm", at, item_id)
-    _open(it.get("style"), f"{at}.style", f"{what}'s style", item_id)
+    _style(it.get("style"), f"{at}.style", f"{what}'s style", item_id)
     _expr(it.get("visible"), f"{at}.visible", f"{what}'s visible", item_id)
 
     def dataset() -> None:
@@ -514,10 +603,8 @@ def _item(it: dict, at: str, kind: str, item_id: str, width: float, height: Opti
                 raise Problem(f"{what}: the {section} reads no dataset", f"{at}.dataset", item_id)
             dataset()
     elif kind == "image":
-        check_image(it.get("asset"), f"{at}.asset", item_id)
+        it["asset"] = check_image(it.get("asset"), f"{at}.asset", item_id)
         _choice(it.get("fit"), ("contain", "cover", "stretch"), f"{at}.fit", f"{what}'s fit", item_id)
-    elif kind == "rect":
-        _open({k: it[k] for k in ("border", "radius", "fill") if k in it}, at, what, item_id)
     elif kind == "table":
         dataset()
         _table(it, at, what, item_id, width)
@@ -537,10 +624,10 @@ def _item(it: dict, at: str, kind: str, item_id: str, width: float, height: Opti
             _text(s.get("name"), f"{sat}.name", f"{what}'s series name", 200, item_id)
             _choice(s.get("as"), ("bar", "line"), f"{sat}.as", f"{what}'s series as", item_id)
             _choice(s.get("axis"), ("left", "right"), f"{sat}.axis", f"{what}'s series axis", item_id)
-        _open(it.get("options"), f"{at}.options", f"{what}'s options", item_id)
+        _options(it.get("options"), f"{at}.options", f"{what}'s options", item_id)
     elif kind == "kpi":
         dataset()
-        _text(it.get("label"), f"{at}.label", f"{what}'s label", MAX_EXPR, item_id)
+        _text(it.get("label"), f"{at}.label", f"{what}'s label", 200, item_id)
         _expr(it.get("value"), f"{at}.value", f"{what}'s value", item_id, required=True)
         _expr(it.get("compare"), f"{at}.compare", f"{what}'s comparison", item_id)
         _text(it.get("format"), f"{at}.format", f"{what}'s format", 64, item_id)
@@ -554,22 +641,26 @@ def _item(it: dict, at: str, kind: str, item_id: str, width: float, height: Opti
 
 def _table(it: dict, at: str, what: str, item_id: str, width: float) -> None:
     _text(it.get("title"), f"{at}.title", f"{what}'s title", 100, item_id)
-    columns = it.get("columns")
-    if not isinstance(columns, list) or not 1 <= len(columns) <= MAX_COLUMNS:
-        raise Problem(f"{what} needs 1 to {MAX_COLUMNS} columns", f"{at}.columns", item_id)
+    # a matrix makes its own columns: of `columns` it reads only the first one's header,
+    # width and style (its rows' labels), and may have none
+    matrix = it.get("matrix")
+    columns = it.get("columns", [] if matrix is not None else None)
+    least = 0 if matrix is not None else 1
+    if not isinstance(columns, list) or not least <= len(columns) <= MAX_COLUMNS:
+        raise Problem(f"{what} needs {least} to {MAX_COLUMNS} columns", f"{at}.columns", item_id)
     total = 0.0
     for k, c in enumerate(columns):
         cat = f"{at}.columns[{k}]"
-        c = _keys(c, cat, ("header", "value", "width", "align", "format", "total", "style", "rules"), ("value",),
-                  what=f"{what}'s column {k + 1}", item=item_id)
+        c = _keys(c, cat, ("header", "value", "width", "align", "format", "total", "style", "rules"),
+                  ("value",) if matrix is None else (), what=f"{what}'s column {k + 1}", item=item_id)
         _text(c.get("header"), f"{cat}.header", f"{what}'s column header", 500, item_id)
-        _expr(c["value"], f"{cat}.value", f"{what}'s column value", item_id, required=True)
+        _expr(c.get("value"), f"{cat}.value", f"{what}'s column value", item_id, required=matrix is None)
         if c.get("width") is not None:
             total += _mm(c["width"], f"{cat}.width", f"{what}'s column width", 1, width, item_id)
         _choice(c.get("align"), ("left", "center", "right"), f"{cat}.align", f"{what}'s column alignment", item_id)
         _text(c.get("format"), f"{cat}.format", f"{what}'s column format", 64, item_id)
         _expr(c.get("total"), f"{cat}.total", f"{what}'s column total", item_id)
-        _open(c.get("style"), f"{cat}.style", f"{what}'s column style", item_id)
+        _style(c.get("style"), f"{cat}.style", f"{what}'s column style", item_id)
         rules = c.get("rules")
         if rules is not None:
             if not isinstance(rules, list) or len(rules) > 20:
@@ -578,7 +669,7 @@ def _table(it: dict, at: str, what: str, item_id: str, width: float) -> None:
                 rat = f"{cat}.rules[{r}]"
                 rule = _keys(rule, rat, ("when", "style"), ("when",), what=f"{what}'s rule", item=item_id)
                 _expr(rule["when"], f"{rat}.when", f"{what}'s rule", item_id, required=True)
-                _open(rule.get("style"), f"{rat}.style", f"{what}'s rule style", item_id)
+                _style(rule.get("style"), f"{rat}.style", f"{what}'s rule style", item_id)
     if total > width + 1e-6:
         raise Problem(f"{what}'s columns are {total:.1f} mm wide: the page has {width:.1f} mm", f"{at}.columns", item_id)
     groups = it.get("groups")
@@ -606,19 +697,21 @@ def _table(it: dict, at: str, what: str, item_id: str, width: float) -> None:
     _expr(it.get("filter"), f"{at}.filter", f"{what}'s filter", item_id)
     for flag in ("detail", "repeat_header", "grand_total", "zebra"):
         _bool(it.get(flag), f"{at}.{flag}", f"{what}'s {flag}", item_id)
-    matrix = it.get("matrix")
     if matrix is not None:
         matrix = _keys(matrix, f"{at}.matrix", ("columns_by", "value", "total", "format", "width"),
                        ("columns_by", "value"), what=f"{what}'s matrix", item=item_id)
         by = matrix["columns_by"]
-        for k, one in enumerate(by if isinstance(by, list) and 1 <= len(by) <= 3 else [by]):
+        if isinstance(by, list) and not 1 <= len(by) <= 3:
+            raise Problem(f"{what}'s matrix has one to three levels of columns", f"{at}.matrix.columns_by", item_id)
+        for k, one in enumerate(by if isinstance(by, list) else [by]):
             _expr(one, f"{at}.matrix.columns_by" + (f"[{k}]" if isinstance(by, list) else ""),
                   f"{what}'s matrix columns", item_id, required=True)
         _expr(matrix["value"], f"{at}.matrix.value", f"{what}'s matrix value", item_id, required=True)
         _bool(matrix.get("total"), f"{at}.matrix.total", f"{what}'s matrix total", item_id)
         _text(matrix.get("format"), f"{at}.matrix.format", f"{what}'s matrix format", 64, item_id)
         if matrix.get("width") is not None:
-            _mm(matrix["width"], f"{at}.matrix.width", f"{what}'s matrix column width", 1, width, item_id)
+            _mm(matrix["width"], f"{at}.matrix.width", f"{what}'s matrix column width", 1,
+                min(width, MAX_MATRIX_WIDTH), item_id)
     interactive = it.get("interactive")
     if interactive is not None:
         interactive = _keys(interactive, f"{at}.interactive", ("sort", "toggle"), what=f"{what}'s interactivity",
@@ -699,8 +792,9 @@ def check(definition: Any) -> dict:
     footer = _keys(sections.get("page_footer") or {}, "sections.page_footer", ("height", "on_last_page", "items"),
                    what="The page footer")
     body = _keys(sections.get("body") or {}, "sections.body", ("items",), what="The body")
-    hh = _mm(header.get("height", 0), "sections.page_header.height", "The page header's height", 0, height)
-    fh = _mm(footer.get("height", 0), "sections.page_footer.height", "The page footer's height", 0, height)
+    tallest = min(height, MAX_BAND_HEIGHT)
+    hh = _mm(header.get("height", 0), "sections.page_header.height", "The page header's height", 0, tallest)
+    fh = _mm(footer.get("height", 0), "sections.page_footer.height", "The page footer's height", 0, tallest)
     if hh + fh > height - 20:
         raise Problem("The page header and footer leave less than 2 cm for the body", "sections")
     _bool(header.get("on_first_page"), "sections.page_header.on_first_page", "The page header's first page")
@@ -709,10 +803,10 @@ def check(definition: Any) -> dict:
     _items(header.get("items"), "sections.page_header.items", "page header", (width, hh), ds_names, ids)
     _items(footer.get("items"), "sections.page_footer.items", "page footer", (width, fh), ds_names, ids)
     body_items = _items(body.get("items"), "sections.body.items", "body", (width, None), ds_names, ids)
-    for it in body_items:
+    for i, it in enumerate(body_items):
         if it.get("type") != "line" and it["h"] > height - hh - fh + 1e-6:
             raise Problem(f"The item «{it['id']}» is taller than the body of a page ({height - hh - fh:.1f} mm)",
-                          "sections.body.items", it["id"])
+                          f"sections.body.items[{i}].h", it["id"])
     _alone_in_its_row(body_items)
     return definition
 

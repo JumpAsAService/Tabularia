@@ -21,6 +21,7 @@ the gateway with the same rights, every dataset it reads checked, and comes back
 from __future__ import annotations
 
 import datetime
+import decimal
 import http.client
 import json
 import os
@@ -110,6 +111,14 @@ def reports() -> list[dict]:
 def _value(v):
     if isinstance(v, (datetime.date, datetime.datetime)):
         return v.isoformat()[:10]  # a report's dates are days
+    if isinstance(v, decimal.Decimal):
+        return str(v)
+    if not isinstance(v, (str, bytes)):
+        # numpy's and pandas' values (`df["year"].max()`, an array, a Series), polars' Series
+        if callable(getattr(v, "tolist", None)):
+            return _value(v.tolist())
+        if callable(getattr(v, "to_list", None)):
+            return _value(v.to_list())
     if isinstance(v, (list, tuple, set)):
         return [_value(x) for x in v]
     return v

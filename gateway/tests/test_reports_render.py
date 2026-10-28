@@ -368,6 +368,9 @@ def test_the_parameters_as_the_form_shows_them(app, session, fake_engine):
     out = reader.get(f"/reports/{w['report']}/parameters?region=South").json()
     assert out[3]["choices"] == [{"value": "N", "label": "NORTH"}] and out[3]["choices_truncated"]
     assert fake_engine.report_choices[-1]["datasets"]["plain"]["operations"][0]["params"]["value"] == "South"
+    # the values given steer the choices only: the default stays the report's own — it came
+    # back as the value given, and a form that read it lost the report's default
+    assert [p["default"] for p in out[:3]] == [None, "2026-09-28", ["N"]]
     assert reader.get(f"/reports/{w['report']}/parameters?nope=1").status_code == 400
 
 

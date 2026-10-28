@@ -18,6 +18,12 @@ from app.services import permissions as perm_service
 _EMAIL = re.compile(r"^[^@\s,;<>]+@[^@\s,;<>]+\.[^@\s,;<>]+$")
 
 
+def email_language(user: User) -> str:
+    """The language a Pushmail email is written in — its note, the names of months and days
+    of its placeholders (`{today:MMMM}`): that of whoever runs the group."""
+    return user.locale if user.locale in ("en", "it", "fr", "de", "es") else "en"
+
+
 def pushmail_errors(session: Session, user: User, cell: FlowGroupCell, readable: set[int] | None = None) -> list[str]:
     """A Pushmail cell, new or changed, or about to run: an SMTP connection this person
     may send through (CONNECT), recipients within the domains it allows, datasources

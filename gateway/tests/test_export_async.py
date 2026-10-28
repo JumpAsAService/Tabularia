@@ -108,3 +108,37 @@ def test_a_read_only_api_token_may_start_an_export():
     token = SimpleNamespace(scope="read")
     request = SimpleNamespace(method="POST", scope={"route": SimpleNamespace(path="/tasks/exports")}, headers={})
     api_tokens.check_level(token, request)
+
+
+@pytest.mark.parametrize("accepts, kind, compressed", [
+    (b"gzip, deflate, br", "application/json", True),
+    (b"", "application/json", False),
+    (b"gzip", "application/pdf", False),  # already compressed inside: not worth the work
+])
+async def test_the_screen_s_pages_of_a_report_travel_compressed(session, scene, monkeypatch, accepts, kind, compressed):
+    """The screen's pages of a 167-page report are some 60 MB of JSON (SVG text, very
+    repetitive): sent as they were, seconds on a real network. Compressed when the browser
+    takes gzip, while streaming — the gateway still never holds the whole file."""
+    import gzip
+
+    payload = json.dumps({"pages": ["<svg>" + "<path d='M0 0 L10 10'/>" * 2000 + "</svg>"] * 20}).encode()
+
+    async def chunks():
+        for i in range(0, len(payload), 65536):
+            yield payload[i:i + 65536]
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        return httpx.Response(200, content=chunks(), headers={"content-type": kind, "content-length": str(len(payload))})
+
+    client = httpx.AsyncClient(transport=httpx.MockTransport(handler), base_url="http://engine")
+    monkeypatch.setattr("app.core.engine_client._client", client)
+    scope = {"type": "http", "method": "GET", "path": "/x", "query_string": b"",
+             "headers": [(b"accept-encoding", accepts)] if accepts else [], "client": ("203.0.113.9", 4242)}
+    resp = await proxy.export_file(Request(scope), task_id=TASK, user=scene.mario)
+    body = b"".join([chunk async for chunk in resp.body_iterator])
+    if compressed:
+        assert resp.headers["content-encoding"] == "gzip" and "content-length" not in resp.headers
+        assert "accept-encoding" in resp.headers["vary"].lower()
+        assert gzip.decompress(body) == payload and len(body) < len(payload) / 20
+    else:
+        assert "content-encoding" not in resp.headers and body == payload

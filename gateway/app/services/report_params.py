@@ -11,7 +11,8 @@ In a dataset's SQL a parameter is written `{name}`, and the server puts in its p
 literal of the dialect — a string quoted and escaped, a number checked as a number, a
 date as a typed literal, a list as `(a, b, c)` for `IN {regions}` — never the text as it
 was typed. The SQL is read by a scanner that knows where strings, quoted names and
-comments start and end, PostgreSQL's dollar quotes included:
+comments start and end, each database's own quotes included (PostgreSQL's and
+ClickHouse's dollar quotes, Oracle's q'[…]', BigQuery's triple quotes):
 
 - outside them, `{name}` is the parameter's literal (NULL when an optional one has no
   value), a placeholder its value as a typed literal (`{today-30}` → `DATE
@@ -52,6 +53,7 @@ NAME = re.compile(r"^[A-Za-z_][A-Za-z0-9_]{0,63}$")
 _BODY = re.compile(r"^(?P<name>[A-Za-z_][A-Za-z0-9_]*)(?P<offset>[+-]\d{1,5}(?:min|d|w|m|y|h|s)?)?(?::(?P<fmt>.+))?$",
                    re.S)
 TYPES = ("text", "number", "date", "boolean")
+LANGS = ("en", "it", "de", "es", "fr")  # a report's locale: the names of months and days ({today:MMMM})
 MAX_TEXT = 1000  # characters of a text value
 MAX_VALUES = 1000  # values of a multi parameter
 _NUMBER = re.compile(r"^[+-]?(\d+(\.\d*)?|\.\d+)([eE][+-]?\d{1,3})?$")
@@ -124,9 +126,17 @@ def to_json(value: Any) -> Any:
     return value.isoformat() if isinstance(value, date) else value
 
 
-async def resolve_placeholders(bodies: Iterable[str], timezone: str) -> dict[str, tuple[Optional[str], Optional[str]]]:
+def lang_of(definition: Mapping[str, Any]) -> str:
+    """The language a report's placeholders write the names of months and days in: its own."""
+    locale = definition.get("locale")
+    return locale if locale in LANGS else "en"
+
+
+async def resolve_placeholders(bodies: Iterable[str], timezone: str,
+                               lang: str = "en") -> dict[str, tuple[Optional[str], Optional[str]]]:
     """{inside: (text, error)} of placeholders of the language, resolved NOW by the engine
-    in `timezone` (twenty to a call, the engine's limit)."""
+    in `timezone`, the names of months and days in `lang` (twenty to a call, the engine's
+    limit)."""
     wanted = sorted(set(bodies))
     out: dict[str, tuple[Optional[str], Optional[str]]] = {}
     for start in range(0, len(wanted), 20):
@@ -134,7 +144,7 @@ async def resolve_placeholders(bodies: Iterable[str], timezone: str) -> dict[str
         templates = {f"p{i}": "{" + body + "}" for i, body in enumerate(chunk)}
         try:
             resp = await get_engine_client().post("/placeholders/preview", timeout=CHECK, json={
-                "kind": "input", "templates": templates, "timezone": timezone or "UTC"})
+                "kind": "input", "templates": templates, "timezone": timezone or "UTC", "lang": lang})
         except Exception as e:  # noqa: BLE001 — said in words
             raise HTTPException(status_code=502,
                                 detail=f"The engine could not resolve the placeholders: {type(e).__name__}") from None
@@ -184,7 +194,8 @@ async def values_for(definition: Mapping[str, Any], given: Mapping[str, list]) -
     reads them (services/reports.py)."""
     params, texts = _given_texts(definition, given)
     bodies = {b for ts in texts.values() for t in ts or [] if (b := placeholder_of(t))}
-    resolved = await resolve_placeholders(bodies, definition.get("timezone") or "UTC") if bodies else {}
+    resolved = await resolve_placeholders(bodies, definition.get("timezone") or "UTC", lang_of(definition)) \
+        if bodies else {}
     return _converted(params, texts, resolved)
 
 
@@ -206,7 +217,7 @@ def _converted(params: dict, texts: dict, resolved: Optional[dict]) -> dict[str,
                 raise bad_value(name, "it needs a value")
             values[name] = [] if p.get("multi") else None
             continue
-        converted = []
+        converted, seen = [], set()
         for t in ts:
             body = placeholder_of(t)
             if body is not None:
@@ -216,7 +227,13 @@ def _converted(params: dict, texts: dict, resolved: Optional[dict]) -> dict[str,
                 if error:
                     raise bad_value(name, f"{{{body}}}: {error}")
                 t = text
-            converted.append(convert(p, t))
+            elif isinstance(t, str) and " " in t and placeholder_of(t.replace(" ", "+")) is not None:
+                raise bad_value(name, f"'{t.strip()[:40]}' is not a placeholder: in an address a + is read as a "
+                                      "space, write it %2B")
+            value = convert(p, t)
+            if _key(value) not in seen:  # a value given twice is one value
+                seen.add(_key(value))
+                converted.append(value)
         if not converted:  # only placeholders, not resolved here
             values[name] = [] if p.get("multi") else None
             continue
@@ -245,20 +262,22 @@ class Dialect:
     e_strings: bool = False  # PostgreSQL's E'…', where a backslash always escapes
     brackets: bool = False  # SQL Server's [quoted name]
     server: bool = False  # a database of someone else's, whose settings change how it reads a string
+    q_quotes: bool = False  # Oracle's q'[…]', nq'{…}': an apostrophe inside does not close them
+    triple_quotes: bool = False  # BigQuery's '''…''' and """…"""
 
 
 # by engine (the catalog) and by connection type (a database)
 DIALECTS: dict[str, Dialect] = {
     "polars": Dialect("postgres", dollar_quotes=True),
     "duckdb": Dialect("duckdb", dollar_quotes=True, e_strings=True),
-    "chdb": Dialect("clickhouse", hash_comments=True),
-    "clickhouse": Dialect("clickhouse", hash_comments=True),
-    "bigquery": Dialect("bigquery", hash_comments=True),
+    "chdb": Dialect("clickhouse", hash_comments=True, dollar_quotes=True),  # $heredoc$…$heredoc$
+    "clickhouse": Dialect("clickhouse", hash_comments=True, dollar_quotes=True),
+    "bigquery": Dialect("bigquery", hash_comments=True, triple_quotes=True),
     "postgresql": Dialect("postgres", dollar_quotes=True, e_strings=True, server=True),
     "mysql": Dialect("mysql", hash_comments=True, server=True),
     "mariadb": Dialect("mysql", hash_comments=True, server=True),
     "trino": Dialect("trino", server=True),
-    "oracle": Dialect("oracle", server=True),
+    "oracle": Dialect("oracle", server=True, q_quotes=True),
     "sqlserver": Dialect("tsql", brackets=True, server=True),
 }
 
@@ -296,6 +315,35 @@ def _quoted_end(sql: str, i: int, close: str, backslash: bool) -> int:
                 j += 2
                 continue
             return j + 1
+        j += 1
+    return n
+
+
+_Q_CLOSE = {"[": "]", "{": "}", "(": ")", "<": ">"}
+
+
+def _q_quote(sql: str, i: int) -> Optional[tuple[int, int, int]]:
+    """Oracle's q'X…X' (nq'X…X' too) starting at `i`: where its text starts, where its
+    closing starts, and the index after it; None when there is none at `i`."""
+    j = i + 1 if sql[i] in "nN" else i
+    if (i > 0 and _ident(sql[i - 1])) or sql[j:j + 1] not in ("q", "Q") or sql[j + 1:j + 2] != "'" \
+            or j + 2 >= len(sql) or sql[j + 2].isspace():
+        return None
+    close = _Q_CLOSE.get(sql[j + 2], sql[j + 2]) + "'"
+    end = sql.find(close, j + 3)
+    return (j + 3, end, end + 2) if end >= 0 else (j + 3, len(sql), len(sql))
+
+
+def _triple_end(sql: str, i: int, backslash: bool) -> int:
+    """The index where BigQuery's triple quote opened at `i` closes (the end of the SQL
+    when none does)."""
+    quote, j, n = sql[i] * 3, i + 3, len(sql)
+    while j < n:
+        if backslash and sql[j] == "\\":
+            j += 2
+            continue
+        if sql.startswith(quote, j):
+            return j
         j += 1
     return n
 
@@ -351,6 +399,13 @@ def _read(sql: str, d: Dialect, backslash: bool, nested: bool) -> list[Brace]:
             i = n if j < 0 else j
         elif sql.startswith("/*", i):
             i = _comment_end(sql, i, nested)
+        elif d.q_quotes and c in "nNqQ" and (q := _q_quote(sql, i)) is not None:
+            out.extend(_in_quotes(sql, q[0], q[1]))
+            i = q[2]
+        elif d.triple_quotes and c in "'\"" and sql.startswith(c * 3, i):
+            j = _triple_end(sql, i, backslash)
+            out.extend(_in_quotes(sql, i + 3, j))
+            i = j + 3
         elif c in "'\"`" or (c == "[" and d.brackets):
             e_string = d.e_strings and c == "'" and i > 0 and sql[i - 1] in "eE" and (i < 2 or not _ident(sql[i - 2]))
             j = _quoted_end(sql, i, "]" if c == "[" else c, backslash or e_string)

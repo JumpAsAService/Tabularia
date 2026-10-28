@@ -217,19 +217,19 @@ def _schedule_off(script: SqlScript, user: User, reasons: list[str]) -> Optional
 
 
 def _groups_off(session: Session, user: User, script: SqlScript, reasons: list[str]) -> list[tuple]:
-    """The flow groups that run the script, scheduled by someone else: a change that makes
-    the script reach more switches their schedules off too, as a change of their own would."""
+    """The flow groups that run the script, or send a report that reads it, scheduled by
+    someone else: a change that makes the script reach more switches their schedules off
+    too, as a change of their own would."""
+    from app.services import reports
+
     if not reasons:
         return []
-    off = []
-    for group in sql_scripts.groups_using(session, script.id):
-        if group.run_schedule and group.run_scheduled_by not in (None, user.id):
-            detail = {"turned_off": True, "author": group.run_scheduled_by,
-                      "reason": f"the SQL script '{script.name}' it runs changed: {'; '.join(reasons)}"}
-            group.run_schedule = group.run_scheduled_by = group.next_run_at = None
-            session.add(group)
-            off.append((group.id, group.name, detail))
-    return off
+    why = "; ".join(reasons)
+    affected = [(g, f"the SQL script '{script.name}' it runs changed: {why}")
+                for g in sql_scripts.groups_using(session, script.id)]
+    affected += [(g, f"the SQL script '{script.name}' its report '{r.name}' reads changed: {why}")
+                 for r, g in reports.groups_reading(session, "sql_script", script.id)]
+    return reports.turn_off_groups(session, user, affected)
 
 
 def _record_off(session: Session, user: User, script: SqlScript, mine: Optional[dict], groups: list[tuple],

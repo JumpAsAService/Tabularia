@@ -35,8 +35,9 @@ one SMTP connection is available to you; so does the picker of an empty cell.
 A cell needs at least one datasource or one report: a cell with reports only is fine.
 
 The placeholders are those of the Outputs ([placeholders](placeholders.md)): `{today}`,
-`{today-1:yyyyMMdd}`, `{now:HHmm}`, `{run_id}`, `{flow}`. The panel shows what each name
-gives now.
+`{today-1:yyyyMMdd}`, `{now:HHmm}`, `{run_id}`, `{flow}`; `{today:MMMM yyyy}` writes the
+month's name in the language of whoever runs the group (`ottobre 2026`). The panel shows
+what each name gives now.
 
 ![The Pushmail cell settings: name Morning sales report, SMTP connection, To sales-team@example.com, subject Sales {today:yyyy-MM-dd}, a message, two datasources with their file names and row caps](media/guide/pushmail/pushmail-cell.png)
 
@@ -72,12 +73,14 @@ designer goes out with the next email.
   last month, `{today-1}` yesterday. A parameter marked `*` needs a value, given here or
   by the report's default.
 - **Summary in the email body.** One report per cell can put its summary in the message,
-  under the cell's text: its texts, its KPIs, the totals of its first table's groups and
-  its charts as images, in an HTML message 640 pixels wide that Outlook and Gmail draw.
-  The detail stays in the attached file. With a plain-text message, the text goes on
-  top; with an HTML one, the summary goes at the end of its body.
-- **Limits.** A report reads at most `REPORTS__MAX_ROWS` rows per dataset (10,000 by
-  default) and renders at most `REPORTS__MAX_PAGES` pages: past them the cell fails,
+  under the cell's text: its texts, its KPIs, its charts as images, and every table and
+  matrix as its totals (see [the email](capabilities/reports.md#pdf-excel-and-the-email)),
+  in an HTML message 640 pixels wide that Outlook and Gmail draw, with the same summary
+  as plain text for a mail client that shows no HTML. The detail stays in the attached
+  file. With a plain-text message, the text goes on top; with an HTML one, the summary
+  goes at the end of its body.
+- **Limits.** A report reads at most `REPORTS__MAX_ROWS` rows per dataset (1,000,000
+  by default) and renders at most `REPORTS__MAX_PAGES` pages: past them the cell fails,
   naming the report and the dataset, and nothing is sent. The files of the reports count
   towards the 15 MB of an email.
 
@@ -95,11 +98,13 @@ it (`409`). Take it out of their Pushmail cells first.
 
 Because a scheduled group sends with its author's rights, someone else who changes what
 the report **reads** — a dataset added, or one that reads other SQL, another datasource,
-view or filters — switches the schedules of the groups that send it off, as a change to
-a SQL script does: the author's rights are not spent on another person's choice. The
-Audit page records it (`flow_group.schedule`, with the reason); the author schedules the
-group again after looking. A change of the layout alone, or one by the schedule's own
-author, keeps it.
+view or filters (a SQL script or a saved view it reads changed by someone else too), a new
+default for a parameter the cell gives no value of its own (`{today-3650}` where it was
+`{today-30}`) — switches the schedules of the groups that send it off, as a change to a
+SQL script does: the author's rights are not spent on another person's choice. The Audit
+page records it (`flow_group.schedule`, with the reason); the author schedules the group
+again after looking. A change of the layout alone, or one by the schedule's own author,
+keeps it.
 
 ## What is checked, and when
 

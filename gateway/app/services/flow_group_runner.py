@@ -425,7 +425,7 @@ async def _pushmail_cell(run_id: int, user_id: int, trigger: str, cell: FlowGrou
     from app.core.engine_client import get_engine_client
     from app.models import Connection
     from app.routes.connections import engine_connection_payload
-    from app.services.pushmail import pushmail_errors
+    from app.services.pushmail import email_language, pushmail_errors
     from app.routes.runs import PLACEHOLDER_TASK
     from app.services import audit
 
@@ -474,7 +474,7 @@ async def _pushmail_cell(run_id: int, user_id: int, trigger: str, cell: FlowGrou
         spec = {
             "to": to, "cc": cc, "subject": cfg.subject, "body": cfg.body, "body_is_html": cfg.bodyIsHtml,
             "timezone": (cfg.timezone or "").strip() or "UTC", "run_id": child.id, "flow": group.name if group else "",
-            "lang": user.locale if user.locale in ("en", "it", "fr", "de", "es") else "en",
+            "lang": email_language(user),
             "attachments": [{"bucket": datasources[a.datasourceId].bucket, "key": datasources[a.datasourceId].key,
                              "label": datasources[a.datasourceId].name, "file_name": a.fileName, "max_rows": a.maxRows}
                             for a in cfg.attachments],

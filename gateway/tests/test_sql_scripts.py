@@ -173,6 +173,9 @@ def test_versions_restore_duplicate_move_delete(app, session):
     assert [(v["version"], v["note"], v["current"]) for v in me.get(f"/sql-scripts/{sid}/versions").json()] == [
         (2, "edited", True), (1, "created", False)]
     assert me.get(f"/sql-scripts/{sid}/versions/1").json()["sql"] == "SELECT 1"
+    # there is no version 0: it answered with the current one, and «restoring» it made a copy
+    assert me.get(f"/sql-scripts/{sid}/versions/0").status_code == 404
+    assert me.post(f"/sql-scripts/{sid}/versions/0/restore", headers=CSRF).status_code == 404
     restored = me.post(f"/sql-scripts/{sid}/versions/1/restore", headers=CSRF).json()
     assert restored["current_version"] == 3 and restored["content"]["sql"] == "SELECT 1"
     assert me.patch(f"/sql-scripts/{sid}", json={"content": {"sql": "x" * (sql_scripts.MAX_SQL_CHARS + 1)}}, headers=CSRF).status_code == 422

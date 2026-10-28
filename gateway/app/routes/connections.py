@@ -1057,8 +1057,13 @@ async def preview_placeholders(
     glob, an Output's file name, folder, key or subject): each template's value
     now, in its time zone, or the message of what is wrong — the engine's
     checker, the same that validates at save time and before a run. Any signed-in
-    user: nothing is read, it is arithmetic on dates."""
-    payload = body.model_dump()
+    user: nothing is read, it is arithmetic on dates. A Pushmail cell's names of months
+    and days come in the language of whoever runs the group, the person asking."""
+    from app.services.pushmail import email_language
+
+    payload = body.model_dump(exclude={"pushmail"})
+    if body.pushmail:
+        payload["lang"] = email_language(user)
     resp = await get_engine_client().post("/placeholders/preview", json=payload)
     if resp.status_code >= 400:
         raise HTTPException(status_code=502 if resp.status_code >= 500 else 422, detail=resp.text[:500])

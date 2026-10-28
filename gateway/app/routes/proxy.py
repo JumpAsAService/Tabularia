@@ -13,6 +13,7 @@ documented debt, acceptable.
 import json
 import re
 import logging
+import zlib
 from typing import Any
 from uuid import uuid4
 
@@ -46,6 +47,32 @@ _PASS_RESPONSE_HEADERS = {"content-type", "content-disposition", "content-length
 
 def _request_headers(request: Request) -> dict[str, str]:
     return {k: v for k, v in request.headers.items() if k.lower() not in _SKIP_REQUEST_HEADERS}
+
+
+_EXTENDED_NAME = re.compile(r"filename\*\s*=\s*utf-8''([^;\s]+)", re.I)
+
+
+def ascii_fallback(disposition: str) -> str:
+    """A file name with accents comes from the engine as `filename*` only (RFC 5987),
+    which `curl -OJ` and `wget --content-disposition` do not read: they saved the file
+    as the last part of the address («render»). A plain name goes before it, the
+    accents taken off (RFC 6266); the browsers keep reading the accented one."""
+    import unicodedata
+    from urllib.parse import unquote
+
+    m = _EXTENDED_NAME.search(disposition)
+    if m is None or re.search(r"(^|;)\s*filename\s*=", disposition, re.I):
+        return disposition
+    name = unquote(m.group(1))
+    stem, dot, ext = name.rpartition(".")
+    if not dot:
+        stem, ext = name, ""
+    plain = "".join(c if c.isascii() and c.isprintable() and c not in '"\\' else " "
+                    for c in unicodedata.normalize("NFKD", stem) if not unicodedata.combining(c))
+    plain = re.sub(r"\s+", " ", plain).strip(" .") or "report"
+    ext = "".join(c for c in ext if c.isascii() and c.isalnum())
+    kind, _, rest = disposition.partition(";")
+    return f'{kind.strip()}; filename="{plain}{"." + ext if ext else ""}";{rest}'
 
 
 def _release_db(session: Session | None, user: User | None = None) -> None:
@@ -113,9 +140,19 @@ async def _release(session: Session | None, user: User | None = None) -> None:
         await run_in_threadpool(_release_db, session, user)
 
 
+async def _gzip(chunks):
+    """The chunks gzipped as they come: never the whole file in memory."""
+    zipper = zlib.compressobj(6, zlib.DEFLATED, 31)  # 31: the gzip wrapper
+    async for chunk in chunks:
+        if out := zipper.compress(chunk):
+            yield out
+    yield zipper.flush()
+
+
 async def _forward(
     request: Request, method: str, path: str, content: Any = None,
     session: Session | None = None, user: User | None = None, params: Any = None,
+    compress_json: bool = False,
 ) -> StreamingResponse:
     """Forwards the request to the engine streaming in BOTH directions: the request's body
     (GB-scale upload) and the response's (csv/xlsx download). The gateway never buffers
@@ -123,7 +160,8 @@ async def _forward(
     `content` set = body read already (for the routes that inspect it).
     `session` (and `user`): the request's session, to release before the wait (see
     `_release_db`) — every route passes it. `params`: the query
-    string to send instead of the browser's."""
+    string to send instead of the browser's. `compress_json`: a JSON answer is gzipped
+    for a browser that takes it (the screen's pages of a report: tens of MB of SVG text)."""
     await _release(session, user)
     client = get_engine_client()
     if content is None and method in ("POST", "PUT", "PATCH"):
@@ -136,10 +174,20 @@ async def _forward(
         content=content,
     )
     engine_resp = await client.send(engine_req, stream=True)
+    headers = {k: v for k, v in engine_resp.headers.items() if k.lower() in _PASS_RESPONSE_HEADERS}
+    for k in [k for k in headers if k.lower() == "content-disposition"]:
+        headers[k] = ascii_fallback(headers[k])
+    body = engine_resp.aiter_raw()
+    if (compress_json and engine_resp.status_code == 200
+            and engine_resp.headers.get("content-type", "").startswith("application/json")
+            and "gzip" in request.headers.get("accept-encoding", "").lower()):
+        body = _gzip(body)
+        headers = {k: v for k, v in headers.items() if k.lower() != "content-length"}
+        headers.update({"content-encoding": "gzip", "vary": "Accept-Encoding"})
     return StreamingResponse(
-        engine_resp.aiter_raw(),
+        body,
         status_code=engine_resp.status_code,
-        headers={k: v for k, v in engine_resp.headers.items() if k.lower() in _PASS_RESPONSE_HEADERS},
+        headers=headers,
         background=BackgroundTask(engine_resp.aclose),
     )
 
@@ -417,7 +465,8 @@ async def export_status(request: Request, task_id: str, user: User = Depends(_us
 async def export_file(request: Request, task_id: str, user: User = Depends(_user)):
     if not _TASK_ID.match(task_id):
         raise HTTPException(status_code=404, detail="Export not found")
-    return await _forward(request, "GET", f"/tasks/exports/{task_id}/file", params={"owner": export_owner(user)})
+    return await _forward(request, "GET", f"/tasks/exports/{task_id}/file", params={"owner": export_owner(user)},
+                          compress_json=True)
 
 
 @router.get("/tasks/{task_id}")

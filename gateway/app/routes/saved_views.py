@@ -23,7 +23,7 @@ from app.deps.permissions import ensure_can
 from app.models import Datasource, Project, SavedView, User
 from app.models.permission import Capability
 from app.schemas.models import SavedViewCreate, SavedViewOut, SavedViewUpdate
-from app.services import audit
+from app.services import audit, reports
 from app.services import permissions as perm_service
 from app.services.copy_names import commit_copy, free_copy_name
 from app.core.routing import ReleasingRoute
@@ -226,8 +226,11 @@ def update_saved_view(
     view.project_id = target_project
     if body.description is not None:
         view.description = body.description
+    groups_off: list[tuple] = []
     if body.spec is not None:
-        view.spec = _valid_spec(body.spec)
+        spec = _valid_spec(body.spec)
+        groups_off = _groups_off(session, user, view, view.spec, spec)
+        view.spec = spec
     view.updated_at = datetime.now(timezone.utc)
     session.add(view)
     session.commit()
@@ -236,7 +239,31 @@ def update_saved_view(
         session, actor=user, action=audit.SAVED_VIEW_UPDATE, target_type="saved_view",
         target_id=view.id, target_label=view.name, request=request,
     )
+    reports.record_groups_off(session, user, groups_off, request)
     return _to_out(session, view)
+
+
+def _groups_off(session: Session, user: User, view: SavedView, before: str, after: str) -> list[tuple]:
+    """The flow groups that send a report reading the view, scheduled by someone else: a
+    change of what the report reads through it (its filters, computed fields, pivot,
+    engine) switches their schedules off — a schedule carries its author's rights, and
+    those are not spent on someone else's choice. The rest of the view (its chart, its
+    columns' order) the report does not read."""
+    ds = session.get(Datasource, view.datasource_id)
+
+    def read(spec: str) -> tuple:
+        try:
+            value = json.loads(spec or "{}")
+        except ValueError:
+            value = {}
+        value = value if isinstance(value, dict) else {}
+        return (reports.view_operations(value, ds), value.get("engine")) if ds is not None else ()
+
+    if read(before) == read(after):
+        return []
+    return reports.turn_off_groups(session, user, [
+        (g, f"the saved view '{view.name}' its report '{r.name}' reads changed: it reads something else")
+        for r, g in reports.groups_reading(session, "view", view.id)])
 
 
 @router.delete("/saved-views/{view_id}", status_code=status.HTTP_204_NO_CONTENT)

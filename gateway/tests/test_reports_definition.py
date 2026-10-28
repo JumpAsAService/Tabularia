@@ -54,7 +54,8 @@ def example() -> dict:
                 {"id": "logo", "type": "image", "x": 0, "y": 0, "w": 30, "h": 12, "asset": PNG, "fit": "contain"},
                 {"id": "title", "type": "text", "x": 40, "y": 0, "w": 100, "h": 10,
                  "value": '="Sales in " & PARAM("region")', "style": {"size": 14, "weight": "bold", "color": "#112233"}},
-                {"id": "rule", "type": "line", "x": 0, "y": 17, "w": 186, "h": 0, "style": {"color": "#cccccc"}},
+                {"id": "rule", "type": "line", "x": 0, "y": 17, "w": 186, "h": 0,
+                 "style": {"border": {"width": 0.4, "color": "#cccccc"}}},
             ]},
             "body": {"items": [
                 {"id": "kpi1", "type": "kpi", "x": 0, "y": 0, "w": 60, "h": 25, "dataset": "kpis", "label": "Revenue",
@@ -75,7 +76,8 @@ def example() -> dict:
                  "detail": True, "sort": [{"by": "[amount]", "dir": "desc"}], "filter": "[amount] <> 0",
                  "repeat_header": True, "grand_total": True, "zebra": True,
                  "interactive": {"sort": True, "toggle": True}},
-                {"id": "rect1", "type": "rect", "x": 0, "y": 110, "w": 50, "h": 10, "fill": "#eeeeee", "radius": 2},
+                {"id": "rect1", "type": "rect", "x": 0, "y": 110, "w": 50, "h": 10,
+                 "style": {"background": "#eeeeee", "radius": 2, "border": {"width": 0.3, "color": "#d9dde5"}}},
             ]},
             "page_footer": {"height": 10, "on_last_page": True, "items": [
                 {"id": "pages", "type": "text", "x": 150, "y": 2, "w": 36, "h": 6,
@@ -262,3 +264,144 @@ def test_one_dataset_of_a_definition_being_edited():
     assert [x["name"] for x in one["datasets"]] == ["kpis"] and len(one["parameters"]) == 3
     with pytest.raises(Problem):
         rd.check_dataset(d, "nope")
+
+
+# ── what the engine reads (backend/app/reports/definition.py) ────────────────
+def test_a_rectangle_is_drawn_from_its_style():
+    # the engine reads a rectangle's fill, border and radius in its style only: written
+    # beside it, they would be saved and never drawn
+    for key, value in (("fill", "#eeeeee"), ("border", {"width": 1}), ("radius", 2)):
+        p = _with(lambda d: d["sections"]["body"]["items"][3].update({key: value}))
+        assert p.item == "rect1" and p.where == f"sections.body.items[3].{key}"
+        assert "go in its style (style.background, style.border, style.radius)" in p.message
+
+
+@pytest.mark.parametrize("style, words", [
+    ({"fill": "#ff0000"}, "unknown key «fill»"),
+    ({"font_size": 10}, "unknown key «font_size»"),
+    ({"size": 200}, "size (points) is between 4 and 96"),
+    ({"weight": 500}, "weight is normal, semibold or bold"),
+    ({"weight": True}, "weight is normal, semibold or bold"),
+    ({"color": ""}, "#rrggbb"),
+    ({"padding": 60}, "padding is between 0 and 50"),
+    ({"border": {"width": 1, "style": "dashed"}}, "unknown key «style»"),
+    ({"border": {"width": 9}}, "border width is between 0 and 5"),
+    ({"border": {"color": "red"}}, "#rrggbb"),
+    ({"can_grow": None}, "can_grow is true or false"),
+    ({"align": "justify"}, "alignment is one of left, center, right"),
+])
+def test_a_style_holds_the_engine_s_keys_only(style, words):
+    p = _with(lambda d: d["sections"]["body"]["items"][3].update(style=style))
+    assert words in p.message and p.item == "rect1", p.message
+    # in a column and in a rule as well
+    p = _with(lambda d: d["sections"]["body"]["items"][2]["columns"][1]["rules"][0].update(style=style))
+    assert words in p.message and p.item == "t1", p.message
+
+
+def test_every_key_of_the_engine_s_style_is_kept():
+    d = example()
+    d["sections"]["body"]["items"][3]["style"] = {
+        "size": 12, "weight": 700, "italic": True, "color": "#112233", "background": "#ffffff", "align": "center",
+        "valign": "middle", "padding": 1.5, "border": {"width": 0.3, "color": "#d9dde5"}, "radius": 2,
+        "format": "#,##0", "can_grow": True}
+    rd.check(d)
+
+
+@pytest.mark.parametrize("options, words", [
+    ({"colors": ["#ff0000"]}, "unknown key «colors»"),
+    ({"top": 0}, "top is a whole number between 1 and 500"),
+    ({"top": 2.5}, "top is a whole number"),
+    ({"sort": "value"}, "sort is one of none, asc, desc"),
+    ({"stacked": None}, "stacked is true or false"),
+    ({"bands": list(range(11))}, "bands are a list of at most 10"),
+    ({"bands": ["a"]}, "bands is a number"),
+    ({"min": "low"}, "min is a number"),
+    ({"target": True}, "target is a number"),
+])
+def test_a_chart_s_options_are_the_engine_s(options, words):
+    p = _with(lambda d: d["sections"]["body"]["items"][1].update(options=options))
+    assert words in p.message and p.item == "chart1", p.message
+
+
+def test_a_matrix_may_have_no_columns_of_its_own():
+    # the engine makes a matrix's columns, and reads only the first one's header, width
+    # and style: no column, or a header without a value, is a matrix it renders
+    def matrix(d):
+        t = d["sections"]["body"]["items"][2]
+        t["matrix"] = {"columns_by": "[year]", "value": "SUM([amount])"}
+        return t
+
+    for columns in ([], [{"header": "Region", "width": 40}], None):
+        d = example()
+        t = matrix(d)
+        if columns is None:
+            t.pop("columns")
+        else:
+            t["columns"] = columns
+        rd.check(d)
+    # a table still needs a column with a value
+    assert "needs 1 to 60 columns" in _with(lambda d: d["sections"]["body"]["items"][2].update(columns=[])).message
+    p = _with(lambda d: d["sections"]["body"]["items"][2].update(columns=[{"header": "x"}]))
+    assert "«value» is missing" in p.message
+    p = _with(lambda d: matrix(d)["matrix"].update(columns_by=["[a]", "[b]", "[c]", "[d]"]))
+    assert "one to three levels" in p.message
+
+
+def test_the_engine_s_bounds():
+    assert "at most 200 characters" in _with(lambda d: d["sections"]["body"]["items"][0].update(label="x" * 201)).message
+    assert "at most 256 characters" in _with(lambda d: d["datasets"][0]["fields"].append(
+        {"name": "f" * 257, "type": "string"})).message
+    assert "at most 256 characters" in _with(lambda d: d["datasets"][0]["calculated"].append(
+        {"name": "c" * 257, "expr": "1"})).message
+
+    def many(d):
+        d["page"]["size"] = {"w": 300, "h": 1200}
+        d["sections"]["page_header"]["items"].extend(
+            {"id": f"x{i}", "type": "text", "x": 0, "y": 0, "w": 5, "h": 5, "value": "a"} for i in range(200))
+
+    assert "at most 200" in _with(many).message
+    assert "between 0 and 500" in _with(lambda d: (d["page"].update(size={"w": 300, "h": 1200}),
+                                                   d["sections"]["page_header"].update(height=600))).message
+
+    def wide_matrix(d):
+        d["page"]["size"] = {"w": 900, "h": 400}
+        d["sections"]["body"]["items"][2]["matrix"] = {"columns_by": "[y]", "value": "SUM([a])", "width": 600}
+
+    assert "matrix column width is between 1 and 500" in _with(wide_matrix).message
+
+
+def test_landscape_puts_the_longer_side_across_a_page_of_one_s_own_size():
+    d = example()
+    d["page"].update(size={"w": 300, "h": 200}, orientation="landscape")
+    d["sections"]["body"]["items"][2]["w"] = 270
+    rd.check(d)
+    assert rd.page_box(d["page"]) == (276, 170)
+
+
+def test_an_image_wrapped_in_lines_is_kept_in_one_piece():
+    raw = b"\x89PNG\r\n\x1a\n" + b"\x01" * 300
+    encoded = base64.b64encode(raw).decode()
+    wrapped = "data:image/png;base64," + "\n".join(encoded[i:i + 76] for i in range(0, len(encoded), 76))
+    d = example()
+    d["sections"]["page_header"]["items"][0]["asset"] = wrapped
+    rd.check(d)
+    assert d["sections"]["page_header"]["items"][0]["asset"] == "data:image/png;base64," + encoded
+
+
+def test_an_svg_the_engine_would_not_know_is_refused():
+    # the engine knows an SVG by its first characters: a comment before <svg is not one
+    commented = "data:image/svg+xml;base64," + base64.b64encode(
+        b'<!-- drawn by hand --><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1 1"/>').decode()
+    assert "does not start with <svg or <?xml" in _image(commented).message
+
+
+def test_a_problem_said_as_the_engine_says_its_own():
+    d = example()
+    assert Problem("x", "sections.body.items[2].columns[0].value", "t1").as_dict(d) == {
+        "item": "t1", "field": "columns[0].value", "pos": None, "length": 0, "message": "x"}
+    assert Problem("x", "datasets[1].source.filters[0]").as_dict(d)["field"] == "datasets[regions].source.filters[0]"
+    assert Problem("x", "parameters[0].default").as_dict(d)["field"] == "parameters[region].default"
+    assert Problem("x", "sections.body.items[9].id").as_dict(d)["field"] == "sections.body.items[9].id"
+    assert Problem("x", "page.margins").as_dict(d)["field"] == "page.margins"
+    d["datasets"][1]["name"] = "orders"  # two of one name: said by its place
+    assert Problem("x", "datasets[1].name").as_dict(d)["field"] == "datasets[1].name"

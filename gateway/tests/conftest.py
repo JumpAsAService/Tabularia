@@ -158,6 +158,7 @@ class FakeEngine:
         self.export_states: dict[str, list[dict]] = {}  # task_id -> states served in turn (the last one stays)
         self.export_polls: list[tuple[str, str | None]] = []  # (path, owner)
         self.export_file: bytes = b"%PDF-1.7 report"
+        self.export_disposition = 'attachment; filename="report.pdf"'  # the file's name, as the engine sends it
         self.pushmails: list[dict] = []  # bodies received on POST /db/pushmail
         self.pushmail_status = 200  # a different answer to test an engine that refuses the email
         self.default_state = {"status": "SUCCESS", "result": {}, "error": None}
@@ -294,7 +295,7 @@ class FakeEngine:
             tid = path.split("/")[3]
             if path.endswith("/file"):  # streamed, as the engine sends it (the gateway passes it on)
                 return httpx.Response(200, content=_chunks(self.export_file), headers={
-                    "content-type": "application/pdf", "content-disposition": 'attachment; filename="report.pdf"'})
+                    "content-type": "application/pdf", "content-disposition": self.export_disposition})
             states = self.export_states.get(tid) or [{"status": "ready", "filename": "report.pdf", "size": 15}]
             return httpx.Response(200, json=states.pop(0) if len(states) > 1 else states[0])
         if path.startswith("/tasks/"):

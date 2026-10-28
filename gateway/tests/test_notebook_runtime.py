@@ -1249,3 +1249,25 @@ def test_a_report_comes_back_as_bytes_with_its_values(pod_module):
         pod_module.report(7, format="xlsx", bad="x")
     with pytest.raises(pod_module.TabulariaError, match="pdf, xlsx or html"):
         pod_module.report(7, format="docx")
+
+
+def test_a_report_takes_the_values_a_notebook_s_data_gives(pod_module):
+    """numpy's and pandas' numbers and lists (what `df["year"].max()` gives), polars'
+    lists and Decimals reach the gateway as values, not as a TypeError of json."""
+    from decimal import Decimal
+
+    class NumpyInt:  # numpy.int64, numpy.bool_…: .tolist() is the Python value
+        def tolist(self):
+            return 2026
+
+    class Series:  # a numpy array, a pandas Series
+        def tolist(self):
+            return ["North", "South"]
+
+    class PolarsSeries:
+        def to_list(self):
+            return [1, 2]
+
+    pod_module.report(7, year=NumpyInt(), region=Series(), ids=PolarsSeries(), rate=Decimal("0.25"))
+    assert pod_module.seen[-1]["body"]["params"] == {"year": 2026, "region": ["North", "South"], "ids": [1, 2],
+                                                     "rate": "0.25"}

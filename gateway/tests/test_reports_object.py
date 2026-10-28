@@ -212,6 +212,7 @@ def test_a_definition_points_only_to_what_its_author_may_read(app, session):
 
 def test_the_sql_s_parameters_are_checked_at_the_save(app, session):
     folder = make_project(session, name="F").id
+    make_datasource(session, name="Orders", project_id=folder)
     me = _sign_in(app, session, "ana@x.local", is_superuser=True)
     region = {"name": "region", "type": "text"}
 
@@ -240,14 +241,16 @@ def test_the_engine_checks_the_expressions_when_it_can(app, session, fake_engine
     assert me.post(f"/projects/{folder}/reports", json={"name": "A", "content": content}, headers=CSRF).status_code == 201
     fake_engine.report_check_response = (500, {"detail": "boom"})
     assert me.post(f"/projects/{folder}/reports", json={"name": "B", "content": content}, headers=CSRF).status_code == 201
-    error = {"item": "t", "where": "sections.body.items[0].value", "message": "Unknown function SUMM", "position": 1}
-    fake_engine.report_check_response = (200, {"errors": [error]})
+    # the engine's own words start in lower case: said as the gateway says its own
+    error = {"item": "t", "field": "value", "pos": 1, "length": 4, "message": "unknown function SUMM"}
+    fake_engine.report_check_response = (200, {"problems": [error]})
     r = me.post(f"/projects/{folder}/reports", json={"name": "C", "content": content}, headers=CSRF)
     assert r.status_code == 422
-    assert r.json()["detail"] == {"message": "Unknown function SUMM", "where": "sections.body.items[0].value",
-                                  "item": "t", "errors": [error]}
+    said = {**error, "message": "Unknown function SUMM"}
+    assert r.json()["detail"] == {"message": "Unknown function SUMM", "where": "value", "item": "t",
+                                  "errors": [said], "problems": [said]}
     assert fake_engine.report_checks[-1]["definition"]["sections"]["body"]["items"][0]["value"] == "=SUMM(1)"
-    fake_engine.report_check_response = (200, {"errors": []})
+    fake_engine.report_check_response = (200, {"problems": []})
     assert me.post(f"/projects/{folder}/reports", json={"name": "C", "content": content}, headers=CSRF).status_code == 201
 
 
