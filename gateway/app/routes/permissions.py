@@ -6,7 +6,7 @@ from app.db.session import get_session
 from app.deps.auth import get_current_user
 from app.deps.permissions import ensure_can
 from app.models import Project, Permission, User, Group
-from app.services import audit
+from app.services import audit, personal_folders
 from app.models.permission import Capability
 from app.schemas.models import PermissionOut, PermissionCreate
 from app.core.routing import ReleasingRoute
@@ -78,6 +78,7 @@ def revoke_permission(permission_id: int, request: Request, user: User = Depends
     if perm is None:
         raise HTTPException(status_code=404, detail="Permission not found")
     ensure_can(session, user, perm.project_id, Capability.MANAGE)
+    personal_folders.guard_grant(session, user, perm)
     detail = {"project_id": perm.project_id, "user_id": perm.user_id, "group_id": perm.group_id,
               "capability": perm.capability}
     session.delete(perm)

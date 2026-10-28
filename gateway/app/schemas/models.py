@@ -391,6 +391,9 @@ class ProjectOut(BaseModel):
     description: str
     parent_id: Optional[int]
     owner_id: Optional[int]
+    # the person whose personal folder this is (services/personal_folders.py); None for
+    # every other folder
+    personal_of: Optional[int] = None
 
 
 class ProjectCreate(BaseModel):

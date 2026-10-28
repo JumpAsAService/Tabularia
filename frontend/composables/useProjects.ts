@@ -6,6 +6,8 @@ export interface Project {
   description: string
   parent_id: number | null
   owner_id: number | null
+  // the person whose personal folder this is; null for every other folder
+  personal_of?: number | null
 }
 
 export interface Permission {

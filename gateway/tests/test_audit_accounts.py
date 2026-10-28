@@ -36,9 +36,13 @@ def _req() -> Request:
 
 
 def _entries(session, action=None):
+    """The log of accounts and groups: the personal folder an account gets when it is
+    created or first signs in is a folder's action, pinned in test_personal_folders.py."""
     query = select(AuditLog).order_by(AuditLog.id)
     if action is not None:
         query = query.where(AuditLog.action == action)
+    else:
+        query = query.where(AuditLog.action != audit.FOLDER_CREATE)
     return session.exec(query).all()
 
 

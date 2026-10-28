@@ -8,7 +8,7 @@ from app.db.session import get_session
 from app.deps.auth import get_current_user, require_observer, require_superuser
 from app.models import ContainerRegistryAccess, User, Group, UserGroupLink
 from app.schemas.models import LocaleChange, PasswordChange, UserOut, UserCreate, UserUpdate
-from app.services import audit, login_throttle, sessions
+from app.services import audit, login_throttle, personal_folders, sessions
 from app.services.masking import mask_email
 from app.services.permissions import ensure_still_admin, is_admin, is_observer_only
 from app.core.routing import ReleasingRoute
@@ -130,6 +130,8 @@ def create_user(
             target_type="user", target_id=user.id, target_label=user.email,
             detail={"at_creation": True},
         )
+    # the person's own folder, born with the account (services/personal_folders.py)
+    personal_folders.ensure(session, user, actor=current, request=request)
     return _to_out(user)  # just created: no group yet
 
 

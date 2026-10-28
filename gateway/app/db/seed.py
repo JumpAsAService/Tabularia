@@ -24,7 +24,7 @@ from app.core.config import admin_password_problem, get_settings
 from app.core.security import hash_password, verify_password
 from app.db.session import engine
 from app.models import User, UserSession
-from app.services import audit, first_run
+from app.services import audit, first_run, personal_folders
 
 logger = logging.getLogger(__name__)
 
@@ -101,3 +101,4 @@ def seed_admin() -> None:
                                (audit.USER_PROMOTE, {"at_creation": True, "via": "startup"})):
             audit.record_audit(session, actor_label=STARTUP_ACTOR, action=action, target_type="user",
                                target_id=admin.id, target_label=admin.email, detail=detail)
+        personal_folders.ensure(session, admin, actor_label=STARTUP_ACTOR, via="startup")

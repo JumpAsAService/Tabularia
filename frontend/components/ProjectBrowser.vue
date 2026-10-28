@@ -50,6 +50,7 @@ import {
   DatabaseSearch,
   NotebookPen,
   FileChartColumn,
+  FolderKey,
 } from 'lucide-vue-next'
 import { errMessage, useApi } from '~/composables/useApi'
 import { useFlows, type FlowSummary } from '~/composables/useFlows'
@@ -149,11 +150,31 @@ const breadcrumb = computed<Project[]>(() => {
   return out
 })
 
+// Personal folders (one per person, born with the account): one's own comes first, the
+// others' (an administrator sees them all) after the shared folders, out of their way.
+function folderRank(p: Project): number {
+  if (p.personal_of == null) return 1
+  return p.personal_of === user.value?.id ? 0 : 2
+}
+
 function childrenOf(parentId: number | null): Project[] {
   const ids = byId.value
   return projects.value
     .filter((p) => (parentId === null ? p.parent_id === null || !ids.has(p.parent_id) : p.parent_id === parentId))
-    .sort((a, b) => a.name.localeCompare(b.name))
+    .sort((a, b) => folderRank(a) - folderRank(b) || a.name.localeCompare(b.name))
+}
+
+/** A personal folder its person cannot delete nor move (the server says the same);
+ *  an administrator can. */
+function personalFixed(p: Project | null | undefined): boolean {
+  return !!p && p.personal_of != null && !isSuper.value
+}
+
+/** Whose personal folder, for the tooltip: the email when the list of users is at hand. */
+function personalLabel(p: Project): string {
+  if (p.personal_of === user.value?.id) return t('projectBrowser.myFolderTitle')
+  const email = users.value.find((u) => u.id === p.personal_of)?.email
+  return email ? t('projectBrowser.personalFolderOf', { who: email }) : t('projectBrowser.personalFolderTitle')
 }
 
 function openFolder(id: number | null) {
@@ -814,8 +835,11 @@ const grantCapability = ref<string>('view')
 
 const groupName = (id: number | null) =>
   groups.value.find((g) => g.id === id)?.name ?? (id != null ? t('projectBrowser.groupFallback', { id }) : '')
+// only an administrator loads the list of users: anyone else still knows their own email
 const userLabel = (id: number | null) =>
-  users.value.find((u) => u.id === id)?.email ?? (id != null ? t('projectBrowser.userFallback', { id }) : '')
+  users.value.find((u) => u.id === id)?.email
+  ?? (id != null && id === user.value?.id ? user.value.email : null)
+  ?? (id != null ? t('projectBrowser.userFallback', { id }) : '')
 
 async function grant() {
   if (!currentId.value) return
@@ -1195,7 +1219,8 @@ watch(currentId, () => { q.value = ''; kindFilter.value = null; settingsOpen.val
                 />
               </span>
               <button v-else-if="r.kind === 'folder'" class="asname" @click="openFolder(r.id)">
-                <component :is="KIND_ICON[r.kind]" :size="15" class="kicon" /> {{ r.name }}
+                <FolderKey v-if="r.raw.personal_of != null" :size="15" class="kicon" />
+                <component :is="KIND_ICON[r.kind]" v-else :size="15" class="kicon" /> {{ r.name }}
               </button>
               <button v-else-if="r.kind === 'connection'" class="asname" @click="openConnDialog(r.raw)">
                 <component :is="KIND_ICON[r.kind]" :size="15" class="kicon" /> {{ r.name }}
@@ -1206,6 +1231,10 @@ watch(currentId, () => { q.value = ''; kindFilter.value = null; settingsOpen.val
               <span v-else class="asname plain">
                 <component :is="KIND_ICON[r.kind]" :size="15" class="kicon" /> {{ r.name }}
                 <Lock v-if="r.locked" :size="12" class="lock" :aria-label="$t('projectBrowser.lockedFlow')" />
+              </span>
+              <span v-if="r.kind === 'folder' && r.raw.personal_of != null" class="tag"
+                    :class="{ mine: r.raw.personal_of === user?.id }" :title="personalLabel(r.raw)">
+                {{ r.raw.personal_of === user?.id ? $t('projectBrowser.myFolderTag') : $t('projectBrowser.personalTag') }}
               </span>
               <span v-if="r.kind === 'datasource' && r.raw.kind === 'database'" class="tag">db</span>
               <ContractBadge v-if="r.kind === 'datasource'" :contract="r.raw.contract" :size="15" />
@@ -1238,7 +1267,7 @@ watch(currentId, () => { q.value = ''; kindFilter.value = null; settingsOpen.val
                 @close="moving = null"
               />
               <button
-                v-else
+                v-else-if="!(r.kind === 'folder' && personalFixed(r.raw))"
                 class="mini"
                 :title="$t('projectBrowser.moveToFolderTitle')"
                 :aria-label="$t('projectBrowser.moveToFolderTitle')"
@@ -1292,7 +1321,7 @@ watch(currentId, () => { q.value = ''; kindFilter.value = null; settingsOpen.val
                 @click="openConnDialog(r.raw)"
               ><Pencil :size="13" /></button>
 
-              <button class="mini danger" :title="$t('projectBrowser.deleteTitle')" :aria-label="$t('projectBrowser.deleteTitle')" @click="removeRow(r)">
+              <button v-if="!(r.kind === 'folder' && personalFixed(r.raw))" class="mini danger" :title="$t('projectBrowser.deleteTitle')" :aria-label="$t('projectBrowser.deleteTitle')" @click="removeRow(r)">
                 <Trash2 :size="13" />
               </button>
             </td>
@@ -1341,7 +1370,10 @@ watch(currentId, () => { q.value = ''; kindFilter.value = null; settingsOpen.val
                 {{ p.group_id != null ? groupName(p.group_id) : userLabel(p.user_id) }}
               </td>
               <td><span class="cap">{{ p.capability }}</span></td>
-              <td class="right"><button class="mini danger" :aria-label="$t('projectBrowser.revokeTitle')" @click="revoke(p)"><X :size="13" /></button></td>
+              <td class="right">
+                <button v-if="!(personalFixed(current) && p.user_id === current.personal_of && p.capability === 'manage')"
+                        class="mini danger" :aria-label="$t('projectBrowser.revokeTitle')" @click="revoke(p)"><X :size="13" /></button>
+              </td>
             </tr>
             <tr v-if="!permissions.length"><td colspan="3" class="muted">{{ $t('projectBrowser.noExplicitPermissions') }}</td></tr>
           </tbody>
@@ -1368,7 +1400,8 @@ watch(currentId, () => { q.value = ''; kindFilter.value = null; settingsOpen.val
           <button class="primary" @click="grant">{{ $t('projectBrowser.grantButton') }}</button>
         </div>
 
-        <div class="dangerzone">
+        <p v-if="personalFixed(current)" class="muted personal-note">{{ $t('projectBrowser.personalFolderNote') }}</p>
+        <div v-else class="dangerzone">
           <button class="danger" @click="deleteCurrentFolder">
             <Trash2 :size="14" /> {{ $t('projectBrowser.deleteFolderButton') }}
           </button>
@@ -1573,6 +1606,11 @@ tr.folderrow .kicon { color: var(--accent-2); }
   border: 1px solid var(--border);
   color: var(--muted);
 }
+.tag.mine {
+  color: var(--accent-2);
+  border-color: color-mix(in srgb, var(--accent-2) 45%, var(--border));
+}
+.personal-note { font-size: 12px; margin: auto 0 0; padding-top: 14px; border-top: 1px solid var(--border-soft); }
 .empty { padding: 28px 4px; }
 /* as `.btn-link`: it lives in listpage.css, not imported here. Without it, the error
    message would come out in the normal text's colour, that is it would not look like an

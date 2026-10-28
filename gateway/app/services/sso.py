@@ -638,6 +638,12 @@ def provision_and_sync(session: Session, claims: dict, cfg: Optional[OidcSetting
     session.refresh(user)
     _record_changes(session, user, request, created=created, renamed=renamed, superuser_before=superuser_before,
                     groups_created=groups_created, added=wanted - current, removed=removed_ids)
+    # the person's own folder: born at the first sign-in, or at the first one after an
+    # older release (services/personal_folders.py). After the groups: an account that
+    # only observes, from its group, gets none.
+    from app.services import personal_folders
+
+    personal_folders.ensure(session, user, actor=user, via="sso", request=request)
 
     def _names(ids: set[int]) -> list[str]:
         if not ids:

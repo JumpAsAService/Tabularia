@@ -2,8 +2,12 @@
 
 - list: only the projects visible to the user (the frontend builds the tree);
 - creation: MANAGE on the parent (root → superuser only);
-- read: VIEW; change: EDIT; deletion: MANAGE (refused when it has children).
+- read: VIEW; change: EDIT; deletion: MANAGE (refused when it has children);
+- a person's personal folder is neither deleted nor moved but by an administrator
+  (services/personal_folders.py).
 """
+from typing import Optional
+
 from fastapi import APIRouter, Depends, HTTPException, Request, status
 from sqlmodel import Session, select
 
@@ -12,7 +16,7 @@ from app.deps.auth import get_current_user
 from app.deps.permissions import ensure_can
 from app.models import Project, User
 from app.models.permission import Capability
-from app.services import audit, openlineage
+from app.services import audit, openlineage, personal_folders
 from app.services import permissions as perm_service
 from app.services.permissions import descendant_ids, folder_parents
 from app.schemas.models import ProjectOut, ProjectCreate, ProjectUpdate
@@ -21,9 +25,16 @@ from app.core.routing import ReleasingRoute
 router = APIRouter(route_class=ReleasingRoute, prefix="/projects", tags=["projects"])
 
 
+def _out(session: Session, project: Project, personal: Optional[dict[int, int]] = None) -> ProjectOut:
+    owner = (personal.get(project.id) if personal is not None
+             else personal_folders.personal_of(session, project.id))
+    return ProjectOut(**project.model_dump(include=set(ProjectOut.model_fields) - {"personal_of"}), personal_of=owner)
+
+
 @router.get("", response_model=list[ProjectOut])
 def list_projects(user: User = Depends(get_current_user), session: Session = Depends(get_session)):
-    return perm_service.visible_projects(session, user)
+    personal = personal_folders.personal_folders(session)
+    return [_out(session, p, personal) for p in perm_service.visible_projects(session, user)]
 
 
 @router.post("", response_model=ProjectOut, status_code=status.HTTP_201_CREATED)
@@ -68,7 +79,7 @@ def _get_project(session: Session, project_id: int) -> Project:
 def get_project(project_id: int, user: User = Depends(get_current_user), session: Session = Depends(get_session)):
     project = _get_project(session, project_id)
     ensure_can(session, user, project_id, Capability.VIEW)
-    return project
+    return _out(session, project)
 
 
 @router.patch("/{project_id}", response_model=ProjectOut)
@@ -101,6 +112,8 @@ def update_project(
         # permission that survives restoring the tree.
         # Audit 2026-09-19, A1: reproduced, from 403 to 201.
         ensure_can(session, user, project_id, Capability.MANAGE)
+        # a personal folder stays at the top level, where its person finds it
+        personal_folders.guard(session, user, project_id, "move")
         if session.get(Project, body.parent_id) is None:
             raise HTTPException(status_code=404, detail="New parent folder not found")
         # No cycles: not inside itself and not inside one of its own DESCENDANTS either, which
@@ -127,7 +140,7 @@ def update_project(
                            target_id=project_id, target_label=project.name,
                            detail={"from_parent": before["parent_id"], "to_parent": project.parent_id})
     session.refresh(project)
-    return project
+    return _out(session, project)
 
 
 @router.delete("/{project_id}", status_code=status.HTTP_204_NO_CONTENT)
@@ -139,6 +152,7 @@ def delete_project(
 ):
     project = _get_project(session, project_id)
     ensure_can(session, user, project_id, Capability.MANAGE)
+    personal_folders.guard(session, user, project_id, "delete")
     has_children = session.exec(select(Project).where(Project.parent_id == project_id)).first()
     if has_children:
         raise HTTPException(status_code=409, detail="The folder contains subfolders: empty it first")

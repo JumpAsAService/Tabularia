@@ -12,7 +12,7 @@ from app.db.session import get_session
 from app.deps.auth import get_current_user, require_observer
 from app.models import User, UserSession
 from app.core.passwords import password_problem
-from app.services import audit, first_run, login_throttle, sessions
+from app.services import audit, first_run, login_throttle, personal_folders, sessions
 from app.services.permissions import is_admin, is_observer, is_observer_only, user_group_ids
 from app.schemas.models import LoginRequest, Token, MeOut, UtcDateTime
 from app.core.routing import ReleasingRoute
@@ -81,6 +81,8 @@ def login(body: LoginRequest, request: Request, response: Response, session: Ses
         )
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Incorrect email or password")
     audit.record_audit(session, actor=user, action=audit.LOGIN, request=request)
+    # an account from before personal folders gets its own now (services/personal_folders.py)
+    personal_folders.ensure(session, user, actor=user, via="sign-in", request=request)
     sessions.write_cookie(response, request, token, row)
     # The interface (which sends the anti-CSRF header) does not need the token in the body,
     # and the page could read it: the HttpOnly cookie is enough for it.
@@ -133,6 +135,7 @@ def setup(body: SetupRequest, request: Request, response: Response, session: Ses
     session.refresh(user)
     audit.record_audit(session, actor=user, action=audit.FIRST_RUN_SETUP, target_type="user",
                        target_id=user.id, target_label=user.email, request=request)
+    personal_folders.ensure(session, user, actor=user, via="first-run", request=request)
     row, token = sessions.open_session(session, user, request, "password", verified_password=user.hashed_password)
     audit.record_audit(session, actor=user, action=audit.LOGIN, request=request)
     sessions.write_cookie(response, request, token, row)
