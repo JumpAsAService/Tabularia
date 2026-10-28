@@ -252,7 +252,8 @@ function problemOf(e: any): Problem {
     return { kind: 'param', message, parameter: detail.parameter }
   }
   if (/more than [\d.,\s ]+ rows/i.test(message)) return { kind: 'rows', message }
-  if (/pages, more than|more than \d+ MB|REPORTS__MAX_PAGES|REPORTS__RENDER_MEMORY_MB/i.test(message)) return { kind: 'size', message }
+  // too many pages, too much memory, or more detail rows than the pages hold (the engine stops before laying out)
+  if (/pages, more than|pages hold|more than \d+ MB|REPORTS__MAX_PAGES|REPORTS__RENDER_MEMORY_MB/i.test(message)) return { kind: 'size', message }
   if (code === 504 || /took longer|REPORTS__RENDER_SECONDS|time limit/i.test(message)) return { kind: 'timeout', message }
   if (code === 503 || /chart service|REPORTS__CHART_URL|could not be drawn/i.test(message)) return { kind: 'charts', message }
   if (/dataset/i.test(message) && (code === 404 || /you can read|cannot read|cannot use|does not exist|no data yet|not found/i.test(message))) {

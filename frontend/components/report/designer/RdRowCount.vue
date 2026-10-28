@@ -15,7 +15,8 @@ const text = computed(() => {
   const n = note.value
   if (!n) return ''
   if (n.level === 'over') return t('reportDesigner.rows.over', { n: number(n.rows) })
-  if (n.level === 'slow') return t('reportDesigner.rows.slow', { n: number(n.rows), s: n.seconds })
+  // plural on the seconds: «about 1 second», «about 3 seconds»
+  if (n.level === 'slow') return t('reportDesigner.rows.slow', { n: number(n.rows), s: n.seconds }, n.seconds)
   return t('reportDesigner.rows.plain', { n: number(n.rows) }, n.rows)
 })
 </script>

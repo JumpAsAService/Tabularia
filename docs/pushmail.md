@@ -79,7 +79,7 @@ designer goes out with the next email.
   as plain text for a mail client that shows no HTML. The detail stays in the attached
   file. With a plain-text message, the text goes on top; with an HTML one, the summary
   goes at the end of its body.
-- **Limits.** A report reads at most `REPORTS__MAX_ROWS` rows per dataset (1,000,000
+- **Limits.** A report reads at most `REPORTS__MAX_ROWS` rows per dataset (3,000,000
   by default) and renders at most `REPORTS__MAX_PAGES` pages: past them the cell fails,
   naming the report and the dataset, and nothing is sent. The files of the reports count
   towards the 15 MB of an email.

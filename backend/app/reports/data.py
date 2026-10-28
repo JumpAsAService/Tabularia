@@ -15,27 +15,48 @@ more: then the render stops and names the dataset. The values are made plain for
 expressions — decimals as floats, date-times in the report's time zone and without it (one
 without a zone is a UTC instant, the engines' standard: app/engine/temporal.py) — and the
 report's calculated fields are added to every row.
+
+A query's and a chain's rows are read as columns and stay so (app/reports/frames.py): the
+dataset's `table`. Its `rows`, Python's dicts, are made only when the interpreter asks for
+them (an item DuckDB leaves to it, the choices of a parameter).
 """
 from __future__ import annotations
 
 import math
-from dataclasses import dataclass
-from datetime import date, datetime, time, timedelta, timezone
-from decimal import Decimal
+from datetime import date, datetime
 from typing import Any
 from zoneinfo import ZoneInfo
 
 from app.core import placeholders as ph
 from app.reports import definition as rd
 from app.reports import expressions as ex
+from app.reports import frames
 from app.reports.errors import ReportError
 
 
-@dataclass
 class DataSet:
-    name: str
-    columns: dict[str, str]  # name → type, as the engine names it
-    rows: list[dict[str, Any]]
+    """A dataset read: its columns (name → type, as the engine names it), and its rows as
+    Python's dicts, or in columns (`table`, whose rows are made when asked for)."""
+
+    def __init__(self, name: str, columns: dict[str, str], rows: list[dict[str, Any]] | None = None,
+                 table: frames.Table | None = None):
+        self.name = name
+        self.columns = columns
+        self._rows = rows
+        self.table = table
+
+    @property
+    def rows(self) -> list[dict[str, Any]]:
+        if self._rows is None:
+            self._rows = self.table.rows() if self.table is not None else []
+        return self._rows
+
+    @rows.setter
+    def rows(self, rows: list[dict[str, Any]]) -> None:
+        self._rows = rows
+
+    def __repr__(self) -> str:
+        return f"DataSet({self.name!r}, {len(self.columns)} columns, {'columns' if self.table else 'rows'})"
 
 
 def used_datasets(report: rd.Report) -> list[str]:
@@ -98,25 +119,7 @@ def _expressions_of(it: Any) -> list[str | None]:
     return []
 
 
-def _plain(value: Any, tz: ZoneInfo) -> Any:
-    if value is None or isinstance(value, (bool, int, str)):
-        return value
-    if isinstance(value, float):
-        return value if math.isfinite(value) else None
-    if isinstance(value, Decimal):
-        return float(value) if value.is_finite() else None
-    if isinstance(value, datetime):
-        aware = value if value.tzinfo else value.replace(tzinfo=timezone.utc)
-        return aware.astimezone(tz).replace(tzinfo=None)
-    if isinstance(value, date):
-        return value
-    if isinstance(value, time):
-        return value.isoformat()
-    if isinstance(value, timedelta):
-        return value.total_seconds()
-    if isinstance(value, (bytes, bytearray, memoryview)):
-        return None
-    return str(value)
+_plain = frames.plain
 
 
 def _non_finite(columns: dict[str, str], rows: list[dict]) -> None:
@@ -129,7 +132,18 @@ def _non_finite(columns: dict[str, str], rows: list[dict]) -> None:
                 row[c] = None
 
 
-def _read_one(name: str, spec: dict, max_rows: int) -> tuple[dict[str, str], list[dict], bool]:
+def _preview(engine: Any, source: Any, operations: list, max_rows: int) -> Any:
+    """The chain read as a preview without the cache, as a DataFrame when the engine gives
+    one (preview(frame=True))."""
+    import inspect
+
+    if "frame" in inspect.signature(engine.preview).parameters:
+        return engine.preview(source, operations, limit=max_rows, use_cache=False, frame=True)
+    return engine.preview(source, operations, limit=max_rows, use_cache=False)
+
+
+def _read_one(name: str, spec: dict, max_rows: int) -> tuple[dict[str, str], Any, bool]:
+    """(columns, rows or a DataFrame, over the cap)."""
     from app.engine.exceptions import EngineError, SourceNotFoundError
     from app.ingest.converters import IngestError
 
@@ -145,14 +159,16 @@ def _read_one(name: str, spec: dict, max_rows: int) -> tuple[dict[str, str], lis
             from app.ingest.db_source import DbConnectionSpec, query_rows
 
             df, truncated = query_rows(DbConnectionSpec(**spec["connection"]), spec.get("sql") or "", max_rows)
-            return {n: str(t) for n, t in df.schema.items()}, df.to_dicts(), truncated
+            return {n: str(t) for n, t in df.schema.items()}, df, truncated
         if "input_key" in spec:
             from app.engine import DEFAULT_ENGINE, DataSource, get_engine
 
             engine = get_engine((spec.get("engine") or DEFAULT_ENGINE).lower())
             source = DataSource(bucket=spec["bucket"], key=spec["input_key"])
-            result = engine.preview(source, spec.get("operations") or [], limit=max_rows, use_cache=False)
+            result = _preview(engine, source, spec.get("operations") or [], max_rows)
             columns = {c.name: c.dtype for c in result.columns}
+            if result.frame is not None:
+                return columns, result.frame, result.truncated
             _non_finite(columns, result.rows)
             return columns, result.rows, result.truncated
     except SourceNotFoundError as e:
@@ -170,6 +186,11 @@ def read_dataset(name: str, spec: Any, max_rows: int, tz: ZoneInfo) -> DataSet:
     if truncated:
         raise ReportError(f"the dataset «{name}» has more than {max_rows:,} rows, the most a report reads: "
                           "aggregate it in SQL, or filter it")
+    if not isinstance(rows, list):  # a DataFrame: in columns, its values made plain column by column
+        table = frames.from_frame(rows, tz)
+        if table is not None:
+            return DataSet(name, columns, table=table)
+        rows = rows.to_dicts()
     return DataSet(name, columns, [{k: _plain(v, tz) for k, v in r.items()} for r in rows])
 
 

@@ -335,10 +335,11 @@ engine:
 # a child process of the worker, the charts drawn by the chartRenderer sidecar below.
 reports:
   # The most rows a report reads from each of its datasets: one more stops the render and
-  # names the dataset (aggregate it in SQL, or filter it). A million rows take some 1.1 GiB
-  # of the worker's memory while the report renders (measured): with worker.concurrency
-  # renders at once, keep worker.resources.limits.memory above concurrency × that.
-  maxRows: 1000000
+  # names the dataset (aggregate it in SQL, or filter it). The report computes in columns
+  # with DuckDB: a million rows take some 1.5 s and half a GiB of the worker's memory while
+  # it renders (measured; 10 million, 10 s and 2.2 GiB): with worker.concurrency renders at
+  # once, keep worker.resources.limits.memory above concurrency × that.
+  maxRows: 3000000
   # The most pages of one report (with renderMemoryMb below: 1024 holds 200 with a margin).
   maxPages: 200
   # The memory and the time of the child process that lays the pages out (Typst). It needs

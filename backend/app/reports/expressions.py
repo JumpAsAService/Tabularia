@@ -833,16 +833,19 @@ class Context:
     scopes: the sets of rows from the outermost (the table or dataset) to the innermost
     (the current group) — aggregates read the last; running/running_index: the rows a
     RUNNING total goes over and how far; datasets: every dataset by name;
-    params: the parameters' values; memo: shared between the contexts of one render."""
+    params: the parameters' values; memo: shared between the contexts of one render.
+
+    A set of rows is a list of dicts, or rows that stay in DuckDB (frames.SqlRows): those
+    answer an aggregate, the first row's field and a running total themselves."""
 
     loc: formats.Locale
     now: datetime  # aware, in the report's time zone
     row: dict | None = None
-    scopes: list[list[dict]] = field(default_factory=list)
-    running: list[dict] | None = None
+    scopes: list[Any] = field(default_factory=list)
+    running: Any = None
     running_index: int = -1
     rownumber: int | None = None
-    datasets: dict[str, list[dict]] = field(default_factory=dict)
+    datasets: Any = field(default_factory=dict)
     params: dict[str, Any] = field(default_factory=dict)
     report: str = ""
     memo: dict = field(default_factory=dict)
@@ -1049,6 +1052,8 @@ class Evaluator:
         row = ctx.row
         if row is None:
             scope = ctx.scopes[-1] if ctx.scopes else None
+            if scope is not None and not isinstance(scope, list):
+                return scope.first_value(node.name)
             row = scope[0] if scope else None
             if row is None:
                 return None
@@ -1145,16 +1150,19 @@ class Evaluator:
                 rows = ctx.datasets.get(named, [])
             else:
                 rows = ctx.scopes[-1] if ctx.scopes else ([ctx.row] if ctx.row is not None else [])
+        if not isinstance(rows, list):  # rows that stay in DuckDB (app/reports/frames.py)
+            return rows.aggregate(node, ctx)
         args = node.args[:-1] if named is not None else node.args
         key = (id(node), id(rows))
         hit = ctx.memo.get(key)
-        if hit is not None and hit[0] is rows:
-            return hit[1]
+        if hit is not None and hit[0] is rows and hit[1] is node:
+            return hit[2]
         if not args:
             value = len(rows)
         else:
             value = _aggregate(node.name, self._values(args[0], ctx, rows))
-        ctx.memo[key] = (rows, value)  # the rows are kept alive with the key: an id is never reused
+        # the rows and the tree are kept alive with the key: neither id is reused while it is here
+        ctx.memo[key] = (rows, node, value)
         return value
 
     def _call(self, node: Call, ctx: Context) -> Any:
@@ -1180,13 +1188,16 @@ class Evaluator:
             idx = ctx.running_index
             if idx < 0 or not rows:
                 return self._aggregate(inner, ctx)
+            if not isinstance(rows, list):
+                running = rows.running(inner, ctx)
+                return running[min(idx, len(running) - 1)]
             key = ("running", id(inner), id(rows))
             hit = ctx.memo.get(key)
-            if hit is None or hit[0] is not rows:
+            if hit is None or hit[0] is not rows or hit[1] is not inner:
                 values = self._values(inner.args[0], ctx, rows) if inner.args else [1] * len(rows)
-                hit = (rows, _running(inner.name if inner.args else "COUNT", values))
+                hit = (rows, inner, _running(inner.name if inner.args else "COUNT", values))
                 ctx.memo[key] = hit
-            return hit[1][min(idx, len(rows) - 1)]
+            return hit[2][min(idx, len(rows) - 1)]
         if name == "ROWNUMBER":
             return ctx.rownumber
         if name == "IF":
@@ -1291,7 +1302,7 @@ def _scalar(name: str, v: list[Any], ctx: Context) -> Any:
             return t[:max(int(_num(v[1], "LEFT")), 0)]
         if name == "RIGHT":
             n = max(int(_num(v[1], "RIGHT")), 0)
-            return t[len(t) - n:] if n else ""
+            return t[-n:] if n else ""
         if name == "MID":
             start, count = max(int(_num(v[1], "MID")), 1) - 1, max(int(_num(v[2], "MID")), 0)
             return t[start:start + count]

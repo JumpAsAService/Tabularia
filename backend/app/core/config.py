@@ -551,11 +551,13 @@ class ReportsSettings(BaseModel):
     env: REPORTS__CHART_URL — the chart service (ECharts to SVG): a sidecar of the worker
     pod on Kubernetes, the `chart-renderer` service on Compose; empty = no charts."""
 
-    # measured: a million rows (8 columns) grouped with totals take some 27 s and 1.1 GiB in
-    # the worker's process (a report holds its rows as Python values); the layout's child
-    # process apart, which the pages bound: 186 pages of grouped tables, some 750 MiB for the
-    # PDF and 830 for the screen's SVG pages, so 1024 MiB holds 200 with a margin
-    max_rows: int = Field(default=1_000_000, ge=1, le=10_000_000)
+    # measured: a million rows (8 columns) grouped with totals take some 1.3 s and 470 MiB in
+    # the worker's process, ten million 10 s and 2.2 GiB (the rows in columns, the groups and
+    # totals in DuckDB: app/reports/frames.py; as Python's values they took 27 s and 1.1 GiB a
+    # million); the layout's child process apart, which the pages bound: 186 pages of grouped
+    # tables, some 750 MiB for the PDF and 830 for the screen's SVG pages, so 1024 MiB holds
+    # 200 with a margin
+    max_rows: int = Field(default=3_000_000, ge=1, le=10_000_000)
     max_pages: int = Field(default=200, ge=1, le=10_000)
     render_memory_mb: int = Field(default=1024, ge=128)
     render_seconds: int = Field(default=120, ge=5)

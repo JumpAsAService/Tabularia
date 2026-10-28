@@ -11,7 +11,7 @@ import math
 from abc import ABC, abstractmethod
 from typing import Any
 
-from pydantic import BaseModel, Field, field_validator
+from pydantic import BaseModel, ConfigDict, Field, field_validator
 
 
 # ─────────────────────────────────────────────────────────────────────────────
@@ -39,6 +39,8 @@ class ColumnInfo(BaseModel):
 class PreviewResult(BaseModel):
     """A preview's result: a sample of rows + the schema."""
 
+    model_config = ConfigDict(arbitrary_types_allowed=True)
+
     columns: list[ColumnInfo]
     rows: list[dict[str, Any]]
     row_count: int = Field(..., description="How many rows the sample returned holds")
@@ -49,6 +51,10 @@ class PreviewResult(BaseModel):
     # upstream step to cache.
     cache_state: str | None = Field(default=None)
     cache_cap_rows: int | None = Field(default=None, description="The cache's row cap, when it matters")
+    # the rows as the engine's Polars DataFrame instead of `rows`, when the caller asked for
+    # them so (preview(frame=True): a report reads its datasets in columns, app/reports/
+    # frames.py); never serialized
+    frame: Any = Field(default=None, exclude=True)
 
     @field_validator("rows")
     @classmethod
@@ -61,6 +67,12 @@ class PreviewResult(BaseModel):
                 if isinstance(v, float) and not math.isfinite(v):
                     row[k] = "NaN" if math.isnan(v) else ("inf" if v > 0 else "-inf")
         return rows
+
+
+def preview_rows(df: Any, frame: bool) -> dict[str, Any]:
+    """A PreviewResult's rows: Python's dicts, or with `frame` the DataFrame itself (a
+    million rows as dicts weigh a gigabyte)."""
+    return {"rows": [], "frame": df} if frame else {"rows": df.to_dicts()}
 
 
 class RunResult(BaseModel):
@@ -94,6 +106,7 @@ class Engine(ABC):
         limit: int = 100,
         use_cache: bool = True,
         sort_keys: list[str] | None = None,
+        frame: bool = False,
     ) -> PreviewResult: ...
 
     @abstractmethod

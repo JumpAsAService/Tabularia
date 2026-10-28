@@ -34,6 +34,7 @@ from app.engine.base import (
     Operation,
     PreviewResult,
     RunResult,
+    preview_rows,
 )
 from app.engine.cache import StepCache, plan_hashes
 from app.engine.context import OperationContext
@@ -186,6 +187,7 @@ class PolarsEngine(DeferredStepCache, Engine):
         limit: int = 100,
         use_cache: bool = True,
         sort_keys: list[str] | None = None,
+        frame: bool = False,
     ) -> PreviewResult:
         ops = _coerce_ops(operations)
         with self._session() as ctx:
@@ -212,7 +214,7 @@ class PolarsEngine(DeferredStepCache, Engine):
                 df = df.head(limit)
             return PreviewResult(
                 columns=_columns_of(df.schema),
-                rows=df.to_dicts(),
+                **preview_rows(df, frame),
                 row_count=df.height,
                 truncated=truncated,
                 cache_state=cstate, cache_cap_rows=ccap,

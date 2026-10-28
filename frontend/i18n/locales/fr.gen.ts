@@ -379,7 +379,7 @@ export default {
     },
     "rows": {
       "plain": "aucune ligne | {n} ligne | {n} lignes",
-      "slow": "environ {n} lignes : le rapport prendra environ {s} secondes et beaucoup de mémoire — agrégez en SQL (GROUP BY) pour qu'il soit rapide",
+      "slow": "environ {n} lignes : le rapport prendra environ {s} seconde et beaucoup de mémoire — agrégez en SQL (GROUP BY) pour qu'il soit rapide | environ {n} lignes : le rapport prendra environ {s} secondes et beaucoup de mémoire — agrégez en SQL (GROUP BY) pour qu'il soit rapide",
       "over": "plus de {n} lignes : le rapport ne sera pas généré — ajoutez un GROUP BY ou un filtre",
       "title": "Comptées avec les valeurs par défaut des paramètres, à la lecture des champs"
     },

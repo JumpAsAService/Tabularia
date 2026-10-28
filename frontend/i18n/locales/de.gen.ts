@@ -379,7 +379,7 @@ export default {
     },
     "rows": {
       "plain": "keine Zeilen | {n} Zeile | {n} Zeilen",
-      "slow": "etwa {n} Zeilen: der Bericht braucht etwa {s} Sekunden und viel Speicher — aggregieren Sie in SQL (GROUP BY), damit er schnell wird",
+      "slow": "etwa {n} Zeilen: der Bericht braucht etwa {s} Sekunde und viel Speicher — aggregieren Sie in SQL (GROUP BY), damit er schnell wird | etwa {n} Zeilen: der Bericht braucht etwa {s} Sekunden und viel Speicher — aggregieren Sie in SQL (GROUP BY), damit er schnell wird",
       "over": "mehr als {n} Zeilen: der Bericht wird nicht erstellt — fügen Sie ein GROUP BY oder einen Filter hinzu",
       "title": "Mit den Standardwerten der Parameter gezählt, als die Felder gelesen wurden"
     },

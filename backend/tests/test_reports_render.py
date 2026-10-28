@@ -24,6 +24,7 @@ from app.reports import pdf, render
 from app.reports.errors import ReportError
 from app.tasks import jobs, report_jobs
 from tests import report_samples as samples
+from tests.reports_both_ways import both_ways  # noqa: F401 — every report, both ways
 from tests.fakes import FakeRedis
 from tests.test_export_route import Result, Storage, _play
 
@@ -356,6 +357,20 @@ def test_a_wide_matrix_shows_its_total_column_and_says_what_is_left_out(tmp_path
     html = _mhtml(run(tmp_path, chart_service, "html", definition=d).path)[0]
     assert "altre 9 colonne sono nel report allegato" in html
     assert html.count('<th align="right"') == 1 and ">Totale</th>" in html
+
+
+def test_a_calculated_field_reads_an_aggregate_of_another_dataset(tmp_path):
+    """`[amount] / SUM([goal], "goals")` in a calculated field: the datasets were given to
+    the expressions only after the calculated fields, so the other dataset had no rows and
+    the share was empty."""
+    share = {"name": "share", "expr": '[amount] / SUM([goal], "goals")'}
+    d = {"v": 1, "datasets": [{"name": "d", "calculated": [share]}, {"name": "goals"}],
+         "sections": {"body": {"items": [{"id": "t", "type": "table", "dataset": "d", "x": 0, "y": 0, "w": 100, "h": 10,
+                                          "columns": [{"header": "Share", "value": "[share]"}]}]}}}
+    data = {"d": {"rows": [{"amount": 10.0}, {"amount": 30.0}]}, "goals": {"rows": [{"goal": 20.0}, {"goal": 20.0}]}}
+    r = render.render(d, data, {}, "xlsx", tmp_path, limits=render.Limits(chart_url=""), now=NOW)
+    sheet = zipfile.ZipFile(r.path).read("xl/worksheets/sheet1.xml").decode()
+    assert re.findall(r"<v>([^<]+)</v>", sheet)[-2:] == ["0.25", "0.75"]
 
 
 # ── choices of a parameter ───────────────────────────────────────────────────

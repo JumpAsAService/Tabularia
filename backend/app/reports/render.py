@@ -18,8 +18,8 @@ from pathlib import Path
 from typing import Any
 
 from app.core import placeholders as ph
-from app.reports import charts, data as rdata, definition as rd, email_html, expressions as ex, formats, model as rmodel
-from app.reports import pdf, xlsx
+from app.reports import charts, data as rdata, definition as rd, email_html, expressions as ex, formats, frames
+from app.reports import model as rmodel, pdf, xlsx
 from app.reports.errors import ReportError
 
 FORMATS = ("pdf", "svg", "xlsx", "html")
@@ -89,12 +89,8 @@ def render(definition: dict, datasets: dict[str, dict], params: dict[str, Any] |
     problems = rd.problems(report, columns)
     if problems:
         raise ReportError(f"the report does not fit its data: {problems[0]}")
-    ex_eval = ex.Evaluator()
-    rdata.add_calculated(report, data, ctx, ex_eval)
-    ctx.datasets = {name: ds.rows for name, ds in data.items()}
-
-    m = rmodel.build(report, data, values, ctx, state=state, title=title, max_pages=limits.max_pages,
-                     interactive=fmt == "svg", layout=fmt in ("pdf", "svg"))
+    m = _model(report, data, values, ctx, state=state, title=title, max_pages=limits.max_pages,
+               interactive=fmt == "svg", layout=fmt in ("pdf", "svg"))
     out = workdir / f"report.{EXTENSION[fmt]}"
     if fmt == "xlsx":
         size = report.page.size if isinstance(report.page.size, str) else None
@@ -122,6 +118,21 @@ def render(definition: dict, datasets: dict[str, dict], params: dict[str, Any] |
            "inputs": {"model": json.dumps(m.doc, ensure_ascii=False, separators=(",", ":"))}}
     result = pdf.run(job, limits.memory_mb, limits.seconds, limits.max_pages)
     return Rendered(out, result.get("pages"), m.warnings)
+
+
+def _model(report: rd.Report, data: dict[str, rdata.DataSet], values: dict[str, Any], ctx: ex.Context,
+           **kw: Any) -> rmodel.Model:
+    """The calculated fields and the render model: in DuckDB (app/reports/frames.py), which
+    is closed with them, or the interpreter's way."""
+    if not frames.enabled():
+        # given before the calculated fields: one may read an aggregate of another dataset
+        ctx.datasets = {name: ds.rows for name, ds in data.items()}
+        rdata.add_calculated(report, data, ctx, ex.Evaluator())
+        return rmodel.build(report, data, values, ctx, **kw)
+    with frames.build_store(report, data, ctx.loc) as store:
+        ctx.datasets = store.datasets(data)
+        frames.add_calculated(report, data, store, ctx)
+        return rmodel.build(report, data, values, ctx, store=store, **kw)
 
 
 def filename(name: str | None, fmt: str) -> str:

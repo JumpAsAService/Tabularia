@@ -16,10 +16,19 @@ Keep-together: the last row of a group travels with the group's footer (and a fo
 the footer of the group around it), as one unbreakable block — Typst alone leaves a
 subtotal alone at the top of a page. Group headers repeat on the pages a group continues
 on (Typst's subheaders).
+
+The rows: what the model asks of them — filter them, sort them, group them, split them by a
+category, give the rows a page shows — goes through a strategy, `PyData` (the
+interpreter's way, every expression walked row by row over Python's dicts) or
+`frames.SqlData` (the rows stay in columns, DuckDB computes): the same questions, the same
+answers. Each item tries DuckDB's way first and, where it cannot be sure of the
+interpreter's result, is built again the interpreter's way (`_Builder.either`).
 """
 from __future__ import annotations
 
 import json
+import logging
+from collections.abc import Iterator, Mapping
 from dataclasses import dataclass, field
 from datetime import date, datetime
 from functools import cmp_to_key
@@ -28,14 +37,17 @@ from typing import Any
 from app.reports import charts
 from app.reports import definition as rd
 from app.reports import expressions as ex
-from app.reports import formats, glyphs
+from app.reports import formats, frames, glyphs
 from app.reports.data import DataSet
 from app.reports.errors import ReportError
+
+logger = logging.getLogger(__name__)
 
 MM_PX = 96 / 25.4  # CSS pixels in a millimetre: the chart service draws in px
 MAX_GLUED = 5  # the longest run of rows kept together (a deep nest of footers)
 CELL_PAD = 1.5  # mm left and right of a cell's text (template.typ, cell-inset)
 MIN_SHARE = 10.0  # mm a column without a width keeps when the others are too wide
+MIN_ROW = 1.2  # mm: no row of a table is lower (the padding of its cells alone is 2.2, template.typ)
 PALETTE = {"muted": "#6b7590", "rule": "#d9dde5", "band": "#e9eef9", "head": "#f1f3f5", "negative": "#c92a2a",
            "positive": "#2b8a3e", "total": "#1f2933"}
 
@@ -126,31 +138,8 @@ def _kind_of(v: Any) -> str:
     return "text"
 
 
-def sort_key(v: Any) -> tuple:
-    """A key that orders any value, NULL marked so it can go last."""
-    if v is None:
-        return (1, 0, 0)
-    if isinstance(v, bool):
-        return (0, 0, int(v))
-    if isinstance(v, (int, float)):
-        return (0, 1, v)
-    if isinstance(v, datetime):
-        return (0, 2, v)
-    if isinstance(v, date):
-        return (0, 2, datetime(v.year, v.month, v.day))
-    if isinstance(v, str):
-        return (0, 3, v.casefold(), v)
-    return (0, 4, str(v))
-
-
-def _compare(a: tuple, b: tuple, direction: str) -> int:
-    """NULL last in both directions."""
-    if a == b:
-        return 0
-    if a[0] != b[0]:
-        return 1 if a[0] else -1
-    r = -1 if a < b else 1
-    return r if direction == "asc" else -r
+sort_key = frames.sort_key  # a key that orders any value, NULL marked so it can go last
+_compare = frames.compare  # NULL last in both directions
 
 
 def key_id(v: Any) -> Any:
@@ -214,14 +203,190 @@ def _subtotal_fn(col: rd.Column) -> int | None:
     return None
 
 
+class _Datasets(Mapping):
+    """The datasets by name for the evaluator (an aggregate that names one): their rows as
+    the strategy has them, taken when an aggregate asks."""
+
+    def __init__(self, names: list[str], rows: Any):
+        self._names = names
+        self._rows = rows
+
+    def __getitem__(self, name: str) -> Any:
+        if name not in self._names:
+            raise KeyError(name)
+        return self._rows(name)
+
+    def __iter__(self) -> Iterator[str]:
+        return iter(self._names)
+
+    def __len__(self) -> int:
+        return len(self._names)
+
+
+class PyData:
+    """The interpreter's way: a dataset's rows as Python's dicts, every expression walked
+    row by row."""
+
+    def __init__(self, data: dict[str, DataSet], ev: ex.Evaluator):
+        self.data = data
+        self.ev = ev
+        self._ids: dict[int, tuple[list, set]] = {}
+
+    def rows(self, name: str | None) -> list[dict]:
+        if name is None:
+            return []
+        ds = self.data.get(name)
+        return ds.rows if ds else []
+
+    def where(self, rows: list[dict], node: ex.Node, ctx: ex.Context, item: str) -> list[dict]:
+        kept = []
+        try:
+            for r in rows:
+                ctx.row = r
+                if ex.truthy(self.ev(node, ctx)):
+                    kept.append(r)
+        except ex.EvalError as e:
+            raise ReportError(f"item «{item}», filter: {e}") from None
+        return kept
+
+    def sort(self, rows: list[dict], keys: list[tuple[ex.Node, str]], ctx: ex.Context, item: str) -> list[dict]:
+        if not keys:
+            return rows
+        decorated = []
+        try:
+            for r in rows:
+                ctx.row = r
+                decorated.append(([sort_key(self.ev(n, ctx)) for n, _ in keys], r))
+        except ex.EvalError as e:
+            raise ReportError(f"item «{item}», sort: {e}") from None
+
+        def cmp(a: tuple, b: tuple) -> int:
+            for ka, kb, (_, d) in zip(a[0], b[0], keys):
+                c = _compare(ka, kb, d)
+                if c:
+                    return c
+            return 0
+
+        decorated.sort(key=cmp_to_key(cmp))
+        return [r for _, r in decorated]
+
+    def tree(self, rows: list[dict], levels: list[tuple[ex.Node, str]], ctx: ex.Context,
+             item: str) -> tuple[list[dict], list[dict]]:
+        """The rows of a level split by its group's key, in the group's order; a group's
+        rows are the concatenation of its children's, so a RUNNING total over a parent
+        follows the order the groups are written in. And the table's rows one group after
+        the other."""
+
+        def split(rows: list[dict], level: int) -> list[dict]:
+            node, direction = levels[level]
+            buckets: dict[tuple, tuple[Any, list[dict]]] = {}
+            try:
+                for r in rows:
+                    ctx.row = r
+                    k = self.ev(node, ctx)
+                    buckets.setdefault(sort_key(k), (k, []))[1].append(r)
+            except ex.EvalError as e:
+                raise ReportError(f"item «{item}», groups[{level}].by: {e}") from None
+            out = []
+            for sk in sorted(buckets, key=cmp_to_key(lambda a, b: _compare(a, b, direction))):
+                key, sub = buckets[sk]
+                children = split(sub, level + 1) if level + 1 < len(levels) else None
+                if children is not None:
+                    sub = [r for c in children for r in c["rows"]]
+                out.append({"key": key, "rows": sub, "children": children})
+            return out
+
+        tree = split(rows, 0)
+        return tree, [r for node in tree for r in node["rows"]]
+
+    def details(self, rows: list[dict]) -> list[dict]:
+        return rows
+
+    def partition(self, rows: list[dict], node: ex.Node, ctx: ex.Context, item: str,
+                  where: str) -> list[tuple[Any, list[dict]]]:
+        buckets: dict[tuple, tuple[Any, list[dict]]] = {}
+        try:
+            for r in rows:
+                ctx.row = r
+                k = self.ev(node, ctx)
+                buckets.setdefault(sort_key(k), (k, []))[1].append(r)
+        except ex.EvalError as e:
+            raise ReportError(f"item «{item}», {where}: {e}") from None
+        return list(buckets.values())
+
+    def union(self, parts: list[list[dict]]) -> list[dict]:
+        return [r for sub in parts for r in sub]
+
+    def intersect(self, a: list[dict], b: list[dict]) -> list[dict]:
+        hit = self._ids.get(id(b))
+        if hit is None or hit[0] is not b:
+            hit = (b, {id(r) for r in b})
+            self._ids[id(b)] = hit
+        ids = hit[1]
+        return [r for r in a if id(r) in ids]
+
+    def points(self, rows: list[dict], x: ex.Node, y: ex.Node, ctx: ex.Context, item: str) -> list[tuple]:
+        out = []
+        for r in rows:
+            ctx.row = r
+            try:
+                out.append((self.ev(x, ctx), self.ev(y, ctx)))
+            except ex.EvalError as e:
+                raise ReportError(f"item «{item}»: {e}") from None
+        return out
+
+    def matrix(self, rows: list[dict], levels: list[ex.Node], ctx: ex.Context,
+               item: str) -> tuple[list[tuple], dict, Any]:
+        keys_of: dict[int, tuple] = {}
+        distinct: dict[tuple, tuple] = {}
+        try:
+            for r in rows:
+                ctx.row = r
+                raw = tuple(self.ev(n, ctx) for n in levels)
+                sk = tuple(sort_key(v) for v in raw)
+                keys_of[id(r)] = sk
+                distinct.setdefault(sk, raw)
+        except ex.EvalError as e:
+            raise ReportError(f"item «{item}», matrix.columns_by: {e}") from None
+        order = sorted(distinct, key=cmp_to_key(lambda a, b: next(
+            (c for c in (_compare(x, y, "asc") for x, y in zip(a, b)) if c), 0)))
+        return order, distinct, {"keys_of": keys_of, "order": order, "by": {}}
+
+    def matrix_sub(self, scope: list[dict], state: dict, j: int) -> list[dict]:
+        hit = state["by"].get(id(scope))
+        if hit is None or hit[0] is not scope:
+            by_key: dict[tuple, list[dict]] = {}
+            for r in scope:
+                by_key.setdefault(state["keys_of"][id(r)], []).append(r)
+            hit = (scope, by_key)
+            state["by"][id(scope)] = hit
+        return hit[1].get(state["order"][j], [])
+
+
 class _Builder:
     def __init__(self, report: rd.Report, data: dict[str, DataSet], ctx: ex.Context, state: dict | None,
-                 interactive: bool, layout: bool = True):
+                 interactive: bool, layout: bool = True, store: frames.Store | None = None, max_pages: int = 400):
         self.r = report
+        self.max_pages = max_pages
         self.data = data
-        self.ctx = ctx
         self.loc = ctx.loc
         self.ev = ex.Evaluator()
+        names = [d.name for d in report.datasets]
+        self.py = PyData(data, self.ev)
+        self.ctx_py = ctx.at(datasets=_Datasets(names, self.py.rows))
+        self.sql = frames.SqlData(store, self.ev) if store is not None else None
+        if self.sql is not None:
+            sql = self.sql
+
+            def sql_rows(name: str) -> Any:
+                try:
+                    return sql.rows(name)
+                except frames.Fallback:  # a dataset the interpreter keeps
+                    return self.py.rows(name)
+
+            self.ctx_sql = ctx.at(datasets=_Datasets(names, sql_rows))
+        self.d: Any = self.sql or self.py
+        self.ctx = self.ctx_sql if self.sql is not None else self.ctx_py
         self.state = (state or {}).get("items") or {}
         self.interactive = interactive
         self.charts: list[ChartJob] = []
@@ -237,6 +402,27 @@ class _Builder:
     def note(self, kind: str, what: Any) -> None:
         if self.in_body:
             self.blocks.append((kind, what))
+
+    def either(self, it: Any, fn: Any, *args: Any) -> Any:
+        """An item worked out in DuckDB, or, where DuckDB cannot be sure of the interpreter's
+        result, worked out again the interpreter's way, with what the first try left undone."""
+        if self.sql is None or self.d is self.py:
+            return fn(*args)
+        marks = (len(self.charts), len(self.files), len(self.blocks), len(self.warnings))
+        try:
+            return fn(*args)
+        except frames.Fallback as e:
+            logger.info("report: item «%s» by the interpreter: %s", getattr(it, "id", "?"), e)
+        del self.charts[marks[0]:]
+        for name in list(self.files)[marks[1]:]:
+            del self.files[name]
+        del self.blocks[marks[2]:]
+        del self.warnings[marks[3]:]
+        self.d, self.ctx = self.py, self.ctx_py
+        try:
+            return fn(*args)
+        finally:
+            self.d, self.ctx = self.sql, self.ctx_sql
 
     # ── evaluation with the item named ──
     def value(self, item: Any, where: str, text: str, ctx: ex.Context) -> Any:
@@ -255,11 +441,8 @@ class _Builder:
         column: a missing one is named too («(blank)»), never an empty label."""
         return self.loc.texts["blank"] if v is None else self.show(v, None)
 
-    def rows_of(self, name: str | None) -> list[dict]:
-        if name is None:
-            return []
-        ds = self.data.get(name)
-        return ds.rows if ds else []
+    def rows_of(self, name: str | None) -> Any:
+        return self.d.rows(name)
 
     def item_dataset(self, it: Any) -> str | None:
         name = getattr(it, "dataset", None)
@@ -275,6 +458,9 @@ class _Builder:
 
     # ── items placed in a band ──
     def placed(self, it: Any, dy: float = 0.0) -> dict | None:
+        return self.either(it, self._placed, it, dy)
+
+    def _placed(self, it: Any, dy: float = 0.0) -> dict | None:
         if not self.visible(it):
             return None
         box = {"x": _round_mm(it.x), "y": _round_mm(it.y - dy), "w": _round_mm(it.w), "h": _round_mm(it.h),
@@ -340,21 +526,11 @@ class _Builder:
         return out
 
     # ── charts ──
-    def partition(self, it: Any, where: str, by: str, rows: list[dict]) -> list[tuple[Any, list[dict]]]:
+    def partition(self, it: Any, where: str, by: str, rows: Any) -> list[tuple[Any, Any]]:
         """The rows by the value of `by`, each value where it first comes in the rows: a
         chart's axis, its series and a sparkline follow the dataset's own order (its SQL's
         ORDER BY), never the alphabet of what the values print as."""
-        node = rd.parse(by)
-        ctx = self.ctx.at(scopes=[rows])
-        buckets: dict[tuple, tuple[Any, list[dict]]] = {}
-        try:
-            for r in rows:
-                ctx.row = r
-                k = self.ev(node, ctx)
-                buckets.setdefault(sort_key(k), (k, []))[1].append(r)
-        except ex.EvalError as e:
-            raise ReportError(f"item «{it.id}», {where}: {e}") from None
-        return list(buckets.values())
+        return self.d.partition(rows, rd.parse(by), self.ctx.at(scopes=[rows]), it.id, where)
 
     def add_chart(self, option: dict, w_mm: float, h_mm: float, alt: str) -> str:
         name = f"chart/{len(self.charts) + 1}.svg"
@@ -383,14 +559,7 @@ class _Builder:
                     y = self.value(it, "series[0].value", s.value, base.at(scopes=[rows, xs]))
                     points.append((self._num(x), self._num(y), self.show(y, fmt)))
                 if not agg:
-                    cat, val = rd.parse(it.category), rd.parse(s.value)
-                    c = base.at()
-                    for r in sub:
-                        c.row = r
-                        try:
-                            x, y = self.ev(cat, c), self.ev(val, c)
-                        except ex.EvalError as e:
-                            raise ReportError(f"item «{it.id}»: {e}") from None
+                    for x, y in self.d.points(sub, rd.parse(it.category), rd.parse(s.value), base.at(), it.id):
                         points.append((self._num(x), self._num(y), self.show(y, fmt)))
                 data.points.append((self.name(key) if it.split_by else (s.name or ""), points))
         else:
@@ -431,7 +600,7 @@ class _Builder:
 
             if o.top and len(cats) > o.top:
                 kept = {id(sub) for _, sub in sorted(cats, key=by_value("desc"))[:o.top]}
-                other = [r for _, sub in cats if id(sub) not in kept for r in sub]
+                other = self.d.union([sub for _, sub in cats if id(sub) not in kept])
                 cats = [c for c in cats if id(c[1]) in kept]
             if o.sort != "none":
                 cats.sort(key=by_value(o.sort))
@@ -446,8 +615,7 @@ class _Builder:
                 raise ReportError(f"item «{it.id}»: split_by gives {len(splits)} series, the most is "
                                   f"{charts.MAX_SERIES}")
             for key, srows in splits:
-                ids = {id(r) for r in srows}
-                values = [measure([r for r in sub if id(r) in ids], first, 0) for sub in subsets]
+                values = [measure(self.d.intersect(sub, srows), first, 0) for sub in subsets]
                 data.series.append(charts.SeriesData(self.name(key), [self._num(v) for v in values],
                                                      [self.show(v, it.options.format) for v in values],
                                                      first.as_ or "bar", first.axis))
@@ -465,6 +633,9 @@ class _Builder:
     # ── tables ──
     def table(self, it: rd.TableItem) -> TableOut:
         return _Table(self, it).build()
+
+    def _visible_table(self, it: rd.TableItem) -> TableOut | None:
+        return self.table(it) if self.visible(it) else None
 
     # ── the body ──
     def body(self) -> list[dict]:
@@ -489,8 +660,8 @@ class _Builder:
             if it.type in rd.GROWING:
                 noted = len(self.blocks)
                 close()
-                if self.visible(it):
-                    out = self.table(it)
+                out = self.either(it, self._visible_table, it)
+                if out is not None:
                     blocks.append({"k": "table", "gap": _round_mm(max(it.y - prev_bottom, 0)), **self.typst_table(out)})
                     above = self.blocks[noted:]
                     if above and all(kind == "text" for kind, _ in above):
@@ -622,6 +793,7 @@ class _Table:
         self.expanded = {json.dumps(p) for p in state.get("expanded") or []} if toggle else set()
         self.out: list[Row] = []
         self.zebra = False
+        self.shown = 0  # the detail rows written so far
 
     def value(self, where: str, text: str, ctx: ex.Context) -> Any:
         return self.b.value(self.it, where, text, ctx)
@@ -629,38 +801,31 @@ class _Table:
     # ── rows: filtered, sorted, grouped ──
     def build(self) -> TableOut:
         it = self.it
-        rows = list(self.b.rows_of(it.dataset))
-        ctx = self.b.ctx.at(scopes=[rows])
+        d = self.b.d
+        rows = self.b.rows_of(it.dataset)
         if it.filter:
-            node = rd.parse(it.filter)
-            kept = []
-            try:
-                for r in rows:
-                    ctx.row = r
-                    if ex.truthy(self.b.ev(node, ctx)):
-                        kept.append(r)
-            except ex.EvalError as e:
-                raise ReportError(f"item «{it.id}», filter: {e}") from None
-            rows = kept
+            rows = d.where(rows, rd.parse(it.filter), self.b.ctx.at(scopes=[rows]), it.id)
         rows = self.sorted(rows)
         self.all_rows = rows
         if it.matrix:
             return self.matrix(rows)
         self.cols = [ColOut(c.header, c.width, c.align, c.format or c.style.format, _style(c.style),
                             subtotal=_subtotal_fn(c)) for c in it.columns]
-        tree = self.partition(rows, 0) if it.groups else None
-        if tree is None:
+        if not it.groups:
             self.details(rows, [rows])
         else:
+            tree, ordered = self.tree(rows)
+            start = 0
             for i, node in enumerate(tree):
-                self.group(node, i, len(tree), [rows], rows, [], [])
+                self.group(node, i, len(tree), [rows], ordered, start, [], [])
+                start += len(node["rows"])
         if it.grand_total and rows:  # an empty table says «No data» (the template), not a total of nothing
-            self.footer(None, ctx.at(row=None, scopes=[rows]), keep=True)
+            self.footer(None, self.b.ctx.at(row=None, scopes=[rows]), keep=True)
         head = [[{"t": c.header, "span": 1, "rspan": 1, "align": c.align or ("right" if c.kind == "number" else "left")}
                  for c in self.cols]]
         return TableOut(it, it.title or it.id, self.cols, head, self.out, len(it.groups))
 
-    def sorted(self, rows: list[dict]) -> list[dict]:
+    def sorted(self, rows: Any) -> Any:
         keys: list[tuple[str, str]] = [(s.by, s.dir) for s in self.it.sort]
         if self.sort_state is not None:
             col = self.sort_state.get("column")
@@ -668,49 +833,13 @@ class _Table:
                 keys = [(self.it.columns[col].value, "desc" if self.sort_state.get("dir") == "desc" else "asc")]
         if not keys:
             return rows
-        ctx = self.b.ctx.at(scopes=[rows])
-        nodes = [(rd.parse(by), d) for by, d in keys]
-        decorated = []
-        try:
-            for r in rows:
-                ctx.row = r
-                decorated.append(([sort_key(self.b.ev(n, ctx)) for n, _ in nodes], r))
-        except ex.EvalError as e:
-            raise ReportError(f"item «{self.it.id}», sort: {e}") from None
+        return self.b.d.sort(rows, [(rd.parse(by), d) for by, d in keys], self.b.ctx.at(scopes=[rows]), self.it.id)
 
-        def cmp(a: tuple, b: tuple) -> int:
-            for ka, kb, (_, d) in zip(a[0], b[0], nodes):
-                c = _compare(ka, kb, d)
-                if c:
-                    return c
-            return 0
-
-        decorated.sort(key=cmp_to_key(cmp))
-        return [r for _, r in decorated]
-
-    def partition(self, rows: list[dict], level: int) -> list[dict]:
-        """The rows of a level split by its group's key, in the group's order; a group's
-        rows are the concatenation of its children's, so a RUNNING total over a parent
-        follows the order the groups are written in."""
-        g = self.it.groups[level]
-        node = rd.parse(g.by)
-        ctx = self.b.ctx.at(scopes=[self.all_rows])
-        buckets: dict[tuple, tuple[Any, list[dict]]] = {}
-        try:
-            for r in rows:
-                ctx.row = r
-                k = self.b.ev(node, ctx)
-                buckets.setdefault(sort_key(k), (k, []))[1].append(r)
-        except ex.EvalError as e:
-            raise ReportError(f"item «{self.it.id}», groups[{level}].by: {e}") from None
-        out = []
-        for sk in sorted(buckets, key=cmp_to_key(lambda a, b: _compare(a, b, g.sort))):
-            key, sub = buckets[sk]
-            children = self.partition(sub, level + 1) if level + 1 < len(self.it.groups) else None
-            if children is not None:
-                sub = [r for c in children for r in c["rows"]]
-            out.append({"key": key, "rows": sub, "children": children})
-        return out
+    def tree(self, rows: Any) -> tuple[list[dict], Any]:
+        """The groups of every level, each {key, rows, children}, in the groups' order; and
+        the table's rows one group after the other."""
+        levels = [(rd.parse(g.by), g.sort) for g in self.it.groups]
+        return self.b.d.tree(rows, levels, self.b.ctx.at(scopes=[self.all_rows]), self.it.id)
 
     def is_closed(self, path: list) -> bool:
         p = json.dumps(path)
@@ -719,15 +848,17 @@ class _Table:
         return p in self.collapsed
 
     # ── groups ──
-    def group(self, node: dict, index: int, siblings: int, scopes: list[list[dict]], parent_rows: list[dict],
+    def group(self, node: dict, index: int, siblings: int, scopes: list[Any], parent_rows: Any, start: int,
               path: list, open_headers: list[Row]) -> None:
+        """A group, whose rows begin at `start` among its parent's (a running total over the
+        parent stops at its last)."""
         it = self.it
         level = len(path)
         g = it.groups[level]
         rows = node["rows"]
         here = [*scopes, rows]
         path = [*path, key_id(node["key"])]
-        last = parent_rows.index(rows[-1]) if rows else -1
+        last = start + len(rows) - 1 if rows else -1
         gctx = self.b.ctx.at(row=None, scopes=here, running=parent_rows, running_index=last, rownumber=index + 1)
         closed = self.is_closed(path)
         has_content = not closed and (node["children"] is not None or it.detail)
@@ -740,8 +871,10 @@ class _Table:
         headers = [*open_headers, header] if header is not None and header.repeat else open_headers
         if not closed:
             if node["children"] is not None:
+                offset = 0
                 for i, child in enumerate(node["children"]):
-                    self.group(child, i, len(node["children"]), here, rows, path, headers)
+                    self.group(child, i, len(node["children"]), here, rows, offset, path, headers)
+                    offset += len(child["rows"])
             elif it.detail:
                 self.zebra = False
                 self.details(rows, here)
@@ -756,8 +889,20 @@ class _Table:
                 for h in open_headers:
                     self.out.append(Row("g", h.level, label=h.label, key=h.key, closed=h.closed, continued=True))
 
-    def details(self, rows: list[dict], scopes: list[list[dict]]) -> None:
+    def details(self, rows: Any, scopes: list[Any]) -> None:
+        """The rows a table shows: the only ones that become Python's values — and when the
+        pages could not hold them, none does."""
         it = self.it
+        self.shown += len(rows)
+        if self.b.layout:
+            _, h = self.b.r.page.dimensions()
+            top, _, bottom, _ = self.b.r.page.margins
+            most = int(self.b.max_pages * max(h - top - bottom, 0) / MIN_ROW)
+            if self.shown > most:
+                total = len(self.all_rows)
+                raise ReportError(f"item «{it.id}»: {total:,} rows to show, more than {self.b.max_pages} pages hold: "
+                                  "show its groups' totals without the detail, or filter it")
+        rows = self.b.d.details(rows)
         nodes = [rd.parse(c.value) for c in it.columns]
         rules = [[(rd.parse(rule.when), _style(rule.style)) for rule in c.rules] for c in it.columns]
         ctx = self.b.ctx.at(scopes=scopes, running=rows)
@@ -812,25 +957,11 @@ class _Table:
         it, m = self.it, self.it.matrix
         assert m is not None
         levels = [rd.parse(x) for x in m.levels]
-        ctx = self.b.ctx.at(scopes=[rows])
-        keys_of: dict[int, tuple] = {}
-        distinct: dict[tuple, tuple] = {}
-        try:
-            for r in rows:
-                ctx.row = r
-                raw = tuple(self.b.ev(n, ctx) for n in levels)
-                sk = tuple(sort_key(v) for v in raw)
-                keys_of[id(r)] = sk
-                distinct.setdefault(sk, raw)
-        except ex.EvalError as e:
-            raise ReportError(f"item «{it.id}», matrix.columns_by: {e}") from None
-        order = sorted(distinct, key=cmp_to_key(lambda a, b: next(
-            (c for c in (_compare(x, y, "asc") for x, y in zip(a, b)) if c), 0)))
+        order, distinct, self.matrix_columns = self.b.d.matrix(rows, levels, self.b.ctx.at(scopes=[rows]), it.id)
         if len(order) > rd.MAX_MATRIX_COLUMNS:
             raise ReportError(f"item «{it.id}»: the matrix would have {len(order):,} columns, the most is "
                               f"{rd.MAX_MATRIX_COLUMNS}: filter the rows, or choose another columns_by")
         self.matrix_keys = order
-        self.keys_of = keys_of
         first = it.columns[0] if it.columns else None
         label_col = ColOut(first.header if first else "", first.width if first else None, "left", None,
                            _style(first.style) if first else {})
@@ -841,7 +972,7 @@ class _Table:
             self.cols.append(ColOut(self.loc.texts["total"], m.width, "right", m.format, {"weight": 700}))
         head = self.matrix_head(order, distinct, label_col.header, len(levels), m.total)
         if it.groups:
-            tree = self.partition(rows, 0)
+            tree, _ = self.tree(rows)
             for i, node in enumerate(tree):
                 self.matrix_group(node, i, len(tree), [rows], rows, [], [])
         elif rows:
@@ -875,15 +1006,12 @@ class _Table:
             head.append(row)
         return head
 
-    def matrix_cells(self, rows: list[dict], scopes: list[list[dict]], ctx: ex.Context) -> list[Cell]:
+    def matrix_cells(self, rows: Any, scopes: list[Any], ctx: ex.Context) -> list[Cell]:
         m = self.it.matrix
         assert m is not None
-        by_key: dict[tuple, list[dict]] = {}
-        for r in rows:
-            by_key.setdefault(self.keys_of[id(r)], []).append(r)
         cells = []
-        for k in self.matrix_keys:
-            sub = by_key.get(k, [])
+        for j in range(len(self.matrix_keys)):
+            sub = self.b.d.matrix_sub(rows, self.matrix_columns, j)
             v = self.value("matrix.value", m.value, ctx.at(scopes=[*scopes, sub])) if sub else None
             cells.append(Cell(self.b.show(v, m.format), v))
             self.cols[len(cells)].kinds.add(_kind_of(v))
@@ -945,10 +1073,20 @@ def _texts_of(doc: Any, out: set[str]) -> None:
 
 def build(report: rd.Report, data: dict[str, DataSet], params: dict[str, Any], ctx: ex.Context,
           state: dict | None = None, title: str = "", max_pages: int = 400, interactive: bool = False,
-          layout: bool = True) -> Model:
+          layout: bool = True, store: frames.Store | None = None) -> Model:
     """The model of a report whose data has been read; `layout`: its pages will be laid out
-    (pdf, svg), and what does not fit them is said in its warnings."""
-    b = _Builder(report, data, ctx, state, interactive, layout)
+    (pdf, svg), and what does not fit them is said in its warnings. `store`: the datasets in
+    DuckDB (frames.py); None builds one for this model when the data's columns are on (the
+    default), or works it all out the interpreter's way."""
+    if store is None and frames.enabled():
+        with frames.build_store(report, data, ctx.loc) as own:
+            return _build(report, data, params, ctx, state, title, max_pages, interactive, layout, own)
+    return _build(report, data, params, ctx, state, title, max_pages, interactive, layout, store)
+
+
+def _build(report: rd.Report, data: dict[str, DataSet], params: dict[str, Any], ctx: ex.Context, state: dict | None,
+           title: str, max_pages: int, interactive: bool, layout: bool, store: frames.Store | None) -> Model:
+    b = _Builder(report, data, ctx, state, interactive, layout, store, max_pages)
     for section, it in report.items() if layout else ():
         b.past_the_paper(it, "table" if it.type in rd.GROWING else "item")
     w, h = report.page.dimensions()

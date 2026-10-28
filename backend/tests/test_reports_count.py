@@ -257,7 +257,7 @@ def test_the_task_answers_tagged(monkeypatch):
 def test_the_cap_is_the_renders(monkeypatch):
     from app.core.config import get_settings
 
-    assert rcount.max_rows() == get_settings().reports.max_rows == 1_000_000
+    assert rcount.max_rows() == get_settings().reports.max_rows == 3_000_000
 
 
 def test_the_route_waits_only_as_long_as_it_is_told(monkeypatch):

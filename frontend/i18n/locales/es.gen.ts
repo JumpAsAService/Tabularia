@@ -379,7 +379,7 @@ export default {
     },
     "rows": {
       "plain": "ninguna fila | {n} fila | {n} filas",
-      "slow": "unas {n} filas: el informe tardará unos {s} segundos y mucha memoria — agregue en SQL (GROUP BY) para que sea rápido",
+      "slow": "unas {n} filas: el informe tardará unos {s} segundo y mucha memoria — agregue en SQL (GROUP BY) para que sea rápido | unas {n} filas: el informe tardará unos {s} segundos y mucha memoria — agregue en SQL (GROUP BY) para que sea rápido",
       "over": "más de {n} filas: el informe no se generará — añada un GROUP BY o un filtro",
       "title": "Contadas con los valores predeterminados de los parámetros al leer los campos"
     },

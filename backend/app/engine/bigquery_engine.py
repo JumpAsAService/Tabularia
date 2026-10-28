@@ -39,7 +39,7 @@ import pyarrow as pa
 import pyarrow.parquet as pq
 
 from app.core.config import BigQuerySettings, get_settings
-from app.engine.base import DataSource, Engine, Operation, PreviewResult, RunResult
+from app.engine.base import DataSource, Engine, Operation, PreviewResult, RunResult, preview_rows
 from app.engine.cache import StepCache, plan_hashes
 from app.engine.bigquery_ops import _qi, get_bigquery_operation
 from app.engine.exceptions import EngineError, OperationError, SourceNotFoundError
@@ -642,6 +642,7 @@ class BigQueryEngine(Engine):
         limit: int = 100,
         use_cache: bool = True,
         sort_keys: list[str] | None = None,
+        frame: bool = False,
     ) -> PreviewResult:
         ops = _coerce_ops(operations)
         tmp: list[str] = []
@@ -674,7 +675,7 @@ class BigQueryEngine(Engine):
                 pf = plan_hashes(self._source_id(source), [op.model_dump() for op in parent])[-1]
                 cstate = "hit" if (self.cache.has(pf) and self.cache.blob_exists(pf)) else "pending"
             return PreviewResult(
-                columns=_columns_of(df.schema), rows=df.to_dicts(), row_count=df.height, truncated=truncated,
+                columns=_columns_of(df.schema), **preview_rows(df, frame), row_count=df.height, truncated=truncated,
                 cache_state=cstate,
             )
         except BaseException:

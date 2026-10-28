@@ -180,6 +180,15 @@ def test_aggregates_over_the_scope():
     assert ev("[region]", rows=ROWS[2:]) == "S"
 
 
+def test_an_aggregate_is_never_taken_for_another_that_had_its_place_in_memory():
+    """The aggregates of a render are remembered by the id of their tree: a tree freed (the
+    parser's cache holds 4096) left its id to a new one, which got the old one's value."""
+    context = ex.Context(loc=formats.locale("en"), now=NOW, scopes=[ROWS])
+    expected = {"SUM([amount])": 35.0, "COUNT([amount])": 3, "MAX([qty])": 3, "MIN([region])": "N"}
+    for text in list(expected) * 25:
+        assert ex.Evaluator()(ex.parse(text), context) == expected[text], text
+
+
 def test_an_aggregate_of_a_named_dataset_reads_the_whole_dataset():
     goals = [{"goal": 5.0}, {"goal": 7.0}]
     assert ev('SUM([goal], "targets")', rows=ROWS, datasets={"targets": goals}) == 12.0
@@ -216,6 +225,13 @@ def test_text_functions():
     assert ev('CONTAINS("Nord-Ovest", "Ovest")') is True and ev('STARTSWITH("Nord", "S")') is False
     assert ev('CONCAT("a", 1, NULL, TRUE)') == "a1Yes"
     assert ev('TEXT(1234.5)', loc="it") == "1.234,5"
+
+
+def test_right_with_more_characters_than_the_text_takes_it_all():
+    """RIGHT("abc", 5) gave "bc": the slice started at len - n, a negative index that
+    Python counts from the end."""
+    assert ev('RIGHT("abc", 5)') == "abc" and ev('RIGHT("abc", 3)') == "abc" and ev('RIGHT("abc", 0)') == ""
+    assert ev('RIGHT("abc", -1)') == "" and ev('LEFT("abc", 5)') == "abc"
 
 
 def test_maths():

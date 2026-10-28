@@ -30,7 +30,7 @@ from chdb import session as chdb_session
 
 from app.core.panel_settings import value_at_start
 from app.engine import storage_direct
-from app.engine.base import DataSource, Engine, Operation, PreviewResult, RunResult
+from app.engine.base import DataSource, Engine, Operation, PreviewResult, RunResult, preview_rows
 from app.engine.cache import StepCache, plan_hashes
 from app.engine.chdb_ops import get_chdb_operation, temporal_safe_sql
 from app.engine.exceptions import EngineError, OperationError, SourceNotFoundError
@@ -268,6 +268,7 @@ class ChdbEngine(DeferredStepCache, Engine):
         limit: int = 100,
         use_cache: bool = True,
         sort_keys: list[str] | None = None,
+        frame: bool = False,
     ) -> PreviewResult:
         ops = _coerce_ops(operations)
         sess, state_dir = self._new_session()
@@ -296,7 +297,7 @@ class ChdbEngine(DeferredStepCache, Engine):
                 df = df.head(limit)
             return PreviewResult(
                 columns=_columns_of(df.schema),
-                rows=df.to_dicts(),
+                **preview_rows(df, frame),
                 row_count=df.height,
                 truncated=truncated,
                 cache_state=cstate, cache_cap_rows=ccap,

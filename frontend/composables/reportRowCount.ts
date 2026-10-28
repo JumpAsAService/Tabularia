@@ -16,14 +16,15 @@ export interface CountedRows extends RowCount {
   source: string
 }
 
-/** Past this many rows a dataset gets the warning: a hundred thousand rows are some two
- *  thousand pages of table, or totals the report computes row by row where the SQL's
- *  GROUP BY gives them at once. */
-export const SLOW_ROWS = 100_000
+/** Past this many rows a dataset gets the warning: half a million rows are far more than
+ *  pages can show (a table of them stops at REPORTS__MAX_PAGES), and totals the SQL's
+ *  GROUP BY would give at once still cost the worker their memory. */
+export const SLOW_ROWS = 500_000
 
-/** What a render takes per million rows of a dataset, measured: some 27 s (and 1.1 GiB) in
- *  the worker (backend/app/core/config.py, ReportsSettings). */
-export const SECONDS_PER_MILLION = 27
+/** What a render takes per million rows of a dataset, measured since the reports compute in
+ *  columns with DuckDB: some 1.3 s for totals, 1.8 with a matrix, and half a GiB in the
+ *  worker (backend/app/core/config.py, ReportsSettings). */
+export const SECONDS_PER_MILLION = 2
 
 export type RowCountLevel = 'plain' | 'slow' | 'over'
 

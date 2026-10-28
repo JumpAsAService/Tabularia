@@ -43,7 +43,7 @@ from botocore.exceptions import ClientError
 
 from app.core import panel_settings
 from app.core.config import ClickHouseExternalSettings, get_settings
-from app.engine.base import DataSource, Engine, Operation, PreviewResult, RunResult
+from app.engine.base import DataSource, Engine, Operation, PreviewResult, RunResult, preview_rows
 from app.engine.cache import StepCache, plan_hashes
 from app.engine.matview import MatViewStore
 from app.engine.chdb_ops import _lit, _qi, get_chdb_operation, temporal_safe_sql
@@ -725,6 +725,7 @@ class ClickHouseEngine(DeferredStepCache, Engine):
         limit: int = 100,
         use_cache: bool = True,
         sort_keys: list[str] | None = None,
+        frame: bool = False,
     ) -> PreviewResult:
         # A stopwatch by PHASE: when a preview "takes too long" one needs to know WHICH
         # part, not the total. The phases are disjoint; what is missing from the time
@@ -788,7 +789,7 @@ class ClickHouseEngine(DeferredStepCache, Engine):
             res = PreviewResult(
                 cache_state=cstate, cache_cap_rows=ccap,
                 columns=_columns_of(df.schema),
-                rows=df.to_dicts(),
+                **preview_rows(df, frame),
                 row_count=df.height,
                 truncated=truncated,
             )

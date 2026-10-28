@@ -25,7 +25,7 @@ import polars as pl
 from botocore.exceptions import ClientError
 
 from app.engine import duckdb_budget, storage_direct
-from app.engine.base import DataSource, Engine, Operation, PreviewResult, RunResult
+from app.engine.base import DataSource, Engine, Operation, PreviewResult, RunResult, preview_rows
 from app.engine.cache import StepCache, plan_hashes
 from app.engine.duckdb_ops import _qi, get_duck_operation
 from app.engine.exceptions import EngineError, OperationError, SourceNotFoundError
@@ -248,6 +248,7 @@ class DuckDBEngine(DeferredStepCache, Engine):
         limit: int = 100,
         use_cache: bool = True,
         sort_keys: list[str] | None = None,
+        frame: bool = False,
     ) -> PreviewResult:
         ops = _coerce_ops(operations)
         tmp: list[str] = []
@@ -272,7 +273,7 @@ class DuckDBEngine(DeferredStepCache, Engine):
                 df = df.head(limit)
             return PreviewResult(
                 columns=_columns_of(df.schema),
-                rows=df.to_dicts(),
+                **preview_rows(df, frame),
                 row_count=df.height,
                 truncated=truncated,
                 cache_state=cstate, cache_cap_rows=ccap,

@@ -379,7 +379,7 @@ export default {
     },
     "rows": {
       "plain": "nessuna riga | {n} riga | {n} righe",
-      "slow": "circa {n} righe: il report impiegherà circa {s} secondi e molta memoria — aggrega nell'SQL (GROUP BY) per renderlo veloce",
+      "slow": "circa {n} righe: il report impiegherà circa {s} secondo e molta memoria — aggrega nell'SQL (GROUP BY) per renderlo veloce | circa {n} righe: il report impiegherà circa {s} secondi e molta memoria — aggrega nell'SQL (GROUP BY) per renderlo veloce",
       "over": "più di {n} righe: il report non verrà generato — aggiungi un GROUP BY o un filtro",
       "title": "Contate con i valori predefiniti dei parametri, quando sono stati letti i campi"
     },

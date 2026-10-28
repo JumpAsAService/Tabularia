@@ -15,6 +15,7 @@ from app.reports import model as rmodel
 from app.reports.data import DataSet
 from app.reports.errors import ReportError
 from tests import report_samples as samples
+from tests.reports_both_ways import both_ways  # noqa: F401 — every report, both ways
 from tests.conftest import BUCKET, upload_df
 
 NOW = datetime(2026, 10, 28, 9, 0, tzinfo=timezone.utc)
@@ -143,6 +144,17 @@ def test_percent_running_and_rownumber_in_a_table():
     assert [r.cells[2].value for r in f] == [25.0, 55.0]  # running over the groups
 
 
+def test_a_running_total_over_the_groups_follows_the_groups_not_the_rows():
+    """The outermost groups' running total ran over the table's rows up to the group's last
+    one: with the regions interleaved, North's took South's first row too (13, not 3)."""
+    rows = [{"region": "N", "customer": "a", "amount": 1.0}, {"region": "S", "customer": "b", "amount": 10.0},
+            {"region": "N", "customer": "c", "amount": 2.0}, {"region": "S", "customer": "d", "amount": 20.0}]
+    t = build(report(table(columns=[{"header": "c", "value": "[customer]"},
+                                    {"header": "run", "value": "[amount]", "total": "RUNNING(SUM([amount]))"}],
+                           sort=[{"by": "[customer]", "dir": "desc"}])), rows).tables[0]
+    assert [(r.label, r.cells[1].value) for r in t.rows if r.kind == "f"] == [("Total N", 3.0), ("Total S", 33.0)]
+
+
 def test_the_screen_s_state_sorts_a_column_and_closes_groups():
     t = table(interactive={"sort": True, "toggle": True})
     m = build(report(t), ROWS[:4], state={"items": {"t": {"sort": {"column": 1, "dir": "desc"}, "collapsed": [["N"]]}}},
@@ -246,6 +258,21 @@ def test_an_item_past_the_edge_of_the_paper_is_said():
                page={"size": "A5", "margins": [15, 12, 15, 12]})
     warnings = build(d).warnings
     assert any("«t»" in w and "paper" in w for w in warnings) and any("«far»" in w for w in warnings), warnings
+
+
+def test_more_rows_to_show_than_the_pages_hold_stop_before_they_are_laid_out():
+    """A `SELECT *` shown row by row: past what the pages could hold at the least height of
+    a row the render stops at once, naming the table, instead of laying out for minutes to
+    fail on the pages; Excel, which has no pages, takes them."""
+    many = [{"region": "N", "customer": f"c{i}", "amount": 1.0, "qty": i, "kind": "x"} for i in range(3000)]
+    r = rd.load(report(table(groups=[])))
+    tz = ph.zone(r.timezone)
+    ctx = ex.Context(loc=formats.locale("en"), now=NOW.astimezone(tz))
+    data = {"d": DataSet("d", {k: "" for k in many[0]}, many)}
+    with pytest.raises(ReportError, match="«t»: 3,000 rows to show, more than 10 pages hold"):
+        rmodel.build(r, data, {}, ctx, max_pages=10)  # 267 mm of body hold 222 rows at most
+    assert len(rmodel.build(r, data, {}, ctx, max_pages=10, layout=False).tables[0].rows) == 3000
+    assert len(rmodel.build(r, data, {}, ctx, max_pages=14).tables[0].rows) == 3000
 
 
 def test_an_empty_table_keeps_its_header():

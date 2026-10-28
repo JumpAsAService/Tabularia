@@ -29,10 +29,10 @@ test('under the threshold: the number, as it is', () => {
 })
 
 test('past the threshold: a warning, with the rows rounded and the time a render takes', () => {
-  assert.equal(SLOW_ROWS, 100_000)
-  assert.deepEqual(rowCountNote({ rows: 105_035, over: false, max_rows: CAP }), { level: 'slow', rows: 105_000, seconds: 3 })
-  // the owner's example: some 840,000 rows, some 25 seconds
-  assert.deepEqual(rowCountNote({ rows: 842_345, over: false, max_rows: CAP }), { level: 'slow', rows: 842_000, seconds: 25 })
+  assert.equal(SLOW_ROWS, 500_000)
+  assert.deepEqual(rowCountNote({ rows: 105_035, over: false, max_rows: CAP }), { level: 'plain', rows: 105_035, seconds: 1 })
+  // the owner's example: some 840,000 rows, now some 2 seconds (in columns, with DuckDB)
+  assert.deepEqual(rowCountNote({ rows: 842_345, over: false, max_rows: CAP }), { level: 'slow', rows: 842_000, seconds: 2 })
   assert.equal(rowCountNote({ rows: CAP, over: false, max_rows: CAP }).level, 'slow') // exactly the cap still renders
 })
 
@@ -48,11 +48,11 @@ test('rounding: three significant figures, the seconds whole and then by fives',
   assert.equal(aboutRows(1_234), 1_230)
   assert.equal(aboutRows(105_035), 105_000)
   assert.equal(aboutRows(999_999), 1_000_000)
-  assert.equal(SECONDS_PER_MILLION, 27)
+  assert.equal(SECONDS_PER_MILLION, 2)
   assert.equal(aboutSeconds(10), 1) // never «about 0 seconds»
-  assert.equal(aboutSeconds(300_000), 8)
-  assert.equal(aboutSeconds(500_000), 15) // 13.5 → by fives
-  assert.equal(aboutSeconds(2_000_000), 55)
+  assert.equal(aboutSeconds(2_000_000), 4)
+  assert.equal(aboutSeconds(7_000_000), 15) // 14 → by fives
+  assert.equal(aboutSeconds(10_000_000), 20)
 })
 
 test('a count belongs to the source it counted, whatever the order of its properties', () => {

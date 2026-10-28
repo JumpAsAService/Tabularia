@@ -1241,7 +1241,7 @@ helm = "from `scripts.notebooks.host`"
 text = "The notebooks' own address, the gateway's `NOTEBOOKS__ORIGIN`: the pages' Content-Security-Policy lets them show the notebooks' apps and editors from it."
 
 [var.REPORTS__MAX_ROWS]
-text = "The most rows a report reads from each of its datasets; one more stops the render and names the dataset (aggregate it in SQL, or filter it). The rows stay in the worker's memory while the report renders: a million take some 1.1 GiB and half a minute (measured), so give the worker that much for every render that may run at once."
+text = "The most rows a report reads from each of its datasets; one more stops the render and names the dataset (aggregate it in SQL, or filter it). The rows stay in the worker's memory, in columns, while the report renders, and DuckDB works out its groups and totals: a million take some 500 MiB and a second or two, ten million some 2.2 GiB and ten seconds (measured), so give the worker that much for every render that may run at once."
 
 [var.REPORTS__MAX_PAGES]
 text = "The most pages of one report: a longer one stops with the number it would have."

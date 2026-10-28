@@ -379,7 +379,7 @@ export default {
     },
     "rows": {
       "plain": "no rows | {n} row | {n} rows",
-      "slow": "about {n} rows: the report will take about {s} seconds and a lot of memory — aggregate in SQL (GROUP BY) to make it fast",
+      "slow": "about {n} rows: the report will take about {s} second and a lot of memory — aggregate in SQL (GROUP BY) to make it fast | about {n} rows: the report will take about {s} seconds and a lot of memory — aggregate in SQL (GROUP BY) to make it fast",
       "over": "more than {n} rows: the report will not render — add a GROUP BY or a filter",
       "title": "Counted with the parameters' defaults when the fields were read"
     },

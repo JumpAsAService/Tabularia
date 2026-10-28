@@ -52,8 +52,8 @@ ARG WITH_CHDB=false
 ARG WITH_DEV=false
 ARG WITH_MSSQL=false
 
-# Without chDB pandas and numpy are skipped too: the application's code does not
-# use them, only chDB requires them. The test suites shipped in third-party packages
+# Without chDB pandas is skipped too: only chDB requires it. numpy stays: the reports
+# compute their columns with it (app/reports/frames.py). The test suites shipped in third-party packages
 # (pyarrow, numpy, pandas…) are not needed at runtime and are removed; Tabularia's
 # tests are not in the image, in development they come from the bind mount.
 RUN --mount=type=cache,target=/root/.cache/uv \
@@ -64,7 +64,7 @@ RUN --mount=type=cache,target=/root/.cache/uv \
     if [ "$WITH_DEV" = "true" ]; then opts=""; fi; \
     if [ "$WITH_MSSQL" = "true" ]; then opts="$opts --extra sqlserver"; fi; \
     if [ "$WITH_CHDB" != "true" ]; then \
-        opts="$opts --no-install-package chdb --no-install-package chdb-core --no-install-package pandas --no-install-package numpy"; \
+        opts="$opts --no-install-package chdb --no-install-package chdb-core --no-install-package pandas"; \
     fi; \
     uv sync --locked --no-install-project $opts; \
     find /opt/venv -type d -name tests -prune -exec rm -rf {} +
