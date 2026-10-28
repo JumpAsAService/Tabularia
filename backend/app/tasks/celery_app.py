@@ -56,7 +56,7 @@ celery_app = Celery(
     "data_prep",
     broker=settings.celery_broker_url,
     backend=settings.celery_result_backend,
-    include=["app.tasks.jobs", "app.tasks.contract_jobs"],
+    include=["app.tasks.jobs", "app.tasks.contract_jobs", "app.tasks.report_jobs"],
     task_cls=_TaskThatSparesTheWorker,
 )
 
@@ -100,6 +100,8 @@ celery_app.conf.update(
     task_routes={
         "app.tasks.jobs.preview_task": {"queue": "preview"},
         "app.tasks.jobs.db_query_task": {"queue": "preview"},
+        # a report's parameter form waits for its choices as for a preview
+        "app.tasks.report_jobs.report_choices_task": {"queue": "preview"},
         # a contract's checks asked for by hand are as interactive as a preview; the one
         # on a saved script's output is a run's, as heavy as the data (exact names first)
         "app.tasks.contract_jobs.check_before_publish_task": {"queue": "celery"},

@@ -205,7 +205,8 @@ def cache_status(request: CacheStatusRequest) -> dict:
 
 
 # tag of an export task's expected error → HTTP status
-_EXPORT_ERROR_STATUS = {"not_found": 404, "unprocessable": 422, "bad_request": 400, "timeout": 504}
+_EXPORT_ERROR_STATUS = {"not_found": 404, "unprocessable": 422, "bad_request": 400, "timeout": 504,
+                        "unavailable": 503}
 
 
 def _send_export(request: ExportRequest, task_id: str):
@@ -295,7 +296,9 @@ def export_status(task_id: str, owner: str | None = None):
     if result.state == "SUCCESS":
         payload = result.result
         if payload.get("ok"):
-            return {"status": "ready", "filename": payload["filename"], "size": payload["size"]}
+            # a report adds its pages and what the reader should know (a character its font lacks)
+            extra = {k: payload[k] for k in ("pages", "warnings") if payload.get(k)}
+            return {"status": "ready", "filename": payload["filename"], "size": payload["size"], **extra}
         error = _failed(payload)
         return {"status": "failed", "code": error.status_code, "detail": error.detail}
     if result.state in ("FAILURE", "REVOKED"):

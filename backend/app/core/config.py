@@ -540,6 +540,26 @@ class ExportSettings(BaseModel):
     max_rows: int = Field(default=5_000_000, ge=0)
 
 
+class ReportsSettings(BaseModel):
+    """Pixel-perfect reports (docs/specs/reports.md): what one render may read and use.
+
+    env: REPORTS__MAX_ROWS — the most rows a report reads from each of its datasets; one
+    more stops the render, naming the dataset (aggregate in SQL, or filter).
+    env: REPORTS__MAX_PAGES — the most pages of one report.
+    env: REPORTS__RENDER_MEMORY_MB / REPORTS__RENDER_SECONDS — the memory and the time of
+    the child process that lays the pages out (Typst); past either the render stops.
+    env: REPORTS__CHART_URL — the chart service (ECharts to SVG): a sidecar of the worker
+    pod on Kubernetes, the `chart-renderer` service on Compose; empty = no charts."""
+
+    # coherent with the memory: about 4 MiB a page of tables, so 1024 MiB lays out some 250
+    # pages, and 10,000 rows of a table fill about 200
+    max_rows: int = Field(default=10_000, ge=1, le=1_000_000)
+    max_pages: int = Field(default=250, ge=1, le=10_000)
+    render_memory_mb: int = Field(default=1024, ge=128)
+    render_seconds: int = Field(default=120, ge=5)
+    chart_url: str = "http://127.0.0.1:8090"
+
+
 class SmtpSettings(BaseModel):
     """Email destinations and notices (SMTP connections).
 
@@ -632,6 +652,7 @@ class Settings(BaseSettings):
     s3_source: S3SourceSettings = Field(default_factory=S3SourceSettings)
     api: ApiSettings = Field(default_factory=ApiSettings)
     placeholders: PlaceholderSettings = Field(default_factory=PlaceholderSettings)
+    reports: ReportsSettings = Field(default_factory=ReportsSettings)
 
     # ─────────────────────────────────────────────────────────────────────────
     # Helper properties for quick access

@@ -24,7 +24,7 @@ MAX_FOLDERS = 300
 MAX_CONNECTIONS = 200
 MAX_ERROR_DETAIL = 3000
 
-SearchKind = Literal["folder", "flow", "group", "datasource", "view", "script", "sql", "notebook", "connection"]
+SearchKind = Literal["folder", "flow", "group", "datasource", "view", "script", "sql", "notebook", "report", "connection"]
 
 
 def _link(kind: str, item_id: int, name: str) -> str:
@@ -34,6 +34,7 @@ def _link(kind: str, item_id: int, name: str) -> str:
     return {
         "flow": flow_link(item_id), "group": f"/flow-group?id={item_id}", "view": f"/viewer?view={item_id}",
         "script": f"/script?id={item_id}", "sql": f"/sql-script?id={item_id}", "notebook": f"/notebook?id={item_id}",
+        "report": f"/report?id={item_id}",
         "datasource": datasource_link(item_id, name), "connection": f"/connections?q={quote(name)}&conn={item_id}",
         "folder": f"/?folder={item_id}",
     }.get(kind, "/")
@@ -53,7 +54,7 @@ class SearchArgs(BaseModel):
 
 @tool("search", title="Search the catalog", args=SearchArgs, level="read")
 async def search(ctx: ToolContext, a: SearchArgs) -> dict:
-    """Find objects by name across the catalog: folders, flows, flow groups (group), datasources, saved views (view), Python/R scripts (script), SQL scripts (sql), notebooks and connections. Only what this user can see. Each result has its id, its folder and the link that opens it in Tabularia."""
+    """Find objects by name across the catalog: folders, flows, flow groups (group), datasources, saved views (view), Python/R scripts (script), SQL scripts (sql), notebooks, reports and connections. Only what this user can see. Each result has its id, its folder and the link that opens it in Tabularia."""
     from app.routes.search import search_everything
 
     def work(session, user):

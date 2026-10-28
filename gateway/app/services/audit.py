@@ -174,6 +174,17 @@ NOTEBOOK_START = "notebook.start"
 NOTEBOOK_STOP = "notebook.stop"
 NOTEBOOK_SAVE = "notebook.save"
 NOTEBOOK_READ = "notebook.read"
+# reports (routes/reports.py): a move, a rename and a copy have actions of their own, and
+# every render is recorded with its format, its parameters and where it came from (the
+# interface, the API, a flow group), as an export is
+REPORT_CREATE = "report.create"
+REPORT_UPDATE = "report.update"
+REPORT_DELETE = "report.delete"
+REPORT_MOVE = "report.move"
+REPORT_RENAME = "report.rename"
+REPORT_DUPLICATE = "report.duplicate"
+REPORT_RESTORE = "report.restore"
+REPORT_RENDER = "report.render"
 SAVED_VIEW_CREATE = "saved_view.create"
 SAVED_VIEW_UPDATE = "saved_view.update"
 SAVED_VIEW_DELETE = "saved_view.delete"

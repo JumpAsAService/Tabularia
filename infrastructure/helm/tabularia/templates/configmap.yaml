@@ -68,6 +68,13 @@ ENGINE__RUN_STALE_TIMEOUT_SECONDS: {{ include "tabularia.env" (.Values.engine.ru
 # runtime (docs/engine-settings.md); false keeps this ConfigMap the only source
 ENGINE__SETTINGS_PANEL: {{ .Values.engine.settingsPanel | quote }}
 
+# Pixel-perfect reports: the limits of one render (the run workers find their chart
+# service at REPORTS__CHART_URL, set on them: templates/_helpers.tpl)
+REPORTS__MAX_ROWS: {{ include "tabularia.env" (.Values.reports.maxRows) }}
+REPORTS__MAX_PAGES: {{ include "tabularia.env" (.Values.reports.maxPages) }}
+REPORTS__RENDER_MEMORY_MB: {{ include "tabularia.env" (.Values.reports.renderMemoryMb) }}
+REPORTS__RENDER_SECONDS: {{ include "tabularia.env" (.Values.reports.renderSeconds) }}
+
 CACHE__TTL_SECONDS: {{ include "tabularia.env" (.Values.cache.ttlSeconds) }}
 CACHE__SWEEP_INTERVAL_SECONDS: {{ include "tabularia.env" (.Values.cache.sweepIntervalSeconds) }}
 
@@ -183,7 +190,7 @@ BIGQUERY__MAXIMUM_BYTES_BILLED: {{ include "tabularia.env" (.Values.externalServ
       "SCRIPTS__REGISTRY_INSECURE" "SCRIPTS__REGISTRY_PUSH_SECRET" "SCRIPTS__REGISTRY_PULL_SECRET" "SCRIPTS__REGISTRY_CA_CONFIGMAP"
       "SCRIPTS__BASE_IMAGES" "SCRIPTS__BUILDER_IMAGE" "SCRIPTS__PYPI_INDEX_URL" "SCRIPTS__CRAN_URL"
       "CONTAINERS__NAMESPACE" "CONTAINERS__TRIAL_NAMESPACE" "CONTAINERS__MAX_CPU" "CONTAINERS__MAX_MEMORY" "CONTAINERS__MAX_TIMEOUT_SECONDS"
-      "NOTEBOOKS__ORIGIN" "NOTEBOOKS__ALLOW_SAME_ORIGIN"
+      "NOTEBOOKS__ORIGIN" "NOTEBOOKS__ALLOW_SAME_ORIGIN" "REPORTS__CHART_URL"
       "NUXT_PUBLIC_API_BASE" "NUXT_PUBLIC_BUCKET" "NUXT_PUBLIC_GRAFANA_URL" "NUXT_PUBLIC_NOTEBOOKS_ORIGIN" -}}
 {{- range $name, $_ := .Values.extraEnv }}
 {{- if or (hasKey $fixed $name) (has $name $perContainer) }}

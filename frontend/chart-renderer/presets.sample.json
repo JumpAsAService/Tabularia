@@ -1,0 +1,2012 @@
+[
+ {
+  "name": "bar",
+  "width": 340,
+  "height": 208,
+  "option": {
+   "animation": false,
+   "color": [
+    "#3b5bdb",
+    "#14a38b",
+    "#e0a23b",
+    "#c2477a",
+    "#6b7590",
+    "#8a63d2",
+    "#2f9e44",
+    "#d9480f",
+    "#1c7ed6",
+    "#868e96"
+   ],
+   "textStyle": {
+    "fontFamily": "IBM Plex Sans",
+    "fontSize": 9,
+    "color": "#1f2933"
+   },
+   "grid": {
+    "left": 6,
+    "right": 34,
+    "top": 22,
+    "bottom": 6,
+    "containLabel": true
+   },
+   "legend": {
+    "show": false,
+    "top": 20,
+    "left": "center",
+    "itemWidth": 10,
+    "itemHeight": 7,
+    "itemGap": 8,
+    "textStyle": {
+     "fontSize": 9,
+     "overflow": "truncate",
+     "width": 120
+    }
+   },
+   "title": {
+    "text": "bar <script>",
+    "left": 0,
+    "top": 0,
+    "textStyle": {
+     "fontSize": 10,
+     "fontWeight": "bold",
+     "color": "#1f2933"
+    }
+   },
+   "yAxis": {
+    "type": "category",
+    "data": [
+     "a",
+     "b",
+     "c",
+     "d"
+    ],
+    "axisLabel": {
+     "fontSize": 9,
+     "hideOverlap": true,
+     "overflow": "truncate",
+     "width": 102
+    },
+    "axisTick": {
+     "alignWithLabel": true
+    },
+    "inverse": true
+   },
+   "xAxis": {
+    "type": "value",
+    "axisLabel": {
+     "fontSize": 9,
+     "formatter": {
+      "$fmt": "compact",
+      "locale": "en"
+     }
+    },
+    "splitLine": {
+     "lineStyle": {
+      "color": "#e9ecef"
+     }
+    }
+   },
+   "series": [
+    {
+     "type": "bar",
+     "name": "Amount",
+     "data": [
+      {
+       "value": 30.0,
+       "t": "30.00"
+      },
+      {
+       "value": -5.0,
+       "t": "-5.00"
+      },
+      {
+       "value": 30.0,
+       "t": "30.00"
+      },
+      {
+       "value": 1.0,
+       "t": "1.00"
+      }
+     ],
+     "label": {
+      "show": true,
+      "position": "right",
+      "fontSize": 8,
+      "formatter": {
+       "$fmt": "label"
+      }
+     },
+     "barMaxWidth": 28
+    }
+   ]
+  }
+ },
+ {
+  "name": "column",
+  "width": 340,
+  "height": 208,
+  "option": {
+   "animation": false,
+   "color": [
+    "#3b5bdb",
+    "#14a38b",
+    "#e0a23b",
+    "#c2477a",
+    "#6b7590",
+    "#8a63d2",
+    "#2f9e44",
+    "#d9480f",
+    "#1c7ed6",
+    "#868e96"
+   ],
+   "textStyle": {
+    "fontFamily": "IBM Plex Sans",
+    "fontSize": 9,
+    "color": "#1f2933"
+   },
+   "grid": {
+    "left": 6,
+    "right": 10,
+    "top": 22,
+    "bottom": 6,
+    "containLabel": true
+   },
+   "legend": {
+    "show": false,
+    "top": 20,
+    "left": "center",
+    "itemWidth": 10,
+    "itemHeight": 7,
+    "itemGap": 8,
+    "textStyle": {
+     "fontSize": 9,
+     "overflow": "truncate",
+     "width": 120
+    }
+   },
+   "title": {
+    "text": "column <script>",
+    "left": 0,
+    "top": 0,
+    "textStyle": {
+     "fontSize": 10,
+     "fontWeight": "bold",
+     "color": "#1f2933"
+    }
+   },
+   "xAxis": {
+    "type": "category",
+    "data": [
+     "a",
+     "b",
+     "c",
+     "d"
+    ],
+    "axisLabel": {
+     "fontSize": 9,
+     "hideOverlap": true,
+     "overflow": "truncate",
+     "width": 81
+    },
+    "axisTick": {
+     "alignWithLabel": true
+    }
+   },
+   "yAxis": [
+    {
+     "type": "value",
+     "axisLabel": {
+      "fontSize": 9,
+      "formatter": {
+       "$fmt": "compact",
+       "locale": "en"
+      }
+     },
+     "splitLine": {
+      "lineStyle": {
+       "color": "#e9ecef"
+      }
+     }
+    }
+   ],
+   "series": [
+    {
+     "type": "bar",
+     "name": "Amount",
+     "data": [
+      {
+       "value": 30.0,
+       "t": "30.00"
+      },
+      {
+       "value": -5.0,
+       "t": "-5.00"
+      },
+      {
+       "value": 30.0,
+       "t": "30.00"
+      },
+      {
+       "value": 1.0,
+       "t": "1.00"
+      }
+     ],
+     "label": {
+      "show": true,
+      "position": "top",
+      "fontSize": 8,
+      "formatter": {
+       "$fmt": "label"
+      }
+     },
+     "yAxisIndex": 0,
+     "barMaxWidth": 48
+    }
+   ]
+  }
+ },
+ {
+  "name": "line",
+  "width": 340,
+  "height": 208,
+  "option": {
+   "animation": false,
+   "color": [
+    "#3b5bdb",
+    "#14a38b",
+    "#e0a23b",
+    "#c2477a",
+    "#6b7590",
+    "#8a63d2",
+    "#2f9e44",
+    "#d9480f",
+    "#1c7ed6",
+    "#868e96"
+   ],
+   "textStyle": {
+    "fontFamily": "IBM Plex Sans",
+    "fontSize": 9,
+    "color": "#1f2933"
+   },
+   "grid": {
+    "left": 6,
+    "right": 10,
+    "top": 36,
+    "bottom": 6,
+    "containLabel": true
+   },
+   "legend": {
+    "show": true,
+    "top": 20,
+    "left": "center",
+    "itemWidth": 10,
+    "itemHeight": 7,
+    "itemGap": 8,
+    "textStyle": {
+     "fontSize": 9,
+     "overflow": "truncate",
+     "width": 120
+    }
+   },
+   "title": {
+    "text": "line <script>",
+    "left": 0,
+    "top": 0,
+    "textStyle": {
+     "fontSize": 10,
+     "fontWeight": "bold",
+     "color": "#1f2933"
+    }
+   },
+   "xAxis": {
+    "type": "category",
+    "data": [
+     "a",
+     "b",
+     "c",
+     "d"
+    ],
+    "axisLabel": {
+     "fontSize": 9,
+     "hideOverlap": true,
+     "overflow": "truncate",
+     "width": 81
+    },
+    "axisTick": {
+     "alignWithLabel": true
+    }
+   },
+   "yAxis": [
+    {
+     "type": "value",
+     "axisLabel": {
+      "fontSize": 9,
+      "formatter": {
+       "$fmt": "compact",
+       "locale": "en"
+      }
+     },
+     "splitLine": {
+      "lineStyle": {
+       "color": "#e9ecef"
+      }
+     }
+    }
+   ],
+   "series": [
+    {
+     "type": "line",
+     "name": "x",
+     "data": [
+      {
+       "value": 10.0,
+       "t": "10.00"
+      },
+      {
+       "value": -5.0,
+       "t": "-5.00"
+      },
+      null,
+      {
+       "value": 1.0,
+       "t": "1.00"
+      }
+     ],
+     "label": {
+      "show": true,
+      "position": "top",
+      "fontSize": 8,
+      "formatter": {
+       "$fmt": "label"
+      }
+     },
+     "yAxisIndex": 0,
+     "symbol": "circle",
+     "symbolSize": 4,
+     "lineStyle": {
+      "width": 1.6
+     },
+     "connectNulls": false
+    },
+    {
+     "type": "line",
+     "name": "y",
+     "data": [
+      {
+       "value": 20.0,
+       "t": "20.00"
+      },
+      null,
+      {
+       "value": 30.0,
+       "t": "30.00"
+      },
+      null
+     ],
+     "label": {
+      "show": true,
+      "position": "top",
+      "fontSize": 8,
+      "formatter": {
+       "$fmt": "label"
+      }
+     },
+     "yAxisIndex": 0,
+     "symbol": "circle",
+     "symbolSize": 4,
+     "lineStyle": {
+      "width": 1.6
+     },
+     "connectNulls": false
+    }
+   ]
+  }
+ },
+ {
+  "name": "area",
+  "width": 340,
+  "height": 208,
+  "option": {
+   "animation": false,
+   "color": [
+    "#3b5bdb",
+    "#14a38b",
+    "#e0a23b",
+    "#c2477a",
+    "#6b7590",
+    "#8a63d2",
+    "#2f9e44",
+    "#d9480f",
+    "#1c7ed6",
+    "#868e96"
+   ],
+   "textStyle": {
+    "fontFamily": "IBM Plex Sans",
+    "fontSize": 9,
+    "color": "#1f2933"
+   },
+   "grid": {
+    "left": 6,
+    "right": 10,
+    "top": 36,
+    "bottom": 6,
+    "containLabel": true
+   },
+   "legend": {
+    "show": true,
+    "top": 20,
+    "left": "center",
+    "itemWidth": 10,
+    "itemHeight": 7,
+    "itemGap": 8,
+    "textStyle": {
+     "fontSize": 9,
+     "overflow": "truncate",
+     "width": 120
+    }
+   },
+   "title": {
+    "text": "area <script>",
+    "left": 0,
+    "top": 0,
+    "textStyle": {
+     "fontSize": 10,
+     "fontWeight": "bold",
+     "color": "#1f2933"
+    }
+   },
+   "xAxis": {
+    "type": "category",
+    "data": [
+     "a",
+     "b",
+     "c",
+     "d"
+    ],
+    "axisLabel": {
+     "fontSize": 9,
+     "hideOverlap": true,
+     "overflow": "truncate",
+     "width": 81
+    },
+    "axisTick": {
+     "alignWithLabel": true
+    }
+   },
+   "yAxis": [
+    {
+     "type": "value",
+     "axisLabel": {
+      "fontSize": 9,
+      "formatter": {
+       "$fmt": "compact",
+       "locale": "en"
+      }
+     },
+     "splitLine": {
+      "lineStyle": {
+       "color": "#e9ecef"
+      }
+     }
+    }
+   ],
+   "series": [
+    {
+     "type": "line",
+     "name": "x",
+     "data": [
+      {
+       "value": 10.0,
+       "t": "10.00"
+      },
+      {
+       "value": -5.0,
+       "t": "-5.00"
+      },
+      null,
+      {
+       "value": 1.0,
+       "t": "1.00"
+      }
+     ],
+     "label": {
+      "show": true,
+      "position": "top",
+      "fontSize": 8,
+      "formatter": {
+       "$fmt": "label"
+      }
+     },
+     "yAxisIndex": 0,
+     "symbol": "circle",
+     "symbolSize": 4,
+     "lineStyle": {
+      "width": 1.6
+     },
+     "connectNulls": false,
+     "areaStyle": {
+      "opacity": 0.18
+     }
+    },
+    {
+     "type": "line",
+     "name": "y",
+     "data": [
+      {
+       "value": 20.0,
+       "t": "20.00"
+      },
+      null,
+      {
+       "value": 30.0,
+       "t": "30.00"
+      },
+      null
+     ],
+     "label": {
+      "show": true,
+      "position": "top",
+      "fontSize": 8,
+      "formatter": {
+       "$fmt": "label"
+      }
+     },
+     "yAxisIndex": 0,
+     "symbol": "circle",
+     "symbolSize": 4,
+     "lineStyle": {
+      "width": 1.6
+     },
+     "connectNulls": false,
+     "areaStyle": {
+      "opacity": 0.18
+     }
+    }
+   ]
+  }
+ },
+ {
+  "name": "pie",
+  "width": 340,
+  "height": 208,
+  "option": {
+   "animation": false,
+   "color": [
+    "#3b5bdb",
+    "#14a38b",
+    "#e0a23b",
+    "#c2477a",
+    "#6b7590",
+    "#8a63d2",
+    "#2f9e44",
+    "#d9480f",
+    "#1c7ed6",
+    "#868e96"
+   ],
+   "textStyle": {
+    "fontFamily": "IBM Plex Sans",
+    "fontSize": 9,
+    "color": "#1f2933"
+   },
+   "grid": {
+    "left": 6,
+    "right": 10,
+    "top": 22,
+    "bottom": 6,
+    "containLabel": true
+   },
+   "legend": {
+    "show": false,
+    "top": 20,
+    "left": "center",
+    "itemWidth": 10,
+    "itemHeight": 7,
+    "itemGap": 8,
+    "textStyle": {
+     "fontSize": 9,
+     "overflow": "truncate",
+     "width": 120
+    }
+   },
+   "title": {
+    "text": "pie <script>",
+    "left": 0,
+    "top": 0,
+    "textStyle": {
+     "fontSize": 10,
+     "fontWeight": "bold",
+     "color": "#1f2933"
+    }
+   },
+   "series": [
+    {
+     "type": "pie",
+     "radius": [
+      0,
+      "70%"
+     ],
+     "center": [
+      "50%",
+      "54%"
+     ],
+     "data": [
+      {
+       "name": "a",
+       "value": 30.0,
+       "t": "30.00"
+      },
+      {
+       "name": "c",
+       "value": 30.0,
+       "t": "30.00"
+      },
+      {
+       "name": "d",
+       "value": 1.0,
+       "t": "1.00"
+      }
+     ],
+     "avoidLabelOverlap": true,
+     "label": {
+      "fontSize": 8,
+      "formatter": {
+       "$fmt": "namePercent",
+       "locale": "en"
+      },
+      "overflow": "truncate",
+      "width": 85
+     },
+     "labelLine": {
+      "length": 6,
+      "length2": 6
+     }
+    }
+   ]
+  }
+ },
+ {
+  "name": "donut",
+  "width": 340,
+  "height": 208,
+  "option": {
+   "animation": false,
+   "color": [
+    "#3b5bdb",
+    "#14a38b",
+    "#e0a23b",
+    "#c2477a",
+    "#6b7590",
+    "#8a63d2",
+    "#2f9e44",
+    "#d9480f",
+    "#1c7ed6",
+    "#868e96"
+   ],
+   "textStyle": {
+    "fontFamily": "IBM Plex Sans",
+    "fontSize": 9,
+    "color": "#1f2933"
+   },
+   "grid": {
+    "left": 6,
+    "right": 10,
+    "top": 22,
+    "bottom": 6,
+    "containLabel": true
+   },
+   "legend": {
+    "show": false,
+    "top": 20,
+    "left": "center",
+    "itemWidth": 10,
+    "itemHeight": 7,
+    "itemGap": 8,
+    "textStyle": {
+     "fontSize": 9,
+     "overflow": "truncate",
+     "width": 120
+    }
+   },
+   "title": {
+    "text": "donut <script>",
+    "left": 0,
+    "top": 0,
+    "textStyle": {
+     "fontSize": 10,
+     "fontWeight": "bold",
+     "color": "#1f2933"
+    }
+   },
+   "series": [
+    {
+     "type": "pie",
+     "radius": [
+      "45%",
+      "70%"
+     ],
+     "center": [
+      "50%",
+      "54%"
+     ],
+     "data": [
+      {
+       "name": "a",
+       "value": 30.0,
+       "t": "30.00"
+      },
+      {
+       "name": "c",
+       "value": 30.0,
+       "t": "30.00"
+      },
+      {
+       "name": "d",
+       "value": 1.0,
+       "t": "1.00"
+      }
+     ],
+     "avoidLabelOverlap": true,
+     "label": {
+      "fontSize": 8,
+      "formatter": {
+       "$fmt": "namePercent",
+       "locale": "en"
+      },
+      "overflow": "truncate",
+      "width": 85
+     },
+     "labelLine": {
+      "length": 6,
+      "length2": 6
+     }
+    }
+   ]
+  }
+ },
+ {
+  "name": "combo",
+  "width": 340,
+  "height": 208,
+  "option": {
+   "animation": false,
+   "color": [
+    "#3b5bdb",
+    "#14a38b",
+    "#e0a23b",
+    "#c2477a",
+    "#6b7590",
+    "#8a63d2",
+    "#2f9e44",
+    "#d9480f",
+    "#1c7ed6",
+    "#868e96"
+   ],
+   "textStyle": {
+    "fontFamily": "IBM Plex Sans",
+    "fontSize": 9,
+    "color": "#1f2933"
+   },
+   "grid": {
+    "left": 6,
+    "right": 10,
+    "top": 36,
+    "bottom": 6,
+    "containLabel": true
+   },
+   "legend": {
+    "show": true,
+    "top": 20,
+    "left": "center",
+    "itemWidth": 10,
+    "itemHeight": 7,
+    "itemGap": 8,
+    "textStyle": {
+     "fontSize": 9,
+     "overflow": "truncate",
+     "width": 120
+    }
+   },
+   "title": {
+    "text": "combo <script>",
+    "left": 0,
+    "top": 0,
+    "textStyle": {
+     "fontSize": 10,
+     "fontWeight": "bold",
+     "color": "#1f2933"
+    }
+   },
+   "xAxis": {
+    "type": "category",
+    "data": [
+     "a",
+     "b",
+     "c",
+     "d"
+    ],
+    "axisLabel": {
+     "fontSize": 9,
+     "hideOverlap": true,
+     "overflow": "truncate",
+     "width": 81
+    },
+    "axisTick": {
+     "alignWithLabel": true
+    }
+   },
+   "yAxis": [
+    {
+     "type": "value",
+     "axisLabel": {
+      "fontSize": 9,
+      "formatter": {
+       "$fmt": "compact",
+       "locale": "en"
+      }
+     },
+     "splitLine": {
+      "lineStyle": {
+       "color": "#e9ecef"
+      }
+     }
+    },
+    {
+     "type": "value",
+     "axisLabel": {
+      "fontSize": 9,
+      "formatter": {
+       "$fmt": "compact",
+       "locale": "en"
+      }
+     },
+     "splitLine": {
+      "show": false
+     }
+    }
+   ],
+   "series": [
+    {
+     "type": "bar",
+     "name": "Amount",
+     "data": [
+      {
+       "value": 30.0,
+       "t": "30.00"
+      },
+      {
+       "value": -5.0,
+       "t": "-5.00"
+      },
+      {
+       "value": 30.0,
+       "t": "30.00"
+      },
+      {
+       "value": 1.0,
+       "t": "1.00"
+      }
+     ],
+     "label": {
+      "show": true,
+      "position": "top",
+      "fontSize": 8,
+      "formatter": {
+       "$fmt": "label"
+      }
+     },
+     "yAxisIndex": 0,
+     "barMaxWidth": 48
+    },
+    {
+     "type": "line",
+     "name": "Qty",
+     "data": [
+      {
+       "value": 3.0,
+       "t": "3.00"
+      },
+      {
+       "value": 3.0,
+       "t": "3.00"
+      },
+      {
+       "value": 4.0,
+       "t": "4.00"
+      },
+      {
+       "value": 5.0,
+       "t": "5.00"
+      }
+     ],
+     "label": {
+      "show": true,
+      "position": "top",
+      "fontSize": 8,
+      "formatter": {
+       "$fmt": "label"
+      }
+     },
+     "yAxisIndex": 1,
+     "symbol": "circle",
+     "symbolSize": 4,
+     "lineStyle": {
+      "width": 1.6
+     },
+     "connectNulls": false
+    }
+   ]
+  }
+ },
+ {
+  "name": "waterfall",
+  "width": 340,
+  "height": 208,
+  "option": {
+   "animation": false,
+   "color": [
+    "#3b5bdb",
+    "#14a38b",
+    "#e0a23b",
+    "#c2477a",
+    "#6b7590",
+    "#8a63d2",
+    "#2f9e44",
+    "#d9480f",
+    "#1c7ed6",
+    "#868e96"
+   ],
+   "textStyle": {
+    "fontFamily": "IBM Plex Sans",
+    "fontSize": 9,
+    "color": "#1f2933"
+   },
+   "grid": {
+    "left": 6,
+    "right": 10,
+    "top": 22,
+    "bottom": 6,
+    "containLabel": true
+   },
+   "legend": {
+    "show": false,
+    "top": 20,
+    "left": "center",
+    "itemWidth": 10,
+    "itemHeight": 7,
+    "itemGap": 8,
+    "textStyle": {
+     "fontSize": 9,
+     "overflow": "truncate",
+     "width": 120
+    }
+   },
+   "title": {
+    "text": "waterfall <script>",
+    "left": 0,
+    "top": 0,
+    "textStyle": {
+     "fontSize": 10,
+     "fontWeight": "bold",
+     "color": "#1f2933"
+    }
+   },
+   "xAxis": {
+    "type": "category",
+    "data": [
+     "a",
+     "b",
+     "c",
+     "d",
+     "Total"
+    ],
+    "axisLabel": {
+     "fontSize": 9,
+     "hideOverlap": true,
+     "overflow": "truncate",
+     "width": 64
+    },
+    "axisTick": {
+     "alignWithLabel": true
+    }
+   },
+   "yAxis": {
+    "type": "value",
+    "axisLabel": {
+     "fontSize": 9,
+     "formatter": {
+      "$fmt": "compact",
+      "locale": "en"
+     }
+    },
+    "splitLine": {
+     "lineStyle": {
+      "color": "#e9ecef"
+     }
+    }
+   },
+   "series": [
+    {
+     "type": "bar",
+     "stack": "w",
+     "silent": true,
+     "data": [
+      0.0,
+      25.0,
+      25.0,
+      55.0,
+      0
+     ],
+     "itemStyle": {
+      "color": "transparent"
+     },
+     "label": {
+      "show": false
+     }
+    },
+    {
+     "type": "bar",
+     "stack": "w",
+     "name": "Amount",
+     "data": [
+      {
+       "value": 30.0,
+       "t": "30.00",
+       "itemStyle": {
+        "color": "#2b8a3e"
+       }
+      },
+      {
+       "value": 5.0,
+       "t": "-5.00",
+       "itemStyle": {
+        "color": "#c92a2a"
+       }
+      },
+      {
+       "value": 30.0,
+       "t": "30.00",
+       "itemStyle": {
+        "color": "#2b8a3e"
+       }
+      },
+      {
+       "value": 1.0,
+       "t": "1.00",
+       "itemStyle": {
+        "color": "#2b8a3e"
+       }
+      },
+      {
+       "value": 56.0,
+       "t": "56.00",
+       "itemStyle": {
+        "color": "#3b5bdb"
+       }
+      }
+     ],
+     "barMaxWidth": 48,
+     "label": {
+      "show": true,
+      "position": "top",
+      "fontSize": 8,
+      "formatter": {
+       "$fmt": "label"
+      }
+     }
+    }
+   ]
+  }
+ },
+ {
+  "name": "funnel",
+  "width": 340,
+  "height": 208,
+  "option": {
+   "animation": false,
+   "color": [
+    "#3b5bdb",
+    "#14a38b",
+    "#e0a23b",
+    "#c2477a",
+    "#6b7590",
+    "#8a63d2",
+    "#2f9e44",
+    "#d9480f",
+    "#1c7ed6",
+    "#868e96"
+   ],
+   "textStyle": {
+    "fontFamily": "IBM Plex Sans",
+    "fontSize": 9,
+    "color": "#1f2933"
+   },
+   "grid": {
+    "left": 6,
+    "right": 10,
+    "top": 22,
+    "bottom": 6,
+    "containLabel": true
+   },
+   "legend": {
+    "show": false,
+    "top": 20,
+    "left": "center",
+    "itemWidth": 10,
+    "itemHeight": 7,
+    "itemGap": 8,
+    "textStyle": {
+     "fontSize": 9,
+     "overflow": "truncate",
+     "width": 120
+    }
+   },
+   "title": {
+    "text": "funnel <script>",
+    "left": 0,
+    "top": 0,
+    "textStyle": {
+     "fontSize": 10,
+     "fontWeight": "bold",
+     "color": "#1f2933"
+    }
+   },
+   "series": [
+    {
+     "type": "funnel",
+     "left": "10%",
+     "right": "10%",
+     "top": 22,
+     "bottom": 6,
+     "sort": "descending",
+     "gap": 2,
+     "data": [
+      {
+       "name": "a",
+       "value": 30.0,
+       "t": "30.00"
+      },
+      {
+       "name": "c",
+       "value": 30.0,
+       "t": "30.00"
+      },
+      {
+       "name": "d",
+       "value": 1.0,
+       "t": "1.00"
+      },
+      {
+       "name": "b",
+       "value": -5.0,
+       "t": "-5.00"
+      }
+     ],
+     "label": {
+      "position": "inside",
+      "fontSize": 8,
+      "color": "#fff",
+      "formatter": {
+       "$fmt": "nameLabel",
+       "sep": " "
+      }
+     }
+    }
+   ]
+  }
+ },
+ {
+  "name": "treemap",
+  "width": 340,
+  "height": 208,
+  "option": {
+   "animation": false,
+   "color": [
+    "#3b5bdb",
+    "#14a38b",
+    "#e0a23b",
+    "#c2477a",
+    "#6b7590",
+    "#8a63d2",
+    "#2f9e44",
+    "#d9480f",
+    "#1c7ed6",
+    "#868e96"
+   ],
+   "textStyle": {
+    "fontFamily": "IBM Plex Sans",
+    "fontSize": 9,
+    "color": "#1f2933"
+   },
+   "grid": {
+    "left": 6,
+    "right": 10,
+    "top": 22,
+    "bottom": 6,
+    "containLabel": true
+   },
+   "legend": {
+    "show": false,
+    "top": 20,
+    "left": "center",
+    "itemWidth": 10,
+    "itemHeight": 7,
+    "itemGap": 8,
+    "textStyle": {
+     "fontSize": 9,
+     "overflow": "truncate",
+     "width": 120
+    }
+   },
+   "title": {
+    "text": "treemap <script>",
+    "left": 0,
+    "top": 0,
+    "textStyle": {
+     "fontSize": 10,
+     "fontWeight": "bold",
+     "color": "#1f2933"
+    }
+   },
+   "series": [
+    {
+     "type": "treemap",
+     "roam": false,
+     "nodeClick": false,
+     "breadcrumb": {
+      "show": false
+     },
+     "left": 0,
+     "right": 0,
+     "top": 16,
+     "bottom": 0,
+     "data": [
+      {
+       "name": "a",
+       "children": [
+        {
+         "name": "x",
+         "value": 10.0,
+         "t": "10.00"
+        },
+        {
+         "name": "y",
+         "value": 20.0,
+         "t": "20.00"
+        }
+       ]
+      },
+      {
+       "name": "c",
+       "children": [
+        {
+         "name": "y",
+         "value": 30.0,
+         "t": "30.00"
+        }
+       ]
+      },
+      {
+       "name": "d",
+       "children": [
+        {
+         "name": "x",
+         "value": 1.0,
+         "t": "1.00"
+        }
+       ]
+      }
+     ],
+     "label": {
+      "fontSize": 8,
+      "overflow": "truncate",
+      "formatter": {
+       "$fmt": "nameLabel"
+      }
+     },
+     "upperLabel": {
+      "show": true,
+      "height": 14,
+      "fontSize": 8,
+      "color": "#fff"
+     },
+     "levels": [
+      {
+       "itemStyle": {
+        "borderWidth": 0,
+        "gapWidth": 2
+       }
+      },
+      {
+       "itemStyle": {
+        "gapWidth": 1,
+        "borderColorSaturation": 0.6
+       }
+      }
+     ]
+    }
+   ]
+  }
+ },
+ {
+  "name": "heatmap",
+  "width": 340,
+  "height": 208,
+  "option": {
+   "animation": false,
+   "color": [
+    "#3b5bdb",
+    "#14a38b",
+    "#e0a23b",
+    "#c2477a",
+    "#6b7590",
+    "#8a63d2",
+    "#2f9e44",
+    "#d9480f",
+    "#1c7ed6",
+    "#868e96"
+   ],
+   "textStyle": {
+    "fontFamily": "IBM Plex Sans",
+    "fontSize": 9,
+    "color": "#1f2933"
+   },
+   "grid": {
+    "left": 6,
+    "right": 10,
+    "top": 22,
+    "bottom": 30,
+    "containLabel": true
+   },
+   "legend": {
+    "show": false,
+    "top": 20,
+    "left": "center",
+    "itemWidth": 10,
+    "itemHeight": 7,
+    "itemGap": 8,
+    "textStyle": {
+     "fontSize": 9,
+     "overflow": "truncate",
+     "width": 120
+    }
+   },
+   "title": {
+    "text": "heatmap <script>",
+    "left": 0,
+    "top": 0,
+    "textStyle": {
+     "fontSize": 10,
+     "fontWeight": "bold",
+     "color": "#1f2933"
+    }
+   },
+   "xAxis": {
+    "type": "category",
+    "data": [
+     "a",
+     "b",
+     "c",
+     "d"
+    ],
+    "axisLabel": {
+     "fontSize": 9,
+     "hideOverlap": true,
+     "overflow": "truncate",
+     "width": 81
+    },
+    "axisTick": {
+     "alignWithLabel": true
+    }
+   },
+   "yAxis": {
+    "type": "category",
+    "data": [
+     "x",
+     "y"
+    ],
+    "axisLabel": {
+     "fontSize": 9,
+     "hideOverlap": true,
+     "overflow": "truncate",
+     "width": 85
+    },
+    "axisTick": {
+     "alignWithLabel": true
+    }
+   },
+   "visualMap": {
+    "min": -5.0,
+    "max": 30.0,
+    "calculable": false,
+    "orient": "horizontal",
+    "left": "center",
+    "bottom": 0,
+    "itemWidth": 8,
+    "itemHeight": 90,
+    "textStyle": {
+     "fontSize": 8
+    },
+    "formatter": {
+     "$fmt": "compact",
+     "locale": "en"
+    },
+    "inRange": {
+     "color": [
+      "#f1f3ff",
+      "#3b5bdb"
+     ]
+    }
+   },
+   "series": [
+    {
+     "type": "heatmap",
+     "data": [
+      {
+       "value": [
+        0,
+        0,
+        10.0
+       ],
+       "t": "10.00"
+      },
+      {
+       "value": [
+        1,
+        0,
+        -5.0
+       ],
+       "t": "-5.00"
+      },
+      {
+       "value": [
+        3,
+        0,
+        1.0
+       ],
+       "t": "1.00"
+      },
+      {
+       "value": [
+        0,
+        1,
+        20.0
+       ],
+       "t": "20.00"
+      },
+      {
+       "value": [
+        2,
+        1,
+        30.0
+       ],
+       "t": "30.00"
+      }
+     ],
+     "label": {
+      "show": true,
+      "position": "inside",
+      "fontSize": 8,
+      "formatter": {
+       "$fmt": "label"
+      }
+     },
+     "itemStyle": {
+      "borderColor": "#fff",
+      "borderWidth": 1
+     }
+    }
+   ]
+  }
+ },
+ {
+  "name": "scatter",
+  "width": 340,
+  "height": 208,
+  "option": {
+   "animation": false,
+   "color": [
+    "#3b5bdb",
+    "#14a38b",
+    "#e0a23b",
+    "#c2477a",
+    "#6b7590",
+    "#8a63d2",
+    "#2f9e44",
+    "#d9480f",
+    "#1c7ed6",
+    "#868e96"
+   ],
+   "textStyle": {
+    "fontFamily": "IBM Plex Sans",
+    "fontSize": 9,
+    "color": "#1f2933"
+   },
+   "grid": {
+    "left": 6,
+    "right": 10,
+    "top": 36,
+    "bottom": 6,
+    "containLabel": true
+   },
+   "legend": {
+    "show": true,
+    "top": 20,
+    "left": "center",
+    "itemWidth": 10,
+    "itemHeight": 7,
+    "itemGap": 8,
+    "textStyle": {
+     "fontSize": 9,
+     "overflow": "truncate",
+     "width": 120
+    }
+   },
+   "title": {
+    "text": "scatter <script>",
+    "left": 0,
+    "top": 0,
+    "textStyle": {
+     "fontSize": 10,
+     "fontWeight": "bold",
+     "color": "#1f2933"
+    }
+   },
+   "xAxis": {
+    "type": "value",
+    "axisLabel": {
+     "fontSize": 9,
+     "formatter": {
+      "$fmt": "compact",
+      "locale": "en"
+     }
+    },
+    "splitLine": {
+     "lineStyle": {
+      "color": "#e9ecef"
+     }
+    },
+    "scale": true
+   },
+   "yAxis": {
+    "type": "value",
+    "axisLabel": {
+     "fontSize": 9,
+     "formatter": {
+      "$fmt": "compact",
+      "locale": "en"
+     }
+    },
+    "splitLine": {
+     "lineStyle": {
+      "color": "#e9ecef"
+     }
+    },
+    "scale": true
+   },
+   "series": [
+    {
+     "type": "scatter",
+     "name": "x",
+     "symbolSize": 5,
+     "data": [
+      {
+       "value": [
+        1.0,
+        10.0
+       ],
+       "t": "10.00"
+      },
+      {
+       "value": [
+        3.0,
+        -5.0
+       ],
+       "t": "-5.00"
+      },
+      {
+       "value": [
+        5.0,
+        1.0
+       ],
+       "t": "1.00"
+      }
+     ],
+     "label": {
+      "show": true,
+      "position": "top",
+      "fontSize": 8,
+      "formatter": {
+       "$fmt": "label"
+      }
+     }
+    },
+    {
+     "type": "scatter",
+     "name": "y",
+     "symbolSize": 5,
+     "data": [
+      {
+       "value": [
+        2.0,
+        20.0
+       ],
+       "t": "20.00"
+      },
+      {
+       "value": [
+        4.0,
+        30.0
+       ],
+       "t": "30.00"
+      }
+     ],
+     "label": {
+      "show": true,
+      "position": "top",
+      "fontSize": 8,
+      "formatter": {
+       "$fmt": "label"
+      }
+     }
+    }
+   ]
+  }
+ },
+ {
+  "name": "gauge",
+  "width": 340,
+  "height": 208,
+  "option": {
+   "animation": false,
+   "color": [
+    "#3b5bdb",
+    "#14a38b",
+    "#e0a23b",
+    "#c2477a",
+    "#6b7590",
+    "#8a63d2",
+    "#2f9e44",
+    "#d9480f",
+    "#1c7ed6",
+    "#868e96"
+   ],
+   "textStyle": {
+    "fontFamily": "IBM Plex Sans",
+    "fontSize": 9,
+    "color": "#1f2933"
+   },
+   "grid": {
+    "left": 6,
+    "right": 10,
+    "top": 22,
+    "bottom": 6,
+    "containLabel": true
+   },
+   "legend": {
+    "show": false,
+    "top": 20,
+    "left": "center",
+    "itemWidth": 10,
+    "itemHeight": 7,
+    "itemGap": 8,
+    "textStyle": {
+     "fontSize": 9,
+     "overflow": "truncate",
+     "width": 120
+    }
+   },
+   "title": {
+    "text": "gauge <script>",
+    "left": 0,
+    "top": 0,
+    "textStyle": {
+     "fontSize": 10,
+     "fontWeight": "bold",
+     "color": "#1f2933"
+    }
+   },
+   "series": [
+    {
+     "type": "gauge",
+     "min": 0.0,
+     "max": 50,
+     "startAngle": 210,
+     "endAngle": -30,
+     "radius": "88%",
+     "center": [
+      "50%",
+      "58%"
+     ],
+     "axisLine": {
+      "lineStyle": {
+       "width": 10,
+       "color": [
+        [
+         0.2,
+         "#c92a2a"
+        ],
+        [
+         0.8,
+         "#2b8a3e"
+        ],
+        [
+         1,
+         "#dee2e6"
+        ]
+       ]
+      }
+     },
+     "progress": {
+      "show": false
+     },
+     "pointer": {
+      "show": true,
+      "length": "52%",
+      "width": 4,
+      "itemStyle": {
+       "color": "#1f2933"
+      }
+     },
+     "axisTick": {
+      "show": false
+     },
+     "splitLine": {
+      "show": false
+     },
+     "axisLabel": {
+      "show": false
+     },
+     "title": {
+      "show": true,
+      "offsetCenter": [
+       0,
+       "66%"
+      ],
+      "fontSize": 9
+     },
+     "detail": {
+      "offsetCenter": [
+       0,
+       "38%"
+      ],
+      "fontSize": 16,
+      "fontWeight": "bold",
+      "color": "#1f2933",
+      "formatter": {
+       "$fmt": "const",
+       "text": "30.00"
+      }
+     },
+     "data": [
+      {
+       "value": 30.0,
+       "name": "Amount"
+      }
+     ]
+    }
+   ]
+  }
+ },
+ {
+  "name": "bullet",
+  "width": 340,
+  "height": 208,
+  "option": {
+   "animation": false,
+   "color": [
+    "#3b5bdb",
+    "#14a38b",
+    "#e0a23b",
+    "#c2477a",
+    "#6b7590",
+    "#8a63d2",
+    "#2f9e44",
+    "#d9480f",
+    "#1c7ed6",
+    "#868e96"
+   ],
+   "textStyle": {
+    "fontFamily": "IBM Plex Sans",
+    "fontSize": 9,
+    "color": "#1f2933"
+   },
+   "grid": {
+    "left": 6,
+    "right": 10,
+    "top": 22,
+    "bottom": 6,
+    "containLabel": true
+   },
+   "legend": {
+    "show": false,
+    "top": 20,
+    "left": "center",
+    "itemWidth": 10,
+    "itemHeight": 7,
+    "itemGap": 8,
+    "textStyle": {
+     "fontSize": 9,
+     "overflow": "truncate",
+     "width": 120
+    }
+   },
+   "title": {
+    "text": "bullet <script>",
+    "left": 0,
+    "top": 0,
+    "textStyle": {
+     "fontSize": 10,
+     "fontWeight": "bold",
+     "color": "#1f2933"
+    }
+   },
+   "yAxis": [
+    {
+     "type": "category",
+     "data": [
+      "a",
+      "b",
+      "c",
+      "d"
+     ],
+     "axisLabel": {
+      "fontSize": 9,
+      "hideOverlap": true,
+      "overflow": "truncate",
+      "width": 85
+     },
+     "axisTick": {
+      "alignWithLabel": true
+     },
+     "inverse": true
+    },
+    {
+     "type": "category",
+     "data": [
+      "a",
+      "b",
+      "c",
+      "d"
+     ],
+     "axisLabel": {
+      "fontSize": 9,
+      "hideOverlap": true,
+      "overflow": "truncate",
+      "width": 85
+     },
+     "axisTick": {
+      "alignWithLabel": true
+     },
+     "inverse": true,
+     "show": false
+    }
+   ],
+   "xAxis": {
+    "type": "value",
+    "axisLabel": {
+     "fontSize": 9,
+     "formatter": {
+      "$fmt": "compact",
+      "locale": "en"
+     }
+    },
+    "splitLine": {
+     "lineStyle": {
+      "color": "#e9ecef"
+     }
+    },
+    "max": 40.0,
+    "min": 0
+   },
+   "series": [
+    {
+     "type": "bar",
+     "stack": "bands",
+     "silent": true,
+     "barWidth": "70%",
+     "yAxisIndex": 0,
+     "itemStyle": {
+      "color": "#adb5bd"
+     },
+     "data": [
+      10.0,
+      10.0,
+      10.0,
+      10.0
+     ]
+    },
+    {
+     "type": "bar",
+     "stack": "bands",
+     "silent": true,
+     "barWidth": "70%",
+     "yAxisIndex": 0,
+     "itemStyle": {
+      "color": "#ced4da"
+     },
+     "data": [
+      30.0,
+      30.0,
+      30.0,
+      30.0
+     ]
+    },
+    {
+     "type": "bar",
+     "name": "Amount",
+     "barWidth": "26%",
+     "yAxisIndex": 1,
+     "z": 3,
+     "itemStyle": {
+      "color": "#1f2933"
+     },
+     "data": [
+      {
+       "value": 30.0,
+       "t": "30.00"
+      },
+      {
+       "value": -5.0,
+       "t": "-5.00"
+      },
+      {
+       "value": 30.0,
+       "t": "30.00"
+      },
+      {
+       "value": 1.0,
+       "t": "1.00"
+      }
+     ],
+     "label": {
+      "show": true,
+      "position": "right",
+      "fontSize": 8,
+      "formatter": {
+       "$fmt": "label"
+      }
+     }
+    },
+    {
+     "type": "scatter",
+     "symbol": "rect",
+     "symbolSize": [
+      3,
+      14
+     ],
+     "z": 4,
+     "yAxisIndex": 0,
+     "itemStyle": {
+      "color": "#c92a2a"
+     },
+     "data": [
+      {
+       "value": [
+        35.0,
+        0
+       ]
+      },
+      {
+       "value": [
+        35.0,
+        1
+       ]
+      },
+      {
+       "value": [
+        35.0,
+        2
+       ]
+      },
+      {
+       "value": [
+        35.0,
+        3
+       ]
+      }
+     ]
+    }
+   ]
+  }
+ }
+]

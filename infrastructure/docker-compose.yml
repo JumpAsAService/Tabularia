@@ -235,6 +235,8 @@ services:
       # the stack's own services, also with no .env (the code's defaults are for running outside Docker)
       - REDIS__HOST=${REDIS__HOST:-redis}
       - STORAGE__ENDPOINT=${STORAGE__ENDPOINT:-http://minio:9000}
+      # the reports' charts, drawn by the chart-renderer service below
+      - REPORTS__CHART_URL=${REPORTS__CHART_URL:-http://chart-renderer:8090}
     volumes:
       - ../backend:/app
       - keys:/var/lib/tabularia/keys
@@ -362,6 +364,20 @@ services:
       - /app/node_modules
     depends_on:
       - gateway
+
+  # The reports' charts: ECharts drawn to SVG on the server (frontend/chart-renderer), called by
+  # the worker while it renders a report (REPORTS__CHART_URL). Internal: no port on the host.
+  # The frontend's development image has Node and ECharts; the code comes from the bind mount.
+  chart-renderer:
+    build:
+      context: ../frontend
+      dockerfile: Dockerfile
+    restart: unless-stopped
+    command: ["node", "/app/chart-renderer/render.mjs", "--serve", "8090", "--host", "0.0.0.0"]
+    volumes:
+      - ../frontend/chart-renderer:/app/chart-renderer:ro
+    mem_limit: 256m
+    memswap_limit: 256m
 
   # ── Monitoring ─────────────────────────────────────────────────────────
   # VictoriaMetrics: a lightweight Prometheus-compatible TSDB; it is also the scraper.

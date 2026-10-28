@@ -330,6 +330,33 @@ engine:
   # that multi-gigabyte uploads are never cut off mid-transfer.
   previewTimeoutSeconds: 120
 
+# Pixel-perfect reports (docs/specs/reports.md): what one render may read and use. The run
+# workers render them (the `celery` queue, as the Viewer's exports): the pages are laid out by
+# a child process of the worker, the charts drawn by the chartRenderer sidecar below.
+reports:
+  # The most rows a report reads from each of its datasets: one more stops the render and
+  # names the dataset (aggregate it in SQL, or filter it).
+  maxRows: 10000
+  # The most pages of one report (with renderMemoryMb below: 1024 lays out some 250).
+  maxPages: 250
+  # The memory and the time of the child process that lays the pages out (Typst). It needs
+  # about 4 MiB a page of tables: 1024 lays out some 250 pages. For longer reports raise it,
+  # and worker.resources.limits.memory by as much for every render that may run at once
+  # (worker.concurrency).
+  renderMemoryMb: 1024
+  renderSeconds: 120
+  # ECharts drawn to SVG for the reports' charts: a sidecar of every run-worker pod, from the
+  # frontend image, listening on 127.0.0.1 only — nothing outside the pod reaches it, so no
+  # Service and no NetworkPolicy. A native sidecar (an init container that keeps running,
+  # Kubernetes 1.29 or later): it starts before the worker and stops after it. false = no
+  # charts: a report that has one fails, saying so.
+  chartRenderer:
+    enabled: true
+    port: 8090
+    resources:
+      requests: { cpu: 50m, memory: 96Mi }
+      limits: { memory: 256Mi }
+
 cache:
   # Step-cache blobs older than this are evicted from the object storage.
   ttlSeconds: 86400

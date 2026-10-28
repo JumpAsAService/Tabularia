@@ -53,11 +53,11 @@ SFTP, S3, APIs, SharePoint) belong to each connection, encrypted with
 | Read by | Variables |
 |---|---|
 | [Shared by the gateway and the engine](#shared-by-the-gateway-and-the-engine) | 7 |
-| [Gateway](#gateway) | 163 |
-| [Engine and workers](#engine-and-workers) | 93 |
+| [Gateway](#gateway) | 164 |
+| [Engine and workers](#engine-and-workers) | 98 |
 | [Frontend](#frontend) | 4 |
 | [Compose and Helm only](#compose-and-helm-only) | 13 |
-| **Total** | **280** |
+| **Total** | **286** |
 
 ## Before production
 
@@ -389,6 +389,14 @@ The marimo notebooks' pods: one per notebook being used, its app or its editor, 
 | `TABULARIA_NOTEBOOK_TOKEN` | string | empty | set in the notebooks' pods | Not to set: the token of a notebook's session, which the gateway puts in the pod's Secret; it holds only on the notebooks' data endpoints, and only while the session lives. |
 | `TABULARIA_URL` | string | empty | set in the notebooks' pods | Not to set: the gateway gives it to every notebook's pod, from `NOTEBOOKS__GATEWAY_URL`; the `tabularia` module in the pod reads datasources there. |
 
+### Reports
+
+Pixel-perfect reports: the gateway checks a report's definition at every save, reads its datasets with the rights of whoever opens it and fills its parameters in; the engine renders it, within the rows, pages, memory and time its own `REPORTS__*` allow.
+
+| Variable | Type | Default | Helm value | Description |
+|---|---|---|---|---|
+| `REPORTS__API_WAIT_SECONDS` | integer, 5–3600 | `120` | `extraEnv` | `GET /reports/{id}/render`, the API: how long the request waits for the file before answering 504 and stopping the render. Keep the reverse proxy's read timeout above it (the chart's ingress allows 300 s). |
+
 ## Engine and workers
 
 The data plane: in Compose the `backend`, `worker`, `preview-worker` and `beat`
@@ -603,6 +611,18 @@ The SMTP connections of email outputs and notices are set up in the app; the dep
 | Variable | Type | Default | Helm value | Description |
 |---|---|---|---|---|
 | `SMTP__VERIFY_TLS` | boolean | `true` | `extraEnv` | Verify the SMTP server's certificate and name, with STARTTLS and with implicit TLS (465). `false` is the explicit opt-out for a relay with a self-signed certificate: the connection is still encrypted, but to a server nobody vouched for, and it receives the SMTP password. |
+
+### Reports
+
+What one render of a pixel-perfect report may read and use. The run workers render reports (the `celery` queue, as downloads); the pages are laid out by a child process of the worker, with its own memory and time, and the charts are drawn by the chart service, ECharts to SVG, a sidecar of the worker pods on Kubernetes and the `chart-renderer` service on Compose.
+
+| Variable | Type | Default | Helm value | Description |
+|---|---|---|---|---|
+| `REPORTS__MAX_ROWS` | integer, 1–1,000,000 | `10000` | `reports.maxRows` | The most rows a report reads from each of its datasets; one more stops the render and names the dataset (aggregate it in SQL, or filter it). |
+| `REPORTS__MAX_PAGES` | integer, 1–10,000 | `250` | `reports.maxPages` | The most pages of one report: a longer one stops with the number it would have. |
+| `REPORTS__RENDER_MEMORY_MB` | integer, ≥ 128 | `1024` | `reports.renderMemoryMb` | The memory of the child process that lays out a report's pages (Typst), in MiB: it needs about 4 MiB a page of tables, so 1024 lays out some 250 pages. Past it the render stops and says so; give the worker as much more memory for every render that may run at once. |
+| `REPORTS__RENDER_SECONDS` | integer, ≥ 5 | `120` | `reports.renderSeconds` | How long the layout of one report may take: past it the child process is killed and the render stops. |
+| `REPORTS__CHART_URL` | string | `http://127.0.0.1:8090` | set on the run workers from `reports.chartRenderer` | Where the workers find the chart service: the sidecar on 127.0.0.1 on Kubernetes (`reports.chartRenderer`), the `chart-renderer` service on Compose. Empty = no charts: a report that has one fails, saying so. |
 
 ## Frontend
 

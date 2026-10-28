@@ -2,7 +2,8 @@
 The three Celery roles. They share one template because they must share one
 configuration; only the command, the queue and the sizing differ.
 
-  worker         — runs, database refreshes, output writes. The heavy one.
+  worker         — runs, database refreshes, output writes, exports and reports. The
+                   heavy one; with the reports' chart service as a sidecar.
   preview-worker — interactive previews on their own queue, so a preview never
                    queues behind a long run.
   beat           — the clock. Enqueues periodic jobs; the workers execute them.
@@ -14,6 +15,7 @@ beats enqueue every periodic job N times.
       "root" $
       "role" "worker"
       "cfg" .Values.worker
+      "chartRenderer" true
       "command" (list "celery" "-A" "app.tasks.celery_app" "worker" "-E" "-Q" "celery" "--loglevel=info")
    ) }}
 ---

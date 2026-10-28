@@ -40,6 +40,9 @@ dependencies = [
     # image through boto3 and the Google client; named here because the code uses them.
     "requests>=2.32",
     "jmespath>=1.0",
+    # Reports' PDF and on-screen pages: the Typst compiler (Apache-2.0), pinned because
+    # the golden PDFs of the tests are byte-identical only with the same compiler
+    "typst==0.15.0",
 ]
 
 [project.optional-dependencies]

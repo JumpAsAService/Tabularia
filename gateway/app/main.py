@@ -50,6 +50,7 @@ from app.routes.engine_policy import router as engine_policy_router
 from app.routes.saved_views import router as saved_views_router
 from app.routes.scripts import router as scripts_router
 from app.routes.sql_scripts import router as sql_scripts_router
+from app.routes.reports import router as reports_router
 from app.routes.notebooks import router as notebooks_router
 from app.routes.notebook_sessions import router as notebook_sessions_router
 from app.routes.notebook_proxy import router as notebook_proxy_router
@@ -304,6 +305,7 @@ if settings.app.role != "orchestrator":
     app.include_router(saved_views_router)
     app.include_router(scripts_router)
     app.include_router(sql_scripts_router)
+    app.include_router(reports_router)
     app.include_router(notebooks_router)
     # the notebooks' pods: their sessions and «Save version» first, then the proxy to
     # marimo (its paths would take /notebooks/{id}/edit/save otherwise), and what the

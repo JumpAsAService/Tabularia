@@ -246,6 +246,13 @@ prefixes = ["NOTEBOOKS"]
 intro = "The marimo notebooks' pods: one per notebook being used, its app or its editor, in the scripts namespace with the image of the notebook's Python environment, started when someone opens it and stopped when nobody uses it. On with the scripting environments (`SCRIPTS__ENABLED`); the chart sets the gateway's address and these limits from `scripts.notebooks`."
 
 [[section]]
+id = "gateway-reports"
+component = "gateway"
+title = "Reports"
+prefixes = ["REPORTS"]
+intro = "Pixel-perfect reports: the gateway checks a report's definition at every save, reads its datasets with the rights of whoever opens it and fills its parameters in; the engine renders it, within the rows, pages, memory and time its own `REPORTS__*` allow."
+
+[[section]]
 id = "engine-api"
 component = "engine"
 title = "Engine API and previews"
@@ -355,6 +362,13 @@ component = "engine"
 title = "Email"
 prefixes = ["SMTP"]
 intro = "The SMTP connections of email outputs and notices are set up in the app; the deployment decides only how their servers are trusted."
+
+[[section]]
+id = "engine-reports"
+component = "engine"
+title = "Reports"
+prefixes = ["REPORTS"]
+intro = "What one render of a pixel-perfect report may read and use. The run workers render reports (the `celery` queue, as downloads); the pages are laid out by a child process of the worker, with its own memory and time, and the charts are drawn by the chart service, ECharts to SVG, a sidecar of the worker pods on Kubernetes and the `chart-renderer` service on Compose."
 
 # ── Shared ───────────────────────────────────────────────────────────────────
 
@@ -916,6 +930,9 @@ text = "A notebook's token is honoured only when the call comes from its own pod
 [var.NOTEBOOKS__START_TIMEOUT_SECONDS]
 text = "A notebook's pod that has not answered after this long has failed to start, and says why (no node free, an image not downloaded)."
 
+[var.REPORTS__API_WAIT_SECONDS]
+text = "`GET /reports/{id}/render`, the API: how long the request waits for the file before answering 504 and stopping the render. Keep the reverse proxy's read timeout above it (the chart's ingress allows 300 s)."
+
 [var.TABULARIA_URL]
 section = "gateway-notebooks"
 helm = "set in the notebooks' pods"
@@ -1222,6 +1239,22 @@ text = "Grafana as the browser reaches it, embedded in the Monitoring tab (admin
 [var.NUXT_PUBLIC_NOTEBOOKS_ORIGIN]
 helm = "from `scripts.notebooks.host`"
 text = "The notebooks' own address, the gateway's `NOTEBOOKS__ORIGIN`: the pages' Content-Security-Policy lets them show the notebooks' apps and editors from it."
+
+[var.REPORTS__MAX_ROWS]
+text = "The most rows a report reads from each of its datasets; one more stops the render and names the dataset (aggregate it in SQL, or filter it)."
+
+[var.REPORTS__MAX_PAGES]
+text = "The most pages of one report: a longer one stops with the number it would have."
+
+[var.REPORTS__RENDER_MEMORY_MB]
+text = "The memory of the child process that lays out a report's pages (Typst), in MiB: it needs about 4 MiB a page of tables, so 1024 lays out some 250 pages. Past it the render stops and says so; give the worker as much more memory for every render that may run at once."
+
+[var.REPORTS__RENDER_SECONDS]
+text = "How long the layout of one report may take: past it the child process is killed and the render stops."
+
+[var.REPORTS__CHART_URL]
+text = "Where the workers find the chart service: the sidecar on 127.0.0.1 on Kubernetes (`reports.chartRenderer`), the `chart-renderer` service on Compose. Empty = no charts: a report that has one fails, saying so."
+helm = "set on the run workers from `reports.chartRenderer`"
 
 [var.SMTP__VERIFY_TLS]
 text = "Verify the SMTP server's certificate and name, with STARTTLS and with implicit TLS (465). `false` is the explicit opt-out for a relay with a self-signed certificate: the connection is still encrypted, but to a server nobody vouched for, and it receives the SMTP password."

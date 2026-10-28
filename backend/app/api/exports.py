@@ -30,6 +30,11 @@ _CHUNK = 1024 * 1024
 MEDIA = {
     "csv": "text/csv",
     "xlsx": "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+    # reports (app/reports/render.py): the PDF, the email's body as MHTML (the HTML and its
+    # images in one MIME document), the pages on screen as JSON
+    "pdf": "application/pdf",
+    "html": "multipart/related",
+    "svg": "application/json",
 }
 _client: redis.Redis | None = None
 

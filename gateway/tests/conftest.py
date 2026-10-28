@@ -89,6 +89,10 @@ def _json_body(request: httpx.Request) -> dict:
     return json.loads(request.content or b"{}")
 
 
+async def _chunks(data: bytes):
+    yield data
+
+
 class FakeEngine:
     """Fake engine: records the blobs' DELETEs and serves task states made to measure."""
 
@@ -119,6 +123,7 @@ class FakeEngine:
         # serve ({template name: message}; a "*" key = a general error) — the grammar is the engine's
         self.placeholder_previews: list[dict] = []
         self.placeholder_errors: dict[str, str] = {}
+        self.placeholder_values: dict[str, str] = {}  # {template: its value}; others answer with themselves
         # «S3 folder» datasource: bodies on POST /s3/inspect and the answer per action
         self.s3_inspects: list[dict] = []
         self.s3_responses: dict[str, tuple[int, dict]] = {
@@ -140,6 +145,19 @@ class FakeEngine:
         self.dbt_export_response: tuple[int, dict] | None = None  # an error answer to serve (e.g. a 422 with a code)
         self.dbt_export_script: list[tuple[int, dict] | None] = []  # answers in line, one per call (None = the zip)
         self.task_states: dict[str, dict] = {}  # task_id -> {status, result, error}
+        # reports (docs/specs/reports.md): renders started, the save's check and the
+        # choices read from a dataset. A check or choices answer of None = an engine
+        # without that route (404), as before the engine had reports
+        self.report_renders: list[dict] = []
+        self.report_render_response: tuple[int, dict] | None = None  # an error to serve
+        self.report_checks: list[dict] = []
+        self.report_check_response: tuple[int, dict] | None = None
+        self.report_choices: list[dict] = []
+        self.report_choices_response: tuple[int, dict] | None = None
+        # an export followed by its owner: its state per task (default: ready) and the file
+        self.export_states: dict[str, list[dict]] = {}  # task_id -> states served in turn (the last one stays)
+        self.export_polls: list[tuple[str, str | None]] = []  # (path, owner)
+        self.export_file: bytes = b"%PDF-1.7 report"
         self.pushmails: list[dict] = []  # bodies received on POST /db/pushmail
         self.pushmail_status = 200  # a different answer to test an engine that refuses the email
         self.default_state = {"status": "SUCCESS", "result": {}, "error": None}
@@ -195,7 +213,8 @@ class FakeEngine:
         if path == "/placeholders/preview" and request.method == "POST":
             body = _json_body(request)
             self.placeholder_previews.append(body)
-            fields = {k: ({"error": self.placeholder_errors[k]} if k in self.placeholder_errors else {"value": v})
+            fields = {k: ({"error": self.placeholder_errors[k]} if k in self.placeholder_errors
+                          else {"value": self.placeholder_values.get(v, v)})
                       for k, v in (body.get("templates") or {}).items()}
             return httpx.Response(200, json={"fields": fields, "expansions": 1, "now": "2026-10-18T00:00:00+00:00",
                                              "error": self.placeholder_errors.get("*")})
@@ -259,6 +278,25 @@ class FakeEngine:
             if self.pushmail_status >= 400:
                 return httpx.Response(self.pushmail_status, json={"detail": "engine refused"})
             return httpx.Response(200, json={"task_id": f"t-pushmail-{len(self.pushmails)}", "status": "submitted", "message": ""})
+        if path == "/reports/render" and request.method == "POST":
+            self.report_renders.append(_json_body(request))
+            if self.report_render_response is not None:
+                return httpx.Response(self.report_render_response[0], json=self.report_render_response[1])
+            return httpx.Response(200, json={"task_id": f"t-report-{len(self.report_renders)}"})
+        if path == "/reports/check" and request.method == "POST" and self.report_check_response is not None:
+            self.report_checks.append(_json_body(request))
+            return httpx.Response(self.report_check_response[0], json=self.report_check_response[1])
+        if path == "/reports/choices" and request.method == "POST" and self.report_choices_response is not None:
+            self.report_choices.append(_json_body(request))
+            return httpx.Response(self.report_choices_response[0], json=self.report_choices_response[1])
+        if path.startswith("/tasks/exports/") and request.method == "GET":
+            self.export_polls.append((path, request.url.params.get("owner")))
+            tid = path.split("/")[3]
+            if path.endswith("/file"):  # streamed, as the engine sends it (the gateway passes it on)
+                return httpx.Response(200, content=_chunks(self.export_file), headers={
+                    "content-type": "application/pdf", "content-disposition": 'attachment; filename="report.pdf"'})
+            states = self.export_states.get(tid) or [{"status": "ready", "filename": "report.pdf", "size": 15}]
+            return httpx.Response(200, json=states.pop(0) if len(states) > 1 else states[0])
         if path.startswith("/tasks/"):
             tid = path.rsplit("/", 1)[-1]
             if request.method == "DELETE":  # revoke + terminate of the task

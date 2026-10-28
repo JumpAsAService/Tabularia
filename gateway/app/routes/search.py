@@ -33,7 +33,8 @@ router = APIRouter(route_class=ReleasingRoute, tags=["search"])
 
 # presentation order at equal relevance: the containers first, then what is opened
 # most often. It also makes the sorting deterministic.
-_KIND_ORDER = {"folder": 0, "flow": 1, "group": 2, "datasource": 3, "view": 4, "script": 5, "sql": 6, "notebook": 7, "connection": 8}
+_KIND_ORDER = {"folder": 0, "flow": 1, "group": 2, "datasource": 3, "view": 4, "script": 5, "sql": 6, "notebook": 7,
+               "report": 8, "connection": 9}
 
 
 def _like(q: str) -> str:
@@ -52,7 +53,7 @@ def _like(q: str) -> str:
 @router.get("/search", response_model=SearchOut)
 def search_everything(
     q: str = Query("", description="searches by name over all the resources"),
-    kind: str | None = Query(None, description="limits to one kind: folder|flow|group|datasource|view|script|sql|notebook|connection"),
+    kind: str | None = Query(None, description="limits to one kind: folder|flow|group|datasource|view|script|sql|notebook|report|connection"),
     limit: int = Query(30, ge=1, le=200),
     offset: int = Query(0, ge=0),
     user: User = Depends(get_current_user),
@@ -151,6 +152,18 @@ def search_everything(
             hits.append(SearchHit(
                 kind="notebook", id=nb.id, name=nb.name,
                 project_id=nb.project_id, project_name=folder_names.get(nb.project_id),
+            ))
+
+    # reports: VIEW on the folder (services/reports.py)
+    from app.models import Report
+    from app.services import reports
+
+    stmt = reports.visible_query(session, user)
+    if stmt is not None:
+        for r in session.exec(stmt.where(Report.name.ilike(pattern, escape="\\"))).all():
+            hits.append(SearchHit(
+                kind="report", id=r.id, name=r.name,
+                project_id=r.project_id, project_name=folder_names.get(r.project_id),
             ))
 
     # CONNECT is orthogonal to VIEW: whoever reads a folder does not necessarily see its

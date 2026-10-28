@@ -179,6 +179,25 @@ spec:
       # Long-running tasks: let Celery finish the task in flight instead of
       # killing it mid-write during a rolling update.
       terminationGracePeriodSeconds: {{ $cfg.terminationGracePeriodSeconds | default 60 }}
+      {{- $charts := and .chartRenderer $root.Values.reports.chartRenderer.enabled }}
+      {{- if $charts }}
+      {{- $port := $root.Values.reports.chartRenderer.port | int }}
+      initContainers:
+        # The reports' charts (ECharts to SVG) for the reports this worker renders: from the
+        # frontend image, on 127.0.0.1 only, so nothing outside the pod reaches it. A native
+        # sidecar (restartPolicy: Always): it starts before the worker and stops after the
+        # worker has finished the render in flight. No startup probe, on purpose: the worker
+        # never waits for it, and if it is down only a report with a chart fails, saying so.
+        - name: chart-renderer
+          image: {{ include "tabularia.image" (dict "root" $root "component" "frontend") }}
+          imagePullPolicy: {{ $root.Values.image.pullPolicy }}
+          restartPolicy: Always
+          securityContext:
+            {{- toYaml $root.Values.containerSecurityContext | nindent 12 }}
+          command: ["node", "/app/chart-renderer/render.mjs", "--serve", "{{ $port }}", "--host", "127.0.0.1"]
+          resources:
+            {{- toYaml $root.Values.reports.chartRenderer.resources | nindent 12 }}
+      {{- end }}
       containers:
         - name: {{ .role }}
           image: {{ include "tabularia.image" (dict "root" $root "component" "backend") }}
@@ -201,6 +220,11 @@ spec:
             # past the size of /tmp the kubelet evicts the pod at once: DuckDB spills within it
             - name: TMP_SIZE_LIMIT
               value: {{ $cfg.tmpSizeLimit | quote }}
+            {{- if .chartRenderer }}
+            # the reports' charts: the sidecar above, or none (a report with a chart then fails, saying so)
+            - name: REPORTS__CHART_URL
+              value: {{ ternary (printf "http://127.0.0.1:%d" ($root.Values.reports.chartRenderer.port | int)) "" $charts | quote }}
+            {{- end }}
             {{- include "tabularia.withoutGatewaySecrets" $root | nindent 12 }}
           resources:
             {{- toYaml $cfg.resources | nindent 12 }}

@@ -384,8 +384,8 @@ def remove_user(session: Session, user_id: int) -> None:
     from app.models import (
         AiChat, AiChatTurn, AiModel, ApiToken, AuditLog, Banner, Connection, Datasource, DisabledEngine, Flow,
         FlowGroup, FlowVersion, Permission, PrivacyNotice, Project, Run, SavedScript, SavedScriptVersion, SavedView,
-        SqlScript, SqlScriptVersion, Notebook, NotebookSession, NotebookTicket, NotebookVersion, NotebookVisitor,
-        Upload, UserSession, Webhook,
+        SqlScript, SqlScriptVersion, Report, ReportVersion, Notebook, NotebookSession, NotebookTicket, NotebookVersion,
+        NotebookVisitor, Upload, UserSession, Webhook,
     )
 
     # the conversations with the assistant are personal: they go with the account (the
@@ -448,6 +448,8 @@ def remove_user(session: Session, user_id: int) -> None:
         (SqlScript, SqlScript.owner_id),
         (SqlScript, SqlScript.run_scheduled_by),
         (SqlScriptVersion, SqlScriptVersion.created_by),
+        (Report, Report.owner_id),
+        (ReportVersion, ReportVersion.created_by),
         # a notebook version left without its author: the app no longer starts (it reads
         # with that author's rights) until someone saves or restores a version
         (Notebook, Notebook.owner_id),

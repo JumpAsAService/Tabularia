@@ -23,6 +23,7 @@ from app.api.routes.panel_settings import router as panel_settings_router
 from app.api.routes.workers import router as workers_router
 from app.api.routes.scripts import router as scripts_router
 from app.api.routes.backups import router as backups_router
+from app.api.routes.reports import router as reports_router
 from app.api.gateway_only import GatewayOnly
 
 
@@ -92,6 +93,7 @@ app.include_router(panel_settings_router)
 app.include_router(workers_router)
 app.include_router(scripts_router)
 app.include_router(backups_router)
+app.include_router(reports_router)
 
 @app.get("/engines")
 def list_engines():

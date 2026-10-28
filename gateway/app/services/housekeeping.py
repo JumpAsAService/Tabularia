@@ -5,8 +5,9 @@ storage; what piles up in Postgres is history, and every hour the orchestrators 
 - the data contracts' reports: the latest ORCHESTRATOR__CONTRACT_RESULTS_KEPT per
   datasource (a refresh every five minutes adds 288 a day), never one whose notice is
   still to be sent;
-- the versions of a flow, of a saved script and of a SQL script: the latest ORCHESTRATOR__VERSIONS_KEPT,
-  the one in use always (a flow with a Script node keeps its code in every version);
+- the versions of a flow, of a saved script, of a SQL script, of a notebook and of a
+  report: the latest ORCHESTRATOR__VERSIONS_KEPT, the one in use always (a flow with a
+  Script node keeps its code in every version, a report its images);
 - the assistant's conversations untouched for ORCHESTRATOR__AI_CHAT_RETENTION_DAYS, the
   spending ledger aside (it is the bill, not the conversation).
 - the agent's drafts unused for a day, and its plans: the pending ones past their 30
@@ -120,6 +121,20 @@ def notebook_versions(session: Session, kept: int) -> int:
             LIMIT :batch)""", kept=kept)
 
 
+def report_versions(session: Session, kept: int) -> int:
+    if kept <= 0:
+        return 0
+    return _in_batches(session, """
+        DELETE FROM report_versions WHERE id IN (
+            SELECT t.id FROM (
+                SELECT id, report_id, version,
+                       ROW_NUMBER() OVER (PARTITION BY report_id ORDER BY version DESC) AS n
+                FROM report_versions) t
+            WHERE t.n > :kept AND NOT EXISTS (
+                SELECT 1 FROM reports s WHERE s.id = t.report_id AND s.current_version = t.version)
+            LIMIT :batch)""", kept=kept)
+
+
 def ai_chats(session: Session, days: int, at: datetime | None = None) -> int:
     if days <= 0:
         return 0
@@ -176,6 +191,7 @@ def one_pass(session: Session, at: datetime | None = None) -> dict[str, int]:
         "saved_script_versions": lambda: script_versions(session, o.versions_kept),
         "sql_script_versions": lambda: sql_script_versions(session, o.versions_kept),
         "notebook_versions": lambda: notebook_versions(session, o.versions_kept),
+        "report_versions": lambda: report_versions(session, o.versions_kept),
         "ai_chats": lambda: ai_chats(session, o.ai_chat_retention_days, at=at),
         "agent_drafts": lambda: agent_drafts(session, at=at),
         "agent_plans": lambda: agent_plans(session, o.ai_chat_retention_days, at=at),

@@ -849,6 +849,16 @@ class NotebooksSettings(BaseModel):
         return f"{parts.scheme}://{host}" + (f":{port}" if port not in (None, default) else "")
 
 
+class ReportsSettings(BaseModel):
+    """Pixel-perfect reports (docs/specs/reports.md): the gateway checks a report's
+    definition, resolves its datasets with the reader's rights and its parameters, and
+    the engine renders it (the engine's REPORTS__* set the rows, pages, memory and time
+    of a render)."""
+    # GET /reports/{id}/render, the API: how long the request waits for the file before
+    # answering 504 (the render is stopped). Keep the proxy's read timeout above it.
+    api_wait_seconds: int = Field(default=120, ge=5, le=3600)
+
+
 class Settings(BaseSettings):
     """
     The gateway's configuration. Priority: init > env > default.
@@ -878,6 +888,7 @@ class Settings(BaseSettings):
     scripts: ScriptsSettings = Field(default_factory=ScriptsSettings)
     containers: ContainersSettings = Field(default_factory=ContainersSettings)
     notebooks: NotebooksSettings = Field(default_factory=NotebooksSettings)
+    reports: ReportsSettings = Field(default_factory=ReportsSettings)
 
     def is_production(self) -> bool:
         return self.app.env_name.lower() in ("production", "prod")

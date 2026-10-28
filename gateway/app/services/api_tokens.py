@@ -90,9 +90,9 @@ NO_REGISTRY_FROM_TOKEN = {
     "de": "Ein API-Token kann die Container-Registries nicht ändern: Das geht über die Oberfläche",
     "es": "Un token de API no puede cambiar los registros de contenedores: hazlo desde la interfaz",
 }
-# the POSTs that only read: a read-only token may use them (an export or a preview
-# compute and return data, they change nothing)
-READING_POSTS = {"/tasks/export", "/tasks/exports", "/tasks/preview"}
+# the POSTs that only read: a read-only token may use them (an export, a preview or a
+# report's render compute and return data, they change nothing)
+READING_POSTS = {"/tasks/export", "/tasks/exports", "/tasks/preview", "/reports/{report_id}/render"}
 
 
 def message(table: dict[str, str], request: Optional[Request]) -> str:

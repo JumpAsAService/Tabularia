@@ -61,6 +61,15 @@ WORKDIR /app
 # (no full node_modules, no sources, no build tools).
 COPY --from=build --chown=10001:10001 /build/.output ./.output
 
+# The reports' chart service (frontend/chart-renderer), run by a sidecar of the worker pods
+# as `node /app/chart-renderer/render.mjs --serve 8090`: its script, the widths of the
+# reports' font, and ECharts as the one file it loads (Apache-2.0, with zrender and parts
+# of d3, BSD-3-Clause: their licences next to it).
+COPY --from=build --chown=10001:10001 /build/chart-renderer/render.mjs /build/chart-renderer/font-widths.json ./chart-renderer/
+COPY --from=build --chown=10001:10001 /build/node_modules/echarts/dist/echarts.min.js /build/node_modules/echarts/LICENSE \
+     /build/node_modules/echarts/NOTICE /build/node_modules/echarts/licenses/LICENSE-d3 ./chart-renderer/vendor/
+COPY --from=build --chown=10001:10001 /build/node_modules/zrender/LICENSE ./chart-renderer/vendor/LICENSE-zrender
+
 USER 10001:10001
 
 EXPOSE 3000
