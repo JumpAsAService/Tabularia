@@ -265,6 +265,11 @@ export default {
     "liveTitle": "En marcha ahora",
     "appRunning": "App en marcha, lee como {who} · desde {since}",
     "appStarting": "App arrancando, lee como {who}",
+    "visitors": "Visitantes a la vez",
+    "visitorsHelp": "Cada persona que abre la app recibe su propia copia de los datos en el pod de la app: por encima de este número la app dice que está llena y se abre sola en cuanto alguien sale. Vacío: el valor predeterminado de la instalación ({default}). Como mucho {max}.",
+    "visitorsDefault": "{n} (predeterminado)",
+    "visitorsInvalid": "Visitantes a la vez: un número entero de 1 a {max}, o vacío para el valor predeterminado.",
+    "appVisitors": "{n} de {max} personas conectadas",
     "appFailed": "La app falló: {error}",
     "editFailed": "El editor falló: {error}",
     "stopApp": "Detener",
@@ -2167,7 +2172,8 @@ export default {
       "redirects": "redirecciones",
       "values": "valores",
       "tasks": "tareas",
-      "processes": "procesos"
+      "processes": "procesos",
+      "people": "personas"
     },
     "errors": {
       "unknown": "Ajuste desconocido",
@@ -2188,7 +2194,9 @@ export default {
       "engine_unreachable": "El motor no responde, y este valor se comprueba contra su límite de tiempo: inténtalo de nuevo en un momento",
       "allowlist_needed": "Admitir solo a los miembros de los grupos tomados requiere esos grupos: indícalos primero",
       "env_too_high": "El valor de la instalación supera {limit}, el máximo que permite el umbral de ejecución perdida: sube primero el umbral, o mantén un valor del panel",
-      "too_small": "Demasiado poco para ejecutar nada"
+      "too_small": "Demasiado poco para ejecutar nada",
+      "visitors_above_ceiling": "Como mucho {limit}, lo máximo que un notebook puede fijar («{other}»)",
+      "ceiling_below_visitors": "Al menos {limit}, el valor predeterminado de cada app («{other}»)"
     },
     "rollout": {
       "region": "Reinicios pendientes",
@@ -2269,6 +2277,10 @@ export default {
       "builds": {
         "title": "Construcción de imágenes",
         "lead": "La construcción y la comprobación de los entornos de scripting."
+      },
+      "notebooks": {
+        "title": "Notebooks",
+        "lead": "Cuántas personas pueden tener abierta a la vez la app de un notebook."
       },
       "containers": {
         "title": "Nodos Container",
@@ -2515,6 +2527,14 @@ export default {
       "scripts_check_timeout_seconds": {
         "label": "Duración máxima de la comprobación de una imagen",
         "help": "El Job que comprueba un entorno construido cargando sus paquetes."
+      },
+      "notebooks_max_visitors_per_app": {
+        "label": "Visitantes a la vez por app",
+        "help": "Cada persona que abre la app de un notebook recibe un kernel propio, con su propia copia de los datos, en el único pod de la app. Por encima de este número la app dice que está llena, y se abre sola en cuanto alguien sale. Un notebook puede fijar su propio número."
+      },
+      "notebooks_max_visitors_ceiling": {
+        "label": "Máximo de visitantes que puede fijar un notebook",
+        "help": "El número más alto de visitantes a la vez que quien edita un notebook puede elegir para su app. Bajarlo limita también los notebooks que eligieron más."
       },
       "containers_pull_check_seconds": {
         "label": "Tiempo para descargar una imagen",

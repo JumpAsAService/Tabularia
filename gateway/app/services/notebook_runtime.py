@@ -27,6 +27,16 @@ all its viewers, an editor by one person at a time.
   for a pod idle past NOTEBOOKS__IDLE_MINUTES, gone from the cluster, or not started in
   NOTEBOOKS__START_TIMEOUT_SECONDS. An editor's file becomes the notebook's draft first
   (and at every round of the reaper), so nothing is lost when its pod stops.
+- Visitors: marimo gives every browser that opens an app a kernel of its own, with its
+  own copy of the data, all in the app's one pod; ten people on a heavy app are ten
+  copies, and the pod runs out of memory for everyone. So an app takes at most
+  `visitors_cap` visitors at once — the notebook's own number, or
+  NOTEBOOKS__MAX_VISITORS_PER_APP, never above NOTEBOOKS__MAX_VISITORS_CEILING. A visitor
+  is marimo's WebSocket (`…/app/ws`) open through the proxy, a row of
+  `notebook_visitors`, so that every replica counts the same ones: counted and taken
+  under a lock per notebook, refreshed once a minute while it is open, deleted when it
+  closes; one not refreshed for VISITOR_STALE (a replica that died) no longer counts,
+  and the reaper clears it. The editor has no cap: one person at a time edits.
 """
 from __future__ import annotations
 
@@ -49,7 +59,9 @@ from sqlalchemy.exc import IntegrityError
 from sqlmodel import Session, func, select
 
 from app.core.config import get_settings
-from app.models import Notebook, NotebookSession, ScriptEnvironment, ScriptEnvironmentVersion, User
+from app.models import (
+    Notebook, NotebookSession, NotebookVisitor, ScriptEnvironment, ScriptEnvironmentVersion, User,
+)
 from app.services import audit, kube_jobs, notebooks, script_builds
 from app.services.kube_scaling import KubeError
 
@@ -74,6 +86,10 @@ POD_MODULE = Path(__file__).resolve().parents[1] / "notebook_pod" / "tabularia.p
 LIVE = ("starting", "ready")
 LOCK = 7_402_140  # the reaper's round
 START_LOCK = 7_402_141  # the cap of live pods, counted and taken together
+VISITORS_LOCK = 7_402_142  # with the notebook's id: its visitors, counted and taken together
+# a visitor refreshed once a minute (routes/notebook_proxy.py) that has missed three
+# beats is gone: its replica died without deleting it
+VISITOR_STALE = timedelta(minutes=3)
 REAP_SECONDS = 30
 TOUCH_EVERY = timedelta(seconds=60)
 CHECK_EVERY = 1.0  # a starting pod is asked about at most this often per process
@@ -614,9 +630,79 @@ async def stop(session: Session, row: NotebookSession, *, actor: Optional[User],
 
 
 def forget(session: Session, notebook_id: int) -> None:
-    """A notebook being deleted: its sessions go with it, their Jobs with the reaper's
-    next round (no session holds them any more)."""
+    """A notebook being deleted: its sessions and visitors go with it, their Jobs with the
+    reaper's next round (no session holds them any more)."""
+    session.exec(delete(NotebookVisitor).where(NotebookVisitor.notebook_id == notebook_id))  # type: ignore[arg-type]
     session.exec(delete(NotebookSession).where(NotebookSession.notebook_id == notebook_id))  # type: ignore[arg-type]
+
+
+# ── visitors ─────────────────────────────────────────────────────────────────
+def visitors_cap(notebook: Notebook) -> int:
+    """How many people may have the notebook's app open at once: its own number or the
+    installation's default, never above the installation's ceiling (lowered after a
+    notebook chose more, it still holds)."""
+    s = get_settings().notebooks
+    return max(1, min(notebook.max_visitors or s.max_visitors_per_app, s.max_visitors_ceiling))
+
+
+def _fresh_since() -> datetime:
+    return _now() - VISITOR_STALE
+
+
+def visitors(session: Session, notebook_id: int) -> int:
+    """The people with the app open now, on every replica."""
+    return session.exec(select(func.count()).select_from(NotebookVisitor).where(
+        NotebookVisitor.notebook_id == notebook_id, NotebookVisitor.last_seen_at >= _fresh_since())).one()
+
+
+def is_visiting(session: Session, notebook_id: int, user_id: int) -> bool:
+    """This person has the app open already (another tab, or the page being reloaded)."""
+    return session.exec(select(NotebookVisitor.id).where(
+        NotebookVisitor.notebook_id == notebook_id, NotebookVisitor.user_id == user_id,
+        NotebookVisitor.last_seen_at >= _fresh_since())).first() is not None
+
+
+def take_visitor(session: Session, notebook: Notebook, user_id: int) -> tuple[Optional[int], int, int]:
+    """A place among the app's visitors: (the visitor's id, or None when the app is full;
+    the visitors counted; the cap). Counted and taken under a lock of the notebook, so two
+    replicas opening at once cannot both take the last place."""
+    if session.get_bind().dialect.name == "postgresql":  # the tests' SQLite: one process
+        session.exec(text("SELECT pg_advisory_xact_lock(CAST(:k AS integer), CAST(:n AS integer))")
+                     .bindparams(k=VISITORS_LOCK, n=notebook.id))
+    cap = visitors_cap(notebook)
+    count = visitors(session, notebook.id)
+    if count >= cap:
+        session.rollback()
+        return None, count, cap
+    row = NotebookVisitor(notebook_id=notebook.id, user_id=user_id)
+    session.add(row)
+    session.commit()
+    return row.id, count + 1, cap
+
+
+def keep_visitor(session: Session, visitor_id: int) -> None:
+    """The visitor's WebSocket is still open (once a minute)."""
+    row = session.get(NotebookVisitor, visitor_id)
+    if row is None:
+        return
+    row.last_seen_at = _now()
+    session.add(row)
+    session.commit()
+
+
+def drop_visitor(session: Session, visitor_id: int) -> None:
+    """The visitor's WebSocket closed: their place is free."""
+    session.exec(delete(NotebookVisitor).where(NotebookVisitor.id == visitor_id))  # type: ignore[arg-type]
+    session.commit()
+
+
+def clear_stale_visitors(session: Session) -> int:
+    """The visitors nobody refreshed (their replica died): they count no more already,
+    the rows go."""
+    gone = session.exec(delete(NotebookVisitor).where(  # type: ignore[arg-type]
+        NotebookVisitor.last_seen_at < _fresh_since())).rowcount
+    session.commit()
+    return gone or 0
 
 
 # ── the reaper (orchestrator role) ───────────────────────────────────────────
@@ -640,7 +726,8 @@ def _round_lock(bind: Engine):
 
 async def one_round(bind: Engine) -> None:
     """Stops the idle pods and those gone from the cluster, fails the ones that do not
-    start, keeps the editors' files as drafts, deletes the Jobs nobody holds."""
+    start, keeps the editors' files as drafts, clears the visitors nobody refreshed,
+    deletes the Jobs nobody holds."""
     with _round_lock(bind) as mine:
         if not mine:
             return
@@ -657,6 +744,7 @@ async def one_round(bind: Engine) -> None:
                     await _reap(session, row, by_name if jobs is not None else None, idle)
                 except KubeError as e:
                     logger.warning("notebooks: session %s not checked (%s)", row.id, e)
+            clear_stale_visitors(session)
             if jobs is not None:
                 held = set(session.exec(select(NotebookSession.job_name)).all())
                 for name, job in by_name.items():

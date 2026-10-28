@@ -360,7 +360,7 @@ def remove_user(session: Session, user_id: int) -> None:
     from app.models import (
         AiChat, AiChatTurn, AiModel, ApiToken, AuditLog, Banner, Connection, Datasource, DisabledEngine, Flow,
         FlowGroup, FlowVersion, Permission, PrivacyNotice, Project, Run, SavedScript, SavedScriptVersion, SavedView,
-        SqlScript, SqlScriptVersion, Notebook, NotebookSession, NotebookVersion,
+        SqlScript, SqlScriptVersion, Notebook, NotebookSession, NotebookVersion, NotebookVisitor,
         Upload, UserSession, Webhook,
     )
 
@@ -379,6 +379,9 @@ def remove_user(session: Session, user_id: int) -> None:
     # the notebook pods reading with the account's rights: no session holds their Jobs
     # any more, and the reaper deletes them at its next round
     session.exec(sa_delete(NotebookSession).where(NotebookSession.user_id == user_id))
+    # the apps the account has open: their places free at once (the WebSockets close at
+    # their next check, the account being gone)
+    session.exec(sa_delete(NotebookVisitor).where(NotebookVisitor.user_id == user_id))
     # the client addresses of the account go with it (services/ip_retention.py);
     # the rows stay, with the email of the time
     from app.services import ip_retention

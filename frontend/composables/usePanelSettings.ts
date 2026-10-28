@@ -92,7 +92,7 @@ export interface RolloutState {
 export const GROUPS: Record<SettingSection, string[]> = {
   gateway: ['signin', 'sso', 'orchestration', 'history', 'webhooks', 'ai', 'dbt', 'previews', 'backups',
     'monitoring', 'openlineage', 'processes'],
-  kubernetes: ['kubernetes', 'scripts', 'builds', 'containers'],
+  kubernetes: ['kubernetes', 'scripts', 'builds', 'notebooks', 'containers'],
   engine: ['execution', 'cache', 'embedded', 'engine_api', 'import', 'export', 'sftp', 's3', 'api',
     'placeholders', 'clickhouse', 'bigquery'],
 }

@@ -265,6 +265,11 @@ export default {
     "liveTitle": "Läuft gerade",
     "appRunning": "App läuft, liest als {who} · seit {since}",
     "appStarting": "App startet, liest als {who}",
+    "visitors": "Gleichzeitige Besucher",
+    "visitorsHelp": "Jede Person, die die App öffnet, bekommt eine eigene Kopie der Daten im Pod der App: darüber hinaus meldet die App, dass sie voll ist, und öffnet sich von selbst, sobald jemand geht. Leer: der Standardwert der Installation ({default}). Höchstens {max}.",
+    "visitorsDefault": "{n} (Standard)",
+    "visitorsInvalid": "Gleichzeitige Besucher: eine ganze Zahl von 1 bis {max}, oder leer für den Standardwert.",
+    "appVisitors": "{n} von {max} Personen verbunden",
     "appFailed": "Die App ist fehlgeschlagen: {error}",
     "editFailed": "Der Editor ist fehlgeschlagen: {error}",
     "stopApp": "Stoppen",
@@ -2167,7 +2172,8 @@ export default {
       "redirects": "Weiterleitungen",
       "values": "Werte",
       "tasks": "Aufgaben",
-      "processes": "Prozesse"
+      "processes": "Prozesse",
+      "people": "Personen"
     },
     "errors": {
       "unknown": "Unbekannte Einstellung",
@@ -2188,7 +2194,9 @@ export default {
       "engine_unreachable": "Die Engine antwortet nicht, und dieser Wert wird gegen ihr Zeitlimit geprüft: Versuchen Sie es gleich noch einmal",
       "allowlist_needed": "Nur Mitglieder der übernommenen Gruppen zuzulassen, braucht diese Gruppen: zuerst eintragen",
       "env_too_high": "Der Wert der Installation liegt über {limit}, dem Höchstwert, den die Schwelle für verlorene Läufe erlaubt: zuerst die Schwelle anheben oder einen Wert aus dem Panel behalten",
-      "too_small": "Zu wenig, um etwas laufen zu lassen"
+      "too_small": "Zu wenig, um etwas laufen zu lassen",
+      "visitors_above_ceiling": "Höchstens {limit}, das Meiste, was ein Notebook einstellen darf („{other}“)",
+      "ceiling_below_visitors": "Mindestens {limit}, der Standardwert jeder App („{other}“)"
     },
     "rollout": {
       "region": "Ausstehende Neustarts",
@@ -2269,6 +2277,10 @@ export default {
       "builds": {
         "title": "Image-Builds",
         "lead": "Die Builds und Prüfungen der Skriptumgebungen."
+      },
+      "notebooks": {
+        "title": "Notebooks",
+        "lead": "Wie viele Personen die App eines Notebooks gleichzeitig geöffnet haben dürfen."
       },
       "containers": {
         "title": "Container-Knoten",
@@ -2515,6 +2527,14 @@ export default {
       "scripts_check_timeout_seconds": {
         "label": "Höchstdauer der Prüfung eines Images",
         "help": "Der Job, der eine gebaute Umgebung prüft, indem er ihre Pakete lädt."
+      },
+      "notebooks_max_visitors_per_app": {
+        "label": "Gleichzeitige Besucher pro App",
+        "help": "Jede Person, die die App eines Notebooks öffnet, bekommt einen eigenen Kernel mit einer eigenen Kopie der Daten, im einzigen Pod der App. Darüber hinaus meldet die App, dass sie voll ist, und öffnet sich von selbst, sobald jemand geht. Ein Notebook darf eine eigene Zahl festlegen."
+      },
+      "notebooks_max_visitors_ceiling": {
+        "label": "Höchstzahl an Besuchern, die ein Notebook festlegen darf",
+        "help": "Die höchste Zahl gleichzeitiger Besucher, die wer ein Notebook bearbeitet für dessen App wählen darf. Wird sie gesenkt, gilt sie auch für Notebooks, die mehr gewählt hatten."
       },
       "containers_pull_check_seconds": {
         "label": "Zeit zum Herunterladen eines Images",

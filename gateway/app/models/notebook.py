@@ -4,6 +4,9 @@ published as web apps. docs/specs/notebooks.md; the rules in services/notebooks.
 - `Notebook`: the object — name, folder, scripting environment (a Python one), the
   version the app runs, and the working draft the editor last saved. Who sees it: VIEW
   on its folder AND the use of its environment, as for saved scripts.
+- `NotebookVisitor`: one open app in a browser (marimo's WebSocket through the proxy),
+  so that every gateway replica counts the same visitors (services/notebook_runtime.py,
+  «Visitors»).
 - `NotebookVersion`: every save that changes the notebook is a version; an older one can
   be restored (it becomes the newest). `content` is JSON: {"source": "<the marimo .py
   file>"}. The app reads with the rights of the version's `created_by`: whoever saved
@@ -37,6 +40,9 @@ class Notebook(SQLModel, table=True):
     draft: Optional[str] = Field(default=None, sa_column=Column(Text, nullable=True))
     draft_by: Optional[int] = Field(default=None, foreign_key="users.id")
     draft_at: Optional[datetime] = None
+    # how many people may have the app open at once (each has a kernel of their own, with
+    # its copy of the data, in the app's pod); None = NOTEBOOKS__MAX_VISITORS_PER_APP
+    max_visitors: Optional[int] = None
     created_at: datetime = Field(default_factory=_now)
     updated_at: datetime = Field(default_factory=_now)
 
@@ -83,4 +89,18 @@ class NotebookSession(SQLModel, table=True):
     token_fp: str = Field(max_length=64, index=True)
     started_at: datetime = Field(default_factory=_naive_now)
     ready_at: Optional[datetime] = None
+    last_seen_at: datetime = Field(default_factory=_naive_now)
+
+
+class NotebookVisitor(SQLModel, table=True):
+    """An app open in a browser: marimo's WebSocket, carried by one gateway replica. The
+    replica keeps `last_seen_at` fresh while it is open and deletes the row when it
+    closes; a row nobody refreshed (a replica that died) no longer counts, and the
+    reaper clears it. Naive UTC times, as the sessions."""
+    __tablename__ = "notebook_visitors"
+
+    id: Optional[int] = Field(default=None, primary_key=True)
+    notebook_id: int = Field(foreign_key="notebooks.id", index=True, ondelete="CASCADE")
+    user_id: int = Field(foreign_key="users.id", index=True, ondelete="CASCADE")
+    opened_at: datetime = Field(default_factory=_naive_now)
     last_seen_at: datetime = Field(default_factory=_naive_now)

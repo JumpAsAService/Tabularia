@@ -8,6 +8,9 @@ docs/specs/notebooks.md («Runtime»); the rules in services/notebook_runtime.py
 - stopping: the app, whoever may edit; the editor, the editor or whoever may edit (the
   editor's file becomes the draft first);
 - saving a version from the editor: only the editor, who becomes its author.
+
+The app's session says how many people have it open (`visitors`, on every replica) and
+how many it takes at once (`max_visitors`); the editor's says neither.
 """
 from __future__ import annotations
 
@@ -22,7 +25,7 @@ from app.core.routing import ReleasingRoute
 from app.db.session import get_session
 from app.deps.auth import get_current_user
 from app.deps.permissions import ensure_can
-from app.models import NotebookSession, User
+from app.models import Notebook, NotebookSession, User
 from app.models.permission import Capability
 from app.routes.notebooks import NotebookDetail, _detail
 from app.schemas.models import UtcDateTime
@@ -46,6 +49,9 @@ class SessionOut(BaseModel):
     user: Optional[Person] = None  # whose rights the pod reads with
     started_at: UtcDateTime
     last_seen_at: UtcDateTime
+    # the app's: the people with it open now, and the most it takes at once
+    visitors: Optional[int] = None
+    max_visitors: Optional[int] = None
 
 
 class SessionStart(BaseModel):
@@ -61,8 +67,13 @@ def person(user: Optional[User]) -> Optional[Person]:
 
 
 def _out(session: Session, row: NotebookSession) -> SessionOut:
-    return SessionOut(mode=row.mode, status=row.status, error=row.error, user=person(session.get(User, row.user_id)),
-                      started_at=row.started_at, last_seen_at=row.last_seen_at)
+    out = SessionOut(mode=row.mode, status=row.status, error=row.error, user=person(session.get(User, row.user_id)),
+                     started_at=row.started_at, last_seen_at=row.last_seen_at)
+    notebook = session.get(Notebook, row.notebook_id) if row.mode == "app" else None
+    if notebook is not None:
+        out.visitors = runtime.visitors(session, notebook.id)
+        out.max_visitors = runtime.visitors_cap(notebook)
+    return out
 
 
 def being_edited(e: runtime.BeingEdited) -> JSONResponse:

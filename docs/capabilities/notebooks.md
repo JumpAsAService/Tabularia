@@ -134,6 +134,45 @@ At most `NOTEBOOKS__MAX_LIVE` pods (20 by default) run at once, apps and editors
 past it, opening another notebook says so. A pod that cannot start says why, in words: no
 node free, an image that could not be downloaded, marimo missing from the image.
 
+### Visitors at once, and memory
+
+An app has one pod, but **every person who opens it gets a kernel of their own** inside
+that pod: marimo runs the notebook once per visitor, so that one person's sliders do not
+move another's. Each kernel holds its own copy of whatever the code read. An app that
+loads 1 GB of data, opened by ten people, holds ten copies; past the memory limit of the
+notebook's environment Kubernetes stops the pod, and the app closes for everyone at once.
+
+So an app takes a limited number of **visitors at once**: 10 by default
+(`NOTEBOOKS__MAX_VISITORS_PER_APP`). Whoever may edit the notebook sets its own number on
+the notebook's page (**Visitors at once**; empty = the default), up to the most the
+installation allows (`NOTEBOOKS__MAX_VISITORS_CEILING`, 50 by default). An administrator
+changes both in **Administration → Settings → Notebooks**, or in the Helm values
+(`scripts.notebooks.maxVisitorsPerApp`, `maxVisitorsCeiling`).
+
+Past the limit, the next person sees «This app already has 10 people connected, the most
+it allows. It will open by itself as soon as someone leaves.»; the page checks again every
+ten seconds and opens the app as soon as a place is free. A visitor is a browser tab with
+the app open: closing the tab frees the place at once, and two tabs of the same person are
+two visitors. The count holds across all the gateway's replicas. The notebook's page shows
+how many people are connected next to the running app. The editor has no limit: one person
+at a time edits a notebook.
+
+How to choose the number: the environment's memory limit (Administration → Scripting
+environments), less some room for marimo itself, divided by what one visitor's data
+takes. An environment with 4 GiB and an app whose cells hold about 300 MB of data takes
+ten visitors comfortably; a lighter app, more.
+
+The way to fit more people is to read less. `tabularia.read` downloads the whole
+datasource unless told otherwise: read **only the columns the app uses**, and filter or
+aggregate early, so that what each kernel keeps is small.
+
+```python
+sales = tabularia.read("Sales/Orders", columns=["region", "month", "amount"])
+by_region = sales.group_by("region", "month").agg(pl.col("amount").sum())  # keep this, not the rows
+```
+
+A cell that returns only the small result lets the large frame go when the cell has run.
+
 ### The environment
 
 A notebook runs in a Python scripting environment, and every Python environment installs
@@ -272,6 +311,7 @@ cell that shows `mo.ui.table(tabularia.datasources())` and a dropdown built from
 | see the notebook in Explore and in the search, open its page and the app | VIEW on its folder, and the use of its environment (being in one of the environment's groups) |
 | open the editor, **Save version**, change the source on the page, **Restore**, discard the draft | EDIT on its folder |
 | stop the app, or someone else's editor | EDIT on its folder |
+| set how many people may have the app open at once | EDIT on its folder |
 | create, rename, duplicate, delete | EDIT on the folder |
 | move | EDIT on both folders |
 | what the app reads | what the author of the current version may read (VIEW), checked at every read |
@@ -298,13 +338,18 @@ Every create, change, restore, start, stop, save from the editor and read is in 
   viewers only with **Save version**.
 - A notebook reads datasources; it does not write them. To publish data, use a
   [saved script](../scripting.md#saved-scripts) or a [flow](flows.md).
-- What the code downloads is held in the pod's memory and its `/tmp`: the environment's
-  memory limit applies, as for a script. `columns=` reads only the columns you need.
+- What the code downloads is held in the pod's memory and its `/tmp`, **once per visitor**:
+  the environment's memory limit applies, as for a script, and an app takes a limited
+  number of visitors at once (see [Visitors at once, and memory](#visitors-at-once-and-memory)).
+  `columns=` reads only the columns you need.
 - The settings are in the [configuration reference](../configuration.md#notebooks-kubernetes):
   `NOTEBOOKS__IDLE_MINUTES`, `NOTEBOOKS__MAX_LIFETIME_HOURS`, `NOTEBOOKS__MAX_LIVE`,
+  `NOTEBOOKS__MAX_VISITORS_PER_APP`, `NOTEBOOKS__MAX_VISITORS_CEILING`,
   `NOTEBOOKS__START_TIMEOUT_SECONDS`. With Helm they are `scripts.notebooks.idleMinutes`,
-  `maxLifetimeHours`, `maxLive` and `startTimeoutSeconds`; the chart also sets the
-  address the pods call (`NOTEBOOKS__GATEWAY_URL`).
+  `maxLifetimeHours`, `maxLive`, `maxVisitorsPerApp`, `maxVisitorsCeiling` and
+  `startTimeoutSeconds`; the chart also sets the address the pods call
+  (`NOTEBOOKS__GATEWAY_URL`). The two about visitors are also in Administration →
+  Settings.
 - marimo is open-source software under the Apache-2.0 licence; its name is used here
   only to describe the feature.
 

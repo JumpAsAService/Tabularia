@@ -330,6 +330,10 @@ gateway needs to build the images there.
   value: {{ $n.maxLifetimeHours | default 12 | quote }}
 - name: NOTEBOOKS__MAX_LIVE
   value: {{ $n.maxLive | default 20 | quote }}
+- name: NOTEBOOKS__MAX_VISITORS_PER_APP
+  value: {{ $n.maxVisitorsPerApp | default 10 | quote }}
+- name: NOTEBOOKS__MAX_VISITORS_CEILING
+  value: {{ $n.maxVisitorsCeiling | default 50 | quote }}
 - name: NOTEBOOKS__START_TIMEOUT_SECONDS
   value: {{ $n.startTimeoutSeconds | default 300 | quote }}
 - name: NOTEBOOKS__POD_IP_CHECK

@@ -783,6 +783,12 @@ class NotebooksSettings(BaseModel):
     max_lifetime_hours: int = Field(default=12, ge=1, le=7 * 24)
     # how many notebook pods may run at once, apps and editors together
     max_live: int = Field(default=20, ge=1, le=1000)
+    # marimo gives every visitor of an app a kernel of their own, with its own copy of
+    # the data, in the app's one pod: how many may have an app open at once, unless the
+    # notebook says otherwise (services/notebook_runtime.py, «Visitors»)
+    max_visitors_per_app: int = Field(default=10, ge=1, le=1000)
+    # the most a notebook may set for itself; it also caps the value above
+    max_visitors_ceiling: int = Field(default=50, ge=1, le=1000)
     # a pod not answering after this long has failed to start, saying why
     start_timeout_seconds: int = Field(default=300, ge=30, le=3600)
     # the gateway's address inside the cluster, which the pods call to read datasources

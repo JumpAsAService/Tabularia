@@ -38,6 +38,11 @@ export interface NotebookDetail extends Notebook {
   draft: string | null
   draft_by: string | null
   draft_at: string | null
+  /** how many people may have the app open at once; null = the installation's default */
+  max_visitors: number | null
+  /** the installation's default, and the most a notebook may set */
+  visitors_default: number
+  visitors_ceiling: number
 }
 
 export interface NotebookVersion {
@@ -55,6 +60,8 @@ export interface NotebookUpdate {
   project_id?: number
   environment_id?: number
   content?: NotebookContent
+  /** null: back to the installation's default; left out: unchanged */
+  max_visitors?: number | null
 }
 
 /** app: the published notebook, read with its author's rights; edit: marimo's editor */
@@ -70,6 +77,9 @@ export interface NotebookSession {
   user: NotebookAuthor
   started_at: string
   last_seen_at: string | null
+  /** the app's: the people with it open now, and the most it takes at once */
+  visitors?: number | null
+  max_visitors?: number | null
 }
 
 /** The 409 of a second editor: who is editing already. */
@@ -92,7 +102,9 @@ export function useNotebooks() {
     listByProject: (projectId: number) => apiFetch<Notebook[]>(`/projects/${projectId}/notebooks`),
     get: (id: number) => apiFetch<NotebookDetail>(`/notebooks/${id}`),
     /** without a content the gateway writes a starting notebook */
-    create: (projectId: number, body: { name: string; description?: string; environment_id: number; content?: NotebookContent }) =>
+    create: (projectId: number, body: {
+      name: string; description?: string; environment_id: number; content?: NotebookContent; max_visitors?: number | null
+    }) =>
       apiFetch<NotebookDetail>(`/projects/${projectId}/notebooks`, { method: 'POST', body }),
     update: (id: number, body: NotebookUpdate) => apiFetch<NotebookDetail>(`/notebooks/${id}`, { method: 'PATCH', body }),
     discardDraft: (id: number) => apiFetch<NotebookDetail>(`/notebooks/${id}/draft`, { method: 'DELETE' }),

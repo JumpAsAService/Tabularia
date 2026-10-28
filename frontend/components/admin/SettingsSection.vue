@@ -13,7 +13,7 @@ import { onBeforeRouteLeave } from 'vue-router'
 import {
   Activity, ArrowDownToLine, Boxes, Braces, ChevronRight, Cloud, Container, Cpu, Database, DatabaseBackup,
   FileCode, FileOutput, FolderInput, GitBranch, Globe, Hammer, HardDrive, History, KeyRound, Layers,
-  LoaderCircle, Package, RefreshCw, RotateCcw, Search, Server, ShieldCheck, SlidersHorizontal, Sparkles, Timer,
+  LoaderCircle, NotebookPen, Package, RefreshCw, RotateCcw, Search, Server, ShieldCheck, SlidersHorizontal, Sparkles, Timer,
   Upload, Webhook, Workflow, X,
 } from 'lucide-vue-next'
 import { errMessage } from '~/composables/useApi'
@@ -54,7 +54,7 @@ const search = ref('')
 const ICONE: Record<string, any> = {
   signin: KeyRound, sso: ShieldCheck, orchestration: Workflow, history: History, webhooks: Webhook, ai: Sparkles,
   dbt: Package, previews: Upload, backups: DatabaseBackup, monitoring: Activity, openlineage: GitBranch,
-  processes: Cpu, kubernetes: Boxes, scripts: FileCode, builds: Hammer, containers: Container,
+  processes: Cpu, kubernetes: Boxes, scripts: FileCode, builds: Hammer, notebooks: NotebookPen, containers: Container,
   execution: Timer, cache: Layers, embedded: HardDrive, engine_api: Server, import: ArrowDownToLine,
   export: FileOutput, sftp: FolderInput, s3: Cloud, api: Globe, placeholders: Braces, clickhouse: Database,
   bigquery: Cloud,

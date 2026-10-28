@@ -889,6 +889,14 @@ text = "The longest a notebook's pod lives, used or not; the next visit starts a
 [var.NOTEBOOKS__MAX_LIVE]
 text = "How many notebook pods may run at once, apps and editors together; past it, opening another one says so."
 
+[var.NOTEBOOKS__MAX_VISITORS_PER_APP]
+helm = "`scripts.notebooks.maxVisitorsPerApp`"
+text = "How many people may have a notebook's app open at once, unless the notebook sets its own number. marimo gives every visitor a kernel of their own, with their own copy of the data the code reads, all in the app's one pod: past the memory limit of the notebook's environment the pod stops for everyone. Past this number the app says it is full and opens by itself as soon as someone leaves. A visitor is an app open in a browser tab (marimo's WebSocket), counted across the gateway's replicas; the editor has no limit. Size it on the environment's memory limit divided by what one visitor's data takes. Never above `NOTEBOOKS__MAX_VISITORS_CEILING`."
+
+[var.NOTEBOOKS__MAX_VISITORS_CEILING]
+helm = "`scripts.notebooks.maxVisitorsCeiling`"
+text = "The most people at once a notebook may set for its own app (whoever may edit it sets it on the notebook's page). Lowering it below what a notebook chose caps that notebook too."
+
 [var.NOTEBOOKS__POD_IP_CHECK]
 text = "A notebook's token is honoured only when the call comes from its own pod's address, and never with a forwarding header (`X-Forwarded-For`, `Forwarded`, `X-Real-IP`): a token the notebook's code printed is useless anywhere else. Turn it off only where the gateway cannot see the pods' addresses, behind a service mesh's sidecars (Istio, Linkerd)."
 

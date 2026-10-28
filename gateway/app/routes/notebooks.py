@@ -13,7 +13,10 @@ Permissions:
   (routes/notebook_sessions.py, «Save version»): changing it here or restoring a
   version is refused with 409 — it would overwrite the editor's work, or be overwritten
   by its next save;
-- administrators see and change every notebook.
+- administrators see and change every notebook;
+- how many people may have the app open at once (`max_visitors`) is set with EDIT,
+  from 1 to NOTEBOOKS__MAX_VISITORS_CEILING; null = the installation's default
+  (NOTEBOOKS__MAX_VISITORS_PER_APP). services/notebook_runtime.py, «Visitors».
 
 On an installation without scripting (the Docker Compose stack) the lists are empty
 and nothing can be saved, as for saved scripts.
@@ -27,6 +30,7 @@ from fastapi import APIRouter, Depends, HTTPException, Request, status
 from pydantic import BaseModel, Field
 from sqlmodel import Session, select
 
+from app.core.config import get_settings
 from app.core.routing import ReleasingRoute
 from app.db.session import get_session
 from app.deps.auth import get_current_user
@@ -70,6 +74,11 @@ class NotebookDetail(NotebookOut):
     draft: Optional[str] = None
     draft_by: Optional[str] = None
     draft_at: Optional[UtcDateTime] = None
+    # people with the app open at once: the notebook's own number (None: the default),
+    # the installation's default, and the most a notebook may set
+    max_visitors: Optional[int] = None
+    visitors_default: int
+    visitors_ceiling: int
 
 
 class NotebookCreate(BaseModel):
@@ -77,6 +86,7 @@ class NotebookCreate(BaseModel):
     description: str = Field(default="", max_length=2000)
     environment_id: int
     content: Optional[dict[str, Any]] = None  # None: a starting notebook
+    max_visitors: Optional[int] = Field(default=None, ge=1)  # None: the installation's default
 
 
 class NotebookUpdate(BaseModel):
@@ -85,6 +95,8 @@ class NotebookUpdate(BaseModel):
     project_id: Optional[int] = None  # a move
     environment_id: Optional[int] = None
     content: Optional[dict[str, Any]] = None
+    # sent as null: back to the installation's default; left out: unchanged
+    max_visitors: Optional[int] = Field(default=None, ge=1)
 
 
 class VersionOut(BaseModel):
@@ -121,6 +133,15 @@ def _name(session: Session, project_id: int, name: str, exclude_id: Optional[int
     if clash is not None and clash != exclude_id:
         raise HTTPException(status_code=409, detail=f"There is already a notebook '{name}' in this folder")
     return name
+
+
+def _max_visitors(value: Optional[int]) -> Optional[int]:
+    """A notebook's own number of visitors at once, within the installation's ceiling."""
+    ceiling = get_settings().notebooks.max_visitors_ceiling
+    if value is not None and value > ceiling:
+        raise HTTPException(status_code=422, detail=f"At most {ceiling} people at once: the most this installation "
+                                                    "allows (NOTEBOOKS__MAX_VISITORS_CEILING)")
+    return value
 
 
 def _not_being_edited(session: Session, notebook: Notebook) -> None:
@@ -160,8 +181,12 @@ def _detail(session: Session, user: User, n: Notebook) -> NotebookDetail:
     out = _out(session, user, n)
     row = notebooks.version_row(session, n)
     author = session.get(User, row.created_by) if row is not None and row.created_by else None
+    limits = get_settings().notebooks
     detail = NotebookDetail(**out.model_dump(), content=notebooks.content_of(session, n),
-                            author=Author(id=author.id, email=author.email, full_name=author.full_name) if author else None)
+                            author=Author(id=author.id, email=author.email, full_name=author.full_name) if author else None,
+                            max_visitors=n.max_visitors, visitors_default=min(limits.max_visitors_per_app,
+                                                                              limits.max_visitors_ceiling),
+                            visitors_ceiling=limits.max_visitors_ceiling)
     if out.editable and n.draft is not None:
         by = session.get(User, n.draft_by) if n.draft_by else None
         detail.draft, detail.draft_by, detail.draft_at = n.draft, by.email if by else None, n.draft_at
@@ -205,10 +230,11 @@ def create_notebook(project_id: int, body: NotebookCreate, request: Request, use
     ensure_can(session, user, project_id, Capability.EDIT)
     env = _environment(session, user, body.environment_id)
     name = _name(session, project_id, body.name)
+    max_visitors = _max_visitors(body.max_visitors)
     content = notebooks.check_content(
         name, body.content if body.content is not None else {"source": notebooks.starter_source(name)})
     notebook = Notebook(name=name, description=body.description.strip(), project_id=project_id, owner_id=user.id,
-                        environment_id=env.id, current_version=0)
+                        environment_id=env.id, current_version=0, max_visitors=max_visitors)
     session.add(notebook)
     session.flush()
     notebooks.add_version(session, notebook, content, "created", user)
@@ -257,6 +283,9 @@ def update_notebook(notebook_id: int, body: NotebookUpdate, request: Request, us
     if body.description is not None and body.description.strip() != notebook.description:
         notebook.description = body.description.strip()
         changes["description"] = True
+    if "max_visitors" in body.model_fields_set and body.max_visitors != notebook.max_visitors:
+        changes["max_visitors"] = {"from": notebook.max_visitors, "to": _max_visitors(body.max_visitors)}
+        notebook.max_visitors = body.max_visitors
     if new_content is not None:
         changes["version"] = notebooks.add_version(session, notebook, new_content, "edited", user).version
         notebook.draft = notebook.draft_by = notebook.draft_at = None
@@ -298,7 +327,8 @@ def duplicate_notebook(notebook_id: int, request: Request, user: User = Depends(
     src = notebooks.get_visible(session, user, notebook_id)
     ensure_can(session, user, src.project_id, Capability.EDIT)
     copy = Notebook(name=free_copy_name(session, Notebook, src.project_id, src.name), description=src.description,
-                    project_id=src.project_id, owner_id=user.id, environment_id=src.environment_id, current_version=0)
+                    project_id=src.project_id, owner_id=user.id, environment_id=src.environment_id, current_version=0,
+                    max_visitors=src.max_visitors)
     session.add(copy)
     session.flush()
     notebooks.add_version(session, copy, notebooks.content_of(session, src), "created", user)

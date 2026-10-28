@@ -49,6 +49,7 @@ One expandable box per component. `↻` = family 2, with the components rolled o
 | Kubernetes API | `KUBERNETES__TIMEOUT_SECONDS` |
 | Python and R scripts (when scripting is on) | `SCRIPTS__POLL_SECONDS`, `SCRIPTS__JOB_TTL_SECONDS`, `SCRIPTS__LOG_MAX_BYTES`, `SCRIPTS__LINT` |
 | Image builds (when scripting is on) | `SCRIPTS__BUILD_TIMEOUT_SECONDS`, `SCRIPTS__BUILD_CPU`, `SCRIPTS__BUILD_MEMORY`, `SCRIPTS__CHECK_TIMEOUT_SECONDS` |
+| Notebooks (when scripting is on) | `NOTEBOOKS__MAX_VISITORS_PER_APP`, `NOTEBOOKS__MAX_VISITORS_CEILING` (the first may not exceed the second) |
 | Container node (when containers are on) | `CONTAINERS__PULL_CHECK_SECONDS`, `CONTAINERS__POLL_SECONDS`, `CONTAINERS__JOB_TTL_SECONDS`, `CONTAINERS__MAX_CPU`, `CONTAINERS__MAX_MEMORY`, `CONTAINERS__MAX_TIMEOUT_SECONDS`, `CONTAINERS__LOG_MAX_BYTES` |
 
 ### Engine
@@ -95,7 +96,7 @@ to shorten the trail of what administrators do: the installer decides).
   `valore_all_avvio` for the variables read at import such as `CHDB_*`).
 - **Validation:** the panel's ranges, the settings classes' own validators (gateway), and
   the constraints: heartbeat × 3 ≤ dead-after, executions per orchestrator ≤ pool +
-  overflow, soft < hard time limit, read timeout < soft, hard + 5 min ≤ run stale (checked
+  overflow, notebooks' visitors per app ≤ their ceiling, soft < hard time limit, read timeout < soft, hard + 5 min ≤ run stale (checked
   from both sides).
 - **Rollout:** table `settings_rollouts` (component, changed_at, requested_at). On
   Kubernetes the orchestrator evicts the pods started before the request, one at a time,

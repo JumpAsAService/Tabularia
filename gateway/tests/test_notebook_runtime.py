@@ -24,7 +24,12 @@ Fixed here:
 - while the editor is open the source changes only there: PATCH and restore 409 with who
   holds it, «Save version» goes on, and once closed they work again;
 - the reaper: idle pods stopped (the editor's file kept), pods gone forgotten, Jobs
-  without a session deleted, starts that time out failed.
+  without a session deleted, starts that time out failed;
+- the visitors of an app: counted in the database, the same on every replica; the cap
+  is the notebook's own or the installation's default, never above the ceiling; past it
+  the root answers «full» and reloads itself, a WebSocket that loses the race is closed
+  with 1013 and the reason; the editor has no cap; stale visitors no longer count and the
+  reaper clears them; they go with their notebook and their account.
 """
 import hashlib
 import json
@@ -37,7 +42,7 @@ import pytest
 import uvicorn
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
-from sqlmodel import select
+from sqlmodel import Session, select
 from starlette.applications import Starlette
 from starlette.responses import JSONResponse, PlainTextResponse
 from starlette.routing import Route, WebSocketRoute
@@ -47,12 +52,12 @@ from app.core.config import get_settings
 from app.db.session import get_session
 from app.core.crypto import encrypt_secret
 from app.models import (
-    AuditLog, Notebook, NotebookSession, NotebookVersion, Permission, ScriptEnvironment, ScriptEnvironmentVariable,
-    ScriptEnvironmentVersion,
+    AuditLog, Notebook, NotebookSession, NotebookVersion, NotebookVisitor, Permission, Project, ScriptEnvironment,
+    ScriptEnvironmentVariable, ScriptEnvironmentVersion,
 )
 from app.services import kube_jobs
 from app.services import notebook_runtime as runtime
-from tests.conftest import make_datasource, make_permission, make_project
+from tests.conftest import make_datasource, make_permission, make_project, make_user
 from tests.fake_kube import Cluster
 from tests.test_notebooks import CSRF, SOURCE, _create, _login, _world
 
@@ -696,3 +701,277 @@ def test_deleting_the_notebook_or_its_reader_forgets_the_sessions(app, session, 
 
     remove_user(session, _row(session, other, "edit").user_id)
     assert session.exec(select(NotebookSession)).all() == []
+
+
+# ── visitors ─────────────────────────────────────────────────────────────────
+def _caps(monkeypatch, per_app=None, ceiling=None):
+    if per_app is not None:
+        monkeypatch.setenv("NOTEBOOKS__MAX_VISITORS_PER_APP", str(per_app))
+    if ceiling is not None:
+        monkeypatch.setenv("NOTEBOOKS__MAX_VISITORS_CEILING", str(ceiling))
+    get_settings.cache_clear()
+
+
+def test_visitors_are_counted_across_replicas(app, session, cluster, db_engine, monkeypatch):
+    _, ana, _, cleo, _, _, nid = _setup(app, session)
+    _caps(monkeypatch, per_app=2)
+    users = [session.exec(select(Notebook.owner_id).where(Notebook.id == nid)).one(), 99]
+    # two gateway replicas: two processes, each with its own connection to the database
+    with Session(db_engine) as one, Session(db_engine) as two:
+        first, n, cap = runtime.take_visitor(one, one.get(Notebook, nid), users[0])
+        assert first is not None and (n, cap) == (1, 2)
+        second, n, _ = runtime.take_visitor(two, two.get(Notebook, nid), users[1])
+        assert second is not None and n == 2
+        # the third, on either replica: full
+        assert runtime.take_visitor(one, one.get(Notebook, nid), users[1])[:2] == (None, 2)
+        assert runtime.take_visitor(two, two.get(Notebook, nid), users[0])[:2] == (None, 2)
+        assert runtime.visitors(one, nid) == runtime.visitors(two, nid) == 2
+        # one leaves on the first replica: the second takes the place
+        runtime.drop_visitor(one, first)
+        third, n, _ = runtime.take_visitor(two, two.get(Notebook, nid), users[0])
+        assert third is not None and n == 2
+        # a replica that died: its visitor, no longer refreshed, stops counting after three
+        # missed beats, and the reaper clears it; the one kept fresh stays
+        dead = two.get(NotebookVisitor, second)
+        dead.last_seen_at = dead.last_seen_at - timedelta(minutes=4)
+        two.add(dead)
+        two.commit()
+        live = two.get(NotebookVisitor, third)
+        live.last_seen_at = live.last_seen_at - timedelta(minutes=2)
+        two.add(live)
+        two.commit()
+        runtime.keep_visitor(one, third)
+        assert runtime.visitors(one, nid) == 1
+        assert runtime.take_visitor(one, one.get(Notebook, nid), users[1])[0] is not None
+    _reap(db_engine)
+    session.expire_all()
+    assert second not in {v.id for v in session.exec(select(NotebookVisitor)).all()}
+    assert len(session.exec(select(NotebookVisitor)).all()) == 2
+
+
+def test_the_notebooks_own_cap_within_the_ceiling(app, session, cluster, monkeypatch):
+    _, ana, _, cleo, env_id, folder, nid = _setup(app, session)
+    n = ana.get(f"/notebooks/{nid}").json()
+    assert (n["max_visitors"], n["visitors_default"], n["visitors_ceiling"]) == (None, 10, 50)
+    notebook = session.get(Notebook, nid)
+    assert runtime.visitors_cap(notebook) == 10
+    r = cleo.patch(f"/notebooks/{nid}", json={"max_visitors": 3}, headers=CSRF)
+    assert r.status_code == 200 and r.json()["max_visitors"] == 3
+    session.expire_all()
+    assert runtime.visitors_cap(session.get(Notebook, nid)) == 3
+    (changed,) = _actions(session, "notebook.update")
+    assert json.loads(changed.detail) == {"max_visitors": {"from": None, "to": 3}}
+    # left out: unchanged; past the ceiling or below one: refused
+    assert ana.patch(f"/notebooks/{nid}", json={"description": "x"}, headers=CSRF).json()["max_visitors"] == 3
+    over = ana.patch(f"/notebooks/{nid}", json={"max_visitors": 51}, headers=CSRF)
+    assert over.status_code == 422 and "NOTEBOOKS__MAX_VISITORS_CEILING" in over.json()["detail"]
+    assert ana.patch(f"/notebooks/{nid}", json={"max_visitors": 0}, headers=CSRF).status_code == 422
+    assert ana.get(f"/notebooks/{nid}").json()["max_visitors"] == 3
+    # only with EDIT
+    dan, dan_id = _login(app, session, "dan@x.local")
+    from app.models import Group, UserGroupLink
+
+    session.add(UserGroupLink(user_id=dan_id, group_id=session.exec(select(Group.id)).one()))
+    session.commit()
+    make_permission(session, user_id=dan_id, project_id=folder, capability="view")
+    assert dan.patch(f"/notebooks/{nid}", json={"max_visitors": 40}, headers=CSRF).status_code == 403
+    # a duplicate keeps it; null goes back to the installation's default
+    copy = ana.post(f"/notebooks/{nid}/duplicate", headers=CSRF).json()
+    assert copy["max_visitors"] == 3
+    assert ana.patch(f"/notebooks/{nid}", json={"max_visitors": None}, headers=CSRF).json()["max_visitors"] is None
+    # the installation's numbers: the default, and a ceiling lowered under a notebook's own
+    _caps(monkeypatch, per_app=4, ceiling=2)
+    session.expire_all()
+    assert runtime.visitors_cap(session.get(Notebook, nid)) == 2  # the default above the ceiling: the ceiling
+    n = ana.get(f"/notebooks/{nid}").json()
+    assert (n["visitors_default"], n["visitors_ceiling"]) == (2, 2)
+    assert runtime.visitors_cap(session.get(Notebook, copy["id"])) == 2
+    assert ana.patch(f"/notebooks/{nid}", json={"max_visitors": 3}, headers=CSRF).status_code == 422
+    # set when created, within the ceiling too
+    r = ana.post(f"/projects/{folder}/notebooks", json={"name": "Small", "environment_id": env_id, "max_visitors": 1},
+                 headers=CSRF)
+    assert r.status_code == 201 and r.json()["max_visitors"] == 1
+    assert ana.post(f"/projects/{folder}/notebooks", json={"name": "Big", "environment_id": env_id, "max_visitors": 5},
+                    headers=CSRF).status_code == 422
+
+
+def test_past_the_cap_the_app_is_full_and_says_so(app, session, cluster, pod, monkeypatch):
+    from app.routes import notebook_proxy
+
+    monkeypatch.setattr(notebook_proxy, "TAKE_TRIES", 2)
+    monkeypatch.setattr(notebook_proxy, "TAKE_PAUSE", 0.01)
+    _, ana, _, cleo, _, _, nid = _setup(app, session)
+    assert ana.patch(f"/notebooks/{nid}", json={"max_visitors": 1}, headers=CSRF).status_code == 200
+    cleo.get(f"/notebooks/{nid}/app/")
+    cluster.pod = "ready"
+    (live,) = _ready(cleo, nid)
+    assert (live["visitors"], live["max_visitors"]) == (0, 1)
+    base = f"/notebooks/{nid}/app"
+    with ana.websocket_connect(base + "/ws?session_id=a", headers=ORIGIN) as ws:
+        assert ws.receive_text().startswith("hello")
+        (live,) = cleo.get(f"/notebooks/{nid}/sessions").json()
+        assert live["visitors"] == 1
+        # anyone else: a page that says so and reloads itself
+        page = cleo.get(base + "/")
+        assert page.status_code == 503 and page.headers["retry-after"] == "10"
+        assert '<meta http-equiv="refresh" content="10">' in page.text and 'role="status"' in page.text
+        assert "This app already has 1 person connected, the most it allows." in page.text
+        assert "It will open by itself as soon as someone leaves" in page.text
+        assert page.headers["x-frame-options"] == "SAMEORIGIN"
+        # the person who has it open reloads: through
+        assert ana.get(base + "/").json()["marimo"] == f"/notebooks/{nid}/app/"
+        # the rest of marimo's requests are not the root: never turned away
+        assert cleo.get(base + "/assets/index.js").status_code == 200
+        # a WebSocket that loses the race for the last place: closed, saying why
+        with cleo.websocket_connect(base + "/ws?session_id=c", headers=ORIGIN) as refused:
+            with pytest.raises(WebSocketDisconnect) as closed:
+                refused.receive_text()
+        assert closed.value.code == 1013
+        assert closed.value.reason == "This app already has 1 person connected, the most it allows"
+        # the editor has no cap, and holds no place
+        assert ana.post(f"/notebooks/{nid}/sessions", json={"mode": "edit"}, headers=CSRF).status_code == 202
+        _ready(ana, nid)
+        with ana.websocket_connect(f"/notebooks/{nid}/edit/ws", headers=ORIGIN) as editor:
+            assert editor.receive_text() == f"hello /notebooks/{nid}/edit/ws?"
+            assert runtime.visitors(session, nid) == 1
+    # ana left: her place is free
+    session.expire_all()
+    assert session.exec(select(NotebookVisitor)).all() == []
+    assert cleo.get(base + "/").json()["marimo"] == f"/notebooks/{nid}/app/"
+    with cleo.websocket_connect(base + "/ws?session_id=c", headers=ORIGIN) as ws:
+        assert ws.receive_text().startswith("hello")
+        assert runtime.visitors(session, nid) == 1
+
+
+def test_an_open_app_keeps_its_place_and_frees_it_when_taken_away(app, session, cluster, pod, db_engine,
+                                                                     monkeypatch):
+    """The minute's check refreshes the visitor; a person no longer allowed loses the
+    WebSocket and the place."""
+    from app.routes import notebook_proxy
+
+    monkeypatch.setattr(notebook_proxy, "WS_CHECK_SECONDS", 0.05)
+    _, ana, _, cleo, _, folder, nid = _setup(app, session)
+    cleo.get(f"/notebooks/{nid}/app/")
+    cluster.pod = "ready"
+    _ready(cleo, nid)
+    with cleo.websocket_connect(f"/notebooks/{nid}/app/ws", headers=ORIGIN) as ws:
+        ws.receive_text()
+        # the proxy's own session is the request's: the test looks with another one
+        with Session(db_engine) as look:
+            (visitor,) = look.exec(select(NotebookVisitor)).all()
+            visitor.last_seen_at = visitor.last_seen_at - timedelta(minutes=2)
+            look.add(visitor)
+            look.commit()
+            vid = visitor.id
+            for _ in range(100):
+                look.expire_all()
+                if runtime._age(look.get(NotebookVisitor, vid).last_seen_at) < 60:
+                    break
+                time.sleep(0.02)
+            else:
+                raise AssertionError("the visitor was not refreshed")
+            # cleo may no longer open the folder: the next check closes the socket
+            for p in look.exec(select(Permission).where(Permission.project_id == folder)).all():
+                look.delete(p)
+            look.commit()
+        with pytest.raises(WebSocketDisconnect) as closed:
+            for _ in range(200):
+                ws.receive_text()
+        assert closed.value.code == 1008
+    with Session(db_engine) as look:
+        assert look.exec(select(NotebookVisitor)).all() == []
+
+
+def test_visitors_go_with_their_notebook_and_their_account(app, session, cluster):
+    _, ana, _, cleo, env_id, folder, nid = _setup(app, session)
+    other = _create(ana, folder, env_id, name="Other").json()["id"]
+    ana_id = session.exec(select(Notebook.owner_id).where(Notebook.id == nid)).one()
+    from app.models import User
+
+    cleo_id = session.exec(select(User.id).where(User.email == "cleo@x.local")).one()
+    session.add_all([NotebookVisitor(notebook_id=nid, user_id=cleo_id), NotebookVisitor(notebook_id=other, user_id=ana_id),
+                     NotebookVisitor(notebook_id=other, user_id=cleo_id)])
+    session.commit()
+    assert ana.delete(f"/notebooks/{nid}", headers=CSRF).status_code == 204
+    assert {(v.notebook_id, v.user_id) for v in session.exec(select(NotebookVisitor)).all()} == {
+        (other, ana_id), (other, cleo_id)}
+    from app.routes.users import remove_user
+
+    remove_user(session, cleo_id)
+    assert [(v.notebook_id, v.user_id) for v in session.exec(select(NotebookVisitor)).all()] == [(other, ana_id)]
+
+
+def test_visitors_on_a_database_that_enforces_foreign_keys(fk_session):
+    from app.routes.users import remove_user
+
+    owner, guest = make_user(fk_session, email="owner@x.local"), make_user(fk_session, email="guest@x.local")
+    folder = make_project(fk_session, name="F")
+    env = ScriptEnvironment(name="py", language="python")
+    fk_session.add(env)
+    fk_session.commit()
+    notebook = Notebook(name="N", project_id=folder.id, owner_id=owner.id, environment_id=env.id, max_visitors=2)
+    fk_session.add(notebook)
+    fk_session.commit()
+    fk_session.add_all([NotebookVisitor(notebook_id=notebook.id, user_id=guest.id),
+                        NotebookVisitor(notebook_id=notebook.id, user_id=owner.id)])
+    fk_session.commit()
+    remove_user(fk_session, guest.id)
+    assert [v.user_id for v in fk_session.exec(select(NotebookVisitor)).all()] == [owner.id]
+    runtime.forget(fk_session, notebook.id)
+    fk_session.delete(notebook)
+    fk_session.commit()
+    assert fk_session.exec(select(NotebookVisitor)).all() == []
+    assert fk_session.get(Project, folder.id) is not None
+
+
+def test_two_replicas_racing_for_the_last_place_on_postgres(monkeypatch):
+    """The lock of the notebook's visitors, on a real Postgres: many replicas asking at
+    the same moment for the last place, one gets it."""
+    from concurrent.futures import ThreadPoolExecutor
+
+    from sqlmodel import SQLModel, create_engine
+
+    from tests.test_migrations import _url_base
+
+    base = _url_base()
+    if base is None:
+        pytest.skip("serve un Postgres (DB__*)")
+    from sqlalchemy import text as sql
+
+    admin = create_engine(base.set(database="postgres"), isolation_level="AUTOCOMMIT")
+    name = f"zzvis_{time.time_ns() % 10 ** 10}"
+    try:
+        with admin.connect() as c:
+            c.execute(sql(f'CREATE DATABASE "{name}"'))
+    except Exception as e:  # noqa: BLE001 — no reachable Postgres: skipped
+        pytest.skip(f"Postgres non raggiungibile ({e.__class__.__name__})")
+    db = create_engine(base.set(database=name), pool_size=10)
+    try:
+        SQLModel.metadata.create_all(db)
+        with Session(db) as s:
+            owner = make_user(s, email="owner@x.local")
+            folder = make_project(s, name="F")
+            env = ScriptEnvironment(name="py", language="python")
+            s.add(env)
+            s.commit()
+            notebook = Notebook(name="N", project_id=folder.id, owner_id=owner.id, environment_id=env.id, max_visitors=3)
+            s.add(notebook)
+            s.commit()
+            nid, uid = notebook.id, owner.id
+            runtime.take_visitor(s, s.get(Notebook, nid), uid)
+            runtime.take_visitor(s, s.get(Notebook, nid), uid)
+
+        def one(_):
+            with Session(db) as replica:
+                return runtime.take_visitor(replica, replica.get(Notebook, nid), uid)[0]
+
+        with ThreadPoolExecutor(8) as pool:
+            got = [v for v in pool.map(one, range(8)) if v is not None]
+        assert len(got) == 1
+        with Session(db) as s:
+            assert runtime.visitors(s, nid) == 3
+    finally:
+        db.dispose()
+        with admin.connect() as c:
+            c.execute(sql(f'DROP DATABASE IF EXISTS "{name}" WITH (FORCE)'))
+        admin.dispose()

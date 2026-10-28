@@ -787,6 +787,13 @@ scripts:
     idleMinutes: 15            # a pod nobody used for this long is stopped
     maxLifetimeHours: 12       # the longest a pod lives, used or not
     maxLive: 20                # notebook pods at once, apps and editors together
+    # marimo gives every visitor of an app a kernel of its own, with its own copy of the
+    # data, inside the app's one pod: past this many people at once the app says it is
+    # full and opens by itself when someone leaves. A notebook may set its own number
+    # (with EDIT), up to maxVisitorsCeiling. Size them on the environment's memory limit
+    # divided by what one visitor's data takes. Both also in Administration → Settings
+    maxVisitorsPerApp: 10
+    maxVisitorsCeiling: 50
     startTimeoutSeconds: 300   # a pod not answering by then has failed to start
     # a notebook's token holds only from its own pod's address; false only behind a
     # service mesh (Istio, Linkerd), whose sidecars hide the pods' addresses

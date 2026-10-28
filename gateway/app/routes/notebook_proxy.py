@@ -13,6 +13,12 @@ services/notebook_runtime.py.
   pod starts is a 503.
 - Every request, and every open WebSocket once a minute, keeps the pod alive
   (`last_seen_at`, throttled): the reaper stops the idle ones.
+- An app takes a limited number of visitors at once (services/notebook_runtime.py,
+  «Visitors»): marimo's WebSocket (`…/app/ws`) holds a place while it is open. Past the
+  cap the root answers a page that says so and reloads itself until a place frees (one
+  who has the app open already gets through: a reload, a second tab); a WebSocket that
+  loses the race for the last place is closed with 1013 and the reason. The editor has
+  no cap.
 - The pod's answers may be framed by Tabularia's pages only (SAMEORIGIN), never by
   another site.
 """
@@ -26,6 +32,7 @@ import re
 from dataclasses import dataclass
 from typing import Optional
 
+import anyio
 import httpx
 import websockets
 from fastapi import APIRouter, Depends, Request, WebSocket
@@ -60,6 +67,12 @@ _SKIP_RESPONSE = {"connection", "keep-alive", "te", "trailer", "transfer-encodin
 _FRAME_ANCESTORS = re.compile(r"frame-ancestors[^;]*", re.I)
 _TIMEOUT = httpx.Timeout(connect=5.0, read=300.0, write=300.0, pool=10.0)
 WS_CHECK_SECONDS = 60  # an open WebSocket keeps the pod alive, and is checked again, this often
+VISITOR_SOCKET = "ws"  # marimo's session socket: the one a visitor holds (a kernel each)
+FULL_RELOAD_SECONDS = 10  # the «full» page asks again this often
+FULL_CLOSE_CODE = 1013  # Try Again Later
+# a reload closes the old socket a moment after the new page opens its own: the new one
+# waits this long for the place before it is refused
+TAKE_TRIES, TAKE_PAUSE = 8, 0.25
 
 
 @dataclass
@@ -74,9 +87,11 @@ class Found:
 
 
 # ── pages ────────────────────────────────────────────────────────────────────
-def _page(title: str, message: str, status: int, refresh: bool = False) -> HTMLResponse:
-    """A small page in the notebook's frame, in the browser's light or dark scheme."""
-    meta = '<meta http-equiv="refresh" content="2">' if refresh else ""
+def _page(title: str, message: str, status: int, refresh: bool = False, every: int = 2,
+          headers: Optional[dict[str, str]] = None) -> HTMLResponse:
+    """A small page in the notebook's frame, in the browser's light or dark scheme;
+    `refresh` reloads it every `every` seconds."""
+    meta = f'<meta http-equiv="refresh" content="{every}">' if refresh else ""
     body = (f'<!doctype html><html lang="en"><head><meta charset="utf-8">{meta}'
             f'<meta name="viewport" content="width=device-width, initial-scale=1"><title>{html.escape(title)}</title>'
             '<style>:root{color-scheme:light dark}body{font:15px/1.5 system-ui,sans-serif;margin:0;display:grid;'
@@ -85,11 +100,27 @@ def _page(title: str, message: str, status: int, refresh: bool = False) -> HTMLR
             f'<h1 style="font-size:1.15rem">{html.escape(title)}</h1>'
             f'<p role="{"status" if refresh else "alert"}" aria-live="polite">{html.escape(message)}</p>'
             '</main></body></html>')
-    return HTMLResponse(body, status_code=status, headers={"Cache-Control": "no-store", "X-Frame-Options": "SAMEORIGIN"})
+    return HTMLResponse(body, status_code=status, headers={"Cache-Control": "no-store", "X-Frame-Options": "SAMEORIGIN",
+                                                           **(headers or {})})
 
 
 def _starting() -> HTMLResponse:
     return _page("Starting…", "Starting the notebook. This page reloads by itself until it is ready.", 200, refresh=True)
+
+
+def _people(n: int) -> str:
+    return f"{n} {'person' if n == 1 else 'people'} connected"
+
+
+def full_reason(count: int) -> str:
+    """Why an app turns a visitor away; also the WebSocket's close reason (≤ 123 bytes)."""
+    return f"This app already has {_people(count)}, the most it allows"
+
+
+def _full(count: int) -> HTMLResponse:
+    return _page("This app is full", f"{full_reason(count)}. It will open by itself as soon as someone leaves: "
+                 f"this page checks again every {FULL_RELOAD_SECONDS} seconds.", 503, refresh=True,
+                 every=FULL_RELOAD_SECONDS, headers={"Retry-After": str(FULL_RELOAD_SECONDS)})
 
 
 def _failed(error: Optional[str]) -> HTMLResponse:
@@ -121,6 +152,10 @@ def _lookup(conn: HTTPConnection, session: Session, notebook_id: int, mode: str,
                          else JSONResponse({"detail": message}, status_code=409))
         found.row_status, found.row_error, found.pod_ip = row.status, row.error, row.pod_ip
         found.stale_app = mode == "app" and row.version != notebook.current_version
+        if root and mode == "app" and row.status == "ready" and not found.stale_app:
+            count = runtime.visitors(session, notebook.id)
+            if count >= runtime.visitors_cap(notebook) and not runtime.is_visiting(session, notebook.id, user.id):
+                return Found(answer=_full(count))
         if row.status == "ready":
             runtime.touch(session, row)
         return found
@@ -239,11 +274,34 @@ async def edit_http(notebook_id: int, path: str, request: Request, session: Sess
 
 
 # ── WebSocket ────────────────────────────────────────────────────────────────
-def _still_open(conn: HTTPConnection, session: Session, notebook_id: int, mode: str) -> bool:
+def _still_open(conn: HTTPConnection, session: Session, notebook_id: int, mode: str,
+                visitor_id: Optional[int] = None) -> bool:
     """Every minute of an open WebSocket: the person may still open the notebook, the
-    session is still theirs; the pod's idle time starts again."""
+    session is still theirs; the pod's idle time starts again, the visitor's place is
+    kept."""
+    if visitor_id is not None:
+        runtime.keep_visitor(session, visitor_id)
     found = _lookup(conn, session, notebook_id, mode, root=False)
     return found.answer is None and found.row_status == "ready"
+
+
+def _take(session: Session, notebook_id: int, user_id: int) -> tuple[Optional[int], int]:
+    """A visitor's place: (its id, or None when the app is full; the visitors counted)."""
+    try:
+        notebook = session.get(Notebook, notebook_id)
+        if notebook is None:
+            return None, 0
+        visitor_id, count, _ = runtime.take_visitor(session, notebook, user_id)
+        return visitor_id, count
+    finally:
+        session.close()
+
+
+def _drop(session: Session, visitor_id: int) -> None:
+    try:
+        runtime.drop_visitor(session, visitor_id)
+    finally:
+        session.close()
 
 
 def _close_code(code: Optional[int]) -> int:
@@ -278,7 +336,8 @@ async def _pump(browser: WebSocket, pod, check) -> int:
         while True:
             await asyncio.sleep(WS_CHECK_SECONDS)
             if not await check():
-                await pod.close()
+                # the pod's socket is closed by the caller: closing it here would end
+                # to_browser first, and the browser would get 1000 instead
                 return 1008
 
     tasks = [asyncio.ensure_future(t()) for t in (to_pod, to_browser, keep)]
@@ -300,7 +359,32 @@ async def _websocket(browser: WebSocket, session: Session, notebook_id: int, mod
     if found.answer is not None or found.row_status != "ready" or not found.pod_ip:
         await browser.close(code=1008 if found.answer is not None else 1013)
         return
-    url = f"ws://{found.pod_ip}:{runtime.APP_PORT}{runtime.base_url(notebook_id, mode)}/{path}"
+    visitor_id: Optional[int] = None
+    if mode == "app" and path == VISITOR_SOCKET:
+        count = 0
+        for attempt in range(TAKE_TRIES):
+            visitor_id, count = await run_in_threadpool(_take, session, notebook_id, found.user_id)
+            if visitor_id is not None:
+                break
+            if attempt < TAKE_TRIES - 1:
+                await asyncio.sleep(TAKE_PAUSE)
+        if visitor_id is None:
+            # accepted first: a refused handshake would reach the page without the reason
+            await browser.accept()
+            await browser.close(code=FULL_CLOSE_CODE, reason=full_reason(count))
+            return
+    try:
+        await _carry(browser, session, notebook_id, mode, path, found.pod_ip, visitor_id)
+    finally:
+        if visitor_id is not None:
+            # also when the handler is being cancelled (the server stopping): the place frees
+            with anyio.CancelScope(shield=True):
+                await run_in_threadpool(_drop, session, visitor_id)
+
+
+async def _carry(browser: WebSocket, session: Session, notebook_id: int, mode: str, path: str, pod_ip: str,
+                 visitor_id: Optional[int]) -> None:
+    url = f"ws://{pod_ip}:{runtime.APP_PORT}{runtime.base_url(notebook_id, mode)}/{path}"
     if browser.url.query:
         url += f"?{browser.url.query}"
     wanted = [p.strip() for p in (browser.headers.get("sec-websocket-protocol") or "").split(",") if p.strip()]
@@ -313,7 +397,7 @@ async def _websocket(browser: WebSocket, session: Session, notebook_id: int, mod
         return
 
     async def check() -> bool:
-        return await run_in_threadpool(_still_open, browser, session, notebook_id, mode)
+        return await run_in_threadpool(_still_open, browser, session, notebook_id, mode, visitor_id)
 
     try:
         await browser.accept(subprotocol=pod.subprotocol)

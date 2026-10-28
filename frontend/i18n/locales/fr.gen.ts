@@ -265,6 +265,11 @@ export default {
     "liveTitle": "En marche",
     "appRunning": "App en marche, lit en tant que {who} · depuis {since}",
     "appStarting": "App en démarrage, lit en tant que {who}",
+    "visitors": "Visiteurs simultanés",
+    "visitorsHelp": "Chaque personne qui ouvre l'app reçoit sa propre copie des données dans le pod de l'app : au-delà de ce nombre, l'app indique qu'elle est pleine et s'ouvre d'elle-même dès que quelqu'un part. Vide : la valeur par défaut de l'installation ({default}). Au plus {max}.",
+    "visitorsDefault": "{n} (par défaut)",
+    "visitorsInvalid": "Visiteurs simultanés : un nombre entier de 1 à {max}, ou vide pour la valeur par défaut.",
+    "appVisitors": "{n} sur {max} personnes connectées",
     "appFailed": "L'app a échoué : {error}",
     "editFailed": "L'éditeur a échoué : {error}",
     "stopApp": "Arrêter",
@@ -2167,7 +2172,8 @@ export default {
       "redirects": "redirections",
       "values": "valeurs",
       "tasks": "tâches",
-      "processes": "processus"
+      "processes": "processus",
+      "people": "personnes"
     },
     "errors": {
       "unknown": "Réglage inconnu",
@@ -2188,7 +2194,9 @@ export default {
       "engine_unreachable": "Le moteur ne répond pas, et cette valeur se vérifie par rapport à sa limite de temps : réessayez dans un instant",
       "allowlist_needed": "N'admettre que les membres des groupes retenus demande ces groupes : listez-les d'abord",
       "env_too_high": "La valeur de l'installation dépasse {limit}, le maximum que permet le seuil d'exécution perdue : relevez d'abord le seuil, ou gardez une valeur du panneau",
-      "too_small": "Trop peu pour faire tourner quoi que ce soit"
+      "too_small": "Trop peu pour faire tourner quoi que ce soit",
+      "visitors_above_ceiling": "Au plus {limit}, le maximum qu'un notebook peut fixer (« {other} »)",
+      "ceiling_below_visitors": "Au moins {limit}, la valeur par défaut de chaque app (« {other} »)"
     },
     "rollout": {
       "region": "Redémarrages à faire",
@@ -2269,6 +2277,10 @@ export default {
       "builds": {
         "title": "Construction des images",
         "lead": "Les constructions et les vérifications des environnements de script."
+      },
+      "notebooks": {
+        "title": "Notebooks",
+        "lead": "Combien de personnes peuvent avoir l'app d'un notebook ouverte en même temps."
       },
       "containers": {
         "title": "Nœuds Container",
@@ -2515,6 +2527,14 @@ export default {
       "scripts_check_timeout_seconds": {
         "label": "Durée maximale de vérification d'une image",
         "help": "Le Job qui vérifie un environnement construit en chargeant ses paquets."
+      },
+      "notebooks_max_visitors_per_app": {
+        "label": "Visiteurs simultanés par app",
+        "help": "Chaque personne qui ouvre l'app d'un notebook reçoit un noyau à elle, avec sa propre copie des données, dans l'unique pod de l'app. Au-delà de ce nombre l'app indique qu'elle est pleine, et s'ouvre d'elle-même dès que quelqu'un part. Un notebook peut fixer son propre nombre."
+      },
+      "notebooks_max_visitors_ceiling": {
+        "label": "Maximum de visiteurs qu'un notebook peut fixer",
+        "help": "Le nombre le plus élevé de visiteurs simultanés que la personne qui modifie un notebook peut choisir pour son app. L'abaisser limite aussi les notebooks qui avaient choisi plus."
       },
       "containers_pull_check_seconds": {
         "label": "Temps pour télécharger une image",

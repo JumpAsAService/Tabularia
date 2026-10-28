@@ -53,11 +53,11 @@ SFTP, S3, APIs, SharePoint) belong to each connection, encrypted with
 | Read by | Variables |
 |---|---|
 | [Shared by the gateway and the engine](#shared-by-the-gateway-and-the-engine) | 7 |
-| [Gateway](#gateway) | 157 |
+| [Gateway](#gateway) | 159 |
 | [Engine and workers](#engine-and-workers) | 93 |
 | [Frontend](#frontend) | 3 |
 | [Compose and Helm only](#compose-and-helm-only) | 13 |
-| **Total** | **273** |
+| **Total** | **275** |
 
 ## Before production
 
@@ -369,6 +369,8 @@ The marimo notebooks' pods: one per notebook being used, its app or its editor, 
 | `NOTEBOOKS__IDLE_MINUTES` | integer, 1–1440 | `15` | set by the chart | A notebook's pod nobody has used for this long is stopped (an open page keeps it alive); an editor's unsaved file becomes the notebook's draft first. |
 | `NOTEBOOKS__MAX_LIFETIME_HOURS` | integer, 1–168 | `12` | set by the chart | The longest a notebook's pod lives, used or not; the next visit starts a new one. |
 | `NOTEBOOKS__MAX_LIVE` | integer, 1–1000 | `20` | set by the chart | How many notebook pods may run at once, apps and editors together; past it, opening another one says so. |
+| `NOTEBOOKS__MAX_VISITORS_PER_APP` | integer, 1–1000 | `10` | `scripts.notebooks.maxVisitorsPerApp` | How many people may have a notebook's app open at once, unless the notebook sets its own number. marimo gives every visitor a kernel of their own, with their own copy of the data the code reads, all in the app's one pod: past the memory limit of the notebook's environment the pod stops for everyone. Past this number the app says it is full and opens by itself as soon as someone leaves. A visitor is an app open in a browser tab (marimo's WebSocket), counted across the gateway's replicas; the editor has no limit. Size it on the environment's memory limit divided by what one visitor's data takes. Never above `NOTEBOOKS__MAX_VISITORS_CEILING`. Also adjustable in Administration → Settings. |
+| `NOTEBOOKS__MAX_VISITORS_CEILING` | integer, 1–1000 | `50` | `scripts.notebooks.maxVisitorsCeiling` | The most people at once a notebook may set for its own app (whoever may edit it sets it on the notebook's page). Lowering it below what a notebook chose caps that notebook too. Also adjustable in Administration → Settings. |
 | `NOTEBOOKS__START_TIMEOUT_SECONDS` | integer, 30–3600 | `300` | set by the chart | A notebook's pod that has not answered after this long has failed to start, and says why (no node free, an image not downloaded). |
 | `NOTEBOOKS__GATEWAY_URL` | string | empty | set by the chart | The gateway's address inside the cluster, which the notebooks' pods call to read datasources. The chart sets it to the gateway's Service; empty, a notebook cannot read datasources. |
 | `NOTEBOOKS__POD_IP_CHECK` | boolean | `true` | set by the chart | A notebook's token is honoured only when the call comes from its own pod's address, and never with a forwarding header (`X-Forwarded-For`, `Forwarded`, `X-Real-IP`): a token the notebook's code printed is useless anywhere else. Turn it off only where the gateway cannot see the pods' addresses, behind a service mesh's sidecars (Istio, Linkerd). |

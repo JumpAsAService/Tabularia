@@ -42,7 +42,7 @@ class Item:
     key: str  # "<section>.<field>" of the gateway's settings
     group: str  # the box of the panel (the labels are the frontend's)
     kind: str  # int | float | bool | str | timezone | cpu | memory
-    unit: str = ""  # seconds | minutes | days | rows | bytes | usd | tokens | messages | requests | chats | runs | threads | connections
+    unit: str = ""  # seconds | minutes | days | rows | bytes | usd | tokens | messages | requests | chats | runs | threads | connections | people
     minimum: Optional[float] = None
     maximum: Optional[float] = None
     max_length: int = 200
@@ -139,6 +139,8 @@ ITEMS: tuple[Item, ...] = (
     Item("scripts.build_cpu", "builds", "cpu", when="scripts"),
     Item("scripts.build_memory", "builds", "memory", when="scripts"),
     Item("scripts.check_timeout_seconds", "builds", "int", "seconds", 30, 3600, when="scripts"),
+    Item("notebooks.max_visitors_per_app", "notebooks", "int", "people", 1, 1000, when="scripts"),
+    Item("notebooks.max_visitors_ceiling", "notebooks", "int", "people", 1, 1000, when="scripts"),
     Item("containers.pull_check_seconds", "containers", "int", "seconds", 30, 3600, when="containers"),
     Item("containers.poll_seconds", "containers", "float", "seconds", 1, 60, when="containers"),
     Item("containers.job_ttl_seconds", "containers", "int", "seconds", 60, 7 * DAY, when="containers"),
@@ -226,7 +228,8 @@ def check(values: Any, base: Any, changed: Optional[set[str]] = None) -> tuple[d
     - each orchestration holds a database connection while it asks the engine, so the
       executions an orchestrator carries stay within its pool (pool + overflow);
     - single sign-on that admits only the members of the groups taken needs a list of
-      them (or the administrators' group): an empty one would let nobody in."""
+      them (or the administrators' group): an empty one would let nobody in;
+    - the notebooks' default of visitors at once stays within the most a notebook may set."""
     good: dict[str, Any] = {}
     errors: list[dict] = []
     if not isinstance(values, dict):
@@ -277,6 +280,17 @@ def check(values: Any, base: Any, changed: Optional[set[str]] = None) -> tuple[d
             if k:
                 good.pop(k)
                 errors.append({"key": k, "code": "concurrent_pool", "limit": limit})
+                moved = True
+                continue
+        per_app, ceiling = e("notebooks.max_visitors_per_app"), e("notebooks.max_visitors_ceiling")
+        if per_app > ceiling:
+            k = blame(("notebooks.max_visitors_per_app", "notebooks.max_visitors_ceiling"))
+            if k:
+                good.pop(k)
+                errors.append({"key": k, "other": next(o for o in ("notebooks.max_visitors_per_app",
+                                                                   "notebooks.max_visitors_ceiling") if o != k),
+                               "code": "visitors_above_ceiling" if k.endswith("per_app") else "ceiling_below_visitors",
+                               "limit": ceiling if k.endswith("per_app") else per_app})
                 moved = True
                 continue
     return good, errors

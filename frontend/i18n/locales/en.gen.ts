@@ -265,6 +265,11 @@ export default {
     "liveTitle": "Running now",
     "appRunning": "App running, reading as {who} · since {since}",
     "appStarting": "App starting, reading as {who}",
+    "visitors": "Visitors at once",
+    "visitorsHelp": "Each person who opens the app gets their own copy of the data in the app's pod: past this many, the app says it is full and opens by itself when someone leaves. Empty: the installation's default ({default}). At most {max}.",
+    "visitorsDefault": "{n} (default)",
+    "visitorsInvalid": "Visitors at once: a whole number from 1 to {max}, or empty for the default.",
+    "appVisitors": "{n} of {max} people connected",
     "appFailed": "The app failed: {error}",
     "editFailed": "The editor failed: {error}",
     "stopApp": "Stop",
@@ -2174,7 +2179,8 @@ export default {
       "redirects": "redirects",
       "values": "values",
       "tasks": "tasks",
-      "processes": "processes"
+      "processes": "processes",
+      "people": "people"
     },
     "errors": {
       "unknown": "Unknown setting",
@@ -2195,7 +2201,9 @@ export default {
       "engine_unreachable": "The engine is not responding, and this one is checked against its time limit: try again in a moment",
       "allowlist_needed": "Admitting only the members of the groups taken needs those groups: list them first",
       "env_too_high": "The installation's value is above {limit}, the most the lost-run threshold allows: raise the threshold first, or keep a value from the panel",
-      "too_small": "Too small to run anything"
+      "too_small": "Too small to run anything",
+      "visitors_above_ceiling": "At most {limit}, the most a notebook may set (“{other}”)",
+      "ceiling_below_visitors": "At least {limit}, the default of every app (“{other}”)"
     },
     "rollout": {
       "region": "Restarts to do",
@@ -2276,6 +2284,10 @@ export default {
       "builds": {
         "title": "Image builds",
         "lead": "The builds and checks of the scripting environments."
+      },
+      "notebooks": {
+        "title": "Notebooks",
+        "lead": "How many people may have a notebook's app open at once."
       },
       "containers": {
         "title": "Container nodes",
@@ -2522,6 +2534,14 @@ export default {
       "scripts_check_timeout_seconds": {
         "label": "Longest the check of an image may take",
         "help": "The Job that checks a built environment by loading its packages."
+      },
+      "notebooks_max_visitors_per_app": {
+        "label": "Visitors at once per app",
+        "help": "Each person who opens a notebook's app gets a kernel of their own, with their own copy of the data, in the app's one pod. Past this many the app says it is full, and opens by itself when someone leaves. A notebook may set its own number."
+      },
+      "notebooks_max_visitors_ceiling": {
+        "label": "Most visitors a notebook may set",
+        "help": "The highest number of visitors at once that whoever edits a notebook may choose for its app. Lowering it also caps the notebooks that chose more."
       },
       "containers_pull_check_seconds": {
         "label": "Time to download an image",

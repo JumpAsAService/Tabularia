@@ -6,7 +6,9 @@
 // it. The source is written in marimo's own editor (/notebook-edit, for whoever has EDIT)
 // or here, in the code editor of saved scripts — here only while nobody has marimo's editor
 // open, so that the two never overwrite each other. The app opens on its own page
-// (/notebook-app). Both run on Kubernetes: the page shows the live ones.
+// (/notebook-app). Both run on Kubernetes: the page shows the live ones. Every visitor of
+// the app gets a kernel and a copy of the data of their own in the app's pod: whoever may
+// edit sets how many may have it open at once (empty: the installation's default).
 //
 // /notebook?id=N opens a notebook; /notebook?project=P starts a new one in folder P.
 import { computed, defineAsyncComponent, onMounted, onUnmounted, ref, watch } from 'vue'
@@ -53,8 +55,20 @@ const name = ref('')
 const description = ref('')
 const environmentId = ref<number | null>(null)
 const source = ref('')
+// what the field holds: a number, or '' for the installation's default (Vue casts a
+// number field's value)
+const maxVisitors = ref<number | string>('')
 const savedAs = ref('')
-const snapshot = () => JSON.stringify([name.value.trim(), description.value.trim(), environmentId.value, source.value])
+// null: the installation's default; undefined: not a value the gateway would take
+const visitorsValue = computed<number | null | undefined>(() => {
+  const raw = String(maxVisitors.value ?? '').trim()
+  if (!raw) return null
+  const n = Number(raw)
+  const ceiling = detail.value?.visitors_ceiling ?? Infinity
+  return Number.isInteger(n) && n >= 1 && n <= ceiling ? n : undefined
+})
+const snapshot = () => JSON.stringify([name.value.trim(), description.value.trim(), environmentId.value, source.value,
+  String(maxVisitors.value ?? '').trim()])
 const dirty = computed(() => snapshot() !== savedAs.value)
 
 const canEdit = computed(() => (detail.value ? detail.value.editable : true))
@@ -81,6 +95,7 @@ function apply(d: NotebookDetail) {
   description.value = d.description
   environmentId.value = d.environment_id
   source.value = d.content.source
+  maxVisitors.value = d.max_visitors ?? ''
   savedAs.value = snapshot()
 }
 
@@ -122,12 +137,16 @@ async function save() {
     toast.error(t('notebook.environmentRequired'))
     return
   }
+  if (visitorsValue.value === undefined) {
+    toast.error(t('notebook.visitorsInvalid', { max: detail.value?.visitors_ceiling ?? '' }))
+    return
+  }
   saving.value = true
   try {
     if (notebookId.value != null) {
       apply(await api.update(notebookId.value, {
         name: n, description: description.value.trim(), environment_id: environmentId.value,
-        content: { source: source.value },
+        content: { source: source.value }, max_visitors: visitorsValue.value,
       }))
       await loadVersions()
       toast.success(t('notebook.saved', { name: n }))
@@ -205,7 +224,9 @@ function sessionLine(s: NotebookSession): string {
   if (s.mode === 'app') {
     if (s.status === 'starting') return t('notebook.appStarting', { who })
     if (s.status === 'failed') return t('notebook.appFailed', { error: s.error || '' })
-    return t('notebook.appRunning', { who, since: fmtx.dateTime(s.started_at) })
+    const line = t('notebook.appRunning', { who, since: fmtx.dateTime(s.started_at) })
+    return s.visitors != null && s.max_visitors != null
+      ? `${line} · ${t('notebook.appVisitors', { n: s.visitors, max: s.max_visitors })}` : line
   }
   if (s.status === 'failed') return t('notebook.editFailed', { error: s.error || '' })
   return s.user.id === user.value?.id ? t('notebook.editedByYou', { since: fmtx.dateTime(s.started_at) })
@@ -430,6 +451,26 @@ const unavailable = computed(() => {
               <textarea v-model="description" rows="2" maxlength="2000" :readonly="!canEdit"
                         :placeholder="$t('notebook.descriptionPlaceholder')" />
             </label>
+            <!-- each visitor of the app costs a copy of the data in its pod -->
+            <div v-if="detail && canEdit" class="field">
+              <label for="nb-visitors">{{ $t('notebook.visitors') }}</label>
+              <input
+                id="nb-visitors"
+                v-model="maxVisitors"
+                class="visitors"
+                type="number"
+                inputmode="numeric"
+                min="1"
+                step="1"
+                :max="detail.visitors_ceiling"
+                :placeholder="$t('notebook.visitorsDefault', { n: detail.visitors_default })"
+                :aria-invalid="visitorsValue === undefined"
+                aria-describedby="nb-visitors-help"
+              />
+              <span id="nb-visitors-help" class="hint" :class="{ bad: visitorsValue === undefined }">
+                {{ $t('notebook.visitorsHelp', { default: detail.visitors_default, max: detail.visitors_ceiling }) }}
+              </span>
+            </div>
           </div>
 
           <div v-if="detail?.draft != null" class="card draft" role="note">
@@ -532,6 +573,10 @@ const unavailable = computed(() => {
 .card p { margin: 0; }
 .field { display: flex; flex-direction: column; gap: 5px; font-size: 12px; color: var(--muted); }
 .field textarea { resize: vertical; font: inherit; color: var(--text); }
+.field label { color: var(--muted); }
+.field .visitors { width: 12ch; color: var(--text); }
+.field .hint { font-size: 11.5px; line-height: 1.45; }
+.field .hint.bad { color: var(--danger); }
 .code-head { display: flex; align-items: center; justify-content: space-between; gap: 10px; }
 .code-head button { display: inline-flex; align-items: center; gap: 6px; }
 .small { font-size: 12px; }

@@ -43,6 +43,8 @@ object shows and says that it needs Kubernetes.
 - `NotebookSession` (piece 2): one row per live pod — notebook, mode (`app`|`edit`),
   user whose rights it carries, version, Job name, pod IP, status, `started_at`,
   `last_seen_at`. One app session and at most one edit session per notebook.
+- `Notebook.max_visitors` and `NotebookVisitor` (2026-10-28, migration 0028): see
+  «Visitors» below.
 
 ## Permissions
 
@@ -100,6 +102,48 @@ No inputs are declared and nothing is copied.
   updates `last_seen_at` (throttled); a loop in the orchestrator role stops sessions idle
   for `NOTEBOOKS__IDLE_MINUTES` (default 15), syncing an edit pod's file into the draft
   first. A global cap of live pods; past it, a clear message.
+
+## Visitors (decided 2026-10-28)
+
+marimo's run mode gives **every browser that opens the app a kernel of its own** (its own
+session, with its own copy of the data), all inside the app's one pod. Ten people on a
+heavy app are ten copies: the pod reaches its memory limit and is killed, for everyone.
+Decision of the owner: a **cap of visitors at once per app**.
+
+- `NOTEBOOKS__MAX_VISITORS_PER_APP` (default 10) is every app's cap;
+  `NOTEBOOKS__MAX_VISITORS_CEILING` (default 50) is the most a notebook may set for
+  itself. Both in Administration → Settings (group «Notebooks»), where the default may
+  not exceed the ceiling, and in the chart (`scripts.notebooks.maxVisitorsPerApp`,
+  `maxVisitorsCeiling`).
+- `Notebook.max_visitors`: nullable (null = the default), set with EDIT through `PATCH
+  /notebooks/{id}` (`null` goes back to the default, left out = unchanged) or at
+  creation, validated 1..ceiling (422 past it), copied by a duplicate, audited. The cap
+  in force is `min(max_visitors or default, ceiling)`: lowering the ceiling caps the
+  notebooks that chose more.
+- A **visitor** is marimo's session WebSocket (`…/app/ws`) open through the proxy: one
+  row of `notebook_visitors` (notebook, user, `opened_at`, `last_seen_at`), in Postgres
+  because the gateway has several replicas and no shared memory. The row is taken when
+  the WebSocket opens — counted and inserted under `pg_advisory_xact_lock(7402142,
+  notebook_id)`, so two replicas cannot both take the last place —, refreshed with the
+  minute's check the proxy already does on every open WebSocket, deleted when it closes
+  (also when the handler is cancelled). A row not refreshed for 3 minutes (a replica
+  that died) no longer counts, and the reaper deletes it. Rows go with their notebook
+  and their account (cascade, and explicit deletes).
+- **Full**: the GET of the app's root answers 503 (`Retry-After: 10`) with a small page
+  — «This app already has N people connected, the most it allows. It will open by itself
+  as soon as someone leaves.» — that reloads itself every 10 s, in the frame of
+  `/notebook-app`. Whoever already holds a place gets through (a reload, a second tab).
+  A WebSocket that loses the race for the last place waits up to 2 s (a reload closes
+  the old one a moment after the new page opens its own), then is accepted and closed
+  with **1013** (Try Again Later) and the same sentence as reason. marimo's page then
+  shows itself disconnected and tries again.
+- The **editor** has no cap (one person at a time edits).
+- `GET /notebooks/{id}/sessions`: the app's session carries `visitors` (the people
+  connected now) and `max_visitors` (the cap in force); the notebook's page shows them
+  next to «App running…». `GET /notebooks/{id}` carries `max_visitors`,
+  `visitors_default` and `visitors_ceiling` for the field «Visitors at once».
+- Good practice, in the docs: read only the columns the app uses
+  (`tabularia.read(…, columns=[…])`) and keep aggregates, not rows.
 
 ## Proxy (piece 3)
 

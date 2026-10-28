@@ -108,6 +108,24 @@ def test_a_constraint_the_environment_already_breaks_refuses_nothing_unrelated(m
     assert good == {"ai.max_requests": 10} and errors == {}
 
 
+def test_the_notebooks_default_of_visitors_stays_within_the_ceiling():
+    # defaults: 10 per app, 50 at most
+    good, errors = _err({"notebooks.max_visitors_per_app": 50, "notebooks.max_visitors_ceiling": 50})
+    assert errors == {} and good == {"notebooks.max_visitors_per_app": 50, "notebooks.max_visitors_ceiling": 50}
+    good, raw = ov.check({"notebooks.max_visitors_per_app": 60}, settings_from_env())
+    assert good == {} and raw == [{"key": "notebooks.max_visitors_per_app", "other": "notebooks.max_visitors_ceiling",
+                                   "code": "visitors_above_ceiling", "limit": 50}]
+    good, raw = ov.check({"notebooks.max_visitors_ceiling": 5}, settings_from_env())
+    assert good == {} and raw == [{"key": "notebooks.max_visitors_ceiling", "other": "notebooks.max_visitors_per_app",
+                                   "code": "ceiling_below_visitors", "limit": 10}]
+    # both together: the one just changed is refused
+    good, errors = _err({"notebooks.max_visitors_per_app": 30, "notebooks.max_visitors_ceiling": 20},
+                        changed={"notebooks.max_visitors_per_app"})
+    assert errors == {"notebooks.max_visitors_per_app": "visitors_above_ceiling"}
+    assert good == {"notebooks.max_visitors_ceiling": 20}
+    assert _err({"notebooks.max_visitors_per_app": 0})[1] == {"notebooks.max_visitors_per_app": "min"}
+
+
 # ── the values in force ──────────────────────────────────────────────────────
 def test_the_overlay_changes_only_the_sections_touched_and_never_the_environment():
     base = settings_from_env()
