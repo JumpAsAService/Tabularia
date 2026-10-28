@@ -36,6 +36,7 @@ from sqlmodel import Session, select
 from app.core.config import OidcSettings, get_settings
 from app.core.security import CLOCK_SKEW_SECONDS
 from app.models import Group, User, UserGroupLink
+from app.services import audit
 from app.services.permissions import user_group_ids
 
 logger = logging.getLogger(__name__)
@@ -449,29 +450,64 @@ def more_group_claims(cfg: OidcSettings, claims: dict, tokens: dict) -> tuple[di
     return tuple(found)
 
 
-def _group_ids(session: Session, names: set[str], auto_create: bool) -> set[int]:
-    """The ids of the Tabularia groups matching the names. With `auto_create` the missing
-    names become new groups; otherwise they are simply ignored (the admin decides which
-    groups exist)."""
+def _group_ids(session: Session, names: set[str], auto_create: bool) -> tuple[set[int], list[Group]]:
+    """The ids of the Tabularia groups matching the names, and the groups created here.
+    With `auto_create` the missing names become new groups; otherwise they are simply
+    ignored (the admin decides which groups exist)."""
     if not names:
-        return set()
+        return set(), []
     existing = {g.name: g for g in session.exec(select(Group).where(Group.name.in_(names))).all()}
     ids = {g.id for g in existing.values()}
+    created: list[Group] = []
     if auto_create:
-        for missing in names - set(existing):
+        for missing in sorted(names - set(existing)):
             group = Group(name=missing, description="created by SSO at the first login")
             session.add(group)
             session.flush()
             ids.add(group.id)
-    return ids
+            created.append(group)
+    return ids, created
+
+
+def _record_changes(session: Session, user: User, request: Optional[Any], *, created: bool,
+                    renamed: dict[str, dict], superuser_before: bool, groups_created: list[Group],
+                    added: set[int], removed: set[int]) -> None:
+    """What the sign-in changed, in the audit with the same actions as the administration
+    panel's and `"via": "sso"`. The actor is the person signing in: the change happens in
+    their sign-in, and an observer's address stays out of the log as for anything else
+    they do (services/audit.py). Nothing changed, nothing written: the sign-in itself is
+    `auth.sso_login`."""
+
+    def write(action: str, detail: dict, group: Optional[Group] = None) -> None:
+        target = (
+            {"target_type": "group", "target_id": group.id, "target_label": group.name}
+            if group is not None else {"target_type": "user", "target_id": user.id, "target_label": user.email}
+        )
+        audit.record_audit(session, actor=user, action=action, request=request,
+                           detail={**detail, "via": "sso"}, **target)
+
+    if created:
+        write(audit.USER_CREATE, {})
+    if renamed:
+        write(audit.USER_UPDATE, renamed)
+    for group in groups_created:
+        write(audit.GROUP_CREATE, {}, group)
+    for action, ids in ((audit.GROUP_MEMBER_ADD, added), (audit.GROUP_MEMBER_REMOVE, removed)):
+        if ids:
+            for group in session.exec(select(Group).where(Group.id.in_(ids)).order_by(Group.name)).all():
+                write(action, audit.membership_detail(group))
+    if user.is_superuser != superuser_before:
+        write(audit.USER_PROMOTE if user.is_superuser else audit.USER_DEMOTE, {"at_creation": True} if created else {})
 
 
 def provision_and_sync(session: Session, claims: dict, cfg: Optional[OidcSettings] = None,
-                       groups: Optional[set[str]] = None, groups_known: Optional[bool] = None) -> tuple[User, dict]:
+                       groups: Optional[set[str]] = None, groups_known: Optional[bool] = None,
+                       request: Optional[Any] = None) -> tuple[User, dict]:
     """Creates/updates the user from the claims and reconciles their groups.
 
     Returns `(user, detail)`; the detail ends up in the audit and says what changed
-    (user created, groups added/removed, superuser).
+    (user created, groups added/removed, superuser). Each change is also an audit action
+    of its own, with `"via": "sso"` (`_record_changes`); `request` gives them the address.
     """
     cfg = cfg or get_settings().oidc
     issuer, subject = identity_from_claims(claims)
@@ -539,14 +575,19 @@ def provision_and_sync(session: Session, claims: dict, cfg: Optional[OidcSetting
 
     # The email at the IdP may change: it is updated, the identity stays the same. It is
     # not touched when the address belongs to someone else already (UNIQUE constraint).
+    renamed: dict[str, dict] = {}
     if user.email != email:
         busy_one = session.exec(select(User).where(User.email == email, User.id != user.id)).first()
         if busy_one is None:
+            renamed["email"] = {"from": user.email, "to": email}
             user.email = email
             session.add(user)
 
     if claims.get("name") and not user.full_name:
-        user.full_name = str(claims["name"]).strip()
+        name = str(claims["name"]).strip()
+        if name != user.full_name and not created:
+            renamed["full_name"] = {"from": user.full_name, "to": name}
+        user.full_name = name
         session.add(user)
 
     idp_groups = set(asserted)
@@ -569,7 +610,7 @@ def provision_and_sync(session: Session, claims: dict, cfg: Optional[OidcSetting
     if cfg.allowlist:
         idp_groups &= cfg.allowlist
 
-    wanted = _group_ids(session, idp_groups, cfg.auto_create_groups)
+    wanted, groups_created = _group_ids(session, idp_groups, cfg.auto_create_groups)
     # Admin and observer groups carry a ROLE, and are matched by name only: whoever
     # gets a group with that name onto their token at the IdP (self-service groups
     # on Entra, a loose Keycloak realm) would get the role. SSO never adds nor
@@ -595,6 +636,8 @@ def provision_and_sync(session: Session, claims: dict, cfg: Optional[OidcSetting
                 session.delete(link)
     session.commit()
     session.refresh(user)
+    _record_changes(session, user, request, created=created, renamed=renamed, superuser_before=superuser_before,
+                    groups_created=groups_created, added=wanted - current, removed=removed_ids)
 
     def _names(ids: set[int]) -> list[str]:
         if not ids:
@@ -618,7 +661,8 @@ def provision_and_sync(session: Session, claims: dict, cfg: Optional[OidcSetting
     return user, detail
 
 
-def login_user(session: Session, code: str, tx: dict, cfg: Optional[OidcSettings] = None) -> tuple[User, dict]:
+def login_user(session: Session, code: str, tx: dict, cfg: Optional[OidcSettings] = None,
+               request: Optional[Any] = None) -> tuple[User, dict]:
     """The whole callback: code → token → validation → user synchronized."""
     cfg = cfg or get_settings().oidc
     tokens = exchange_code(cfg, code, tx["cv"])
@@ -629,7 +673,7 @@ def login_user(session: Session, code: str, tx: dict, cfg: Optional[OidcSettings
         raise SsoError("email not verified by the IdP", "email_unverified")
     more = more_group_claims(cfg, claims, tokens)
     return provision_and_sync(session, claims, cfg, groups=normalize_groups(claims, cfg, more),
-                              groups_known=groups_claim_found(claims, cfg, more))
+                              groups_known=groups_claim_found(claims, cfg, more), request=request)
 
 
 def public_config() -> dict[str, Any]:

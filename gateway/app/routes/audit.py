@@ -87,11 +87,12 @@ def _to_out(e: AuditLog, full: bool = True) -> AuditEntryOut:
 
 
 # keys of `detail` that say WHERE (hosts, endpoints, paths, SQL) or WHO (IdP groups
-# and identities): an observer sees "…" in their place, at any depth
+# and identities, a person's name — the users' list blanks it for them too): an observer
+# sees "…" in their place, at any depth
 _HIDDEN = frozenset({
     "host", "url", "endpoint", "server", "fingerprint", "path", "source_keys", "sql", "secret",
     "groups", "groups_added", "groups_removed", "group_names", "sub", "subject", "issuer",
-    "to", "cc", "bcc",
+    "to", "cc", "bcc", "full_name",
 })
 
 

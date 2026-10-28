@@ -95,8 +95,9 @@ role is granted like the administrator's, on a person or on a group (the eye but
 **Open the administration panels read-only**).
 
 What an observer sees is masked: emails as `a***@example.com` (the domain stays), no IP
-addresses, no browser strings, and in the audit details no hosts, paths, SQL or
-recipients. Their own actions are recorded without their IP address and browser.
+addresses, no browser strings, and in the audit details no hosts, paths, SQL,
+recipients or people's names. Their own actions are recorded without their IP address
+and browser.
 
 An account that is **only** an observer is treated as a shared account, the kind a
 public demo signs everyone in with: it has no personal API tokens, cannot change its

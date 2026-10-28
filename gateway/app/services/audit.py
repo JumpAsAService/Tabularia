@@ -14,7 +14,7 @@ from typing import Any, Optional
 from fastapi import Request
 from sqlmodel import Session
 
-from app.models import AuditLog, User
+from app.models import AuditLog, Group, User
 
 logger = logging.getLogger(__name__)
 
@@ -188,9 +188,36 @@ FOLDER_UPDATE = "folder.update"
 FOLDER_MOVE = "folder.move"
 FOLDER_DELETE = "folder.delete"
 DS_UPDATE = "datasource.update"
+# accounts and groups (routes/users.py, routes/groups.py). What single sign-on does by
+# itself — an account created at its first sign-in, a group created by
+# OIDC__AUTO_CREATE_GROUPS, a membership synchronized from the identity provider — goes
+# with the same actions and `"via": "sso"` in the detail (services/sso.py)
+USER_CREATE = "user.create"
+USER_UPDATE = "user.update"            # the name, or the email the identity provider changed
+USER_DEACTIVATE = "user.deactivate"
+USER_REACTIVATE = "user.reactivate"
 USER_DELETE = "user.delete"
 GROUP_CREATE = "group.create"
+GROUP_UPDATE = "group.update"          # the description: the two flags have their own actions
+GROUP_DELETE = "group.delete"
+# joining or leaving ANY group, an administrators' one too: there `group.admin_join` /
+# `group.admin_leave` follow, the trace of the privilege, so that one action holds a
+# group's whole membership history
+GROUP_MEMBER_ADD = "group.member_add"
+GROUP_MEMBER_REMOVE = "group.member_remove"
 QUEUE_JOB_STOP = "queue.job_stop"
+
+
+def membership_detail(group: Group) -> dict[str, Any]:
+    """The detail of a `group.member_add` / `group.member_remove`, whose target is the
+    person: which group, and the role it carries when it carries one — joining an
+    administrators' or observers' group IS receiving that role."""
+    detail: dict[str, Any] = {"group": group.name, "group_id": group.id}
+    if group.is_admin:
+        detail["admin"] = True
+    if group.is_observer:
+        detail["observer"] = True
+    return detail
 
 
 def client_ip(request: Optional[Request]) -> Optional[str]:

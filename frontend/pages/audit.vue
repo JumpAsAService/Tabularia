@@ -216,8 +216,16 @@ const ACTION_META = computed<Record<string, { icon: any; color: string; label: s
     'folder.move': { icon: Folder, color: u.accent, label: t('audit.folderMoveAction') },
     'folder.delete': { icon: Folder, color: u.danger, label: t('audit.folderDeleteAction') },
     'datasource.update': { icon: Database, color: u.accent, label: t('audit.datasourceUpdateAction') },
+    'user.create': { icon: Shield, color: u.success, label: t('audit.userCreateAction') },
+    'user.update': { icon: Shield, color: u.accent, label: t('audit.userUpdateAction') },
+    'user.deactivate': { icon: Shield, color: u.danger, label: t('audit.userDeactivateAction') },
+    'user.reactivate': { icon: Shield, color: u.accent, label: t('audit.userReactivateAction') },
     'user.delete': { icon: Shield, color: u.danger, label: t('audit.userDeleteAction') },
     'group.create': { icon: Shield, color: u.success, label: t('audit.groupCreateAction') },
+    'group.update': { icon: Shield, color: u.accent, label: t('audit.groupUpdateAction') },
+    'group.delete': { icon: Shield, color: u.danger, label: t('audit.groupDeleteAction') },
+    'group.member_add': { icon: Shield, color: u.accent, label: t('audit.groupMemberAddAction') },
+    'group.member_remove': { icon: Shield, color: u.muted, label: t('audit.groupMemberRemoveAction') },
     'queue.job_stop': { icon: Server, color: u.danger, label: t('audit.queueJobStopAction') },
     'flow_group.create': { icon: Rows3, color: u.accent, label: t('audit.flowGroupCreateAction') },
     'flow_group.update': { icon: Rows3, color: u.accent, label: t('audit.flowGroupUpdateAction') },
@@ -318,6 +326,9 @@ function detailSummary(e: AuditEntry): string {
   if (d.capability) parts.push(String(d.capability))
   if (d.db_type) parts.push(String(d.db_type))
   if (d.engine) parts.push(t('audit.engineLabel', { engine: d.engine }))
+  // a membership's group (the target is the person); what single sign-on did by itself
+  if (typeof d.group === 'string') parts.push(t('audit.groupLabel', { group: d.group }))
+  if (d.via === 'sso') parts.push('SSO')
   return parts.join(' · ')
 }
 </script>

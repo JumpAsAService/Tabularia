@@ -155,7 +155,8 @@ curl -s http://localhost:8000/auth/sso/config     # {"enabled":true,...}
 
 Then open http://localhost:3000/login — the SSO button is there. First sign-in creates
 the Tabularia user and syncs the groups; the audit log records `auth.sso_login` with the
-group delta.
+group delta, and before it each change on its own (`user.create`, `group.member_add`…)
+with `"via": "sso"`.
 
 ## Entra ID (MSAL)
 

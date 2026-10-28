@@ -497,7 +497,7 @@ def test_callback_ok_opens_the_internal_session_and_writes_the_audit(session, mo
 
     user = make_user(session, email="h@x.local")
     monkeypatch.setattr(sso_routes.sso, "login_user",
-                        lambda s, code, tx, cfg: (user, {"created": False, "groups_added": ["analytics"]}))
+                        lambda s, code, tx, cfg, request=None: (user, {"created": False, "groups_added": ["analytics"]}))
 
     tx_cookie = sso.issue_tx_token("s1", "n1", "v1")
     res = sso_routes.sso_callback(FakeRequest({sso.TX_COOKIE: tx_cookie}), code="ok", state="s1", session=session)

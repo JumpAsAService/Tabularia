@@ -52,10 +52,10 @@ def test_promote_and_demote_user_is_audited(session):
     assert row.target_label == "anna@x.it" and row.actor_id == root.id
 
 
-def test_patch_without_flag_change_writes_no_audit(session):
+def test_patch_without_flag_change_writes_no_promotion(session):
     root, anna = _root(session), make_user(session, email="anna@x.it")
     user_routes.update_user(anna.id, UserUpdate(full_name="Anna B."), session=session, current=root)
-    assert _actions(session) == []
+    assert _actions(session) == [audit.USER_UPDATE]  # the name changed, the privileges did not
 
 
 def test_cannot_demote_or_deactivate_yourself(session):
@@ -128,12 +128,14 @@ def test_membership_changes_of_an_admin_group_are_audited(session):
     g = _group(session, is_admin=True)
     normal = _group(session, name="Vendite")
     user_routes.add_to_group(anna.id, normal.id, session=session, current=root)
-    assert _actions(session) == []  # any group is not a promotion
+    assert _actions(session) == [audit.GROUP_MEMBER_ADD]  # any group is not a promotion
     user_routes.add_to_group(anna.id, g.id, session=session, current=root)
     assert perm.is_admin(session, anna)
     user_routes.remove_from_group(anna.id, g.id, session=session, current=root)
     assert not perm.is_admin(session, anna)
-    assert _actions(session) == [audit.ADMIN_GROUP_JOIN, audit.ADMIN_GROUP_LEAVE]
+    # an administrators' group: the membership, then the privilege
+    assert _actions(session) == [audit.GROUP_MEMBER_ADD, audit.GROUP_MEMBER_ADD, audit.ADMIN_GROUP_JOIN,
+                                 audit.GROUP_MEMBER_REMOVE, audit.ADMIN_GROUP_LEAVE]
 
 
 def test_admin_by_group_cannot_lock_themselves_out(session):
@@ -156,7 +158,7 @@ def test_deleting_an_admin_group_demotes_its_members(session):
     g = _group(session, is_admin=True, members=[anna])
     group_routes.delete_group(g.id, session=session, current=root)
     assert not perm.is_admin(session, anna)
-    assert _actions(session) == [audit.GROUP_DEMOTE]
+    assert _actions(session) == [audit.GROUP_DELETE, audit.GROUP_DEMOTE]
 
 
 def test_new_groups_are_never_admin(session):

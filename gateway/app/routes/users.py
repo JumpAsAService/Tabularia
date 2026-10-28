@@ -113,6 +113,11 @@ def create_user(
         session.rollback()
         raise HTTPException(status_code=409, detail="This email is already registered") from None
     session.refresh(user)
+    # the account itself; its roles follow as their own actions, `at_creation`
+    audit.record_audit(
+        session, actor=current, action=audit.USER_CREATE, request=request,
+        target_type="user", target_id=user.id, target_label=user.email,
+    )
     if user.is_superuser:
         audit.record_audit(
             session, actor=current, action=audit.USER_PROMOTE, request=request,
@@ -261,6 +266,12 @@ def update_user(
     # tokens: whoever knew the old password, or had copied a token of it, stays out — even
     # if the account is reactivated later
     close_sessions = body.password is not None or body.is_active is False
+    was_active = user.is_active
+    # the name, from what to what: a form sent again unchanged records nothing
+    renamed = (
+        {"from": user.full_name, "to": body.full_name}
+        if body.full_name is not None and body.full_name != user.full_name else None
+    )
     if body.full_name is not None:
         user.full_name = body.full_name
     if body.password is not None:
@@ -292,6 +303,19 @@ def update_user(
         session.flush()
         withdrawn += api_tokens.withdraw_if_observer(session, [user.id])
     session.commit()
+    if renamed:
+        audit.record_audit(
+            session, actor=current, request=request, action=audit.USER_UPDATE,
+            target_type="user", target_id=user.id, target_label=user.email,
+            detail={"full_name": renamed},
+        )
+    if user.is_active != was_active:
+        # first: it is the reason of the closing of its sessions, recorded below
+        audit.record_audit(
+            session, actor=current, request=request,
+            action=audit.USER_REACTIVATE if user.is_active else audit.USER_DEACTIVATE,
+            target_type="user", target_id=user.id, target_label=user.email,
+        )
     if closed_ones or withdrawn:
         reason = ("password" if body.password is not None else "deactivated" if body.is_active is False else "observer")
         audit.record_audit(
@@ -466,6 +490,11 @@ def add_to_group(
             session.flush()
             api_tokens.withdraw_if_observer(session, [user_id])
         session.commit()
+        audit.record_audit(
+            session, actor=current, action=audit.GROUP_MEMBER_ADD, request=request,
+            target_type="user", target_id=user.id, target_label=user.email,
+            detail=audit.membership_detail(group),
+        )
         if group.is_admin:
             # joining an admin group IS a promotion: a trace must stay
             audit.record_audit(
@@ -491,6 +520,11 @@ def remove_from_group(
         if user_id == current.id:
             ensure_still_admin(session, current)
         session.commit()
+        audit.record_audit(
+            session, actor=current, action=audit.GROUP_MEMBER_REMOVE, request=request,
+            target_type="user", target_id=user_id, target_label=user.email if user is not None else None,
+            detail=audit.membership_detail(group) if group is not None else {"group_id": group_id},
+        )
         if group is not None and group.is_admin and user is not None:
             audit.record_audit(
                 session, actor=current, action=audit.ADMIN_GROUP_LEAVE, request=request,

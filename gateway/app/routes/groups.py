@@ -85,6 +85,10 @@ def update_group(
         from app.services import api_tokens
 
         deny_if_from_token(request, api_tokens.NO_ROLES_FROM_TOKEN)
+    described = (
+        {"from": group.description, "to": body.description}
+        if body.description is not None and body.description != group.description else None
+    )
     if body.description is not None:
         group.description = body.description
     if body.is_admin is not None:
@@ -105,6 +109,12 @@ def update_group(
     members = session.exec(
         select(func.count()).select_from(UserGroupLink).where(UserGroupLink.group_id == group_id)
     ).one()
+    if described:
+        audit.record_audit(
+            session, actor=current, request=request, action=audit.GROUP_UPDATE,
+            target_type="group", target_id=group.id, target_label=group.name,
+            detail={"description": described},
+        )
     if group.is_admin != was_admin:
         audit.record_audit(
             session, actor=current, request=request,
@@ -136,8 +146,9 @@ def delete_group(
     group = session.get(Group, group_id)
     if group is None:
         raise HTTPException(status_code=404, detail="Group not found")
-    was_admin, name = group.is_admin, group.name
-    for link in session.exec(select(UserGroupLink).where(UserGroupLink.group_id == group_id)).all():
+    was_admin, was_observer, name = group.is_admin, group.is_observer, group.name
+    links = session.exec(select(UserGroupLink).where(UserGroupLink.group_id == group_id)).all()
+    for link in links:
         session.delete(link)
     # the PERMISSIONS granted to the group too: the foreign key protects them, and without
     # this the deletion blew up in a 500
@@ -154,10 +165,28 @@ def delete_group(
     if was_admin:
         ensure_still_admin(session, current)
     session.commit()
+    # the group, with how many people were in it: their memberships go with it, and this
+    # one action stands for all of them (no `group.member_remove` per person)
+    detail: dict = {"members": len(links)}
+    if was_admin:
+        detail["admin"] = True
+    if was_observer:
+        detail["observer"] = True
+    audit.record_audit(
+        session, actor=current, action=audit.GROUP_DELETE, request=request,
+        target_type="group", target_id=group_id, target_label=name, detail=detail,
+    )
     if was_admin:
         # an administrators' group disappears: its members lose the privileges
         audit.record_audit(
             session, actor=current, action=audit.GROUP_DEMOTE, request=request,
+            target_type="group", target_id=group_id, target_label=name,
+            detail={"deleted": True},
+        )
+    if was_observer:
+        # an observers' group too: its members no longer read the panels
+        audit.record_audit(
+            session, actor=current, action=audit.GROUP_OBSERVER_REVOKE, request=request,
             target_type="group", target_id=group_id, target_label=name,
             detail={"deleted": True},
         )

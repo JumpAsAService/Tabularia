@@ -151,7 +151,7 @@ def sso_callback(
 
     try:
         tx = sso.read_tx_token(tx_cookie, state)
-        user, detail = sso.login_user(session, code, tx, cfg)
+        user, detail = sso.login_user(session, code, tx, cfg, request=request)
     except sso.SsoError as e:
         return _fail(session, request, e, state=state)
     except Exception as e:  # unexpected: must never expose the stack to the user

@@ -24,9 +24,11 @@ from app.core.config import admin_password_problem, get_settings
 from app.core.security import hash_password, verify_password
 from app.db.session import engine
 from app.models import User, UserSession
-from app.services import first_run
+from app.services import audit, first_run
 
 logger = logging.getLogger(__name__)
+
+STARTUP_ACTOR = "startup"  # the audit's actor of the administrator created from the environment
 
 
 # the passwords an older release actually handed out: the code and example default,
@@ -91,4 +93,11 @@ def seed_admin() -> None:
         )
         session.add(admin)
         session.commit()
+        session.refresh(admin)
         logger.info("Admin '%s' created (superuser).", s.auth.admin_email)
+        # in the audit as the panel's creations are, by no one: by the start-up, from the
+        # environment (an administrator deleted comes back at the next start, and that shows)
+        for action, detail in ((audit.USER_CREATE, {"via": "startup"}),
+                               (audit.USER_PROMOTE, {"at_creation": True, "via": "startup"})):
+            audit.record_audit(session, actor_label=STARTUP_ACTOR, action=action, target_type="user",
+                               target_id=admin.id, target_label=admin.email, detail=detail)

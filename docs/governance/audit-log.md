@@ -26,7 +26,7 @@ goes on.
 | Field | |
 |---|---|
 | When | the time of the action, in UTC |
-| Who | the account's email at that moment, and its id. The email stays even when the account is later renamed or deleted. A failed sign-in carries the email as typed; an email the scheduler sends carries `scheduler` |
+| Who | the account's email at that moment, and its id. The email stays even when the account is later renamed or deleted. A failed sign-in carries the email as typed; an email the scheduler sends carries `scheduler`; the administrator the gateway creates at start from `AUTH__ADMIN_EMAIL` carries `startup` |
 | Action | a stable name such as `flow.run` or `permission.grant`, listed below |
 | Outcome | `success` or `failure` (a wrong password, a refused send) |
 | Target | its kind (`flow`, `datasource`, `connection`, `user`, `permission`, `export`…), id and name at that moment |
@@ -64,7 +64,8 @@ from.
 | Area | Actions |
 |---|---|
 | Sign-in and sessions | `auth.login`, `auth.login_failed`, `auth.sso_login`, `auth.sso_login_failed`, `auth.logout`, `auth.session_revoke`, `auth.password_change`, `auth.first_run_setup`, `auth.bootstrap_login` |
-| Roles and access | `permission.grant`, `permission.revoke`, `user.promote`, `user.demote`, `group.promote`, `group.demote`, `group.admin_join`, `group.admin_leave`, `user.observer_grant`, `user.observer_revoke`, `group.observer_grant`, `group.observer_revoke`, `user.delete`, `group.create` |
+| Accounts and groups | `user.create`, `user.update` (a new name, or the email the identity provider changed), `user.deactivate`, `user.reactivate`, `user.delete`, `group.create`, `group.update` (its description), `group.delete`, `group.member_add`, `group.member_remove` |
+| Roles and access | `permission.grant`, `permission.revoke`, `user.promote`, `user.demote`, `group.promote`, `group.demote`, `group.admin_join`, `group.admin_leave`, `user.observer_grant`, `user.observer_revoke`, `group.observer_grant`, `group.observer_revoke` |
 | Tokens and integrations | `token.create`, `token.revoke`, `service_account.create`, `service_account.delete`, `webhook.create`, `webhook.update`, `webhook.delete` |
 | Folders | `folder.create`, `folder.update`, `folder.move`, `folder.delete` |
 | Flows | `flow.create`, `flow.update`, `flow.delete`, `flow.run`, `flow.schedule`, `flow.promote`, `transform.run` (an unsaved flow run from the editor) |
@@ -82,6 +83,28 @@ from.
 A schedule switched off because someone else widened what it does is recorded too, as
 a `flow.schedule` (or the object's own schedule action) with the reason, so "why did my
 nightly run stop" has an answer in the log.
+
+**Accounts and groups.** An entry names the account or the group, and what changed from
+what to what (`{"full_name": {"from": "Anna", "to": "Anna Bianchi"}}`); a password never
+appears. A membership's target is the person, with the group in the detail
+(`{"group": "finance", "group_id": 4}`, plus `"admin": true` or `"observer": true` when
+the group carries that role). Joining or leaving an administrators' group writes
+`group.member_add` (or `group.member_remove`) and then `group.admin_join` (or
+`group.admin_leave`): the first action holds a group's whole membership history, the
+second every change of privileges. Deleting a group writes one `group.delete` with the
+number of its members, not a removal per person, and a role the group carried is
+withdrawn as `group.demote` or `group.observer_revoke`. A change that changes nothing (a
+form saved again, an account deactivated twice) writes nothing. The first administrator
+of a try-it stack, created at the sign-in page, is `auth.first_run_setup`.
+
+**What single sign-on does by itself** goes with the same actions and `"via": "sso"` in
+the detail: the account created at its first sign-in (`user.create`), the email or name
+the identity provider changed (`user.update`), a group created by
+`OIDC__AUTO_CREATE_GROUPS` (`group.create`), each membership the synchronization adds or
+removes (`group.member_add`, `group.member_remove`), and the administrator rights of
+`OIDC__SUPERUSER_GROUP` (`user.promote`, `user.demote`). Their actor is the person
+signing in, the change happening in their sign-in; a sign-in that changes nothing writes
+only its `auth.sso_login`.
 
 ## Example
 
@@ -126,7 +149,7 @@ The answer is a page, `{"items": […], "total": n}`; the filters are `q`, `acti
 | Who | Sees |
 |---|---|
 | Administrators | every entry, in full; they close other people's sessions |
-| Observers | every entry, with emails masked (`a***@example.com`), no address or browser, and in the detail no hosts, paths, SQL, recipients or identity-provider groups; their search covers only the action and targets that are not emails; they close nothing |
+| Observers | every entry, with emails masked (`a***@example.com`), no address or browser, and in the detail no hosts, paths, SQL, recipients, identity-provider groups or people's names; their search covers only the action and targets that are not emails; they close nothing |
 | Everyone else | nothing; **Your sessions**, in the settings menu, lists their own sessions |
 
 An observer's own actions are recorded without their address and browser: what they did
@@ -163,12 +186,11 @@ from the configuration. Every change is recorded (`privacy.update`).
 
 - **Not recorded**: reading. Opening a flow, a preview, the Viewer, a datasource's
   page are not in the log; exports, SQL script runs and the assistant's queries are.
-- **Not recorded either**: creating an account (unless it is created administrator or
-  observer), disabling or re-enabling one (only the closing of its sessions and tokens
-  shows, as `auth.session_revoke` with the reason `deactivated`), adding people to or
-  removing them from a group that is not an administrators' group, and deleting such a
-  group. Group membership coming from single sign-on is in the detail of each
-  `auth.sso_login`.
+- **Older entries.** Up to 1.2.2 an account showed only when it was created
+  administrator or observer, a deactivation only as the closing of its sessions
+  (`auth.session_revoke` with the reason `deactivated`), and the memberships of
+  ordinary groups, a deleted group and what single sign-on changed not at all (except
+  inside the detail of each `auth.sso_login`, which still carries it).
 - **No export button.** Use the API above, or forward the log to a SIEM.
 - **Large logs.** Entries are indexed by time, action, actor and target kind; on a busy
   installation set a retention window and keep the long history in the SIEM.
