@@ -8,8 +8,11 @@ from sqlmodel import Session, select
 
 
 def paginate(session: Session, base_stmt, order_by, limit: int, offset: int):
-    """`base_stmt` is a select with only the filters (WHERE), WITHOUT order/limit.
-    Returns (items of the ordered window, total that matches the filter)."""
+    """`base_stmt` is a select with only the filters (WHERE), WITHOUT order/limit;
+    `order_by` a column, or a tuple of them (the last one unique, or a page could repeat
+    a row of the one before). Returns (items of the ordered window, total that matches
+    the filter)."""
     total = session.exec(select(func.count()).select_from(base_stmt.subquery())).one()
-    items = session.exec(base_stmt.order_by(order_by).limit(limit).offset(offset)).all()
+    keys = order_by if isinstance(order_by, (tuple, list)) else (order_by,)
+    items = session.exec(base_stmt.order_by(*keys).limit(limit).offset(offset)).all()
     return items, total

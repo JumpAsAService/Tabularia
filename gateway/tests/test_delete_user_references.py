@@ -5,11 +5,13 @@ one points at the account: the API answered 500 to deleting anyone who had saved
 flow version, a view or a flow group. SQLite runs the other tests with foreign keys
 off, which is how it went unseen; here they are on.
 """
+from datetime import date
+
 from sqlmodel import SQLModel, select
 
 from app.models import (
     AiModel, Banner, ContainerRegistry, ContainerRegistryAccess, Datasource, DisabledEngine, Flow, FlowGroup,
-    FlowVersion, PrivacyNotice, SavedView, User,
+    FlowVersion, PrivacyNotice, Report, ReportView, SavedView, User,
 )
 from app.routes.users import remove_user
 from tests.conftest import make_datasource, make_flow, make_project, make_user
@@ -24,7 +26,7 @@ REFERENCES = {
     ("flow_groups", "run_scheduled_by"), ("flow_versions", "created_by"), ("flows", "owner_id"),
     ("flows", "run_scheduled_by"), ("permissions", "user_id"), ("privacy_notice", "updated_by"),
     ("notebook_sessions", "user_id"), ("notebook_tickets", "user_id"), ("notebook_visitors", "user_id"), ("notebook_versions", "created_by"), ("notebooks", "draft_by"), ("notebooks", "owner_id"),
-    ("projects", "owner_id"), ("report_versions", "created_by"), ("reports", "owner_id"), ("runs", "launched_by"), ("saved_script_versions", "created_by"),
+    ("projects", "owner_id"), ("report_versions", "created_by"), ("report_views", "user_id"), ("reports", "owner_id"), ("runs", "launched_by"), ("saved_script_versions", "created_by"),
     ("saved_scripts", "owner_id"), ("saved_scripts", "run_scheduled_by"), ("saved_views", "owner_id"),
     ("sql_script_versions", "created_by"), ("sql_scripts", "owner_id"), ("sql_scripts", "run_scheduled_by"), ("uploads", "owner_id"),
     ("user_groups", "user_id"), ("user_sessions", "user_id"), ("webhooks", "created_by"),
@@ -61,6 +63,10 @@ def test_an_account_referenced_everywhere_can_be_deleted(fk_session):
     ])
     s.commit()
     s.add(ContainerRegistryAccess(registry_id=1, user_id=gone.id))
+    report = Report(name="r", project_id=p.id, owner_id=admin.id, views_total=1)
+    s.add(report)
+    s.commit()
+    s.add(ReportView(report_id=report.id, user_id=gone.id, day=date(2026, 10, 28)))
     s.commit()
     gone_id, flow_id, ds_id = gone.id, flow.id, ds.id
 
@@ -73,6 +79,7 @@ def test_an_account_referenced_everywhere_can_be_deleted(fk_session):
     assert s.get(Flow, flow_id).run_scheduled_by is None and s.get(Datasource, ds_id).refresh_scheduled_by is None
     assert s.exec(select(SavedView.owner_id)).all() == [None]
     assert s.exec(select(ContainerRegistryAccess)).all() == []  # a grant is personal: it goes with the account
+    assert s.exec(select(ReportView)).all() == [] and s.exec(select(Report.views_total)).all() == [1]
 
 
 def test_a_group_given_environments_and_registries_can_be_deleted(fk_session):

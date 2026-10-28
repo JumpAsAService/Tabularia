@@ -173,6 +173,8 @@ async function load() {
     if (reportId.value !== id) return
     detail.value = d
     parameters.value = params
+    // the Reports tab counts who opens it (a person once a day); never in the way of reading
+    api.opened(id).catch(() => {})
     // the choices that follow a value given in the link (only the lists: that answer has
     // the link's values as its defaults)
     const given = urlValues()

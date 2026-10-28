@@ -8,6 +8,8 @@ export default {
     datasources: 'Fuentes de datos',
     lineage: 'Linaje',
     viewer: 'Visor',
+    analysis: 'Análisis',
+    reports: 'Informes',
     assistant: 'Asistente',
     connections: 'Conexiones',
     scripting: 'Scripts',

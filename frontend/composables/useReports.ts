@@ -7,6 +7,8 @@
 // how a render is followed. Saving, the editor's preview, fields, duplicating and
 // restoring are the designer's (useReportDesign.ts), which follows its preview with
 // `followRender` from here.
+// a type only: useApi.ts reaches Nuxt at import time, and the tests load this module bare
+import type { Page } from '~/composables/useApi'
 import { FIRST_PAUSE_MS, nextPause } from '~/composables/waits'
 
 // ── the definition (`v: 1`): lengths in millimetres, colours #rrggbb ─────────
@@ -69,6 +71,23 @@ export interface Report {
   /** EDIT on its folder: changing, moving, deleting it, restoring a version */
   editable: boolean
 }
+
+/** A row of the Reports tab (GET /reports/search): where it lives, who made it, who reads it. */
+export interface ReportRow extends Report {
+  /** from the root down to its folder */
+  folder_path: string[]
+  /** full name, else email; null when the account is gone */
+  owner_name: string | null
+  /** opened in the viewer in the last 30 days: by how many people, how many times (a person once a day) */
+  people_30d: number
+  opens_30d: number
+  /** ever, a person once a day */
+  views_total: number
+  last_viewed_at: string | null
+}
+
+/** The Reports tab's orders: the most read in the last 30 days first, by name, the latest changed first. */
+export type ReportSort = 'trending' | 'name' | 'updated'
 
 export interface ReportDetail extends Report {
   content: ReportDefinition
@@ -273,6 +292,14 @@ export function useReports() {
 
   return {
     list: () => apiFetch<Report[]>('/reports'),
+    /** the Reports tab: paginated, searched on the server over name, description and folders */
+    listPaged: (p: { q?: string; limit: number; offset: number; sort: ReportSort }) => {
+      const query = new URLSearchParams({ limit: String(p.limit), offset: String(p.offset), sort: p.sort })
+      if (p.q) query.set('q', p.q)
+      return apiFetch<Page<ReportRow>>(`/reports/search?${query}`)
+    },
+    /** the viewer opened it: a person once a day counts for the Reports tab */
+    opened: (id: number) => apiFetch<void>(`/reports/${id}/views`, { method: 'POST' }),
     listByProject: (projectId: number) => apiFetch<Report[]>(`/projects/${projectId}/reports`),
     get: (id: number) => apiFetch<ReportDetail>(`/reports/${id}`),
     /** a new report in a folder (EDIT): with no content, the gateway's empty A4 page */

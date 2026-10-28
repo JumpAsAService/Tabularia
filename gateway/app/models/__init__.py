@@ -27,7 +27,7 @@ from app.models.registry import ContainerRegistry, ContainerRegistryAccess, Cont
 from app.models.saved_script import SavedScript, SavedScriptVersion
 from app.models.saved_view import SavedView
 from app.models.sql_script import SqlScript, SqlScriptVersion
-from app.models.report import Report, ReportVersion
+from app.models.report import Report, ReportVersion, ReportView
 from app.models.flow_group import FlowGroup
 from app.models.notebook import Notebook, NotebookSession, NotebookTicket, NotebookVersion, NotebookVisitor
 from app.models.notebook_read import NotebookRead
@@ -44,7 +44,7 @@ __all__ = [
     "Flow", "FlowVersion", "Connection", "Datasource", "Run", "Upload", "PendingBlobDeletion",
     "AuditLog", "Banner", "DisabledEngine", "EngineSetting", "WorkerScaling", "SiemDestination", "DatabaseBackup", "GatewaySetting", "SettingsRollout", "ScriptStorage", "ScriptEnvironment", "ScriptEnvironmentVersion",
     "ScriptEnvironmentVariable", "ScriptEnvironmentGroup", "ContainerRegistry", "ContainerRegistryAccess",
-    "ContainerRegistryVariable", "SavedScript", "SavedScriptVersion", "SavedView", "SqlScript", "SqlScriptVersion", "Report", "ReportVersion", "Notebook", "NotebookVersion", "NotebookSession", "NotebookVisitor", "NotebookTicket", "NotebookRead", "FlowGroup", "AiModel", "AiPrompt", "AiChat", "AiChatTurn", "AiSpend", "AgentDraft", "AgentPlan", "PrivacyNotice",
+    "ContainerRegistryVariable", "SavedScript", "SavedScriptVersion", "SavedView", "SqlScript", "SqlScriptVersion", "Report", "ReportVersion", "ReportView", "Notebook", "NotebookVersion", "NotebookSession", "NotebookVisitor", "NotebookTicket", "NotebookRead", "FlowGroup", "AiModel", "AiPrompt", "AiChat", "AiChatTurn", "AiSpend", "AgentDraft", "AgentPlan", "PrivacyNotice",
     "FlowPresence", "LoginAttempt",
     "DataContract", "DataContractResult", "DataContractVersion", "DbtAiText",
 ]

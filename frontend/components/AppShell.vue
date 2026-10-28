@@ -8,7 +8,7 @@ import { useScriptingEditor } from '~/composables/useScripting'
 import { useRegistriesEditor } from '~/composables/useRegistries'
 // The app's shell: navbar with brand, sections and user. The pages use it as a wrapper
 // (<AppShell>…content…</AppShell>); the editor stays full screen.
-import { computed, onMounted, ref, nextTick } from 'vue'
+import { computed, onMounted, ref, nextTick, type Component } from 'vue'
 import { usePopover } from '~/composables/usePopover'
 import { useI18n } from 'vue-i18n'
 import {
@@ -32,6 +32,8 @@ import {
   LockKeyhole,
   Terminal,
   Server,
+  FileChartColumn,
+  ChartNoAxesCombined,
 } from 'lucide-vue-next'
 
 // fluid = full-width content (no centred max-width): for pages like the Viewer that use
@@ -94,24 +96,23 @@ const registriesEditor = useRegistriesEditor()
 onMounted(() => { scriptingEditor.load(); registriesEditor.load() })
 const scriptingTab = computed(() => scriptingEditor.available.value || registriesEditor.available.value)
 
-const links = computed(() => [
-  { to: '/', label: t('nav.explore'), icon: FolderTree },
-  { to: '/flows', label: t('nav.flows'), icon: Workflow },
-  { to: '/datasources', label: t('nav.datasources'), icon: Database },
-  { to: '/lineage', label: t('nav.lineage'), icon: Share2 },
+type NavLink = { to: string; label: string; icon: Component }
+type NavMenu = { menu: 'analysis' | 'admin'; label: string; icon: Component; links: NavLink[] }
+
+/* Analysis: the two places where data is read rather than prepared, the Viewer and the
+   Reports tab. The bar had no room for one more item (measured on Chrome and Firefox: at
+   1440px only the English bar fitted, with 44px to spare, and the item takes 83 to 98px
+   by language), so the Viewer's place became a menu with both, as Administration. */
+const analysisLinks = computed<NavLink[]>(() => [
   { to: '/viewer', label: t('nav.viewer'), icon: PieChart },
-  { to: '/chat', label: t('nav.assistant'), icon: Sparkles },
-  { to: '/connections', label: t('nav.connections'), icon: Plug },
-  // only to whoever may use a scripting environment or a container registry
-  ...(scriptingTab.value ? [{ to: '/scripting', label: t('nav.scripting'), icon: Terminal }] : []),
-  { to: '/runs', label: t('nav.runs'), icon: History },
+  { to: '/reports', label: t('nav.reports'), icon: FileChartColumn },
 ])
 
 /* Administration: five destinations that in the product are ONE place, and in the bar
    were five items at the same level as Flows or Datasources. Gathered under one item
    with its menu, like the settings gear: the bar goes from thirteen elements to nine and
    tells a structure that exists already. */
-const adminLinks = computed(() => [
+const adminLinks = computed<NavLink[]>(() => [
   { to: '/admin', label: t('nav.admin'), icon: Shield },
   { to: '/queue', label: t('nav.queue'), icon: Cpu },
   { to: '/monitoring', label: t('nav.monitoring'), icon: Activity },
@@ -119,20 +120,38 @@ const adminLinks = computed(() => [
   { to: '/cluster', label: t('nav.cluster'), icon: Server },
   { to: '/audit', label: t('nav.audit'), icon: ScrollText },
 ])
-const adminOpen = ref(false)
-const adminBtn = ref<HTMLElement | null>(null)
-const adminStyle = ref<Record<string, string>>({})
+
+const items = computed<(NavLink | NavMenu)[]>(() => [
+  { to: '/', label: t('nav.explore'), icon: FolderTree },
+  { to: '/flows', label: t('nav.flows'), icon: Workflow },
+  { to: '/datasources', label: t('nav.datasources'), icon: Database },
+  { to: '/lineage', label: t('nav.lineage'), icon: Share2 },
+  { menu: 'analysis', label: t('nav.analysis'), icon: ChartNoAxesCombined, links: analysisLinks.value },
+  { to: '/chat', label: t('nav.assistant'), icon: Sparkles },
+  { to: '/connections', label: t('nav.connections'), icon: Plug },
+  // only to whoever may use a scripting environment or a container registry
+  ...(scriptingTab.value ? [{ to: '/scripting', label: t('nav.scripting'), icon: Terminal }] : []),
+  { to: '/runs', label: t('nav.runs'), icon: History },
+  ...(canObserve.value ? [{ menu: 'admin', label: t('nav.administration'), icon: Shield, links: adminLinks.value } as NavMenu] : []),
+])
+const isMenu = (i: NavLink | NavMenu): i is NavMenu => 'menu' in i
+
+// one menu open at a time, its panel on the body
+const openMenu = ref<NavMenu['menu'] | null>(null)
+const openLinks = computed(() => items.value.find((i): i is NavMenu => isMenu(i) && i.menu === openMenu.value)?.links ?? [])
+const menuBtns: Partial<Record<NavMenu['menu'], HTMLElement>> = {}
+const menuStyle = ref<Record<string, string>>({})
 
 /**
  * The menu is on the body: its position must be computed from the button, which may
  * have moved because the bar scrolls.
  */
-function placeAdmin() {
-  const r = adminBtn.value?.getBoundingClientRect()
+function placeMenu() {
+  const r = openMenu.value ? menuBtns[openMenu.value]?.getBoundingClientRect() : undefined
   if (!r) return
   // anchored to the button's left, but never off screen on the right
   const left = Math.min(r.left, window.innerWidth - 226)
-  adminStyle.value = { left: `${Math.max(8, left)}px`, top: `${r.bottom + 6}px` }
+  menuStyle.value = { left: `${Math.max(8, left)}px`, top: `${r.bottom + 6}px` }
 }
 
 /**
@@ -146,29 +165,34 @@ function navWheel(ev: WheelEvent) {
   ev.preventDefault()
 }
 
-const adminMenu = ref<HTMLElement | null>(null)
-function toggleAdmin() {
-  adminOpen.value = !adminOpen.value
-  if (adminOpen.value) nextTick(() => { placeAdmin(); adminItem(0) })
+const navMenu = ref<HTMLElement | null>(null)
+function toggleNavMenu(which: NavMenu['menu']) {
+  openMenu.value = openMenu.value === which ? null : which
+  if (openMenu.value) nextTick(() => { placeMenu(); menuItem(0) })
+}
+function closeNavMenu(refocus = false) {
+  const which = openMenu.value
+  openMenu.value = null
+  if (refocus && which) menuBtns[which]?.focus()
 }
 // a real menu (role=menu): the arrows go through the items, Esc closes and goes back to
 // the button
-function adminItem(i: number) {
-  const items = [...(adminMenu.value?.querySelectorAll<HTMLElement>('[role="menuitem"]') ?? [])]
-  if (items.length) items[(i + items.length) % items.length].focus()
+function menuItem(i: number) {
+  const links = [...(navMenu.value?.querySelectorAll<HTMLElement>('[role="menuitem"]') ?? [])]
+  if (links.length) links[(i + links.length) % links.length].focus()
 }
-function onAdminKey(e: KeyboardEvent) {
-  const items = [...(adminMenu.value?.querySelectorAll<HTMLElement>('[role="menuitem"]') ?? [])]
-  const here = items.indexOf(document.activeElement as HTMLElement)
-  if (e.key === 'ArrowDown') { e.preventDefault(); adminItem(here + 1) }
-  else if (e.key === 'ArrowUp') { e.preventDefault(); adminItem(here - 1) }
-  else if (e.key === 'Home') { e.preventDefault(); adminItem(0) }
-  else if (e.key === 'End') { e.preventDefault(); adminItem(-1) }
-  else if (e.key === 'Escape') { e.preventDefault(); adminOpen.value = false; adminBtn.value?.focus() }
-  else if (e.key === 'Tab') adminOpen.value = false
+function onMenuKey(e: KeyboardEvent) {
+  const links = [...(navMenu.value?.querySelectorAll<HTMLElement>('[role="menuitem"]') ?? [])]
+  const here = links.indexOf(document.activeElement as HTMLElement)
+  if (e.key === 'ArrowDown') { e.preventDefault(); menuItem(here + 1) }
+  else if (e.key === 'ArrowUp') { e.preventDefault(); menuItem(here - 1) }
+  else if (e.key === 'Home') { e.preventDefault(); menuItem(0) }
+  else if (e.key === 'End') { e.preventDefault(); menuItem(-1) }
+  else if (e.key === 'Escape') { e.preventDefault(); closeNavMenu(true) }
+  else if (e.key === 'Tab') closeNavMenu()
 }
 // the item stays lit while in any of its pages
-const inAdmin = computed(() => adminLinks.value.some((l) => route.path === l.to))
+const inMenu = (m: NavMenu) => m.links.some((l) => route.path === l.to)
 
 onMounted(async () => {
   if (!user.value) await fetchMe()
@@ -184,50 +208,45 @@ onMounted(async () => {
       </NuxtLink>
 
       <nav class="mainnav" @wheel="navWheel">
-        <NuxtLink
-          v-for="l in links"
-          :key="l.to"
-          :to="l.to"
-          class="navlink"
-          :class="{ on: route.path === l.to }"
-        >
-          <component :is="l.icon" :size="14" /> {{ l.label }}
-        </NuxtLink>
+        <template v-for="i in items" :key="isMenu(i) ? i.menu : i.to">
+          <div v-if="isMenu(i)" class="menuwrap">
+            <button
+              :ref="(el) => { if (el) menuBtns[i.menu] = el as HTMLElement }"
+              type="button"
+              class="navlink"
+              :class="{ on: inMenu(i) || openMenu === i.menu }"
+              aria-haspopup="menu"
+              :aria-expanded="openMenu === i.menu"
+              @click="toggleNavMenu(i.menu)"
+            >
+              <component :is="i.icon" :size="14" /> {{ i.label }}
+              <ChevronDown :size="13" class="caret" :class="{ up: openMenu === i.menu }" />
+            </button>
+          </div>
+          <NuxtLink v-else :to="i.to" class="navlink" :class="{ on: route.path === i.to }">
+            <component :is="i.icon" :size="14" /> {{ i.label }}
+          </NuxtLink>
+        </template>
 
-        <div v-if="canObserve" class="adminwrap">
-          <button
-            type="button"
-            class="navlink"
-            :class="{ on: inAdmin || adminOpen }"
-            aria-haspopup="menu"
-            :aria-expanded="adminOpen"
-            ref="adminBtn"
-            @click="toggleAdmin"
-          >
-            <Shield :size="14" /> {{ t('nav.administration') }}
-            <ChevronDown :size="13" class="caret" :class="{ up: adminOpen }" />
-          </button>
-
-          <!-- teleported to the body: the navigation SCROLLS, and a container with overflow clips
-               the positioned children — the menu ended up cut and seemed to open upwards. The same
-               solution as Select.vue, which teleports its panel for the same reason. -->
-          <Teleport v-if="adminOpen" to="body">
-            <div class="menu-backdrop" @click="adminOpen = false" />
-            <div ref="adminMenu" class="menu adminmenu" role="menu" :style="adminStyle" @keydown="onAdminKey">
-              <NuxtLink
-                v-for="l in adminLinks"
-                :key="l.to"
-                :to="l.to"
-                class="menu-item"
-                :class="{ on: route.path === l.to }"
-                role="menuitem"
-                @click="adminOpen = false"
-              >
-                <component :is="l.icon" :size="14" /> {{ l.label }}
-              </NuxtLink>
-            </div>
-          </Teleport>
-        </div>
+        <!-- teleported to the body: the navigation SCROLLS, and a container with overflow clips
+             the positioned children — the menu ended up cut and seemed to open upwards. The same
+             solution as Select.vue, which teleports its panel for the same reason. -->
+        <Teleport v-if="openMenu" to="body">
+          <div class="menu-backdrop" @click="closeNavMenu()" />
+          <div ref="navMenu" class="menu navmenu" role="menu" :style="menuStyle" @keydown="onMenuKey">
+            <NuxtLink
+              v-for="l in openLinks"
+              :key="l.to"
+              :to="l.to"
+              class="menu-item"
+              :class="{ on: route.path === l.to }"
+              role="menuitem"
+              @click="closeNavMenu()"
+            >
+              <component :is="l.icon" :size="14" /> {{ l.label }}
+            </NuxtLink>
+          </div>
+        </Teleport>
       </nav>
 
       <span class="spacer" />
@@ -471,12 +490,23 @@ onMounted(async () => {
    width it pushed the page to scroll horizontally. The navigation scrolls inside its own
    bar instead of widening the document; the hamburger menu would be a redesign, not an
    adaptation. */
-/* the administration menu reuses the settings panel: the same surface, the same radius,
-   the same shadow — only where it hooks changes */
-.adminwrap { position: relative; display: inline-flex; height: 100%; flex: none; }
-.adminwrap .caret { opacity: 0.7; transition: transform 0.15s ease; }
-.adminwrap .caret.up { transform: rotate(180deg); }
-.adminmenu {
+/* the Analysis and Administration menus reuse the settings panel: the same surface, the
+   same radius, the same shadow — only where it hooks changes */
+.menuwrap { position: relative; display: inline-flex; height: 100%; flex: none; }
+/* a menu's button reads as the links beside it: without this it took the app's button
+   (a chip with a fill, borders and a shadow on hover), a box in the middle of the bar */
+.menuwrap .navlink {
+  background: transparent;
+  border-left-color: transparent;
+  border-right-color: transparent;
+  border-radius: 0;
+  box-shadow: none;
+  transform: none;
+}
+.menuwrap .navlink:not(.on) { border-bottom-color: transparent; border-top-color: transparent; }
+.menuwrap .caret { opacity: 0.7; transition: transform 0.15s ease; }
+.menuwrap .caret.up { transform: rotate(180deg); }
+.navmenu {
   position: fixed;
   right: auto;
   top: auto;

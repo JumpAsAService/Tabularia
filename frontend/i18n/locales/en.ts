@@ -9,6 +9,8 @@ export default {
     datasources: 'Datasources',
     lineage: 'Lineage',
     viewer: 'Viewer',
+    analysis: 'Analysis',
+    reports: 'Reports',
     assistant: 'Assistant',
     connections: 'Connections',
     scripting: 'Scripting',

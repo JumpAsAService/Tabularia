@@ -5,6 +5,8 @@ the rules in services/reports.py.
 Permissions:
 - seeing one (lists, search, opening it, its versions, its parameters, its fields) and
   rendering it: VIEW on its folder; whoever lacks it gets 404, as if it did not exist;
+  the viewer notes every opening (services/report_views.py), and the Reports tab
+  (GET /reports/search) puts the reports opened by the most people first;
 - creating, changing, moving, renaming, duplicating, deleting, restoring a version, and
   the editor's preview and check of a definition not saved yet: EDIT on the folder (both
   folders for a move); a definition saved must point only to what its author may read;
@@ -26,6 +28,7 @@ from typing import Any, Literal, Optional
 
 from fastapi import APIRouter, Depends, HTTPException, Query, Request, status
 from pydantic import BaseModel, Field
+from sqlalchemy import func, or_
 from sqlalchemy.exc import IntegrityError
 from sqlmodel import Session, select
 
@@ -37,10 +40,12 @@ from app.deps.auth import get_current_user
 from app.deps.permissions import ensure_can
 from app.models import Project, Report, ReportVersion, User
 from app.models.permission import Capability
-from app.schemas.models import UtcDateTime
-from app.services import audit, report_definition, report_params, reports
+from app.routes.search import _like as like_pattern
+from app.schemas.models import Page, UtcDateTime
+from app.services import audit, report_definition, report_params, report_views, reports
 from app.services import permissions as perm_service
 from app.services.copy_names import commit_copy, free_copy_name
+from app.services.pagination import paginate
 from app.services.report_definition import Problem
 
 router = APIRouter(route_class=ReleasingRoute, tags=["reports"])
@@ -61,6 +66,18 @@ class ReportOut(BaseModel):
 
 class ReportDetail(ReportOut):
     content: dict[str, Any]
+
+
+class ReportRow(ReportOut):
+    """A row of the Reports tab: the report, where it lives, who made it, who reads it."""
+    folder_path: list[str]  # from the root down to its folder
+    owner_name: Optional[str] = None  # full name, else email; None when the account is gone
+    # opened in the viewer in the last 30 days (services/report_views.py): by how many
+    # people, and how many openings (a person once a day)
+    people_30d: int = 0
+    opens_30d: int = 0
+    views_total: int = 0  # ever, a person once a day
+    last_viewed_at: Optional[UtcDateTime] = None
 
 
 class ReportCreate(BaseModel):
@@ -253,6 +270,71 @@ def list_reports(user: User = Depends(get_current_user), session: Session = Depe
     return _many(session, user, reports.visible_query(session, user))
 
 
+# NB: registered BEFORE /reports/{report_id}, so that "search" is not taken for an id
+@router.get("/reports/search", response_model=Page[ReportRow])
+def search_reports(
+    q: Optional[str] = Query(None, description="searches name, description and folder, over the WHOLE dataset"),
+    sort: Literal["trending", "name", "updated"] = Query("trending"),
+    limit: int = Query(50, ge=1, le=200),
+    offset: int = Query(0, ge=0),
+    user: User = Depends(get_current_user),
+    session: Session = Depends(get_session),
+):
+    """The reports this person sees, PAGINATED, for the Reports tab. `trending` (the
+    default) puts first those opened by the most people in the last 30 days, then by the
+    most openings in them, then by the most ever, then the latest changed; `name` and
+    `updated` (the latest changed first) as they say. The search matches the name, the
+    description, and the name of the report's folder or of a folder above it."""
+    visible = reports.visible_query(session, user, ordered=False)
+    if visible is None:
+        return Page(items=[], total=0)
+    recent = report_views.recent_counts()
+    people = func.coalesce(recent.c.people, 0)
+    opens = func.coalesce(recent.c.opens, 0)
+    stmt = select(Report, people, opens).outerjoin(recent, recent.c.report_id == Report.id)
+    if visible.whereclause is not None:
+        stmt = stmt.where(visible.whereclause)
+    names = {pid: p.name for pid, p in perm_service._all_projects(session).items()}
+    parents = perm_service.folder_parents(session)
+    if q and q.strip():
+        text = q.strip()
+        needle = text.casefold()
+        in_folders = [pid for pid in names if any(needle in names[a].casefold()
+                                                  for a in perm_service.ancestor_ids(parents, pid) if a in names)]
+        like = like_pattern(text)
+        stmt = stmt.where(or_(Report.name.ilike(like, escape="\\"), Report.description.ilike(like, escape="\\"),
+                              Report.project_id.in_(in_folders)))  # type: ignore[attr-defined]
+    order = {
+        "trending": (people.desc(), opens.desc(), Report.views_total.desc(), Report.updated_at.desc(), Report.id.desc()),
+        "name": (func.lower(Report.name), Report.id),
+        "updated": (Report.updated_at.desc(), Report.id.desc()),
+    }[sort]
+    rows, total = paginate(session, stmt, order, limit, offset)
+    found = [r for r, _, _ in rows]
+    contents = reports.current_contents(session, found)
+    owners = {uid: full_name or email for uid, full_name, email in session.exec(
+        select(User.id, User.full_name, User.email)
+        .where(User.id.in_({r.owner_id for r in found if r.owner_id is not None}))).all()}  # type: ignore[attr-defined]
+    items = []
+    for r, n_people, n_opens in rows:
+        path = [names[a] for a in reversed(perm_service.ancestor_ids(parents, r.project_id)) if a in names]
+        items.append(ReportRow(**_out(session, user, r, contents[r.id]).model_dump(), folder_path=path,
+                               owner_name=owners.get(r.owner_id), people_30d=n_people, opens_30d=n_opens,
+                               views_total=r.views_total, last_viewed_at=r.last_viewed_at))
+    return Page(items=items, total=total)
+
+
+@router.post("/reports/{report_id}/views", status_code=status.HTTP_204_NO_CONTENT)
+def report_opened(report_id: int, request: Request, user: User = Depends(get_current_user),
+                  session: Session = Depends(get_session)):
+    """The viewer opened the report (services/report_views.py): a person once a day
+    counts for the Reports tab. A call with an API token counts nothing: a script is not
+    a reader."""
+    report = reports.get_visible(session, user, report_id)
+    if getattr(request.state, "api_token", None) is None:
+        report_views.record(session, report, user)
+
+
 @router.get("/projects/{project_id}/reports", response_model=list[ReportOut])
 def list_project_reports(project_id: int, user: User = Depends(get_current_user),
                          session: Session = Depends(get_session)):
@@ -395,6 +477,7 @@ def delete_report(report_id: int, request: Request, user: User = Depends(get_cur
     label = report.name
     for row in session.exec(select(ReportVersion).where(ReportVersion.report_id == report.id)).all():
         session.delete(row)
+    report_views.forget_report(session, report.id)
     session.flush()
     session.delete(report)
     session.commit()

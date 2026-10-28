@@ -65,9 +65,9 @@ def can_see(session: Session, user: User, report: Report) -> bool:
     return is_admin(session, user) or perm_service.has_capability(session, user, report.project_id, Capability.VIEW)
 
 
-def visible_query(session: Session, user: User, project_ids: Optional[set[int]] = None):
-    """A select of the reports this person sees (in `project_ids` when given), or None
-    when there are none."""
+def visible_query(session: Session, user: User, project_ids: Optional[set[int]] = None, ordered: bool = True):
+    """A select of the reports this person sees (in `project_ids` when given), by name
+    unless not `ordered`, or None when there are none."""
     stmt = select(Report)
     if not is_admin(session, user):
         readable = set(perm_service.readable_project_ids(session, user))
@@ -78,7 +78,7 @@ def visible_query(session: Session, user: User, project_ids: Optional[set[int]] 
         stmt = stmt.where(Report.project_id.in_(readable))  # type: ignore[attr-defined]
     elif project_ids is not None:
         stmt = stmt.where(Report.project_id.in_(project_ids))  # type: ignore[attr-defined]
-    return stmt.order_by(Report.name)
+    return stmt.order_by(Report.name) if ordered else stmt
 
 
 def get_visible(session: Session, user: User, report_id: int) -> Report:

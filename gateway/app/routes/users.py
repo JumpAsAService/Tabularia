@@ -386,8 +386,8 @@ def remove_user(session: Session, user_id: int) -> None:
     from app.models import (
         AiChat, AiChatTurn, AiModel, ApiToken, AuditLog, Banner, Connection, Datasource, DisabledEngine, Flow,
         FlowGroup, FlowVersion, Permission, PrivacyNotice, Project, Run, SavedScript, SavedScriptVersion, SavedView,
-        SqlScript, SqlScriptVersion, Report, ReportVersion, Notebook, NotebookSession, NotebookTicket, NotebookVersion,
-        NotebookVisitor, Upload, UserSession, Webhook,
+        SqlScript, SqlScriptVersion, Report, ReportVersion, ReportView, Notebook, NotebookSession, NotebookTicket,
+        NotebookVersion, NotebookVisitor, Upload, UserSession, Webhook,
     )
 
     # the conversations with the assistant are personal: they go with the account (the
@@ -415,6 +415,8 @@ def remove_user(session: Session, user_id: int) -> None:
     session.exec(sa_delete(NotebookVisitor).where(NotebookVisitor.user_id == user_id))
     # and the tickets it asked for to open them (a minute's worth)
     session.exec(sa_delete(NotebookTicket).where(NotebookTicket.user_id == user_id))
+    # which reports it opened (the Reports tab's «trending»): the totals stay on the reports
+    session.exec(sa_delete(ReportView).where(ReportView.user_id == user_id))
     # the client addresses of the account go with it (services/ip_retention.py);
     # the rows stay, with the email of the time
     from app.services import ip_retention
