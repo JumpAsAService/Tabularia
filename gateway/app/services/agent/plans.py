@@ -24,13 +24,14 @@ from __future__ import annotations
 
 import json
 import logging
+import zlib
 from dataclasses import dataclass
 from datetime import timedelta
 from typing import Any, Awaitable, Callable, Optional
 
 from fastapi import HTTPException
 from pydantic import BaseModel, Field
-from sqlalchemy import update
+from sqlalchemy import text, update
 from sqlmodel import Session, select
 
 from app.core.config import get_settings
@@ -155,6 +156,20 @@ def plan_view(ctx: ToolContext, plan: AgentPlan) -> dict:
     return out
 
 
+# with the caller's key (person, origin, chat or token): finding and making its pending plan
+PLAN_LOCK = 7_402_151
+
+
+def _lock_callers_plan(session: Session, ctx: ToolContext) -> None:
+    """Two calls of the same caller at once (an MCP client calling tools in parallel) would
+    each find no pending plan and make one: on Postgres they take turns here, until the
+    transaction ends. The tests' SQLite has one writer anyway."""
+    if session.get_bind().dialect.name == "postgresql":
+        who = f"{ctx.user.id}|{ctx.origin}|{ctx.chat_id}|{ctx.token_name}".encode()
+        session.exec(text("SELECT pg_advisory_xact_lock(CAST(:k AS integer), CAST(:n AS integer))")
+                     .bindparams(k=PLAN_LOCK, n=zlib.crc32(who) & 0x7FFFFFFF))
+
+
 def _current_plan(session: Session, ctx: ToolContext) -> Optional[AgentPlan]:
     """The caller's pending plan: of this chat, or of this token over MCP."""
     q = select(AgentPlan).where(AgentPlan.user_id == ctx.user.id, AgentPlan.origin == ctx.origin,
@@ -176,6 +191,7 @@ def add_action(ctx: ToolContext, action: dict, key: str) -> dict:
     action = {**action, "key": key}
     for _ in range(ADD_ATTEMPTS):
         with ctx.session_factory() as session:
+            _lock_callers_plan(session, ctx)
             plan = _current_plan(session, ctx)
             actions = actions_of(plan) if plan is not None else []
             at = next((i for i, a in enumerate(actions) if a.get("key") == key), None)

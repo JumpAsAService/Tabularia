@@ -252,3 +252,47 @@ def test_two_environment_builds_at_once_take_the_next_numbers_in_turn(db):
 
     with ThreadPoolExecutor(2) as pool:
         assert sorted(pool.map(build, (1, 2))) == [2, 3]
+
+
+# ── an agent's plan: two tool calls at once make ONE plan ────────────────────
+def test_two_tool_calls_at_once_add_to_one_plan(db, monkeypatch):
+    """An MCP client calls two plan tools in parallel and has no pending plan yet: each
+    call used to find none and make one, leaving two plans the person had to confirm
+    apart. They take turns on the caller's lock now."""
+    from contextlib import contextmanager
+
+    from app.models import AgentPlan
+    from app.services.agent import plans
+    from app.services.agent.registry import ToolContext
+
+    with Session(db) as s:
+        uid = make_user(s, email="agent@x.local", is_superuser=True).id
+    kind = next(iter(plans.ACTIONS))
+    in_step = _in_step()
+    real_current = plans._current_plan
+
+    def current_then_wait(session, ctx):  # both read before either writes, with the defect
+        plan = real_current(session, ctx)
+        in_step()
+        return plan
+
+    monkeypatch.setattr(plans, "_current_plan", current_then_wait)
+
+    @contextmanager
+    def sessions():
+        with Session(db) as s:
+            yield s
+
+    def call(i: int) -> int:
+        with Session(db) as s:
+            user = s.get(User, uid)
+            s.expunge(user)
+        ctx = ToolContext(user=user, session_factory=sessions, request=None, origin="mcp", token_name="laptop")
+        return plans.add_action(ctx, {"kind": kind, "words": f"step {i}"}, key=f"k{i}")["plan_id"]
+
+    with ThreadPoolExecutor(2) as pool:
+        ids = set(pool.map(call, (1, 2)))
+    with Session(db) as s:
+        pending = s.exec(select(AgentPlan).where(AgentPlan.user_id == uid, AgentPlan.status == "pending")).all()
+    assert len(ids) == 1 and len(pending) == 1
+    assert sorted(a["key"] for a in plans.actions_of(pending[0])) == ["k1", "k2"]
