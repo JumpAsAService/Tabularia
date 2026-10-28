@@ -163,6 +163,55 @@ keep one file per run. The run records what it wrote (host, path, bytes) in its
 destination, shown when the run ends. CSV is streamed; Excel holds at most 1,048,575
 rows. Scheduled runs and orchestrations use the same Output: nothing else to set up.
 
+## Example: the depots' daily sales files
+
+Each depot drops a CSV a day on an SFTP server, in `upload/depots`:
+`sales_20261020.csv`, `sales_20261021.csv`, … with the columns `data`, `deposito`,
+`canale`, `ordini`, `ricavo`. The sales office wants them as one table, and the monthly
+margin back on the same server.
+
+1. **The connection.** In a folder where you have CONNECT, **New → New connection**,
+   type **SFTP (files)**: name `Depots exchange (SFTP)`, host `sftp.example.com`, port
+   `2222` (the server's; empty means 22), user `tabularia`, **Sign in with** Password and
+   the password.
+2. **Test connection.** The form shows the key the server offers,
+   `ssh-ed25519 SHA256:…`, and says that nothing has been sent yet. Compare the
+   fingerprint with the one the server's administrator gives you
+   (`ssh-keygen -lf /etc/ssh/ssh_host_ed25519_key.pub` on the server), then **Accept this
+   key and test**: *Connection works*. **Create**.
+
+   ![The SFTP connection form after Test connection: the server's ed25519 key and its fingerprint, with Accept this key and test](media/guide/connections/sftp-host-key.png)
+
+   *The first test reads the server's key and stops there: the password is sent only after you accept that key.*
+
+3. **The datasource.** In `Sample / Private tables`, **New → Datasource from a
+   database**, connection `Depots exchange (SFTP)`, name `depot_sales`, **Folder on the
+   server** `upload/depots`, **Files** `sales_*.csv`, format from each file's extension.
+   **Check files** lists the five files it will stack.
+
+   ![The SFTP folder datasource: folder upload/depots, files sales_*.csv, and Check files listing five files](media/guide/sources/sftp-folder-datasource.png)
+
+   *Check files: the glob takes five files, stacked into one table.*
+
+4. **Create & import.** The datasource has 125 rows and seven columns: the five of the
+   files, then `_file` (`sales_20261020.csv`, …) and `_file_modified_at`. Schedule it
+   (**Schedule automatic refresh (cron)**, `30 6 * * *`): every morning it reads the
+   files again, the new one included.
+
+   ![depot_sales in the Viewer: the columns of the files, then _file and _file_modified_at on every row](media/guide/sources/sftp-depot-sales-viewer.png)
+
+   *`depot_sales` in the Viewer: every row says which file it came from.*
+
+5. **The way back.** In the flow «Margin by Category and Month», an Output node with
+   destination **SFTP server (file)**, the same connection, folder
+   `outbox/{today:yyyy}/{today:MM}`, file name `margin_{yesterday:yyyyMMdd}`, format CSV,
+   time zone `Europe/Rome`. Under each field the form shows what a run would write today
+   (`outbox/2026/10`, `margin_20261027`); the dated folder is created on the first run.
+
+   ![The SFTP Output node with the dated folder and file name and, under each, the resolved value](media/guide/placeholders/sftp-output-placeholders.png)
+
+   *The Output's templates and what they give on 28 October 2026.*
+
 ## Lineage, dbt
 
 OpenLineage: an SFTP refresh reads `sftp://host:port` + `/folder/glob` (the templates as written); an SFTP Output

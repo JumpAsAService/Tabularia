@@ -185,6 +185,10 @@ names are the ones the forms show.
 | Default headers | — |
 | Test path | `/latest` |
 
+![The New connection dialog with type HTTP API: base URL https://api.frankfurter.dev/v1, authentication None, test path /latest, and Connection works](media/guide/connections/api-connection-frankfurter.png)
+
+*The connection after **Test connection**: no key, the test calls `/latest`.*
+
 **Datasource «API call»**
 
 | Field | Value |
@@ -204,6 +208,14 @@ names are the ones the forms show.
 `HTTP 200` and rows with the columns `_key`, `CHF`, `USD`. The first refresh writes about
 22 rows (business days only); a second one replaces the same dates, so each date stays
 once.
+
+![The API call form of ecb_rates: method GET, path /{today-30}.., the query parameters base and symbols, time zone Europe/Rome](media/guide/sources/api-call-datasource.png)
+
+*The datasource `ecb_rates`: the path with a moving date, the two query parameters, and the time zone that decides what «today» is.*
+
+![Try the call: the request with its dates resolved, HTTP 200, one call per refresh, 22 rows with the columns _key, CHF and USD](media/guide/sources/api-call-try.png)
+
+*Further down the same form: the records path `rates` keyed by date, **append by key** on `_key`, and **Try the call** with the request as sent and its first rows. Taken on 28 October 2026, so the path starts on 28 September.*
 
 To ask only for what is new, write the path `/{last_refresh:yyyy-MM-dd}..` and set
 **Initial last refresh** to `today-30`: the first refresh reads 30 days, each later one

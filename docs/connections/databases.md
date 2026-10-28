@@ -37,6 +37,10 @@ CONNECT on the connection's folder (see [Connections](README.md#the-connect-perm
 The form's **Test connection** opens a connection and runs `SELECT 1`. The MySQL,
 MariaDB, ClickHouse, Oracle and SQL Server drivers give up connecting after 10 seconds.
 
+![The New connection dialog for PostgreSQL: host db.example.com, user tabularia_reader, password hidden, database shop, schema vendite, Encrypted verify the server's certificate, the certificate authority field empty](../media/guide/connections/new-connection-postgres.png)
+
+*A PostgreSQL connection as in the table below: a read-only user, the schema in front of unqualified tables, and **Encryption (TLS)** on verify. The **Certificate authority (PEM)** stays empty when a public authority signed the server's certificate.*
+
 ### Encryption (TLS)
 
 Every type has the same choice, **Encryption (TLS)**, used by everything that opens the

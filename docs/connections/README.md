@@ -43,10 +43,18 @@ where you have CONNECT. The form asks for a **Name** (unique in the folder), the
 beside the type, «Example of the fields», shows every field of the type filled with
 made-up values and a tip; nothing is copied into the form.
 
+![The New connection dialog for PostgreSQL with example values and the password hidden](../media/guide/connections/new-connection-postgres.png)
+
+***New → New connection**: the name, the type, the type's fields. A secret is shown as dots and never comes back from the server.*
+
 The **Connections** page of the main menu lists every connection you may use, from every
 folder, with a search over name, host and database; from there a connection is tested,
 edited or deleted. A connection is moved to another folder like any object of Explore,
 and duplicated there as «name (1)»: the copy keeps the stored secret.
+
+![The Connections page listing six connections of different types with their host and folder](../media/guide/connections/connections-page.png)
+
+*The **Connections** page: every connection you may use, from every folder, with a search.*
 
 ### The CONNECT permission
 

@@ -5,6 +5,10 @@ views, SQL scripts, the Viewer and the AI assistant read. This page lists every 
 datasource comes into being, what each one needs, and the rules all of them share:
 snapshots, refreshes, descriptions, sort keys, data contracts, permissions and lineage.
 
+![The dialog New datasource from database: name orders, connection Sample ERP (Postgres), Table vendite.ordini, order by data_ordine, a description](../media/guide/sources/datasource-from-database.png)
+
+***New → Datasource from a database** in a folder: the most common way in, here for the sample `orders` ([the example](databases.md#a-whole-table-refreshed-every-morning)).*
+
 ## Every source at a glance
 
 | Source | What it reads | Connection needed | How it is updated | Page |
@@ -105,6 +109,10 @@ columns does not lose them. People read them in the catalog, and the AI assistan
 them to choose a table and understand its columns. A datasource whose description and
 every field description are filled in shows the badge **AI ready**.
 
+![The Datasources page with orders opened: its source vendite.ordini on Sample ERP, the Datasource description and a description for each field, the badge AI ready](../media/guide/sources/datasource-descriptions.png)
+
+*`orders` in the **Datasources** page: where it is read from, the **Datasource description**, a description for every field, and the **AI ready** badge they earn.*
+
 ### Sort keys
 
 A datasource from a database table or query can be written **ordered** by some of its
@@ -156,6 +164,10 @@ scripts, SQL scripts and notebooks read it, which flow groups refresh it or send
 email. With OpenLineage turned on, every refresh and every write is also reported to
 your data catalog as a job with its inputs and outputs, and every notebook session
 with what it read: see [OpenLineage](../openlineage.md).
+
+![The Lineage page centred on the flow Margin by Category and Month: five datasources read from the database on the left, the flow in the middle, the datasource it publishes on the right](../media/guide/lineage/lineage-margin-flow.png)
+
+***Lineage** centred on «Margin by Category and Month»: the five datasources it reads, and the one it publishes.*
 
 ## Related
 

@@ -13,6 +13,10 @@ and on the side the datasources you can read with their columns: a click on a na
 it where the cursor is, the arrow shows the columns, a click on a column writes it too.
 The editor also completes names and columns as you type.
 
+![A SQL script page: the SQL on the sample orders, the result of 185 rows read from order_rows and orders on DuckDB, the Datasource card writing revenue_by_channel, and the list of datasources](media/guide/sql/sql-script-revenue-by-channel.png)
+
+*The script of the example below: the SQL, the result with its time and the datasources it read, and on the side the **Datasource** card and the catalog.*
+
 A datasource is a table by its **name**. A name with spaces or capitals goes in double
 quotes; unquoted names match regardless of case:
 
@@ -145,6 +149,40 @@ connection it runs on), the datasource it writes and the flow groups that run it
 With [OpenLineage](openlineage.md) on, every write is a run of the job
 `<folder>/<name> (SQL script)`: the datasources the write read (on a connection, the
 tables of the SQL), the datasource it wrote, the SQL in the `sql` facet.
+
+## Example: the revenue by channel, every morning
+
+On the sample data ([the «Sample» folder](getting-started-docker-compose.md#a-the-sample-data-already-there)):
+the net revenue of the orders by sales channel and month, kept as a datasource that the
+other flows, the Viewer and the assistant can read.
+
+1. In Explore, open `Sample / Private tables`, then **New → SQL script**. At the top,
+   **Where the SQL runs** stays on **Datasources**; choose the engine **DuckDB**.
+2. Write the SQL (a click on `order_rows` or `orders` in the side list writes the name):
+
+   ```sql
+   -- Net revenue by sales channel and month, cancelled orders left out
+   SELECT o.canale,
+          EXTRACT(YEAR FROM o.data_ordine) * 100 + EXTRACT(MONTH FROM o.data_ordine) AS anno_mese,
+          round(sum(CAST(r.quantita AS DOUBLE) * CAST(r.prezzo_unitario AS DOUBLE)
+                    * (1 - CAST(r.sconto_pct AS DOUBLE) / 100)), 2) AS ricavo_netto
+   FROM "order_rows" r
+   JOIN "orders" o ON r.ordine_id = o.id
+   WHERE o.stato <> 'annullato'
+   GROUP BY o.canale, anno_mese
+   ORDER BY anno_mese, ricavo_netto DESC
+   ```
+
+3. **Ctrl+Enter**. The result says «185 rows in 584 ms · DuckDB · read: order_rows,
+   orders»: one row per channel and month, the biggest channel of each month first.
+4. **Create**, with the name `Revenue by channel`. In the **Datasource** card write the
+   name `revenue_by_channel`, keep the folder `Sample / Private tables`, **Save**.
+5. **Refresh now**. The card shows «Written …: 185 rows · by» you, and
+   `revenue_by_channel` is in the catalog.
+6. **Schedule** → `0 6 * * 1-5` → **Save**: every working day at six the datasource is
+   written again from the saved SQL. When it must wait for fresh orders, put it in a
+   [flow group](capabilities/flow-groups.md#example-the-morning-sales-email) after the
+   refreshes instead.
 
 ## Saving and sharing
 

@@ -59,6 +59,10 @@ from.
   email, the target's name, the action and the address; **All actions** narrows to one
   action; **Any outcome** to successes or failures.
 
+![The audit log table: when, who, action, target, detail, IP and outcome, with a flow group created, a SQL script run and written, connections created and an SFTP host key accepted](../media/guide/governance/audit-log-table.png)
+
+*The **Audit log** part of the page: each row says when, who, what, on which object, with what detail, from which address, and whether it succeeded.*
+
 ## What is recorded
 
 | Area | Actions |

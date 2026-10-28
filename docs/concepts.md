@@ -29,6 +29,10 @@ flow groups.
 Root folders are created by administrators; a subfolder by whoever has **MANAGE** on
 its parent.
 
+![Explore inside the Sample folder: three subfolders, four saved views and two connections, each with its description and actions](media/guide/explore/explore-sample-folder.png)
+
+***Explore** in the `Sample` folder: the subfolders `Flows`, `Private tables` and `Public tables`, the saved views and the two connections, with a filter by kind at the top.*
+
 Permissions are granted on a folder, to a user or to a group, and hold for every folder
 below it. There are five:
 
@@ -49,6 +53,10 @@ datasources its user may see.
 A **connection** holds where a system is and how to sign in to it. Its secrets are
 encrypted at rest and never returned by the API. Creating, testing or reading through a
 connection needs **CONNECT** on its folder.
+
+![The Connections page: the sample ERP on Postgres and CRM on ClickHouse, an SFTP server, an HTTP API, an SMTP server and an S3 bucket, each with type, host and folder](media/guide/connections/connections-page.png)
+
+*The **Connections** page lists every connection you can see, with its type, address and folder.*
 
 A **datasource** is the unit of data everyone else works with: a name in a folder, a
 schema, field descriptions and, when you want one, a data contract. Its rows are a

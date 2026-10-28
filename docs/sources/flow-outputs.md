@@ -38,6 +38,10 @@ run per Output node; the run reads the flow's sources, computes the chain on a w
 and writes a new Parquet file. When the flow has no Output node, **Run** offers
 **Publish the output as a datasource** for the result of its last step instead.
 
+![The Output node of Margin by Category and Month selected in the editor: destination Tabularia Datasource, name, folder Private tables, Overwrite if it already exists ticked, the order-by columns](../media/guide/sources/output-node-datasource.png)
+
+*The Output node of the sample flow «Margin by Category and Month»: it publishes the datasource of the same name in `Sample / Private tables`, overwriting it at every run.*
+
 ### What an overwrite does
 
 At the end of a successful run the datasource is pointed at the new file in one step:

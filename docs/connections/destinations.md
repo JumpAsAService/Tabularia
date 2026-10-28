@@ -25,6 +25,10 @@ and hands it to a worker, which writes it where the node says. The worker opens 
 connection with the credentials the gateway sends it, still encrypted, after checking that
 whoever runs the flow — you, or the author of the schedule — may use it.
 
+![The Destination list of an Output node: Tabularia Datasource, Database table, File on S3 / object storage, Email with attachment, SFTP server (file)](../media/guide/connections/output-destinations.png)
+
+*The five destinations of an Output node. The fields below the list change with the choice.*
+
 Names marked as templates above take the [placeholder language](../placeholders.md) and
 four names of the Outputs:
 
@@ -44,6 +48,10 @@ table and its rows, the bucket and key, the SFTP path and size, or the recipient
 attachment.
 
 ## A datasource
+
+![The Output node of the sample flow with destination Tabularia Datasource, its name, folder and the overwrite option](../media/guide/sources/output-node-datasource.png)
+
+*The Output node of «Margin by Category and Month»: the datasource of the same name in `Sample / Private tables`, overwritten at every run.*
 
 **Tabularia Datasource** publishes the result as a datasource that other flows, the viewer
 and the AI assistant can read.

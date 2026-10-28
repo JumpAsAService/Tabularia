@@ -10,6 +10,10 @@ Nothing changes in Tabularia when it is on: events leave *after* the commit that
 closes a run, from a background thread, and a collector that is down or slow never
 fails a run. The other integrations are listed in [Integrations](integrations/README.md).
 
+![The Lineage page of Tabularia centred on the flow Margin by Category and Month, with its five input datasources and its output](media/guide/lineage/lineage-margin-flow.png)
+
+*The Lineage page, inside Tabularia: what the sample flow «Margin by Category and Month» reads and writes. OpenLineage sends the same facts, run by run, to your catalog.*
+
 ## Turn it on
 
 | Variable | Meaning |
@@ -190,6 +194,10 @@ its first run already has the name it will have.
 `POST /flows/{id}/openlineage` sends that event to the configured collector: use it
 to populate a catalog with the flows that exist before any of them runs, or after
 changing a flow's definition. Both need VIEW on the flow's folder.
+
+![The Export flow dialog of Top 20 Products by Revenue with two choices: dbt and OpenLineage](media/guide/dbt/export-flow-menu.png)
+
+***Flows** → a flow's export button: **OpenLineage** downloads the static event, **dbt** the project.*
 
 ## What leaves the installation
 

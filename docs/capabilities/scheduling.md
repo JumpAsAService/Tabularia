@@ -38,6 +38,10 @@ Each opens the same dialog: the cron expression, its meaning in words as you typ
   scheduled run fails after one that succeeded, once for as long as the flow stays
   broken; runs started by hand never send it.
 
+![The schedule dialog of the flow Top 20 Products by Revenue: cron 30 5 * * *, At 05:30, the presets, the engine for scheduled runs and the failure notice to data-team@example.com](../media/guide/scheduling/schedule-dialog.png)
+
+*The dialog of a flow, as in step 2 of the example below: cron `30 5 * * *`, the production engine, and **Tell me if it fails** with an address and an SMTP connection.*
+
 A flow can be scheduled only when it has something to run (an Output, a refresh or a
 run-flow node), a flow group when it has at least one cell, a saved script when it has
 code, a SQL script when its author could write its datasource now.
@@ -145,6 +149,10 @@ The sample `Sample / Flows` folder already has three scheduled flows (`0 6 1 * *
    `30 5 * * *`, half an hour after the imports. Open the dialog, set **Tell me if it
    fails** to `data-team@example.com` with your SMTP connection, **Save**.
 3. Look at **Schedule load** in the Flows tab: 05:00 holds two imports, 05:30 one flow.
+
+![Schedule load in the Flows tab: a week by hour, with the busy slots in the early morning and no collisions](../media/guide/scheduling/schedule-load.png)
+
+***Schedule load**: the next seven days hour by hour; the darker the cell, the more runs start in it. Below, whether any minute exceeds the workers' capacity.*
 
 Two schedules half an hour apart work as long as the imports take less than half an
 hour. When the order matters, put the jobs in a [flow group](flow-groups.md) with one

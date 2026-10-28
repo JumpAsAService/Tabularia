@@ -122,6 +122,39 @@ ENTRYPOINT ["python", "/app/run.py"]
 With that image, the node's **Arguments** `--days` and `30` run
 `python /app/run.py --days 30`.
 
+## Example: a forecast step in a flow
+
+The image above, used in a flow that reads the sample «Margin by Category and Month»
+(**Sample / Private tables**).
+
+1. Build the image and push it to your company's registry:
+
+   ```bash
+   docker build -t registry.acme.internal:5000/analytics/demand-forecast:1.4.0 .
+   docker push registry.acme.internal:5000/analytics/demand-forecast:1.4.0
+   ```
+
+2. An administrator defines the registry, allows `analytics/*` and gives your group
+   access to it ([the example in Container registries](container-registries.md#example-the-company-registry)).
+3. In a flow, select the **Source** node and choose «Margin by Category and Month» as a
+   catalog datasource. Drag **Container** from the palette's **Control** group next to
+   it and connect the Source to it.
+4. In the node's panel: **Registry** «Acme registry»; **Image**
+   `analytics/demand-forecast`, which the field suggests; **Tag** `1.4.0`, from the list
+   the ↻ button reads. **What the image does** appears: it runs `python /app/run.py` by
+   default, for the platforms it was built for.
+5. **Arguments**, one per line: `--days`, then `30`. Leave **Command** empty: the image's
+   entrypoint runs. **CPU** `1`, **Memory** `1Gi`.
+6. Drag **Output (datasource / database)** after the node, connect it, name the
+   datasource «Demand horizon» in your folder, and **Save**.
+7. **Run** in the node's panel: a node of the cluster pulls the image and runs it on the
+   sources' sample. The panel says «Last run from here now: SUCCESS · 184 rows», **Log**
+   shows what the container printed, and the preview under the canvas has the input's
+   columns and `horizon_days` = 30.
+8. **Run** in the toolbar runs the whole flow. In **Runs**, the node's run shows the
+   registry and the image with its digest, the command, the attempts, the exit code and
+   the log.
+
 ## A run
 
 1. **The image.** The tag is resolved to its digest when the run starts, and the Pod

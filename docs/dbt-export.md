@@ -239,6 +239,10 @@ In the Flows page, **Export → dbt** opens a dialog that shapes the project for
 data team's repository. The choices are remembered in the browser, per flow, as they
 were typed (an empty folder stays empty: its default follows the flow's name).
 
+![The dialog Export as a dbt project for Top 20 Products by Revenue: where it runs (ClickHouse, DuckDB federated, native warehouse), complete project or folder, folder, model prefix and schema, the source names of Sample ERP, the materialization and what to include](media/guide/dbt/dbt-export-dialog.png)
+
+***Export → dbt** on the sample flow «Top 20 Products by Revenue»: its two sources on the sample ERP get a source name each, its output a materialization.*
+
 | Option | What it does |
 |---|---|
 | **Where it runs** | ClickHouse, DuckDB (federated) or native. A target that cannot work for the flow is disabled, with the reason: a `pivot` outside DuckDB, sources on several connections or on MySQL/MariaDB for native, an Oracle, SQL Server or Trino source, a seed over 50 000 rows, a step saved half done (a join without its right input or its keys, a filter without a column or a value, an aggregation without a column…), a source or output name with a character the target's dbt adapter cannot write (see Limits). ClickHouse with an Oracle, SQL Server or Trino table becomes available in **Folder for an existing project**: those sources are then ticked «already declared» and cannot be unticked (the team's project must declare them; type the source name it has there); in the complete project ClickHouse stays disabled with the reason |

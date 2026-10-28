@@ -31,6 +31,10 @@ adds a row, the **+** above the grid adds a column; a step may leave columns emp
 **Save** keeps the group; **Run now** runs the saved version, so it is greyed out while
 there are unsaved changes.
 
+![The flow group Morning sales: four steps, two refreshes in the first, then a flow, a SQL script and a Pushmail cell, all succeeded; the catalog of objects on the right](../media/guide/flow-groups/morning-sales-grid.png)
+
+*The group of the example below after a run: every cell green, the outcome and the time of the last run above the grid, **Add to the group** on the right.*
+
 | Cell | In the catalog | What it does |
 |---|---|---|
 | Flow | **Flows** | runs the flow on its production engine; label «Run flow» |
@@ -189,8 +193,17 @@ revenue by channel and send both to the sales team.
    its file name (`top_products_{today:yyyyMMdd}`, `revenue_by_channel`).
 6. **Save**, then **Run now** to try it. The cells light up step by step; the email
    arrives with two `.xlsx` files.
+
+   ![Run now on the flow group: the two refreshes light up together, then the flow, the SQL script and the email, one step after the other](../media/guide/flow-groups/run-a-flow-group.gif)
+
+   *Run now: step 1 starts both refreshes at once; each step waits for the one above.*
+
 7. **Schedule** → `30 6 * * 1-5` (Monday to Friday at 06:30, in the installation's
    time zone) → **Save**. The run bar shows **Next run**.
+
+![The schedule dialog of the group with the cron 30 6 * * 1-5 read as At 06:30, Monday through Friday](../media/guide/flow-groups/morning-sales-schedule.png)
+
+*The group's schedule: the cron, its meaning in words and the time zone it is read in.*
 
 What happens when something breaks:
 

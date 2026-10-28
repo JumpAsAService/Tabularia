@@ -28,6 +28,10 @@ back and whether there are more («100 rows (truncated)»); the node keeps the s
 shown raw, nulls as `∅`. A node that is not configured yet asks to be set, instead of
 showing an error.
 
+![Clicking the nodes of the sample flow one after another: the table under the canvas changes to each step's result](../media/guide/flows/preview-any-step.gif)
+
+*Each click shows that step's first 100 rows: the order lines, the computed revenue, the join with the orders, the margin by category and month.*
+
 The rows are computed on the **whole input**: a Group by groups every row, a Join joins
 every row, and you see the first 100 of the result. The one exception is a source with a
 **Development sample** (first N rows or a random percentage), which previews and editor
@@ -98,6 +102,10 @@ then build the view in the side panel and press **Apply**:
   fields and pivot applied). The chosen engine computes it; the file is written by a
   worker with Polars.
 
+![The Viewer on Margin by Category and Month with the pivot on: categories as rows, months as columns, the sum of the margin in the cells](../media/guide/analysis/viewer-pivot.png)
+
+*The saved view «Margin by category — month by month»: **Pivot** with **Rows** `categoria`, **Columns** `anno_mese`, **Values** `margine`, **Function** sum.*
+
 ## Saved views
 
 **Save view** stores the current configuration, with a name, in a folder: the engine,
@@ -130,6 +138,10 @@ in **Sample / Private tables**, with one row per product category and month:
 The **Sample** folder already holds four views built this way, among them «Margin
 watch — categories under 30%» (step 2) and «Margin by category — month by month»
 (step 4).
+
+![In the Viewer the pivot is turned off and on, then the Chart tab draws the sum of the margin by category](../media/guide/analysis/pivot-and-chart.gif)
+
+*The same view: the rows without the pivot, the matrix with it, then **Chart** with the sum of `margine` by category, computed on every row.*
 
 ## Permissions
 

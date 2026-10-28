@@ -3,8 +3,9 @@
 // The docs are written for GitHub: `foo.md`, `../deploy/kubernetes.md#ingress`,
 // `../gateway/app/db/migrations/versions/`. On the site
 //   - a link to a published doc becomes the doc's route (/docs/...),
-//   - the diagrams in docs/architecture stay on the site; a few repository images are served
-//     by the site itself (SITE_IMAGES); the product GIFs of docs/media are not published,
+//   - the diagrams in docs/architecture and the screenshots and GIFs of docs/media/getting-started
+//     and docs/media/guide stay on the site; a few repository images are served by the site
+//     itself (SITE_IMAGES); the README's product GIFs (docs/media/*.gif) are not published,
 //   - any other repository path becomes its GitHub URL (blob for files, tree for folders),
 //   - a link to a file that will not be on GitHub (not in git, or kept local on purpose)
 //     becomes plain text: the site never links somewhere that does not exist.
@@ -20,10 +21,11 @@ export const PRIVATE_DOC_DIRS = ['audit', 'specs']
 export const PRIVATE_DOC_FILES = ['deploy/docker-compose.md']
 
 // Folders of docs/ published as plain files next to the pages (the walkthrough's
-// screenshots too; the other files of docs/media are not published).
-export const PUBLIC_DOC_ASSET_DIRS = ['architecture', 'media/getting-started']
+// screenshots, and the guide's screenshots and GIFs; the other files of docs/media are not
+// published).
+export const PUBLIC_DOC_ASSET_DIRS = ['architecture', 'media/getting-started', 'media/guide']
 // Only these kinds are served from the site; other files (JSON schemas) read better on GitHub.
-const PUBLIC_ASSET_EXT = /\.(png|jpe?g|svg|webp|html)$/i
+const PUBLIC_ASSET_EXT = /\.(png|jpe?g|gif|svg|webp|html)$/i
 // Repository images the site serves itself (copied into website/public).
 const SITE_IMAGES = {
   'frontend/public/logo.svg': '/logo.svg',

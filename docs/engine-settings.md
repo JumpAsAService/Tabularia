@@ -10,6 +10,10 @@ The settings are in boxes, one per component (Gateway, Kubernetes, Engine), with
 by name or variable. Each one shows a description in the reader's language, the value of
 the environment and its variable, the allowed range, and who changed it and when.
 
+![Administration, Settings searched for EXPORT__MAX_ROWS: the box Export with Most rows in a CSV export, a new value 2000000 not yet saved, the environment's value 5,000,000, the allowed range, Undo the change, and the bar 1 change to save](media/guide/admin/settings-export-limit.png)
+
+*A change on its way: the setting found by its variable, the new value marked **Unsaved** next to the environment's, and **Save** in the bar at the bottom.*
+
 ## Three families
 
 - **Live** (most of them): read by the code each time it is used. A change applies within
@@ -368,6 +372,22 @@ started with until the next check, a script's or container's Job is followed at 
 it was started with, and a new connect timeout for ClickHouse applies to the connections
 opened from then on. A new time zone for the schedules computes again the next slot of
 every schedule at once.
+
+## Example: a smaller cap on CSV exports
+
+The Viewer's and the editor's CSV downloads stop at 5,000,000 rows by default
+(`EXPORT__MAX_ROWS`). To bring that down to 2,000,000 without touching the deployment:
+
+1. **Administration → Settings**, type `EXPORT__MAX_ROWS` in the search: the box
+   **Export** (Engine) opens on **Most rows in a CSV export**, with the environment's
+   value, its variable and the allowed range (0 to 100,000,000 rows).
+2. Type `2000000`. The field is marked **Unsaved**, with **Undo the change**, and the
+   bar at the bottom counts «1 change to save».
+3. **Save**. The engine checks the value and keeps it; within ten seconds every worker
+   uses it, and the audit log has an `engine_settings.update` with the old and the new
+   value. A larger export now stops and says so.
+
+**Back to the environment**, on the setting, returns to 5,000,000.
 
 ## Restarts
 

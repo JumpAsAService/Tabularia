@@ -31,6 +31,10 @@ The placeholders are those of the Outputs ([placeholders](placeholders.md)): `{t
 `{today-1:yyyyMMdd}`, `{now:HHmm}`, `{run_id}`, `{flow}`. The panel shows what each name
 gives now.
 
+![The Pushmail cell settings: name Morning sales report, SMTP connection, To sales-team@example.com, subject Sales {today:yyyy-MM-dd}, a message, two datasources with their file names and row caps](media/guide/pushmail/pushmail-cell.png)
+
+*The cell of the [morning sales example](capabilities/flow-groups.md#example-the-morning-sales-email): two datasources, each with its file name; under each name, what it gives today.*
+
 **Rows at most.** A datasource with more rows sends its first ones, and the email says
 so at the end of the message, in the language of whoever runs the group:
 
@@ -62,6 +66,27 @@ would otherwise send data to recipients its author never chose.
 
 Every email is written to the audit log (`email.send`) when it leaves: who, through
 which connection, to whom, which datasources.
+
+## Example: the morning sales email
+
+The [flow group example](capabilities/flow-groups.md#example-the-morning-sales-email)
+ends with this cell. Tried with [Mailpit](connections/smtp.md#example-try-it-locally-with-mailpit)
+as the SMTP connection:
+
+1. In the group, **Add step**, then in its first cell choose **Pushmail (datasources by
+   email)**.
+2. Name `Morning sales report`, the SMTP connection, To `sales-team@example.com`,
+   Subject `Sales {today:yyyy-MM-dd}`, the message «Good morning, attached are
+   yesterday's top products and the revenue by channel.», time zone `Europe/Rome`.
+3. **Datasources**: «Top 20 Products by Revenue» as `top_products_{today:yyyyMMdd}`, and
+   `revenue_by_channel` as `revenue_by_channel`, 10,000 rows at most each.
+4. **Save**, **Run now**. When the cell turns green, the email is in Mailpit: subject
+   «Sales 2026-10-28», from the connection's sender, with `top_products_20261028.xlsx`
+   and `revenue_by_channel.xlsx`.
+
+![The email in Mailpit: from Tabularia Reports, to sales-team@example.com, subject Sales 2026-10-28, the message and two .xlsx attachments](media/guide/pushmail/pushmail-email-mailpit.png)
+
+*What the recipients get: the message as written, one Excel file per datasource.*
 
 ## The run
 

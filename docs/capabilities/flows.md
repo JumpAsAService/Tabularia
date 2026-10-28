@@ -8,6 +8,10 @@ the whole table by the engine the flow runs on. A saved flow keeps its versions,
 hand or on a schedule, and publishes its result as a datasource, a database table, a file
 or an email.
 
+![Building a flow in the editor: a source, a filter, a group by and a sort, each previewed as it is added](../media/guide/flows/build-a-flow.gif)
+
+*A flow built on the sample `orders`: the source, a Filter on `stato`, a Group by on `canale` with a count, a Sort. Each node shows its rows as soon as it is set.*
+
 ## At a glance
 
 | | |
@@ -43,6 +47,10 @@ Nodes that need a second input, **Join** and **Union (append rows)**, have two h
 on their left: the top one takes the previous step (the left table), the bottom one the
 branch to join or append (the right table). The right branch can be transformed before
 it arrives, like any chain.
+
+![The flow editor with the sample flow Margin by Category and Month: the palette on the left, five chains joined on the canvas, the Join node's settings on the right and its rows below](../media/guide/flows/flow-editor-margin.png)
+
+*The sample flow «Margin by Category and Month» in the editor: the palette, the canvas with five source chains, the selected Join's settings in the panel and its first rows in the data view.*
 
 ## The node catalogue
 
@@ -187,6 +195,10 @@ and VIEW on **Sample** first: the sample folder starts with no permissions.
 Each step can be checked as you go: click the Join to see the order lines with their
 order attached, the Group by to see one row per region and channel. The run publishes the datasource; the
 [Viewer](preview-and-analysis.md#the-viewer) and the other flows read it from then on.
+
+![Clicking the nodes of the sample flow one after another: the table under the canvas changes to each step's result](../media/guide/flows/preview-any-step.gif)
+
+*Click a node, see its data: the raw order lines, the computed `ricavo_netto`, the join with the orders, then the margin per category and month.*
 
 The **Sample / Flows** folder holds the complete version of this analysis, «Margin by
 Category and Month»: five sources, six joins, an **Execute SQL** step that picks the

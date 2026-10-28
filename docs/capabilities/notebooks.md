@@ -8,6 +8,12 @@ seeing or touching the code. The notebook reads Tabularia's datasources when its
 asks for them, with the rights of its author, and its pod runs only while somebody uses
 it.
 
+![The «Margin by category» app open in Tabularia: the threshold slider moves from 30% to 25% and then to 35%, the dashed line on the chart follows it and the count of category-months under it changes; then «Last months» goes from 12 to 24 and the chart is drawn again over two years](../media/guide/notebooks/notebook-app-sliders.gif)
+
+*The app of the [example below](#example-margin-by-category), as whoever can see the
+notebook opens it: each control recomputes only the cells that depend on it, and the code
+stays out of sight.*
+
 ## At a glance
 
 | | |
@@ -31,6 +37,11 @@ description, and writes a starting notebook. Every save that changes the code is
 lists them with who saved each one; **View** shows an older one and **Restore** makes it
 the newest again, as a new version.
 
+![The page of the notebook «Margin by category» in the folder Sales analysis: Open app and Open editor at the top, a box saying the app reads Tabularia's data with the rights of Administrator, who saved this version, the Python environment, the description, the visitors at once, the source, and the versions v2 (current) and v1](../media/guide/notebooks/notebook-page.png)
+
+*The notebook's page: **Open app**, **Open editor**, whose rights the app reads with, and
+the versions on the right.*
+
 The code can be changed in two places:
 
 - **marimo's editor** (**Open editor**): the notebook runs live as you write it. marimo
@@ -38,6 +49,11 @@ The code can be changed in two places:
   Tabularia version of what marimo saved last, with an optional note. **Close editor**
   stops the editor.
 - **The notebook's page**, as text, then **Save**.
+
+![marimo's editor inside a Tabularia page: the bar above it says «You are editing: this editor reads Tabularia's data with your own rights» and holds Save version, Open app and Close editor; below, the cells of the example: the read of the datasource, the cell that draws the Category dropdown and the two sliders with its output, the filter, and the chart](../media/guide/notebooks/notebook-editor.png)
+
+*marimo's editor in its frame: each cell's code with its output under it. **Save version**
+turns what marimo saved into the version the app runs.*
 
 While marimo's editor is open on a notebook, the code changes only there. The page shows
 the source read-only, and Tabularia refuses a change of the source or a **Restore** from
@@ -55,6 +71,11 @@ that there is one, with **Load it** and **Discard**.
 **Open app** opens the app in a new tab, on a page of its own. Behind it is `marimo run`:
 the viewers see the outputs and the controls, never the code. Everyone who opens the app
 shares the same pod; marimo keeps each open page's controls separate.
+
+![The app on a page of its own: the title «Margin by category», a Category dropdown on All, the sliders Last months at 12 and Flag margins under (%) at 30, a line chart of the margin of five product categories over twelve months with a dashed line at 30%, and the start of the table of the 37 category-months under it](../media/guide/notebooks/notebook-app.png)
+
+*The app as its viewers see it: outputs and controls, no code. The bar above names the
+notebook and its folder.*
 
 When a new version becomes current, the pod that runs the old one is replaced the next
 time someone opens the app. **Stop**, on the notebook's page, stops the app for
@@ -359,7 +380,7 @@ def _(alt, floor, shown):
 @app.cell
 def _(floor, mo, pl, shown):
     under = (shown.filter(pl.col("margine_pct") < floor.value)
-             .select("month", "categoria", "ricavo", "margine", "margine_pct")
+             .select("month", "categoria", pl.col("ricavo", "margine").round(0), "margine_pct")
              .sort("month", "categoria"))
     mo.vstack([mo.md(f"**{under.height}** category-months under {floor.value}%"), mo.ui.table(under)])
     return
@@ -372,6 +393,22 @@ if __name__ == "__main__":
 Moving the slider or changing the category recomputes only the cells that depend on
 them: the data is read once, when the page opens. The months of the sample data show
 their seasons; with the threshold at 30%, the table lists the months to look into.
+
+What you see, with the sample data (the pictures at the top of this page):
+
+1. The app opens on **All** categories and the **last 12 months**: one line per
+   category, and the dashed threshold at 30%. *Insaccati cotti* and *Insaccati da
+   cuocere* run around or above it; *Salami*, *Salumi stagionati* and *Prosciutti* run
+   below, so the table under the chart holds their months.
+2. Move **Flag margins under (%)** to 25: the dashed line drops, and the count above the
+   table falls to the months of the two lowest categories and a few of *Salami*.
+3. Move **Last months** to 24: the chart shows two years, and you can compare each month
+   with the same month of the year before.
+4. Choose **Prosciutti** in **Category**: one line, and the table holds only its months.
+
+In marimo's editor (**Open editor**) the same cells show their code with their output under
+it; change the threshold's default to 25, **Save version**, and the app opens on 25% for
+whoever opens it next.
 
 A second notebook can start from the catalogue instead of a known name, for example a
 cell that shows `mo.ui.table(tabularia.datasources())` and a dropdown built from its

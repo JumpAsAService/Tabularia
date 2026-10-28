@@ -118,7 +118,13 @@ Then, in a folder where you have CONNECT, **New → New connection**:
 | Encryption | None (not recommended) |
 | Allowed domains | `example.com` |
 
-**Test connection** says *Connection works*. Open the sample flow **Top 20 Products by
+**Test connection** says *Connection works*.
+
+![The SMTP connection Mailpit (test): server mailpit, port 1025, no credentials, sender tabularia@example.com, encryption none, allowed domain example.com, and Connection works](../media/guide/connections/smtp-connection-mailpit.png)
+
+*The Mailpit connection of this example after **Test connection**. On a real server keep STARTTLS or SSL/TLS.*
+
+Open the sample flow **Top 20 Products by
 Revenue**, add an Output node after the last step with destination **Email with
 attachment**, the connection `Mailpit (test)`, recipients `sales@example.com`, subject
 `Top 20 products {today:dd/MM/yyyy}`, attachment name `top20_{date}`, format Excel. Run the

@@ -60,6 +60,14 @@ Every flow carries two engines:
   set **Engine (production)**. Scheduled runs, flow groups and **Run in production** use
   it; «same as development» leaves them on the development engine.
 
+![The New flow button open on the Execution engine list: Polars marked preferred, DuckDB, chDB, ClickHouse (external), BigQuery](../media/guide/engines/new-flow-engine-picker.png)
+
+***New flow** asks for the development engine first; your preferred one is marked.*
+
+![A flow's card in the Flows tab with Engine (production) set to same as development](../media/guide/engines/flow-card-production-engine.png)
+
+*A flow's card in the **Flows** tab: **Engine (production)**, the engine of its schedules and of **Run in production**.*
+
 So a flow can be designed on Polars, with a development sample on its sources, and run
 every night on ClickHouse or BigQuery on the whole table. Every run records the engine it
 actually ran on (the `engine` field of the run in the API), which is the first thing to
@@ -79,6 +87,10 @@ running, and the count beside the engine is the list of flows to move. At least 
 engine always stays allowed. The pickers tell «not allowed here» apart from «not
 configured», so nobody looks for a missing variable when the reason is a policy.
 Allowing and disallowing are in the audit log (`engine.allow`, `engine.disallow`).
+
+![Administration, Engines: polars used by 13 flows, duckdb, chdb, clickhouse and bigquery by none, each with its switch](../media/guide/admin/engines-allowed.png)
+
+***Administration → Engines**: each engine, the flows still using it, and the switch that allows or stops it.*
 
 ### One semantics, documented differences
 

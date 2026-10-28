@@ -41,6 +41,10 @@ key below the fixed part `in`), `_file_modified_at` the object's last modificati
 must be **machine readable** (header in the first row, one name per column, no
 repeats): anything else is refused, naming the file.
 
+![The S3 folder datasource form: name sell_out, connection Partner exchange (S3), bucket empty, folder inbound, files sellout_*.csv, format from each file's extension](media/guide/sources/s3-folder-datasource.png)
+
+*The datasource of the [S3 connection example](connections/s3.md#example-a-nightly-exchange-with-a-partner-bucket): the distributor's daily files in `inbound/`, read from the connection's default bucket.*
+
 With placeholders or variables, a value whose files are missing is **skipped and
 listed** on the run; no file at all across the values **fails** the refresh (see
 [placeholders.md](placeholders.md#files-one-expansion-per-value)).

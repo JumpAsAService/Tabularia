@@ -7,6 +7,10 @@ what they want to know but not where the data sits or how to write the SQL, and 
 analysts who want a first answer in seconds. It reads only what the person asking may
 read, and never changes anything.
 
+![A question typed on the Assistant page with one datasource in focus; the steps appear, then a bar chart and a table with the answer](../media/guide/ai/ask-your-data.gif)
+
+*«Which category has the lowest margin? Chart it.» with «Margin by Category and Month» in focus: the steps it took, the chart, the table and a two-line answer.*
+
 ## At a glance
 
 | | |
@@ -137,6 +141,47 @@ descriptions on purpose. The assistant still answers, but it has to guess what `
 and `esito` hold from their names and five sample rows; with descriptions it would not
 need to. The side list shows the difference: `orders` carries the «AI ready» mark
 (every field described), `crm_activities` no mark at all.
+
+## Asking it to build
+
+The same page builds: a flow, its schedule, a refresh, the other objects its tools
+offer. Nothing changes until you confirm. An example on the sample data, as it went on
+the Docker Compose stack:
+
+1. Type «Build a datasource with the monthly net revenue per sales channel from the
+   Sample orders and order lines, refreshed every morning.»
+2. The assistant searches the catalog, lists the folders where you may write and reads
+   the fields of `orders` and `order_rows`. One thing it cannot decide for you comes back
+   as a card of questions: **Which orders should count toward net revenue?**, with
+   «Fulfilled only» marked *Recommended*, «Fulfilled + in progress», «All orders» and
+   **Other** for an answer of your own.
+
+![The assistant asks which orders count toward net revenue, with three choices and Other](../media/guide/ai/agent-question-card.png)
+
+*The question card: pick one choice (or write yours under Other), then **Send answers**.*
+
+3. Pick «Fulfilled only» and **Send answers**. The answer is a **plan**: *Create the flow
+   «Monthly net revenue per channel»* in `Sample / Flows` on Polars, with its steps (the
+   two sources, a filter `stato = evaso`, the join on the order, the month and the net
+   revenue as computed columns, the group by, the sort, the Output) and its first five
+   rows; then *Schedule the flow* at 07:00 every day. The card says «Nothing has changed
+   yet» and when the plan expires (30 minutes after its last change).
+
+![A plan of two actions, waiting for confirmation: create the flow with its steps and first rows, then schedule it](../media/guide/ai/agent-plan-card.png)
+
+*The plan card: what each action does, what it writes, the first rows it will produce, and **Confirm**, **Change**, **Cancel**.*
+
+4. **Confirm**. Your permissions are checked again and the actions run in order: each
+   one shows **Done** with an **Open** link, here to the new flow in the editor.
+   **Open its page** shows the same plan at `/agent-plan`, to come back to it later.
+
+![The plan applied: both actions marked Done, each with an Open link](../media/guide/ai/agent-plan-applied.png)
+
+*Applied: the flow exists and is scheduled; **Open** takes you to it.*
+
+**Change** asks the assistant to rework the plan with your remarks; **Cancel** drops it.
+Building needs what the same work needs by hand: EDIT on the folder of the flow, RUN to
+schedule it, CONNECT on a connection it reads ([AI in Tabularia](../integrations/ai.md#where-the-ai-is-used)).
 
 ## Permissions
 

@@ -27,7 +27,7 @@ your team also **writes Python and R in governed environments** and **orchestrat
 own containers**, as steps of the same flows.
 
 <p align="center">
-  <img src="docs/media/build-a-flow.gif" width="100%"
+  <img src="docs/media/guide/flows/build-a-flow.gif" width="100%"
        alt="Building a flow step by step: a source, a filter, a group by and a sort, with the preview refreshing at every step">
 </p>
 
@@ -76,7 +76,7 @@ engines, from an in-process library to a serverless warehouse.
   rows, so reopening it reads today's data — it is a lens, not a copy.
 
   <p align="center">
-    <img src="docs/media/pivot-and-chart.gif" width="100%"
+    <img src="docs/media/guide/analysis/pivot-and-chart.gif" width="100%"
          alt="A saved view in the Viewer: the table pivoted by month, then the same data as a chart">
   </p>
 
@@ -375,7 +375,7 @@ Verified against a real project: the cross-engine oracle suite passes on BigQuer
 fill_null · drop_nulls · group_by · pivot · unpivot · join · union · foreach`
 
 <p align="center">
-  <img src="docs/media/preview-any-step.gif" width="100%"
+  <img src="docs/media/guide/flows/preview-any-step.gif" width="100%"
        alt="Clicking any node in the flow shows its parameters on the right and its output below">
 </p>
 
@@ -590,7 +590,7 @@ query could name another table, the permission on a datasource would be decorati
 ## AI assistant
 
 <p align="center">
-  <img src="docs/media/ask-your-data.gif" width="100%"
+  <img src="docs/media/guide/ai/ask-your-data.gif" width="100%"
        alt="Asking the assistant which category has the lowest margin: it finds the datasource, runs the query and charts the answer">
 </p>
 

@@ -86,6 +86,11 @@ ORD-004103;2026-03-03;Gastronomia;Modena;412,80
 2. In the toolbar, **Upload file** and pick `ordini_modena_marzo.csv`. The source shows
    three rows and five columns; `importo` is a number (1234.5, 18760, 412.8), not text,
    because the separator `;` and the decimal comma were read from the file.
+
+   ![The uploaded CSV as the source of a new flow: three rows, importo read as a decimal number](../media/guide/sources/upload-csv-italian.png)
+
+   *`ordini_modena_marzo.csv` right after the upload: `data_ordine` is a date, `importo` a number (`Float64`), read from an Italian-style file.*
+
 3. Add a second source (**Source**) and, with it selected, upload `listino_2026.xlsx`.
    `Listino` is read; the dialog **Sheets to import** shows `Note` as hidden. Leave it.
 4. Build the flow: filter, join, compute. Then add an **Output** node, destination

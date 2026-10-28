@@ -16,6 +16,12 @@ For whoever runs Tabularia on Kubernetes, and whoever writes the scripts.
 - **Notebooks** run marimo in the Python environments, as web apps that read the
   datasources ([marimo notebooks as apps](capabilities/notebooks.md)).
 
+![The Scripting tab: My scripts lists «Margins under target», in the folder Sales analysis, with its Python environment and its last run, and a New script button; My environments shows the environment Python, Python 3.12, ready, with its installed packages open](media/guide/scripting/scripting-tab.png)
+
+*The **Scripting** tab, read-only: your saved scripts, and the environments you may write
+for with what is installed in them. Where Container nodes are on, the registries granted to
+you are listed too.*
+
 All of it needs Kubernetes. On Docker Compose, Scripting environments, the palette's
 **Script** and the Script nodes of a flow brought from a cluster are greyed out, with
 the reason.
@@ -220,6 +226,11 @@ In **Administration → Scripting environments**, fill in:
 It also warns when the key can list the bucket. The secret key is encrypted and cannot
 be read back.
 
+![Administration, Scripting environments: the bucket for the scripts, with the endpoint of a MinIO service in the cluster, the bucket tabularia-scripts, the region us-east-1, the access key scripts and the secret key shown only as set, Save and Test; below, the environment Python 3.12 with version 1 in use](media/guide/scripting/admin-scripting-environments.png)
+
+*The scripts bucket and the environments, in Administration. The secret key is never shown
+again: the field only says it is set.*
+
 ## Environments
 
 **New environment** asks for a name, a language and its version, and the packages.
@@ -354,6 +365,12 @@ On the right, what the script finds in its environment: Tabularia's variables, t
 environment's variables (secret ones by name only), the installed packages. A click
 inserts one at the cursor.
 
+![The code editor of the Script node «Margin trend», Python 3.12: on the left the node's files, main.py marked as the one that runs, and a field to add another such as lib/helpers.py; in the middle the code of the example below; on the right the variables set by Tabularia, TABULARIA_INPUT and TABULARIA_OUTPUT first, and the installed packages; under the code, «Last run, now: succeeded»](media/guide/scripting/script-code-editor.png)
+
+*The code editor of the [example below](#example-the-margin-trend-of-each-category):
+files on the left, the variables and packages the script finds on the right, the outcome
+of the last run under the code.*
+
 While typing, the editor offers:
 - the variables, inside `os.environ["…"]`, `os.getenv("…")` and `Sys.getenv("…")`;
 - the installed modules after `import` and `library(`;
@@ -403,6 +420,68 @@ columns, and, for a failed run, only the error of its log (the Python traceback,
 error): never a row of data, nor anything else the script printed. Its conversations
 are saved as the other assistants', with the same daily caps.
 
+### Example: the margin trend of each category
+
+The sample datasource «Margin by Category and Month» (**Sample / Private tables**) has one
+row per product category and month: `categoria`, `anno_mese`, `ricavo`, `margine`,
+`margine_pct` and more. This Script node adds, for each row, the margin of the last three
+months and the revenue against the same month a year before, which a flow's operations
+would need several steps to compute.
+
+1. In Explore, open a folder you may edit (here «Sales analysis»), **New** → **New flow**,
+   and name it «Margin trend».
+2. Select the **Source** node and, in its panel, **or use a catalog datasource** →
+   «Margin by Category and Month».
+3. Drag **Script** from the palette's **Control** group next to it, and connect the
+   Source to it. In its panel: name «Margin trend», **Written here**, environment
+   «Python».
+4. Drag **Output (datasource / database)** after it, connect the Script node to it, and
+   name the datasource «Margin trend by category» in your folder.
+5. **Save**. In the Script node's panel, **Edit the code**, replace `main.py` with the code
+   below, **Close**, and **Save** again.
+6. **Run** in the Script node's panel. In a few seconds the panel says «Last run from here
+   now: SUCCESS · 184 rows»; **Log** shows what the script printed, and the preview under
+   the canvas shows the rows it wrote, newest month first.
+7. **Run** in the toolbar runs the whole flow and publishes «Margin trend by category».
+
+```python
+import os
+
+import polars as pl
+
+# the step before this node: Margin by Category and Month
+margin = pl.read_parquet(os.environ["TABULARIA_INPUT"])
+print(f"read {margin.height} rows")
+
+revenue_3m = pl.col("ricavo").rolling_sum(3).over("categoria")
+margin_3m = pl.col("margine").rolling_sum(3).over("categoria")
+year_ago = pl.col("ricavo").shift(12).over("categoria")
+growth = pl.col("ricavo") / year_ago - 1
+
+trend = (
+    margin.sort("categoria", "anno_mese")
+    .with_columns(
+        margin_pct_3m=(margin_3m / revenue_3m * 100).round(2),
+        revenue_vs_last_year_pct=(growth * 100).round(1),
+    )
+    .select("categoria", "anno_mese", pl.col("ricavo").round(0),
+            "margine_pct", "margin_pct_3m",
+            "revenue_vs_last_year_pct")
+    .sort("anno_mese", "categoria", descending=[True, False])
+)
+trend.write_parquet(os.environ["TABULARIA_OUTPUT"])
+print(f"wrote {trend.height} rows")
+```
+
+![The flow «Margin trend» in the editor: Source «Margin by Category and Month», the Script node «Margin trend» (Python) and a datasource output. The Script node is selected; Run in its panel shows «Running…», then «Last run from here now: SUCCESS · 184 rows»; the Log opens on «read 184 rows» and «wrote 184 rows», and the preview below lists categoria, anno_mese, ricavo, margine_pct, margin_pct_3m and revenue_vs_last_year_pct, newest month first](media/guide/scripting/script-node-run.gif)
+
+*Run in the Script node's panel: the trial runs on the cluster, its log arrives in the
+panel, and what it wrote becomes the preview of the nodes after it.*
+
+The newest month can show a large drop against the year before: in the sample data it
+holds only part of the month. The months of the first year have no
+`revenue_vs_last_year_pct`, and the first two of each category no `margin_pct_3m`.
+
 ### Running
 
 A flow with a Script node runs as an orchestration, like one with a Container node.
@@ -434,6 +513,11 @@ New → Script (Python or R)**, or **New script** in the **Scripting** tab. It i
 in the same editor as the Script node, in one of the environments you may use, and it
 keeps its **versions**: every save that changes it is one; an older one can be looked
 at and restored, and becomes the newest.
+
+![The page of the saved script «Margins under target» in Sales analysis: Schedule, Run and Save at the top; the Python environment and the description; the code, main.py, 13 lines, with Edit the code; the input MARGIN, the datasource «Margin by Category and Month» from Sample › Private tables; the output, published as the datasource «Margins under target» in Sales analysis and replaced at every run; the versions on the right](media/guide/scripting/saved-script-page.png)
+
+*A saved script's page: its environment, its code, the datasources it reads under their
+aliases, and where its result goes.*
 
 **Who sees it.** VIEW on its folder **and** the use of its environment. Whoever lacks
 either does not see it at all: not in Explore, not in the search, not in the Scripting
@@ -493,6 +577,43 @@ runs it with a cron, with the authority of whoever set it; as for flows, a chang
 someone else that makes the script reach more (other code, other inputs, another
 publish folder, another environment, another folder) switches the schedule off, and
 the audit log says why.
+
+![The Runs of a saved script: two runs on the left, versions 2 and 1; the newest succeeded, by hand, in 7 seconds, with a link to the datasource it published; its log says «43 category-months under 25%», and its output, 43 rows, lists anno_mese, categoria, ricavo, margine and margine_pct](media/guide/scripting/saved-script-run.png)
+
+*The script's page follows each run: its outcome, its log and the first rows of what it
+wrote.*
+
+### Example: the months under target
+
+A saved script that reads the sample «Margin by Category and Month» and publishes the
+category-months whose margin is under 25%:
+
+1. In Explore, open your folder (here «Sales analysis»), **New** → **Script (Python or
+   R)**, name it «Margins under target», environment «Python».
+2. Under **Inputs**, **Add a datasource** → «Margin by Category and Month», and change
+   the alias it proposes to `MARGIN`.
+3. Under **Output**, tick **Also publish it as a datasource**: name «Margins under
+   target», folder «Sales analysis», **Replace it at every run**.
+4. **Edit the code**, write the code below, **Save**.
+5. **Run**: in a few seconds the run succeeds, its log says how many category-months are
+   under 25%, and **Published as a datasource** opens the result.
+6. **Schedule** runs it every morning, for instance, so the datasource is fresh when people
+   arrive.
+
+```python
+import os
+
+import polars as pl
+
+margin = pl.read_parquet(os.environ["TABULARIA_INPUT_MARGIN"])
+under = (
+    margin.filter(pl.col("margine_pct") < 25)
+    .select("anno_mese", "categoria", pl.col("ricavo", "margine").round(0), "margine_pct")
+    .sort("anno_mese", "categoria", descending=[True, False])
+)
+print(f"{under.height} category-months under 25%")
+under.write_parquet(os.environ["TABULARIA_OUTPUT"])
+```
 
 ### In flow groups and flows
 

@@ -44,6 +44,10 @@ The first time forwarding is turned on, it starts from that moment; the earlier
 history stays on the Audit page. Turning it off and on again resumes where it
 stopped, so the entries made in between are sent too.
 
+![Administration, SIEM: forwarding off, the counters, and the destination with the HEC address https://splunk.example.com:8088, the token stored, index tabularia, host tabularia-prod, Verify Splunk's certificate ticked, Save and Send a test event](media/guide/admin/siem-splunk-form.png)
+
+***Administration → SIEM** filled in as in the table above: the token is stored and never shown; **Send a test event** before **Turn forwarding on**.*
+
 ## The events
 
 One HEC event per audit entry, with the entry's time as `_time`:

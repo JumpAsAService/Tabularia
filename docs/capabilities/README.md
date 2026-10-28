@@ -6,6 +6,10 @@ scheduling the work, and choosing where it is computed. Each page says where the
 is in the interface, how it works, who may use it and what it does not do, with an
 example on the sample data of the Docker Compose stack.
 
+![The flow editor with the sample flow Margin by Category and Month](../media/guide/flows/flow-editor-margin.png)
+
+*The flow editor, where most of the work starts: the sample flow «Margin by Category and Month» with the selected step's rows below.*
+
 ## The map
 
 ### Prepare and analyse

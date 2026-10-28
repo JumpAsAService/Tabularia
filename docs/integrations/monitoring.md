@@ -88,6 +88,10 @@ the Viewer).
   (`MONITORING__NODE_EXPORTER_URL`), not from the metrics store: it is the live value.
   With the variable empty the badge is not shown.
 
+![The Queue page: two online workers, two jobs running, none waiting; one worker busy on two Datasource ingest jobs, each with its Stop button](../media/guide/integrations/queue-page.png)
+
+***Queue** while a flow group refreshes two datasources: one worker has both slots busy, the jobs show their id, worker and time, and **Stop**.*
+
 ### Health checks
 
 | Service | Request | Answers |

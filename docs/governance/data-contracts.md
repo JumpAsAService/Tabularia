@@ -86,6 +86,10 @@ column and a **Whole table** group for row count, freshness and SQL conditions.
   on the current data. Every save that changes the rules is a new version.
 - **Remove the contract** stops the checks; the history of the checks stays.
 
+![The data contract editor of erp_orders: Respected, the severity legend, Propose from the data, Contract active, and the rules of the columns id, numero, data_ordine and cliente_id with their severity](../media/guide/governance/data-contract-dialog.png)
+
+*A contract proposed from the data of an `erp_orders` datasource: column and type as **Error**, not null and unique as **Warning**, every rule respected at the last check.*
+
 ### Notifications
 
 Under **Notifications**, **Addresses to notify** and **SMTP connection to send with**

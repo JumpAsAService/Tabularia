@@ -51,6 +51,10 @@ everything that can be wrong with the connection shows here. A token refused say
 check the tenant, client ID and secret; an access denied names `Sites.Selected` and the
 grant on the site.
 
+![The New connection dialog with type SharePoint: site URL, client ID, client secret hidden, tenant ID, document library empty](../media/guide/connections/sharepoint-connection.png)
+
+*A SharePoint connection with example values: the site, the app's client ID and tenant ID, its secret (hidden), the default library.*
+
 The client secret is encrypted at rest with the same Fernet key as every other
 connection secret (`SECURITY__FERNET_KEY`), travels encrypted to the worker and is
 decrypted only to ask Microsoft for a token. The API never returns it. The Microsoft

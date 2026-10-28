@@ -60,6 +60,43 @@ stays done, as with any account: after revoking a leaked administrator token, lo
 in the audit log for the actions carrying its name (a webhook it created, a
 schedule it changed).
 
+## Example: a token for a scheduler
+
+An external scheduler (Airflow, a CI job) runs the sample flow «Top 20 Products by
+Revenue» every night. As an administrator:
+
+1. **Administration → Service accounts**, name `Airflow production`, **Create account**.
+   The account gets an address of its own (`airflow-production@service.invalid`) and
+   no password.
+2. Give it what the job needs, as to a person: **RUN** on `Sample / Flows`, where the
+   flow is, and **EDIT** on `Sample / Private tables`, where its Output writes (in each
+   folder's **Folder settings**, or through a group). Without EDIT there the run starts
+   and then fails with «Missing 'edit' permission on folder …».
+3. Open the account, name the token `nightly runs`, **Access** *Read and write*,
+   **Expires** 90 days, **Create token**. Copy the secret now: it is shown once.
+
+![The service account Airflow production opened, with the form for a new token: name, access Read and write, expiry 90 days](media/guide/api/service-account-token-form.png)
+
+*A token is created on the account it acts as; its access and its expiry are chosen here.*
+
+![The account with its token nightly runs, read and write, expiring in 90 days, never used yet](media/guide/api/service-account-tokens.png)
+
+*After **Create token** the list keeps only the first characters of the token, to recognise it, and when it was last used.*
+
+Then, from the scheduler (the flow's id is in its editor address, `/editor?flow=6`):
+
+```bash
+curl -X POST -H "Authorization: Bearer tab_…" \
+  https://tabularia.example.com/api/flows/6/run-now
+# 202 {"status": "started", "flow_id": 6, "run_id": 1318}
+
+curl -H "Authorization: Bearer tab_…" https://tabularia.example.com/api/runs/1318
+# {"id": 1318, "status": "SUCCESS", "flow_id": 6, "launched_by": 206, …}
+```
+
+The run appears in **Runs** started by `Airflow production`, and the audit log names the
+token. To cut the job off, revoke the token: the next call gets `401`.
+
 ## Stable endpoints
 
 The paths below are a contract: within a major version they keep their meaning

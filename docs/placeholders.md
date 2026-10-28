@@ -19,6 +19,10 @@ parsed and never evaluated, with the same messages everywhere:
 A database destination's **table name is not a template**: a table named by date
 would break the catalogue and the dbt export.
 
+![An Output node with destination SFTP server: folder outbox/{today:yyyy}/{today:MM} resolved as outbox/2026/10, file name margin_{yesterday:yyyyMMdd} resolved as margin_20261027, time zone Europe/Rome](media/guide/placeholders/sftp-output-placeholders.png)
+
+*An SFTP Output with dated folder and file name: under each field, «now:» shows what a run would write today (28 October 2026, Rome time).*
+
 ## The language
 
 | Placeholder | Value |
@@ -184,6 +188,10 @@ keys: refused with the message the refresh would give) and **before every run** 
 flow (the Output's templates: refused before anything is queued). Every form shows the
 **resolved value while you type** — «now: export_20261018.csv», or «7 values:
 sales_20261011.csv … sales_20261017.csv» — or the message of what is wrong.
+
+![The API call form: the path /{today-30}.. resolved as now: /2026-09-28.., the query parameters, the variables field and the list of dynamic values](media/guide/placeholders/placeholders-api-path.png)
+
+*An «API call» datasource: under the path, «now:» shows what `{today-30}` resolves to today; under the fields, the dynamic values the form accepts.*
 
 ## Proofs
 

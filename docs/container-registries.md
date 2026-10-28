@@ -182,6 +182,35 @@ they are then: a changed or removed password never lingers there. A registry wit
 credentials has none, and a deleted registry's goes with it. Do not edit them by hand:
 the next run writes them again.
 
+## Example: the company registry
+
+Your company runs a Harbor at `registry.acme.internal:5000`, with a certificate signed by
+its own authority, and the data team pushes its images under `analytics/`.
+
+1. In Harbor, create a robot account with *Pull* on the project `analytics`, and keep its
+   name (`robot$analytics+tabularia`) and its secret.
+2. **Administration → Container registries → New registry**:
+   - **Name** «Acme registry», **Address** `registry.acme.internal:5000`, **Protocol**
+     HTTPS;
+   - **Certificate** **Company authority**, and in **Authority's certificate (PEM)** the
+     certificate of the company's authority, from `-----BEGIN CERTIFICATE-----` to
+     `-----END CERTIFICATE-----`;
+   - **User** `robot$analytics+tabularia`, **Password or token** its secret;
+   - **Allowed repositories** `analytics/*`.
+3. Under **Who can use it**, choose **Group**, the data team's group, and **Give access**.
+   Leave its repositories empty: it may use everything under `analytics/`.
+4. **Save and test**. The answer is «The registry answers.», with a few tags when an
+   allowed repository is named in full; a failure says which part to fix.
+5. Under **Tags of a repository**, `analytics/demand-forecast` → **Show the tags** lists
+   what the Container node will offer, `1.4.0` among them.
+6. Under **Try in the cluster**, the same repository and **Tag or digest** `1.4.0` →
+   **Try in the cluster**. «The cluster can download it.», with the digest, means the
+   nodes trust the authority and accept the robot's credentials. If they do not trust it,
+   install the authority on the nodes first ([kind guide](deploy/kind.md#3-nodes-that-trust-the-authority)).
+
+From then on, the data team finds **Container** in the palette of the flow editor, with
+the registry and its `analytics/` images: [a forecast step in a flow](container-node.md#example-a-forecast-step-in-a-flow).
+
 ## Audit
 
 Every creation, change, test, deletion and variable is in **Audit**, with who did it.

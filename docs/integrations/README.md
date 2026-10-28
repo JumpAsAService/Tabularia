@@ -6,6 +6,10 @@ to them (lineage events, the audit log, a dbt project, the data itself in your o
 storage and databases). This page is the map: one line per integration, and the page
 that explains it.
 
+![Administration, Service accounts: the account Airflow production with one read-and-write token, nightly runs, expiring in 90 days](../media/guide/api/service-account-tokens.png)
+
+*A service account for an external scheduler and its token, as in the example below.*
+
 ## The map
 
 | Integration | What it does | Set up in | Page |
@@ -42,8 +46,9 @@ account token starts a flow (`POST /flows/{id}/run-now`) and a webhook, or polli
 ## Example: an external scheduler runs a flow
 
 An administrator creates a service account `airflow` in **Administration → Service
-accounts**, grants it **RUN** on the folder `Sample / Flows`, and creates a read-write
-token for it. The scheduler then starts the flow «Top 20 Products by Revenue» (id 42
+accounts**, grants it **RUN** on the folder `Sample / Flows` and **EDIT** on
+`Sample / Private tables`, where the flow publishes its datasource, and creates a
+read-write token for it. The scheduler then starts the flow «Top 20 Products by Revenue» (id 42
 here) and waits for it:
 
 ```bash

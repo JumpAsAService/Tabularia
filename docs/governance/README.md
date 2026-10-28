@@ -5,6 +5,10 @@ quality and personal data in check. This page is the map, for whoever answers fo
 installation to the security team, the data owners or the data protection officer:
 one line per topic and the page that covers it.
 
+![Folder settings of the folder Finance with two group grants and the list of capabilities](../media/guide/governance/folder-settings-permissions.png)
+
+*Permissions are granted on folders, to groups: [Permissions](permissions.md).*
+
 ## Principles
 
 - **Everything lives in a folder, and the folder carries the permissions.** Flows,

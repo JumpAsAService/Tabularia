@@ -51,6 +51,10 @@ connection's folder, and a **read-only database user** on the connection.
 **Create & import** saves the datasource and starts the first import at once. If the
 engine refuses to start it, nothing is saved.
 
+![The dialog New datasource from database: name orders, connection Sample ERP (Postgres), Table vendite.ordini, order by data_ordine, a description](../media/guide/sources/datasource-from-database.png)
+
+*The dialog filled in as in the first example below: a whole table, `vendite.ordini`, read through the sample ERP connection.*
+
 ### What the table list shows
 
 | Database | Listed |

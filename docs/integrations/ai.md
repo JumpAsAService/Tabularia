@@ -55,6 +55,10 @@ assistant changes only the canvas in the browser: what it built comes back as on
 step, and it never saves, runs or schedules the flow. The script assistant proposes
 whole files that the person applies or discards; it never saves or runs the script.
 
+![A plan card on the Assistant page: create a flow with its steps and first rows, then schedule it, with Confirm, Change and Cancel](../media/guide/ai/agent-plan-card.png)
+
+*A plan waiting for **Confirm** on the Assistant page: nothing has changed yet ([the example](../capabilities/ask-your-data.md#asking-it-to-build)).*
+
 ### Permissions of each use
 
 | Use | Who |
@@ -73,6 +77,10 @@ assistant» with its model; under the input, «This is an AI: it can make mistak
 Always check the results.» A downloaded conversation opens with the same notice. The
 acceptance lives in the browser, so every new browser, or a shared account on another
 machine, asks again. Details: [Ask your data](../capabilities/ask-your-data.md#telling-people-it-is-an-ai).
+
+![The dialog You are writing to an automated assistant, with its four points and the button I understand](../media/guide/ai/ai-disclosure.png)
+
+*The notice every assistant opens with, until «I understand».*
 
 ## Configuration
 
@@ -102,6 +110,10 @@ model people may choose. Embedding, audio and reranker models are listed but can
 enabled. A model the provider stops offering stays in the list, marked «no longer
 offered», so it can be disabled. The dbt export uses `AI__DEFAULT_MODEL` when it is
 enabled, otherwise the first enabled model.
+
+![Administration, AI models: the provider's catalog, one model enabled, an embedding model marked not a chat model](../media/guide/ai/ai-models-panel.png)
+
+***Administration → AI models**: the catalog of the provider; only the enabled models can be picked.*
 
 ### Costs and caps
 

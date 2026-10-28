@@ -55,6 +55,10 @@ from above. Choose **Group** or **User**, the subject, the capability, then **Gr
 In the interface, administrators grant to single users and to groups, other folder
 managers to groups (the API, `POST /projects/{id}/permissions`, takes either). The cross beside a grant revokes it.
 
+![Folder settings of the folder Finance: the group finance with edit, the group finance-leads with manage, and the form to grant a capability to a group with the list view, run, edit, connect, manage open](../media/guide/governance/folder-settings-permissions.png)
+
+***Folder settings** of `Finance`, as in the example below: two grants on this folder, and the form for a third with the five capabilities.*
+
 Prefer groups. A person who changes team changes groups, and the folders follow.
 With single sign-on the groups can come from the identity provider
 ([group mapping](../design/sso-group-mapping.md)).
