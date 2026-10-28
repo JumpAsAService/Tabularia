@@ -115,6 +115,8 @@ announced in `CHANGELOG.md` one minor release in advance.
 | Datasources | `GET /datasources` | each with `bucket` and `key`, which the export needs; `GET /datasources/{id}/runs` for its refreshes |
 | Refresh a datasource | `POST /datasources/{id}/refresh` | `202` with the run; database datasources only |
 | Export | `POST /tasks/export` | CSV (streamed) or Excel; see below |
+| Download a report | `GET /reports/{id}/render?format=pdf&<parameter>=<value>` | the file, waited for; see [Download a report](#download-a-report) |
+| Reports | `GET /reports`, `GET /reports/{id}/parameters` | those you can see; a report's parameters with their defaults and choices |
 | Lineage | `GET /lineage` | the graph of flows, datasources, connections, scripts, SQL scripts, notebooks and flow groups; `?type=flow\|datasource\|connection\|script\|sql\|notebook\|group&id=…` centres it |
 
 All paths are relative to the gateway: `https://<host>/api` behind the reference
@@ -185,6 +187,98 @@ account that started an export can see it.
 
 Error bodies are JSON with a `detail` field. Its language follows the
 `Accept-Language` header where a translation exists.
+
+## Download a report
+
+A pixel-perfect report (a page designed in **Reports**, kept in a folder) can be
+downloaded from any script, with its parameters, as the web app renders it:
+
+```
+GET /reports/{id}/render?format=pdf&region=North&since=2026-09-01
+```
+
+- **`format`**: `pdf` (the default), `xlsx` (the report's tables, groups and subtotals as
+  rows) or `html` (the summary an email carries, as an `.mhtml` file: the HTML with its
+  charts as images).
+- **The parameters** go in the query string by name. A parameter that takes several values
+  repeats its name: `?region=North&region=South`. One left out takes the report's default.
+  A value is text, as typed in the report's form: a number with a dot for decimals
+  (`1234.5`), a date as `yyyy-mm-dd`, `true` or `false`. A date may also be a
+  [placeholder](placeholders.md), resolved in the report's time zone when it is rendered:
+  `since={start_of_month-1m}` is the first day of last month.
+- **The token**: *read only* is enough. The report reads with the rights of the token's
+  account: it needs **VIEW** on the report's folder, and every dataset the report reads
+  must be one that account may read (the datasources, the views, the SQL scripts, and
+  **CONNECT** on a database connection).
+- **The answer** is the file, with its name in `Content-Disposition` (`Monthly sales.pdf`).
+  The request stays open while a worker renders it, up to `REPORTS__API_WAIT_SECONDS`
+  (120 seconds by default); past that the render is stopped. Every download is in the
+  audit log (`report.render`, from `api`).
+
+The report's id is in its address (`/report?id=12`), and **Copy API link** in the
+report's toolbar gives the address with the values on screen. `GET /reports` lists the
+reports the account sees; `GET /reports/{id}/parameters` lists a report's parameters, with
+their types, their defaults as they read today and their choices.
+
+### Example: last month's PDF, every month
+
+A script run on the first of each month downloads the PDF of the month before for one
+region. As an administrator, create a service account (see
+[Example: a token for a scheduler](#example-a-token-for-a-scheduler)) with **VIEW** on the
+report's folder and on the data it reads, and give it a token with access *Read only*.
+The report here has the parameters `region` (text) and `since` and `until` (dates):
+
+```python
+import datetime as dt
+import os
+
+import requests
+
+API = "https://tabularia.example.com/api"
+TOKEN = os.environ["TABULARIA_TOKEN"]  # never in the script itself
+REPORT_ID = 12
+
+first_of_this_month = dt.date.today().replace(day=1)
+last_day = first_of_this_month - dt.timedelta(days=1)
+first_day = last_day.replace(day=1)
+
+response = requests.get(
+    f"{API}/reports/{REPORT_ID}/render",
+    params={"format": "pdf", "region": "North", "since": first_day.isoformat(), "until": last_day.isoformat()},
+    headers={"Authorization": f"Bearer {TOKEN}"},
+    timeout=180,  # longer than REPORTS__API_WAIT_SECONDS
+)
+if response.status_code == 400:
+    detail = response.json()["detail"]
+    raise SystemExit(f"{detail['parameter']}: {detail['message']}")
+response.raise_for_status()
+with open(f"sales_north_{first_day:%Y-%m}.pdf", "wb") as f:
+    f.write(response.content)
+```
+
+The same with curl, two regions in Excel; `-G` with `--data-urlencode` puts the values in
+the query string, encoded:
+
+```bash
+curl -fG -H "Authorization: Bearer $TABULARIA_TOKEN" -o sales.xlsx \
+  --data-urlencode format=xlsx --data-urlencode region=North --data-urlencode region=South \
+  --data-urlencode "since={start_of_month-1m}" \
+  https://tabularia.example.com/api/reports/12/render
+```
+
+### When it fails
+
+| Code | Meaning |
+|---|---|
+| `400` | a value does not fit a parameter: `{"detail": {"message": "Parameter «since»: '2026-02-30' is not a date: write it as yyyy-mm-dd", "parameter": "since"}}`. The same for a required parameter without a value, a value outside its choices, a name the report does not have |
+| `404` | no report with that id, or one in a folder the account cannot see |
+| `422` | the report cannot be rendered: a dataset the account may not read, said with its name as one that does not exist (`The dataset «orders»: there is no datasource «Salaries» you can read`), a dataset over the row limit (`REPORTS__MAX_ROWS`, 10,000 by default: aggregate in SQL, or filter), too many pages |
+| `502` | the engine could not render it (the chart service down, for a report with charts) |
+| `504` | not ready within `REPORTS__API_WAIT_SECONDS`: the render was stopped |
+
+To send a report by email instead, on a schedule and right after the data is refreshed,
+put it in the [Pushmail cell of a flow group](pushmail.md#reports). In a marimo notebook,
+[`tabularia.report()`](capabilities/notebooks.md#reports) does the same as this API.
 
 ## Webhooks
 

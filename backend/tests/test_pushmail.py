@@ -1,9 +1,11 @@
 """The Pushmail cell of a flow group: one email, one .xlsx per datasource, the rows cut
 to each one's maximum and said in the body, names from the date placeholders, the
-size cap, and the recipients as given (the gateway checks them)."""
+size cap, and the recipients as given (the gateway checks them); the reports rendered
+in the same task, attached, one of them summarised in the body with its charts by cid."""
 from __future__ import annotations
 
 import io
+import re
 from datetime import datetime, timezone
 
 import polars as pl
@@ -13,8 +15,10 @@ from app.engine.cache import StepCache
 from app.engine.polars_engine import PolarsEngine
 from app.ingest import pushmail as pm
 from app.ingest.email_destination import EmailDestinationError, SmtpConnectionSpec
+from tests import report_samples as samples
 from tests.conftest import upload_df
 from tests.fakes import FakeRedis
+from tests.test_reports_render import chart_service  # noqa: F401 — the fixture
 
 NOW = datetime(2026, 10, 24, 21, 30, tzinfo=timezone.utc)
 
@@ -130,5 +134,71 @@ def test_an_empty_datasource_is_attached_all_the_same(sent, storage):
 @pytest.mark.parametrize("bad", [{"attachments": []}, {"attachments": [{"bucket": "b", "key": "k", "file_name": "x", "max_rows": 0}]},
                                  {"attachments": [{"bucket": "b", "key": "k", "file_name": "x", "max_rows": 2_000_000}]}])
 def test_the_spec_is_checked(bad):
+    with pytest.raises(ValueError):
+        pm.PushmailSpec(to=["a@b.c"], **bad)
+
+
+# ── reports (docs/specs/reports.md, «Sending») ────────────────────────────────────
+@pytest.fixture
+def charts(monkeypatch, chart_service):  # noqa: F811
+    from app.reports import render
+
+    monkeypatch.setattr(render.Limits, "from_settings", classmethod(lambda cls: cls(chart_url=chart_service[0])))
+    return chart_service
+
+
+def _report(name="Vendite", fmt="pdf", in_body=False, file_name="vendite_{today:yyyy-MM}", rows=300):
+    return pm.PushmailReport(name=name, definition=samples.definition(), datasets=samples.datasets(rows),
+                             params={"since": "2026-01-01"}, format=fmt, file_name=file_name, in_body=in_body,
+                             locale="it")
+
+
+def test_a_report_is_rendered_and_attached_with_its_summary_in_the_body(sent, regions, charts):
+    out = pm.send_pushmail(_conn(), _spec(_att(regions, "regioni"), reports=[
+        _report(in_body=True), _report(fmt="xlsx", file_name="vendite.xlsx")]), now=NOW)
+    (msg, _), = sent
+    files = {p.get_filename(): p for p in msg.iter_attachments()}
+    assert list(files) == ["regioni.xlsx", "vendite_2026-10.pdf", "vendite.xlsx"]
+    assert files["vendite_2026-10.pdf"].get_content_type() == "application/pdf"
+    assert files["vendite_2026-10.pdf"].get_content().startswith(b"%PDF-")
+    workbook = files["vendite.xlsx"].get_content()
+    assert workbook.startswith(b"PK") and len(pl.read_excel(io.BytesIO(workbook), sheet_id=0)) >= 2
+    # the cell's text first, then the report's summary, its charts in the HTML part by cid
+    html_part = msg.get_body(("html",))
+    html = html_part.get_content()
+    assert html.index("in allegato i dati.") < html.index("Totale Regione: Centro")
+    cids = re.findall(r'src="cid:([^"]+)"', html)
+    related = msg.get_body(("related",))
+    images = [p for p in related.iter_parts() if p.get_content_maintype() == "image"]
+    assert len(cids) == 2 and sorted(cids) == sorted(p["Content-ID"].strip("<>") for p in images)
+    assert all(p.get_content().startswith(b"\x89PNG") for p in images)
+    assert [p.get_filename() for p in msg.iter_attachments()] == list(files)  # the charts are not attachments
+    plain = msg.get_body(("plain",)).get_content()
+    assert plain.startswith("Ciao,\nin allegato i dati.") and "Totale Regione: Centro" in plain
+    assert [a["name"] for a in out["attachments"]] == list(files)
+
+
+def test_a_report_without_datasources_and_an_html_body(sent, charts):
+    body = "<html><body><p>Buongiorno</p></body></html>"
+    pm.send_pushmail(_conn(), _spec(reports=[_report(in_body=True, file_name="v")], body=body, body_is_html=True,
+                                    subject=""), now=NOW)
+    (msg, _), = sent
+    html = msg.get_body(("html",)).get_content()
+    assert html.index("<p>Buongiorno</p>") < html.index("Totale Regione") < html.rindex("</body>")
+    assert msg["Subject"] == "v.pdf"
+
+
+def test_a_report_that_cannot_be_rendered_sends_nothing_and_says_which(sent, monkeypatch, chart_service):  # noqa: F811
+    from app.reports import render
+
+    monkeypatch.setattr(render.Limits, "from_settings",
+                        classmethod(lambda cls: cls(chart_url=chart_service[0], max_rows=100)))
+    with pytest.raises(EmailDestinationError, match="the report «Vendite»: the dataset «orders» has more than 100 rows"):
+        pm.send_pushmail(_conn(), _spec(reports=[_report()]), now=NOW)
+    assert sent == []
+
+
+@pytest.mark.parametrize("bad", [{}, {"reports": [_report(in_body=True), _report(in_body=True)]}])
+def test_a_spec_with_nothing_to_send_or_two_bodies_is_refused(bad):
     with pytest.raises(ValueError):
         pm.PushmailSpec(to=["a@b.c"], **bad)

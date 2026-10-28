@@ -17,10 +17,13 @@ orchestration (services/orchestrator.py), which hands it here from `run_it`.
   in progress if there is one (`orchestrator._refresh_and_wait`).
 - A **container** cell runs an image as a Container node with no edge does
   (services/container_runs.py): no data in, none out, a run under the group's.
-- A **pushmail** cell sends one email with one .xlsx per datasource through an SMTP
-  connection, as an engine task under a run of its own (kind="pushmail"); every part
-  of it — the connection, the recipients' domains, the datasources — is checked again
-  with the rights of whoever runs the group (services/pushmail.py `pushmail_errors`).
+- A **pushmail** cell sends one email with one .xlsx per datasource and one file per
+  report through an SMTP connection, as an engine task under a run of its own
+  (kind="pushmail"); every part of it — the connection, the recipients' domains, the
+  datasources, the reports and what they read — is checked again with the rights of
+  whoever runs the group (services/pushmail.py `pushmail_errors`), and the reports are
+  resolved with those rights too (services/reports.py `prepare`), then rendered by the
+  engine in the task that writes the email.
 - A **script** cell runs a saved script's current version (services/saved_script_runs.py)
   under a child orchestration row that holds the script's live slot, as a flow cell
   does; a run of the script already in progress is waited for, and its outcome counts
@@ -443,6 +446,11 @@ async def _pushmail_cell(run_id: int, user_id: int, trigger: str, cell: FlowGrou
         empty = [datasources[a.datasourceId].name for a in cfg.attachments if not datasources[a.datasourceId].key]
         if empty:
             return f"«{name}»: no data yet in {', '.join(empty)} (never imported or published)"
+        # the reports: resolved here, with the rights of whoever runs the group, before
+        # anything is sent; the engine renders them in the worker that writes the email
+        rendered, read, failed = await _cell_reports(s, user, cfg, group, trigger)
+        if failed:
+            return f"«{name}»: {failed}"
         to = [a.strip() for a in cfg.to if a.strip()]
         cc = [a.strip() for a in cfg.cc if a.strip()]
         # the run first: its number is the {run_id} of the names; a placeholder task
@@ -454,6 +462,10 @@ async def _pushmail_cell(run_id: int, user_id: int, trigger: str, cell: FlowGrou
                                       "attachments": [datasources[a.datasourceId].name for a in cfg.attachments],
                                       # by id too, for the lineage: a name can change
                                       "datasource_ids": [a.datasourceId for a in cfg.attachments],
+                                      "reports": [{"id": r["id"], "name": r["name"], "format": r["format"],
+                                                   "in_body": r["in_body"]} for r in rendered],
+                                      # what the reports read, for the lineage too
+                                      "report_datasource_ids": sorted(read),
                                       "cell": name, "cell_id": cell.id, "ok": None}))
         s.add(child)
         s.commit()
@@ -466,14 +478,16 @@ async def _pushmail_cell(run_id: int, user_id: int, trigger: str, cell: FlowGrou
             "attachments": [{"bucket": datasources[a.datasourceId].bucket, "key": datasources[a.datasourceId].key,
                              "label": datasources[a.datasourceId].name, "file_name": a.fileName, "max_rows": a.maxRows}
                             for a in cfg.attachments],
+            "reports": [{k: r[k] for k in ("name", "definition", "datasets", "params", "format", "file_name", "in_body",
+                                           "locale")} for r in rendered],
         }
         # who sent what to whom, written when it leaves, whatever the outcome
         audit.record_audit(
             s, actor=user, action=audit.EMAIL_SEND, target_type="flow_group",
             target_id=group.id if group else None, target_label=group.name if group else None,
             detail={"connection_id": conn.id, "host": conn.host, "to": to + cc, "subject": cfg.subject,
-                    "cell": name, "datasources": [a.datasourceId for a in cfg.attachments], "trigger": trigger,
-                    "run_id": child.id},
+                    "cell": name, "datasources": [a.datasourceId for a in cfg.attachments],
+                    "reports": [r["id"] for r in rendered], "trigger": trigger, "run_id": child.id},
         )
         try:
             resp = await get_engine_client().post("/db/pushmail", json={
@@ -485,12 +499,61 @@ async def _pushmail_cell(run_id: int, user_id: int, trigger: str, cell: FlowGrou
             raise
         except Exception as e:  # noqa: BLE001 — refused or not reachable: the cell fails saying why
             await orch._finalize_orch_run(child.id, "FAILURE", f"the engine did not take the email: {e}")
+            _audit_reports(s, user, rendered, "failure", child.id, f"the engine did not take the email: {e}")
             return f"«{name}»: the engine did not take the email: {e}"
         s.exec(update(Run).where(Run.id == child.id).values(task_id=answer["task_id"]))
         s.commit()
         s.refresh(child)
         done = await orch._wait_run(s, child)
-        return None if done.status == "SUCCESS" else f"«{name}»: {done.error or 'the email was not sent'}"
+        ok = done.status == "SUCCESS"
+        _audit_reports(s, user, rendered, "success" if ok else "failure", child.id, None if ok else done.error)
+        return None if ok else f"«{name}»: {done.error or 'the email was not sent'}"
+
+
+async def _cell_reports(s: Session, user: User, cfg, group: FlowGroup | None,
+                        trigger: str) -> tuple[list[dict], set[int], str | None]:
+    """Every report of a Pushmail cell as the engine renders it — its current version, its
+    datasets resolved and its parameters converted with the rights of whoever runs the
+    group, the placeholders in the report's time zone — the datasources they read, and why
+    one cannot be sent (audited as a refused render), or None."""
+    from app.models import Report
+    from app.services import reports
+    from app.services.report_params import to_json
+
+    out: list[dict] = []
+    read: set[int] = set()
+    for r in cfg.reports:
+        report = s.get(Report, r.reportId) if r.reportId is not None else None
+        if report is None or not reports.can_see(s, user, report):
+            return out, read, f"report {r.reportId} not found"
+        definition = reports.content_of(s, report)
+        detail = {"format": r.format, "from": "flow_group", "flow_group": group.id if group else None,
+                  "trigger": trigger, "parameters": {}}
+        try:
+            given = reports.given_params(r.params)
+            detail["parameters"] = reports.given_detail(given)
+            values, datasets = await reports.prepare(s, user, definition, given, detail, read)
+        except HTTPException as e:
+            detail["error"] = reports._text(e)[:500]
+            reports._audit_render(s, user, report, None, "failure", detail)
+            return out, read, f"the report «{report.name}»: {reports._text(e)}"
+        out.append({"id": report.id, "name": report.name, "definition": definition, "datasets": datasets,
+                    "params": {k: to_json(v) for k, v in values.items()}, "format": r.format,
+                    "file_name": r.fileName, "in_body": r.inBody, "locale": definition.get("locale") or "en",
+                    "report": report, "detail": detail})
+    return out, read, None
+
+
+def _audit_reports(s: Session, user: User, rendered: list[dict], outcome: str, run_id: int, error: str | None) -> None:
+    """`report.render` for every report of a cell, once the email's outcome is known: its
+    render and its send are one task of the engine."""
+    from app.services import reports
+
+    for r in rendered:
+        detail = {**r["detail"], "run_id": run_id}
+        if error:
+            detail["error"] = error[:500]
+        reports._audit_render(s, user, r["report"], None, outcome, detail)
 
 
 def _node_id(run: Run) -> str | None:

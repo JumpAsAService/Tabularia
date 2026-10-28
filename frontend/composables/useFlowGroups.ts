@@ -8,8 +8,22 @@
 
 export type FlowGroupCellKind = 'flow' | 'refresh' | 'script' | 'container' | 'pushmail' | 'sql'
 
-/** A Pushmail cell: one email through an SMTP connection, one .xlsx per datasource. */
+/** A Pushmail cell: one email through an SMTP connection, one .xlsx per datasource,
+ *  one PDF or Excel file per report (docs/specs/reports.md, «Sending»). */
 export interface PushmailAttachment { datasourceId: number | null; fileName: string; maxRows: number }
+/** A report's values as texts, as a link carries them: empty = the report's default when
+ *  the email leaves; a date may be a placeholder ({start_of_month}). */
+export type PushmailReportParams = Record<string, string | string[]>
+export interface PushmailReport {
+  reportId: number | null
+  format: 'pdf' | 'xlsx'
+  params: PushmailReportParams
+  /** a template with the Outputs' placeholders, the extension added */
+  fileName: string
+  /** its summary (texts, KPIs, totals, charts) in the body, under the message: one per cell */
+  inBody: boolean
+}
+export const PUSHMAIL_MAX_REPORTS = 5
 export interface PushmailConfig {
   label: string
   connectionId: number | null
@@ -20,6 +34,8 @@ export interface PushmailConfig {
   bodyIsHtml: boolean
   timezone: string
   attachments: PushmailAttachment[]
+  /** absent in a cell saved before reports could be sent */
+  reports?: PushmailReport[]
 }
 
 export interface FlowGroupCell {

@@ -11,7 +11,7 @@ from sqlmodel import Session, select
 
 from app.models import Datasource, User
 from app.models.permission import Capability
-from app.schemas.models import FlowGroupCell
+from app.schemas.models import PUSHMAIL_MAX_REPORT_PARAMS, FlowGroupCell, PushmailCell
 from app.services import permissions as perm_service
 
 # an address, roughly: what an SMTP server would take, without a list or a name in it
@@ -21,8 +21,9 @@ _EMAIL = re.compile(r"^[^@\s,;<>]+@[^@\s,;<>]+\.[^@\s,;<>]+$")
 def pushmail_errors(session: Session, user: User, cell: FlowGroupCell, readable: set[int] | None = None) -> list[str]:
     """A Pushmail cell, new or changed, or about to run: an SMTP connection this person
     may send through (CONNECT), recipients within the domains it allows, datasources
-    they may read. Sending data out of the installation is what the cell does: whoever
-    sets it up, and whoever runs it, must be allowed every part of it."""
+    they may read, reports they see and whose data they may read. Sending data out of the
+    installation is what the cell does: whoever sets it up, and whoever runs it, must be
+    allowed every part of it."""
     from app.models import Connection
     from app.routes.connections import allowed_email_domains
 
@@ -57,8 +58,8 @@ def pushmail_errors(session: Session, user: User, cell: FlowGroupCell, readable:
         if outside:
             errors.append(f"pushmail «{name}»: recipients outside the domains «{conn.name}» allows "
                           f"({', '.join(allowed)}): {', '.join(outside[:5])}")
-    if not cfg.attachments:
-        errors.append(f"pushmail «{name}»: choose at least one datasource")
+    if not cfg.attachments and not cfg.reports:
+        errors.append(f"pushmail «{name}»: choose at least one datasource or report")
     for n, a in enumerate(cfg.attachments, 1):
         if a.datasourceId is None:
             errors.append(f"pushmail «{name}»: choose the datasource of file {n}")
@@ -73,4 +74,42 @@ def pushmail_errors(session: Session, user: User, cell: FlowGroupCell, readable:
         # not found and not readable read the same: a group does not reveal what exists
         if ds is None or ds.project_id not in readable:
             errors.append(f"pushmail «{name}»: datasource {i} not found")
+    errors.extend(report_errors(session, user, cfg, name))
+    return errors
+
+
+def report_errors(session: Session, user: User, cfg: PushmailCell, name: str) -> list[str]:
+    """The reports of a cell: each one this person sees (VIEW on its folder), with values
+    that fit its parameters and datasets they may all read — the checks of a render
+    (services/reports.py), without asking the engine. Rendered when the cell runs, they
+    are checked again in full, with the real values."""
+    from app.models import Report
+    from app.services import report_params, reports
+
+    errors: list[str] = []
+    if sum(1 for r in cfg.reports if r.inBody) > 1:
+        errors.append(f"pushmail «{name}»: only one report can go in the email's body")
+    for n, r in enumerate(cfg.reports, 1):
+        if r.reportId is None:
+            errors.append(f"pushmail «{name}»: choose the report {n}")
+            continue
+        if not r.fileName.strip():
+            errors.append(f"pushmail «{name}»: give the file of report {n} a name")
+        if len(r.params) > PUSHMAIL_MAX_REPORT_PARAMS:
+            errors.append(f"pushmail «{name}»: report {n} has too many values")
+            continue
+        report = session.get(Report, r.reportId)
+        # not found and not visible read the same, as for a datasource
+        if report is None or not reports.can_see(session, user, report):
+            errors.append(f"pushmail «{name}»: report {r.reportId} not found")
+            continue
+        definition = reports.content_of(session, report)
+        try:
+            report_params.check_values(definition, reports.given_params(r.params))
+        except HTTPException as e:
+            errors.append(f"pushmail «{name}»: the report «{report.name}»: {reports._text(e)}")
+            continue
+        problem = reports.reading_problem(session, user, definition)
+        if problem:
+            errors.append(f"pushmail «{name}»: the report «{report.name}»: {problem}")
     return errors

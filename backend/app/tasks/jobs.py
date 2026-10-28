@@ -428,13 +428,15 @@ def transform_data_task(
 
 @celery_app.task(name="app.tasks.jobs.pushmail_task")
 def pushmail_task(connection: dict[str, Any], spec: dict[str, Any]) -> dict:
-    """The Pushmail cell of a flow group: one email, one .xlsx per datasource
-    (app.ingest.pushmail). A refused send fails the task with the reason."""
+    """The Pushmail cell of a flow group: one email, one .xlsx per datasource and one file
+    per report, rendered here (app.ingest.pushmail). A refused send fails the task with
+    the reason."""
     from app.ingest.email_destination import SmtpConnectionSpec
     from app.ingest.pushmail import PushmailSpec, send_pushmail
 
     pm = PushmailSpec(**spec)
-    logger.info("📧 Starting pushmail_task: %d datasources to %d recipients", len(pm.attachments), len(pm.to) + len(pm.cc))
+    logger.info("📧 Starting pushmail_task: %d datasources, %d reports to %d recipients", len(pm.attachments),
+                len(pm.reports), len(pm.to) + len(pm.cc))
     result = send_pushmail(SmtpConnectionSpec(**connection), pm)
     return {"rows_written": result["rows"], "email": result}
 

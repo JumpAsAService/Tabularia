@@ -22,7 +22,7 @@ stays out of sight.*
 | What it is | a marimo `.py` file, run in one of the Python scripting environments, whose image carries marimo |
 | The app | opened by whoever can see the notebook, on a page of its own; it runs the version marked current |
 | The editor | marimo's editor inside a Tabularia page, for whoever may edit the folder; one person at a time |
-| Data | `tabularia.read("Folder/Name")` returns a polars DataFrame, read when the code asks, nothing copied |
+| Data | `tabularia.read("Folder/Name")` returns a polars DataFrame, read when the code asks, nothing copied; `tabularia.report(…)` a report's PDF or Excel |
 | Whose rights | the app reads with the rights of whoever saved the version it runs; the editor with the editor's |
 | When it runs | its pod starts when someone opens it (a few seconds) and stops after 15 minutes with nobody on it |
 | Requires | Kubernetes, with the scripting environments ([Python and R](../scripting.md)), and a host name of their own for the apps and editors ([An address of their own](#an-address-of-their-own)) |
@@ -146,6 +146,36 @@ pod (app or editor) is a run of the job `<folder>/<name> (notebook)`: START when
 starts, RUNNING at the first read of each datasource, COMPLETE with everything it read
 when it stops.
 
+### Reports
+
+A pixel-perfect report comes into the notebook as a file, rendered with the same rights
+as the reads, exactly as the [API](../api.md#download-a-report) renders it:
+
+```python
+import tabularia
+
+tabularia.reports()   # the reports this notebook may render: id, name, folder, path, parameters
+pdf = tabularia.report("Sales/Monthly sales", region="North", since="2026-09-01")   # the PDF, as bytes
+xlsx = tabularia.report(12, format="xlsx", region=["North", "South"])              # by id, two regions, Excel
+```
+
+- **The report** is named as a datasource is: by its id, by its path, or by its name
+  alone when only one report you may open has it.
+- **`format`**: `pdf` (the default), `xlsx`, or `html` (the email's summary, as MHTML).
+- **The parameters** are keyword arguments, by their names: a list for one that takes
+  several values, a date as a `datetime.date` or as `yyyy-mm-dd`, or a
+  [placeholder](../placeholders.md) such as `since="{start_of_month-1m}"`. One left out
+  takes the report's default.
+- **The answer** is the file's bytes: save them (`open("sales.pdf", "wb").write(pdf)`), offer
+  them with `mo.download(pdf, filename="sales.pdf")`, or read the Excel with
+  `polars.read_excel(io.BytesIO(xlsx))`.
+
+The call waits while a worker renders the report, up to `REPORTS__API_WAIT_SECONDS` (120
+seconds by default). A value that does not fit, a report you cannot open, a dataset you
+may not read or one over the row limit arrive as `tabularia.TabulariaError` with the
+gateway's words (`Parameter «since»: '2026-02-30' is not a date…`). Every render is in the
+audit log (`report.render`, from `notebook`, with the notebook's name).
+
 ### Starting and stopping
 
 There is no pod for a notebook nobody is using. The first request to the app, or to the
@@ -227,7 +257,7 @@ editor's file to keep the draft.
 
 Out of the pod, the notebooks follow the scripts' policy (`scripts.blockTabularia`, see
 [Network policies](../scripting.md#network-policies)), with one opening: the gateway's
-pods, on their port, for the reads. The download goes straight to Tabularia's object
+pods, on their port, for the reads and the reports. The download goes straight to Tabularia's object
 storage, at the address the engine uses: that address must be reachable from the scripts
 namespace, as the scripts bucket is.
 

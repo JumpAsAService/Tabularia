@@ -13,15 +13,19 @@
 - Lineage: the first read of a datasource in a session is recorded
   (services/notebook_reads.py), for the Lineage page, and told to OpenLineage as an
   input of the session's run.
+- Reports: the ones that person sees (VIEW on their folder), rendered with their rights
+  as the API renders them — every dataset checked, the parameters converted — waited for
+  and sent back as the file (`tabularia.report()`); audited as `report.render` from the
+  notebook.
 """
 from __future__ import annotations
 
 import logging
 from types import SimpleNamespace
-from typing import Optional, Union
+from typing import Any, Literal, Optional, Union
 
 from fastapi import APIRouter, Depends, HTTPException, Request
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 from sqlmodel import Session, select
 
 from app.core.config import get_settings
@@ -123,29 +127,33 @@ def _norm(path: str) -> str:
 
 def _find(session: Session, user: User, wanted: Union[int, str]) -> Datasource:
     """By id, by path («Folder/Sub/Name») or by a name only one readable datasource has."""
-    readable = _readable(session, user)
+    return _pick(session, _readable(session, user), wanted, "datasource")
+
+
+def _pick(session: Session, readable: list, wanted: Union[int, str], noun: str):
+    """One of `readable` (datasources, reports) by id, by path or by a name only one has."""
     if isinstance(wanted, int) or (isinstance(wanted, str) and wanted.strip().isdigit()):
-        ds = next((d for d in readable if d.id == int(wanted)), None)
-        if ds is None:
-            raise HTTPException(status_code=404, detail=f"There is no datasource {wanted} this notebook may read")
-        return ds
+        found = next((d for d in readable if d.id == int(wanted)), None)
+        if found is None:
+            raise HTTPException(status_code=404, detail=f"There is no {noun} {wanted} this notebook may read")
+        return found
     name = _norm(wanted)
     if not name:
-        raise HTTPException(status_code=422, detail="Name the datasource: «Folder/Name», or its id")
+        raise HTTPException(status_code=422, detail=f"Name the {noun}: «Folder/Name», or its id")
     if "/" in name:
         folders = _folders(session)
-        for ds in readable:
-            if _norm(f"{folders.get(ds.project_id, '')}/{ds.name}") == name:
-                return ds
-        raise HTTPException(status_code=404, detail=f"There is no datasource «{name}» this notebook may read")
+        for d in readable:
+            if _norm(f"{folders.get(d.project_id, '')}/{d.name}") == name:
+                return d
+        raise HTTPException(status_code=404, detail=f"There is no {noun} «{name}» this notebook may read")
     same = [d for d in readable if d.name.strip() == name]
     if len(same) == 1:
         return same[0]
     if not same:
-        raise HTTPException(status_code=404, detail=f"There is no datasource «{name}» this notebook may read")
+        raise HTTPException(status_code=404, detail=f"There is no {noun} «{name}» this notebook may read")
     folders = _folders(session)
     paths = ", ".join(sorted(f"{folders.get(d.project_id, '')}/{d.name}" for d in same)[:5])
-    raise HTTPException(status_code=409, detail=f"Several datasources are called «{name}»: name its folder too ({paths})")
+    raise HTTPException(status_code=409, detail=f"Several {noun}s are called «{name}»: name its folder too ({paths})")
 
 
 @router.post("/notebook-data/read")
@@ -185,3 +193,66 @@ async def read_datasource(body: ReadIn, request: Request, caller: Caller = Depen
     if first:
         openlineage.notebook_session(session, pod, "RUNNING", datasource_id=found["id"])
     return {"url": r.json()["url"], **found}
+
+
+# ── reports (docs/specs/reports.md, «API») ───────────────────────────────────
+def _reports(session: Session, user: User) -> list:
+    from app.services import reports
+
+    stmt = reports.visible_query(session, user)
+    return list(session.exec(stmt).all()) if stmt is not None else []
+
+
+@router.get("/notebook-data/reports")
+def list_reports(caller: Caller = Depends(notebook_caller), session: Session = Depends(get_session)) -> list[dict]:
+    """The reports the notebook may render: id, name, folder, path, parameters."""
+    from app.services import reports
+
+    folders = _folders(session)
+    found = _reports(session, caller.user)
+    contents = reports.current_contents(session, found)
+    out = []
+    for r in found:
+        folder = folders.get(r.project_id, "")
+        params = [{"name": p.get("name"), "type": p.get("type"), "multi": bool(p.get("multi")),
+                   "required": bool(p.get("required")), "default": p.get("default")}
+                  for p in contents[r.id].get("parameters") or [] if isinstance(p, dict)]
+        out.append({"id": r.id, "name": r.name, "folder": folder, "path": f"{folder}/{r.name}" if folder else r.name,
+                    "parameters": params})
+    return out
+
+
+class ReportIn(BaseModel):
+    report: Union[int, str]
+    format: Literal["pdf", "xlsx", "html"] = "pdf"
+    # a text, a number, true/false, or a list for a parameter that takes several
+    params: dict[str, Any] = Field(default_factory=dict)
+
+
+@router.post("/notebook-data/report")
+async def render_report(body: ReportIn, request: Request, caller: Caller = Depends(notebook_caller),
+                        session: Session = Depends(get_session)):
+    """The report rendered with these parameters and the rights the notebook carries, as
+    the API renders it (GET /reports/{id}/render): waited for up to
+    REPORTS__API_WAIT_SECONDS, sent back as the file. Audited as `report.render` from
+    the notebook."""
+    from app.routes.proxy import _forward, _release_db, export_owner
+    from app.routes.reports import _wait_for_file
+    from app.services import reports
+
+    user = caller.user
+    report = _pick(session, _reports(session, user), body.report, "report")
+    extra = {"notebook": caller.notebook.id, "notebook_name": caller.notebook.name, "mode": caller.row.mode}
+    started = await reports.render(session, user, report, reports.content_of(session, report), body.format,
+                                   reports.given_params(body.params), origin="notebook", request=request,
+                                   audit_success=False, extra=extra)
+    owner = export_owner(user)
+    _release_db(session, user)  # nothing holds a database connection while the engine works
+    try:
+        await _wait_for_file(started.task_id, owner)
+    except HTTPException as e:
+        reports._audit_render(session, user, report, request, "failure", {**started.detail, "error": str(e.detail)[:500]})
+        raise
+    reports._audit_render(session, user, report, request, "success", started.detail)
+    return await _forward(request, "GET", f"/tasks/exports/{started.task_id}/file", session=session, user=user,
+                          params={"owner": owner})

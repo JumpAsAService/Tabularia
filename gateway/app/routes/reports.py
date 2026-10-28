@@ -291,6 +291,13 @@ def delete_report(report_id: int, request: Request, user: User = Depends(get_cur
                   session: Session = Depends(get_session)):
     report = reports.get_visible(session, user, report_id)
     ensure_can(session, user, report.project_id, Capability.EDIT)
+    # a flow group that sends it would fail at its Pushmail cell: it is taken out there first
+    groups = [g.name for g in reports.groups_using(session, report.id)]
+    if groups:
+        names = ", ".join(f"«{n}»" for n in groups[:10]) + (" …" if len(groups) > 10 else "")
+        raise HTTPException(status_code=409, detail={
+            "message": f"The report is sent by the flow groups {names}: remove it from there first",
+            "flows": [], "groups": groups})
     label = report.name
     for row in session.exec(select(ReportVersion).where(ReportVersion.report_id == report.id)).all():
         session.delete(row)

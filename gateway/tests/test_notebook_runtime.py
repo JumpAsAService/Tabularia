@@ -574,6 +574,54 @@ def test_the_notebook_token_holds_only_on_the_data_and_only_while_its_session_li
     assert r.status_code == 401 and "ended" in r.json()["detail"]
 
 
+def test_the_notebook_renders_a_report_with_its_authors_rights(app, session, cluster, fake_engine):
+    """tabularia.report(): the reports the notebook's person sees, rendered with their
+    rights, waited for and sent back whole; a value that does not fit names its parameter;
+    audited as a render from the notebook."""
+    from app.models import Report, ReportVersion
+
+    _, ana, _, _, _, folder, nid = _setup(app, session)
+    make_datasource(session, name="sales", project_id=folder, key="datasets/sales.parquet")
+    private = make_project(session, name="Private").id
+    content = {"v": 1, "timezone": "UTC", "locale": "en",
+               "parameters": [{"name": "region", "type": "text", "required": True}],
+               "datasets": [{"name": "s", "source": {"kind": "sql", "sql": 'SELECT * FROM "sales" WHERE region = {region}'}}],
+               "sections": {"body": {"items": []}}}
+    ids = []
+    for name, project in (("Monthly", folder), ("Board only", private)):
+        r = Report(name=name, project_id=project, current_version=1)
+        session.add(r)
+        session.commit()
+        session.add(ReportVersion(report_id=r.id, version=1, content=json.dumps(content)))
+        session.commit()
+        ids.append(r.id)
+    ana.post(f"/notebooks/{nid}/sessions", json={"mode": "app"}, headers=CSRF)
+    cluster.pod = "ready"
+    _ready(ana, nid)
+    bearer = {"Authorization": f"Bearer {_token(cluster)}"}
+    pod_client = _pod_client(app)
+    listed = pod_client.get("/notebook-data/reports", headers=bearer).json()
+    assert listed == [{"id": ids[0], "name": "Monthly", "folder": "Analyses", "path": "Analyses/Monthly", "parameters": [
+        {"name": "region", "type": "text", "multi": False, "required": True, "default": None}]}]
+    r = pod_client.post("/notebook-data/report", json={"report": "Analyses/Monthly", "params": {"region": "North"}},
+                        headers=bearer)
+    assert r.status_code == 200, r.text
+    assert r.content == b"%PDF-1.7 report" and r.headers["content-type"] == "application/pdf"
+    (body,) = fake_engine.report_renders
+    assert body["format"] == "pdf" and body["params"] == {"region": "North"} and body["owner"] == f"user:{_row(session, nid, 'app').user_id}"
+    assert "'North'" in body["datasets"]["s"]["operations"][0]["params"]["query"]
+    bad = pod_client.post("/notebook-data/report", json={"report": ids[0], "params": {"region": "", "x": "1"}}, headers=bearer)
+    assert bad.status_code == 400 and bad.json()["detail"]["parameter"] == "x"
+    hidden = pod_client.post("/notebook-data/report", json={"report": ids[1]}, headers=bearer)
+    assert hidden.status_code == 404 and "Board" not in hidden.text
+    renders = _actions(session, "report.render")
+    assert [a.outcome for a in renders] == ["success", "failure"]
+    detail = json.loads(renders[0].detail)
+    assert detail["from"] == "notebook" and detail["notebook"] == nid and detail["parameters"] == {"region": "North"}
+    # and a person's session is nothing here either
+    assert ana.post("/notebook-data/report", json={"report": ids[0]}, headers=CSRF).status_code == 401
+
+
 # ── the proxy ────────────────────────────────────────────────────────────────
 def test_the_proxy_starts_the_app_then_serves_marimo(app, session, cluster, pod):
     _, ana, ben, cleo, _, _, nid = _setup(app, session)
@@ -1134,8 +1182,23 @@ def pod_module(monkeypatch):
             return None
 
         def do_POST(self):
-            self.rfile.read(int(self.headers.get("content-length") or 0))
-            seen.append({"path": self.path, "authorization": self.headers.get("authorization")})
+            body = json.loads(self.rfile.read(int(self.headers.get("content-length") or 0)) or b"{}")
+            seen.append({"path": self.path, "authorization": self.headers.get("authorization"), "body": body})
+            if self.path == "/notebook-data/report":
+                if "bad" in body["params"]:  # as the gateway names a value that does not fit
+                    detail = json.dumps({"detail": {"message": "Parameter «bad»: it is not a date", "parameter": "bad"}})
+                    self.send_response(400)
+                    self.send_header("content-type", "application/json")
+                    self.send_header("content-length", str(len(detail)))
+                    self.end_headers()
+                    self.wfile.write(detail.encode())
+                    return None
+                self.send_response(200)
+                self.send_header("content-type", "application/pdf")
+                self.send_header("content-length", "13")
+                self.end_headers()
+                self.wfile.write(b"%PDF-1.7 fake")
+                return None
             port = self.server.server_address[1]
             return self._json({"url": f"http://127.0.0.1:{port}/slow.parquet", "id": 1, "name": "sales"})
 
@@ -1173,3 +1236,16 @@ def test_a_download_that_stalls_fails_instead_of_hanging_the_cell(pod_module, mo
     with pytest.raises(pod_module.TabulariaError, match="could not be downloaded"):
         pod_module.read("sales")
     assert time.monotonic() - started < 2.5
+
+
+def test_a_report_comes_back_as_bytes_with_its_values(pod_module):
+    from datetime import date
+
+    pdf = pod_module.report("Sales/Monthly", region=["North", "South"], since=date(2026, 9, 1), report="x")
+    assert pdf == b"%PDF-1.7 fake"
+    assert pod_module.seen[-1]["body"] == {"report": "Sales/Monthly", "format": "pdf", "params": {
+        "region": ["North", "South"], "since": "2026-09-01", "report": "x"}}
+    with pytest.raises(pod_module.TabulariaError, match="Parameter «bad»: it is not a date"):
+        pod_module.report(7, format="xlsx", bad="x")
+    with pytest.raises(pod_module.TabulariaError, match="pdf, xlsx or html"):
+        pod_module.report(7, format="docx")

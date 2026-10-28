@@ -1162,7 +1162,9 @@ def _describe(session: Session, run: Run, top: bool = True):
                                  _pushmail_dataset_name(_project_path(session, group.project_id), group.name, cell),
                                  conn.name if conn is not None else None)] if host else []
         job = Job(namespace=namespace(), name=f"{job_name_for(session, 'flow_group', group)}.pushmail {cell}", facets=_job_type("PUSHMAIL"))
-        return job, _datasource_inputs(session, email.get("datasource_ids") or []), outputs, run_facets
+        # the datasources attached, and those the reports read (each once)
+        read = list(dict.fromkeys([*(email.get("datasource_ids") or []), *(email.get("report_datasource_ids") or [])]))
+        return job, _datasource_inputs(session, read), outputs, run_facets
     return None
 
 

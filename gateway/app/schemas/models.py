@@ -1,7 +1,7 @@
 """The gateway's request/response schemas. Kept apart from the DB models so that
 `hashed_password` never goes out, and to validate the input."""
 from datetime import datetime, timezone
-from typing import Annotated, Any, Generic, Literal, Optional, TypeVar
+from typing import Annotated, Any, Generic, Literal, Optional, TypeVar, Union
 from pydantic import AfterValidator, BaseModel, PlainSerializer, Field, field_validator, model_validator
 
 # ── Outgoing datetimes: always with the offset ────────────────────────────────
@@ -240,9 +240,30 @@ class PushmailAttachmentCell(BaseModel):
     maxRows: int = Field(default=10_000, ge=1, le=PUSHMAIL_MAX_ROWS)
 
 
+PUSHMAIL_MAX_REPORTS = 5
+PUSHMAIL_MAX_REPORT_PARAMS = 100
+# a parameter's value as the cell keeps it: a text (a placeholder such as {start_of_month}
+# too), or texts for a parameter that takes several; empty = the report's default
+ReportParamValue = Union[str, int, float, bool, None, list[Union[str, int, float, bool]]]
+
+
+class PushmailReportCell(BaseModel):
+    """A report of a Pushmail cell (docs/specs/reports.md, «Sending»): rendered when the
+    cell runs, with the rights of whoever runs the group, in its format and with these
+    parameters; its file's name a template with the Outputs' placeholders (the extension
+    added). `inBody`: its summary as HTML in the email's body too, under the cell's text
+    (one report per cell)."""
+    # left empty while the cell is being set up, as a datasource's (services/pushmail.py)
+    reportId: Optional[int] = None
+    format: Literal["pdf", "xlsx"] = "pdf"
+    params: dict[str, ReportParamValue] = Field(default_factory=dict)
+    fileName: str = Field(default="", max_length=255)
+    inBody: bool = False
+
+
 class PushmailCell(BaseModel):
     """A Pushmail cell's settings: an email through an SMTP connection, one .xlsx per
-    datasource (docs/pushmail.md)."""
+    datasource and one file per report (docs/pushmail.md)."""
     label: str = Field(default="", max_length=200)
     connectionId: Optional[int] = None
     to: list[str] = Field(default_factory=list, max_length=PUSHMAIL_MAX_RECIPIENTS)
@@ -252,6 +273,7 @@ class PushmailCell(BaseModel):
     bodyIsHtml: bool = False
     timezone: str = Field(default="UTC", max_length=64)  # of the placeholders' dates
     attachments: list[PushmailAttachmentCell] = Field(default_factory=list, max_length=PUSHMAIL_MAX_ATTACHMENTS)
+    reports: list[PushmailReportCell] = Field(default_factory=list, max_length=PUSHMAIL_MAX_REPORTS)
 
 
 class FlowGroupCell(BaseModel):

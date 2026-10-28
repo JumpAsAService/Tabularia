@@ -32,6 +32,7 @@ import { useRegistriesEditor } from '~/composables/useRegistries'
 import ContainerNodePanel from '~/components/containers/ContainerNodePanel.vue'
 import PushmailCellPanel from '~/components/containers/PushmailCellPanel.vue'
 import { useConnections, type ConnectionInfo } from '~/composables/useConnections'
+import { useReports, type Report } from '~/composables/useReports'
 import Modal from '~/components/ui/Modal.vue'
 import {
   useFlowGroups, MAX_GROUP_COLUMNS, MAX_GROUP_STEPS,
@@ -49,6 +50,7 @@ const scriptsApi = useSavedScripts()
 const sqlScriptsApi = useSqlScripts()
 const registriesEditor = useRegistriesEditor()
 const connApi = useConnections()
+const reportsApi = useReports()
 const folderPaths = useFolderPaths()
 
 type Grid = (FlowGroupCell | null)[][]
@@ -160,6 +162,7 @@ function place(item: { kind: FlowGroupCellKind; id: number }, r: number, c: numb
       pushmail: {
         label: '', connectionId: smtpConnections.value[0]?.id ?? null, to: [], cc: [], subject: '{flow} {today:yyyy-MM-dd}',
         body: '', bodyIsHtml: false, timezone: 'UTC', attachments: [{ datasourceId: null, fileName: '', maxRows: 10_000 }],
+        reports: [],
       },
     }
     editing.value = [r, c]
@@ -184,6 +187,8 @@ const SECTION_LABEL = { flow: 'flowGroups.catalogFlows', refresh: 'flowGroups.ca
 // the SMTP connections one may send through: a Pushmail cell is offered when there is one
 const connections = ref<ConnectionInfo[]>([])
 const smtpConnections = computed(() => connections.value.filter((c) => c.db_type === 'smtp'))
+// the reports one sees: a Pushmail cell can attach them
+const reports = ref<Report[]>([])
 
 // ── a Container cell's settings, in the Container node's panel ───────────────
 const editing = ref<[number, number] | null>(null)
@@ -252,6 +257,7 @@ function labelFor(cell: { kind: FlowGroupCellKind; id: number; container?: Recor
   if (cell.kind === 'pushmail') {
     const d = (cell as FlowGroupCell).pushmail
     const n = (d?.attachments ?? []).filter((a) => a.datasourceId != null).length
+      + (d?.reports ?? []).filter((r) => r.reportId != null).length
     const to = (d?.to ?? [])[0]
     return {
       name: d?.label?.trim() || t('pushmail.kind'),
@@ -373,10 +379,12 @@ async function load() {
 
 async function loadCatalog() {
   // a list that does not load leaves the panel empty, not the page broken
-  const [f, d, sc, , cn, sq] = await Promise.allSettled([
+  const [f, d, sc, , cn, sq, rp] = await Promise.allSettled([
     flowsApi.list(), dsApi.list(), scriptsApi.list(), registriesEditor.load(), connApi.list(), sqlScriptsApi.list(),
+    reportsApi.list(),
   ])
   connections.value = cn.status === 'fulfilled' ? cn.value : []
+  reports.value = rp.status === 'fulfilled' ? rp.value : []
   sqlScripts.value = sq.status === 'fulfilled' ? sq.value : []
   flows.value = f.status === 'fulfilled' ? f.value : []
   datasources.value = d.status === 'fulfilled' ? d.value : []
@@ -844,6 +852,7 @@ async function saveSchedule(cron: string) {
           :config="editingCell.pushmail"
           :connections="smtpConnections"
           :datasources="datasources"
+          :reports="reports"
           :group-name="name"
           :read-only="!canEdit"
           @update="patchPushmail"

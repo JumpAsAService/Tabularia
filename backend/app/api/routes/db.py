@@ -196,9 +196,17 @@ def pushmail(request: PushmailRequest):
         spec = PushmailSpec(**request.spec)
     except ValueError as e:
         raise HTTPException(status_code=422, detail=f"pushmail: {e}") from e
+    for r in spec.reports:
+        # a broken definition is refused here, as a render's (the fields: by the worker, on the data)
+        from app.reports import definition as rd
+
+        problems = rd.check(r.definition, any_field=True)
+        if problems:
+            raise HTTPException(status_code=422, detail=f"pushmail: the report «{r.name}»: {problems[0]}")
     task = pushmail_task.delay(connection=request.connection, spec=spec.model_dump())
-    logger.info("📩 Submitting pushmail_task: %d datasources", len(spec.attachments))
-    return TaskResponse(task_id=task.id, status="submitted", message=f"Pushmail of {len(spec.attachments)} datasources")
+    logger.info("📩 Submitting pushmail_task: %d datasources, %d reports", len(spec.attachments), len(spec.reports))
+    return TaskResponse(task_id=task.id, status="submitted",
+                        message=f"Pushmail of {len(spec.attachments)} datasources and {len(spec.reports)} reports")
 
 
 class DbIngestRequest(BaseModel):

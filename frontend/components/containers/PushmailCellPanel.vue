@@ -1,25 +1,33 @@
 <script setup lang="ts">
 // The settings of a Pushmail cell of a flow group: one email through an SMTP
-// connection, with one .xlsx per datasource (gateway: routes/flow_groups.py
-// `pushmail_errors`, engine: app/ingest/pushmail.py). The subject and the file names
+// connection, with one .xlsx per datasource and one PDF or Excel file per report
+// (gateway: services/pushmail.py `pushmail_errors`, engine: app/ingest/pushmail.py;
+// docs/specs/reports.md, «Sending»). A report takes its parameters' values here, and
+// one report may put its summary in the email's body. The subject and the file names
 // take the Outputs' date placeholders, previewed as they are typed. More than one
 // datasource, or a big one, brings a warning: how large a message the SMTP relay
 // takes is known by the administrators.
 import { computed, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
-import { Plus, X, Trash2, TriangleAlert, Mail } from 'lucide-vue-next'
+import { Plus, X, Trash2, TriangleAlert, Mail, FileText } from 'lucide-vue-next'
 import type { ConnectionInfo } from '~/composables/useConnections'
 import type { DatasourceInfo } from '~/composables/useDatasources'
+import type { Report } from '~/composables/useReports'
 import { usePlaceholderPreview, type PreviewRequest } from '~/composables/usePlaceholders'
 import { useFolderPaths } from '~/composables/useFolderPaths'
 import TemplatePreview from '~/components/ui/TemplatePreview.vue'
-import type { PushmailAttachment, PushmailConfig } from '~/composables/useFlowGroups'
+import RdSeg from '~/components/report/designer/RdSeg.vue'
+import PushmailReportParams from '~/components/containers/PushmailReportParams.vue'
+import {
+  PUSHMAIL_MAX_REPORTS, type PushmailAttachment, type PushmailConfig, type PushmailReport,
+} from '~/composables/useFlowGroups'
 
 
 const props = defineProps<{
   config: PushmailConfig
   connections: ConnectionInfo[] // the SMTP ones this person may send through
   datasources: DatasourceInfo[]
+  reports: Report[] // the ones this person sees
   groupName: string
   readOnly?: boolean
 }>()
@@ -76,6 +84,38 @@ function rowsOf(a: PushmailAttachment): { total: number | null; sent: number | n
   const total = a.datasourceId != null ? dsById.value.get(a.datasourceId)?.rows ?? null : null
   return { total, sent: total == null ? null : Math.min(total, a.maxRows || 0) }
 }
+// ── reports ─────────────────────────────────────────────────────────────────
+const cellReports = computed<PushmailReport[]>(() => props.config.reports ?? [])
+const reportById = computed(() => new Map(props.reports.map((r) => [r.id, r])))
+const reportOptions = computed(() => props.reports
+  .map((r) => ({ value: r.id, label: r.name, hint: folderPaths.pathOf(r.project_id) ?? undefined })))
+const FORMATS = computed(() => [{ value: 'pdf', label: t('pushmail.formatPdf') }, { value: 'xlsx', label: t('pushmail.formatXlsx') }])
+function setReport(i: number, patch: Partial<PushmailReport>) {
+  const next = cellReports.value.map((r, n) => (n === i ? { ...r, ...patch } : r))
+  emit('update', { reports: next })
+}
+function addReport() {
+  if (cellReports.value.length >= PUSHMAIL_MAX_REPORTS) return
+  emit('update', { reports: [...cellReports.value, { reportId: null, format: 'pdf', params: {}, fileName: '', inBody: false }] })
+}
+function removeReport(i: number) {
+  emit('update', { reports: cellReports.value.filter((_, n) => n !== i) })
+}
+// a report chosen gives its file a name, until one is written; another report's values
+// would not fit it
+function chooseReport(i: number, id: number) {
+  const r = cellReports.value[i]
+  if (!r || r.reportId === id) return
+  const name = r.fileName.trim() ? r.fileName : `${(reportById.value.get(id)?.name ?? 'report').replace(/[\\/]/g, '_')}_{today:yyyy-MM-dd}`
+  setReport(i, { reportId: id, fileName: name, params: {} })
+}
+// one summary in the body: checking one unchecks the others
+function setInBody(i: number, on: boolean) {
+  emit('update', { reports: cellReports.value.map((r, n) => ({ ...r, inBody: n === i ? on : on ? false : r.inBody })) })
+}
+// a report the list does not have: deleted since, or in a folder one cannot see
+const unknownReport = (r: PushmailReport) => r.reportId != null && !reportById.value.has(r.reportId)
+
 const warn = computed(() => {
   const chosen = props.config.attachments.filter((a) => a.datasourceId != null)
   return chosen.length > 1 || chosen.some((a) => (rowsOf(a).sent ?? 0) > BIG_ROWS)
@@ -85,6 +125,7 @@ const preview = usePlaceholderPreview((): PreviewRequest | null => {
   const templates: Record<string, string> = { subject: props.config.subject ?? '' }
   const targets: Record<string, 'text' | 'file'> = { subject: 'text' }
   props.config.attachments.forEach((a, i) => { templates[`file_${i}`] = (a.fileName ?? '').trim(); targets[`file_${i}`] = 'file' })
+  cellReports.value.forEach((r, i) => { templates[`report_${i}`] = (r.fileName ?? '').trim(); targets[`report_${i}`] = 'file' })
   return { kind: 'output', templates, targets, timezone: props.config.timezone ?? '', flow: props.groupName }
 })
 const fmt = (n: number) => n.toLocaleString()
@@ -160,6 +201,46 @@ const DATE_EXAMPLE = '{today:yyyy-MM-dd}'
         <Plus :size="13" /> {{ t('pushmail.addAttachment') }}
       </button>
 
+      <div class="atthead">
+        <span class="lbl">{{ t('pushmail.reportsLabel') }}</span>
+        <span class="muted">{{ t('pushmail.reportsHint') }}</span>
+      </div>
+      <div v-for="(r, i) in cellReports" :key="`r${i}`" class="att rep" :data-report="i">
+        <div class="arow">
+          <FileText :size="14" class="ricon" aria-hidden="true" />
+          <Select class="ads" :model-value="r.reportId" :options="reportOptions" searchable
+                  :placeholder="unknownReport(r) ? t('pushmail.reportHidden', { id: r.reportId }) : t('pushmail.reportPlaceholder')"
+                  :aria-label="t('pushmail.reportAria', { n: i + 1 })"
+                  @update:model-value="(v: any) => chooseReport(i, v)" />
+          <RdSeg class="fmt" :model-value="r.format" :options="FORMATS" :label="t('pushmail.formatAria', { n: i + 1 })"
+                 @update:model-value="(v: any) => setReport(i, { format: v })" />
+          <button type="button" class="x" :title="t('pushmail.removeReport')" :aria-label="t('pushmail.removeReport')"
+                  @click="removeReport(i)"><X :size="13" /></button>
+        </div>
+        <label class="fname">
+          <span>{{ t('pushmail.fileNameLabel', { example: DATE_EXAMPLE }) }}</span>
+          <span class="withext">
+            <input :value="r.fileName" type="text" spellcheck="false" maxlength="255" :aria-describedby="`tp-pm-report-${i}`"
+                   @input="setReport(i, { fileName: ($event.target as HTMLInputElement).value })" />
+            <span class="ext muted">.{{ r.format }}</span>
+          </span>
+        </label>
+        <TemplatePreview :id="`tp-pm-report-${i}`" :preview="preview" :name="`report_${i}`" />
+        <div v-if="r.reportId != null && !unknownReport(r)" class="params">
+          <span class="sub">{{ t('pushmail.paramsLabel') }}</span>
+          <PushmailReportParams :report-id="r.reportId" :model-value="r.params" :id-prefix="`pm-r${i}`" :read-only="readOnly"
+                                @update:model-value="(v) => setReport(i, { params: v })" />
+        </div>
+        <label class="chk body">
+          <input type="checkbox" :checked="r.inBody" @change="setInBody(i, ($event.target as HTMLInputElement).checked)" />
+          <span>{{ t('pushmail.inBody') }} <span class="muted">{{ t('pushmail.inBodyHint') }}</span></span>
+        </label>
+      </div>
+      <p v-if="!reports.length" class="muted hint">{{ t('pushmail.noReports') }}</p>
+      <button type="button" class="add" :disabled="cellReports.length >= PUSHMAIL_MAX_REPORTS || !reports.length" @click="addReport">
+        <Plus :size="13" /> {{ t('pushmail.addReport') }}
+      </button>
+
       <div v-if="warn" class="warn" role="note">
         <TriangleAlert :size="15" />
         <p>{{ t('pushmail.sizeWarning') }}</p>
@@ -199,6 +280,14 @@ const DATE_EXAMPLE = '{today:yyyy-MM-dd}'
   color: var(--text); font-size: 12.5px; line-height: 1.45; }
 .warn svg { color: #f59e0b; flex-shrink: 0; margin-top: 1px; }
 .warn p { margin: 0; }
+.ricon { color: var(--muted); flex-shrink: 0; }
+.fmt { flex-shrink: 0; }
+.rep .fname { display: flex; flex-direction: column; gap: 3px; }
+.params { display: flex; flex-direction: column; gap: 4px; padding-top: 2px; }
+.sub { font-size: 11.5px; font-weight: 600; color: var(--muted); }
+.pm label.chk.body { align-items: flex-start; font-size: 12.5px; line-height: 1.45; }
+.pm label.chk.body input { margin-top: 2px; flex-shrink: 0; }
+.pm label.chk.body .muted { font-size: 11.5px; }
 .foot { display: flex; justify-content: flex-start; margin-top: 12px; }
 .danger-ghost { display: inline-flex; align-items: center; gap: 5px; color: var(--danger, #ef4444); }
 @media (max-width: 520px) { .arow2 { grid-template-columns: 1fr; } }

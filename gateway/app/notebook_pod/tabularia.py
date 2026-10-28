@@ -8,15 +8,19 @@ rebuilding any image. docs/specs/notebooks.md, «Data».
     tabularia.datasources()                 # what this notebook may read
     df = tabularia.read("Sample/orders")    # a polars DataFrame
     df = tabularia.read(42, columns=["order_id", "amount"])
+    tabularia.reports()                     # the reports it may render, with their parameters
+    pdf = tabularia.report("Sales/Monthly", region="North", since="2026-09-01")  # the PDF's bytes
 
 Every read goes to the gateway with the pod's notebook token, and the gateway checks,
 at every call, that the person whose rights the notebook carries (the author of the
 version the app runs, or whoever is editing) may read that datasource. The answer is a
 short-lived link to the datasource's own parquet, downloaded from the object storage:
-nothing is copied, and the data is as fresh as the datasource.
+nothing is copied, and the data is as fresh as the datasource. A report is rendered by
+the gateway with the same rights, every dataset it reads checked, and comes back whole.
 """
 from __future__ import annotations
 
+import datetime
 import http.client
 import json
 import os
@@ -25,9 +29,11 @@ import tempfile
 import urllib.error
 import urllib.request
 
-__all__ = ["TabulariaError", "datasources", "read"]
+__all__ = ["TabulariaError", "datasources", "read", "report", "reports"]
 
 _TIMEOUT = 60  # the gateway's answers
+# a report: the gateway waits for the render (REPORTS__API_WAIT_SECONDS, 120 s by default)
+_REPORT_TIMEOUT = 600
 # the download: as long as it keeps coming, but a storage that stops sending fails the
 # read after this long instead of holding the cell forever
 _DOWNLOAD_TIMEOUT = 60
@@ -41,7 +47,7 @@ class TabulariaError(Exception):
     """What the gateway answered, in words: not found, not allowed, the session ended."""
 
 
-def _call(method: str, path: str, body: dict | None = None) -> dict | list:
+def _send(method: str, path: str, body: dict | None = None, timeout: float = _TIMEOUT) -> bytes:
     url = os.environ.get("TABULARIA_URL", "").rstrip("/")
     token = os.environ.get("TABULARIA_NOTEBOOK_TOKEN", "")
     if not url or not token:
@@ -52,16 +58,22 @@ def _call(method: str, path: str, body: dict | None = None) -> dict | list:
         headers={"content-type": "application/json", "authorization": f"Bearer {token}"},
     )
     try:
-        with _DIRECT.open(req, timeout=_TIMEOUT) as r:
-            return json.loads(r.read() or b"null")
+        with _DIRECT.open(req, timeout=timeout) as r:
+            return r.read()
     except urllib.error.HTTPError as e:
         try:
             detail = json.loads(e.read() or b"{}").get("detail")
         except ValueError:
             detail = None
+        if isinstance(detail, dict):  # a parameter that does not fit: {"message", "parameter"}
+            detail = detail.get("message")
         raise TabulariaError(detail if isinstance(detail, str) else f"Tabularia answered {e.code}") from None
-    except OSError as e:  # URLError, or no answer within _TIMEOUT
+    except (OSError, http.client.HTTPException) as e:  # URLError, no answer in time, a body cut short
         raise TabulariaError(f"Tabularia cannot be reached: {getattr(e, 'reason', None) or e}") from None
+
+
+def _call(method: str, path: str, body: dict | None = None) -> dict | list:
+    return json.loads(_send(method, path, body) or b"null")
 
 
 def datasources() -> list[dict]:
@@ -87,3 +99,32 @@ def read(datasource: str | int, columns: list[str] | None = None):
             os.remove(path)
         except OSError:
             pass
+
+
+def reports() -> list[dict]:
+    """The reports this notebook may render: id, name, folder, path, and their parameters
+    (name, type, multi, required, default)."""
+    return _call("GET", "/notebook-data/reports")
+
+
+def _value(v):
+    if isinstance(v, (datetime.date, datetime.datetime)):
+        return v.isoformat()[:10]  # a report's dates are days
+    if isinstance(v, (list, tuple, set)):
+        return [_value(x) for x in v]
+    return v
+
+
+def report(report: str | int, /, format: str = "pdf", **params) -> bytes:
+    """A report rendered with these parameters, as bytes: by its id or its path
+    ("Folder/Name"; the name alone when only one report it may render has it). `format`
+    pdf, xlsx or html (the email's summary, as MHTML). A parameter left out takes the
+    report's default; a list for one that takes several; a date as a date or yyyy-mm-dd.
+
+        with open("sales.pdf", "wb") as f:
+            f.write(tabularia.report("Sales/Monthly", region=["North", "South"]))
+    """
+    if format not in ("pdf", "xlsx", "html"):
+        raise TabulariaError("format is pdf, xlsx or html")
+    body = {"report": report, "format": format, "params": {k: _value(v) for k, v in params.items()}}
+    return _send("POST", "/notebook-data/report", body, timeout=_REPORT_TIMEOUT)

@@ -168,19 +168,36 @@ def _texts(param: Mapping[str, Any], given: Optional[list]) -> Optional[list]:
     return list(default) if isinstance(default, list) else [default]
 
 
+def _given_texts(definition: Mapping[str, Any], given: Mapping[str, list]) -> tuple[dict, dict]:
+    params = {p["name"]: p for p in definition.get("parameters") or []}
+    for name in given:
+        if name not in params:
+            raise bad_value(name, "the report has no parameter by this name")
+    return params, {name: _texts(p, given.get(name)) for name, p in params.items()}
+
+
 async def values_for(definition: Mapping[str, Any], given: Mapping[str, list]) -> dict[str, Any]:
     """Every parameter's value: the ones given (texts; a list per name), the defaults for
     the others. 400 naming the parameter when a value does not fit: an unknown name, a
     required one without a value, a text that is not of its type, a value outside its
     fixed choices. The choices taken from a dataset are checked by the caller, which
     reads them (services/reports.py)."""
-    params = {p["name"]: p for p in definition.get("parameters") or []}
-    for name in given:
-        if name not in params:
-            raise bad_value(name, "the report has no parameter by this name")
-    texts = {name: _texts(p, given.get(name)) for name, p in params.items()}
+    params, texts = _given_texts(definition, given)
     bodies = {b for ts in texts.values() for t in ts or [] if (b := placeholder_of(t))}
     resolved = await resolve_placeholders(bodies, definition.get("timezone") or "UTC") if bodies else {}
+    return _converted(params, texts, resolved)
+
+
+def check_values(definition: Mapping[str, Any], given: Mapping[str, list]) -> None:
+    """`values_for` without asking the engine anything: what a flow group's Pushmail cell
+    is checked against when it is saved and before a scheduled run. A placeholder
+    (`{start_of_month}`) is taken for what it will be; the engine resolves it when the
+    report is rendered, and the render says then if it does not fit."""
+    _converted(*_given_texts(definition, given), None)
+
+
+def _converted(params: dict, texts: dict, resolved: Optional[dict]) -> dict[str, Any]:
+    """The values converted to their types; `resolved` None leaves the placeholders out."""
     values: dict[str, Any] = {}
     for name, p in params.items():
         ts = texts[name]
@@ -193,11 +210,16 @@ async def values_for(definition: Mapping[str, Any], given: Mapping[str, list]) -
         for t in ts:
             body = placeholder_of(t)
             if body is not None:
+                if resolved is None:
+                    continue
                 text, error = resolved[body]
                 if error:
                     raise bad_value(name, f"{{{body}}}: {error}")
                 t = text
             converted.append(convert(p, t))
+        if not converted:  # only placeholders, not resolved here
+            values[name] = [] if p.get("multi") else None
+            continue
         fixed = (p.get("choices") or {}).get("values")
         if fixed is not None:
             allowed = {_key(convert(p, c)) for c in fixed}

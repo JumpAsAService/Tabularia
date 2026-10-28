@@ -378,7 +378,8 @@ def build_full_graph(session: Session, user: User) -> _Graph:
                            meta={"connection_id": c.pushmail.connectionId,
                                  "connection_name": conn.name if conn else None,
                                  "recipients": len([a for a in c.pushmail.to + c.pushmail.cc if a.strip()]),
-                                 "attachments": len(c.pushmail.attachments)})
+                                 "attachments": len(c.pushmail.attachments),
+                                 "reports": len(c.pushmail.reports)})
                 g.add_edge(_gid(grp.id), mail, EDGE_WRITE)                            # group → email
                 for a in c.pushmail.attachments:
                     if a.datasourceId is None:

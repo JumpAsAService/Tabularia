@@ -60,7 +60,9 @@ def _cell_lines(session, user, definition: FlowGroupDefinition) -> list[str]:
                 text = _container_words(cell)
             else:
                 p = cell.pushmail or PushmailCell()
-                files = ", ".join(f"«{f.fileName}» (datasource {f.datasourceId})" for f in p.attachments)
+                files = ", ".join([f"«{f.fileName}» (datasource {f.datasourceId})" for f in p.attachments]
+                                  + [f"«{r.fileName}» (report {r.reportId}, {r.format}"
+                                     + (", summary in the body" if r.inBody else "") + ")" for r in p.reports])
                 text = (f"email «{p.label or 'Pushmail'}» to {', '.join(p.to)}" + (f" (cc {', '.join(p.cc)})" if p.cc else "")
                         + f", subject «{p.subject}», files {files} (pushmail {cell.id})")
             lines.append(f"step {n}: {text}")
@@ -135,7 +137,9 @@ def _cell_view(cell: Optional[FlowGroupCell], label: Any, paths: dict[int, str])
         out.update(label=p.label, connection_id=p.connectionId, to=p.to, cc=p.cc, subject=p.subject,
                    body=p.body[:2000], body_is_html=p.bodyIsHtml, timezone=p.timezone,
                    attachments=[{"datasource_id": f.datasourceId, "file_name": f.fileName, "max_rows": f.maxRows}
-                                for f in p.attachments])
+                                for f in p.attachments],
+                   reports=[{"report_id": r.reportId, "format": r.format, "params": r.params, "file_name": r.fileName,
+                             "in_body": r.inBody} for r in p.reports])
     return out
 
 
@@ -167,7 +171,7 @@ class GroupCellArgs(BaseModel):
     kind: Literal["flow", "refresh", "script", "container", "pushmail", "sql"] = Field(
         description="flow: run a flow; refresh: refresh a datasource imported from a connection; script: run a saved "
                     "Python/R script; sql: write a SQL script's datasource; container: run an image; pushmail: email "
-                    "datasources as .xlsx files.")
+                    "datasources as .xlsx files and reports as PDF or Excel.")
     id: Optional[int] = Field(None, description="flow, refresh, script, sql: the object's id. container, pushmail: the "
                                                 "cell's number in the group (get_flow_group) to keep it as it is, or to "
                                                 "change it with new settings; leave it out for a new one.")
@@ -176,7 +180,9 @@ class GroupCellArgs(BaseModel):
                                                                   "variables [{name, value}], cpu, memory, timeoutSeconds, retries.")
     pushmail: Optional[PushmailCell] = Field(None, description="pushmail: connectionId (an SMTP connection, see "
                                                                "list_connections and its allowed_domains), to, cc, "
-                                                               "subject, body, attachments [{datasourceId, fileName, maxRows}].")
+                                                               "subject, body, attachments [{datasourceId, fileName, maxRows}], "
+                                                               "reports [{reportId, format pdf|xlsx, params {name: value}, "
+                                                               "fileName, inBody}].")
 
 
 class PlanFlowGroupArgs(BaseModel):

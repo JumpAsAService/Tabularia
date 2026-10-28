@@ -88,6 +88,17 @@ def get_visible(session: Session, user: User, report_id: int) -> Report:
     return report
 
 
+def groups_using(session: Session, report_id: int) -> list:
+    """The flow groups with a Pushmail cell that sends the report."""
+    from app.models import FlowGroup
+    from app.services.flow_groups import definition_of
+
+    return [g for g in session.exec(select(FlowGroup).where(FlowGroup.definition.contains('"reportId"'))).all()  # type: ignore[union-attr]
+            if any(c is not None and c.kind == "pushmail" and c.pushmail is not None
+                   and any(r.reportId == report_id for r in c.pushmail.reports)
+                   for row in definition_of(g).steps for c in row)]
+
+
 # ── versions ─────────────────────────────────────────────────────────────────
 def version_row(session: Session, report: Report, version: Optional[int] = None) -> Optional[ReportVersion]:
     return session.exec(select(ReportVersion).where(
@@ -360,6 +371,7 @@ class _Plan:
     conn: Optional[Connection] = None
     engine: Optional[str] = None
     chain: dict = field(default_factory=dict)
+    datasource_id: Optional[int] = None  # the datasource a chain reads
     filters: list = field(default_factory=list)
     placeholders: set = field(default_factory=set)
 
@@ -405,6 +417,7 @@ async def _plan(session: Session, user: User, ds: dict, params: dict, engines: _
         raise HTTPException(status_code=422, detail=f"the datasource «{target.name}» has no data yet")
     plan = _Plan(name, "chain", engine=await engines.pick(engine, fallback=True), filters=list(src.get("filters") or []))
     plan.chain = {"bucket": target.bucket, "input_key": target.key, "operations": ops}
+    plan.datasource_id = target.id
     plan.placeholders = {b for f in plan.filters if (b := report_params.placeholder_of(f.get("value")))}
     return plan
 
@@ -427,8 +440,9 @@ def _filter_ops(plan: _Plan, params: dict, values: Mapping[str, Any], placeholde
 
 
 def _finish(session: Session, user: User, plan: _Plan, params: dict, values: Mapping[str, Any],
-            placeholders: Mapping[str, str]) -> dict:
-    """The dataset as the engine reads it."""
+            placeholders: Mapping[str, str], read: Optional[set[int]] = None) -> dict:
+    """The dataset as the engine reads it; the datasources it reads go in `read`."""
+    read = set() if read is None else read
     if plan.kind == "connection":
         from app.routes.connections import engine_connection_payload  # routes → services: late import
 
@@ -439,16 +453,46 @@ def _finish(session: Session, user: User, plan: _Plan, params: dict, values: Map
         resolved = sql_scripts.resolve(session, user, sql, plan.engine)
         if not resolved.tables:
             raise HTTPException(status_code=422, detail="the query reads no datasource: name one in FROM")
+        read.update(ds.id for ds in resolved.tables.values())
         return {**sql_scripts._catalog_chain(resolved), "engine": plan.engine}
+    read.add(plan.datasource_id)
     chain = dict(plan.chain)
     chain["operations"] = _filter_ops(plan, params, values, placeholders) + chain["operations"]
     return {**chain, "engine": plan.engine}
 
 
+def reading_problem(session: Session, user: User, definition: dict) -> Optional[str]:
+    """Why `user` could not read every dataset of the definition, or None: the checks of a
+    render (`resolve_datasets`) without asking the engine anything — for a flow group's
+    Pushmail cell when it is saved and before a scheduled run starts. The parameters take
+    a value of their type and the placeholders a date: only who may read what counts
+    here, the render checks the rest with the real values."""
+    params = {p["name"]: p for p in definition.get("parameters") or []}
+    values = {name: _neutral(p) for name, p in params.items()}
+    for ds in definition.get("datasets") or []:
+        src = ds["source"]
+        try:
+            if src["kind"] in ("sql", "sql_script"):
+                sql, conn, engine = _sql_of(session, user, src)
+                if conn is None:
+                    dialect = _dialect(None, engine)
+                    bodies = report_params.check_sql(sql, dialect, params)[1]
+                    filled = report_params.fill(sql, dialect, params, values, {b: "2000-01-01" for b in bodies})
+                    sql_scripts.resolve(session, user, filled, engine)
+            elif src["kind"] == "datasource":
+                _datasource(session, user, src["datasource_id"])
+            else:
+                _view(session, user, src["view_id"])
+        except HTTPException as e:
+            return f"The dataset «{ds['name']}»: {_within(_text(e))}"
+    return None
+
+
 async def resolve_datasets(session: Session, user: User, definition: dict, values: Mapping[str, Any],
-                           only: Optional[set[str]] = None) -> dict[str, dict]:
+                           only: Optional[set[str]] = None, read: Optional[set[int]] = None) -> dict[str, dict]:
     """Every dataset (or those in `only`) as the engine reads it, with `user`'s rights and
-    the parameters' `values` in place. 422 naming the dataset that cannot be read."""
+    the parameters' `values` in place. 422 naming the dataset that cannot be read. The
+    datasources read go in `read`, when given (a flow group's lineage)."""
     params = {p["name"]: p for p in definition.get("parameters") or []}
     engines = _Engines(session)
     plans: list[_Plan] = []
@@ -470,7 +514,7 @@ async def resolve_datasets(session: Session, user: User, definition: dict, value
     out = {}
     for plan in plans:
         try:
-            out[plan.name] = _finish(session, user, plan, params, values, texts)
+            out[plan.name] = _finish(session, user, plan, params, values, texts, read)
         except HTTPException as e:
             raise _in_dataset(plan.name, e) from None
     return out
@@ -555,6 +599,26 @@ class Started:
     detail: dict  # what the audit records
 
 
+def given_detail(given: Mapping[str, list]) -> dict:
+    """The values as given, a few and cut short: the audit of a render refused before they
+    were converted."""
+    return {str(k)[:64]: [str(v)[:200] for v in vs[:20]] for k, vs in list(given.items())[:40]}
+
+
+async def prepare(session: Session, user: User, definition: dict, given: Mapping[str, list],
+                  detail: Optional[dict] = None, read: Optional[set[int]] = None) -> tuple[dict, dict]:
+    """What a render needs before the engine: the parameters' values (400 naming the one
+    that does not fit) and every dataset resolved with `user`'s rights (422 naming the one
+    that cannot be read), the values of choices read from a dataset among them. The
+    converted values go in the audit's `detail`, the datasources read in `read`."""
+    values = await report_params.values_for(definition, given)
+    if detail is not None:
+        detail["parameters"] = {k: _shown(report_params.to_json(v)) for k, v in values.items()}
+    datasets = await resolve_datasets(session, user, definition, values, read=read)
+    await check_dataset_choices(definition, datasets, values)
+    return values, datasets
+
+
 def _audit_render(session: Session, user: User, report: Optional[Report], request: Optional[Request], outcome: str,
                   detail: dict) -> None:
     audit.record_audit(session, actor=user, action=audit.REPORT_RENDER, outcome=outcome, target_type="report",
@@ -564,13 +628,15 @@ def _audit_render(session: Session, user: User, report: Optional[Report], reques
 
 async def render(session: Session, user: User, report: Optional[Report], definition: dict, fmt: str,
                  given: Mapping[str, list], *, state: Optional[dict] = None, origin: str = "interface",
-                 request: Optional[Request] = None, audit_success: bool = True) -> Started:
+                 request: Optional[Request] = None, audit_success: bool = True,
+                 extra: Optional[dict] = None) -> Started:
     """Starts the render of `definition` (a saved report's, or the editor's unsaved one)
     with the parameters `given`, read with `user`'s rights. The file is an export of
     theirs: followed and taken through /tasks/exports. Audited with its format, its
-    parameters and where it came from (`origin`: interface, editor, api, flow_group);
-    `audit_success=False` leaves the success to the caller, who records it once it knows
-    the file came out (the API)."""
+    parameters and where it came from (`origin`: interface, editor, api, notebook; a flow
+    group's Pushmail cell renders through the engine's email task, see `prepare`), and
+    `extra` (the notebook that asked); `audit_success=False` leaves the success to the
+    caller, who records it once it knows the file came out (the API, a notebook)."""
     from app.routes.proxy import export_owner  # routes → services: late import
 
     if fmt not in FORMATS:
@@ -578,14 +644,10 @@ async def render(session: Session, user: User, report: Optional[Report], definit
     if state is not None and len(json.dumps(state)) > MAX_STATE_BYTES:
         raise HTTPException(status_code=422, detail="The view's state is too large")
     # as given until they are converted: a few, cut short, in the audit of a refusal
-    detail: dict[str, Any] = {"format": fmt, "from": origin, "parameters": {
-        str(k)[:64]: [str(v)[:200] for v in vs[:20]] for k, vs in list(given.items())[:40]}}
+    detail: dict[str, Any] = {"format": fmt, "from": origin, **(extra or {}), "parameters": given_detail(given)}
     outcome = "failure"
     try:
-        values = await report_params.values_for(definition, given)
-        detail["parameters"] = {k: _shown(report_params.to_json(v)) for k, v in values.items()}
-        datasets = await resolve_datasets(session, user, definition, values)
-        await check_dataset_choices(definition, datasets, values)
+        values, datasets = await prepare(session, user, definition, given, detail)
         name = filename(report, fmt)
         resp = await get_engine_client().post("/reports/render", timeout=60, json={
             "definition": definition, "datasets": datasets,
