@@ -57,7 +57,7 @@ with** and the account's email, and the Google Cloud project. Both are read from
 when it is saved, and the Connections page lists the connection under that email: a
 connection is one account.
 
-![The New connection dialog with type Google Sheets: the JSON key pasted, the account's email to share the spreadsheets with, the project, and the result of the test](../media/guide/connections/google-sheets-connection.png)
+![The New connection dialog with type Google Sheets: the JSON key pasted (blurred here), the account's email to share the spreadsheets with, the project, and the result of the test](../media/guide/connections/google-sheets-connection.png)
 
 *A Google Sheets connection with a made-up key: the email to share the spreadsheets with, and a working test.*
 
