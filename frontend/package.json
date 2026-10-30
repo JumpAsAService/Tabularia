@@ -4,7 +4,9 @@
   "private": true,
   "type": "module",
   "scripts": {
+    "predev": "node scripts/third-party-notices.mjs public/third-party-notices.txt --extra \"IBM Plex Sans|OFL-1.1|assets/fonts/OFL.txt\" || true",
     "dev": "nuxt dev",
+    "prebuild": "node scripts/third-party-notices.mjs public/third-party-notices.txt --extra \"IBM Plex Sans|OFL-1.1|assets/fonts/OFL.txt\"",
     "build": "nuxt build",
     "preview": "nuxt preview",
     "postinstall": "nuxt prepare",

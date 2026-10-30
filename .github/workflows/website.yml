@@ -20,6 +20,8 @@ on:
       - "brand/**"
       - "README.md"
       - "frontend/public/logo.svg"
+      - "frontend/scripts/third-party-notices.mjs"
+      - "frontend/assets/fonts/OFL.txt"
       - ".github/workflows/website.yml"
   pull_request:
     paths:
@@ -28,6 +30,8 @@ on:
       - "brand/**"
       - "README.md"
       - "frontend/public/logo.svg"
+      - "frontend/scripts/third-party-notices.mjs"
+      - "frontend/assets/fonts/OFL.txt"
       - ".github/workflows/website.yml"
   workflow_dispatch:
 

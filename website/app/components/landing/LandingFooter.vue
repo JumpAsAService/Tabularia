@@ -40,7 +40,7 @@ const isInternal = (target: string) => target.startsWith('/')
       <div>
         <p>{{ t.footer.copyright }}</p>
         <p class="small soft foot__tm">{{ t.footer.trademarks }}</p>
-        <p class="small soft foot__tm">{{ t.footer.warranty }} <a :href="`${config.public.repo}/blob/main/LICENSE`">{{ t.footer.licence }}</a>.</p>
+        <p class="small soft foot__tm">{{ t.footer.warranty }} <a :href="`${config.public.repo}/blob/main/LICENSE`">{{ t.footer.licence }}</a>. · <a :href="`${config.app.baseURL}third-party-notices.txt`">Open source licences</a></p>
       </div>
       <div class="foot__actions">
         <ThemeToggle />

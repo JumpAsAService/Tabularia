@@ -29,6 +29,8 @@ export default {
     engineHint: 'Predeterminado para el Visor y los nuevos flujos. Al crear, se sigue eligiendo a mano.',
     language: 'Idioma',
     signOut: 'Cerrar sesión',
+    sourceCode: 'Código fuente',
+    licences: 'Licencias de código abierto',
     sessions: 'Tus sesiones',
     apiTokens: 'Tokens de API',
     admin: 'admin',

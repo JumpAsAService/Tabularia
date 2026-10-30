@@ -29,6 +29,8 @@ export default {
     engineHint: 'Standard für Viewer und neue Flüsse. Bei der Erstellung wird sie weiterhin manuell gewählt.',
     language: 'Sprache',
     signOut: 'Abmelden',
+    sourceCode: 'Quellcode',
+    licences: 'Open-Source-Lizenzen',
     sessions: 'Ihre Sitzungen',
     apiTokens: 'API-Token',
     admin: 'Admin',

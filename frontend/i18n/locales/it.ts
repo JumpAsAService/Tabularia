@@ -29,6 +29,8 @@ export default {
     engineHint: 'Default per Viewer e nuovi flussi. Alla creazione resta comunque scelto a mano.',
     language: 'Lingua',
     signOut: 'Esci',
+    sourceCode: 'Codice sorgente',
+    licences: 'Licenze open source',
     sessions: 'Le tue sessioni',
     apiTokens: 'Token API',
     admin: 'admin',

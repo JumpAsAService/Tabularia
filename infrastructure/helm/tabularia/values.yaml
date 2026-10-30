@@ -643,6 +643,9 @@ frontend:
   # app.corsOrigins and set auth.cookieDomain).
   publicApiBase: ""
   publicGrafanaUrl: ""    # optional, powers the Monitoring tab iframe
+  # Where «Source code» in the menu leads. Empty = the project's repository. If you run a
+  # changed version for others, the AGPL asks you to offer its source: point this at yours.
+  publicSourceUrl: ""
   resources:
     requests: { cpu: 50m, memory: 128Mi }
     limits: { memory: 512Mi }

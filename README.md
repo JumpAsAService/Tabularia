@@ -899,7 +899,11 @@ are translated.
 Copyright © 2025–2026 Leonardo Trivelli.
 
 Licensed under the **GNU Affero General Public License v3.0** — see [LICENSE](LICENSE).
-For commercial licensing options, contact the author.
+For commercial licensing options, contact the author. The notices of the third-party software
+are in the app, under **Open source licences** in the settings menu. If you offer a changed
+version to others over a network, the AGPL asks you to offer them its source: point
+`NUXT_PUBLIC_SOURCE_URL` (Helm: `frontend.publicSourceUrl`) at it, and **Source code** in the
+menu leads there.
 
 Tabularia is provided **"as is", without warranty of any kind**; the authors are not liable
 for any damage, including loss of data (AGPL-3.0, sections 15–16). Keep backups — and take one

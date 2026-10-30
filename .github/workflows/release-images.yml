@@ -211,8 +211,11 @@ jobs:
               cid=$(docker run -d --read-only --tmpfs /tmp -p 127.0.0.1:3000:3000 "$IMAGE")
               for _ in $(seq 60); do curl -fsS -o /dev/null http://127.0.0.1:3000/login && break; sleep 1; done
               status=$(curl -s -o /dev/null -w '%{http_code}' http://127.0.0.1:3000/login)
+              # the notices the licences of the bundled packages ask to keep
+              notices=$(curl -s -o /dev/null -w '%{http_code}' http://127.0.0.1:3000/third-party-notices.txt)
               docker rm -f "$cid" > /dev/null
-              check "/login" "$status" "200" ;;
+              check "/login" "$status" "200"
+              check "/third-party-notices.txt" "$notices" "200" ;;
           esac
 
       - name: Licences of the packages

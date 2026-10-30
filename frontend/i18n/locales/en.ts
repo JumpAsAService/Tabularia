@@ -30,6 +30,8 @@ export default {
     engineHint: 'Default for Viewer and new flows. On creation it is still chosen by hand.',
     language: 'Language',
     signOut: 'Sign out',
+    sourceCode: 'Source code',
+    licences: 'Open source licences',
     sessions: 'Your sessions',
     apiTokens: 'API tokens',
     admin: 'admin',

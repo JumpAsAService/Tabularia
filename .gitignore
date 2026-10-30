@@ -33,6 +33,8 @@ venv/
 node_modules/
 frontend/.nuxt/
 frontend/.output/
+frontend/public/third-party-notices.txt
+website/public/third-party-notices.txt
 frontend/dist/
 npm-debug.log*
 yarn-error.log*

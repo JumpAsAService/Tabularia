@@ -34,6 +34,7 @@ import {
   Server,
   FileChartColumn,
   ChartNoAxesCombined,
+  Code2,
 } from 'lucide-vue-next'
 
 // fluid = full-width content (no centred max-width): for pages like the Viewer that use
@@ -42,6 +43,8 @@ defineProps<{ fluid?: boolean }>()
 
 const { t } = useI18n()
 const { user, fetchMe, logout } = useAuth()
+const runtimeConfig = useRuntimeConfig()
+const sourceUrl = runtimeConfig.public.sourceUrl as string
 const { theme, setTheme } = useTheme()
 // name and version from the gateway: it is the release really running, not the bundle's
 const { info: appInfo, load: loadAppInfo } = useAppInfo()
@@ -316,6 +319,12 @@ onMounted(async () => {
             <button v-if="user?.personal_tokens" class="menu-item" @click="closeMenu(); tokensOpen = true">
               <KeyRound :size="14" /> {{ t('settings.apiTokens') }}
             </button>
+            <a class="menu-item" :href="sourceUrl" target="_blank" rel="noopener" @click="closeMenu()">
+              <Code2 :size="14" /> {{ t('settings.sourceCode') }}
+            </a>
+            <a class="menu-item" :href="`${runtimeConfig.app.baseURL}third-party-notices.txt`" target="_blank" rel="noopener" @click="closeMenu()">
+              <ScrollText :size="14" /> {{ t('settings.licences') }}
+            </a>
             <button class="menu-item" @click="closeMenu(); logout()">
               <LogOut :size="14" /> {{ t('settings.signOut') }}
             </button>

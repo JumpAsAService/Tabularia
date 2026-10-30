@@ -29,6 +29,8 @@ export default {
     engineHint: 'Par défaut pour le Visualiseur et les nouveaux flux. À la création, il reste choisi à la main.',
     language: 'Langue',
     signOut: 'Déconnexion',
+    sourceCode: 'Code source',
+    licences: 'Licences open source',
     sessions: 'Vos sessions',
     apiTokens: 'Jetons d\'API',
     admin: 'admin',

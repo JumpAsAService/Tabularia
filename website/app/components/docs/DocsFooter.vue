@@ -8,7 +8,8 @@ const config = useRuntimeConfig()
     <p>
       <a :href="config.public.repo">Source on GitHub</a> ·
       <a :href="`${config.public.repo}/issues`">Issues</a> ·
-      <a :href="config.public.dockerHub">Images on Docker Hub</a>
+      <a :href="config.public.dockerHub">Images on Docker Hub</a> ·
+      <a :href="`${config.app.baseURL}third-party-notices.txt`">Open source licences</a>
     </p>
   </footer>
 </template>
