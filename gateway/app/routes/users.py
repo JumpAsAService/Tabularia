@@ -395,7 +395,7 @@ def remove_user(session: Session, user_id: int) -> None:
     from sqlalchemy import delete as sa_delete, update as sa_update
 
     from app.models import (
-        AiChat, AiChatTurn, AiModel, ApiToken, AuditLog, Banner, Connection, Datasource, DisabledEngine, Flow,
+        AiChat, AiChatTurn, AiModel, AiProvider, ApiToken, AuditLog, Banner, Connection, Datasource, DisabledEngine, Flow,
         FlowGroup, FlowVersion, Permission, PrivacyNotice, Project, Run, SavedScript, SavedScriptVersion, SavedView,
         SqlScript, SqlScriptVersion, Report, ReportVersion, ReportView, Notebook, NotebookSession, NotebookTicket,
         NotebookVersion, NotebookVisitor, Upload, UserSession, Webhook,
@@ -471,6 +471,7 @@ def remove_user(session: Session, user_id: int) -> None:
         (Notebook, Notebook.draft_by),
         (NotebookVersion, NotebookVersion.created_by),
         (AiModel, AiModel.updated_by),
+        (AiProvider, AiProvider.updated_by),
         (Banner, Banner.created_by),
         (DisabledEngine, DisabledEngine.disabled_by),
         (PrivacyNotice, PrivacyNotice.updated_by),

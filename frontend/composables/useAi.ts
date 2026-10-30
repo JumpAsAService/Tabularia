@@ -7,20 +7,80 @@
 import type { PreviewResult } from '~/composables/useApi'
 import type { AgentPlan } from '~/composables/useAgentPlans'
 
+/** A model people can choose, with who answers: `id` is what goes back to the server. */
+export interface AiModelOption {
+  id: string
+  model: string
+  provider: string
+}
+
 export interface AiStatus {
   enabled: boolean
   models: string[]
   default_model: string | null
+  options?: AiModelOption[]
   // metadata-only mode: no value of a row reaches the models configured here, or an MCP client's
   metadata_only?: boolean
   mcp_metadata_only?: boolean
 }
 
 export interface AiModel {
-  model_id: string
+  id: string // the reference: `provider:3/name`, or the bare name for the environment's provider
+  model_id: string // its name at the provider
+  provider: string
+  provider_name: string
   enabled: boolean
   chat: boolean // false = embedding/audio/reranker: cannot be enabled for the chat
   available: boolean // false = the provider no longer lists it
+  priced: boolean // false = no known price: the spending caps count it at an assumed one
+}
+
+export type AiProviderKind = 'openai_compatible' | 'anthropic'
+
+export interface AiProvider {
+  key: string // `env`, `provider:3`
+  id: number | null
+  name: string
+  kind: AiProviderKind
+  base_url: string // empty for an observer
+  active: boolean
+  has_key: boolean
+  read_only: boolean // the environment's: changed where it is set
+  chats: number
+  enabled_models: number
+}
+
+export interface AiProviderTestResult {
+  ok: boolean
+  models: number
+  code: string | null
+  message: string | null
+}
+
+/** The model's name, without the reference's provider part. */
+export function aiModelName(ref: string | null | undefined): string {
+  return (ref ?? '').replace(/^provider:\d+\//, '')
+}
+
+/** A model in words: its name and who answers, when the provider is still there. */
+export function aiModelLabel(status: AiStatus | null | undefined, ref: string | null | undefined): string {
+  const option = status?.options?.find((o) => o.id === ref)
+  return option?.provider ? `${option.model} · ${option.provider}` : aiModelName(ref)
+}
+
+/** The pickers' options: the model, and under it who answers. */
+export function aiModelOptions(status: AiStatus | null | undefined) {
+  return (status?.options ?? []).map((o) => ({ value: o.id, label: o.model, hint: o.provider }))
+}
+
+/** Who answers with this model: where what a conversation sends goes. */
+export function aiProviderOf(status: AiStatus | null | undefined, ref: string | null | undefined): string {
+  return status?.options?.find((o) => o.id === ref)?.provider ?? ''
+}
+
+/** Every provider of the models that can be chosen, for the dialog at the start. */
+export function aiProviders(status: AiStatus | null | undefined): string[] {
+  return [...new Set((status?.options ?? []).map((o) => o.provider).filter(Boolean))]
 }
 
 // an agent's instructions (Administration → AI): the text, editable by the administrators,
@@ -135,6 +195,10 @@ export interface AiDone {
   // the Assistant page's agent: the questions that ended the turn, the plan it proposed or changed
   questions?: AgentQuestion[] | null
   plan?: AgentPlan | null
+  // the model ran out of room: what it wrote stops there
+  truncated?: boolean
+  // with an error: the model declined, and what it wrote before is not an answer
+  discard?: boolean
 }
 
 export interface ScriptProposal {
@@ -184,7 +248,7 @@ export interface AiTurn {
   steps: {
     id?: string; name: string; args: any; table?: AiTable; chart?: AiChartSpec; node?: string
     // how the call ended (false: refused, with the reason), how long it took, its words and result
-    ok?: boolean; error?: string; duration_ms?: number; title?: string; subject?: string; plan_id?: number
+    ok?: boolean; error?: string; duration_ms?: number; title?: string; subject?: string; plan_id?: number; count?: number
   }[]
   model_id: string
   usage: AiUsage
@@ -299,9 +363,19 @@ export function useAi() {
 
   return {
     status: () => apiFetch<AiStatus>('/ai/status'),
-    models: () => apiFetch<AiModel[]>('/ai/models'),
-    setModel: (modelId: string, enabled: boolean) =>
-      apiFetch<AiModel>(`/ai/models/${encodeURIComponent(modelId)}`, { method: 'PUT', body: { enabled } }),
+    models: (provider?: string) =>
+      apiFetch<AiModel[]>(`/ai/models${provider ? `?provider=${encodeURIComponent(provider)}` : ''}`),
+    setModel: (ref: string, enabled: boolean) =>
+      apiFetch<AiModel>(`/ai/models/${ref.split('/').map(encodeURIComponent).join('/')}`, { method: 'PUT', body: { enabled } }),
+    providers: () => apiFetch<AiProvider[]>('/ai/providers'),
+    createProvider: (body: { name: string; kind: AiProviderKind; base_url: string; api_key: string }) =>
+      apiFetch<AiProvider>('/ai/providers', { method: 'POST', body }),
+    updateProvider: (id: number, body: { name?: string; base_url?: string; api_key?: string; active?: boolean }) =>
+      apiFetch<AiProvider>(`/ai/providers/${id}`, { method: 'PATCH', body }),
+    removeProvider: (id: number, confirm = false) =>
+      apiFetch<void>(`/ai/providers/${id}${confirm ? '?confirm=true' : ''}`, { method: 'DELETE' }),
+    testProvider: (body: { key?: string; name?: string; kind?: AiProviderKind; base_url?: string; api_key?: string }) =>
+      apiFetch<AiProviderTestResult>('/ai/providers/test', { method: 'POST', body }),
     prompts: (locale: string) => apiFetch<AiPrompt[]>(`/ai/prompts?locale=${encodeURIComponent(locale)}`),
     setPrompt: (agent: AiAgent, text: string, locale: string) =>
       apiFetch<AiPrompt>(`/ai/prompts/${agent}?locale=${encodeURIComponent(locale)}`, { method: 'PUT', body: { text } }),

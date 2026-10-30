@@ -410,11 +410,11 @@ class PreviewSettings(BaseModel):
 
 
 class AiSettings(BaseModel):
-    """AI assistant (chat over the data). It talks to an OpenAI-compatible endpoint
-    (Scaleway Generative APIs, or any other): the URL and the key are enough. Off while
-    `base_url` or `secret_key` are empty. Which MODELS may be used the administrator
-    decides from the panel (the ai_models table): no model is enabled until they enable
-    it.
+    """AI assistant (chat over the data). `base_url` and `secret_key` are one provider, an
+    OpenAI-compatible endpoint (Scaleway Generative APIs, or any other): the URL and the key
+    are enough. The others are added from the panel (services/ai_models.py), and the assistant
+    is off while there is none. Which MODELS may be used the administrator decides from the
+    panel (the ai_models table): no model is enabled until they enable it.
 
     env: AI__BASE_URL, AI__ACCESS_KEY, AI__SECRET_KEY, AI__DEFAULT_MODEL,
     AI__MAX_RESULT_ROWS, AI__MAX_REQUESTS, AI__MAX_HISTORY_MESSAGES, AI__METADATA_ONLY"""

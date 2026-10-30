@@ -179,3 +179,29 @@ def test_0034_takes_manage_off_the_personal_folders_and_off_them_only(temporary_
         (11, 2, None, "manage"), (11, None, 1, "manage"),               # untouched
         (12, 4, None, "edit"),                                          # no second EDIT
     ], key=str)
+
+
+def test_0035_adds_the_providers_and_leaves_what_was_there(temporary_database):
+    """An installation with the environment's provider: its enabled models, conversations and bills
+    keep their names, and the previous version's reads still work on the migrated database."""
+    with temporary_database.begin() as c:
+        command.upgrade(m._config(c), "0034")
+        c.execute(text("INSERT INTO users (id, email, full_name, is_active, is_superuser, is_observer, created_at) "
+                       "VALUES (1, 'ann@example.com', '', true, false, false, now())"))
+        c.execute(text("INSERT INTO ai_models (model_id, enabled, updated_at, updated_by) VALUES "
+                       "('gpt-oss-120b', true, now(), 1), ('glm-5.2', false, now(), NULL)"))
+        c.execute(text("INSERT INTO ai_chats (id, user_id, title, model_id, kind, created_at, updated_at) "
+                       "VALUES (5, 1, 'Sales', 'gpt-oss-120b', 'assistant', now(), now())"))
+        c.execute(text("INSERT INTO ai_chat_turns (id, chat_id, seq, question, messages, model_id, input_tokens, output_tokens, "
+                       "requests, cost_usd, created_at) VALUES (7, 5, 0, 'q', '[]', 'gpt-oss-120b', 10, 2, 1, '0.01', now())"))
+        c.execute(text("INSERT INTO ai_spend (ts, user_id, turn_id, model_id, input_tokens, output_tokens, cost_usd) "
+                       "VALUES (now(), 1, 7, 'gpt-oss-120b', 10, 2, '0.01')"))
+    m.migra(temporary_database)  # stops if the database and the models differ
+    with temporary_database.connect() as c:
+        assert sorted(c.execute(text("SELECT model_id, enabled FROM ai_models")).all()) == [("glm-5.2", False), ("gpt-oss-120b", True)]
+        assert c.execute(text("SELECT model_id FROM ai_chats")).scalar() == "gpt-oss-120b"
+        assert c.execute(text("SELECT model_id, cost_usd FROM ai_spend")).one() == ("gpt-oss-120b", "0.01")
+        assert c.execute(text("SELECT count(*) FROM ai_providers")).scalar() == 0
+    # what the previous version does during a rolling update: inserts a row by its bare name
+    with temporary_database.begin() as c:
+        c.execute(text("INSERT INTO ai_models (model_id, enabled, updated_at) VALUES ('another', true, now())"))

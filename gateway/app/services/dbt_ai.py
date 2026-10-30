@@ -44,7 +44,7 @@ from sqlmodel import Session, select
 from app.core.config import get_settings
 from app.core.engine_client import get_engine_client
 from app.models import Datasource, DbtAiText, Flow, FlowVersion, User
-from app.services import ai_chats, ai_pricing, ai_prompts, metadata_only
+from app.services import ai_chats, ai_models, ai_pricing, ai_prompts, metadata_only
 from app.services.ai_models import enabled_model_ids
 from app.services.dbt_export import DbtExportError
 
@@ -67,13 +67,7 @@ WAIT = 0.5               # seconds between two looks at a claim another export h
 def ai_model(session: Session) -> Optional[str]:
     """The model to use: the default one when the administrator enabled it, otherwise the
     first enabled. None = the AI is not available."""
-    cfg = get_settings().ai
-    if not cfg.enabled:
-        return None
-    enabled_ones = enabled_model_ids(session)
-    if not enabled_ones:
-        return None
-    return cfg.default_model if cfg.default_model in enabled_ones else enabled_ones[0]
+    return ai_models.preferred(get_settings().ai.default_model, enabled_model_ids(session))
 
 
 def new_deadline() -> float:
@@ -174,9 +168,10 @@ def _insert(session: Session, rows: list[dict]) -> int:
 def _remember(session: Session, flow_id: int, version: int, kind: str, texts: dict[str, str], model_id: str) -> None:
     """Stores the texts. A key already stored keeps its text: another export, on this
     gateway or another one, stored it first, and that is the text every later export
-    gives back."""
+    gives back. The model only to name it, so in words: its provider may be gone by then."""
+    model = ai_models.described(session, model_id)
     _insert(session, [{"flow_id": flow_id, "flow_version": version, "kind": kind, "key": _key(key),
-                          "text": text, "model_id": model_id} for key, text in texts.items()])
+                          "text": text, "model_id": model} for key, text in texts.items()])
     session.commit()
 
 
@@ -235,28 +230,40 @@ async def _run(model_id: str, output_type: type, instructions: str, question: st
     run cost goes to the spending ledger even when it fails halfway (an answer that
     fails validation is retried, and billed): the daily caps read only the ledger."""
     from pydantic_ai import Agent
+    from pydantic_ai.exceptions import ContentFilterError, ModelAPIError
     from pydantic_ai.usage import RunUsage, UsageLimits
 
     from app.services import ai_agent
 
     cfg = get_settings().ai
     usage = RunUsage()   # ours, passed in: pydantic-ai counts into it, so a run stopped halfway still says what it spent
+    model = None
     try:
         rest = deadline - time.monotonic()
         if rest <= 0:
             raise TimeoutError
-        agent = Agent(ai_agent.build_model(model_id), output_type=output_type, instructions=instructions)
-        limits = UsageLimits(request_limit=3,
-                             cost_limit=Decimal(str(cfg.max_cost_per_turn_usd)) if cfg.max_cost_per_turn_usd else None,
-                             input_tokens_limit=cfg.max_input_tokens_per_turn)
-        outcome = await asyncio.wait_for(agent.run(question, usage=usage, usage_limits=limits), timeout=rest)
+        model = ai_agent.build_model(model_id)
+        agent = Agent(model, output_type=output_type, instructions=instructions,
+                      capabilities=[ai_agent.TurnGuard(model_id=model_id)])
+        limits = UsageLimits(request_limit=3, input_tokens_limit=cfg.max_input_tokens_per_turn)
+        outcome = await asyncio.wait_for(
+            agent.run(question, usage=usage, usage_limits=limits, model_settings=ai_agent.one_off_settings(model)),
+            timeout=rest)
     except TimeoutError as e:
         logger.warning("dbt export: the AI (%s) did not answer within the export's budget", model_id)
         raise _expired() from e
+    except (ai_agent.ModelRefused, ContentFilterError) as e:
+        logger.warning("dbt export: the AI (%s) declined the request", model_id)
+        raise DbtExportError("the AI declined the request", "ai_failed", detail="the model declined the request") from e
+    except ModelAPIError as e:  # in words: what the provider said may quote what was sent
+        _, words = ai_models.failure(getattr(e, "status_code", None), ai_models.provider_label(session, model_id))
+        logger.warning("dbt export: AI call failed (%s): %s", model_id, words)
+        raise DbtExportError(f"the AI did not answer ({words})", "ai_failed", detail=words) from e
     except Exception as e:  # noqa: BLE001 — the provider does not answer, or answers badly
         logger.warning("dbt export: AI call failed (%s): %s", model_id, e)
         raise DbtExportError(f"the AI did not answer ({str(e)[:200]})", "ai_failed", detail=str(e)[:200]) from e
     finally:
+        await ai_agent.close_model(model)
         if usage.requests:
             _record_spend(session, user, model_id, usage)
     return outcome.output
@@ -513,7 +520,7 @@ async def translate(session: Session, user: User, flow: Flow, params: dict,
         if proposal:   # an empty one is rejected by the engine: kept, it would be served again, and paid again
             _remember(session, flow.id, version, "translate", {key: proposal}, model_id)
         # what is stored wins: another gateway may have stored its proposal first
-        held = _remembered(session, flow.id, version, "translate").get(_key(key)) or (proposal, model_id)
+        held = _remembered(session, flow.id, version, "translate").get(_key(key)) or (proposal, ai_models.described(session, model_id))
     return held[0], key, held[1]
 
 

@@ -32,6 +32,7 @@ import os
 import re
 from contextlib import AbstractContextManager
 from dataclasses import dataclass
+from decimal import Decimal
 from typing import Any, Callable, Literal, Optional, get_args
 
 from pydantic import BaseModel, Field
@@ -40,14 +41,15 @@ from fastapi import Request
 
 os.environ.setdefault("PYDANTIC_AI_NO_BANNER", "1")  # no banner in the gateway's logs
 
-from pydantic_ai import ModelRetry, RunContext  # noqa: E402
+from pydantic_ai import CallToolsNode, ModelRetry, RunContext  # noqa: E402
 from pydantic_ai.capabilities import AbstractCapability  # noqa: E402
+from pydantic_ai.exceptions import UsageLimitExceeded  # noqa: E402
 from sqlmodel import Session, select
 
 from app.core.config import get_settings
 from app.core.engine_client import get_engine_client
 from app.models import Datasource, Project, User
-from app.services import ai_prompts, audit, metadata_only
+from app.services import ai_models, ai_pricing, ai_prompts, audit, metadata_only
 from app.services.permissions import readable_project_ids
 
 logger = logging.getLogger(__name__)
@@ -128,6 +130,35 @@ class StopWhenWithheld(AbstractCapability[ChatDeps]):
         if not ctx.deps.metadata_turn and metadata_only.on(ctx.deps.origin):
             raise metadata_only.TurnOutdated
         return request_context
+
+
+class ModelRefused(Exception):
+    """The model declined to answer. An HTTP 200, and the text so far (if any) is not an answer."""
+
+
+@dataclass
+class TurnGuard(AbstractCapability[Any]):
+    """After every answer of the model, before anything is done with it (a tool called, a text
+    taken for final), with its usage counted already.
+
+    - A refusal ends the turn with the reason. Without this, a refusal after some text passes
+      for a finished answer, and a tool call cut by it would be run.
+    - The cap on a turn's cost. `UsageLimits.cost_limit` would not do: it reads the library's
+      price, which has none for many models, so the cap would stop protecting in silence.
+
+    `model_id`: for an agent without `ChatDeps` (the dbt export's)."""
+
+    model_id: Optional[str] = None
+
+    async def before_node_run(self, ctx: RunContext[Any], *, node: Any) -> Any:
+        if isinstance(node, CallToolsNode):
+            if node.model_response.finish_reason == "content_filter":
+                raise ModelRefused
+            cap = get_settings().ai.max_cost_per_turn_usd
+            model_id = self.model_id or ctx.deps.model_id
+            if cap and ai_pricing.cost_for_caps(ctx.usage, model_id) > Decimal(str(cap)):
+                raise UsageLimitExceeded(f"The turn went over the cost cap of {cap} $")
+        return node
 
 
 def _columns(ds: Datasource) -> list[dict[str, Any]]:
@@ -513,20 +544,49 @@ async def query_datasource(
             audit.record_audit(
                 session, actor=deps.user, action=audit.AI_QUERY, outcome=outcome,
                 target_type="datasource", target_id=snapshot.id, target_label=snapshot.name,
-                detail={"sql": query[:2000], "model": deps.model_id, "engine": deps.engine or "default", "rows": n_rows},
+                detail={"sql": query[:2000], "model": ai_models.described(session, deps.model_id),
+                        "engine": deps.engine or "default", "rows": n_rows},
                 request=deps.request,
             )
 
 
 def build_model(model_id: str):
-    """The pydantic-ai model for a provider id. Kept apart (and replaceable) because the
-    tests must not talk to a real provider."""
+    """The pydantic-ai model for a model's reference (services/ai_models.py). Kept apart (and
+    replaceable) because the tests must not talk to a real provider."""
+    from fastapi import HTTPException
     from pydantic_ai.models.openai import OpenAIChatModel
     from pydantic_ai.providers.openai import OpenAIProvider
 
-    cfg = get_settings().ai
-    provider = OpenAIProvider(base_url=cfg.base_url, api_key=cfg.secret_key.get_secret_value())
-    return OpenAIChatModel(model_id, provider=provider)
+    endpoint = ai_models.endpoint_of(model_id)
+    if endpoint is None:
+        raise HTTPException(status_code=403, detail="The provider of this model is not available: choose another model")
+    name = ai_models.model_name(model_id)
+    if endpoint.kind == ai_models.ANTHROPIC:
+        from app.services import ai_anthropic
+
+        return ai_anthropic.build(name, endpoint)
+    provider = OpenAIProvider(base_url=endpoint.base_url, api_key=endpoint.secret())
+    return OpenAIChatModel(name, provider=provider)
+
+
+async def close_model(model: Any) -> None:
+    """The HTTP client of a model built for one turn or one call: its connections go now, not
+    whenever the garbage collector gets to them. Nothing to report if it fails."""
+    close = getattr(getattr(model, "client", None), "close", None)
+    if close is not None:
+        try:
+            await close()
+        except Exception:  # noqa: BLE001
+            logger.debug("assistant: model client not closed", exc_info=True)
+
+
+def one_off_settings(model: Any, *, quick: bool = False) -> dict[str, Any] | None:
+    """The settings of a call outside a turn, for the models that have any."""
+    if getattr(model, "system", "") != "anthropic":
+        return None
+    from app.services import ai_anthropic
+
+    return ai_anthropic.one_off_settings(model, quick=quick)
 
 
 # ── the conversation's title ─────────────────────────────────────────────────
@@ -550,12 +610,15 @@ async def suggest_title(model_id: str, question: str, locale: str = "en", prompt
     question_text = (question or "").strip()
     if not question_text:
         return None, None
+    model = None
     try:
+        model = build_model(model_id)
         agent = Agent(
-            build_model(model_id),
+            model,
             instructions=ai_prompts.compose(prompt or ai_prompts.TITLE, ai_prompts.language_line(locale, "the title")),
         )
-        payload = await agent.run(question_text[:1000], usage_limits=UsageLimits(request_limit=1))
+        payload = await agent.run(question_text[:1000], usage_limits=UsageLimits(request_limit=1),
+                                  model_settings=one_off_settings(model, quick=True))
         usage = payload.usage
         usage = usage() if callable(usage) else usage
         title = " ".join(str(payload.output or "").split()).strip(" \"'«»`.")
@@ -565,3 +628,5 @@ async def suggest_title(model_id: str, question: str, locale: str = "en", prompt
     except Exception:  # noqa: BLE001 — an extra: it must never disturb the answer
         logger.info("assistant: title not generated for the chat (model %s)", model_id, exc_info=True)
         return None, None
+    finally:
+        await close_model(model)

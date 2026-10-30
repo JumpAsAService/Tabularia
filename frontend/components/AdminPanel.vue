@@ -7,7 +7,7 @@ import { computed, onMounted, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { useFormat } from '~/composables/useFormat'
 import {
-  CheckCircle2, Cpu, Eye, Plus, Search, Shield, ShieldAlert, ShieldCheck, Trash2, TriangleAlert,
+  CheckCircle2, Cpu, Eye, Plus, Search, Shield, ShieldCheck, Trash2, TriangleAlert,
   User as UserIcon, Users as UsersIcon, X, XCircle, Sparkles, Bot, Webhook as WebhookIcon,
   SlidersHorizontal, Radar, Server, KeyRound, Code2, Boxes, DatabaseBackup,
 } from 'lucide-vue-next'
@@ -21,6 +21,7 @@ import WorkersSection from '~/components/admin/WorkersSection.vue'
 import ScriptingSection from '~/components/admin/ScriptingSection.vue'
 import RegistriesSection from '~/components/admin/RegistriesSection.vue'
 import AiPromptsSection from '~/components/admin/AiPromptsSection.vue'
+import AiProvidersSection from '~/components/admin/AiProvidersSection.vue'
 import PasswordDialog from '~/components/ui/PasswordDialog.vue'
 import { passwordProblem, usePasswordRules } from '~/composables/usePasswordRules'
 import { useSiem } from '~/composables/useSiem'
@@ -35,7 +36,7 @@ import { useProjects, type GroupOut, type Project, type UserOut } from '~/compos
 import { useBanners, type Banner, type BannerLevel } from '~/composables/useBanners'
 import { usePrivacy, type PrivacyNotice } from '~/composables/usePrivacy'
 import { useEnginePolicy, type EnginePolicy } from '~/composables/useEnginePolicy'
-import { useAi, type AiModel, type AiStatus } from '~/composables/useAi'
+import { useAi, type AiStatus } from '~/composables/useAi'
 
 const api = useProjects()
 const bannersApi = useBanners()
@@ -50,10 +51,8 @@ const backupsApi = useBackups()
 const workersApi = useWorkers()
 const scriptingApi = useScripting()
 const registriesApi = useRegistries()
-// AI models: the provider's catalog + the administrator's choice. `null` = assistant not
-// configured or provider unreachable (the section says so)
-const models = ref<AiModel[] | null>(null)
-const modelsError = ref('')
+// how many AI models are enabled, for the menu: the section holds the rest
+const nAiModels = ref(0)
 const toast = useToast()
 const { user: me } = useAuth()
 // An OBSERVER opens the panels and does not touch them. Hidden instead of disabled: a
@@ -144,7 +143,7 @@ const sections = computed(() => [
   { id: 'registries' as Section, label: t('registries.navTitle'), icon: Boxes, badge: nRegistries.value, off: registriesOff.value },
   { id: 'siem' as Section, label: t('siem.navTitle'), icon: Radar, badge: siemOn.value ? 1 : 0 },
   // how many models are ENABLED: zero = the assistant cannot be used by anyone
-  { id: 'ai' as Section, label: t('adminPanel.aiTitle'), icon: Sparkles, badge: (models.value ?? []).filter((m) => m.enabled).length },
+  { id: 'ai' as Section, label: t('adminPanel.aiTitle'), icon: Sparkles, badge: nAiModels.value },
 ])
 
 // the same convention as the other pages: local formatter, tolerant
@@ -206,12 +205,8 @@ async function loadAll() {
   loadAiStatus()
   // apart: the assistant may not be configured, and that is not a panel error
   try {
-    models.value = await aiApi.models()
-    modelsError.value = ''
-  } catch (e) {
-    models.value = null
-    modelsError.value = errMessage(e)
-  }
+    nAiModels.value = (await aiApi.models()).filter((m) => m.enabled).length
+  } catch { /* the section says why when it opens */ }
 }
 onMounted(loadAll)
 
@@ -438,17 +433,6 @@ async function deleteBanner(b: Banner) {
 
 function levelLabel(l: string): string {
   return t(`banners.level${l.charAt(0).toUpperCase()}${l.slice(1)}`)
-}
-
-// ── AI models ──────────────────────────────────────────────────────────────
-async function toggleModel(m: AiModel) {
-  try {
-    const updated = await aiApi.setModel(m.model_id, !m.enabled)
-    models.value = (models.value ?? []).map((x) => (x.model_id === updated.model_id ? updated : x))
-    toast.success(t(updated.enabled ? 'adminPanel.aiModelEnabled' : 'adminPanel.aiModelDisabled', { model: m.model_id }))
-  } catch (e) {
-    toast.error(errMessage(e))
-  }
 }
 
 // ── engines ────────────────────────────────────────────────────────────────
@@ -826,54 +810,7 @@ async function toggleEngine(m: EnginePolicy) {
         </template>
 
         <template v-else-if="section === 'ai'">
-          <div class="card">
-            <h4><Sparkles :size="14" /> {{ $t('adminPanel.aiTitle') }}</h4>
-            <p class="muted small hint">{{ $t('adminPanel.aiHint') }}</p>
-            <div v-if="aiStatus" class="data-mode">
-              <p :class="{ on: aiStatus.metadata_only }">
-                <component :is="aiStatus.metadata_only ? ShieldCheck : ShieldAlert" :size="14" aria-hidden="true" />
-                <span>{{ aiStatus.metadata_only ? $t('adminPanel.aiMetadataOnlyOn') : $t('adminPanel.aiMetadataOnlyOff') }}</span>
-              </p>
-              <p :class="{ on: aiStatus.mcp_metadata_only }">
-                <component :is="aiStatus.mcp_metadata_only ? ShieldCheck : ShieldAlert" :size="14" aria-hidden="true" />
-                <span>{{ aiStatus.mcp_metadata_only ? $t('adminPanel.mcpMetadataOnlyOn') : $t('adminPanel.mcpMetadataOnlyOff') }}</span>
-              </p>
-              <button class="link-like" type="button" @click="goTo('settings')">{{ $t('adminPanel.aiMetadataOnlyChange') }}</button>
-            </div>
-            <p v-if="models === null" class="muted small hint">{{ modelsError || $t('adminPanel.aiUnavailable') }}</p>
-            <div v-else class="tablewrap">
-              <table class="rows">
-                <thead>
-                  <tr>
-                    <th>{{ $t('adminPanel.colModel') }}</th>
-                    <th>{{ $t('adminPanel.colModelState') }}</th>
-                    <th />
-                  </tr>
-                </thead>
-                <tbody>
-                  <tr v-for="m in models" :key="m.model_id">
-                    <td>
-                      {{ m.model_id }}
-                      <span v-if="!m.chat" class="tag off">{{ $t('adminPanel.aiNotChatTag') }}</span>
-                      <span v-else-if="!m.available" class="tag off">{{ $t('adminPanel.aiGoneTag') }}</span>
-                    </td>
-                    <td class="small" :class="m.enabled ? '' : 'muted'">{{ m.enabled ? $t('adminPanel.aiEnabled') : $t('adminPanel.aiDisabled') }}</td>
-                    <td class="right">
-                      <button
-                        v-if="m.chat && canWrite"
-                        class="mini"
-                        :title="m.enabled ? $t('adminPanel.aiDisableTitle') : $t('adminPanel.aiEnableTitle')"
-                        :aria-label="m.enabled ? $t('adminPanel.aiDisableTitle') : $t('adminPanel.aiEnableTitle')"
-                        @click="toggleModel(m)"
-                      >
-                        <component :is="m.enabled ? CheckCircle2 : XCircle" :size="13" />
-                      </button>
-                    </td>
-                  </tr>
-                </tbody>
-              </table>
-            </div>
-          </div>
+          <AiProvidersSection :can-write="canWrite" :status="aiStatus" @count="nAiModels = $event" @settings="goTo('settings')" />
           <AiPromptsSection :can-write="canWrite" />
         </template>
 
@@ -986,13 +923,6 @@ async function toggleEngine(m: EnginePolicy) {
 .card h4 { margin: 0; display: inline-flex; align-items: center; gap: 7px; }
 .subhead { margin-top: 14px !important; color: var(--muted); font-size: 12.5px; }
 .hint { margin: 0; }
-/* metadata-only mode, on the AI section: what a model gets */
-.data-mode { display: flex; flex-direction: column; align-items: flex-start; gap: 6px; padding: 10px 12px; border: 1px solid var(--border); border-radius: 8px; }
-.data-mode p { display: flex; align-items: flex-start; gap: 7px; margin: 0; font-size: 12.5px; color: var(--muted); }
-.data-mode p svg { flex: none; margin-top: 2px; }
-.data-mode p.on { color: var(--text); }
-.data-mode p.on svg { color: var(--accent-hi); }
-.link-like { padding: 0; border: 0; background: none; color: var(--accent-hi); font-size: 12.5px; cursor: pointer; text-decoration: underline; }
 /* the same search bar as the group by's */
 .rowsearch {
   display: flex;

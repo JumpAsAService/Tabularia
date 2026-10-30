@@ -1,7 +1,7 @@
 """AI assistant: state, models (admin panel) and the streaming chat.
 
 - `GET  /ai/status`            for everyone: is the assistant on? with which models?
-- `GET  /ai/models`            superuser: the provider's catalog + the admin's choice
+- `GET  /ai/models`            observer: the providers' catalogs + the admin's choice
 - `PUT  /ai/models/{id}`       superuser: enables/disables a model (audit)
 - `GET  /ai/prompts`           observer: the agents' instructions, the text and the context added
 - `PUT  /ai/prompts/{agent}`   superuser: changes an agent's text (audit)
@@ -39,9 +39,9 @@ from app.deps.permissions import ensure_can
 from app.models.permission import Capability
 from app.models import AiChat, AiModel, AiPrompt, Datasource, User
 from app.services.permissions import is_observer_only
-from app.services import ai_agent, ai_chats, ai_flow_agent, ai_pricing, ai_prompts, ai_script_agent, audit, metadata_only
+from app.services import ai_agent, ai_chats, ai_flow_agent, ai_models, ai_pricing, ai_prompts, ai_script_agent, audit, metadata_only
 from app.services.agent import REGISTRY as AGENT_TOOLS, chat as agent_chat
-from app.services.ai_models import enabled_model_ids, ensure_configured, is_chat_model, provider_models
+from app.services.ai_models import enabled_model_ids, is_chat_model, provider_models
 from app.services.engine_policy import pick_engine
 from app.services.permissions import readable_project_ids
 from app.core.routing import ReleasingRoute
@@ -57,10 +57,18 @@ def _new_session() -> Session:
 
 
 # ── state and models ─────────────────────────────────────────────────────────
+class AiModelOption(BaseModel):
+    id: str  # the reference to send back (services/ai_models.py)
+    model: str
+    provider: str  # who gets what a conversation with this model sends
+
+
 class AiStatusOut(BaseModel):
     enabled: bool
     models: list[str] = []
     default_model: Optional[str] = None
+    # `models`, with who answers: what the pickers and the notices show
+    options: list[AiModelOption] = []
     # metadata-only mode (services/metadata_only.py): the pages say what a model gets
     metadata_only: bool = False
     mcp_metadata_only: bool = False
@@ -68,35 +76,78 @@ class AiStatusOut(BaseModel):
 
 @router.get("/status", response_model=AiStatusOut)
 def ai_status(user: User = Depends(get_current_user), session: Session = Depends(get_session)) -> AiStatusOut:
-    cfg = get_settings().ai
     modes = {"metadata_only": metadata_only.on("chat"), "mcp_metadata_only": metadata_only.on("mcp")}
-    if not cfg.enabled:
+    if not ai_models.configured(session):
         return AiStatusOut(enabled=False, **modes)
     models = enabled_model_ids(session)
-    default = cfg.default_model if cfg.default_model in models else (models[0] if models else None)
-    return AiStatusOut(enabled=True, models=models, default_model=default, **modes)
+    return AiStatusOut(enabled=True, models=models, default_model=ai_models.preferred(get_settings().ai.default_model, models),
+                       options=ai_models.options(session, models), **modes)
 
 
+# ── the models ───────────────────────────────────────────────────────────────
 class AiModelOut(BaseModel):
-    model_id: str
+    id: str  # the reference: what PUT /ai/models/{id} and the chat take
+    model_id: str  # its name at the provider
+    provider: str = ai_models.ENVIRONMENT
+    provider_name: str = ""
     enabled: bool
     chat: bool  # False = embedding/audio/reranker: cannot be enabled for the chat
     available: bool  # False = enabled in the past, but the provider no longer lists it
+    priced: bool = True  # False = no known price: the spending caps count it at an assumed one
 
 
 class AiModelUpdate(BaseModel):
     enabled: bool
 
 
-@router.get("/models", response_model=list[AiModelOut])
-async def list_ai_models(user: User = Depends(require_observer), session: Session = Depends(get_session)) -> list[AiModelOut]:
-    offered = await provider_models()
-    chosen = {m.model_id: m.enabled for m in session.exec(select(AiModel)).all()}
-    out = [AiModelOut(model_id=m, enabled=bool(chosen.get(m)), chat=is_chat_model(m), available=True) for m in offered]
+def _model_out(ep: ai_models.Endpoint, ref: str, enabled: bool, available: bool) -> AiModelOut:
+    name = ai_models.model_name(ref)
+    return AiModelOut(id=ref, model_id=name, provider=ep.key, provider_name=ep.name, enabled=enabled,
+                      chat=is_chat_model(name), available=available, priced=ai_pricing.is_priced(name))
+
+
+async def _catalog_of(ep: ai_models.Endpoint) -> list[str]:
+    return await (provider_models() if ep.provider_id is None else provider_models(provider=ep))
+
+
+def _rows_of(session: Session, ep: ai_models.Endpoint) -> dict[str, bool]:
+    return {m.model_id: m.enabled for m in session.exec(select(AiModel)).all() if ai_models.split_ref(m.model_id)[0] == ep.provider_id}
+
+
+async def _models_of(session: Session, ep: ai_models.Endpoint) -> list[AiModelOut]:
+    chosen = _rows_of(session, ep)
+    if not ep.active:  # not called: what was chosen stays visible
+        return [_model_out(ep, ref, enabled, False) for ref, enabled in sorted(chosen.items())]
+    refs = [ai_models.ref_of(ep.provider_id, m) for m in await _catalog_of(ep)]
+    out = [_model_out(ep, ref, bool(chosen.get(ref)), True) for ref in refs]
     # enabled in the past and gone from the catalog: visible, so they can be turned off
-    out += [AiModelOut(model_id=m, enabled=e, chat=is_chat_model(m), available=False)
-            for m, e in sorted(chosen.items()) if m not in offered and e]
-    return out
+    return out + [_model_out(ep, ref, enabled, False) for ref, enabled in sorted(chosen.items()) if ref not in refs and enabled]
+
+
+@router.get("/models", response_model=list[AiModelOut])
+async def list_ai_models(
+    provider: Optional[str] = None,
+    user: User = Depends(require_observer),
+    session: Session = Depends(get_session),
+) -> list[AiModelOut]:
+    """The models of one provider (`?provider=`: its failure is the answer), or of all that answer."""
+    if provider is not None:
+        ep = ai_models.endpoint_of_key(session, provider)
+        if ep is None:
+            raise HTTPException(status_code=404, detail="Provider not found")
+        return await _models_of(session, ep)
+    ai_models.ensure_configured(session)
+    found: list[AiModelOut] = []
+    failures: list[HTTPException] = []
+    every = ai_models.endpoints(session)
+    for ep in every:
+        try:
+            found += await _models_of(session, ep)
+        except HTTPException as e:
+            failures.append(e)
+    if failures and len(failures) == len(every):
+        raise failures[0]
+    return found
 
 
 @router.put("/models/{model_id:path}", response_model=AiModelOut)
@@ -107,13 +158,18 @@ async def set_ai_model(
     user: User = Depends(require_superuser),
     session: Session = Depends(get_session),
 ) -> AiModelOut:
-    offered = await provider_models()
+    ep = ai_models.endpoint_of(model_id, session)
+    if ep is None:
+        ai_models.ensure_configured(session)
+        raise HTTPException(status_code=404, detail="The provider of this model is off or gone")
+    offered = await _catalog_of(ep)
     row = session.get(AiModel, model_id)
-    if model_id not in offered and row is None:
-        raise HTTPException(status_code=404, detail=f"Model unknown to the provider: {model_id}")
-    if body.enabled and not is_chat_model(model_id):
+    name = ai_models.model_name(model_id)
+    if name not in offered and row is None:
+        raise HTTPException(status_code=404, detail=f"Model unknown to the provider: {name}")
+    if body.enabled and not is_chat_model(name):
         raise HTTPException(status_code=422, detail="This model is not a chat model (embedding, audio or reranker)")
-    if body.enabled and model_id not in offered:
+    if body.enabled and name not in offered:
         raise HTTPException(status_code=422, detail="The provider no longer offers this model")
     if row is None:
         row = AiModel(model_id=model_id)
@@ -124,9 +180,9 @@ async def set_ai_model(
     session.commit()
     audit.record_audit(
         session, actor=user, action=audit.AI_MODEL_ENABLE if body.enabled else audit.AI_MODEL_DISABLE,
-        target_type="ai_model", target_label=model_id, request=request,
+        target_type="ai_model", target_label=ai_models.described(session, model_id), request=request,
     )
-    return AiModelOut(model_id=model_id, enabled=body.enabled, chat=is_chat_model(model_id), available=model_id in offered)
+    return _model_out(ep, model_id, body.enabled, name in offered)
 
 
 # ── the agents' instructions ─────────────────────────────────────────────────
@@ -236,7 +292,7 @@ def reset_ai_prompt(
 # ── chat ─────────────────────────────────────────────────────────────────────
 class ChatRequest(BaseModel):
     message: str = Field(min_length=1, max_length=8000)
-    model: str = Field(min_length=1, max_length=200)
+    model: str = Field(min_length=1, max_length=300)
     # The conversation to continue. The SERVER keeps the history: the client no longer
     # sends it (and so can no longer forge it — audit A8). Missing = a new conversation.
     chat_id: Optional[int] = None
@@ -254,7 +310,8 @@ def _tool_result_payload(part: Any) -> dict[str, Any]:
     """What the chat shows of a result: the outcome, and the TABLE when the tool returned
     one (the true numbers, not the model's transcription)."""
     content = getattr(part, "content", None)
-    ok = type(part).__name__ != "RetryPromptPart"
+    # refused by the tool, or its arguments by their schema: the model is told and tries again
+    ok = type(part).__name__ != "RetryPromptPart" and getattr(part, "outcome", "success") == "success"
     out: dict[str, Any] = {"id": getattr(part, "tool_call_id", None), "name": getattr(part, "tool_name", None), "ok": ok}
     # a TABLE is the result of a query: `rows` is a list. (describe_datasource has `rows`
     # too, but there it is the number of rows.)
@@ -398,6 +455,29 @@ def _check_spending(session: Session, user: User) -> None:
             )
 
 
+REFUSED = "The model declined to answer this request. Rephrase it, or try another model."
+TOO_LONG = "The answer went over the length allowed for one request. Ask for it in smaller pieces."
+NO_USABLE_ANSWER = "The model gave no usable answer. Try again, or choose another model."
+
+
+def _cut_short(messages: list[Any]) -> bool:
+    return bool(messages) and getattr(messages[-1], "finish_reason", None) == "length"
+
+
+def _provider_of(model_id: str) -> str:
+    with _new_session() as session:
+        return ai_models.provider_label(session, model_id) or ai_models.model_name(model_id)
+
+
+def _what_it_said(e: Any) -> str:
+    """For the log, and only for a request it refused: its reason is what an administrator needs,
+    and a refused key may come back quoted in the others."""
+    if getattr(e, "status_code", None) != 400 or not isinstance(getattr(e, "body", None), dict):
+        return ""
+    said = e.body.get("error") if isinstance(e.body.get("error"), dict) else e.body
+    return f": {str(said.get('message'))[:300]}"
+
+
 async def _turn_stream(
     *, agent: Any, message: str, history: list, deps: Any, model: Any, model_id: str, user: User,
     engine: Optional[str], ephemeral: bool, chat_id: Optional[int], locale: str,
@@ -417,7 +497,9 @@ async def _turn_stream(
         AgentRunResultEvent, FunctionToolCallEvent, FunctionToolResultEvent, ModelMessagesTypeAdapter,
         PartDeltaEvent, PartStartEvent, TextPart, TextPartDelta,
     )
-    from pydantic_ai.exceptions import ModelHTTPError, UsageLimitExceeded
+    from pydantic_ai.exceptions import (
+        ContentFilterError, IncompleteToolCall, ModelAPIError, ModelHTTPError, UnexpectedModelBehavior, UsageLimitExceeded,
+    )
     from pydantic_ai.usage import RunUsage, UsageLimits
 
     cfg = get_settings().ai
@@ -445,9 +527,8 @@ async def _turn_stream(
             message, message_history=history, deps=deps, model=model, usage=spent,
             usage_limits=UsageLimits(
                 request_limit=request_limit or cfg.max_requests,
-                # the rounds do not cap the tokens: without these two, an inflated history spends as
-                # much as it likes (audit A8)
-                cost_limit=Decimal(str(cfg.max_cost_per_turn_usd)) if cfg.max_cost_per_turn_usd else None,
+                # the rounds do not cap the tokens: without this and the cost cap (ai_agent.TurnGuard),
+                # an inflated history spends as much as it likes (audit A8)
                 input_tokens_limit=cfg.max_input_tokens_per_turn,
             ),
         ) as events:
@@ -527,6 +608,8 @@ async def _turn_stream(
                             "cost_usd": str(cost) if cost is not None else None,
                         },
                         "chat_total": summary,
+                        # the model ran out of room: what it wrote stops there, and the page says so
+                        "truncated": _cut_short(new_items),
                         **(extra_done() if extra_done is not None else {}),
                     })
                     # The model writes the title, but AFTER closing the turn: doing it earlier would have
@@ -545,12 +628,26 @@ async def _turn_stream(
         # too big, not which counter stopped it
         logger.info("assistant: usage cap reached (chat %s): %s", chat_id, e)
         yield _sse("error", {"code": "too_many_steps", "message": "The question went beyond the limits set for a single turn. Try narrowing it down.", **unfinished()})
-    except ModelHTTPError as e:
-        logger.warning("assistant: the provider answered %s for %s", e.status_code, model_id)
-        yield _sse("error", {"code": "provider", "message": f"The AI provider refused the request ({e.status_code}).", **unfinished()})
+    except (ai_agent.ModelRefused, ContentFilterError):
+        # an answer of the API, not a failure. `discard`: what was written before it is not an answer
+        logger.info("assistant: the model declined the turn (chat %s, model %s)", chat_id, model_id)
+        yield _sse("error", {"code": "refused", "discard": True, "message": REFUSED, **unfinished()})
+    except IncompleteToolCall:
+        logger.warning("assistant: a tool call went over the length allowed (chat %s, model %s)", chat_id, model_id)
+        yield _sse("error", {"code": "too_long", "message": TOO_LONG, **unfinished()})
+    except UnexpectedModelBehavior:
+        logger.warning("assistant: no usable answer from the model (chat %s, model %s)", chat_id, model_id, exc_info=True)
+        yield _sse("error", {"code": "model_behavior", "message": NO_USABLE_ANSWER, **unfinished()})
+    except ModelAPIError as e:
+        status = e.status_code if isinstance(e, ModelHTTPError) else None
+        logger.warning("assistant: the provider answered %s for %s%s", status or "nothing", model_id, _what_it_said(e))
+        code, message = ai_models.failure(status, _provider_of(model_id))
+        yield _sse("error", {"code": code, "message": message, **unfinished()})
     except Exception:  # noqa: BLE001 — the stream has started already: the error goes INSIDE the stream
         logger.exception("assistant: error during the conversation")
         yield _sse("error", {"code": "internal", "message": "Unexpected error in the assistant.", **unfinished()})
+    finally:
+        await ai_agent.close_model(model)
 
 
 _SSE_HEADERS = {"Cache-Control": "no-cache", "X-Accel-Buffering": "no"}
@@ -563,10 +660,8 @@ async def chat(
     user: User = Depends(get_current_user),
     session: Session = Depends(get_session),
 ) -> StreamingResponse:
-    ensure_configured()
+    ai_models.refuse_unless_usable(session, body.model)
     cfg = get_settings().ai
-    if body.model not in enabled_model_ids(session):
-        raise HTTPException(status_code=403, detail="This model is not enabled by the administrator")
     engine = await pick_engine(session, body.engine)
     # A NEW conversation: the row is created when the turn is over (see ai_chats.crea), so
     # an interrupted request leaves no empty chat.
@@ -612,7 +707,7 @@ async def chat(
 # ── the flow editor's assistant ──────────────────────────────────────────────
 class FlowAssistRequest(BaseModel):
     message: str = Field(min_length=1, max_length=8000)
-    model: str = Field(min_length=1, max_length=200)
+    model: str = Field(min_length=1, max_length=300)
     chat_id: Optional[int] = None
     # the flow being edited, None while it is not saved yet
     flow_id: Optional[int] = None
@@ -637,10 +732,8 @@ async def flow_assist(
     sent and returns it in `done.definition` (null when nothing changed), with the
     nodes it added or changed in `done.touched`: the editor applies it as one Undo
     step. It never saves, runs or schedules the flow."""
-    ensure_configured()
+    ai_models.refuse_unless_usable(session, body.model)
     cfg = get_settings().ai
-    if body.model not in enabled_model_ids(session):
-        raise HTTPException(status_code=403, detail="This model is not enabled by the administrator")
     if is_observer_only(session, user):
         raise HTTPException(status_code=403, detail="Observers do not change flows")
     flow = ai_flow_agent.flow_of(session, body.flow_id)
@@ -700,7 +793,7 @@ class ScriptInputIn(BaseModel):
 
 class ScriptAssistRequest(BaseModel):
     message: str = Field(min_length=1, max_length=8000)
-    model: str = Field(min_length=1, max_length=200)
+    model: str = Field(min_length=1, max_length=300)
     chat_id: Optional[int] = None
     environment_id: int
     files: list[ScriptFileIn] = Field(default_factory=list, max_length=60)
@@ -732,10 +825,8 @@ async def script_assist(
     from app.models import ScriptEnvironment, ScriptEnvironmentVersion
     from app.services import script_nodes
 
-    ensure_configured()
+    ai_models.refuse_unless_usable(session, body.model)
     cfg = get_settings().ai
-    if body.model not in enabled_model_ids(session):
-        raise HTTPException(status_code=403, detail="This model is not enabled by the administrator")
     if is_observer_only(session, user):
         raise HTTPException(status_code=403, detail="Observers do not write scripts")
     env = session.get(ScriptEnvironment, body.environment_id)

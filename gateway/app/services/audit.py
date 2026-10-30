@@ -132,6 +132,10 @@ ENGINE_DISALLOW = "engine.disallow"
 AI_MODEL_ENABLE = "ai.model_enable"
 AI_MODEL_DISABLE = "ai.model_disable"
 AI_QUERY = "ai.query"
+# the providers added from the panel: never with the key, only whether it changed
+AI_PROVIDER_CREATE = "ai.provider_create"
+AI_PROVIDER_UPDATE = "ai.provider_update"
+AI_PROVIDER_DELETE = "ai.provider_delete"
 # the text of an agent's instructions changed from the panel, or put back to the default
 AI_PROMPT_UPDATE = "ai.prompt_update"
 AI_PROMPT_RESET = "ai.prompt_reset"

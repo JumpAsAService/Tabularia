@@ -66,13 +66,14 @@ With [metadata-only mode](../integrations/ai.md#metadata-only-mode) on, the rows
 do not go: the model works from names, types, descriptions and row counts, says it cannot
 read the data, and answers with no figures and no tables. The opening dialog says so.
 
-Otherwise rows of your data do reach the model provider: as many as the query returns, up
-to the cap. The default instructions tell the model to aggregate in SQL rather than
+Otherwise rows of your data do reach the provider of the model you chose, named under the
+input: as many as the query returns, up to the cap. The default instructions tell the model to aggregate in SQL rather than
 fetch raw rows, and a well-asked question («the total per channel») sends a few
 aggregated lines, not the table. Choose the provider with that in mind, and keep
 personal data out of the datasources the assistant's users can read, or out of the
-question («Do not type personal or confidential data: the question is sent to the
-model provider», as the opening dialog says).
+question («Do not type personal or confidential data: your question, and the data the
+assistant reads to answer it, go to the provider of the model you choose», as the opening
+dialog says, with the names).
 
 ### Where the queries run
 
@@ -204,10 +205,11 @@ schedule it, CONNECT on a connection it reads ([AI in Tabularia](../integrations
 
 Before the first question, a dialog says «You are writing to an automated assistant»:
 the answers come from a model, there is no person on the other side, it can be wrong,
-it reads only what the account may read, and the question goes to the model provider.
+it reads only what the account may read, and the question goes to the provider of the model
+chosen, whose name it gives.
 The chat stays locked until «I understand». The acceptance is kept in the browser, not
 in the account, so on a shared account every new browser asks again. Every answer is
-labelled «AI assistant» with the model that wrote it, the notice «This is an AI: it can
+labelled «AI assistant» with the model that wrote it and its provider, the notice «This is an AI: it can
 make mistakes. Always check the results.» stays under the input, and a conversation
 downloaded as Markdown opens with the same notice. This is the transparency the EU AI
 Act (article 50) asks of a system people talk to.

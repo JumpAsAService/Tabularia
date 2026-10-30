@@ -27,7 +27,7 @@ from app.core.config import get_settings
 from app.core.engine_client import get_engine_client
 from app.models import Datasource, Flow, Project
 from app.models.permission import Capability
-from app.services import ai_agent, ai_prompts, audit, metadata_only
+from app.services import ai_models, ai_agent, ai_prompts, audit, metadata_only
 from app.services import permissions as perm_service
 from app.services.flow_resolver import _Resolver
 from app.services.objects import collect_storage_keys, ensure_can_read_keys, ensure_reads_pinned
@@ -341,7 +341,7 @@ async def preview_node(deps: FlowDeps, node_id: str, rows: int, for_the_person: 
             audit.record_audit(
                 session, actor=deps.user, action=audit.AI_QUERY, outcome=outcome,
                 target_type="flow", target_id=deps.flow_id, target_label=deps.flow_name or "new flow",
-                detail={"node": node_id, "operations": len(operations), "model": deps.model_id,
+                detail={"node": node_id, "operations": len(operations), "model": ai_models.described(session, deps.model_id),
                         "engine": deps.engine or "default", "rows": n_rows, "via": "flow editor"},
                 request=deps.request,
             )
@@ -417,7 +417,7 @@ flow_agent: Agent[FlowDeps, str] = Agent(
     instructions=_instructions,
     retries=2,
     name="tabularia-flow-assistant",
-    capabilities=[ai_agent.StopWhenWithheld()],
+    capabilities=[ai_agent.StopWhenWithheld(), ai_agent.TurnGuard()],
 )
 
 # name → does it return values of the data? As the registry's `reads_data` (services/agent/

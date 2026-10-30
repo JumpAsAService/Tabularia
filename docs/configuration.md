@@ -55,9 +55,9 @@ SFTP, S3, APIs, SharePoint) belong to each connection, encrypted with
 | [Shared by the gateway and the engine](#shared-by-the-gateway-and-the-engine) | 7 |
 | [Gateway](#gateway) | 166 |
 | [Engine and workers](#engine-and-workers) | 98 |
-| [Frontend](#frontend) | 4 |
+| [Frontend](#frontend) | 5 |
 | [Compose and Helm only](#compose-and-helm-only) | 13 |
-| **Total** | **288** |
+| **Total** | **289** |
 
 ## Before production
 
@@ -185,20 +185,20 @@ Optional: Keycloak, Microsoft Entra ID, Auth0, Okta… Off while `OIDC__ISSUER` 
 
 ### AI assistant
 
-Optional: a chat over the catalog and an assistant in the flow editor, against any OpenAI-compatible endpoint. Off until `AI__BASE_URL` and `AI__SECRET_KEY` are set, and no model is usable until an administrator enables it. On the external ClickHouse the assistant can run as a read-only user: see [the AI user](engines/clickhouse-ai-user.md). The dbt export uses it too ([dbt export](dbt-export.md)).
+Optional: a chat over the catalog and an assistant in the flow editor. Off until an administrator adds a provider in Administration → AI models (Anthropic, or any OpenAI-compatible endpoint), or `AI__BASE_URL` and `AI__SECRET_KEY` are set, and no model is usable until an administrator enables it. On the external ClickHouse the assistant can run as a read-only user: see [the AI user](engines/clickhouse-ai-user.md). The dbt export uses it too ([dbt export](dbt-export.md)).
 
 | Variable | Type | Default | Helm value | Description |
 |---|---|---|---|---|
-| `AI__BASE_URL` | string | empty | `ai.baseUrl` | OpenAI-compatible endpoint, e.g. `https://api.scaleway.ai/v1`. Empty = assistant off. |
+| `AI__BASE_URL` | string | empty | `ai.baseUrl` | OpenAI-compatible endpoint, e.g. `https://api.scaleway.ai/v1`: a provider that shows in the panel as read-only. Empty = no such provider. |
 | `AI__ACCESS_KEY` | string | empty | `ai.accessKey` | Identifier of the key (Scaleway calls it access key); the protocol authenticates with the secret alone, this only tells which key is in use. |
-| `AI__SECRET_KEY` | string | empty | `secrets.aiSecretKey` | The API key. Empty = assistant off. |
-| `AI__DEFAULT_MODEL` | string | empty | `ai.defaultModel` | Model proposed first in the picker, if an administrator enabled it. Also adjustable in Administration → Settings. |
+| `AI__SECRET_KEY` | string | empty | `secrets.aiSecretKey` | Its API key. Empty = no such provider. |
+| `AI__DEFAULT_MODEL` | string | empty | `ai.defaultModel` | Model proposed first in the picker, if an administrator enabled it, on any provider: its name, e.g. `claude-opus-5-5`. Also adjustable in Administration → Settings. |
 | `AI__METADATA_ONLY` | boolean | `false` | `extraEnv` | On, no value of a row of data reaches the model configured here: the chat, the flow and script assistants and the dbt export get names, types, descriptions, row counts and structure, with no query, preview, sample or error text. Values people typed in filters, SQL and descriptions still go. See [AI in Tabularia](integrations/ai.md#metadata-only-mode). Also adjustable in Administration → Settings. |
 | `AI__MAX_RESULT_ROWS` | integer, 1–2000 | `200` | `ai.maxResultRows` | Rows a query of the assistant may return, to the model and to the chat. Also adjustable in Administration → Settings. |
 | `AI__MAX_REQUESTS` | integer, 1–50 | `12` | `ai.maxRequests` | Model round-trips per message of the data chat: the cap on its tool-calling loop. Also adjustable in Administration → Settings. |
 | `AI__MAX_FLOW_REQUESTS` | integer, 1–80 | `30` | `ai.maxFlowRequests` | The same for the assistants that build — the flow editor's, and the Assistant page's for whoever may make changes — which take a round-trip for every step they build and check. Also adjustable in Administration → Settings. |
 | `AI__MAX_HISTORY_MESSAGES` | integer, 0–400 | `60` | `extraEnv` | Past messages of a conversation replayed to the model: higher remembers more and costs more per turn. Also adjustable in Administration → Settings. |
-| `AI__MAX_COST_PER_TURN_USD` | number, ≥ 0 | `0.5` | `ai.maxCostPerTurnUsd` | Spending ceiling of one turn, in dollars, enforced by pydantic-ai. The round-trip cap does not limit tokens. Also adjustable in Administration → Settings. |
+| `AI__MAX_COST_PER_TURN_USD` | number, ≥ 0 | `0.5` | `ai.maxCostPerTurnUsd` | Spending ceiling of one turn, in dollars. The round-trip cap does not limit tokens. A model with no known price counts at $4 in and $20 out per million tokens. Also adjustable in Administration → Settings. |
 | `AI__MAX_COST_PER_DAY_USD` | number, ≥ 0 | `0` | `ai.maxCostPerDayUsd` | **Production:** set it, and `AI__MAX_COST_PER_DAY_TOTAL_USD`, wherever people you do not know can sign in (every question is paid with your key). Daily ceiling per user, in dollars. 0 = none. Also adjustable in Administration → Settings. |
 | `AI__MAX_COST_PER_DAY_TOTAL_USD` | number, ≥ 0 | `0` | `ai.maxCostPerDayTotalUsd` | Daily ceiling of the whole installation, in dollars: where many people share one account (a public demo) the per-user ceiling protects nothing. Once reached, the assistant is unavailable until the next day. 0 = none. Also adjustable in Administration → Settings. |
 | `AI__MAX_INPUT_TOKENS_PER_TURN` | integer, ≥ 1000 | `400000` | `extraEnv` | Input tokens one turn may send to the model. Also adjustable in Administration → Settings. |
@@ -638,6 +638,7 @@ sets them in the `frontend` service itself, not from `.env`.
 | `NUXT_PUBLIC_API_BASE` | `http://localhost:8000` | `frontend.publicApiBase` | The gateway's URL as the browser calls it: `/api` when one host serves interface and API, or a full URL on another host. |
 | `NUXT_PUBLIC_BUCKET` | `data-prep` | `externalServices.storage.bucket` | Default bucket; must match `STORAGE__BUCKET`. |
 | `NUXT_PUBLIC_GRAFANA_URL` | `http://localhost:3001` | `frontend.publicGrafanaUrl` | Grafana as the browser reaches it, embedded in the Monitoring tab (administrators only). Optional. |
+| `NUXT_PUBLIC_SOURCE_URL` | `https://github.com/JumpAsAService/Tabularia` | `frontend.publicSourceUrl` | Where **Source code** in the settings menu leads. Empty: the project's repository. If you offer a changed version to others over a network, the AGPL asks you to offer them its source: point this at it. |
 | `NUXT_PUBLIC_NOTEBOOKS_ORIGIN` | empty | from `scripts.notebooks.host` | The notebooks' own address, the gateway's `NOTEBOOKS__ORIGIN`: the pages' Content-Security-Policy lets them show the notebooks' apps and editors from it. |
 
 ## Compose and Helm only

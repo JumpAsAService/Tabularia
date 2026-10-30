@@ -3,8 +3,8 @@
 Tabularia can use a language model in five places: a chat that answers questions on the
 datasources, an assistant that builds flows in the editor, one that writes Python and R
 scripts, the naming of conversations, and the descriptions and SQL translations of the
-dbt export. All of it is optional, off until an administrator points Tabularia at a
-model provider, and limited to the models the administrator enables. This page says,
+dbt export. All of it is optional, off until an administrator adds a model provider,
+and limited to the models the administrator enables. This page says,
 for each use, what goes to the model and what does not, and how to configure, cap and
 audit it.
 
@@ -12,13 +12,13 @@ audit it.
 
 | | |
 |---|---|
-| Provider | any endpoint that speaks the OpenAI chat-completions protocol, with tool calls, and lists its models at `GET /models` |
-| Who talks to it | the gateway only; the engine and the workers never call the provider |
-| On | when `AI__BASE_URL` and `AI__SECRET_KEY` are set, and at least one model is enabled in Administration → AI models |
-| Models | chosen by the administrator from the provider's catalog; none enabled by default |
+| Providers | any number: Anthropic, through its own SDK, and any endpoint that speaks the OpenAI chat-completions protocol, with tool calls, and lists its models at `GET /models` |
+| Who talks to them | the gateway only; the engine and the workers never call a provider |
+| On | when a provider is added in Administration → AI models, or `AI__BASE_URL` and `AI__SECRET_KEY` are set, and at least one model is enabled |
+| Models | chosen by the administrator from each provider's catalog; none enabled by default |
 | Instructions | six system prompts, editable in Administration → AI models → **Agent instructions** |
 | Costs | estimated per answer; caps per answer, per person per day, per installation per day |
-| Audit | every query on data, every model enabled or disabled, every instruction changed |
+| Audit | every query on data, every provider changed, every model enabled or disabled, every instruction changed |
 | Sending no data | [metadata-only mode](#metadata-only-mode): two switches, one for these uses and one for MCP |
 
 ## Where the AI is used
@@ -44,9 +44,9 @@ told the exit code only. The editor says so under the input: «The model gets th
 the names and types of the columns and the error of a failed run: never a row of data.»
 
 **The data and flow assistants do send rows.** As many as a query or a preview returns,
-within the caps above. Pick the provider accordingly, and keep personal data out of the
-datasources whose readers use the assistant, or turn on
-[metadata-only mode](#metadata-only-mode).
+within the caps above, to the provider of the model the person chose. Pick the providers
+accordingly, and keep personal data out of the datasources whose readers use the assistant,
+or turn on [metadata-only mode](#metadata-only-mode).
 
 **What the assistants can change.** The assistant of the Assistant page changes nothing
 by itself: what it builds — flows, their runs and schedules, and the other objects its
@@ -69,7 +69,7 @@ audit log; every gateway replica applies a change within 10 seconds:
 
 | Variable | Covers | Whose model |
 |---|---|---|
-| `AI__METADATA_ONLY` | the chat, the flow assistant, the script assistant, the dbt export | the one configured in Tabularia |
+| `AI__METADATA_ONLY` | the chat, the flow assistant, the script assistant, the dbt export | those configured in Tabularia, whichever the provider |
 | `MCP__METADATA_ONLY` | the [MCP server](../specs/mcp-agent.md) | the client's, outside the administrator's control |
 
 Administration → AI models shows the state of both.
@@ -145,16 +145,18 @@ It does not close every side door either, and these are decisions, not oversight
 | Flow assistant | EDIT on the flow's folder (any signed-in person on a flow not saved yet); not observers |
 | Script assistant | the use of the script's environment; not observers |
 | dbt export with AI | whoever may export the flow ([dbt export](../dbt-export.md)) |
-| Enable models, change the instructions | administrators; observers read them |
+| Add and change providers, enable models, change the instructions | administrators; observers read them, without the providers' addresses or keys |
 
 ## Telling people it is an AI
 
 The three assistants open with the same dialog, «You are writing to an automated
-assistant», and stay locked until «I understand». Every answer is labelled «AI
-assistant» with its model; under the input, «This is an AI: it can make mistakes.
-Always check the results.» A downloaded conversation opens with the same notice. The
-acceptance lives in the browser, so every new browser, or a shared account on another
-machine, asks again. Details: [Ask your data](../capabilities/ask-your-data.md#telling-people-it-is-an-ai).
+assistant», and stay locked until «I understand». It names the providers of the models on
+offer, by the name the administrator gave them, and asks again when that list changes.
+Every answer is labelled «AI assistant» with its model and its provider; under the input,
+the provider of the model chosen («Your messages, and what the assistant reads for them, go
+to …») and «This is an AI: it can make mistakes. Always check the results.» A downloaded
+conversation opens with the same notice. The acceptance lives in the browser, so every new
+browser, or a shared account on another machine, asks again. Details: [Ask your data](../capabilities/ask-your-data.md#telling-people-it-is-an-ai).
 
 ![The dialog You are writing to an automated assistant, with its four points and the button I understand](../media/guide/ai/ai-disclosure.png)
 
@@ -162,12 +164,35 @@ machine, asks again. Details: [Ask your data](../capabilities/ask-your-data.md#t
 
 ## Configuration
 
-### The provider
+### The providers
+
+Administration → **AI models** → **AI providers** lists them. An administrator adds one with
+a name, a type, an address and an API key, tests it, turns it off or removes it. The name is
+what people read as who gets their data. The key is encrypted with `SECURITY__FERNET_KEY`
+and never comes back, not in the page, the log, the audit or an error: an empty field keeps
+it. A new address needs the key typed again, so a saved key cannot be sent elsewhere. Every
+change goes to the audit log, without the key.
+
+| Type | Address | Models come from |
+|---|---|---|
+| **Anthropic** | empty, for `https://api.anthropic.com` | the Models API, through Anthropic's SDK |
+| **OpenAI-compatible** | the endpoint, ending in `/v1`, hosted or inside your network | `GET {address}/models` |
+
+Data leaves your network only if the address is outside it. An OpenAI-compatible endpoint
+must also answer chat completions with tool calls, which is how the assistants use their
+tools.
+
+![Administration, AI providers: a provider from the environment, read-only, and Anthropic, with its buttons to test, change, turn off and remove](../media/guide/ai/ai-providers-panel.png)
+
+***Administration → AI models**: the providers. Only the environment's cannot be changed here.*
+
+**A provider from the environment** stays what it always was, and appears in the list as
+«from the environment», named after its host; it is changed where it is set:
 
 | Variable | Helm value | |
 |---|---|---|
-| `AI__BASE_URL` | `ai.baseUrl` | the endpoint, ending in `/v1`; empty = AI off |
-| `AI__SECRET_KEY` | `secrets.aiSecretKey` | the API key; empty = AI off |
+| `AI__BASE_URL` | `ai.baseUrl` | an OpenAI-compatible endpoint, ending in `/v1` |
+| `AI__SECRET_KEY` | `secrets.aiSecretKey` | its API key |
 | `AI__ACCESS_KEY` | `ai.accessKey` | the key's identifier, informational only |
 | `AI__DEFAULT_MODEL` | `ai.defaultModel` | offered first in the pickers, and used by the dbt export, when enabled |
 
@@ -175,29 +200,46 @@ On Kubernetes, `ai.enabled: true` renders these variables; the chart refuses to 
 without `ai.baseUrl` and the secret. The full list, with the caps below, is in
 [Configuration](../configuration.md#ai-assistant).
 
-The endpoint must answer `GET {AI__BASE_URL}/models` with its catalog (it is how the
-administration page lists the models) and chat completions with tool calls (how the
-assistants use their tools). It can be a hosted service or a model server inside your
-network: data leaves your network only if the endpoint is outside it.
+**Turning a provider off, or removing it.** Its models can no longer be chosen, and a request
+for one is refused with the reason. Its conversations stay readable, and go on with another
+model: the page says the next message goes to the model selected. Turned on again, its models
+are back as they were. Removed, its key and its enabled models are gone; the panel says first
+how many conversations and models depend on it.
+
+**Anthropic.** Tabularia sends no sampling settings and no `thinking`, and never forces a tool
+call: today's models refuse them. Effort is set to `medium` on the models that take it (`low`
+for the titles), `max_tokens` to 32,000, and prompt caching is on for the assistants' turns.
+Thinking blocks go back untouched. When the conversation before them has changed (the date,
+the plans, the datasources in focus are in the system prompt) the API refuses them, and
+Tabularia repeats the request asking it to drop them: the person sees nothing, and the refused
+request costs nothing. A history cut by `AI__MAX_HISTORY_MESSAGES` is cut between turns, and
+goes without thinking blocks. A conversation can change model, and provider, at any question:
+the new one gets the earlier messages, not the other model's reasoning. When a model declines
+to answer, the person is told, and what it had written is discarded. Server-side fallbacks to
+another model are not on.
 
 ### The models
 
-Administration → **AI models** lists the provider's catalog. Nothing is enabled by
-default: every message is billed by the provider, so an administrator enables each
-model people may choose. Embedding, audio and reranker models are listed but cannot be
-enabled. A model the provider stops offering stays in the list, marked «no longer
-offered», so it can be disabled. The dbt export uses `AI__DEFAULT_MODEL` when it is
-enabled, otherwise the first enabled model.
+Administration → **AI models** lists each provider's catalog; one that does not answer says
+so without hiding the others. Nothing is enabled by default: every message is billed by the
+provider, so an administrator enables each model people may choose. Embedding, audio and
+reranker models are listed but cannot be enabled. A model the provider stops offering stays
+in the list, marked «no longer offered», so it can be disabled. The same name on two providers
+is two models, and the pickers show each model with its provider. The dbt export uses
+`AI__DEFAULT_MODEL` when it is enabled, otherwise the first enabled model. That setting holds
+a model's name, for instance `claude-opus-5-5`: with the same name on two providers, the
+environment's wins, then the provider added first.
 
-![Administration, AI models: the provider's catalog, one model enabled, an embedding model marked not a chat model](../media/guide/ai/ai-models-panel.png)
+![Administration, AI models: the catalog of each provider, some models enabled, an embedding model marked not a chat model, one marked price unknown](../media/guide/ai/ai-models-panel.png)
 
-***Administration → AI models**: the catalog of the provider; only the enabled models can be picked.*
+***Administration → AI models**: the catalog of each provider; only the enabled models can be picked.*
 
 ### Costs and caps
 
 Under each answer the page shows the tokens and an estimated cost, computed from the
 model's public list price as published with the AI library: an estimate, not your
-provider's invoice. A dash means the model could not be priced, which is not zero.
+provider's invoice, with cached input at its own rates. A dash means the model could not be
+priced, which is not zero.
 
 | Variable | Default | Caps |
 |---|---|---|
@@ -213,7 +255,9 @@ provider's invoice. A dash means the model could not be priced, which is not zer
 
 The daily caps are checked before a question is sent; once reached, the person (or
 everyone, for the installation's cap) is told to try again the next day. The dbt
-export's calls count in the same ledger and stop at the same caps. Set both daily caps
+export's calls count in the same ledger and stop at the same caps. A model with no known
+price, marked «price unknown» in the panel, is not free for the caps: they count it at $4 in
+and $20 out per million tokens, whatever it really costs. Set both daily caps
 wherever people you do not know can sign in. All of these can also be changed in
 Administration → Settings, without a restart.
 
@@ -256,7 +300,7 @@ conversation reopens with its flow.
 ## Turning it off
 
 - **Entirely**: leave `AI__BASE_URL` or `AI__SECRET_KEY` empty (on Helm,
-  `ai.enabled: false`). The Assistant page says «Assistant not configured», the editors
+  `ai.enabled: false`), and add no provider. The Assistant page says «Assistant not configured», the editors
   show no Assistant tab, and the dbt export offers no AI (it can still reuse the texts
   kept for a flow version).
 - **For now**: disable every model in Administration → AI models. The Assistant page
@@ -270,15 +314,19 @@ conversation reopens with its flow.
 
 | Event | When |
 |---|---|
-| `ai.query` | every query of the data assistant and every preview of the flow assistant, with the SQL, the model, the engine and the rows returned |
+| `ai.query` | every query of the data assistant and every preview of the flow assistant, with the SQL, the model and its provider, the engine and the rows returned |
 | `export.download` | a full result downloaded from a conversation, with the SQL |
-| `ai.model_enable`, `ai.model_disable` | a model enabled or disabled |
+| `ai.provider_create`, `ai.provider_update`, `ai.provider_delete` | a provider added, changed (which fields, whether the key changed; never the key) or removed |
+| `ai.model_enable`, `ai.model_disable` | a model enabled or disabled, with its provider |
 | `ai.prompt_update`, `ai.prompt_reset` | an agent's instructions changed or restored |
 
 The dbt export's own audit entry names the AI models that wrote its texts
 ([dbt export](../dbt-export.md)).
 
 ## Example: turning it on
+
+**From the panel**: Administration → AI models → **Add a provider**: a name, the type, the API
+key, **Test**, **Save**. Enable a model in the list below it (`claude-opus-5-5`, for instance).
 
 **Docker Compose**, in `infrastructure/.env`:
 

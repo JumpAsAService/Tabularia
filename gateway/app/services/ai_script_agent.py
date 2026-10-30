@@ -188,7 +188,7 @@ script_agent: Agent[ScriptDeps, str] = Agent(
     instructions=_instructions,
     retries=2,
     name="tabularia-script-assistant",
-    capabilities=[ai_agent.StopWhenWithheld()],
+    capabilities=[ai_agent.StopWhenWithheld(), ai_agent.TurnGuard()],
 )
 
 

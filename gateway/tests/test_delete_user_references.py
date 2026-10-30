@@ -19,7 +19,7 @@ from tests.conftest import make_datasource, make_flow, make_project, make_user
 # every foreign key to users, and what deleting the account does with it. A new
 # one makes the first test fail: handle it in `remove_user`, then list it here.
 REFERENCES = {
-    ("ai_models", "updated_by"), ("api_tokens", "user_id"), ("api_tokens", "created_by"),
+    ("ai_models", "updated_by"), ("ai_providers", "updated_by"), ("api_tokens", "user_id"), ("api_tokens", "created_by"),
     ("audit_logs", "actor_id"), ("banners", "created_by"), ("connections", "owner_id"),
     ("container_registry_access", "user_id"), ("datasources", "owner_id"),
     ("datasources", "refresh_scheduled_by"), ("disabled_engines", "disabled_by"), ("flow_groups", "owner_id"),

@@ -9,7 +9,7 @@ import { useI18n } from 'vue-i18n'
 import { Sparkles, Check } from 'lucide-vue-next'
 import { useDialogA11y } from '~/composables/useDialogA11y'
 
-const props = defineProps<{ open: boolean; metadataOnly?: boolean }>()
+const props = defineProps<{ open: boolean; metadataOnly?: boolean; providers?: string[] }>()
 const emit = defineEmits<{ (e: 'accept'): void }>()
 const { t } = useI18n()
 
@@ -21,8 +21,10 @@ useDialogA11y(card, () => props.open, () => {})
 // in metadata-only mode «the numbers come from your data» and «your data goes to the provider»
 // would be false: these say what happens then, and what still goes
 const POINTS = computed(() => (props.metadataOnly
-  ? ['metaGenerated', 'metaCanBeWrong', 'readsOnly', 'metaConstants', 'noPersonalData']
+  ? ['metaGenerated', 'metaCanBeWrong', 'readsOnly', 'metaConstants', 'metaNoPersonalData']
   : ['generated', 'canBeWrong', 'readsOnly', 'noPersonalData']))
+// who gets what is sent: the names the administrator gave to the providers of the models on offer
+const providerNames = computed(() => props.providers?.join(', ') || t('aiDisclosure.theProvider'))
 </script>
 
 <template>
@@ -39,7 +41,7 @@ const POINTS = computed(() => (props.metadataOnly
         <h3 id="ad-title"><Sparkles :size="16" /> {{ t('aiDisclosure.title') }}</h3>
         <p class="ad-lead">{{ t('aiDisclosure.lead') }}</p>
         <ul class="ad-points">
-          <li v-for="p in POINTS" :key="p">{{ t(`aiDisclosure.${p}`) }}</li>
+          <li v-for="p in POINTS" :key="p">{{ t(`aiDisclosure.${p}`, { providers: providerNames }) }}</li>
         </ul>
         <button class="primary ad-ok" type="button" @click="emit('accept')">
           <Check :size="14" /> {{ t('aiDisclosure.accept') }}

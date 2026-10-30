@@ -322,8 +322,8 @@ a kind nothing was kept for, it names the model configured now.
 The calls go through the assistant's model, accounting and caps: every AI call of one
 export shares a time budget, `AI__DBT_EXPORT_TIMEOUT_SECONDS` (180 s by default, under
 the ingress' 300 s: raise both together), and each call has the assistant's per-turn
-limits (`AI__MAX_COST_PER_TURN_USD` — enforced only when the provider publishes the
-model's price — and `AI__MAX_INPUT_TOKENS_PER_TURN`). What a failed call cost is
+limits (`AI__MAX_COST_PER_TURN_USD`, with a model of no known price counted at an assumed
+one, and `AI__MAX_INPUT_TOKENS_PER_TURN`). What a failed call cost is
 recorded and counts against the daily caps too. A cap reached, the budget spent or a
 provider that does not answer stops the export with the reason; the budget also stops
 the engine's check of a new AI translation once it is spent.

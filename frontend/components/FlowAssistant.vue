@@ -10,7 +10,7 @@
 import { computed, nextTick, onMounted, reactive, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { AlertTriangle, Check, CircleAlert, LoaderCircle, Plus, Send, ShieldCheck, Sparkles, Square, Trash2, Undo2 } from 'lucide-vue-next'
-import { useAi, type AiDone, type AiStatus, type AiTable, type AiUsage } from '~/composables/useAi'
+import { aiModelLabel, aiModelOptions, aiProviderOf, aiProviders, useAi, type AiDone, type AiStatus, type AiTable, type AiUsage } from '~/composables/useAi'
 import { useAiDisclosure } from '~/composables/useAiDisclosure'
 import { useLocale } from '~/composables/useLocale'
 import AiDisclosure from '~/components/ui/AiDisclosure.vue'
@@ -70,7 +70,8 @@ const scroller = ref<HTMLElement | null>(null)
 const input = ref<HTMLTextAreaElement | null>(null)
 let controller: AbortController | null = null
 
-const modelOptions = computed(() => props.status.models.map((m) => ({ value: m, label: m })))
+const modelOptions = computed(() => aiModelOptions(props.status))
+const sentTo = computed(() => aiProviderOf(props.status, model.value))
 const ready = computed(() => accepted.value === true && !!model.value)
 // the third asks why a step fails: in metadata-only mode the model sees no error
 const metadataOnly = computed(() => !!props.status.metadata_only)
@@ -141,7 +142,7 @@ let started = false
 function start() {
   if (started || !props.active) return
   started = true
-  read(metadataOnly.value)
+  read(metadataOnly.value, aiProviders(props.status))
   pickModel()
   loadLatest()
 }
@@ -191,9 +192,14 @@ async function send(text?: string) {
           step.node = r.node
           step.table = r.table
         },
-        onDone: (done) => finish(turn, done, sent),
+        onDone: (done) => {
+          if (done.truncated) turn.error = t('aiCompliance.truncated')
+          finish(turn, done, sent)
+        },
         onError: (msg, _code, extra) => {
           turn.error = msg
+          // the model declined: what it wrote before that is not an answer
+          if (extra?.discard) turn.text = ''
           // a turn stopped halfway still hands back what it built
           if (extra?.definition) offer(turn, { definition: extra.definition, touched: extra.touched ?? [] }, sent)
         },
@@ -308,7 +314,7 @@ function stepLabel(s: Step): string {
 <template>
   <section class="fa" :aria-label="$t('flowAssistant.title')">
     <!-- the gate: the assistant is not used before the user has read who answers -->
-    <AiDisclosure :open="active && accepted === false" :metadata-only="metadataOnly" @accept="accept" />
+    <AiDisclosure :open="active && accepted === false" :metadata-only="metadataOnly" :providers="aiProviders(status)" @accept="accept" />
     <header class="fa-head">
       <h3><Sparkles :size="15" /> {{ $t('flowAssistant.title') }}</h3>
       <span class="fa-head-actions">
@@ -352,7 +358,7 @@ function stepLabel(s: Step): string {
           <p class="fa-q">{{ turn.question }}</p>
         </div>
         <div class="fa-a" role="group" :aria-label="$t('aiCompliance.assistantLabel')">
-          <AiSpeaker who="ai" :model="turn.model" />
+          <AiSpeaker who="ai" :model="aiModelLabel(status, turn.model)" />
           <ol v-if="turn.steps.length" class="fa-steps">
             <li v-for="s in turn.steps" :key="s.id" class="fa-step" :class="s.state">
               <span class="fa-step-line">
@@ -419,6 +425,7 @@ function stepLabel(s: Step): string {
         ><Send :size="13" /></button>
       </div>
       <p v-if="metadataOnly" class="fa-notice"><ShieldCheck :size="12" aria-hidden="true" /> {{ $t('flowAssistant.metadataOnly') }}</p>
+      <p v-if="sentTo" class="fa-notice"><Send :size="12" aria-hidden="true" /> {{ $t('aiCompliance.sentTo', { provider: sentTo }) }}</p>
       <p class="fa-notice"><Sparkles :size="12" aria-hidden="true" /> {{ $t('aiCompliance.disclaimer') }}</p>
       <div class="fa-under">
         <Select

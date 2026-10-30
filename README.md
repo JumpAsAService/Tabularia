@@ -597,8 +597,9 @@ query could name another table, the permission on a datasource would be decorati
 <p align="center"><em>It names the datasource it used, shows the table the numbers come from,
 and tells you what the answer cost.</em></p>
 
-Optional, in the gateway, built with [pydantic-ai](https://ai.pydantic.dev) against any
-OpenAI-compatible endpoint (`AI__BASE_URL`, `AI__SECRET_KEY`; verified on Scaleway
+Optional, in the gateway, built with [pydantic-ai](https://ai.pydantic.dev), against the
+providers an administrator adds from the panel: Anthropic through its own SDK, and any
+OpenAI-compatible endpoint (also from `AI__BASE_URL`, `AI__SECRET_KEY`; verified on Scaleway
 Generative APIs). The agent has three tools and nothing else: `list_datasources`,
 `describe_datasource` (columns, types and the hand-written **field descriptions** — the
 semantic context that makes the query right — plus a few sample rows) and

@@ -21,6 +21,7 @@ from sqlmodel import Session, func, select
 
 from app.models import AiChat, AiChatTurn, AiSpend, User
 from app.models.ai_chat import _now
+from app.services import ai_models, ai_pricing
 
 logger = logging.getLogger(__name__)
 
@@ -85,18 +86,30 @@ def create(session: Session, user: User, question: str, model_id: str, engine: O
     return chat
 
 
+def _without_thinking(items: list[Any]) -> None:
+    for message in items:
+        if isinstance(message, dict) and isinstance(message.get("parts"), list):
+            message["parts"] = [p for p in message["parts"] if not (isinstance(p, dict) and p.get("part_kind") == "thinking")]
+
+
 def history(session: Session, chat: AiChat, max_messages: int, metadata_only: bool = False):
-    """The messages of the earlier turns, ready for `message_history`.
+    """The messages of the earlier turns, ready for `message_history`, for the conversation's
+    model (`chat.model_id`, which `open_session` has just set).
 
     An unreadable turn is SKIPPED instead of failing the chat: better a conversation that
     starts again maimed than one that no longer reopens.
 
     `metadata_only`: only the turns made in that mode. Any other may hold values of the data
     in every part of it: a tool's result, the SQL the model wrote after reading them, what it
-    answered, the choices of a card."""
+    answered, the choices of a card.
+
+    `max_messages` keeps whole turns from the newest, and always the newest: cut inside a turn,
+    a history starts with an answer or with a tool's result without its call, which a provider
+    refuses. A history cut, or with turns left out, has no thinking blocks: each is bound to
+    everything that came before it, so the API would refuse them (services/ai_anthropic.py)."""
     from pydantic_ai import ModelMessagesTypeAdapter
 
-    raw_items: list[Any] = []
+    kept: list[list[Any]] = []
     turns = session.exec(
         select(AiChatTurn).where(AiChatTurn.chat_id == chat.id).order_by(AiChatTurn.seq)
     ).all()
@@ -107,11 +120,27 @@ def history(session: Session, chat: AiChat, max_messages: int, metadata_only: bo
             logger.warning("chat %s: turn %s unreadable, skipped", chat.id, turn.seq)
             continue
         if not metadata_only or _made_in_metadata_only(items):
-            raw_items.extend(items)
+            kept.append(items)
+    complete = len(kept) == len(turns)
     if max_messages:
-        raw_items = raw_items[-max_messages:]
+        room, recent = max_messages, []
+        for items in reversed(kept):
+            if recent and len(items) > room:
+                break
+            recent.append(items)
+            room -= len(items)
+        complete = complete and len(recent) == len(kept)
+        kept = recent[::-1]
+    raw_items = [m for items in kept for m in items]
     if not raw_items:
         return []
+    if not complete:
+        _without_thinking(raw_items)
+    endpoint = ai_models.endpoint_of(chat.model_id, session)
+    if endpoint is not None and endpoint.kind == ai_models.ANTHROPIC:
+        from app.services import ai_anthropic
+
+        ai_anthropic.fit_history(raw_items)
     try:
         return ModelMessagesTypeAdapter.validate_python(raw_items)
     except Exception:  # noqa: BLE001 — incompatible history (e.g. after an upgrade): start again clean
@@ -336,6 +365,9 @@ def _turn_for_ui(turn: AiChatTurn) -> dict[str, Any]:
                 if isinstance(metadata, dict) and isinstance(metadata.get("ms"), (int, float)):
                     step["duration_ms"] = metadata["ms"]
                 content = part.get("content")
+                if not step["ok"]:  # a call the tool refused, as pydantic-ai now saves it
+                    step["error"] = _retry_words(content)
+                    continue
                 if not isinstance(content, dict):
                     continue
                 # the TABLE that backs the answer: without it, a reopened conversation would show the
@@ -347,6 +379,8 @@ def _turn_for_ui(turn: AiChatTurn) -> dict[str, Any]:
                     }
                 if isinstance(content.get("chart"), dict):
                     step["chart"] = content["chart"]
+                if isinstance(content.get("datasources"), list):  # how many the listing found: the step says it
+                    step["count"] = len(content["datasources"])
                 if content.get("node"):  # the flow editor's tools: the node made or changed
                     step["node"] = str(content["node"])
                 if content.get("error"):
@@ -485,12 +519,13 @@ def record_spend(
 
 
 def _sum(rows) -> Decimal:
+    """What a day's rows of the ledger count for against the caps: `(cost, input, output)`. A
+    round of a model with no known price is not free, and a cap that reads it as free
+    stops protecting in silence (services/ai_pricing.py)."""
     total = Decimal(0)
-    for v in rows:
-        if not v:
-            continue
+    for cost, input_tokens, output_tokens in rows:
         try:
-            total += Decimal(v)
+            total += Decimal(cost) if cost else ai_pricing.at_unknown_price(input_tokens, output_tokens)
         except InvalidOperation:
             continue
     return total
@@ -509,7 +544,8 @@ def spent_today(session: Session, user: User) -> Decimal:
     chats are deleted when they leave, and a cap that disappears together with the data
     it must count is not a cap."""
     rows = session.exec(
-        select(AiSpend.cost_usd).where(AiSpend.user_id == user.id, AiSpend.ts >= _start_of_day())
+        select(AiSpend.cost_usd, AiSpend.input_tokens, AiSpend.output_tokens)
+        .where(AiSpend.user_id == user.id, AiSpend.ts >= _start_of_day())
     ).all()
     return _sum(rows)
 
@@ -519,5 +555,7 @@ def spent_today_all(session: Session) -> Decimal:
 
     It is the cap that counts where the account is shared: on a public demo everyone
     signs in as the same guest and the bill is one."""
-    rows = session.exec(select(AiSpend.cost_usd).where(AiSpend.ts >= _start_of_day())).all()
+    rows = session.exec(
+        select(AiSpend.cost_usd, AiSpend.input_tokens, AiSpend.output_tokens).where(AiSpend.ts >= _start_of_day())
+    ).all()
     return _sum(rows)

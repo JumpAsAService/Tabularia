@@ -152,7 +152,7 @@ id = "gateway-ai"
 component = "gateway"
 title = "AI assistant"
 prefixes = ["AI"]
-intro = "Optional: a chat over the catalog and an assistant in the flow editor, against any OpenAI-compatible endpoint. Off until `AI__BASE_URL` and `AI__SECRET_KEY` are set, and no model is usable until an administrator enables it. On the external ClickHouse the assistant can run as a read-only user: see [the AI user](engines/clickhouse-ai-user.md). The dbt export uses it too ([dbt export](dbt-export.md))."
+intro = "Optional: a chat over the catalog and an assistant in the flow editor. Off until an administrator adds a provider in Administration → AI models (Anthropic, or any OpenAI-compatible endpoint), or `AI__BASE_URL` and `AI__SECRET_KEY` are set, and no model is usable until an administrator enables it. On the external ClickHouse the assistant can run as a read-only user: see [the AI user](engines/clickhouse-ai-user.md). The dbt export uses it too ([dbt export](dbt-export.md))."
 outro = """
 #### The agents' instructions
 
@@ -424,16 +424,16 @@ values = "an IANA name, e.g. `Europe/Rome`"
 text = "Above 0, every source node without a sample of its own is read only for its first N rows in editor previews and trial runs. People switch it off per node; scheduled runs and «Run in production» always read everything. Useful when every read costs (remote storage, a pay-per-use warehouse). 0 = no automatic sample."
 
 [var.AI__BASE_URL]
-text = "OpenAI-compatible endpoint, e.g. `https://api.scaleway.ai/v1`. Empty = assistant off."
+text = "OpenAI-compatible endpoint, e.g. `https://api.scaleway.ai/v1`: a provider that shows in the panel as read-only. Empty = no such provider."
 
 [var.AI__ACCESS_KEY]
 text = "Identifier of the key (Scaleway calls it access key); the protocol authenticates with the secret alone, this only tells which key is in use."
 
 [var.AI__SECRET_KEY]
-text = "The API key. Empty = assistant off."
+text = "Its API key. Empty = no such provider."
 
 [var.AI__DEFAULT_MODEL]
-text = "Model proposed first in the picker, if an administrator enabled it."
+text = "Model proposed first in the picker, if an administrator enabled it, on any provider: its name, e.g. `claude-opus-5-5`."
 
 [var.AI__MAX_RESULT_ROWS]
 text = "Rows a query of the assistant may return, to the model and to the chat."
@@ -451,7 +451,7 @@ text = "On, no value of a row of data reaches the model configured here: the cha
 text = "Past messages of a conversation replayed to the model: higher remembers more and costs more per turn."
 
 [var.AI__MAX_COST_PER_TURN_USD]
-text = "Spending ceiling of one turn, in dollars, enforced by pydantic-ai. The round-trip cap does not limit tokens."
+text = "Spending ceiling of one turn, in dollars. The round-trip cap does not limit tokens. A model with no known price counts at $4 in and $20 out per million tokens."
 
 [var.AI__MAX_COST_PER_DAY_USD]
 text = "Daily ceiling per user, in dollars. 0 = none."
@@ -957,6 +957,10 @@ text = "The gateway's address inside the cluster, which the notebooks' pods call
 helm = "`scripts.notebooks.host` (with `origin`)"
 production = "with notebooks, set it to a host name of their own next to the interface's, routed to the gateway: without it their apps and editors do not open."
 text = "The address the notebooks' apps and editors are served from, an origin of their own such as `https://notebooks.example.com`: marimo shows whatever HTML and JavaScript a notebook's code writes, and on the interface's address that code would act in Tabularia with the session of whoever opens the notebook. There the gateway answers only for the notebooks, and only with a cookie that Tabularia's page obtains for one notebook with a one-use ticket. A host other than the interface's, a sibling one best; `https`, or `http` only for `localhost` and its subdomains; never in `APP__CORS_ORIGINS`. The frontend needs the same value (`NUXT_PUBLIC_NOTEBOOKS_ORIGIN`). Empty: the apps and the editors do not open, unless `NOTEBOOKS__ALLOW_SAME_ORIGIN`. See [An address of their own](capabilities/notebooks.md#an-address-of-their-own)."
+
+[var.NUXT_PUBLIC_SOURCE_URL]
+helm = "`frontend.publicSourceUrl`"
+text = "Where **Source code** in the settings menu leads. Empty: the project's repository. If you offer a changed version to others over a network, the AGPL asks you to offer them its source: point this at it."
 
 [var.NOTEBOOKS__ALLOW_SAME_ORIGIN]
 helm = "`scripts.notebooks.allowSameOrigin`"

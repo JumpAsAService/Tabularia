@@ -11,11 +11,13 @@ import { ref } from 'vue'
 const KEY = 'tabularia.aiDisclosure'
 // To raise when the text changes in SUBSTANCE (not for a comma): whoever had accepted the
 // earlier version sees it asked again, and rightly — they consented to something else.
-const VERSION = '1'
+const VERSION = '2'
 // The dialog says something else in metadata-only mode: each text is accepted on its own, so
 // that whoever read «no value of your data reaches the model» reads the other one when
-// an administrator turns the mode off, and the other way round.
-const versionFor = (metadataOnly: boolean) => (metadataOnly ? `${VERSION}-metadata` : VERSION)
+// an administrator turns the mode off, and the other way round. And it names who gets the
+// questions: a new provider is something the person has not read about yet.
+const versionFor = (metadataOnly: boolean, providers: string[]) =>
+  [metadataOnly ? `${VERSION}-metadata` : VERSION, ...[...providers].sort()].join('|')
 
 // `null` = not known yet (we are on the server, or the mount has not happened). It serves
 // to keep the dialog from flashing to whoever has accepted already.
@@ -23,9 +25,9 @@ const accepted = ref<boolean | null>(null)
 let current = VERSION
 
 export function useAiDisclosure() {
-  function read(metadataOnly = false) {
+  function read(metadataOnly = false, providers: string[] = []) {
     if (!import.meta.client) return
-    current = versionFor(metadataOnly)
+    current = versionFor(metadataOnly, providers)
     try {
       accepted.value = localStorage.getItem(KEY) === current
     } catch {

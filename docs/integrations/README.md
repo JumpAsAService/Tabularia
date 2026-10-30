@@ -14,7 +14,7 @@ that explains it.
 
 | Integration | What it does | Set up in | Page |
 |---|---|---|---|
-| AI models | The chat over the catalog, the assistants of the flow and script editors, the descriptions and SQL translations of the dbt export. Any OpenAI-compatible endpoint. | `AI__BASE_URL`, `AI__SECRET_KEY`; models enabled in **Administration → AI models** | [AI](ai.md) |
+| AI models | The chat over the catalog, the assistants of the flow and script editors, the descriptions and SQL translations of the dbt export. Anthropic, and any OpenAI-compatible endpoint. | Providers and models in **Administration → AI models**; also `AI__BASE_URL`, `AI__SECRET_KEY` | [AI](ai.md) |
 | API, tokens and webhooks | Run flows, refresh datasources, read runs and lineage, download data from scripts and schedulers; be called when a run ends, with an HMAC signature. | **Settings → API tokens**, **Administration → Service accounts**, **Administration → Webhooks** | [API, tokens and webhooks](../api.md) |
 | dbt | Export a flow as a dbt project: one model per output, `sources.yml`, `schema.yml`, the data contract as tests. | The Flows page, **«Export flow»** (administrators) | [Export to dbt](../dbt-export.md) |
 | OpenLineage | Tell an external catalog (Marquez, DataHub, OpenMetadata…) what every run read and wrote: flows, refreshes, SQL and saved scripts, flow groups and their cells, containers, notebook sessions. | `OPENLINEAGE__URL` or `OPENLINEAGE__FILE` | [OpenLineage](../openlineage.md) |

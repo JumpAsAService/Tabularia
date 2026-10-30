@@ -131,7 +131,7 @@ def ai_on(monkeypatch):
     monkeypatch.setenv("AI__SECRET_KEY", "k")
     get_settings.cache_clear()
 
-    async def offered(force: bool = False):
+    async def offered(force: bool = False, provider=None):
         return [MODEL]
 
     monkeypatch.setattr(ai_routes, "provider_models", offered)

@@ -18,7 +18,7 @@ import { errMessage, useApi } from '~/composables/useApi'
 import MiniChart from '~/components/ui/MiniChart.vue'
 import AiDisclosure from '~/components/ui/AiDisclosure.vue'
 import { useAiDisclosure } from '~/composables/useAiDisclosure'
-import { useAi, type AgentQuestion, type AiChatSummary, type AiChatTotal, type AiStatus, type AiToolCall, type AiToolResult, type AiUsage } from '~/composables/useAi'
+import { aiModelLabel, aiModelName, aiModelOptions, aiProviderOf, aiProviders, useAi, type AgentQuestion, type AiChatSummary, type AiChatTotal, type AiStatus, type AiToolCall, type AiToolResult, type AiUsage } from '~/composables/useAi'
 import { argsOf, type AgentStep } from '~/composables/useAgentSteps'
 import type { AgentPlan } from '~/composables/useAgentPlans'
 import { useDatasources, type DatasourceInfo } from '~/composables/useDatasources'
@@ -131,7 +131,10 @@ const ready = computed(() =>
 // blocked by the consent, not by something missing: it avoids false messages
 const awaitingConsent = computed(() =>
   accepted.value !== true && !!status.value?.enabled && !!status.value.models.length)
-const modelOptions = computed(() => (status.value?.models ?? []).map((m) => ({ value: m, label: m })))
+const modelOptions = computed(() => aiModelOptions(status.value))
+const sentTo = computed(() => aiProviderOf(status.value, model.value))
+// a conversation opened whose model can no longer be chosen: the next question goes to another one
+const goneModel = ref('')
 const engineOptions = computed(() => engines.value.filter((e) => e.available).map((e) => ({ value: e.id, label: e.label || e.id })))
 const shown = computed(() => {
   const q = filter.value.trim().toLowerCase()
@@ -155,7 +158,7 @@ onMounted(async () => {
     statusError.value = errMessage(e)
   }
   // after the state: the dialog's text depends on it
-  readConsent(metadataOnly.value)
+  readConsent(metadataOnly.value, aiProviders(status.value))
   try {
     // a FRESH catalog (not the session's cached one): the engines' policy may have changed
     engines.value = await api.engines()
@@ -229,6 +232,7 @@ async function send(text?: string) {
   if (!message || busy.value || !ready.value) return
   draft.value = ''
   changeHint.value = false
+  goneModel.value = ''
   turns.value.push({ role: 'user', text: message })
   const reply: Turn = { role: 'assistant', text: '', steps: [], streaming: true, phase: 'thinking', model: model.value }
   turns.value.push(reply)
@@ -272,12 +276,15 @@ async function send(text?: string) {
           if (done.seq !== null) live.seq = done.seq
           if (done.questions?.length) live.questions = done.questions
           if (done.plan) live.plan = done.plan
+          if (done.truncated) live.error = t('aiCompliance.truncated')
           void refreshChats()
         },
         onError: (msg, code, extra) => {
           live.error = msg
+          // the model declined: what it wrote before that is not an answer
+          if (extra?.discard) live.text = ''
           // the mode came on during this turn: the page says so from now on, and its dialog asks again
-          if (code === 'metadata_only') ai.status().then((s) => { status.value = s; readConsent(metadataOnly.value) }).catch(() => {})
+          if (code === 'metadata_only') ai.status().then((s) => { status.value = s; readConsent(metadataOnly.value, aiProviders(s)) }).catch(() => {})
           // a turn stopped halfway may have opened the conversation and proposed a plan already
           if (extra?.chat_id) chatId.value = extra.chat_id
           if (extra?.plan) live.plan = extra.plan
@@ -305,6 +312,7 @@ function reset() {
   chatId.value = null
   chatTotal.value = null
   changeHint.value = false
+  goneModel.value = ''
   input.value?.focus()
 }
 
@@ -334,7 +342,7 @@ async function openChat(id: number) {
         role: 'assistant', text: t.answer, streaming: false, usage: t.usage, seq: t.seq, model: t.model_id,
         steps: t.steps.map((p, i): Step => ({
           id: p.id ?? `${t.seq}-${i}`, name: p.name, title: p.title, args: argsOf(p.args),
-          state: p.ok === false ? 'error' : 'ok', error: p.error, table: p.table, chart: p.chart, node: p.node,
+          state: p.ok === false ? 'error' : 'ok', error: p.error, table: p.table, chart: p.chart, node: p.node, count: p.count,
           subject: p.subject, planId: p.plan_id, durationMs: p.duration_ms,
         })),
         questions: t.questions, answers: t.answers, plan: t.plan,
@@ -343,7 +351,9 @@ async function openChat(id: number) {
     chatId.value = d.id
     changeHint.value = false
     chatTotal.value = { turns: d.turns, input_tokens: d.input_tokens, output_tokens: d.output_tokens, cost_usd: d.cost_usd }
+    goneModel.value = ''
     if (d.model_id && (status.value?.models ?? []).includes(d.model_id)) model.value = d.model_id
+    else if (d.model_id) goneModel.value = aiModelName(d.model_id)
     if (d.engine) engine.value = d.engine
     chatsOpen.value = false
     scrollDown()
@@ -400,7 +410,7 @@ function downloadChat() {
   ]
   for (const turn of turns.value) {
     if (turn.role === 'user') { rows.push(`## ${t('aiCompliance.youLabel')}: ${turn.text}`, ''); continue }
-    rows.push(`**${t('aiCompliance.assistantLabel')}${turn.model ? ` · ${turn.model}` : ''}**`, '')
+    rows.push(`**${t('aiCompliance.assistantLabel')}${turn.model ? ` · ${aiModelLabel(status.value, turn.model)}` : ''}**`, '')
     for (const s of turn.steps) {
       const sql = (s.args as any)?.sql
       if (sql) rows.push('```sql', String(sql), '```', '')
@@ -467,7 +477,7 @@ watch(draft, async () => {
 <template>
   <AppShell fluid>
     <!-- the gate: the chat is not used until one has read who one is talking to -->
-    <AiDisclosure :open="accepted === false" :metadata-only="metadataOnly" @accept="acceptConsent" />
+    <AiDisclosure :open="accepted === false" :metadata-only="metadataOnly" :providers="aiProviders(status)" @accept="acceptConsent" />
     <div class="chat">
       <!-- ── catalog: what the assistant can read ───────────────── -->
       <details class="rail" open>
@@ -596,7 +606,7 @@ watch(draft, async () => {
               <p>{{ turn.text }}</p>
             </div>
             <article v-else class="msg bot" :aria-label="$t('aiCompliance.assistantLabel')">
-              <AiSpeaker who="ai" :model="turn.model" />
+              <AiSpeaker who="ai" :model="aiModelLabel(status, turn.model)" />
               <AgentSteps v-if="turn.steps.length" :steps="turn.steps" :ds-name="dsName">
                 <template #evidence="{ step: s }">
                   <div v-if="s.table" class="evidence">
@@ -680,7 +690,9 @@ watch(draft, async () => {
             </label>
             <span v-if="focus.length" class="muted">{{ $t('chat.focusCount', { n: focus.length }) }}</span>
           </div>
+          <p v-if="goneModel" class="ai-notice mode"><CircleAlert :size="12" aria-hidden="true" /> {{ $t('chat.modelGone', { model: goneModel }) }}</p>
           <p v-if="metadataOnly" class="ai-notice mode"><ShieldCheck :size="12" aria-hidden="true" /> {{ $t('chat.metadataOnly') }}</p>
+          <p v-if="sentTo" class="ai-notice"><Send :size="12" aria-hidden="true" /> {{ $t('aiCompliance.sentTo', { provider: sentTo }) }}</p>
           <p class="ai-notice"><Sparkles :size="12" aria-hidden="true" /> {{ $t('aiCompliance.disclaimer') }}</p>
         </form>
       </section>

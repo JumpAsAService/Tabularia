@@ -74,7 +74,7 @@ def ai_on(monkeypatch):
     for mod in (ai_routes, ai_agent, ai_models):
         monkeypatch.setattr(mod, "get_settings", lambda: settings)
 
-    async def offered(force: bool = False):
+    async def offered(force: bool = False, provider=None):
         return [MODEL]
 
     monkeypatch.setattr(ai_routes, "provider_models", offered)

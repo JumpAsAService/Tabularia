@@ -30,7 +30,7 @@ def ai_on(monkeypatch, session):
     for mod in (config_mod, ai_routes, ai_agent, ai_models):
         monkeypatch.setattr(mod, "get_settings", lambda: settings)
 
-    async def offered(force: bool = False):
+    async def offered(force: bool = False, provider=None):
         return ["gpt-oss-120b"]
 
     monkeypatch.setattr(ai_routes, "provider_models", offered)

@@ -397,6 +397,7 @@ def export_flow_dbt_plan(
     allowed materializations."""
     from app.services.dbt_export import export_plan
 
+    from app.services import ai_models
     from app.services.dbt_ai import ai_model, version_texts
 
     flow = _flow_for_dbt(session, user, flow_id)
@@ -404,7 +405,8 @@ def export_flow_dbt_plan(
     model = ai_model(session)
     # `stored`: what the AI wrote for this version, which a re-export reuses without a call even with
     # the AI switched off: the dialog can still offer it, and the same version gives the same zip
-    piano["ai"] = {"available": model is not None, "model": model, "metadata_only": metadata_only.on("chat"),
+    piano["ai"] = {"available": model is not None, "model": ai_models.described(session, model) if model else None,
+                   "metadata_only": metadata_only.on("chat"),
                    "stored": version_texts(session, flow)}
     return piano
 

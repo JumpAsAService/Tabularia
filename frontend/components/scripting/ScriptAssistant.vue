@@ -9,7 +9,7 @@
 import { computed, nextTick, onBeforeUnmount, onMounted, reactive, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { Check, CircleAlert, FileDiff, LoaderCircle, Plus, Send, Sparkles, Square, Wrench } from 'lucide-vue-next'
-import { useAi, type AiDone, type AiStatus, type AiUsage, type ScriptProposal } from '~/composables/useAi'
+import { aiModelLabel, aiModelOptions, aiProviderOf, aiProviders, useAi, type AiDone, type AiStatus, type AiUsage, type ScriptProposal } from '~/composables/useAi'
 import { useAiDisclosure } from '~/composables/useAiDisclosure'
 import { useLocale } from '~/composables/useLocale'
 import type { ScriptNodeRun } from '~/composables/useScripting'
@@ -61,13 +61,14 @@ const scroller = ref<HTMLElement | null>(null)
 const input = ref<HTMLTextAreaElement | null>(null)
 let controller: AbortController | null = null
 
-const modelOptions = computed(() => props.status.models.map((m) => ({ value: m, label: m })))
+const modelOptions = computed(() => aiModelOptions(props.status))
+const sentTo = computed(() => aiProviderOf(props.status, model.value))
 const ready = computed(() => accepted.value === true && !!model.value && !props.readOnly)
 const failed = computed(() => props.lastRun?.status === 'FAILURE' && !props.lastRun.stale)
 const metadataOnly = computed(() => !!props.status.metadata_only)
 
 onMounted(() => {
-  read(metadataOnly.value)
+  read(metadataOnly.value, aiProviders(props.status))
   let saved = ''
   try { saved = localStorage.getItem(MODEL_KEY) ?? '' } catch { /* no storage: the default model */ }
   model.value = props.status.models.includes(saved) ? saved : (props.status.default_model ?? props.status.models[0] ?? '')
@@ -122,12 +123,17 @@ async function send(text?: string, withError = false) {
         onDone: (done: AiDone) => {
           chatId.value = done.chat_id ?? chatId.value
           turn.usage = done.usage
+          if (done.truncated) turn.error = t('aiCompliance.truncated')
           if (done.proposal) {
             turn.proposal = done.proposal
             turn.outcome = 'pending'
           }
         },
-        onError: (msg) => { turn.error = msg },
+        onError: (msg, _code, extra) => {
+          turn.error = msg
+          // the model declined: what it wrote before that is not an answer
+          if (extra?.discard) turn.text = ''
+        },
       },
       controller.signal,
     )
@@ -162,7 +168,7 @@ function onKey(e: KeyboardEvent) {
 
 <template>
   <section class="sa" :aria-label="$t('scriptAssistant.title')">
-    <AiDisclosure :open="accepted === false" :metadata-only="metadataOnly" @accept="accept" />
+    <AiDisclosure :open="accepted === false" :metadata-only="metadataOnly" :providers="aiProviders(status)" @accept="accept" />
     <header class="sa-head">
       <h3><Sparkles :size="14" /> {{ $t('scriptAssistant.title') }}</h3>
       <button v-if="turns.length" class="sa-mini" type="button" :disabled="busy" :title="$t('scriptAssistant.newConversation')"
@@ -186,7 +192,7 @@ function onKey(e: KeyboardEvent) {
           <p class="sa-q">{{ turn.question }}</p>
         </div>
         <div class="sa-a" role="group" :aria-label="$t('aiCompliance.assistantLabel')">
-          <AiSpeaker who="ai" :model="turn.model" />
+          <AiSpeaker who="ai" :model="aiModelLabel(status, turn.model)" />
           <MarkdownLite v-if="turn.text" :text="turn.text" />
           <p v-if="turn.streaming" class="sa-activity"><LoaderCircle :size="12" class="spin" /> {{ $t('scriptAssistant.working') }}</p>
           <p v-if="turn.error" class="sa-note err"><CircleAlert :size="13" /> <span>{{ turn.error }}</span></p>
@@ -218,6 +224,7 @@ function onKey(e: KeyboardEvent) {
                 :aria-label="$t('scriptAssistant.send')"><Send :size="13" /></button>
       </div>
       <p class="sa-notice"><Sparkles :size="12" aria-hidden="true" /> {{ metadataOnly ? $t('scriptAssistant.metadataOnly') : $t('scriptAssistant.noData') }}</p>
+      <p v-if="sentTo" class="sa-notice">{{ $t('aiCompliance.sentTo', { provider: sentTo }) }}</p>
       <p class="sa-notice">{{ $t('aiCompliance.disclaimer') }}</p>
       <Select v-if="modelOptions.length > 1" v-model="model" class="sa-model" :options="modelOptions" :disabled="busy"
               :aria-label="$t('scriptAssistant.model')" />

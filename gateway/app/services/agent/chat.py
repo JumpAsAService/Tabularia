@@ -106,7 +106,7 @@ agent: Agent[ai_agent.ChatDeps, Any] = Agent(
     output_type=[str, *(ToolOutput(t.args, name=t.name, description=t.description) for t in _ENDING)],
     retries=RETRIES,
     name="tabularia-assistant",
-    capabilities=[ai_agent.StopWhenWithheld()],
+    capabilities=[ai_agent.StopWhenWithheld(), ai_agent.TurnGuard()],
 )
 
 
