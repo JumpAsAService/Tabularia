@@ -3,25 +3,32 @@
 When an account is created (by an administrator, by SSO at the first sign-in, by the
 start-up or the first-run page) a folder at the top level is born with it, named after
 the part of the email before the @ («leonardtriv@esempio.it» → «leonardtriv»; «leonardtriv
-(1)» when the name is taken, as copies are named). The person gets MANAGE on it, which
-holds every capability; nobody else gets anything: a top-level folder inherits from no
-one, so only the administrators see it, as they see every folder. The person shares it
-as any other folder.
+(1)» when the name is taken, as copies are named). The person gets EDIT on it: they build
+and run there. Nobody else gets anything: a top-level folder inherits from no one, so only
+the administrators see it, as they see every folder.
+
+EDIT and not MANAGE, because of what MANAGE holds. CONNECT: a connection may point at any
+host the workers reach, so it is the barrier against copying data out of the installation
+(a flow with an Output to one's own server) and against probing the internal network, and
+a right every account is born with is no barrier. And sharing: with it, a copy of a
+datasource the person may only read would reach people nobody granted it to. An
+administrator can grant more on this folder, as on any other, to whoever needs it.
 
 What makes it personal is not a column, it is the shape the creation leaves: a folder at
 the top level, owned by the person (`owner_id`), on which the person holds a grant of
-their own (a user grant, not a group's) to MANAGE. Nothing else gives that shape: only an
+their own (a user grant, not a group's) to EDIT. Nothing else gives that shape: only an
 administrator creates top-level folders, and an administrator needs no grant. Should one
-match more than once (an administrator who granted themselves MANAGE on a folder of
-theirs, and later lost the role), the oldest is the personal one.
+match more than once (an administrator who granted themselves EDIT on a folder of theirs,
+and later lost the role), the oldest is the personal one.
 
 An account that predates this, or whose folder an administrator took away, gets one at
 its next sign-in. Service accounts never get one (they sign in with a token, and work in
 the folders they are given), nor do accounts that only observe: a public demo's guest is
 one such account shared by many, and a folder of its own would let every visitor write.
 
-What the person cannot do to it (an administrator can, on purpose): delete it, move it
-under another folder, take their own grant away. Deactivating the account changes
+What nobody but an administrator can do to it, not even someone an administrator gave
+MANAGE on it: delete it, move it under another folder, take the person's grant away.
+Deactivating the account changes
 nothing; deleting it takes the grant away, as for every grant, and the folder stays with
 its content as an ordinary folder only the administrators see: the content belongs to the
 organization (routes/users.py, `delete_user`)."""
@@ -38,6 +45,9 @@ from app.services.copy_names import copy_name
 from app.services.permissions import is_admin, is_observer_only
 
 logger = logging.getLogger(__name__)
+
+# what the person holds on their folder, and what tells it apart (see above)
+CAPABILITY = Capability.EDIT
 
 
 def folder_name(email: str) -> str:
@@ -61,7 +71,7 @@ def _personal_query():
             Project.parent_id.is_(None),
             Project.owner_id.is_not(None),
             Permission.user_id == Project.owner_id,
-            Permission.capability == Capability.MANAGE.value,
+            Permission.capability == CAPABILITY.value,
         )
         .order_by(Project.id)
     )
@@ -102,7 +112,7 @@ def guard(session: Session, actor: User, project_id: int, what: str) -> None:
 def guard_grant(session: Session, actor: User, perm: Permission) -> None:
     """Refuses to take the person's own grant off their personal folder, unless an
     administrator asks: without it the person would be locked out of their own area."""
-    if perm.user_id is None or perm.capability != Capability.MANAGE.value or is_admin(session, actor):
+    if perm.user_id is None or perm.capability != CAPABILITY.value or is_admin(session, actor):
         return
     if personal_of(session, perm.project_id) == perm.user_id:
         raise HTTPException(
@@ -147,7 +157,7 @@ def ensure(
         project = Project(name=_free_root_name(session, folder_name(user.email)), owner_id=user.id)
         session.add(project)
         session.flush()
-        session.add(Permission(project_id=project.id, user_id=user.id, capability=Capability.MANAGE.value))
+        session.add(Permission(project_id=project.id, user_id=user.id, capability=CAPABILITY.value))
         session.commit()
         session.refresh(project)
     except Exception:  # noqa: BLE001 — never in the way of the account (see above)

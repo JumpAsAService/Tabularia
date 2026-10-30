@@ -18,6 +18,7 @@ import os
 import uuid
 
 import pytest
+from alembic import command
 from sqlalchemy import create_engine, inspect, text
 from sqlalchemy.engine import make_url
 
@@ -137,3 +138,44 @@ def test_a_database_newer_than_the_code_does_not_stop_the_step(temporary_databas
         c.execute(text("UPDATE alembic_version SET version_num = '9999'"))
     assert m.migra(temporary_database) == {"before": "9999", "after": "9999", "adopted": False}
     assert m.check_revision(temporary_database) == "9999"
+
+
+def test_0034_takes_manage_off_the_personal_folders_and_off_them_only(temporary_database):
+    """A personal folder is told by the line its creation left in the audit, not by its
+    shape: this revision also runs on installations that never had one, where the shape
+    can be a company folder and its grants are somebody's decision."""
+    with temporary_database.begin() as c:
+        command.upgrade(m._config(c), "0033")
+        for uid, email, admin in ((1, "leo@example.com", False), (2, "boss@example.com", True),
+                                  (3, "other@example.com", False), (4, "ann@example.com", False)):
+            c.execute(text("INSERT INTO users (id, email, full_name, is_active, is_superuser, is_observer, created_at) "
+                           "VALUES (:i, :e, '', true, :a, false, now())"), {"i": uid, "e": email, "a": admin})
+        c.execute(text("INSERT INTO groups (id, name, description, is_admin, is_observer, created_at) "
+                       "VALUES (1, 'finance-leads', '', false, false, now())"))
+        for pid, name, owner in ((10, "leo", 1), (11, "Finance", 2), (12, "ann", 4), (13, "boss", 2)):
+            c.execute(text("INSERT INTO projects (id, name, description, owner_id, created_at) "
+                           "VALUES (:i, :n, '', :o, now())"), {"i": pid, "n": name, "o": owner})
+        for pid, uid, gid, capability in (
+            (10, 1, None, "manage"),                                    # the person's own
+            (10, 3, None, "manage"), (10, None, 1, "connect"),          # what the person shared
+            (10, 3, None, "view"),
+            (11, 2, None, "manage"), (11, None, 1, "manage"),           # a company folder of the same shape
+            (12, 4, None, "edit"), (12, 4, None, "manage"),
+            # folder 13: an administrator took the person's grant away, and it stays away
+        ):
+            c.execute(text("INSERT INTO permissions (project_id, user_id, group_id, capability) "
+                           "VALUES (:p, :u, :g, :c)"), {"p": pid, "u": uid, "g": gid, "c": capability})
+        for pid, detail in ((10, '{"parent_id": null, "personal": true, "user_id": 1}'),
+                            (11, '{"parent_id": null}'),
+                            (12, '{"parent_id": null, "personal": true, "user_id": 4, "via": "sign-in"}'),
+                            (13, '{"parent_id": null, "personal": true, "user_id": 2}')):
+            c.execute(text("INSERT INTO audit_logs (ts, actor_label, action, outcome, target_type, target_id, detail) "
+                           "VALUES (now(), '', 'folder.create', 'success', 'folder', :p, :d)"), {"p": pid, "d": detail})
+    m.migra(temporary_database)
+    with temporary_database.connect() as c:
+        rows = c.execute(text("SELECT project_id, user_id, group_id, capability FROM permissions")).all()
+    assert sorted(rows, key=str) == sorted([
+        (10, 1, None, "edit"), (10, 3, None, "view"),                   # no more MANAGE or CONNECT on it
+        (11, 2, None, "manage"), (11, None, 1, "manage"),               # untouched
+        (12, 4, None, "edit"),                                          # no second EDIT
+    ], key=str)

@@ -1,5 +1,8 @@
 """Every person's own folder (services/personal_folders.py): born with the account, seen
-by the person and the administrators only, never lost by mistake."""
+by the person and the administrators only, never lost by mistake, and no way out of the
+installation: no connections, no sharing."""
+import asyncio
+
 import pytest
 from fastapi import FastAPI, HTTPException
 from fastapi.testclient import TestClient
@@ -9,12 +12,14 @@ from app.core.config import OidcSettings, Settings
 from app.core.security import hash_password
 from app.db import seed
 from app.db.session import get_session
-from app.models import AuditLog, Group, Permission, Project, User, UserGroupLink
+from app.models import AuditLog, Connection, Group, Permission, Project, User, UserGroupLink
+from app.models.permission import Capability
 from app.routes import auth as auth_routes
+from app.routes import connections as connection_routes
 from app.routes import permissions as perm_routes
 from app.routes import projects as project_routes
 from app.routes import users as user_routes
-from app.schemas.models import PermissionCreate, ProjectUpdate, UserCreate
+from app.schemas.models import ConnectionCreate, ConnectionTest, PermissionCreate, ProjectCreate, ProjectUpdate, UserCreate
 from app.services import audit, personal_folders, sso
 from app.services import permissions as perm
 from tests.conftest import make_permission, make_project, make_user
@@ -48,9 +53,10 @@ def test_a_new_account_gets_a_folder_named_after_its_email(session):
     folder = _folder_of(session, leo)
     assert folder is not None and folder.name == "leonardtriv"
     assert folder.parent_id is None and folder.owner_id == leo.id
-    # MANAGE: every capability, CONNECT included
-    for cap in ("view", "run", "edit", "connect", "manage"):
+    for cap in ("view", "run", "edit"):
         assert perm.has_capability(session, leo, folder.id, cap)
+    for cap in ("connect", "manage"):
+        assert not perm.has_capability(session, leo, folder.id, cap)
     # in the audit as any folder, by who created the account, and marked personal
     row = session.exec(select(AuditLog).where(AuditLog.action == audit.FOLDER_CREATE)).one()
     assert row.actor_id == boss.id and row.target_id == folder.id and row.target_label == "leonardtriv"
@@ -83,14 +89,71 @@ def test_nobody_else_sees_it_and_the_administrators_do(session):
     assert _listed(session, leo)[mine.id].personal_of == leo.id
 
 
-def test_it_is_shared_as_any_folder(session):
+def test_the_person_works_there(session):
+    boss = _boss(session)
+    leo = _create(session, boss, "leo@example.com")
+    mine = _folder_of(session, leo)
+    grant = session.exec(select(Permission).where(Permission.project_id == mine.id)).one()
+    assert (grant.user_id, grant.capability) == (leo.id, Capability.EDIT.value)
+    for capability in (Capability.VIEW, Capability.RUN, Capability.EDIT):
+        assert perm.has_capability(session, leo, mine.id, capability)
+    assert perm.can_upload(session, leo)
+    # a rename is an edit, and the folder is still the person's
+    project_routes.update_project(mine.id, ProjectUpdate(name="my things"), user=leo, session=session)
+    assert personal_folders.personal_of(session, mine.id) == leo.id
+
+
+def test_the_person_cannot_make_or_try_a_connection_there(session):
+    """A connection may point at any host the workers reach, so CONNECT is the barrier
+    against copying data out (a flow with an Output to one's own server) and against
+    probing the internal network: a right every account is born with is no barrier."""
+    boss = _boss(session)
+    leo = _create(session, boss, "leo@example.com")
+    mine = _folder_of(session, leo)
+    assert not perm.has_capability(session, leo, mine.id, Capability.CONNECT)
+    assert mine.id not in perm.connectable_project_ids(session, leo)
+    fields = {"name": "out", "db_type": "postgresql", "host": "outside.example", "database": "copy", "username": "me"}
+    with pytest.raises(HTTPException) as made:
+        connection_routes.create_connection(mine.id, ConnectionCreate(**fields), request=None,
+                                            user=leo, session=session)
+    with pytest.raises(HTTPException) as tried:
+        asyncio.run(connection_routes.test_draft_connection(mine.id, ConnectionTest(**fields), user=leo,
+                                                            session=session))
+    assert made.value.status_code == tried.value.status_code == 403
+    assert session.exec(select(Connection)).first() is None
+
+
+def test_the_person_cannot_give_it_away_nor_climb(session):
+    """No sharing: with it, a copy of a datasource the person may only read would reach
+    people nobody granted it to; and a grant to themselves would bring CONNECT back."""
+    boss = _boss(session)
+    leo, other = _create(session, boss, "leo@example.com"), _create(session, boss, "other@example.com")
+    mine = _folder_of(session, leo)
+    before = session.exec(select(Permission).where(Permission.project_id == mine.id)).all()
+    for subject, capability in ((other.id, "view"), (leo.id, "connect"), (leo.id, "manage")):
+        with pytest.raises(HTTPException) as e:
+            perm_routes.grant_permission(mine.id, PermissionCreate(user_id=subject, capability=capability),
+                                         request=None, user=leo, session=session)
+        assert e.value.status_code == 403
+    with pytest.raises(HTTPException) as e:
+        project_routes.create_project(ProjectCreate(name="sub", parent_id=mine.id), user=leo, session=session)
+    assert e.value.status_code == 403
+    assert session.exec(select(Permission).where(Permission.project_id == mine.id)).all() == before
+    assert mine.id not in _listed(session, other)
+
+
+def test_an_administrator_can_give_more_on_it(session):
     boss = _boss(session)
     leo, other = _create(session, boss, "leo@example.com"), _create(session, boss, "other@example.com")
     mine = _folder_of(session, leo)
     perm_routes.grant_permission(mine.id, PermissionCreate(user_id=other.id, capability="view"),
-                                 request=None, user=leo, session=session)
+                                 request=None, user=boss, session=session)
     seen = _listed(session, other)
     assert mine.id in seen and seen[mine.id].personal_of == leo.id   # still Leo's, not "mine" for the other
+    perm_routes.grant_permission(mine.id, PermissionCreate(user_id=leo.id, capability="connect"),
+                                 request=None, user=boss, session=session)
+    assert perm.has_capability(session, leo, mine.id, Capability.CONNECT)
+    assert personal_folders.personal_of(session, mine.id) == leo.id
 
 
 def test_service_and_observer_accounts_get_none(session):
@@ -130,7 +193,7 @@ def test_its_person_cannot_delete_move_or_leave_it(session):
     ):
         with pytest.raises(HTTPException) as e:
             attempt()
-        assert e.value.status_code == 409 and "personal folder" in e.value.detail
+        assert e.value.status_code == 403
     assert _folder_of(session, leo).id == mine.id and mine.parent_id is None
 
 
@@ -141,14 +204,17 @@ def test_who_it_was_shared_with_cannot_take_it_away_either(session):
     make_permission(session, user_id=other.id, project_id=mine.id, capability="manage")
     own_grant = session.exec(select(Permission).where(Permission.project_id == mine.id,
                                                       Permission.user_id == leo.id)).one()
-    with pytest.raises(HTTPException):
-        perm_routes.revoke_permission(own_grant.id, request=None, user=other, session=session)
-    with pytest.raises(HTTPException):
-        project_routes.delete_project(mine.id, user=other, session=session)
+    for attempt in (
+        lambda: perm_routes.revoke_permission(own_grant.id, request=None, user=other, session=session),
+        lambda: project_routes.delete_project(mine.id, user=other, session=session),
+    ):
+        with pytest.raises(HTTPException) as e:
+            attempt()
+        assert e.value.status_code == 409 and "personal" in e.value.detail
     # the other grants on it come and go as usual
     theirs = session.exec(select(Permission).where(Permission.project_id == mine.id,
                                                    Permission.user_id == other.id)).one()
-    perm_routes.revoke_permission(theirs.id, request=None, user=leo, session=session)
+    perm_routes.revoke_permission(theirs.id, request=None, user=other, session=session)
 
 
 def test_an_administrator_can_and_the_next_sign_in_brings_a_new_one(session):

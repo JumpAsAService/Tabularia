@@ -42,17 +42,29 @@ It sits at the top level and is named after the part of the email before the @
 already, it takes a number, as copies do (`leonardtriv (1)`). Accounts created before
 this release get theirs at their next sign-in.
 
-The person has MANAGE on it, so every capability, CONNECT included. Nobody else is
-granted anything, and a top-level folder inherits nothing: only the person and the
-administrators see it. In Explore it comes first, with a key on the folder and the tag
-**My folder**; an administrator sees everyone's, after the shared folders, tagged
-**Personal**. The person shares it as any other folder, from its **Folder settings**,
-and can rename it.
+The person has EDIT on it: they upload files there, build flows, datasources, views and
+reports, run and schedule them, and rename the folder. Nobody else is granted anything,
+and a top-level folder inherits nothing: only the person and the administrators see it.
+In Explore it comes first, with a key on the folder and the tag **My folder**; an
+administrator sees everyone's, after the shared folders, tagged **Personal**.
 
-So that it is not lost by mistake, its person (or someone it was shared with) cannot
-delete it, move it under another folder or remove the person's own MANAGE: an
-administrator can. Should an administrator delete it or take that grant away, the
-person gets a new, empty one at their next sign-in.
+The person does **not** have MANAGE, and that is deliberate:
+
+- **no CONNECT**: a connection can point at any host the workers reach, so being able to
+  create one is what lets someone copy data out of the installation or probe the internal
+  network. It stays a right an administrator gives. Data reaches the folder from the
+  connections the person was granted elsewhere;
+- **no sharing and no subfolders**: a folder its person could share would let a copy of a
+  datasource they may only read reach people nobody granted it to.
+
+An administrator can grant more on it, as on any folder: a colleague's access, or
+CONNECT or MANAGE to the person. Python and R scripts, notebooks and Container nodes still
+need the use of their environment or registry, which the folder does not give.
+
+So that it is not lost by mistake, nobody but an administrator can delete it, move it
+under another folder or remove the person's own EDIT, even with MANAGE on it. Should an
+administrator delete it or take that grant away, the person gets a new, empty one at
+their next sign-in.
 
 When the account is deactivated nothing changes. When it is deleted, an empty folder goes
 with it; one holding anything stays, with its content, as an ordinary top-level folder
@@ -61,6 +73,9 @@ the organization, as everywhere else.
 
 Service accounts and accounts that only observe get none: a public demo's guest is one
 account shared by many visitors, and a folder of its own would let any of them write.
+Upgrading from a version where the person held MANAGE lowers that grant to EDIT and
+removes the MANAGE and CONNECT grants on these folders; connections already made there
+stay, and only the administrators see them.
 The creation is in the audit log as `folder.create`, with `"personal": true`.
 
 ### The capabilities

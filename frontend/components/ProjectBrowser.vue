@@ -1091,18 +1091,21 @@ watch(currentId, () => { q.value = ''; kindFilter.value = null; settingsOpen.val
         <RefreshCw :size="13" />
       </button>
 
-      <div class="newwrap">
+      <div v-if="currentId !== null || isSuper" class="newwrap">
         <button class="btn-link" @click="newMenu = !newMenu"><Plus :size="14" /> {{ $t('projectBrowser.newButton') }}</button>
         <div v-if="newMenu" class="menu-backdrop" @click="closeNew" />
         <div v-if="newMenu" ref="newPop" class="menu-pop">
           <template v-if="!engineStep">
-            <div class="menu-label">{{ $t('projectBrowser.newFolderLabel') }}</div>
-            <div class="menu-row">
-              <input v-model="newFolderName" type="text" :placeholder="$t('projectBrowser.namePlaceholder')" @keyup.enter="createFolder" />
-              <button class="primary" :disabled="!newFolderName.trim()" @click="createFolder">{{ $t('projectBrowser.folderButton') }}</button>
-            </div>
+            <!-- as the server asks: MANAGE on the parent, an administrator at the top level -->
+            <template v-if="isSuper || canManage">
+              <div class="menu-label">{{ $t('projectBrowser.newFolderLabel') }}</div>
+              <div class="menu-row">
+                <input v-model="newFolderName" type="text" :placeholder="$t('projectBrowser.namePlaceholder')" @keyup.enter="createFolder" />
+                <button class="primary" :disabled="!newFolderName.trim()" @click="createFolder">{{ $t('projectBrowser.folderButton') }}</button>
+              </div>
+            </template>
             <template v-if="currentId !== null">
-              <div class="menu-sep" />
+              <div v-if="isSuper || canManage" class="menu-sep" />
               <button class="menu-item" @click="engineStep = true">
                 <span class="mi-top"><Workflow :size="14" /> {{ $t('projectBrowser.newFlowButton') }}</span>
               </button>
@@ -1371,7 +1374,7 @@ watch(currentId, () => { q.value = ''; kindFilter.value = null; settingsOpen.val
               </td>
               <td><span class="cap">{{ p.capability }}</span></td>
               <td class="right">
-                <button v-if="!(personalFixed(current) && p.user_id === current.personal_of && p.capability === 'manage')"
+                <button v-if="!(personalFixed(current) && p.user_id === current.personal_of && p.capability === 'edit')"
                         class="mini danger" :aria-label="$t('projectBrowser.revokeTitle')" @click="revoke(p)"><X :size="13" /></button>
               </td>
             </tr>
