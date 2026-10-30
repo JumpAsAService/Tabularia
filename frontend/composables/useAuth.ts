@@ -149,7 +149,10 @@ export function useAuth() {
     }
     try {
       const me = await $fetch<Me>(`${base}/auth/me`, { credentials: 'include' })
-      if (user.value?.id !== me.id) forgetPerUserCaches()
+      // another person in this tab. Not the first answer after a reload, when nobody is known
+      // yet and nothing cached is anyone else's: what the page has loaded meanwhile (the
+      // editor's palette) would go, depending on which answer came first
+      if (user.value && user.value.id !== me.id) forgetPerUserCaches()
       user.value = me
       // at sign-in (and on every load of the app) the gateway learns the language
       // of the interface: the emails it sends this user will speak it
