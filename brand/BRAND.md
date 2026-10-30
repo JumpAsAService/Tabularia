@@ -48,6 +48,14 @@ Inside the app the wordmark beside the mark is live text in the interface's own 
 
 The full mark centred on an Ink tile (56 × 56 units, radius 12.5, mark at 48 units): use it wherever the mark stands alone outside the product (repository, docs, store-like listings, a tile on a dashboard). The apple-touch icon is the same tile square and full-bleed, because iOS rounds it itself. Browser-tab PNG favicons are a small Ink tile with the **reduced** mark, so they read on light and dark tab bars alike.
 
+### Motion
+
+The mark may reveal itself once, on a full load of the page and never on a change of page, in the
+order of its idea: the fragments are there, the flow draws itself from left to right, and the grid
+appears as the flow passes. About 0.6 s, never looping and never blocking anything; with
+reduced motion the mark is simply complete. It does not touch colour, geometry or proportions, and
+the wordmark stays still. Everything else in this file still holds at every instant of it.
+
 ## Colour
 
 | Token | Hex | Role |

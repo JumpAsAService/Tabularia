@@ -402,5 +402,5 @@ The one authored motion moment, used behind the sign-in card only. A single deco
 - **Don't** set `overflow: hidden` on a flow node; the handles overhang by design.
 - **Don't** signal an outcome with colour alone; pair `accent-2` or `danger` with an icon and words.
 - **Don't** load fonts or icons from a CDN at runtime; the font is one self-hosted woff2 and icons are lucide components.
-- **Don't** reuse the ordering field, or add a second ambient animation, inside the working app. The product has one authored motion moment and it is before sign-in.
+- **Don't** reuse the ordering field, or add a second ambient animation, inside the working app. The product has one authored motion moment and it is before sign-in. The mark's reveal is not ambient: about 0.6s, once, on a full load of the page and never on a change of page (`BrandMark.vue`, `brand/BRAND.md`). It blocks nothing, and it is the only thing besides feedback that moves in the app.
 - **Don't** flash a skeleton: never show one for less than 300ms, and never use a full-page spinner where a skeleton fits.
