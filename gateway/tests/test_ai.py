@@ -168,7 +168,8 @@ def test_instructions_name_the_dialect_and_the_language(session, ai_on):
 @pytest.mark.anyio
 async def test_no_model_is_usable_until_the_admin_enables_it(session, ai_on):
     admin, user, _, _ = _catalog(session)
-    assert ai_routes.ai_status(user=user, session=session).model_dump() == {"enabled": True, "models": [], "default_model": None}
+    assert ai_routes.ai_status(user=user, session=session).model_dump() == {
+        "enabled": True, "models": [], "default_model": None, "metadata_only": False, "mcp_metadata_only": False}
     listed = await ai_routes.list_ai_models(user=admin, session=session)
     assert [(m.model_id, m.enabled, m.chat) for m in listed] == [
         ("gpt-oss-120b", False, True), ("mistral-small-3.2-24b-instruct-2506", False, True),

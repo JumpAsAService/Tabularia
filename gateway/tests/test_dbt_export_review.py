@@ -360,7 +360,8 @@ def test_the_plan_says_which_ai_texts_are_kept_for_the_flow_version(session, sce
     _version(session, flow)
     monkeypatch.setattr(dbt_ai, "ai_model", lambda s: None)
     piano = lambda: flows_routes.export_flow_dbt_plan(flow.id, _request(), scene.boss, session)["ai"]
-    assert piano() == {"available": False, "model": None, "stored": {"descriptions": False, "translations": False, "models": []}}
+    assert piano() == {"available": False, "model": None, "metadata_only": False,
+                       "stored": {"descriptions": False, "translations": False, "models": []}}
     dbt_ai._remember(session, flow.id, 1, "describe", {"col:ds:1:id:Int64": "The id", "col:ds:1:x:Int64": ""}, "old-model")
     dbt_ai._remember(session, flow.id, 1, "claim", {"describe": "123"}, "")
     assert piano()["stored"] == {"descriptions": True, "translations": False, "models": ["old-model"]}

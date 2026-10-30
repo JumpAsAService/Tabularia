@@ -97,7 +97,7 @@ export interface DbtExportPlan {
   /** available: the AI assistant is configured and a model is enabled. stored: what the AI wrote
    *  for the flow's CURRENT version (non-empty texts only) and the models that wrote it: a
    *  re-export reuses it without any AI call, also with the AI off (absent from older gateways). */
-  ai?: { available: boolean; model: string | null; stored?: { descriptions: boolean; translations: boolean; models: string[] } }
+  ai?: { available: boolean; model: string | null; metadata_only?: boolean; stored?: { descriptions: boolean; translations: boolean; models: string[] } }
 }
 
 /** The download's options, as the gateway validates them (`DbtOptions`). */

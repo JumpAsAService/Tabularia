@@ -14,7 +14,8 @@ routes, which check everything again (and start the first import at once).
 """
 from __future__ import annotations
 
-from typing import Annotated, Any, Literal, Optional, Union
+from contextlib import contextmanager
+from typing import Annotated, Any, Iterator, Literal, Optional, Union
 
 from fastapi import HTTPException
 from pydantic import BaseModel, Field, ValidationError
@@ -33,6 +34,7 @@ from app.schemas.models import (
     SftpDatasourceCreate,
     SharePointDatasourceCreate,
 )
+from app.services import metadata_only
 from app.services import permissions as perm_service
 from app.services.agent import plans
 from app.services.agent.common import datasource_link, folder_paths, in_thread
@@ -59,12 +61,24 @@ def usable_connection(session: Session, user: User, ctx: ToolContext, connection
     return conn
 
 
+@contextmanager
+def _engine_words_withheld(ctx: ToolContext) -> Iterator[None]:
+    """In metadata-only mode the words of the database or the server behind a connection
+    stay out: they may quote a value."""
+    try:
+        yield
+    except HTTPException as e:
+        if ctx.withholds_data:
+            raise ToolError(f"The connection refused ({e.status_code}). {metadata_only.ERROR_WITHHELD}") from e
+        raise
+
+
 # ── reading what a connection offers ─────────────────────────────────────────
 class ConnectionIdArgs(BaseModel):
     connection_id: int = Field(description="A database connection (list_connections).")
 
 
-@tool("list_tables", title="List a database's tables", args=ConnectionIdArgs, level="read")
+@tool("list_tables", title="List a database's tables", args=ConnectionIdArgs, level="read", reads_data=False)
 async def list_tables(ctx: ToolContext, a: ConnectionIdArgs) -> dict:
     """The tables (and views) a database connection reads, as its own credentials see them: what a datasource of type table can import, and what a SQL script on that connection can query. list_columns gives a table's columns."""
     from app.routes.connections import list_connection_tables
@@ -76,7 +90,8 @@ async def list_tables(ctx: ToolContext, a: ConnectionIdArgs) -> dict:
                             + (" (list_files shows its files)." if conn.db_type in ("s3", "sftp", "sharepoint") else "."))
         return conn.name, await list_connection_tables(conn.id, ctx.request, user=user, session=session)
 
-    name, res = await with_session(ctx, work)
+    with _engine_words_withheld(ctx):
+        name, res = await with_session(ctx, work)
     tables = list(res.get("tables") or [])
     out: dict[str, Any] = {"connection": name, "tables": tables[:MAX_TABLES]}
     if len(tables) > MAX_TABLES:
@@ -88,7 +103,7 @@ class ListColumnsArgs(ConnectionIdArgs):
     table: str = Field(min_length=1, max_length=500, description="A table as list_tables names it.")
 
 
-@tool("list_columns", title="List a table's columns", args=ListColumnsArgs, level="read")
+@tool("list_columns", title="List a table's columns", args=ListColumnsArgs, level="read", reads_data=False)
 async def list_columns(ctx: ToolContext, a: ListColumnsArgs) -> dict:
     """The columns of a table of a database connection, with their types (read from one row)."""
     from app.routes.connections import list_connection_columns
@@ -97,7 +112,8 @@ async def list_columns(ctx: ToolContext, a: ListColumnsArgs) -> dict:
         conn = usable_connection(session, user, ctx, a.connection_id, "reading tables")
         return await list_connection_columns(conn.id, a.table, ctx.request, user=user, session=session)
 
-    res = await with_session(ctx, work)
+    with _engine_words_withheld(ctx):
+        res = await with_session(ctx, work)
     return {"table": a.table, "columns": res.get("columns") or []}
 
 
@@ -110,7 +126,7 @@ class ListFilesArgs(BaseModel):
     format: Literal["auto", "excel", "csv"] = Field("auto", description="sharepoint: which files the path takes.")
 
 
-@tool("list_files", title="List the files a pattern takes", args=ListFilesArgs, level="read")
+@tool("list_files", title="List the files a pattern takes", args=ListFilesArgs, level="read", reads_data=False)
 async def list_files(ctx: ToolContext, a: ListFilesArgs) -> dict:
     """The files an S3 folder and pattern, an SFTP folder and pattern, or a SharePoint path take now: what a datasource of type s3, sftp or sharepoint would import. Check it before planning one."""
     from app.routes import connections as conn_routes
@@ -133,7 +149,8 @@ async def list_files(ctx: ToolContext, a: ListFilesArgs) -> dict:
         raise ToolError(f"«{conn.name}» is a {conn.db_type} connection: list_files reads S3, SFTP and SharePoint ones"
                         + (" (list_tables reads a database)." if _is_database(conn) else "."))
 
-    res = await with_session(ctx, work)
+    with _engine_words_withheld(ctx):
+        res = await with_session(ctx, work)
     files = list(res.get("files") or [])
     out = {k: v for k, v in res.items() if k != "files"}
     out["files"] = files[:MAX_FILES]
@@ -275,7 +292,7 @@ _SOURCE_WORDS = {"table": "the table {text}", "sql": "a SQL query", "s3": "the S
                  "api": "the API call {text}"}
 
 
-@tool("plan_create_datasource", title="Plan a new datasource", args=PlanCreateDatasourceArgs, level="write")
+@tool("plan_create_datasource", title="Plan a new datasource", args=PlanCreateDatasourceArgs, level="write", reads_data=False)
 async def plan_create_datasource(ctx: ToolContext, a: PlanCreateDatasourceArgs) -> dict:
     """Add to the plan: create a datasource that imports from an EXISTING connection — a table or a SQL query of a database, files on S3, SFTP or SharePoint, an HTTP API call. Its first import starts as soon as it is created; plan_schedule (kind datasource, planned_action = this action's n) refreshes it on a schedule. Checked now as the interface checks it: EDIT on the folder, CONNECT on the connection, the name free, the placeholders and the API call checked by the engine. The agent never creates a connection: when the one needed is missing, tell the user. Nothing changes until the plan is confirmed."""
     from app.routes.connections import _engine_inspect, engine_connection_payload
@@ -313,6 +330,8 @@ async def plan_create_datasource(ctx: ToolContext, a: PlanCreateDatasourceArgs) 
         try:
             await _engine_inspect(payload, "validate", source=checked[0])
         except HTTPException as e:
+            if ctx.withholds_data:
+                raise ToolError(f"The engine refuses the source. {metadata_only.ERROR_WITHHELD}") from e
             if e.status_code == 400:  # the engine's words for whoever wrote the source
                 raise ToolError(f"The engine refuses the source: {e.detail}") from e
             raise
@@ -369,7 +388,7 @@ class DatasourceIdArgs(BaseModel):
     datasource_id: int
 
 
-@tool("plan_refresh_datasource", title="Plan a refresh", args=DatasourceIdArgs, level="write")
+@tool("plan_refresh_datasource", title="Plan a refresh", args=DatasourceIdArgs, level="write", reads_data=False)
 async def plan_refresh_datasource(ctx: ToolContext, a: DatasourceIdArgs) -> dict:
     """Add to the plan: refresh a datasource imported from a connection now — it reads its source again and replaces its data when the import succeeds. Nothing runs until the plan is confirmed; then get_run follows the import."""
 

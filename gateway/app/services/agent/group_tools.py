@@ -21,6 +21,7 @@ from app.core.config import get_settings
 from app.models import FlowGroup, Project, Run
 from app.models.permission import Capability
 from app.schemas.models import FlowGroupCell, FlowGroupDefinition, PushmailCell
+from app.services import metadata_only
 from app.services import permissions as perm_service
 from app.services.agent import plans
 from app.services.agent.common import fingerprint, folder_paths, in_thread
@@ -143,10 +144,13 @@ def _cell_view(cell: Optional[FlowGroupCell], label: Any, paths: dict[int, str])
     return out
 
 
-@tool("get_flow_group", title="Read a flow group", args=GroupIdArgs, level="read")
+@tool("get_flow_group", title="Read a flow group", args=GroupIdArgs, level="read", reads_data=False,
+      withholds="it returns no error text of its last run")
 async def get_flow_group(ctx: ToolContext, a: GroupIdArgs) -> dict:
     """A flow group: its folder, schedule, last run and its grid — steps run one after another, the cells of a step at the same time — with what each cell runs: a flow, a datasource's refresh, a saved script, a SQL script, a container image, a Pushmail. To change it, plan_flow_group with its id and the whole new grid."""
     from app.routes import flow_groups as fg_routes
+
+    withheld = ctx.withholds_data
 
     def work(session, user):
         _group(session, user, a.flow_group_id)
@@ -159,7 +163,8 @@ async def get_flow_group(ctx: ToolContext, a: GroupIdArgs) -> dict:
             "id": d.id, "name": d.name, "description": d.description, "folder_id": d.project_id,
             "folder": paths.get(d.project_id, ""), "schedule": d.run_schedule, "next_run_at": d.next_run_at,
             "last_run": {"run_id": last.id, "status": last.status, "at": last.started_at,
-                         **({"error": last.error[:500]} if last.error else {})} if last else None,
+                         **({"error": metadata_only.ERROR_WITHHELD if withheld else last.error[:500]}
+                            if last.error else {})} if last else None,
             "can_edit": d.can_edit, "can_run": d.can_run, "steps": steps, "link": flow_group_link(d.id),
         }
 
@@ -235,7 +240,7 @@ def _definition(steps: list[list[Optional[GroupCellArgs]]], before: FlowGroupDef
         raise ToolError(_words(e)) from e
 
 
-@tool("plan_flow_group", title="Plan a flow group", args=PlanFlowGroupArgs, level="write")
+@tool("plan_flow_group", title="Plan a flow group", args=PlanFlowGroupArgs, level="write", reads_data=False)
 async def plan_flow_group(ctx: ToolContext, a: PlanFlowGroupArgs) -> dict:
     """Add to the plan: create a flow group (folder_id, name, steps) or change a saved one (flow_group_id and what changes: the plan shows which cells come and go). Every cell is checked as the interface checks it: what it runs must be something the user may run (RUN on its folder), a container's image one they may use, a Pushmail's SMTP connection one they may use (CONNECT) with every recipient within its allowed domains. plan_run_flow_group runs it, plan_schedule (kind flow_group) schedules it. Nothing changes until the plan is confirmed."""
     from app.routes import flow_groups as fg_routes
@@ -383,7 +388,7 @@ class PlanRunGroupArgs(BaseModel):
     planned_action: Optional[int] = Field(None, ge=1, description="A group this plan creates: the n of its plan_flow_group action.")
 
 
-@tool("plan_run_flow_group", title="Plan running a flow group", args=PlanRunGroupArgs, level="write")
+@tool("plan_run_flow_group", title="Plan running a flow group", args=PlanRunGroupArgs, level="write", reads_data=False)
 async def plan_run_flow_group(ctx: ToolContext, a: PlanRunGroupArgs) -> dict:
     """Add to the plan: run a flow group once, now — its steps one after another, each cell checked again with the user's rights when it runs. Nothing runs until the plan is confirmed; then get_run follows the run."""
     target = _target(ctx, a.flow_group_id, a.planned_action)

@@ -5,7 +5,8 @@ What reaches the model, and nothing else (the user's choice of 2026-10-24: no re
 the code, the environment's language, version and declared packages, the NAMES of the
 variables the script finds, the names and types of its inputs' columns, and, to fix a
 run that failed, only the error part of its log (`error_excerpt`): a traceback or an R
-error, never what the script printed. No tool reads data.
+error, never what the script printed. No tool reads data. In metadata-only mode
+(services/metadata_only.py) not even that error: it may quote a value.
 
 Its one tool proposes files; when the turn ends the editor receives the proposal and the
 person applies it or not. Nothing is saved or run here.
@@ -114,6 +115,9 @@ class ScriptDeps(ai_agent.ChatDeps):
     output: str = "optional"  # required | optional | none
     saved: bool = False  # a saved script's page, not a Script node
     error: str = ""  # error_excerpt of the last run, when it failed
+    # metadata-only mode, on a run that failed: its exit code, if any, and no error text
+    error_withheld: bool = False
+    exit_code: Optional[int] = None
     proposal: Optional[dict[str, Any]] = None
 
 
@@ -153,6 +157,12 @@ def context(d: ScriptDeps) -> str:
         "on the address in the variable: those libraries read s3:// by themselves with the AWS_* variables set."
     )
     error = f"\nThe last run FAILED with this error (only the error is shown, not the script's output):\n{d.error}\n" if d.error else ""
+    if d.error_withheld:
+        code = f" with exit code {d.exit_code}" if d.exit_code is not None else ""
+        error = (f"\nThe last run FAILED{code}. Its error is withheld, because this installation is in metadata-only mode and "
+                 "an error may quote a value of the data: you cannot see why it failed. Say so if the user asks you to fix "
+                 "it, and ask them to tell you what the log says, leaving out any value.\n")
+    history = f"\n{ai_agent.HISTORY_WITHHELD_CONTEXT}\n" if d.history_withheld else ""
     return f"""{ai_prompts.CONTEXT_HEADER}
 - {ai_prompts.today()}
 - The user writes {where}, in {lang} {d.language_version}, in the environment «{d.environment}».
@@ -162,7 +172,7 @@ def context(d: ScriptDeps) -> str:
 {_inputs_text(d)}
 - Output: {_output_text(d)}
 - {io}
-{error}
+{error}{history}
 The files now ({d.entrypoint or 'no entrypoint'} is the one that runs):
 {files}
 
@@ -178,6 +188,7 @@ script_agent: Agent[ScriptDeps, str] = Agent(
     instructions=_instructions,
     retries=2,
     name="tabularia-script-assistant",
+    capabilities=[ai_agent.StopWhenWithheld()],
 )
 
 

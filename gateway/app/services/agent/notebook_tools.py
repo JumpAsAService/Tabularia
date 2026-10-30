@@ -50,7 +50,7 @@ class NotebookIdArgs(BaseModel):
     notebook_id: int
 
 
-@tool("get_notebook", title="Read a notebook", args=NotebookIdArgs, level="read")
+@tool("get_notebook", title="Read a notebook", args=NotebookIdArgs, level="read", reads_data=False)
 async def get_notebook(ctx: ToolContext, a: NotebookIdArgs) -> dict:
     """A marimo notebook: its folder, its Python environment, who saved the version its app runs (the app reads data with their rights) and its source, the marimo .py file. Unsaved work in marimo's editor is not shown: only that there is some, and whose. To change it, plan_notebook with its id."""
     from app.routes import notebooks as nb_routes
@@ -98,7 +98,7 @@ def _syntax(name: str, source: str) -> None:
         raise ToolError(f"Notebook «{name}»: the source is not valid Python, line {e.lineno}: {e.msg}.") from e
 
 
-@tool("plan_notebook", title="Plan a notebook", args=PlanNotebookArgs, level="write")
+@tool("plan_notebook", title="Plan a notebook", args=PlanNotebookArgs, level="write", reads_data=False)
 async def plan_notebook(ctx: ToolContext, a: PlanNotebookArgs) -> dict:
     """Add to the plan: create a marimo notebook (folder_id, name, environment_id, source) or change a saved one (notebook_id and what changes: the plan shows the difference of the source). Its app will read data with this user's rights, as the author of the version it runs. Refused while someone has the notebook open in marimo's editor. Only where scripting (Kubernetes) is on. Nothing changes until the plan is confirmed."""
     from app.routes import notebooks as nb_routes

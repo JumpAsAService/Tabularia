@@ -39,7 +39,7 @@ from app.deps.permissions import ensure_can
 from app.models.permission import Capability
 from app.models import AiChat, AiModel, AiPrompt, Datasource, User
 from app.services.permissions import is_observer_only
-from app.services import ai_agent, ai_chats, ai_flow_agent, ai_pricing, ai_prompts, ai_script_agent, audit
+from app.services import ai_agent, ai_chats, ai_flow_agent, ai_pricing, ai_prompts, ai_script_agent, audit, metadata_only
 from app.services.agent import REGISTRY as AGENT_TOOLS, chat as agent_chat
 from app.services.ai_models import enabled_model_ids, ensure_configured, is_chat_model, provider_models
 from app.services.engine_policy import pick_engine
@@ -61,16 +61,20 @@ class AiStatusOut(BaseModel):
     enabled: bool
     models: list[str] = []
     default_model: Optional[str] = None
+    # metadata-only mode (services/metadata_only.py): the pages say what a model gets
+    metadata_only: bool = False
+    mcp_metadata_only: bool = False
 
 
 @router.get("/status", response_model=AiStatusOut)
 def ai_status(user: User = Depends(get_current_user), session: Session = Depends(get_session)) -> AiStatusOut:
     cfg = get_settings().ai
+    modes = {"metadata_only": metadata_only.on("chat"), "mcp_metadata_only": metadata_only.on("mcp")}
     if not cfg.enabled:
-        return AiStatusOut(enabled=False)
+        return AiStatusOut(enabled=False, **modes)
     models = enabled_model_ids(session)
     default = cfg.default_model if cfg.default_model in models else (models[0] if models else None)
-    return AiStatusOut(enabled=True, models=models, default_model=default)
+    return AiStatusOut(enabled=True, models=models, default_model=default, **modes)
 
 
 class AiModelOut(BaseModel):
@@ -143,15 +147,17 @@ class AiPromptUpdate(BaseModel):
 
 def _example_context(agent: str, locale: str) -> str:
     """The context with example values in place of the request's ones."""
+    withheld = metadata_only.on("chat")
     if agent == "assistant":
-        return ai_agent.context(None, locale)
+        return ai_agent.context(None, locale, withheld=withheld)
     if agent == "flow":
-        return ai_flow_agent.context(None, locale, "‹flow name›", "op-3")
+        return ai_flow_agent.context(None, locale, "‹flow name›", "op-3", withheld=withheld)
     if agent == "script":
         return ai_script_agent.context(ai_script_agent.ScriptDeps(
             user=None, session_factory=_new_session, engine=None, model_id="", locale=locale,  # type: ignore[arg-type]
             language_version="3.12", environment="‹environment›", packages=["‹packages›"], variables=["‹variables›"],
             files=[{"path": "main.py", "content": "‹the files' content›"}], entrypoint="main.py",
+            error_withheld=withheld,
         ))
     if agent == "title":
         return ai_prompts.language_line(locale, "the title")
@@ -504,6 +510,7 @@ async def _turn_stream(
                                 messages=ModelMessagesTypeAdapter.dump_python(new_items, mode="json"),
                                 model_id=model_id, input_tokens=usage.input_tokens,
                                 output_tokens=usage.output_tokens, requests=usage.requests, cost=cost,
+                                metadata_only=bool(getattr(deps, "metadata_turn", False)),
                             )
                             summary = ai_chats.summary(s_save, s_save.get(AiChat, chat_id))
                     except _NothingToSave:
@@ -530,6 +537,9 @@ async def _turn_stream(
                         _in_flight.add(asyncio.create_task(
                             _name_chat(chat_id, turn.id, model_id, message, locale)
                         ))
+    except metadata_only.TurnOutdated:
+        logger.info("assistant: metadata-only mode came on during a turn (chat %s): it stops", chat_id)
+        yield _sse("error", {"code": "metadata_only", "message": metadata_only.TURN_OUTDATED, **unfinished()})
     except UsageLimitExceeded as e:
         # the same event for steps, tokens and cost: the user needs to know the question was
         # too big, not which counter stopped it
@@ -569,7 +579,8 @@ async def chat(
     chat = (ai_chats.open_session(session, user, body.chat_id, body.model, engine)
             if body.chat_id and not ephemeral else None)
     chat_id = chat.id if chat is not None else None
-    history = ai_chats.history(session, chat, cfg.max_history_messages) if chat is not None else []
+    withheld = metadata_only.on("chat")
+    history = ai_chats.history(session, chat, cfg.max_history_messages, withheld) if chat is not None else []
 
     # The agent reads and builds with the registry's tools (services/agent/chat.py): an
     # observer only reads. What it builds is a plan the person confirms from its card: the
@@ -585,7 +596,8 @@ async def chat(
         focus=ai_agent.readable_focus(session, user, body.focus),
         prompt=ai_prompts.text(session, "assistant"),
         level=level, ephemeral=ephemeral, question=body.message,
-        plans=agent_chat.plans_in_words(session, user, chat_id),
+        plans=agent_chat.plans_in_words(session, user, chat_id, withheld),
+        metadata_turn=withheld, history_withheld=withheld and chat is not None and ai_chats.turns_withheld(session, chat),
     )
     stream = _turn_stream(
         agent=agent_chat.agent, message=body.message, history=history, deps=deps,
@@ -646,13 +658,15 @@ async def flow_assist(
         # a conversation started on a new flow follows it once saved; another flow's is not continued here
         ai_chats.follow_flow(session, chat, flow.id if flow is not None else None)
     chat_id = chat.id if chat is not None else None
-    history = ai_chats.history(session, chat, cfg.max_history_messages) if chat is not None else []
+    withheld = metadata_only.on("chat")
+    history = ai_chats.history(session, chat, cfg.max_history_messages, withheld) if chat is not None else []
     deps = ai_flow_agent.FlowDeps(
         user=user, session_factory=_new_session, engine=engine, model_id=body.model, locale=body.locale,
         request=request, chat_id=chat_id, draft=draft,
         flow_id=flow.id if flow is not None else None, flow_name=flow.name if flow is not None else "",
         project_id=flow.project_id if flow is not None else None, selected=body.selected,
         preview_key=uuid4().hex[:10], prompt=ai_prompts.text(session, "flow"),
+        metadata_turn=withheld, history_withheld=withheld and chat is not None and ai_chats.turns_withheld(session, chat),
     )
 
     def changes() -> dict[str, Any]:
@@ -713,7 +727,8 @@ async def script_assist(
     """One turn of the script editor's assistant. Its proposal of files comes back in
     `done.proposal` (null when it proposed nothing): the editor applies it if the person
     wants. No data reaches the model: the code, the environment, the names of the
-    variables and of the inputs' columns, and the error of a failed run."""
+    variables and of the inputs' columns, and the error of a failed run; in metadata-only
+    mode not even that (`done.error_withheld`: the person is told)."""
     from app.models import ScriptEnvironment, ScriptEnvironmentVersion
     from app.services import script_nodes
 
@@ -734,13 +749,15 @@ async def script_assist(
         version = session.exec(select(ScriptEnvironmentVersion).where(ScriptEnvironmentVersion.environment_id == env.id)
                                .order_by(ScriptEnvironmentVersion.number.desc())).first()
     error = ""
-    if body.run_log or body.run_exit_code is not None:
+    withheld = metadata_only.on("chat")
+    failed_run = bool(body.run_log) or body.run_exit_code is not None
+    if failed_run and not withheld:
         error = ai_script_agent.error_excerpt(body.run_log, env.language)
         if not error and body.run_exit_code is not None:
             error = f"(no error message in the log; the process ended with exit code {body.run_exit_code})"
     chat = ai_chats.open_session(session, user, body.chat_id, body.model, None, kind="script") if body.chat_id else None
     chat_id = chat.id if chat is not None else None
-    history = ai_chats.history(session, chat, cfg.max_history_messages) if chat is not None else []
+    history = ai_chats.history(session, chat, cfg.max_history_messages, withheld) if chat is not None else []
     deps = ai_script_agent.ScriptDeps(
         user=user, session_factory=_new_session, engine=None, model_id=body.model, locale=body.locale,
         request=request, chat_id=chat_id, language=env.language,
@@ -749,12 +766,14 @@ async def script_assist(
         variables=[v for v in body.variables if v], files=[f.model_dump() for f in body.files],
         entrypoint=body.entrypoint, inputs=[i.model_dump() for i in body.inputs], output=body.output,
         saved=body.saved, error=error, prompt=ai_prompts.text(session, "script"),
+        metadata_turn=withheld, history_withheld=withheld and chat is not None and ai_chats.turns_withheld(session, chat),
+        error_withheld=withheld and failed_run, exit_code=body.run_exit_code if withheld else None,
     )
     stream = _turn_stream(
         agent=ai_script_agent.script_agent, message=body.message, history=history, deps=deps,
         model=ai_agent.build_model(body.model), model_id=body.model, user=user, engine=None,
         ephemeral=False, chat_id=chat_id, locale=body.locale, kind="script",
-        extra_done=lambda: {"proposal": deps.proposal},
+        extra_done=lambda: {"proposal": deps.proposal, "error_withheld": deps.error_withheld},
     )
     return StreamingResponse(stream, media_type="text/event-stream", headers=_SSE_HEADERS)
 

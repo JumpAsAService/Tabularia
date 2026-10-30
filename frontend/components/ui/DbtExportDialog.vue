@@ -330,7 +330,7 @@ const aiHint = computed(() => {
   if (choices.some((k) => ai.stored?.[k])) for (const m of ai.stored?.models ?? []) models.add(m)
   if (ai.available && ai.model && choices.some((k) => !ai.stored?.[k])) models.add(ai.model)
   const model = [...models].sort().join(', ')
-  if (ai.available) return t('dbtExportDialog.aiHint', { model: model || ai.model || '' })
+  if (ai.available) return t(ai.metadata_only ? 'dbtExportDialog.aiHintMetadataOnly' : 'dbtExportDialog.aiHint', { model: model || ai.model || '' })
   return model ? t('dbtExportDialog.aiStoredHint', { model }) : t('dbtExportDialog.aiStoredHintUnnamed')
 })
 

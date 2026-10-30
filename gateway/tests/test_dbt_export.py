@@ -735,9 +735,9 @@ def test_the_plan_says_whether_the_ai_is_there(session, scene, monkeypatch):
     flow = _flow_with_two_outputs(session, scene)
     nothing = {"descriptions": False, "translations": False, "models": []}   # what is kept for the version (#55 #59)
     monkeypatch.setattr(dbt_ai, "ai_model", lambda s: None)
-    assert flows_routes.export_flow_dbt_plan(flow.id, _request(), scene.boss, session)["ai"] == {"available": False, "model": None, "stored": nothing}
+    assert flows_routes.export_flow_dbt_plan(flow.id, _request(), scene.boss, session)["ai"] == {"available": False, "model": None, "metadata_only": False, "stored": nothing}
     monkeypatch.setattr(dbt_ai, "ai_model", lambda s: "m-1")
-    assert flows_routes.export_flow_dbt_plan(flow.id, _request(), scene.boss, session)["ai"] == {"available": True, "model": "m-1", "stored": nothing}
+    assert flows_routes.export_flow_dbt_plan(flow.id, _request(), scene.boss, session)["ai"] == {"available": True, "model": "m-1", "metadata_only": False, "stored": nothing}
 
 
 @pytest.mark.parametrize("db_type", ["oracle", "sqlserver"])

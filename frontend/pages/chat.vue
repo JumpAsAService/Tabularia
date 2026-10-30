@@ -12,7 +12,7 @@ import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 import {
   Sparkles, Send, Square, Plus, Database, Search, Check, FileText,
-  CircleAlert, ChevronRight, ShieldAlert, History, Trash2, Download,
+  CircleAlert, ChevronRight, ShieldAlert, ShieldCheck, History, Trash2, Download,
 } from 'lucide-vue-next'
 import { errMessage, useApi } from '~/composables/useApi'
 import MiniChart from '~/components/ui/MiniChart.vue'
@@ -142,17 +142,20 @@ const shown = computed(() => {
 const described = (d: DatasourceInfo) => d.described_columns
 const dsName = (id: any) => datasources.value.find((d) => d.id === Number(id))?.name ?? `#${id}`
 // the fourth asks to build: not offered to whom only reads
-const examples = computed(() => [t('chat.example1'), t('chat.example2'), t('chat.example3'),
+const metadataOnly = computed(() => !!status.value?.metadata_only)
+const examples = computed(() => [t('chat.example1'),
+  ...(metadataOnly.value ? [t('chat.metadataExample2'), t('chat.metadataExample3')] : [t('chat.example2'), t('chat.example3')]),
   ...(noHistory.value ? [] : [t('chat.example4')])])
 
 onMounted(async () => {
-  readConsent()
   try {
     status.value = await ai.status()
     model.value = status.value.default_model ?? status.value.models[0] ?? ''
   } catch (e) {
     statusError.value = errMessage(e)
   }
+  // after the state: the dialog's text depends on it
+  readConsent(metadataOnly.value)
   try {
     // a FRESH catalog (not the session's cached one): the engines' policy may have changed
     engines.value = await api.engines()
@@ -271,8 +274,10 @@ async function send(text?: string) {
           if (done.plan) live.plan = done.plan
           void refreshChats()
         },
-        onError: (msg, _code, extra) => {
+        onError: (msg, code, extra) => {
           live.error = msg
+          // the mode came on during this turn: the page says so from now on, and its dialog asks again
+          if (code === 'metadata_only') ai.status().then((s) => { status.value = s; readConsent(metadataOnly.value) }).catch(() => {})
           // a turn stopped halfway may have opened the conversation and proposed a plan already
           if (extra?.chat_id) chatId.value = extra.chat_id
           if (extra?.plan) live.plan = extra.plan
@@ -462,7 +467,7 @@ watch(draft, async () => {
 <template>
   <AppShell fluid>
     <!-- the gate: the chat is not used until one has read who one is talking to -->
-    <AiDisclosure :open="accepted === false" @accept="acceptConsent" />
+    <AiDisclosure :open="accepted === false" :metadata-only="metadataOnly" @accept="acceptConsent" />
     <div class="chat">
       <!-- ── catalog: what the assistant can read ───────────────── -->
       <details class="rail" open>
@@ -577,7 +582,7 @@ watch(draft, async () => {
 
           <div v-else-if="!turns.length" class="empty">
             <h2>{{ $t('chat.emptyTitle') }}</h2>
-            <p class="muted">{{ $t('chat.emptyBody') }}</p>
+            <p class="muted">{{ metadataOnly ? $t('chat.metadataEmptyBody') : $t('chat.emptyBody') }}</p>
             <div class="examples">
               <button v-for="ex in examples" :key="ex" class="example" type="button" :disabled="!ready" @click="send(ex)">
                 {{ ex }} <ChevronRight :size="13" />
@@ -675,6 +680,7 @@ watch(draft, async () => {
             </label>
             <span v-if="focus.length" class="muted">{{ $t('chat.focusCount', { n: focus.length }) }}</span>
           </div>
+          <p v-if="metadataOnly" class="ai-notice mode"><ShieldCheck :size="12" aria-hidden="true" /> {{ $t('chat.metadataOnly') }}</p>
           <p class="ai-notice"><Sparkles :size="12" aria-hidden="true" /> {{ $t('aiCompliance.disclaimer') }}</p>
         </form>
       </section>
@@ -753,6 +759,9 @@ watch(draft, async () => {
 /* the AI Act notice: always on screen under the box where the user writes */
 .ai-notice { display: flex; align-items: center; justify-content: center; gap: 6px; margin: 8px 0 0; font-size: 12px; color: var(--muted); text-align: center; }
 .ai-notice svg { flex: none; color: var(--accent-hi); }
+/* metadata-only mode: two lines, under the box and as wide as it */
+.ai-notice.mode { max-width: 780px; margin-inline: auto; justify-content: flex-start; align-items: flex-start; text-align: left; }
+.ai-notice.mode svg { margin-top: 2px; }
 
 @media (max-width: 900px) {
   .chat { grid-template-columns: 1fr; height: auto; min-height: calc(100dvh - 52px); }

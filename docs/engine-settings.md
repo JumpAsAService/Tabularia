@@ -107,6 +107,7 @@ Container node) or greyed out (an engine that is not configured).
 
 | Setting | Variable | Panel range | Applies |
 |---|---|---|---|
+| Metadata-only mode | `AI__METADATA_ONLY` | on / off | live |
 | Model proposed first | `AI__DEFAULT_MODEL` | text | live |
 | Rows of an assistant's query | `AI__MAX_RESULT_ROWS` | 1 – 2,000 | live |
 | Model rounds per message | `AI__MAX_REQUESTS` | 1 – 50 | live |
@@ -125,6 +126,7 @@ Container node) or greyed out (an engine that is not configured).
 |---|---|---|---|
 | MCP server | `MCP__ENABLED` | on / off | live |
 | Plans confirmed only in Tabularia | `MCP__CONFIRM_IN_TABULARIA_ONLY` | on / off | live |
+| Metadata-only mode for MCP | `MCP__METADATA_ONLY` | on / off | live |
 
 **dbt export**
 

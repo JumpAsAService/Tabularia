@@ -105,6 +105,7 @@ ITEMS: tuple[Item, ...] = (
     # ── webhooks and SIEM ──
     Item("webhooks.timeout_seconds", "webhooks", "float", "seconds", 1, 60),
     # ── AI assistant ──
+    Item("ai.metadata_only", "ai", "bool"),
     Item("ai.default_model", "ai", "str", max_length=200),
     Item("ai.max_result_rows", "ai", "int", "rows", 1, 2000),
     Item("ai.max_requests", "ai", "int", "requests", 1, 50),
@@ -119,6 +120,7 @@ ITEMS: tuple[Item, ...] = (
     # ── agents over MCP (docs/specs/mcp-agent.md) ──
     Item("mcp.enabled", "mcp", "bool"),
     Item("mcp.confirm_in_tabularia_only", "mcp", "bool"),
+    Item("mcp.metadata_only", "mcp", "bool"),
     # ── dbt export, previews, uploads, backups, monitoring, lineage ──
     Item("engine.dbt_export_timeout_seconds", "dbt", "float", "seconds", 10, 3600),
     Item("preview.default_sample_rows", "previews", "int", "rows", 0, 10_000_000),

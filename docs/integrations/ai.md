@@ -19,6 +19,7 @@ audit it.
 | Instructions | six system prompts, editable in Administration → AI models → **Agent instructions** |
 | Costs | estimated per answer; caps per answer, per person per day, per installation per day |
 | Audit | every query on data, every model enabled or disabled, every instruction changed |
+| Sending no data | [metadata-only mode](#metadata-only-mode): two switches, one for these uses and one for MCP |
 
 ## Where the AI is used
 
@@ -44,7 +45,8 @@ the names and types of the columns and the error of a failed run: never a row of
 
 **The data and flow assistants do send rows.** As many as a query or a preview returns,
 within the caps above. Pick the provider accordingly, and keep personal data out of the
-datasources whose readers use the assistant.
+datasources whose readers use the assistant, or turn on
+[metadata-only mode](#metadata-only-mode).
 
 **What the assistants can change.** The assistant of the Assistant page changes nothing
 by itself: what it builds — flows, their runs and schedules, and the other objects its
@@ -58,6 +60,82 @@ whole files that the person applies or discards; it never saves or runs the scri
 ![A plan card on the Assistant page: create a flow with its steps and first rows, then schedule it, with Confirm, Change and Cancel](../media/guide/ai/agent-plan-card.png)
 
 *A plan waiting for **Confirm** on the Assistant page: nothing has changed yet ([the example](../capabilities/ask-your-data.md#asking-it-to-build)).*
+
+## Metadata-only mode
+
+With this mode on, **no value of a row of data goes to a model**. There are two switches,
+both off by default and both changed live in Administration → Settings, with a line in the
+audit log; every gateway replica applies a change within 10 seconds:
+
+| Variable | Covers | Whose model |
+|---|---|---|
+| `AI__METADATA_ONLY` | the chat, the flow assistant, the script assistant, the dbt export | the one configured in Tabularia |
+| `MCP__METADATA_ONLY` | the [MCP server](../specs/mcp-agent.md) | the client's, outside the administrator's control |
+
+Administration → AI models shows the state of both.
+
+| Goes to the model | Does not |
+|---|---|
+| names of datasources, folders, columns, flows, connections, tables and files | sample rows, query results, previews |
+| types, row counts, the descriptions people wrote | aggregates and charts: a total is a value of the data |
+| the structure of flows, flow groups, SQL scripts and notebooks, with their schedules | the text of errors of the engine, of runs and of connections: `could not convert 'abc'` quotes one |
+| the SQL saved in a script or a datasource | a refresh's notes (the values it did not find; their count goes) |
+| for the script assistant, the code and the exit code of a failed run | for the script assistant, the error of a failed run |
+
+The barrier is in the tools, not in a prompt, so no [agent's instructions](#the-agents-instructions)
+can open it. Each tool declares whether it returns values of the data: those that do are not
+offered, and calling one over MCP anyway is refused; those that hold both, such as
+`describe_datasource`, leave the data out. Here is what changes for each use:
+
+- **Chat**: the dialog at the start says the mode is on, and asks to be read again when an
+  administrator changes the mode. The model is told it cannot read data, so it says so instead
+  of inventing figures. It can still explain what a datasource holds from its descriptions,
+  write SQL for the person to run, and build. There are no result tables under its answers.
+  A plan's card still shows the person the first rows: they never go to the model, nor does
+  whether the query of a planned SQL script fails.
+- **Flow assistant**: it adds and changes steps without any preview, neither rows nor columns
+  nor the preview's error come back (the columns of a pivot are values, and whether a step
+  fails can be made to depend on one). The person checks the result on the canvas.
+- **Script assistant**: it loses the help on a failed run: the editor says so, and the person
+  describes the problem in their own words.
+- **dbt export**: columns are described from their name and type. Descriptions already written
+  from sample values before the mode came on stay in the project: they are not sent again.
+- **Conversations**: the turns of a conversation made outside the mode stop going to the model,
+  whole (a tool's result, the SQL the model wrote after reading it, what it answered, the
+  choices of a card), so the model does not remember them, and says so. The person still reads
+  them on the page and can still download a past result. Turns made in the mode go back as usual.
+  Turning the mode off sends everything back again.
+- **A turn in progress** when the mode comes on stops before its next request to the model,
+  with a message saying so. One begun in the mode stays in it to its end.
+
+### What stays visible
+
+The mode keeps the values of your rows from the model. It cannot keep from it what people
+**wrote into the structure**, which is what the model needs in order to work on it:
+
+- constants in the settings of a flow: `country = 'IT'` in a filter, a value in a `fill_null`,
+  the literals of a computed column;
+- constants in SQL: a saved script, the query of a datasource, a post-SQL;
+- the text of descriptions, of a note on the canvas, of a Pushmail or an email Output (subject,
+  body, recipients), the parameters saved with a report in a flow group, the names of the
+  variables of a script;
+- whatever the person types in the conversation;
+- names that are values: the column a pivot made out of a value and published in a datasource, a
+  file called after a customer, a table named after a client.
+
+If those hold something confidential, the mode does not protect it.
+
+It does not close every side door either, and these are decisions, not oversights:
+
+- **Row counts and the state of a run go**, on purpose. A flow that filters on a guessed value,
+  or fails only when a value is there, and is run after the person confirms its plan, will show
+  how many rows it wrote and whether it failed.
+- **`MCP__METADATA_ONLY` covers `/mcp`.** An API token also works on the rest of Tabularia's API,
+  where it reads what its owner may read. A client that hands its model a generic HTTP tool and
+  the token is outside this barrier: give MCP clients a token only through their MCP
+  configuration, and a service account with only the folders it needs.
+- A page opened before an administrator changes the mode keeps showing the old state until it is
+  reloaded. The gateway applies the mode in force, whatever the page says.
 
 ### Permissions of each use
 
@@ -130,7 +208,7 @@ provider's invoice. A dash means the model could not be priced, which is not zer
 | `AI__MAX_COST_PER_DAY_USD` | 0 (none) | dollars per person per day |
 | `AI__MAX_COST_PER_DAY_TOTAL_USD` | 0 (none) | dollars for the whole installation per day |
 | `AI__MAX_RESULT_ROWS` | 200 | rows of a data assistant query, to the model and to the chat |
-| `AI__MAX_HISTORY_MESSAGES` | 60 | past messages replayed to the model at each question |
+| `AI__MAX_HISTORY_MESSAGES` | 60 | past messages replayed to the model at each question ([metadata-only mode](#metadata-only-mode): only those of turns made in it) |
 | `AI__DBT_EXPORT_TIMEOUT_SECONDS` | 180 | seconds for all the AI calls of one dbt export |
 
 The daily caps are checked before a question is sent; once reached, the person (or
@@ -185,6 +263,8 @@ conversation reopens with its flow.
   says «No model enabled»; nothing is sent.
 - **One use**: there is no switch per use or per group. Restricting what the data
   assistant can read is done with folder permissions, as for everything else.
+- **Only the data**: [metadata-only mode](#metadata-only-mode) keeps the assistants on, with
+  no value of a row going to the model.
 
 ## Audit
 

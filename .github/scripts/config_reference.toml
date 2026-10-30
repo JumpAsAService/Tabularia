@@ -444,6 +444,9 @@ text = "Model round-trips per message of the data chat: the cap on its tool-call
 [var.AI__MAX_FLOW_REQUESTS]
 text = "The same for the assistants that build — the flow editor's, and the Assistant page's for whoever may make changes — which take a round-trip for every step they build and check."
 
+[var.AI__METADATA_ONLY]
+text = "On, no value of a row of data reaches the model configured here: the chat, the flow and script assistants and the dbt export get names, types, descriptions, row counts and structure, with no query, preview, sample or error text. Values people typed in filters, SQL and descriptions still go. See [AI in Tabularia](integrations/ai.md#metadata-only-mode)."
+
 [var.AI__MAX_HISTORY_MESSAGES]
 text = "Past messages of a conversation replayed to the model: higher remembers more and costs more per turn."
 
@@ -471,6 +474,9 @@ text = "Turns the MCP server on. Off, `/mcp` answers 404 and the API tokens keep
 
 [var.MCP__CONFIRM_IN_TABULARIA_ONLY]
 text = "On, an agent cannot apply its own plans (`confirm_plan` refuses with the plan's link): a person signed in to Tabularia confirms each plan on its page."
+
+[var.MCP__METADATA_ONLY]
+text = "On, the MCP tools that read values are neither offered nor callable, and the others leave out rows and error text. It covers `/mcp` only: an API token can still read data on the rest of the API. See [AI in Tabularia](integrations/ai.md#metadata-only-mode)."
 
 [var.SCHEDULING__WORKER_CAPACITY]
 text = "Flow runs one worker is assumed to carry at once: used only to highlight the crowded minutes in the schedule load heatmap. Match it to the run workers' `CELERY__WORKER_CONCURRENCY`."

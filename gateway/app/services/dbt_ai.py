@@ -18,7 +18,12 @@ version is asked once; one export at a time asks for a version, on any gateway (
 claim row), and what is stored wins over what an export just got; the README names
 the models that wrote the stored texts. Every AI call of one export shares one budget
 (AI__DBT_EXPORT_TIMEOUT_SECONDS), under the ingress' timeout, and has the assistant's
-per-turn limits; what a call cost reaches ai_spend even when it fails."""
+per-turn limits; what a call cost reaches ai_spend even when it fails.
+
+In metadata-only mode (services/metadata_only.py) the AI gets no values: the columns go by
+name and type, and a translation the engine discarded comes back without the engine's
+words. What was written from sample values before the mode came on stays in the zip: it is
+not sent to the model."""
 from __future__ import annotations
 
 import asyncio
@@ -39,7 +44,7 @@ from sqlmodel import Session, select
 from app.core.config import get_settings
 from app.core.engine_client import get_engine_client
 from app.models import Datasource, DbtAiText, Flow, FlowVersion, User
-from app.services import ai_chats, ai_pricing, ai_prompts
+from app.services import ai_chats, ai_pricing, ai_prompts, metadata_only
 from app.services.ai_models import enabled_model_ids
 from app.services.dbt_export import DbtExportError
 
@@ -393,15 +398,16 @@ async def _describe_missing(session: Session, user: User, flow: Flow, version: i
     _check_caps(session, user)
     # the few sample values, for the columns to describe (one read per datasource)
     samples: dict[int, dict[str, list[str]]] = {}
-    for v in missing:
-        m = re.match(r"col:ds:(\d+):", v["key"])
-        if not m:
-            continue
-        ds_id = int(m.group(1))
-        if ds_id not in samples:
-            ds = session.get(Datasource, ds_id)
-            samples[ds_id] = await _samples_within(ds, deadline) if ds is not None and ds.key else {}
-        v["samples"] = samples[ds_id].get(v["column"], [])
+    if not metadata_only.on("chat"):
+        for v in missing:
+            m = re.match(r"col:ds:(\d+):", v["key"])
+            if not m:
+                continue
+            ds_id = int(m.group(1))
+            if ds_id not in samples:
+                ds = session.get(Datasource, ds_id)
+                samples[ds_id] = await _samples_within(ds, deadline) if ds is not None and ds.key else {}
+            v["samples"] = samples[ds_id].get(v["column"], [])
     texts = await _ask(model_id, missing, session, user, deadline)
     remaining = [v for v in missing if v["key"] not in texts]
     if remaining:
@@ -423,10 +429,17 @@ async def _samples_within(ds: Datasource, deadline: float) -> dict[str, list[str
         raise _expired() from e
 
 
+NO_SAMPLES = ("No sample values are given: this installation is in metadata-only mode. Describe each column from its name and "
+              "type, and say plainly when its meaning is not clear from them.")
+
+
 async def _ask(model_id: str, items: list[dict], session: Session, user: User, deadline: float) -> dict[str, str]:
     """The descriptions the AI writes for `items`, by key: an item its answer leaves out,
     or answers with nothing, is not there."""
-    outcome = await _run(model_id, _Descriptions, ai_prompts.text(session, "dbt_describe"), json.dumps({"items": items}, ensure_ascii=False),
+    instructions = ai_prompts.text(session, "dbt_describe")
+    if metadata_only.on("chat"):
+        instructions = ai_prompts.compose(instructions, NO_SAMPLES)
+    outcome = await _run(model_id, _Descriptions, instructions, json.dumps({"items": items}, ensure_ascii=False),
                           session, user, deadline)
     waits = {v["key"] for v in items}
     return {v.key: text for v in (outcome.items or []) if v.key in waits and (text := _clean(v.description))}
@@ -490,7 +503,9 @@ async def translate(session: Session, user: User, flow: Flow, params: dict,
         _check_caps(session, user)
         question = sql
         if discarded is not None:
-            question += (f"\n\n-- Your previous translation was rejected: {discarded[1]}\n-- Previous translation:\n"
+            # the engine's words may quote a value of the data
+            why = "the engine's words are withheld" if metadata_only.on("chat") else discarded[1]
+            question += (f"\n\n-- Your previous translation was rejected: {why}\n-- Previous translation:\n"
                         + "\n".join("-- " + r for r in discarded[0][:5000].splitlines()))
         instructions = ai_prompts.compose(ai_prompts.text(session, "dbt_translate"), translation_context(source, target, columns))
         outcome = await _run(model_id, _Translation, instructions, question, session, user, deadline)

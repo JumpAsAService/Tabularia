@@ -15,10 +15,10 @@ from sqlmodel import select
 
 from app.models import Connection, User
 from app.models.permission import Capability
-from app.services import ai_agent, ai_flow_agent
+from app.services import ai_agent, ai_flow_agent, metadata_only
 from app.services import permissions as perm_service
 from app.services.agent.common import datasource_link, flow_link, folder_paths, in_thread
-from app.services.agent.registry import ToolContext, tool
+from app.services.agent.registry import ToolContext, ToolError, tool
 
 MAX_FOLDERS = 300
 MAX_CONNECTIONS = 200
@@ -52,7 +52,7 @@ class SearchArgs(BaseModel):
     limit: int = Field(30, ge=1, le=100)
 
 
-@tool("search", title="Search the catalog", args=SearchArgs, level="read")
+@tool("search", title="Search the catalog", args=SearchArgs, level="read", reads_data=False)
 async def search(ctx: ToolContext, a: SearchArgs) -> dict:
     """Find objects by name across the catalog: folders, flows, flow groups (group), datasources, saved views (view), Python/R scripts (script), SQL scripts (sql), notebooks, reports and connections. Only what this user can see. Each result has its id, its folder and the link that opens it in Tabularia."""
     from app.routes.search import search_everything
@@ -80,7 +80,7 @@ class NoArgs(BaseModel):
     pass
 
 
-@tool("list_folders", title="List folders", args=NoArgs, level="read")
+@tool("list_folders", title="List folders", args=NoArgs, level="read", reads_data=False)
 async def list_folders(ctx: ToolContext, a: NoArgs) -> dict:
     """The folders this user can read, with their path and what the user may do there: `can_run` (run and schedule flows), `can_edit` (create and change flows, write datasources)."""
 
@@ -103,7 +103,7 @@ class ListDatasourcesArgs(BaseModel):
     search: str = Field("", max_length=200, description="Words matched against name and description; empty lists everything.")
 
 
-@tool("list_datasources", title="List datasources", args=ListDatasourcesArgs, level="read")
+@tool("list_datasources", title="List datasources", args=ListDatasourcesArgs, level="read", reads_data=False)
 async def list_datasources(ctx: ToolContext, a: ListDatasourcesArgs) -> dict:
     """List the datasources this user can read, each with the description its owners wrote. `search` is matched word by word against name and description, ignoring case, underscores and dashes; leave it empty to list everything. If nothing matches, everything available is returned with a note."""
     res = await ai_agent.list_datasources(_assistant(ctx), a.search)
@@ -116,7 +116,8 @@ class DescribeDatasourceArgs(BaseModel):
     datasource_id: int
 
 
-@tool("describe_datasource", title="Describe a datasource", args=DescribeDatasourceArgs, level="read")
+@tool("describe_datasource", title="Describe a datasource", args=DescribeDatasourceArgs, level="read", reads_data=False,
+      withholds="it returns no sample rows")
 async def describe_datasource(ctx: ToolContext, a: DescribeDatasourceArgs) -> dict:
     """Columns (name, type, and the curated description of what each field means), row count and a few sample rows of one datasource."""
     return await ai_agent.describe_datasource(_assistant(ctx), a.datasource_id)
@@ -139,7 +140,7 @@ class QueryDatasourceArgs(BaseModel):
     chart_title: Optional[str] = None
 
 
-@tool("query_datasource", title="Query a datasource", args=QueryDatasourceArgs, level="read")
+@tool("query_datasource", title="Query a datasource", args=QueryDatasourceArgs, level="read", reads_data=True)
 async def query_datasource(ctx: ToolContext, a: QueryDatasourceArgs) -> dict:
     """Run ONE read-only SELECT on a datasource. The table is named `self` (e.g. `SELECT paese, COUNT(*) AS n FROM self GROUP BY paese ORDER BY n DESC`). Returns columns, rows (capped) and whether the result was truncated.
 
@@ -154,7 +155,7 @@ class ListConnectionsArgs(BaseModel):
     kind: Optional[str] = Field(None, max_length=20, description="A connection type: postgresql, mysql, clickhouse, oracle, sqlserver, s3, sftp, smtp, sharepoint, api…")
 
 
-@tool("list_connections", title="List connections", args=ListConnectionsArgs, level="read")
+@tool("list_connections", title="List connections", args=ListConnectionsArgs, level="read", reads_data=False)
 async def list_connections(ctx: ToolContext, a: ListConnectionsArgs) -> dict:
     """The connections this user may use (CONNECT permission on their folder): id, name, type and folder — never an address, a user name or a secret. An SMTP connection says the domains it may send to (empty = any). The agent never creates or changes a connection: when the right one is missing, tell the user and give them `add_link`."""
 
@@ -189,7 +190,7 @@ async def list_connections(ctx: ToolContext, a: ListConnectionsArgs) -> dict:
 
 
 # ── scripting environments ────────────────────────────────────────────────────
-@tool("list_environments", title="List scripting environments", args=NoArgs, level="read")
+@tool("list_environments", title="List scripting environments", args=NoArgs, level="read", reads_data=False)
 async def list_environments(ctx: ToolContext, a: NoArgs) -> dict:
     """The Python and R environments this user may run scripts and notebooks with: language, version, whether it is ready, the packages it holds and the names of its variables."""
     from app.routes.scripting import editor_environments
@@ -224,7 +225,7 @@ def describe_flow(definition: str) -> dict:
     return {"nodes": [ai_flow_agent._summary(draft, n) for n in draft.nodes], "ends_of_chains": ends}
 
 
-@tool("get_flow", title="Read a flow", args=FlowIdArgs, level="read")
+@tool("get_flow", title="Read a flow", args=FlowIdArgs, level="read", reads_data=False)
 async def get_flow(ctx: ToolContext, a: FlowIdArgs) -> dict:
     """A saved flow: its folder, engines, schedule, last run and every node with its id, kind, settings and what it reads (`input`, `right_input`). To change it, open a draft with flow_draft_open."""
     from app.routes import flows as flows_routes
@@ -247,7 +248,9 @@ async def get_flow(ctx: ToolContext, a: FlowIdArgs) -> dict:
     return await in_thread(ctx, work)
 
 
-def run_summary(r: Any) -> dict:
+def run_summary(r: Any, withheld: bool = False) -> dict:
+    """A run for the model. `withheld` (metadata-only mode): that it failed, not why: an
+    error may quote a value of the data."""
     out: dict[str, Any] = {"id": r.id, "kind": r.kind, "status": r.status, "trigger": r.trigger_type,
                            "started_at": r.started_at, "finished_at": r.finished_at}
     for key in ("flow_id", "datasource_id", "flow_group_id", "sql_script_id", "saved_script_id", "rows_written",
@@ -260,7 +263,7 @@ def run_summary(r: Any) -> dict:
         if value:
             out[key] = value
     if r.error:
-        out["error"] = r.error[:500]
+        out["error"] = metadata_only.ERROR_WITHHELD if withheld else r.error[:500]
     progress = getattr(r, "progress", None)
     if progress is not None:
         out["progress"] = progress.model_dump(exclude_none=True)
@@ -274,17 +277,21 @@ class ListRunsArgs(BaseModel):
     limit: int = Field(20, ge=1, le=100)
 
 
-@tool("list_runs", title="List runs", args=ListRunsArgs, level="read")
+@tool("list_runs", title="List runs", args=ListRunsArgs, level="read", reads_data=False,
+      withholds="it returns no error text, and `search` is refused because it reads the errors")
 async def list_runs(ctx: ToolContext, a: ListRunsArgs) -> dict:
     """The latest runs this user can see, newest first: flows, refreshes, scripts, SQL scripts, flow groups. Filter by flow, status (FAILURE to find what broke) or text. get_run gives one run's whole error."""
     from app.routes import runs as runs_routes
 
+    withheld = ctx.withholds_data
+    if withheld and a.search:
+        raise ToolError(metadata_only.SEARCH_WITHHELD)
     if a.flow_id is not None:
         # the flow's runs are reconciled with the engine, as the editor's history does
         with ctx.session_factory() as session:
             user = session.get(User, ctx.user.id) or ctx.user
             runs = await runs_routes.list_runs(a.flow_id, user=user, session=session)
-            items = [run_summary(r) for r in runs if not a.status or r.status == a.status]
+            items = [run_summary(r, withheld) for r in runs if not a.status or r.status == a.status]
         return {"runs": items[:a.limit], "link": flow_link(a.flow_id)}
 
     def search(session, user):
@@ -292,14 +299,26 @@ async def list_runs(ctx: ToolContext, a: ListRunsArgs) -> dict:
                                        session=session)
 
     page = await in_thread(ctx, search)
-    return {"runs": [run_summary(r) for r in page.items], "total": page.total, "link": "/runs"}
+    return {"runs": [run_summary(r, withheld) for r in page.items], "total": page.total, "link": "/runs"}
 
 
 class RunIdArgs(BaseModel):
     run_id: int
 
 
-@tool("get_run", title="Read a run", args=RunIdArgs, level="read")
+def _without_values(key: str, value: Any) -> Any:
+    """A run's record in metadata-only mode. An output's `error` is the words of what it
+    wrote to, which may quote a value; a refresh's notes name the values it did not find:
+    of those, the counts."""
+    if not isinstance(value, dict):
+        return None
+    if key == "notes":
+        return {k: value[k] for k in ("missing_count", "duplicate_keys") if k in value}
+    return {k: v for k, v in value.items() if k != "error"}
+
+
+@tool("get_run", title="Read a run", args=RunIdArgs, level="read", reads_data=False,
+      withholds="it returns no error text and no values from the run's notes")
 async def get_run(ctx: ToolContext, a: RunIdArgs) -> dict:
     """One run: its state (with its progress while it runs), what it wrote, where it sent it, and the whole error when it failed."""
     from app.routes import runs as runs_routes
@@ -307,8 +326,9 @@ async def get_run(ctx: ToolContext, a: RunIdArgs) -> dict:
     with ctx.session_factory() as session:
         user = session.get(User, ctx.user.id) or ctx.user
         r = await runs_routes.get_run(a.run_id, user=user, session=session)
-    out = run_summary(r)
-    if r.error_detail:
+    withheld = ctx.withholds_data
+    out = run_summary(r, withheld)
+    if r.error_detail and not withheld:
         out["error_detail"] = r.error_detail[-MAX_ERROR_DETAIL:]
     for key in ("destination", "email", "mirror", "notes"):
         raw = getattr(r, key, None)
@@ -317,6 +337,8 @@ async def get_run(ctx: ToolContext, a: RunIdArgs) -> dict:
                 out[key] = json.loads(raw)
             except ValueError:
                 out[key] = raw
+            if withheld:
+                out[key] = _without_values(key, out[key])
     if r.flow_id:
         out["link"] = flow_link(r.flow_id)
     return out

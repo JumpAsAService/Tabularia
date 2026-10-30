@@ -82,7 +82,7 @@ def answers_of(questions: list[dict], message: Optional[str]) -> list[Optional[s
     return [found.get(q["question"].lower()) for q in questions]
 
 
-@tool("ask_user", title="Ask the user", args=AskUserArgs, level="read", only="chat", ends_turn=True)
+@tool("ask_user", title="Ask the user", args=AskUserArgs, level="read", reads_data=False, only="chat", ends_turn=True)
 async def ask_user(ctx: ToolContext, a: AskUserArgs) -> dict:
     """Ask the user 1–4 questions at once, each with 2–4 choices to click (a label and a sentence on what it means), the one you recommend FIRST; the card always adds a free answer. Use it when a choice is the user's and you are not sure — which datasource, which recipients, what time, what to do with rows that do not fit — instead of guessing, and ask everything you need in one card. It ENDS your turn: write at most one short sentence before it, then stop. The answers come as the user's next message, one line per question: «question → answer»."""
     return card(a)

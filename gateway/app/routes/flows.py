@@ -22,7 +22,7 @@ from app.models import Connection, Datasource, Flow, FlowVersion, Project, Run, 
 from app.services.dbt_export import DbtOptions
 from app.core.language import request_language
 from app.models.permission import Capability
-from app.services import ai_chats, audit, flow_presence, openlineage, run_history
+from app.services import ai_chats, audit, flow_presence, metadata_only, openlineage, run_history
 from pydantic import BaseModel, Field
 from app.schemas.models import UtcDateTime
 from app.schemas.models import (
@@ -404,7 +404,8 @@ def export_flow_dbt_plan(
     model = ai_model(session)
     # `stored`: what the AI wrote for this version, which a re-export reuses without a call even with
     # the AI switched off: the dialog can still offer it, and the same version gives the same zip
-    piano["ai"] = {"available": model is not None, "model": model, "stored": version_texts(session, flow)}
+    piano["ai"] = {"available": model is not None, "model": model, "metadata_only": metadata_only.on("chat"),
+                   "stored": version_texts(session, flow)}
     return piano
 
 

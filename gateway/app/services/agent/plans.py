@@ -36,7 +36,7 @@ from sqlmodel import Session, select
 
 from app.core.config import get_settings
 from app.models import AgentPlan
-from app.services import audit
+from app.services import audit, metadata_only
 from app.services.agent.common import absolute, fingerprint, now, plan_link
 from app.services.agent.registry import ToolContext, ToolError, tool
 
@@ -50,6 +50,8 @@ ADD_ATTEMPTS = 3
 MAX_CHANGES_SHOWN = 200
 # a plan left `applying` by a process that stopped half way: closed as failed after this
 APPLYING_STUCK_AFTER = timedelta(hours=1)
+# what a SQL script's action says of a query that fails, the engine's words after it
+SQL_FAILS = ". Its SQL fails now: "
 
 
 # ── kinds of action ───────────────────────────────────────────────────────────
@@ -116,6 +118,17 @@ def _summary(actions: list[dict]) -> str:
     return "\n".join(f"{i}. {a.get('words', a.get('kind'))}" for i, a in enumerate(actions, 1))
 
 
+def words_without_data(words: str) -> str:
+    """An action's words in metadata-only mode: a plan made before the mode came on may
+    quote the engine."""
+    return words.split(SQL_FAILS, 1)[0]
+
+
+def result_without_data(r: dict) -> dict:
+    """An action's outcome in metadata-only mode: that it failed, not in whose words."""
+    return {**r, "error": metadata_only.ERROR_WITHHELD} if r.get("error") and not r.get("skipped") else r
+
+
 def _next_step(ctx: ToolContext, plan: AgentPlan) -> str:
     if plan.status != "pending":
         return ""
@@ -129,12 +142,15 @@ def _next_step(ctx: ToolContext, plan: AgentPlan) -> str:
 
 
 def plan_view(ctx: ToolContext, plan: AgentPlan) -> dict:
-    """The plan as a tool returns it."""
+    """The plan as a tool returns it: never its `preview`, the first rows on the card."""
+    withheld = ctx.withholds_data
     actions = actions_of(plan)
+    if withheld:
+        actions = [{**a, "words": words_without_data(str(a.get("words", "")))} for a in actions]
     out: dict[str, Any] = {
         "plan_id": plan.id, "status": plan.status,
         "actions": [{"n": i, "kind": a.get("kind"), "words": a.get("words", "")} for i, a in enumerate(actions, 1)],
-        "summary": plan.summary,
+        "summary": _summary(actions) if withheld else plan.summary,
         "review_link": absolute(ctx.request, plan_link(plan.id)) if ctx.origin == "mcp" else plan_link(plan.id),
     }
     if plan.status == "pending":
@@ -145,6 +161,8 @@ def plan_view(ctx: ToolContext, plan: AgentPlan) -> dict:
             view["changes"] = lines if len(lines) <= MAX_CHANGES_SHOWN else \
                 lines[:MAX_CHANGES_SHOWN] + [f"… {len(lines) - MAX_CHANGES_SHOWN} more lines, on the plan's page"]
     results = results_of(plan)
+    if results is not None and withheld:
+        results = [result_without_data(r) for r in results]
     if results is not None:
         out["result"] = [
             {**r, **({"link": absolute(ctx.request, r["link"])} if r.get("link") and ctx.origin == "mcp" else {})}
@@ -376,20 +394,21 @@ class PlanIdArgs(BaseModel):
     plan_id: int = Field(description="The id a plan tool returned.")
 
 
-@tool("get_plan", title="Read a plan", args=PlanIdArgs, level="read")
+@tool("get_plan", title="Read a plan", args=PlanIdArgs, level="read", reads_data=False,
+      withholds="the words of an action that failed stay on the plan's page")
 async def get_plan(ctx: ToolContext, a: PlanIdArgs) -> dict:
     """A plan of this user: its actions in words, its state (pending, applied, failed, cancelled, expired) and, once applied, the outcome of each action with the link to what it made."""
     with ctx.session_factory() as session:
         return plan_view(ctx, own_plan(session, ctx, a.plan_id))
 
 
-@tool("cancel_plan", title="Cancel a plan", args=PlanIdArgs, level="write")
+@tool("cancel_plan", title="Cancel a plan", args=PlanIdArgs, level="write", reads_data=False)
 async def cancel_plan(ctx: ToolContext, a: PlanIdArgs) -> dict:
     """Cancel a pending plan: nothing of it will be applied. The drafts stay, to plan again."""
     return cancel_plan_of(ctx, a.plan_id)
 
 
-@tool("confirm_plan", title="Apply a plan", args=PlanIdArgs, level="write", only="mcp", destructive=True)
+@tool("confirm_plan", title="Apply a plan", args=PlanIdArgs, level="write", reads_data=False, only="mcp", destructive=True)
 async def confirm_plan(ctx: ToolContext, a: PlanIdArgs) -> dict:
     """Apply a pending plan: create, change, run and schedule what it lists, in order, with the user's permissions checked again. Call it ONLY after the user has seen the plan and agreed to it. The first action that fails stops the rest; the result says what was done, with links."""
     if get_settings().mcp.confirm_in_tabularia_only:
@@ -424,7 +443,7 @@ class PlanScheduleArgs(BaseModel):
     notify_connection_id: Optional[int] = Field(None, description="flow: the SMTP connection that sends the failure notice.")
 
 
-@tool("plan_schedule", title="Plan a schedule", args=PlanScheduleArgs, level="write")
+@tool("plan_schedule", title="Plan a schedule", args=PlanScheduleArgs, level="write", reads_data=False)
 async def plan_schedule(ctx: ToolContext, a: PlanScheduleArgs) -> dict:
     """Add to the plan: schedule an object to run by itself (cron), or turn its schedule off (cron null). The scheduled runs carry the authority of the user who schedules. Nothing changes until the plan is confirmed."""
     planner = SCHEDULERS.get(a.kind)

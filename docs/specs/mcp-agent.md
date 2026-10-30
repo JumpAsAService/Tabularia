@@ -38,6 +38,18 @@ company agent) through an **MCP server** authenticated with Tabularia's API toke
 - **Visible work** (2026-10-19): in the chat every tool call shows as a step — what in
   words, arguments on demand, status, duration, result; retries grouped under the same
   step with the reason; the final outcome stated clearly.
+- **Metadata-only mode** (2026-10-30, `MCP__METADATA_ONLY`, `AI__METADATA_ONLY` for the chat;
+  [what it means](../integrations/ai.md#metadata-only-mode)): no value of a row leaves through
+  the tools. Every tool of the registry declares `reads_data`, with no default, so a new tool
+  does not register without saying. Those with `reads_data=True` (`query_datasource`,
+  `run_sql_preview`, `flow_preview`) are not in `tools/list` nor among the chat's tools, and
+  `call` refuses them with a message that explains the mode. Those with `reads_data=False`
+  that also hold data leave it out themselves and say what in `withholds`, added to their
+  description: `describe_datasource` (sample rows), `get_run`, `list_runs`, `get_sql_script`,
+  `get_flow_group`, `get_plan` (error text; `list_runs` refuses `search`, which reads the
+  errors), `flow_add_step`, `flow_change_step` (no preview at all), `plan_sql_script` (not told
+  whether the SQL runs). A plan's first rows stay on its card for the person: `plan_view` has
+  never returned them. Tests: `gateway/tests/test_metadata_only.py`, a canary through every tool.
 - **MCP access**: personal and service-account API tokens; a `read` token sees and calls
   only the reading tools, a `write` token all of them. An administrator's switch turns the
   external MCP off (on by default, and only when AI is not required: MCP works without an

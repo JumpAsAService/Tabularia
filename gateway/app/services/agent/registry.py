@@ -1,7 +1,8 @@
 """The registry of the agent's tools: one set for the chat and for MCP (docs/specs/mcp-agent.md).
 
 A tool is a name, a description for the model, a pydantic model of its arguments, a level
-(`read` or `write`) and an async handler `(ctx, args) -> dict`. The same entry serves:
+(`read` or `write`), whether it returns values of the data (`reads_data`) and an async
+handler `(ctx, args) -> dict`. The same entry serves:
 
 - the MCP endpoint (routes/mcp.py): `tools/list` shows the tools the token's level allows,
   `tools/call` runs one through `call`, and a refusal becomes a result with `isError`;
@@ -16,6 +17,12 @@ as in the interface.
 
 Every tool checks the permissions of the person it runs for (`ctx.user`), at every call:
 the model is never trusted with an id.
+
+`reads_data` has no default, so a tool cannot be registered without saying. True: its result
+is made of rows, or of something computed on them. In metadata-only mode
+(services/metadata_only.py) such a tool is not offered and `call` refuses it. False: its
+result is metadata; one that also holds data leaves it out in that mode by itself, and
+says what in `withholds`.
 """
 from __future__ import annotations
 
@@ -33,6 +40,7 @@ from pydantic_ai import ModelRetry
 from sqlmodel import Session
 
 from app.models import User
+from app.services import metadata_only
 
 logger = logging.getLogger(__name__)
 
@@ -73,6 +81,13 @@ class ToolContext:
     engine: Optional[str] = None
     # previews of one call supersede each other only within it
     call_key: str = field(default_factory=lambda: uuid.uuid4().hex[:10])
+    # a chat's turn begun in metadata-only mode stays in it (services/metadata_only.py)
+    metadata_turn: bool = False
+
+    @property
+    def withholds_data(self) -> bool:
+        """Metadata-only mode, as of now: MCP reads it again at every call."""
+        return self.metadata_turn or metadata_only.on(self.origin)
 
     def chat_deps(self):
         """The data assistant's dependencies, for its tools reused here."""
@@ -80,7 +95,8 @@ class ToolContext:
 
         return ChatDeps(user=self.user, session_factory=self.session_factory, engine=self.engine,
                         model_id=self.model_id, locale=self.locale, request=self.request,
-                        chat_id=self.chat_id if self.origin == "chat" else None)
+                        chat_id=self.chat_id if self.origin == "chat" else None, origin=self.origin,
+                        metadata_turn=self.metadata_turn)
 
 
 @dataclass(frozen=True)
@@ -90,7 +106,12 @@ class Tool:
     description: str
     args: type[BaseModel]
     level: Level
+    # its result is made of rows or of something computed on them: see the module's docstring
+    reads_data: bool
     handler: Callable[[ToolContext, Any], Awaitable[dict]]
+    # what a tool that does not read data leaves out of its result in metadata-only mode, when
+    # it would hold some otherwise: the model reads it in the description
+    withholds: str = ""
     # "mcp": only over MCP (confirm_plan); "chat": only in the chat (ask_user)
     only: Optional[Origin] = None
     # it changes saved objects (confirm_plan): MCP clients ask their human first
@@ -98,6 +119,12 @@ class Tool:
     # it ends the chat's turn (ask_user): the chat makes it the agent's output, not a call
     # whose result goes back to the model (services/agent/chat.py)
     ends_turn: bool = False
+
+    def described(self, withheld: bool) -> str:
+        """The description the model reads."""
+        if withheld and self.withholds:
+            return f"{self.description}\n\nThis installation is in metadata-only mode: {self.withholds}."
+        return self.description
 
     def input_schema(self) -> dict:
         schema = self.args.model_json_schema()
@@ -119,15 +146,18 @@ class Tool:
 REGISTRY: dict[str, Tool] = {}
 
 
-def tool(name: str, *, title: str, args: type[BaseModel], level: Level,
+def tool(name: str, *, title: str, args: type[BaseModel], level: Level, reads_data: bool, withholds: str = "",
          only: Optional[Origin] = None, destructive: bool = False, ends_turn: bool = False):
     """Registers the decorated handler; its docstring is the description the model reads."""
+    if reads_data and withholds:
+        raise RuntimeError(f"agent tool {name}: a tool that reads data is left out whole, it withholds nothing")
 
     def register(fn: Callable[[ToolContext, Any], Awaitable[dict]]):
         if name in REGISTRY:
             raise RuntimeError(f"agent tool {name} registered twice")
         REGISTRY[name] = Tool(name=name, title=title, description=inspect.getdoc(fn) or "", args=args, level=level,
-                              handler=fn, only=only, destructive=destructive, ends_turn=ends_turn)
+                              reads_data=reads_data, handler=fn, withholds=withholds, only=only,
+                              destructive=destructive, ends_turn=ends_turn)
         return fn
 
     return register
@@ -140,10 +170,15 @@ def _rank(t: Tool) -> int:
     return 3 if t.name in ("cancel_plan", "confirm_plan") else 2 if t.name.startswith("plan_") else 1
 
 
-def available(origin: Origin, level: Level = "write") -> list[Tool]:
-    """The tools for a caller: its origin's, and only the reading ones for a `read` level."""
+def available(origin: Origin, level: Level = "write", withheld: Optional[bool] = None) -> list[Tool]:
+    """The tools for a caller: its origin's, only the reading ones for a `read` level, and
+    none that returns values of the data in metadata-only mode (`withheld`: a turn's own
+    answer to that; by default the switch as of now)."""
+    if withheld is None:
+        withheld = metadata_only.on(origin)
     return sorted((t for t in REGISTRY.values()
-                   if (t.only is None or t.only == origin) and (level == "write" or t.level == "read")), key=_rank)
+                   if (t.only is None or t.only == origin) and (level == "write" or t.level == "read")
+                   and not (withheld and t.reads_data)), key=_rank)
 
 
 def _words(e: ValidationError) -> str:
@@ -169,6 +204,8 @@ async def call(ctx: ToolContext, name: str, arguments: Optional[dict], level: Le
     t = REGISTRY.get(name)
     if t is None or (t.only is not None and t.only != ctx.origin):
         raise UnknownTool(name)
+    if t.reads_data and ctx.withholds_data:
+        raise ToolError(metadata_only.refusal(name))
     if t.level == "write" and level != "write":
         raise ToolError(f"{name} changes things: it needs a write token. This token reads only.")
     try:

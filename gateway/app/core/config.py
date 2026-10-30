@@ -417,7 +417,7 @@ class AiSettings(BaseModel):
     it.
 
     env: AI__BASE_URL, AI__ACCESS_KEY, AI__SECRET_KEY, AI__DEFAULT_MODEL,
-    AI__MAX_RESULT_ROWS, AI__MAX_REQUESTS, AI__MAX_HISTORY_MESSAGES"""
+    AI__MAX_RESULT_ROWS, AI__MAX_REQUESTS, AI__MAX_HISTORY_MESSAGES, AI__METADATA_ONLY"""
 
     base_url: str = ""
     # the key's id (Scaleway calls it access key): the OpenAI protocol authenticates with
@@ -426,6 +426,9 @@ class AiSettings(BaseModel):
     secret_key: SecretStr = SecretStr("")
     # offered first in the selector, when the administrator enabled it
     default_model: str = ""
+    # on: no value of a row of data reaches the model configured here, in any of its uses
+    # (services/metadata_only.py)
+    metadata_only: bool = False
     # the maximum rows an assistant query returns (to the model and to the chat)
     max_result_rows: int = Field(default=200, ge=1, le=2000)
     # the model's rounds per message: the cap on the loop of tool calls
@@ -480,12 +483,14 @@ class McpSettings(BaseModel):
     (Claude Desktop, an IDE, another company agent) use the same tools as the chat, signed
     in with an API token. It needs no AI model: the model is the client's.
 
-    env: MCP__ENABLED, MCP__CONFIRM_IN_TABULARIA_ONLY"""
+    env: MCP__ENABLED, MCP__CONFIRM_IN_TABULARIA_ONLY, MCP__METADATA_ONLY"""
 
     # off: `/mcp` answers 404, the tokens keep working on the rest of the API
     enabled: bool = True
     # on: `confirm_plan` refuses and points to the plan's page, where a person confirms it
     confirm_in_tabularia_only: bool = False
+    # on: no value of a row of data leaves through `/mcp` (services/metadata_only.py)
+    metadata_only: bool = False
 
 
 class WebhookSettings(BaseModel):

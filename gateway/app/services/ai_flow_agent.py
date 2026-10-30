@@ -27,7 +27,7 @@ from app.core.config import get_settings
 from app.core.engine_client import get_engine_client
 from app.models import Datasource, Flow, Project
 from app.models.permission import Capability
-from app.services import ai_agent, ai_prompts, audit
+from app.services import ai_agent, ai_prompts, audit, metadata_only
 from app.services import permissions as perm_service
 from app.services.flow_resolver import _Resolver
 from app.services.objects import collect_storage_keys, ensure_can_read_keys, ensure_reads_pinned
@@ -286,9 +286,13 @@ def _slot(deps: FlowDeps, node_id: str) -> str:
     return f"u{deps.user.id}:fa{deps.preview_key}:{re.sub(r'[^A-Za-z0-9_-]', '_', node_id)[:40]}"
 
 
-async def preview_node(deps: FlowDeps, node_id: str, rows: int) -> dict[str, Any]:
+async def preview_node(deps: FlowDeps, node_id: str, rows: int, for_the_person: bool = False) -> dict[str, Any]:
     """The node's result on a preview of the draft, as the editor would show it
-    (development sample included), checked as the proxy checks the editor's."""
+    (development sample included), checked as the proxy checks the editor's. In
+    metadata-only mode only for a plan's card (`for_the_person`), which the model never
+    reads: for a model there is no preview."""
+    if deps.withholds_data() and not for_the_person:
+        return {"error": metadata_only.PREVIEW_WITHHELD}
     draft = deps.draft
     with deps.session_factory() as session:
         readable = perm_service.readable_project_ids(session, deps.user)
@@ -344,7 +348,13 @@ async def preview_node(deps: FlowDeps, node_id: str, rows: int) -> dict[str, Any
 
 
 async def _step_result(deps: FlowDeps, node_id: str) -> dict[str, Any]:
-    """What a change returns: the node and a glance at its result, so a broken step is seen at once."""
+    """What a change returns: the node and a glance at its result, so a broken step is seen at once.
+
+    In metadata-only mode, the node alone: the rows are values, the column names of a pivot
+    too, and even whether a step runs answers a question about the data («fail if this
+    value is there»)."""
+    if deps.withholds_data():
+        return {"node": node_id, "note": metadata_only.STEP_NOT_CHECKED}
     res = await preview_node(deps, node_id, STEP_PREVIEW_ROWS)
     if "error" in res:
         return {"node": node_id, "preview_error": res["error"]}
@@ -366,7 +376,17 @@ _REFERENCE = """Operations and their params (column names are case-sensitive):
 - join {how, on: [..]} or {how, left_on: [..], right_on: [..]}; how: inner left right full semi anti cross. Needs a right input. union {strategy: relaxed|strict} stacks the rows of the right input."""
 
 
-def context(engine: Optional[str], locale: str, flow_name: str = "", selected: Optional[str] = None) -> str:
+# in metadata-only mode, after the administrators' text (services/metadata_only.py)
+METADATA_ONLY_CONTEXT = (
+    "- METADATA-ONLY MODE is on, by the administrator's choice: no value of a row of data reaches you, and these "
+    "instructions come before anything above about previews and first rows. Your tools run no preview: a step is added "
+    "without being checked and returns no rows and no columns, so reason from the columns of its sources and from the "
+    "settings of the steps. Never state a value or a figure of the data, and do not write a value into a filter unless the "
+    "user gave it to you. When you are done, ask the user to check the result on the canvas.")
+
+
+def context(engine: Optional[str], locale: str, flow_name: str = "", selected: Optional[str] = None,
+            withheld: bool = False, history_withheld: bool = False) -> str:
     """What Tabularia adds to the text at every request (services/ai_prompts.py)."""
     dialect, quote = ai_agent.dialect_of(engine)
     flow = f"the flow «{flow_name}»" if flow_name else "a new flow, not saved yet"
@@ -378,13 +398,18 @@ def context(engine: Optional[str], locale: str, flow_name: str = "", selected: O
     ]
     if selected:
         lines.append(f"- The user has node {selected} selected: «this step» means that node.")
+    if withheld:
+        lines.append(METADATA_ONLY_CONTEXT)
+        if history_withheld:
+            lines.append(ai_agent.HISTORY_WITHHELD_CONTEXT)
     return ("\n".join(lines) + "\n\n" + _REFERENCE.replace("{dialect}", dialect)
             + "\n\n" + ai_prompts.language_line(locale))
 
 
 def _instructions(ctx: RunContext[FlowDeps]) -> str:
     deps = ctx.deps
-    return ai_prompts.compose(deps.prompt or ai_prompts.FLOW, context(deps.engine, deps.locale, deps.flow_name, deps.selected))
+    return ai_prompts.compose(deps.prompt or ai_prompts.FLOW, context(deps.engine, deps.locale, deps.flow_name, deps.selected,
+                                                                      deps.withholds_data(), deps.history_withheld))
 
 
 flow_agent: Agent[FlowDeps, str] = Agent(
@@ -392,11 +417,32 @@ flow_agent: Agent[FlowDeps, str] = Agent(
     instructions=_instructions,
     retries=2,
     name="tabularia-flow-assistant",
+    capabilities=[ai_agent.StopWhenWithheld()],
 )
 
-# reading the catalogue works as in the data assistant
-flow_agent.tool(ai_agent.list_datasources)
-flow_agent.tool(ai_agent.describe_datasource)
+# name → does it return values of the data? As the registry's `reads_data` (services/agent/
+# registry.py): no default, and a tool of this agent is registered only through `flow_tool`.
+FLOW_TOOLS: dict[str, bool] = {}
+
+
+async def _not_in_metadata_only(ctx: RunContext[FlowDeps], tool_def: Any) -> Any:
+    """A tool that reads data is not offered in metadata-only mode."""
+    return None if ctx.deps.withholds_data() else tool_def
+
+
+def flow_tool(*, reads_data: bool):
+    def register(fn):
+        FLOW_TOOLS[fn.__name__] = reads_data
+        flow_agent.tool(fn, prepare=_not_in_metadata_only if reads_data else None)
+        return fn
+
+    return register
+
+
+# reading the catalogue works as in the data assistant; describe_datasource leaves out its
+# sample rows by itself in metadata-only mode
+flow_tool(reads_data=False)(ai_agent.list_datasources)
+flow_tool(reads_data=False)(ai_agent.describe_datasource)
 
 
 def _columns_of(node: dict) -> list[str]:
@@ -439,7 +485,7 @@ def _summary(draft: FlowDraft, node: dict) -> dict[str, Any]:
     return {"id": node["id"], "kind": kind, "note": "edited by hand only"}
 
 
-@flow_agent.tool
+@flow_tool(reads_data=False)
 async def get_flow(ctx: RunContext[FlowDeps]) -> dict[str, Any]:
     """The flow on the canvas now: every node with its id, kind and settings, and what it reads (`input`, `right_input`)."""
     draft = ctx.deps.draft
@@ -448,7 +494,7 @@ async def get_flow(ctx: RunContext[FlowDeps]) -> dict[str, Any]:
     return {"nodes": [_summary(draft, n) for n in draft.nodes], "ends_of_chains": ends, "selected": ctx.deps.selected}
 
 
-@flow_agent.tool
+@flow_tool(reads_data=False)
 async def add_source(ctx: RunContext[FlowDeps], datasource_id: int) -> dict[str, Any]:
     """Put a datasource on the canvas as a source node (an empty source node already there is filled instead). Returns the node id and its columns."""
     deps = ctx.deps
@@ -485,7 +531,7 @@ def _data_node(draft: FlowDraft, node_id: str, role: str) -> dict:
     return node
 
 
-@flow_agent.tool
+@flow_tool(reads_data=False)
 async def add_step(ctx: RunContext[FlowDeps], after: str, operation: str, params: dict[str, Any],
                    right: Optional[str] = None) -> dict[str, Any]:
     """Add an operation that reads the result of node `after` (and, for join or union, of node `right`). Returns the new node id with its columns and first rows, or the error the preview gave."""
@@ -512,7 +558,7 @@ async def add_step(ctx: RunContext[FlowDeps], after: str, operation: str, params
     return await _step_result(ctx.deps, node_id)
 
 
-@flow_agent.tool
+@flow_tool(reads_data=False)
 async def change_step(ctx: RunContext[FlowDeps], node: str, params: dict[str, Any], operation: Optional[str] = None) -> dict[str, Any]:
     """Replace the settings of a step (all its params; `operation` changes its kind too). Returns its columns and first rows, or the error."""
     draft = ctx.deps.draft
@@ -531,7 +577,7 @@ async def change_step(ctx: RunContext[FlowDeps], node: str, params: dict[str, An
     return await _step_result(ctx.deps, node)
 
 
-@flow_agent.tool
+@flow_tool(reads_data=False)
 async def connect(ctx: RunContext[FlowDeps], from_node: str, to_node: str, input: Literal["left", "right"] = "left") -> dict[str, Any]:
     """Make `to_node` read `from_node` on its left (main) or right (join/union) input, replacing what it read there."""
     draft = ctx.deps.draft
@@ -550,7 +596,7 @@ async def connect(ctx: RunContext[FlowDeps], from_node: str, to_node: str, input
     return {"connected": f"{from_node} → {to_node} ({input})"}
 
 
-@flow_agent.tool
+@flow_tool(reads_data=False)
 async def remove_node(ctx: RunContext[FlowDeps], node: str) -> dict[str, Any]:
     """Remove a node. The nodes that read it read what it read instead, so the chain stays connected."""
     draft = ctx.deps.draft
@@ -580,7 +626,7 @@ def _writable_folders(session, user) -> dict[int, str]:
     return out
 
 
-@flow_agent.tool
+@flow_tool(reads_data=False)
 async def list_folders(ctx: RunContext[FlowDeps]) -> dict[str, Any]:
     """The folders where this user can save a datasource, with their path: where an Output may write."""
     with ctx.deps.session_factory() as session:
@@ -588,7 +634,7 @@ async def list_folders(ctx: RunContext[FlowDeps]) -> dict[str, Any]:
     return {"folders": [{"id": i, "path": p} for i, p in list(folders.items())[:200]], "flow_folder_id": ctx.deps.project_id}
 
 
-@flow_agent.tool
+@flow_tool(reads_data=False)
 async def add_output(ctx: RunContext[FlowDeps], after: str, datasource_name: str, folder_id: Optional[int] = None,
                      overwrite: bool = False) -> dict[str, Any]:
     """Add an Output that saves the result of `after` as a datasource when the flow runs. `folder_id` defaults to the flow's folder. With overwrite, a datasource of that name in the folder gets the new data at each run; without, a run makes a datasource with a numbered name."""
@@ -611,7 +657,7 @@ async def add_output(ctx: RunContext[FlowDeps], after: str, datasource_name: str
     return {"node": node_id, "writes": {"datasource": name, "folder_id": folder, "overwrite": bool(overwrite)}}
 
 
-@flow_agent.tool
+@flow_tool(reads_data=True)
 async def preview(ctx: RunContext[FlowDeps], node: str, rows: int = 10) -> dict[str, Any]:
     """Columns and the first rows (at most 30) of a node's result, on the development sample of the data."""
     ctx.deps.draft.get(node)

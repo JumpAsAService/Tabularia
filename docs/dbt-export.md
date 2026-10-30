@@ -279,7 +279,8 @@ offers two more choices, both off by default:
   a sentence for every column of the outputs, the source tables and the seeds that has
   no description. In English, marked `(AI)`. The AI sees the structure of the flow —
   names, types, steps, the descriptions already written — and at most 3 short sample
-  values per column. Characters YAML cannot carry (control characters, DEL,
+  values per column, none with [metadata-only mode](integrations/ai.md#metadata-only-mode)
+  on. Characters YAML cannot carry (control characters, DEL,
   U+FFFE/FFFF) are removed from what it writes before it is kept.
 - **An AI translation where a query does not translate**: when the engine cannot
   translate a model or a datasource query to the target's SQL, the AI proposes one,

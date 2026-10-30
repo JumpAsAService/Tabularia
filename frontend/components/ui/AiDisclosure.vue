@@ -4,12 +4,12 @@
 //
 // It is not a convenience dialog: it does not close with Esc nor by clicking outside,
 // and has no X. A consent that can be skipped by mistake is not a consent.
-import { ref } from 'vue'
+import { computed, ref } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { Sparkles, Check } from 'lucide-vue-next'
 import { useDialogA11y } from '~/composables/useDialogA11y'
 
-const props = defineProps<{ open: boolean }>()
+const props = defineProps<{ open: boolean; metadataOnly?: boolean }>()
 const emit = defineEmits<{ (e: 'accept'): void }>()
 const { t } = useI18n()
 
@@ -18,7 +18,11 @@ const card = ref<HTMLElement | null>(null)
 // way out is the button
 useDialogA11y(card, () => props.open, () => {})
 
-const POINTS = ['generated', 'canBeWrong', 'readsOnly', 'noPersonalData'] as const
+// in metadata-only mode «the numbers come from your data» and «your data goes to the provider»
+// would be false: these say what happens then, and what still goes
+const POINTS = computed(() => (props.metadataOnly
+  ? ['metaGenerated', 'metaCanBeWrong', 'readsOnly', 'metaConstants', 'noPersonalData']
+  : ['generated', 'canBeWrong', 'readsOnly', 'noPersonalData']))
 </script>
 
 <template>

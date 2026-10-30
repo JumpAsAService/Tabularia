@@ -418,7 +418,10 @@ fix the last error** asks it why, with the error.
 the names of the variables the script finds, the names and types of its inputs'
 columns, and, for a failed run, only the error of its log (the Python traceback, the R
 error): never a row of data, nor anything else the script printed. Its conversations
-are saved as the other assistants', with the same daily caps.
+are saved as the other assistants', with the same daily caps. With
+[metadata-only mode](integrations/ai.md#metadata-only-mode) on, the error stays out too,
+since it may quote a value: the model gets the exit code, the editor says so, and **Explain
+and fix the last error** is not offered.
 
 ### Example: the margin trend of each category
 

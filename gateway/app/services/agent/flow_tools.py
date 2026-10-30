@@ -96,7 +96,7 @@ def _deps(ctx: ToolContext, snap: dict, draft: ai_flow_agent.FlowDraft) -> ai_fl
         user=ctx.user, session_factory=ctx.session_factory, engine=snap["engine"], model_id=ctx.model_id,
         locale=ctx.locale, request=ctx.request, chat_id=ctx.chat_id if ctx.origin == "chat" else None,
         draft=draft, flow_id=snap["flow_id"], flow_name=snap["name"], project_id=snap["project_id"],
-        preview_key=ctx.call_key,
+        preview_key=ctx.call_key, origin=ctx.origin, metadata_turn=ctx.metadata_turn,
     )
 
 
@@ -140,7 +140,7 @@ class DraftNewArgs(BaseModel):
     engine: Optional[str] = Field(None, max_length=20, description="polars (default), duckdb, chdb, clickhouse or bigquery, among those the administrator allows.")
 
 
-@tool("flow_draft_new", title="Start a new flow", args=DraftNewArgs, level="write")
+@tool("flow_draft_new", title="Start a new flow", args=DraftNewArgs, level="write", reads_data=False)
 async def flow_draft_new(ctx: ToolContext, a: DraftNewArgs) -> dict:
     """Start a draft of a NEW flow. Nothing is saved: add sources, steps and Outputs to the draft, check them with flow_preview, then plan_save_flow puts its creation in the plan the user confirms."""
     from app.routes.flows import _check_flow_name, _validate_engine
@@ -164,7 +164,7 @@ class DraftOpenArgs(BaseModel):
     flow_id: int
 
 
-@tool("flow_draft_open", title="Open a flow to change it", args=DraftOpenArgs, level="write")
+@tool("flow_draft_open", title="Open a flow to change it", args=DraftOpenArgs, level="write", reads_data=False)
 async def flow_draft_open(ctx: ToolContext, a: DraftOpenArgs) -> dict:
     """Open a draft of a SAVED flow, to change it: the flow itself does not change until the plan with its save (plan_save_flow) is confirmed, and the plan shows the difference. Returns the draft id and the flow's nodes."""
     from app.routes import flows as flows_routes
@@ -186,7 +186,7 @@ class AddSourceArgs(DraftArgs):
     datasource_id: int
 
 
-@tool("flow_add_source", title="Add a source", args=AddSourceArgs, level="write")
+@tool("flow_add_source", title="Add a source", args=AddSourceArgs, level="write", reads_data=False)
 async def flow_add_source(ctx: ToolContext, a: AddSourceArgs) -> dict:
     """Put a datasource in the draft as a source node (an empty source node already there is filled instead). Returns the node id and its columns."""
     return await _with_draft(ctx, a.draft_id, lambda deps: ai_flow_agent.add_source(_ctx_of(deps), a.datasource_id))
@@ -209,7 +209,8 @@ flow_add_step.__doc__ = (
     "node id with its columns and first rows, or the error the preview gave.\n\n"
     + ai_flow_agent._REFERENCE.replace("{dialect}", "the SQL dialect of the draft's engine (DuckDB, ClickHouse, Polars SQL…)")
 )
-tool("flow_add_step", title="Add a step", args=AddStepArgs, level="write")(flow_add_step)
+tool("flow_add_step", title="Add a step", args=AddStepArgs, level="write", reads_data=False,
+     withholds="it runs no preview, so it returns neither rows, nor columns, nor the preview's error")(flow_add_step)
 
 
 class ChangeStepArgs(DraftArgs):
@@ -218,7 +219,8 @@ class ChangeStepArgs(DraftArgs):
     operation: Optional[str] = Field(None, description="Changes the step's kind too.")
 
 
-@tool("flow_change_step", title="Change a step", args=ChangeStepArgs, level="write")
+@tool("flow_change_step", title="Change a step", args=ChangeStepArgs, level="write", reads_data=False,
+      withholds="it runs no preview, so it returns neither rows, nor columns, nor the preview's error")
 async def flow_change_step(ctx: ToolContext, a: ChangeStepArgs) -> dict:
     """Replace the settings of a step (all its params, as flow_add_step takes them; `operation` changes its kind too). Returns its columns and first rows, or the error."""
     return await _with_draft(ctx, a.draft_id, lambda deps: ai_flow_agent.change_step(
@@ -231,7 +233,7 @@ class ConnectArgs(DraftArgs):
     input: Literal["left", "right"] = "left"
 
 
-@tool("flow_connect", title="Connect two nodes", args=ConnectArgs, level="write")
+@tool("flow_connect", title="Connect two nodes", args=ConnectArgs, level="write", reads_data=False)
 async def flow_connect(ctx: ToolContext, a: ConnectArgs) -> dict:
     """Make `to_node` read `from_node` on its left (main) or right (join/union) input, replacing what it read there."""
     return await _with_draft(ctx, a.draft_id, lambda deps: ai_flow_agent.connect(
@@ -242,7 +244,7 @@ class NodeArgs(DraftArgs):
     node: str
 
 
-@tool("flow_remove_node", title="Remove a node", args=NodeArgs, level="write")
+@tool("flow_remove_node", title="Remove a node", args=NodeArgs, level="write", reads_data=False)
 async def flow_remove_node(ctx: ToolContext, a: NodeArgs) -> dict:
     """Remove a node from the draft. The nodes that read it read what it read instead, so the chain stays connected."""
     return await _with_draft(ctx, a.draft_id, lambda deps: ai_flow_agent.remove_node(_ctx_of(deps), a.node))
@@ -253,7 +255,7 @@ class AddOutputArgs(OutputSettings):
     after: str = Field(description="The node whose result the Output writes.")
 
 
-@tool("flow_add_output", title="Add an Output", args=AddOutputArgs, level="write")
+@tool("flow_add_output", title="Add an Output", args=AddOutputArgs, level="write", reads_data=False)
 async def flow_add_output(ctx: ToolContext, a: AddOutputArgs) -> dict:
     """Add an Output that writes the result of node `after` when the flow runs: a datasource in Tabularia, a database table, a file on S3 or SFTP, or an email with the result attached. Connections are referenced by id (list_connections) and checked as a run checks them — the user's permission, the connection's kind, the domains an SMTP connection may send to. Placeholders such as {date} or {datetime} are allowed in file names, keys and subjects."""
 
@@ -280,13 +282,13 @@ class PreviewArgs(DraftArgs):
     rows: int = Field(10, ge=1, le=ai_flow_agent.MAX_PREVIEW_ROWS)
 
 
-@tool("flow_preview", title="Preview a node", args=PreviewArgs, level="write")
+@tool("flow_preview", title="Preview a node", args=PreviewArgs, level="write", reads_data=True)
 async def flow_preview(ctx: ToolContext, a: PreviewArgs) -> dict:
     """Columns and the first rows (at most 30) of a node's result in the draft, on the development sample of the data."""
     return await _with_draft(ctx, a.draft_id, lambda deps: ai_flow_agent.preview(_ctx_of(deps), a.node, a.rows))
 
 
-@tool("flow_draft_show", title="Show a draft", args=DraftArgs, level="write")
+@tool("flow_draft_show", title="Show a draft", args=DraftArgs, level="write", reads_data=False)
 async def flow_draft_show(ctx: ToolContext, a: DraftArgs) -> dict:
     """The draft now: its name, folder and engine, every node with its id, kind, settings and inputs and, for a saved flow being changed, the differences from the saved version."""
     def work(session, user):
@@ -314,8 +316,9 @@ def _outputs(definition: dict, only: Optional[set[str]] = None) -> list[dict]:
 
 
 async def _plan_preview(ctx: ToolContext, snap: dict, definition: dict) -> Optional[dict]:
-    """The first rows reaching the first Output: what the person sees on the plan. A help,
-    never a reason to refuse."""
+    """The first rows reaching the first Output: what the person sees on the plan, in
+    metadata-only mode too. The model never reads them: `plans.plan_view` leaves them out.
+    A help, never a reason to refuse."""
     out = next(iter(_outputs(definition)), None)
     if out is None:
         return None
@@ -324,7 +327,7 @@ async def _plan_preview(ctx: ToolContext, snap: dict, definition: dict) -> Optio
     if not upstream:
         return None
     try:
-        res = await ai_flow_agent.preview_node(_deps(ctx, snap, draft), upstream, PLAN_PREVIEW_ROWS)
+        res = await ai_flow_agent.preview_node(_deps(ctx, snap, draft), upstream, PLAN_PREVIEW_ROWS, for_the_person=True)
     except Exception:  # noqa: BLE001
         return None
     if "error" in res:
@@ -336,7 +339,7 @@ class PlanSaveArgs(BaseModel):
     draft_id: int
 
 
-@tool("plan_save_flow", title="Plan saving a flow", args=PlanSaveArgs, level="write")
+@tool("plan_save_flow", title="Plan saving a flow", args=PlanSaveArgs, level="write", reads_data=False)
 async def plan_save_flow(ctx: ToolContext, a: PlanSaveArgs) -> dict:
     """Add to the plan: save the draft — a new flow is created, a saved one changed (the plan shows what changes). The Outputs it adds or changes are checked again. Planning the same draft again replaces the earlier save. Nothing changes until the plan is confirmed."""
     with ctx.session_factory() as session:
@@ -497,7 +500,7 @@ class PlanRunArgs(BaseModel):
                                    "its production engine, every record, as a scheduled run.")
 
 
-@tool("plan_run_flow", title="Plan running a flow", args=PlanRunArgs, level="write")
+@tool("plan_run_flow", title="Plan running a flow", args=PlanRunArgs, level="write", reads_data=False)
 async def plan_run_flow(ctx: ToolContext, a: PlanRunArgs) -> dict:
     """Add to the plan: run a flow once, now — its Outputs write, send and publish what they say. Nothing runs until the plan is confirmed; then get_run follows the run."""
     target = _target(ctx, a.flow_id, a.draft_id)

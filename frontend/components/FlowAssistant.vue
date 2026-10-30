@@ -9,7 +9,7 @@
 // asking.
 import { computed, nextTick, onMounted, reactive, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
-import { AlertTriangle, Check, CircleAlert, LoaderCircle, Plus, Send, Sparkles, Square, Trash2, Undo2 } from 'lucide-vue-next'
+import { AlertTriangle, Check, CircleAlert, LoaderCircle, Plus, Send, ShieldCheck, Sparkles, Square, Trash2, Undo2 } from 'lucide-vue-next'
 import { useAi, type AiDone, type AiStatus, type AiTable, type AiUsage } from '~/composables/useAi'
 import { useAiDisclosure } from '~/composables/useAiDisclosure'
 import { useLocale } from '~/composables/useLocale'
@@ -72,7 +72,10 @@ let controller: AbortController | null = null
 
 const modelOptions = computed(() => props.status.models.map((m) => ({ value: m, label: m })))
 const ready = computed(() => accepted.value === true && !!model.value)
-const examples = computed(() => [t('flowAssistant.example1'), t('flowAssistant.example2'), t('flowAssistant.example3')])
+// the third asks why a step fails: in metadata-only mode the model sees no error
+const metadataOnly = computed(() => !!props.status.metadata_only)
+const examples = computed(() => [t('flowAssistant.example1'), t('flowAssistant.example2'),
+  ...(metadataOnly.value ? [] : [t('flowAssistant.example3')])])
 
 function pickModel() {
   let saved = ''
@@ -138,7 +141,7 @@ let started = false
 function start() {
   if (started || !props.active) return
   started = true
-  read()
+  read(metadataOnly.value)
   pickModel()
   loadLatest()
 }
@@ -305,7 +308,7 @@ function stepLabel(s: Step): string {
 <template>
   <section class="fa" :aria-label="$t('flowAssistant.title')">
     <!-- the gate: the assistant is not used before the user has read who answers -->
-    <AiDisclosure :open="active && accepted === false" @accept="accept" />
+    <AiDisclosure :open="active && accepted === false" :metadata-only="metadataOnly" @accept="accept" />
     <header class="fa-head">
       <h3><Sparkles :size="15" /> {{ $t('flowAssistant.title') }}</h3>
       <span class="fa-head-actions">
@@ -332,7 +335,7 @@ function stepLabel(s: Step): string {
 
     <div ref="scroller" class="fa-stream" aria-live="polite">
       <div v-if="!turns.length" class="fa-empty">
-        <p>{{ $t('flowAssistant.emptyBody') }}</p>
+        <p>{{ metadataOnly ? $t('flowAssistant.metadataEmptyBody') : $t('flowAssistant.emptyBody') }}</p>
         <button
           v-for="ex in examples"
           :key="ex"
@@ -415,6 +418,7 @@ function stepLabel(s: Step): string {
           :aria-label="$t('flowAssistant.send')"
         ><Send :size="13" /></button>
       </div>
+      <p v-if="metadataOnly" class="fa-notice"><ShieldCheck :size="12" aria-hidden="true" /> {{ $t('flowAssistant.metadataOnly') }}</p>
       <p class="fa-notice"><Sparkles :size="12" aria-hidden="true" /> {{ $t('aiCompliance.disclaimer') }}</p>
       <div class="fa-under">
         <Select

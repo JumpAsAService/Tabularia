@@ -20,7 +20,7 @@ from app.core.config import get_settings
 from app.models import Project, Run, SqlScript
 from app.models.permission import Capability
 from app.services import permissions as perm_service
-from app.services import sql_script_runs, sql_scripts
+from app.services import metadata_only, sql_script_runs, sql_scripts
 from app.services.agent import plans
 from app.services.agent.common import datasource_link, folder_paths, in_thread, trim_rows
 from app.services.agent.planning import (
@@ -57,10 +57,13 @@ class SqlScriptIdArgs(BaseModel):
     sql_script_id: int
 
 
-@tool("get_sql_script", title="Read a SQL script", args=SqlScriptIdArgs, level="read")
+@tool("get_sql_script", title="Read a SQL script", args=SqlScriptIdArgs, level="read", reads_data=False,
+      withholds="it returns no error text of its last write")
 async def get_sql_script(ctx: ToolContext, a: SqlScriptIdArgs) -> dict:
     """A saved SQL script: its folder, its SQL, where it runs (the catalog with an engine, or a database connection), the datasource it writes, its schedule and its last write. To change it, plan_sql_script with its id."""
     from app.routes import sql_scripts as sql_routes
+
+    withheld = ctx.withholds_data
 
     def work(session, user):
         _visible(session, user, a.sql_script_id)
@@ -86,7 +89,8 @@ async def get_sql_script(ctx: ToolContext, a: SqlScriptIdArgs) -> dict:
                             .order_by(Run.id.desc())).first()  # type: ignore[union-attr]
         if last is not None:
             out["last_write"] = {"run_id": last.id, "status": last.status, "at": last.started_at,
-                                 **({"error": last.error[:500]} if last.error else {})}
+                                 **({"error": metadata_only.ERROR_WITHHELD if withheld else last.error[:500]}
+                                    if last.error else {})}
         return out
 
     return await in_thread(ctx, work)
@@ -100,7 +104,7 @@ class RunSqlArgs(BaseModel):
     limit: int = Field(50, ge=1, le=1000)
 
 
-@tool("run_sql_preview", title="Try SQL", args=RunSqlArgs, level="read")
+@tool("run_sql_preview", title="Try SQL", args=RunSqlArgs, level="read", reads_data=True)
 async def run_sql_preview(ctx: ToolContext, a: RunSqlArgs) -> dict:
     """Run ONE SELECT as a SQL script runs and return its first rows, without saving anything. On the catalog the SQL names datasources by their name — "Folder"."name" when two folders share one — among those the user may read, and reads them with the chosen engine's dialect (DuckDB, ClickHouse…). With connection_id it runs on that database, in its own dialect, with the user's CONNECT. Every run is recorded in the audit with its SQL."""
     cap = get_settings().ai.max_result_rows
@@ -173,7 +177,8 @@ async def _plan_preview(ctx: ToolContext, content: dict) -> Optional[dict]:
     return {"columns": res.get("columns") or [], "rows": trim_rows(res.get("rows") or [], PLAN_PREVIEW_ROWS)}
 
 
-@tool("plan_sql_script", title="Plan a SQL script", args=PlanSqlScriptArgs, level="write")
+@tool("plan_sql_script", title="Plan a SQL script", args=PlanSqlScriptArgs, level="write", reads_data=False,
+      withholds="the first rows are for the user's card, and you are not told whether the SQL runs")
 async def plan_sql_script(ctx: ToolContext, a: PlanSqlScriptArgs) -> dict:
     """Add to the plan: create a SQL script (folder_id, name, sql) or change a saved one (sql_script_id and what changes: the plan shows the difference of the SQL). `output` makes it write its whole result into a datasource: plan_run_sql_script writes it now, plan_schedule (kind sql_script) on a schedule. Checked as the interface checks it — EDIT on the folder, CONNECT on a connection, EDIT on the datasource's folder — and its first rows are read for the plan. Planning the same script again replaces the earlier action. Nothing changes until the plan is confirmed."""
     from app.routes import sql_scripts as sql_routes
@@ -271,8 +276,10 @@ async def plan_sql_script(ctx: ToolContext, a: PlanSqlScriptArgs) -> dict:
     if info.get("notes"):
         words += "; " + "; ".join(info["notes"])
     preview = await _plan_preview(ctx, content)
-    if preview and preview.get("error"):
-        words += f". Its SQL fails now: {preview['error'][:300]}"
+    # the person reads the rows and the error on the plan's page; whether a query the model
+    # wrote fails, and why, is an answer about the data
+    if preview and preview.get("error") and not ctx.withholds_data:
+        words += f"{plans.SQL_FAILS}{preview['error'][:300]}"
     action: dict[str, Any] = {
         "kind": "save_sql_script", "id": a.sql_script_id, "folder_id": info["folder_id"], "folder": info["folder"],
         "name": info["name"], "engine": content.get("engine"), "connection": info["connection"],
@@ -357,7 +364,7 @@ class PlanRunSqlArgs(BaseModel):
     planned_action: Optional[int] = Field(None, ge=1, description="A script this plan creates: the n of its plan_sql_script action.")
 
 
-@tool("plan_run_sql_script", title="Plan writing a SQL script's datasource", args=PlanRunSqlArgs, level="write")
+@tool("plan_run_sql_script", title="Plan writing a SQL script's datasource", args=PlanRunSqlArgs, level="write", reads_data=False)
 async def plan_run_sql_script(ctx: ToolContext, a: PlanRunSqlArgs) -> dict:
     """Add to the plan: run a SQL script once, now, writing its whole result into its datasource (created at the first write, replaced at every one after). Nothing runs until the plan is confirmed; then get_run follows the write."""
     target = _target(ctx, a.sql_script_id, a.planned_action)

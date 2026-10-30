@@ -62,7 +62,11 @@ and the conversation works on them, without searching the catalog first.
 | **the rows each query returns**, up to `AI__MAX_RESULT_ROWS` (200 by default), each text value cut at 300 characters | |
 | today's date, the engine's SQL dialect, the interface language | |
 
-So rows of your data do reach the model provider: as many as the query returns, up
+With [metadata-only mode](../integrations/ai.md#metadata-only-mode) on, the rows above
+do not go: the model works from names, types, descriptions and row counts, says it cannot
+read the data, and answers with no figures and no tables. The opening dialog says so.
+
+Otherwise rows of your data do reach the model provider: as many as the query returns, up
 to the cap. The default instructions tell the model to aggregate in SQL rather than
 fetch raw rows, and a well-asked question («the total per channel») sends a few
 aggregated lines, not the table. Choose the provider with that in mind, and keep

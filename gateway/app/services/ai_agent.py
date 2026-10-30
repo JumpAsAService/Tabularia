@@ -41,12 +41,13 @@ from fastapi import Request
 os.environ.setdefault("PYDANTIC_AI_NO_BANNER", "1")  # no banner in the gateway's logs
 
 from pydantic_ai import ModelRetry, RunContext  # noqa: E402
+from pydantic_ai.capabilities import AbstractCapability  # noqa: E402
 from sqlmodel import Session, select
 
 from app.core.config import get_settings
 from app.core.engine_client import get_engine_client
 from app.models import Datasource, Project, User
-from app.services import ai_prompts, audit
+from app.services import ai_prompts, audit, metadata_only
 from app.services.permissions import readable_project_ids
 
 logger = logging.getLogger(__name__)
@@ -107,6 +108,26 @@ class ChatDeps:
     tools: Any = None
     plan_id: int | None = None
     questions: list[dict[str, Any]] | None = None
+    # ── metadata-only mode (services/metadata_only.py) ──
+    # whose switch applies: the registry's tools run here for MCP too
+    origin: Literal["chat", "mcp"] = "chat"
+    # this turn began in the mode, and stays in it
+    metadata_turn: bool = False
+    # the conversation has earlier turns the model does not get: the context says so
+    history_withheld: bool = False
+
+    def withholds_data(self) -> bool:
+        return self.metadata_turn or metadata_only.on(self.origin)
+
+
+class StopWhenWithheld(AbstractCapability[ChatDeps]):
+    """Before every request to the model: a turn begun outside metadata-only mode stops
+    when the mode comes on, since the request would carry what the turn has read so far."""
+
+    async def before_model_request(self, ctx: RunContext[ChatDeps], request_context: Any) -> Any:
+        if not ctx.deps.metadata_turn and metadata_only.on(ctx.deps.origin):
+            raise metadata_only.TurnOutdated
+        return request_context
 
 
 def _columns(ds: Datasource) -> list[dict[str, Any]]:
@@ -167,7 +188,11 @@ async def _engine_preview(ds: Datasource, operations: list[dict], limit: int, de
     win *in the same chat*, when someone rephrases while the answer is coming. Tied to
     the user, two conversations in parallel killed each other — two tabs open by the
     same person, or two people on a shared account, as in a public demo. New chat: no
-    slot, because there is nothing to overtake."""
+    slot, because there is nothing to overtake.
+
+    In metadata-only mode nothing is previewed for a model, whichever tool asks."""
+    if deps.withholds_data():
+        raise _EngineRefusal(403, metadata_only.PREVIEW_WITHHELD)
     body: dict[str, Any] = {
         "bucket": ds.bucket, "input_key": ds.key, "operations": operations,
         "limit": limit, "no_cache": True,
@@ -206,16 +231,37 @@ def dialect_of(engine: Optional[str]) -> tuple[str, str]:
     return _DIALECTS.get((engine or "polars").lower(), _DIALECTS["polars"])
 
 
+# what the model is told in metadata-only mode, after the administrators' text: the barrier
+# is in the tools, this keeps the model from inventing what they do not give it
+METADATA_ONLY_CONTEXT = (
+    "- METADATA-ONLY MODE is on, by the administrator's choice: no value of a row of data reaches you, and these "
+    "instructions come before anything above about queries, previews, sample rows, tables and charts. Your tools give you "
+    "names, types, the descriptions people wrote, row counts and the structure of what is saved; none can query or preview. "
+    "So you cannot state a value, a total, a share or any other figure computed on the data, nor guess one: when the "
+    "answer needs them, say plainly that on this installation you cannot read the data, and offer what you can do "
+    "(explain what a datasource holds from its description and columns, write the SQL or build the flow that the user runs "
+    "and reads in Tabularia). The errors of runs and queries are withheld too: the user reads them in Tabularia.")
+HISTORY_WITHHELD_CONTEXT = (
+    "- This conversation has earlier turns you do not get, because they were made before metadata-only mode came on and "
+    "may hold values of the data. If the user refers to them, say you can no longer see them.")
+
+
 def context(engine: Optional[str], locale: str, focus: list[dict[str, Any]] | None = None,
-            level: str = "write", plans: list[str] | None = None) -> str:
+            level: str = "write", plans: list[str] | None = None, withheld: bool = False,
+            history_withheld: bool = False) -> str:
     """What Tabularia adds to the text at every request (services/ai_prompts.py)."""
     dialect, quote = dialect_of(engine)
     lines = [
         ai_prompts.CONTEXT_HEADER,
         f"- {ai_prompts.today()}",
         f"- SQL dialect: {dialect}. Quote column names that contain spaces or symbols with {quote}.",
-        f"- Query results are capped at {get_settings().ai.max_result_rows} rows.",
     ]
+    if withheld:
+        lines.append(METADATA_ONLY_CONTEXT)
+        if history_withheld:
+            lines.append(HISTORY_WITHHELD_CONTEXT)
+    else:
+        lines.append(f"- Query results are capped at {get_settings().ai.max_result_rows} rows.")
     if level != "write":
         lines.append("- This user can only read: the tools that build, change, run or schedule are not available. "
                      "If they ask for a change, say they need an account that may make changes.")
@@ -233,7 +279,8 @@ def context(engine: Optional[str], locale: str, focus: list[dict[str, Any]] | No
 def _instructions(ctx: RunContext[ChatDeps]) -> str:
     deps = ctx.deps
     return ai_prompts.compose(deps.prompt or ai_prompts.ASSISTANT,
-                              context(deps.engine, deps.locale, deps.focus, deps.level, deps.plans))
+                              context(deps.engine, deps.locale, deps.focus, deps.level, deps.plans,
+                                      deps.withholds_data(), deps.history_withheld))
 
 
 def _words(text: str) -> str:
@@ -283,6 +330,9 @@ async def describe_datasource(ctx: RunContext[ChatDeps], datasource_id: int) -> 
             "columns": _columns(ds),
         }
         snapshot = Datasource(id=ds.id, name=ds.name, project_id=ds.project_id, bucket=ds.bucket, key=ds.key, sort_keys=ds.sort_keys)
+    if deps.withholds_data():
+        info["note"] = metadata_only.SAMPLE_WITHHELD
+        return info
     try:
         res = await _engine_preview(snapshot, [], SAMPLE_ROWS, deps)
         info["sample_rows"] = _trim(res.get("rows", []))

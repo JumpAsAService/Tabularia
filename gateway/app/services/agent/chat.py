@@ -22,6 +22,9 @@ itself with. Then:
 
 A tool's result carries the time it took in its `metadata`, which the model never sees:
 the page shows it, also when the conversation is opened again (services/ai_chats.py).
+
+In metadata-only mode (services/metadata_only.py) the tools that read data are not among
+those offered, and a turn begun in the mode keeps to it (`metadata_turn`) to its end.
 """
 from __future__ import annotations
 
@@ -57,7 +60,7 @@ def tool_context(deps: ai_agent.ChatDeps) -> ToolContext:
     if deps.tools is None:
         deps.tools = ToolContext(user=deps.user, session_factory=deps.session_factory, request=deps.request,
                                  origin="chat", chat_id=deps.chat_id, locale=deps.locale, model_id=deps.model_id,
-                                 engine=deps.engine)
+                                 engine=deps.engine, metadata_turn=deps.metadata_turn)
     return deps.tools
 
 
@@ -70,7 +73,7 @@ def _ensure_chat(deps: ai_agent.ChatDeps) -> None:
     tool_context(deps).chat_id = deps.chat_id
 
 
-def _as_tool(t: registry.Tool) -> AiTool:
+def _as_tool(t: registry.Tool, withheld: bool = False) -> AiTool:
     async def run(ctx: RunContext[ai_agent.ChatDeps], /, **arguments: Any) -> ToolReturn:
         deps = ctx.deps
         if t.level == "write":
@@ -90,7 +93,7 @@ def _as_tool(t: registry.Tool) -> AiTool:
             deps.plan_id = out["plan_id"]
         return ToolReturn(return_value=out, metadata={"ms": round((time.monotonic() - started) * 1000)})
 
-    return AiTool.from_schema(run, name=t.name, description=t.description, json_schema=t.input_schema(),
+    return AiTool.from_schema(run, name=t.name, description=t.described(withheld), json_schema=t.input_schema(),
                               takes_ctx=True, sequential=t.level == "write" or t.name in _ON_THE_SLOT)
 
 
@@ -103,13 +106,16 @@ agent: Agent[ai_agent.ChatDeps, Any] = Agent(
     output_type=[str, *(ToolOutput(t.args, name=t.name, description=t.description) for t in _ENDING)],
     retries=RETRIES,
     name="tabularia-assistant",
+    capabilities=[ai_agent.StopWhenWithheld()],
 )
 
 
 @agent.toolset(per_run_step=False)
 def _registry_tools(ctx: RunContext[ai_agent.ChatDeps]) -> FunctionToolset:
     """The registry's tools for this person, read when the turn starts."""
-    return FunctionToolset([_as_tool(t) for t in registry.available("chat", ctx.deps.level) if not t.ends_turn])
+    withheld = ctx.deps.withholds_data()
+    return FunctionToolset([_as_tool(t, withheld) for t in registry.available("chat", ctx.deps.level, withheld)
+                            if not t.ends_turn])
 
 
 @agent.output_validator
@@ -173,9 +179,10 @@ def turn_extras(deps: ai_agent.ChatDeps) -> dict[str, Any]:
     return out
 
 
-def plans_in_words(session: Session, user: User, chat_id: Optional[int]) -> list[str]:
+def plans_in_words(session: Session, user: User, chat_id: Optional[int], withheld: bool = False) -> list[str]:
     """The conversation's latest plans as they stand, for the model's context: it does not
-    see the person's clicks, and must not take a plan applied for one still waiting."""
+    see the person's clicks, and must not take a plan applied for one still waiting.
+    `withheld` (metadata-only mode): that an action failed, not in whose words."""
     if chat_id is None:
         return []
     rows = session.exec(
@@ -189,7 +196,10 @@ def plans_in_words(session: Session, user: User, chat_id: Optional[int]) -> list
         words = f"plan {plan.id}: {status}, {n} action{'s' if n != 1 else ''}"
         if status == "pending":
             words += ", waiting for the user's click: plan tools add to it"
-        done = [r.get("words") or (f"failed: {r['error']}" if r.get("error") else "") for r in plans.results_of(plan) or []]
+        results = plans.results_of(plan) or []
+        if withheld:
+            results = [plans.result_without_data(r) for r in results]
+        done = [r.get("words") or (f"failed: {r['error']}" if r.get("error") else "") for r in results]
         done = [w for w in done if w]
         if done:
             words += " — " + " ".join(done)[:MAX_RESULT_WORDS]

@@ -53,11 +53,11 @@ SFTP, S3, APIs, SharePoint) belong to each connection, encrypted with
 | Read by | Variables |
 |---|---|
 | [Shared by the gateway and the engine](#shared-by-the-gateway-and-the-engine) | 7 |
-| [Gateway](#gateway) | 164 |
+| [Gateway](#gateway) | 166 |
 | [Engine and workers](#engine-and-workers) | 98 |
 | [Frontend](#frontend) | 4 |
 | [Compose and Helm only](#compose-and-helm-only) | 13 |
-| **Total** | **286** |
+| **Total** | **288** |
 
 ## Before production
 
@@ -193,6 +193,7 @@ Optional: a chat over the catalog and an assistant in the flow editor, against a
 | `AI__ACCESS_KEY` | string | empty | `ai.accessKey` | Identifier of the key (Scaleway calls it access key); the protocol authenticates with the secret alone, this only tells which key is in use. |
 | `AI__SECRET_KEY` | string | empty | `secrets.aiSecretKey` | The API key. Empty = assistant off. |
 | `AI__DEFAULT_MODEL` | string | empty | `ai.defaultModel` | Model proposed first in the picker, if an administrator enabled it. Also adjustable in Administration → Settings. |
+| `AI__METADATA_ONLY` | boolean | `false` | `extraEnv` | On, no value of a row of data reaches the model configured here: the chat, the flow and script assistants and the dbt export get names, types, descriptions, row counts and structure, with no query, preview, sample or error text. Values people typed in filters, SQL and descriptions still go. See [AI in Tabularia](integrations/ai.md#metadata-only-mode). Also adjustable in Administration → Settings. |
 | `AI__MAX_RESULT_ROWS` | integer, 1–2000 | `200` | `ai.maxResultRows` | Rows a query of the assistant may return, to the model and to the chat. Also adjustable in Administration → Settings. |
 | `AI__MAX_REQUESTS` | integer, 1–50 | `12` | `ai.maxRequests` | Model round-trips per message of the data chat: the cap on its tool-calling loop. Also adjustable in Administration → Settings. |
 | `AI__MAX_FLOW_REQUESTS` | integer, 1–80 | `30` | `ai.maxFlowRequests` | The same for the assistants that build — the flow editor's, and the Assistant page's for whoever may make changes — which take a round-trip for every step they build and check. Also adjustable in Administration → Settings. |
@@ -227,6 +228,7 @@ The MCP server at `/mcp` (on the gateway, under `APP__ROOT_PATH` when set): agen
 |---|---|---|---|---|
 | `MCP__ENABLED` | boolean | `true` | `extraEnv` | Turns the MCP server on. Off, `/mcp` answers 404 and the API tokens keep working on the rest of the API. Also adjustable in Administration → Settings. |
 | `MCP__CONFIRM_IN_TABULARIA_ONLY` | boolean | `false` | `extraEnv` | On, an agent cannot apply its own plans (`confirm_plan` refuses with the plan's link): a person signed in to Tabularia confirms each plan on its page. Also adjustable in Administration → Settings. |
+| `MCP__METADATA_ONLY` | boolean | `false` | `extraEnv` | On, the MCP tools that read values are neither offered nor callable, and the others leave out rows and error text. It covers `/mcp` only: an API token can still read data on the rest of the API. See [AI in Tabularia](integrations/ai.md#metadata-only-mode). Also adjustable in Administration → Settings. |
 
 ### Development sample
 

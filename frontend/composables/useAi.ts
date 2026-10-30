@@ -11,6 +11,9 @@ export interface AiStatus {
   enabled: boolean
   models: string[]
   default_model: string | null
+  // metadata-only mode: no value of a row reaches the models configured here, or an MCP client's
+  metadata_only?: boolean
+  mcp_metadata_only?: boolean
 }
 
 export interface AiModel {
@@ -125,8 +128,10 @@ export interface AiDone {
   // the flow editor's assistant: the new canvas (null when nothing changed) and the nodes it touched
   definition?: string | null
   touched?: string[]
-  // the script editor's assistant: the files it proposes (null when it proposed none)
+  // the script editor's assistant: the files it proposes (null when it proposed none), and
+  // that it did not get the error of the failed run (metadata-only mode)
   proposal?: ScriptProposal | null
+  error_withheld?: boolean
   // the Assistant page's agent: the questions that ended the turn, the plan it proposed or changed
   questions?: AgentQuestion[] | null
   plan?: AgentPlan | null

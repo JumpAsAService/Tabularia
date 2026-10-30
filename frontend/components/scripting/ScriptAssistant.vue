@@ -64,9 +64,10 @@ let controller: AbortController | null = null
 const modelOptions = computed(() => props.status.models.map((m) => ({ value: m, label: m })))
 const ready = computed(() => accepted.value === true && !!model.value && !props.readOnly)
 const failed = computed(() => props.lastRun?.status === 'FAILURE' && !props.lastRun.stale)
+const metadataOnly = computed(() => !!props.status.metadata_only)
 
 onMounted(() => {
-  read()
+  read(metadataOnly.value)
   let saved = ''
   try { saved = localStorage.getItem(MODEL_KEY) ?? '' } catch { /* no storage: the default model */ }
   model.value = props.status.models.includes(saved) ? saved : (props.status.default_model ?? props.status.models[0] ?? '')
@@ -108,8 +109,11 @@ async function send(text?: string, withError = false) {
         message, model: model.value, chat_id: chatId.value, environment_id: props.environmentId,
         files: props.files, entrypoint: props.entrypoint, variables: props.variables, inputs: props.inputs,
         output: props.output, saved: props.saved, locale: locale.value,
-        // the gateway keeps only the error of this log for the model
-        ...(withError || failed.value ? { run_log: run?.log ?? '', run_exit_code: run?.exit_code ?? null } : {}),
+        // the gateway keeps only the error of this log for the model; in metadata-only mode the
+        // log stays here (the gateway would drop it anyway) and only its exit code goes
+        ...(withError || failed.value
+          ? { run_log: metadataOnly.value ? '' : (run?.log ?? ''), run_exit_code: run?.exit_code ?? null }
+          : {}),
       },
       {
         onText: (d) => { turn.text += d; scrollDown() },
@@ -158,7 +162,7 @@ function onKey(e: KeyboardEvent) {
 
 <template>
   <section class="sa" :aria-label="$t('scriptAssistant.title')">
-    <AiDisclosure :open="accepted === false" @accept="accept" />
+    <AiDisclosure :open="accepted === false" :metadata-only="metadataOnly" @accept="accept" />
     <header class="sa-head">
       <h3><Sparkles :size="14" /> {{ $t('scriptAssistant.title') }}</h3>
       <button v-if="turns.length" class="sa-mini" type="button" :disabled="busy" :title="$t('scriptAssistant.newConversation')"
@@ -168,7 +172,8 @@ function onKey(e: KeyboardEvent) {
     <div ref="scroller" class="sa-stream" aria-live="polite">
       <div v-if="!turns.length" class="sa-empty">
         <p>{{ $t('scriptAssistant.emptyBody') }}</p>
-        <button v-if="failed" type="button" class="sa-fix" :disabled="!ready || busy" @click="send($t('scriptAssistant.fixPrompt'), true)">
+        <p v-if="failed && metadataOnly" class="sa-note">{{ $t('scriptAssistant.errorWithheld') }}</p>
+        <button v-else-if="failed" type="button" class="sa-fix" :disabled="!ready || busy" @click="send($t('scriptAssistant.fixPrompt'), true)">
           <Wrench :size="13" /> {{ $t('scriptAssistant.fixLastError') }}
         </button>
         <button type="button" class="sa-example" :disabled="!ready || busy" @click="send($t('scriptAssistant.example1'))">{{ $t('scriptAssistant.example1') }}</button>
@@ -212,7 +217,7 @@ function onKey(e: KeyboardEvent) {
         <button v-else type="submit" class="sa-send primary" :disabled="!ready || !draft.trim()" :title="$t('scriptAssistant.send')"
                 :aria-label="$t('scriptAssistant.send')"><Send :size="13" /></button>
       </div>
-      <p class="sa-notice"><Sparkles :size="12" aria-hidden="true" /> {{ $t('scriptAssistant.noData') }}</p>
+      <p class="sa-notice"><Sparkles :size="12" aria-hidden="true" /> {{ metadataOnly ? $t('scriptAssistant.metadataOnly') : $t('scriptAssistant.noData') }}</p>
       <p class="sa-notice">{{ $t('aiCompliance.disclaimer') }}</p>
       <Select v-if="modelOptions.length > 1" v-model="model" class="sa-model" :options="modelOptions" :disabled="busy"
               :aria-label="$t('scriptAssistant.model')" />

@@ -30,6 +30,14 @@ MAX_QUESTION = 8000
 # of its first real question. Now an empty title is the default, and the
 # interface writes «New conversation» in its own language.
 _OLD_DEFAULT_TITLE = "Nuova conversazione"
+# on the first message of a turn made in metadata-only mode (services/metadata_only.py): the
+# only turns that mode sends back to the model
+_METADATA_ONLY_MARK = "tabularia_metadata_only"
+
+
+def _made_in_metadata_only(items: list[Any]) -> bool:
+    first = items[0] if items else None
+    return isinstance(first, dict) and bool((first.get("metadata") or {}).get(_METADATA_ONLY_MARK))
 
 
 def _title(question: str) -> str:
@@ -77,11 +85,15 @@ def create(session: Session, user: User, question: str, model_id: str, engine: O
     return chat
 
 
-def history(session: Session, chat: AiChat, max_messages: int):
+def history(session: Session, chat: AiChat, max_messages: int, metadata_only: bool = False):
     """The messages of the earlier turns, ready for `message_history`.
 
     An unreadable turn is SKIPPED instead of failing the chat: better a conversation that
-    starts again maimed than one that no longer reopens."""
+    starts again maimed than one that no longer reopens.
+
+    `metadata_only`: only the turns made in that mode. Any other may hold values of the data
+    in every part of it: a tool's result, the SQL the model wrote after reading them, what it
+    answered, the choices of a card."""
     from pydantic_ai import ModelMessagesTypeAdapter
 
     raw_items: list[Any] = []
@@ -90,9 +102,12 @@ def history(session: Session, chat: AiChat, max_messages: int):
     ).all()
     for turn in turns:
         try:
-            raw_items.extend(json.loads(turn.messages))
+            items = json.loads(turn.messages)
         except ValueError:
             logger.warning("chat %s: turn %s unreadable, skipped", chat.id, turn.seq)
+            continue
+        if not metadata_only or _made_in_metadata_only(items):
+            raw_items.extend(items)
     if max_messages:
         raw_items = raw_items[-max_messages:]
     if not raw_items:
@@ -104,10 +119,23 @@ def history(session: Session, chat: AiChat, max_messages: int):
         return []
 
 
+def turns_withheld(session: Session, chat: AiChat) -> bool:
+    """Whether metadata-only mode keeps some earlier turn of this conversation from the model."""
+    for raw in session.exec(select(AiChatTurn.messages).where(AiChatTurn.chat_id == chat.id)).all():
+        try:
+            if not _made_in_metadata_only(json.loads(raw)):
+                return True
+        except ValueError:
+            continue
+    return False
+
+
 def save_turn(
     session: Session, chat_id: int, *, question: str, messages: list[Any], model_id: str,
-    input_tokens: int, output_tokens: int, requests: int, cost: Optional[Decimal],
+    input_tokens: int, output_tokens: int, requests: int, cost: Optional[Decimal], metadata_only: bool = False,
 ) -> AiChatTurn:
+    if metadata_only and messages:
+        messages[0]["metadata"] = {**(messages[0].get("metadata") or {}), _METADATA_ONLY_MARK: True}
     owned_chat = session.get(AiChat, chat_id)
     user_id_ = owned_chat.user_id if owned_chat is not None else 0
     next_ = session.exec(

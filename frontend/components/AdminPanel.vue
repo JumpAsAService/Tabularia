@@ -3,11 +3,11 @@
 // users, groups, banners. Before, everything was stacked on one screen and the
 // destructive actions sat next to the creation forms. The feedback goes through the
 // toasts; the confirmations through the browser's confirm(), as in the rest of the app.
-import { computed, onMounted, ref } from 'vue'
+import { computed, onMounted, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { useFormat } from '~/composables/useFormat'
 import {
-  CheckCircle2, Cpu, Eye, Plus, Search, Shield, ShieldCheck, Trash2, TriangleAlert,
+  CheckCircle2, Cpu, Eye, Plus, Search, Shield, ShieldAlert, ShieldCheck, Trash2, TriangleAlert,
   User as UserIcon, Users as UsersIcon, X, XCircle, Sparkles, Bot, Webhook as WebhookIcon,
   SlidersHorizontal, Radar, Server, KeyRound, Code2, Boxes, DatabaseBackup,
 } from 'lucide-vue-next'
@@ -35,7 +35,7 @@ import { useProjects, type GroupOut, type Project, type UserOut } from '~/compos
 import { useBanners, type Banner, type BannerLevel } from '~/composables/useBanners'
 import { usePrivacy, type PrivacyNotice } from '~/composables/usePrivacy'
 import { useEnginePolicy, type EnginePolicy } from '~/composables/useEnginePolicy'
-import { useAi, type AiModel } from '~/composables/useAi'
+import { useAi, type AiModel, type AiStatus } from '~/composables/useAi'
 
 const api = useProjects()
 const bannersApi = useBanners()
@@ -203,6 +203,7 @@ async function loadAll() {
     nRegistries.value = rg.registries.length
     registriesOff.value = rg.disabled_reason === 'kubernetes'
   } catch { /* the section says why when it opens */ }
+  loadAiStatus()
   // apart: the assistant may not be configured, and that is not a panel error
   try {
     models.value = await aiApi.models()
@@ -213,6 +214,15 @@ async function loadAll() {
   }
 }
 onMounted(loadAll)
+
+// metadata-only mode, as Administration → AI models shows it: changed in Settings, so read again on the way back here
+const aiStatus = ref<AiStatus | null>(null)
+async function loadAiStatus() {
+  try {
+    aiStatus.value = await aiApi.status()
+  } catch { /* the section shows the models without it */ }
+}
+watch(section, (s) => { if (s === 'ai') loadAiStatus() })
 
 // flows left on an engine no longer allowed: it is the migration's work list. Disabling
 // stops nothing, so without this number the change would have no visible consequence.
@@ -819,6 +829,17 @@ async function toggleEngine(m: EnginePolicy) {
           <div class="card">
             <h4><Sparkles :size="14" /> {{ $t('adminPanel.aiTitle') }}</h4>
             <p class="muted small hint">{{ $t('adminPanel.aiHint') }}</p>
+            <div v-if="aiStatus" class="data-mode">
+              <p :class="{ on: aiStatus.metadata_only }">
+                <component :is="aiStatus.metadata_only ? ShieldCheck : ShieldAlert" :size="14" aria-hidden="true" />
+                <span>{{ aiStatus.metadata_only ? $t('adminPanel.aiMetadataOnlyOn') : $t('adminPanel.aiMetadataOnlyOff') }}</span>
+              </p>
+              <p :class="{ on: aiStatus.mcp_metadata_only }">
+                <component :is="aiStatus.mcp_metadata_only ? ShieldCheck : ShieldAlert" :size="14" aria-hidden="true" />
+                <span>{{ aiStatus.mcp_metadata_only ? $t('adminPanel.mcpMetadataOnlyOn') : $t('adminPanel.mcpMetadataOnlyOff') }}</span>
+              </p>
+              <button class="link-like" type="button" @click="goTo('settings')">{{ $t('adminPanel.aiMetadataOnlyChange') }}</button>
+            </div>
             <p v-if="models === null" class="muted small hint">{{ modelsError || $t('adminPanel.aiUnavailable') }}</p>
             <div v-else class="tablewrap">
               <table class="rows">
@@ -965,6 +986,13 @@ async function toggleEngine(m: EnginePolicy) {
 .card h4 { margin: 0; display: inline-flex; align-items: center; gap: 7px; }
 .subhead { margin-top: 14px !important; color: var(--muted); font-size: 12.5px; }
 .hint { margin: 0; }
+/* metadata-only mode, on the AI section: what a model gets */
+.data-mode { display: flex; flex-direction: column; align-items: flex-start; gap: 6px; padding: 10px 12px; border: 1px solid var(--border); border-radius: 8px; }
+.data-mode p { display: flex; align-items: flex-start; gap: 7px; margin: 0; font-size: 12.5px; color: var(--muted); }
+.data-mode p svg { flex: none; margin-top: 2px; }
+.data-mode p.on { color: var(--text); }
+.data-mode p.on svg { color: var(--accent-hi); }
+.link-like { padding: 0; border: 0; background: none; color: var(--accent-hi); font-size: 12.5px; cursor: pointer; text-decoration: underline; }
 /* the same search bar as the group by's */
 .rowsearch {
   display: flex;

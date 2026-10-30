@@ -12,16 +12,22 @@ const KEY = 'tabularia.aiDisclosure'
 // To raise when the text changes in SUBSTANCE (not for a comma): whoever had accepted the
 // earlier version sees it asked again, and rightly — they consented to something else.
 const VERSION = '1'
+// The dialog says something else in metadata-only mode: each text is accepted on its own, so
+// that whoever read «no value of your data reaches the model» reads the other one when
+// an administrator turns the mode off, and the other way round.
+const versionFor = (metadataOnly: boolean) => (metadataOnly ? `${VERSION}-metadata` : VERSION)
 
 // `null` = not known yet (we are on the server, or the mount has not happened). It serves
 // to keep the dialog from flashing to whoever has accepted already.
 const accepted = ref<boolean | null>(null)
+let current = VERSION
 
 export function useAiDisclosure() {
-  function read() {
+  function read(metadataOnly = false) {
     if (!import.meta.client) return
+    current = versionFor(metadataOnly)
     try {
-      accepted.value = localStorage.getItem(KEY) === VERSION
+      accepted.value = localStorage.getItem(KEY) === current
     } catch {
       // no storage (private window, cookies blocked): it asks every time. Better to insist than
       // to take as accepted what does not show.
@@ -32,7 +38,7 @@ export function useAiDisclosure() {
   function accept() {
     accepted.value = true
     try {
-      localStorage.setItem(KEY, VERSION)
+      localStorage.setItem(KEY, current)
     } catch {
       /* not being able to remember it does not prevent going on now */
     }
