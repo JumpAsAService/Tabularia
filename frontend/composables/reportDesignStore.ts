@@ -105,9 +105,18 @@ export function createDesignStore() {
   })
   watch(gesture, (on) => { if (!on) record() })
 
+  /** A change that is no step of the person's: the fields read from the data arrive by
+   *  themselves, and a Ctrl+Z is not spent on taking them away (nor does it). */
+  function quietly(change: () => void) {
+    record()
+    change()
+    current = text.value
+  }
+
   function restore(s: string) {
     current = s
     doc.value = deserialize(s)
+    seedShapes(doc.value)
     if (selectedId.value && !find(selectedId.value)) selectedId.value = null
   }
   function undo() {
@@ -130,10 +139,7 @@ export function createDesignStore() {
   /** A definition loaded: a history of its own, nothing selected. */
   function reset(d: DDefinition) {
     if (timer) { clearTimeout(timer); timer = null }
-    tableShape.clear()
-    for (const it of d.sections.body.items) {
-      if (it.type === 'table') tableShape.set(it.id, `${tableRows(it).length}:${d.theme.size}`)
-    }
+    seedShapes(d)
     doc.value = d
     current = text.value
     past.value = []
@@ -146,9 +152,16 @@ export function createDesignStore() {
   }
 
   // ── a table's height follows its rows when they change (a group added, the theme's
-  // size): not when a report is opened, whose tables keep the height they were saved with
+  // size): not when a report is opened or a change undone, whose tables keep the height they had
   // (a report made through the API may space what is under a table by it) ──
   const tableShape = new Map<string, string>()
+  /** A definition put in place as it is (opened, undone): its tables keep their heights. */
+  function seedShapes(d: DDefinition) {
+    tableShape.clear()
+    for (const it of d.sections.body.items) {
+      if (it.type === 'table') tableShape.set(it.id, `${tableRows(it).length}:${d.theme.size}`)
+    }
+  }
   const shapes = () => doc.value.sections.body.items
     .filter((i): i is DTable => i.type === 'table')
     .map((t) => [t.id, `${tableRows(t).length}:${doc.value.theme.size}`] as const)
@@ -178,6 +191,7 @@ export function createDesignStore() {
   }
 
   function add(band: BandName, item: DItem) {
+    record() // what came before is a step of its own, however quickly this one follows
     doc.value.sections[band].items.push(item)
     select(item.id)
   }
@@ -185,7 +199,9 @@ export function createDesignStore() {
   function remove(id: string) {
     const hit = find(id)
     if (!hit) return
+    record()
     doc.value.sections[hit.band].items.splice(hit.index, 1)
+    record() // Ctrl+Z after a removal always brings the item back, not what came before it
     if (selectedId.value === id) selectedId.value = null
     problems.value = problems.value.filter((p) => p.item !== id)
   }
@@ -243,7 +259,18 @@ export function createDesignStore() {
   /** The item moved inside its band and the page (after a paste, a change of size). */
   function keepInside(band: BandName, it: DItem) {
     const width = contentWidth(doc.value)
-    if (it.type === 'line') return
+    if (it.type === 'line') {
+      // its two ends, each inside the page and its band
+      const room = band === 'body' ? Infinity : doc.value.sections[band].height
+      const inside = (v: number, most: number) => mm1(Math.max(0, Math.min(v, most)))
+      const [x1, x2] = [inside(it.x, width), inside(it.x + it.w, width)]
+      const [y1, y2] = [inside(it.y, room), inside(it.y + it.h, room)]
+      it.x = x1
+      it.w = mm1(x2 - x1)
+      it.y = y1
+      it.h = mm1(y2 - y1)
+      return
+    }
     it.w = mm1(Math.min(it.w, width))
     it.x = mm1(Math.max(0, Math.min(it.x, width - it.w)))
     if (band === 'body') {
@@ -258,11 +285,13 @@ export function createDesignStore() {
 
   /** A table takes its row of the body alone: an item dropped beside one goes under it,
    *  a table dropped beside items goes under them. */
-  function settleRow(it: DItem): boolean {
+  function settleRow(placed: DItem): boolean {
     const items = doc.value.sections.body.items
-    if (!items.includes(it)) return false
+    // the one in the document, not the object just made: the rows are compared by identity
+    const it = items.find((i) => i.id === placed.id)
+    if (!it) return false
     for (let guard = 0; guard < 50; guard++) {
-      const clash = rowConflicts(items, it)[0]
+      const clash: { table: DItem; other: DItem } | undefined = rowConflicts(items, it)[0]
       if (!clash) return guard > 0
       if (it.type === 'table' && clash.table === it) {
         it.y = mm1(clash.other.y + Math.max(clash.other.h, 0) + 2)
@@ -329,7 +358,7 @@ export function createDesignStore() {
 
   return {
     doc, text, selectedId, selectedBand, selected, problems, zoom, snap, gesture, chartPicker, notice, sideTab, rowCounts,
-    undo, redo, canUndo, canRedo, reset, record,
+    undo, redo, canUndo, canRedo, reset, record, quietly,
     find, select, add, remove, duplicate, copy, paste, freeSpot, keepInside, settleRow,
     datasetOf, fieldsOf, params,
     problemAt, clearProblem, itemsWithProblems, setProblems,

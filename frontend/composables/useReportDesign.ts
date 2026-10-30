@@ -5,7 +5,7 @@
 // `followRender` and read with its `screenOf`.
 import {
   useReports,
-  type ReportDefinition, type ReportDetail, type ReportParams, type ReportScreen, type ReportState,
+  type ReportDefinition, type ReportDetail, type ReportParameter, type ReportParams, type ReportScreen, type ReportState,
 } from '~/composables/useReports'
 import type { DDefinition, DField } from '~/composables/reportDesignModel'
 
@@ -41,6 +41,11 @@ export function useReportDesign() {
   const check = (id: number, definition: unknown, signal?: AbortSignal) =>
     apiFetch<{ problems: unknown[] }>('/reports/check', { method: 'POST', body: { report_id: id, definition }, signal })
 
+  /** The parameters of the definition being edited as a form shows them (its preview's):
+   *  defaults resolved, the choices read from its datasets, with the values chosen so far. */
+  const parametersOf = (id: number, definition: DDefinition, params: ReportParams, signal?: AbortSignal) =>
+    apiFetch<ReportParameter[]>(`/reports/${id}/parameters`, { method: 'POST', body: { definition, params }, signal })
+
   /** A dataset's columns as the data has them, read from the definition being edited, and
    *  its rows with the parameters' defaults, counted up to the engine's cap (`rows`,
    *  `over`, `max_rows`: absent when they could not be counted; reportRowCount.ts). */
@@ -52,6 +57,7 @@ export function useReportDesign() {
   return {
     get: reports.get,
     parameters: reports.parameters,
+    parametersOf,
     save,
     preview,
     check,

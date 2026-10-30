@@ -1,6 +1,6 @@
 <script setup lang="ts">
 // A number of the definition: millimetres to a tenth, points, a count. The value is
-// written when it is a number within its bounds; an empty field is null where null is
+// written when it is a number, at most its largest; an empty field is null where null is
 // allowed (`nullable`), else it keeps the last good value.
 import { ref, watch } from 'vue'
 
@@ -32,8 +32,10 @@ function onInput(e: Event) {
     return
   }
   const n = Number(raw)
-  if (!Number.isFinite(n) || n < props.min || n > props.max) return
-  emit('update:modelValue', Math.round(n * 10 ** props.decimals) / 10 ** props.decimals)
+  // past the largest: the largest (not what the first digits happened to make, 27 for 277);
+  // under the smallest, it may be on its way: the blur goes back to the last good value
+  if (!Number.isFinite(n) || n < props.min) return
+  emit('update:modelValue', Math.round(Math.min(n, props.max) * 10 ** props.decimals) / 10 ** props.decimals)
 }
 function onBlur() {
   text.value = shown(props.modelValue)

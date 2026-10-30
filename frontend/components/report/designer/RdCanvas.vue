@@ -132,6 +132,18 @@ onMounted(() => {
   document.fonts?.ready.then(() => { fontsReady.value++ })
 })
 onBeforeUnmount(() => observer?.disconnect())
+// a page made wider than the stage is fitted, as when it opens; made narrower again (an undo),
+// it goes back to the zoom it had
+let zoomBeforeFit: number | null = null
+watch(() => page.value.w, (w, before) => {
+  if (w > before && stageW.value - RULER < w * (96 / 25.4) * store.zoom.value + gutterL.value + gutterR.value) {
+    zoomBeforeFit = store.zoom.value
+    fitWidth()
+  } else if (w < before && zoomBeforeFit != null) {
+    store.zoom.value = zoomBeforeFit
+    zoomBeforeFit = null
+  }
+})
 
 const sheetW = computed(() => page.value.w * ppm.value)
 const areaW = computed(() => Math.max(stageW.value - RULER - 2, sheetW.value + gutterL.value + gutterR.value))
@@ -510,7 +522,7 @@ function onDragOver(e: DragEvent) {
   e.preventDefault()
   const pt = sheetPoint(e)
   const band = bandAt(pt.y)
-  const local = { x: pt.x - margins.value[3], y: pt.y - bandTop.value[band] }
+  const local = { x: snapGrid(pt.x - margins.value[3]), y: snapGrid(pt.y - bandTop.value[band]) }
   if (p.kind === 'field') {
     const table = band === 'body' ? tableAt(local.x, local.y) : null
     dropHint.value = table
@@ -645,6 +657,9 @@ watch(() => store.selectedId.value, async (id) => {
   if (!id) return
   await nextTick()
   stage.value?.querySelector<HTMLElement>(`[data-item="${CSS.escape(id)}"]`)?.scrollIntoView({ block: 'nearest', inline: 'nearest' })
+  // added with a click or a drag from the panel's elements or fields: the keys go on with the item
+  const active = document.activeElement
+  if (!active || active === document.body || active.closest('.rds-tile, .rds-snip, .rds-field')) stage.value?.focus({ preventScroll: true })
 })
 
 // ── the selection's frame and handles ──
@@ -707,6 +722,7 @@ const bandLabel = (b: BandName) => t(`reportDesigner.bands.${b}`)
     tabindex="0"
     :aria-label="$t('reportDesigner.canvas.label')"
     @wheel="onWheel"
+    @dragenter="onDragOver"
     @dragover="onDragOver"
     @dragleave="onDragLeave"
     @drop="onDrop"

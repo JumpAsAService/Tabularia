@@ -131,6 +131,7 @@ function addSeries() {
             <RdSeg :model-value="s.axis ?? 'left'" :options="axisOptions" :label="$t('reportDesigner.chart.axis')" @update:model-value="s.axis = $event" />
           </div>
         </div>
+        <RdFormatInput v-if="item.kind === 'combo'" v-model="s.format" :label="$t('reportDesigner.chart.seriesFormat')" :item="id" :path="`series[${i}].format`" />
       </div>
     </div>
     <RdExprField :obj="item" prop="split_by" :label="$t('reportDesigner.chart.splitBy')" path="split_by" :item="id" :fields="fields" optional
@@ -191,7 +192,7 @@ function addSeries() {
   flex-direction: column; gap: 3px; padding: 6px 2px 5px; font-size: 10.5px; color: var(--muted); min-width: 0;
   background: transparent; border-color: transparent; box-shadow: none;
 }
-.rcp-kinds button span { max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.rcp-kinds button span { max-width: 100%; line-height: 1.15; text-align: center; overflow-wrap: anywhere; }
 .rcp-kinds button :deep(svg) { color: var(--accent); }
 .rcp-kinds button:hover { background: var(--panel-2); color: var(--text); box-shadow: none; }
 .rcp-kinds button.on { background: var(--tint-accent); color: var(--accent-hi); border-color: color-mix(in srgb, var(--accent) 45%, transparent); }

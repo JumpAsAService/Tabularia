@@ -32,6 +32,11 @@ interface Draft {
   labelExpr: string
 }
 const draft = ref<Draft | null>(null)
+let opened = ''
+/** An Esc or a click beside the dialog: what was written here is not lost without asking. */
+function closing() {
+  if (JSON.stringify(draft.value) === opened || confirm(t('reportDesigner.discardDraft'))) emit('close')
+}
 const original = ref<string | null>(null)
 
 const show = (v: unknown) => (v == null ? '' : String(v))
@@ -53,6 +58,7 @@ watch(() => props.open, (o) => {
     value: c && 'dataset' in c ? c.value : '',
     labelExpr: c && 'dataset' in c ? c.label ?? '' : '',
   }
+  opened = JSON.stringify(draft.value)
 }, { immediate: true })
 
 const typeOptions = computed(() => PARAM_TYPES.map((v) => ({ value: v, label: t(`reportDesigner.param.types.${v}`) })))
@@ -128,7 +134,7 @@ function rename(old: string, name: string) {
 </script>
 
 <template>
-  <Modal :open="open" :title="name ? $t('reportDesigner.param.editTitle', { name }) : $t('reportDesigner.param.newTitle')" :width="560" @close="emit('close')">
+  <Modal :open="open" :title="name ? $t('reportDesigner.param.editTitle', { name }) : $t('reportDesigner.param.newTitle')" :width="560" @close="closing">
     <div v-if="draft" class="rpd">
       <div v-for="(p, i) in serverProblems" :key="i" class="rpd-alert" role="alert">{{ p.path ? `${p.path}: ` : '' }}{{ p.message }}</div>
       <div class="rp-row">
@@ -141,7 +147,7 @@ function rename(old: string, name: string) {
           <input v-model="draft.label" type="text" maxlength="200" :placeholder="draft.name" />
         </label>
       </div>
-      <p v-if="nameError" class="rp-err">{{ nameError }}</p>
+      <p v-if="nameError && draft.name" class="rp-err">{{ nameError }}</p>
       <p v-else-if="draft.name" class="rp-help">{{ $t('reportDesigner.param.usage', { sql: '{' + draft.name + '}', expr: 'PARAM("' + draft.name + '")' }) }}</p>
       <div class="rp-row">
         <label class="rp-f">

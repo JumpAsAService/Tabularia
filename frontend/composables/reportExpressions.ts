@@ -366,6 +366,19 @@ export function checkExpression(text: string, ctx: CheckContext): ExprError | nu
   }
 }
 
+// what the check says of an expression not finished yet: something open at its end, nothing yet where a value goes
+const UNFINISHED = new Set(['textOpen', 'fieldOpen', 'fieldEmpty', 'placeholderOpen', 'parenOpen', 'callOpen', 'endsEarly', 'empty'])
+const NAME_MISTAKES = new Set(['unknownName', 'keywordAlone', 'missingOperator'])
+
+/** Whether a mistake only says the expression is still being written, with the caret where
+ *  it is: not finished yet, a name under the caret (`SU`, about to be `SUM(`), or the caret
+ *  inside what the mistake is about. A person who stops writing is told (at the blur). */
+export function stillWriting(err: ExprError, caret: number): boolean {
+  if (UNFINISHED.has(err.code)) return true
+  const end = err.pos + err.length
+  return NAME_MISTAKES.has(err.code) ? caret >= err.pos && caret <= end : caret > err.pos && caret < end
+}
+
 /** The nearest name, when one is close enough to be the one meant. */
 function closest(name: string, names: string[]): string | null {
   const low = name.toLowerCase()

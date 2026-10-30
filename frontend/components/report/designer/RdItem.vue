@@ -130,11 +130,13 @@ const kindLabel = computed(() => (props.item.type === 'chart' ? t(`reportDesigne
       :style="{ background: st.background || PAPER.band, borderRadius: px(st.radius ?? 1.5), padding: px(2.5), fontSize: `${7.5 * PT_MM * ppm}px` }"
     >
       <div class="rklabel">{{ item.label || $t('reportDesigner.face.kpiLabel') }}</div>
-      <div class="rkvalue" :style="{ fontSize: `${(st.size ?? 16) * PT_MM * ppm}px`, color: st.color || def.theme.color }">
-        <span v-if="item.value" class="rchip big">{{ item.value }}</span>
-        <span v-else class="rhole">{{ $t('reportDesigner.face.value') }}</span>
+      <div class="rkline">
+        <div class="rkvalue" :style="{ fontSize: `${(st.size ?? 16) * PT_MM * ppm}px`, color: st.color || def.theme.color }">
+          <span v-if="item.value" class="rchip big">{{ item.value }}</span>
+          <span v-else class="rhole">{{ $t('reportDesigner.face.value') }}</span>
+        </div>
+        <div v-if="item.compare" class="rkcmp">↑ <span class="rmono">{{ item.compare }}</span></div>
       </div>
-      <div v-if="item.compare" class="rkcmp">↑ <span class="rmono">{{ item.compare }}</span></div>
       <svg v-if="item.sparkline" class="rspark" viewBox="0 0 100 20" preserveAspectRatio="none" aria-hidden="true">
         <polyline points="0,16 14,12 28,14 42,8 56,10 70,5 84,7 100,2" fill="none" :stroke="def.theme.accent" stroke-width="1.6" vector-effect="non-scaling-stroke" />
       </svg>
@@ -185,8 +187,9 @@ const kindLabel = computed(() => (props.item.type === 'chart' ? t(`reportDesigne
 .rmono { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; }
 .rkpi { position: relative; width: 100%; height: 100%; box-sizing: border-box; overflow: hidden; color: #1f2933; display: flex; flex-direction: column; gap: 0.3em; }
 .rklabel { color: #6b7590; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-.rkvalue { font-weight: 700; line-height: 1.1; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-.rkcmp { color: #2b8a3e; font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.rkline { display: flex; align-items: baseline; gap: 0.6em; min-width: 0; }
+.rkvalue { font-weight: 700; line-height: 1.1; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; min-width: 0; }
+.rkcmp { color: #2b8a3e; font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; min-width: 0; flex: none; max-width: 45%; }
 .rspark { position: absolute; left: 8%; right: 8%; bottom: 8%; width: 84%; height: 24%; }
 .rbadge {
   position: absolute; top: -8px; right: 18%; display: grid; place-items: center; width: 16px; height: 16px;

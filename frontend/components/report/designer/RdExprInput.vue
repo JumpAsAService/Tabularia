@@ -12,7 +12,7 @@
 import { computed, nextTick, onBeforeUnmount, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 import {
-  FUNCTIONS, callAt, checkExpression, completionAt, highlightTokens, type ExprError, type TokenKind,
+  FUNCTIONS, callAt, checkExpression, completionAt, highlightTokens, stillWriting, type ExprError, type TokenKind,
 } from '~/composables/reportExpressions'
 import { fieldRef, type DField } from '~/composables/reportDesignModel'
 import RdFieldIcon from '~/components/report/designer/RdFieldIcon.vue'
@@ -45,14 +45,27 @@ const caret = ref(0)
 const uid = `rx-${Math.random().toString(36).slice(2, 9)}`
 
 // ── the check done here: what is fixed goes at once, a new mistake is said after a
-// pause (not while it is being typed) ──
+// pause, and what only says the expression is not finished is not said while the person
+// is writing it (stillWriting): `SUM([ric` is on its way, not wrong ──
 const localError = ref<ExprError | null>(null)
 let timer: ReturnType<typeof setTimeout> | null = null
-function checkOf(v: string): ExprError | null {
+/** written in since it took the focus: a field one only enters says what it has to say */
+const edited = ref(false)
+function rawCheck(v: string): ExprError | null {
   const expr = !props.textMode || v.startsWith('=')
   if (!expr || !v.trim() || (props.textMode && v.trim() === '=')) return null
   return checkExpression(v, { fields: props.fields ? props.fields.map((f) => f.name) : null, params: props.params ?? [] })
 }
+function checkOf(v: string): ExprError | null {
+  const err = rawCheck(v)
+  return err && focused.value && edited.value && stillWriting(err, caret.value) ? null : err
+}
+/** the server's answer about a text still being written is no more use than ours */
+const writing = computed(() => {
+  if (!focused.value || !edited.value) return false
+  const err = rawCheck(text.value)
+  return !!err && stillWriting(err, caret.value)
+})
 const same = (a: ExprError | null, b: ExprError | null) => !!a && !!b && a.code === b.code && a.pos === b.pos && a.length === b.length
 /** The text changed to `v`: the mistake shown goes if it is not there any more. */
 function recheck(v: string) {
@@ -81,7 +94,7 @@ const localMessage = (e: ExprError) => {
 const shown = computed(() => {
   if (props.problem) return { message: props.problem.message, pos: props.problem.pos, length: props.problem.length, server: true }
   if (localError.value) return { message: localMessage(localError.value), pos: localError.value.pos, length: localError.value.length, server: false }
-  if (props.live) return { message: props.live.message, pos: props.live.pos, length: props.live.length, server: false }
+  if (props.live && !writing.value) return { message: props.live.message, pos: props.live.pos, length: props.live.length, server: false }
   return null
 })
 
@@ -190,6 +203,8 @@ function accept(o: Option) {
   const to = o.replaceTo ?? c
   const next = v.slice(0, from) + o.insert + v.slice(to)
   const at = from + o.insert.length - (o.back ?? 0)
+  edited.value = true
+  caret.value = at
   emit('update:modelValue', next)
   emit('edited')
   open.value = false
@@ -206,6 +221,7 @@ function onInput(e: Event) {
   let v = el.value
   if (!props.multiline && v.includes('\n')) v = v.replace(/\n/g, ' ')
   caret.value = el.selectionStart ?? v.length
+  edited.value = true
   emit('update:modelValue', v)
   emit('edited')
   nextTick(() => refresh())
@@ -240,6 +256,7 @@ function scrollActive() {
 
 function onBlur() {
   focused.value = false
+  edited.value = false
   // a click on the list lands after the blur: it is kept open for that click
   setTimeout(() => { if (!focused.value) open.value = false }, 150)
   runCheck()

@@ -1,17 +1,18 @@
 <script setup lang="ts">
 // The preview of the report as it is now, saved or not: the pages the PDF will have (the
 // render's svg format, through the viewer's ReportPages), with values for the parameters
-// to try in a small bar, the render's notes, and its error. The mistakes of the definition
+// to try in the viewer's form, the render's notes, and its error. The mistakes of the definition
 // come back as a save's do, each with its item and field (the gateway's 422 `problems`, or
 // the engine's text of an older gateway): listed here, each one a way to its field in Design.
 import { computed, onBeforeUnmount, ref, watch } from 'vue'
-import { useI18n } from 'vue-i18n'
 import { CircleAlert, LoaderCircle, Play, RefreshCw, TriangleAlert } from 'lucide-vue-next'
-import Select from '~/components/ui/Select.vue'
 import ReportPages from '~/components/report/ReportPages.vue'
+import ReportParamsBar from '~/components/report/ReportParamsBar.vue'
 import { useDesign } from '~/composables/reportDesignStore'
 import { useReportDesign } from '~/composables/useReportDesign'
-import { stateAfter, type ReportDefinition, type ReportHotspot, type ReportParams, type ReportState } from '~/composables/useReports'
+import {
+  stateAfter, type ReportDefinition, type ReportFormValue, type ReportHotspot, type ReportParameter, type ReportParams, type ReportState,
+} from '~/composables/useReports'
 import { forSave, problemFromText, problemsOf, type DesignProblem } from '~/composables/reportDesignModel'
 import { errMessage } from '~/composables/useApi'
 
@@ -22,35 +23,83 @@ const emit = defineEmits<{
   (e: 'scale', s: number): void
 }>()
 const store = useDesign()
-const { t } = useI18n()
 const api = useReportDesign()
 
-// ── the values to try: texts, as a link would carry them ──
-const values = useState<Record<string, string>>(`report-designer-preview-${props.reportId}`, () => ({}))
-const parameters = computed(() => store.doc.value.parameters)
-function shownDefault(v: unknown): string {
-  if (v == null) return ''
-  return Array.isArray(v) ? v.join(', ') : String(v)
+// ── the values to try: the viewer's form, on the parameters as they are now. A value is kept
+// once it is chosen; a field not touched is the default, which the report keeps moving ──
+const values = useState<Record<string, ReportFormValue>>(`report-designer-preview-${props.reportId}`, () => ({}))
+const parameters = computed<ReportParameter[]>(() => store.doc.value.parameters.map((p) => {
+  const fixed = p.choices && 'values' in p.choices ? p.choices.values : null
+  const read = fresh.value.find((f) => f.name === p.name)
+  return {
+    name: p.name, label: p.label || p.name, type: p.type, multi: !!p.multi, required: !!p.required, default: read ? read.default : p.default,
+    choices: fixed ? fixed.map((v) => ({ value: v, label: String(v) })) : p.choices ? listOf(read) : null,
+    choices_truncated: !!read?.choices_truncated,
+    choices_error: read?.choices_error ?? null,
+  }
+}))
+/** The list read from a dataset; until the server answers, one with nothing in it (not a
+ *  text field that turns into a list); if it cannot answer, a field to write in. */
+function listOf(read: ReportParameter | undefined): ReportParameter['choices'] {
+  if (failed.value) return null
+  return read ? read.choices : []
 }
-function choiceOptions(p: (typeof parameters.value)[number]) {
-  // a yes/no is chosen, not typed: «true» written by hand is easy to get wrong
-  const yesNo = p.type === 'boolean' && !p.multi ? [true, false] : null
-  const c = yesNo ?? (p.choices && 'values' in p.choices ? p.choices.values : null)
-  if (!c) return null
-  const label = (v: unknown) => (typeof v === 'boolean' ? (v ? t('report.yes') : t('report.no')) : String(v))
-  const def = p.default == null || p.default === '' ? '' : Array.isArray(p.default) ? shownDefault(p.default) : label(p.default)
-  return [{ value: '', label: def ? t('reportDesigner.preview.defaultValue', { value: def }) : t('reportDesigner.preview.anyValue') },
-    ...c.map((v) => ({ value: String(v), label: label(v) }))]
+const free = (p: ReportParameter) => p.multi && !(p.choices && !p.choices_truncated)
+function defaultOf(p: ReportParameter): ReportFormValue {
+  const d = p.default
+  const texts = (d === null || d === undefined ? [] : Array.isArray(d) ? d : [d]).map(String)
+  if (!p.multi) return texts[0] ?? ''
+  return free(p) ? texts.join(', ') : texts
 }
+const form = computed(() => Object.fromEntries(parameters.value.map((p) => [p.name, values.value[p.name] ?? defaultOf(p)])))
+function onForm(next: Record<string, ReportFormValue>) {
+  const changed = parameters.value.filter((p) => JSON.stringify(next[p.name]) !== JSON.stringify(form.value[p.name]))
+  if (!changed.length) return
+  values.value = { ...values.value, ...Object.fromEntries(changed.map((p) => [p.name, next[p.name]])) }
+  readChoicesSoon()
+}
+/** What was chosen, as a render takes it: a list where the parameter takes several. */
 function params(): ReportParams {
   const out: ReportParams = {}
   for (const p of parameters.value) {
-    const v = (values.value[p.name] ?? '').trim()
-    if (!v) continue
-    out[p.name] = p.multi ? v.split(',').map((x) => x.trim()).filter(Boolean) : v
+    const v = values.value[p.name]
+    if (v === undefined) continue
+    const clean = (Array.isArray(v) ? v : p.multi ? v.split(',') : [v]).map((x) => x.trim()).filter(Boolean)
+    if (clean.length) out[p.name] = p.multi ? clean : clean[0]
   }
   return out
 }
+
+// ── the lists of the choices: read from the definition as it is, asked again when another
+// value may change them; the report's fixed lists are there already ──
+const fresh = ref<ReportParameter[]>([])
+const failed = ref(false)
+let choicesCall: AbortController | null = null
+let choicesTimer: ReturnType<typeof setTimeout> | null = null
+/** a list read from a dataset, or a default such as {today-30}, which only the server resolves */
+const asksServer = computed(() => store.doc.value.parameters.some((p) => (!!p.choices && 'dataset' in p.choices) || /^\{.+\}$/.test(String(p.default ?? ''))))
+async function readChoices() {
+  choicesCall?.abort()
+  if (!asksServer.value) { fresh.value = []; return }
+  const mine = new AbortController()
+  choicesCall = mine
+  try {
+    const got = await api.parametersOf(props.reportId, forSave(store.doc.value), params(), mine.signal)
+    if (choicesCall === mine) { fresh.value = got; failed.value = false }
+  } catch {
+    // half written, or the server cannot say: a field to write in, the render says the rest
+    if (choicesCall === mine) failed.value = true
+  }
+}
+function readChoicesSoon() {
+  if (choicesTimer) clearTimeout(choicesTimer)
+  if (asksServer.value && store.doc.value.parameters.length > 1) choicesTimer = setTimeout(readChoices, 400)
+}
+watch(() => JSON.stringify([store.doc.value.parameters, store.doc.value.datasets]), readChoices, { immediate: true })
+onBeforeUnmount(() => {
+  choicesCall?.abort()
+  if (choicesTimer) clearTimeout(choicesTimer)
+})
 
 // ── the render ──
 const busy = ref(false)
@@ -118,26 +167,9 @@ watch(warnings, () => { notesOpen.value = false })
 <template>
   <section class="rpv" :aria-label="$t('reportDesigner.preview.label')">
     <div class="rpv-bar">
-      <form class="rpv-params" @submit.prevent="run()">
-        <span v-if="!parameters.length" class="rpv-none">{{ $t('reportDesigner.preview.noParams') }}</span>
-        <label v-for="p in parameters" :key="p.name" class="rpv-param">
-          <span>{{ p.label || p.name }}<b v-if="p.required" class="rpv-req" aria-hidden="true">*</b></span>
-          <Select
-            v-if="choiceOptions(p) && !p.multi"
-            :model-value="values[p.name] ?? ''"
-            :options="choiceOptions(p)!"
-            :aria-label="p.label || p.name"
-            @update:model-value="values = { ...values, [p.name]: $event }"
-          />
-          <input
-            v-else
-            type="text"
-            :value="values[p.name] ?? ''"
-            :placeholder="shownDefault(p.default) || (p.multi ? 'a, b' : '')"
-            :aria-label="p.label || p.name"
-            @input="values = { ...values, [p.name]: ($event.target as HTMLInputElement).value }"
-          />
-        </label>
+      <ReportParamsBar v-if="parameters.length" class="rpv-form" :parameters="parameters" :model-value="form" :busy="busy" @update:model-value="onForm" @submit="run()" />
+      <form v-else class="rpv-params" @submit.prevent="run()">
+        <span class="rpv-none">{{ $t('reportDesigner.preview.noParams') }}</span>
         <button type="submit" class="rpv-run" :disabled="busy">
           <LoaderCircle v-if="busy" :size="13" class="spin" /><Play v-else :size="13" /> {{ $t('reportDesigner.preview.run') }}
         </button>
@@ -188,9 +220,7 @@ watch(warnings, () => { notesOpen.value = false })
 .rpv-bar { display: flex; align-items: center; gap: 10px; padding: 8px 12px; border-bottom: 1px solid var(--border-soft); background: var(--panel); min-width: 0; }
 .rpv-params { display: flex; align-items: flex-end; gap: 10px; flex: 1; min-width: 0; overflow-x: auto; padding-bottom: 1px; }
 .rpv-none { font-size: 12px; color: var(--muted); align-self: center; }
-.rpv-param { display: flex; flex-direction: column; gap: 3px; font-size: 11.5px; color: var(--muted); font-weight: 500; min-width: 130px; max-width: 200px; }
-.rpv-param input, .rpv-param :deep(.sel-trigger) { padding: 4px 8px; font-size: 12.5px; }
-.rpv-req { color: var(--danger); font-weight: 600; margin-left: 2px; }
+.rpv-form { flex: 1; min-width: 0; padding: 0; border: 0; background: transparent; }
 .rpv-run { flex-shrink: 0; white-space: nowrap; padding: 5px 11px; }
 .rpv-stale { font-size: 12px; color: var(--warning); white-space: nowrap; flex-shrink: 0; }
 .rpv-notes { color: var(--warning); border-color: color-mix(in srgb, var(--warning) 40%, var(--border)); white-space: nowrap; flex-shrink: 0; display: inline-flex; gap: 4px; align-items: center; }

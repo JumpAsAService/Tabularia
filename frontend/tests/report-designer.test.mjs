@@ -3,12 +3,17 @@
 // their item and field (reportDesignModel.ts), and the expressions rewritten when a
 // dataset or a parameter is renamed (reportExpressions.ts).
 // Run: npm test (Node strips the types of the modules it imports).
+import { register } from 'node:module'
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
 
 import { createLiveCheck } from '../composables/reportLiveCheck.ts'
-import { emptyDefinition, problemsOf, problemFromText, withSeen, liveShown } from '../composables/reportDesignModel.ts'
-import { renameEverywhere, renameInExpression } from '../composables/reportExpressions.ts'
+import { emptyDefinition, problemsOf, problemFromText, withSeen, liveShown, stillReported } from '../composables/reportDesignModel.ts'
+import { checkExpression, renameEverywhere, renameInExpression, stillWriting } from '../composables/reportExpressions.ts'
+
+register('./alias-hooks.mjs', import.meta.url)
+const { createDesignStore } = await import('../composables/reportDesignStore.ts')
+const { newItem } = await import('../composables/reportDesignModel.ts')
 
 // ── a clock and a server we drive by hand ───────────────────────────────────
 function fakeClock () {
@@ -255,4 +260,125 @@ test('rename: every expression of the report follows a renamed dataset or parame
   assert.equal(d.sections.body.items[2].label, 'orders', 'a KPI\'s label is text')
   assert.equal(d.sections.body.items[1].columns[1].total, 'SUM([a]) / SUM([a], "sales")')
   assert.equal(d.sections.body.items[1].columns[1].header, 'orders', 'a header is text')
+})
+
+test('writing: an expression on its way is not a mistake; a finished one that is wrong is', () => {
+  const ctx = { fields: ['ricavo', 'costo'], params: ['since'] }
+  const held = (text, caret = text.length) => stillWriting(checkExpression(text, ctx), caret)
+  for (const on of ['S', 'SU', 'SUM', 'SUM(', 'SUM([', 'SUM([ric', 'SUM([ricavo]', '[ricavo] +', '[ricavo] > 1 AN', '"Sales', '="Sales" &', '(', 'IF([ricavo] > 1,', 'PARAM("si', '{tod']) {
+    assert.ok(checkExpression(on, ctx), `${on} has something to say`)
+    assert.equal(held(on), true, on)
+  }
+  // finished and wrong: said, also while the field has the focus
+  for (const wrong of ['SUM([ricavoo])', '[ricavoo]', 'SUMM([ricavo])', 'SUM()', 'PARAM("nope")', '[ricavo] != 1']) {
+    assert.ok(checkExpression(wrong, ctx), wrong)
+    assert.equal(held(wrong), false, wrong)
+  }
+  // the name being written is the one under the caret: another one, away from it, is wrong
+  assert.equal(held('SU + [ricavo]', 2), true)
+  assert.equal(held('SU + [ricavo]', 13), false)
+  // inside the brackets of a field being corrected
+  assert.equal(held('SUM([ricavoo])', 8), true)
+})
+
+test('problems: those of a save go when the server\'s check does not find them any more', () => {
+  const p = (item, path) => ({ message: 'x', item, dataset: null, parameter: null, path, pos: null, length: 0 })
+  const saved = [p('t', 'columns[0].value'), p('t', 'groups[0].by'), p('k', 'value')]
+  assert.deepEqual(stillReported(saved, [p('k', 'value')]).map((x) => x.item), ['k'])
+  assert.deepEqual(stillReported(saved, []), [])
+})
+
+test('live check: a session that has ended (401) is not asked again at every pause', async () => {
+  const { clock, server, live, edit } = harness()
+  edit('v1')
+  await clock.tick(700)
+  server.calls[0].reject({ statusCode: 401 })
+  await flush()
+  edit('v2')
+  await clock.tick(700)
+  assert.equal(server.calls.length, 1)
+  assert.equal(live.available, false)
+})
+
+test('the store: what is put beside a table goes under it, however it gets there', () => {
+  const store = createDesignStore()
+  const d = store.doc.value
+  const table = newItem(d, 'table', { x: 0, y: 0 })
+  store.add('body', table)
+  const text = newItem(d, 'text', { x: 130, y: 2 })
+  store.add('body', text)
+  assert.equal(store.settleRow(text), true)
+  assert.equal(store.find(text.id).item.y, Math.round((table.h + 2) * 10) / 10)
+  // a table dropped beside what is there: under it
+  const other = newItem(store.doc.value, 'table', { x: 0, y: store.find(text.id).item.y + 1 })
+  store.add('body', other)
+  assert.equal(store.settleRow(other), true)
+  assert.ok(store.find(other.id).item.y >= store.find(text.id).item.y + 7)
+  // a copy too
+  store.select(text.id)
+  store.copy(text.id)
+  store.select(table.id)
+  const pasted = store.paste()
+  assert.ok(pasted)
+  const y = store.find(pasted.item.id).item.y
+  assert.equal(store.doc.value.sections.body.items.filter((i) => i.type === 'table' && i.y < y + 7 && i.y + i.h > y).length, 0)
+})
+
+test('the store: undo and redo do not change a table\'s height behind the history', async () => {
+  const store = createDesignStore()
+  const table = newItem(store.doc.value, 'table', { x: 0, y: 0 })
+  table.h = 50 // a height saved long ago
+  store.reset({ ...store.doc.value, sections: { ...store.doc.value.sections, body: { items: [table] } } })
+  store.doc.value.sections.body.items[0].groups.push({ by: '[a]' })
+  await flush()
+  store.record()
+  store.undo()
+  await flush()
+  assert.equal(store.doc.value.sections.body.items[0].h, 50)
+  assert.equal(store.canRedo.value, true)
+})
+
+test('the store: a line keeps both its ends on a page made narrower', () => {
+  const store = createDesignStore()
+  store.doc.value.page.orientation = 'landscape'
+  const line = { id: 'l', type: 'line', x: 20, y: 5, w: 250, h: 0 }
+  store.add('body', line)
+  store.doc.value.page.orientation = 'portrait'
+  const hit = store.find('l')
+  store.keepInside('body', hit.item)
+  assert.deepEqual([hit.item.x, hit.item.w], [20, 166])
+  // a line that runs backwards too
+  const back = { id: 'b', type: 'line', x: 180, y: 8, w: -200, h: 4 }
+  store.add('page_footer', back)
+  const b = store.find('b')
+  store.keepInside('page_footer', b.item)
+  assert.deepEqual([b.item.x, b.item.w, b.item.y, b.item.h], [180, -180, 8, 2])
+})
+
+test('the store: the fields read from the data are no step of the undo', async () => {
+  const store = createDesignStore()
+  store.doc.value.datasets.push({ name: 'd', source: { kind: 'sql', sql: 'SELECT 1', connection_id: null, engine: null }, fields: [] })
+  // they arrive: the dataset is one step, with them
+  const ds = store.doc.value.datasets[0]
+  store.quietly(() => { ds.fields = [{ name: 'a', type: 'string' }] })
+  await flush()
+  store.doc.value.sections.body.items.push({ id: 'r', type: 'rect', x: 0, y: 0, w: 5, h: 5 })
+  store.record()
+  store.undo()
+  assert.deepEqual(store.doc.value.datasets[0].fields, [{ name: 'a', type: 'string' }], 'the rectangle goes, the fields stay')
+  store.undo()
+  assert.equal(store.doc.value.datasets.length, 0, 'the next one takes the dataset away')
+  store.redo()
+  assert.deepEqual(store.doc.value.datasets[0].fields, [{ name: 'a', type: 'string' }], 'and it comes back with its fields')
+})
+
+test('the store: an item added and removed at once is two steps: Ctrl+Z brings it back', () => {
+  const store = createDesignStore()
+  store.doc.value.datasets.push({ name: 'd', source: { kind: 'sql', sql: 'SELECT 1', connection_id: null, engine: null } })
+  store.record()
+  store.add('body', { id: 'r', type: 'rect', x: 0, y: 0, w: 5, h: 5 })
+  store.remove('r')
+  store.undo()
+  assert.ok(store.find('r'), 'the item, not the dataset before it')
+  assert.equal(store.doc.value.datasets.length, 1)
 })

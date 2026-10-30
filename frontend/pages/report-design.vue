@@ -27,9 +27,10 @@ import { useReportDesign } from '~/composables/useReportDesign'
 import { createLiveCheck } from '~/composables/reportLiveCheck'
 import { rowCountOf, sourceKey, type RowCount } from '~/composables/reportRowCount'
 import { errMessage } from '~/composables/useApi'
+import { useSessionPresent } from '~/composables/useAuth'
 import { useFolderPaths } from '~/composables/useFolderPaths'
 import {
-  boxOf, contentWidth, forCheck, forSave, mm1, normalize, problemsOf, type BandName, type DDataset, type DItem, type DesignProblem,
+  boxOf, contentWidth, forCheck, forSave, mm1, normalize, problemsOf, stillReported, type BandName, type DDataset, type DItem, type DesignProblem,
 } from '~/composables/reportDesignModel'
 
 const { t } = useI18n()
@@ -112,11 +113,14 @@ async function save(force = false): Promise<boolean> {
     const detail = e?.data?.detail
     if (code === 422 && detail && typeof detail === 'object' && !Array.isArray(detail)) {
       showProblems(problemsOf(store.doc.value, detail))
-    } else if (code === 409 && !force && version.value != null && await savedElsewhere()) {
-      saving.value = false
-      return save(true)
     } else {
-      toast.error(errMessage(e))
+      const now = code === 409 && !force && version.value != null ? await newerVersion() : null
+      if (now == null) {
+        toast.error(errMessage(e))
+      } else if (confirm(t('reportDesigner.savedElsewhere', { mine: version.value!, now }))) {
+        saving.value = false
+        return save(true)
+      } // «Cancel» keeps the changes here, with nothing more to say
     }
     return false
   } finally {
@@ -124,14 +128,13 @@ async function save(force = false): Promise<boolean> {
   }
 }
 
-/** A 409 of a save: another version became the current one since this editor opened the
- *  report. Whether to save these changes over it (it stays among the versions). A 409
- *  for the name (another report has it) is not this: false. */
-async function savedElsewhere(): Promise<boolean> {
+/** A 409 of a save: the version that became the current one since this editor opened the
+ *  report (it stays among the versions, whatever the person decides). A 409 for the name
+ *  (another report has it) is not this: null. */
+async function newerVersion(): Promise<number | null> {
   let now: number | null = null
-  try { now = (await api.get(reportId.value!)).current_version } catch { return false }
-  if (now == null || now === version.value) return false
-  return confirm(t('reportDesigner.savedElsewhere', { mine: version.value!, now }))
+  try { now = (await api.get(reportId.value!)).current_version } catch { return null }
+  return now === version.value ? null : now
 }
 
 /** The problems of a refused save: the first one's item is selected and its
@@ -171,7 +174,11 @@ function problemWhere(p: DesignProblem): string {
 const live = createLiveCheck({
   call: (definition, signal) => api.check(reportId.value!, definition, signal),
   current: () => store.text.value,
-  onProblems: (list) => store.setLiveProblems(problemsOf(store.doc.value, { problems: list })),
+  onProblems: (list) => {
+    const found = problemsOf(store.doc.value, { problems: list })
+    store.setLiveProblems(found)
+    store.problems.value = stillReported(store.problems.value, found)
+  },
   onClear: () => { store.liveProblems.value = [] },
 })
 watch([() => store.text.value, () => store.gesture.value], ([text, moving]) => {
@@ -239,7 +246,7 @@ async function refreshFields(dataset: string) {
   try {
     const got = await api.fields(reportId.value, dataset, forSave(store.doc.value))
     const ds = store.doc.value.datasets.find((d) => d.name === dataset)
-    if (ds) ds.fields = got.fields
+    if (ds) store.quietly(() => { ds.fields = got.fields })
     keepRowCount(dataset, rowCountOf(got), ds?.source)
     const { [dataset]: _, ...rest } = fieldErrors.value
     fieldErrors.value = rest
@@ -290,9 +297,17 @@ function typing(target: EventTarget | null): boolean {
   const el = target as HTMLElement | null
   return !!el?.closest?.('input, textarea, select, [contenteditable="true"], .monaco-editor, [role="combobox"], .sel-panel')
 }
+// after a press on what takes no focus (a panel's empty space, a button in Firefox) the keys
+// come from the body: they act on the page only if that last press was on it, or a Backspace
+// beside the fields would remove the selected item
+let pressedAway = false
+function onPress(e: PointerEvent) {
+  pressedAway = !(e.target as HTMLElement | null)?.closest?.('.rdc-stage')
+}
 function onCanvas(target: EventTarget | null): boolean {
   const el = target as HTMLElement | null
-  return !el || el === document.body || !!el.closest?.('.rdc-stage')
+  if (!el || el === document.body) return !pressedAway
+  return !!el.closest?.('.rdc-stage')
 }
 const dialogOpen = () => setupOpen.value || datasetDialog.value.open || parameterDialog.value.open || !!document.querySelector('[role="dialog"][aria-modal="true"]')
 
@@ -366,10 +381,14 @@ function onBeforeUnload(e: BeforeUnloadEvent) {
   e.preventDefault()
   e.returnValue = ''
 }
-onBeforeRouteLeave(() => !dirty.value || confirm(t('reportDesigner.leaveConfirm')))
+// a session gone takes the page to the sign-in: whoever stays here can sign in again in
+// another tab and save, and is told so
+const signedIn = useSessionPresent()
+onBeforeRouteLeave(() => !dirty.value || confirm(t(signedIn.value ? 'reportDesigner.leaveConfirm' : 'reportDesigner.sessionGone')))
 
 onMounted(() => {
   document.addEventListener('keydown', onKey)
+  document.addEventListener('pointerdown', onPress, true)
   window.addEventListener('beforeunload', onBeforeUnload)
   folderPaths.load()
   load()
@@ -377,6 +396,7 @@ onMounted(() => {
 onBeforeUnmount(() => {
   live.stop()
   document.removeEventListener('keydown', onKey)
+  document.removeEventListener('pointerdown', onPress, true)
   window.removeEventListener('beforeunload', onBeforeUnload)
 })
 

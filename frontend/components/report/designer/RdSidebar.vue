@@ -302,7 +302,7 @@ const fieldTitle = computed(() => (store.selected.value?.item.type === 'table'
 }
 .rds-snip :deep(svg) { color: var(--muted); flex: none; }
 .rds-snip:hover { background: var(--panel-2); border-color: transparent; box-shadow: none; }
-.rds-snipname { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.rds-snipname { min-width: 0; overflow-wrap: anywhere; text-align: left; line-height: 1.25; }
 .rds-head { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
 .rds-head .rds-h { margin: 0; }
 .rds-head.params { margin-top: 10px; }

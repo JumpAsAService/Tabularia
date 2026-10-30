@@ -81,7 +81,7 @@ export interface DTable extends DBase {
 export const CHART_KINDS = ['bar', 'column', 'line', 'area', 'pie', 'donut', 'combo', 'waterfall', 'funnel', 'treemap',
   'heatmap', 'scatter', 'gauge', 'bullet'] as const
 export type ChartKind = typeof CHART_KINDS[number]
-export interface DSeries { value: string; name?: string; as?: 'bar' | 'line' | null; axis?: 'left' | 'right' }
+export interface DSeries { value: string; name?: string; as?: 'bar' | 'line' | null; axis?: 'left' | 'right'; format?: string | null }
 export interface DChartOptions {
   stacked?: boolean
   labels?: boolean
@@ -173,6 +173,8 @@ export const PAPER = {
 
 // ── geometry (mm) ────────────────────────────────────────────────────────────
 export const PT_MM = 25.4 / 72
+/** IBM Plex Sans: its capitals' height, in em. Where the PDF starts a text, and how high a line is. */
+export const CAP_HEIGHT = 0.698
 export const mm1 = (v: number) => Math.round(v * 10) / 10
 
 export function pageSize(def: DDefinition): { w: number; h: number } {
@@ -244,10 +246,10 @@ export function tableRows(t: DTable): TableRow[] {
   return rows
 }
 
-/** A row's height in the design view, from the theme's size (the template's cells: 1.1 mm
- *  above and below a line of text). */
+/** A row's height as the PDF lays it out, from the theme's size (the template's cells: 1.1 mm
+ *  above and below a line of text, which Typst measures from the capitals to the baseline). */
 export function rowHeight(def: DDefinition): number {
-  return mm1(2.6 + def.theme.size * PT_MM * 1.25)
+  return mm1(2.2 + def.theme.size * PT_MM * CAP_HEIGHT)
 }
 
 export function tableHeight(def: DDefinition, t: DTable): number {
@@ -543,6 +545,14 @@ export function stillStanding(def: DDefinition, list: DesignProblem[]): DesignPr
     if (root === undefined) return false
     return p.seen === undefined || !p.path || JSON.stringify(valueAt(root, p.path) ?? null) === p.seen
   })
+}
+
+/** The problems of a refused save that the server's latest check still finds: what was fixed
+ *  without touching their property (the table's dataset put back) goes from the count. */
+export function stillReported(saved: DesignProblem[], live: DesignProblem[]): DesignProblem[] {
+  const key = (p: DesignProblem) => JSON.stringify([p.item, p.dataset, p.parameter, p.path])
+  const found = new Set(live.map(key))
+  return saved.filter((p) => found.has(key(p)))
 }
 
 /** A problem of the live check, shown at its field: only while the field holds what the

@@ -52,6 +52,14 @@ const tagOf = (r: TableRow) => {
   }
 }
 
+// a total row's label: right-aligned just before the first column with a total, as the PDF
+// writes it across the columns before it (template.typ)
+const labelAt = computed(() => {
+  const first = cols.value.findIndex((c) => !!c.total)
+  return first > 0 ? first - 1 : 0
+})
+const labelled = (r: TableRow, j: number) => (r.kind === 'group-foot' || r.kind === 'total') && j === labelAt.value && cols.value.some((c) => !!c.total)
+
 const empty = computed(() => !props.table.matrix && !props.table.columns.length)
 const tagMode = computed(() => (rowPx.value >= 18 ? 'full' : rowPx.value >= 11 ? 'small' : null))
 </script>
@@ -74,7 +82,7 @@ const tagMode = computed(() => (rowPx.value >= 18 ? 'full' : rowPx.value >= 11 ?
             v-for="(c, j) in cols"
             :key="j"
             class="tcell"
-            :class="[c.align, { by: c.matrix === 'by' }]"
+            :class="[labelled(r, j) ? 'right' : c.align, { by: c.matrix === 'by' }]"
             :style="{ width: `${c.w * ppm}px`, padding: `0 ${1.5 * ppm}px`,
                       background: r.kind === 'head' ? PAPER.head : r.kind === 'total' ? PAPER.total : (table.zebra && r.kind === 'detail' ? '#f8f9fb' : 'transparent') }"
           >
@@ -88,7 +96,7 @@ const tagMode = computed(() => (rowPx.value >= 18 ? 'full' : rowPx.value >= 11 ?
               <span v-else class="hole">{{ $t('reportDesigner.face.value') }}</span>
             </template>
             <template v-else>
-              <strong v-if="j === 0 && !c.total" class="htext">{{ r.kind === 'total' ? $t('reportDesigner.face.total') : `${$t('reportDesigner.face.total')} ${groupText(r.level)}` }}</strong>
+              <strong v-if="j === labelAt && !c.total" class="htext">{{ r.kind === 'total' ? $t('reportDesigner.face.total') : `${$t('reportDesigner.face.total')} ${groupText(r.level)}` }}</strong>
               <span v-else-if="c.total" class="chip">{{ c.total }}</span>
             </template>
           </div>

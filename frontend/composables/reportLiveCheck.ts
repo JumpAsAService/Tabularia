@@ -6,8 +6,9 @@
 //
 // An answer is used only if the definition is still the one that was sent: what came back
 // for an older text is dropped, and a newer pause cancels the call under way. A gateway
-// without the route (404, 405) is not asked again for the life of the page; one that is
-// slow, fails or cannot be reached leaves the editor's check alone, with nothing said:
+// without the route (404, 405), or a session that has ended (401: the page says so once,
+// not at every pause in the typing), is not asked again for the life of the page; one that
+// is slow, fails or cannot be reached leaves the editor's check alone, with nothing said:
 // the save checks everything all the same. No timers or fetches of its own, so it can be
 // tested with fakes.
 
@@ -76,7 +77,7 @@ export function createLiveCheck(o: LiveCheckOptions): LiveCheck {
       if (controller !== mine) return // a newer call took its place
       cancel()
       const status = statusOf(e)
-      if (status === 404 || status === 405) available = false
+      if (status === 401 || status === 404 || status === 405) available = false
       checked = null
       o.onClear()
       return

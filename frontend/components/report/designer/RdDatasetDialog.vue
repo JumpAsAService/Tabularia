@@ -56,6 +56,11 @@ interface Draft {
   fields: DField[]
 }
 const draft = ref<Draft | null>(null)
+let opened = ''
+/** An Esc or a click beside the dialog: what was written here is not lost without asking. */
+function closing() {
+  if (JSON.stringify(draft.value) === opened || confirm(t('reportDesigner.discardDraft'))) emit('close')
+}
 const original = ref<string | null>(null)
 /** the source the draft's fields were read from: another source, and they are read again */
 const fieldsFor = ref('')
@@ -88,6 +93,7 @@ watch(() => props.open, (o) => {
   if (!o) return
   const d = props.name ? store.doc.value.datasets.find((x) => x.name === props.name) ?? null : null
   draft.value = fromDataset(d)
+  opened = JSON.stringify(draft.value)
   original.value = d?.name ?? null
   fieldsFor.value = d ? JSON.stringify(d.source) : ''
   counted.value = d ? store.rowCounts.value[d.name] ?? null : null
@@ -101,6 +107,7 @@ const catalog = ref<SqlCatalogItem[]>([])
 const datasources = ref<DatasourceInfo[]>([])
 const views = ref<SavedView[]>([])
 const scripts = ref<SqlScript[]>([])
+const listsRead = ref(false)
 let loaded = false
 async function loadLists() {
   if (loaded) return
@@ -116,8 +123,11 @@ async function loadLists() {
   if (ds.status === 'fulfilled') datasources.value = ds.value
   if (vw.status === 'fulfilled') views.value = vw.value
   if (sc.status === 'fulfilled') scripts.value = sc.value
+  listsRead.value = cat.status === 'fulfilled' && ds.status === 'fulfilled' && c.status === 'fulfilled'
 }
 
+/** nothing of the catalog to read, for a person nobody gave a folder yet: said, not an empty list */
+const nothingToRead = computed(() => listsRead.value && !catalog.value.length && !datasources.value.length && !connections.value.length)
 const kinds = computed(() => [
   { value: 'sql', label: t('reportDesigner.dataset.kindSql'), icon: FileCode },
   { value: 'datasource', label: t('reportDesigner.dataset.kindDatasource'), icon: Database },
@@ -288,7 +298,7 @@ const rowCount = computed(() => countFor(counted.value, built()?.source))
 </script>
 
 <template>
-  <Modal :open="open" :title="name ? $t('reportDesigner.dataset.editTitle', { name }) : $t('reportDesigner.dataset.newTitle')" :width="780" @close="emit('close')">
+  <Modal :open="open" :title="name ? $t('reportDesigner.dataset.editTitle', { name }) : $t('reportDesigner.dataset.newTitle')" :width="780" @close="closing">
     <div v-if="draft" class="rdd">
       <div v-for="(p, i) in serverProblems" :key="i" class="rdd-alert" role="alert">{{ p.path ? `${p.path}: ` : '' }}{{ p.message }}</div>
       <div class="rp-row">
@@ -301,7 +311,8 @@ const rowCount = computed(() => countFor(counted.value, built()?.source))
           <RdSeg v-model="draft.kind" :options="kinds" :label="$t('reportDesigner.dataset.kind')" />
         </div>
       </div>
-      <p v-if="nameError" class="rp-err">{{ nameError }}</p>
+      <p v-if="nameError && draft.name" class="rp-err">{{ nameError }}</p>
+      <p v-if="nothingToRead" class="rp-help" role="status">{{ $t('reportDesigner.dataset.nothingToRead') }}</p>
 
       <!-- SQL -->
       <template v-if="draft.kind === 'sql'">
