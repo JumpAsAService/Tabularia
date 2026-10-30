@@ -443,6 +443,17 @@ def lexical(keys: list[np.ndarray], n: int) -> np.ndarray:
     return order
 
 
+def nested(paths: Iterable[tuple]) -> list[tuple]:
+    """A matrix's columns, from their paths of values in the order they first come: each
+    value of a level where it first comes inside its parent, a parent's columns together."""
+    paths = list(paths)
+    first: dict[tuple, int] = {}
+    for path in paths:
+        for depth in range(1, len(path) + 1):
+            first.setdefault(path[:depth], len(first))
+    return sorted(paths, key=lambda path: [first[path[:depth]] for depth in range(1, len(path) + 1)])
+
+
 def _ranks(values: pa.Array, direction: str) -> tuple[np.ndarray, list]:
     """A rank per value (values Python sorts as equal, one rank) in the order `direction`
     gives them, NULL last; and the value of each rank. Python orders the distinct values."""
@@ -1054,8 +1065,8 @@ class SqlData:
         return list(zip(xs, ys))
 
     def matrix(self, rows: Any, levels: list[ex.Node], ctx: ex.Context, item: str) -> tuple[list[tuple], dict, Any]:
-        """A matrix's columns: the distinct paths of values, in order, and the family of the
-        table's rows by them."""
+        """A matrix's columns: the distinct paths of values, in the order they first come
+        (`nested`), and the family of the table's rows by them."""
         rows = _rows_of(rows)
         n = len(rows)
         encoded, dicts = [], []
@@ -1079,6 +1090,9 @@ class SqlData:
                 inverse = where[code]
             else:
                 present, inverse = np.unique(code, return_inverse=True)
+            inverse = inverse.reshape(-1)
+            arrival = np.empty(len(present), np.int64)
+            arrival[inverse[::-1]] = np.arange(n - 1, -1, -1)  # the last written is each path's first row
             raw = {}
             paths = []
             for c in present.tolist():
@@ -1089,12 +1103,11 @@ class SqlData:
                 tup = tuple(reversed(parts))
                 paths.append(tuple(sort_key(v) for v in tup))
                 raw[paths[-1]] = tup
-            order = sorted(raw, key=cmp_to_key(lambda a, b: next(
-                (c for c in (compare(x, y, "asc") for x, y in zip(a, b)) if c), 0)))
+            order = nested(paths[i] for i in np.argsort(arrival, kind="stable").tolist())
             if len(order) > rd.MAX_MATRIX_COLUMNS:  # the model says so
                 return order, raw, None
             place = {sk: j for j, sk in enumerate(order)}
-            cols = np.array([place[p] for p in paths], np.int64)[inverse.reshape(-1)]
+            cols = np.array([place[p] for p in paths], np.int64)[inverse]
         else:
             order, raw, cols = [], {}, np.empty(0, np.int64)
         perm = rows.idx[lexical([cols], n)]

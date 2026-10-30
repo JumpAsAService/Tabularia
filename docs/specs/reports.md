@@ -212,14 +212,21 @@ All lengths are millimetres (numbers, a tenth at most), colours `#rrggbb`.
   most, stored with the definition as base64); `fit` contain | cover | stretch. No URLs.
 - `line` (from x, y to x+w, y+h), `rect` (its `style`: border, radius, background).
 - `table`: `dataset`; `columns` [{`header`, `value` (expression), `width`, `align`,
-  `format`, `total` (an aggregate expression or null), `style`, `rules`: [{`when`,
+  `format`, `total` (an aggregate expression or null; the designer leaves it null until the
+  person chooses one, and offers the sum, average, minimum, maximum or count of the column's value or
+  an expression), `style`, `rules`: [{`when`,
   `style`}] (conditional formatting)}]; `groups` [{`by` (expression), `label`
   (expression, default the value), `header`, `footer` (subtotals from the columns'
-  `total`), `page_break` none | between | after, `sort` asc | desc, `keep_together`}];
+  `total`: with none, printed only where it is all that names the group; the designer draws
+  the same rows), `page_break` none | between | after, `sort` asc | desc, `keep_together`}];
   `detail` (show the rows, or only groups); `sort` [{`by`, `dir`}]; `filter` (expression);
   `repeat_header`; `grand_total`; `zebra`; `matrix` {`columns_by` (expression), `value`
-  (aggregate), `total`} turns it into a matrix (one column per value, at most 60; its first
-  column gives only a header, a width and a style, no `value`);
+  (aggregate), `total`} turns it into a matrix (one column per value, at most 60, each where
+  it first comes in the table's rows after its `filter` and `sort`, and with up to three
+  levels each value where it first comes inside its parent: a query with no `ORDER BY` has no order
+  the database promises, so the dataset decides; its first column gives only a header, a width and a style, no
+  `value`; `total` defaults to true, which keeps the reports saved so far as they were: the designer
+  writes false in a new matrix);
   `interactive`: {`sort`: column sorting on screen, `toggle`: groups collapsed/expanded
   on screen}.
 - `chart`: `dataset`, `kind` bar | column | line | area | pie | donut | combo | waterfall |
@@ -338,7 +345,9 @@ render.
   `month` would be one column, and a subquery would take a field called `k` for one of its own.
 - **Orders are Python's.** The distinct values of a key are sorted by the interpreter's own
   key (`casefold`, NULL last, the direction), and numpy puts the rows in that order with
-  stable counting sorts; a chart's categories keep the order they first come in.
+  stable counting sorts; a chart's categories and a matrix's columns keep the order they
+  first come in, read from the rows' positions (`frames.nested`, the interpreter's too), never
+  from what a `GROUP BY` or a temporary table returns.
 - **Groups and totals.** The groups of a level, the categories of a chart, the cells of a
   matrix, the series of a split are *families* of sets of rows, aggregated together: one
   `GROUP BY` on the member's number per level and aggregate (not ROLLUP or GROUPING SETS:

@@ -234,16 +234,69 @@ export type TableRowKind = 'title' | 'head' | 'group-head' | 'detail' | 'group-f
 export interface TableRow { kind: TableRowKind; level: number }
 
 /** The rows a table shows in the design view, in order: its header, every group's header,
- *  the detail, every group's footer from the innermost out, the grand total. */
+ *  the detail, every group's footer from the innermost out, the grand total. As the engine
+ *  prints them (model.py): where no column has a total, a table's total rows have nothing to
+ *  show and are not there, but for the footer that is all that names its group; a matrix's
+ *  are its values, and with no group its one row is already the total. */
 export function tableRows(t: DTable): TableRow[] {
   const rows: TableRow[] = [{ kind: 'head', level: 0 }]
   // a matrix's innermost group is its rows (the cells): only the outer ones have a header and a total
   const groups = t.matrix ? (t.groups ?? []).slice(0, -1) : t.groups ?? []
+  const totals = hasTotals(t)
   groups.forEach((g, i) => { if (g.header !== false) rows.push({ kind: 'group-head', level: i }) })
   if (t.matrix || t.detail !== false || !groups.length) rows.push({ kind: 'detail', level: groups.length })
-  for (let i = groups.length - 1; i >= 0; i--) if (groups[i].footer !== false) rows.push({ kind: 'group-foot', level: i })
-  if (t.grand_total) rows.push({ kind: 'total', level: 0 })
+  for (let i = groups.length - 1; i >= 0; i--) {
+    if (groups[i].footer !== false && (t.matrix || totals || groups[i].header === false)) rows.push({ kind: 'group-foot', level: i })
+  }
+  if (t.grand_total && (t.matrix ? !!t.groups?.length : totals)) rows.push({ kind: 'total', level: 0 })
   return rows
+}
+
+// ── a column's total: none until the person asks for one ─────────────────────
+export type TotalKind = 'none' | 'sum' | 'avg' | 'min' | 'max' | 'count' | 'custom'
+const TOTAL_FUNCTIONS: [TotalKind, string][] = [['sum', 'SUM'], ['avg', 'AVG'], ['min', 'MIN'], ['max', 'MAX'], ['count', 'COUNT']]
+
+/** Whether a column of the table has a total. */
+export function hasTotals(t: DTable): boolean {
+  return (t.columns ?? []).some((c) => !!c.total?.trim())
+}
+
+/** A column's total as its panel offers it: an aggregate of the column's own value, or any
+ *  other expression. */
+export function totalKind(c: DColumn): TotalKind {
+  const total = c.total?.trim()
+  if (!total) return 'none'
+  return TOTAL_FUNCTIONS.find(([, fn]) => total === `${fn}(${c.value.trim()})`)?.[0] ?? 'custom'
+}
+
+/** The totals a column can have: nothing to add up without a value, and a field of text,
+ *  dates or true and false has no sum and no average. What it already has stays on the list. */
+export function totalChoices(c: DColumn, fields: DField[] | null | undefined): TotalKind[] {
+  const value = c.value.trim()
+  const field = fields?.find((f) => fieldRef(f.name) === value)
+  const unsummable = !!field && ['text', 'date', 'boolean'].includes(fieldKind(field.type))
+  const fits = (kind: TotalKind) => {
+    if (kind === 'none' || kind === 'custom') return true
+    if (kind === totalKind(c)) return true
+    return !!value && !(unsummable && (kind === 'sum' || kind === 'avg'))
+  }
+  return (['none', 'sum', 'avg', 'min', 'max', 'count', 'custom'] as TotalKind[]).filter(fits)
+}
+
+/** Asks for a column's total (`custom` keeps the text there is, to edit). The table's first
+ *  total, with no row to print it, turns the grand total on: a choice that changes nothing on
+ *  the page would look broken. It stays the person's to turn off. */
+export function chooseTotal(t: DTable, c: DColumn, kind: TotalKind) {
+  const first = !hasTotals(t)
+  const fn = TOTAL_FUNCTIONS.find(([k]) => k === kind)?.[1]
+  if (fn) c.total = `${fn}(${c.value.trim()})`
+  else if (kind === 'none') c.total = null
+  if (kind !== 'none' && first && !totalRowsOn(t)) t.grand_total = true
+}
+
+/** Whether a row of the table is there to print the columns' totals. */
+export function totalRowsOn(t: DTable): boolean {
+  return !!t.grand_total || (t.groups ?? []).some((g) => g.footer !== false)
 }
 
 /** A row's height as the PDF lays it out, from the theme's size (the template's cells: 1.1 mm
@@ -346,7 +399,7 @@ export function newItem(def: DDefinition, kind: InsertKind, at: { x: number; y: 
     case 'matrix': {
       const t: DTable = { ...base, type: 'table', x: 0, w: width, h: 10, dataset: ds,
         columns: [{ header: '', value: '' }], groups: [{ by: '', header: false, footer: false }], detail: false, repeat_header: true,
-        matrix: { columns_by: '', value: '', total: true } }
+        matrix: { columns_by: '', value: '', total: false } }
       t.h = tableHeight(def, t)
       return t
     }
@@ -593,13 +646,14 @@ export function fieldRef(name: string): string {
 /** The default expressions for a column made from a dropped field. */
 export function columnFor(field: DField): DColumn {
   const kind = fieldKind(field.type)
-  // a whole number may be a code or a period (202401): right-aligned, but no format and no
-  // total until the person asks for them; an amount gets both
+  // a whole number may be a code or a period (202401): right-aligned, but no format until the
+  // person asks for one; an amount gets it. No field gets a total: a price or a discount does
+  // not add up, and whether one does is for the person to say (the column's Total)
   const amount = kind === 'number' && !/^(int|uint|bigint|integer)/i.test(field.type)
   return {
     header: field.name,
     value: fieldRef(field.name),
     ...(kind === 'number' ? { align: 'right' as Align } : {}),
-    ...(amount ? { format: '#,##0.00', total: `SUM(${fieldRef(field.name)})` } : {}),
+    ...(amount ? { format: '#,##0.00' } : {}),
   }
 }

@@ -260,7 +260,17 @@ export default {
       "auto": "auto",
       "alignAuto": "Automatico",
       "total": "Totale",
-      "totalHint": "Un aggregato stampato nei totali dei gruppi e nel totale generale, come SUM([importo]). Vuoto: nessuno.",
+      "totalNone": "Nessuno",
+      "totalSum": "Somma",
+      "totalAvg": "Media",
+      "totalMin": "Minimo",
+      "totalMax": "Massimo",
+      "totalCount": "Conteggio",
+      "totalCustom": "Espressione…",
+      "totalExpr": "Espressione del totale",
+      "totalHint": "Un aggregato delle righe, come SUM([importo]) / COUNT(). Si stampa nelle righe del totale dei gruppi e nel totale generale.",
+      "totalNoRow": "Nessuna riga lo stampa ancora: attiva Totale generale in fondo, o la Riga del totale di un gruppo.",
+      "noTotals": "Nessuna colonna ha un totale, quindi non si stampa nessuna riga di totale: scegline uno nel Totale di una colonna.",
       "cellStyle": "Stile delle celle",
       "rules": "Formattazione condizionale",
       "addRule": "Regola",
@@ -283,7 +293,7 @@ export default {
       "keepTogether": "Tieni le ultime righe con il loro totale",
       "matrix": "Matrice",
       "columnsBy": "Una colonna per ogni valore di",
-      "columnsByHint": "Ogni valore diventa una colonna (al massimo 60); i gruppi fanno le righe.",
+      "columnsByHint": "Ogni valore diventa una colonna (al massimo 60), dove compare per la prima volta nelle righe: decide l'ORDER BY del dataset. I gruppi fanno le righe.",
       "cellValue": "Valore delle celle",
       "cellValueHint": "Un aggregato delle righe della cella, come SUM([importo]).",
       "cellWidth": "Larghezza colonna",
@@ -683,6 +693,8 @@ export default {
     "deleteConversation": "Elimina questa conversazione",
     "deleteConfirm": "Eliminare questa conversazione con l'assistente? Si cancellano i messaggi e le righe delle sue anteprime.",
     "newConversation": "Nuova conversazione",
+    "metadataOnly": "Modalità solo metadati: al modello vanno le impostazioni del flusso, i nomi e i tipi, mai un valore dei tuoi dati. Aggiunge i passi senza anteprima: controlla il risultato sul canvas.",
+    "metadataEmptyBody": "Descrivi che cosa deve fare il flusso. L'assistente aggiunge e cambia i passi sul canvas e non salva mai: un Annulla toglie tutto ciò che ha fatto. Questa installazione è in modalità solo metadati: non vede i dati, quindi non controlla nulla su un'anteprima.",
     "emptyBody": "Descrivi cosa deve fare il flusso. L'assistente aggiunge e modifica i passi sul canvas, controlla ognuno su un'anteprima dei dati e non salva mai: un solo Annulla toglie tutto ciò che ha fatto.",
     "example1": "Parti dalla datasource delle vendite e tieni solo le righe dell'anno scorso",
     "example2": "Aggiungi l'importo totale per paese, dal più grande",
@@ -722,6 +734,9 @@ export default {
     "canBeWrong": "Può sbagliare. Ogni risposta mostra la tabella da cui vengono i numeri: controllala prima di usarli.",
     "readsOnly": "Legge soltanto le datasource che il tuo account può leggere, e solo in lettura.",
     "noPersonalData": "Non scrivere dati personali o riservati: la domanda viene inviata al fornitore del modello.",
+    "metaGenerated": "Il testo è scritto dal modello a partire dai nomi, dai tipi e dalle descrizioni dei tuoi dati e dalla struttura di ciò che è salvato. Un amministratore ha attivato la modalità solo metadati: nessun valore di una riga di dati gli arriva, quindi non può rispondere con delle cifre.",
+    "metaCanBeWrong": "Può sbagliare. Non mostra tabelle, perché non ne legge: controlla ciò che dice nel Viewer prima di agire.",
+    "metaConstants": "Ciò che le persone hanno scritto gli arriva comunque: le descrizioni e i valori digitati in un filtro, in un SQL salvato o in un'email.",
     "accept": "Ho capito",
   },
   "memoryGauge": {
@@ -1101,6 +1116,11 @@ export default {
     "confirmPromoteGroup": "Rendere «{name}» un gruppo di amministratori? I suoi {n} membri, e chiunque vi entrerà, potranno vedere e modificare tutto.",
     "groupPromoted": "«{name}» è ora un gruppo di amministratori",
     "groupDemoted": "«{name}» non è più un gruppo di amministratori",
+    "aiMetadataOnlyOn": "La modalità solo metadati è attiva per i modelli configurati qui (chat, assistenti dei flussi e degli script, export dbt): nessun valore di una riga arriva loro.",
+    "aiMetadataOnlyOff": "La modalità solo metadati è spenta per i modelli configurati qui: gli assistenti dei dati e dei flussi mandano righe al fornitore, e l'export dbt valori d'esempio.",
+    "mcpMetadataOnlyOn": "La modalità solo metadati è attiva per MCP: gli strumenti che leggono valori non sono offerti ai modelli dei client.",
+    "mcpMetadataOnlyOff": "La modalità solo metadati è spenta per MCP: i modelli dei client, fuori dal tuo controllo, possono leggere righe e interrogare i database.",
+    "aiMetadataOnlyChange": "Cambiala in Impostazioni",
     "aiTitle": "Modelli AI",
     "aiHint": "I modelli che l'assistente può usare. Nessun modello è abilitato finché non lo abiliti tu: ogni messaggio ha un costo presso il provider. Embedding e modelli audio non sono abilitabili per la chat.",
     "aiUnavailable": "Assistente non configurato, o provider non raggiungibile.",
@@ -2555,6 +2575,10 @@ export default {
     "railEmpty": "Non hai ancora accesso a nessuna datasource: chiedi l'accesso a una cartella.",
     "dsRows": "{n} righe",
     "dsDescribed": "{n} campi descritti su {total}: le descrizioni aiutano l'assistente a scrivere la query giusta",
+    "metadataOnly": "Modalità solo metadati: al modello vanno nomi, tipi, descrizioni e numero di righe, mai un valore dei tuoi dati. Può spiegare e costruire, non rispondere con delle cifre.",
+    "metadataEmptyBody": "Chiedi che cosa contiene una datasource, fatti scrivere dell'SQL o fatti costruire un flusso. L'assistente legge nomi, tipi, descrizioni e numero di righe, e costruisce con piani che confermi tu. Questa installazione è in modalità solo metadati: nessun valore dei tuoi dati arriva al modello, quindi non può rispondere con delle cifre.",
+    "metadataExample2": "Che cosa significa ogni campo della datasource più pertinente?",
+    "metadataExample3": "Scrivi l'SQL che somma gli importi per anno: lo eseguo io.",
     "emptyTitle": "Chiedi ai tuoi dati, o costruisci con loro",
     "emptyBody": "Fai una domanda in linguaggio naturale: l'assistente cerca la datasource, legge i campi e le loro descrizioni, esegue una query e ti mostra la tabella da cui vengono i numeri. Costruisce anche flussi, li esegue e li pianifica: chiede ciò di cui non è sicuro e non cambia nulla finché non confermi il suo piano.",
     "example1": "Quali datasource posso usare e cosa contengono?",
@@ -2866,6 +2890,7 @@ export default {
     "download": "Scarica",
     "aiDescriptions": "Descrizioni scritte dall'AI dove mancano",
     "aiTranslations": "Una traduzione dell'AI dove una query non si traduce (controllata, da rivedere)",
+    "aiHintMetadataOnly": "Con {model}: l'AI vede la struttura del flusso e i nomi e i tipi delle colonne. Questa installazione è in modalità solo metadati, quindi non riceve valori d'esempio. Quello che scrive resta per versione del flusso, quindi riesportare dà lo stesso progetto.",
     "aiHint": "Con {model}: l'AI vede la struttura del flusso e fino a 3 valori d'esempio per colonna. Quello che scrive resta per versione del flusso, quindi riesportare dà lo stesso progetto.",
     "aiStoredDescriptions": "Descrizioni dell'AI conservate per questa versione",
     "aiStoredTranslations": "Traduzioni dell'AI conservate per questa versione",
@@ -3366,6 +3391,10 @@ export default {
         "label": "Attesa del ricevente",
         "help": "Quanto un webhook aspetta la risposta dell'altro sistema prima di contare la consegna come fallita."
       },
+      "ai_metadata_only": {
+        "label": "Modalità solo metadati",
+        "help": "Attiva: nessun valore di una riga di dati arriva al modello configurato qui. La chat, gli assistenti dei flussi e degli script e l'export dbt ricevono nomi, tipi, descrizioni, numero di righe e struttura: niente query, anteprime, campioni né testo degli errori. I valori digitati dalle persone in filtri, SQL e descrizioni continuano ad andare. I turni di una conversazione fatti fuori da questa modalità smettono di andare al modello."
+      },
       "ai_default_model": {
         "label": "Modello proposto per primo",
         "help": "Il modello che il selettore dell'assistente propone, se un amministratore l'ha abilitato. Vuoto = il primo disponibile."
@@ -3413,6 +3442,10 @@ export default {
       "mcp_enabled": {
         "label": "Server MCP",
         "help": "Gli agenti fuori da Tabularia possono collegarsi a /mcp con un token API: i token di sola lettura leggono soltanto, quelli di scrittura propongono piani. Spento: /mcp risponde 404 e i token continuano a valere sul resto dell'API."
+      },
+      "mcp_metadata_only": {
+        "label": "Modalità solo metadati per MCP",
+        "help": "Attiva: gli strumenti MCP che leggono valori non sono né offerti né richiamabili, e gli altri omettono righe e testo degli errori. I valori digitati dalle persone in filtri, SQL e descrizioni continuano ad andare. Vale solo per /mcp: un token API può ancora leggere i dati dal resto dell'API."
       },
       "mcp_confirm_in_tabularia_only": {
         "label": "Piani confermati solo in Tabularia",
@@ -4527,6 +4560,8 @@ export default {
     "title": "Assistente",
     "toggle": "Assistente",
     "newConversation": "Nuova conversazione",
+    "metadataOnly": "Modalità solo metadati: al modello vanno il codice e i nomi e i tipi delle colonne. Mai una riga di dati, né l'errore di un'esecuzione fallita.",
+    "errorWithheld": "L'ultima esecuzione è fallita. In modalità solo metadati il modello non riceve il suo errore: leggilo nel log e descrivi qui il problema senza citare alcun valore.",
     "emptyBody": "Chiedi una modifica al codice, o uno script che faccia qualcosa con gli input. Propone file interi: tu li applichi o no, e lanci tu lo script.",
     "fixLastError": "Spiega e correggi l'ultimo errore",
     "fixPrompt": "L'ultima esecuzione è fallita: spiega perché e correggi il codice.",

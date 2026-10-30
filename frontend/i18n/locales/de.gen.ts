@@ -260,7 +260,17 @@ export default {
       "auto": "auto",
       "alignAuto": "Automatisch",
       "total": "Summe",
-      "totalHint": "Ein Aggregat, gedruckt in den Gruppensummen und der Gesamtsumme, wie SUM([betrag]). Leer: keines.",
+      "totalNone": "Keine",
+      "totalSum": "Summe",
+      "totalAvg": "Durchschnitt",
+      "totalMin": "Minimum",
+      "totalMax": "Maximum",
+      "totalCount": "Anzahl",
+      "totalCustom": "Ausdruck…",
+      "totalExpr": "Ausdruck der Summe",
+      "totalHint": "Ein Aggregat der Zeilen, wie SUM([betrag]) / COUNT(). Es wird in den Summenzeilen der Gruppen und in der Gesamtsumme gedruckt.",
+      "totalNoRow": "Noch druckt keine Zeile diesen Wert: Schalten Sie Gesamtsumme am Ende oder die Summenzeile einer Gruppe ein.",
+      "noTotals": "Keine Spalte hat eine Summe, daher wird keine Summenzeile gedruckt: Wählen Sie eine unter Summe einer Spalte.",
       "cellStyle": "Stil der Zellen",
       "rules": "Bedingte Formatierung",
       "addRule": "Regel",
@@ -283,7 +293,7 @@ export default {
       "keepTogether": "Die letzten Zeilen bei ihrer Summe halten",
       "matrix": "Matrix",
       "columnsBy": "Eine Spalte pro Wert von",
-      "columnsByHint": "Jeder Wert wird eine Spalte (höchstens 60); die Gruppen bilden die Zeilen.",
+      "columnsByHint": "Jeder Wert wird eine Spalte (höchstens 60), dort, wo er zuerst in den Zeilen vorkommt: Das ORDER BY des Datasets entscheidet. Die Gruppen bilden die Zeilen.",
       "cellValue": "Wert der Zellen",
       "cellValueHint": "Ein Aggregat der Zeilen der Zelle, wie SUM([betrag]).",
       "cellWidth": "Spaltenbreite",
@@ -683,6 +693,8 @@ export default {
     "deleteConversation": "Diese Unterhaltung löschen",
     "deleteConfirm": "Diese Unterhaltung mit dem Assistenten löschen? Ihre Nachrichten und die Zeilen ihrer Vorschauen werden entfernt.",
     "newConversation": "Neue Unterhaltung",
+    "metadataOnly": "Nur-Metadaten-Modus: Das Modell erhält die Einstellungen des Flows, Namen und Typen, nie einen Wert Ihrer Daten. Es fügt Schritte ohne Vorschau hinzu: Prüfen Sie das Ergebnis auf der Arbeitsfläche.",
+    "metadataEmptyBody": "Beschreiben Sie, was der Flow tun soll. Der Assistent fügt Schritte auf der Arbeitsfläche hinzu, ändert sie und speichert nie: Ein Rückgängig nimmt alles zurück. Diese Installation ist im Nur-Metadaten-Modus: Er sieht keine Daten und prüft daher nichts an einer Vorschau.",
     "emptyBody": "Beschreibe, was der Flow tun soll. Der Assistent fügt Schritte auf der Arbeitsfläche hinzu und ändert sie, prüft jeden an einer Vorschau der Daten und speichert nie: Ein einziges Rückgängig nimmt alles zurück.",
     "example1": "Starte mit der Datenquelle der Verkäufe und behalte nur die Zeilen des letzten Jahres",
     "example2": "Füge den Gesamtbetrag pro Land hinzu, absteigend",
@@ -722,6 +734,9 @@ export default {
     "canBeWrong": "Es kann sich irren. Jede Antwort zeigt die Tabelle, aus der die Zahlen stammen — prüfen Sie sie, bevor Sie danach handeln.",
     "readsOnly": "Es liest nur die Datenquellen, die Ihr Konto lesen darf, und ausschließlich lesend.",
     "noPersonalData": "Geben Sie keine personenbezogenen oder vertraulichen Daten ein: die Frage geht an den Modellanbieter.",
+    "metaGenerated": "Der Text wird vom Modell aus den Namen, Typen und Beschreibungen Ihrer Daten und der Struktur des Gespeicherten geschrieben. Ein Administrator hat den Nur-Metadaten-Modus aktiviert: Kein Wert einer Datenzeile erreicht es, daher kann es nicht mit Zahlen antworten.",
+    "metaCanBeWrong": "Es kann sich irren. Es zeigt keine Tabelle, weil es keine liest: Prüfen Sie seine Aussagen im Viewer, bevor Sie handeln.",
+    "metaConstants": "Was Menschen geschrieben haben, erreicht es weiterhin: Beschreibungen und Werte, die in einem Filter, einem gespeicherten SQL oder einer E-Mail eingegeben wurden.",
     "accept": "Verstanden",
   },
   "memoryGauge": {
@@ -1101,6 +1116,11 @@ export default {
     "confirmPromoteGroup": "„{name}“ zu einer Administratorengruppe machen? Ihre {n} Mitglieder und alle, die später beitreten, können alles sehen und ändern.",
     "groupPromoted": "„{name}“ ist jetzt eine Administratorengruppe",
     "groupDemoted": "„{name}“ ist keine Administratorengruppe mehr",
+    "aiMetadataOnlyOn": "Der Nur-Metadaten-Modus ist für die hier konfigurierten Modelle aktiv (Chat, Flow- und Skript-Assistent, dbt-Export): Kein Wert einer Zeile erreicht sie.",
+    "aiMetadataOnlyOff": "Der Nur-Metadaten-Modus ist für die hier konfigurierten Modelle aus: Daten- und Flow-Assistent senden Zeilen an den Anbieter, der dbt-Export Beispielwerte.",
+    "mcpMetadataOnlyOn": "Der Nur-Metadaten-Modus ist für MCP aktiv: Werkzeuge, die Werte lesen, werden den Modellen der Clients nicht angeboten.",
+    "mcpMetadataOnlyOff": "Der Nur-Metadaten-Modus ist für MCP aus: Die Modelle der Clients, außerhalb Ihrer Kontrolle, können Zeilen lesen und Datenbanken abfragen.",
+    "aiMetadataOnlyChange": "In den Einstellungen ändern",
     "aiTitle": "KI-Modelle",
     "aiHint": "Die Modelle, die der Assistent nutzen darf. Kein Modell ist aktiviert, bis Sie es aktivieren: Jede Nachricht wird vom Anbieter berechnet. Embedding- und Audiomodelle lassen sich für den Chat nicht aktivieren.",
     "aiUnavailable": "Assistent nicht konfiguriert oder Anbieter nicht erreichbar.",
@@ -2530,6 +2550,10 @@ export default {
     "railEmpty": "Sie haben noch keinen Zugriff auf eine Datenquelle: Bitten Sie um Zugriff auf einen Ordner.",
     "dsRows": "{n} Zeilen",
     "dsDescribed": "{n} von {total} Feldern beschrieben: Beschreibungen helfen dem Assistenten, die richtige Abfrage zu schreiben",
+    "metadataOnly": "Nur-Metadaten-Modus: Das Modell erhält Namen, Typen, Beschreibungen und Zeilenzahlen, nie einen Wert Ihrer Daten. Es kann erklären und bauen, aber nicht mit Zahlen antworten.",
+    "metadataEmptyBody": "Fragen Sie, was eine Datasource enthält, lassen Sie SQL schreiben oder einen Flow bauen. Der Assistent liest Namen, Typen, Beschreibungen und Zeilenzahlen und baut über Pläne, die Sie bestätigen. Diese Installation ist im Nur-Metadaten-Modus: Kein Wert Ihrer Daten erreicht das Modell, daher kann es nicht mit Zahlen antworten.",
+    "metadataExample2": "Was bedeutet jedes Feld der relevantesten Datasource?",
+    "metadataExample3": "Schreibe das SQL, das die Beträge pro Jahr summiert: Ich führe es selbst aus.",
     "emptyTitle": "Fragen Sie Ihre Daten oder bauen Sie damit",
     "emptyBody": "Stellen Sie eine Frage in natürlicher Sprache: Der Assistent findet die Datenquelle, liest die Felder und ihre Beschreibungen, führt eine Abfrage aus und zeigt die Tabelle, aus der die Zahlen stammen. Er baut auch Flows, führt sie aus und plant sie: Er fragt nach, wo er unsicher ist, und ändert nichts, bevor Sie seinen Plan bestätigen.",
     "example1": "Welche Datenquellen kann ich nutzen und was enthalten sie?",
@@ -2841,6 +2865,7 @@ export default {
     "download": "Herunterladen",
     "aiDescriptions": "Von der KI geschriebene Beschreibungen, wo sie fehlen",
     "aiTranslations": "Eine KI-Übersetzung, wo sich eine Abfrage nicht übersetzen lässt (geprüft, zur Durchsicht markiert)",
+    "aiHintMetadataOnly": "Mit {model}: die KI sieht die Struktur des Flows sowie die Namen und Typen der Spalten. Diese Installation ist im Nur-Metadaten-Modus, sie erhält daher keine Beispielwerte. Was sie schreibt, bleibt pro Version des Flows gespeichert, ein erneuter Export ergibt dasselbe Projekt.",
     "aiHint": "Mit {model}: die KI sieht die Struktur des Flows und bis zu 3 Beispielwerte pro Spalte. Was sie schreibt, bleibt pro Version des Flows gespeichert, ein erneuter Export ergibt dasselbe Projekt.",
     "aiStoredDescriptions": "Die für diese Version gespeicherten KI-Beschreibungen verwenden",
     "aiStoredTranslations": "Die für diese Version gespeicherten KI-Übersetzungen verwenden",
@@ -3341,6 +3366,10 @@ export default {
         "label": "Wartezeit auf den Empfänger",
         "help": "Wie lange ein Webhook auf die Antwort des anderen Systems wartet, bevor die Zustellung als fehlgeschlagen gilt."
       },
+      "ai_metadata_only": {
+        "label": "Nur-Metadaten-Modus",
+        "help": "An: Kein Wert einer Datenzeile erreicht das hier konfigurierte Modell. Chat, Flow- und Skript-Assistent und dbt-Export erhalten Namen, Typen, Beschreibungen, Zeilenzahlen und Struktur: keine Abfrage, keine Vorschau, keine Stichprobe, kein Fehlertext. Werte, die Menschen in Filter, SQL und Beschreibungen eingegeben haben, gehen weiterhin mit. Frühere Runden einer Unterhaltung außerhalb dieses Modus gehen nicht mehr an das Modell."
+      },
       "ai_default_model": {
         "label": "Zuerst vorgeschlagenes Modell",
         "help": "Das Modell, das die Auswahl des Assistenten vorschlägt, sofern ein Administrator es freigegeben hat. Leer = das erste verfügbare."
@@ -3388,6 +3417,10 @@ export default {
       "mcp_enabled": {
         "label": "MCP-Server",
         "help": "Agenten außerhalb von Tabularia können sich mit einem API-Token unter /mcp verbinden: Nur-Lese-Token lesen nur, Schreib-Token schlagen Pläne vor. Aus: /mcp antwortet 404, und die Token funktionieren im Rest der API weiter."
+      },
+      "mcp_metadata_only": {
+        "label": "Nur-Metadaten-Modus für MCP",
+        "help": "An: MCP-Werkzeuge, die Werte lesen, werden weder angeboten noch ausgeführt, die anderen lassen Zeilen und Fehlertexte weg. Werte, die Menschen in Filter, SQL und Beschreibungen eingegeben haben, gehen weiterhin mit. Es gilt nur für /mcp: Ein API-Token kann über die übrige API weiterhin Daten lesen."
       },
       "mcp_confirm_in_tabularia_only": {
         "label": "Pläne nur in Tabularia bestätigen",
@@ -4527,6 +4560,8 @@ export default {
     "title": "Assistent",
     "toggle": "Assistent",
     "newConversation": "Neue Unterhaltung",
+    "metadataOnly": "Nur-Metadaten-Modus: Das Modell erhält den Code sowie die Namen und Typen der Spalten. Nie eine Datenzeile und auch nicht den Fehler eines fehlgeschlagenen Laufs.",
+    "errorWithheld": "Der letzte Lauf ist fehlgeschlagen. Im Nur-Metadaten-Modus erhält das Modell seinen Fehler nicht: Lesen Sie ihn im Log und beschreiben Sie das Problem hier, ohne Werte zu nennen.",
     "emptyBody": "Bitten Sie um eine Änderung am Code oder um ein Skript, das etwas mit den Eingaben macht. Er schlägt ganze Dateien vor: Sie übernehmen sie oder nicht und starten das Skript selbst.",
     "fixLastError": "Letzten Fehler erklären und beheben",
     "fixPrompt": "Der letzte Lauf ist fehlgeschlagen: Erkläre warum und behebe den Code.",

@@ -348,8 +348,7 @@ class PyData:
                 distinct.setdefault(sk, raw)
         except ex.EvalError as e:
             raise ReportError(f"item «{item}», matrix.columns_by: {e}") from None
-        order = sorted(distinct, key=cmp_to_key(lambda a, b: next(
-            (c for c in (_compare(x, y, "asc") for x, y in zip(a, b)) if c), 0)))
+        order = frames.nested(distinct)
         return order, distinct, {"keys_of": keys_of, "order": order, "by": {}}
 
     def matrix_sub(self, scope: list[dict], state: dict, j: int) -> list[dict]:

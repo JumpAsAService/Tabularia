@@ -13,7 +13,7 @@ import { checkExpression, renameEverywhere, renameInExpression, stillWriting } f
 
 register('./alias-hooks.mjs', import.meta.url)
 const { createDesignStore } = await import('../composables/reportDesignStore.ts')
-const { newItem } = await import('../composables/reportDesignModel.ts')
+const { chooseTotal, columnFor, newItem, tableHeight, tableRows, totalChoices, totalKind } = await import('../composables/reportDesignModel.ts')
 
 // ── a clock and a server we drive by hand ───────────────────────────────────
 function fakeClock () {
@@ -381,4 +381,111 @@ test('the store: an item added and removed at once is two steps: Ctrl+Z brings i
   store.undo()
   assert.ok(store.find('r'), 'the item, not the dataset before it')
   assert.equal(store.doc.value.datasets.length, 1)
+})
+
+// ── no total comes by itself: the person asks for it, the rows drawn are those the PDF prints ──
+const amount = { name: 'prezzo', type: 'Float64' }
+const kinds = (t) => tableRows(t).map((r) => r.kind)
+
+test('a field dropped on a table has no total, whatever its type', () => {
+  for (const type of ['Float64', 'Decimal(18,2)', 'Int64', 'String', 'Date', undefined]) {
+    assert.equal(columnFor({ name: 'x', type }).total, undefined, type)
+  }
+  const c = columnFor(amount)
+  assert.deepEqual(c, { header: 'prezzo', value: '[prezzo]', align: 'right', format: '#,##0.00' })
+})
+
+test('a new table and a new matrix have no total; a saved one keeps what it has', () => {
+  const d = emptyDefinition()
+  const table = newItem(d, 'table', { x: 0, y: 0 })
+  assert.equal(table.grand_total, false)
+  assert.deepEqual(table.columns, [])
+  assert.equal(newItem(d, 'matrix', { x: 0, y: 0 }).matrix.total, false)
+  const store = createDesignStore()
+  const saved = { ...newItem(store.doc.value, 'table', { x: 0, y: 0 }), grand_total: true, columns: [{ value: '[a]', total: 'SUM([a])' }] }
+  store.reset({ ...store.doc.value, sections: { ...store.doc.value.sections, body: { items: [saved] } } })
+  store.duplicate(saved.id)
+  const tables = store.doc.value.sections.body.items
+  assert.equal(tables.length, 2)
+  assert.deepEqual(tables.map((x) => [x.grand_total, x.columns[0].total]), [[true, 'SUM([a])'], [true, 'SUM([a])']])
+})
+
+test('a column\'s total: what it is, what it may be, and asking for it', () => {
+  const t = { columns: [{ value: '[prezzo]' }, { value: '[nome]' }, { value: '' }], groups: [], grand_total: false }
+  const [price, name, empty] = t.columns
+  const fields = [amount, { name: 'nome', type: 'String' }]
+  assert.equal(totalKind(price), 'none')
+  assert.deepEqual(totalChoices(price, fields), ['none', 'sum', 'avg', 'min', 'max', 'count', 'custom'])
+  assert.deepEqual(totalChoices(name, fields), ['none', 'min', 'max', 'count', 'custom'], 'a text has no sum')
+  assert.deepEqual(totalChoices(empty, fields), ['none', 'custom'], 'nothing to add up yet')
+  assert.deepEqual(totalChoices({ value: '[prezzo] * 2' }, fields), ['none', 'sum', 'avg', 'min', 'max', 'count', 'custom'])
+  // the first total of a table with nowhere to print it shows the grand total: the choice is seen
+  chooseTotal(t, price, 'sum')
+  assert.equal(price.total, 'SUM([prezzo])')
+  assert.equal(t.grand_total, true)
+  assert.equal(totalKind(price), 'sum')
+  // turned off by hand, the next total of the same table does not turn it on again
+  t.grand_total = false
+  chooseTotal(t, name, 'count')
+  assert.equal(name.total, 'COUNT([nome])')
+  assert.equal(t.grand_total, false)
+  chooseTotal(t, price, 'avg')
+  assert.equal(price.total, 'AVG([prezzo])')
+  assert.equal(t.grand_total, false)
+  chooseTotal(t, price, 'none')
+  assert.equal(price.total, null)
+  chooseTotal(t, name, 'none')
+  // the rows of the groups show it: no grand total asked for
+  const grouped = { columns: [{ value: '[prezzo]' }], groups: [{ by: '[a]' }], grand_total: false }
+  chooseTotal(grouped, grouped.columns[0], 'max')
+  assert.equal(grouped.columns[0].total, 'MAX([prezzo])')
+  assert.equal(grouped.grand_total, false)
+  // an expression stays as it is, a preset's text is where it starts from
+  price.total = 'SUM([prezzo]) / COUNT()'
+  assert.equal(totalKind(price), 'custom')
+  assert.equal(totalKind({ value: '[costo]', total: 'SUM([prezzo])' }), 'custom', 'the total of another field')
+  const open = { value: '[prezzo]', total: 'SUM([prezzo])' }
+  chooseTotal({ columns: [open], grand_total: true }, open, 'custom')
+  assert.equal(open.total, 'SUM([prezzo])')
+})
+
+test('the rows drawn are those the PDF prints: no empty total row', () => {
+  const none = [{ value: '[a]' }]
+  const some = [{ value: '[a]', total: 'SUM([a])' }]
+  const group = { by: '[g]' }
+  // no column has a total: neither the group's row nor the grand total print
+  assert.deepEqual(kinds({ columns: none, groups: [group], grand_total: true }), ['head', 'group-head', 'detail'])
+  assert.deepEqual(kinds({ columns: [{ value: '[a]', total: '  ' }], groups: [group], grand_total: true }), ['head', 'group-head', 'detail'])
+  // one has: they do
+  assert.deepEqual(kinds({ columns: some, groups: [group], grand_total: true }), ['head', 'group-head', 'detail', 'group-foot', 'total'])
+  assert.deepEqual(kinds({ columns: some, groups: [{ ...group, footer: false }] }), ['head', 'group-head', 'detail'])
+  // a group with no header row is named by its footer, totals or not
+  assert.deepEqual(kinds({ columns: none, groups: [{ ...group, header: false }] }), ['head', 'detail', 'group-foot'])
+  // a matrix's rows are its values: its outer groups' rows and its grand total print without the columns' totals
+  const matrix = { columns_by: '[y]', value: 'SUM([a])', total: false }
+  assert.deepEqual(kinds({ matrix, columns: [{ header: '', value: '' }], groups: [group, { by: '[h]' }], grand_total: true }),
+    ['head', 'group-head', 'detail', 'group-foot', 'total'])
+  // … with no group it has one row, already the total
+  assert.deepEqual(kinds({ matrix, columns: [{ header: '', value: '' }], groups: [], grand_total: true }), ['head', 'detail'])
+})
+
+test('the store: a table grows when its first total appears, and shrinks when its last goes', async () => {
+  const store = createDesignStore()
+  const table = newItem(store.doc.value, 'table', { x: 0, y: 0 })
+  store.add('body', table)
+  await flush()
+  const tb = store.find(table.id).item
+  tb.columns.push(columnFor(amount))
+  tb.groups.push({ by: '[a]', header: true, footer: true })
+  await flush()
+  const before = tb.h
+  assert.deepEqual(kinds(tb), ['head', 'group-head', 'detail'])
+  chooseTotal(tb, tb.columns[0], 'sum')
+  await flush()
+  assert.deepEqual(kinds(tb), ['head', 'group-head', 'detail', 'group-foot'])
+  assert.equal(tb.h, tableHeight(store.doc.value, tb))
+  assert.ok(tb.h > before)
+  chooseTotal(tb, tb.columns[0], 'none')
+  await flush()
+  assert.equal(tb.h, before)
 })

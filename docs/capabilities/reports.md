@@ -117,7 +117,7 @@ takes you to its field in **Design**.
 
 ![In the designer a table is dragged under the chart; the fields Month, ricavo, costo and margine are dragged into it one after the other; a group by categoria adds the group's row and its total; Preview renders the first page](../media/guide/reports/designer-table-group-preview.gif)
 
-*A table under the chart: four fields dragged into it, a group by `[categoria]` written in its properties (the amounts already have their totals, so the group's total row appears), then **Preview**.*
+*A table under the chart: four fields dragged into it, a group by `[categoria]` written in its properties, then **Preview**. The group's total row shows the columns' totals: **Sum** was chosen for the amounts off camera, because a new column has none.*
 
 ## Datasets and parameters
 
@@ -294,11 +294,18 @@ header repeated at the top of every page. Its properties:
 | Section | |
 |---|---|
 | **Data** | the dataset; **Rows where**, a condition that keeps some rows; **Order of the rows**, keys with their direction |
-| **Columns** | for each: **Header**, **Value** (an expression), **Width** (millimetres, or automatic), alignment, **Format**, **Total** (an aggregate such as `SUM([amount])`, printed in the groups' total rows and in the grand total), the style of its cells and its **Conditional formatting** |
+| **Columns** | for each: **Header**, **Value** (an expression), **Width** (millimetres, or automatic), alignment, **Format**, **Total** (**None** until you choose one: **Sum**, **Average**, **Minimum**, **Maximum** or **Count** of the column's value, or an **Expression…**, an aggregate of your own such as `SUM([margine]) / SUM([ricavo])`; printed in the groups' total rows and in the grand total), the style of its cells and its **Conditional formatting** |
 | **Groups** | up to six levels, each with **Group by** (an expression), **Label**, **Order**, **Page break** (none, between groups, after each group), **Header row**, **Total row** and **Keep the last rows with their total** |
 | **Layout** | **Show the rows** (off: the groups' totals only), **Grand total at the end**, **Header on every page**, **Alternate row shading** |
 | **Sheet name in Excel** | the table's sheet when the report is downloaded as Excel |
 | **On screen** | **Sort by a column with a click on its header**, **Close and open the groups**: what the reader may do in the viewer |
+
+No column gets a total by itself: a field dragged onto a table, a column added and a new
+table have none, because a price or a discount does not add up and only you know which
+values do. The table's first total, when no row is there to print it, turns on **Grand
+total at the end**; turn it off if you want the groups' totals alone. A table where no column
+has a total prints no total rows at all, not even empty ones, and the designer draws none
+(a group with its **Header row** off keeps its **Total row**: it is all that names the group).
 
 A group's total row reads «Total» and the group's label, across the columns before the
 first one that has a total; when the first column has a total too, the label takes a row
@@ -320,10 +327,19 @@ cells, not the totals.
 
 A **matrix** is a table with **One column per value of** an expression (at most 60
 columns): `YEAR([Month])` gives a column per year. Its groups make the rows, **Value of
-the cells** is an aggregate of the rows that meet there (`SUM([margine])`), and **Total
-column** adds the row totals; the grand total adds the column totals. The columns come in
-ascending order of their values, so month names would be alphabetical: for months in
-their order write a value that sorts, `[anno_mese]` or `FORMAT([day], "MM MMM")`.
+the cells** is an aggregate of the rows that meet there (`SUM([margine])`), **Total
+column**, which a new matrix leaves off, adds the row totals, and **Grand total at the end**
+adds the column totals.
+
+The columns come in the order of the data: each value where it first comes in the rows the
+table reads, after its **Rows where** and its **Order of the rows**, as a chart's categories
+do with «In the data's order». With levels of columns, each one's values follow the same rule
+inside the value above them. So the `ORDER BY` of the dataset's SQL decides: with `ORDER BY
+anno_mese`, a column per `FORMAT([Month], "MMM")` reads Jan, Feb, Mar. A value that the first rows
+do not have comes where it first shows up, so sort by what makes the columns, before the
+rest. A query without `ORDER BY` has no order the database promises, and the columns may
+change from one run to the next: order the dataset, or the table. A missing value is a
+column too, «(blank)», in its place.
 
 ![The last page of the example PDF: the group Salumi stagionati continued from the page before with its label repeated, the margin percentages under 30% in red, the group's total and the grand total, then the matrix of the margin by category and year with its totals](../media/guide/reports/pdf-group-totals-and-matrix.png)
 
@@ -595,18 +611,20 @@ the first month.
    `Revenue`, `SUM([ricavo])`, drawn as bars, and `Margin`, `SUM([margine])`, as a line;
    format `#,##0`.
 8. **The table.** A **Table** under the chart. In **Data**, drag `Month`, `ricavo`,
-   `costo`, `margine` and `MarginPct` onto it (the amounts arrive with a `SUM` total).
+   `costo`, `margine` and `MarginPct` onto it. Open `ricavo`, `costo` and `margine` and
+   choose **Sum** as their **Total**.
    Name the headers `Month`, `Revenue`, `Cost`, `Margin`, `Margin %`; give `Month` the
-   format `MMMM yyyy` and the amounts `#,##0`; `Margin %` the total
+   format `MMMM yyyy` and the amounts `#,##0`; `Margin %` the total **Expression…**
    `SUM([margine]) / SUM([ricavo])`, the format `0.0%` and a **Rule**: when
    `[MarginPct] < 0.3`, red and bold. **Order of the rows**: `[anno_mese]`.
-   **+ Group**: `[categoria]`. Tick **Grand total at the end**, **Alternate row
-   shading** and both **On screen** options. The [GIF above](#saving-and-the-preview)
+   **+ Group**: `[categoria]`. **Grand total at the end** is already on, from the first
+   total you chose; tick **Alternate row shading** and both **On screen** options. The [GIF above](#saving-and-the-preview)
    shows the drag and the group.
 9. **The matrix.** Under the table a text `Margin by category and year` (size 10, bold)
    and a **Matrix**: rows grouped by `[categoria]`, **One column per value of**
-   `YEAR([Month])`, **Value of the cells** `SUM([margine])`, format `#,##0`, with its
-   total column.
+   `YEAR([Month])`, **Value of the cells** `SUM([margine])`, format `#,##0`; tick **Total
+   column**. The years come in the order of the rows, which the query sorts by `anno_mese`
+   within each category.
 10. **The footer.** Click **Page footer**, add the ready-made **The report's name** on
     the left and **Page number of total** on the right.
 11. **Preview** and look at it, then **Done**: the report is saved and opens in the

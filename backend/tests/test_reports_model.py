@@ -223,6 +223,66 @@ def test_a_matrix_with_two_levels_of_columns_and_its_limit():
         build(report(table(matrix={"columns_by": "[region]", "value": "SUM([amount])"}, groups=[])), many)
 
 
+# the columns of a matrix: each value where it first comes in the rows the table reads
+MATRIX_ROWS = [
+    {"n": 1, "y": 2025, "m": "gen", "t": "a", "keep": True, "v": 1},
+    {"n": 2, "y": 2024, "m": "mar", "t": "b", "keep": False, "v": 2},
+    {"n": 3, "y": 2025, "m": "ago", "t": "b", "keep": True, "v": 3},
+    {"n": 4, "y": 2024, "m": "apr", "t": "a", "keep": True, "v": 4},
+    {"n": 5, "y": 2025, "m": None, "t": "a", "keep": True, "v": 5},
+    {"n": 6, "y": 2025, "m": "dic", "t": "a", "keep": True, "v": 6},
+    {"n": 7, "y": 2024, "m": "gen", "t": "a", "keep": True, "v": 7},
+    {"n": 8, "y": None, "m": "feb", "t": "a", "keep": True, "v": 8},
+    {"n": 9, "y": 2025, "m": "gen", "t": "b", "keep": True, "v": 9},
+]
+
+
+def _months(**over) -> rmodel.TableOut:
+    defn = {"columns_by": "[m]", "value": "SUM([v])", "total": False, **over.pop("matrix", {})}
+    return build(report(table(**{"matrix": defn, "groups": [{"by": "[t]"}], **over})), MATRIX_ROWS).tables[0]
+
+
+def test_a_matrix_has_its_columns_in_the_order_of_the_data():
+    t = _months()
+    assert [h["t"] for h in t.head[0]][1:] == ["gen", "mar", "ago", "apr", "(blank)", "dic", "feb"]
+    # every value is still in its own column
+    a = next(r for r in t.rows if r.cells[0].text == "a")
+    assert [c.text for c in a.cells][1:] == ["8", "", "", "4", "5", "6", "8"]
+
+
+def test_a_matrix_has_its_columns_in_the_order_of_the_rows_the_table_reads():
+    assert [h["t"] for h in _months(filter="[keep]").head[0]][1:] == ["gen", "ago", "apr", "(blank)", "dic", "feb"]
+    assert [h["t"] for h in _months(filter='[m] <> "gen"').head[0]][1:] == ["mar", "ago", "apr", "dic", "feb"]
+    newest = [h["t"] for h in _months(sort=[{"by": "[n]", "dir": "desc"}]).head[0]][1:]
+    assert newest == ["gen", "feb", "dic", "(blank)", "apr", "ago", "mar"]
+    # filtered and then sorted; ties keep the order they came in
+    tied = [h["t"] for h in _months(filter="[keep]", sort=[{"by": "[t]", "dir": "desc"}]).head[0]][1:]
+    assert tied == ["ago", "gen", "apr", "(blank)", "dic", "feb"]
+    # the groups make the rows and do not touch the columns
+    down = build(report(table(matrix={"columns_by": "[m]", "value": "SUM([v])"}, groups=[{"by": "[t]", "sort": "desc"}])),
+                 MATRIX_ROWS).tables[0]
+    assert [h["t"] for h in down.head[0]][1:-1] == ["gen", "mar", "ago", "apr", "(blank)", "dic", "feb"]
+    assert [r.cells[0].text for r in down.rows] == ["b", "a"]
+
+
+def test_a_matrix_nests_its_levels_each_in_the_order_it_comes_inside_its_parent():
+    t = _months(matrix={"columns_by": ["[y]", "[m]"]})
+    assert [(h["t"], h["span"]) for h in t.head[0]][1:] == [("2025", 4), ("2024", 3), ("(blank)", 1)]
+    assert [h["t"] for h in t.head[1]] == ["gen", "ago", "(blank)", "dic", "mar", "apr", "gen", "feb"]
+    assert [c.header for c in t.cols][1:] == ["2025 · gen", "2025 · ago", "2025 · (blank)", "2025 · dic",
+                                              "2024 · mar", "2024 · apr", "2024 · gen", "(blank) · feb"]
+    b = next(r for r in t.rows if r.cells[0].text == "b")
+    assert [c.text for c in b.cells][1:] == ["9", "3", "", "", "2", "", "", ""]
+    three = _months(matrix={"columns_by": ["[t]", "[y]", "[m]"]}, groups=[{"by": "[keep]"}])
+    assert [(h["t"], h["span"]) for h in three.head[0]][1:] == [("a", 6), ("b", 3)]
+    assert [(h["t"], h["span"]) for h in three.head[1]] == [("2025", 3), ("2024", 2), ("(blank)", 1), ("2024", 1), ("2025", 2)]
+    assert [h["t"] for h in three.head[2]] == ["gen", "(blank)", "dic", "apr", "gen", "feb", "mar", "ago", "gen"]
+    # a value that comes back after another keeps its first place, and filtered rows do not count
+    late = _months(matrix={"columns_by": ["[y]", "[m]"]}, filter='[n] <> 1 AND [n] <> 9')
+    assert [(h["t"], h["span"]) for h in late.head[0]][1:] == [("2024", 3), ("2025", 3), ("(blank)", 1)]
+    assert [h["t"] for h in late.head[1]] == ["mar", "apr", "gen", "ago", "(blank)", "dic", "feb"]
+
+
 def test_an_empty_table_says_no_data_with_no_total_of_nothing():
     for t in (table(grand_total=True), table(grand_total=True, groups=[]),
               table(grand_total=True, matrix={"columns_by": "[kind]", "value": "SUM([amount])"})):

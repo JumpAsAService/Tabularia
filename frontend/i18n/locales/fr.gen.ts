@@ -260,7 +260,17 @@ export default {
       "auto": "auto",
       "alignAuto": "Automatique",
       "total": "Total",
-      "totalHint": "Un agrégat imprimé dans les totaux des groupes et le total général, comme SUM([montant]). Vide : aucun.",
+      "totalNone": "Aucun",
+      "totalSum": "Somme",
+      "totalAvg": "Moyenne",
+      "totalMin": "Minimum",
+      "totalMax": "Maximum",
+      "totalCount": "Nombre",
+      "totalCustom": "Expression…",
+      "totalExpr": "Expression du total",
+      "totalHint": "Un agrégat des lignes, comme SUM([montant]) / COUNT(). Il s'imprime dans les lignes de total des groupes et dans le total général.",
+      "totalNoRow": "Aucune ligne ne l'imprime encore : activez Total général à la fin, ou la Ligne de total d'un groupe.",
+      "noTotals": "Aucune colonne n'a de total, aucune ligne de total ne s'imprime donc : choisissez-en un dans le Total d'une colonne.",
       "cellStyle": "Style des cellules",
       "rules": "Mise en forme conditionnelle",
       "addRule": "Règle",
@@ -283,7 +293,7 @@ export default {
       "keepTogether": "Garder les dernières lignes avec leur total",
       "matrix": "Matrice",
       "columnsBy": "Une colonne par valeur de",
-      "columnsByHint": "Chaque valeur devient une colonne (60 au plus) ; les groupes font les lignes.",
+      "columnsByHint": "Chaque valeur devient une colonne (60 au plus), là où elle apparaît pour la première fois dans les lignes : l'ORDER BY du dataset décide. Les groupes font les lignes.",
       "cellValue": "Valeur des cellules",
       "cellValueHint": "Un agrégat des lignes de la cellule, comme SUM([montant]).",
       "cellWidth": "Largeur de colonne",
@@ -683,6 +693,8 @@ export default {
     "deleteConversation": "Supprimer cette conversation",
     "deleteConfirm": "Supprimer cette conversation avec l'assistant ? Ses messages et les lignes de ses aperçus sont effacés.",
     "newConversation": "Nouvelle conversation",
+    "metadataOnly": "Mode métadonnées uniquement : le modèle reçoit les réglages du flux, les noms et les types, jamais une valeur de vos données. Il ajoute des étapes sans aperçu : vérifiez le résultat sur le canevas.",
+    "metadataEmptyBody": "Décrivez ce que le flux doit faire. L'assistant ajoute et modifie des étapes sur le canevas et n'enregistre jamais : une annulation retire tout ce qu'il a fait. Cette installation est en mode métadonnées uniquement : il ne voit pas les données et ne vérifie donc rien sur un aperçu.",
     "emptyBody": "Décrivez ce que le flux doit faire. L'assistant ajoute et modifie les étapes sur le canevas, vérifie chacune sur un aperçu des données et n'enregistre jamais : une seule annulation retire tout ce qu'il a fait.",
     "example1": "Partir de la source de données des ventes et ne garder que les lignes de l'an dernier",
     "example2": "Ajouter le montant total par pays, du plus grand au plus petit",
@@ -722,6 +734,9 @@ export default {
     "canBeWrong": "Il peut se tromper. Chaque réponse montre le tableau d'où viennent les chiffres : vérifiez-le avant de vous en servir.",
     "readsOnly": "Il ne lit que les sources de données que votre compte a le droit de lire, et en lecture seule.",
     "noPersonalData": "N'écrivez pas de données personnelles ou confidentielles : la question est envoyée au fournisseur du modèle.",
+    "metaGenerated": "Le texte est écrit par le modèle à partir des noms, des types et des descriptions de vos données et de la structure de ce qui est enregistré. Un administrateur a activé le mode métadonnées uniquement : aucune valeur d'une ligne de données ne lui parvient, il ne peut donc pas répondre avec des chiffres.",
+    "metaCanBeWrong": "Il peut se tromper. Il n'affiche aucun tableau, car il n'en lit aucun : vérifiez ce qu'il dit dans le Viewer avant d'agir.",
+    "metaConstants": "Ce que les personnes ont écrit lui parvient toujours : les descriptions et les valeurs saisies dans un filtre, un SQL enregistré ou un e-mail.",
     "accept": "J'ai compris",
   },
   "memoryGauge": {
@@ -1101,6 +1116,11 @@ export default {
     "confirmPromoteGroup": "Faire de « {name} » un groupe d'administrateurs ? Ses {n} membres, et toute personne qui le rejoindra, pourront tout voir et tout modifier.",
     "groupPromoted": "« {name} » est maintenant un groupe d'administrateurs",
     "groupDemoted": "« {name} » n'est plus un groupe d'administrateurs",
+    "aiMetadataOnlyOn": "Le mode métadonnées uniquement est actif pour les modèles configurés ici (chat, assistants de flux et de scripts, export dbt) : aucune valeur d'une ligne ne leur parvient.",
+    "aiMetadataOnlyOff": "Le mode métadonnées uniquement est désactivé pour les modèles configurés ici : les assistants de données et de flux envoient des lignes au fournisseur, et l'export dbt des valeurs d'exemple.",
+    "mcpMetadataOnlyOn": "Le mode métadonnées uniquement est actif pour MCP : les outils qui lisent des valeurs ne sont pas proposés aux modèles des clients.",
+    "mcpMetadataOnlyOff": "Le mode métadonnées uniquement est désactivé pour MCP : les modèles des clients, hors de votre contrôle, peuvent lire des lignes et interroger des bases de données.",
+    "aiMetadataOnlyChange": "Le modifier dans les Paramètres",
     "aiTitle": "Modèles IA",
     "aiHint": "Les modèles que l'assistant peut utiliser. Aucun modèle n'est activé tant que vous ne l'activez pas : chaque message est facturé par le fournisseur. Les modèles d'embedding et audio ne sont pas activables pour le chat.",
     "aiUnavailable": "Assistant non configuré, ou fournisseur injoignable.",
@@ -2530,6 +2550,10 @@ export default {
     "railEmpty": "Vous n'avez encore accès à aucune source : demandez l'accès à un dossier.",
     "dsRows": "{n} lignes",
     "dsDescribed": "{n} champs décrits sur {total} : les descriptions aident l'assistant à écrire la bonne requête",
+    "metadataOnly": "Mode métadonnées uniquement : le modèle reçoit les noms, les types, les descriptions et le nombre de lignes, jamais une valeur de vos données. Il peut expliquer et construire, pas répondre avec des chiffres.",
+    "metadataEmptyBody": "Demandez ce que contient une datasource, faites écrire du SQL ou construire un flux. L'assistant lit les noms, les types, les descriptions et le nombre de lignes, et construit par des plans que vous confirmez. Cette installation est en mode métadonnées uniquement : aucune valeur de vos données ne parvient au modèle, il ne peut donc pas répondre avec des chiffres.",
+    "metadataExample2": "Que signifie chaque champ de la datasource la plus pertinente ?",
+    "metadataExample3": "Écris le SQL qui additionne les montants par année : je l'exécuterai moi-même.",
     "emptyTitle": "Interrogez vos données, ou construisez avec elles",
     "emptyBody": "Posez une question en langage naturel : l'assistant trouve la source, lit les champs et leurs descriptions, exécute une requête et vous montre la table d'où viennent les chiffres. Il construit aussi des flux, les exécute et les planifie : il demande ce dont il n'est pas sûr et ne change rien tant que vous n'avez pas confirmé son plan.",
     "example1": "Quelles sources puis-je utiliser et que contiennent-elles ?",
@@ -2841,6 +2865,7 @@ export default {
     "download": "Télécharger",
     "aiDescriptions": "Des descriptions écrites par l'IA là où elles manquent",
     "aiTranslations": "Une traduction de l'IA là où une requête ne se traduit pas (contrôlée, à revoir)",
+    "aiHintMetadataOnly": "Avec {model} : l'IA voit la structure du flux et les noms et types des colonnes. Cette installation est en mode métadonnées uniquement, elle ne reçoit donc aucune valeur d'exemple. Ce qu'elle écrit est gardé par version du flux, donc réexporter donne le même projet.",
     "aiHint": "Avec {model} : l'IA voit la structure du flux et jusqu'à 3 valeurs d'exemple par colonne. Ce qu'elle écrit est gardé par version du flux, donc réexporter donne le même projet.",
     "aiStoredDescriptions": "Utiliser les descriptions de l'IA gardées pour cette version",
     "aiStoredTranslations": "Utiliser les traductions de l'IA gardées pour cette version",
@@ -3341,6 +3366,10 @@ export default {
         "label": "Attente du destinataire",
         "help": "Combien de temps un webhook attend la réponse de l'autre système avant de compter l'envoi comme échoué."
       },
+      "ai_metadata_only": {
+        "label": "Mode métadonnées uniquement",
+        "help": "Actif : aucune valeur d'une ligne de données ne parvient au modèle configuré ici. Le chat, les assistants de flux et de scripts et l'export dbt reçoivent les noms, les types, les descriptions, le nombre de lignes et la structure : ni requête, ni aperçu, ni échantillon, ni texte d'erreur. Les valeurs saisies par les personnes dans les filtres, le SQL et les descriptions continuent de passer. Les tours d'une conversation faits hors de ce mode ne vont plus au modèle."
+      },
       "ai_default_model": {
         "label": "Modèle proposé en premier",
         "help": "Le modèle que propose le sélecteur de l'assistant, si un administrateur l'a activé. Vide = le premier disponible."
@@ -3388,6 +3417,10 @@ export default {
       "mcp_enabled": {
         "label": "Serveur MCP",
         "help": "Les agents hors de Tabularia peuvent se connecter à /mcp avec un jeton d'API : les jetons en lecture seule lisent seulement, ceux en écriture proposent des plans. Désactivé : /mcp répond 404 et les jetons restent valables sur le reste de l'API."
+      },
+      "mcp_metadata_only": {
+        "label": "Mode métadonnées uniquement pour MCP",
+        "help": "Actif : les outils MCP qui lisent des valeurs ne sont ni proposés ni appelables, et les autres omettent les lignes et le texte des erreurs. Les valeurs saisies par les personnes dans les filtres, le SQL et les descriptions continuent de passer. Cela ne vaut que pour /mcp : un jeton d'API peut toujours lire des données sur le reste de l'API."
       },
       "mcp_confirm_in_tabularia_only": {
         "label": "Plans confirmés seulement dans Tabularia",
@@ -4527,6 +4560,8 @@ export default {
     "title": "Assistant",
     "toggle": "Assistant",
     "newConversation": "Nouvelle conversation",
+    "metadataOnly": "Mode métadonnées uniquement : le modèle reçoit le code et les noms et types des colonnes. Jamais une ligne de données, ni l'erreur d'une exécution échouée.",
+    "errorWithheld": "La dernière exécution a échoué. En mode métadonnées uniquement, le modèle ne reçoit pas son erreur : lisez-la dans le journal et décrivez ici le problème sans citer de valeur.",
     "emptyBody": "Demandez une modification du code, ou un script qui fasse quelque chose avec les entrées. Il propose des fichiers entiers : vous les appliquez ou non, et vous lancez le script.",
     "fixLastError": "Expliquer et corriger la dernière erreur",
     "fixPrompt": "La dernière exécution a échoué : explique pourquoi et corrige le code.",

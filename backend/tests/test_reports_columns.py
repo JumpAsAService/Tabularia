@@ -342,6 +342,20 @@ def test_the_common_items_are_worked_out_in_duckdb(caplog):
     assert not [r for r in caplog.records if "by the interpreter" in r.getMessage()], caplog.text
 
 
+def test_a_matrix_keeps_the_order_of_the_rows_past_what_duckdb_reads_at_a_time(caplog):
+    """The first time each value comes, over more rows than one thread of DuckDB reads at a
+    time and in DuckDB: the values come back in the rows' order, or the columns would change
+    from one run to the next."""
+    caplog.set_level(logging.INFO, logger="app.reports")
+    n = 400_000
+    late = {120_000: "z", 150_000: "b", 250_000: "m", 399_999: "a"}
+    data = [{"customer": "c", "amount": 1.0, "qty": i, "kind": late.get(i, "first"), "region": "N"} for i in range(n)]
+    t = build(report(table(matrix={"columns_by": "[kind]", "value": "COUNT()", "total": False}, groups=[{"by": "[region]"}])),
+              data).tables[0]
+    assert [h["t"] for h in t.head[0]][1:] == ["first", "z", "b", "m", "a"]
+    assert not [r for r in caplog.records if "by the interpreter" in r.getMessage()], caplog.text
+
+
 # ── reports made up at random, built both ways ──────────────────────────────
 @pytest.mark.parametrize("seed", range(12))
 def test_random_reports_are_the_same_both_ways(seed):

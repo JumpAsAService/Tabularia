@@ -4,7 +4,7 @@
 // whether the rows are shown, its order and filter, zebra rows, a grand total, the header
 // repeated on every page, and what can be done on screen (sorting a column, closing a
 // group). A matrix adds the columns it spreads (one per value) and the value of its cells.
-import { computed, ref } from 'vue'
+import { computed, ref, shallowRef, toRaw } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { ArrowDown, ArrowUp, ChevronRight, Plus, Trash2 } from 'lucide-vue-next'
 import Select from '~/components/ui/Select.vue'
@@ -15,7 +15,7 @@ import RdSeg from '~/components/report/designer/RdSeg.vue'
 import RdSection from '~/components/report/designer/RdSection.vue'
 import RdStyleFields from '~/components/report/designer/RdStyleFields.vue'
 import { useDesign } from '~/composables/reportDesignStore'
-import type { DColumn, DGroup, DTable } from '~/composables/reportDesignModel'
+import { chooseTotal, hasTotals, totalChoices, totalKind, totalRowsOn, type DColumn, type DGroup, type DTable, type TotalKind } from '~/composables/reportDesignModel'
 
 const props = defineProps<{ item: DTable }>()
 const store = useDesign()
@@ -55,6 +55,32 @@ function addRule(c: DColumn) {
   if (!c.rules) c.rules = []
   c.rules.push({ when: '', style: { color: '#c92a2a', weight: 'bold' } })
 }
+// a column's total: none until it is asked for here. «Expression» holds while its field is
+// still empty; after that the text says what it is
+const writing = shallowRef(new Set<DColumn>())
+const totalShown = (c: DColumn): TotalKind => (writing.value.has(toRaw(c)) ? 'custom' : totalKind(c))
+const totalNames = computed<Record<TotalKind, string>>(() => ({
+  none: t('reportDesigner.table.totalNone'),
+  sum: t('reportDesigner.table.totalSum'),
+  avg: t('reportDesigner.table.totalAvg'),
+  min: t('reportDesigner.table.totalMin'),
+  max: t('reportDesigner.table.totalMax'),
+  count: t('reportDesigner.table.totalCount'),
+  custom: t('reportDesigner.table.totalCustom'),
+}))
+const totalOptions = (c: DColumn) => totalChoices(c, fields.value).map((value) => ({ value, label: totalNames.value[value] }))
+function setTotal(c: DColumn, kind: TotalKind) {
+  const next = new Set(writing.value)
+  if (kind === 'custom') next.add(toRaw(c))
+  else next.delete(toRaw(c))
+  writing.value = next
+  chooseTotal(props.item, c, kind)
+}
+const totalProblem = (i: number) => {
+  const at = `columns[${i}].total`
+  return store.problemAt(id.value, at)?.message ?? store.liveAt(id.value, at)?.message ?? null
+}
+const noTotals = computed(() => !props.item.matrix && !hasTotals(props.item))
 const alignOptions = computed(() => [
   { value: null, label: t('reportDesigner.table.alignAuto') },
   { value: 'left', label: t('reportDesigner.style.left') },
@@ -90,7 +116,7 @@ function sortKeys() {
 function setMatrix(on: boolean) {
   const tb = props.item
   if (on) {
-    tb.matrix = { columns_by: '', value: '', total: true }
+    tb.matrix = { columns_by: '', value: '', total: false }
     if (!tb.columns.length) tb.columns.push({ header: '', value: '' })
     if (!tb.groups?.length) groups().push({ by: '', header: false, footer: false })
     tb.detail = false
@@ -102,7 +128,7 @@ function setMatrix(on: boolean) {
     tb.detail = true
     tb.groups = (tb.groups ?? []).filter((g) => g.by.trim())
     const first = tb.columns[0]
-    if (first && !first.value.trim()) {
+    if (first && !first.value?.trim()) {
       const inner = tb.groups[tb.groups.length - 1]?.by
       if (inner) first.value = inner
       else tb.columns.splice(0, 1)
@@ -201,8 +227,14 @@ function interactive() {
           </label>
         </div>
         <RdFormatInput v-model="c.format" :label="$t('reportDesigner.style.format')" :item="id" :path="`columns[${i}].format`" />
-        <RdExprField :obj="c" prop="total" :label="$t('reportDesigner.table.total')" :path="`columns[${i}].total`" :item="id" :fields="fields" optional
-                     placeholder="SUM([amount])" :hint="$t('reportDesigner.table.totalHint')" />
+        <label class="rp-f">
+          <span>{{ $t('reportDesigner.table.total') }}</span>
+          <Select :model-value="totalShown(c)" :options="totalOptions(c)" :aria-label="$t('reportDesigner.table.total')" @update:model-value="setTotal(c, $event)" />
+        </label>
+        <RdExprField v-if="totalShown(c) === 'custom'" :obj="c" prop="total" :label="$t('reportDesigner.table.totalExpr')" :path="`columns[${i}].total`" :item="id" :fields="fields" optional
+                     placeholder="SUM([amount]) / COUNT()" :hint="$t('reportDesigner.table.totalHint')" />
+        <p v-else-if="totalProblem(i)" class="rp-err" role="alert">{{ totalProblem(i) }}</p>
+        <p v-if="c.total?.trim() && !totalRowsOn(item)" class="rp-help">{{ $t('reportDesigner.table.totalNoRow') }}</p>
         <details class="rp-more">
           <summary>{{ $t('reportDesigner.table.cellStyle') }}</summary>
           <RdStyleFields :obj="c" :parts="['font', 'color', 'fill']" :item="id" :path="`columns[${i}]`" />
@@ -234,6 +266,7 @@ function interactive() {
       <button type="button" class="mini rp-add" :disabled="(item.groups ?? []).length >= 6" @click="addGroup"><Plus :size="12" /> {{ $t('reportDesigner.table.addGroup') }}</button>
     </template>
     <p v-if="!(item.groups ?? []).length" class="rp-help">{{ $t('reportDesigner.table.noGroups') }}</p>
+    <p v-if="noTotals && (item.groups ?? []).some((g) => g.footer !== false && g.header !== false)" class="rp-help">{{ $t('reportDesigner.table.noTotals') }}</p>
     <div v-for="(g, i) in item.groups ?? []" :key="i" class="rp-card" :class="{ bad: has(`groups[${i}]`) }">
       <div class="rp-chead">
         <span class="rp-glevel">{{ $t('reportDesigner.table.level', { n: i + 1 }) }}</span>
@@ -267,6 +300,7 @@ function interactive() {
     <div class="rp-checks">
       <label v-if="!item.matrix" class="rp-check"><input type="checkbox" :checked="item.detail !== false" @change="item.detail = ($event.target as HTMLInputElement).checked" /> {{ $t('reportDesigner.table.detail') }}</label>
       <label class="rp-check"><input type="checkbox" :checked="!!item.grand_total" @change="item.grand_total = ($event.target as HTMLInputElement).checked" /> {{ $t('reportDesigner.table.grandTotal') }}</label>
+      <p v-if="noTotals && item.grand_total" class="rp-help">{{ $t('reportDesigner.table.noTotals') }}</p>
       <label class="rp-check"><input type="checkbox" :checked="item.repeat_header !== false" @change="item.repeat_header = ($event.target as HTMLInputElement).checked" /> {{ $t('reportDesigner.table.repeatHeader') }}</label>
       <label class="rp-check"><input type="checkbox" :checked="!!item.zebra" @change="item.zebra = ($event.target as HTMLInputElement).checked" /> {{ $t('reportDesigner.table.zebra') }}</label>
     </div>

@@ -260,7 +260,17 @@ export default {
       "auto": "auto",
       "alignAuto": "Automatic",
       "total": "Total",
-      "totalHint": "An aggregate printed in the groups' totals and the grand total, such as SUM([amount]). Empty: none.",
+      "totalNone": "None",
+      "totalSum": "Sum",
+      "totalAvg": "Average",
+      "totalMin": "Minimum",
+      "totalMax": "Maximum",
+      "totalCount": "Count",
+      "totalCustom": "Expression…",
+      "totalExpr": "Expression of the total",
+      "totalHint": "An aggregate of the rows, such as SUM([amount]) / COUNT(). It prints in the groups' total rows and in the grand total.",
+      "totalNoRow": "No row prints it yet: turn on Grand total at the end, or a group's Total row.",
+      "noTotals": "No column has a total, so no total row prints: choose one in a column's Total.",
       "cellStyle": "Style of the cells",
       "rules": "Conditional formatting",
       "addRule": "Rule",
@@ -283,7 +293,7 @@ export default {
       "keepTogether": "Keep the last rows with their total",
       "matrix": "Matrix",
       "columnsBy": "One column per value of",
-      "columnsByHint": "Each value becomes a column (at most 60); the groups make the rows.",
+      "columnsByHint": "Each value becomes a column (at most 60), where it first comes in the rows: the ORDER BY of the dataset decides. The groups make the rows.",
       "cellValue": "Value of the cells",
       "cellValueHint": "An aggregate of the rows of the cell, such as SUM([amount]).",
       "cellWidth": "Column width",
@@ -683,6 +693,8 @@ export default {
     "deleteConversation": "Delete this conversation",
     "deleteConfirm": "Delete this conversation with the assistant? Its messages and the rows of its previews are removed.",
     "newConversation": "New conversation",
+    "metadataOnly": "Metadata-only mode: the model gets the flow's settings, names and types, never a value of your data. It adds steps without a preview: check the result on the canvas.",
+    "metadataEmptyBody": "Describe what the flow should do. The assistant adds and changes steps on the canvas and never saves: one Undo takes back all it did. This installation is in metadata-only mode: it sees no data, so it checks nothing on a preview.",
     "emptyBody": "Describe what the flow should do. The assistant adds and changes steps on the canvas, checks each one on a preview of the data, and never saves: one Undo takes back all it did.",
     "example1": "Start from the sales datasource and keep only last year's rows",
     "example2": "Add the total amount per country, largest first",
@@ -722,6 +734,9 @@ export default {
     "canBeWrong": "It can be wrong. Every answer shows the table the numbers come from — check it before you act on them.",
     "readsOnly": "It reads only the datasources your account is allowed to read, and only for reading.",
     "noPersonalData": "Do not type personal or confidential data: the question is sent to the model provider.",
+    "metaGenerated": "The text is written by the model from the names, types and descriptions of your data, and the structure of what is saved. An administrator has turned on metadata-only mode: no value of a row of data reaches it, so it cannot answer with figures.",
+    "metaCanBeWrong": "It can be wrong. It shows no table, because it reads none: check what it says in the Viewer before you act on it.",
+    "metaConstants": "What people wrote still reaches it: descriptions, and the values typed in a filter, in a saved SQL or in an email.",
     "accept": "I understand",
   },
   "memoryGauge": {
@@ -1101,6 +1116,11 @@ export default {
     "confirmPromoteGroup": "Make “{name}” an administrators group? Its {n} members, and anyone who joins later, will be able to see and change everything.",
     "groupPromoted": "“{name}” is now an administrators group",
     "groupDemoted": "“{name}” is no longer an administrators group",
+    "aiMetadataOnlyOn": "Metadata-only mode is on for the models configured here (chat, flow and script assistants, dbt export): no value of a row reaches them.",
+    "aiMetadataOnlyOff": "Metadata-only mode is off for the models configured here: the data and flow assistants send rows to the provider, and the dbt export sample values.",
+    "mcpMetadataOnlyOn": "Metadata-only mode is on for MCP: the tools that read values are not offered to the clients' models.",
+    "mcpMetadataOnlyOff": "Metadata-only mode is off for MCP: the clients' models, outside your control, can read rows and query databases.",
+    "aiMetadataOnlyChange": "Change it in Settings",
     "aiTitle": "AI models",
     "aiHint": "The models the assistant may use. No model is enabled until you enable it: every message is billed by the provider. Embedding and audio models cannot be enabled for chat.",
     "aiUnavailable": "Assistant not configured, or provider unreachable.",
@@ -2555,6 +2575,10 @@ export default {
     "railEmpty": "You have no access to any datasource yet: ask for access to a folder.",
     "dsRows": "{n} rows",
     "dsDescribed": "{n} of {total} fields described: descriptions help the assistant write the right query",
+    "metadataOnly": "Metadata-only mode: the model gets names, types, descriptions and row counts, never a value of your data. It can explain and build, not answer with figures.",
+    "metadataEmptyBody": "Ask what a datasource holds, have the assistant write SQL, or have it build a flow. It reads names, types, descriptions and row counts, and it builds through plans you confirm. This installation is in metadata-only mode: no value of your data reaches the model, so it cannot answer with figures.",
+    "metadataExample2": "What does each field of the most relevant datasource mean?",
+    "metadataExample3": "Write the SQL that sums the amounts by year: I will run it myself.",
     "emptyTitle": "Ask your data, or build with it",
     "emptyBody": "Ask a question in plain language: the assistant finds the datasource, reads the fields and their descriptions, runs a query and shows you the table the numbers come from. It also builds flows, runs and schedules them: it asks what it is not sure about, and changes nothing until you confirm its plan.",
     "example1": "Which datasources can I use and what do they contain?",
@@ -2866,6 +2890,7 @@ export default {
     "download": "Download",
     "aiDescriptions": "Descriptions written by AI where they are missing",
     "aiTranslations": "An AI translation where a query does not translate (checked, marked to review)",
+    "aiHintMetadataOnly": "With {model}: the AI sees the structure of the flow, and the names and types of the columns. This installation is in metadata-only mode, so it gets no sample values. What it writes is kept per version of the flow, so re-exporting gives the same project.",
     "aiHint": "With {model}: the AI sees the structure of the flow and up to 3 sample values per column. What it writes is kept per version of the flow, so re-exporting gives the same project.",
     "aiStoredDescriptions": "Use the AI descriptions kept for this version",
     "aiStoredTranslations": "Use the AI translations kept for this version",
@@ -3366,6 +3391,10 @@ export default {
         "label": "Wait for the receiver",
         "help": "How long a webhook waits for the other system to answer before counting the delivery as failed."
       },
+      "ai_metadata_only": {
+        "label": "Metadata-only mode",
+        "help": "On: no value of a row of data reaches the model configured here. The chat, the flow and script assistants and the dbt export get names, types, descriptions, row counts and structure: no query, no preview, no sample, no error text. The values people typed in filters, SQL and descriptions still go. Earlier turns of a conversation made outside this mode stop going to the model."
+      },
       "ai_default_model": {
         "label": "Model proposed first",
         "help": "The model the assistant's selector proposes, if an administrator enabled it. Empty = the first available."
@@ -3413,6 +3442,10 @@ export default {
       "mcp_enabled": {
         "label": "MCP server",
         "help": "Agents outside Tabularia may connect to /mcp with an API token: read-only tokens only read, write tokens propose plans. Off: /mcp answers 404 and the tokens keep working on the rest of the API."
+      },
+      "mcp_metadata_only": {
+        "label": "Metadata-only mode for MCP",
+        "help": "On: the MCP tools that read values are neither offered nor callable, and the others leave out rows and error text. The values people typed in filters, SQL and descriptions still go. It covers /mcp only: an API token can still read data on the rest of the API."
       },
       "mcp_confirm_in_tabularia_only": {
         "label": "Plans confirmed only in Tabularia",
@@ -4527,6 +4560,8 @@ export default {
     "title": "Assistant",
     "toggle": "Assistant",
     "newConversation": "New conversation",
+    "metadataOnly": "Metadata-only mode: the model gets the code and the names and types of the columns. Never a row of data, nor the error of a failed run.",
+    "errorWithheld": "The last run failed. In metadata-only mode the model does not get its error: read it in the log, and describe the problem here without quoting any value.",
     "emptyBody": "Ask for a change to the code, or for a script that does something with the inputs. It proposes whole files: you apply them or not, and run the script yourself.",
     "fixLastError": "Explain and fix the last error",
     "fixPrompt": "The last run failed: explain why and fix the code.",
