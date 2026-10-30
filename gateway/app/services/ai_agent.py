@@ -255,6 +255,7 @@ def context(engine: Optional[str], locale: str, focus: list[dict[str, Any]] | No
         ai_prompts.CONTEXT_HEADER,
         f"- {ai_prompts.today()}",
         f"- SQL dialect: {dialect}. Quote column names that contain spaces or symbols with {quote}.",
+        "- Never add a currency to an amount unless the data or the user states which one.",
     ]
     if withheld:
         lines.append(METADATA_ONLY_CONTEXT)

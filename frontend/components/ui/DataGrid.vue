@@ -1,18 +1,21 @@
 <script setup lang="ts">
 import { computed } from 'vue'
 import type { PreviewResult } from '~/composables/useApi'
+import { readableNumber } from '~/composables/readableNumber'
 
 // note: something to say instead of a table that is not an error (no preview after a Script node)
-const props = defineProps<{ result: PreviewResult | null; loading?: boolean; error?: string; note?: string }>()
+// readable: for who reads an answer, not who checks a step (the assistant's tables): the exact
+// value stays in the cell's tooltip and in the file
+const props = defineProps<{ result: PreviewResult | null; loading?: boolean; error?: string; note?: string; readable?: boolean }>()
 
 // numbers on the right with tabular digits; the VALUES stay raw: in a step's preview one
 // wants to see the exact data, not a formatted version of it
 const isNum = (dtype: string) => /Int|Float|Decimal/i.test(dtype)
 
-function fmt(v: any): string {
+function fmt(v: any, dtype = ''): string {
   if (v === null || v === undefined) return '∅'
   if (typeof v === 'object') return JSON.stringify(v)
-  return String(v)
+  return props.readable && typeof v === 'number' ? readableNumber(v, dtype) : String(v)
 }
 
 // ── The preview's skeleton ──────────────────────────────────────────────
@@ -68,8 +71,9 @@ const skW = (r: number, c: number) => `${SK_WIDTHS[(r * 3 + c) % SK_WIDTHS.lengt
               v-for="c in result.columns"
               :key="c.name"
               :class="{ null: row[c.name] === null || row[c.name] === undefined, num: isNum(c.dtype) }"
+              :title="readable && typeof row[c.name] === 'number' ? String(row[c.name]) : undefined"
             >
-              {{ fmt(row[c.name]) }}
+              {{ fmt(row[c.name], c.dtype) }}
             </td>
           </tr>
         </tbody>

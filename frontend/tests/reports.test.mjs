@@ -10,6 +10,7 @@ import { register } from 'node:module'
 register('./alias-hooks.mjs', import.meta.url)
 const reports = await import('../composables/useReports.ts')
 const kinds = await import('../composables/chartKinds.ts')
+const { readableNumber } = await import('../composables/readableNumber.ts')
 
 // ── the hotspots ─────────────────────────────────────────────────────────────
 const DEFINITION = {
@@ -239,4 +240,15 @@ test('an empty field: «no value» for an optional parameter, whatever its defau
   // a link and a script carry it: it is not the default
   assert.deepEqual(reports.explicitParams(ps, { region: '{none}', top: 10 }), { region: '{none}' })
   assert.equal(reports.paramsQuery({ region: '{none}' }), 'region=%7Bnone%7D')
+})
+
+// ── the numbers of the assistant's tables ────────────────────
+test('a float reads without its binary noise, a whole-number column stays as it is', () => {
+  assert.equal(readableNumber(1411085.7500000007, 'Float64', 'en'), '1,411,085.75')
+  assert.equal(readableNumber(1000, 'Float64', 'en'), '1,000')
+  assert.equal(readableNumber(0.003456, 'Float64', 'en'), '0.00346')
+  assert.equal(readableNumber(0, 'Float64', 'en'), '0')
+  assert.equal(readableNumber(2026, 'Int32', 'en'), '2026')
+  assert.equal(readableNumber(1234.5, 'Decimal(10,2)', 'it'), '1234,5')
+  assert.equal(readableNumber(Number.NaN, 'Float64', 'en'), 'NaN')
 })

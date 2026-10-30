@@ -533,3 +533,8 @@ def test_the_assistant_page_agent_offers_the_same_kinds():
     props = read_tools.QueryDatasourceArgs.model_json_schema()["properties"]
     assert _enum(props["chart_type"]) == list(ai_agent.CHART_TYPES)
     assert {"chart_y2", "chart_max"} <= set(props)
+
+
+def test_the_assistant_is_told_not_to_invent_a_currency():
+    """A column named revenue says no currency: it wrote «$» on amounts of a report in euros."""
+    assert "Never add a currency" in ai_agent.context(None, "en", [])

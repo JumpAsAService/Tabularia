@@ -604,7 +604,7 @@ watch(draft, async () => {
                       <span>{{ s.table.datasource }}</span>
                       <span class="muted num">{{ $t(s.table.truncated ? 'chat.rowsMore' : 'chat.rows', { n: nf.format(s.table.row_count) }) }}</span>
                     </div>
-                    <DataGrid :result="s.table" />
+                    <DataGrid :result="s.table" readable />
                     <MiniChart v-if="s.chart" :spec="s.chart" :rows="s.table.rows" :name="s.table.datasource" />
                     <!-- the file holds the WHOLE result, not the rows shown: the server runs the saved query
                          again -->
