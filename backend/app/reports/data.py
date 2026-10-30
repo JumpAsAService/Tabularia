@@ -87,8 +87,11 @@ def used_datasets(report: rd.Report) -> list[str]:
             elif isinstance(n, ex.Binary):
                 stack.extend((n.left, n.right))
 
+    only = report.datasets[0].name if len(report.datasets) == 1 else None
     for _, it in report.items():
         add(getattr(it, "dataset", None))
+        if it.visible and getattr(it, "dataset", None) is None:
+            add(only)  # its condition reads the report's one dataset
         if it.type == "text":
             text, is_expr = ex.text_value(it.value)
             if is_expr:
@@ -98,10 +101,13 @@ def used_datasets(report: rd.Report) -> list[str]:
         walk(it.visible)
         for value in _expressions_of(it):
             walk(value)
-    for d in report.datasets:
-        if d.name in used:
-            for c in d.calculated:
-                walk(c.expr)
+    done: set[str] = set()
+    while set(used) - done:  # a field may name a dataset whose fields name another
+        for d in report.datasets:
+            if d.name in used and d.name not in done:
+                done.add(d.name)
+                for c in d.calculated:
+                    walk(c.expr)
     return used
 
 
@@ -236,12 +242,16 @@ def _one(p: rd.Parameter, value: Any, pctx: ph.Context) -> Any:
             return value
         text = str(value).strip().replace(" ", "")
         try:
+            return int(text)  # as it is: through a float an id of 19 digits becomes another
+        except ValueError:
+            pass
+        try:
             n = float(text)
         except ValueError:
             raise ValueError(f"«{value}» is not a number") from None
         if not math.isfinite(n):
             raise ValueError(f"«{value}» is not a number")
-        return int(n) if n.is_integer() and "." not in text and "e" not in text.lower() else n
+        return n
     if p.type == "boolean":
         if isinstance(value, bool):
             return value

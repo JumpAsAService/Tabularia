@@ -235,6 +235,7 @@ class Series(_Model):
     name: str = Field("", max_length=200)
     as_: Literal["bar", "line"] | None = Field(None, alias="as")
     axis: Literal["left", "right"] = "left"
+    format: Pattern | None = None  # its values', and its axis's; none: the chart's
 
 
 class ChartOptions(_Model):
@@ -450,7 +451,7 @@ class _Checks:
         for d in report.datasets:
             known = self.fields[d.name]
             for i, c in enumerate(d.calculated):
-                t = self.expr(c.expr, None, f"datasets[{d.name}].calculated[{i}]", self.env(d.name))
+                t = self.expr(c.expr, None, f"datasets[{d.name}].calculated[{i}]", self.env(d.name, running=False))
                 if known is not None:
                     known[c.name] = _TYPE_NAMES.get(t or "", "")
 
@@ -541,12 +542,12 @@ class _Checks:
     def table(self, it: TableItem, ds: str | None) -> None:
         if ds is None:
             return
-        self.expr(it.filter, it.id, "filter", self.env(ds, want=ex.BOOL))
+        self.expr(it.filter, it.id, "filter", self.env(ds, want=ex.BOOL, rownumber=False))
         for i, g in enumerate(it.groups):
-            self.expr(g.by, it.id, f"groups[{i}].by", self.env(ds, aggregates=False))
+            self.expr(g.by, it.id, f"groups[{i}].by", self.env(ds, aggregates=False, rownumber=False))
             self.expr(g.label, it.id, f"groups[{i}].label", self.env(ds))
         for i, s in enumerate(it.sort):
-            self.expr(s.by, it.id, f"sort[{i}].by", self.env(ds, aggregates=False))
+            self.expr(s.by, it.id, f"sort[{i}].by", self.env(ds, aggregates=False, rownumber=False))
         for i, c in enumerate(it.columns):
             if c.value is None and not it.matrix:
                 self.problems.append(Problem("a column of a table needs a value", it.id, f"columns[{i}].value"))
@@ -557,7 +558,7 @@ class _Checks:
                 self.expr(rule.when, it.id, f"columns[{i}].rules[{j}].when", self.env(ds, want=ex.BOOL))
         if it.matrix:
             for i, level in enumerate(it.matrix.levels):
-                self.expr(level, it.id, f"matrix.columns_by[{i}]", self.env(ds, aggregates=False))
+                self.expr(level, it.id, f"matrix.columns_by[{i}]", self.env(ds, aggregates=False, rownumber=False))
             self.expr(it.matrix.value, it.id, "matrix.value", self.env(ds))
             self.pattern(it.matrix.format, it.id, "matrix.format")
         elif not it.columns:
@@ -575,6 +576,8 @@ class _Checks:
         if isinstance(it.options.target, str):
             self.expr(it.options.target, it.id, "options.target", self.env(ds))
         self.pattern(it.options.format, it.id, "options.format")
+        for i, s in enumerate(it.series):
+            self.pattern(s.format, it.id, f"series[{i}].format")
         if it.category is None and it.kind not in ("gauge", "bullet"):
             self.problems.append(Problem(f"a {it.kind} chart needs a category (what goes along its axis)", it.id,
                                          "category"))

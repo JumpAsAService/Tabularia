@@ -42,6 +42,8 @@ from app.reports import formats
 
 MAX_EXPRESSION_CHARS = 4000
 MAX_DEPTH = 64
+MAX_TREE_DEPTH = 200  # a chain of operators is a tree this deep: the walks below are recursive
+MAX_TEXT_CHARS = 1_000_000  # the longest text REPLACE makes: nested, it multiplies a text at every level
 PLACEHOLDERS = (*ph.DATE_BASES, "now")  # the placeholders an expression may write
 
 
@@ -389,7 +391,22 @@ def _respan(node: Node, pos: int, end: int) -> Node:
 def parse(text: str) -> Node:
     if len(text) > MAX_EXPRESSION_CHARS:
         raise ExpressionError(f"the expression is longer than {MAX_EXPRESSION_CHARS} characters", 0, 0)
-    return _Parser(text).parse()
+    node = _Parser(text).parse()
+    _check_depth(node)
+    return node
+
+
+def _check_depth(root: Node) -> None:
+    """A chain of `+` or `&` is as deep as it is long, and every walk of the tree recurses."""
+    stack = [(root, 1)]
+    while stack:
+        node, depth = stack.pop()
+        if depth > MAX_TREE_DEPTH:
+            raise ExpressionError(f"the expression is more than {MAX_TREE_DEPTH} operations long: "
+                                  "put a part of it in a calculated field", node.pos, max(node.end - node.pos, 0))
+        children = node.args if isinstance(node, Call) else (node.arg,) if isinstance(node, Unary) \
+            else (node.left, node.right) if isinstance(node, Binary) else ()
+        stack.extend((c, depth + 1) for c in children)
 
 
 # ── types and the functions' table ───────────────────────────────────────────
@@ -460,6 +477,8 @@ class Env:
     header: bool = False  # the page header or footer: no fields, except in an aggregate of a named dataset
     aggregates: bool = True  # aggregates may be written (not in a group's `by`, a sort key…)
     want: str | None = None  # the type the place wants (boolean for a condition)
+    rownumber: bool = True  # ROWNUMBER() has a value here (not before the rows are in their order)
+    running: bool = True  # RUNNING has rows to run over (a table's: not a calculated field)
 
 
 def _err(node: Node, message: str, name: str | None = None) -> ExpressionError:
@@ -636,6 +655,10 @@ class _Checker:
             if not self.env.aggregates or self.in_aggregate is not None or self.in_special:
                 raise ExpressionError(f"{name} cannot be written here", node.pos, len(name), name)
             inner = args[0]
+            if name == "RUNNING" and not self.env.running:
+                # with no rows to run over it is the total, on every row: a number that looks right
+                raise ExpressionError("RUNNING goes over the rows a table shows: write it in a column of the table, "
+                                      "not in a calculated field", node.pos, len(name), name)
             if name == "RUNNING" and not (isinstance(inner, Call) and inner.name in AGGREGATES
                                           and scope_dataset(inner, self.env.datasets) is None):
                 raise _err(inner, "RUNNING takes an aggregate of the group, as RUNNING(SUM([amount]))", name)
@@ -651,6 +674,9 @@ class _Checker:
         if name == "ROWNUMBER":
             if self.env.header:
                 raise ExpressionError("ROWNUMBER() has no row in the page header and footer", node.pos, len(name), name)
+            if not self.env.rownumber:
+                raise ExpressionError("ROWNUMBER() is the row's place among those the table shows: it is not known yet "
+                                      "where they are chosen, sorted or grouped", node.pos, len(name), name)
             return NUM
         if name in ("PAGE", "PAGES"):
             if not self.env.page or self.in_aggregate is not None:
@@ -975,8 +1001,31 @@ def _round(x: float, n: int) -> float | int:
 
     if isinstance(x, float) and not math.isfinite(x):
         return x
-    q = Decimal(repr(x)).quantize(Decimal(1).scaleb(-int(n)), rounding=ROUND_HALF_UP)
+    # a double has no digit past these: more decimals change nothing, and tens further than
+    # its size are zero; the context holds every digit of the largest
+    n = max(min(int(n), formats.MAX_PLACES), -formats.MAX_PLACES)
+    d = Decimal(x) if isinstance(x, int) else Decimal(repr(x))
+    q = d.quantize(Decimal(1).scaleb(-n), rounding=ROUND_HALF_UP, context=formats.PRECISE)
     return int(q) if n <= 0 else float(q)
+
+
+# the bits of the largest value a report's number holds: a power past them is NULL at once
+_MAX_POWER_BITS = 1024
+
+
+def _power(a: float | int, b: float | int) -> Any:
+    """a ** b; NULL when it is no real number or no number a report holds. An int to an int
+    is Python's exact one, as long as a double holds it: the exponent is whatever a person
+    (or a field) writes, and POWER(10, 99999999999) would keep the worker for good."""
+    if isinstance(a, int) and isinstance(b, int) and b > 0 and (abs(a).bit_length() - 1) * b > _MAX_POWER_BITS:
+        return None
+    try:
+        r = a ** b
+    except (OverflowError, ZeroDivisionError):
+        return None
+    if isinstance(r, int) and r.bit_length() > _MAX_POWER_BITS:
+        return None
+    return None if isinstance(r, complex) else r
 
 
 def _aggregate(name: str, values: list[Any]) -> Any:
@@ -1107,24 +1156,30 @@ class Evaluator:
         if isinstance(a, date) or isinstance(b, date):
             return self._date_arithmetic(op, a, b)
         x, y = _num(a, f"«{op}»"), _num(b, f"«{op}»")
-        if op == "+":
-            return x + y
-        if op == "-":
-            return x - y
-        if op == "*":
-            return x * y
-        if y == 0:
-            return None
-        return x / y
+        try:
+            if op == "+":
+                return x + y
+            if op == "-":
+                return x - y
+            if op == "*":
+                return x * y
+            if y == 0:
+                return None
+            return x / y
+        except OverflowError as e:  # an int too long for a float beside it
+            raise EvalError(f"«{op}»: {e}") from None
 
     @staticmethod
     def _date_arithmetic(op: str, a: Any, b: Any) -> Any:
-        if op == "+" and isinstance(a, date) and _is_num(b):
-            return a + timedelta(days=b)
-        if op == "+" and isinstance(b, date) and _is_num(a):
-            return b + timedelta(days=a)
-        if op == "-" and isinstance(a, date) and _is_num(b):
-            return a - timedelta(days=b)
+        try:
+            if op == "+" and isinstance(a, date) and _is_num(b):
+                return a + timedelta(days=b)
+            if op == "+" and isinstance(b, date) and _is_num(a):
+                return b + timedelta(days=a)
+            if op == "-" and isinstance(a, date) and _is_num(b):
+                return a - timedelta(days=b)
+        except (OverflowError, ValueError):
+            raise EvalError("the date goes out of range") from None
         if op == "-" and isinstance(a, date) and isinstance(b, date):
             x, y = _cmp_pair(a, b)
             delta = x - y
@@ -1228,7 +1283,10 @@ class Evaluator:
         if name == "NOW":
             return ctx.now.replace(tzinfo=None)
         values = [self(a, ctx) for a in args]
-        return _scalar(name, values, ctx)
+        try:
+            return _scalar(name, values, ctx)
+        except OverflowError:  # a date past year 9999, a whole number of an infinity
+            raise EvalError(f"{name}: a value goes out of range") from None
 
 
 def _scalar(name: str, v: list[Any], ctx: Context) -> Any:
@@ -1283,11 +1341,7 @@ def _scalar(name: str, v: list[Any], ctx: Context) -> Any:
     if name == "CEILING":
         return math.ceil(_num(v[0], "CEILING"))
     if name == "POWER":
-        try:
-            r = _num(v[0], "POWER") ** _num(v[1], "POWER")
-        except (OverflowError, ZeroDivisionError):
-            return None
-        return None if isinstance(r, complex) else r
+        return _power(_num(v[0], "POWER"), _num(v[1], "POWER"))
     if name in ("UPPER", "LOWER", "TRIM", "LEN", "LEFT", "RIGHT", "MID", "REPLACE", "CONTAINS", "STARTSWITH"):
         t = v[0] if isinstance(v[0], str) else formats.display(v[0], None, ctx.loc)
         if name == "UPPER":
@@ -1307,14 +1361,19 @@ def _scalar(name: str, v: list[Any], ctx: Context) -> Any:
             start, count = max(int(_num(v[1], "MID")), 1) - 1, max(int(_num(v[2], "MID")), 0)
             return t[start:start + count]
         if name == "REPLACE":
-            return t.replace(str(v[1]), str(v[2])) if v[1] != "" else t
+            old, new = str(v[1]), str(v[2])
+            if not old:
+                return t
+            if len(t) + t.count(old) * (len(new) - len(old)) > MAX_TEXT_CHARS:
+                raise EvalError(f"REPLACE makes a text longer than {MAX_TEXT_CHARS:,} characters")
+            return t.replace(old, new)
         if name == "CONTAINS":
             return str(v[1]) in t
         return t.startswith(str(v[1]))
     if name == "DATE":
         try:
             return date(int(_num(v[0], "DATE")), int(_num(v[1], "DATE")), int(_num(v[2], "DATE")))
-        except ValueError:
+        except (ValueError, OverflowError):
             return None
     if name in ("YEAR", "MONTH", "DAY", "WEEKDAY"):
         d = v[0]

@@ -59,7 +59,15 @@
   )
 }
 
-#let text-body(it) = styled(it.st, parts(it.parts))
+// a text's lines as the designer's canvas draws them, a line-height of 1.2 (IBM Plex Sans: 1.025
+// above the baseline, 0.275 below, less a half-leading of 0.05 each): the box's top is the line's,
+// not the top of the capitals, which left the ascenders and the accents of É to the box's clip
+#let text-body(it) = {
+  let size = it.st.at("size", default: T.size) * 1pt
+  set text(top-edge: 0.975 * size, bottom-edge: -0.225 * size)
+  set par(leading: 0pt)
+  styled(it.st, parts(it.parts))
+}
 
 #let kpi(it) = {
   let st = it.st
@@ -81,7 +89,8 @@
         let tone = if c.dir == "up" { T.positive } else if c.dir == "down" { T.negative } else { T.muted }
         let arrow = if c.dir == "up" { "↑ " } else if c.dir == "down" { "↓ " } else { "→ " }
         h(2mm)
-        styled((size: 7.5, color: tone, weight: 600), arrow + c.t)
+        // whole: on the next line when it does not fit beside the value, the arrow with its number
+        box(styled((size: 7.5, color: tone, weight: 600), arrow + c.t))
       }
       if it.spark != none {
         place(bottom + left, image(it.spark, width: 100%, height: it.spark_h * 1mm))
@@ -94,7 +103,8 @@
   if it.k == "text" {
     frame(it, text-body(it), height: height)
   } else if it.k == "image" {
-    box(width: it.w * 1mm, height: it.h * 1mm, clip: true, image(it.src, width: 100%, height: 100%, fit: it.fit))
+    box(width: it.w * 1mm, height: it.h * 1mm, clip: true, stroke: stroke-of(it.st),
+      radius: it.st.at("radius", default: 0) * 1mm, image(it.src, width: 100%, height: 100%, fit: it.fit))
   } else if it.k == "line" {
     line(start: (0mm, 0mm), end: (it.w * 1mm, it.h * 1mm), stroke: it.stroke.w * 1mm + rgb(it.stroke.c))
   } else if it.k == "rect" {
@@ -159,7 +169,7 @@
       let out = ()
       for (j, c) in r.c.enumerate() {
         let (txt, st) = content-of(c)
-        let fill = fill-of(st, default: if r.at("z", default: false) { rgb(T.head) } else { none })
+        let fill = fill-of(col-style.at(j) + st, default: if r.at("z", default: false) { rgb(T.head) } else { none })
         out.push(cell(fill: fill, align: aligns.at(j) + horizon, styled(col-style.at(j) + st, txt)))
       }
       out
@@ -277,6 +287,9 @@
   },
 )
 
+// the body's rows stand where their y says: the only space between them is their gap, not
+// the spacing Typst leaves around a block
+#set block(spacing: 0pt)
 #for b in m.body {
   if b.k == "band" {
     v(b.gap * 1mm)

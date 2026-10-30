@@ -296,3 +296,65 @@ def test_a_text_added_to_a_number_fails_at_render_time_too():
 def test_format_follows_the_locale():
     assert ev('FORMAT(1234.5, "#,##0.00")', loc="it") == "1.234,50"
     assert ev('FORMAT(DATE(2026, 3, 5), "d MMMM yyyy")', loc="de") == "5 März 2026"
+
+
+# ── what Python cannot hold ─────────────────────────────────────────────────
+@pytest.mark.parametrize("text", [
+    'DATEADD("d", 99999999, DATE(2024, 1, 1))', 'DATEADD("w", 99999999, DATE(2024, 1, 1))', "DATE(2024, 1, 1) + 99999999",
+    "DATE(2024, 1, 1) - 99999999.5", "99999999 + DATE(2024, 1, 1)", 'LEFT("x", 1e308 * 10)', 'MID("x", 1e308 * 10, 1)',
+    "FLOOR(1e308 * 10)", 'DATEADD("m", 1e308 * 10, DATE(2024, 1, 1))',
+])
+def test_a_value_out_of_range_is_said_not_an_uncaught_error(text):
+    with pytest.raises(ex.EvalError):
+        ev(text)
+
+
+@pytest.mark.parametrize("text", ["DATE(1e300, 1, 1)", "DATE(2024, 1e300, 1)"])
+def test_a_date_that_does_not_exist_is_null_however_far(text):
+    assert ev(text) is None
+
+
+@pytest.mark.parametrize("text, value", [
+    ("ROUND(1.5, 30)", 1.5), ("ROUND(1e30, 2)", 1e30), ("ROUND(1e300, 2)", 1e300), ("ROUND(1.5, 100000)", 1.5),
+    ("ROUND(1234.5, -100000)", 0), ("ROUND(7, 2)", 7.0), ("ROUND(1234567890123456789, 0)", 1234567890123456789),
+    ("ROUND(1234567890123456789, -2)", 1234567890123456800),
+])
+def test_round_takes_any_size_and_any_number_of_decimals(text, value):
+    got = ev(text)
+    assert got == value and type(got) is type(value)
+
+
+@pytest.mark.parametrize("text, value", [
+    ("POWER(2, 62)", 2**62), ("POWER(2, 1000)", 2**1000), ("POWER(10, 400)", None), ("POWER(10, 99999999999)", None),
+    ("POWER(-10, 99999999999)", None), ("POWER(1, 99999999999)", 1), ("POWER(0, 99999999999)", 0),
+    ("POWER(-1, 99999999998)", 1), ("POWER(2.5, 99999999999)", None), ("POWER(2, -2)", 0.25),
+])
+def test_power_past_any_number_is_null_at_once(text, value):
+    """The exponent of an int was Python's own: POWER(10, 99999999999) took the worker for good."""
+    assert ev(text) == value
+
+
+def test_rownumber_cannot_be_written_where_no_row_has_its_number_yet():
+    node = rd.parse("ROWNUMBER() <= 10")
+    with pytest.raises(ex.ExpressionError, match="ROWNUMBER"):
+        ex.check(node, ex.Env(fields=FIELDS, rownumber=False))
+    assert ex.check(node, ex.Env(fields=FIELDS)) == ex.BOOL
+
+
+def test_a_chain_too_long_for_the_walks_of_the_tree_is_a_mistake_not_a_crash():
+    node = ex.parse("+".join(["1"] * 150))
+    assert ex.check(node, ex.Env()) == ex.NUM and ev("+".join(["1"] * 150)) == 150
+    with pytest.raises(ex.ExpressionError, match="more than 200 operations long"):
+        ex.parse("+".join(["1"] * 1900))
+    with pytest.raises(ex.ExpressionError, match="more than 200 operations long"):
+        rd.parse("[a]" + " & [a]" * 500)
+
+
+def test_nested_replaces_stop_before_they_fill_the_memory():
+    """Each level makes the text ten times longer, in a few characters of expression."""
+    text = '"aaaaaaaaaa"'
+    for _ in range(12):
+        text = f'REPLACE({text}, "a", "aaaaaaaaaa")'
+    with pytest.raises(ex.EvalError, match="longer than 1,000,000 characters"):
+        ev(text)
+    assert ev('REPLACE("abc", "b", "xx")') == "axxc" and ev('REPLACE("abc", "", "xx")') == "abc"

@@ -19,13 +19,17 @@ import math
 import re
 from dataclasses import dataclass, field
 from datetime import date, datetime
-from decimal import ROUND_HALF_UP, Decimal, InvalidOperation
+from decimal import ROUND_HALF_UP, Context, Decimal, InvalidOperation
 from functools import lru_cache
 from typing import Any
 
 from app.core import calendar_names
 
 LOCALES = calendar_names.LANGUAGES
+# Python's default of 28 digits raises on a number longer than that: what holds every digit of
+# the longest number a report has (an int of POWER, 1e308) and a pattern's decimals
+MAX_PLACES = 400
+PRECISE = Context(prec=2 * MAX_PLACES + 800, rounding=ROUND_HALF_UP)
 
 
 @dataclass(frozen=True)
@@ -222,12 +226,13 @@ def number_pattern(pattern: str) -> tuple[_Section, ...]:
 def _digits(value: float, sec: _Section) -> tuple[str, str]:
     """The integer and decimal digits of |value|, rounded half away from zero."""
     try:
-        d = Decimal(repr(abs(float(value))))
+        # an int as it is: through a float an id of 19 digits prints others
+        d = Decimal(abs(value)) if isinstance(value, int) else Decimal(repr(abs(float(value))))
+        if sec.percent:
+            d = PRECISE.multiply(d, 100)
+        d = d.quantize(Decimal(1).scaleb(-sec.max_frac), rounding=ROUND_HALF_UP, context=PRECISE)
     except (InvalidOperation, ValueError, OverflowError):
         return "0", ""
-    if sec.percent:
-        d *= 100
-    d = d.quantize(Decimal(1).scaleb(-sec.max_frac), rounding=ROUND_HALF_UP)
     text = format(d, "f")
     whole, _, frac = text.partition(".")
     frac = frac.rstrip("0")
@@ -372,12 +377,23 @@ def _xl_text(text: str) -> str:
     return '"' + text.replace('"', '""') + '"' if text else ""
 
 
-def excel_number_format(pattern: str | None, whole: bool = False) -> str:
+def _no_decimals_left(value: float, sec: _Section) -> bool:
+    """The value, written with this section, has no decimal left to write: Excel would still
+    write the point of a format with optional decimals, «1,200.»."""
+    return not sec.min_frac and not _digits(value, sec)[1]
+
+
+def excel_number_format(pattern: str | None, whole: bool = False, value: float | None = None) -> str:
     """The pattern as an Excel number format: the text quoted, negatives in red when the
     pattern does not say how to write them. Excel uses its own user's separators. With no
-    pattern a whole number (`whole`) has no separators, as `display` writes it."""
+    pattern a whole number (`whole`) has no separators, as `display` writes it.
+    `value`: the float this cell holds, whose optional decimals may come to nothing."""
     if not pattern or not is_number_pattern(pattern):
-        return "0;[Red]-0" if whole else '#,##0.##;[Red]-#,##0.##'
+        if whole:
+            return "0;[Red]-0"
+        plain = number_pattern("#,##0.##")[0]
+        return "#,##0;[Red]-#,##0" if value is not None and _no_decimals_left(value, plain) \
+            else "#,##0.##;[Red]-#,##0.##"
     out = []
     for sec in number_pattern(pattern):
         if not sec.digits:
@@ -386,7 +402,7 @@ def excel_number_format(pattern: str | None, whole: bool = False) -> str:
         core = ("#,##0" if sec.grouping else "0" if sec.min_int else "#")
         if sec.grouping and sec.min_int == 0:
             core = "#,##"
-        if sec.max_frac:
+        if sec.max_frac and not (value is not None and _no_decimals_left(value, sec)):
             core += "." + "0" * sec.min_frac + "#" * (sec.max_frac - sec.min_frac)
         prefix, suffix = sec.prefix.replace("%", ""), sec.suffix.replace("%", "")
         out.append(f"{_xl_text(prefix)}{core}{'%' if sec.percent else ''}{_xl_text(suffix)}")

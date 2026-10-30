@@ -420,3 +420,127 @@ def test_a_chain_of_the_catalog_is_read_in_columns_with_the_values_of_its_rows(n
     for i, (a, b) in enumerate(zip(expected, ds.rows)):
         for k in a:
             assert _same(a[k], b[k]), f"{name}, row {i}, {k}: rows {a[k]!r}, columns {b[k]!r}"
+
+
+# ── what DuckDB must not take for something else ─────────────────────────────
+def _both(defn, data):
+    """The cells of the first table, built both ways (the fixture compares them)."""
+    return [[c.text for c in r.cells] for r in build(defn, data).tables[0].rows if r.kind in ("d", "t")]
+
+
+def test_fields_that_differ_only_by_their_capitals_are_two_fields():
+    """DuckDB's names ignore case: a calculated field «Month» beside a column «month» read the column."""
+    data = [{"month": 1, "t": "a"}, {"month": 2, "t": "b"}]
+    d = report(table(columns=[{"header": "m", "value": "[t]", "total": "SUM([month])"},
+                              {"header": "M", "value": "[Month]", "total": "SUM([Month])"}],
+                     groups=[], grand_total=True, sort=[{"by": "[Month]", "dir": "desc"}]),
+               datasets=[{"name": "d", "calculated": [{"name": "Month", "expr": "[month] * 100"}]}])
+    assert _both(d, data) == [["b", "200"], ["a", "100"], ["3", "300"]]
+    two = [{"Region": "n", "region": "s", "x": 1}, {"Region": "e", "region": "w", "x": 2}]
+    d = report(table(columns=[{"header": "x", "value": "[region]"}], groups=[{"by": "[region]", "footer": False}]))
+    assert [r.label for r in build(d, two).tables[0].rows if r.kind == "g"] == ["s", "w"]
+
+
+@pytest.mark.parametrize("name", ["k", "v", "f", "m", "o", "__m", "__o"])
+def test_a_field_with_the_name_duckdb_gives_to_its_own_columns_is_read(name):
+    """`IF([b], [n], [f])` written with a format looked itself up in a table of columns k, v and f:
+    the field «f» was taken for that table's, and printed 0."""
+    data = [{name: 2.5, "n": 1, "b": False}, {name: -1.5, "n": 2, "b": False}, {name: 4.25, "n": 3, "b": True}]
+    d = report(table(columns=[{"header": "x", "value": f'FORMAT(IF([b], [n], [{name}]), "0.00")', "total": f"SUM([{name}])"},
+                              {"header": "y", "value": f'UPPER(TEXT([{name}]))', "total": f"COUNTDISTINCT(TEXT([{name}]))"}],
+                     groups=[{"by": f'TEXT([{name}])', "footer": False, "header": False}], grand_total=True, sort=[]))
+    assert _both(d, data) == [["-1.50", "-1.5"], ["2.50", "2.5"], ["3.00", "4.25"], ["5.25", "3"]]
+
+
+def test_a_new_text_that_is_null_leaves_the_replace_null():
+    """REPLACE with an empty `old` and a NULL `new`: NULL, as any NULL argument."""
+    data = [{"s": "abc", "new": None}, {"s": "abc", "new": "x"}]
+    d = report(table(columns=[{"header": "x", "value": 'ISNULL(REPLACE([s], "", [new]))'}], groups=[]))
+    assert _both(d, data) == [["Yes"], ["No"]]
+
+
+def test_a_frame_the_columns_cannot_hold_is_read_by_the_interpreter_with_its_rows():
+    """A UInt64 past 2**63 (a ClickHouse hash): the frame was emptied column by column and then read
+    as rows, so the report printed «No data» without a word."""
+    df = pl.DataFrame({"h": pl.Series([2**63 + 5, 7], dtype=pl.UInt64), "x": [1.5, 2.5], "t": ["a", "b"]})
+    rome = ZoneInfo("Europe/Rome")
+    assert frames.from_frame(df.clone(), rome) is None
+    with pytest.MonkeyPatch.context() as mp:
+        mp.setattr(rdata, "_read_one", lambda name, spec, limit: ({n: str(t) for n, t in df.schema.items()}, df, False))
+        ds = rdata.read_dataset("d", {}, 10, rome)
+    assert ds.table is None
+    assert ds.rows == [{"h": 2**63 + 5, "x": 1.5, "t": "a"}, {"h": 7, "x": 2.5, "t": "b"}]
+
+
+@pytest.mark.parametrize("name", ["polars", "duckdb", "chdb"])
+def test_a_chain_with_no_rows_keeps_its_columns_on_every_engine(name, storage, monkeypatch):
+    """A parameter that selects nothing: a table that says «No data», not «there is no field»."""
+    import app.engine
+    from tests.conftest import BUCKET, upload_df
+    from tests.test_reports_count import _engine
+
+    df = pl.DataFrame({"region": ["a", "b"], "amount": [1.5, 2.5], "day": [date(2024, 1, 1), date(2024, 1, 2)]})
+    src = upload_df(storage, df, f"datasets/empty_{name}.parquet")
+    engine = _engine(name, storage)
+    monkeypatch.setattr(app.engine, "get_engine", lambda name=None: engine)
+    r = rd.load(report(table(columns=[{"header": "r", "value": "[region]"}, {"header": "a", "value": "[amount]", "total": "SUM([amount])"}],
+                             groups=[], grand_total=True)))
+    ops = [{"type": "filter", "params": {"column": "region", "operator": "eq", "value": "nobody"}}]
+    ds = rdata.read(r, {"d": {"bucket": BUCKET, "input_key": src.key, "operations": ops, "engine": name}}, 10)["d"]
+    assert set(ds.columns) == {"region", "amount", "day"}
+    assert not rd.problems(r, {"d": ds.columns})
+    ctx = ex.Context(loc=formats.locale("en"), now=NOW)
+    with frames.build_store(r, {"d": ds}, ctx.loc) as store:
+        ctx.datasets = store.datasets({"d": ds})
+        from app.reports import model as rmodel
+
+        m = rmodel.build(r, {"d": ds}, {}, ctx, store=store)
+    assert [row.kind for row in m.tables[0].rows] == []
+
+
+@pytest.mark.parametrize("name", ["polars", "duckdb", "chdb"])
+def test_a_chain_at_the_cap_is_read_and_past_it_stops_on_every_engine(name, storage, monkeypatch):
+    """A total of a dataset cut at the cap would be a wrong total: the render stops, one row past it."""
+    import app.engine
+    from app.reports.errors import ReportError
+    from tests.conftest import BUCKET, upload_df
+    from tests.test_reports_count import _engine
+
+    src = upload_df(storage, pl.DataFrame({"x": list(range(10))}), f"datasets/cap_{name}.parquet")
+    engine = _engine(name, storage)
+    monkeypatch.setattr(app.engine, "get_engine", lambda name=None: engine)
+    spec = {"bucket": BUCKET, "input_key": src.key, "operations": [], "engine": name}
+    tz = ZoneInfo("UTC")
+    assert rdata.read_dataset("d", spec, 10, tz).table.n == 10
+    with pytest.raises(ReportError, match="«d» has more than 9 rows"):
+        rdata.read_dataset("d", spec, 9, tz)
+
+
+@pytest.mark.parametrize("wrap, depth", [("ROUND({}, 2)", 40), ('DATEDIFF("d", DATE(2020, 1, {}), TODAY())', 30),
+                                         ('LEN(REPLACE("abc", "a", LEFT("abc", {})))', 20)])
+def test_nested_functions_do_not_write_an_endless_sql(wrap, depth):
+    """ROUND writes its value five times: 64 nested ROUNDs, in 600 characters, were 5**64 of SQL
+    built in the worker's memory. Past a size the interpreter works them out."""
+    text = "[a]"
+    for _ in range(depth):
+        text = wrap.format(text)
+    data = [{"a": 1.5}, {"a": 2.5}]
+    table = frames.from_rows(data)
+    with frames.Store({"d": table}, formats.locale("en"), ["d"]) as s:
+        ctx = ex.Context(loc=formats.locale("en"), now=NOW, scopes=[s.rows("d")])
+        with pytest.raises(frames.Fallback, match="too much SQL"):
+            s.rel("d").translate(ex.parse(text), ctx)
+
+
+def test_power_of_null_to_zero_is_null():
+    d = report(table(columns=[{"header": "x", "value": "ISNULL(POWER([q], 0))"}, {"header": "y", "value": "POWER([q], 0)"}], groups=[]))
+    assert _both(d, [{"q": None}, {"q": 5}]) == [["Yes", ""], ["No", "1"]]
+
+
+def test_the_longest_chain_the_parser_takes_is_translated_without_running_out_of_stack():
+    text = " + ".join(["[a]"] * 199)
+    table = frames.from_rows([{"a": 1}, {"a": 2}])
+    with frames.Store({"d": table}, formats.locale("en"), ["d"]) as s:
+        ctx = ex.Context(loc=formats.locale("en"), now=NOW, scopes=[s.rows("d")])
+        rel = s.rel("d")
+        assert rel.python_values(rel.translate(ex.parse(text), ctx), np.arange(2)) == [199, 398]

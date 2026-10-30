@@ -24,6 +24,7 @@ from app.reports.model import Model, TableOut
 
 _PAPER = {"A4": 9, "A3": 8, "A5": 11, "Letter": 1, "Legal": 5}
 _SHEET_BAD = re.compile(r"[\[\]:*?/\\]")
+_EXACT_INT = 2**53  # past it a double, which is what a cell of Excel holds, loses digits
 
 
 def _sheet_name(title: str, used: set[str]) -> str:
@@ -73,15 +74,23 @@ def _chars(mm: float) -> float:
     return round(mm / 1.9, 1)
 
 
+def _number_format(value: int | float, col_fmt: str | None) -> str:
+    return formats.excel_number_format(col_fmt, isinstance(value, int), value if isinstance(value, float) else None)
+
+
 def _write_value(ws: Any, r: int, c: int, value: Any, fmts: _Formats, props: dict, col_fmt: str | None,
                  loc: formats.Locale) -> None:
     if value is None or (isinstance(value, float) and value != value):
         ws.write_blank(r, c, None, fmts.get(**props))
     elif isinstance(value, bool):
         ws.write_boolean(r, c, value, fmts.get(**props))
+    elif isinstance(value, int) and abs(value) > _EXACT_INT:
+        # a double would round an id of 19 digits, and Excel shows 15: as a text it stays itself
+        ws.write_string(r, c, str(value), fmts.get(align="right", **props))
     elif isinstance(value, (int, float)):
-        ws.write_number(r, c, value, fmts.get(num_format=formats.excel_number_format(col_fmt, isinstance(value, int)),
-                                              **props))
+        ws.write_number(r, c, value, fmts.get(num_format=_number_format(value, col_fmt), **props))
+    elif isinstance(value, date) and value.year < 1900:  # Excel's dates begin there: a cell of ####
+        ws.write_string(r, c, formats.display(value, col_fmt, loc), fmts.get(**props))
     elif isinstance(value, datetime):
         ws.write_datetime(r, c, value, fmts.get(num_format=formats.excel_date_format(col_fmt, loc, True), **props))
     elif isinstance(value, date):
@@ -167,8 +176,7 @@ def _table(ws: Any, t: TableOut, fmts: _Formats, loc: formats.Locale, page: dict
                     letter = xl_col_to_name(c)
                     start = first + (1 if not grand and t.rows[row.first].kind == "g" else 0)
                     ws.write_formula(r, c, f"=SUBTOTAL({col.subtotal},{letter}{start + 1}:{letter}{r})",
-                                     fmts.get(num_format=formats.excel_number_format(col.fmt, isinstance(cell.value, int)),
-                                              **cprops), cell.value)
+                                     fmts.get(num_format=_number_format(cell.value, col.fmt), **cprops), cell.value)
                 else:
                     _write_value(ws, r, c, cell.value, fmts, cprops, col.fmt, loc)
             if not grand:

@@ -387,7 +387,8 @@ class _Builder:
             self.ctx_sql = ctx.at(datasets=_Datasets(names, sql_rows))
         self.d: Any = self.sql or self.py
         self.ctx = self.ctx_sql if self.sql is not None else self.ctx_py
-        self.state = (state or {}).get("items") or {}
+        items = state.get("items") if isinstance(state, dict) else None  # what a browser sent: it may be anything
+        self.state = {k: v for k, v in items.items() if isinstance(v, dict)} if isinstance(items, dict) else {}
         self.interactive = interactive
         self.charts: list[ChartJob] = []
         self.files: dict[str, bytes] = {}
@@ -507,6 +508,9 @@ class _Builder:
         # no value (no rows, a division by zero): a dash, not an empty card
         shown = "—" if value is None else self.show(value, it.format)
         out: dict[str, Any] = {"label": it.label, "value": shown, "change": None, "spark": None}
+        if self.layout and glyphs.width_mm(shown, it.style.size or 16, 700) > it.w - 5:  # 2.5 mm inside each side
+            self.warnings.append(f"KPI «{it.id}»: its value «{shown}» is wider than the card and is cut: widen the card, "
+                                 "or give the value a smaller size or a shorter format")
         if it.compare:
             base = self.value(it, "compare", it.compare, ctx)
             if isinstance(value, (int, float)) and isinstance(base, (int, float)) and base:
@@ -617,15 +621,16 @@ class _Builder:
             for key, srows in splits:
                 values = [measure(self.d.intersect(sub, srows), first, 0) for sub in subsets]
                 data.series.append(charts.SeriesData(self.name(key), [self._num(v) for v in values],
-                                                     [self.show(v, it.options.format) for v in values],
-                                                     first.as_ or "bar", first.axis))
+                                                     [self.show(v, first.format or it.options.format) for v in values],
+                                                     first.as_ or "bar", first.axis, first.format or it.options.format))
         else:
             for i, s in enumerate(it.series):
                 values = [measure(sub, s, i) for sub in subsets]
+                fmt = s.format or it.options.format
                 data.series.append(charts.SeriesData(s.name, [self._num(v) for v in values],
-                                                     [self.show(v, it.options.format) for v in values],
+                                                     [self.show(v, fmt) for v in values],
                                                      s.as_ or ("line" if i and it.kind == "combo" else "bar"),
-                                                     s.axis))
+                                                     s.axis, fmt))
         if it.kind == "bullet":
             data.targets = [self._target(it, base.at(scopes=[rows, sub])) for sub in subsets]
         data.total_label = self.loc.texts["total"]
@@ -777,6 +782,10 @@ class _Builder:
                                  "move it or make it narrower")
 
 
+def _listed(v: Any) -> list:
+    return v if isinstance(v, list) else []
+
+
 class _Table:
     """One table (or matrix) laid out as rows."""
 
@@ -789,8 +798,8 @@ class _Table:
         self.sort_state = state.get("sort") if sortable and isinstance(state.get("sort"), dict) else None
         toggle = it.interactive.toggle
         self.collapse_all = bool(state.get("collapse_all")) if toggle else False
-        self.collapsed = {json.dumps(p) for p in state.get("collapsed") or []} if toggle else set()
-        self.expanded = {json.dumps(p) for p in state.get("expanded") or []} if toggle else set()
+        self.collapsed = {json.dumps(p) for p in _listed(state.get("collapsed"))} if toggle else set()
+        self.expanded = {json.dumps(p) for p in _listed(state.get("expanded"))} if toggle else set()
         self.out: list[Row] = []
         self.zebra = False
         self.shown = 0  # the detail rows written so far
@@ -819,7 +828,8 @@ class _Table:
             for i, node in enumerate(tree):
                 self.group(node, i, len(tree), [rows], ordered, start, [], [])
                 start += len(node["rows"])
-        if it.grand_total and rows:  # an empty table says «No data» (the template), not a total of nothing
+        # an empty table says «No data» (the template), not a total of nothing
+        if it.grand_total and rows and any(c.total for c in it.columns):
             self.footer(None, self.b.ctx.at(row=None, scopes=[rows]), keep=True)
         head = [[{"t": c.header, "span": 1, "rspan": 1, "align": c.align or ("right" if c.kind == "number" else "left")}
                  for c in self.cols]]
@@ -878,7 +888,8 @@ class _Table:
             elif it.detail:
                 self.zebra = False
                 self.details(rows, here)
-        if g.footer:
+        # a footer shows its subtotals: with none it is an empty row, unless it is all that names the group
+        if g.footer and (not g.header or any(c.total for c in it.columns)):
             label = self.value(f"groups[{level}].label", g.label, gctx) if g.label else node["key"]
             self.footer(level, gctx, keep=g.keep_together, label=f"{self.loc.texts['total']} {self.b.name(label)}",
                         first=first)

@@ -48,6 +48,9 @@ _INT64 = (-2**63, 2**63 - 1)
 # Python's whitespace (str.strip): DuckDB's trim takes spaces only
 _SPACE = "".join(f"\\x{{{ord(c):x}}}" for c in map(chr, range(0x3001)) if c.isspace())
 _TRIM = f"'^[{_SPACE}]+|[{_SPACE}]+$'"
+# A value may be written several times in the SQL of the function around it (ROUND five, a CASE
+# two), so nested functions multiply the text at every level: past this, the interpreter
+MAX_SQL_CHARS = 200_000
 
 
 class Untranslatable(Exception):
@@ -145,6 +148,12 @@ class Translator:
         self.single = single  # inside PERCENT: an aggregate is over the one row
 
     def __call__(self, node: ex.Node) -> Sql:
+        out = self.translate(node)
+        if len(out.text) + len(out.isint) > MAX_SQL_CHARS:
+            raise Untranslatable("an expression that takes too much SQL to write")
+        return out
+
+    def translate(self, node: ex.Node) -> Sql:
         if not self.per_row(node):
             try:
                 value = self.constant(node)
@@ -374,8 +383,8 @@ class Translator:
             return Sql(f"substring({self.texts(args[0]).text}, {_at_least(start, 1)}, {_at_least(count, 0)})", TEXT)
         if name == "REPLACE":
             t, old, new = (self.texts(a) for a in args)
-            return Sql(f"(CASE WHEN {old.text} = '' THEN {t.text} ELSE replace({t.text}, {old.text}, {new.text}) END)",
-                       TEXT)
+            return Sql(f"(CASE WHEN {new.text} IS NULL THEN NULL WHEN {old.text} = '' THEN {t.text} "
+                       f"ELSE replace({t.text}, {old.text}, {new.text}) END)", TEXT)
         if name in ("CONTAINS", "STARTSWITH"):
             t, part = self.texts(args[0]), self.texts(args[1])
             fn = "contains" if name == "CONTAINS" else "starts_with"
@@ -477,8 +486,10 @@ class Translator:
             e = self.constant_of(node.args[1])
             if not isinstance(e, int) or e > 16:
                 raise Untranslatable("POWER of an int to an exponent that is not a small constant")
-            if e >= 0:
-                return Sql("(" + " * ".join([a.text] * e) + ")" if e else "CAST(1 AS BIGINT)", INT)
+            if e > 0:
+                return Sql("(" + " * ".join([a.text] * e) + ")", INT)
+            if e == 0:  # NULL stays NULL: not the 1 of anything else to the zero
+                return Sql(f"(CASE WHEN {a.text} IS NOT NULL THEN CAST(1 AS BIGINT) END)", INT)
         p = f"pow(CAST({a.text} AS DOUBLE), CAST({b.text} AS DOUBLE))"
         # overflow, 0 to a negative power, a negative number to a fraction: None in Python
         return Sql(f"(CASE WHEN isfinite({p}) THEN {p} END)", FLOAT)

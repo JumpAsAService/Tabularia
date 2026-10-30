@@ -128,3 +128,30 @@ def test_excel_date_formats():
     assert f.excel_date_format("d MMMM yyyy", loc, False) == "d mmmm yyyy"
     assert f.excel_date_format("d 'de' MMMM", loc, False) == 'd "de" mmmm'
     assert f.excel_date_format(None, loc, False) == "dd/mm/yyyy"
+
+
+# ── numbers as long as they come ─────────────────────────────────────────────
+@pytest.mark.parametrize("value, pattern, text", [
+    (1234567890123456789, None, "1234567890123456789"),  # an id: through a float it printed ...456800
+    (9007199254740993, "0", "9007199254740993"),
+    (-9007199254740993, "#,##0", "-9,007,199,254,740,993"),
+    (1234567890123456789, "#,##0.00", "1,234,567,890,123,456,789.00"),
+    (10**30, "0", "1" + "0" * 30),
+    (1e26, "#,##0.00", "100,000,000,000,000,000,000,000,000.00"),  # past 28 digits, an uncaught decimal error
+    (1e28, None, "10,000,000,000,000,000,000,000,000,000"),
+    (1e30, "0%", "1" + "0" * 32 + "%"),
+    (1.5e300, "0", "15" + "0" * 299),
+])
+def test_a_long_number_prints_every_digit(value, pattern, text):
+    assert f.display(value, pattern, f.locale("en")) == text
+
+
+def test_a_whole_float_has_no_stray_decimal_point_in_excel():
+    """Excel writes `#,##0.##` of 1200 as «1,200.» with its point: the format is the one a whole number needs."""
+    assert f.excel_number_format(None, value=1200.0) == "#,##0;[Red]-#,##0"
+    assert f.excel_number_format(None, value=1200.001) == "#,##0;[Red]-#,##0"
+    assert f.excel_number_format(None, value=1200.5) == "#,##0.##;[Red]-#,##0.##"
+    assert f.excel_number_format("#,##0.##", value=7.0) == "#,##0;[Red]-#,##0"
+    assert f.excel_number_format("0.##%", value=0.5) == "0%;[Red]-0%"
+    assert f.excel_number_format("0.##%", value=0.125) == "0.##%;[Red]-0.##%"
+    assert f.excel_number_format("#,##0.00", value=7.0) == "#,##0.00;[Red]-#,##0.00"  # its decimals are asked for

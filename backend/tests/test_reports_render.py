@@ -2,6 +2,7 @@
 screen laid out by Typst in a child process, Excel, the email's MHTML; the limits of a
 render; the task on the export queue and the engine's routes. The chart service is a fake
 here (it answers a fixed SVG): the real one is Node (frontend/chart-renderer)."""
+import base64
 import email
 import hashlib
 import json
@@ -10,7 +11,7 @@ import subprocess
 import sys
 import threading
 import zipfile
-from datetime import datetime, timezone
+from datetime import date, datetime, timezone
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 
@@ -31,7 +32,7 @@ from tests.test_export_route import Result, Storage, _play
 NOW = datetime(2026, 10, 28, 9, 0, tzinfo=timezone.utc)
 # The sample report's PDF, byte for byte. It changes with the template, the fonts, Typst's
 # version (pinned in pyproject.toml) or the model: look at the new PDF, then update the hash.
-GOLDEN_PDF_SHA256 = "97bcba85e5401bdaf99c211e6a2bf025bc37ec603058f332f0cc8ab0ee08be4c"
+GOLDEN_PDF_SHA256 = "cbba77076717245cb13f2ab17f30219a17e5af1021b35b79181e8524a4c396cd"
 
 
 @pytest.fixture(scope="module")
@@ -75,6 +76,86 @@ def test_the_pdf_is_byte_identical_and_matches_its_golden(tmp_path, chart_servic
     assert first.startswith(b"%PDF-") and first == second
     assert a.pages == 8 and a.warnings == []
     assert hashlib.sha256(first).hexdigest() == GOLDEN_PDF_SHA256
+
+
+def _text_tops(svg: str) -> dict[str, float]:
+    """Where a filled rectangle of each colour starts on the page, in mm from its top: the SVG's
+    transforms added up, from the outermost group in (its unit is the point)."""
+    tops: dict[str, float] = {}
+    depth: list[float] = []
+    for m in re.finditer(r'<(/?)(g|path)\b([^>]*?)(/?)>', svg):
+        closing, tag, attrs, selfclosed = m.groups()
+        if closing:
+            if tag == "g":
+                depth.pop()
+            continue
+        dy = 0.0
+        t = re.search(r'transform="(?:matrix\([^,]+,[^,]+,[^,]+,[^,]+,[^,]+,([-\d.]+)\)|translate\([^ ,]+[ ,]([-\d.]+)\))"', attrs)
+        if t:
+            dy = float(t.group(1) or t.group(2))
+        if tag == "g" and not selfclosed:
+            depth.append(dy)
+        if tag == "path":
+            fill = re.search(r'fill="(#[0-9a-fA-F]{6})"', attrs)
+            if fill:
+                tops.setdefault(fill.group(1).lower(), (sum(depth) + dy) * 25.4 / 72)
+    return tops
+
+
+def test_the_rows_of_the_body_stand_where_their_y_says(tmp_path, chart_service):
+    """Pixel-perfect: nothing but their distance on the page between two rows of the body, and
+    under a table. Rectangles, whose edges are exact whatever the font does."""
+    def box(colour, y, h=5.0):
+        return {"id": f"r{colour}", "type": "rect", "x": 0, "y": y, "w": 20, "h": h, "style": {"background": f"#{colour}"}}
+
+    d = samples.definition()
+    d["sections"]["page_header"] = {"height": 10, "items": []}
+    d["sections"]["body"]["items"] = [box("aa0000", 2), box("00aa00", 8), box("0000aa", 13), box("aaaa00", 40),
+                                      box("00aaaa", 60)]
+    out = json.loads(run(tmp_path, chart_service, "svg", definition=d).path.read_text())
+    tops = _text_tops(out["pages"][0])
+    top = d["page"]["margins"][0] + 10
+    for colour, y in (("aa0000", 2), ("00aa00", 8), ("0000aa", 13), ("aaaa00", 40), ("00aaaa", 60)):
+        assert tops[f"#{colour}"] == pytest.approx(top + y, abs=0.1), colour
+
+
+def _one_page(tmp_path, *items, rows=None, fmt="svg"):
+    d = {"v": 1, "datasets": [{"name": "d"}], "page": {"margins": [10, 10, 10, 10]}, "sections": {"body": {"items": list(items)}}}
+    rows = rows or [{"a": 1}]
+    r = render.render(d, {"d": {"rows": rows, "columns": [{"name": k, "type": ""} for k in rows[0]]}}, {}, fmt, tmp_path,
+                      limits=render.Limits(chart_url=""), now=NOW)
+    return json.loads(r.path.read_text())["pages"][0] if fmt == "svg" else r.path
+
+
+def test_a_text_s_lines_are_those_of_the_designer_and_nothing_of_them_is_cut(tmp_path):
+    """A line of 1.2 em with its baseline at 0.975 em, as the canvas's line-height: from the top of
+    the capitals, the box's clip cut the ascenders and the accent of an É."""
+    svg = _one_page(tmp_path, {"id": "x", "type": "text", "x": 10, "y": 20, "w": 80, "h": 10, "value": "Ab\nCd", "style": {"size": 10}})
+    assert re.findall(r"matrix\(1 0 0 -1 0 ([\d.]+)\)", svg) == ["9.75", "21.75"]
+
+
+def test_an_image_has_the_border_the_designer_gives_it_and_a_column_its_background(tmp_path):
+    picture = b'<svg xmlns="http://www.w3.org/2000/svg" width="10" height="10"><rect width="10" height="10"/></svg>'
+    svg = _one_page(tmp_path,
+                    {"id": "i", "type": "image", "x": 0, "y": 0, "w": 20, "h": 20, "asset": base64.b64encode(picture).decode(),
+                     "style": {"border": {"width": 0.5, "color": "#ab0000"}, "radius": 2}},
+                    {"id": "t", "type": "table", "dataset": "d", "x": 0, "y": 30, "w": 100, "h": 10,
+                     "columns": [{"header": "h", "value": "[a]", "style": {"background": "#00ab00"}}]})
+    assert 'stroke="#ab0000"' in svg and 'fill="#00ab00"' in svg
+
+
+def test_excel_writes_what_it_can_hold_and_what_it_cannot_as_text(tmp_path):
+    rows = [{"id": 1234567890123456789, "x": 1200.0, "y": 1200.5, "old": date(1890, 1, 1)},
+            {"id": 7, "x": -3.0, "y": 0.25, "old": date(2025, 1, 2)}]
+    path = _one_page(tmp_path, {"id": "t", "type": "table", "dataset": "d", "x": 0, "y": 0, "w": 100, "h": 10, "columns": [
+        {"header": k, "value": f"[{k}]"} for k in rows[0]]}, rows=rows, fmt="xlsx")
+    z = zipfile.ZipFile(path)
+    strings = z.read("xl/sharedStrings.xml").decode()
+    assert "1234567890123456789" in strings and "1 Jan 1890" in strings  # a double rounds the first, Excel shows #### for the second
+    sheet = z.read("xl/worksheets/sheet1.xml").decode()
+    assert '<c r="B2" s="' in sheet and "<v>1200</v>" in sheet and "<v>7</v>" in sheet  # numbers stay numbers
+    styles = z.read("xl/styles.xml").decode()
+    assert 'formatCode="#,##0;[Red]-#,##0"' in styles and 'formatCode="#,##0.##;[Red]-#,##0.##"' in styles
 
 
 def test_hostile_names_are_text(tmp_path, chart_service):

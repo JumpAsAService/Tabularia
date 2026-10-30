@@ -48,6 +48,7 @@ class SeriesData:
     labels: list[str]
     as_: str = "bar"
     axis: str = "left"
+    fmt: str | None = None  # the series' format, or the chart's
 
 
 @dataclass
@@ -138,8 +139,10 @@ def _y_axis(categories: list[str], width_px: int, height_px: int) -> dict:
     return {"type": "category", "data": categories, "axisLabel": label, "axisTick": {"alignWithLabel": True}}
 
 
-def _value_axis(data: ChartData, loc: formats.Locale, o: rd.ChartOptions) -> dict:
-    axis: dict[str, Any] = {"type": "value", "axisLabel": {"fontSize": 9, "formatter": _value_formatter(data.fmt, loc)},
+def _value_axis(data: ChartData, loc: formats.Locale, o: rd.ChartOptions, side: str = "left") -> dict:
+    # an axis writes its numbers in the format of the first series on it (a margin in % beside amounts)
+    fmt = next((s.fmt for s in data.series if s.axis == side and s.fmt), data.fmt)
+    axis: dict[str, Any] = {"type": "value", "axisLabel": {"fontSize": 9, "formatter": _value_formatter(fmt, loc)},
                             "splitLine": {"lineStyle": {"color": "#e9ecef"}}}
     if o.min is not None:
         axis["min"] = o.min
@@ -205,7 +208,7 @@ def _option(data: ChartData, it: rd.ChartItem, theme: rd.Theme, loc: formats.Loc
             if o.stacked:
                 entry["stack"] = "total"
             series.append(entry)
-        yaxis = [_value_axis(data, loc, o)] + ([{**_value_axis(data, loc, o), "splitLine": {"show": False}}]
+        yaxis = [_value_axis(data, loc, o)] + ([{**_value_axis(data, loc, o, "right"), "splitLine": {"show": False}}]
                                                if right else [])
         return {**base, "xAxis": _x_axis(data.categories, width_px), "yAxis": yaxis, "series": series}
     if kind == "bar":

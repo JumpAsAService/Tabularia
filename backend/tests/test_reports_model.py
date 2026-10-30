@@ -75,6 +75,16 @@ def test_groups_subtotals_and_a_grand_total():
     assert [r.span for r in t.rows if r.kind == "f"] == [1, 1, 1]
 
 
+def test_a_footer_with_no_total_to_show_prints_no_row():
+    """An empty row named «Total N» says nothing; without a header it is the group's only row."""
+    columns = [{"header": "Customer", "value": "[customer]"}, {"header": "Amount", "value": "[amount]"}]
+    t = build(report(table(columns=columns, grand_total=True))).tables[0]
+    assert [r.kind for r in t.rows if r.kind in ("f", "t")] == []
+    assert [r.label for r in t.rows if r.kind == "g"] == ["N", "S", "(blank)"]
+    t = build(report(table(columns=columns, groups=[{"by": "[region]", "header": False}]))).tables[0]
+    assert [r.label for r in t.rows if r.kind == "f"] == ["Total N", "Total S", "Total (blank)"]
+
+
 def test_nested_groups_sort_and_detail_order():
     t = build(report(table(groups=[{"by": "[region]", "sort": "desc"}, {"by": "[customer]", "label": '"Cust " & [customer]'}],
                            sort=[{"by": "[amount]", "dir": "desc"}])), ROWS[:4]).tables[0]
@@ -409,6 +419,24 @@ def test_a_waterfall_that_goes_below_zero_stacks_across_zero():
     assert [p.get("label") for p in series[1]["data"]] == [{"position": "bottom"}, None, {"position": "bottom"}]
 
 
+def test_a_combo_series_has_a_format_of_its_own_and_its_axis_follows_it():
+    def combo(**second):
+        return report({"id": "c", "type": "chart", "dataset": "d", "kind": "combo", "x": 0, "y": 0, "w": 100, "h": 50,
+                       "category": "[customer]", "options": {"labels": True, "format": "#,##0.0"},
+                       "series": [{"value": "SUM([amount])", "name": "Amount", "as": "bar"},
+                                  {"value": "SUM([amount]) / 100", "name": "Share", "as": "line", "axis": "right", **second}]})
+
+    o = build(combo(format="0.0%")).charts[0].option
+    left, right = o["yAxis"]
+    assert left["axisLabel"]["formatter"]["$fmt"] == "compact"
+    assert right["axisLabel"]["formatter"] == {"$fmt": "percent", "locale": "en", "decimals": 1}
+    assert o["series"][0]["data"][0]["t"] == "30.0" and o["series"][1]["data"][0]["t"] == "30.0%"
+    # without one, a series writes in the chart's format as before
+    plain = build(combo()).charts[0].option
+    assert plain["series"][1]["data"][0]["t"] == "0.3"
+    assert [p.field for p in rd.problems(rd.load(combo(format="#,##0,")))] == ["series[1].format"]
+
+
 def test_a_chart_with_nothing_to_draw_says_so():
     for kind, rows in (("column", []), ("pie", [{"region": "a", "amount": -1.0}]), ("funnel", [{"region": "a", "amount": 0.0}]),
                        ("gauge", [])):
@@ -595,3 +623,48 @@ def test_only_the_datasets_in_use_are_read():
     d["sections"]["body"]["items"].append({"id": "x", "type": "text", "x": 0, "y": 40, "w": 50, "h": 5,
                                            "value": '=SUM([goal], "goals")'})
     assert rdata.used_datasets(rd.load(d)) == ["d", "goals"]
+
+
+# ── what the checks must say ─────────────────────────────────────────────────
+@pytest.mark.parametrize("over", [{"filter": "ROWNUMBER() <= 2"}, {"sort": [{"by": "ROWNUMBER()"}]},
+                                  {"groups": [{"by": "ROWNUMBER()"}]}])
+def test_a_filter_on_the_row_number_is_refused_not_an_empty_table(over):
+    """No row has its number yet: `ROWNUMBER() <= 10` was NULL on every row, and the table «No data»."""
+    problems = rd.problems(rd.load(report(table(**over))))
+    assert problems and "ROWNUMBER" in problems[0].message
+
+
+def test_a_dataset_read_only_by_a_condition_is_read():
+    """The report's one dataset, used only by an item's «Shown when»: it was not read, and the item hidden."""
+    r = rd.load(report({"id": "x", "type": "rect", "x": 0, "y": 0, "w": 10, "h": 10, "visible": "COUNT() > 0"}))
+    assert rdata.used_datasets(r) == ["d"]
+
+
+def test_a_chain_of_datasets_named_by_calculated_fields_is_read_whole():
+    r = rd.load(report(table(dataset="a"), datasets=[
+        {"name": "c"}, {"name": "b", "calculated": [{"name": "x", "expr": 'SUM([y], "c")'}]},
+        {"name": "a", "calculated": [{"name": "x", "expr": 'SUM([y], "b")'}]}]))
+    assert set(rdata.used_datasets(r)) == {"a", "b", "c"}
+
+
+def test_a_parameter_keeps_every_digit_of_a_long_id():
+    r = rd.load(report(parameters=[{"name": "id", "type": "number"}]))
+    pctx = ph.Context(now=NOW, tz=timezone.utc)
+    assert rdata.parameters(r, {"id": "1234567890123456789"}, pctx)["id"] == 1234567890123456789
+    assert rdata.parameters(r, {"id": "12.5"}, pctx)["id"] == 12.5
+    assert rdata.parameters(r, {"id": "1e3"}, pctx)["id"] == 1000.0
+
+
+@pytest.mark.parametrize("state", ["x", {"items": "x"}, {"items": {"t": "x"}},
+                                   {"items": {"t": {"sort": "x", "collapsed": 5, "expanded": "y"}}}])
+def test_a_state_that_is_not_one_is_no_state(state):
+    """It comes from the browser: an uncaught AttributeError was what it got."""
+    d = report(table(interactive={"sort": True, "toggle": True}))
+    assert kinds(build(d, state=state).tables[0]) == kinds(build(d).tables[0])
+
+
+def test_a_running_total_in_a_calculated_field_is_refused_not_the_total_on_every_row():
+    r = rd.load(report(table(), datasets=[{"name": "d", "calculated": [{"name": "c", "expr": "RUNNING(SUM([amount]))"}]}]))
+    problems = rd.problems(r)
+    assert problems and "RUNNING goes over the rows a table shows" in problems[0].message
+    assert not rd.problems(rd.load(report(table(columns=[{"header": "r", "value": "RUNNING(SUM([amount]))"}]))))

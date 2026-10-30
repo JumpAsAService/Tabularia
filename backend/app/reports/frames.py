@@ -110,6 +110,11 @@ class Table:
     def names(self) -> list[str]:
         return list(self._columns)
 
+    def column_name(self, name: str) -> str:
+        """A column's name in DuckDB, by its place: DuckDB's names ignore case («Month» beside
+        «month» is one column there), and a subquery takes one of its own for an outer one."""
+        return f"{_INTERNAL}c{list(self._columns).index(name)}"
+
     def flag_name(self, name: str) -> str:
         return f"{_INTERNAL}int_{list(self._columns).index(name)}"
 
@@ -121,7 +126,7 @@ class Table:
     def _make_arrow(self) -> pa.Table:
         names, arrays = [], []
         for name, values in self._columns.items():
-            names.append(name)
+            names.append(self.column_name(name))
             arrays.append(values)
         for name, flag in self._flags.items():
             names.append(self.flag_name(name))
@@ -358,9 +363,10 @@ def from_arrow(table: pa.Table, tz: ZoneInfo) -> Table | None:
 
 def from_frame(df: Any, tz: ZoneInfo) -> Table | None:
     """A Polars DataFrame (a query on a connection, a catalog chain) in columns; None when
-    one of its columns is of a kind Arrow does not hold (the interpreter reads it). The
-    frame is emptied as it is read, column by column: a text is copied into Arrow's layout,
-    and the frame's own goes at once, so the two are never whole together."""
+    one of its columns is of a kind the columns do not hold (the interpreter reads it, and
+    finds the frame whole). The frame is emptied as it is read, column by column: a text is
+    copied into Arrow's layout, and the frame's own goes at once, so the two are never whole
+    together."""
     if df.width == 0 or any(t == pl_object() for t in df.dtypes):
         return None
     names, arrays = [], []
@@ -368,7 +374,14 @@ def from_frame(df: Any, tz: ZoneInfo) -> Table | None:
         name = df.columns[0]
         arrays.append(df.drop_in_place(name).to_arrow())
         names.append(name)
-    return from_arrow(pa.Table.from_arrays(arrays, names=names), tz)
+    arrow = pa.Table.from_arrays(arrays, names=names)
+    table = from_arrow(arrow, tz)
+    if table is None:
+        import polars as pl
+
+        for column in pl.from_arrow(arrow).get_columns():
+            df.insert_column(df.width, column)
+    return table
 
 
 def pl_object() -> Any:
@@ -561,7 +574,7 @@ class Rel:
         self.table = table
         self.n = table.n
         self.name = store.register("ds", table.arrow())
-        self.cols = {name: rsql.Col(rsql.quote(name), kind,
+        self.cols = {name: rsql.Col(rsql.quote(table.column_name(name)), kind,
                                     rsql.quote(table.flag_name(name)) if name in table._flags else None)
                      for name, kind in table.kinds.items()}
         self._values: dict[tuple[str, str], tuple[pa.Array, pa.Array | None]] = {}
