@@ -60,6 +60,10 @@ and duplicated there as «name (1)»: the copy keeps the stored secret.
 
 ### The CONNECT permission
 
+A connection can point at any host the workers reach, so CONNECT is given on purpose, by
+an administrator or by whoever has MANAGE on the folder. A person's
+[personal folder](../governance/permissions.md#personal-folders) does not include it.
+
 CONNECT is a permission of its own, beside VIEW < RUN < EDIT < MANAGE: EDIT does not
 include it, MANAGE does. Like every permission it is given on a folder and holds for the
 folders below it; administrators have it everywhere. With CONNECT on a connection's folder

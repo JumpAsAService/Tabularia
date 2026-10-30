@@ -656,7 +656,10 @@ Reload Explore: the `Sample` folder holds the two connections (*Sample ERP (Post
 *Sample CRM (ClickHouse)*), four saved views, and three folders: *Flows* (eleven flows,
 three of them scheduled), *Private tables* (the company's tables and the flows' results)
 and *Public tables* (a calendar, the regions). As on Docker Compose, the folder has no
-permissions on it: other people see it once the administrator shares it.
+permissions on it: other people see it once the administrator shares it. A colleague's
+account starts with their [personal folder](../governance/permissions.md#personal-folders)
+alone, where they can build but not create connections: to try the samples they need VIEW
+on `Sample`, and CONNECT too to import from its two connections.
 
 - **More data**: `SAMPLES_SCALE` in `infrastructure/kind/samples.yaml` is `small`;
   `medium` (3.5 million order lines) takes a few minutes. Choose it before the first
