@@ -66,8 +66,9 @@ with VIEW on the folder and no CONNECT on the connection reads its SQL and canno
 choosing a connection for a script needs CONNECT on it too.
 
 The SQL runs inside `SELECT * FROM (…)`, as a SQL datasource's, so a statement that is not
-a query fails. That is not the barrier: the barrier is a **read-only database user** on
-the connection, as for database datasources. Give that user a time limit on the database
+a query fails; on PostgreSQL, MySQL and MariaDB it also runs in a read-only transaction, so
+a function it calls cannot write either. That is not the barrier: the barrier is a
+**read-only database user** on the connection, as for database datasources. Give that user a time limit on the database
 too (PostgreSQL: `ALTER ROLE lettore SET statement_timeout = '60s'`; MySQL:
 `max_execution_time`; ClickHouse: a settings profile with `max_execution_time`). Tabularia
 stops waiting after the preview time limit (`PREVIEW_TIMEOUT_SECONDS`) and asks the

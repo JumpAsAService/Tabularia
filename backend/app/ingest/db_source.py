@@ -315,6 +315,9 @@ def _pg_connect(conn: DbConnectionSpec):
 def _batches_postgresql(conn: DbConnectionSpec, query: str) -> Iterator[Any]:
     with _pg_connect(conn) as c:
         with c.cursor() as cur:
+            # a function the query calls could still write; of this transaction only, so
+            # nothing stays on a connection a pooler hands to someone else
+            cur.execute("SET TRANSACTION READ ONLY")
             cur.execute(query)
             reader = cur.fetch_record_batch()  # RecordBatchReader: true streaming
             yield _schema_without_extensions(reader.schema)
@@ -511,6 +514,7 @@ def _batches_mysql(conn: DbConnectionSpec, query: str) -> Iterator[Any]:
     c = _mysql_connect(conn, cursorclass=pymysql.cursors.SSCursor)  # unbuffered: the server streams
     try:
         with c.cursor() as cur:
+            cur.execute("START TRANSACTION READ ONLY")  # a function the query calls could still write
             cur.execute(query)
             yield from _dbapi_batches(cur)
     finally:

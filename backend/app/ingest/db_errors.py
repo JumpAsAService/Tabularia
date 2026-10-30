@@ -76,7 +76,8 @@ _TIMEOUT_HINT = (
 )
 _AUTH_HINT = "Check the connection's username and password."
 _PERM_HINT = "The connection's user lacks the required privileges on this object."
-_READONLY_HINT = "The connection's user is read-only: it cannot be used as a destination."
+_READONLY_HINT = ("The statement tried to write where it can only read: a query on a connection runs read-only, "
+                  "and a read-only user cannot be used as a destination.")
 _SERVER_MEMORY_HINT = "The database server ran out of memory for this query: reduce the data."
 _NET_HINT = "The server is unreachable: check host, port and network."
 _SERVICE_HINT = "Check the service name in the connection's Database field."
@@ -121,7 +122,7 @@ _PG_HINTS = {
 # MySQL/MariaDB: code → hint
 _MYSQL_HINTS = {
     1045: _AUTH_HINT, 1044: _PERM_HINT, 1142: _PERM_HINT, 1143: _PERM_HINT,
-    3024: _TIMEOUT_HINT, 1290: _READONLY_HINT,
+    3024: _TIMEOUT_HINT, 1290: _READONLY_HINT, 1792: _READONLY_HINT,
     3159: _TLS_REQUIRED_HINT,  # require_secure_transport, and the connection not encrypted
     2003: _NET_HINT, 2005: _NET_HINT, 2006: _NET_HINT, 2013: _NET_HINT,
 }
