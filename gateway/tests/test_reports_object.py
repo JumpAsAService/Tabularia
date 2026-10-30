@@ -261,3 +261,67 @@ def test_a_structural_mistake_says_where(app, session):
     r = me.post(f"/projects/{folder}/reports", json={"name": "A", "content": content}, headers=CSRF)
     assert r.status_code == 422
     assert r.json()["detail"]["item"] == "t" and "right margin" in r.json()["detail"]["message"]
+
+
+# ── what a report reads, deleted ──────────────────────────────────────────────
+def _reading(kind, **source) -> dict:
+    return definition({"name": "orders", "source": {"kind": kind, **source}})
+
+
+@pytest.mark.parametrize("what", ["view", "sql_script", "datasource", "connection"])
+def test_what_a_report_reads_is_not_deleted_and_the_answer_says_who(session, fake_engine, what):
+    from fastapi import HTTPException
+
+    from app.routes.connections import delete_connection
+    from app.routes.datasources import delete_datasource
+    from app.routes.saved_views import delete_saved_view
+    from app.routes.sql_scripts import delete_sql_script
+    from app.services import reports
+    from tests.conftest import make_user
+
+    sales, vault = (make_project(session, name=n).id for n in ("Sales", "Vault"))
+    orders = make_datasource(session, name="Orders", project_id=sales, key="datasets/o.parquet").id
+    target, source, call = {
+        "view": lambda: ((v := SavedView(name="V", project_id=sales, datasource_id=orders, spec="{}")),
+                         session.add(v), session.commit(), v.id)[-1],
+        "sql_script": lambda: ((c := SqlScript(name="S", project_id=sales, current_version=1)), session.add(c),
+                               session.commit(), c.id)[-1],
+        "datasource": lambda: orders,
+        "connection": lambda: _connection(session, sales),
+    }[what](), {"view": ("view", "view_id"), "sql_script": ("sql_script", "script_id"),
+                "datasource": ("datasource", "datasource_id"), "connection": ("sql", "connection_id")}[what], {
+        "view": delete_saved_view, "sql_script": delete_sql_script, "datasource": delete_datasource,
+        "connection": delete_connection}[what]
+    extra = {"sql": "SELECT 1"} if what == "connection" else {}
+    boss = make_user(session, email="boss@x.local", is_superuser=True)
+    colleague = make_user(session, email="ada@x.local")
+    make_permission(session, user_id=colleague.id, project_id=sales, capability="manage")
+    make_permission(session, user_id=colleague.id, project_id=sales, capability="connect")
+    seen, hidden = (Report(name=n, project_id=p, current_version=1) for n, p in (("Margin", sales), ("Payroll", vault)))
+    session.add_all([seen, hidden])
+    session.commit()
+    content = json.dumps(_reading(source[0], **{source[1]: target}, **extra))
+    session.add_all([ReportVersion(report_id=r.id, version=1, content=content) for r in (seen, hidden)])
+    session.commit()
+    name = {"view": "view_id", "sql_script": "script_id", "datasource": "ds_id", "connection": "conn_id"}[what]
+
+    with pytest.raises(HTTPException) as e:
+        call(**{name: target}, request=None, user=colleague, session=session)
+    assert e.value.status_code == 409
+    message = e.value.detail["message"]
+    assert "the reports «Margin» and 1 you cannot see" in message and "Payroll" not in message
+    assert e.value.detail["reports"] == ["Margin"]
+    with pytest.raises(HTTPException) as e:  # an administrator sees them all
+        call(**{name: target}, request=None, user=boss, session=session)
+    assert "the reports «Margin», «Payroll»:" in e.value.detail["message"]
+    with pytest.raises(HTTPException) as e:  # one who sees none of them: no name at all
+        reports.not_read_by_reports(session, make_user(session, email="z@x.local"), what, target, "It")
+    assert e.value.detail["message"] == "It is read by 2 reports you cannot see: change them first"
+    # an older version does not hold it back: only what the report reads now
+    for r in (seen, hidden):
+        session.add(ReportVersion(report_id=r.id, version=2, content=json.dumps(definition())))
+        r.current_version = 2
+        session.add(r)
+    session.commit()
+    assert reports.reports_reading(session, what, target) == []
+    call(**{name: target}, request=None, user=boss, session=session)

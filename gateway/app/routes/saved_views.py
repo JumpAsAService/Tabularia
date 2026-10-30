@@ -275,6 +275,7 @@ def delete_saved_view(
 ):
     view = _get_view(session, view_id)
     ensure_can(session, user, view.project_id, Capability.EDIT)
+    reports.not_read_by_reports(session, user, "view", view.id, "The saved view")
     label = view.name
     session.delete(view)
     session.commit()

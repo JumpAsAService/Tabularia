@@ -180,6 +180,49 @@ def test_the_metadata_of_a_row(app, session):
     assert item["editable"] and item["updated_at"]
 
 
+def test_the_tab_and_the_lists_do_not_read_the_definitions(app, session):
+    """A definition holds its images: a page of rows asks the database for what it shows."""
+    from sqlalchemy import event
+
+    root = make_project(session, name="Finance").id
+    boss = _sign_in(app, session, "boss@x.local", is_superuser=True)
+    picture = {"name": "orders", "note": "x" * 1000}
+    content = {"v": 1, "parameters": [{"name": "region"}, {"name": "since"}], "datasets": [picture], "sections": {}}
+    made = boss.post(f"/projects/{root}/reports", json={"name": "Margin"}, headers=CSRF).json()
+    r = session.get(Report, made["id"])
+    from app.services import reports
+
+    reports.add_version(session, r, content, "edited", session.get(User, r.owner_id))
+    session.commit()
+    seen: list[str] = []
+
+    def note(_conn, _cursor, statement, _params, _context, _many):
+        seen.append(statement)
+
+    event.listen(session.get_bind(), "before_cursor_execute", note)
+    try:
+        for path in ("/reports/search", "/reports", f"/projects/{root}/reports"):
+            seen.clear()
+            answer = boss.get(path).json()
+            row = (answer["items"] if isinstance(answer, dict) else answer)[0]
+            assert (row["datasets"], row["parameters"]) == (1, 2), path
+            assert any("json_array_length" in q for q in seen), path
+            assert not [q for q in seen if "report_versions.content" in q.replace("json_array_length(report_versions.content", "")], path
+    finally:
+        event.remove(session.get_bind(), "before_cursor_execute", note)
+
+
+def test_an_observer_reads_the_author_s_email_masked(app, session):
+    root = make_project(session, name="Finance").id
+    boss = _sign_in(app, session, "boss@x.local", is_superuser=True)
+    made = boss.post(f"/projects/{root}/reports", json={"name": "Margin"}, headers=CSRF).json()
+    assert boss.get("/reports/search").json()["items"][0]["owner_name"] == "boss@x.local"
+    guest = _sign_in(app, session, "guest@x.local", is_observer=True)
+    make_permission(session, user_id=_uid(session, "guest@x.local"), project_id=root, capability="view")
+    assert guest.get("/reports/search").json()["items"][0]["owner_name"].startswith("b***@")
+    assert guest.get(f"/reports/{made['id']}/versions").json()[0]["created_by"].startswith("b***@")
+
+
 def test_only_the_reports_one_sees(app, session):
     sales, hr = make_project(session, name="Sales").id, make_project(session, name="HR").id
     reader = _sign_in(app, session, "reader@x.local")

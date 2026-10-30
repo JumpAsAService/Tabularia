@@ -213,6 +213,26 @@ def test_an_empty_list_in_the_sql_stops_with_a_clear_message(app, session, fake_
     assert r.json()["detail"] == "The dataset «erp»: «regions» has no value, and the SQL needs at least one: choose one"
 
 
+def test_no_value_reaches_the_sql_as_null_whatever_the_default(app, session, fake_engine):
+    w = _world(session)
+    reader = _reader(app, session, w)
+    r = reader.post(f"/reports/{w['report']}/render", json={"params": {"region": "North", "since": "{none}"}}, headers=CSRF)
+    assert r.status_code == 200, r.text
+    sent = fake_engine.report_renders[-1]
+    assert sent["params"]["since"] is None
+    assert "day >= NULL" in sent["datasets"]["orders"]["operations"][0]["params"]["query"]
+    r = reader.get(f"/reports/{w['report']}/parameters", params={"region": "North", "since": "{none}"})
+    assert r.status_code == 200 and {p["name"]: p["default"] for p in r.json()}["since"] is not None
+
+
+@pytest.mark.parametrize("state", [{"items": "x"}, {"items": {"table": 1}}, {"items": ["table"]}])
+def test_a_view_s_state_of_another_shape_is_refused_before_the_engine(app, session, fake_engine, state):
+    w = _world(session)
+    reader = _reader(app, session, w)
+    r = reader.post(f"/reports/{w['report']}/render", json={"params": {"region": "North"}, "state": state}, headers=CSRF)
+    assert r.status_code == 422 and "state" in r.json()["detail"] and fake_engine.report_renders == []
+
+
 def test_the_engine_s_refusal_is_said(app, session, fake_engine):
     w = _world(session)
     reader = _reader(app, session, w)
@@ -348,6 +368,29 @@ def test_which_tokens_the_api_answers(app, session, fake_engine):
 
 
 # ── the form and the editor ───────────────────────────────────────────────────
+def test_the_parameters_of_a_definition_not_saved_yet(app, session, fake_engine):
+    """The designer's preview: the choices of the definition as it is, half done or not; EDIT."""
+    w = _world(session)
+    reader = _reader(app, session, w)
+    editor = _sign_in(app, session, "editor@x.local")
+    make_permission(session, user_id=_uid(session, "editor@x.local"), project_id=w["sales"], capability="edit")
+    make_permission(session, user_id=_uid(session, "editor@x.local"), project_id=w["secret"], capability="connect")
+    content = json.loads(session.exec(select(ReportVersion)).one().content)
+    draft = {**content, "sections": {"body": {"items": [{"id": "half", "type": "chart"}]}},
+             "parameters": [*content["parameters"], {"name": "area", "type": "text", "choices": {"dataset": "plain", "value": "[region]"}},
+                            {"name": "lost", "type": "text", "choices": {"dataset": "nope", "value": "[x]"}}]}
+    fake_engine.report_choices_response = (200, {"choices": [{"value": "N", "label": "North"}], "truncated": False})
+    url = f"/reports/{w['report']}/parameters"
+    assert reader.post(url, json={"definition": draft}, headers=CSRF).status_code == 403
+    r = editor.post(url, json={"definition": draft, "params": {"region": "South"}}, headers=CSRF)
+    assert r.status_code == 200, r.text
+    out = {p["name"]: p for p in r.json()}
+    assert out["area"]["choices"] == [{"value": "N", "label": "North"}] and out["area"]["choices_error"] is None
+    assert out["lost"]["choices"] is None and "nope" in out["lost"]["choices_error"]
+    assert editor.post(url, json={"definition": {**draft, "parameters": [{"name": "today", "type": "text"}]}},
+                       headers=CSRF).status_code == 422
+
+
 def test_the_parameters_as_the_form_shows_them(app, session, fake_engine):
     w = _world(session)
     reader = _reader(app, session, w)

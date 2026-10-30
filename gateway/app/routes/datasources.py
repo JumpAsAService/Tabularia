@@ -24,7 +24,7 @@ from app.db.session import get_session
 from app.deps.auth import get_current_user
 from app.deps.permissions import ensure_can
 from app.models import Connection, Datasource, Project, Run, SavedView, User
-from app.services import audit, openlineage
+from app.services import audit, openlineage, reports
 from app.services import contracts as contract_service
 from app.services.documented import count_described, is_ai_ready
 from app.models.permission import Capability
@@ -937,6 +937,7 @@ def delete_datasource(
     if views:
         names = ", ".join(f"'{n}'" for n in views[:5]) + (", …" if len(views) > 5 else "")
         raise HTTPException(status_code=409, detail=f"The datasource is used by saved views ({names}): delete them first")
+    reports.not_read_by_reports(session, user, "datasource", ds.id, "The datasource")
 
     ds_name, ds_kind = ds.name, ds.kind  # snapshot per l'audit
     bucket, key = ds.bucket, ds.key

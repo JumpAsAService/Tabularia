@@ -2,8 +2,9 @@
 // The report's parameters as a form, in one band above the pages: a field per parameter
 // by its type (text, number, date, yes/no), a list when it has choices (several at once
 // when it takes several), the required ones marked, and «View report». The values are
-// texts, as a link carries them: `''` (or `[]`) is no value, and then the report's default
-// holds. The owner keeps them in the address (pages/report.vue).
+// texts, as a link carries them: `''` (or `[]`) is an empty field, which is no value for
+// an optional parameter, whatever its default; a required one asks for a value. The owner
+// keeps them in the address (pages/report.vue).
 import { useI18n } from 'vue-i18n'
 import { Eye, LoaderCircle, TriangleAlert } from 'lucide-vue-next'
 import type { ReportFormValue as FormValue, ReportParameter } from '~/composables/useReports'
@@ -39,21 +40,9 @@ const list = (name: string) => {
   return Array.isArray(v) ? v : v ? [v] : []
 }
 
-/** The default as a text, for the empty field's placeholder. */
-function shownDefault(p: ReportParameter): string {
-  const d = p.default
-  if (d === null || d === undefined || (Array.isArray(d) && !d.length)) return ''
-  if (p.type === 'boolean') return d ? t('report.yes') : t('report.no')
-  const label = (v: unknown) => p.choices?.find((c) => String(c.value) === String(v))?.label ?? String(v)
-  return Array.isArray(d) ? d.map(label).join(', ') : label(d)
-}
-// an optional parameter with no default can be left empty: its lists offer «Any»
-const canBeEmpty = (p: ReportParameter) => !p.required && (p.default === null || p.default === undefined
-  || (Array.isArray(p.default) && !p.default.length))
-const placeholder = (p: ReportParameter) => {
-  const d = shownDefault(p)
-  return d ? t('report.defaultPlaceholder', { value: d }) : (p.required ? '' : t('report.anyValue'))
-}
+// an optional parameter can be left empty, a default or not: its lists offer «Any»
+const canBeEmpty = (p: ReportParameter) => !p.required
+const placeholder = (p: ReportParameter) => (p.required ? '' : t('report.anyValue'))
 
 const choiceOptions = (p: ReportParameter) => (p.choices ?? []).map((c) => ({ value: String(c.value), label: c.label ?? String(c.value) }))
 const singleOptions = (p: ReportParameter) => [

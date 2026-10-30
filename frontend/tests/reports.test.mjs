@@ -219,3 +219,24 @@ test('the cell previews its subject and file names as the email writes them: in 
   assert.equal(req.kind, 'output')
   assert.equal(req.flow, 'Morning')
 })
+
+// ── the form's values, as a render takes them ────────────────────────────────
+test('an empty field: «no value» for an optional parameter, whatever its default', () => {
+  const ps = [
+    { name: 'region', multi: false, required: false, default: 'North' }, // emptied
+    { name: 'area', multi: false, required: false, default: null }, // nothing to say
+    { name: 'tags', multi: true, required: false, default: ['a', 'b'] }, // emptied
+    { name: 'free', multi: true, required: false, default: ['a'] },
+    { name: 'top', multi: false, required: true, default: 10 }, // the default holds
+    { name: 'must', multi: false, required: true, default: null }, // the form asks for it
+    { name: 'kept', multi: false, required: false, default: 'x' },
+  ]
+  assert.deepEqual(reports.paramsOfForm(ps, { region: '', area: '', tags: [], free: ' a , ,b', top: '', must: ' ', kept: ' y ' }),
+    { region: '{none}', tags: '{none}', free: ['a', 'b'], kept: 'y' })
+  assert.equal(reports.hasDefault({ default: [] }), false)
+  assert.equal(reports.hasDefault({ default: 0 }), true)
+  assert.equal(reports.hasDefault({ default: false }), true)
+  // a link and a script carry it: it is not the default
+  assert.deepEqual(reports.explicitParams(ps, { region: '{none}', top: 10 }), { region: '{none}' })
+  assert.equal(reports.paramsQuery({ region: '{none}' }), 'region=%7Bnone%7D')
+})

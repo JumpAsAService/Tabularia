@@ -24,7 +24,7 @@ from __future__ import annotations
 import asyncio
 import time
 from datetime import datetime, timezone
-from typing import Any, Literal, Optional
+from typing import Any, Callable, Literal, Optional
 
 from fastapi import APIRouter, Depends, HTTPException, Query, Request, status
 from pydantic import BaseModel, Field
@@ -45,6 +45,7 @@ from app.schemas.models import Page, UtcDateTime
 from app.services import audit, report_definition, report_params, report_views, reports
 from app.services import permissions as perm_service
 from app.services.copy_names import commit_copy, free_copy_name
+from app.services.masking import mask_email
 from app.services.pagination import paginate
 from app.services.report_definition import Problem
 
@@ -154,6 +155,12 @@ class FieldsRequest(BaseModel):
     definition: Optional[dict[str, Any]] = None
 
 
+class ParametersRequest(BaseModel):
+    """The editor's definition, not saved yet, and the values chosen so far in its preview."""
+    definition: dict[str, Any]
+    params: dict[str, Any] = Field(default_factory=dict)
+
+
 class FieldOut(BaseModel):
     name: str
     type: str  # string | integer | float | date | datetime | time | boolean | other
@@ -226,25 +233,31 @@ def _being_edited(session: Session, user: User, report_id: Optional[int],
     return report
 
 
-def _out(session: Session, user: User, r: Report, content: Optional[dict] = None) -> ReportOut:
-    content = content if content is not None else reports.content_of(session, r)
+def _out(session: Session, user: User, r: Report, datasets: int, parameters: int) -> ReportOut:
     return ReportOut(id=r.id, name=r.name, description=r.description, project_id=r.project_id,
-                     current_version=r.current_version, datasets=len(content.get("datasets") or []),
-                     parameters=len(content.get("parameters") or []), created_at=r.created_at, updated_at=r.updated_at,
+                     current_version=r.current_version, datasets=datasets, parameters=parameters,
+                     created_at=r.created_at, updated_at=r.updated_at,
                      editable=perm_service.has_capability(session, user, r.project_id, Capability.EDIT))
 
 
 def _detail(session: Session, user: User, r: Report) -> ReportDetail:
     content = reports.content_of(session, r)
-    return ReportDetail(**_out(session, user, r, content).model_dump(), content=content)
+    out = _out(session, user, r, len(content.get("datasets") or []), len(content.get("parameters") or []))
+    return ReportDetail(**out.model_dump(), content=content)
 
 
 def _many(session: Session, user: User, stmt) -> list[ReportOut]:
     if stmt is None:
         return []
     found = list(session.exec(stmt).all())
-    contents = reports.current_contents(session, found)
-    return [_out(session, user, r, contents[r.id]) for r in found]
+    sizes = reports.sizes_of(session, [r.id for r in found])
+    return [_out(session, user, r, *sizes.get(r.id, (0, 0))) for r in found]
+
+
+def _shown_email(session: Session, user: User):
+    """An email as this person reads it: an account that is only an observer is shared, and
+    reads them masked (services/masking.py)."""
+    return mask_email if perm_service.is_observer_only(session, user) else (lambda email: email)
 
 
 def _record(session: Session, user: User, action: str, report: Report, request: Request,
@@ -311,14 +324,15 @@ def search_reports(
     }[sort]
     rows, total = paginate(session, stmt, order, limit, offset)
     found = [r for r, _, _ in rows]
-    contents = reports.current_contents(session, found)
-    owners = {uid: full_name or email for uid, full_name, email in session.exec(
+    sizes = reports.sizes_of(session, [r.id for r in found])
+    shown = _shown_email(session, user)
+    owners = {uid: full_name or shown(email) for uid, full_name, email in session.exec(
         select(User.id, User.full_name, User.email)
         .where(User.id.in_({r.owner_id for r in found if r.owner_id is not None}))).all()}  # type: ignore[attr-defined]
     items = []
     for r, n_people, n_opens in rows:
         path = [names[a] for a in reversed(perm_service.ancestor_ids(parents, r.project_id)) if a in names]
-        items.append(ReportRow(**_out(session, user, r, contents[r.id]).model_dump(), folder_path=path,
+        items.append(ReportRow(**_out(session, user, r, *sizes.get(r.id, (0, 0))).model_dump(), folder_path=path,
                                owner_name=owners.get(r.owner_id), people_30d=n_people, opens_30d=n_opens,
                                views_total=r.views_total, last_viewed_at=r.last_viewed_at))
     return Page(items=items, total=total)
@@ -490,7 +504,8 @@ def list_versions(report_id: int, user: User = Depends(get_current_user), sessio
     report = reports.get_visible(session, user, report_id)
     rows = session.exec(select(ReportVersion).where(ReportVersion.report_id == report.id)
                         .order_by(ReportVersion.version.desc())).all()  # type: ignore[attr-defined]
-    authors = {u.id: u.email for u in session.exec(select(User).where(
+    shown = _shown_email(session, user)
+    authors = {u.id: shown(u.email) for u in session.exec(select(User).where(
         User.id.in_({r.created_by for r in rows if r.created_by}))).all()} if rows else {}  # type: ignore[attr-defined]
     return [VersionOut(version=r.version, note=r.note, created_at=r.created_at, created_by=authors.get(r.created_by),
                        current=r.version == report.current_version) for r in rows]
@@ -641,7 +656,27 @@ async def report_parameters(report_id: int, request: Request, user: User = Depen
     parameters, so that a choice can follow another)."""
     report = reports.get_visible(session, user, report_id)
     definition = reports.content_of(session, report)
-    given = _query_params(request)
+    return await _parameters_out(session, user, definition, _query_params(request), lambda _: definition)
+
+
+@router.post("/reports/{report_id}/parameters", response_model=list[ParameterOut])
+async def report_parameters_being_edited(report_id: int, body: ParametersRequest, user: User = Depends(get_current_user),
+                                         session: Session = Depends(get_session)):
+    """The same for the editor's definition, not saved yet (EDIT on the folder), which its
+    preview's form asks: only the parameters and the dataset of each list must be whole,
+    the rest may be half done."""
+    _being_edited(session, user, report_id, None)
+    try:
+        definition = report_definition.check_parameters(body.definition)
+    except Problem as p:
+        raise p.http(body.definition) from None
+    return await _parameters_out(session, user, definition, reports.given_params(body.params),
+                                 lambda name: report_definition.check_dataset(body.definition, name))
+
+
+async def _parameters_out(session: Session, user: User, definition: dict, given: dict[str, list],
+                          choices_from: Callable[[str], dict]) -> list[ParameterOut]:
+    """`choices_from`: the definition to read a dataset's choices with, by the dataset's name."""
     params = definition.get("parameters") or []
     for name in given:
         if name not in {p["name"] for p in params}:
@@ -667,8 +702,9 @@ async def report_parameters(report_id: int, request: Request, user: User = Depen
             item.choices = [Choice(value=v, label=str(v)) for v in choices["values"]]
         elif choices.get("dataset"):
             try:
-                datasets = await reports.resolve_datasets(session, user, definition, values, only={choices["dataset"]})
-                got = await reports.dataset_choices(definition, datasets, values, p)
+                source = choices_from(choices["dataset"])
+                datasets = await reports.resolve_datasets(session, user, source, values, only={choices["dataset"]})
+                got = await reports.dataset_choices(source, datasets, values, p)
                 if got is None:
                     item.choices_error = "The engine cannot read choices from a dataset yet"
                 else:
@@ -677,6 +713,8 @@ async def report_parameters(report_id: int, request: Request, user: User = Depen
                     item.choices_truncated = got["truncated"]
             except HTTPException as e:
                 item.choices_error = reports._text(e)[:500]
+            except Problem as e:
+                item.choices_error = e.message[:500]
         out.append(item)
     return out
 

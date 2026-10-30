@@ -438,6 +438,9 @@ def delete_sql_script(script_id: int, request: Request, user: User = Depends(get
     if sql_script_runs.live_run(session, script.id) is not None:
         raise HTTPException(status_code=409, detail="The script is writing its datasource: delete it once it has finished")
     _not_in_groups(session, script, "The script is used by the flow groups {names}: remove it from there first")
+    from app.services import reports
+
+    reports.not_read_by_reports(session, user, "sql_script", script.id, "The script")
     label = script.name
     # its runs stay in the history, no longer attached to it; its datasource stays
     session.exec(sa_update(Run).where(Run.sql_script_id == script.id).values(sql_script_id=None))

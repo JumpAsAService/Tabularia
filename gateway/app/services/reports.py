@@ -39,7 +39,7 @@ from typing import Any, Mapping, Optional
 
 import httpx
 from fastapi import HTTPException, Request
-from sqlalchemy import and_
+from sqlalchemy import JSON, and_, case, cast, func
 from sqlmodel import Session, select
 
 from app.core.engine_client import CHECK, get_engine_client
@@ -144,20 +144,49 @@ def groups_using(session: Session, report_id: int) -> list:
                    for row in definition_of(g).steps for c in row)]
 
 
+# what a dataset's source names: the object's kind → the source's kind and its key
+_POINTS_TO = {"sql_script": ("sql_script", "script_id"), "view": ("view", "view_id"),
+              "datasource": ("datasource", "datasource_id"), "connection": ("sql", "connection_id")}
+
+
+def reports_reading(session: Session, kind: str, object_id: int) -> list[Report]:
+    """The reports one of whose datasets (in the current version) names the object. A SQL
+    on the catalog names its datasources by name: those are not found here."""
+    source_kind, key = _POINTS_TO[kind]
+    rows = session.exec(select(Report, ReportVersion).join(ReportVersion, and_(
+        Report.id == ReportVersion.report_id, Report.current_version == ReportVersion.version,
+    )).where(ReportVersion.content.contains(f'"{key}"'))).all()  # type: ignore[union-attr]
+    return [report for report, row in rows
+            if any(isinstance(d, dict) and (d.get("source") or {}).get("kind") == source_kind
+                   and (d.get("source") or {}).get(key) == object_id for d in _parsed(row).get("datasets") or [])]
+
+
+def not_read_by_reports(session: Session, user: User, kind: str, object_id: int, what: str) -> None:
+    """409 when reports read the object about to be deleted, as for the other references in
+    use: they would stop rendering. It names the ones this person sees and counts the
+    others, whose names are not theirs to know."""
+    found = reports_reading(session, kind, object_id)
+    if not found:
+        return
+    seen = sorted(r.name for r in found if can_see(session, user, r))
+    others = len(found) - len(seen)
+    who = ", ".join(f"«{n}»" for n in seen[:10]) + (" …" if len(seen) > 10 else "")
+    if not seen:
+        who = f"{others} {'report' if others == 1 else 'reports'} you cannot see"
+    elif others:
+        who = f"the reports {who} and {others} you cannot see"
+    else:
+        who = f"the reports {who}"
+    raise HTTPException(status_code=409, detail={"message": f"{what} is read by {who}: change them first",
+                                                 "flows": [], "groups": [], "reports": seen})
+
+
 def groups_reading(session: Session, kind: str, object_id: int) -> list[tuple[Report, Any]]:
     """The flow groups that send a report one of whose datasets (its current version) reads
     the SQL script (`kind` sql_script) or the saved view (`view`), with that report:
     whoever changes the script or the view changes what the report reads."""
-    key = {"sql_script": "script_id", "view": "view_id"}[kind]
-    rows = session.exec(select(Report, ReportVersion).join(ReportVersion, and_(
-        Report.id == ReportVersion.report_id, Report.current_version == ReportVersion.version,
-    )).where(ReportVersion.content.contains(f'"{kind}"'))).all()  # type: ignore[union-attr]
-    out = []
-    for report, row in rows:
-        if any(isinstance(d, dict) and (d.get("source") or {}).get("kind") == kind
-               and (d.get("source") or {}).get(key) == object_id for d in _parsed(row).get("datasets") or []):
-            out.extend((report, group) for group in groups_using(session, report.id))
-    return out
+    return [(report, group) for report in reports_reading(session, kind, object_id)
+            for group in groups_using(session, report.id)]
 
 
 def turn_off_groups(session: Session, user: User, affected: list[tuple[Any, str]]) -> list[tuple]:
@@ -198,6 +227,26 @@ def _parsed(row: Optional[ReportVersion]) -> dict:
 
 def content_of(session: Session, report: Report, version: Optional[int] = None) -> dict:
     return _parsed(version_row(session, report, version))
+
+
+def sizes_of(session: Session, report_ids: list[int]) -> dict[int, tuple[int, int]]:
+    """{report: (datasets, parameters)} of the current versions, counted by the database:
+    a definition holds its images, and a list of reports has no use for them."""
+    if not report_ids:
+        return {}
+    if session.get_bind().dialect.name == "postgresql":
+        tree = cast(ReportVersion.content, JSON)
+
+        def length(key: str):
+            part = tree.op("->")(key)
+            return case((func.json_typeof(part) == "array", func.json_array_length(part)), else_=0)
+    else:  # SQLite, the tests'
+        def length(key: str):
+            return func.coalesce(func.json_array_length(ReportVersion.content, f"$.{key}"), 0)
+    rows = session.exec(select(ReportVersion.report_id, length("datasets"), length("parameters")).join(Report, and_(
+        Report.id == ReportVersion.report_id, Report.current_version == ReportVersion.version,
+    )).where(Report.id.in_(report_ids))).all()  # type: ignore[union-attr]
+    return {report_id: (datasets, parameters) for report_id, datasets, parameters in rows}
 
 
 def current_contents(session: Session, reports: list[Report]) -> dict[int, dict]:
@@ -802,6 +851,9 @@ async def render(session: Session, user: User, report: Optional[Report], definit
         raise HTTPException(status_code=422, detail=f"The format is one of {', '.join(FORMATS)}")
     if state is not None and len(json.dumps(state)) > MAX_STATE_BYTES:
         raise HTTPException(status_code=422, detail="The view's state is too large")
+    if state is not None and not (isinstance(state.get("items", {}), dict)
+                                  and all(isinstance(i, dict) for i in state.get("items", {}).values())):
+        raise HTTPException(status_code=422, detail="The view's state has its items as an object by item's id")
     # as given until they are converted: a few, cut short, in the audit of a refusal
     detail: dict[str, Any] = {"format": fmt, "from": origin, **(extra or {}), "parameters": given_detail(given)}
     outcome = "failure"

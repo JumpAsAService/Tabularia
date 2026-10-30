@@ -3,8 +3,9 @@
 // search over name, description and folders. By default the most read come first: the
 // people who opened it in the viewer in the last 30 days, a person once a day
 // (GET /reports/search, services/report_views.py in the gateway). A report is made in a
-// folder, from Explore: here it is opened, edited and its API link copied.
-import { computed, ref, watch } from 'vue'
+// folder, from Explore: here it is opened, edited and its API link copied. The order, the
+// search and the page live in the address: a link, a reload and Back give the same list.
+import { computed, nextTick, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { FileChartColumn, Search, Folder, Pencil, Link2, Eye, FolderTree } from 'lucide-vue-next'
 import { useFormat } from '~/composables/useFormat'
@@ -18,9 +19,13 @@ const toast = useToast()
 const { t } = useI18n()
 const fmtx = useFormat()
 const route = useRoute()
+const router = useRouter()
 
+const PAGE_SIZE = 50
 const SORTS: ReportSort[] = ['trending', 'name', 'updated']
-const sort = ref<ReportSort>(SORTS.includes(route.query.sort as ReportSort) ? route.query.sort as ReportSort : 'trending')
+const sortOf = (query: typeof route.query) => (SORTS.includes(query.sort as ReportSort) ? query.sort as ReportSort : 'trending')
+const offsetOf = (query: typeof route.query) => (Math.max(1, Math.floor(Number(query.page)) || 1) - 1) * PAGE_SIZE
+const sort = ref<ReportSort>(sortOf(route.query))
 const sortOptions = computed(() => [
   { value: 'trending', label: t('reportsTab.sortTrending') },
   { value: 'name', label: t('reportsTab.sortName') },
@@ -29,10 +34,37 @@ const sortOptions = computed(() => [
 
 const { q, items, total, offset, pageSize, loading, error, load, next, prev } = usePagedList<ReportRow>(
   (p) => api.listPaged({ ...p, sort: sort.value }),
-  { initialQuery: String(route.query.q ?? '') },
+  { pageSize: PAGE_SIZE, initialQuery: String(route.query.q ?? ''), initialOffset: offsetOf(route.query) },
 )
 watch(sort, () => {
   offset.value = 0
+  load()
+})
+// addresses on their way: a change of ours arriving back must not undo the keys typed since
+let writing = 0
+watch([sort, q, offset], () => {
+  const query: Record<string, string> = {}
+  if (sort.value !== 'trending') query.sort = sort.value
+  if (q.value.trim()) query.q = q.value.trim()
+  if (offset.value) query.page = String(offset.value / pageSize + 1)
+  writing++
+  router.replace({ query }).finally(() => nextTick(() => { writing-- }))
+})
+// the menu's link to the plain list, with the page already open: nothing mounts again
+watch(() => route.query, (query) => {
+  if (writing) return
+  const [wantedSort, wantedQ, wantedOffset] = [sortOf(query), String(query.q ?? ''), offsetOf(query)]
+  if (wantedSort === sort.value && wantedQ === q.value.trim() && wantedOffset === offset.value) return
+  sort.value = wantedSort
+  q.value = wantedQ
+  offset.value = wantedOffset
+  load()
+})
+// a link to a page that is no longer there (fewer reports now): the last one that is
+watch(items, () => {
+  const last = Math.floor(Math.max(0, total.value - 1) / pageSize) * pageSize
+  if (items.value.length || !total.value || offset.value <= last) return
+  offset.value = last
   load()
 })
 
@@ -83,7 +115,7 @@ function openTokens() {
     </div>
 
     <p v-if="error" class="err">{{ error }}</p>
-    <SkeletonRows v-else-if="loading" :rows="5" />
+    <SkeletonRows v-else-if="loading || (!items.length && total)" :rows="5" />
     <p v-else-if="!items.length && q" class="muted">{{ $t('reportsTab.noSearchResults') }}</p>
     <div v-else-if="!items.length" class="empty">
       <FileChartColumn :size="22" class="empty-icon" />

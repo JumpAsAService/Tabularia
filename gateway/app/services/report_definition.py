@@ -619,9 +619,10 @@ def _item(it: dict, at: str, kind: str, item_id: str, width: float, height: Opti
             raise Problem(f"{what} needs 1 to {MAX_SERIES} series", f"{at}.series", item_id)
         for k, s in enumerate(series):
             sat = f"{at}.series[{k}]"
-            s = _keys(s, sat, ("value", "name", "as", "axis"), ("value",), what=f"{what}'s series", item=item_id)
+            s = _keys(s, sat, ("value", "name", "as", "axis", "format"), ("value",), what=f"{what}'s series", item=item_id)
             _expr(s["value"], f"{sat}.value", f"{what}'s series value", item_id, required=True)
             _text(s.get("name"), f"{sat}.name", f"{what}'s series name", 200, item_id)
+            _text(s.get("format"), f"{sat}.format", f"{what}'s series format", 64, item_id)
             _choice(s.get("as"), ("bar", "line"), f"{sat}.as", f"{what}'s series as", item_id)
             _choice(s.get("axis"), ("left", "right"), f"{sat}.axis", f"{what}'s series axis", item_id)
         _options(it.get("options"), f"{at}.options", f"{what}'s options", item_id)
@@ -811,22 +812,34 @@ def check(definition: Any) -> dict:
     return definition
 
 
-def check_dataset(definition: Any, name: str) -> dict:
-    """The parameters and one dataset of a definition being edited, which is what reading
-    that dataset's fields needs (the rest may be half done): a definition with those only."""
+def check_parameters(definition: Any) -> dict:
+    """The parameters of a definition being edited, which is what its form needs (the rest
+    may be half done): a definition with those only."""
     if not isinstance(definition, dict):
         raise Problem("The report's definition is an object")
     parameters = definition.get("parameters") or []
     if not isinstance(parameters, list) or len(parameters) > MAX_PARAMETERS:
         raise Problem(f"The parameters are a list of at most {MAX_PARAMETERS}", "parameters")
     names: set[str] = set()
-    by_name = {p["name"]: p for p in (_parameter(p, i, names) for i, p in enumerate(parameters))}
+    for i, p in enumerate(parameters):
+        _parameter(p, i, names)
+    tz = definition.get("timezone")
+    locale = definition.get("locale")
+    return {"v": 1, "timezone": tz if isinstance(tz, str) else "UTC", **({"locale": locale} if isinstance(locale, str) else {}),
+            "parameters": parameters, "datasets": []}
+
+
+def check_dataset(definition: Any, name: str) -> dict:
+    """The parameters and one dataset of a definition being edited, which is what reading
+    that dataset's fields needs (the rest may be half done): a definition with those only."""
+    checked = check_parameters(definition)
+    parameters = checked["parameters"]
+    by_name = {p["name"]: p for p in parameters}
     datasets = definition.get("datasets") or []
     for i, ds in enumerate(datasets if isinstance(datasets, list) else []):
         if isinstance(ds, dict) and ds.get("name") == name:
             _dataset(ds, i, set(), by_name)
-            tz = definition.get("timezone")
-            return {"v": 1, "timezone": tz if isinstance(tz, str) else "UTC", "parameters": parameters, "datasets": [ds]}
+            return {**checked, "datasets": [ds]}
     raise Problem(f"The report has no dataset «{name[:64]}»", "datasets")
 
 

@@ -8,11 +8,11 @@ import { skeletonPad } from '~/composables/useSkeleton'
 
 export function usePagedList<T>(
   fetcher: (p: { q?: string; limit: number; offset: number }) => Promise<Page<T>>,
-  opts: { pageSize?: number; initialQuery?: string } = {},
+  opts: { pageSize?: number; initialQuery?: string; initialOffset?: number } = {},
 ) {
   const pageSize = opts.pageSize ?? 50
   const q = ref(opts.initialQuery ?? '') // e.g. coming from the global search
-  const offset = ref(0)
+  const offset = ref(opts.initialOffset ?? 0)
   const total = ref(0)
   const items = ref<T[]>([]) as Ref<T[]>
   const loading = ref(true)
@@ -21,24 +21,33 @@ export function usePagedList<T>(
   // `quiet`: the rows update in place, with no skeleton and nothing emptied on an
   // error, for refreshes the user did not ask for (an import that just finished):
   // the list blinking out and back in reads as a crash
+  // only the latest answer counts: a slow one (a search typed before, the page before) must
+  // not replace what was asked after it
+  let latest = 0
+  let latestLoud = 0
   async function load(opts: { quiet?: boolean } = {}) {
     const quiet = opts.quiet === true
-    if (!quiet) loading.value = true
+    const mine = ++latest
+    if (!quiet) {
+      latestLoud = mine
+      loading.value = true
+    }
     const t0 = performance.now()
     try {
       const r = await fetcher({ q: q.value.trim() || undefined, limit: pageSize, offset: offset.value })
+      if (mine !== latest) return
       items.value = r.items
       total.value = r.total
       error.value = ''
     } catch (e) {
-      if (quiet) return // keep what is on screen; the next load will tell
+      if (quiet || mine !== latest) return // keep what is on screen; the next load will tell
       error.value = errMessage(e)
       items.value = []
       total.value = 0
     } finally {
       if (!quiet) {
         await skeletonPad(t0) // the skeleton stays visible a minimum: no flash
-        loading.value = false
+        if (mine === latestLoud) loading.value = false
       }
     }
   }

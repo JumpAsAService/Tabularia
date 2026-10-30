@@ -56,6 +56,9 @@ TYPES = ("text", "number", "date", "boolean")
 LANGS = ("en", "it", "de", "es", "fr")  # a report's locale: the names of months and days ({today:MMMM})
 MAX_TEXT = 1000  # characters of a text value
 MAX_VALUES = 1000  # values of a multi parameter
+# the value that says «no value» out loud, in a query string, a body or a Pushmail cell: an
+# optional parameter then has none whatever its default (an empty value takes the default)
+NO_VALUE = "{none}"
 _NUMBER = re.compile(r"^[+-]?(\d+(\.\d*)?|\.\d+)([eE][+-]?\d{1,3})?$")
 _ISO_DATE = re.compile(r"^\d{4}-\d{2}-\d{2}$")
 _ISO_DATETIME = re.compile(r"^(\d{4}-\d{2}-\d{2})[T ](\d{2}:\d{2}(?::\d{2})?)(?:\.\d+)?(?:Z|[+-]\d{2}:?\d{2})?$")
@@ -162,10 +165,13 @@ async def resolve_placeholders(bodies: Iterable[str], timezone: str,
 
 
 def _texts(param: Mapping[str, Any], given: Optional[list]) -> Optional[list]:
-    """The texts a parameter takes: the ones given, else its default; None = no value."""
+    """The texts a parameter takes: the ones given, else its default; None = no value
+    (none given and no default, or NO_VALUE given)."""
     name, multi = param["name"], bool(param.get("multi"))
     if given is not None:
         given = [g for g in given if not (isinstance(g, str) and not g.strip())]  # `?since=` is no value
+    if given and len(given) == 1 and isinstance(given[0], str) and given[0].strip() == NO_VALUE:
+        return None
     if given:
         if not multi and len(given) > 1:
             raise bad_value(name, "it takes one value")

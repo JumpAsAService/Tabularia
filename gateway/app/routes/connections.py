@@ -50,7 +50,7 @@ from app.db.session import get_session
 from app.deps.auth import get_current_user
 from app.deps.permissions import ensure_can
 from app.models import Connection, Datasource, Flow, Project, User
-from app.services import audit, db_tls
+from app.services import audit, db_tls, reports
 from app.models.permission import Capability
 from app.schemas.models import (
     ApiCallSpec, ConnectionCreate, ConnectionOut, ConnectionTest, ConnectionUpdate, Page, PlaceholderPreviewQuery,
@@ -888,6 +888,7 @@ def delete_connection(
             status_code=409,
             detail=f"The connection sends the failure notices of flows ({names}): change their schedule first",
         )
+    reports.not_read_by_reports(session, user, "connection", conn.id, "The connection")
     conn_name, conn_type = conn.name, conn.db_type
     session.delete(conn)
     session.commit()

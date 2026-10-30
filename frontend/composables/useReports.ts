@@ -343,6 +343,29 @@ export function withChoices(own: ReportParameter[], fresh: ReportParameter[]): R
   })
 }
 
+/** «No value» said out loud, in a link and in a render (NO_VALUE in the gateway's
+ *  services/report_params.py): an empty value takes the default. */
+export const NO_VALUE = '{none}'
+
+export const hasDefault = (p: Pick<ReportParameter, 'default'>) =>
+  p.default !== null && p.default !== undefined && !(Array.isArray(p.default) && !p.default.length)
+
+/** The form's values as a render takes them: a list where the parameter takes several.
+ *  An empty field of an optional parameter is «no value», a default or none (with none,
+ *  nothing need be said); a required one gives nothing, and the form asks for it. */
+export function paramsOfForm(parameters: Pick<ReportParameter, 'name' | 'multi' | 'required' | 'default'>[],
+                             values: Record<string, ReportFormValue>): ReportParams {
+  const out: ReportParams = {}
+  for (const p of parameters) {
+    const v = values[p.name]
+    const list = Array.isArray(v) ? v : p.multi ? (v ?? '').split(',') : [v ?? '']
+    const clean = list.map((x) => x.trim()).filter((x) => x !== '')
+    if (clean.length) out[p.name] = p.multi ? clean : clean[0]
+    else if (!p.required && hasDefault(p)) out[p.name] = NO_VALUE
+  }
+  return out
+}
+
 /** The values a link or a script should carry: those that are not the parameter's
  *  default. One left out takes its default when the report is rendered, so a default such
  *  as «the last 30 days» keeps moving with the calendar instead of the day it was copied. */

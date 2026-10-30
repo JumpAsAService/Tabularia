@@ -7,7 +7,8 @@
 // - The parameters' values live in the address (`?id=4&region=North`, a list repeats its
 //   name): a link opens the same report, and Back goes back to the values before. Only
 //   the values that differ from the defaults are written there, so a default such as
-//   «the last 30 days» keeps moving with the calendar.
+//   «the last 30 days» keeps moving with the calendar; an optional parameter emptied is
+//   `region={none}`.
 // - A click on the pages (a column's header, a group's row) changes the view on screen:
 //   the report is rendered again with that view and the scroll stays where it was. The
 //   view is not in the address; «Reset view» drops it, and the downloads take it (they
@@ -26,7 +27,7 @@ import { useFolderPaths } from '~/composables/useFolderPaths'
 import { useDialogA11y } from '~/composables/useDialogA11y'
 import { versionNote } from '~/composables/useSavedScripts'
 import {
-  explicitParams, isPlainState, stateAfter, useReports, withChoices,
+  explicitParams, isPlainState, NO_VALUE, paramsOfForm, stateAfter, useReports, withChoices,
   type ReportDetail, type ReportFormValue, type ReportHotspot, type ReportParameter, type ReportParams,
   type ReportScreen, type ReportState, type ReportVersion,
 } from '~/composables/useReports'
@@ -83,25 +84,14 @@ function formFromUrl() {
   for (const p of parameters.value) {
     const v = given[p.name]
     if (!v || !v.length) next[p.name] = defaultValue(p)
+    else if (v.length === 1 && v[0] === NO_VALUE) next[p.name] = freeMulti(p) || !p.multi ? '' : []
     else if (!p.multi) next[p.name] = v[0]
     else next[p.name] = freeMulti(p) ? v.join(', ') : v
   }
   form.value = next
   chosen.value = { ...next }
 }
-/** The form as a render takes it: a list where the parameter takes several, nothing for
- *  an empty field (the default then holds). */
-function toParams(values: Record<string, ReportFormValue>): ReportParams {
-  const out: ReportParams = {}
-  for (const p of parameters.value) {
-    const v = values[p.name]
-    const list = Array.isArray(v) ? v : p.multi ? (v ?? '').split(',') : [v ?? '']
-    const clean = list.map((x) => x.trim()).filter((x) => x !== '')
-    if (!clean.length) continue
-    out[p.name] = p.multi ? clean : clean[0]
-  }
-  return out
-}
+const toParams = (values: Record<string, ReportFormValue>) => paramsOfForm(parameters.value, values)
 const sameValue = (a: ReportFormValue, b: ReportFormValue) => JSON.stringify(a) === JSON.stringify(b)
 /** The address of these values: the report, and the values that differ from their defaults. */
 function queryFor(values: Record<string, ReportFormValue>): Record<string, string | string[]> {

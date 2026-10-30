@@ -185,6 +185,20 @@ async def test_values_are_converted_and_defaults_resolved_in_the_report_s_zone(f
     assert values["since"] == date(2026, 10, 28) and values["top"] == 2.5 and values["regions"] == []
 
 
+async def test_no_value_said_out_loud_empties_an_optional_parameter_with_a_default(fake_engine):
+    fake_engine.placeholder_values = {"{today-30}": "2026-09-28"}
+    values = await rp.values_for(DEFINITION, {"region": ["North"], "since": ["{none}"], "top": ["{none}"],
+                                              "regions": ["{none}"]})
+    assert values["since"] is None and values["top"] is None and values["regions"] == []
+    # a required one still needs its value, and an empty one still takes the default
+    with pytest.raises(HTTPException) as e:
+        await rp.values_for(DEFINITION, {"region": ["{none}"]})
+    assert e.value.status_code == 400 and e.value.detail["parameter"] == "region"
+    values = await rp.values_for(DEFINITION, {"region": ["North"], "since": [""], "top": []})
+    assert values["since"] == date(2026, 9, 28) and values["top"] == 10
+    rp.check_values(DEFINITION, {"region": ["North"], "since": ["{none}"]})  # as a Pushmail cell is checked
+
+
 @pytest.mark.parametrize("given, parameter, words", [
     ({"region": ["North"], "nope": ["1"]}, "nope", "no parameter"),
     ({}, "region", "needs a value"),
