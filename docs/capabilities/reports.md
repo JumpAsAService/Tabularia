@@ -115,9 +115,9 @@ parameters you choose in the same form the viewer has (the lists read from a dat
 included): the same renderer as the PDF, so what you see is what will print. A report with mistakes is not rendered: the preview lists them, and a click on one
 takes you to its field in **Design**.
 
-![In the designer a table is dragged under the chart; the fields Month, ricavo, costo and margine are dragged into it one after the other; a group by categoria adds the group's row and its total; Preview renders the first page](../media/guide/reports/designer-table-group-preview.gif)
+![In the designer a table is dragged under the chart; the fields Month, ricavo, costo and margine are dragged into it one after the other; a group by categoria adds the group's row, with no total yet; Sum is chosen in the Total list of ricavo, costo and margine, and the group's total row appears; Preview renders the page with the parameters above it; Salami chosen in Category and View report render that category, down to its total](../media/guide/reports/designer-table-group-preview.gif)
 
-*A table under the chart: four fields dragged into it, a group by `[categoria]` written in its properties, then **Preview**. The group's total row shows the columns' totals: **Sum** was chosen for the amounts off camera, because a new column has none.*
+*A table under the chart: four fields dragged into it, a group by `[categoria]` written in its properties. A new column has no total: **Sum**, chosen in the **Total** of each amount, brings the group's total row. **Preview** asks for the parameters as the viewer does, here **Category** `Salami`.*
 
 ## Datasets and parameters
 
@@ -505,7 +505,7 @@ it (PDF or Excel, the values of its parameters, the file's name) and can put its
 in the email's body. The cell runs after the steps before it, so the email leaves right
 after the data it shows has been refreshed, and not at all when a refresh failed.
 
-![The email in Mailpit: from Tabularia Reports to sales-team@example.com, subject Monthly margin 2026-10-28, the message, then the report's summary: the title, the three KPI cards, the combo chart and the totals of each category, with the PDF attached](../media/guide/reports/email-summary-mailpit.png)
+![The email in Mailpit: from Tabularia Reports to sales-team@example.com, subject Monthly margin 2026-10-30, the message, then the report's summary: the title, the three KPI cards, the combo chart, the totals of each category and the margin by category and year, with the PDF attached](../media/guide/reports/email-summary-mailpit.png)
 
 *The example sent by a flow group to a test mail server: the cell's message, then the report's summary; the whole report is the attached PDF.*
 
