@@ -70,8 +70,9 @@ designer goes out with the next email.
   the report's default **when the email leaves** (`{today-30}` is thirty days before the
   send, not before the save). A date may also be a [placeholder](placeholders.md),
   resolved then, in the report's time zone: `{start_of_month-1m}` is the first day of
-  last month, `{today-1}` yesterday. A parameter marked `*` needs a value, given here or
-  by the report's default.
+  last month, `{today-1}` yesterday. `{none}` in a text field gives an optional parameter
+  no value, whatever its default. A parameter marked `*` needs a value, given here or by
+  the report's default.
 - **Summary in the email body.** One report per cell can put its summary in the message,
   under the cell's text: its texts, its KPIs, its charts as images, and every table and
   matrix as its totals (see [the email](capabilities/reports.md#pdf-excel-and-the-email)),

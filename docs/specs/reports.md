@@ -14,10 +14,6 @@ with the interpreter's results to the value («Data in columns»). Still open:
 
 - the preview's bar takes a parameter whose choices come from a dataset as free text: the
   choices are read from the saved report only;
-- a saved view or a SQL script that a report reads can be deleted without a word: the
-  report then fails, naming the dataset, and so does the email of a group that sends it;
-- an optional parameter that has a default cannot be emptied: an empty field takes the
-  default, so «no value» can be chosen only for a parameter without one;
 - an interactive hotspot (a column to sort, a group to close) carries the box of its cell
   from the engine (`box`); the viewer still rebuilds a box from the table's layout for the
   pages of a render that has none.
@@ -168,7 +164,8 @@ All lengths are millimetres (numbers, a tenth at most), colours `#rrggbb`.
   `{start_of_month}`) or null; `required`; `choices`: fixed `{"values": [...]}`, or taken
   from a dataset (`dataset`, `value`, `label` expressions) — a choices dataset cannot use
   the parameter it fills. Names: letters, digits, `_`, not one of the placeholder
-  builtins (`today`, `now`…). Values arrive as text (query string, form, flow group) and
+  builtins (`today`, `now`…). A value empty or left out takes the default; `{none}` gives
+  an optional parameter no value, whatever its default. Values arrive as text (query string, form, flow group) and
   are converted and checked against the type and the choices before anything runs.
 - **Datasets**: `source.kind`
   - `sql`: on the catalog (`connection_id` null; `engine` as SQL scripts', null = the
@@ -227,7 +224,8 @@ All lengths are millimetres (numbers, a tenth at most), colours `#rrggbb`.
   on screen}.
 - `chart`: `dataset`, `kind` bar | column | line | area | pie | donut | combo | waterfall |
   funnel | treemap | heatmap | scatter | gauge | bullet, `category` (expression),
-  `series` [{`value` (aggregate), `name`, `as` bar | line (combo), `axis` left | right}],
+  `series` [{`value` (aggregate), `name`, `as` bar | line (combo), `axis` left | right,
+  `format` (its values' and its axis's; none: the chart's)}],
   `split_by` (expression: one series per value), `options` {`stacked`, `labels`,
   `legend`, `sort`, `top`, `min`, `max`, `target`, `bands` (gauge, bullet), `format`}.
   `sort` none: the categories (and the series of `split_by`, and a KPI's sparkline) in
@@ -335,6 +333,9 @@ render.
   constant, evaluated once by the interpreter; what only Python writes the same — `FORMAT`,
   `TEXT`, a number or a date joined with `&`, `UPPER` and `LOWER` («ß» is «SS») — is
   computed by Python once per distinct value and looked up.
+- **Names are DuckDB's own.** A column is registered by its place (`__tabularia_c0`…), never
+  by its name: DuckDB's names ignore case, so a calculated field `Month` beside a column
+  `month` would be one column, and a subquery would take a field called `k` for one of its own.
 - **Orders are Python's.** The distinct values of a key are sorted by the interpreter's own
   key (`casefold`, NULL last, the direction), and numpy puts the rows in that order with
   stable counting sorts; a chart's categories keep the order they first come in.
@@ -353,7 +354,8 @@ render.
   the least height of a row (1.2 mm) stop the render at once, naming the table.
 - **Never a different result.** An item with an expression that cannot be translated for
   certain (some 5% of random valid expressions: an `IF` between a date and a date-time, a
-  date-time moved by a fraction of a day…), or whose query fails, is built again by the
+  date-time moved by a fraction of a day…, or nested so deep its SQL would pass 200,000
+  characters), or whose query fails, is built again by the
   interpreter over the dataset's rows, made then. The tests build every report of the
   suite both ways and compare the whole model and the PDF and SVG bytes
   (`tests/reports_both_ways.py`), random expressions row by row and per group, random
@@ -378,6 +380,8 @@ render.
   `Content-Disposition`; a token with read scope is enough; repeated `?region=a&region=b`
   for a multi parameter. 400 with the parameter's name when a value does not fit.
 - `GET /reports/{id}/parameters` — the parameters with their choices resolved (the form).
+  `POST` the same for a definition being edited (EDIT, the designer's preview): only the
+  parameters and each list's dataset must be whole.
 - `GET /reports/search?q=&sort=trending|name|updated&limit=&offset=` — the Reports tab:
   a page of the reports one sees, with their folder path, author and readers (people and
   openings in 30 days, openings ever, the last one); `POST /reports/{id}/views` — the

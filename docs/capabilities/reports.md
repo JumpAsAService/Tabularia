@@ -102,15 +102,17 @@ goes through the bands' names and the items; **Enter** on a band's name selects 
 every save: a field that does not exist, a function with the wrong arguments, a text
 added to a number. A save it refuses lists the problems in the bar; the first item is
 selected and the message sits under its field, with the character where the mistake
-is. The expression fields check what they can while you type, and say it at once; after
-a pause the server checks the report as a save would (the types, where a field may be
-used, the formats) and says what it finds under the same fields. If someone else saved
+is. The expression fields check what they can while you type: an expression you are still
+writing (`SUM([ric`) is not a mistake, and is said only if you leave the field that way; one
+that is finished and wrong is said at once. After a pause the server checks the report as
+a save would (the types, where a field may be used, the formats) and says what it finds
+under the same fields. If someone else saved
 the report since you opened it, **Save** says so and asks before your version becomes
 the newest: theirs stays among the versions.
 
 **Preview** renders the report as it is on screen, saved or not, with the values of its
-parameters you choose there: the same renderer as the PDF, so what you see is what will
-print. A report with mistakes is not rendered: the preview lists them, and a click on one
+parameters you choose in the same form the viewer has (the lists read from a dataset
+included): the same renderer as the PDF, so what you see is what will print. A report with mistakes is not rendered: the preview lists them, and a click on one
 takes you to its field in **Design**.
 
 ![In the designer a table is dragged under the chart; the fields Month, ricavo, costo and margine are dragged into it one after the other; a group by categoria adds the group's row and its total; Preview renders the first page](../media/guide/reports/designer-table-group-preview.gif)
@@ -124,7 +126,7 @@ In **Data**, **+ Dataset**:
 
 | Data from | What it reads |
 |---|---|
-| **SQL** | a query on the **catalog** (the datasources you may read, by name, on the engine you choose, as in a [SQL script](../sql-scripts.md)) or on a **database connection** (in the database's own dialect, with **CONNECT** on the connection's folder). Read-only, as SQL scripts are |
+| **SQL** | a query on the **catalog** (the datasources you may read, by name, on the engine you choose, as in a [SQL script](../sql-scripts.md)) or on a **database connection** (in the database's own dialect, with **CONNECT** on the connection's folder). Only a query runs, as in a SQL script; as there, the barrier is [a read-only database user](../sql-scripts.md#on-a-database-connection) on the connection |
 | **Datasource** | a datasource as it is, with optional **filters** (a column, `=` `<>` `<` `<=` `>` `>=` `in` `contains`, a value or a parameter) applied before the rows are read |
 | **Saved view** | a [saved view](preview-and-analysis.md#saved-views) with its filters, computed fields and pivot, plus filters of its own |
 | **SQL script** | a saved [SQL script](../sql-scripts.md), its current version, on its catalog or connection: whoever changes the script changes the report. Its parameters are the report's |
@@ -308,7 +310,8 @@ data», with no total of nothing.
 Columns whose widths add up to more than the table are narrowed to fit it, and a value
 wider than its column (a long number in a narrow column) would run into the next one:
 the preview and the viewer say both, naming the table and the columns, so the design can
-be fixed. So does an item that goes past the edge of the paper.
+be fixed. So does an item that goes past the edge of the paper, and a KPI whose value is
+wider than its card.
 
 **Conditional formatting** gives a column's cells a style when a condition about their
 row is true: `[MarginPct] < 0.3` in red and bold. A column may have several rules; when
@@ -318,7 +321,9 @@ cells, not the totals.
 A **matrix** is a table with **One column per value of** an expression (at most 60
 columns): `YEAR([Month])` gives a column per year. Its groups make the rows, **Value of
 the cells** is an aggregate of the rows that meet there (`SUM([margine])`), and **Total
-column** adds the row totals; the grand total adds the column totals.
+column** adds the row totals; the grand total adds the column totals. The columns come in
+ascending order of their values, so month names would be alphabetical: for months in
+their order write a value that sorts, `[anno_mese]` or `FORMAT([day], "MM MMM")`.
 
 ![The last page of the example PDF: the group Salumi stagionati continued from the page before with its label repeated, the margin percentages under 30% in red, the group's total and the grand total, then the matrix of the margin by category and year with its totals](../media/guide/reports/pdf-group-totals-and-matrix.png)
 
@@ -336,7 +341,7 @@ in the email.
 | **Bar**, **Column** | horizontal bars, vertical columns; stacked if asked |
 | **Line**, **Area** | one line per series along the axis |
 | **Pie**, **Donut** | each category's share; values below zero are left out |
-| **Combo** | bars and lines together, each series **Drawn as** bars or line, on the left or the right axis |
+| **Combo** | bars and lines together, each series **Drawn as** bars or line, on the left or the right axis, with a **Format of its values** of its own (amounts in euros on the left, a percentage on the right); its axis writes its numbers the same way |
 | **Waterfall** | how each category adds to or takes from a total: rises in green, falls in red, the total last |
 | **Funnel** | stages from the largest to the smallest |
 | **Treemap** | each category as a rectangle sized by its value; with **One series per value of**, nested |
@@ -372,7 +377,8 @@ the Viewer's and the assistant's charts too: see
 A click on a report in Explore opens it for reading. The bar at the top has one field
 per parameter, as the report defines it: a list for those with choices («Any» for an
 optional one), a date picker, Yes or No, several values for a list; `*` marks a required
-one, and an empty field takes the default. **View report** renders it.
+one. The fields open with the defaults. An optional field emptied has no value, whatever
+its default; a required one asks for a value. **View report** renders it.
 
 ![The viewer of Monthly margin: the bar with the parameters Category (Prosciutti) and From (01/01/2025), View report, and the first page at 100% with the title Monthly margin — Prosciutti, three KPI cards and the chart](../media/guide/reports/viewer-monthly-margin.png)
 
@@ -435,7 +441,8 @@ report, only how many.
 
 The search box looks in the names, the descriptions and the folders: `finance` finds the
 reports of a folder *Finance* and of every folder inside it. The list shows 50 reports a
-page.
+page. The order, the search and the page are in the address, so a link or a reload gives
+the same list.
 
 ![Analysis then Reports in the top bar: the list, the most read first; the order changed to Name and back to Most read; channels typed in the search finds the two reports of the folder Sales reports › Channels; margin finds three reports by their names and descriptions; a click on Margin growth by month opens it in the viewer](../media/guide/reports/reports-tab-trending-search.gif)
 
@@ -448,7 +455,7 @@ report.*
 | Format | What it is |
 |---|---|
 | **PDF** | the page as designed: positions exact to a tenth of a millimetre, the font embedded, the header and footer on every page, «Page X of Y». The same data gives the same file |
-| **Excel** | one sheet per table and matrix, named by **Sheet name in Excel**: the groups as outline levels (closed and opened with Excel's **+** and **−**), the subtotals and totals as `SUBTOTAL` formulas with their values, numbers that stay numbers in the report's formats, the header frozen and repeated on printed pages, a page break per group where the report has one; one more sheet lists the parameters' values. A text is never turned into a formula |
+| **Excel** | one sheet per table and matrix, named by **Sheet name in Excel**: the groups as outline levels (closed and opened with Excel's **+** and **−**), the subtotals and totals as `SUBTOTAL` formulas with their values, numbers that stay numbers in the report's formats (a whole number past 16 digits, an id, and a date before 1900 are written as text: a cell of Excel would change the first and cannot show the second), the header frozen and repeated on printed pages, a page break per group where the report has one; one more sheet lists the parameters' values. A text is never turned into a formula |
 | **Email** | the summary in the body of a [Pushmail](../pushmail.md#reports) email, 640 pixels wide: the report's texts, its KPI cards, its charts as images and the totals of every table and matrix ([below](#the-summary-in-the-email)); the detail goes as the attached PDF or Excel |
 
 ![Page 1 of the example PDF: the title, the printing date, the line in the accent colour, three KPI cards with sparklines, the combo chart of revenue and margin by month, and the table grouped by category with the first group's total; the report's name and Page 1 of 3 in the footer](../media/guide/reports/pdf-monthly-margin-page-1.png)
@@ -526,6 +533,12 @@ computed fields or pivot of a saved view that the report reads. The audit log sa
 and the author schedules the group again after looking. A change of layout, or one made
 by the schedule's own author, keeps them. A report that a flow group sends cannot be
 deleted until it is taken out of the group's cells.
+
+The other way round, what a report reads by reference (a saved view, a SQL script, a
+datasource chosen as such, a connection) cannot be deleted while the report's current
+version reads it: the refusal names the reports you may see and counts the others. A
+datasource named in a SQL goes by its name, and is not looked for: the report then says
+it cannot find it.
 
 ## Example: a monthly margin report
 

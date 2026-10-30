@@ -203,8 +203,9 @@ GET /reports/{id}/render?format=pdf&region=North&since=2026-09-01
   rows) or `html` (the summary an email carries, as an `.mhtml` file: the HTML with its
   charts as images).
 - **The parameters** go in the query string by name. A parameter that takes several values
-  repeats its name: `?region=North&region=South`. One left out takes the report's default.
-  A value is text, as typed in the report's form: a number with a dot for decimals
+  repeats its name: `?region=North&region=South`. One left out, or empty, takes the
+  report's default; `{none}` says no value for an optional one, whatever its default
+  (`region=%7Bnone%7D`), and the viewer's links do the same. A value is text, as typed in the report's form: a number with a dot for decimals
   (`1234.5`), a date as `yyyy-mm-dd`, `true` or `false`. A date may also be a
   [placeholder](placeholders.md), resolved in the report's time zone when it is rendered:
   `since={start_of_month-1m}` is the first day of last month. Encode the values: in a

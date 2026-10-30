@@ -190,8 +190,9 @@ On `margins`, a table grouped by `[categoria]`, sorted by `[anno_mese]`, with
 `RUNNING(aggregate)`: the aggregate from the first row of the group to the current one,
 in the order the rows are shown: a running total that starts again with every group, or
 runs over the whole table when it has none. It takes an aggregate of the group,
-`RUNNING(SUM([ricavo]))`; one of a named dataset is refused. When a reader sorts the
-table by another column in the viewer, the running total follows the new order.
+`RUNNING(SUM([ricavo]))`; one of a named dataset is refused, and so is `RUNNING` in a
+calculated field, which has no rows shown to run over: write it in a column. When a reader
+sorts the table by another column in the viewer, the running total follows the new order.
 
 | Month (Insaccati cotti) | Revenue | `RUNNING(SUM([ricavo]))` |
 |---|---|---|
@@ -204,7 +205,9 @@ table by another column in the viewer, the running total follows the new order.
 
 `ROWNUMBER()`: the number of the row within its group, from 1. In the first group of the
 table above it goes from 1 to 6, and starts from 1 again in *Insaccati da cuocere*. The
-page header and footer have no rows: there it is refused.
+page header and footer have no rows: there it is refused. So it is in **Rows where**,
+**Group by**, the **Order of the rows** and a matrix's **One column per value of**: there
+the rows are being chosen and put in their order, and none has its number yet.
 
 ## Logic
 
@@ -301,7 +304,7 @@ below it. `CEILING(number)`: the whole number at or above it.
 ### POWER
 
 `POWER(number, exponent)`: the number raised to the exponent; NULL when the result is not
-a real number.
+a real number, or past what a number holds (about 10 to the 308th).
 
 | Expression | Gives |
 |---|---|
@@ -332,7 +335,7 @@ compared as written: capitals count.
 | `LEFT(text, count)` | the first characters | `LEFT("Insaccati cotti", 9)` | `Insaccati` |
 | `RIGHT(text, count)` | the last characters | `RIGHT(TEXT(202503), 2)` | `03` |
 | `MID(text, start, count)` | `count` characters from `start`, 1 the first | `MID("ORD-12902", 5, 5)` | `12902` |
-| `REPLACE(text, old, new)` | every `old` replaced by `new` | `REPLACE("Insaccati cotti", "Insaccati", "Sausages,")` | `Sausages, cotti` |
+| `REPLACE(text, old, new)` | every `old` replaced by `new`; a result over a million characters stops the render | `REPLACE("Insaccati cotti", "Insaccati", "Sausages,")` | `Sausages, cotti` |
 | `CONTAINS(text, part)` | true when the text contains the part | `CONTAINS("Insaccati da cuocere", "cuocere")` | `Yes` |
 | | | `CONTAINS("Prosciutti", "PROSC")` | `No` |
 | `STARTSWITH(text, start)` | true when the text starts with it | `STARTSWITH("Insaccati cotti", "Insaccati")` | `Yes` |
@@ -597,6 +600,8 @@ Some of the messages:
 | `"Total: " + [ricavo]` | «+» works on numbers, and this is a text: join texts with & |
 | `SUM([categoria])` | SUM adds numbers: a field of type text is here |
 | `SUM(SUM([ricavo]))` | SUM inside another aggregate: write one at a time |
+| `ROWNUMBER() <= 10` as **Rows where** | ROWNUMBER() is the row's place among those the table shows: it is not known yet where they are chosen, sorted or grouped |
+| `RUNNING(SUM([ricavo]))` in a calculated field | RUNNING goes over the rows a table shows: write it in a column of the table, not in a calculated field |
 | `RUNNING([ricavo])` | RUNNING takes an aggregate of the group, as RUNNING(SUM([amount])) |
 | `MID("abc", 1)` | MID takes 3 arguments, 2 given: MID(text, start, count) |
 | `IF([ricavo] > 0, "yes"` | IF( is not closed: add «)» after its arguments, separated by commas |
