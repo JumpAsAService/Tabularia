@@ -899,8 +899,11 @@ function openable(r: Row): boolean {
 function rowClick(e: MouseEvent, r: Row) {
   if (!openable(r)) return
   // the actions' column does not open: between one button and the next a missed click must
-  // not take one away from the page
-  if ((e.target as HTMLElement | null)?.closest('button, a, input, select, textarea, label, [role="listbox"], [role="option"], .racts')) return
+  // not take one away from the page. The path as the click began, not the target's ancestors:
+  // the button's own handler has already swapped the icon under the pointer for a spinner by
+  // now (Duplicate), and a target out of the page has none
+  const ACTIONS = 'button, a, input, select, textarea, label, [role="listbox"], [role="option"], .racts'
+  if (e.composedPath().some((n) => n instanceof Element && n.matches(ACTIONS))) return
   if (window.getSelection()?.toString()) return
   const newTab = e.button === 1 || e.ctrlKey || e.metaKey || e.shiftKey
   if (e.type === 'auxclick' && e.button !== 1) return
