@@ -24,6 +24,11 @@ const props = defineProps<{
   spark?: Spark | null
   /** the chat's size: smaller, aligned to the left */
   dense?: boolean
+  /** the figure already written in its format (a dashboard's tile, by the server) */
+  text?: string | null
+  /** on a dashboard's tile: the figure takes the room there is, the trend line what is left, and
+   *  it does not animate at every refresh */
+  fit?: boolean
 }>()
 
 const { t } = useI18n()
@@ -31,9 +36,10 @@ const fmtx = useFormat()
 const { ui } = useChartTheme()
 const ctx = useKindCtx(ui)
 
-const shown = computed(() => (props.value == null ? '—' : headline(ctx.value, props.value)))
-// the exact figure under a shortened one: «4.2M» alone loses what the data says
-const exact = computed(() => (props.value == null ? '' : fmtx.number(props.value, 2)))
+const shown = computed(() => props.text ?? (props.value == null ? '—' : headline(ctx.value, props.value)))
+// the exact figure under a shortened one: «4.2M» alone loses what the data says. One written in
+// its format is what its author wanted to say
+const exact = computed(() => (props.value == null || props.text != null ? '' : fmtx.number(props.value, 2)))
 const dir = computed(() => {
   const r = props.change?.ratio ?? 0
   return r > 0 ? 'up' : r < 0 ? 'down' : 'flat'
@@ -41,24 +47,26 @@ const dir = computed(() => {
 const arrow = computed(() => ({ up: ArrowUpRight, down: ArrowDownRight, flat: ArrowRight })[dir.value])
 const changeText = computed(() =>
   props.change
-    ? new Intl.NumberFormat(fmtx.locale.value, { style: 'percent', maximumFractionDigits: 1, signDisplay: 'exceptZero' })
+    ? props.change.shown ?? new Intl.NumberFormat(fmtx.locale.value, { style: 'percent', maximumFractionDigits: 1, signDisplay: 'exceptZero' })
       .format(props.change.ratio)
     : '',
 )
-const sparkOpt = computed(() => (props.spark ? sparkOption(ctx.value, { ...props.spark, name: props.label }) : null))
+const sparkOpt = computed(() => (props.spark
+  ? { ...sparkOption(ctx.value, { ...props.spark, name: props.label }), ...(props.fit ? { animation: false } : {}) }
+  : null))
 </script>
 
 <template>
-  <div class="kpi" :class="{ dense }">
+  <div class="kpi" :class="{ dense, fit }">
     <p class="kpi-label">{{ label }}</p>
     <p class="kpi-value">{{ shown }}</p>
     <p v-if="exact && exact !== shown" class="kpi-exact">{{ exact }}</p>
     <p v-if="change" class="kpi-change" :class="dir">
       <component :is="arrow" :size="dense ? 13 : 15" aria-hidden="true" />
       <span class="kpi-pct">{{ changeText }}</span>
-      <span class="kpi-vs">{{ change.text }}</span>
+      <span v-if="change.text" class="kpi-vs">{{ change.text }}</span>
     </p>
-    <VChart v-if="sparkOpt" class="kpi-spark" :option="sparkOpt" autoresize :aria-label="t('chartPanel.trendOf', { name: label })" role="img" />
+    <VChart v-if="sparkOpt" class="kpi-spark" :option="sparkOpt" :update-options="{ notMerge: true }" autoresize :aria-label="t('chartPanel.trendOf', { name: label })" role="img" />
   </div>
 </template>
 
@@ -91,4 +99,29 @@ const sparkOpt = computed(() => (props.spark ? sparkOption(ctx.value, { ...props
 .kpi.dense .kpi-value { font-size: 34px; }
 .kpi.dense .kpi-change { margin-top: 6px; font-size: 12px; }
 .kpi.dense .kpi-spark { height: 64px; margin-top: 8px; }
+
+/* on a tile, whose size the author chose: the figure grows with the card, within reason, and the
+   trend line is what stays when there is no room (a short card says the number, nothing else) */
+.kpi.fit {
+  container-type: size;
+  max-width: none;
+  margin: 0;
+  padding: 0;
+  gap: 2px;
+  justify-content: inherit;
+  text-align: inherit;
+}
+.kpi.fit .kpi-label { font-size: 12.5px; line-height: 1.3; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; overflow-wrap: normal; }
+.kpi.fit .kpi-value {
+  font-size: var(--kpi-size, clamp(18px, min(14cqw, 34cqh), 40px));
+  margin-top: 0;
+  color: inherit;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.kpi.fit .kpi-change { margin-top: 0; font-size: 12px; flex-wrap: nowrap; white-space: nowrap; overflow: hidden; }
+.kpi.fit .kpi-spark { flex: 1 1 0; min-height: 0; height: auto; margin-top: 4px; }
+@container (max-height: 96px) { .kpi.fit .kpi-spark { display: none; } }
+@container (max-height: 62px) { .kpi.fit .kpi-change { display: none; } }
 </style>

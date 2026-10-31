@@ -17,6 +17,8 @@ const props = defineProps<{
   /** per parameter: why its value does not fit (required, refused by the server) */
   errors?: Record<string, string>
   busy?: boolean
+  /** what the button says, where it is not a report that is shown */
+  submitLabel?: string
 }>()
 const emit = defineEmits<{
   (e: 'update:modelValue', v: Record<string, FormValue>): void
@@ -131,7 +133,7 @@ const anyRequired = (ps: ReportParameter[]) => ps.some((p) => p.required)
     <div class="pact">
       <button type="submit" class="primary" :disabled="busy">
         <LoaderCircle v-if="busy" :size="14" class="spin" /><Eye v-else :size="14" />
-        {{ $t('report.viewReport') }}
+        {{ submitLabel ?? $t('report.viewReport') }}
       </button>
       <p v-if="anyRequired(parameters)" class="pmsg legend"><span class="req" aria-hidden="true">*</span> {{ $t('report.requiredLegend') }}</p>
     </div>

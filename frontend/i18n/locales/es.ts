@@ -10,6 +10,7 @@ export default {
     viewer: 'Visor',
     analysis: 'Análisis',
     reports: 'Informes',
+    dashboards: "Dashboards",
     assistant: 'Asistente',
     connections: 'Conexiones',
     scripting: 'Scripts',

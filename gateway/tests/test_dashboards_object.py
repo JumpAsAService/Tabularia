@@ -844,3 +844,104 @@ def test_the_assistant_s_search_links_a_dashboard_to_its_page():
     from app.services.agent.read_tools import _link
 
     assert _link("dashboard", 7, "D") == "/dashboard?id=7"
+
+
+# ── the Dashboards tab ────────────────────────────────────────────────────────
+def _on_board(session, name, project_id, description="", owner_id=None, updated_days_ago=0) -> Dashboard:
+    at = datetime.now(timezone.utc) - timedelta(days=updated_days_ago)
+    d = Dashboard(name=name, description=description, project_id=project_id, owner_id=owner_id, created_at=at, updated_at=at)
+    session.add(d)
+    session.commit()
+    session.refresh(d)
+    return d
+
+
+def _names(page) -> list[str]:
+    return [x["name"] for x in page["items"]]
+
+
+def test_the_tab_puts_first_the_dashboards_read_by_the_most_people(app, session):
+    sales = make_project(session, name="Sales").id
+    boss = _sign_in(app, session, "boss@x.local", is_superuser=True)
+    quiet = _on_board(session, "A quiet one", sales, updated_days_ago=9)
+    _on_board(session, "B fresh, never opened", sales)
+    popular = _on_board(session, "C popular", sales, updated_days_ago=9)
+    busy = _on_board(session, "D one busy reader", sales, updated_days_ago=9)
+    old_star = _on_board(session, "E read long ago", sales, updated_days_ago=9)
+    readers = [make_user(session, email=f"reader{i}@x.local") for i in range(3)]
+    now = datetime.now(timezone.utc)
+    for u in readers:  # three people today
+        dashboards.record_open(session, popular, u, at=now)
+    for d in range(4):  # one person, four days
+        dashboards.record_open(session, busy, readers[0], at=now - timedelta(days=d))
+    dashboards.record_open(session, quiet, readers[1], at=now - timedelta(days=2))
+    for d in range(40, 50):  # ten openings, all before the window
+        dashboards.record_open(session, old_star, readers[2], at=now - timedelta(days=d))
+
+    page = boss.get("/dashboards/search").json()
+    assert page["total"] == 5
+    # people first; at one person, the openings; at none in the window, the openings ever
+    # (old_star's ten); then the latest changed
+    assert _names(page) == ["C popular", "D one busy reader", "A quiet one", "E read long ago", "B fresh, never opened"]
+    row = {x["name"]: x for x in page["items"]}
+    assert (row["C popular"]["people_30d"], row["C popular"]["opens_30d"], row["C popular"]["views_total"]) == (3, 3, 3)
+    assert (row["D one busy reader"]["people_30d"], row["D one busy reader"]["opens_30d"]) == (1, 4)
+    assert (row["E read long ago"]["people_30d"], row["E read long ago"]["views_total"]) == (0, 10)
+    assert row["B fresh, never opened"]["last_viewed_at"] is None and row["C popular"]["last_viewed_at"]
+    assert _names(boss.get("/dashboards/search?sort=name").json())[0] == "A quiet one"
+    assert _names(boss.get("/dashboards/search?sort=updated").json())[0] == "B fresh, never opened"
+    assert boss.get("/dashboards/search?sort=popular").status_code == 422
+
+
+def test_the_tab_shows_only_the_dashboards_one_sees(app, session):
+    sales, hr = make_project(session, name="Sales").id, make_project(session, name="HR").id
+    reader = _sign_in(app, session, "reader@x.local")
+    nobody = _sign_in(app, session, "nobody@x.local")
+    make_permission(session, user_id=_ids(session)["reader@x.local"], project_id=sales, capability="view")
+    _on_board(session, "Monthly", sales)
+    _on_board(session, "Salaries", hr)
+    page = reader.get("/dashboards/search").json()
+    assert page["total"] == 1 and _names(page) == ["Monthly"]
+    assert not page["items"][0]["editable"]
+    assert nobody.get("/dashboards/search").json() == {"items": [], "total": 0}
+    # a search over what cannot be seen finds nothing, its folder's name included
+    assert reader.get("/dashboards/search", params={"q": "salaries"}).json() == {"items": [], "total": 0}
+    assert reader.get("/dashboards/search", params={"q": "hr"}).json() == {"items": [], "total": 0}
+
+
+def test_the_tab_searches_name_description_and_folders_a_page_at_a_time(app, session):
+    finance = make_project(session, name="Finance")
+    close = make_project(session, name="Close", parent_id=finance.id).id
+    ops = make_project(session, name="Operations").id
+    boss = _sign_in(app, session, "boss@x.local", is_superuser=True)
+    _on_board(session, "Margin", close)
+    _on_board(session, "Stock", ops, description="Warehouse stock by finance code")
+    _on_board(session, "Shipments", ops)
+    _on_board(session, "100%_done", ops)
+    found = lambda q: sorted(_names(boss.get("/dashboards/search", params={"q": q}).json()))
+    assert found("finance") == ["Margin", "Stock"]  # a folder above it, a description
+    assert found("CLOSE") == ["Margin"]  # its own folder, any case
+    assert found("ship") == ["Shipments"]
+    assert found("%") == found("_") == ["100%_done"]  # LIKE's characters are literal
+    assert found("  ") == ["100%_done", "Margin", "Shipments", "Stock"]
+    first = boss.get("/dashboards/search?sort=name&limit=3").json()
+    second = boss.get("/dashboards/search?sort=name&limit=3&offset=3").json()
+    assert first["total"] == second["total"] == 4
+    assert _names(first) + _names(second) == ["100%_done", "Margin", "Shipments", "Stock"]
+
+
+def test_a_row_of_the_tab_says_where_it_lives_who_made_it_and_its_size(app, session):
+    root = make_project(session, name="Finance").id
+    child = make_project(session, name="Close", parent_id=root).id
+    boss = _sign_in(app, session, "boss@x.local", is_superuser=True)
+    content = definition(tiles=[kpi()], datasets=[sql_dataset(sql="SELECT 1")],
+                         parameters=[{"name": "region", "type": "text"}, {"name": "year", "type": "number"}])
+    assert _create(boss, child, "Margin", content).status_code == 201
+    row = boss.get("/dashboards/search").json()["items"][0]
+    assert row["folder_path"] == ["Finance", "Close"]
+    assert row["owner_name"] == "boss@x.local"
+    assert (row["datasets"], row["parameters"], row["tiles"]) == (1, 2, 1)
+    assert row["editable"] is True
+    guest = _sign_in(app, session, "guest@x.local", is_observer=True)
+    make_permission(session, user_id=_ids(session)["guest@x.local"], project_id=root, capability="view")
+    assert guest.get("/dashboards/search").json()["items"][0]["owner_name"].startswith("b***@")

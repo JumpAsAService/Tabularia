@@ -60,9 +60,9 @@ def can_see(session: Session, user: User, dashboard: Dashboard) -> bool:
     return is_admin(session, user) or perm_service.has_capability(session, user, dashboard.project_id, Capability.VIEW)
 
 
-def visible_query(session: Session, user: User, project_ids: Optional[set[int]] = None):
-    """A select of the dashboards this person sees (in `project_ids` when given), by name, or
-    None when there are none."""
+def visible_query(session: Session, user: User, project_ids: Optional[set[int]] = None, ordered: bool = True):
+    """A select of the dashboards this person sees (in `project_ids` when given), by name
+    unless `ordered` is false, or None when there are none."""
     stmt = select(Dashboard)
     if not is_admin(session, user):
         readable = set(perm_service.readable_project_ids(session, user))
@@ -73,7 +73,7 @@ def visible_query(session: Session, user: User, project_ids: Optional[set[int]] 
         stmt = stmt.where(Dashboard.project_id.in_(readable))  # type: ignore[attr-defined]
     elif project_ids is not None:
         stmt = stmt.where(Dashboard.project_id.in_(project_ids))  # type: ignore[attr-defined]
-    return stmt.order_by(Dashboard.name)
+    return stmt.order_by(Dashboard.name) if ordered else stmt
 
 
 def get_visible(session: Session, user: User, dashboard_id: int) -> Dashboard:
@@ -515,6 +515,17 @@ async def numbers(session: Session, user: User, definition: dict, asked: Asked, 
 
 
 # ── who opened it ────────────────────────────────────────────────────────────
+def recent_counts():
+    """A subquery: per dashboard opened in the window, the people (`people`) and the openings, a
+    person once a day (`opens`). The window is the reports' (services/report_views.py)."""
+    return (select(DashboardView.dashboard_id.label("dashboard_id"),
+                   func.count(func.distinct(DashboardView.user_id)).label("people"),
+                   func.count(DashboardView.id).label("opens"))
+            .where(DashboardView.day >= report_views.window_start())
+            .group_by(DashboardView.dashboard_id)
+            .subquery())
+
+
 def record_open(session: Session, dashboard: Dashboard, user: User, at: Optional[datetime] = None) -> bool:
     """`user` opened `dashboard` now. True when it is their first opening of the day, which
     counts (services/report_views.py says why, and the window); the latest opening is noted

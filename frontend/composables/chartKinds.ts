@@ -78,18 +78,18 @@ export function niceMax(v: number): number {
   return 10 * magnitude
 }
 
-const tooltip = (c: ChartUi) => ({ backgroundColor: c.panel2, borderColor: c.border, textStyle: { color: c.text, fontSize: 12 } })
-const legend = (c: ChartUi) => ({ textStyle: { color: c.muted, fontSize: 11 }, top: 0, icon: 'circle' })
+export const tooltip = (c: ChartUi) => ({ backgroundColor: c.panel2, borderColor: c.border, textStyle: { color: c.text, fontSize: 12 } })
+export const legend = (c: ChartUi) => ({ textStyle: { color: c.muted, fontSize: 11 }, top: 0, icon: 'circle' })
 // a long category is cut with an ellipsis (the tooltip has it whole): uncut, the labels
 // overlapped and all but one were hidden, that one clipped at the chart's edge
-const axis = (c: ChartUi) => ({
+export const axis = (c: ChartUi) => ({
   axisLabel: { color: c.muted, hideOverlap: true, interval: 0, width: 120, overflow: 'truncate' as const },
   axisLine: { lineStyle: { color: c.border } },
   axisTick: { show: false },
 })
 // categories along the side: a long name is cut with an ellipsis (the tooltip has it whole)
 // instead of squeezing the plot into a strip
-const sideLabels = (c: ChartUi) => ({ color: c.muted, width: 180, overflow: 'truncate' as const })
+export const sideLabels = (c: ChartUi) => ({ color: c.muted, width: 180, overflow: 'truncate' as const })
 const valueAxis = (k: KindCtx, short = false) => ({
   type: 'value' as const,
   axisLabel: { color: k.ui.muted, formatter: (v: number) => (short ? k.short(v) : k.num(v)) },
@@ -537,6 +537,8 @@ export interface Spark {
 
 export interface KpiChange {
   ratio: number
+  /** the change already written (a dashboard's tile, by the server): the card does not write its own */
+  shown?: string
   /** what the change compares: «2025-12 vs 2025-11», «vs target» */
   text: string
 }

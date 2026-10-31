@@ -120,7 +120,11 @@ owner, `current_version`; every save is a version.
 
 - 12 columns; row height one unit of 40 px; a tile has a minimum per type.
 - **Wide (≥ 1100 px)** as drawn. **Medium (700–1099 px)** on 6 columns, widths halved and
-  rounded up. **Narrow (< 700 px)** one column, in the order top to bottom and left to right.
+  rounded up, each tile laid in the order drawn and then taking what is free beside and under it,
+  so that a row ends in no hole. **Narrow (< 700 px)** one column, in the order top to bottom and
+  left to right, a chart at least 6 rows and a table at least 8. The widths are the window's; 10 px
+  between tiles (`GRID_GAP_PX`); a tile hidden by its condition takes no place, and a band only
+  hidden tiles held closes.
 - In the designer: drag to move, handle to resize, snap to the grid, tiles push each other
   rather than overlap, undo and redo as one step, arrows and Delete with the same rule as
   the report designer. Written by hand on the designer's existing pointer code: **no new
@@ -280,8 +284,12 @@ each query costs money, so this is a requirement, not an optimization.
   rows past `DASHBOARDS__CACHE_BUCKET_BYTES`, the room of all of them on the bucket.
 - Without Valkey or the bucket a dashboard works, without the cache. When the broker is that Valkey
   no worker can be reached: the numbers are worked out in the engine's API, one request at a time.
-- The automatic refresh pauses when the tab is hidden and has a little jitter; on an error it
-  keeps the last numbers with the time they are from, and says so.
+- The automatic refresh waits the interval and up to a tenth more, and pauses when the tab is
+  hidden; on an error it keeps the last numbers with the time they are from, and says so. Kept
+  numbers can outlive the interval (5 minutes against one), so a tick first takes what is shared,
+  and only when that brings nothing newer than the screen has does it ask for the source: the first
+  screen to find out reads, under the limit of 10 seconds, and the others find it shared at their
+  tick. About one read per interval, however many people watch.
 
 ### A click filters the others
 

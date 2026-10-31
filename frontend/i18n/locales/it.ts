@@ -10,6 +10,7 @@ export default {
     viewer: 'Viewer',
     analysis: 'Analisi',
     reports: 'Report',
+    dashboards: "Dashboard",
     assistant: 'Assistente',
     connections: 'Connessioni',
     scripting: 'Scripting',

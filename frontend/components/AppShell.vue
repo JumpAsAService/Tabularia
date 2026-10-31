@@ -33,6 +33,7 @@ import {
   Terminal,
   Server,
   FileChartColumn,
+  LayoutDashboard,
   ChartNoAxesCombined,
   Code2,
 } from 'lucide-vue-next'
@@ -102,13 +103,14 @@ const scriptingTab = computed(() => scriptingEditor.available.value || registrie
 type NavLink = { to: string; label: string; icon: Component }
 type NavMenu = { menu: 'analysis' | 'admin'; label: string; icon: Component; links: NavLink[] }
 
-/* Analysis: the two places where data is read rather than prepared, the Viewer and the
-   Reports tab. The bar had no room for one more item (measured on Chrome and Firefox: at
+/* Analysis: the places where data is read rather than prepared, the Viewer, the Reports
+   and the Dashboards tabs. The bar had no room for one more item (measured on Chrome and Firefox: at
    1440px only the English bar fitted, with 44px to spare, and the item takes 83 to 98px
    by language), so the Viewer's place became a menu with both, as Administration. */
 const analysisLinks = computed<NavLink[]>(() => [
   { to: '/viewer', label: t('nav.viewer'), icon: PieChart },
   { to: '/reports', label: t('nav.reports'), icon: FileChartColumn },
+  { to: '/dashboards', label: t('nav.dashboards'), icon: LayoutDashboard },
 ])
 
 /* Administration: five destinations that in the product are ONE place, and in the bar
