@@ -22,6 +22,8 @@ const props = defineProps<{
   /** the fields the expression can name; null: not known (none are checked) */
   fields?: DField[] | null
   params?: string[]
+  /** the report's datasets and the groups of the table it is in: what an aggregate may name */
+  scopes?: { datasets: string[]; groups: string[] }
   /** a text item's value: plain text, or an expression when it starts with «=» */
   textMode?: boolean
   placeholder?: string
@@ -155,6 +157,14 @@ function compute(force = false): Option[] {
     const rest = /^[A-Za-z0-9_]*"?\s*\)?/.exec(v.slice(c))?.[0] ?? ''
     return (props.params ?? []).filter((p) => p.toLowerCase().startsWith(q))
       .map((p) => ({ label: p, insert: `"${p}")`, detail: 'param', kind: 'param' as const, replaceTo: c + rest.length }))
+  }
+  if (ctx.kind === 'scope') {
+    const q = ctx.prefix.toLowerCase()
+    const rest = /^[^"]*"?\s*\)?/.exec(v.slice(c))?.[0] ?? ''
+    const named = (names: string[], detail: string) => names.filter((n) => n.toLowerCase().startsWith(q))
+      .map((n) => ({ label: n, insert: `"${n.replaceAll('"', '""')}")`, detail, kind: 'param' as const, replaceTo: c + rest.length }))
+    return [...(ctx.of === 'dataset' ? [] : named(props.scopes?.groups ?? [], t('reportDesigner.expr.scopeGroup'))),
+      ...(ctx.of === 'group' ? [] : named(props.scopes?.datasets ?? [], t('reportDesigner.expr.scopeDataset')))]
   }
   if (ctx.kind === 'name' || force) {
     const q = ctx.kind === 'name' ? ctx.prefix.toUpperCase() : ''
@@ -329,6 +339,7 @@ defineExpose({ focus: () => ta.value?.focus() })
         >
           <span class="rx-oicon" :class="o.kind"><RdFieldIcon :type="o.kind === 'field' ? o.detail : o.kind" :size="12" /></span>
           <span class="rx-olabel">{{ o.kind === 'fn' ? o.detail : o.label }}</span>
+          <span v-if="o.kind === 'param' && o.detail !== 'param'" class="rx-odesc">{{ o.detail }}</span>
           <span v-if="o.desc && i === active" class="rx-odesc">{{ o.desc }}</span>
         </li>
       </ul>

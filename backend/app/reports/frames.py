@@ -17,7 +17,9 @@ aggregated together, one GROUP BY for every group of a level; the evaluator
 total, and walks the rest of the expression itself — the arithmetic around the aggregates,
 the formats, the labels — as before. Sums and averages of decimals are folded by Python
 over the values DuckDB computed, in the rows' order: Python's `sum` compensates its
-rounding in that order, and a total is then the interpreter's to the last bit.
+rounding in that order, and a total is then the interpreter's to the last bit. A LOOKUP's
+rows by key are a family too; over every row of a dataset, its results are a table DuckDB
+joins (`Rel.joined`), and where the evaluator walks, a key in a dict finds its member.
 
 Whatever cannot be done here with the interpreter's result for certain raises `Fallback`,
 and the model (app/reports/model.py) works that item out the interpreter's way, over the
@@ -500,6 +502,7 @@ class Store:
         self._n = 0
         self._rels: dict[str, tuple[int, Rel]] = {}
         self._rows: dict[str, tuple[int, SqlRows]] = {}
+        self._joins: dict[tuple, tuple] = {}  # the results of a LOOKUP by key, as tables (Rel.joined)
 
     def close(self) -> None:
         try:
@@ -565,6 +568,24 @@ class Store:
 
         return Live()
 
+    def plain(self, data: dict[str, Any]) -> Mapping[str, Any]:
+        """Every dataset by name as Python's rows, as they are now: for an expression the
+        interpreter works out alone, where DuckDB is no more to be asked."""
+        store = self
+
+        class Plain(Mapping):
+            def __getitem__(self, name: str) -> Any:
+                table = store.tables.get(name)
+                return table.rows() if table is not None else data[name].rows
+
+            def __iter__(self) -> Iterator[str]:
+                return iter(data)
+
+            def __len__(self) -> int:
+                return len(data)
+
+        return Plain()
+
     def rows(self, dataset: str) -> "SqlRows":
         """A dataset's rows, in the order they were read."""
         rel = self.rel(dataset)
@@ -594,13 +615,60 @@ class Rel:
     def translate(self, node: ex.Node, ctx: ex.Context, rownumber: str | None = None) -> rsql.Sql:
         """The expression over a row of this dataset; constants evaluated in `ctx` (its
         scopes are those the interpreter would have)."""
-        const_ctx = ctx.at(row=None)
+        const_ctx = ctx.at(row=None, dataset=self.dataset)
         evaluate = ex.Evaluator()
         try:
             return rsql.Translator(self.cols, self.store.loc, lambda n: evaluate(n, const_ctx), self, rownumber,
-                                   datasets=frozenset(ctx.datasets) if ctx.datasets else self.store.names)(node)
+                                   datasets=frozenset(ctx.datasets) if ctx.datasets else self.store.names,
+                                   joined=lambda n, key: self.joined(n, key, const_ctx))(node)
         except rsql.Untranslatable as e:
             raise Fallback(str(e)) from None
+
+    def joined(self, node: ex.Call, key: rsql.Sql, ctx: ex.Context) -> rsql.Sql:
+        """A LOOKUP over every row of this dataset (a filter, a group's key, a calculated field,
+        what an aggregate takes): the results worked out once per key of the dataset it reads,
+        by the very code of the interpreter's walk, as a table of unique keys; a row reads its
+        own by its key. DuckDB joins them, whatever the rows on either side."""
+        if key.kind == NULL:
+            return rsql.lit(None)
+        name = node.args[3].value if len(node.args) > 3 else self.dataset  # type: ignore[attr-defined]
+        rows = self.store.rows(name)
+        memo = (name, rows.family.rel.table.version, _canon(node.args[1]), _canon(node.args[2]))
+        hit = self.store._joins.get(memo)
+        if hit is None:
+            hit = self.store._joins[memo] = self._join_table(node, rows, name, ctx)
+        table, kind, value_kind = hit
+        if table is None or value_kind == NULL:
+            return rsql.lit(None)
+        same = key.kind == kind or {key.kind, kind} <= {FLOAT, NUM} or {key.kind, kind} == {DATE, DATETIME}
+        if not same:  # ints with floats are equal by value only in Python's exact way; other kinds, never
+            raise Fallback(f"a LOOKUP of a {key.kind} in keys of kind {kind}")
+        k = f"({key.text} + CAST(0.0 AS DOUBLE))" if key.kind in (FLOAT, NUM) else key.text
+        value = f"(SELECT m.v FROM {table} m WHERE m.k = ({k}))"
+        if value_kind == NUM:
+            return rsql.Sql(value, NUM, f"(SELECT m.f FROM {table} m WHERE m.k = ({k}))")
+        return rsql.Sql(value, value_kind)
+
+    def _join_table(self, node: ex.Call, rows: "SqlRows", name: str, ctx: ex.Context) -> tuple:
+        on = ctx.at(row=None, scopes=[], running=None, running_index=-1, rownumber=None, previous=None, groups=(),
+                    dataset=name)
+        fam = rows.family_by(node.args[1], on)
+        if not fam.members:
+            return None, NULL, NULL
+        keys = _classify(fam.keys)
+        if keys is None:  # pragma: no cover — one expression's values are of one kind in columns
+            raise Fallback("a key field of more than one kind")
+        try:
+            values = _classify(fam.results(node.args[2], on, ex.Evaluator()))
+        except ex.EvalError as e:
+            raise Fallback(str(e)) from None
+        if values is None:
+            raise Fallback("a LOOKUP whose results are of more than one kind")
+        arrays, names = [keys[1], values[1]], ["k", "v"]
+        if values[2] is not None:
+            arrays.append(values[2])
+            names.append("f")
+        return self.store.register("look", pa.Table.from_arrays(arrays, names=names)), keys[0], values[0]
 
     def values(self, s: rsql.Sql) -> tuple[pa.Array, pa.Array | None]:
         """The expression's value on every row, in the rows' order, and for NUM its flags."""
@@ -711,14 +779,34 @@ class Family:
 
     # what the evaluator asks
     def aggregate(self, node: ex.Call, ctx: ex.Context) -> list:
-        named = ex.scope_dataset(node, ctx.datasets)
-        args = node.args[:-1] if named is not None else node.args
-        key = node.name + "|" + (_canon(args[0]) if args else "")
+        fn, arg = ex.measure(node, ex.scope_name(node, ctx.datasets, ctx.groups) is not None)
+        key = fn + "|" + (_canon(arg) if arg is not None else "")
         hit = self._aggs.get(key)
         if hit is None:
-            hit = self._aggregate(node.name, args[0] if args else None, ctx)
+            hit = self._aggregate(fn, arg, ctx)
             self._aggs[key] = hit
         return hit
+
+    def results(self, node: ex.Node, ctx: ex.Context, evaluate: ex.Evaluator) -> list:
+        """What an expression gives on each member's rows with no current row: for a field or
+        an aggregate, the very lists the walk reads."""
+        if isinstance(node, ex.Field):
+            return self.first(node.name)
+        if isinstance(node, ex.Call) and node.name in ex.AGGREGATES:
+            return self.aggregate(node, ctx)
+        if not ex.is_aggregate(node):  # the fields of each member's first row: DuckDB works them all out at once
+            try:
+                s = self.rel.translate(node, ctx)
+                if s.kind != rsql.LIST:
+                    return self.rel.python_values(s, self.perm[self.bounds[:-1]])
+            except Fallback:
+                pass
+        at = ctx.at()
+        out = []
+        for member in self.members:
+            at.scopes = [member]
+            out.append(evaluate(node, at))
+        return out
 
     def _aggregate(self, name: str, arg: ex.Node | None, ctx: ex.Context) -> list:
         k = len(self.members)
@@ -803,17 +891,17 @@ class Family:
 
     def running(self, inner: ex.Call, ctx: ex.Context, i: int) -> list:
         """RUNNING(agg) over a member's rows: expressions._running of their values."""
-        key = (i, inner.name, _canon(inner.args[0]) if inner.args else "")
+        name, arg = ex.measure(inner, False)
+        key = (i, name, _canon(arg) if arg is not None else "")
         hit = self._running.get(key)
         if hit is None:
-            if inner.args:
-                if _has_rownumber(inner.args[0]):
+            if arg is not None:
+                if _has_rownumber(arg):
                     raise Fallback("ROWNUMBER() inside an aggregate")
-                x = self.rel.translate(inner.args[0], ctx.at(row=None, scopes=[], running=None, running_index=-1))
+                x = self.rel.translate(arg, ctx.at(row=None, scopes=[], running=None, running_index=-1))
                 values = self.rel.python_values(x, self.idx(i)) if x.kind != NULL else [None] * self.size(i)
-                name = inner.name
             else:
-                values, name = [1] * self.size(i), "COUNT"
+                values = [1] * self.size(i)
             try:
                 hit = ex._running(name, values)
             except ex.EvalError as e:
@@ -860,6 +948,29 @@ class SqlRows:
     def rows(self) -> list[dict]:
         return self.family.rel.table.rows_at(self.idx)
 
+    def family_by(self, node: ex.Node, ctx: ex.Context) -> Family:
+        """These rows by the value of a LOOKUP's key field, each member in the rows' order;
+        those whose key is NULL equal nothing, and are left out."""
+        rel = self.family.rel
+        s = rel.translate(node, ctx)
+        if s.kind == rsql.LIST:
+            raise Fallback("a parameter of many values as a key")
+        if s.kind == NULL:
+            return Family(rel, np.empty(0, np.int64), np.array([0], np.int64), [])
+        if s.kind in (FLOAT, NUM):  # -0.0 and 0.0 are one key; an int of NUM equals its float
+            s = rsql.Sql(f"({s.text} + CAST(0.0 AS DOUBLE))", FLOAT)
+        values, _ = rel.values(s)
+        values = values.take(pa.array(self.idx, pa.int64()))
+        valid = np.asarray(values.is_valid().to_numpy(zero_copy_only=False), dtype=bool)
+        ids, keys = encode(values.filter(pa.array(valid)))
+        perm = self.idx[valid][lexical([ids], len(ids))]
+        bounds = np.concatenate([[0], np.cumsum(np.bincount(ids, minlength=len(keys)))]).astype(np.int64)
+        return Family(rel, perm, bounds, keys)
+
+    def keyed(self, node: ex.Node, ctx: ex.Context) -> dict:
+        fam = self.family_by(node, ctx)
+        return {ex.lookup_key(k): m for k, m in zip(fam.keys, fam.members)}
+
 
 def _sum_or_mean(name: str, numbers: list) -> Any:
     """expressions._aggregate of numbers that are numbers: the same `sum` over the same
@@ -870,21 +981,7 @@ def _sum_or_mean(name: str, numbers: list) -> Any:
     return total if name == "SUM" else total / len(numbers)
 
 
-def _canon(node: ex.Node) -> str:
-    """An expression written back canonically: the same aggregate in two places is
-    computed once."""
-    if isinstance(node, ex.Lit):
-        return f"L{type(node.value).__name__}:{node.value!r}"
-    if isinstance(node, ex.Field):
-        return f"F{node.name!r}"
-    if isinstance(node, ex.Placeholder):
-        return f"P{node.raw!r}"
-    if isinstance(node, ex.Unary):
-        return f"U{node.op}({_canon(node.arg)})"
-    if isinstance(node, ex.Binary):
-        return f"B{node.op}({_canon(node.left)},{_canon(node.right)})"
-    assert isinstance(node, ex.Call)
-    return f"C{node.name}(" + ",".join(_canon(a) for a in node.args) + ")"
+_canon = ex.canon
 
 
 def _has_rownumber(node: ex.Node) -> bool:
@@ -1147,6 +1244,7 @@ def add_calculated(report: Any, data: dict[str, Any], store: Store, ctx: ex.Cont
         ds = data.get(d.name)
         if ds is None or not d.calculated:
             continue
+        ctx = ctx.at(dataset=d.name)
         for c in d.calculated:
             node = rd.parse(c.expr)
             table = store.tables.get(d.name)
@@ -1168,7 +1266,8 @@ def add_calculated(report: Any, data: dict[str, Any], store: Store, ctx: ex.Cont
                     logger.info("report: dataset «%s», calculated field «%s» by the interpreter: %s", d.name, c.name, e)
             if not done:
                 rows = table.rows() if table is not None else ds.rows
-                c_ctx = ctx.at(scopes=[rows])
+                # by the interpreter, every set of rows too: it is DuckDB that said no
+                c_ctx = ctx.at(scopes=[rows], datasets=store.plain(data))
                 evaluate = ex.Evaluator()
                 values = []
                 for i, row in enumerate(rows):

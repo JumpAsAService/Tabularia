@@ -9,7 +9,7 @@ import assert from 'node:assert/strict'
 
 import { createLiveCheck } from '../composables/reportLiveCheck.ts'
 import { emptyDefinition, problemsOf, problemFromText, withSeen, liveShown, stillReported } from '../composables/reportDesignModel.ts'
-import { checkExpression, renameEverywhere, renameInExpression, stillWriting } from '../composables/reportExpressions.ts'
+import { FN, checkExpression, completionAt, groupName, renameEverywhere, renameInExpression, stillWriting } from '../composables/reportExpressions.ts'
 
 register('./alias-hooks.mjs', import.meta.url)
 const { createDesignStore } = await import('../composables/reportDesignStore.ts')
@@ -236,6 +236,72 @@ test('rename: a dataset named as an aggregate’s scope follows its new name, no
   assert.equal(r('CONCAT([a], "orders")'), 'CONCAT([a], "orders")', 'not an aggregate')
   assert.equal(r('SUM([orders])'), 'SUM([orders])', 'a field with the same name')
   assert.equal(r('SUM([a], "other")'), 'SUM([a], "other")')
+})
+
+test('rename: the scope of SUMIF, COUNTIF and LOOKUP follows; what only looks like one does not', () => {
+  const r = (e) => renameInExpression(e, { dataset: ['orders', 'sales'] })
+  assert.equal(r('SUMIF([a] > 0, [b], "orders")'), 'SUMIF([a] > 0, [b], "sales")')
+  assert.equal(r('COUNTIF([a] > 0, "orders")'), 'COUNTIF([a] > 0, "sales")')
+  assert.equal(r('LOOKUP([a], [b], [c], "orders")'), 'LOOKUP([a], [b], [c], "sales")')
+  assert.equal(r('LOOKUP("orders", [b], [c])'), 'LOOKUP("orders", [b], [c])', 'a key is a value')
+  assert.equal(r('LOOKUP([a], [b], "orders")'), 'LOOKUP([a], [b], "orders")', 'a result is a value')
+  assert.equal(r('SUMIF([a] > 0, "orders")'), 'SUMIF([a] > 0, "orders")', 'the value of SUMIF is no scope')
+  assert.equal(r('PERCENT(SUM([a]), "orders")'), 'PERCENT(SUM([a]), "orders")', 'PERCENT names a group')
+})
+
+test('functions: the new ones complete with their signature, and take the arguments the engine says', () => {
+  for (const [name, sig, min, max] of [['PREVIOUS', 'PREVIOUS(value)', 1, 1], ['LOOKUP', 'LOOKUP(key, key field, result, [dataset])', 3, 4],
+    ['SUMIF', 'SUMIF(condition, value, [dataset or group])', 2, 3], ['COUNTIF', 'COUNTIF(condition, [dataset or group])', 1, 2],
+    ['PERCENT', 'PERCENT(aggregate, [group])', 1, 2]]) {
+    const f = FN.get(name)
+    assert.deepEqual([f.sig, f.min, f.max], [sig, min, max], name)
+  }
+  const ctx = { fields: ['ricavo', 'mese'], params: [] }
+  assert.equal(checkExpression('PREVIOUS([ricavo])', ctx), null)
+  assert.equal(checkExpression('SUM([ricavo]) / SUM([ricavo], "categoria")', ctx), null)
+  assert.equal(checkExpression('PERCENT(SUM([ricavo]), "categoria")', ctx), null)
+  assert.equal(checkExpression('SUMIF(YEAR([mese]) = 2025, [ricavo])', ctx), null)
+  assert.equal(checkExpression('LOOKUP(DATEADD("y", -1, [mese]), [mese], SUM([ricavo]))', ctx), null)
+  assert.equal(checkExpression('PREVIOUS([ricavo], 1)', ctx).code, 'arity')
+  assert.equal(checkExpression('LOOKUP([ricavo])', ctx).code, 'arity')
+  assert.equal(checkExpression('SUMIF([ricavo])', ctx).code, 'arity')
+  assert.equal(checkExpression('SUM([ricavoo])', ctx).code, 'noFieldNear')
+})
+
+test('check: fields of rows elsewhere are the server\'s to judge, nested or not; the rest stays ours', () => {
+  const ctx = { fields: ['ricavo'], params: [] }
+  for (const e of ['SUM([other], "orders")', 'COUNT([other], "orders")', 'SUM(IF([other] > 0, [other]), "orders")',
+    'SUMIF(YEAR([other]) = 2025, [other], "orders")', 'COUNTIF([other] > 0, "orders")', 'LOOKUP([ricavo], [sku], [price], "prices")',
+    'LOOKUP([ricavo], [sku], [price])', '1 + SUM([other], "orders")']) {
+    assert.equal(checkExpression(e, ctx), null, e)
+  }
+  for (const e of ['SUM([other])', 'SUMIF([other] > 0, [ricavo])', 'COUNTIF([other] > 0)', 'CONCAT([other], "orders")',
+    'SUM([other] & "x")', 'IF([other] > 0, "a", "b")']) {
+    assert.equal(checkExpression(e, ctx)?.code, 'noField', e)
+  }
+})
+
+test('completion: inside quotes, a dataset or a group where a call takes one, and nothing elsewhere', () => {
+  const at = (e) => completionAt(e, e.length)
+  assert.deepEqual(at('SUM([x], "ca'), { kind: 'scope', from: 9, prefix: 'ca', of: 'both' })
+  assert.equal(at('COUNT("').kind, 'scope')
+  assert.equal(at('SUMIF([a] > 0, [b], "').of, 'both')
+  assert.equal(at('COUNTIF([a] > 0, "').of, 'both')
+  assert.equal(at('PERCENT(SUM([x]), "').of, 'group')
+  assert.equal(at('LOOKUP([a], [b], [c], "').of, 'dataset')
+  for (const e of ['SUM("', 'SUMIF([a] > 0, "', 'LOOKUP("', 'LOOKUP([a], [b], "', 'IF([a] = "', 'CONCAT([a], "', 'PERCENT("', 'SUM([x] & "']) {
+    assert.equal(at(e).kind, 'none', e)
+  }
+  assert.equal(at('PARAM("').kind, 'param')
+})
+
+test('a group is named by its field, or by the name it is given', () => {
+  assert.equal(groupName({ by: '[categoria]' }), 'categoria')
+  assert.equal(groupName({ by: ' = [a]]b] ' }), 'a]b')
+  assert.equal(groupName({ by: 'YEAR([d])' }), null)
+  assert.equal(groupName({ by: 'YEAR([d])', name: ' anno ' }), 'anno')
+  assert.equal(groupName({ by: '[a]', name: '  ' }), 'a')
+  assert.equal(groupName({ by: '' }), null)
 })
 
 test('rename: a parameter follows in PARAM(), however it is written', () => {

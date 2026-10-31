@@ -10,6 +10,7 @@ import {
   allowedIn, bodyPageHeight, contentWidth, copyItem, emptyDefinition, liveShown, mm1, rowConflicts, samePath, stillStanding, tableHeight,
   tableRows, withSeen, type BandName, type DDefinition, type DItem, type DTable, type DesignProblem, type DField, type InsertKind,
 } from '~/composables/reportDesignModel'
+import { groupName } from '~/composables/reportExpressions'
 import type { CountedRows } from '~/composables/reportRowCount'
 
 const HISTORY = 200
@@ -320,6 +321,13 @@ export function createDesignStore() {
   }
 
   const params = computed(() => doc.value.parameters.map((p) => p.name))
+  /** What an aggregate may name in an expression of this item: the report's datasets, and
+   *  the groups when it belongs to a table. */
+  function scopesOf(id: string | null): { datasets: string[]; groups: string[] } {
+    const item = id ? find(id)?.item : null
+    const groups = item?.type === 'table' ? (item.groups ?? []).map(groupName).filter((n): n is string => !!n) : []
+    return { datasets: doc.value.datasets.map((d) => d.name), groups }
+  }
 
   // ── problems ──
   function problemAt(item: string | null, path: string): DesignProblem | null {
@@ -360,7 +368,7 @@ export function createDesignStore() {
     doc, text, selectedId, selectedBand, selected, problems, zoom, snap, gesture, chartPicker, notice, sideTab, rowCounts,
     undo, redo, canUndo, canRedo, reset, record, quietly,
     find, select, add, remove, duplicate, copy, paste, freeSpot, keepInside, settleRow,
-    datasetOf, fieldsOf, params,
+    datasetOf, fieldsOf, params, scopesOf,
     problemAt, clearProblem, itemsWithProblems, setProblems,
     liveProblems, setLiveProblems, liveAt, liveOf,
   }

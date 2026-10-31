@@ -247,18 +247,23 @@ group's total row) is the value of the group's first row.
 
 Every function with its cases and an example on the sample data, with the result it
 prints, is in [Report functions](report-functions.md), with recipes for a real report:
-the margin percentage, the growth on the month before, the share of a category, running
-totals, thresholds, dates in titles.
+the margin percentage, the growth on the month before, the share of a level you choose,
+the year before, a value from a price list, the sum of a period, running totals,
+thresholds, dates in titles.
 
 | Function | Arguments | Gives |
 |---|---|---|
-| `SUM`, `AVG` | `value, [dataset]` | the sum, the average of the values, NULLs left out |
-| `MIN`, `MAX` | `value, [dataset]` | the smallest, the largest value |
-| `COUNT` | `[value], [dataset]` | how many rows; with a value, how many are not NULL |
-| `COUNTDISTINCT` | `value, [dataset]` | how many different values |
-| `FIRST`, `LAST` | `value, [dataset]` | the value of the first, the last row |
-| `PERCENT` | `aggregate` | the aggregate as a share of the same one level up: a row of its group, a group of the whole. `PERCENT(SUM([amount]))` |
+| `SUM`, `AVG` | `value, [dataset or group]` | the sum, the average of the values, NULLs left out |
+| `MIN`, `MAX` | `value, [dataset or group]` | the smallest, the largest value |
+| `COUNT` | `[value], [dataset or group]` | how many rows; with a value, how many are not NULL |
+| `COUNTDISTINCT` | `value, [dataset or group]` | how many different values |
+| `FIRST`, `LAST` | `value, [dataset or group]` | the value of the first, the last row |
+| `SUMIF` | `condition, value, [dataset or group]` | the sum over the rows where the condition is true: `SUMIF(YEAR([day]) = 2025, [amount])` |
+| `COUNTIF` | `condition, [dataset or group]` | how many rows have the condition true: `COUNTIF([state] = "open")` |
+| `PERCENT` | `aggregate, [group]` | the aggregate as a share of the same one level up, a row of its group, a group of the whole, or of the group named: `PERCENT(SUM([amount]), "region")` |
 | `RUNNING` | `aggregate` | the running total within the group, row after row: `RUNNING(SUM([amount]))` |
+| `PREVIOUS` | `value` | the value on the row above in its group; in a total, on the group before: `[amount] / PREVIOUS([amount]) - 1` |
+| `LOOKUP` | `key, key field, result, [dataset]` | the result on the rows whose key field equals the key: a field of the first, an aggregate of them, NULL if there are none: `LOOKUP([code], [sku], [price], "prices")` |
 | `ROWNUMBER` | | the number of the row within its group, from 1 |
 | `IF` | `condition, value if true, [value if false]` | one value or the other; without the third, NULL |
 | `IFS` | `condition1, value1, condition2, value2, …, [else]` | the value of the first true condition, else the last argument |
@@ -336,7 +341,7 @@ header repeated at the top of every page. Its properties:
 |---|---|
 | **Data** | the dataset; **Rows where**, a condition that keeps some rows; **Order of the rows**, keys with their direction |
 | **Columns** | for each: **Header**, **Value** (an expression), **Width** (millimetres, or automatic), alignment, **Format**, **Total** (**None** until you choose one: **Sum**, **Average**, **Minimum**, **Maximum** or **Count** of the column's value, or an **Expression…**, an aggregate of your own such as `SUM([margine]) / SUM([ricavo])`; printed in the groups' total rows and in the grand total), the style of its cells and its **Conditional formatting** |
-| **Groups** | up to six levels, each with **Group by** (an expression), **Label**, **Order**, **Page break** (none, between groups, after each group), **Header row**, **Total row** and **Keep the last rows with their total** |
+| **Groups** | up to six levels, each with **Group by** (an expression), **Name in expressions** (how an aggregate names the group; a group by a field already has its name), **Label**, **Order**, **Page break** (none, between groups, after each group), **Header row**, **Total row** and **Keep the last rows with their total** |
 | **Layout** | **Show the rows** (off: the groups' totals only), **Grand total at the end**, **Header on every page**, **Alternate row shading** |
 | **Sheet name in Excel** | the table's sheet when the report is downloaded as Excel |
 | **On screen** | **Sort by a column with a click on its header**, **Close and open the groups**: what the reader may do in the viewer |
@@ -444,7 +449,8 @@ its default; a required one asks for a value. **View report** renders it.
 The pages are those of the PDF, drawn by the same renderer, with **Page** to move
 between them (**Page Up**, **Page Down**), the zoom (**+**, **−**, **0** to fit the
 width) and **Fit**. Where the designer allowed it, a click on a column's header sorts the
-table by it (again for descending), and a click on a group's label closes or opens it;
+table by it (again for descending), unless its value depends on that order, as
+[`PREVIOUS`](report-functions.md#previous) does, and a click on a group's label closes or opens it;
 **Reset view** goes back to the report's own order with every group open. **PDF** and
 **Excel** download the report **as shown**: with the values chosen, the sort and the
 groups closed on screen. The API, the flow groups and the notebooks render it in its own

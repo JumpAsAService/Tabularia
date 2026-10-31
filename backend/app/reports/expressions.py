@@ -18,12 +18,21 @@ Semantics:
 - NULL propagates through arithmetic and comparisons, aggregates skip it, a division by
   zero is NULL; `&` writes NULL as nothing, as a spreadsheet does; a condition that is
   NULL is false.
-- An aggregate (SUM AVG MIN MAX COUNT COUNTDISTINCT FIRST LAST) works on the rows of the
-  scope it sits in — the group, the table, the dataset of the item — or on a whole
-  dataset named as its last argument (`SUM([amount], "orders")`). A field outside a row
-  (a group's header or footer) is the value of the scope's first row.
+- An aggregate (SUM AVG MIN MAX COUNT COUNTDISTINCT FIRST LAST, and SUMIF(c, x) and
+  COUNTIF(c), which are SUM(IF(c, x)) and COUNT(IF(c, 1))) works on the rows of the scope it
+  sits in — the group, the table, the dataset of the item — or on what its last argument
+  names: a whole dataset (`SUM([amount], "orders")`) or a group of the table around it
+  (`SUM([amount], "region")`). A field outside a row (a group's header or footer) is the
+  value of the scope's first row.
 - `PERCENT(x)`: x over the same x one level up (a detail row over its group, a group
-  over its parent). `RUNNING(SUM(x))`: from the first row of the group to this one.
+  over its parent); `PERCENT(x, "region")`: over x of that group. `RUNNING(SUM(x))`: from
+  the first row of the group to this one. `PREVIOUS(x)`: x on the row above in the same
+  group, or in a group's total on the group before it under the same parent; NULL on the
+  first.
+- `LOOKUP(key, key field, result[, "dataset"])`: the result on the rows of a whole dataset
+  whose key field equals the key, as anywhere with a set of rows and no current row: an
+  aggregate over them, a field from the first of them. Each is worked out once per key,
+  never row by row; a missing key is NULL, and so is a NULL one.
 - `PAGE()` and `PAGES()` are known only when the pages are laid out: they can only be
   written as text (`"Page " & PAGE()`), and the template fills them in.
 """
@@ -33,7 +42,7 @@ import difflib
 import math
 import re
 from calendar import monthrange
-from dataclasses import dataclass, field
+from dataclasses import dataclass, field, replace
 from datetime import date, datetime, timedelta
 from typing import Any, Callable, Iterable
 
@@ -431,11 +440,11 @@ def field_type(dtype: str | None) -> str:
     return ANY
 
 
-AGGREGATES = frozenset({"SUM", "AVG", "MIN", "MAX", "COUNT", "COUNTDISTINCT", "FIRST", "LAST"})
+AGGREGATES = frozenset({"SUM", "AVG", "MIN", "MAX", "COUNT", "COUNTDISTINCT", "FIRST", "LAST", "SUMIF", "COUNTIF"})
 # name → (min args, max args or None for any)
 ARITY: dict[str, tuple[int, int | None]] = {
-    **{a: (1, 2) for a in AGGREGATES}, "COUNT": (0, 2),
-    "PERCENT": (1, 1), "RUNNING": (1, 1), "ROWNUMBER": (0, 0),
+    **{a: (1, 2) for a in AGGREGATES}, "COUNT": (0, 2), "SUMIF": (2, 3), "COUNTIF": (1, 2),
+    "PERCENT": (1, 2), "RUNNING": (1, 1), "ROWNUMBER": (0, 0), "PREVIOUS": (1, 1), "LOOKUP": (3, 4),
     "IF": (2, 3), "IFS": (2, None), "ISNULL": (1, 1), "COALESCE": (1, None),
     "ROUND": (1, 2), "ABS": (1, 1), "FLOOR": (1, 1), "CEILING": (1, 1), "POWER": (2, 2),
     "UPPER": (1, 1), "LOWER": (1, 1), "LEFT": (2, 2), "RIGHT": (2, 2), "MID": (3, 3), "LEN": (1, 1),
@@ -454,6 +463,8 @@ _USAGE = {
     "DATEADD": 'DATEADD("d", 7, date)', "DATEDIFF": 'DATEDIFF("d", start, end)', "FORMAT": 'FORMAT(value, "#,##0.00")',
     "PARAM": 'PARAM("name")', "POWER": "POWER(number, exponent)", "PERCENT": "PERCENT(SUM([amount]))",
     "RUNNING": "RUNNING(SUM([amount]))", "CONTAINS": 'CONTAINS(text, "part")', "STARTSWITH": 'STARTSWITH(text, "start")',
+    "PREVIOUS": "PREVIOUS([amount])", "LOOKUP": 'LOOKUP(key, key field, result, "dataset")',
+    "SUMIF": "SUMIF(condition, value)", "COUNTIF": "COUNTIF(condition)",
 }
 
 
@@ -479,6 +490,17 @@ class Env:
     want: str | None = None  # the type the place wants (boolean for a condition)
     rownumber: bool = True  # ROWNUMBER() has a value here (not before the rows are in their order)
     running: bool = True  # RUNNING has rows to run over (a table's: not a calculated field)
+    # the table's groups, outermost first (None: one with no name); `reach` of them hold this
+    # place, the others are said by `outside` ({} is the group's name)
+    groups: tuple[str | None, ...] = ()
+    reach: int = 0
+    outside: str = ""
+    # what the row before is here: "row" (a table's row), "group" (a group's total, a chart's
+    # category); None: there is none, for the reason in `no_previous`, or the usual one
+    previous: str | None = None
+    no_previous: str = ""
+    lookup: bool = True  # LOOKUP has its rows here (not the choices of a parameter)
+    in_lookup: bool = False  # the key field or the result of a LOOKUP: on the rows of the key, and no others
 
 
 def _err(node: Node, message: str, name: str | None = None) -> ExpressionError:
@@ -494,6 +516,8 @@ def is_aggregate(node: Node) -> bool:
     if isinstance(node, Call):
         if node.name in AGGREGATES or node.name in ("PERCENT", "RUNNING"):
             return True
+        if node.name == "LOOKUP":  # its key field and its result are on rows of their own
+            return any(is_aggregate(a) for a in node.args[:1])
         return any(is_aggregate(a) for a in node.args)
     if isinstance(node, Unary):
         return is_aggregate(node.arg)
@@ -518,16 +542,67 @@ def fields_of(node: Node) -> set[str]:
     return out
 
 
-def scope_dataset(call: Call, datasets: Iterable[str]) -> str | None:
-    """The dataset an aggregate names as its last argument, if it names one."""
+def calls_in(node: Node) -> Iterable[Call]:
+    """Every function call of the expression."""
+    stack = [node]
+    while stack:
+        n = stack.pop()
+        if isinstance(n, Call):
+            yield n
+            stack.extend(n.args)
+        elif isinstance(n, Unary):
+            stack.append(n.arg)
+        elif isinstance(n, Binary):
+            stack.extend((n.left, n.right))
+
+
+def calls(node: Node, name: str) -> bool:
+    return any(c.name == name for c in calls_in(node))
+
+
+_VALUE_ARGS = {"SUMIF": 2, "COUNTIF": 1}  # the arguments of an aggregate before its scope; the others, one
+
+
+def scope_name(call: Call, datasets: Iterable[str] = (), groups: Iterable[str | None] = ()) -> str | None:
+    """What an aggregate names as its last argument, a dataset or a group, if it names one."""
     if not call.args:
         return None
     last = call.args[-1]
     if not (isinstance(last, Lit) and isinstance(last.value, str)):
         return None
-    if len(call.args) == 2 or (call.name == "COUNT" and len(call.args) == 1 and last.value in set(datasets)):
+    if len(call.args) == _VALUE_ARGS.get(call.name, 1) + 1:
+        return last.value
+    if call.name == "COUNT" and len(call.args) == 1 and (last.value in set(datasets) or last.value in tuple(groups)):
         return last.value
     return None
+
+
+def measure(call: Call, scoped: bool) -> tuple[str, Node | None]:
+    """The plain aggregate a call is and the value it takes: SUMIF and COUNTIF are SUM and
+    COUNT of an IF, the same numbers by construction. No value: COUNT() of the rows."""
+    args = call.args
+    if call.name == "SUMIF":
+        return "SUM", Call(call.pos, call.end, "IF", (args[0], args[1]))
+    if call.name == "COUNTIF":
+        return "COUNT", Call(call.pos, call.end, "IF", (args[0], Lit(call.pos, call.end, 1)))
+    values = args[:-1] if scoped else args
+    return call.name, values[0] if values else None
+
+
+def canon(node: Node) -> str:
+    """An expression written back canonically: the same one in two places is computed once."""
+    if isinstance(node, Lit):
+        return f"L{type(node.value).__name__}:{node.value!r}"
+    if isinstance(node, Field):
+        return f"F{node.name!r}"
+    if isinstance(node, Placeholder):
+        return f"P{node.raw!r}"
+    if isinstance(node, Unary):
+        return f"U{node.op}({canon(node.arg)})"
+    if isinstance(node, Binary):
+        return f"B{node.op}({canon(node.left)},{canon(node.right)})"
+    assert isinstance(node, Call)
+    return f"C{node.name}(" + ",".join(canon(a) for a in node.args) + ")"
 
 
 class _Checker:
@@ -651,8 +726,12 @@ class _Checker:
                                   f"{_usage(name)}", node.pos, node.end - node.pos, name)
         if name in AGGREGATES:
             return self.aggregate(node)
+        if name == "PREVIOUS":
+            return self.previous(node)
+        if name == "LOOKUP":
+            return self.lookup(node)
         if name in ("PERCENT", "RUNNING"):
-            if not self.env.aggregates or self.in_aggregate is not None or self.in_special:
+            if not self.env.aggregates or self.in_aggregate is not None or self.in_special or self.env.in_lookup:
                 raise ExpressionError(f"{name} cannot be written here", node.pos, len(name), name)
             inner = args[0]
             if name == "RUNNING" and not self.env.running:
@@ -660,10 +739,12 @@ class _Checker:
                 raise ExpressionError("RUNNING goes over the rows a table shows: write it in a column of the table, "
                                       "not in a calculated field", node.pos, len(name), name)
             if name == "RUNNING" and not (isinstance(inner, Call) and inner.name in AGGREGATES
-                                          and scope_dataset(inner, self.env.datasets) is None):
+                                          and scope_name(inner, self.env.datasets, self.env.groups) is None):
                 raise _err(inner, "RUNNING takes an aggregate of the group, as RUNNING(SUM([amount]))", name)
             if name == "PERCENT" and not is_aggregate(inner):
                 raise _err(inner, "PERCENT takes an aggregate, as PERCENT(SUM([amount]))", name)
+            if name == "PERCENT" and len(args) > 1:
+                self.percent_of(args[1])
             self.in_special = True
             try:
                 t = self.check(inner)
@@ -705,24 +786,27 @@ class _Checker:
                                   node.pos, len(name), name)
         if self.in_aggregate is not None:
             raise ExpressionError(f"{name} inside another aggregate: write one at a time", node.pos, len(name), name)
-        named = scope_dataset(node, self.env.datasets)
-        if len(args) == 2:
-            last = args[1]
-            if not (isinstance(last, Lit) and isinstance(last.value, str)):
-                raise _err(last, f'the last argument of {name} is the name of a dataset in quotes: {name}([x], "orders")',
-                           name)
-        if named is not None and named not in self.env.datasets:
-            close = difflib.get_close_matches(named, list(self.env.datasets), n=1)
-            hint = f': did you mean "{close[0]}"?' if close else ""
-            raise _err(args[-1], f"there is no dataset «{named}»{hint}", named)
-        if named is None and self.env.header:
+        written = scope_name(node, self.env.datasets, self.env.groups)
+        if len(args) == _VALUE_ARGS.get(name, 1) + 1 and written is None:
+            what = "a dataset or a group" if self.env.groups else "a dataset"
+            example = {"SUMIF": "SUMIF([a] > 0, [x], ", "COUNTIF": "COUNTIF([a] > 0, "}.get(name, f"{name}([x], ")
+            raise _err(args[-1], f'the last argument of {name} is the name of {what} in quotes: {example}"orders")', name)
+        named = self.scope(args[-1], written) if written is not None else None
+        if written is None and self.env.header:
             raise ExpressionError(f'{name} in the page header or footer names its dataset: {name}([x], "orders")',
                                   node.pos, len(name), name)
-        value_args = args[:-1] if named is not None else args
+        value_args = args[:-1] if written is not None else args
         if name != "COUNT" and not value_args:
             raise ExpressionError(f"{name} takes the value to aggregate, as {name}([amount])", node.pos, len(name), name)
         self.in_aggregate = named or ""
         try:
+            if name in _VALUE_ARGS:
+                t = self.check(value_args[0])
+                self.want(value_args[0], t, BOOL, f"{name}: the first argument is a condition — {_usage(name)}")
+                if name == "SUMIF":
+                    t = self.check(value_args[1])
+                    self.want(value_args[1], t, NUM, "SUMIF adds numbers")
+                return NUM
             t = self.check(value_args[0]) if value_args else NUM
         finally:
             self.in_aggregate = None
@@ -732,6 +816,104 @@ class _Checker:
         if name in ("COUNT", "COUNTDISTINCT"):
             return NUM
         return t
+
+    def scope(self, last: Node, written: str) -> str | None:
+        """The dataset an aggregate's last argument names; None for a group that holds this
+        place. Anything else is a mistake, said here."""
+        env = self.env
+        if env.in_lookup:
+            raise _err(last, "an aggregate in LOOKUP works on the rows with the key: it names no dataset or group", written)
+        in_dataset, in_group = written in env.datasets, written in env.groups
+        if in_dataset and in_group:
+            raise _err(last, f"«{written}» is both a dataset and a group of this table: rename the dataset, or give the "
+                             "group a name of its own", written)
+        if in_group:
+            if self.in_special:
+                raise _err(last, f'write the group after the aggregate: PERCENT(SUM([x]), "{written}")', written)
+            self.group_here(last, written)
+            return None
+        if in_dataset:
+            return written
+        known = [*env.datasets, *(g for g in env.groups if g)]
+        close = difflib.get_close_matches(written, known, n=1)
+        hint = f': did you mean "{close[0]}"?' if close else ""
+        if not env.groups:
+            raise _err(last, f"there is no dataset «{written}»{hint}", written)
+        unnamed = ". A group by an expression has no name until you give it one" if None in env.groups else ""
+        raise _err(last, f"there is no dataset or group «{written}»{hint}{unnamed}", written)
+
+    def group_here(self, last: Node, written: str) -> None:
+        """The group holds this place, or the mistake is said."""
+        env = self.env
+        if env.groups.count(written) > 1:
+            raise _err(last, f"two groups of this table are named «{written}»: give one of them a name of its own", written)
+        if env.groups.index(written) >= env.reach:
+            raise _err(last, env.outside.replace("{}", written) or f"the group «{written}» does not hold this place",
+                       written)
+
+    def percent_of(self, last: Node) -> None:
+        """PERCENT's second argument: a group around this place, by name."""
+        if not (isinstance(last, Lit) and isinstance(last.value, str)):
+            raise _err(last, 'the second argument of PERCENT is the name of a group in quotes: '
+                             'PERCENT(SUM([x]), "region")', "PERCENT")
+        if last.value not in self.env.groups:
+            close = difflib.get_close_matches(last.value, [g for g in self.env.groups if g], n=1)
+            hint = f': did you mean "{close[0]}"?' if close else ""
+            raise _err(last, f"PERCENT takes a group of the table, and «{last.value}» is none{hint}", last.value)
+        self.group_here(last, last.value)
+
+    def previous(self, node: Call) -> str:
+        """PREVIOUS(x): x where the row above is, or in the group before."""
+        env, inner = self.env, node.args[0]
+        if env.previous is None:
+            raise ExpressionError(env.no_previous or "PREVIOUS reads the row above among those a table shows: write it "
+                                  "in a column of the table or in its total", node.pos, len("PREVIOUS"), "PREVIOUS")
+        if self.in_aggregate is not None or self.in_special:
+            raise ExpressionError("PREVIOUS inside an aggregate: an aggregate works on its rows in no order; write "
+                                  "the aggregate inside it, as PREVIOUS(SUM([amount]))", node.pos, len("PREVIOUS"), "PREVIOUS")
+        if env.previous == "row" and _plain_aggregate(inner):
+            raise _err(inner, "on a row an aggregate is the same for every row of the group: write PREVIOUS([amount]) "
+                              "here, and PREVIOUS(SUM([amount])) in the column's total", "PREVIOUS")
+        return self.check(inner)
+
+    def lookup(self, node: Call) -> str:
+        """LOOKUP(key, key field, result[, dataset]): the key is here, the others on the
+        rows of the dataset."""
+        env, args = self.env, node.args
+        if not env.lookup:
+            raise ExpressionError("LOOKUP reads another row, and the choices of a parameter have only their own: "
+                                  "join what you need in the dataset's SQL", node.pos, len("LOOKUP"), "LOOKUP")
+        named = None
+        if len(args) == 4:
+            last = args[3]
+            if not (isinstance(last, Lit) and isinstance(last.value, str)):
+                raise _err(last, f"the last argument of LOOKUP is the name of a dataset in quotes: {_usage('LOOKUP')}", "LOOKUP")
+            named = last.value
+            if named not in env.datasets:
+                close = difflib.get_close_matches(named, list(env.datasets), n=1)
+                hint = f': did you mean "{close[0]}"?' if close else ""
+                raise _err(last, f"there is no dataset «{named}»{hint}", named)
+        target = named or self.in_aggregate or env.dataset
+        if target is None or (not named and not self.in_aggregate and env.header):
+            raise ExpressionError(f"LOOKUP here names its dataset: {_usage('LOOKUP')}", node.pos, len("LOOKUP"), "LOOKUP")
+        key = self.check(args[0])
+        if key == LIST:
+            raise _err(args[0], "the key of LOOKUP is one value, and this is a parameter with many values", "LOOKUP")
+        fields = env.datasets[target] if target in env.datasets else env.fields
+        rows = replace(env, fields=fields, dataset=target, want=None, header=False, page=False, rownumber=False,
+                       running=False, groups=(), reach=0, previous=None, in_lookup=True,
+                       no_previous="PREVIOUS has no row above among the rows of a LOOKUP")
+        field = _Checker(replace(rows, aggregates=False)).check(args[1])
+        result = _Checker(replace(rows, aggregates=True)).check(args[2])
+        family = {DATETIME: DATE}
+        a, b = family.get(key, key), family.get(field, field)
+        if ANY not in (a, b) and NULL not in (a, b) and a != b:
+            raise _err(args[0], f"LOOKUP compares {_article(key)} with {_article(field)}: they are of different types, and "
+                                "would never be equal. Make them one type, as TEXT([code])", "LOOKUP")
+        if LIST in (field, result):
+            raise _err(args[1 if field == LIST else 2], "LOOKUP works on one value, and this is a parameter with many values",
+                       "LOOKUP")
+        return result
 
     def scalar(self, node: Call, types: list[str]) -> str:
         name, args = node.name, node.args
@@ -815,6 +997,22 @@ class _Checker:
         raise AssertionError(name)  # pragma: no cover — every name of ARITY is handled above
 
 
+def _plain_aggregate(node: Node) -> bool:
+    """An aggregate that is one value for all the rows it sits in: not one that follows the
+    row (PERCENT, RUNNING), nor one that is on rows of its own (LOOKUP's result)."""
+    if isinstance(node, Call):
+        if node.name in AGGREGATES:
+            return True
+        if node.name in ("PERCENT", "RUNNING"):
+            return False
+        return any(_plain_aggregate(a) for a in (node.args[:1] if node.name == "LOOKUP" else node.args))
+    if isinstance(node, Unary):
+        return _plain_aggregate(node.arg)
+    if isinstance(node, Binary):
+        return _plain_aggregate(node.left) or _plain_aggregate(node.right)
+    return False
+
+
 def _article(t: str) -> str:
     return {NUM: "a number", TEXT: "a text", DATE: "a date", DATETIME: "a date", BOOL: "a condition"}.get(t, t)
 
@@ -859,7 +1057,10 @@ class Context:
     scopes: the sets of rows from the outermost (the table or dataset) to the innermost
     (the current group) — aggregates read the last; running/running_index: the rows a
     RUNNING total goes over and how far; datasets: every dataset by name;
-    params: the parameters' values; memo: shared between the contexts of one render.
+    params: the parameters' values; memo: shared between the contexts of one render;
+    dataset: the item's, the one a LOOKUP reads when it names none; groups: the names of the
+    table's groups, scopes[i + 1] holding the rows of the i-th; previous: a group's total,
+    the context of the total before it (a row's is in running/running_index).
 
     A set of rows is a list of dicts, or rows that stay in DuckDB (frames.SqlRows): those
     answer an aggregate, the first row's field and a running total themselves."""
@@ -876,6 +1077,9 @@ class Context:
     report: str = ""
     memo: dict = field(default_factory=dict)
     ph_context: ph.Context | None = None
+    dataset: str | None = None
+    groups: tuple[str | None, ...] = ()
+    previous: "Context | None" = None
 
     def at(self, **changes: Any) -> "Context":
         """The same context with some fields changed (the memo stays shared)."""
@@ -933,6 +1137,22 @@ def compare_equal(a: Any, b: Any) -> bool:
     if isinstance(a, bool) and isinstance(b, bool) or isinstance(a, str) and isinstance(b, str):
         return a == b
     return False
+
+
+def lookup_key(v: Any) -> tuple | None:
+    """`=` of the language as a dict's key: numbers by value, a date as its midnight, values of
+    different kinds different. None for what equals nothing (NULL)."""
+    if v is None:
+        return None
+    if isinstance(v, bool):
+        return ("b", v)
+    if isinstance(v, (int, float)):
+        return ("n", v) if v == v else None
+    if isinstance(v, str):
+        return ("t", v)
+    if isinstance(v, date):
+        return ("d", _as_datetime(v))
+    return None
 
 
 def _kind(v: Any) -> str:
@@ -1198,44 +1418,129 @@ class Evaluator:
         finally:
             ctx.row = saved
 
-    def _aggregate(self, node: Call, ctx: Context, rows: list[dict] | None = None) -> Any:
-        named = scope_dataset(node, ctx.datasets)
-        if rows is None:
-            if named is not None:
-                rows = ctx.datasets.get(named, [])
-            else:
-                rows = ctx.scopes[-1] if ctx.scopes else ([ctx.row] if ctx.row is not None else [])
+    def _aggregate(self, node: Call, ctx: Context) -> Any:
+        named = scope_name(node, ctx.datasets, ctx.groups)
+        whole = False
+        if named is None:
+            rows = ctx.scopes[-1] if ctx.scopes else ([ctx.row] if ctx.row is not None else [])
+        elif named in ctx.groups:
+            level = ctx.groups.index(named) + 1
+            if level >= len(ctx.scopes):  # a total outside the group: the grand total, say
+                return None
+            rows = ctx.scopes[level]
+        else:
+            rows = ctx.datasets.get(named, [])
+            whole = True
         if not isinstance(rows, list):  # rows that stay in DuckDB (app/reports/frames.py)
             return rows.aggregate(node, ctx)
-        args = node.args[:-1] if named is not None else node.args
         key = (id(node), id(rows))
         hit = ctx.memo.get(key)
         if hit is not None and hit[0] is rows and hit[1] is node:
             return hit[2]
-        if not args:
+        fn, arg = measure(node, named is not None)
+        if arg is None:
             value = len(rows)
         else:
-            value = _aggregate(node.name, self._values(args[0], ctx, rows))
+            value = _aggregate(fn, self._values(arg, ctx.at(dataset=named) if whole else ctx, rows))
         # the rows and the tree are kept alive with the key: neither id is reused while it is here
         ctx.memo[key] = (rows, node, value)
         return value
+
+    def _percent(self, node: Call, ctx: Context) -> Any:
+        inner = node.args[0]
+        up = None
+        if len(node.args) > 1:
+            name = node.args[1].value  # type: ignore[attr-defined]
+            level = ctx.groups.index(name) + 1 if name in ctx.groups else len(ctx.scopes)
+            if level >= len(ctx.scopes):  # outside the group
+                return None
+            up = ctx.scopes[:level + 1]
+        if ctx.row is not None:
+            num = self(inner, ctx.at(scopes=[*ctx.scopes, [ctx.row]], row=None))
+            den = self(inner, ctx.at(row=None) if up is None else ctx.at(row=None, scopes=up))
+        else:
+            num = self(inner, ctx)
+            if up is not None:
+                den = self(inner, ctx.at(scopes=up))
+            else:
+                den = self(inner, ctx.at(scopes=ctx.scopes[:-1])) if len(ctx.scopes) > 1 else num
+        if num is None or den is None:
+            return None
+        n, d = _num(num, "PERCENT"), _num(den, "PERCENT")
+        return None if d == 0 else n / d
+
+    def _previous(self, node: Call, ctx: Context) -> Any:
+        """The same expression one place back: on a row, the row above it among those of its
+        group; in a total, the total before it, already built with its own rows."""
+        inner = node.args[0]
+        if ctx.row is None:
+            return None if ctx.previous is None else self(inner, ctx.previous)
+        i = ctx.running_index
+        if i <= 0 or not isinstance(ctx.running, list):
+            return None
+        kept = ctx.row, ctx.rownumber
+        ctx.row, ctx.running_index = ctx.running[i - 1], i - 1
+        ctx.rownumber = None if ctx.rownumber is None else ctx.rownumber - 1
+        try:
+            return self(inner, ctx)
+        finally:
+            (ctx.row, ctx.rownumber), ctx.running_index = kept, i
+
+    def _lookup(self, node: Call, ctx: Context) -> Any:
+        args = node.args
+        k = lookup_key(self(args[0], ctx))
+        if k is None:
+            return None
+        name = args[3].value if len(args) > 3 else ctx.dataset  # type: ignore[attr-defined]
+        rows = ctx.datasets.get(name) if name is not None else None
+        if rows is None:
+            raise EvalError(f"LOOKUP: the dataset «{name}» is not read here")
+        memo = ("lookup", id(node), name)
+        hit = ctx.memo.get(memo)
+        if hit is None or hit[0] is not node or hit[1] is not rows:
+            # the result is on the rows of the key: nothing of the place the LOOKUP sits in
+            on = ctx.at(row=None, scopes=[], running=None, running_index=-1, rownumber=None, previous=None, groups=(),
+                        dataset=name)
+            hit = (node, rows, self._keyed(args[1], on, rows), on, {})
+            ctx.memo[memo] = hit
+        _, _, members, on, results = hit
+        member = members.get(k)
+        if member is None:
+            return None
+        if k not in results:
+            on.scopes = [member]
+            results[k] = self(args[2], on)
+        return results[k]
+
+    def _keyed(self, field_node: Node, ctx: Context, rows: Any) -> dict:
+        """The rows of a dataset by the value of a LOOKUP's key field, in their order."""
+        memo = ("keyed", canon(field_node), ctx.dataset)
+        hit = ctx.memo.get(memo)
+        if hit is not None and hit[0] is rows:
+            return hit[1]
+        if isinstance(rows, list):
+            members: dict = {}
+            at = ctx.at()
+            for r in rows:
+                at.row = r
+                k = lookup_key(self(field_node, at))
+                if k is not None:
+                    members.setdefault(k, []).append(r)
+        else:  # rows that stay in DuckDB
+            members = rows.keyed(field_node, ctx)
+        ctx.memo[memo] = (rows, members)
+        return members
 
     def _call(self, node: Call, ctx: Context) -> Any:
         name, args = node.name, node.args
         if name in AGGREGATES:
             return self._aggregate(node, ctx)
         if name == "PERCENT":
-            inner = args[0]
-            if ctx.row is not None:
-                num = self(inner, ctx.at(scopes=[*ctx.scopes, [ctx.row]], row=None))
-                den = self(inner, ctx.at(row=None))
-            else:
-                num = self(inner, ctx)
-                den = self(inner, ctx.at(scopes=ctx.scopes[:-1])) if len(ctx.scopes) > 1 else num
-            if num is None or den is None:
-                return None
-            n, d = _num(num, "PERCENT"), _num(den, "PERCENT")
-            return None if d == 0 else n / d
+            return self._percent(node, ctx)
+        if name == "PREVIOUS":
+            return self._previous(node, ctx)
+        if name == "LOOKUP":
+            return self._lookup(node, ctx)
         if name == "RUNNING":
             inner = args[0]
             assert isinstance(inner, Call)
@@ -1249,8 +1554,9 @@ class Evaluator:
             key = ("running", id(inner), id(rows))
             hit = ctx.memo.get(key)
             if hit is None or hit[0] is not rows or hit[1] is not inner:
-                values = self._values(inner.args[0], ctx, rows) if inner.args else [1] * len(rows)
-                hit = (rows, inner, _running(inner.name if inner.args else "COUNT", values))
+                fn, arg = measure(inner, False)
+                values = self._values(arg, ctx, rows) if arg is not None else [1] * len(rows)
+                hit = (rows, inner, _running(fn, values))
                 ctx.memo[key] = hit
             return hit[2][min(idx, len(rows) - 1)]
         if name == "ROWNUMBER":

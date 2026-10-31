@@ -16,6 +16,7 @@ import RdSection from '~/components/report/designer/RdSection.vue'
 import RdStyleFields from '~/components/report/designer/RdStyleFields.vue'
 import { useDesign } from '~/composables/reportDesignStore'
 import { chooseTotal, hasTotals, totalChoices, totalKind, totalRowsOn, type DColumn, type DGroup, type DTable, type TotalKind } from '~/composables/reportDesignModel'
+import { groupName } from '~/composables/reportExpressions'
 
 const props = defineProps<{ item: DTable }>()
 const store = useDesign()
@@ -277,6 +278,10 @@ function interactive() {
       </div>
       <div class="rp-cbody">
         <RdExprField :obj="g" prop="by" :label="$t('reportDesigner.table.groupBy')" :path="`groups[${i}].by`" :item="id" :fields="fields" placeholder="[region]" />
+        <label class="rp-f">
+          <span>{{ $t('reportDesigner.table.groupName') }}</span>
+          <input type="text" :value="g.name ?? ''" maxlength="100" :placeholder="groupName({ by: g.by }) ?? $t('reportDesigner.table.groupNamePh')" @input="g.name = ($event.target as HTMLInputElement).value.trim() ? ($event.target as HTMLInputElement).value : null" />
+        </label>
         <RdExprField :obj="g" prop="label" :label="$t('reportDesigner.table.groupLabel')" :path="`groups[${i}].label`" :item="id" :fields="fields" optional
                      :placeholder="$t('reportDesigner.table.groupLabelPh')" />
         <div class="rp-f">

@@ -240,7 +240,8 @@ All lengths are millimetres (numbers, a tenth at most), colours `#rrggbb`.
   `format`, `total` (an aggregate expression or null; the designer leaves it null until the
   person chooses one, and offers the sum, average, minimum, maximum or count of the column's value or
   an expression), `style`, `rules`: [{`when`,
-  `style`}] (conditional formatting)}]; `groups` [{`by` (expression), `label`
+  `style`}] (conditional formatting)}]; `groups` [{`by` (expression), `name` (how an
+  aggregate names it, «Expressions»; a plain field needs none), `label`
   (expression, default the value), `header`, `footer` (subtotals from the columns'
   `total`: with none, printed only where it is all that names the group; the designer draws
   the same rows), `page_break` none | between | after, `sort` asc | desc, `keep_together`}];
@@ -284,9 +285,19 @@ primary := number | "text" | TRUE | FALSE | NULL | [field] | {placeholder} | NAM
 language as a date; functions in capitals, case-insensitive:
 
 - aggregates over the scope they sit in — the group, the table, the dataset of the item
-  — or of a dataset named as last argument (`SUM([amount], "orders")`): `SUM AVG MIN MAX
-  COUNT COUNTDISTINCT FIRST LAST`; `PERCENT(x)` = x over the same aggregate one level
-  up; `RUNNING(SUM([amount]))` running total within the group; `ROWNUMBER()`;
+  — or over what their last argument names, a dataset (`SUM([amount], "orders")`) or a group
+  of the table around them (`SUM([amount], "region")`): `SUM AVG MIN MAX COUNT COUNTDISTINCT
+  FIRST LAST`, and `SUMIF(c, x)`, `COUNTIF(c)`, which are `SUM(IF(c, x))` and `COUNT(IF(c, 1))`;
+  `PERCENT(x)` = x over the same aggregate one level up, `PERCENT(x, "region")` over that
+  group; `RUNNING(SUM([amount]))` running total within the group; `ROWNUMBER()`;
+- `PREVIOUS(x)`: x one place back in what the table shows: on a row the row above in its
+  group, in a total (a chart's series: along its axis) the total before it under the same
+  parent; NULL on the first. Evaluated with the rows the table has in their final order,
+  so only there: refused in filters, keys, calculated fields, matrices, texts, KPIs;
+- `LOOKUP(key, key field, result[, "dataset"])`: `result` with no current row over the rows of
+  the whole dataset (no table's filter) whose key field equals the key, as `=` compares; a
+  field is the first of them in the dataset's order, an aggregate is over them all; NULL
+  without any. Refused in the choices of a parameter;
 - logic `IF(c, a, b)`, `IFS(c1, a1, c2, a2, …, else)`, `ISNULL(x)`, `COALESCE(a, b…)`;
 - maths `ROUND(x, n) ABS FLOOR CEILING POWER`; text `UPPER LOWER LEFT RIGHT MID LEN TRIM
   REPLACE CONTAINS STARTSWITH TEXT(x)`; dates `DATE(y, m, d) YEAR MONTH DAY WEEKDAY
@@ -303,6 +314,15 @@ definition is saved, with the item and the position, and at render time name the
 NULL propagates through arithmetic; aggregates skip it; division by zero is NULL. Over the
 rows of a dataset the expressions are translated into DuckDB's SQL with these very
 semantics («Data in columns»); the tree is still walked where a value goes on the page.
+
+A group is named by `name`, or by its `by` when that is a plain field; a group by an expression
+with no `name` cannot be named. Naming one checks that it holds the place: a row is inside every
+group; a column's total is inside those down to the outermost level with a footer, and in the
+grand total the name is NULL (a share beside the sums, the grand total empty; a table whose only
+total is the grand total is refused); a label is inside its own and those around it. A name that
+is both a dataset and a group is refused, so a saved report in that corner stops saying so
+instead of changing what it adds. The header of a column whose value holds `PREVIOUS` or names a
+group offers no sort: that value is known only with the rows in their order and their groups.
 
 ### Rendering (engine)
 
@@ -373,6 +393,19 @@ render.
   stable counting sorts; a chart's categories and a matrix's columns keep the order they
   first come in, read from the rows' positions (`frames.nested`, the interpreter's too), never
   from what a `GROUP BY` or a temporary table returns.
+- **Shares, previous, lookups.** An aggregate of a group is the family of that level, with the
+  same `GROUP BY`; `SUMIF` and `COUNTIF` are `SUM` and `COUNT` of an `IF`, in both ways by
+  construction. `PREVIOUS` is never in SQL: the evaluator walks to the row above or the total
+  before, whose aggregates are already in columns. `LOOKUP` partitions the dataset by its key
+  field in DuckDB (a family, each member in the rows' order, NULL keys out), and either a key
+  finds its member in a dict where the evaluator walks, or, over every row, the results of all
+  keys become a table DuckDB joins by a scalar subquery, unique keys and one kind of key on
+  both sides (an int against a float goes to the interpreter: Python's `=` is exact, DuckDB's
+  goes through a double). Measured with a million rows and a million distinct keys, in the
+  CI image: an aggregate of a group, `PERCENT` of a group, `PREVIOUS` of a total, 0.3 s
+  against 16-21 s by the interpreter; `SUMIF`, 0.1 s against 22 s; the year before as a total,
+  0.2 s against 19 s; a million lookups inside `SUM` or a filter, 5 s against 24-27 s; a million
+  keys with an expression as result, in a group's key, 23 s against 32 s.
 - **Groups and totals.** The groups of a level, the categories of a chart, the cells of a
   matrix, the series of a split are *families* of sets of rows, aggregated together: one
   `GROUP BY` on the member's number per level and aggregate (not ROLLUP or GROUPING SETS:

@@ -154,6 +154,19 @@ def test_what_the_page_header_holds():
     rd.check(d)
 
 
+def test_a_group_may_have_a_name_for_the_aggregates_to_call_it_by():
+    d = example()
+    table = next(i for i in d["sections"]["body"]["items"] if i["type"] == "table")
+    table["groups"] = [{"by": "YEAR([day])", "name": "year"}]
+    rd.check(d)
+    table["groups"][0]["name"] = 7
+    with pytest.raises(Problem, match="group name is a text"):
+        rd.check(d)
+    table["groups"][0]["name"] = "x" * 101
+    with pytest.raises(Problem, match="group name is at most 100"):
+        rd.check(d)
+
+
 def test_names_and_references():
     assert "Two items have the id «t1»" in _with(lambda d: d["sections"]["body"]["items"][0].update(id="t1")).message
     p = _with(lambda d: d["sections"]["body"]["items"][2].update(dataset="nope"))

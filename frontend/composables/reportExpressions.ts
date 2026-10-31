@@ -29,16 +29,20 @@ const F = (name: string, sig: string, group: FnGroup, min: number, max: number |
  *  arguments (backend/app/reports/expressions.py, ARITY). The descriptions are the
  *  interface's (reportDesigner.fn.<NAME>). */
 export const FUNCTIONS: FnInfo[] = [
-  F('SUM', 'SUM(value, [dataset])', 'aggregate', 1, 2),
-  F('AVG', 'AVG(value, [dataset])', 'aggregate', 1, 2),
-  F('MIN', 'MIN(value, [dataset])', 'aggregate', 1, 2),
-  F('MAX', 'MAX(value, [dataset])', 'aggregate', 1, 2),
-  F('COUNT', 'COUNT([value], [dataset])', 'aggregate', 0, 2),
-  F('COUNTDISTINCT', 'COUNTDISTINCT(value, [dataset])', 'aggregate', 1, 2),
-  F('FIRST', 'FIRST(value, [dataset])', 'aggregate', 1, 2),
-  F('LAST', 'LAST(value, [dataset])', 'aggregate', 1, 2),
-  F('PERCENT', 'PERCENT(aggregate)', 'aggregate', 1, 1),
+  F('SUM', 'SUM(value, [dataset or group])', 'aggregate', 1, 2),
+  F('AVG', 'AVG(value, [dataset or group])', 'aggregate', 1, 2),
+  F('MIN', 'MIN(value, [dataset or group])', 'aggregate', 1, 2),
+  F('MAX', 'MAX(value, [dataset or group])', 'aggregate', 1, 2),
+  F('COUNT', 'COUNT([value], [dataset or group])', 'aggregate', 0, 2),
+  F('COUNTDISTINCT', 'COUNTDISTINCT(value, [dataset or group])', 'aggregate', 1, 2),
+  F('FIRST', 'FIRST(value, [dataset or group])', 'aggregate', 1, 2),
+  F('LAST', 'LAST(value, [dataset or group])', 'aggregate', 1, 2),
+  F('SUMIF', 'SUMIF(condition, value, [dataset or group])', 'aggregate', 2, 3),
+  F('COUNTIF', 'COUNTIF(condition, [dataset or group])', 'aggregate', 1, 2),
+  F('PERCENT', 'PERCENT(aggregate, [group])', 'aggregate', 1, 2),
   F('RUNNING', 'RUNNING(aggregate)', 'aggregate', 1, 1),
+  F('PREVIOUS', 'PREVIOUS(value)', 'aggregate', 1, 1),
+  F('LOOKUP', 'LOOKUP(key, key field, result, [dataset])', 'aggregate', 3, 4),
   F('ROWNUMBER', 'ROWNUMBER()', 'aggregate', 0, 0),
   F('IF', 'IF(condition, then, else)', 'logic', 2, 3),
   F('IFS', 'IFS(condition1, value1, …, else)', 'logic', 2, null),
@@ -77,7 +81,23 @@ export const FUNCTIONS: FnInfo[] = [
   F('REPORT', 'REPORT()', 'report', 0, 0),
 ]
 export const FN = new Map(FUNCTIONS.map((f) => [f.name, f]))
-export const AGGREGATES = new Set(['SUM', 'AVG', 'MIN', 'MAX', 'COUNT', 'COUNTDISTINCT', 'FIRST', 'LAST'])
+export const AGGREGATES = new Set(['SUM', 'AVG', 'MIN', 'MAX', 'COUNT', 'COUNTDISTINCT', 'FIRST', 'LAST', 'SUMIF', 'COUNTIF'])
+/** How many arguments come before an aggregate's scope. */
+const VALUE_ARGS: Record<string, number> = { SUMIF: 2, COUNTIF: 1 }
+const isScope = (name: string | null, args: number) => {
+  if (!name || !AGGREGATES.has(name)) return false
+  return args === (VALUE_ARGS[name] ?? 1) + 1 || (name === 'COUNT' && args === 1)
+}
+
+/** What the group of a table is called in an aggregate: its name, or the field it groups by.
+ *  Null: a group by an expression, which has no name until it is given one. */
+export function groupName(g: { by: string; name?: string | null }): string | null {
+  const own = g.name?.trim()
+  if (own) return own
+  const toks = highlightTokens(g.by.replace(/^\s*=/, '')).filter((t) => t.kind !== 'space')
+  if (toks.length !== 1 || toks[0].kind !== 'field' || !toks[0].text.endsWith(']')) return null
+  return toks[0].text.slice(1, -1).replaceAll(']]', ']')
+}
 
 // ── tokens ───────────────────────────────────────────────────────────────────
 /** The tokens of a text, for the highlighting: never throws, an unclosed text or field
@@ -258,14 +278,40 @@ export interface CheckContext {
 }
 
 const COMPARE = new Set(['=', '<>', '<', '>', '<=', '>='])
-const NAMED_SCOPE = /\b(SUM|AVG|MIN|MAX|COUNT|COUNTDISTINCT|FIRST|LAST)\s*\([^()]*,\s*"[^"]*"\s*\)/i
+
+/** The expression reads fields of rows of its own: an aggregate that names where it works, a
+ *  LOOKUP. This side does not know which fields those are, and the server checks them. */
+function readsElsewhere(text: string): boolean {
+  const stack: { name: string | null; args: number; last: TokenKind | null; alone: boolean }[] = []
+  let fn: string | null = null
+  for (const t of highlightTokens(text)) {
+    if (t.kind === 'space') continue
+    const top = stack[stack.length - 1]
+    if (t.kind === 'punct' && t.text === '(') {
+      if (top) top.alone = false
+      stack.push({ name: fn, args: 1, last: null, alone: true })
+    } else if (t.kind === 'punct' && t.text === ')') {
+      const f = stack.pop()
+      if (f && (f.name === 'LOOKUP' || (f.last === 'str' && f.alone && isScope(f.name, f.args)))) return true
+      const outer = stack[stack.length - 1]
+      if (outer) outer.alone = false
+    } else if (t.kind === 'punct' && t.text === ',' && top) {
+      top.args++
+      top.last = null
+      top.alone = true
+    } else if (top) {
+      top.alone = top.last === null && top.alone
+      top.last = t.kind
+    }
+    fn = t.kind === 'fn' ? t.text.toUpperCase() : null
+  }
+  return false
+}
 
 /** The first mistake of an expression this side can see, or null. A leading «=» is
  *  allowed (a text's expression starts with it): positions stay those of `text`. */
 export function checkExpression(text: string, ctx: CheckContext): ExprError | null {
-  // an aggregate of another dataset (SUM([x], "orders")) reads that dataset's fields: the
-  // server checks them, this side does not know which they are
-  if (NAMED_SCOPE.test(text)) ctx = { ...ctx, fields: null }
+  if (readsElsewhere(text)) ctx = { ...ctx, fields: null }
   let src = text
   const lead = /^\s*=/.exec(src)
   if (lead) src = src.slice(0, lead[0].length - 1) + ' ' + src.slice(lead[0].length)
@@ -433,9 +479,9 @@ export function concatParts(expr: string): { lit: boolean; text: string }[] {
 
 // ── renames ──────────────────────────────────────────────────────────────────
 /** An expression with a dataset or a parameter renamed where the language names them: a
- *  dataset as the last argument of an aggregate (`SUM([amount], "orders")`, `COUNT("orders")`),
- *  a parameter in `PARAM("region")`. Texts elsewhere, fields and the rest of the expression
- *  are left as written, spaces and capitals included. */
+ *  dataset as the last argument of an aggregate or a LOOKUP (`SUM([amount], "orders")`,
+ *  `COUNT("orders")`), a parameter in `PARAM("region")`. Texts elsewhere, fields and the rest of
+ *  the expression are left as written, spaces and capitals included. */
 export function renameInExpression(expr: string, what: { dataset?: [string, string]; param?: [string, string] }): string {
   const toks = highlightTokens(expr)
   const frames: { name: string | null; args: Token[][] }[] = []
@@ -447,7 +493,7 @@ export function renameInExpression(expr: string, what: { dataset?: [string, stri
     if (last.length !== 1) return
     const v = textOf(last[0])
     if (v == null) return
-    const scoped = AGGREGATES.has(f.name ?? '') && (f.args.length >= 2 || f.name === 'COUNT')
+    const scoped = isScope(f.name, f.args.length) || (f.name === 'LOOKUP' && f.args.length === 4)
     if (what.dataset && scoped && v === what.dataset[0]) swap.set(last[0], quoted(what.dataset[1]))
     if (what.param && f.name === 'PARAM' && f.args.length === 1 && v === what.param[0]) swap.set(last[0], quoted(what.param[1]))
   }
@@ -511,11 +557,13 @@ export function renameEverywhere(def: DDefinition, what: { dataset?: [string, st
 export type CompletionContext =
   | { kind: 'field'; from: number; prefix: string }
   | { kind: 'param'; from: number; prefix: string }
+  | { kind: 'scope'; from: number; prefix: string; of: 'dataset' | 'group' | 'both' }
   | { kind: 'name'; from: number; prefix: string }
   | { kind: 'none' }
 
 /** What the person is typing at `caret`: a field after an open `[`, a parameter's name
- *  inside `PARAM("`, a function's name; nothing inside a text or a placeholder. */
+ *  inside `PARAM("`, a dataset's or a group's where a call takes one, a function's name;
+ *  nothing inside another text or a placeholder. */
 export function completionAt(text: string, caret: number): CompletionContext {
   const before = text.slice(0, caret)
   let inStr = false
@@ -542,12 +590,23 @@ export function completionAt(text: string, caret: number): CompletionContext {
   if (inField) return { kind: 'field', from: fieldStart, prefix: before.slice(fieldStart + 1).replaceAll(']]', ']') }
   if (inStr) {
     if (/PARAM\s*\(\s*$/i.test(before.slice(0, strStart))) return { kind: 'param', from: strStart, prefix: before.slice(strStart + 1) }
+    const of = scopeArgument(before.slice(0, strStart))
+    if (of) return { kind: 'scope', from: strStart, prefix: before.slice(strStart + 1), of }
     return { kind: 'none' }
   }
   if (inPh) return { kind: 'none' }
   const m = /[A-Za-z_][A-Za-z0-9_]*$/.exec(before)
   if (m && !/[\d.]$/.test(before.slice(0, m.index))) return { kind: 'name', from: m.index, prefix: m[0] }
   return { kind: 'none' }
+}
+
+/** What a text written here would name, if it is the last argument of a call that takes one. */
+function scopeArgument(before: string): 'dataset' | 'group' | 'both' | null {
+  const c = callAt(before, before.length)
+  if (!c || !/[,(]\s*$/.test(before)) return null
+  if (c.fn.name === 'LOOKUP') return c.arg === 3 ? 'dataset' : null
+  if (c.fn.name === 'PERCENT') return c.arg === 1 ? 'group' : null
+  return isScope(c.fn.name, c.arg + 1) ? 'both' : null
 }
 
 /** The function call the caret is inside (the innermost), and which argument: the

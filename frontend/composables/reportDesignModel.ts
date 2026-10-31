@@ -54,6 +54,7 @@ export interface DColumn {
 }
 export interface DGroup {
   by: string
+  name?: string | null
   label?: string | null
   header?: boolean
   footer?: boolean

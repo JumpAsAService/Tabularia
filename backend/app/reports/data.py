@@ -60,7 +60,7 @@ class DataSet:
 
 
 def used_datasets(report: rd.Report) -> list[str]:
-    """The datasets a render reads: the items', and those named inside aggregates."""
+    """The datasets a render reads: the items', and those named inside aggregates and LOOKUPs."""
     names = {d.name for d in report.datasets}
     used: list[str] = []
 
@@ -80,7 +80,9 @@ def used_datasets(report: rd.Report) -> list[str]:
             n = stack.pop()
             if isinstance(n, ex.Call):
                 if n.name in ex.AGGREGATES:
-                    add(ex.scope_dataset(n, names))
+                    add(ex.scope_name(n, names))
+                elif n.name == "LOOKUP" and len(n.args) == 4 and isinstance(n.args[3], ex.Lit):
+                    add(n.args[3].value)
                 stack.extend(n.args)
             elif isinstance(n, ex.Unary):
                 stack.append(n.arg)
@@ -115,13 +117,16 @@ def _expressions_of(it: Any) -> list[str | None]:
     if it.type == "table":
         out = [it.filter] + [c.value for c in it.columns] + [c.total for c in it.columns]
         out += [g.label for g in it.groups] + [r.when for c in it.columns for r in c.rules]
+        out += [g.by for g in it.groups] + [s.by for s in it.sort]
         if it.matrix:
-            out.append(it.matrix.value)
+            out += [it.matrix.value, *it.matrix.levels]
         return out
     if it.type == "chart":
-        return [s.value for s in it.series] + [it.options.target if isinstance(it.options.target, str) else None]
+        return [s.value for s in it.series] + [it.options.target if isinstance(it.options.target, str) else None,
+                                               it.category, it.split_by]
     if it.type == "kpi":
-        return [it.value, it.compare, it.sparkline.value if it.sparkline else None]
+        return [it.value, it.compare, it.sparkline.value if it.sparkline else None,
+                it.sparkline.category if it.sparkline else None]
     return []
 
 
@@ -213,7 +218,7 @@ def add_calculated(report: rd.Report, data: dict[str, DataSet], ctx: ex.Context,
         ds = data.get(d.name)
         if ds is None or not d.calculated:
             continue
-        c_ctx = ctx.at(scopes=[ds.rows])
+        c_ctx = ctx.at(scopes=[ds.rows], dataset=d.name)
         for c in d.calculated:
             node = rd.parse(c.expr)
             for i, row in enumerate(ds.rows):

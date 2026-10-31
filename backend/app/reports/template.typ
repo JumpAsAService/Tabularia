@@ -200,7 +200,7 @@
         if t.sorted.dir == "desc" { " ↓" } else { " ↑" }
       } else { "" }
       let body = styled((weight: 600), h.t + mark)
-      if sorting and hi == 0 { body = hot((kind: "sort", item: t.id, column: j), body, cell-pad) }
+      if sorting and hi == 0 and not ("still" in t.hot and j in t.hot.still) { body = hot((kind: "sort", item: t.id, column: j), body, cell-pad) }
       head.push(table.cell(colspan: h.span, rowspan: h.rspan, fill: rgb(T.head), align: horizontal(h.align) + horizon, body))
     }
   }

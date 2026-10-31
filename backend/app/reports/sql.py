@@ -27,6 +27,9 @@ What «the same result» asks for:
 - A part with no field outside an aggregate is a constant — a parameter, a placeholder,
   `TODAY()`, an aggregate of the whole dataset in a filter — and is evaluated once by the
   interpreter itself, then written as a literal.
+- A LOOKUP is its results worked out once per key (frames.Rel.joined), read by key: only
+  between keys of one kind, as Python's exact `=` between an int and a float is not DuckDB's.
+  PREVIOUS is never here: it needs the rows in the order the table shows them.
 """
 from __future__ import annotations
 
@@ -138,7 +141,7 @@ class Translator:
 
     def __init__(self, cols: Mapping[str, Col], loc: formats.Locale, constant: Callable[[ex.Node], Any],
                  mapper: Mapper | None, rownumber: str | None = None, single: bool = False,
-                 datasets: frozenset[str] = frozenset()):
+                 datasets: frozenset[str] = frozenset(), joined: Callable[[ex.Call, "Sql"], "Sql"] | None = None):
         self.cols = cols
         self.loc = loc
         self.datasets = datasets  # the report's datasets: an aggregate may name one
@@ -146,6 +149,7 @@ class Translator:
         self.mapper = mapper
         self.rownumber = rownumber
         self.single = single  # inside PERCENT: an aggregate is over the one row
+        self.joined = joined  # a LOOKUP over every row: its results by key, already worked out (frames.Rel.joined)
 
     def __call__(self, node: ex.Node) -> Sql:
         out = self.translate(node)
@@ -178,13 +182,15 @@ class Translator:
             return True
         if isinstance(node, ex.Call):
             if node.name in ex.AGGREGATES:  # over a scope: one value, or the one row's inside PERCENT
-                return self.single and ex.scope_dataset(node, self.datasets) is None
+                return self.single and ex.scope_name(node, self.datasets) is None
             if node.name == "RUNNING":
                 return False  # with a row and no running set it is the aggregate of the scope
             if node.name == "PERCENT":
                 return True
             if node.name == "ROWNUMBER":
                 return self.rownumber is not None
+            if node.name == "LOOKUP":  # the key is on this row; the others on the rows of the dataset
+                return self.per_row(node.args[0])
             return any(self.per_row(a) for a in node.args)
         if isinstance(node, ex.Unary):
             return self.per_row(node.arg)
@@ -315,6 +321,10 @@ class Translator:
             return self.single_row_aggregate(node)
         if name == "PERCENT":
             return self.percent(node)
+        if name == "LOOKUP":
+            if self.joined is None:
+                raise Untranslatable("no place to read another dataset")
+            return self.joined(node, self(node.args[0]))
         if name == "ROWNUMBER":
             return Sql(f"CAST({self.rownumber} AS BIGINT)", INT)
         if name in ("PAGE", "PAGES"):
@@ -532,6 +542,8 @@ class Translator:
     def percent(self, node: ex.Call) -> Sql:
         """PERCENT(x) with a row: x over the row alone, over x of the scope (a constant)."""
         inner = node.args[0]
+        if len(node.args) > 1:
+            raise Untranslatable("PERCENT of a group, where no groups are")
         num = replace_(self, single=True)(inner)
         den = self.constant_of_scope(inner)
         if num.kind == NULL or den is None:
@@ -553,11 +565,10 @@ class Translator:
         row's value alone."""
         if not self.single:  # pragma: no cover — an aggregate of a scope is a constant, folded
             raise Untranslatable("an aggregate where a row is")
-        args = node.args
-        if not args:
+        name, arg = ex.measure(node, False)
+        if arg is None:
             return lit(1)
-        x = replace_(self, single=False)(args[0])
-        name = node.name
+        x = replace_(self, single=False)(arg)
         if name in ("COUNT", "COUNTDISTINCT"):
             return Sql(f"(CASE WHEN {x.text} IS NULL THEN 0 ELSE 1 END)", INT) if x.kind != NULL else lit(0)
         # sum() starts from the int 0: 0 + -0.0 is 0.0
@@ -574,7 +585,7 @@ class Translator:
 
 
 def replace_(t: Translator, **changes: Any) -> Translator:
-    out = Translator(t.cols, t.loc, t.constant, t.mapper, t.rownumber, t.single, t.datasets)
+    out = Translator(t.cols, t.loc, t.constant, t.mapper, t.rownumber, t.single, t.datasets, t.joined)
     for k, v in changes.items():
         setattr(out, k, v)
     return out

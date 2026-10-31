@@ -39,6 +39,7 @@ const value = computed({
       v-model="value"
       :fields="fields ?? null"
       :params="store.params.value"
+      :scopes="store.scopesOf(item)"
       :problem="problem"
       :live="live"
       :text-mode="textMode"

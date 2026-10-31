@@ -204,7 +204,7 @@ def choices(definition: dict, dataset: str, datasets: dict[str, dict], params: d
                           "from a dataset of their own (SELECT DISTINCT)") from None
     env = ex.Env(fields={**ds.columns, **dict.fromkeys(calculated, "")}, dataset=dataset,
                  params={p.name: (ex.LIST if p.multi else rd._PARAM_TYPES[p.type]) for p in report.parameters},
-                 aggregates=False)
+                 aggregates=False, lookup=False)
     nodes = []
     for where, text in (("value", value), ("label", label)):
         if text:
@@ -217,6 +217,7 @@ def choices(definition: dict, dataset: str, datasets: dict[str, dict], params: d
         else:
             nodes.append(None)
     if not narrowed:  # those fields are not read: nothing here needs them
+        ctx.datasets = {dataset: ds.rows}  # the one dataset a field may read here; another is said
         rdata.add_calculated(report, {dataset: ds}, ctx, ex.Evaluator())
     evaluate = ex.Evaluator()
     ctx.scopes = [ds.rows]

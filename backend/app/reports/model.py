@@ -461,6 +461,7 @@ class _Builder:
         return self.either(it, self._placed, it, dy)
 
     def _placed(self, it: Any, dy: float = 0.0) -> dict | None:
+        self.ctx.dataset = self.item_dataset(it)
         if not self.visible(it):
             return None
         box = {"x": _round_mm(it.x), "y": _round_mm(it.y - dy), "w": _round_mm(it.w), "h": _round_mm(it.h),
@@ -591,6 +592,14 @@ class _Builder:
         def measure(sub: list[dict], s: rd.Series, i: int) -> Any:
             return self.value(it, f"series[{i}].value", s.value, base.at(scopes=[rows, sub]))
 
+        def along(parts: list[Any], s: rd.Series, i: int) -> list[Any]:
+            """The series along the axis: each value knows the category before it (PREVIOUS)."""
+            values, before = [], None
+            for sub in parts:
+                before = base.at(scopes=[rows, sub], previous=before)
+                values.append(self.value(it, f"series[{i}].value", s.value, before))
+            return values
+
         # the order (docs/specs/reports.md, `options.sort`): the data's, or the first series'
         # value; `top` keeps the N largest values, in that order, and gathers the rest as «Other»
         o = it.options
@@ -618,13 +627,13 @@ class _Builder:
                 raise ReportError(f"item «{it.id}»: split_by gives {len(splits)} series, the most is "
                                   f"{charts.MAX_SERIES}")
             for key, srows in splits:
-                values = [measure(self.d.intersect(sub, srows), first, 0) for sub in subsets]
+                values = along([self.d.intersect(sub, srows) for sub in subsets], first, 0)
                 data.series.append(charts.SeriesData(self.name(key), [self._num(v) for v in values],
                                                      [self.show(v, first.format or it.options.format) for v in values],
                                                      first.as_ or "bar", first.axis, first.format or it.options.format))
         else:
             for i, s in enumerate(it.series):
-                values = [measure(sub, s, i) for sub in subsets]
+                values = along(subsets, s, i)
                 fmt = s.format or it.options.format
                 data.series.append(charts.SeriesData(s.name, [self._num(v) for v in values],
                                                      [self.show(v, fmt) for v in values],
@@ -639,6 +648,7 @@ class _Builder:
         return _Table(self, it).build()
 
     def _visible_table(self, it: rd.TableItem) -> TableOut | None:
+        self.ctx.dataset = it.dataset
         return self.table(it) if self.visible(it) else None
 
     # ── the body ──
@@ -698,7 +708,7 @@ class _Builder:
         sorted_by = None
         st = self.state.get(it.id) or {}
         sortable = it.interactive.sort and it.matrix is None  # a matrix's columns are values, not columns to sort by
-        if sortable and isinstance(st.get("sort"), dict):
+        if sortable and isinstance(st.get("sort"), dict) and _sorts(it, st["sort"].get("column")):
             sorted_by = {"col": st["sort"].get("column"), "dir": st["sort"].get("dir", "asc")}
         rows = []
         for row in t.rows:
@@ -726,9 +736,15 @@ class _Builder:
                 "cols": [{"w": w, "align": c.align or ("right" if c.kind == "number" else "left"), "st": c.style}
                          for w, c in zip(widths, t.cols)],
                 "head": t.head, "rows": rows, "repeat": it.repeat_header, "levels": t.levels,
-                "hot": {"sort": sortable, "toggle": it.interactive.toggle} if self.interactive else None,
+                "hot": self.hot(it, sortable) if self.interactive else None,
                 "sorted": sorted_by}
 
+
+    @staticmethod
+    def hot(it: rd.TableItem, sortable: bool) -> dict:
+        """What the screen can click in a table; `still`: the columns that offer no sort."""
+        still = [j for j in range(len(it.columns)) if not _sorts(it, j)] if sortable else []
+        return {"sort": sortable, "toggle": it.interactive.toggle, **({"still": still} if still else {})}
 
     # ── what does not fit ──
     def column_widths(self, t: TableOut) -> list[float | None]:
@@ -785,6 +801,27 @@ def _listed(v: Any) -> list:
     return v if isinstance(v, list) else []
 
 
+def _reads_group(node: ex.Node, names: tuple[str | None, ...]) -> bool:
+    """The expression names a group of the table (PERCENT's second argument included)."""
+    for c in ex.calls_in(node):
+        if c.name == "PERCENT" and len(c.args) > 1:
+            return True
+        written = ex.scope_name(c, (), names) if c.name in ex.AGGREGATES else None
+        if written is not None and written in names:
+            return True
+    return False
+
+
+def _sorts(it: rd.TableItem, col: Any) -> bool:
+    """A click on a column's header sorts the rows by its value, unless that value is known
+    only once the rows are in their order and in their groups (PREVIOUS, a group's aggregate):
+    that header offers no click, and a view that asks for it anyway leaves them as they are."""
+    if not isinstance(col, int) or not 0 <= col < len(it.columns) or not it.columns[col].value:
+        return True
+    node = rd.parse(it.columns[col].value)
+    return not ex.calls(node, "PREVIOUS") and not _reads_group(node, rd.group_names(it.groups))
+
+
 class _Table:
     """One table (or matrix) laid out as rows."""
 
@@ -802,6 +839,11 @@ class _Table:
         self.out: list[Row] = []
         self.zebra = False
         self.shown = 0  # the detail rows written so far
+        self.ctx = b.ctx.at(groups=rd.group_names(it.groups))
+        # a total before this one is kept only for who reads it
+        self.links = it.matrix is None and any(ex.calls(rd.parse(t), "PREVIOUS") for t in
+                                               [*(c.total for c in it.columns if c.total),
+                                                *(g.label for g in it.groups if g.label)])
 
     def value(self, where: str, text: str, ctx: ex.Context) -> Any:
         return self.b.value(self.it, where, text, ctx)
@@ -812,7 +854,7 @@ class _Table:
         d = self.b.d
         rows = self.b.rows_of(it.dataset)
         if it.filter:
-            rows = d.where(rows, rd.parse(it.filter), self.b.ctx.at(scopes=[rows]), it.id)
+            rows = d.where(rows, rd.parse(it.filter), self.ctx.at(scopes=[rows]), it.id)
         rows = self.sorted(rows)
         self.all_rows = rows
         if it.matrix:
@@ -824,12 +866,13 @@ class _Table:
         else:
             tree, ordered = self.tree(rows)
             start = 0
+            before = None
             for i, node in enumerate(tree):
-                self.group(node, i, len(tree), [rows], ordered, start, [], [])
+                before = self.group(node, i, len(tree), [rows], ordered, start, [], [], before)
                 start += len(node["rows"])
         # an empty table says «No data» (the template), not a total of nothing
         if it.grand_total and rows and any(c.total for c in it.columns):
-            self.footer(None, self.b.ctx.at(row=None, scopes=[rows]), keep=True)
+            self.footer(None, self.ctx.at(row=None, scopes=[rows]), keep=True)
         head = [[{"t": c.header, "span": 1, "rspan": 1, "align": c.align or ("right" if c.kind == "number" else "left")}
                  for c in self.cols]]
         return TableOut(it, it.title or it.id, self.cols, head, self.out, len(it.groups))
@@ -838,17 +881,17 @@ class _Table:
         keys: list[tuple[str, str]] = [(s.by, s.dir) for s in self.it.sort]
         if self.sort_state is not None:
             col = self.sort_state.get("column")
-            if isinstance(col, int) and 0 <= col < len(self.it.columns):
+            if isinstance(col, int) and 0 <= col < len(self.it.columns) and _sorts(self.it, col):
                 keys = [(self.it.columns[col].value, "desc" if self.sort_state.get("dir") == "desc" else "asc")]
         if not keys:
             return rows
-        return self.b.d.sort(rows, [(rd.parse(by), d) for by, d in keys], self.b.ctx.at(scopes=[rows]), self.it.id)
+        return self.b.d.sort(rows, [(rd.parse(by), d) for by, d in keys], self.ctx.at(scopes=[rows]), self.it.id)
 
     def tree(self, rows: Any) -> tuple[list[dict], Any]:
         """The groups of every level, each {key, rows, children}, in the groups' order; and
         the table's rows one group after the other."""
         levels = [(rd.parse(g.by), g.sort) for g in self.it.groups]
-        return self.b.d.tree(rows, levels, self.b.ctx.at(scopes=[self.all_rows]), self.it.id)
+        return self.b.d.tree(rows, levels, self.ctx.at(scopes=[self.all_rows]), self.it.id)
 
     def is_closed(self, path: list) -> bool:
         p = json.dumps(path)
@@ -858,9 +901,10 @@ class _Table:
 
     # ── groups ──
     def group(self, node: dict, index: int, siblings: int, scopes: list[Any], parent_rows: Any, start: int,
-              path: list, open_headers: list[Row]) -> None:
+              path: list, open_headers: list[Row], before: ex.Context | None = None) -> ex.Context | None:
         """A group, whose rows begin at `start` among its parent's (a running total over the
-        parent stops at its last)."""
+        parent stops at its last). `before`: the context of the total before it under the same
+        parent (PREVIOUS), closed or not: closing a group changes no number; it gives its own."""
         it = self.it
         level = len(path)
         g = it.groups[level]
@@ -868,7 +912,8 @@ class _Table:
         here = [*scopes, rows]
         path = [*path, key_id(node["key"])]
         last = start + len(rows) - 1 if rows else -1
-        gctx = self.b.ctx.at(row=None, scopes=here, running=parent_rows, running_index=last, rownumber=index + 1)
+        gctx = self.ctx.at(row=None, scopes=here, running=parent_rows, running_index=last, rownumber=index + 1,
+                           previous=before)
         closed = self.is_closed(path)
         has_content = not closed and (node["children"] is not None or it.detail)
         first = len(self.out)
@@ -881,8 +926,9 @@ class _Table:
         if not closed:
             if node["children"] is not None:
                 offset = 0
+                child_before = None
                 for i, child in enumerate(node["children"]):
-                    self.group(child, i, len(node["children"]), here, rows, offset, path, headers)
+                    child_before = self.group(child, i, len(node["children"]), here, rows, offset, path, headers, child_before)
                     offset += len(child["rows"])
             elif it.detail:
                 self.zebra = False
@@ -898,6 +944,7 @@ class _Table:
                 # the groups around this one start the next page again with their headers
                 for h in open_headers:
                     self.out.append(Row("g", h.level, label=h.label, key=h.key, closed=h.closed, continued=True))
+        return gctx if self.links else None
 
     def details(self, rows: Any, scopes: list[Any]) -> None:
         """The rows a table shows: the only ones that become Python's values — and when the
@@ -915,7 +962,7 @@ class _Table:
         rows = self.b.d.details(rows)
         nodes = [rd.parse(c.value) for c in it.columns]
         rules = [[(rd.parse(rule.when), _style(rule.style)) for rule in c.rules] for c in it.columns]
-        ctx = self.b.ctx.at(scopes=scopes, running=rows)
+        ctx = self.ctx.at(scopes=scopes, running=rows)
         for i, r in enumerate(rows):
             ctx.row, ctx.running_index, ctx.rownumber = r, i, i + 1
             cells = []
@@ -967,7 +1014,7 @@ class _Table:
         it, m = self.it, self.it.matrix
         assert m is not None
         levels = [rd.parse(x) for x in m.levels]
-        order, distinct, self.matrix_columns = self.b.d.matrix(rows, levels, self.b.ctx.at(scopes=[rows]), it.id)
+        order, distinct, self.matrix_columns = self.b.d.matrix(rows, levels, self.ctx.at(scopes=[rows]), it.id)
         if len(order) > rd.MAX_MATRIX_COLUMNS:
             raise ReportError(f"item «{it.id}»: the matrix would have {len(order):,} columns, the most is "
                               f"{rd.MAX_MATRIX_COLUMNS}: filter the rows, or choose another columns_by")
@@ -1031,7 +1078,7 @@ class _Table:
         return cells
 
     def matrix_row(self, label: str, scopes: list[list[dict]], kind: str, level: int = 0) -> None:
-        ctx = self.b.ctx.at(row=None, scopes=scopes)
+        ctx = self.ctx.at(row=None, scopes=scopes)
         cells = [Cell(label, label)] + self.matrix_cells(scopes[-1], scopes, ctx)
         if kind == "d":
             self.zebra = not self.zebra
@@ -1046,7 +1093,7 @@ class _Table:
         g = it.groups[level]
         here = [*scopes, node["rows"]]
         path = [*path, key_id(node["key"])]
-        gctx = self.b.ctx.at(row=None, scopes=here, rownumber=index + 1)
+        gctx = self.ctx.at(row=None, scopes=here, rownumber=index + 1)
         label = self.b.name(self.value(f"groups[{level}].label", g.label, gctx) if g.label else node["key"])
         if node["children"] is None:  # the innermost group is a row of the matrix
             self.matrix_row(label, here, "d")

@@ -177,6 +177,7 @@ class Column(_Model):
 
 class Group(_Model):
     by: Expr
+    name: str | None = Field(None, max_length=100)  # how an aggregate names it; a plain [field] is named by the field
     label: Expr | None = None
     header: bool = True
     footer: bool = True
@@ -426,6 +427,22 @@ def parse(text: str) -> ex.Node:
     return ex.parse(text)
 
 
+def group_names(groups: list[Group]) -> tuple[str | None, ...]:
+    """The name of each group of a table: its own, or the field it groups by; a group by an
+    expression has none until it is given one."""
+    out: list[str | None] = []
+    for g in groups:
+        name = (g.name or "").strip() or None
+        if name is None:
+            try:
+                node = parse(g.by)
+            except ex.ExpressionError:
+                node = None
+            name = node.name if isinstance(node, ex.Field) else None
+        out.append(name)
+    return tuple(out)
+
+
 _TYPE_NAMES = {ex.NUM: "number", ex.TEXT: "text", ex.DATE: "date", ex.DATETIME: "datetime", ex.BOOL: "boolean"}
 _PARAM_TYPES = {"text": ex.TEXT, "number": ex.NUM, "date": ex.DATE, "boolean": ex.BOOL}
 
@@ -505,7 +522,7 @@ class _Checks:
             if self.report.dataset(c.dataset) is None:
                 self.problems.append(Problem(f"there is no dataset «{c.dataset}»", None, f"{where}.choices.dataset"))
                 return
-            env = self.env(c.dataset, aggregates=False)
+            env = self.env(c.dataset, aggregates=False, lookup=False)
             self.expr(c.value, None, f"{where}.choices.value", env)
             self.expr(c.label, None, f"{where}.choices.label", env)
 
@@ -542,24 +559,42 @@ class _Checks:
     def table(self, it: TableItem, ds: str | None) -> None:
         if ds is None:
             return
-        self.expr(it.filter, it.id, "filter", self.env(ds, want=ex.BOOL, rownumber=False))
+        names = group_names(it.groups)
+        inner = len(names) - 1
+        before = "the rows are chosen before the groups are made: the group «{}» has no rows yet in «Rows where»"
+        self.expr(it.filter, it.id, "filter", self.env(ds, want=ex.BOOL, rownumber=False, groups=names, outside=before))
         for i, g in enumerate(it.groups):
             self.expr(g.by, it.id, f"groups[{i}].by", self.env(ds, aggregates=False, rownumber=False))
-            self.expr(g.label, it.id, f"groups[{i}].label", self.env(ds))
+            self.expr(g.label, it.id, f"groups[{i}].label", self.env(
+                ds, groups=names, reach=i + 1, previous=None if it.matrix else "group",
+                no_previous=_NO_PREVIOUS_MATRIX if it.matrix else "",
+                outside="the label of a group sees its rows and those of the groups around it: the group «{}» is inside it"))
         for i, s in enumerate(it.sort):
             self.expr(s.by, it.id, f"sort[{i}].by", self.env(ds, aggregates=False, rownumber=False))
+        # a table's rows are inside all its groups; its totals, inside those above their own level
+        on_row = dict(groups=names, reach=len(names), previous=None if it.matrix else "row",
+                      no_previous=_NO_PREVIOUS_MATRIX if it.matrix else "")
+        footers = [j for j, g in enumerate(it.groups) if g.footer]
+        total = dict(groups=names, reach=footers[0] + 1 if footers else 0,
+                     outside=_outside_total(names, footers), previous="group" if it.groups and not it.matrix else None,
+                     no_previous=_NO_PREVIOUS_MATRIX if it.matrix else
+                     "PREVIOUS in a total compares it with the group before, and this table has no groups")
         for i, c in enumerate(it.columns):
             if c.value is None and not it.matrix:
                 self.problems.append(Problem("a column of a table needs a value", it.id, f"columns[{i}].value"))
-            self.expr(c.value, it.id, f"columns[{i}].value", self.env(ds))
-            self.expr(c.total, it.id, f"columns[{i}].total", self.env(ds))
+            self.expr(c.value, it.id, f"columns[{i}].value", self.env(ds, **on_row))
+            self.expr(c.total, it.id, f"columns[{i}].total", self.env(ds, **total))
             self.pattern(c.format, it.id, f"columns[{i}].format")
             for j, rule in enumerate(c.rules):
-                self.expr(rule.when, it.id, f"columns[{i}].rules[{j}].when", self.env(ds, want=ex.BOOL))
+                self.expr(rule.when, it.id, f"columns[{i}].rules[{j}].when", self.env(ds, want=ex.BOOL, **on_row))
         if it.matrix:
             for i, level in enumerate(it.matrix.levels):
                 self.expr(level, it.id, f"matrix.columns_by[{i}]", self.env(ds, aggregates=False, rownumber=False))
-            self.expr(it.matrix.value, it.id, "matrix.value", self.env(ds))
+            # the rows of a matrix are its innermost groups, its totals those of the groups around them
+            levels = [*(j for j in footers if j < inner), inner] if names else []
+            self.expr(it.matrix.value, it.id, "matrix.value", self.env(
+                ds, groups=names, reach=levels[0] + 1 if levels else 0, outside=_outside_total(names, levels),
+                no_previous=_NO_PREVIOUS_MATRIX))
             self.pattern(it.matrix.format, it.id, "matrix.format")
         elif not it.columns:
             self.problems.append(Problem("a table needs at least one column", it.id, "columns"))
@@ -571,8 +606,16 @@ class _Checks:
         self.expr(it.split_by, it.id, "split_by", self.env(ds, aggregates=False))
         if not it.series:
             self.problems.append(Problem("a chart needs at least one series (its values)", it.id, "series"))
+        # along the axis the category before is known, as long as the axis keeps the data's
+        # order: `sort` and `top` choose it by the very values PREVIOUS would be part of
+        o = it.options
+        along = it.category is not None and it.kind not in ("scatter", "gauge", "bullet") and o.sort == "none" and not o.top
+        reason = ("PREVIOUS follows a chart's axis in the order of the data: not with its option «sort» or «top»"
+                  if it.category is not None and (o.sort != "none" or o.top) else
+                  "PREVIOUS follows the axis of a chart with categories, and this one has none")
         for i, s in enumerate(it.series):
-            self.expr(s.value, it.id, f"series[{i}].value", self.env(ds))
+            self.expr(s.value, it.id, f"series[{i}].value",
+                      self.env(ds, previous="group" if along else None, no_previous="" if along else reason))
         if isinstance(it.options.target, str):
             self.expr(it.options.target, it.id, "options.target", self.env(ds))
         self.pattern(it.options.format, it.id, "options.format")
@@ -581,6 +624,19 @@ class _Checks:
         if it.category is None and it.kind not in ("gauge", "bullet"):
             self.problems.append(Problem(f"a {it.kind} chart needs a category (what goes along its axis)", it.id,
                                          "category"))
+
+
+_NO_PREVIOUS_MATRIX = "a matrix has no row above in the rows it reads: PREVIOUS goes in the columns of a table"
+
+
+def _outside_total(names: tuple[str | None, ...], levels: list[int]) -> str:
+    """What a total says of a group inside the outermost level it shows at."""
+    if not levels:
+        return "the only total of this table is the grand total, and it is outside every group: the group «{}» has no rows there"
+    outer = names[levels[0]]
+    level = f"the group «{outer}»" if outer else f"level {levels[0] + 1}"
+    return ("the total of " + level + " is outside the group «{}»: a total reads the group it closes and those around it. "
+            "Name one of those, or switch that total off")
 
 
 def problems(report: Report, columns: dict[str, dict[str, str]] | None = None,

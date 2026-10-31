@@ -43,6 +43,7 @@ MAX_BAND_HEIGHT, MAX_MATRIX_WIDTH = 500, 500  # mm, as the engine's
 MAX_NAME = 256  # a field's or a calculated field's name, as the engine's
 MAX_SQL_CHARS = 100_000  # as a SQL script's
 MAX_EXPR = 4000
+MAX_GROUP_NAME = 100  # how an aggregate names a group, as the engine's
 
 PAGE_SIZES = {"A4": (210, 297), "A3": (297, 420), "A5": (148, 210), "Letter": (215.9, 279.4),
               "Legal": (215.9, 355.6)}
@@ -679,9 +680,10 @@ def _table(it: dict, at: str, what: str, item_id: str, width: float) -> None:
             raise Problem(f"{what}'s groups are a list of at most {MAX_GROUPS}", f"{at}.groups", item_id)
         for k, g in enumerate(groups):
             gat = f"{at}.groups[{k}]"
-            g = _keys(g, gat, ("by", "label", "header", "footer", "page_break", "sort", "keep_together"), ("by",),
+            g = _keys(g, gat, ("by", "name", "label", "header", "footer", "page_break", "sort", "keep_together"), ("by",),
                       what=f"{what}'s group", item=item_id)
             _expr(g["by"], f"{gat}.by", f"{what}'s group", item_id, required=True)
+            _text(g.get("name"), f"{gat}.name", f"{what}'s group name", MAX_GROUP_NAME, item_id)
             _expr(g.get("label"), f"{gat}.label", f"{what}'s group label", item_id)
             for flag in ("header", "footer", "keep_together"):
                 _bool(g.get(flag), f"{gat}.{flag}", f"{what}'s group {flag}", item_id)

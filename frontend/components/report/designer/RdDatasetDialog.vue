@@ -446,7 +446,7 @@ const rowCount = computed(() => countFor(counted.value, built()?.source))
         </div>
         <div v-for="(c, i) in draft.calculated" :key="i" class="rdd-calc">
           <input v-model="c.name" type="text" class="rdd-mono rdd-cname" maxlength="256" :placeholder="$t('reportDesigner.dataset.calcName')" :aria-label="$t('reportDesigner.dataset.calcName')" />
-          <RdExprInput v-model="c.expr" :fields="fieldsForCalc" :params="store.params.value" :label="$t('reportDesigner.dataset.calcExpr')" placeholder="[revenue] - [cost]"
+          <RdExprInput v-model="c.expr" :fields="fieldsForCalc" :params="store.params.value" :scopes="store.scopesOf(null)" :label="$t('reportDesigner.dataset.calcExpr')" placeholder="[revenue] - [cost]"
                        :problem="calcProblem(i)" :live="calcLive(i)" />
           <button type="button" class="rp-icon danger" :aria-label="$t('reportDesigner.props.remove')" :title="$t('reportDesigner.props.remove')" @click="draft.calculated.splice(i, 1)"><Trash2 :size="13" /></button>
         </div>
