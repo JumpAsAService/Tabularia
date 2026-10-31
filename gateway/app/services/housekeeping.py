@@ -5,16 +5,16 @@ storage; what piles up in Postgres is history, and every hour the orchestrators 
 - the data contracts' reports: the latest ORCHESTRATOR__CONTRACT_RESULTS_KEPT per
   datasource (a refresh every five minutes adds 288 a day), never one whose notice is
   still to be sent;
-- the versions of a flow, of a saved script, of a SQL script, of a notebook and of a
-  report: the latest ORCHESTRATOR__VERSIONS_KEPT, the one in use always (a flow with a
+- the versions of a flow, of a saved script, of a SQL script, of a notebook, of a report
+  and of a dashboard: the latest ORCHESTRATOR__VERSIONS_KEPT, the one in use always (a flow with a
   Script node keeps its code in every version, a report its images);
 - the assistant's conversations untouched for ORCHESTRATOR__AI_CHAT_RETENTION_DAYS, the
   spending ledger aside (it is the bill, not the conversation).
 - the agent's drafts unused for a day, and its plans: the pending ones past their 30
   minutes become expired, the others go with the conversations' retention
   (services/agent).
-- who opened which report, past the 30 days the Reports tab counts
-  (services/report_views.py): the reports keep their totals.
+- who opened which report or dashboard, past the 30 days the Reports tab counts
+  (services/report_views.py): the reports and the dashboards keep their totals.
 
 0 keeps everything of that kind. Postgres does not give back what an UPDATE or a DELETE
 frees: the old rows stay until a vacuum marks their space for reuse. So a pass that
@@ -145,6 +145,28 @@ def report_views(session: Session, at: datetime | None = None) -> int:
             SELECT id FROM report_views WHERE day < :first LIMIT :batch)""", first=window_start(at))
 
 
+def dashboard_versions(session: Session, kept: int) -> int:
+    if kept <= 0:
+        return 0
+    return _in_batches(session, """
+        DELETE FROM dashboard_versions WHERE id IN (
+            SELECT t.id FROM (
+                SELECT id, dashboard_id, version,
+                       ROW_NUMBER() OVER (PARTITION BY dashboard_id ORDER BY version DESC) AS n
+                FROM dashboard_versions) t
+            WHERE t.n > :kept AND NOT EXISTS (
+                SELECT 1 FROM dashboards s WHERE s.id = t.dashboard_id AND s.current_version = t.version)
+            LIMIT :batch)""", kept=kept)
+
+
+def dashboard_views(session: Session, at: datetime | None = None) -> int:
+    from app.services.report_views import window_start
+
+    return _in_batches(session, """
+        DELETE FROM dashboard_views WHERE id IN (
+            SELECT id FROM dashboard_views WHERE day < :first LIMIT :batch)""", first=window_start(at))
+
+
 def ai_chats(session: Session, days: int, at: datetime | None = None) -> int:
     if days <= 0:
         return 0
@@ -203,6 +225,8 @@ def one_pass(session: Session, at: datetime | None = None) -> dict[str, int]:
         "notebook_versions": lambda: notebook_versions(session, o.versions_kept),
         "report_versions": lambda: report_versions(session, o.versions_kept),
         "report_views": lambda: report_views(session, at=at),
+        "dashboard_versions": lambda: dashboard_versions(session, o.versions_kept),
+        "dashboard_views": lambda: dashboard_views(session, at=at),
         "ai_chats": lambda: ai_chats(session, o.ai_chat_retention_days, at=at),
         "agent_drafts": lambda: agent_drafts(session, at=at),
         "agent_plans": lambda: agent_plans(session, o.ai_chat_retention_days, at=at),

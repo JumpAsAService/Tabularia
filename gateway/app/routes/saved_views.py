@@ -23,7 +23,7 @@ from app.deps.permissions import ensure_can
 from app.models import Datasource, Project, SavedView, User
 from app.models.permission import Capability
 from app.schemas.models import SavedViewCreate, SavedViewOut, SavedViewUpdate
-from app.services import audit, reports
+from app.services import audit, dashboards, reports
 from app.services import permissions as perm_service
 from app.services.copy_names import commit_copy, free_copy_name
 from app.core.routing import ReleasingRoute
@@ -276,6 +276,7 @@ def delete_saved_view(
     view = _get_view(session, view_id)
     ensure_can(session, user, view.project_id, Capability.EDIT)
     reports.not_read_by_reports(session, user, "view", view.id, "The saved view")
+    dashboards.not_read_by_dashboards(session, user, "view", view.id, "The saved view")
     label = view.name
     session.delete(view)
     session.commit()

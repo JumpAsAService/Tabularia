@@ -1,0 +1,371 @@
+"""Dashboards: who sees them, what they hold, who opened them. docs/specs/dashboards.md; the
+object in models/dashboard.py, the routes in routes/dashboards.py.
+
+Who sees a dashboard: VIEW on its folder (administrators: every one). Whoever cannot see it
+gets 404, as if it did not exist; EDIT on the folder changes, moves, renames, duplicates and
+deletes it, and restores a version.
+
+`parameters` and `datasets` are a report's, checked by a report's code, and a saved
+definition points only to what its author may read, as a report's (services/reports.py). A
+tile is a report's item of its type with `grid` in place of `x`, `y`, `w`, `h`: `as_report`
+writes the definition as a report's, each tile as an item in a row of its own on a page wide
+enough for anything, and that is what the gateway's checks and the engine's read. What only a
+dashboard has is checked here: its limits, the interval, the grid. The problems are said as
+those of a dashboard (`_in_our_words`).
+"""
+from __future__ import annotations
+
+import json
+import re
+from datetime import datetime, timezone
+from typing import Any, Optional
+
+from fastapi import HTTPException
+from sqlalchemy import JSON, and_, case, cast, func, update
+from sqlalchemy.exc import IntegrityError
+from sqlmodel import Session, select
+
+from app.models import Dashboard, DashboardVersion, DashboardView, User
+from app.models.permission import Capability
+from app.services import permissions as perm_service
+from app.services import report_definition, report_views, reports
+from app.services.permissions import is_admin
+from app.services.report_definition import ITEM_ID, Problem, _keys, _text
+
+MAX_TILES, MAX_DATASETS, MAX_PARAMETERS = 40, 10, 20
+MIN_REFRESH_SECONDS, MAX_REFRESH_SECONDS = 60, 24 * 3600  # 0: by hand only
+GRID_COLUMNS, MAX_GRID_ROW, MAX_TILE_ROWS = 12, 1000, 100
+TILE_TYPES = ("kpi", "chart", "table", "text", "image")
+# the smallest tile of each type, columns and rows (a row is 40 px)
+MIN_TILE = {"kpi": (2, 2), "chart": (4, 4), "table": (4, 4), "text": (2, 1), "image": (1, 1)}
+FILTERS_OTHERS = ("chart", "table")  # a KPI, a text and an image do not filter
+_HAS_TITLE = ("chart", "table")  # a report's items with a title of their own: the rest take the tile's here
+_ITEM_PATH = re.compile(r"^sections\.body\.items\[(\d+)\](.*)$")
+_TILE_PATH = re.compile(r"^tiles\[\d+\]\.?(.*)$")
+
+
+# ── who sees what ────────────────────────────────────────────────────────────
+def can_see(session: Session, user: User, dashboard: Dashboard) -> bool:
+    return is_admin(session, user) or perm_service.has_capability(session, user, dashboard.project_id, Capability.VIEW)
+
+
+def visible_query(session: Session, user: User, project_ids: Optional[set[int]] = None):
+    """A select of the dashboards this person sees (in `project_ids` when given), by name, or
+    None when there are none."""
+    stmt = select(Dashboard)
+    if not is_admin(session, user):
+        readable = set(perm_service.readable_project_ids(session, user))
+        if project_ids is not None:
+            readable &= set(project_ids)
+        if not readable:
+            return None
+        stmt = stmt.where(Dashboard.project_id.in_(readable))  # type: ignore[attr-defined]
+    elif project_ids is not None:
+        stmt = stmt.where(Dashboard.project_id.in_(project_ids))  # type: ignore[attr-defined]
+    return stmt.order_by(Dashboard.name)
+
+
+def get_visible(session: Session, user: User, dashboard_id: int) -> Dashboard:
+    """The dashboard, or 404: one that cannot be seen does not exist for this person."""
+    dashboard = session.get(Dashboard, dashboard_id)
+    if dashboard is None or not can_see(session, user, dashboard):
+        raise HTTPException(status_code=404, detail="Dashboard not found")
+    return dashboard
+
+
+# ── what reads what ──────────────────────────────────────────────────────────
+def dashboards_reading(session: Session, kind: str, object_id: int) -> list[Dashboard]:
+    """The dashboards one of whose datasets (in the current version) names the object. A SQL
+    on the catalog names its datasources by name: those are not found here."""
+    source_kind, key = reports._POINTS_TO[kind]
+    rows = session.exec(select(Dashboard, DashboardVersion).join(DashboardVersion, and_(
+        Dashboard.id == DashboardVersion.dashboard_id, Dashboard.current_version == DashboardVersion.version,
+    )).where(DashboardVersion.content.contains(f'"{key}"'))).all()  # type: ignore[union-attr]
+    return [dashboard for dashboard, row in rows
+            if any(isinstance(d, dict) and (d.get("source") or {}).get("kind") == source_kind
+                   and (d.get("source") or {}).get(key) == object_id for d in _parsed(row).get("datasets") or [])]
+
+
+def not_read_by_dashboards(session: Session, user: User, kind: str, object_id: int, what: str) -> None:
+    """409 when dashboards read the object about to be deleted, as for reports: it names the
+    ones this person sees and counts the others, whose names are not theirs to know."""
+    found = dashboards_reading(session, kind, object_id)
+    if not found:
+        return
+    seen = sorted(d.name for d in found if can_see(session, user, d))
+    others = len(found) - len(seen)
+    who = ", ".join(f"«{n}»" for n in seen[:10]) + (" …" if len(seen) > 10 else "")
+    if not seen:
+        who = f"{others} {'dashboard' if others == 1 else 'dashboards'} you cannot see"
+    elif others:
+        who = f"the dashboards {who} and {others} you cannot see"
+    else:
+        who = f"the dashboards {who}"
+    raise HTTPException(status_code=409, detail={"message": f"{what} is read by {who}: change them first",
+                                                 "flows": [], "groups": [], "reports": [], "dashboards": seen})
+
+
+# ── versions ─────────────────────────────────────────────────────────────────
+def version_row(session: Session, dashboard: Dashboard, version: Optional[int] = None) -> Optional[DashboardVersion]:
+    """A version of the dashboard (None: the current one); None when it has no such version."""
+    return session.exec(select(DashboardVersion).where(
+        DashboardVersion.dashboard_id == dashboard.id,
+        DashboardVersion.version == (dashboard.current_version if version is None else version))).first()
+
+
+def _parsed(row: Optional[DashboardVersion]) -> dict:
+    if row is None:
+        return empty()
+    try:
+        return json.loads(row.content)
+    except ValueError:
+        return empty()
+
+
+def content_of(session: Session, dashboard: Dashboard, version: Optional[int] = None) -> dict:
+    return _parsed(version_row(session, dashboard, version))
+
+
+def sizes_of(session: Session, dashboard_ids: list[int]) -> dict[int, tuple[int, int, int]]:
+    """{dashboard: (datasets, parameters, tiles)} of the current versions, counted by the
+    database: a definition holds its images, and a list of dashboards has no use for them."""
+    if not dashboard_ids:
+        return {}
+    if session.get_bind().dialect.name == "postgresql":
+        tree = cast(DashboardVersion.content, JSON)
+
+        def length(key: str):
+            part = tree.op("->")(key)
+            return case((func.json_typeof(part) == "array", func.json_array_length(part)), else_=0)
+    else:  # SQLite, the tests'
+        def length(key: str):
+            return func.coalesce(func.json_array_length(DashboardVersion.content, f"$.{key}"), 0)
+    rows = session.exec(select(DashboardVersion.dashboard_id, length("datasets"), length("parameters"), length("tiles")).join(
+        Dashboard, and_(Dashboard.id == DashboardVersion.dashboard_id, Dashboard.current_version == DashboardVersion.version),
+    ).where(Dashboard.id.in_(dashboard_ids))).all()  # type: ignore[union-attr]
+    return {dashboard_id: (datasets, parameters, tiles) for dashboard_id, datasets, parameters, tiles in rows}
+
+
+def add_version(session: Session, dashboard: Dashboard, content: dict, note: str, user: User) -> DashboardVersion:
+    """The next version, which becomes the current one. The dashboard's row stays locked until
+    the commit: two saves at once take the next numbers in turn."""
+    session.exec(select(Dashboard.id).where(Dashboard.id == dashboard.id).with_for_update())
+    last = session.exec(select(DashboardVersion.version).where(DashboardVersion.dashboard_id == dashboard.id)
+                        .order_by(DashboardVersion.version.desc())).first() or 0  # type: ignore[attr-defined]
+    row = DashboardVersion(dashboard_id=dashboard.id, version=last + 1, content=json.dumps(content), note=note,
+                           created_by=user.id)
+    session.add(row)
+    dashboard.current_version = row.version
+    session.add(dashboard)
+    return row
+
+
+# ── the definition ───────────────────────────────────────────────────────────
+def empty(locale: str = "en", zone: str = "UTC") -> dict:
+    """A new dashboard's definition: no data yet, refreshed by hand."""
+    return {"v": 1, "locale": locale if locale in report_definition.LOCALES else "en", "timezone": zone or "UTC",
+            "refresh_seconds": 0, "parameters": [], "datasets": [], "tiles": []}
+
+
+def as_report(definition: dict) -> dict:
+    """The definition as a report's, for the code that checks one: its parameters and datasets
+    as they are, each tile an item in a row of its own (a report's rules on millimetres have
+    nothing to say about a grid) on the largest page there is."""
+    tiles = definition.get("tiles")
+    items = []
+    for i, tile in enumerate(tiles if isinstance(tiles, list) else []):
+        if isinstance(tile, dict):
+            dropped = {"grid", "filters_others", *(() if tile.get("type") in _HAS_TITLE else ("title",))}
+            items.append({**{k: v for k, v in tile.items() if k not in dropped}, "x": 0, "y": i * 11, "w": 100, "h": 10})
+    shaped: dict[str, Any] = {"v": definition.get("v"), "page": {"size": {"w": 2000, "h": 2000}, "margins": [0, 0, 0, 0]},
+                              "sections": {"body": {"items": items}}}
+    for key in ("locale", "timezone", "parameters", "datasets"):
+        if key in definition:
+            shaped[key] = definition[key]
+    return shaped
+
+
+def _in_our_words(message: str) -> str:
+    """A report's message about a dashboard: the checks are the same, the words are not."""
+    message = re.sub(r"\b([Tt])he report\b", lambda m: f"{m.group(1)}he dashboard", message)
+    return re.sub(r"\b([Tt])he item\b", lambda m: f"{m.group(1)}he tile", message)
+
+
+def _said(p: Problem) -> Problem:
+    """A problem found by a report's code, with the dashboard's words and paths."""
+    return Problem(_in_our_words(p.message), _ITEM_PATH.sub(r"tiles[\1]\2", p.where), p.item)
+
+
+def _problem_dict(p: Problem, definition: Any) -> dict:
+    """As the engine says its problems: the property inside the tile (`series[0].value`)."""
+    said = p.as_dict(definition)
+    if p.item is not None and (m := _TILE_PATH.match(p.where)):
+        said["field"] = m.group(1)
+    return said
+
+
+def _at_most(value: Any, most: int, key: str, what: str) -> list:
+    """A list of `key`, stating the limit."""
+    if value is None:
+        return []
+    if not isinstance(value, list):
+        raise Problem(f"The {what} are a list of at most {most}", key)
+    if len(value) > most:
+        raise Problem(f"A dashboard holds at most {most} {what}: this one has {len(value)}", key)
+    return value
+
+
+def _refresh(value: Any) -> None:
+    if isinstance(value, bool) or not isinstance(value, int) or value != 0 and not (
+            MIN_REFRESH_SECONDS <= value <= MAX_REFRESH_SECONDS):
+        raise Problem(f"The refresh is 0 (by hand) or from {MIN_REFRESH_SECONDS} to {MAX_REFRESH_SECONDS} seconds",
+                      "refresh_seconds")
+
+
+def _whole(value: Any, where: str, what: str, lo: int, hi: int, item: str) -> int:
+    if isinstance(value, bool) or not isinstance(value, int):
+        raise Problem(f"{what} is a whole number", where, item)
+    if not lo <= value <= hi:
+        raise Problem(f"{what} is between {lo} and {hi}", where, item)
+    return value
+
+
+def _grid(tile: dict, at: str, what: str, item: str) -> tuple[int, int, int, int]:
+    where = f"{at}.grid"
+    grid = _keys(tile.get("grid"), where, ("x", "y", "w", "h"), what=f"{what}'s grid", item=item)
+    for key in ("x", "y", "w", "h"):
+        if grid.get(key) is None:
+            raise Problem(f"{what}'s grid: «{key}» is missing", f"{where}.{key}", item)
+    x = _whole(grid["x"], f"{where}.x", f"{what}'s column", 0, GRID_COLUMNS - 1, item)
+    y = _whole(grid["y"], f"{where}.y", f"{what}'s row", 0, MAX_GRID_ROW, item)
+    w = _whole(grid["w"], f"{where}.w", f"{what}'s width", 1, GRID_COLUMNS, item)
+    h = _whole(grid["h"], f"{where}.h", f"{what}'s height", 1, MAX_TILE_ROWS, item)
+    if x + w > GRID_COLUMNS:
+        raise Problem(f"{what} goes past the {GRID_COLUMNS} columns of the grid", where, item)
+    least_w, least_h = MIN_TILE[tile["type"]]
+    if w < least_w:
+        raise Problem(f"{what} is at least {least_w} columns wide", where, item)
+    if h < least_h:
+        raise Problem(f"{what} is at least {least_h} rows high", where, item)
+    return x, y, w, h
+
+
+def _tiles(tiles: list) -> None:
+    """What a report's item does not have: the id and type a dashboard takes, the place on the
+    grid, which two tiles do not share, and what the tile itself says."""
+    ids: set[str] = set()
+    placed: list[tuple[str, tuple[int, int, int, int]]] = []
+    for i, tile in enumerate(tiles):
+        at = f"tiles[{i}]"
+        if not isinstance(tile, dict):
+            raise Problem("A tile is an object", at)
+        item_id = tile.get("id")
+        if not isinstance(item_id, str) or not ITEM_ID.match(item_id):
+            raise Problem("A tile needs an id (letters, digits, _ and -)", f"{at}.id")
+        if item_id in ids:
+            raise Problem(f"Two tiles have the id «{item_id}»", f"{at}.id", item_id)
+        ids.add(item_id)
+        what = f"The tile «{item_id}»"
+        if tile.get("type") not in TILE_TYPES:
+            raise Problem(f"A tile is one of {', '.join(TILE_TYPES)}: not «{str(tile.get('type'))[:20]}»", f"{at}.type", item_id)
+        for key in ("x", "y", "w", "h"):
+            if key in tile:
+                raise Problem(f"{what} takes its place from «grid»: not «{key}»", f"{at}.{key}", item_id)
+        if tile.get("grid") is None:
+            raise Problem(f"{what}: «grid» is missing", f"{at}.grid", item_id)
+        box = _grid(tile, at, what, item_id)
+        x, y, w, h = box
+        for other, (ox, oy, ow, oh) in placed:
+            if x < ox + ow and ox < x + w and y < oy + oh and oy < y + h:
+                raise Problem(f"{what} lies on «{other}»: two tiles do not share a cell", f"{at}.grid", item_id)
+        placed.append((item_id, box))
+        if tile.get("type") not in _HAS_TITLE:
+            _text(tile.get("title"), f"{at}.title", f"{what}'s title", 200, item_id)
+        if "filters_others" in tile:
+            if tile["type"] not in FILTERS_OTHERS:
+                raise Problem(f"{what} does not filter the others: only a chart or a table does", f"{at}.filters_others", item_id)
+            if not isinstance(tile["filters_others"], bool):
+                raise Problem(f"{what}'s filters_others is true or false", f"{at}.filters_others", item_id)
+
+
+def check(definition: Any) -> dict:
+    """The definition as it will be saved, or Problem saying what is wrong and where."""
+    if not isinstance(definition, dict):
+        raise Problem("The dashboard's definition is an object")
+    _keys(definition, "", ("v", "locale", "timezone", "refresh_seconds", "parameters", "datasets", "tiles"), ("v",),
+          what="The dashboard")
+    if definition.get("v") != 1:
+        raise Problem("The dashboard's definition is version 1 (v: 1)", "v")
+    if "refresh_seconds" in definition:
+        _refresh(definition["refresh_seconds"])
+    _at_most(definition.get("parameters"), MAX_PARAMETERS, "parameters", "parameters")
+    _at_most(definition.get("datasets"), MAX_DATASETS, "datasets", "datasets")
+    tiles = _at_most(definition.get("tiles"), MAX_TILES, "tiles", "tiles")
+    _tiles(tiles)
+    shaped = as_report(definition)
+    try:
+        report_definition.check(shaped)
+    except Problem as p:
+        raise _said(p) from None
+    # an image as it is kept: its data URL in one piece, as the check wrote it
+    for tile, item in zip(tiles, shaped["sections"]["body"]["items"]):
+        if tile["type"] == "image":
+            tile["asset"] = item["asset"]
+    return definition
+
+
+async def review(session: Session, user: User, definition: Any, current: Optional[dict] = None) -> reports.Review:
+    """Every problem of a definition, as for a report (reports.review): the gateway's (the first
+    one only, each check stops there) and the engine's (the expressions of the tiles and the
+    datasets against the fields, all of them). What a save refuses and what POST /dashboards/check
+    says."""
+    found: list[dict] = []
+    checked, where = None, None
+    try:
+        checked = check(definition)
+        reports.check_references(session, user, checked, current)
+    except Problem as p:
+        said = _said(p)
+        found.append(_problem_dict(said, definition))
+        checked, where = None, said.where
+    if isinstance(definition, dict):
+        columns = reports.known_columns(session, user, checked) if checked is not None else None
+        seen = {(f["item"], f["field"]) for f in found}
+        for e in await reports.engine_problems(as_report(definition), columns):
+            if (e["item"], e["field"]) not in seen:
+                seen.add((e["item"], e["field"]))
+                found.append({**e, "message": _in_our_words(e["message"])})
+    return reports.Review(checked if not found else None, found, where)
+
+
+async def checked(session: Session, user: User, definition: Any, current: Optional[dict] = None) -> dict:
+    """The definition to save, or a 422 saying every problem and where."""
+    looked = await review(session, user, definition, current)
+    if looked.problems:
+        raise looked.refusal()
+    return looked.definition  # type: ignore[return-value]
+
+
+# ── who opened it ────────────────────────────────────────────────────────────
+def record_open(session: Session, dashboard: Dashboard, user: User, at: Optional[datetime] = None) -> bool:
+    """`user` opened `dashboard` now. True when it is their first opening of the day, which
+    counts (services/report_views.py says why, and the window); the latest opening is noted
+    either way. Commits."""
+    now = at or datetime.now(timezone.utc)
+    day = report_views.today(now)
+    seen = session.exec(select(DashboardView.id).where(
+        DashboardView.dashboard_id == dashboard.id, DashboardView.user_id == user.id, DashboardView.day == day)).first()
+    counted = False
+    if seen is None:
+        session.add(DashboardView(dashboard_id=dashboard.id, user_id=user.id, day=day, at=now))
+        try:
+            session.flush()
+            counted = True
+        except IntegrityError:  # the same opening at the same moment, from another tab
+            session.rollback()
+    values: dict[str, Any] = {"last_viewed_at": now}
+    if counted:
+        values["views_total"] = Dashboard.views_total + 1  # in the database: two openings at once both count
+    session.exec(update(Dashboard).where(Dashboard.id == dashboard.id).values(**values))
+    session.commit()
+    return counted

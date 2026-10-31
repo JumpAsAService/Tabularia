@@ -21,6 +21,7 @@ from tests.conftest import make_datasource, make_flow, make_project, make_user
 REFERENCES = {
     ("ai_models", "updated_by"), ("ai_providers", "updated_by"), ("api_tokens", "user_id"), ("api_tokens", "created_by"),
     ("audit_logs", "actor_id"), ("banners", "created_by"), ("connections", "owner_id"),
+    ("dashboard_versions", "created_by"), ("dashboard_views", "user_id"), ("dashboards", "owner_id"),
     ("container_registry_access", "user_id"), ("datasources", "owner_id"),
     ("datasources", "refresh_scheduled_by"), ("disabled_engines", "disabled_by"), ("flow_groups", "owner_id"),
     ("flow_groups", "run_scheduled_by"), ("flow_versions", "created_by"), ("flows", "owner_id"),

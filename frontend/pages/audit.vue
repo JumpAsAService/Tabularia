@@ -10,7 +10,7 @@ import { GridComponent, TooltipComponent, LegendComponent } from 'echarts/compon
 import VChart from 'vue-echarts'
 import {
   ScrollText, Search, RefreshCw, ChevronLeft, ChevronRight, Circle,
-  LogIn, LogOut, Workflow, Database, Plug, Download, Shield, CheckCircle2, XCircle, AlertTriangle, KeyRound, SlidersHorizontal, Radar, Rows3, Server, Folder, Code2, DatabaseSearch, Boxes, DatabaseBackup, Sparkles, Megaphone, FileCheck, Mail, Cpu, NotebookPen, Bot, FileChartColumn } from 'lucide-vue-next'
+  LogIn, LogOut, Workflow, Database, Plug, Download, Shield, CheckCircle2, XCircle, AlertTriangle, KeyRound, SlidersHorizontal, Radar, Rows3, Server, Folder, Code2, DatabaseSearch, Boxes, DatabaseBackup, Sparkles, Megaphone, FileCheck, Mail, Cpu, NotebookPen, Bot, FileChartColumn, LayoutDashboard } from 'lucide-vue-next'
 import { useApi, type AuditEntry, type ActiveSession, type AccessActivity } from '~/composables/useApi'
 import { useI18n } from 'vue-i18n'
 import { useFormat } from '~/composables/useFormat'
@@ -209,6 +209,14 @@ const ACTION_META = computed<Record<string, { icon: any; color: string; label: s
     'report.duplicate': { icon: FileChartColumn, color: u.accent, label: t('audit.reportDuplicateAction') },
     'report.restore': { icon: FileChartColumn, color: u.accent, label: t('audit.reportRestoreAction') },
     'report.render': { icon: FileChartColumn, color: u.violet, label: t('audit.reportRenderAction') },
+    'dashboard.create': { icon: LayoutDashboard, color: u.accent, label: t('audit.dashboardCreateAction') },
+    'dashboard.update': { icon: LayoutDashboard, color: u.accent, label: t('audit.dashboardUpdateAction') },
+    'dashboard.delete': { icon: LayoutDashboard, color: u.danger, label: t('audit.dashboardDeleteAction') },
+    'dashboard.move': { icon: LayoutDashboard, color: u.accent, label: t('audit.dashboardMoveAction') },
+    'dashboard.rename': { icon: LayoutDashboard, color: u.accent, label: t('audit.dashboardRenameAction') },
+    'dashboard.duplicate': { icon: LayoutDashboard, color: u.accent, label: t('audit.dashboardDuplicateAction') },
+    'dashboard.restore': { icon: LayoutDashboard, color: u.accent, label: t('audit.dashboardRestoreAction') },
+    'dashboard.open': { icon: LayoutDashboard, color: u.violet, label: t('audit.dashboardOpenAction') },
     'auth.sso_login': { icon: KeyRound, color: u.success, label: t('audit.ssoLoginAction') },
     'auth.sso_login_failed': { icon: KeyRound, color: u.danger, label: t('audit.ssoLoginFailedAction') },
     'auth.first_run_setup': { icon: KeyRound, color: u.success, label: t('audit.firstRunSetupAction') },

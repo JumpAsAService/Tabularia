@@ -14,6 +14,7 @@ What is tested (docs/database-migrations.md):
 · without automatic migration the gateway stops on a database behind, not on a newer
   one (rolling update);
 · the revisions are one chain."""
+import json
 import os
 import uuid
 
@@ -205,3 +206,65 @@ def test_0035_adds_the_providers_and_leaves_what_was_there(temporary_database):
     # what the previous version does during a rolling update: inserts a row by its bare name
     with temporary_database.begin() as c:
         c.execute(text("INSERT INTO ai_models (model_id, enabled, updated_at) VALUES ('another', true, now())"))
+
+
+def test_0036_adds_the_dashboards_and_leaves_what_was_there(temporary_database):
+    """An installation with its folders and reports: nothing of it changes, the three tables come
+    empty, and what the previous version does during a rolling update still works."""
+    with temporary_database.begin() as c:
+        command.upgrade(m._config(c), "0035")
+        c.execute(text("INSERT INTO users (id, email, full_name, is_active, is_superuser, is_observer, created_at) VALUES "
+                       "(1, 'ann@example.com', '', true, false, false, now()), (2, 'bob@example.com', '', true, false, false, now())"))
+        c.execute(text("INSERT INTO projects (id, name, description, owner_id, created_at) VALUES "
+                       "(10, 'Sales', '', 1, now()), (11, 'Old', '', 1, now())"))
+        c.execute(text("INSERT INTO reports (id, name, description, project_id, owner_id, current_version, created_at, updated_at, views_total) "
+                       "VALUES (5, 'Margin', '', 10, 1, 1, now(), now(), 3)"))
+        c.execute(text("INSERT INTO report_versions (id, report_id, version, content, note, created_at) "
+                       "VALUES (7, 5, 1, '{\"v\": 1}', 'created', now())"))
+    m.migra(temporary_database)  # stops if the database and the models differ
+    with temporary_database.connect() as c:
+        assert c.execute(text("SELECT name, views_total FROM reports")).one() == ("Margin", 3)
+        assert c.execute(text("SELECT content FROM report_versions")).scalar() == '{"v": 1}'
+        assert [c.execute(text(f"SELECT count(*) FROM {t}")).scalar() for t in
+                ("dashboards", "dashboard_versions", "dashboard_views")] == [0, 0, 0]
+    # the previous version's writes do not know the new tables
+    with temporary_database.begin() as c:
+        c.execute(text("INSERT INTO reports (name, description, project_id, current_version, created_at, updated_at, views_total) "
+                       "VALUES ('Another', '', 10, 1, now(), now(), 0)"))
+        c.execute(text("DELETE FROM projects WHERE id = 11"))
+        c.execute(text("DELETE FROM report_views"))
+
+
+def test_0036_on_postgres_a_name_is_unique_in_its_folder_and_the_openings_go_with_their_person(temporary_database):
+    """What SQLite does not hold in the other tests: the constraints, the cascade, the JSON of
+    `sizes_of` and the housekeeping's windows are Postgres's."""
+    from sqlalchemy.exc import IntegrityError
+    from sqlmodel import Session
+
+    from app.services import dashboards, housekeeping
+
+    m.migra(temporary_database)
+    content = {"v": 1, "parameters": [{"name": "p", "type": "text"}], "datasets": [], "tiles": [{"id": "a"}, {"id": "b"}]}
+    with temporary_database.begin() as c:
+        c.execute(text("INSERT INTO users (id, email, full_name, is_active, is_superuser, is_observer, created_at) "
+                       "VALUES (1, 'ann@example.com', '', true, false, false, now())"))
+        c.execute(text("INSERT INTO projects (id, name, description, owner_id, created_at) VALUES (10, 'Sales', '', 1, now())"))
+        c.execute(text("INSERT INTO dashboards (id, name, description, project_id, owner_id, current_version, created_at, updated_at) "
+                       "VALUES (5, 'Live', '', 10, 1, 3, now(), now())"))
+        for v in range(1, 6):
+            c.execute(text("INSERT INTO dashboard_versions (dashboard_id, version, content, note, created_at) "
+                           "VALUES (5, :v, :content, 'edited', now())"), {"v": v, "content": json.dumps(content)})
+        c.execute(text("INSERT INTO dashboard_views (dashboard_id, user_id, day, at) VALUES (5, 1, '2026-10-30', now())"))
+    with pytest.raises(IntegrityError):
+        with temporary_database.begin() as c:
+            c.execute(text("INSERT INTO dashboards (name, description, project_id, current_version, created_at, updated_at) "
+                           "VALUES ('Live', '', 10, 1, now(), now())"))
+    with Session(temporary_database) as session:
+        assert dashboards.sizes_of(session, [5]) == {5: (0, 1, 2)}
+        assert housekeeping.dashboard_versions(session, 2) == 2  # v1, v2: v3 is the current one
+    with temporary_database.begin() as c:
+        assert [r[0] for r in c.execute(text("SELECT version FROM dashboard_versions ORDER BY version"))] == [3, 4, 5]
+        c.execute(text("UPDATE dashboards SET owner_id = NULL"))
+        c.execute(text("UPDATE projects SET owner_id = NULL"))
+        c.execute(text("DELETE FROM users WHERE id = 1"))
+        assert c.execute(text("SELECT count(*) FROM dashboard_views")).scalar() == 0

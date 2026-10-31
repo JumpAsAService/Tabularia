@@ -50,6 +50,7 @@ import {
   DatabaseSearch,
   NotebookPen,
   FileChartColumn,
+  LayoutDashboard,
   FolderKey,
 } from 'lucide-vue-next'
 import { errMessage, useApi } from '~/composables/useApi'
@@ -69,6 +70,7 @@ import { useScriptingEditor } from '~/composables/useScripting'
 import { useSqlScripts, type SqlScript } from '~/composables/useSqlScripts'
 import { useNotebooks, type Notebook } from '~/composables/useNotebooks'
 import { starterReport, useReports, type Report } from '~/composables/useReports'
+import { starterDashboard, useDashboards, type Dashboard } from '~/composables/useDashboards'
 import ContractBadge from '~/components/ui/ContractBadge.vue'
 import ContractDialog from '~/components/ui/ContractDialog.vue'
 import {
@@ -93,6 +95,7 @@ const scriptsApi = useSavedScripts()
 const sqlApi = useSqlScripts()
 const notebooksApi = useNotebooks()
 const reportsApi = useReports()
+const dashboardsApi = useDashboards()
 const appInfo = useAppInfo()
 // «New → Script» only for whoever may use a scripting environment (Kubernetes)
 const scriptingEditor = useScriptingEditor()
@@ -120,6 +123,7 @@ const scripts = ref<SavedScript[]>([])
 const sqlScripts = ref<SqlScript[]>([])
 const notebooks = ref<Notebook[]>([])
 const reports = ref<Report[]>([])
+const dashboards = ref<Dashboard[]>([])
 const connections = ref<ConnectionInfo[]>([])
 const canConnect = ref(false)
 const canManage = ref(false)
@@ -186,7 +190,7 @@ function openFolder(id: number | null) {
 }
 
 // ── Unified row: one kind of row for six kinds of resource ────────────
-type Kind = 'folder' | 'flow' | 'group' | 'datasource' | 'view' | 'script' | 'sql' | 'notebook' | 'report' | 'connection'
+type Kind = 'folder' | 'flow' | 'group' | 'datasource' | 'view' | 'script' | 'sql' | 'notebook' | 'report' | 'dashboard' | 'connection'
 interface Row {
   kind: Kind
   id: number
@@ -212,6 +216,7 @@ const KIND_ICON: Record<Kind, any> = {
   sql: DatabaseSearch,
   notebook: NotebookPen,
   report: FileChartColumn,
+  dashboard: LayoutDashboard,
   connection: Plug,
 }
 
@@ -266,6 +271,10 @@ const rows = computed<Row[]>(() => {
     const meta = [`v${r.current_version}`, fmtDate(r.updated_at)].filter(Boolean).join(' · ')
     out.push({ kind: 'report', id: r.id, name: r.name, meta, to: `/report?id=${r.id}`, raw: r })
   }
+  for (const d of dashboards.value) {
+    const meta = [`v${d.current_version}`, fmtDate(d.updated_at)].filter(Boolean).join(' · ')
+    out.push({ kind: 'dashboard', id: d.id, name: d.name, meta, to: `/dashboard?id=${d.id}`, raw: d })
+  }
   for (const c of connections.value) {
     out.push({
       kind: 'connection', id: c.id, name: c.name,
@@ -296,7 +305,7 @@ const visibleRows = computed(() =>
   kindFilter.value ? matching.value.filter((r) => r.kind === kindFilter.value) : matching.value,
 )
 const segments = computed(() =>
-  (['folder', 'flow', 'group', 'datasource', 'view', 'script', 'sql', 'notebook', 'report', 'connection'] as Kind[])
+  (['folder', 'flow', 'group', 'datasource', 'view', 'script', 'sql', 'notebook', 'report', 'dashboard', 'connection'] as Kind[])
     .filter((k) => counts.value[k])
     .map((k) => ({ kind: k, n: counts.value[k] })),
 )
@@ -320,6 +329,7 @@ async function loadFolder(id: number | null) {
   sqlScripts.value = []
   notebooks.value = []
   reports.value = []
+  dashboards.value = []
   connections.value = []
   permissions.value = []
   canManage.value = false
@@ -351,6 +361,7 @@ async function loadFolder(id: number | null) {
     try { sqlScripts.value = await sqlApi.listByProject(id) } catch { sqlScripts.value = [] }
     try { notebooks.value = await notebooksApi.listByProject(id) } catch { notebooks.value = [] }
     try { reports.value = await reportsApi.listByProject(id) } catch { reports.value = [] }
+    try { dashboards.value = await dashboardsApi.listByProject(id) } catch { dashboards.value = [] }
     // connections require CONNECT: the refusal is information, not an error
     try {
       connections.value = await connApi.listByProject(id)
@@ -530,6 +541,9 @@ async function moveRow(row: Row, target: number | null) {
     } else if (row.kind === 'report') {
       await reportsApi.update(row.id, { project_id: target })
       reports.value = reports.value.filter((x) => x.id !== row.id)
+    } else if (row.kind === 'dashboard') {
+      await dashboardsApi.update(row.id, { project_id: target })
+      dashboards.value = dashboards.value.filter((x) => x.id !== row.id)
     } else if (row.kind === 'connection') {
       await connApi.update(row.id, { project_id: target })
       connections.value = connections.value.filter((c) => c.id !== row.id)
@@ -550,7 +564,7 @@ async function moveRow(row: Row, target: number | null) {
 const renaming = ref<string | null>(null)
 const renameDraft = ref('')
 const renameBusy = ref(false)
-const RENAMABLE = new Set<Kind>(['folder', 'flow', 'group', 'datasource', 'view', 'script', 'sql', 'notebook', 'report'])
+const RENAMABLE = new Set<Kind>(['folder', 'flow', 'group', 'datasource', 'view', 'script', 'sql', 'notebook', 'report', 'dashboard'])
 
 function startRename(row: Row) {
   renaming.value = rowKey(row)
@@ -603,6 +617,9 @@ async function commitRename(row: Row) {
     } else if (row.kind === 'report') {
       await reportsApi.update(row.id, { name })
       reports.value = rename(reports.value)
+    } else if (row.kind === 'dashboard') {
+      await dashboardsApi.update(row.id, { name })
+      dashboards.value = rename(dashboards.value)
     } else if (row.kind === 'folder') {
       await api.update(row.id, { name })
       projects.value = projects.value.map((p) => (p.id === row.id ? { ...p, name } : p))
@@ -670,6 +687,10 @@ async function duplicateRow(row: Row) {
       const copy = await reportsApi.duplicate(row.id)
       reports.value = [...reports.value, copy].sort(byName)
       name = copy.name
+    } else if (row.kind === 'dashboard') {
+      const copy = await dashboardsApi.duplicate(row.id)
+      dashboards.value = [...dashboards.value, copy].sort(byName)
+      name = copy.name
     } else if (row.kind === 'connection') {
       const copy = await connApi.duplicate(row.id)
       connections.value = [...connections.value, copy].sort(byName)
@@ -728,6 +749,11 @@ async function removeRow(row: Row) {
       await reportsApi.remove(row.id)
       reports.value = reports.value.filter((x) => x.id !== row.id)
       toast.success(t('projectBrowser.reportDeleted', { name: row.name }))
+    } else if (row.kind === 'dashboard') {
+      if (!ask('projectBrowser.confirmDeleteDashboard')) return
+      await dashboardsApi.remove(row.id)
+      dashboards.value = dashboards.value.filter((x) => x.id !== row.id)
+      toast.success(t('projectBrowser.dashboardDeleted', { name: row.name }))
     } else if (row.kind === 'connection') {
       if (!ask('projectBrowser.confirmDeleteConnection')) return
       await connApi.remove(row.id)
@@ -809,6 +835,38 @@ async function createReport() {
     toast.error(errMessage(e))
   } finally {
     creatingReport.value = false
+  }
+}
+
+// «New → Dashboard»: made here, empty, under the first free «New dashboard» name, then opened
+const creatingDashboard = ref(false)
+async function createDashboard() {
+  const folder = currentId.value
+  if (folder == null || creatingDashboard.value) return
+  creatingDashboard.value = true
+  try {
+    const base = t('projectBrowser.newDashboardName')
+    const taken = new Set(dashboards.value.map((d) => d.name))
+    const info = await appInfo.load()
+    const content = starterDashboard(String(locale.value), info?.timezone ?? 'UTC')
+    for (let i = 1; i < 50; i++) {
+      const name = i === 1 ? base : `${base} (${i})`
+      if (taken.has(name)) continue
+      try {
+        const created = await dashboardsApi.create(folder, { name, content })
+        closeNew()
+        await navigateTo(`/dashboard?id=${created.id}`)
+        return
+      } catch (e: any) {
+        // someone made one with this name meanwhile: the next one
+        if ((e?.response?.status ?? e?.statusCode) !== 409) throw e
+        taken.add(name)
+      }
+    }
+  } catch (e) {
+    toast.error(errMessage(e))
+  } finally {
+    creatingDashboard.value = false
   }
 }
 
@@ -1122,6 +1180,12 @@ watch(currentId, () => { q.value = ''; kindFilter.value = null; settingsOpen.val
                 <span class="mi-top">
                   <LoaderCircle v-if="creatingReport" :size="14" class="spin" /><FileChartColumn v-else :size="14" />
                   {{ $t('projectBrowser.newReportButton') }}
+                </span>
+              </button>
+              <button class="menu-item" :disabled="creatingDashboard" :aria-busy="creatingDashboard" @click="createDashboard">
+                <span class="mi-top">
+                  <LoaderCircle v-if="creatingDashboard" :size="14" class="spin" /><LayoutDashboard v-else :size="14" />
+                  {{ $t('projectBrowser.newDashboardButton') }}
                 </span>
               </button>
               <button v-if="scriptingEditor.available.value" class="menu-item" @click="createScript">

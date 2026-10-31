@@ -357,7 +357,7 @@ class FlowGroupDetail(FlowGroupOut):
 
 
 # ── Unified search (by name, over every kind of resource) ─────────────────────
-SearchKind = Literal["folder", "flow", "group", "datasource", "view", "script", "sql", "notebook", "report", "connection"]
+SearchKind = Literal["folder", "flow", "group", "datasource", "view", "script", "sql", "notebook", "report", "dashboard", "connection"]
 
 
 class SearchHit(BaseModel):

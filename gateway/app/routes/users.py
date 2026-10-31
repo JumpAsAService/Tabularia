@@ -397,7 +397,7 @@ def remove_user(session: Session, user_id: int) -> None:
     from app.models import (
         AiChat, AiChatTurn, AiModel, AiProvider, ApiToken, AuditLog, Banner, Connection, Datasource, DisabledEngine, Flow,
         FlowGroup, FlowVersion, Permission, PrivacyNotice, Project, Run, SavedScript, SavedScriptVersion, SavedView,
-        SqlScript, SqlScriptVersion, Report, ReportVersion, ReportView, Notebook, NotebookSession, NotebookTicket,
+        SqlScript, SqlScriptVersion, Report, ReportVersion, ReportView, Dashboard, DashboardVersion, DashboardView, Notebook, NotebookSession, NotebookTicket,
         NotebookVersion, NotebookVisitor, Upload, UserSession, Webhook,
     )
 
@@ -428,6 +428,7 @@ def remove_user(session: Session, user_id: int) -> None:
     session.exec(sa_delete(NotebookTicket).where(NotebookTicket.user_id == user_id))
     # which reports it opened (the Reports tab's «trending»): the totals stay on the reports
     session.exec(sa_delete(ReportView).where(ReportView.user_id == user_id))
+    session.exec(sa_delete(DashboardView).where(DashboardView.user_id == user_id))
     # the client addresses of the account go with it (services/ip_retention.py);
     # the rows stay, with the email of the time
     from app.services import ip_retention
@@ -465,6 +466,8 @@ def remove_user(session: Session, user_id: int) -> None:
         (SqlScriptVersion, SqlScriptVersion.created_by),
         (Report, Report.owner_id),
         (ReportVersion, ReportVersion.created_by),
+        (Dashboard, Dashboard.owner_id),
+        (DashboardVersion, DashboardVersion.created_by),
         # a notebook version left without its author: the app no longer starts (it reads
         # with that author's rights) until someone saves or restores a version
         (Notebook, Notebook.owner_id),

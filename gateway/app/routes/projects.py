@@ -193,6 +193,10 @@ def delete_project(
 
     if session.exec(select(Report).where(Report.project_id == project_id)).first():
         raise HTTPException(status_code=409, detail="The folder contains reports: move or delete them first")
+    from app.models import Dashboard
+
+    if session.exec(select(Dashboard).where(Dashboard.project_id == project_id)).first():
+        raise HTTPException(status_code=409, detail="The folder contains dashboards: move or delete them first")
     # a webhook limited to this folder: removing it silently would widen it to all, and the
     # foreign key would prevent it anyway with a 500
     from app.models import Webhook
