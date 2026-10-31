@@ -802,14 +802,16 @@ async def resolve_each(session: Session, user: User, definition: dict,
 
 # ── choices taken from a dataset ─────────────────────────────────────────────
 async def dataset_choices(session: Session, user: User, definition: dict, values: Mapping[str, Any],
-                          param: dict) -> Optional[dict]:
+                          param: dict, cache: Optional[dict] = None) -> Optional[dict]:
     """The choices of a parameter that takes them from a dataset, read by the engine (POST
     /reports/choices) with `user`'s rights: {"choices": [{value, label}], "truncated",
     "whole"}. None when the engine has no such route yet. The dataset may use the parameter:
     it is read without it, and the other parameters keep their values, so that one list can
     follow another (`_not_followed`). Where its SQL names the parameter outside a condition
     it reads NULL, as with no value: such a list is not `whole`, and when it comes out empty
-    or cannot be read at all it says so in "problem"."""
+    or cannot be read at all it says so in "problem". `cache`: a saved dashboard's (services/
+    dashboards.py), whose list is kept and shared after this reader's rights were checked here;
+    it may wait for someone else's reading, so no database connection waits with it."""
     choices = param["choices"]
     ignoring = frozenset(_not_followed(definition, param))
     blank = {p["name"]: [] if p.get("multi") else None for p in definition.get("parameters") or [] if p["name"] in ignoring}
@@ -817,12 +819,16 @@ async def dataset_choices(session: Session, user: User, definition: dict, values
     left: set[str] = set()
     datasets = await resolve_datasets(session, user, definition, reading, only={choices["dataset"]}, ignoring=ignoring,
                                       left=left)
+    if cache is not None:
+        from app.routes.proxy import _release_db  # routes → services: late import
+
+        _release_db(session, user)
     resp = await get_engine_client().post("/reports/choices", timeout=300, json={
         "definition": report_definition.without_images(definition), "dataset": choices["dataset"],
         "datasets": {choices["dataset"]: datasets[choices["dataset"]]},
         "params": {k: report_params.to_json(v) for k, v in reading.items()},
         "value": choices["value"], "label": choices.get("label"), "limit": MAX_CHOICES,
-        "locale": definition.get("locale") or "en"})
+        "locale": definition.get("locale") or "en", **({"cache": cache} if cache is not None else {})})
     if resp.status_code in (404, 405):
         return None
     if resp.status_code >= 400 and param["name"] in left:  # a NULL the database does not take there
@@ -844,21 +850,24 @@ def _unread(param: dict) -> dict:
                        f"NULL OR a_column = {name}, or read the choices from a dataset of their own"}
 
 
-async def check_dataset_choices(session: Session, user: User, definition: dict, values: Mapping[str, Any]) -> None:
+async def check_dataset_choices(session: Session, user: User, definition: dict, values: Mapping[str, Any],
+                                cache: Optional[dict] = None) -> None:
     """A value of a parameter whose choices come from a dataset must be one of them, in the
     whole list: not among the rows its own filter leaves (when the engine can say, and the
     list is whole). A list the engine could not read checks nothing: without its filter a
     dataset may be over the cap of rows that it fits with one, and the render reads it with
-    the filter, as the reader's rights allow (they were checked before this)."""
+    the filter, as the reader's rights allow (they were checked before this). A dashboard
+    (`cache`, see `dataset_choices`) goes on when the engine could not say, too: its tiles say
+    what they can, each its own."""
     for p in definition.get("parameters") or []:
         source = (p.get("choices") or {}).get("dataset")
         value = values.get(p["name"])
         if not source or value is None or value == []:
             continue
         try:
-            got = await dataset_choices(session, user, definition, values, p)
+            got = await dataset_choices(session, user, definition, values, p, cache)
         except HTTPException as e:
-            if e.status_code >= 500:
+            if e.status_code >= 500 and cache is None:
                 raise
             logger.info("report: the choices of %s were not read to check its value: %s", p["name"], e.status_code)
             continue

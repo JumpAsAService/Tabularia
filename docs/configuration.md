@@ -54,10 +54,10 @@ SFTP, S3, APIs, SharePoint) belong to each connection, encrypted with
 |---|---|
 | [Shared by the gateway and the engine](#shared-by-the-gateway-and-the-engine) | 7 |
 | [Gateway](#gateway) | 166 |
-| [Engine and workers](#engine-and-workers) | 99 |
+| [Engine and workers](#engine-and-workers) | 103 |
 | [Frontend](#frontend) | 5 |
 | [Compose and Helm only](#compose-and-helm-only) | 13 |
-| **Total** | **290** |
+| **Total** | **294** |
 
 ## Before production
 
@@ -633,6 +633,10 @@ What one request for a dashboard's numbers may read. The preview workers compute
 | Variable | Type | Default | Helm value | Description |
 |---|---|---|---|---|
 | `DASHBOARDS__MAX_ROWS` | integer, 1–10,000,000 | `REPORTS__MAX_ROWS` | `dashboards.maxRows` | The most rows a dashboard reads from each of its datasets; empty, `REPORTS__MAX_ROWS`. The tiles that read a dataset with more say so and how to aggregate it, and show no number: a total is never computed on part of the rows. The rows stay in the preview worker's memory, in columns, while a request is worked out: a request of 9 tiles on a million rows of 8 columns took it from 0.3 to 1.2–1.5 GiB (measured), so give that worker as much for every request that may run at once. |
+| `DASHBOARDS__CACHE_SECONDS` | integer, 10–604,800 | `300` | `dashboards.cacheSeconds` | How long the rows of a dataset and the numbers of a tile are shared by everyone who may read them, so that a hundred people on a dashboard run one query; a dashboard whose `refresh_seconds` is longer keeps them for that. Rights are checked at every request all the same. Also adjustable in Administration → Settings. Also adjustable in Administration → Settings. |
+| `DASHBOARDS__CACHE_TILE_BYTES` | integer, at least 1,024 | `1048576` | `dashboards.cacheTileBytes` | The largest numbers of one tile kept in Valkey; above it they are worked out again at each request, from the rows kept, and counted in the `dataprep_dashboard_cache` metric. Also adjustable in Administration → Settings. Also adjustable in Administration → Settings. |
+| `DASHBOARDS__CACHE_VALKEY_BYTES` | integer, at least 1,048,576 | `536870912` | `dashboards.cacheValkeyBytes` | With Valkey using more memory than this, no tile's numbers are kept (Valkey also carries the queues, and has no limit of its own). Also adjustable in Administration → Settings. Also adjustable in Administration → Settings. |
+| `DASHBOARDS__CACHE_BUCKET_BYTES` | integer | `21474836480` | `dashboards.cacheBucketBytes` | The most the rows of dashboards take on the bucket, under `cache/`: those about to expire leave first, and rows larger than this are not kept (then each new table page or click reads the source again). 0 keeps none. Also adjustable in Administration → Settings. Also adjustable in Administration → Settings. |
 
 ## Frontend
 

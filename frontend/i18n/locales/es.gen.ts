@@ -3716,6 +3716,10 @@ export default {
         "title": "Caché de pasos",
         "lead": "Los resultados intermedios que hacen rápidas las vistas previas del editor, y las limpiezas del programador."
       },
+      "dashboards": {
+        "title": "Paneles",
+        "lead": "Lo que guarda la caché de un panel: las filas de sus conjuntos de datos en el bucket, los números de sus mosaicos en Valkey, compartidos por quien pueda leerlos.",
+      },
       "clickhouse": {
         "title": "ClickHouse",
         "lead": "El motor ClickHouse externo.",
@@ -3777,6 +3781,22 @@ export default {
       "cache_max_step_rows": {
         "label": "Filas máximas de un paso en caché",
         "help": "Un paso con más filas no entra en caché: una copia tan grande como el origen cuesta gigabytes de escritura y no ahorra tiempo frente a releer el origen. 0 = sin límite.",
+      },
+      "dashboards_cache_seconds": {
+        "label": "Cuánto se comparten los datos de un panel",
+        "help": "Las filas y los números leídos una vez se comparten durante este tiempo entre quienes pueden leerlos, para que cien personas hagan una consulta. Un panel con un intervalo de actualización más largo los conserva ese intervalo.",
+      },
+      "dashboards_cache_tile_bytes": {
+        "label": "Números más grandes de un mosaico que se guardan",
+        "help": "Los números de un mosaico por encima de este tamaño no se guardan en Valkey: se recalculan en cada petición a partir de las filas guardadas.",
+      },
+      "dashboards_cache_valkey_bytes": {
+        "label": "Memoria de Valkey en la que la caché se detiene",
+        "help": "Con Valkey usando más memoria que esta, no se guardan los números de los mosaicos. Valkey también lleva las colas y no tiene un límite propio.",
+      },
+      "dashboards_cache_bucket_bytes": {
+        "label": "Espacio de las filas en el bucket",
+        "help": "Lo máximo que ocupan las filas de los paneles bajo cache/ en el bucket: sale primero lo que está por caducar, y las filas más grandes no se guardan. 0 = no se guardan filas.",
       },
       "clickhouse_external_parquet_scan_max_threads": {
         "label": "Hilos para los recorridos",

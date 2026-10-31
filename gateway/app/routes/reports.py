@@ -42,7 +42,7 @@ from app.models import Project, Report, ReportVersion, User
 from app.models.permission import Capability
 from app.routes.search import _like as like_pattern
 from app.schemas.models import Page, UtcDateTime
-from app.services import audit, report_definition, report_params, report_views, reports
+from app.services import audit, report_definition, report_params, report_views, reports, sql_scripts
 from app.services import permissions as perm_service
 from app.services.copy_names import commit_copy, free_copy_name
 from app.services.masking import mask_email
@@ -675,8 +675,9 @@ async def report_parameters_being_edited(report_id: int, body: ParametersRequest
 
 
 async def _parameters_out(session: Session, user: User, definition: dict, given: dict[str, list],
-                          choices_from: Callable[[str], dict]) -> list[ParameterOut]:
-    """`choices_from`: the definition to read a dataset's choices with, by the dataset's name."""
+                          choices_from: Callable[[str], dict], cache: Optional[dict] = None) -> list[ParameterOut]:
+    """`choices_from`: the definition to read a dataset's choices with, by the dataset's name;
+    `cache`: a saved dashboard's (services/dashboards.py), whose lists are kept."""
     params = definition.get("parameters") or []
     for name in given:
         if name not in {p["name"] for p in params}:
@@ -702,7 +703,7 @@ async def _parameters_out(session: Session, user: User, definition: dict, given:
             item.choices = [Choice(value=v, label=str(v)) for v in choices["values"]]
         elif choices.get("dataset"):
             try:
-                got = await reports.dataset_choices(session, user, choices_from(choices["dataset"]), values, p)
+                got = await reports.dataset_choices(session, user, choices_from(choices["dataset"]), values, p, cache)
                 if got is None:
                     item.choices_error = "The engine cannot read choices from a dataset yet"
                 elif got.get("problem"):
@@ -711,6 +712,9 @@ async def _parameters_out(session: Session, user: User, definition: dict, given:
                     item.choices = [Choice(value=c.get("value"), label=None if c.get("label") is None else str(c["label"]))
                                     for c in got["choices"]]
                     item.choices_truncated = got["truncated"]
+            except sql_scripts.Unreadable as e:
+                # a saved dashboard opens for whoever may see it, not only who wrote it: not what the list reads
+                item.choices_error = reports._text(e)[:500] if cache is None else "You cannot read the list of this parameter: ask whoever manages its data"
             except HTTPException as e:
                 item.choices_error = reports._text(e)[:500]
             except Problem as e:

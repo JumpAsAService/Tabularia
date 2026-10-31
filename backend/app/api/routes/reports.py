@@ -6,22 +6,26 @@
 - POST /reports/check: the mistakes of a definition, each with its item, its property and
   the position inside the expression — what the editor shows when a report is saved.
 - POST /reports/choices: the choices of a parameter taken from a dataset, for the form; on
-  the preview worker, waited for as a preview.
+  the preview worker, waited for as a preview (a saved dashboard's: `cache`, as for its tiles).
 - POST /reports/count: how many rows a dataset gives, up to REPORTS__MAX_ROWS (the
   designer's hint next to the dataset); on the preview worker, waited for `seconds` at most.
 - POST /reports/tiles: a dashboard's numbers, tile by tile (app/reports/tiles.py); on the
-  preview worker, waited for as a preview.
+  preview worker, waited for as a preview. With `cache`, a saved dashboard's: shared by whoever
+  reads the same thing, and worked out once (app/reports/tile_cache.py).
+- POST /reports/tiles/refresh: a saved dashboard's refresh by hand, at most one every 10 seconds
+  for everyone: the token that makes its numbers be read again, or none.
 """
 import uuid
 from typing import Any, Literal, Optional
 
 from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel, Field
+from starlette.concurrency import run_in_threadpool
 
 from app.api import exports
 from app.api.models import TaskResponse
 from app.reports import definition as rd
-from app.reports import formats
+from app.reports import formats, tile_cache
 from app.reports.render import filename as file_name
 from app.tasks.celery_app import celery_app
 
@@ -46,6 +50,13 @@ class ReportStarted(TaskResponse):
     filename: str  # with the extension of what the file holds (.mhtml, .json for svg)
 
 
+class DashboardCache(BaseModel):
+    """A saved dashboard's: what the gateway knows that the cache needs. Rights were checked
+    before this, with the reader's: what is asked here is theirs to read."""
+    refresh_seconds: int = Field(default=0, ge=0)
+    fresh: Optional[str] = Field(default=None, max_length=64)  # the token of a refresh claimed
+
+
 class ReportChoices(BaseModel):
     definition: dict
     dataset: str
@@ -55,6 +66,7 @@ class ReportChoices(BaseModel):
     label: Optional[str] = Field(default=None, max_length=4000)
     limit: int = Field(default=500, ge=1, le=5000)
     locale: Optional[Literal[formats.LOCALES]] = None  # type: ignore[valid-type]
+    cache: Optional[DashboardCache] = None
 
 
 class ReportCheck(BaseModel):
@@ -83,6 +95,11 @@ class DashboardTiles(BaseModel):
     locale: Optional[Literal[formats.LOCALES]] = None  # type: ignore[valid-type]
     title: Optional[str] = Field(default=None, max_length=300)  # REPORT()
     slot: Optional[str] = Field(default=None, max_length=200)  # a newer request on the same slot knocks this one down
+    cache: Optional[DashboardCache] = None  # then no slot: others may be waiting for this computation
+
+
+class TilesRefresh(BaseModel):
+    dashboard: int
 
 
 @router.post("/check")
@@ -90,15 +107,30 @@ def check(request: ReportCheck) -> dict:
     return {"problems": [p.as_dict() for p in rd.check(request.definition, request.columns)]}
 
 
-@router.post("/choices")
-def choices(request: ReportChoices) -> dict:
-    from app.api.routes.tasks import _PREVIEW_ERROR_STATUS, on_preview_worker
+def _worker_said(payload: dict, otherwise: str) -> dict:
+    """A task's tagged answer: its result, or its failure as the HTTP status."""
+    from app.api.routes.tasks import _PREVIEW_ERROR_STATUS
 
-    payload = on_preview_worker("app.tasks.report_jobs.report_choices_task", request.model_dump(), None)
     if not payload.get("ok"):
         status = {**_PREVIEW_ERROR_STATUS, "unavailable": 503}.get(payload.get("error"), 400)
-        raise HTTPException(status_code=status, detail=payload.get("detail", "The choices could not be read"))
+        raise HTTPException(status_code=status, detail=payload.get("detail", otherwise))
     return payload["result"]
+
+
+_CHOICES_TASK = "app.tasks.report_jobs.report_choices_task"
+_TILES_TASK = "app.tasks.report_jobs.dashboard_tiles_task"
+
+
+@router.post("/choices")
+async def choices(request: ReportChoices) -> dict:
+    from app.api.routes.tasks import on_preview_worker
+
+    said = "The choices could not be read"
+    kwargs = request.model_dump(exclude={"cache"})
+    if request.cache is None:
+        return _worker_said(await run_in_threadpool(on_preview_worker, _CHOICES_TASK, kwargs, None), said)
+    return await tile_cache.choices(kwargs, request.cache.model_dump(),
+                                    lambda task, left: _worker_said(tile_cache.on_worker(_CHOICES_TASK, task, left), said))
 
 
 @router.post("/count")
@@ -116,14 +148,20 @@ def count(request: ReportCount) -> dict:
 
 
 @router.post("/tiles")
-def tiles(request: DashboardTiles) -> dict:
-    from app.api.routes.tasks import _PREVIEW_ERROR_STATUS, on_preview_worker
+async def tiles(request: DashboardTiles) -> dict:
+    from app.api.routes.tasks import on_preview_worker
 
-    payload = on_preview_worker("app.tasks.report_jobs.dashboard_tiles_task", request.model_dump(exclude={"slot"}), request.slot)
-    if not payload.get("ok"):
-        status = {**_PREVIEW_ERROR_STATUS, "unavailable": 503}.get(payload.get("error"), 400)
-        raise HTTPException(status_code=status, detail=payload.get("detail", "The numbers could not be read"))
-    return payload["result"]
+    said = "The numbers could not be read"
+    kwargs = request.model_dump(exclude={"slot", "cache"})
+    if request.cache is None:
+        return _worker_said(await run_in_threadpool(on_preview_worker, _TILES_TASK, kwargs, request.slot), said)
+    return await tile_cache.numbers(kwargs, request.cache.model_dump(),
+                                    lambda task, left: _worker_said(tile_cache.on_worker(_TILES_TASK, task, left), said))
+
+
+@router.post("/tiles/refresh")
+def tiles_refresh(request: TilesRefresh) -> dict:
+    return {"fresh": tile_cache.claim_refresh(request.dashboard)}
 
 
 @router.post("/render", response_model=ReportStarted)

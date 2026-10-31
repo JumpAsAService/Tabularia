@@ -2,8 +2,8 @@
 Administration → Settings, without touching the environment and without restarts.
 
 Those the engine reads when it uses them (`ITEMS` without `rollout`): the row groups'
-size, the imports' read timeout, the export's cap, the tasks' duration, the step cache,
-ClickHouse, BigQuery, the caps of SFTP, S3 folders, HTTP APIs and placeholders. Worker concurrency is one of them: every worker resizes its own pool from
+size, the imports' read timeout, the export's cap, the tasks' duration, the step cache, the
+dashboards' cache, ClickHouse, BigQuery, the caps of SFTP, S3 folders, HTTP APIs and placeholders. Worker concurrency is one of them: every worker resizes its own pool from
 `workers.*` while it runs (tasks/worker_pool.py).
 
 Those a process reads once when it starts (`rollout`: memory and recycling of the
@@ -88,6 +88,10 @@ ITEMS: tuple[Item, ...] = (
     Item("celery.task_soft_time_limit", "execution", "seconds", 30, SEVEN_DAYS),
     Item("cache.ttl_seconds", "cache", "seconds", 300, 30 * 24 * 3600),
     Item("cache.max_step_rows", "cache", "rows", 0, 100_000_000),
+    Item("dashboards.cache_seconds", "dashboards", "seconds", 10, SEVEN_DAYS),
+    Item("dashboards.cache_tile_bytes", "dashboards", "bytes", 1024, 100 * 1024**2),
+    Item("dashboards.cache_valkey_bytes", "dashboards", "bytes", 1024**2, 1024**4),
+    Item("dashboards.cache_bucket_bytes", "dashboards", "bytes", 0, 100 * 1024**4),
     Item("clickhouse_external.parquet_scan_max_threads", "clickhouse", "threads", 0, 64),
     Item("clickhouse_external.max_execution_time", "clickhouse", "seconds", 0, 86_400),
     Item("clickhouse_external.materialize_min_rows", "clickhouse", "rows", 0, 1_000_000_000),

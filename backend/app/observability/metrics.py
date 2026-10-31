@@ -17,6 +17,7 @@ from app.core.config import get_settings
 # Valkey keys (in line with those StepCache and the tasks use)
 CACHE_HITS_KEY = "dataprep:metrics:cache_hits"
 CACHE_MISSES_KEY = "dataprep:metrics:cache_misses"
+DASHBOARD_CACHE_STATS = "dataprep:metrics:dashboard_cache"
 STEPCACHE_SET = "dataprep:stepcache"
 STORAGE_BYTES_HASH = "dataprep:metrics:storage_bytes"
 STORAGE_OBJECTS_HASH = "dataprep:metrics:storage_objects"
@@ -27,6 +28,18 @@ class DataPrepCollector:
 
     def __init__(self, redis_client):
         self.redis = redis_client
+
+    def _dashboard_metrics(self):
+        """A dashboard's cache: what was reused, what was read, what was too large to keep
+        (app/reports/tile_cache.py)."""
+        try:
+            counted = self.redis.hgetall(DASHBOARD_CACHE_STATS)
+        except redis.RedisError:
+            return
+        g = GaugeMetricFamily("dataprep_dashboard_cache", "Dashboards' cache, totals by event", labels=["event"])
+        for event, val in (counted or {}).items():
+            g.add_metric([event], float(val))
+        yield g
 
     def collect(self):
         try:
@@ -57,6 +70,7 @@ class DataPrepCollector:
             g_obj.add_metric([prefix], float(val))
         yield g_obj
 
+        yield from self._dashboard_metrics()
         yield from _preview_metrics()
 
 

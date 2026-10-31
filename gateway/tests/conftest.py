@@ -184,6 +184,9 @@ class FakeEngine:
         # a number for every tile asked that nothing stopped, and the refusals as the engine says them
         self.report_tiles: list[dict] = []
         self.report_tiles_response: tuple[int, dict] | None = None
+        # a refresh by hand (POST /reports/tiles/refresh): the dashboards asked, and the token given
+        self.refresh_claims: list[int] = []
+        self.refresh_token: str | None = "fresh-token"
         # an export followed by its owner: its state per task (default: ready) and the file
         self.export_states: dict[str, list[dict]] = {}  # task_id -> states served in turn (the last one stays)
         self.export_polls: list[tuple[str, str | None]] = []  # (path, owner)
@@ -326,6 +329,9 @@ class FakeEngine:
         if path == "/reports/choices" and request.method == "POST" and self.report_choices_response is not None:
             self.report_choices.append(_json_body(request))
             return httpx.Response(self.report_choices_response[0], json=self.report_choices_response[1])
+        if path == "/reports/tiles/refresh" and request.method == "POST":
+            self.refresh_claims.append(_json_body(request)["dashboard"])
+            return httpx.Response(200, json={"fresh": self.refresh_token})
         if path == "/reports/tiles" and request.method == "POST":
             body = _json_body(request)
             self.report_tiles.append(body)

@@ -3,7 +3,7 @@ numbers themselves are the engine's (backend/tests/test_dashboard_tiles.py). Wha
 rights are the reader's, dataset by dataset, at every request, and one they may not read refuses
 in its tiles only, saying nothing of its data, whichever way it reads; a report still stops at
 the first one, as before; the parameters are a report's, values, `{none}`, choices and cascade;
-`clicks` is refused until it filters, `refresh` accepted; a read-only token reads a dashboard as
+`clicks` is refused until it filters; a read-only token reads a dashboard as
 it reads a report; the preview needs EDIT and takes a definition not saved.
 """
 import json
@@ -112,7 +112,7 @@ def test_the_numbers_go_on_the_preview_way_with_the_definition_as_a_report_s(app
     assert body["definition"]["sections"]["body"]["items"][0]["id"] == "mine"
     assert "tiles" not in body["definition"] and body["locale"] == "it" and body["title"] == "Board"
     assert body["datasets"]["orders"]["input_key"] == "datasets/o.parquet" and body["refused"] == {}
-    assert body["slot"].startswith(f"u{_uid(session, 'reader@x.local')}:dashboard:{board}:")
+    assert body["cache"] == {"refresh_seconds": 0} and "slot" not in body  # a saved one's numbers are shared
 
 
 def test_a_tile_keeps_its_title_and_an_image_its_picture_which_the_engine_never_sees(app, session, fake_engine):
@@ -141,11 +141,10 @@ def test_tiles_asks_for_some_and_a_page_goes_with_its_tile(app, session, fake_en
 
 def test_a_page_for_some_tiles_does_not_knock_down_the_opening_of_all_of_them(app, session, fake_engine):
     w = _world(session)
-    board = _saved(session, w, definition(w, _dataset("more", w["orders"])))
-    reader = _reader(app, session, w)
-    _data(reader, board)
-    _data(reader, board, tiles=["on_more"])
-    _data(reader, board, tiles=["on_more"], page={"on_more": 1})
+    draft = definition(w, _dataset("more", w["orders"]))
+    reader = _reader(app, session, w, capability="edit")
+    for body in ({}, {"tiles": ["on_more"]}, {"tiles": ["on_more"], "page": {"on_more": 1}}):
+        assert reader.post("/dashboards/preview", headers=CSRF, json={"definition": draft, "project_id": w["sales"], **body}).status_code == 200
     slots = [b["slot"] for b in fake_engine.report_tiles]
     assert slots[0] != slots[1] and slots[1] == slots[2]
 
@@ -166,12 +165,6 @@ def test_a_list_of_tiles_longer_than_a_dashboard_holds_is_refused(app, session, 
     w = _world(session)
     r = _data(_reader(app, session, w), _saved(session, w, definition(w)), tiles=["mine"] * 41)
     assert r.status_code == 422
-
-
-def test_refresh_is_accepted_and_does_nothing_yet(app, session, fake_engine):
-    w = _world(session)
-    r = _data(_reader(app, session, w), _saved(session, w, definition(w)), refresh=True)
-    assert r.status_code == 200 and "refresh" not in fake_engine.report_tiles[-1]
 
 
 def test_a_click_and_a_read_of_the_numbers_are_not_audited(app, session, fake_engine):

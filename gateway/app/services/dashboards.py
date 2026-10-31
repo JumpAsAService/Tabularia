@@ -13,10 +13,12 @@ enough for anything, and that is what the gateway's checks and the engine's read
 dashboard has is checked here: its limits, the interval, the grid. The problems are said as
 those of a dashboard (`_in_our_words`).
 
-Reading the numbers (`numbers`) is three steps, each with its place for what comes next: what
-was asked is checked (`check_asked`); rights and values with the reader's, at every request
-(`_plan`), which no cache stands in for; the engine works them out on the preview queue
-(`_computed`, app/reports/tiles.py), which is what a cache of the numbers wraps.
+Reading the numbers (`numbers`) is three steps: what was asked is checked (`check_asked`);
+rights and values with the reader's, at every request (`_plan`), which no cache stands in for;
+the engine works them out on the preview queue (`_computed`, app/reports/tiles.py). A saved
+dashboard's are shared by whoever reads the same source, with one query: the cache is in the
+engine (app/reports/tile_cache.py), as Valkey is not the gateway's, and what it is given is only
+what `_plan` found this reader may read. A definition being edited shares nothing.
 """
 from __future__ import annotations
 
@@ -27,12 +29,13 @@ from dataclasses import dataclass, field
 from datetime import datetime, timezone
 from typing import Any, Optional
 
+import httpx
 from fastapi import HTTPException
 from sqlalchemy import JSON, and_, case, cast, func, update
 from sqlalchemy.exc import IntegrityError
 from sqlmodel import Session, select
 
-from app.core.engine_client import get_engine_client
+from app.core.engine_client import CHECK, get_engine_client
 from app.models import Dashboard, DashboardVersion, DashboardView, User
 from app.models.permission import Capability
 from app.services import permissions as perm_service
@@ -388,12 +391,13 @@ TILES_SECONDS = 300  # the engine stops first (PREVIEW_TIMEOUT_SECONDS): 504
 class Asked:
     """What a request for numbers asks: the parameters' values as given, the tiles (None: every
     one), a table's page by tile, the on-screen view (a column sorted, groups toggled), the
-    clicks."""
+    clicks, and whether to read the data again rather than take what is kept."""
     given: dict[str, list] = field(default_factory=dict)
     tiles: Optional[list[str]] = None
     pages: dict[str, int] = field(default_factory=dict)
     state: Optional[dict] = None
     clicks: list = field(default_factory=list)
+    refresh: bool = False
 
 
 def check_asked(definition: dict, asked: Asked) -> None:
@@ -423,29 +427,29 @@ class _Plan:
     refused: dict[str, dict]
 
 
-async def _plan(session: Session, user: User, definition: dict, asked: Asked) -> _Plan:
+async def _plan(session: Session, user: User, definition: dict, asked: Asked, cache: Optional[dict] = None) -> _Plan:
     """With `user`'s rights, whoever asks and whatever they asked before: a value that does not
     fit is a 400 naming its parameter, as for a report; a dataset they may not read is only
-    its tiles' refusal."""
+    its tiles' refusal, and one that holds the choices of a parameter checks nothing."""
     shaped = as_report(definition)
     try:
         values = await report_params.values_for(shaped, asked.given)
         datasets, refused = await reports.resolve_each(session, user, shaped, values)
-        await reports.check_dataset_choices(session, user, shaped, values)
+        await reports.check_dataset_choices(session, user, shaped, values, cache)
     except HTTPException as e:
         raise in_our_words(e) from None
     return _Plan(report_definition.without_images(shaped), {k: report_params.to_json(v) for k, v in values.items()},
                  datasets, refused)
 
 
-async def _computed(plan: _Plan, asked: Asked, slot: str, title: str) -> dict:
+async def _computed(plan: _Plan, asked: Asked, title: str, slot: Optional[str] = None, cache: Optional[dict] = None) -> dict:
     """{"tiles": {id: its numbers or {"error", "code"}}, "truncated": {dataset: bool}}, from the
     engine. An error of a tile is the tile's; what comes here as an error is the whole request's:
-    a newer one took its place, or the engine could not answer."""
+    a newer one took its place, or the engine could not answer. `cache` or `slot`, not both."""
     resp = await get_engine_client().post("/reports/tiles", timeout=TILES_SECONDS, json={
         "definition": plan.shaped, "datasets": plan.datasets, "refused": plan.refused, "params": plan.params,
         "tiles": asked.tiles, "pages": asked.pages, "state": asked.state, "locale": plan.shaped.get("locale") or "en",
-        "title": title[:300], "slot": slot})
+        "title": title[:300], **({"cache": cache} if cache is not None else {"slot": slot})})
     if resp.status_code == 409:
         raise HTTPException(status_code=409, detail="A newer request for the same tiles took the place of this one")
     if resp.status_code in (404, 405):
@@ -469,22 +473,45 @@ def _finished(definition: dict, answer: dict) -> dict:
 
 
 def slot_of(user: User, where: str, asked: Asked) -> str:
-    """A newer request of this person for the same tiles knocks this one down; a table's page
-    next to the whole dashboard's first opening does not."""
+    """A definition being edited: a newer request of this person for the same tiles knocks this
+    one down; a table's page next to the whole dashboard's first opening does not."""
     tiles = hashlib.sha256(json.dumps(sorted(asked.tiles) if asked.tiles is not None else None).encode()).hexdigest()[:16]
     return f"u{user.id}:dashboard:{where}:{tiles}"
 
 
-async def numbers(session: Session, user: User, definition: dict, asked: Asked, where: str, title: str = "") -> dict:
-    """The numbers of a definition `user` may open, tile by tile. `where`: the dashboard's id, or
-    what names an unsaved one: requests for one do not knock down those for another."""
+async def _refresh_token(dashboard_id: int) -> Optional[str]:
+    """A refresh by hand, if the engine grants one (at most every 10 seconds per dashboard, for
+    everyone); None means answering with what is kept, without saying it is an error."""
+    try:
+        resp = await get_engine_client().post("/reports/tiles/refresh", timeout=CHECK, json={"dashboard": dashboard_id})
+    except httpx.HTTPError:
+        return None
+    return resp.json().get("fresh") if resp.status_code == 200 else None
+
+
+async def cache_of(definition: dict, dashboard_id: int, refresh: bool = False) -> dict:
+    """What the engine's cache is told of a saved dashboard."""
+    interval = definition.get("refresh_seconds")
+    cache: dict[str, Any] = {"refresh_seconds": interval if isinstance(interval, int) else 0}
+    if refresh and (fresh := await _refresh_token(dashboard_id)):
+        cache["fresh"] = fresh
+    return cache
+
+
+async def numbers(session: Session, user: User, definition: dict, asked: Asked, title: str = "",
+                  saved: Optional[int] = None, editing: str = "") -> dict:
+    """The numbers of a definition `user` may open, tile by tile. `saved`: the dashboard's id, whose
+    numbers are shared, so that no request of anyone knocks down a computation others may be
+    waiting for: two tabs of one person, too. Otherwise `editing` names the definition being
+    edited, which shares nothing: requests for one do not knock down those for another."""
     from app.routes.proxy import _release_db  # routes → services: late import
 
     check_asked(definition, asked)
-    plan = await _plan(session, user, definition, asked)
-    slot = slot_of(user, where, asked)
+    cache = await cache_of(definition, saved, asked.refresh) if saved is not None else None
+    plan = await _plan(session, user, definition, asked, cache)
+    slot = slot_of(user, editing, asked) if saved is None else None
     _release_db(session, user)  # nothing holds a database connection while the engine works
-    return _finished(definition, await _computed(plan, asked, slot, title))
+    return _finished(definition, await _computed(plan, asked, title, slot, cache))
 
 
 # ── who opened it ────────────────────────────────────────────────────────────

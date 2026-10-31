@@ -3742,6 +3742,10 @@ export default {
         "title": "Cache dei passi",
         "lead": "I risultati intermedi che rendono veloci le anteprime dell'editor, e le pulizie del pianificatore."
       },
+      "dashboards": {
+        "title": "Dashboard",
+        "lead": "Ciò che la cache di una dashboard conserva: le righe dei suoi dataset sul bucket, i numeri dei suoi tile in Valkey, condivisi da chiunque possa leggerli.",
+      },
       "clickhouse": {
         "title": "ClickHouse",
         "lead": "Il motore ClickHouse esterno.",
@@ -3803,6 +3807,22 @@ export default {
       "cache_max_step_rows": {
         "label": "Righe massime di un passo in cache",
         "help": "Un passo con più righe non va in cache: una copia grande quanto la sorgente costa gigabyte di scrittura e non fa guadagnare tempo rispetto a rileggere la sorgente. 0 = nessun tetto.",
+      },
+      "dashboards_cache_seconds": {
+        "label": "Quanto restano condivisi i dati di una dashboard",
+        "help": "Le righe e i numeri letti una volta restano condivisi per questo tempo da chiunque possa leggerli, così cento persone fanno una query. Una dashboard con un intervallo di aggiornamento più lungo li tiene per quell'intervallo.",
+      },
+      "dashboards_cache_tile_bytes": {
+        "label": "Numeri più grandi di un tile da conservare",
+        "help": "I numeri di un tile oltre questa dimensione non vanno in Valkey: si ricalcolano a ogni richiesta, dalle righe conservate.",
+      },
+      "dashboards_cache_valkey_bytes": {
+        "label": "Memoria di Valkey oltre cui la cache si ferma",
+        "help": "Con Valkey oltre questa memoria non si conservano i numeri dei tile. Valkey porta anche le code e non ha un limite suo.",
+      },
+      "dashboards_cache_bucket_bytes": {
+        "label": "Spazio delle righe sul bucket",
+        "help": "Il massimo che le righe delle dashboard occupano sotto cache/ sul bucket: esce prima ciò che sta per scadere, e righe più grandi di così non si conservano. 0 = nessuna riga conservata.",
       },
       "clickhouse_external_parquet_scan_max_threads": {
         "label": "Thread per le scansioni",

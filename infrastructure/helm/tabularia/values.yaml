@@ -336,6 +336,15 @@ dashboards:
   # The most rows a dashboard reads from each of its datasets; empty, reports.maxRows. The
   # tiles that read a dataset with more say so and how to aggregate it, and show no number.
   maxRows: ""
+  # How long the rows of a dataset and the numbers of a tile are shared by everyone who may
+  # read them: a hundred people on a dashboard run one query. A dashboard's longer interval wins.
+  cacheSeconds: 300
+  # The largest numbers of one tile kept in Valkey, and Valkey's memory past which none is kept
+  # (it carries the queues too). Administration → Settings changes these live.
+  cacheTileBytes: 1048576
+  cacheValkeyBytes: 536870912
+  # The room of the rows on the bucket, under cache/: those about to expire leave first. 0 keeps none.
+  cacheBucketBytes: 21474836480
 
 # Pixel-perfect reports (docs/specs/reports.md): what one render may read and use. The run
 # workers render them (the `celery` queue, as the Viewer's exports): the pages are laid out by

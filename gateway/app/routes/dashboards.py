@@ -12,7 +12,8 @@ Permissions:
   VIEW on the folder, read with the caller's rights at every request, dataset by dataset: a
   tile whose dataset they may not read says so inside the tile, the others work (an API token
   of either level reads them as it reads a report; a click and a refresh are not audited, they
-  would drown the log);
+  would drown the log). What comes out is shared by whoever reads the same source, for the
+  dashboard's cache's life (the engine's: app/reports/tile_cache.py), after that check;
 - the numbers of a definition not saved yet (POST /dashboards/preview): EDIT on the folder;
 - administrators see and change every dashboard.
 """
@@ -89,8 +90,9 @@ class CheckRequest(BaseModel):
 class DataRequest(BaseModel):
     """What to read: the parameters' values, as for a report; `tiles` only some (none: every
     one); `page` a table's page by tile, from 0; `state` the on-screen view, as a report's
-    (a column sorted, groups toggled). `clicks` waits for the click's filter, and `refresh`
-    for the cache: there is nothing yet for it to go around."""
+    (a column sorted, groups toggled). `clicks` waits for the click's filter. `refresh` reads
+    the data again, at most every 10 seconds per dashboard for everyone: past that, it answers
+    with what is kept and when it was read, as any request does."""
     params: dict[str, Any] = Field(default_factory=dict)
     clicks: list[Any] = Field(default_factory=list, max_length=dashboards.MAX_TILES)
     tiles: Optional[list[str]] = Field(default=None, max_length=dashboards.MAX_TILES)
@@ -152,7 +154,7 @@ def _being_edited(session: Session, user: User, dashboard_id: Optional[int], pro
 
 def _asked(body: DataRequest) -> dashboards.Asked:
     return dashboards.Asked(given=reports.given_params(body.params), tiles=body.tiles, pages=body.page, state=body.state,
-                            clicks=body.clicks)
+                            clicks=body.clicks, refresh=body.refresh)
 
 
 def _out(session: Session, user: User, d: Dashboard, datasets: int, parameters: int, tiles: int) -> DashboardOut:
@@ -224,9 +226,9 @@ async def preview_dashboard(body: PreviewRequest, user: User = Depends(get_curre
     looked = await dashboards.review(session, user, body.definition, current)
     if looked.problems:
         raise looked.refusal()
-    where = f"preview-{dashboard.id if dashboard is not None else 'new'}"
+    editing = f"preview-{dashboard.id if dashboard is not None else 'new'}"
     title = dashboard.name if dashboard is not None else ""
-    return await dashboards.numbers(session, user, looked.definition, _asked(body), where, title)
+    return await dashboards.numbers(session, user, looked.definition, _asked(body), title, editing=editing)
 
 
 @router.get("/dashboards/{dashboard_id}", response_model=DashboardDetail)
@@ -254,7 +256,7 @@ async def dashboard_data(dashboard_id: int, body: DataRequest, user: User = Depe
     may not read included, stays in that tile."""
     dashboard = dashboards.get_visible(session, user, dashboard_id)
     definition = dashboards.content_of(session, dashboard)
-    return await dashboards.numbers(session, user, definition, _asked(body), str(dashboard.id), dashboard.name)
+    return await dashboards.numbers(session, user, definition, _asked(body), dashboard.name, saved=dashboard.id)
 
 
 @router.get("/dashboards/{dashboard_id}/parameters", response_model=list[ParameterOut])
@@ -263,9 +265,12 @@ async def dashboard_parameters(dashboard_id: int, request: Request, user: User =
     """The parameters as the form shows them, as a report's: defaults resolved, choices read (those
     of a dataset with the caller's rights, and the values of the query string for the other
     parameters, so that a choice can follow another)."""
-    definition = dashboards.as_report(dashboards.content_of(session, dashboards.get_visible(session, user, dashboard_id)))
+    dashboard = dashboards.get_visible(session, user, dashboard_id)
+    content = dashboards.content_of(session, dashboard)
+    definition = dashboards.as_report(content)
     try:
-        return await _parameters_out(session, user, definition, _query_params(request), lambda _: definition)
+        return await _parameters_out(session, user, definition, _query_params(request), lambda _: definition,
+                                     await dashboards.cache_of(content, dashboard.id))
     except HTTPException as e:
         raise dashboards.in_our_words(e) from None
 

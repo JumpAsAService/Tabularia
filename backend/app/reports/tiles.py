@@ -17,9 +17,10 @@ what the others' tiles say. Here:
   and totals on all of them;
 - an error stays in its tile, the interruption of a request knocked down apart.
 
-Two places are for what comes next: `compute` takes the reading as `read`, where the rows of a
-dataset can come from elsewhere (the cache), and `_Builder.rows_of` is the one place a tile's
-rows come from, on both ways of computing (a click's filter).
+`compute` takes the reading as `read`, where the rows of a dataset can come from the cache
+(app/reports/tile_cache.py): then `computed_at` says when they were read from their source, and
+`cached` that this request did not read it. `_Builder.rows_of` is the one place a tile's rows come
+from, on both ways of computing, for what comes next (a click's filter).
 """
 from __future__ import annotations
 
@@ -279,13 +280,13 @@ def _failure(message: str, code: str = "error") -> dict:
     return {"error": message, "code": code}
 
 
-def _tile(b: rmodel._Builder, it: Any, page: int, at: str) -> dict:
+def _tile(b: rmodel._Builder, it: Any, page: int, at: str, cached: bool) -> dict:
     """One tile, whatever happens to it: what stops it stays here. Only the request knocked
     down goes on up (SoftTimeLimitExceeded, by name: the engine does not import Celery)."""
     try:
         answer = b.either(it, _numbers, b, it, page)
         # as plain JSON here, or a bad value would stop the whole answer at the door
-        return {"type": it.type, **_clean(answer), "computed_at": at, "cached": False}
+        return {"type": it.type, **_clean(answer), "computed_at": at, "cached": cached}
     except ReportError as e:
         return _failure(_said(e.message, it.id))
     except Exception as e:
@@ -337,8 +338,14 @@ def _calculated(report: rd.Report, data: dict[str, rdata.DataSet], ctx: ex.Conte
     return failed
 
 
-def _page(value: Any) -> int:
+def page_of(value: Any) -> int:
     return value if isinstance(value, int) and not isinstance(value, bool) and value > 0 else 0
+
+
+def refusal(needs: Iterable[str], refused: dict[str, dict]) -> dict | None:
+    """What a tile says when it needs what the reader may not read, and nothing else."""
+    stopped = sorted((refused[n] for n in needs if n in refused), key=lambda r: r.get("code") != "no_access")
+    return {"error": stopped[0].get("error"), "code": stopped[0].get("code")} if stopped else None
 
 
 def compute(definition: dict, datasets: dict[str, dict], params: dict[str, Any] | None = None, *,
@@ -360,16 +367,15 @@ def compute(definition: dict, datasets: dict[str, dict], params: dict[str, Any] 
     values = rdata.parameters(report, params or {}, pctx)
     ctx = ex.Context(loc=loc, now=now_local, params=values, report=title, ph_context=pctx)
     cap = cap or max_rows()
-    at = moment.isoformat()
 
     items = [it for _, it in report.items() if only is None or it.id in only]
     needs = {it.id: rdata.used_datasets(report, [it]) for it in items}
     # rights first: a tile that needs what the reader may not read says only that
     answers: dict[str, dict] = {}
     for it in items:
-        stopped = sorted((refused[n] for n in needs[it.id] if n in refused), key=lambda r: r.get("code") != "no_access")
+        stopped = refusal(needs[it.id], refused)
         if stopped:
-            answers[it.id] = {"error": stopped[0].get("error"), "code": stopped[0].get("code")}
+            answers[it.id] = stopped
 
     # every dataset once
     data: dict[str, rdata.DataSet] = {}
@@ -387,6 +393,12 @@ def compute(definition: dict, datasets: dict[str, dict], params: dict[str, Any] 
 
     def stopped_by_data(it: Any) -> dict | None:
         return next((failed[n] for n in needs[it.id] if n in failed), None)
+
+    def read_when(it: Any) -> tuple[str, bool]:
+        """When the rows of a tile were read from their source (the oldest of them), and
+        whether this request did without reading it."""
+        read = [data[n] for n in needs[it.id] if n in data]
+        return min((d.read_at or moment for d in read), default=moment).isoformat(), bool(read) and all(d.from_cache for d in read)
 
     # the tile's expressions against the columns the data really has
     columns = {name: ds.columns for name, ds in data.items()}
@@ -415,7 +427,7 @@ def compute(definition: dict, datasets: dict[str, dict], params: dict[str, Any] 
             elif it.id in wrong:
                 answers[it.id] = _failure(_said(wrong[it.id], it.id))
             else:
-                answers[it.id] = _tile(b, it, _page(pages.get(it.id)), at)
+                answers[it.id] = _tile(b, it, page_of(pages.get(it.id)), *read_when(it))
 
     if frames.enabled():
         with frames.build_store(report, data, loc) as store:

@@ -78,6 +78,10 @@ REPORTS__RENDER_SECONDS: {{ include "tabularia.env" (.Values.reports.renderSecon
 {{- with .Values.dashboards.maxRows }}
 DASHBOARDS__MAX_ROWS: {{ include "tabularia.env" . }}
 {{- end }}
+DASHBOARDS__CACHE_SECONDS: {{ include "tabularia.env" (.Values.dashboards.cacheSeconds) }}
+DASHBOARDS__CACHE_TILE_BYTES: {{ include "tabularia.env" (.Values.dashboards.cacheTileBytes) }}
+DASHBOARDS__CACHE_VALKEY_BYTES: {{ include "tabularia.env" (.Values.dashboards.cacheValkeyBytes) }}
+DASHBOARDS__CACHE_BUCKET_BYTES: {{ include "tabularia.env" (.Values.dashboards.cacheBucketBytes) }}
 
 CACHE__TTL_SECONDS: {{ include "tabularia.env" (.Values.cache.ttlSeconds) }}
 CACHE__SWEEP_INTERVAL_SECONDS: {{ include "tabularia.env" (.Values.cache.sweepIntervalSeconds) }}

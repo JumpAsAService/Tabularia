@@ -3716,6 +3716,10 @@ export default {
         "title": "Schritt-Cache",
         "lead": "Die Zwischenergebnisse, die Vorschauen im Editor schnell machen, und die Aufräumläufe des Schedulers."
       },
+      "dashboards": {
+        "title": "Dashboards",
+        "lead": "Was der Cache eines Dashboards aufbewahrt: die Zeilen seiner Datensätze im Bucket, die Zahlen seiner Kacheln in Valkey, geteilt von allen, die sie lesen dürfen.",
+      },
       "clickhouse": {
         "title": "ClickHouse",
         "lead": "Die externe ClickHouse-Engine.",
@@ -3777,6 +3781,22 @@ export default {
       "cache_max_step_rows": {
         "label": "Höchstzahl an Zeilen eines Schritts im Cache",
         "help": "Ein Schritt mit mehr Zeilen kommt nicht in den Cache: Eine Kopie so groß wie die Quelle kostet Gigabytes an Schreibvorgängen und spart keine Zeit gegenüber erneutem Lesen der Quelle. 0 = keine Grenze.",
+      },
+      "dashboards_cache_seconds": {
+        "label": "Wie lange die Daten eines Dashboards geteilt werden",
+        "help": "Einmal gelesene Zeilen und Zahlen werden so lange von allen geteilt, die sie lesen dürfen, damit hundert Personen eine Abfrage auslösen. Ein Dashboard mit längerem Aktualisierungsintervall behält sie für dieses Intervall.",
+      },
+      "dashboards_cache_tile_bytes": {
+        "label": "Größte aufbewahrte Zahlen einer Kachel",
+        "help": "Die Zahlen einer Kachel über dieser Größe kommen nicht in Valkey: Sie werden bei jeder Anfrage neu aus den aufbewahrten Zeilen berechnet.",
+      },
+      "dashboards_cache_valkey_bytes": {
+        "label": "Valkey-Speicher, bei dem der Cache anhält",
+        "help": "Verbraucht Valkey mehr Speicher als dies, werden keine Zahlen von Kacheln aufbewahrt. Valkey trägt auch die Warteschlangen und hat keine eigene Grenze.",
+      },
+      "dashboards_cache_bucket_bytes": {
+        "label": "Platz der Zeilen im Bucket",
+        "help": "Das Maximum, das die Zeilen der Dashboards unter cache/ im Bucket belegen: Was bald abläuft, geht zuerst, und größere Zeilen werden nicht aufbewahrt. 0 = keine Zeilen aufbewahrt.",
       },
       "clickhouse_external_parquet_scan_max_threads": {
         "label": "Threads für Scans",

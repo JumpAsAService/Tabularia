@@ -170,11 +170,12 @@ def _only_shown(spec: Any, value: str, label: str | None, calculated: set[str]) 
 
 def choices(definition: dict, dataset: str, datasets: dict[str, dict], params: dict[str, Any] | None, value: str,
             label: str | None = None, limit: int = 500, locale: str | None = None, max_rows: int | None = None,
-            now: datetime | None = None) -> dict:
+            now: datetime | None = None, read: Any = rdata.read_dataset) -> dict:
     """The choices of a parameter taken from a dataset: `value` and `label` evaluated on
     every row, each value once, in the order of the rows (`_only_shown` for what a chain
     reads); `truncated` when there are more than `limit`. The parameters are those of a
-    form still being filled in (not strict)."""
+    form still being filled in (not strict). `read`: where the rows come from (a dashboard's
+    cache)."""
     try:
         report = rd.load(definition)
     except rd.DefinitionError as e:
@@ -192,13 +193,13 @@ def choices(definition: dict, dataset: str, datasets: dict[str, dict], params: d
     ds = None
     if (shown := _only_shown(spec, value, label, calculated)) is not None:
         try:
-            ds = rdata.read_dataset(dataset, shown, cap, tz)
+            ds = read(dataset, shown, cap, tz)
         except ReportError:  # a field it does not have, say: as it is said when the rows are read
             pass
     narrowed = ds is not None
     if ds is None:
         try:
-            ds = rdata.read_dataset(dataset, spec, cap, tz)
+            ds = read(dataset, spec, cap, tz)
         except OverCap as e:  # read whole for its list, without the filter a render reads it with
             raise OverCap(f"{e.message}. For its list, make the value a plain field, or read the choices "
                           "from a dataset of their own (SELECT DISTINCT)") from None

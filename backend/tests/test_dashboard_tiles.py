@@ -11,6 +11,7 @@ them into Python's values.
 """
 from __future__ import annotations
 
+import asyncio
 import base64
 import json
 from datetime import date, datetime, timezone
@@ -669,12 +670,12 @@ def test_the_route_waits_for_the_preview_worker_and_says_its_failures(monkeypatc
     monkeypatch.setattr(tasks, "on_preview_worker", worker)
     request = routes.DashboardTiles(definition={"v": 1}, datasets={"d": {"rows": []}}, slot="u1:dashboard:2",
                                     refused={"x": {"error": "no", "code": "no_access"}}, tiles=["a"], pages={"a": 1})
-    assert routes.tiles(request) == {"tiles": {}, "truncated": {}}
+    assert asyncio.run(routes.tiles(request)) == {"tiles": {}, "truncated": {}}
     assert got["name"] == "app.tasks.report_jobs.dashboard_tiles_task" and got["slot"] == "u1:dashboard:2"
     assert got["kwargs"]["refused"] == {"x": {"error": "no", "code": "no_access"}} and "slot" not in got["kwargs"]
     monkeypatch.setattr(tasks, "on_preview_worker", lambda *a, **k: {"ok": False, "error": "unprocessable", "detail": "no"})
     with pytest.raises(HTTPException) as e:
-        routes.tiles(request)
+        asyncio.run(routes.tiles(request))
     assert e.value.status_code == 422 and e.value.detail == "no"
 
 

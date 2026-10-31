@@ -569,9 +569,20 @@ class DashboardsSettings(BaseModel):
 
     env: DASHBOARDS__MAX_ROWS — the most rows a dashboard reads from each of its datasets:
     the tiles that read one with more say so, and how to aggregate, and show no number.
-    Unset: REPORTS__MAX_ROWS."""
+    Unset: REPORTS__MAX_ROWS.
+    env: DASHBOARDS__CACHE_SECONDS — how long the rows of a dataset and the numbers of a tile
+    are shared by everyone who may read them; a dashboard's own interval, when longer, wins.
+    env: DASHBOARDS__CACHE_TILE_BYTES — the largest numbers of one tile kept in Valkey.
+    env: DASHBOARDS__CACHE_VALKEY_BYTES — past this memory used by Valkey, no number is kept
+    (Valkey is the queues' broker too, and has no limit of its own).
+    env: DASHBOARDS__CACHE_BUCKET_BYTES — the room of the rows on the bucket, under `cache/`:
+    those about to expire leave first; 0 keeps none."""
 
     max_rows: int | None = Field(default=None, ge=1, le=10_000_000)
+    cache_seconds: int = Field(default=300, ge=10, le=7 * 24 * 3600)
+    cache_tile_bytes: int = Field(default=1024**2, ge=1024)
+    cache_valkey_bytes: int = Field(default=512 * 1024**2, ge=1024**2)
+    cache_bucket_bytes: int = Field(default=20 * 1024**3, ge=0)
 
     @field_validator("max_rows", mode="before")
     @classmethod

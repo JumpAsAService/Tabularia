@@ -230,7 +230,7 @@ def test_the_catalog_says_environment_value_and_range():
     assert items["ingest.parquet_row_group_rows"]["value"] is None
     assert items["celery.task_time_limit"]["max"] == 3000
     assert {v["category"] for v in c["items"]} == {
-        "import", "export", "execution", "cache", "clickhouse", "bigquery", "workers", "sftp", "s3", "api",
+        "import", "export", "execution", "cache", "dashboards", "clickhouse", "bigquery", "workers", "sftp", "s3", "api",
         "placeholders", "upload", "engine_api", "embedded"}
     assert items["api.min_interval_seconds"]["kind"] == "float" and items["export.max_rows"]["kind"] == "int"
     assert items["celery.max_tasks_per_child"]["rollout"] == ["worker", "preview-worker"]

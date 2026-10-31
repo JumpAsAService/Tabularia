@@ -1260,6 +1260,26 @@ text = "The notebooks' own address, the gateway's `NOTEBOOKS__ORIGIN`: the pages
 [var.REPORTS__MAX_ROWS]
 text = "The most rows a report reads from each of its datasets; one more stops the render and names the dataset (aggregate it in SQL, or filter it). The rows stay in the worker's memory, in columns, while the report renders, and DuckDB works out its groups and totals: a million take some 500 MiB and a second or two, ten million some 2.2 GiB and ten seconds (measured), so give the worker that much for every render that may run at once."
 
+[var.DASHBOARDS__CACHE_SECONDS]
+text = "How long the rows of a dataset and the numbers of a tile are shared by everyone who may read them, so that a hundred people on a dashboard run one query; a dashboard whose `refresh_seconds` is longer keeps them for that. Rights are checked at every request all the same. Also adjustable in Administration → Settings."
+default = "`300`"
+type = "integer, 10–604,800"
+
+[var.DASHBOARDS__CACHE_TILE_BYTES]
+text = "The largest numbers of one tile kept in Valkey; above it they are worked out again at each request, from the rows kept, and counted in the `dataprep_dashboard_cache` metric. Also adjustable in Administration → Settings."
+default = "`1048576`"
+type = "integer, at least 1,024"
+
+[var.DASHBOARDS__CACHE_VALKEY_BYTES]
+text = "With Valkey using more memory than this, no tile's numbers are kept (Valkey also carries the queues, and has no limit of its own). Also adjustable in Administration → Settings."
+default = "`536870912`"
+type = "integer, at least 1,048,576"
+
+[var.DASHBOARDS__CACHE_BUCKET_BYTES]
+text = "The most the rows of dashboards take on the bucket, under `cache/`: those about to expire leave first, and rows larger than this are not kept (then each new table page or click reads the source again). 0 keeps none. Also adjustable in Administration → Settings."
+default = "`21474836480`"
+type = "integer"
+
 [var.DASHBOARDS__MAX_ROWS]
 text = "The most rows a dashboard reads from each of its datasets; empty, `REPORTS__MAX_ROWS`. The tiles that read a dataset with more say so and how to aggregate it, and show no number: a total is never computed on part of the rows. The rows stay in the preview worker's memory, in columns, while a request is worked out: a request of 9 tiles on a million rows of 8 columns took it from 0.3 to 1.2–1.5 GiB (measured), so give that worker as much for every request that may run at once."
 default = "`REPORTS__MAX_ROWS`"

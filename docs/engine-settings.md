@@ -227,6 +227,15 @@ Container node) or greyed out (an engine that is not configured).
 | How often expired steps are cleared | `CACHE__SWEEP_INTERVAL_SECONDS` | 1 min – 7 d | ↻ beat |
 | How often storage is measured | `METRICS__STORAGE_STATS_INTERVAL_SECONDS` | 10 s – 1 h | ↻ beat |
 
+**Dashboards**
+
+| Setting | Variable | Panel range | Applies |
+|---|---|---|---|
+| How long a dashboard's data is shared | `DASHBOARDS__CACHE_SECONDS` | 10 s – 7 d | live |
+| Largest numbers of a tile kept | `DASHBOARDS__CACHE_TILE_BYTES` | 1 KiB – 100 MiB | live |
+| Valkey memory the cache stops at | `DASHBOARDS__CACHE_VALKEY_BYTES` | 1 MiB – 1 TiB | live |
+| Room of the rows on the bucket | `DASHBOARDS__CACHE_BUCKET_BYTES` | 0 – 100 TiB | live |
+
 **Embedded engines**
 
 | Setting | Variable | Panel range | Applies |

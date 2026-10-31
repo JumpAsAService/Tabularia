@@ -3716,6 +3716,10 @@ export default {
         "title": "Cache des étapes",
         "lead": "Les résultats intermédiaires qui rendent rapides les aperçus de l'éditeur, et les nettoyages du planificateur."
       },
+      "dashboards": {
+        "title": "Tableaux de bord",
+        "lead": "Ce que garde le cache d'un tableau de bord : les lignes de ses jeux de données sur le bucket, les nombres de ses tuiles dans Valkey, partagés par quiconque peut les lire.",
+      },
       "clickhouse": {
         "title": "ClickHouse",
         "lead": "Le moteur ClickHouse externe.",
@@ -3777,6 +3781,22 @@ export default {
       "cache_max_step_rows": {
         "label": "Lignes maximales d'une étape en cache",
         "help": "Une étape avec plus de lignes n'est pas mise en cache : une copie aussi grande que la source coûte des gigaoctets d'écriture et ne fait pas gagner de temps par rapport à relire la source. 0 = aucune limite.",
+      },
+      "dashboards_cache_seconds": {
+        "label": "Durée de partage des données d'un tableau de bord",
+        "help": "Les lignes et les nombres lus une fois sont partagés pendant cette durée par quiconque peut les lire, pour que cent personnes fassent une requête. Un tableau de bord avec un intervalle d'actualisation plus long les garde pendant cet intervalle.",
+      },
+      "dashboards_cache_tile_bytes": {
+        "label": "Plus grands nombres d'une tuile conservés",
+        "help": "Les nombres d'une tuile au-delà de cette taille ne sont pas gardés dans Valkey : ils sont recalculés à chaque requête à partir des lignes conservées.",
+      },
+      "dashboards_cache_valkey_bytes": {
+        "label": "Mémoire de Valkey où le cache s'arrête",
+        "help": "Quand Valkey utilise plus de mémoire que cela, les nombres des tuiles ne sont plus gardés. Valkey porte aussi les files et n'a pas de limite propre.",
+      },
+      "dashboards_cache_bucket_bytes": {
+        "label": "Place des lignes sur le bucket",
+        "help": "Le maximum que prennent les lignes des tableaux de bord sous cache/ sur le bucket : ce qui va expirer part d'abord, et les lignes plus grandes ne sont pas gardées. 0 = aucune ligne gardée.",
       },
       "clickhouse_external_parquet_scan_max_threads": {
         "label": "Threads pour les parcours",

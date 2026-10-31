@@ -3742,6 +3742,10 @@ export default {
         "title": "Step cache",
         "lead": "The intermediate results that make the editor's previews fast, and the scheduler's sweeps."
       },
+      "dashboards": {
+        "title": "Dashboards",
+        "lead": "What a dashboard's cache keeps: the rows of its datasets on the bucket, the numbers of its tiles in Valkey, shared by everyone who may read them.",
+      },
       "clickhouse": {
         "title": "ClickHouse",
         "lead": "The external ClickHouse engine.",
@@ -3803,6 +3807,22 @@ export default {
       "cache_max_step_rows": {
         "label": "Most rows in a cached step",
         "help": "A step with more rows is not cached: a copy as large as the source costs gigabytes of writing and saves no time over reading the source again. 0 = no limit.",
+      },
+      "dashboards_cache_seconds": {
+        "label": "How long a dashboard's data is shared",
+        "help": "The rows and numbers read once are shared this long by everyone who may read them, so that a hundred people run one query. A dashboard with a longer refresh interval keeps them for that interval.",
+      },
+      "dashboards_cache_tile_bytes": {
+        "label": "Largest numbers of a tile kept",
+        "help": "The numbers of a tile above this size are not kept in Valkey: they are worked out again at each request, from the rows kept.",
+      },
+      "dashboards_cache_valkey_bytes": {
+        "label": "Valkey memory the cache stops at",
+        "help": "With Valkey using more memory than this, no tile's numbers are kept. Valkey also carries the queues and has no limit of its own.",
+      },
+      "dashboards_cache_bucket_bytes": {
+        "label": "Room of the rows on the bucket",
+        "help": "The most the rows of dashboards take under cache/ on the bucket: those about to expire leave first, and rows larger than this are not kept. 0 = no rows kept.",
       },
       "clickhouse_external_parquet_scan_max_threads": {
         "label": "Threads for scans",

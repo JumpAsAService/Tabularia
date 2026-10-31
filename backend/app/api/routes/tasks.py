@@ -90,17 +90,20 @@ PREVIEW_TIMEOUT_SECONDS = float(value_at_start("PREVIEW_TIMEOUT_SECONDS"))  # en
 _PREVIEW_ERROR_STATUS = {"not_found": 404, "unprocessable": 422, "bad_request": 400, "superseded": 409}
 # how often the wait checks it has not been superseded
 _PREVIEW_POLL_SECONDS = 0.25
+_WORKER_LOOK_SECONDS = 5.0  # how often a wait with others behind it checks its worker is there
 _SUPERSEDED = "Preview superseded by a more recent request"
 # how long the synchronous export waits for a worker to pick it up, on top of the
 # workers' time limit for the export itself
 EXPORT_QUEUE_WAIT_SECONDS = 600
 
 
-def on_preview_worker(task_name: str, kwargs: dict, slot: str | None, seconds: float | None = None) -> dict:
+def on_preview_worker(task_name: str, kwargs: dict, slot: str | None, seconds: float | None = None,
+                      watch_worker: bool = False) -> dict:
     """Sends a task to the preview worker and waits for its tagged answer. With a
     `slot`, a newer request on the same slot knocks this one down (409); after
     PREVIEW_TIMEOUT_SECONDS (or `seconds`, when shorter: what is only a hint) the task is
-    revoked (504)."""
+    revoked (504). `watch_worker`: others are waiting for this one (a dashboard's cache), so
+    a worker gone is said when it is known (503), not at the end of the wait."""
     # the id decided HERE: it is needed before sending, to book the slot
     task_id = str(uuid.uuid4())
     previous = None
@@ -117,6 +120,7 @@ def on_preview_worker(task_name: str, kwargs: dict, slot: str | None, seconds: f
         celery_app.control.revoke(previous, terminate=True, signal="SIGUSR1")
 
     deadline = time.monotonic() + min(PREVIEW_TIMEOUT_SECONDS, seconds or PREVIEW_TIMEOUT_SECONDS)
+    look_at = time.monotonic() + _WORKER_LOOK_SECONDS
     try:
         while True:
             try:
@@ -128,6 +132,10 @@ def on_preview_worker(task_name: str, kwargs: dict, slot: str | None, seconds: f
                 # stay here until then.
                 if slot and preview_slots.owner(slot) not in (None, task_id):
                     raise HTTPException(status_code=409, detail=_SUPERSEDED)
+                if watch_worker and time.monotonic() >= look_at:
+                    look_at = time.monotonic() + _WORKER_LOOK_SECONDS
+                    if async_result.state == "STARTED" and worker_pool.lost(task_id, async_result.info):
+                        raise HTTPException(status_code=503, detail="The worker computing this was lost: try again")
                 if time.monotonic() >= deadline:
                     async_result.revoke(terminate=True)  # stops the preview in progress
                     raise HTTPException(

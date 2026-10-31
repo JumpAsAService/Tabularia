@@ -728,6 +728,9 @@ def evict_cache_task() -> dict:
             removed += get_engine("bigquery").cache.evict_expired(settings.cache.ttl_seconds)
         except Exception as e:  # noqa: BLE001 — the sweep must not stop for an optional engine
             logger.warning("sweep of the BigQuery cache failed: %s", e)
+    from app.reports import tile_cache
+
+    removed += tile_cache.sweep()  # the dashboards' rows: on the same prefix, each with its own end
     return {"removed": removed, "ttl_seconds": settings.cache.ttl_seconds}
 
 

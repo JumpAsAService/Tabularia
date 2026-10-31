@@ -36,7 +36,8 @@ from app.reports.errors import OverCap, ReportError
 
 class DataSet:
     """A dataset read: its columns (name → type, as the engine names it), and its rows as
-    Python's dicts, or in columns (`table`, whose rows are made when asked for)."""
+    Python's dicts, or in columns (`table`, whose rows are made when asked for). `read_at`: when
+    a cache read them from their source (None: just now), `from_cache`: this time it did not."""
 
     def __init__(self, name: str, columns: dict[str, str], rows: list[dict[str, Any]] | None = None,
                  table: frames.Table | None = None):
@@ -44,6 +45,8 @@ class DataSet:
         self.columns = columns
         self._rows = rows
         self.table = table
+        self.read_at: datetime | None = None
+        self.from_cache = False
 
     @property
     def rows(self) -> list[dict[str, Any]]:
@@ -196,8 +199,17 @@ def read_dataset(name: str, spec: Any, max_rows: int, tz: ZoneInfo) -> DataSet:
         raise ReportError(f"the dataset «{name}» was not sent with the report: it cannot be read")
     columns, rows, truncated = _read_one(name, spec, max_rows)
     if truncated:
-        raise OverCap(f"the dataset «{name}» has more than {max_rows:,} rows, the most a report reads: "
-                      "aggregate it in SQL, or filter it")
+        raise over_cap(name, max_rows)
+    return dataset_from(name, columns, rows, tz)
+
+
+def over_cap(name: str, max_rows: int) -> OverCap:
+    return OverCap(f"the dataset «{name}» has more than {max_rows:,} rows, the most a report reads: "
+                   "aggregate it in SQL, or filter it")
+
+
+def dataset_from(name: str, columns: dict[str, str], rows: Any, tz: ZoneInfo) -> DataSet:
+    """A dataset of what `_read_one` gave, its values made plain."""
     if not isinstance(rows, list):  # a DataFrame: in columns, its values made plain column by column
         table = frames.from_frame(rows, tz)
         if table is not None:

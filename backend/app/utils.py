@@ -96,7 +96,9 @@ class StorageService:
     The bucket is passed to the methods as an argument, for flexibility.
     """
 
-    def __init__(self):
+    def __init__(self, quick: bool = False):
+        """`quick`: for what is only a courtesy, a cache: a bucket that does not answer is said in
+        seconds (boto3's own defaults take minutes), and no attempt is made twice."""
         settings = get_settings()
         
         self.settings = settings
@@ -115,8 +117,11 @@ class StorageService:
                 # AWS/MinIO/Scaleway.
                 request_checksum_calculation="when_required",
                 response_checksum_validation="when_required",
+                **({"connect_timeout": 2, "read_timeout": 15, "retries": {"max_attempts": 0}} if quick else {}),
             ),
         )
+        # a download has attempts of its own, five by default, each as long as the timeout above
+        self._download_config = transfer_config(None, num_download_attempts=1) if quick else None
 
     def create_bucket(self, bucket: str, location: str | None = None) -> dict:
         """
@@ -209,7 +214,7 @@ class StorageService:
         Returns:
             A dict describing the download
         """
-        self.client.download_file(bucket, object_key, file_path)
+        self.client.download_file(bucket, object_key, file_path, Config=self._download_config)
         return {"bucket": bucket, "key": object_key, "status": "downloaded"}
 
     def download_fileobj(self, bucket: str, object_key: str, file_obj) -> dict:

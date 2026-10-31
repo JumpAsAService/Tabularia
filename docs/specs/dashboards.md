@@ -250,20 +250,36 @@ The parameters' form: `GET /dashboards/{id}/parameters` (VIEW) and
 The promise is: **a hundred people on one dashboard run one query**. On ClickHouse and BigQuery
 each query costs money, so this is a requirement, not an optimization.
 
-- Two levels: the dataset's rows (a file on the bucket, under the managed `cache/` prefix) and
-  the tile's numbers (Valkey). A click recomputes the numbers from the rows and does not go
-  back to the source.
-- Key: the dataset's resolved source after the parameters, its data version where known
-  (a datasource's snapshot), the engine; for a tile also the tile's definition, the clicks, the
-  locale, the timezone.
+- Two levels: the dataset's rows (a file on the bucket, under the managed `cache/` prefix, written
+  and read by the preview workers, never reached by a browser) and the tile's numbers (Valkey). A
+  click recomputes the numbers from the rows and does not go back to the source. A parameter that
+  leads to the same resolved source does the same. It lives in the engine (`backend/app/reports/
+  tile_cache.py`), since Valkey is not the gateway's: the gateway sends only what `_plan` found the
+  reader may read.
+- Key: the dataset's resolved source after the parameters, for this reader (a catalog name is the
+  parquet it resolved to), its data version where known (a datasource's snapshot, which is the
+  parquet's key), the engine; for a tile also the tile's definition, the parameters, its page and
+  state, the clicks, the locale, the timezone, the title `REPORT()` reads.
 - **Rights come first and are never cached.** The check runs at every request with the reader's
   rights, and only then the key is used. Two people share a result only because the resolved
   source is identical.
-- Lifetime `DASHBOARDS__CACHE_SECONDS`, by default 300, and at least the dashboard's interval.
-- Concurrent requests for one key wait for one computation (a lock in Valkey), with a timeout
-  after which the waiter gets a clear error and not a second query.
+- Lifetime `DASHBOARDS__CACHE_SECONDS`, by default 300, and at least the dashboard's interval. A
+  number ends with the rows it comes from. `computed_at` is when the rows were read from their
+  source; `cached` says this answer did not read it.
+- Concurrent requests for one key wait for one computation (a lock in Valkey, renewed while its
+  holder lives, ending in 30 s when it dies), with a timeout after which the waiter gets a clear
+  error in the tile and not a second query. A failure is kept for 10 s for those waiting. Nothing
+  cancels a shared computation: a saved dashboard's request has no slot.
 - **Refresh** by hand ignores the cache, at most once per dashboard every 10 seconds, shared by
-  everyone.
+  everyone: past it, the answer is what there is, without an error. It reads again only what the
+  reader may read.
+- A parameter's list from a dataset (the check of a value, the form) is kept the same way. One the
+  reader may not read checks nothing and stops nothing.
+- Too large is not kept, and counted (`dataprep_dashboard_cache`): a tile past
+  `DASHBOARDS__CACHE_TILE_BYTES`, anything past `DASHBOARDS__CACHE_VALKEY_BYTES` of Valkey's memory,
+  rows past `DASHBOARDS__CACHE_BUCKET_BYTES`, the room of all of them on the bucket.
+- Without Valkey or the bucket a dashboard works, without the cache. When the broker is that Valkey
+  no worker can be reached: the numbers are worked out in the engine's API, one request at a time.
 - The automatic refresh pauses when the tab is hidden and has a little jitter; on an error it
   keeps the last numbers with the time they are from, and says so.
 
@@ -348,8 +364,9 @@ cd infrastructure/production && docker compose --env-file .env.prodtest build <s
 gateway/app/models/dashboard.py              the tables
 gateway/app/db/migrations/versions/          the migration
 gateway/app/routes/dashboards.py             the API
-gateway/app/services/dashboards.py           definition, rights, cache, plan of a request
+gateway/app/services/dashboards.py           definition, rights, plan of a request
 backend/app/reports/tiles.py                 numbers per tile, from the reports' model
+backend/app/reports/tile_cache.py            the cache: rows on the bucket, numbers in Valkey, the lock
 backend/app/reports/dashboard_layout.py      a dashboard as a report's layout, for PDF and PNG
 frontend/pages/dashboards.vue                the tab
 frontend/pages/dashboard.vue                 the viewer

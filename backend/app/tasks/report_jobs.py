@@ -65,15 +65,17 @@ def report_choices_task(
     label: str | None = None,
     limit: int = 500,
     locale: str | None = None,
+    cache_seconds: int | None = None,
 ) -> dict:
     """The choices of a parameter from a dataset, for the form a person is filling in: on
     the preview queue, tagged as preview_task's answer (the route maps `error` to the HTTP
-    status)."""
-    from app.reports import render
+    status). `cache_seconds`: a dashboard's, whose rows are shared (app/reports/tile_cache.py)."""
+    from app.reports import render, tile_cache
     from app.reports.errors import ReportError
 
+    extra = tile_cache.choices_reading(datasets.get(dataset), cache_seconds) if cache_seconds else {}
     try:
-        return {"ok": True, "result": render.choices(definition, dataset, datasets, params, value, label, limit, locale)}
+        return {"ok": True, "result": render.choices(definition, dataset, datasets, params, value, label, limit, locale, **extra)}
     except ReportError as e:
         return {"ok": False, "error": e.tag, "detail": e.message}
 
@@ -113,21 +115,25 @@ def dashboard_tiles_task(
     state: dict | None = None,
     locale: str | None = None,
     title: str | None = None,
+    cache_seconds: int | None = None,
 ) -> dict:
     """A dashboard's numbers (app/reports/tiles.py): on the preview queue, tagged as
     preview_task's answer; its queries carry the task's id, so that one knocked down is
-    stopped on the server too."""
+    stopped on the server too. `cache_seconds`: a saved dashboard's, whose rows are shared
+    (app/reports/tile_cache.py)."""
     from celery import current_task
 
     from app.engine.query_tag import query_tag, was_interrupted
+    from app.reports import tile_cache
     from app.reports import tiles as rtiles
     from app.reports.errors import ReportError
 
     task_id = getattr(getattr(current_task, "request", None), "id", None)
+    extra = {"read": tile_cache.reader(cache_seconds)} if cache_seconds else {}
     try:
         with query_tag(f"tab-prev:{task_id}" if task_id else None):
-            return {"ok": True, "result": rtiles.compute(definition, datasets, params, refused=refused, only=tiles,
-                                                         pages=pages, state=state, locale=locale, title=title or "")}
+            return {"ok": True, "result": rtiles.compute(definition, datasets, params, refused=refused, only=tiles, pages=pages,
+                                                         state=state, locale=locale, title=title or "", **extra)}
     except ReportError as e:
         return {"ok": False, "error": e.tag, "detail": e.message}
     except Exception as e:
