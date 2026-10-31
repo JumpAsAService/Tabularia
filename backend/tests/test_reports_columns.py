@@ -604,3 +604,32 @@ def test_the_longest_chain_the_parser_takes_is_translated_without_running_out_of
         ctx = ex.Context(loc=formats.locale("en"), now=NOW, scopes=[s.rows("d")])
         rel = s.rel("d")
         assert rel.python_values(rel.translate(ex.parse(text), ctx), np.arange(2)) == [199, 398]
+
+
+@pytest.mark.parametrize("direction", ["asc", "desc"])
+def test_the_ranks_put_the_values_in_the_order_compare_gives(direction):
+    """The distinct values sorted by key: what a comparison of each pair gave, NULL last, values
+    Python takes as equal one rank, the first of them naming it."""
+    import random
+    from functools import cmp_to_key
+
+    import pyarrow as pa
+
+    rnd = random.Random(3)
+    for values in ([rnd.choice([None, -1.5, 0.0, -0.0, 2.25, 3.0, rnd.uniform(-5, 5)]) for _ in range(500)],
+                   [rnd.choice([None, "a", "A", "é", "E", "e", "b", "", "Z"]) for _ in range(500)],
+                   [rnd.choice([None, True, False]) for _ in range(50)], [None, None], []):
+        array = pa.array(values, pa.float64() if any(isinstance(v, float) for v in values) else None)
+        ranks, named = frames._ranks(array, direction)
+        ids, distinct = frames.encode(array)
+        order = sorted(range(len(distinct)), key=cmp_to_key(
+            lambda a, b: frames.compare(frames.sort_key(distinct[a]), frames.sort_key(distinct[b]), direction)))
+        want, prev = [], None
+        for i in order:
+            k = frames.sort_key(distinct[i])
+            if prev is None or k != prev:
+                want.append(distinct[i])
+                prev = k
+        assert named == want
+        assert [named[r] for r in ranks.tolist()] == [next(w for w in want if frames.sort_key(w) == frames.sort_key(v)) for v in values]
+

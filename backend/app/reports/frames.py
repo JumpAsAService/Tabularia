@@ -34,7 +34,6 @@ import tempfile
 from collections.abc import Iterator, Mapping
 from datetime import date, datetime, time, timedelta, timezone
 from decimal import Decimal
-from functools import cmp_to_key
 from typing import Any, Callable, Iterable
 from zoneinfo import ZoneInfo
 
@@ -460,13 +459,17 @@ def _ranks(values: pa.Array, direction: str) -> tuple[np.ndarray, list]:
     """A rank per value (values Python sorts as equal, one rank) in the order `direction`
     gives them, NULL last; and the value of each rank. Python orders the distinct values."""
     ids, distinct = encode(values)
-    order = sorted(range(len(distinct)), key=cmp_to_key(
-        lambda a, b: compare(sort_key(distinct[a]), sort_key(distinct[b]), direction)))
+    keys = [sort_key(v) for v in distinct]
+    # the order `compare` gives (NULL last in both directions), by key: a column of amounts has
+    # hundreds of thousands of distinct values, and comparing them through a Python function
+    # took seconds
+    order = sorted((i for i, k in enumerate(keys) if not k[0]), key=keys.__getitem__, reverse=direction != "asc")
+    order += [i for i, k in enumerate(keys) if k[0]]
     rank_of = np.empty(len(distinct), np.int64)
     named: list = []
     prev = None
     for i in order:
-        k = sort_key(distinct[i])
+        k = keys[i]
         if prev is None or k != prev:
             named.append(distinct[i])
             prev = k
