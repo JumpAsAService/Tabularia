@@ -1109,6 +1109,11 @@ class SqlData:
     def details(self, rows: Any) -> list[dict]:
         return _rows_of(rows).rows()
 
+    def window(self, rows: Any, lo: int, hi: int) -> list[dict]:
+        """Some of the rows as Python's values, the others staying in columns."""
+        rows = _rows_of(rows)
+        return rows.family.rel.table.rows_at(rows.idx[lo:hi])
+
     def partition(self, rows: Any, node: ex.Node, ctx: ex.Context, item: str, where: str) -> list[tuple[Any, Any]]:
         """The rows by the value of `node`, each value where it first comes."""
         rows = _rows_of(rows)

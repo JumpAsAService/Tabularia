@@ -311,7 +311,7 @@ def _script(session: Session, user: User, script_id: int) -> SqlScript:
 
 
 def _unreadable(what: str) -> HTTPException:
-    return HTTPException(status_code=422, detail=f"it reads {what}")
+    return sql_scripts.Unreadable(f"it reads {what}")
 
 
 def _columns(ds: Datasource) -> set[str]:
@@ -538,6 +538,8 @@ def sentence(message: str) -> str:
 def _in_dataset(name: str, e: HTTPException) -> HTTPException:
     if isinstance(e.detail, dict) and "parameter" in e.detail:
         return e  # a value that does not fit: the parameter's name is the point
+    if isinstance(e, sql_scripts.Unreadable):
+        return sql_scripts.Unreadable(f"The dataset «{name}»: {_within(_text(e))}")
     status = e.status_code if e.status_code in (400, 502, 504) else 422
     return HTTPException(status_code=status, detail=f"The dataset «{name}»: {_within(_text(e))}")
 
@@ -737,13 +739,14 @@ def reading_problem(session: Session, user: User, definition: dict) -> Optional[
 
 async def resolve_datasets(session: Session, user: User, definition: dict, values: Mapping[str, Any],
                            only: Optional[set[str]] = None, read: Optional[set[int]] = None,
-                           ignoring: frozenset[str] = frozenset(), left: Optional[set[str]] = None) -> dict[str, dict]:
+                           ignoring: frozenset[str] = frozenset(), left: Optional[set[str]] = None,
+                           engines: Optional[_Engines] = None) -> dict[str, dict]:
     """Every dataset (or those in `only`) as the engine reads it, with `user`'s rights and
     the parameters' `values` in place. 422 naming the dataset that cannot be read. The
     datasources read go in `read`, when given (a flow group's lineage). `ignoring`: see
     `_plan`; those a SQL still names go in `left`, when given."""
     params = {p["name"]: p for p in definition.get("parameters") or []}
-    engines = _Engines(session)
+    engines = engines or _Engines(session)
     plans: list[_Plan] = []
     for ds in definition.get("datasets") or []:
         if only is not None and ds["name"] not in only:
@@ -771,6 +774,30 @@ async def resolve_datasets(session: Session, user: User, definition: dict, value
         except HTTPException as e:
             raise _in_dataset(plan.name, e) from None
     return out
+
+
+async def resolve_each(session: Session, user: User, definition: dict,
+                       values: Mapping[str, Any]) -> tuple[dict[str, dict], dict[str, dict]]:
+    """`resolve_datasets` one dataset at a time, for what goes on without those it cannot read
+    (a dashboard): the datasets resolved, and for each of the others what stopped it, as
+    {"code", "error"}. Rights say `no_access` and nothing else, not even what it reads: a
+    message says what it can. A value that does not fit a parameter, and an engine that does
+    not answer, are not a dataset's: those stop everything, as for a report."""
+    engines = _Engines(session)
+    resolved: dict[str, dict] = {}
+    refused: dict[str, dict] = {}
+    for ds in definition.get("datasets") or []:
+        name = ds["name"]
+        try:
+            resolved.update(await resolve_datasets(session, user, definition, values, only={name}, engines=engines))
+        except sql_scripts.Unreadable:
+            refused[name] = {"code": "no_access", "error": f"You cannot read the dataset «{name}» this tile needs: "
+                                                           "ask whoever manages its data"}
+        except HTTPException as e:
+            if e.status_code >= 500 or (isinstance(e.detail, dict) and "parameter" in e.detail):
+                raise
+            refused[name] = {"code": "dataset", "error": _text(e)[:2000]}
+    return resolved, refused
 
 
 # ── choices taken from a dataset ─────────────────────────────────────────────
@@ -903,6 +930,15 @@ async def prepare(session: Session, user: User, definition: dict, given: Mapping
     return values, datasets
 
 
+def check_state(state: Optional[dict]) -> None:
+    """The on-screen view a browser sends (a column sorted, groups toggled): what it may hold."""
+    if state is not None and len(json.dumps(state)) > MAX_STATE_BYTES:
+        raise HTTPException(status_code=422, detail="The view's state is too large")
+    if state is not None and not (isinstance(state.get("items", {}), dict)
+                                  and all(isinstance(i, dict) for i in state.get("items", {}).values())):
+        raise HTTPException(status_code=422, detail="The view's state has its items as an object by item's id")
+
+
 def _audit_render(session: Session, user: User, report: Optional[Report], request: Optional[Request], outcome: str,
                   detail: dict) -> None:
     audit.record_audit(session, actor=user, action=audit.REPORT_RENDER, outcome=outcome, target_type="report",
@@ -925,11 +961,7 @@ async def render(session: Session, user: User, report: Optional[Report], definit
 
     if fmt not in FORMATS:
         raise HTTPException(status_code=422, detail=f"The format is one of {', '.join(FORMATS)}")
-    if state is not None and len(json.dumps(state)) > MAX_STATE_BYTES:
-        raise HTTPException(status_code=422, detail="The view's state is too large")
-    if state is not None and not (isinstance(state.get("items", {}), dict)
-                                  and all(isinstance(i, dict) for i in state.get("items", {}).values())):
-        raise HTTPException(status_code=422, detail="The view's state has its items as an object by item's id")
+    check_state(state)
     # as given until they are converted: a few, cut short, in the audit of a refusal
     detail: dict[str, Any] = {"format": fmt, "from": origin, **(extra or {}), "parameters": given_detail(given)}
     outcome = "failure"

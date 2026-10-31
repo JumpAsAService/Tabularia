@@ -155,6 +155,96 @@ owner, `current_version`; every save is a version.
 - The row cap is `DASHBOARDS__MAX_ROWS`, by default `REPORTS__MAX_ROWS`. Past it, the tile says
   the data was cut and how to aggregate. **A total is never computed on cut data in silence.**
 
+### The answer, tile by tile
+
+`POST /dashboards/{id}/data` and `/dashboards/preview` answer `{"tiles": {id: …}, "truncated":
+{dataset: bool}}`. `truncated` names only the datasets read: of one the reader may not read,
+nothing, not even that it is large. A tile is either an error or its numbers.
+
+**An error** is exactly `{"error": "a sentence", "code": …}`, with no number and no column of a
+dataset refused or cut. The browser translates by `code`:
+
+| `code` | Means |
+|---|---|
+| `no_access` | It reads a dataset, directly or through an expression or a calculated field, that the reader may not read |
+| `truncated` | It reads a dataset past `DASHBOARDS__MAX_ROWS`: the sentence says how to aggregate. No number on part of the rows, not even the rows of a plain table |
+| `dataset` | Its dataset cannot be resolved for another reason (no data yet, a parameter its SQL needs) |
+| `error` | Anything else in this tile: a field that is gone, too many categories, a read that failed |
+
+**Numbers** always have `type` (the tile's), `title`, `computed_at` (ISO, UTC), `cached` and,
+when its `visible` says no, only `"hidden": true`. Texts are already written, in the dashboard's
+locale; `null` is no value. Then, by type:
+
+```json
+{"type": "kpi", "label": "Revenue", "value": 123.4, "text": "123",
+ "change": {"ratio": 0.25, "text": "+25.0%", "dir": "up"},
+ "spark": {"cats": ["1", "2"], "values": [10.0, null]}}
+```
+
+`change` and `spark` are `null` when the KPI has none; with no value, `value` is `null` and `text`
+a dash.
+
+```json
+{"type": "chart", "kind": "bar", "format": "#,##0", "empty": false,
+ "options": {"stacked": false, "labels": false, "legend": null, "min": null, "max": null},
+ "data": {}}
+```
+
+`empty`: nothing to draw. `data` holds what the kind's builder in
+`frontend/composables/chartKinds.ts` takes, under its names; every kind with an axis has `cats` and
+`series`, a series being `{"name", "values", "texts", "as", "axis", "format"}`:
+
+| `kind` | `data` |
+|---|---|
+| `column`, `bar`, `line`, `area` | `cats`, `series` |
+| `combo` | `cats`, `series`, and for `comboOption`: `bars`, `line`, `barName`, `lineName` |
+| `pie`, `donut` | `cats`, `series`, `name`, `slices` (`{"name", "value", "text"}`, those above zero), `left_out` |
+| `treemap`, `funnel` | `cats`, `series`, `values`, `texts`, `name`; with `split_by`, `series` holds the parts |
+| `waterfall` | those of a funnel, and `total`, `total_text`, `total_label` |
+| `heatmap` | `cats`, `series`, `xCats`, `yCats`, `cells` (`[x, y, value]`), `texts` (the cells', in order), `name` |
+| `bullet` | `cats`, `series`, `values`, `texts`, `targets`, `name`, `targetName` (empty: the interface's word), `max`, `bands` |
+| `gauge` | `value`, `text`, `name`, `min`, `max`, `target`, `bands` |
+| `scatter` | `series`: `{"name", "points": [[x, y, "text"]]}` |
+
+```json
+{"type": "table", "matrix": false, "empty": false, "levels": 1,
+ "columns": [{"header": "Order", "align": "left", "width": null, "style": {}}],
+ "head": [[{"t": "Order", "span": 1, "rspan": 1, "align": "left"}]],
+ "rows": [
+   {"kind": "g", "level": 0, "label": "North", "key": ["North"], "closed": false},
+   {"kind": "d", "cells": [{"text": "1.00", "value": 1.0, "style": {"color": "#c92a2a"}}], "zebra": true},
+   {"kind": "f", "level": 0, "label": "Total North", "span": 1, "cells": []},
+   {"kind": "t", "level": 0, "label": "Total", "span": 1, "cells": []}],
+ "page": 0, "pages": 3, "page_rows": 50, "total_rows": 121,
+ "sorted": {"column": 1, "dir": "desc"},
+ "hot": {"sort": true, "toggle": true, "still": [2]}}
+```
+
+A matrix is the same with `"matrix": true`: `head` holds its levels of columns, each cell its
+number. `rows` are the kinds of a report's model: `g` a group's header, `d` a detail row, `f` a
+group's footer, `t` the grand total; a footer's or total's `label` takes its first `span` columns,
+its `cells` are all the columns. `page` is the one given, the last if past it; a group header
+counts as a row of the page. `key` is what `state` names a group by (`null` when the table does
+not offer closing them), `sorted` what it sorts by; `hot`: what a click can do, as in the viewer of
+reports, `still` the columns that offer no sort. `style` is a report's, as `model._style` writes it
+(`color`, `fill`, `weight`, `italic`, `size`, `align`…).
+
+The state goes in the request as in the viewer of reports:
+`{"state": {"items": {"t": {"sort": {"column": 1, "dir": "desc"}, "collapsed": [["North"]],
+"expanded": [], "collapse_all": false}}}}`, and `{"page": {"t": 2}}` the page, from 0.
+
+```json
+{"type": "text", "text": "Rows: 120"}
+{"type": "image", "src": "data:image/png;base64,…", "fit": "contain"}
+```
+
+Limits, each said in the tile as an `error`: a chart keeps a report's (2,000 categories, 24
+series), a scatter draws at most 10,000 points, and a page more than 100,000 rows down cannot be
+reached by a column with `RUNNING` or `PREVIOUS`, which reads every row above it in memory.
+
+The parameters' form: `GET /dashboards/{id}/parameters` (VIEW) and
+`POST /dashboards/{id}/parameters` for a definition being edited (EDIT), as a report's.
+
 ### The cache
 
 The promise is: **a hundred people on one dashboard run one query**. On ClickHouse and BigQuery

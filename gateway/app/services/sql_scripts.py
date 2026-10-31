@@ -282,6 +282,14 @@ def _refuse(message: str) -> HTTPException:
     return HTTPException(status_code=422, detail=message)
 
 
+class Unreadable(HTTPException):
+    """What a person may not read, said as what does not exist: a 422 like any other, for
+    whoever stops at it; a dashboard tells it apart, and says it in the tile (services/dashboards.py)."""
+
+    def __init__(self, detail: str):
+        super().__init__(status_code=422, detail=detail)
+
+
 def resolve(session: Session, user: User, sql: str, engine: Optional[str]) -> Resolved:
     """Finds the datasources the SQL names, among those `user` may read, and puts their
     aliases in their place. A datasource the person cannot read is reported as one that
@@ -326,7 +334,7 @@ def resolve(session: Session, user: User, sql: str, engine: Optional[str]) -> Re
             matches = exact if len(exact) == 1 else matches
         label = f"{folder}.{name}" if folder else name
         if not matches:
-            raise _refuse(f"There is no datasource «{label}» you can read")
+            raise Unreadable(f"There is no datasource «{label}» you can read")
         if len(matches) > 1 and folder:
             # the folder's name does not tell them apart either: only a new name will
             paths = folder_paths(session)

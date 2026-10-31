@@ -74,6 +74,10 @@ REPORTS__MAX_ROWS: {{ include "tabularia.env" (.Values.reports.maxRows) }}
 REPORTS__MAX_PAGES: {{ include "tabularia.env" (.Values.reports.maxPages) }}
 REPORTS__RENDER_MEMORY_MB: {{ include "tabularia.env" (.Values.reports.renderMemoryMb) }}
 REPORTS__RENDER_SECONDS: {{ include "tabularia.env" (.Values.reports.renderSeconds) }}
+# Dashboards: empty, the most rows are those of a report
+{{- with .Values.dashboards.maxRows }}
+DASHBOARDS__MAX_ROWS: {{ include "tabularia.env" . }}
+{{- end }}
 
 CACHE__TTL_SECONDS: {{ include "tabularia.env" (.Values.cache.ttlSeconds) }}
 CACHE__SWEEP_INTERVAL_SECONDS: {{ include "tabularia.env" (.Values.cache.sweepIntervalSeconds) }}

@@ -330,6 +330,13 @@ engine:
   # that multi-gigabyte uploads are never cut off mid-transfer.
   previewTimeoutSeconds: 120
 
+# Dashboards (docs/specs/dashboards.md): what one request for their numbers may read. The
+# preview workers compute them, with the rows in their memory while they do.
+dashboards:
+  # The most rows a dashboard reads from each of its datasets; empty, reports.maxRows. The
+  # tiles that read a dataset with more say so and how to aggregate it, and show no number.
+  maxRows: ""
+
 # Pixel-perfect reports (docs/specs/reports.md): what one render may read and use. The run
 # workers render them (the `celery` queue, as the Viewer's exports): the pages are laid out by
 # a child process of the worker, the charts drawn by the chartRenderer sidecar below.

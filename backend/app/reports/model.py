@@ -302,6 +302,9 @@ class PyData:
     def details(self, rows: list[dict]) -> list[dict]:
         return rows
 
+    def window(self, rows: list[dict], lo: int, hi: int) -> list[dict]:
+        return rows[lo:hi]
+
     def partition(self, rows: list[dict], node: ex.Node, ctx: ex.Context, item: str,
                   where: str) -> list[tuple[Any, list[dict]]]:
         buckets: dict[tuple, tuple[Any, list[dict]]] = {}
@@ -501,27 +504,39 @@ class _Builder:
         return [shown]
 
     # ── KPI ──
-    def kpi(self, it: rd.KpiItem) -> dict:
+    def kpi_numbers(self, it: rd.KpiItem) -> dict:
+        """What a KPI says, before it is placed: its value, as written; its change, with the
+        ratio; its trend (`spark`: the categories and their values)."""
         rows = self.rows_of(it.dataset)
         ctx = self.ctx.at(scopes=[rows])
         value = self.value(it, "value", it.value, ctx)
         # no value (no rows, a division by zero): a dash, not an empty card
-        shown = "—" if value is None else self.show(value, it.format)
-        out: dict[str, Any] = {"label": it.label, "value": shown, "change": None, "spark": None}
-        if self.layout and glyphs.width_mm(shown, it.style.size or 16, 700) > it.w - 5:  # 2.5 mm inside each side
-            self.warnings.append(f"KPI «{it.id}»: its value «{shown}» is wider than the card and is cut: widen the card, "
-                                 "or give the value a smaller size or a shorter format")
+        out: dict[str, Any] = {"value": value, "shown": "—" if value is None else self.show(value, it.format),
+                               "change": None, "spark": None}
         if it.compare:
             base = self.value(it, "compare", it.compare, ctx)
             if isinstance(value, (int, float)) and isinstance(base, (int, float)) and base:
                 change = (value - base) / abs(base)
-                out["change"] = {"t": formats.format_number(change, "+0.0%;-0.0%;0.0%", self.loc),
+                out["change"] = {"ratio": change, "t": formats.format_number(change, "+0.0%;-0.0%;0.0%", self.loc),
                                  "dir": "up" if change > 0 else "down" if change < 0 else "flat"}
         if it.sparkline:
             cats, values = [], []
             for key, sub in self.partition(it, "sparkline.category", it.sparkline.category, rows):
                 cats.append(self.show(key, None))
                 values.append(self.value(it, "sparkline.value", it.sparkline.value, ctx.at(scopes=[rows, sub])))
+            out["spark"] = (cats, values)
+        return out
+
+    def kpi(self, it: rd.KpiItem) -> dict:
+        numbers = self.kpi_numbers(it)
+        shown, change = numbers["shown"], numbers["change"]
+        out: dict[str, Any] = {"label": it.label, "value": shown, "change": change and {"t": change["t"], "dir": change["dir"]},
+                               "spark": None}
+        if self.layout and glyphs.width_mm(shown, it.style.size or 16, 700) > it.w - 5:  # 2.5 mm inside each side
+            self.warnings.append(f"KPI «{it.id}»: its value «{shown}» is wider than the card and is cut: widen the card, "
+                                 "or give the value a smaller size or a shorter format")
+        if numbers["spark"]:
+            cats, values = numbers["spark"]
             spark_h = min(it.h * 0.28, 8.0)
             out["spark"] = self.add_chart(charts.sparkline(cats, values, self.r.theme.accent), it.w - 5, spark_h,
                                           f"{it.label}: trend")
@@ -543,6 +558,14 @@ class _Builder:
         return name
 
     def chart(self, it: rd.ChartItem) -> str:
+        data = self.chart_numbers(it)
+        option = charts.option(data, it, self.r.theme, self.loc)
+        name = self.add_chart(option, it.w, it.h, it.title or it.id)
+        self.note("chart", (it, name))
+        return name
+
+    def chart_numbers(self, it: rd.ChartItem) -> charts.ChartData:
+        """What a chart draws, before it is an ECharts option."""
         rows = self.rows_of(it.dataset)
         base = self.ctx.at(scopes=[rows])
         o = it.options
@@ -568,10 +591,7 @@ class _Builder:
                 data.points.append((self.name(key) if it.split_by else (s.name or ""), points))
         else:
             self._categories(it, rows, base, data)
-        option = charts.option(data, it, self.r.theme, self.loc)
-        name = self.add_chart(option, it.w, it.h, it.title or it.id)
-        self.note("chart", (it, name))
-        return name
+        return data
 
     @staticmethod
     def _num(v: Any) -> float | None:
@@ -960,10 +980,16 @@ class _Table:
                 raise ReportError(f"item «{it.id}»: {total:,} rows to show, more than {self.b.max_pages} pages hold: "
                                   "show its groups' totals without the detail, or filter it")
         rows = self.b.d.details(rows)
+        self.write_rows(rows, scopes, rows)
+
+    def write_rows(self, rows: list[dict], scopes: list[Any], running: list[dict], first: int = 0) -> None:
+        """Detail rows as cells; `first`: the place of the first one among the rows `running`
+        goes over."""
+        it = self.it
         nodes = [rd.parse(c.value) for c in it.columns]
         rules = [[(rd.parse(rule.when), _style(rule.style)) for rule in c.rules] for c in it.columns]
-        ctx = self.ctx.at(scopes=scopes, running=rows)
-        for i, r in enumerate(rows):
+        ctx = self.ctx.at(scopes=scopes, running=running)
+        for i, r in enumerate(rows, first):
             ctx.row, ctx.running_index, ctx.rownumber = r, i, i + 1
             cells = []
             for j, (node, col) in enumerate(zip(nodes, self.cols)):

@@ -54,10 +54,10 @@ SFTP, S3, APIs, SharePoint) belong to each connection, encrypted with
 |---|---|
 | [Shared by the gateway and the engine](#shared-by-the-gateway-and-the-engine) | 7 |
 | [Gateway](#gateway) | 166 |
-| [Engine and workers](#engine-and-workers) | 98 |
+| [Engine and workers](#engine-and-workers) | 99 |
 | [Frontend](#frontend) | 5 |
 | [Compose and Helm only](#compose-and-helm-only) | 13 |
-| **Total** | **289** |
+| **Total** | **290** |
 
 ## Before production
 
@@ -625,6 +625,14 @@ What one render of a pixel-perfect report may read and use. The run workers rend
 | `REPORTS__RENDER_MEMORY_MB` | integer, ≥ 128 | `1024` | `reports.renderMemoryMb` | The memory of the child process that lays out a report's pages (Typst), in MiB: it needs about 4.5 MiB a page of tables (measured), so 1024 holds 200. Past it the render stops and says so; give the worker as much more memory for every render that may run at once. |
 | `REPORTS__RENDER_SECONDS` | integer, ≥ 5 | `120` | `reports.renderSeconds` | How long the layout of one report may take: past it the child process is killed and the render stops. |
 | `REPORTS__CHART_URL` | string | `http://127.0.0.1:8090` | set on the run workers from `reports.chartRenderer` | Where the workers find the chart service: the sidecar on 127.0.0.1 on Kubernetes (`reports.chartRenderer`), the `chart-renderer` service on Compose. Empty = no charts: a report that has one fails, saying so. |
+
+### Dashboards
+
+What one request for a dashboard's numbers may read. The preview workers compute them (the `preview` queue), with the reports' engine.
+
+| Variable | Type | Default | Helm value | Description |
+|---|---|---|---|---|
+| `DASHBOARDS__MAX_ROWS` | integer, 1–10,000,000 | `REPORTS__MAX_ROWS` | `dashboards.maxRows` | The most rows a dashboard reads from each of its datasets; empty, `REPORTS__MAX_ROWS`. The tiles that read a dataset with more say so and how to aggregate it, and show no number: a total is never computed on part of the rows. The rows stay in the preview worker's memory, in columns, while a request is worked out: a request of 9 tiles on a million rows of 8 columns took it from 0.3 to 1.2–1.5 GiB (measured), so give that worker as much for every request that may run at once. |
 
 ## Frontend
 

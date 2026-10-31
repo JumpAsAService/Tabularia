@@ -8,6 +8,12 @@ Permissions:
 - creating, changing, moving, renaming, duplicating, deleting, restoring a version, and the
   check of a definition not saved yet: EDIT on the folder (both folders for a move); a
   definition saved must point only to what its author may read;
+- its numbers (POST /dashboards/{id}/data, on the engine's preview queue) and its parameters:
+  VIEW on the folder, read with the caller's rights at every request, dataset by dataset: a
+  tile whose dataset they may not read says so inside the tile, the others work (an API token
+  of either level reads them as it reads a report; a click and a refresh are not audited, they
+  would drown the log);
+- the numbers of a definition not saved yet (POST /dashboards/preview): EDIT on the folder;
 - administrators see and change every dashboard.
 """
 from __future__ import annotations
@@ -27,12 +33,13 @@ from app.deps.auth import get_current_user
 from app.deps.permissions import ensure_can
 from app.models import Dashboard, DashboardVersion, DashboardView, Project, User
 from app.models.permission import Capability
-from app.routes.reports import CheckOut, VersionOut
+from app.routes.reports import CheckOut, ParameterOut, ParametersRequest, VersionOut, _parameters_out, _query_params
 from app.schemas.models import UtcDateTime
-from app.services import audit, dashboards
+from app.services import audit, dashboards, reports
 from app.services import permissions as perm_service
 from app.services.copy_names import commit_copy, free_copy_name
 from app.services.masking import mask_email
+from app.services.report_definition import Problem
 
 router = APIRouter(route_class=ReleasingRoute, tags=["dashboards"])
 
@@ -79,6 +86,33 @@ class CheckRequest(BaseModel):
     project_id: Optional[int] = None
 
 
+class DataRequest(BaseModel):
+    """What to read: the parameters' values, as for a report; `tiles` only some (none: every
+    one); `page` a table's page by tile, from 0; `state` the on-screen view, as a report's
+    (a column sorted, groups toggled). `clicks` waits for the click's filter, and `refresh`
+    for the cache: there is nothing yet for it to go around."""
+    params: dict[str, Any] = Field(default_factory=dict)
+    clicks: list[Any] = Field(default_factory=list, max_length=dashboards.MAX_TILES)
+    tiles: Optional[list[str]] = Field(default=None, max_length=dashboards.MAX_TILES)
+    page: dict[str, int] = Field(default_factory=dict, max_length=dashboards.MAX_TILES)
+    state: Optional[dict[str, Any]] = None
+    refresh: bool = False
+
+
+class PreviewRequest(DataRequest):
+    """The numbers of a definition being edited, of a saved dashboard (`dashboard_id`) or of a
+    new one in a folder (`project_id`)."""
+    definition: dict[str, Any]
+    dashboard_id: Optional[int] = None
+    project_id: Optional[int] = None
+
+
+class TilesOut(BaseModel):
+    """docs/specs/dashboards.md, «The answer, tile by tile»."""
+    tiles: dict[str, dict[str, Any]]
+    truncated: dict[str, bool]  # of the datasets read: past DASHBOARDS__MAX_ROWS
+
+
 # ── helpers ───────────────────────────────────────────────────────────────────
 def _name(session: Session, project_id: int, name: str, exclude_id: Optional[int] = None) -> str:
     name = (name or "").strip()
@@ -103,6 +137,22 @@ def _commit_named(session: Session, name: str) -> None:
     except IntegrityError:
         session.rollback()
         raise _taken(name) from None
+
+
+def _being_edited(session: Session, user: User, dashboard_id: Optional[int], project_id: Optional[int]) -> Optional[Dashboard]:
+    """A definition being edited is of a saved dashboard, or of a new one in a folder: EDIT on
+    that folder. The saved dashboard, or None."""
+    dashboard = dashboards.get_visible(session, user, dashboard_id) if dashboard_id is not None else None
+    folder = dashboard.project_id if dashboard is not None else project_id
+    if folder is None or session.get(Project, folder) is None:
+        raise HTTPException(status_code=404, detail="Folder not found")
+    ensure_can(session, user, folder, Capability.EDIT)
+    return dashboard
+
+
+def _asked(body: DataRequest) -> dashboards.Asked:
+    return dashboards.Asked(given=reports.given_params(body.params), tiles=body.tiles, pages=body.page, state=body.state,
+                            clicks=body.clicks)
 
 
 def _out(session: Session, user: User, d: Dashboard, datasets: int, parameters: int, tiles: int) -> DashboardOut:
@@ -157,13 +207,26 @@ async def check_dashboard(body: CheckRequest, user: User = Depends(get_current_u
                           session: Session = Depends(get_session)):
     """The problems of a definition being edited, as a save would say them, without saving it.
     EDIT on the dashboard's folder, or on the folder a new one goes in."""
-    dashboard = dashboards.get_visible(session, user, body.dashboard_id) if body.dashboard_id is not None else None
-    folder = dashboard.project_id if dashboard is not None else body.project_id
-    if folder is None or session.get(Project, folder) is None:
-        raise HTTPException(status_code=404, detail="Folder not found")
-    ensure_can(session, user, folder, Capability.EDIT)
+    dashboard = _being_edited(session, user, body.dashboard_id, body.project_id)
     current = dashboards.content_of(session, dashboard) if dashboard is not None else None
     return CheckOut(problems=(await dashboards.review(session, user, body.definition, current)).problems)
+
+
+@router.post("/dashboards/preview", response_model=TilesOut)
+async def preview_dashboard(body: PreviewRequest, user: User = Depends(get_current_user),
+                            session: Session = Depends(get_session)):
+    """The numbers of a definition not saved yet: EDIT on the dashboard's folder, or on the folder
+    a new one goes in. Checked first, as a save is: problems are a 422 that lists them by tile
+    and property. A dataset it reads as the saved dashboard does and this person may not read
+    refuses in its tiles; one it now points to must be theirs to read, as at a save."""
+    dashboard = _being_edited(session, user, body.dashboard_id, body.project_id)
+    current = dashboards.content_of(session, dashboard) if dashboard is not None else None
+    looked = await dashboards.review(session, user, body.definition, current)
+    if looked.problems:
+        raise looked.refusal()
+    where = f"preview-{dashboard.id if dashboard is not None else 'new'}"
+    title = dashboard.name if dashboard is not None else ""
+    return await dashboards.numbers(session, user, looked.definition, _asked(body), where, title)
 
 
 @router.get("/dashboards/{dashboard_id}", response_model=DashboardDetail)
@@ -180,6 +243,48 @@ def dashboard_opened(dashboard_id: int, request: Request, user: User = Depends(g
     if getattr(request.state, "api_token", None) is None:
         dashboards.record_open(session, dashboard, user)
         _record(session, user, audit.DASHBOARD_OPEN, dashboard, request)
+
+
+# ── its numbers and its parameters ────────────────────────────────────────────
+@router.post("/dashboards/{dashboard_id}/data", response_model=TilesOut)
+async def dashboard_data(dashboard_id: int, body: DataRequest, user: User = Depends(get_current_user),
+                         session: Session = Depends(get_session)):
+    """The numbers of the current version, ready to draw, tile by tile, read with the caller's
+    rights. 400 naming the parameter whose value does not fit. An error of a tile, a dataset it
+    may not read included, stays in that tile."""
+    dashboard = dashboards.get_visible(session, user, dashboard_id)
+    definition = dashboards.content_of(session, dashboard)
+    return await dashboards.numbers(session, user, definition, _asked(body), str(dashboard.id), dashboard.name)
+
+
+@router.get("/dashboards/{dashboard_id}/parameters", response_model=list[ParameterOut])
+async def dashboard_parameters(dashboard_id: int, request: Request, user: User = Depends(get_current_user),
+                               session: Session = Depends(get_session)):
+    """The parameters as the form shows them, as a report's: defaults resolved, choices read (those
+    of a dataset with the caller's rights, and the values of the query string for the other
+    parameters, so that a choice can follow another)."""
+    definition = dashboards.as_report(dashboards.content_of(session, dashboards.get_visible(session, user, dashboard_id)))
+    try:
+        return await _parameters_out(session, user, definition, _query_params(request), lambda _: definition)
+    except HTTPException as e:
+        raise dashboards.in_our_words(e) from None
+
+
+@router.post("/dashboards/{dashboard_id}/parameters", response_model=list[ParameterOut])
+async def dashboard_parameters_being_edited(dashboard_id: int, body: ParametersRequest, user: User = Depends(get_current_user),
+                                            session: Session = Depends(get_session)):
+    """The same for the editor's definition, not saved yet (EDIT on the folder): only the
+    parameters and the dataset of each list must be whole, the rest may be half done."""
+    _being_edited(session, user, dashboard_id, None)
+    try:
+        definition = dashboards.check_parameters(body.definition)
+    except Problem as p:
+        raise p.http(body.definition) from None
+    try:
+        return await _parameters_out(session, user, definition, reports.given_params(body.params),
+                                     lambda name: dashboards.check_dataset(body.definition, name))
+    except HTTPException as e:
+        raise dashboards.in_our_words(e) from None
 
 
 # ── create, change, copy, delete ──────────────────────────────────────────────

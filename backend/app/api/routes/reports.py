@@ -9,6 +9,8 @@
   the preview worker, waited for as a preview.
 - POST /reports/count: how many rows a dataset gives, up to REPORTS__MAX_ROWS (the
   designer's hint next to the dataset); on the preview worker, waited for `seconds` at most.
+- POST /reports/tiles: a dashboard's numbers, tile by tile (app/reports/tiles.py); on the
+  preview worker, waited for as a preview.
 """
 import uuid
 from typing import Any, Literal, Optional
@@ -69,6 +71,20 @@ class ReportCount(BaseModel):
     seconds: float = Field(default=20, gt=0, le=300)  # past it the count is stopped (504): it is only a hint
 
 
+class DashboardTiles(BaseModel):
+    definition: dict  # a dashboard's, written as a report's, without its images
+    datasets: dict[str, dict] = Field(default_factory=dict)  # those the reader may read, as a render's
+    # those not resolved: dataset name → what its tiles say, {"error", "code"}
+    refused: dict[str, dict] = Field(default_factory=dict)
+    params: dict[str, Any] = Field(default_factory=dict)
+    tiles: Optional[list[str]] = Field(default=None, max_length=500)  # none: every one
+    pages: dict[str, int] = Field(default_factory=dict)  # a table's page, by tile, from 0
+    state: Optional[dict] = None  # the screen's sort and open/closed groups, as a render's
+    locale: Optional[Literal[formats.LOCALES]] = None  # type: ignore[valid-type]
+    title: Optional[str] = Field(default=None, max_length=300)  # REPORT()
+    slot: Optional[str] = Field(default=None, max_length=200)  # a newer request on the same slot knocks this one down
+
+
 @router.post("/check")
 def check(request: ReportCheck) -> dict:
     return {"problems": [p.as_dict() for p in rd.check(request.definition, request.columns)]}
@@ -96,6 +112,17 @@ def count(request: ReportCount) -> dict:
     if not payload.get("ok"):
         raise HTTPException(status_code=_PREVIEW_ERROR_STATUS.get(payload.get("error"), 400),
                             detail=payload.get("detail", "The rows could not be counted"))
+    return payload["result"]
+
+
+@router.post("/tiles")
+def tiles(request: DashboardTiles) -> dict:
+    from app.api.routes.tasks import _PREVIEW_ERROR_STATUS, on_preview_worker
+
+    payload = on_preview_worker("app.tasks.report_jobs.dashboard_tiles_task", request.model_dump(exclude={"slot"}), request.slot)
+    if not payload.get("ok"):
+        status = {**_PREVIEW_ERROR_STATUS, "unavailable": 503}.get(payload.get("error"), 400)
+        raise HTTPException(status_code=status, detail=payload.get("detail", "The numbers could not be read"))
     return payload["result"]
 
 

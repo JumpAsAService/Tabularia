@@ -59,8 +59,9 @@ class DataSet:
         return f"DataSet({self.name!r}, {len(self.columns)} columns, {'columns' if self.table else 'rows'})"
 
 
-def used_datasets(report: rd.Report) -> list[str]:
-    """The datasets a render reads: the items', and those named inside aggregates and LOOKUPs."""
+def used_datasets(report: rd.Report, items: list[Any] | None = None) -> list[str]:
+    """The datasets a render reads: the items' (`items`: these only), and those named inside
+    aggregates and LOOKUPs."""
     names = {d.name for d in report.datasets}
     used: list[str] = []
 
@@ -90,7 +91,7 @@ def used_datasets(report: rd.Report) -> list[str]:
                 stack.extend((n.left, n.right))
 
     only = report.datasets[0].name if len(report.datasets) == 1 else None
-    for _, it in report.items():
+    for it in [it for _, it in report.items()] if items is None else items:
         add(getattr(it, "dataset", None))
         if it.visible and getattr(it, "dataset", None) is None:
             add(only)  # its condition reads the report's one dataset

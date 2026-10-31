@@ -564,6 +564,21 @@ class ReportsSettings(BaseModel):
     chart_url: str = "http://127.0.0.1:8090"
 
 
+class DashboardsSettings(BaseModel):
+    """Dashboards (docs/specs/dashboards.md): what one request may read.
+
+    env: DASHBOARDS__MAX_ROWS — the most rows a dashboard reads from each of its datasets:
+    the tiles that read one with more say so, and how to aggregate, and show no number.
+    Unset: REPORTS__MAX_ROWS."""
+
+    max_rows: int | None = Field(default=None, ge=1, le=10_000_000)
+
+    @field_validator("max_rows", mode="before")
+    @classmethod
+    def _empty_is_none(cls, v: object) -> object:
+        return None if v == "" else v
+
+
 class SmtpSettings(BaseModel):
     """Email destinations and notices (SMTP connections).
 
@@ -657,6 +672,7 @@ class Settings(BaseSettings):
     api: ApiSettings = Field(default_factory=ApiSettings)
     placeholders: PlaceholderSettings = Field(default_factory=PlaceholderSettings)
     reports: ReportsSettings = Field(default_factory=ReportsSettings)
+    dashboards: DashboardsSettings = Field(default_factory=DashboardsSettings)
 
     # ─────────────────────────────────────────────────────────────────────────
     # Helper properties for quick access

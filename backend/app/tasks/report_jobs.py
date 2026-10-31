@@ -100,3 +100,37 @@ def report_count_task(dataset: dict) -> dict:
         if was_interrupted(e):
             return {"ok": False, "error": "superseded", "detail": "The count was superseded or stopped"}
         raise
+
+
+@celery_app.task(name="app.tasks.report_jobs.dashboard_tiles_task")
+def dashboard_tiles_task(
+    definition: dict,
+    datasets: dict[str, dict],
+    params: dict[str, Any] | None = None,
+    refused: dict[str, dict] | None = None,
+    tiles: list[str] | None = None,
+    pages: dict[str, int] | None = None,
+    state: dict | None = None,
+    locale: str | None = None,
+    title: str | None = None,
+) -> dict:
+    """A dashboard's numbers (app/reports/tiles.py): on the preview queue, tagged as
+    preview_task's answer; its queries carry the task's id, so that one knocked down is
+    stopped on the server too."""
+    from celery import current_task
+
+    from app.engine.query_tag import query_tag, was_interrupted
+    from app.reports import tiles as rtiles
+    from app.reports.errors import ReportError
+
+    task_id = getattr(getattr(current_task, "request", None), "id", None)
+    try:
+        with query_tag(f"tab-prev:{task_id}" if task_id else None):
+            return {"ok": True, "result": rtiles.compute(definition, datasets, params, refused=refused, only=tiles,
+                                                         pages=pages, state=state, locale=locale, title=title or "")}
+    except ReportError as e:
+        return {"ok": False, "error": e.tag, "detail": e.message}
+    except Exception as e:
+        if was_interrupted(e):
+            return {"ok": False, "error": "superseded", "detail": "The request was superseded or stopped"}
+        raise

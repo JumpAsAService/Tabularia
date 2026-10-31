@@ -370,6 +370,13 @@ title = "Reports"
 prefixes = ["REPORTS"]
 intro = "What one render of a pixel-perfect report may read and use. The run workers render reports (the `celery` queue, as downloads); the pages are laid out by a child process of the worker, with its own memory and time, and the charts are drawn by the chart service, ECharts to SVG, a sidecar of the worker pods on Kubernetes and the `chart-renderer` service on Compose."
 
+[[section]]
+id = "engine-dashboards"
+component = "engine"
+title = "Dashboards"
+prefixes = ["DASHBOARDS"]
+intro = "What one request for a dashboard's numbers may read. The preview workers compute them (the `preview` queue), with the reports' engine."
+
 # ── Shared ───────────────────────────────────────────────────────────────────
 
 [var.APP__ENV_NAME]
@@ -1252,6 +1259,12 @@ text = "The notebooks' own address, the gateway's `NOTEBOOKS__ORIGIN`: the pages
 
 [var.REPORTS__MAX_ROWS]
 text = "The most rows a report reads from each of its datasets; one more stops the render and names the dataset (aggregate it in SQL, or filter it). The rows stay in the worker's memory, in columns, while the report renders, and DuckDB works out its groups and totals: a million take some 500 MiB and a second or two, ten million some 2.2 GiB and ten seconds (measured), so give the worker that much for every render that may run at once."
+
+[var.DASHBOARDS__MAX_ROWS]
+text = "The most rows a dashboard reads from each of its datasets; empty, `REPORTS__MAX_ROWS`. The tiles that read a dataset with more say so and how to aggregate it, and show no number: a total is never computed on part of the rows. The rows stay in the preview worker's memory, in columns, while a request is worked out: a request of 9 tiles on a million rows of 8 columns took it from 0.3 to 1.2–1.5 GiB (measured), so give that worker as much for every request that may run at once."
+default = "`REPORTS__MAX_ROWS`"
+type = "integer, 1–10,000,000"
+helm = "`dashboards.maxRows`"
 
 [var.REPORTS__MAX_PAGES]
 text = "The most pages of one report: a longer one stops with the number it would have."

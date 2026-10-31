@@ -93,6 +93,19 @@ async def _chunks(data: bytes):
     yield data
 
 
+def _tiles_answer(body: dict) -> dict:
+    """A number per tile asked, and what a refused dataset makes of the tiles on it. The tiles'
+    reach through expressions is the engine's (tests/test_dashboard_tiles.py on its side)."""
+    tiles = {}
+    for it in body["definition"]["sections"]["body"]["items"]:
+        if body.get("tiles") is not None and it["id"] not in body["tiles"]:
+            continue
+        stop = body["refused"].get(it.get("dataset"))
+        tiles[it["id"]] = dict(stop) if stop else {"type": it["type"], "value": 1, "computed_at": "2026-10-31T12:00:00+00:00",
+                                                   "cached": False}
+    return {"tiles": tiles, "truncated": dict.fromkeys(body["datasets"], False)}
+
+
 class FakeEngine:
     """Fake engine: records the blobs' DELETEs and serves task states made to measure."""
 
@@ -167,6 +180,10 @@ class FakeEngine:
         # an exception is raised as the engine client would (a timeout)
         self.report_counts: list[dict] = []
         self.report_count_response: tuple[int, dict] | Exception | None = None
+        # a dashboard's numbers (POST /reports/tiles): what was asked; the answer, or by default
+        # a number for every tile asked that nothing stopped, and the refusals as the engine says them
+        self.report_tiles: list[dict] = []
+        self.report_tiles_response: tuple[int, dict] | None = None
         # an export followed by its owner: its state per task (default: ready) and the file
         self.export_states: dict[str, list[dict]] = {}  # task_id -> states served in turn (the last one stays)
         self.export_polls: list[tuple[str, str | None]] = []  # (path, owner)
@@ -309,6 +326,12 @@ class FakeEngine:
         if path == "/reports/choices" and request.method == "POST" and self.report_choices_response is not None:
             self.report_choices.append(_json_body(request))
             return httpx.Response(self.report_choices_response[0], json=self.report_choices_response[1])
+        if path == "/reports/tiles" and request.method == "POST":
+            body = _json_body(request)
+            self.report_tiles.append(body)
+            if self.report_tiles_response is not None:
+                return httpx.Response(self.report_tiles_response[0], json=self.report_tiles_response[1])
+            return httpx.Response(200, json=_tiles_answer(body))
         if path == "/reports/count" and request.method == "POST" and self.report_count_response is not None:
             self.report_counts.append(_json_body(request))
             if isinstance(self.report_count_response, Exception):
