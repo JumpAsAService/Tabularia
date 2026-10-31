@@ -343,6 +343,25 @@ export function withChoices(own: ReportParameter[], fresh: ReportParameter[]): R
   })
 }
 
+/** The form without the values its lists no longer hold, once another parameter's value
+ *  changed them (the agents of another region): a list shows «Any» for a value it does not
+ *  have, and a render would be refused for it. What the form shows is what goes. The same
+ *  form when nothing went. */
+export function whatListsHold(form: Record<string, ReportFormValue>, parameters: ReportParameter[]): Record<string, ReportFormValue> {
+  let out = form
+  for (const p of parameters) {
+    if (!p.choices || p.choices_truncated || p.choices_error) continue
+    const held = new Set(p.choices.map((c) => String(c.value)))
+    const v = form[p.name]
+    if (Array.isArray(v)) {
+      if (v.some((x) => !held.has(x))) out = { ...out, [p.name]: v.filter((x) => held.has(x)) }
+    } else if (v && !held.has(v)) {
+      out = { ...out, [p.name]: '' }
+    }
+  }
+  return out
+}
+
 /** «No value» said out loud, in a link and in a render (NO_VALUE in the gateway's
  *  services/report_params.py): an empty value takes the default. */
 export const NO_VALUE = '{none}'

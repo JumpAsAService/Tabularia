@@ -12,6 +12,7 @@ render model, the charts drawn by the chart service, then the format asked for â
 from __future__ import annotations
 
 import json
+import re
 from dataclasses import dataclass, field
 from datetime import datetime, timezone
 from pathlib import Path
@@ -20,7 +21,7 @@ from typing import Any
 from app.core import placeholders as ph
 from app.reports import charts, data as rdata, definition as rd, email_html, expressions as ex, formats, frames
 from app.reports import model as rmodel, pdf, xlsx
-from app.reports.errors import ReportError
+from app.reports.errors import OverCap, ReportError
 
 FORMATS = ("pdf", "svg", "xlsx", "html")
 EXTENSION = {"pdf": "pdf", "svg": "json", "xlsx": "xlsx", "html": "mhtml"}
@@ -146,12 +147,34 @@ def filename(name: str | None, fmt: str) -> str:
     return f"{stem}.{ext}"
 
 
+def _only_shown(spec: Any, value: str, label: str | None, calculated: set[str]) -> dict | None:
+    """A chain read for a list whose value and label are plain fields: those columns, each
+    pair once, sorted, instead of every column of every row: `[area]` on millions of rows
+    is the normal case. None for anything else, which reads the rows, and for a query with
+    an ORDER BY of its own: its order is the list's."""
+    if not isinstance(spec, dict) or "input_key" not in spec:
+        return None
+    if any(op.get("type") == "sql" and re.search(r"\border\s+by\b", str((op.get("params") or {}).get("query")), re.I)
+           for op in spec.get("operations") or []):
+        return None
+    try:
+        nodes = [rd.parse(t) for t in (label, value) if t]
+    except ex.ExpressionError:
+        return None
+    if not all(isinstance(n, ex.Field) and n.name not in calculated for n in nodes):
+        return None
+    columns = list(dict.fromkeys(n.name for n in nodes))
+    return {**spec, "operations": [*(spec.get("operations") or []), {"type": "select", "params": {"columns": columns}},
+                                   {"type": "unique", "params": {}}, {"type": "sort", "params": {"by": columns}}]}
+
+
 def choices(definition: dict, dataset: str, datasets: dict[str, dict], params: dict[str, Any] | None, value: str,
             label: str | None = None, limit: int = 500, locale: str | None = None, max_rows: int | None = None,
             now: datetime | None = None) -> dict:
     """The choices of a parameter taken from a dataset: `value` and `label` evaluated on
-    every row, each value once, in the order of the rows; `truncated` when there are more
-    than `limit`. The parameters are those of a form still being filled in (not strict)."""
+    every row, each value once, in the order of the rows (`_only_shown` for what a chain
+    reads); `truncated` when there are more than `limit`. The parameters are those of a
+    form still being filled in (not strict)."""
     try:
         report = rd.load(definition)
     except rd.DefinitionError as e:
@@ -164,8 +187,22 @@ def choices(definition: dict, dataset: str, datasets: dict[str, dict], params: d
     pctx = ph.Context(now=now_local, tz=tz, lang=loc.code)
     values = rdata.parameters(report, params or {}, pctx, strict=False)
     ctx = ex.Context(loc=loc, now=now_local, params=values, ph_context=pctx)
-    ds = rdata.read_dataset(dataset, (datasets or {}).get(dataset), max_rows or Limits.from_settings().max_rows, tz)
-    env = ex.Env(fields={**ds.columns, **{c.name: "" for c in report.dataset(dataset).calculated}}, dataset=dataset,
+    spec, cap = (datasets or {}).get(dataset), max_rows or Limits.from_settings().max_rows
+    calculated = {c.name for c in report.dataset(dataset).calculated}
+    ds = None
+    if (shown := _only_shown(spec, value, label, calculated)) is not None:
+        try:
+            ds = rdata.read_dataset(dataset, shown, cap, tz)
+        except ReportError:  # a field it does not have, say: as it is said when the rows are read
+            pass
+    narrowed = ds is not None
+    if ds is None:
+        try:
+            ds = rdata.read_dataset(dataset, spec, cap, tz)
+        except OverCap as e:  # read whole for its list, without the filter a render reads it with
+            raise OverCap(f"{e.message}. For its list, make the value a plain field, or read the choices "
+                          "from a dataset of their own (SELECT DISTINCT)") from None
+    env = ex.Env(fields={**ds.columns, **dict.fromkeys(calculated, "")}, dataset=dataset,
                  params={p.name: (ex.LIST if p.multi else rd._PARAM_TYPES[p.type]) for p in report.parameters},
                  aggregates=False)
     nodes = []
@@ -179,8 +216,8 @@ def choices(definition: dict, dataset: str, datasets: dict[str, dict], params: d
             nodes.append(node)
         else:
             nodes.append(None)
-    data = {dataset: ds}
-    rdata.add_calculated(report, data, ctx, ex.Evaluator())
+    if not narrowed:  # those fields are not read: nothing here needs them
+        rdata.add_calculated(report, {dataset: ds}, ctx, ex.Evaluator())
     evaluate = ex.Evaluator()
     ctx.scopes = [ds.rows]
     seen: set = set()

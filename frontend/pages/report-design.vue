@@ -30,7 +30,7 @@ import { errMessage } from '~/composables/useApi'
 import { useSessionPresent } from '~/composables/useAuth'
 import { useFolderPaths } from '~/composables/useFolderPaths'
 import {
-  boxOf, contentWidth, forCheck, forSave, mm1, normalize, problemsOf, stillReported, type BandName, type DDataset, type DItem, type DesignProblem,
+  boxOf, contentWidth, dropParamFilters, forCheck, forSave, mm1, normalize, problemsOf, stillReported, usesOfParam, type BandName, type DDataset, type DItem, type DesignProblem,
 } from '~/composables/reportDesignModel'
 
 const { t } = useI18n()
@@ -278,8 +278,15 @@ function removeDataset(dataset: string) {
   keepRowCount(dataset, null, null)
 }
 function removeParameter(param: string) {
-  if (!confirm(t('reportDesigner.data.removeParameterConfirm', { name: param }))) return
+  const uses = usesOfParam(store.doc.value, param)
+  const said = [
+    t('reportDesigner.data.removeParameterConfirm', { name: param }),
+    ...(uses.filters.length ? [t('reportDesigner.data.removeParameterFilters', { datasets: uses.filters.join(', ') })] : []),
+    ...(uses.sql.length ? [t('reportDesigner.data.removeParameterSql', { datasets: uses.sql.join(', ') })] : []),
+  ]
+  if (!confirm(said.join(' '))) return
   store.doc.value.parameters = store.doc.value.parameters.filter((p) => p.name !== param)
+  dropParamFilters(store.doc.value, param)
 }
 function sourceLabel(d: DDataset): string {
   const s = d.source

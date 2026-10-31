@@ -13,7 +13,10 @@ import { checkExpression, renameEverywhere, renameInExpression, stillWriting } f
 
 register('./alias-hooks.mjs', import.meta.url)
 const { createDesignStore } = await import('../composables/reportDesignStore.ts')
-const { chooseTotal, columnFor, newItem, tableHeight, tableRows, totalChoices, totalKind } = await import('../composables/reportDesignModel.ts')
+const {
+  alignFilterOps, chooseTotal, columnFor, dropParamFilters, filterParam, filteredBy, nearestName, newItem, opForParam, paramWritten, plainField,
+  setChoiceFilter, sqlFilterLine, tableHeight, tableRows, totalChoices, totalKind, typeOfField, usesOfParam,
+} = await import('../composables/reportDesignModel.ts')
 
 // ── a clock and a server we drive by hand ───────────────────────────────────
 function fakeClock () {
@@ -488,4 +491,111 @@ test('the store: a table grows when its first total appears, and shrinks when it
   chooseTotal(tb, tb.columns[0], 'none')
   await flush()
   assert.equal(tb.h, before)
+})
+
+// ── a parameter and the filters that name it ─────────────────────────────────
+function withData (...filters) {
+  return {
+    ...emptyDefinition(),
+    datasets: [
+      { name: 'data', source: { kind: 'datasource', datasource_id: 1, filters }, fields: [], calculated: [] },
+      { name: 'other', source: { kind: 'view', view_id: 2, filters: [{ column: 'x', op: '=', value: '{regione}' }] }, fields: [], calculated: [] },
+      { name: 'q', source: { kind: 'sql', sql: 'SELECT 1 WHERE a = {regione} AND b = {{regione}}', connection_id: null, engine: null }, fields: [], calculated: [] },
+      { name: 's', source: { kind: 'sql_script', script_id: 3 }, fields: [], calculated: [] },
+    ],
+  }
+}
+const filtersOf = (def, name = 'data') => def.datasets.find((d) => d.name === name).source.filters
+
+test('a filter names a parameter by its braces; a placeholder is a value, and so is a text', () => {
+  assert.equal(filterParam('{regione}'), 'regione')
+  assert.equal(filterParam(' {regione} '), 'regione')
+  for (const v of ['{today}', '{today-30}', 'North', '', 3, null, ['{a}'], 'a{b}']) assert.equal(filterParam(v), null, String(v))
+})
+
+test('a plain field is one field and nothing else', () => {
+  assert.equal(plainField('[area]'), 'area')
+  assert.equal(plainField(' =[my field] '), 'my field')
+  assert.equal(plainField('[a]]b]'), 'a]b')
+  for (const e of ['', 'UPPER([area])', '[a] & [b]', 'area', '[a]+1']) assert.equal(plainField(e), null, e)
+})
+
+test('the list\'s checkbox adds its filter once, and takes it away', () => {
+  const def = withData()
+  const ask = { param: 'regione', multi: false, dataset: 'data', column: 'area', on: true }
+  setChoiceFilter(def, ask)
+  assert.deepEqual(filtersOf(def), [{ column: 'area', op: '=', value: '{regione}' }])
+  setChoiceFilter(def, ask) // no double
+  assert.equal(filtersOf(def).length, 1)
+  assert.equal(filteredBy(def, 'data', 'regione'), true)
+  setChoiceFilter(def, { ...ask, on: false })
+  assert.deepEqual(filtersOf(def), [])
+  assert.equal(filteredBy(def, 'data', 'regione'), false)
+  // several values: in; another filter and one on another parameter stay
+  const two = withData({ column: 'y', op: '>', value: 3 }, { column: 'z', op: '=', value: '{agent}' })
+  setChoiceFilter(two, { ...ask, multi: true })
+  assert.deepEqual(filtersOf(two).at(-1), { column: 'area', op: 'in', value: '{regione}' })
+  setChoiceFilter(two, { ...ask, on: false })
+  assert.deepEqual(filtersOf(two).map((f) => f.column), ['y', 'z'])
+  // one that the person wrote is not doubled, whatever its field
+  const mine = withData({ column: 'zone', op: '<>', value: '{regione}' })
+  setChoiceFilter(mine, ask)
+  assert.deepEqual(filtersOf(mine).map((f) => f.column), ['zone'])
+  // a SQL is not touched, nor a dataset that does not exist
+  const before = JSON.stringify(def)
+  setChoiceFilter(def, { ...ask, dataset: 'q' })
+  setChoiceFilter(def, { ...ask, dataset: 's' })
+  setChoiceFilter(def, { ...ask, dataset: 'nope' })
+  assert.equal(JSON.stringify(def), before)
+})
+
+test('the list moved to another field or dataset takes its filter with it', () => {
+  const def = withData({ column: 'area', op: '=', value: '{regione}' })
+  setChoiceFilter(def, { param: 'regione', multi: false, dataset: 'data', column: 'zone', on: true, was: { dataset: 'data', column: 'area' } })
+  assert.deepEqual(filtersOf(def).map((f) => f.column), ['zone'])
+  setChoiceFilter(def, { param: 'regione', multi: false, dataset: 'q', column: 'zone', on: true, was: { dataset: 'data', column: 'zone' } })
+  assert.deepEqual(filtersOf(def), [])
+})
+
+test('a filter follows its parameter from one value to several and back', () => {
+  assert.equal(opForParam(true, '='), 'in')
+  assert.equal(opForParam(false, 'in'), '=')
+  assert.equal(opForParam(false, '>='), '>=')
+  const def = withData({ column: 'a', op: '=', value: '{regione}' }, { column: 'b', op: '=', value: 'North' })
+  alignFilterOps(def, 'regione', true)
+  assert.deepEqual([filtersOf(def)[0].op, filtersOf(def)[1].op, filtersOf(def, 'other')[0].op], ['in', '=', 'in'])
+  alignFilterOps(def, 'regione', false)
+  assert.equal(filtersOf(def)[0].op, '=')
+})
+
+test('removing a parameter says where it is used and takes its filters with it', () => {
+  const def = withData({ column: 'a', op: '=', value: '{regione}' }, { column: 'b', op: '=', value: 'North' })
+  assert.deepEqual(usesOfParam(def, 'regione'), { filters: ['data', 'other'], sql: ['q'] })
+  assert.deepEqual(usesOfParam(def, 'gion'), { filters: [], sql: [] })
+  dropParamFilters(def, 'regione')
+  assert.deepEqual(filtersOf(def).map((f) => f.column), ['b'])
+  assert.deepEqual(filtersOf(def, 'other'), [])
+})
+
+test('what is written in a filter\'s field is understood as a parameter, or corrected', () => {
+  const names = ['regione', 'agente']
+  for (const t of ['{regione}', 'PARAM("regione")', "PARAM('regione')", ' =param( "regione" ) ']) {
+    assert.deepEqual(paramWritten(t, names), { name: 'regione', exists: true, near: null }, t)
+  }
+  assert.deepEqual(paramWritten('{regiones}', names), { name: 'regiones', exists: false, near: 'regione' })
+  assert.deepEqual(paramWritten('PARAM("REGIONE")', names), { name: 'REGIONE', exists: false, near: 'regione' })
+  assert.deepEqual(paramWritten('{zzzzzzzzzzzz}', names), { name: 'zzzzzzzzzzzz', exists: false, near: null })
+  for (const t of ['North', '{today-30}', '{today}', 'PARAM', '', '12']) assert.equal(paramWritten(t, names), null, t)
+  assert.equal(nearestName('x', []), null)
+})
+
+test('the line for a SQL: every row with nothing chosen, when that can be', () => {
+  assert.equal(sqlFilterLine('area', 'regione', false, false), 'WHERE {regione} IS NULL OR area = {regione}')
+  assert.equal(sqlFilterLine('area', 'regione', false, true), 'WHERE area = {regione}')
+  assert.equal(sqlFilterLine('"my area"', 'regione', true, false), 'WHERE "my area" IN {regione}')
+})
+
+test('a list takes the type of the field it reads', () => {
+  assert.deepEqual(['integer', 'float', 'date', 'boolean', 'string', 'datetime', 'other', null].map(typeOfField),
+    ['number', 'number', 'date', 'boolean', 'text', 'text', 'text', 'text'])
 })

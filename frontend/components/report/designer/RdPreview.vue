@@ -11,7 +11,7 @@ import ReportParamsBar from '~/components/report/ReportParamsBar.vue'
 import { useDesign } from '~/composables/reportDesignStore'
 import { useReportDesign } from '~/composables/useReportDesign'
 import {
-  stateAfter, type ReportDefinition, type ReportFormValue, type ReportHotspot, type ReportParameter, type ReportParams, type ReportState,
+  stateAfter, whatListsHold, type ReportDefinition, type ReportFormValue, type ReportHotspot, type ReportParameter, type ReportParams, type ReportState,
 } from '~/composables/useReports'
 import { forSave, problemFromText, problemsOf, type DesignProblem } from '~/composables/reportDesignModel'
 import { errMessage } from '~/composables/useApi'
@@ -85,7 +85,12 @@ async function readChoices() {
   choicesCall = mine
   try {
     const got = await api.parametersOf(props.reportId, forSave(store.doc.value), params(), mine.signal)
-    if (choicesCall === mine) { fresh.value = got; failed.value = false }
+    if (choicesCall === mine) {
+      fresh.value = got
+      failed.value = false
+      const held = whatListsHold(values.value, parameters.value)
+      if (held !== values.value) { values.value = held; readChoicesSoon() }
+    }
   } catch {
     // half written, or the server cannot say: a field to write in, the render says the rest
     if (choicesCall === mine) failed.value = true

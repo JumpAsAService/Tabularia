@@ -247,7 +247,6 @@ def test_choices_from_a_dataset_are_checked_when_the_engine_reads_them(app, sess
     reader = _reader(app, session, w)
     content = json.loads(session.exec(select(ReportVersion)).one().content)
     content["parameters"][0]["choices"] = {"dataset": "plain", "value": "[region]", "label": "[region]"}
-    content["datasets"][2]["source"]["filters"] = []  # the dataset that fills the choices does not use them
     row = session.exec(select(ReportVersion)).one()
     row.content = json.dumps(content)
     session.add(row)
@@ -259,6 +258,9 @@ def test_choices_from_a_dataset_are_checked_when_the_engine_reads_them(app, sess
     assert r.status_code == 400 and r.json()["detail"]["parameter"] == "region"
     asked = fake_engine.report_choices[-1]
     assert (asked["dataset"], asked["value"], list(asked["datasets"])) == ("plain", "[region]", ["plain"])
+    # the value is looked for in the whole list: not among the rows it would filter down to itself
+    assert [o["params"]["column"] for o in asked["datasets"]["plain"]["operations"]] == ["day", "amount"]
+    assert asked["params"]["region"] is None
     assert reader.post(f"/reports/{w['report']}/render", json={"params": {"region": "North"}}, headers=CSRF).status_code == 200
 
 
@@ -415,6 +417,234 @@ def test_the_parameters_as_the_form_shows_them(app, session, fake_engine):
     # back as the value given, and a form that read it lost the report's default
     assert [p["default"] for p in out[:3]] == [None, "2026-09-28", ["N"]]
     assert reader.get(f"/reports/{w['report']}/parameters?nope=1").status_code == 400
+
+
+# ── choices read from the dataset that uses the parameter ─────────────────────
+def _with(session, change) -> None:
+    row = session.exec(select(ReportVersion)).one()
+    content = json.loads(row.content)
+    change(content)
+    row.content = json.dumps(content)
+    session.add(row)
+    session.commit()
+
+
+REGION_FROM = {"dataset": "plain", "value": "[region]"}
+
+
+def _regions(content, dataset="plain", **also) -> None:
+    content["parameters"][0] = {"name": "region", "type": "text", "choices": {**REGION_FROM, "dataset": dataset}, **also}
+
+
+def test_a_list_read_from_the_dataset_it_filters_shows_every_value(app, session, fake_engine):
+    w = _world(session)
+    reader = _reader(app, session, w)
+    _with(session, _regions)
+    fake_engine.report_choices_response = (200, {"choices": [{"value": "North", "label": "North"}, {"value": "South", "label": "South"}],
+                                                 "truncated": False})
+    # the form, with a region chosen: every region all the same, the other filters still there
+    out = reader.get(f"/reports/{w['report']}/parameters?region=North").json()
+    assert [c["value"] for c in out[0]["choices"]] == ["North", "South"] and out[0]["choices_error"] is None
+    ops = fake_engine.report_choices[-1]["datasets"]["plain"]["operations"]
+    assert [o["params"]["column"] for o in ops] == ["day", "amount"]
+    # the render keeps the filter
+    assert reader.post(f"/reports/{w['report']}/render", json={"params": {"region": "North"}}, headers=CSRF).status_code == 200
+    sent = fake_engine.report_renders[-1]["datasets"]["plain"]["operations"]
+    assert sent[0]["params"] == {"column": "region", "operator": "eq", "value": "North"}
+    # a value outside the whole list stays refused, a value inside it (not the one before) passes
+    r = reader.post(f"/reports/{w['report']}/render", json={"params": {"region": "West"}}, headers=CSRF)
+    assert r.status_code == 400 and r.json()["detail"]["parameter"] == "region"
+    assert reader.post(f"/reports/{w['report']}/render", json={"params": {"region": "South"}}, headers=CSRF).status_code == 200
+
+
+def test_a_list_of_several_values_from_the_dataset_it_filters(app, session, fake_engine):
+    w = _world(session)
+    reader = _reader(app, session, w)
+
+    def change(content):
+        content["parameters"][2] = {"name": "regions", "type": "text", "multi": True,
+                                    "choices": {"dataset": "kpis", "value": "[region]"}}
+    _with(session, change)
+    fake_engine.report_choices_response = (200, {"choices": [{"value": "N", "label": "N"}, {"value": "S", "label": "S"}],
+                                                 "truncated": False})
+    out = reader.get(f"/reports/{w['report']}/parameters?regions=N").json()
+    assert [c["value"] for c in out[2]["choices"]] == ["N", "S"]
+    assert not any(o["params"].get("column") == "region" for o in fake_engine.report_choices[-1]["datasets"]["kpis"]["operations"])
+    ok = reader.post(f"/reports/{w['report']}/render", json={"params": {"region": "North", "regions": ["N", "S"]}}, headers=CSRF)
+    assert ok.status_code == 200
+    assert fake_engine.report_renders[-1]["datasets"]["kpis"]["operations"][0]["params"]["value"] == ["N", "S"]
+    r = reader.post(f"/reports/{w['report']}/render", json={"params": {"region": "North", "regions": ["N", "X"]}}, headers=CSRF)
+    assert r.status_code == 400 and r.json()["detail"]["parameter"] == "regions"
+
+
+def test_two_lists_on_one_dataset_follow_the_order_of_the_form(app, session, fake_engine):
+    """Region, then agent, each from the dataset both filter: the agents follow the region;
+    the regions stay all there, or the first one chosen would be the only one left."""
+    w = _world(session)
+    reader = _reader(app, session, w)
+
+    def change(content):
+        _regions(content)
+        content["parameters"].append({"name": "agent", "type": "text", "choices": {"dataset": "plain", "value": "[region]"}})
+        content["datasets"][2]["source"]["filters"].append({"column": "region", "op": "<>", "value": "{agent}"})
+    _with(session, change)
+    fake_engine.report_choices_response = (200, {"choices": [{"value": "A", "label": "A"}], "truncated": False})
+    reader.get(f"/reports/{w['report']}/parameters?region=North&agent=A").json()
+    regions, agents = fake_engine.report_choices[-2:]
+    assert (regions["params"]["region"], regions["params"]["agent"]) == (None, None)
+    assert all(o["params"]["value"] not in ("North", "A") for o in regions["datasets"]["plain"]["operations"])
+    assert agents["params"]["region"] == "North" and agents["params"]["agent"] is None
+    assert any(o["params"]["value"] == "North" for o in agents["datasets"]["plain"]["operations"])
+    assert not any(o["params"]["value"] == "A" for o in agents["datasets"]["plain"]["operations"])
+
+
+def test_a_list_follows_a_parameter_of_another_dataset(app, session, fake_engine):
+    w = _world(session)
+    reader = _reader(app, session, w)
+
+    def change(content):
+        content["parameters"].append({"name": "agent", "type": "text", "choices": {"dataset": "orders", "value": "[region]"}})
+        content["datasets"][0]["source"]["sql"] = "SELECT region FROM \"Orders\" WHERE region = {region} AND amount > 0"
+    _with(session, change)
+    fake_engine.report_choices_response = (200, {"choices": [{"value": "A", "label": "A"}], "truncated": False})
+    reader.get(f"/reports/{w['report']}/parameters?region=North")
+    assert "region = 'North' AND amount > 0" in fake_engine.report_choices[-1]["datasets"]["orders"]["operations"][0]["params"]["query"]
+
+
+@pytest.mark.parametrize("dataset", ["orders", "top"])
+def test_a_list_from_the_sql_that_uses_the_parameter(app, session, fake_engine, dataset):
+    """On the catalog, written in the report or in a saved script."""
+    w = _world(session)
+    reader = _reader(app, session, w)
+    _with(session, lambda c: _regions(c, dataset))
+    fake_engine.report_choices_response = (200, {"choices": [{"value": "North", "label": "North"}], "truncated": False})
+    out = reader.get(f"/reports/{w['report']}/parameters?region=North").json()
+    assert [c["value"] for c in out[0]["choices"]] == ["North"] and out[0]["choices_error"] is None
+    query = fake_engine.report_choices[-1]["datasets"][dataset]["operations"][0]["params"]["query"]
+    assert "'North'" not in query and "region = NULL" not in query and "1 = 1" in query
+    assert reader.post(f"/reports/{w['report']}/render", json={"params": {"region": "North"}}, headers=CSRF).status_code == 200
+    assert "region = 'North'" in fake_engine.report_renders[-1]["datasets"][dataset]["operations"][0]["params"]["query"]
+
+
+def test_a_list_from_the_sql_of_a_connection_that_uses_the_parameter(app, session, fake_engine):
+    w = _world(session)
+    reader = _reader(app, session, w)
+
+    def change(content):
+        content["parameters"][2] = {"name": "regions", "type": "text", "multi": True, "choices": {"dataset": "erp", "value": "[area]"}}
+    _with(session, change)
+    fake_engine.report_choices_response = (200, {"choices": [{"value": "N", "label": "N"}], "truncated": False})
+    out = reader.get(f"/reports/{w['report']}/parameters?regions=N").json()
+    assert [c["value"] for c in out[2]["choices"]] == ["N"]
+    assert fake_engine.report_choices[-1]["datasets"]["erp"]["sql"] == "SELECT * FROM invoices WHERE 1 = 1 AND note <> 'it''s'"
+    # without the right to the connection, no list: the same words as a render
+    stranger = _reader(app, session, w, email="stranger@x.local", connect=False)
+    asked = len(fake_engine.report_choices)
+    out = stranger.get(f"/reports/{w['report']}/parameters?regions=N").json()
+    assert out[2]["choices"] is None and "cannot use" in out[2]["choices_error"]
+    assert len(fake_engine.report_choices) == asked
+
+
+def _sql_dataset(sql):
+    def change(content):
+        _regions(content, "orders")
+        content["datasets"][0]["source"]["sql"] = sql
+    return change
+
+
+@pytest.mark.parametrize("sql", [
+    "SELECT region, {region} AS chosen FROM \"Orders\"",
+    "SELECT region FROM \"Orders\" LIMIT {region}",
+])
+def test_a_parameter_outside_the_conditions_is_null_and_an_empty_list_says_what_to_do(app, session, fake_engine, sql):
+    w = _world(session)
+    reader = _reader(app, session, w)
+    _with(session, _sql_dataset(sql))
+    fake_engine.report_choices_response = (200, {"choices": [{"value": "North", "label": "North"}], "truncated": False})
+    out = reader.get(f"/reports/{w['report']}/parameters").json()
+    assert [c["value"] for c in out[0]["choices"]] == ["North"] and out[0]["choices_error"] is None
+    assert "NULL" in fake_engine.report_choices[-1]["datasets"]["orders"]["operations"][0]["params"]["query"]
+    fake_engine.report_choices_response = (200, {"choices": [], "truncated": False})
+    out = reader.get(f"/reports/{w['report']}/parameters").json()
+    assert out[0]["choices"] is None
+    assert "{region}" in out[0]["choices_error"] and "dataset of their own" in out[0]["choices_error"]
+    # the engine refusing the NULL: the same words, no 500
+    fake_engine.report_choices_response = (422, {"detail": "LIMIT must not be NULL"})
+    r = reader.get(f"/reports/{w['report']}/parameters")
+    assert r.status_code == 200 and "dataset of their own" in r.json()[0]["choices_error"]
+    # a list that cannot be read whole checks nothing: the render says the rest
+    assert reader.post(f"/reports/{w['report']}/render", json={"params": {"region": "West"}}, headers=CSRF).status_code == 200
+
+
+def test_a_list_over_the_cap_does_not_stop_a_render_that_fits_it(app, session, fake_engine):
+    """Without its filter the dataset has too many rows; with it the render reads few."""
+    w = _world(session)
+    reader = _reader(app, session, w)
+    _with(session, _regions)
+    fake_engine.report_choices_response = (422, {"detail": "the dataset «plain» has more than 3,000,000 rows"})
+    out = reader.get(f"/reports/{w['report']}/parameters").json()
+    assert out[0]["choices"] is None and "3,000,000" in out[0]["choices_error"]  # said in the form
+    assert reader.post(f"/reports/{w['report']}/render", json={"params": {"region": "North"}}, headers=CSRF).status_code == 200
+    fake_engine.report_choices_response = (503, {"detail": "the engine is restarting"})
+    assert reader.post(f"/reports/{w['report']}/render", json={"params": {"region": "North"}}, headers=CSRF).status_code >= 500
+
+
+@pytest.mark.parametrize("sql, shown", [
+    ("SELECT area, {regions} AS chosen FROM invoices", True),  # NULL there
+    ("SELECT area FROM invoices WHERE area IN {regions} AND x = {{", False),  # not read: IN NULL, which the database refuses
+])
+def test_several_values_outside_the_conditions(app, session, fake_engine, sql, shown):
+    w = _world(session)
+    reader = _reader(app, session, w)
+
+    def change(content):
+        content["parameters"][2] = {"name": "regions", "type": "text", "multi": True, "choices": {"dataset": "erp", "value": "[area]"}}
+        content["datasets"][1]["source"]["sql"] = sql
+    _with(session, change)
+    fake_engine.report_choices_response = (200, {"choices": [{"value": "North", "label": "North"}], "truncated": False}) if shown \
+        else (422, {"detail": "syntax error at or near NULL"})
+    r = reader.get(f"/reports/{w['report']}/parameters")
+    assert r.status_code == 200
+    if shown:
+        assert [c["value"] for c in r.json()[2]["choices"]] == ["North"]
+    else:
+        assert "dataset of their own" in r.json()[2]["choices_error"]
+
+
+@pytest.mark.parametrize("sql, words", [
+    # what the rewriting leaves is read with the reader's rights: Salaries is in «Vault»
+    ("SELECT region FROM \"Orders\" WHERE region = {region} OR region IN (SELECT who FROM \"Salaries\")", "Salaries"),
+    ("SELECT region FROM \"Orders\" WHERE region IN (SELECT who FROM \"Salaries\" WHERE who = {region})", "Salaries"),
+    ("SELECT region FROM \"Salaries\" WHERE region = {region}", "Salaries"),
+    # one query, a SELECT, as a render
+    ("SELECT region FROM \"Orders\" WHERE region = {region}; DROP TABLE x", "one query at a time"),
+    # never between quotes
+    ("SELECT region FROM \"Orders\" WHERE region = '{region}'", "without quotes"),
+])
+def test_a_hostile_query_gets_nothing_more_through_the_list_than_through_a_render(app, session, fake_engine, sql, words):
+    w = _world(session)
+    reader = _reader(app, session, w)
+    _with(session, _sql_dataset(sql))
+    fake_engine.report_choices_response = (200, {"choices": [{"value": "x", "label": "x"}], "truncated": False})
+    out = reader.get(f"/reports/{w['report']}/parameters?region=North").json()
+    assert out[0]["choices"] is None and words in out[0]["choices_error"]
+    assert fake_engine.report_choices == []  # refused before the engine is asked anything
+
+
+def test_a_value_of_another_parameter_stays_a_literal_in_the_list_s_sql(app, session, fake_engine):
+    w = _world(session)
+    reader = _reader(app, session, w)
+
+    def change(content):
+        _regions(content, "orders")
+        content["parameters"].append({"name": "who", "type": "text"})
+        content["datasets"][0]["source"]["sql"] = "SELECT region FROM \"Orders\" WHERE region = {region} AND region <> {who}"
+    _with(session, change)
+    fake_engine.report_choices_response = (200, {"choices": [], "truncated": False})
+    r = reader.get(f"/reports/{w['report']}/parameters", params={"who": "x'; DROP TABLE t; --"})
+    assert r.status_code == 200
+    query = fake_engine.report_choices[-1]["datasets"]["orders"]["operations"][0]["params"]["query"]
+    assert "<> 'x''; DROP TABLE t; --'" in query
 
 
 def test_a_dataset_s_fields(app, session, fake_engine):

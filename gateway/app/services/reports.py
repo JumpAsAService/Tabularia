@@ -345,19 +345,51 @@ def _filter_params(src: dict) -> set[str]:
             and (m := _PARAM_REF.match(f["value"].strip())) and m.group(1) not in report_params.BUILTINS}
 
 
+def _not_followed(definition: dict, param: dict) -> set[str]:
+    """The parameters the choices of `param` do not follow, when they are read: itself, or
+    the list would hold only the value chosen; and those after it in the form that take
+    their choices from the same dataset. Region, then agent, both from the dataset both
+    filter: the agents follow the region. If the regions followed the agent too, each list
+    would close on the other's value, and no region could be chosen again."""
+    params = definition.get("parameters") or []
+    at = next(i for i, p in enumerate(params) if p["name"] == param["name"])
+    source = param["choices"]["dataset"]
+    return {param["name"]} | {p["name"] for p in params[at + 1:] if (p.get("choices") or {}).get("dataset") == source}
+
+
+def _check_no_circle(definition: dict, uses: Mapping[str, set[str]]) -> None:
+    """Refuses lists that follow each other through different datasets: nothing says which
+    one comes first. `uses`: the parameters each dataset is known to use."""
+    params = definition.get("parameters") or []
+    with_list = [p for p in params if (p.get("choices") or {}).get("dataset")]
+    follows = {p["name"]: uses.get(p["choices"]["dataset"], set()) - _not_followed(definition, p) for p in with_list}
+
+    def path(start: str, name: str, seen: tuple[str, ...]) -> Optional[tuple[str, ...]]:
+        for other in sorted(follows.get(name, ())):
+            if other == start:
+                return seen
+            if other not in seen and (found := path(start, other, (*seen, other))):
+                return found
+        return None
+
+    for p in with_list:
+        circle = path(p["name"], p["name"], (p["name"],))
+        if circle:
+            names = " and ".join(f"«{n}»" for n in circle)
+            raise Problem(f"The choices of {names} follow each other: each list reads a dataset that the other "
+                          "parameter filters, and neither can be chosen first. Take that filter off one of the two datasets",
+                          f"parameters[{params.index(p)}].choices.dataset")
+
+
 def check_references(session: Session, user: User, definition: dict, current: Optional[dict] = None) -> None:
     """What the definition points to, at a save. A dataset whose source is new or changed
     must point to something that exists and that this person may read (CONNECT for a
     connection: nobody points a report at a database they could not query); its filters
     name columns the datasource has. Every SQL uses only the report's parameters, never
-    inside quotes, and a dataset that fills a parameter's choices does not use it."""
+    inside quotes, and two lists of choices do not follow each other."""
     before = {d.get("name"): d.get("source") for d in (current or {}).get("datasets") or [] if isinstance(d, dict)}
     params = {p["name"]: p for p in definition.get("parameters") or []}
-    fills = {}
-    for p in params.values():
-        source = (p.get("choices") or {}).get("dataset")
-        if source:
-            fills.setdefault(source, set()).add(p["name"])
+    uses: dict[str, set[str]] = {}
     for i, ds in enumerate(definition.get("datasets") or []):
         src, where = ds["source"], f"datasets[{i}].source"
         changed = before.get(ds["name"]) != src
@@ -382,10 +414,8 @@ def check_references(session: Session, user: User, definition: dict, current: Op
                                                                     f"which «{target.name}» does not have")
         except HTTPException as e:
             raise Problem(f"The dataset «{ds['name']}»: {_within(_text(e))}", where) from None
-        both = used & fills.get(ds["name"], set())
-        if both:
-            raise Problem(f"The dataset «{ds['name']}» fills the choices of «{sorted(both)[0]}»: "
-                          "it cannot use that parameter", where)
+        uses[ds["name"]] = used
+    _check_no_circle(definition, uses)
 
 
 def known_columns(session: Session, user: User, definition: dict) -> dict[str, dict[str, str]]:
@@ -574,6 +604,7 @@ class _Plan:
     datasource_id: Optional[int] = None  # the datasource a chain reads
     filters: list = field(default_factory=list)
     placeholders: set = field(default_factory=set)
+    left: set = field(default_factory=set)  # the parameters to ignore that its SQL still names
 
 
 class _Engines:
@@ -595,14 +626,23 @@ class _Engines:
         return self.picked[requested]
 
 
-async def _plan(session: Session, user: User, ds: dict, params: dict, engines: _Engines) -> _Plan:
+async def _plan(session: Session, user: User, ds: dict, params: dict, engines: _Engines,
+                ignoring: frozenset[str] = frozenset()) -> _Plan:
+    """`ignoring`: parameters read as having no value, their conditions in a SQL taken for
+    true (the choices of a parameter). The SQL is checked before and after: it is no less
+    checked for it. A filter on them leaves by itself: they have no value (`_filter_ops`)."""
     src, name = ds["source"], ds["name"]
     if src["kind"] in ("sql", "sql_script"):
         sql, conn, engine = _sql_of(session, user, src)
         if conn is None:
             engine = await engines.pick(engine)
+        dialect = _dialect(conn, engine)
         plan = _Plan(name, "connection" if conn is not None else "sql", sql=sql, conn=conn, engine=engine)
-        plan.placeholders = report_params.check_sql(sql, _dialect(conn, engine), params)[1]
+        plan.placeholders = report_params.check_sql(sql, dialect, params)[1]
+        if ignoring:
+            plan.sql = report_params.without_params(sql, dialect, ignoring)
+            used, plan.placeholders = report_params.check_sql(plan.sql, dialect, params)
+            plan.left = used & ignoring
         return plan
     if src["kind"] == "datasource":
         target, ops, engine = _datasource(session, user, src["datasource_id"]), [], None
@@ -696,10 +736,12 @@ def reading_problem(session: Session, user: User, definition: dict) -> Optional[
 
 
 async def resolve_datasets(session: Session, user: User, definition: dict, values: Mapping[str, Any],
-                           only: Optional[set[str]] = None, read: Optional[set[int]] = None) -> dict[str, dict]:
+                           only: Optional[set[str]] = None, read: Optional[set[int]] = None,
+                           ignoring: frozenset[str] = frozenset(), left: Optional[set[str]] = None) -> dict[str, dict]:
     """Every dataset (or those in `only`) as the engine reads it, with `user`'s rights and
     the parameters' `values` in place. 422 naming the dataset that cannot be read. The
-    datasources read go in `read`, when given (a flow group's lineage)."""
+    datasources read go in `read`, when given (a flow group's lineage). `ignoring`: see
+    `_plan`; those a SQL still names go in `left`, when given."""
     params = {p["name"]: p for p in definition.get("parameters") or []}
     engines = _Engines(session)
     plans: list[_Plan] = []
@@ -707,9 +749,11 @@ async def resolve_datasets(session: Session, user: User, definition: dict, value
         if only is not None and ds["name"] not in only:
             continue
         try:
-            plans.append(await _plan(session, user, ds, params, engines))
+            plans.append(await _plan(session, user, ds, params, engines, ignoring))
         except HTTPException as e:
             raise _in_dataset(ds["name"], e) from None
+        if left is not None:
+            left.update(plans[-1].left)
     bodies = {b for p in plans for b in p.placeholders}
     resolved = await report_params.resolve_placeholders(bodies, definition.get("timezone") or "UTC",
                                                         report_params.lang_of(definition)) if bodies else {}
@@ -722,44 +766,76 @@ async def resolve_datasets(session: Session, user: User, definition: dict, value
     out = {}
     for plan in plans:
         try:
-            out[plan.name] = _finish(session, user, plan, params, values, texts, read)
+            # what to ignore that the SQL still names: NULL, several values or one
+            out[plan.name] = _finish(session, user, plan, params, {**values, **dict.fromkeys(plan.left)}, texts, read)
         except HTTPException as e:
             raise _in_dataset(plan.name, e) from None
     return out
 
 
 # ── choices taken from a dataset ─────────────────────────────────────────────
-async def dataset_choices(definition: dict, datasets: Mapping[str, dict], values: Mapping[str, Any],
+async def dataset_choices(session: Session, user: User, definition: dict, values: Mapping[str, Any],
                           param: dict) -> Optional[dict]:
-    """The choices of a parameter that takes them from a dataset, read by the engine
-    (POST /reports/choices): {"choices": [{value, label}], "truncated"}. None when the
-    engine has no such route yet."""
+    """The choices of a parameter that takes them from a dataset, read by the engine (POST
+    /reports/choices) with `user`'s rights: {"choices": [{value, label}], "truncated",
+    "whole"}. None when the engine has no such route yet. The dataset may use the parameter:
+    it is read without it, and the other parameters keep their values, so that one list can
+    follow another (`_not_followed`). Where its SQL names the parameter outside a condition
+    it reads NULL, as with no value: such a list is not `whole`, and when it comes out empty
+    or cannot be read at all it says so in "problem"."""
     choices = param["choices"]
+    ignoring = frozenset(_not_followed(definition, param))
+    blank = {p["name"]: [] if p.get("multi") else None for p in definition.get("parameters") or [] if p["name"] in ignoring}
+    reading = {**values, **blank}
+    left: set[str] = set()
+    datasets = await resolve_datasets(session, user, definition, reading, only={choices["dataset"]}, ignoring=ignoring,
+                                      left=left)
     resp = await get_engine_client().post("/reports/choices", timeout=300, json={
         "definition": report_definition.without_images(definition), "dataset": choices["dataset"],
         "datasets": {choices["dataset"]: datasets[choices["dataset"]]},
-        "params": {k: report_params.to_json(v) for k, v in values.items()},
+        "params": {k: report_params.to_json(v) for k, v in reading.items()},
         "value": choices["value"], "label": choices.get("label"), "limit": MAX_CHOICES,
         "locale": definition.get("locale") or "en"})
     if resp.status_code in (404, 405):
         return None
+    if resp.status_code >= 400 and param["name"] in left:  # a NULL the database does not take there
+        return _unread(param)
     if resp.status_code >= 400:
         raise sql_scripts._engine_failure(resp, lambda d: f"The choices of «{param['name']}»: {_within(d)}")
     answer = resp.json()
-    return {"choices": [c for c in answer.get("choices") or [] if isinstance(c, dict)][:MAX_CHOICES],
-            "truncated": bool(answer.get("truncated"))}
+    found = [c for c in answer.get("choices") or [] if isinstance(c, dict)][:MAX_CHOICES]
+    if not found and param["name"] in left:
+        return _unread(param)
+    return {"choices": found, "truncated": bool(answer.get("truncated")), "whole": not left}
 
 
-async def check_dataset_choices(definition: dict, datasets: Mapping[str, dict], values: Mapping[str, Any]) -> None:
-    """A value of a parameter whose choices come from a dataset must be one of them (when
-    the engine can say, and the list is whole)."""
+def _unread(param: dict) -> dict:
+    name = "{" + param["name"] + "}"
+    return {"choices": [], "truncated": False, "whole": False,
+            "problem": f"The choices of «{param['name']}» cannot be read: their dataset writes {name} outside a WHERE, "
+                       f"HAVING or ON condition, where it has no value yet. Move it into a condition, such as {name} IS "
+                       f"NULL OR a_column = {name}, or read the choices from a dataset of their own"}
+
+
+async def check_dataset_choices(session: Session, user: User, definition: dict, values: Mapping[str, Any]) -> None:
+    """A value of a parameter whose choices come from a dataset must be one of them, in the
+    whole list: not among the rows its own filter leaves (when the engine can say, and the
+    list is whole). A list the engine could not read checks nothing: without its filter a
+    dataset may be over the cap of rows that it fits with one, and the render reads it with
+    the filter, as the reader's rights allow (they were checked before this)."""
     for p in definition.get("parameters") or []:
         source = (p.get("choices") or {}).get("dataset")
         value = values.get(p["name"])
-        if not source or value is None or value == [] or source not in datasets:
+        if not source or value is None or value == []:
             continue
-        got = await dataset_choices(definition, datasets, values, p)
-        if got is None or got["truncated"]:
+        try:
+            got = await dataset_choices(session, user, definition, values, p)
+        except HTTPException as e:
+            if e.status_code >= 500:
+                raise
+            logger.info("report: the choices of %s were not read to check its value: %s", p["name"], e.status_code)
+            continue
+        if got is None or got["truncated"] or not got["whole"]:
             continue
         allowed = set()
         for c in got["choices"]:
@@ -823,7 +899,7 @@ async def prepare(session: Session, user: User, definition: dict, given: Mapping
     if detail is not None:
         detail["parameters"] = {k: _shown(report_params.to_json(v)) for k, v in values.items()}
     datasets = await resolve_datasets(session, user, definition, values, read=read)
-    await check_dataset_choices(definition, datasets, values)
+    await check_dataset_choices(session, user, definition, values)
     return values, datasets
 
 

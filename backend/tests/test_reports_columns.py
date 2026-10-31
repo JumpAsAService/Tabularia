@@ -530,6 +530,52 @@ def test_a_chain_at_the_cap_is_read_and_past_it_stops_on_every_engine(name, stor
         rdata.read_dataset("d", spec, 9, tz)
 
 
+@pytest.mark.parametrize("name", ["polars", "duckdb", "chdb"])
+def test_a_list_of_choices_reads_what_it_shows_not_every_row(storage, monkeypatch, name):
+    """`[area]` on a datasource: the list of a parameter, the normal case. Ten rows and a cap
+    of five: the render could not read them, the list can, sorted, each value once; the
+    other columns stay in the file (a calculated field among them is not worked out)."""
+    import app.engine
+    from app.reports import render
+    from app.reports.errors import ReportError
+    from tests.conftest import BUCKET, upload_df
+    from tests.test_reports_count import _engine
+
+    src = upload_df(storage, pl.DataFrame({"area": ["S", "N", None, "E", "S", "N", "E", "S", "N", "E"],
+                                           "name": ["South", "North", "x", "East", "South", "North", "East", "South", "North", "East"],
+                                           "qty": list(range(10))}), f"datasets/list_{name}.parquet")
+    engine = _engine(name, storage)
+    monkeypatch.setattr(app.engine, "get_engine", lambda name=None: engine)
+    spec = {"bucket": BUCKET, "input_key": src.key, "operations": [], "engine": name}
+    definition = {"v": 1, "timezone": "UTC", "parameters": [], "sections": {"body": {"items": []}},
+                  "datasets": [{"name": "d", "source": {"kind": "datasource", "datasource_id": 1},
+                                "calculated": [{"name": "double", "expr": "[qty] * 2"}]}]}
+
+    def choices(value, label=None, max_rows=5, chain=spec):
+        return render.choices(definition, "d", {"d": chain}, {}, value, label, max_rows=max_rows, now=NOW)
+
+    assert choices("[area]") == {"truncated": False, "choices": [{"value": v, "label": v} for v in ("E", "N", "S")]}
+    # value and label, in the order of the label; the filters before it stay
+    assert [c["label"] for c in choices("[area]", "[name]")["choices"]] == ["East", "North", "South"]
+    only = {**spec, "operations": [{"type": "filter", "params": {"column": "qty", "operator": "gt", "value": 7}}]}
+    assert [c["value"] for c in choices("[area]", chain=only)["choices"]] == ["E", "N"]
+    # an expression or a calculated field reads the rows, under the cap of a render
+    with pytest.raises(ReportError, match="more than 5 rows"):
+        choices('=UPPER([area])')
+    with pytest.raises(ReportError, match="more than 5 rows"):
+        choices("[double]")
+    assert len(choices("[double]", max_rows=20)["choices"]) == 10
+    # a field the data does not have says so as ever
+    with pytest.raises(ReportError, match="there is no field \\[regoin\\]"):
+        choices("[regoin]", max_rows=20)
+    # a query keeps its own order; one without any is sorted as a datasource is
+    query = {"type": "sql", "params": {"query": "SELECT area FROM t ORDER BY 1 DESC"}}
+    assert render._only_shown({**spec, "operations": [query]}, "[area]", None, set()) is None
+    query = {"type": "sql", "params": {"query": "SELECT area FROM t"}}
+    assert render._only_shown({**spec, "operations": [query]}, "[area]", None, set())["operations"][-1]["type"] == "sort"
+    assert render._only_shown({"connection": {}, "sql": "SELECT 1"}, "[area]", None, set()) is None
+
+
 @pytest.mark.parametrize("wrap, depth", [("ROUND({}, 2)", 40), ('DATEDIFF("d", DATE(2020, 1, {}), TODAY())', 30),
                                          ('LEN(REPLACE("abc", "a", LEFT("abc", {})))', 20)])
 def test_nested_functions_do_not_write_an_endless_sql(wrap, depth):

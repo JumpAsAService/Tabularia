@@ -702,11 +702,11 @@ async def _parameters_out(session: Session, user: User, definition: dict, given:
             item.choices = [Choice(value=v, label=str(v)) for v in choices["values"]]
         elif choices.get("dataset"):
             try:
-                source = choices_from(choices["dataset"])
-                datasets = await reports.resolve_datasets(session, user, source, values, only={choices["dataset"]})
-                got = await reports.dataset_choices(source, datasets, values, p)
+                got = await reports.dataset_choices(session, user, choices_from(choices["dataset"]), values, p)
                 if got is None:
                     item.choices_error = "The engine cannot read choices from a dataset yet"
+                elif got.get("problem"):
+                    item.choices_error = got["problem"]
                 else:
                     item.choices = [Choice(value=c.get("value"), label=None if c.get("label") is None else str(c["label"]))
                                     for c in got["choices"]]

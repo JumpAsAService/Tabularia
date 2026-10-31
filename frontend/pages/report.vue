@@ -27,7 +27,7 @@ import { useFolderPaths } from '~/composables/useFolderPaths'
 import { useDialogA11y } from '~/composables/useDialogA11y'
 import { versionNote } from '~/composables/useSavedScripts'
 import {
-  explicitParams, isPlainState, NO_VALUE, paramsOfForm, stateAfter, useReports, withChoices,
+  explicitParams, isPlainState, NO_VALUE, paramsOfForm, stateAfter, useReports, whatListsHold, withChoices,
   type ReportDetail, type ReportFormValue, type ReportHotspot, type ReportParameter, type ReportParams,
   type ReportScreen, type ReportState, type ReportVersion,
 } from '~/composables/useReports'
@@ -124,6 +124,8 @@ async function refreshChoices() {
     const fresh = await api.parameters(reportId.value, toParams(form.value))
     if (mine !== choicesSeq) return
     parameters.value = withChoices(parameters.value, fresh)
+    const held = whatListsHold(form.value, parameters.value)
+    if (held !== form.value) onForm(held)
   } catch { /* the lists keep what they had */ }
 }
 function onForm(values: Record<string, ReportFormValue>) {

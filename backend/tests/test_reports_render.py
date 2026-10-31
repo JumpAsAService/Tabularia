@@ -466,6 +466,11 @@ def test_the_choices_of_a_parameter_come_from_a_dataset():
         render.choices(samples.definition(), "orders", samples.datasets(5), {}, "[regoin]", now=NOW)
 
 
+def test_a_list_over_the_cap_says_what_to_do():
+    with pytest.raises(ReportError, match="more than 5 rows.*dataset of their own"):
+        render.choices(samples.definition(), "orders", samples.datasets(300), {}, "[region]", max_rows=5, now=NOW)
+
+
 def test_the_choices_task_answers_as_a_preview():
     ok = report_jobs.report_choices_task.run(samples.definition(), "orders", samples.datasets(5), {}, "[region]")
     assert ok["ok"] and ok["result"]["choices"]

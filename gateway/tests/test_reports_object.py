@@ -216,20 +216,51 @@ def test_the_sql_s_parameters_are_checked_at_the_save(app, session):
     me = _sign_in(app, session, "ana@x.local", is_superuser=True)
     region = {"name": "region", "type": "text"}
 
-    def save(sql, parameters=(region,), **extra):
+    def save(sql, parameters=(region,), name="R", **extra):
         content = definition(sql_dataset(sql=sql), parameters=list(parameters), **extra)
-        return me.post(f"/projects/{folder}/reports", json={"name": "R", "content": content}, headers=CSRF)
+        return me.post(f"/projects/{folder}/reports", json={"name": name, "content": content}, headers=CSRF)
 
     r = save("SELECT * FROM \"Orders\" WHERE region = '{region}'")
     assert r.status_code == 422
     assert r.json()["detail"]["message"] == ("The dataset «orders»: write {region} without quotes: "
                                              "Tabularia quotes it")
     assert "neither a parameter" in save("SELECT * FROM \"Orders\" WHERE a = {regoin}").json()["detail"]["message"]
-    # a dataset that fills a parameter's choices cannot use it
+    # a dataset may use the parameter whose choices it fills: its list is read without it
     chooser = {"name": "region", "type": "text", "choices": {"dataset": "orders", "value": "[region]"}}
-    r = save("SELECT region FROM \"Orders\" WHERE region <> {region}", parameters=[chooser])
-    assert "fills the choices of «region»" in r.json()["detail"]["message"]
-    assert save("SELECT * FROM \"Orders\" WHERE region = {region} -- '{region}'").status_code == 201
+    assert save("SELECT region FROM \"Orders\" WHERE region <> {region}", parameters=[chooser]).status_code == 201
+    assert save("SELECT * FROM \"Orders\" WHERE region = {region} -- '{region}'", name="S").status_code == 201
+
+
+def test_two_lists_that_fill_each_other_are_refused_by_name(app, session, fake_engine):
+    folder = make_project(session, name="F").id
+    orders = make_datasource(session, name="Orders", project_id=folder, key="k.parquet",
+                             columns=json.dumps([{"name": "region", "dtype": "String"}, {"name": "agent", "dtype": "String"}])).id
+    me = _sign_in(app, session, "ana@x.local", is_superuser=True)
+
+    def on(name, *filters):
+        return {"name": name, "source": {"kind": "datasource", "datasource_id": orders,
+                                         "filters": [{"column": c, "op": "=", "value": v} for c, v in filters]}}
+
+    def param(name, dataset, column):
+        return {"name": name, "type": "text", "choices": {"dataset": dataset, "value": f"[{column}]"}}
+
+    def save(datasets, parameters, name="R"):
+        return me.post(f"/projects/{folder}/reports", json={"name": name, "content": definition(*datasets, parameters=parameters)},
+                       headers=CSRF)
+
+    # one dataset, filtered by both: a cascade by their order in the form, nothing to refuse
+    both = on("data", ("region", "{region}"), ("agent", "{agent}"))
+    assert save([both], [param("region", "data", "region"), param("agent", "data", "agent")]).status_code == 201
+    # one way, across two datasets: a cascade
+    assert save([on("regions"), on("agents", ("region", "{region}"))],
+                [param("region", "regions", "region"), param("agent", "agents", "agent")], name="S").status_code == 201
+    # each list reads a dataset the other parameter filters: neither has a place to start
+    r = save([on("regions", ("agent", "{agent}")), on("agents", ("region", "{region}"))],
+             [param("region", "regions", "region"), param("agent", "agents", "agent")], name="T")
+    assert r.status_code == 422
+    message = r.json()["detail"]["message"]
+    assert "«region»" in message and "«agent»" in message and "each other" in message
+    assert r.json()["detail"]["where"].startswith("parameters[")
 
 
 def test_the_engine_checks_the_expressions_when_it_can(app, session, fake_engine):

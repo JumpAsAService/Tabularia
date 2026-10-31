@@ -31,7 +31,7 @@ from app.core import placeholders as ph
 from app.reports import definition as rd
 from app.reports import expressions as ex
 from app.reports import frames
-from app.reports.errors import ReportError
+from app.reports.errors import OverCap, ReportError
 
 
 class DataSet:
@@ -190,8 +190,8 @@ def read_dataset(name: str, spec: Any, max_rows: int, tz: ZoneInfo) -> DataSet:
         raise ReportError(f"the dataset «{name}» was not sent with the report: it cannot be read")
     columns, rows, truncated = _read_one(name, spec, max_rows)
     if truncated:
-        raise ReportError(f"the dataset «{name}» has more than {max_rows:,} rows, the most a report reads: "
-                          "aggregate it in SQL, or filter it")
+        raise OverCap(f"the dataset «{name}» has more than {max_rows:,} rows, the most a report reads: "
+                      "aggregate it in SQL, or filter it")
     if not isinstance(rows, list):  # a DataFrame: in columns, its values made plain column by column
         table = frames.from_frame(rows, tz)
         if table is not None:

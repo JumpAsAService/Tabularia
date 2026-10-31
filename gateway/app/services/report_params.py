@@ -28,6 +28,10 @@ PostgreSQL with standard_conforming_strings off read a backslash as an escape, a
 PostgreSQL nests block comments where the others do not. The scanner reads the SQL each
 way and refuses when the readings place a brace differently: a value never goes where
 the database might read it as part of a string.
+
+A dataset may fill the choices of a parameter it uses (`without_params`): its list is
+read with the conditions on that parameter taken for true, before the same checks as any
+other read, so that it shows every value and not only the one chosen.
 """
 from __future__ import annotations
 
@@ -38,8 +42,10 @@ from decimal import Decimal
 from itertools import zip_longest
 from typing import Any, Iterable, Mapping, Optional
 
+import sqlglot
 from fastapi import HTTPException
 from sqlglot import exp
+from sqlglot.errors import SqlglotError
 
 from app.core.engine_client import CHECK, get_engine_client
 
@@ -528,6 +534,66 @@ def fill(sql: str, d: Dialect, parameters: Mapping[str, Any], values: Mapping[st
             out.append(sql[b.start:b.end])
     out.append(sql[at:])
     return "".join(out)
+
+
+# ── the SQL read for the choices of a parameter it uses ───────────────────────
+def _freed(node: exp.Expression, marks: set[str]) -> bool:
+    """Takes for true every part of a condition (what AND, OR and parentheses join) that
+    names one of the `marks`; True when one was. A NOT goes whole: `NOT (a = {p} OR b)`,
+    with its inside true, would be false for every row."""
+    if isinstance(node, exp.Paren):
+        return _freed(node.this, marks)
+    if isinstance(node, (exp.And, exp.Or)):
+        return any([_freed(node.left, marks), _freed(node.right, marks)])
+    if not any(i.name in marks for i in node.find_all(exp.Identifier)):
+        return False
+    # 1 = 1 and not TRUE: neither Oracle nor SQL Server has that word
+    node.replace(exp.EQ(this=exp.Literal.number(1), expression=exp.Literal.number(1)))
+    return True
+
+
+def without_params(sql: str, d: Dialect, names: Iterable[str]) -> str:
+    """The SQL with the conditions (WHERE, HAVING, QUALIFY, a join's ON) that depend on the
+    parameters `names` taken for true. What stays is SQL with its braces, values nowhere
+    near: call `check_sql` on it and go on as with any other. Where a parameter is not in a
+    condition (a column, a LIMIT), or the SQL cannot be read (nor a single query, nor with
+    a literal brace), it stays as it is: `check_sql` still finds it there."""
+    found, wanted = braces(sql, d), set(names)
+    if not any(b.kind == "name" and not b.quoted and _parts(b)[0] in wanted for b in found) \
+            or any(b.kind in ("open", "close") for b in found):
+        return sql
+    # each brace outside quotes as a name sqlglot can read, one the SQL does not hold
+    mark = "tabularia_brace"
+    while mark in sql:
+        mark += "_"
+    out, at, restored, marks = [], 0, {}, set()
+    for b in found:
+        if b.kind != "name" or b.quoted:
+            continue
+        name = f"{mark}_{len(restored)}_"
+        out += [sql[at:b.start], name]
+        at = b.end
+        restored[name] = sql[b.start:b.end]
+        if _parts(b)[0] in wanted:
+            marks.add(name)
+    out.append(sql[at:])
+    try:
+        trees = [t for t in sqlglot.parse("".join(out), read=d.sqlglot) if t is not None]
+    except SqlglotError:
+        return sql
+    if len(trees) != 1 or not isinstance(trees[0], exp.Query):
+        return sql
+    tree = trees[0]
+    # the innermost first: a subquery keeps being read, its own condition gone
+    freed = False
+    for clause in reversed(list(tree.find_all(exp.Where, exp.Having, exp.Qualify, exp.Join))):
+        condition = clause.args.get("on") if isinstance(clause, exp.Join) else clause.this
+        if condition is not None and _freed(condition, marks):
+            freed = True
+    if not freed:
+        return sql
+    written = tree.sql(dialect=d.sqlglot, comments=False)
+    return re.sub(re.escape(mark) + r"_\d+_", lambda m: restored[m.group(0)], written)
 
 
 # ── literals ──────────────────────────────────────────────────────────────────

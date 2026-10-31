@@ -11,3 +11,7 @@ class ReportError(Exception):
         super().__init__(message)
         self.message = message
         self.tag = tag
+
+
+class OverCap(ReportError):
+    """A dataset with more rows than a report reads."""

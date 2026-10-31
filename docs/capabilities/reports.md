@@ -161,11 +161,52 @@ A **parameter** is a value the reader chooses. In **Data**, **+ Parameter**:
 | **Type** | **Text**, **Number**, **Date** or **Yes or no**; **Several values** makes it a list |
 | **Required** | the report does not render without a value |
 | **Default** | used when the reader gives none: a value, or for a date a placeholder resolved at every render, `{today-30}`, `{start_of_month-1m}` |
-| **Choices** | **Any value**, a **Fixed list** (one per line), or **From a dataset** (an expression for the value and one for the label shown; that dataset cannot use the parameter it fills) |
+| **Choices** | **Any value**, a **Fixed list** (one per line), or **From a dataset** (an expression for the value and one for the label shown) |
 
 Values arrive as text (the viewer's form, a flow group's cell, the query string of the
 API) and are converted and checked against the type and the choices before anything
 runs: a value that does not fit stops the render with the parameter's name.
+
+### A parameter that filters the data
+
+The usual parameter takes its choices from a field of a dataset, and filters that same
+dataset by what the reader chooses:
+
+1. **+ Parameter**: a name, `regione`, **Choices → From a dataset**, the dataset and, as
+   **Value**, the field: `[area]`.
+2. With a datasource or a saved view, **Filter this dataset by what is chosen** is already
+   ticked: it adds the filter `area = {regione}` to the dataset (`area in {regione}` with
+   **Several values**), and takes it away when you untick it.
+3. With a SQL or a SQL script the query stays as you wrote it: the dialog shows the line
+   to add, `WHERE {regione} IS NULL OR area = {regione}`, with a button that copies it.
+
+That is all. The list always shows every value of the field, whatever is chosen: to read
+it Tabularia leaves out what depends on that parameter, while the report itself applies
+the filter. If the parameter is not required, with nothing chosen (**Any**) every row stays.
+With **Several values** a SQL needs at least one value (`IN {regione}`), and the report
+asks for it; a filter on a datasource or a view lets every row through with none.
+
+Several parameters on one dataset work the same way, and follow the order of the form:
+add `regione`, then `agente`, and the agents follow the region while the regions stay all
+there. To take the choices from somewhere else, a table of regions or a list you curate,
+choose another dataset as their source: the filter on the data is then yours to add. Two
+lists that follow each other through two different datasets are refused, by name, because
+neither could be chosen first.
+
+In a SQL, Tabularia recognises the conditions on the parameter in the `WHERE`, the
+`HAVING` and the `ON` of a join, in subqueries too, and takes them for true when it reads
+the list. Written anywhere else, say in the columns or in a `LIMIT`, the parameter reads
+`NULL` for the list, as with no value; if that leaves the list empty, the form says so and
+what to do.
+
+The value of a filter on a datasource or a view is chosen in the dataset's dialog: **A
+value written here**, or a parameter of the report, by its label and name. A parameter of
+several values sets the operator to `in`, one of a single value takes it back to `=`, and
+the dialog says so. Written by hand, `{regione}` and `PARAM("regione")` both become the
+parameter, and a name that does not exist is an error on the spot, with the name you
+probably meant. Renaming a parameter carries its filters and its SQL with it (a saved SQL
+script is its own text: the designer tells you to change it there); removing one takes its
+filters away and tells you which SQL still writes it.
 
 ## Expressions
 
@@ -568,19 +609,28 @@ the first month.
    Report**. In the designer, write `Monthly margin` over «New report». In **Page setup**
    keep A4 portrait with margins 15 · 12 · 15 · 12, set the language English, the time
    zone `Europe/Rome` and the font size 8.
-2. **The categories.** **Data → + Dataset**: name `categories`, **SQL**, **Runs on**
-   Datasources, engine DuckDB:
+2. **The first month.** **Data → + Parameter**: name `since`, label `From`, type **Date**,
+   **Required**, default `{start_of_year-1y}` (the first of January of last year, at
+   every render).
+3. **The data.** **+ Dataset**: name `margins`, **SQL**, **Runs on** Datasources, engine
+   DuckDB:
 
    ```sql
-   SELECT DISTINCT categoria FROM "Margin by Category and Month" ORDER BY 1
+   SELECT categoria, anno_mese, ricavo, costo, margine
+   FROM "Margin by Category and Month"
+   WHERE anno_mese >= EXTRACT(YEAR FROM {since}) * 100 + EXTRACT(MONTH FROM {since})
+   ORDER BY categoria, anno_mese
    ```
 
-3. **The parameters.** **+ Parameter**: name `since`, label `From`, type **Date**,
-   **Required**, default `{start_of_year-1y}` (the first of January of last year, at
-   every render). Then name `category`, label `Category`, type **Text**, not required,
-   no default, **Choices → From a dataset**: `categories`, value and label
-   `[categoria]`.
-4. **The data.** **+ Dataset**: name `margins`, SQL on the catalog, DuckDB:
+   `{since}` becomes a date, and `anno_mese` holds months as `202501`. Add two **Calculated
+   fields**: `Month`, `DATE(FLOOR([anno_mese] / 100), [anno_mese] - FLOOR([anno_mese] / 100) * 100, 1)`,
+   the first day of the month as a date; and `MarginPct`, `IF([ricavo] = 0, NULL, [margine] / [ricavo])`.
+   **Add**: the fields are read from the data.
+4. **The category.** **+ Parameter**: name `category`, label `Category`, type **Text**, not
+   required, no default, **Choices → From a dataset**: `margins`, value and label
+   `[categoria]`. `margins` is SQL, so the dialog shows the line that filters it by what
+   is chosen: **Add**, then open `margins` and put that line in its `WHERE`, joined to the
+   other condition with `AND`:
 
    ```sql
    SELECT categoria, anno_mese, ricavo, costo, margine
@@ -590,11 +640,8 @@ the first month.
    ORDER BY categoria, anno_mese
    ```
 
-   With no category chosen `{category}` is `NULL` and every category stays; `{since}`
-   becomes a date, and `anno_mese` holds months as `202501`. Add two **Calculated
-   fields**: `Month`, `DATE(FLOOR([anno_mese] / 100), [anno_mese] - FLOOR([anno_mese] / 100) * 100, 1)`,
-   the first day of the month as a date; and `MarginPct`, `IF([ricavo] = 0, NULL, [margine] / [ricavo])`.
-   **Add**: the fields are read from the data.
+   With no category chosen `{category}` is `NULL` and every category stays. The list of
+   categories reads the same query without that condition, so it always holds them all.
 5. **The page header.** Click **Page header** beside the page, then in **Insert** a
    **Text**, **Expression**:
    `="Monthly margin" & IF(ISNULL(PARAM("category")), "", " — " & PARAM("category"))`,

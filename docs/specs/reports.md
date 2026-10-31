@@ -162,11 +162,36 @@ All lengths are millimetres (numbers, a tenth at most), colours `#rrggbb`.
 - **Parameters**: `type` text | number | date | boolean; `multi` = a list of values;
   `default` a value, a placeholder of Tabularia's language (`{today-30}`,
   `{start_of_month}`) or null; `required`; `choices`: fixed `{"values": [...]}`, or taken
-  from a dataset (`dataset`, `value`, `label` expressions) — a choices dataset cannot use
-  the parameter it fills. Names: letters, digits, `_`, not one of the placeholder
+  from a dataset (`dataset`, `value`, `label` expressions). Names: letters, digits, `_`, not one of the placeholder
   builtins (`today`, `now`…). A value empty or left out takes the default; `{none}` gives
   an optional parameter no value, whatever its default. Values arrive as text (query string, form, flow group) and
   are converted and checked against the type and the choices before anything runs.
+- **Choices from a dataset.** The normal case is the dataset the parameter then filters:
+  it fills the list and uses the parameter. A list is read **without the parameter it
+  fills** (it shows every value, not only the one chosen), wherever one is read: the
+  form, the designer's preview, `GET` and `POST /reports/{id}/parameters`, the check of a
+  value at a render, API and Pushmail included (a value outside the whole list stays
+  refused, a 400 naming the parameter). The render itself applies the filter.
+  - Datasource or view: its filters on `{p}` leave for that read (as with no value); the
+    others stay, those on other parameters with their current values, so one list can
+    follow another.
+  - SQL and SQL scripts (`report_params.without_params`): sqlglot reads the SQL with its
+    braces as names, and every part of a `WHERE`, `HAVING`, `QUALIFY` or join `ON` that
+    names `{p}` — what `AND`, `OR` and parentheses join, a `NOT` whole — becomes `1 = 1`,
+    subqueries and CTEs included, the rest as it was. The text that comes out goes through
+    every check of a render (`check_sql`, the datasources read with the reader's rights,
+    the engine's guard, the row cap); no value is near it until then. Elsewhere (a column,
+    a `LIMIT`), or in a SQL sqlglot cannot read, `{p}` stays and is NULL, as with no value.
+    Such a list checks no value, and if it comes out empty or the database refuses the
+    NULL the form says what to do: `choices_error`, never an empty list without a word.
+  - Several lists on **one dataset** that filters by them all follow the order of the
+    form: each follows the parameters before it, not those after it (region, then agent:
+    the agents follow the region, the regions stay whole). A list that follows another
+    **through another dataset** that in turn follows it has no first one: refused at the
+    save, naming the two.
+  - A datasource's or view's list whose value and label are plain fields reads those
+    columns only, each pair once, sorted (`render._only_shown`): `[area]` costs the
+    distinct values, whatever the rows; anything else reads the rows, under the render's cap.
 - **Datasets**: `source.kind`
   - `sql`: on the catalog (`connection_id` null; `engine` as SQL scripts', null = the
     default) or on a connection (CONNECT on its folder). Parameters are written `{name}`

@@ -252,3 +252,16 @@ test('a float reads without its binary noise, a whole-number column stays as it 
   assert.equal(readableNumber(1234.5, 'Decimal(10,2)', 'it'), '1234,5')
   assert.equal(readableNumber(Number.NaN, 'Float64', 'en'), 'NaN')
 })
+
+// ── a list that changed under its value ──────────────────────────────────────
+test('the form lets go of a value its list no longer holds, and keeps the rest', () => {
+  const p = (name, choices, more = {}) => ({ name, label: name, type: 'text', multi: false, required: false, default: null, choices: choices && choices.map((value) => ({ value, label: String(value) })), ...more })
+  const list = [p('agent', ['Ann', 'Bob']), p('year', [2025, 2026]), p('many', ['a', 'b'], { multi: true }), p('free', null), p('long', ['x'], { choices_truncated: true }), p('broken', [], { choices_error: 'no' })]
+  const form = { agent: 'Ann', year: '2026', many: ['a'], free: 'anything', long: 'y', broken: 'z' }
+  assert.equal(reports.whatListsHold(form, list), form) // the same form: nothing to do
+  assert.deepEqual(reports.whatListsHold({ ...form, agent: 'Carl' }, list).agent, '')
+  assert.deepEqual(reports.whatListsHold({ ...form, many: ['a', 'c'] }, list).many, ['a'])
+  assert.deepEqual(reports.whatListsHold({ ...form, year: '2024' }, list), { ...form, year: '' })
+  const empty = { ...form, agent: '' }
+  assert.equal(reports.whatListsHold(empty, list), empty)
+})

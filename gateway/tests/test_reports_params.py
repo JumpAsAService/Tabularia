@@ -289,3 +289,92 @@ async def test_the_names_of_months_and_days_are_in_the_report_s_language(fake_en
     assert fake_engine.placeholder_previews[-1]["lang"] == "de"
     await rp.values_for({**DEFINITION, "locale": "xx"}, {"region": ["North"]})
     assert fake_engine.placeholder_previews[-1]["lang"] == "en"
+
+
+# ── the SQL read for the choices of a parameter it uses ───────────────────────
+_ALL_KEYS = ["polars", "duckdb", "chdb", "clickhouse", "bigquery", "postgresql", "mysql", "trino", "oracle", "sqlserver"]
+
+
+def _freed(sql: str, key: str = "duckdb", names=("region",)) -> str:
+    d = rp.dialect_of(key)
+    out = rp.without_params(sql, d, set(names))
+    rp.check_sql(out, d, PARAMS)  # what comes out goes through every check of a render
+    return out
+
+
+@pytest.mark.parametrize("key", _ALL_KEYS)
+@pytest.mark.parametrize("condition", [
+    "area = {region}", "area IN {region}", "{region} IS NULL OR area = {region}", "({region} IS NULL OR area IN {region})",
+    "area LIKE {region}", "area NOT LIKE {region}", "area <> {region}", "area >= {region}", "{region} = area",
+    "UPPER(area) = UPPER({region})", "NOT area = {region}", "NOT (area = {region} OR area = 'x')",
+    "COALESCE({region}, area) = area", "CASE WHEN {region} IS NULL THEN 1 ELSE 0 END = 1", "area BETWEEN {region} AND 'z'",
+])
+def test_a_condition_on_the_parameter_read_for_its_choices_is_true(key, condition):
+    out = _freed(f"SELECT area FROM t WHERE {condition}", key)
+    assert "{region}" not in out and "1 = 1" in out
+    tree = sqlglot.parse_one(out, read=rp.dialect_of(key).sqlglot)
+    assert isinstance(tree, exp.Select)  # still a query of its dialect
+    assert "NOT" not in out.replace("NOT LIKE", "")  # a NOT would turn the true into false
+
+
+@pytest.mark.parametrize("sql, kept, gone", [
+    ("SELECT area FROM t WHERE year = 2026 AND area = {region}", ["year = 2026", "1 = 1"], ["{region}"]),
+    ("SELECT area FROM t WHERE agent = {n} AND area = {region}", ["agent = {n}", "1 = 1"], ["{region}"]),
+    ("SELECT area FROM t WHERE day >= {today-30} AND area = {region}", ["day >= {today-30}"], ["{region}"]),
+    ("SELECT area FROM t WHERE note = '{today}' AND area = {region}", ["note = '{today}'"], ["{region}"]),
+    ("SELECT area, SUM(x) FROM t GROUP BY area HAVING SUM(x) > {region}", ["HAVING 1 = 1", "GROUP BY area"], ["{region}"]),
+    ("SELECT area FROM t JOIN u ON t.id = u.id AND u.kind = {region}", ["t.id = u.id", "1 = 1"], ["{region}"]),
+    ("WITH s AS (SELECT area FROM t WHERE area = {region}) SELECT area FROM s", ["WITH s AS", "WHERE 1 = 1"], ["{region}"]),
+    ("SELECT area FROM (SELECT area FROM t WHERE area = {region}) AS s", ["WHERE 1 = 1"], ["{region}"]),
+    ("SELECT area FROM t WHERE area = {region} UNION ALL SELECT area FROM u WHERE area = {region}",
+     ["UNION ALL", "FROM u"], ["{region}"]),
+    # the condition of a subquery goes, not the subquery: it still has to be read with the reader's rights
+    ("SELECT area FROM t WHERE id IN (SELECT id FROM u WHERE kind = {region})", ["id IN (SELECT id FROM u WHERE 1 = 1)"], ["{region}"]),
+    ("SELECT area FROM t WHERE year = 2026 OR area = {region}", ["year = 2026 OR 1 = 1"], ["{region}"]),
+])
+def test_only_what_depends_on_the_parameter_goes(sql, kept, gone):
+    out = _freed(sql)
+    assert all(k in out for k in kept), out
+    assert not any(g in out for g in gone), out
+
+
+@pytest.mark.parametrize("sql", [
+    "SELECT {region} AS chosen, area FROM t",  # not a condition: NULL, as without a value
+    "SELECT area FROM t LIMIT {region}",
+    "SELECT area, COALESCE({region}, area) FROM t ORDER BY 1",
+    "SELECT area FROM t GROUP BY area, {region}",
+    "SELECT area FROM t WHERE area = 'a {{ b' -- {region}",  # nothing to do: a comment
+    "SELECT area FROM t",
+])
+def test_what_is_not_a_condition_is_left_as_it_is(sql):
+    assert _freed(sql) == sql
+
+
+@pytest.mark.parametrize("sql", [
+    "SELECT area FROM t WHERE area = {region} AND x = {{",  # literal braces: not read
+    "SELECT area FROM t WHERE area = {region} AND (",  # not a query sqlglot reads
+    "SELECT area FROM t WHERE area = {region}; DROP TABLE t",  # two statements: the render's checks say no
+    "DELETE FROM t WHERE area = {region}",
+])
+def test_a_sql_that_cannot_be_read_is_left_as_it_is(sql):
+    assert rp.without_params(sql, rp.dialect_of("duckdb"), {"region"}) == sql
+
+
+def test_the_rewriting_cannot_be_steered_from_the_sql():
+    d = rp.dialect_of("duckdb")
+    # a name written to look like the rewriting's own marks stays a name
+    out = _freed("SELECT tabularia_brace_0_ FROM t WHERE area = {region} AND b = {n}")
+    assert "SELECT tabularia_brace_0_ FROM t" in out and "{n}" in out
+    # a value of another parameter goes in afterwards, as a literal, never through the rewriting
+    filled = rp.fill(out, d, PARAMS, {"n": 3}, {})
+    assert "b = 3" in filled
+    out = rp.without_params("SELECT a FROM t WHERE c = {region} AND d = {since}", d, {"region"})
+    assert "d = DATE '2026-01-01'" in rp.fill(out, d, PARAMS, {"since": date(2026, 1, 1)}, {})
+    hostile = rp.fill(rp.without_params("SELECT a FROM t WHERE c = {since} AND t.b = {region}", d, {"since"}), d, PARAMS,
+                      {"region": "x'; DROP TABLE t; --"}, {})
+    assert sqlglot.parse_one(hostile, read="duckdb").find(exp.Drop) is None
+    assert "'x''; DROP TABLE t; --'" in hostile
+    # a parameter in quotes stays refused: the render's check comes first, and again on what comes out
+    assert "without quotes" in _refused(rp.check_sql, "SELECT a FROM t WHERE c = '{region}'", d, PARAMS)
+    # comments do not survive to hide anything behind what was rewritten
+    assert "evil" not in rp.without_params("SELECT a FROM t /* evil */ WHERE c = {region}", d, {"region"})

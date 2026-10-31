@@ -163,6 +163,8 @@ export const ITEM_ID_RE = /^[A-Za-z0-9_-]{1,64}$/
 /** What a page header or footer holds. */
 export const BAND_ITEM_TYPES: ItemType[] = ['text', 'image', 'line', 'rect']
 export const FILTER_OPS = ['=', '<>', '<', '<=', '>', '>=', 'in', 'contains'] as const
+// the names of the placeholder language: {today} in a filter is a date, not a parameter
+const PLACEHOLDERS = new Set(['today', 'yesterday', 'start_of_month', 'start_of_week', 'start_of_year', 'now', 'last_refresh'])
 export const MAX_IMAGE_BYTES = 512 * 1024
 
 // The printed page's own colours (backend/app/reports/model.py, PALETTE): the sheet is
@@ -656,4 +658,126 @@ export function columnFor(field: DField): DColumn {
     ...(kind === 'number' ? { align: 'right' as Align } : {}),
     ...(amount ? { format: '#,##0.00' } : {}),
   }
+}
+
+// ── a parameter and the filters that name it ─────────────────────────────────
+/** The parameter a filter's value names ({region}); a placeholder ({today}) is a value. */
+export function filterParam(value: unknown): string | null {
+  const m = typeof value === 'string' ? /^\s*\{([A-Za-z_][A-Za-z0-9_]*)\}\s*$/.exec(value) : null
+  return m && !PLACEHOLDERS.has(m[1]) ? m[1] : null
+}
+
+/** The field an expression is when it is that and nothing else: `[area]` → area. */
+export function plainField(expr: string): string | null {
+  const m = /^\s*=?\s*\[((?:[^\]]|\]\])+)\]\s*$/.exec(expr ?? '')
+  return m ? m[1].replaceAll(']]', ']') : null
+}
+
+/** The operator a filter on a parameter takes: `in` for a list, not `in` for one value. */
+export function opForParam(multi: boolean, op: string): string {
+  return multi ? 'in' : op === 'in' ? '=' : op
+}
+
+function editDistance(a: string, b: string): number {
+  let row = Array.from({ length: b.length + 1 }, (_, i) => i)
+  for (let i = 1; i <= a.length; i++) {
+    const next = [i]
+    for (let j = 1; j <= b.length; j++) next[j] = Math.min(row[j] + 1, next[j - 1] + 1, row[j - 1] + (a[i - 1] === b[j - 1] ? 0 : 1))
+    row = next
+  }
+  return row[b.length]
+}
+
+/** The name meant, when one is close enough to have been meant. */
+export function nearestName(name: string, names: string[]): string | null {
+  const wanted = name.toLowerCase()
+  let best: string | null = null
+  let nearest = Math.max(2, Math.floor(wanted.length / 3)) + 1
+  for (const n of names) {
+    const d = editDistance(wanted, n.toLowerCase())
+    if (d < nearest) { best = n; nearest = d }
+  }
+  return best
+}
+
+/** What is written in a filter's field, when it means a parameter: `{region}`,
+ *  `PARAM("region")` as in an expression. `exists` false: no parameter has that name. */
+export function paramWritten(text: string, names: string[]): { name: string; exists: boolean; near: string | null } | null {
+  const m = /^\s*=?\s*PARAM\s*\(\s*(?:"([^"]*)"|'([^']*)')\s*\)\s*$/i.exec(text ?? '')
+  const name = m ? m[1] ?? m[2] : filterParam(text)
+  if (name == null) return null
+  return names.includes(name) ? { name, exists: true, near: null } : { name, exists: false, near: nearestName(name, names) }
+}
+
+const filterable = (def: DDefinition, dataset: string | null | undefined) => {
+  const src = def.datasets.find((d) => d.name === dataset)?.source
+  return src && (src.kind === 'datasource' || src.kind === 'view') ? src : null
+}
+
+/** Whether the dataset has a filter on the parameter. */
+export function filteredBy(def: DDefinition, dataset: string | null | undefined, param: string): boolean {
+  return !!filterable(def, dataset)?.filters?.some((f) => filterParam(f.value) === param)
+}
+
+/** The filter that a parameter's list asks of its own dataset, on (`column` = {param}, one
+ *  only) or off. `was`: the dataset and field the list had, whose filter does not stay
+ *  behind on another field. */
+export function setChoiceFilter(def: DDefinition, c: {
+  param: string; multi: boolean; dataset: string | null; column: string | null; on: boolean
+  was?: { dataset: string | null; column: string | null } | null
+}) {
+  const cites = (f: DFilter) => filterParam(f.value) === c.param
+  const before = c.was && (c.was.dataset !== c.dataset || c.was.column !== c.column) ? filterable(def, c.was.dataset) : null
+  if (before?.filters) before.filters = before.filters.filter((f) => !(cites(f) && f.column === c.was!.column))
+  const src = filterable(def, c.dataset)
+  if (!src) return
+  if (!c.on) {
+    if (src.filters?.some(cites)) src.filters = src.filters.filter((f) => !cites(f))
+    return
+  }
+  if (!c.column || src.filters?.some(cites)) return
+  src.filters = [...(src.filters ?? []), { column: c.column, op: c.multi ? 'in' : '=', value: `{${c.param}}` }]
+}
+
+/** A parameter now of one value or of several: the filters that name it follow. */
+export function alignFilterOps(def: DDefinition, param: string, multi: boolean) {
+  for (const d of def.datasets) {
+    const src = d.source
+    if (src.kind !== 'datasource' && src.kind !== 'view') continue
+    for (const f of src.filters ?? []) if (filterParam(f.value) === param) f.op = opForParam(multi, f.op)
+  }
+}
+
+/** The datasets that name a parameter, by how a removal touches them: `filters` lose the
+ *  filter, a `sql` must be changed by hand. */
+export function usesOfParam(def: DDefinition, param: string): { filters: string[]; sql: string[] } {
+  const braces = new RegExp(`(?<!\\{)\\{${param}\\}(?!\\})`)
+  const out = { filters: [] as string[], sql: [] as string[] }
+  for (const d of def.datasets) {
+    if (d.source.kind === 'sql' && braces.test(d.source.sql)) out.sql.push(d.name)
+    if (filteredBy(def, d.name, param)) out.filters.push(d.name)
+  }
+  return out
+}
+
+/** Takes the filters on a parameter away from every dataset. */
+export function dropParamFilters(def: DDefinition, param: string) {
+  for (const d of def.datasets) {
+    const src = d.source
+    if ((src.kind === 'datasource' || src.kind === 'view') && src.filters) src.filters = src.filters.filter((f) => filterParam(f.value) !== param)
+  }
+}
+
+/** The line that filters a SQL by a parameter, for who writes it in by hand: a list needs
+ *  at least one value in SQL; an optional one lets every row through with none. */
+export function sqlFilterLine(column: string, param: string, multi: boolean, required: boolean): string {
+  const braced = `{${param}}`
+  if (multi) return `WHERE ${column} IN ${braced}`
+  return required ? `WHERE ${column} = ${braced}` : `WHERE ${braced} IS NULL OR ${column} = ${braced}`
+}
+
+/** The type a parameter takes from the field its list reads. */
+export function typeOfField(fieldType: string | null | undefined): ParamType {
+  if (fieldType === 'integer' || fieldType === 'float') return 'number'
+  return fieldType === 'date' || fieldType === 'boolean' ? fieldType : 'text'
 }

@@ -4,7 +4,8 @@
 // with filters applied before, or a saved SQL script; its calculated fields; its fields as
 // the data has them («Refresh fields», read from the definition being edited), with its
 // rows counted (a SELECT * on a big table shows here, before a preview reads it). A
-// parameter goes in the SQL as {name}, without quotes: the server writes it as a literal.
+// parameter goes in the SQL as {name}, without quotes: the server writes it as a literal;
+// in a filter it is chosen from the report's list, and written `{name}` in the definition.
 import { computed, defineAsyncComponent, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { Database, FileCode, LoaderCircle, Plus, RefreshCw, Table2, Trash2, View } from 'lucide-vue-next'
@@ -28,7 +29,7 @@ import { errMessage } from '~/composables/useApi'
 import { renameEverywhere } from '~/composables/reportExpressions'
 import { countFor, rowCountOf, sourceKey, type CountedRows } from '~/composables/reportRowCount'
 import {
-  FILTER_OPS, NAME_RE, fieldKind, samePath, valueAt, type DCalculated, type DDataset, type DField, type DFilter, type DSource,
+  FILTER_OPS, NAME_RE, fieldKind, filterParam, opForParam, paramWritten, samePath, valueAt, type DCalculated, type DDataset, type DField, type DFilter, type DSource,
 } from '~/composables/reportDesignModel'
 
 const SqlEditor = defineAsyncComponent(() => import('~/components/sql/SqlEditor.vue'))
@@ -56,6 +57,8 @@ interface Draft {
   fields: DField[]
 }
 const draft = ref<Draft | null>(null)
+/** the operators changed on their own, said beside the filter */
+const opNotes = ref(new Map<DFilter, string>())
 let opened = ''
 /** An Esc or a click beside the dialog: what was written here is not lost without asking. */
 function closing() {
@@ -78,10 +81,16 @@ function fromDataset(d: DDataset | null): Draft {
     datasource_id: s?.kind === 'datasource' ? s.datasource_id : null,
     view_id: s?.kind === 'view' ? s.view_id : null,
     script_id: s?.kind === 'sql_script' ? s.script_id : null,
-    filters: JSON.parse(JSON.stringify((s && 'filters' in s && s.filters) || [])),
+    filters: (JSON.parse(JSON.stringify((s && 'filters' in s && s.filters) || [])) as DFilter[]).map(meant),
     calculated: JSON.parse(JSON.stringify(d?.calculated ?? [])),
     fields: JSON.parse(JSON.stringify(d?.fields ?? [])),
   }
+}
+/** A filter saved with a parameter written as an expression, which the server takes for
+ *  the text it is: what it meant. */
+function meant(f: DFilter): DFilter {
+  const written = typeof f.value === 'string' ? paramWritten(f.value, store.doc.value.parameters.map((p) => p.name)) : null
+  return written?.exists ? { ...f, value: `{${written.name}}` } : f
 }
 function freeName(): string {
   const taken = new Set(store.doc.value.datasets.map((d) => d.name))
@@ -98,6 +107,7 @@ watch(() => props.open, (o) => {
   fieldsFor.value = d ? JSON.stringify(d.source) : ''
   counted.value = d ? store.rowCounts.value[d.name] ?? null : null
   refreshError.value = ''
+  opNotes.value = new Map()
   loadLists()
 }, { immediate: true })
 
@@ -188,13 +198,62 @@ const opOptions = FILTER_OPS.map((o) => ({ value: o, label: o }))
 function filterText(f: DFilter): string {
   return Array.isArray(f.value) ? f.value.join(', ') : f.value == null ? '' : String(f.value)
 }
+const paramNames = computed(() => store.doc.value.parameters.map((p) => p.name))
+/** Where a filter's value comes from: a value written here, or a parameter by its true name. */
+const valueFromOptions = computed(() => [
+  { value: null, label: t('reportDesigner.dataset.valueWritten') },
+  ...store.doc.value.parameters.map((p) => ({ value: p.name, label: p.label || p.name, hint: p.name })),
+])
+/** the parameter of the report a filter reads, if it reads one that exists */
+function chosenParam(f: DFilter): string | null {
+  const name = filterParam(f.value)
+  return name && paramNames.value.includes(name) ? name : null
+}
+function useParam(f: DFilter, name: string) {
+  f.value = `{${name}}`
+  const multi = !!store.doc.value.parameters.find((p) => p.name === name)?.multi
+  const op = opForParam(multi, f.op)
+  if (op !== f.op) {
+    f.op = op
+    opNotes.value.set(f, t(multi ? 'reportDesigner.dataset.opSetIn' : 'reportDesigner.dataset.opSetEq', { name }))
+  } else {
+    opNotes.value.delete(f)
+  }
+}
+function chooseValueFrom(f: DFilter, name: string | null) {
+  if (name) { useParam(f, name); return }
+  opNotes.value.delete(f)
+  f.value = f.op === 'in' ? [] : ''
+}
+function chooseOp(f: DFilter, op: string) {
+  f.op = op
+  opNotes.value.delete(f)
+}
 function setFilterValue(f: DFilter, text: string) {
   const v = text.trim()
+  const written = paramWritten(v, paramNames.value)
+  if (written?.exists) { useParam(f, written.name); return }
+  if (written) { f.value = v; return } // kept as it is, and said (filterError)
   const numeric = fieldKind(filterColumns.value.find((c) => c.value === f.column)?.hint) === 'number'
   const one = (s: string) => (numeric && /^-?\d+(\.\d+)?$/.test(s) ? Number(s) : s)
-  if (/^\{[A-Za-z_]\w*\}$/.test(v)) f.value = v
+  if (filterParam(v) || /^\{.*\}$/.test(v)) f.value = v
   else if (f.op === 'in') f.value = v.split(',').map((s) => s.trim()).filter(Boolean).map(one)
   else f.value = one(v)
+}
+/** What is wrong with a filter, in the words of what to do: said at its place, before a save does. */
+function filterError(f: DFilter): string {
+  if (typeof f.value !== 'string') return ''
+  const written = paramWritten(f.value, paramNames.value)
+  if (written && !written.exists) {
+    return written.near
+      ? t('reportDesigner.dataset.noParamNear', { name: written.name, near: written.near })
+      : t('reportDesigner.dataset.noParam', { name: written.name })
+  }
+  const name = chosenParam(f)
+  if (!name) return ''
+  const multi = !!store.doc.value.parameters.find((p) => p.name === name)?.multi
+  if (multi && f.op !== 'in') return t('reportDesigner.dataset.paramNeedsIn', { name })
+  return !multi && f.op === 'in' ? t('reportDesigner.dataset.paramNeedsOne', { name }) : ''
 }
 
 // ── checks ──
@@ -212,7 +271,7 @@ const sourceError = computed(() => {
   if (d.kind === 'datasource' && d.datasource_id == null) return t('reportDesigner.dataset.needDatasource')
   if (d.kind === 'view' && d.view_id == null) return t('reportDesigner.dataset.needView')
   if (d.kind === 'sql_script' && d.script_id == null) return t('reportDesigner.dataset.needScript')
-  return ''
+  return (d.kind === 'datasource' || d.kind === 'view') && d.filters.some((f) => f.column && filterError(f)) ? t('reportDesigner.dataset.fixFilter') : ''
 })
 const serverProblems = computed(() => (original.value ? store.problems.value.filter((p) => p.dataset === original.value) : []))
 
@@ -355,12 +414,17 @@ const rowCount = computed(() => countFor(counted.value, built()?.source))
             <button type="button" class="mini" @click="draft.filters.push({ column: '', op: '=', value: '' })"><Plus :size="12" /> {{ $t('reportDesigner.dataset.addFilter') }}</button>
           </div>
           <p class="rp-help">{{ $t('reportDesigner.dataset.filtersHelp') }}</p>
-          <div v-for="(f, i) in draft.filters" :key="i" class="rdd-filter">
-            <Select :model-value="f.column || null" :options="filterColumns" searchable :placeholder="$t('reportDesigner.dataset.column')" :aria-label="$t('reportDesigner.dataset.column')" @update:model-value="f.column = $event" />
-            <Select class="rdd-op" :model-value="f.op" :options="opOptions" :aria-label="$t('reportDesigner.dataset.operator')" @update:model-value="f.op = $event" />
-            <input type="text" class="rdd-mono" :value="filterText(f)" :placeholder="f.op === 'in' ? 'a, b, c' : '{region}'" :aria-label="$t('reportDesigner.dataset.value')" @change="setFilterValue(f, ($event.target as HTMLInputElement).value)" />
-            <button type="button" class="rp-icon danger" :aria-label="$t('reportDesigner.props.remove')" :title="$t('reportDesigner.props.remove')" @click="draft.filters.splice(i, 1)"><Trash2 :size="13" /></button>
-          </div>
+          <template v-for="(f, i) in draft.filters" :key="i">
+            <div class="rdd-filter" :class="{ whole: !params.length || !!chosenParam(f) }">
+              <Select :model-value="f.column || null" :options="filterColumns" searchable :placeholder="$t('reportDesigner.dataset.column')" :aria-label="$t('reportDesigner.dataset.column')" @update:model-value="f.column = $event" />
+              <Select class="rdd-op" :model-value="f.op" :options="opOptions" :aria-label="$t('reportDesigner.dataset.operator')" @update:model-value="chooseOp(f, $event)" />
+              <Select v-if="params.length" :model-value="chosenParam(f)" :options="valueFromOptions" :aria-label="$t('reportDesigner.dataset.valueFrom')" @update:model-value="chooseValueFrom(f, $event)" />
+              <input v-if="!chosenParam(f)" type="text" class="rdd-mono" :value="filterText(f)" :placeholder="f.op === 'in' ? 'a, b, c' : $t('reportDesigner.dataset.valuePlaceholder')" :aria-label="$t('reportDesigner.dataset.value')" :aria-invalid="!!filterError(f)" @change="setFilterValue(f, ($event.target as HTMLInputElement).value)" />
+              <button type="button" class="rp-icon danger" :aria-label="$t('reportDesigner.props.remove')" :title="$t('reportDesigner.props.remove')" @click="draft.filters.splice(i, 1)"><Trash2 :size="13" /></button>
+            </div>
+            <p v-if="filterError(f)" class="rp-err rdd-fnote" role="alert">{{ filterError(f) }}</p>
+            <p v-else-if="opNotes.get(f)" class="rp-help rdd-fnote" role="status">{{ opNotes.get(f) }}</p>
+          </template>
         </div>
       </template>
 
@@ -421,7 +485,9 @@ const rowCount = computed(() => countFor(counted.value, built()?.source))
 .rdd-params { display: flex; flex-direction: column; gap: 6px; }
 .rdd-chips { display: flex; flex-wrap: wrap; gap: 6px; }
 .rdd-chip { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 11.5px; color: var(--warning); }
-.rdd-filter { display: grid; grid-template-columns: minmax(0, 1.2fr) 90px minmax(0, 1fr) auto; gap: 6px; align-items: center; }
+.rdd-filter { display: grid; grid-template-columns: minmax(0, 1.1fr) 90px minmax(0, 1fr) minmax(0, 1fr) auto; gap: 6px; align-items: center; }
+.rdd-filter.whole { grid-template-columns: minmax(0, 1.1fr) 90px minmax(0, 2fr) auto; }
+.rdd-fnote { margin-top: -2px; }
 .rdd-filter :deep(.sel-trigger) { padding: 5px 8px; }
 .rdd-filter input { padding: 5px 8px; }
 .rdd-calc { display: grid; grid-template-columns: 150px minmax(0, 1fr) auto; gap: 6px; align-items: start; }
