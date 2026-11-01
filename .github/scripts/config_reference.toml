@@ -468,7 +468,7 @@ production = "set it, and `AI__MAX_COST_PER_DAY_TOTAL_USD`, wherever people you 
 text = "Daily ceiling of the whole installation, in dollars: where many people share one account (a public demo) the per-user ceiling protects nothing. Once reached, the assistant is unavailable until the next day. 0 = none."
 
 [var.AI__MAX_INPUT_TOKENS_PER_TURN]
-text = "Input tokens one turn may send to the model."
+text = "Input tokens one turn may send to the model, without those read from the provider's cache: the spending ceilings stand for those."
 
 [var.AI__DBT_EXPORT_TIMEOUT_SECONDS]
 text = "Seconds for all the AI calls of one dbt export (descriptions and translations). Keep it, plus `ENGINE__DBT_EXPORT_TIMEOUT_SECONDS`, under the ingress' read timeout (300 s in the chart)."

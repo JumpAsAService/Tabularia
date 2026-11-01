@@ -770,6 +770,32 @@ def test_the_turn_cap_stops_a_turn_at_a_known_price(anna, claude, fake, monkeypa
     assert Decimal(session.exec(select(AiSpend)).one().cost_usd) == Decimal("0.06")
 
 
+def test_what_is_read_from_the_cache_does_not_count_against_the_input_cap(anna, claude, fake, monkeypatch, session):
+    """A flow built in ten rounds reads its context ten times, at a tenth of the price: stopped at
+    400,000 of them, it had spent $0.15 of a cap of $0.50, and every retry spent as much again."""
+    settings = config_mod.Settings(ai={"max_input_tokens_per_turn": 1000})
+    monkeypatch.setattr(ai_routes, "get_settings", lambda: settings)
+    monkeypatch.setattr(ai_agent, "get_settings", lambda: settings)
+    fake.script = [tools(("toolu_a", "list_datasources", {}), usage={"input_tokens": 100, "output_tokens": 10, "cache_read_input_tokens": 5000}),
+                   text("done", usage={"input_tokens": 100, "output_tokens": 10, "cache_read_input_tokens": 5000})]
+    answer = done(ask(anna, claude))
+    assert answer["usage"]["requests"] == 2 and answer["usage"]["input_tokens"] == 10_200
+
+
+@pytest.mark.parametrize("usage", [
+    {"input_tokens": 1500, "output_tokens": 10},
+    {"input_tokens": 100, "output_tokens": 10, "cache_creation_input_tokens": 1500},  # written: paid more than fresh
+], ids=["fresh", "written to the cache"])
+def test_what_is_not_read_from_the_cache_still_meets_the_input_cap(anna, claude, fake, monkeypatch, session, usage):
+    settings = config_mod.Settings(ai={"max_input_tokens_per_turn": 1000})
+    monkeypatch.setattr(ai_routes, "get_settings", lambda: settings)
+    monkeypatch.setattr(ai_agent, "get_settings", lambda: settings)
+    fake.script = [tools(("toolu_a", "list_datasources", {}), usage=usage)]
+    assert error(ask(anna, claude))["code"] == "too_many_steps"
+    assert len(model_requests(fake)) == 1  # not the next request
+    assert session.exec(select(AiSpend)).one().input_tokens >= 1500
+
+
 def test_a_model_with_no_known_price_still_meets_the_turn_cap(admin, anna, fake, monkeypatch, session):
     """Before: `cost_limit` read no price, so it did not protect at all, in silence."""
     fake.models.append("claude-unpriced-model")

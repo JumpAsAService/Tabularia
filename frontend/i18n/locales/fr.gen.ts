@@ -3503,7 +3503,7 @@ export default {
       },
       "ai_max_input_tokens_per_turn": {
         "label": "Jetons lus au maximum par réponse",
-        "help": "La limite de ce que le modèle lit pour répondre à un message, tous ses tours compris."
+        "help": "La limite de ce que le modèle lit pour répondre à un message, tous ses tours compris, sans ce qu'il lit dans le cache du fournisseur : pour cela vaut le plafond de dépense."
       },
       "ai_max_chats_listed": {
         "label": "Conversations listées par utilisateur",

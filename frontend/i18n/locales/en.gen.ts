@@ -3529,7 +3529,7 @@ export default {
       },
       "ai_max_input_tokens_per_turn": {
         "label": "Most tokens read per answer",
-        "help": "The limit on what the model reads to answer one message, all its rounds together."
+        "help": "The limit on what the model reads to answer one message, all its rounds together, without what it reads from the provider's cache: the spending ceiling stands for that."
       },
       "ai_max_chats_listed": {
         "label": "Conversations listed per user",

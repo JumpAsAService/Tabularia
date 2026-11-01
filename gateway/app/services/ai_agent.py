@@ -145,6 +145,9 @@ class TurnGuard(AbstractCapability[Any]):
       for a finished answer, and a tool call cut by it would be run.
     - The cap on a turn's cost. `UsageLimits.cost_limit` would not do: it reads the library's
       price, which has none for many models, so the cap would stop protecting in silence.
+    - The cap on a turn's input tokens, without those read from the provider's cache. A turn of ten
+      rounds reads its context ten times, at a tenth of the price: `UsageLimits.input_tokens_limit`
+      counts them all, and stopped such a turn far under the cost cap, with a retry paying again.
 
     `model_id`: for an agent without `ChatDeps` (the dbt export's)."""
 
@@ -154,10 +157,14 @@ class TurnGuard(AbstractCapability[Any]):
         if isinstance(node, CallToolsNode):
             if node.model_response.finish_reason == "content_filter":
                 raise ModelRefused
-            cap = get_settings().ai.max_cost_per_turn_usd
+            ai = get_settings().ai
+            cap = ai.max_cost_per_turn_usd
             model_id = self.model_id or ctx.deps.model_id
             if cap and ai_pricing.cost_for_caps(ctx.usage, model_id) > Decimal(str(cap)):
                 raise UsageLimitExceeded(f"The turn went over the cost cap of {cap} $")
+            fresh = ctx.usage.input_tokens - ctx.usage.cache_read_tokens
+            if fresh > ai.max_input_tokens_per_turn:
+                raise UsageLimitExceeded(f"The turn went over the cap of {ai.max_input_tokens_per_turn} input tokens not read from the cache: {fresh}")
         return node
 
 

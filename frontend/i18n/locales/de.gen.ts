@@ -3503,7 +3503,7 @@ export default {
       },
       "ai_max_input_tokens_per_turn": {
         "label": "Höchstzahl gelesener Token pro Antwort",
-        "help": "Die Grenze dessen, was das Modell liest, um eine Nachricht zu beantworten, alle Runden zusammen."
+        "help": "Die Grenze dessen, was das Modell liest, um eine Nachricht zu beantworten, alle Runden zusammen, ohne das, was es aus dem Cache des Anbieters liest: Dafür gilt die Ausgabengrenze."
       },
       "ai_max_chats_listed": {
         "label": "Aufgelistete Unterhaltungen pro Benutzer",

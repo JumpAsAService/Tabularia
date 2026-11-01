@@ -525,12 +525,9 @@ async def _turn_stream(
     try:
         async with agent.run_stream_events(
             message, message_history=history, deps=deps, model=model, usage=spent,
-            usage_limits=UsageLimits(
-                request_limit=request_limit or cfg.max_requests,
-                # the rounds do not cap the tokens: without this and the cost cap (ai_agent.TurnGuard),
-                # an inflated history spends as much as it likes (audit A8)
-                input_tokens_limit=cfg.max_input_tokens_per_turn,
-            ),
+            # the rounds do not cap the tokens: ai_agent.TurnGuard does, and the cost, or an inflated
+            # history would spend as much as it likes (audit A8)
+            usage_limits=UsageLimits(request_limit=request_limit or cfg.max_requests),
         ) as events:
             async for ev in events:
                 if isinstance(ev, PartStartEvent) and isinstance(ev.part, TextPart):

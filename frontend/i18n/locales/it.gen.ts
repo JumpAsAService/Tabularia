@@ -3529,7 +3529,7 @@ export default {
       },
       "ai_max_input_tokens_per_turn": {
         "label": "Token letti al massimo per risposta",
-        "help": "Il tetto a quello che il modello legge per rispondere a un messaggio, tutti i suoi giri insieme."
+        "help": "Il tetto a quello che il modello legge per rispondere a un messaggio, tutti i suoi giri insieme, senza ciò che legge dalla cache del provider: per quello vale il tetto di spesa."
       },
       "ai_max_chats_listed": {
         "label": "Conversazioni in elenco per utente",
