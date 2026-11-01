@@ -271,7 +271,7 @@
 #set par(leading: 0.45em, spacing: 0.6em)
 #set page(
   width: P.w * 1mm,
-  height: P.h * 1mm,
+  height: if P.h == none { auto } else { P.h * 1mm },  // none: one long page (a dashboard's image)
   margin: (top: (mt + hh) * 1mm, bottom: (mb + fh) * 1mm, left: ml * 1mm, right: mr * 1mm),
   header-ascent: 0mm,
   footer-descent: 0mm,

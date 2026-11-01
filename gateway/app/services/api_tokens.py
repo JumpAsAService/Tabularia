@@ -93,7 +93,7 @@ NO_REGISTRY_FROM_TOKEN = {
 # the POSTs that only read: a read-only token may use them (an export, a preview, a report's
 # render or a dashboard's numbers compute and return data, they change nothing)
 READING_POSTS = {"/tasks/export", "/tasks/exports", "/tasks/preview", "/reports/{report_id}/render",
-                 "/dashboards/{dashboard_id}/data"}
+                 "/dashboards/{dashboard_id}/data", "/dashboards/{dashboard_id}/render"}
 
 
 def message(table: dict[str, str], request: Optional[Request]) -> str:

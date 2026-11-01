@@ -25,6 +25,14 @@ export interface PushmailReport {
   inBody: boolean
 }
 export const PUSHMAIL_MAX_REPORTS = 5
+/** A dashboard of the cell: a PDF or an image, rendered when the email leaves (docs/specs/dashboards.md,
+ *  «Going out»). Its values as a report's. */
+export interface PushmailDashboard {
+  dashboardId: number | null
+  format: 'pdf' | 'png'
+  params: PushmailReportParams
+  fileName: string
+}
 export interface PushmailConfig {
   label: string
   connectionId: number | null
@@ -37,6 +45,8 @@ export interface PushmailConfig {
   attachments: PushmailAttachment[]
   /** absent in a cell saved before reports could be sent */
   reports?: PushmailReport[]
+  /** absent in a cell saved before dashboards could be sent */
+  dashboards?: PushmailDashboard[]
 }
 
 /** What a Pushmail cell previews (POST /placeholders/preview): its subject and its files'
@@ -48,6 +58,7 @@ export function pushmailPreviewRequest(config: PushmailConfig, groupName: string
   const targets: Record<string, 'text' | 'file'> = { subject: 'text' }
   config.attachments.forEach((a, i) => { templates[`file_${i}`] = (a.fileName ?? '').trim(); targets[`file_${i}`] = 'file' })
   ;(config.reports ?? []).forEach((r, i) => { templates[`report_${i}`] = (r.fileName ?? '').trim(); targets[`report_${i}`] = 'file' })
+  ;(config.dashboards ?? []).forEach((d, i) => { templates[`dashboard_${i}`] = (d.fileName ?? '').trim(); targets[`dashboard_${i}`] = 'file' })
   return { kind: 'output', templates, targets, timezone: config.timezone ?? '', flow: groupName, pushmail: true }
 }
 

@@ -1,6 +1,6 @@
 <script setup lang="ts">
 // A dashboard on screen (docs/specs/dashboards.md, «On the screen»): its parameters, its grid of
-// tiles, the time of the numbers, Refresh, Full screen. It reads the data with the rights of
+// tiles, the time of the numbers, Refresh, Full screen, Download. It reads the data with the rights of
 // whoever opens it, and a tile they may not read says so inside that tile.
 //
 // - The parameters' values live in the address (`?id=4&region=North`), as a report's: only those
@@ -14,13 +14,15 @@
 // - One request reads every tile; a page, a sort or a closed group asks only that tile, and
 //   is not in the address. Only the latest request that asked for a tile counts for it
 //   (composables/dashboardTiles.ts): a slow network never puts old numbers over new ones.
+// - Download writes the PDF or the image of what is on screen: its parameters, its clicks, its sorts
+//   and closed groups. The numbers are the same; the look is a report's, as it is a document.
 // - The automatic refresh waits for the interval and a little more, stops with the tab hidden and
 //   survives a failure: the last numbers stay, with the time they are from, and the page says so.
 //
 // /dashboard?id=N
 import { computed, nextTick, onBeforeUnmount, onMounted, ref, shallowRef, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
-import { Clock, FolderTree, LayoutDashboard, LoaderCircle, Maximize, Minimize, PencilRuler, RefreshCw, TriangleAlert } from 'lucide-vue-next'
+import { Clock, Download, FolderTree, Image as ImageIcon, LayoutDashboard, LoaderCircle, Maximize, Minimize, PencilRuler, RefreshCw, TriangleAlert, X } from 'lucide-vue-next'
 import { errMessage } from '~/composables/useApi'
 import { useChartTheme } from '~/composables/useChartTheme'
 import { dashboardCtx } from '~/composables/dashboardCharts'
@@ -31,7 +33,7 @@ import { useFolderPaths } from '~/composables/useFolderPaths'
 import { useFormat } from '~/composables/useFormat'
 import { dashboardQuery, formOfQuery, useDashboards, valuesInQuery, type DashboardDetail, type TileNumbers } from '~/composables/useDashboards'
 import {
-  isPlainState, paramsOfForm, stateAfter, whatListsHold, withChoices,
+  isPlainState, paramsOfForm, stateAfter, useReports, whatListsHold, withChoices,
   type ReportFormValue, type ReportHotspot, type ReportParameter, type ReportState,
 } from '~/composables/useReports'
 import {
@@ -46,6 +48,7 @@ const { t } = useI18n()
 const route = useRoute()
 const router = useRouter()
 const api = useDashboards()
+const reportsApi = useReports()
 const fmtx = useFormat()
 const folderPaths = useFolderPaths()
 const { ui } = useChartTheme()
@@ -364,6 +367,30 @@ async function askAll(how: { changed: boolean; refresh?: boolean }) {
 
 // Refresh, by hand: the server reads again at most every 10 seconds per dashboard, for everyone;
 // past that the answer is what is kept, without an error
+// ── the file ─────────────────────────────────────────────────────────────────
+// what is on screen, as a document: one at a time, so a second click starts nothing
+const downloading = ref<'' | 'pdf' | 'png'>('')
+const downloadError = ref('')
+const canDownload = computed(() => !downloading.value && !!tiles.value.length && !waiting.value && !problem.value)
+async function download(format: 'pdf' | 'png') {
+  if (dashboardId.value == null || !canDownload.value) return
+  downloading.value = format
+  downloadError.value = ''
+  announce.value = t('dashboard.downloadPreparing')
+  try {
+    const { task_id } = await api.render(dashboardId.value, {
+      format, params: toParams(chosen.value), clicks: clickSends(clicks.value), state: isPlainState(viewState.value) ? null : viewState.value,
+    })
+    const outcome = await reportsApi.followRender(task_id)
+    outcome.download()
+    announce.value = t('dashboard.downloadReady')
+  } catch (e) {
+    downloadError.value = t(format === 'pdf' ? 'dashboard.downloadPdfFailed' : 'dashboard.downloadImageFailed', { error: errMessage(e) })
+  } finally {
+    downloading.value = ''
+  }
+}
+
 async function refreshNow() {
   if (asking.value || waiting.value) return
   if (await askAll({ changed: false, refresh: true })) announce.value = t('dashboard.updated')
@@ -534,7 +561,14 @@ onBeforeUnmount(() => {
                 <PencilRuler :size="14" aria-hidden="true" />
                 <span class="lbl">{{ $t('dashboard.edit') }}</span>
               </button>
-              <!-- Download joins here with the PDF and the image -->
+              <button type="button" :disabled="!canDownload" :aria-busy="downloading === 'pdf'" :title="$t('dashboard.downloadPdfTitle')" :aria-label="$t('dashboard.downloadPdfTitle')" @click="download('pdf')">
+                <LoaderCircle v-if="downloading === 'pdf'" :size="14" class="spin" aria-hidden="true" /><Download v-else :size="14" aria-hidden="true" />
+                <span class="lbl">PDF</span>
+              </button>
+              <button type="button" :disabled="!canDownload" :aria-busy="downloading === 'png'" :title="$t('dashboard.downloadImageTitle')" :aria-label="$t('dashboard.downloadImageTitle')" @click="download('png')">
+                <LoaderCircle v-if="downloading === 'png'" :size="14" class="spin" aria-hidden="true" /><ImageIcon v-else :size="14" aria-hidden="true" />
+                <span class="lbl">{{ $t('dashboard.downloadImage') }}</span>
+              </button>
             </template>
             <button v-else ref="exitBtn" type="button" class="mini leave" :title="$t('dashboard.leaveFullScreen')" :aria-label="$t('dashboard.leaveFullScreen')" @click="leaveWall">
               <Minimize :size="14" aria-hidden="true" />
@@ -544,6 +578,15 @@ onBeforeUnmount(() => {
         <span class="sr-only" role="status" aria-live="polite">{{ announce }}</span>
         <p v-if="detail.description && !wall" class="description">{{ detail.description }}</p>
 
+        <p v-if="downloading && !wall" class="notice waiting" role="status">
+          <LoaderCircle :size="14" class="spin" aria-hidden="true" />
+          <span>{{ $t('dashboard.downloadPreparing') }}</span>
+        </p>
+        <p v-if="downloadError && !wall" class="notice" role="alert">
+          <TriangleAlert :size="14" aria-hidden="true" />
+          <span>{{ downloadError }}</span>
+          <button type="button" class="mini" :title="$t('dashboard.dismiss')" :aria-label="$t('dashboard.dismiss')" @click="downloadError = ''"><X :size="13" aria-hidden="true" /></button>
+        </p>
         <p v-if="refreshFailedAt" class="notice" role="status">
           <TriangleAlert :size="14" aria-hidden="true" />
           <span>{{ oldest ? $t('dashboard.refreshFailed', { at: timeOf(refreshFailedAt), time: timeOf(oldest) }) : $t('dashboard.refreshFailedNoNumbers', { at: timeOf(refreshFailedAt) }) }}</span>
@@ -631,6 +674,8 @@ onBeforeUnmount(() => {
 .notice svg { flex-shrink: 0; color: var(--warning); }
 .notice span { flex: 1; min-width: 0; }
 .notice .mini { flex-shrink: 0; }
+.notice.waiting { border-color: var(--border); }
+.notice.waiting svg { color: var(--muted); }
 .empty {
   margin-top: 8px; padding: 56px 24px; display: flex; flex-direction: column; align-items: center; gap: 8px; text-align: center;
   color: var(--muted); border: 1px dashed var(--border); border-radius: var(--radius, 8px);

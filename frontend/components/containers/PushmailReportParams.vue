@@ -12,11 +12,14 @@ import { LoaderCircle, TriangleAlert } from 'lucide-vue-next'
 import Select from '~/components/ui/Select.vue'
 import ReportMultiSelect from '~/components/report/ReportMultiSelect.vue'
 import { errMessage } from '~/composables/useApi'
+import { useDashboards } from '~/composables/useDashboards'
 import { useReports, type ReportParameter } from '~/composables/useReports'
 import type { PushmailReportParams } from '~/composables/useFlowGroups'
 
 const props = defineProps<{
-  reportId: number
+  reportId?: number
+  /** a dashboard's values, with its form: the same rules as a report's */
+  dashboardId?: number
   modelValue: PushmailReportParams
   /** unique on the page: the fields' ids */
   idPrefix: string
@@ -27,6 +30,9 @@ const emit = defineEmits<{ (e: 'update:modelValue', v: PushmailReportParams): vo
 
 const { t } = useI18n()
 const api = useReports()
+const dashboardsApi = useDashboards()
+// the words of the messages: what the values are of
+const wordOf = (key: string) => (props.dashboardId != null ? `pushmail.${key}Dashboard` : `pushmail.${key}`)
 const params = ref<ReportParameter[]>([])
 const loading = ref(false)
 const error = ref('')
@@ -41,7 +47,7 @@ async function load() {
   try {
     // the defaults and the choices as the report's form shows them, without the cell's
     // values: one the report no longer takes would make the gateway refuse the list
-    const got = await api.parameters(props.reportId)
+    const got = props.dashboardId != null ? await dashboardsApi.parameters(props.dashboardId) : await api.parameters(props.reportId!)
     if (mine !== asked) return
     params.value = got
     const known = new Set(got.map((p) => p.name))
@@ -58,7 +64,7 @@ async function load() {
     if (mine === asked) loading.value = false
   }
 }
-watch(() => props.reportId, load, { immediate: true })
+watch(() => [props.reportId, props.dashboardId], load, { immediate: true })
 
 const fieldId = (p: ReportParameter) => `${props.idPrefix}-p-${p.name}`
 function set(name: string, v: string | string[]) {
@@ -124,7 +130,7 @@ const DATE_EXAMPLE = '{start_of_month-1m}'
   <div class="rpp">
     <p v-if="loading && !params.length" class="muted line"><LoaderCircle :size="12" class="spin" /> {{ t('pushmail.paramsLoading') }}</p>
     <p v-else-if="error" class="line warn" role="alert"><TriangleAlert :size="12" /> {{ t('pushmail.paramsError', { error }) }}</p>
-    <p v-else-if="!params.length" class="muted line">{{ t('pushmail.paramsNone') }}</p>
+    <p v-else-if="!params.length" class="muted line">{{ t(wordOf('paramsNone')) }}</p>
     <div v-else class="rpp-fields">
       <div v-for="p in params" :key="p.name" class="pf" :class="{ invalid: missing(p) }">
         <label class="pl" :for="fieldId(p)">
@@ -175,10 +181,10 @@ const DATE_EXAMPLE = '{start_of_month-1m}'
       </div>
     </div>
     <p v-if="dropped.length && !readOnly" class="line warn" role="status">
-      <TriangleAlert :size="12" /> {{ t('pushmail.paramsDropped', { names: dropped.join(', ') }, dropped.length) }}
+      <TriangleAlert :size="12" /> {{ t(wordOf('paramsDropped'), { names: dropped.join(', ') }, dropped.length) }}
     </p>
     <p v-if="params.length" class="muted line hint">
-      {{ anyDate ? `${t('pushmail.paramsHint')} ${t('pushmail.paramsDateHint', { example: DATE_EXAMPLE })}` : t('pushmail.paramsHint') }}
+      {{ anyDate ? `${t(wordOf('paramsHint'))} ${t('pushmail.paramsDateHint', { example: DATE_EXAMPLE })}` : t(wordOf('paramsHint')) }}
     </p>
   </div>
 </template>

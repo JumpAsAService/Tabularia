@@ -35,6 +35,7 @@ MEDIA = {
     "pdf": "application/pdf",
     "html": "multipart/related",
     "svg": "application/json",
+    "png": "image/png",  # a dashboard's image
 }
 _client: redis.Redis | None = None
 

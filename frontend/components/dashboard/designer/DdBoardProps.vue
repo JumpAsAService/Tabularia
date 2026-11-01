@@ -1,6 +1,6 @@
 <script setup lang="ts">
 // With no tile selected, the right panel is the dashboard's own: the language of its numbers, its
-// time zone, how it refreshes, and a reminder of the keys.
+// time zone, how it refreshes, the page of its PDF and its image, and a reminder of the keys.
 import { computed } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { LayoutDashboard } from 'lucide-vue-next'
@@ -35,6 +35,19 @@ const mode = computed(() => (doc.value.refresh_seconds ? 'every' : 'hand'))
 function setMode(m: string) {
   doc.value.refresh_seconds = m === 'every' ? 300 : 0
 }
+// A4 across, unless another is chosen: what goes in the definition only when it is
+const PAGE_SIZES = ['A4', 'A3', 'A5', 'Letter', 'Legal'].map((value) => ({ value, label: value }))
+const orientations = computed(() => [
+  { value: 'landscape', label: t('dashboardDesigner.pageLandscape') },
+  { value: 'portrait', label: t('dashboardDesigner.pagePortrait') },
+])
+const pageSize = computed(() => (typeof doc.value.printed?.size === 'string' ? doc.value.printed.size : 'A4'))
+const pageOrientation = computed(() => doc.value.printed?.orientation ?? 'landscape')
+function setPage(patch: { size?: string; orientation?: 'portrait' | 'landscape' }) {
+  const next = { ...doc.value.printed, size: pageSize.value, orientation: pageOrientation.value, ...patch }
+  if (next.size === 'A4' && next.orientation === 'landscape' && !next.margins) delete doc.value.printed
+  else doc.value.printed = next
+}
 const refreshProblem = computed(() => store.problemAt(null, 'refresh_seconds') ?? store.liveAt(null, 'refresh_seconds'))
 </script>
 
@@ -62,6 +75,15 @@ const refreshProblem = computed(() => store.problemAt(null, 'refresh_seconds') ?
     </label>
     <p class="rp-help">{{ mode === 'every' ? $t('dashboardDesigner.refreshEveryHelp', { least: REFRESH_LEAST, most: REFRESH_MOST }) : $t('dashboardDesigner.refreshHandHelp') }}</p>
     <p v-if="refreshProblem" class="rp-err" role="alert">{{ refreshProblem.message }}</p>
+    <label class="rp-f">
+      <span>{{ $t('dashboardDesigner.pageSize') }}</span>
+      <Select :model-value="pageSize" :options="PAGE_SIZES" :aria-label="$t('dashboardDesigner.pageSize')" data-field="page-size" @update:model-value="setPage({ size: $event })" />
+    </label>
+    <div class="rp-f">
+      <span>{{ $t('dashboardDesigner.pageOrientation') }}</span>
+      <RdSeg :model-value="pageOrientation" :options="orientations" :label="$t('dashboardDesigner.pageOrientation')" @update:model-value="setPage({ orientation: $event })" />
+    </div>
+    <p class="rp-help">{{ $t('dashboardDesigner.pageHelp') }}</p>
 
     <p class="rp-help ddb-hint">{{ $t('dashboardDesigner.nothingSelected') }}</p>
     <dl class="ddb-keys">

@@ -172,6 +172,8 @@ class FakeEngine:
         # without that route (404), as before the engine had reports
         self.report_renders: list[dict] = []
         self.report_render_response: tuple[int, dict] | None = None  # an error to serve
+        self.dashboard_renders: list[dict] = []  # a dashboard as a document (POST /reports/dashboard-render)
+        self.dashboard_render_response: tuple[int, dict] | None = None
         self.report_checks: list[dict] = []
         self.report_check_response: tuple[int, dict] | None = None
         self.report_choices: list[dict] = []
@@ -323,6 +325,12 @@ class FakeEngine:
             if self.report_render_response is not None:
                 return httpx.Response(self.report_render_response[0], json=self.report_render_response[1])
             return httpx.Response(200, json={"task_id": f"t-report-{len(self.report_renders)}"})
+        if path == "/reports/dashboard-render" and request.method == "POST":
+            body = _json_body(request)
+            self.dashboard_renders.append(body)
+            if self.dashboard_render_response is not None:
+                return httpx.Response(self.dashboard_render_response[0], json=self.dashboard_render_response[1])
+            return httpx.Response(200, json={"task_id": f"t-dashboard-{len(self.dashboard_renders)}", "filename": body.get("filename")})
         if path == "/reports/check" and request.method == "POST" and self.report_check_response is not None:
             self.report_checks.append(_json_body(request))
             return httpx.Response(self.report_check_response[0], json=self.report_check_response[1])

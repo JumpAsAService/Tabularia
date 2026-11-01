@@ -1,7 +1,7 @@
 <script setup lang="ts">
 // The settings of a Pushmail cell of a flow group: one email through an SMTP
-// connection, with one .xlsx per datasource and one PDF or Excel file per report
-// (gateway: services/pushmail.py `pushmail_errors`, engine: app/ingest/pushmail.py;
+// connection, with one .xlsx per datasource, one PDF or Excel file per report and one PDF or
+// image per dashboard (gateway: services/pushmail.py `pushmail_errors`, engine: app/ingest/pushmail.py;
 // docs/specs/reports.md, «Sending»). A report takes its parameters' values here, and
 // one report may put its summary in the email's body. The subject and the file names
 // take the Outputs' date placeholders, previewed as they are typed. More than one
@@ -9,9 +9,10 @@
 // takes is known by the administrators.
 import { computed, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
-import { Plus, X, Trash2, TriangleAlert, Mail, FileText } from 'lucide-vue-next'
+import { Plus, X, Trash2, TriangleAlert, Mail, FileText, LayoutDashboard } from 'lucide-vue-next'
 import type { ConnectionInfo } from '~/composables/useConnections'
 import type { DatasourceInfo } from '~/composables/useDatasources'
+import type { Dashboard } from '~/composables/useDashboards'
 import type { Report } from '~/composables/useReports'
 import { usePlaceholderPreview, type PreviewRequest } from '~/composables/usePlaceholders'
 import { useFolderPaths } from '~/composables/useFolderPaths'
@@ -19,7 +20,7 @@ import TemplatePreview from '~/components/ui/TemplatePreview.vue'
 import RdSeg from '~/components/report/designer/RdSeg.vue'
 import PushmailReportParams from '~/components/containers/PushmailReportParams.vue'
 import {
-  PUSHMAIL_MAX_REPORTS, pushmailPreviewRequest, type PushmailAttachment, type PushmailConfig, type PushmailReport,
+  PUSHMAIL_MAX_REPORTS, pushmailPreviewRequest, type PushmailAttachment, type PushmailConfig, type PushmailDashboard, type PushmailReport,
 } from '~/composables/useFlowGroups'
 
 
@@ -28,6 +29,7 @@ const props = defineProps<{
   connections: ConnectionInfo[] // the SMTP ones this person may send through
   datasources: DatasourceInfo[]
   reports: Report[] // the ones this person sees
+  dashboards: Dashboard[] // the ones this person sees
   groupName: string
   readOnly?: boolean
 }>()
@@ -115,6 +117,31 @@ function setInBody(i: number, on: boolean) {
 }
 // a report the list does not have: deleted since, or in a folder one cannot see
 const unknownReport = (r: PushmailReport) => r.reportId != null && !reportById.value.has(r.reportId)
+
+// ── dashboards ──────────────────────────────────────────────────────────────
+const cellDashboards = computed<PushmailDashboard[]>(() => props.config.dashboards ?? [])
+const dashboardById = computed(() => new Map(props.dashboards.map((d) => [d.id, d])))
+const dashboardOptions = computed(() => props.dashboards
+  .map((d) => ({ value: d.id, label: d.name, hint: folderPaths.pathOf(d.project_id) ?? undefined })))
+const DASHBOARD_FORMATS = computed(() => [{ value: 'pdf', label: t('pushmail.formatPdf') }, { value: 'png', label: t('pushmail.formatImage') }])
+function setDashboard(i: number, patch: Partial<PushmailDashboard>) {
+  emit('update', { dashboards: cellDashboards.value.map((d, n) => (n === i ? { ...d, ...patch } : d)) })
+}
+function addDashboard() {
+  if (cellDashboards.value.length >= PUSHMAIL_MAX_REPORTS) return
+  emit('update', { dashboards: [...cellDashboards.value, { dashboardId: null, format: 'pdf', params: {}, fileName: '' }] })
+}
+function removeDashboard(i: number) {
+  emit('update', { dashboards: cellDashboards.value.filter((_, n) => n !== i) })
+}
+// as a report: chosen, it gives its file a name, until one is written; another's values would not fit it
+function chooseDashboard(i: number, id: number) {
+  const d = cellDashboards.value[i]
+  if (!d || d.dashboardId === id) return
+  const name = d.fileName.trim() ? d.fileName : `${(dashboardById.value.get(id)?.name ?? 'dashboard').replace(/[\\/]/g, '_')}_{today:yyyy-MM-dd}`
+  setDashboard(i, { dashboardId: id, fileName: name, params: {} })
+}
+const unknownDashboard = (d: PushmailDashboard) => d.dashboardId != null && !dashboardById.value.has(d.dashboardId)
 
 const warn = computed(() => {
   const chosen = props.config.attachments.filter((a) => a.datasourceId != null)
@@ -234,6 +261,43 @@ const DATE_EXAMPLE = '{today:yyyy-MM-dd}'
       <p v-if="!reports.length" class="muted hint">{{ t('pushmail.noReports') }}</p>
       <button type="button" class="add" :disabled="cellReports.length >= PUSHMAIL_MAX_REPORTS || !reports.length" @click="addReport">
         <Plus :size="13" /> {{ t('pushmail.addReport') }}
+      </button>
+
+      <div class="atthead">
+        <span class="lbl">{{ t('pushmail.dashboardsLabel') }}</span>
+        <span class="muted">{{ t('pushmail.dashboardsHint') }}</span>
+      </div>
+      <div v-for="(d, i) in cellDashboards" :key="`d${i}`" class="att rep" :class="{ gone: unknownDashboard(d) }" :data-dashboard="i">
+        <div class="arow">
+          <LayoutDashboard :size="14" class="ricon" aria-hidden="true" />
+          <Select class="ads" :model-value="d.dashboardId" :options="dashboardOptions" searchable
+                  :placeholder="unknownDashboard(d) ? t('pushmail.dashboardHidden', { id: d.dashboardId }) : t('pushmail.dashboardPlaceholder')"
+                  :aria-label="t('pushmail.dashboardAria', { n: i + 1 })"
+                  @update:model-value="(v: any) => chooseDashboard(i, v)" />
+          <RdSeg class="fmt" :model-value="d.format" :options="DASHBOARD_FORMATS" :label="t('pushmail.dashboardFormatAria', { n: i + 1 })"
+                 @update:model-value="(v: any) => setDashboard(i, { format: v })" />
+          <button type="button" class="x" :title="t('pushmail.removeDashboard')" :aria-label="t('pushmail.removeDashboard')"
+                  @click="removeDashboard(i)"><X :size="13" /></button>
+        </div>
+        <p v-if="unknownDashboard(d)" class="gone-msg" role="note"><TriangleAlert :size="13" aria-hidden="true" /> {{ t('pushmail.dashboardGone') }}</p>
+        <label class="fname">
+          <span>{{ t('pushmail.fileNameLabel', { example: DATE_EXAMPLE }) }}</span>
+          <span class="withext">
+            <input :value="d.fileName" type="text" spellcheck="false" maxlength="255" :aria-describedby="`tp-pm-dashboard-${i}`"
+                   @input="setDashboard(i, { fileName: ($event.target as HTMLInputElement).value })" />
+            <span class="ext muted">.{{ d.format }}</span>
+          </span>
+        </label>
+        <TemplatePreview :id="`tp-pm-dashboard-${i}`" :preview="preview" :name="`dashboard_${i}`" />
+        <div v-if="d.dashboardId != null && !unknownDashboard(d)" class="params">
+          <span class="sub">{{ t('pushmail.paramsLabel') }}</span>
+          <PushmailReportParams :dashboard-id="d.dashboardId" :model-value="d.params" :id-prefix="`pm-d${i}`" :read-only="readOnly"
+                                @update:model-value="(v) => setDashboard(i, { params: v })" />
+        </div>
+      </div>
+      <p v-if="!dashboards.length" class="muted hint">{{ t('pushmail.noDashboards') }}</p>
+      <button type="button" class="add" :disabled="cellDashboards.length >= PUSHMAIL_MAX_REPORTS || !dashboards.length" @click="addDashboard">
+        <Plus :size="13" /> {{ t('pushmail.addDashboard') }}
       </button>
 
       <div v-if="warn" class="warn" role="note">

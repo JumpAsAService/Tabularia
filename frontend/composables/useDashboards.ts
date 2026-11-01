@@ -7,11 +7,14 @@ import {
   NO_VALUE, paramsOfForm, paramsQuery, type ReportFormValue, type ReportParameter, type ReportParams, type ReportState,
 } from '~/composables/useReports'
 
+export interface DashboardPage { size?: string | { w: number; h: number }; orientation?: 'portrait' | 'landscape'; margins?: number[] }
+
 export interface DashboardDefinition {
   v: 1
   locale: string
   timezone: string
   refresh_seconds: number // 0: by hand only; otherwise at least 60
+  page?: DashboardPage // of its PDF and its image: A4 across unless one is chosen
   parameters: Record<string, any>[]
   datasets: Record<string, any>[]
   tiles: Record<string, any>[]
@@ -59,6 +62,14 @@ export interface TileNumbers {
 }
 export type TileAnswer = TileError | TileNumbers
 export interface TilesAnswer { tiles: Record<string, TileAnswer>; truncated: Record<string, boolean> }
+
+/** A document of the dashboard, with what is on screen: its parameters, its clicks, its view. */
+export interface DashboardRenderRequest {
+  format: 'pdf' | 'png'
+  params: ReportParams
+  clicks?: { tile: string; on?: string; values: unknown[] }[]
+  state?: ReportState | null
+}
 
 export interface TilesRequest {
   params: ReportParams
@@ -137,6 +148,8 @@ export function useDashboards() {
   const { apiFetch } = useApiClient()
 
   return {
+    /** every dashboard this person sees: a flow group's Pushmail cell can attach them */
+    list: () => apiFetch<Dashboard[]>('/dashboards'),
     /** the Dashboards tab: paginated, searched on the server over name, description and folders */
     listPaged: (p: { q?: string; limit: number; offset: number; sort: DashboardSort }) => {
       const query = new URLSearchParams({ limit: String(p.limit), offset: String(p.offset), sort: p.sort })
@@ -154,6 +167,9 @@ export function useDashboards() {
     /** the numbers ready to draw, tile by tile; an error of a tile stays in that tile */
     data: (id: number, body: TilesRequest, signal?: AbortSignal) =>
       apiFetch<TilesAnswer>(`/dashboards/${id}/data`, { method: 'POST', body, signal }),
+    /** starts a document: followed and taken as a report's (useReports().followRender) */
+    render: (id: number, body: DashboardRenderRequest) =>
+      apiFetch<{ task_id: string; filename: string }>(`/dashboards/${id}/render`, { method: 'POST', body }),
     /** the folders where this person can make one: EDIT */
     folders: () => apiFetch<number[]>('/dashboards/folders'),
     create: (projectId: number, body: { name: string; description?: string; content?: DashboardDefinition }) =>

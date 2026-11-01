@@ -237,6 +237,17 @@ class _Tiles(rmodel._Builder):
             hit = self._cuts[cut] = (parts, found)
         return hit
 
+    def chart_numbers(self, it: rd.ChartItem) -> charts.ChartData:
+        # the rows are counted before they become Python's values, a million of them on a scatter
+        if it.kind == "scatter" and not ex.is_aggregate(rd.parse(it.series[0].value)):
+            n = len(self.rows_of(it.dataset))
+            if n > MAX_POINTS:
+                raise _too_many_points(n)
+        d = super().chart_numbers(it)
+        if (n := sum(len(points) for _, points in d.points)) > MAX_POINTS:
+            raise _too_many_points(n)
+        return d
+
     def rows_of(self, name: str | None) -> Any:
         rows = super().rows_of(name)
         filters = tuple(c for c in self.clicks if c.dataset == name and c.tile != self.tile)
@@ -416,14 +427,7 @@ def _too_many_points(n: int) -> ReportError:
 
 
 def _chart(b: rmodel._Builder, it: rd.ChartItem) -> dict:
-    # the rows are counted before they become Python's values, a million of them on a scatter
-    if it.kind == "scatter" and not ex.is_aggregate(rd.parse(it.series[0].value)):
-        n = len(b.rows_of(it.dataset))
-        if n > MAX_POINTS:
-            raise _too_many_points(n)
     d = b.chart_numbers(it)
-    if (n := sum(len(points) for _, points in d.points)) > MAX_POINTS:
-        raise _too_many_points(n)
     o = it.options
     return {"kind": it.kind, "format": o.format, "empty": not charts._has_values(d), "data": _chart_data(d, it, b.loc),
             "options": {"stacked": o.stacked, "labels": o.labels, "legend": o.legend, "min": o.min, "max": o.max}}
@@ -517,22 +521,32 @@ def _failure(message: str, code: str = "error") -> dict:
     return {"error": message, "code": code}
 
 
-def _tile(b: _Tiles, it: Any, page: int, at: str, cached: bool) -> dict:
-    """One tile, whatever happens to it: what stops it stays here. Only the request knocked
-    down goes on up (SoftTimeLimitExceeded, by name: the engine does not import Celery)."""
+def attempt(tile: str, fn: Callable[[], Any]) -> tuple[Any, dict | None]:
+    """What `fn` gives, or what it was stopped by, as the tile says it: what stops a tile stays in
+    it. Only the request knocked down goes on up (SoftTimeLimitExceeded, by name: the engine does
+    not import Celery)."""
     try:
-        answer = b.either(it, _numbers, b, it, page)
-        # as plain JSON here, or a bad value would stop the whole answer at the door
-        return {"type": it.type, **_clean(answer), "computed_at": at, "cached": cached}
+        return fn(), None
     except ReportError as e:
-        return _failure(_said(e.message, it.id))
+        return None, _failure(_said(e.message, tile))
     except Exception as e:
         from app.engine.query_tag import was_interrupted
 
         if was_interrupted(e):
             raise
-        logger.exception("dashboard: tile «%s» could not be computed", it.id)
-        return _failure("This tile could not be computed")
+        logger.exception("dashboard: tile «%s» could not be computed", tile)
+        return None, _failure("This tile could not be computed")
+
+
+def _tile(b: _Tiles, it: Any, page: int, at: str, cached: bool) -> dict:
+    """One tile, whatever happens to it."""
+    def answered() -> dict:
+        answer = b.either(it, _numbers, b, it, page)
+        # as plain JSON here, or a bad value would stop the whole answer at the door
+        return {"type": it.type, **_clean(answer), "computed_at": at, "cached": cached}
+
+    numbers, failure = attempt(it.id, answered)
+    return failure if failure is not None else numbers
 
 
 # ── a request ────────────────────────────────────────────────────────────────
@@ -585,6 +599,102 @@ def refusal(needs: Iterable[str], refused: dict[str, dict]) -> dict | None:
     return {"error": stopped[0].get("error"), "code": stopped[0].get("code")} if stopped else None
 
 
+class Reading:
+    """What a request reads, whatever it makes of it: the dashboard written as a report's, its
+    tiles (`items`) and what each needs, the clicks this reader may use, the refusals, every dataset
+    once. `compute` turns it into JSON for a screen, and app/reports/dashboard_layout.py into a
+    document: the same rows, so the same numbers. ReportError when nothing can be said of any tile:
+    a definition that cannot be read, or parameters that do not fit."""
+
+    def __init__(self, definition: dict, datasets: dict[str, dict], params: dict[str, Any] | None = None, *,
+                 refused: dict[str, dict] | None = None, only: list[str] | None = None, locale: str | None = None,
+                 title: str = "", cap: int | None = None, now: datetime | None = None,
+                 read: Callable[[str, Any, int, Any], rdata.DataSet] = rdata.read_dataset, clicks: list[dict] | None = None):
+        refused = refused or {}
+        self.report = report = _load(definition)
+        if locale:
+            report.locale = locale if locale in formats.LOCALES else report.locale
+        self.loc = formats.locale(report.locale)
+        tz = ph.zone(report.timezone)
+        self.moment = now or datetime.now(timezone.utc)
+        now_local = self.moment.astimezone(tz)
+        pctx = ph.Context(now=now_local, tz=tz, lang=self.loc.code)
+        self.values = rdata.parameters(report, params or {}, pctx)
+        self.ctx = ex.Context(loc=self.loc, now=now_local, params=self.values, report=title, ph_context=pctx)
+        self.cap = cap or max_rows()
+
+        self.items = [it for _, it in report.items() if only is None or it.id in only]
+        self.needs = {it.id: rdata.used_datasets(report, [it]) for it in self.items}
+        self.usable = clicks_of(report, clicks or [], refused)
+        # rights first: a tile that needs what the reader may not read says only that
+        self.answers: dict[str, dict] = {}
+        for it in self.items:
+            stopped = refusal(self.needs[it.id], refused)
+            if stopped:
+                self.answers[it.id] = stopped
+
+        # every dataset once
+        self.data: dict[str, rdata.DataSet] = {}
+        self.failed: dict[str, dict] = {}
+        self.truncated: dict[str, bool] = {}
+        for name in dict.fromkeys(n for it in self.items if it.id not in self.answers for n in needing(report, it, self.needs[it.id], self.usable)):
+            try:
+                self.data[name] = read(name, datasets.get(name), self.cap, tz)
+                self.truncated[name] = False
+            except OverCap:
+                self.truncated[name] = True
+                self.failed[name] = _over_cap(name, self.cap)
+            except ReportError as e:
+                self.failed[name] = _failure(_sentence(e.message))
+
+        # the tile's expressions against the columns the data really has
+        columns = {name: ds.columns for name, ds in self.data.items()}
+        self.wrong: dict[str, str] = {}
+        for p in rd.problems(report, columns):
+            if p.item is None:
+                where = next((d.name for d in report.datasets if p.field.startswith(f"datasets[{d.name}]")), None)
+                if where is not None:
+                    self.failed.setdefault(where, _failure(f"The dataset «{where}»: {p}"))
+                continue
+            self.wrong.setdefault(p.item, str(p))
+
+    def stopped(self, it: Any) -> dict | None:
+        """What stops this tile before anything is worked out; None when nothing does."""
+        if it.id in self.answers:
+            return self.answers[it.id]
+        data = next((self.failed[n] for n in self.needs[it.id] if n in self.failed), None)
+        if data is not None:
+            return dict(data)
+        # what filters a tile cannot be worked out: better no number than the numbers of all the rows
+        for c in touching(it.id, dataset_of(self.report, it), self.needs[it.id], self.usable):
+            if c.tile in self.wrong or any(n in self.failed for n in c.reads):
+                return _failure(f"The click on «{c.tile}» cannot be applied: its tile cannot read its data. Clear that click")
+        return _failure(_said(self.wrong[it.id], it.id)) if it.id in self.wrong else None
+
+    def read_when(self, it: Any) -> tuple[str, bool]:
+        """When the rows of a tile were read from their source (the oldest of them), and
+        whether this request did without reading it."""
+        read = [self.data[n] for n in self.needs[it.id] if n in self.data]
+        return min((d.read_at or self.moment for d in read), default=self.moment).isoformat(), bool(read) and all(d.from_cache for d in read)
+
+    def builder(self, store: frames.Store | None, state: dict | None, *, interactive: bool, layout: bool, max_pages: int = 400,
+                cls: type[_Tiles] = _Tiles) -> Any:
+        """The model on these rows, with its calculated fields."""
+        if store is not None:
+            self.ctx.datasets = store.datasets(self.data)
+        else:
+            self.ctx.datasets = {name: ds.rows for name, ds in self.data.items()}
+        self.failed.update(_calculated(self.report, self.data, self.ctx, store, set(self.failed)))
+        return cls(self.report, self.data, self.ctx, state, interactive=interactive, layout=layout, store=store, clicks=self.usable, max_pages=max_pages)
+
+    def work(self, fn: Callable[[frames.Store | None], Any]) -> Any:
+        """`fn` with the rows in DuckDB, which is closed with it, or the interpreter's way."""
+        if frames.enabled():
+            with frames.build_store(self.report, self.data, self.loc) as store:
+                return fn(store)
+        return fn(None)
+
+
 def compute(definition: dict, datasets: dict[str, dict], params: dict[str, Any] | None = None, *,
             refused: dict[str, dict] | None = None, only: list[str] | None = None, pages: dict[str, int] | None = None,
             state: dict | None = None, locale: str | None = None, title: str = "", cap: int | None = None,
@@ -593,91 +703,16 @@ def compute(definition: dict, datasets: dict[str, dict], params: dict[str, Any] 
     """{"tiles": {id: numbers or {"error", "code"}}, "truncated": {dataset: bool}}. ReportError
     when nothing can be said of any tile: a definition that cannot be read, or parameters
     that do not fit."""
-    refused, pages = refused or {}, pages or {}
-    report = _load(definition)
-    if locale:
-        report.locale = locale if locale in formats.LOCALES else report.locale
-    loc = formats.locale(report.locale)
-    tz = ph.zone(report.timezone)
-    moment = now or datetime.now(timezone.utc)
-    now_local = moment.astimezone(tz)
-    pctx = ph.Context(now=now_local, tz=tz, lang=loc.code)
-    values = rdata.parameters(report, params or {}, pctx)
-    ctx = ex.Context(loc=loc, now=now_local, params=values, report=title, ph_context=pctx)
-    cap = cap or max_rows()
-
-    items = [it for _, it in report.items() if only is None or it.id in only]
-    needs = {it.id: rdata.used_datasets(report, [it]) for it in items}
-    usable = clicks_of(report, clicks or [], refused)
-    # rights first: a tile that needs what the reader may not read says only that
-    answers: dict[str, dict] = {}
-    for it in items:
-        stopped = refusal(needs[it.id], refused)
-        if stopped:
-            answers[it.id] = stopped
-
-    # every dataset once
-    data: dict[str, rdata.DataSet] = {}
-    failed: dict[str, dict] = {}
-    truncated: dict[str, bool] = {}
-    for name in dict.fromkeys(n for it in items if it.id not in answers for n in needing(report, it, needs[it.id], usable)):
-        try:
-            data[name] = read(name, datasets.get(name), cap, tz)
-            truncated[name] = False
-        except OverCap:
-            truncated[name] = True
-            failed[name] = _over_cap(name, cap)
-        except ReportError as e:
-            failed[name] = _failure(_sentence(e.message))
-
-    def stopped_by_data(it: Any) -> dict | None:
-        return next((failed[n] for n in needs[it.id] if n in failed), None)
-
-    def stopped_by_click(it: Any) -> dict | None:
-        """What filters a tile cannot be worked out: better no number than the numbers of all the rows."""
-        for c in touching(it.id, dataset_of(report, it), needs[it.id], usable):
-            if c.tile in wrong or any(n in failed for n in c.reads):
-                return _failure(f"The click on «{c.tile}» cannot be applied: its tile cannot read its data. Clear that click")
-        return None
-
-    def read_when(it: Any) -> tuple[str, bool]:
-        """When the rows of a tile were read from their source (the oldest of them), and
-        whether this request did without reading it."""
-        read = [data[n] for n in needs[it.id] if n in data]
-        return min((d.read_at or moment for d in read), default=moment).isoformat(), bool(read) and all(d.from_cache for d in read)
-
-    # the tile's expressions against the columns the data really has
-    columns = {name: ds.columns for name, ds in data.items()}
-    wrong: dict[str, str] = {}
-    for p in rd.problems(report, columns):
-        if p.item is None:
-            where = next((d.name for d in report.datasets if p.field.startswith(f"datasets[{d.name}]")), None)
-            if where is not None:
-                failed.setdefault(where, _failure(f"The dataset «{where}»: {p}"))
-            continue
-        wrong.setdefault(p.item, str(p))
+    pages = pages or {}
+    r = Reading(definition, datasets, params, refused=refused, only=only, locale=locale, title=title, cap=cap, now=now, read=read, clicks=clicks)
 
     def work(store: frames.Store | None) -> None:
-        if store is not None:
-            ctx.datasets = store.datasets(data)
-        else:
-            ctx.datasets = {name: ds.rows for name, ds in data.items()}
-        failed.update(_calculated(report, data, ctx, store, set(failed)))
-        b = _Tiles(report, data, ctx, state, interactive=True, layout=False, store=store, clicks=usable)
-        for it in items:
-            if it.id in answers:
+        b = r.builder(store, state, interactive=True, layout=False)
+        for it in r.items:
+            if it.id in r.answers:
                 continue
-            stopped = stopped_by_data(it) or stopped_by_click(it)
-            if stopped is not None:
-                answers[it.id] = dict(stopped)
-            elif it.id in wrong:
-                answers[it.id] = _failure(_said(wrong[it.id], it.id))
-            else:
-                answers[it.id] = _tile(b, it, page_of(pages.get(it.id)), *read_when(it))
+            stopped = r.stopped(it)
+            r.answers[it.id] = stopped if stopped is not None else _tile(b, it, page_of(pages.get(it.id)), *r.read_when(it))
 
-    if frames.enabled():
-        with frames.build_store(report, data, loc) as store:
-            work(store)
-    else:
-        work(None)
-    return {"tiles": {it.id: answers[it.id] for it in items}, "truncated": truncated}
+    r.work(work)
+    return {"tiles": {it.id: r.answers[it.id] for it in r.items}, "truncated": r.truncated}

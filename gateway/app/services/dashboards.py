@@ -21,6 +21,11 @@ by that tile's own expression; a click on a tile the reader may not read counts 
 dashboard's are shared by whoever reads the same source, with one query: the cache is in the
 engine (app/reports/tile_cache.py), as Valkey is not the gateway's, and what it is given is only
 what `_plan` found this reader may read. A definition being edited shares nothing.
+
+A document of it (`render`, a PDF or an image) has the same three steps: the engine lays it out
+(app/reports/dashboard_layout.py) on the export queue, with the rows of the screen. A group's
+Pushmail cell sends one with the rights of whoever runs the group: what makes one valid for them is
+in services/pushmail.py, which schedule_authority asks too, and `groups_using` says who sends what.
 """
 from __future__ import annotations
 
@@ -33,7 +38,7 @@ from datetime import datetime, timezone
 from typing import Any, Optional
 
 import httpx
-from fastapi import HTTPException
+from fastapi import HTTPException, Request
 from sqlalchemy import JSON, and_, case, cast, func, update
 from sqlalchemy.exc import IntegrityError
 from sqlmodel import Session, select
@@ -41,6 +46,7 @@ from sqlmodel import Session, select
 from app.core.engine_client import CHECK, get_engine_client
 from app.models import Dashboard, DashboardVersion, DashboardView, User
 from app.models.permission import Capability
+from app.services import audit
 from app.services import permissions as perm_service
 from app.services import report_definition, report_params, report_views, reports, sql_scripts
 from app.services.permissions import is_admin
@@ -50,6 +56,7 @@ MAX_TILES, MAX_DATASETS, MAX_PARAMETERS = 40, 10, 20
 MIN_REFRESH_SECONDS, MAX_REFRESH_SECONDS = 60, 24 * 3600  # 0: by hand only
 GRID_COLUMNS, MAX_GRID_ROW, MAX_TILE_ROWS = 12, 1000, 100
 TILE_TYPES = ("kpi", "chart", "table", "text", "image")
+FORMATS = ("pdf", "png")
 # the smallest tile of each type, columns and rows (a row is 40 px)
 MIN_TILE = {"kpi": (2, 2), "chart": (4, 4), "table": (4, 4), "text": (2, 1), "image": (1, 1)}
 FILTERS_OTHERS = ("chart", "table")  # a KPI, a text and an image do not filter
@@ -307,12 +314,14 @@ def check(definition: Any) -> dict:
     """The definition as it will be saved, or Problem saying what is wrong and where."""
     if not isinstance(definition, dict):
         raise Problem("The dashboard's definition is an object")
-    _keys(definition, "", ("v", "locale", "timezone", "refresh_seconds", "parameters", "datasets", "tiles"), ("v",),
+    _keys(definition, "", ("v", "locale", "timezone", "refresh_seconds", "page", "parameters", "datasets", "tiles"), ("v",),
           what="The dashboard")
     if definition.get("v") != 1:
         raise Problem("The dashboard's definition is version 1 (v: 1)", "v")
     if "refresh_seconds" in definition:
         _refresh(definition["refresh_seconds"])
+    if definition.get("page") is not None:
+        report_definition._page(definition["page"])  # its documents': a tile has its place on the grid
     _at_most(definition.get("parameters"), MAX_PARAMETERS, "parameters", "parameters")
     _at_most(definition.get("datasets"), MAX_DATASETS, "datasets", "datasets")
     tiles = _at_most(definition.get("tiles"), MAX_TILES, "tiles", "tiles")
@@ -571,6 +580,145 @@ async def numbers(session: Session, user: User, definition: dict, asked: Asked, 
     slot = slot_of(user, editing, asked) if saved is None else None
     _release_db(session, user)  # nothing holds a database connection while the engine works
     return _finished(definition, await _computed(plan, asked, title, slot, cache))
+
+
+# ── a document ───────────────────────────────────────────────────────────────
+def laid_out(definition: dict) -> dict:
+    """What the engine lays a document out from: the dashboard written as a report's, with its
+    pictures; each tile's place on the grid and its title; the page chosen, if one was."""
+    tiles = [t for t in definition.get("tiles") or [] if isinstance(t, dict)]
+    return {"definition": as_report(definition), "page": definition.get("page"),
+            "tiles": [{"id": t.get("id"), "title": t.get("title") or "", "grid": t.get("grid")} for t in tiles]}
+
+
+def read_click(text: str) -> Any:
+    """A value of a click as an address writes it (frontend/composables/dashboardClicks.ts): `{none}`
+    an empty group, `\\` before a text that would read as something else, JSON for several levels."""
+    if text == "{none}":
+        return None
+    if text.startswith("\\"):
+        return text[1:]
+    if text.startswith("["):
+        try:
+            path = json.loads(text)
+        except ValueError:
+            return text
+        if isinstance(path, list) and path and all(v is None or isinstance(v, (str, int, float, bool)) for v in path):
+            return path
+    return text
+
+
+def in_the_address(given: dict[str, list]) -> tuple[dict[str, list], list[dict]]:
+    """A query string's values, as the viewer's address holds them: the parameters, and the clicks
+    (`click.by_area=Nord-Est`, `click.cross.columns=2023`)."""
+    params: dict[str, list] = {}
+    clicks: list[dict] = []
+    for key, values in given.items():
+        if not key.startswith("click."):
+            params[key] = values
+            continue
+        name = key[len("click."):]
+        on = "columns" if name.endswith(".columns") else "rows"
+        clicks.append({"tile": name[:-len(".columns")] if on == "columns" else name, "on": on, "values": [read_click(str(v)) for v in values]})
+    return params, clicks
+
+
+def audit_render(session: Session, user: User, dashboard: Dashboard, request: Optional[Request], outcome: str, detail: dict) -> None:
+    audit.record_audit(session, actor=user, action=audit.DASHBOARD_RENDER, outcome=outcome, target_type="dashboard", target_id=dashboard.id,
+                       target_label=dashboard.name, detail=detail, request=request)
+
+
+async def render(session: Session, user: User, dashboard: Dashboard, fmt: str, given: dict[str, list], *, clicks: Optional[list] = None,
+                 state: Optional[dict] = None, origin: str = "interface", request: Optional[Request] = None,
+                 audit_success: bool = True) -> reports.Started:
+    """Starts a document of the current version, read with `user`'s rights as its numbers are (`_plan`):
+    a dataset they may not read goes only as what its tiles say, and a click on one of those counts for
+    nothing. Its rows are the ones its screen reads, so the numbers too. The file is an export of theirs:
+    followed and taken through /tasks/exports. Audited with what it showed; `audit_success=False` leaves
+    the success to the caller, who records it once it knows the file came out (the API)."""
+    from app.routes.proxy import export_owner  # routes → services: late import
+
+    if fmt not in FORMATS:
+        raise HTTPException(status_code=422, detail=f"The format is one of {', '.join(FORMATS)}")
+    definition = content_of(session, dashboard)
+    asked = Asked(given=given, clicks=clicks or [], state=state)
+    detail: dict[str, Any] = {"format": fmt, "from": origin, "parameters": reports.given_detail(given)}
+    owner = export_owner(user)
+    outcome = "failure"
+    try:
+        check_asked(definition, asked)
+        if asked.clicks:
+            detail["clicks"] = [{**c, "values": reports._shown(c["values"])} for c in asked.clicks]
+        cache = await cache_of(definition, dashboard.id)
+        plan = await _plan(session, user, definition, asked, cache)
+        detail["parameters"] = {k: reports._shown(v) for k, v in plan.params.items()}
+        name = reports.filename(dashboard, fmt)
+        resp = await get_engine_client().post("/reports/dashboard-render", timeout=60, json={
+            **laid_out(definition), "datasets": plan.datasets, "refused": plan.refused, "params": plan.params, "clicks": asked.clicks,
+            "state": state, "format": fmt, "filename": name, "owner": owner, "locale": definition.get("locale") or "en",
+            "title": dashboard.name[:300], "cache": cache})
+        if resp.status_code in (404, 405):
+            raise HTTPException(status_code=503, detail="The engine cannot make documents of a dashboard yet: update it to the gateway's version")
+        if resp.status_code >= 400:
+            raise sql_scripts._engine_failure(resp, reports.sentence)
+        answer = resp.json()
+        outcome = "success"
+        return reports.Started(task_id=answer["task_id"], filename=answer.get("filename") or name, detail=detail)
+    except HTTPException as e:
+        detail["error"] = _in_our_words(reports._text(e))[:500]
+        raise
+    except httpx.TransportError:  # answered 503 by the gateway's handler (main.py)
+        detail["error"] = "The engine is not answering"
+        raise
+    finally:
+        if outcome == "failure" or audit_success:
+            audit_render(session, user, dashboard, request, outcome, detail)
+
+
+# ── who sends it ─────────────────────────────────────────────────────────────
+def _cells_sending(group: Any, dashboard_id: int) -> list:
+    from app.services.flow_groups import definition_of
+
+    return [d for row in definition_of(group).steps for c in row if c is not None and c.kind == "pushmail" and c.pushmail is not None
+            for d in c.pushmail.dashboards if d.dashboardId == dashboard_id]
+
+
+def groups_using(session: Session, dashboard_id: int) -> list:
+    """The flow groups with a Pushmail cell that sends the dashboard."""
+    from app.models import FlowGroup
+
+    return [g for g in session.exec(select(FlowGroup).where(FlowGroup.definition.contains('"dashboardId"'))).all()  # type: ignore[union-attr]
+            if _cells_sending(g, dashboard_id)]
+
+
+def given_by(group: Any, dashboard_id: int) -> set[str]:
+    """The parameters every Pushmail cell of the group that sends the dashboard gives a value."""
+    cells = _cells_sending(group, dashboard_id)
+    given = [{k for k, v in d.params.items() if v not in (None, "", [])} for d in cells]
+    return set.intersection(*given) if given else set()
+
+
+def groups_off(session: Session, user: User, dashboard: Dashboard, before: dict, after: dict) -> list[tuple]:
+    """The flow groups that send the dashboard, scheduled by someone else: a change that makes it read
+    more switches their schedules off, as for a report (routes/reports.py), since a schedule carries
+    its author's rights. More is a dataset that reads something else, or a new default of a parameter
+    the group's cell gives no value. Its tiles only show what the datasets read."""
+    reasons, defaults = reports.widens(before, after), reports.new_defaults(before, after)
+    if not reasons and not defaults:
+        return []
+    affected = []
+    for group in groups_using(session, dashboard.id):
+        mine = reasons + [f"the default of «{name}» changed" for name in sorted(defaults - given_by(group, dashboard.id))]
+        if mine:
+            affected.append((group, f"the dashboard '{dashboard.name}' it sends changed: {'; '.join(mine)}"))
+    return reports.turn_off_groups(session, user, affected)
+
+
+def groups_reading(session: Session, kind: str, object_id: int) -> list[tuple[Dashboard, Any]]:
+    """The flow groups that send a dashboard one of whose datasets reads the SQL script (`kind`
+    sql_script) or the saved view (`view`), with that dashboard."""
+    return [(dashboard, group) for dashboard in dashboards_reading(session, kind, object_id)
+            for group in groups_using(session, dashboard.id)]
 
 
 # ── who opened it ────────────────────────────────────────────────────────────

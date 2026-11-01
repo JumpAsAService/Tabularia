@@ -18,7 +18,7 @@ orchestration (services/orchestrator.py), which hands it here from `run_it`.
 - A **container** cell runs an image as a Container node with no edge does
   (services/container_runs.py): no data in, none out, a run under the group's.
 - A **pushmail** cell sends one email with one .xlsx per datasource and one file per
-  report through an SMTP connection, as an engine task under a run of its own
+  report or dashboard through an SMTP connection, as an engine task under a run of its own
   (kind="pushmail"); every part of it — the connection, the recipients' domains, the
   datasources, the reports and what they read — is checked again with the rights of
   whoever runs the group (services/pushmail.py `pushmail_errors`), and the reports are
@@ -451,6 +451,9 @@ async def _pushmail_cell(run_id: int, user_id: int, trigger: str, cell: FlowGrou
         rendered, read, failed = await _cell_reports(s, user, cfg, group, trigger)
         if failed:
             return f"«{name}»: {failed}"
+        boards, failed = await _cell_dashboards(s, user, cfg, group, trigger, read)
+        if failed:
+            return f"«{name}»: {failed}"
         to = [a.strip() for a in cfg.to if a.strip()]
         cc = [a.strip() for a in cfg.cc if a.strip()]
         # the run first: its number is the {run_id} of the names; a placeholder task
@@ -464,6 +467,7 @@ async def _pushmail_cell(run_id: int, user_id: int, trigger: str, cell: FlowGrou
                                       "datasource_ids": [a.datasourceId for a in cfg.attachments],
                                       "reports": [{"id": r["id"], "name": r["name"], "format": r["format"],
                                                    "in_body": r["in_body"]} for r in rendered],
+                                      "dashboards": [{"id": d["id"], "name": d["name"], "format": d["format"]} for d in boards],
                                       # what the reports read, for the lineage too
                                       "report_datasource_ids": sorted(read),
                                       "cell": name, "cell_id": cell.id, "ok": None}))
@@ -480,6 +484,8 @@ async def _pushmail_cell(run_id: int, user_id: int, trigger: str, cell: FlowGrou
                             for a in cfg.attachments],
             "reports": [{k: r[k] for k in ("name", "definition", "datasets", "params", "format", "file_name", "in_body",
                                            "locale")} for r in rendered],
+            "dashboards": [{k: d[k] for k in ("name", "definition", "tiles", "page", "datasets", "params", "format", "file_name", "locale")}
+                           for d in boards],
         }
         # who sent what to whom, written when it leaves, whatever the outcome
         audit.record_audit(
@@ -487,7 +493,7 @@ async def _pushmail_cell(run_id: int, user_id: int, trigger: str, cell: FlowGrou
             target_id=group.id if group else None, target_label=group.name if group else None,
             detail={"connection_id": conn.id, "host": conn.host, "to": to + cc, "subject": cfg.subject,
                     "cell": name, "datasources": [a.datasourceId for a in cfg.attachments],
-                    "reports": [r["id"] for r in rendered], "trigger": trigger, "run_id": child.id},
+                    "reports": [r["id"] for r in rendered], "dashboards": [d["id"] for d in boards], "trigger": trigger, "run_id": child.id},
         )
         try:
             resp = await get_engine_client().post("/db/pushmail", json={
@@ -500,6 +506,7 @@ async def _pushmail_cell(run_id: int, user_id: int, trigger: str, cell: FlowGrou
         except Exception as e:  # noqa: BLE001 — refused or not reachable: the cell fails saying why
             await orch._finalize_orch_run(child.id, "FAILURE", f"the engine did not take the email: {e}")
             _audit_reports(s, user, rendered, "failure", child.id, f"the engine did not take the email: {e}")
+            _audit_dashboards(s, user, boards, "failure", child.id, f"the engine did not take the email: {e}")
             return f"«{name}»: the engine did not take the email: {e}"
         s.exec(update(Run).where(Run.id == child.id).values(task_id=answer["task_id"]))
         s.commit()
@@ -507,6 +514,7 @@ async def _pushmail_cell(run_id: int, user_id: int, trigger: str, cell: FlowGrou
         done = await orch._wait_run(s, child)
         ok = done.status == "SUCCESS"
         _audit_reports(s, user, rendered, "success" if ok else "failure", child.id, None if ok else done.error)
+        _audit_dashboards(s, user, boards, "success" if ok else "failure", child.id, None if ok else done.error)
         return None if ok else f"«{name}»: {done.error or 'the email was not sent'}"
 
 
@@ -542,6 +550,46 @@ async def _cell_reports(s: Session, user: User, cfg, group: FlowGroup | None,
                     "file_name": r.fileName, "in_body": r.inBody, "locale": definition.get("locale") or "en",
                     "report": report, "detail": detail})
     return out, read, None
+
+
+async def _cell_dashboards(s: Session, user: User, cfg, group: FlowGroup | None, trigger: str,
+                           read: set[int]) -> tuple[list[dict], str | None]:
+    """Every dashboard of a Pushmail cell as the engine renders it, as `_cell_reports` for its
+    reports: a dataset whoever runs the group may not read stops it, here, before anything is sent.
+    The datasources they read go in `read`."""
+    from app.models import Dashboard
+    from app.services import dashboards, reports
+    from app.services.report_params import to_json
+
+    out: list[dict] = []
+    for d in cfg.dashboards:
+        board = s.get(Dashboard, d.dashboardId) if d.dashboardId is not None else None
+        if board is None or not dashboards.can_see(s, user, board):
+            return out, f"dashboard {d.dashboardId} not found"
+        content = dashboards.content_of(s, board)
+        printed = dashboards.laid_out(content)
+        detail = {"format": d.format, "from": "flow_group", "flow_group": group.id if group else None, "trigger": trigger, "parameters": {}}
+        try:
+            given = reports.given_params(d.params)
+            detail["parameters"] = reports.given_detail(given)
+            values, datasets = await reports.prepare(s, user, printed["definition"], given, detail, read)
+        except HTTPException as e:
+            said = dashboards._in_our_words(reports._text(e))
+            detail["error"] = said[:500]
+            dashboards.audit_render(s, user, board, None, "failure", detail)
+            return out, f"the dashboard «{board.name}»: {said}"
+        out.append({"id": board.id, "name": board.name, **printed, "datasets": datasets, "params": {k: to_json(v) for k, v in values.items()},
+                    "format": d.format, "file_name": d.fileName, "locale": content.get("locale") or "en", "board": board, "detail": detail})
+    return out, None
+
+
+def _audit_dashboards(s: Session, user: User, boards: list[dict], outcome: str, run_id: int, error: str | None) -> None:
+    """`dashboard.render` for every dashboard of a cell, as `_audit_reports`."""
+    from app.services import dashboards
+
+    for d in boards:
+        detail = {**d["detail"], "run_id": run_id, **({"error": error[:500]} if error else {})}
+        dashboards.audit_render(s, user, d["board"], None, outcome, detail)
 
 
 def _audit_reports(s: Session, user: User, rendered: list[dict], outcome: str, run_id: int, error: str | None) -> None:

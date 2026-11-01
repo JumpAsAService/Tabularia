@@ -204,9 +204,9 @@ def pushmail(request: PushmailRequest):
         if problems:
             raise HTTPException(status_code=422, detail=f"pushmail: the report «{r.name}»: {problems[0]}")
     task = pushmail_task.delay(connection=request.connection, spec=spec.model_dump())
-    logger.info("📩 Submitting pushmail_task: %d datasources, %d reports", len(spec.attachments), len(spec.reports))
+    logger.info("📩 Submitting pushmail_task: %d datasources, %d reports, %d dashboards", len(spec.attachments), len(spec.reports), len(spec.dashboards))
     return TaskResponse(task_id=task.id, status="submitted",
-                        message=f"Pushmail of {len(spec.attachments)} datasources and {len(spec.reports)} reports")
+                        message=f"Pushmail of {len(spec.attachments)} datasources, {len(spec.reports)} reports and {len(spec.dashboards)} dashboards")
 
 
 class DbIngestRequest(BaseModel):

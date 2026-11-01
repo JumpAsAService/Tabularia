@@ -63,7 +63,8 @@ def _cell_lines(session, user, definition: FlowGroupDefinition) -> list[str]:
                 p = cell.pushmail or PushmailCell()
                 files = ", ".join([f"«{f.fileName}» (datasource {f.datasourceId})" for f in p.attachments]
                                   + [f"«{r.fileName}» (report {r.reportId}, {r.format}"
-                                     + (", summary in the body" if r.inBody else "") + ")" for r in p.reports])
+                                     + (", summary in the body" if r.inBody else "") + ")" for r in p.reports]
+                                  + [f"«{d.fileName}» (dashboard {d.dashboardId}, {d.format})" for d in p.dashboards])
                 text = (f"email «{p.label or 'Pushmail'}» to {', '.join(p.to)}" + (f" (cc {', '.join(p.cc)})" if p.cc else "")
                         + f", subject «{p.subject}», files {files} (pushmail {cell.id})")
             lines.append(f"step {n}: {text}")
@@ -140,7 +141,9 @@ def _cell_view(cell: Optional[FlowGroupCell], label: Any, paths: dict[int, str])
                    attachments=[{"datasource_id": f.datasourceId, "file_name": f.fileName, "max_rows": f.maxRows}
                                 for f in p.attachments],
                    reports=[{"report_id": r.reportId, "format": r.format, "params": r.params, "file_name": r.fileName,
-                             "in_body": r.inBody} for r in p.reports])
+                             "in_body": r.inBody} for r in p.reports],
+                   dashboards=[{"dashboard_id": d.dashboardId, "format": d.format, "params": d.params, "file_name": d.fileName}
+                               for d in p.dashboards])
     return out
 
 

@@ -12,8 +12,8 @@ job as JSON on stdin and answers as JSON on stdout.
 - it dies with its parent (PR_SET_PDEATHSIG): a render cancelled by killing the worker's
   process takes this one with it.
 
-The job: {"root", "fonts", "main", "inputs", "format": pdf|svg|none, "output",
-"hotspots": bool, "pngs": [{"src", "w", "h", "output"}]}. The fonts are only those of
+The job: {"root", "fonts", "main", "inputs", "format": pdf|svg|png|none, "output",
+"hotspots": bool, "ppi", "pngs": [{"src", "w", "h", "output"}]}. The fonts are only those of
 `fonts`: no system font, no font Typst carries.
 """
 import ctypes
@@ -55,6 +55,10 @@ def main() -> dict:
                 pdf = compiler.compile(format="pdf", timestamp=0)
                 with open(job["output"], "wb") as f:
                     f.write(pdf)
+            elif job["format"] == "png":  # a dashboard's image: one long page
+                image = compiler.compile(format="png", ppi=job["ppi"])
+                with open(job["output"], "wb") as f:
+                    f.write(image if isinstance(image, bytes) else image[0])
             elif job["format"] == "svg":
                 pages = compiler.compile(format="svg")
                 pages = pages if isinstance(pages, list) else [pages]

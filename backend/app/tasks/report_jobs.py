@@ -55,6 +55,51 @@ def render_report_task(
     return payload
 
 
+@celery_app.task(name="app.tasks.report_jobs.render_dashboard_task", bind=True)
+def render_dashboard_task(
+    self,
+    definition: dict,
+    tiles: list[dict],
+    datasets: dict[str, dict],
+    params: dict[str, Any] | None = None,
+    refused: dict[str, dict] | None = None,
+    clicks: list[dict] | None = None,
+    format: str = "pdf",
+    filename: str | None = None,
+    locale: str | None = None,
+    state: dict | None = None,
+    title: str | None = None,
+    page: dict | None = None,
+    cache_seconds: int | None = None,
+) -> dict:
+    """A dashboard as a document (app/reports/dashboard_layout.py), left for its owner as a
+    report's render. `cache_seconds`: its rows are the ones the screen reads (app/reports/
+    tile_cache.py), so the numbers too, and no source is asked twice."""
+    from celery.exceptions import SoftTimeLimitExceeded
+
+    from app.reports import dashboard_layout, tile_cache
+    from app.reports.errors import ReportError
+    from app.tasks.jobs import _deliver_export
+
+    name = dashboard_layout.filename(filename, format)
+    extra = {"read": tile_cache.reader(cache_seconds)} if cache_seconds else {}
+    with tempfile.TemporaryDirectory(prefix="dashboard-") as work:
+        try:
+            result = dashboard_layout.render(definition, tiles, datasets, format, Path(work), params=params, refused=refused, clicks=clicks,
+                                             state=state, locale=locale, page=page, title=title or name.rsplit(".", 1)[0], **extra)
+        except ReportError as e:
+            return {"ok": False, "error": e.tag, "detail": e.message}
+        except SoftTimeLimitExceeded:
+            return {"ok": False, "error": "timeout", "detail": "The dashboard took longer than the time limit of the workers"}
+        payload = _deliver_export(self.request.id, str(result.path), format, name)
+    if result.warnings:
+        payload["warnings"] = result.warnings
+    if result.pages is not None:
+        payload["pages"] = result.pages
+    logger.info("dashboard rendered: %s, %s bytes, %s pages", format, payload.get("size"), result.pages)
+    return payload
+
+
 @celery_app.task(name="app.tasks.report_jobs.report_choices_task")
 def report_choices_task(
     definition: dict,

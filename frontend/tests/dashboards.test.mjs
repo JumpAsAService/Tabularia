@@ -1330,3 +1330,21 @@ test('a tile taken away has no slot, and one that comes back starts over', async
   view.run()
   assert.deepEqual(calls[1].ids, ['b'])
 })
+
+// ── its documents ────────────────────────────────────────────────────────────
+test('the page of its documents comes out as it went in, and none chosen stays none', () => {
+  const page = { size: 'Letter', orientation: 'portrait' }
+  const base = { v: 1, locale: 'en', timezone: 'UTC', refresh_seconds: 0, parameters: [], datasets: [], tiles: [] }
+  assert.deepEqual(definitionOf(boardOf({ ...base, page })).page, page)
+  assert.equal('page' in definitionOf(boardOf(base)), false)
+})
+
+test('a Pushmail cell previews the names of its dashboards\' files too', async () => {
+  const { pushmailPreviewRequest } = await import('../composables/useFlowGroups.ts')
+  const req = pushmailPreviewRequest({
+    label: '', connectionId: null, to: [], cc: [], subject: 'S', body: '', bodyIsHtml: false, timezone: 'UTC', attachments: [],
+    dashboards: [{ dashboardId: 1, format: 'png', params: {}, fileName: ' board_{today:yyyy} ' }],
+  }, 'G')
+  assert.equal(req.templates.dashboard_0, 'board_{today:yyyy}')
+  assert.equal(req.targets.dashboard_0, 'file')
+})

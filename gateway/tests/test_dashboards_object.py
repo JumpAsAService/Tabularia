@@ -361,7 +361,7 @@ def test_forty_tiles_ten_datasets_twenty_parameters_are_accepted(me, folder):
 @pytest.mark.parametrize("change,where,words", [
     ({"v": 2}, "v", "version 1"),
     ({"sections": {}}, "", "unknown key «sections»"),
-    ({"page": {"size": "A4"}}, "", "unknown key «page»"),
+    ({"theme": {"size": 9}}, "", "unknown key «theme»"),
     ({"locale": "xx"}, "locale", "one of"),
     ({"timezone": "Mars/Olympus"}, "timezone", "Unknown time zone"),
     ({"tiles": "many"}, "tiles", "list"),

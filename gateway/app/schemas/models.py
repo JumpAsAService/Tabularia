@@ -261,9 +261,20 @@ class PushmailReportCell(BaseModel):
     inBody: bool = False
 
 
+class PushmailDashboardCell(BaseModel):
+    """A dashboard of a Pushmail cell (docs/specs/dashboards.md, «Going out»): rendered when the
+    cell runs, with the rights of whoever runs the group, as a PDF or an image, with these
+    parameters; its file's name a template with the Outputs' placeholders (the extension added)."""
+    # left empty while the cell is being set up, as a report's (services/pushmail.py)
+    dashboardId: Optional[int] = None
+    format: Literal["pdf", "png"] = "pdf"
+    params: dict[str, ReportParamValue] = Field(default_factory=dict)
+    fileName: str = Field(default="", max_length=255)
+
+
 class PushmailCell(BaseModel):
     """A Pushmail cell's settings: an email through an SMTP connection, one .xlsx per
-    datasource and one file per report (docs/pushmail.md)."""
+    datasource and one file per report or dashboard (docs/pushmail.md)."""
     label: str = Field(default="", max_length=200)
     connectionId: Optional[int] = None
     to: list[str] = Field(default_factory=list, max_length=PUSHMAIL_MAX_RECIPIENTS)
@@ -274,6 +285,7 @@ class PushmailCell(BaseModel):
     timezone: str = Field(default="UTC", max_length=64)  # of the placeholders' dates
     attachments: list[PushmailAttachmentCell] = Field(default_factory=list, max_length=PUSHMAIL_MAX_ATTACHMENTS)
     reports: list[PushmailReportCell] = Field(default_factory=list, max_length=PUSHMAIL_MAX_REPORTS)
+    dashboards: list[PushmailDashboardCell] = Field(default_factory=list, max_length=PUSHMAIL_MAX_REPORTS)
 
 
 class FlowGroupCell(BaseModel):

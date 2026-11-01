@@ -263,7 +263,9 @@ def _groups_off(session: Session, user: User, view: SavedView, before: str, afte
         return []
     return reports.turn_off_groups(session, user, [
         (g, f"the saved view '{view.name}' its report '{r.name}' reads changed: it reads something else")
-        for r, g in reports.groups_reading(session, "view", view.id)])
+        for r, g in reports.groups_reading(session, "view", view.id)] + [
+        (g, f"the saved view '{view.name}' its dashboard '{d.name}' reads changed: it reads something else")
+        for d, g in dashboards.groups_reading(session, "view", view.id)])
 
 
 @router.delete("/saved-views/{view_id}", status_code=status.HTTP_204_NO_CONTENT)

@@ -16,6 +16,8 @@ Permissions:
   would drown the log). What comes out is shared by whoever reads the same source, for the
   dashboard's cache's life (the engine's: app/reports/tile_cache.py), after that check;
 - the numbers of a definition not saved yet (POST /dashboards/preview): EDIT on the folder;
+- a document of it (POST /dashboards/{id}/render for the viewer, GET for an API token, as a PDF or
+  an image): as its numbers, with the clicks of the moment, and audited;
 - administrators see and change every dashboard.
 """
 from __future__ import annotations
@@ -37,7 +39,18 @@ from app.deps.auth import get_current_user
 from app.deps.permissions import ensure_can
 from app.models import Dashboard, DashboardVersion, DashboardView, Project, User
 from app.models.permission import Capability
-from app.routes.reports import CheckOut, FieldOut, FieldsOut, ParameterOut, ParametersRequest, VersionOut, _parameters_out, _query_params
+from app.routes.reports import (
+    CheckOut,
+    FieldOut,
+    FieldsOut,
+    ParameterOut,
+    ParametersRequest,
+    RenderStarted,
+    VersionOut,
+    _parameters_out,
+    _query_params,
+    _wait_for_file,
+)
 from app.routes.search import _like as like_pattern
 from app.schemas.models import Page, UtcDateTime
 from app.services import audit, dashboards, reports
@@ -132,6 +145,15 @@ class PreviewRequest(DataRequest):
 class FieldsRequest(BaseModel):
     dataset: str = Field(max_length=64)
     definition: dict[str, Any]  # the editor's, not saved yet
+
+
+class RenderRequest(BaseModel):
+    """A document of the dashboard: its format; the parameters, the clicks and the on-screen view, as
+    for its numbers."""
+    format: Literal["pdf", "png"] = "pdf"
+    params: dict[str, Any] = Field(default_factory=dict)
+    clicks: list[Any] = Field(default_factory=list, max_length=2 * dashboards.MAX_TILES)
+    state: Optional[dict[str, Any]] = None
 
 
 class TilesOut(BaseModel):
@@ -345,6 +367,40 @@ async def dashboard_data(dashboard_id: int, body: DataRequest, user: User = Depe
     return await dashboards.numbers(session, user, definition, _asked(body), dashboard.name, saved=dashboard.id)
 
 
+@router.post("/dashboards/{dashboard_id}/render", response_model=RenderStarted)
+async def render_dashboard(dashboard_id: int, body: RenderRequest, request: Request, user: User = Depends(get_current_user),
+                           session: Session = Depends(get_session)):
+    """Starts a document of the current version with these parameters and clicks, read with the
+    caller's rights. Followed and downloaded as an export (/tasks/exports/{task_id})."""
+    dashboard = dashboards.get_visible(session, user, dashboard_id)
+    started = await dashboards.render(session, user, dashboard, body.format, reports.given_params(body.params), clicks=body.clicks,
+                                      state=body.state, request=request)
+    return RenderStarted(task_id=started.task_id, filename=started.filename)
+
+
+@router.get("/dashboards/{dashboard_id}/render")
+async def render_dashboard_file(dashboard_id: int, request: Request, format: Literal["pdf", "png"] = Query("pdf", description="pdf or png"),
+                                user: User = Depends(get_current_user), session: Session = Depends(get_session)):
+    """The API: the dashboard as a file, with the parameters and the clicks of the query string as
+    the viewer's address holds them (`?region=North&click.by_area=Nord-Est`), read with the rights of the
+    token's owner. Waits for the file and sends it, with its name. 400 naming the parameter whose
+    value does not fit, 422 for a click that cannot be; 504 past REPORTS__API_WAIT_SECONDS."""
+    from app.routes.proxy import _forward, _release_db, export_owner
+
+    dashboard = dashboards.get_visible(session, user, dashboard_id)
+    given, clicks = dashboards.in_the_address(_query_params(request))
+    started = await dashboards.render(session, user, dashboard, format, given, clicks=clicks, origin="api", request=request, audit_success=False)
+    owner = export_owner(user)
+    _release_db(session, user)  # nothing holds a database connection while the engine works
+    try:
+        await _wait_for_file(started.task_id, owner, request)
+    except HTTPException as e:
+        dashboards.audit_render(session, user, dashboard, request, "failure", {**started.detail, "error": str(e.detail)[:500]})
+        raise dashboards.in_our_words(e) from None
+    dashboards.audit_render(session, user, dashboard, request, "success", started.detail)
+    return await _forward(request, "GET", f"/tasks/exports/{started.task_id}/file", session=session, user=user, params={"owner": owner})
+
+
 @router.get("/dashboards/{dashboard_id}/parameters", response_model=list[ParameterOut])
 async def dashboard_parameters(dashboard_id: int, request: Request, user: User = Depends(get_current_user),
                                session: Session = Depends(get_session)):
@@ -448,17 +504,20 @@ async def update_dashboard(dashboard_id: int, body: DashboardUpdate, request: Re
     if target != dashboard.project_id:
         actions.append((audit.DASHBOARD_MOVE, {"from": dashboard.project_id, "to": target}))
     changes: dict[str, Any] = {}
+    groups_off: list[tuple] = []
     if body.content is not None:
         content = await dashboards.checked(session, user, body.content, dashboards.content_of(session, dashboard))
         # read again and held until the commit: a save that landed while this one was checked
         # is the current version `base_version` is compared with
         session.refresh(dashboard, with_for_update=True)
-        if content != dashboards.content_of(session, dashboard):
+        current = dashboards.content_of(session, dashboard)
+        if content != current:
             if body.base_version is not None and body.base_version != dashboard.current_version:
                 raise HTTPException(status_code=409, detail=(
                     f"«{dashboard.name}» changed since you opened it (now version {dashboard.current_version}): "
                     "reload it, then make your change again"))
             changes["version"] = dashboards.add_version(session, dashboard, content, "edited", user).version
+            groups_off = dashboards.groups_off(session, user, dashboard, current, content)
     if body.description is not None and body.description.strip() != dashboard.description:
         dashboard.description = body.description.strip()
         changes["description"] = True
@@ -473,6 +532,7 @@ async def update_dashboard(dashboard_id: int, body: DashboardUpdate, request: Re
     session.refresh(dashboard)
     for action, detail in actions:
         _record(session, user, action, dashboard, request, detail)
+    reports.record_groups_off(session, user, groups_off, request)
     return _detail(session, user, dashboard)
 
 
@@ -498,6 +558,12 @@ def delete_dashboard(dashboard_id: int, request: Request, user: User = Depends(g
                      session: Session = Depends(get_session)):
     dashboard = dashboards.get_visible(session, user, dashboard_id)
     ensure_can(session, user, dashboard.project_id, Capability.EDIT)
+    # a flow group that sends it would fail at its Pushmail cell: it is taken out there first
+    groups = [g.name for g in dashboards.groups_using(session, dashboard.id)]
+    if groups:
+        names = ", ".join(f"«{n}»" for n in groups[:10]) + (" …" if len(groups) > 10 else "")
+        raise HTTPException(status_code=409, detail={
+            "message": f"The dashboard is sent by the flow groups {names}: remove it from there first", "flows": [], "groups": groups})
     label = dashboard.name
     session.exec(delete(DashboardVersion).where(DashboardVersion.dashboard_id == dashboard.id))
     # its openings too: SQLite runs the tests without the cascade
@@ -545,9 +611,11 @@ async def restore_version(dashboard_id: int, version: int, request: Request, use
     current = dashboards.content_of(session, dashboard)
     content = await dashboards.checked(session, user, dashboards.content_of(session, dashboard, version), current)
     row = dashboards.add_version(session, dashboard, content, f"restored from v{version}", user)
+    groups_off = dashboards.groups_off(session, user, dashboard, current, content)
     dashboard.updated_at = datetime.now(timezone.utc)
     session.add(dashboard)
     session.commit()
     session.refresh(dashboard)
     _record(session, user, audit.DASHBOARD_RESTORE, dashboard, request, {"from": version, "version": row.version})
+    reports.record_groups_off(session, user, groups_off, request)
     return _detail(session, user, dashboard)

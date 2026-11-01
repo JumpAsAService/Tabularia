@@ -112,6 +112,8 @@ owner, `current_version`; every save is a version.
   millimetres; `grid` replaces them. Types: `kpi`, `chart`, `table` (with `matrix`), `text`,
   `image`.
 - `refresh_seconds`: `0` is by hand only; otherwise at least 60.
+- `page`, optional: the page of its PDF and its image, `{"size", "orientation", "margins"}` as a
+  report's. Without it, A4 across with margins of 10 mm. On a screen it says nothing.
 - Limits, stated in the error: 40 tiles, 10 datasets, 20 parameters. An image as in reports.
 - The definition is JSON checked on the server, as a report's: this is what lets the chat
   and MCP create one later without another format.
@@ -375,15 +377,44 @@ each query costs money, so this is a requirement, not an optimization.
 
 ### Going out
 
-- **PDF and image**: the server converts the definition to a report's (A4 landscape, or the
-  page chosen; rows of tiles flowing over pages; tables paginated) and uses the reports'
-  render, with the parameters and the clicks of the moment. The image is one long page, PNG.
-  It is a faithful document of the numbers, not a screenshot: the look is the report's.
+- **PDF and image**: the server converts the definition to a report's layout
+  (`backend/app/reports/dashboard_layout.py`) and uses the reports' template, with the parameters and the
+  clicks of the moment. It is a faithful document of the numbers, not a screenshot: the look is the
+  report's, its colours are not the theme on the screen.
+  - The numbers are the screen's because nothing is worked out twice: the same reading (`tiles.Reading`),
+    the same rows of a tile with its clicks (`tiles._Tiles`), on both ways of computing, and from the rows
+    the screen reads (the cache), so a download asks no source that the screen did not.
+  - The 12 columns fill the width of the page; a row is as high, for its width, as on a window of 1280 px.
+    Tiles whose rows overlap stand together, in a row a page break never cuts; a row taller than a page is
+    cut between tiles, and a tile taller than a page is made to fit it. A hidden tile takes no place.
+  - A table takes its row alone and the whole width, and goes on over the pages, with its title in the head
+    that comes back on each; what stood beside it moves over the hole. Its columns take the width by what
+    they hold, and those that do not fit go on in another table with the first column again: a number is
+    never written over the next one. It says the sort and the closed groups of the screen by what it shows,
+    without the arrows.
+  - On top, what it is showing: the name, the parameters that have a value, the clicks, when the rows are
+    from. At the foot, the page's number.
+  - A tile that cannot say its numbers says why in its place, in the document's language; of a dataset the
+    reader may not read, that it cannot, as the viewer does: its title, and no name of a dataset, no column,
+    no number. A click on such a tile counts for nothing, here too.
+  - The image is the same document on one long page, PNG at 192 ppi. It is one page in memory: past
+    `REPORTS__RENDER_MEMORY_MB` (at the default, a table of 1,000 rows fits and one of 2,000 does not) it fails saying so, and the PDF
+    holds more. The limits are those of a report's render: `REPORTS__MAX_PAGES`, `REPORTS__RENDER_SECONDS`.
 - **Link**: the address, for whoever has the rights.
-- **Scheduled send**: the Pushmail cell of flow groups attaches a dashboard (PDF or PNG,
-  parameter values), with the same rules as a report: the author's rights, checked at every run;
-  a change by someone else that reaches further switches the schedule off.
-- `GET /dashboards/{id}/render?format=pdf|png&<param>=<value>` with a token, as for reports.
+- **Scheduled send**: the Pushmail cell of flow groups attaches a dashboard (PDF or PNG, up to 5,
+  parameter values), with the same rules as a report: what makes one valid is `services/pushmail.py`,
+  which `schedule_authority` asks before a scheduled group starts, with the author's rights, at every run.
+  A change by someone else that reaches further (a dataset that reads something else, a SQL script or a
+  saved view it reads, a new default of a parameter the cell gives no value) switches the schedule off;
+  one a group sends cannot be deleted. Unlike the viewer's, nobody looks at it before it leaves: a dataset
+  the author may not read, or a tile that cannot say its numbers, stops the cell with its name, and nothing
+  is sent. It reads its source, with no cache: what the steps before it refreshed is what it says.
+- `POST /dashboards/{id}/render` starts one for the viewer (followed and taken as a report's, through
+  `/tasks/exports`, with the parameters, the clicks and the view of the screen).
+  `GET /dashboards/{id}/render?format=pdf|png&<param>=<value>&click.<tile>=<value>` is the same with a token,
+  as for reports: it waits for the file, and the clicks are written as in the viewer's address.
+- Audit: `dashboard.render`, with its format, where it came from (`interface`, `api`, `flow_group`), its
+  parameters and its clicks.
 
 ### AI and MCP
 

@@ -8,9 +8,10 @@ import {
 } from '~/composables/reportDesignModel'
 import { freeSpot, type GridBox } from '~/composables/dashboardGrid'
 // a type only: useDashboards.ts reaches the API
-import type { DashboardDefinition } from '~/composables/useDashboards'
+import type { DashboardDefinition, DashboardPage } from '~/composables/useDashboards'
 
-export type DBoard = DDefinition & { refresh_seconds: number }
+// `printed`: the page of its documents. The store's `page` is the designer's, as for a report
+export type DBoard = DDefinition & { refresh_seconds: number; printed?: DashboardPage }
 export type DTile = Record<string, any> & { id: string; type: string; grid: GridBox }
 export type TileKind = 'kpi' | 'chart' | 'table' | 'matrix' | 'text' | 'image'
 
@@ -27,6 +28,7 @@ export function boardOf(d: DashboardDefinition | Record<string, any>): DBoard {
     locale: d.locale || 'en',
     timezone: d.timezone || 'UTC',
     refresh_seconds: typeof d.refresh_seconds === 'number' ? d.refresh_seconds : 0,
+    ...(d.page ? { printed: d.page } : {}),
     parameters: (d.parameters ?? []) as DDefinition['parameters'],
     datasets: (d.datasets ?? []).map((x: any) => ({ ...x, fields: x.fields ?? [], calculated: x.calculated ?? [] })),
     sections: {
@@ -43,6 +45,7 @@ function asDashboard(saved: DDefinition, doc: DBoard): DashboardDefinition {
     locale: saved.locale,
     timezone: saved.timezone,
     refresh_seconds: doc.refresh_seconds,
+    ...(doc.printed ? { page: doc.printed } : {}),
     parameters: saved.parameters as unknown as Record<string, any>[],
     datasets: saved.datasets as unknown as Record<string, any>[],
     // what the store writes for a report's table is not a tile's: a tile has its place in `grid`

@@ -205,6 +205,51 @@ def test_a_report_that_cannot_be_rendered_sends_nothing_and_says_which(sent, mon
     assert sent == []
 
 
+def _dashboard(items=None, fmt="pdf", file_name="board_{today:yyyy-MM}"):
+    from tests.test_dashboard_tiles import kpi
+
+    items = [kpi("k", label="Revenue", format="#,##0.00")] if items is None else items
+    return pm.PushmailDashboard(
+        name="Board", definition={"v": 1, "locale": "it", "timezone": "UTC", "page": {"size": {"w": 2000, "h": 2000}, "margins": [0, 0, 0, 0]},
+                                  "datasets": [{"name": "orders", "source": {"kind": "sql", "sql": "SELECT 1"}}],
+                                  "sections": {"body": {"items": items}}},
+        tiles=[{"id": it["id"], "title": "", "grid": {"x": 0, "y": 0, "w": 3, "h": 3}} for it in items],
+        datasets={"orders": samples.datasets(50)["orders"]}, format=fmt, file_name=file_name, locale="it")
+
+
+@pytest.mark.parametrize("fmt, kind, start", [("pdf", "application/pdf", b"%PDF-"), ("png", "image/png", b"\x89PNG")])
+def test_a_dashboard_goes_as_a_file_after_the_reports(sent, regions, charts, fmt, kind, start):
+    out = pm.send_pushmail(_conn(), _spec(_att(regions, "regioni"), dashboards=[_dashboard(fmt=fmt)]), now=NOW)
+    (msg, _), = sent
+    files = {p.get_filename(): p for p in msg.iter_attachments()}
+    assert list(files) == ["regioni.xlsx", f"board_2026-10.{fmt}"]
+    assert files[f"board_2026-10.{fmt}"].get_content_type() == kind
+    assert files[f"board_2026-10.{fmt}"].get_content().startswith(start)
+    assert [a["name"] for a in out["attachments"]] == list(files)
+
+
+def test_a_cell_with_only_a_dashboard_is_a_cell(sent, charts):
+    pm.send_pushmail(_conn(), _spec(dashboards=[_dashboard(file_name="b")], subject=""), now=NOW)
+    (msg, _), = sent
+    assert msg["Subject"] == "b.pdf"
+
+
+def test_a_dashboard_with_a_tile_that_failed_sends_nothing_and_says_which(sent, charts):
+    from tests.test_dashboard_tiles import kpi
+
+    bad = _dashboard([kpi("bad", "SUM([nope])", label="Margin"), kpi("good", label="Good")])
+    with pytest.raises(EmailDestinationError, match="the dashboard «Board»: the tile «Margin»"):
+        pm.send_pushmail(_conn(), _spec(dashboards=[bad]), now=NOW)
+    assert sent == []
+
+
+def test_a_dashboard_past_the_size_cap_sends_nothing(sent, charts, monkeypatch):
+    monkeypatch.setattr(pm, "MAX_ATTACHMENT_BYTES", 100)
+    with pytest.raises(EmailDestinationError, match="over the"):
+        pm.send_pushmail(_conn(), _spec(dashboards=[_dashboard()]), now=NOW)
+    assert sent == []
+
+
 @pytest.mark.parametrize("bad", [{}, {"reports": [_report(in_body=True), _report(in_body=True)]}])
 def test_a_spec_with_nothing_to_send_or_two_bodies_is_refused(bad):
     with pytest.raises(ValueError):

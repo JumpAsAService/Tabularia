@@ -27,7 +27,7 @@ def email_language(user: User) -> str:
 def pushmail_errors(session: Session, user: User, cell: FlowGroupCell, readable: set[int] | None = None) -> list[str]:
     """A Pushmail cell, new or changed, or about to run: an SMTP connection this person
     may send through (CONNECT), recipients within the domains it allows, datasources
-    they may read, reports they see and whose data they may read. Sending data out of the
+    they may read, reports and dashboards they see and whose data they may read. Sending data out of the
     installation is what the cell does: whoever sets it up, and whoever runs it, must be
     allowed every part of it."""
     from app.models import Connection
@@ -64,8 +64,8 @@ def pushmail_errors(session: Session, user: User, cell: FlowGroupCell, readable:
         if outside:
             errors.append(f"pushmail «{name}»: recipients outside the domains «{conn.name}» allows "
                           f"({', '.join(allowed)}): {', '.join(outside[:5])}")
-    if not cfg.attachments and not cfg.reports:
-        errors.append(f"pushmail «{name}»: choose at least one datasource or report")
+    if not cfg.attachments and not cfg.reports and not cfg.dashboards:
+        errors.append(f"pushmail «{name}»: choose at least one datasource, report or dashboard")
     for n, a in enumerate(cfg.attachments, 1):
         if a.datasourceId is None:
             errors.append(f"pushmail «{name}»: choose the datasource of file {n}")
@@ -81,6 +81,7 @@ def pushmail_errors(session: Session, user: User, cell: FlowGroupCell, readable:
         if ds is None or ds.project_id not in readable:
             errors.append(f"pushmail «{name}»: datasource {i} not found")
     errors.extend(report_errors(session, user, cfg, name))
+    errors.extend(dashboard_errors(session, user, cfg, name))
     return errors
 
 
@@ -118,4 +119,38 @@ def report_errors(session: Session, user: User, cfg: PushmailCell, name: str) ->
         problem = reports.reading_problem(session, user, definition)
         if problem:
             errors.append(f"pushmail «{name}»: the report «{report.name}»: {problem}")
+    return errors
+
+
+def dashboard_errors(session: Session, user: User, cfg: PushmailCell, name: str) -> list[str]:
+    """The dashboards of a cell, as `report_errors` for its reports: each one this person sees, with
+    values that fit its parameters and datasets they may all read. A dataset they may not read does
+    not become a tile that says so in an email nobody looked at: it stops the cell."""
+    from app.models import Dashboard
+    from app.services import dashboards, report_params, reports
+
+    errors: list[str] = []
+    for n, d in enumerate(cfg.dashboards, 1):
+        if d.dashboardId is None:
+            errors.append(f"pushmail «{name}»: choose the dashboard {n}")
+            continue
+        if not d.fileName.strip():
+            errors.append(f"pushmail «{name}»: give the file of dashboard {n} a name")
+        if len(d.params) > PUSHMAIL_MAX_REPORT_PARAMS:
+            errors.append(f"pushmail «{name}»: dashboard {n} has too many values")
+            continue
+        board = session.get(Dashboard, d.dashboardId)
+        # not found and not visible read the same, as for a datasource
+        if board is None or not dashboards.can_see(session, user, board):
+            errors.append(f"pushmail «{name}»: dashboard {d.dashboardId} not found")
+            continue
+        definition = dashboards.as_report(dashboards.content_of(session, board))
+        try:
+            report_params.check_values(definition, reports.given_params(d.params))
+        except HTTPException as e:
+            errors.append(f"pushmail «{name}»: the dashboard «{board.name}»: {dashboards._in_our_words(reports._text(e))}")
+            continue
+        problem = reports.reading_problem(session, user, definition)
+        if problem:
+            errors.append(f"pushmail «{name}»: the dashboard «{board.name}»: {dashboards._in_our_words(problem)}")
     return errors

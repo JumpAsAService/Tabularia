@@ -9,8 +9,10 @@ export queue renders one (app.reports.render: Typst in a child process, with its
 limits), from what the gateway resolved with the rights of whoever runs the group: its
 definition, its datasets, its parameters converted. One report may also put its
 summary in the body (the `html` format: the HTML under the cell's text, its charts as
-images by `cid`). The subject and the file names are templates with the Outputs'
-placeholders (app.core.placeholders), resolved once for the whole email.
+images by `cid`). A dashboard goes as a PDF or an image (app.reports.dashboard_layout), and
+a tile of it that cannot say its numbers stops the email: nobody looks at it before it leaves.
+The subject and the file names are templates with the Outputs' placeholders
+(app.core.placeholders), resolved once for the whole email.
 
 The recipients arrive already checked: the allowed domains of the SMTP connection are
 applied by the GATEWAY, as for the email of an Output node (see email_destination).
@@ -44,6 +46,7 @@ logger = logging.getLogger(__name__)
 
 XLSX_MIME = ("application", "vnd.openxmlformats-officedocument.spreadsheetml.sheet")
 PDF_MIME = ("application", "pdf")
+PNG_MIME = ("image", "png")
 MAX_ROWS = 1_000_000  # under the Excel format's own limit (1,048,576 with the header)
 MAX_ATTACHMENTS = 20
 MAX_REPORTS = 5
@@ -70,6 +73,20 @@ class PushmailReport(BaseModel):
     locale: Literal["en", "it", "fr", "de", "es"] | None = None
 
 
+class PushmailDashboard(BaseModel):
+    """A dashboard as the gateway resolved it for whoever runs the group: what a render on the
+    export queue receives (app.api.routes.reports.DashboardRender)."""
+    name: str = Field(min_length=1, max_length=300)
+    definition: dict
+    tiles: list[dict] = Field(default_factory=list)
+    page: dict | None = None
+    datasets: dict[str, dict] = Field(default_factory=dict)
+    params: dict[str, Any] = Field(default_factory=dict)
+    format: Literal["pdf", "png"] = "pdf"
+    file_name: str = Field(min_length=1, max_length=255)  # a template, the extension added when missing
+    locale: Literal["en", "it", "fr", "de", "es"] | None = None
+
+
 class PushmailSpec(BaseModel):
     to: list[str] = []
     cc: list[str] = []
@@ -78,6 +95,7 @@ class PushmailSpec(BaseModel):
     body_is_html: bool = False
     attachments: list[PushmailAttachment] = Field(default_factory=list, max_length=MAX_ATTACHMENTS)
     reports: list[PushmailReport] = Field(default_factory=list, max_length=MAX_REPORTS)
+    dashboards: list[PushmailDashboard] = Field(default_factory=list, max_length=MAX_REPORTS)
     # the placeholders' zone; the run and the group's name for {run_id} and {flow}
     timezone: str = Field(default="UTC", max_length=64)
     run_id: int | None = None
@@ -88,8 +106,8 @@ class PushmailSpec(BaseModel):
 
     @model_validator(mode="after")
     def _something_to_send(self) -> "PushmailSpec":
-        if not self.attachments and not self.reports:
-            raise ValueError("nothing to send: no datasource and no report")
+        if not self.attachments and not self.reports and not self.dashboards:
+            raise ValueError("nothing to send: no datasource, no report and no dashboard")
         if sum(1 for r in self.reports if r.in_body) > 1:
             raise ValueError("only one report can go in the email's body")
         return self
@@ -111,21 +129,21 @@ def _number(n: int, lang: str) -> str:
 
 
 def _file_names(spec: PushmailSpec, now: datetime) -> tuple[str, list[str], list[str]]:
-    """The subject and the names of the datasources' and the reports' files, placeholders
-    resolved; a name without a folder in it, ending in its extension (.xlsx, a report's
-    .pdf), never the same twice in one email."""
+    """The subject and the names of the datasources' files and of the others' (the reports', then
+    the dashboards'), placeholders resolved; a name without a folder in it, ending in its
+    extension (.xlsx, a report's .pdf), never the same twice in one email."""
     from app.core import placeholders as ph
 
     try:
         ctx = ph.output_context(now, spec.timezone, spec.run_id, spec.flow, spec.lang)
         subject = ph.render_output(spec.subject, ctx, "text", "subject") if any(c in spec.subject for c in "{}") else spec.subject
         names = [ph.render_output(t, ctx, "file", "file name") if any(c in t for c in "{}") else t
-                 for t in [a.file_name for a in spec.attachments] + [r.file_name for r in spec.reports]]
+                 for t in [a.file_name for a in spec.attachments] + [r.file_name for r in (*spec.reports, *spec.dashboards)]]
     except ph.PlaceholderError as e:
         raise EmailDestinationError(str(e)) from e
     if "\r" in subject or "\n" in subject:
         raise EmailDestinationError("the subject cannot hold a line break")
-    extensions = ["xlsx"] * len(spec.attachments) + [r.format for r in spec.reports]
+    extensions = ["xlsx"] * len(spec.attachments) + [r.format for r in (*spec.reports, *spec.dashboards)]
     out: list[str] = []
     for raw, ext in zip(names, extensions):
         base = (raw or "report").replace("/", "_").replace("\\", "_").strip(". ") or "report"
@@ -150,6 +168,19 @@ def _render(r: PushmailReport, fmt: str, workdir: Path, now: datetime) -> Path:
                              now=now).path
     except ReportError as e:
         raise EmailDestinationError(f"the report «{r.name}»: {e.message}") from None
+
+
+def _render_dashboard(d: PushmailDashboard, workdir: Path, now: datetime) -> Path:
+    """One dashboard rendered here; EmailDestinationError naming it when it cannot be, or when one
+    of its tiles has nothing to say."""
+    from app.reports import dashboard_layout
+    from app.reports.errors import ReportError
+
+    try:
+        return dashboard_layout.render(d.definition, d.tiles, d.datasets, d.format, workdir, params=d.params, locale=d.locale, title=d.name,
+                                       page=d.page, strict=True, now=now).path
+    except ReportError as e:
+        raise EmailDestinationError(f"the dashboard «{d.name}»: {e.message}") from None
 
 
 class _Summary(NamedTuple):
@@ -214,7 +245,7 @@ def send_pushmail(conn: SmtpConnectionSpec, spec: PushmailSpec, now: datetime | 
     if not conn.from_address.strip():
         raise EmailDestinationError("The SMTP connection has no sender address.")
     now = now or datetime.now(timezone.utc)
-    subject, names, report_names = _file_names(spec, now)
+    subject, names, report_names = _file_names(spec, now)  # the reports', then the dashboards'
     count = len(names) + len(report_names)
 
     files: list[tuple[str, bytes]] = []
@@ -253,6 +284,9 @@ def send_pushmail(conn: SmtpConnectionSpec, spec: PushmailSpec, now: datetime | 
             files.append((name, add(path, len(names) + i + 1)))
             if r.in_body:
                 summary = _summary(add(_render(r, "html", Path(tmp) / f"summary-{i}", now), len(names) + i + 1))
+        for i, (d, name) in enumerate(zip(spec.dashboards, report_names[len(spec.reports):])):
+            path = _render_dashboard(d, Path(tmp) / f"dashboard-{i}", now)
+            files.append((name, add(path, len(names) + len(spec.reports) + i + 1)))
 
     msg = EmailMessage()
     msg["From"] = conn.sender()
@@ -281,12 +315,12 @@ def send_pushmail(conn: SmtpConnectionSpec, spec: PushmailSpec, now: datetime | 
     else:
         msg.set_content(body)
     for name, data in files:
-        mime = PDF_MIME if name.lower().endswith(".pdf") else XLSX_MIME
+        mime = {".pdf": PDF_MIME, ".png": PNG_MIME}.get(name.lower()[-4:], XLSX_MIME)
         msg.add_attachment(data, maintype=mime[0], subtype=mime[1], filename=name)
 
     _send(conn, msg, recipients)
-    logger.info("📧 pushmail to %d recipients, %d files (%d bytes, %d reports)", len(recipients), len(files), size,
-                len(spec.reports))
+    logger.info("📧 pushmail to %d recipients, %d files (%d bytes, %d reports, %d dashboards)", len(recipients), len(files), size,
+                len(spec.reports), len(spec.dashboards))
     return {
         "ok": True,
         "recipients": len(recipients),

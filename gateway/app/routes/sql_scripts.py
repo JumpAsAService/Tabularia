@@ -220,7 +220,7 @@ def _groups_off(session: Session, user: User, script: SqlScript, reasons: list[s
     """The flow groups that run the script, or send a report that reads it, scheduled by
     someone else: a change that makes the script reach more switches their schedules off
     too, as a change of their own would."""
-    from app.services import reports
+    from app.services import dashboards, reports
 
     if not reasons:
         return []
@@ -229,6 +229,8 @@ def _groups_off(session: Session, user: User, script: SqlScript, reasons: list[s
                 for g in sql_scripts.groups_using(session, script.id)]
     affected += [(g, f"the SQL script '{script.name}' its report '{r.name}' reads changed: {why}")
                  for r, g in reports.groups_reading(session, "sql_script", script.id)]
+    affected += [(g, f"the SQL script '{script.name}' its dashboard '{d.name}' reads changed: {why}")
+                 for d, g in dashboards.groups_reading(session, "sql_script", script.id)]
     return reports.turn_off_groups(session, user, affected)
 
 

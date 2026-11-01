@@ -3,6 +3,8 @@
 - POST /reports/render: starts the render of a report whose datasets the gateway has
   resolved with the reader's rights; the file is followed and taken, once, as the Viewer's
   exports (GET /tasks/exports/{id}, …/file), by its owner.
+- POST /reports/dashboard-render: the same for a dashboard, as a PDF or an image
+  (app/reports/dashboard_layout.py), with what this reader may read and the clicks of the moment.
 - POST /reports/check: the mistakes of a definition, each with its item, its property and
   the position inside the expression — what the editor shows when a report is saved.
 - POST /reports/choices: the choices of a parameter taken from a dataset, for the form; on
@@ -99,6 +101,23 @@ class DashboardTiles(BaseModel):
     cache: Optional[DashboardCache] = None  # then no slot: others may be waiting for this computation
 
 
+class DashboardRender(BaseModel):
+    definition: dict  # a dashboard's, written as a report's, with its images
+    tiles: list[dict] = Field(default_factory=list, max_length=500)  # {"id", "title", "grid"} of each
+    datasets: dict[str, dict] = Field(default_factory=dict)  # those the reader may read, as a render's
+    refused: dict[str, dict] = Field(default_factory=dict)  # those not resolved: what their tiles say
+    params: dict[str, Any] = Field(default_factory=dict)
+    clicks: list[dict] = Field(default_factory=list, max_length=500)  # as a dashboard's numbers
+    state: Optional[dict] = None
+    format: Literal["pdf", "png"] = "pdf"
+    filename: Optional[str] = Field(default=None, max_length=255)
+    owner: str = Field(..., min_length=1, description="Who asked for the render, as the gateway names them")
+    locale: Optional[Literal[formats.LOCALES]] = None  # type: ignore[valid-type]
+    title: Optional[str] = Field(default=None, max_length=300)
+    page: Optional[dict] = None  # the one chosen: A4 across otherwise
+    cache: Optional[DashboardCache] = None  # a saved dashboard's: the rows are those its screen reads
+
+
 class TilesRefresh(BaseModel):
     dashboard: int
 
@@ -163,6 +182,22 @@ async def tiles(request: DashboardTiles) -> dict:
 @router.post("/tiles/refresh")
 def tiles_refresh(request: TilesRefresh) -> dict:
     return {"fresh": tile_cache.claim_refresh(request.dashboard)}
+
+
+@router.post("/dashboard-render", response_model=ReportStarted)
+def dashboard_render(request: DashboardRender):
+    """Queues a dashboard's document on the export queue; followed and taken as a report's."""
+    from app.reports.dashboard_layout import filename as dashboard_file
+
+    task_id = str(uuid.uuid4())
+    exports.remember_owner(task_id, request.owner)
+    name = dashboard_file(request.filename, request.format)
+    kwargs = request.model_dump(exclude={"owner", "cache", "filename"})
+    kwargs["filename"] = name
+    if request.cache is not None:
+        kwargs["cache_seconds"] = tile_cache.lifetime(request.cache.refresh_seconds)
+    celery_app.send_task("app.tasks.report_jobs.render_dashboard_task", kwargs=kwargs, task_id=task_id)
+    return ReportStarted(task_id=task_id, status="submitted", message=f"Rendering a dashboard as {request.format}", filename=name)
 
 
 @router.post("/render", response_model=ReportStarted)
