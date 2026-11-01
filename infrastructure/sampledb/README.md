@@ -100,7 +100,7 @@ by name first (running it again duplicates nothing):
 
 | where | what |
 |---|---|
-| `Sample` | the two connections (order system, CRM) and four saved views (the reports) |
+| `Sample` | the two connections (order system, CRM), four saved views (the reports) and the dashboard «Sales overview», with two parameters that follow each other and a click that filters |
 | `Sample / Flows` | eleven flows; three scheduled (`0 6 1 * *`, `30 5 * * *`, `0 7 * * 1`) |
 | `Sample / Private tables` | the company's nine tables and the tables the flows produce |
 | `Sample / Public tables` | `ref.calendario` (days, ISO weeks, Italian holidays) and `ref.regioni` |

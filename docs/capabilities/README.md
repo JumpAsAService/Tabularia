@@ -1,7 +1,7 @@
 # Capabilities
 
 What Tabularia does, one capability per page: preparing data on a canvas, analysing it,
-asking it questions, printing it as reports, running Python, R, SQL and container images
+asking it questions, printing it as reports, showing it on dashboards, running Python, R, SQL and container images
 on it, chaining and scheduling the work, and choosing where it is computed. Each page
 says where the feature is in the interface, how it works, who may use it and what it
 does not do, with an example on the sample data of the Docker Compose stack.
@@ -20,6 +20,7 @@ does not do, with an example on the sample data of the Docker Compose stack.
 | Preview and analysis | The data of every step as a table or a chart, the Viewer with filters, computed fields and pivots, saved views, CSV and Excel downloads | [Preview and analysis](preview-and-analysis.md) |
 | Ask your data | Questions in plain language over the datasources you may read, answered with the query and the table behind the numbers | [Ask your data](ask-your-data.md) |
 | Pixel-perfect reports | Paginated reports designed in the browser: bands in millimetres, tables grouped with subtotals over many pages, 14 kinds of chart and KPI cards, parameters; read on screen, downloaded as PDF or Excel, sent by email | [Reports](reports.md), [functions](report-functions.md) |
+| Dashboards | A screen of live tiles on an adaptive grid: KPIs, 14 kinds of chart, tables, matrices; parameters, a click on a chart that filters the others, a refresh shared by everyone; a PDF or an image, an email from a flow group | [Dashboards](dashboards.md) |
 
 ### Code and containers
 
@@ -37,7 +38,7 @@ does not do, with an example on the sample data of the Docker Compose stack.
 | Flow groups | Flows, refreshes, scripts, images and emails in steps: the cells of a step in parallel, the steps in order | [Flow groups](flow-groups.md) |
 | Scheduling | Flows, datasource refreshes, scripts and flow groups on a cron, in the installation's time zone, with an email when a scheduled flow fails | [Scheduling](scheduling.md) |
 | Dynamic dates | File names, folders, API calls and outputs with dates that move by themselves (`{yesterday:yyyyMMdd}`) and ranges of days | [Placeholders](../placeholders.md) |
-| Pushmail | Datasources sent by email as Excel files, and reports as PDF or Excel with their summary in the message, as a step of a flow group | [Pushmail](../pushmail.md) |
+| Pushmail | Datasources sent by email as Excel files, reports as PDF or Excel with their summary in the message, dashboards as PDF or image, as a step of a flow group | [Pushmail](../pushmail.md) |
 
 ### Where it runs, and where it goes
 
@@ -51,7 +52,7 @@ does not do, with an example on the sample data of the Docker Compose stack.
 A few things hold for every capability above.
 
 - **Everything lives in folders.** Flows, datasources, saved views, scripts, SQL
-  scripts, notebooks, reports, flow groups and connections are objects in a folder, and the folder's
+  scripts, notebooks, reports, dashboards, flow groups and connections are objects in a folder, and the folder's
   permissions decide who sees, runs, edits or connects: VIEW, RUN, EDIT, MANAGE and
   CONNECT ([Permissions](../governance/permissions.md)).
 - **Datasources are the shared currency.** Flows read datasources and publish new ones;

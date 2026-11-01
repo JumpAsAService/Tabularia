@@ -191,7 +191,8 @@ and exits; `docker compose ps -a` then shows it `Exited (0)`, as it should. It r
 every `docker compose up -d` and finds everything already there.
 
 Reload Explore: the `Sample` folder holds the two connections (*Sample ERP (Postgres)*,
-*Sample CRM (ClickHouse)*), four saved views, and three folders: *Flows* (eleven flows,
+*Sample CRM (ClickHouse)*), four saved views, the dashboard *Sales overview*
+([Dashboards](capabilities/dashboards.md#example-sales-overview)), and three folders: *Flows* (eleven flows,
 three of them scheduled), *Private tables* (the company's tables and the flows' results)
 and *Public tables* (a calendar, the regions).
 

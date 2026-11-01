@@ -18,6 +18,7 @@ into detail.
 | Script | Python or R code with its versions, run on Kubernetes | a folder | [Python and R](scripting.md) |
 | SQL script | SQL over the catalog or over a database connection | a folder | [SQL scripts](sql-scripts.md) |
 | Report | A paginated, pixel-perfect document over datasets, with parameters: read on screen, downloaded as PDF or Excel, sent by email | a folder | [Reports](capabilities/reports.md) |
+| Dashboard | A screen of live tiles on a grid, over datasets, with parameters: a click on a chart filters the others; downloaded as PDF or image, sent by email | a folder | [Dashboards](capabilities/dashboards.md) |
 | Flow group | Flows, refreshes, scripts, SQL scripts, images and emails in steps | a folder | [Flow groups](capabilities/flow-groups.md) |
 | Run | One execution, with its outcome, timings, engine and log | the **Runs** page | below |
 | User, group, service account | Who signs in or calls the API, and how they are grouped | **Administration** | [Permissions](governance/permissions.md) |
@@ -26,7 +27,7 @@ into detail.
 
 Everything lives in a folder, and folders nest. **Explore** shows the tree: a folder
 lists its subfolders, flows, datasources, views, connections, scripts, SQL scripts,
-notebooks, reports and flow groups.
+notebooks, reports, dashboards and flow groups.
 Root folders are created by administrators; a subfolder by whoever has **MANAGE** on
 its parent. Every person also has a **personal folder**, born with their account and
 named after their email (`leonardtriv` for `leonardtriv@example.com`): first in Explore as

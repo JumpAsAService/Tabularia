@@ -311,7 +311,7 @@ function interactive() {
       <label class="rp-check"><input type="checkbox" :checked="!!item.zebra" @change="item.zebra = ($event.target as HTMLInputElement).checked" /> {{ $t('reportDesigner.table.zebra') }}</label>
     </div>
     <label class="rp-f">
-      <span>{{ $t('reportDesigner.table.title') }}</span>
+      <span>{{ $t(word('reportDesigner.table.title')) }}</span>
       <input type="text" :value="item.title ?? ''" maxlength="100" :placeholder="item.id" @input="item.title = ($event.target as HTMLInputElement).value || null" />
     </label>
     <p class="rp-help">{{ $t(word('reportDesigner.table.titleHelp')) }}</p>

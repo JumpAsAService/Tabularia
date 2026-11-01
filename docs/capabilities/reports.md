@@ -11,8 +11,10 @@ through the **API**.
 Use the [Viewer](preview-and-analysis.md#the-viewer) to explore a datasource: filters,
 pivots and charts that change as you ask. Use a report when the answer has to arrive as
 a document: the same layout every month, page numbers and totals in their place, for
-people who never open Tabularia and read it as a PDF or in their inbox. Every
-installation has reports, Docker Compose included.
+people who never open Tabularia and read it as a PDF or in their inbox. Use a
+[dashboard](dashboards.md) when the screen is the answer: tiles on a grid that adapt to the
+window and filter each other at a click. Every installation has reports, Docker Compose
+included.
 
 ![The report designer: the page in millimetres with its header, three KPI cards, a combo chart, a table grouped by category and a matrix; the elements on the left, the selected table's properties on the right](../media/guide/reports/designer-monthly-margin.png)
 
@@ -734,6 +736,7 @@ outcome and where it came from: the interface, the API, a notebook or a flow gro
 ## Related
 
 - [Report functions](report-functions.md): every function with examples on the sample data
+- [Dashboards](dashboards.md): the same datasets and parameters, on a screen that answers clicks
 - [Pushmail](../pushmail.md#reports): sending a report from a flow group
 - [Flow groups](flow-groups.md) and [Scheduling](scheduling.md)
 - [API: download a report](../api.md#download-a-report),

@@ -1,13 +1,13 @@
-# Pushmail: datasources and reports by email from a flow group
+# Pushmail: datasources, reports and dashboards by email from a flow group
 
 For whoever sets up flow groups that send data to people.
 
 A **Pushmail** cell of a [flow group](capabilities/flow-groups.md) sends one email through an SMTP connection, with
-**one `.xlsx` file per datasource** and **one PDF or Excel file per report**, and can put a
-report's summary in the message itself. It runs as a step of the group like any other
+**one `.xlsx` file per datasource**, **one PDF or Excel file per report** and **one PDF or
+image per dashboard**, and can put a report's summary in the message itself. It runs as a step of the group like any other
 cell: after the steps before it (a refresh, the flows that publish the datasources), on
-the group's schedule, and its failure stops the group. It is the only way a report is
-sent by email: a report has no schedule of its own, so it leaves right after the data it
+the group's schedule, and its failure stops the group. It is the only way a report or a dashboard is
+sent by email: neither has a schedule of its own, so it leaves right after the data it
 shows is refreshed.
 
 ## Before you start
@@ -15,9 +15,9 @@ shows is refreshed.
 - An SMTP connection exists and you have **CONNECT** on its folder (the same right the
   email of an Output node needs). Its **allowed domains** limit who may receive the email.
 - You can read the datasources you attach (**VIEW** on their folders).
-- For a report: **VIEW** on its folder, and the right to read every dataset it reads.
+- For a report or a dashboard: **VIEW** on its folder, and the right to read every dataset it reads.
 
-The group's catalog offers **Pushmail (datasources and reports by email)** when at least
+The group's catalog offers **Pushmail** when at least
 one SMTP connection is available to you; so does the picker of an empty cell.
 
 ## The cell
@@ -31,8 +31,9 @@ one SMTP connection is available to you; so does the picker of an empty cell.
 | **Message** | plain text, or HTML when ticked (sent with a plain-text alternative) |
 | **Datasources** | one file each, up to 20: the datasource, the **file name** (a template, `.xlsx` added) and the **rows at most** (1 to 1,000,000; 10,000 by default) |
 | **Reports** | one file each, up to 5: the report, **PDF** or **Excel**, the **file name** (a template, the extension added), the values of its **parameters**, and **Summary in the email body** (see [Reports](#reports)) |
+| **Dashboards** | one file each, up to 5: the dashboard, **PDF** or **Image**, the **file name**, the values of its **parameters** (see [Dashboards](#dashboards)) |
 
-A cell needs at least one datasource or one report: a cell with reports only is fine.
+A cell needs at least one datasource, one report or one dashboard: a cell with dashboards only is fine.
 
 The placeholders are those of the Outputs ([placeholders](placeholders.md)): `{today}`,
 `{today-1:yyyyMMdd}`, `{now:HHmm}`, `{run_id}`, `{flow}`; `{today:MMMM yyyy}` writes the
@@ -107,27 +108,55 @@ page records it (`flow_group.schedule`, with the reason); the author schedules t
 again after looking. A change of the layout alone, or one by the schedule's own author,
 keeps it.
 
+## Dashboards
+
+A [dashboard](capabilities/dashboards.md) in the cell is made into a file when the email
+leaves, by the worker that writes it, from the dashboard's **current version**.
+
+- **Format.** **PDF** is the document the viewer's PDF button gives, its tables over as many
+  pages as they need. **Image** is the same on one long page, PNG; past
+  `REPORTS__RENDER_MEMORY_MB` it stops the cell, saying so: choose the PDF. They count in the
+  15 MB of files of one email.
+- **Parameters.** As a report's: the panel shows the form, a value left empty is the
+  dashboard's default when the email leaves, a date may be a [placeholder](placeholders.md).
+  A click is not something a cell chooses: to send one area, give it the parameter.
+- **It reads the source.** Not what the screen keeps: what the steps before it refreshed is
+  what the email says.
+- **Nobody looks at it before it leaves.** On a screen a tile that cannot say its numbers says
+  so and the others work; here a dataset the group's author may not read, a dataset past
+  `DASHBOARDS__MAX_ROWS` or any tile with an error **stops the cell, with its name, and nothing is
+  sent**.
+
+The rules of a schedule are a report's. A dashboard that a flow group sends cannot be deleted:
+the delete says which groups send it (`409`). Someone else who changes what the dashboard
+**reads** (a dataset that reads something else, a SQL script or a saved view it reads, a new
+default for a parameter the cell gives no value) switches the schedules of the groups that send
+it off, and the audit log says why; a change of its tiles or their places keeps them.
+
+Every dashboard the cell carries is a `dashboard.render` in the audit log, from `flow_group`,
+with its format and its parameters.
+
 ## What is checked, and when
 
 When the group is saved, a Pushmail cell that is new or changed is checked with the
 rights of whoever saves it: the connection is SMTP and they have CONNECT on it, every
 address is an address and within the connection's allowed domains, every datasource
 exists and they can read it, none twice; every report exists and they can see it, its
-values fit its parameters, and they may read every dataset it reads. A report in a folder
-they cannot see is «not found», as a datasource.
+values fit its parameters, and they may read every dataset it reads; the same for every
+dashboard. A report or a dashboard in a folder they cannot see is «not found», as a datasource.
 
 When the group runs, all of it is checked again with the rights of whoever runs it (the
 author of the schedule, for a scheduled run), and a scheduled group whose author lost a
 right does not start at all. A datasource with no data yet (never imported or published)
-fails the cell before anything is sent; so does a report whose values no longer fit, or
-whose data they may no longer read.
+fails the cell before anything is sent; so does a report or a dashboard whose values no
+longer fit, or whose data they may no longer read.
 
 A change to a Pushmail cell made by someone other than the author of the group's
 schedule switches the schedule off, as for any cell added by someone else: the schedule
 would otherwise send data to recipients its author never chose.
 
 Every email is written to the audit log (`email.send`) when it leaves: who, through
-which connection, to whom, which datasources and reports. Every report it carries is a
+which connection, to whom, which datasources, reports and dashboards. Every report it carries is a
 `report.render` too, from `flow_group`, with its format, its parameters' values, the
 group and the cell's run, and the outcome.
 

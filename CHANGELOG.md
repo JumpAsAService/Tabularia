@@ -3,6 +3,20 @@
 All notable changes to Tabularia. The version shown here is the one the gateway
 exposes at `/system/info` and in the app's settings menu.
 
+## Unreleased
+
+- **Dashboards**: a screen of live tiles on an adaptive grid of 12 columns, an object of a folder
+  with its versions (Explore → New → Dashboard, Analysis → Dashboards, the most read first). KPIs,
+  14 kinds of chart, tables, matrices, texts and images; datasets and parameters as a report's,
+  with the same rights and expressions, read tile by tile with the rights of whoever reads. A click
+  on a bar, a slice or a group filters the other tiles on its dataset, and stays in the address.
+  Refresh by hand or by itself, with a cache shared by everyone (`DASHBOARDS__*`): the rights are
+  checked first, at every request. A PDF or an image of what is on screen, the API
+  (`GET /dashboards/{id}/render`), and an email from a flow group's Pushmail cell. The sample data
+  ends with «Sales overview». Schema revision 0036 adds its tables and nothing else. Guide:
+  docs/capabilities/dashboards.md. **Not in this version:** custom tiles, a click across datasets,
+  comments, alerts, a dashboard public without signing in, CSV or Excel of a tile, and MCP tools.
+
 ## 1.2.2 «Appio» — 2026-10-25
 
 - **Administration → Settings holds every setting an administrator may own**, about a

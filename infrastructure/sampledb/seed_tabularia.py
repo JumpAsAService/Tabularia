@@ -16,7 +16,8 @@ after the gateway and the sample databases are healthy. In order, it:
   5. builds eleven flows in «Flows» — with joins between private and public data,
      a sql node, pivots, calculations — and schedules three of them;
   6. runs them once, so that the tables they produce exist, and saves the views
-     (the reports) on those in the Sample folder.
+     (the reports) on those in the Sample folder;
+  7. makes the dashboard «Sales overview» on two of those tables.
 
 Idempotent: every object is looked up by name before being created, so starting
 the container again duplicates nothing. It grants NO permissions: who can see
@@ -691,6 +692,102 @@ def create_views(project: int, engine: str, outputs_in: int) -> None:
         log(f"view saved: {name}")
 
 
+# ── 7. the dashboard ──────────────────────────────────────────────────────────
+DASHBOARD = "Sales overview"
+# the two tables it reads, with the flows' names: a dataset on a datasource reads its parquet, the same
+# whichever engine wrote it, so no engine is named here and the columns are taken from what this one wrote
+DASHBOARD_TABLES = {"agents": "Agent Leaderboard", "months": "Margin by Category and Month"}
+
+
+def field_type(dtype: str) -> str:
+    d = dtype.lower()
+    return "integer" if d.startswith(("int", "uint")) else "float" if d.startswith(("float", "double", "decimal")) else "string"
+
+
+def sales_overview(agents: dict, months: dict) -> dict:
+    """KPIs and charts on the agents, a table of them by area, and the months by category.
+
+    A click filters the tiles of its own dataset. The Agent list follows the Area because both filter
+    one dataset, in the order of the form: docs/capabilities/reports.md, «A parameter that filters the data»."""
+    def fields(d: dict) -> list[dict]:
+        return [{"name": c["name"], "type": field_type(c.get("dtype", ""))} for c in d["columns"]]
+
+    def grid(x: int, y: int, w: int, h: int) -> dict:
+        return {"x": x, "y": y, "w": w, "h": h}
+
+    def kpi(tid: str, label: str, value: str, fmt: str, x: int) -> dict:
+        return {"id": tid, "type": "kpi", "dataset": "agents", "title": label, "label": label, "value": value, "format": fmt,
+                "grid": grid(x, 0, 3, 3)}
+
+    def choices(dataset: str, field: str) -> dict:
+        return {"dataset": dataset, "value": f"[{field}]"}
+
+    money, whole = "€ #,##0", "#,##0"
+    return {
+        "v": 1, "locale": "en", "timezone": "Europe/Rome", "refresh_seconds": 300,
+        "parameters": [
+            {"name": "area", "label": "Area", "type": "text", "required": False, "choices": choices("agents", "area")},
+            {"name": "agent", "label": "Agent", "type": "text", "required": False, "choices": choices("agents", "agente")},
+            {"name": "category", "label": "Category", "type": "text", "required": False, "choices": choices("months", "categoria")},
+        ],
+        "datasets": [
+            {"name": "agents", "fields": fields(agents),
+             "source": {"kind": "datasource", "datasource_id": agents["id"], "filters": [
+                 {"column": "area", "op": "=", "value": "{area}"}, {"column": "agente", "op": "=", "value": "{agent}"}]}},
+            {"name": "months", "fields": fields(months),
+             "calculated": [{"name": "Month", "expr": "DATE(FLOOR([anno_mese] / 100), [anno_mese] - FLOOR([anno_mese] / 100) * 100, 1)"}],
+             "source": {"kind": "datasource", "datasource_id": months["id"], "filters": [
+                 {"column": "categoria", "op": "=", "value": "{category}"}]}},
+        ],
+        "tiles": [
+            kpi("revenue", "Revenue", "SUM([ricavo])", money, 0),
+            kpi("orders", "Orders", "SUM([ordini])", whole, 3),
+            kpi("per_order", "Revenue per order", "SUM([ricavo]) / SUM([ordini])", "€ #,##0.00", 6),
+            kpi("agents", "Agents", "COUNT()", whole, 9),
+            {"id": "by_area", "type": "chart", "kind": "column", "dataset": "agents", "title": "Revenue by area", "grid": grid(0, 3, 5, 8),
+             "category": "[area]", "series": [{"name": "Revenue", "value": "SUM([ricavo])"}], "options": {"format": money, "sort": "desc"}},
+            {"id": "orders_by_area", "type": "chart", "kind": "combo", "dataset": "agents", "title": "Orders and revenue per order", "grid": grid(5, 3, 7, 8),
+             "category": "[area]", "series": [{"name": "Orders", "value": "SUM([ordini])", "as": "bar", "format": whole},
+                                              {"name": "Revenue per order", "value": "SUM([ricavo]) / SUM([ordini])", "as": "line", "axis": "right", "format": "€ #,##0.00"}],
+             "options": {"format": whole, "legend": True}},
+            {"id": "table", "type": "table", "dataset": "agents", "title": "Agents by area", "grid": grid(0, 11, 12, 10),
+             "groups": [{"by": "[area]", "header": True, "footer": True}], "sort": [{"by": "[ricavo]", "dir": "desc"}],
+             "columns": [
+                 {"header": "Agent", "value": "[agente]"},
+                 {"header": "Revenue", "value": "[ricavo]", "format": money, "align": "right", "total": "SUM([ricavo])"},
+                 {"header": "Orders", "value": "[ordini]", "format": whole, "align": "right", "total": "SUM([ordini])"},
+                 {"header": "Customers", "value": "[clienti]", "format": whole, "align": "right"},
+                 {"header": "Revenue per order", "value": "[ricavo_per_ordine]", "format": "€ #,##0.00", "align": "right",
+                  "total": "SUM([ricavo]) / SUM([ordini])"}],
+             "grand_total": True, "interactive": {"sort": True, "toggle": True}},
+            {"id": "margin", "type": "kpi", "dataset": "months", "title": "Margin", "label": "Margin", "grid": grid(0, 21, 3, 8),
+             "value": "SUM([margine]) / SUM([ricavo])", "format": "0.0%",
+             "sparkline": {"category": 'FORMAT([Month], "MMM yy")', "value": "SUM([margine]) / SUM([ricavo])"}},
+            {"id": "by_category", "type": "chart", "kind": "donut", "dataset": "months", "title": "Revenue by category", "grid": grid(3, 21, 5, 8),
+             "category": "[categoria]", "series": [{"name": "Revenue", "value": "SUM([ricavo])"}], "options": {"format": money, "sort": "desc"}},
+            {"id": "by_month", "type": "chart", "kind": "line", "dataset": "months", "title": "Revenue and margin by month", "grid": grid(8, 21, 4, 8),
+             "category": 'FORMAT([Month], "MMM yy")', "series": [{"name": "Revenue", "value": "SUM([ricavo])"}, {"name": "Margin", "value": "SUM([margine])"}],
+             "options": {"format": money, "legend": True}},
+        ],
+    }
+
+
+def create_dashboard(project: int, outputs_in: int) -> None:
+    if any(d["name"] == DASHBOARD for d in gw.must("GET", f"/projects/{project}/dashboards")):
+        return
+    outputs = {d["name"]: d for d in gw.must("GET", "/datasources") if d["project_id"] == outputs_in}
+    tables = {k: outputs.get(name) for k, name in DASHBOARD_TABLES.items()}
+    missing = [DASHBOARD_TABLES[k] for k, d in tables.items() if not d]
+    if missing:
+        log(f"dashboard «{DASHBOARD}» skipped: {', '.join(missing)} missing (did the flows run?)")
+        return
+    gw.must("POST", f"/projects/{project}/dashboards", {
+        "name": DASHBOARD, "content": sales_overview(tables["agents"], tables["months"]),
+        "description": "Revenue by area and agent, margin by category and month. Choose an area and the agents follow it; "
+                       "a click on a chart filters the tiles on the same data."})
+    log(f"dashboard created: {DASHBOARD}")
+
+
 # ── all together ──────────────────────────────────────────────────────────────
 def main() -> None:
     log(f"setting up the sample data (scale «{SCALE}»)")
@@ -732,7 +829,8 @@ def main() -> None:
         log("running the flows once, so the tables they produce exist…")
         failed = run_once(created, private)
     create_views(sample, engine, private)
-    log("DONE. The «Sample» folder is ready: Flows, Private tables, Public tables, connections and views. "
+    create_dashboard(sample, private)
+    log("DONE. The «Sample» folder is ready: Flows, Private tables, Public tables, connections, views and a dashboard. "
         "No permission granted: that is the administrator's call.")
     if failed:
         sys.exit(f"{len(failed)} flows did not succeed ({', '.join(failed)}): see Runs; "

@@ -111,3 +111,8 @@ jobs:
       # keys the code names (tests/i18n.test.mjs)
       - name: Translations
         run: npm test
+
+      # the seed of the sample data: on a gateway written in the test, standard library only
+      - name: The sample dashboard
+        working-directory: .
+        run: python3 -m unittest infrastructure/sampledb/test_seed_dashboard.py

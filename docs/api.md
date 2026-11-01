@@ -35,8 +35,9 @@ Every token has:
 
 - **An access level.** *Read only* refuses every request that changes something
   (any method other than GET/HEAD/OPTIONS) with `403`; the POSTs that only read,
-  `POST /tasks/export` (with `POST /tasks/exports`), `POST /tasks/preview` and
-  `POST /reports/{id}/render`, are allowed. *Read and write* can do whatever its
+  `POST /tasks/export` (with `POST /tasks/exports`), `POST /tasks/preview`,
+  `POST /reports/{id}/render`, `POST /dashboards/{id}/data` and
+  `POST /dashboards/{id}/render`, are allowed. *Read and write* can do whatever its
   account can do. A token never adds permissions: it
   is at most as powerful as its account.
 - **An expiry** of at most `AUTH__API_TOKEN_MAX_DAYS` days, one year by default.
@@ -117,6 +118,9 @@ announced in `CHANGELOG.md` one minor release in advance.
 | Export | `POST /tasks/export` | CSV (streamed) or Excel; see below |
 | Download a report | `GET /reports/{id}/render?format=pdf&<parameter>=<value>` | the file, waited for; see [Download a report](#download-a-report) |
 | Reports | `GET /reports`, `GET /reports/search?q=…&sort=trending`, `GET /reports/{id}/parameters` | those you can see (all, or a page searched and ordered as the Reports tab: `trending`, `name`, `updated`); a report's parameters with their defaults and choices |
+| Dashboards | `GET /dashboards`, `GET /dashboards/search?q=…&sort=trending`, `GET /dashboards/{id}`, `GET /dashboards/{id}/parameters` | those you can see, and as the Dashboards tab; see [Dashboards](#dashboards) |
+| A dashboard's numbers | `POST /dashboards/{id}/data` | the numbers of its tiles, ready to draw |
+| Download a dashboard | `GET /dashboards/{id}/render?format=pdf&<parameter>=<value>&click.<tile>=<value>` | the file, waited for |
 | Lineage | `GET /lineage` | the graph of flows, datasources, connections, scripts, SQL scripts, notebooks and flow groups; `?type=flow\|datasource\|connection\|script\|sql\|notebook\|group&id=…` centres it |
 
 All paths are relative to the gateway: `https://<host>/api` behind the reference
@@ -288,6 +292,95 @@ curl -fG -H "Authorization: Bearer $TABULARIA_TOKEN" -o sales.xlsx \
 To send a report by email instead, on a schedule and right after the data is refreshed,
 put it in the [Pushmail cell of a flow group](pushmail.md#reports). In a marimo notebook,
 [`tabularia.report()`](capabilities/notebooks.md#reports) does the same as this API.
+
+## Dashboards
+
+A [dashboard](capabilities/dashboards.md) answers scripts with its numbers and with its files.
+A token that may only read is enough for all of this. The reads are with the rights of the
+token's account: **VIEW** on the dashboard's folder, and the datasets it reads must be ones that
+account may read. A tile on a dataset it may not read says so in its place, and the others answer.
+The examples read «Sales overview» of the [sample data](capabilities/dashboards.md#example-sales-overview);
+its id is in its address (`/dashboard?id=12`).
+
+### Its parameters
+
+```
+GET /dashboards/12/parameters?area=Nord-Ovest
+```
+
+The parameters as the form shows them: types, defaults as they read today, choices. The values
+in the query string are those the other lists follow: with `area=Nord-Ovest`, `agent` has 13
+choices instead of 90.
+
+### Its numbers
+
+```bash
+curl -s -H "Authorization: Bearer $TABULARIA_TOKEN" -H "Content-Type: application/json" \
+  -d '{"params": {"area": "Nord-Ovest"}, "tiles": ["revenue"]}' \
+  https://tabularia.example.com/api/dashboards/12/data
+```
+
+```json
+{"tiles": {"revenue": {"type": "kpi", "label": "Revenue", "value": 2818062.7190681,
+                       "text": "€ 2,818,063", "change": null, "spark": null, "title": "Revenue",
+                       "computed_at": "2026-11-01T20:03:24.145747+00:00", "cached": false}},
+ "truncated": {"agents": false}}
+```
+
+| In the request | |
+|---|---|
+| `params` | the parameters' values, by name, as text |
+| `clicks` | what is chosen on a tile: `[{"tile": "by_area", "values": ["Centro"]}]`, and `"on": "columns"` for a matrix's columns. **A tile's id and values, never an expression**: the expression is the saved one |
+| `tiles` | only these tiles; none, every one |
+| `page` | a table's page, from 0: `{"table": 1}`; 50 rows a page |
+| `state` | a table's sort and closed groups, as on the screen: `{"items": {"table": {"sort": {"column": 1, "dir": "asc"}, "collapsed": [["Centro"]]}}}` |
+| `refresh` | `true` reads the source again, at most once every 10 seconds per dashboard, for everyone: past that it answers with what is kept, without an error |
+
+| In the answer | |
+|---|---|
+| `tiles` | by tile id. The numbers: `type`, `title`, what the type draws (`value` and `text`; `data`; `rows`), `computed_at` (when the rows were read from their source) and `cached` (this answer did not read it). A tile clicked adds `chosen`, what stayed of its values. A tile that cannot answer: only `{"error": "a sentence", "code": …}` |
+| `truncated` | by dataset read, whether it is past `DASHBOARDS__MAX_ROWS`. Of a dataset you may not read, nothing |
+
+| `code` | Means |
+|---|---|
+| `no_access` | it reads a dataset the account may not read |
+| `truncated` | it reads a dataset past `DASHBOARDS__MAX_ROWS`: the sentence says how to aggregate. No number on part of the rows |
+| `dataset` | its dataset cannot be read for another reason (no data yet, a parameter its SQL needs) |
+| `error` | anything else in this tile |
+
+A value of a click is the raw one the tile gave in `keys` (or `path` and `key` in a table): the
+number or the date, not the text on the screen; `null` for an empty group; a list for several levels,
+`["Nord", 2023]`.
+
+### Its files
+
+```bash
+curl -fG -H "Authorization: Bearer $TABULARIA_TOKEN" -o sales.pdf \
+  --data-urlencode format=pdf --data-urlencode area=Nord-Est --data-urlencode click.by_area=Nord-Est \
+  https://tabularia.example.com/api/dashboards/12/render
+```
+
+- **`format`**: `pdf` (the default) or `png`, the same document on one long page.
+- **The parameters** go in the query string by name, as for [a report](#download-a-report): one left
+  out takes the default, `{none}` says no value.
+- **The clicks** are written as in the viewer's address: `click.by_area=Nord-Est`, repeated for several
+  values; `click.cross.columns=…` for the columns of a matrix `cross`; `{none}` for an empty group; `\`
+  before a text that would read as something else; JSON for several levels.
+- **The answer** is the file, with its name in `Content-Disposition`, as a report's, and the same wait
+  (`REPORTS__API_WAIT_SECONDS`). Every download is in the audit log (`dashboard.render`, from `api`).
+
+`POST /dashboards/{id}/render`, with `{"format": "pdf", "params": {…}, "clicks": […], "state": {…}}`, is what
+the viewer's button does: it answers `{"task_id", "filename"}` at once, followed at
+`GET /tasks/exports/{task_id}` until `status` is `ready`, and taken at `GET /tasks/exports/{task_id}/file`.
+
+| Status | Means |
+|---|---|
+| `400` | a value does not fit a parameter: `{"detail": {"message": "Parameter «area»: 'Atlantis' is not one of its choices", "parameter": "area"}}`. The same for a name the dashboard does not have |
+| `404` | no dashboard with that id, or one in a folder the account cannot see |
+| `422` | a click that cannot be: `The dashboard has no tile «nope»`, `The tile «revenue» cannot filter the others`, `The click on «by_area» has 101 values: at most 100`; an unknown `format`; a file that cannot be made, saying why |
+
+A link to the viewer with a click on a tile that is gone opens without it; the API says `422`. To send a
+dashboard by email, on a schedule, put it in the [Pushmail cell of a flow group](pushmail.md#dashboards).
 
 ## Webhooks
 

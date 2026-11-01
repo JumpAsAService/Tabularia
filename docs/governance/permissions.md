@@ -23,7 +23,7 @@ and what each common action needs.
 ### Folders
 
 Flows, datasources, connections, saved views, SQL scripts, Python and R scripts,
-notebooks, reports and flow groups all belong to exactly one folder. Folders nest. Only administrators create
+notebooks, reports, dashboards and flow groups all belong to exactly one folder. Folders nest. Only administrators create
 top-level folders (the personal folders below aside); whoever has MANAGE on a folder creates
 folders inside it.
 
@@ -43,7 +43,7 @@ already, it takes a number, as copies do (`leonardtriv (1)`). Accounts created b
 this release get theirs at their next sign-in.
 
 The person has EDIT on it: they upload files there, build flows, datasources, views and
-reports, run and schedule them, and rename the folder. Nobody else is granted anything,
+reports and dashboards, run and schedule them, and rename the folder. Nobody else is granted anything,
 and a top-level folder inherits nothing: only the person and the administrators see it.
 In Explore it comes first, with a key on the folder and the tag **My folder**; an
 administrator sees everyone's, after the shared folders, tagged **Personal**.
@@ -82,7 +82,7 @@ The creation is in the audit log as `folder.create`, with `"personal": true`.
 
 | Capability | Lets you | Includes |
 |---|---|---|
-| **VIEW** | see the folder's content; open flows, datasources, saved views, scripts and reports; preview and export data; read a report and download it; ask the assistant about the datasources | |
+| **VIEW** | see the folder's content; open flows, datasources, saved views, scripts, reports and dashboards; preview and export data; read a report or a dashboard and download it; ask the assistant about the datasources | |
 | **RUN** | run flows, refresh datasources, write a SQL script's datasource, run scripts and flow groups, and schedule all of them | VIEW |
 | **EDIT** | create, change, rename, move, duplicate and delete content; write a datasource's data contract; publish a flow's result into the folder | RUN, VIEW |
 | **MANAGE** | grant and revoke permissions on the folder, create subfolders, move and delete folders | EDIT, RUN, VIEW, CONNECT |
@@ -92,6 +92,24 @@ CONNECT stands apart on purpose. Someone with VIEW, RUN or EDIT on a folder does
 see** its connections; someone with CONNECT alone sees the connections and nothing else.
 That is how a team is allowed to import from the ERP database without being able to
 change the flows next to the connection, or the other way round.
+
+### Dashboards
+
+A [dashboard](../capabilities/dashboards.md) is an object of its folder: **VIEW** opens it, chooses
+its parameters, clicks, refreshes it and downloads its PDF and its image; **EDIT** designs, renames,
+moves, duplicates and deletes it, and restores a version. Without VIEW it answers as one that does not
+exist.
+
+Opening it lends no rights. What each tile reads is checked with the rights of **whoever reads**, at
+every request and before anything shared is looked at: a tile on a dataset the reader may not read
+says so inside the tile, with no number and no name of a column, whether or not someone else has just
+read it, and the other tiles work.
+
+A flow group that sends one reads with the rights of **whoever runs the group**: the author of its
+schedule, for a scheduled run, checked again at every send. Nobody looks at it before it leaves, so a
+dataset the author may not read stops the cell, with its name, and nothing is sent. Someone else who
+changes what the dashboard reads switches the schedule off: the
+[rules of the Pushmail cell](../pushmail.md#dashboards).
 
 ### Granting
 

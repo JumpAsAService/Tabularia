@@ -383,6 +383,7 @@ const SAID_OF_A_BOARD: Record<string, string> = {
   'reportDesigner.dataset.scriptHelp': 'dashboardDesigner.words.scriptHelp',
   'reportDesigner.param.filterItOff': 'dashboardDesigner.words.filterItOff',
   'reportDesigner.param.sqlLineMulti': 'dashboardDesigner.words.sqlLineMulti',
+  'reportDesigner.table.title': 'dashboardDesigner.title',
   'reportDesigner.table.titleHelp': 'dashboardDesigner.words.titleHelp',
   'reportDesigner.props.visibleHint': 'dashboardDesigner.words.visibleHint',
   'reportDesigner.props.imageHelp': 'dashboardDesigner.words.imageHelp',
