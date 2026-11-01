@@ -106,11 +106,12 @@ class CheckRequest(BaseModel):
 class DataRequest(BaseModel):
     """What to read: the parameters' values, as for a report; `tiles` only some (none: every
     one); `page` a table's page by tile, from 0; `state` the on-screen view, as a report's
-    (a column sorted, groups toggled). `clicks` waits for the click's filter. `refresh` reads
-    the data again, at most every 10 seconds per dashboard for everyone: past that, it answers
-    with what is kept and when it was read, as any request does."""
+    (a column sorted, groups toggled); `clicks` what is chosen on a tile, which filters the others
+    on its dataset: {"tile", "values", "on"}, a matrix's `on` being "columns", and never an expression
+    (services/dashboards.py). `refresh` reads the data again, at most every 10 seconds per dashboard
+    for everyone: past that, it answers with what is kept and when it was read, as any request does."""
     params: dict[str, Any] = Field(default_factory=dict)
-    clicks: list[Any] = Field(default_factory=list, max_length=dashboards.MAX_TILES)
+    clicks: list[Any] = Field(default_factory=list, max_length=2 * dashboards.MAX_TILES)  # a matrix: its rows and its columns
     tiles: Optional[list[str]] = Field(default=None, max_length=dashboards.MAX_TILES)
     page: dict[str, int] = Field(default_factory=dict, max_length=dashboards.MAX_TILES)
     state: Optional[dict[str, Any]] = None

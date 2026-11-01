@@ -320,6 +320,11 @@ class PyData:
     def union(self, parts: list[list[dict]]) -> list[dict]:
         return [r for sub in parts for r in sub]
 
+    def keeping(self, rows: list[dict], parts: list[list[dict]]) -> list[dict]:
+        """The rows that are in these sets, in their own order."""
+        kept = {id(r) for sub in parts for r in sub}
+        return [r for r in rows if id(r) in kept]
+
     def intersect(self, a: list[dict], b: list[dict]) -> list[dict]:
         hit = self._ids.get(id(b))
         if hit is None or hit[0] is not b:
@@ -578,6 +583,7 @@ class _Builder:
             data.targets = [self._target(it, base)]
         elif it.kind == "scatter":
             groups = self.partition(it, "split_by", it.split_by, rows) if it.split_by else [(None, rows)]
+            data.split_keys = [key for key, _ in groups] if it.split_by else []
             s = it.series[0]
             agg = ex.is_aggregate(rd.parse(s.value))
             for key, sub in groups:
@@ -640,12 +646,14 @@ class _Builder:
             raise ReportError(f"item «{it.id}»: {len(cats):,} categories, the most a chart draws is "
                               f"{charts.MAX_CATEGORIES:,}: set its option «top», or aggregate")
         data.categories = [self.name(k) for k, _ in cats] + ([self.loc.texts["other"]] if other else [])
+        data.keys = [k for k, _ in cats]
         subsets = [sub for _, sub in cats] + ([other] if other else [])
         if it.split_by:
             splits = self.partition(it, "split_by", it.split_by, rows)
             if len(splits) > charts.MAX_SERIES:
                 raise ReportError(f"item «{it.id}»: split_by gives {len(splits)} series, the most is "
                                   f"{charts.MAX_SERIES}")
+            data.split_keys = [key for key, _ in splits]
             for key, srows in splits:
                 values = along([self.d.intersect(sub, srows) for sub in subsets], first, 0)
                 data.series.append(charts.SeriesData(self.name(key), [self._num(v) for v in values],

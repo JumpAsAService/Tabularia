@@ -116,6 +116,7 @@ def dashboard_tiles_task(
     locale: str | None = None,
     title: str | None = None,
     cache_seconds: int | None = None,
+    clicks: list[dict] | None = None,
 ) -> dict:
     """A dashboard's numbers (app/reports/tiles.py): on the preview queue, tagged as
     preview_task's answer; its queries carry the task's id, so that one knocked down is
@@ -133,7 +134,7 @@ def dashboard_tiles_task(
     try:
         with query_tag(f"tab-prev:{task_id}" if task_id else None):
             return {"ok": True, "result": rtiles.compute(definition, datasets, params, refused=refused, only=tiles, pages=pages,
-                                                         state=state, locale=locale, title=title or "", **extra)}
+                                                         state=state, locale=locale, title=title or "", clicks=clicks, **extra)}
     except ReportError as e:
         return {"ok": False, "error": e.tag, "detail": e.message}
     except Exception as e:

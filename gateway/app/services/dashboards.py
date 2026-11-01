@@ -15,7 +15,9 @@ those of a dashboard (`_in_our_words`).
 
 Reading the numbers (`numbers`) is three steps: what was asked is checked (`check_asked`);
 rights and values with the reader's, at every request (`_plan`), which no cache stands in for;
-the engine works them out on the preview queue (`_computed`, app/reports/tiles.py). A saved
+the engine works them out on the preview queue (`_computed`, app/reports/tiles.py). A click names
+a tile and values, checked against the saved definition (`_checked_clicks`), and the engine filters
+by that tile's own expression; a click on a tile the reader may not read counts for nothing. A saved
 dashboard's are shared by whoever reads the same source, with one query: the cache is in the
 engine (app/reports/tile_cache.py), as Valkey is not the gateway's, and what it is given is only
 what `_plan` found this reader may read. A definition being edited shares nothing.
@@ -24,6 +26,7 @@ from __future__ import annotations
 
 import hashlib
 import json
+import math
 import re
 from dataclasses import dataclass, field
 from datetime import datetime, timezone
@@ -50,6 +53,7 @@ TILE_TYPES = ("kpi", "chart", "table", "text", "image")
 # the smallest tile of each type, columns and rows (a row is 40 px)
 MIN_TILE = {"kpi": (2, 2), "chart": (4, 4), "table": (4, 4), "text": (2, 1), "image": (1, 1)}
 FILTERS_OTHERS = ("chart", "table")  # a KPI, a text and an image do not filter
+MAX_CLICK_VALUES, MAX_CLICK_TEXT = 100, 1000  # what a person chooses with Ctrl; what a value on an axis can be
 _HAS_TITLE = ("chart", "table")  # a report's items with a title of their own: the rest take the tile's here
 _ITEM_PATH = re.compile(r"^sections\.body\.items\[(\d+)\](.*)$")
 _TILE_PATH = re.compile(r"^tiles\[\d+\]\.?(.*)$")
@@ -391,7 +395,8 @@ TILES_SECONDS = 300  # the engine stops first (PREVIEW_TIMEOUT_SECONDS): 504
 class Asked:
     """What a request for numbers asks: the parameters' values as given, the tiles (None: every
     one), a table's page by tile, the on-screen view (a column sorted, groups toggled), the
-    clicks, and whether to read the data again rather than take what is kept."""
+    clicks (each {"tile", "on", "values"}), and whether to read the data again rather than take
+    what is kept."""
     given: dict[str, list] = field(default_factory=dict)
     tiles: Optional[list[str]] = None
     pages: dict[str, int] = field(default_factory=dict)
@@ -400,12 +405,66 @@ class Asked:
     refresh: bool = False
 
 
+def _levels_of(tile: dict, on: str) -> int:
+    """How many values a click on this tile can name: its category and the `split_by`; a table's
+    groups, or a matrix's levels of columns. None: it cannot filter."""
+    if tile.get("filters_others") is False:
+        return 0
+    if tile.get("type") == "chart":
+        return 0 if on != "rows" or not tile.get("category") or tile.get("kind") == "gauge" else (2 if tile.get("split_by") else 1)
+    if tile.get("type") != "table":
+        return 0
+    if on == "rows":
+        return len(tile.get("groups") or [])
+    levels = (tile.get("matrix") or {}).get("columns_by")
+    return len(levels) if isinstance(levels, list) else 1 if levels else 0
+
+
+def _click_value(value: Any) -> bool:
+    if isinstance(value, str):
+        return len(value) <= MAX_CLICK_TEXT
+    if isinstance(value, float):
+        return math.isfinite(value)  # Python's JSON reads NaN, and no key is one
+    return value is None or isinstance(value, (bool, int))
+
+
+def _checked_clicks(definition: dict, clicks: list) -> list[dict]:
+    """The clicks as the engine takes them, or 422. The browser names a tile and values, and never
+    an expression: a key it does not know is refused, not left out, and what a value chooses on is
+    the saved definition's."""
+    tiles = {t.get("id"): t for t in definition.get("tiles") or [] if isinstance(t, dict)}
+    seen, out = set(), []
+    for click in clicks:
+        if not isinstance(click, dict) or not set(click) <= {"tile", "on", "values"}:
+            raise HTTPException(status_code=422, detail="A click is a tile and its values, and nothing else")
+        tile_id, on, values = click.get("tile"), click.get("on") or "rows", click.get("values")
+        if not isinstance(tile_id, str) or tile_id not in tiles:
+            raise HTTPException(status_code=422, detail=f"The dashboard has no tile «{str(tile_id)[:64]}»")
+        if on not in ("rows", "columns"):
+            raise HTTPException(status_code=422, detail=f"The tile «{tile_id}»: a click is on its rows or on its columns")
+        most = _levels_of(tiles[tile_id], on)
+        if not most:
+            raise HTTPException(status_code=422, detail=f"The tile «{tile_id}» cannot filter the others")
+        if (tile_id, on) in seen:
+            raise HTTPException(status_code=422, detail=f"The tile «{tile_id}» has two clicks: send its values together")
+        seen.add((tile_id, on))
+        if not isinstance(values, list) or not values:
+            raise HTTPException(status_code=422, detail=f"The click on «{tile_id}» needs its values")
+        if len(values) > MAX_CLICK_VALUES:
+            raise HTTPException(status_code=422, detail=f"The click on «{tile_id}» has {len(values)} values: at most {MAX_CLICK_VALUES}")
+        for value in values:
+            path = value if isinstance(value, list) else [value]
+            if not 1 <= len(path) <= most or not all(_click_value(v) for v in path):
+                raise HTTPException(status_code=422, detail=f"The click on «{tile_id}»: a value is a text of at most {MAX_CLICK_TEXT} "
+                                                            f"characters, a number, true, false or null, or a list of at most {most} of them")
+        out.append({"tile": tile_id, "on": on, "values": values})
+    return out
+
+
 def check_asked(definition: dict, asked: Asked) -> None:
     """422 for what a browser may not ask: a tile the dashboard does not have, a page that is
-    none, a view too large. A click's filter is not there yet: refused, not ignored, or the
-    tiles would answer as if nothing had been clicked."""
-    if asked.clicks:
-        raise HTTPException(status_code=422, detail="A click cannot filter the other tiles yet: send the request without «clicks»")
+    none, a view too large, a click on what cannot filter or with too many values."""
+    asked.clicks = _checked_clicks(definition, asked.clicks)
     known = {t.get("id") for t in definition.get("tiles") or [] if isinstance(t, dict)}
     for tile_id in [*(asked.tiles or []), *asked.pages]:
         if tile_id not in known:
@@ -448,7 +507,7 @@ async def _computed(plan: _Plan, asked: Asked, title: str, slot: Optional[str] =
     a newer one took its place, or the engine could not answer. `cache` or `slot`, not both."""
     resp = await get_engine_client().post("/reports/tiles", timeout=TILES_SECONDS, json={
         "definition": plan.shaped, "datasets": plan.datasets, "refused": plan.refused, "params": plan.params,
-        "tiles": asked.tiles, "pages": asked.pages, "state": asked.state, "locale": plan.shaped.get("locale") or "en",
+        "tiles": asked.tiles, "pages": asked.pages, "state": asked.state, "clicks": asked.clicks, "locale": plan.shaped.get("locale") or "en",
         "title": title[:300], **({"cache": cache} if cache is not None else {"slot": slot})})
     if resp.status_code == 409:
         raise HTTPException(status_code=409, detail="A newer request for the same tiles took the place of this one")

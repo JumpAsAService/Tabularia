@@ -1133,6 +1133,15 @@ class SqlData:
         perm = np.concatenate([p.idx for p in parts]) if parts else np.empty(0, np.int64)
         return Family(parts[0].family.rel, perm, np.array([0, len(perm)], np.int64), [None]).members[0]
 
+    def keeping(self, rows: Any, parts: list[Any]) -> Any:
+        """The rows that are in these sets, in their own order."""
+        rows = _rows_of(rows)
+        kept = np.zeros(rows.family.rel.table.n, bool)
+        for part in parts:
+            kept[_rows_of(part).idx] = True
+        keep = rows.idx[kept[rows.idx]]
+        return Family(rows.family.rel, keep, np.array([0, len(keep)], np.int64), [None]).members[0]
+
     def intersect(self, a: Any, b: Any) -> Any:
         """The rows of `a` that are in `b`, in `a`'s order; all the pairs of their two
         families are worked out together."""

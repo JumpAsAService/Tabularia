@@ -62,6 +62,10 @@ class ChartData:
     points: list[tuple[str, list[tuple[float | None, float | None, str]]]] = field(default_factory=list)
     targets: list[float | None] = field(default_factory=list)
     total_label: str = "Total"
+    # the raw values behind `categories` (without «Other») and the series of a `split_by`: only a
+    # dashboard's click reads them, a value on a report's chart is what it prints
+    keys: list[Any] = field(default_factory=list)
+    split_keys: list[Any] = field(default_factory=list)
 
 
 def _palette(theme: rd.Theme) -> list[str]:

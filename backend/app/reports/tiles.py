@@ -19,13 +19,26 @@ what the others' tiles say. Here:
 
 `compute` takes the reading as `read`, where the rows of a dataset can come from the cache
 (app/reports/tile_cache.py): then `computed_at` says when they were read from their source, and
-`cached` that this request did not read it. `_Builder.rows_of` is the one place a tile's rows come
-from, on both ways of computing, for what comes next (a click's filter).
+`cached` that this request did not read it.
+
+A click on a tile filters the others on its dataset (docs/specs/dashboards.md, «A click filters the
+others»): `_Tiles.rows_of` is the one place a tile's rows come from, on both ways of computing. The
+browser sends a tile's id and values. The expression is the tile's own, in the definition; the
+rows are split by it as the tile itself splits them (`partition`), and those whose key is one of the
+values are kept: a value is only ever compared with a key, so nothing in it can be read as an
+expression, and NULL, a date or an int past what JavaScript holds are found like any other. A
+value not there is dropped, and a click with none left counts for nothing: the tile clicked says
+what stayed, in `chosen`. A click on a tile the reader may not read counts for nothing, whatever it
+says (`clicks_of`): its expression may read what they may not, and it would tell them which values
+exist there. One that cannot be worked out says so in the tiles it touches: none of them shows its
+numbers as if nothing had been clicked.
 """
 from __future__ import annotations
 
+import json
 import logging
 import math
+from dataclasses import dataclass
 from datetime import datetime, timezone
 from types import SimpleNamespace
 from typing import Any, Callable, Iterable
@@ -43,6 +56,7 @@ logger = logging.getLogger(__name__)
 PAGE_ROWS = 50  # a table's page
 MAX_POINTS = 10_000  # a scatter's points: what a browser draws and a person reads; past it, aggregate
 MAX_WALKED = 100_000  # the rows a RUNNING or a PREVIOUS turns into Python's values to reach a page
+MAX_SAFE_INT = 2 ** 53  # past it a browser's JSON changes an int: it goes as a text
 
 
 def max_rows() -> int:
@@ -63,6 +77,13 @@ def _value(v: Any) -> Any:
     return rmodel.key_id(v)
 
 
+def _key(v: Any) -> Any:
+    """A value a click can name, as the browser holds it and sends it back: the raw one, never
+    what the screen says of it. `_forms` finds it again."""
+    v = _value(v)
+    return str(v) if isinstance(v, int) and not isinstance(v, bool) and abs(v) > MAX_SAFE_INT else v
+
+
 def _clean(node: Any) -> Any:
     """The whole answer of a tile written in plain JSON: an infinity computed anywhere in it
     would stop every other tile at the door."""
@@ -73,20 +94,194 @@ def _clean(node: Any) -> Any:
     return _value(node)
 
 
+# ── a click ──────────────────────────────────────────────────────────────────
+@dataclass(eq=False)
+class Click:
+    """A click a reader may use: on which tile, on what of it (`on`: a matrix's `columns`, or
+    `rows`), the expressions it chooses values of, from the outermost, what it chooses (each a
+    path along them, `written` as it was sent), and the datasets that tile reads."""
+    tile: str
+    on: str
+    dataset: str | None
+    levels: list[str]
+    paths: list[list]
+    written: list
+    reads: list[str]
+
+
+def click_levels(it: Any, on: str = "rows") -> list[str]:
+    """What a click on this tile chooses values of. Nothing: it cannot filter (a KPI, a gauge, a table
+    with no groups)."""
+    if it.type == "chart":
+        return [it.category, *([it.split_by] if it.split_by else [])] if it.category and it.kind != "gauge" else []
+    if it.type == "table":
+        if on == "columns":
+            return list(it.matrix.levels) if it.matrix else []
+        return [g.by for g in it.groups]
+    return []
+
+
+def dataset_of(report: rd.Report, it: Any) -> str | None:
+    name = getattr(it, "dataset", None)
+    return name if name is not None or len(report.datasets) != 1 else report.datasets[0].name
+
+
+def clicks_of(report: rd.Report, clicks: Iterable[dict], refused: dict[str, dict]) -> list[Click]:
+    """The clicks of a request this reader may use: one on a tile they may not read counts for
+    nothing. The gateway refuses the rest (a tile that cannot filter); here they are only left out."""
+    tiles = {it.id: it for _, it in report.items()}
+    out = []
+    for raw in clicks:
+        it, on = tiles.get(raw.get("tile")), raw.get("on") or "rows"
+        levels = click_levels(it, on) if it is not None else []
+        if not levels:
+            continue
+        reads = rdata.used_datasets(report, [it])
+        if refusal(reads, refused):
+            continue
+        written = [v for v in raw.get("values") or [] if len(v if isinstance(v, list) else [v]) <= len(levels)]
+        out.append(Click(it.id, on, dataset_of(report, it), levels, [v if isinstance(v, list) else [v] for v in written], written, reads))
+    return out
+
+
+def touching(it_id: str, dataset: str | None, reads: Iterable[str], clicks: list[Click]) -> list[Click]:
+    """The clicks that filter this tile: on another tile, on a dataset it reads as its own."""
+    return [c for c in clicks if c.tile != it_id and c.dataset == dataset and dataset in reads]
+
+
+def needing(report: rd.Report, it: Any, needs: list[str], clicks: list[Click]) -> list[str]:
+    """What a tile needs read: its own, and what the clicks that filter it read."""
+    more = [n for c in touching(it.id, dataset_of(report, it), needs, clicks) for n in c.reads]
+    return list(dict.fromkeys([*needs, *more]))
+
+
+def click_marks(report: rd.Report, it: Any, needs: list[str], clicks: list[Click]) -> list:
+    """What the clicks change of this tile, for the cache's key, in no order of their own: the
+    filters on it, by expression, so that two tiles on one field share; and what it says is chosen."""
+    marks = [["filter", c.levels, sorted(json.dumps(p) for p in c.paths)] for c in touching(it.id, dataset_of(report, it), needs, clicks)]
+    marks += [["chosen", c.on, c.written] for c in clicks if c.tile == it.id]
+    return sorted(marks, key=json.dumps)
+
+
+def _forms(v: Any) -> list[tuple]:
+    """What a value sent can be equal to: JSON keeps its type, an address has only texts."""
+    if v is None:
+        return [("null",)]
+    if isinstance(v, bool):
+        return [("bool", v)]
+    if isinstance(v, (int, float)):
+        return [("number", v)]
+    out: list[tuple] = [("text", v)]
+    if v in ("true", "false"):
+        out.append(("bool", v == "true"))
+    try:
+        out.append(("number", int(v)))
+    except ValueError:
+        try:
+            if math.isfinite(number := float(v)):
+                out.append(("number", number))
+        except ValueError:
+            pass
+    return out
+
+
+def _form_of(key: Any) -> tuple:
+    """A key as `_forms` writes it: as the answer holds it."""
+    return _forms(_value(key))[0]
+
+
+class _Tiles(rmodel._Builder):
+    """The reports' model, whose rows are a tile's: its dataset's, less what a click on another
+    tile leaves out. Set `tile` before asking."""
+
+    def __init__(self, *args: Any, clicks: list[Click] = (), **kwargs: Any):  # type: ignore[assignment]
+        super().__init__(*args, **kwargs)
+        self.clicks = clicks
+        self.tile: str | None = None
+        self._cuts: dict[tuple, tuple[list, dict[int, list]]] = {}
+        self._kept: dict[tuple, Any] = {}
+
+    def _among(self, c: Click, rows: Any, paths: list[tuple[int, list]], found: dict[int, list], before: list) -> list:
+        """The sets of these rows whose values are on one of these paths, noting in `found`
+        which paths are there, with the keys they have."""
+        at = len(before)
+        wanted: dict[tuple, list[tuple[int, list]]] = {}
+        for i, path in paths:
+            for form in _forms(path[at]):
+                wanted.setdefault(form, []).append((i, path))
+        parts = []
+        ctx = self.ctx.at(dataset=c.dataset, scopes=[rows], row=None)
+        for key, sub in self.d.partition(rows, rd.parse(c.levels[at]), ctx, c.tile, "the click"):
+            here = wanted.get(_form_of(key))
+            if not here:
+                continue
+            ending = [i for i, path in here if len(path) == at + 1]
+            for i in ending:
+                found[i] = [*before, _key(key)]
+            deeper = [(i, path) for i, path in here if len(path) > at + 1]
+            inside = self._among(c, sub, deeper, found, [*before, _key(key)]) if deeper else []
+            parts += [sub] if ending else inside  # a group chosen whole holds those inside it
+        return parts
+
+    def _cut(self, c: Click) -> tuple[list, dict[int, list]]:
+        """The sets of the dataset's rows this click chooses, and what of it is there: on the
+        dataset, not on what other clicks left, so that one click does not undo another."""
+        cut = (self.d is self.py, id(c))
+        hit = self._cuts.get(cut)
+        if hit is None:
+            found: dict[int, list] = {}
+            try:
+                parts = self._among(c, super().rows_of(c.dataset), list(enumerate(c.paths)), found, [])
+            except ReportError as e:
+                raise ReportError(f"the click on «{c.tile}» cannot be applied: {e.message}") from None
+            hit = self._cuts[cut] = (parts, found)
+        return hit
+
+    def rows_of(self, name: str | None) -> Any:
+        rows = super().rows_of(name)
+        filters = tuple(c for c in self.clicks if c.dataset == name and c.tile != self.tile)
+        if not filters:
+            return rows
+        memo = (self.d is self.py, name, tuple(id(c) for c in filters))
+        kept = self._kept.get(memo)
+        if kept is None:
+            kept = rows
+            for c in filters:
+                parts, found = self._cut(c)
+                if found:
+                    kept = self.d.keeping(kept, parts)
+            self._kept[memo] = kept
+        return kept
+
+    def chosen(self, tile: str) -> dict[str, list]:
+        """What is chosen on this tile: the values found, as they are written in the answer."""
+        out = {}
+        for c in self.clicks:
+            if c.tile == tile:
+                _, found = self._cut(c)
+                out[c.on] = [found[i] if isinstance(c.written[i], list) else found[i][0] for i in sorted(found)]
+        return out
+
+
 # ── a table, a page at a time ────────────────────────────────────────────────
 class _Page(list):
     """The rows of a table's page, counting those it leaves out. A screen has no page breaks,
-    nor headers written again after one."""
+    nor headers written again after one. `path`: what a click on the row being written names, when
+    it is not a group's header, whose key says it."""
 
     def __init__(self, lo: int, hi: int):
         super().__init__()
         self.lo, self.hi, self.total = lo, hi, 0
+        self.path: list | None = None
+        self.paths: dict[int, list] = {}
 
     def append(self, row: rmodel.Row) -> None:
         if row.kind == "pb" or row.continued:
             return
         if self.lo <= self.total < self.hi:
             super().append(row)
+            if self.path is not None:
+                self.paths[id(row)] = self.path
         self.total += 1
 
 
@@ -105,9 +300,39 @@ class _PagedTable(rmodel._Table):
         super().__init__(b, it)
         self.out = _Page(page * PAGE_ROWS, (page + 1) * PAGE_ROWS)
         self.walks = _walks(it)
+        self.open_paths: dict[int, list] = {}
 
     def glue_previous(self, keep: bool) -> None:  # what stays together on a sheet of paper
         pass
+
+    # what a click names: a group with no header, by its footer; a matrix's innermost group is
+    # a row with no key of its own; its columns, by each header of its levels
+    def group(self, node: dict, index: int, siblings: int, scopes: list[Any], parent_rows: Any, start: int,
+              path: list, open_headers: list[rmodel.Row], before: ex.Context | None = None) -> ex.Context | None:
+        self.open_paths[len(path)] = [*path, rmodel.key_id(node["key"])]
+        return super().group(node, index, siblings, scopes, parent_rows, start, path, open_headers, before)
+
+    def footer(self, level: int | None, ctx: ex.Context, keep: bool, label: str | None = None, first: int = 0) -> None:
+        self.out.path = self.open_paths[level] if level is not None and not self.it.groups[level].header else None
+        super().footer(level, ctx, keep, label, first)
+        self.out.path = None
+
+    def matrix_group(self, node: dict, index: int, siblings: int, scopes: list[list[dict]], parent_rows: list[dict],
+                     path: list, open_headers: list[rmodel.Row]) -> None:
+        self.out.path = [*path, rmodel.key_id(node["key"])] if node["children"] is None else None
+        super().matrix_group(node, index, siblings, scopes, parent_rows, path, open_headers)
+        self.out.path = None
+
+    def matrix_head(self, order: list[tuple], distinct: dict, first: str, depth: int, total: bool) -> list[list[dict]]:
+        head = super().matrix_head(order, distinct, first, depth, total)
+        for level, row in enumerate(head):
+            at = 0
+            for cell in row[1:] if level == 0 else row:
+                if at >= len(order):
+                    break  # the total's column
+                cell["key"] = [_key(v) for v in distinct[order[at]][:level + 1]]
+                at += cell["span"]
+        return head
 
     def details(self, rows: Any, scopes: list[Any]) -> None:
         page, n = self.out, len(rows)
@@ -145,19 +370,23 @@ def _series(s: charts.SeriesData) -> dict:
 
 def _chart_data(d: charts.ChartData, it: rd.ChartItem, loc: formats.Locale) -> dict:
     """What the kind's builder in frontend/composables/chartKinds.ts takes (or ChartPanel's
-    axes: `cats` and `series`), under the same names, and the texts the server wrote."""
+    axes: `cats` and `series`), under the same names, and the texts the server wrote; `keys` and
+    `split_keys`: the raw values a click names, of the categories (none for «Other») and of a
+    `split_by`'s series."""
     kind, o = it.kind, it.options
+    split_keys = [_key(k) for k in d.split_keys]
     if kind == "scatter":
         return {"series": [{"name": name, "points": [[x, y, t] for x, y, t in points if x is not None and y is not None]}
-                           for name, points in d.points]}
+                           for name, points in d.points], "split_keys": split_keys}
     if kind == "gauge":
         s = d.series[0]
         return {"value": s.values[0], "text": s.labels[0], "name": s.name, "min": o.min, "max": o.max,
                 "target": d.targets[0] if d.targets else None, "bands": o.bands}
-    out: dict[str, Any] = {"cats": d.categories, "series": [_series(s) for s in d.series]}
+    out: dict[str, Any] = {"cats": d.categories, "series": [_series(s) for s in d.series], "keys": [_key(k) for k in d.keys],
+                           "split_keys": split_keys}
     first = d.series[0] if d.series else charts.SeriesData("", [], [])
     if kind in ("pie", "donut"):
-        out["slices"] = [{"name": c, "value": v, "text": t} for c, v, t in zip(d.categories, first.values, first.labels)
+        out["slices"] = [{"name": c, "value": v, "text": t, "at": i} for i, (c, v, t) in enumerate(zip(d.categories, first.values, first.labels))
                          if v is not None and v > 0]
         out["left_out"] = len(d.categories) - len(out["slices"])
         out["name"] = first.name
@@ -204,12 +433,15 @@ def _cell(c: rmodel.Cell) -> dict:
     return {"text": c.text, "value": c.value, **({"style": c.style} if c.style else {})}
 
 
-def _row(r: rmodel.Row, toggles: bool) -> dict:
+def _row(r: rmodel.Row, toggles: bool, paths: dict[int, list]) -> dict:
+    """`path`: what a click on this row names, where it names something."""
     if r.kind == "g":
-        return {"kind": "g", "level": r.level, "label": r.label, "key": r.key if toggles else None, "closed": r.closed}
+        return {"kind": "g", "level": r.level, "label": r.label, "key": r.key if toggles else None, "closed": r.closed,
+                "path": [_key(v) for v in r.key or []]}
+    path = {"path": [_key(v) for v in paths[id(r)]]} if id(r) in paths else {}
     if r.kind == "d":
-        return {"kind": "d", "cells": [_cell(c) for c in r.cells], **({"zebra": True} if r.zebra else {})}
-    return {"kind": r.kind, "level": r.level, "label": r.label, "span": r.span, "cells": [_cell(c) for c in r.cells]}
+        return {"kind": "d", "cells": [_cell(c) for c in r.cells], **({"zebra": True} if r.zebra else {}), **path}
+    return {"kind": r.kind, "level": r.level, "label": r.label, "span": r.span, "cells": [_cell(c) for c in r.cells], **path}
 
 
 def _sorted_by(b: rmodel._Builder, it: rd.TableItem) -> dict | None:
@@ -233,7 +465,7 @@ def _table(b: rmodel._Builder, it: rd.TableItem, page: int) -> dict:
     return {"matrix": it.matrix is not None, "empty": total == 0,
             "columns": [{"header": c.header, "align": c.align or ("right" if c.kind == "number" else "left"),
                          "width": c.width, "style": c.style} for c in out.cols],
-            "head": out.head, "rows": [_row(r, it.interactive.toggle) for r in out.rows], "levels": out.levels,
+            "head": out.head, "rows": [_row(r, it.interactive.toggle, out.rows.paths) for r in out.rows], "levels": out.levels,
             "page": page, "pages": max(math.ceil(total / PAGE_ROWS), 1), "page_rows": PAGE_ROWS, "total_rows": total,
             "sorted": _sorted_by(b, it) if sortable else None,
             "hot": b.hot(it, sortable)}
@@ -248,20 +480,25 @@ def _image(it: rd.ImageItem) -> dict:
     return {"fit": it.fit}  # the picture is the gateway's: it does not come here
 
 
-def _numbers(b: rmodel._Builder, it: Any, page: int) -> dict:
-    """The tile's own JSON, or `hidden` when its condition says so."""
+def _numbers(b: _Tiles, it: Any, page: int) -> dict:
+    """The tile's own JSON, or `hidden` when its condition says so; `chosen`: what is clicked on
+    it, and still there."""
+    b.tile = it.id
     b.ctx.dataset = b.item_dataset(it)
     if not b.visible(it):
         return {"hidden": True}
     if it.type == "kpi":
-        return _kpi(b, it)
-    if it.type == "chart":
-        return _chart(b, it)
-    if it.type == "table":
-        return _table(b, it, page)
-    if it.type == "text":
-        return _text(b, it)
-    return _image(it)
+        out = _kpi(b, it)
+    elif it.type == "chart":
+        out = _chart(b, it)
+    elif it.type == "table":
+        out = _table(b, it, page)
+    elif it.type == "text":
+        out = _text(b, it)
+    else:
+        out = _image(it)
+    chosen = b.chosen(it.id)
+    return {**out, "chosen": chosen} if chosen else out
 
 
 def _said(message: str, tile: str) -> str:
@@ -280,7 +517,7 @@ def _failure(message: str, code: str = "error") -> dict:
     return {"error": message, "code": code}
 
 
-def _tile(b: rmodel._Builder, it: Any, page: int, at: str, cached: bool) -> dict:
+def _tile(b: _Tiles, it: Any, page: int, at: str, cached: bool) -> dict:
     """One tile, whatever happens to it: what stops it stays here. Only the request knocked
     down goes on up (SoftTimeLimitExceeded, by name: the engine does not import Celery)."""
     try:
@@ -351,7 +588,8 @@ def refusal(needs: Iterable[str], refused: dict[str, dict]) -> dict | None:
 def compute(definition: dict, datasets: dict[str, dict], params: dict[str, Any] | None = None, *,
             refused: dict[str, dict] | None = None, only: list[str] | None = None, pages: dict[str, int] | None = None,
             state: dict | None = None, locale: str | None = None, title: str = "", cap: int | None = None,
-            now: datetime | None = None, read: Callable[[str, Any, int, Any], rdata.DataSet] = rdata.read_dataset) -> dict:
+            now: datetime | None = None, read: Callable[[str, Any, int, Any], rdata.DataSet] = rdata.read_dataset,
+            clicks: list[dict] | None = None) -> dict:
     """{"tiles": {id: numbers or {"error", "code"}}, "truncated": {dataset: bool}}. ReportError
     when nothing can be said of any tile: a definition that cannot be read, or parameters
     that do not fit."""
@@ -370,6 +608,7 @@ def compute(definition: dict, datasets: dict[str, dict], params: dict[str, Any] 
 
     items = [it for _, it in report.items() if only is None or it.id in only]
     needs = {it.id: rdata.used_datasets(report, [it]) for it in items}
+    usable = clicks_of(report, clicks or [], refused)
     # rights first: a tile that needs what the reader may not read says only that
     answers: dict[str, dict] = {}
     for it in items:
@@ -381,7 +620,7 @@ def compute(definition: dict, datasets: dict[str, dict], params: dict[str, Any] 
     data: dict[str, rdata.DataSet] = {}
     failed: dict[str, dict] = {}
     truncated: dict[str, bool] = {}
-    for name in dict.fromkeys(n for it in items if it.id not in answers for n in needs[it.id]):
+    for name in dict.fromkeys(n for it in items if it.id not in answers for n in needing(report, it, needs[it.id], usable)):
         try:
             data[name] = read(name, datasets.get(name), cap, tz)
             truncated[name] = False
@@ -393,6 +632,13 @@ def compute(definition: dict, datasets: dict[str, dict], params: dict[str, Any] 
 
     def stopped_by_data(it: Any) -> dict | None:
         return next((failed[n] for n in needs[it.id] if n in failed), None)
+
+    def stopped_by_click(it: Any) -> dict | None:
+        """What filters a tile cannot be worked out: better no number than the numbers of all the rows."""
+        for c in touching(it.id, dataset_of(report, it), needs[it.id], usable):
+            if c.tile in wrong or any(n in failed for n in c.reads):
+                return _failure(f"The click on «{c.tile}» cannot be applied: its tile cannot read its data. Clear that click")
+        return None
 
     def read_when(it: Any) -> tuple[str, bool]:
         """When the rows of a tile were read from their source (the oldest of them), and
@@ -417,11 +663,11 @@ def compute(definition: dict, datasets: dict[str, dict], params: dict[str, Any] 
         else:
             ctx.datasets = {name: ds.rows for name, ds in data.items()}
         failed.update(_calculated(report, data, ctx, store, set(failed)))
-        b = rmodel._Builder(report, data, ctx, state, interactive=True, layout=False, store=store)
+        b = _Tiles(report, data, ctx, state, interactive=True, layout=False, store=store, clicks=usable)
         for it in items:
             if it.id in answers:
                 continue
-            stopped = stopped_by_data(it)
+            stopped = stopped_by_data(it) or stopped_by_click(it)
             if stopped is not None:
                 answers[it.id] = dict(stopped)
             elif it.id in wrong:

@@ -137,7 +137,8 @@ owner, `current_version`; every save is a version.
 
 ```json
 {"params": {"region": "Nord"},
- "clicks": [{"tile": "by_area", "values": ["Nord-Est"]}],
+ "clicks": [{"tile": "by_area", "values": ["Nord-Est"]},
+            {"tile": "cross", "on": "columns", "values": [[2023, 7]]}],
  "tiles": ["revenue", "by_area"],
  "page": {"detail": 0},
  "refresh": false}
@@ -196,26 +197,30 @@ a dash.
 
 `empty`: nothing to draw. `data` holds what the kind's builder in
 `frontend/composables/chartKinds.ts` takes, under its names; every kind with an axis has `cats` and
-`series`, a series being `{"name", "values", "texts", "as", "axis", "format"}`:
+`series`, a series being `{"name", "values", "texts", "as", "axis", "format"}`, and `keys` and
+`split_keys`, what a click sends back: the raw values of the categories (none for «Other», which
+cannot be clicked, so `keys` can be one shorter than `cats`) and of the series of a `split_by`. A key
+is JSON: a number, a text, `true`, `null` for an empty group, a date in ISO, and a text for an int
+past 2^53, which a browser would change. A gauge has neither.
 
 | `kind` | `data` |
 |---|---|
 | `column`, `bar`, `line`, `area` | `cats`, `series` |
 | `combo` | `cats`, `series`, and for `comboOption`: `bars`, `line`, `barName`, `lineName` |
-| `pie`, `donut` | `cats`, `series`, `name`, `slices` (`{"name", "value", "text"}`, those above zero), `left_out` |
+| `pie`, `donut` | `cats`, `series`, `name`, `slices` (`{"name", "value", "text", "at"}`, those above zero, `at` its place in `cats`), `left_out` |
 | `treemap`, `funnel` | `cats`, `series`, `values`, `texts`, `name`; with `split_by`, `series` holds the parts |
 | `waterfall` | those of a funnel, and `total`, `total_text`, `total_label` |
 | `heatmap` | `cats`, `series`, `xCats`, `yCats`, `cells` (`[x, y, value]`), `texts` (the cells', in order), `name` |
 | `bullet` | `cats`, `series`, `values`, `texts`, `targets`, `name`, `targetName` (empty: the interface's word), `max`, `bands` |
 | `gauge` | `value`, `text`, `name`, `min`, `max`, `target`, `bands` |
-| `scatter` | `series`: `{"name", "points": [[x, y, "text"]]}` |
+| `scatter` | `series`: `{"name", "points": [[x, y, "text"]]}`, `split_keys` |
 
 ```json
 {"type": "table", "matrix": false, "empty": false, "levels": 1,
  "columns": [{"header": "Order", "align": "left", "width": null, "style": {}}],
  "head": [[{"t": "Order", "span": 1, "rspan": 1, "align": "left"}]],
  "rows": [
-   {"kind": "g", "level": 0, "label": "North", "key": ["North"], "closed": false},
+   {"kind": "g", "level": 0, "label": "North", "key": ["North"], "closed": false, "path": ["North"]},
    {"kind": "d", "cells": [{"text": "1.00", "value": 1.0, "style": {"color": "#c92a2a"}}], "zebra": true},
    {"kind": "f", "level": 0, "label": "Total North", "span": 1, "cells": []},
    {"kind": "t", "level": 0, "label": "Total", "span": 1, "cells": []}],
@@ -229,7 +234,9 @@ number. `rows` are the kinds of a report's model: `g` a group's header, `d` a de
 group's footer, `t` the grand total; a footer's or total's `label` takes its first `span` columns,
 its `cells` are all the columns. `page` is the one given, the last if past it; a group header
 counts as a row of the page. `key` is what `state` names a group by (`null` when the table does
-not offer closing them), `sorted` what it sorts by; `hot`: what a click can do, as in the viewer of
+not offer closing them), `path` what a click names, at any level; a matrix's innermost group, a `d`
+row, and a footer whose group has no header have a `path` too, and each header of a matrix's columns
+its `key`, by its levels. `sorted` is what it sorts by; `hot`: what a click can do, as in the viewer of
 reports, `still` the columns that offer no sort. `style` is a report's, as `model._style` writes it
 (`color`, `fill`, `weight`, `italic`, `size`, `align`…).
 
@@ -241,6 +248,9 @@ The state goes in the request as in the viewer of reports:
 {"type": "text", "text": "Rows: 120"}
 {"type": "image", "src": "data:image/png;base64,…", "fit": "contain"}
 ```
+
+A tile a click was made on adds what is chosen and still there, as its keys are written, by side:
+`"chosen": {"rows": ["Nord-Est"], "columns": [[2023, 7]]}`.
 
 Limits, each said in the tile as an `error`: a chart keeps a report's (2,000 categories, 24
 series), a scatter draws at most 10,000 points, and a page more than 100,000 rows down cannot be
@@ -299,11 +309,42 @@ each query costs money, so this is a requirement, not an optimization.
 - A strip under the parameters says what is active, `By area: Nord-Est ×`, with **Clear all**.
 - `filters_others` on a tile turns it off. A KPI, a text and an image do not filter.
 - **The browser sends a tile's id and values, never an expression.** The server takes the
-  expression from the saved definition and writes the values as literals. It is applied after
-  the dataset's rows, in the engine, on both ways of computing. Unknown tile, too many values
-  or a tile that cannot filter: 422.
-- A parameter re-reads the data and keeps the clicks whose values still exist.
-- All of it is in the address: `?region=Nord&click.by_area=Nord-Est`.
+  expression from the saved definition. A value is not written into anything: the rows are split by
+  that expression as the tile itself splits them, and a value is only compared with the keys, on
+  both ways of computing, after the dataset's rows and its calculated fields. Unknown tile, too many
+  values (more than 100) or a tile that cannot filter: 422.
+- **What a value is.** The raw one the tile gave (`keys`, `path`, `key`), never the text on the screen:
+  a month 202307 written as a date, an amount with its thousands, `null` for an empty group, which can
+  be clicked. A text from an address finds the number, the date or the boolean it writes. Several
+  levels are a list: a group's path, a matrix's header, a heatmap's cell or a part of a split bar
+  (`["Nord", 2023]`). A plain click on a value chooses it alone, and clears it if it was the only one;
+  Ctrl or Cmd adds it or takes it away. In one tile values add up; between tiles, and between a matrix's
+  rows and columns, each narrows the others.
+- **What it reads.** A click filters what a tile reads as its own rows: its numbers, its condition, a
+  KPI, a text. An aggregate that names the dataset (`SUM([x], "sales")`) still reads all of it, so that
+  a share of the total stays one; so does a calculated field, worked out before the click.
+- **What cannot be chosen.** «Other», a waterfall's total, a gauge, a detail row.
+- A value is judged on the dataset's rows, not on what another click left: a value no longer there is
+  dropped, and with none left the click counts for nothing. So a parameter re-reads the data and keeps the
+  clicks whose values still exist, and `chosen` says what stayed; the browser follows it, in the address too.
+- **A click on a tile the reader may not read counts for nothing**, whatever its values: its expression
+  may read what they may not, and the answer would say which values exist there. It reaches no key of
+  the cache and no worker: the answer is the one with no click, and the browser drops it. So for a tile
+  whose dataset cannot be resolved (`dataset`).
+- A filter that cannot be worked out (the tile clicked lost a field, or a dataset it needs cannot be read)
+  is an `error` in the tiles it touches: never the numbers of all the rows under a strip that says otherwise.
+- All of it is in the address: `?region=Nord&click.by_area=Nord-Est`, repeated for several values,
+  `click.cross.columns` for a matrix's columns, `{none}` for an empty group, `\` before a text that would
+  read as something else, and JSON for several levels. Back undoes a click. A link with the click of a
+  tile that is gone, or now has `filters_others` off, opens without it; the API still answers 422.
+- The numbers a click does not change stay kept: a tile on another dataset is not even asked, and the
+  tile clicked is asked only what is chosen, keeping its bars while it waits.
+- On a table that can filter, a group's name filters and the arrow beside it closes the group; on one
+  that cannot, the name still closes it.
+- From the keyboard: a group's name, a matrix's header, the strip's × and **Clear all** are buttons, Ctrl
+  with Enter adds. A chart's canvas cannot be reached: a list of its categories shows when it takes the
+  focus, and choosing there adds a value. A part of a split, a heatmap's cell and a scatter's point
+  cannot be chosen from the keyboard, only their category where they have one.
 
 ### On the screen
 
@@ -381,6 +422,7 @@ frontend/pages/dashboard.vue                 the viewer
 frontend/pages/dashboard-design.vue          the designer
 frontend/components/dashboard/               grid, tiles, strip of clicks
 frontend/composables/useDashboards.ts        the API and the page's state
+frontend/composables/dashboardClicks.ts      what a click chose, in the address and on a chart
 gateway/tests/test_dashboards_*.py           gateway tests
 backend/tests/test_dashboard_*.py            engine tests
 frontend/tests/dashboards.test.mjs           grid and state, pure functions

@@ -65,6 +65,7 @@ export interface TilesRequest {
   tiles?: string[]
   page?: Record<string, number>
   state?: ReportState | null
+  clicks?: { tile: string; on?: string; values: unknown[] }[]
   refresh?: boolean
 }
 

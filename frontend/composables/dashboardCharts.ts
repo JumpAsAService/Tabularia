@@ -7,12 +7,16 @@
 // each point (`t`); what ECharts works out by itself (the ticks of an axis) is written here, in the same
 // language. No animation: a chart must not draw itself again at every refresh, and a wall of them
 // would never stop moving. Every dynamic piece of a tooltip goes through `esc` (chartKinds.ts).
+//
+// What a click chose (`withChosen`) is drawn on the same numbers: an edge in the ink of the theme on
+// what is chosen, the rest faded, so that it is read without telling colours apart and on any theme.
 import type { ChartUi } from '~/composables/useChartTheme'
 import { withAlpha } from '~/composables/useChartTheme'
 import {
   PALETTE, axis, bulletOption, comboOption, esc, funnelOption, gaugeOption, heatmapOption, legend, niceMax, sideLabels, tooltip,
   treemapOption, waterfallOption, type KindCtx,
 } from '~/composables/chartKinds'
+import { valueText, type ClickValue } from '~/composables/dashboardClicks'
 import type { TileNumbers } from '~/composables/useDashboards'
 
 /** What the builders need, with the numbers in the dashboard's language and the words in the
@@ -155,7 +159,7 @@ function partsOption(k: KindCtx, a: TileNumbers) {
       // with an ellipsis there (the tooltip has it whole); free, a long name ran off the canvas
       label: { color: c.text, fontSize: 11, formatter: '{b}\n{d}%', alignTo: 'edge', edgeDistance: 6, overflow: 'truncate', lineHeight: 14 },
       labelLine: { length: 12, length2: 0, maxSurfaceAngle: 80, lineStyle: { color: c.border } },
-      data: slices.map((s: any, i: number) => ({ name: s.name, value: s.value, t: s.text, itemStyle: { color: colourOf(i, c) } })),
+      data: slices.map((s: any, i: number) => ({ name: s.name, value: s.value, t: s.text, at: s.at, itemStyle: { color: colourOf(i, c) } })),
     }],
     // a tile too narrow for names beside the pie: «Sa…» says nothing, a legend says them all
     legend: { ...scrollLegend(c), show: false, top: undefined, bottom: 0 },
@@ -202,11 +206,11 @@ function nestedTreemap(k: KindCtx, a: TileNumbers) {
   const c = k.ui
   const { cats, series, name } = a.data as { cats: string[]; series: ChartSeries[]; name: string }
   const nodes = cats.flatMap((cat, ci) => {
-    const children = series.flatMap((s) => {
+    const children = series.flatMap((s, part) => {
       const v = s.values[ci]
-      return v != null && v > 0 ? [{ name: s.name, value: v, t: s.texts[ci] }] : []
+      return v != null && v > 0 ? [{ name: s.name, value: v, t: s.texts[ci], at: ci, part }] : []
     })
-    return children.length ? [{ name: cat, children }] : []
+    return children.length ? [{ name: cat, at: ci, children }] : []
   })
   return {
     backgroundColor: 'transparent',
@@ -287,9 +291,87 @@ function namesInTheirRoom(option: any, width: number) {
   return option
 }
 
+/** The builders of chartKinds.ts know names, and may leave some out or sort them: each item of a
+ *  box or a stage, told where it is on the axis, which is what a click names. */
+function withPlaces(option: any, cats: string[]) {
+  const places = new Map<string, number[]>()
+  cats.forEach((name, i) => places.set(name, [...(places.get(name) ?? []), i]))
+  for (const item of option.series[0].data) item.at = places.get(item.name)?.shift()
+  return option
+}
+
+const FADED = 0.3
+const EDGE_PX = 2
+const LEAST_POINT_PX = 4
+const CHOSEN_POINT_PX = 11
+
+/** What a click chose, on the option of a chart: the same numbers, with an edge on what is chosen
+ *  and the rest faded. A category chosen takes all its parts on a split. */
+function withChosen(option: any, k: KindCtx, a: TileNumbers, chosen: ClickValue[]) {
+  const d = a.data ?? {}
+  const keys: unknown[] = d.keys ?? []
+  const splits: unknown[] = d.split_keys ?? []
+  const set = new Set(chosen.map(valueText))
+  const on = (at: number, part?: number) => at < keys.length && (set.has(valueText(keys[at] as any))
+    || (part !== undefined && part < splits.length && set.has(valueText([keys[at], splits[part]] as any))))
+  const edge = { borderColor: k.ui.text, borderWidth: EDGE_PX }
+  const marked = (item: any, yes: boolean) => {
+    if (item === null || item === undefined) return item
+    const whole = typeof item === 'object' && !Array.isArray(item) ? item : { value: item }
+    return { ...whole, itemStyle: { ...whole.itemStyle, ...(yes ? edge : { opacity: FADED }) } }
+  }
+  switch (a.kind) {
+    case 'pie':
+    case 'donut':
+    case 'funnel':
+      option.series[0].data = option.series[0].data.map((item: any) => marked(item, on(item.at)))
+      break
+    case 'treemap':
+      option.series[0].data = option.series[0].data.map((item: any) => (item.children
+        ? { ...item, children: item.children.map((part: any) => marked(part, on(part.at, part.part))) }
+        : marked(item, on(item.at))))
+      break
+    case 'waterfall':
+      option.series[1].data = option.series[1].data.map((item: any, i: number) => marked(item, on(i)))
+      break
+    case 'bullet': {
+      const bars = option.series.find((s: any) => s.type === 'bar' && !s.silent)
+      if (bars) bars.data = bars.data.map((item: any, i: number) => marked(item, on(i)))
+      break
+    }
+    case 'heatmap':
+      option.series[0].data = option.series[0].data.map((cell: number[]) => marked({ value: cell }, on(cell[0], cell[1])))
+      break
+    case 'scatter':
+      option.series.forEach((s: any, i: number) => {
+        s.large = false // it draws no point on its own: what is chosen would not show
+        s.data = s.data.map((point: any[]) => marked({ value: point }, set.has(valueText(point[0])) || (i < splits.length && set.has(valueText([point[0], splits[i]] as any)))))
+      })
+      break
+    default:
+      option.series.forEach((s: any, i: number) => {
+        const part = splits.length ? i : undefined
+        if (s.type === 'line') {
+          // a crowded line has no points drawn: the one chosen is, the others stay as they were
+          const crowded = s.showSymbol === false
+          s.showSymbol = true
+          s.data = s.data.map((item: any, at: number) => {
+            if (item === null || item === undefined) return item
+            const whole = typeof item === 'object' ? item : { value: item }
+            if (on(at, part)) return { ...whole, symbol: 'circle', symbolSize: CHOSEN_POINT_PX, itemStyle: { ...whole.itemStyle, ...edge } }
+            return crowded ? { ...whole, symbol: 'none' } : { ...whole, symbolSize: LEAST_POINT_PX, itemStyle: { ...whole.itemStyle, opacity: FADED } }
+          })
+        } else {
+          s.data = s.data.map((item: any, at: number) => marked(item, on(at, part)))
+        }
+      })
+  }
+  return option
+}
+
 /** The option of a chart tile. `small`: a tile only a few rows high, where a gauge's figure takes
- *  the chat's size. `width`: of the tile's chart in px, when known. */
-export function tileChartOption(k: KindCtx, a: TileNumbers, opts: { small?: boolean; width?: number } = {}): Record<string, any> {
+ *  the chat's size. `width`: of the tile's chart in px, when known. `chosen`: what a click chose. */
+export function tileChartOption(k: KindCtx, a: TileNumbers, opts: { small?: boolean; width?: number; chosen?: ClickValue[] } = {}): Record<string, any> {
   const d = a.data
   const o = a.options ?? {}
   const format = a.format
@@ -316,10 +398,10 @@ export function tileChartOption(k: KindCtx, a: TileNumbers, opts: { small?: bool
       break
     }
     case 'treemap':
-      option = d.series?.length > 1 ? nestedTreemap(k, a) : treemapOption(readingTexts(k, paired(d.values, d.texts), format), d)
+      option = d.series?.length > 1 ? nestedTreemap(k, a) : withPlaces(treemapOption(readingTexts(k, paired(d.values, d.texts), format), d), d.cats)
       break
     case 'funnel':
-      option = funnelOption(readingTexts(k, paired(d.values, d.texts), format), d)
+      option = withPlaces(funnelOption(readingTexts(k, paired(d.values, d.texts), format), d), d.cats)
       break
     case 'waterfall': {
       const ctx = readingTexts(k, [...paired(d.values, d.texts), [d.total, d.total_text]], format)
@@ -355,5 +437,6 @@ export function tileChartOption(k: KindCtx, a: TileNumbers, opts: { small?: bool
     default:
       option = axesOption(k, a)
   }
+  if (opts.chosen?.length) option = withChosen(option, k, a, opts.chosen)
   return { ...(opts.width ? namesInTheirRoom(option, opts.width) : option), animation: false }
 }

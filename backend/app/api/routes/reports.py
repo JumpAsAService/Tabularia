@@ -92,6 +92,7 @@ class DashboardTiles(BaseModel):
     tiles: Optional[list[str]] = Field(default=None, max_length=500)  # none: every one
     pages: dict[str, int] = Field(default_factory=dict)  # a table's page, by tile, from 0
     state: Optional[dict] = None  # the screen's sort and open/closed groups, as a render's
+    clicks: list[dict] = Field(default_factory=list, max_length=500)  # {"tile", "on", "values"}: the expressions are the definition's
     locale: Optional[Literal[formats.LOCALES]] = None  # type: ignore[valid-type]
     title: Optional[str] = Field(default=None, max_length=300)  # REPORT()
     slot: Optional[str] = Field(default=None, max_length=200)  # a newer request on the same slot knocks this one down

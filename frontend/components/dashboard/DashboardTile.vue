@@ -10,6 +10,7 @@ import KpiCard from '~/components/ui/KpiCard.vue'
 import TileChart from '~/components/dashboard/TileChart.vue'
 import TileTable from '~/components/dashboard/TileTable.vue'
 import type { KindCtx } from '~/composables/chartKinds'
+import { canFilter, clicksOfTile, type ClickSide, type ClickValue, type TileClick } from '~/composables/dashboardClicks'
 import { tileStyleOf } from '~/composables/dashboardStyle'
 import { tileStates, type TileSlot } from '~/composables/dashboardTiles'
 import { useFormat } from '~/composables/useFormat'
@@ -21,12 +22,14 @@ const props = defineProps<{
   ctx: KindCtx
   /** the page says it already: every tile is older, as the whole refresh failed */
   saidAbove?: boolean
+  clicks?: TileClick[]
 }>()
 const emit = defineEmits<{
   (e: 'retry'): void
   (e: 'sort', column: number): void
   (e: 'toggle', key: unknown[], closed: boolean): void
   (e: 'page', page: number): void
+  (e: 'pick', on: ClickSide, value: ClickValue, add: boolean): void
 }>()
 
 const { t, te } = useI18n()
@@ -65,6 +68,8 @@ const kpiChange = computed(() => (numbers.value?.change
 // a data URL the gateway checked when it was saved; anything else is not drawn
 const imageSrc = computed(() => (typeof numbers.value?.src === 'string' && numbers.value.src.startsWith('data:image/') ? numbers.value.src : null))
 const FITS: Record<string, 'contain' | 'cover' | 'fill'> = { contain: 'contain', cover: 'cover', stretch: 'fill' }
+const chosenRows = computed(() => clicksOfTile(props.clicks ?? [], props.tile.id))
+const chosenColumns = computed(() => clicksOfTile(props.clicks ?? [], props.tile.id, 'columns'))
 </script>
 
 <template>
@@ -127,13 +132,27 @@ const FITS: Record<string, 'contain' | 'cover' | 'fill'> = { contain: 'contain',
           :change="kpiChange"
           :spark="numbers.spark"
         />
-        <TileChart v-else-if="kind === 'chart'" :answer="numbers" :ctx="ctx" :label="title" :small="tile.grid.h < 6" />
+        <TileChart
+          v-else-if="kind === 'chart'"
+          :answer="numbers"
+          :ctx="ctx"
+          :label="title"
+          :small="tile.grid.h < 6"
+          :filters="canFilter(tile)"
+          :chosen="chosenRows"
+          @pick="(v: ClickValue, add: boolean) => emit('pick', 'rows', v, add)"
+        />
         <TileTable
           v-else-if="kind === 'table'"
           :answer="numbers"
           :panel="ctx.ui.panel"
           :label="title"
           :busy="state.loading"
+          :filters-rows="canFilter(tile)"
+          :filters-columns="canFilter(tile, 'columns')"
+          :chosen-rows="chosenRows"
+          :chosen-columns="chosenColumns"
+          @pick="(on: ClickSide, v: ClickValue, add: boolean) => emit('pick', on, v, add)"
           @sort="(c: number) => emit('sort', c)"
           @toggle="(k: unknown[], closed: boolean) => emit('toggle', k, closed)"
           @page="(p: number) => emit('page', p)"

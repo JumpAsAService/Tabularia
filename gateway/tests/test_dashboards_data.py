@@ -151,7 +151,7 @@ def test_a_page_for_some_tiles_does_not_knock_down_the_opening_of_all_of_them(ap
 
 @pytest.mark.parametrize("body, says", [
     ({"tiles": ["nope"]}, "no tile «nope»"), ({"page": {"nope": 1}}, "no tile «nope»"),
-    ({"page": {"mine": -1}}, "a page is 0 or more"), ({"clicks": [{"tile": "mine", "values": ["x"]}]}, "click"),
+    ({"page": {"mine": -1}}, "a page is 0 or more"), ({"clicks": [{"tile": "mine", "values": ["x"]}]}, "cannot filter"),
     ({"state": {"items": "x"}}, "state"), ({"state": {"items": {"mine": {"x": "y" * 70000}}}}, "too large"),
 ])
 def test_what_a_browser_may_not_ask_is_a_422_before_anything_is_read(app, session, fake_engine, body, says):
@@ -470,7 +470,7 @@ def test_the_preview_of_a_dashboard_refuses_in_the_tile_what_it_already_read(app
     assert r.json()["tiles"]["mine"]["value"] == 1
 
 
-def test_the_preview_refuses_clicks_and_unknown_tiles(app, session, fake_engine):
+def test_the_preview_refuses_a_click_that_cannot_filter_and_unknown_tiles(app, session, fake_engine):
     w = _world(session)
     editor = _reader(app, session, w, capability="edit")
     draft = definition(w)

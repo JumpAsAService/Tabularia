@@ -30,11 +30,12 @@ export function emptySlots(ids: string[]): TileSlots {
 }
 
 /** Request `seq` asks for these tiles. `changed`: another question, which the numbers on screen
- *  do not answer; without it they are the same numbers, read again. */
-export function beginAsking(slots: TileSlots, ids: string[], seq: number, changed: boolean): TileSlots {
+ *  do not answer; without it they are the same numbers, read again. `still`: those of them whose
+ *  numbers do not change whatever else does, as the tile clicked keeps its bars. */
+export function beginAsking(slots: TileSlots, ids: string[], seq: number, changed: boolean, still: string[] = []): TileSlots {
   const next = { ...slots }
   for (const id of ids) {
-    if (next[id]) next[id] = { ...next[id], asked: seq, waiting: changed ? 'new' : 'same' }
+    if (next[id]) next[id] = { ...next[id], asked: seq, waiting: changed && !still.includes(id) ? 'new' : 'same' }
   }
   return next
 }
@@ -51,15 +52,16 @@ function sameNumbers(a: TileAnswer | null, b: TileAnswer): boolean {
 // not: those numbers may not be shown any more
 const KEPT_THROUGH: ReadonlySet<string> = new Set(['error', 'dataset'])
 
-/** The answer of request `seq`. `keep`: the question is the one the numbers on screen answer. */
-export function tookAnswer(slots: TileSlots, seq: number, tiles: Record<string, TileAnswer>, opts: { keep: boolean }): TileSlots {
+/** The answer of request `seq`. `keep`: the question is the one the numbers on screen answer;
+ *  `still`: for these tiles it is, whatever the others were asked. */
+export function tookAnswer(slots: TileSlots, seq: number, tiles: Record<string, TileAnswer>, opts: { keep: boolean; still?: string[] }): TileSlots {
   const next = { ...slots }
   for (const [id, slot] of Object.entries(slots)) {
     if (slot.asked !== seq) continue
     const answer = tiles[id]
     if (!answer) {
       next[id] = { ...slot, waiting: false }
-    } else if ('error' in answer && opts.keep && hasNumbers(slot) && KEPT_THROUGH.has(answer.code)) {
+    } else if ('error' in answer && (opts.keep || opts.still?.includes(id)) && hasNumbers(slot) && KEPT_THROUGH.has(answer.code)) {
       next[id] = { ...slot, waiting: false, trouble: answer.error }
     } else {
       const read = 'error' in answer ? null : answer.computed_at
@@ -70,11 +72,11 @@ export function tookAnswer(slots: TileSlots, seq: number, tiles: Record<string, 
 }
 
 /** Request `seq` found no answer at all. */
-export function tookFailure(slots: TileSlots, seq: number, message: string, opts: { keep: boolean }): TileSlots {
+export function tookFailure(slots: TileSlots, seq: number, message: string, opts: { keep: boolean; still?: string[] }): TileSlots {
   const next = { ...slots }
   for (const [id, slot] of Object.entries(slots)) {
     if (slot.asked !== seq) continue
-    next[id] = opts.keep && hasNumbers(slot)
+    next[id] = (opts.keep || opts.still?.includes(id)) && hasNumbers(slot)
       ? { ...slot, waiting: false, trouble: message }
       : { answer: { error: message, code: 'request' }, asked: seq, waiting: false, trouble: null }
   }

@@ -6,6 +6,11 @@
 // - The parameters' values live in the address (`?id=4&region=North`), as a report's: only those
 //   that differ from the defaults, `{none}` an optional one emptied; a link opens the same
 //   dashboard, Back goes back to the values before.
+// - A click on a tile filters the others on its dataset (composables/dashboardClicks.ts): it is in
+//   the address too, `&click.by_area=Nord-Est`, so that a link holds it and Back undoes it. Only the
+//   tiles of that dataset are asked again, and the tile clicked keeps its bars. What the server found
+//   comes back in the tile, `chosen`: a value no longer there goes, from the address as well, with no
+//   step for Back. A link's click on a tile gone or switched off is left out when the page opens.
 // - One request reads every tile; a page, a sort or a closed group asks only that tile, and
 //   is not in the address. Only the latest request that asked for a tile counts for it
 //   (composables/dashboardTiles.ts): a slow network never puts old numbers over new ones.
@@ -29,6 +34,11 @@ import {
   isPlainState, paramsOfForm, stateAfter, whatListsHold, withChoices,
   type ReportFormValue, type ReportHotspot, type ReportParameter, type ReportState,
 } from '~/composables/useReports'
+import {
+  askedAfterClicks, clickAfter, clickLabel, clickSends, clicksInQuery, clicksQuery, hasFilters, namingTheDataset, sameClicks, settledClicks, valueText,
+  type ClickSide, type ClickValue, type TileClick,
+} from '~/composables/dashboardClicks'
+import DashboardClicks from '~/components/dashboard/DashboardClicks.vue'
 import DashboardGrid from '~/components/dashboard/DashboardGrid.vue'
 import ReportParamsBar from '~/components/report/ReportParamsBar.vue'
 
@@ -107,11 +117,51 @@ function apply() {
     return
   }
   if (dashboardId.value == null) return
-  const q = dashboardQuery(dashboardId.value, parameters.value, form.value)
+  const q = { ...dashboardQuery(dashboardId.value, parameters.value, form.value), ...clicksQuery(clicks.value) }
   if (queryKey(q) === queryKey(route.query as Record<string, unknown>)) {
     chosen.value = { ...form.value }
     askAll({ changed: false })
   } else router.push({ path: '/dashboard', query: q })
+}
+
+// ── what a click chose: the address holds it ─────────────────────────────────
+const clicks = ref<TileClick[]>([])
+const canClick = computed(() => hasFilters(tiles.value))
+// what the screen said of a value when it was clicked: a table's other page does not say it any more
+const saidOf = new Map<string, string>()
+const saidKey = (tile: string, on: ClickSide, value: ClickValue) => `${tile}|${on}|${valueText(value)}`
+
+function addressWith(next: TileClick[]) {
+  return { ...dashboardQuery(dashboardId.value!, parameters.value, chosen.value), ...clicksQuery(next) }
+}
+function pick(tile: string, on: ClickSide, value: ClickValue, add: boolean) {
+  if (dashboardId.value == null) return
+  const answer = slots.value[tile]?.answer
+  const said = clickLabel(answer, on, value)
+  if (said !== undefined) saidOf.set(saidKey(tile, on, value), said)
+  const next = clickAfter(clicks.value, tile, on, value, add)
+  if (sameClicks(next, clicks.value)) return
+  const name = said ?? String(value ?? t('report.emptyGroup'))
+  const title = tiles.value.find((x) => x.id === tile)?.title ?? ''
+  const still = next.some((c) => c.tile === tile && c.on === on && c.values.some((v) => valueText(v) === valueText(value)))
+  announce.value = still ? t('dashboard.clickChosen', { tile: title, value: name }) : t('dashboard.clickRemoved', { tile: title, value: name })
+  router.push({ path: '/dashboard', query: addressWith(next) })
+}
+function dropClick(tile: string, on: ClickSide) {
+  announce.value = t('dashboard.clickCleared')
+  router.push({ path: '/dashboard', query: addressWith(clicks.value.filter((c) => !(c.tile === tile && c.on === on))) })
+}
+function clearClicks() {
+  announce.value = t('dashboard.clickCleared')
+  router.push({ path: '/dashboard', query: addressWith([]) })
+}
+// the answer's word on a click: the address follows, with no step for Back and nothing to read again,
+// as this answer already counted only what stayed
+function settle(answered: Record<string, unknown>) {
+  const settled = settledClicks(clicks.value, answered)
+  if (!settled) return
+  clicks.value = settled
+  router.replace({ path: '/dashboard', query: addressWith(settled) })
 }
 
 // ── loading ──────────────────────────────────────────────────────────────────
@@ -123,6 +173,8 @@ async function load() {
   stopRefreshing()
   detail.value = null
   parameters.value = []
+  clicks.value = []
+  saidOf.clear()
   slots.value = {}
   pages.value = {}
   viewState.value = { items: {} }
@@ -157,6 +209,11 @@ async function load() {
       }
     }
     formFromUrl()
+    clicks.value = clicksInQuery(route.query, found.content.tiles)
+    // an old link: what it says of a tile gone or switched off leaves the address as well
+    const here = route.query as Record<string, unknown>
+    const clean = { ...Object.fromEntries(Object.entries(here).filter(([k]) => !k.startsWith('click.'))), ...clicksQuery(clicks.value) }
+    if (queryKey(clean) !== queryKey(here)) router.replace({ path: '/dashboard', query: clean as Record<string, string> })
   } catch (e: any) {
     if ((e?.response?.status ?? e?.statusCode) === 404) notFound.value = true
     else loadError.value = errMessage(e)
@@ -191,8 +248,23 @@ watch(() => route.fullPath, () => {
     return
   }
   if (!detail.value) return
+  const paramsBefore = JSON.stringify(toParams(chosen.value))
+  const clicksBefore = clicks.value
   formFromUrl()
   fieldErrors.value = {}
+  const clicksNow = clicksInQuery(route.query, tiles.value)
+  const sameValues = JSON.stringify(toParams(chosen.value)) === paramsBefore
+  clicks.value = clicksNow
+  if (sameValues && sameClicks(clicksBefore, clicksNow)) return // the address caught up with the screen
+  if (sameValues && !waiting.value) {
+    // only a click: the tiles it changes; a table it filters goes back to its first page
+    const { ids, still } = askedAfterClicks(namingTheDataset(tiles.value, detail.value.content.datasets), clicksBefore, clicksNow)
+    const turned = { ...pages.value }
+    for (const id of ids) if (!still.includes(id)) delete turned[id]
+    pages.value = turned
+    if (ids.length) ask(ids, { changed: true, still })
+    return
+  }
   refreshChoices()
   pages.value = {}
   showTiles(true)
@@ -225,12 +297,12 @@ function stopAsking() {
 /** Asks for some tiles, or all of them (`null`). `changed`: another question than the numbers on
  *  screen answer. What the answer brings counts only for the tiles this is still the latest
  *  request of; a request none of its tiles is waiting for any more is dropped. True when an answer came. */
-async function ask(ids: string[] | null, how: { changed: boolean; refresh?: boolean }): Promise<boolean> {
+async function ask(ids: string[] | null, how: { changed: boolean; refresh?: boolean; still?: string[] }): Promise<boolean> {
   const id = dashboardId.value
   if (id == null) return false
   const mine = ++seq
   const asked = ids ?? tileIds.value
-  slots.value = beginAsking(slots.value, asked, mine, how.changed)
+  slots.value = beginAsking(slots.value, asked, mine, how.changed, how.still)
   for (const [other, request] of inFlight) {
     if (request.ids.every((tile) => slots.value[tile]?.asked !== other)) {
       request.controller.abort()
@@ -246,11 +318,13 @@ async function ask(ids: string[] | null, how: { changed: boolean; refresh?: bool
       ...(ids ? { tiles: ids } : {}),
       page: pagesFor(pages.value, ids),
       state: isPlainState(viewState.value) ? null : viewState.value,
+      clicks: clickSends(clicks.value),
       refresh: !!how.refresh,
     }, controller.signal)
     if (controller.signal.aborted || dashboardId.value !== id) return false
-    slots.value = tookAnswer(slots.value, mine, answer.tiles, { keep: !how.changed })
+    slots.value = tookAnswer(slots.value, mine, answer.tiles, { keep: !how.changed, still: how.still })
     pages.value = pagesAfter(pages.value, slots.value, mine, answer.tiles)
+    settle(Object.fromEntries(Object.entries(answer.tiles).filter(([tile]) => slots.value[tile]?.asked === mine)))
     if (!ids) {
       refreshFailedAt.value = null
       problem.value = ''
@@ -273,7 +347,7 @@ async function ask(ids: string[] | null, how: { changed: boolean; refresh?: bool
       slots.value = emptySlots(tileIds.value)
       return false
     }
-    slots.value = tookFailure(slots.value, mine, errMessage(e), { keep: !how.changed })
+    slots.value = tookFailure(slots.value, mine, errMessage(e), { keep: !how.changed, still: how.still })
     if (!ids && !how.changed) refreshFailedAt.value = new Date().toISOString()
     return false
   } finally {
@@ -487,6 +561,17 @@ onBeforeUnmount(() => {
           @submit="apply"
         />
 
+        <DashboardClicks
+          v-if="canClick && !waiting && !problem"
+          :clicks="clicks"
+          :tiles="tiles"
+          :slots="slots"
+          :said-of="saidOf"
+          :hint="!wall"
+          @remove="dropClick"
+          @clear="clearClicks"
+        />
+
         <div v-if="!tiles.length" class="empty">
           <LayoutDashboard :size="32" aria-hidden="true" />
           <h2>{{ $t('dashboard.emptyTitle') }}</h2>
@@ -508,6 +593,8 @@ onBeforeUnmount(() => {
           :slots="slots"
           :ctx="ctx"
           :said-above="!!refreshFailedAt"
+          :clicks="clicks"
+          @pick="pick"
           @retry="retryTile"
           @sort="sortTile"
           @toggle="toggleGroup"

@@ -561,15 +561,17 @@ def _keep_for(tile: dict, seconds: int) -> float:
 @dataclass
 class _Asked:
     """A request for numbers, worked out: its tiles, what each reads, the refusals, which say
-    everything of those tiles, and the key of each of the others."""
+    everything of those tiles, the key of each of the others, and the clicks that count."""
     items: list
     needs: dict[str, list[str]]
     refusals: dict[str, dict]
     hashes: dict[str, str]
+    clicks: list[dict]
 
 
 def _asked(request: dict, seconds: int, fresh: str | None) -> _Asked:
-    """Rights first: a tile refused has no key, and looks at nothing."""
+    """Rights first: a tile refused has no key, and looks at nothing, and a click on it counts for
+    nothing: neither it nor its values are in any key, nor reach a worker."""
     definition = request["definition"]
     report = rd.load(definition)
     only, refused, datasets = request.get("tiles"), request.get("refused") or {}, request.get("datasets") or {}
@@ -577,21 +579,25 @@ def _asked(request: dict, seconds: int, fresh: str | None) -> _Asked:
     needs = {it.id: rdata.used_datasets(report, [it]) for it in items}
     refusals = {it.id: stopped for it in items if (stopped := rtiles.refusal(needs[it.id], refused))}
     readable = [it for it in items if it.id not in refusals]
+    usable = rtiles.clicks_of(report, request.get("clicks") or [], refused)
+    reads = {it.id: rtiles.needing(report, it, needs[it.id], usable) for it in readable}
 
     cap = rtiles.max_rows()
-    roots = {name: rows_hash(datasets.get(name), cap) for it in readable for name in needs[it.id]}
+    roots = {name: rows_hash(datasets.get(name), cap) for it in readable for name in reads[it.id]}
     generations = _generations(sorted(set(roots.values())), fresh)
     described = {d["name"]: {k: v for k, v in d.items() if k != "source"} for d in definition.get("datasets") or []}
     raw = {i.get("id"): i for i in definition["sections"]["body"]["items"]}
     states = (request.get("state") or {}).get("items") if isinstance(request.get("state"), dict) else None
     pages = request.get("pages") or {}
     hashes = {it.id: tile_hash(raw.get(it.id) or {}, {name: {"reads": roots[name], "generation": generations[roots[name]],
-                                                             "described": described.get(name)} for name in needs[it.id]},
+                                                             "described": described.get(name)} for name in reads[it.id]},
                                request.get("params") or {}, definition.get("parameters"), rtiles.page_of(pages.get(it.id)),
                                states.get(it.id) if isinstance(states, dict) else None, request.get("locale"),
-                               definition.get("timezone"), request.get("title") or "", cap, seconds)
+                               definition.get("timezone"), request.get("title") or "", cap, seconds,
+                               rtiles.click_marks(report, it, needs[it.id], usable))
               for it in readable}
-    return _Asked(items, needs, refusals, hashes)
+    kept = [raw for raw in request.get("clicks") or [] if any(c.tile == raw.get("tile") for c in usable)]
+    return _Asked(items, reads, refusals, hashes, kept)
 
 
 async def numbers(request: dict, cache: dict, run: Callable[[dict, float], dict]) -> dict:
@@ -606,7 +612,7 @@ async def numbers(request: dict, cache: dict, run: Callable[[dict, float], dict]
         return await run_in_threadpool(run, kwargs, WAIT_SECONDS)  # the worker says it, as it does without a cache
 
     def work(names: list[str], left: float) -> dict[str, tuple[dict, float]]:
-        answer = run({**kwargs, "tiles": names, "refused": {}}, left)
+        answer = run({**kwargs, "tiles": names, "refused": {}, "clicks": asked.clicks}, left)
         said = answer.get("truncated") or {}
         return {name: ({"tile": answer["tiles"][name], "truncated": {n: said[n] for n in asked.needs[name] if n in said}},
                        _keep_for(answer["tiles"][name], seconds)) for name in names}

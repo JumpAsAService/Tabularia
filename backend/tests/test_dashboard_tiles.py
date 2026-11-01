@@ -154,7 +154,7 @@ def test_a_pie_gives_only_the_slices_it_can_draw(way):
     data = [{"order": "a", "day": date(2026, 1, 1), "region": r, "customer": "c", "product": "p", "qty": 1, "amount": v}
             for r, v in (("N", 10.0), ("S", -5.0), ("E", 30.0), ("W", 0.0))]
     t = one(definition(chart(kind="pie", options={"format": "0"})), spec(data))
-    assert t["data"]["slices"] == [{"name": "N", "value": 10.0, "text": "10"}, {"name": "E", "value": 30.0, "text": "30"}]
+    assert t["data"]["slices"] == [{"name": "N", "value": 10.0, "text": "10", "at": 0}, {"name": "E", "value": 30.0, "text": "30", "at": 2}]
     assert t["data"]["left_out"] == 2
 
 
@@ -330,7 +330,7 @@ def test_groups_with_their_subtotals_by_hand(way):
     t = one(definition(table(**GROUPED)), spec(data))
     kinds = [r["kind"] for r in t["rows"]]
     assert kinds == ["g", "d", "d", "d", "f", "g", "d", "d", "d", "f", "t"]  # no page break on a screen
-    assert t["rows"][0] == {"kind": "g", "level": 0, "label": "N", "key": ["N"], "closed": False}
+    assert t["rows"][0] == {"kind": "g", "level": 0, "label": "N", "key": ["N"], "closed": False, "path": ["N"]}
     assert t["rows"][4]["cells"][1]["value"] == 0 + 2 + 4 and t["rows"][4]["label"] == "Total N"
     assert t["rows"][9]["cells"][1]["value"] == 1 + 3 + 5
     assert t["rows"][10]["cells"][1]["value"] == 15
