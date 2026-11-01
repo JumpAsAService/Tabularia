@@ -555,4 +555,6 @@ def test_fifty_people_on_one_click_make_one_computation(world):
         return await routes.tiles(cached_request(d, clicks=[click("c", "R1")]))
 
     answers = asyncio.run(go())
-    assert {a["tiles"]["k"]["value"] for a in answers} == {20.0} and len(world["worker"]) == asked + 1
+    assert {a["tiles"]["k"]["value"] for a in answers} == {20.0}
+    # each tile worked out once: two requests may each hold the lock of one, so the calls can be two
+    assert sorted(name for call in world["worker"][asked:] for name in call["kwargs"]["tiles"]) == ["c", "k"]
