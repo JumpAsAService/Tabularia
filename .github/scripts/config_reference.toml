@@ -452,7 +452,7 @@ text = "Model round-trips per message of the data chat: the cap on its tool-call
 text = "The same for the assistants that build — the flow editor's, and the Assistant page's for whoever may make changes — which take a round-trip for every step they build and check."
 
 [var.AI__METADATA_ONLY]
-text = "On, no value of a row of data reaches the model configured here: the chat, the flow and script assistants and the dbt export get names, types, descriptions, row counts and structure, with no query, preview, sample or error text. Values people typed in filters, SQL and descriptions still go. See [AI in Tabularia](integrations/ai.md#metadata-only-mode)."
+text = "On, no value of a row of data reaches the model configured here: the chat, the flow and script assistants and the dbt export get names, types, descriptions, row counts and structure, with no query, preview, sample or error text, and the AI comments on dashboards and reports are off. Values people typed in filters, SQL and descriptions still go. See [AI in Tabularia](integrations/ai.md#metadata-only-mode)."
 
 [var.AI__MAX_HISTORY_MESSAGES]
 text = "Past messages of a conversation replayed to the model: higher remembers more and costs more per turn."
@@ -472,6 +472,18 @@ text = "Input tokens one turn may send to the model, without those read from the
 
 [var.AI__DBT_EXPORT_TIMEOUT_SECONDS]
 text = "Seconds for all the AI calls of one dbt export (descriptions and translations). Keep it, plus `ENGINE__DBT_EXPORT_TIMEOUT_SECONDS`, under the ingress' read timeout (300 s in the chart)."
+
+[var.AI__COMMENT_KEEP_SECONDS]
+text = "How long an AI comment on a dashboard's or a report's numbers stays for whoever reads the same numbers: within it, those numbers cost no new call."
+
+[var.AI__COMMENT_MIN_SECONDS]
+text = "Least time between two calls for one element when a dashboard refreshes by itself with new numbers: until then the old text stays, saying the time of its numbers. A wall screen must not make a call at every refresh. Opening a page, a refresh by hand and a document are not held by it."
+
+[var.AI__COMMENT_WAIT_SECONDS]
+text = "Longest a report or a document waits for the AI comment. Past it, it goes out with a line saying the comment is not available, and the text is kept for the next one. Keep it under the ingress' read timeout (300 s in the chart)."
+
+[var.AI__COMMENT_MODEL]
+text = "The model of the AI comments, as `AI__DEFAULT_MODEL` names one. Empty: the default model. One that cannot be used means no comment: another model is never used in its place, since the numbers go where the administrator said."
 
 [var.AI__MAX_CHATS_LISTED]
 text = "Conversations listed per person; older ones are not deleted, only left out of the list."

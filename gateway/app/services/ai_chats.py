@@ -19,6 +19,7 @@ from typing import Any, Optional
 from fastapi import HTTPException
 from sqlmodel import Session, func, select
 
+from app.core.config import get_settings
 from app.models import AiChat, AiChatTurn, AiSpend, User
 from app.models.ai_chat import _now
 from app.services import ai_models, ai_pricing
@@ -509,7 +510,8 @@ def record_spend(
 
     It is the OBSERVERS' accounting: their questions are written nowhere, but the bill is
     — otherwise the daily cap would not see the spending of whoever comes in from the
-    shared account, that is exactly the one to keep an eye on."""
+    shared account, that is exactly the one to keep an eye on. A comment on the numbers
+    has no conversation either (services/ai_comment.py)."""
     session.add(AiSpend(
         user_id=user_id, turn_id=None, model_id=model_id,
         input_tokens=input_tokens or 0, output_tokens=output_tokens or 0,
@@ -529,6 +531,21 @@ def _sum(rows) -> Decimal:
         except InvalidOperation:
             continue
     return total
+
+
+def over_the_ceiling(session: Session, user: User) -> Optional[str]:
+    """What a person is told when a daily ceiling stops them, or None. The installation's ceiling
+    first: where the account is shared — a demo open to strangers — the per-user ceiling
+    protects nothing, because the user is one and so is the key that pays."""
+    cfg = get_settings().ai
+    if cfg.max_cost_per_day_total_usd and spent_today_all(session) >= Decimal(str(cfg.max_cost_per_day_total_usd)):
+        return ("The assistant is not available for the rest of the day: this installation has reached its spending cap. "
+                "Try again tomorrow.")
+    if cfg.max_cost_per_day_usd:
+        spent = spent_today(session, user)
+        if spent >= Decimal(str(cfg.max_cost_per_day_usd)):
+            return f"You have reached today's spending cap for the assistant ({spent:.4f} $ of {cfg.max_cost_per_day_usd} $). Try again tomorrow."
+    return None
 
 
 def _start_of_day():

@@ -417,7 +417,8 @@ class AiSettings(BaseModel):
     panel (the ai_models table): no model is enabled until they enable it.
 
     env: AI__BASE_URL, AI__ACCESS_KEY, AI__SECRET_KEY, AI__DEFAULT_MODEL,
-    AI__MAX_RESULT_ROWS, AI__MAX_REQUESTS, AI__MAX_HISTORY_MESSAGES, AI__METADATA_ONLY"""
+    AI__MAX_RESULT_ROWS, AI__MAX_REQUESTS, AI__MAX_HISTORY_MESSAGES, AI__METADATA_ONLY,
+    AI__COMMENT_KEEP_SECONDS, AI__COMMENT_MIN_SECONDS, AI__COMMENT_WAIT_SECONDS, AI__COMMENT_MODEL"""
 
     base_url: str = ""
     # the key's id (Scaleway calls it access key): the OpenAI protocol authenticates with
@@ -467,6 +468,15 @@ class AiSettings(BaseModel):
     # how many chats to keep per user (the oldest are not deleted by themselves: it is
     # only the listing's cap)
     max_chats_listed: int = Field(default=100, ge=1, le=500)
+    # The AI comment on the numbers of a dashboard or a report (services/ai_comment.py): how long
+    # what it wrote is kept for whoever reads the same numbers, how often a refresh with new numbers
+    # may make a call, how long a report or a document waits for the text, and the model (empty: the
+    # default one).
+    # env: AI__COMMENT_KEEP_SECONDS, AI__COMMENT_MIN_SECONDS, AI__COMMENT_WAIT_SECONDS, AI__COMMENT_MODEL
+    comment_keep_seconds: int = Field(default=86_400, ge=60)
+    comment_min_seconds: int = Field(default=3600, ge=60)
+    comment_wait_seconds: int = Field(default=30, ge=1, le=240)
+    comment_model: str = ""
 
     @field_validator("secret_key", mode="before")
     @classmethod

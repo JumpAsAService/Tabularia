@@ -266,6 +266,7 @@ const ACTION_META = computed<Record<string, { icon: any; color: string; label: s
     'ai.provider_update': { icon: Sparkles, color: u.accent, label: t('audit.aiProviderUpdateAction') },
     'ai.provider_delete': { icon: Sparkles, color: u.muted, label: t('audit.aiProviderDeleteAction') },
     'ai.query': { icon: Sparkles, color: u.muted, label: t('audit.aiQueryAction') },
+    'ai.comment': { icon: Sparkles, color: u.muted, label: t('audit.aiCommentAction') },
     'ai.prompt_update': { icon: Sparkles, color: u.accent, label: t('audit.aiPromptUpdateAction') },
     'ai.prompt_reset': { icon: Sparkles, color: u.muted, label: t('audit.aiPromptResetAction') },
     'banner.create': { icon: Megaphone, color: u.accent, label: t('audit.bannerCreateAction') },

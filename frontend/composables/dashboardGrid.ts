@@ -17,7 +17,7 @@ export const MEDIUM_FROM_PX = 700
 export const MAX_GRID_ROW = 1000
 export const MAX_TILE_ROWS = 100
 /** The smallest tile of each type, in columns and rows. */
-export const MIN_TILE: Record<string, [number, number]> = { kpi: [2, 2], chart: [4, 4], table: [4, 4], text: [2, 1], image: [1, 1] }
+export const MIN_TILE: Record<string, [number, number]> = { kpi: [2, 2], chart: [4, 4], table: [4, 4], text: [2, 1], image: [1, 1], comment: [4, 3] }
 
 export type GridWidth = 'wide' | 'medium' | 'narrow'
 export interface GridBox { x: number; y: number; w: number; h: number }

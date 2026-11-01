@@ -817,6 +817,10 @@ export default {
       "dbt_translate": {
         "name": "Traduzioni SQL dell'export dbt",
         "purpose": "Traduce in un altro dialetto le query che il motore non converte"
+      },
+      "comment": {
+        "name": "Commenti AI",
+        "purpose": "Scrive il commento sui numeri di una dashboard o di un report"
       }
     },
     "tagDefault": "Predefinite",
@@ -1588,6 +1592,7 @@ export default {
     "aiModelEnableAction": "Modello AI attivato",
     "aiModelDisableAction": "Modello AI disattivato",
     "aiPromptUpdateAction": "Istruzioni di un agente AI modificate",
+    "aiCommentAction": "Commento AI scritto",
     "aiPromptResetAction": "Istruzioni di un agente AI ripristinate",
     "aiQueryAction": "Domanda all'assistente",
     "bannerCreateAction": "Banner creato",
@@ -3538,6 +3543,22 @@ export default {
       "ai_dbt_export_timeout_seconds": {
         "label": "Tempo dell'AI in un export dbt",
         "help": "Secondi per tutte le chiamate all'AI di un export dbt (descrizioni, traduzioni). L'ingress taglia una richiesta a 300 s: tieni questo e l'attesa del motore qui sotto insieme sotto quel limite."
+      },
+      "ai_comment_model": {
+        "label": "Modello dei commenti AI",
+        "help": "Il modello che scrive i commenti su dashboard e report. Vuoto = il modello proposto. Se non è utilizzabile non si scrive nessun commento: non se ne usa mai un altro al suo posto."
+      },
+      "ai_comment_keep_seconds": {
+        "label": "Per quanto si tiene un commento AI",
+        "help": "Secondi per cui resta a chi legge gli stessi numeri: in questo tempo quei numeri non costano nuove chiamate."
+      },
+      "ai_comment_min_seconds": {
+        "label": "Tempo minimo tra commenti AI in un aggiornamento",
+        "help": "Secondi tra due chiamate per un elemento quando una dashboard si aggiorna da sola con numeri nuovi: fino ad allora resta il testo vecchio, con l'ora dei suoi numeri."
+      },
+      "ai_comment_wait_seconds": {
+        "label": "Attesa di un commento AI",
+        "help": "Secondi per cui un report o un documento aspetta il testo. Oltre esce con una riga che dice che il commento non è disponibile."
       },
       "mcp_enabled": {
         "label": "Server MCP",

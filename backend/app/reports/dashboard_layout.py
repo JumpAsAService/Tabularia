@@ -420,6 +420,8 @@ def _document(r: rtiles.Reading, store: Any, tiles: list[dict], state: dict | No
     tables: dict[str, rmodel.TableOut] = {}
     most = int(limits.max_pages * (sheet.height if sheet.height is not None else sheet.page_h) / ROW_MM)
     for it in r.items:
+        if it.type == "comment":
+            continue
         place = grid.get(it.id) or {}
         g = place.get("grid") or {"x": 0, "y": len(shown) * 6, "w": 6, "h": 6}
         b.tile = it.id

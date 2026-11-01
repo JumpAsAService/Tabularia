@@ -60,7 +60,7 @@ class AiPrompt(SQLModel, table=True):
 
     __tablename__ = "ai_prompts"
 
-    # assistant | flow | script | title | dbt_describe | dbt_translate
+    # assistant | flow | script | title | dbt_describe | dbt_translate | comment
     agent: str = Field(primary_key=True, max_length=40)
     text: str = Field(sa_column=Column(Text, nullable=False))
     updated_at: datetime = Field(default_factory=_now)

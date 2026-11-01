@@ -817,6 +817,10 @@ export default {
       "dbt_translate": {
         "name": "SQL-Übersetzungen des dbt-Exports",
         "purpose": "Übersetzt Abfragen, die die Engine nicht umwandelt, in einen anderen Dialekt"
+      },
+      "comment": {
+        "name": "KI-Kommentare",
+        "purpose": "Schreibt den Kommentar zu den Zahlen eines Dashboards oder Berichts"
       }
     },
     "tagDefault": "Standard",
@@ -1588,6 +1592,7 @@ export default {
     "aiModelEnableAction": "KI-Modell aktiviert",
     "aiModelDisableAction": "KI-Modell deaktiviert",
     "aiPromptUpdateAction": "Anweisungen eines KI-Agenten geändert",
+    "aiCommentAction": "KI-Kommentar geschrieben",
     "aiPromptResetAction": "Anweisungen eines KI-Agenten wiederhergestellt",
     "aiQueryAction": "Frage an den Assistenten",
     "bannerCreateAction": "Banner erstellt",
@@ -3512,6 +3517,22 @@ export default {
       "ai_dbt_export_timeout_seconds": {
         "label": "KI-Zeit eines dbt-Exports",
         "help": "Sekunden für alle KI-Aufrufe eines dbt-Exports (Beschreibungen, Übersetzungen). Der Ingress bricht eine Anfrage nach 300 s ab: Dieser Wert und die Wartezeit auf die Engine darunter müssen zusammen unter dieser Grenze bleiben."
+      },
+      "ai_comment_model": {
+        "label": "Modell der KI-Kommentare",
+        "help": "Das Modell, das die Kommentare zu Dashboards und Berichten schreibt. Leer = das vorgeschlagene Modell. Ist es nicht verfügbar, wird kein Kommentar geschrieben: Es wird nie ein anderes Modell verwendet."
+      },
+      "ai_comment_keep_seconds": {
+        "label": "Wie lange ein KI-Kommentar aufbewahrt wird",
+        "help": "Sekunden, die er für alle bleibt, die dieselben Zahlen lesen: In dieser Zeit kosten diese Zahlen keinen neuen Aufruf."
+      },
+      "ai_comment_min_seconds": {
+        "label": "Mindestzeit zwischen KI-Kommentaren bei einer Aktualisierung",
+        "help": "Sekunden zwischen zwei Aufrufen für ein Element, wenn sich ein Dashboard selbst mit neuen Zahlen aktualisiert: Bis dahin bleibt der alte Text mit der Uhrzeit seiner Zahlen."
+      },
+      "ai_comment_wait_seconds": {
+        "label": "Wartezeit auf einen KI-Kommentar",
+        "help": "Sekunden, die ein Bericht oder Dokument auf den Text wartet. Danach geht es mit einer Zeile hinaus, die sagt, dass der Kommentar nicht verfügbar ist."
       },
       "mcp_enabled": {
         "label": "MCP-Server",

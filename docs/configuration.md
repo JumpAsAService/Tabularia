@@ -53,11 +53,11 @@ SFTP, S3, APIs, SharePoint) belong to each connection, encrypted with
 | Read by | Variables |
 |---|---|
 | [Shared by the gateway and the engine](#shared-by-the-gateway-and-the-engine) | 7 |
-| [Gateway](#gateway) | 166 |
+| [Gateway](#gateway) | 170 |
 | [Engine and workers](#engine-and-workers) | 103 |
 | [Frontend](#frontend) | 5 |
 | [Compose and Helm only](#compose-and-helm-only) | 13 |
-| **Total** | **294** |
+| **Total** | **298** |
 
 ## Before production
 
@@ -193,7 +193,7 @@ Optional: a chat over the catalog and an assistant in the flow editor. Off until
 | `AI__ACCESS_KEY` | string | empty | `ai.accessKey` | Identifier of the key (Scaleway calls it access key); the protocol authenticates with the secret alone, this only tells which key is in use. |
 | `AI__SECRET_KEY` | string | empty | `secrets.aiSecretKey` | Its API key. Empty = no such provider. |
 | `AI__DEFAULT_MODEL` | string | empty | `ai.defaultModel` | Model proposed first in the picker, if an administrator enabled it, on any provider: its name, e.g. `claude-opus-5-5`. Also adjustable in Administration → Settings. |
-| `AI__METADATA_ONLY` | boolean | `false` | `extraEnv` | On, no value of a row of data reaches the model configured here: the chat, the flow and script assistants and the dbt export get names, types, descriptions, row counts and structure, with no query, preview, sample or error text. Values people typed in filters, SQL and descriptions still go. See [AI in Tabularia](integrations/ai.md#metadata-only-mode). Also adjustable in Administration → Settings. |
+| `AI__METADATA_ONLY` | boolean | `false` | `extraEnv` | On, no value of a row of data reaches the model configured here: the chat, the flow and script assistants and the dbt export get names, types, descriptions, row counts and structure, with no query, preview, sample or error text, and the AI comments on dashboards and reports are off. Values people typed in filters, SQL and descriptions still go. See [AI in Tabularia](integrations/ai.md#metadata-only-mode). Also adjustable in Administration → Settings. |
 | `AI__MAX_RESULT_ROWS` | integer, 1–2000 | `200` | `ai.maxResultRows` | Rows a query of the assistant may return, to the model and to the chat. Also adjustable in Administration → Settings. |
 | `AI__MAX_REQUESTS` | integer, 1–50 | `12` | `ai.maxRequests` | Model round-trips per message of the data chat: the cap on its tool-calling loop. Also adjustable in Administration → Settings. |
 | `AI__MAX_FLOW_REQUESTS` | integer, 1–80 | `30` | `ai.maxFlowRequests` | The same for the assistants that build — the flow editor's, and the Assistant page's for whoever may make changes — which take a round-trip for every step they build and check. Also adjustable in Administration → Settings. |
@@ -204,6 +204,10 @@ Optional: a chat over the catalog and an assistant in the flow editor. Off until
 | `AI__MAX_INPUT_TOKENS_PER_TURN` | integer, ≥ 1000 | `400000` | `extraEnv` | Input tokens one turn may send to the model, without those read from the provider's cache: the spending ceilings stand for those. Also adjustable in Administration → Settings. |
 | `AI__DBT_EXPORT_TIMEOUT_SECONDS` | number, > 0 and ≤ 3600 | `180` | `extraEnv` | Seconds for all the AI calls of one dbt export (descriptions and translations). Keep it, plus `ENGINE__DBT_EXPORT_TIMEOUT_SECONDS`, under the ingress' read timeout (300 s in the chart). Also adjustable in Administration → Settings. |
 | `AI__MAX_CHATS_LISTED` | integer, 1–500 | `100` | `extraEnv` | Conversations listed per person; older ones are not deleted, only left out of the list. Also adjustable in Administration → Settings. |
+| `AI__COMMENT_KEEP_SECONDS` | integer, ≥ 60 | `86400` | `ai.commentKeepSeconds` | How long an AI comment on a dashboard's or a report's numbers stays for whoever reads the same numbers: within it, those numbers cost no new call. Also adjustable in Administration → Settings. |
+| `AI__COMMENT_MIN_SECONDS` | integer, ≥ 60 | `3600` | `ai.commentMinSeconds` | Least time between two calls for one element when a dashboard refreshes by itself with new numbers: until then the old text stays, saying the time of its numbers. A wall screen must not make a call at every refresh. Opening a page, a refresh by hand and a document are not held by it. Also adjustable in Administration → Settings. |
+| `AI__COMMENT_WAIT_SECONDS` | integer, 1–240 | `30` | `ai.commentWaitSeconds` | Longest a report or a document waits for the AI comment. Past it, it goes out with a line saying the comment is not available, and the text is kept for the next one. Keep it under the ingress' read timeout (300 s in the chart). Also adjustable in Administration → Settings. |
+| `AI__COMMENT_MODEL` | string | empty | `ai.commentModel` | The model of the AI comments, as `AI__DEFAULT_MODEL` names one. Empty: the default model. One that cannot be used means no comment: another model is never used in its place, since the numbers go where the administrator said. Also adjustable in Administration → Settings. |
 
 #### The agents' instructions
 

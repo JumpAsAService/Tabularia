@@ -31,6 +31,7 @@ audit it.
 | **Conversation titles** | data assistant | the first question of a conversation (up to 1,000 characters), once | anything else |
 | **dbt descriptions** | the dbt export dialog, when ticked ([dbt export](../dbt-export.md)) | each flow's structure (sources, steps with their settings cut at 300 characters, outputs); the columns without a description, with their type and up to 3 sample values of up to 40 characters each | full rows; columns that already have a description |
 | **dbt SQL translations** | the dbt export, when a query does not translate to the target dialect | the query (up to 20,000 characters), the two dialects and the output columns; on a second attempt, why the engine rejected the first | data |
+| **AI comments** | a dashboard or a report, on an **AI comment** element | the instruction of whoever built it; the title and the numbers of the KPIs, charts and tables it reads, as the screen writes them, with a table's groups and totals and a matrix's page. Never a row: a table's detail rows and a scatter that is not aggregated stay out | anything else: it has no tool to query with |
 
 The SQL script editor has no assistant.
 
@@ -69,7 +70,7 @@ audit log; every gateway replica applies a change within 10 seconds:
 
 | Variable | Covers | Whose model |
 |---|---|---|
-| `AI__METADATA_ONLY` | the chat, the flow assistant, the script assistant, the dbt export | those configured in Tabularia, whichever the provider |
+| `AI__METADATA_ONLY` | the chat, the flow assistant, the script assistant, the dbt export, the AI comments | those configured in Tabularia, whichever the provider |
 | `MCP__METADATA_ONLY` | the [MCP server](../specs/mcp-agent.md) | the client's, outside the administrator's control |
 
 Administration → AI models shows the state of both.
@@ -100,6 +101,8 @@ offered, and calling one over MCP anyway is refused; those that hold both, such 
   describes the problem in their own words.
 - **dbt export**: columns are described from their name and type. Descriptions already written
   from sample values before the mode came on stay in the project: they are not sent again.
+- **AI comments**: a total is a value, so nothing is sent: the element says it is off, and what was
+  written before the mode came on is not shown.
 - **Conversations**: the turns of a conversation made outside the mode stop going to the model,
   whole (a tool's result, the SQL the model wrote after reading it, what it answered, the
   choices of a card), so the model does not remember them, and says so. The person still reads
@@ -264,7 +267,7 @@ Administration → Settings, without a restart.
 ### The agents' instructions
 
 Administration → AI models → **Agent instructions** shows the system prompt of each of
-the six agents:
+the seven agents:
 
 | Agent | Purpose |
 |---|---|
@@ -274,6 +277,7 @@ the six agents:
 | Conversation titles | names every new conversation |
 | dbt export descriptions | writes the descriptions of flows and columns in the dbt project |
 | dbt export SQL translations | translates the queries the engine does not convert |
+| AI comments | writes the comment on the numbers of a dashboard or a report |
 
 An administrator can rewrite a text (up to 20,000 characters) or restore the default.
 A change applies from the next request, on every gateway replica, and goes to the audit

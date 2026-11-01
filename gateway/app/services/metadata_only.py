@@ -2,7 +2,7 @@
 
 Two switches, each off by default and changed live from Administration → Settings:
 `AI__METADATA_ONLY` for what goes through the model configured in Tabularia (the chat, the
-flow and script assistants, the dbt export), `MCP__METADATA_ONLY` for the MCP server, whose
+flow and script assistants, the dbt export, the AI comments), `MCP__METADATA_ONLY` for the MCP server, whose
 model is the client's. Both are read at every use (`on`): `get_settings()` holds what the
 panel saved, read again by every gateway within `overrides.REREAD_EVERY`.
 
@@ -23,6 +23,9 @@ quote a value (`could not convert 'abc'`). The barrier is in the tools, not in a
   the model wrote about them;
 - a turn begun outside the mode stops before its next request when the mode comes on
   (`StopWhenWithheld`): its own results would go back with that request.
+
+An AI comment on a dashboard or a report sends nothing at all, and what was written before the
+mode came on is not shown (services/ai_comment.py): its numbers are all it reads.
 
 A turn begun in the mode stays in it to its end, whatever happens to the switch, so that
 what it saved is what its mark says.

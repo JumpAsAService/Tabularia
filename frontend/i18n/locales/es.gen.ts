@@ -817,6 +817,10 @@ export default {
       "dbt_translate": {
         "name": "Traducciones SQL del export dbt",
         "purpose": "Traduce a otro dialecto las consultas que el motor no convierte"
+      },
+      "comment": {
+        "name": "Comentarios de IA",
+        "purpose": "Escribe el comentario sobre los números de un panel o un informe"
       }
     },
     "tagDefault": "Predeterminadas",
@@ -1588,6 +1592,7 @@ export default {
     "aiModelEnableAction": "Modelo de IA activado",
     "aiModelDisableAction": "Modelo de IA desactivado",
     "aiPromptUpdateAction": "Instrucciones de un agente de IA modificadas",
+    "aiCommentAction": "Comentario de IA escrito",
     "aiPromptResetAction": "Instrucciones de un agente de IA restauradas",
     "aiQueryAction": "Pregunta al asistente",
     "bannerCreateAction": "Banner creado",
@@ -3512,6 +3517,22 @@ export default {
       "ai_dbt_export_timeout_seconds": {
         "label": "Tiempo de IA de una exportación dbt",
         "help": "Segundos para todas las llamadas a la IA de una exportación dbt (descripciones, traducciones). El ingress corta una petición a los 300 s: este valor y la espera del motor de abajo, sumados, deben quedar por debajo."
+      },
+      "ai_comment_model": {
+        "label": "Modelo de los comentarios de IA",
+        "help": "El modelo que escribe los comentarios de paneles e informes. Vacío = el modelo propuesto. Si no se puede usar no se escribe ningún comentario: nunca se usa otro en su lugar."
+      },
+      "ai_comment_keep_seconds": {
+        "label": "Cuánto se conserva un comentario de IA",
+        "help": "Segundos que permanece para quien lee los mismos números: durante ese tiempo esos números no cuestan llamadas nuevas."
+      },
+      "ai_comment_min_seconds": {
+        "label": "Tiempo mínimo entre comentarios de IA al actualizar",
+        "help": "Segundos entre dos llamadas para un elemento cuando un panel se actualiza solo con números nuevos: hasta entonces queda el texto anterior, con la hora de sus números."
+      },
+      "ai_comment_wait_seconds": {
+        "label": "Espera de un comentario de IA",
+        "help": "Segundos que un informe o un documento espera el texto. Pasados, sale con una línea que dice que el comentario no está disponible."
       },
       "mcp_enabled": {
         "label": "Servidor MCP",

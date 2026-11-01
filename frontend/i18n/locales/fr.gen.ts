@@ -817,6 +817,10 @@ export default {
       "dbt_translate": {
         "name": "Traductions SQL de l'export dbt",
         "purpose": "Traduit dans un autre dialecte les requêtes que le moteur ne convertit pas"
+      },
+      "comment": {
+        "name": "Commentaires IA",
+        "purpose": "Écrit le commentaire sur les chiffres d'un tableau de bord ou d'un rapport"
       }
     },
     "tagDefault": "Par défaut",
@@ -1588,6 +1592,7 @@ export default {
     "aiModelEnableAction": "Modèle d'IA activé",
     "aiModelDisableAction": "Modèle d'IA désactivé",
     "aiPromptUpdateAction": "Instructions d'un agent IA modifiées",
+    "aiCommentAction": "Commentaire IA écrit",
     "aiPromptResetAction": "Instructions d'un agent IA rétablies",
     "aiQueryAction": "Question à l'assistant",
     "bannerCreateAction": "Bandeau créé",
@@ -3512,6 +3517,22 @@ export default {
       "ai_dbt_export_timeout_seconds": {
         "label": "Temps d'IA d'un export dbt",
         "help": "Secondes pour l'ensemble des appels à l'IA d'un export dbt (descriptions, traductions). L'ingress coupe une requête à 300 s : ce délai et l'attente du moteur ci-dessous doivent ensemble rester en dessous."
+      },
+      "ai_comment_model": {
+        "label": "Modèle des commentaires IA",
+        "help": "Le modèle qui écrit les commentaires des tableaux de bord et des rapports. Vide = le modèle proposé. S'il n'est pas utilisable, aucun commentaire n'est écrit : aucun autre modèle n'est jamais utilisé à sa place."
+      },
+      "ai_comment_keep_seconds": {
+        "label": "Durée de conservation d'un commentaire IA",
+        "help": "Secondes pendant lesquelles il reste pour qui lit les mêmes chiffres : pendant ce temps, ces chiffres ne coûtent aucun nouvel appel."
+      },
+      "ai_comment_min_seconds": {
+        "label": "Temps minimal entre commentaires IA lors d'une actualisation",
+        "help": "Secondes entre deux appels pour un élément quand un tableau de bord s'actualise seul avec de nouveaux chiffres : jusque-là l'ancien texte reste, avec l'heure de ses chiffres."
+      },
+      "ai_comment_wait_seconds": {
+        "label": "Attente d'un commentaire IA",
+        "help": "Secondes pendant lesquelles un rapport ou un document attend le texte. Au-delà, il part avec une ligne disant que le commentaire n'est pas disponible."
       },
       "mcp_enabled": {
         "label": "Serveur MCP",

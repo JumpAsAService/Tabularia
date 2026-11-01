@@ -44,6 +44,7 @@ MAX_NAME = 256  # a field's or a calculated field's name, as the engine's
 MAX_SQL_CHARS = 100_000  # as a SQL script's
 MAX_EXPR = 4000
 MAX_GROUP_NAME = 100  # how an aggregate names a group, as the engine's
+MAX_COMMENT_INSTRUCTION, MAX_COMMENT_READS = 1000, 10
 
 PAGE_SIZES = {"A4": (210, 297), "A3": (297, 420), "A5": (148, 210), "Letter": (215.9, 279.4),
               "Legal": (215.9, 355.6)}
@@ -52,7 +53,8 @@ FIELD_TYPES = ("string", "integer", "float", "date", "datetime", "time", "boolea
 FILTER_OPS = ("=", "<>", "<", "<=", ">", ">=", "in", "contains")
 CHART_KINDS = ("bar", "column", "line", "area", "pie", "donut", "combo", "waterfall", "funnel", "treemap",
                "heatmap", "scatter", "gauge", "bullet")
-ITEM_TYPES = ("text", "image", "line", "rect", "table", "chart", "kpi")
+ITEM_TYPES = ("text", "image", "line", "rect", "table", "chart", "kpi", "comment")
+COMMENTED_TYPES = ("kpi", "chart", "table")  # what an AI comment reads (docs/specs/ai-comment.md)
 PAGE_ITEM_TYPES = ("text", "image", "line", "rect")  # what a page header or footer holds
 DATASET_NAME = re.compile(r"^[A-Za-z_][A-Za-z0-9_]{0,63}$")
 ITEM_ID = re.compile(r"^[A-Za-z0-9_-]{1,64}$")
@@ -562,6 +564,7 @@ _TYPE_KEYS = {
               "zebra", "matrix", "interactive"),
     "chart": ("dataset", "title", "kind", "category", "series", "split_by", "options"),
     "kpi": ("dataset", "label", "value", "compare", "format", "sparkline"),
+    "comment": ("title", "instruction", "reads"),
 }
 
 
@@ -639,6 +642,28 @@ def _item(it: dict, at: str, kind: str, item_id: str, width: float, height: Opti
                           what=f"{what}'s sparkline", item=item_id)
             _expr(spark["category"], f"{at}.sparkline.category", f"{what}'s sparkline category", item_id, required=True)
             _expr(spark["value"], f"{at}.sparkline.value", f"{what}'s sparkline value", item_id, required=True)
+    elif kind == "comment":
+        _text(it.get("title"), f"{at}.title", f"{what}'s title", 200, item_id)
+        _text(it.get("instruction"), f"{at}.instruction", f"{what}'s instruction", MAX_COMMENT_INSTRUCTION, item_id)
+        reads = it.get("reads")
+        if not isinstance(reads, list) or not 1 <= len(reads) <= MAX_COMMENT_READS:
+            raise Problem(f"{what} comments on 1 to {MAX_COMMENT_READS} elements", f"{at}.reads", item_id)
+
+
+def _comments_read(items: list[dict], where: str) -> None:
+    """What a comment reads is a KPI, a chart or a table of the same definition, each once. A wrong
+    id is refused on save, as a wrong field is: a comment that cannot be written says nothing, and
+    says it at the worst moment."""
+    kinds = {it["id"]: it["type"] for it in items}
+    for i, it in enumerate(items):
+        if it["type"] != "comment":
+            continue
+        for k, name in enumerate(it["reads"]):
+            at = f"{where}[{i}].reads[{k}]"
+            if not isinstance(name, str) or kinds.get(name) not in COMMENTED_TYPES:
+                raise Problem(f"The item «{it['id']}» comments on «{str(name)[:64]}»: not a KPI, a chart or a table here", at, it["id"])
+            if name in it["reads"][:k]:
+                raise Problem(f"The item «{it['id']}» names «{name}» twice", at, it["id"])
 
 
 def _table(it: dict, at: str, what: str, item_id: str, width: float) -> None:
@@ -811,6 +836,7 @@ def check(definition: Any) -> dict:
             raise Problem(f"The item «{it['id']}» is taller than the body of a page ({height - hh - fh:.1f} mm)",
                           f"sections.body.items[{i}].h", it["id"])
     _alone_in_its_row(body_items)
+    _comments_read(body_items, "sections.body.items")
     return definition
 
 

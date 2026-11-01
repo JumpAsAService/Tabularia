@@ -15,6 +15,8 @@ storage; what piles up in Postgres is history, and every hour the orchestrators 
   (services/agent).
 - who opened which report or dashboard, past the 30 days the Reports tab counts
   (services/report_views.py): the reports and the dashboards keep their totals.
+- the AI comments past their time, a failure or a claim whose writer died with them
+  (services/ai_comment.py), which nobody reads again anyway.
 
 0 keeps everything of that kind. Postgres does not give back what an UPDATE or a DELETE
 frees: the old rows stay until a vacuum marks their space for reuse. So a pass that
@@ -201,6 +203,18 @@ def agent_plans(session: Session, days: int, at: datetime | None = None) -> int:
     return expire_and_trim(session, at=at, retention_days=days)
 
 
+def ai_comments(session: Session, at: datetime | None = None) -> int:
+    return _in_batches(session, """
+        DELETE FROM ai_comments WHERE key IN (
+            SELECT key FROM ai_comments WHERE expires_at <= :now LIMIT :batch)""", now=at or _now())
+
+
+def ai_comment_threads(session: Session, at: datetime | None = None) -> int:
+    return _in_batches(session, """
+        DELETE FROM ai_comment_threads WHERE thread IN (
+            SELECT thread FROM ai_comment_threads WHERE expires_at <= :now LIMIT :batch)""", now=at or _now())
+
+
 def vacuum(session: Session, tables: list[str]) -> None:
     """Marks the space the pass freed for reuse (Postgres only; outside a transaction)."""
     bind = session.get_bind()
@@ -230,6 +244,8 @@ def one_pass(session: Session, at: datetime | None = None) -> dict[str, int]:
         "ai_chats": lambda: ai_chats(session, o.ai_chat_retention_days, at=at),
         "agent_drafts": lambda: agent_drafts(session, at=at),
         "agent_plans": lambda: agent_plans(session, o.ai_chat_retention_days, at=at),
+        "ai_comments": lambda: ai_comments(session, at=at),
+        "ai_comment_threads": lambda: ai_comment_threads(session, at=at),
     }
     done: dict[str, int] = {}
     for table, step in steps.items():

@@ -148,6 +148,14 @@ ai:
   maxCostPerTurnUsd: 0.50
   maxCostPerDayUsd: 0
   maxCostPerDayTotalUsd: 0
+  # The AI comment on the numbers of a dashboard or a report: how long what it wrote is kept
+  # for whoever reads the same numbers (seconds), how often a refresh with new numbers may make
+  # a call per element, how long a report or a document waits for the text (under the ingress'
+  # read timeout), and its model (empty: the default one; one that cannot be used: no comment).
+  commentKeepSeconds: 86400
+  commentMinSeconds: 3600
+  commentWaitSeconds: 30
+  commentModel: ""
 
 # ─────────────────────────────────────────────────────────────────────────────
 # Secrets

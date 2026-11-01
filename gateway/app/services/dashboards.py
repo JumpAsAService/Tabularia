@@ -55,13 +55,13 @@ from app.services.report_definition import ITEM_ID, Problem, _keys, _text
 MAX_TILES, MAX_DATASETS, MAX_PARAMETERS = 40, 10, 20
 MIN_REFRESH_SECONDS, MAX_REFRESH_SECONDS = 60, 24 * 3600  # 0: by hand only
 GRID_COLUMNS, MAX_GRID_ROW, MAX_TILE_ROWS = 12, 1000, 100
-TILE_TYPES = ("kpi", "chart", "table", "text", "image")
+TILE_TYPES = ("kpi", "chart", "table", "text", "image", "comment")
 FORMATS = ("pdf", "png")
 # the smallest tile of each type, columns and rows (a row is 40 px)
-MIN_TILE = {"kpi": (2, 2), "chart": (4, 4), "table": (4, 4), "text": (2, 1), "image": (1, 1)}
+MIN_TILE = {"kpi": (2, 2), "chart": (4, 4), "table": (4, 4), "text": (2, 1), "image": (1, 1), "comment": (4, 3)}
 FILTERS_OTHERS = ("chart", "table")  # a KPI, a text and an image do not filter
 MAX_CLICK_VALUES, MAX_CLICK_TEXT = 100, 1000  # what a person chooses with Ctrl; what a value on an axis can be
-_HAS_TITLE = ("chart", "table")  # a report's items with a title of their own: the rest take the tile's here
+_HAS_TITLE = ("chart", "table", "comment")  # a report's items with a title of their own: the rest take the tile's here
 _ITEM_PATH = re.compile(r"^sections\.body\.items\[(\d+)\](.*)$")
 _TILE_PATH = re.compile(r"^tiles\[\d+\]\.?(.*)$")
 

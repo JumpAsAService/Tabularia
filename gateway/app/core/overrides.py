@@ -117,6 +117,10 @@ ITEMS: tuple[Item, ...] = (
     Item("ai.max_input_tokens_per_turn", "ai", "int", "tokens", 1000, 2_000_000),
     Item("ai.max_chats_listed", "ai", "int", "chats", 1, 500),
     Item("ai.dbt_export_timeout_seconds", "ai", "float", "seconds", 10, 3600),
+    Item("ai.comment_model", "ai", "str", max_length=200),
+    Item("ai.comment_keep_seconds", "ai", "int", "seconds", 60, 30 * DAY),
+    Item("ai.comment_min_seconds", "ai", "int", "seconds", 60, DAY),
+    Item("ai.comment_wait_seconds", "ai", "int", "seconds", 1, 240),
     # ── agents over MCP (docs/specs/mcp-agent.md) ──
     Item("mcp.enabled", "mcp", "bool"),
     Item("mcp.confirm_in_tabularia_only", "mcp", "bool"),

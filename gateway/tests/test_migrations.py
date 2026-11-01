@@ -268,3 +268,16 @@ def test_0036_on_postgres_a_name_is_unique_in_its_folder_and_the_openings_go_wit
         c.execute(text("UPDATE projects SET owner_id = NULL"))
         c.execute(text("DELETE FROM users WHERE id = 1"))
         assert c.execute(text("SELECT count(*) FROM dashboard_views")).scalar() == 0
+
+
+def test_0037_adds_the_ai_comments_and_leaves_what_was_there(temporary_database):
+    """Two tables, empty, that the previous version does not know, during a rolling update too."""
+    with temporary_database.begin() as c:
+        command.upgrade(m._config(c), "0036")
+        c.execute(text("INSERT INTO ai_models (model_id, enabled, updated_at) VALUES ('a-model', true, now())"))
+    m.migra(temporary_database)  # stops if the database and the models differ
+    with temporary_database.connect() as c:
+        assert c.execute(text("SELECT model_id FROM ai_models")).scalar() == "a-model"
+        assert [c.execute(text(f"SELECT count(*) FROM {t}")).scalar() for t in ("ai_comments", "ai_comment_threads")] == [0, 0]
+    with temporary_database.begin() as c:
+        c.execute(text("INSERT INTO ai_models (model_id, enabled, updated_at) VALUES ('another', true, now())"))

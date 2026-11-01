@@ -132,6 +132,9 @@ ENGINE_DISALLOW = "engine.disallow"
 AI_MODEL_ENABLE = "ai.model_enable"
 AI_MODEL_DISABLE = "ai.model_disable"
 AI_QUERY = "ai.query"
+# a comment written on the numbers of a dashboard or a report: the element, the model and the
+# cost, never the numbers or the text (services/ai_comment.py)
+AI_COMMENT = "ai.comment"
 # the providers added from the panel: never with the key, only whether it changed
 AI_PROVIDER_CREATE = "ai.provider_create"
 AI_PROVIDER_UPDATE = "ai.provider_update"

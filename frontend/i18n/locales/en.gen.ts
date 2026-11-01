@@ -817,6 +817,10 @@ export default {
       "dbt_translate": {
         "name": "dbt export SQL translations",
         "purpose": "Translates into another dialect the queries the engine does not convert"
+      },
+      "comment": {
+        "name": "AI comments",
+        "purpose": "Writes the comment on the numbers of a dashboard or a report"
       }
     },
     "tagDefault": "Default",
@@ -1588,6 +1592,7 @@ export default {
     "aiModelEnableAction": "AI model enabled",
     "aiModelDisableAction": "AI model disabled",
     "aiPromptUpdateAction": "AI agent instructions changed",
+    "aiCommentAction": "AI comment written",
     "aiPromptResetAction": "AI agent instructions restored",
     "aiQueryAction": "Question to the assistant",
     "bannerCreateAction": "Banner created",
@@ -3538,6 +3543,22 @@ export default {
       "ai_dbt_export_timeout_seconds": {
         "label": "AI time of a dbt export",
         "help": "Seconds for all the AI calls of one dbt export (descriptions, translations). The ingress cuts a request at 300 s: keep this and the engine's wait below together under it."
+      },
+      "ai_comment_model": {
+        "label": "Model of the AI comments",
+        "help": "The model that writes the comments on dashboards and reports. Empty = the proposed model. If it cannot be used, no comment is written: another model is never used in its place."
+      },
+      "ai_comment_keep_seconds": {
+        "label": "How long an AI comment is kept",
+        "help": "Seconds it stays for whoever reads the same numbers: within them, those numbers cost no new call."
+      },
+      "ai_comment_min_seconds": {
+        "label": "Least time between AI comments on a refresh",
+        "help": "Seconds between two calls for one element when a dashboard refreshes by itself with new numbers: until then the old text stays, saying the time of its numbers."
+      },
+      "ai_comment_wait_seconds": {
+        "label": "Wait for an AI comment",
+        "help": "Seconds a report or a document waits for the text. Past them it goes out with a line saying the comment is not available."
       },
       "mcp_enabled": {
         "label": "MCP server",

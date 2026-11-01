@@ -26,6 +26,7 @@ PAPER = {"A4": (210.0, 297.0), "A3": (297.0, 420.0), "A5": (148.0, 210.0), "Lett
          "Legal": (215.9, 355.6)}
 MAX_IMAGE_BYTES = 512 * 1024
 MAX_MATRIX_COLUMNS = 60
+MAX_COMMENT_INSTRUCTION, MAX_COMMENT_READS = 1000, 10  # as the gateway's (services/report_definition.py)
 CHART_KINDS = ("bar", "column", "line", "area", "pie", "donut", "combo", "waterfall", "funnel", "treemap", "heatmap",
                "scatter", "gauge", "bullet")
 _NAME = r"^[A-Za-z_][A-Za-z0-9_]{0,63}$"
@@ -278,9 +279,19 @@ class KpiItem(_Item):
     sparkline: Sparkline | None = None
 
 
-Item = Annotated[Union[TextItem, ImageItem, LineItem, RectItem, TableItem, ChartItem, KpiItem],
+class CommentItem(_Item):
+    """A text the gateway has a model write on the numbers of other items (docs/specs/ai-comment.md):
+    here it has no numbers of its own."""
+    type: Literal["comment"]
+    title: str | None = Field(None, max_length=200)
+    instruction: str = Field("", max_length=MAX_COMMENT_INSTRUCTION)
+    reads: list[str] = Field(min_length=1, max_length=MAX_COMMENT_READS)
+
+
+Item = Annotated[Union[TextItem, ImageItem, LineItem, RectItem, TableItem, ChartItem, KpiItem, CommentItem],
                  Field(discriminator="type")]
 GROWING = ("table",)  # items that grow with their data and take their row alone
+COMMENTED = ("kpi", "chart", "table")  # what a comment reads
 
 
 class Band(_Model):
@@ -400,7 +411,7 @@ def _structure_problems(raw: dict, e: ValidationError) -> list[Problem]:
             except (KeyError, IndexError, TypeError, AttributeError):
                 item = None
             rest = loc[5:] if len(loc) > 4 and isinstance(loc[4], str) and loc[4] in (
-                "text", "image", "line", "rect", "table", "chart", "kpi") else loc[4:]
+                "text", "image", "line", "rect", "table", "chart", "kpi", "comment") else loc[4:]
             problems.append(Problem(err["msg"].removeprefix("Value error, "), item, _path(rest)))
             continue
         problems.append(Problem(err["msg"].removeprefix("Value error, "), None, _path(loc)))
@@ -528,7 +539,7 @@ class _Checks:
 
     def item(self, section: str, it: Any) -> None:
         header = section != "body"
-        if header and it.type in ("table", "chart", "kpi"):
+        if header and it.type in ("table", "chart", "kpi", "comment"):
             self.problems.append(Problem("the page header and footer hold texts, images, lines and rectangles",
                                          it.id, "type"))
             return
@@ -555,6 +566,14 @@ class _Checks:
             if it.sparkline:
                 self.expr(it.sparkline.category, it.id, "sparkline.category", self.env(ds, aggregates=False))
                 self.expr(it.sparkline.value, it.id, "sparkline.value", self.env(ds))
+        elif it.type == "comment":
+            self.comment(it)
+
+    def comment(self, it: CommentItem) -> None:
+        kinds = {other.id: other.type for _, other in self.report.items()}
+        for i, name in enumerate(it.reads):
+            if kinds.get(name) not in COMMENTED:
+                self.problems.append(Problem(f"there is no KPI, chart or table «{name[:64]}» to comment on", it.id, f"reads[{i}]"))
 
     def table(self, it: TableItem, ds: str | None) -> None:
         if ds is None:

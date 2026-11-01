@@ -388,7 +388,9 @@ def _chart_data(d: charts.ChartData, it: rd.ChartItem, loc: formats.Locale) -> d
     split_keys = [_key(k) for k in d.split_keys]
     if kind == "scatter":
         return {"series": [{"name": name, "points": [[x, y, t] for x, y, t in points if x is not None and y is not None]}
-                           for name, points in d.points], "split_keys": split_keys}
+                           for name, points in d.points], "split_keys": split_keys,
+                # aggregated or row by row: an AI comment may read only the first (docs/specs/ai-comment.md)
+                "aggregated": ex.is_aggregate(rd.parse(it.series[0].value))}
     if kind == "gauge":
         s = d.series[0]
         return {"value": s.values[0], "text": s.labels[0], "name": s.name, "min": o.min, "max": o.max,
@@ -499,6 +501,8 @@ def _numbers(b: _Tiles, it: Any, page: int) -> dict:
         out = _table(b, it, page)
     elif it.type == "text":
         out = _text(b, it)
+    elif it.type == "comment":
+        out = {}  # its text is the gateway's (services/ai_comment.py), which does not wait for the numbers' answer
     else:
         out = _image(it)
     chosen = b.chosen(it.id)

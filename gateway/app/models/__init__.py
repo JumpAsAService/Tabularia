@@ -34,6 +34,7 @@ from app.models.notebook import Notebook, NotebookSession, NotebookTicket, Noteb
 from app.models.notebook_read import NotebookRead
 from app.models.ai_model import AiModel, AiPrompt, AiProvider
 from app.models.ai_chat import AiChat, AiChatTurn, AiSpend
+from app.models.ai_comment import AiComment, AiCommentThread
 from app.models.agent import AgentDraft, AgentPlan
 from app.models.privacy import PrivacyNotice
 from app.models.shared_state import FlowPresence, LoginAttempt
@@ -45,7 +46,7 @@ __all__ = [
     "Flow", "FlowVersion", "Connection", "Datasource", "Run", "Upload", "PendingBlobDeletion",
     "AuditLog", "Banner", "DisabledEngine", "EngineSetting", "WorkerScaling", "SiemDestination", "DatabaseBackup", "GatewaySetting", "SettingsRollout", "ScriptStorage", "ScriptEnvironment", "ScriptEnvironmentVersion",
     "ScriptEnvironmentVariable", "ScriptEnvironmentGroup", "ContainerRegistry", "ContainerRegistryAccess",
-    "ContainerRegistryVariable", "SavedScript", "SavedScriptVersion", "SavedView", "SqlScript", "SqlScriptVersion", "Report", "ReportVersion", "ReportView", "Dashboard", "DashboardVersion", "DashboardView", "Notebook", "NotebookVersion", "NotebookSession", "NotebookVisitor", "NotebookTicket", "NotebookRead", "FlowGroup", "AiModel", "AiPrompt", "AiProvider", "AiChat", "AiChatTurn", "AiSpend", "AgentDraft", "AgentPlan", "PrivacyNotice",
+    "ContainerRegistryVariable", "SavedScript", "SavedScriptVersion", "SavedView", "SqlScript", "SqlScriptVersion", "Report", "ReportVersion", "ReportView", "Dashboard", "DashboardVersion", "DashboardView", "Notebook", "NotebookVersion", "NotebookSession", "NotebookVisitor", "NotebookTicket", "NotebookRead", "FlowGroup", "AiModel", "AiPrompt", "AiProvider", "AiChat", "AiChatTurn", "AiSpend", "AiComment", "AiCommentThread", "AgentDraft", "AgentPlan", "PrivacyNotice",
     "FlowPresence", "LoginAttempt",
     "DataContract", "DataContractResult", "DataContractVersion", "DbtAiText",
 ]

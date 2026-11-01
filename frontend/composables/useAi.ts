@@ -85,7 +85,7 @@ export function aiProviders(status: AiStatus | null | undefined): string[] {
 
 // an agent's instructions (Administration → AI): the text, editable by the administrators,
 // and the context Tabularia adds at every request, shown with example values
-export type AiAgent = 'assistant' | 'flow' | 'script' | 'title' | 'dbt_describe' | 'dbt_translate'
+export type AiAgent = 'assistant' | 'flow' | 'script' | 'title' | 'dbt_describe' | 'dbt_translate' | 'comment'
 
 export interface AiPrompt {
   agent: AiAgent

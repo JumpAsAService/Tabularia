@@ -119,6 +119,10 @@ Container node) or greyed out (an engine that is not configured).
 | Most tokens read per answer | `AI__MAX_INPUT_TOKENS_PER_TURN` | 1,000 – 2,000,000 | live |
 | Conversations listed per user | `AI__MAX_CHATS_LISTED` | 1 – 500 | live |
 | AI time of a dbt export | `AI__DBT_EXPORT_TIMEOUT_SECONDS` | 10 s – 1 h | live |
+| Model of the AI comments | `AI__COMMENT_MODEL` | text | live |
+| How long an AI comment is kept | `AI__COMMENT_KEEP_SECONDS` | 1 min – 30 days | live |
+| Least time between AI comments on a refresh | `AI__COMMENT_MIN_SECONDS` | 1 min – 1 day | live |
+| Wait for an AI comment | `AI__COMMENT_WAIT_SECONDS` | 1 s – 4 min | live |
 
 **Agents over MCP**
 

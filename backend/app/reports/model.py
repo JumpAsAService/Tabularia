@@ -682,7 +682,7 @@ class _Builder:
     # ── the body ──
     def body(self) -> list[dict]:
         self.in_body = True
-        items = sorted(self.r.sections.body.items, key=lambda i: (i.y, i.x))
+        items = sorted((i for i in self.r.sections.body.items if i.type != "comment"), key=lambda i: (i.y, i.x))
         blocks: list[dict] = []
         band: list[Any] = []
         top = bottom = 0.0

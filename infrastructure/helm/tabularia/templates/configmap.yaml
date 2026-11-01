@@ -176,6 +176,11 @@ AI__MAX_FLOW_REQUESTS: {{ include "tabularia.env" (.Values.ai.maxFlowRequests) }
 AI__MAX_COST_PER_TURN_USD: {{ include "tabularia.env" (.Values.ai.maxCostPerTurnUsd) }}
 AI__MAX_COST_PER_DAY_USD: {{ include "tabularia.env" (.Values.ai.maxCostPerDayUsd) }}
 AI__MAX_COST_PER_DAY_TOTAL_USD: {{ include "tabularia.env" (.Values.ai.maxCostPerDayTotalUsd) }}
+# The AI comment on a dashboard's or a report's numbers
+AI__COMMENT_KEEP_SECONDS: {{ include "tabularia.env" (.Values.ai.commentKeepSeconds) }}
+AI__COMMENT_MIN_SECONDS: {{ include "tabularia.env" (.Values.ai.commentMinSeconds) }}
+AI__COMMENT_WAIT_SECONDS: {{ include "tabularia.env" (.Values.ai.commentWaitSeconds) }}
+AI__COMMENT_MODEL: {{ include "tabularia.env" (.Values.ai.commentModel) }}
 {{- end }}
 
 {{- if .Values.externalServices.bigquery.enabled }}

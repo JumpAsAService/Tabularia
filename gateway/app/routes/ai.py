@@ -39,7 +39,7 @@ from app.deps.permissions import ensure_can
 from app.models.permission import Capability
 from app.models import AiChat, AiModel, AiPrompt, Datasource, User
 from app.services.permissions import is_observer_only
-from app.services import ai_agent, ai_chats, ai_flow_agent, ai_models, ai_pricing, ai_prompts, ai_script_agent, audit, metadata_only
+from app.services import ai_agent, ai_chats, ai_comment, ai_flow_agent, ai_models, ai_pricing, ai_prompts, ai_script_agent, audit, metadata_only
 from app.services.agent import REGISTRY as AGENT_TOOLS, chat as agent_chat
 from app.services.ai_models import enabled_model_ids, is_chat_model, provider_models
 from app.services.engine_policy import pick_engine
@@ -221,6 +221,8 @@ def _example_context(agent: str, locale: str) -> str:
         from app.services.dbt_ai import translation_context
 
         return translation_context("‹source dialect›", "‹target dialect›", ["‹the model's columns›"])
+    if agent == "comment":
+        return ai_comment.context(locale)
     return ""
 
 
@@ -427,32 +429,10 @@ async def export_step(
 
 def _check_spending(session: Session, user: User) -> None:
     """The daily caps, checked BEFORE the stream opens: a refusal must come as an
-    error of the request, not as an event halfway through an answer. The
-    installation's cap first: where the account is shared — a demo open to
-    strangers — the per-user cap protects nothing, because the user is one and
-    so is the key that pays."""
-    cfg = get_settings().ai
-    if cfg.max_cost_per_day_total_usd:
-        spent_all = ai_chats.spent_today_all(session)
-        if spent_all >= Decimal(str(cfg.max_cost_per_day_total_usd)):
-            raise HTTPException(
-                status_code=429,
-                detail=(
-                    "The assistant is not available for the rest of the day: "
-                    "this installation has reached its spending cap. "
-                    "Try again tomorrow."
-                ),
-            )
-    if cfg.max_cost_per_day_usd:
-        spent = ai_chats.spent_today(session, user)
-        if spent >= Decimal(str(cfg.max_cost_per_day_usd)):
-            raise HTTPException(
-                status_code=429,
-                detail=(
-                    f"You have reached today's spending cap for the assistant "
-                    f"({spent:.4f} $ of {cfg.max_cost_per_day_usd} $). Try again tomorrow."
-                ),
-            )
+    error of the request, not as an event halfway through an answer."""
+    refusal = ai_chats.over_the_ceiling(session, user)
+    if refusal:
+        raise HTTPException(status_code=429, detail=refusal)
 
 
 REFUSED = "The model declined to answer this request. Rephrase it, or try another model."
