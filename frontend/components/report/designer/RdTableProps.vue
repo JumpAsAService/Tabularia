@@ -14,13 +14,14 @@ import RdNum from '~/components/report/designer/RdNum.vue'
 import RdSeg from '~/components/report/designer/RdSeg.vue'
 import RdSection from '~/components/report/designer/RdSection.vue'
 import RdStyleFields from '~/components/report/designer/RdStyleFields.vue'
-import { useDesign } from '~/composables/reportDesignStore'
+import { useDesign, useDesignWords } from '~/composables/reportDesignStore'
 import { chooseTotal, hasTotals, totalChoices, totalKind, totalRowsOn, type DColumn, type DGroup, type DTable, type TotalKind } from '~/composables/reportDesignModel'
 import { groupName } from '~/composables/reportExpressions'
 
 const props = defineProps<{ item: DTable }>()
 const store = useDesign()
 const { t } = useI18n()
+const word = useDesignWords()
 
 const fields = computed(() => store.fieldsOf(props.item.dataset))
 const datasetOptions = computed(() => store.doc.value.datasets.map((d) => ({ value: d.name, label: d.name })))
@@ -313,7 +314,7 @@ function interactive() {
       <span>{{ $t('reportDesigner.table.title') }}</span>
       <input type="text" :value="item.title ?? ''" maxlength="100" :placeholder="item.id" @input="item.title = ($event.target as HTMLInputElement).value || null" />
     </label>
-    <p class="rp-help">{{ $t('reportDesigner.table.titleHelp') }}</p>
+    <p class="rp-help">{{ $t(word('reportDesigner.table.titleHelp')) }}</p>
   </RdSection>
 
   <RdSection :title="$t('reportDesigner.table.onScreen')" skey="table-screen">

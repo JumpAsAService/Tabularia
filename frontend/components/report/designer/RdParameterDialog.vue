@@ -12,7 +12,7 @@ import Modal from '~/components/ui/Modal.vue'
 import Select from '~/components/ui/Select.vue'
 import RdExprInput from '~/components/report/designer/RdExprInput.vue'
 import RdSeg from '~/components/report/designer/RdSeg.vue'
-import { useDesign } from '~/composables/reportDesignStore'
+import { useDesign, useDesignWords } from '~/composables/reportDesignStore'
 import {
   NAME_RE, PARAM_TYPES, RESERVED_PARAMS, alignFilterOps, filteredBy, plainField, setChoiceFilter, sqlFilterLine, typeOfField, type DParameter, type ParamType,
 } from '~/composables/reportDesignModel'
@@ -24,6 +24,7 @@ const props = defineProps<{ open: boolean; name: string | null }>()
 const emit = defineEmits<{ (e: 'close'): void }>()
 const store = useDesign()
 const { t } = useI18n()
+const word = useDesignWords()
 
 interface Draft {
   name: string
@@ -107,7 +108,7 @@ const filterShown = computed(() => `${filterColumn.value} ${draft.value?.multi ?
 const filterSays = computed(() => {
   const d = draft.value
   if (!d) return ''
-  if (!d.filterIt) return t('reportDesigner.param.filterItOff', { dataset: d.dataset ?? '' })
+  if (!d.filterIt) return t(word('reportDesigner.param.filterItOff'), { dataset: d.dataset ?? '' })
   return [
     ...(filterColumn.value ? [t('reportDesigner.param.filterItAdds', { filter: filterShown.value, dataset: d.dataset ?? '' })] : []),
     ...(d.required ? [] : [t('reportDesigner.param.filterItAny')]),
@@ -296,7 +297,7 @@ function rename(old: string, name: string) {
               <code ref="lineEl">{{ sqlLine }}</code>
               <button type="button" class="mini" @click="copyLine">{{ copied ? $t('reportDesigner.param.lineCopied') : $t('reportDesigner.param.copyLine') }}</button>
             </div>
-            <p class="rp-help">{{ draft.multi ? $t('reportDesigner.param.sqlLineMulti') : draft.required ? '' : $t('reportDesigner.param.filterItAny') }}</p>
+            <p class="rp-help">{{ draft.multi ? $t(word('reportDesigner.param.sqlLineMulti')) : draft.required ? '' : $t('reportDesigner.param.filterItAny') }}</p>
           </template>
           <p v-else class="rp-help">{{ $t('reportDesigner.param.sqlLineField', { param: braced }) }}</p>
         </div>

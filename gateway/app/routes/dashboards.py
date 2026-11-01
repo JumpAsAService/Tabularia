@@ -20,6 +20,7 @@ Permissions:
 """
 from __future__ import annotations
 
+import asyncio
 from datetime import datetime, timezone
 from typing import Any, Literal, Optional
 
@@ -36,7 +37,7 @@ from app.deps.auth import get_current_user
 from app.deps.permissions import ensure_can
 from app.models import Dashboard, DashboardVersion, DashboardView, Project, User
 from app.models.permission import Capability
-from app.routes.reports import CheckOut, ParameterOut, ParametersRequest, VersionOut, _parameters_out, _query_params
+from app.routes.reports import CheckOut, FieldOut, FieldsOut, ParameterOut, ParametersRequest, VersionOut, _parameters_out, _query_params
 from app.routes.search import _like as like_pattern
 from app.schemas.models import Page, UtcDateTime
 from app.services import audit, dashboards, reports
@@ -120,10 +121,17 @@ class DataRequest(BaseModel):
 
 class PreviewRequest(DataRequest):
     """The numbers of a definition being edited, of a saved dashboard (`dashboard_id`) or of a
-    new one in a folder (`project_id`)."""
+    new one in a folder (`project_id`). `tab` tells one designer from another of the same person: a
+    newer request knocks down an older one of its own tab, and two tabs on one dashboard both answer."""
     definition: dict[str, Any]
     dashboard_id: Optional[int] = None
     project_id: Optional[int] = None
+    tab: str = Field(default="", max_length=32)
+
+
+class FieldsRequest(BaseModel):
+    dataset: str = Field(max_length=64)
+    definition: dict[str, Any]  # the editor's, not saved yet
 
 
 class TilesOut(BaseModel):
@@ -276,6 +284,12 @@ def search_dashboards(
     return Page(items=items, total=total)
 
 
+@router.get("/dashboards/folders", response_model=list[int])
+def folders_for_a_new_dashboard(user: User = Depends(get_current_user), session: Session = Depends(get_session)):
+    """The folders where this person can make one: EDIT."""
+    return sorted(perm_service.editable_project_ids(session, user))
+
+
 @router.post("/dashboards/check", response_model=CheckOut)
 async def check_dashboard(body: CheckRequest, user: User = Depends(get_current_user),
                           session: Session = Depends(get_session)):
@@ -298,7 +312,7 @@ async def preview_dashboard(body: PreviewRequest, user: User = Depends(get_curre
     looked = await dashboards.review(session, user, body.definition, current)
     if looked.problems:
         raise looked.refusal()
-    editing = f"preview-{dashboard.id if dashboard is not None else 'new'}"
+    editing = f"preview-{dashboard.id if dashboard is not None else 'new'}{f'-{body.tab}' if body.tab else ''}"
     title = dashboard.name if dashboard is not None else ""
     return await dashboards.numbers(session, user, looked.definition, _asked(body), title, editing=editing)
 
@@ -362,6 +376,30 @@ async def dashboard_parameters_being_edited(dashboard_id: int, body: ParametersR
                                      lambda name: dashboards.check_dataset(body.definition, name))
     except HTTPException as e:
         raise dashboards.in_our_words(e) from None
+
+
+@router.post("/dashboards/{dashboard_id}/fields", response_model=FieldsOut, response_model_exclude_none=True)
+async def dashboard_fields(dashboard_id: int, body: FieldsRequest, user: User = Depends(get_current_user),
+                           session: Session = Depends(get_session)):
+    """A dataset's columns of the editor's definition («Refresh fields»), read with the caller's
+    rights (EDIT on the folder), and its rows, counted when they can be, as a report's."""
+    dashboard = _being_edited(session, user, dashboard_id, None)
+    try:
+        definition = dashboards.check_dataset(body.definition, body.dataset)
+    except Problem as p:
+        raise p.http(body.definition) from None
+    slot = f"u{user.id}:dashboard:{dashboard.id}"
+    counting = asyncio.ensure_future(reports.count_rows(await reports.to_count(session, user, definition, body.dataset),
+                                                        f"{slot}:count"))
+    try:
+        found = await reports.fields(session, user, definition, body.dataset, f"{slot}:fields")
+    except HTTPException as e:
+        counting.cancel()
+        raise dashboards.in_our_words(e) from None
+    except BaseException:
+        counting.cancel()
+        raise
+    return FieldsOut(dataset=body.dataset, fields=[FieldOut(**f) for f in found], **(await counting or {}))
 
 
 # ── create, change, copy, delete ──────────────────────────────────────────────

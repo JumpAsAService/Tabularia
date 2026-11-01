@@ -20,7 +20,7 @@
 // /dashboard?id=N
 import { computed, nextTick, onBeforeUnmount, onMounted, ref, shallowRef, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
-import { Clock, FolderTree, LayoutDashboard, LoaderCircle, Maximize, Minimize, RefreshCw, TriangleAlert } from 'lucide-vue-next'
+import { Clock, FolderTree, LayoutDashboard, LoaderCircle, Maximize, Minimize, PencilRuler, RefreshCw, TriangleAlert } from 'lucide-vue-next'
 import { errMessage } from '~/composables/useApi'
 import { useChartTheme } from '~/composables/useChartTheme'
 import { dashboardCtx } from '~/composables/dashboardCharts'
@@ -530,7 +530,11 @@ onBeforeUnmount(() => {
                 <Maximize :size="14" aria-hidden="true" />
                 <span class="lbl">{{ $t('dashboard.fullScreen') }}</span>
               </button>
-              <!-- Download joins here with the PDF and the image, Edit (detail.editable) with the designer -->
+              <button v-if="detail.editable" type="button" class="primary" :title="$t('dashboard.editTitle')" @click="navigateTo(`/dashboard-design?id=${detail.id}`)">
+                <PencilRuler :size="14" aria-hidden="true" />
+                <span class="lbl">{{ $t('dashboard.edit') }}</span>
+              </button>
+              <!-- Download joins here with the PDF and the image -->
             </template>
             <button v-else ref="exitBtn" type="button" class="mini leave" :title="$t('dashboard.leaveFullScreen')" :aria-label="$t('dashboard.leaveFullScreen')" @click="leaveWall">
               <Minimize :size="14" aria-hidden="true" />

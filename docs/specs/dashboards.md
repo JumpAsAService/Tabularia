@@ -154,7 +154,11 @@ owner, `current_version`; every save is a version.
 - The answer is **numbers ready to draw**, one tile at a time, computed by the worker with the
   reports' engine. The browser draws them in its theme. An error stays in its tile.
 - A dataset is read **once** per request, however many tiles use it.
-- `POST /dashboards/preview` takes an unsaved definition: EDIT on the folder, no shared cache.
+- `POST /dashboards/preview` takes an unsaved definition: EDIT on the folder, no shared cache: it reads
+  its rows every time, measured at 0.5 s for one tile on 1 million rows on the machine of the tests, against
+  0.4 s from rows kept. The designer asks after a pause in the editing and only for the tile that changed; a
+  tile's place and its title ask nothing. `tab` tells one designer from another of the same person: a newer
+  request knocks down an older one of its own tab.
 - A table returns one page at a time (50 rows); a sort or a closed group goes in the state, as
   in the viewer of reports; a chart keeps the limits of the report's.
 - The row cap is `DASHBOARDS__MAX_ROWS`, by default `REPORTS__MAX_ROWS`. Past it, the tile says
@@ -258,6 +262,8 @@ reached by a column with `RUNNING` or `PREVIOUS`, which reads every row above it
 
 The parameters' form: `GET /dashboards/{id}/parameters` (VIEW) and
 `POST /dashboards/{id}/parameters` for a definition being edited (EDIT), as a report's.
+`POST /dashboards/{id}/fields`: a dataset's columns and rows counted, for a definition being edited (EDIT).
+`GET /dashboards/folders`: the folders where this person can make a dashboard, those with EDIT.
 
 ### The cache
 
@@ -354,7 +360,16 @@ each query costs money, so this is a requirement, not an optimization.
   skeleton on its first load, its own error with a retry; the time of the update, Refresh,
   Full screen, Download. It also opens through a link with its filters, after signing in.
 - The designer: the three parts of the report designer (elements and data on the left, the
-  grid, properties on the right), with a live view, since the data is on the canvas.
+  grid, properties on the right), with a live view, since the data is on the canvas. It opens from Explore
+  and from the tab (a new one, where the person has EDIT) and from the viewer's Edit; with VIEW only it
+  leads to the viewer. Below 900 px it says it needs a larger screen.
+  - Its panels are the report designer's, on its store: a dashboard goes in written as a report's, as the
+    gateway writes it to check it, and comes out as it was.
+  - Its tiles are the viewer's, on the same rows and gaps. The columns share the room between the panels. A
+    click selects a tile and filters nothing; a hidden tile stays on the grid and says so.
+  - A new tile opens with data on it, from the fields of its dataset. One half made says what it needs and is
+    not asked of the server; one with a mistake says it inside the tile and at its field, and the others go on.
+    A problem of the dashboard's own (a dataset, a parameter) is said above the grid and stops the asking.
 - Five themes, five languages, keyboard, reduced motion, 1280 px and a phone. Motion only for
   state; the charts have no entrance animation at each refresh.
 

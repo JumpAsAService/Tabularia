@@ -6,6 +6,7 @@
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
 import { register } from 'node:module'
+import { readFileSync } from 'node:fs'
 
 register('./alias-hooks.mjs', import.meta.url)
 const { starterDashboard } = await import('../composables/useDashboards.ts')
@@ -897,4 +898,435 @@ test('a slice and a box carry their place, whatever order the chart draws them i
     const placed = Object.fromEntries(o.series[0].data.map((d) => [d.name, d.at]))
     assert.deepEqual(placed, { a: 0, c: 2 }, kind)
   }
+})
+
+// ── the designer: the grid's rules ──────────────────────────────────────────
+const {
+  MIN_TILE, boxMoved, boxResized, cellsOf, freeSpot, lowestRow, pushed, MAX_GRID_ROW,
+} = await import('../composables/dashboardGrid.ts')
+
+const onGrid = (tiles) => Object.fromEntries(tiles.map((t) => [t.id, [t.grid.x, t.grid.y, t.grid.w, t.grid.h]]))
+function assertNoOverlap(tiles) {
+  for (let i = 0; i < tiles.length; i++) {
+    for (let j = i + 1; j < tiles.length; j++) assert.ok(!overlaps(tiles[i].grid, tiles[j].grid), `${tiles[i].id} on ${tiles[j].id}`)
+  }
+}
+
+test('the smallest tiles are the ones the gateway refuses under', () => {
+  const source = readFileSync(new URL('../../gateway/app/services/dashboards.py', import.meta.url), 'utf8')
+  const written = /MIN_TILE = \{(.*)\}/.exec(source)[1]
+  const gateway = Object.fromEntries([...written.matchAll(/"(\w+)": \((\d+), (\d+)\)/g)].map((m) => [m[1], [Number(m[2]), Number(m[3])]]))
+  assert.deepEqual(MIN_TILE, gateway)
+})
+
+test('a tile put on another pushes it down, and what is under that one follows', () => {
+  const tiles = [box('a', 0, 0, 6, 3), box('b', 0, 3, 6, 3), box('c', 0, 6, 6, 3), box('far', 6, 0, 6, 3)]
+  const after = pushed(tiles, 'a', { x: 0, y: 2, w: 6, h: 3 })
+  assert.deepEqual(onGrid(after), { a: [0, 2, 6, 3], b: [0, 5, 6, 3], c: [0, 8, 6, 3], far: [6, 0, 6, 3] })
+})
+
+test('a tile with no one in its way leaves the others as they are, the same objects', () => {
+  const tiles = [box('a', 0, 0, 3, 3), box('b', 6, 0, 3, 3)]
+  const after = pushed(tiles, 'a', { x: 3, y: 0, w: 3, h: 3 })
+  assert.equal(after[1], tiles[1])
+  assert.deepEqual(after[0].grid, { x: 3, y: 0, w: 3, h: 3 })
+})
+
+test('a tile that has moved on leaves what it pushed where it was: a gesture starts from the same layout', () => {
+  const start = [box('a', 0, 0, 6, 3), box('b', 0, 3, 6, 3)]
+  const through = pushed(start, 'a', { x: 0, y: 2, w: 6, h: 3 })
+  assert.deepEqual(onGrid(through).b, [0, 5, 6, 3])
+  const past = pushed(start, 'a', { x: 6, y: 2, w: 6, h: 3 })
+  assert.deepEqual(onGrid(past).b, [0, 3, 6, 3])
+})
+
+test('no way of moving and resizing ever leaves two tiles on one cell', () => {
+  let seed = 7
+  const next = (n) => { seed = (seed * 1103515245 + 12345) % 2147483648; return seed % n }
+  let tiles = Array.from({ length: 40 }, (_, i) => box(`t${i}`, (i % 4) * 3, Math.floor(i / 4) * 3, 3, 3))
+  for (let step = 0; step < 500; step++) {
+    const t = tiles[next(tiles.length)]
+    const to = step % 2
+      ? boxMoved(t.grid, next(25) - 12, next(21) - 10)
+      : boxResized(t.grid, ['n', 's', 'e', 'w', 'ne', 'nw', 'se', 'sw'][next(8)], next(13) - 6, next(13) - 6, t.type)
+    tiles = pushed(tiles, t.id, to)
+    assertNoOverlap(tiles)
+    for (const x of tiles) assert.ok(x.grid.x >= 0 && x.grid.x + x.grid.w <= 12 && x.grid.y >= 0, `${x.id} inside the grid`)
+  }
+})
+
+test('a layout that would go past the last row the server takes is not made', () => {
+  const tiles = [box('a', 0, 0, 12, 90), box('b', 0, MAX_GRID_ROW - 5, 12, 3)]
+  assert.equal(pushed(tiles, 'a', { x: 0, y: MAX_GRID_ROW - 80, w: 12, h: 90 }), null)
+})
+
+test('a move stays inside the twelve columns and under the first row', () => {
+  const g = { x: 4, y: 2, w: 4, h: 3 }
+  assert.deepEqual(boxMoved(g, -9, -9), { x: 0, y: 0, w: 4, h: 3 })
+  assert.deepEqual(boxMoved(g, 9, 1), { x: 8, y: 3, w: 4, h: 3 })
+  assert.deepEqual(boxMoved(g, 0, 5000).y, MAX_GRID_ROW)
+})
+
+test('a handle moves its edges only, down to the smallest tile of the type and up to the grid', () => {
+  const g = { x: 4, y: 4, w: 6, h: 6 }
+  assert.deepEqual(boxResized(g, 'se', 1, 2, 'chart'), { x: 4, y: 4, w: 7, h: 8 })
+  assert.deepEqual(boxResized(g, 'e', 50, 50, 'chart'), { x: 4, y: 4, w: 8, h: 6 }, 'the east handle has no say on the height, and stops at the twelfth column')
+  assert.deepEqual(boxResized(g, 'se', -50, -50, 'chart'), { x: 4, y: 4, w: 4, h: 4 }, 'a chart is at least 4 by 4')
+  assert.deepEqual(boxResized(g, 'se', -50, -50, 'text'), { x: 4, y: 4, w: 2, h: 1 }, 'a text at least 2 by 1')
+  assert.deepEqual(boxResized(g, 'nw', -2, -1, 'chart'), { x: 2, y: 3, w: 8, h: 7 }, 'the far corner stays where it was')
+  assert.deepEqual(boxResized(g, 'nw', 50, 50, 'kpi'), { x: 8, y: 8, w: 2, h: 2 }, 'and does when it stops at the smallest')
+  assert.deepEqual(boxResized(g, 'w', -50, 0, 'chart'), { x: 0, y: 4, w: 10, h: 6 })
+  assert.deepEqual(boxResized(g, 'n', 0, -50, 'chart'), { x: 4, y: 0, w: 6, h: 10 })
+  assert.deepEqual(boxResized({ x: 0, y: 0, w: 12, h: 99 }, 's', 0, 50, 'table').h, 100, 'a tile is at most 100 rows high')
+})
+
+test('pixels become cells by the same sizes the viewer draws with', () => {
+  // twelve columns of 70 and eleven gaps of 10: a cell and its gap are 80 across, 50 down
+  assert.deepEqual(cellsOf(79, 24, 950), { cols: 1, rows: 0 })
+  assert.deepEqual(cellsOf(-41, 26, 950), { cols: -1, rows: 1 })
+  assert.deepEqual(cellsOf(0, 0, 950), { cols: 0, rows: 0 })
+})
+
+test('a new tile goes where it first fits, reading the grid, and under the rest when it fits nowhere', () => {
+  assert.deepEqual(freeSpot([], 6, 6), { x: 0, y: 0 })
+  assert.deepEqual(freeSpot([box('a', 0, 0, 3, 3)], 3, 3), { x: 3, y: 0 })
+  assert.deepEqual(freeSpot([box('a', 0, 0, 6, 3), box('b', 6, 0, 6, 6)], 6, 3), { x: 0, y: 3 })
+  assert.deepEqual(freeSpot([box('a', 0, 0, 12, 3)], 12, 2), { x: 0, y: 3 })
+  assert.equal(lowestRow([box('a', 0, 2, 6, 3), box('b', 6, 0, 6, 9)]), 9)
+  assert.equal(lowestRow([]), 0)
+})
+
+// ── the designer: a dashboard as the report designer's store holds it ───────
+const {
+  boardOf, definitionOf, duplicateTile, fieldOnTile, newTile, placeTile, previewSignatures, problemsOfBoard, readyToAsk, sizeOfNew, tilesChanged, withoutTiles,
+} = await import('../composables/dashboardDesignModel.ts')
+const { createDesignStore } = await import('../composables/reportDesignStore.ts')
+
+const salesFields = [{ name: 'area', type: 'string' }, { name: 'day', type: 'date' }, { name: 'id', type: 'integer' }, { name: 'amount', type: 'float' }]
+const sales = { name: 'sales', source: { kind: 'datasource', datasource_id: 7, filters: [] }, fields: salesFields, calculated: [] }
+const definition = (tiles, more = {}) => ({ v: 1, locale: 'it', timezone: 'Europe/Rome', refresh_seconds: 300, parameters: [], datasets: [sales], tiles, ...more })
+const kpiTile = (id, x, y, more = {}) => ({ id, type: 'kpi', dataset: 'sales', grid: { x, y, w: 3, h: 3 }, value: 'SUM([amount])', ...more })
+
+test('a dashboard goes into the report designer\'s store and comes out as it was', () => {
+  const d = definition([kpiTile('a', 0, 0, { title: 'A', label: 'Revenue', format: '#,##0', visible: null }), { id: 't', type: 'text', title: '', grid: { x: 3, y: 0, w: 2, h: 1 }, value: 'Hello' }])
+  const out = definitionOf(boardOf(d))
+  assert.deepEqual(Object.keys(out).sort(), ['datasets', 'locale', 'parameters', 'refresh_seconds', 'tiles', 'timezone', 'v'])
+  assert.deepEqual(out.tiles[0], { id: 'a', type: 'kpi', dataset: 'sales', grid: { x: 0, y: 0, w: 3, h: 3 }, value: 'SUM([amount])', title: 'A', label: 'Revenue', format: '#,##0' })
+  assert.deepEqual(out.tiles[1], { id: 't', type: 'text', grid: { x: 3, y: 0, w: 2, h: 1 }, value: 'Hello' }, 'what is left empty is not there')
+  assert.equal(out.refresh_seconds, 300)
+  assert.equal(out.locale, 'it')
+})
+
+test('what the store adds for a table of a report does not reach the definition', async () => {
+  const store = createDesignStore()
+  store.reset(boardOf(definition([{ id: 't', type: 'table', dataset: 'sales', grid: { x: 0, y: 0, w: 6, h: 6 }, columns: [{ header: 'A', value: '[area]' }], groups: [] }])))
+  store.find('t').item.groups.push({ by: '[area]' })
+  await new Promise((resolve) => setImmediate(resolve))
+  const [tile] = definitionOf(store.doc.value).tiles
+  assert.deepEqual(Object.keys(tile).filter((k) => ['x', 'y', 'w', 'h'].includes(k)), [])
+})
+
+test('a drag of many cells, with the tiles it pushes, is one undo and one redo', async () => {
+  const store = createDesignStore()
+  store.reset(boardOf(definition([kpiTile('a', 0, 0), kpiTile('b', 0, 3)])))
+  const start = store.doc.value.sections.body.items.map((t) => ({ id: t.id, type: t.type, grid: t.grid }))
+  store.gesture.value = true
+  for (const y of [1, 2, 3, 4]) placeTile(store.doc.value, pushed(start, 'a', { x: 0, y, w: 3, h: 3 }))
+  await new Promise((resolve) => setImmediate(resolve))
+  store.gesture.value = false
+  await new Promise((resolve) => setImmediate(resolve))
+  const moved = onGrid(definitionOf(store.doc.value).tiles)
+  assert.deepEqual(moved, { a: [0, 4, 3, 3], b: [0, 7, 3, 3] })
+  store.undo()
+  assert.deepEqual(onGrid(definitionOf(store.doc.value).tiles), { a: [0, 0, 3, 3], b: [0, 3, 3, 3] })
+  assert.equal(store.canUndo.value, false, 'one step, and nothing before it')
+  store.redo()
+  assert.deepEqual(onGrid(definitionOf(store.doc.value).tiles), moved)
+})
+
+test('a new tile opens with data already on it, from the fields of the dataset', () => {
+  const doc = boardOf(definition([]))
+  const k = newTile(doc, 'kpi', { x: 0, y: 0 })
+  assert.equal(k.dataset, 'sales')
+  assert.equal(k.value, 'SUM([amount])')
+  assert.equal(k.label, 'amount')
+  assert.deepEqual(k.grid, { x: 0, y: 0, ...sizeOfNew('kpi') })
+  const c = newTile(doc, 'chart', { x: 0, y: 3 })
+  assert.equal(c.kind, 'column')
+  assert.equal(c.category, '[area]')
+  assert.deepEqual(c.series, [{ value: 'SUM([amount])', name: 'amount' }])
+  const t = newTile(doc, 'table', { x: 0, y: 9 })
+  assert.deepEqual(t.columns.map((x) => x.value), ['[area]', '[day]', '[id]', '[amount]'])
+  const m = newTile(doc, 'matrix', { x: 0, y: 15 })
+  assert.equal(m.type, 'table')
+  assert.equal(m.matrix.columns_by, '[day]')
+  assert.equal(m.matrix.value, 'SUM([amount])')
+  assert.equal(m.groups[0].by, '[area]')
+  assert.equal(m.id, 'matrix1')
+  for (const kind of ['kpi', 'chart', 'table', 'matrix', 'text', 'image']) {
+    const [w, h] = MIN_TILE[kind === 'matrix' ? 'table' : kind]
+    assert.ok(sizeOfNew(kind).w >= w && sizeOfNew(kind).h >= h, `${kind} born above its minimum`)
+  }
+})
+
+test('with no numbers to add up a new tile counts rows, and without a dataset it waits for one', () => {
+  const words = boardOf(definition([], { datasets: [{ ...sales, fields: [{ name: 'area', type: 'string' }] }] }))
+  assert.equal(newTile(words, 'kpi', { x: 0, y: 0 }).value, 'COUNT()')
+  assert.deepEqual(newTile(words, 'chart', { x: 0, y: 0 }).series, [{ value: 'COUNT()', name: '' }])
+  const none = boardOf(definition([], { datasets: [] }))
+  assert.equal(newTile(none, 'kpi', { x: 0, y: 0 }).dataset, '')
+})
+
+test('a tile half made is not asked of the server, and the rest are', () => {
+  const doc = boardOf(definition([]))
+  const ready = (tile) => readyToAsk(doc, tile)
+  assert.equal(ready(kpiTile('a', 0, 0)), true)
+  assert.equal(ready(kpiTile('a', 0, 0, { value: '' })), false)
+  assert.equal(ready(kpiTile('a', 0, 0, { dataset: 'gone' })), false)
+  const chart = { id: 'c', type: 'chart', kind: 'column', dataset: 'sales', category: '[area]', series: [{ value: 'SUM([amount])' }] }
+  assert.equal(ready(chart), true)
+  assert.equal(ready({ ...chart, category: '' }), false)
+  assert.equal(ready({ ...chart, kind: 'gauge', category: null }), true, 'a gauge has no category')
+  assert.equal(ready({ ...chart, series: [{ value: '' }] }), false)
+  const table = { id: 't', type: 'table', dataset: 'sales', columns: [{ header: 'A', value: '[area]' }] }
+  assert.equal(ready(table), true)
+  assert.equal(ready({ ...table, columns: [] }), false)
+  assert.equal(ready({ ...table, columns: [{ header: '', value: '' }] }), false)
+  assert.equal(ready({ ...table, columns: [{ header: '', value: '' }], matrix: { columns_by: '[day]', value: 'SUM([amount])' }, groups: [{ by: '[area]' }] }), true)
+  assert.equal(ready({ ...table, columns: [{ header: '', value: '' }], matrix: { columns_by: '', value: 'SUM([amount])' }, groups: [{ by: '[area]' }] }), false)
+  assert.equal(ready({ id: 'x', type: 'text', value: '' }), false)
+  assert.equal(ready({ id: 'x', type: 'text', value: 'Hello' }), true)
+  assert.equal(ready({ id: 'i', type: 'image', asset: '' }), false)
+  const full = definition([kpiTile('a', 0, 0), kpiTile('b', 3, 0, { value: '' })])
+  assert.deepEqual(withoutTiles(full, new Set(['b'])).tiles.map((t) => t.id), ['a'])
+})
+
+test('moving a tile asks nothing again; a property asks its tile; a dataset or a value asks them all', () => {
+  const asked = (d, values = {}) => previewSignatures(d, values)
+  const base = definition([kpiTile('a', 0, 0), kpiTile('b', 3, 0)])
+  const before = asked(base)
+  const moved = definition([kpiTile('a', 6, 6), kpiTile('b', 3, 0)])
+  assert.deepEqual(tilesChanged(before, asked(moved)), [])
+  const format = definition([kpiTile('a', 0, 0, { format: '0.0' }), kpiTile('b', 3, 0)])
+  assert.deepEqual(tilesChanged(before, asked(format)), ['a'])
+  const source = definition([kpiTile('a', 0, 0), kpiTile('b', 3, 0)], { datasets: [{ ...sales, source: { kind: 'datasource', datasource_id: 8, filters: [] } }] })
+  assert.deepEqual(tilesChanged(before, asked(source)).sort(), ['a', 'b'])
+  assert.deepEqual(tilesChanged(before, asked(base, { region: 'Nord' })).sort(), ['a', 'b'])
+  assert.deepEqual(tilesChanged(before, asked(definition([kpiTile('a', 0, 0), kpiTile('b', 3, 0), kpiTile('c', 6, 0)]))), ['c'])
+  assert.deepEqual(tilesChanged(before, asked(definition([kpiTile('a', 0, 0)]))), [], 'one taken away has nothing to ask')
+})
+
+test('a title, which the screen knows, asks nothing again', () => {
+  const before = previewSignatures(definition([kpiTile('a', 0, 0, { title: 'One' })]), {})
+  assert.deepEqual(tilesChanged(before, previewSignatures(definition([kpiTile('a', 0, 0, { title: 'Two' })]), {})), [])
+})
+
+test('the fields of a dataset, read while one works, ask nothing again', () => {
+  const before = previewSignatures(definition([kpiTile('a', 0, 0)]), {})
+  const read = definition([kpiTile('a', 0, 0)], { datasets: [{ ...sales, fields: [...salesFields, { name: 'new', type: 'float' }] }] })
+  assert.deepEqual(tilesChanged(before, previewSignatures(read, {})), [])
+})
+
+test('a copy of a tile has its own id and goes where it fits, pushing no one', () => {
+  const doc = boardOf(definition([kpiTile('kpi1', 0, 0, { label: 'Total' }), kpiTile('other', 3, 0)]))
+  const copy = duplicateTile(doc, doc.sections.body.items[0])
+  assert.equal(copy.id, 'kpi2')
+  assert.equal(copy.label, 'Total')
+  assert.deepEqual(copy.grid, { x: 6, y: 0, w: 3, h: 3 })
+})
+
+test('a field clicked joins what is selected, as what it can be there', () => {
+  const num = salesFields[3]
+  const text = salesFields[0]
+  const table = { id: 't', type: 'table', dataset: 'sales', columns: [] }
+  assert.equal(fieldOnTile(table, 'sales', num), true)
+  assert.deepEqual(table.columns.map((c) => c.value), ['[amount]'])
+  const chart = { id: 'c', type: 'chart', kind: 'column', dataset: 'sales', category: '', series: [{ value: '' }] }
+  assert.equal(fieldOnTile(chart, 'sales', text), true)
+  assert.equal(chart.category, '[area]')
+  assert.equal(fieldOnTile(chart, 'sales', num), true)
+  assert.deepEqual(chart.series, [{ value: 'SUM([amount])', name: 'amount' }], 'the first empty series takes it')
+  fieldOnTile(chart, 'sales', { name: 'id', type: 'integer' })
+  assert.equal(chart.series.length, 2, 'the next is one more')
+  const kpi = { id: 'k', type: 'kpi', dataset: 'sales', value: '' }
+  assert.equal(fieldOnTile(kpi, 'sales', num), true)
+  assert.equal(kpi.value, 'SUM([amount])')
+  assert.equal(fieldOnTile(kpi, 'sales', text), false, 'a text does not add up: not on a KPI')
+  assert.equal(fieldOnTile({ ...kpi, dataset: 'other' }, 'sales', num), false, 'not from another dataset')
+  const matrix = { id: 'm', type: 'table', dataset: 'sales', columns: [{ header: '', value: '' }], groups: [{ by: '' }], matrix: { columns_by: '', value: '' } }
+  fieldOnTile(matrix, 'sales', text)
+  fieldOnTile(matrix, 'sales', { name: 'day', type: 'date' })
+  fieldOnTile(matrix, 'sales', num)
+  assert.equal(matrix.groups[0].by, '[area]', 'a matrix: its rows first')
+  assert.equal(matrix.matrix.columns_by, '[day]', 'then its columns')
+  assert.equal(matrix.matrix.value, 'SUM([amount])', 'and a number in its cells')
+})
+
+test('a problem of the server lands on its tile and its property, by the tile\'s id or its place', () => {
+  const doc = boardOf(definition([kpiTile('a', 0, 0), kpiTile('b', 3, 0)]))
+  const byItem = problemsOfBoard(doc, { problems: [{ item: 'b', field: 'value', pos: 3, length: 2, message: 'no such field' }] })
+  assert.deepEqual([byItem[0].item, byItem[0].path, byItem[0].pos], ['b', 'value', 3])
+  const refused = problemsOfBoard(doc, { message: 'x', where: 'tiles[1].grid', item: 'b', problems: [{ item: 'b', field: 'grid', pos: null, length: 0, message: 'lies on' }] })
+  assert.deepEqual([refused[0].item, refused[0].path], ['b', 'grid'])
+  const byPlace = problemsOfBoard(doc, { problems: [{ item: null, field: 'tiles[1].type', pos: null, length: 0, message: 'A tile is one of' }] })
+  assert.deepEqual([byPlace[0].item, byPlace[0].path], ['b', 'type'])
+  const dataset = problemsOfBoard(doc, { problems: [{ item: null, field: 'datasets[sales].source', pos: null, length: 0, message: 'gone' }] })
+  assert.deepEqual([dataset[0].item, dataset[0].dataset, dataset[0].path], [null, 'sales', 'source'])
+  const whole = problemsOfBoard(doc, { problems: [{ item: null, field: 'refresh_seconds', pos: null, length: 0, message: 'The refresh is' }] })
+  assert.deepEqual([whole[0].item, whole[0].dataset, whole[0].path], [null, null, 'refresh_seconds'])
+})
+
+// ── the designer: its live view ─────────────────────────────────────────────
+const { createLiveView } = await import('../composables/dashboardLiveView.ts')
+
+function liveHarness (tiles) {
+  const calls = []
+  const state = { def: definition(tiles), values: {}, moving: false, slots: {}, problem: '' }
+  const view = createLiveView({
+    build: () => state.def,
+    values: () => state.values,
+    slots: () => state.slots,
+    setSlots: (s) => { state.slots = s },
+    ready: (tile) => !!(tile.value ?? true),
+    local: () => null,
+    say: (p) => { state.problem = p },
+    call: (definition, ids, values, signal) => new Promise((resolve, reject) => {
+      const c = { definition, ids, values, signal, resolve, reject }
+      signal.addEventListener('abort', () => { c.aborted = true; reject(Object.assign(new Error('aborted'), { name: 'AbortError' })) })
+      calls.push(c)
+    }),
+    errorOf: (e) => String(e.message ?? e),
+  })
+  return { calls, state, view }
+}
+const numbersOf = (value) => ({ type: 'kpi', title: '', computed_at: '2026-11-01T00:00:00Z', cached: false, value, text: String(value) })
+const tick = () => new Promise((resolve) => setImmediate(resolve))
+
+test('the live view asks what changed and nothing else', async () => {
+  const { calls, state, view } = liveHarness([kpiTile('a', 0, 0), kpiTile('b', 3, 0)])
+  view.run()
+  assert.deepEqual(calls[0].ids.sort(), ['a', 'b'])
+  calls[0].resolve({ tiles: { a: numbersOf(1), b: numbersOf(2) }, truncated: {} })
+  await tick()
+  assert.equal(state.slots.a.answer.value, 1)
+  state.def = definition([kpiTile('a', 0, 0, { format: '0.0' }), kpiTile('b', 9, 9)])
+  view.run()
+  assert.deepEqual(calls[1].ids, ['a'], 'one property: one tile, and one moved is not asked')
+  assert.deepEqual(calls[1].definition.tiles.map((t) => t.id), ['a', 'b'], 'the whole definition goes, an expression may name another dataset')
+  calls[1].resolve({ tiles: { a: numbersOf(10) }, truncated: {} })
+  await tick()
+  view.run()
+  assert.equal(calls.length, 2, 'nothing changed since: nothing asked')
+})
+
+test('an old answer never covers a new one', async () => {
+  const { calls, state, view } = liveHarness([kpiTile('a', 0, 0), kpiTile('b', 3, 0)])
+  view.run()
+  calls[0].resolve({ tiles: { a: numbersOf(1), b: numbersOf(2) }, truncated: {} })
+  await tick()
+  state.def = definition([kpiTile('a', 0, 0, { format: '0.0' }), kpiTile('b', 3, 0, { format: '0.0' })])
+  view.run()
+  const old = calls[1]
+  state.def = definition([kpiTile('a', 0, 0, { format: '0.00' }), kpiTile('b', 3, 0, { format: '0.0' })])
+  view.run()
+  const fresh = calls[2]
+  assert.deepEqual(fresh.ids, ['a'])
+  assert.equal(old.aborted, undefined, 'the older one still answers for b')
+  fresh.resolve({ tiles: { a: numbersOf(100) }, truncated: {} })
+  await tick()
+  old.resolve({ tiles: { a: numbersOf(-1), b: numbersOf(20) }, truncated: {} })
+  await tick()
+  assert.equal(state.slots.a.answer.value, 100, 'the late answer does not touch a')
+  assert.equal(state.slots.b.answer.value, 20, 'and still counts for b')
+})
+
+test('a request no tile is waiting for any more is dropped', async () => {
+  const { calls, state, view } = liveHarness([kpiTile('a', 0, 0)])
+  view.run()
+  state.def = definition([kpiTile('a', 0, 0, { format: '0.0' })])
+  view.run()
+  assert.equal(calls[0].aborted, true)
+})
+
+test('a tile half made says so by itself, and is not sent', async () => {
+  const { calls, state, view } = liveHarness([kpiTile('a', 0, 0), kpiTile('b', 3, 0, { value: '' })])
+  view.run()
+  assert.deepEqual(calls[0].ids, ['a'])
+  assert.deepEqual(calls[0].definition.tiles.map((t) => t.id), ['a'])
+  calls[0].resolve({ tiles: { a: numbersOf(1) }, truncated: {} })
+  await tick()
+  assert.equal(state.slots.b.answer, null)
+})
+
+test('a tile the server refuses says why in the tile, and the others go on', async () => {
+  const { calls, state, view } = liveHarness([kpiTile('a', 0, 0), kpiTile('b', 3, 0)])
+  view.run([{ item: 'b', dataset: null, parameter: null, path: 'value', message: 'there is no field [x]', pos: 0, length: 3 }])
+  assert.deepEqual(calls[0].ids, ['a'])
+  assert.deepEqual(calls[0].definition.tiles.map((t) => t.id), ['a'], 'one the server refuses would stop the whole request')
+  assert.deepEqual(state.slots.b.answer, { error: 'there is no field [x]', code: 'error' })
+  calls[0].resolve({ tiles: { a: numbersOf(1) }, truncated: {} })
+  await tick()
+  assert.equal(state.slots.a.answer.value, 1)
+  assert.deepEqual(state.slots.b.answer, { error: 'there is no field [x]', code: 'error' })
+})
+
+test('a tile mended is asked again', async () => {
+  const { calls, state, view } = liveHarness([kpiTile('a', 0, 0), kpiTile('b', 3, 0)])
+  view.run([{ item: 'b', dataset: null, parameter: null, path: 'value', message: 'no', pos: null, length: 0 }])
+  calls[0].resolve({ tiles: { a: numbersOf(1) }, truncated: {} })
+  await tick()
+  view.run([])
+  assert.deepEqual(calls[1].ids, ['b'])
+})
+
+test('a problem of the whole dashboard is said once and no tile is asked', async () => {
+  const { calls, state, view } = liveHarness([kpiTile('a', 0, 0)])
+  view.run([{ item: null, dataset: 'sales', parameter: null, path: 'source', message: 'gone', pos: null, length: 0 }])
+  assert.equal(calls.length, 0)
+  assert.equal(state.problem, 'gone')
+  view.run([])
+  assert.equal(calls.length, 1)
+  assert.equal(state.problem, '')
+})
+
+test('a request that fails says so in the tiles it asked, and they are asked again at the next change', async () => {
+  const { calls, state, view } = liveHarness([kpiTile('a', 0, 0)])
+  view.run()
+  calls[0].reject(new Error('the engine fell'))
+  await tick()
+  assert.equal(state.slots.a.answer.error, 'the engine fell')
+  view.run()
+  assert.equal(calls.length, 2)
+})
+
+test('a refused request lands on its tiles, and the others are asked without them', async () => {
+  const { calls, state, view } = liveHarness([kpiTile('a', 0, 0), kpiTile('b', 3, 0)])
+  view.run()
+  const refused = Object.assign(new Error('refused'), { problems: [{ item: 'b', dataset: null, parameter: null, path: 'value', message: 'no such field', pos: null, length: 0 }] })
+  calls[0].reject(refused)
+  await tick()
+  assert.deepEqual(state.slots.b.answer, { error: 'no such field', code: 'error' })
+  assert.deepEqual(calls[1].ids, ['a'])
+})
+
+test('Refresh asks every tile again', async () => {
+  const { calls, view } = liveHarness([kpiTile('a', 0, 0), kpiTile('b', 3, 0)])
+  view.run()
+  calls[0].resolve({ tiles: { a: numbersOf(1), b: numbersOf(2) }, truncated: {} })
+  await tick()
+  view.run(undefined, { again: true })
+  assert.deepEqual(calls[1].ids.sort(), ['a', 'b'])
+})
+
+test('a tile taken away has no slot, and one that comes back starts over', async () => {
+  const { calls, state, view } = liveHarness([kpiTile('a', 0, 0), kpiTile('b', 3, 0)])
+  view.run()
+  calls[0].resolve({ tiles: { a: numbersOf(1), b: numbersOf(2) }, truncated: {} })
+  await tick()
+  state.def = definition([kpiTile('a', 0, 0)])
+  view.run()
+  assert.deepEqual(Object.keys(state.slots), ['a'])
+  state.def = definition([kpiTile('a', 0, 0), kpiTile('b', 3, 0)])
+  view.run()
+  assert.deepEqual(calls[1].ids, ['b'])
 })

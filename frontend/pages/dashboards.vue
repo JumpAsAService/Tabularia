@@ -2,17 +2,24 @@
 // Every dashboard the person may open (VIEW on its folder), paginated, with a server-side search
 // over name, description and folders. By default the most read come first: the people who opened it
 // in the viewer in the last 30 days, a person once a day (GET /dashboards/search). A dashboard is
-// made in a folder, from Explore: here it is opened. The order, the search and the page live in the
-// address: a link, a reload and Back give the same list.
-import { computed, nextTick, ref, watch } from 'vue'
+// made in a folder, from Explore or here, where the person has EDIT, and goes to the designer. The
+// order, the search and the page live in the address: a link, a reload and Back give the same list.
+import { computed, nextTick, onMounted, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
-import { Eye, Folder, FolderTree, LayoutDashboard, Search } from 'lucide-vue-next'
+import { Eye, Folder, FolderTree, LayoutDashboard, LoaderCircle, PencilRuler, Plus, Search } from 'lucide-vue-next'
+import Modal from '~/components/ui/Modal.vue'
+import { errMessage } from '~/composables/useApi'
+import { useAuth } from '~/composables/useAuth'
+import { useAppInfo } from '~/composables/useAppInfo'
+import { useFolderPaths } from '~/composables/useFolderPaths'
+import { useProjects } from '~/composables/useProjects'
 import { useFormat } from '~/composables/useFormat'
 import { usePagedList } from '~/composables/usePagedList'
-import { useDashboards, type DashboardRow, type DashboardSort } from '~/composables/useDashboards'
+import { starterDashboard, useDashboards, type DashboardRow, type DashboardSort } from '~/composables/useDashboards'
 
 const api = useDashboards()
-const { t } = useI18n()
+const { t, locale } = useI18n()
+const toast = useToast()
 const fmtx = useFormat()
 const route = useRoute()
 const router = useRouter()
@@ -56,6 +63,45 @@ watch(() => route.query, (query) => {
   offset.value = wantedOffset
   load()
 })
+// ── a new one, in a folder where this person has EDIT ──
+const folders = useFolderPaths()
+const { user } = useAuth()
+const editable = ref<number[]>([])
+const personal = ref<number | null>(null)
+const folderOptions = computed(() => editable.value
+  .map((id) => ({ value: id, label: folders.pathOf(id) ?? String(id) }))
+  .sort((a, b) => Number(b.value === personal.value) - Number(a.value === personal.value) || a.label.localeCompare(b.label)))
+const newOpen = ref(false)
+const newName = ref('')
+const newFolder = ref<number | null>(null)
+const creating = ref(false)
+onMounted(async () => {
+  try {
+    const [ids, list] = await Promise.all([api.folders(), useProjects().list(), folders.load()])
+    editable.value = ids
+    personal.value = list.find((p) => p.personal_of != null && p.personal_of === user.value?.id)?.id ?? null
+  } catch { /* the list reads all the same; the button stays away */ }
+})
+function openNew() {
+  newName.value = t('projectBrowser.newDashboardName')
+  newFolder.value = folderOptions.value[0]?.value ?? null
+  newOpen.value = true
+}
+async function createNew() {
+  if (newFolder.value == null || creating.value) return
+  creating.value = true
+  try {
+    const info = await useAppInfo().load()
+    const created = await api.create(newFolder.value, { name: newName.value.trim(), content: starterDashboard(String(locale.value), info?.timezone ?? 'UTC') })
+    newOpen.value = false
+    await navigateTo(`/dashboard-design?id=${created.id}`)
+  } catch (e) {
+    toast.error(errMessage(e))
+  } finally {
+    creating.value = false
+  }
+}
+
 // a link to a page that is no longer there (fewer dashboards now): the last one that is
 watch(items, () => {
   const last = Math.floor(Math.max(0, total.value - 1) / pageSize) * pageSize
@@ -87,6 +133,7 @@ function openRow(ev: MouseEvent, r: DashboardRow) {
       <div class="head-actions">
         <Select v-model="sort" :options="sortOptions" class="sortsel" :aria-label="$t('dashboardsTab.sortLabel')" />
         <span class="searchbox"><Search :size="14" /><input v-model="q" type="text" :placeholder="$t('dashboardsTab.searchPlaceholder')" :aria-label="$t('dashboardsTab.searchPlaceholder')" /></span>
+        <button v-if="folderOptions.length" type="button" class="primary new-board" data-new-dashboard @click="openNew"><Plus :size="14" /> {{ $t('dashboardsTab.new') }}</button>
       </div>
     </div>
 
@@ -146,19 +193,45 @@ function openRow(ev: MouseEvent, r: DashboardRow) {
           </td>
           <td class="right">
             <NuxtLink :to="viewerLink(r)" class="mini iconbtn" :title="$t('dashboardsTab.open')" :aria-label="`${$t('dashboardsTab.open')}: ${r.name}`"><Eye :size="13" /></NuxtLink>
-            <!-- Edit (r.editable) joins here with the designer -->
+            <NuxtLink v-if="r.editable" :to="`/dashboard-design?id=${r.id}`" class="mini iconbtn" :title="$t('dashboardsTab.edit')" :aria-label="`${$t('dashboardsTab.edit')}: ${r.name}`"><PencilRuler :size="13" /></NuxtLink>
           </td>
         </tr>
       </tbody>
     </table>
 
     <Pager :offset="offset" :page-size="pageSize" :total="total" :loading="loading" @prev="prev" @next="next" />
+
+    <Modal :open="newOpen" :title="$t('dashboardsTab.newTitle')" :width="460" @close="newOpen = false">
+      <form id="new-dashboard" class="newform" @submit.prevent="createNew">
+        <label>
+          <span>{{ $t('dashboardsTab.newName') }}</span>
+          <input v-model="newName" type="text" maxlength="200" data-new-name />
+        </label>
+        <label>
+          <span>{{ $t('dashboardsTab.newFolder') }}</span>
+          <Select v-model="newFolder" :options="folderOptions" searchable :aria-label="$t('dashboardsTab.newFolder')" />
+        </label>
+        <p class="muted hint">{{ $t('dashboardsTab.newHint') }}</p>
+      </form>
+      <template #footer>
+        <span class="grow" />
+        <button type="button" @click="newOpen = false">{{ $t('reportDesigner.cancel') }}</button>
+        <button type="submit" form="new-dashboard" class="primary" :disabled="creating || !newName.trim() || newFolder == null">
+          <LoaderCircle v-if="creating" :size="14" class="spin" /> {{ $t('dashboardsTab.newCreate') }}
+        </button>
+      </template>
+    </Modal>
   </AppShell>
 </template>
 
 <style scoped src="~/assets/listpage.css" />
 
 <style scoped>
+.new-board { display: inline-flex; align-items: center; gap: 6px; white-space: nowrap; }
+.newform { display: flex; flex-direction: column; gap: 12px; }
+.newform label { display: flex; flex-direction: column; gap: 4px; font-size: 12px; color: var(--muted); }
+.hint { margin: 0; font-size: 12px; line-height: 1.45; }
+.grow { flex: 1; }
 .sortsel { width: 170px; }
 tr.row { cursor: pointer; }
 td.name { max-width: 420px; }

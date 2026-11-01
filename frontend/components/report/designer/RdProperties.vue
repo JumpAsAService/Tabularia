@@ -2,7 +2,7 @@
 // The right panel: the properties of what is selected — an item (its name, place and size
 // in mm, what it shows, its style, when it is visible), a band (its height, the pages it is
 // on), or, with nothing selected, the report (its page and a reminder of the keys).
-import { computed, ref, watch } from 'vue'
+import { computed, inject, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 import {
   ChartColumn, CircleAlert, Copy, FileText, Gauge, Image, Minus, PanelBottom, PanelTop, Square, Table2, Trash2, Type, Upload, X,
@@ -16,7 +16,7 @@ import RdSection from '~/components/report/designer/RdSection.vue'
 import RdSeg from '~/components/report/designer/RdSeg.vue'
 import RdStyleFields from '~/components/report/designer/RdStyleFields.vue'
 import RdTableProps from '~/components/report/designer/RdTableProps.vue'
-import { useDesign } from '~/composables/reportDesignStore'
+import { ON_A_BOARD, useDesign, useDesignWords } from '~/composables/reportDesignStore'
 import {
   ITEM_ID_RE, MAX_IMAGE_BYTES, bodyPageHeight, contentWidth, pageSize, type DItem, type DText,
 } from '~/composables/reportDesignModel'
@@ -25,6 +25,9 @@ const emit = defineEmits<{ (e: 'page-setup'): void }>()
 const store = useDesign()
 const { t } = useI18n()
 const toast = useToast()
+const word = useDesignWords()
+// a dashboard's tile has its place on a grid (the slots), and a style only as a KPI or a text
+const onBoard = inject(ON_A_BOARD, false)
 
 const sel = computed(() => store.selected.value)
 const item = computed<DItem | null>(() => sel.value?.item ?? null)
@@ -184,6 +187,7 @@ const pageLine = computed(() => {
       <div v-for="(p, i) in itemProblems" :key="i" class="rpp-alert" role="alert"><CircleAlert :size="14" /> <span>{{ p.message }}</span></div>
 
       <div ref="body" class="rpp-body">
+        <slot name="layout" :item="item">
         <RdSection :title="$t('reportDesigner.props.layout')" skey="layout">
           <div class="rpp-grid">
             <label class="rp-f"><span>{{ isLine ? $t('reportDesigner.props.startX') : 'X' }}</span><RdNum v-model="item.x" unit="mm" :min="0" :max="width" @update:model-value="keep" /></label>
@@ -193,6 +197,7 @@ const pageLine = computed(() => {
             <div v-else class="rp-f"><span>{{ $t('reportDesigner.props.height') }}</span><span class="rpp-auto">{{ $t('reportDesigner.props.tableHeight') }}</span></div>
           </div>
         </RdSection>
+        </slot>
 
         <!-- what the item shows -->
         <RdSection v-if="textItem" :title="$t('reportDesigner.props.content')" skey="text-content" :bad="store.problems.value.some((p) => p.item === item!.id && (p.path === 'value' || p.path === 'dataset'))">
@@ -215,7 +220,7 @@ const pageLine = computed(() => {
             </div>
             <input ref="fileInput" type="file" accept="image/png,image/jpeg,image/svg+xml,.png,.jpg,.jpeg,.svg" class="sr-only" tabindex="-1" @change="onFile" />
           </div>
-          <p class="rp-help">{{ $t('reportDesigner.props.imageHelp') }}</p>
+          <p class="rp-help">{{ $t(word('reportDesigner.props.imageHelp')) }}</p>
           <p v-if="store.problemAt(item.id, 'asset')" class="rp-err" role="alert">{{ store.problemAt(item.id, 'asset')?.message }}</p>
           <div class="rp-f">
             <span>{{ $t('reportDesigner.props.fit') }}</span>
@@ -228,8 +233,8 @@ const pageLine = computed(() => {
         <RdKpiProps v-else-if="item.type === 'kpi'" :item="item" />
 
         <!-- style -->
-        <RdSection v-if="item.type !== 'table' && item.type !== 'chart'" :title="$t('reportDesigner.props.style')" skey="style" :bad="!!store.problemAt(item.id, 'style.format')">
-          <RdStyleFields v-if="item.type === 'text'" :obj="item" :parts="['font', 'align', 'valign', 'color', 'fill', 'border', 'padding', 'radius', 'format', 'grow']" :item="item.id" path="" />
+        <RdSection v-if="item.type !== 'table' && item.type !== 'chart' && !(onBoard && item.type === 'image')" :title="$t('reportDesigner.props.style')" skey="style" :bad="!!store.problemAt(item.id, 'style.format')">
+          <RdStyleFields v-if="item.type === 'text'" :obj="item" :parts="onBoard ? ['font', 'align', 'valign', 'color', 'fill', 'border', 'padding', 'radius', 'format'] : ['font', 'align', 'valign', 'color', 'fill', 'border', 'padding', 'radius', 'format', 'grow']" :item="item.id" path="" />
           <RdStyleFields v-else-if="item.type === 'line'" :obj="item" :parts="['stroke']" :item="item.id" path="" />
           <RdStyleFields v-else-if="item.type === 'rect'" :obj="item" :parts="['fill', 'border', 'radius']" :item="item.id" path="" />
           <RdStyleFields v-else-if="item.type === 'kpi'" :obj="item" :parts="['font', 'color', 'fill', 'radius']" :item="item.id" path="" />
@@ -239,13 +244,13 @@ const pageLine = computed(() => {
         <RdSection :title="$t('reportDesigner.props.visibility')" skey="visible" :closed="!item.visible" :bad="!!store.problemAt(item.id, 'visible')">
           <RdExprField :obj="item" prop="visible" :label="$t('reportDesigner.props.visibleWhen')" path="visible" :item="item.id"
                        :fields="band === 'body' ? store.fieldsOf(store.datasetOf(item)) : null" optional
-                       placeholder="PARAM(&quot;detail&quot;) = TRUE" :hint="$t('reportDesigner.props.visibleHint')" />
+                       placeholder="PARAM(&quot;detail&quot;) = TRUE" :hint="$t(word('reportDesigner.props.visibleHint'))" />
         </RdSection>
       </div>
     </template>
 
     <!-- a band -->
-    <template v-else-if="band">
+    <template v-else-if="band && !onBoard">
       <header class="rpp-head">
         <component :is="band === 'page_header' ? PanelTop : band === 'page_footer' ? PanelBottom : FileText" :size="16" class="rpp-ticon" />
         <div class="rpp-titles"><span class="rpp-name">{{ $t(`reportDesigner.bands.${band}`) }}</span></div>
@@ -271,7 +276,7 @@ const pageLine = computed(() => {
     </template>
 
     <!-- the report -->
-    <template v-else>
+    <slot v-else name="nothing">
       <header class="rpp-head">
         <FileText :size="16" class="rpp-ticon" />
         <div class="rpp-titles"><span class="rpp-name">{{ $t('reportDesigner.props.report') }}</span></div>
@@ -290,7 +295,7 @@ const pageLine = computed(() => {
           <div><dt><kbd>Del</kbd></dt><dd>{{ $t('reportDesigner.keys.delete') }}</dd></div>
         </dl>
       </div>
-    </template>
+    </slot>
   </aside>
 </template>
 

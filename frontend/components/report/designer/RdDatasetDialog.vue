@@ -6,7 +6,7 @@
 // rows counted (a SELECT * on a big table shows here, before a preview reads it). A
 // parameter goes in the SQL as {name}, without quotes: the server writes it as a literal;
 // in a filter it is chosen from the report's list, and written `{name}` in the definition.
-import { computed, defineAsyncComponent, ref, watch } from 'vue'
+import { computed, defineAsyncComponent, inject, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { Database, FileCode, LoaderCircle, Plus, RefreshCw, Table2, Trash2, View } from 'lucide-vue-next'
 import Modal from '~/components/ui/Modal.vue'
@@ -15,7 +15,7 @@ import RdExprInput from '~/components/report/designer/RdExprInput.vue'
 import RdFieldIcon from '~/components/report/designer/RdFieldIcon.vue'
 import RdRowCount from '~/components/report/designer/RdRowCount.vue'
 import RdSeg from '~/components/report/designer/RdSeg.vue'
-import { useDesign } from '~/composables/reportDesignStore'
+import { ON_A_BOARD, useDesign, useDesignWords } from '~/composables/reportDesignStore'
 import { useReportDesign } from '~/composables/useReportDesign'
 import { DB_TYPES, useConnections, type ConnectionInfo } from '~/composables/useConnections'
 import { useDatasources, type DatasourceInfo } from '~/composables/useDatasources'
@@ -34,11 +34,19 @@ import {
 
 const SqlEditor = defineAsyncComponent(() => import('~/components/sql/SqlEditor.vue'))
 
-const props = defineProps<{ open: boolean; name: string | null; reportId: number | null }>()
+const props = defineProps<{
+  open: boolean
+  name: string | null
+  reportId: number | null
+  /** how the fields are read, when what is edited is not a report */
+  readFields?: (dataset: string, definition: any) => Promise<{ fields: DField[]; rows?: number; over?: boolean; max_rows?: number }>
+}>()
 const emit = defineEmits<{ (e: 'close'): void; (e: 'applied', name: string): void }>()
 const store = useDesign()
 const { t } = useI18n()
 const designApi = useReportDesign()
+const word = useDesignWords()
+const onBoard = inject(ON_A_BOARD, false)
 const folderPaths = useFolderPaths()
 const { engineCatalog, loadCatalog, defaultEngine } = usePreferredEngine()
 
@@ -74,7 +82,8 @@ function fromDataset(d: DDataset | null): Draft {
   const s = d?.source
   return {
     name: d?.name ?? freeName(),
-    kind: s?.kind ?? 'sql',
+    // who makes a dashboard from a blank page may write no SQL: what the folders hold comes first there
+    kind: s?.kind ?? (onBoard ? 'datasource' : 'sql'),
     sql: s?.kind === 'sql' ? s.sql : '',
     connection_id: s?.kind === 'sql' ? s.connection_id : null,
     engine: s?.kind === 'sql' ? s.engine : null,
@@ -302,7 +311,7 @@ async function refreshFields() {
     const at = def.datasets.findIndex((x: DDataset) => x.name === (original.value ?? ds.name))
     if (at >= 0) def.datasets[at] = ds
     else def.datasets.push(ds)
-    const got = await designApi.fields(props.reportId, ds.name, def)
+    const got = await (props.readFields ? props.readFields(ds.name, def) : designApi.fields(props.reportId, ds.name, def))
     if (draft.value) draft.value.fields = got.fields
     fieldsFor.value = JSON.stringify(ds.source)
     const count = rowCountOf(got)
@@ -389,7 +398,7 @@ const rowCount = computed(() => countFor(counted.value, built()?.source))
           <SqlEditor ref="editorRef" v-model="sqlText" :tables="editorTables" />
         </div>
         <p class="rp-help rdd-agg">
-          {{ $t('reportDesigner.dataset.aggregateHelp') }} <code>{{ $t('reportDesigner.dataset.aggregateExample') }}</code> {{ $t('reportDesigner.dataset.aggregateWhy') }}
+          {{ $t(word('reportDesigner.dataset.aggregateHelp')) }} <code>{{ $t('reportDesigner.dataset.aggregateExample') }}</code> {{ $t('reportDesigner.dataset.aggregateWhy') }}
         </p>
         <div class="rdd-params">
           <p class="rp-help">{{ $t('reportDesigner.dataset.paramsHelp') }}</p>
@@ -413,7 +422,7 @@ const rowCount = computed(() => countFor(counted.value, built()?.source))
             <span>{{ $t('reportDesigner.dataset.filters') }}</span>
             <button type="button" class="mini" @click="draft.filters.push({ column: '', op: '=', value: '' })"><Plus :size="12" /> {{ $t('reportDesigner.dataset.addFilter') }}</button>
           </div>
-          <p class="rp-help">{{ $t('reportDesigner.dataset.filtersHelp') }}</p>
+          <p class="rp-help">{{ $t(word('reportDesigner.dataset.filtersHelp')) }}</p>
           <template v-for="(f, i) in draft.filters" :key="i">
             <div class="rdd-filter" :class="{ whole: !params.length || !!chosenParam(f) }">
               <Select :model-value="f.column || null" :options="filterColumns" searchable :placeholder="$t('reportDesigner.dataset.column')" :aria-label="$t('reportDesigner.dataset.column')" @update:model-value="f.column = $event" />
@@ -434,7 +443,7 @@ const rowCount = computed(() => countFor(counted.value, built()?.source))
           <span>{{ $t('reportDesigner.dataset.script') }}</span>
           <Select :model-value="draft.script_id" :options="scriptOptions" searchable :placeholder="$t('reportDesigner.dataset.choose')" :aria-label="$t('reportDesigner.dataset.script')" @update:model-value="draft.script_id = $event" />
         </label>
-        <p class="rp-help">{{ $t('reportDesigner.dataset.scriptHelp') }}</p>
+        <p class="rp-help">{{ $t(word('reportDesigner.dataset.scriptHelp')) }}</p>
       </template>
       <p v-if="sourceError" class="rp-help rdd-need">{{ sourceError }}</p>
 

@@ -374,6 +374,25 @@ export function createDesignStore() {
   }
 }
 
+/** Provided by the dashboard designer, which edits a dashboard with these panels. */
+export const ON_A_BOARD: InjectionKey<boolean> = Symbol('dashboard-design')
+// the panels' words that speak of a report or of paper, and what they say of a dashboard
+const SAID_OF_A_BOARD: Record<string, string> = {
+  'reportDesigner.dataset.aggregateHelp': 'dashboardDesigner.words.aggregateHelp',
+  'reportDesigner.dataset.filtersHelp': 'dashboardDesigner.words.filtersHelp',
+  'reportDesigner.dataset.scriptHelp': 'dashboardDesigner.words.scriptHelp',
+  'reportDesigner.param.filterItOff': 'dashboardDesigner.words.filterItOff',
+  'reportDesigner.param.sqlLineMulti': 'dashboardDesigner.words.sqlLineMulti',
+  'reportDesigner.table.titleHelp': 'dashboardDesigner.words.titleHelp',
+  'reportDesigner.props.visibleHint': 'dashboardDesigner.words.visibleHint',
+  'reportDesigner.props.imageHelp': 'dashboardDesigner.words.imageHelp',
+}
+/** The key of a panel's text, in the words of what is being edited. */
+export function useDesignWords() {
+  const board = inject(ON_A_BOARD, false)
+  return (key: string) => (board ? SAID_OF_A_BOARD[key] ?? key : key)
+}
+
 export type DesignStore = ReturnType<typeof createDesignStore>
 export const DESIGN: InjectionKey<DesignStore> = Symbol('report-design')
 

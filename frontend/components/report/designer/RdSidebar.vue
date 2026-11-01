@@ -18,23 +18,30 @@ import {
   columnFor, fieldRef, newItem, type DDataset, type DField, type DText, type InsertKind,
 } from '~/composables/reportDesignModel'
 
-defineProps<{ refreshing?: string | null; fieldErrors?: Record<string, string>; sourceLabel: (d: DDataset) => string }>()
+const props = defineProps<{ refreshing?: string | null; fieldErrors?: Record<string, string>; sourceLabel: (d: DDataset) => string; board?: boolean }>()
 const emit = defineEmits<{
   (e: 'edit-dataset', name: string | null): void
   (e: 'remove-dataset', name: string): void
   (e: 'refresh-fields', name: string): void
   (e: 'edit-parameter', name: string | null): void
   (e: 'remove-parameter', name: string): void
+  (e: 'insert', kind: InsertKind): void
+  (e: 'use-field', dataset: string, field: DField): void
 }>()
 
 const store = useDesign()
 const { t } = useI18n()
 const tab = store.sideTab
 
-const ELEMENTS: { kind: InsertKind; icon: unknown }[] = [
-  { kind: 'text', icon: Type }, { kind: 'image', icon: Image }, { kind: 'line', icon: Minus }, { kind: 'rect', icon: Square },
-  { kind: 'table', icon: Table2 }, { kind: 'matrix', icon: Grid3x3 }, { kind: 'chart', icon: ChartColumn }, { kind: 'kpi', icon: Gauge },
-]
+const ELEMENTS: { kind: InsertKind; icon: unknown }[] = props.board
+  ? [
+      { kind: 'kpi', icon: Gauge }, { kind: 'chart', icon: ChartColumn }, { kind: 'table', icon: Table2 }, { kind: 'matrix', icon: Grid3x3 },
+      { kind: 'text', icon: Type }, { kind: 'image', icon: Image },
+    ]
+  : [
+      { kind: 'text', icon: Type }, { kind: 'image', icon: Image }, { kind: 'line', icon: Minus }, { kind: 'rect', icon: Square },
+      { kind: 'table', icon: Table2 }, { kind: 'matrix', icon: Grid3x3 }, { kind: 'chart', icon: ChartColumn }, { kind: 'kpi', icon: Gauge },
+    ]
 
 // the words of the ready-made texts in the report's own language (not the interface's)
 const WORDS: Record<string, [string, string, string]> = {
@@ -67,6 +74,7 @@ function end() {
 /** An element added without a drop: in the band chosen when it can hold it, else the
  *  body, under what is there. */
 function insert(kind: InsertKind) {
+  if (props.board) { emit('insert', kind); return }
   const d = store.doc.value
   const spot = store.freeSpot(kind)
   const it = newItem(d, kind, spot)
@@ -111,6 +119,7 @@ watch(() => store.doc.value.datasets.map((d) => d.name), (now, before) => {
 /** A field added with a click: a column of the selected table when it reads this
  *  dataset, else a text in the body. */
 function useField(ds: DDataset, f: DField) {
+  if (props.board) { emit('use-field', ds.name, f); return }
   const sel = store.selected.value?.item
   if (sel?.type === 'table' && (sel.dataset === ds.name || !sel.dataset)) {
     sel.dataset = ds.name
@@ -128,8 +137,10 @@ function useField(ds: DDataset, f: DField) {
   store.settleRow(it)
 }
 
-const fieldTitle = computed(() => (store.selected.value?.item.type === 'table'
-  ? t('reportDesigner.data.fieldToTable') : t('reportDesigner.data.fieldToText')))
+const fieldTitle = computed(() => {
+  if (props.board) return t('dashboardDesigner.fieldHint')
+  return store.selected.value?.item.type === 'table' ? t('reportDesigner.data.fieldToTable') : t('reportDesigner.data.fieldToText')
+})
 </script>
 
 <template>
@@ -145,7 +156,7 @@ const fieldTitle = computed(() => (store.selected.value?.item.type === 'table'
     </div>
 
     <div v-if="tab === 'insert'" class="rds-body" role="tabpanel">
-      <p class="rds-help">{{ $t('reportDesigner.insert.help') }}</p>
+      <p class="rds-help">{{ board ? $t('dashboardDesigner.insertHelp') : $t('reportDesigner.insert.help') }}</p>
       <div class="rds-tiles">
         <button
           v-for="el in ELEMENTS"
@@ -154,7 +165,7 @@ const fieldTitle = computed(() => (store.selected.value?.item.type === 'table'
           class="rds-tile"
           draggable="true"
           :data-insert="el.kind"
-          :title="$t(`reportDesigner.insert.hint.${el.kind}`)"
+          :title="board ? $t(`dashboardDesigner.hint.${el.kind}`) : $t(`reportDesigner.insert.hint.${el.kind}`)"
           @dragstart="start($event, { kind: 'insert', type: el.kind })"
           @dragend="end"
           @click="insert(el.kind)"
@@ -164,8 +175,8 @@ const fieldTitle = computed(() => (store.selected.value?.item.type === 'table'
         </button>
       </div>
 
-      <h3 class="rds-h">{{ $t('reportDesigner.insert.readyMade') }}</h3>
-      <ul class="rds-snips">
+      <h3 v-if="!board" class="rds-h">{{ $t('reportDesigner.insert.readyMade') }}</h3>
+      <ul v-if="!board" class="rds-snips">
         <li v-for="(s, i) in snippets" :key="i">
           <button
             type="button"

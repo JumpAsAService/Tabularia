@@ -838,7 +838,8 @@ async function createReport() {
   }
 }
 
-// «New → Dashboard»: made here, empty, under the first free «New dashboard» name, then opened
+// «New → Dashboard»: made here, empty, under the first free «New dashboard» name, then opened in
+// the designer
 const creatingDashboard = ref(false)
 async function createDashboard() {
   const folder = currentId.value
@@ -855,7 +856,7 @@ async function createDashboard() {
       try {
         const created = await dashboardsApi.create(folder, { name, content })
         closeNew()
-        await navigateTo(`/dashboard?id=${created.id}`)
+        await navigateTo(`/dashboard-design?id=${created.id}`)
         return
       } catch (e: any) {
         // someone made one with this name meanwhile: the next one

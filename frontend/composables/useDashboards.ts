@@ -154,10 +154,27 @@ export function useDashboards() {
     /** the numbers ready to draw, tile by tile; an error of a tile stays in that tile */
     data: (id: number, body: TilesRequest, signal?: AbortSignal) =>
       apiFetch<TilesAnswer>(`/dashboards/${id}/data`, { method: 'POST', body, signal }),
+    /** the folders where this person can make one: EDIT */
+    folders: () => apiFetch<number[]>('/dashboards/folders'),
     create: (projectId: number, body: { name: string; description?: string; content?: DashboardDefinition }) =>
       apiFetch<DashboardDetail>(`/projects/${projectId}/dashboards`, { method: 'POST', body }),
     update: (id: number, body: { name?: string; description?: string; project_id?: number; content?: DashboardDefinition; base_version?: number }) =>
       apiFetch<DashboardDetail>(`/dashboards/${id}`, { method: 'PATCH', body }),
+    // ── the designer, on a definition not saved yet: EDIT on the folder ──
+    /** every problem of the definition, as a save would say them */
+    check: (id: number, definition: unknown, signal?: AbortSignal) =>
+      apiFetch<{ problems: unknown[] }>('/dashboards/check', { method: 'POST', body: { dashboard_id: id, definition }, signal }),
+    /** the numbers of a definition being edited; a 422 lists its problems. `tab`: a newer request knocks
+     *  down an older one of this tab only */
+    preview: (id: number, definition: DashboardDefinition, body: TilesRequest, tab: string, signal?: AbortSignal) =>
+      apiFetch<TilesAnswer>('/dashboards/preview', { method: 'POST', body: { dashboard_id: id, definition, tab, ...body }, signal }),
+    parametersOf: (id: number, definition: DashboardDefinition, params: ReportParams, signal?: AbortSignal) =>
+      apiFetch<ReportParameter[]>(`/dashboards/${id}/parameters`, { method: 'POST', body: { definition, params }, signal }),
+    /** a dataset's columns as the data has them, and its rows counted when they can be */
+    fields: (id: number, dataset: string, definition: unknown) =>
+      apiFetch<{ dataset: string; fields: { name: string; type: string }[]; rows?: number; over?: boolean; max_rows?: number }>(`/dashboards/${id}/fields`, {
+        method: 'POST', body: { dataset, definition },
+      }),
     duplicate: (id: number) => apiFetch<DashboardDetail>(`/dashboards/${id}/duplicate`, { method: 'POST' }),
     remove: (id: number) => apiFetch<void>(`/dashboards/${id}`, { method: 'DELETE' }),
   }

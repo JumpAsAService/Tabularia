@@ -417,9 +417,50 @@ def test_the_choices_of_a_definition_being_edited_need_edit(app, session, fake_e
     assert r.status_code == 400 and "the dashboard has no parameter" in r.text
 
 
+def test_the_fields_of_a_definition_being_edited_need_edit_and_the_reader_s_rights(app, session, fake_engine):
+    """«Refresh fields» in the designer: what a dataset being written has, with its rows counted."""
+    w = _world(session)
+    board = _saved(session, w, definition(w))
+    draft = {**definition(w), "datasets": [_dataset("orders", w["orders"]), _dataset("salaries", w["salaries"])], "tiles": [{"id": "half"}]}
+    asked = {"dataset": "orders", "definition": draft}
+    viewer = _reader(app, session, w)
+    assert viewer.post(f"/dashboards/{board}/fields", json=asked, headers=CSRF).status_code == 403
+    stranger = _sign_in(app, session, "stranger@x.local")
+    assert stranger.post(f"/dashboards/{board}/fields", json=asked, headers=CSRF).status_code == 404
+    editor = _reader(app, session, w, "editor@x.local", "edit")
+    r = editor.post(f"/dashboards/{board}/fields", json=asked, headers=CSRF)
+    assert r.status_code == 200 and r.json()["fields"] == [{"name": "region", "type": "string"}, {"name": "amount", "type": "float"}]
+    # half done elsewhere: only that dataset must be whole. Not theirs to read: refused, saying nothing of it
+    r = editor.post(f"/dashboards/{board}/fields", json={**asked, "dataset": "salaries"}, headers=CSRF)
+    assert r.status_code in (403, 404, 422) and "pay_grade" not in r.text
+    r = editor.post(f"/dashboards/{board}/fields", json={**asked, "dataset": "nope"}, headers=CSRF)
+    assert r.status_code in (404, 422) and "report" not in r.text
+
+
+def test_the_folders_for_a_new_dashboard_are_those_with_edit(app, session, fake_engine):
+    w = _world(session)
+    viewer = _reader(app, session, w)
+    assert w["sales"] not in viewer.get("/dashboards/folders").json()
+    editor = _reader(app, session, w, "editor@x.local", "edit")
+    assert w["sales"] in editor.get("/dashboards/folders").json() and w["vault"] not in editor.get("/dashboards/folders").json()
+
+
 # ── the preview ───────────────────────────────────────────────────────────────
 def _preview(client, **body):
     return client.post("/dashboards/preview", json=body, headers=CSRF)
+
+
+def test_two_tabs_on_one_dashboard_do_not_knock_each_other_down(app, session, fake_engine):
+    """A newer request takes the place of an older one of its own tab only."""
+    w = _world(session)
+    board = _saved(session, w, definition(w))
+    editor = _reader(app, session, w, "editor@x.local", "edit")
+    slots = []
+    for tab in ("one", "two", "one"):
+        assert _preview(editor, definition=definition(w), dashboard_id=board, tab=tab).status_code == 200
+        slots.append(fake_engine.report_tiles[-1]["slot"])
+    assert slots[0] != slots[1] and slots[0] == slots[2]
+    assert _preview(editor, definition=definition(w), dashboard_id=board, tab="x" * 33).status_code == 422
 
 
 def test_the_preview_takes_a_definition_not_saved_and_needs_edit(app, session, fake_engine):

@@ -13,6 +13,11 @@ export const GRID_ROW_PX = 40
 export const GRID_GAP_PX = 10
 export const WIDE_FROM_PX = 1100
 export const MEDIUM_FROM_PX = 700
+// the gateway's (services/dashboards.py), which refuses past them
+export const MAX_GRID_ROW = 1000
+export const MAX_TILE_ROWS = 100
+/** The smallest tile of each type, in columns and rows. */
+export const MIN_TILE: Record<string, [number, number]> = { kpi: [2, 2], chart: [4, 4], table: [4, 4], text: [2, 1], image: [1, 1] }
 
 export type GridWidth = 'wide' | 'medium' | 'narrow'
 export interface GridBox { x: number; y: number; w: number; h: number }
@@ -96,4 +101,70 @@ export function placeTiles(tiles: GridTile[], width: GridWidth, hidden: Set<stri
     y += h
     return placed
   })
+}
+
+// ── the designer: drawn on 12 columns, the tiles push each other ─────────────
+export type GridHandle = 'n' | 's' | 'e' | 'w' | 'ne' | 'nw' | 'se' | 'sw'
+
+/** How many cells a pointer went, on a grid `width` pixels wide: by the sizes the viewer draws with. */
+export function cellsOf(dx: number, dy: number, width: number): { cols: number; rows: number } {
+  const across = (width + GRID_GAP_PX) / GRID_COLUMNS
+  return { cols: Math.round(dx / across) || 0, rows: Math.round(dy / (GRID_ROW_PX + GRID_GAP_PX)) || 0 }
+}
+
+/** A tile moved by some cells, inside the columns and under the first row. */
+export function boxMoved(box: GridBox, cols: number, rows: number): GridBox {
+  return {
+    ...box,
+    x: Math.max(0, Math.min(box.x + cols, GRID_COLUMNS - box.w)),
+    y: Math.max(0, Math.min(box.y + rows, MAX_GRID_ROW)),
+  }
+}
+
+/** A tile with a handle dragged some cells: the edges of that handle move, the others stay, down to
+ *  the smallest tile of its type and up to the grid's edges. */
+export function boxResized(box: GridBox, handle: GridHandle, cols: number, rows: number, type = ''): GridBox {
+  const [leastW, leastH] = MIN_TILE[type] ?? [1, 1]
+  let [left, top, right, bottom] = [box.x, box.y, box.x + box.w, box.y + box.h]
+  if (handle.includes('w')) left = Math.max(0, Math.min(left + cols, right - leastW))
+  if (handle.includes('e')) right = Math.min(GRID_COLUMNS, Math.max(right + cols, left + leastW))
+  if (handle.includes('n')) top = Math.max(0, bottom - MAX_TILE_ROWS, Math.min(top + rows, bottom - leastH))
+  if (handle.includes('s')) bottom = Math.min(top + MAX_TILE_ROWS, Math.max(bottom + rows, top + leastH))
+  return { x: left, y: top, w: right - left, h: bottom - top }
+}
+
+/** The layout with one tile at `box`: whatever it lands on goes down to the first row free, and so
+ *  on in reading order, so no two tiles share a cell and none goes up. A tile not in the way stays the
+ *  same object. A gesture calls it from the layout it started with, at every cell: what was pushed
+ *  goes back when the tile has moved on. Null when a tile would pass the last row the server takes. */
+export function pushed<T extends GridTile>(tiles: T[], id: string, box: GridBox): T[] | null {
+  const placed: GridBox[] = [box]
+  const moved = new Map<string, GridBox>([[id, box]])
+  for (const t of inReadingOrder(tiles.filter((x) => x.id !== id))) {
+    let y = t.grid.y
+    for (;;) {
+      const hits = placed.filter((p) => collides(p, { ...t.grid, y }))
+      if (!hits.length) break
+      y = Math.max(...hits.map((p) => p.y + p.h))
+    }
+    if (y > MAX_GRID_ROW) return null
+    if (y !== t.grid.y) moved.set(t.id, { ...t.grid, y })
+    placed.push({ ...t.grid, y })
+  }
+  return tiles.map((t) => (moved.has(t.id) ? { ...t, grid: moved.get(t.id)! } : t))
+}
+
+/** The row under the last tile. */
+export const lowestRow = (tiles: GridTile[]) => tiles.reduce((most, t) => Math.max(most, t.grid.y + t.grid.h), 0)
+
+/** Where a new tile of this size first fits, reading the grid: the rows that can hold it are the
+ *  first, and those where another ends. */
+export function freeSpot(tiles: GridTile[], w: number, h: number): { x: number; y: number } {
+  const rows = [...new Set([0, ...tiles.map((t) => t.grid.y + t.grid.h)])].sort((a, b) => a - b)
+  for (const y of rows) {
+    for (let x = 0; x + w <= GRID_COLUMNS; x++) {
+      if (!tiles.some((t) => collides(t.grid, { x, y, w, h }))) return { x, y }
+    }
+  }
+  return { x: 0, y: lowestRow(tiles) } // never reached: the row under the last tile is free
 }

@@ -23,6 +23,8 @@ const props = defineProps<{
   /** the page says it already: every tile is older, as the whole refresh failed */
   saidAbove?: boolean
   clicks?: TileClick[]
+  /** in the designer: the title as it is being written, which the numbers on screen are older than */
+  drawing?: boolean
 }>()
 const emit = defineEmits<{
   (e: 'retry'): void
@@ -39,7 +41,7 @@ const answer = computed(() => props.entry.answer)
 const numbers = computed(() => (state.value.numbers ? (answer.value as TileNumbers) : null))
 const failure = computed(() => (answer.value && 'error' in answer.value ? answer.value : null))
 const kind = computed<string>(() => props.tile.type)
-const title = computed(() => numbers.value?.title || props.tile.title || props.tile.label || '')
+const title = computed(() => (props.drawing ? '' : numbers.value?.title) || props.tile.title || props.tile.label || '')
 // a KPI says its name itself, as its card does, when it has a card to show; a text or an image
 // with none needs no header
 const headed = computed(() => !!title.value && (kind.value !== 'kpi' || !numbers.value))
@@ -174,7 +176,7 @@ const chosenColumns = computed(() => clicksOfTile(props.clicks ?? [], props.tile
 .tile.dim { opacity: 0.45; }
 .t-kpi { justify-content: center; }
 .thead { display: flex; align-items: center; gap: 8px; min-width: 0; margin-bottom: 6px; flex-shrink: 0; }
-.thead h2 { margin: 0; font-size: 12.5px; font-weight: 600; color: var(--text); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; min-width: 0; }
+.thead h2 { margin: 0; font-size: 12.5px; font-weight: 600; color: inherit; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; min-width: 0; }
 .tbody { flex: 1; display: flex; flex-direction: column; min-height: 0; min-width: 0; justify-content: inherit; }
 .stale {
   margin: 0 0 4px; padding: 1px 6px; display: flex; align-items: center; gap: 4px; align-self: flex-start; max-width: 100%; flex-shrink: 0;

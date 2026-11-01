@@ -238,6 +238,11 @@ def connectable_project_ids(session: Session, user: User) -> set[int]:
     return _granted_project_ids(session, user, Capability.CONNECT)
 
 
+def editable_project_ids(session: Session, user: User) -> set[int]:
+    """The projects where the user can change what is inside (EDIT or above)."""
+    return _granted_project_ids(session, user, Capability.EDIT)
+
+
 def visible_project_ids(session: Session, user: User) -> set[int]:
     """The projects the user can see IN THE TREE: the readable ones plus their ancestors
     (only to make the path to the root navigable — the ancestors' CONTENT is not
