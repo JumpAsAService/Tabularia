@@ -30,11 +30,11 @@ report designer should already know how to build a dashboard.
 | Tiles | KPI, every chart kind, table, matrix, text, image. No custom code |
 | Going out | A link holding the filters, a PDF or an image, a scheduled send. **No CSV or Excel of a tile** |
 | Where | A **Dashboards** item in the Analysis menu with the tab of the Reports (trending, search); created from Explore → New |
-| AI | Not creating them yet, but prepared: reading and opening them from MCP yes |
+| AI | Not creating them yet, but prepared. MCP on dashboards waits for version 2, as the owner decided on 2026-11-01. An AI comment on the numbers is its own element: `docs/specs/ai-comment.md` |
 
 Out of this version: custom tiles, drill-down to another dashboard, filters across
-datasets by a click (a parameter does that), comments, alerts, a dashboard public without
-signing in, CSV or Excel of a tile, creating dashboards from the chat or MCP.
+datasets by a click (a parameter does that), comments by people, alerts, a dashboard public without
+signing in, CSV or Excel of a tile, creating dashboards from the chat or MCP, and MCP tools on dashboards.
 
 ## Depends on, in this order
 
@@ -418,10 +418,10 @@ each query costs money, so this is a requirement, not an optimization.
 
 ### AI and MCP
 
-- Read tools: `search` finds dashboards; a new `get_dashboard` describes one (`reads_data=False`,
-  declared as the registry demands), with its link. They show the structure, never rows.
-- No write tool in this version. `POST /dashboards/check` validates a definition as for reports,
-  so that adding them later is small.
+- **For version 2 of the dashboards, not this one:** an MCP tool `get_dashboard` describing one
+  (`reads_data=False`, its structure and its link, never rows), and tools that create or change one.
+- In this version `search` finds a dashboard by name and gives its link, no more.
+  `POST /dashboards/check` validates a definition as for reports, so that adding the tools later is small.
 - The metadata-only mode stays true: no tool here returns values of the data.
 
 ### Sample and documentation
@@ -431,7 +431,7 @@ each query costs money, so this is a requirement, not an optimization.
   dashboard to click.
 - `docs/capabilities/dashboards.md` with an example on the Sample data, images and a GIF of
   a click; Capabilities index, `docs/concepts.md`, `docs/governance/permissions.md`,
-  `docs/api.md`, `docs/pushmail.md`, the MCP pages, the site's navigation, `CHANGELOG.md`.
+  `docs/api.md`, `docs/pushmail.md`, the site's navigation, `CHANGELOG.md`.
 - Settings in `docs/configuration.md` (generated), the panel where they are live, Helm values.
 
 ## Commands
@@ -546,7 +546,7 @@ Each ends with its tests, and is a commit; no piece is left half done.
 5. **Clicks**: engine and API, the strip, the address.
 6. **Designer**: canvas, panels reused, live view, undo.
 7. **Going out**: `dashboard_layout.py`, PDF, PNG, the API, the Pushmail cell.
-8. **MCP, sample, docs**: read tools, Sales overview, the guide, images, configuration, Helm.
+8. **Sample, docs**: Sales overview, the guide, images, configuration, Helm. MCP waits for version 2.
 9. **Verification**: load, clean clone, kind, the whole regression; a report of what is measured.
 
 ## Open points, not blocking
