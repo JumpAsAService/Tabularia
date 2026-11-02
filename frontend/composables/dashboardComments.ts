@@ -35,7 +35,8 @@ export interface CommentSlot {
 }
 export type CommentSlots = Record<string, CommentSlot>
 
-export const PENDING_TRIES = 6 // past CALL_SECONDS and its margin in the gateway, at the route's own wait
+// past CALL_SECONDS and its margin in the gateway, at the route's own wait
+export const PENDING_TRIES = 6
 const PENDING_PAUSE_MS = 3000
 const READABLE = new Set(['kpi', 'chart', 'table'])
 // a scatter whose value is an aggregate draws groups (ex.is_aggregate in the engine, which decides)

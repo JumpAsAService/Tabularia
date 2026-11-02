@@ -9,6 +9,7 @@
    thinking, an edited history, refusals, max_tokens, parallel results, typed errors, costs, caps,
    metadata-only mode.
 """
+import asyncio
 import json
 import logging
 from contextlib import nullcontext
@@ -61,8 +62,16 @@ def fake():
     server.stop()
 
 
+async def _no_title(*_args) -> None:
+    """A conversation's title goes beside the turn, as a task of its own (its call has its own test): on a
+    test client it gets to the fake only when the loop stays open that long, which a busy machine lets it do,
+    and it would take a line of the script meant for the next turn."""
+    ai_routes._in_flight.discard(asyncio.current_task())
+
+
 @pytest.fixture
 def app(session, fake_engine, monkeypatch):
+    monkeypatch.setattr(ai_routes, "_name_chat", _no_title)
     app = FastAPI()
     for r in (auth_routes.router, ai_routes.router, providers_routes.router):
         app.include_router(r)

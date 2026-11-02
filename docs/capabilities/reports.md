@@ -745,8 +745,9 @@ the first month.
 
    With no category chosen `{category}` is `NULL` and every category stays. The list of
    categories reads the same query without that condition, so it always holds them all.
-5. **The page header.** Click **Page header** beside the page, then in **Insert** a
-   **Text**, **Expression**:
+5. **The page header.** A new report starts with a title and a line here, and a page
+   number in the footer. Click **Page header** beside the page, select the title and the
+   line and press **Del**, then in **Insert** a **Text**, **Expression**:
    `="Monthly margin" & IF(ISNULL(PARAM("category")), "", " — " & PARAM("category"))`,
    size 14, bold. Under it a text
    `="From " & FORMAT(PARAM("since"), "MMMM yyyy") & " · revenue, cost and margin of the sample orders"`,
@@ -775,8 +776,9 @@ the first month.
    `YEAR([Month])`, **Value of the cells** `SUM([margine])`, format `#,##0`; tick **Total
    column**. The years come in the order of the rows, which the query sorts by `anno_mese`
    within each category.
-10. **The footer.** Click **Page footer**, add the ready-made **The report's name** on
-    the left and **Page number of total** on the right.
+10. **The footer.** Click **Page footer**, select the page number it started with and
+    press **Del**, then add the ready-made **The report's name** on the left and **Page
+    number of total** on the right.
 11. **Preview** and look at it, then **Done**: the report is saved and opens in the
     viewer. It has three pages; with **Category** `Prosciutti`, one.
 12. **PDF** downloads it. To send it every month, put it in a flow group after the
