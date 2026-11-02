@@ -264,9 +264,9 @@ builder that can start on one machine and grow onto the warehouse they already h
 
 ## Architecture
 
-[![Tabularia runtime architecture](docs/architecture/tabularia-runtime.png)](https://jumpasaservice.github.io/Tabularia/architecture/runtime-architecture.html)
+[![Tabularia runtime architecture](docs/architecture/tabularia-runtime.png)](https://tabularia.org/architecture/runtime-architecture.html)
 
-**[Open the interactive diagram](https://jumpasaservice.github.io/Tabularia/architecture/runtime-architecture.html)**
+**[Open the interactive diagram](https://tabularia.org/architecture/runtime-architecture.html)**
 (pan/zoom, light/dark theme, search, guided views, PNG/SVG export). It is generated
 with [Archify](https://github.com/tt-a1i/archify) from
 [`docs/architecture/runtime.architecture.json`](docs/architecture/runtime.architecture.json);
@@ -297,7 +297,7 @@ the **orchestrator** tier scale separately: one process at ~100 requests/s, thre
 served 500 concurrent users at a 0.12 s p95 on one laptop.
 
 That metadata Postgres has a diagram of its own:
-**[Open the metadata database schema](https://jumpasaservice.github.io/Tabularia/architecture/metadata-schema.html)**
+**[Open the metadata database schema](https://tabularia.org/architecture/metadata-schema.html)**
 — the 28 tables and 35 foreign keys of release 1.1.0, read back from a live database
 rather than transcribed from the models, and generated with Archify from
 [`docs/architecture/metadata-schema.architecture.json`](docs/architecture/metadata-schema.architecture.json).

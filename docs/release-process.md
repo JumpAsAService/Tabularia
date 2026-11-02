@@ -169,7 +169,7 @@ Paste the file into the secret (Settings → Secrets and variables → Actions �
 
 The presentation site and these docs are built from `website/` by
 `.github/workflows/website.yml` and published at
-<https://jumpasaservice.github.io/Tabularia/>. It runs on every push to `main` that
+<https://tabularia.org/>. It runs on every push to `main` that
 touches `website/`, `docs/`, `brand/` or the README, and by hand from Actions → Website.
 A pull request gets the same build and checks (unit tests, `nuxi generate`, the link
 check, which also verifies that every GitHub link names a file in the repository) and no
@@ -181,6 +181,17 @@ publishing (Jekyll over the repository), and the workflow's deploy job fails. Af
 switch Jekyll no longer runs: the `raw` / `endraw` comments at the top and bottom of some
 Markdown pages, and the push guard's Liquid check, are no longer needed for Pages; they
 are harmless and can stay.
+
+**The domain.** `tabularia.org` (registered with Cloudflare, whose DNS serves it) is the
+repository's Pages custom domain, set in Settings → Pages → Custom domain with
+**Enforce HTTPS**; the GitHub address redirects there. Its DNS records: `A` for the apex
+to 185.199.108.153, 185.199.109.153, 185.199.110.153 and 185.199.111.153, `AAAA` to
+2606:50c0:8000::153 to 2606:50c0:8003::153, and `www` as a `CNAME` to
+`jumpasaservice.github.io`; all of them **DNS only** (the grey cloud), or GitHub cannot
+issue the certificate. The organisation's verified domain (a `TXT` record
+`_github-pages-challenge-jumpasaservice`) keeps anyone else's Pages from claiming it. The
+site is built for its root: `SITE_URL` in the workflow, the one value to change if the
+domain ever changes.
 
 The site describes the current `main` without naming a version: publish a release first
 when the product changed since the last one.

@@ -1,6 +1,7 @@
 # Builds the presentation site and the documentation (website/, a static Nuxt site that reads
 # docs/ and brand/ at build time) and publishes it on GitHub Pages:
-#   https://jumpasaservice.github.io/Tabularia/
+#   https://tabularia.org/ (the custom domain of the repository's Pages; the GitHub
+#   address, jumpasaservice.github.io/Tabularia/, redirects there)
 #
 # Pull requests: build and check only (tests, generate, link check), nothing is deployed.
 # Pushes to main and manual runs: the same, then the deploy.
@@ -52,7 +53,7 @@ jobs:
     runs-on: ubuntu-24.04
     env:
       # the one value that says where the site lives; the base path is derived from it
-      SITE_URL: https://jumpasaservice.github.io/Tabularia/
+      SITE_URL: https://tabularia.org/
     steps:
       - name: Check out
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1

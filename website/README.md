@@ -1,7 +1,7 @@
 # Tabularia website
 
 The presentation site and the documentation, published on GitHub Pages at
-<https://jumpasaservice.github.io/Tabularia/>. A static [Nuxt](https://nuxt.com) site,
+<https://tabularia.org/>. A static [Nuxt](https://nuxt.com) site,
 separate from the application in `frontend/`: nothing here goes into the product's images.
 
 - `/` — the landing page. All its texts are in [`app/locales/en.ts`](app/locales/en.ts),
@@ -46,8 +46,8 @@ file's content, so a change to the link rewriting alone is not picked up otherwi
 ([`site.config.mjs`](site.config.mjs)):
 
 ```bash
-SITE_URL=https://jumpasaservice.github.io/Tabularia/ npm run generate   # the default: under /Tabularia/
-SITE_URL=https://tabularia.example.org/ npm run generate                 # a custom domain: at the root
+SITE_URL=https://tabularia.org/ npm run generate                         # the default: at the root
+SITE_URL=https://jumpasaservice.github.io/Tabularia/ npm run generate   # under a path: /Tabularia/
 ```
 
 For a custom domain, also add `public/CNAME` with the host name and set it in Settings → Pages.
