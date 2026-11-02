@@ -3241,7 +3241,17 @@ export default {
       "processes": "procesos",
       "people": "personas"
     },
+    "secretSet": "definida",
+    "secretNotSet": "no definida",
+    "secretKeep": "definida · escribe para sustituirla",
     "errors": {
+      "required": "Hace falta un valor",
+      "format_host": "Solo la dirección del servidor, sin http://, ruta ni puerto",
+      "format_name": "Solo letras, cifras, _ y -",
+      "format_url": "Hace falta una dirección que empiece por http:// o https://",
+      "format_user": "Sin espacios",
+      "choice": "Elige uno de los valores propuestos",
+      "secret": "La contraseña guardada ya no se puede leer (la clave de cifrado cambió): escríbela de nuevo",
       "unknown": "Ajuste desconocido",
       "unavailable": "No disponible en esta instalación",
       "boolean": "Hace falta activado o desactivado",
@@ -3728,6 +3738,21 @@ export default {
       "below": "Debe quedar por debajo de «{other}» ({limit})",
       "above": "Debe quedar por encima de «{other}» ({limit})",
     },
+    "check": {
+      "region": "Prueba de la conexión",
+      "lead": "Prueba los valores de los campos de arriba, incluso antes de guardarlos: acceso, base de datos, usuario de IA y lectura del almacenamiento (o tablas temporales, con push). No guarda nada.",
+      "button": "Probar conexión",
+      "running": "Probando…",
+      "ok": "La conexión funciona",
+      "failed": "La conexión no funciona",
+      "steps": {
+        "server": "Acceso al servidor",
+        "database": "Base de datos de trabajo",
+        "ai_user": "Usuario del asistente de IA",
+        "storage": "Lectura del almacenamiento",
+        "staging": "Tablas temporales",
+      },
+    },
     "categories": {
       "import": {
         "title": "Importación",
@@ -3748,6 +3773,10 @@ export default {
       "dashboards": {
         "title": "Paneles",
         "lead": "Lo que guarda la caché de un panel: las filas de sus conjuntos de datos en el bucket, los números de sus mosaicos en Valkey, compartidos por quien pueda leerlos.",
+      },
+      "clickhouse_connection": {
+        "title": "Conexión a ClickHouse",
+        "lead": "El servidor ClickHouse externo: dónde está, con qué usuario, cómo llega a los datos. Se aplica tras reiniciar el motor, los workers y el planificador.",
       },
       "clickhouse": {
         "title": "ClickHouse",
@@ -3850,6 +3879,58 @@ export default {
       "clickhouse_external_connect_timeout": {
         "label": "Espera para conectar con ClickHouse",
         "help": "Cuánto puede tardar en abrirse una conexión. Se aplica a las conexiones abiertas a partir de ahora."
+      },
+      "clickhouse_external_host": {
+        "label": "Servidor",
+        "help": "La dirección del servidor ClickHouse, sin http:// ni puerto (por ejemplo clickhouse.empresa.es). Una vez definida, el motor ClickHouse se ofrece a los flujos. Si la instalación limita las salidas de los workers (networkPolicy.egressCIDRs), la dirección debe estar entre las permitidas.",
+      },
+      "clickhouse_external_port": {
+        "label": "Puerto",
+        "help": "El puerto HTTP de ClickHouse: 8123 sin cifrar, 8443 con TLS.",
+      },
+      "clickhouse_external_secure": {
+        "label": "TLS",
+        "help": "Una conexión cifrada: los servicios gestionados la exigen (puerto 8443).",
+      },
+      "clickhouse_external_database": {
+        "label": "Base de datos de trabajo",
+        "help": "Debe existir ya. Con el transporte push aloja las tablas temporales de carga: el usuario debe poder crear y borrar tablas en ella.",
+      },
+      "clickhouse_external_username": {
+        "label": "Usuario",
+        "help": "El usuario con el que el motor trabaja en el servidor.",
+      },
+      "clickhouse_external_password": {
+        "label": "Contraseña",
+        "help": "Escrita aquí viaja y se guarda cifrada, y no se puede volver a leer. Dejar el campo vacío mantiene la actual.",
+      },
+      "clickhouse_external_ai_username": {
+        "label": "Usuario del asistente de IA",
+        "help": "Un usuario de solo lectura para las consultas del asistente de IA: una segunda barrera. Vacío = el asistente usa el usuario principal. Los permisos necesarios: docs/engines/clickhouse-ai-user.md.",
+      },
+      "clickhouse_external_ai_password": {
+        "label": "Contraseña del usuario de IA",
+        "help": "Se usa solo si también está el nombre del usuario de IA. Dejar el campo vacío mantiene la actual.",
+      },
+      "clickhouse_external_transport": {
+        "label": "Transporte",
+        "help": "Cómo llega el servidor a los datos. s3: lee y escribe los parquet directamente en el almacenamiento (la opción de producción: el servidor debe ver el almacenamiento). push: el worker carga los datos en tablas temporales y recibe el resultado (funciona con cualquier servidor, pero los datos pasan por el worker).",
+        "choices": {
+          "s3": "s3 — el servidor lee del almacenamiento",
+          "push": "push — los datos pasan por el worker",
+        },
+      },
+      "clickhouse_external_s3_endpoint": {
+        "label": "Dirección del almacenamiento vista por ClickHouse",
+        "help": "Solo con el transporte s3. Vacío = la dirección del almacenamiento del motor, correcta solo si el servidor está en la misma red; en una nube, la URL pública (por ejemplo https://s3.fr-par.scw.cloud).",
+      },
+      "clickhouse_external_s3_named_collection": {
+        "label": "Named collection de S3",
+        "help": "Una named collection definida en el servidor con las claves del almacenamiento: las claves no viajan en las consultas ni acaban en el query_log. Vacío = las claves viajan en las consultas.",
+      },
+      "clickhouse_external_materialize_database": {
+        "label": "Base de datos de las copias del visor",
+        "help": "Dónde van las copias de los conjuntos de datos grandes abiertos en el visor. Vacío = la base de datos de trabajo.",
       },
       "sftp_max_file_bytes": {
         "label": "Archivo más grande",

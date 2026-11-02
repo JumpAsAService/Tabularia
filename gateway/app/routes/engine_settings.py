@@ -2,7 +2,9 @@
 without touching the environment and without restarts.
 
 Read for administrators and observers; write for administrators only, never with an
-API token, and every change in the audit with the value before and after. With
+API token, and every change in the audit with the value before and after (a password:
+only whether it was set). The external ClickHouse's password arrives here in clear, is
+encrypted at once with the key gateway and engine share, and is never sent back. With
 ENGINE__SETTINGS_PANEL=false they are seen and not changed. Which parameters, with
 what limits and how they reach the engine's processes: services/engine_panel_settings.py.
 """
@@ -12,9 +14,11 @@ from typing import Any, Optional, Union
 import httpx
 from fastapi import APIRouter, Depends, HTTPException, Request
 from fastapi.responses import JSONResponse
-from pydantic import BaseModel, Field, StrictBool, StrictFloat, StrictInt
+from pydantic import BaseModel, Field, StrictBool, StrictFloat, StrictInt, StrictStr
 from sqlmodel import Session
 
+from app.core.crypto import encrypt_secret
+from app.core.engine_client import get_engine_client
 from app.core.routing import ReleasingRoute
 from app.db.session import get_session
 from app.deps.auth import require_observer, require_superuser
@@ -33,14 +37,17 @@ class SettingOut(BaseModel):
     key: str
     category: str
     unit: str  # rows | seconds | bytes | threads | …
-    kind: str = "int"  # int | float | bool
+    kind: str = "int"  # int | float | bool | str | choice | secret
+    choices: list[str] = []  # choice: the values allowed
+    optional: bool = False  # str: it may be empty
+    format: str = ""  # str: the shape it must have (host, name, url, user), checked by the panel too
     # the components to roll out for it to apply (worker, preview-worker, engine, beat); empty = live
     rollout: list[str] = []
     min: float
     max: float
     env_var: str
     env_value: Any  # the environment's: the starting value
-    value: Any  # the one set from the panel (None = the environment holds)
+    value: Any  # the one set from the panel (None = the environment holds; a secret: true when set)
     applied: Any  # the one the engine is applying now (None = the environment)
     updated_at: Optional[UtcDateTime] = None
     updated_by: Optional[str] = None
@@ -57,8 +64,8 @@ class SettingsOut(BaseModel):
 class SettingsUpdate(BaseModel):
     # only those that change, null goes back to the environment. Strict: a text does not
     # become a number, nor `true` a 1 without the engine seeing it (the engine checks the
-    # type)
-    values: dict[str, Optional[Union[StrictBool, StrictInt, StrictFloat]]] = Field(max_length=80)
+    # type). A password in clear, at most 1024 characters
+    values: dict[str, Optional[Union[StrictBool, StrictInt, StrictFloat, StrictStr]]] = Field(max_length=80)
 
 
 def _no_token(request: Request, _admin: User = Depends(require_superuser)) -> None:
@@ -69,6 +76,37 @@ def _no_token(request: Request, _admin: User = Depends(require_superuser)) -> No
     from app.routes.api_tokens import deny_if_from_token
 
     deny_if_from_token(request, api_tokens.NO_SETTINGS_FROM_TOKEN)
+
+
+SECRET_MAX = 1024
+# the connection's passwords (the engine's catalog says `kind: secret`): the test does not
+# read the catalog first
+CLICKHOUSE_SECRETS = ("clickhouse_external.password", "clickhouse_external.ai_password")
+# the engine gives each step at most 30 s: signing in twice, the database, the storage
+CHECK_TIMEOUT = httpx.Timeout(150.0, connect=5.0)
+
+
+def _masked(kind: Optional[str], v: Any) -> Any:
+    """A value as it leaves the gateway, to the panel or to the audit: a secret only as set
+    (true) or not, never its token nor its clear text."""
+    return bool(v) if kind == "secret" and v is not None else v
+
+
+def _sealed(kinds: dict[str, str], values: dict[str, Any]) -> tuple[dict[str, Any], list[dict]]:
+    """The passwords typed in clear, encrypted with the shared key: so they are sent to the
+    engine, kept in Valkey and saved. (values, errors)"""
+    out, errors = {}, []
+    for k, v in values.items():
+        if kinds.get(k) == "secret" and v is not None:
+            if not isinstance(v, str):
+                errors.append({"key": k, "code": "text"})
+                continue
+            if len(v) > SECRET_MAX:
+                errors.append({"key": k, "code": "too_long"})
+                continue
+            v = encrypt_secret(v)
+        out[k] = v
+    return out, errors
 
 
 # an engine from before these settings (a half-done update, or done before the gateway):
@@ -96,8 +134,9 @@ async def _state(session: Session, asker: User, request: Request) -> SettingsOut
         items.append(SettingOut(
             key=v["key"], category=v["category"], unit=v["unit"], min=v["min"], max=v["max"],
             kind=v.get("kind", "int"), rollout=v.get("rollout", []),
+            choices=v.get("choices", []), optional=v.get("optional", False), format=v.get("format", ""),
             env_var=v["env_var"], env_value=v["env_value"],
-            value=rm.value(r) if r is not None and rm.from_panel() else None,
+            value=_masked(v.get("kind"), rm.value(r)) if r is not None and rm.from_panel() else None,
             applied=v["value"],
             updated_at=r.updated_at if r is not None else None,
             updated_by=(changed_by if full else mask_email(changed_by)) if changed_by else None,
@@ -130,33 +169,36 @@ async def write(
     if not await rm.lock(session):
         raise HTTPException(status_code=409, detail="Another change to the settings is in progress: try again in a moment")
     try:
-        note = {v["key"] for v in (await rm.catalog())["items"]} - set(rm.FROM_GATEWAY)
+        cat_items = (await rm.catalog())["items"]
     except httpx.HTTPStatusError as e:
         if e.response.status_code == 404:
             raise HTTPException(status_code=503, detail=OLD_ENGINE + ": nothing was changed")
         raise HTTPException(status_code=503, detail="The engine is not responding: nothing was changed")
     except (httpx.HTTPError, ValueError):
         raise HTTPException(status_code=503, detail="The engine is not responding: nothing was changed")
-    unknown = [k for k in body.values if k not in note]
-    if unknown:
-        return JSONResponse(status_code=422, content={"detail": {"errors": [{"key": k, "code": "unknown"} for k in unknown]}})
+    kinds = {v["key"]: v.get("kind", "int") for v in cat_items if v["key"] not in rm.FROM_GATEWAY}
+    unknown = [{"key": k, "code": "unknown"} for k in body.values if k not in kinds]
+    asked, wrong = _sealed(kinds, body.values)
+    if unknown or wrong:
+        return JSONResponse(status_code=422, content={"detail": {"errors": unknown + wrong}})
     rows = rm.saved(session)
     before = {k: rm.value(r) for k, r in rows.items() if k not in rm.FROM_GATEWAY}
     after = dict(before)
-    for k, v in body.values.items():
+    for k, v in asked.items():
         if v is None:
             after.pop(k, None)
         else:
             after[k] = v
-    changes = {k: {"from": before.get(k), "to": after.get(k)} for k in body.values if before.get(k) != after.get(k)}
+    # a password typed again is a change (its token is new each time)
+    changes = {k: {"from": before.get(k), "to": after.get(k)} for k in asked if before.get(k) != after.get(k)}
     if not changes:
         return await _state(session, admin, request)
     try:
         # start from the saved ones the engine still accepts: one no longer valid (the
         # environment changed underneath) must not block the changes to the others
         valid = await rm.push_discarding(before)
-        sending = {**{k: v for k, v in valid.items() if k not in body.values},
-                 **{k: v for k, v in body.values.items() if v is not None}}
+        sending = {**{k: v for k, v in valid.items() if k not in asked},
+                 **{k: v for k, v in asked.items() if v is not None}}
         r = await rm.push(sending, changed=list(changes))
         errors = ((r.json().get("detail") or {}).get("errors") or []) if r.status_code == 422 else []
         if errors and {e.get("key") for e in errors} <= set(rm.FROM_GATEWAY):
@@ -193,6 +235,35 @@ async def write(
         raise
     audit.record_audit(
         session, actor=admin, action=audit.ENGINE_SETTINGS_UPDATE, request=request,
-        target_type="engine_settings", target_label="engine", detail={"changes": changes},
+        target_type="engine_settings", target_label="engine",
+        detail={"changes": {k: {side: _masked(kinds.get(k), x) for side, x in c.items()} for k, c in changes.items()}},
     )
     return await _state(session, admin, request)
+
+
+class CheckRequest(BaseModel):
+    # the connection as the panel's fields hold it now; a password in clear (missing = the saved one)
+    values: dict[str, Optional[Union[StrictBool, StrictInt, StrictStr]]] = Field(default_factory=dict, max_length=20)
+
+
+@router.post("/clickhouse-check", dependencies=[Depends(_no_token)])
+async def clickhouse_check(body: CheckRequest, request: Request, admin: User = Depends(require_superuser)):
+    """«Test connection»: the engine tries the external ClickHouse with these values, step by
+    step, and saves nothing. Administrators only: it makes the engine open a connection
+    to the address given."""
+    _no_token(request)
+    values = {k: v for k, v in body.values.items() if v is not None}
+    sealed, wrong = _sealed({k: "secret" for k in CLICKHOUSE_SECRETS}, values)
+    if wrong:
+        return JSONResponse(status_code=422, content={"detail": {"errors": wrong}})
+    try:
+        r = await get_engine_client().post("/settings/clickhouse-check", json={"values": sealed}, timeout=CHECK_TIMEOUT)
+    except httpx.HTTPError:
+        raise HTTPException(status_code=503, detail="The engine is not responding: the connection was not tested")
+    if r.status_code == 404:
+        raise HTTPException(status_code=503, detail=OLD_ENGINE)
+    if r.status_code == 422:
+        return JSONResponse(status_code=422, content=r.json())
+    if r.status_code >= 400:
+        raise HTTPException(status_code=502, detail=f"The engine answered {r.status_code}: the connection was not tested")
+    return r.json()

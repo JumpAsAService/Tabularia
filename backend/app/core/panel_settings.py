@@ -14,7 +14,11 @@ rolled out (docs/specs/panel-settings.md). A pod that starts later takes them as
 A few are not settings fields but variables read at import (`env_name`).
 
 Left out, and changed only in the environment: credentials, addresses, and the
-switches tied to the chart's resources.
+switches tied to the chart's resources. One exception, the owner's choice: the external
+ClickHouse's connection (`CLICKHOUSE_CONNECTION`), set from the panel so that the server
+can be configured or moved without touching the deployment. Its password arrives and stays
+encrypted with the Fernet key gateway and engine share (`kind="secret"`): Valkey and the
+gateway's database hold the token, and only the process that applies it decrypts it.
 
 How they arrive: the gateway keeps them in its database (the true source, with the
 audit) and writes them here with `PUT /settings`; the engine keeps them in Valkey
@@ -33,6 +37,7 @@ import json
 import logging
 import math
 import os
+import re
 import threading
 import time
 from dataclasses import dataclass
@@ -52,13 +57,17 @@ class Item:
     unit: str  # rows | seconds | bytes | threads | processes | files | keys | … | "" (a fraction, yes/no)
     minimum: float
     maximum: float
-    kind: str = "int"  # int | float | bool
+    kind: str = "int"  # int | float | bool | str | choice | secret
     # the components that read it only when they start (engine, worker, preview-worker,
     # beat): empty = applied live
     rollout: tuple[str, ...] = ()
     # not a settings field: the variable read at import, and its default
     env_name: str = ""
     default: Any = None
+    # a text (str): the shape it must have (FORMATS) and whether it may be empty
+    format: str = ""
+    optional: bool = False
+    choices: tuple[str, ...] = ()  # choice: the values allowed
 
     @property
     def section(self) -> str:
@@ -75,6 +84,45 @@ class Item:
 
 
 WORKERS = ("worker", "preview-worker")
+# every process that may open the external ClickHouse: previews and the viewer (engine,
+# preview-worker), runs (worker), the copies' sweep (beat)
+CLICKHOUSE = ("engine", "worker", "preview-worker", "beat")
+
+# the shapes of a text item: a host without scheme or path (the port has a field of its
+# own), a name ClickHouse takes without quoting surprises, an http(s) address, a user name
+# without spaces
+FORMATS: dict[str, re.Pattern] = {
+    "host": re.compile(r"^(?=.*[A-Za-z0-9])[A-Za-z0-9.\-:\[\]]+$"),
+    "name": re.compile(r"^[A-Za-z0-9_][A-Za-z0-9_\-]*$"),
+    "url": re.compile(r"^https?://[^\s/?#]+(/[^\s?#]*)?$"),
+    "user": re.compile(r"^[^\s\x00-\x1f\x7f]+$"),
+}
+SECRET_MAX = 4096  # the encrypted token of a password: a few hundred characters
+
+# read when a process starts: a process keeps one connection for its life, and a server
+# changed half way would leave the copies on one server and the reads on the other. A
+# text's maximum is its length. Written out in full, as the other items:
+# .github/scripts/config_reference.py reads them from here
+CLICKHOUSE_CONNECTION: tuple[Item, ...] = (
+    Item("clickhouse_external.host", "clickhouse_connection", "", 0, 253, kind="str", rollout=CLICKHOUSE, format="host"),
+    Item("clickhouse_external.port", "clickhouse_connection", "port", 1, 65_535, rollout=CLICKHOUSE),
+    Item("clickhouse_external.secure", "clickhouse_connection", "", 0, 1, kind="bool", rollout=CLICKHOUSE),
+    Item("clickhouse_external.database", "clickhouse_connection", "", 0, 64, kind="str", rollout=CLICKHOUSE, format="name"),
+    Item("clickhouse_external.username", "clickhouse_connection", "", 0, 128, kind="str", rollout=CLICKHOUSE, format="user"),
+    Item("clickhouse_external.password", "clickhouse_connection", "", 0, SECRET_MAX, kind="secret", rollout=CLICKHOUSE),
+    Item("clickhouse_external.ai_username", "clickhouse_connection", "", 0, 128, kind="str", rollout=CLICKHOUSE, format="user",
+         optional=True),
+    Item("clickhouse_external.ai_password", "clickhouse_connection", "", 0, SECRET_MAX, kind="secret", rollout=CLICKHOUSE),
+    Item("clickhouse_external.transport", "clickhouse_connection", "", 0, 0, kind="choice", rollout=CLICKHOUSE,
+         choices=("s3", "push")),
+    Item("clickhouse_external.s3_endpoint", "clickhouse_connection", "", 0, 512, kind="str", rollout=CLICKHOUSE, format="url",
+         optional=True),
+    Item("clickhouse_external.s3_named_collection", "clickhouse_connection", "", 0, 64, kind="str", rollout=CLICKHOUSE,
+         format="name", optional=True),
+    Item("clickhouse_external.materialize_database", "clickhouse_connection", "", 0, 64, kind="str", rollout=CLICKHOUSE,
+         format="name", optional=True),
+)
+CONNECTION_KEYS = frozenset(v.key for v in CLICKHOUSE_CONNECTION)
 
 # The ranges are narrower than what the environment accepts: a typo in the panel
 # must not bring the system to its knees (a huge row group sends the import OOM, a
@@ -144,6 +192,8 @@ ITEMS: tuple[Item, ...] = (
          env_name="CHDB_MAX_BYTES_IN_JOIN", default=512 * 1024**2),
     Item("engine.max_cross_join_rows", "execution", "rows", 1000, 10_000_000_000, rollout=WORKERS,
          env_name="ENGINE_MAX_CROSS_JOIN_ROWS", default=50_000_000),
+    # the external ClickHouse's connection: the server, who signs in, how it reaches the data
+    *CLICKHOUSE_CONNECTION,
     # processes per worker container: shown in Admin → Workers, not among the settings
     Item("workers.run_concurrency", "workers", "processes", 1, 32),
     Item("workers.preview_concurrency", "workers", "processes", 1, 32),
@@ -180,6 +230,58 @@ def _value(s: Any, key: str) -> Any:
     return getattr(getattr(s, section), field)
 
 
+def _fernet():
+    """The key gateway and engine share, from the environment: `get_settings()` would come
+    back here (it applies these very values)."""
+    from cryptography.fernet import Fernet
+
+    from app.core.config import settings_from_env
+
+    return Fernet(settings_from_env().security.fernet_key)
+
+
+def reveal(token: str) -> str:
+    """A secret item's clear value."""
+    return _fernet().decrypt(token.encode()).decode()
+
+
+def _text_problem(item: Item, v: Any) -> str:
+    """Why a text, a choice or a secret is not acceptable (a code), or ''."""
+    if not isinstance(v, str):
+        return "text"
+    if item.kind == "choice":
+        return "" if v in item.choices else "choice"
+    if len(v) > item.maximum:
+        return "too_long"
+    if item.kind == "secret":
+        # the gateway encrypted it with the shared key: one that does not open is not a
+        # password (a key changed underneath, or written by someone else)
+        try:
+            reveal(v)
+        except Exception:  # noqa: BLE001 — InvalidToken, a malformed token, no key
+            return "secret"
+        return ""
+    s = v.strip()
+    if not s:
+        return "" if item.optional else "required"
+    # the whole text (`$` alone would let a final newline through)
+    return "" if FORMATS[item.format].fullmatch(s) else f"format_{item.format}"
+
+
+def shown(key: str, v: Any) -> Any:
+    """A value as it may be shown or written in a log: a secret is only «set» or not."""
+    item = BY_KEY.get(key)
+    if item is not None and item.kind == "secret":
+        if hasattr(v, "get_secret_value"):
+            v = v.get_secret_value()
+        return bool(v)
+    return v
+
+
+def _loggable(values: dict[str, Any]) -> dict[str, Any]:
+    return {k: shown(k, v) for k, v in values.items()}
+
+
 def validate(values: Any, base: Any, hard_limit_max: Optional[int] = None,
            changed: Optional[set[str]] = None) -> tuple[dict[str, Any], list[dict]]:
     """(good values, errors). The errors have a code, not a sentence: the frontend writes
@@ -205,6 +307,13 @@ def validate(values: Any, base: Any, hard_limit_max: Optional[int] = None,
                 good[key] = v
             else:
                 errors.append({"key": key, "code": "boolean"})
+            continue
+        if item.kind in ("str", "choice", "secret"):
+            code = _text_problem(item, v)
+            if code:
+                errors.append({"key": key, "code": code})
+            else:
+                good[key] = v.strip() if item.kind == "str" else v
             continue
         if item.kind == "float":
             if isinstance(v, bool) or not isinstance(v, (int, float)):
@@ -262,6 +371,15 @@ def validate(values: Any, base: Any, hard_limit_max: Optional[int] = None,
     return good, errors
 
 
+def _typed(key: str, v: Any) -> Any:
+    """A value as the settings hold it: a secret's token opened into a SecretStr."""
+    if BY_KEY[key].kind == "secret":
+        from pydantic import SecretStr
+
+        return SecretStr(reveal(v))
+    return v
+
+
 def apply_values(base: Any, good: dict[str, Any]) -> Any:
     """`base` with the values on top, section by section (the others stay the same objects).
     The variables read at import are not settings: their modules ask `value_at_start`."""
@@ -271,7 +389,7 @@ def apply_values(base: Any, good: dict[str, Any]) -> Any:
     by_section: dict[str, dict[str, Any]] = {}
     for key, v in good.items():
         section, field = key.split(".", 1)
-        by_section.setdefault(section, {})[field] = v
+        by_section.setdefault(section, {})[field] = _typed(key, v)
     return base.model_copy(update={
         section: getattr(base, section).model_copy(update=fields) for section, fields in by_section.items()
     })
@@ -317,7 +435,7 @@ def _pin_start(values: dict[str, Any]) -> None:
     if _start is None:
         _start = {k: v for k, v in values.items() if BY_KEY[k].rollout}
         if _start:
-            logger.info("panel settings read when this process starts: %s", _start)
+            logger.info("panel settings read when this process starts: %s", _loggable(_start))
 
 
 def _current() -> dict[str, Any]:
@@ -349,7 +467,7 @@ def _current() -> dict[str, Any]:
         if good != _values:
             if errors:
                 logger.warning("panel settings: discarded as invalid: %s", errors)
-            logger.info("settings from the panel: %s", good or "none (the environment's hold)")
+            logger.info("settings from the panel: %s", _loggable(good) or "none (the environment's hold)")
             _values = good
             _version += 1
             _copies.clear()
@@ -428,7 +546,7 @@ def overlapping(obj: Any, section: str) -> Any:
     """A section of the settings held by an object made once (the ClickHouse engine keeps
     its own from the start): with that section's current panel values on top. The same
     object when there are none."""
-    fields = {k.split(".", 1)[1]: v for k, v in _in_force().items()
+    fields = {k.split(".", 1)[1]: _typed(k, v) for k, v in _in_force().items()
              if k.startswith(section + ".") and not BY_KEY[k].env_name}
     if not fields:
         return obj

@@ -41,7 +41,9 @@ file as a temporary external table of the query, so nothing is loaded into a dat
   without it; the development Docker Compose stack builds its images with it. Where it
   is missing, the engine picker shows it as «not configured».
 - **ClickHouse (external)** appears once `CLICKHOUSE_EXTERNAL__HOST` is set, with the
-  connection settings in [Configuration](../configuration.md#external-clickhouse-engine).
+  connection settings in [Configuration](../configuration.md#external-clickhouse-engine),
+  or once an administrator sets the server in **Administration → Settings → ClickHouse
+  connection**, with a connection test ([guide](../engine-settings.md#the-clickhouse-connection)).
 - **BigQuery** appears once `BIGQUERY__PROJECT` and the service account's key are set;
   the object storage must be Google Cloud Storage
   ([Configuration](../configuration.md#bigquery-engine)).

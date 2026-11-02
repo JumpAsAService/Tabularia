@@ -79,7 +79,10 @@ externalServices:
     # accessKey/secretKey → secrets.storageAccessKey / secrets.storageSecretKey
 
   # Optional engine: transformations run on a remote ClickHouse instead of in
-  # the worker. Leave host empty to disable.
+  # the worker. Leave host empty to disable. An administrator can also set or change
+  # the connection in Administration → Settings → ClickHouse connection: those values
+  # override these, which stay the starting ones. With networkPolicy.egressCIDRs or
+  # egressNamespaces set, a server chosen there must be reachable through them.
   clickhouse:
     enabled: false
     host: ""

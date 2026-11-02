@@ -13,7 +13,9 @@ touching the deployment, grouped by component, and changes them:
   once and applies when the components that read it are rolled out; **such settings
   carry an icon**, and the panel offers the rollout (Kubernetes) or names the restart
   (Docker Compose).
-- **Family 3, never in the panel:** addresses, credentials, keys, identities, paths,
+- **Family 3, never in the panel:** with one exception — **the external ClickHouse's
+  connection, in the panel by the owner's decision (2026-11-02), password included,
+  encrypted** (see «The external ClickHouse's connection» below) — addresses, credentials, keys, identities, paths,
   namespaces, buckets, switches tied to resources the chart creates, anything that, wrong,
   stops Tabularia from starting or anyone from signing in. **Not shown at all: that is the
   configuration of the values file.**
@@ -62,6 +64,7 @@ One expandable box per component. `↻` = family 2, with the components rolled o
 | Dashboards | `DASHBOARDS__CACHE_SECONDS`, `DASHBOARDS__CACHE_TILE_BYTES`, `DASHBOARDS__CACHE_VALKEY_BYTES`, `DASHBOARDS__CACHE_BUCKET_BYTES` |
 | Embedded engines ↻ worker, preview-worker | `CHDB_MAX_MEMORY_USAGE`, `CHDB_MAX_BYTES_BEFORE_EXTERNAL_GROUP_BY`, `CHDB_MAX_BYTES_BEFORE_EXTERNAL_SORT`, `CHDB_MAX_BYTES_IN_JOIN`, `ENGINE_MAX_CROSS_JOIN_ROWS` |
 | Engine API ↻ engine | `APP__ENGINE_API_THREADS`, `PREVIEW_TIMEOUT_SECONDS` |
+| ClickHouse connection ↻ engine, worker, preview-worker, beat | `CLICKHOUSE_EXTERNAL__HOST`, `…__PORT`, `…__SECURE`, `…__DATABASE`, `…__USERNAME`, `…__PASSWORD`, `…__AI_USERNAME`, `…__AI_PASSWORD`, `…__TRANSPORT`, `…__S3_ENDPOINT`, `…__S3_NAMED_COLLECTION`, `…__MATERIALIZE_DATABASE` |
 | External ClickHouse (when configured) | `CLICKHOUSE_EXTERNAL__CONNECT_TIMEOUT`, `…__MAX_EXECUTION_TIME`, `…__PARQUET_SCAN_MAX_THREADS`, `…__MATERIALIZE_MIN_ROWS`, `…__MATERIALIZE_TTL_SECONDS` |
 | BigQuery (when configured) | `BIGQUERY__MAXIMUM_BYTES_BILLED` |
 | Imports | `INGEST__PARQUET_ROW_GROUP_ROWS`, `INGEST__DB_READ_TIMEOUT_SECONDS` |
@@ -76,13 +79,37 @@ One expandable box per component. `↻` = family 2, with the components rolled o
 Everything else. Borderline ones left out on purpose: `OIDC__SUPERUSER_GROUP` (it makes
 administrators), `OIDC__SCOPES`, `OIDC__VERIFY_TLS`, `SMTP__VERIFY_TLS` (security of a
 connection), the scripting base images, builder image, PyPI and CRAN addresses (code that
-runs in the builds), `CLICKHOUSE_EXTERNAL__TRANSPORT` and `STORAGE__DIRECT_READ` (depend on
-the network between services), `KUBERNETES__*_MAX_REPLICAS` (the ceiling the installer puts
+runs in the builds), `STORAGE__DIRECT_READ` (depends on the network between services), `KUBERNETES__*_MAX_REPLICAS` (the ceiling the installer puts
 on the panel itself), `SCRIPTS__ENABLED`, `CONTAINERS__ENABLED`,
 `KUBERNETES__CLUSTER_VIEW`, `KUBERNETES__SCALING` (they need RBAC and namespaces from the
 chart), `CELERY__TIMEZONE`, the serializers, `ENGINE__SETTINGS_PANEL` (it governs the panel),
 `AUDIT__RETENTION_MINUTES` and `AUDIT__IP_RETENTION_DAYS` (an administrator must not be able
 to shorten the trail of what administrators do: the installer decides).
+
+## The external ClickHouse's connection
+
+**The owner's decision (2026-11-02): configuring everything from Administration is
+worth it, the ClickHouse server included.** The connection's items are engine settings of
+family 2 (`rollout`: engine, worker, preview-worker, beat), with three kinds the panel did
+not have: `str` (a text with a shape: host, name, url, user; `optional` when it may be
+empty), `choice` (the transport) and `secret` (the passwords).
+
+- **Secrets:** the gateway encrypts a typed password at once with the Fernet key it shares
+  with the engine (`SECURITY__FERNET_KEY`, already required on both sides): the engine
+  receives a token, `engine_settings.value_json` and Valkey hold the token, and the engine
+  opens it only when applying it (`panel_settings._typed`). The engine refuses a value
+  that is not a token of that key (`secret`). Catalog, panel, audit and logs show a secret
+  only as set or not; an empty field keeps the saved one; typing it again is a change.
+- **Test connection:** `POST /admin/engine-settings/clickhouse-check` (administrators, no
+  token) → `POST /settings/clickhouse-check` on the engine (`engine/clickhouse_check.py`):
+  server, database, AI user, then storage (`s3`, a small parquet read with `s3()`, then
+  removed) or staging (`push`, a table created and dropped). The typed values over the
+  ones in force; nothing saved; the messages cleaned and the passwords redacted.
+- **Availability:** the engine catalog's `unavailable` computes ClickHouse from the
+  environment plus the panel's connection; the engine registry of each process (built at
+  import) follows after the rollout.
+- **Not in the panel:** the network the installation allows (`networkPolicy.egressCIDRs`,
+  `egressNamespaces`): the guide says so.
 
 ## Mechanism
 

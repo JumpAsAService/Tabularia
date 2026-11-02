@@ -3267,7 +3267,17 @@ export default {
       "processes": "processes",
       "people": "people"
     },
+    "secretSet": "set",
+    "secretNotSet": "not set",
+    "secretKeep": "set · type to replace it",
     "errors": {
+      "required": "A value is needed",
+      "format_host": "The server's address only, without http://, path or port",
+      "format_name": "Letters, digits, _ and - only",
+      "format_url": "An address starting with http:// or https:// is needed",
+      "format_user": "No spaces",
+      "choice": "Choose one of the values offered",
+      "secret": "The saved password can no longer be read (the encryption key changed): type it again",
       "unknown": "Unknown setting",
       "unavailable": "Not available on this installation",
       "boolean": "On or off is needed",
@@ -3754,6 +3764,21 @@ export default {
       "below": "Must stay below “{other}” ({limit})",
       "above": "Must stay above “{other}” ({limit})",
     },
+    "check": {
+      "region": "Connection test",
+      "lead": "Tries the values in the fields above, even before they are saved: sign-in, database, AI user and reading from the storage (or temporary tables, with push). Nothing is saved.",
+      "button": "Test connection",
+      "running": "Testing…",
+      "ok": "The connection works",
+      "failed": "The connection does not work",
+      "steps": {
+        "server": "Signing in to the server",
+        "database": "Working database",
+        "ai_user": "AI assistant's user",
+        "storage": "Reading from the storage",
+        "staging": "Temporary tables",
+      },
+    },
     "categories": {
       "import": {
         "title": "Import",
@@ -3774,6 +3799,10 @@ export default {
       "dashboards": {
         "title": "Dashboards",
         "lead": "What a dashboard's cache keeps: the rows of its datasets on the bucket, the numbers of its tiles in Valkey, shared by everyone who may read them.",
+      },
+      "clickhouse_connection": {
+        "title": "ClickHouse connection",
+        "lead": "The external ClickHouse server: where it is, which user signs in, how it reaches the data. Applies after the engine, the workers and the scheduler restart.",
       },
       "clickhouse": {
         "title": "ClickHouse",
@@ -3876,6 +3905,58 @@ export default {
       "clickhouse_external_connect_timeout": {
         "label": "Wait to connect to ClickHouse",
         "help": "How long opening a connection may take. Applies to the connections opened from now on."
+      },
+      "clickhouse_external_host": {
+        "label": "Server",
+        "help": "The ClickHouse server's address, without http:// or port (for example clickhouse.example.com). Once set, the ClickHouse engine is offered to the flows. If the installation limits where the workers may connect (networkPolicy.egressCIDRs), the address must be among the allowed ones.",
+      },
+      "clickhouse_external_port": {
+        "label": "Port",
+        "help": "ClickHouse's HTTP port: 8123 in clear, 8443 with TLS.",
+      },
+      "clickhouse_external_secure": {
+        "label": "TLS",
+        "help": "An encrypted connection: managed services require it (port 8443).",
+      },
+      "clickhouse_external_database": {
+        "label": "Working database",
+        "help": "It must exist already. With the push transport it holds the temporary loading tables: the user must be able to create and drop tables in it.",
+      },
+      "clickhouse_external_username": {
+        "label": "User",
+        "help": "The user the engine works with on the server.",
+      },
+      "clickhouse_external_password": {
+        "label": "Password",
+        "help": "Typed here it travels and stays encrypted, and cannot be read back. Leave the field empty to keep the current one.",
+      },
+      "clickhouse_external_ai_username": {
+        "label": "AI assistant's user",
+        "help": "A read-only user for the AI assistant's queries: a second barrier. Empty = the assistant uses the main user. The grants it needs: docs/engines/clickhouse-ai-user.md.",
+      },
+      "clickhouse_external_ai_password": {
+        "label": "AI user's password",
+        "help": "Used only when the AI user's name is set too. Leave the field empty to keep the current one.",
+      },
+      "clickhouse_external_transport": {
+        "label": "Transport",
+        "help": "How the server reaches the data. s3: it reads and writes the parquet files directly on the object storage (the production choice: the server must see the storage). push: the worker loads the data into temporary tables and receives the result (works with any server, but the data goes through the worker).",
+        "choices": {
+          "s3": "s3 — the server reads from the storage",
+          "push": "push — the data goes through the worker",
+        },
+      },
+      "clickhouse_external_s3_endpoint": {
+        "label": "Storage address as ClickHouse sees it",
+        "help": "With the s3 transport only. Empty = the engine's storage address, right only when the server is on the same network; on a cloud, the public URL (for example https://s3.fr-par.scw.cloud).",
+      },
+      "clickhouse_external_s3_named_collection": {
+        "label": "S3 named collection",
+        "help": "A named collection defined on the server with the storage's keys: the keys do not travel in the queries nor end up in the query_log. Empty = the keys travel in the queries.",
+      },
+      "clickhouse_external_materialize_database": {
+        "label": "Database of the viewer's copies",
+        "help": "Where the copies of large datasets opened in the viewer go. Empty = the working database.",
       },
       "sftp_max_file_bytes": {
         "label": "Largest file",

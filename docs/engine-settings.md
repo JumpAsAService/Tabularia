@@ -23,6 +23,8 @@ the environment and its variable, the allowed range, and who changed it and when
   when the components that read them restart. The panel tells which components still run
   a previous value and restarts them (see [Restarts](#restarts)).
 - **Never in the panel**: addresses, credentials, keys, identities, namespaces, buckets,
+  with one exception, the external ClickHouse's connection (see
+  [The ClickHouse connection](#the-clickhouse-connection)); the rest:
   the switches tied to resources the Helm chart creates (scripting, Container node,
   cluster view, scaling), the audit log's retention, and anything that, wrong, would stop
   Tabularia from starting or anyone from signing in. They are the configuration of the
@@ -30,8 +32,8 @@ the environment and its variable, the allowed range, and who changed it and when
   purpose: `OIDC__SUPERUSER_GROUP` (it makes administrators), `OIDC__SCOPES`,
   `OIDC__VERIFY_TLS` and `SMTP__VERIFY_TLS` (the security of a connection), the scripting
   base images, builder image, PyPI and CRAN addresses (code that runs in the builds),
-  `CLICKHOUSE_EXTERNAL__TRANSPORT` and `STORAGE__DIRECT_READ` (they depend on the network
-  between services), `KUBERNETES__*_MAX_REPLICAS` (the ceiling the installer puts on the
+  `STORAGE__DIRECT_READ` (it depends on the network between services),
+  `KUBERNETES__*_MAX_REPLICAS` (the ceiling the installer puts on the
   panel itself), `AUDIT__RETENTION_MINUTES` and `AUDIT__IP_RETENTION_DAYS` (an
   administrator must not be able to shorten the trail of what administrators do),
   `ENGINE__SETTINGS_PANEL` (it governs the panel).
@@ -311,6 +313,23 @@ Container node) or greyed out (an engine that is not configured).
 |---|---|---|---|
 | Most values of a variable | `PLACEHOLDERS__MAX_VALUES` | 1 – 100,000 | live |
 
+**ClickHouse connection** (see [The ClickHouse connection](#the-clickhouse-connection))
+
+| Setting | Variable | Panel values | Applies |
+|---|---|---|---|
+| Server | `CLICKHOUSE_EXTERNAL__HOST` | a host name or address, without scheme, path or port | ↻ engine, worker, preview-worker, beat |
+| Port | `CLICKHOUSE_EXTERNAL__PORT` | 1 – 65535 | ↻ same |
+| TLS | `CLICKHOUSE_EXTERNAL__SECURE` | on / off | ↻ same |
+| Working database | `CLICKHOUSE_EXTERNAL__DATABASE` | letters, digits, `_`, `-` | ↻ same |
+| User | `CLICKHOUSE_EXTERNAL__USERNAME` | no spaces | ↻ same |
+| Password | `CLICKHOUSE_EXTERNAL__PASSWORD` | write-only, encrypted | ↻ same |
+| AI assistant's user | `CLICKHOUSE_EXTERNAL__AI_USERNAME` | no spaces; empty = the main user | ↻ same |
+| AI user's password | `CLICKHOUSE_EXTERNAL__AI_PASSWORD` | write-only, encrypted | ↻ same |
+| Transport | `CLICKHOUSE_EXTERNAL__TRANSPORT` | `s3` or `push` | ↻ same |
+| Storage address as ClickHouse sees it | `CLICKHOUSE_EXTERNAL__S3_ENDPOINT` | `http(s)://…`; empty = the engine's | ↻ same |
+| S3 named collection | `CLICKHOUSE_EXTERNAL__S3_NAMED_COLLECTION` | a name; empty = keys in the queries | ↻ same |
+| Database of the viewer's copies | `CLICKHOUSE_EXTERNAL__MATERIALIZE_DATABASE` | a name; empty = the working database | ↻ same |
+
 **ClickHouse**
 
 | Setting | Variable | Panel range | Applies |
@@ -326,6 +345,37 @@ Container node) or greyed out (an engine that is not configured).
 | Setting | Variable | Panel range | Applies |
 |---|---|---|---|
 | Most bytes billed per query | `BIGQUERY__MAXIMUM_BYTES_BILLED` | 0 – 100 TiB | live |
+
+## The ClickHouse connection
+
+The external ClickHouse can be configured, or moved to another server, from the panel
+instead of the environment. **Administration → Settings → Engine → ClickHouse
+connection** holds the server, its port and TLS, the working database, the user and its
+password, the AI assistant's user, the transport and how the server reaches the storage.
+The environment's `CLICKHOUSE_EXTERNAL__*` stay the starting values, as for every
+setting: an installation configured in its `.env` or Helm values keeps working unchanged,
+and **Back to the environment** returns to them.
+
+- **Test connection**, at the bottom of the box, tries the values in the fields, even
+  before they are saved: signing in, the working database, the AI user when it is set,
+  and reading a small file from the storage (transport `s3`) or creating and dropping a
+  table (transport `push`). Each step says what failed with the server's own words; the
+  test saves nothing and leaves nothing on the server or in the bucket.
+- **The password** is write-only. It is encrypted in the gateway as soon as it arrives,
+  with the key gateway and engine already share (`SECURITY__FERNET_KEY`), and it stays
+  encrypted in the gateway's database and in Valkey; only the engine's processes decrypt
+  it, when they apply it. The panel shows only whether one is set, the audit only that
+  it changed. An empty field keeps the current password.
+- **Applies after a restart** of the engine API, the workers, the preview workers and the
+  scheduler: a process keeps its connection for its life. After **Save**, the restart
+  banner offers the rollout (see [Restarts](#restarts)).
+- **The ClickHouse engine appears** in the flows' engine picker once a server is set, and
+  the ClickHouse box of tuning settings stops being greyed out.
+- **The network**: the panel cannot change what the installation allows. On Kubernetes, if
+  the Helm values set `networkPolicy.egressCIDRs` or `networkPolicy.egressNamespaces`, the
+  engine's processes reach only those ranges and namespaces (plus the server named in
+  `externalServices.clickhouse.host`): a server elsewhere must be added there first, and
+  the test fails at the first step until it is.
 
 ## Rules between settings
 

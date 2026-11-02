@@ -41,15 +41,21 @@ def _catalog(max_task_time_limit: Optional[int] = None) -> dict:
             maximum = min(maximum, max_task_time_limit)
         items.append({
             "key": v.key, "category": v.category, "unit": v.unit, "min": v.minimum, "max": maximum,
-            "kind": v.kind, "rollout": list(v.rollout),
-            "env_var": v.variable, "env_value": panel_settings._value(env, v.key),
-            "value": set_values.get(v.key),
+            "kind": v.kind, "rollout": list(v.rollout), "choices": list(v.choices), "optional": v.optional,
+            "format": v.format,
+            "env_var": v.variable,
+            # a secret is only «set» or not, the environment's as the panel's
+            "env_value": panel_settings.shown(v.key, panel_settings._value(env, v.key)),
+            "value": panel_settings.shown(v.key, set_values.get(v.key)) if v.key in set_values else None,
         })
+    # ClickHouse is there when a host is set, in the environment or from the panel
+    clickhouse = panel_settings.apply_values(env, {k: x for k, x in set_values.items()
+                                                    if k in panel_settings.CONNECTION_KEYS})
     return {
         "items": items,
         # the categories of the engines this installation lacks: the panel shows them off
         # (setting them would change nothing)
-        "unavailable": [c for c, active in (("clickhouse", env.clickhouse_external.enabled),
+        "unavailable": [c for c, active in (("clickhouse", clickhouse.clickhouse_external.enabled),
                                             ("bigquery", env.bigquery.enabled),
                                             ("embedded", _chdb()),) if not active],
         "refresh_seconds": panel_settings.REREAD_EVERY,
@@ -60,6 +66,33 @@ def _catalog(max_task_time_limit: Optional[int] = None) -> dict:
 @router.get("")
 def read(max_task_time_limit: Optional[int] = None):
     return _catalog(max_task_time_limit)
+
+
+class Check(BaseModel):
+    # the connection's items as the panel holds them (a password as its encrypted token);
+    # the missing ones are the ones in force: the saved password stays when none is typed
+    values: dict[str, Any] = {}
+
+
+@router.post("/clickhouse-check")
+def clickhouse_check(body: Check):
+    """«Test connection»: the external ClickHouse with these values, step by step
+    (engine/clickhouse_check.py). Nothing is saved; 422 when a value is malformed."""
+    from app.engine.clickhouse_check import check
+
+    asked = body.values
+    errors = [{"key": k, "code": "unknown"} for k in asked
+              if k not in panel_settings.CONNECTION_KEYS and k != "clickhouse_external.connect_timeout"]
+    env = settings_from_env()
+    good, wrong = panel_settings.validate(asked, env)
+    if errors or wrong:
+        return JSONResponse(status_code=422, content={"detail": {"errors": errors + wrong}})
+    try:
+        saved, _ = panel_settings.validate(panel_settings.read_raw(), env)
+    except Exception:  # noqa: BLE001 — Valkey down: the environment's under the ones typed
+        saved = {}
+    cfg = panel_settings.apply_values(env, {**saved, **good}).clickhouse_external
+    return check(cfg)
 
 
 @router.put("")

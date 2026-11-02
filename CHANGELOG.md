@@ -183,6 +183,16 @@ notebooks.
   provider, and the disclosure says who receives what they send. A model with no known
   price no longer escapes the spending ceilings: it counts at $4 in and $20 out per
   million tokens. Schema revision 0035. Guide: docs/integrations/ai.md, «The providers».
+- **The external ClickHouse's connection from the administration panel.**
+  Administration → Settings → ClickHouse connection sets the server, port and TLS, the
+  working database, the user and its password, the AI assistant's user, the transport and
+  how the server reaches the storage; `CLICKHOUSE_EXTERNAL__*` stay the starting values.
+  **Test connection** tries the values before they are saved, step by step (sign-in,
+  database, AI user, reading from the storage or temporary tables), with the server's
+  own reason. The password is encrypted with the key gateway and engine already share,
+  never shown again, and audited only as changed. It applies after the engine, the
+  workers and the scheduler restart, which the panel offers. No schema revision. Guide:
+  docs/engine-settings.md, «The ClickHouse connection».
 - **The AI agents' instructions, editable in Administration → AI models.** The system
   prompts of the data assistant, the flow and script assistants, the conversations'
   titles and the dbt export's descriptions and SQL translations are in two parts: a text

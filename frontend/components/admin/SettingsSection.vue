@@ -13,15 +13,15 @@ import { onBeforeRouteLeave } from 'vue-router'
 import {
   Activity, ArrowDownToLine, Bot, Boxes, Braces, ChevronRight, Cloud, Container, Cpu, Database, DatabaseBackup,
   FileCode, FileOutput, FolderInput, GitBranch, Globe, Hammer, HardDrive, History, KeyRound, Layers,
-  LoaderCircle, NotebookPen, Package, RefreshCw, RotateCcw, Search, Server, ShieldCheck, SlidersHorizontal, Sparkles, Timer,
-  Upload, Webhook, Workflow, X,
+  CircleCheck, CircleX, LoaderCircle, NotebookPen, Package, Plug, RefreshCw, RotateCcw, Search, Server, ShieldCheck,
+  SlidersHorizontal, Sparkles, Timer, Upload, Webhook, Workflow, X,
 } from 'lucide-vue-next'
 import { errMessage } from '~/composables/useApi'
 import { useFormat } from '~/composables/useFormat'
-import { GIB, settingI18nKey } from '~/composables/useEngineSettings'
+import { GIB, TEXT_FORMATS, settingI18nKey } from '~/composables/useEngineSettings'
 import {
   GROUPS, fromEngine, fromGateway, sectionOf, usePanelSettings,
-  type PanelSetting, type RolloutComponent, type RolloutState, type SettingError, type SettingSection,
+  type ClickhouseCheck, type PanelSetting, type RolloutComponent, type RolloutState, type SettingError, type SettingSection,
 } from '~/composables/usePanelSettings'
 
 const emit = defineEmits<{ (e: 'count', n: number): void; (e: 'dirty', d: boolean): void }>()
@@ -57,7 +57,7 @@ const ICONS: Record<string, any> = {
   processes: Cpu, kubernetes: Boxes, scripts: FileCode, builds: Hammer, notebooks: NotebookPen, containers: Container,
   execution: Timer, cache: Layers, embedded: HardDrive, engine_api: Server, import: ArrowDownToLine,
   export: FileOutput, sftp: FolderInput, s3: Cloud, api: Globe, placeholders: Braces, clickhouse: Database,
-  bigquery: Cloud,
+  clickhouse_connection: Plug, bigquery: Cloud,
 }
 const SECTIONS: SettingSection[] = ['gateway', 'kubernetes', 'engine']
 
@@ -163,10 +163,12 @@ function duration(seconds: number): string {
 const localNumber = (x: number, digits = 3) => new Intl.NumberFormat(locale.value, { maximumFractionDigits: digits }).format(x)
 
 function show(v: PanelSetting, x: unknown): string {
+  if (v.kind === 'secret') return x ? t('panelSettings.secretSet') : t('panelSettings.secretNotSet')
   if (x === null || x === undefined) return t('panelSettings.automatic')
   if (v.kind === 'bool') return x ? t('panelSettings.on') : t('panelSettings.off')
   if (typeof x === 'string') return x === '' ? t('panelSettings.empty') : x
-  if (typeof x !== 'number') return String(x)
+  // a port is a code, not a quantity: no thousands separator
+  if (typeof x !== 'number' || v.unit === 'port') return String(x)
   const { factor } = inputScale(v)
   const u = unit(v)
   const n = `${localNumber(x / factor, factor === 1 ? 3 : 4)}${u ? ` ${u}` : ''}`
@@ -191,7 +193,7 @@ function separators() {
 // a value as its field shows it (four decimals in GiB or MiB: 4096 bytes is not «0»)
 function formatted(v: PanelSetting, x: unknown): string {
   if (x === null || x === undefined) return ''
-  if (typeof x === 'number') {
+  if (typeof x === 'number' && v.unit !== 'port') {
     const { factor } = inputScale(v)
     return new Intl.NumberFormat(locale.value, { maximumFractionDigits: factor === 1 ? 3 : 4 }).format(x / factor)
   }
@@ -201,8 +203,12 @@ function formatted(v: PanelSetting, x: unknown): string {
 function field(v: PanelSetting): string {
   const k = key(v)
   if (k in text.value) return text.value[k]
-  return formatted(v, shownOne(v))
+  // a password is never shown: the field holds only a new one being typed
+  return v.kind === 'secret' ? '' : formatted(v, shownOne(v))
 }
+// a password field: what is there now, said where the typing goes
+const secretPlaceholder = (v: PanelSetting) =>
+  shownOne(v) ? t('panelSettings.secretKeep') : t('panelSettings.secretNotSet')
 const isOn = (v: PanelSetting) => {
   const k = key(v)
   return k in text.value ? text.value[k] === 'true' : !!shownOne(v)
@@ -231,6 +237,8 @@ function reset(v: PanelSetting) {
 function value(v: PanelSetting): unknown {
   const s0 = text.value[key(v)] ?? ''
   if (v.kind === 'bool') return s0 === 'true'
+  // a password as typed (spaces too); an empty field is no new password
+  if (v.kind === 'secret') return s0 === '' ? undefined : s0
   if (!numeric(v)) return s0.trim()
   const { group, decimal } = separators()
   let s = s0.trim().replace(/[\s  ']/g, '')
@@ -275,10 +283,19 @@ function localProblem(v: PanelSetting): string {
       if (v.kind === 'int' && !Number.isInteger(x)) return messageOf(v, { key: v.key, code: 'integer' })
       if (v.min !== null && (x as number) < v.min) return messageOf(v, { key: v.key, code: 'min', limit: v.min })
       if (v.max !== null && (x as number) > v.max) return messageOf(v, { key: v.key, code: 'max', limit: v.max })
+    } else if (v.kind === 'secret') {
+      if (x !== undefined && v.maxLength !== null && (x as string).length > v.maxLength) {
+        return messageOf(v, { key: v.key, code: 'too_long' })
+      }
     } else if (v.kind !== 'bool') {
       const s = x as string
       if (v.maxLength !== null && s.length > v.maxLength) return messageOf(v, { key: v.key, code: 'too_long' })
-      if (v.kind !== 'str' && !s) return messageOf(v, { key: v.key, code: 'invalid' })
+      // the gateway's texts may be empty; the engine's say whether they may
+      if (!s && (v.kind !== 'str' || (v.source === 'engine' && !v.optional))) {
+        return messageOf(v, { key: v.key, code: v.kind === 'str' ? 'required' : 'invalid' })
+      }
+      const shape = TEXT_FORMATS[v.format]
+      if (s && shape && !shape.test(s)) return messageOf(v, { key: v.key, code: `format_${v.format}` })
     }
   }
   return ''
@@ -296,9 +313,14 @@ const changes = computed(() => {
     if (toReset.value.has(k)) {
       if (v.value !== null) out[v.source][v.key] = null
     } else if (k in text.value) {
+      const x = value(v)
+      // a password typed is always a new one (the saved one is never in the page)
+      if (v.kind === 'secret') {
+        if (x !== undefined) out[v.source][v.key] = x
+        continue
+      }
       // the shown value typed again (a rounded 1,4305 GiB) is not a change
       if (text.value[k] === formatted(v, savedValue(v))) continue
-      const x = value(v)
       if (x !== undefined && x !== savedValue(v)) out[v.source][v.key] = x
     }
   }
@@ -377,6 +399,45 @@ async function save() {
   }
   saving.value = false
 }
+
+// ── «Test connection» of the external ClickHouse ────────────────────────────
+
+const CONNECTION = 'clickhouse_connection'
+const checking = ref(false)
+const checked = ref<ClickhouseCheck | null>(null)
+const checkError = ref('')
+const connectionItems = computed(() => items.value.filter((v) => v.source === 'engine' && v.group === CONNECTION))
+// the connection as the fields hold it: what is typed, the installation's value for one
+// going back to it; the rest the engine takes as it is in force (the saved password too)
+function connectionNow(): Record<string, unknown> {
+  const out: Record<string, unknown> = {}
+  for (const v of connectionItems.value) {
+    const k = key(v)
+    if (toReset.value.has(k)) {
+      if (v.kind !== 'secret') out[v.key] = v.envValue
+    } else if (k in text.value) {
+      const x = value(v)
+      if (x !== undefined) out[v.key] = x
+    }
+  }
+  return out
+}
+const cannotCheck = computed(() => connectionItems.value.some((v) => key(v) in text.value && !!localProblem(v)))
+async function checkConnection() {
+  checking.value = true
+  checked.value = null
+  checkError.value = ''
+  try {
+    checked.value = await api.checkClickhouse(connectionNow())
+  } catch (e) {
+    checkError.value = errMessage(e)
+  } finally {
+    checking.value = false
+  }
+}
+// a result is of the values it was made with: one field changed, it no longer says anything
+watch(() => JSON.stringify(connectionNow()), () => { checked.value = null; checkError.value = '' })
+const stepName = (step: string) => te(`engineSettings.check.steps.${step}`) ? t(`engineSettings.check.steps.${step}`) : step
 
 // ── the rollout ─────────────────────────────────────────────────────────────
 
@@ -598,6 +659,29 @@ const zones = computed(() => {
               />
               <span>{{ isOn(v) ? $t('panelSettings.on') : $t('panelSettings.off') }}</span>
             </label>
+            <div v-else-if="v.kind === 'choice'" class="field text" :class="{ changed: toSave(v), wrong: !!problem(v) }">
+              <select
+                :id="fieldId(v)"
+                :value="field(v)"
+                :disabled="!canEdit(v) || saving"
+                @change="write(v, ($event.target as HTMLSelectElement).value)"
+              >
+                <option v-for="c in v.choices" :key="c" :value="c">{{ te(`${i18nBase(v)}.choices.${c}`) ? t(`${i18nBase(v)}.choices.${c}`) : c }}</option>
+              </select>
+            </div>
+            <div v-else-if="v.kind === 'secret'" class="field text" :class="{ changed: toSave(v), wrong: !!problem(v) }">
+              <input
+                :id="fieldId(v)"
+                type="password"
+                autocomplete="new-password"
+                :spellcheck="false"
+                :placeholder="secretPlaceholder(v)"
+                :value="field(v)"
+                :disabled="!canEdit(v) || saving"
+                :aria-invalid="!!problem(v)"
+                @input="write(v, ($event.target as HTMLInputElement).value)"
+              />
+            </div>
             <div v-else class="field" :class="{ changed: toSave(v), wrong: !!problem(v), text: !numeric(v) }">
               <input
                 :id="fieldId(v)"
@@ -641,6 +725,27 @@ const zones = computed(() => {
               </button>
             </div>
           </div>
+        </div>
+
+        <div v-if="g.group === CONNECTION" class="check" role="group" :aria-label="$t('engineSettings.check.region')">
+          <p class="hint muted small">{{ $t('engineSettings.check.lead') }}</p>
+          <div class="actions">
+            <button type="button" :disabled="!editable || checking || cannotCheck" @click="checkConnection">
+              <LoaderCircle v-if="checking" :size="13" class="spin" /><Plug v-else :size="13" />
+              {{ checking ? $t('engineSettings.check.running') : $t('engineSettings.check.button') }}
+            </button>
+            <span v-if="checked" class="small" :class="checked.ok ? 'ok' : 'ko'" role="status">
+              {{ checked.ok ? $t('engineSettings.check.ok') : $t('engineSettings.check.failed') }}
+            </span>
+          </div>
+          <p v-if="checkError" class="error" role="alert">{{ checkError }}</p>
+          <ul v-if="checked" class="steps">
+            <li v-for="st in checked.steps" :key="st.step" :class="st.ok ? 'ok' : 'ko'">
+              <CircleCheck v-if="st.ok" :size="13" /><CircleX v-else :size="13" />
+              <strong>{{ stepName(st.step) }}</strong>
+              <span v-if="st.detail" class="detail">{{ st.detail }}</span>
+            </li>
+          </ul>
         </div>
       </details>
     </section>
@@ -738,6 +843,17 @@ const zones = computed(() => {
 .switch.changed span { color: var(--accent-hi); }
 .switch input { width: 16px; height: 16px; accent-color: var(--accent); }
 .range { margin: 0; font-size: 11.5px; color: var(--muted); }
+.field select { flex: 1; min-width: 0; border: 0; background: transparent; box-shadow: none; padding: 7px 9px; color: var(--text); }
+.field select:focus { outline: none; box-shadow: none; }
+
+.check { display: flex; flex-direction: column; gap: 8px; padding: 14px 0; border-top: 1px solid var(--border-soft); }
+.check .ok { color: var(--accent-2); }
+.check .ko { color: var(--danger); }
+.steps { margin: 0; padding: 0; list-style: none; display: flex; flex-direction: column; gap: 6px; font-size: 12.5px; }
+.steps li { display: flex; align-items: baseline; gap: 6px; flex-wrap: wrap; }
+.steps li svg { flex: none; align-self: center; }
+.steps strong { color: var(--text); font-weight: 600; }
+.steps .detail { color: var(--muted); overflow-wrap: anywhere; min-width: 0; flex: 1 1 240px; }
 .error { margin: 0; font-size: 12px; color: var(--danger); }
 .state { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; min-height: 22px; }
 .chip { font-size: 10.5px; letter-spacing: 0.02em; border-radius: 999px; padding: 1px 8px; border: 1px solid var(--border); background: var(--panel-2); color: var(--muted); white-space: nowrap; }

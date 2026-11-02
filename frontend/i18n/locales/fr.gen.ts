@@ -3241,7 +3241,17 @@ export default {
       "processes": "processus",
       "people": "personnes"
     },
+    "secretSet": "défini",
+    "secretNotSet": "non défini",
+    "secretKeep": "défini · tapez pour le remplacer",
     "errors": {
+      "required": "Une valeur est nécessaire",
+      "format_host": "L'adresse du serveur seulement, sans http://, chemin ni port",
+      "format_name": "Lettres, chiffres, _ et - seulement",
+      "format_url": "Une adresse commençant par http:// ou https:// est nécessaire",
+      "format_user": "Sans espaces",
+      "choice": "Choisissez une des valeurs proposées",
+      "secret": "Le mot de passe enregistré ne peut plus être lu (la clé de chiffrement a changé) : saisissez-le à nouveau",
       "unknown": "Réglage inconnu",
       "unavailable": "Indisponible sur cette installation",
       "boolean": "Choisissez activé ou désactivé",
@@ -3728,6 +3738,21 @@ export default {
       "below": "Doit rester sous « {other} » ({limit})",
       "above": "Doit rester au-dessus de « {other} » ({limit})",
     },
+    "check": {
+      "region": "Test de la connexion",
+      "lead": "Essaie les valeurs des champs ci-dessus, même avant de les enregistrer : connexion, base, utilisateur IA et lecture dans le stockage (ou tables temporaires, avec push). Rien n'est enregistré.",
+      "button": "Tester la connexion",
+      "running": "Test en cours…",
+      "ok": "La connexion fonctionne",
+      "failed": "La connexion ne fonctionne pas",
+      "steps": {
+        "server": "Connexion au serveur",
+        "database": "Base de travail",
+        "ai_user": "Utilisateur de l'assistant IA",
+        "storage": "Lecture dans le stockage",
+        "staging": "Tables temporaires",
+      },
+    },
     "categories": {
       "import": {
         "title": "Importation",
@@ -3748,6 +3773,10 @@ export default {
       "dashboards": {
         "title": "Tableaux de bord",
         "lead": "Ce que garde le cache d'un tableau de bord : les lignes de ses jeux de données sur le bucket, les nombres de ses tuiles dans Valkey, partagés par quiconque peut les lire.",
+      },
+      "clickhouse_connection": {
+        "title": "Connexion à ClickHouse",
+        "lead": "Le serveur ClickHouse externe : où il se trouve, avec quel utilisateur, comment il atteint les données. S'applique après le redémarrage du moteur, des workers et du planificateur.",
       },
       "clickhouse": {
         "title": "ClickHouse",
@@ -3850,6 +3879,58 @@ export default {
       "clickhouse_external_connect_timeout": {
         "label": "Attente de connexion à ClickHouse",
         "help": "Combien de temps peut prendre l'ouverture d'une connexion. S'applique aux connexions ouvertes à partir de maintenant."
+      },
+      "clickhouse_external_host": {
+        "label": "Serveur",
+        "help": "L'adresse du serveur ClickHouse, sans http:// ni port (par exemple clickhouse.entreprise.fr). Une fois définie, le moteur ClickHouse est proposé aux flux. Si l'installation limite les sorties des workers (networkPolicy.egressCIDRs), l'adresse doit faire partie de celles autorisées.",
+      },
+      "clickhouse_external_port": {
+        "label": "Port",
+        "help": "Le port HTTP de ClickHouse : 8123 en clair, 8443 avec TLS.",
+      },
+      "clickhouse_external_secure": {
+        "label": "TLS",
+        "help": "Une connexion chiffrée : les services gérés l'exigent (port 8443).",
+      },
+      "clickhouse_external_database": {
+        "label": "Base de travail",
+        "help": "Elle doit déjà exister. Avec le transport push, elle accueille les tables temporaires de chargement : l'utilisateur doit pouvoir y créer et supprimer des tables.",
+      },
+      "clickhouse_external_username": {
+        "label": "Utilisateur",
+        "help": "L'utilisateur avec lequel le moteur travaille sur le serveur.",
+      },
+      "clickhouse_external_password": {
+        "label": "Mot de passe",
+        "help": "Saisi ici, il voyage et reste chiffré, et ne peut plus être relu. Laisser le champ vide garde l'actuel.",
+      },
+      "clickhouse_external_ai_username": {
+        "label": "Utilisateur de l'assistant IA",
+        "help": "Un utilisateur en lecture seule pour les requêtes de l'assistant IA : une seconde barrière. Vide = l'assistant utilise l'utilisateur principal. Les droits nécessaires : docs/engines/clickhouse-ai-user.md.",
+      },
+      "clickhouse_external_ai_password": {
+        "label": "Mot de passe de l'utilisateur IA",
+        "help": "Utilisé seulement si le nom de l'utilisateur IA est aussi défini. Laisser le champ vide garde l'actuel.",
+      },
+      "clickhouse_external_transport": {
+        "label": "Transport",
+        "help": "Comment le serveur atteint les données. s3 : il lit et écrit les fichiers parquet directement dans le stockage objet (le choix de production : le serveur doit voir le stockage). push : le worker charge les données dans des tables temporaires et reçoit le résultat (fonctionne avec tout serveur, mais les données passent par le worker).",
+        "choices": {
+          "s3": "s3 — le serveur lit dans le stockage",
+          "push": "push — les données passent par le worker",
+        },
+      },
+      "clickhouse_external_s3_endpoint": {
+        "label": "Adresse du stockage vue par ClickHouse",
+        "help": "Avec le transport s3 seulement. Vide = l'adresse du stockage du moteur, juste seulement si le serveur est sur le même réseau ; sur un cloud, l'URL publique (par exemple https://s3.fr-par.scw.cloud).",
+      },
+      "clickhouse_external_s3_named_collection": {
+        "label": "Named collection S3",
+        "help": "Une named collection définie sur le serveur avec les clés du stockage : les clés ne voyagent pas dans les requêtes et ne finissent pas dans le query_log. Vide = les clés voyagent dans les requêtes.",
+      },
+      "clickhouse_external_materialize_database": {
+        "label": "Base des copies du viewer",
+        "help": "Où vont les copies des gros jeux de données ouverts dans le viewer. Vide = la base de travail.",
       },
       "sftp_max_file_bytes": {
         "label": "Plus gros fichier",

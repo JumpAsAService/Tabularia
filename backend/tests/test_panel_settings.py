@@ -38,12 +38,15 @@ def test_only_the_listed_items_whole_and_in_their_range():
 
 
 def test_credentials_and_addresses_are_not_in_the_list():
+    """Except the external ClickHouse's connection, the owner's choice (2026-11-02): its
+    password is a secret item (test_clickhouse_connection_panel.py)."""
     key_names = {v.key for v in panel_settings.ITEMS}
     for forbidden in ("storage.secret_key", "storage.endpoint", "redis.host", "security.fernet_key",
-                    "clickhouse_external.password", "clickhouse_external.host", "bigquery.credentials_b64",
-                    "celery.worker_concurrency", "celery.timezone", "storage.direct_read",
-                    "clickhouse_external.transport", "redis.url"):
+                    "bigquery.credentials_b64", "celery.worker_concurrency", "celery.timezone",
+                    "storage.direct_read", "redis.url", "storage.access_key", "bigquery.project"):
         assert forbidden not in key_names
+    secrets = {v.key for v in panel_settings.ITEMS if v.kind == "secret"}
+    assert secrets == {"clickhouse_external.password", "clickhouse_external.ai_password"}
 
 
 def test_the_soft_limit_stays_under_the_hard_one():
@@ -230,8 +233,8 @@ def test_the_catalog_says_environment_value_and_range():
     assert items["ingest.parquet_row_group_rows"]["value"] is None
     assert items["celery.task_time_limit"]["max"] == 3000
     assert {v["category"] for v in c["items"]} == {
-        "import", "export", "execution", "cache", "dashboards", "clickhouse", "bigquery", "workers", "sftp", "s3", "api",
-        "placeholders", "upload", "engine_api", "embedded"}
+        "import", "export", "execution", "cache", "dashboards", "clickhouse", "clickhouse_connection", "bigquery",
+        "workers", "sftp", "s3", "api", "placeholders", "upload", "engine_api", "embedded"}
     assert items["api.min_interval_seconds"]["kind"] == "float" and items["export.max_rows"]["kind"] == "int"
     assert items["celery.max_tasks_per_child"]["rollout"] == ["worker", "preview-worker"]
     assert items["chdb.max_memory_usage"]["env_var"] == "CHDB_MAX_MEMORY_USAGE"

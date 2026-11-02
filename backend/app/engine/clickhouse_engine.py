@@ -109,6 +109,16 @@ def _clean_error(e: Exception, host: str | None = None, port: int | None = None)
     return describe_db_error(e, "clickhouse", host, port)
 
 
+def s3_table_function(cfg: ClickHouseExternalSettings, source: DataSource) -> str:
+    """`s3(...)` pointing at the object `source`, as the server `cfg` reaches the storage."""
+    endpoint = (cfg.s3_endpoint or get_settings().storage.endpoint).rstrip("/")
+    url = f"{endpoint}/{source.bucket}/{source.key}"
+    if cfg.s3_named_collection:
+        return f"s3({_qi(cfg.s3_named_collection)}, url = {_lit(url)}, format = 'Parquet')"
+    st = get_settings().storage
+    return f"s3({_lit(url)}, {_lit(st.access_key)}, {_lit(st.secret_key.get_secret_value())}, 'Parquet')"
+
+
 # POSITIVE outcomes of the existence check, per process: (bucket, key) -> expiry.
 # A HEAD to the object storage costs ~11 ms — a sixth of a fast preview — paid for
 # EVERY source of EVERY preview (the join sides too), always on the same key. Keys
@@ -303,12 +313,7 @@ class ClickHouseContext:
     # ── transport s3: table function on the storage ──────────────────────
     def s3_fn(self, source: DataSource) -> str:
         """`s3(...)` pointing at the object `source` (read AND write)."""
-        endpoint = (self.cfg.s3_endpoint or get_settings().storage.endpoint).rstrip("/")
-        url = f"{endpoint}/{source.bucket}/{source.key}"
-        if self.cfg.s3_named_collection:
-            return f"s3({_qi(self.cfg.s3_named_collection)}, url = {_lit(url)}, format = 'Parquet')"
-        st = get_settings().storage
-        return f"s3({_lit(url)}, {_lit(st.access_key)}, {_lit(st.secret_key.get_secret_value())}, 'Parquet')"
+        return s3_table_function(self.cfg, source)
 
     # ── transport push: staging table ──────────────────────────────────────
     def _push(self, source: DataSource) -> str:

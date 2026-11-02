@@ -305,7 +305,7 @@ id = "engine-clickhouse"
 component = "engine"
 title = "External ClickHouse engine"
 prefixes = ["CLICKHOUSE_EXTERNAL"]
-intro = "Optional: flows run on a remote ClickHouse server (managed or self-hosted) instead of in the worker. Off while `CLICKHOUSE_EXTERNAL__HOST` is empty. Use the HTTP(S) port (8123 / 8443), not the native one."
+intro = "Optional: flows run on a remote ClickHouse server (managed or self-hosted) instead of in the worker. Off while `CLICKHOUSE_EXTERNAL__HOST` is empty. Use the HTTP(S) port (8123 / 8443), not the native one. The connection can also be set, or changed, by an administrator in **Administration → Settings → ClickHouse connection**, which overrides these variables (they stay the starting values) and has a connection test: see [the guide](engine-settings.md#the-clickhouse-connection)."
 
 [[section]]
 id = "engine-bigquery"

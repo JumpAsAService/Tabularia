@@ -3241,7 +3241,17 @@ export default {
       "processes": "Prozesse",
       "people": "Personen"
     },
+    "secretSet": "gesetzt",
+    "secretNotSet": "nicht gesetzt",
+    "secretKeep": "gesetzt · tippen, um es zu ersetzen",
     "errors": {
+      "required": "Ein Wert ist nötig",
+      "format_host": "Nur die Adresse des Servers, ohne http://, Pfad oder Port",
+      "format_name": "Nur Buchstaben, Ziffern, _ und -",
+      "format_url": "Eine Adresse, die mit http:// oder https:// beginnt, ist nötig",
+      "format_user": "Ohne Leerzeichen",
+      "choice": "Wähle einen der angebotenen Werte",
+      "secret": "Das gespeicherte Passwort lässt sich nicht mehr lesen (der Verschlüsselungsschlüssel hat sich geändert): gib es neu ein",
       "unknown": "Unbekannte Einstellung",
       "unavailable": "In dieser Installation nicht verfügbar",
       "boolean": "Ein oder Aus ist nötig",
@@ -3728,6 +3738,21 @@ export default {
       "below": "Muss unter „{other}“ bleiben ({limit})",
       "above": "Muss über „{other}“ bleiben ({limit})",
     },
+    "check": {
+      "region": "Verbindungstest",
+      "lead": "Probiert die Werte der Felder oben aus, auch vor dem Speichern: Anmeldung, Datenbank, KI-Benutzer und Lesen aus dem Speicher (oder temporäre Tabellen, mit push). Es wird nichts gespeichert.",
+      "button": "Verbindung testen",
+      "running": "Test läuft…",
+      "ok": "Die Verbindung funktioniert",
+      "failed": "Die Verbindung funktioniert nicht",
+      "steps": {
+        "server": "Anmeldung am Server",
+        "database": "Arbeitsdatenbank",
+        "ai_user": "Benutzer des KI-Assistenten",
+        "storage": "Lesen aus dem Speicher",
+        "staging": "Temporäre Tabellen",
+      },
+    },
     "categories": {
       "import": {
         "title": "Import",
@@ -3748,6 +3773,10 @@ export default {
       "dashboards": {
         "title": "Dashboards",
         "lead": "Was der Cache eines Dashboards aufbewahrt: die Zeilen seiner Datensätze im Bucket, die Zahlen seiner Kacheln in Valkey, geteilt von allen, die sie lesen dürfen.",
+      },
+      "clickhouse_connection": {
+        "title": "ClickHouse-Verbindung",
+        "lead": "Der externe ClickHouse-Server: wo er steht, mit welchem Benutzer angemeldet wird, wie er die Daten erreicht. Gilt nach dem Neustart von Engine, Workern und Planer.",
       },
       "clickhouse": {
         "title": "ClickHouse",
@@ -3850,6 +3879,58 @@ export default {
       "clickhouse_external_connect_timeout": {
         "label": "Wartezeit beim Verbinden mit ClickHouse",
         "help": "Wie lange das Öffnen einer Verbindung dauern darf. Gilt für Verbindungen, die ab jetzt geöffnet werden."
+      },
+      "clickhouse_external_host": {
+        "label": "Server",
+        "help": "Die Adresse des ClickHouse-Servers, ohne http:// und ohne Port (zum Beispiel clickhouse.firma.de). Sobald gesetzt, wird die ClickHouse-Engine für die Flows angeboten. Begrenzt die Installation, wohin die Worker sich verbinden dürfen (networkPolicy.egressCIDRs), muss die Adresse zu den erlaubten gehören.",
+      },
+      "clickhouse_external_port": {
+        "label": "Port",
+        "help": "Der HTTP-Port von ClickHouse: 8123 unverschlüsselt, 8443 mit TLS.",
+      },
+      "clickhouse_external_secure": {
+        "label": "TLS",
+        "help": "Eine verschlüsselte Verbindung: verwaltete Dienste verlangen sie (Port 8443).",
+      },
+      "clickhouse_external_database": {
+        "label": "Arbeitsdatenbank",
+        "help": "Sie muss bereits existieren. Mit dem Transport push enthält sie die temporären Ladetabellen: der Benutzer muss darin Tabellen anlegen und löschen dürfen.",
+      },
+      "clickhouse_external_username": {
+        "label": "Benutzer",
+        "help": "Der Benutzer, mit dem die Engine auf dem Server arbeitet.",
+      },
+      "clickhouse_external_password": {
+        "label": "Passwort",
+        "help": "Hier eingegeben wird es verschlüsselt übertragen und gespeichert und lässt sich nicht mehr auslesen. Bleibt das Feld leer, gilt das bisherige.",
+      },
+      "clickhouse_external_ai_username": {
+        "label": "Benutzer des KI-Assistenten",
+        "help": "Ein Benutzer nur mit Leserechten für die Abfragen des KI-Assistenten: eine zweite Schranke. Leer = der Assistent nutzt den Hauptbenutzer. Die nötigen Rechte: docs/engines/clickhouse-ai-user.md.",
+      },
+      "clickhouse_external_ai_password": {
+        "label": "Passwort des KI-Benutzers",
+        "help": "Wird nur verwendet, wenn auch der Name des KI-Benutzers gesetzt ist. Bleibt das Feld leer, gilt das bisherige.",
+      },
+      "clickhouse_external_transport": {
+        "label": "Transport",
+        "help": "Wie der Server die Daten erreicht. s3: er liest und schreibt die Parquet-Dateien direkt im Objektspeicher (die Wahl für die Produktion: der Server muss den Speicher sehen). push: der Worker lädt die Daten in temporäre Tabellen und erhält das Ergebnis (geht mit jedem Server, aber die Daten laufen über den Worker).",
+        "choices": {
+          "s3": "s3 — der Server liest aus dem Speicher",
+          "push": "push — die Daten laufen über den Worker",
+        },
+      },
+      "clickhouse_external_s3_endpoint": {
+        "label": "Speicheradresse aus Sicht von ClickHouse",
+        "help": "Nur mit dem Transport s3. Leer = die Speicheradresse der Engine, nur richtig, wenn der Server im selben Netz ist; in einer Cloud die öffentliche URL (zum Beispiel https://s3.fr-par.scw.cloud).",
+      },
+      "clickhouse_external_s3_named_collection": {
+        "label": "S3 Named Collection",
+        "help": "Eine auf dem Server definierte Named Collection mit den Schlüsseln des Speichers: die Schlüssel reisen nicht in den Abfragen und landen nicht im query_log. Leer = die Schlüssel reisen in den Abfragen.",
+      },
+      "clickhouse_external_materialize_database": {
+        "label": "Datenbank der Viewer-Kopien",
+        "help": "Wohin die Kopien großer, im Viewer geöffneter Datasets kommen. Leer = die Arbeitsdatenbank.",
       },
       "sftp_max_file_bytes": {
         "label": "Größte Datei",

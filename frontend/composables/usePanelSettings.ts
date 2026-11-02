@@ -5,7 +5,7 @@
 // /admin/settings-rollout says which components still run an old value.
 import type { EngineSetting, EngineSettings } from '~/composables/useEngineSettings'
 
-export type SettingKind = 'int' | 'float' | 'bool' | 'str' | 'timezone' | 'cpu' | 'memory'
+export type SettingKind = 'int' | 'float' | 'bool' | 'str' | 'timezone' | 'cpu' | 'memory' | 'choice' | 'secret'
 export type SettingSource = 'gateway' | 'engine'
 export type SettingSection = 'gateway' | 'kubernetes' | 'engine'
 
@@ -44,6 +44,9 @@ export interface PanelSetting {
   min: number | null
   max: number | null
   maxLength: number | null
+  choices: string[] // choice: the values allowed
+  optional: boolean // a text that may be left empty
+  format: string // a text's shape (TEXT_FORMATS); '' = any
   rollout: string[]
   envVar: string
   envValue: unknown
@@ -62,6 +65,12 @@ export interface SettingError {
   limit?: number
   other?: string
   message?: string
+}
+
+export interface ClickhouseCheck {
+  ok: boolean
+  // server, database, ai_user, storage (transport s3), staging (transport push): each only when the one before held
+  steps: { step: string, ok: boolean, detail: string }[]
 }
 
 export type RolloutMode = 'kubernetes' | 'manual' | 'compose'
@@ -94,7 +103,7 @@ export const GROUPS: Record<SettingSection, string[]> = {
     'monitoring', 'openlineage', 'processes'],
   kubernetes: ['kubernetes', 'scripts', 'builds', 'notebooks', 'containers'],
   engine: ['execution', 'cache', 'embedded', 'engine_api', 'import', 'export', 'sftp', 's3', 'api',
-    'placeholders', 'clickhouse', 'bigquery'],
+    'placeholders', 'clickhouse_connection', 'clickhouse', 'bigquery'],
 }
 
 export const sectionOf = (s: PanelSetting): SettingSection =>
@@ -103,16 +112,21 @@ export const sectionOf = (s: PanelSetting): SettingSection =>
 export function fromGateway(v: GatewaySetting): PanelSetting {
   return {
     source: 'gateway', key: v.key, group: v.group, kind: v.kind, unit: v.unit, min: v.min, max: v.max,
-    maxLength: v.max_length, rollout: v.rollout, envVar: v.env_var, envValue: v.env_value, value: v.value,
+    maxLength: v.max_length, choices: [], optional: true, format: '', rollout: v.rollout, envVar: v.env_var, envValue: v.env_value,
+    value: v.value,
     applied: v.applied, startedWith: v.started_with, updatedAt: v.updated_at, updatedBy: v.updated_by, off: false,
   }
 }
 
 export function fromEngine(v: EngineSetting, unavailable: string[]): PanelSetting {
-  const e = v as EngineSetting & { kind?: SettingKind, rollout?: string[] }
+  const kind: SettingKind = v.kind ?? 'int'
+  const text = kind === 'str' || kind === 'secret'
   return {
-    source: 'engine', key: v.key, group: v.category, kind: e.kind ?? 'int', unit: v.unit, min: v.min, max: v.max,
-    maxLength: null, rollout: e.rollout ?? [], envVar: v.env_var, envValue: v.env_value, value: v.value,
+    source: 'engine', key: v.key, group: v.category, kind, unit: v.unit,
+    // a text's limits are its length
+    min: text ? null : v.min, max: text ? null : v.max, maxLength: text ? v.max : null,
+    choices: v.choices ?? [], optional: v.optional ?? false, format: v.format ?? '',
+    rollout: v.rollout ?? [], envVar: v.env_var, envValue: v.env_value, value: v.value,
     applied: v.applied, updatedAt: v.updated_at, updatedBy: v.updated_by,
     off: unavailable.includes(v.category),
   }
@@ -127,6 +141,9 @@ export function usePanelSettings() {
       apiFetch<GatewaySettings>('/admin/gateway-settings', { method: 'PUT', body: { values } }),
     saveEngine: (values: Record<string, unknown>) =>
       apiFetch<EngineSettings>('/admin/engine-settings', { method: 'PUT', body: { values } }),
+    // «Test connection» of the external ClickHouse: the fields as they are now (a password in clear)
+    checkClickhouse: (values: Record<string, unknown>) =>
+      apiFetch<ClickhouseCheck>('/admin/engine-settings/clickhouse-check', { method: 'POST', body: { values } }),
     rollout: () => apiFetch<RolloutState>('/admin/settings-rollout'),
     startRollout: (components: string[]) =>
       apiFetch<RolloutState>('/admin/settings-rollout', { method: 'POST', body: { components } }),
