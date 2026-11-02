@@ -345,6 +345,23 @@ def test_the_api_says_a_failed_render_and_stops_a_slow_one(app, session, fake_en
     assert [e.outcome for e in _renders(session)] == ["failure", "failure"]
 
 
+def test_a_report_whose_worker_ran_out_of_memory_says_it_as_the_engine_does(app, session, fake_engine):
+    """In the API, and in the form: the list of a parameter is a report's, and is not said to be a dashboard's."""
+    w = _world(session)
+    reader = _reader(app, session, w)
+    token, _ = _token(session, "reader@x.local")
+    said = ("«orders» is too big for a report to read: the worker ran out of memory. Aggregate it first, in its query "
+            "or in a flow — a report works best on summarized data.")
+    fake_engine.export_states["t-report-1"] = [{"status": "failed", "code": 422, "detail": said}]
+    r = TestClient(app).get(f"/reports/{w['report']}/render?region=North", headers=_bearer(token))
+    assert (r.status_code, r.json()["detail"]) == (422, said)
+    _with(session, _regions)
+    fake_engine.report_choices_response = (422, {"detail": said})
+    out = reader.get(f"/reports/{w['report']}/parameters").json()
+    assert out[0]["choices_error"] == f"The choices of «region»: {said}"
+    assert fake_engine.report_choices and all("of_dashboard" not in b for b in fake_engine.report_choices)
+
+
 def test_which_tokens_the_api_answers(app, session, fake_engine):
     w = _world(session)
     _reader(app, session, w)

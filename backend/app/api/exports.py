@@ -23,6 +23,7 @@ from app.tasks.celery_app import celery_app
 from app.utils import get_storage_service
 
 _PREFIX = "dataprep:export:owner:"
+_KILLED_PREFIX = "dataprep:export:killed:"  # what a document says when its worker is killed while it reads
 # long enough for a queued export, its run up to the workers' time limit and the
 # hour the file is kept; the key is a few bytes and is deleted with the file
 OWNER_TTL_SECONDS = 24 * 3600
@@ -49,6 +50,16 @@ def _r() -> redis.Redis:
 
 def remember_owner(task_id: str, owner: str) -> None:
     _r().set(_PREFIX + task_id, owner, ex=OWNER_TTL_SECONDS)
+
+
+def remember_if_killed(task_id: str, message: str) -> None:
+    """What to say of this export when its worker process is killed (errors.worker_killed): the
+    worker cannot say it, and the dataset's name is known only here, when it starts."""
+    _r().set(_KILLED_PREFIX + task_id, message, ex=OWNER_TTL_SECONDS)
+
+
+def said_if_killed(task_id: str) -> str | None:
+    return _r().get(_KILLED_PREFIX + task_id)
 
 
 def ensure_owner(task_id: str, owner: str | None) -> None:
@@ -78,7 +89,7 @@ def send_file(task_id: str, payload: dict) -> StreamingResponse:
     def cleanup() -> None:
         storage.delete_object(bucket, key)
         AsyncResult(task_id, app=celery_app).forget()
-        _r().delete(_PREFIX + task_id)
+        _r().delete(_PREFIX + task_id, _KILLED_PREFIX + task_id)
 
     return StreamingResponse(
         obj["Body"].iter_chunks(_CHUNK),

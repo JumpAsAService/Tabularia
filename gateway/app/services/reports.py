@@ -830,7 +830,7 @@ async def resolve_each(session: Session, user: User, definition: dict,
 
 # ── choices taken from a dataset ─────────────────────────────────────────────
 async def dataset_choices(session: Session, user: User, definition: dict, values: Mapping[str, Any],
-                          param: dict, cache: Optional[dict] = None) -> Optional[dict]:
+                          param: dict, cache: Optional[dict] = None, of_dashboard: bool = False) -> Optional[dict]:
     """The choices of a parameter that takes them from a dataset, read by the engine (POST
     /reports/choices) with `user`'s rights: {"choices": [{value, label}], "truncated",
     "whole"}. None when the engine has no such route yet. The dataset may use the parameter:
@@ -839,7 +839,8 @@ async def dataset_choices(session: Session, user: User, definition: dict, values
     it reads NULL, as with no value: such a list is not `whole`, and when it comes out empty
     or cannot be read at all it says so in "problem". `cache`: a saved dashboard's (services/
     dashboards.py), whose list is kept and shared after this reader's rights were checked here;
-    it may wait for someone else's reading, so no database connection waits with it."""
+    it may wait for someone else's reading, so no database connection waits with it. `of_dashboard`:
+    a dashboard's list, so that what the engine says of a failure says «a dashboard»."""
     choices = param["choices"]
     ignoring = frozenset(_not_followed(definition, param))
     blank = {p["name"]: [] if p.get("multi") else None for p in definition.get("parameters") or [] if p["name"] in ignoring}
@@ -854,7 +855,8 @@ async def dataset_choices(session: Session, user: User, definition: dict, values
         "datasets": {choices["dataset"]: datasets[choices["dataset"]]},
         "params": {k: report_params.to_json(v) for k, v in reading.items()},
         "value": choices["value"], "label": choices.get("label"), "limit": MAX_CHOICES,
-        "locale": definition.get("locale") or "en", **({"cache": cache} if cache is not None else {})})
+        "locale": definition.get("locale") or "en", **({"cache": cache} if cache is not None else {}),
+        **({"of_dashboard": True} if of_dashboard else {})})
     if resp.status_code in (404, 405):
         return None
     if resp.status_code >= 400 and param["name"] in left:  # a NULL the database does not take there
@@ -877,7 +879,7 @@ def _unread(param: dict) -> dict:
 
 
 async def check_dataset_choices(session: Session, user: User, definition: dict, values: Mapping[str, Any],
-                                cache: Optional[dict] = None) -> None:
+                                cache: Optional[dict] = None, of_dashboard: bool = False) -> None:
     """A value of a parameter whose choices come from a dataset must be one of them, in the
     whole list: not among the rows its own filter leaves (when the engine can say, and the
     list is whole). A list the engine could not read checks nothing: without its filter a
@@ -891,7 +893,7 @@ async def check_dataset_choices(session: Session, user: User, definition: dict, 
         if not source or value is None or value == []:
             continue
         try:
-            got = await dataset_choices(session, user, definition, values, p, cache)
+            got = await dataset_choices(session, user, definition, values, p, cache, of_dashboard)
         except HTTPException as e:
             if e.status_code >= 500 and cache is None:
                 raise

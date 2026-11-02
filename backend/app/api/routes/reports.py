@@ -18,16 +18,19 @@
   for everyone: the token that makes its numbers be read again, or none.
 """
 import uuid
-from typing import Any, Literal, Optional
+from typing import Any, Callable, Literal, Optional
 
+from celery.exceptions import WorkerLostError
 from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel, Field
 from starlette.concurrency import run_in_threadpool
 
 from app.api import exports
 from app.api.models import TaskResponse
+from app.reports import data as rdata
 from app.reports import definition as rd
-from app.reports import formats, tile_cache
+from app.reports import errors, formats, tile_cache
+from app.reports import tiles as rtiles
 from app.reports.render import filename as file_name
 from app.tasks.celery_app import celery_app
 
@@ -72,6 +75,7 @@ class ReportChoices(BaseModel):
     limit: int = Field(default=500, ge=1, le=5000)
     locale: Optional[Literal[formats.LOCALES]] = None  # type: ignore[valid-type]
     cache: Optional[DashboardCache] = None
+    of_dashboard: bool = False  # a dashboard's list, being edited (with `cache`, a saved one's): how a failure says it
 
 
 class ReportCheck(BaseModel):
@@ -143,6 +147,37 @@ def _worker_said(payload: dict, otherwise: str) -> dict:
     return payload["result"]
 
 
+def _reads(asked: dict) -> list[str]:
+    """The datasets a task reads, as `tiles.Reading` reads them, of those it was given: its items' (`tiles`:
+    those only, without the refused), and what the clicks filtering them read. All those it was given when
+    its definition cannot be read."""
+    given = list(asked.get("datasets") or {})
+    try:
+        report, refused, only = rd.load(asked["definition"]), asked.get("refused") or {}, asked.get("tiles")
+        usable = rtiles.clicks_of(report, asked.get("clicks") or [], refused)
+        names: list[str] = []
+        for _, it in report.items():
+            needs = rdata.used_datasets(report, [it])
+            if (only is None or it.id in only) and not rtiles.refusal(needs, refused):
+                names += rtiles.needing(report, it, needs, usable)
+        return [n for n in dict.fromkeys(names) if n in given]
+    except Exception:  # noqa: BLE001 — what says a failure must not fail
+        return given
+
+
+def _from_worker(send: Callable[[], dict], otherwise: str, what: str, reads: Callable[[], list[str]]) -> dict:
+    """`send()`, a task on the preview worker, and its answer as `_worker_said` says it. Its process killed
+    while it worked (errors.worker_killed) is said in words, as a 422: the rows `what` read were too many for
+    the worker's memory, which aggregating them changes; it was a 500, «Internal Server Error»."""
+    try:
+        payload = send()
+    except WorkerLostError as e:
+        if not errors.worker_killed(e):
+            raise
+        raise HTTPException(status_code=422, detail=errors.out_of_memory(what, reads())) from None
+    return _worker_said(payload, otherwise)
+
+
 _CHOICES_TASK = "app.tasks.report_jobs.report_choices_task"
 _TILES_TASK = "app.tasks.report_jobs.dashboard_tiles_task"
 
@@ -151,12 +186,13 @@ _TILES_TASK = "app.tasks.report_jobs.dashboard_tiles_task"
 async def choices(request: ReportChoices) -> dict:
     from app.api.routes.tasks import on_preview_worker
 
-    said = "The choices could not be read"
-    kwargs = request.model_dump(exclude={"cache"})
+    said, what = "The choices could not be read", "a dashboard" if request.of_dashboard or request.cache is not None else "a report"
+    kwargs = request.model_dump(exclude={"cache", "of_dashboard"})  # what a worker of the version before knows
+    reads = lambda: [request.dataset]  # noqa: E731
     if request.cache is None:
-        return _worker_said(await run_in_threadpool(on_preview_worker, _CHOICES_TASK, kwargs, None), said)
-    return await tile_cache.choices(kwargs, request.cache.model_dump(),
-                                    lambda task, left: _worker_said(tile_cache.on_worker(_CHOICES_TASK, task, left), said))
+        return await run_in_threadpool(_from_worker, lambda: on_preview_worker(_CHOICES_TASK, kwargs, None), said, what, reads)
+    return await tile_cache.choices(kwargs, request.cache.model_dump(), lambda task, left: _from_worker(
+        lambda: tile_cache.on_worker(_CHOICES_TASK, task, left), said, what, reads))
 
 
 @router.post("/count")
@@ -177,13 +213,14 @@ def count(request: ReportCount) -> dict:
 async def tiles(request: DashboardTiles) -> dict:
     from app.api.routes.tasks import on_preview_worker
 
-    said = "The numbers could not be read"
+    said, what = "The numbers could not be read", "a report" if request.of_report else "a dashboard"
     # what only a document's comment asks does not go otherwise: a worker of the version before is still a worker
     kwargs = request.model_dump(exclude={"slot", "cache", *(k for k in ("reading", "of_report") if not getattr(request, k))})
     if request.cache is None:
-        return _worker_said(await run_in_threadpool(on_preview_worker, _TILES_TASK, kwargs, request.slot), said)
-    return await tile_cache.numbers(kwargs, request.cache.model_dump(),
-                                    lambda task, left: _worker_said(tile_cache.on_worker(_TILES_TASK, task, left), said))
+        return await run_in_threadpool(_from_worker, lambda: on_preview_worker(_TILES_TASK, kwargs, request.slot), said, what,
+                                       lambda: _reads(kwargs))
+    return await tile_cache.numbers(kwargs, request.cache.model_dump(), lambda task, left: _from_worker(
+        lambda: tile_cache.on_worker(_TILES_TASK, task, left), said, what, lambda: _reads(task)))
 
 
 @router.post("/tiles/refresh")
@@ -198,6 +235,8 @@ def dashboard_render(request: DashboardRender):
 
     task_id = str(uuid.uuid4())
     exports.remember_owner(task_id, request.owner)
+    exports.remember_if_killed(task_id, errors.out_of_memory("a dashboard", _reads({
+        "definition": request.definition, "datasets": request.datasets, "refused": request.refused, "clicks": request.clicks})))
     name = dashboard_file(request.filename, request.format)
     kwargs = request.model_dump(exclude={"owner", "cache", "filename", *(() if request.comments else ("comments",))})
     kwargs["filename"] = name
@@ -217,6 +256,7 @@ def render(request: ReportRender):
         raise HTTPException(status_code=422, detail=f"the report's definition: {problems[0]}")
     task_id = str(uuid.uuid4())
     exports.remember_owner(task_id, request.owner)
+    exports.remember_if_killed(task_id, errors.out_of_memory("a report", _reads({"definition": request.definition, "datasets": request.datasets})))
     name = file_name(request.filename, request.format)
     kwargs: dict[str, Any] = {"definition": request.definition, "datasets": request.datasets, "params": request.params,
                               "format": request.format, "filename": name}

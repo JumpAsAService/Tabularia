@@ -537,6 +537,46 @@ def test_those_waiting_get_the_failure_of_who_was_computing_and_ask_again_only_l
     assert ask()["tiles"]["k"]["value"] == 60.0
 
 
+def test_those_waiting_for_numbers_whose_worker_ran_out_of_memory_are_told_so_too(world, monkeypatch):
+    """The kernel killed the process that read the rows: whoever waited for it reads why, not «could not be read»."""
+    from celery.exceptions import WorkerLostError
+
+    def killed(task, kwargs, slot, seconds=None, watch_worker=False):
+        time.sleep(0.3)
+        raise WorkerLostError("Worker exited prematurely: signal 9 (SIGKILL) Job: 0.")
+
+    monkeypatch.setattr(tasks, "on_preview_worker", killed)
+
+    async def go():
+        return await asyncio.gather(*[routes.tiles(request()) for _ in range(10)], return_exceptions=True)
+
+    results = asyncio.run(go())
+    said = ("«orders» is too big for a dashboard to read: the worker ran out of memory. Aggregate it first, in its query "
+            "or in a flow — a dashboard works best on summarized data.")
+    failures = [r for r in results if isinstance(r, HTTPException)]
+    assert [(f.status_code, f.detail) for f in failures] == [(422, said)]
+    assert [r["tiles"]["k"] for r in results if not isinstance(r, Exception)] == [{"error": said, "code": "error"}] * 9
+
+
+def test_those_waiting_for_a_list_whose_worker_ran_out_of_memory_are_told_so_too(world, monkeypatch):
+    from celery.exceptions import WorkerLostError
+
+    def killed(task, kwargs, slot, seconds=None, watch_worker=False):
+        time.sleep(0.3)
+        raise WorkerLostError("Worker exited prematurely: signal 9 (SIGKILL) Job: 0.")
+
+    monkeypatch.setattr(tasks, "on_preview_worker", killed)
+    asked = routes.ReportChoices(definition=definition(), dataset="orders", datasets={"orders": ORDERS}, value="[region]",
+                                 of_dashboard=True, cache={})
+
+    async def go():
+        return await asyncio.gather(*[routes.choices(asked) for _ in range(5)], return_exceptions=True)
+
+    said = ("«orders» is too big for a dashboard to read: the worker ran out of memory. Aggregate it first, in its query "
+            "or in a flow — a dashboard works best on summarized data.")
+    assert [(e.status_code, e.detail) for e in asyncio.run(go())] == [(422, said)] * 5
+
+
 def test_a_source_that_fails_is_asked_once_by_those_waiting_and_recovers(world, monkeypatch):
     monkeypatch.setattr(tile_cache, "FAILED_SECONDS", 1)
     world["source"].failure = ReportError("dataset «orders»: the server is down")

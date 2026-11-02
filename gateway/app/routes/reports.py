@@ -723,9 +723,11 @@ async def report_parameters_being_edited(report_id: int, body: ParametersRequest
 
 
 async def _parameters_out(session: Session, user: User, definition: dict, given: dict[str, list],
-                          choices_from: Callable[[str], dict], cache: Optional[dict] = None) -> list[ParameterOut]:
+                          choices_from: Callable[[str], dict], cache: Optional[dict] = None,
+                          of_dashboard: bool = False) -> list[ParameterOut]:
     """`choices_from`: the definition to read a dataset's choices with, by the dataset's name;
-    `cache`: a saved dashboard's (services/dashboards.py), whose lists are kept."""
+    `cache`: a saved dashboard's (services/dashboards.py), whose lists are kept; `of_dashboard`: a
+    dashboard's parameters, saved or being edited."""
     params = definition.get("parameters") or []
     for name in given:
         if name not in {p["name"] for p in params}:
@@ -751,7 +753,7 @@ async def _parameters_out(session: Session, user: User, definition: dict, given:
             item.choices = [Choice(value=v, label=str(v)) for v in choices["values"]]
         elif choices.get("dataset"):
             try:
-                got = await reports.dataset_choices(session, user, choices_from(choices["dataset"]), values, p, cache)
+                got = await reports.dataset_choices(session, user, choices_from(choices["dataset"]), values, p, cache, of_dashboard)
                 if got is None:
                     item.choices_error = "The engine cannot read choices from a dataset yet"
                 elif got.get("problem"):

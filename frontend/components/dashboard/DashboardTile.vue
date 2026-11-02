@@ -4,7 +4,7 @@
 // for a new question dim the old ones (they are not its answer); read again they stay as they
 // are, with their time. Motion only for that state, and not with reduced motion. An AI comment
 // (TileComment) has an answer of its own, which the numbers do not wait for.
-import { computed } from 'vue'
+import { computed, nextTick, onBeforeUnmount, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { Clock, LoaderCircle, Lock, RefreshCw, TriangleAlert } from 'lucide-vue-next'
 import KpiCard from '~/components/ui/KpiCard.vue'
@@ -58,6 +58,23 @@ const errorTitle = computed(() => {
   return t(te(`dashboard.err_${code}`) ? `dashboard.err_${code}` : 'dashboard.err_error')
 })
 const noAccess = computed(() => failure.value?.code === 'no_access')
+// a message longer than a small tile scrolls, and fades at its foot while more of it is below: a
+// line cut at the tile's edge looks like the end of the sentence, and a scroll bar is not always drawn
+const msg = ref<HTMLElement | null>(null)
+const more = ref(false)
+function measure() {
+  const m = msg.value
+  more.value = !!m && m.scrollTop + m.clientHeight < m.scrollHeight - 1
+}
+let sized: ResizeObserver | null = null
+watch(msg, (m) => {
+  sized?.disconnect()
+  sized = m && typeof ResizeObserver !== 'undefined' ? new ResizeObserver(measure) : null
+  if (m) sized?.observe(m)
+  measure()
+})
+watch(() => failure.value?.error, () => nextTick(measure))
+onBeforeUnmount(() => sized?.disconnect())
 // what the author wrote on a KPI or a text; a KPI's figure takes the size, its label does not
 const owned = computed(() => {
   const style = tileStyleOf(props.tile.style, props.ctx.ui.panel)
@@ -123,7 +140,7 @@ const chosenColumns = computed(() => clicksOfTile(props.clicks ?? [], props.tile
       </div>
       <div v-else-if="failure" class="failed" role="alert">
         <p class="ftitle"><TriangleAlert :size="14" aria-hidden="true" /> {{ errorTitle }}</p>
-        <p class="fmsg" :title="failure.error">{{ failure.error }}</p>
+        <p ref="msg" class="fmsg" :class="{ more }" :title="failure.error" @scroll.passive="measure">{{ failure.error }}</p>
         <button type="button" class="mini" :disabled="state.loading" @click="emit('retry')">
           <LoaderCircle v-if="state.loading" :size="12" class="spin" aria-hidden="true" /><RefreshCw v-else :size="12" aria-hidden="true" />
           {{ $t('dashboard.tryAgain') }}
@@ -202,10 +219,11 @@ const chosenColumns = computed(() => clicksOfTile(props.clicks ?? [], props.tile
 .refused p, .failed p { margin: 0; }
 .ftitle { display: inline-flex; align-items: center; gap: 6px; font-size: 12.5px; font-weight: 600; color: var(--text); }
 .ftitle svg { color: var(--warning); flex-shrink: 0; }
-.fmsg {
-  font-size: 12px; line-height: 1.4; color: var(--muted); overflow-wrap: anywhere;
-  display: -webkit-box; -webkit-line-clamp: 3; line-clamp: 3; -webkit-box-orient: vertical; overflow: hidden;
-}
+/* the whole message, as a text tile's: a small tile scrolls it (a clamp cut it after two lines, with no
+   sign that more followed), and its title and its button stay in sight */
+.fmsg { font-size: 12px; line-height: 1.4; color: var(--muted); overflow-wrap: anywhere; overflow: auto; min-height: 0; }
+.fmsg.more { mask-image: linear-gradient(to bottom, #000 calc(100% - 1.4em), transparent); }
+.ftitle, .failed .mini { flex-shrink: 0; }
 .failed .mini { display: inline-flex; align-items: center; gap: 4px; }
 .ttext { margin: 0; white-space: pre-wrap; overflow-wrap: anywhere; line-height: 1.45; overflow: auto; min-height: 0; }
 .timg { flex: 1; min-height: 0; width: 100%; height: 100%; display: block; }

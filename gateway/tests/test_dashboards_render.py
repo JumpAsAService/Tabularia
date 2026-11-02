@@ -256,6 +256,18 @@ def test_the_api_says_a_failed_render_and_stops_a_slow_one(app, session, fake_en
     assert [e.outcome for e in _renders(session)] == ["failure", "failure"]
 
 
+def test_a_document_whose_worker_ran_out_of_memory_says_it_as_the_engine_does(app, session, fake_engine):
+    """It was a 502 with «Worker exited prematurely: signal 9 (SIGKILL) Job: 0.»."""
+    w = _world(session)
+    board = _saved(session, w, definition(w))
+    _reader(app, session, w)
+    said = ("«orders» is too big for a dashboard to read: the worker ran out of memory. Aggregate it first, in its query "
+            "or in a flow — a dashboard works best on summarized data.")
+    fake_engine.export_states["t-dashboard-1"] = [{"status": "failed", "code": 422, "detail": said}]
+    r = TestClient(app).get(f"/dashboards/{board}/render", headers=_bearer(_token(session, "reader@x.local")))
+    assert (r.status_code, r.json()["detail"]) == (422, said)
+
+
 # ── the audit ─────────────────────────────────────────────────────────────────
 def test_a_render_is_audited_with_what_it_showed(app, session, fake_engine):
     w = _world(session)

@@ -186,6 +186,21 @@ def test_an_engine_that_takes_too_long_is_a_504(app, session, fake_engine):
     assert _data(_reader(app, session, w), _saved(session, w, definition(w))).status_code == 504
 
 
+OUT_OF_MEMORY = ("«orders» is too big for a dashboard to read: the worker ran out of memory. Aggregate it first, in its "
+                 "query or in a flow — a dashboard works best on summarized data.")
+
+
+def test_a_worker_out_of_memory_is_said_as_the_engine_says_it_in_the_viewer_and_the_designer(app, session, fake_engine):
+    """It was «Internal Server Error», a 502, on every tile."""
+    w = _world(session)
+    board = _saved(session, w, definition(w))
+    fake_engine.report_tiles_response = (422, {"detail": OUT_OF_MEMORY})
+    viewer = _data(_reader(app, session, w), board)
+    designer = _preview(_reader(app, session, w, "editor@x.local", "edit"), definition=definition(w), dashboard_id=board, tab="t")
+    for r in (viewer, designer):
+        assert (r.status_code, r.json()["detail"]) == (422, OUT_OF_MEMORY)
+
+
 def test_an_engine_older_than_the_gateway_says_so(app, session, fake_engine):
     w = _world(session)
     fake_engine.report_tiles_response = (404, {"detail": "Not Found"})
@@ -394,6 +409,21 @@ def test_choices_from_a_dataset_the_reader_may_not_read_say_so_and_leak_nothing(
     # its value checks nothing against a list they may not read, and tells nothing of it; the tiles still work
     r = _data(reader, board, params={"grade": "guess"})
     assert r.status_code == 200 and r.json()["tiles"]["mine"]["value"] == 1 and r.json()["tiles"]["on_pay"]["code"] == "no_access"
+
+
+def test_a_list_whose_worker_ran_out_of_memory_says_it_of_a_dashboard_saved_or_being_edited(app, session, fake_engine):
+    w = _world(session)
+    board = _saved(session, w, _choosing(w))
+    fake_engine.report_choices_response = (422, {"detail": OUT_OF_MEMORY})
+    reader = _reader(app, session, w)
+    saved = reader.get(f"/dashboards/{board}/parameters").json()[0]
+    edited = _reader(app, session, w, "editor@x.local", "edit").post(f"/dashboards/{board}/parameters", json={"definition": _choosing(w)},
+                                                                      headers=CSRF).json()[0]
+    for out in (saved, edited):
+        assert out["choices"] is None and out["choices_error"] == f"The choices of «region»: {OUT_OF_MEMORY}"
+    assert [b.get("of_dashboard") for b in fake_engine.report_choices] == [True] * len(fake_engine.report_choices)
+    # a value checked against a list that could not be read checks nothing: the tiles say what they can
+    assert _data(reader, board, params={"region": "North"}).status_code == 200
 
 
 def test_the_choices_of_a_definition_being_edited_need_edit(app, session, fake_engine):

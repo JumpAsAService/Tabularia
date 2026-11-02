@@ -23,6 +23,7 @@ import logging
 from app.core.config import get_settings
 from app.core.panel_settings import value_at_start
 from app.core.redaction import redact_secrets
+from app.reports.errors import worker_killed
 
 logger = logging.getLogger(__name__)
 
@@ -311,6 +312,9 @@ def export_status(task_id: str, owner: str | None = None):
         error = _failed(payload)
         return {"status": "failed", "code": error.status_code, "detail": error.detail}
     if result.state in ("FAILURE", "REVOKED"):
+        # a dashboard's or a report's: its worker ran out of memory while it read, in words
+        if worker_killed(result.info) and (said := exports.said_if_killed(task_id)):
+            return {"status": "failed", "code": 422, "detail": said}
         return {"status": "failed", "code": 500, "detail": redact_secrets(readable(result.info))}
     if result.state == "STARTED":
         lost = worker_pool.lost(task_id, result.info)

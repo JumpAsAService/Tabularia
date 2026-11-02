@@ -470,7 +470,7 @@ async def dashboard_parameters(dashboard_id: int, request: Request, user: User =
     definition = dashboards.as_report(content)
     try:
         return await _parameters_out(session, user, definition, _query_params(request), lambda _: definition,
-                                     await dashboards.cache_of(content, dashboard.id))
+                                     await dashboards.cache_of(content, dashboard.id), of_dashboard=True)
     except HTTPException as e:
         raise dashboards.in_our_words(e) from None
 
@@ -487,7 +487,7 @@ async def dashboard_parameters_being_edited(dashboard_id: int, body: ParametersR
         raise p.http(body.definition) from None
     try:
         return await _parameters_out(session, user, definition, reports.given_params(body.params),
-                                     lambda name: dashboards.check_dataset(body.definition, name))
+                                     lambda name: dashboards.check_dataset(body.definition, name), of_dashboard=True)
     except HTTPException as e:
         raise dashboards.in_our_words(e) from None
 

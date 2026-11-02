@@ -65,6 +65,11 @@ const hiddenNow = (id: string) => {
   const a = props.slots[id]?.answer
   return !!a && !('error' in a) && !!a.hidden
 }
+/** what a tile that failed says, whole: its face is inert, so neither scrolled nor hovered */
+const failureOf = (id: string) => {
+  const a = props.slots[id]?.answer
+  return a && 'error' in a ? a.error : undefined
+}
 const nameOf = (tile: DTile) => tile.title || tile.label || tile.id
 const kindName = (tile: DTile) => t(`reportDesigner.items.${tile.type === 'table' && tile.matrix ? 'matrix' : tile.type}`)
 /** what a tile half made still needs, in the words of what to do */
@@ -298,6 +303,7 @@ watch(() => store.selectedId.value, async (id) => {
         class="ddc-tile"
         :class="{ selected: store.selectedId.value === tile.id, bad: store.itemsWithProblems.value.has(tile.id), moving: moving === tile.id, over: dropHint?.on === tile.id }"
         :style="boxStyle(tile.grid)"
+        :title="failureOf(tile.id)"
         :data-tile="tile.id"
         role="button"
         tabindex="0"
@@ -353,6 +359,9 @@ watch(() => store.selectedId.value, async (id) => {
 .ddc-face { position: absolute; inset: 0; pointer-events: none; display: flex; border-radius: inherit; overflow: hidden; }
 .ddc-face > :deep(.tile) { flex: 1; min-width: 0; }
 .ddc-face :deep(.failed .mini) { display: none; } /* the next change asks again; here it cannot be reached */
+/* nor can a long message be scrolled here: no scroll bar that does nothing */
+.ddc-face :deep(.fmsg) { scrollbar-width: none; }
+.ddc-face :deep(.fmsg::-webkit-scrollbar) { display: none; }
 .ddc-note {
   flex: 1; min-width: 0; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 4px; padding: 8px 10px; text-align: center;
   font-size: 12px; line-height: 1.35; color: var(--muted); background: var(--panel); border: 1px dashed var(--border); border-radius: inherit; overflow: hidden;

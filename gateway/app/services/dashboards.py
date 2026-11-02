@@ -513,7 +513,7 @@ async def _plan(session: Session, user: User, definition: dict, asked: Asked, ca
     try:
         values = await report_params.values_for(shaped, asked.given)
         datasets, refused = await reports.resolve_each(session, user, shaped, values)
-        await reports.check_dataset_choices(session, user, shaped, values, cache)
+        await reports.check_dataset_choices(session, user, shaped, values, cache, of_dashboard=True)
     except HTTPException as e:
         raise in_our_words(e) from None
     return _Plan(report_definition.without_images(shaped), {k: report_params.to_json(v) for k, v in values.items()},
