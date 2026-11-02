@@ -142,6 +142,35 @@ runs the deploy; the product changes are in `CHANGELOG.md`.
    company database), or they stop reaching them. The orchestrator gets a service
    account of its own (`…-orchestrator`), the only one that may create the image
    builds' Jobs.
+   **New in 1.3.0:** fifteen revisions, 0023 to 0037. They add the tables of the
+   agents' instructions (0023), SQL scripts (0024, 0025: also a nullable
+   `runs.sql_script_id`), notebooks (0026 to 0029, 0031), the agent's drafts and plans
+   (0030), reports (0032, 0033), AI providers (0035), dashboards (0036) and AI comments
+   (0037); 0034 changes only the grants of personal folders, which 1.2.2 did not have,
+   so coming from it nothing changes. None renames or drops a column. There is no way
+   down: going back to 1.2.2 is restoring the backup of step 2. New variables, all with
+   defaults: `REPORTS__*` (rows, pages, the layout's memory and time, the API's wait),
+   `DASHBOARDS__*` (rows and the shared cache, which lives in Valkey and under `cache/` in
+   the bucket), `AI__COMMENT_*`, `AI__METADATA_ONLY`, `MCP__*` (the MCP server at `/mcp`
+   is **on** by default for API tokens: `MCP__ENABLED=false` to keep it off),
+   `NOTEBOOKS__*` and `NUXT_PUBLIC_SOURCE_URL`. **Reports draw their charts with a small
+   Node service from the frontend image**: in the Helm chart a native sidecar of the run
+   workers (`reports.chartRenderer`, on by default), which needs Kubernetes 1.29 or later
+   (on an older cluster set it to `false`: a report with a chart then fails, saying so);
+   in the Compose stack of `infrastructure/` a new `chart-renderer` service, built by
+   `docker compose up -d --build`. Size the workers for the reports and the preview
+   workers for the dashboards: a million rows of a dataset take some 500 MiB of the
+   worker while it renders (see `REPORTS__MAX_ROWS` and `DASHBOARDS__MAX_ROWS` in the
+   [configuration reference](../configuration.md)). **Notebooks** (Kubernetes, with
+   scripting on) open only from a host of their own: set `scripts.notebooks.host`, with
+   its DNS name and certificate, before people use them
+   ([notebooks.md](../capabilities/notebooks.md), «An address of their own»); an existing
+   Python environment needs **Build again** to carry marimo. With the external ClickHouse
+   before 25.3, a flow with a join on keys of two integer types writes the key column as
+   `k` instead of `l.k` at its next run: whatever reads its output by the old name has to
+   change (`CHANGELOG.md`, 1.3.0). With the Helm chart, `ai.max*`, `ai.comment*` and
+   `ai.commentModel` now apply without `ai.enabled` too, to the providers added in
+   Administration → AI models.
 4. **SQL Server.** The published backend images no longer contain the SQL Server
    driver (since 1.1.1): it is Microsoft's, under Microsoft's licence, and an AGPL
    image cannot carry it. If you have SQL Server connections, build or extend the
@@ -151,6 +180,17 @@ runs the deploy; the product changes are in `CHANGELOG.md`.
    not installed», and nothing else is affected.
 
 ## Rollout order
+
+**From 1.2.2 to 1.3.0:** the migration step, then the engine API, the workers and beat,
+then the gateways and orchestrators, the interface last: the new gateway calls the
+engine's new endpoints (reports, dashboards, SQL on a connection, the SQL scripts'
+exports), and until the engine and its workers have rolled those features may fail; the
+rest of Tabularia goes on working. With Helm the pods roll together and this lasts
+minutes: try the new features once the rollout has ended. With the Compose stack of
+`infrastructure/`: `git pull`, then `docker compose up -d --build`; it also builds the
+new `chart-renderer` service and runs `sampledb-init` again, whose image changed: the
+sample data gains its dashboard and two reports, and nothing is duplicated. On kind, the
+guide's step 13, «Run it again», does the same.
 
 **From 1.2.1 to 1.2.2:** the migration step; nothing else depends on the order. An image
 build that starts while the old orchestrator is still running fails with *Forbidden*
@@ -202,6 +242,17 @@ below, gateway first, is for an upgrade from 1.0.x.
 5. If the deployment uses the external ClickHouse: confirm no `_mv_…` tables are
    left on it (the sweep runs every 30 minutes and now runs even with
    materialization off).
+6. **From 1.3.0.** The settings menu says 1.3.0 «Catone». Open **Analysis →
+   Dashboards** and a dashboard (with the sample data, `Sample` → «Sales overview»):
+   every tile shows numbers, a click on a bar filters the others, **PDF** downloads
+   what is on the screen. Open **Analysis → Reports** and a report («Margin review»): its pages
+   show with their charts (a report with charts that fails saying the chart service
+   does not answer means the run workers' `chart-renderer` sidecar, or the Compose
+   service, is not running), and PDF and Excel download. Where an AI model is enabled, add an AI
+   comment to a copy of a dashboard and **Try it**: a text marked as written by AI, or a
+   line saying why there is none. Where scripting is on, open a notebook's app: it opens
+   on the notebooks' own host. With the external ClickHouse before 25.3, run once the
+   flows with a join and check what reads their output (above).
 
 ## Known limits to tell users
 

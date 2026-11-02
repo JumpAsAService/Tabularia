@@ -311,11 +311,13 @@ class MonitoringSettings(BaseModel):
 # ─────────────────────────────────────────────────────────────────────────────
 class AppSettings(BaseModel):
     name: str = "Tabularia"
-    version: str = "1.2.2"  # the release: exposed by /system/info and in the app's menu
-    # the release's name. Appius Claudius Caecus, censor in 312 BC: he rewrote the lists
-    # of the citizens and built the first aqueduct — whoever counts, classifies and
-    # cleans the registers, and the first pipeline. A data prep before its time.
-    codename: str = "Appio"
+    version: str = "1.3.0"  # the release: exposed by /system/info and in the app's menu
+    # the release's name. 1.0–1.2 were «Appio»: Appius Claudius Caecus, censor in 312 BC,
+    # who rewrote the lists of the citizens and built the first aqueduct. 1.3 is «Catone»:
+    # Marcus Porcius Cato, censor in 184 BC, remembered for the rigour of his census: he
+    # valued what each citizen held and let the state's contracts on strict terms — the
+    # numbers, read closely and accounted for. The release of reports and dashboards.
+    codename: str = "Catone"
     env_name: str = "development"
     # What THIS process does. The gateway has two jobs: answering the requests, and
     # carrying on the background work (schedules, running the flows, cleanups). `all` does

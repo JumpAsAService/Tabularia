@@ -207,7 +207,7 @@ release's ConfigMap and Secret:
 ```yaml
 apiVersion: batch/v1
 kind: Job
-metadata: { name: tabularia-migrate-1-2-2, namespace: <namespace> }
+metadata: { name: tabularia-migrate-1-3-0, namespace: <namespace> }
 spec:
   backoffLimit: 0
   template:
@@ -215,7 +215,7 @@ spec:
       restartPolicy: Never
       containers:
         - name: migrate
-          image: <registry>/tabularia-gateway:1.2.2
+          image: <registry>/tabularia-gateway:1.3.0
           command: ["python", "-m", "app.db.migra"]
           envFrom:
             - configMapRef: { name: <release>-tabularia-config }
@@ -223,7 +223,7 @@ spec:
 ```
 
 It needs only the database's address and credentials, which the release already holds.
-Wait for it (`kubectl wait --for=condition=complete job/tabularia-migrate-1-2-2`), then
+Wait for it (`kubectl wait --for=condition=complete job/tabularia-migrate-1-3-0`), then
 upgrade.
 
 ## When something goes wrong

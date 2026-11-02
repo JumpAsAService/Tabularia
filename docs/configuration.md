@@ -105,8 +105,8 @@ Read by both services, so listed under [Shared by the gateway and the engine](#s
 | Variable | Type | Default | Helm value | Description |
 |---|---|---|---|---|
 | `APP__NAME` | string | `Tabularia` | `extraEnv` | Product name shown by the API. Product identity, not a deployment setting: leave it. |
-| `APP__VERSION` | string | `1.2.2` | `extraEnv` | The release, shown by `/system/info` and in the interface's menu. Set by the code; leave it. |
-| `APP__CODENAME` | string | `Appio` | `extraEnv` | The release's name. Set by the code; leave it. |
+| `APP__VERSION` | string | `1.3.0` | `extraEnv` | The release, shown by `/system/info` and in the interface's menu. Set by the code; leave it. |
+| `APP__CODENAME` | string | `Catone` | `extraEnv` | The release's name. Set by the code; leave it. |
 | `APP__ROLE` | one of `all`, `api`, `orchestrator` | `all` | set per workload: `api` for the gateway, `orchestrator` for the orchestrator | What this gateway process does: `all` answers requests and does the background work (schedules, flow executions, clean-up); `api` only answers; `orchestrator` only does the background work. Split them to run several copies: they share the work through the database. |
 | `APP__ROOT_PATH` | string; a path such as `/api` | empty | `ingress.apiPrefix` | Path prefix a reverse proxy publishes the gateway under, stripping it before forwarding (`/api` when one host serves interface and API). It fixes the paths the gateway writes for the browser: the SSO cookie, `/docs`, redirects. Empty = published at the root. |
 | `APP__GATEWAY_THREADS` | integer, ≥ 4 | `40` | `gateway.threads` | Threads serving the synchronous routes. More do not serve more (Python runs one at a time); the database pool follows this number. A different name from the engine's `APP__ENGINE_API_THREADS` because both read the same file and want opposite values. Also adjustable in Administration → Settings, applied after a restart of the gateway and orchestrator. |

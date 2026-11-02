@@ -3,8 +3,84 @@
 All notable changes to Tabularia. The version shown here is the one the gateway
 exposes at `/system/info` and in the app's settings menu.
 
-## Unreleased
+## 1.3.0 «Catone» — 2026-11-02
 
+Fourth release, and a new name: «Catone», after Marcus Porcius Cato, censor in 184 BC,
+remembered for the rigour of his census: he valued what each citizen held and let the
+state's contracts on strict terms. This is the release in which Tabularia reads its
+numbers back to people: pixel-perfect reports in PDF, Excel and email, dashboards of live
+tiles, and an AI comment on their numbers, all read with the rights of whoever reads. SQL
+scripts join flows as a way to shape data, on the catalog or on a database connection;
+marimo notebooks become apps (Kubernetes); the Assistant and a new MCP server build flows
+and other objects through plans a person confirms; administrators add AI providers,
+Anthropic among them, rewrite the agents' instructions and can keep every row of data away
+from the models. Google Sheets joins the sources, Oracle and SQL Server the Output's
+databases, and every database connection gets one choice of encryption. Two corrections
+change data a flow writes: a join on ClickHouse before 25.3 and a full join on Polars
+(below). Before upgrading read `docs/deploy/release-checklist.md`: fifteen schema
+revisions, forward only, a sidecar for the run workers, and a host of their own for the
+notebooks.
+
+- **Upgrade note: schema revisions 0023 to 0037, forward only.** The migration step
+  applies fifteen revisions. They add tables, and columns that are nullable or have a
+  default; none renames or drops a column or a table. Only 0034 changes rows, and on an
+  installation coming from 1.2.2 it finds none to change. The 1.2.2 code keeps working on
+  the migrated database during the rolling update. There is no way down: **to go back to
+  1.2.2, restore the backup taken before the upgrade** (docs/deploy/upgrading.md). `helm
+  rollback` starts the 1.2.2 pods on the migrated database, which 1.2.2 accepts with a
+  warning, but they know nothing of what 1.3.0 made (reports, dashboards, SQL scripts,
+  notebooks, plans).
+  - 0023: `ai_prompts`, the agents' instructions as administrators rewrite them.
+  - 0024: `sql_scripts` and `sql_script_versions`.
+  - 0025: `runs.sql_script_id` and the SQL scripts' schedule (`run_schedule`,
+    `run_scheduled_by`, `next_run_at`), all nullable.
+  - 0026: `notebooks` and `notebook_versions`.
+  - 0027: `notebook_sessions`, the notebooks' live pods.
+  - 0028: `notebooks.max_visitors` (nullable) and `notebook_visitors`.
+  - 0029: `notebook_reads`, what each notebook read, for the Lineage page.
+  - 0030: `agent_drafts` and `agent_plans`, the agent's drafts and the plans a person
+    confirms.
+  - 0031: `notebook_tickets`, the one-minute tickets that open a notebook's app or editor.
+  - 0032: `reports` and `report_versions`.
+  - 0033: `reports.views_total` (default 0), `reports.last_viewed_at` and `report_views`.
+  - 0034: data only. On the personal folders, recognised by the audit line of their
+    creation, the person's MANAGE becomes EDIT and the MANAGE and CONNECT grants go.
+    1.2.2 had no personal folders: coming from it, nothing changes.
+  - 0035: `ai_providers`, the AI providers added from the panel.
+  - 0036: `dashboards`, `dashboard_versions` and `dashboard_views`.
+  - 0037: `ai_comments` and `ai_comment_threads`.
+
+  **On the external ClickHouse before 25.3 (24.x included)**, the datasources and tables
+  written by a flow with a join on keys of two integer types change the name of a column
+  at their next run, from `l.k` to `k`: see the first fix below.
+- **Pixel-perfect reports**, a new object of a folder with its versions (Explore → New →
+  Report): a page of fixed size in millimetres with a header, a body and a footer,
+  holding texts with expressions, images, lines, rectangles, tables and matrices that
+  group and subtotal over many pages, 14 kinds of chart and KPI cards. Its datasets are
+  SQL on the catalog or on a connection, a datasource, a saved view or a saved SQL script,
+  read with the rights of whoever opens it; its parameters fill a bar in the viewer, the
+  address, the API and the emails, and a list may filter the dataset its choices come
+  from. A spreadsheet-like expression language of its own (`[Revenue]`, `SUM`, `IF`,
+  `FORMAT`, `PARAM`, an aggregate on a named group, `PREVIOUS`, `LOOKUP`, `SUMIF`,
+  `COUNTIF`), with number and date formats in five languages. The designer draws what
+  prints: bands, a 1 mm snap with guides, undo, copy and paste between reports, the
+  expression checked while it is typed, and each dataset's rows counted, with a warning
+  before it is too big. The viewer shows the pages the engine laid out, sorts and opens
+  groups on screen, and downloads PDF and Excel; `GET /reports/{id}/render` gives the same
+  with a token, `tabularia.report()` in a notebook, and a flow group's Pushmail cell sends
+  up to five, with a summary in the message. Groups, totals and charts are computed in
+  columns by DuckDB inside the worker (a million rows: 1.3 s and 469 MiB, measured), the
+  pages laid out by Typst in a child process with limits of its own, and the charts drawn
+  by a small Node service from the frontend image: a sidecar of the run workers in the
+  chart (`reports.chartRenderer`), the `chart-renderer` service in the Compose stack. A
+  schedule sends with its author's rights, and someone else's change that makes a report
+  read something else switches it off; what a report reads cannot be deleted under it
+  (409, naming it). A **Reports** tab lists every report one may open, the most read
+  first (distinct readers over 30 days); the bar's new **Analysis** menu holds the
+  Viewer, Reports and Dashboards. `REPORTS__MAX_ROWS` (3,000,000), `REPORTS__MAX_PAGES`,
+  `REPORTS__RENDER_MEMORY_MB`, `REPORTS__RENDER_SECONDS`, `REPORTS__API_WAIT_SECONDS`.
+  Schema revisions 0032 and 0033. Guides: docs/capabilities/reports.md,
+  docs/capabilities/report-functions.md.
 - **Dashboards**: a screen of live tiles on an adaptive grid of 12 columns, an object of a folder
   with its versions (Explore → New → Dashboard, Analysis → Dashboards, the most read first). KPIs,
   14 kinds of chart, tables, matrices, texts and images; datasets and parameters as a report's,
@@ -23,9 +99,9 @@ exposes at `/system/info` and in the app's settings menu.
   model and the time of the numbers, and that it may be wrong. The same numbers make one call for everyone,
   on whoever caused it, under the daily ceilings; a read-only API token, a notebook and an observer cause none.
   The numbers never depend on it: when it cannot write, the document or the email goes out with one line in
-  its place. Excel has no place for it. A report without the element is byte for byte what it was. `AI__COMMENT_*`.
+  its place. Excel has no place for it. A report without the element is byte for byte what it was. With
+  `AI__METADATA_ONLY` on, the provider receives nothing. `AI__COMMENT_*`. Schema revision 0037 adds its two tables.
   Guides: docs/capabilities/reports.md, docs/capabilities/dashboards.md, docs/pushmail.md, docs/integrations/ai.md.
-
 - **Sample reports**: the sample data now ends with two pixel-perfect reports as well, in the `Sample` folder.
   «Margin review», for the directors: key figures against the same months a year earlier, charts, a table by
   category and month with totals, a share of its group and the change on the month before. «Agent scorecard», for a
@@ -33,6 +109,234 @@ exposes at `/system/info` and in the app's settings menu.
   colour on what stands out. Running the seed again changes neither; neither holds an AI comment, and the guide says
   how to add one. The comment at the top of the seed no longer calls the saved views reports.
   Guide: docs/capabilities/reports.md, «The sample reports».
+- **A dashboard or a report too big for its worker says so in words.** Over a dataset too
+  large for the worker's memory, every tile answered «Internal Server Error» and a PDF
+  «Worker exited prematurely: signal 9 (SIGKILL)». The tiles, a parameter's list, a
+  report's pages and its documents now name the dataset and say what to do: on Docker
+  Compose, that the worker ran out of memory reading it, and to aggregate it first, in its
+  query or in a flow. On Kubernetes the kernel stops the whole container at its memory
+  limit (`memory.oom.group`), and an upgrade or a drained node look the same, so the cause
+  is not said for certain: the worker reading that dataset stopped before the end, most
+  often because the rows were too many for its memory; try again, then aggregate.
+  `DASHBOARDS__MAX_ROWS` and `REPORTS__MAX_ROWS` count rows, not bytes: a wide table
+  reaches the workers' memory first (measured with 4 GB: 24 columns hold 1 million rows,
+  not 3).
+- **SQL scripts**, a new object of a folder next to flows and views (Explore → New → SQL
+  script): SQL written in an editor with completion, run either over the datasources the
+  runner may read, by their names, on the catalog's engines, or as it is on a database
+  connection (PostgreSQL, MySQL, MariaDB, ClickHouse, Trino, Oracle, SQL Server; CONNECT
+  needed, as for an import), kept with its versions and shared through the folder's
+  permissions. The whole result exports as CSV or Excel. A script may write a datasource
+  by hand, on its own schedule with its author's rights, or as the new **SQL** cell of a
+  flow group; the datasource keeps its id and its data contract is checked. Someone
+  else's change that makes the script read further switches its schedule off, and the
+  schedules of the groups that run it. Every run and export is audited. Schema revisions
+  0024 and 0025. Guide: docs/sql-scripts.md.
+- **The Output node writes into Oracle and SQL Server.** 1.2.2 offered both as
+  destinations of «Database table», but the engine had no writer for them: a run failed
+  with a `KeyError`. They now write as the other databases do: the table created when
+  missing, «Replace» emptying it and writing again in one transaction, columns matched by
+  name, the post-SQL in the same transaction (a PL/SQL block runs whole). Oracle with
+  array inserts of 10,000 rows, its naming rule (a plain name is UPPERCASE), timestamps
+  with their microseconds and synonyms resolved; SQL Server with `executemany` in one
+  transaction on one connection (about 16,000 rows a second), only where its optional
+  driver is installed. Time zones, categories and times of day reach both. «Replace
+  (TRUNCATE + INSERT)» is now «Replace (empty + INSERT)»: TRUNCATE was true on PostgreSQL
+  only. Guide: docs/connections/destinations.md.
+- **marimo notebooks as apps (Kubernetes).** A new object of the folders: a marimo
+  notebook written in marimo's own editor inside Tabularia, with its versions, published
+  as a web app that only the people with VIEW open (EDIT opens the editor). The app reads
+  data with `tabularia.read("Folder/Name")` and reports with `tabularia.report()`, with
+  the rights of whoever saved the version it runs; the pod gets a token of its own and a
+  short-lived link to the datasource's parquet, never a key. A pod starts when someone
+  opens the notebook (about 4.5 s) and stops after `NOTEBOOKS__IDLE_MINUTES` unused; at
+  most `NOTEBOOKS__MAX_LIVE` run at once, and `NOTEBOOKS__MAX_VISITORS_PER_APP` people use
+  an app at once (marimo gives each a kernel and a copy of the data; a notebook may set its
+  own number, up to `NOTEBOOKS__MAX_VISITORS_CEILING`). **The apps and editors are served
+  on a host of their own** (`NOTEBOOKS__ORIGIN`, Helm `scripts.notebooks.host`): marimo
+  shows whatever HTML a notebook writes, and on the interface's address it would act with
+  the session of whoever opens it. Without that host they do not open, and say why. An
+  existing Python environment needs «Build again» to carry marimo. Schema revisions 0026
+  to 0029 and 0031. Guide: docs/capabilities/notebooks.md.
+- **The Assistant builds, and an MCP server lets other agents do the same, never a change
+  without a person's confirmation.** The Assistant page reads and builds with one set of
+  tools shared with `/mcp`: flows in a draft on the server (sources, steps, every kind of
+  Output), datasources of every kind, SQL scripts, flow groups, notebooks, schedules and
+  runs, from existing connections only (never a connection, never a secret), always with
+  the rights of whoever uses it. It asks what it is not sure of with a card of choices,
+  and every change is a **plan** shown in full (the diff, an Output's post-SQL, an
+  email's recipients, a container's command) with Confirm, Change and Cancel: only the
+  person's click applies it, once, within 30 minutes, every action checked again through
+  the code the interface uses. `/mcp` speaks MCP over Streamable HTTP without sessions,
+  signed in with an API token (a read token only reads); `confirm_plan` is marked
+  destructive so that clients ask their human first, `MCP__CONFIRM_IN_TABULARIA_ONLY`
+  leaves the confirmation to the plan's page in Tabularia (`/agent-plan`), and
+  `MCP__ENABLED` turns the server off. Every applied action is audited with `via` and its
+  plan; `AI__MAX_FLOW_REQUESTS` bounds the Assistant too when it may build. Schema
+  revision 0030. Guides: docs/capabilities/ask-your-data.md, docs/configuration.md (MCP);
+  the tools and the plans in docs/specs/mcp-agent.md.
+- **Several AI providers from the administration panel, Anthropic among them.**
+  Administration → AI models adds providers: any OpenAI-compatible endpoint, or Anthropic
+  through its own SDK. The key is encrypted and never shown again, and every change is
+  audited. `AI__BASE_URL` stays, as the provider «from the environment», read only: its
+  models, conversations and spending carry on unchanged. People see each model's
+  provider, and the disclosure says who receives what they send. A model with no known
+  price no longer escapes the spending ceilings: it counts at $4 in and $20 out per
+  million tokens. Schema revision 0035. Guide: docs/integrations/ai.md, «The providers».
+- **The AI agents' instructions, editable in Administration → AI models.** The system
+  prompts of the data assistant, the flow and script assistants, the conversations'
+  titles and the dbt export's descriptions and SQL translations are in two parts: a text
+  administrators rewrite or restore, audited, and a context Tabularia adds at every
+  request (the date, the engine's dialect, the object at hand, and last the language of
+  the person's interface, so that data in another language does not pull the answer away
+  from it). Schema revision 0023. Guide: docs/integrations/ai.md, «The agents'
+  instructions».
+- **A metadata-only mode for the AI**: `AI__METADATA_ONLY` (the assistants and the AI
+  comment) and `MCP__METADATA_ONLY` (the MCP server), off by default and changed live from
+  Administration. No value of a row of data then reaches the model; names, types,
+  descriptions, row counts and what people wrote in a filter or a SQL still do. The
+  barrier is in the tools, not in the prompt: each tool declares whether it returns
+  values of the data, and those are neither offered nor callable. Tried with a marked
+  value in every column, on every way in: none reached the model. Guide:
+  docs/integrations/ai.md, «Metadata-only mode».
+- **New chart kinds in the Viewer, the editor's preview and the chat**: bars and line on
+  two axes, waterfall, funnel, heatmap (at most 1,000 cells, saying so), KPI with an
+  optional trend, gauge and bullet, as the reports draw them; the aggregates still come
+  from the engine, and the assistant knows when each fits. Saved views open as they were.
+  Guide: docs/capabilities/preview-and-analysis.md.
+- **The lineage of every object that runs**, on the Lineage page and in OpenLineage: SQL
+  scripts (with their SQL), saved Python and R scripts, Script and Container nodes as
+  child jobs of their flow, flow groups with their cells, containers with their image
+  (registry, repository, tag, digest), Pushmail cells and emails (the server, never the
+  recipients), notebooks as readers of what they read. Renaming or moving an object
+  renames its job. The runs that prepare a Script or Container node's input no longer
+  make a new job each time. Guide: docs/openlineage.md.
+- **Google Sheets as a source.** A `gsheets` connection holds a Google service account's
+  JSON key, encrypted like every secret; a spreadsheet shared with its email becomes a
+  datasource refreshed and scheduled as any other: the spreadsheet listed through Drive
+  or its link pasted, the tab (found again when renamed), an optional A1 range. Read-only
+  scopes; the types follow the sheet's formats (codes such as 00123 keep their zeros,
+  formula errors become empty and are counted); the connection's test says what to do for
+  the usual mistakes. Lineage, the run history and the dbt export (as a seed) know it. No
+  new dependency. Guide: docs/sources/google-sheets.md.
+- **One encryption choice for every database connection**, «Encryption (TLS)»: verify
+  (the default for a new connection: certificate and name checked, with an optional
+  certificate authority of the company's own, then the only one trusted), trust
+  (encrypted, the certificate taken as it is) or none (with a warning). On PostgreSQL,
+  MySQL, MariaDB, ClickHouse, Trino and Oracle (TCPS), on every path (test, tables,
+  imports, SQL scripts, reports, Output) and in the dbt export's profiles; SQL Server has
+  the choice without an authority of its own, its driver reading only the system's store.
+  **Connections saved before have no choice and keep their driver's previous behaviour**
+  until someone picks one: an upgrade breaks none. Guide: docs/connections/databases.md,
+  «Encryption (TLS)».
+- **Every person has a personal folder**, born with the account and named after the email
+  before the @, first in Explore as «My folder», seen by the person and the
+  administrators only. The person holds **EDIT** there: they build, run and rename; no
+  connections, no subfolders, no sharing; an administrator may grant more. Not MANAGE:
+  MANAGE holds CONNECT, and a connection may point at any host the workers reach, so a
+  right every account is born with would let any account read an internal database or
+  the cloud metadata address. A development build of this release gave MANAGE for two
+  days (reproduced: a plain account read an internal database); revision 0034 lowers it
+  wherever such a build ran. Accounts that existed before get their folder at their next
+  sign-in; service accounts and observers get none. An empty personal folder goes with
+  its account, one holding anything stays. Guide: docs/governance/permissions.md,
+  «Personal folders».
+- **The audit log records accounts and groups**: `user.create`, `user.update`,
+  `user.deactivate`, `user.reactivate`, `group.update`, `group.delete`,
+  `group.member_add`, `group.member_remove`, also when single sign-on does it by itself
+  (`"via": "sso"`); the administrator created at startup has `startup` as its actor. They
+  reach the SIEM unchanged. Observers no longer see people's names. Guide:
+  docs/governance/audit-log.md.
+- **The notices of the third-party software, and a link to the source.** Every build
+  writes `third-party-notices.txt` with each bundled package's licence and notices,
+  served by the interface and linked from the settings menu, as MIT, BSD and Apache ask
+  (the published images carried none). The menu also offers **Source code**, as the AGPL
+  asks of whoever runs a changed version for others: `NUXT_PUBLIC_SOURCE_URL` (Helm
+  `frontend.publicSourceUrl`) points it at theirs. The website does the same.
+- **The mark draws itself when a page loads**: about 0.6 s, once, on a full load and never
+  on a change of page, in CSS; with reduced motion it is simply there. In the app and on
+  the website.
+- **The documentation in sections, with pictures**: Capabilities, Sources, Connections,
+  Integrations, Security & governance and Concepts, a page per source, connection and
+  capability, on the website with a sidebar that folds; 56 screenshots and 7 GIFs taken
+  from the running application on the sample data, and worked examples tried on a real
+  installation. Existing pages keep their addresses.
+- **The sample data on kind**: step 13 of the kind guide runs the sample databases in
+  `tabularia-deps`, behind a network policy (`infrastructure/kind/samples.yaml`), and
+  builds the `Sample` folder through the gateway; run again, it duplicates nothing and
+  adds what a new release brings. Guide: docs/deploy/kind.md.
+- **Fixed: a join wrote a wrongly named column on ClickHouse before 25.3, and a full join
+  made up rows on Polars.** On the external ClickHouse engine before 25.3 (24.x
+  included), a join on a key of two integer types (Int32 and UInt32, as PostgreSQL and
+  ClickHouse sources give) named the key column `l.k` instead of `k`: a run wrote it so
+  into its datasource or table, a rename of it was ignored, and a step reading `k`
+  afterwards failed (the sample flow «Customer Segments by Region (RFM)» did). Every
+  column of a join now carries its alias. **Upgrade note:** what was written is not
+  touched; a flow that wrote `l.k` writes `k` at its next run, so whatever reads `l.k`
+  from its output (a view, a report, a query of your own, an Output appending to that
+  table) has to read `k`. The engine's step cache starts over under a new name
+  (`clickhouse.2`): each chain is worked out once more, and the old copies expire. On
+  Polars, a full join on keys of two integer types declared the left's type on a wider
+  column: **a pivot after it made up rows**, and sort, group by, unique and fill null
+  failed. Both sides are widened first.
+- **Fixed (security): SQL on the catalog could read any file of the worker.** Polars
+  took `"read_csv"(…)` written in quotes, or with a comment before the parenthesis, past
+  the check, in a flow's SQL node as anywhere SQL runs on the catalog; chDB's
+  `file('/path')` was stopped only by a bug of an older sqlglot. Both names are now
+  refused wherever they appear.
+- **Fixed (security): SQL on a database connection could write.** It runs inside `SELECT
+  * FROM (…)`, which refuses a statement that is not a query, but a function the query
+  calls could still write: on PostgreSQL a plain `SELECT wipe()` deleted the rows, through
+  a SQL datasource (and the new SQL scripts and reports). On PostgreSQL, MySQL and MariaDB
+  it now runs in a read-only transaction the query cannot turn back. The barrier stays a
+  read-only database user on the connection, as the guides say; on ClickHouse, Trino,
+  Oracle and SQL Server it is the only one.
+- **Fixed: a saved Python or R script could publish data that broke a blocking data
+  contract.** The contract is now checked before the datasource is replaced, as for
+  flows, refreshes and SQL scripts, and the refusal goes into the contract's history.
+- **Fixed: two SQL nodes in a row failed on ClickHouse 24.8** («Unknown table expression
+  identifier 'self'»): each level now names its CTEs apart, and nothing else of the
+  author's SQL is rewritten.
+- **Fixed: a `--` comment on the last line of a database SQL datasource** swallowed the
+  closing parenthesis Tabularia puts around the query.
+- **Fixed: an Output into an existing PostgreSQL table with other column types**
+  (INTEGER, NUMERIC…) failed; it now writes, times in UTC.
+- **Fixed: two saves at once of a flow, a data contract, a saved script or an environment
+  answered 500**: they now take their turn. A user or a group created twice at once is a
+  409, not a 500.
+- **Fixed in the lineage:** a Pushmail cell or an Output's email lost its summary (no
+  inputs, no email, the group's job empty, the cell's name gone from Runs); email
+  addresses could reach the error messages of OpenLineage events; a flow group's events
+  read the folders once (184 queries became 74).
+- **Fixed: a long turn of the AI assistant stopped half way**, saying to narrow the
+  question. A turn that builds reads its context at every round, mostly from the
+  provider's cache at a tenth of the price, and the cap of 400,000 input tokens counted
+  all of it: it stopped at $0.15 to $0.23 of a $0.50 ceiling, and each retry paid as much
+  again. `AI__MAX_INPUT_TOKENS_PER_TURN` now counts what is not read from the cache; the
+  spending ceilings stand for the rest.
+- **Fixed: the assistant's tables showed a sum's binary noise** (1411085.7500000007): they
+  read 1,411,085.75, with the exact value in the cell's tooltip and in the file; and the
+  model no longer writes «$» on amounts nothing says are dollars.
+- **Fixed:** «Test connection» of an SMTP connection not saved yet tried STARTTLS whatever
+  the form said; a flow's run said `"engine": null`; `/auth/me` said `is_service: false`
+  for a service account.
+- **Fixed in the interface:** the palette lost the Script or Container node after a
+  reload (5 reloads in 12 on kind); the widths a page gives its lists were ignored (the
+  Viewer's pickers took the whole column); a click on Duplicate also opened the row; a
+  saved script's Create, clicked before its environment had loaded, was refused; the
+  privacy notice's placeholder was swallowed by the translations; refused sign-ins and
+  «(disattivato)» were written in Italian in the audit log; the sample flows drew each
+  edge out of a source as a loop (folders seeded before keep it until seeded again); the
+  Grafana dashboard is in English, named «Tabularia — Overview».
+- **Fixed (Helm chart): the AI limits and the AI comment's settings applied only with
+  `ai.enabled`.** `ai.max*`, `ai.comment*Seconds` and `ai.commentModel` reached the
+  gateway only with the switch of the endpoint given in the values: with the providers
+  added from Administration → AI models they were ignored without a word, and the code's
+  defaults applied. Only the endpoint's address, key and default model stay behind it.
+- **The code is in English throughout**: comments, identifiers, log lines, OpenAPI
+  descriptions and the metrics' help. Nothing that crosses a service boundary changed
+  (routes, JSON fields, Celery tasks, Valkey keys, variables, metric names), and a
+  translation test in the CI checks the interface's five languages.
 
 ## 1.2.2 «Appio» — 2026-10-25
 
