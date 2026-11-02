@@ -113,6 +113,6 @@ jobs:
         run: npm test
 
       # the seed of the sample data: on a gateway written in the test, standard library only
-      - name: The sample dashboard
+      - name: The sample dashboard and reports
         working-directory: .
         run: python3 -m unittest infrastructure/sampledb/test_seed_dashboard.py

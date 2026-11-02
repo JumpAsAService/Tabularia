@@ -100,7 +100,7 @@ by name first (running it again duplicates nothing):
 
 | where | what |
 |---|---|
-| `Sample` | the two connections (order system, CRM), four saved views (the reports) and the dashboard «Sales overview», with two parameters that follow each other and a click that filters |
+| `Sample` | the two connections (order system, CRM), four saved views, the dashboard «Sales overview», with two parameters that follow each other and a click that filters, and two pixel-perfect reports: «Margin review» (for the directors: a period against the same months a year earlier, by category and month) and «Agent scorecard» (for a sales manager: an area and its agents, on revenue and on the contacts of the CRM) |
 | `Sample / Flows` | eleven flows; three scheduled (`0 6 1 * *`, `30 5 * * *`, `0 7 * * 1`) |
 | `Sample / Private tables` | the company's nine tables and the tables the flows produce |
 | `Sample / Public tables` | `ref.calendario` (days, ISO weeks, Italian holidays) and `ref.regioni` |
@@ -109,6 +109,11 @@ Eight tables of eleven have column descriptions and three do not, on purpose: it
 shows the difference between a datasource ready for the assistant and one that is
 not. The flows use portable SQL only (`EXTRACT`, `CASE WHEN`, `||`, `round`,
 `coalesce`) and run on the engine the installation's policy allows.
+
+The reports hold no AI comment: without a model configured it would stay empty, and
+[the guide](../../docs/capabilities/reports.md#ai-comments) says how to add one. A report or
+a dashboard someone has changed stays as it is when the container runs again; one deleted
+comes back as the seed makes it.
 
 **No permission is granted**: the folder starts with no grants, like any other. Who
 sees it is the administrator's call.

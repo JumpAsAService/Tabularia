@@ -14,7 +14,7 @@ a document: the same layout every month, page numbers and totals in their place,
 people who never open Tabularia and read it as a PDF or in their inbox. Use a
 [dashboard](dashboards.md) when the screen is the answer: tiles on a grid that adapt to the
 window and filter each other at a click. Every installation has reports, Docker Compose
-included.
+included, and the sample data comes with [two of them](#the-sample-reports) to open and study.
 
 ![The report designer: the page in millimetres with its header, three KPI cards, a combo chart, a table grouped by category and a matrix; the elements on the left, the selected table's properties on the right](../media/guide/reports/designer-monthly-margin.png)
 
@@ -647,6 +647,58 @@ datasource chosen as such, a connection) cannot be deleted while the report's cu
 version reads it: the refusal names the reports you may see and counts the others. A
 datasource named in a SQL goes by its name, and is not looked for: the report then says
 it cannot find it.
+
+## The sample reports
+
+The [sample data](../getting-started-docker-compose.md#a-the-sample-data-already-there) ends with
+two finished reports in the `Sample` folder, to open and to take apart: **Analysis → Reports**
+lists them, and **Edit** shows how each is made. Nothing in them is typed by hand: each number is read
+from the tables of `Sample / Private tables`, written by the sample flows. Whoever reads them needs
+VIEW on `Sample`.
+
+### Margin review
+
+The document for the directors: where the revenue and the margin of a period stand, against the
+same months a year earlier. It opens on 2025, in two pages; with one **Category**, in one.
+
+![Page 1 of Margin review: a sentence with the revenue and the margin against a year earlier, four cards with arrows and trends, a combo chart of revenue and margin percent by month, the margin percent by category, and the table by category and month with its totals](../media/guide/reports/sample-margin-review.png)
+
+| Look at | To see |
+|---|---|
+| **Category**, **From**, **To** | three lists on one dataset, `months`, each filtering it: **From** shows months with the label `FORMAT([Month], "MMMM yyyy")` and the value `[anno_mese]`, and **To** starts where **From** does, since a list follows those before it |
+| The dataset `history` | the same table with the category only, so that a year earlier is there to compare with. A second dataset is how a filter leaves out what a comparison still needs |
+| The cards' **Compared with** | `SUMIF([anno_mese] >= PARAM("first_month") - 100 AND [anno_mese] <= PARAM("last_month") - 100, [ricavo], "history")`: the same months a year earlier, and inside an `IF` nothing when the data does not go back that far, rather than half a period |
+| The sentence on top | a **Text** that starts with `=`, joining `FORMAT()` of aggregates of two datasets |
+| The table's **Share** | as **Value** `PERCENT(SUM([ricavo]), "categoria")`, a month's part of its category; as **Total** `PERCENT(SUM([ricavo]))`, the category's part of the whole |
+| **vs month before** | `[ricavo] / PREVIOUS([ricavo]) - 1`, with a **Rule** that writes the falls in red. A category's first month has none, and the column offers no sort: its value depends on the order |
+| The header | `=REPORT() & IF(ISNULL(PARAM("category")), "", " — " & PARAM("category"))`, and the months of the parameters turned into dates |
+
+The data stops on 15 July 2026, so July 2026 is half a month, in the chart and in a comparison.
+
+### Agent scorecard
+
+The document for a sales manager: how the agents of an area stand, on revenue and on the contacts
+of the CRM. Three pages for all of them; choose an **Area** and the **Agent** list holds only its
+agents.
+
+![The viewer of Agent scorecard with Area Nord-Ovest: the lists Area and Agent above the page, four cards with revenue, orders, revenue per order and field visits, a scatter of revenue against visits and the contacts by kind](../media/guide/reports/sample-agent-scorecard.png)
+
+| Look at | To see |
+|---|---|
+| **Area**, **Agent** | [two lists that follow each other](#a-parameter-that-filters-the-data): both read and filter the dataset `agents`, in the order of the form |
+| The calculated fields of `agents` | `Visits` and `Contacts`: `LOOKUP([area] & [agente], [area] & [agente], [visita], "crm")` reads a second table, with the area in the key as two agents may share a name. Then they are fields like any other, in a card, a chart, a total |
+| **Size**, another calculated field | `IFS([ricavo] >= 1.2 * AVG([ricavo]), "Over 120%", …)`: an aggregate in a calculated field is over the dataset, as chosen in the form |
+| The table's **Of the area** | `[ricavo] / SUM([ricavo], "area")`, a row's part of its group; the same in the **Total**, with the grand total left empty because it is in no group |
+| **Of contacts** | two **Rules**, in red under 18% and in green from 22% |
+| The matrix under the table | **One column per value of** `[Size]`, the columns in the order of the rows, which the table sorts by revenue; **Shown when** `COUNT() > 1` takes it away for one agent |
+| **Contacts by area and kind** | a stacked chart on `crm`, a dataset with the same two filters: five series, one per field of the table |
+
+To **add an AI comment** to one of them, [as above](#ai-comments), duplicate it first: **Insert → AI comment**, then tick
+the cards and the table it reads. They come without one because it needs a model: on an
+installation with none it would say only that it is not available.
+
+A report you change stays as you left it, whatever runs later: the sample container looks it up by name and writes
+nothing over it. One you delete comes back as it was the next time the container runs.
 
 ## Example: a monthly margin report
 

@@ -2,7 +2,8 @@
 # guide (docs/deploy/kind.md, "Play with sample data"): a cured-meats company's order
 # system (PostgreSQL) and CRM (ClickHouse), and a Job that fills them and builds the
 # «Sample» folder in Tabularia through the gateway: the two connections, the tables,
-# eleven flows run once, four saved views.
+# eleven flows run once, four saved views, the reports «Margin review» and «Agent
+# scorecard», the dashboard «Sales overview».
 #
 # In the namespace tabularia-deps, which Tabularia's workers already reach, next to its
 # PostgreSQL and Valkey. Before applying this file: the image `tabularia-sampledb:local`

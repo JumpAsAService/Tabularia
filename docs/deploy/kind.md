@@ -648,14 +648,24 @@ kubectl logs --namespace tabularia-deps job/sampledb-init --tail=1
 
 The `until` waits for the Job to end; `kubectl logs --namespace tabularia-deps --follow
 job/sampledb-init`, in another terminal, shows it working. The data takes seconds at the
-`small` scale; the Job then imports the tables and runs the eleven sample flows once,
-about two minutes in all. The last line is `DONE. The «Sample» folder is ready: …`; a
-flow that failed is named instead, and running the Job again (below) retries only those.
+`small` scale; the Job then imports the tables, runs the eleven sample flows once and
+makes the views, the reports and the dashboard, about two minutes in all. The last line
+is `DONE. The «Sample» folder is ready: …`; a flow that failed is named instead, and
+running the Job again (below) retries only those.
+<!-- 2 minutes: measured on the Compose stack, 2026-11-02: 4 s of data and 110 s of everything else on Polars, 110 s on DuckDB. The final check measures this Job on kind. -->
 
-Reload Explore: the `Sample` folder holds the two connections (*Sample ERP (Postgres)*,
-*Sample CRM (ClickHouse)*), four saved views, and three folders: *Flows* (eleven flows,
-three of them scheduled), *Private tables* (the company's tables and the flows' results)
-and *Public tables* (a calendar, the regions). As on Docker Compose, the folder has no
+Reload Explore. The `Sample` folder holds:
+
+| What | Where | What to expect |
+|---|---|---|
+| Two connections | `Sample` | *Sample ERP (Postgres)* and *Sample CRM (ClickHouse)*: **Connections** lists them, and a table can be imported from them |
+| Three folders | `Sample` | *Flows* (eleven flows, three of them scheduled), *Private tables* (the company's tables and the flows' results), *Public tables* (a calendar, the regions) |
+| Four saved views | `Sample` | a click opens each in the **Viewer**: the categories under 30% of margin, the margin as a matrix, the channels that cost the most to serve, the agents of Nord-Ovest |
+| Two reports | **Analysis → Reports**, or `Sample` in Explore | *Margin review*: two pages, 2025 against 2024, with a list of categories and the months; *Agent scorecard*: three pages, with an Area list and an Agent list that follows it. **PDF** and **Excel** download them, **Edit** opens them in the designer: [what to look at in them](../capabilities/reports.md#the-sample-reports) |
+| A dashboard | **Analysis → Dashboards**, or `Sample` in Explore | *Sales overview*: [tiles that answer a click](../capabilities/dashboards.md#example-sales-overview) |
+
+The reports draw their charts with the chart service, a sidecar of the worker pods: if one says
+the service does not answer, those pods are not ready yet. As on Docker Compose, the folder has no
 permissions on it: other people see it once the administrator shares it. A colleague's
 account starts with their [personal folder](../governance/permissions.md#personal-folders)
 alone, where they can build but not create connections: to try the samples they need VIEW

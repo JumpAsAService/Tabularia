@@ -26,6 +26,14 @@ exposes at `/system/info` and in the app's settings menu.
   its place. Excel has no place for it. A report without the element is byte for byte what it was. `AI__COMMENT_*`.
   Guides: docs/capabilities/reports.md, docs/capabilities/dashboards.md, docs/pushmail.md, docs/integrations/ai.md.
 
+- **Sample reports**: the sample data now ends with two pixel-perfect reports as well, in the `Sample` folder.
+  «Margin review», for the directors: key figures against the same months a year earlier, charts, a table by
+  category and month with totals, a share of its group and the change on the month before. «Agent scorecard», for a
+  sales manager: an Area list and an Agent list that follows it, a matrix, the CRM's contacts read with `LOOKUP`, a
+  colour on what stands out. Running the seed again changes neither; neither holds an AI comment, and the guide says
+  how to add one. The comment at the top of the seed no longer calls the saved views reports.
+  Guide: docs/capabilities/reports.md, «The sample reports».
+
 ## 1.2.2 «Appio» — 2026-10-25
 
 - **Administration → Settings holds every setting an administrator may own**, about a

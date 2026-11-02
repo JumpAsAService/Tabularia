@@ -15,9 +15,10 @@ after the gateway and the sample databases are healthy. In order, it:
      is not;
   5. builds eleven flows in «Flows» — with joins between private and public data,
      a sql node, pivots, calculations — and schedules three of them;
-  6. runs them once, so that the tables they produce exist, and saves the views
-     (the reports) on those in the Sample folder;
-  7. makes the dashboard «Sales overview» on two of those tables.
+  6. runs them once, so that the tables they produce exist, and saves four views
+     on those in the Sample folder;
+  7. makes the dashboard «Sales overview» and the reports «Margin review» and
+     «Agent scorecard» on those tables, in the Sample folder.
 
 Idempotent: every object is looked up by name before being created, so starting
 the container again duplicates nothing. It grants NO permissions: who can see
@@ -704,14 +705,15 @@ def field_type(dtype: str) -> str:
     return "integer" if d.startswith(("int", "uint")) else "float" if d.startswith(("float", "double", "decimal")) else "string"
 
 
+def fields_of(d: dict) -> list[dict]:
+    return [{"name": c["name"], "type": field_type(c.get("dtype", ""))} for c in d["columns"]]
+
+
 def sales_overview(agents: dict, months: dict) -> dict:
     """KPIs and charts on the agents, a table of them by area, and the months by category.
 
     A click filters the tiles of its own dataset. The Agent list follows the Area because both filter
     one dataset, in the order of the form: docs/capabilities/reports.md, «A parameter that filters the data»."""
-    def fields(d: dict) -> list[dict]:
-        return [{"name": c["name"], "type": field_type(c.get("dtype", ""))} for c in d["columns"]]
-
     def grid(x: int, y: int, w: int, h: int) -> dict:
         return {"x": x, "y": y, "w": w, "h": h}
 
@@ -731,10 +733,10 @@ def sales_overview(agents: dict, months: dict) -> dict:
             {"name": "category", "label": "Category", "type": "text", "required": False, "choices": choices("months", "categoria")},
         ],
         "datasets": [
-            {"name": "agents", "fields": fields(agents),
+            {"name": "agents", "fields": fields_of(agents),
              "source": {"kind": "datasource", "datasource_id": agents["id"], "filters": [
                  {"column": "area", "op": "=", "value": "{area}"}, {"column": "agente", "op": "=", "value": "{agent}"}]}},
-            {"name": "months", "fields": fields(months),
+            {"name": "months", "fields": fields_of(months),
              "calculated": [{"name": "Month", "expr": "DATE(FLOOR([anno_mese] / 100), [anno_mese] - FLOOR([anno_mese] / 100) * 100, 1)"}],
              "source": {"kind": "datasource", "datasource_id": months["id"], "filters": [
                  {"column": "categoria", "op": "=", "value": "{category}"}]}},
@@ -788,7 +790,235 @@ def create_dashboard(project: int, outputs_in: int) -> None:
     log(f"dashboard created: {DASHBOARD}")
 
 
+# ── 8. the reports ────────────────────────────────────────────────────────────
+INK, MUTED, RULE, ACCENT, RED, GREEN = "#1f2933", "#52606d", "#cbd2d9", "#2f4b8f", "#c92a2a", "#2b8a3e"
+MONTH_DATE = "DATE(FLOOR({0} / 100), {0} - FLOOR({0} / 100) * 100, 1)"  # 202503 is the 1st of March 2025
+EURO, WHOLE, SIGNED = "€ #,##0", "#,##0", "+0.0%;-0.0%;0.0%"
+
+
+def report_page(items: list[dict], parameters: list[dict], datasets: list[dict], title: str, subtitle: str) -> dict:
+    """A4 upright, in the language of the sample data's other texts: the title and what it is about on every
+    page, the name and the page number at the foot; the rest is `items`, in the body."""
+    def small(item_id: str, x: float, y: float, w: float, value: str, **style: object) -> dict:
+        return {"id": item_id, "type": "text", "x": x, "y": y, "w": w, "h": 5, "value": value,
+                "style": {"size": 7.5, "color": MUTED, **style}}
+
+    return {
+        "v": 1,
+        "page": {"size": "A4", "orientation": "portrait", "margins": [15, 12, 14, 12]},
+        "locale": "en", "timezone": "Europe/Rome",
+        "theme": {"font": "IBM Plex Sans", "size": 8, "color": INK, "accent": ACCENT},
+        "parameters": parameters,
+        "datasets": datasets,
+        "sections": {
+            "page_header": {"height": 18, "on_first_page": True, "items": [
+                {"id": "title", "type": "text", "x": 0, "y": 0, "w": 186, "h": 8.5, "value": title, "style": {"size": 15, "weight": "bold"}},
+                small("subtitle", 0, 9, 150, subtitle, size=8),
+                small("printed", 146, 9, 40, '="Printed " & FORMAT(NOW(), "d MMM yyyy")', align="right"),
+                {"id": "rule", "type": "line", "x": 0, "y": 15.5, "w": 186, "h": 0, "style": {"border": {"width": 0.5, "color": ACCENT}}},
+            ]},
+            "body": {"items": items},
+            "page_footer": {"height": 8, "on_last_page": True, "items": [
+                {"id": "foot_rule", "type": "line", "x": 0, "y": 1, "w": 186, "h": 0, "style": {"border": {"width": 0.2, "color": RULE}}},
+                small("foot_name", 0, 2.5, 130, '=REPORT() & " · sample data, generated"', size=7),
+                small("foot_page", 136, 2.5, 50, '="Page " & PAGE() & " of " & PAGES()', size=7, align="right"),
+            ]},
+        },
+    }
+
+
+def heading(item_id: str, y: float, text: str, **kw: object) -> dict:
+    return {"id": item_id, "type": "text", "x": 0, "y": y, "w": 186, "h": 6, "value": text,
+            "style": {"size": 10, "weight": "bold"}, **kw}
+
+
+def margin_review(months: dict) -> dict:
+    """For the directors: where the revenue and the margin of a period stand, against the same months a year
+    earlier. `months` reads what the form chooses, `history` the same table for the comparison, with only
+    the category: a period before the first whole one has no comparison, rather than half of one."""
+    a_year_earlier = 'PARAM("first_month") - 100 >= MIN([anno_mese], "history")'
+
+    def earlier(value: str) -> str:
+        return f'SUMIF([anno_mese] >= PARAM("first_month") - 100 AND [anno_mese] <= PARAM("last_month") - 100, {value}, "history")'
+
+    def before(value: str) -> str:
+        return f"IF({a_year_earlier}, {earlier(value)})"
+
+    def kpi(item_id: str, x: float, label: str, value: str, fmt: str, compare: str | None = None) -> dict:
+        card = {"id": item_id, "type": "kpi", "dataset": "months", "x": x, "y": 14, "w": 43.5, "h": 27, "label": label, "value": value,
+                "format": fmt, "sparkline": {"category": "[anno_mese]", "value": value}}
+        return {**card, "compare": compare} if compare else card
+
+    def month_list(name: str, label: str, default: int) -> dict:
+        return {"name": name, "label": label, "type": "number", "required": True, "default": default,
+                "choices": {"dataset": "months", "value": "[anno_mese]", "label": 'FORMAT([Month], "MMMM yyyy")'}}
+
+    def month_of(name: str) -> str:
+        return "FORMAT(" + MONTH_DATE.format(f'PARAM("{name}")') + ', "MMM yyyy")'
+
+    fields = fields_of(months)
+    by_category = [{"column": "categoria", "op": "=", "value": "{category}"}]
+    margin_share = "SUM([margine]) / SUM([ricavo])"
+    return report_page(
+        title='=REPORT() & IF(ISNULL(PARAM("category")), "", " — " & PARAM("category"))',
+        subtitle=f'={month_of("first_month")} & " to " & {month_of("last_month")} & " · fulfilled orders, net of discount"',
+        parameters=[
+            {"name": "category", "label": "Category", "type": "text", "required": False,
+             "choices": {"dataset": "months", "value": "[categoria]"}},
+            month_list("first_month", "From", 202501),
+            month_list("last_month", "To", 202512),
+        ],
+        datasets=[
+            {"name": "months", "fields": fields,
+             "calculated": [{"name": "Month", "expr": MONTH_DATE.format("[anno_mese]")},
+                            {"name": "MarginPct", "expr": "IF([ricavo] = 0, NULL, [margine] / [ricavo])"}],
+             "source": {"kind": "datasource", "datasource_id": months["id"], "filters": by_category + [
+                 {"column": "anno_mese", "op": ">=", "value": "{first_month}"},
+                 {"column": "anno_mese", "op": "<=", "value": "{last_month}"}]}},
+            {"name": "history", "fields": fields,
+             "source": {"kind": "datasource", "datasource_id": months["id"], "filters": by_category}},
+        ],
+        items=[
+            {"id": "headline", "type": "text", "dataset": "months", "x": 0, "y": 0, "w": 186, "h": 11, "style": {"size": 11, "can_grow": True},
+             "value": f'="Revenue of " & FORMAT(SUM([ricavo]), "{EURO}") & " at a margin of " & FORMAT({margin_share}, "0.0%")'
+                      f' & IF({a_year_earlier}, ", against " & FORMAT({earlier("[ricavo]")}, "{EURO}") & " and "'
+                      f' & FORMAT({earlier("[margine]")} / {earlier("[ricavo]")}, "0.0%") & " in the same months a year earlier", "") & "."'},
+            kpi("kpi_revenue", 0, "Revenue", "SUM([ricavo])", EURO, before("[ricavo]")),
+            kpi("kpi_margin", 47.5, "Margin", "SUM([margine])", EURO, before("[margine]")),
+            kpi("kpi_margin_pct", 95, "Margin %", margin_share, "0.0%"),
+            kpi("kpi_kilos", 142.5, "Kilos sold", "SUM([chili])", "#,##0 kg", before("[chili]")),
+            {"id": "by_month", "type": "chart", "kind": "combo", "dataset": "months", "x": 0, "y": 44, "w": 118, "h": 62,
+             "title": "Revenue and margin % by month", "category": 'FORMAT([Month], "MMM yy")',
+             "series": [{"name": "Revenue", "value": "SUM([ricavo])", "as": "bar", "format": EURO},
+                        {"name": "Margin %", "value": margin_share, "as": "line", "axis": "right", "format": "0%"}],
+             "options": {"legend": True, "format": EURO}},
+            {"id": "by_category", "type": "chart", "kind": "bar", "dataset": "months", "x": 122, "y": 44, "w": 64, "h": 62,
+             "title": "Margin % by category", "category": "[categoria]", "series": [{"name": "Margin %", "value": margin_share}],
+             "options": {"sort": "desc", "labels": True, "max": 0.5, "format": "0%"}},
+            heading("table_title", 109, "By category and month"),
+            {"id": "detail", "type": "table", "dataset": "months", "x": 0, "y": 116, "w": 186, "h": 30, "title": "By category and month",
+             "groups": [{"by": "[categoria]", "header": True, "footer": True, "keep_together": True}],
+             "sort": [{"by": "[anno_mese]", "dir": "asc"}], "repeat_header": True, "grand_total": True, "zebra": True,
+             "interactive": {"sort": True, "toggle": True},
+             "columns": [
+                 {"header": "Month", "value": "[Month]", "format": "MMMM yyyy", "width": 46},
+                 {"header": "Revenue", "value": "[ricavo]", "format": EURO, "align": "right", "width": 30, "total": "SUM([ricavo])"},
+                 {"header": "Margin", "value": "[margine]", "format": EURO, "align": "right", "width": 30, "total": "SUM([margine])"},
+                 {"header": "Margin %", "value": "[MarginPct]", "format": "0.0%", "align": "right", "width": 22, "total": margin_share},
+                 {"header": "Share", "value": 'PERCENT(SUM([ricavo]), "categoria")', "format": "0.0%", "align": "right", "width": 24,
+                  "total": "PERCENT(SUM([ricavo]))"},
+                 {"header": "vs month before", "value": "[ricavo] / PREVIOUS([ricavo]) - 1", "format": SIGNED, "align": "right", "width": 34,
+                  "rules": [{"when": "[ricavo] < PREVIOUS([ricavo])", "style": {"color": RED}}]},
+             ]},
+            {"id": "note", "type": "text", "x": 0, "y": 149, "w": 186, "h": 8,
+             "value": "Share: a month's part of the revenue of its category; on a total, the category's part of all those shown. "
+                      "The arrows on the cards compare with the same months a year earlier, when the data goes back that far.",
+             "style": {"size": 7, "color": MUTED, "can_grow": True}},
+        ])
+
+
+def agent_scorecard(agents: dict, crm: dict) -> dict:
+    """For a sales manager: how the agents of an area stand, on revenue and on the contacts of the CRM. The
+    Agent list follows the Area because both filter one dataset, in the order of the form; `crm` is a table
+    of its own, read by LOOKUP. Two agents may share a name in two areas, so the key holds both."""
+    def contacts(field: str) -> str:
+        return f'LOOKUP([area] & [agente], [area] & [agente], [{field}], "crm")'
+
+    def kpi(item_id: str, x: float, label: str, value: str, fmt: str) -> dict:
+        return {"id": item_id, "type": "kpi", "dataset": "agents", "x": x, "y": 0, "w": 43.5, "h": 20, "label": label, "value": value, "format": fmt}
+
+    filters = [{"column": "area", "op": "=", "value": "{area}"}, {"column": "agente", "op": "=", "value": "{agent}"}]
+    per_order, visits = "SUM([ricavo]) / SUM([ordini])", "SUM([Visits]) / SUM([Contacts])"
+    several = "COUNT() > 1"
+    return report_page(
+        title='=REPORT() & IF(ISNULL(PARAM("agent")), IF(ISNULL(PARAM("area")), "", " — " & PARAM("area")), " — " & PARAM("agent"))',
+        subtitle="All fulfilled orders, net of discount, and the contacts logged in the CRM",
+        parameters=[
+            {"name": "area", "label": "Area", "type": "text", "required": False, "choices": {"dataset": "agents", "value": "[area]"}},
+            {"name": "agent", "label": "Agent", "type": "text", "required": False, "choices": {"dataset": "agents", "value": "[agente]"}},
+        ],
+        datasets=[
+            {"name": "agents", "fields": fields_of(agents),
+             "calculated": [
+                 {"name": "Visits", "expr": contacts("visita")},
+                 {"name": "Contacts", "expr": contacts("totale")},
+                 {"name": "VisitShare", "expr": "IF([Contacts] = 0, NULL, [Visits] / [Contacts])"},
+                 {"name": "Size", "expr": 'IFS([ricavo] >= 1.2 * AVG([ricavo]), "Over 120%", '
+                                          '[ricavo] >= 0.8 * AVG([ricavo]), "80% to 120%", "Under 80%")'}],
+             "source": {"kind": "datasource", "datasource_id": agents["id"], "filters": filters}},
+            {"name": "crm", "fields": fields_of(crm), "source": {"kind": "datasource", "datasource_id": crm["id"], "filters": filters}},
+        ],
+        items=[
+            kpi("kpi_revenue", 0, "Revenue", "SUM([ricavo])", EURO),
+            kpi("kpi_orders", 47.5, "Orders", "SUM([ordini])", WHOLE),
+            kpi("kpi_per_order", 95, "Revenue per order", per_order, "€ #,##0.00"),
+            kpi("kpi_visits", 142.5, "Field visits among contacts", visits, "0.0%"),
+            {"id": "revenue_visits", "type": "chart", "kind": "scatter", "dataset": "agents", "x": 0, "y": 23, "w": 92, "h": 66,
+             "title": "Revenue against field visits, a point per agent", "category": "[Visits]", "split_by": "[area]",
+             "series": [{"name": "Revenue", "value": "[ricavo]"}], "options": {"legend": True, "format": EURO}},
+            {"id": "contacts", "type": "chart", "kind": "column", "dataset": "crm", "x": 96, "y": 23, "w": 90, "h": 66,
+             "title": "Contacts by area and kind", "category": "[area]",
+             "series": [{"name": "Visits", "value": "SUM([visita])"}, {"name": "Calls", "value": "SUM([telefonata])"},
+                        {"name": "Emails", "value": "SUM([email])"}, {"name": "Reminders", "value": "SUM([sollecito])"},
+                        {"name": "Complaints", "value": "SUM([reclamo])"}],
+             "options": {"stacked": True, "legend": True, "format": WHOLE}},
+            heading("table_title", 92, "Agents by area"),
+            {"id": "agents", "type": "table", "dataset": "agents", "x": 0, "y": 99, "w": 186, "h": 30, "title": "Agents by area",
+             "groups": [{"by": "[area]", "header": True, "footer": True, "keep_together": True}],
+             "sort": [{"by": "[ricavo]", "dir": "desc"}], "repeat_header": True, "grand_total": True, "zebra": True,
+             "interactive": {"sort": True, "toggle": True},
+             "columns": [
+                 {"header": "Agent", "value": "[agente]", "width": 50},
+                 {"header": "Revenue", "value": "[ricavo]", "format": EURO, "align": "right", "width": 26, "total": "SUM([ricavo])"},
+                 {"header": "Of the area", "value": '[ricavo] / SUM([ricavo], "area")', "format": "0.0%", "align": "right", "width": 19,
+                  "total": 'SUM([ricavo]) / SUM([ricavo], "area")'},
+                 {"header": "Orders", "value": "[ordini]", "format": WHOLE, "align": "right", "width": 16, "total": "SUM([ordini])"},
+                 {"header": "Customers", "value": "[clienti]", "format": WHOLE, "align": "right", "width": 17},
+                 {"header": "Per order", "value": "[ricavo_per_ordine]", "format": "€ #,##0.00", "align": "right", "width": 22, "total": per_order},
+                 {"header": "Visits", "value": "[Visits]", "format": WHOLE, "align": "right", "width": 14, "total": "SUM([Visits])"},
+                 {"header": "Of contacts", "value": "[VisitShare]", "format": "0.0%", "align": "right", "width": 22, "total": visits,
+                  "rules": [{"when": "[VisitShare] < 0.18", "style": {"color": RED, "weight": "bold"}},
+                            {"when": "[VisitShare] >= 0.22", "style": {"color": GREEN, "weight": "bold"}}]},
+             ]},
+            {"id": "note", "type": "text", "x": 0, "y": 132, "w": 186, "h": 5,
+             "value": "Of contacts: field visits among all the contacts in the CRM, in red under 18%, in green from 22%.",
+             "style": {"size": 7, "color": MUTED}},
+            heading("matrix_title", 140, "Revenue by area and size of the agent, against the average of those shown", visible=several, dataset="agents"),
+            {"id": "by_size", "type": "table", "dataset": "agents", "x": 0, "y": 147, "w": 186, "h": 20, "title": "By area and size",
+             "visible": several, "groups": [{"by": "[area]"}], "sort": [{"by": "[ricavo]", "dir": "desc"}], "grand_total": True,
+             "columns": [{"header": "Area", "width": 42}],
+             "matrix": {"columns_by": "[Size]", "value": "SUM([ricavo])", "total": True, "format": EURO}},
+        ])
+
+
+REPORTS = {  # name: what it builds, the tables it reads with the flows' names, what it is for
+    "Margin review": (margin_review, ["Margin by Category and Month"],
+                      "For the directors: revenue and margin of a period against the same months a year earlier."),
+    "Agent scorecard": (agent_scorecard, ["Agent Leaderboard", "CRM Workload by Agent and Contact Type"],
+                        "For a sales manager: revenue and field visits of the agents of an area. Choose an area and the agents follow it."),
+}
+
+
+def create_reports(project: int, outputs_in: int) -> None:
+    existing = {r["name"] for r in gw.must("GET", f"/projects/{project}/reports")}
+    outputs = {d["name"]: d for d in gw.must("GET", "/datasources") if d["project_id"] == outputs_in}
+    for name, (build, tables, description) in REPORTS.items():
+        if name in existing:
+            continue
+        missing = [t for t in tables if t not in outputs]
+        if missing:
+            log(f"report «{name}» skipped: {', '.join(missing)} missing (did the flows run?)")
+            continue
+        gw.must("POST", f"/projects/{project}/reports", {"name": name, "description": description, "content": build(*(outputs[t] for t in tables))})
+        log(f"report created: {name}")
+
+
 # ── all together ──────────────────────────────────────────────────────────────
+READY = ("DONE. The «Sample» folder is ready: Flows, Private tables, Public tables, connections, views, "
+         f"the reports {' and '.join(f'«{name}»' for name in REPORTS)} and the dashboard «{DASHBOARD}». "
+         "No permission granted: that is the administrator's call.")
+
+
 def main() -> None:
     log(f"setting up the sample data (scale «{SCALE}»)")
     prepare_databases()
@@ -830,8 +1060,8 @@ def main() -> None:
         failed = run_once(created, private)
     create_views(sample, engine, private)
     create_dashboard(sample, private)
-    log("DONE. The «Sample» folder is ready: Flows, Private tables, Public tables, connections, views and a dashboard. "
-        "No permission granted: that is the administrator's call.")
+    create_reports(sample, private)
+    log(READY)
     if failed:
         sys.exit(f"{len(failed)} flows did not succeed ({', '.join(failed)}): see Runs; "
                  "starting the container again retries only those")

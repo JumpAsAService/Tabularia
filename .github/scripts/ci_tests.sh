@@ -79,7 +79,9 @@ esac
 wait_for postgres pg_isready -h 127.0.0.1 -U tab
 
 status=0
-docker run --rm --network "$NET" "${ENV[@]}" -v "$SRC:/app" -v "$OUT:/out" -w /app "$IMAGE" \
+# the sample reports are checked by the code that takes them: tests/test_sample_reports.py of both suites
+docker run --rm --network "$NET" "${ENV[@]}" -v "$SRC:/app" -v "$OUT:/out" -v "$ROOT/infrastructure/sampledb:/sampledb:ro" \
+  -w /app "$IMAGE" \
   python -m pytest tests -q -p no:cacheprovider --junitxml=/out/junit.xml || status=$?
 if [[ -f "$OUT/junit.xml" ]]; then
   python3 "$ROOT/.github/scripts/ci_skips.py" "$OUT/junit.xml" "${ALLOWED[@]}" || { [[ $status -ne 0 ]] || status=1; }

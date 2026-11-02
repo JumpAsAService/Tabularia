@@ -178,8 +178,8 @@ A fictional cured-meats company: an ERP on PostgreSQL and a CRM on ClickHouse, w
 ready-made `Sample` folder in Tabularia. It is part of the stack: three containers, the
 two databases and `sampledb-init`, which fills them, waits for the administrator of
 step 5, signs in as that administrator and builds the folder. At the `small` scale the
-data takes seconds; the container then runs the eleven sample flows once, about two
-minutes. Follow it:
+data takes seconds; the container then runs the eleven sample flows once and makes the
+views, the reports and the dashboard, about two minutes. Follow it:
 
 ```bash
 docker compose logs -f sampledb-init
@@ -191,7 +191,8 @@ and exits; `docker compose ps -a` then shows it `Exited (0)`, as it should. It r
 every `docker compose up -d` and finds everything already there.
 
 Reload Explore: the `Sample` folder holds the two connections (*Sample ERP (Postgres)*,
-*Sample CRM (ClickHouse)*), four saved views, the dashboard *Sales overview*
+*Sample CRM (ClickHouse)*), four saved views, the reports *Margin review* and *Agent scorecard*
+([Reports](capabilities/reports.md#the-sample-reports)), the dashboard *Sales overview*
 ([Dashboards](capabilities/dashboards.md#example-sales-overview)), and three folders: *Flows* (eleven flows,
 three of them scheduled), *Private tables* (the company's tables and the flows' results)
 and *Public tables* (a calendar, the regions).
