@@ -18,11 +18,12 @@ from fastapi import HTTPException
 from fastapi.responses import StreamingResponse
 from starlette.background import BackgroundTask
 
+from app.core import export_slots
 from app.core.config import get_settings
 from app.tasks.celery_app import celery_app
 from app.utils import get_storage_service
 
-_PREFIX = "dataprep:export:owner:"
+_PREFIX = export_slots.OWNER_PREFIX
 _KILLED_PREFIX = "dataprep:export:killed:"  # what a document says when its worker is killed while it reads
 # long enough for a queued export, its run up to the workers' time limit and the
 # hour the file is kept; the key is a few bytes and is deleted with the file
@@ -50,6 +51,20 @@ def _r() -> redis.Redis:
 
 def remember_owner(task_id: str, owner: str) -> None:
     _r().set(_PREFIX + task_id, owner, ex=OWNER_TTL_SECONDS)
+
+
+def start(task_id: str, owner: str, wait: float = 0) -> None:
+    """An export or a document about to be queued: a place among the owner's
+    (core/export_slots.py), then who may follow it. Past the cap: 429 at once, or after
+    `wait` seconds of waiting for a place (code, which would wait for the file anyway)."""
+    if not export_slots.wait_for_place(owner, task_id, wait):
+        raise HTTPException(status_code=429, detail=export_slots.refusal())
+    remember_owner(task_id, owner)
+
+
+def owner_of(task_id: str) -> str | None:
+    """Who an export was started for (None once its file has been taken)."""
+    return _r().get(_PREFIX + task_id)
 
 
 def remember_if_killed(task_id: str, message: str) -> None:

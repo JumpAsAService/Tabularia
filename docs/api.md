@@ -171,6 +171,13 @@ with requests.post(f"{API}/tasks/export", headers=H, json=body, stream=True) as 
 CSV exports stop at `EXPORT__MAX_ROWS` (5,000,000 rows by default) and Excel
 exports at 1,048,575 rows; the response says so instead of cutting silently.
 
+A person, or a service account, has at most `EXPORT__MAX_RUNNING_PER_PERSON` (3 by
+default) exports and documents being prepared at once. A request with an API token past
+it does not fail: it waits for one of them to finish, up to `REPORTS__API_WAIT_SECONDS`
+(`POST /tasks/export` as long as it waits for a worker), and answers 429 only when none
+did. A script that sends ten reports by email, one after the other or a few at a time,
+gets them all.
+
 A worker writes the file, and `POST /tasks/export` keeps the request open until it
 has. For a long export, start it and come back for it instead, as the web app does:
 `POST /tasks/exports` with the same body answers `{"task_id": …}`;

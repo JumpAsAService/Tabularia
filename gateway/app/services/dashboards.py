@@ -690,7 +690,7 @@ async def render(session: Session, user: User, dashboard: Dashboard, fmt: str, g
     nothing. Its rows are the ones its screen reads, so the numbers too. The file is an export of theirs:
     followed and taken through /tasks/exports. Audited with what it showed; `audit_success=False` leaves
     the success to the caller, who records it once it knows the file came out (the API)."""
-    from app.routes.proxy import export_owner  # routes → services: late import
+    from app.routes.proxy import export_owner, export_wait  # routes → services: late import
 
     if fmt not in FORMATS:
         raise HTTPException(status_code=422, detail=f"The format is one of {', '.join(FORMATS)}")
@@ -711,9 +711,10 @@ async def render(session: Session, user: User, dashboard: Dashboard, fmt: str, g
         if ai_comment.has_comment(definition):
             comments = await _comments_of_document(session, user, definition, plan, asked, given, dashboard.name, dashboard.id, cache,
                                                    reports.comment_moment(fmt, origin, request), request)
-        resp = await get_engine_client().post("/reports/dashboard-render", timeout=60, json={
+        wait = export_wait(request, origin)
+        resp = await get_engine_client().post("/reports/dashboard-render", timeout=60 + wait, json={
             **laid_out(definition), "datasets": plan.datasets, "refused": plan.refused, "params": plan.params, "clicks": asked.clicks,
-            "state": state, "format": fmt, "filename": name, "owner": owner, "locale": definition.get("locale") or "en",
+            "state": state, "format": fmt, "filename": name, "owner": owner, "wait_seconds": wait, "locale": definition.get("locale") or "en",
             "title": dashboard.name[:300], "cache": cache, **({"comments": comments} if comments else {})})
         if resp.status_code in (404, 405):
             raise HTTPException(status_code=503, detail="The engine cannot make documents of a dashboard yet: update it to the gateway's version")

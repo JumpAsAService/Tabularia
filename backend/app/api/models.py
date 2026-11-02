@@ -108,12 +108,16 @@ class ExportRequest(BaseModel):
     limit: Optional[int] = Field(default=None, ge=1, description="The most rows (optional)")
     filename: Optional[str] = Field(default=None, description="The file name suggested to the browser")
     engine: Optional[str] = Field(default=None, description="The engine that computes the snapshot (compute dialect); Polars then writes the file")
+    owner: Optional[str] = Field(default=None, description="Who asked, as the gateway names them: counted against EXPORT__MAX_RUNNING_PER_PERSON")
 
 
 class ExportStart(ExportRequest):
     """An export the requester follows and then downloads: the gateway names who
     asked, and only that name may see its state and take its file."""
     owner: str = Field(..., min_length=1, description="Who asked for the export, as the gateway names them")
+    # code waits for a place past the person's cap, for up to this many seconds; the
+    # interface does not (0: refused at once). core/export_slots.py
+    wait_seconds: float = Field(default=0, ge=0, le=3600)
 
 class CacheChain(BaseModel):
     """One node of an editor's flow: the chain a preview of it would send."""

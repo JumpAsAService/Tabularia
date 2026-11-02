@@ -3,7 +3,7 @@ import os
 import sys
 
 from celery import Celery, Task
-from celery.signals import before_task_publish, worker_init, worker_process_init, worker_ready
+from celery.signals import before_task_publish, task_postrun, task_revoked, worker_init, worker_process_init, worker_ready
 from app.core import panel_settings
 from app.core.config import get_settings, resolve_max_memory_per_child_kb, settings_from_env
 from app.tasks.worker_pool import PoolFromPanel
@@ -175,6 +175,23 @@ def _sweep_temporary_files(sender=None, **_):
         tempdirs.sweep_loose()
     except Exception:  # never stops the worker from starting
         logger.warning("temporary files: sweep at start failed", exc_info=True)
+
+
+@task_postrun.connect
+def _export_place_back(sender=None, task_id=None, **_):
+    """An export or a document ended (well or not): its place back to the person
+    (core/export_slots.py)."""
+    from app.core import export_slots
+
+    export_slots.task_ended(getattr(sender, "name", None), task_id)
+
+
+@task_revoked.connect
+def _export_place_back_revoked(request=None, **_):
+    """Stopped before or while it ran: the place back too."""
+    from app.core import export_slots
+
+    export_slots.task_ended(getattr(request, "task", None) or getattr(request, "name", None), getattr(request, "id", None))
 
 
 @worker_process_init.connect

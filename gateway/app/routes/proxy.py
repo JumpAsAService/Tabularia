@@ -14,7 +14,7 @@ import json
 import re
 import logging
 import zlib
-from typing import Any
+from typing import Any, Optional
 from uuid import uuid4
 
 from fastapi import APIRouter, Depends, HTTPException, Request, Response
@@ -424,8 +424,12 @@ async def export(
 ):
     """The export for API callers: the file comes back in the response."""
     raw, payload = await _read_json(request)
+    if not isinstance(payload, dict):
+        raise HTTPException(status_code=422, detail="The request body must be a JSON object")
     await run_in_threadpool(_authorize_export, request, session, user, payload)
-    return await _forward(request, "POST", "/tasks/export", content=raw, session=session, user=user)
+    # counted among the person's exports; the engine waits for a place, as it waits for a worker
+    payload["owner"] = export_owner(user)
+    return await _forward(request, "POST", "/tasks/export", content=json.dumps(payload).encode(), session=session, user=user)
 
 
 # ── The browser's export: started, followed, its file taken once ────────────
@@ -440,6 +444,24 @@ def export_owner(user: User) -> str:
     return f"user:{user.id}"
 
 
+# where a document is asked by code: the REST API's render routes, a notebook's
+# tabularia.report()
+CODE_ORIGINS = ("api", "notebook")
+
+
+def export_wait(request: Optional[Request], origin: Optional[str] = None) -> int:
+    """How long the engine may wait for a place past the person's cap of exports running
+    (EXPORT__MAX_RUNNING_PER_PERSON): code — a request with an API token, a notebook, the
+    API's render routes — waits its turn, as long as it would wait for the document
+    (REPORTS__API_WAIT_SECONDS); the interface is told at once (0). One rule for a script
+    that sends reports by email and for a notebook's app."""
+    from app.services import api_tokens
+
+    if origin in CODE_ORIGINS or api_tokens.current_name(request):
+        return get_settings().reports.api_wait_seconds
+    return 0
+
+
 @router.post("/tasks/exports")
 async def start_export(
     request: Request,
@@ -451,6 +473,7 @@ async def start_export(
         raise HTTPException(status_code=422, detail="The request body must be a JSON object")
     await run_in_threadpool(_authorize_export, request, session, user, payload)
     payload["owner"] = export_owner(user)  # never the browser's word for it
+    payload["wait_seconds"] = export_wait(request)
     return await _forward(request, "POST", "/tasks/exports", content=json.dumps(payload).encode(), session=session, user=user)
 
 

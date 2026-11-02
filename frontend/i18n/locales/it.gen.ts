@@ -3240,6 +3240,7 @@ export default {
       "beat": "Pianificatore (beat)"
     },
     "units": {
+      "exports": "export",
       "minutes": "minuti",
       "days": "giorni",
       "seconds": "secondi",
@@ -3845,6 +3846,10 @@ export default {
       "ingest_db_read_timeout_seconds": {
         "label": "Attesa massima di una risposta durante un import",
         "help": "Per quanto si aspetta un database senza ricevere niente prima di dichiarare fallito l'import. ClickHouse non manda nulla finché non ha la prima riga, e sulle tabelle grandi può tacere a lungo. Deve restare sotto il limite morbido dei task, così l'errore dice cosa è successo.",
+      },
+      "export_max_running_per_person": {
+        "label": "Export contemporanei per persona",
+        "help": "Quanti export e documenti (CSV, Excel, risultati degli script SQL, report e dashboard) una persona o un account di servizio può avere in preparazione insieme: usano la coda delle esecuzioni dei flussi, e senza tetto una sola persona potrebbe occuparla tutta. Dall'interfaccia, oltre il tetto, si chiede di aspettare; il codice (API REST con un token, tabularia.report() di un notebook) aspetta il suo turno invece di fallire.",
       },
       "export_max_rows": {
         "label": "Righe massime di un export CSV",

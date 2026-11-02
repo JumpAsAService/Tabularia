@@ -252,6 +252,9 @@ def export_flow(request: ExportRequest):
     while a large file is being written.
     """
     task_id = str(uuid.uuid4())
+    if request.owner:  # a gateway from before the cap names nobody: not counted
+        # code waits for the file: it waits for its place too, as long as for a worker
+        exports.start(task_id, request.owner, wait=EXPORT_QUEUE_WAIT_SECONDS)
     async_result = _send_export(request, task_id)
     wait = get_settings().celery.task_time_limit + EXPORT_QUEUE_WAIT_SECONDS
     try:
@@ -274,7 +277,7 @@ def start_export(request: ExportStart):
     """Starts an export that the requester follows (`GET /tasks/exports/{id}`) and
     then downloads, once (`GET /tasks/exports/{id}/file`)."""
     task_id = str(uuid.uuid4())
-    exports.remember_owner(task_id, request.owner)
+    exports.start(task_id, request.owner, wait=request.wait_seconds)
     _send_export(request, task_id)
     return TaskResponse(task_id=task_id, status="submitted", message=f"Exporting {request.input_key} as {request.format}")
 

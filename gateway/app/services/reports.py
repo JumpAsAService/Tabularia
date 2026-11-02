@@ -1058,7 +1058,7 @@ async def render(session: Session, user: User, report: Optional[Report], definit
     `extra` (the notebook that asked); `audit_success=False` leaves the success to the
     caller, who records it once it knows the file came out (the API, a notebook). An AI
     comment is written first (`comments_for`), waiting for it at most AI__COMMENT_WAIT_SECONDS."""
-    from app.routes.proxy import export_owner  # routes → services: late import
+    from app.routes.proxy import export_owner, export_wait  # routes → services: late import
 
     if fmt not in FORMATS:
         raise HTTPException(status_code=422, detail=f"The format is one of {', '.join(FORMATS)}")
@@ -1077,10 +1077,11 @@ async def render(session: Session, user: User, report: Optional[Report], definit
                                                    where=("report", report.id) if report is not None else None,
                                                    title=report.name if report is not None else "", request=request,
                                                    unasked="not_tried" if origin == "editor" else "not_asked")
-        resp = await get_engine_client().post("/reports/render", timeout=60, json={
+        wait = export_wait(request, origin)
+        resp = await get_engine_client().post("/reports/render", timeout=60 + wait, json={
             "definition": definition, "datasets": datasets,
             "params": params, "format": fmt, "filename": name,
-            "owner": owner, "locale": definition.get("locale") or "en", "state": state or {},
+            "owner": owner, "wait_seconds": wait, "locale": definition.get("locale") or "en", "state": state or {},
             # REPORT() and the PDF's title: the name as written, not as a file may hold it
             **({"title": report.name} if report is not None else {}),
             **({"comments": comments, "reading": reading} if comments or reading else {})})

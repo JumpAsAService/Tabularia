@@ -183,6 +183,10 @@ a message, not the data. Every download and export is in the audit log
 - A CSV export holds at most `EXPORT__MAX_ROWS` rows (5 million by default) and an Excel
   file the format's limit of about one million. Larger results belong in a datasource,
   through a flow's Output node.
+- One person has at most `EXPORT__MAX_RUNNING_PER_PERSON` exports and documents (CSV,
+  Excel, reports, dashboards) being prepared at once, 3 by default: past it Tabularia asks
+  to wait for one to finish. Code — the REST API with a token, a notebook's
+  `tabularia.report()` — waits for its turn instead ([API](../api.md)).
 - A pivot makes at most 500 new columns.
 - A preview's numbers come from the engine you previewed with. When a flow's production
   engine is another one, see [Engine differences](../engines/engine-differences.md).

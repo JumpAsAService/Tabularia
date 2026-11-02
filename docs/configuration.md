@@ -54,10 +54,10 @@ SFTP, S3, APIs, SharePoint) belong to each connection, encrypted with
 |---|---|
 | [Shared by the gateway and the engine](#shared-by-the-gateway-and-the-engine) | 7 |
 | [Gateway](#gateway) | 170 |
-| [Engine and workers](#engine-and-workers) | 103 |
+| [Engine and workers](#engine-and-workers) | 104 |
 | [Frontend](#frontend) | 5 |
 | [Compose and Helm only](#compose-and-helm-only) | 13 |
-| **Total** | **298** |
+| **Total** | **299** |
 
 ## Before production
 
@@ -551,6 +551,7 @@ Database imports stream Arrow batches into parquet snapshots; a CSV or Excel dow
 | `INGEST__PARQUET_ROW_GROUP_ROWS` | integer, 1–20,000,000 | `1000000` | `extraEnv` | Rows per parquet row group written by imports. Large groups let the engines read only the columns a query needs; the group is held in memory before it is written (about 570 MB per million rows of a 50-column table), so raise the worker memory with it. Also adjustable in Administration → Settings. |
 | `INGEST__DB_READ_TIMEOUT_SECONDS` | integer, ≥ 10 | `3000` | `extraEnv` | How long an import from ClickHouse, or a write into it, waits while the server sends nothing (it may sort a whole table before the first row). Keep it below `CELERY__TASK_SOFT_TIME_LIMIT`, so people read this error and not a killed task. Also adjustable in Administration → Settings. |
 | `EXPORT__MAX_ROWS` | integer, ≥ 0 | `5000000` | `extraEnv` | Rows of a CSV download from the editor, the viewer or the chat: the browser holds the whole file in memory. Larger results go through an Output node. 0 = no cap. Also adjustable in Administration → Settings. |
+| `EXPORT__MAX_RUNNING_PER_PERSON` | integer, ≥ 1 | `3` | `extraEnv` | Exports and documents (CSV, Excel, SQL scripts' results, reports, dashboards) one person or service account may have being prepared at once, on the queue of the flows' runs. From the interface past it people are asked to wait; code (the REST API with a token, a notebook's `tabularia.report()`) waits for its turn, up to `REPORTS__API_WAIT_SECONDS`. Also adjustable in Administration → Settings. |
 
 ### SharePoint datasources
 

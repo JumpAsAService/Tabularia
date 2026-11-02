@@ -45,6 +45,9 @@ class ReportRender(BaseModel):
     format: Literal["pdf", "xlsx", "html", "svg"] = "pdf"
     filename: Optional[str] = Field(default=None, max_length=255)
     owner: str = Field(..., min_length=1, description="Who asked for the render, as the gateway names them")
+    # code waits for a place past the person's cap, for up to this many seconds; the
+    # interface does not (0: refused at once). core/export_slots.py
+    wait_seconds: float = Field(default=0, ge=0, le=3600)
     locale: Optional[Literal[formats.LOCALES]] = None  # type: ignore[valid-type]
     state: Optional[dict] = None  # the screen's sort and open/closed groups
     title: Optional[str] = Field(default=None, max_length=300)  # REPORT(), the PDF's title
@@ -120,6 +123,9 @@ class DashboardRender(BaseModel):
     format: Literal["pdf", "png"] = "pdf"
     filename: Optional[str] = Field(default=None, max_length=255)
     owner: str = Field(..., min_length=1, description="Who asked for the render, as the gateway names them")
+    # code waits for a place past the person's cap, for up to this many seconds; the
+    # interface does not (0: refused at once). core/export_slots.py
+    wait_seconds: float = Field(default=0, ge=0, le=3600)
     locale: Optional[Literal[formats.LOCALES]] = None  # type: ignore[valid-type]
     title: Optional[str] = Field(default=None, max_length=300)
     page: Optional[dict] = None  # the one chosen: A4 across otherwise
@@ -235,11 +241,11 @@ def dashboard_render(request: DashboardRender):
     from app.reports.dashboard_layout import filename as dashboard_file
 
     task_id = str(uuid.uuid4())
-    exports.remember_owner(task_id, request.owner)
+    exports.start(task_id, request.owner, wait=request.wait_seconds)
     exports.remember_if_killed(task_id, errors.out_of_memory("a dashboard", _reads({
         "definition": request.definition, "datasets": request.datasets, "refused": request.refused, "clicks": request.clicks})))
     name = dashboard_file(request.filename, request.format)
-    kwargs = request.model_dump(exclude={"owner", "cache", "filename", *(() if request.comments else ("comments",))})
+    kwargs = request.model_dump(exclude={"owner", "wait_seconds", "cache", "filename", *(() if request.comments else ("comments",))})
     kwargs["filename"] = name
     if request.cache is not None:
         kwargs["cache_seconds"] = tile_cache.lifetime(request.cache.refresh_seconds)
@@ -256,7 +262,7 @@ def render(request: ReportRender):
     if problems:
         raise HTTPException(status_code=422, detail=f"the report's definition: {problems[0]}")
     task_id = str(uuid.uuid4())
-    exports.remember_owner(task_id, request.owner)
+    exports.start(task_id, request.owner, wait=request.wait_seconds)
     exports.remember_if_killed(task_id, errors.out_of_memory("a report", _reads({"definition": request.definition, "datasets": request.datasets})))
     name = file_name(request.filename, request.format)
     kwargs: dict[str, Any] = {"definition": request.definition, "datasets": request.datasets, "params": request.params,

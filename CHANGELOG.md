@@ -300,6 +300,12 @@ notebooks.
   read_parquet('s3a://…') …)` read objects outside the folders one may see, from an editor
   preview with VIEW alone. An expression the check cannot read is now refused, on every
   engine. Found by the audit of the observer role for a public demo.
+- **A cap on the exports one person has running at once**: `EXPORT__MAX_RUNNING_PER_PERSON`
+  (3 by default, also in Administration → Settings). Exports, SQL scripts' results,
+  reports and dashboards rendered share the queue of the flows' runs, and one person —
+  or a demo's shared guest — could hold all of it for an hour. The interface past the cap
+  asks to wait; code (the REST API with a token, a notebook's `tabularia.report()`) waits
+  for its turn instead of failing.
 - **Fixed (security): SQL on a database connection could write.** It runs inside `SELECT
   * FROM (…)`, which refuses a statement that is not a query, but a function the query
   calls could still write: on PostgreSQL a plain `SELECT wipe()` deleted the rows, through

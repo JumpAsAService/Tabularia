@@ -3214,6 +3214,7 @@ export default {
       "beat": "Programador (beat)"
     },
     "units": {
+      "exports": "exportaciones",
       "minutes": "minutos",
       "days": "días",
       "seconds": "segundos",
@@ -3819,6 +3820,10 @@ export default {
       "ingest_db_read_timeout_seconds": {
         "label": "Espera máxima de una respuesta durante una importación",
         "help": "Cuánto tiempo puede una base de datos no enviar nada antes de dar la importación por fallida. ClickHouse no envía nada hasta tener la primera fila, y en tablas grandes puede callar mucho tiempo. Debe quedar por debajo del límite suave de las tareas, para que el error diga qué pasó.",
+      },
+      "export_max_running_per_person": {
+        "label": "Exportaciones simultáneas por persona",
+        "help": "Cuántas exportaciones y documentos (CSV, Excel, resultados de scripts SQL, informes y paneles) puede tener en preparación a la vez una persona o una cuenta de servicio: usan la cola de las ejecuciones de los flujos, y sin tope una sola persona podría ocuparla entera. Desde la interfaz, por encima del tope, se pide esperar; el código (la API REST con un token, tabularia.report() de un notebook) espera su turno en lugar de fallar.",
       },
       "export_max_rows": {
         "label": "Filas máximas de una exportación CSV",

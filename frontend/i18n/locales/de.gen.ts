@@ -3214,6 +3214,7 @@ export default {
       "beat": "Scheduler (beat)"
     },
     "units": {
+      "exports": "Exporte",
       "minutes": "Minuten",
       "days": "Tage",
       "seconds": "Sekunden",
@@ -3819,6 +3820,10 @@ export default {
       "ingest_db_read_timeout_seconds": {
         "label": "Längste Wartezeit auf eine Antwort beim Import",
         "help": "Wie lange eine Datenbank nichts senden darf, bevor der Import als gescheitert gilt. ClickHouse sendet nichts, bis die erste Zeile da ist, und bei großen Tabellen kann es lange still bleiben. Muss unter dem weichen Limit der Aufgaben bleiben, damit der Fehler sagt, was passiert ist.",
+      },
+      "export_max_running_per_person": {
+        "label": "Gleichzeitige Exporte pro Person",
+        "help": "Wie viele Exporte und Dokumente (CSV, Excel, Ergebnisse von SQL-Skripten, Reports und Dashboards) eine Person oder ein Dienstkonto gleichzeitig in Vorbereitung haben darf: sie nutzen die Warteschlange der Flow-Ausführungen, und ohne Obergrenze könnte eine einzige Person sie ganz belegen. In der Oberfläche wird oberhalb der Grenze um Geduld gebeten; Code (die REST-API mit einem Token, tabularia.report() eines Notebooks) wartet, bis er an der Reihe ist, statt zu scheitern.",
       },
       "export_max_rows": {
         "label": "Höchstzahl an Zeilen im CSV-Export",

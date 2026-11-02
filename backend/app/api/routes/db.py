@@ -136,6 +136,9 @@ class DbExportStart(BaseModel):
     format: Literal["csv", "xlsx"] = "csv"
     filename: Optional[str] = None
     owner: str = Field(..., min_length=1, description="Who asked for the export, as the gateway names them")
+    # code waits for a place past the person's cap, for up to this many seconds; the
+    # interface does not (0: refused at once). core/export_slots.py
+    wait_seconds: float = Field(default=0, ge=0, le=3600)
 
 
 @router.post("/exports", response_model=TaskResponse)
@@ -143,7 +146,7 @@ def start_export(request: DbExportStart):
     """Starts the export of a SQL script's result on a connection; it is followed and
     downloaded, once, as the Viewer's (the routes of /tasks/exports)."""
     task_id = str(uuid.uuid4())
-    exports.remember_owner(task_id, request.owner)
+    exports.start(task_id, request.owner, wait=request.wait_seconds)
     kwargs = {"connection": request.connection.model_dump(), "sql": request.sql, "format": request.format}
     if request.filename is not None:
         kwargs["filename"] = request.filename

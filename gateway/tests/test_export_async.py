@@ -142,3 +142,43 @@ async def test_the_screen_s_pages_of_a_report_travel_compressed(session, scene, 
         assert gzip.decompress(body) == payload and len(body) < len(payload) / 20
     else:
         assert "content-encoding" not in resp.headers and body == payload
+
+
+# ── the cap on the exports a person has running (EXPORT__MAX_RUNNING_PER_PERSON) ──
+
+async def test_the_interface_does_not_wait_for_a_place_code_with_a_token_does(session, engine, scene):
+    from app.core.config import get_settings
+
+    body = _body(scene.orders)  # read before the route lets the session go
+    await proxy.start_export(_request(body), user=scene.mario, session=session)
+    asked = _request(body)
+    asked.state.api_token = "nightly report"  # as get_current_user marks a request with a token
+    await proxy.start_export(asked, user=scene.mario, session=session)
+    assert [c.body["wait_seconds"] for c in engine] == [0, get_settings().reports.api_wait_seconds]
+
+
+async def test_the_synchronous_export_names_who_asked(session, engine, scene):
+    """Without a name the engine would not count it: the API's export is the one a script uses."""
+    await proxy.export(_request(_body(scene.orders, owner="user:999")), user=scene.mario, session=session)
+    [call] = engine
+    assert call.path == "/tasks/export" and call.body["owner"] == f"user:{scene.mario.id}"
+
+
+def test_who_waits_is_code():
+    from app.core.config import get_settings
+
+    wait = get_settings().reports.api_wait_seconds
+    browser = SimpleNamespace(state=SimpleNamespace())
+    token = SimpleNamespace(state=SimpleNamespace(api_token="sender"))
+    assert proxy.export_wait(browser) == 0 and proxy.export_wait(browser, "interface") == 0
+    assert proxy.export_wait(browser, "editor") == 0
+    assert proxy.export_wait(token) == wait
+    assert proxy.export_wait(browser, "api") == wait and proxy.export_wait(None, "notebook") == wait
+
+
+def test_the_cap_s_refusal_reaches_the_person_as_it_is():
+    from app.services.sql_scripts import _engine_failure
+
+    said = "You already have as many exports and documents being prepared as one person may at once (3): wait for one to finish"
+    e = _engine_failure(httpx.Response(429, json={"detail": said}), lambda d: f"The report could not be made: {d}")
+    assert e.status_code == 429 and e.detail == said

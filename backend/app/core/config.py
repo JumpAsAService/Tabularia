@@ -538,6 +538,14 @@ class ExportSettings(BaseModel):
     # rows the tab dies. Larger ones are written with an Output node (datasource,
     # table, bucket). 0 = no cap. env: EXPORT__MAX_ROWS
     max_rows: int = Field(default=5_000_000, ge=0)
+    # The most exports and documents one person (or service account) may have running or
+    # waiting at once: CSV/Excel, SQL scripts' results, reports and dashboards rendered.
+    # They share the queue of the flows' runs, and without a cap one person — or the shared
+    # guest of a demo — could hold every slot for up to the tasks' time limit. The
+    # interface past the cap is told to wait; code (the REST API with a token, a notebook's
+    # tabularia.report(), the synchronous export) waits for its turn instead of failing.
+    # env: EXPORT__MAX_RUNNING_PER_PERSON
+    max_running_per_person: int = Field(default=3, ge=1)
 
 
 class ReportsSettings(BaseModel):

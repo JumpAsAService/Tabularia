@@ -3240,6 +3240,7 @@ export default {
       "beat": "Scheduler (beat)"
     },
     "units": {
+      "exports": "exports",
       "minutes": "minutes",
       "days": "days",
       "seconds": "seconds",
@@ -3845,6 +3846,10 @@ export default {
       "ingest_db_read_timeout_seconds": {
         "label": "Longest wait for an answer during an import",
         "help": "How long a database may send nothing before the import is declared failed. ClickHouse sends nothing until it has the first row, and on large tables it can stay silent for a long time. Must stay below the tasks' soft limit, so the error says what happened.",
+      },
+      "export_max_running_per_person": {
+        "label": "Exports at once per person",
+        "help": "How many exports and documents (CSV, Excel, SQL scripts' results, reports and dashboards) one person or service account may have being prepared together: they use the queue of the flows' runs, and without a cap one person could take all of it. From the interface, past the cap, people are asked to wait; code (the REST API with a token, a notebook's tabularia.report()) waits for its turn instead of failing.",
       },
       "export_max_rows": {
         "label": "Most rows in a CSV export",

@@ -132,6 +132,7 @@ ITEMS: tuple[Item, ...] = (
     Item("ingest.parquet_row_group_rows", "import", "rows", 10_000, 5_000_000),
     Item("ingest.db_read_timeout_seconds", "import", "seconds", 30, 86_400),
     Item("export.max_rows", "export", "rows", 0, 100_000_000),
+    Item("export.max_running_per_person", "export", "exports", 1, 50),
     Item("celery.task_time_limit", "execution", "seconds", 60, SEVEN_DAYS),
     Item("celery.task_soft_time_limit", "execution", "seconds", 30, SEVEN_DAYS),
     Item("cache.ttl_seconds", "cache", "seconds", 300, 30 * 24 * 3600),

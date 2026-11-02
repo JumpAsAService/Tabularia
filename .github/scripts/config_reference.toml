@@ -1185,6 +1185,9 @@ text = "How long an import from ClickHouse, or a write into it, waits while the 
 [var.EXPORT__MAX_ROWS]
 text = "Rows of a CSV download from the editor, the viewer or the chat: the browser holds the whole file in memory. Larger results go through an Output node. 0 = no cap."
 
+[var.EXPORT__MAX_RUNNING_PER_PERSON]
+text = "Exports and documents (CSV, Excel, SQL scripts' results, reports, dashboards) one person or service account may have being prepared at once, on the queue of the flows' runs. From the interface past it people are asked to wait; code (the REST API with a token, a notebook's `tabularia.report()`) waits for its turn, up to `REPORTS__API_WAIT_SECONDS`."
+
 [var.SHAREPOINT__GRAPH_BASE]
 text = "Microsoft Graph endpoint; change it only on a sovereign cloud (US Gov: `https://graph.microsoft.us/v1.0`)."
 

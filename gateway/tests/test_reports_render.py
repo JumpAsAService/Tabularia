@@ -115,8 +115,8 @@ def test_a_render_reads_every_dataset_with_the_reader_s_rights(app, session, fak
     assert r.status_code == 200, r.text
     assert r.json() == {"task_id": "t-report-1", "filename": "Monthly sales.pdf"}
     [body] = fake_engine.report_renders
-    assert (body["format"], body["filename"], body["locale"], body["owner"]) == (
-        "pdf", "Monthly sales.pdf", "it", f"user:{_uid(session, 'reader@x.local')}")
+    assert (body["format"], body["filename"], body["locale"], body["owner"], body["wait_seconds"]) == (
+        "pdf", "Monthly sales.pdf", "it", f"user:{_uid(session, 'reader@x.local')}", 0)  # the interface: told at once
     assert body["params"] == {"region": "North", "since": "2026-09-28", "regions": ["N", "S'; DROP TABLE x; --"]}
     assert body["state"] == {"sort": {"t1": "amount"}} and body["definition"]["datasets"][0]["name"] == "orders"
     ds, o = body["datasets"], w["orders"]
@@ -311,6 +311,11 @@ def test_the_api_waits_for_the_file_and_sends_it(app, session, fake_engine):
     assert fake_engine.export_polls == [("/tasks/exports/t-report-1", owner)] * 3 + \
         [("/tasks/exports/t-report-1/file", owner)]
     assert fake_engine.report_renders[0]["params"]["regions"] == ["N", "S"]
+    # code (a script sending reports by email) waits for its turn past the person's cap of
+    # exports at once, as long as it waits for the file (EXPORT__MAX_RUNNING_PER_PERSON)
+    from app.core.config import get_settings
+
+    assert fake_engine.report_renders[0]["wait_seconds"] == get_settings().reports.api_wait_seconds
     [entry] = _renders(session)
     assert entry.outcome == "success" and json.loads(entry.detail)["from"] == "api"
     assert json.loads(entry.detail)["token"] == "nightly"

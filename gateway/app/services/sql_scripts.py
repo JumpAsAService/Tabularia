@@ -445,6 +445,8 @@ def _engine_failure(resp, message) -> HTTPException:
         detail = str(resp.json().get("detail"))
     except ValueError:
         detail = resp.text
+    if resp.status_code == 429:  # the person's exports at the cap: said as the engine says it, to try later
+        return HTTPException(status_code=429, detail=detail[:2000])
     return HTTPException(status_code=422 if resp.status_code < 500 else 502, detail=message(detail)[:2000])
 
 
@@ -553,7 +555,7 @@ async def export(session: Session, user: User, sql: str, engine: Optional[str], 
     the Viewer's: the person then follows it and takes the file through /tasks/exports,
     as its owner. Checked as a run (the datasources the person may read, CONNECT on the
     connection) and audited with its SQL."""
-    from app.routes.proxy import export_owner  # routes → services: late import
+    from app.routes.proxy import export_owner, export_wait  # routes → services: late import
 
     filename = export_filename(script, fmt)
     if connection_id is not None:
@@ -573,8 +575,9 @@ async def export(session: Session, user: User, sql: str, engine: Optional[str], 
         detail = {"engine": engine, "datasources": [{"id": ds.id, "name": ds.name} for ds in resolved.tables.values()]}
     outcome = "failure"
     try:
-        resp = await get_engine_client().post(path, timeout=60, json={
-            **body, "format": fmt, "filename": filename, "owner": export_owner(user)})
+        wait = export_wait(request)
+        resp = await get_engine_client().post(path, timeout=60 + wait, json={
+            **body, "format": fmt, "filename": filename, "owner": export_owner(user), "wait_seconds": wait})
         if resp.status_code >= 400:
             raise _engine_failure(resp, lambda d: d)
         outcome = "success"

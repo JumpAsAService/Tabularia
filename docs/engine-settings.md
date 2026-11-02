@@ -271,6 +271,7 @@ Container node) or greyed out (an engine that is not configured).
 | Setting | Variable | Panel range | Applies |
 |---|---|---|---|
 | Most rows in a CSV export | `EXPORT__MAX_ROWS` | 0 – 100,000,000 | live |
+| Exports at once per person | `EXPORT__MAX_RUNNING_PER_PERSON` | 1 – 50 | live |
 
 **SFTP**
 
