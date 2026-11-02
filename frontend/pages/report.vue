@@ -27,10 +27,11 @@ import { useFolderPaths } from '~/composables/useFolderPaths'
 import { useDialogA11y } from '~/composables/useDialogA11y'
 import { versionNote } from '~/composables/useSavedScripts'
 import {
-  explicitParams, isPlainState, NO_VALUE, paramsOfForm, stateAfter, useReports, whatListsHold, withChoices,
+  explicitParams, isPlainState, paramsOfForm, stateAfter, useReports, whatListsHold, withChoices,
   type ReportDetail, type ReportFormValue, type ReportHotspot, type ReportParameter, type ReportParams,
   type ReportScreen, type ReportState, type ReportVersion,
 } from '~/composables/useReports'
+import { dashboardQuery, formOfQuery, valuesInQuery } from '~/composables/useDashboards'
 import ReportPages from '~/components/report/ReportPages.vue'
 import ReportParamsBar from '~/components/report/ReportParamsBar.vue'
 import ReportApiDialog from '~/components/report/ReportApiDialog.vue'
@@ -58,52 +59,13 @@ const form = ref<Record<string, ReportFormValue>>({})
 // viewed yet — a click on the pages must not render those)
 const chosen = ref<Record<string, ReportFormValue>>({})
 const fieldErrors = ref<Record<string, string>>({})
-// a parameter called `id` would meet the report's own: in the address it is `_id`
-// (a parameter's name starts with a letter, so `_id` is nobody's)
-const urlKey = (name: string) => (name === 'id' ? '_id' : name)
-const freeMulti = (p: ReportParameter) => p.multi && !(p.choices && !p.choices_truncated)
-
-function defaultValue(p: ReportParameter): ReportFormValue {
-  const d = p.default
-  const texts = (d === null || d === undefined ? [] : Array.isArray(d) ? d : [d]).map((v) => String(v))
-  if (!p.multi) return texts[0] ?? ''
-  return freeMulti(p) ? texts.join(', ') : texts
-}
-function urlValues(): Record<string, string[]> {
-  const out: Record<string, string[]> = {}
-  for (const [k, v] of Object.entries(route.query)) {
-    if (k === 'id') continue
-    const name = k === '_id' ? 'id' : k
-    out[name] = (Array.isArray(v) ? v : [v]).filter((x): x is string => typeof x === 'string')
-  }
-  return out
-}
 function formFromUrl() {
-  const given = urlValues()
-  const next: Record<string, ReportFormValue> = {}
-  for (const p of parameters.value) {
-    const v = given[p.name]
-    if (!v || !v.length) next[p.name] = defaultValue(p)
-    else if (v.length === 1 && v[0] === NO_VALUE) next[p.name] = freeMulti(p) || !p.multi ? '' : []
-    else if (!p.multi) next[p.name] = v[0]
-    else next[p.name] = freeMulti(p) ? v.join(', ') : v
-  }
+  const next = formOfQuery(parameters.value, valuesInQuery(route.query))
   form.value = next
   chosen.value = { ...next }
 }
 const toParams = (values: Record<string, ReportFormValue>) => paramsOfForm(parameters.value, values)
 const sameValue = (a: ReportFormValue, b: ReportFormValue) => JSON.stringify(a) === JSON.stringify(b)
-/** The address of these values: the report, and the values that differ from their defaults. */
-function queryFor(values: Record<string, ReportFormValue>): Record<string, string | string[]> {
-  const q: Record<string, string | string[]> = { id: String(reportId.value) }
-  const params = toParams(values)
-  for (const p of parameters.value) {
-    const v = params[p.name]
-    if (v === undefined || v === null || sameValue(values[p.name], defaultValue(p))) continue
-    q[urlKey(p.name)] = Array.isArray(v) ? v.map(String) : String(v)
-  }
-  return q
-}
 const queryKey = (q: Record<string, unknown>) =>
   JSON.stringify(Object.keys(q).sort().map((k) => [k, Array.isArray(q[k]) ? q[k] : [q[k]]]))
 
@@ -169,7 +131,7 @@ async function load() {
     api.opened(id).catch(() => {})
     // the choices that follow a value given in the link (only the lists: that answer has
     // the link's values as its defaults)
-    const given = urlValues()
+    const given = valuesInQuery(route.query)
     const known = Object.fromEntries(Object.entries(given).filter(([k]) => params.some((p) => p.name === k)))
     if (Object.keys(known).length && params.length > 1) {
       try { parameters.value = withChoices(params, await api.parameters(id, known)) } catch { /* the first answer holds */ }
@@ -203,7 +165,7 @@ function view() {
     document.getElementById(`rp-field-${missing[0]}`)?.focus()
     return
   }
-  const q = queryFor(form.value)
+  const q = dashboardQuery(reportId.value!, parameters.value, form.value)
   if (queryKey(q) === queryKey(route.query as Record<string, unknown>)) {
     chosen.value = { ...form.value }
     renderScreen()

@@ -110,12 +110,11 @@ export function createLiveView(o: LiveViewOptions): LiveView {
       o.setSlots(tookAnswer(o.slots(), mine, answer.tiles, { keep: false }))
     }, (e: any) => {
       if (controller.signal.aborted || isAbort(e)) return
+      for (const id of ids) if (o.slots()[id]?.asked === mine) delete asked[id]
       if (Array.isArray(e?.problems) && e.problems.length) {
-        for (const id of ids) if (o.slots()[id]?.asked === mine) delete asked[id]
         run(e.problems)
         return
       }
-      for (const id of ids) if (o.slots()[id]?.asked === mine) delete asked[id]
       o.setSlots(tookFailure(o.slots(), mine, o.errorOf(e), { keep: false }))
     }).finally(() => { inFlight.delete(mine) })
   }

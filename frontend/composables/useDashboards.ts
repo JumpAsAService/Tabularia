@@ -94,8 +94,8 @@ export function starterDashboard(locale: string, timezone: string): DashboardDef
   }
 }
 
-// ── the parameters in the address, as a report's (pages/report.vue) ──────────
-// A parameter called `id` would meet the dashboard's own: in the address it is `_id` (a
+// ── the parameters in the address: a dashboard's, and a report's (pages/report.vue) ──
+// A parameter called `id` would meet the object's own: in the address it is `_id` (a
 // parameter's name starts with a letter, so `_id` is nobody's).
 const urlKey = (name: string) => (name === 'id' ? '_id' : name)
 const freeMulti = (p: ReportParameter) => p.multi && !(p.choices && !p.choices_truncated)
@@ -132,7 +132,7 @@ export function formOfQuery(parameters: ReportParameter[], given: Record<string,
   return form
 }
 
-/** The address of these values: the dashboard, and the values that differ from their defaults, so
+/** The address of these values: the dashboard or the report, and the values that differ from their defaults, so
  *  that a default such as «the last 30 days» keeps moving with the calendar. */
 export function dashboardQuery(id: number, parameters: ReportParameter[], values: Record<string, ReportFormValue>): Record<string, string | string[]> {
   const q: Record<string, string | string[]> = { id: String(id) }

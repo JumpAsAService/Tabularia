@@ -3,7 +3,6 @@
 // click on it filters the others. KPIs, texts and images have their title here (a chart and a table
 // have one of their own). Worked out by the grid's rules, as a drag is.
 import { computed } from 'vue'
-import { ChevronRight } from 'lucide-vue-next'
 import RdNum from '~/components/report/designer/RdNum.vue'
 import RdSection from '~/components/report/designer/RdSection.vue'
 import { GRID_COLUMNS, MAX_GRID_ROW, MAX_TILE_ROWS, MIN_TILE, pushed, type GridBox } from '~/composables/dashboardGrid'
