@@ -235,6 +235,34 @@ def test_run_writes_parquet_and_cache(storage, src):
     assert df["paese"].dtype == pl.String
 
 
+def _two_integer_sides(storage):
+    left = upload_df(storage, pl.DataFrame({"k": pl.Series([1, 2, 3], dtype=pl.Int32), "v": [10, 20, 30]}), "datasets/typed_left_ch.parquet")
+    right = upload_df(storage, pl.DataFrame({"k": pl.Series([1, 2], dtype=pl.UInt32), "n": ["a", "b"]}), "datasets/typed_right_ch.parquet")
+    return left, {"type": "join", "params": {"how": "inner", "on": ["k"], "right": {"bucket": right.bucket, "key": right.key}}}
+
+
+def test_a_run_writes_the_key_of_a_join_on_two_integer_types_under_its_name(storage):
+    left, join = _two_integer_sides(storage)
+    dest = DataSource(bucket=BUCKET, key="out/typed.parquet")
+    res = _engine(storage).run(left, [join], dest)
+    assert res.rows_written == 2 and [c.name for c in res.columns] == ["k", "v", "n"]
+    written = pl.read_parquet(_read_blob(storage, BUCKET, "out/typed.parquet"))
+    assert written.columns == ["k", "v", "n"] and sorted(written["k"].to_list()) == [1, 2]
+
+
+def test_a_join_copied_in_the_cache_before_the_key_kept_its_name_is_not_read_again(storage):
+    """On ClickHouse before 25.3 the cache holds join steps with a column `l.k`: read again
+    (their fingerprint did not change), what follows would still not find the key, for as
+    long as somebody keeps using them. The name of the engine's copies moved on."""
+    left, join = _two_integer_sides(storage)
+    cache = StepCache(storage, redis_client=FakeRedis())
+    old = plan_hashes(f"clickhouse:{left.bucket}/{left.key}", [join])[-1]
+    upload_df(storage, pl.DataFrame({"l.k": [1, 2], "v": [10, 20], "n": ["a", "b"]}), cache.object_key(old))
+    cache.mark(old)
+    res = _engine(storage, cache).preview(left, [join, {"type": "select", "params": {"columns": ["k"]}}], limit=10)
+    assert sorted(r["k"] for r in res.rows) == [1, 2]
+
+
 def test_preview_uses_cache_prefix(storage, src):
     cache = StepCache(storage, redis_client=FakeRedis())
     eng = _engine(storage, cache)

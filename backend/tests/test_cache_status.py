@@ -7,7 +7,7 @@ import pytest
 
 from app.api.models import CacheStatusRequest
 from app.api.routes import tasks
-from app.engine.cache import StepCache, plan_hashes
+from app.engine.cache import StepCache, plan_hashes, source_fingerprint
 from app.engine.duckdb_engine import DuckDBEngine
 from app.engine.polars_engine import PolarsEngine
 from tests.conftest import drain_cache
@@ -71,10 +71,25 @@ if importlib.util.find_spec("chdb"):
 
 @pytest.mark.parametrize("module, name", ENGINES)
 def test_every_engine_names_its_sources_as_the_route_does(module, name):
-    """The route writes `<engine>:<bucket>/<key>`, each engine's `_source_id`: should
-    one engine change it, its haloes would never light up."""
+    """The route writes `source_fingerprint`, each engine's `_source_id`: should one
+    engine change it, its haloes would never light up."""
     from app.engine.base import DataSource
 
     cls = getattr(importlib.import_module(module), name)
     engine = object.__new__(cls)  # no connection, no client: only the name is needed
-    assert engine._source_id(DataSource(bucket="b", key="datasets/k.parquet")) == f"{cls.engine_name}:b/datasets/k.parquet"
+    assert engine._source_id(DataSource(bucket="b", key="datasets/k.parquet")) == source_fingerprint(cls.engine_name, "b", "datasets/k.parquet")
+
+
+@pytest.mark.parametrize("engine_name", ["polars", "duckdb", "chdb", "bigquery"])
+def test_only_clickhouse_forgot_its_copies(engine_name):
+    assert source_fingerprint(engine_name, "b", "k") == f"{engine_name}:b/k"
+
+
+def test_the_halo_looks_for_a_clickhouse_copy_under_the_name_the_engine_writes_it(storage, fredis, sales, monkeypatch):
+    from app.core.config import ClickHouseExternalSettings
+    from app.engine.clickhouse_engine import ClickHouseEngine
+
+    eng = ClickHouseEngine(storage=storage, cache=StepCache(storage, redis_client=fredis), cfg=ClickHouseExternalSettings(host="unused"))
+    monkeypatch.setattr(tasks, "_step_cache", lambda name: eng.cache)
+    eng.cache.mark(plan_hashes(eng._source_id(sales), [FILTER])[-1])
+    assert _status(eng, sales, {"filter": [FILTER]})["cached"] == ["filter"]

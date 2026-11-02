@@ -524,6 +524,23 @@ def _cross_join(lf: pl.LazyFrame, right_lf: pl.LazyFrame, ctx: OperationContext)
     return lf.join(right_lf, how="cross")
 
 
+def _widen_full_join_keys(left: pl.LazyFrame, right: pl.LazyFrame, keys) -> tuple[pl.LazyFrame, pl.LazyFrame]:
+    """A key of two integer types, in a full join: Polars fills it with a wider column but
+    goes on saying it is the left's type, so what comes after fails, and a pivot makes up
+    its rows. Both sides are widened first, and the plan tells the truth."""
+    left_s, right_s = left.collect_schema(), right.collect_schema()
+    casts = []
+    for key in [keys] if isinstance(keys, str) else keys:
+        a, b = left_s.get(key), right_s.get(key)
+        if a == b or a is None or b is None or not (a.is_integer() and b.is_integer()):
+            continue
+        if pl.UInt64 in (a, b):  # beyond a signed 64-bit integer, what the join compares on
+            casts.append(pl.col(key).cast(pl.UInt64 if a.is_unsigned_integer() and b.is_unsigned_integer() else pl.Int128))
+        else:
+            casts.append(pl.col(key).cast(pl.Int64))
+    return (left.with_columns(casts), right.with_columns(casts)) if casts else (left, right)
+
+
 @register("join")
 def op_join(lf: pl.LazyFrame, params: dict[str, Any], ctx: OperationContext) -> pl.LazyFrame:
     # params: {"right": <source or sub-flow>,
@@ -548,6 +565,8 @@ def op_join(lf: pl.LazyFrame, params: dict[str, Any], ctx: OperationContext) -> 
         return lf.join(right_lf, left_on=_require(params, "left_on"), right_on=_require(params, "right_on"), how=how)
     left_cols = lf.collect_schema().names()
     if "on" in params:
+        if how == "full":
+            lf, right_lf = _widen_full_join_keys(lf, right_lf, params["on"])
         out = lf.join(right_lf, on=params["on"], how=how, coalesce=True)
     else:
         left_on = _require(params, "left_on")

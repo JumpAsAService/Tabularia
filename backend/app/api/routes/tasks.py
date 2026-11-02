@@ -18,7 +18,7 @@ from functools import lru_cache
 
 from app.engine import DEFAULT_ENGINE, PreviewResult, available_operations
 from app.engine.base import Operation
-from app.engine.cache import StepCache, plan_hashes
+from app.engine.cache import StepCache, plan_hashes, source_fingerprint
 import logging
 from app.core.config import get_settings
 from app.core.panel_settings import value_at_start
@@ -205,7 +205,7 @@ def cache_status(request: CacheStatusRequest) -> dict:
         if not chain.operations:
             continue
         ops = [Operation(**op.model_dump()).model_dump() for op in chain.operations]
-        final = plan_hashes(f"{name}:{chain.bucket}/{chain.input_key}", ops)[-1]  # each engine's `_source_id`
+        final = plan_hashes(source_fingerprint(name, chain.bucket, chain.input_key), ops)[-1]  # each engine's `_source_id`
         if cache.has(final):
             cached.append(chain.node_id)
         elif cache.is_skipped(final):

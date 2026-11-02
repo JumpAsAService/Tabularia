@@ -465,16 +465,20 @@ def _join_condition(params: dict) -> tuple[str, str]:
 def _join_select(lcols, rcols, skip_right: set, coalesce_keys: set = frozenset()) -> str:
     """The result's columns: all the left's + the right's (USING keys excluded), with the
     _right suffix on the same names — as Polars/DuckDB. In full/right joins the USING keys
-    are coalesce(left, right): filled in the rows that exist only on the right too."""
+    are coalesce(left, right): filled in the rows that exist only on the right too.
+
+    Every column carries its name: a USING key of two types (Int32 and UInt32) is cast to
+    a common one, and ClickHouse before 25.3 then names the column `l.k`, not `k`: what
+    read `k` afterwards did not find it, and a run wrote it under that name."""
     lset = set(lcols)
     parts = [
-        f"coalesce(l.{_qi(c)}, r.{_qi(c)}) AS {_qi(c)}" if c in coalesce_keys else f"l.{_qi(c)}"
+        f"coalesce(l.{_qi(c)}, r.{_qi(c)}) AS {_qi(c)}" if c in coalesce_keys else f"l.{_qi(c)} AS {_qi(c)}"
         for c in lcols
     ]
     for c in rcols:
         if c in skip_right:
             continue
-        parts.append(f"r.{_qi(c)} AS {_qi(c + '_right')}" if c in lset else f"r.{_qi(c)}")
+        parts.append(f"r.{_qi(c)} AS {_qi(c + '_right' if c in lset else c)}")
     return ", ".join(parts)
 
 

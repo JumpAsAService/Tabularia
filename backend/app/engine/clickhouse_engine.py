@@ -44,7 +44,7 @@ from botocore.exceptions import ClientError
 from app.core import panel_settings
 from app.core.config import ClickHouseExternalSettings, get_settings
 from app.engine.base import DataSource, Engine, Operation, PreviewResult, RunResult, preview_rows
-from app.engine.cache import StepCache, plan_hashes
+from app.engine.cache import StepCache, plan_hashes, source_fingerprint
 from app.engine.matview import MatViewStore
 from app.engine.chdb_ops import _lit, _qi, get_chdb_operation, temporal_safe_sql
 from app.engine.principal import AI, current_principal
@@ -613,7 +613,7 @@ class ClickHouseEngine(DeferredStepCache, Engine):
             logger.warning("KILL QUERY for %s failed: %s", tag, _clean_error(e))
 
     def _source_id(self, source: DataSource) -> str:
-        return f"{self.engine_name}:{source.bucket}/{source.key}"
+        return source_fingerprint(self.engine_name, source.bucket, source.key)
 
     def _scan_max_threads(self, ctx) -> int:
         """max_threads to impose on a scan, or 0 to leave it alone. Reads the server's cores

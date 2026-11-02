@@ -32,6 +32,7 @@ import statistics
 import polars as pl
 import pytest
 
+from app.engine.base import DataSource
 from app.engine.cache import StepCache
 from app.engine.exceptions import EngineError
 from app.engine.polars_engine import PolarsEngine
@@ -654,6 +655,113 @@ def test_join_duplicates_multiply_rows(storage, orders, customers, name):
     assert sorted((r["id"], r["tag"]) for r in res.rows) == [(1, "a"), (1, "b"), (2, "c"), (5, "a"), (5, "b"), (7, "c")]
     res = run(name, storage, orders, [_join("left", right)])
     assert res.row_count == 8 + 2  # 1 and 5 double
+
+
+# The same key, two integer types (an Int32 from one database, a UInt32 from another): the
+# server casts both sides to a common type, and ClickHouse before 25.3 then names the column
+# `l.k` instead of `k`. Whatever came after could not find it, or wrote it under that name.
+_TWO_INTEGER_TYPES = [(pl.Int32, pl.UInt32), (pl.UInt32, pl.Int32), (pl.Int32, pl.Int64), (pl.UInt8, pl.Int32)]
+
+
+def _two_typed_sides(storage, left_type, right_type):
+    left = upload_df(storage, pl.DataFrame({"k": pl.Series([1, 2, 3, None], dtype=left_type), "v": [10, 20, 30, 40]}),
+                     "datasets/typed_left_corr.parquet")
+    upload_df(storage, pl.DataFrame({"k": pl.Series([1, 2, 4], dtype=right_type), "n": ["a", "b", "d"]}),
+              "datasets/typed_right_corr.parquet")
+    return left, {"bucket": BUCKET, "key": "datasets/typed_right_corr.parquet"}
+
+
+@pytest.mark.parametrize("types", _TWO_INTEGER_TYPES, ids=lambda t: f"{t[0]}-{t[1]}")
+@pytest.mark.parametrize("how,expected", [
+    ("inner", [(1, 10, "a"), (2, 20, "b")]),
+    ("left", [(1, 10, "a"), (2, 20, "b"), (3, 30, None), (None, 40, None)]),
+    ("right", [(1, 10, "a"), (2, 20, "b"), (4, None, "d")]),
+    ("full", [(1, 10, "a"), (2, 20, "b"), (3, 30, None), (4, None, "d"), (None, 40, None)]),
+], ids=lambda v: v if isinstance(v, str) else "")
+@pytest.mark.parametrize("name", ENGINES)
+def test_a_join_key_of_two_integer_types_keeps_its_name(storage, name, how, expected, types):
+    left, right = _two_typed_sides(storage, *types)
+    check(name, storage, left, [_join(how, right, on=["k"])],
+          [dict(zip(("k", "v", "n"), row)) for row in expected], columns=["k", "v", "n"])
+
+
+@pytest.mark.parametrize("how,keys", [("semi", [1, 2]), ("anti", [3, None])])
+@pytest.mark.parametrize("name", ENGINES)
+def test_a_semi_or_anti_join_on_two_integer_types_keeps_the_left_columns(storage, name, how, keys):
+    left, right = _two_typed_sides(storage, pl.Int32, pl.UInt32)
+    res = run(name, storage, left, [_join(how, right, on=["k"])])
+    assert [c.name for c in res.columns] == ["k", "v"]
+    assert sorted((r["k"] for r in res.rows), key=str) == sorted(keys, key=str)
+
+
+@pytest.mark.parametrize("after", [
+    {"type": "select", "params": {"columns": ["k", "v"]}},
+    {"type": "sort", "params": {"by": "k"}},
+    {"type": "rename", "params": {"mapping": {"k": "chiave"}}},
+    {"type": "sql", "params": {"query": "SELECT *, v * 2 AS doppio FROM self"}},
+    {"type": "group_by", "params": {"by": ["k"], "aggregations": [{"column": "v", "func": "sum", "alias": "v"}]}},
+], ids=lambda op: op["type"])
+@pytest.mark.parametrize("name", ENGINES)
+def test_what_follows_a_join_on_two_integer_types_finds_the_key(storage, name, after):
+    left, right = _two_typed_sides(storage, pl.Int32, pl.UInt32)
+    res = run(name, storage, left, [_join("inner", right, on=["k"]), after])
+    key = "chiave" if after["type"] == "rename" else "k"
+    assert sorted(_norm(r[key]) for r in res.rows) == [1, 2]
+    assert "l.k" not in [c.name for c in res.columns]
+
+
+@pytest.mark.parametrize("name", ENGINES)
+def test_what_follows_a_full_join_on_two_integer_types_reads_the_right_values(storage, name):
+    """Polars said the key of such a join was still the left's type while its column was a
+    wider one: a sort or a group_by failed, and a pivot gave back made up rows and columns."""
+    left, right = _two_typed_sides(storage, pl.Int32, pl.UInt32)
+    join = _join("full", right, on=["k"])
+    every_key = [1, 2, 3, 4, None]
+    assert [r["k"] for r in run(name, storage, left, [join, {"type": "sort", "params": {"by": "k"}}]).rows] == every_key
+    grouped = run(name, storage, left, [join, {"type": "group_by", "params": {"by": ["k"], "aggregations": [{"column": "v", "func": "sum", "alias": "v"}]}}])
+    assert sorted(((r["k"], r["v"]) for r in grouped.rows), key=str) == [(1, 10), (2, 20), (3, 30), (4, None), (None, 40)]
+    pivoted = run(name, storage, left, [join, {"type": "filter", "params": {"column": "k", "operator": "le", "value": 2}},
+                                        {"type": "pivot", "params": {"index": ["k"], "on": ["n"], "values": "v", "func": "sum"}}])
+    assert [c.name for c in pivoted.columns] == ["k", "a", "b"]
+    assert sorted((r["k"], r["a"], r["b"]) for r in pivoted.rows) == [(1, 10, None), (2, None, 20)]
+    full_pivot = run(name, storage, left, [join, {"type": "pivot", "params": {"index": ["k"], "on": ["n"], "values": "v", "func": "sum"}}])
+    assert [c.name for c in full_pivot.columns] == ["k", "a", "b", "d", "null"]
+
+
+@pytest.mark.parametrize("name", ENGINES[:2])  # ClickHouse refuses a USING key of Int64 and UInt64
+def test_a_full_join_keeps_a_key_too_wide_for_a_signed_integer(storage, name):
+    big = 2**63 + 5
+    left = upload_df(storage, pl.DataFrame({"k": pl.Series([1, -1], dtype=pl.Int64), "v": [10, 20]}), "datasets/wide_left_corr.parquet")
+    upload_df(storage, pl.DataFrame({"k": pl.Series([1, big], dtype=pl.UInt64), "n": ["a", "b"]}), "datasets/wide_right_corr.parquet")
+    res = run(name, storage, left, [_join("full", {"bucket": BUCKET, "key": "datasets/wide_right_corr.parquet"}, on=["k"])])
+    assert sorted((int(r["k"]), r["v"], r["n"]) for r in res.rows) == [(-1, 20, None), (1, 10, "a"), (big, None, "b")]
+    written = _engine(name, storage).run(left, [_join("full", {"bucket": BUCKET, "key": "datasets/wide_right_corr.parquet"}, on=["k"])],
+                                         DataSource(bucket=BUCKET, key="out/wide_corr.parquet"))
+    assert written.rows_written == 3
+
+
+@pytest.mark.parametrize("name", ENGINES)
+def test_customer_segments_on_a_key_of_two_integer_types(storage, name):
+    """The «Customer Segments by Region» flow of the sample data, in small: an aggregate by
+    customer, joined to a registry whose `id` becomes the key, a segment written in SQL with
+    `SELECT *`, an aggregate counting the customers, a pivot. On ClickHouse 24.8 the count
+    failed with «Unknown expression identifier cliente_id»."""
+    lines = upload_df(storage, pl.DataFrame({"cliente_id": pl.Series([1, 1, 1, 2, 3], dtype=pl.Int32), "importo": [10.0, 20.0, 5.0, 40.0, 7.5]}),
+                      "datasets/rfm_lines_corr.parquet")
+    upload_df(storage, pl.DataFrame({"id": pl.Series([1, 2, 3], dtype=pl.UInt32), "regione": ["Nord", "Nord", "Sud"]}),
+              "datasets/rfm_customers_corr.parquet")
+    registry = {"source": {"bucket": BUCKET, "key": "datasets/rfm_customers_corr.parquet"},
+                "operations": [{"type": "rename", "params": {"mapping": {"id": "cliente_id"}}}]}
+    res = run(name, storage, lines, [
+        {"type": "group_by", "params": {"by": ["cliente_id"], "aggregations": [
+            {"column": "importo", "func": "sum", "alias": "valore"}, {"column": "importo", "func": "count", "alias": "ordini"}]}},
+        {"type": "join", "params": {"how": "inner", "on": ["cliente_id"], "right": registry}},
+        {"type": "sql", "params": {"query": "SELECT *, CASE WHEN ordini >= 2 THEN 'Loyal' ELSE 'At risk' END AS segmento FROM self"}},
+        {"type": "group_by", "params": {"by": ["regione", "segmento"], "aggregations": [
+            {"column": "valore", "func": "sum", "alias": "valore"}, {"column": "cliente_id", "func": "n_unique", "alias": "clienti"}]}},
+    ])
+    assert sorted((r["regione"], r["segmento"], _norm(r["valore"]), r["clienti"]) for r in res.rows) == [
+        ("Nord", "At risk", 40.0, 1), ("Nord", "Loyal", 35.0, 1), ("Sud", "At risk", 7.5, 1)]
 
 
 @pytest.mark.parametrize("name", ENGINES)

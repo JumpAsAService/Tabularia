@@ -51,6 +51,18 @@ def _canonical(op: dict) -> str:
     return json.dumps(op, sort_keys=True, separators=(",", ":"))
 
 
+# An engine's name in its fingerprints: moved on when what a step writes changes under the
+# same operations, so that nothing goes on reading the old copies (the TTL removes them).
+# clickhouse.2: a join's key keeps its name (see chdb_ops._join_select), before 25.3 the
+# copies hold a column `l.k`.
+_FINGERPRINT_NAME = {"clickhouse": "clickhouse.2"}
+
+
+def source_fingerprint(engine: str, bucket: str, key: str) -> str:
+    """Where the fingerprints of an engine's chain on an object start from."""
+    return f"{_FINGERPRINT_NAME.get(engine, engine)}:{bucket}/{key}"
+
+
 def plan_hashes(source_id: str, operations: list[dict]) -> list[str]:
     """
     The chain's progressive hash.
