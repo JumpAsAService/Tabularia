@@ -13,4 +13,8 @@ export const site = {
   repo: 'https://github.com/JumpAsAService/Tabularia',
   branch: process.env.SITE_REPO_BRANCH || 'main',
   dockerHub: 'https://hub.docker.com/u/jumpasaservice',
+  // Cloudflare Web Analytics: the site's token (public, it is in every page), from the
+  // workflow's SITE_ANALYTICS_TOKEN (a repository variable). Empty = no analytics at all.
+  // No cookies and no personal data: visits, pages, countries.
+  analyticsToken: (process.env.SITE_ANALYTICS_TOKEN || '').trim(),
 }

@@ -41,6 +41,7 @@ const isInternal = (target: string) => target.startsWith('/')
         <p>{{ t.footer.copyright }}</p>
         <p class="small soft foot__tm">{{ t.footer.trademarks }}</p>
         <p class="small soft foot__tm">{{ t.footer.warranty }} <a :href="`${config.public.repo}/blob/main/LICENSE`">{{ t.footer.licence }}</a>. · <a :href="`${config.app.baseURL}third-party-notices.txt`">Open source licences</a></p>
+        <p v-if="config.public.analytics" class="small soft foot__tm">{{ t.footer.analytics }}</p>
       </div>
       <div class="foot__actions">
         <ThemeToggle />

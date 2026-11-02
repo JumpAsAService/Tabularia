@@ -191,7 +191,9 @@ to 185.199.108.153, 185.199.109.153, 185.199.110.153 and 185.199.111.153, `AAAA`
 issue the certificate. The organisation's verified domain (a `TXT` record
 `_github-pages-challenge-jumpasaservice`) keeps anyone else's Pages from claiming it. The
 site is built for its root: `SITE_URL` in the workflow, the one value to change if the
-domain ever changes.
+domain ever changes. Visits are counted with Cloudflare Web Analytics (no cookies, no
+personal data) when the repository variable `SITE_ANALYTICS_TOKEN` holds the site's token;
+without it the pages load no analytics.
 
 The site describes the current `main` without naming a version: publish a release first
 when the product changed since the last one.

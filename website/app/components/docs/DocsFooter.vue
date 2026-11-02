@@ -11,6 +11,9 @@ const config = useRuntimeConfig()
       <a :href="config.public.dockerHub">Images on Docker Hub</a> ·
       <a :href="`${config.app.baseURL}third-party-notices.txt`">Open source licences</a>
     </p>
+    <p v-if="config.public.analytics" class="docs-footer__note">
+      Visits are counted with Cloudflare Web Analytics: no cookies, no personal data.
+    </p>
   </footer>
 </template>
 
@@ -21,4 +24,5 @@ const config = useRuntimeConfig()
 }
 .docs-footer a { color: var(--soft); }
 .docs-footer a:hover { color: var(--text); }
+.docs-footer__note { flex-basis: 100%; margin: 0; font-size: 13px; }
 </style>

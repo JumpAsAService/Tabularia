@@ -50,7 +50,16 @@ SITE_URL=https://tabularia.org/ npm run generate                         # the d
 SITE_URL=https://jumpasaservice.github.io/Tabularia/ npm run generate   # under a path: /Tabularia/
 ```
 
-For a custom domain, also add `public/CNAME` with the host name and set it in Settings → Pages.
+The domain is set in Settings → Pages → Custom domain (with the Actions deploy no `CNAME`
+file is needed): see the release process, «The domain».
+
+### Visits
+
+`SITE_ANALYTICS_TOKEN`, the token of a Cloudflare Web Analytics site, adds Cloudflare's
+beacon to every page and a line in the footers that says so: no cookies, no personal data,
+only visits, pages and countries. The workflow reads it from the repository variable of the
+same name (Settings → Secrets and variables → Actions → Variables); unset, the site has no
+analytics at all.
 
 ## How the docs are turned into pages
 

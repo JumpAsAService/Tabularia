@@ -38,6 +38,11 @@ export default defineNuxtConfig({
           innerHTML: "try{var t=localStorage.getItem('tabularia-site-theme');if(t==='light'||t==='dark')document.documentElement.dataset.theme=t}catch(e){}",
           tagPosition: 'head',
         },
+        // Cloudflare Web Analytics, only with a token: cookieless, counts visits and pages
+        ...(site.analyticsToken
+          ? [{ src: 'https://static.cloudflareinsights.com/beacon.min.js', defer: true,
+               'data-cf-beacon': JSON.stringify({ token: site.analyticsToken }), tagPosition: 'bodyClose' as const }]
+          : []),
       ],
     },
   },
@@ -50,6 +55,7 @@ export default defineNuxtConfig({
       repo: site.repo,
       branch: site.branch,
       dockerHub: site.dockerHub,
+      analytics: Boolean(site.analyticsToken),
     },
   },
 

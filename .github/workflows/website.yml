@@ -54,6 +54,9 @@ jobs:
     env:
       # the one value that says where the site lives; the base path is derived from it
       SITE_URL: https://tabularia.org/
+      # Cloudflare Web Analytics (cookieless): the site's token, a repository variable
+      # (Settings → Secrets and variables → Actions → Variables); unset = no analytics
+      SITE_ANALYTICS_TOKEN: ${{ vars.SITE_ANALYTICS_TOKEN }}
     steps:
       - name: Check out
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1

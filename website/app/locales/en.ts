@@ -224,6 +224,7 @@ export default {
     trademarks:
       'BigQuery and Google Cloud are trademarks of Google LLC; ClickHouse is a trademark of ClickHouse, Inc. Other names are trademarks of their owners, named only to say what Tabularia works with.',
     top: 'Back to top',
+    analytics: 'Visits are counted with Cloudflare Web Analytics: no cookies, no personal data.',
     warranty: 'Provided “as is”, without warranty; the authors are not liable for any damage, including loss of data (AGPL-3.0 §15–16). Keep backups.',
     licence: 'Read the licence',
     name: 'Tabularia',
