@@ -132,6 +132,8 @@ externalServices:
 # AI assistant: a chat over the catalog against any OpenAI-compatible endpoint.
 # Users only reach the datasources they can read; every query is audited. No
 # model is usable until an administrator enables it in Admin → AI models.
+# `enabled` adds this endpoint as a provider; the limits and the comment below apply as well
+# to the providers an administrator adds in Admin → AI models.
 ai:
   enabled: false
   baseUrl: ""            # e.g. https://api.scaleway.ai/v1

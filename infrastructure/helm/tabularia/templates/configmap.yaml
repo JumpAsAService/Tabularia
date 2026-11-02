@@ -169,6 +169,9 @@ CLICKHOUSE_EXTERNAL__S3_NAMED_COLLECTION: {{ . | quote }}
 AI__BASE_URL: {{ required "ai.baseUrl is required when ai.enabled" .Values.ai.baseUrl | quote }}
 AI__ACCESS_KEY: {{ include "tabularia.env" (.Values.ai.accessKey) }}
 AI__DEFAULT_MODEL: {{ include "tabularia.env" (.Values.ai.defaultModel) }}
+{{- end }}
+# What the assistants and the AI comment may do, with the endpoint above or with the providers
+# an administrator adds in Admin → AI models
 AI__MAX_RESULT_ROWS: {{ include "tabularia.env" (.Values.ai.maxResultRows) }}
 AI__MAX_REQUESTS: {{ include "tabularia.env" (.Values.ai.maxRequests) }}
 AI__MAX_FLOW_REQUESTS: {{ include "tabularia.env" (.Values.ai.maxFlowRequests) }}
@@ -181,7 +184,6 @@ AI__COMMENT_KEEP_SECONDS: {{ include "tabularia.env" (.Values.ai.commentKeepSeco
 AI__COMMENT_MIN_SECONDS: {{ include "tabularia.env" (.Values.ai.commentMinSeconds) }}
 AI__COMMENT_WAIT_SECONDS: {{ include "tabularia.env" (.Values.ai.commentWaitSeconds) }}
 AI__COMMENT_MODEL: {{ include "tabularia.env" (.Values.ai.commentModel) }}
-{{- end }}
 
 {{- if .Values.externalServices.bigquery.enabled }}
 # Optional engine: transformations run on Google BigQuery, reading the parquet

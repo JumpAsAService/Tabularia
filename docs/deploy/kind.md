@@ -649,10 +649,9 @@ kubectl logs --namespace tabularia-deps job/sampledb-init --tail=1
 The `until` waits for the Job to end; `kubectl logs --namespace tabularia-deps --follow
 job/sampledb-init`, in another terminal, shows it working. The data takes seconds at the
 `small` scale; the Job then imports the tables, runs the eleven sample flows once and
-makes the views, the reports and the dashboard, about two minutes in all. The last line
-is `DONE. The «Sample» folder is ready: …`; a flow that failed is named instead, and
-running the Job again (below) retries only those.
-<!-- 2 minutes: measured on the Compose stack, 2026-11-02: 4 s of data and 110 s of everything else on Polars, 110 s on DuckDB. The final check measures this Job on kind. -->
+makes the views, the reports and the dashboard, about two and a half minutes in all. The
+last line is `DONE. The «Sample» folder is ready: …`; a flow that failed is named instead,
+and running the Job again (below) retries only those.
 
 Reload Explore. The `Sample` folder holds:
 
@@ -674,8 +673,11 @@ on `Sample`, and CONNECT too to import from its two connections.
 - **More data**: `SAMPLES_SCALE` in `infrastructure/kind/samples.yaml` is `small`;
   `medium` (3.5 million order lines) takes a few minutes. Choose it before the first
   `apply`: the Job generates the data only into empty databases.
-- **Run it again** (a flow that failed, a folder deleted by mistake): it duplicates
-  nothing.
+- **Run it again** (a flow that failed, a folder deleted by mistake, or a new release
+  of Tabularia that brings new samples): it duplicates nothing and only adds what is
+  missing. `kubectl apply` alone does not start it again, since the Job of the first
+  time is still there. For a new release, run the `docker build` and `kind load` above
+  first.
 
   ```bash
   kubectl delete job sampledb-init --namespace tabularia-deps
