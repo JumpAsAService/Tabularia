@@ -359,8 +359,8 @@ def op_compute(sql, params, ctx):
             raise EngineError("compute: name and expression are required")
         if forbidden_expression(expr, "duckdb") or _BIGQUERY_ONLY.search(expr):
             raise EngineError(
-                f"compute: the expression of '{name}' is not allowed (no subqueries, "
-                "FROM or external functions — scalar expressions only)."
+                f"compute: the expression of '{name}' is not allowed, or cannot be read (no "
+                "subqueries, FROM or external functions — scalar expressions only)."
             )
         expr = ctx.map_quoted(to_bigquery_expr(expr))
         if name in existing:

@@ -308,8 +308,9 @@ def _recast_hugeint(ctx, rel):
 
 
 # ── compute (scalar SQL expressions, WITHOUT subqueries or file reads) ───────
-# the expression is parsed, not searched for words: EXTRACT(YEAR FROM d) is scalar
-# (see app/engine/expressions.py, whose blacklist covers read_*, parquet_scan, scan_*)
+# the expression is parsed, not searched for words: EXTRACT(YEAR FROM d) is scalar, and
+# one the parser cannot read is refused (see app/engine/expressions.py, whose list of
+# functions covers read_*, parquet_scan, scan_*)
 @_register("compute")
 def op_compute(rel, params, a, ctx):
     columns = _require(params, "columns")  # [{name, expr}]
@@ -322,8 +323,8 @@ def op_compute(rel, params, a, ctx):
             raise EngineError("compute: name and expression are required")
         if forbidden_expression(expr, "duckdb"):
             raise EngineError(
-                f"compute: the expression of '{name}' is not allowed (no subqueries, "
-                "FROM or file reading functions — scalar expressions only)."
+                f"compute: the expression of '{name}' is not allowed, or cannot be read (no "
+                "subqueries, FROM or file reading functions — scalar expressions only)."
             )
         step = f"{a}_{i}"
         if name in rel.columns:

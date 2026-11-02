@@ -347,9 +347,9 @@ def op_compute(sql, params, ctx):
             raise EngineError("compute: name and expression are required")
         if forbidden_expression(expr, "clickhouse"):
             raise EngineError(
-                f"compute: the expression of '{name}' is not allowed (no subqueries, "
-                "tables, table functions or functions that read data outside the row — "
-                "scalar expressions only)."
+                f"compute: the expression of '{name}' is not allowed, or cannot be read (no "
+                "subqueries, tables, table functions or functions that read data outside the "
+                "row — scalar expressions only)."
             )
         expr = _utf8_functions(expr)
         if name in existing:

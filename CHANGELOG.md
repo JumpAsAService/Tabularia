@@ -294,6 +294,12 @@ notebooks.
   the check, in a flow's SQL node as anywhere SQL runs on the catalog; chDB's
   `file('/path')` was stopped only by a bug of an older sqlglot. Both names are now
   refused wherever they appear.
+- **Fixed (security): a calculated column could read any file of the bucket or the worker on
+  DuckDB.** When the check of a compute expression could not parse it, it fell back on a
+  list of words that missed `read_*` and `PIVOT`: an expression such as `(PIVOT
+  read_parquet('s3a://…') …)` read objects outside the folders one may see, from an editor
+  preview with VIEW alone. An expression the check cannot read is now refused, on every
+  engine. Found by the audit of the observer role for a public demo.
 - **Fixed (security): SQL on a database connection could write.** It runs inside `SELECT
   * FROM (…)`, which refuses a statement that is not a query, but a function the query
   calls could still write: on PostgreSQL a plain `SELECT wipe()` deleted the rows, through

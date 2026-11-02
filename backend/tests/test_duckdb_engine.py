@@ -305,7 +305,10 @@ def test_compute(storage, src):
 
 def test_compute_blocks_subquery_and_file(storage, src):
     e = _engine(storage)
-    for bad_expr in ("(SELECT 1)", "(SELECT * FROM read_csv('/etc/passwd'))"):
+    # the PIVOT over a file: sqlglot cannot read it, and before 2026-11-02 a search for words
+    # let it through, reading any object of the bucket and the worker's files
+    for bad_expr in ("(SELECT 1)", "(SELECT * FROM read_csv('/etc/passwd'))",
+                     "(PIVOT read_csv('/etc/hostname') ON (1) IN (1) USING count(*))"):
         with pytest.raises(EngineError, match="not allowed"):
             e.preview(src, [{"type": "compute", "params": {"columns": [{"name": "x", "expr": bad_expr}]}}], limit=5)
 

@@ -14,20 +14,14 @@ dangerous is refused:
   · the SCALAR functions that read data outside the row: dictionaries (`dictGet…`),
     `joinGet`, the models (`catboostEvaluate`, `evalMLMethod`), the server's metadata;
   · several expressions in one (`;`).
-When the expression cannot be read, the earlier careful rule (by words) holds: better a
-refusal too many than a read unseen.
+When the expression cannot be read it is refused: what the parser does not understand
+cannot be checked. The earlier fallback, a search for words, missed what it did not list:
+`(PIVOT read_parquet('s3a://…') …)` is unreadable to sqlglot and read any object of the
+bucket, and the worker's files, from a preview with VIEW alone (audit 2026-11-02).
 """
 from __future__ import annotations
 
 import re
-
-# the earlier check by words: it stays for what sqlglot cannot read
-_FORBIDDEN_WORDS = re.compile(
-    r"\b(?:select|from|with|insert|attach|create|"
-    r"file|url|s3|hdfs|remote|remoteSecure|mysql|postgresql|jdbc|odbc|"
-    r"clusterAllReplicas|cluster|dictionary|merge|numbers|zeros)\b",
-    re.IGNORECASE,
-)
 
 # scalar functions that read data not in the row (or the server itself)
 _FORBIDDEN_FUNCTIONS = re.compile(
@@ -59,8 +53,8 @@ def forbidden_expression(expr: str, dialect: str = "clickhouse") -> bool:
         return True
     try:
         trees = sqlglot.parse(f"SELECT ({expr}) AS _x", read=dialect)
-    except Exception:  # noqa: BLE001 — unreadable: the careful rule, by words
-        return bool(_FORBIDDEN_WORDS.search(expr))
+    except Exception:  # noqa: BLE001 — unreadable: not checkable, so not allowed
+        return True
     if len(trees) != 1 or trees[0] is None:
         return True
     tree = trees[0]

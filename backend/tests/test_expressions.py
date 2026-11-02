@@ -30,9 +30,17 @@ def test_what_reads_outside_the_row_is_refused(expr):
     assert forbidden_expression(expr, "clickhouse"), expr
 
 
-def test_what_cannot_be_read_keeps_the_careful_rule():
+def test_what_cannot_be_read_is_refused():
+    """Not checkable, so not allowed: the earlier fallback by words let a PIVOT over
+    read_parquet through on DuckDB, reading objects outside the VIEW (audit 2026-11-02)."""
     assert forbidden_expression("select ((( from", "clickhouse")
-    assert not forbidden_expression("a +", "clickhouse") or True   # broken syntax: the engine will refuse it anyway
+    assert forbidden_expression("a +", "clickhouse")
+    for dialect in ("duckdb", "clickhouse"):
+        for expr in ("(PIVOT read_parquet('s3a://b/datasets/1/x.parquet') ON (concat(a) IS NOT NULL) "
+                     "IN (true) USING count(*))",
+                     "(PIVOT read_csv('/etc/hostname') ON (1) IN (1) USING count(*))",
+                     "(UNPIVOT read_parquet('s3a://b/x.parquet') ON a INTO NAME k VALUE v)"):
+            assert forbidden_expression(expr, dialect), (dialect, expr)
 
 
 # DuckDB (and BigQuery, whose expressions are written in the same dialect) use the
