@@ -39,3 +39,15 @@ def out_of_memory(what: str, datasets: Iterable[str]) -> str:
                 f"in its query or in a flow — {what} works best on summarized data.")
     return (f"The data is too big for {what} to read: the worker ran out of memory. Aggregate it first, "
             f"in its queries or in a flow — {what} works best on summarized data.")
+
+
+def worker_lost(what: str, datasets: Iterable[str]) -> str:
+    """What a dashboard or a report says when its worker went away whole while it read. On Kubernetes the
+    kernel kills a container's every process at its memory limit (memory.oom.group), so no SIGKILL of a
+    child reaches Celery and `worker_killed` cannot tell: memory is the likely cause, not a certain one (an
+    upgrade or a drained node do the same)."""
+    names = list(dict.fromkeys(datasets))
+    read = f"reading «{names[0]}»" if len(names) == 1 else "reading the data"
+    return (f"The worker {read} for {what} stopped before the end, most often because the rows were too many for "
+            f"its memory. Try again; if it happens again, aggregate the data first, in its query or in a flow — "
+            f"{what} works best on summarized data.")

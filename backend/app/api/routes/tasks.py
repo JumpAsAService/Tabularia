@@ -93,6 +93,7 @@ _PREVIEW_ERROR_STATUS = {"not_found": 404, "unprocessable": 422, "bad_request": 
 _PREVIEW_POLL_SECONDS = 0.25
 _WORKER_LOOK_SECONDS = 5.0  # how often a wait with others behind it checks its worker is there
 _SUPERSEDED = "Preview superseded by a more recent request"
+WORKER_LOST = "The worker computing this was lost: try again"
 # how long the synchronous export waits for a worker to pick it up, on top of the
 # workers' time limit for the export itself
 EXPORT_QUEUE_WAIT_SECONDS = 600
@@ -136,7 +137,7 @@ def on_preview_worker(task_name: str, kwargs: dict, slot: str | None, seconds: f
                 if watch_worker and time.monotonic() >= look_at:
                     look_at = time.monotonic() + _WORKER_LOOK_SECONDS
                     if async_result.state == "STARTED" and worker_pool.lost(task_id, async_result.info):
-                        raise HTTPException(status_code=503, detail="The worker computing this was lost: try again")
+                        raise HTTPException(status_code=503, detail=WORKER_LOST)
                 if time.monotonic() >= deadline:
                     async_result.revoke(terminate=True)  # stops the preview in progress
                     raise HTTPException(

@@ -520,7 +520,7 @@ def test_those_waiting_get_the_failure_of_who_was_computing_and_ask_again_only_l
     def fails(task, kwargs, slot, seconds=None, watch_worker=False):
         calls.append(1)
         time.sleep(0.3)
-        raise HTTPException(status_code=503, detail="The worker computing this was lost: try again")
+        raise HTTPException(status_code=503, detail=tasks.WORKER_LOST)
 
     monkeypatch.setattr(tasks, "on_preview_worker", fails)
 
@@ -531,7 +531,9 @@ def test_those_waiting_get_the_failure_of_who_was_computing_and_ask_again_only_l
     failures = [r for r in results if isinstance(r, HTTPException)]
     waited = [r for r in results if not isinstance(r, Exception)]
     assert len(calls) == 1 and len(failures) == 1 and failures[0].status_code == 503
-    assert len(waited) == 9 and all(r["tiles"]["k"] == {"error": "The worker computing this was lost: try again", "code": "error"} for r in waited)
+    said = failures[0].detail  # a worker gone whole: the likely cause, with the dataset it read
+    assert said.startswith("The worker reading «orders» for a dashboard stopped before the end")
+    assert len(waited) == 9 and all(r["tiles"]["k"] == {"error": said, "code": "error"} for r in waited)
     time.sleep(1.1)
     monkeypatch.setattr(tasks, "on_preview_worker", lambda task, kwargs, slot, seconds=None, watch_worker=False: celery_app.tasks[task].run(**kwargs))
     assert ask()["tiles"]["k"]["value"] == 60.0

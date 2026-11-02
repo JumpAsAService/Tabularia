@@ -168,13 +168,20 @@ def _reads(asked: dict) -> list[str]:
 def _from_worker(send: Callable[[], dict], otherwise: str, what: str, reads: Callable[[], list[str]]) -> dict:
     """`send()`, a task on the preview worker, and its answer as `_worker_said` says it. Its process killed
     while it worked (errors.worker_killed) is said in words, as a 422: the rows `what` read were too many for
-    the worker's memory, which aggregating them changes; it was a 500, «Internal Server Error»."""
+    the worker's memory, which aggregating them changes; it was a 500, «Internal Server Error». A worker gone
+    whole (tasks.WORKER_LOST, how Kubernetes kills one at its memory limit) stays a 503, saying what is likely."""
+    from app.api.routes.tasks import WORKER_LOST
+
     try:
         payload = send()
     except WorkerLostError as e:
         if not errors.worker_killed(e):
             raise
         raise HTTPException(status_code=422, detail=errors.out_of_memory(what, reads())) from None
+    except HTTPException as e:
+        if e.status_code != 503 or e.detail != WORKER_LOST:
+            raise
+        raise HTTPException(status_code=503, detail=errors.worker_lost(what, reads())) from None
     return _worker_said(payload, otherwise)
 
 

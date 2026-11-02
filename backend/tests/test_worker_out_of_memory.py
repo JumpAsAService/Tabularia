@@ -97,6 +97,31 @@ def test_a_worker_lost_for_another_reason_is_not_called_out_of_memory(monkeypatc
         asyncio.run(routes.tiles(routes.DashboardTiles(definition=definition(), datasets={"Vendite": SALES})))
 
 
+@pytest.mark.parametrize("of_report, what", [(False, "a dashboard"), (True, "a report")])
+def test_a_worker_gone_whole_says_memory_is_the_likely_cause(monkeypatch, of_report, what):
+    """Kubernetes kills the container's every process at its memory limit: no SIGKILL of a child reaches
+    Celery, and what is seen is a worker lost."""
+    def gone(task, kwargs, slot, seconds=None, watch_worker=False):
+        raise HTTPException(status_code=503, detail=tasks.WORKER_LOST)
+
+    monkeypatch.setattr(tasks, "on_preview_worker", gone)
+    e = refused(routes.tiles(routes.DashboardTiles(definition=definition(), datasets={"Vendite": SALES}, of_report=of_report)))
+    assert e.status_code == 503 and e.detail == (
+        f"The worker reading «Vendite» for {what} stopped before the end, most often because the rows were too many for "
+        f"its memory. Try again; if it happens again, aggregate the data first, in its query or in a flow — "
+        f"{what} works best on summarized data.")
+
+
+def test_another_503_is_left_as_it_was(monkeypatch):
+    def busy(task, kwargs, slot, seconds=None, watch_worker=False):
+        raise HTTPException(status_code=503, detail="No worker is listening")
+
+    monkeypatch.setattr(tasks, "on_preview_worker", busy)
+    e = refused(routes.choices(routes.ReportChoices(definition=definition(), dataset="Vendite", datasets={"Vendite": SALES},
+                                                    value="[region]")))
+    assert (e.status_code, e.detail) == (503, "No worker is listening")
+
+
 def test_what_celery_keeps_of_the_kill_is_still_known_as_one():
     """The API reads the failure back from the result backend, not from the worker."""
     backend = celery_app.backend
