@@ -597,10 +597,8 @@ async def preview_report(body: PreviewRequest, request: Request, user: User = De
     that lists them by item and property, as a refused save does; what only reading the
     data finds (a dataset too large, one that cannot be read) is said as a render says it."""
     report = _being_edited(session, user, body.report_id, body.project_id)
-    looked = await reports.review(session, user, body.definition)
-    if looked.problems:
-        raise looked.refusal()
-    started = await reports.render(session, user, report, looked.definition, body.format,
+    definition = await reports.checked(session, user, body.definition)
+    started = await reports.render(session, user, report, definition, body.format,
                                    reports.given_params(body.params), state=body.state, origin="editor",
                                    request=request)
     return RenderStarted(task_id=started.task_id, filename=started.filename)
@@ -614,10 +612,8 @@ async def preview_report_comment(body: CommentPreviewRequest, request: Request, 
     on the same ones costs nothing, and the preview shows it."""
     report = _being_edited(session, user, body.report_id, body.project_id)
     current = reports.content_of(session, report) if report is not None else None
-    looked = await reports.review(session, user, body.definition, current)
-    if looked.problems:
-        raise looked.refusal()
-    comment = await reports.commented(session, user, report, looked.definition, body.item, reports.given_params(body.params), request)
+    definition = await reports.checked(session, user, body.definition, current)
+    comment = await reports.commented(session, user, report, definition, body.item, reports.given_params(body.params), request)
     return _comment_out(session, user, comment)
 
 

@@ -55,6 +55,7 @@ from app.routes.reports import (
     _comment_out,
     _parameters_out,
     _query_params,
+    _shown_email,
     _wait_for_file,
 )
 from app.routes.search import _like as like_pattern
@@ -62,7 +63,6 @@ from app.schemas.models import Page, UtcDateTime
 from app.services import audit, dashboards, reports
 from app.services import permissions as perm_service
 from app.services.copy_names import commit_copy, free_copy_name
-from app.services.masking import mask_email
 from app.services.pagination import paginate
 from app.services.report_definition import Problem
 
@@ -320,7 +320,7 @@ def search_dashboards(
     found = [d for d, _, _ in rows]
     sizes = dashboards.sizes_of(session, [d.id for d in found])
     # an account that is only an observer is shared, and reads the emails masked (services/masking.py)
-    shown = mask_email if perm_service.is_observer_only(session, user) else (lambda email: email)
+    shown = _shown_email(session, user)
     owners = {uid: full_name or shown(email) for uid, full_name, email in session.exec(
         select(User.id, User.full_name, User.email)
         .where(User.id.in_({d.owner_id for d in found if d.owner_id is not None}))).all()}  # type: ignore[attr-defined]
@@ -349,6 +349,13 @@ async def check_dashboard(body: CheckRequest, user: User = Depends(get_current_u
     return CheckOut(problems=(await dashboards.review(session, user, body.definition, current)).problems)
 
 
+async def _checked_edit(session: Session, user: User, body: PreviewRequest | CommentPreviewRequest) -> tuple[Optional[Dashboard], dict]:
+    """A definition being edited (`_being_edited`), checked as a save would be: a 422 that lists its problems."""
+    dashboard = _being_edited(session, user, body.dashboard_id, body.project_id)
+    current = dashboards.content_of(session, dashboard) if dashboard is not None else None
+    return dashboard, await dashboards.checked(session, user, body.definition, current)
+
+
 @router.post("/dashboards/preview", response_model=TilesOut)
 async def preview_dashboard(body: PreviewRequest, user: User = Depends(get_current_user),
                             session: Session = Depends(get_session)):
@@ -356,14 +363,10 @@ async def preview_dashboard(body: PreviewRequest, user: User = Depends(get_curre
     a new one goes in. Checked first, as a save is: problems are a 422 that lists them by tile
     and property. A dataset it reads as the saved dashboard does and this person may not read
     refuses in its tiles; one it now points to must be theirs to read, as at a save."""
-    dashboard = _being_edited(session, user, body.dashboard_id, body.project_id)
-    current = dashboards.content_of(session, dashboard) if dashboard is not None else None
-    looked = await dashboards.review(session, user, body.definition, current)
-    if looked.problems:
-        raise looked.refusal()
+    dashboard, definition = await _checked_edit(session, user, body)
     editing = f"preview-{dashboard.id if dashboard is not None else 'new'}{f'-{body.tab}' if body.tab else ''}"
     title = dashboard.name if dashboard is not None else ""
-    return await dashboards.numbers(session, user, looked.definition, _asked(body), title, editing=editing)
+    return await dashboards.numbers(session, user, definition, _asked(body), title, editing=editing)
 
 
 @router.post("/dashboards/preview/comment", response_model=CommentOut)
@@ -372,14 +375,10 @@ async def preview_dashboard_comment(body: CommentPreviewRequest, request: Reques
     """**Try it**: the comment of a definition not saved yet, as `/dashboards/preview` reads its numbers:
     EDIT on the folder, and problems are a 422 that lists them. On the author's bill, when pressed and only
     then; what is kept goes by the numbers, so pressing it again on the same ones costs nothing."""
-    dashboard = _being_edited(session, user, body.dashboard_id, body.project_id)
-    current = dashboards.content_of(session, dashboard) if dashboard is not None else None
-    looked = await dashboards.review(session, user, body.definition, current)
-    if looked.problems:
-        raise looked.refusal()
+    dashboard, definition = await _checked_edit(session, user, body)
     editing = f"comment-{dashboard.id if dashboard is not None else 'new'}{f'-{body.tab}' if body.tab else ''}"
     asked = dashboards.Asked(given=reports.given_params(body.params))
-    comment = await dashboards.commented(session, user, looked.definition, body.tile, asked, "asked", dashboard.name if dashboard is not None else "",
+    comment = await dashboards.commented(session, user, definition, body.tile, asked, "asked", dashboard.name if dashboard is not None else "",
                                          editing=editing, request=request)
     return _comment_out(session, user, comment)
 
@@ -639,7 +638,7 @@ def list_versions(dashboard_id: int, user: User = Depends(get_current_user), ses
     rows = session.exec(select(DashboardVersion).where(DashboardVersion.dashboard_id == dashboard.id)
                         .order_by(DashboardVersion.version.desc())).all()  # type: ignore[attr-defined]
     # an account that is only an observer is shared, and reads the emails masked (services/masking.py)
-    shown = mask_email if perm_service.is_observer_only(session, user) else (lambda email: email)
+    shown = _shown_email(session, user)
     authors = {u.id: shown(u.email) for u in session.exec(select(User).where(
         User.id.in_({r.created_by for r in rows if r.created_by}))).all()} if rows else {}  # type: ignore[attr-defined]
     return [VersionOut(version=r.version, note=r.note, created_at=r.created_at, created_by=authors.get(r.created_by),

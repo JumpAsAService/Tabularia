@@ -444,6 +444,13 @@ def _click_value(value: Any) -> bool:
     return value is None or isinstance(value, (bool, int))
 
 
+def _counting(definition: dict, clicks: list, refused: dict) -> list:
+    """The clicks that count for this reader: one on a tile whose dataset they may not read counts for nothing.
+    They were checked first (`_checked_clicks`): each names a tile of the definition."""
+    tiles = {t.get("id"): t for t in definition.get("tiles") or [] if isinstance(t, dict)}
+    return [c for c in clicks if tiles[c["tile"]].get("dataset") not in refused]
+
+
 def _checked_clicks(definition: dict, clicks: list) -> list[dict]:
     """The clicks as the engine takes them, or 422. The browser names a tile and values, and never
     an expression: a key it does not know is refused, not left out, and what a value chooses on is
@@ -589,8 +596,7 @@ async def numbers(session: Session, user: User, definition: dict, asked: Asked, 
     cache = await cache_of(definition, saved, asked.refresh) if saved is not None else None
     plan = await _plan(session, user, definition, asked, cache)
     slot = slot_of(user, editing, asked) if saved is None else None
-    tiles = {t.get("id"): t for t in definition.get("tiles") or [] if isinstance(t, dict)}
-    asked.counting = [c for c in asked.clicks if tiles[c["tile"]].get("dataset") not in plan.refused]
+    asked.counting = _counting(definition, asked.clicks, plan.refused)
     _release_db(session, user)  # nothing holds a database connection while the engine works
     return _finished(definition, await _computed(plan, asked, title, slot, cache))
 
@@ -657,8 +663,7 @@ async def _comments_of_document(session: Session, user: User, definition: dict, 
     """What the AI comments of a document say: on the numbers its screen reads with these clicks, a click on what
     the reader may not read counting for nothing, as on the screen. What cannot be read is a comment not available."""
     numbers: Optional[dict] = {}
-    tiles = {t.get("id"): t for t in definition.get("tiles") or [] if isinstance(t, dict)}
-    counting = [c for c in asked.clicks if tiles[c["tile"]].get("dataset") not in plan.refused]
+    counting = _counting(definition, asked.clicks, plan.refused)
     if not metadata_only.on("chat"):
         from app.routes.proxy import _release_db  # routes → services: late import
 
