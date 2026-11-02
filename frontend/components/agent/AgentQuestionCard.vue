@@ -48,7 +48,7 @@ const answerOf = (i: number): string => {
 }
 const complete = computed(() => props.questions.every((_, i) => answerOf(i) !== ''))
 // locked without an answer: the person wrote something else, and the conversation went on
-const unanswered = computed(() => props.locked && !(props.answers ?? []).some((a) => a != null))
+const skipped = computed(() => props.locked && !(props.answers ?? []).some((a) => a != null))
 
 function submit() {
   if (props.locked || !complete.value) return
@@ -77,7 +77,7 @@ watch(() => props.locked, focusFirst)
   <form ref="root" class="ask" :class="{ locked }" :aria-labelledby="`${uid}-title`" @submit.prevent="submit">
     <p :id="`${uid}-title`" class="ask-title">
       <MessageCircleQuestionMark :size="15" aria-hidden="true" />
-      {{ locked ? (unanswered ? t('chat.ask.titleSkipped') : t('chat.ask.titleAnswered')) : t('chat.ask.title') }}
+      {{ locked ? (skipped ? t('chat.ask.titleSkipped') : t('chat.ask.titleAnswered')) : t('chat.ask.title') }}
     </p>
     <fieldset v-for="(q, qi) in questions" :key="qi" class="q" :disabled="locked">
       <legend>{{ q.question }}</legend>

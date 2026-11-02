@@ -13,8 +13,8 @@ const props = defineProps<{ item: Record<string, any> }>()
 const store = useDesign()
 const tile = computed(() => props.item as DTile)
 const least = computed(() => MIN_TILE[tile.value.type] ?? [1, 1])
-const canFilter = computed(() => ['chart', 'table'].includes(tile.value.type))
-const hasOwnTitle = computed(() => !canFilter.value)
+const filterable = computed(() => ['chart', 'table'].includes(tile.value.type))
+const hasOwnTitle = computed(() => !filterable.value)
 const gridProblem = computed(() => store.problemAt(tile.value.id, 'grid') ?? store.liveAt(tile.value.id, 'grid'))
 const titleProblem = computed(() => store.problemAt(tile.value.id, 'title') ?? store.liveAt(tile.value.id, 'title'))
 
@@ -50,13 +50,13 @@ function setFilters(e: Event) {
     <p class="rp-help">{{ $t('dashboardDesigner.gridHelp', { w: least[0], h: least[1] }) }}</p>
     <p v-if="gridProblem" class="rp-err" role="alert">{{ gridProblem.message }}</p>
   </RdSection>
-  <RdSection v-if="hasOwnTitle || canFilter" :title="$t('dashboardDesigner.onTheScreen')" skey="tile-screen">
+  <RdSection v-if="hasOwnTitle || filterable" :title="$t('dashboardDesigner.onTheScreen')" skey="tile-screen">
     <label v-if="hasOwnTitle" class="rp-f">
       <span>{{ $t('dashboardDesigner.title') }}</span>
       <input type="text" data-field="tile-title" maxlength="200" :value="tile.title ?? ''" @input="setTitle" />
     </label>
     <p v-if="titleProblem" class="rp-err" role="alert">{{ titleProblem.message }}</p>
-    <template v-if="canFilter">
+    <template v-if="filterable">
       <label class="rp-check">
         <input type="checkbox" data-field="filters-others" :checked="tile.filters_others !== false" @change="setFilters" />
         {{ $t('dashboardDesigner.filtersOthers') }}
