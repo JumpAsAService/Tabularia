@@ -25,6 +25,10 @@ of those waiting takes its place. A failure is kept for FAILED_SECONDS: those wa
 source down is not asked by all of them in turn. Nothing here cancels a computation: others may be
 waiting for it, so a person's newer request does not knock it down.
 
+A document with an AI comment reads through here too, a report's as well (`reader_of`): the comment and the
+pages must speak of the same rows, and a source must not be asked twice for one document. Those rows are that
+document's alone, named by a word it makes up (`reading`), so nothing of what it reads is shared, nor older.
+
 A refresh by hand (`claim_refresh`, at most every REFRESH_SECONDS per dashboard) gives its datasets
 a new generation, which is part of the key of their numbers and of what their rows' entry must
 say: everything read from them is read again, once, for everyone.
@@ -69,6 +73,7 @@ VERSION = 1  # of what is kept: an answer of another shape is not to be read as 
 LOCK_SECONDS = 30  # a holder that stopped renewing has died
 FAILED_SECONDS = 10
 REFRESH_SECONDS = 10
+READING_SECONDS = 600  # one document's rows: the comment's wait, and the queue its pages stand in
 GENERATION_SECONDS = 8 * 24 * 3600  # longer than anything it can tell apart (cache_seconds: 7 days at most)
 WAIT_SECONDS = float(value_at_start("PREVIEW_TIMEOUT_SECONDS"))
 DOWN_SECONDS = 5.0  # after a failure, Valkey is not asked again for this long
@@ -398,14 +403,14 @@ def _read_and_keep(name: str, h: str, version: str, spec: dict, cap: int, tz: An
     return ds
 
 
-def read_rows(name: str, spec: Any, cap: int, tz: Any, seconds: int, root: str | None = None) -> rdata.DataSet:
+def read_rows(name: str, spec: Any, cap: int, tz: Any, seconds: int, root: str | None = None, reading: str | None = None) -> rdata.DataSet:
     """`rdata.read_dataset` with the cache in front: one read of a source for everyone, however
     many requests and whichever tiles they ask for. `root`: whose generation these rows follow,
-    when they are not the dataset's whole (`_only_shown`, a list of choices). Rows given as they
-    are have nothing to keep."""
+    when they are not the dataset's whole (`_only_shown`, a list of choices). `reading`: the
+    document these rows are for, and nobody else. Rows given as they are have nothing to keep."""
     if not isinstance(spec, dict) or not ("connection" in spec or "input_key" in spec):
         return rdata.read_dataset(name, spec, cap, tz)
-    h = rows_hash(spec, cap)
+    h = _hash("reading", VERSION, spec, cap, reading) if reading else rows_hash(spec, cap)
     version = generation(root or h)
     deadline = time.monotonic() + WAIT_SECONDS
     delay = 0.02
@@ -427,6 +432,13 @@ def read_rows(name: str, spec: Any, cap: int, tz: Any, seconds: int, root: str |
 def reader(seconds: int, root: str | None = None) -> Callable[[str, Any, int, Any], rdata.DataSet]:
     """What `tiles.compute` takes as `read`."""
     return lambda name, spec, cap, tz: read_rows(name, spec, cap, tz, seconds, root)
+
+
+def reader_of(reading: str) -> Callable[[str, Any, int, Any], rdata.DataSet]:
+    """The rows of one document (`reading`): its AI comment reads them, on the preview queue, and its pages
+    after it, on the export queue. Past READING_SECONDS, or with no Valkey or bucket to keep them, the pages
+    read their source again, as they would without a comment."""
+    return lambda name, spec, cap, tz: read_rows(name, spec, cap, tz, READING_SECONDS, reading=reading)
 
 
 def choices_reading(spec: Any, seconds: int) -> dict:

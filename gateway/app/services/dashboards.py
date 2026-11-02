@@ -27,9 +27,11 @@ the cache, and hands them to services/ai_comment.py, which does the rest: what i
 are the definition's, never the browser's.
 
 A document of it (`render`, a PDF or an image) has the same three steps: the engine lays it out
-(app/reports/dashboard_layout.py) on the export queue, with the rows of the screen. A group's
-Pushmail cell sends one with the rights of whoever runs the group: what makes one valid for them is
-in services/pushmail.py, which schedule_authority asks too, and `groups_using` says who sends what.
+(app/reports/dashboard_layout.py) on the export queue, with the rows of the screen. Its AI comments are
+written first, on those same numbers, with the clicks of the moment, and their text goes with it; a failure
+costs them and not the document. A group's Pushmail cell sends one with the rights of whoever runs the group:
+what makes one valid for them is in services/pushmail.py, which schedule_authority asks too, and
+`groups_using` says who sends what.
 """
 from __future__ import annotations
 
@@ -650,6 +652,26 @@ def in_the_address(given: dict[str, list]) -> tuple[dict[str, list], list[dict]]
     return params, clicks
 
 
+async def _comments_of_document(session: Session, user: User, definition: dict, plan: _Plan, asked: Asked, given: dict[str, list], title: str,
+                                dashboard_id: int, cache: dict, moment: ai_comment.Moment, request: Optional[Request]) -> dict:
+    """What the AI comments of a document say: on the numbers its screen reads with these clicks, a click on what
+    the reader may not read counting for nothing, as on the screen. What cannot be read is a comment not available."""
+    numbers: Optional[dict] = {}
+    tiles = {t.get("id"): t for t in definition.get("tiles") or [] if isinstance(t, dict)}
+    counting = [c for c in asked.clicks if tiles[c["tile"]].get("dataset") not in plan.refused]
+    if not metadata_only.on("chat"):
+        from app.routes.proxy import _release_db  # routes → services: late import
+
+        _release_db(session, user)
+        reading = Asked(given=given, tiles=ai_comment.asked_of(definition), clicks=asked.clicks)
+        try:
+            numbers = (await _computed(plan, reading, title, None, cache)).get("tiles") or {}
+        except (HTTPException, httpx.HTTPError) as e:
+            reports.logger.warning("AI comment: its numbers could not be read: %s", getattr(e, "status_code", type(e).__name__))
+            numbers = None
+    return await ai_comment.on_paper(session, user, definition, numbers, moment=moment, where=("dashboard", dashboard_id), params=given, clicks=counting, request=request)
+
+
 def audit_render(session: Session, user: User, dashboard: Dashboard, request: Optional[Request], outcome: str, detail: dict) -> None:
     audit.record_audit(session, actor=user, action=audit.DASHBOARD_RENDER, outcome=outcome, target_type="dashboard", target_id=dashboard.id,
                        target_label=dashboard.name, detail=detail, request=request)
@@ -680,10 +702,14 @@ async def render(session: Session, user: User, dashboard: Dashboard, fmt: str, g
         plan = await _plan(session, user, definition, asked, cache)
         detail["parameters"] = {k: reports._shown(v) for k, v in plan.params.items()}
         name = reports.filename(dashboard, fmt)
+        comments: dict = {}
+        if ai_comment.has_comment(definition):
+            comments = await _comments_of_document(session, user, definition, plan, asked, given, dashboard.name, dashboard.id, cache,
+                                                   reports.comment_moment(fmt, origin, request), request)
         resp = await get_engine_client().post("/reports/dashboard-render", timeout=60, json={
             **laid_out(definition), "datasets": plan.datasets, "refused": plan.refused, "params": plan.params, "clicks": asked.clicks,
             "state": state, "format": fmt, "filename": name, "owner": owner, "locale": definition.get("locale") or "en",
-            "title": dashboard.name[:300], "cache": cache})
+            "title": dashboard.name[:300], "cache": cache, **({"comments": comments} if comments else {})})
         if resp.status_code in (404, 405):
             raise HTTPException(status_code=503, detail="The engine cannot make documents of a dashboard yet: update it to the gateway's version")
         if resp.status_code >= 400:

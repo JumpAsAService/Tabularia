@@ -218,10 +218,10 @@ def dataset_from(name: str, columns: dict[str, str], rows: Any, tz: ZoneInfo) ->
     return DataSet(name, columns, [{k: _plain(v, tz) for k, v in r.items()} for r in rows])
 
 
-def read(report: rd.Report, resolved: dict[str, dict], max_rows: int) -> dict[str, DataSet]:
-    """Every dataset the report uses, read."""
+def read(report: rd.Report, resolved: dict[str, dict], max_rows: int, reader: Any = None) -> dict[str, DataSet]:
+    """Every dataset the report uses, read; `reader`: where their rows come from, `read_dataset` otherwise."""
     tz = ZoneInfo(report.timezone or "UTC")
-    return {name: read_dataset(name, resolved.get(name), max_rows, tz) for name in used_datasets(report)}
+    return {name: (reader or read_dataset)(name, resolved.get(name), max_rows, tz) for name in used_datasets(report)}
 
 
 def add_calculated(report: rd.Report, data: dict[str, DataSet], ctx: ex.Context, evaluate: ex.Evaluator) -> None:

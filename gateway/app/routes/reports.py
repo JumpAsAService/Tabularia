@@ -14,6 +14,8 @@ Permissions:
   for it (services/reports.py): a dataset they may not read stops it, with its name;
 - the API (GET /reports/{id}/render) answers to an API token of either level, with its
   owner's rights, waits for the file and sends it;
+- an AI comment in a report is written when a render asks for it (services/reports.py), and in the
+  editor only on **Try it** (POST /reports/preview/comment), which is EDIT on the folder and on the author's bill;
 - administrators see and change every report.
 
 Every installation has them: no Kubernetes, no optional service but the engine's chart
@@ -42,7 +44,7 @@ from app.models import Project, Report, ReportVersion, User
 from app.models.permission import Capability
 from app.routes.search import _like as like_pattern
 from app.schemas.models import Page, UtcDateTime
-from app.services import audit, report_definition, report_params, report_views, reports, sql_scripts
+from app.services import ai_comment, audit, report_definition, report_params, report_views, reports, sql_scripts
 from app.services import permissions as perm_service
 from app.services.copy_names import commit_copy, free_copy_name
 from app.services.masking import mask_email
@@ -126,6 +128,29 @@ class CheckRequest(BaseModel):
     definition: dict[str, Any]
     report_id: Optional[int] = None
     project_id: Optional[int] = None
+
+
+class CommentPreviewRequest(BaseModel):
+    """**Try it**: an AI comment of a definition being edited, on the numbers read as it stands. Only when it is
+    pressed, so there is no moment to say."""
+    item: str = Field(max_length=64)
+    definition: dict[str, Any]
+    report_id: Optional[int] = None
+    project_id: Optional[int] = None
+    params: dict[str, Any] = Field(default_factory=dict)
+
+
+class CommentOut(BaseModel):
+    """services/ai_comment.py, `Comment`."""
+    state: str
+    text: str
+    model: str
+    numbers_at: Optional[str]
+    written_at: Optional[str]
+    stale: bool
+    can_ask: bool
+    message: str
+    reason: str
 
 
 class ProblemOut(BaseModel):
@@ -258,6 +283,14 @@ def _shown_email(session: Session, user: User):
     """An email as this person reads it: an account that is only an observer is shared, and
     reads them masked (services/masking.py)."""
     return mask_email if perm_service.is_observer_only(session, user) else (lambda email: email)
+
+
+def _comment_out(session: Session, user: User, comment: ai_comment.Comment) -> CommentOut:
+    """What failed is for whoever may do something about it."""
+    out = comment.as_dict()
+    if out["reason"] and not perm_service.is_admin(session, user):
+        out["reason"] = ""
+    return CommentOut(**out)
 
 
 def _record(session: Session, user: User, action: str, report: Report, request: Request,
@@ -571,6 +604,21 @@ async def preview_report(body: PreviewRequest, request: Request, user: User = De
                                    reports.given_params(body.params), state=body.state, origin="editor",
                                    request=request)
     return RenderStarted(task_id=started.task_id, filename=started.filename)
+
+
+@router.post("/reports/preview/comment", response_model=CommentOut)
+async def preview_report_comment(body: CommentPreviewRequest, request: Request, user: User = Depends(get_current_user),
+                                 session: Session = Depends(get_session)):
+    """**Try it**: the comment of a definition not saved yet: EDIT on the folder, and problems are a 422 that lists
+    them. On the author's bill, when pressed and only then; what is kept goes by the numbers, so pressing it again
+    on the same ones costs nothing, and the preview shows it."""
+    report = _being_edited(session, user, body.report_id, body.project_id)
+    current = reports.content_of(session, report) if report is not None else None
+    looked = await reports.review(session, user, body.definition, current)
+    if looked.problems:
+        raise looked.refusal()
+    comment = await reports.commented(session, user, report, looked.definition, body.item, reports.given_params(body.params), request)
+    return _comment_out(session, user, comment)
 
 
 @router.post("/reports/check", response_model=CheckOut)

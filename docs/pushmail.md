@@ -136,6 +136,27 @@ it off, and the audit log says why; a change of its tiles or their places keeps 
 Every dashboard the cell carries is a `dashboard.render` in the audit log, from `flow_group`,
 with its format and its parameters.
 
+## AI comments
+
+A report or a dashboard with an [AI comment](capabilities/reports.md#ai-comments) carries it in the
+email: in the attached PDF or image, and in the summary in the body.
+
+- **On the numbers it sends.** The comment and the file read the same rows, once from the source,
+  when the email leaves.
+- **On the bill of whoever runs the group**, the author of its schedule for a scheduled run,
+  under the daily ceilings, as `ai.comment` in the audit log. The same numbers every ten minutes are one call,
+  for a day (`AI__COMMENT_KEEP_SECONDS`).
+- **A comment never stops the cell.** The cell waits for it at most `AI__COMMENT_WAIT_SECONDS`,
+  holding no database connection. With the provider down, a wrong key, a ceiling reached or
+  `AI__METADATA_ONLY` on, **the email goes out**, with one line in its place. A tile in error
+  stops it; a comment does not.
+- **It is written by the orchestrator**, where the group runs, not by the gateway: its network must reach the
+  provider, as it must a webhook's receiver. Where it cannot, the comment is not available.
+- **A report as Excel** has no place for one, and asks nothing: with its summary in the body, the
+  summary has the comment and the workbook does not.
+- Someone else who adds an AI comment to what the cell sends, or changes what one reads or is asked,
+  switches the schedules off, as for what it reads: it spends the author's budget.
+
 ## What is checked, and when
 
 When the group is saved, a Pushmail cell that is new or changed is checked with the

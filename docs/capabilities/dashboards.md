@@ -24,7 +24,7 @@ Compose included.
 |---|---|
 | Where | Explore → **New** → **Dashboard**, in a folder, or **New dashboard** in **Analysis → Dashboards**, which lists the dashboards you may open, the most read first |
 | What it reads | up to 10 **datasets**, as a report's: SQL on the catalog or on a database connection, a datasource, a saved view, a saved SQL script |
-| What it shows | up to 40 **tiles** on a grid of 12 columns: KPI, 14 kinds of chart, table, matrix, text, image |
+| What it shows | up to 40 **tiles** on a grid of 12 columns: KPI, 14 kinds of chart, table, matrix, text, image, [AI comment](#ai-comments) |
 | Parameters | up to 20, as a report's: text, number, date or yes/no, one value or several, fixed choices or choices from a dataset |
 | A click | on a bar, a slice or a group filters the other tiles on the same dataset |
 | Refresh | by hand, and if you want by itself, at least every minute; the numbers are kept and shared, so that many readers run one query |
@@ -208,6 +208,7 @@ what is selected.
 | **Matrix** | a table with one column per value of a field | 4 × 4 |
 | **Text** | text as written, or an expression when it starts with `=` | 2 × 1 |
 | **Image** | a PNG, JPEG or SVG of at most 512 KiB, kept inside the dashboard | 1 × 1 |
+| **AI comment** | a short text the configured AI model writes on the numbers of the tiles you pick: [below](#ai-comments) | 4 × 3 |
 
 Sizes are in cells: 12 columns that share the width, rows of 40 pixels, 10 pixels between
 tiles. Drag a tile to move it, a handle to size it; it snaps to the grid, and a tile it
@@ -233,6 +234,42 @@ the server checks the whole definition each time, and a save it refuses names th
 the field. If someone else saved since you opened it, **Save** says so and asks before yours
 becomes the newest.
 
+## AI comments
+
+An **AI comment** tile holds a short text written by the configured AI model on the numbers of
+the tiles you pick, such as what moved and what stands out. The numbers never depend on it, and
+never wait for it: a provider that is down, a budget that is spent or a mode that forbids it
+costs the comment only, and the tile says so.
+
+**To add one**, click **AI comment** in **Insert**, and in its panel write what you ask of it (at
+most 1,000 characters; empty, it says what stands out) and tick what it reads, from 1 to 10 KPIs,
+charts or tables. **Try it** shows what it writes on the tile: the designer asks the model only
+then, never at a keystroke, and it needs EDIT on the folder.
+
+| | |
+|---|---|
+| **What it reads** | the title and the numbers of the tiles it reads, as the screen writes them: a KPI's value and change, a chart's categories and series, a table's groups and totals, a matrix's page, what is chosen by a click, with your instruction, in the dashboard's language |
+| **What it never reads** | a row. A table's detail rows and a scatter that is not aggregated stay out, though the screen shows them. A tile with only those is left out, and with nothing left no call is made: the panel says so. It has no tool to query with |
+| **When it writes** | on opening, on **Apply** and on a refresh by hand, if those numbers have no comment; on a PDF or an image, always on the numbers of that document. A hundred people on one dashboard make one call |
+| **After a click** | the old text goes, and **Comment this view** writes one for that view. **Back** brings the old one back, with no call |
+| **A screen that refreshes by itself** | at most one call every `AI__COMMENT_MIN_SECONDS` (an hour): until then the old text stays and says the time of the numbers it speaks of |
+| **Who pays** | whoever causes the call, under the daily ceilings: the author of a schedule for a [Pushmail cell](../pushmail.md#ai-comments). A read-only API token and an observer cause no call, and read what is kept |
+
+Every comment says **Written by AI · the model · numbers of the moment they were read**, and that
+it may be wrong, on screen and on paper; no setting takes that away. It is plain text, at most
+1,500 characters, with no link.
+
+When it cannot write, it says why in its place, and a PDF, an image or an email goes out with one
+line there: that the comment is not available, that the day's spending limit has been reached, that this
+installation sends no data to AI models (`AI__METADATA_ONLY`).
+
+**Any element it reads that you may not read stops the comment**, with what a tile with no access
+says and nothing about which one, on screen and in the PDF, with a comment kept for others and with
+none: a text written from fewer numbers would mislead, one from more would leak. An element hidden by
+its own condition shows nothing, so it is left out.
+
+What its model reads goes where the administrator said: [AI in Tabularia](../integrations/ai.md).
+
 ## Sending it on a schedule
 
 A dashboard is sent by a flow group: a [Pushmail cell](../pushmail.md#dashboards) attaches it
@@ -241,7 +278,8 @@ the dashboard's: the cell runs after the steps that refresh the data. **Nobody l
 before it leaves**, so it is stricter than the screen: a dataset the group's author may not
 read, or a tile that cannot say its numbers, stops the cell with its name, and nothing is
 sent. It reads its source and not what the screen keeps: what the steps before it refreshed
-is what it says.
+is what it says. An [AI comment](#ai-comments) never stops it: with the provider down the email
+goes out, with one line in its place.
 
 ## With whose rights
 

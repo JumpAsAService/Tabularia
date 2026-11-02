@@ -3,6 +3,11 @@
 export default {
   "reportDesigner": {
     "titleSuffix": "Berichtsdesigner",
+    "commentTitle": "Titel",
+    "commentReadsHelp": "1 bis {n} KPIs, Diagramme oder Tabellen dieses Berichts, wie jeder Leser sie lesen darf.",
+    "commentTried": "Er steht im Element auf der Seite und ist in der Vorschau zu sehen.",
+    "commentNeedsReads": "Wählen Sie unter «Was er liest» aus, was er liest.",
+    "commentNeedsValues": "Geben Sie seinen Parametern zuerst im Reiter Vorschau einen Wert.",
     "notFound": "Dieser Bericht existiert nicht, oder Sie können ihn nicht öffnen.",
     "backToExplore": "Zurück zu Explore",
     "nameLabel": "Name des Berichts",
@@ -90,6 +95,7 @@ export default {
     },
     "face": {
       "emptyText": "Text",
+      "comment": "Vom KI-Modell geschrieben, wenn der Bericht geöffnet oder gesendet wird",
       "noColumns": "Felder hierher ziehen, um Spalten zu bilden",
       "groupBy": "gruppieren nach…",
       "value": "Wert",
@@ -116,7 +122,8 @@ export default {
         "table": "Eine Tabelle mit Gruppen, Zwischen- und Gesamtsummen: sie wächst über die Seiten",
         "matrix": "Eine Matrix: eine Spalte pro Wert eines Feldes",
         "chart": "Ein Diagramm: Balken, Linie, Kreis, Tacho und zehn weitere",
-        "kpi": "Eine KPI-Karte: ein Wert, seine Veränderung und eine Sparkline"
+        "kpi": "Eine KPI-Karte: ein Wert, seine Veränderung und eine Sparkline",
+        "comment": "Ein Text, den das KI-Modell zu den Zahlen der gewählten Elemente schreibt"
       },
       "snip": {
         "pageOf": "Seitenzahl von gesamt",

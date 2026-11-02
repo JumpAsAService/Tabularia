@@ -6,7 +6,7 @@ import { computed, inject } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { CircleAlert, LoaderCircle, Sparkles } from 'lucide-vue-next'
 import RdSection from '~/components/report/designer/RdSection.vue'
-import { COMMENT_TRIAL, useDesign } from '~/composables/reportDesignStore'
+import { COMMENT_TRIAL, ON_A_BOARD, useDesign } from '~/composables/reportDesignStore'
 import { readableBy, showsOnlyRows } from '~/composables/dashboardComments'
 import type { DComment } from '~/composables/reportDesignModel'
 
@@ -16,6 +16,7 @@ const MAX_READS = 10
 const props = defineProps<{ item: DComment }>()
 const store = useDesign()
 const trial = inject(COMMENT_TRIAL, null)
+const onBoard = inject(ON_A_BOARD, false)
 const { t } = useI18n()
 
 const id = computed(() => props.item.id)
@@ -42,6 +43,11 @@ const tried = computed(() => trial?.tried(id.value) ?? null)
 
 <template>
   <RdSection :title="$t('dashboardDesigner.commentWords')" skey="comment-words" :bad="!!problemOf('instruction')">
+    <!-- a tile's title is its own, above; an item on paper has it here -->
+    <label v-if="!onBoard" class="rp-f">
+      <span>{{ $t('reportDesigner.commentTitle') }}</span>
+      <input v-model="item.title" type="text" maxlength="200" data-field="comment-title" />
+    </label>
     <label class="rp-f">
       <span>{{ $t('dashboardDesigner.commentInstruction') }}</span>
       <textarea v-model="item.instruction" class="cmp-area" data-field="comment-instruction" rows="4" :maxlength="MAX_INSTRUCTION" :placeholder="$t('dashboardDesigner.commentInstructionPh')" />
@@ -60,7 +66,7 @@ const tried = computed(() => trial?.tried(id.value) ?? null)
         <span class="cmp-kind">{{ kindOf(el) }}</span>
       </label>
     </div>
-    <p class="rp-help">{{ $t('dashboardDesigner.commentReadsHelp', { n: MAX_READS }) }}</p>
+    <p class="rp-help">{{ $t(onBoard ? 'dashboardDesigner.commentReadsHelp' : 'reportDesigner.commentReadsHelp', { n: MAX_READS }) }}</p>
     <p v-for="el in onlyRows" :key="el.id" class="cmp-note" role="note">
       <CircleAlert :size="13" aria-hidden="true" />
       <span>{{ $t('dashboardDesigner.commentOnlyRows', { name: nameOf(el) }) }}</span>
@@ -82,7 +88,7 @@ const tried = computed(() => trial?.tried(id.value) ?? null)
     </button>
     <p v-if="cannot && !off && !noModel" class="rp-help">{{ cannot }}</p>
     <p class="rp-help" role="status" data-tried>
-      <template v-if="tried?.state === 'ready'">{{ $t('dashboardDesigner.commentTried') }}</template>
+      <template v-if="tried?.state === 'ready'">{{ $t(onBoard ? 'dashboardDesigner.commentTried' : 'reportDesigner.commentTried') }}</template>
       <template v-else-if="tried">{{ tried.message }}<template v-if="tried.reason"> ({{ tried.reason }})</template></template>
     </p>
   </RdSection>

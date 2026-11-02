@@ -384,6 +384,18 @@ export function freeId(def: DDefinition, type: ItemType | 'matrix'): string {
 
 export type InsertKind = ItemType | 'matrix'
 
+/** What was chosen in the preview's form, as a render takes it: a list where the parameter takes several. */
+export function chosenParams(parameters: readonly { name: string; multi?: boolean }[], values: Record<string, string | string[] | undefined>): Record<string, string | string[]> {
+  const out: Record<string, string | string[]> = {}
+  for (const p of parameters) {
+    const v = values[p.name]
+    if (v === undefined) continue
+    const clean = (Array.isArray(v) ? v : p.multi ? v.split(',') : [v]).map((x) => x.trim()).filter(Boolean)
+    if (clean.length) out[p.name] = p.multi ? clean : clean[0]
+  }
+  return out
+}
+
 /** A new item of `kind`, at its default size; a table, matrix and chart on the first
  *  dataset, which the person changes in the properties. */
 export function newItem(def: DDefinition, kind: InsertKind, at: { x: number; y: number }, dataset?: string): DItem {

@@ -3,6 +3,11 @@
 export default {
   "reportDesigner": {
     "titleSuffix": "Concepteur de rapports",
+    "commentTitle": "Titre",
+    "commentReadsHelp": "De 1 à {n} KPI, graphiques ou tableaux de ce rapport, tels que chaque lecteur peut les lire.",
+    "commentTried": "C'est écrit dans l'élément sur la page, et visible dans l'aperçu.",
+    "commentNeedsReads": "Choisissez ce qu'il lit, dans « Ce qu'il lit ».",
+    "commentNeedsValues": "Donnez d'abord une valeur à ses paramètres dans l'onglet Aperçu.",
     "notFound": "Ce rapport n'existe pas, ou vous ne pouvez pas l'ouvrir.",
     "backToExplore": "Retour à Explorer",
     "nameLabel": "Nom du rapport",
@@ -90,6 +95,7 @@ export default {
     },
     "face": {
       "emptyText": "Texte",
+      "comment": "Écrit par le modèle d'IA quand le rapport s'ouvre ou s'envoie",
       "noColumns": "Déposez des champs ici pour créer des colonnes",
       "groupBy": "grouper par…",
       "value": "valeur",
@@ -116,7 +122,8 @@ export default {
         "table": "Un tableau avec groupes, sous-totaux et totaux : il grandit sur les pages",
         "matrix": "Une matrice : une colonne par valeur d'un champ",
         "chart": "Un graphique : barres, courbes, secteurs, jauge et dix autres",
-        "kpi": "Une carte KPI : une valeur, son évolution et une sparkline"
+        "kpi": "Une carte KPI : une valeur, son évolution et une sparkline",
+        "comment": "Un texte écrit par le modèle d'IA sur les chiffres des éléments que vous choisissez"
       },
       "snip": {
         "pageOf": "Numéro de page sur le total",

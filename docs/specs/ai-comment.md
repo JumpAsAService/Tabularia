@@ -1,7 +1,6 @@
 # Spec: an AI comment on the numbers, in dashboards and reports
 
-Status: decided with the owner on 2026-11-01. The writing (piece 1) and the dashboards (piece 2) are
-built; the reports are still to come.
+Status: decided with the owner on 2026-11-01; all three pieces are built.
 
 ## Objective
 
@@ -96,13 +95,16 @@ when a call was last made for an element, on any gateway, and what it wrote: tha
 | **Comment this view** | Yes, if those numbers have no comment |
 | Automatic refresh with new numbers | At most every `AI__COMMENT_MIN_SECONDS` per element and values of the parameters (one hour by default): until then the old text stays, saying the time of the numbers it speaks of, for the same definition and parameters and never for another value of them. A wall screen must not make 1,440 calls a day. A call that failed counts: a provider that is down is not asked every minute |
 | Refresh by hand | As opening |
-| PDF, PNG, scheduled send | Yes, always on the numbers of that document, if they have no comment: paper never speaks of other numbers |
+| PDF, PNG, the summary in an email, a scheduled send | Yes, always on the numbers of that document, if they have no comment: paper never speaks of other numbers. A report has PDF, its pages on screen and the summary, and no image; Excel asks nothing |
+| A report's pages on screen | As opening. Sorting a column or closing a group re-reads the same numbers: no new call |
 | The designer | Only on **Try it**, pressed by the author; never at a keystroke |
 
 ### Who may cause a call, and who pays
 
 - Spending goes on the person who caused the call, under the existing daily ceilings; a scheduled send
   goes on its author. With a ceiling reached the comment is not available, and a kept one is still shown.
+  Someone else who adds a comment to what a schedule sends, or changes what one reads or is asked, switches
+  that schedule off, as for what it reads (`reports.widens`).
 - An observer causes no call and reads only what is kept, like the shared demo account.
 - Every call is audited as `ai.comment` with the element, the model and the cost, never the numbers.
 - With no provider configured the element says so to whoever may configure one, and is empty for the others.
@@ -124,6 +126,15 @@ when a call was last made for an element, on any gateway, and what it wrote: tha
 - **Report viewer, PDF, email:** the gateway gets the text first and passes it to the render as
   `comments`, waiting at most `AI__COMMENT_WAIT_SECONDS` (30 by default). Past it, or on any failure, the
   line of the decision above takes its place.
+- **In a document:** the gateway reads the numbers first and hands the text to the render. A report's rows
+  are named by a word made up for that render (`reading`, `tile_cache.reader_of`), and its pages read those same
+  rows: one read of the source, and a text that speaks of what is on the page. A dashboard's already share the
+  screen's cache; a Pushmail cell's have a `reading` too, since a cell reads its source and not what a screen keeps.
+  What may not make a call (a designer's preview, a read-only API token, a notebook, as an observer) looks at what
+  is kept (`moment` `kept`). Paper says «not available» for what is on its way and for no provider: it is not
+  looked at again, and goes to people who can do nothing about it. On a report's page the box grows with its text,
+  at least 40 mm wide so that the longest text fits a page at the smallest size. Excel has no place for a comment
+  and asks nothing.
 - **Both designers:** a new element **AI comment**: the instruction, the elements it reads, **Try it**.
   With metadata-only on or no provider, the panel says why it will not write, and it says which of the elements
   picked show only rows, which the model will never read. On a dashboard **Try it** is

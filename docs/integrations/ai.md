@@ -101,8 +101,9 @@ offered, and calling one over MCP anyway is refused; those that hold both, such 
   describes the problem in their own words.
 - **dbt export**: columns are described from their name and type. Descriptions already written
   from sample values before the mode came on stay in the project: they are not sent again.
-- **AI comments**: a total is a value, so nothing is sent: the element says it is off, and what was
-  written before the mode came on is not shown.
+- **AI comments**: a total is a value, so nothing is sent and no number is read for one: the element
+  says it is off, in a PDF, an image or an email too, which go out all the same, and what was written
+  before the mode came on is not shown.
 - **Conversations**: the turns of a conversation made outside the mode stop going to the model,
   whole (a tool's result, the SQL the model wrote after reading it, what it answered, the
   choices of a card), so the model does not remember them, and says so. The person still reads

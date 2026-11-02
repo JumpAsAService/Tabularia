@@ -15,7 +15,16 @@ exposes at `/system/info` and in the app's settings menu.
   (`GET /dashboards/{id}/render`), and an email from a flow group's Pushmail cell. The sample data
   ends with «Sales overview». Schema revision 0036 adds its tables and nothing else. Guide:
   docs/capabilities/dashboards.md. **Not in this version:** custom tiles, a click across datasets,
-  comments, alerts, a dashboard public without signing in, CSV or Excel of a tile, and MCP tools.
+  comments by people, alerts, a dashboard public without signing in, CSV or Excel of a tile, and MCP tools.
+- **AI comments**: a new element of dashboards and reports, a short text the configured model writes on
+  the numbers of the KPIs, charts and tables you pick, with your instruction. It reads their aggregated
+  numbers as the screen writes them and never a row, and has no tool. It is on the screen, in a report's
+  pages, in the PDF and the image, in the email and its summary, always marked as written by AI, with the
+  model and the time of the numbers, and that it may be wrong. The same numbers make one call for everyone,
+  on whoever caused it, under the daily ceilings; a read-only API token, a notebook and an observer cause none.
+  The numbers never depend on it: when it cannot write, the document or the email goes out with one line in
+  its place. Excel has no place for it. A report without the element is byte for byte what it was. `AI__COMMENT_*`.
+  Guides: docs/capabilities/reports.md, docs/capabilities/dashboards.md, docs/pushmail.md, docs/integrations/ai.md.
 
 ## 1.2.2 «Appio» — 2026-10-25
 

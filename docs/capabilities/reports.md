@@ -26,7 +26,7 @@ included.
 |---|---|
 | Where | Explore → **New** → **Report**, in a folder; it opens in the designer. Readers open it in the viewer from Explore or from **Analysis → Reports**, the most read first |
 | What it reads | up to 20 **datasets**: SQL on the catalog or on a database connection, a datasource, a saved view, a saved SQL script |
-| What it shows | texts and expressions, images, lines, rectangles, tables and matrices with groups and totals, 14 kinds of chart, KPI cards |
+| What it shows | texts and expressions, images, lines, rectangles, tables and matrices with groups and totals, 14 kinds of chart, KPI cards, and an [AI comment](#ai-comments) on the numbers |
 | Parameters | text, number, date or yes/no, one value or several, fixed choices or choices from a dataset; in the SQL as `{name}` |
 | Formats | **PDF** (the page as designed), **Excel** (the tables with their groups and subtotals), the **summary in an email** |
 | Sending | from a flow group's [Pushmail](../pushmail.md#reports) cell, after the steps that refresh the data; a report has no schedule of its own |
@@ -83,6 +83,7 @@ holds already:
 | **Matrix** | a table with one column per value of a field |
 | **Chart** | 14 kinds, chosen when it is placed: [charts and KPIs](#charts-and-kpis) |
 | **KPI** | one value in large type, its change against another and a sparkline |
+| **AI comment** | a short text the configured AI model writes on the numbers of the elements you pick: [below](#ai-comments) |
 
 **Ready-made texts** are texts written for you: **Page number of total**, **Date and time
 of printing**, **The report's name**, and **Value of …** for each parameter.
@@ -520,7 +521,7 @@ report.*
 | Format | What it is |
 |---|---|
 | **PDF** | the page as designed: positions exact to a tenth of a millimetre, the font embedded, the header and footer on every page, «Page X of Y». The same data gives the same file |
-| **Excel** | one sheet per table and matrix, named by **Sheet name in Excel**: the groups as outline levels (closed and opened with Excel's **+** and **−**), the subtotals and totals as `SUBTOTAL` formulas with their values, numbers that stay numbers in the report's formats (a whole number past 16 digits, an id, and a date before 1900 are written as text: a cell of Excel would change the first and cannot show the second), the header frozen and repeated on printed pages, a page break per group where the report has one; one more sheet lists the parameters' values. A text is never turned into a formula |
+| **Excel** | one sheet per table and matrix (an [AI comment](#ai-comments) has no place in it), named by **Sheet name in Excel**: the groups as outline levels (closed and opened with Excel's **+** and **−**), the subtotals and totals as `SUBTOTAL` formulas with their values, numbers that stay numbers in the report's formats (a whole number past 16 digits, an id, and a date before 1900 are written as text: a cell of Excel would change the first and cannot show the second), the header frozen and repeated on printed pages, a page break per group where the report has one; one more sheet lists the parameters' values. A text is never turned into a formula |
 | **Email** | the summary in the body of a [Pushmail](../pushmail.md#reports) email, 640 pixels wide: the report's texts, its KPI cards, its charts as images and the totals of every table and matrix ([below](#the-summary-in-the-email)); the detail goes as the attached PDF or Excel |
 
 ![Page 1 of the example PDF: the title, the printing date, the line in the accent colour, three KPI cards with sparklines, the combo chart of revenue and margin by month, and the table grouped by category with the first group's total; the report's name and Page 1 of 3 in the footer](../media/guide/reports/pdf-monthly-margin-page-1.png)
@@ -531,7 +532,7 @@ report.*
 
 The summary follows the body of the report, in its order:
 
-- its texts, its KPI cards and its charts;
+- its texts, its KPI cards, its charts and its [AI comments](#ai-comments), each with its line;
 - each **table** as its totals: the total row of each of its outermost groups and the
   grand total, with the columns that have a total; a **matrix** as its rows and its total
   column. Five columns of values at most fit the width of an email: a wider matrix shows
@@ -573,6 +574,47 @@ The formats, the errors and a Python example are in the API's
 [Download a report](../api.md#download-a-report); in a marimo notebook,
 [`tabularia.report()`](notebooks.md#reports) does the same in one line.
 
+## AI comments
+
+An **AI comment** is a short text written by the configured AI model on the numbers of the
+KPIs, charts and tables you pick, such as what moved and what stands out. The numbers never
+depend on it: a provider that is down, a budget that is spent or a mode that forbids it costs
+the comment only, and the page says so.
+
+**To add one**, drag **AI comment** from **Insert** onto the page, and in its panel write what
+you ask of it (at most 1,000 characters; empty, it says what stands out) and tick what it
+reads, from 1 to 10 elements. Its place and size are in millimetres, as for any item, and it
+is at least 40 mm wide. A longer text makes the box grow and pushes down what is under it, and
+a very long word breaks at the edge. **Try it** shows what it writes: it is the only moment the
+designer asks the model, and the preview shows what **Try it** wrote and never asks.
+
+| | |
+|---|---|
+| **What it reads** | the title and the numbers of the elements it reads, as the page writes them: a KPI's value and change, a chart's categories and series, a table's groups and totals, a matrix's rows, with your instruction, in the report's language |
+| **What it never reads** | a row. A table's detail rows and a scatter that is not aggregated stay out, though the page shows them. An element with only those is left out, and with nothing left no call is made: the panel says so. It has no tool to query with, and it reads nothing else |
+| **When it writes** | when the report is opened, or a PDF or a summary made, if those numbers have no comment. The same numbers make one call for everyone, for a day (`AI__COMMENT_KEEP_SECONDS`); other values of a parameter or data that changed make another |
+| **How long it waits** | at most `AI__COMMENT_WAIT_SECONDS` (30), with the render behind it. A report without the element waits for nothing, asks nothing, and is the file it always was |
+| **Who pays** | whoever causes the call, under the daily ceilings: who opens the report, the account of an API token that may write, the group's author for a [Pushmail cell](../pushmail.md#ai-comments). A read-only API token, a notebook and an observer cause no call, and get what is kept |
+| **Excel** | it has no place in a workbook, so an Excel asks the model nothing, and the workbook is the same with or without one |
+
+On paper and on screen it is always marked: **Written by AI · the model · numbers of the moment
+they were read**, and that it may be wrong. No setting takes that away. The text is plain text,
+at most 1,500 characters, with no link: nothing in it is ever read as markup, in the PDF as
+in the email.
+
+When it cannot write, the document goes out all the same, with one line in its place: that
+the comment is not available, that the day's spending limit has been reached, that this
+installation sends no data to AI models (`AI__METADATA_ONLY`: nothing is sent and no number is
+read for it). Past the wait the text is kept for the next one who asks, and this document says
+it is not available: paper does not speak of what is on its way.
+
+**The numbers are those on the page.** The comment and the pages read the same rows, once from
+the source for that document. A report also never lends its author's rights: a reader who may
+not read a dataset gets no pages, as for any report, and so no text. The text kept for someone
+who reads more is found only by whoever has just read the same numbers.
+
+What its model reads goes where the administrator said: [AI in Tabularia](../integrations/ai.md).
+
 ## With whose rights
 
 A report never lends its author's rights. What it reads is checked dataset by dataset
@@ -594,7 +636,8 @@ Because a scheduled group sends with its author's rights, someone else who chang
 a report **reads** switches off the schedules of the groups that send it: a dataset added,
 or one whose SQL, connection, datasource, view or filters changed; a new default of a
 parameter the group's cell does not set itself; a change to a SQL script or to the filters,
-computed fields or pivot of a saved view that the report reads. The audit log says why,
+computed fields or pivot of a saved view that the report reads; an AI comment added, or
+one that reads something else or is asked something else, since it spends the author's budget. The audit log says why,
 and the author schedules the group again after looking. A change of layout, or one made
 by the schedule's own author, keeps them. A report that a flow group sends cannot be
 deleted until it is taken out of the group's cells.

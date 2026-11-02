@@ -13,7 +13,7 @@ import { useReportDesign } from '~/composables/useReportDesign'
 import {
   stateAfter, whatListsHold, type ReportDefinition, type ReportFormValue, type ReportHotspot, type ReportParameter, type ReportParams, type ReportState,
 } from '~/composables/useReports'
-import { forSave, problemFromText, problemsOf, type DesignProblem } from '~/composables/reportDesignModel'
+import { chosenParams, forSave, problemFromText, problemsOf, type DesignProblem } from '~/composables/reportDesignModel'
 import { errMessage } from '~/composables/useApi'
 
 const props = defineProps<{ reportId: number; zoom: number | 'fit'; where: (p: DesignProblem) => string }>()
@@ -60,14 +60,7 @@ function onForm(next: Record<string, ReportFormValue>) {
 }
 /** What was chosen, as a render takes it: a list where the parameter takes several. */
 function params(): ReportParams {
-  const out: ReportParams = {}
-  for (const p of parameters.value) {
-    const v = values.value[p.name]
-    if (v === undefined) continue
-    const clean = (Array.isArray(v) ? v : p.multi ? v.split(',') : [v]).map((x) => x.trim()).filter(Boolean)
-    if (clean.length) out[p.name] = p.multi ? clean : clean[0]
-  }
-  return out
+  return chosenParams(parameters.value, values.value)
 }
 
 // ── the lists of the choices: read from the definition as it is, asked again when another

@@ -1437,6 +1437,11 @@ test('only a KPI, a chart or a table can be read, and which comments read what',
 test('what shows only rows is what the gateway leaves out, from the numbers on screen', () => {
   const table = { id: 't', type: 'table', groups: [] }
   assert.equal(showsOnlyRows(table, { type: 'table', rows: [{ kind: 'd', cells: [] }] }), true)
+  // on paper there are no numbers to look at: what the definition says
+  assert.equal(showsOnlyRows({ type: 'chart', kind: 'scatter', series: [{ value: '[amount]' }] }, null), true)
+  assert.equal(showsOnlyRows({ type: 'chart', kind: 'scatter', series: [{ value: 'SUM([amount])' }] }, null), false)
+  assert.equal(showsOnlyRows({ type: 'chart', kind: 'column', series: [{ value: '[amount]' }] }, null), false)
+  assert.equal(showsOnlyRows({ type: 'kpi' }, null), false)
   assert.equal(showsOnlyRows(table, { type: 'table', rows: [{ kind: 'd' }, { kind: 't' }] }), false, 'a total is a number')
   assert.equal(showsOnlyRows(table, { type: 'table', matrix: true, rows: [{ kind: 'd' }] }), false, 'in a matrix the same kind is a group')
   assert.equal(showsOnlyRows(table, { type: 'table', empty: true, rows: [] }), false)

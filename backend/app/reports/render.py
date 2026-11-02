@@ -8,6 +8,10 @@ render model, the charts drawn by the chart service, then the format asked for �
         the pages on screen, with where a click sorts a column or opens a group
   xlsx  the tables and matrices, one sheet each, and the parameters
   html  the email's body as MHTML: the summary, the charts as PNG by cid
+
+An AI comment (docs/specs/ai-comment.md) comes written: the gateway holds the keys and the budgets, and
+gives its text or what stands in its place in `comments`. Excel has no place for it: only the tables and the
+parameters go there, so the gateway asks the model nothing for one.
 """
 from __future__ import annotations
 
@@ -69,8 +73,10 @@ def load(definition: dict) -> rd.Report:
 
 def render(definition: dict, datasets: dict[str, dict], params: dict[str, Any] | None, fmt: str, workdir: Path,
            *, locale: str | None = None, state: dict | None = None, title: str = "", limits: Limits | None = None,
-           now: datetime | None = None) -> Rendered:
-    """The report as a file in `workdir`; ReportError with what stopped it."""
+           now: datetime | None = None, comments: dict[str, dict] | None = None, read: Any = None) -> Rendered:
+    """The report as a file in `workdir`; ReportError with what stopped it. `comments`: what the gateway wrote
+    for its AI comments; `read`: where the rows come from, when what a comment read must be what the pages show
+    (tile_cache.reader_of)."""
     if fmt not in FORMATS:
         raise ReportError(f"unknown format «{fmt}»: use pdf, xlsx, html or svg", "bad_request")
     limits = limits or Limits.from_settings()
@@ -85,13 +91,13 @@ def render(definition: dict, datasets: dict[str, dict], params: dict[str, Any] |
     values = rdata.parameters(report, params or {}, pctx)
     ctx = ex.Context(loc=loc, now=now_local, params=values, report=title, ph_context=pctx)
 
-    data = rdata.read(report, datasets or {}, limits.max_rows)
+    data = rdata.read(report, datasets or {}, limits.max_rows, read)
     columns = {name: ds.columns for name, ds in data.items()}
     problems = rd.problems(report, columns)
     if problems:
         raise ReportError(f"the report does not fit its data: {problems[0]}")
     m = _model(report, data, values, ctx, state=state, title=title, max_pages=limits.max_pages,
-               interactive=fmt == "svg", layout=fmt in ("pdf", "svg"))
+               interactive=fmt == "svg", layout=fmt in ("pdf", "svg"), comments=comments)
     out = workdir / f"report.{EXTENSION[fmt]}"
     if fmt == "xlsx":
         size = report.page.size if isinstance(report.page.size, str) else None

@@ -71,6 +71,8 @@ function renameItem() {
 
 // problems of the whole item (outside the page, beside a table): at the top
 const itemProblems = computed(() => (item.value ? store.problems.value.filter((p) => p.item === item.value!.id && !p.path) : []))
+// what is said of a size has no field of its own: an AI comment's width, while one types too
+const widthProblem = computed(() => (item.value?.type === 'comment' ? [...store.problems.value, ...store.liveProblems.value].find((p) => p.item === item.value!.id && p.path === 'w') ?? null : null))
 
 // ── layout ──
 const width = computed(() => contentWidth(def.value))
@@ -198,6 +200,7 @@ const pageLine = computed(() => {
             <label v-if="item.type !== 'table'" class="rp-f"><span>{{ isLine ? $t('reportDesigner.props.runY') : $t('reportDesigner.props.height') }}</span><RdNum v-model="item.h" unit="mm" :min="isLine ? -bodyPageHeight(def) : 0.1" @update:model-value="keep" /></label>
             <div v-else class="rp-f"><span>{{ $t('reportDesigner.props.height') }}</span><span class="rpp-auto">{{ $t('reportDesigner.props.tableHeight') }}</span></div>
           </div>
+          <p v-if="widthProblem" class="rp-err" role="alert">{{ widthProblem.message }}</p>
         </RdSection>
         </slot>
 

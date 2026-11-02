@@ -38,6 +38,8 @@ export type CommentSlots = Record<string, CommentSlot>
 export const PENDING_TRIES = 6 // past CALL_SECONDS and its margin in the gateway, at the route's own wait
 const PENDING_PAUSE_MS = 3000
 const READABLE = new Set(['kpi', 'chart', 'table'])
+// a scatter whose value is an aggregate draws groups (ex.is_aggregate in the engine, which decides)
+const AGGREGATED = /\b(SUM|AVG|MIN|MAX|COUNT|COUNTDISTINCT|FIRST|LAST|SUMIF|COUNTIF|PERCENT|RUNNING)\s*\(/i
 
 export const commentIds = (tiles: Record<string, any>[]) => tiles.filter((t) => t.type === 'comment').map((t) => t.id as string)
 /** What a comment can read: the gateway's COMMENTED_TYPES. */
@@ -55,6 +57,7 @@ export function showsOnlyRows(tile: Record<string, any>, answer: TileAnswer | nu
     if (tile.type === 'table') return !answer.matrix && (answer.rows ?? []).every((r: any) => r.kind === 'd')
     return answer.kind === 'scatter' && !answer.data?.aggregated
   }
+  if (tile.type === 'chart') return tile.kind === 'scatter' && !AGGREGATED.test(tile.series?.[0]?.value ?? '')
   return tile.type === 'table' && !tile.matrix && !tile.groups?.length && !tile.grand_total
 }
 

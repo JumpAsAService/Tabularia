@@ -3,6 +3,11 @@
 export default {
   "reportDesigner": {
     "titleSuffix": "Report designer",
+    "commentTitle": "Title",
+    "commentReadsHelp": "From 1 to {n} KPIs, charts or tables of this report, as each reader may read them.",
+    "commentTried": "Written in the item on the page, and shown in the preview.",
+    "commentNeedsReads": "Pick what it reads, in «What it reads».",
+    "commentNeedsValues": "Give its parameters a value in the Preview tab first.",
     "notFound": "This report does not exist, or you cannot open it.",
     "backToExplore": "Back to Explore",
     "nameLabel": "Report name",
@@ -90,6 +95,7 @@ export default {
     },
     "face": {
       "emptyText": "Text",
+      "comment": "Written by the AI model when the report opens or is sent",
       "noColumns": "Drop fields here to make columns",
       "groupBy": "group by…",
       "value": "value",
@@ -116,7 +122,8 @@ export default {
         "table": "A table with groups, subtotals and totals: it grows over the pages",
         "matrix": "A matrix: one column per value of a field",
         "chart": "A chart: bar, line, pie, gauge and ten more",
-        "kpi": "A KPI card: a value, its change and a sparkline"
+        "kpi": "A KPI card: a value, its change and a sparkline",
+        "comment": "A text written by the AI model on the numbers of the items you pick"
       },
       "snip": {
         "pageOf": "Page number of total",

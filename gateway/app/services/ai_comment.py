@@ -55,8 +55,8 @@ from app.services.permissions import is_admin, is_observer_only
 
 logger = logging.getLogger(__name__)
 
-Moment = Literal["open", "refresh", "asked", "document"]
-MOMENTS: tuple[str, ...] = ("open", "refresh", "asked", "document")
+Moment = Literal["open", "refresh", "asked", "document", "kept"]
+MOMENTS: tuple[str, ...] = ("open", "refresh", "asked", "document", "kept")
 STATES = ("ready", "off", "no_provider", "no_access", "too_much", "failed", "budget", "pending", "not_asked")
 
 MAX_SENT_CHARS = 20_000  # the instruction and the numbers
@@ -124,6 +124,13 @@ MESSAGES: dict[str, dict[str, str]] = {
         "de": "Der KI-Kommentar wird geschrieben.",
         "es": "El comentario de IA se está escribiendo.",
         "fr": "Le commentaire IA est en cours de rédaction.",
+    },
+    "not_tried": {
+        "en": "The AI comment is written when this opens or is sent. Press Try it in its panel to see what it writes.",
+        "it": "Il commento AI si scrive all'apertura o all'invio. Premi Prova nel suo pannello per vedere cosa scrive.",
+        "de": "Der KI-Kommentar wird beim Öffnen oder Senden geschrieben. Drücken Sie in seinem Bereich auf Ausprobieren, um zu sehen, was er schreibt.",
+        "es": "El comentario de IA se escribe al abrir o al enviar. Pulsa Probar en su panel para ver qué escribe.",
+        "fr": "Le commentaire IA s'écrit à l'ouverture ou à l'envoi. Appuyez sur Essayer dans son panneau pour voir ce qu'il écrit.",
     },
     "not_asked": {
         "en": "No AI comment on these numbers.",
@@ -582,7 +589,8 @@ async def comment(session: Session, user: User, definition: dict, element: str, 
     - `numbers`: the answer's tiles by id, `{id: its numbers, or {"error", "code"}}` (dashboards.numbers,
       tiles.compute), read with no page and no state of a table: the first page, sorted as defined, for everyone.
     - `moment`: `open` an opening, an Apply, a refresh by hand; `refresh` an automatic refresh; `asked` a press
-      of **Comment this view** or **Try it**; `document` a PDF, an image, an email.
+      of **Comment this view** or **Try it**; `document` a PDF, an image, an email; `kept` what is kept and
+      nothing else, for what may not make a call (a designer's preview, a read-only token, a notebook).
     - `where`: `("dashboard", id)` or `("report", id)`, for the audit and for the interval; None while editing.
     - `params`, `clicks`: the parameters' values and the clicks these numbers were read with. With a click
       only `asked` and `document` make a call.
@@ -654,7 +662,7 @@ async def _comment(session: Session, user: User, definition: dict, element: str,
             continue
         if alive and row.state == "failed":
             return kept or _said("failed", definition, reason=row.reason)
-        if who.observer or too_soon or (moment == "refresh" and where is None):
+        if who.observer or too_soon or moment == "kept" or (moment == "refresh" and where is None):
             return kept or _said("not_asked", definition)
         if clicked and moment in ("open", "refresh"):
             return _said("not_asked", definition, can_ask=True)
@@ -674,3 +682,55 @@ async def _comment(session: Session, user: User, definition: dict, element: str,
         _writing.add(task)
         task.add_done_callback(_writing.discard)
         await asyncio.wait({task}, timeout=max(deadline - time.monotonic(), 0))
+
+
+# ── in a document ────────────────────────────────────────────────────────────
+def has_comment(definition: dict) -> bool:
+    return any(it.get("type") == "comment" for it in elements_of(definition).values())
+
+
+def asked_of(definition: dict) -> list[str]:
+    """What the numbers of a document's comments are read from: what they read, and the comments themselves,
+    whose own condition may hide them, so that a call is not made for what will not be drawn."""
+    elements = elements_of(definition)
+    comments = [name for name, it in elements.items() if it.get("type") == "comment"]
+    read = [name for c in comments for name in elements[c].get("reads") or [] if isinstance(name, str) and name in elements]
+    return list(dict.fromkeys([*read, *comments]))
+
+
+def not_available(definition: dict) -> Comment:
+    """For when the numbers themselves could not be read: nothing to say of rights, nothing to write on."""
+    return _said("failed", definition)
+
+
+def said_on_paper(said: Comment, definition: dict, unasked: str = "not_asked") -> dict:
+    """What the engine draws (app/reports/model.py, `comment`): the text with what its line needs, or what stands
+    in its place. Paper is not looked at again and goes to people who can do nothing about it: it does not say a
+    text is on its way, nor where to add a model, only that this comment is not available. `unasked`: what it says
+    when nothing asked for one, in a designer's words."""
+    if said.state == "ready":
+        return {"text": said.text, "model": said.model, "numbers_at": said.numbers_at}
+    if said.state == "not_asked":
+        return {"message": MESSAGES[unasked][_language(definition)]}
+    if said.state in ("pending", "no_provider") or not said.message:
+        return {"message": MESSAGES["failed"][_language(definition)]}
+    return {"message": said.message}
+
+
+async def on_paper(session: Session, user: User, definition: dict, numbers: Optional[dict[str, Any]], *, moment: Moment = "document",
+                   where: Optional[tuple[str, int]] = None, params: Optional[dict] = None, clicks: Optional[list] = None,
+                   request: Optional[Request] = None, unasked: str = "not_asked") -> dict[str, dict]:
+    """Every comment of a document, by element, at the same time: all of them wait at most
+    AI__COMMENT_WAIT_SECONDS together, and none stops the document. `numbers`: as for `comment`, from `asked_of`;
+    None: they could not be read, and the comments are not available. One its own condition hides has no place on
+    the page, and no call is made for it. It releases `session`."""
+    from app.routes.proxy import _release_db  # routes → services: late import
+
+    _release_db(session, user)
+    if numbers is None:
+        said = said_on_paper(not_available(definition), definition)
+        return {name: said for name, it in elements_of(definition).items() if it.get("type") == "comment"}
+    names = [name for name, it in elements_of(definition).items() if it.get("type") == "comment" and not (numbers.get(name) or {}).get("hidden")]
+    answers = await asyncio.gather(*(comment(session, user, definition, name, numbers, moment=moment, where=where, params=params, clicks=clicks, request=request)
+                                     for name in names))
+    return {name: said_on_paper(said, definition, unasked) for name, said in zip(names, answers)}

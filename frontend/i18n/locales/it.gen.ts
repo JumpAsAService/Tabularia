@@ -3,6 +3,11 @@
 export default {
   "reportDesigner": {
     "titleSuffix": "Designer di report",
+    "commentTitle": "Titolo",
+    "commentReadsHelp": "Da 1 a {n} KPI, grafici o tabelle di questo report, come ogni lettore può leggerli.",
+    "commentTried": "È scritto nell'elemento sulla pagina, e si vede nell'anteprima.",
+    "commentNeedsReads": "Scegli cosa legge, in «Cosa legge».",
+    "commentNeedsValues": "Dai prima un valore ai suoi parametri nella scheda Anteprima.",
     "notFound": "Questo report non esiste, oppure non puoi aprirlo.",
     "backToExplore": "Torna a Esplora",
     "nameLabel": "Nome del report",
@@ -90,6 +95,7 @@ export default {
     },
     "face": {
       "emptyText": "Testo",
+      "comment": "Scritto dal modello di AI quando il report si apre o si invia",
       "noColumns": "Trascina qui i campi per fare le colonne",
       "groupBy": "raggruppa per…",
       "value": "valore",
@@ -116,7 +122,8 @@ export default {
         "table": "Una tabella con gruppi, subtotali e totali: cresce sulle pagine",
         "matrix": "Una matrice: una colonna per ogni valore di un campo",
         "chart": "Un grafico: barre, linee, torta, indicatore e altri dieci",
-        "kpi": "Una scheda KPI: un valore, la sua variazione e una sparkline"
+        "kpi": "Una scheda KPI: un valore, la sua variazione e una sparkline",
+        "comment": "Un testo scritto dal modello di AI sui numeri degli elementi che scegli"
       },
       "snip": {
         "pageOf": "Numero di pagina sul totale",

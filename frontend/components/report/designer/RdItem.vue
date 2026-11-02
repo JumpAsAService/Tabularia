@@ -2,13 +2,16 @@
 // An item of the report in the design view, drawn on the sheet at its place in mm: a text
 // with its style (an expression's quoted parts as they print, the rest as expressions), an
 // image, a line, a rectangle, a table's rows, a chart's or a KPI's outline. A press starts
-// a move (the canvas follows it); the handles are the canvas's.
-import { computed } from 'vue'
+// a move (the canvas follows it); the handles are the canvas's. An AI comment: what its **Try it**
+// wrote, as a text node, with the line that says whose it is; nothing else asks for it here.
+import { computed, inject } from 'vue'
 import { useI18n } from 'vue-i18n'
-import { CircleAlert, ImagePlus } from 'lucide-vue-next'
+import { CircleAlert, ImagePlus, Sparkles } from 'lucide-vue-next'
 import RdChartGlyph from '~/components/report/designer/RdChartGlyph.vue'
 import RdTableFace from '~/components/report/designer/RdTableFace.vue'
 import { concatParts } from '~/composables/reportExpressions'
+import { COMMENT_TRIAL } from '~/composables/reportDesignStore'
+import { useFormat } from '~/composables/useFormat'
 import { PAPER, PT_MM, boxOf, type DDefinition, type DItem, type DStyle } from '~/composables/reportDesignModel'
 
 const props = defineProps<{
@@ -63,6 +66,16 @@ const rootStyle = computed(() => ({
 }))
 
 const kindLabel = computed(() => (props.item.type === 'chart' ? t(`reportDesigner.kinds.${props.item.kind}`) : ''))
+
+const trial = inject(COMMENT_TRIAL, null)
+const fmtx = useFormat()
+const tried = computed(() => (props.item.type === 'comment' ? trial?.tried(props.item.id) ?? null : null))
+const triedLine = computed(() => {
+  const a = tried.value
+  return a?.state === 'ready'
+    ? `${t('dashboard.commentBy', { model: a.model, time: a.numbers_at ? fmtx.dateTime(a.numbers_at, { seconds: true }) : '' })}. ${t('dashboard.commentMayBeWrong')}`
+    : ''
+})
 </script>
 
 <template>
@@ -142,6 +155,19 @@ const kindLabel = computed(() => (props.item.type === 'chart' ? t(`reportDesigne
       </svg>
     </div>
 
+    <!-- an AI comment: as the report's card -->
+    <div
+      v-else-if="item.type === 'comment'"
+      class="rcomment"
+      :style="{ background: PAPER.band, borderRadius: px(1.5), padding: px(2.5), fontSize: `${def.theme.size * PT_MM * ppm}px` }"
+    >
+      <div v-if="item.title" class="rcm-title">{{ item.title }}</div>
+      <p v-if="tried?.state === 'ready'" class="rcm-text">{{ tried.text }}</p>
+      <p v-else-if="tried" class="rcm-text rcm-said">{{ tried.message }}</p>
+      <p v-else class="rcm-text rcm-said"><Sparkles :size="Math.max(10, 10 * ppm / 3)" aria-hidden="true" /> {{ $t('reportDesigner.face.comment') }}</p>
+      <p v-if="triedLine" class="rcm-line">{{ triedLine }}</p>
+    </div>
+
     <span v-if="invalid" class="rbadge" :title="$t('reportDesigner.face.hasProblem')"><CircleAlert :size="12" /></span>
   </div>
 </template>
@@ -191,6 +217,12 @@ const kindLabel = computed(() => (props.item.type === 'chart' ? t(`reportDesigne
 .rkvalue { font-weight: 700; line-height: 1.1; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; min-width: 0; }
 .rkcmp { color: #2b8a3e; font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; min-width: 0; flex: none; max-width: 45%; }
 .rspark { position: absolute; left: 8%; right: 8%; bottom: 8%; width: 84%; height: 24%; }
+.rcomment { width: 100%; height: 100%; box-sizing: border-box; overflow: hidden; display: flex; flex-direction: column; gap: 0.4em; color: #1f2933; line-height: 1.25; font-family: 'IBM Plex Sans', system-ui, sans-serif; }
+.rcm-title { flex: none; font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.rcm-text { flex: 1; min-height: 0; margin: 0; overflow: hidden; white-space: pre-wrap; overflow-wrap: anywhere; }
+.rcm-said { color: #6b7590; font-style: italic; }
+.rcm-said svg { vertical-align: -1px; color: #3b5bdb; }
+.rcm-line { flex: none; margin: 0; font-size: 0.78em; color: #6b7590; overflow-wrap: anywhere; }
 .rbadge {
   position: absolute; top: -8px; right: 18%; display: grid; place-items: center; width: 16px; height: 16px;
   border-radius: 50%; background: var(--danger-fill); color: var(--on-danger); pointer-events: none;

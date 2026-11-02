@@ -292,6 +292,7 @@ Item = Annotated[Union[TextItem, ImageItem, LineItem, RectItem, TableItem, Chart
                  Field(discriminator="type")]
 GROWING = ("table",)  # items that grow with their data and take their row alone
 COMMENTED = ("kpi", "chart", "table")  # what a comment reads
+MIN_COMMENT_WIDTH = 40  # mm: at the smallest size the template has, 1,500 characters fit a page
 
 
 class Band(_Model):
@@ -570,6 +571,9 @@ class _Checks:
             self.comment(it)
 
     def comment(self, it: CommentItem) -> None:
+        if it.w < MIN_COMMENT_WIDTH:
+            self.problems.append(Problem(f"an AI comment is at least {MIN_COMMENT_WIDTH} mm wide: its text and the line that says "
+                                         "who wrote it must fit a page", it.id, "w"))
         kinds = {other.id: other.type for _, other in self.report.items()}
         for i, name in enumerate(it.reads):
             if kinds.get(name) not in COMMENTED:

@@ -8,7 +8,7 @@ import { test } from 'node:test'
 import assert from 'node:assert/strict'
 
 import { createLiveCheck } from '../composables/reportLiveCheck.ts'
-import { emptyDefinition, problemsOf, problemFromText, withSeen, liveShown, stillReported } from '../composables/reportDesignModel.ts'
+import { chosenParams, emptyDefinition, newItem as newDesignItem, problemsOf, problemFromText, withSeen, liveShown, stillReported } from '../composables/reportDesignModel.ts'
 import { FN, checkExpression, completionAt, groupName, renameEverywhere, renameInExpression, stillWriting } from '../composables/reportExpressions.ts'
 
 register('./alias-hooks.mjs', import.meta.url)
@@ -664,4 +664,17 @@ test('the line for a SQL: every row with nothing chosen, when that can be', () =
 test('a list takes the type of the field it reads', () => {
   assert.deepEqual(['integer', 'float', 'date', 'boolean', 'string', 'datetime', 'other', null].map(typeOfField),
     ['number', 'number', 'date', 'boolean', 'text', 'text', 'text', 'text'])
+})
+
+test('what was chosen in the preview goes as a render takes it: a list where a parameter takes several', () => {
+  const parameters = [{ name: 'region', multi: true }, { name: 'tags', multi: true }, { name: 'year' }, { name: 'left' }, { name: 'empty' }]
+  assert.deepEqual(chosenParams(parameters, { region: 'North, South ,', tags: ['a', ' b '], year: ' 2026 ', empty: '  ' }),
+    { region: ['North', 'South'], tags: ['a', 'b'], year: '2026' })
+})
+
+test('a new AI comment on paper starts with nothing to read, wide enough, and its author picks what it reads', () => {
+  const it = newDesignItem(emptyDefinition(), 'comment', { x: 5, y: 7 })
+  assert.equal(it.type, 'comment')
+  assert.deepEqual(it.reads, [])
+  assert.ok(it.w >= 40, 'the least the engine takes')
 })

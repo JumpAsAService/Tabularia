@@ -3,6 +3,11 @@
 export default {
   "reportDesigner": {
     "titleSuffix": "Diseñador de informes",
+    "commentTitle": "Título",
+    "commentReadsHelp": "De 1 a {n} KPI, gráficos o tablas de este informe, como cada lector pueda leerlos.",
+    "commentTried": "Está escrito en el elemento de la página, y se ve en la vista previa.",
+    "commentNeedsReads": "Elige qué lee, en «Qué lee».",
+    "commentNeedsValues": "Da antes un valor a sus parámetros en la pestaña Vista previa.",
     "notFound": "Este informe no existe, o no puede abrirlo.",
     "backToExplore": "Volver a Explorar",
     "nameLabel": "Nombre del informe",
@@ -90,6 +95,7 @@ export default {
     },
     "face": {
       "emptyText": "Texto",
+      "comment": "Lo escribe el modelo de IA cuando el informe se abre o se envía",
       "noColumns": "Arrastre campos aquí para crear columnas",
       "groupBy": "agrupar por…",
       "value": "valor",
@@ -116,7 +122,8 @@ export default {
         "table": "Una tabla con grupos, subtotales y totales: crece a lo largo de las páginas",
         "matrix": "Una matriz: una columna por cada valor de un campo",
         "chart": "Un gráfico: barras, líneas, circular, indicador y diez más",
-        "kpi": "Una tarjeta KPI: un valor, su variación y un minigráfico"
+        "kpi": "Una tarjeta KPI: un valor, su variación y un minigráfico",
+        "comment": "Un texto que escribe el modelo de IA sobre los números de los elementos que elijas"
       },
       "snip": {
         "pageOf": "Número de página sobre el total",

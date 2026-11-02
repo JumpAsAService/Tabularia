@@ -8,6 +8,7 @@ import {
   type ReportDefinition, type ReportDetail, type ReportParameter, type ReportParams, type ReportScreen, type ReportState,
 } from '~/composables/useReports'
 import type { DDefinition, DField } from '~/composables/reportDesignModel'
+import type { TileComment } from '~/composables/dashboardComments'
 
 export interface PreviewOutcome extends ReportScreen {
   warnings: string[]
@@ -54,12 +55,17 @@ export function useReportDesign() {
       method: 'POST', body: { dataset, definition },
     })
 
+  /** **Try it**: an AI comment of a definition being edited; a 422 lists its problems. */
+  const tryComment = (id: number, definition: DDefinition, item: string, params: ReportParams, signal?: AbortSignal) =>
+    apiFetch<TileComment>('/reports/preview/comment', { method: 'POST', body: { report_id: id, definition, item, params }, signal })
+
   return {
     get: reports.get,
     parameters: reports.parameters,
     parametersOf,
     save,
     preview,
+    tryComment,
     check,
     fields,
     duplicate: (id: number) => apiFetch<ReportDetail>(`/reports/${id}/duplicate`, { method: 'POST' }),

@@ -911,3 +911,53 @@ def test_who_others_wait_for_finds_out_a_worker_is_gone_without_waiting_to_the_e
     with pytest.raises(HTTPException) as e:
         tasks.on_preview_worker("x", {}, None, seconds=0.05)
     assert e.value.status_code == 504
+
+
+# ── one document's rows, for its AI comment and its pages ────────────────────
+def test_a_document_s_comment_and_its_pages_read_the_source_once_and_the_same_rows(world):
+    d = definition(item())
+    answer = routes_tiles_with_reading(d, "word-1")
+    assert answer["tiles"]["k"]["value"] == 60.0 and world["source"].reads == [ORDERS["input_key"]]
+    world["source"].frames[ORDERS["input_key"]] = frame((1.0, 2.0))  # the source moves after the comment read it
+    ds = tile_cache.reader_of("word-1")("orders", ORDERS, tiles.max_rows(), UTC)
+    assert sum(r["amount"] for r in ds.rows) == 60.0, "the pages say what the comment read"
+    assert world["source"].reads == [ORDERS["input_key"]]
+
+
+def test_another_document_reads_the_source_again_and_shares_nothing(world):
+    tile_cache.reader_of("word-1")("orders", ORDERS, 100, UTC)
+    tile_cache.reader_of("word-2")("orders", ORDERS, 100, UTC)
+    assert len(world["source"].reads) == 2
+
+
+def test_a_document_s_rows_are_not_what_a_dashboard_keeps_nor_the_other_way_round(world):
+    tile_cache.reader(300)("orders", ORDERS, 100, UTC)
+    world["source"].frames[ORDERS["input_key"]] = frame((1.0, 2.0))
+    fresh = tile_cache.reader_of("word-1")("orders", ORDERS, 100, UTC)
+    assert sum(r["amount"] for r in fresh.rows) == 3.0, "what the steps before a cell refreshed is what it says"
+    kept = tile_cache.reader(300)("orders", ORDERS, 100, UTC)
+    assert sum(r["amount"] for r in kept.rows) == 60.0
+
+
+def test_without_valkey_a_document_reads_its_source_all_the_same(source, bucket, monkeypatch):
+    monkeypatch.setattr(tile_cache, "_client", BrokenRedis())
+    monkeypatch.setattr(tile_cache, "_down_until", 0.0)
+    ds = tile_cache.reader_of("word-1")("orders", ORDERS, 100, UTC)
+    assert sum(r["amount"] for r in ds.rows) == 60.0
+
+
+def test_a_report_s_numbers_are_read_under_a_report_s_cap_and_a_dashboard_s_keep_theirs(world, monkeypatch):
+    from app.core import config
+
+    settings = config.get_settings()
+    monkeypatch.setattr(settings.dashboards, "max_rows", 1000)
+    monkeypatch.setattr(settings.reports, "max_rows", 5000)
+    caps, real = [], world["source"].read
+    monkeypatch.setattr(rdata, "_read_one", lambda name, spec, cap: caps.append(cap) or real(name, spec, cap))
+    routes_tiles_with_reading(definition(item()), "word-1", of_report=False)
+    routes_tiles_with_reading(definition(item()), "word-2", of_report=True)
+    assert caps == [1000, 5000]
+
+
+def routes_tiles_with_reading(d, reading, of_report=True) -> dict:
+    return asyncio.run(routes.tiles(routes.DashboardTiles(definition=d, datasets={"orders": ORDERS}, reading=reading, of_report=of_report)))

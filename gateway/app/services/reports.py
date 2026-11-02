@@ -27,12 +27,20 @@ The engine receives each dataset resolved — a chain on the catalog, or a conne
 its SQL — and renders the report as an export (POST /reports/render), followed and
 downloaded by its owner through /tasks/exports. Saving a definition also needs the
 right to what it points to: nobody points a report at a database they could not query.
+
+A report with an AI comment (docs/specs/ai-comment.md): once its datasets are resolved, the engine
+reads the numbers the comment speaks of, the gateway has them written (services/ai_comment.py) and
+only then starts the render, with the text in it. Those rows are named by a word made up for this render
+(`reading`), and the pages read those same rows: what is on the page and what the model read are one thing,
+and the source is asked once. A failure of any of it costs the comment, never the document. Excel has no place
+for a comment, so it asks nothing. One without the element takes none of these steps.
 """
 from __future__ import annotations
 
 import json
 import logging
 import re
+import uuid
 from dataclasses import dataclass, field
 from datetime import date
 from typing import Any, Mapping, Optional
@@ -45,7 +53,7 @@ from sqlmodel import Session, select
 from app.core.engine_client import CHECK, get_engine_client
 from app.models import Connection, Datasource, Report, ReportVersion, SavedView, SqlScript, User
 from app.models.permission import Capability
-from app.services import audit, report_definition, report_params, sql_scripts
+from app.services import ai_comment, audit, metadata_only, report_definition, report_params, sql_scripts
 from app.services import permissions as perm_service
 from app.services.engine_policy import pick_engine
 from app.services.permissions import is_admin
@@ -104,7 +112,14 @@ def widens(before: dict, after: dict) -> list[str]:
         reasons.append(f"it reads the new datasets {', '.join(map(str, added))}")
     if changed := [n for n in a if n in b and a[n] != b[n]]:
         reasons.append(f"its datasets {', '.join(map(str, changed))} read something else")
+    if _comments_of(before) != _comments_of(after):
+        reasons.append("its AI comments changed, and a schedule pays for them with its author's numbers and budget")
     return reasons
+
+
+def _comments_of(content: dict) -> dict:
+    """What an AI comment sends to a model and on whose bill: a schedule's author did not choose another."""
+    return {name: (it.get("instruction"), it.get("reads")) for name, it in ai_comment.elements_of(content).items() if it.get("type") == "comment"}
 
 
 def new_defaults(before: dict, after: dict) -> set[str]:
@@ -966,6 +981,67 @@ def _audit_render(session: Session, user: User, report: Optional[Report], reques
                        target_label=report.name if report is not None else "", detail=detail, request=request)
 
 
+def comment_moment(fmt: str, origin: str, request: Optional[Request]) -> ai_comment.Moment:
+    """When a render may make a call, and what kind of moment it is. The editor's preview looks at what is kept:
+    the designer writes only on **Try it**. A notebook's code and a read-only token cause no spending, so they get
+    what is kept too; whoever opens the viewer pays for what they open, a document for itself."""
+    if origin in ("editor", "notebook") or getattr(getattr(request, "state", None), "api_token_scope", None) == "read":
+        return "kept"
+    return "open" if fmt == "svg" else "document"
+
+
+async def _numbers_of_comments(definition: dict, datasets: dict, params: dict, title: str, reading: Optional[str], slot: Optional[str] = None,
+                               of_report: bool = True) -> Optional[dict]:
+    """What the comments of a document read, on the rows of `reading`: None when the engine cannot say, which
+    is a comment not available, and not a document that stops."""
+    try:
+        resp = await get_engine_client().post("/reports/tiles", timeout=300, json={
+            "definition": report_definition.without_images(definition), "datasets": datasets, "params": params,
+            "tiles": ai_comment.asked_of(definition), "locale": definition.get("locale") or "en", "title": title[:300],
+            "reading": reading, "of_report": of_report, "slot": slot})
+        if resp.status_code < 400:
+            return resp.json().get("tiles") or {}
+        logger.warning("AI comment: the engine answered %s for its numbers", resp.status_code)
+    except httpx.HTTPError as e:
+        logger.warning("AI comment: the engine did not give its numbers: %s", type(e).__name__)
+    return None
+
+
+async def comments_for(session: Session, user: User, definition: dict, datasets: dict, params: dict, given: Mapping[str, list], *,
+                       moment: ai_comment.Moment = "document", where: Optional[tuple[str, int]] = None, title: str = "", request: Optional[Request] = None,
+                       of_report: bool = True, unasked: str = "not_asked", words_of: Optional[dict] = None) -> tuple[dict, Optional[str]]:
+    """What a document's AI comments say, by element, and the word for the rows they read: its pages read
+    the same ones. Nothing when the definition has none. In metadata-only mode nothing is read for them.
+    `words_of`: the definition as the screen has it (a dashboard's, tile by tile), so that the same numbers make
+    the same comment on the screen and in an email; `definition` is what the engine reads."""
+    if not ai_comment.has_comment(definition):
+        return {}, None
+    _hand_back(session, user)
+    reading = None if metadata_only.on("chat") else uuid.uuid4().hex
+    numbers = await _numbers_of_comments(definition, datasets, params, title, reading, of_report=of_report) if reading else {}
+    said = await ai_comment.on_paper(session, user, words_of or definition, numbers, moment=moment, where=where, params=dict(given), request=request, unasked=unasked)
+    return said, reading
+
+
+async def commented(session: Session, user: User, report: Optional[Report], definition: dict, element: str, given: Mapping[str, list],
+                    request: Optional[Request] = None) -> ai_comment.Comment:
+    """**Try it**: the comment `element` of a definition being edited, on the numbers it reads with the values
+    `given` and `user`'s rights. A dataset they may not read stops it as it stops a render."""
+    item = ai_comment.elements_of(definition).get(element)
+    if item is None or item.get("type") != "comment":
+        raise HTTPException(status_code=422, detail=f"The report has no AI comment «{element[:64]}»")
+    numbers: Optional[dict] = {}
+    if not metadata_only.on("chat"):
+        values, datasets = await prepare(session, user, definition, given)
+        params = {k: report_params.to_json(v) for k, v in values.items()}
+        _hand_back(session, user)
+        numbers = await _numbers_of_comments(definition, datasets, params, report.name if report is not None else "", None,
+                                             slot=f"u{user.id}:report-comment:{report.id if report is not None else 'new'}")
+        if numbers is None:
+            return ai_comment.not_available(definition)
+    return await ai_comment.comment(session, user, definition, element, numbers, moment="asked", params=dict(given), request=request)
+
+
 async def render(session: Session, user: User, report: Optional[Report], definition: dict, fmt: str,
                  given: Mapping[str, list], *, state: Optional[dict] = None, origin: str = "interface",
                  request: Optional[Request] = None, audit_success: bool = True,
@@ -976,7 +1052,8 @@ async def render(session: Session, user: User, report: Optional[Report], definit
     parameters and where it came from (`origin`: interface, editor, api, notebook; a flow
     group's Pushmail cell renders through the engine's email task, see `prepare`), and
     `extra` (the notebook that asked); `audit_success=False` leaves the success to the
-    caller, who records it once it knows the file came out (the API, a notebook)."""
+    caller, who records it once it knows the file came out (the API, a notebook). An AI
+    comment is written first (`comments_for`), waiting for it at most AI__COMMENT_WAIT_SECONDS."""
     from app.routes.proxy import export_owner  # routes → services: late import
 
     if fmt not in FORMATS:
@@ -988,12 +1065,21 @@ async def render(session: Session, user: User, report: Optional[Report], definit
     try:
         values, datasets = await prepare(session, user, definition, given, detail)
         name = filename(report, fmt)
+        params = {k: report_params.to_json(v) for k, v in values.items()}
+        owner = export_owner(user)
+        comments, reading = {}, None
+        if fmt != "xlsx":
+            comments, reading = await comments_for(session, user, definition, datasets, params, given, moment=comment_moment(fmt, origin, request),
+                                                   where=("report", report.id) if report is not None else None,
+                                                   title=report.name if report is not None else "", request=request,
+                                                   unasked="not_tried" if origin == "editor" else "not_asked")
         resp = await get_engine_client().post("/reports/render", timeout=60, json={
             "definition": definition, "datasets": datasets,
-            "params": {k: report_params.to_json(v) for k, v in values.items()}, "format": fmt, "filename": name,
-            "owner": export_owner(user), "locale": definition.get("locale") or "en", "state": state or {},
+            "params": params, "format": fmt, "filename": name,
+            "owner": owner, "locale": definition.get("locale") or "en", "state": state or {},
             # REPORT() and the PDF's title: the name as written, not as a file may hold it
-            **({"title": report.name} if report is not None else {})})
+            **({"title": report.name} if report is not None else {}),
+            **({"comments": comments, "reading": reading} if comments or reading else {})})
         if resp.status_code >= 400:
             raise sql_scripts._engine_failure(resp, sentence)
         answer = resp.json()

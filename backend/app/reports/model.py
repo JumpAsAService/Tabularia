@@ -30,10 +30,11 @@ import json
 import logging
 from collections.abc import Iterator, Mapping
 from dataclasses import dataclass, field
-from datetime import date, datetime
+from datetime import date, datetime, timezone
 from functools import cmp_to_key
 from typing import Any
 
+from app.core import placeholders as ph
 from app.reports import charts
 from app.reports import definition as rd
 from app.reports import expressions as ex
@@ -372,9 +373,11 @@ class PyData:
 
 class _Builder:
     def __init__(self, report: rd.Report, data: dict[str, DataSet], ctx: ex.Context, state: dict | None,
-                 interactive: bool, layout: bool = True, store: frames.Store | None = None, max_pages: int = 400):
+                 interactive: bool, layout: bool = True, store: frames.Store | None = None, max_pages: int = 400,
+                 comments: dict[str, dict] | None = None):
         self.r = report
         self.max_pages = max_pages
+        self.comments = comments or {}
         self.data = data
         self.loc = ctx.loc
         self.ev = ex.Evaluator()
@@ -492,6 +495,8 @@ class _Builder:
             return {"k": "chart", **box, "src": self.chart(it)}
         if it.type == "kpi":
             return {"k": "kpi", **box, **self.kpi(it)}
+        if it.type == "comment":
+            return {"k": "comment", **box, **self.comment(it)}
         raise ReportError(f"item «{it.id}»: a {it.type} cannot be placed here")  # pragma: no cover
 
     def text_parts(self, it: rd.TextItem) -> list:
@@ -507,6 +512,31 @@ class _Builder:
         shown = self.show(v, it.style.format)
         self.note("text", (it, shown))
         return [shown]
+
+    # ── an AI comment ──
+    def comment(self, it: rd.CommentItem) -> dict:
+        """What a comment says, as the gateway wrote it (services/ai_comment.py, `on_paper`): its text with the
+        line that says whose it is, or what stands in its place. Nothing here is markup: it goes as a string, as
+        every text of a report does. A comment the gateway said nothing of is one that is not available."""
+        said = self.comments.get(it.id)
+        said = said if isinstance(said, dict) else {}
+        text = said.get("text")
+        out: dict[str, Any] = {"title": it.title or None}
+        if isinstance(text, str) and text.strip():
+            by = self.loc.texts["comment_by"].format(model=str(said.get("model") or ""), time=self._comment_time(said.get("numbers_at")))
+            out.update(text=text, line=f"{by}. {self.loc.texts['comment_wrong']}")
+        else:
+            out["message"] = str(said.get("message") or self.loc.texts["comment_off"])
+        self.note("comment", out)
+        return out
+
+    def _comment_time(self, at: Any) -> str:
+        """When the numbers it speaks of were read, in the report's zone and its way of writing a moment."""
+        try:
+            when = datetime.fromisoformat(str(at))
+        except ValueError:
+            when = self.ctx.now
+        return self.show((when if when.tzinfo else when.replace(tzinfo=timezone.utc)).astimezone(ph.zone(self.r.timezone)), None)
 
     # ── KPI ──
     def kpi_numbers(self, it: rd.KpiItem) -> dict:
@@ -682,7 +712,7 @@ class _Builder:
     # ── the body ──
     def body(self) -> list[dict]:
         self.in_body = True
-        items = sorted((i for i in self.r.sections.body.items if i.type != "comment"), key=lambda i: (i.y, i.x))
+        items = sorted(self.r.sections.body.items, key=lambda i: (i.y, i.x))
         blocks: list[dict] = []
         band: list[Any] = []
         top = bottom = 0.0
@@ -1164,20 +1194,22 @@ def _texts_of(doc: Any, out: set[str]) -> None:
 
 def build(report: rd.Report, data: dict[str, DataSet], params: dict[str, Any], ctx: ex.Context,
           state: dict | None = None, title: str = "", max_pages: int = 400, interactive: bool = False,
-          layout: bool = True, store: frames.Store | None = None) -> Model:
+          layout: bool = True, store: frames.Store | None = None, comments: dict[str, dict] | None = None) -> Model:
     """The model of a report whose data has been read; `layout`: its pages will be laid out
     (pdf, svg), and what does not fit them is said in its warnings. `store`: the datasets in
     DuckDB (frames.py); None builds one for this model when the data's columns are on (the
-    default), or works it all out the interpreter's way."""
+    default), or works it all out the interpreter's way. `comments`: what the gateway wrote for
+    the AI comments, by item (`_Builder.comment`)."""
     if store is None and frames.enabled():
         with frames.build_store(report, data, ctx.loc) as own:
-            return _build(report, data, params, ctx, state, title, max_pages, interactive, layout, own)
-    return _build(report, data, params, ctx, state, title, max_pages, interactive, layout, store)
+            return _build(report, data, params, ctx, state, title, max_pages, interactive, layout, own, comments)
+    return _build(report, data, params, ctx, state, title, max_pages, interactive, layout, store, comments)
 
 
 def _build(report: rd.Report, data: dict[str, DataSet], params: dict[str, Any], ctx: ex.Context, state: dict | None,
-           title: str, max_pages: int, interactive: bool, layout: bool, store: frames.Store | None) -> Model:
-    b = _Builder(report, data, ctx, state, interactive, layout, store, max_pages)
+           title: str, max_pages: int, interactive: bool, layout: bool, store: frames.Store | None,
+           comments: dict[str, dict] | None = None) -> Model:
+    b = _Builder(report, data, ctx, state, interactive, layout, store, max_pages, comments)
     for section, it in report.items() if layout else ():
         b.past_the_paper(it, "table" if it.type in rd.GROWING else "item")
     w, h = report.page.dimensions()

@@ -216,6 +216,9 @@ GET /reports/{id}/render?format=pdf&region=North&since=2026-09-01
   query string `+` is a space, so `{today+7}` is written `%7Btoday%2B7%7D` (`requests`'
   `params` and curl's `--data-urlencode` do it for you). A value repeated for a parameter
   that takes several counts once.
+- **An [AI comment](capabilities/reports.md#ai-comments)** in the report: a token that may write makes
+  the call it needs, on its account; a *read only* one causes none, and gets what is kept, or a line
+  in its place. `xlsx` has no place for one.
 - **The token**: *read only* is enough. The report reads with the rights of the token's
   account: it needs **VIEW** on the report's folder, and every dataset the report reads
   must be one that account may read (the datasources, the views, the SQL scripts, and

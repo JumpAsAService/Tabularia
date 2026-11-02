@@ -46,6 +46,9 @@ class ReportRender(BaseModel):
     locale: Optional[Literal[formats.LOCALES]] = None  # type: ignore[valid-type]
     state: Optional[dict] = None  # the screen's sort and open/closed groups
     title: Optional[str] = Field(default=None, max_length=300)  # REPORT(), the PDF's title
+    # what the gateway wrote for its AI comments, by item: {text, model, numbers_at} or {message}
+    comments: Optional[dict[str, dict]] = None
+    reading: Optional[str] = Field(default=None, max_length=64)  # the rows those were written on (tile_cache.reader_of)
 
 
 class ReportStarted(TaskResponse):
@@ -99,6 +102,8 @@ class DashboardTiles(BaseModel):
     title: Optional[str] = Field(default=None, max_length=300)  # REPORT()
     slot: Optional[str] = Field(default=None, max_length=200)  # a newer request on the same slot knocks this one down
     cache: Optional[DashboardCache] = None  # then no slot: others may be waiting for this computation
+    reading: Optional[str] = Field(default=None, max_length=64)  # for an AI comment in a document: the rows its pages will read
+    of_report: bool = False  # a report's definition: a report's cap on the rows
 
 
 class DashboardRender(BaseModel):
@@ -116,6 +121,7 @@ class DashboardRender(BaseModel):
     title: Optional[str] = Field(default=None, max_length=300)
     page: Optional[dict] = None  # the one chosen: A4 across otherwise
     cache: Optional[DashboardCache] = None  # a saved dashboard's: the rows are those its screen reads
+    comments: Optional[dict[str, dict]] = None  # what the gateway wrote for its AI comments, by tile
 
 
 class TilesRefresh(BaseModel):
@@ -172,7 +178,8 @@ async def tiles(request: DashboardTiles) -> dict:
     from app.api.routes.tasks import on_preview_worker
 
     said = "The numbers could not be read"
-    kwargs = request.model_dump(exclude={"slot", "cache"})
+    # what only a document's comment asks does not go otherwise: a worker of the version before is still a worker
+    kwargs = request.model_dump(exclude={"slot", "cache", *(k for k in ("reading", "of_report") if not getattr(request, k))})
     if request.cache is None:
         return _worker_said(await run_in_threadpool(on_preview_worker, _TILES_TASK, kwargs, request.slot), said)
     return await tile_cache.numbers(kwargs, request.cache.model_dump(),
@@ -192,7 +199,7 @@ def dashboard_render(request: DashboardRender):
     task_id = str(uuid.uuid4())
     exports.remember_owner(task_id, request.owner)
     name = dashboard_file(request.filename, request.format)
-    kwargs = request.model_dump(exclude={"owner", "cache", "filename"})
+    kwargs = request.model_dump(exclude={"owner", "cache", "filename", *(() if request.comments else ("comments",))})
     kwargs["filename"] = name
     if request.cache is not None:
         kwargs["cache_seconds"] = tile_cache.lifetime(request.cache.refresh_seconds)
@@ -213,8 +220,8 @@ def render(request: ReportRender):
     name = file_name(request.filename, request.format)
     kwargs: dict[str, Any] = {"definition": request.definition, "datasets": request.datasets, "params": request.params,
                               "format": request.format, "filename": name}
-    kwargs.update({k: v for k, v in (("locale", request.locale), ("state", request.state), ("title", request.title))
-                   if v is not None})
+    kwargs.update({k: v for k, v in (("locale", request.locale), ("state", request.state), ("title", request.title),
+                                     ("comments", request.comments), ("reading", request.reading)) if v is not None})
     celery_app.send_task("app.tasks.report_jobs.render_report_task", kwargs=kwargs, task_id=task_id)
     return ReportStarted(task_id=task_id, status="submitted", message=f"Rendering a report as {request.format}",
                          filename=name)

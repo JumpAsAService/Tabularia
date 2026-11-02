@@ -41,6 +41,7 @@ const ELEMENTS: { kind: InsertKind; icon: unknown }[] = props.board
   : [
       { kind: 'text', icon: Type }, { kind: 'image', icon: Image }, { kind: 'line', icon: Minus }, { kind: 'rect', icon: Square },
       { kind: 'table', icon: Table2 }, { kind: 'matrix', icon: Grid3x3 }, { kind: 'chart', icon: ChartColumn }, { kind: 'kpi', icon: Gauge },
+      { kind: 'comment', icon: Sparkles },
     ]
 
 // the words of the ready-made texts in the report's own language (not the interface's)

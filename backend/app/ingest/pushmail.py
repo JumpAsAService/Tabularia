@@ -11,6 +11,8 @@ definition, its datasets, its parameters converted. One report may also put its
 summary in the body (the `html` format: the HTML under the cell's text, its charts as
 images by `cid`). A dashboard goes as a PDF or an image (app.reports.dashboard_layout), and
 a tile of it that cannot say its numbers stops the email: nobody looks at it before it leaves.
+An AI comment comes written by the gateway (`comments`), and never stops it: what it could not
+write is one line in its place (docs/specs/ai-comment.md).
 The subject and the file names are templates with the Outputs' placeholders
 (app.core.placeholders), resolved once for the whole email.
 
@@ -71,6 +73,8 @@ class PushmailReport(BaseModel):
     file_name: str = Field(min_length=1, max_length=255)  # a template, the extension added when missing
     in_body: bool = False  # its summary in the body, under the cell's text
     locale: Literal["en", "it", "fr", "de", "es"] | None = None
+    comments: dict[str, dict] = Field(default_factory=dict)  # what the gateway wrote for its AI comments, by item
+    reading: str | None = Field(default=None, max_length=64)  # the rows those were written on (app.reports.tile_cache)
 
 
 class PushmailDashboard(BaseModel):
@@ -85,6 +89,8 @@ class PushmailDashboard(BaseModel):
     format: Literal["pdf", "png"] = "pdf"
     file_name: str = Field(min_length=1, max_length=255)  # a template, the extension added when missing
     locale: Literal["en", "it", "fr", "de", "es"] | None = None
+    comments: dict[str, dict] = Field(default_factory=dict)  # what the gateway wrote for its AI comments, by tile
+    reading: str | None = Field(default=None, max_length=64)  # the rows those were written on (app.reports.tile_cache)
 
 
 class PushmailSpec(BaseModel):
@@ -160,12 +166,13 @@ def _file_names(spec: PushmailSpec, now: datetime) -> tuple[str, list[str], list
 def _render(r: PushmailReport, fmt: str, workdir: Path, now: datetime) -> Path:
     """One report rendered here, as the export queue renders it; EmailDestinationError
     naming the report when it cannot be."""
-    from app.reports import render
+    from app.reports import render, tile_cache
     from app.reports.errors import ReportError
 
+    extra = {"comments": r.comments, "read": tile_cache.reader_of(r.reading)} if r.reading else {"comments": r.comments}
     try:
         return render.render(r.definition, r.datasets, r.params, fmt, workdir, locale=r.locale, title=r.name,
-                             now=now).path
+                             now=now, **extra).path
     except ReportError as e:
         raise EmailDestinationError(f"the report «{r.name}»: {e.message}") from None
 
@@ -173,12 +180,13 @@ def _render(r: PushmailReport, fmt: str, workdir: Path, now: datetime) -> Path:
 def _render_dashboard(d: PushmailDashboard, workdir: Path, now: datetime) -> Path:
     """One dashboard rendered here; EmailDestinationError naming it when it cannot be, or when one
     of its tiles has nothing to say."""
-    from app.reports import dashboard_layout
+    from app.reports import dashboard_layout, tile_cache
     from app.reports.errors import ReportError
 
+    extra = {"read": tile_cache.reader_of(d.reading)} if d.reading else {}
     try:
         return dashboard_layout.render(d.definition, d.tiles, d.datasets, d.format, workdir, params=d.params, locale=d.locale, title=d.name,
-                                       page=d.page, strict=True, now=now).path
+                                       page=d.page, strict=True, now=now, comments=d.comments, **extra).path
     except ReportError as e:
         raise EmailDestinationError(f"the dashboard «{d.name}»: {e.message}") from None
 

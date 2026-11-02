@@ -16,7 +16,8 @@ the moment, on both ways of computing, and the report's model writes them. Here 
   the next one;
 - a tile that cannot say its numbers says why in its place, in the document's language; of a dataset
   the reader may not read, that it cannot and nothing else. `strict`, for what nobody looks at before
-  it leaves (a Pushmail cell): it stops the document instead.
+  it leaves (a Pushmail cell): it stops the document instead. An AI comment never does: it comes written
+  by the gateway (`comments`), and what it cannot say costs that comment and no more.
 
 An image is the same document on one long page.
 """
@@ -399,15 +400,16 @@ def _table_blocks(b: _Printed, out: rmodel.TableOut, title: str, sheet: Sheet) -
 
 
 def _document(r: rtiles.Reading, store: Any, tiles: list[dict], state: dict | None, title: str, sheet: Sheet, strict: bool,
-              limits: Limits) -> rmodel.Model:
+              limits: Limits, comments: dict[str, dict] | None = None) -> rmodel.Model:
     r.report.page = sheet.page
     b = r.builder(store, state, interactive=False, layout=True, max_pages=limits.max_pages, cls=_Printed)
+    b.comments = comments or {}
     grid = {t.get("id"): t for t in tiles}
     lang = r.report.locale
     names = {it.id: grid.get(it.id, {}).get("title") or getattr(it, "label", "") or it.id for it in r.items}
 
     def stops(it: Any, answer: dict) -> dict:
-        if strict:
+        if strict and it.type != "comment":
             raise ReportError(f"the tile «{names[it.id]}»: {answer.get('error')}", "unprocessable")
         return answer
 
@@ -420,8 +422,6 @@ def _document(r: rtiles.Reading, store: Any, tiles: list[dict], state: dict | No
     tables: dict[str, rmodel.TableOut] = {}
     most = int(limits.max_pages * (sheet.height if sheet.height is not None else sheet.page_h) / ROW_MM)
     for it in r.items:
-        if it.type == "comment":
-            continue
         place = grid.get(it.id) or {}
         g = place.get("grid") or {"x": 0, "y": len(shown) * 6, "w": 6, "h": 6}
         b.tile = it.id
@@ -490,14 +490,14 @@ def build(definition: dict, tiles: list[dict], datasets: dict[str, dict], params
           refused: dict[str, dict] | None = None, clicks: list[dict] | None = None, state: dict | None = None,
           locale: str | None = None, title: str = "", page: dict | None = None, long: bool = False, strict: bool = False,
           cap: int | None = None, limits: Limits | None = None, now: datetime | None = None,
-          read: Callable[[str, Any, int, Any], rdata.DataSet] = rdata.read_dataset) -> rmodel.Model:
+          read: Callable[[str, Any, int, Any], rdata.DataSet] = rdata.read_dataset, comments: dict[str, dict] | None = None) -> rmodel.Model:
     """The model of the document. `definition`: the dashboard written as a report's, as for its numbers,
     with its images; `tiles`: {"id", "title", "grid"} of each. `refused`, `clicks`, `state`: as for
-    its numbers (tiles.compute), for this reader."""
+    its numbers (tiles.compute), for this reader. `comments`: what the gateway wrote for its AI comments."""
     limits = limits or Limits.from_settings()
     sheet = Sheet.of(page, long)
     r = rtiles.Reading(definition, datasets, params, refused=refused, locale=locale, title=title, cap=cap, now=now, read=read, clicks=clicks)
-    return r.work(lambda store: _document(r, store, tiles, state, title, sheet, strict, limits))
+    return r.work(lambda store: _document(r, store, tiles, state, title, sheet, strict, limits, comments))
 
 
 def _without_pictures(doc: dict, lang: str) -> None:

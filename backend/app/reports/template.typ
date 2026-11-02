@@ -28,6 +28,12 @@
   )
 }
 
+// what the body has on a page; none: one long page (a dashboard's image)
+#let page-room = if m.page.h == none { none } else {
+  (m.page.h - m.page.margins.at(0) - m.page.margins.at(2)
+   - (if m.header != none { m.header.h } else { 0 }) - (if m.footer != none { m.footer.h } else { 0 })) * 1mm
+}
+
 #let horizontal(a) = if a == "right" { right } else if a == "center" { center } else { left }
 #let vertical(a) = if a == "bottom" { bottom } else if a == "horizon" { horizon } else { top }
 #let placement(st) = horizontal(st.at("align", default: "left")) + vertical(st.at("valign", default: "top"))
@@ -99,7 +105,46 @@
   )
 }
 
-#let item(it, height: auto) = {
+// an AI comment (docs/specs/ai-comment.md): what a model wrote, a string like any other text here, so nothing in
+// it is read as Typst. A word longer than a line breaks where it can, every so many characters: Typst alone
+// lets it run past the box. Under the text, the line that says it is the model's, which no setting takes away.
+#let comment-pad = 2.5
+#let comment-sizes = (T.size, 7, 6, 5, 4)
+#let breaking(s) = s.replace(regex("\\S{24,}"), m => m.text.clusters().chunks(12).map(c => c.join("")).join("\u{200b}"))
+#let comment-body(it, size) = {
+  set par(leading: 0.42em, spacing: 0.7em, justify: false)
+  if it.title != none {
+    styled((size: size, weight: 600), breaking(it.title))
+    v(1mm)
+  }
+  if "text" in it {
+    styled((size: size), breaking(it.text))
+    v(1.5mm)
+    styled((size: calc.max(size - 2, 4), color: T.muted), breaking(it.line))
+  } else {
+    styled((size: size, italic: true, color: T.muted), breaking(it.message))
+  }
+}
+#let comment-need(it, size) = measure(block(width: it.w * 1mm - 2 * comment-pad * 1mm, comment-body(it, size))).height + 2 * comment-pad * 1mm
+// the size its text fits a page at, the theme's when it can; only where the layout is known (`context`)
+#let comment-size(it, room) = {
+  for size in comment-sizes {
+    if size <= T.size and (room == none or comment-need(it, size) <= room) { return size }
+  }
+  comment-sizes.last()
+}
+#let comment(it, height, size) = box(
+  width: it.w * 1mm,
+  height: height,
+  fill: fill-of(it.st, default: rgb(T.band)),
+  stroke: stroke-of(it.st),
+  radius: it.st.at("radius", default: 1.5) * 1mm,
+  inset: comment-pad * 1mm,
+  clip: true,
+  comment-body(it, size),
+)
+
+#let item(it, height: auto, size: T.size) = {
   if it.k == "text" {
     frame(it, text-body(it), height: height)
   } else if it.k == "image" {
@@ -113,13 +158,16 @@
     image(it.src, width: it.w * 1mm, height: it.h * 1mm)
   } else if it.k == "kpi" {
     kpi(it)
+  } else if it.k == "comment" {
+    comment(it, if height == auto { it.h * 1mm } else { height }, size)
   }
 }
 
-// a band: items placed at their x, y; a text that can grow pushes the band down
+// a band: items placed at their x, y; a text that can grow, and an AI comment, push the band down
 #let band(b, fixed: false) = context {
   let height = b.h * 1mm
   let heights = (:)
+  let sizes = (:)
   if not fixed {
     for (i, it) in b.items.enumerate() {
       if grows(it) {
@@ -128,12 +176,18 @@
         let h = calc.max(it.h * 1mm, need)
         heights.insert(str(i), h)
         height = calc.max(height, it.y * 1mm + h)
+      } else if it.k == "comment" {
+        let size = comment-size(it, page-room)
+        let h = calc.max(it.h * 1mm, comment-need(it, size))
+        sizes.insert(str(i), size)
+        heights.insert(str(i), h)
+        height = calc.max(height, it.y * 1mm + h)
       }
     }
   }
   block(width: 100%, height: height, breakable: false, {
     for (i, it) in b.items.enumerate() {
-      place(top + left, dx: it.x * 1mm, dy: it.y * 1mm, item(it, height: heights.at(str(i), default: auto)))
+      place(top + left, dx: it.x * 1mm, dy: it.y * 1mm, item(it, height: heights.at(str(i), default: auto), size: sizes.at(str(i), default: T.size)))
     }
   })
 }

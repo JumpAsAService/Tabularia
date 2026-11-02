@@ -45,24 +45,25 @@ from app.models import Dashboard, DashboardVersion, DashboardView, Project, User
 from app.models.permission import Capability
 from app.routes.reports import (
     CheckOut,
+    CommentOut,
     FieldOut,
     FieldsOut,
     ParameterOut,
     ParametersRequest,
     RenderStarted,
     VersionOut,
+    _comment_out,
     _parameters_out,
     _query_params,
     _wait_for_file,
 )
 from app.routes.search import _like as like_pattern
 from app.schemas.models import Page, UtcDateTime
-from app.services import ai_comment, audit, dashboards, reports
+from app.services import audit, dashboards, reports
 from app.services import permissions as perm_service
 from app.services.copy_names import commit_copy, free_copy_name
 from app.services.masking import mask_email
 from app.services.pagination import paginate
-from app.services.permissions import is_admin
 from app.services.report_definition import Problem
 
 router = APIRouter(route_class=ReleasingRoute, tags=["dashboards"])
@@ -168,19 +169,6 @@ class CommentPreviewRequest(BaseModel):
     tab: str = Field(default="", max_length=32)
 
 
-class CommentOut(BaseModel):
-    """services/ai_comment.py, `Comment`."""
-    state: str
-    text: str
-    model: str
-    numbers_at: Optional[str]
-    written_at: Optional[str]
-    stale: bool
-    can_ask: bool
-    message: str
-    reason: str
-
-
 class FieldsRequest(BaseModel):
     dataset: str = Field(max_length=64)
     definition: dict[str, Any]  # the editor's, not saved yet
@@ -241,14 +229,6 @@ def _being_edited(session: Session, user: User, dashboard_id: Optional[int], pro
 def _asked(body: DataRequest) -> dashboards.Asked:
     return dashboards.Asked(given=reports.given_params(body.params), tiles=body.tiles, pages=body.page, state=body.state,
                             clicks=body.clicks, refresh=body.refresh)
-
-
-def _comment_out(session: Session, user: User, comment: ai_comment.Comment) -> CommentOut:
-    """What failed is for whoever may do something about it."""
-    out = comment.as_dict()
-    if out["reason"] and not is_admin(session, user):
-        out["reason"] = ""
-    return CommentOut(**out)
 
 
 def _out(session: Session, user: User, d: Dashboard, datasets: int, parameters: int, tiles: int) -> DashboardOut:

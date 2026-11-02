@@ -3,11 +3,13 @@
 // the page header and footer, of fixed heights, and the body, which grows with its tables —
 // the elements to drag onto it, the datasets and their fields, the properties of what is
 // selected, and the preview of the report as it is now. Saving makes a new version; a
-// definition the server refuses comes back as problems at their item and property.
+// definition the server refuses comes back as problems at their item and property. An AI
+// comment writes only when its **Try it** is pressed (docs/specs/ai-comment.md); the preview
+// shows what is kept and never asks.
 //
 // /report-design?id=N. It needs EDIT on the report's folder: with VIEW only, the viewer
 // (/report?id=N) opens instead.
-import { computed, onBeforeUnmount, onMounted, provide, ref, watch } from 'vue'
+import { computed, onBeforeUnmount, onMounted, provide, ref, shallowRef, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { onBeforeRouteLeave } from 'vue-router'
 import {
@@ -22,7 +24,9 @@ import RdDatasetDialog from '~/components/report/designer/RdDatasetDialog.vue'
 import RdParameterDialog from '~/components/report/designer/RdParameterDialog.vue'
 import RdPreview from '~/components/report/designer/RdPreview.vue'
 import RdSeg from '~/components/report/designer/RdSeg.vue'
-import { DESIGN, createDesignStore } from '~/composables/reportDesignStore'
+import { COMMENT_TRIAL, DESIGN, createDesignStore } from '~/composables/reportDesignStore'
+import { unanswered, type TileComment } from '~/composables/dashboardComments'
+import { useAi, type AiStatus } from '~/composables/useAi'
 import { useReportDesign } from '~/composables/useReportDesign'
 import { createLiveCheck } from '~/composables/reportLiveCheck'
 import { rowCountOf, sourceKey, type RowCount } from '~/composables/reportRowCount'
@@ -30,7 +34,7 @@ import { errMessage } from '~/composables/useApi'
 import { useSessionPresent } from '~/composables/useAuth'
 import { useFolderPaths } from '~/composables/useFolderPaths'
 import {
-  boxOf, contentWidth, dropParamFilters, forCheck, forSave, mm1, normalize, problemsOf, stillReported, usesOfParam, type BandName, type DDataset, type DItem, type DesignProblem,
+  boxOf, chosenParams, contentWidth, dropParamFilters, forCheck, forSave, mm1, normalize, problemsOf, stillReported, usesOfParam, type BandName, type DDataset, type DItem, type DesignProblem,
 } from '~/composables/reportDesignModel'
 
 const { t } = useI18n()
@@ -204,6 +208,63 @@ const previewZoom = ref<number | 'fit'>(1)
 const previewScale = ref(1)
 watch(mode, (m) => {
   if (m === 'preview') requestAnimationFrame(() => previewRef.value?.run())
+})
+
+// ── an AI comment: Try it, and never at a keystroke ──────────────────────────
+const ai = useAi()
+const aiStatus = ref<AiStatus | null>(null)
+const trying = ref<string | null>(null)
+// what it wrote, on what: its words and what it reads as they were. Once they change, it speaks of something else
+const triedAnswers = shallowRef<Record<string, { answer: TileComment; on: string }>>({})
+let tryController: AbortController | null = null
+const previewValues = useState<Record<string, string | string[]>>(`report-designer-preview-${reportId.value}`, () => ({})) // RdPreview's form
+function triedOn(id: string): string {
+  const d = store.doc.value
+  const it = d.sections.body.items.find((x) => x.id === id)
+  if (!it || it.type !== 'comment') return ''
+  const read = (it.reads ?? []).map((name) => {
+    const { x, y, w, h, ...rest } = (d.sections.body.items.find((x2) => x2.id === name) ?? {}) as Record<string, any>
+    return rest
+  })
+  return JSON.stringify([it.instruction ?? '', read, d.datasets.map((x) => x.source), d.parameters, previewValues.value])
+}
+function tried(id: string): TileComment | null {
+  const held = triedAnswers.value[id]
+  void store.text.value // what it depends on, read through the definition
+  return held && trying.value !== id && held.on === triedOn(id) ? held.answer : null
+}
+function cannotTry(id: string): string {
+  const it = store.find(id)?.item
+  if (!it || it.type !== 'comment' || !it.reads?.length) return t('reportDesigner.commentNeedsReads')
+  const chosen = chosenParams(store.doc.value.parameters, previewValues.value)
+  return store.doc.value.parameters.some((p) => p.required && (p.default === undefined || p.default === null || p.default === '') && chosen[p.name] === undefined)
+    ? t('reportDesigner.commentNeedsValues') : ''
+}
+async function tryIt(id: string) {
+  if (trying.value || reportId.value == null || cannotTry(id)) return
+  tryController = new AbortController()
+  trying.value = id
+  const on = triedOn(id)
+  let answer: TileComment
+  try {
+    answer = await api.tryComment(reportId.value, forSave(store.doc.value), id, chosenParams(store.doc.value.parameters, previewValues.value), tryController.signal)
+  } catch (e: any) {
+    if (e?.name === 'AbortError' || e?.cause?.name === 'AbortError') return
+    const detail = e?.data?.detail
+    if ((e?.statusCode ?? e?.response?.status) === 422 && detail && typeof detail === 'object' && !Array.isArray(detail)) showProblems(problemsOf(store.doc.value, detail))
+    answer = unanswered(errMessage(e))
+  } finally {
+    trying.value = null
+  }
+  triedAnswers.value = { ...triedAnswers.value, [id]: { answer, on } }
+}
+provide(COMMENT_TRIAL, {
+  status: aiStatus,
+  answerOf: () => null, // no numbers on paper here: the panel goes by what the definition says
+  cannotTry,
+  trying,
+  tried,
+  tryIt,
 })
 
 // ── zoom ─────────────────────────────────────────────────────────────────────
@@ -399,9 +460,11 @@ onMounted(() => {
   window.addEventListener('beforeunload', onBeforeUnload)
   folderPaths.load()
   load()
+  ai.status().then((s) => { aiStatus.value = s }, () => {})
 })
 onBeforeUnmount(() => {
   live.stop()
+  tryController?.abort()
   document.removeEventListener('keydown', onKey)
   document.removeEventListener('pointerdown', onPress, true)
   window.removeEventListener('beforeunload', onBeforeUnload)

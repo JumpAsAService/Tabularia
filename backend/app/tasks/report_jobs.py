@@ -28,20 +28,25 @@ def render_report_task(
     locale: str | None = None,
     state: dict | None = None,
     title: str | None = None,
+    comments: dict[str, dict] | None = None,
+    reading: str | None = None,
 ) -> dict:
     """Renders the report and leaves the file for its owner. Tagged as export_task's
-    answer: what stopped the render is an answer with its reason, not an exception."""
+    answer: what stopped the render is an answer with its reason, not an exception.
+    `comments`: what the gateway wrote for its AI comments; `reading`: the rows they were
+    written on (app/reports/tile_cache.py)."""
     from celery.exceptions import SoftTimeLimitExceeded
 
-    from app.reports import render
+    from app.reports import render, tile_cache
     from app.reports.errors import ReportError
     from app.tasks.jobs import _deliver_export
 
     name = render.filename(filename, format)
+    extra = {"comments": comments, "read": tile_cache.reader_of(reading) if reading else None}
     with tempfile.TemporaryDirectory(prefix="report-") as work:
         try:
             result = render.render(definition, datasets, params, format, Path(work), locale=locale, state=state,
-                                   title=title or name.rsplit(".", 1)[0])
+                                   title=title or name.rsplit(".", 1)[0], **extra)
         except ReportError as e:
             return {"ok": False, "error": e.tag, "detail": e.message}
         except SoftTimeLimitExceeded:
@@ -71,10 +76,12 @@ def render_dashboard_task(
     title: str | None = None,
     page: dict | None = None,
     cache_seconds: int | None = None,
+    comments: dict[str, dict] | None = None,
 ) -> dict:
     """A dashboard as a document (app/reports/dashboard_layout.py), left for its owner as a
     report's render. `cache_seconds`: its rows are the ones the screen reads (app/reports/
-    tile_cache.py), so the numbers too, and no source is asked twice."""
+    tile_cache.py), so the numbers too, and no source is asked twice. `comments`: what the
+    gateway wrote on them for its AI comments."""
     from celery.exceptions import SoftTimeLimitExceeded
 
     from app.reports import dashboard_layout, tile_cache
@@ -86,7 +93,7 @@ def render_dashboard_task(
     with tempfile.TemporaryDirectory(prefix="dashboard-") as work:
         try:
             result = dashboard_layout.render(definition, tiles, datasets, format, Path(work), params=params, refused=refused, clicks=clicks,
-                                             state=state, locale=locale, page=page, title=title or name.rsplit(".", 1)[0], **extra)
+                                             state=state, locale=locale, page=page, title=title or name.rsplit(".", 1)[0], comments=comments, **extra)
         except ReportError as e:
             return {"ok": False, "error": e.tag, "detail": e.message}
         except SoftTimeLimitExceeded:
@@ -162,20 +169,28 @@ def dashboard_tiles_task(
     title: str | None = None,
     cache_seconds: int | None = None,
     clicks: list[dict] | None = None,
+    reading: str | None = None,
+    of_report: bool = False,
 ) -> dict:
     """A dashboard's numbers (app/reports/tiles.py): on the preview queue, tagged as
     preview_task's answer; its queries carry the task's id, so that one knocked down is
     stopped on the server too. `cache_seconds`: a saved dashboard's, whose rows are shared
-    (app/reports/tile_cache.py)."""
+    (app/reports/tile_cache.py). `reading`: those of one document, which its pages read after
+    this, for its AI comment; `of_report`: a report's, under a report's cap."""
     from celery import current_task
 
     from app.engine.query_tag import query_tag, was_interrupted
     from app.reports import tile_cache
     from app.reports import tiles as rtiles
     from app.reports.errors import ReportError
+    from app.reports.render import Limits
 
     task_id = getattr(getattr(current_task, "request", None), "id", None)
-    extra = {"read": tile_cache.reader(cache_seconds)} if cache_seconds else {}
+    extra: dict[str, Any] = {"read": tile_cache.reader(cache_seconds)} if cache_seconds else {}
+    if reading:
+        extra["read"] = tile_cache.reader_of(reading)
+    if of_report:
+        extra["cap"] = Limits.from_settings().max_rows
     try:
         with query_tag(f"tab-prev:{task_id}" if task_id else None):
             return {"ok": True, "result": rtiles.compute(definition, datasets, params, refused=refused, only=tiles, pages=pages,

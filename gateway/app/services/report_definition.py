@@ -44,7 +44,7 @@ MAX_NAME = 256  # a field's or a calculated field's name, as the engine's
 MAX_SQL_CHARS = 100_000  # as a SQL script's
 MAX_EXPR = 4000
 MAX_GROUP_NAME = 100  # how an aggregate names a group, as the engine's
-MAX_COMMENT_INSTRUCTION, MAX_COMMENT_READS = 1000, 10
+MAX_COMMENT_INSTRUCTION, MAX_COMMENT_READS, MIN_COMMENT_WIDTH = 1000, 10, 40  # mm: as the engine's
 
 PAGE_SIZES = {"A4": (210, 297), "A3": (297, 420), "A5": (148, 210), "Letter": (215.9, 279.4),
               "Legal": (215.9, 355.6)}
@@ -648,6 +648,8 @@ def _item(it: dict, at: str, kind: str, item_id: str, width: float, height: Opti
         reads = it.get("reads")
         if not isinstance(reads, list) or not 1 <= len(reads) <= MAX_COMMENT_READS:
             raise Problem(f"{what} comments on 1 to {MAX_COMMENT_READS} elements", f"{at}.reads", item_id)
+        if isinstance(it.get("w"), (int, float)) and it["w"] < MIN_COMMENT_WIDTH:
+            raise Problem(f"{what} is at least {MIN_COMMENT_WIDTH} mm wide: its text and the line that says who wrote it must fit a page", f"{at}.w", item_id)
 
 
 def _comments_read(items: list[dict], where: str) -> None:

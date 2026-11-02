@@ -23,7 +23,9 @@ orchestration (services/orchestrator.py), which hands it here from `run_it`.
   datasources, the reports and what they read — is checked again with the rights of
   whoever runs the group (services/pushmail.py `pushmail_errors`), and the reports are
   resolved with those rights too (services/reports.py `prepare`), then rendered by the
-  engine in the task that writes the email.
+  engine in the task that writes the email. Their AI comments are written before that, on their
+  numbers and on the bill of whoever runs the group; one that cannot be written is a line in
+  its place, and the email goes all the same (`_cell_comments`).
 - A **script** cell runs a saved script's current version (services/saved_script_runs.py)
   under a child orchestration row that holds the script's live slot, as a flow cell
   does; a run of the script already in progress is waited for, and its outcome counts
@@ -454,6 +456,7 @@ async def _pushmail_cell(run_id: int, user_id: int, trigger: str, cell: FlowGrou
         boards, failed = await _cell_dashboards(s, user, cfg, group, trigger, read)
         if failed:
             return f"«{name}»: {failed}"
+        await _cell_comments(s, user, rendered, boards)
         to = [a.strip() for a in cfg.to if a.strip()]
         cc = [a.strip() for a in cfg.cc if a.strip()]
         # the run first: its number is the {run_id} of the names; a placeholder task
@@ -483,8 +486,8 @@ async def _pushmail_cell(run_id: int, user_id: int, trigger: str, cell: FlowGrou
                              "label": datasources[a.datasourceId].name, "file_name": a.fileName, "max_rows": a.maxRows}
                             for a in cfg.attachments],
             "reports": [{k: r[k] for k in ("name", "definition", "datasets", "params", "format", "file_name", "in_body",
-                                           "locale")} for r in rendered],
-            "dashboards": [{k: d[k] for k in ("name", "definition", "tiles", "page", "datasets", "params", "format", "file_name", "locale")}
+                                           "locale", "comments", "reading")} for r in rendered],
+            "dashboards": [{k: d[k] for k in ("name", "definition", "tiles", "page", "datasets", "params", "format", "file_name", "locale", "comments", "reading")}
                            for d in boards],
         }
         # who sent what to whom, written when it leaves, whatever the outcome
@@ -548,7 +551,7 @@ async def _cell_reports(s: Session, user: User, cfg, group: FlowGroup | None,
         out.append({"id": report.id, "name": report.name, "definition": definition, "datasets": datasets,
                     "params": {k: to_json(v) for k, v in values.items()}, "format": r.format,
                     "file_name": r.fileName, "in_body": r.inBody, "locale": definition.get("locale") or "en",
-                    "report": report, "detail": detail})
+                    "report": report, "detail": detail, "given": given})
     return out, read, None
 
 
@@ -579,8 +582,29 @@ async def _cell_dashboards(s: Session, user: User, cfg, group: FlowGroup | None,
             dashboards.audit_render(s, user, board, None, "failure", detail)
             return out, f"the dashboard «{board.name}»: {said}"
         out.append({"id": board.id, "name": board.name, **printed, "datasets": datasets, "params": {k: to_json(v) for k, v in values.items()},
-                    "format": d.format, "file_name": d.fileName, "locale": content.get("locale") or "en", "board": board, "detail": detail})
+                    "format": d.format, "file_name": d.fileName, "locale": content.get("locale") or "en", "board": board, "detail": detail, "given": given, "content": content})
     return out, None
+
+
+async def _cell_comments(s: Session, user: User, rendered: list[dict], boards: list[dict]) -> None:
+    """The AI comments of what a cell sends, on the numbers it sends, all at the same time, on the bill of whoever
+    runs the group. It waits for them with no database connection held (AI__COMMENT_WAIT_SECONDS at most), and
+    whatever happens to them the cell goes on: a comment is no tile in error. A report going as Excel with no
+    summary in the body has no place for one, and asks nothing."""
+    from app.services import reports
+
+    async def one(doc: dict, where: str, of_report: bool) -> None:
+        doc["comments"], doc["reading"] = {}, None
+        if of_report and doc["format"] == "xlsx" and not doc["in_body"]:
+            return
+        try:
+            doc["comments"], doc["reading"] = await reports.comments_for(
+                s, user, doc["definition"], doc["datasets"], doc["params"], doc["given"], where=(where, doc["id"]), title=doc["name"], of_report=of_report,
+                words_of=doc.get("content"))
+        except Exception:  # noqa: BLE001 — the engine draws the line in its place
+            logger.exception("flow group: the AI comments of «%s» not written", doc["name"])
+
+    await asyncio.gather(*(one(r, "report", True) for r in rendered), *(one(d, "dashboard", False) for d in boards))
 
 
 def _audit_dashboards(s: Session, user: User, boards: list[dict], outcome: str, run_id: int, error: str | None) -> None:

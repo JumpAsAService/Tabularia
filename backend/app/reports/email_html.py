@@ -2,7 +2,7 @@
 
 What goes in (docs/specs/reports.md, «Email HTML»), in the order of the report's body:
 
-- its texts, its KPI cards and its charts;
+- its texts, its KPI cards, its charts and its AI comments, each with the line that says who wrote it;
 - every table and matrix as its totals: the total row of each of its outermost groups (a
   matrix's own rows, when they are its only groups) and its grand total, with the columns
   that have a value — at most five: a wider matrix shows its total column alone;
@@ -190,6 +190,19 @@ def _image(cid: str, width: int, height: int, alt: str) -> str:
             f'style="display:block;border:0;width:{w}px;max-width:100%;height:auto;"></td></tr>')
 
 
+def _comment(c: dict, theme: dict) -> str:
+    """An AI comment: what a model wrote, escaped like every other text, and a word too long for a mail client's
+    line breaks where it must."""
+    title = f'<div style="font-weight:600;margin-bottom:4px;">{_e(c["title"])}</div>' if c.get("title") else ""
+    if "text" in c:
+        body = "<br>".join(_e(line) for line in c["text"].split("\n"))
+        said = (f'<div>{body}</div><div style="margin-top:6px;font-size:11px;color:{theme["muted"]};">{_e(c["line"])}</div>')
+    else:
+        said = f'<div style="font-style:italic;color:{theme["muted"]};">{_e(c["message"])}</div>'
+    return (f'<tr><td style="padding:8px 24px;"><div style="padding:12px;background:{theme["band"]};border-radius:6px;{FONT}'
+            f'font-size:13px;line-height:1.5;color:{theme["color"]};overflow-wrap:anywhere;word-break:break-word;">{title}{said}</div></td></tr>')
+
+
 def _note(text: str, theme: dict, colspan: int = 1) -> str:
     return (f'<tr><td colspan="{colspan}" style="padding:6px 8px;font-size:12px;color:{theme["muted"]};{FONT}">'
             f'{_e(text)}</td></tr>')
@@ -242,6 +255,8 @@ def html(model: Model, cids: dict[str, str], loc: formats.Locale, limit: int = R
             parts.append(_text(*p.what, theme))
         elif p.kind == "kpis":
             parts.extend(_kpis(p.what[i:i + 3], theme) for i in range(0, len(p.what), 3))
+        elif p.kind == "comment":
+            parts.append(_comment(p.what, theme))
         elif p.kind == "chart":
             name = p.what[1]
             if name in cids:
@@ -279,6 +294,9 @@ def text(model: Model, loc: formats.Locale, limit: int = ROW_LIMITS[0], tables: 
         elif p.kind == "kpis":
             out.append("\n".join(f"{k['label']}: {k['value']}" + (f" ({_arrow(k['change'])} {k['change']['t']})"
                                                                    if k["change"] else "") for k in p.what))
+        elif p.kind == "comment":
+            c = p.what
+            out.append("\n".join(x for x in (c.get("title"), c.get("text"), c.get("line"), c.get("message")) if x))
         elif p.kind == "table":
             s = p.what
             rows, hidden = _shown(s, limit)
