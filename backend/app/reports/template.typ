@@ -177,7 +177,8 @@
         heights.insert(str(i), h)
         height = calc.max(height, it.y * 1mm + h)
       } else if it.k == "comment" {
-        let size = comment-size(it, page-room)
+        // the band cannot break: the room is what the page has under where the comment starts in it
+        let size = comment-size(it, if page-room == none { none } else { page-room - it.y * 1mm })
         let h = calc.max(it.h * 1mm, comment-need(it, size))
         sizes.insert(str(i), size)
         heights.insert(str(i), h)

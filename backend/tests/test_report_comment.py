@@ -9,6 +9,7 @@ import copy
 import email
 import email.policy
 import json
+import re
 import zipfile
 
 import pytest
@@ -16,6 +17,7 @@ import pytest
 from app.reports import dashboard_layout as dl
 from app.reports import definition as rd
 from app.reports import formats, pdf, render, tile_cache, tiles
+from app.reports import model as rmodel
 from tests import report_samples as samples
 from tests.test_dashboard_render import NOW, placed
 from tests.test_dashboard_tiles import chart, definition, kpi, spec, table
@@ -225,6 +227,19 @@ def test_a_comment_that_cannot_fit_a_page_at_the_theme_size_comes_smaller_and_on
     d = definition(kpi(), comment(reads=["k"], y=20, w=40, h=10))
     out = run(tmp_path, chart_service, definition=d, comments=said("A sentence of the comment on these numbers. " * 34))
     assert out.pages == 1
+
+
+def test_a_comment_low_in_its_band_comes_smaller_rather_than_past_the_bottom_of_the_page(tmp_path, chart_service):
+    """Beside a tall element, it starts low in a band that cannot break: the size its text fits is the one
+    that fits the room under where it starts, and the line that says it is the model's stays on the paper."""
+    d = definition(kpi())
+    d["sections"]["body"]["items"] += [{"id": "tall", "type": "rect", "x": 0, "y": 0, "w": 50, "h": 1900},
+                                       comment(reads=["k"], x=60, y=1800, w=40, h=10)]
+    out = run(tmp_path, chart_service, fmt="svg", definition=d, comments=said("A sentence of the comment on these numbers. " * 34))
+    # the comment's box: where it starts and how tall its side is, in points
+    top, side = re.findall(rf'<path fill="{rmodel.PALETTE["band"]}"[^>]*translate\([^ ]+ ([\d.]+)\)" d="[^"]*?v ([\d.]+)',
+                           json.loads(out.path.read_text())["pages"][0])[-1]
+    assert out.pages == 1 and (float(top) + float(side)) * 25.4 / 72 < 2000
 
 
 def test_a_comment_in_the_middle_of_a_report_keeps_its_place_between_what_is_above_and_under(tmp_path, chart_service):
