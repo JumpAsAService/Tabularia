@@ -8,7 +8,7 @@ import { computed, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 import {
   ChartColumn, ChevronRight, Database, Gauge, Grid3x3, Image, LoaderCircle, Minus, Pencil, Plus, RefreshCw, Square,
-  SquareFunction, Table2, Trash2, Type, Variable,
+  Sparkles, SquareFunction, Table2, Trash2, Type, Variable,
 } from 'lucide-vue-next'
 import RdFieldIcon from '~/components/report/designer/RdFieldIcon.vue'
 import RdRowCount from '~/components/report/designer/RdRowCount.vue'
@@ -36,7 +36,7 @@ const tab = store.sideTab
 const ELEMENTS: { kind: InsertKind; icon: unknown }[] = props.board
   ? [
       { kind: 'kpi', icon: Gauge }, { kind: 'chart', icon: ChartColumn }, { kind: 'table', icon: Table2 }, { kind: 'matrix', icon: Grid3x3 },
-      { kind: 'text', icon: Type }, { kind: 'image', icon: Image },
+      { kind: 'text', icon: Type }, { kind: 'image', icon: Image }, { kind: 'comment', icon: Sparkles },
     ]
   : [
       { kind: 'text', icon: Type }, { kind: 'image', icon: Image }, { kind: 'line', icon: Minus }, { kind: 'rect', icon: Square },

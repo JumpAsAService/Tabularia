@@ -22,6 +22,10 @@ dashboard's are shared by whoever reads the same source, with one query: the cac
 engine (app/reports/tile_cache.py), as Valkey is not the gateway's, and what it is given is only
 what `_plan` found this reader may read. A definition being edited shares nothing.
 
+An AI comment (`commented`) reads what it comments on with the same `numbers`, so from the same place in
+the cache, and hands them to services/ai_comment.py, which does the rest: what is read and the instruction
+are the definition's, never the browser's.
+
 A document of it (`render`, a PDF or an image) has the same three steps: the engine lays it out
 (app/reports/dashboard_layout.py) on the export queue, with the rows of the screen. A group's
 Pushmail cell sends one with the rights of whoever runs the group: what makes one valid for them is
@@ -46,7 +50,7 @@ from sqlmodel import Session, select
 from app.core.engine_client import CHECK, get_engine_client
 from app.models import Dashboard, DashboardVersion, DashboardView, User
 from app.models.permission import Capability
-from app.services import audit
+from app.services import ai_comment, audit, metadata_only
 from app.services import permissions as perm_service
 from app.services import report_definition, report_params, report_views, reports, sql_scripts
 from app.services.permissions import is_admin
@@ -405,13 +409,14 @@ class Asked:
     """What a request for numbers asks: the parameters' values as given, the tiles (None: every
     one), a table's page by tile, the on-screen view (a column sorted, groups toggled), the
     clicks (each {"tile", "on", "values"}), and whether to read the data again rather than take
-    what is kept."""
+    what is kept. `counting`: once read, the clicks that counted for this reader."""
     given: dict[str, list] = field(default_factory=dict)
     tiles: Optional[list[str]] = None
     pages: dict[str, int] = field(default_factory=dict)
     state: Optional[dict] = None
     clicks: list = field(default_factory=list)
     refresh: bool = False
+    counting: list = field(default_factory=list)
 
 
 def _levels_of(tile: dict, on: str) -> int:
@@ -499,6 +504,9 @@ async def _plan(session: Session, user: User, definition: dict, asked: Asked, ca
     """With `user`'s rights, whoever asks and whatever they asked before: a value that does not
     fit is a 400 naming its parameter, as for a report; a dataset they may not read is only
     its tiles' refusal, and one that holds the choices of a parameter checks nothing."""
+    from app.routes.proxy import _release_db  # routes → services: late import
+
+    _release_db(session, user)  # a default may ask the engine what today is
     shaped = as_report(definition)
     try:
         values = await report_params.values_for(shaped, asked.given)
@@ -575,11 +583,30 @@ async def numbers(session: Session, user: User, definition: dict, asked: Asked, 
     from app.routes.proxy import _release_db  # routes → services: late import
 
     check_asked(definition, asked)
+    _release_db(session, user)  # a refresh asks the engine for a token
     cache = await cache_of(definition, saved, asked.refresh) if saved is not None else None
     plan = await _plan(session, user, definition, asked, cache)
     slot = slot_of(user, editing, asked) if saved is None else None
+    tiles = {t.get("id"): t for t in definition.get("tiles") or [] if isinstance(t, dict)}
+    asked.counting = [c for c in asked.clicks if tiles[c["tile"]].get("dataset") not in plan.refused]
     _release_db(session, user)  # nothing holds a database connection while the engine works
     return _finished(definition, await _computed(plan, asked, title, slot, cache))
+
+
+async def commented(session: Session, user: User, definition: dict, element: str, asked: Asked, moment: ai_comment.Moment, title: str = "",
+                    saved: Optional[int] = None, editing: str = "", request: Optional[Request] = None) -> ai_comment.Comment:
+    """The AI comment `element` of a definition `user` may open, on the numbers they read, as `numbers` reads
+    them with no page and no state: the first page, sorted as defined, for everyone. 422 when the definition has
+    no such comment. In metadata-only mode nothing is read: there is nothing to read it for."""
+    item = ai_comment.elements_of(definition).get(element)
+    if item is None or item.get("type") != "comment":
+        raise HTTPException(status_code=422, detail=f"The dashboard has no AI comment «{element[:64]}»")
+    asked.tiles, asked.pages, asked.state, asked.refresh = list(item.get("reads") or []), {}, None, False
+    where: Optional[tuple[str, int]] = ("dashboard", saved) if saved is not None else None
+    answer: dict = {"tiles": {}} if metadata_only.on("chat") else await numbers(session, user, definition, asked, title, saved, editing)
+    # a click that counted for nothing is no click: these numbers are the ones with none
+    return await ai_comment.comment(session, user, definition, element, answer["tiles"], moment=moment, where=where, params=asked.given,
+                                    clicks=asked.counting, request=request)
 
 
 # ── a document ───────────────────────────────────────────────────────────────

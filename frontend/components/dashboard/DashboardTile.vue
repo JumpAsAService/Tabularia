@@ -2,15 +2,18 @@
 // One tile: its title, and its numbers, or a skeleton on its first load, or its own error with a
 // way to try again, or «no access» without a word about what is behind it. New numbers on their way
 // for a new question dim the old ones (they are not its answer); read again they stay as they
-// are, with their time. Motion only for that state, and not with reduced motion.
+// are, with their time. Motion only for that state, and not with reduced motion. An AI comment
+// (TileComment) has an answer of its own, which the numbers do not wait for.
 import { computed } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { Clock, LoaderCircle, Lock, RefreshCw, TriangleAlert } from 'lucide-vue-next'
 import KpiCard from '~/components/ui/KpiCard.vue'
 import TileChart from '~/components/dashboard/TileChart.vue'
+import TileComment from '~/components/dashboard/TileComment.vue'
 import TileTable from '~/components/dashboard/TileTable.vue'
 import type { KindCtx } from '~/composables/chartKinds'
 import { canFilter, clicksOfTile, type ClickSide, type ClickValue, type TileClick } from '~/composables/dashboardClicks'
+import type { CommentSlot } from '~/composables/dashboardComments'
 import { tileStyleOf } from '~/composables/dashboardStyle'
 import { tileStates, type TileSlot } from '~/composables/dashboardTiles'
 import { useFormat } from '~/composables/useFormat'
@@ -25,6 +28,8 @@ const props = defineProps<{
   clicks?: TileClick[]
   /** in the designer: the title as it is being written, which the numbers on screen are older than */
   drawing?: boolean
+  /** what an AI comment has to say */
+  comment?: CommentSlot | null
 }>()
 const emit = defineEmits<{
   (e: 'retry'): void
@@ -32,6 +37,7 @@ const emit = defineEmits<{
   (e: 'toggle', key: unknown[], closed: boolean): void
   (e: 'page', page: number): void
   (e: 'pick', on: ClickSide, value: ClickValue, add: boolean): void
+  (e: 'ask-comment'): void
 }>()
 
 const { t, te } = useI18n()
@@ -103,7 +109,7 @@ const chosenColumns = computed(() => clicksOfTile(props.clicks ?? [], props.tile
         <template v-else-if="kind === 'table'">
           <span v-for="i in 6" :key="i" class="sk" style="width: 100%; height: 13px" />
         </template>
-        <template v-else-if="kind === 'text'">
+        <template v-else-if="kind === 'text' || kind === 'comment'">
           <span class="sk" style="width: 88%" /><span class="sk" style="width: 64%" />
         </template>
         <span v-else class="sk" style="width: 100%; height: 100%" />
@@ -160,6 +166,7 @@ const chosenColumns = computed(() => clicksOfTile(props.clicks ?? [], props.tile
           @page="(p: number) => emit('page', p)"
         />
         <p v-else-if="kind === 'text'" class="ttext">{{ numbers.text }}</p>
+        <TileComment v-else-if="kind === 'comment'" :entry="comment" :drawing="drawing" :label="title" @ask="emit('ask-comment')" />
         <img v-else-if="imageSrc" class="timg" :src="imageSrc" :alt="title" :style="{ objectFit: FITS[numbers.fit] ?? 'contain' }" />
       </template>
     </div>

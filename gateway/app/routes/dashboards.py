@@ -16,6 +16,10 @@ Permissions:
   would drown the log). What comes out is shared by whoever reads the same source, for the
   dashboard's cache's life (the engine's: app/reports/tile_cache.py), after that check;
 - the numbers of a definition not saved yet (POST /dashboards/preview): EDIT on the folder;
+- an AI comment on its numbers (POST /dashboards/{id}/comment): as its numbers, and those are what it
+  reads. It may make a paid call on behalf of whoever asks, so it is no reading POST (services/api_tokens.py):
+  a read-only token is refused, a token that may write pays on its owner. On a definition not saved yet
+  (POST /dashboards/preview/comment, the designer's Try it): EDIT on the folder;
 - a document of it (POST /dashboards/{id}/render for the viewer, GET for an API token, as a PDF or
   an image): as its numbers, with the clicks of the moment, and audited;
 - administrators see and change every dashboard.
@@ -53,11 +57,12 @@ from app.routes.reports import (
 )
 from app.routes.search import _like as like_pattern
 from app.schemas.models import Page, UtcDateTime
-from app.services import audit, dashboards, reports
+from app.services import ai_comment, audit, dashboards, reports
 from app.services import permissions as perm_service
 from app.services.copy_names import commit_copy, free_copy_name
 from app.services.masking import mask_email
 from app.services.pagination import paginate
+from app.services.permissions import is_admin
 from app.services.report_definition import Problem
 
 router = APIRouter(route_class=ReleasingRoute, tags=["dashboards"])
@@ -142,6 +147,40 @@ class PreviewRequest(DataRequest):
     tab: str = Field(default="", max_length=32)
 
 
+class CommentRequest(BaseModel):
+    """Which comment, and what the screen shows beside it: the parameters' values and the clicks, as for
+    its numbers. What it reads and its instruction are the saved definition's. `moment`: `open` an opening, an
+    Apply, a refresh by hand; `refresh` an automatic refresh; `asked` a press of **Comment this view**."""
+    tile: str = Field(max_length=64)
+    moment: Literal["open", "refresh", "asked"] = "open"
+    params: dict[str, Any] = Field(default_factory=dict)
+    clicks: list[Any] = Field(default_factory=list, max_length=2 * dashboards.MAX_TILES)
+
+
+class CommentPreviewRequest(BaseModel):
+    """**Try it**: a comment of a definition being edited, on the numbers read as it stands. Only when
+    it is pressed, so there is no moment to say."""
+    tile: str = Field(max_length=64)
+    definition: dict[str, Any]
+    dashboard_id: Optional[int] = None
+    project_id: Optional[int] = None
+    params: dict[str, Any] = Field(default_factory=dict)
+    tab: str = Field(default="", max_length=32)
+
+
+class CommentOut(BaseModel):
+    """services/ai_comment.py, `Comment`."""
+    state: str
+    text: str
+    model: str
+    numbers_at: Optional[str]
+    written_at: Optional[str]
+    stale: bool
+    can_ask: bool
+    message: str
+    reason: str
+
+
 class FieldsRequest(BaseModel):
     dataset: str = Field(max_length=64)
     definition: dict[str, Any]  # the editor's, not saved yet
@@ -202,6 +241,14 @@ def _being_edited(session: Session, user: User, dashboard_id: Optional[int], pro
 def _asked(body: DataRequest) -> dashboards.Asked:
     return dashboards.Asked(given=reports.given_params(body.params), tiles=body.tiles, pages=body.page, state=body.state,
                             clicks=body.clicks, refresh=body.refresh)
+
+
+def _comment_out(session: Session, user: User, comment: ai_comment.Comment) -> CommentOut:
+    """What failed is for whoever may do something about it."""
+    out = comment.as_dict()
+    if out["reason"] and not is_admin(session, user):
+        out["reason"] = ""
+    return CommentOut(**out)
 
 
 def _out(session: Session, user: User, d: Dashboard, datasets: int, parameters: int, tiles: int) -> DashboardOut:
@@ -339,6 +386,24 @@ async def preview_dashboard(body: PreviewRequest, user: User = Depends(get_curre
     return await dashboards.numbers(session, user, looked.definition, _asked(body), title, editing=editing)
 
 
+@router.post("/dashboards/preview/comment", response_model=CommentOut)
+async def preview_dashboard_comment(body: CommentPreviewRequest, request: Request, user: User = Depends(get_current_user),
+                                    session: Session = Depends(get_session)):
+    """**Try it**: the comment of a definition not saved yet, as `/dashboards/preview` reads its numbers:
+    EDIT on the folder, and problems are a 422 that lists them. On the author's bill, when pressed and only
+    then; what is kept goes by the numbers, so pressing it again on the same ones costs nothing."""
+    dashboard = _being_edited(session, user, body.dashboard_id, body.project_id)
+    current = dashboards.content_of(session, dashboard) if dashboard is not None else None
+    looked = await dashboards.review(session, user, body.definition, current)
+    if looked.problems:
+        raise looked.refusal()
+    editing = f"comment-{dashboard.id if dashboard is not None else 'new'}{f'-{body.tab}' if body.tab else ''}"
+    asked = dashboards.Asked(given=reports.given_params(body.params))
+    comment = await dashboards.commented(session, user, looked.definition, body.tile, asked, "asked", dashboard.name if dashboard is not None else "",
+                                         editing=editing, request=request)
+    return _comment_out(session, user, comment)
+
+
 @router.get("/dashboards/{dashboard_id}", response_model=DashboardDetail)
 def get_dashboard(dashboard_id: int, user: User = Depends(get_current_user), session: Session = Depends(get_session)):
     return _detail(session, user, dashboards.get_visible(session, user, dashboard_id))
@@ -365,6 +430,19 @@ async def dashboard_data(dashboard_id: int, body: DataRequest, user: User = Depe
     dashboard = dashboards.get_visible(session, user, dashboard_id)
     definition = dashboards.content_of(session, dashboard)
     return await dashboards.numbers(session, user, definition, _asked(body), dashboard.name, saved=dashboard.id)
+
+
+@router.post("/dashboards/{dashboard_id}/comment", response_model=CommentOut)
+async def dashboard_comment(dashboard_id: int, body: CommentRequest, request: Request, user: User = Depends(get_current_user),
+                            session: Session = Depends(get_session)):
+    """The AI comment of a tile of the current version, on the numbers it reads, read with the caller's
+    rights and shared with their screen (docs/specs/ai-comment.md). The answer says the text, or why there
+    is none: whatever happens to the model, this is a 200. 400 naming the parameter whose value does not fit."""
+    dashboard = dashboards.get_visible(session, user, dashboard_id)
+    definition = dashboards.content_of(session, dashboard)
+    asked = dashboards.Asked(given=reports.given_params(body.params), clicks=body.clicks)
+    comment = await dashboards.commented(session, user, definition, body.tile, asked, body.moment, dashboard.name, saved=dashboard.id, request=request)
+    return _comment_out(session, user, comment)
 
 
 @router.post("/dashboards/{dashboard_id}/render", response_model=RenderStarted)

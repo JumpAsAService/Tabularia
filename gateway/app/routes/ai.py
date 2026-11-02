@@ -72,6 +72,8 @@ class AiStatusOut(BaseModel):
     # metadata-only mode (services/metadata_only.py): the pages say what a model gets
     metadata_only: bool = False
     mcp_metadata_only: bool = False
+    # the model an AI comment would be written with (docs/specs/ai-comment.md), in words; None: none can be used
+    comment_model: Optional[str] = None
 
 
 @router.get("/status", response_model=AiStatusOut)
@@ -80,8 +82,9 @@ def ai_status(user: User = Depends(get_current_user), session: Session = Depends
     if not ai_models.configured(session):
         return AiStatusOut(enabled=False, **modes)
     models = enabled_model_ids(session)
+    writer = ai_comment.model_of(session)
     return AiStatusOut(enabled=True, models=models, default_model=ai_models.preferred(get_settings().ai.default_model, models),
-                       options=ai_models.options(session, models), **modes)
+                       options=ai_models.options(session, models), comment_model=ai_models.described(session, writer) if writer else None, **modes)
 
 
 # ── the models ───────────────────────────────────────────────────────────────

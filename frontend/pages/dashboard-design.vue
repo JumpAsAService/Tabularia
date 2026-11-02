@@ -25,16 +25,18 @@ import RdProperties from '~/components/report/designer/RdProperties.vue'
 import RdSidebar from '~/components/report/designer/RdSidebar.vue'
 import { dashboardCtx } from '~/composables/dashboardCharts'
 import {
-  boardOf, definitionOf, draftOf, duplicateTile, fieldOnTile, newTile, placeTile, problemsOfBoard, readyToAsk, sizeOfNew, tilesOf, withoutTiles,
+  boardOf, definitionOf, draftOf, duplicateTile, fieldOnTile, newTile, placeTile, previewSignatures, problemsOfBoard, readyToAsk, sizeOfNew, tilesOf, withoutTiles,
   type DBoard, type DTile, type TileKind,
 } from '~/composables/dashboardDesignModel'
 import { boxMoved, freeSpot, pushed } from '~/composables/dashboardGrid'
 import { createLiveView } from '~/composables/dashboardLiveView'
 import type { TileSlots } from '~/composables/dashboardTiles'
-import { DESIGN, ON_A_BOARD, createDesignStore } from '~/composables/reportDesignStore'
+import { unanswered, type CommentSlots, type TileComment } from '~/composables/dashboardComments'
+import { COMMENT_TRIAL, DESIGN, ON_A_BOARD, createDesignStore } from '~/composables/reportDesignStore'
 import { createLiveCheck } from '~/composables/reportLiveCheck'
 import { dropParamFilters, fieldKind, stillReported, usesOfParam, type DDataset, type DField, type DItem, type DesignProblem } from '~/composables/reportDesignModel'
 import { rowCountOf, sourceKey, type RowCount } from '~/composables/reportRowCount'
+import { useAi, type AiStatus } from '~/composables/useAi'
 import { errMessage } from '~/composables/useApi'
 import { useSessionPresent } from '~/composables/useAuth'
 import { useChartTheme } from '~/composables/useChartTheme'
@@ -46,6 +48,7 @@ const { t } = useI18n()
 const route = useRoute()
 const toast = useToast()
 const api = useDashboards()
+const ai = useAi()
 const folderPaths = useFolderPaths()
 const { ui } = useChartTheme()
 
@@ -251,8 +254,10 @@ const view = createLiveView({
   slots: () => slots.value,
   setSlots: (s) => { slots.value = s },
   ready: tileReady,
-  // an image is drawn from the definition, and half a megabyte does not go at every pause
+  // an image is drawn from the definition, and half a megabyte does not go at every pause; an AI comment has
+  // no numbers of its own, unless a condition of its own needs reading
   local: (tile) => {
+    if (tile.type === 'comment' && !tile.visible) return { type: 'comment', title: tile.title ?? '', computed_at: '', cached: true }
     if (tile.type !== 'image') return null
     const own = tiles.value.find((x) => x.id === tile.id)
     return { type: 'image', title: own?.title ?? '', computed_at: '', cached: true, src: own?.asset, fit: own?.fit ?? 'contain' }
@@ -304,6 +309,64 @@ watch([() => store.text.value, () => store.gesture.value], ([, moving]) => {
 function refreshNumbers() {
   if (!needsValues.value) view.run(undefined, { again: true })
 }
+
+// ── an AI comment: Try it, and never at a keystroke ──────────────────────────
+const aiStatus = ref<AiStatus | null>(null)
+const trying = ref<string | null>(null)
+// what it wrote, on what: the words and the numbers of that moment. Once they change, it speaks of something else
+const triedAnswers = shallowRef<Record<string, { answer: TileComment; on: string }>>({})
+let tryController: AbortController | null = null
+function triedOn(id: string, d: ReturnType<typeof draftOf>): string {
+  const tile = d.tiles.find((x) => x.id === id)
+  if (!tile) return ''
+  const numbers = previewSignatures(d, toParams(chosen.value))
+  return JSON.stringify([tile.instruction ?? '', tile.reads, (tile.reads ?? []).map((name: string) => numbers[name])])
+}
+const triedSlots = computed<CommentSlots>(() => {
+  const out: CommentSlots = {}
+  if (trying.value) out[trying.value] = { answer: null, asking: 'asked' }
+  const held = Object.entries(triedAnswers.value)
+  if (!held.length) return out
+  void store.text.value // what it depends on, read through the draft
+  const d = draftOf(board())
+  for (const [id, { answer, on }] of held) if (id !== trying.value && on === triedOn(id, d)) out[id] = { answer, asking: false }
+  return out
+})
+function cannotTry(id: string): string {
+  const tile = tiles.value.find((x) => x.id === id)
+  if (!tile || !tileReady(tile)) return t('dashboardDesigner.needComment')
+  return needsValues.value ? t('dashboard.needsValuesBody') : ''
+}
+async function tryIt(id: string) {
+  if (trying.value || dashboardId.value == null || cannotTry(id)) return
+  tryController = new AbortController()
+  trying.value = id
+  announce.value = t('dashboard.commentLoading')
+  const definition = draftToAsk()
+  const on = triedOn(id, draftOf(board()))
+  let answer: TileComment
+  try {
+    answer = await api.tryComment(dashboardId.value, definition, { tile: id, params: toParams(chosen.value) }, tab, tryController.signal)
+    announce.value = answer.state === 'ready' ? t('dashboard.commentDone') : answer.message
+  } catch (e: any) {
+    if (e?.name === 'AbortError' || e?.cause?.name === 'AbortError') return
+    const detail = e?.data?.detail
+    if ((e?.statusCode ?? e?.response?.status) === 422 && detail && typeof detail === 'object') showProblems(problemsOfBoard(store.doc.value, detail))
+    answer = unanswered(errMessage(e))
+    announce.value = answer.message
+  } finally {
+    trying.value = null
+  }
+  triedAnswers.value = { ...triedAnswers.value, [id]: { answer, on } }
+}
+provide(COMMENT_TRIAL, {
+  status: aiStatus,
+  answerOf: (id) => slots.value[id]?.answer ?? null,
+  cannotTry,
+  trying,
+  tried: (id) => triedSlots.value[id]?.answer ?? null,
+  tryIt,
+})
 
 // ── tiles ────────────────────────────────────────────────────────────────────
 function addTile(tile: DTile, at?: { x: number; y: number }) {
@@ -518,10 +581,12 @@ onMounted(() => {
   window.addEventListener('beforeunload', onBeforeUnload)
   folderPaths.load()
   load()
+  ai.status().then((s) => { aiStatus.value = s }, () => {})
 })
 onBeforeUnmount(() => {
   live.stop()
   view.stop()
+  tryController?.abort()
   document.removeEventListener('keydown', onKey)
   document.removeEventListener('pointerdown', onPress, true)
   window.removeEventListener('beforeunload', onBeforeUnload)
@@ -625,6 +690,7 @@ useHead(() => ({ title: name.value ? `${name.value} · ${t('dashboardDesigner.ti
           :slots="slots"
           :ctx="ctx"
           :ready="tileReady"
+          :comments="triedSlots"
           @add-dataset="datasetDialog = { open: true, name: null }"
           @insert="insert"
           @drop-field="dropField"

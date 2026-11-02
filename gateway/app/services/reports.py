@@ -609,18 +609,29 @@ class _Plan:
     left: set = field(default_factory=set)  # the parameters to ignore that its SQL still names
 
 
-class _Engines:
-    """The engine of each dataset, asked once per render (pick_engine reads /engines)."""
+def _hand_back(session: Session, user: User) -> None:
+    """No database connection waits for the engine: on the event loop, whoever waits for one stops the very
+    requests that would give theirs back (routes/proxy.py). A hundred readers of a saved dashboard, 33 on each
+    gateway, are a stall of 30 seconds per request with the pool at 22."""
+    from app.routes.proxy import _release_db  # routes → services: late import
 
-    def __init__(self, session: Session):
-        self.session, self.picked = session, {}
+    _release_db(session, user)
+
+
+class _Engines:
+    """The engine of each dataset, asked once per render (pick_engine reads /engines). `releasing`: a saved
+    dashboard's reader, whose request hands the connection back before each wait: it has nothing pending, and
+    whoever does (a flow group's run) stays out of this."""
+
+    def __init__(self, session: Session, releasing: Optional[User] = None):
+        self.session, self.releasing, self.picked = session, releasing, {}
 
     async def pick(self, requested: Optional[str], fallback: bool = False) -> str:
         """`fallback`: a view saved on an engine no longer allowed reads with the default
         one, as the Viewer would; a SQL written for an engine says it cannot run."""
         if requested not in self.picked:
             try:
-                self.picked[requested] = await pick_engine(self.session, requested)
+                self.picked[requested] = await pick_engine(self.session, requested, (lambda: _hand_back(self.session, self.releasing)) if self.releasing else None)
             except HTTPException:
                 if requested is None or not fallback:
                     raise
@@ -758,6 +769,8 @@ async def resolve_datasets(session: Session, user: User, definition: dict, value
         if left is not None:
             left.update(plans[-1].left)
     bodies = {b for p in plans for b in p.placeholders}
+    if bodies and engines.releasing is not None:
+        _hand_back(session, user)
     resolved = await report_params.resolve_placeholders(bodies, definition.get("timezone") or "UTC",
                                                         report_params.lang_of(definition)) if bodies else {}
     texts = {}
@@ -783,7 +796,7 @@ async def resolve_each(session: Session, user: User, definition: dict,
     {"code", "error"}. Rights say `no_access` and nothing else, not even what it reads: a
     message says what it can. A value that does not fit a parameter, and an engine that does
     not answer, are not a dataset's: those stop everything, as for a report."""
-    engines = _Engines(session)
+    engines = _Engines(session, releasing=user)
     resolved: dict[str, dict] = {}
     refused: dict[str, dict] = {}
     for ds in definition.get("datasets") or []:
@@ -818,11 +831,9 @@ async def dataset_choices(session: Session, user: User, definition: dict, values
     reading = {**values, **blank}
     left: set[str] = set()
     datasets = await resolve_datasets(session, user, definition, reading, only={choices["dataset"]}, ignoring=ignoring,
-                                      left=left)
+                                      left=left, engines=_Engines(session, releasing=user) if cache is not None else None)
     if cache is not None:
-        from app.routes.proxy import _release_db  # routes → services: late import
-
-        _release_db(session, user)
+        _hand_back(session, user)
     resp = await get_engine_client().post("/reports/choices", timeout=300, json={
         "definition": report_definition.without_images(definition), "dataset": choices["dataset"],
         "datasets": {choices["dataset"]: datasets[choices["dataset"]]},

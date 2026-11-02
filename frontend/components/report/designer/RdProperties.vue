@@ -5,10 +5,11 @@
 import { computed, inject, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 import {
-  ChartColumn, CircleAlert, Copy, FileText, Gauge, Image, Minus, PanelBottom, PanelTop, Square, Table2, Trash2, Type, Upload, X,
+  ChartColumn, CircleAlert, Copy, FileText, Gauge, Image, Minus, PanelBottom, PanelTop, Sparkles, Square, Table2, Trash2, Type, Upload, X,
 } from 'lucide-vue-next'
 import Select from '~/components/ui/Select.vue'
 import RdChartProps from '~/components/report/designer/RdChartProps.vue'
+import RdCommentProps from '~/components/report/designer/RdCommentProps.vue'
 import RdExprField from '~/components/report/designer/RdExprField.vue'
 import RdKpiProps from '~/components/report/designer/RdKpiProps.vue'
 import RdNum from '~/components/report/designer/RdNum.vue'
@@ -18,7 +19,7 @@ import RdStyleFields from '~/components/report/designer/RdStyleFields.vue'
 import RdTableProps from '~/components/report/designer/RdTableProps.vue'
 import { ON_A_BOARD, useDesign, useDesignWords } from '~/composables/reportDesignStore'
 import {
-  ITEM_ID_RE, MAX_IMAGE_BYTES, bodyPageHeight, contentWidth, pageSize, type DItem, type DText,
+  ITEM_ID_RE, MAX_IMAGE_BYTES, bodyPageHeight, contentWidth, pageSize, renameRead, type DItem, type DText,
 } from '~/composables/reportDesignModel'
 
 const emit = defineEmits<{ (e: 'page-setup'): void }>()
@@ -34,7 +35,7 @@ const item = computed<DItem | null>(() => sel.value?.item ?? null)
 const band = computed(() => (sel.value ? sel.value.band : store.selectedBand.value))
 const def = computed(() => store.doc.value)
 
-const ICONS: Record<string, unknown> = { text: Type, image: Image, line: Minus, rect: Square, table: Table2, chart: ChartColumn, kpi: Gauge }
+const ICONS: Record<string, unknown> = { text: Type, image: Image, line: Minus, rect: Square, table: Table2, chart: ChartColumn, kpi: Gauge, comment: Sparkles }
 const typeName = computed(() => {
   const it = item.value
   if (!it) return ''
@@ -63,6 +64,7 @@ function renameItem() {
   if (idError.value) { idText.value = it.id; return }
   const old = it.id
   it.id = v
+  renameRead(def.value, old, v)
   store.selectedId.value = v
   store.problems.value = store.problems.value.filter((p) => p.item !== old)
 }
@@ -231,9 +233,10 @@ const pageLine = computed(() => {
         <RdTableProps v-else-if="item.type === 'table'" :item="item" />
         <RdChartProps v-else-if="item.type === 'chart'" :item="item" />
         <RdKpiProps v-else-if="item.type === 'kpi'" :item="item" />
+        <RdCommentProps v-else-if="item.type === 'comment'" :item="item" />
 
         <!-- style -->
-        <RdSection v-if="item.type !== 'table' && item.type !== 'chart' && !(onBoard && item.type === 'image')" :title="$t('reportDesigner.props.style')" skey="style" :bad="!!store.problemAt(item.id, 'style.format')">
+        <RdSection v-if="item.type !== 'table' && item.type !== 'chart' && item.type !== 'comment' && !(onBoard && item.type === 'image')" :title="$t('reportDesigner.props.style')" skey="style" :bad="!!store.problemAt(item.id, 'style.format')">
           <RdStyleFields v-if="item.type === 'text'" :obj="item" :parts="onBoard ? ['font', 'align', 'valign', 'color', 'fill', 'border', 'padding', 'radius', 'format'] : ['font', 'align', 'valign', 'color', 'fill', 'border', 'padding', 'radius', 'format', 'grow']" :item="item.id" path="" />
           <RdStyleFields v-else-if="item.type === 'line'" :obj="item" :parts="['stroke']" :item="item.id" path="" />
           <RdStyleFields v-else-if="item.type === 'rect'" :obj="item" :parts="['fill', 'border', 'radius']" :item="item.id" path="" />

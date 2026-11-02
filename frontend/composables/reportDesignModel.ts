@@ -8,7 +8,7 @@ import type { ReportDefinition } from '~/composables/useReports'
 
 // ── the definition ───────────────────────────────────────────────────────────
 export type BandName = 'page_header' | 'body' | 'page_footer'
-export type ItemType = 'text' | 'image' | 'line' | 'rect' | 'table' | 'chart' | 'kpi'
+export type ItemType = 'text' | 'image' | 'line' | 'rect' | 'table' | 'chart' | 'kpi' | 'comment'
 export type Align = 'left' | 'center' | 'right'
 
 export interface DStyle {
@@ -115,7 +115,14 @@ export interface DKpi extends DBase {
   sparkline?: { category: string; value: string } | null
 }
 
-export type DItem = DText | DImage | DLine | DRect | DTable | DChart | DKpi
+/** A text a model writes on the numbers of other items (docs/specs/ai-comment.md). */
+export interface DComment extends DBase {
+  type: 'comment'
+  title?: string
+  instruction?: string
+  reads: string[]
+}
+export type DItem = DText | DImage | DLine | DRect | DTable | DChart | DKpi | DComment
 
 export interface DField { name: string; type: string }
 export interface DCalculated { name: string; expr: string }
@@ -364,7 +371,7 @@ export function normalize(raw: ReportDefinition | Record<string, any> | null | u
 }
 
 const PREFIX: Record<ItemType, string> = {
-  text: 'text', image: 'image', line: 'line', rect: 'rect', table: 'table', chart: 'chart', kpi: 'kpi',
+  text: 'text', image: 'image', line: 'line', rect: 'rect', table: 'table', chart: 'chart', kpi: 'kpi', comment: 'comment',
 }
 
 /** A free id for a new item: its type and the first number not taken. */
@@ -411,6 +418,21 @@ export function newItem(def: DDefinition, kind: InsertKind, at: { x: number; y: 
         series: [{ value: '' }], options: {} }
     case 'kpi':
       return { ...base, type: 'kpi', w: 58, h: 24, dataset: ds, label: '', value: '' }
+    case 'comment':
+      return { ...base, type: 'comment', w: Math.min(120, width), h: 30, instruction: '', reads: [] }
+  }
+}
+
+/** An item taken away: no comment reads it any more. */
+export function dropRead(def: DDefinition, id: string) {
+  for (const it of def.sections.body.items) {
+    if (it.type === 'comment' && it.reads?.includes(id)) it.reads = it.reads.filter((name) => name !== id)
+  }
+}
+/** An item renamed: the comments that read it follow. */
+export function renameRead(def: DDefinition, from: string, to: string) {
+  for (const it of def.sections.body.items) {
+    if (it.type === 'comment' && it.reads?.includes(from)) it.reads = it.reads.map((name) => (name === from ? to : name))
   }
 }
 

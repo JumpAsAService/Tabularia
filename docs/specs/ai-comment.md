@@ -1,7 +1,7 @@
 # Spec: an AI comment on the numbers, in dashboards and reports
 
-Status: decided with the owner on 2026-11-01. The writing (piece 1) is built; the dashboards and the
-reports are still to come.
+Status: decided with the owner on 2026-11-01. The writing (piece 1) and the dashboards (piece 2) are
+built; the reports are still to come.
 
 ## Objective
 
@@ -111,13 +111,24 @@ when a call was last made for an element, on any gateway, and what it wrote: tha
 
 ## On the screen and on paper
 
-- **Dashboard:** `/data` does not wait for the model. The tile shows a skeleton, then asks
-  `POST /dashboards/{id}/comment` with the tile, the parameters and the clicks.
+- **Dashboard:** `/data` does not wait for the model. The tile shows a skeleton, then, once the tiles it
+  reads have answered, asks `POST /dashboards/{id}/comment` with the tile, the parameters, the clicks and the
+  moment (`open`, `refresh`, `asked`). The gateway reads the numbers as `/data` does, with no page and no
+  state, so from the same place in the cache: what is read and the instruction are the saved definition's,
+  never the browser's. VIEW opens it and whoever cannot see the dashboard gets 404. A click on a tile
+  the reader may not read counts for nothing here either. With the tab hidden nothing is asked until it is back
+  in sight. A refresh keeps the text on screen until there is another, so nothing flashes.
+- **API tokens:** the route is no reading POST, since it may make a call someone pays for: a read-only token is
+  refused (403) and still reads the numbers; a token that may write pays on its owner.
+- **What failed** (`reason`) reaches only an administrator, who may do something about it.
 - **Report viewer, PDF, email:** the gateway gets the text first and passes it to the render as
   `comments`, waiting at most `AI__COMMENT_WAIT_SECONDS` (30 by default). Past it, or on any failure, the
   line of the decision above takes its place.
 - **Both designers:** a new element **AI comment**: the instruction, the elements it reads, **Try it**.
-  With metadata-only on or no provider, the panel says why it will not write.
+  With metadata-only on or no provider, the panel says why it will not write, and it says which of the elements
+  picked show only rows, which the model will never read. On a dashboard **Try it** is
+  `POST /dashboards/preview/comment`, on the definition being edited: EDIT on the folder, as `/preview`. Writing and
+  picking ask the server nothing. `GET /ai/status` says the model that would write (`comment_model`).
 - Every comment carries `Written by AI · <model> · numbers of <time>`, and the reader is told it may be
   wrong.
 

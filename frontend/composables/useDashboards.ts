@@ -3,6 +3,7 @@
 // dashboard, EDIT changes it; what a tile reads is checked with the reader's rights.
 // a type only: useApi.ts reaches Nuxt at import time, and the tests load this module bare
 import type { Page } from '~/composables/useApi'
+import type { CommentMoment, TileComment } from '~/composables/dashboardComments'
 import {
   NO_VALUE, paramsOfForm, paramsQuery, type ReportFormValue, type ReportParameter, type ReportParams, type ReportState,
 } from '~/composables/useReports'
@@ -167,6 +168,9 @@ export function useDashboards() {
     /** the numbers ready to draw, tile by tile; an error of a tile stays in that tile */
     data: (id: number, body: TilesRequest, signal?: AbortSignal) =>
       apiFetch<TilesAnswer>(`/dashboards/${id}/data`, { method: 'POST', body, signal }),
+    /** an AI comment, on the numbers of what it reads: never an error for what happens to the model */
+    comment: (id: number, body: { tile: string; moment: CommentMoment; params: ReportParams; clicks?: TilesRequest['clicks'] }, signal?: AbortSignal) =>
+      apiFetch<TileComment>(`/dashboards/${id}/comment`, { method: 'POST', body, signal }),
     /** starts a document: followed and taken as a report's (useReports().followRender) */
     render: (id: number, body: DashboardRenderRequest) =>
       apiFetch<{ task_id: string; filename: string }>(`/dashboards/${id}/render`, { method: 'POST', body }),
@@ -184,6 +188,9 @@ export function useDashboards() {
      *  down an older one of this tab only */
     preview: (id: number, definition: DashboardDefinition, body: TilesRequest, tab: string, signal?: AbortSignal) =>
       apiFetch<TilesAnswer>('/dashboards/preview', { method: 'POST', body: { dashboard_id: id, definition, tab, ...body }, signal }),
+    /** **Try it**: an AI comment of a definition being edited; a 422 lists its problems */
+    tryComment: (id: number, definition: DashboardDefinition, body: { tile: string; params: ReportParams }, tab: string, signal?: AbortSignal) =>
+      apiFetch<TileComment>('/dashboards/preview/comment', { method: 'POST', body: { dashboard_id: id, definition, tab, ...body }, signal }),
     parametersOf: (id: number, definition: DashboardDefinition, params: ReportParams, signal?: AbortSignal) =>
       apiFetch<ReportParameter[]>(`/dashboards/${id}/parameters`, { method: 'POST', body: { definition, params }, signal }),
     /** a dataset's columns as the data has them, and its rows counted when they can be */

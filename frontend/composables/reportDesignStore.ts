@@ -5,13 +5,17 @@
 // The history keeps the definition as JSON after every pause in the editing (or at the end
 // of a drag): an image is kept once and named in the snapshots, so a report with a logo
 // does not copy its half megabyte at every step.
-import { computed, inject, ref, watch, type InjectionKey } from 'vue'
+import { computed, inject, ref, watch, type InjectionKey, type Ref } from 'vue'
 import {
-  allowedIn, bodyPageHeight, contentWidth, copyItem, emptyDefinition, liveShown, mm1, rowConflicts, samePath, stillStanding, tableHeight,
+  allowedIn, bodyPageHeight, contentWidth, copyItem, dropRead, emptyDefinition, liveShown, mm1, rowConflicts, samePath, stillStanding, tableHeight,
   tableRows, withSeen, type BandName, type DDefinition, type DItem, type DTable, type DesignProblem, type DField, type InsertKind,
 } from '~/composables/reportDesignModel'
 import { groupName } from '~/composables/reportExpressions'
 import type { CountedRows } from '~/composables/reportRowCount'
+// types only: useAi.ts and useDashboards.ts reach the API
+import type { AiStatus } from '~/composables/useAi'
+import type { TileComment } from '~/composables/dashboardComments'
+import type { TileAnswer } from '~/composables/useDashboards'
 
 const HISTORY = 200
 const PAUSE_MS = 350
@@ -202,6 +206,7 @@ export function createDesignStore() {
     if (!hit) return
     record()
     doc.value.sections[hit.band].items.splice(hit.index, 1)
+    dropRead(doc.value, id)
     record() // Ctrl+Z after a removal always brings the item back, not what came before it
     if (selectedId.value === id) selectedId.value = null
     problems.value = problems.value.filter((p) => p.item !== id)
@@ -376,6 +381,20 @@ export function createDesignStore() {
 
 /** Provided by the dashboard designer, which edits a dashboard with these panels. */
 export const ON_A_BOARD: InjectionKey<boolean> = Symbol('dashboard-design')
+
+/** What the panel of an AI comment needs of its page: why it will not write, the numbers on the canvas, and
+ *  **Try it** (never at a keystroke). */
+export interface CommentTrial {
+  /** null: not known yet */
+  status: Ref<Pick<AiStatus, 'metadata_only' | 'comment_model'> | null>
+  answerOf: (id: string) => TileAnswer | null
+  /** why it cannot be pressed now, in words; empty: it can */
+  cannotTry: (id: string) => string
+  trying: Ref<string | null>
+  tried: (id: string) => TileComment | null
+  tryIt: (id: string) => void
+}
+export const COMMENT_TRIAL: InjectionKey<CommentTrial> = Symbol('comment-trial')
 // the panels' words that speak of a report or of paper, and what they say of a dashboard
 const SAID_OF_A_BOARD: Record<string, string> = {
   'reportDesigner.dataset.aggregateHelp': 'dashboardDesigner.words.aggregateHelp',

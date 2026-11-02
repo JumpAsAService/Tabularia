@@ -8,7 +8,7 @@ flows' validation (routes/flows.py) and the catalog served to the selector
 Rule: the FORBIDDEN engines are stored. An empty table = everything allowed, that is
 the historical behaviour.
 """
-from typing import Optional
+from typing import Callable, Optional
 
 from fastapi import HTTPException
 from sqlmodel import Session, select
@@ -32,12 +32,15 @@ def allowed_engines(session: Session) -> set[str]:
     return set(KNOWN_ENGINES) - disabled_engines(session)
 
 
-async def pick_engine(session: Session, requested: Optional[str]) -> Optional[str]:
+async def pick_engine(session: Session, requested: Optional[str], before_asking: Optional[Callable[[], None]] = None) -> Optional[str]:
     """The engine of a query (the assistant's, a SQL script's): one AVAILABLE on the engine
     and ALLOWED by the administrator. When the client asks for one that is not, the error says which
     may be chosen; when it does not ask, the first usable one is taken (Polars, if
-    there)."""
+    there). `before_asking`: what to do between the policy read and the engine's answer, which is
+    a wait: whoever has nothing pending hands the database connection back there."""
     allowed = allowed_engines(session)
+    if before_asking is not None:
+        before_asking()
     try:
         resp = await get_engine_client().get("/engines", timeout=15)
         resp.raise_for_status()

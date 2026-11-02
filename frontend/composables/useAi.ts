@@ -22,6 +22,8 @@ export interface AiStatus {
   // metadata-only mode: no value of a row reaches the models configured here, or an MCP client's
   metadata_only?: boolean
   mcp_metadata_only?: boolean
+  // the model an AI comment would be written with, in words; none: none can be used
+  comment_model?: string | null
 }
 
 export interface AiModel {

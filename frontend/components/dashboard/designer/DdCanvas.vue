@@ -17,9 +17,10 @@ import type { KindCtx } from '~/composables/chartKinds'
 import { GRID_COLUMNS, GRID_GAP_PX, GRID_ROW_PX, boxMoved, boxResized, cellsOf, lowestRow, pushed, type GridBox, type GridHandle } from '~/composables/dashboardGrid'
 import { placeTile, sizeOfNew, tilesOf, type DTile, type TileKind } from '~/composables/dashboardDesignModel'
 import { emptySlots, type TileSlots } from '~/composables/dashboardTiles'
+import type { CommentSlots } from '~/composables/dashboardComments'
 import { DRAG_TYPE, dragged, useDesign } from '~/composables/reportDesignStore'
 
-const props = defineProps<{ slots: TileSlots; ctx: KindCtx; ready: (tile: Record<string, any>) => boolean }>()
+const props = defineProps<{ slots: TileSlots; ctx: KindCtx; ready: (tile: Record<string, any>) => boolean; comments?: CommentSlots }>()
 const emit = defineEmits<{
   (e: 'add-dataset'): void
   (e: 'insert', kind: TileKind, at?: { x: number; y: number }): void
@@ -70,6 +71,7 @@ const kindName = (tile: DTile) => t(`reportDesigner.items.${tile.type === 'table
 function needs(tile: DTile): string {
   if (tile.type === 'text') return t('dashboardDesigner.needText')
   if (tile.type === 'image') return t('dashboardDesigner.needImage')
+  if (tile.type === 'comment') return t('dashboardDesigner.needComment')
   if (noData.value) return t('dashboardDesigner.needData')
   if (!store.doc.value.datasets.some((d) => d.name === tile.dataset)) return t('dashboardDesigner.needDataset')
   return t(`dashboardDesigner.need_${tile.type}`)
@@ -314,7 +316,7 @@ watch(() => store.selectedId.value, async (id) => {
             <span class="ddc-kind">{{ nameOf(tile) }}</span>
             <span>{{ $t('dashboardDesigner.hiddenNow') }}</span>
           </div>
-          <DashboardTile v-else :tile="tile" :entry="entryOf(tile.id)" :ctx="ctx" drawing />
+          <DashboardTile v-else :tile="tile" :entry="entryOf(tile.id)" :ctx="ctx" :comment="comments?.[tile.id]" drawing />
         </div>
         <template v-if="store.selectedId.value === tile.id">
           <span v-for="h in HANDLES" :key="h" class="ddc-handle" :class="h" :data-handle="h" @pointerdown="begin($event, tile, 'resize', h)" />

@@ -18,6 +18,10 @@
 //   and closed groups. The numbers are the same; the look is a report's, as it is a document.
 // - The automatic refresh waits for the interval and a little more, stops with the tab hidden and
 //   survives a failure: the last numbers stay, with the time they are from, and the page says so.
+// - An AI comment is asked after the tiles it reads have answered, and they do not wait for it: from the
+//   same cache, at the moment that says whether it may make a call (docs/specs/ai-comment.md,
+//   «When a call is made»). A click goes through the same way as an opening, and only `asked`, the button's,
+//   writes after one; the numbers a text was written on bring it back, so Back and Clear all do.
 //
 // /dashboard?id=N
 import { computed, nextTick, onBeforeUnmount, onMounted, ref, shallowRef, watch } from 'vue'
@@ -31,6 +35,7 @@ import {
 } from '~/composables/dashboardTiles'
 import { useFolderPaths } from '~/composables/useFolderPaths'
 import { useFormat } from '~/composables/useFormat'
+import { commentIds, commentsReading, createComments, type CommentMoment, type CommentSlots } from '~/composables/dashboardComments'
 import { dashboardQuery, formOfQuery, useDashboards, valuesInQuery, type DashboardDetail, type TileNumbers } from '~/composables/useDashboards'
 import {
   isPlainState, paramsOfForm, stateAfter, useReports, whatListsHold, withChoices,
@@ -174,6 +179,7 @@ async function load() {
   dashboardId.value = known ? id : null
   stopAsking()
   stopRefreshing()
+  forgetComments()
   detail.value = null
   parameters.value = []
   clicks.value = []
@@ -236,6 +242,7 @@ function showTiles(changed: boolean) {
   if (waiting.value) {
     stopAsking()
     stopRefreshing()
+    forgetComments()
     slots.value = emptySlots(tileIds.value)
     return
   }
@@ -265,7 +272,13 @@ watch(() => route.fullPath, () => {
     const turned = { ...pages.value }
     for (const id of ids) if (!still.includes(id)) delete turned[id]
     pages.value = turned
-    if (ids.length) ask(ids, { changed: true, still })
+    if (ids.length) {
+      // the numbers its text speaks of are going: it goes at once, and the button or a text kept come after them
+      const touched = commentsReading(tiles.value, ids)
+      comments.blank(touched)
+      const turn = owe(touched, 'open')
+      ask(ids, { changed: true, still }).then(() => payComments(turn))
+    }
     return
   }
   refreshChoices()
@@ -360,9 +373,53 @@ async function ask(ids: string[] | null, how: { changed: boolean; refresh?: bool
 }
 
 async function askAll(how: { changed: boolean; refresh?: boolean }) {
+  const every = commentIds(tiles.value)
+  if (how.changed) comments.blank(every) // other values: other numbers, and not a word about them yet
+  const turn = owe(every, 'open')
   const answered = await ask(null, how)
   scheduleRefresh()
+  if (answered) payComments(turn)
   return answered
+}
+
+// ── the AI comments ──────────────────────────────────────────────────────────
+const commentSlots = shallowRef<CommentSlots>({})
+const comments = createComments({
+  slots: () => commentSlots.value,
+  setSlots: (s) => { commentSlots.value = s },
+  hidden: () => document.hidden,
+  call: (tile, moment, signal) => api.comment(dashboardId.value!, { tile, moment, params: toParams(chosen.value), clicks: clickSends(clicks.value) }, signal),
+  failed: () => t('dashboard.commentUnavailable'),
+  wrote: (id) => {
+    const said = commentSlots.value[id]?.answer
+    announce.value = said?.state === 'ready' ? t('dashboard.commentDone') : said?.message ?? ''
+  },
+})
+// what is to be asked once the tiles have answered: the latest turn does, whichever numbers came first
+let commentTurn = 0
+const owed = new Map<string, CommentMoment>()
+function owe(ids: string[], moment: CommentMoment) {
+  for (const id of ids) if (owed.get(id) !== 'open') owed.set(id, moment)
+  return ++commentTurn
+}
+function payComments(turn: number) {
+  if (turn !== commentTurn || left) return
+  for (const [id, moment] of owed) {
+    const said = slots.value[id]?.answer
+    // hidden by its own condition: nobody sees it, so nothing is written for it
+    if (!(said && !('error' in said) && said.hidden)) comments.ask([id], moment)
+  }
+  owed.clear()
+}
+function forgetComments() {
+  comments.stop()
+  owed.clear()
+  commentTurn++
+  commentSlots.value = {}
+}
+function askComment(id: string) {
+  announce.value = t('dashboard.commentLoading')
+  comments.ask([id], 'asked')
 }
 
 // Refresh, by hand: the server reads again at most every 10 seconds per dashboard, for everyone;
@@ -398,7 +455,8 @@ async function refreshNow() {
 
 // a tile's own actions: only that tile is asked for
 function retryTile(id: string) {
-  ask([id], { changed: false })
+  const turn = owe([...commentIds(tiles.value).filter((c) => c === id), ...commentsReading(tiles.value, [id])], 'open')
+  ask([id], { changed: false }).then(() => payComments(turn))
 }
 function changeView(id: string, hot: Pick<ReportHotspot, 'kind' | 'column' | 'key' | 'closed'>, keepPage: boolean) {
   viewState.value = stateAfter(viewState.value, { ...hot, item: id } as ReportHotspot)
@@ -452,8 +510,9 @@ async function tick() {
     return
   }
   const before = reading.value
-  if (await ask(null, { changed: false }) && askSourceAgain(before, reading.value)) {
-    await ask(null, { changed: false, refresh: true })
+  if (await ask(null, { changed: false })) {
+    if (askSourceAgain(before, reading.value)) await ask(null, { changed: false, refresh: true })
+    payComments(owe(commentIds(tiles.value), 'refresh'))
   }
   scheduleRefresh()
 }
@@ -465,6 +524,7 @@ function onVisibility() {
     // back in sight: what was due while nobody looked, in a moment and not all together
     arm(Math.max(dueAt - Date.now(), 0) + Math.round(Math.random() * 2000))
   }
+  if (!document.hidden) comments.resume()
 }
 const everyLabel = computed(() => {
   const s = interval.value
@@ -512,6 +572,7 @@ onBeforeUnmount(() => {
   left = true
   stopAsking()
   stopRefreshing()
+  comments.stop()
   if (choicesTimer) clearTimeout(choicesTimer)
   document.removeEventListener('visibilitychange', onVisibility)
   document.removeEventListener('fullscreenchange', onFullScreenChange)
@@ -641,11 +702,13 @@ onBeforeUnmount(() => {
           :ctx="ctx"
           :said-above="!!refreshFailedAt"
           :clicks="clicks"
+          :comments="commentSlots"
           @pick="pick"
           @retry="retryTile"
           @sort="sortTile"
           @toggle="toggleGroup"
           @page="pageTile"
+          @ask-comment="askComment"
         />
       </template>
 

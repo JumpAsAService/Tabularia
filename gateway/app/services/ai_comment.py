@@ -542,7 +542,7 @@ async def _write(job: _Job) -> None:
 
 
 # ── asking ───────────────────────────────────────────────────────────────────
-def _model_of(session: Session) -> Optional[str]:
+def model_of(session: Session) -> Optional[str]:
     """AI__COMMENT_MODEL, and if it cannot be used no other: the numbers go where the administrator said,
     or nowhere. Empty: the default model, as the pickers propose it."""
     cfg = get_settings().ai
@@ -564,7 +564,7 @@ class _Who:
 
 def _who(user: User) -> _Who:
     with _new_session() as s:
-        ref = _model_of(s)
+        ref = model_of(s)
         return _Who(is_observer_only(s, user), is_admin(s, user), ref, ai_models.described(s, ref) if ref else "", ai_prompts.text(s, "comment"))
 
 

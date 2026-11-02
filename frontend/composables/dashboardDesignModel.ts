@@ -13,7 +13,7 @@ import type { DashboardDefinition, DashboardPage } from '~/composables/useDashbo
 // `printed`: the page of its documents. The store's `page` is the designer's, as for a report
 export type DBoard = DDefinition & { refresh_seconds: number; printed?: DashboardPage }
 export type DTile = Record<string, any> & { id: string; type: string; grid: GridBox }
-export type TileKind = 'kpi' | 'chart' | 'table' | 'matrix' | 'text' | 'image'
+export type TileKind = 'kpi' | 'chart' | 'table' | 'matrix' | 'text' | 'image' | 'comment'
 
 export const REFRESH_LEAST = 60
 export const REFRESH_MOST = 24 * 3600
@@ -78,7 +78,7 @@ export function placeTile(doc: DDefinition, layout: { id: string; grid: GridBox 
 
 // ── new tiles ────────────────────────────────────────────────────────────────
 const NEW_SIZE: Record<TileKind, { w: number; h: number }> = {
-  kpi: { w: 3, h: 3 }, chart: { w: 6, h: 6 }, table: { w: 6, h: 6 }, matrix: { w: 6, h: 6 }, text: { w: 3, h: 2 }, image: { w: 3, h: 3 },
+  kpi: { w: 3, h: 3 }, chart: { w: 6, h: 6 }, table: { w: 6, h: 6 }, matrix: { w: 6, h: 6 }, text: { w: 3, h: 2 }, image: { w: 3, h: 3 }, comment: { w: 6, h: 4 },
 }
 export const sizeOfNew = (kind: TileKind) => NEW_SIZE[kind]
 
@@ -121,6 +121,8 @@ export function newTile(doc: DDefinition, kind: TileKind, at: { x: number; y: nu
       return { ...base, type: 'text', value: '' }
     case 'image':
       return { ...base, type: 'image', asset: '', fit: 'contain' }
+    case 'comment': // what it reads goes to a model: its author picks it
+      return { ...base, type: 'comment', instruction: '', reads: [] }
   }
 }
 
@@ -170,8 +172,16 @@ const written = (v: unknown) => typeof v === 'string' && !!v.trim()
 
 /** Whether a tile says enough to be asked: one half made would stop the whole request, and it is
  *  being made, which is no mistake. What it says is judged by the server. */
-export function readyToAsk(doc: Pick<DDefinition, 'datasets'>, tile: Record<string, any>): boolean {
+export function readyToAsk(doc: Pick<DDefinition, 'datasets' | 'sections'>, tile: Record<string, any>): boolean {
   if (tile.type === 'image') return written(tile.asset)
+  if (tile.type === 'comment') {
+    const tiles = tilesOf(doc as DDefinition)
+    // a read half made is left out of what is sent, and the server would refuse the id that names it
+    return !!tile.reads?.length && tile.reads.every((name: string) => {
+      const read = tiles.find((t) => t.id === name)
+      return !!read && read.type !== 'comment' && readyToAsk(doc, read)
+    })
+  }
   if (tile.type === 'text') return written(tile.value) && (!tile.dataset || doc.datasets.some((d) => d.name === tile.dataset))
   if (!doc.datasets.some((d) => d.name === tile.dataset)) return false
   if (tile.type === 'kpi') return written(tile.value)
@@ -186,13 +196,18 @@ export function readyToAsk(doc: Pick<DDefinition, 'datasets'>, tile: Record<stri
 }
 
 /** What each tile's numbers depend on. Its place and its title are not among them: the screen knows
- *  those, and on ClickHouse or BigQuery a read costs money. */
+ *  those, and on ClickHouse or BigQuery a read costs money. Nor are a comment's words and what it reads: its
+ *  numbers are those of the others, and its text comes only from **Try it**. */
 export function previewSignatures(d: DashboardDefinition, values: Record<string, unknown>): Record<string, string> {
   // the fields of a dataset are a help to who writes: the data does not change when they are read
   const sources = d.datasets.map(({ fields: _f, ...source }) => source)
   const around = JSON.stringify([d.locale, d.timezone, d.parameters, sources, values])
   return Object.fromEntries(d.tiles.map((t) => {
     const { grid: _g, title: _t, ...said } = t
+    if (t.type === 'comment') {
+      delete said.instruction
+      delete said.reads
+    }
     return [t.id, `${around}|${JSON.stringify(said)}`]
   }))
 }

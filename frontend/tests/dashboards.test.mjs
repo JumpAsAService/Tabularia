@@ -1348,3 +1348,297 @@ test('a Pushmail cell previews the names of its dashboards\' files too', async (
   assert.equal(req.templates.dashboard_0, 'board_{today:yyyy}')
   assert.equal(req.targets.dashboard_0, 'file')
 })
+
+// ── an AI comment (docs/specs/ai-comment.md) ─────────────────────────────────
+const {
+  commentIds, commentsReading, createComments, readableBy, showsOnlyRows, PENDING_TRIES,
+} = await import('../composables/dashboardComments.ts')
+const { dropRead, renameRead } = await import('../composables/reportDesignModel.ts')
+
+const said = (text, more = {}) => ({
+  state: 'ready', text, model: 'fake (Fake)', numbers_at: '2026-11-01T10:00:00+00:00', written_at: '2026-11-01T10:00:01+00:00', stale: false, can_ask: false, message: '', reason: '', ...more,
+})
+const none = (state, more = {}) => ({ ...said('', { state, model: '', numbers_at: null, written_at: null, message: `says ${state}` }), ...more })
+
+function commentHarness(ids = ['story'], how = {}) {
+  const state = { slots: Object.fromEntries(ids.map((id) => [id, { answer: null, asking: false }])), hidden: false, written: [], shown: [] }
+  const calls = []
+  const timers = []
+  const comments = createComments({
+    slots: () => state.slots,
+    setSlots: (s) => { state.slots = s; state.shown.push(s) },
+    hidden: () => state.hidden,
+    call: (tile, moment, signal) => new Promise((resolve, reject) => {
+      const c = { tile, moment, signal, resolve, reject }
+      signal.addEventListener('abort', () => { c.aborted = true; reject(Object.assign(new Error('aborted'), { name: 'AbortError' })) })
+      calls.push(c)
+    }),
+    failed: () => 'Not available here',
+    wrote: (id) => state.written.push(id),
+    later: (fn) => { timers.push(fn); return timers.length },
+    forget: (t) => { timers[t - 1] = null },
+    ...how,
+  })
+  return { calls, state, comments, timers }
+}
+
+test('a comment tile is at least 4 by 3, in the grid and in the designer', () => {
+  assert.deepEqual(MIN_TILE.comment, [4, 3])
+  assert.deepEqual(sizeOfNew('comment'), { w: 6, h: 4 })
+  assert.equal(boxResized({ x: 0, y: 0, w: 6, h: 4 }, 'se', -9, -9, 'comment').w, 4)
+  assert.equal(boxResized({ x: 0, y: 0, w: 6, h: 4 }, 'se', -9, -9, 'comment').h, 3)
+})
+
+test('a new AI comment reads nothing until its author picks, and is not asked until then', () => {
+  const doc = boardOf(definition([kpiTile('a', 0, 0)]))
+  const tile = newTile(doc, 'comment', { x: 0, y: 3 })
+  assert.deepEqual([tile.id, tile.type, tile.instruction, tile.reads], ['comment1', 'comment', '', []])
+  assert.equal(readyToAsk(doc, tile), false)
+  assert.equal(readyToAsk(doc, { ...tile, reads: ['a'] }), true)
+  assert.equal(readyToAsk(doc, { ...tile, reads: ['a', 'gone'] }), false, 'what it reads is there')
+  const half = boardOf(definition([kpiTile('a', 0, 0, { value: '' })]))
+  assert.equal(readyToAsk(half, { ...tile, reads: ['a'] }), false, 'a read half made stops it: the server would refuse the id')
+})
+
+test('writing an instruction or picking what it reads asks nothing of the server', () => {
+  const tile = { id: 'c', type: 'comment', grid: { x: 0, y: 0, w: 6, h: 4 }, instruction: 'A', reads: ['a'] }
+  const before = previewSignatures(definition([kpiTile('a', 0, 0), tile]), {})
+  const after = previewSignatures(definition([kpiTile('a', 0, 0), { ...tile, instruction: 'AB', reads: ['a', 'b'], title: 'T' }]), {})
+  assert.deepEqual(tilesChanged(before, after), [])
+})
+
+test('a tile removed leaves what comments on it, and a tile renamed is followed', () => {
+  const doc = boardOf(definition([kpiTile('a', 0, 0), kpiTile('b', 3, 0), { id: 'c', type: 'comment', grid: { x: 0, y: 3, w: 6, h: 4 }, reads: ['a', 'b'] }]))
+  renameRead(doc, 'a', 'revenue')
+  assert.deepEqual(doc.sections.body.items[2].reads, ['revenue', 'b'])
+  dropRead(doc, 'b')
+  assert.deepEqual(doc.sections.body.items[2].reads, ['revenue'])
+})
+
+test('the store takes a removed tile out of what reads it, and an undo brings both back', async () => {
+  const store = createDesignStore()
+  store.reset(boardOf(definition([kpiTile('a', 0, 0), kpiTile('b', 3, 0), { id: 'c', type: 'comment', grid: { x: 0, y: 3, w: 6, h: 4 }, reads: ['a', 'b'] }])))
+  store.remove('a')
+  const comment = () => store.doc.value.sections.body.items.find((t) => t.id === 'c')
+  assert.deepEqual(comment().reads, ['b'])
+  store.undo()
+  assert.deepEqual(comment().reads, ['a', 'b'])
+})
+
+test('only a KPI, a chart or a table can be read, and which comments read what', () => {
+  const tiles = [kpiTile('a', 0, 0), { id: 't', type: 'text' }, { id: 'c', type: 'chart' }, { id: 'x', type: 'table' }, { id: 'i', type: 'image' },
+    { id: 'one', type: 'comment', reads: ['a'] }, { id: 'two', type: 'comment', reads: ['c', 'x'] }]
+  assert.deepEqual(readableBy(tiles).map((t) => t.id), ['a', 'c', 'x'])
+  assert.deepEqual(commentIds(tiles), ['one', 'two'])
+  assert.deepEqual(commentsReading(tiles, ['x']), ['two'])
+  assert.deepEqual(commentsReading(tiles, ['t']), [])
+})
+
+test('what shows only rows is what the gateway leaves out, from the numbers on screen', () => {
+  const table = { id: 't', type: 'table', groups: [] }
+  assert.equal(showsOnlyRows(table, { type: 'table', rows: [{ kind: 'd', cells: [] }] }), true)
+  assert.equal(showsOnlyRows(table, { type: 'table', rows: [{ kind: 'd' }, { kind: 't' }] }), false, 'a total is a number')
+  assert.equal(showsOnlyRows(table, { type: 'table', matrix: true, rows: [{ kind: 'd' }] }), false, 'in a matrix the same kind is a group')
+  assert.equal(showsOnlyRows(table, { type: 'table', empty: true, rows: [] }), false)
+  const scatter = { id: 'c', type: 'chart', kind: 'scatter' }
+  assert.equal(showsOnlyRows(scatter, { type: 'chart', kind: 'scatter', data: { aggregated: false } }), true)
+  assert.equal(showsOnlyRows(scatter, { type: 'chart', kind: 'scatter', data: { aggregated: true } }), false)
+  assert.equal(showsOnlyRows(kpiTile('a', 0, 0), { type: 'kpi', text: '1' }), false)
+  // no numbers yet: what the definition can say
+  assert.equal(showsOnlyRows({ type: 'table', groups: [], grand_total: false }, null), true)
+  assert.equal(showsOnlyRows({ type: 'table', groups: [{ by: '[a]' }] }, null), false)
+  assert.equal(showsOnlyRows({ type: 'table', groups: [], grand_total: true }, { error: 'x', code: 'no_access' }), false)
+  assert.equal(showsOnlyRows({ type: 'table', matrix: { columns_by: '[a]' }, groups: [] }, null), false)
+})
+
+test('a comment asked shows what comes back, and the moment goes with the request', async () => {
+  const { calls, state, comments } = commentHarness()
+  comments.ask(['story'], 'open')
+  assert.deepEqual([calls[0].tile, calls[0].moment], ['story', 'open'])
+  assert.equal(state.slots.story.answer, null, 'a skeleton until it answers')
+  calls[0].resolve(said('Up.'))
+  await tick()
+  assert.equal(state.slots.story.answer.text, 'Up.')
+  assert.equal(state.slots.story.asking, false)
+})
+
+test('a click takes the text away at once, before anything is answered', async () => {
+  const { calls, state, comments } = commentHarness()
+  comments.ask(['story'], 'open')
+  calls[0].resolve(said('Up.'))
+  await tick()
+  comments.blank(['story'])
+  assert.equal(state.slots.story.answer, null)
+  comments.ask(['story'], 'open')
+  calls[1].resolve(none('not_asked', { can_ask: true }))
+  await tick()
+  assert.equal(state.slots.story.answer.can_ask, true)
+  comments.ask(['story'], 'asked')
+  assert.equal(calls[2].moment, 'asked')
+  assert.equal(state.slots.story.asking, 'asked', 'the button says it is at work')
+  calls[2].resolve(said('Only the North.'))
+  await tick()
+  assert.equal(state.slots.story.answer.text, 'Only the North.')
+  assert.deepEqual(state.written, ['story'], 'the page is told: focus and announcement')
+})
+
+test('an old answer never covers a new one, nor a request knocked down', async () => {
+  const { calls, state, comments } = commentHarness()
+  comments.ask(['story'], 'open')
+  comments.blank(['story'])
+  comments.ask(['story'], 'open')
+  assert.equal(calls[0].aborted, true)
+  calls[1].resolve(said('New.'))
+  await tick()
+  calls[0].resolve(said('Old.'))
+  await tick()
+  assert.equal(state.slots.story.answer.text, 'New.')
+})
+
+test('a refresh with the same text and the same time changes nothing on the screen', async () => {
+  const { calls, state, comments } = commentHarness()
+  comments.ask(['story'], 'open')
+  calls[0].resolve(said('Same.'))
+  await tick()
+  const shown = state.slots.story.answer
+  comments.ask(['story'], 'refresh')
+  assert.equal(state.slots.story.answer, shown, 'no skeleton while it asks')
+  calls[1].resolve(said('Same.'))
+  await tick()
+  assert.equal(state.slots.story.answer, shown, 'the same object: nothing is drawn again')
+})
+
+test('a refresh keeps the text through a failure of its own, and says the time of its numbers when the server does', async () => {
+  const { calls, state, comments } = commentHarness()
+  comments.ask(['story'], 'open')
+  calls[0].resolve(said('Up.'))
+  await tick()
+  comments.ask(['story'], 'refresh')
+  calls[1].reject(new Error('the network'))
+  await tick()
+  assert.equal(state.slots.story.answer.text, 'Up.')
+  comments.ask(['story'], 'refresh')
+  calls[2].resolve(said('Up.', { stale: true }))
+  await tick()
+  assert.equal(state.slots.story.answer.stale, true)
+})
+
+test('a request that fails with no text on screen says so, and is no comment', async () => {
+  const { calls, state, comments } = commentHarness()
+  comments.ask(['story'], 'open')
+  calls[0].reject(new Error('the network'))
+  await tick()
+  assert.deepEqual([state.slots.story.answer.state, state.slots.story.answer.message], ['failed', 'Not available here'])
+})
+
+test('a refresh does not knock down what a person asked for', async () => {
+  const { calls, state, comments } = commentHarness()
+  comments.ask(['story'], 'asked')
+  comments.ask(['story'], 'refresh')
+  assert.equal(calls.length, 1)
+  assert.equal(calls[0].aborted, undefined)
+  calls[0].resolve(said('Written.'))
+  await tick()
+  assert.equal(state.slots.story.answer.text, 'Written.')
+  comments.ask(['story'], 'open')
+  comments.ask(['story'], 'refresh')
+  assert.equal(calls.length, 2)
+})
+
+test('with the tab hidden nothing is asked: the question waits for the tab, once, and an opening outranks a refresh', async () => {
+  const { calls, state, comments } = commentHarness()
+  state.hidden = true
+  comments.ask(['story'], 'refresh')
+  comments.ask(['story'], 'open')
+  comments.ask(['story'], 'refresh')
+  assert.equal(calls.length, 0)
+  state.hidden = false
+  comments.resume()
+  assert.deepEqual(calls.map((c) => c.moment), ['open'])
+  comments.resume()
+  assert.equal(calls.length, 1)
+})
+
+test('what is being written is looked at again, a few times, and costs no new request meanwhile', async () => {
+  const { calls, state, comments, timers } = commentHarness()
+  comments.ask(['story'], 'open')
+  calls[0].resolve(none('pending'))
+  await tick()
+  assert.equal(state.slots.story.answer.state, 'pending')
+  assert.equal(calls.length, 1, 'not at once')
+  timers.shift()()
+  assert.equal(calls[1].moment, 'open')
+  calls[1].resolve(said('Done.'))
+  await tick()
+  assert.equal(state.slots.story.answer.text, 'Done.')
+  assert.equal(timers.length, 0)
+})
+
+test('what is being written leaves the text on screen, and it stops looking after a while', async () => {
+  const { calls, state, comments, timers } = commentHarness()
+  comments.ask(['story'], 'open')
+  calls[0].resolve(said('Old.'))
+  await tick()
+  comments.ask(['story'], 'refresh')
+  for (let i = 0; i <= PENDING_TRIES; i++) {
+    calls.at(-1).resolve(none('pending'))
+    await tick()
+    assert.equal(state.slots.story.answer.text, 'Old.')
+    if (i < PENDING_TRIES) timers.shift()()
+  }
+  assert.equal(timers.length, 0, 'it stops')
+})
+
+test('hidden meanwhile, what is being written waits for the tab', async () => {
+  const { calls, state, comments, timers } = commentHarness()
+  comments.ask(['story'], 'open')
+  calls[0].resolve(none('pending'))
+  await tick()
+  state.hidden = true
+  timers.shift()()
+  assert.equal(calls.length, 1)
+  state.hidden = false
+  comments.resume()
+  assert.equal(calls.length, 2)
+})
+
+test('stop leaves nothing asking and nothing to come', async () => {
+  const { calls, state, comments, timers } = commentHarness()
+  comments.ask(['story'], 'open')
+  calls[0].resolve(none('pending'))
+  await tick()
+  comments.ask(['story'], 'open')
+  comments.stop()
+  assert.equal(calls[1].aborted, true)
+  assert.deepEqual(timers.filter(Boolean).length, 0)
+  state.hidden = true
+  comments.ask(['story'], 'open')
+  comments.stop()
+  state.hidden = false
+  comments.resume()
+  assert.equal(calls.length, 2)
+})
+
+test('each comment has its own request and its own slot: another one is not drawn again', async () => {
+  const { calls, state, comments } = commentHarness(['one', 'two'])
+  comments.ask(['one', 'two'], 'open')
+  assert.deepEqual(calls.map((c) => c.tile), ['one', 'two'])
+  calls[0].resolve(said('First.'))
+  await tick()
+  const first = state.slots.one
+  calls[1].resolve(said('Second.'))
+  await tick()
+  assert.equal(state.slots.one, first)
+  assert.equal(state.slots.two.answer.text, 'Second.')
+})
+
+test('the words of a comment are never markup: no v-html on the way to the screen', () => {
+  for (const file of ['../components/dashboard/TileComment.vue', '../components/dashboard/DashboardTile.vue', '../components/report/designer/RdCommentProps.vue']) {
+    assert.ok(!readFileSync(new URL(file, import.meta.url), 'utf8').includes('v-html'), file)
+  }
+})
+
+test('the viewer never says a moment the gateway keeps for documents', () => {
+  const page = readFileSync(new URL('../pages/dashboard.vue', import.meta.url), 'utf8')
+  assert.ok(!page.includes("'document'"))
+})
