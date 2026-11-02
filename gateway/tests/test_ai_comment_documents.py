@@ -512,6 +512,14 @@ def test_a_comment_added_or_changed_is_something_a_schedule_s_author_did_not_cho
     assert reports.widens({"tiles": []}, {"tiles": [{"id": "c", "type": "comment", "instruction": "Say", "reads": ["k"]}]})
 
 
+def test_the_same_elements_read_in_another_order_are_no_change_to_a_schedule():
+    def reading(*reads):
+        return {"tiles": [{"id": "k"}, {"id": "t"}, {"id": "c", "type": "comment", "instruction": "Say", "reads": list(reads)}]}
+
+    assert not reports.widens(reading("k", "t"), reading("t", "k"))
+    assert reports.widens(reading("k"), reading("k", "t"))
+
+
 # ── a dashboard's document ───────────────────────────────────────────────────
 def board_render(client, board, fmt="pdf", **body):
     return client.post(f"/dashboards/{board}/render", json={"format": fmt, **body}, headers=CSRF)

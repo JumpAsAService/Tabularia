@@ -118,8 +118,10 @@ def widens(before: dict, after: dict) -> list[str]:
 
 
 def _comments_of(content: dict) -> dict:
-    """What an AI comment sends to a model and on whose bill: a schedule's author did not choose another."""
-    return {name: (it.get("instruction"), it.get("reads")) for name, it in ai_comment.elements_of(content).items() if it.get("type") == "comment"}
+    """What an AI comment sends to a model and on whose bill: a schedule's author did not choose another. The
+    elements it reads, in whatever order: the same ones are the same numbers."""
+    return {name: (it.get("instruction"), sorted(map(str, it.get("reads") or [])))
+            for name, it in ai_comment.elements_of(content).items() if it.get("type") == "comment"}
 
 
 def new_defaults(before: dict, after: dict) -> set[str]:
