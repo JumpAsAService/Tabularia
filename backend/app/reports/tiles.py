@@ -603,6 +603,28 @@ def refusal(needs: Iterable[str], refused: dict[str, dict]) -> dict | None:
     return {"error": stopped[0].get("error"), "code": stopped[0].get("code")} if stopped else None
 
 
+@dataclass
+class Asked:
+    """What a request asks of a dashboard: its tiles (`only`; None: every one) and the datasets each needs, the
+    clicks this reader may use, and what the tiles that need a dataset they may not read say: rights first."""
+    items: list
+    needs: dict[str, list[str]]
+    usable: list[Click]
+    refusals: dict[str, dict]
+
+    @classmethod
+    def of(cls, report: rd.Report, only: list[str] | None, clicks: Iterable[dict], refused: dict[str, dict]) -> Asked:
+        items = [it for _, it in report.items() if only is None or it.id in only]
+        needs = {it.id: rdata.used_datasets(report, [it]) for it in items}
+        refusals = {it.id: stopped for it in items if (stopped := refusal(needs[it.id], refused))}
+        return cls(items, needs, clicks_of(report, clicks, refused), refusals)
+
+    def to_read(self, report: rd.Report) -> list[str]:
+        """Every dataset the tiles not refused read, once, in the order they are first needed."""
+        return list(dict.fromkeys(n for it in self.items if it.id not in self.refusals
+                                  for n in needing(report, it, self.needs[it.id], self.usable)))
+
+
 class Reading:
     """What a request reads, whatever it makes of it: the dashboard written as a report's, its
     tiles (`items`) and what each needs, the clicks this reader may use, the refusals, every dataset
@@ -627,21 +649,16 @@ class Reading:
         self.ctx = ex.Context(loc=self.loc, now=now_local, params=self.values, report=title, ph_context=pctx)
         self.cap = cap or max_rows()
 
-        self.items = [it for _, it in report.items() if only is None or it.id in only]
-        self.needs = {it.id: rdata.used_datasets(report, [it]) for it in self.items}
-        self.usable = clicks_of(report, clicks or [], refused)
+        asked = Asked.of(report, only, clicks or [], refused)
+        self.items, self.needs, self.usable = asked.items, asked.needs, asked.usable
         # rights first: a tile that needs what the reader may not read says only that
-        self.answers: dict[str, dict] = {}
-        for it in self.items:
-            stopped = refusal(self.needs[it.id], refused)
-            if stopped:
-                self.answers[it.id] = stopped
+        self.answers: dict[str, dict] = dict(asked.refusals)
 
         # every dataset once
         self.data: dict[str, rdata.DataSet] = {}
         self.failed: dict[str, dict] = {}
         self.truncated: dict[str, bool] = {}
-        for name in dict.fromkeys(n for it in self.items if it.id not in self.answers for n in needing(report, it, self.needs[it.id], self.usable)):
+        for name in asked.to_read(report):
             try:
                 self.data[name] = read(name, datasets.get(name), self.cap, tz)
                 self.truncated[name] = False

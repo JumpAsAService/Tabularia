@@ -27,7 +27,6 @@ from starlette.concurrency import run_in_threadpool
 
 from app.api import exports
 from app.api.models import TaskResponse
-from app.reports import data as rdata
 from app.reports import definition as rd
 from app.reports import errors, formats, tile_cache
 from app.reports import tiles as rtiles
@@ -153,14 +152,9 @@ def _reads(asked: dict) -> list[str]:
     its definition cannot be read."""
     given = list(asked.get("datasets") or {})
     try:
-        report, refused, only = rd.load(asked["definition"]), asked.get("refused") or {}, asked.get("tiles")
-        usable = rtiles.clicks_of(report, asked.get("clicks") or [], refused)
-        names: list[str] = []
-        for _, it in report.items():
-            needs = rdata.used_datasets(report, [it])
-            if (only is None or it.id in only) and not rtiles.refusal(needs, refused):
-                names += rtiles.needing(report, it, needs, usable)
-        return [n for n in dict.fromkeys(names) if n in given]
+        report = rd.load(asked["definition"])
+        names = rtiles.Asked.of(report, asked.get("tiles"), asked.get("clicks") or [], asked.get("refused") or {}).to_read(report)
+        return [n for n in names if n in given]
     except Exception:  # noqa: BLE001 — what says a failure must not fail
         return given
 

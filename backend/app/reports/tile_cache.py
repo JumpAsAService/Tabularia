@@ -299,53 +299,58 @@ def _bucket_failed(e: Exception, what: str) -> None:
     logger.warning("dashboards: %s: going on without the rows' file (%s)", what, e)
 
 
+@contextmanager
+def _temp_rows() -> Iterator[str]:
+    """A file of its own for the rows on their way to or from the bucket, gone after."""
+    fd, path = tempfile.mkstemp(prefix="dashboard-rows-", suffix=".parquet")
+    os.close(fd)
+    try:
+        yield path
+    finally:
+        os.unlink(path)
+
+
 def _keep_file(h: str, df: Any, seconds: int) -> int | None:
     """The rows on the bucket: their size, or None when they are not kept."""
     budget = get_settings().dashboards.cache_bucket_bytes
     if not budget or _is_down() or time.monotonic() < _bucket_down_until:
         return None
-    fd, path = tempfile.mkstemp(prefix="dashboard-rows-", suffix=".parquet")
-    os.close(fd)
-    try:
-        df.write_parquet(path)  # a column of Python's objects cannot: read again, as without a cache
-        size = os.path.getsize(path)
-        if size > budget:
-            _count("rows_too_large")
-            logger.info("dashboards: rows of %s bytes are not kept: the room is %s", size, budget)
+    with _temp_rows() as path:
+        try:
+            df.write_parquet(path)  # a column of Python's objects cannot: read again, as without a cache
+            size = os.path.getsize(path)
+            if size > budget:
+                _count("rows_too_large")
+                logger.info("dashboards: rows of %s bytes are not kept: the room is %s", size, budget)
+                return None
+            index = _index()
+            index.make_room(size, budget)
+            index.storage.upload_file(path, index.bucket, index.object_key(h))
+            index.keep(h, size, time.time() + seconds + FILE_MARGIN_SECONDS)
+            return size
+        except (redis.RedisError, OSError) as e:
+            logger.warning("dashboards: the rows' file was not kept: %s", e)
             return None
-        index = _index()
-        index.make_room(size, budget)
-        index.storage.upload_file(path, index.bucket, index.object_key(h))
-        index.keep(h, size, time.time() + seconds + FILE_MARGIN_SECONDS)
-        return size
-    except (redis.RedisError, OSError) as e:
-        logger.warning("dashboards: the rows' file was not kept: %s", e)
-        return None
-    except Exception as e:  # noqa: BLE001 — a cache that fails is no cache, not a failure
-        _bucket_failed(e, "the rows' file was not written")
-        return None
-    finally:
-        os.unlink(path)
+        except Exception as e:  # noqa: BLE001 — a cache that fails is no cache, not a failure
+            _bucket_failed(e, "the rows' file was not written")
+            return None
 
 
 def _from_file(name: str, h: str, entry: dict, at: datetime, tz: Any) -> rdata.DataSet | None:
     """The rows on the bucket, or None when they cannot be had: they are read again."""
     if time.monotonic() < _bucket_down_until:
         return None
-    fd, path = tempfile.mkstemp(prefix="dashboard-rows-", suffix=".parquet")
-    os.close(fd)
-    try:
-        import polars as pl
+    with _temp_rows() as path:
+        try:
+            import polars as pl
 
-        index = _index()
-        index.storage.download_file(index.bucket, index.object_key(h), path)
-        df = pl.read_parquet(path, memory_map=False)
-    except Exception as e:  # noqa: BLE001 — as above: a file swept away, a bucket down
-        _bucket_failed(e, "the rows' file was not read")
-        _safely(lambda r: r.delete(f"{PREFIX}rows:{h}"))
-        return None
-    finally:
-        os.unlink(path)
+            index = _index()
+            index.storage.download_file(index.bucket, index.object_key(h), path)
+            df = pl.read_parquet(path, memory_map=False)
+        except Exception as e:  # noqa: BLE001 — as above: a file swept away, a bucket down
+            _bucket_failed(e, "the rows' file was not read")
+            _safely(lambda r: r.delete(f"{PREFIX}rows:{h}"))
+            return None
     ds = rdata.dataset_from(name, entry["columns"], df, tz)
     ds.read_at, ds.from_cache = at, True
     _count("rows_hits")
@@ -587,11 +592,9 @@ def _asked(request: dict, seconds: int, fresh: str | None) -> _Asked:
     definition = request["definition"]
     report = rd.load(definition)
     only, refused, datasets = request.get("tiles"), request.get("refused") or {}, request.get("datasets") or {}
-    items = [it for _, it in report.items() if only is None or it.id in only]
-    needs = {it.id: rdata.used_datasets(report, [it]) for it in items}
-    refusals = {it.id: stopped for it in items if (stopped := rtiles.refusal(needs[it.id], refused))}
-    readable = [it for it in items if it.id not in refusals]
-    usable = rtiles.clicks_of(report, request.get("clicks") or [], refused)
+    asked = rtiles.Asked.of(report, only, request.get("clicks") or [], refused)
+    readable = [it for it in asked.items if it.id not in asked.refusals]
+    needs, usable = asked.needs, asked.usable
     reads = {it.id: rtiles.needing(report, it, needs[it.id], usable) for it in readable}
 
     cap = rtiles.max_rows()
@@ -609,7 +612,7 @@ def _asked(request: dict, seconds: int, fresh: str | None) -> _Asked:
                                rtiles.click_marks(report, it, needs[it.id], usable))
               for it in readable}
     kept = [raw for raw in request.get("clicks") or [] if any(c.tile == raw.get("tile") for c in usable)]
-    return _Asked(items, reads, refusals, hashes, kept)
+    return _Asked(asked.items, reads, asked.refusals, hashes, kept)
 
 
 async def numbers(request: dict, cache: dict, run: Callable[[dict, float], dict]) -> dict:
