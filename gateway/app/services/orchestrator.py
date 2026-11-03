@@ -835,10 +835,43 @@ def wake() -> None:
         _wakeup.set()
 
 
+# The process received its stop signal: it takes no more runs from the queue, which stay
+# queued for the next orchestrator; the ones running carry on until the process ends. Before,
+# the queue was taken from until the very end — the seconds uvicorn drains its connections — and
+# what was taken then was closed as interrupted at every rollout (bug hunt 2026-11-03).
+_draining = False
+
+
+def drain() -> None:
+    global _draining
+    _draining = True
+    if _wakeup is not None:
+        _wakeup.set()
+
+
+def drain_on_stop_signal(loop: asyncio.AbstractEventLoop) -> None:
+    """SIGTERM and SIGINT call `drain` before uvicorn's own handler, which is kept: uvicorn
+    installs it before the app starts and puts the original back when it stops."""
+    import signal
+
+    if threading.current_thread() is not threading.main_thread():
+        return  # signals reach the main thread only (the tests' clients)
+    for sig in (signal.SIGTERM, signal.SIGINT):
+        previous = signal.getsignal(sig)
+
+        def handler(signum: int, frame: object, previous: object = previous) -> None:
+            loop.call_soon_threadsafe(drain)
+            if callable(previous):
+                previous(signum, frame)
+
+        signal.signal(sig, handler)
+
+
 async def queue_loop(stop: asyncio.Event) -> None:
-    """Takes from the queue and runs, as long as the process lives."""
-    global _wakeup
+    """Takes from the queue and runs, as long as the process lives and is not stopping."""
+    global _wakeup, _draining
     _wakeup = asyncio.Event()
+    _draining = False
     stop_heartbeat = threading.Event()
     start_heartbeat(stop_heartbeat)
     logger.info(
@@ -860,7 +893,7 @@ async def queue_loop(stop: asyncio.Event) -> None:
             _wakeup.clear()
             try:
                 free = concurrency() - len(_running) - running_cells
-                if free > 0:
+                if free > 0 and not _draining:
                     taken, refused = await asyncio.to_thread(claim, free)
                     for run_id in taken:
                         _start(run_id)

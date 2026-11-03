@@ -155,6 +155,10 @@ async def lifespan(app: FastAPI):
 
     logger.info(openlineage.describe())
     background = start_background_work(stop)
+    if background:
+        from app.services.orchestrator import drain_on_stop_signal
+
+        drain_on_stop_signal(asyncio.get_running_loop())
     try:
         yield
     finally:

@@ -50,6 +50,12 @@ exposes at `/system/info` and in the app's settings menu.
   connection: a 422 telling what to change (a development sample, a filter earlier, an
   aggregation in the SQL), or a 503 to try again when the worker went away for another reason.
   It was a 500, «Internal Server Error» as plain text.
+- **An orchestrator that is stopping takes no more runs.** In the seconds between its stop signal
+  and its end it went on taking runs from the queue, then closed them as interrupted: at every
+  upgrade or rollout a run started then failed. They now stay queued for the next orchestrator;
+  on Kubernetes the orchestrator no longer waits five seconds before stopping (no Service sends
+  it requests).
+
 ## 1.3.0 «Catone» — 2026-11-02
 
 Fourth release, and a new name: «Catone», after Marcus Porcius Cato, censor in 184 BC,
