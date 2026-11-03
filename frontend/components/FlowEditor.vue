@@ -799,23 +799,22 @@ function fitWhenMeasured(ids: string[], frames = 30) {
 
 onMounted(async () => {
   if (!signedIn.value) await fetchMe()
-  // automatic development sample: must be known BEFORE the first preview
-  await useAppInfo().load()
-  try {
-    operations.value = await api.operations()
-  } catch (e) {
-    setStatus(t('flowEditor.backendUnreachable', { error: errMessage(e) }), 'error')
+  // side by side, one round trip instead of four in a row: the app's settings (the
+  // automatic development sample must be known BEFORE the first preview), the operations,
+  // the projects' list (the toolbar's selector AND the run dialog) and the catalog, which
+  // comes BEFORE the flow: loadFlow reattaches the datasource sources to the current
+  // snapshot (the saved keys become stale at every refresh)
+  const [, ops] = await Promise.all([
+    useAppInfo().load(),
+    api.operations().then((o) => ({ ok: true as const, o }), (e) => ({ ok: false as const, e })),
+    projectsApi.list().then((p) => { projectsList.value = p }, () => { projectsList.value = [] }),
+    refreshDatasources(),
+  ])
+  if (!ops.ok) {
+    setStatus(t('flowEditor.backendUnreachable', { error: errMessage(ops.e) }), 'error')
     return
   }
-  try {
-    // the projects' list serves the toolbar's selector AND the run dialog
-    projectsList.value = await projectsApi.list()
-  } catch {
-    projectsList.value = []
-  }
-  // the catalog BEFORE the flow: loadFlow reattaches the datasource sources to the
-  // current snapshot (the saved keys become stale at every refresh)
-  await refreshDatasources()
+  operations.value = ops.o
   refreshConnections() // for the Output node: may come later, does not block the load
   refreshFlows() // for the "Run flow" node
   try {

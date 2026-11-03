@@ -324,7 +324,16 @@ async function loadProjects() {
   }
 }
 
+// the folder being loaded: an answer for one no longer open is dropped (before, the
+// requests went one after another — 13 round trips, 2–3 s on a remote server — and a
+// folder opened meanwhile could receive the previous one's lists)
+let folderLoad = 0
+type Settled<T> = { ok: true; value: T } | { ok: false; error: unknown }
+const settle = <T,>(p: Promise<T>): Promise<Settled<T>> =>
+  p.then((value) => ({ ok: true as const, value }), (error) => ({ ok: false as const, error }))
+
 async function loadFolder(id: number | null) {
+  const mine = ++folderLoad
   flows.value = []
   flowGroups.value = []
   dsList.value = []
@@ -341,54 +350,79 @@ async function loadFolder(id: number | null) {
   expandedFlowId.value = null
   ingestToken++ // stops the previous folder's polls
   ingestRuns.value = {}
-  if (id == null) return
+  if (id == null) {
+    loading.value = false
+    return
+  }
 
   loading.value = true
-  try {
-    try {
-      flows.value = await flowsApi.listByProject(id)
-    } catch (e) {
-      error.value = errMessage(e)
-    }
-    try {
-      dsList.value = await dsApi.listByProject(id)
-      for (const d of dsList.value) {
-        // the server says `refreshing`: it holds for a refresh started from another page, by
-        // another user or by the scheduler too
-        if (d.kind === 'database' && (d.rows == null || d.refreshing)) pollIngest(d.id, ingestToken)
-      }
-    } catch { dsList.value = [] }
-    try { flowGroups.value = await groupsApi.listByProject(id) } catch { flowGroups.value = [] }
-    try { savedViews.value = await viewsApi.listByProject(id) } catch { savedViews.value = [] }
+  // all at once: each list is independent, and a refusal empties only its own
+  const [fl, ds, gr, sv, sc, sq, nb, rp, db, cn, pm] = await Promise.all([
+    settle(flowsApi.listByProject(id)),
+    settle(dsApi.listByProject(id)),
+    settle(groupsApi.listByProject(id)),
+    settle(viewsApi.listByProject(id)),
     // only the scripts this person may see; none without scripting
-    try { scripts.value = await scriptsApi.listByProject(id) } catch { scripts.value = [] }
-    try { sqlScripts.value = await sqlApi.listByProject(id) } catch { sqlScripts.value = [] }
-    try { notebooks.value = await notebooksApi.listByProject(id) } catch { notebooks.value = [] }
-    try { reports.value = await reportsApi.listByProject(id) } catch { reports.value = [] }
-    try { dashboards.value = await dashboardsApi.listByProject(id) } catch { dashboards.value = [] }
+    settle(scriptsApi.listByProject(id)),
+    settle(sqlApi.listByProject(id)),
+    settle(notebooksApi.listByProject(id)),
+    settle(reportsApi.listByProject(id)),
+    settle(dashboardsApi.listByProject(id)),
     // connections require CONNECT: the refusal is information, not an error
-    try {
-      connections.value = await connApi.listByProject(id)
-      canConnect.value = true
-    } catch { connections.value = []; canConnect.value = false }
+    settle(connApi.listByProject(id)),
     // if the permissions can be read, we have MANAGE
+    settle(api.permissions(id)),
+  ])
+  if (mine !== folderLoad) return
+  if (fl.ok) flows.value = fl.value
+  else error.value = errMessage(fl.error)
+  if (ds.ok) {
+    dsList.value = ds.value
+    for (const d of dsList.value) {
+      // the server says `refreshing`: it holds for a refresh started from another page, by
+      // another user or by the scheduler too
+      if (d.kind === 'database' && (d.rows == null || d.refreshing)) pollIngest(d.id, ingestToken)
+    }
+  }
+  if (gr.ok) flowGroups.value = gr.value
+  if (sv.ok) savedViews.value = sv.value
+  if (sc.ok) scripts.value = sc.value
+  if (sq.ok) sqlScripts.value = sq.value
+  if (nb.ok) notebooks.value = nb.value
+  if (rp.ok) reports.value = rp.value
+  if (db.ok) dashboards.value = db.value
+  if (cn.ok) {
+    connections.value = cn.value
+    canConnect.value = true
+  }
+  if (pm.ok) {
+    permissions.value = pm.value
+    canManage.value = true
+  }
+  loading.value = false
+  // who may be granted the folder: only for the permissions panel, after the folder shows
+  if (pm.ok) {
     try {
-      permissions.value = await api.permissions(id)
-      canManage.value = true
-      if (!groups.value.length) groups.value = await api.groups()
-      if (isSuper.value && !users.value.length) users.value = await api.users()
-    } catch { canManage.value = false }
-  } finally {
-    loading.value = false
+      const [gs, us] = await Promise.all([
+        groups.value.length ? groups.value : api.groups(),
+        isSuper.value && !users.value.length ? api.users() : users.value,
+      ])
+      if (mine !== folderLoad) return
+      groups.value = gs
+      users.value = us
+    } catch { /* the lists of the grant dialog: it shows what it has */ }
   }
 }
 
 onMounted(async () => {
-  await loadProjects()
   const linked = Number(route.query.folder)
   currentId.value = Number.isInteger(linked) && linked > 0 ? linked : null
-  await loadFolder(currentId.value)
-  try { engines.value = await coreApi.engines() } catch { /* Polars stays */ }
+  // side by side: the folder's lists do not wait for the tree, nor the engines for either
+  await Promise.all([
+    loadProjects(),
+    loadFolder(currentId.value),
+    coreApi.engines().then((e) => { engines.value = e }, () => { /* Polars stays */ }),
+  ])
 })
 
 // creating or editing in another tab, coming back here reloads

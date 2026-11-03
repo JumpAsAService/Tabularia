@@ -31,6 +31,15 @@ export default defineNuxtConfig({
   // component names without folder prefix (SourceNode, DataGrid, ...)
   components: [{ path: '~/components', pathPrefix: false }],
 
+  // a page's code is fetched before the click: when its link shows (the default) and when
+  // the pointer or the focus reaches it, as for the links of the Analysis and
+  // Administration menus, which show only once opened. Without it the first visit to a
+  // page waited for its code with nothing moving on screen (plugins/route-preload.client.ts
+  // does the same for the pages opened by buttons)
+  experimental: {
+    defaults: { nuxtLink: { prefetchOn: { visibility: true, interaction: true } } },
+  },
+
   vite: {
     // the code editor of the Script nodes: prepared with the other dependencies, so the
     // development server does not reload the page the first time an editor opens

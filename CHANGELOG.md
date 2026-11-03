@@ -21,6 +21,14 @@ exposes at `/system/info` and in the app's settings menu.
   a group, a report, a dashboard, a script… and makes it in one's own folder, as the menu
   says. Before, it offered only «New folder», to the administrators only: a first flow
   seemed impossible to make until one opened a folder.
+- **Changing page never looks frozen.** A thin bar at the top shows while a page's code
+  arrives; that code is fetched before the click (when a link shows, when the pointer or
+  the focus reaches it, and, for the pages opened by buttons — the editor, a dashboard, a
+  report — once the app is idle). Explore's folders, Administration, the flow editor, the
+  Viewer, the Assistant and the Flows page ask the server for everything at once instead
+  of one request after another: on a server 150 ms away a folder opened in 2.5 s, now in
+  0.6 s (Administration likewise). A folder opened while the previous one was still
+  loading could receive the previous one's lists; no longer.
 - **The page shows what its address names.** Another flow opened from inside the editor
   (from the search, a link) stayed the old one on screen under the new address; so did
   another report or dashboard in their designers. Each now opens in its own, after the

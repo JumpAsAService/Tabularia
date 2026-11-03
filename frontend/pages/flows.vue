@@ -161,25 +161,17 @@ onBeforeUnmount(() => {
   clearTimeout(followTimer)
   clearInterval(listTimer)
 })
-onMounted(async () => {
-  try {
-    const projects = await projectsApi.list()
-    folderName.value = Object.fromEntries(projects.map((p) => [p.id, p.name]))
-  } catch {
-    /* the folder names are an extra */
-  }
-  try {
-    engines.value = await api.engines()
-  } catch {
-    /* fallback: Polars only (in the default already) */
-  }
-  try {
-    const conns = await connectionsApi.list()
+// the extras side by side: none waits for another
+onMounted(() => Promise.allSettled([
+  // the folder names are an extra
+  projectsApi.list().then((projects) => { folderName.value = Object.fromEntries(projects.map((p) => [p.id, p.name])) }),
+  // fallback: Polars only (in the default already)
+  api.engines().then((e) => { engines.value = e }),
+  // without SMTP connections the notice's section does not show, and that is all
+  connectionsApi.list().then((conns) => {
     smtpConnections.value = conns.filter((c) => c.db_type === 'smtp').map((c) => ({ id: c.id, name: c.name }))
-  } catch {
-    /* without SMTP connections the notice's section does not show, and that is all */
-  }
-})
+  }),
+]))
 
 // ── Per-flow expander: metrics + Gantt + versions (loaded at the first opening)
 interface Detail {

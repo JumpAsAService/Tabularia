@@ -151,25 +151,26 @@ const examples = computed(() => [t('chat.example1'),
   ...(noHistory.value ? [] : [t('chat.example4')])])
 
 onMounted(async () => {
-  try {
-    status.value = await ai.status()
-    model.value = status.value.default_model ?? status.value.models[0] ?? ''
-  } catch (e) {
-    statusError.value = errMessage(e)
-  }
-  // after the state: the dialog's text depends on it
-  readConsent(metadataOnly.value, aiProviders(status.value))
-  try {
+  // side by side: the state, the engines, the catalog and the chats do not wait for each other
+  await Promise.allSettled([
+    ai.status().then((st) => {
+      status.value = st
+      model.value = st.default_model ?? st.models[0] ?? ''
+    }, (e) => { statusError.value = errMessage(e) }).then(() => {
+      // after the state: the dialog's text depends on it
+      readConsent(metadataOnly.value, aiProviders(status.value))
+    }),
     // a FRESH catalog (not the session's cached one): the engines' policy may have changed
-    engines.value = await api.engines()
-    engine.value = defaultEngine(engines.value)
-  } catch { /* without a catalog the backend decides */ }
-  try {
-    const [list, projects] = await Promise.all([dsApi.list(), projectsApi.list()])
-    datasources.value = list.sort((a, b) => a.name.localeCompare(b.name))
-    folders.value = Object.fromEntries(projects.map((p: any) => [p.id, p.name]))
-  } catch { /* the catalog is a help: the chat works without it too */ }
-  await refreshChats()
+    api.engines().then((e) => {
+      engines.value = e
+      engine.value = defaultEngine(engines.value)
+    }), // without a catalog the backend decides
+    Promise.all([dsApi.list(), projectsApi.list()]).then(([list, projects]) => {
+      datasources.value = list.sort((a, b) => a.name.localeCompare(b.name))
+      folders.value = Object.fromEntries(projects.map((p: any) => [p.id, p.name]))
+    }), // the catalog is a help: the chat works without it too
+    refreshChats(),
+  ])
   input.value?.focus()
 })
 onBeforeUnmount(() => abort?.abort())

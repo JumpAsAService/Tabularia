@@ -160,53 +160,49 @@ const nonMembers = computed(() =>
   currentGroup.value ? users.value.filter((u) => !u.groups.includes(currentGroup.value!.name)) : [],
 )
 
+// everything at once: one round trip, not fifteen in a row (2–3 s on a remote server)
 async function loadAll() {
-  try {
-    users.value = await api.users()
-    groups.value = await api.groups()
-    banners.value = await bannersApi.list()
-    try { privacy.value = await privacyApi.get() } catch { privacy.value = null }
-    engines.value = await engineApi.list()
-    folders.value = await api.list()
-  } catch (e) {
-    toast.error(errMessage(e))
-  }
-  // the counts of the two sections that load by themselves, for the navigation
-  try {
-    ;[nService.value, nWebhook.value] = (await Promise.all([integr.serviceAccounts(), integr.webhooks()])).map((x) => x.length)
-  } catch { /* the sections will say so when they open */ }
-  try {
-    // the processes per worker are engine settings too, but they have their own section
-    const [gw, eng] = await Promise.allSettled([panelApi.gateway(), settingsApi.get()])
-    nSettings.value = (gw.status === 'fulfilled' ? gw.value.items.filter((v) => v.value !== null).length : 0)
-      + (eng.status === 'fulfilled' ? eng.value.items.filter((v) => v.value !== null && isSettingsCategory(v.category)).length : 0)
-  } catch { /* the section will say so when it opens */ }
-  try {
-    siemOn.value = (await siemApi.get()).enabled
-  } catch { /* the section will say so when it opens */ }
-  try {
-    const bk = await backupsApi.get()
-    nBackup.value = bk.items.length
-    backupsOff.value = bk.disabled_reason === 'kubernetes'
-  } catch { /* the section says why when it opens */ }
-  try {
-    nWorker.value = (await workersApi.get()).groups.reduce((n, g) => n + g.workers.length, 0)
-  } catch { /* the section says why when it opens */ }
-  try {
-    const sc = await scriptingApi.get()
-    nEnvironments.value = sc.environments.length
-    scriptingOff.value = sc.disabled_reason === 'kubernetes'
-  } catch { /* the section says why when it opens */ }
-  try {
-    const rg = await registriesApi.get()
-    nRegistries.value = rg.registries.length
-    registriesOff.value = rg.disabled_reason === 'kubernetes'
-  } catch { /* the section says why when it opens */ }
+  const [us, gs, bn, pv, en, fo] = await Promise.allSettled([
+    api.users(), api.groups(), bannersApi.list(), privacyApi.get(), engineApi.list(), api.list(),
+  ])
+  if (us.status === 'fulfilled') users.value = us.value
+  if (gs.status === 'fulfilled') groups.value = gs.value
+  if (bn.status === 'fulfilled') banners.value = bn.value
+  privacy.value = pv.status === 'fulfilled' ? pv.value : null
+  if (en.status === 'fulfilled') engines.value = en.value
+  if (fo.status === 'fulfilled') folders.value = fo.value
+  const failed = [us, gs, bn, en, fo].find((r) => r.status === 'rejected')
+  if (failed) toast.error(errMessage((failed as PromiseRejectedResult).reason))
+  // the counts of the sections that load by themselves, for the navigation: a section that
+  // cannot answer says why when it opens
   loadAiStatus()
-  // apart: the assistant may not be configured, and that is not a panel error
-  try {
-    nAiModels.value = (await aiApi.models()).filter((m) => m.enabled).length
-  } catch { /* the section says why when it opens */ }
+  await Promise.allSettled([
+    Promise.all([integr.serviceAccounts(), integr.webhooks()]).then(([sa, wh]) => {
+      nService.value = sa.length
+      nWebhook.value = wh.length
+    }),
+    // the processes per worker are engine settings too, but they have their own section
+    Promise.allSettled([panelApi.gateway(), settingsApi.get()]).then(([gw, eng]) => {
+      nSettings.value = (gw.status === 'fulfilled' ? gw.value.items.filter((v) => v.value !== null).length : 0)
+        + (eng.status === 'fulfilled' ? eng.value.items.filter((v) => v.value !== null && isSettingsCategory(v.category)).length : 0)
+    }),
+    siemApi.get().then((x) => { siemOn.value = x.enabled }),
+    backupsApi.get().then((bk) => {
+      nBackup.value = bk.items.length
+      backupsOff.value = bk.disabled_reason === 'kubernetes'
+    }),
+    workersApi.get().then((w) => { nWorker.value = w.groups.reduce((n, g) => n + g.workers.length, 0) }),
+    scriptingApi.get().then((sc) => {
+      nEnvironments.value = sc.environments.length
+      scriptingOff.value = sc.disabled_reason === 'kubernetes'
+    }),
+    registriesApi.get().then((rg) => {
+      nRegistries.value = rg.registries.length
+      registriesOff.value = rg.disabled_reason === 'kubernetes'
+    }),
+    // apart: the assistant may not be configured, and that is not a panel error
+    aiApi.models().then((m) => { nAiModels.value = m.filter((x) => x.enabled).length }),
+  ])
 }
 onMounted(loadAll)
 

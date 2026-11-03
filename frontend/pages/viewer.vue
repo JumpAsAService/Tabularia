@@ -394,15 +394,18 @@ async function saveView() {
 }
 
 onMounted(async () => {
-  try { datasources.value = await dsApi.list() } catch (e) { error.value = errMessage(e) }
-  try {
-    engines.value = await api.engines()
-    // the favourite may not be available: applies the robust fallback
-    engine.value = defaultEngine(engines.value)
-  } catch { /* fallback polars */ }
-  // views are an extra: if they do not load, the Viewer stays usable
-  try { savedViews.value = await viewsApi.list() } catch { savedViews.value = [] }
-  try { projects.value = await projectsApi.list() } catch { projects.value = [] }
+  // side by side: one round trip, not four in a row
+  await Promise.allSettled([
+    dsApi.list().then((l) => { datasources.value = l }, (e) => { error.value = errMessage(e) }),
+    api.engines().then((e) => {
+      engines.value = e
+      // the favourite may not be available: applies the robust fallback
+      engine.value = defaultEngine(engines.value)
+    }), // fallback polars
+    // views are an extra: if they do not load, the Viewer stays usable
+    viewsApi.list().then((v) => { savedViews.value = v }, () => { savedViews.value = [] }),
+    projectsApi.list().then((p) => { projects.value = p }, () => { projects.value = [] }),
+  ])
   // direct opening from a link (?view=<id>): that is how the folder leads here. It goes
   // AFTER loading the datasources, because the view must find one.
   const linked = Number(useRoute().query.view)
