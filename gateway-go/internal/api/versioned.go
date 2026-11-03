@@ -17,6 +17,7 @@ import (
 	"github.com/JumpAsAService/Tabularia/gateway-go/internal/copynames"
 	"github.com/JumpAsAService/Tabularia/gateway-go/internal/masking"
 	"github.com/JumpAsAService/Tabularia/gateway-go/internal/perm"
+	"github.com/JumpAsAService/Tabularia/gateway-go/internal/pyd"
 	"github.com/JumpAsAService/Tabularia/gateway-go/internal/pyjson"
 	"github.com/JumpAsAService/Tabularia/gateway-go/internal/server"
 	"github.com/JumpAsAService/Tabularia/gateway-go/internal/versioned"
@@ -31,6 +32,12 @@ type objectsAPI struct {
 	param    string // the path parameter of its id: "report_id"
 	// openAudit is the audit of an opening in the viewer ("": none, as for a report)
 	openAudit string
+	// the bodies' models (pyd/gatewaymodels) and a new definition (empty())
+	createModel, updateModel, checkModel *pyd.Model
+	empty                                func(locale, timezone string) pyjson.Object
+	// check and review are a dashboard's checked() and review().problems; nil: a report's
+	check  func(ctx context.Context, h *objectsAPI, c *perm.Checker, definition, current any) (pyjson.Object, error)
+	review func(ctx context.Context, h *objectsAPI, c *perm.Checker, definition, current any) ([]pyjson.Object, error)
 }
 
 // ObjectOut is routes/reports.py ReportOut and routes/dashboards.py DashboardOut.

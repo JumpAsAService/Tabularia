@@ -277,3 +277,13 @@ func (p *parser) str() (any, error) {
 		}
 	}
 }
+
+// MarshalJSON writes the object for encoding/json (an answer, a body to the engine), its keys
+// in their order.
+func (o Object) MarshalJSON() ([]byte, error) {
+	s, err := Dumps(o, Options{Compact: true})
+	return []byte(s), err
+}
+
+// MarshalJSON writes the integer's digits.
+func (i Int) MarshalJSON() ([]byte, error) { return []byte(i), nil }
