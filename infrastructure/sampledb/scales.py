@@ -24,6 +24,18 @@ ALIASES = {"robusta": "robust"}
 WAIT_IMPORT = {"robust": 120, "massive": 480}
 WAIT_RUN = {"robust": 60, "massive": 180}
 
+# the engines the seed tries for the flows, the first the engine policy allows (unless
+# SAMPLES_ENGINE names one). From robust up DuckDB first: it spills to disk, while Polars
+# holds a group in memory — «Top 20 Products by Revenue» counts the distinct orders of
+# each product over 42 million lines, and on Polars passed 7 GB (killed on a 15 GB
+# machine), on DuckDB it took 18 s and some 300 MB (measured on kind, 2026-11-03)
+ENGINES = ("polars", "duckdb", "chdb", "clickhouse", "bigquery")
+ENGINES_LARGE = ("duckdb", "polars", "chdb", "clickhouse", "bigquery")
+
+
+def engines(scale: str) -> tuple[str, ...]:
+    return ENGINES_LARGE if scale in ("robust", "massive") else ENGINES
+
 
 def resolve(name: str | None) -> str:
     """The preset's name from SAMPLES_SCALE (the default small, the earlier names too);

@@ -73,7 +73,7 @@ one created at the sign-in page. To leave them out:
 ```bash
 # in infrastructure/.env (optional)
 SAMPLES_SCALE=small        # small | medium | robust | massive
-#SAMPLES_ENGINE=           # engine of the flows; empty = the first one the policy allows
+#SAMPLES_ENGINE=           # engine of the flows; empty = the first one the policy allows (DuckDB first at robust and massive)
 #SAMPLES_RUN_FLOWS=true    # runs the flows once, so the tables they produce exist
 
 docker compose -f infrastructure/docker-compose.yml up -d

@@ -11,7 +11,9 @@ exposes at `/system/info` and in the app's settings menu.
   of an hour to import into the «Sample» folder, ~50 GB of free disk. `robusta` is now
   `robust`; the earlier name is still accepted. The kind guide lists the four scales, and
   the kind Job that generates them may use 3 GiB: from `medium` up the generator peaks at
-  2.1 GB (measured), past the 2 GiB the Job had.
+  2.1 GB (measured), past the 2 GiB the Job had. From `robust` up the sample flows are
+  made on DuckDB, which spills to disk: on Polars, *Top 20 Products by Revenue* passed
+  7 GB at `robust` and was killed; on DuckDB it takes 18 s and some 300 MB.
 
 ## 1.3.0 «Catone» — 2026-11-02
 

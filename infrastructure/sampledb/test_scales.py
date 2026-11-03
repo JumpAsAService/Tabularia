@@ -49,6 +49,14 @@ class Scales(unittest.TestCase):
         self.assertLess(waits["small"], waits["robust"])
         self.assertLess(waits["robust"], waits["massive"])
 
+    def test_the_flows_of_the_large_scales_start_on_an_engine_that_spills(self):
+        self.assertEqual(scales.engines("small")[0], "polars")
+        self.assertEqual(scales.engines("medium")[0], "polars")
+        self.assertEqual(scales.engines("robust")[0], "duckdb")
+        self.assertEqual(scales.engines("massive")[0], "duckdb")
+        # the same engines, in another order: one the policy forbids is still skipped
+        self.assertEqual(sorted(scales.engines("small")), sorted(scales.engines("massive")))
+
     def test_the_seed_refuses_a_scale_that_does_not_exist(self):
         with mock.patch.dict(os.environ, {"SAMPLES_SCALE": "huge"}), self.assertRaises(SystemExit):
             importlib.reload(importlib.import_module("seed_tabularia"))

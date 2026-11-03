@@ -299,7 +299,7 @@ def choose_engine() -> str:
     if WANTED_ENGINE:
         return WANTED_ENGINE
     allowed = {e["engine_id"] for e in gw.must("GET", "/engine-policy") if e.get("allowed")}
-    for e in ("polars", "duckdb", "chdb", "clickhouse", "bigquery"):
+    for e in scales.engines(SCALE):
         if e in allowed:
             return e
     return "polars"

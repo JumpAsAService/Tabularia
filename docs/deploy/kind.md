@@ -685,7 +685,9 @@ on `Sample`, and CONNECT too to import from its two connections.
   ClickHouse CRM log, where Tabularia reads large tables best. The generator writes them
   in about an hour, ClickHouse keeps them in ~15 GB, and the «Sample» folder copies them
   into Tabularia in about a quarter of an hour (~12 GB of Parquet in MinIO); the *CRM
-  Workload* flow then groups them by agent. The volumes' sizes in the manifests do not
+  Workload* flow then groups them by agent. At `robust` and `massive` the sample flows
+  are made on DuckDB, which spills to disk: on Polars, *Top 20 Products by Revenue*
+  needed more than 7 GB at `robust`. The volumes' sizes in the manifests do not
   limit anything on kind (its `local-path` storage does not enforce them): what counts is
   the free disk of the computer, under Docker's data directory. Follow the Job with
   `kubectl logs -f --namespace tabularia-deps job/sampledb-init`.
