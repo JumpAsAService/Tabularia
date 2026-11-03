@@ -1,7 +1,7 @@
 #!/bin/sh
 # The route inventory (docs/gateway-go-routes.md): every route of the Python gateway, as
-# FastAPI serves it, and whether the Go gateway answers it yet (its table in
-# cmd/gateway/main.go). Run after porting a route.
+# FastAPI serves it, and whether the Go gateway answers it yet (the routes of
+# cmd/gateway/main.go and internal/api). Run after porting a route.
 #
 #   GATEWAY_IMAGE=… gateway-go/scripts/inventory.sh
 set -eu
@@ -35,10 +35,10 @@ walk(app.routes)
 print(json.dumps(out))
 PY
 
-python3 - "$routes" "$here/cmd/gateway/main.go" "$repo/docs/gateway-go-routes.md" <<'PY'
-import collections, json, re, sys
+python3 - "$routes" "$here" "$repo/docs/gateway-go-routes.md" <<'PY'
+import collections, glob, json, re, sys
 routes = json.load(open(sys.argv[1]))
-go = open(sys.argv[2]).read()
+go = "".join(open(f).read() for f in [sys.argv[2] + "/cmd/gateway/main.go", *glob.glob(sys.argv[2] + "/internal/api/*.go")])
 ported = set(re.findall(r'Method:\s*http\.Method(\w+),\s*Pattern:\s*"([^"]+)"', go))
 ported = {(m.upper(), p) for m, p in ported}
 by_module = collections.defaultdict(list)

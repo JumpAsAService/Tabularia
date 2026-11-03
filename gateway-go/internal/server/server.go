@@ -8,6 +8,7 @@ import (
 	"net/http"
 
 	"github.com/JumpAsAService/Tabularia/gateway-go/internal/auth"
+	"github.com/JumpAsAService/Tabularia/gateway-go/internal/reqinfo"
 )
 
 // Route is a ported route: the method and the path as FastAPI declares it
@@ -77,7 +78,7 @@ func Authed(a *auth.Authenticator, route string, h func(http.ResponseWriter, *ht
 			Refuse(w, refusal)
 			return
 		}
-		h(w, r, p)
+		h(w, reqinfo.With(r, a.ClientIP, p), p)
 	})
 }
 

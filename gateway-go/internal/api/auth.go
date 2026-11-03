@@ -42,6 +42,12 @@ type Settings interface {
 	APITokenMaxDays() int
 }
 
+func init() {
+	register("auth", func(d *Deps) []server.Route {
+		return []server.Route{{Method: http.MethodGet, Pattern: "/auth/me", Handler: Me(d.Auth, d.DB, d.Panel, d.Log)}}
+	})
+}
+
 // Me is GET /auth/me (routes/auth.py `me`): oneself, with the effective roles, the group
 // names and the settings the page needs.
 func Me(a *auth.Authenticator, db *pgxpool.Pool, set Settings, log *slog.Logger) http.Handler {

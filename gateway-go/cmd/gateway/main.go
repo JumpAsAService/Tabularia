@@ -55,10 +55,8 @@ func run(log *slog.Logger) error {
 		DB: pool, Secret: cfg.JWTSecret, Algorithm: cfg.JWTAlgorithm, CookieDomain: cfg.CookieDomain,
 		Settings: panel, ClientIP: clientip.New(cfg.ForwardedAllowIPs), Log: log,
 	}
-	routes := []server.Route{
-		{Method: http.MethodGet, Pattern: "/health", Handler: server.Health()},
-		{Method: http.MethodGet, Pattern: "/auth/me", Handler: api.Me(authn, pool, panel, log)},
-	}
+	routes := append([]server.Route{{Method: http.MethodGet, Pattern: "/health", Handler: server.Health()}},
+		api.Routes(&api.Deps{DB: pool, Auth: authn, Panel: panel, Config: cfg, Log: log})...)
 	srv := &http.Server{
 		Addr:              cfg.Listen,
 		Handler:           server.New(routes, proxy.New(cfg.Upstream, log)),
