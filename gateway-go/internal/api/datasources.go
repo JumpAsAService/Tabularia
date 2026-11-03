@@ -12,7 +12,6 @@ import (
 	"github.com/JumpAsAService/Tabularia/gateway-go/internal/auth"
 	"github.com/JumpAsAService/Tabularia/gateway-go/internal/perm"
 	"github.com/JumpAsAService/Tabularia/gateway-go/internal/pyd"
-	"github.com/JumpAsAService/Tabularia/gateway-go/internal/pyjson"
 	"github.com/JumpAsAService/Tabularia/gateway-go/internal/server"
 )
 
@@ -92,14 +91,6 @@ func queryDatasources(ctx context.Context, q perm.Querier, tail string, args ...
 		out = append(out, d)
 	}
 	return out, rows.Err()
-}
-
-func isoPtr(t *time.Time) *string {
-	if t == nil {
-		return nil
-	}
-	s := pyjson.Isoformat(*t)
-	return &s
 }
 
 // errResponse is a value the response model refuses: FastAPI's ResponseValidationError, a 500.

@@ -47,6 +47,11 @@ type Config struct {
 	EngineBaseURL string
 	EngineBucket  string
 
+	// OpenLineage is services/openlineage.py enabled(): OPENLINEAGE__URL or OPENLINEAGE__FILE,
+	// or the library's OPENLINEAGE_URL / OPENLINEAGE_CONFIG. The routes whose lineage events are
+	// not ported yet leave those requests to the Python gateway while it is on.
+	OpenLineage bool
+
 	// SECURITY__FERNET_KEY, or the one created in SECURITY__KEYS_DIR (fernet.key)
 	FernetKey string
 	KeysDir   string
@@ -86,6 +91,11 @@ func Load(env Env) (*Config, error) {
 		EngineBucket:       r.str("ENGINE__BUCKET", "data-prep"),
 		FernetKey:          r.str("SECURITY__FERNET_KEY", ""),
 		KeysDir:            r.str("SECURITY__KEYS_DIR", ""),
+	}
+	for _, name := range []string{"OPENLINEAGE__URL", "OPENLINEAGE__FILE", "OPENLINEAGE_URL", "OPENLINEAGE_CONFIG"} {
+		if r.str(name, "") != "" {
+			c.OpenLineage = true
+		}
 	}
 	if c.FernetKey == "" && c.KeysDir != "" {
 		// Settings._key_from_keys_dir: the key a first service created in the shared directory
