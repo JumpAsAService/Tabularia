@@ -17,6 +17,7 @@ import (
 
 	"github.com/JumpAsAService/Tabularia/gateway-go/internal/auth"
 	"github.com/JumpAsAService/Tabularia/gateway-go/internal/perm"
+	"github.com/JumpAsAService/Tabularia/gateway-go/internal/pyjson"
 )
 
 // ManagedPrefixes are MANAGED_PREFIXES: everything else cannot be addressed by the clients.
@@ -48,6 +49,17 @@ func CollectReadRefs(payload any) (buckets, keys map[string]bool) {
 					}
 				}
 				walk(v)
+			}
+		case pyjson.Object: // pyjson.Loads
+			for _, kv := range x {
+				if s, ok := kv.Value.(string); ok {
+					if kv.Key == "key" || kv.Key == "input_key" {
+						keys[s] = true
+					} else if kv.Key == "bucket" {
+						buckets[s] = true
+					}
+				}
+				walk(kv.Value)
 			}
 		case []any:
 			for _, v := range x {
@@ -93,6 +105,10 @@ func CollectStorageKeys(payload any) map[string]bool {
 		case map[string]any:
 			for _, v := range x {
 				walk(v)
+			}
+		case pyjson.Object: // pyjson.Loads
+			for _, kv := range x {
+				walk(kv.Value)
 			}
 		case []any:
 			for _, v := range x {

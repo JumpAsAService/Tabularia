@@ -28,6 +28,9 @@ type values struct {
 	sessionIdleMinutes int
 	personalTokens     bool
 	apiTokenMaxDays    int
+	uploadMaxBytes     int64 // upload.max_bytes
+	timezone           string
+	workerCapacity     int64
 }
 
 // item is an entry of overrides.ITEMS the Go gateway reads: its kind and the panel's range.
@@ -38,9 +41,12 @@ type item struct {
 }
 
 var items = map[string]item{
-	"auth.session_idle_minutes": {kind: "int", min: 0, max: 24 * 60, set: func(v *values, x any) { v.sessionIdleMinutes = int(x.(int64)) }},
-	"auth.personal_tokens":      {kind: "bool", set: func(v *values, x any) { v.personalTokens = x.(bool) }},
-	"auth.api_token_max_days":   {kind: "int", min: 1, max: 3650, set: func(v *values, x any) { v.apiTokenMaxDays = int(x.(int64)) }},
+	"auth.session_idle_minutes":  {kind: "int", min: 0, max: 24 * 60, set: func(v *values, x any) { v.sessionIdleMinutes = int(x.(int64)) }},
+	"auth.personal_tokens":       {kind: "bool", set: func(v *values, x any) { v.personalTokens = x.(bool) }},
+	"auth.api_token_max_days":    {kind: "int", min: 1, max: 3650, set: func(v *values, x any) { v.apiTokenMaxDays = int(x.(int64)) }},
+	"upload.max_bytes":           {kind: "int", min: 1 << 20, max: 1 << 40, set: func(v *values, x any) { v.uploadMaxBytes = x.(int64) }},
+	"app.timezone":               {kind: "timezone", set: func(v *values, x any) { v.timezone = x.(string) }},
+	"scheduling.worker_capacity": {kind: "int", min: 1, max: 256, set: func(v *values, x any) { v.workerCapacity = x.(int64) }},
 }
 
 // Panel holds the settings in force.
@@ -53,7 +59,9 @@ type Panel struct {
 
 // New starts from the environment.
 func New(cfg *config.Config, panelEnabled bool, log *slog.Logger) *Panel {
-	p := &Panel{env: values{cfg.SessionIdleMinutes, cfg.PersonalTokens, cfg.APITokenMaxDays}, enabled: panelEnabled, log: log}
+	p := &Panel{env: values{cfg.SessionIdleMinutes, cfg.PersonalTokens, cfg.APITokenMaxDays, cfg.Flows.UploadMaxBytes,
+		cfg.Flows.Timezone, cfg.Flows.WorkerCapacity},
+		enabled: panelEnabled, log: log}
 	v := p.env
 	p.current.Store(&v)
 	return p
@@ -62,6 +70,15 @@ func New(cfg *config.Config, panelEnabled bool, log *slog.Logger) *Panel {
 func (p *Panel) SessionIdleMinutes() int { return p.current.Load().sessionIdleMinutes }
 func (p *Panel) PersonalTokens() bool    { return p.current.Load().personalTokens }
 func (p *Panel) APITokenMaxDays() int    { return p.current.Load().apiTokenMaxDays }
+
+// Timezone is app.timezone: the zone of the cron expressions.
+func (p *Panel) Timezone() string { return p.current.Load().timezone }
+
+// WorkerCapacity is scheduling.worker_capacity.
+func (p *Panel) WorkerCapacity() int64 { return p.current.Load().workerCapacity }
+
+// UploadMaxBytes is upload.max_bytes: 0 = no ceiling.
+func (p *Panel) UploadMaxBytes() int64 { return p.current.Load().uploadMaxBytes }
 
 // Apply puts in force the rows just read (key → JSON text): the good ones on top of the
 // environment, the others dropped and logged.
@@ -97,6 +114,13 @@ func check(it item, raw string) (any, bool) {
 	case "bool":
 		b, ok := x.(bool)
 		return b, ok
+	case "timezone": // check_one for a text: stripped, not empty, at most 200, a zone
+		t, ok := x.(string)
+		t = strings.TrimSpace(t)
+		if !ok || t == "" || len([]rune(t)) > 200 || !config.ValidZone(t) {
+			return nil, false
+		}
+		return t, true
 	case "int":
 		n, ok := x.(json.Number)
 		if !ok || strings.ContainsAny(n.String(), ".eE") {

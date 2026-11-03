@@ -5,7 +5,9 @@ package server
 import (
 	"bytes"
 	"encoding/json"
+	"io"
 	"net/http"
+	"strconv"
 
 	"github.com/JumpAsAService/Tabularia/gateway-go/internal/auth"
 	"github.com/JumpAsAService/Tabularia/gateway-go/internal/reqinfo"
@@ -29,7 +31,11 @@ func New(routes []Route, upstream http.Handler) http.Handler {
 		if byPattern[r.Pattern] == nil {
 			byPattern[r.Pattern] = map[string]http.Handler{}
 		}
-		byPattern[r.Pattern][r.Method] = r.Handler
+		h := r.Handler
+		if !(r.Method == http.MethodPost && r.Pattern == "/files") {
+			h = BodyLimit(h)
+		}
+		byPattern[r.Pattern][r.Method] = h
 	}
 	for pattern, methods := range byPattern {
 		mux.HandleFunc(pattern, func(w http.ResponseWriter, req *http.Request) {
@@ -99,5 +105,40 @@ func InternalError(w http.ResponseWriter) {
 func Health() http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		JSON(w, http.StatusOK, map[string]string{"status": "ok"})
+	})
+}
+
+// MaxBody is core/body_limit.py MAX_BODY_BYTES.
+const MaxBody = 8 * 1024 * 1024
+
+// BodyLimit is core/body_limit.py BodyLimitMiddleware, in front of every ported route but
+// the upload: a 413 before anything else when the declared size is too large, or when
+// an undeclared one (chunked) goes past it.
+func BodyLimit(h http.Handler) http.Handler {
+	refuse := func(w http.ResponseWriter) {
+		body := []byte(`{"detail":"Request body too large (limit 8 MB)"}`)
+		w.Header().Set("Content-Type", "application/json")
+		w.Header().Set("Content-Length", strconv.Itoa(len(body)))
+		w.WriteHeader(http.StatusRequestEntityTooLarge)
+		_, _ = w.Write(body)
+	}
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.ContentLength > MaxBody {
+			refuse(w)
+			return
+		}
+		if r.ContentLength < 0 && r.Body != nil && r.Body != http.NoBody {
+			raw, err := io.ReadAll(io.LimitReader(r.Body, MaxBody+1))
+			if err != nil {
+				InternalError(w)
+				return
+			}
+			if len(raw) > MaxBody {
+				refuse(w)
+				return
+			}
+			r.Body = io.NopCloser(bytes.NewReader(raw))
+		}
+		h.ServeHTTP(w, r)
 	})
 }

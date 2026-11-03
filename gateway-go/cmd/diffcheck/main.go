@@ -17,6 +17,7 @@ package main
 
 import (
 	"bytes"
+	"compress/gzip"
 	"context"
 	"encoding/json"
 	"fmt"
@@ -44,6 +45,8 @@ type Step struct {
 	Header      map[string]string
 	Engine      []EngineRule // scripted on both engines before this step (nil: the suite's)
 	Mask        []string     // dotted paths of the answer's JSON (* for every item) holding random values
+	Before      func(*World) // run before the step (on both databases): a change of state the step needs
+	EngineMask  []string     // as Mask, in the requests sent to the engine (e.g. «*.body.output_key»)
 }
 
 // EngineRule is one scripted answer of the fake engine (cmd/fakeengine).
@@ -52,6 +55,9 @@ type EngineRule struct {
 	Path   string `json:"path"` // a regular expression on the path
 	Status int    `json:"status,omitempty"`
 	Body   any    `json:"body,omitempty"`
+	// the answer's headers, and its body as text instead of Body (cmd/fakeengine)
+	Headers map[string]string `json:"headers,omitempty"`
+	Raw     *string           `json:"raw,omitempty"`
 }
 
 // Suite is the comparison of one module.
@@ -136,6 +142,9 @@ func main() {
 					rules = s.Engine
 				}
 				w.script(rules)
+				if st.Before != nil {
+					st.Before(w)
+				}
 				total++
 				if diff := w.compare(st); diff != "" {
 					failed++
@@ -262,6 +271,14 @@ func (w *World) ask(s *side, st Step) answer {
 	}
 	raw, _ := io.ReadAll(res.Body)
 	res.Body.Close()
+	if res.Header.Get("Content-Encoding") == "gzip" {
+		// the same content: two gzip writers do not write the same bytes
+		if zr, err := gzip.NewReader(bytes.NewReader(raw)); err == nil {
+			if plain, err := io.ReadAll(zr); err == nil {
+				raw = append([]byte("gzip:"), plain...)
+			}
+		}
+	}
 	a := answer{Status: res.StatusCode, Headers: map[string]string{}}
 	for _, h := range compared {
 		if v := res.Header.Get(h); v != "" {
@@ -287,6 +304,9 @@ func (w *World) ask(s *side, st Step) answer {
 		a.Body = string(bytes.TrimSpace(raw))
 	}
 	a.Engine = recorded(s)
+	for _, path := range st.EngineMask {
+		a.Engine = maskPath(a.Engine, strings.Split(path, "."))
+	}
 	a.Tables = dump(w.ctx, s)
 	return a
 }

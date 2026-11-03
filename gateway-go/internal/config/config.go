@@ -50,6 +50,8 @@ type Config struct {
 	// SECURITY__FERNET_KEY, or the one created in SECURITY__KEYS_DIR (fernet.key)
 	FernetKey string
 	KeysDir   string
+
+	Flows FlowsConfig // config_flows.go
 }
 
 // Env reads a variable without regard to case, as pydantic-settings does.
@@ -87,6 +89,7 @@ func Load(env Env) (*Config, error) {
 		FernetKey:          r.str("SECURITY__FERNET_KEY", ""),
 		KeysDir:            r.str("SECURITY__KEYS_DIR", ""),
 	}
+	c.Flows = loadFlows(&r)
 	if c.FernetKey == "" && c.KeysDir != "" {
 		// Settings._key_from_keys_dir: the key a first service created in the shared directory
 		key, err := readOrCreate(c.KeysDir, "fernet.key", newFernetKey)
