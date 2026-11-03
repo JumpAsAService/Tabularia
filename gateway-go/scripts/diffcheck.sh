@@ -18,16 +18,22 @@ secret=$(openssl rand -hex 32)
 fernet=$(openssl rand -base64 32 | tr '+/' '-_')
 admin_password=$(openssl rand -hex 16)
 containers="$id-pga $id-pgb $id-enga $id-engb $id-pya $id-pyb $id-go"
-cleanup() { docker rm -f $containers >/dev/null 2>&1; docker network rm "$net" >/dev/null 2>&1 || true; }
+# images of this run only: comparisons run side by side, each with its own build
+go_gateway=tabularia-gateway-go:$id
+fake_engine=tabularia-fakeengine:$id
+cleanup() {
+    docker rm -f $containers >/dev/null 2>&1; docker network rm "$net" >/dev/null 2>&1
+    docker rmi "$go_gateway" "$fake_engine" >/dev/null 2>&1 || true
+}
 trap cleanup EXIT
 
-docker build -q -t tabularia-gateway-go:diff "$here" >/dev/null
-docker build -q --build-arg PROGRAM=fakeengine -t tabularia-fakeengine:diff "$here" >/dev/null
+docker build -q -t "$go_gateway" "$here" >/dev/null
+docker build -q --build-arg PROGRAM=fakeengine -t "$fake_engine" "$here" >/dev/null
 docker network create "$net" >/dev/null
 for s in a b; do
     docker run -d --name "$id-pg$s" --network "$net" -e POSTGRES_USER=t -e POSTGRES_PASSWORD=t -e POSTGRES_DB=t \
         -p 127.0.0.1::5432 postgres:16-alpine >/dev/null
-    docker run -d --name "$id-eng$s" --network "$net" -p 127.0.0.1::8000 tabularia-fakeengine:diff >/dev/null
+    docker run -d --name "$id-eng$s" --network "$net" -p 127.0.0.1::8000 "$fake_engine" >/dev/null
 done
 for s in a b; do
     until docker exec "$id-pg$s" pg_isready -U t -d t >/dev/null 2>&1; do sleep 0.5; done
@@ -49,7 +55,7 @@ for s in a b; do
 done
 docker run -d --name "$id-go" --network "$net" $common -e DB__HOST="$id-pgb" -e ENGINE__BASE_URL="http://$id-engb:8000" \
     -p 127.0.0.1::8000 -e GATEWAY_GO__UPSTREAM="http://$id-pyb:8000" -e GATEWAY_GO__FORWARDED_ALLOW_IPS='*' \
-    tabularia-gateway-go:diff >/dev/null
+    "$go_gateway" >/dev/null
 
 port() { docker port "$1" "$2/tcp" | head -1 | sed 's/.*://'; }
 for c in "$id-pya" "$id-pyb" "$id-go"; do
