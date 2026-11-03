@@ -17,7 +17,9 @@ import (
 	"github.com/JumpAsAService/Tabularia/gateway-go/internal/clientip"
 	"github.com/JumpAsAService/Tabularia/gateway-go/internal/config"
 	"github.com/JumpAsAService/Tabularia/gateway-go/internal/db"
+	"github.com/JumpAsAService/Tabularia/gateway-go/internal/engine"
 	"github.com/JumpAsAService/Tabularia/gateway-go/internal/proxy"
+	"github.com/JumpAsAService/Tabularia/gateway-go/internal/secret"
 	"github.com/JumpAsAService/Tabularia/gateway-go/internal/server"
 	"github.com/JumpAsAService/Tabularia/gateway-go/internal/settings"
 )
@@ -55,8 +57,16 @@ func run(log *slog.Logger) error {
 		DB: pool, Secret: cfg.JWTSecret, Algorithm: cfg.JWTAlgorithm, CookieDomain: cfg.CookieDomain,
 		Settings: panel, ClientIP: clientip.New(cfg.ForwardedAllowIPs), Log: log,
 	}
+	engineClient, err := engine.New(cfg.EngineBaseURL, cfg.FernetKey)
+	if err != nil {
+		return err
+	}
+	fernet, err := secret.NewFernet(cfg.FernetKey)
+	if err != nil {
+		return err
+	}
 	routes := append([]server.Route{{Method: http.MethodGet, Pattern: "/health", Handler: server.Health()}},
-		api.Routes(&api.Deps{DB: pool, Auth: authn, Panel: panel, Config: cfg, Log: log})...)
+		api.Routes(&api.Deps{DB: pool, Auth: authn, Panel: panel, Config: cfg, Log: log, Engine: engineClient, Fernet: fernet})...)
 	srv := &http.Server{
 		Addr:              cfg.Listen,
 		Handler:           server.New(routes, proxy.New(cfg.Upstream, log)),

@@ -4,9 +4,12 @@
 package config
 
 import (
+	"crypto/rand"
+	"encoding/base64"
 	"fmt"
 	"net/url"
 	"os"
+	"path/filepath"
 	"strconv"
 	"strings"
 )
@@ -38,6 +41,15 @@ type Config struct {
 
 	// ENGINE__SETTINGS_PANEL: false = the panel's values are ignored, the environment only
 	SettingsPanel bool
+
+	// ENGINE__BASE_URL, ENGINE__BUCKET: the engine, and its storage's bucket (only a string
+	// in the payloads: the gateway never touches the storage)
+	EngineBaseURL string
+	EngineBucket  string
+
+	// SECURITY__FERNET_KEY, or the one created in SECURITY__KEYS_DIR (fernet.key)
+	FernetKey string
+	KeysDir   string
 }
 
 // Env reads a variable without regard to case, as pydantic-settings does.
@@ -70,6 +82,22 @@ func Load(env Env) (*Config, error) {
 		APITokenMaxDays:    r.integer("AUTH__API_TOKEN_MAX_DAYS", 365, 1, 3650),
 		CookieDomain:       r.str("AUTH__COOKIE_DOMAIN", ""),
 		SettingsPanel:      r.boolean("ENGINE__SETTINGS_PANEL", true),
+		EngineBaseURL:      r.str("ENGINE__BASE_URL", "http://localhost:8000"),
+		EngineBucket:       r.str("ENGINE__BUCKET", "data-prep"),
+		FernetKey:          r.str("SECURITY__FERNET_KEY", ""),
+		KeysDir:            r.str("SECURITY__KEYS_DIR", ""),
+	}
+	if c.FernetKey == "" && c.KeysDir != "" {
+		// Settings._key_from_keys_dir: the key a first service created in the shared directory
+		key, err := readOrCreate(c.KeysDir, "fernet.key", newFernetKey)
+		if err != nil {
+			r.fail("SECURITY__KEYS_DIR", err.Error())
+		}
+		c.FernetKey = key
+	}
+	if c.FernetKey == "" {
+		// check_required_secrets: the gateway does not start without it
+		r.fail("SECURITY__FERNET_KEY", "is not set: generate one with: openssl rand -base64 32 | tr '+/' '-_'")
 	}
 	upstream := r.str("GATEWAY_GO__UPSTREAM", "")
 	if upstream == "" {
@@ -160,4 +188,41 @@ func splitList(s string) []string {
 		}
 	}
 	return out
+}
+
+// readOrCreate is core/keys.py read_or_create: the secret in its file, created once by
+// whichever service gets there first (published with a hard link, which fails if another
+// process published first: its value wins).
+func readOrCreate(dir, name string, make func() (string, error)) (string, error) {
+	path := filepath.Join(dir, name)
+	if b, err := os.ReadFile(path); err == nil && strings.TrimSpace(string(b)) != "" {
+		return strings.TrimSpace(string(b)), nil
+	}
+	if err := os.MkdirAll(dir, 0o755); err != nil {
+		return "", fmt.Errorf("cannot write %s (%v): SECURITY__KEYS_DIR must be writable by the services", path, err)
+	}
+	value, err := make()
+	if err != nil {
+		return "", err
+	}
+	tmp := filepath.Join(dir, fmt.Sprintf(".%s.%d.tmp", name, os.Getpid()))
+	if err := os.WriteFile(tmp, []byte(value+"\n"), 0o600); err != nil {
+		return "", fmt.Errorf("cannot write %s (%v): SECURITY__KEYS_DIR must be writable by the services", path, err)
+	}
+	_ = os.Link(tmp, path)
+	_ = os.Remove(tmp)
+	b, err := os.ReadFile(path)
+	if err != nil || strings.TrimSpace(string(b)) == "" {
+		return "", fmt.Errorf("%s is empty: remove it and start again", path)
+	}
+	return strings.TrimSpace(string(b)), nil
+}
+
+// newFernetKey is Fernet.generate_key(): 32 random bytes, URL-safe base64.
+func newFernetKey() (string, error) {
+	raw := make([]byte, 32)
+	if _, err := rand.Read(raw); err != nil {
+		return "", err
+	}
+	return base64.URLEncoding.EncodeToString(raw), nil
 }

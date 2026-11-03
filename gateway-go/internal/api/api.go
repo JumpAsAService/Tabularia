@@ -8,6 +8,8 @@ import (
 
 	"github.com/JumpAsAService/Tabularia/gateway-go/internal/auth"
 	"github.com/JumpAsAService/Tabularia/gateway-go/internal/config"
+	"github.com/JumpAsAService/Tabularia/gateway-go/internal/engine"
+	"github.com/JumpAsAService/Tabularia/gateway-go/internal/secret"
 	"github.com/JumpAsAService/Tabularia/gateway-go/internal/server"
 	"github.com/JumpAsAService/Tabularia/gateway-go/internal/settings"
 )
@@ -19,6 +21,8 @@ type Deps struct {
 	Panel  *settings.Panel
 	Config *config.Config
 	Log    *slog.Logger
+	Engine *engine.Client // core/engine_client.py
+	Fernet *secret.Fernet // core/crypto.py
 }
 
 // Each file of this package registers its routes in an init(), one module of the Python
