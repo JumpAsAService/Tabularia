@@ -28,6 +28,7 @@ type values struct {
 	sessionIdleMinutes int
 	personalTokens     bool
 	apiTokenMaxDays    int
+	admin              map[string]any // settings_admin.go
 }
 
 // item is an entry of overrides.ITEMS the Go gateway reads: its kind and the panel's range.
@@ -53,7 +54,8 @@ type Panel struct {
 
 // New starts from the environment.
 func New(cfg *config.Config, panelEnabled bool, log *slog.Logger) *Panel {
-	p := &Panel{env: values{cfg.SessionIdleMinutes, cfg.PersonalTokens, cfg.APITokenMaxDays}, enabled: panelEnabled, log: log}
+	p := &Panel{env: values{cfg.SessionIdleMinutes, cfg.PersonalTokens, cfg.APITokenMaxDays, nil}, enabled: panelEnabled, log: log}
+	p.env.admin = adminEnv(cfg)
 	v := p.env
 	p.current.Store(&v)
 	return p
@@ -71,7 +73,8 @@ func (p *Panel) Apply(rows map[string]string) {
 		for key, raw := range rows {
 			it, ok := items[key]
 			if !ok {
-				continue // a setting of the Python gateway's: not read here
+				p.applyAdmin(&v, key, raw)
+				continue // or a setting of the Python gateway's: not read here
 			}
 			x, ok := check(it, raw)
 			if !ok {

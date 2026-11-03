@@ -99,6 +99,8 @@ func write(b *strings.Builder, v any, o Options) error {
 		b.WriteString(strconv.FormatInt(x, 10))
 	case uint64:
 		b.WriteString(strconv.FormatUint(x, 10))
+	case BigInt:
+		b.WriteString(string(x))
 	case float32:
 		b.WriteString(FloatRepr(float64(x)))
 	case float64:
