@@ -72,7 +72,7 @@ one created at the sign-in page. To leave them out:
 
 ```bash
 # in infrastructure/.env (optional)
-SAMPLES_SCALE=small        # small | medium | robusta
+SAMPLES_SCALE=small        # small | medium | robust | massive
 #SAMPLES_ENGINE=           # engine of the flows; empty = the first one the policy allows
 #SAMPLES_RUN_FLOWS=true    # runs the flows once, so the tables they produce exist
 
@@ -86,7 +86,16 @@ Scales (approximate):
 |---|---:|---:|---:|---:|---|
 | `small`   | 3,000 | 30,000 | ~100 k | 60 k | a smoke test, seconds |
 | `medium`  | 30,000 | 1 M | ~3.5 M | 2 M | a few minutes |
-| `robusta` | 150,000 | 12 M | ~42 M | 60 M | ~10–20 GB, longer |
+| `robust`  | 150,000 | 12 M | ~42 M | 60 M | ~10–20 GB, longer |
+| `massive` | 500,000 | 12 M | ~42 M | **1 billion** | about 50 GB free, a couple of hours |
+
+`massive` puts the billion rows in the ClickHouse CRM log, where Tabularia reads large
+tables best; the order system stays at `robust`'s size. Measured on an 8-core machine:
+the generator writes about 260,000 CRM activities a second (about an hour for the
+billion, ~15 bytes each in ClickHouse, ~15 GB), and the «Sample» folder's import copies
+them into Tabularia at about a million rows a second (~15 minutes, ~12 GB of Parquet in
+the object storage); the seed waits up to eight hours for the imports and three for each
+flow's first run. `robusta`, the earlier name of `robust`, is still accepted.
 
 The data stays in the volumes `sampledb_pg` and `sampledb_ch`: at the next start the
 container finds them filled and does not generate them again. To change the scale,

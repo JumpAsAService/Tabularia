@@ -860,14 +860,14 @@ fulfilment anomalies) so pivots tell a story. Details in
 [`infrastructure/sampledb/README.md`](infrastructure/sampledb/README.md).
 
 It is on in the Compose stack of `infrastructure/`, at the `small` scale (`SAMPLES_SCALE`
-in `.env`: `small` | `medium` | `robusta`). To leave it out:
+in `.env`: `small` | `medium` | `robust` | `massive`, a billion CRM activities). To leave it out:
 
 ```bash
 docker compose up -d --scale sampledb-init=0 --scale sampledb-postgres=0 --scale sampledb-clickhouse=0
 ```
 
 The `sampledb-init` container waits for the gateway and the two sample databases,
-fills them if they are empty (seconds at `small`, longer at `robusta`), then logs in
+fills them if they are empty (seconds at `small`, a couple of hours at `massive`), then logs in
 as the administrator and creates, idempotently by name:
 
 | Where | What |

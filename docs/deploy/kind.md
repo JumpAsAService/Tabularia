@@ -670,9 +670,25 @@ account starts with their [personal folder](../governance/permissions.md#persona
 alone, where they can build but not create connections: to try the samples they need VIEW
 on `Sample`, and CONNECT too to import from its two connections.
 
-- **More data**: `SAMPLES_SCALE` in `infrastructure/kind/samples.yaml` is `small`;
-  `medium` (3.5 million order lines) takes a few minutes. Choose it before the first
-  `apply`: the Job generates the data only into empty databases.
+- **More data**: `SAMPLES_SCALE` in `infrastructure/kind/samples.yaml` is `small`.
+  Choose another before the first `apply`: the Job generates the data only into empty
+  databases.
+
+  | Scale | Orders and lines | CRM activities | Time | Free disk |
+  |---|---|---|---|---|
+  | `small` | 30,000 orders, ~100,000 lines | 60,000 | seconds | under 1 GB |
+  | `medium` | 1 million orders, ~3.5 million lines | 2 million | a few minutes | a few GB |
+  | `robust` | 12 million orders, ~42 million lines | 60 million | longer | ~20 GB |
+  | `massive` | as `robust` | **1 billion** | a couple of hours | ~50 GB |
+
+  `massive` is for trying Tabularia at the scale of a billion rows: they are in the
+  ClickHouse CRM log, where Tabularia reads large tables best. The generator writes them
+  in about an hour, ClickHouse keeps them in ~15 GB, and the «Sample» folder copies them
+  into Tabularia in about a quarter of an hour (~12 GB of Parquet in MinIO); the *CRM
+  Workload* flow then groups them by agent. The volumes' sizes in the manifests do not
+  limit anything on kind (its `local-path` storage does not enforce them): what counts is
+  the free disk of the computer, under Docker's data directory. Follow the Job with
+  `kubectl logs -f --namespace tabularia-deps job/sampledb-init`.
 - **Run it again** (a flow that failed, a folder deleted by mistake, or a new release
   of Tabularia that brings new samples): it duplicates nothing and only adds what is
   missing. `kubectl apply` alone does not start it again, since the Job of the first

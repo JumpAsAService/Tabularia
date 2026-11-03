@@ -3,6 +3,16 @@
 All notable changes to Tabularia. The version shown here is the one the gateway
 exposes at `/system/info` and in the app's settings menu.
 
+## Unreleased
+
+- **The sample data at the scale of a billion rows**: `SAMPLES_SCALE=massive` fills the
+  ClickHouse CRM log with a billion activities (the order system stays at `robust`'s
+  size), for trying Tabularia on a table that size — about an hour to generate, a quarter
+  of an hour to import into the «Sample» folder, ~50 GB of free disk. `robusta` is now
+  `robust`; the earlier name is still accepted. The kind guide lists the four scales, and
+  the kind Job that generates them may use 3 GiB: from `medium` up the generator peaks at
+  2.1 GB (measured), past the 2 GiB the Job had.
+
 ## 1.3.0 «Catone» — 2026-11-02
 
 Fourth release, and a new name: «Catone», after Marcus Porcius Cato, censor in 184 BC,

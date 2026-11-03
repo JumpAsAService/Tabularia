@@ -8,7 +8,7 @@
 
 Realistic sizes with Faker (names, companies, addresses); large fact tables
 with numpy (fast), loaded in blocks through COPY (Postgres) and insert_df
-(ClickHouse). The scale is set with SAMPLES_SCALE=small|medium|robusta.
+(ClickHouse). The scale is set with SAMPLES_SCALE=small|medium|robust|massive.
 
 The line margin is built like this (in Tabularia, joining the two sources):
     revenue  = quantita * prezzo_unitario * (1 - sconto_pct/100)
@@ -30,6 +30,8 @@ import numpy as np
 import pandas as pd
 import psycopg2
 from faker import Faker
+
+import scales
 
 # ── configuration ────────────────────────────────────────────────────────────
 PG = dict(
@@ -69,15 +71,11 @@ MONTH_MULT = np.array([0.0, 0.90, 0.82, 1.05, 1.15, 1.00, 0.95, 0.90, 0.62, 1.05
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 
-# scale presets: (area managers, inspectors, agents, customers, orders, CRM activities)
-PRESETS = {
-    "small":   dict(managers=3, inspectors=12, agents=90,   customers=3_000,   orders=30_000,     activities=60_000),
-    "medium":  dict(managers=5, inspectors=30, agents=300,  customers=30_000,  orders=1_000_000,  activities=2_000_000),
-    "robusta": dict(managers=8, inspectors=56, agents=700,  customers=150_000, orders=12_000_000, activities=60_000_000),
-}
-if SCALE not in PRESETS:
-    sys.exit(f"SAMPLES_SCALE is not valid: {SCALE!r} (use small|medium|robusta)")
-P = PRESETS[SCALE]
+try:
+    SCALE = scales.resolve(SCALE)
+except ValueError as e:
+    sys.exit(str(e))
+P = scales.PRESETS[SCALE]
 
 rng = np.random.default_rng(SEED)
 fake = Faker("it_IT")

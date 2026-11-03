@@ -36,6 +36,8 @@ import time
 import urllib.error
 import urllib.request
 
+import scales
+
 GATEWAY = os.getenv("GATEWAY_URL", "http://gateway:8000").rstrip("/")
 ADMIN_EMAIL = os.getenv("AUTH__ADMIN_EMAIL", "")
 ADMIN_PASSWORD = os.getenv("AUTH__ADMIN_PASSWORD", "")
@@ -43,7 +45,12 @@ ADMIN_PASSWORD = os.getenv("AUTH__ADMIN_PASSWORD", "")
 # token the gateway leaves in the shared keys directory, exchanged for a session as the
 # administrator once someone has created it at the sign-in page (POST /auth/bootstrap)
 BOOTSTRAP_TOKEN_FILE = os.getenv("SAMPLES_BOOTSTRAP_TOKEN_FILE", "/var/lib/tabularia/keys/bootstrap.token")
-SCALE = (os.getenv("SAMPLES_SCALE") or "small").lower()
+try:
+    SCALE = scales.resolve(os.getenv("SAMPLES_SCALE"))
+except ValueError as e:
+    sys.exit(str(e))
+WAIT_IMPORT = scales.WAIT_IMPORT.get(SCALE, 60)
+WAIT_RUN = scales.WAIT_RUN.get(SCALE, 40)
 WANTED_ENGINE = (os.getenv("SAMPLES_ENGINE") or "").strip().lower()
 RUN_FLOWS = (os.getenv("SAMPLES_RUN_FLOWS") or "true").lower() in ("1", "true", "yes", "si", "sì")
 
@@ -148,7 +155,7 @@ def prepare_databases() -> None:
             cur.execute("SELECT count(*) FROM vendite.ordini")
             rows = cur.fetchone()[0]
     if rows == 0:
-        log(f"empty databases: generating the data at scale «{SCALE}» (small takes seconds, robusta minutes)")
+        log(f"empty databases: generating the data at scale «{SCALE}» (small takes seconds, robust minutes, massive about an hour)")
         pg.close()
         os.environ["SAMPLES_SCALE"] = SCALE
         import generate  # noqa: WPS433 — same container, same code
@@ -642,7 +649,7 @@ def run_once(created_flows: list[dict], outputs_in: int) -> list[str]:
             failed.append(f["name"])
             continue
         run_id = r.get("run_id")
-        deadline = time.time() + 40 * 60
+        deadline = time.time() + WAIT_RUN * 60
         status = "?"
         while time.time() < deadline:
             s2, run = gw.call("GET", f"/runs/{run_id}")
@@ -1047,7 +1054,7 @@ def main() -> None:
     for name, conn, table, descr in PUBLIC:
         ids.append(datasource(public, name, conn_pg, table, descr))
     log("waiting for the tables to finish importing…")
-    by_id = wait_for_ingest(ids)
+    by_id = wait_for_ingest(ids, WAIT_IMPORT)
     by_name = {d["name"]: d for d in by_id.values() if d["project_id"] in (private, public)}
     describe(by_name)
 

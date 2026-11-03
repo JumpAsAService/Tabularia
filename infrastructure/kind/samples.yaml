@@ -99,7 +99,8 @@ spec:
         - podSelector: { matchLabels: { app: sampledb-init } }
 ---
 # Runs once: fills the databases when they are empty (SAMPLES_SCALE: small, medium,
-# robusta), then builds the «Sample» folder. Running it again duplicates nothing.
+# robust, massive — see docs/deploy/kind.md, «More data»), then builds the «Sample»
+# folder. Running it again duplicates nothing.
 apiVersion: batch/v1
 kind: Job
 metadata: { name: sampledb-init, namespace: tabularia-deps }
@@ -143,4 +144,6 @@ spec:
             - { name: PG_PORT, value: "5432" }
             - { name: CH_HOST, value: sampledb-clickhouse.tabularia-deps.svc.cluster.local }
             - { name: CH_PORT, value: "8123" }
-          resources: { requests: { cpu: 200m, memory: 512Mi }, limits: { memory: 2Gi } }
+          # the generator writes the orders a million at a time: ~2.1 GB at the peak
+          # (measured), from medium up
+          resources: { requests: { cpu: 200m, memory: 512Mi }, limits: { memory: 3Gi } }
