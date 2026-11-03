@@ -64,6 +64,52 @@ func seedData(w *World) {
 	ds("child", "data-ds-child", "child", "flow")
 	ds("hidden", "data-ds-hidden", "hidden", "flow")
 	ds("run", "data-ds-run", "run", "flow")
+	// the odd JSON a datasource row may hold, and what the listings compute from it
+	odd := func(key, name, columns, sortKeys, descriptions, description string) {
+		Data["ds:"+key] = w.Insert(`INSERT INTO datasources (name, description, project_id, owner_id, bucket, key, rows, columns,
+			sort_keys, column_descriptions, kind, connection_id, source_type, source_ref, refresh_schedule, refreshed_at,
+			next_refresh_at, created_at, updated_at) VALUES ($1, $2, $3, NULL, 'b', $4, NULL, $5, $6, $7, 'database', NULL, 'table',
+			'public.x', '0 3 * * *', '2026-02-01 10:00:00', '2026-02-02 03:00:00.5', '2026-01-04', '2026-01-04 08:00:00')
+			RETURNING id`, name, description, Data["child"], "datasets/"+key+".parquet", columns, sortKeys, descriptions)
+	}
+	odd("ready", "data-ds-ready", `[{"name": "a", "dtype": "Int64"}, {"name": "b", "dtype": "Utf8", "description": "own"}]`,
+		`["a", "b"]`, `{"a": "the a"}`, "a ready one")
+	odd("half", "data-ds-half", `[{"name": "a"}, {"name": "b", "description": "  "}, {"name": ""}, {"x": 1}, {"name": 5, "n": 1.0}]`,
+		`{"a": 1}`, `{"a": 1, "b": [1, "x", null, true, 2.5], "c": null, "d": {"k": "v"}, "5": "five"}`, "  ")
+	odd("broken", "data-ds-broken", `not json`, `nope`, `[1]`, "described")
+	odd("nulls", "data-ds-nulls", ``, ``, ``, "")
+	contract := func(ds string, enabled, blocked bool, status string) {
+		var blockedAt *string
+		if blocked {
+			blockedAt = ptr("2026-02-03 00:00:00")
+		}
+		w.Exec(`INSERT INTO data_contracts (datasource_id, version, document, enabled, status, checked_at, errors, warnings,
+			last_report, blocked_at, blocked_run_id, notify_emails, notify_connection_id, created_by, updated_by, created_at, updated_at)
+			VALUES ($1, 3, '{"description": "", "rules": [{"id": "r1", "kind": "not_null", "severity": "error", "column": "a"}]}', $2, $3,
+			'2026-02-03 01:02:03.000004', 1, 2, '{"outcome": "warning", "rules": []}', $4, NULL, 'x@y.test', NULL, $5, $5, '2026-02-01', '2026-02-03')`,
+			Data["ds:"+ds], enabled, status, blockedAt, w.People["admin"])
+	}
+	contract("root", true, false, "warning")
+	contract("ready", true, true, "passed")
+	contract("half", false, false, "failed")
+	w.Exec(`INSERT INTO runs (kind, task_id, status, launched_by, trigger_type, input_key, output_bucket, output_key, datasource_id,
+		publish_description, publish_overwrite, publish_sort_keys, started_at) VALUES ('ingest', 'data-t1', 'STARTED', $1, 'manual', '',
+		'data-prep', 'datasets/x.parquet', $2, '', false, '[]', '2026-02-04')`, w.People["admin"], Data["ds:ready"])
+	w.Exec(`INSERT INTO runs (kind, task_id, status, launched_by, trigger_type, input_key, output_bucket, output_key, datasource_id,
+		publish_description, publish_overwrite, publish_sort_keys, started_at) VALUES ('ingest', 'data-t2', 'SUCCESS', $1, 'manual', '',
+		'data-prep', 'datasets/y.parquet', $2, '', false, '[]', '2026-02-04')`, w.People["admin"], Data["ds:half"])
+
+	conn := func(key, name, project, dbType, host, database, password, extra string, port *int) {
+		Data["conn:"+key] = w.Insert(`INSERT INTO connections (name, description, project_id, owner_id, db_type, host, port, username,
+			password_encrypted, database, db_schema, extra, private_key_encrypted, host_key_type, host_key_fingerprint, created_at, updated_at)
+			VALUES ($1, '', $2, $3, $4, $5, $6, 'u', $7, $8, '', $9, '', '', '', '2026-01-06', '2026-01-06 12:00:00.000001') RETURNING id`,
+			name, Data[project], w.People["admin"], dbType, host, port, password, database, extra)
+	}
+	conn("pg", "data-conn-pg", "connect", "postgresql", "db.example.test", "sales", "not-a-real-token", "{}", ptr(5432))
+	conn("smtp", "data-conn-smtp", "connect", "smtp", "mail.example.test", "", "", `{"sender": "a@b.test"}`, nil)
+	conn("root", "data-conn-root", "root", "clickhouse", "ch.example.test", "warehouse", "", "{}", nil)
+	conn("hidden", "data-conn-hidden", "hidden", "mysql", "my.example.test", "x", "t", "{}", ptr(3306))
+
 	view := func(key, name, project, datasource, spec string) {
 		Data["view:"+key] = w.Insert(`INSERT INTO saved_views (name, description, project_id, owner_id, datasource_id, spec,
 			created_at, updated_at) VALUES ($1, '', $2, $3, $4, $5, '2026-01-05', '2026-01-05 10:00:00.123456') RETURNING id`,
