@@ -12,7 +12,7 @@
 // (/dashboard?id=N) opens instead.
 import { computed, nextTick, onBeforeUnmount, onMounted, provide, ref, shallowRef, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
-import { onBeforeRouteLeave } from 'vue-router'
+import { onBeforeRouteLeave, onBeforeRouteUpdate } from 'vue-router'
 import { ArrowLeft, Check, CircleAlert, LayoutDashboard, LoaderCircle, MonitorSmartphone, Redo2, RefreshCw, Save, Undo2 } from 'lucide-vue-next'
 import BrandMark from '~/components/ui/BrandMark.vue'
 import DdBoardProps from '~/components/dashboard/designer/DdBoardProps.vue'
@@ -43,6 +43,10 @@ import { useChartTheme } from '~/composables/useChartTheme'
 import { formOfQuery, useDashboards, type DashboardDefinition } from '~/composables/useDashboards'
 import { useFolderPaths } from '~/composables/useFolderPaths'
 import { paramsOfForm, withChoices, type ReportFormValue, type ReportParameter } from '~/composables/useReports'
+
+// one designer per one: Vue would reuse the page when only `?id=` changes, and the old one
+// stayed on screen under the new address
+definePageMeta({ key: (route) => `${route.path}?id=${route.query.id ?? ''}` })
 
 const { t } = useI18n()
 const route = useRoute()
@@ -574,6 +578,10 @@ function onBeforeUnload(e: BeforeUnloadEvent) {
 }
 const signedIn = useSessionPresent()
 onBeforeRouteLeave(() => !dirty.value || confirm(t(signedIn.value ? 'dashboardDesigner.leaveConfirm' : 'dashboardDesigner.sessionGone')))
+// another one opened from here (the search, a link) gets its own designer (definePageMeta
+// above): the same question as leaving
+onBeforeRouteUpdate((to, from) => String(to.query.id ?? '') === String(from.query.id ?? '') || !dirty.value
+  || confirm(t(signedIn.value ? 'dashboardDesigner.leaveConfirm' : 'dashboardDesigner.sessionGone')))
 
 onMounted(() => {
   document.addEventListener('keydown', onKey)

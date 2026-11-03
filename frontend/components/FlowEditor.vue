@@ -29,7 +29,8 @@ import type { PreviewResult, ColumnInfo, Operation, IngestResult } from '~/compo
 import { SOURCE_ID, buildIncoming, resolveChain, leafNodeId, defaultParams } from '~/composables/useFlowModel'
 import { computeAutoLayout } from '~/composables/useFlowLayout'
 import { createFlowHistory } from '~/composables/useFlowHistory'
-import { onBeforeRouteLeave } from 'vue-router'
+import { onBeforeRouteLeave, onBeforeRouteUpdate } from 'vue-router'
+import { opensAnotherFlow } from '~/composables/editorAddress'
 import Modal from '~/components/ui/Modal.vue'
 import SheetPickerDialog from '~/components/ui/SheetPickerDialog.vue'
 import { buildClip, instantiateClip, readClip, writeClip, type ClipNode, type FlowClip } from '~/composables/useFlowClipboard'
@@ -698,6 +699,12 @@ async function saveAndLeave() {
 // session lost for another reason (expired, revoked) still asks.
 const wantedLeave = useLeaving()
 onBeforeRouteLeave(() => (leaveConfirmed || wantedLeave.value ? true : askToLeave()))
+// another flow opened from here replaces this editor (pages/editor.vue): the same question
+onBeforeRouteUpdate((to, from) =>
+  !opensAnotherFlow(to.query, from.query, flowId.value) || leaveConfirmed || wantedLeave.value ? true : askToLeave())
+// which flow is open, for pages/editor.vue to tell a first save from another flow
+const shownFlow = useState<number | null>('editor.shownFlow', () => null)
+watch(flowId, (id) => { shownFlow.value = id }, { immediate: true })
 // signing out of the account goes through here BEFORE removing the session: a «stay»
 // after the logout would leave the editor open without a session
 async function leave() {
@@ -821,7 +828,10 @@ onMounted(async () => {
     selectedId.value = null
   }
   if (flowId.value === null) {
-    // new flow: it starts from the initial canvas, which is also the «saved» reference
+    // new flow: it starts from the initial canvas, which is also the «saved» reference,
+    // and so is its starting name (before: '' against «Untitled flow», and leaving an
+    // untouched new flow asked about «unsaved changes»)
+    savedName.value = flowName.value.trim()
     adoptReference = true
     fitView_ = true
     history.reset()

@@ -21,6 +21,11 @@ exposes at `/system/info` and in the app's settings menu.
   a group, a report, a dashboard, a script… and makes it in one's own folder, as the menu
   says. Before, it offered only «New folder», to the administrators only: a first flow
   seemed impossible to make until one opened a folder.
+- **The page shows what its address names.** Another flow opened from inside the editor
+  (from the search, a link) stayed the old one on screen under the new address; so did
+  another report or dashboard in their designers. Each now opens in its own, after the
+  usual question when there are unsaved changes. And leaving a new flow nobody touched no
+  longer asks about «unsaved changes».
 
 ## 1.3.0 «Catone» — 2026-11-02
 

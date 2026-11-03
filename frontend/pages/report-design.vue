@@ -11,7 +11,7 @@
 // (/report?id=N) opens instead.
 import { computed, onBeforeUnmount, onMounted, provide, ref, shallowRef, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
-import { onBeforeRouteLeave } from 'vue-router'
+import { onBeforeRouteLeave, onBeforeRouteUpdate } from 'vue-router'
 import {
   ArrowLeft, Check, CircleAlert, FileText, LoaderCircle, Magnet, Maximize2, PencilRuler, Eye, Redo2, Save, Undo2, ZoomIn, ZoomOut,
 } from 'lucide-vue-next'
@@ -36,6 +36,10 @@ import { useFolderPaths } from '~/composables/useFolderPaths'
 import {
   boxOf, chosenParams, contentWidth, dropParamFilters, forCheck, forSave, mm1, normalize, problemsOf, stillReported, usesOfParam, type BandName, type DDataset, type DItem, type DesignProblem,
 } from '~/composables/reportDesignModel'
+
+// one designer per one: Vue would reuse the page when only `?id=` changes, and the old one
+// stayed on screen under the new address
+definePageMeta({ key: (route) => `${route.path}?id=${route.query.id ?? ''}` })
 
 const { t } = useI18n()
 const route = useRoute()
@@ -453,6 +457,10 @@ function onBeforeUnload(e: BeforeUnloadEvent) {
 // another tab and save, and is told so
 const signedIn = useSessionPresent()
 onBeforeRouteLeave(() => !dirty.value || confirm(t(signedIn.value ? 'reportDesigner.leaveConfirm' : 'reportDesigner.sessionGone')))
+// another one opened from here (the search, a link) gets its own designer (definePageMeta
+// above): the same question as leaving
+onBeforeRouteUpdate((to, from) => String(to.query.id ?? '') === String(from.query.id ?? '') || !dirty.value
+  || confirm(t(signedIn.value ? 'reportDesigner.leaveConfirm' : 'reportDesigner.sessionGone')))
 
 onMounted(() => {
   document.addEventListener('keydown', onKey)
