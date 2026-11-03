@@ -56,6 +56,11 @@ exposes at `/system/info` and in the app's settings menu.
   on Kubernetes the orchestrator no longer waits five seconds before stopping (no Service sends
   it requests).
 
+- **Every run reads every record, from the editor too.** A run started from the editor kept its
+  previews' development sample and published a datasource of the sample's rows, while its dialog
+  said «the entire dataset»: the sample is now the previews' only (and a Script or Container
+  node's trial's, which publishes nothing).
+
 ## 1.3.0 «Catone» — 2026-11-02
 
 Fourth release, and a new name: «Catone», after Marcus Porcius Cato, censor in 184 BC,

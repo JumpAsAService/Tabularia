@@ -3,8 +3,13 @@
 `data.sample` on a source node becomes an operation (limit/sample marked
 `_dev_sample`) ONLY in engine_mode="development". In production (the resolver's
 default, scheduler, run-now ?mode=production) it is never injected, and
-`strip_dev_sample_ops` removes it everywhere anyway, nested too.
+`strip_dev_sample_ops` removes it everywhere anyway, nested too. A run, from the editor too,
+never keeps it: only a Script or Container node's trial does.
 """
+import json
+
+import pytest
+
 from app.services.flow_resolver import (
     DEV_SAMPLE_MARK,
     build_output_run_requests,
@@ -205,3 +210,27 @@ def test_preview_settings_reject_negative():
 
     with pytest.raises(Exception):
         config_mod.Settings(preview={"default_sample_rows": -1})
+
+
+# ── a run reads every record, from the editor too ────────────────────────────
+@pytest.mark.anyio
+async def test_every_run_reads_every_record_only_a_trial_keeps_the_sample(session, fake_engine):
+    """A run from the editor kept its previews' sample and published a datasource of the sample's
+    rows, while its dialog said «the entire dataset» (bug hunt 2026-11-03): the sample is the
+    previews' only. A Script or Container node's trial from its panel stays on it: it publishes
+    nothing (docs/specs/script-node.md)."""
+    from app.routes.runs import _launch_flow_run
+    from app.schemas.models import RunCreate
+    from tests.conftest import make_flow, make_project, make_user
+
+    boss = make_user(session, email="capo@x.it", is_superuser=True)
+    flow = make_flow(session, name="f", project_id=make_project(session, name="p").id)
+    sample = {"type": "limit", "params": {"n": 100, "_dev_sample": True}}
+    nested = {"type": "join", "params": {"how": "inner", "on": ["id"], "right": {
+        "bucket": BUCKET, "input_key": "datasets/r.parquet", "operations": [sample]}}}
+    for mode, trigger, kept in (("development", "manual", False), ("production", "schedule", False),
+                                ("development", "trial", True)):
+        body = RunCreate(bucket=BUCKET, input_key="datasets/x.parquet", operations=[sample, nested])
+        await _launch_flow_run(session, boss, flow, body, trigger_type=trigger, engine_mode=mode)
+        sent = json.dumps(fake_engine.transforms[-1]["operations"])
+        assert ('"_dev_sample": true' in sent) is kept, (mode, trigger, sent)

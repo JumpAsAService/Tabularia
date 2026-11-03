@@ -238,7 +238,7 @@ The MCP server at `/mcp` (on the gateway, under `APP__ROOT_PATH` when set): agen
 
 | Variable | Type | Default | Helm value | Description |
 |---|---|---|---|---|
-| `PREVIEW__DEFAULT_SAMPLE_ROWS` | integer, ≥ 0 | `0` | `app.previewDefaultSampleRows` | Above 0, every source node without a sample of its own is read only for its first N rows in editor previews and trial runs. People switch it off per node; scheduled runs and «Run in production» always read everything. Useful when every read costs (remote storage, a pay-per-use warehouse). 0 = no automatic sample. Also adjustable in Administration → Settings. |
+| `PREVIEW__DEFAULT_SAMPLE_ROWS` | integer, ≥ 0 | `0` | `app.previewDefaultSampleRows` | Above 0, every source node without a sample of its own is read only for its first N rows in editor previews and in the trials of Script and Container nodes. People switch it off per node; every run, from the editor too, reads everything. Useful when every read costs (remote storage, a pay-per-use warehouse). 0 = no automatic sample. Also adjustable in Administration → Settings. |
 
 ### Orchestration and scheduling
 
