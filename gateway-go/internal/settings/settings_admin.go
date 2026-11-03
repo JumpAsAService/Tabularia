@@ -25,6 +25,8 @@ type adminItem struct {
 
 var adminItems = map[string]adminItem{
 	"app.timezone": {kind: "timezone", maxLen: 200, env: func(c *config.Config) any { return c.Admin.Timezone }},
+	"webhooks.timeout_seconds": {kind: "float", min: 1, max: 60, hasRange: true,
+		env: func(c *config.Config) any { return c.Admin.WebhooksTimeout }},
 }
 
 func adminEnv(cfg *config.Config) map[string]any {
@@ -110,4 +112,12 @@ func (p *Panel) Timezone() string {
 		return z
 	}
 	return "UTC"
+}
+
+// WebhooksTimeout is webhooks.timeout_seconds: how long a receiver is waited for.
+func (p *Panel) WebhooksTimeout() float64 {
+	if f, ok := p.current.Load().admin["webhooks.timeout_seconds"].(float64); ok && f > 0 {
+		return f
+	}
+	return 10
 }

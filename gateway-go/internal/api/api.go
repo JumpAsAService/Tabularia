@@ -2,6 +2,7 @@ package api
 
 import (
 	"log/slog"
+	"net/http"
 	"sort"
 
 	"github.com/jackc/pgx/v5/pgxpool"
@@ -23,6 +24,9 @@ type Deps struct {
 	Log    *slog.Logger
 	Engine *engine.Client // core/engine_client.py
 	Fernet *secret.Fernet // core/crypto.py
+	// Upstream is the Python gateway: a ported route hands it a request only Python can
+	// answer faithfully (a host that is not ASCII, for one)
+	Upstream http.Handler
 }
 
 // Each file of this package registers its routes in an init(), one module of the Python
