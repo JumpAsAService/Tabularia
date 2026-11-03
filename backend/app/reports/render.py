@@ -29,6 +29,10 @@ from app.reports.errors import OverCap, ReportError
 
 FORMATS = ("pdf", "svg", "xlsx", "html")
 EXTENSION = {"pdf": "pdf", "svg": "json", "xlsx": "xlsx", "html": "mhtml"}
+# the detail rows an Excel file of a report holds, all its sheets together: the pages stop a
+# PDF long before, an Excel file had no limit, and 2.1 million rows took a worker past 8 GiB
+# (bug hunt 2026-11-03). Under Excel's own 1,048,576 rows a sheet, too
+XLSX_MAX_ROWS = 1_000_000
 
 
 @dataclass
@@ -97,7 +101,8 @@ def render(definition: dict, datasets: dict[str, dict], params: dict[str, Any] |
     if problems:
         raise ReportError(f"the report does not fit its data: {problems[0]}")
     m = _model(report, data, values, ctx, state=state, title=title, max_pages=limits.max_pages,
-               interactive=fmt == "svg", layout=fmt in ("pdf", "svg"), comments=comments)
+               interactive=fmt == "svg", layout=fmt in ("pdf", "svg"), comments=comments,
+               max_rows_out=XLSX_MAX_ROWS if fmt == "xlsx" else None)
     out = workdir / f"report.{EXTENSION[fmt]}"
     if fmt == "xlsx":
         size = report.page.size if isinstance(report.page.size, str) else None

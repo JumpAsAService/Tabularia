@@ -180,7 +180,13 @@ def _read_one(name: str, spec: dict, max_rows: int) -> tuple[dict[str, str], Any
 
             engine = get_engine((spec.get("engine") or DEFAULT_ENGINE).lower())
             source = DataSource(bucket=spec["bucket"], key=spec["input_key"])
-            result = _preview(engine, source, spec.get("operations") or [], max_rows)
+            operations = spec.get("operations") or []
+            # a datasource read as it is: counting it costs a scan that stops at the cap, while
+            # reading cap+1 rows to find it too big cost 10-17 s and 1.5 GB at 3 million (bug hunt
+            # 2026-11-03). With steps the count would compute them twice: they are read at once
+            if not operations and engine.count_rows(source, [], max_rows) > max_rows:
+                return {}, [], True
+            result = _preview(engine, source, operations, max_rows)
             columns = {c.name: c.dtype for c in result.columns}
             if result.frame is not None:
                 return columns, result.frame, result.truncated

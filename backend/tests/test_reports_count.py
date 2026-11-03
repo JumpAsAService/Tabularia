@@ -316,3 +316,35 @@ def test_the_wait_of_a_hint_is_shorter_than_a_previews(monkeypatch):
         tasks.on_preview_worker("app.tasks.report_jobs.report_count_task", {}, None, seconds=0.1)
     assert e.value.status_code == 504 and revoked == [True]
     assert time.monotonic() - started < 2
+
+
+# ── a render's read: a datasource over the cap is counted, not read ──────────
+def test_a_datasource_over_the_cap_is_refused_without_reading_its_rows(storage, monkeypatch):
+    """Reading cap+1 rows to find a dataset too big cost 10-17 s and 1.5 GB at 3 million in a
+    dashboard (bug hunt 2026-11-03): a datasource read as it is gets counted first, the count
+    stopping at the cap. A chain with steps is read at once, as counting would compute it twice."""
+    from app.reports import data as rdata
+
+    engine = _engine("duckdb", storage)
+    src = upload_df(storage, pl.DataFrame({"a": list(range(10))}), "datasets/ten.parquet")
+    previews: list[list] = []
+    real = engine.preview
+
+    def spy(source, operations, **kw):
+        previews.append([o if isinstance(o, dict) else o.model_dump() for o in operations])
+        return real(source, operations, **kw)
+
+    monkeypatch.setattr(engine, "preview", spy)
+    monkeypatch.setattr("app.engine.get_engine", lambda name: engine)
+    spec = {"bucket": BUCKET, "input_key": src.key, "engine": "duckdb"}
+    with pytest.raises(rdata.OverCap, match="more than 9 rows"):
+        rdata.read_dataset("big", spec, 9, rdata.ZoneInfo("UTC"))
+    assert all(p and p[-1]["type"] == "sql" for p in previews)  # only the count ran
+    previews.clear()
+    assert len(rdata.read_dataset("ok", spec, 10, rdata.ZoneInfo("UTC")).rows) == 10
+    assert [p for p in previews if not p] == [[]]  # counted, then read
+    previews.clear()
+    steps = {**spec, "operations": [{"type": "filter", "params": {"column": "a", "operator": "ge", "value": 0}}]}
+    with pytest.raises(rdata.OverCap):
+        rdata.read_dataset("steps", steps, 9, rdata.ZoneInfo("UTC"))
+    assert len(previews) == 1 and previews[0][-1]["type"] == "filter"  # read once, never counted

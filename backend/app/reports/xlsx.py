@@ -201,8 +201,11 @@ def _escape_hf(text: str) -> str:
 
 
 def write(model: Model, path: str, loc: formats.Locale, paper: str | None = None) -> None:
+    # constant_memory: each row goes to disk once the next one starts (_table writes them in
+    # order), instead of the whole book staying in memory until it closes
     wb = xlsxwriter.Workbook(path, {"strings_to_formulas": False, "strings_to_urls": False,
-                                    "strings_to_numbers": False, "nan_inf_to_errors": True})
+                                    "strings_to_numbers": False, "nan_inf_to_errors": True,
+                                    "constant_memory": True})
     wb.set_properties({"title": model.title, "author": "Tabularia", "company": "Tabularia"})
     theme = model.doc["theme"]
     fmts = _Formats(wb, theme)

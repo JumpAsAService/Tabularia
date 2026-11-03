@@ -35,6 +35,17 @@ exposes at `/system/info` and in the app's settings menu.
   usual question when there are unsaved changes. And leaving a new flow nobody touched no
   longer asks about «unsaved changes».
 
+- **An Excel file of a report holds a million rows at most**, all its sheets together: over
+  that it is refused with a message, as a PDF is past its pages, before the rows are written.
+  2.1 million detail rows took a worker past its 8 GiB and the other work on it with it. The
+  book is now written in constant memory: a million rows peak at about 3 GB.
+- **A table comparing a row with the one above (`PREVIOUS`) offers no sort to its reader.**
+  Sorted by revenue, «vs month before» compared July with December; such a table now keeps the
+  designer's order, and a link asking for a sort leaves it as it is.
+- **A datasource over a report's or a dashboard's row limit is counted, not read.** Finding
+  it too big read the limit's 3 million rows first: 10-17 s and 1.5 GB of a preview worker,
+  at every change in the dashboard designer. A dataset with steps is still read at once.
+
 ## 1.3.0 «Catone» — 2026-11-02
 
 Fourth release, and a new name: «Catone», after Marcus Porcius Cato, censor in 184 BC,
