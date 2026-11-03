@@ -23,6 +23,8 @@ type rule struct {
 	Path   string          `json:"path"`
 	Status int             `json:"status"`
 	Body   json.RawMessage `json:"body"`
+	Text   string          `json:"text"` // a body that is not JSON, written as it is
+	Type   string          `json:"type"` // its content type (default application/json)
 	re     *regexp.Regexp
 }
 
@@ -85,7 +87,11 @@ func main() {
 			}
 		}
 		mu.Unlock()
-		w.Header().Set("Content-Type", "application/json")
+		if hit != nil && hit.Type != "" {
+			w.Header().Set("Content-Type", hit.Type)
+		} else {
+			w.Header().Set("Content-Type", "application/json")
+		}
 		if hit == nil {
 			w.Write([]byte("{}"))
 			return
@@ -95,7 +101,9 @@ func main() {
 			status = 200
 		}
 		w.WriteHeader(status)
-		if len(hit.Body) > 0 {
+		if hit.Text != "" {
+			w.Write([]byte(hit.Text))
+		} else if len(hit.Body) > 0 {
 			w.Write(hit.Body)
 		}
 	})
