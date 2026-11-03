@@ -52,6 +52,14 @@ func (c *Client) Request(ctx context.Context, method, path string, body io.Reade
 // Do sends a request built with Request.
 func (c *Client) Do(req *http.Request) (*http.Response, error) { return c.http.Do(req) }
 
+// raw neither asks for nor undoes a compression: what passes through the proxy routes
+// (routes/proxy.py) goes as httpx sends it and comes back as the engine wrote it.
+var raw = &http.Client{Transport: &http.Transport{Proxy: http.ProxyFromEnvironment, DisableCompression: true,
+	ForceAttemptHTTP2: false, MaxIdleConnsPerHost: 32}}
+
+// DoRaw sends a request built with Request, its body and the answer's passed as they are.
+func (c *Client) DoRaw(req *http.Request) (*http.Response, error) { return raw.Do(req) }
+
 // JSON sends `body` as JSON (nil: no body) and returns the answer, its body read.
 func (c *Client) JSON(ctx context.Context, method, path string, body any) (*http.Response, []byte, error) {
 	var r io.Reader

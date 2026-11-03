@@ -23,7 +23,11 @@ type rule struct {
 	Path   string          `json:"path"`
 	Status int             `json:"status"`
 	Body   json.RawMessage `json:"body"`
-	re     *regexp.Regexp
+	// Headers replace the answer's (a Content-Type, a Content-Disposition); Raw, when set, is
+	// the body as text instead of Body
+	Headers map[string]string `json:"headers"`
+	Raw     *string           `json:"raw"`
+	re      *regexp.Regexp
 }
 
 type recorded struct {
@@ -94,8 +98,13 @@ func main() {
 		if status == 0 {
 			status = 200
 		}
+		for k, v := range hit.Headers {
+			w.Header().Set(k, v)
+		}
 		w.WriteHeader(status)
-		if len(hit.Body) > 0 {
+		if hit.Raw != nil {
+			w.Write([]byte(*hit.Raw))
+		} else if len(hit.Body) > 0 {
 			w.Write(hit.Body)
 		}
 	})
