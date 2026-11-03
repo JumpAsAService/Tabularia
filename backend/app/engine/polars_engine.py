@@ -285,9 +285,11 @@ class PolarsEngine(DeferredStepCache, Engine):
                 elif fmt == "xlsx":
                     n = lf.select(pl.len()).collect(engine="streaming").item()
                     if n > self.XLSX_MAX_ROWS:
+                        # «more than»: a query on a connection arrives here read only up to just past the
+                        # limit, and its count named the cap as the table's size (bug hunt 2026-11-03)
                         raise EngineError(
-                            f"the result has {n:,} rows: over the limit of the Excel "
-                            f"format (~1,048,575). Download it as CSV, or reduce it (a filter, a limit)."
+                            f"the result has more than {self.XLSX_MAX_ROWS:,} rows: over the limit of the Excel "
+                            f"format. Download it as CSV, or reduce it (a filter, a limit)."
                         )
                     lf.collect(engine="streaming").write_excel(out_path)
                 else:

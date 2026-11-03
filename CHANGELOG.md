@@ -60,6 +60,7 @@ exposes at `/system/info` and in the app's settings menu.
   previews' development sample and published a datasource of the sample's rows, while its dialog
   said «the entire dataset»: the sample is now the previews' only (and a Script or Container
   node's trial's, which publishes nothing).
+
 - **DuckDB is the default engine.** A new flow, the assistant's query and a SQL script with no
   engine chosen run on DuckDB (or on the first engine the administrator allows), which spills
   to disk where Polars holds a group in memory: on 42 million rows a Polars aggregation took an
@@ -69,6 +70,13 @@ exposes at `/system/info` and in the app's settings menu.
   files through views, only the columns and row groups the query needs, and still nothing else
   (DuckDB's allowed paths, with every other access switched off and locked). A GROUP BY over
   20 million rows: 20 s → 6 s.
+
+- **Smaller things the bug hunt found.** A dataset over the row limit suggests aggregating it in
+  its query or in a flow (a datasource has no SQL to change); a step's error counts the chain's
+  steps from 1 («operation #2» was the third); an Excel export over the format's limit says
+  «more than 1,048,575 rows» instead of naming the limit as the table's size; on Kubernetes with
+  the panel's scaling off, Administration → Workers no longer suggests `docker compose --scale`;
+  the kind guide labels Tabularia's namespace for the `restricted` Pod Security it promised.
 
 ## 1.3.0 «Catone» — 2026-11-02
 

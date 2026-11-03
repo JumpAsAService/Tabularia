@@ -211,7 +211,7 @@ def read_dataset(name: str, spec: Any, max_rows: int, tz: ZoneInfo) -> DataSet:
 
 def over_cap(name: str, max_rows: int) -> OverCap:
     return OverCap(f"the dataset «{name}» has more than {max_rows:,} rows, the most a report reads: "
-                   "aggregate it in SQL, or filter it")
+                   "aggregate it — in its query or in a flow — or filter it")
 
 
 def dataset_from(name: str, columns: dict[str, str], rows: Any, tz: ZoneInfo) -> DataSet:

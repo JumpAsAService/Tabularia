@@ -182,3 +182,20 @@ def test_export_respects_the_limit(engine, sales):
         assert pl.read_csv(path).height == 3
     finally:
         os.unlink(path)
+
+
+def test_a_step_s_error_counts_the_steps_as_a_person_does():
+    """«operation #2» was the third step: the message counts from 1 (bug hunt 2026-11-03)."""
+    e = OperationError("filter", 2, "no column x")
+    assert e.index == 2 and str(e) == "Error in step 3 of the chain ('filter'): no column x"
+
+
+def test_an_excel_export_over_the_limit_says_more_than_the_limit(engine, monkeypatch, tmp_path):
+    """A query on a connection arrives read only up to just past the limit: «the result has
+    1,048,576 rows» named the cap as the size of a 60-million-row table (bug hunt 2026-11-03)."""
+    from tests.conftest import upload_df
+
+    src = upload_df(engine.storage, pl.DataFrame({"a": list(range(5))}), "datasets/five.parquet")
+    monkeypatch.setattr(type(engine), "XLSX_MAX_ROWS", 3)
+    with pytest.raises(EngineError, match=r"^the result has more than 3 rows: over the limit of the Excel format"):
+        engine.export(src, [], "xlsx", str(tmp_path / "x.xlsx"))
