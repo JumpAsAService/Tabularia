@@ -64,6 +64,11 @@ exposes at `/system/info` and in the app's settings menu.
   engine chosen run on DuckDB (or on the first engine the administrator allows), which spills
   to disk where Polars holds a group in memory: on 42 million rows a Polars aggregation took an
   8 GiB worker down. Existing flows keep their engine; a person's favourite engine still wins.
+- **The SQL step and the SQL scripts read their tables in place.** Their sandbox copied every
+  table into a database of its own, every column, before the query ran: now it reads the run's
+  files through views, only the columns and row groups the query needs, and still nothing else
+  (DuckDB's allowed paths, with every other access switched off and locked). A GROUP BY over
+  20 million rows: 20 s → 6 s.
 
 ## 1.3.0 «Catone» — 2026-11-02
 
