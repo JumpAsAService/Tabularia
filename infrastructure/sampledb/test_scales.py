@@ -49,13 +49,20 @@ class Scales(unittest.TestCase):
         self.assertLess(waits["small"], waits["robust"])
         self.assertLess(waits["robust"], waits["massive"])
 
-    def test_the_flows_of_the_large_scales_start_on_an_engine_that_spills(self):
-        self.assertEqual(scales.engines("small")[0], "polars")
-        self.assertEqual(scales.engines("medium")[0], "polars")
-        self.assertEqual(scales.engines("robust")[0], "duckdb")
-        self.assertEqual(scales.engines("massive")[0], "duckdb")
-        # the same engines, in another order: one the policy forbids is still skipped
-        self.assertEqual(sorted(scales.engines("small")), sorted(scales.engines("massive")))
+    def test_the_flows_start_on_an_engine_that_spills_then_the_others(self):
+        self.assertEqual(scales.ENGINES[0], "duckdb")
+        self.assertEqual(set(scales.ENGINES), {"duckdb", "polars", "chdb", "clickhouse", "bigquery"})
+
+    def test_the_seed_takes_the_first_engine_the_policy_allows(self):
+        seed = importlib.import_module("seed_tabularia")
+        policy = lambda *allowed: type("G", (), {"must": staticmethod(  # noqa: E731
+            lambda m, p, *a, **k: [{"engine_id": e, "allowed": e in allowed} for e in scales.ENGINES])})()
+        with mock.patch.object(seed, "WANTED_ENGINE", ""):
+            for allowed, chosen in ((("duckdb", "polars"), "duckdb"), (("polars",), "polars"), (("clickhouse",), "clickhouse")):
+                with mock.patch.object(seed, "gw", policy(*allowed)):
+                    self.assertEqual(seed.choose_engine(), chosen)
+        with mock.patch.object(seed, "WANTED_ENGINE", "polars"):
+            self.assertEqual(seed.choose_engine(), "polars")  # SAMPLES_ENGINE wins
 
     def test_the_seed_refuses_a_scale_that_does_not_exist(self):
         with mock.patch.dict(os.environ, {"SAMPLES_SCALE": "huge"}), self.assertRaises(SystemExit):

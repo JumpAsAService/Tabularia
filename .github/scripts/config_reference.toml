@@ -1331,7 +1331,7 @@ default = "`127.0.0.1`"
 text = "Size of the sample data: `small` (seconds, fits a laptop), `medium`, `robust` (42M order lines, minutes and a few GB), `massive` (a billion CRM activities in ClickHouse, a couple of hours and about 50 GB free). Generated once; `robusta`, `robust`'s earlier name, is still accepted."
 
 [var.SAMPLES_ENGINE]
-text = "Engine of the sample flows. Empty = the first one the policy allows, Polars first, DuckDB first at `robust` and `massive` (it spills to disk where Polars holds a group in memory)."
+text = "Engine of the sample flows. Empty = the first one the policy allows, DuckDB first (it spills to disk where Polars holds a group in memory), then Polars."
 
 [var.SAMPLES_RUN_FLOWS]
 text = "Run the sample flows once at initialisation, so their outputs and views exist."
