@@ -27,6 +27,7 @@ import (
 	"reflect"
 	"regexp"
 	"sort"
+	"strconv"
 	"strings"
 	"time"
 
@@ -468,6 +469,11 @@ func rowDiff(a, b []any) string {
 }
 
 func clip(b []byte) string {
+	if n, _ := strconv.Atoi(os.Getenv("DIFF_CLIP")); n > 0 && len(b) > n {
+		return string(b[:n]) + "…"
+	} else if n > 0 {
+		return string(b)
+	}
 	if len(b) > 900 {
 		return string(b[:900]) + "…"
 	}

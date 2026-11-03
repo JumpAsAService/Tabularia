@@ -11,6 +11,8 @@ import (
 	"context"
 	"encoding/json"
 	"log/slog"
+	"math"
+	"strconv"
 	"strings"
 	"sync/atomic"
 	"time"
@@ -31,6 +33,8 @@ type values struct {
 	uploadMaxBytes     int64 // upload.max_bytes
 	timezone           string
 	workerCapacity     int64
+	runStaleTimeout    int64
+	queueTimeout       float64
 }
 
 // item is an entry of overrides.ITEMS the Go gateway reads: its kind and the panel's range.
@@ -41,12 +45,14 @@ type item struct {
 }
 
 var items = map[string]item{
-	"auth.session_idle_minutes":  {kind: "int", min: 0, max: 24 * 60, set: func(v *values, x any) { v.sessionIdleMinutes = int(x.(int64)) }},
-	"auth.personal_tokens":       {kind: "bool", set: func(v *values, x any) { v.personalTokens = x.(bool) }},
-	"auth.api_token_max_days":    {kind: "int", min: 1, max: 3650, set: func(v *values, x any) { v.apiTokenMaxDays = int(x.(int64)) }},
-	"upload.max_bytes":           {kind: "int", min: 1 << 20, max: 1 << 40, set: func(v *values, x any) { v.uploadMaxBytes = x.(int64) }},
-	"app.timezone":               {kind: "timezone", set: func(v *values, x any) { v.timezone = x.(string) }},
-	"scheduling.worker_capacity": {kind: "int", min: 1, max: 256, set: func(v *values, x any) { v.workerCapacity = x.(int64) }},
+	"auth.session_idle_minutes":          {kind: "int", min: 0, max: 24 * 60, set: func(v *values, x any) { v.sessionIdleMinutes = int(x.(int64)) }},
+	"auth.personal_tokens":               {kind: "bool", set: func(v *values, x any) { v.personalTokens = x.(bool) }},
+	"auth.api_token_max_days":            {kind: "int", min: 1, max: 3650, set: func(v *values, x any) { v.apiTokenMaxDays = int(x.(int64)) }},
+	"upload.max_bytes":                   {kind: "int", min: 1 << 20, max: 1 << 40, set: func(v *values, x any) { v.uploadMaxBytes = x.(int64) }},
+	"app.timezone":                       {kind: "timezone", set: func(v *values, x any) { v.timezone = x.(string) }},
+	"scheduling.worker_capacity":         {kind: "int", min: 1, max: 256, set: func(v *values, x any) { v.workerCapacity = x.(int64) }},
+	"engine.run_stale_timeout_seconds":   {kind: "int", min: 900, max: 7 * 86400, set: func(v *values, x any) { v.runStaleTimeout = x.(int64) }},
+	"orchestrator.queue_timeout_seconds": {kind: "float", min: 60, max: 86400, set: func(v *values, x any) { v.queueTimeout = x.(float64) }},
 }
 
 // Panel holds the settings in force.
@@ -60,7 +66,7 @@ type Panel struct {
 // New starts from the environment.
 func New(cfg *config.Config, panelEnabled bool, log *slog.Logger) *Panel {
 	p := &Panel{env: values{cfg.SessionIdleMinutes, cfg.PersonalTokens, cfg.APITokenMaxDays, cfg.Flows.UploadMaxBytes,
-		cfg.Flows.Timezone, cfg.Flows.WorkerCapacity},
+		cfg.Flows.Timezone, cfg.Flows.WorkerCapacity, cfg.Flows.RunStaleTimeout, cfg.Flows.QueueTimeoutSeconds},
 		enabled: panelEnabled, log: log}
 	v := p.env
 	p.current.Store(&v)
@@ -70,6 +76,12 @@ func New(cfg *config.Config, panelEnabled bool, log *slog.Logger) *Panel {
 func (p *Panel) SessionIdleMinutes() int { return p.current.Load().sessionIdleMinutes }
 func (p *Panel) PersonalTokens() bool    { return p.current.Load().personalTokens }
 func (p *Panel) APITokenMaxDays() int    { return p.current.Load().apiTokenMaxDays }
+
+// RunStaleTimeout is engine.run_stale_timeout_seconds.
+func (p *Panel) RunStaleTimeout() int64 { return p.current.Load().runStaleTimeout }
+
+// QueueTimeout is orchestrator.queue_timeout_seconds.
+func (p *Panel) QueueTimeout() float64 { return p.current.Load().queueTimeout }
 
 // Timezone is app.timezone: the zone of the cron expressions.
 func (p *Panel) Timezone() string { return p.current.Load().timezone }
@@ -121,6 +133,16 @@ func check(it item, raw string) (any, bool) {
 			return nil, false
 		}
 		return t, true
+	case "float": // a JSON number (not a boolean), finite, within the range
+		n, ok := x.(json.Number)
+		if !ok {
+			return nil, false
+		}
+		f, err := strconv.ParseFloat(n.String(), 64)
+		if err != nil || math.IsInf(f, 0) || math.IsNaN(f) || f < float64(it.min) || f > float64(it.max) {
+			return nil, false
+		}
+		return f, true
 	case "int":
 		n, ok := x.(json.Number)
 		if !ok || strings.ContainsAny(n.String(), ".eE") {

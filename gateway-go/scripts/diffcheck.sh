@@ -63,7 +63,7 @@ for c in "$id-pya" "$id-pyb" "$id-go"; do
 done
 
 docker run --rm --network host --user "$(id -u):$(id -g)" -e HOME=/tmp -e GOCACHE=/tmp/gocache \
-    -e DIFF_SECRET="$secret" -e DIFF_ONLY="${DIFF_ONLY:-}" \
+    -e DIFF_SECRET="$secret" -e DIFF_ONLY="${DIFF_ONLY:-}" -e DIFF_CLIP="${DIFF_CLIP:-}" \
     -e DIFF_A_DSN="postgresql://t:t@127.0.0.1:$(port "$id-pga" 5432)/t" -e DIFF_B_DSN="postgresql://t:t@127.0.0.1:$(port "$id-pgb" 5432)/t" \
     -e DIFF_A_URL="http://127.0.0.1:$(port "$id-pya" 8000)" -e DIFF_B_URL="http://127.0.0.1:$(port "$id-go" 8000)" \
     -e DIFF_A_ENGINE="http://127.0.0.1:$(port "$id-enga" 8000)" -e DIFF_B_ENGINE="http://127.0.0.1:$(port "$id-engb" 8000)" \
