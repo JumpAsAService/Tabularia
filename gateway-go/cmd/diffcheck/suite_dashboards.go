@@ -12,6 +12,7 @@ var dash struct {
 	root, sales, edit, other, conns          int64
 	board, quarter, secret, broken, sent, bc int64
 	listy, ds, dsSecret, view, connPg        int64
+	live, cat                                int64
 }
 
 const dashContent = `{"v": 1, "locale": "it", "timezone": "Europe/Rome", "refresh_seconds": 300, ` +
@@ -104,6 +105,25 @@ func init() {
 				database, db_schema, extra, created_at, updated_at, private_key_encrypted, host_key_type, host_key_fingerprint)
 				VALUES ('dash pg', '', $1, 'postgresql', 'db.example', 5432, 'u', '', 'shop', '', '{}', '2026-01-01', '2026-01-01', '', '', '')
 				RETURNING id`, dash.conns)
+			dash.view = w.Insert(`INSERT INTO saved_views (name, description, project_id, datasource_id, spec, created_at, updated_at)
+				VALUES ('dash view', '', $1, $2, '{"engine": "chdb", "filters": [{"column": "n", "operator": "between", "value": "1", "value2": "2,5"}]}',
+				'2026-01-01', '2026-01-01') RETURNING id`, dash.sales, dash.ds)
+			dash.live = board("Live board", dash.edit, "admin", 1, 0, nil)
+			version(dash.live, 1, fmt.Sprintf(`{"v": 1, "locale": "fr", "refresh_seconds": 600, "parameters": [`+
+				`{"name": "region", "type": "text", "default": "Nord", "choices": {"dataset": "orders", "value": "[region]"}}, `+
+				`{"name": "since", "type": "date", "default": "{start_of_month}"}], `+
+				`"datasets": [{"name": "orders", "source": {"kind": "datasource", "datasource_id": %d, "filters": [{"column": "region", "op": "=", "value": "{region}"}]}}, `+
+				`{"name": "secret", "source": {"kind": "datasource", "datasource_id": %d}}, `+
+				`{"name": "v", "source": {"kind": "view", "view_id": %d}}, `+
+				`{"name": "pg", "source": {"kind": "sql", "sql": "SELECT * FROM t WHERE d >= {since}", "connection_id": %d}}], `+
+				`"tiles": [{"id": "k1", "type": "kpi", "grid": {"x": 0, "y": 0, "w": 3, "h": 2}, "dataset": "orders", "value": "SUM([n])", "title": "Total"}, `+
+				`{"id": "c1", "type": "chart", "grid": {"x": 3, "y": 0, "w": 6, "h": 4}, "dataset": "orders", "kind": "bar", "category": "[region]", "split_by": "[x]", "series": [{"value": "SUM([n])"}]}, `+
+				`{"id": "t1", "type": "table", "grid": {"x": 0, "y": 4, "w": 12, "h": 6}, "dataset": "v", "columns": [{"value": "[a]"}], "groups": [{"by": "[a]"}], "matrix": {"columns_by": "[m]", "value": "1"}}, `+
+				`{"id": "s1", "type": "kpi", "grid": {"x": 9, "y": 0, "w": 3, "h": 2}, "dataset": "secret", "value": "1", "label": "Secret"}, `+
+				`{"id": "img", "type": "image", "grid": {"x": 9, "y": 2, "w": 1, "h": 1}, "asset": "data:image/png;base64,iVBORw0KGgo="}, `+
+				`{"id": "tx", "type": "text", "grid": {"x": 10, "y": 2, "w": 2, "h": 1}, "value": "x"}]}`, dash.ds, dash.dsSecret, dash.view, dash.connPg), "created", "admin")
+			dash.cat = board("Catalog board", dash.edit, "admin", 1, 0, nil)
+			version(dash.cat, 1, `{"v": 1, "datasets": [{"name": "q", "source": {"kind": "sql", "sql": "SELECT 1 FROM dash_orders"}}]}`, "created", "admin")
 			w.Token("writer", "tab_dash_writer_rw_00000000", "write", time.Hour)
 			w.Token("writer", "tab_dash_writer_ro_00000000", "read", time.Hour)
 		},
@@ -226,7 +246,118 @@ func init() {
 			add("check without a folder", "POST", "/dashboards/check", w.As("editor"), map[string]any{"definition": map[string]any{}})
 			add("check where it reads", "POST", "/dashboards/check", w.As("editor"), map[string]any{"definition": map[string]any{}, "dashboard_id": dash.quarter})
 			add("versions after", "GET", b+"/versions", w.As("admin"), nil)
+			s = append(s, dashNumbers(w)...)
 			return s
 		},
 	})
 }
+
+var dashEngine = []EngineRule{
+	{Method: "GET", Path: "^/engines$", Body: []any{map[string]any{"id": "polars", "available": true}, map[string]any{"id": "duckdb", "available": true}}},
+	{Method: "POST", Path: "^/placeholders/preview$", Body: map[string]any{"fields": map[string]any{"p0": map[string]any{"value": "2026-11-01"}}}},
+	{Method: "POST", Path: "^/reports/choices$", Body: map[string]any{"choices": []any{map[string]any{"value": "Nord"}, map[string]any{"value": "Sud"}}}},
+	{Method: "POST", Path: "^/reports/tiles/refresh$", Body: map[string]any{"fresh": "f-1"}},
+	{Method: "POST", Path: "^/reports/tiles$", Body: map[string]any{"tiles": map[string]any{
+		"k1": map[string]any{"type": "kpi", "text": "12"}, "img": map[string]any{"type": "image"}, "tx": map[string]any{"type": "text", "hidden": true},
+		"s1": map[string]any{"error": "You cannot read", "code": "no_access"}}, "truncated": map[string]any{"orders": false}, "extra": 1}},
+	{Method: "POST", Path: "^/reports/dashboard-render$", Body: map[string]any{"task_id": "d-1"}},
+	{Method: "GET", Path: "^/tasks/exports/d-1$", Body: map[string]any{"status": "ready"}},
+	{Method: "GET", Path: "^/tasks/exports/d-1/file$", Body: map[string]any{"png": true}},
+}
+
+// dashNumbers are the steps of a dashboard's numbers, documents, form and fields.
+func dashNumbers(w *World) []Step {
+	var s []Step
+	id := func(n int64) string { return fmt.Sprint(n) }
+	add := func(name, method, path string, auth func(*http.Request), body any, engine ...EngineRule) {
+		rules := append(append([]EngineRule{}, engine...), dashEngine...)
+		s = append(s, Step{Name: name, Method: method, Path: path, Auth: auth, JSON: body, Engine: rules})
+	}
+	live := "/dashboards/" + id(dash.live)
+	add("editor reads the numbers", "POST", live+"/data", w.As("editor"), map[string]any{})
+	add("admin reads some tiles, a page, a click", "POST", live+"/data", w.As("admin"), map[string]any{"tiles": []any{"k1", "t1"},
+		"page": map[string]any{"t1": 2}, "clicks": []any{map[string]any{"tile": "c1", "values": []any{"Nord", []any{"Sud", 1}}},
+			map[string]any{"tile": "t1", "on": "columns", "values": []any{nil}}}, "params": map[string]any{"region": "Sud"}, "refresh": true})
+	add("a refresh the engine does not grant", "POST", live+"/data", w.As("editor"), map[string]any{"refresh": true},
+		EngineRule{Method: "POST", Path: "^/reports/tiles/refresh$", Status: 429, Body: map[string]any{}})
+	add("a tile it lacks", "POST", live+"/data", w.As("editor"), map[string]any{"tiles": []any{"zz"}})
+	add("a page below 0", "POST", live+"/data", w.As("editor"), map[string]any{"page": map[string]any{"t1": -1}})
+	add("a click on a KPI", "POST", live+"/data", w.As("editor"), map[string]any{"clicks": []any{map[string]any{"tile": "k1", "values": []any{1}}}})
+	add("a click with a key too many", "POST", live+"/data", w.As("editor"), map[string]any{"clicks": []any{map[string]any{"tile": "c1", "values": []any{1}, "x": 1}}})
+	add("two clicks on one tile", "POST", live+"/data", w.As("editor"), map[string]any{"clicks": []any{map[string]any{"tile": "c1", "values": []any{1}},
+		map[string]any{"tile": "c1", "on": "rows", "values": []any{2}}}})
+	add("a click too deep", "POST", live+"/data", w.As("editor"), map[string]any{"clicks": []any{map[string]any{"tile": "c1", "values": []any{[]any{1, 2, 3}}}}})
+	add("a click on columns of a chart", "POST", live+"/data", w.As("editor"), map[string]any{"clicks": []any{map[string]any{"tile": "c1", "on": "columns", "values": []any{1}}}})
+	add("a click without values", "POST", live+"/data", w.As("editor"), map[string]any{"clicks": []any{map[string]any{"tile": "c1", "values": []any{}}}})
+	add("a value that does not fit", "POST", live+"/data", w.As("editor"), map[string]any{"params": map[string]any{"since": "x"}})
+	add("a value not among the choices", "POST", live+"/data", w.As("editor"), map[string]any{"params": map[string]any{"region": "Est"}})
+	add("the choices fail: the tiles go on", "POST", live+"/data", w.As("editor"), map[string]any{"params": map[string]any{"region": "Est"}},
+		EngineRule{Method: "POST", Path: "^/reports/choices$", Status: 500, Body: map[string]any{"detail": "x"}})
+	add("a newer request", "POST", live+"/data", w.As("editor"), map[string]any{}, EngineRule{Method: "POST", Path: "^/reports/tiles$", Status: 409, Body: map[string]any{}})
+	add("an engine without dashboards", "POST", live+"/data", w.As("editor"), map[string]any{}, EngineRule{Method: "POST", Path: "^/reports/tiles$", Status: 404, Body: map[string]any{}})
+	add("the engine refuses", "POST", live+"/data", w.As("editor"), map[string]any{}, EngineRule{Method: "POST", Path: path0("tiles"), Status: 400, Body: map[string]any{"detail": "bad"}})
+	add("an answer without truncated", "POST", live+"/data", w.As("editor"), map[string]any{}, EngineRule{Method: "POST", Path: "^/reports/tiles$", Body: map[string]any{"tiles": map[string]any{}}})
+	add("a reader without it", "POST", live+"/data", w.As("obs_flag"), map[string]any{})
+	add("a read token reads the numbers", "POST", live+"/data", Bearer("tab_dash_writer_ro_00000000"), map[string]any{})
+	add("numbers of a catalog SQL: Python", "POST", "/dashboards/"+id(dash.cat)+"/data", w.As("editor"), map[string]any{})
+	add("numbers with a bad body", "POST", live+"/data", w.As("editor"), map[string]any{"page": map[string]any{"t1": "x"}, "tiles": "k1"})
+
+	// the designer's numbers
+	def := map[string]any{"v": 1, "parameters": []any{map[string]any{"name": "region", "type": "text"}},
+		"datasets": []any{map[string]any{"name": "orders", "source": map[string]any{"kind": "datasource", "datasource_id": dash.ds}}},
+		"tiles":    []any{map[string]any{"id": "k1", "type": "kpi", "grid": map[string]any{"x": 0, "y": 0, "w": 2, "h": 2}, "dataset": "orders", "value": "1"}}}
+	add("a preview of a new one", "POST", "/dashboards/preview", w.As("editor"), map[string]any{"definition": def, "project_id": dash.edit, "tab": "t9",
+		"tiles": []any{"k1"}})
+	add("a preview of a saved one", "POST", "/dashboards/preview", w.As("editor"), map[string]any{"definition": def, "dashboard_id": dash.live})
+	add("a preview with problems", "POST", "/dashboards/preview", w.As("editor"), map[string]any{"definition": map[string]any{"v": 1, "tiles": 3}, "project_id": dash.edit})
+	add("a preview where it reads", "POST", "/dashboards/preview", w.As("editor"), map[string]any{"definition": def, "project_id": dash.sales})
+
+	// documents
+	add("a document", "POST", live+"/render", w.As("editor"), map[string]any{"format": "png", "clicks": []any{map[string]any{"tile": "c1", "values": []any{"Nord"}}},
+		"state": map[string]any{"items": map[string]any{}}})
+	add("a document with a token", "POST", live+"/render", Bearer("tab_dash_writer_rw_00000000"), map[string]any{})
+	add("a document with a bad click", "POST", live+"/render", w.As("editor"), map[string]any{"clicks": []any{map[string]any{"tile": "zz", "values": []any{1}}}})
+	add("a document the engine cannot make", "POST", live+"/render", w.As("editor"), map[string]any{},
+		EngineRule{Method: "POST", Path: "^/reports/dashboard-render$", Status: 404, Body: map[string]any{}})
+	add("a document refused", "POST", live+"/render", w.As("editor"), map[string]any{},
+		EngineRule{Method: "POST", Path: "^/reports/dashboard-render$", Status: 422, Body: map[string]any{"detail": "the report is too large"}})
+	add("a document with a bad value", "POST", live+"/render", w.As("editor"), map[string]any{"params": map[string]any{"since": "x"}})
+	add("a document with an object as a value", "POST", live+"/render", w.As("editor"), map[string]any{"params": map[string]any{"since": []any{map[string]any{}}}})
+	add("a document as docx", "POST", live+"/render", w.As("editor"), map[string]any{"format": "docx"})
+	add("the API's document", "GET", live+"/render?format=png&region=Sud&click.c1=Nord&click.c1=%5B%22a%22%2C1%5D&click.t1.columns=%7Bnone%7D", w.As("editor"), nil)
+	add("the API's document, a bad click", "GET", live+"/render?click.k1=1", w.As("editor"), nil)
+	add("the API's document fails", "GET", live+"/render", w.As("editor"), nil,
+		EngineRule{Method: "GET", Path: "^/tasks/exports/d-1$", Body: map[string]any{"status": "failed", "detail": "the report could not be laid out"}})
+	add("the API's document as pdf", "GET", live+"/render?format=svg", w.As("editor"), nil)
+
+	// the form and the fields
+	add("the form", "GET", live+"/parameters", w.As("editor"), nil)
+	add("the form with an unknown name", "GET", live+"/parameters?nope=1", w.As("editor"), nil)
+	add("the form whose list cannot be read", "GET", live+"/parameters", w.As("editor"), nil,
+		EngineRule{Method: "POST", Path: "^/reports/choices$", Status: 422, Body: map[string]any{"detail": "the report has no field"}})
+	add("the designer's form", "POST", live+"/parameters", w.As("editor"), map[string]any{"definition": map[string]any{"parameters": []any{
+		map[string]any{"name": "a", "type": "text", "choices": map[string]any{"dataset": "orders", "value": "[a]"}},
+		map[string]any{"name": "b", "type": "text", "choices": map[string]any{"dataset": "nope", "value": "[a]"}}},
+		"datasets": []any{map[string]any{"name": "orders", "source": map[string]any{"kind": "datasource", "datasource_id": dash.dsSecret}}}}})
+	add("the designer's form, too many parameters", "POST", live+"/parameters", w.As("editor"), map[string]any{"definition": map[string]any{
+		"parameters": make([]any, 21)}})
+	need := map[string]any{"v": 1, "parameters": []any{map[string]any{"name": "region", "type": "text", "required": true}},
+		"datasets": []any{map[string]any{"name": "o", "source": map[string]any{"kind": "datasource", "datasource_id": dash.ds,
+			"filters": []any{map[string]any{"column": "region", "op": "=", "value": "{region}"}}}}}}
+	add("the fields", "POST", live+"/fields", w.As("editor"), map[string]any{"dataset": "o", "definition": need})
+	add("the fields of a dataset it lacks", "POST", live+"/fields", w.As("editor"), map[string]any{"dataset": "zz", "definition": need})
+	add("the fields without EDIT", "POST", live+"/fields", w.As("obs_group"), map[string]any{"dataset": "o", "definition": need})
+
+	// AI comments stay in Python (the AI service): no provider configured here
+	withComment := map[string]any{"v": 1, "datasets": []any{map[string]any{"name": "o", "source": map[string]any{"kind": "datasource", "datasource_id": dash.ds}}},
+		"tiles": []any{map[string]any{"id": "k1", "type": "kpi", "grid": map[string]any{"x": 0, "y": 0, "w": 2, "h": 2}, "dataset": "o", "value": "1"},
+			map[string]any{"id": "ai", "type": "comment", "grid": map[string]any{"x": 2, "y": 0, "w": 4, "h": 3}, "reads": []any{"k1"}}}}
+	add("a comment of a tile it lacks", "POST", live+"/comment", w.As("editor"), map[string]any{"tile": "zz"})
+	add("Try it on a dashboard", "POST", "/dashboards/preview/comment", w.As("editor"), map[string]any{"tile": "ai", "definition": withComment,
+		"project_id": dash.edit})
+	add("a dashboard preview with a comment", "POST", "/dashboards/preview", w.As("editor"), map[string]any{"definition": withComment,
+		"project_id": dash.edit})
+	return s
+}
+
+func path0(what string) string { return "^/reports/" + what + "$" }

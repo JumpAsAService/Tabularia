@@ -154,3 +154,6 @@ func invalidPrefixLen(b []byte) int {
 	}
 	return n
 }
+
+// Items is QueryParams.multi_items(): every name and value, in order.
+func (q *Query) Items() [][2]string { return q.pairs }

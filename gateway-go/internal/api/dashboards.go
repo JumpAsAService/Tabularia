@@ -21,7 +21,7 @@ func init() {
 			createModel: gatewaymodels.DashboardCreate, updateModel: gatewaymodels.DashboardUpdate,
 			checkModel: gatewaymodels.DashboardsCheckRequest, empty: dashboards.Empty,
 			check:  dashboardChecked,
-			review: dashboardProblems}
+			review: dashboardProblems, inOurWords: dashboards.InOurWordsErr}
 		route := func(method, pattern string, fn func(http.ResponseWriter, *http.Request, *auth.Principal)) server.Route {
 			return server.Route{Method: method, Pattern: pattern, Handler: server.Authed(d.Auth, pattern, fn)}
 		}
@@ -43,6 +43,13 @@ func init() {
 			route(http.MethodGet, "/dashboards/{dashboard_id}/versions", h.versions),
 			route(http.MethodGet, "/dashboards/{dashboard_id}/versions/{version}", h.version),
 			route(http.MethodPost, "/dashboards/{dashboard_id}/versions/{version}/restore", h.restore),
+			body(http.MethodPost, "/dashboards/preview", h.previewNumbers),
+			body(http.MethodPost, "/dashboards/{dashboard_id}/data", h.data),
+			body(http.MethodPost, "/dashboards/{dashboard_id}/render", h.renderDashboard),
+			route(http.MethodGet, "/dashboards/{dashboard_id}/render", h.renderDashboardFile),
+			route(http.MethodGet, "/dashboards/{dashboard_id}/parameters", h.dashboardParameters),
+			body(http.MethodPost, "/dashboards/{dashboard_id}/parameters", h.dashboardParametersEdited),
+			body(http.MethodPost, "/dashboards/{dashboard_id}/fields", h.dashboardFields),
 		}
 	})
 }

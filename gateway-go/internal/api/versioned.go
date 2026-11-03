@@ -38,6 +38,8 @@ type objectsAPI struct {
 	// check and review are a dashboard's checked() and review().problems; nil: a report's
 	check  func(ctx context.Context, h *objectsAPI, c *perm.Checker, definition, current any) (pyjson.Object, error)
 	review func(ctx context.Context, h *objectsAPI, c *perm.Checker, definition, current any) ([]pyjson.Object, error)
+	// inOurWords is a dashboard's dashboards.in_our_words over a report's refusal; nil: a report's
+	inOurWords func(error) error
 }
 
 // ObjectOut is routes/reports.py ReportOut and routes/dashboards.py DashboardOut.

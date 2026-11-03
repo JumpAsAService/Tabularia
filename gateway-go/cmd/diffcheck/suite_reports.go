@@ -14,6 +14,7 @@ var rep struct {
 	monthly, quarterly, secret, broken, missing, sent, mc   int64
 	listy, group                                            int64
 	ds, dsSecret, view, connPg, connSftp, script, scriptCat int64
+	r1, r2, r3, r4                                          int64
 }
 
 // repContent is a definition as json.dumps wrote it (ASCII, «, » and «: »).
@@ -135,6 +136,29 @@ func init() {
 				created_at, updated_at) VALUES ('Rep scheduled', '', $1, $2, $3, '0 * * * *', $2, '2026-12-01', '2026-01-01', '2026-01-01')
 				RETURNING id`, rep.edit, w.People["admin"],
 				fmt.Sprintf(`{"steps": [[{"kind": "pushmail", "id": 2, "pushmail": {"reports": [{"reportId": %d, "params": {"region": "", "x": 1}}]}}]]}`, rep.monthly))
+			renderable := func(name, content string) int64 {
+				id := report(name, rep.edit, "admin", 1, 0, nil)
+				version(id, 1, content, "created", "admin")
+				return id
+			}
+			rep.r1 = renderable("Render: ds/view?", fmt.Sprintf(`{"v": 1, "locale": "it", "timezone": "Europe/Rome", "parameters": [`+
+				`{"name": "region", "type": "text", "default": "Nord"}, {"name": "since", "type": "date", "default": "{today-30}"}, `+
+				`{"name": "n", "type": "number", "multi": true, "default": [1, 2.5]}, {"name": "flag", "type": "boolean"}], `+
+				`"datasets": [{"name": "orders", "source": {"kind": "datasource", "datasource_id": %d, "filters": [`+
+				`{"column": "region", "op": "=", "value": "{region}"}, {"column": "n", "op": "in", "value": "{n}"}, `+
+				`{"column": "d", "op": ">=", "value": "{today-7}"}, {"column": "x", "op": "=", "value": 5}]}}, `+
+				`{"name": "v", "source": {"kind": "view", "view_id": %d}}, `+
+				`{"name": "q", "source": {"kind": "sql", "sql": "SELECT * FROM t WHERE r = {region} AND d > {since} AND f = {flag} AND n IN {n} AND x < {now}", "connection_id": %d}}], `+
+				`"sections": {"body": {"items": [{"id": "logo", "type": "image", "x": 0, "y": 0, "w": 10, "h": 10, "asset": "data:image/png;base64,iVBORw0KGgo="}]}}}`,
+				rep.ds, rep.view, rep.connPg))
+			rep.r2 = renderable("Render choices", fmt.Sprintf(`{"v": 1, "parameters": [`+
+				`{"name": "region", "type": "text", "choices": {"dataset": "regions", "value": "[region]"}}, `+
+				`{"name": "agent", "type": "text", "multi": true, "choices": {"dataset": "regions", "value": "[agent]", "label": "[name]"}}, `+
+				`{"name": "fixed", "type": "number", "choices": {"values": [1, 2]}}], `+
+				`"datasets": [{"name": "regions", "source": {"kind": "datasource", "datasource_id": %d, "filters": [{"column": "region", "op": "=", "value": "{region}"}]}}]}`, rep.ds))
+			rep.r3 = renderable("Render catalog", `{"v": 1, "datasets": [{"name": "q", "source": {"kind": "sql", "sql": "SELECT * FROM rep_orders"}}]}`)
+			rep.r4 = renderable("Render secret", fmt.Sprintf(`{"v": 1, "datasets": [{"name": "s", "source": {"kind": "datasource", "datasource_id": %d}}]}`, rep.dsSecret))
+			w.Exec(`UPDATE datasources SET key = '' WHERE id = $1`, rep.dsSecret)
 			w.Token("writer", "tab_rep_writer_rw_000000000", "write", time.Hour)
 			w.Token("writer", "tab_rep_writer_ro_000000000", "read", time.Hour)
 			w.Token("editor", "tab_rep_editor_rw_000000000", "write", time.Hour)
@@ -239,6 +263,7 @@ func init() {
 			add("deleting without an id", "DELETE", "/reports/x", w.As("admin"), nil)
 			add("lists after the deletions", "GET", "/reports", w.As("admin"), nil)
 			s = append(s, repWrites(w)...)
+			s = append(s, repRenders(w)...)
 			return s
 		},
 	})
@@ -382,5 +407,172 @@ func repWrites(w *World) []Step {
 		Engine: []EngineRule{{Method: "POST", Path: "^/reports/check$", Body: map[string]any{"errors": []any{
 			map[string]any{"item": nil, "field": "", "message": "The report: unknown key «x»"},
 			map[string]any{"item": "a", "field": "b", "message": "other"}}}}}})
+	return s
+}
+
+// repRenderEngine is the fake engine of a render that goes well.
+var repRenderEngine = []EngineRule{
+	{Method: "GET", Path: "^/engines$", Body: []any{map[string]any{"id": "polars", "available": true},
+		map[string]any{"id": "duckdb", "available": true}, map[string]any{"id": "chdb", "available": false}}},
+	{Method: "POST", Path: "^/placeholders/preview$", Body: map[string]any{"fields": map[string]any{
+		"p0": map[string]any{"value": "2026-10-04"}, "p1": map[string]any{"value": "2026-11-03T10:20"}, "p2": map[string]any{"value": "2026-10-27"}}}},
+	{Method: "POST", Path: "^/reports/render$", Body: map[string]any{"task_id": "t-1", "filename": "made.pdf"}},
+	{Method: "POST", Path: "^/reports/choices$", Body: map[string]any{"choices": []any{map[string]any{"value": "Nord"},
+		map[string]any{"value": "Sud", "label": "South"}, "junk"}, "truncated": false}},
+	{Method: "GET", Path: "^/tasks/exports/t-1$", Body: map[string]any{"status": "ready"}},
+	{Method: "GET", Path: "^/tasks/exports/t-1/file$", Body: map[string]any{"a": "file"}},
+}
+
+// repRenders are the steps of the renders: the viewer's, the editor's preview, the API's.
+func repRenders(w *World) []Step {
+	var s []Step
+	id := func(n int64) string { return fmt.Sprint(n) }
+	add := func(name, method, path string, auth func(*http.Request), body any, engine ...EngineRule) {
+		rules := repRenderEngine
+		if engine != nil {
+			rules = append(append([]EngineRule{}, engine...), repRenderEngine...)
+		}
+		s = append(s, Step{Name: name, Method: method, Path: path, Auth: auth, JSON: body, Engine: rules})
+	}
+	r1 := "/reports/" + id(rep.r1) + "/render"
+	add("editor renders it", "POST", r1, w.As("editor"), map[string]any{})
+	add("admin renders it with values", "POST", r1, w.As("admin"), map[string]any{"format": "html",
+		"params": map[string]any{"region": "Sud", "since": "2026-01-31", "n": []any{3, "4.5", 3.0}, "flag": "yes"}, "state": map[string]any{"items": map[string]any{"t": map[string]any{}}}})
+	add("as svg with a token", "POST", r1, Bearer("tab_rep_editor_rw_000000000"), map[string]any{"format": "svg", "params": map[string]any{"region": nil}})
+	add("a value that does not fit", "POST", r1, w.As("editor"), map[string]any{"params": map[string]any{"since": "yesterday"}})
+	add("two values for one", "POST", r1, w.As("editor"), map[string]any{"params": map[string]any{"region": []any{"a", "b"}}})
+	add("a parameter it lacks", "POST", r1, w.As("editor"), map[string]any{"params": map[string]any{"nope": 1}})
+	add("an object as a value", "POST", r1, w.As("editor"), map[string]any{"params": map[string]any{"region": map[string]any{"a": 1}}})
+	add("no value said out loud", "POST", r1, w.As("editor"), map[string]any{"params": map[string]any{"region": "{none}", "n": []any{"", " "}}})
+	add("a placeholder with a space", "POST", r1, w.As("editor"), map[string]any{"params": map[string]any{"since": "{today 1}"}})
+	add("a placeholder given", "POST", r1, w.As("editor"), map[string]any{"params": map[string]any{"since": "{yesterday}"}})
+	add("a state that is wrong", "POST", r1, w.As("editor"), map[string]any{"state": map[string]any{"items": []any{1}}})
+	add("a format it does not know", "POST", r1, w.As("editor"), map[string]any{"format": "docx"})
+	add("someone who cannot see it", "POST", r1, w.As("obs_flag"), map[string]any{})
+	add("signed out", "POST", r1, nil, map[string]any{})
+	add("the engine refuses", "POST", r1, w.As("editor"), map[string]any{},
+		EngineRule{Method: "POST", Path: "^/reports/render$", Status: 422, Body: map[string]any{"detail": "there is no field [x]"}})
+	add("the engine is busy", "POST", r1, w.As("editor"), map[string]any{},
+		EngineRule{Method: "POST", Path: "^/reports/render$", Status: 429, Body: map[string]any{"detail": "Too many exports"}})
+	add("the engine times out", "POST", r1, w.As("editor"), map[string]any{},
+		EngineRule{Method: "POST", Path: "^/reports/render$", Status: 504, Body: map[string]any{"detail": "x"}})
+	add("the engine fails", "POST", r1, w.As("editor"), map[string]any{},
+		EngineRule{Method: "POST", Path: "^/reports/render$", Status: 500, Body: "oops"})
+	add("the placeholders cannot be read", "POST", r1, w.As("editor"), map[string]any{},
+		EngineRule{Method: "POST", Path: "^/placeholders/preview$", Status: 500, Body: map[string]any{}})
+	add("the time zone is wrong", "POST", r1, w.As("editor"), map[string]any{},
+		EngineRule{Method: "POST", Path: "^/placeholders/preview$", Body: map[string]any{"error": "unknown zone"}})
+	add("a placeholder without a value", "POST", r1, w.As("editor"), map[string]any{},
+		EngineRule{Method: "POST", Path: "^/placeholders/preview$", Body: map[string]any{"fields": map[string]any{"p0": map[string]any{"error": "bad offset"}}}})
+	add("the engines cannot be read", "POST", r1, w.As("editor"), map[string]any{},
+		EngineRule{Method: "GET", Path: "^/engines$", Status: 500, Body: map[string]any{}})
+	add("polars is not available", "POST", r1, w.As("editor"), map[string]any{},
+		EngineRule{Method: "GET", Path: "^/engines$", Body: []any{map[string]any{"id": "duckdb", "available": true}}})
+	add("no engine is available", "POST", r1, w.As("editor"), map[string]any{},
+		EngineRule{Method: "GET", Path: "^/engines$", Body: []any{}})
+	r2 := "/reports/" + id(rep.r2) + "/render"
+	add("a choice from a dataset", "POST", r2, w.As("editor"), map[string]any{"params": map[string]any{"region": "Sud", "agent": []any{"Nord"}}})
+	add("a choice not among them", "POST", r2, w.As("editor"), map[string]any{"params": map[string]any{"region": "Est"}})
+	add("a fixed choice not among them", "POST", r2, w.As("editor"), map[string]any{"params": map[string]any{"fixed": "3"}})
+	add("the choices cannot be read", "POST", r2, w.As("editor"), map[string]any{"params": map[string]any{"region": "Est"}},
+		EngineRule{Method: "POST", Path: "^/reports/choices$", Status: 500, Body: map[string]any{"detail": "boom"}})
+	add("the choices are cut short", "POST", r2, w.As("editor"), map[string]any{"params": map[string]any{"region": "Est"}},
+		EngineRule{Method: "POST", Path: "^/reports/choices$", Body: map[string]any{"choices": []any{}, "truncated": true}})
+	add("a catalog SQL: Python renders it", "POST", "/reports/"+id(rep.r3)+"/render", w.As("editor"), map[string]any{})
+	add("a datasource without data", "POST", "/reports/"+id(rep.r4)+"/render", w.As("admin"), map[string]any{})
+	add("a datasource it cannot read", "POST", "/reports/"+id(rep.r4)+"/render", w.As("editor"), map[string]any{})
+	add("a definition that is a list", "POST", "/reports/"+id(rep.listy)+"/render", w.As("writer"), map[string]any{})
+
+	// the editor's preview
+	newDef := map[string]any{"v": 1, "parameters": []any{map[string]any{"name": "region", "type": "text"}},
+		"datasets": []any{map[string]any{"name": "o", "source": map[string]any{"kind": "datasource", "datasource_id": rep.ds,
+			"filters": []any{map[string]any{"column": "region", "op": "=", "value": "{region}"}}}}}}
+	add("a preview of a new one", "POST", "/reports/preview", w.As("editor"), map[string]any{"definition": newDef, "project_id": rep.edit,
+		"params": map[string]any{"region": "Nord"}})
+	add("a preview of a saved one", "POST", "/reports/preview", w.As("editor"), map[string]any{"definition": newDef, "report_id": rep.r1, "format": "xlsx"})
+	add("a preview with problems", "POST", "/reports/preview", w.As("editor"), map[string]any{"definition": map[string]any{"v": 1, "page": 1},
+		"project_id": rep.edit})
+	add("a preview where it reads", "POST", "/reports/preview", w.As("editor"), map[string]any{"definition": newDef, "project_id": rep.sales})
+	add("a preview of catalog SQL: Python", "POST", "/reports/preview", w.As("editor"), map[string]any{"definition": map[string]any{"v": 1,
+		"datasets": []any{map[string]any{"name": "q", "source": map[string]any{"kind": "sql", "sql": "SELECT 1 FROM rep_orders"}}}}, "project_id": rep.edit})
+	add("a preview without a definition", "POST", "/reports/preview", w.As("editor"), map[string]any{"project_id": rep.edit, "format": "x"})
+
+	// the API
+	add("the API renders it", "GET", r1+"?region=Sud&n=1&n=2&format=pdf", Bearer("tab_rep_editor_rw_000000000"), nil)
+	add("the API with a read token", "GET", r1+"?format=html", Bearer("tab_rep_writer_ro_000000000"), nil)
+	add("the API with a bad format", "GET", r1+"?format=svg", w.As("editor"), nil)
+	add("the API with a bad value", "GET", r1+"?since=x", w.As("editor"), nil)
+	add("the API: the render fails", "GET", r1, w.As("editor"), nil,
+		EngineRule{Method: "GET", Path: "^/tasks/exports/t-1$", Body: map[string]any{"status": "failed", "code": 422, "detail": "the data is too large"}})
+	add("the API: the engine answers 404", "GET", r1, w.As("editor"), nil,
+		EngineRule{Method: "GET", Path: "^/tasks/exports/t-1$", Status: 404, Body: map[string]any{}})
+	add("the API: the file is gone", "GET", r1, w.As("editor"), nil,
+		EngineRule{Method: "GET", Path: "^/tasks/exports/t-1/file$", Status: 410, Body: map[string]any{"detail": "gone"}})
+	add("the API of a catalog SQL: Python", "GET", "/reports/"+id(rep.r3)+"/render", w.As("editor"), nil)
+
+	// the form's parameters
+	pr := func(n int64) string { return "/reports/" + id(n) + "/parameters" }
+	add("the form of a report", "GET", pr(rep.r1), w.As("editor"), nil)
+	add("the form with values given", "GET", pr(rep.r1)+"?region=Sud&since=2026-02-02&format=pdf", w.As("editor"), nil)
+	add("the form with a bad value", "GET", pr(rep.r1)+"?since=x", w.As("editor"), nil)
+	add("the form with an unknown name", "GET", pr(rep.r1)+"?nope=1", w.As("editor"), nil)
+	add("the form of the choices", "GET", pr(rep.r2), w.As("editor"), nil)
+	add("the form of the choices, a region chosen", "GET", pr(rep.r2)+"?region=Sud&agent=a&agent=b", w.As("editor"), nil)
+	add("the choices fail", "GET", pr(rep.r2), w.As("editor"), nil,
+		EngineRule{Method: "POST", Path: "^/reports/choices$", Status: 422, Body: map[string]any{"detail": "no field [region]"}})
+	add("the engine has no choices yet", "GET", pr(rep.r2), w.As("editor"), nil,
+		EngineRule{Method: "POST", Path: "^/reports/choices$", Status: 404, Body: map[string]any{}})
+	add("the form of a catalog SQL: Python", "GET", pr(rep.r3), w.As("editor"), nil)
+	add("the form of one it cannot see", "GET", pr(rep.r1), w.As("obs_flag"), nil)
+	add("the form's id wrong", "GET", "/reports/x/parameters", w.As("editor"), nil)
+	edited := map[string]any{"v": 1, "timezone": "Europe/Rome", "locale": "de", "parameters": []any{
+		map[string]any{"name": "region", "type": "text", "choices": map[string]any{"dataset": "o", "value": "[region]"}},
+		map[string]any{"name": "other", "type": "text", "choices": map[string]any{"dataset": "missing", "value": "[x]"}},
+		map[string]any{"name": "d", "type": "date", "default": "{today}"}},
+		"datasets": []any{map[string]any{"name": "o", "source": map[string]any{"kind": "datasource", "datasource_id": rep.ds}},
+			map[string]any{"name": "secret", "source": map[string]any{"kind": "datasource", "datasource_id": rep.dsSecret}}},
+		"sections": "half done"}
+	add("the editor's form", "POST", pr(rep.r1), w.As("editor"), map[string]any{"definition": edited, "params": map[string]any{"region": "Nord"}})
+	add("the editor's form with bad parameters", "POST", pr(rep.r1), w.As("editor"), map[string]any{"definition": map[string]any{"parameters": []any{
+		map[string]any{"name": "1x", "type": "text"}}}})
+	add("the editor's form with an object given", "POST", pr(rep.r1), w.As("editor"), map[string]any{"definition": edited, "params": map[string]any{"region": []any{[]any{}}}})
+	add("the editor's form where it reads", "POST", pr(rep.quarterly), w.As("editor"), map[string]any{"definition": edited})
+	add("the editor's form of catalog SQL: Python", "POST", pr(rep.r1), w.As("editor"), map[string]any{"definition": map[string]any{"v": 1,
+		"datasets": []any{map[string]any{"name": "q", "source": map[string]any{"kind": "sql", "sql": "SELECT 1 FROM rep_orders"}}}}})
+
+	// the fields: without a count (a required parameter without a default), whose request would
+	// race the fields' in the Python gateway itself
+	fr := "/reports/" + id(rep.r1) + "/fields"
+	need := map[string]any{"v": 1, "parameters": []any{map[string]any{"name": "region", "type": "text", "required": true}},
+		"datasets": []any{
+			map[string]any{"name": "o", "source": map[string]any{"kind": "datasource", "datasource_id": rep.ds,
+				"filters": []any{map[string]any{"column": "region", "op": "=", "value": "{region}"}}}},
+			map[string]any{"name": "v", "source": map[string]any{"kind": "view", "view_id": rep.view,
+				"filters": []any{map[string]any{"column": "region", "op": "=", "value": "{region}"}}}},
+			map[string]any{"name": "q", "source": map[string]any{"kind": "sql", "sql": "SELECT * FROM t WHERE r = {region}", "connection_id": rep.connPg}},
+			map[string]any{"name": "s", "source": map[string]any{"kind": "datasource", "datasource_id": rep.dsSecret}}}}
+	fieldsEngine := EngineRule{Method: "POST", Path: "^/(tasks/preview|db/query)$", Body: map[string]any{"columns": []any{
+		map[string]any{"name": "a", "dtype": "Int64"}, map[string]any{"name": "b", "dtype": "Datetime(us)"}, map[string]any{"name": "c"}, 7}}}
+	for _, name := range []string{"o", "v", "q", "s", "none"} {
+		add("the fields of "+name, "POST", fr, w.As("editor"), map[string]any{"dataset": name, "definition": need}, fieldsEngine)
+	}
+	add("the fields of the view: the engine refuses", "POST", fr, w.As("editor"), map[string]any{"dataset": "v", "definition": need},
+		EngineRule{Method: "POST", Path: "^/tasks/preview$", Status: 400, Body: map[string]any{"detail": "bad column"}})
+	add("the fields of the editor's, without EDIT", "POST", fr, w.As("obs_group"), map[string]any{"dataset": "orders", "definition": need})
+	add("the fields of a dataset it lacks", "POST", fr, w.As("editor"), map[string]any{"dataset": "zz", "definition": need})
+	add("the fields with a bad body", "POST", fr, w.As("editor"), map[string]any{"dataset": 3})
+
+	// AI comments stay in Python (the AI service): no provider configured here
+	withComment := map[string]any{"v": 1, "datasets": []any{map[string]any{"name": "o", "source": map[string]any{"kind": "datasource", "datasource_id": rep.ds}}},
+		"sections": map[string]any{"body": map[string]any{"items": []any{
+			map[string]any{"id": "k1", "type": "kpi", "x": 0, "y": 0, "w": 50, "h": 20, "dataset": "o", "value": "SUM([n])"},
+			map[string]any{"id": "ai", "type": "comment", "x": 0, "y": 30, "w": 100, "h": 30, "reads": []any{"k1"}}}}}}
+	tiles := EngineRule{Method: "POST", Path: "^/reports/tiles$", Body: map[string]any{"tiles": map[string]any{"k1": map[string]any{"type": "kpi", "text": "3"}}}}
+	add("Try it: a comment of the editor", "POST", "/reports/preview/comment", w.As("editor"), map[string]any{"item": "ai", "definition": withComment,
+		"project_id": rep.edit}, tiles)
+	add("Try it: not a comment", "POST", "/reports/preview/comment", w.As("editor"), map[string]any{"item": "k1", "definition": withComment,
+		"project_id": rep.edit}, tiles)
+	// a render with a comment is the Python gateway's too, but not compared here: it names the rows its
+	// comment reads with a random word (`reading`, a uuid) sent to the engine
 	return s
 }

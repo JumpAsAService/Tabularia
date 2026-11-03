@@ -36,6 +36,12 @@ func init() {
 			body(http.MethodPatch, "/reports/{report_id}", h.update),
 			route(http.MethodPost, "/reports/{report_id}/versions/{version}/restore", h.restore),
 			body(http.MethodPost, "/reports/check", h.checkDefinition),
+			body(http.MethodPost, "/reports/{report_id}/render", h.render),
+			body(http.MethodPost, "/reports/preview", h.preview),
+			route(http.MethodGet, "/reports/{report_id}/render", h.renderFile),
+			route(http.MethodGet, "/reports/{report_id}/parameters", h.parameters),
+			body(http.MethodPost, "/reports/{report_id}/parameters", h.parametersEdited),
+			body(http.MethodPost, "/reports/{report_id}/fields", h.fields),
 		}
 	})
 }

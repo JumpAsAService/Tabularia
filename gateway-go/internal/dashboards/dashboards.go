@@ -406,3 +406,28 @@ func sortStrings(s []string) {
 		}
 	}
 }
+
+// CheckParameters is check_parameters: the parameters of a definition being edited, written as
+// a report's.
+func CheckParameters(definition any) (pyjson.Object, error) {
+	if def, ok := definition.(pyjson.Object); ok {
+		if _, err := atMost(get(def, "parameters"), MaxParameters, "parameters", "parameters"); err != nil {
+			return nil, sayErr(err)
+		}
+	}
+	out, err := reportdef.CheckParameters(definition)
+	return out, sayErr(err)
+}
+
+// CheckDataset is check_dataset: its parameters and one dataset.
+func CheckDataset(definition any, name string) (pyjson.Object, error) {
+	out, err := reportdef.CheckDataset(definition, name)
+	return out, sayErr(err)
+}
+
+func sayErr(err error) error {
+	if p, ok := reportdef.AsProblem(err); ok {
+		return said(p)
+	}
+	return err
+}
