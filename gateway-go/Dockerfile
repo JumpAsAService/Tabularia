@@ -1,0 +1,16 @@
+# The Go gateway (docs/specs/gateway-go.md). Built from the repository root's gateway-go/:
+#   docker build -t tabularia-gateway-go:dev gateway-go
+FROM golang:1.27.3-bookworm AS build
+WORKDIR /src
+COPY go.mod go.sum ./
+RUN go mod download
+COPY . .
+RUN CGO_ENABLED=0 go build -trimpath -ldflags="-s -w" -o /out/gateway ./cmd/gateway
+
+# no shell, no package manager: the binary and the CA certificates
+FROM gcr.io/distroless/static-debian12
+COPY --from=build /out/gateway /gateway
+# the same unprivileged user as the other images
+USER 10001:10001
+EXPOSE 8000
+ENTRYPOINT ["/gateway"]
