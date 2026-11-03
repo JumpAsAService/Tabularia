@@ -91,6 +91,18 @@ func init() {
 			w.Insert(`INSERT INTO flow_groups (name, description, project_id, owner_id, definition, created_at, updated_at)
 				VALUES ('Rep unreadable', '', $1, $2, $3, '2026-01-01', '2026-01-01') RETURNING id`, rep.edit, w.People["admin"],
 				fmt.Sprintf(`{"steps": "no", "reportId": %d}`, rep.monthly))
+			view := func(report int64, person string, daysAgo int) {
+				w.Exec(`INSERT INTO report_views (report_id, user_id, day, at) VALUES ($1, $2, (now() at time zone 'UTC')::date - $3::int,
+					'2026-02-01')`, report, w.People[person], daysAgo)
+			}
+			view(rep.monthly, "editor", 1)
+			view(rep.monthly, "editor", 2)
+			view(rep.monthly, "admin", 3)
+			view(rep.secret, "writer", 0)
+			view(rep.secret, "editor", 29)
+			view(rep.secret, "admin", 30)
+			view(rep.mc, "admin", 40)
+			w.Exec(`UPDATE users SET full_name = '' WHERE id = $1`, w.People["sso"])
 			w.Token("writer", "tab_rep_writer_rw_000000000", "write", time.Hour)
 			w.Token("writer", "tab_rep_writer_ro_000000000", "read", time.Hour)
 			w.Token("editor", "tab_rep_editor_rw_000000000", "write", time.Hour)
@@ -132,8 +144,18 @@ func init() {
 			}
 			add("signed out", "GET", "/reports/"+id(rep.monthly), nil, nil)
 			add("a read token reads it", "GET", "/reports/"+id(rep.secret), Bearer("tab_rep_writer_ro_000000000"), nil)
-			add("search is not a report", "GET", "/reports/search", w.As("admin"), nil)
-			add("search, bad sort", "GET", "/reports/search?sort=x&limit=0", w.As("admin"), nil)
+			for _, p := range []string{"admin", "editor", "writer", "obs_flag", "obs_group"} {
+				for _, q := range []string{"", "?sort=name", "?sort=updated", "?q=sales", "?q=%20%20", "?q=rep%20sales&sort=name",
+					"?q=MONTH", "?q=_", "?q=%25", "?q=about%20sent", "?limit=2&offset=1", "?limit=2&offset=1&sort=name", "?offset=50"} {
+					add(p+" searches "+q, "GET", "/reports/search"+q, w.As(p), nil)
+				}
+			}
+			add("search signed out", "GET", "/reports/search", nil, nil)
+			add("search, bad sort and limit", "GET", "/reports/search?sort=x&limit=0", w.As("admin"), nil)
+			add("search, limit past 200", "GET", "/reports/search?limit=201&offset=-1", w.As("admin"), nil)
+			add("search, limit no number", "GET", "/reports/search?limit=a&limit=3", w.As("admin"), nil)
+			add("search, limit no number last", "GET", "/reports/search?limit=3&limit=a", w.As("admin"), nil)
+			add("search, bad sort signed out", "GET", "/reports/search?sort=x", nil, nil)
 
 			// versions
 			for _, p := range []string{"admin", "editor", "writer", "obs_group"} {

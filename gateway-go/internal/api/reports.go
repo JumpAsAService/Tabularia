@@ -18,8 +18,7 @@ func init() {
 		}
 		return []server.Route{
 			route(http.MethodGet, "/reports", h.list),
-			// declared before /reports/{report_id} in Python: answered there still
-			{Method: http.MethodGet, Pattern: "/reports/search", Handler: d.Upstream},
+			route(http.MethodGet, "/reports/search", h.search),
 			route(http.MethodPost, "/reports/{report_id}/views", h.opened),
 			route(http.MethodGet, "/projects/{project_id}/reports", h.listProject),
 			route(http.MethodGet, "/reports/{report_id}", h.get),

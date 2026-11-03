@@ -6,6 +6,7 @@ package pystr
 import (
 	"fmt"
 	"math"
+	"math/big"
 	"strings"
 	"unicode"
 
@@ -153,4 +154,158 @@ func Sentence(m string) string {
 		return strings.ToUpper(string(r[:1])) + string(r[1:])
 	}
 	return m
+}
+
+// ── values read from JSON, as Python sees them ───────────────────────────────
+
+// Number is a JSON number as float (bool is not one here: callers exclude it as
+// `isinstance(v, bool)` does), and whether it is one.
+func Number(v any) (float64, bool) {
+	switch x := v.(type) {
+	case int64:
+		return float64(x), true
+	case int:
+		return float64(x), true
+	case float64:
+		return x, true
+	case pyjson.Int:
+		f, _ := new(big.Float).SetString(string(x))
+		if f == nil {
+			return 0, false
+		}
+		r, _ := f.Float64()
+		return r, true
+	}
+	return 0, false
+}
+
+// IsInt is isinstance(v, int) and not a bool.
+func IsInt(v any) bool {
+	switch v.(type) {
+	case int64, int, pyjson.Int:
+		return true
+	}
+	return false
+}
+
+// Truthy is bool(v).
+func Truthy(v any) bool {
+	switch x := v.(type) {
+	case nil:
+		return false
+	case bool:
+		return x
+	case string:
+		return x != ""
+	case []any:
+		return len(x) > 0
+	case pyjson.Object:
+		return len(x) > 0
+	case pyjson.Int:
+		return true
+	}
+	if f, ok := Number(v); ok {
+		return f != 0
+	}
+	return true
+}
+
+// Eq is Python's ==: numbers by value (True == 1, 1 == 1.0), lists item by item, dicts by
+// their keys whatever the order.
+func Eq(a, b any) bool {
+	if fa, ok := a.(float64); ok && math.IsNaN(fa) {
+		return false
+	}
+	if fb, ok := b.(float64); ok && math.IsNaN(fb) {
+		return false
+	}
+	na, aNum := numeric(a)
+	nb, bNum := numeric(b)
+	if aNum || bNum {
+		if aNum && bNum {
+			return na.Cmp(nb) == 0
+		}
+		return false
+	}
+	switch x := a.(type) {
+	case nil:
+		return b == nil
+	case string:
+		y, ok := b.(string)
+		return ok && x == y
+	case []any:
+		y, ok := b.([]any)
+		if !ok || len(x) != len(y) {
+			return false
+		}
+		for i := range x {
+			if !Eq(x[i], y[i]) {
+				return false
+			}
+		}
+		return true
+	case pyjson.Object:
+		y, ok := b.(pyjson.Object)
+		if !ok || len(x) != len(y) {
+			return false
+		}
+		for _, kv := range x {
+			o, ok := y.Get(kv.Key)
+			if !ok || !Eq(kv.Value, o) {
+				return false
+			}
+		}
+		return true
+	}
+	if ea, ok := a.(interface{ Equal(any) bool }); ok {
+		return ea.Equal(b)
+	}
+	return false
+}
+
+// numeric is a bool, an int or a float as an exact number; NaN is never equal.
+func numeric(v any) (*big.Float, bool) {
+	switch x := v.(type) {
+	case bool:
+		if x {
+			return big.NewFloat(1), true
+		}
+		return big.NewFloat(0), true
+	case int64:
+		return new(big.Float).SetInt64(x), true
+	case int:
+		return new(big.Float).SetInt64(int64(x)), true
+	case pyjson.Int:
+		f, _, err := big.ParseFloat(string(x), 10, 4096, big.ToNearestEven)
+		if err != nil {
+			return nil, false
+		}
+		return f, true
+	case float64:
+		if math.IsInf(x, 0) {
+			return new(big.Float).SetInf(x < 0), true
+		}
+		return new(big.Float).SetFloat64(x), true
+	}
+	return nil, false
+}
+
+// In is `v in options`.
+func In(v any, options ...any) bool {
+	for _, o := range options {
+		if Eq(v, o) {
+			return true
+		}
+	}
+	return false
+}
+
+// Hashable is false for what Python cannot put in a set or look up in a dict (a list, a dict):
+// a TypeError, a 500.
+func Hashable(v any) bool {
+	switch v.(type) {
+	case []any, pyjson.Object:
+		return false
+	}
+	return true
 }
