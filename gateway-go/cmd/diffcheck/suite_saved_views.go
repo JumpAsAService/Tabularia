@@ -44,7 +44,19 @@ func init() {
 			create("editor", "create with a spec not JSON", p("root"), map[string]any{"name": "x", "datasource_id": Data["ds:root"], "spec": "{"})
 			create("editor", "create without a name", p("root"), map[string]any{"datasource_id": Data["ds:root"]})
 			create("editor", "create with a number as name", p("root"), map[string]any{"name": 5, "datasource_id": Data["ds:root"]})
+			for i, spec := range []string{"null", " ", "NaN", "\ufeff{}", "[1,]", "{\"a\": Infinity}", "1e999", "\"x\""} {
+				create("editor", fmt.Sprintf("create with the spec %q", spec), p("root"), map[string]any{"name": fmt.Sprintf("data-spec-%d", i), "datasource_id": Data["ds:root"], "spec": spec})
+			}
+			create("editor", "create in a RUN folder", p("run"), map[string]any{"name": "x", "datasource_id": Data["ds:run"]})
+			create("editor", "create with a huge datasource id", p("root"), map[string]any{"name": "x", "datasource_id": 99999999999})
+			create("editor", "create with a huge folder id", "99999999999", good)
+			create("editor", "create with a bad folder id and a bad body", "x", map[string]any{"name": 1})
+			create("obs_flag", "create with a bad body, an observer", p("root"), map[string]any{"name": 1})
+			s = append(s, Step{Name: "create with a broken JSON, nobody", Method: "POST", Path: "/projects/" + p("root") + "/saved-views", Raw: []byte(`{"name"`), ContentType: "application/json"})
+			s = append(s, Step{Name: "create with no body", Method: "POST", Path: "/projects/" + p("root") + "/saved-views", Auth: w.As("editor")})
+			s = append(s, Step{Name: "create with a form", Method: "POST", Path: "/projects/" + p("root") + "/saved-views", Raw: []byte(`name=x`), ContentType: "application/x-www-form-urlencoded", Auth: w.As("editor")})
 			create("editor", "create", p("root"), good)
+			create("editor", "create a name with a copy number", p("root"), map[string]any{"name": "data_100% (2)", "datasource_id": Data["ds:root"]})
 			create("editor", "create with an empty spec", p("child"), map[string]any{"name": "data-empty-spec", "datasource_id": Data["ds:root"], "spec": ""})
 			create("admin", "create in a hidden folder", p("hidden"), map[string]any{"name": "data-admin-view", "datasource_id": Data["ds:hidden"], "description": "d"})
 			// duplicating
@@ -52,6 +64,7 @@ func init() {
 				as(person, "duplicate", "POST", "/saved-views/"+v("root")+"/duplicate", nil)
 			}
 			as("editor", "duplicate twice", "POST", "/saved-views/"+v("root")+"/duplicate", nil)
+			s = append(s, Step{Name: "duplicate the copy numbered", Method: "POST", Path: "/saved-views/" + fmt.Sprint(Data["view:root"]+11) + "/duplicate", Auth: w.As("editor")})
 			as("editor", "duplicate a view on a hidden datasource", "POST", "/saved-views/"+v("root2")+"/duplicate", nil)
 			as("editor", "duplicate a hidden view", "POST", "/saved-views/"+v("hidden")+"/duplicate", nil)
 			as("editor", "duplicate an unknown view", "POST", "/saved-views/999999/duplicate", nil)
