@@ -42,15 +42,6 @@ func init() {
 	})
 }
 
-// isoPtr is a UtcDateTime field that may be null.
-func isoPtr(t *time.Time) *string {
-	if t == nil {
-		return nil
-	}
-	s := pyjson.Isoformat(*t)
-	return &s
-}
-
 // listGroups is routes/groups.py list_groups: every group with its members' count. No ORDER
 // BY, as the Python query.
 func listGroups(d *Deps) authedFunc {

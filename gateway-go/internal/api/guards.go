@@ -1,8 +1,6 @@
 package api
 
 import (
-	"context"
-	"io"
 	"math/big"
 	"net/http"
 
@@ -101,33 +99,6 @@ func pathIntsInto(ps *pyd.Params, r *http.Request, names ...string) ([]int64, bo
 		}
 	}
 	return out, !ps.Failed()
-}
-
-type bodyKey struct{}
-
-// withBody is FastAPI's reading of a route's body, BEFORE its dependencies: a JSON that does
-// not parse is a 422 (a 400 when it cannot be read) even for whoever is not signed in. The
-// body read waits in the request for the validation (bodyOf), after the guards.
-func withBody(h http.Handler) http.Handler {
-	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		raw, err := io.ReadAll(r.Body)
-		if err != nil {
-			pyd.BadRequestBody().Write(w)
-			return
-		}
-		body, early := pyd.ReadBody(raw, r.Header.Get("Content-Type"))
-		if early != nil {
-			early.Write(w)
-			return
-		}
-		h.ServeHTTP(w, r.WithContext(context.WithValue(r.Context(), bodyKey{}, body)))
-	})
-}
-
-// bodyOf is the body withBody read.
-func bodyOf(r *http.Request) pyd.Body {
-	b, _ := r.Context().Value(bodyKey{}).(pyd.Body)
-	return b
 }
 
 // validated answers the 422 of the parameters, when there is one.
