@@ -16,12 +16,27 @@ func TestPortedRoutesAnswerHereEverythingElseUpstream(t *testing.T) {
 		{"POST", "/health", "python POST /health"},
 		{"GET", "/projects", "python GET /projects"},
 		{"GET", "/health/x", "python GET /health/x"},
+		{"GET", "/a/../health", "python GET /a/../health"}, // not cleaned, not redirected
+		{"GET", "//health", "python GET //health"},
 	} {
 		rec := httptest.NewRecorder()
 		h.ServeHTTP(rec, httptest.NewRequest(c.method, c.path, nil))
 		body, _ := io.ReadAll(rec.Body)
 		if string(body) != c.want {
 			t.Errorf("%s %s: %q", c.method, c.path, body)
+		}
+	}
+}
+
+// «%2F» splits a segment for Starlette: never one wildcard's value here
+func TestEscapedSlashGoesUpstream(t *testing.T) {
+	upstream := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) { w.Write([]byte("python")) })
+	h := New([]Route{{Method: "GET", Pattern: "/x/{id}", Handler: Health()}}, upstream)
+	for path, want := range map[string]string{"/x/a%2Fb": "python", "/x/a%2fb": "python", "/x/a%20b": `{"status":"ok"}`} {
+		rec := httptest.NewRecorder()
+		h.ServeHTTP(rec, httptest.NewRequest("GET", path, nil))
+		if body, _ := io.ReadAll(rec.Body); string(body) != want {
+			t.Errorf("%s: %q", path, body)
 		}
 	}
 }
