@@ -126,6 +126,8 @@ func init() {
 			add("a name that is a number", "POST", "/projects", w.As("admin"), map[string]any{"name": 5})
 			add("a parent that is text", "POST", "/projects", w.As("admin"), map[string]any{"name": "x", "parent_id": "abc"})
 			s = append(s, Step{Name: "not JSON", Method: "POST", Path: "/projects", Auth: w.As("admin"), Raw: []byte("{"), ContentType: "application/json"})
+			s = append(s, bodyEdges("POST", "/projects", w.As("admin"))...)
+			s = append(s, bodyEdges("PATCH", "/projects/"+f("pr-Grand"), w.As("editor"))...)
 			add("nobody creates", "POST", "/projects", nil, map[string]any{"name": "x"})
 			add("an observer creates", "POST", "/projects", w.As("obs_flag"), map[string]any{"name": "x"})
 

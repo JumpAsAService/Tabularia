@@ -20,7 +20,9 @@ func init() {
 				}
 				return Groups[name]
 			}
-			plain := group("gr-Plain", false, false, "writer", "sso")
+			plain := group("gr-Plain", false, false, "writer", "sso", "service")
+			w.Token("writer", "tab_gr_writer_000000000000", "write", time.Hour)
+			w.Token("service", "tab_gr_service_00000000000", "write", time.Hour)
 			group("gr-Admins", true, false, "writer")
 			group("gr-Watch", false, true, "sso")
 			group("gr-Empty", false, false)
@@ -52,6 +54,8 @@ func init() {
 			add("no name", "POST", "/groups", w.As("admin"), map[string]any{"description": "d"})
 			add("not an administrator", "POST", "/groups", w.As("editor"), map[string]any{"name": "gr-No"})
 			add("an observer", "POST", "/groups", w.As("obs_flag"), map[string]any{"name": "gr-No"})
+			s = append(s, bodyEdges("POST", "/groups", w.As("admin"))...)
+			s = append(s, bodyEdges("PATCH", "/groups/"+gid("gr-Plain"), w.As("admin"))...)
 			add("nobody", "POST", "/groups", nil, map[string]any{"name": "gr-No"})
 			add("an administrator by group", "POST", "/groups", w.As("admin_group"), map[string]any{"name": "gr-New2"})
 			add("a description", "PATCH", "/groups/"+gid("gr-Plain"), w.As("admin"), map[string]any{"description": "changed"})

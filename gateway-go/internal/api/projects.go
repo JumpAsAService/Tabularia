@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"net/http"
+	"time"
 
 	"github.com/jackc/pgx/v5"
 
@@ -12,6 +13,8 @@ import (
 	"github.com/JumpAsAService/Tabularia/gateway-go/internal/auth"
 	"github.com/JumpAsAService/Tabularia/gateway-go/internal/perm"
 	"github.com/JumpAsAService/Tabularia/gateway-go/internal/personalfolders"
+	"github.com/JumpAsAService/Tabularia/gateway-go/internal/pyd"
+	"github.com/JumpAsAService/Tabularia/gateway-go/internal/pyd/gatewaymodels"
 	"github.com/JumpAsAService/Tabularia/gateway-go/internal/pyjson"
 	"github.com/JumpAsAService/Tabularia/gateway-go/internal/server"
 )
@@ -29,11 +32,19 @@ type ProjectOut struct {
 
 func init() {
 	register("projects", func(d *Deps) []server.Route {
-		return []server.Route{
+		routes := []server.Route{
 			{Method: http.MethodGet, Pattern: "/projects", Handler: server.Authed(d.Auth, "/projects", listProjects(d))},
 			{Method: http.MethodGet, Pattern: "/projects/{project_id}", Handler: server.Authed(d.Auth, "/projects/{project_id}", getProject(d))},
 			{Method: http.MethodDelete, Pattern: "/projects/{project_id}", Handler: server.Authed(d.Auth, "/projects/{project_id}", deleteProject(d))},
+			{Method: http.MethodPost, Pattern: "/projects", Handler: withBody(server.Authed(d.Auth, "/projects", createProject(d)))},
 		}
+		if !d.Config.OpenLineage {
+			// a rename or a move renames the folder's content in the lineage catalog
+			// (openlineage.folder_names / renamed): with OpenLineage on, Python does it
+			routes = append(routes, server.Route{Method: http.MethodPatch, Pattern: "/projects/{project_id}",
+				Handler: withBody(server.Authed(d.Auth, "/projects/{project_id}", updateProject(d)))})
+		}
+		return routes
 	})
 }
 
@@ -239,3 +250,156 @@ func conflict(found bool, text string) *auth.Refusal {
 }
 
 func ptr[T any](v T) *T { return &v }
+
+// createProject is routes/projects.py create_project: at the top level only an administrator,
+// under a folder MANAGE on it.
+func createProject(d *Deps) authedFunc {
+	return func(w http.ResponseWriter, r *http.Request, p *auth.Principal) {
+		var ps pyd.Params
+		body := ps.Body(bodyOf(r), gatewaymodels.ProjectCreate)
+		if !validated(w, &ps) {
+			return
+		}
+		ctx := r.Context()
+		name, description, parent := body.Get("name").(string), body.Get("description").(string), optInt(body, "parent_id")
+		checker := perm.For(d.DB, &p.User)
+		if parent == nil {
+			admin, err := checker.IsAdmin(ctx)
+			if err != nil {
+				fail(d, w, "reading the roles", err)
+				return
+			}
+			if !admin {
+				detail(w, http.StatusForbidden, "Only an admin can create top-level folders")
+				return
+			}
+		} else {
+			pr, err := readProject(ctx, d.DB, *parent)
+			if err != nil {
+				fail(d, w, "reading the folder", err)
+				return
+			}
+			if pr == nil {
+				detail(w, http.StatusNotFound, "Parent folder not found")
+				return
+			}
+			if refusal, err := checker.Ensure(ctx, *parent, perm.Manage); err != nil || refusal != nil {
+				refuseOr500(d, w, refusal, err)
+				return
+			}
+		}
+		out, err := scanProject(d.DB.QueryRow(ctx, `INSERT INTO projects (name, description, parent_id, owner_id, created_at)
+			VALUES ($1, $2, $3, $4, $5) RETURNING `+projectColumns, name, description, parent, p.User.ID, time.Now().UTC()))
+		if err != nil {
+			fail(d, w, "creating the folder", err)
+			return
+		}
+		audit.Record(ctx, d.DB, d.Log, audit.Event{Actor: &p.User, Action: "folder.create", TargetType: ptr("folder"),
+			TargetID: &out.ID, TargetLabel: &out.Name, Detail: pyjson.Object{{Key: "parent_id", Value: out.ParentID}}})
+		server.JSON(w, http.StatusCreated, out)
+	}
+}
+
+// updateProject is routes/projects.py update_project: EDIT to rename or describe it; moving
+// it is MANAGE on both ends, never into itself or a subfolder, and a personal folder only by
+// an administrator.
+func updateProject(d *Deps) authedFunc {
+	return func(w http.ResponseWriter, r *http.Request, p *auth.Principal) {
+		var ps pyd.Params
+		ids, _ := pathIntsInto(&ps, r, "project_id")
+		body := ps.Body(bodyOf(r), gatewaymodels.ProjectUpdate)
+		if !validated(w, &ps) {
+			return
+		}
+		ctx, id := r.Context(), ids[0]
+		pr, err := readProject(ctx, d.DB, id)
+		if err != nil {
+			fail(d, w, "reading the folder", err)
+			return
+		}
+		if pr == nil {
+			detail(w, http.StatusNotFound, "Folder not found")
+			return
+		}
+		checker := perm.For(d.DB, &p.User)
+		if refusal, err := checker.Ensure(ctx, id, perm.Edit); err != nil || refusal != nil {
+			refuseOr500(d, w, refusal, err)
+			return
+		}
+		before := *pr
+		name, description, parent := optStr(body, "name"), optStr(body, "description"), optInt(body, "parent_id")
+		if name != nil {
+			n := pyd.Strip(*name)
+			if n == "" {
+				detail(w, http.StatusUnprocessableEntity, "The folder needs a name")
+				return
+			}
+			pr.Name = n
+		}
+		if description != nil {
+			pr.Description = *description
+		}
+		if parent != nil && (pr.ParentID == nil || *parent != *pr.ParentID) {
+			if refusal, err := checker.Ensure(ctx, id, perm.Manage); err != nil || refusal != nil {
+				refuseOr500(d, w, refusal, err)
+				return
+			}
+			if refusal, err := personalfolders.Guard(ctx, d.DB, &p.User, id, "move"); err != nil || refusal != nil {
+				refuseOr500(d, w, refusal, err)
+				return
+			}
+			target, err := readProject(ctx, d.DB, *parent)
+			if err != nil {
+				fail(d, w, "reading the folder", err)
+				return
+			}
+			if target == nil {
+				detail(w, http.StatusNotFound, "New parent folder not found")
+				return
+			}
+			parents, err := checker.Parents(ctx)
+			if err != nil {
+				fail(d, w, "reading the folders", err)
+				return
+			}
+			if *parent == id || perm.Descendants(parents, map[int64]bool{id: true})[*parent] {
+				detail(w, http.StatusUnprocessableEntity, "A folder cannot be moved into itself or into one of its subfolders")
+				return
+			}
+			if refusal, err := checker.Ensure(ctx, *parent, perm.Manage); err != nil || refusal != nil {
+				refuseOr500(d, w, refusal, err)
+				return
+			}
+			pr.ParentID = parent
+		}
+		if _, err := d.DB.Exec(ctx, `UPDATE projects SET name = $1, description = $2, parent_id = $3 WHERE id = $4`,
+			pr.Name, pr.Description, pr.ParentID, id); err != nil {
+			fail(d, w, "changing the folder", err)
+			return
+		}
+		var changed pyjson.Object
+		if pr.Name != before.Name {
+			changed = append(changed, pyjson.KV{Key: "name", Value: pyjson.Object{{Key: "from", Value: before.Name}, {Key: "to", Value: pr.Name}}})
+		}
+		if pr.Description != before.Description {
+			changed = append(changed, pyjson.KV{Key: "description", Value: pyjson.Object{{Key: "from", Value: before.Description}, {Key: "to", Value: pr.Description}}})
+		}
+		if len(changed) > 0 {
+			audit.Record(ctx, d.DB, d.Log, audit.Event{Actor: &p.User, Action: "folder.update", TargetType: ptr("folder"),
+				TargetID: &id, TargetLabel: &pr.Name, Detail: changed})
+		}
+		if !sameID(pr.ParentID, before.ParentID) {
+			audit.Record(ctx, d.DB, d.Log, audit.Event{Actor: &p.User, Action: "folder.move", TargetType: ptr("folder"),
+				TargetID: &id, TargetLabel: &pr.Name, Detail: pyjson.Object{{Key: "from_parent", Value: before.ParentID}, {Key: "to_parent", Value: pr.ParentID}}})
+		}
+		if pr.PersonalOf, err = personalfolders.Of(ctx, d.DB, id); err != nil {
+			fail(d, w, "reading the personal folders", err)
+			return
+		}
+		server.JSON(w, http.StatusOK, pr)
+	}
+}
+
+func sameID(a, b *int64) bool {
+	return (a == nil && b == nil) || (a != nil && b != nil && *a == *b)
+}

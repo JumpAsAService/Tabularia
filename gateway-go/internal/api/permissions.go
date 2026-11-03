@@ -10,6 +10,8 @@ import (
 	"github.com/JumpAsAService/Tabularia/gateway-go/internal/auth"
 	"github.com/JumpAsAService/Tabularia/gateway-go/internal/perm"
 	"github.com/JumpAsAService/Tabularia/gateway-go/internal/personalfolders"
+	"github.com/JumpAsAService/Tabularia/gateway-go/internal/pyd"
+	"github.com/JumpAsAService/Tabularia/gateway-go/internal/pyd/gatewaymodels"
 	"github.com/JumpAsAService/Tabularia/gateway-go/internal/pyjson"
 	"github.com/JumpAsAService/Tabularia/gateway-go/internal/server"
 )
@@ -28,6 +30,8 @@ func init() {
 		return []server.Route{
 			{Method: http.MethodGet, Pattern: "/projects/{project_id}/permissions",
 				Handler: server.Authed(d.Auth, "/projects/{project_id}/permissions", listPermissions(d))},
+			{Method: http.MethodPost, Pattern: "/projects/{project_id}/permissions",
+				Handler: withBody(server.Authed(d.Auth, "/projects/{project_id}/permissions", grantPermission(d)))},
 			{Method: http.MethodDelete, Pattern: "/permissions/{permission_id}",
 				Handler: server.Authed(d.Auth, "/permissions/{permission_id}", revokePermission(d))},
 		}
@@ -114,5 +118,79 @@ func revokePermission(d *Deps) authedFunc {
 				{Key: "project_id", Value: g.ProjectID}, {Key: "user_id", Value: g.UserID},
 				{Key: "group_id", Value: g.GroupID}, {Key: "capability", Value: g.Capability}}})
 		returnsNone(w)
+	}
+}
+
+// grantPermission is routes/permissions.py grant_permission: MANAGE on the folder, one subject
+// (a person or a group); the same grant twice answers the one there.
+func grantPermission(d *Deps) authedFunc {
+	return func(w http.ResponseWriter, r *http.Request, p *auth.Principal) {
+		var ps pyd.Params
+		ids, _ := pathIntsInto(&ps, r, "project_id")
+		body := ps.Body(bodyOf(r), gatewaymodels.PermissionCreate)
+		if !validated(w, &ps) {
+			return
+		}
+		ctx, id := r.Context(), ids[0]
+		pr, err := readProject(ctx, d.DB, id)
+		if err != nil {
+			fail(d, w, "reading the folder", err)
+			return
+		}
+		if pr == nil {
+			detail(w, http.StatusNotFound, "Folder not found")
+			return
+		}
+		if refusal, err := perm.For(d.DB, &p.User).Ensure(ctx, id, perm.Manage); err != nil || refusal != nil {
+			refuseOr500(d, w, refusal, err)
+			return
+		}
+		userID, groupID, capability := optInt(body, "user_id"), optInt(body, "group_id"), body.Get("capability").(string)
+		if (userID == nil) == (groupID == nil) {
+			detail(w, http.StatusUnprocessableEntity, "Specify exactly one of user_id and group_id")
+			return
+		}
+		for _, c := range []struct {
+			id           *int64
+			table, label string
+		}{{userID, "users", "User not found"}, {groupID, "groups", "Group not found"}} {
+			if c.id == nil {
+				continue
+			}
+			var found bool
+			if err := d.DB.QueryRow(ctx, `SELECT EXISTS (SELECT 1 FROM `+c.table+` WHERE id = $1)`, *c.id).Scan(&found); err != nil {
+				fail(d, w, "reading the subject", err)
+				return
+			}
+			if !found {
+				detail(w, http.StatusNotFound, c.label)
+				return
+			}
+		}
+		var g PermissionOut
+		// no exact duplicates: the same subject and capability on the same folder
+		err = d.DB.QueryRow(ctx, `SELECT id, project_id, user_id, group_id, capability FROM permissions
+			WHERE project_id = $1 AND user_id IS NOT DISTINCT FROM $2 AND group_id IS NOT DISTINCT FROM $3 AND capability = $4 LIMIT 1`,
+			id, userID, groupID, capability).Scan(&g.ID, &g.ProjectID, &g.UserID, &g.GroupID, &g.Capability)
+		if err == nil {
+			server.JSON(w, http.StatusCreated, g)
+			return
+		}
+		if !errors.Is(err, pgx.ErrNoRows) {
+			fail(d, w, "reading the permissions", err)
+			return
+		}
+		err = d.DB.QueryRow(ctx, `INSERT INTO permissions (project_id, user_id, group_id, capability) VALUES ($1, $2, $3, $4)
+			RETURNING id, project_id, user_id, group_id, capability`, id, userID, groupID, capability).
+			Scan(&g.ID, &g.ProjectID, &g.UserID, &g.GroupID, &g.Capability)
+		if err != nil {
+			fail(d, w, "granting", err)
+			return
+		}
+		audit.Record(ctx, d.DB, d.Log, audit.Event{Actor: &p.User, Action: "permission.grant", TargetType: ptr("permission"),
+			TargetID: &g.ID, TargetLabel: &capability, Detail: pyjson.Object{
+				{Key: "project_id", Value: id}, {Key: "user_id", Value: userID},
+				{Key: "group_id", Value: groupID}, {Key: "capability", Value: capability}}})
+		server.JSON(w, http.StatusCreated, g)
 	}
 }

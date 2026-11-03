@@ -1,12 +1,13 @@
 package api
 
 import (
+	"context"
+	"io"
+	"math/big"
 	"net/http"
-	"strconv"
-	"strings"
-	"unicode"
 
 	"github.com/JumpAsAService/Tabularia/gateway-go/internal/auth"
+	"github.com/JumpAsAService/Tabularia/gateway-go/internal/pyd"
 	"github.com/JumpAsAService/Tabularia/gateway-go/internal/roles"
 	"github.com/JumpAsAService/Tabularia/gateway-go/internal/server"
 )
@@ -73,57 +74,93 @@ func returnsNone(w http.ResponseWriter) {
 	w.WriteHeader(http.StatusNoContent)
 }
 
-// validationError is one item of FastAPI's 422 (RequestValidationError).
-type validationError struct {
-	Type  string `json:"type"`
-	Loc   []any  `json:"loc"`
-	Msg   string `json:"msg"`
-	Input any    `json:"input"`
-}
-
-// pathInts reads the route's integer path parameters as FastAPI does (pydantic's lax int
-// from a string), in the order the Python function declares them: every bad one in the 422,
-// written here. FastAPI validates them after the dependencies (authentication, the guards).
+// pathInts reads the route's integer path parameters as FastAPI does, in the order the
+// Python function declares them, and answers the 422 of every bad one. FastAPI validates them
+// after the dependencies (authentication, the guards). An integer too big for int64 matches no
+// row in Python (psycopg sends it as a numeric): 0, which no row has, does the same.
 func pathInts(w http.ResponseWriter, r *http.Request, names ...string) ([]int64, bool) {
-	out := make([]int64, len(names))
-	var errs []validationError
-	for i, n := range names {
-		raw := r.PathValue(n)
-		v, ok := pydanticInt(raw)
-		if !ok {
-			errs = append(errs, validationError{Type: "int_parsing", Loc: []any{"path", n},
-				Msg: "Input should be a valid integer, unable to parse string as an integer", Input: raw})
-			continue
-		}
-		out[i] = v
-	}
-	if len(errs) > 0 {
-		server.JSON(w, http.StatusUnprocessableEntity, map[string]any{"detail": errs})
+	var ps pyd.Params
+	out, ok := pathIntsInto(&ps, r, names...)
+	if resp := ps.Response(); resp != nil {
+		resp.Write(w)
 		return nil, false
 	}
-	return out, true
+	return out, ok
 }
 
-// pydanticInt is pydantic's int from a string in lax mode: surrounding (Unicode) whitespace,
-// a sign, ASCII digits with single underscores between them, and a fraction of zeros only
-// («5.00» is 5).
-func pydanticInt(s string) (int64, bool) {
-	s = strings.TrimFunc(s, unicode.IsSpace)
-	if whole, frac, ok := strings.Cut(s, "."); ok {
-		if frac == "" || strings.Trim(frac, "0") != "" {
-			return 0, false
-		}
-		s = whole
-	}
-	digits := strings.TrimPrefix(strings.TrimPrefix(s, "+"), "-")
-	if len(s)-len(digits) > 1 || digits == "" || digits[0] == '_' || digits[len(digits)-1] == '_' || strings.Contains(digits, "__") {
-		return 0, false
-	}
-	for _, c := range digits {
-		if (c < '0' || c > '9') && c != '_' {
-			return 0, false
+// pathIntsInto validates the path parameters into `ps`, for a route that also has a body (the
+// errors of both together).
+func pathIntsInto(ps *pyd.Params, r *http.Request, names ...string) ([]int64, bool) {
+	out := make([]int64, len(names))
+	for i, n := range names {
+		switch v := ps.Path(n, r.PathValue(n), pyd.Int()).(type) {
+		case int64:
+			out[i] = v
+		case *big.Int:
+			out[i] = 0
 		}
 	}
-	v, err := strconv.ParseInt(strings.ReplaceAll(s, "_", ""), 10, 64)
-	return v, err == nil
+	return out, !ps.Failed()
+}
+
+type bodyKey struct{}
+
+// withBody is FastAPI's reading of a route's body, BEFORE its dependencies: a JSON that does
+// not parse is a 422 (a 400 when it cannot be read) even for whoever is not signed in. The
+// body read waits in the request for the validation (bodyOf), after the guards.
+func withBody(h http.Handler) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		raw, err := io.ReadAll(r.Body)
+		if err != nil {
+			pyd.BadRequestBody().Write(w)
+			return
+		}
+		body, early := pyd.ReadBody(raw, r.Header.Get("Content-Type"))
+		if early != nil {
+			early.Write(w)
+			return
+		}
+		h.ServeHTTP(w, r.WithContext(context.WithValue(r.Context(), bodyKey{}, body)))
+	})
+}
+
+// bodyOf is the body withBody read.
+func bodyOf(r *http.Request) pyd.Body {
+	b, _ := r.Context().Value(bodyKey{}).(pyd.Body)
+	return b
+}
+
+// validated answers the 422 of the parameters, when there is one.
+func validated(w http.ResponseWriter, ps *pyd.Params) bool {
+	if resp := ps.Response(); resp != nil {
+		resp.Write(w)
+		return false
+	}
+	return true
+}
+
+// optStr, optInt and optBool read an Optional field of a validated body (nil = None).
+func optStr(mv *pyd.ModelValue, name string) *string {
+	if v, ok := mv.Get(name).(string); ok {
+		return &v
+	}
+	return nil
+}
+
+func optInt(mv *pyd.ModelValue, name string) *int64 {
+	switch v := mv.Get(name).(type) {
+	case int64:
+		return &v
+	case *big.Int:
+		zero := int64(0)
+		return &zero
+	}
+	return nil
+}
+
+func optBool(mv *pyd.ModelValue, name string) *bool {
+	if v, ok := mv.Get(name).(bool); ok {
+		return &v
+	}
+	return nil
 }
