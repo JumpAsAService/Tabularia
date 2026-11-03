@@ -12,6 +12,7 @@ import (
 	"syscall"
 	"time"
 
+	"github.com/JumpAsAService/Tabularia/gateway-go/internal/api"
 	"github.com/JumpAsAService/Tabularia/gateway-go/internal/auth"
 	"github.com/JumpAsAService/Tabularia/gateway-go/internal/clientip"
 	"github.com/JumpAsAService/Tabularia/gateway-go/internal/config"
@@ -54,10 +55,9 @@ func run(log *slog.Logger) error {
 		DB: pool, Secret: cfg.JWTSecret, Algorithm: cfg.JWTAlgorithm, CookieDomain: cfg.CookieDomain,
 		Settings: panel, ClientIP: clientip.New(cfg.ForwardedAllowIPs), Log: log,
 	}
-	_ = authn // the first route that needs a person uses it (phase 2: /auth/me)
-
 	routes := []server.Route{
 		{Method: http.MethodGet, Pattern: "/health", Handler: server.Health()},
+		{Method: http.MethodGet, Pattern: "/auth/me", Handler: api.Me(authn, pool, panel, log)},
 	}
 	srv := &http.Server{
 		Addr:              cfg.Listen,

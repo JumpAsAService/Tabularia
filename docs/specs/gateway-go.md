@@ -1,6 +1,6 @@
 # Spec: the gateway in Go
 
-Status: started 2026-11-03 on the `gateway-go` branch. Nothing here reaches `main`, the
+Status: started 2026-11-03 on the `gateway-go` branch; phase 2 begun with `/auth/me`. Nothing here reaches `main`, the
 images or the Helm chart until the Go gateway serves every route (see *Done*).
 
 ## Objective
@@ -110,6 +110,10 @@ All in a container (no Go on the maintainer's machine):
 docker run --rm -v "$PWD/gateway-go":/src -w /src golang:1.27.3-bookworm go test ./...
 # the image
 docker build -t tabularia-gateway-go:dev gateway-go
+# the two gateways side by side on a disposable stack, the same requests to both
+gateway-go/scripts/diffcheck.sh
+# the route inventory (docs/gateway-go-routes.md), after porting a route
+gateway-go/scripts/inventory.sh
 ```
 
 ## Boundaries
