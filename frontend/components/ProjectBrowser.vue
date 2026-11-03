@@ -58,6 +58,7 @@ import { useFlows, type FlowSummary } from '~/composables/useFlows'
 import { useRuns, type RunInfo } from '~/composables/useRuns'
 import RunProgressText from '~/components/ui/RunProgressText.vue'
 import { usePopover } from '~/composables/usePopover'
+import { creationFolder, personalFolderOf } from '~/composables/creationFolder'
 import { useDialogA11y } from '~/composables/useDialogA11y'
 import { useDatasources, type ApiDatasourceDraft, type DatasourceInfo, type DbDatasourceDraft, type GsheetsDatasourceDraft, type S3DatasourceDraft, type SharePointDatasourceDraft, type SftpDatasourceDraft } from '~/composables/useDatasources'
 import { runNotes, notesText } from '~/composables/usePlaceholders'
@@ -134,6 +135,9 @@ const loading = ref(false)
 
 const isSuper = computed(() => !!user.value?.is_superuser)
 const current = computed(() => projects.value.find((p) => p.id === currentId.value) ?? null)
+// where «New» creates: the open folder, at the top level one's own (composables/creationFolder.ts)
+const myFolder = computed(() => personalFolderOf(projects.value, user.value?.id))
+const target = computed(() => creationFolder(currentId.value, projects.value, user.value?.id))
 
 // ── Path and navigation ──────────────────────────────────────────────────
 const byId = computed(() => new Map(projects.value.map((p) => [p.id, p])))
@@ -781,35 +785,35 @@ usePopover(newMenu, newPop, closeNew)
 
 function createFlowWith(engineId: string) {
   closeNew()
-  const where = currentId.value != null ? `&project=${currentId.value}` : ''
+  const where = target.value != null ? `&project=${target.value}` : ''
   navigateTo(`/editor?engine=${engineId}${where}`)
 }
 
 function createFlowGroup() {
   closeNew()
-  if (currentId.value != null) navigateTo(`/flow-group?project=${currentId.value}`)
+  if (target.value != null) navigateTo(`/flow-group?project=${target.value}`)
 }
 
 function createScript() {
   closeNew()
-  if (currentId.value != null) navigateTo(`/script?project=${currentId.value}`)
+  if (target.value != null) navigateTo(`/script?project=${target.value}`)
 }
 
 function createNotebook() {
   closeNew()
-  if (currentId.value != null) navigateTo(`/notebook?project=${currentId.value}`)
+  if (target.value != null) navigateTo(`/notebook?project=${target.value}`)
 }
 
 function createSqlScript() {
   closeNew()
-  if (currentId.value != null) navigateTo(`/sql-script?project=${currentId.value}`)
+  if (target.value != null) navigateTo(`/sql-script?project=${target.value}`)
 }
 
 // «New → Report»: made here with a starting page (the name as title, «Page X of Y» in the
 // footer) under the first free «New report» name, then opened in the designer
 const creatingReport = ref(false)
 async function createReport() {
-  const folder = currentId.value
+  const folder = target.value
   if (folder == null || creatingReport.value) return
   creatingReport.value = true
   try {
@@ -842,7 +846,7 @@ async function createReport() {
 // the designer
 const creatingDashboard = ref(false)
 async function createDashboard() {
-  const folder = currentId.value
+  const folder = target.value
   if (folder == null || creatingDashboard.value) return
   creatingDashboard.value = true
   try {
@@ -1011,6 +1015,8 @@ async function saveConnection(draft: ConnectionDraft) {
 
 async function openDbDsDialog() {
   closeNew()
+  // at the top level the datasource goes to one's own folder: it opens, the dialog on it
+  if (currentId.value == null && target.value != null) openFolder(target.value)
   dbDsError.value = ''
   try {
     // every source but mail: databases, SharePoint, SFTP, HTTP APIs, and S3 (a
@@ -1153,7 +1159,7 @@ watch(currentId, () => { q.value = ''; kindFilter.value = null; settingsOpen.val
         <RefreshCw :size="13" />
       </button>
 
-      <div v-if="currentId !== null || isSuper" class="newwrap">
+      <div v-if="target !== null || isSuper" class="newwrap">
         <button class="btn-link" @click="newMenu = !newMenu"><Plus :size="14" /> {{ $t('projectBrowser.newButton') }}</button>
         <div v-if="newMenu" class="menu-backdrop" @click="closeNew" />
         <div v-if="newMenu" ref="newPop" class="menu-pop">
@@ -1166,8 +1172,9 @@ watch(currentId, () => { q.value = ''; kindFilter.value = null; settingsOpen.val
                 <button class="primary" :disabled="!newFolderName.trim()" @click="createFolder">{{ $t('projectBrowser.folderButton') }}</button>
               </div>
             </template>
-            <template v-if="currentId !== null">
+            <template v-if="target !== null">
               <div v-if="isSuper || canManage" class="menu-sep" />
+              <div v-if="currentId === null" class="menu-label">{{ $t('projectBrowser.inMyFolderLabel', { name: myFolder?.name }) }}</div>
               <button class="menu-item" @click="engineStep = true">
                 <span class="mi-top"><Workflow :size="14" /> {{ $t('projectBrowser.newFlowButton') }}</span>
               </button>

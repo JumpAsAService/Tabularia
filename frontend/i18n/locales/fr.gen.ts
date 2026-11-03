@@ -2341,6 +2341,7 @@ export default {
     "clearSearch": "Effacer le filtre",
     "newButton": "Nouveau",
     "newFolderLabel": "Nouveau dossier ici",
+    "inMyFolderLabel": "Dans mon dossier ({name})",
     "allSegment": "Tout",
     "kind_folder": "Dossiers",
     "kind_flow": "Flux",

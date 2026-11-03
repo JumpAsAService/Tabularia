@@ -2314,6 +2314,7 @@ export default {
     "clearSearch": "Svuota il filtro",
     "newButton": "Nuovo",
     "newFolderLabel": "Nuova cartella qui",
+    "inMyFolderLabel": "Nella mia cartella ({name})",
     "allSegment": "Tutto",
     "kind_folder": "Cartelle",
     "kind_flow": "Flussi",

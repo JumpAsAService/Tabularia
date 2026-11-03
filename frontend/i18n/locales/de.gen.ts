@@ -2341,6 +2341,7 @@ export default {
     "clearSearch": "Filter leeren",
     "newButton": "Neu",
     "newFolderLabel": "Neuer Ordner hier",
+    "inMyFolderLabel": "In meinem Ordner ({name})",
     "allSegment": "Alle",
     "kind_folder": "Ordner",
     "kind_flow": "Flows",

@@ -17,6 +17,10 @@ exposes at `/system/info` and in the app's settings menu.
   in memory. On Polars, *Top 20 Products by Revenue* passed 7 GB at `robust` and was
   killed; on DuckDB it takes 18 s and some 300 MB. Flows made by earlier samples keep
   their engine.
+- **A first flow from where one lands**: at the top of Explore, «New» now offers a flow,
+  a group, a report, a dashboard, a script… and makes it in one's own folder, as the menu
+  says. Before, it offered only «New folder», to the administrators only: a first flow
+  seemed impossible to make until one opened a folder.
 
 ## 1.3.0 «Catone» — 2026-11-02
 
