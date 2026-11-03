@@ -55,3 +55,10 @@ func pyStr(v any) *string {
 	}
 	return nil
 }
+
+// noContent is a route declared with status_code=204: FastAPI's JSONResponse class still
+// names its content type, with no body.
+func noContent(w http.ResponseWriter) {
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(http.StatusNoContent)
+}

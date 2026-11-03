@@ -11,6 +11,8 @@ import (
 	"context"
 	"encoding/json"
 	"log/slog"
+	"os"
+	"strconv"
 	"strings"
 	"sync/atomic"
 	"time"
@@ -28,6 +30,7 @@ type values struct {
 	sessionIdleMinutes int
 	personalTokens     bool
 	apiTokenMaxDays    int
+	runStaleTimeout    int // engine.run_stale_timeout_seconds
 }
 
 // item is an entry of overrides.ITEMS the Go gateway reads: its kind and the panel's range.
@@ -41,6 +44,21 @@ var items = map[string]item{
 	"auth.session_idle_minutes": {kind: "int", min: 0, max: 24 * 60, set: func(v *values, x any) { v.sessionIdleMinutes = int(x.(int64)) }},
 	"auth.personal_tokens":      {kind: "bool", set: func(v *values, x any) { v.personalTokens = x.(bool) }},
 	"auth.api_token_max_days":   {kind: "int", min: 1, max: 3650, set: func(v *values, x any) { v.apiTokenMaxDays = int(x.(int64)) }},
+	"engine.run_stale_timeout_seconds": {kind: "int", min: 900, max: 7 * 86400,
+		set: func(v *values, x any) { v.runStaleTimeout = int(x.(int64)) }},
+}
+
+// runStaleFromEnv is EngineSettings.run_stale_timeout_seconds from the environment: set, or
+// Celery's hard limit (CELERY__TASK_TIME_LIMIT, 3600) plus five minutes.
+func runStaleFromEnv() int {
+	if v, err := strconv.Atoi(strings.TrimSpace(os.Getenv("ENGINE__RUN_STALE_TIMEOUT_SECONDS"))); err == nil {
+		return v
+	}
+	hard := 3600
+	if v, err := strconv.Atoi(strings.TrimSpace(os.Getenv("CELERY__TASK_TIME_LIMIT"))); err == nil {
+		hard = v
+	}
+	return hard + 300
 }
 
 // Panel holds the settings in force.
@@ -53,7 +71,7 @@ type Panel struct {
 
 // New starts from the environment.
 func New(cfg *config.Config, panelEnabled bool, log *slog.Logger) *Panel {
-	p := &Panel{env: values{cfg.SessionIdleMinutes, cfg.PersonalTokens, cfg.APITokenMaxDays}, enabled: panelEnabled, log: log}
+	p := &Panel{env: values{cfg.SessionIdleMinutes, cfg.PersonalTokens, cfg.APITokenMaxDays, runStaleFromEnv()}, enabled: panelEnabled, log: log}
 	v := p.env
 	p.current.Store(&v)
 	return p
@@ -62,6 +80,12 @@ func New(cfg *config.Config, panelEnabled bool, log *slog.Logger) *Panel {
 func (p *Panel) SessionIdleMinutes() int { return p.current.Load().sessionIdleMinutes }
 func (p *Panel) PersonalTokens() bool    { return p.current.Load().personalTokens }
 func (p *Panel) APITokenMaxDays() int    { return p.current.Load().apiTokenMaxDays }
+
+// RunStaleTimeout is engine.run_stale_timeout_seconds.
+func (p *Panel) RunStaleTimeout() int { return p.current.Load().runStaleTimeout }
+
+// FromPanel is engine_panel_settings.from_panel: ENGINE__SETTINGS_PANEL.
+func (p *Panel) FromPanel() bool { return p.enabled }
 
 // Apply puts in force the rows just read (key → JSON text): the good ones on top of the
 // environment, the others dropped and logged.
