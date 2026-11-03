@@ -27,6 +27,15 @@ same addresses, same JSON, same status codes, same cookies, same tables.
    ported one at a time; each one is verified against the Python one.
 3. **On a branch of its own**, tested side by side with the Python gateway. It goes to
    production only when it is complete: no mixed deployment is shipped.
+4. **What only Python can do stays in a small Python service** (2026-11-03): the AI
+   assistant, built on pydantic-ai (the chat on the data, the flows' agent, the plans, the AI
+   comments of reports and dashboards), and the SQL parsing done with sqlglot (the SQL node's
+   fence, the reports' parameters, the tables a SQL script names, the dbt export's dialects).
+   There is no faithful Go equivalent of either, and a parser written by approximation would
+   weaken the SQL fence. The same image as today with a role of its own (`APP__ROLE=ai`):
+   the Go gateway forwards the assistant's routes to it and asks it for the SQL parsing over
+   an internal API. Rewriting the assistant in Go with the providers' official SDKs stays
+   possible later, checked against a fake provider that answers deterministically.
 
 ## Architecture
 
@@ -36,6 +45,14 @@ browser / scripts ──► gateway-go :8000 ──► ported route: answered in
                          │
                          ├── PostgreSQL (the same database, the same tables)
                          └── Valkey (the same keys)
+```
+
+At the end (decision 4) the Python gateway behind is gone, and a small Python service stays:
+
+```
+browser / scripts ──► gateway-go ──► every route in Go
+                         ├──► the assistant's routes forwarded to the AI service (Python, APP__ROLE=ai)
+                         └──► SQL parsing asked of the AI service over an internal API (sqlglot)
 ```
 
 - **One table of ported routes** (`internal/routes`): method + path pattern → handler.
@@ -95,9 +112,8 @@ For a ported route, for every request in its corpus:
 3. **The rest of the CRUD**: users, groups, connections (Fernet), settings, audit, API
    tokens, webhooks, banners, the engine proxy routes.
 4. **The hard parts**: the orchestrator role (schedules, queue locks, retention), SSO
-   (OIDC), the notebooks' WebSocket proxy, exports and their slots, OpenLineage, the SQL
-   guard (sqlglot has no Go equivalent: a decision of its own), the AI assistant
-   (pydantic-ai: same).
+   (OIDC), the notebooks' WebSocket proxy, exports and their slots, OpenLineage; the AI
+   service (decision 4): the assistant's routes and an internal API for the SQL parsing.
 5. **Switch**: the images, the compose files and the Helm chart run the Go gateway;
    the Python one is removed. Only when the inventory has no *Python* line.
 
@@ -127,7 +143,5 @@ gateway-go/scripts/inventory.sh
 
 ## Open questions
 
-- The SQL guard (`sqlglot`) and the AI assistant (`pydantic-ai`) have no Go equivalent:
-  keep them in a small Python service behind the Go gateway, or rewrite them.
 - WebSocket library for the notebooks' proxy (`nhooyr.io/websocket` → `coder/websocket`,
   or `gorilla/websocket`).
