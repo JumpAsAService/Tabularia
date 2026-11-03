@@ -119,11 +119,12 @@ class DbQueryRequest(BaseModel):
 def query(request: DbQueryRequest):
     """A SQL script run on a connection: the first rows, as a preview's. On the preview
     worker, with the preview's time limit."""
-    from app.api.routes.tasks import _PREVIEW_ERROR_STATUS, on_preview_worker
+    from app.api.routes.tasks import _PREVIEW_ERROR_STATUS, on_preview_worker, said_by_preview_worker
 
-    payload = on_preview_worker(
+    payload = said_by_preview_worker(lambda: on_preview_worker(
         "app.tasks.jobs.db_query_task",
-        {"connection": request.connection.model_dump(), "sql": request.sql, "limit": request.limit}, request.slot)
+        {"connection": request.connection.model_dump(), "sql": request.sql, "limit": request.limit}, request.slot),
+        "The query's result ran out of the worker's memory: aggregate or filter it in the SQL, and try again")
     if not payload.get("ok"):
         raise HTTPException(status_code=_PREVIEW_ERROR_STATUS.get(payload.get("error"), 400),
                             detail=payload.get("detail", "Query failed"))

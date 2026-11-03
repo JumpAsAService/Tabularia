@@ -5,7 +5,7 @@ from concurrent.futures import ThreadPoolExecutor
 
 from fastapi import APIRouter, HTTPException
 from celery.result import AsyncResult
-from celery.exceptions import TaskRevokedError, TimeoutError as CeleryTimeoutError
+from celery.exceptions import TaskRevokedError, TimeoutError as CeleryTimeoutError, WorkerLostError
 from app.tasks.jobs import transform_data_task
 from app.tasks.celery_app import celery_app
 from app.tasks import worker_pool
@@ -94,6 +94,8 @@ _PREVIEW_POLL_SECONDS = 0.25
 _WORKER_LOOK_SECONDS = 5.0  # how often a wait with others behind it checks its worker is there
 _SUPERSEDED = "Preview superseded by a more recent request"
 WORKER_LOST = "The worker computing this was lost: try again"
+PREVIEW_OUT_OF_MEMORY = ("The preview ran out of the worker's memory: give the source a development sample, "
+                         "or filter it earlier in the flow, and try again")
 # how long the synchronous export waits for a worker to pick it up, on top of the
 # workers' time limit for the export itself
 EXPORT_QUEUE_WAIT_SECONDS = 600
@@ -153,6 +155,19 @@ def on_preview_worker(task_name: str, kwargs: dict, slot: str | None, seconds: f
     return payload
 
 
+def said_by_preview_worker(send, out_of_memory: str) -> dict:
+    """`send()`, a preview's task, with its process killed while it worked said in words: the kernel's
+    OOM killer at the worker's memory limit (worker_killed) is a 422 saying what to change, any other
+    loss a 503 to try again. Both were a 500, «Internal Server Error» as text (bug hunt 2026-11-03).
+    Reports and dashboards say it their way (routes/reports.py, `_from_worker`)."""
+    try:
+        return send()
+    except WorkerLostError as e:
+        if worker_killed(e):
+            raise HTTPException(status_code=422, detail=out_of_memory) from None
+        raise HTTPException(status_code=503, detail=WORKER_LOST) from None
+
+
 @router.post("/preview", response_model=PreviewResult)
 def preview_flow(request: PreviewRequest):
     """
@@ -180,7 +195,8 @@ def preview_flow(request: PreviewRequest):
         kwargs["sort_keys"] = request.sort_keys
     if request.principal:  # the same rule: only when set (the editor's previews do not send it)
         kwargs["principal"] = request.principal
-    payload = on_preview_worker("app.tasks.jobs.preview_task", kwargs, request.slot)
+    payload = said_by_preview_worker(lambda: on_preview_worker("app.tasks.jobs.preview_task", kwargs, request.slot),
+                                     PREVIEW_OUT_OF_MEMORY)
     if not payload.get("ok"):
         status = _PREVIEW_ERROR_STATUS.get(payload.get("error"), 400)
         raise HTTPException(status_code=status, detail=payload.get("detail", "Preview failed"))

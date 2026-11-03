@@ -46,6 +46,10 @@ exposes at `/system/info` and in the app's settings menu.
   it too big read the limit's 3 million rows first: 10-17 s and 1.5 GB of a preview worker,
   at every change in the dashboard designer. A dataset with steps is still read at once.
 
+- **A preview whose worker ran out of memory says so**, in the editor and for a query on a
+  connection: a 422 telling what to change (a development sample, a filter earlier, an
+  aggregation in the SQL), or a 503 to try again when the worker went away for another reason.
+  It was a 500, «Internal Server Error» as plain text.
 ## 1.3.0 «Catone» — 2026-11-02
 
 Fourth release, and a new name: «Catone», after Marcus Porcius Cato, censor in 184 BC,
