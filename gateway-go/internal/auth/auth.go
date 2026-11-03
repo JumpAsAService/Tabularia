@@ -87,13 +87,12 @@ func (a *Authenticator) Authenticate(ctx context.Context, r *http.Request, route
 		return nil, a.refuse(r, cred)
 	}
 	p, err := a.sessionUser(ctx, userID, sid)
+	if errors.Is(err, pgx.ErrNoRows) {
+		return nil, a.refuse(r, cred) // user gone, session closed, expired or still
+	}
 	if err != nil {
-		if !errors.Is(err, pgx.ErrNoRows) {
-			a.Log.Error("reading the session", "err", err)
-		}
-		// user gone, session closed, expired or still — and, unlike Python, a database
-		// that does not answer: the Python gateway answers that with a 500
-		return nil, a.refuse(r, cred)
+		a.Log.Error("reading the session", "err", err)
+		return nil, internalError()
 	}
 	if !p.User.IsActive {
 		return nil, a.refuse(r, cred)
@@ -286,11 +285,12 @@ func (a *Authenticator) apiToken(ctx context.Context, r *http.Request, cred cred
 		WHERE t.token_hash = $1 AND t.expires_at > $2`,
 		hex.EncodeToString(sum[:]), naive(a.now()),
 	).Scan(append(scanUser(&p.User), &tokenID, &p.TokenName, &p.TokenScope, &lastUsed, &adminG, &observerG)...)
-	if err != nil {
-		if !errors.Is(err, pgx.ErrNoRows) {
-			a.Log.Error("reading the API token", "err", err)
-		}
+	if errors.Is(err, pgx.ErrNoRows) {
 		return nil, a.refuse(r, cred) // never existed, revoked or expired
+	}
+	if err != nil {
+		a.Log.Error("reading the API token", "err", err)
+		return nil, internalError()
 	}
 	u := &p.User
 	if !u.IsActive {

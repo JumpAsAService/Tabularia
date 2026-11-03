@@ -62,10 +62,18 @@ func bearer(header string) string {
 }
 
 // Refusal is an HTTPException of the Python gateway: status, `{"detail": …}` and headers.
+// Internal is an exception no handler catches (a database that does not answer): Starlette's
+// plain-text 500.
 type Refusal struct {
-	Status int
-	Detail string
-	Header http.Header
+	Status   int
+	Detail   string
+	Header   http.Header
+	Internal bool
+}
+
+// internalError is the Refusal of an unexpected error.
+func internalError() *Refusal {
+	return &Refusal{Status: http.StatusInternalServerError, Detail: "Internal Server Error", Internal: true}
 }
 
 func (e *Refusal) Error() string { return fmt.Sprintf("%d %s", e.Status, e.Detail) }

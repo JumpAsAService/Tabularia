@@ -59,8 +59,13 @@ func JSON(w http.ResponseWriter, status int, v any) {
 	_, _ = w.Write(body)
 }
 
-// Refuse writes an HTTPException: `{"detail": …}` with its headers.
+// Refuse writes an HTTPException: `{"detail": …}` with its headers; an internal error as
+// Starlette writes one.
 func Refuse(w http.ResponseWriter, e *auth.Refusal) {
+	if e.Internal {
+		InternalError(w)
+		return
+	}
 	for k, vs := range e.Header {
 		for _, v := range vs {
 			w.Header().Add(k, v)
@@ -80,6 +85,14 @@ func Authed(a *auth.Authenticator, route string, h func(http.ResponseWriter, *ht
 		}
 		h(w, reqinfo.With(r, a.ClientIP, p), p)
 	})
+}
+
+// InternalError is Starlette's answer to an exception no handler catches: a 500 with
+// «Internal Server Error» as plain text.
+func InternalError(w http.ResponseWriter) {
+	w.Header().Set("Content-Type", "text/plain; charset=utf-8")
+	w.WriteHeader(http.StatusInternalServerError)
+	_, _ = w.Write([]byte("Internal Server Error"))
 }
 
 // Health is GET /health (app/main.py): the process is serving.

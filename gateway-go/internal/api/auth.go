@@ -56,13 +56,13 @@ func Me(a *auth.Authenticator, db *pgxpool.Pool, set Settings, log *slog.Logger)
 		rs, err := roles.Of(r.Context(), db, u.ID, u.IsSuperuser, u.IsObserver)
 		if err != nil {
 			log.Error("reading the roles", "user", u.ID, "err", err)
-			server.JSON(w, http.StatusInternalServerError, map[string]string{"detail": "Internal Server Error"})
+			server.InternalError(w)
 			return
 		}
 		groups, err := groupNames(r, db, u.ID)
 		if err != nil {
 			log.Error("reading the groups", "user", u.ID, "err", err)
-			server.JSON(w, http.StatusInternalServerError, map[string]string{"detail": "Internal Server Error"})
+			server.InternalError(w)
 			return
 		}
 		server.JSON(w, http.StatusOK, MeOut{
