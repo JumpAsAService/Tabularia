@@ -24,8 +24,8 @@ run history when a number surprises you.
 
 | Engine | id | Operations | Notes |
 |---|---|---|---|
-| Polars | `polars` | all 20 | Default. In-process, lazy, streaming. |
-| DuckDB | `duckdb` | all 20 | Out-of-core SQL, spills to disk. Good for very large joins and aggregations. |
+| DuckDB | `duckdb` | all 20 | Default. Out-of-core SQL, spills to disk. Good for very large joins and aggregations. |
+| Polars | `polars` | all 20 | In-process, lazy, streaming; a group is held in memory, so very large aggregations may need more of it than DuckDB. |
 | chDB | `chdb` | 19 — no `foreach` | Out-of-core SQL, ClickHouse dialect, in-process. |
 | ClickHouse (external) | `clickhouse` | 19 — no `foreach` | Same dialect and operation set as chDB, executed on a remote server. |
 | BigQuery | `bigquery` | 19 — no `foreach`; no `median` inside `pivot` | GoogleSQL over temporary external tables on Google Cloud Storage; results through the Storage Read API. |

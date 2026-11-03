@@ -60,6 +60,10 @@ exposes at `/system/info` and in the app's settings menu.
   previews' development sample and published a datasource of the sample's rows, while its dialog
   said «the entire dataset»: the sample is now the previews' only (and a Script or Container
   node's trial's, which publishes nothing).
+- **DuckDB is the default engine.** A new flow, the assistant's query and a SQL script with no
+  engine chosen run on DuckDB (or on the first engine the administrator allows), which spills
+  to disk where Polars holds a group in memory: on 42 million rows a Polars aggregation took an
+  8 GiB worker down. Existing flows keep their engine; a person's favourite engine still wins.
 
 ## 1.3.0 «Catone» — 2026-11-02
 

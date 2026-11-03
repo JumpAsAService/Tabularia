@@ -21,6 +21,18 @@ from app.models import DisabledEngine
 # the two would force the other to import from a routes module.
 KNOWN_ENGINES: tuple[str, ...] = ("polars", "duckdb", "chdb", "clickhouse", "bigquery")
 
+# The engine of what nobody chose one for — a new flow, the assistant's query, a SQL script — the
+# first of these the administrator allows. DuckDB first: it spills to disk where Polars holds a
+# group in memory (bug hunt 2026-11-03: «Margin by Category and Month» over 42 million rows took an
+# 8 GiB worker down on Polars). The engine's own default is the same (backend app/engine DEFAULT_ENGINE).
+PREFERRED_ENGINES: tuple[str, ...] = ("duckdb", "polars", "chdb", "clickhouse", "bigquery")
+DEFAULT_ENGINE = PREFERRED_ENGINES[0]
+
+
+def default_engine(allowed: Optional[set[str]] = None) -> str:
+    """The first preferred engine among `allowed` (every one when None)."""
+    return next((e for e in PREFERRED_ENGINES if allowed is None or e in allowed), DEFAULT_ENGINE)
+
 
 def disabled_engines(session: Session) -> set[str]:
     """The ids of the engines the administrator disabled (often the empty set)."""
@@ -35,8 +47,7 @@ def allowed_engines(session: Session) -> set[str]:
 async def pick_engine(session: Session, requested: Optional[str], before_asking: Optional[Callable[[], None]] = None) -> Optional[str]:
     """The engine of a query (the assistant's, a SQL script's): one AVAILABLE on the engine
     and ALLOWED by the administrator. When the client asks for one that is not, the error says which
-    may be chosen; when it does not ask, the first usable one is taken (Polars, if
-    there). `before_asking`: what to do between the policy read and the engine's answer, which is
+    may be chosen; when it does not ask, the first usable one is taken (`default_engine`). `before_asking`: what to do between the policy read and the engine's answer, which is
     a wait: whoever has nothing pending hands the database connection back there."""
     allowed = allowed_engines(session)
     if before_asking is not None:
@@ -53,4 +64,4 @@ async def pick_engine(session: Session, requested: Optional[str], before_asking:
         return requested
     if not usable:
         raise HTTPException(status_code=422, detail="No engine is available")
-    return "polars" if "polars" in usable else usable[0]
+    return default_engine(set(usable))

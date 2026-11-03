@@ -48,6 +48,7 @@ from sqlglot import exp
 from sqlglot.errors import SqlglotError
 
 from app.core.engine_client import CHECK, get_engine_client
+from app.services.engine_policy import DEFAULT_ENGINE
 
 # the names of the placeholder language (backend/app/core/placeholders.py): a parameter
 # cannot take one, nor `format` (the API's query string names the file's format with it)
@@ -295,7 +296,7 @@ DIALECTS: dict[str, Dialect] = {
 
 
 def dialect_of(key: Optional[str]) -> Dialect:
-    return DIALECTS.get(key or "polars", DIALECTS["polars"])
+    return DIALECTS.get(key or DEFAULT_ENGINE, DIALECTS["polars"])
 
 
 @dataclass(frozen=True)

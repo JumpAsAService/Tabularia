@@ -24,7 +24,7 @@ class Flow(SQLModel, table=True):
 
     # DEVELOPMENT engine (persisted): the editor's — previews, manual runs, run-now. Chosen
     # at creation, changeable afterwards.
-    engine: str = Field(default="polars")
+    engine: str = Field(default="duckdb")  # engine_policy.DEFAULT_ENGINE (a model does not import services)
     # PRODUCTION engine: used by the SCHEDULED runs (and by run-now in production mode).
     # None = the same as development. It decouples "what I use while designing" (e.g.
     # Polars, fast locally) from "what the DAG uses in production" (e.g. an external

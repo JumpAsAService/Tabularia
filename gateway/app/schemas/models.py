@@ -455,7 +455,7 @@ class FlowCreate(BaseModel):
     name: str
     description: str = ""
     definition: str = "{}"
-    engine: str = "polars"  # chosen at creation
+    engine: Optional[str] = None  # chosen at creation; none = engine_policy.default_engine, the first allowed
     production_engine: Optional[str] = None  # optional; null/"" = as engine
 
 

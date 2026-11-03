@@ -161,7 +161,7 @@ def test_instructions_name_the_dialect_and_the_language(session, ai_on):
     _, user, _, _ = _catalog(session)
     text = ai_agent._instructions(_ctx(session, user, engine="clickhouse"))
     assert "ClickHouse SQL" in text and "Italian" in text and "capped at 7 rows" in text and "`self`" in text
-    assert "Polars SQL" in ai_agent._instructions(_ctx(session, user))
+    assert "DuckDB SQL" in ai_agent._instructions(_ctx(session, user))  # no engine: the default
 
 
 # ── 4. models (admin panel) ──────────────────────────────────────────────────
@@ -357,17 +357,17 @@ async def test_the_engine_is_chosen_among_the_available_and_allowed_ones(session
     favourite may have been forbidden by the admin."""
     from app.models import DisabledEngine
 
-    assert await ai_routes.pick_engine(session, None) == "polars"
+    assert await ai_routes.pick_engine(session, None) == "duckdb"  # the default (engine_policy.PREFERRED_ENGINES)
     assert await ai_routes.pick_engine(session, "clickhouse") == "clickhouse"
-    for e in ("polars", "chdb"):
+    for e in ("duckdb", "chdb"):
         session.add(DisabledEngine(engine_id=e))
     session.commit()
-    assert await ai_routes.pick_engine(session, None) == "duckdb"  # the first one left
+    assert await ai_routes.pick_engine(session, None) == "polars"  # the first one left
     with pytest.raises(HTTPException) as err:
         await ai_routes.pick_engine(session, "chdb")
-    assert err.value.status_code == 422 and "duckdb" in err.value.detail
+    assert err.value.status_code == 422 and "polars" in err.value.detail
     # available on the engine but NOT allowed, or allowed but not available: both out
-    fake_engine.engines = [{"id": "duckdb", "label": "DuckDB", "available": False}, {"id": "clickhouse", "label": "CH", "available": True}]
+    fake_engine.engines = [{"id": "polars", "label": "Polars", "available": False}, {"id": "clickhouse", "label": "CH", "available": True}]
     assert await ai_routes.pick_engine(session, None) == "clickhouse"
 
 

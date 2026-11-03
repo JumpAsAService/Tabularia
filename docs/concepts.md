@@ -99,7 +99,7 @@ example:
 ]
 ```
 
-and an **engine** executes it: Polars (the default), DuckDB or chDB inside the workers,
+and an **engine** executes it: DuckDB (the default), Polars or chDB inside the workers,
 or an external ClickHouse or Google BigQuery. A flow has a development engine, used by
 the editor, and an optional production engine, used by schedules and **«Run in
 production»**. The engines follow one data standard; the differences that remain are
