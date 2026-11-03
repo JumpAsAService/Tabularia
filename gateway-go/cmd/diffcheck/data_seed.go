@@ -54,6 +54,27 @@ func seedData(w *World) {
 	flow("polars-chdb", "data-flow-polars-chdb", "root", "polars", ptr("chdb"))
 	flow("duck-duck", "data-flow-duck-duck", "hidden", "duckdb", ptr("duckdb"))
 
+	ds := func(key, name, project, kind string) {
+		Data["ds:"+key] = w.Insert(`INSERT INTO datasources (name, description, project_id, owner_id, bucket, key, rows, columns,
+			sort_keys, column_descriptions, kind, created_at, updated_at) VALUES ($1::text, 'about ' || $1::text, $2, $3, 'data-prep', $4, 42,
+			'[{"name": "a", "dtype": "Int64"}, {"name": "b", "dtype": "Utf8"}]', '[]', '{}', $5, '2026-01-04', '2026-01-04') RETURNING id`,
+			name, Data[project], w.People["admin"], "datasets/"+key+".parquet", kind)
+	}
+	ds("root", "data-ds-root", "root", "flow")
+	ds("child", "data-ds-child", "child", "flow")
+	ds("hidden", "data-ds-hidden", "hidden", "flow")
+	ds("run", "data-ds-run", "run", "flow")
+	view := func(key, name, project, datasource, spec string) {
+		Data["view:"+key] = w.Insert(`INSERT INTO saved_views (name, description, project_id, owner_id, datasource_id, spec,
+			created_at, updated_at) VALUES ($1, '', $2, $3, $4, $5, '2026-01-05', '2026-01-05 10:00:00.123456') RETURNING id`,
+			name, Data[project], w.People["admin"], Data["ds:"+datasource], spec)
+	}
+	view("root", "data-view-b", "root", "root", `{"engine": "polars"}`)
+	view("root2", "data-view-a", "root", "hidden", `{}`)
+	view("child", "data-view-c", "child", "child", `{"filters": []}`)
+	view("hidden", "data-view-h", "hidden", "hidden", `{}`)
+	view("run", "data-view-r", "run", "run", `{}`)
+
 	w.Token("writer", "tab_data_writer_write_00000", "write", time.Hour)
 	w.Token("writer", "tab_data_writer_read_000000", "read", time.Hour)
 	w.Token("service", "tab_data_service_write_0000", "write", time.Hour)
