@@ -6,6 +6,8 @@ import (
 	"bytes"
 	"encoding/json"
 	"net/http"
+	"path"
+	"strings"
 
 	"github.com/JumpAsAService/Tabularia/gateway-go/internal/auth"
 	"github.com/JumpAsAService/Tabularia/gateway-go/internal/reqinfo"
@@ -41,7 +43,25 @@ func New(routes []Route, upstream http.Handler) http.Handler {
 		})
 	}
 	mux.Handle("/", upstream)
-	return mux
+	return http.HandlerFunc(func(w http.ResponseWriter, req *http.Request) {
+		// Starlette routes on the DECODED path and never cleans it: «%2F» is a slash that
+		// splits a segment, «..» and «//» stay as they are. net/http's mux would match the
+		// first inside one wildcard and redirect the others: these go to Python as they came.
+		if strings.Contains(strings.ToLower(req.URL.EscapedPath()), "%2f") || !clean(req.URL.Path) {
+			upstream.ServeHTTP(w, req)
+			return
+		}
+		mux.ServeHTTP(w, req)
+	})
+}
+
+// clean says whether the mux would take the path as it is, without a redirect.
+func clean(p string) bool {
+	if p == "" || p[0] != '/' {
+		return false
+	}
+	c := path.Clean(p)
+	return c == p || (strings.HasSuffix(p, "/") && c+"/" == p)
 }
 
 // JSON writes an answer as Starlette's JSONResponse does: compact, UTF-8, no HTML escaping.
