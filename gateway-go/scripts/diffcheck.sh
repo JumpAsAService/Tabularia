@@ -7,6 +7,9 @@
 #
 #   gateway-go/scripts/diffcheck.sh                 every suite
 #   DIFF_ONLY=flows,projects gateway-go/scripts/diffcheck.sh
+#   DIFF_ENV="SCRIPTS__ENABLED=true KUBERNETES__API_URL=http://{engine}:8000" …
+#                    more variables for every gateway of both stacks; {engine} is the
+#                    stack's fake engine (to stand in for another API, as Kubernetes')
 set -eu
 here=$(cd "$(dirname "$0")/.." && pwd)
 repo=$(cd "$here/.." && pwd)
@@ -43,8 +46,11 @@ done
 
 common="-e DB__USER=t -e DB__PASSWORD=t -e DB__NAME=t -e JWT__SECRET=$secret -e SECURITY__FERNET_KEY=$fernet
     -e AUTH__ADMIN_PASSWORD=$admin_password -e APP__ROLE=api"
+extra() {  # DIFF_ENV for the stack whose engine is $1
+    for kv in ${DIFF_ENV:-}; do printf -- '-e %s ' "$(printf '%s' "$kv" | sed "s/{engine}/$1/g")"; done
+}
 python_gateway() {  # name, its database, its engine
-    docker run -d --name "$1" --network "$net" $common -e DB__HOST="$2" -e ENGINE__BASE_URL="http://$3:8000" \
+    docker run -d --name "$1" --network "$net" $common $(extra "$3") -e DB__HOST="$2" -e ENGINE__BASE_URL="http://$3:8000" \
         -p 127.0.0.1::8000 -v "$repo/gateway/app:/app/app:ro" "$gateway_image" \
         uvicorn app.main:app --host 0.0.0.0 --port 8000 --proxy-headers --forwarded-allow-ips='*' >/dev/null
 }
@@ -53,7 +59,7 @@ for s in a b; do
         "$gateway_image" python -m app.db.migra >/dev/null 2>&1
     python_gateway "$id-py$s" "$id-pg$s" "$id-eng$s"
 done
-docker run -d --name "$id-go" --network "$net" $common -e DB__HOST="$id-pgb" -e ENGINE__BASE_URL="http://$id-engb:8000" \
+docker run -d --name "$id-go" --network "$net" $common $(extra "$id-engb") -e DB__HOST="$id-pgb" -e ENGINE__BASE_URL="http://$id-engb:8000" \
     -p 127.0.0.1::8000 -e GATEWAY_GO__UPSTREAM="http://$id-pyb:8000" -e GATEWAY_GO__FORWARDED_ALLOW_IPS='*' \
     "$go_gateway" >/dev/null
 
