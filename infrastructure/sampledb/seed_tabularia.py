@@ -36,7 +36,10 @@ import time
 import urllib.error
 import urllib.request
 
-import scales
+# scales.py sits next to this file: found whether it runs as a script, is imported from its folder
+# or loaded by path, as the suites' tests of the sample reports load it (/sampledb in the CI image)
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+import scales  # noqa: E402
 
 GATEWAY = os.getenv("GATEWAY_URL", "http://gateway:8000").rstrip("/")
 ADMIN_EMAIL = os.getenv("AUTH__ADMIN_EMAIL", "")
