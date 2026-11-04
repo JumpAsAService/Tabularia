@@ -68,6 +68,9 @@ class ConcurrencyOut(BaseModel):
 
 class ScalingOut(BaseModel):
     mode: Literal["kubernetes", "none"]
+    # on a Kubernetes cluster with the panel's scaling off (mode «none»): the chart's values set
+    # the pods, not a `docker compose --scale` (bug hunt 2026-11-03)
+    on_kubernetes: bool = False
     deployment: Optional[str] = None
     autoscaler: Optional[str] = None  # hpa | scaledobject
     autoscaler_name: Optional[str] = None
@@ -133,7 +136,9 @@ async def _engine() -> tuple[dict, dict]:
 
 async def _scaling(kind: str, row: Optional[WorkerScaling], full: bool) -> ScalingOut:
     if not kube.enabled():
-        return ScalingOut(mode="none")
+        from app.core.config import on_kubernetes
+
+        return ScalingOut(mode="none", on_kubernetes=on_kubernetes())
     out = ScalingOut(mode="kubernetes", saved=row is not None)
     if row is not None:
         out.saved_min, out.saved_max, out.updated_at = row.min_replicas, row.max_replicas, row.updated_at

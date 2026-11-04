@@ -321,8 +321,10 @@ group; a column's total is inside those down to the outermost level with a foote
 grand total the name is NULL (a share beside the sums, the grand total empty; a table whose only
 total is the grand total is refused); a label is inside its own and those around it. A name that
 is both a dataset and a group is refused, so a saved report in that corner stops saying so
-instead of changing what it adds. The header of a column whose value holds `PREVIOUS` or names a
-group offers no sort: that value is known only with the rows in their order and their groups.
+instead of changing what it adds. The header of a column whose value names a group offers no
+sort: that value is known only with the rows in their groups. A table with a column whose value
+holds `PREVIOUS` offers no sort at all, from any header: sorted by another column, the row above
+would no longer be the one the designer meant («vs month before» comparing July with December).
 
 ### Rendering (engine)
 

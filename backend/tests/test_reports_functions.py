@@ -306,15 +306,16 @@ def test_previous_of_a_group_s_total_is_the_group_before_under_the_same_parent()
     assert total(m) == [None]
 
 
-def test_previous_follows_the_order_on_the_screen_and_closing_a_group_changes_no_number():
+def test_previous_follows_the_designer_s_order_and_closing_a_group_changes_no_number():
     groups = [{"by": "[cat]"}]
     columns = [{"value": "[month]"}, {"value": "[rev]"}, {"value": "PREVIOUS([qty])", "total": "PREVIOUS(SUM([qty]))"}]
     defn = report(table(columns=columns, groups=groups, sort=[{"by": "[month]"}], interactive={"sort": True, "toggle": True}))
     opened = both(defn)
-    # sorted by a column on the screen: the row above is the row above
-    state = {"items": {"t": {"sort": {"column": 1, "dir": "desc"}}}}
-    m = both(defn, state=state)
-    coppa = sorted(sorted_cat(SALES, "Coppa"), key=lambda r: -r["rev"])
+    # a sort asked by the screen changes nothing: the row above stays the one the designer meant
+    # (sorted by revenue, «vs month before» compared July with December — bug hunt 2026-11-03)
+    m = both(defn, state={"items": {"t": {"sort": {"column": 1, "dir": "desc"}}}})
+    assert details(m, 2) == details(opened, 2) and footers(m, 2) == footers(opened, 2)
+    coppa = sorted(sorted_cat(SALES, "Coppa"), key=lambda r: r["month"])
     rows = [r for r in m.tables[0].rows if r.kind == "d" and r.cells[1].value in {x["rev"] for x in coppa}]
     assert [r.cells[2].value for r in rows[:2]] == [None, coppa[0]["qty"]]
     # a closed group's rows are not shown, and its total is still the one before the next
@@ -335,11 +336,16 @@ def test_a_click_on_a_column_known_only_in_its_order_leaves_the_rows_as_they_are
 def test_the_screen_offers_no_sort_on_a_column_known_only_in_its_order(tmp_path):
     columns = [{"header": "Plain", "value": "[month]"}, {"header": "Before", "value": "PREVIOUS([rev])"},
                {"header": "Share", "value": '[rev] / SUM([rev], "cat")'}, {"header": "Whole", "value": 'SUM([rev], "d")'}]
-    defn = report(table(columns=columns, interactive={"sort": True, "toggle": True}))
     specs = {"d": {"rows": copy.deepcopy(SALES), "columns": {k: "" for k in SALES[0]}}}
-    r = render.render(defn, specs, None, "svg", tmp_path, limits=render.Limits(chart_url=""), now=NOW)
-    hots = json.loads(r.path.read_text())["hotspots"]
-    assert sorted({h["column"] for h in hots if h["kind"] == "sort"}) == [0, 3]
+
+    def sortable(cols: list, out) -> list:
+        defn = report(table(columns=cols, interactive={"sort": True, "toggle": True}))
+        r = render.render(defn, specs, None, "svg", out, limits=render.Limits(chart_url=""), now=NOW)
+        return sorted({h["column"] for h in json.loads(r.path.read_text())["hotspots"] if h["kind"] == "sort"})
+
+    # a column with PREVIOUS: no header sorts the table; without it, a group's share does not sort
+    assert sortable(columns, tmp_path / "a") == []
+    assert sortable([c for c in columns if "PREVIOUS" not in c["value"]], tmp_path / "b") == [0, 2]
 
 
 def test_previous_with_a_descending_group_and_a_filter_on_the_table():

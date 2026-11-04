@@ -174,3 +174,39 @@ async def test_catalogue_is_untouched_when_nothing_is_disallowed(session, fake_e
     listing = await catalog(request=None, session=session)
     assert all(e["available"] for e in listing)
     assert not any("disabled_by_admin" in e for e in listing)
+
+
+# ── the default: DuckDB, or the first engine allowed ─────────────────────────
+def test_what_nobody_chose_an_engine_for_runs_on_duckdb_or_the_first_allowed(session):
+    """DuckDB spills to disk where Polars holds a group in memory: on 42 million rows a Polars
+    aggregation took an 8 GiB worker down (bug hunt 2026-11-03). A new flow without an engine gets
+    it, unless the administrator disallowed it: then the next allowed, in PREFERRED_ENGINES' order."""
+    import asyncio
+
+    from app.services import engine_policy
+
+    admin = make_user(session, email="capo@x.it", is_superuser=True)
+    assert engine_policy.PREFERRED_ENGINES[0] == engine_policy.DEFAULT_ENGINE == "duckdb"
+    assert set(engine_policy.PREFERRED_ENGINES) == set(KNOWN_ENGINES)
+    assert _validate_engine(None, session) == "duckdb"
+    assert _validate_engine(None) == "duckdb"  # the catalog's check alone
+    _forbid(session, admin, "duckdb")
+    assert _validate_engine(None, session) == "polars"
+    _forbid(session, admin, "polars")
+    assert _validate_engine(None, session) == "chdb"
+    assert _validate_engine("clickhouse", session) == "clickhouse"  # a choice stays a choice
+
+    class Catalog:  # the engine's /engines: everything available
+        async def get(self, *a, **kw):
+            class R:
+                def raise_for_status(self): ...
+                def json(self): return [{"id": e, "available": True} for e in KNOWN_ENGINES]
+            return R()
+
+    import app.services.engine_policy as ep
+    original = ep.get_engine_client
+    ep.get_engine_client = lambda: Catalog()
+    try:
+        assert asyncio.run(ep.pick_engine(session, None)) == "chdb"  # the assistant's, a SQL script's
+    finally:
+        ep.get_engine_client = original

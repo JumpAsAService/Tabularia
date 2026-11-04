@@ -302,7 +302,7 @@ def test_upstream_models_carry_the_upstream_flow_dialect_and_a_query_none(sessio
     published = make_datasource(session, name="Clean customers", project_id=scene.folder.id, key="datasets/9/v1.parquet", kind="flow", flow_id=monte.id)
     downstream = _flow(session, scene, "Downstream", [_src_node("s", published.id), _ds_output("o", "Final", scene.folder.id)], [_edge("s", "o")])
     m = _models(d.build_export_payload(session, downstream, "data-prep", "duckdb"))
-    assert (m["clean_customers"]["dialect"], m["final"]["dialect"]) == ("clickhouse", "polars")
+    assert (m["clean_customers"]["dialect"], m["final"]["dialect"]) == ("clickhouse", "duckdb")  # Final: the default engine
     assert "dialect" not in m["src_customers"]       # the datasource's own query is written for its database, not for a flow engine
 
 

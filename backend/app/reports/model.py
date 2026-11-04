@@ -374,9 +374,13 @@ class PyData:
 class _Builder:
     def __init__(self, report: rd.Report, data: dict[str, DataSet], ctx: ex.Context, state: dict | None,
                  interactive: bool, layout: bool = True, store: frames.Store | None = None, max_pages: int = 400,
-                 comments: dict[str, dict] | None = None):
+                 comments: dict[str, dict] | None = None, max_rows_out: int | None = None):
         self.r = report
         self.max_pages = max_pages
+        # the detail rows the whole output may hold (an Excel file: render.XLSX_MAX_ROWS), and
+        # how many the tables wrote so far
+        self.max_rows_out = max_rows_out
+        self.rows_out = 0
         self.comments = comments or {}
         self.data = data
         self.loc = ctx.loc
@@ -765,7 +769,7 @@ class _Builder:
         it = t.item
         sorted_by = None
         st = self.state.get(it.id) or {}
-        sortable = it.interactive.sort and it.matrix is None  # a matrix's columns are values, not columns to sort by
+        sortable = _reader_sorts(it)
         if sortable and isinstance(st.get("sort"), dict) and _sorts(it, st["sort"].get("column")):
             sorted_by = {"col": st["sort"].get("column"), "dir": st["sort"].get("dir", "asc")}
         rows = []
@@ -870,6 +874,16 @@ def _reads_group(node: ex.Node, names: tuple[str | None, ...]) -> bool:
     return False
 
 
+def _reader_sorts(it: rd.TableItem) -> bool:
+    """Whether the reader may sort the table by its headers. Not a matrix: its columns are
+    values, not columns to sort by. Not a table with a column comparing a row with the one above
+    it (PREVIOUS): sorted by another column, «vs month before» compared July with December
+    (bug hunt 2026-11-03), so no header sorts it and the comparison stays the designer's."""
+    if not it.interactive.sort or it.matrix is not None:
+        return False
+    return not any(c.value and ex.calls(rd.parse(c.value), "PREVIOUS") for c in it.columns)
+
+
 def _sorts(it: rd.TableItem, col: Any) -> bool:
     """A click on a column's header sorts the rows by its value, unless that value is known
     only once the rows are in their order and in their groups (PREVIOUS, a group's aggregate):
@@ -888,7 +902,7 @@ class _Table:
         self.it = it
         self.loc = b.loc
         state = b.state.get(it.id) or {}
-        sortable = it.interactive.sort and it.matrix is None
+        sortable = _reader_sorts(it)
         self.sort_state = state.get("sort") if sortable and isinstance(state.get("sort"), dict) else None
         toggle = it.interactive.toggle
         self.collapse_all = bool(state.get("collapse_all")) if toggle else False
@@ -1009,6 +1023,11 @@ class _Table:
         pages could not hold them, none does."""
         it = self.it
         self.shown += len(rows)
+        self.b.rows_out += len(rows)
+        most_out = self.b.max_rows_out
+        if most_out is not None and self.b.rows_out > most_out:
+            raise ReportError(f"item «{it.id}»: more than {most_out:,} rows to write, the most an Excel file of a "
+                              "report holds: show its groups' totals without the detail, or filter it")
         if self.b.layout:
             _, h = self.b.r.page.dimensions()
             top, _, bottom, _ = self.b.r.page.margins
@@ -1194,22 +1213,25 @@ def _texts_of(doc: Any, out: set[str]) -> None:
 
 def build(report: rd.Report, data: dict[str, DataSet], params: dict[str, Any], ctx: ex.Context,
           state: dict | None = None, title: str = "", max_pages: int = 400, interactive: bool = False,
-          layout: bool = True, store: frames.Store | None = None, comments: dict[str, dict] | None = None) -> Model:
+          layout: bool = True, store: frames.Store | None = None, comments: dict[str, dict] | None = None,
+          max_rows_out: int | None = None) -> Model:
     """The model of a report whose data has been read; `layout`: its pages will be laid out
     (pdf, svg), and what does not fit them is said in its warnings. `store`: the datasets in
     DuckDB (frames.py); None builds one for this model when the data's columns are on (the
     default), or works it all out the interpreter's way. `comments`: what the gateway wrote for
-    the AI comments, by item (`_Builder.comment`)."""
+    the AI comments, by item (`_Builder.comment`). `max_rows_out`: the detail rows the output may
+    hold in all, None for no limit but the pages'."""
     if store is None and frames.enabled():
         with frames.build_store(report, data, ctx.loc) as own:
-            return _build(report, data, params, ctx, state, title, max_pages, interactive, layout, own, comments)
-    return _build(report, data, params, ctx, state, title, max_pages, interactive, layout, store, comments)
+            return _build(report, data, params, ctx, state, title, max_pages, interactive, layout, own, comments,
+                          max_rows_out)
+    return _build(report, data, params, ctx, state, title, max_pages, interactive, layout, store, comments, max_rows_out)
 
 
 def _build(report: rd.Report, data: dict[str, DataSet], params: dict[str, Any], ctx: ex.Context, state: dict | None,
            title: str, max_pages: int, interactive: bool, layout: bool, store: frames.Store | None,
-           comments: dict[str, dict] | None = None) -> Model:
-    b = _Builder(report, data, ctx, state, interactive, layout, store, max_pages, comments)
+           comments: dict[str, dict] | None = None, max_rows_out: int | None = None) -> Model:
+    b = _Builder(report, data, ctx, state, interactive, layout, store, max_pages, comments, max_rows_out)
     for section, it in report.items() if layout else ():
         b.past_the_paper(it, "table" if it.type in rd.GROWING else "item")
     w, h = report.page.dimensions()

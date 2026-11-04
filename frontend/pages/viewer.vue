@@ -4,6 +4,7 @@
 // PREVIEW (which reads the datasource's snapshot, it does NOT change it). The table and
 // the charts (ChartPanel, aggregation over the whole dataset) run on the same
 // transformed data. Nothing is saved.
+import { DEFAULT_ENGINE_OPTION } from '~/composables/useEngine'
 import { ref, computed } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { useFormat } from '~/composables/useFormat'
@@ -37,10 +38,8 @@ const fmtx = useFormat()
 const datasources = ref<DatasourceInfo[]>([])
 const dsId = ref<number | null>(null)
 const { preferredEngine, defaultEngine } = usePreferredEngine()
-const engines = ref<{ id: string; label: string; available: boolean }[]>([
-  { id: 'polars', label: 'Polars', available: true },
-])
-// default = the user's favourite engine (Polars as fallback until the catalog is loaded;
+const engines = ref<{ id: string; label: string; available: boolean }[]>([DEFAULT_ENGINE_OPTION])
+// default = the user's favourite engine (DuckDB as fallback until the catalog is loaded;
 // then onMounted checks the availability)
 const engine = ref(preferredEngine.value)
 
@@ -401,7 +400,7 @@ onMounted(async () => {
       engines.value = e
       // the favourite may not be available: applies the robust fallback
       engine.value = defaultEngine(engines.value)
-    }), // fallback polars
+    }), // fallback: the default engine
     // views are an extra: if they do not load, the Viewer stays usable
     viewsApi.list().then((v) => { savedViews.value = v }, () => { savedViews.value = [] }),
     projectsApi.list().then((p) => { projects.value = p }, () => { projects.value = [] }),

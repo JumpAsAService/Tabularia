@@ -2,6 +2,8 @@
 
 Checks preview/run and the supported operations; the others must raise a clear error.
 """
+import os
+
 import polars as pl
 import pytest
 
@@ -160,6 +162,33 @@ def test_sql_sandbox_blocks_file_read(storage, src):
         _engine(storage).preview(
             src, [{"type": "sql", "params": {"query": "SELECT * FROM read_csv('/app/app/core/config.py')"}}], limit=5
         )
+
+
+def test_sql_sandbox_reads_its_own_tables_in_place_and_nothing_else(storage, src):
+    """The input and the tables are views on parquet files of this run, read in place (a copy into the
+    sandbox of every column made a GROUP BY over 60 million rows take 45-81 s — bug hunt 2026-11-03):
+    `allowed_paths` lets the query read those files and no other, and the lock keeps it so."""
+    import tempfile
+
+    import duckdb
+
+    eng = _engine(storage)
+    ok = [{"type": "sql", "params": {"query": "SELECT paese, sum(vendite) AS tot FROM self GROUP BY paese ORDER BY paese"}}]
+    assert [r["tot"] for r in eng.preview(src, ok, limit=10).rows] == [250, 50, 400]
+    # another parquet in the very folder this run's own files are written to
+    other = tempfile.mkstemp(suffix=".parquet", prefix="duckdb_")[1]
+    duckdb.sql("SELECT 'secret' AS s").write_parquet(other)
+    folder = os.path.dirname(other)
+    try:
+        for query in (f"SELECT * FROM read_parquet('{other}')", f"SELECT * FROM read_parquet('{folder}/duckdb_*.parquet')",
+                      f"SELECT * FROM read_parquet('{folder}/x/../{os.path.basename(other)}')",
+                      "SELECT * FROM read_csv('/etc/passwd')", "SELECT * FROM glob('/tmp/*')",
+                      f"SET allowed_paths=['{other}']", "SET enable_external_access=true",
+                      f"ATTACH '{folder}/x.db'", f"COPY (SELECT 1) TO '{folder}/out.csv'", "INSTALL httpfs"):
+            with pytest.raises(EngineError):
+                eng.preview(src, [{"type": "sql", "params": {"query": query}}], limit=5)
+    finally:
+        os.remove(other)
 
 
 def test_sql_copies_the_input_only_when_the_query_names_it(tmp_path):

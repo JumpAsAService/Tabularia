@@ -35,6 +35,7 @@ export interface WorkerConcurrency {
 
 export interface WorkerScaling {
   mode: 'kubernetes' | 'none'
+  on_kubernetes?: boolean // mode «none» on a cluster: the chart's values set the pods
   deployment: string | null
   autoscaler: 'hpa' | 'scaledobject' | null
   autoscaler_name: string | null

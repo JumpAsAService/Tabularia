@@ -41,7 +41,7 @@ from app.models import Connection, Datasource, SqlScript, SqlScriptVersion, User
 from app.models.permission import Capability
 from app.services import audit
 from app.services import permissions as perm_service
-from app.services.engine_policy import KNOWN_ENGINES, pick_engine
+from app.services.engine_policy import DEFAULT_ENGINE, KNOWN_ENGINES, pick_engine
 from app.services.permissions import is_admin
 
 MAX_SQL_CHARS = 100_000
@@ -299,7 +299,7 @@ def resolve(session: Session, user: User, sql: str, engine: Optional[str]) -> Re
         text = text[:-1].rstrip()
     if not text:
         raise _refuse("The query is empty")
-    dialect = DIALECTS.get(engine or "polars", "postgres")
+    dialect = DIALECTS.get(engine or DEFAULT_ENGINE, "postgres")
     try:
         trees = [t for t in sqlglot.parse(text, read=dialect) if t is not None]
     except SqlglotError as e:
@@ -407,7 +407,7 @@ def named_datasources(session: Session, sql: str, engine: Optional[str],
     (`by_name` of the candidates; default: every datasource), with the folders'
     names `folders` (`folder_names`) — whoever asks for many scripts builds both once.
     A name it cannot place is left out."""
-    tables = _named_tables(sql or "", DIALECTS.get(engine or "polars", "postgres"))
+    tables = _named_tables(sql or "", DIALECTS.get(engine or DEFAULT_ENGINE, "postgres"))
     if not tables:
         return []
     if index is None:

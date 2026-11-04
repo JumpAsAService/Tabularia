@@ -564,7 +564,7 @@ def _load(definition: dict) -> rd.Report:
 
 def _over_cap(name: str, cap: int) -> dict:
     return _failure(f"The dataset «{name}» has more than {cap:,} rows, the most a dashboard reads, so this tile shows no "
-                    "number on part of them: aggregate it in its SQL, or filter it", "truncated")
+                    "number on part of them: aggregate it — in its query or in a flow — or filter it", "truncated")
 
 
 def _calculated(report: rd.Report, data: dict[str, rdata.DataSet], ctx: ex.Context, store: frames.Store | None,

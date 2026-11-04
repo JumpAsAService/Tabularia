@@ -322,7 +322,7 @@ the real schedule back.
 
 ![A scheduled run in Runs](media/getting-started/12-runs.png)
 
-A scheduled run reads the whole table, never the development sample, and with
+Every run reads the whole table, never the development sample (that is for the previews), and with
 *Overwrite if it already exists* it refreshes the same datasource each time.
 
 ## 9. Where to go next

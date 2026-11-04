@@ -182,6 +182,25 @@ def test_the_screen_s_state_sorts_a_column_and_closes_groups():
     assert kinds(fixed).count("d") == 4
 
 
+def test_a_table_comparing_a_row_with_the_one_above_offers_no_sort():
+    """«vs month before» is PREVIOUS over the designer's order: sorted by revenue, it compared
+    July with December (bug hunt 2026-11-03). No header sorts such a table, and a view that asks
+    for it anyway leaves the designer's order; without PREVIOUS the same table sorts."""
+    rows = [{"month": m, "rev": r} for m, r in ((1, 10.0), (2, 30.0), (3, 20.0))]
+    columns = [{"header": "Month", "value": "[month]"}, {"header": "Revenue", "value": "[rev]"},
+               {"header": "vs month before", "value": "[rev] - PREVIOUS([rev])"}]
+    t = table(interactive={"sort": True}, columns=columns, groups=[], sort=[{"by": "[month]"}])
+    m = build(report(t), rows, state={"items": {"t": {"sort": {"column": 1, "dir": "desc"}}}}, interactive=True)
+    doc = m.doc["body"][0]
+    assert doc["hot"] == {"sort": False, "toggle": False} and doc["sorted"] is None
+    assert [[c.value for c in r.cells] for r in m.tables[0].rows if r.kind == "d"] == \
+        [[1, 10.0, None], [2, 30.0, 20.0], [3, 20.0, -10.0]]
+    plain = table(interactive={"sort": True}, columns=columns[:2], groups=[], sort=[{"by": "[month]"}])
+    m = build(report(plain), rows, state={"items": {"t": {"sort": {"column": 1, "dir": "desc"}}}}, interactive=True)
+    assert m.doc["body"][0]["hot"]["sort"] is True
+    assert [r.cells[0].value for r in m.tables[0].rows if r.kind == "d"] == [2, 3, 1]
+
+
 def test_a_matrix_offers_no_column_to_sort():
     """Its columns are values, not the table's columns: a click on «x» marked it sorted and
     changed nothing. Its groups still open and close."""

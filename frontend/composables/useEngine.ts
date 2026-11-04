@@ -36,9 +36,14 @@ export function engineDescription(
   return te(on) ? t(on) : e.description
 }
 
-const preferredEngine = ref<string>('polars')
+// the engine of a new flow when the person chose no favourite: DuckDB, which spills to disk where
+// Polars holds a group in memory (bug hunt 2026-11-03), as the gateway's (engine_policy.py)
+export const DEFAULT_ENGINE = 'duckdb'
+export const DEFAULT_ENGINE_OPTION = { id: DEFAULT_ENGINE, label: 'DuckDB', available: true, description: '' }
+
+const preferredEngine = ref<string>(DEFAULT_ENGINE)
 // catalog of the available engines, loaded once and shared
-const catalog = ref<EngineOpt[]>([{ id: 'polars', label: 'Polars', available: true, description: '' }])
+const catalog = ref<EngineOpt[]>([DEFAULT_ENGINE_OPTION])
 let prefInit = false
 let catalogLoaded = false
 
@@ -52,7 +57,7 @@ export function usePreferredEngine() {
   }
 
   // loads the catalog once only (idempotent): useful for the selector in Settings. On error
-  // it leaves the Polars fallback and will retry.
+  // it leaves the DuckDB fallback and will retry.
   async function loadCatalog() {
     if (catalogLoaded) return
     catalogLoaded = true
@@ -72,7 +77,7 @@ export function usePreferredEngine() {
     const list = available ?? catalog.value
     const ok = list.find((e) => e.id === preferredEngine.value && e.available)
     if (ok) return preferredEngine.value
-    return list.find((e) => e.available)?.id ?? 'polars'
+    return list.find((e) => e.available)?.id ?? DEFAULT_ENGINE
   }
 
   return { preferredEngine, setPreferredEngine, engineCatalog: catalog, loadCatalog, defaultEngine }

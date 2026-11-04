@@ -50,6 +50,7 @@ from app.core.config import get_settings
 from app.core.engine_client import get_engine_client
 from app.models import Datasource, Project, User
 from app.services import ai_models, ai_pricing, ai_prompts, audit, metadata_only
+from app.services.engine_policy import DEFAULT_ENGINE
 from app.services.permissions import readable_project_ids
 
 logger = logging.getLogger(__name__)
@@ -266,7 +267,7 @@ class _EngineRefusal(Exception):
 
 
 def dialect_of(engine: Optional[str]) -> tuple[str, str]:
-    return _DIALECTS.get((engine or "polars").lower(), _DIALECTS["polars"])
+    return _DIALECTS.get((engine or DEFAULT_ENGINE).lower(), _DIALECTS["polars"])
 
 
 # what the model is told in metadata-only mode, after the administrators' text: the barrier

@@ -118,12 +118,16 @@ spec:
             - --timeout-keep-alive=75
             # stopping: the requests in flight finish, within the grace period
             - --timeout-graceful-shutdown={{ max 5 (sub (.cfg.terminationGracePeriodSeconds | default 60) 15) }}
+          {{- if ne .role "orchestrator" }}
           # Stopping, the pod first waits for the Service to drop it: closing its socket
           # at once refused the requests still sent to it (a 500 from the gateway's proxy,
-          # a 502 from the ingress) at every upgrade, restart or scale-in.
+          # a 502 from the ingress) at every upgrade, restart or scale-in. Not the
+          # orchestrator: no Service sends it requests, and in those seconds it went on
+          # taking runs from the queue that its stop then closed as interrupted.
           lifecycle:
             preStop:
               exec: { command: ["sleep", "5"] }
+          {{- end }}
           ports:
             - name: http
               containerPort: 8000
