@@ -79,7 +79,8 @@ The Python gateway's image, started with `APP__ROLE=ai`: a process that answers 
 with sqlglot. The Go gateway reaches it at `GATEWAY_GO__AI_SERVICE` (required, like
 `GATEWAY_GO__UPSTREAM`) with two clients:
 
-- `internal/aisvc`: the internal API below, one call per use of sqlglot the gateway makes;
+- `internal/aisvc`: the internal API below, one call per use of sqlglot the gateway makes (and of
+  Python's `re.compile`);
 - a forwarding proxy for the assistant's routes, sent as they came (headers, cookies, body,
   the answer streamed back), where the Python code authenticates them as it always has.
 
@@ -124,6 +125,16 @@ offsets are in characters (code points), as Python indexes a string.
   it is; its refusals are the 422 it raises.
 - `POST /internal/sql/qualified-tables` — `{"sql", "db_type"}` → `{"tables"}`, the sorted
   qualified names `_qualified_tables` finds (none for a SQL it cannot read).
+
+One more call stands outside `/internal/sql`, on its own prefix and behind the same token: Python's
+own regular expressions, which Go's (RE2: no look-behind, no back-references, another syntax) cannot
+stand in for.
+
+- `POST /internal/python/re-compile` — `{"patterns": [text…]}` → `{"compiles": [bool…]}`, one per
+  pattern in their order: whether `re.compile` takes it (`re.error` is a no; any other exception is
+  not caught, a 500, as in Python). `services/contracts.py` `_check_rule` asks it of a «pattern»
+  rule; the Go gateway sends the patterns of a document in one call, only when it has some
+  (`internal/contracts.ValidateDocument`).
 
 Everything around the parse — who may read which datasource, the refusals' words, the aliases
 put in the text, the engine's chain — is ported to Go and compared as any route

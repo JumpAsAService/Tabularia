@@ -12,11 +12,17 @@ the text the engine gets) is the Go gateway's:
 - `/without-params`: `report_params.without_params`, as it is;
 - `/qualified-tables`: `openlineage._qualified_tables`, as it is.
 
+And, on its own prefix, what only Python's own regular expressions can say:
+
+- `/internal/python/re-compile`: whether `re.compile` takes each pattern
+  (`contracts.validate_document`, a «pattern» rule).
+
 Offsets in the answers count characters (code points), as Python indexes a string.
 """
 from __future__ import annotations
 
 import hmac
+import re
 from typing import Literal, Optional
 
 import sqlglot
@@ -124,3 +130,31 @@ class QualifiedOut(BaseModel):
 def qualified_tables(body: QualifiedIn) -> QualifiedOut:
     """`openlineage._qualified_tables`: the qualified names of the tables a query reads."""
     return QualifiedOut(tables=list(openlineage._qualified_tables(body.db_type, body.sql)))
+
+
+# ── Python's own regular expressions ────────────────────────────────────────
+
+regex_router = APIRouter(prefix="/internal/python", include_in_schema=False, dependencies=[Depends(_internal_only)])
+
+
+class PatternsIn(BaseModel):
+    patterns: list[str]
+
+
+class CompilesOut(BaseModel):
+    compiles: list[bool]  # one per pattern, in their order
+
+
+@regex_router.post("/re-compile", response_model=CompilesOut)
+def re_compile(body: PatternsIn) -> CompilesOut:
+    """Whether `re.compile` takes each pattern, as `contracts._check_rule` asks it: `re.error`
+    is a no; any other exception is not caught, as there (a 500)."""
+    out = []
+    for pattern in body.patterns:
+        try:
+            re.compile(pattern)
+        except re.error:
+            out.append(False)
+        else:
+            out.append(True)
+    return CompilesOut(compiles=out)
