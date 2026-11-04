@@ -132,15 +132,25 @@ offsets are in characters (code points), as Python indexes a string.
   Who may check, the size, the rate per person and the installed modules are the Go gateway's
   (`POST /scripting/lint`).
 
-One more call stands outside `/internal/sql`, on its own prefix and behind the same token: Python's
-own regular expressions, which Go's (RE2: no look-behind, no back-references, another syntax) cannot
-stand in for.
+Two more calls stand outside `/internal/sql`, on their own prefix and behind the same token: what
+only Python's own libraries say. Python's regular expressions, which Go's (RE2: no look-behind, no
+back-references, another syntax) cannot stand in for; and httpx's encoding of a host that is not
+ASCII, done by the package `idna` (IDNA 2008 with its own Unicode tables: which code points a label
+may hold, the joiners' and bidirectional rules), which no Go library reproduces character by
+character (`golang.org/x/net/idna` follows UTS 46, other tables, other refusals).
 
 - `POST /internal/python/re-compile` — `{"patterns": [text…]}` → `{"compiles": [bool…]}`, one per
   pattern in their order: whether `re.compile` takes it (`re.error` is a no; any other exception is
   not caught, a 500, as in Python). `services/contracts.py` `_check_rule` asks it of a «pattern»
   rule; the Go gateway sends the patterns of a document in one call, only when it has some
   (`internal/contracts.ValidateDocument`).
+- `POST /internal/python/idna-encode` — `{"hosts": [text…]}` → `{"hosts": [text|null…]}`, one per
+  host in their order: httpx 0.28's `encode_host` (`idna.encode(host.lower())` for a host that is
+  not ASCII), null for its `InvalidURL` («Invalid IDNA hostname»). The Go gateway reads every address
+  as httpx does (`internal/pyurl.HTTPXURL`: `webhooks.validate_url` at a webhook's or the SIEM's
+  save, `webhooks._resolve` at a delivery or a send) and asks this only for a host that is not
+  ASCII (`pyurl.UseIDNA`, set by `api.Routes` and `api.Jobs`); the rest of the address — urlsplit's
+  NFKC check, `str.lower` of a hostname, the port, the labels' lengths — is Go's.
 
 And one call on `/internal/ai`, behind the same token: the AI comments the queue cannot write itself
 (the assistant's, built on pydantic-ai).

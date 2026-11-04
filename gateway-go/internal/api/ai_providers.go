@@ -15,7 +15,6 @@ import (
 	"github.com/JumpAsAService/Tabularia/gateway-go/internal/pyd"
 	"github.com/JumpAsAService/Tabularia/gateway-go/internal/pyd/gatewaymodels"
 	"github.com/JumpAsAService/Tabularia/gateway-go/internal/pyjson"
-	"github.com/JumpAsAService/Tabularia/gateway-go/internal/pyurl"
 	"github.com/JumpAsAService/Tabularia/gateway-go/internal/server"
 )
 
@@ -95,14 +94,9 @@ func listAIProviders(d *Deps) adminHandler {
 	}
 }
 
-// validProviderURL is _valid_url; false when the answer was written (a 422, or the request
-// handed to Python for a host it alone judges).
+// validProviderURL is _valid_url; false when the answer was written (a 422).
 func validProviderURL(d *Deps, w http.ResponseWriter, r *http.Request, raw []byte, kind, url string) (string, bool) {
 	u, err := aimodels.NormalizeBaseURL(kind, url)
-	if errors.Is(err, pyurl.ErrNotASCII) {
-		forwardToPython(d, w, r, raw)
-		return "", false
-	}
 	if err != nil {
 		adminDetail(w, http.StatusUnprocessableEntity, err.Error())
 		return "", false
@@ -399,7 +393,11 @@ func testAIProvider(d *Deps) adminBodyHandler {
 			target = aimodels.Endpoint{Name: name, Kind: kind, BaseURL: url, Active: true}
 		}
 		if target.Kind == aimodels.Anthropic {
-			forwardToPython(d, w, r, raw) // services/ai_anthropic.py catalog: Anthropic's SDK
+			// services/ai_anthropic.py catalog reads it with Anthropic's SDK (its requests, its
+			// retry, its errors): the assistant's provider code, in the AI service. The request
+			// goes there as it came; the checks above read only the database, and it makes
+			// them again identically before reading the catalog
+			toAIService(d, w, r, raw)
 			return
 		}
 		ids, err := aimodels.OpenAICatalog(ctx, target, secret)

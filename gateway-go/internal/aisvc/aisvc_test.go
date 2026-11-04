@@ -115,3 +115,31 @@ func TestTheCommentsAreSentAsEncodedAndTheAnswerGivenBack(t *testing.T) {
 		t.Error(err)
 	}
 }
+
+func TestTheIDNAEncodingIsAskedOneHostAtATime(t *testing.T) {
+	c := service(t, func(path string, body map[string]any) (int, any) {
+		if path != "/internal/python/idna-encode" {
+			return 404, nil
+		}
+		switch body["hosts"].([]any)[0] {
+		case "bücher.example":
+			return 200, map[string]any{"hosts": []any{"xn--bcher-kva.example"}}
+		case "a‍b":
+			return 200, map[string]any{"hosts": []any{nil}}
+		}
+		return 500, nil
+	})
+	if a, ok, err := c.IDNAEncode("bücher.example"); err != nil || !ok || a != "xn--bcher-kva.example" {
+		t.Errorf("encoded: %q %v %v", a, ok, err)
+	}
+	if _, ok, err := c.IDNAEncode("a‍b"); err != nil || ok {
+		t.Errorf("refused: %v %v", ok, err)
+	}
+	if _, _, err := c.IDNAEncode("boom"); err == nil {
+		t.Error("a failure is an error")
+	}
+	var none *Client
+	if _, _, err := none.IDNAEncode("x"); !errors.Is(err, ErrNoClient) {
+		t.Error(err)
+	}
+}

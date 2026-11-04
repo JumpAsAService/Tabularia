@@ -149,6 +149,27 @@ def test_re_compile_says_what_python_takes(client):
     assert client.post("/internal/python/re-compile", json={"patterns": [1]}, headers=headers).status_code == 422
 
 
+def test_the_idna_encoding_is_httpxs(client):
+    """httpx's encode_host: idna.encode(host.lower()) for a host that is not ASCII, its
+    InvalidURL a None."""
+    import httpx
+
+    hosts = ["bücher.example", "BÜCHER.example", "ΟΔΟΣ.test", "a\u200db.test", "١.test", "ü" * 70 + ".test", "日本語.jp"]
+    headers = {INTERNAL_HEADER: internal_token()}
+    r = client.post("/internal/python/idna-encode", json={"hosts": hosts}, headers=headers)
+    assert r.status_code == 200
+    want = []
+    for h in hosts:
+        try:
+            want.append(httpx.URL(f"http://{h}/").raw_host.decode("ascii"))
+        except httpx.InvalidURL:
+            want.append(None)
+    assert r.json() == {"hosts": want}
+    assert want[0] == want[1] == "xn--bcher-kva.example" and want[3] is None and want[4] is None
+    assert client.post("/internal/python/idna-encode", json={"hosts": ["x"]}).status_code == 404
+    assert client.post("/internal/python/idna-encode", json={"hosts": [1]}, headers=headers).status_code == 422
+
+
 # ── the role ─────────────────────────────────────────────────────────────────
 @pytest.mark.parametrize("role, mounted", [("ai", True), ("api", False), ("all", False)])
 def test_only_the_ai_role_has_the_routes(role, mounted):

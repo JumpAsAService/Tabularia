@@ -12,10 +12,13 @@ the text the engine gets) is the Go gateway's:
 - `/without-params`: `report_params.without_params`, as it is;
 - `/qualified-tables`: `openlineage._qualified_tables`, as it is.
 
-And, on its own prefix, what only Python's own regular expressions can say:
+And, on its own prefix, what only Python's own libraries can say:
 
 - `/internal/python/re-compile`: whether `re.compile` takes each pattern
-  (`contracts.validate_document`, a «pattern» rule).
+  (`contracts.validate_document`, a «pattern» rule);
+- `/internal/python/idna-encode`: httpx's encoding of a host that is not ASCII (the package
+  `idna`, IDNA 2008 with its own Unicode tables), for every address read as httpx reads it
+  (`webhooks.validate_url`, `webhooks._resolve`, the SIEM's).
 
 Offsets in the answers count characters (code points), as Python indexes a string.
 """
@@ -27,6 +30,8 @@ from typing import Literal, Optional
 
 import sqlglot
 from fastapi import APIRouter, Depends, HTTPException, Request
+from httpx import InvalidURL
+from httpx._urlparse import encode_host
 from pydantic import BaseModel
 from sqlglot import exp
 from sqlglot.errors import SqlglotError
@@ -158,3 +163,25 @@ def re_compile(body: PatternsIn) -> CompilesOut:
         else:
             out.append(True)
     return CompilesOut(compiles=out)
+
+
+class HostsIn(BaseModel):
+    hosts: list[str]
+
+
+class EncodedOut(BaseModel):
+    hosts: list[Optional[str]]  # one per host, in their order: None for httpx's InvalidURL
+
+
+@regex_router.post("/idna-encode", response_model=EncodedOut)
+def idna_encode(body: HostsIn) -> EncodedOut:
+    """httpx's `encode_host` of each host (`idna.encode(host.lower())` for one that is not ASCII),
+    as `httpx.URL` calls it: its InvalidURL («Invalid IDNA hostname») is a None; any other
+    exception is not caught, a 500."""
+    out: list[Optional[str]] = []
+    for host in body.hosts:
+        try:
+            out.append(encode_host(host))
+        except InvalidURL:
+            out.append(None)
+    return EncodedOut(hosts=out)

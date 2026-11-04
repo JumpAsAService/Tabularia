@@ -1,8 +1,9 @@
 // Package pyurl parses addresses as the Python gateway does: urllib.parse.urlsplit of
 // CPython 3.12 (the scheme, the host shown to an observer, the audit's target) and
 // httpx 0.28's urlparse (the webhooks' and the SIEM's validate_url), with their errors'
-// texts. A host that is not ASCII is left to Python (ErrNotASCII): its IDNA and NFKC
-// rules have no faithful equivalent here.
+// texts. A host that is not ASCII is checked as _checknetloc does (NFKC) and lower-cased as
+// Python's str.lower does; httpx's IDNA encoding of such a host (the Python package idna) is
+// asked of the AI service (UseIDNA): without it, ErrNotASCII.
 package pyurl
 
 import (
@@ -12,14 +13,37 @@ import (
 	"net/netip"
 	"regexp"
 	"strings"
+	"sync/atomic"
 	"unicode"
 	"unicode/utf8"
 
 	"golang.org/x/text/unicode/norm"
 )
 
-// ErrNotASCII: an address whose host is not ASCII, which only Python judges faithfully.
+// ErrNotASCII: httpx's encoding of a host that is not ASCII asked with no IDNA encoder given
+// (UseIDNA): only the Python package idna says it faithfully.
 var ErrNotASCII = errors.New("pyurl: a host that is not ASCII")
+
+// ErrIDNAUnavailable: the IDNA encoder could not be asked (the AI service did not answer); the
+// error wraps it and the cause.
+var ErrIDNAUnavailable = errors.New("pyurl: the IDNA encoding could not be asked")
+
+// IDNAEncoder is httpx 0.28's encode_host for a host that is not ASCII:
+// idna.encode(host.lower()).decode("ascii"), the Python package idna (IDNA 2008, its own
+// Unicode tables), or ok=false for its IDNAError; err when it could not be asked.
+type IDNAEncoder func(host string) (ascii string, ok bool, err error)
+
+var idnaEncoder atomic.Pointer[IDNAEncoder]
+
+// UseIDNA sets the encoder HTTPXURL asks for a host that is not ASCII (the AI service's
+// /internal/python/idna-encode); nil goes back to ErrNotASCII.
+func UseIDNA(e IDNAEncoder) {
+	if e == nil {
+		idnaEncoder.Store(nil)
+		return
+	}
+	idnaEncoder.Store(&e)
+}
 
 // Split is urlsplit's result.
 type Split struct {
@@ -28,15 +52,14 @@ type Split struct {
 
 const schemeChars = "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789+-."
 
-// URLSplit is urllib.parse.urlsplit(url): a ValueError's text as the error.
-func URLSplit(url string) (Split, error) { return urlSplit(url, false) }
+// URLSplit is urllib.parse.urlsplit(url): a ValueError's text as the error. A netloc that is
+// not ASCII is checked as _checknetloc does (NFKC).
+func URLSplit(url string) (Split, error) { return urlSplit(url) }
 
-// URLSplitNFKC is urlsplit(url) for any host: a host that is not ASCII is checked as
-// _checknetloc does (NFKC), not left to Python. For the callers that read only what the
-// split says (its parts, whether there is a host), not the host's case or IDNA form.
-func URLSplitNFKC(url string) (Split, error) { return urlSplit(url, true) }
+// URLSplitNFKC is URLSplit (its name from when a netloc that is not ASCII was left to Python).
+func URLSplitNFKC(url string) (Split, error) { return urlSplit(url) }
 
-func urlSplit(url string, nfkc bool) (Split, error) {
+func urlSplit(url string) (Split, error) {
 	url = strings.TrimLeftFunc(url, func(r rune) bool { return r <= ' ' })
 	for _, b := range []string{"\t", "\r", "\n"} {
 		url = strings.ReplaceAll(url, b, "")
@@ -79,9 +102,6 @@ func urlSplit(url string, nfkc bool) (Split, error) {
 		url, s.Query = url[:i], url[i+1:]
 	}
 	if !isASCII(s.Netloc) {
-		if !nfkc {
-			return Split{}, ErrNotASCII // _checknetloc's NFKC
-		}
 		if err := checkNetloc(s.Netloc); err != nil {
 			return Split{}, err
 		}
@@ -177,9 +197,9 @@ func (s Split) Hostname() (string, bool) {
 	}
 	h, pct, zone := partition(hostname, "%")
 	if pct {
-		return strings.ToLower(h) + "%" + zone, true
+		return Lower(h) + "%" + zone, true
 	}
-	return strings.ToLower(h), true
+	return Lower(h), true
 }
 
 // UserInfo is SplitResult.username and .password ("" for None as for empty).
@@ -421,7 +441,18 @@ func encodeHost(host string) (string, error) {
 	case isASCII(host):
 		return quote(strings.ToLower(host), `!$&'()*+,;="`+"`"+`{}%|\`), nil
 	}
-	return "", ErrNotASCII
+	e := idnaEncoder.Load()
+	if e == nil {
+		return "", ErrNotASCII
+	}
+	ascii, ok, err := (*e)(host)
+	if err != nil {
+		return "", fmt.Errorf("%w: %v", ErrIDNAUnavailable, err)
+	}
+	if !ok {
+		return "", fmt.Errorf("Invalid IDNA hostname: %s", Repr(host))
+	}
+	return ascii, nil
 }
 
 const unreserved = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789-._~"
