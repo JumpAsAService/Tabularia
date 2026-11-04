@@ -67,6 +67,15 @@ answers only the exact method, everything else still goes to Python.
   TransportError, main.py's 503. The routes and the background work share them.
 - `flowresolver` — `services/flow_resolver.py`; `contracts` — `services/contracts.py`
   (validation, save, ODCS).
+- `openlineage` (`Deps.Lineage`, an `*openlineage.Emitter`) — `services/openlineage.py`: the
+  events built as the official client serializes them and sent from a bounded queue after the
+  commit (`RunClosed` after a run's closing commit, `NotebookSession` for a notebook's session,
+  `CatalogNames`/`FolderNames` before a rename or a move and `Renamed` after its commit, which
+  also removes the old names from Marquez). Nil-safe and a no-op while OpenLineage is off; the
+  process empties the queue for at most 5 s at the stop. The comparison with OpenLineage on:
+  `DIFF_ENV="OPENLINEAGE__URL=http://siem.test:8000 OPENLINEAGE__FILE=/share/ol-{stack}.jsonl"
+  DIFF_SHARE=<a folder writable by all> DIFF_SETTLE_MS=700` (suite `openlineage_x`, and any
+  other suite the same way).
 
 A service that several modules need and that does not exist yet: write it in its own
 package, small, with the Python function it ports cited in its comment.
