@@ -11,19 +11,19 @@ import (
 // routes/flows.py: the dbt export of a flow (the project built by the gateway, compiled by the
 // engine) and the download dialog's plan. Names carry the «dbt-» prefix.
 var DBT = struct {
-	seeded                                         bool
-	Main, Hidden                                   int64
-	PG, PGBare, MY, CH, ORA, OtherPG               int64
-	Orders, Customers, NoSchema, MyT, ChT, OraT    int64
-	Files, Big, Margin, Quoted                     int64
-	Simple, Mixed, Upstream, Oracle, Scripted      int64
+	seeded                                          bool
+	Main, Hidden                                    int64
+	PG, PGBare, MY, CH, ORA, OtherPG                int64
+	Orders, Customers, NoSchema, MyT, ChT, OraT     int64
+	Files, Big, Margin, Quoted                      int64
+	Simple, Mixed, Upstream, Oracle, Scripted       int64
 	NoKey, Text, List, NotJSON, NoOutputs, OnlyMail int64
-	Foreach, Pivot, Incomplete, Loop, NoSource     int64
-	Seed, Seeded, Unicode, CycleA, CycleB, Quote   int64
-	Native, Tests, Nested, BadNode, Accented       int64
-	ABOut, BAOut                                   int64
-	ProviderAt                                     int64
-	enabled                                        []string
+	Foreach, Pivot, Incomplete, Loop, NoSource      int64
+	Seed, Seeded, Unicode, CycleA, CycleB, Quote    int64
+	Native, Tests, Nested, BadNode, Accented        int64
+	ABOut, BAOut                                    int64
+	ProviderAt                                      int64
+	enabled                                         []string
 }{}
 
 func (w *World) seedDbt() {
@@ -90,7 +90,9 @@ func (w *World) seedDbt() {
 		return fmt.Sprintf(`{"id": %q, "type": "operation", "data": {"opType": %q, "label": "step %s", "params": %s}}`, id, kind, id, params)
 	}
 	edge := func(a, b string) string { return fmt.Sprintf(`{"source": %q, "target": %q}`, a, b) }
-	right := func(a, b string) string { return fmt.Sprintf(`{"source": %q, "target": %q, "targetHandle": "right"}`, a, b) }
+	right := func(a, b string) string {
+		return fmt.Sprintf(`{"source": %q, "target": %q, "targetHandle": "right"}`, a, b)
+	}
 	def := func(nodes, edges []string) string {
 		b, _ := json.Marshal(nil)
 		_ = b

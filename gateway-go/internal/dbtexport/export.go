@@ -188,10 +188,16 @@ func isDigit(r rune) bool {
 		(r >= 0x2780 && r <= 0x2788) || (r >= 0x278A && r <= 0x2792)
 }
 
+// pyLower is str.lower(): Go's ToLower with Python's one full mapping that is not a single
+// character (İ is i and a combining dot).
+func pyLower(s string) string {
+	return strings.ToLower(strings.ReplaceAll(s, "\u0130", "i\u0307"))
+}
+
 // Slug is _slug.
 func Slug(s any) string {
 	var b strings.Builder
-	for _, r := range strings.ToLower(pyval.Str(s)) {
+	for _, r := range pyLower(pyval.Str(s)) {
 		if isAlnum(r) || r == '_' {
 			b.WriteRune(r)
 		} else {
