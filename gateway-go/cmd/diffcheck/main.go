@@ -30,6 +30,8 @@ import (
 	"time"
 
 	"github.com/jackc/pgx/v5/pgxpool"
+
+	"github.com/JumpAsAService/Tabularia/gateway-go/internal/secret"
 )
 
 // Step is one request of a suite, sent to both gateways.
@@ -106,6 +108,9 @@ type World struct {
 func main() {
 	ctx := context.Background()
 	w := &World{ctx: ctx, secret: []byte(must("DIFF_SECRET")), People: map[string]int64{}}
+	if key := os.Getenv("DIFF_FERNET"); key != "" {
+		fernet, _ = secret.NewFernet(key)
+	}
 	w.a = &side{"python", pool(ctx, must("DIFF_A_DSN")), must("DIFF_A_URL"), must("DIFF_A_ENGINE")}
 	w.b = &side{"go", pool(ctx, must("DIFF_B_DSN")), must("DIFF_B_URL"), must("DIFF_B_ENGINE")}
 	w.seedPeople()
@@ -366,6 +371,12 @@ func dump(ctx context.Context, s *side) map[string][]any {
 	return out
 }
 
+// fernet decrypts the connections' and settings' secrets (DIFF_FERNET, the stacks' key)
+var (
+	fernet      *secret.Fernet
+	fernetToken = regexp.MustCompile(`gAAAAA[A-Za-z0-9_-]{40,}={0,2}`)
+)
+
 var stamp = regexp.MustCompile(`^\d{4}-\d\d-\d\d[T ]\d\d:\d\d:\d\d(\.\d+)?(Z|[+-]\d\d:\d\d)?$`)
 
 // normalize replaces the timestamps of the last ten minutes by «<now>»: the two sides write
@@ -381,6 +392,16 @@ func normalize(v any) any {
 			x[i] = normalize(e)
 		}
 	case string:
+		if fernet != nil && strings.Contains(x, "gAAAAA") {
+			// a Fernet token is random on each side: compared by what it encrypts
+			x = fernetToken.ReplaceAllStringFunc(x, func(tok string) string {
+				if plain, err := fernet.Decrypt(tok); err == nil {
+					return "<fernet:" + plain + ">"
+				}
+				return tok
+			})
+			v = x
+		}
 		if stamp.MatchString(x) {
 			s := strings.Replace(x, " ", "T", 1)
 			for _, layout := range []string{time.RFC3339Nano, "2006-01-02T15:04:05.999999999"} {
