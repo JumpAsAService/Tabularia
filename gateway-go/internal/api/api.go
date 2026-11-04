@@ -52,6 +52,7 @@ func register(module string, routes func(*Deps) []server.Route) {
 // Routes is every ported route, module by module in name order.
 func Routes(d *Deps) []server.Route {
 	kubePanel.Store(d.Panel)
+	useIDNA(d)
 	names := make([]string, 0, len(modules))
 	for n := range modules {
 		names = append(names, n)

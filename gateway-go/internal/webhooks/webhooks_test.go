@@ -11,29 +11,47 @@ import (
 )
 
 // The Python gateway's own answers (testdata/urls.py, run in its image): validate_url,
-// siem.endpoint and urlsplit's scheme and hostname, address by address.
+// siem.endpoint and urlsplit's scheme and hostname, address by address. httpx's IDNA encoding
+// of a host that is not ASCII (the AI service's, in the gateway) is the one Python recorded.
 func TestTheAddressesAsPythonJudgesThem(t *testing.T) {
 	raw, err := os.ReadFile("testdata/urls.json")
 	if err != nil {
 		t.Fatal(err)
 	}
 	var cases []struct {
-		URL        string  `json:"url"`
-		Valid      *string `json:"valid"`
-		Error      *string `json:"error"`
-		Scheme     string  `json:"scheme"`
-		Hostname   *string `json:"hostname"`
-		SplitError *string `json:"split_error"`
-		Endpoint   *string `json:"endpoint"`
+		URL        string             `json:"url"`
+		Valid      *string            `json:"valid"`
+		Error      *string            `json:"error"`
+		Scheme     string             `json:"scheme"`
+		Hostname   *string            `json:"hostname"`
+		SplitError *string            `json:"split_error"`
+		Endpoint   *string            `json:"endpoint"`
+		IDNA       map[string]*string `json:"idna"`
 	}
 	if err := json.Unmarshal(raw, &cases); err != nil {
 		t.Fatal(err)
 	}
+	encoded := map[string]*string{}
+	for _, c := range cases {
+		for h, a := range c.IDNA {
+			encoded[h] = a
+		}
+	}
+	pyurl.UseIDNA(func(host string) (string, bool, error) {
+		a, met := encoded[host]
+		if !met {
+			t.Errorf("an IDNA encoding Python never asked: %q", host)
+			return "", false, errors.New("unknown")
+		}
+		if a == nil {
+			return "", false, nil
+		}
+		return *a, true, nil
+	})
+	defer pyurl.UseIDNA(nil)
 	for _, c := range cases {
 		got, err := ValidateURL(c.URL)
 		switch {
-		case errors.Is(err, pyurl.ErrNotASCII):
-			continue // left to Python
 		case c.Valid != nil && (err != nil || got != *c.Valid):
 			t.Errorf("%q: want %q, got %q %v", c.URL, *c.Valid, got, err)
 		case c.Error != nil && (err == nil || err.Error() != *c.Error):

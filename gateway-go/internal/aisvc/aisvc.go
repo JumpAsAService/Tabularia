@@ -177,3 +177,26 @@ func (c *Client) Compiles(ctx context.Context, patterns []string) ([]bool, error
 	}
 	return out.Compiles, nil
 }
+
+// IDNAEncode is httpx's encoding of a host that is not ASCII
+// (POST /internal/python/idna-encode): idna.encode(host.lower()).decode("ascii") of the Python
+// package idna, whose IDNA 2008 rules and Unicode tables Go has no faithful twin of; ok=false
+// for its IDNAError. A pyurl.IDNAEncoder.
+func (c *Client) IDNAEncode(host string) (string, bool, error) {
+	if c == nil {
+		return "", false, ErrNoClient
+	}
+	var out struct {
+		Hosts []*string `json:"hosts"`
+	}
+	if err := c.post(context.Background(), "/internal/python/idna-encode", map[string]any{"hosts": []string{host}}, &out); err != nil {
+		return "", false, err
+	}
+	if len(out.Hosts) != 1 {
+		return "", false, fmt.Errorf("aisvc: /internal/python/idna-encode answered %d hosts for 1", len(out.Hosts))
+	}
+	if out.Hosts[0] == nil {
+		return "", false, nil
+	}
+	return *out.Hosts[0], true, nil
+}
