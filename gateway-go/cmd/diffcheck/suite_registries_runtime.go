@@ -8,7 +8,9 @@ import (
 
 // routes/registries.py, what speaks to a registry: the administrators' test and tags, the flow
 // editor's tags and image. The registries are at siem.test:8000, the fake engine of each stack.
-// Run it with DIFF_ENV="CONTAINERS__ENABLED=true" (without, every route says 409).
+// Run it with DIFF_ENV="CONTAINERS__ENABLED=true CONTAINERS__NAMESPACE=containers CONTAINERS__TRIAL_NAMESPACE=trials
+// CONTAINERS__POLL_SECONDS=0.2 KUBERNETES__API_URL=http://{engine}:8000 KUBERNETES__TOKEN_FILE=/etc/hostname" (without,
+// every route says 409; the cluster's test reaches the fake engine's Kubernetes).
 func init() {
 	ids := map[string]int64{}
 	const digest = "sha256:1111111111111111111111111111111111111111111111111111111111111111"
@@ -200,6 +202,42 @@ func init() {
 				EngineRule{Method: "GET", Path: "^/v2/team/app/blobs/", Body: map[string]any{"created": 5}})
 			image("not allowed", "repository=other/x", "writer")
 			image("nobody", "repository=team/app", "nobody")
+
+			// «Try in the cluster»
+			pullName := []string{`tabularia-pull-\d+-[0-9a-f]{8}`}
+			head := EngineRule{Method: "HEAD", Path: "^/v2/team/app/manifests/", Headers: map[string]string{"Docker-Content-Digest": digest}}
+			running := EngineRule{Method: "GET", Path: "^/api/v1/namespaces/trials/pods$", Body: map[string]any{"items": []any{map[string]any{
+				"metadata": map[string]any{"name": "p1"}, "status": map[string]any{"containerStatuses": []any{map[string]any{"state": map[string]any{
+					"running": map[string]any{}}}}}}}}}
+			pulled := EngineRule{Method: "GET", Path: "^/api/v1/namespaces/trials/pods$", Body: map[string]any{"items": []any{map[string]any{
+				"metadata": map[string]any{"name": "p2"}, "status": map[string]any{}}}}}
+			cluster := func(name, key, p string, body any, rules ...EngineRule) {
+				if rules == nil {
+					rules = []EngineRule{}
+				}
+				var auth func(*http.Request)
+				if p != "nobody" {
+					auth = w.As(p)
+				}
+				s = append(s, Step{Name: "cluster: " + name, Method: "POST", Path: fmt.Sprintf("/admin/registries/%d/cluster-test", id(key)), Auth: auth,
+					JSON: body, Engine: rules, EngineScrub: pullName, Scrub: pullName})
+			}
+			cluster("anonymous, running", "anon", "admin", map[string]any{"repository": "team/app", "reference": " v1 "}, v2(200, ""), head, running)
+			cluster("with credentials, an event says pulled", "basic", "admin", map[string]any{"repository": "team/app", "reference": digest},
+				pulled, EngineRule{Method: "GET", Path: "^/api/v1/namespaces/trials/events$", Body: map[string]any{"items": []any{
+					map[string]any{"reason": "Pulled", "message": "ok"}}}})
+			cluster("the Secret there already", "basic", "admin", map[string]any{"repository": "team/app", "reference": digest}, running,
+				EngineRule{Method: "POST", Path: "^/api/v1/namespaces/trials/secrets$", Status: 409},
+				EngineRule{Method: "GET", Path: "^/api/v1/namespaces/trials/secrets/", Body: map[string]any{"type": "x", "metadata": map[string]any{"resourceVersion": "7"}}})
+			cluster("the image not resolved", "anon", "admin", map[string]any{"repository": "team/app"}, v2(200, ""),
+				EngineRule{Method: "HEAD", Path: "^/v2/team/app/manifests/", Status: 404})
+			cluster("the cluster refuses", "anon", "admin", map[string]any{"repository": "team/app", "reference": digest},
+				EngineRule{Method: "POST", Path: "^/apis/batch/v1/namespaces/trials/jobs$", Status: 403, Body: map[string]any{"message": "forbidden"}})
+			cluster("not allowed", "anon", "admin", map[string]any{"repository": "other/x"})
+			cluster("a bad body", "anon", "admin", map[string]any{"repository": strings.Repeat("a", 256), "reference": 5})
+			cluster("an observer", "anon", "obs_flag", map[string]any{"repository": "team/app"})
+			cluster("a token", "anon", "nobody", map[string]any{"repository": "team/app"})
+			s[len(s)-1].Auth = Bearer("tab_data_service_write_0000")
 			return s
 		},
 	})

@@ -94,8 +94,9 @@ func init() {
 func nbOrigin() string { return scriptcfg.Get().Notebooks.Origin }
 
 // IsNotebooksHost is notebook_frames.is_notebooks_host: the Host is the notebooks' own.
-func IsNotebooksHost(host string) bool {
-	mine := nbOrigin()
+func IsNotebooksHost(host string) bool { return isNotebooksHostOf(host, nbOrigin()) }
+
+func isNotebooksHostOf(host, mine string) bool {
 	if mine == "" || host == "" {
 		return false
 	}

@@ -28,6 +28,11 @@ type Runtime struct {
 	// SCRIPTS__REGISTRY_PULL_SECRET, SCRIPTS__JOB_TTL_SECONDS: what the pods' Jobs carry
 	ScriptsPullSecret string
 	ScriptsJobTTL     int64
+	// CONTAINERS__PULL_CHECK_SECONDS, CONTAINERS__POLL_SECONDS, CONTAINERS__JOB_TTL_SECONDS:
+	// the registries' «Try in the cluster»
+	ContainersPullCheck int64
+	ContainersPoll      float64
+	ContainersJobTTL    int64
 }
 
 var (
@@ -64,7 +69,17 @@ func LoadRuntime(env config.Env) *Runtime {
 		}
 		return def
 	}
+	number := func(name string, def float64) float64 {
+		if v, ok := env(name); ok {
+			if f, err := strconv.ParseFloat(strings.TrimSpace(v), 64); err == nil {
+				return f
+			}
+		}
+		return def
+	}
 	return &Runtime{
+		ContainersPullCheck: integer("CONTAINERS__PULL_CHECK_SECONDS", 300), ContainersPoll: number("CONTAINERS__POLL_SECONDS", 3),
+		ContainersJobTTL: integer("CONTAINERS__JOB_TTL_SECONDS", 3600),
 		NotebooksMaxLive: integer("NOTEBOOKS__MAX_LIVE", 20), NotebooksStartTimeout: integer("NOTEBOOKS__START_TIMEOUT_SECONDS", 300),
 		NotebooksMaxLifetimeHours: integer("NOTEBOOKS__MAX_LIFETIME_HOURS", 12), NotebooksGatewayURL: str("NOTEBOOKS__GATEWAY_URL", ""),
 		ScriptsPullSecret: str("SCRIPTS__REGISTRY_PULL_SECRET", ""), ScriptsJobTTL: integer("SCRIPTS__JOB_TTL_SECONDS", 3600),
