@@ -81,7 +81,7 @@ func (d *Deps) scheduleLoad(w http.ResponseWriter, r *http.Request, p *auth.Prin
 	}
 	days := daysV.(int64)
 	q := d.req(w, r, p)
-	zone := d.Panel.Timezone()
+	zone := d.Panel.AppTimezone()
 	loc, err := time.LoadLocation(zone)
 	if err != nil {
 		q.fail(err)

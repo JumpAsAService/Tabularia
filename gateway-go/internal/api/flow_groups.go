@@ -596,7 +596,7 @@ func (d *Deps) listFlowGroups(w http.ResponseWriter, r *http.Request, p *auth.Pr
 
 // listProjectFlowGroups is GET /projects/{project_id}/flow-groups.
 func (d *Deps) listProjectFlowGroups(w http.ResponseWriter, r *http.Request, p *auth.Principal) {
-	ids, ok := pathIDs(w, r, "project_id")
+	ids, ok := pathInts(w, r, "project_id")
 	if !ok {
 		return
 	}
@@ -636,7 +636,7 @@ func (q *request) containerBlocked(def *groupDef) (string, error) {
 
 // getFlowGroup is GET /flow-groups/{group_id}.
 func (d *Deps) getFlowGroup(w http.ResponseWriter, r *http.Request, p *auth.Principal) {
-	ids, ok := pathIDs(w, r, "group_id")
+	ids, ok := pathInts(w, r, "group_id")
 	if !ok {
 		return
 	}
@@ -725,7 +725,7 @@ func (d *Deps) createFlowGroup(w http.ResponseWriter, r *http.Request, p *auth.P
 
 // duplicateFlowGroup is POST /flow-groups/{group_id}/duplicate.
 func (d *Deps) duplicateFlowGroup(w http.ResponseWriter, r *http.Request, p *auth.Principal) {
-	ids, ok := pathIDs(w, r, "group_id")
+	ids, ok := pathInts(w, r, "group_id")
 	if !ok {
 		return
 	}
@@ -881,7 +881,7 @@ const groupQueueLock = 74610004
 
 // deleteFlowGroup is DELETE /flow-groups/{group_id}: not while it is queued or running.
 func (d *Deps) deleteFlowGroup(w http.ResponseWriter, r *http.Request, p *auth.Principal) {
-	ids, ok := pathIDs(w, r, "group_id")
+	ids, ok := pathInts(w, r, "group_id")
 	if !ok {
 		return
 	}
@@ -938,7 +938,7 @@ var groupAlreadyRunning = map[string]string{
 // runFlowGroupNow is POST /flow-groups/{group_id}/run-now: a run queued for an
 // orchestrator (create_group_run), its flows in production mode.
 func (d *Deps) runFlowGroupNow(w http.ResponseWriter, r *http.Request, p *auth.Principal) {
-	ids, ok := pathIDs(w, r, "group_id")
+	ids, ok := pathInts(w, r, "group_id")
 	if !ok {
 		return
 	}
@@ -1023,7 +1023,7 @@ func (d *Deps) setFlowGroupSchedule(w http.ResponseWriter, r *http.Request, p *a
 			q.refuse(422, err.Error())
 			return
 		}
-		next, err := cron.NextFire(spec, time.Now(), d.Panel.Timezone())
+		next, err := cron.NextFire(spec, time.Now(), d.Panel.AppTimezone())
 		if err != nil {
 			q.fail(err)
 			return
@@ -1183,7 +1183,7 @@ func (q *request) groupRunsOut(runs []*runRow) ([]FlowGroupRunOut, error) {
 
 // listFlowGroupRuns is GET /flow-groups/{group_id}/runs: the latest 50, newest first.
 func (d *Deps) listFlowGroupRuns(w http.ResponseWriter, r *http.Request, p *auth.Principal) {
-	ids, ok := pathIDs(w, r, "group_id")
+	ids, ok := pathInts(w, r, "group_id")
 	if !ok {
 		return
 	}
@@ -1218,7 +1218,7 @@ func (d *Deps) listFlowGroupRuns(w http.ResponseWriter, r *http.Request, p *auth
 
 // getFlowGroupRun is GET /flow-groups/{group_id}/runs/{run_id}.
 func (d *Deps) getFlowGroupRun(w http.ResponseWriter, r *http.Request, p *auth.Principal) {
-	ids, ok := pathIDs(w, r, "group_id", "run_id")
+	ids, ok := pathInts(w, r, "group_id", "run_id")
 	if !ok {
 		return
 	}

@@ -280,10 +280,13 @@ func updateGroup(d *Deps) authedFunc {
 			return
 		}
 		defer tx.Rollback(ctx) //nolint:errcheck
-		if _, err := tx.Exec(ctx, `UPDATE groups SET description = $1, is_admin = $2, is_observer = $3 WHERE id = $4`,
-			g.Description, g.IsAdmin, g.IsObserver, id); err != nil {
-			fail(d, w, "changing the group", err)
-			return
+		// as the ORM's flush: no UPDATE when nothing changed
+		if described != nil || g.IsAdmin != wasAdmin || g.IsObserver != wasObserver {
+			if _, err := tx.Exec(ctx, `UPDATE groups SET description = $1, is_admin = $2, is_observer = $3 WHERE id = $4`,
+				g.Description, g.IsAdmin, g.IsObserver, id); err != nil {
+				fail(d, w, "changing the group", err)
+				return
+			}
 		}
 		if wasAdmin && !g.IsAdmin {
 			if refusal, err := stillAdmin(ctx, tx, &p.User); err != nil || refusal != nil {

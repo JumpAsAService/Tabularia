@@ -90,6 +90,17 @@ func maskColumns(table string, columns ...string) {
 	maskedColumns[table] = append(maskedColumns[table], columns...)
 }
 
+// maskedPatterns: table → column → what inside a text is random (a token's prefix, a moment
+// far from now in an audit event's detail), replaced by «<masked>»
+var maskedPatterns = map[string]map[string][]*regexp.Regexp{}
+
+func maskPattern(table, column, pattern string) {
+	if maskedPatterns[table] == nil {
+		maskedPatterns[table] = map[string][]*regexp.Regexp{}
+	}
+	maskedPatterns[table][column] = append(maskedPatterns[table][column], regexp.MustCompile(pattern))
+}
+
 // side is one stack.
 type side struct {
 	name    string
@@ -234,12 +245,15 @@ type answer struct {
 	Tables  map[string][]any
 }
 
-var compared = []string{"Content-Type", "Www-Authenticate", "Location", "Cache-Control", "Content-Disposition", "Allow"}
+var compared = []string{"Content-Type", "Www-Authenticate", "Location", "Cache-Control", "Content-Disposition", "Allow", "Retry-After"}
 
 var (
 	expires  = regexp.MustCompile(`expires=[^;]+`)
 	tokenVal = regexp.MustCompile(`tab_token=[^;"]+`)
 )
+
+// noRedirects compares a redirect itself (its Location), never the page it points to.
+var noRedirects = &http.Client{CheckRedirect: func(*http.Request, []*http.Request) error { return http.ErrUseLastResponse }}
 
 func (w *World) ask(s *side, st Step) answer {
 	var body io.Reader
@@ -266,7 +280,7 @@ func (w *World) ask(s *side, st Step) answer {
 	if st.Auth != nil {
 		st.Auth(req)
 	}
-	res, err := http.DefaultClient.Do(req)
+	res, err := noRedirects.Do(req)
 	if err != nil {
 		fail("%s: %v", s.name, err)
 	}
@@ -283,7 +297,8 @@ func (w *World) ask(s *side, st Step) answer {
 	a := answer{Status: res.StatusCode, Headers: map[string]string{}}
 	for _, h := range compared {
 		if v := res.Header.Get(h); v != "" {
-			a.Headers[h] = v
+			// a redirect to the gateway itself names its address, which differs between the sides
+			a.Headers[h] = strings.Replace(v, s.gateway, "<gateway>", 1)
 		}
 	}
 	if v := res.Header.Values("Set-Cookie"); len(v) > 0 {
@@ -329,6 +344,7 @@ func (w *World) compare(st Step) string {
 	if !reflect.DeepEqual(pa.Body, gb.Body) {
 		p, _ := json.Marshal(pa.Body)
 		g, _ := json.Marshal(gb.Body)
+		p, g = fromFirstDifference(p, g)
 		out = append(out, fmt.Sprintf("    body:\n      python %s\n      go     %s", clip(p), clip(g)))
 	}
 	if !reflect.DeepEqual(pa.Engine, gb.Engine) {
@@ -376,10 +392,26 @@ func dump(ctx context.Context, s *side) map[string][]any {
 						m[c] = "<masked>"
 					}
 				}
+				for c, patterns := range maskedPatterns[t] {
+					if v, ok := m[c].(string); ok {
+						for _, re := range patterns {
+							v = re.ReplaceAllString(v, "<masked>")
+						}
+						m[c] = v
+					}
+				}
 			}
 		}
 		if len(list) > 0 {
-			out[t] = normalize(list).([]any)
+			rows := normalize(list).([]any)
+			// in order again once masked: a random value (a session's id) must not decide where
+			// its row falls
+			sort.SliceStable(rows, func(i, j int) bool {
+				a, _ := json.Marshal(rows[i])
+				b, _ := json.Marshal(rows[j])
+				return string(a) < string(b)
+			})
+			out[t] = rows
 		}
 	}
 	return out
@@ -387,7 +419,11 @@ func dump(ctx context.Context, s *side) map[string][]any {
 
 var stamp = regexp.MustCompile(`^\d{4}-\d\d-\d\d[T ]\d\d:\d\d:\d\d(\.\d+)?(Z|[+-]\d\d:\d\d)?$`)
 
-// normalize replaces the timestamps of the last ten minutes by «<now>»: the two sides write
+// startedAt is when the comparison began, ten minutes early: what is dated after it was
+// written during the run.
+var startedAt = time.Now().Add(-10 * time.Minute)
+
+// normalize replaces the timestamps written during the run by «<now>»: the two sides write
 // them a few milliseconds apart.
 func normalize(v any) any {
 	switch x := v.(type) {
@@ -404,7 +440,9 @@ func normalize(v any) any {
 			s := strings.Replace(x, " ", "T", 1)
 			for _, layout := range []string{time.RFC3339Nano, "2006-01-02T15:04:05.999999999"} {
 				if t, err := time.Parse(layout, s); err == nil {
-					if d := time.Since(t); d < 10*time.Minute && d > -10*time.Minute {
+					// written during the comparison (a full run lasts over an hour: a row written
+					// at its start must not turn into two different instants later on)
+					if t.After(startedAt) && time.Until(t) < 10*time.Minute {
 						return "<now>"
 					}
 					break
@@ -471,6 +509,19 @@ func rowDiff(a, b []any) string {
 		}
 	}
 	return strings.Join(out, "\n")
+}
+
+// fromFirstDifference cuts two long texts a little before where they start to differ, so
+// that the clipped lines show the difference.
+func fromFirstDifference(a, b []byte) ([]byte, []byte) {
+	i := 0
+	for i < len(a) && i < len(b) && a[i] == b[i] {
+		i++
+	}
+	if i < 300 {
+		return a, b
+	}
+	return append([]byte("…"), a[i-200:]...), append([]byte("…"), b[i-200:]...)
 }
 
 func clip(b []byte) string {

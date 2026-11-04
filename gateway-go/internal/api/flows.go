@@ -271,7 +271,7 @@ func (d *Deps) listAllFlows(w http.ResponseWriter, r *http.Request, p *auth.Prin
 
 // listFlows is GET /projects/{project_id}/flows (list_flows).
 func (d *Deps) listFlows(w http.ResponseWriter, r *http.Request, p *auth.Principal) {
-	ids, ok := pathIDs(w, r, "project_id")
+	ids, ok := pathInts(w, r, "project_id")
 	if !ok {
 		return
 	}
@@ -301,7 +301,7 @@ func (d *Deps) listFlows(w http.ResponseWriter, r *http.Request, p *auth.Princip
 
 // getFlow is GET /flows/{flow_id} (get_flow).
 func (d *Deps) getFlow(w http.ResponseWriter, r *http.Request, p *auth.Principal) {
-	ids, ok := pathIDs(w, r, "flow_id")
+	ids, ok := pathInts(w, r, "flow_id")
 	if !ok {
 		return
 	}
@@ -320,7 +320,7 @@ func (d *Deps) getFlow(w http.ResponseWriter, r *http.Request, p *auth.Principal
 // deleteFlow is DELETE /flows/{flow_id} (delete_flow): the run history dies with the flow,
 // the published datasources survive without their provenance.
 func (d *Deps) deleteFlow(w http.ResponseWriter, r *http.Request, p *auth.Principal) {
-	ids, ok := pathIDs(w, r, "flow_id")
+	ids, ok := pathInts(w, r, "flow_id")
 	if !ok {
 		return
 	}
@@ -523,7 +523,7 @@ func (q *request) snapshotVersion(flowID int64, note string) (*flowRow, error) {
 // duplicateFlow is POST /flows/{flow_id}/duplicate (duplicate_flow): a copy in its
 // folder, as «name (i)», under the same rules as a new flow.
 func (d *Deps) duplicateFlow(w http.ResponseWriter, r *http.Request, p *auth.Principal) {
-	ids, ok := pathIDs(w, r, "flow_id")
+	ids, ok := pathInts(w, r, "flow_id")
 	if !ok {
 		return
 	}
@@ -586,7 +586,7 @@ type FlowVersionOut struct {
 
 // listFlowVersions is GET /flows/{flow_id}/versions: the history, the newest first.
 func (d *Deps) listFlowVersions(w http.ResponseWriter, r *http.Request, p *auth.Principal) {
-	ids, ok := pathIDs(w, r, "flow_id")
+	ids, ok := pathInts(w, r, "flow_id")
 	if !ok {
 		return
 	}
@@ -627,7 +627,7 @@ func (d *Deps) listFlowVersions(w http.ResponseWriter, r *http.Request, p *auth.
 // promoteFlowVersion is POST /flows/{flow_id}/versions/{version}/promote: an old
 // version's definition becomes the flow's, recorded as a new version.
 func (d *Deps) promoteFlowVersion(w http.ResponseWriter, r *http.Request, p *auth.Principal) {
-	ids, ok := pathIDs(w, r, "flow_id", "version")
+	ids, ok := pathInts(w, r, "flow_id", "version")
 	if !ok {
 		return
 	}
@@ -717,7 +717,7 @@ type FlowStatsOut struct {
 
 // flowStats is GET /flows/{flow_id}/stats: counts and average time from the run history.
 func (d *Deps) flowStats(w http.ResponseWriter, r *http.Request, p *auth.Principal) {
-	ids, ok := pathIDs(w, r, "flow_id")
+	ids, ok := pathInts(w, r, "flow_id")
 	if !ok {
 		return
 	}
@@ -777,7 +777,7 @@ func pyRound(x float64, ndigits int) float64 {
 
 // flowPresenceLeave is DELETE /flows/{flow_id}/presence/{instance}: the tab closed.
 func (d *Deps) flowPresenceLeave(w http.ResponseWriter, r *http.Request, p *auth.Principal) {
-	ids, ok := pathIDs(w, r, "flow_id")
+	ids, ok := pathInts(w, r, "flow_id")
 	if !ok {
 		return
 	}

@@ -853,7 +853,7 @@ func runOut(run *runRow, progress progressOf) RunOut {
 // getRun is GET /runs/{run_id} (get_run): read with the rights of the object it belongs to,
 // then reconciled.
 func (d *Deps) getRun(w http.ResponseWriter, r *http.Request, p *auth.Principal) {
-	ids, ok := pathIDs(w, r, "run_id")
+	ids, ok := pathInts(w, r, "run_id")
 	if !ok {
 		return
 	}
@@ -1024,7 +1024,7 @@ func (d *Deps) getRun(w http.ResponseWriter, r *http.Request, p *auth.Principal)
 
 // listRuns is GET /flows/{flow_id}/runs: the flow's last 50 runs, each reconciled.
 func (d *Deps) listRuns(w http.ResponseWriter, r *http.Request, p *auth.Principal) {
-	ids, ok := pathIDs(w, r, "flow_id")
+	ids, ok := pathInts(w, r, "flow_id")
 	if !ok {
 		return
 	}

@@ -673,7 +673,7 @@ func (d *Deps) setFlowSchedule(w http.ResponseWriter, r *http.Request, p *auth.P
 			q.refuse(422, err.Error())
 			return
 		}
-		next, err := cron.NextFire(spec, time.Now(), d.Panel.Timezone())
+		next, err := cron.NextFire(spec, time.Now(), d.Panel.AppTimezone())
 		if err != nil {
 			q.fail(err)
 			return
