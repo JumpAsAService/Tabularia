@@ -5,7 +5,7 @@ Python gateway as FastAPI serves it, and whether the Go gateway answers it
 ([spec](specs/gateway-go.md)). The Go gateway replaces the Python one when no line says *Python*;
 *AI service* lines are forwarded to the Python AI service (`APP__ROLE=ai`), where they stay.
 
-**313 of 362 in Go**, 14 forwarded to the AI service.
+**347 of 362 in Go**, 14 forwarded to the AI service.
 
 ## core.api_docs (2/2)
 
@@ -122,7 +122,7 @@ Python gateway as FastAPI serves it, and whether the Go gateway answers it
 |---|---|---|---|
 | GET | `/admin/cluster` | `cluster` | **Go** |
 
-## routes.connections (6/20)
+## routes.connections (20/20)
 
 | Method | Path | Python function | Served by |
 |---|---|---|---|
@@ -130,33 +130,33 @@ Python gateway as FastAPI serves it, and whether the Go gateway answers it
 | GET | `/connections/drivers` | `connection_drivers` | **Go** |
 | GET | `/connections/search` | `search_connections` | **Go** |
 | DELETE | `/connections/{conn_id}` | `delete_connection` | **Go** |
-| PATCH | `/connections/{conn_id}` | `update_connection` | Python |
-| POST | `/connections/{conn_id}/api/try` | `try_api_call` | Python |
-| GET | `/connections/{conn_id}/columns` | `list_connection_columns` | Python |
+| PATCH | `/connections/{conn_id}` | `update_connection` | **Go** |
+| POST | `/connections/{conn_id}/api/try` | `try_api_call` | **Go** |
+| GET | `/connections/{conn_id}/columns` | `list_connection_columns` | **Go** |
 | POST | `/connections/{conn_id}/duplicate` | `duplicate_connection` | **Go** |
-| POST | `/connections/{conn_id}/gsheets/preview` | `preview_gsheets_tab` | Python |
-| POST | `/connections/{conn_id}/gsheets/spreadsheets` | `list_gsheets_spreadsheets` | Python |
-| POST | `/connections/{conn_id}/gsheets/tabs` | `list_gsheets_tabs` | Python |
-| POST | `/connections/{conn_id}/s3/files` | `list_s3_files` | Python |
-| POST | `/connections/{conn_id}/sftp/files` | `list_sftp_files` | Python |
-| POST | `/connections/{conn_id}/sharepoint/files` | `list_sharepoint_files` | Python |
-| GET | `/connections/{conn_id}/tables` | `list_connection_tables` | Python |
-| POST | `/connections/{conn_id}/test` | `test_connection` | Python |
-| POST | `/placeholders/preview` | `preview_placeholders` | Python |
+| POST | `/connections/{conn_id}/gsheets/preview` | `preview_gsheets_tab` | **Go** |
+| POST | `/connections/{conn_id}/gsheets/spreadsheets` | `list_gsheets_spreadsheets` | **Go** |
+| POST | `/connections/{conn_id}/gsheets/tabs` | `list_gsheets_tabs` | **Go** |
+| POST | `/connections/{conn_id}/s3/files` | `list_s3_files` | **Go** |
+| POST | `/connections/{conn_id}/sftp/files` | `list_sftp_files` | **Go** |
+| POST | `/connections/{conn_id}/sharepoint/files` | `list_sharepoint_files` | **Go** |
+| GET | `/connections/{conn_id}/tables` | `list_connection_tables` | **Go** |
+| POST | `/connections/{conn_id}/test` | `test_connection` | **Go** |
+| POST | `/placeholders/preview` | `preview_placeholders` | **Go** |
 | GET | `/projects/{project_id}/connections` | `list_project_connections` | **Go** |
-| POST | `/projects/{project_id}/connections` | `create_connection` | Python |
-| POST | `/projects/{project_id}/connections/test` | `test_draft_connection` | Python |
+| POST | `/projects/{project_id}/connections` | `create_connection` | **Go** |
+| POST | `/projects/{project_id}/connections/test` | `test_draft_connection` | **Go** |
 
-## routes.contracts (5/7)
+## routes.contracts (7/7)
 
 | Method | Path | Python function | Served by |
 |---|---|---|---|
 | DELETE | `/datasources/{ds_id}/contract` | `delete_contract` | **Go** |
 | GET | `/datasources/{ds_id}/contract` | `get_contract` | **Go** |
-| PUT | `/datasources/{ds_id}/contract` | `put_contract` | Python |
+| PUT | `/datasources/{ds_id}/contract` | `put_contract` | **Go** |
 | POST | `/datasources/{ds_id}/contract/check` | `check_contract` | **Go** |
 | GET | `/datasources/{ds_id}/contract/history` | `contract_history` | **Go** |
-| GET | `/datasources/{ds_id}/contract/odcs` | `export_odcs` | Python |
+| GET | `/datasources/{ds_id}/contract/odcs` | `export_odcs` | **Go** |
 | POST | `/datasources/{ds_id}/contract/proposal` | `propose_contract` | **Go** |
 
 ## routes.dashboards (21/23)
@@ -187,7 +187,7 @@ Python gateway as FastAPI serves it, and whether the Go gateway answers it
 | GET | `/projects/{project_id}/dashboards` | `list_project_dashboards` | **Go** |
 | POST | `/projects/{project_id}/dashboards` | `create_dashboard` | **Go** |
 
-## routes.datasources (5/15)
+## routes.datasources (15/15)
 
 | Method | Path | Python function | Served by |
 |---|---|---|---|
@@ -195,17 +195,17 @@ Python gateway as FastAPI serves it, and whether the Go gateway answers it
 | GET | `/datasources/search` | `search_datasources` | **Go** |
 | DELETE | `/datasources/{ds_id}` | `delete_datasource` | **Go** |
 | PATCH | `/datasources/{ds_id}` | `update_datasource` | **Go** |
-| POST | `/datasources/{ds_id}/duplicate` | `duplicate_datasource` | Python |
-| POST | `/datasources/{ds_id}/refresh` | `refresh_datasource` | Python |
-| GET | `/datasources/{ds_id}/runs` | `list_datasource_runs` | Python |
-| PUT | `/datasources/{ds_id}/schedule` | `set_schedule` | Python |
+| POST | `/datasources/{ds_id}/duplicate` | `duplicate_datasource` | **Go** |
+| POST | `/datasources/{ds_id}/refresh` | `refresh_datasource` | **Go** |
+| GET | `/datasources/{ds_id}/runs` | `list_datasource_runs` | **Go** |
+| PUT | `/datasources/{ds_id}/schedule` | `set_schedule` | **Go** |
 | GET | `/projects/{project_id}/datasources` | `list_project_datasources` | **Go** |
-| POST | `/projects/{project_id}/datasources/api` | `create_api_datasource` | Python |
-| POST | `/projects/{project_id}/datasources/database` | `create_db_datasource` | Python |
-| POST | `/projects/{project_id}/datasources/gsheets` | `create_gsheets_datasource` | Python |
-| POST | `/projects/{project_id}/datasources/s3` | `create_s3_datasource` | Python |
-| POST | `/projects/{project_id}/datasources/sftp` | `create_sftp_datasource` | Python |
-| POST | `/projects/{project_id}/datasources/sharepoint` | `create_sharepoint_datasource` | Python |
+| POST | `/projects/{project_id}/datasources/api` | `create_api_datasource` | **Go** |
+| POST | `/projects/{project_id}/datasources/database` | `create_db_datasource` | **Go** |
+| POST | `/projects/{project_id}/datasources/gsheets` | `create_gsheets_datasource` | **Go** |
+| POST | `/projects/{project_id}/datasources/s3` | `create_s3_datasource` | **Go** |
+| POST | `/projects/{project_id}/datasources/sftp` | `create_sftp_datasource` | **Go** |
+| POST | `/projects/{project_id}/datasources/sharepoint` | `create_sharepoint_datasource` | **Go** |
 
 ## routes.engine_policy (2/2)
 
@@ -238,7 +238,7 @@ Python gateway as FastAPI serves it, and whether the Go gateway answers it
 | GET | `/projects/{project_id}/flow-groups` | `list_project_flow_groups` | **Go** |
 | POST | `/projects/{project_id}/flow-groups` | `create_flow_group` | **Go** |
 
-## routes.flows (15/18)
+## routes.flows (18/18)
 
 | Method | Path | Python function | Served by |
 |---|---|---|---|
@@ -248,9 +248,9 @@ Python gateway as FastAPI serves it, and whether the Go gateway answers it
 | GET | `/flows/{flow_id}` | `get_flow` | **Go** |
 | PATCH | `/flows/{flow_id}` | `update_flow` | **Go** |
 | POST | `/flows/{flow_id}/duplicate` | `duplicate_flow` | **Go** |
-| GET | `/flows/{flow_id}/export/dbt` | `export_flow_dbt` | Python |
-| POST | `/flows/{flow_id}/export/dbt` | `export_flow_dbt_with_options` | Python |
-| GET | `/flows/{flow_id}/export/dbt/plan` | `export_flow_dbt_plan` | Python |
+| GET | `/flows/{flow_id}/export/dbt` | `export_flow_dbt` | **Go** |
+| POST | `/flows/{flow_id}/export/dbt` | `export_flow_dbt_with_options` | **Go** |
+| GET | `/flows/{flow_id}/export/dbt/plan` | `export_flow_dbt_plan` | **Go** |
 | POST | `/flows/{flow_id}/presence` | `flow_presence_beat` | **Go** |
 | DELETE | `/flows/{flow_id}/presence/{instance}` | `flow_presence_leave` | **Go** |
 | POST | `/flows/{flow_id}/run-now` | `run_flow_now` | **Go** |
@@ -261,12 +261,12 @@ Python gateway as FastAPI serves it, and whether the Go gateway answers it
 | GET | `/projects/{project_id}/flows` | `list_flows` | **Go** |
 | POST | `/projects/{project_id}/flows` | `create_flow` | **Go** |
 
-## routes.gateway_settings (3/5)
+## routes.gateway_settings (5/5)
 
 | Method | Path | Python function | Served by |
 |---|---|---|---|
-| GET | `/admin/gateway-settings` | `read` | Python |
-| PUT | `/admin/gateway-settings` | `write` | Python |
+| GET | `/admin/gateway-settings` | `read` | **Go** |
+| PUT | `/admin/gateway-settings` | `write` | **Go** |
 | GET | `/admin/settings-rollout` | `rollout_state` | **Go** |
 | POST | `/admin/settings-rollout` | `rollout_start` | **Go** |
 | DELETE | `/admin/settings-rollout/{component}` | `rollout_cancel` | **Go** |
@@ -451,13 +451,13 @@ Python gateway as FastAPI serves it, and whether the Go gateway answers it
 | POST | `/reports/{report_id}/versions/{version}/restore` | `restore_version` | **Go** |
 | POST | `/reports/{report_id}/views` | `report_opened` | **Go** |
 
-## routes.runs (4/6)
+## routes.runs (6/6)
 
 | Method | Path | Python function | Served by |
 |---|---|---|---|
-| POST | `/flows/{flow_id}/email-test` | `launch_email_test` | Python |
+| POST | `/flows/{flow_id}/email-test` | `launch_email_test` | **Go** |
 | GET | `/flows/{flow_id}/runs` | `list_runs` | **Go** |
-| POST | `/flows/{flow_id}/runs` | `launch_run` | Python |
+| POST | `/flows/{flow_id}/runs` | `launch_run` | **Go** |
 | GET | `/runs` | `search_runs` | **Go** |
 | GET | `/runs/activity` | `runs_activity` | **Go** |
 | GET | `/runs/{run_id}` | `get_run` | **Go** |
@@ -547,7 +547,7 @@ Python gateway as FastAPI serves it, and whether the Go gateway answers it
 | PUT | `/admin/siem` | `write` | **Go** |
 | POST | `/admin/siem/test` | `trial` | **Go** |
 
-## routes.sql_scripts (15/16)
+## routes.sql_scripts (16/16)
 
 | Method | Path | Python function | Served by |
 |---|---|---|---|
@@ -561,7 +561,7 @@ Python gateway as FastAPI serves it, and whether the Go gateway answers it
 | GET | `/sql-scripts/{script_id}` | `get_sql_script` | **Go** |
 | PATCH | `/sql-scripts/{script_id}` | `update_sql_script` | **Go** |
 | POST | `/sql-scripts/{script_id}/duplicate` | `duplicate_sql_script` | **Go** |
-| POST | `/sql-scripts/{script_id}/refresh` | `refresh_sql_script` | Python |
+| POST | `/sql-scripts/{script_id}/refresh` | `refresh_sql_script` | **Go** |
 | GET | `/sql-scripts/{script_id}/runs` | `list_sql_script_runs` | **Go** |
 | PUT | `/sql-scripts/{script_id}/schedule` | `set_sql_script_schedule` | **Go** |
 | GET | `/sql-scripts/{script_id}/versions` | `list_versions` | **Go** |
