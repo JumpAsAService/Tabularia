@@ -422,3 +422,20 @@ func Tail(text string, maxBytes int) string {
 	}
 	return "…\n" + b.String()
 }
+
+// OwnedBy is kube_jobs.owned_by: the ownerReferences that make an object go with its Job.
+func OwnedBy(job any) []any {
+	meta := Dict(Dict(job).Value("metadata"))
+	return []any{pyjson.Object{{Key: "apiVersion", Value: "batch/v1"}, {Key: "kind", Value: "Job"}, {Key: "name", Value: meta.Value("name")},
+		{Key: "uid", Value: meta.Value("uid")}}}
+}
+
+// CreateObject is kube_jobs.create_object: a ConfigMap or a Secret ("configmaps",
+// "secrets"); one of the same name already there is fine.
+func CreateObject(ctx context.Context, k scriptcfg.Kubernetes, namespace, kind string, manifest pyjson.Object) error {
+	_, err := Call(ctx, k, http.MethodPost, "/api/v1/namespaces/"+namespace+"/"+kind, manifest, false)
+	if Status(err) == 409 {
+		return nil
+	}
+	return err
+}

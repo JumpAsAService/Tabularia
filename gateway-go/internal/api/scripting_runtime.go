@@ -258,7 +258,7 @@ func editorLint(d *Deps) authedFunc {
 			return
 		}
 		empty := pyjson.Object{{Key: "diagnostics", Value: []any{}}, {Key: "skipped", Value: false}}
-		if language != "python" || !scriptcfg.Get().Scripts.Lint || !strings.HasSuffix(path, ".py") {
+		if language != "python" || !scriptsLint() || !strings.HasSuffix(path, ".py") {
 			writePy(w, empty)
 			return
 		}

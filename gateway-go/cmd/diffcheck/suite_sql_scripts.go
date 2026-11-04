@@ -363,6 +363,8 @@ func init() {
 			patch("nobody changes Alpha", sid("s1"), "nobody", map[string]any{"name": "N"})
 			patch("editor renames Alpha (RUN only)", sid("s1"), "editor", map[string]any{"name": "N"})
 			add("the list after the changes", "GET", "/sql-scripts", as("admin"), nil)
+			// ordered by name only: the two «Alpha» in the table's physical order, as above
+			s[len(s)-1].Unordered = []string{""}
 
 			// the schedule: a clear here, a cron forwarded (croniter)
 			sched := func(name, key, p string, body any) {

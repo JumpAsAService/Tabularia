@@ -396,45 +396,11 @@ func pyInt(v any) (int64, bool) {
 	return 0, false
 }
 
-// recordResult is services/contracts.py record_result for a check asked by hand (trigger
-// manual: never blocked, never notified), in the caller's transaction.
+// recordResult is services/contracts.py record_result for a check asked by hand or at the
+// save (never blocked, never notified: neither trigger notifies), in the caller's transaction.
 func recordResult(ctx context.Context, tx pgx.Tx, c *contractRow, report *pyd.Object, trigger, snapshotKey string) error {
-	now := time.Now().UTC()
-	outcome := "failed"
-	if o, _ := report.Get("outcome"); o == "passed" || o == "warning" || o == "failed" {
-		outcome = o.(string)
-	}
-	text, err := pyjson.Dumps(toPyjson(report), pyjson.Options{})
-	if err != nil {
-		return err
-	}
-	count := func(k string) (int64, error) {
-		v, _ := report.Get(k)
-		if !pyd.Truthy(v) {
-			return 0, nil
-		}
-		n, ok := pyInt(v)
-		if !ok {
-			return 0, errResponse
-		}
-		return n, nil
-	}
-	errs, err := count("errors")
-	if err != nil {
-		return err
-	}
-	warns, err := count("warnings")
-	if err != nil {
-		return err
-	}
-	rows, _ := report.Get("rows")
-	if _, err := tx.Exec(ctx, `INSERT INTO data_contract_results (datasource_id, contract_version, trigger, run_id, snapshot_key,
-		outcome, blocked, errors, warnings, rows, report, evaluated_at, notify) VALUES ($1, $2, $3, NULL, $4, $5, false, $6, $7, $8, $9, $10, NULL)`,
-		c.DatasourceID, c.Version, trigger, snapshotKey, outcome, errs, warns, rows, text, now); err != nil {
-		return err
-	}
-	_, err = tx.Exec(ctx, `UPDATE data_contracts SET status = $1, checked_at = $2, errors = $3, warnings = $4, last_report = $5 WHERE id = $6`,
-		outcome, now, errs, warns, text, c.ID)
+	o, _ := toPyjson(report).(pyjson.Object)
+	_, err := recordContractResult(ctx, tx, c, o, trigger, nil, snapshotKey, false)
 	return err
 }
 

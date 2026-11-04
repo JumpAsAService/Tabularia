@@ -489,7 +489,7 @@ func writeGatewaySettings(d *Deps) deps.Handler {
 		}
 		for k := range fromGateway {
 			if has(k) {
-				if err := engineSettingsRound(ctx, d); err != nil {
+				if _, err := engineSettingsRound(ctx, d); err != nil {
 					d.Log.Info("settings: the upload limit not sent to the engine yet", "err", err)
 				}
 				break
@@ -572,25 +572,26 @@ func recomputeSchedules(ctx context.Context, d *Deps) (int, error) {
 }
 
 // engineSettingsRound is engine_panel_settings.one_round: the engine's saved settings sent
-// again (with the gateway's upload limit), unless someone is saving them.
-func engineSettingsRound(ctx context.Context, d *Deps) error {
+// again (with the gateway's upload limit), unless someone is saving them: false then, as
+// one_round returns. The settings' own loop runs it too (jobs_engine_settings.go).
+func engineSettingsRound(ctx context.Context, d *Deps) (bool, error) {
 	tx, err := d.DB.Begin(ctx)
 	if err != nil {
-		return err
+		return false, err
 	}
 	defer tx.Rollback(ctx)
 	var got bool
 	if err := tx.QueryRow(ctx, `SELECT pg_try_advisory_xact_lock($1)`, int64(engineSettingsLock)).Scan(&got); err != nil {
-		return err
+		return false, err
 	}
 	if !got {
-		return nil
+		return false, nil
 	}
 	values := pyjson.Object{}
 	if d.Panel.FromPanel() {
 		rows, err := savedEngineSettings(ctx, tx)
 		if err != nil {
-			return err
+			return false, err
 		}
 		for _, k := range sortedRowKeys(ctx, tx) {
 			if fromGateway[k] {
@@ -598,13 +599,13 @@ func engineSettingsRound(ctx context.Context, d *Deps) error {
 			}
 			v, ok := engineSettingValue(rows[k])
 			if !ok {
-				return errors.New("an engine setting cannot be read")
+				return false, errors.New("an engine setting cannot be read")
 			}
 			values = append(values, pyjson.KV{Key: k, Value: v})
 		}
 	}
 	if _, err := pushDiscarding(ctx, d, values); err != nil {
-		return err
+		return false, err
 	}
-	return tx.Commit(ctx)
+	return true, tx.Commit(ctx)
 }

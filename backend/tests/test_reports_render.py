@@ -150,9 +150,11 @@ def test_excel_writes_what_it_can_hold_and_what_it_cannot_as_text(tmp_path):
     path = _one_page(tmp_path, {"id": "t", "type": "table", "dataset": "d", "x": 0, "y": 0, "w": 100, "h": 10, "columns": [
         {"header": k, "value": f"[{k}]"} for k in rows[0]]}, rows=rows, fmt="xlsx")
     z = zipfile.ZipFile(path)
-    strings = z.read("xl/sharedStrings.xml").decode()
-    assert "1234567890123456789" in strings and "1 Jan 1890" in strings  # a double rounds the first, Excel shows #### for the second
     sheet = z.read("xl/worksheets/sheet1.xml").decode()
+    # written as text (the book is written in constant memory: a text sits in its cell, «inlineStr»)
+    # — a double rounds the first, Excel shows #### for the second
+    for text in ("1234567890123456789", "1 Jan 1890"):
+        assert re.search(rf'<c r="\w+"[^>]* t="inlineStr"><is><t>{text}</t></is></c>', sheet), text
     assert '<c r="B2" s="' in sheet and "<v>1200</v>" in sheet and "<v>7</v>" in sheet  # numbers stay numbers
     styles = z.read("xl/styles.xml").decode()
     assert 'formatCode="#,##0;[Red]-#,##0"' in styles and 'formatCode="#,##0.##;[Red]-#,##0.##"' in styles
@@ -287,9 +289,8 @@ def test_excel_keeps_values_groups_and_subtotal_formulas(tmp_path, chart_service
     book = z.read("xl/workbook.xml").decode()
     assert re.findall(r'<sheet name="([^"]+)"', book) == ["detail", "Parametri"]
     sheet = z.read("xl/worksheets/sheet1.xml").decode()
-    strings = z.read("xl/sharedStrings.xml").decode()
-    # a text is never a formula: the customer called =HYPERLINK(…) is a shared string
-    assert '=HYPERLINK("http://x")' in strings
+    # a text is never a formula: the customer called =HYPERLINK(…) is a text in its cell
+    assert re.search(r't="inlineStr"><is><t>=HYPERLINK\("http://x"\)</t></is>', sheet)
     assert all(f.startswith("SUBTOTAL(9,") for f in re.findall(r"<f>([^<]+)</f>", sheet))
     cached = re.findall(r"<f>SUBTOTAL\(9,E\d+:E\d+\)</f><v>([^<]+)</v>", sheet)
     assert cached and float(cached[-1]) == pytest.approx(sum(o["amount"] for o in samples.orders(300)), abs=0.01)
@@ -298,6 +299,24 @@ def test_excel_keeps_values_groups_and_subtotal_formulas(tmp_path, chart_service
     assert "Print_Titles" in book
     styles = z.read("xl/styles.xml").decode()
     assert "[Red]" in styles
+
+
+def test_an_excel_file_holds_a_million_rows_at_most_all_its_sheets_together(tmp_path, monkeypatch):
+    """Over the limit the Excel file is refused, as the PDF is past its pages, before its rows
+    become cells: 2.1 million detail rows took a worker past 8 GiB (bug hunt 2026-11-03)."""
+    assert render.XLSX_MAX_ROWS == 1_000_000
+    monkeypatch.setattr(render, "XLSX_MAX_ROWS", 5)
+    table = lambda i, where: {"id": f"t{i}", "type": "table", "dataset": "d", "x": 0, "y": 20 * i, "w": 100, "h": 10,
+                              "filter": where, "columns": [{"header": "a", "value": "[a]"}]}
+    rows = [{"a": n} for n in range(6)]
+    assert _one_page(tmp_path / "five", table(0, "[a] < 5"), rows=rows, fmt="xlsx").exists()
+    with pytest.raises(ReportError, match=r"item «t0»: more than 5 rows to write, the most an Excel file of a report holds"):
+        _one_page(tmp_path / "six", table(0, "[a] < 6"), rows=rows, fmt="xlsx")
+    # two tables of three: six in the file
+    with pytest.raises(ReportError, match=r"item «t1»: more than 5 rows"):
+        _one_page(tmp_path / "two", table(0, "[a] < 3"), table(1, "[a] >= 3"), rows=rows, fmt="xlsx")
+    # the other formats keep their own limit, the pages
+    assert _one_page(tmp_path / "pdf", table(0, "[a] < 6"), rows=rows, fmt="pdf").exists()
 
 
 def test_sheet_names_drop_what_excel_refuses_and_stay_readable():
@@ -319,10 +338,9 @@ def test_a_total_row_with_no_column_free_for_its_label_writes_it_on_a_row_of_its
     detail["columns"] = [c for c in detail["columns"] if c.get("total")]
     detail["groups"] = detail["groups"][:1]
     z = zipfile.ZipFile(run(tmp_path, chart_service, "xlsx", definition=d).path)
-    strings = re.findall(r"<t[^>]*>([^<]*)</t>", z.read("xl/sharedStrings.xml").decode())
     sheet = z.read("xl/worksheets/sheet1.xml").decode()
-    label = strings.index("Totale Regione: Centro")
-    row = int(re.search(rf'<c r="A(\d+)"[^>]*t="s"[^>]*><v>{label}</v>', sheet).group(1))
+    strings = re.findall(r"<t[^>]*>([^<]*)</t>", sheet)  # the texts sit in their cells (constant memory)
+    row = int(re.search(r'<c r="A(\d+)"[^>]*t="inlineStr"><is><t[^>]*>Totale Regione: Centro</t>', sheet).group(1))
     # the values of that total on the next row, as SUBTOTAL formulas
     assert re.search(rf'<c r="A{row + 1}"[^>]*><f>SUBTOTAL\(9,A\d+:A{row}\)</f>', sheet)
     assert "Totale" in strings

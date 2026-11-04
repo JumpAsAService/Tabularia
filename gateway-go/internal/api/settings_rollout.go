@@ -71,7 +71,7 @@ func rolloutMode() string {
 		return "compose"
 	}
 	rt := scriptcfg.GetRuntime()
-	if rt.Rollout && rt.Release != "" && fileExists(scriptcfg.Get().Kubernetes.TokenFile) {
+	if rt.Rollout && rt.Release != "" && fileExists(kubeAPI().TokenFile) {
 		return "kubernetes"
 	}
 	return "manual"
@@ -179,7 +179,7 @@ func rolloutPods(ctx context.Context, component string) ([]any, error) {
 	if rt.AppName != "" {
 		selector += ",app.kubernetes.io/name=" + rt.AppName
 	}
-	out, err := kube.Call(ctx, scriptcfg.Get().Kubernetes, http.MethodGet,
+	out, err := kube.Call(ctx, kubeAPI(), http.MethodGet,
 		"/api/v1/namespaces/"+rt.ReleaseNamespace()+"/pods?labelSelector="+kube.Quote(selector), nil, false)
 	if err != nil {
 		return nil, err

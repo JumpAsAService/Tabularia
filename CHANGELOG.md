@@ -35,6 +35,49 @@ exposes at `/system/info` and in the app's settings menu.
   usual question when there are unsaved changes. And leaving a new flow nobody touched no
   longer asks about «unsaved changes».
 
+- **An Excel file of a report holds a million rows at most**, all its sheets together: over
+  that it is refused with a message, as a PDF is past its pages, before the rows are written.
+  2.1 million detail rows took a worker past its 8 GiB and the other work on it with it. The
+  book is now written in constant memory: a million rows peak at about 3 GB.
+- **A table comparing a row with the one above (`PREVIOUS`) offers no sort to its reader.**
+  Sorted by revenue, «vs month before» compared July with December; such a table now keeps the
+  designer's order, and a link asking for a sort leaves it as it is.
+- **A datasource over a report's or a dashboard's row limit is counted, not read.** Finding
+  it too big read the limit's 3 million rows first: 10-17 s and 1.5 GB of a preview worker,
+  at every change in the dashboard designer. A dataset with steps is still read at once.
+
+- **A preview whose worker ran out of memory says so**, in the editor and for a query on a
+  connection: a 422 telling what to change (a development sample, a filter earlier, an
+  aggregation in the SQL), or a 503 to try again when the worker went away for another reason.
+  It was a 500, «Internal Server Error» as plain text.
+- **An orchestrator that is stopping takes no more runs.** In the seconds between its stop signal
+  and its end it went on taking runs from the queue, then closed them as interrupted: at every
+  upgrade or rollout a run started then failed. They now stay queued for the next orchestrator;
+  on Kubernetes the orchestrator no longer waits five seconds before stopping (no Service sends
+  it requests).
+
+- **Every run reads every record, from the editor too.** A run started from the editor kept its
+  previews' development sample and published a datasource of the sample's rows, while its dialog
+  said «the entire dataset»: the sample is now the previews' only (and a Script or Container
+  node's trial's, which publishes nothing).
+
+- **DuckDB is the default engine.** A new flow, the assistant's query and a SQL script with no
+  engine chosen run on DuckDB (or on the first engine the administrator allows), which spills
+  to disk where Polars holds a group in memory: on 42 million rows a Polars aggregation took an
+  8 GiB worker down. Existing flows keep their engine; a person's favourite engine still wins.
+- **The SQL step and the SQL scripts read their tables in place.** Their sandbox copied every
+  table into a database of its own, every column, before the query ran: now it reads the run's
+  files through views, only the columns and row groups the query needs, and still nothing else
+  (DuckDB's allowed paths, with every other access switched off and locked). A GROUP BY over
+  20 million rows: 20 s → 6 s.
+
+- **Smaller things the bug hunt found.** A dataset over the row limit suggests aggregating it in
+  its query or in a flow (a datasource has no SQL to change); a step's error counts the chain's
+  steps from 1 («operation #2» was the third); an Excel export over the format's limit says
+  «more than 1,048,575 rows» instead of naming the limit as the table's size; on Kubernetes with
+  the panel's scaling off, Administration → Workers no longer suggests `docker compose --scale`;
+  the kind guide labels Tabularia's namespace for the `restricted` Pod Security it promised.
+
 ## 1.3.0 «Catone» — 2026-11-02
 
 Fourth release, and a new name: «Catone», after Marcus Porcius Cato, censor in 184 BC,

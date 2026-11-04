@@ -13,6 +13,23 @@ import (
 // Known is KNOWN_ENGINES, in its order.
 var Known = []string{"polars", "duckdb", "chdb", "clickhouse", "bigquery"}
 
+// Preferred is PREFERRED_ENGINES: the engine of what nobody chose one for is the first of
+// these the administrator allows.
+var Preferred = []string{"duckdb", "polars", "chdb", "clickhouse", "bigquery"}
+
+// DefaultEngine is DEFAULT_ENGINE.
+const DefaultEngine = "duckdb"
+
+// Default is default_engine: the first preferred engine among `allowed` (every one when nil).
+func Default(allowed map[string]bool) string {
+	for _, e := range Preferred {
+		if allowed == nil || allowed[e] {
+			return e
+		}
+	}
+	return DefaultEngine
+}
+
 // IsKnown says whether the id is among Known.
 func IsKnown(id string) bool {
 	for _, e := range Known {

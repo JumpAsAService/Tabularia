@@ -48,7 +48,7 @@ class AgentDraft(SQLModel, table=True):
     base_hash: str = Field(default="", max_length=64)
     name: str = Field(default="", max_length=200)
     project_id: Optional[int] = None  # the folder
-    engine: str = Field(default="polars", max_length=20)
+    engine: str = Field(default="duckdb", max_length=20)  # engine_policy.DEFAULT_ENGINE
     # {nodes, edges}, as the editor saves a flow
     definition: str = Field(default='{"nodes": [], "edges": []}', sa_column=Column(Text, nullable=False))
     # the ids handed out already ({"op-": 4, ...}): a removed node's id is not handed out again

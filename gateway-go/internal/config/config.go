@@ -101,6 +101,7 @@ type Config struct {
 
 	Admin AdminConfig // config_admin.go
 	Flows FlowsConfig // config_flows.go
+	Jobs  JobsConfig  // config_jobs.go
 
 	// PanelEnv: the environment's value of every setting of Administration → Settings
 	// (overrides.ITEMS), by its key, as pydantic types it (config_panel.go)
@@ -179,6 +180,7 @@ func Load(env Env) (*Config, error) {
 		}
 	}
 	c.Admin = loadAdmin(&r)
+	c.Jobs = loadJobs(&r)
 	c.PanelEnv = loadPanelEnv(&r)
 	c.KubernetesTokenFile = r.str("KUBERNETES__TOKEN_FILE", "/var/run/secrets/kubernetes.io/serviceaccount/token")
 	if c.FernetKey == "" && c.KeysDir != "" {
@@ -194,7 +196,9 @@ func Load(env Env) (*Config, error) {
 		r.fail("SECURITY__FERNET_KEY", "is not set: generate one with: openssl rand -base64 32 | tr '+/' '-_'")
 	}
 	upstream := r.str("GATEWAY_GO__UPSTREAM", "")
-	if upstream == "" {
+	if upstream == "" && !c.Jobs.Answers() {
+		// an orchestrator answers only /health: nothing goes to the Python gateway
+	} else if upstream == "" {
 		r.fail("GATEWAY_GO__UPSTREAM", "is required: the Python gateway's address, which answers the routes not ported yet")
 	} else if u, err := url.Parse(upstream); err != nil || u.Scheme == "" || u.Host == "" {
 		r.fail("GATEWAY_GO__UPSTREAM", fmt.Sprintf("is not an address: %q", upstream))

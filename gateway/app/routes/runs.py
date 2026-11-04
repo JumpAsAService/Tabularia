@@ -159,16 +159,19 @@ async def _launch_flow_run(
     ensure_can(session, user, flow.project_id, Capability.RUN)
     engine_name = resolve_run_engine(flow, engine_mode)
 
-    # PRODUCTION = every record: any development sample (operations marked `_dev_sample`,
-    # nested ones too) is removed. The gateway's resolver never injects them in
-    # production: this is defence in depth (e.g. a client sending a chain the editor
-    # built).
-    if engine_mode != "development":
+    # A RUN = every record, from the editor too: any development sample (operations marked
+    # `_dev_sample`, nested ones too) is removed — the chain the editor sends carries its
+    # previews' samples, and the resolver adds them in development. The sample is the previews'
+    # only: a run from the editor published a datasource of the sample's rows while its dialog
+    # said «the entire dataset» (bug hunt 2026-11-03, the maintainer's choice). A Script or
+    # Container node's trial from its panel stays on the sample (docs/specs/script-node.md):
+    # it publishes nothing.
+    if trigger_type != "trial":
         from app.services.flow_resolver import strip_dev_sample_ops
 
         body.operations, removed = strip_dev_sample_ops(body.operations)
         if removed:
-            logger.warning("production run of flow %s: %d development samples removed", flow.id, removed)
+            logger.info("run of flow %s: %d development samples removed, it reads every record", flow.id, removed)
 
     # input_key and operations: the source (and every nested source: the right of
     # join/union, driver/body of the foreach) must be IN the engine's bucket and under a

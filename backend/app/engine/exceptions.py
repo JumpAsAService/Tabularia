@@ -26,9 +26,10 @@ class SourceNotFoundError(EngineError):
 
 
 class OperationError(EngineError):
-    """An error while applying one of the flow's operations."""
+    """An error while applying one of the flow's operations. `index` counts from 0, as the
+    chain does; the message counts from 1, as a person does («operation #2» was the third)."""
 
     def __init__(self, op_type: str, index: int, message: str):
         self.op_type = op_type
         self.index = index
-        super().__init__(f"Error in operation #{index} '{op_type}': {message}")
+        super().__init__(f"Error in step {index + 1} of the chain ('{op_type}'): {message}")

@@ -58,6 +58,7 @@ import { useFlows, type FlowSummary } from '~/composables/useFlows'
 import { useRuns, type RunInfo } from '~/composables/useRuns'
 import RunProgressText from '~/components/ui/RunProgressText.vue'
 import { usePopover } from '~/composables/usePopover'
+import { DEFAULT_ENGINE_OPTION } from '~/composables/useEngine'
 import { creationFolder, personalFolderOf } from '~/composables/creationFolder'
 import { useDialogA11y } from '~/composables/useDialogA11y'
 import { useDatasources, type ApiDatasourceDraft, type DatasourceInfo, type DbDatasourceDraft, type GsheetsDatasourceDraft, type S3DatasourceDraft, type SharePointDatasourceDraft, type SftpDatasourceDraft } from '~/composables/useDatasources'
@@ -421,7 +422,7 @@ onMounted(async () => {
   await Promise.all([
     loadProjects(),
     loadFolder(currentId.value),
-    coreApi.engines().then((e) => { engines.value = e }, () => { /* Polars stays */ }),
+    coreApi.engines().then((e) => { engines.value = e }, () => { /* the default engine stays */ }),
   ])
 })
 
@@ -808,7 +809,7 @@ async function removeRow(row: Row) {
 
 // ── Creation: a single entry point ─────────────────────────────────────
 interface EngineOpt { id: string; label: string; available: boolean; description: string; optional?: boolean; disabled_by_admin?: boolean }
-const engines = ref<EngineOpt[]>([{ id: 'polars', label: 'Polars', available: true, description: '' }])
+const engines = ref<EngineOpt[]>([DEFAULT_ENGINE_OPTION])
 const newMenu = ref(false)
 const engineStep = ref(false) // the menu's second level: choosing the engine
 const newFolderName = ref('')

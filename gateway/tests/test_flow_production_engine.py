@@ -63,7 +63,7 @@ def test_update_flow_sets_and_clears_production_engine(session):
     p = make_project(session, name="p")
     flow = create_flow(p.id, FlowCreate(name="f"), request=None, user=admin, session=session)
     up = update_flow(flow.id, FlowUpdate(production_engine="chdb"), request=None, user=admin, session=session)
-    assert up.production_engine == "chdb" and up.engine == "polars"  # development does not change
+    assert up.production_engine == "chdb" and up.engine == "duckdb"  # development does not change
     # omitted = unchanged
     up = update_flow(flow.id, FlowUpdate(name="f2"), request=None, user=admin, session=session)
     assert up.production_engine == "chdb"

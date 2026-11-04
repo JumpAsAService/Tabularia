@@ -886,7 +886,7 @@ func deleteRegistry(d *Deps, w http.ResponseWriter, r *http.Request, p *auth.Pri
 			}
 		}
 		for _, ns := range namespaces {
-			_, err := kube.Call(ctx, cfg.Kubernetes, http.MethodDelete, fmt.Sprintf("/api/v1/namespaces/%s/secrets/tabularia-registry-%d", ns, reg.ID), nil, false)
+			_, err := kube.Call(ctx, kubeAPI(), http.MethodDelete, fmt.Sprintf("/api/v1/namespaces/%s/secrets/tabularia-registry-%d", ns, reg.ID), nil, false)
 			if err != nil && kube.Status(err) != 404 {
 				if kube.Status(err) == -1 {
 					fail(d, w, "registries: the cluster's answer", err)
@@ -1159,7 +1159,7 @@ func editorRegistries(d *Deps, w http.ResponseWriter, r *http.Request, p *auth.P
 		fail(d, w, "registries: the bucket", err)
 		return
 	}
-	cfg := scriptcfg.Get()
+	maxCPU, maxMemory, maxTimeout := containersLimits()
 	// EditorVariable of the registries has no from_tabularia: written without it
 	type regEditorVariable struct {
 		Name   string  `json:"name"`
@@ -1193,7 +1193,7 @@ func editorRegistries(d *Deps, w http.ResponseWriter, r *http.Request, p *auth.P
 		Limits             limits              `json:"limits"`
 		StorageReady       bool                `json:"storage_ready"`
 		TabulariaVariables []string            `json:"tabularia_variables"`
-	}{scNullable(regDisabled()), registries, limits{cfg.Containers.MaxCPU, cfg.Containers.MaxMemory, cfg.Containers.MaxTimeoutSecond},
+	}{scNullable(regDisabled()), registries, limits{maxCPU, maxMemory, int(maxTimeout)},
 		storage.Bucket != "" && storage.AccessKey != "" && storage.SecretKeyEnc != nil && *storage.SecretKeyEnc != "", scTabulariaVariables})
 }
 

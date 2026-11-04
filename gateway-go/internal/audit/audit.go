@@ -33,6 +33,9 @@ type Event struct {
 	TargetID    *int64
 	TargetLabel *string
 	Detail      pyjson.Object // in the order the Python code builds the dict
+	// At is the event's moment when the caller has one (a background loop's round, at the
+	// moment cmd/jobsonce fixes); nil: now
+	At *time.Time
 }
 
 // Record writes the event; an error is logged, never returned (record_audit never raises).
@@ -82,9 +85,13 @@ func Record(ctx context.Context, db Execer, log *slog.Logger, e Event) {
 			agent = &info.UserAgent
 		}
 	}
+	at := time.Now().UTC()
+	if e.At != nil {
+		at = e.At.UTC()
+	}
 	_, err := db.Exec(ctx, `INSERT INTO audit_logs (ts, actor_id, actor_label, action, outcome, target_type, target_id,
 			target_label, detail, ip, user_agent) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)`,
-		time.Now().UTC(), actorID, label, e.Action, outcome, e.TargetType, e.TargetID, e.TargetLabel, detailText, ip, agent)
+		at, actorID, label, e.Action, outcome, e.TargetType, e.TargetID, e.TargetLabel, detailText, ip, agent)
 	if err != nil {
 		log.Error("record_audit: cannot write the event", "action", e.Action, "err", err)
 	}

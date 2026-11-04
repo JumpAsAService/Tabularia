@@ -302,7 +302,8 @@ const groups = computed(() => state.value?.groups ?? [])
       <div class="item">
         <div class="description">
           <span class="name"><Server :size="13" class="icon" /> {{ $t('workers.pods.title') }}</span>
-          <template v-if="g.scaling.mode === 'none'">
+          <p v-if="g.scaling.mode === 'none' && g.scaling.on_kubernetes" class="help">{{ $t('workers.pods.chart') }}</p>
+          <template v-else-if="g.scaling.mode === 'none'">
             <p class="help">{{ $t('workers.pods.compose') }}</p>
             <p class="meta"><code>docker compose up -d --scale {{ SERVICE[g.kind] }}=N</code></p>
           </template>

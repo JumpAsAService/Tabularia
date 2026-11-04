@@ -415,7 +415,7 @@ var FlowCreate = pyd.NewModel("FlowCreate",
 	pyd.F("name", pyd.Str()),
 	pyd.F("description", pyd.Str()).Default(""),
 	pyd.F("definition", pyd.Str()).Default("{}"),
-	pyd.F("engine", pyd.Str()).Default("polars"),
+	pyd.F("engine", pyd.Optional(pyd.Str())).Default(nil),
 	pyd.F("production_engine", pyd.Optional(pyd.Str())).Default(nil),
 )
 

@@ -159,9 +159,11 @@ func (d *Deps) req(w http.ResponseWriter, r *http.Request, p *auth.Principal) *r
 
 func (d *Deps) flowSettings() flowaccess.Settings {
 	f := d.Config.Flows
+	// containers.max_cpu, max_memory, max_timeout_seconds: the panel's
+	cpu, memory, timeout := d.Panel.ContainersMaxCPU(), d.Panel.ContainersMaxMemory(), d.Panel.ContainersMaxTimeout()
 	return flowaccess.Settings{ScriptsEnabled: f.ScriptsEnabled, ScriptsNamespace: f.ScriptsNamespace,
-		ScriptsRegistry: f.ScriptsRegistry, ContainersEnabled: f.ContainersEnabled, MaxCPU: f.ContainersMaxCPU,
-		MaxMemory: f.ContainersMaxMemory, MaxTimeoutSeconds: f.ContainersMaxTimeout}
+		ScriptsRegistry: f.ScriptsRegistry, ContainersEnabled: f.ContainersEnabled, MaxCPU: cpu,
+		MaxMemory: memory, MaxTimeoutSeconds: timeout}
 }
 
 // fail answers an unexpected error as Starlette does (a 500, plain text).
@@ -376,13 +378,19 @@ func forgetFlowChats(ctx context.Context, tx pgx.Tx, flowID int64) error {
 // validateEngine is _validate_engine: in the catalog and not disabled by the
 // administrator. `raw` is what was asked (nil: none).
 func (q *request) validateEngine(raw *string) (string, *auth.Refusal, error) {
-	e := "polars"
+	// engine_policy.default_engine(allowed_engines(session)) when none was asked
+	var e string
 	shown := "None"
 	if raw != nil {
 		shown = *raw
-		if *raw != "" {
-			e = *raw
+		e = *raw
+	}
+	if e == "" {
+		allowed, err := enginepolicy.Allowed(q.ctx, q.d.DB)
+		if err != nil {
+			return "", nil, err
 		}
+		e = enginepolicy.Default(allowed)
 	}
 	e = strings.ToLower(pyStrip(e))
 	if !enginepolicy.IsKnown(e) {

@@ -19,6 +19,8 @@ import (
 	"github.com/JumpAsAService/Tabularia/gateway-go/internal/config"
 	"github.com/JumpAsAService/Tabularia/gateway-go/internal/db"
 	"github.com/JumpAsAService/Tabularia/gateway-go/internal/engine"
+	"github.com/JumpAsAService/Tabularia/gateway-go/internal/jobs"
+	_ "github.com/JumpAsAService/Tabularia/gateway-go/internal/jobs/all"
 	"github.com/JumpAsAService/Tabularia/gateway-go/internal/openlineage"
 	"github.com/JumpAsAService/Tabularia/gateway-go/internal/proxy"
 	"github.com/JumpAsAService/Tabularia/gateway-go/internal/secret"
@@ -71,36 +73,62 @@ func run(log *slog.Logger) error {
 	if err != nil {
 		return err
 	}
-	upstream := proxy.New(cfg.Upstream, log)
+	// the loops need the AI service too (a SQL script on the catalog): every role has it
 	deps := &api.Deps{DB: pool, Auth: authn, Panel: panel, Config: cfg, Log: log, Engine: engineClient, Fernet: fernet,
-		Upstream: upstream, AIService: proxy.New(cfg.AIService, log), SQL: aisvc.New(cfg.AIService, cfg.FernetKey)}
+		AIService: proxy.New(cfg.AIService, log), SQL: aisvc.New(cfg.AIService, cfg.FernetKey)}
 	// services/openlineage.py: its queue, emptied at the stop (main.py's lifespan, wait_idle 5 s)
 	deps.Lineage = openlineage.New(openlineage.FromEnv(), pool, deps.SQL, panel.OpenLineageTimeout, log)
 	log.Info(deps.Lineage.Describe())
 	defer deps.Lineage.WaitIdle(5 * time.Second)
-	routes := append([]server.Route{{Method: http.MethodGet, Pattern: "/health", Handler: server.Health()}}, api.Routes(deps)...)
-	srv := &http.Server{
-		Addr: cfg.Listen,
+	// APP__ROLE (app/main.py): «orchestrator» declares no API route, «api» starts no
+	// background work, «all» does both
+	var handler http.Handler
+	if cfg.Jobs.Answers() {
+		upstream := proxy.New(cfg.Upstream, log)
+		deps.Upstream = upstream
+		routes := append([]server.Route{{Method: http.MethodGet, Pattern: "/health", Handler: server.Health()}},
+			api.Routes(deps)...)
 		// the notebooks' own host (NOTEBOOKS__ORIGIN) reaches the notebooks' proxy and nothing else
-		Handler:           api.WithNotebooksHost(deps, server.New(routes, upstream)),
+		handler = api.WithNotebooksHost(deps, server.New(routes, upstream))
+	} else {
+		handler = server.Orchestrator(cfg.AppName)
+	}
+	// start_background_work: the loops stop after the server, as the lifespan's tasks are
+	// cancelled once uvicorn has drained its connections
+	jobsCtx, stopJobs := context.WithCancel(context.Background())
+	defer stopJobs()
+	waitJobs := func() {}
+	if cfg.Jobs.Works() {
+		waitJobs = jobs.Start(jobsCtx, api.Jobs(deps))
+	}
+	srv := &http.Server{
+		Addr:              cfg.Listen,
+		Handler:           handler,
 		ReadHeaderTimeout: 30 * time.Second,
 		// as uvicorn's --timeout-keep-alive 130 in the production compose
 		IdleTimeout: 130 * time.Second,
 	}
 	errc := make(chan error, 1)
 	go func() {
-		log.Info("listening", "addr", cfg.Listen, "upstream", cfg.Upstream.String(), "ai_service", cfg.AIService.String())
+		log.Info("listening", "addr", cfg.Listen, "role", cfg.Jobs.Role, "ai_service", cfg.AIService.String())
 		errc <- srv.ListenAndServe()
 	}()
 	select {
 	case err := <-errc:
+		stopJobs()
+		waitJobs()
 		if !errors.Is(err, http.ErrServerClosed) {
 			return err
 		}
 	case <-ctx.Done():
+		// orchestrator.drain_on_stop_signal: no more runs taken from the queue from now on
+		jobs.Drain()
 		shutdown, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 		defer cancel()
-		return srv.Shutdown(shutdown)
+		err := srv.Shutdown(shutdown)
+		stopJobs()
+		waitJobs()
+		return err
 	}
 	return nil
 }

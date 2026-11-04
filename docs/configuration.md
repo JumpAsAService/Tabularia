@@ -238,7 +238,7 @@ The MCP server at `/mcp` (on the gateway, under `APP__ROOT_PATH` when set): agen
 
 | Variable | Type | Default | Helm value | Description |
 |---|---|---|---|---|
-| `PREVIEW__DEFAULT_SAMPLE_ROWS` | integer, ≥ 0 | `0` | `app.previewDefaultSampleRows` | Above 0, every source node without a sample of its own is read only for its first N rows in editor previews and trial runs. People switch it off per node; scheduled runs and «Run in production» always read everything. Useful when every read costs (remote storage, a pay-per-use warehouse). 0 = no automatic sample. Also adjustable in Administration → Settings. |
+| `PREVIEW__DEFAULT_SAMPLE_ROWS` | integer, ≥ 0 | `0` | `app.previewDefaultSampleRows` | Above 0, every source node without a sample of its own is read only for its first N rows in editor previews and in the trials of Script and Container nodes. People switch it off per node; every run, from the editor too, reads everything. Useful when every read costs (remote storage, a pay-per-use warehouse). 0 = no automatic sample. Also adjustable in Administration → Settings. |
 
 ### Orchestration and scheduling
 
@@ -625,7 +625,7 @@ What one render of a pixel-perfect report may read and use. The run workers rend
 
 | Variable | Type | Default | Helm value | Description |
 |---|---|---|---|---|
-| `REPORTS__MAX_ROWS` | integer, 1–10,000,000 | `3000000` | `reports.maxRows` | The most rows a report reads from each of its datasets; one more stops the render and names the dataset (aggregate it in SQL, or filter it). The rows stay in the worker's memory, in columns, while the report renders, and DuckDB works out its groups and totals: a million take some 500 MiB and a second or two, ten million some 2.2 GiB and ten seconds (measured), so give the worker that much for every render that may run at once. |
+| `REPORTS__MAX_ROWS` | integer, 1–10,000,000 | `3000000` | `reports.maxRows` | The most rows a report reads from each of its datasets; one more stops the render and names the dataset (aggregate it in its query or in a flow, or filter it). The rows stay in the worker's memory, in columns, while the report renders, and DuckDB works out its groups and totals: a million take some 500 MiB and a second or two, ten million some 2.2 GiB and ten seconds (measured), so give the worker that much for every render that may run at once. |
 | `REPORTS__MAX_PAGES` | integer, 1–10,000 | `200` | `reports.maxPages` | The most pages of one report: a longer one stops with the number it would have. |
 | `REPORTS__RENDER_MEMORY_MB` | integer, ≥ 128 | `1024` | `reports.renderMemoryMb` | The memory of the child process that lays out a report's pages (Typst), in MiB: it needs about 4.5 MiB a page of tables (measured), so 1024 holds 200. Past it the render stops and says so; give the worker as much more memory for every render that may run at once. |
 | `REPORTS__RENDER_SECONDS` | integer, ≥ 5 | `120` | `reports.renderSeconds` | How long the layout of one report may take: past it the child process is killed and the render stops. |

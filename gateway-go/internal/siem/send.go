@@ -10,12 +10,12 @@ import (
 	"net"
 	"net/http"
 	"net/netip"
-	"os"
 	"strconv"
 	"strings"
 	"time"
 	"unicode/utf8"
 
+	"github.com/JumpAsAService/Tabularia/gateway-go/internal/httpxerr"
 	"github.com/JumpAsAService/Tabularia/gateway-go/internal/pyjson"
 	"github.com/JumpAsAService/Tabularia/gateway-go/internal/pystr"
 	"github.com/JumpAsAService/Tabularia/gateway-go/internal/pyurl"
@@ -352,25 +352,6 @@ func truthy(v any) bool {
 // faults whose words are known (measured in the gateway's image): a connection refused or
 // unreachable, a timeout, a server that closes without answering.
 func httpxError(err error) string {
-	var ne net.Error
-	var op *net.OpError
-	switch {
-	case errors.As(err, &op) && op.Op == "dial":
-		if op.Timeout() {
-			return "ConnectTimeout: "
-		}
-		return "ConnectError: All connection attempts failed"
-	case errors.As(err, &ne) && ne.Timeout():
-		if errors.Is(err, os.ErrDeadlineExceeded) && strings.Contains(err.Error(), "TLS handshake") {
-			return "ConnectTimeout: _ssl.c:983: The handshake operation timed out"
-		}
-		return "ReadTimeout: "
-	case errors.Is(err, io.EOF) || errors.Is(err, io.ErrUnexpectedEOF):
-		return "RemoteProtocolError: Server disconnected without sending a response."
-	}
-	var cert *tls.CertificateVerificationError
-	if errors.As(err, &cert) {
-		return "ConnectError: [SSL: CERTIFICATE_VERIFY_FAILED] certificate verify failed: " + cert.Err.Error()
-	}
-	return "ConnectError: " + err.Error()
+	name, text := httpxerr.Of(err)
+	return name + ": " + text
 }

@@ -52,7 +52,7 @@ __all__ = [
 ]
 
 
-DEFAULT_ENGINE = "polars"
+DEFAULT_ENGINE = "duckdb"
 
 # registered implementations: name → factory (an engine class or a callable → instance,
 # see the lazy chDB below).

@@ -99,7 +99,7 @@ example:
 ]
 ```
 
-and an **engine** executes it: Polars (the default), DuckDB or chDB inside the workers,
+and an **engine** executes it: DuckDB (the default), Polars or chDB inside the workers,
 or an external ClickHouse or Google BigQuery. A flow has a development engine, used by
 the editor, and an optional production engine, used by schedules and **«Run in
 production»**. The engines follow one data standard; the differences that remain are
@@ -107,7 +107,8 @@ listed in [Engine differences](engines/engine-differences.md).
 
 A **preview** is what you see when you click a node: the result of the flow up to that
 step, computed on the whole dataset unless a development sample is set on the source
-node (or the installation sets an automatic one). Previews run on workers of their own,
+node (or the installation sets an automatic one). The sample is the previews' only: a
+run, from the editor as from a schedule, reads every record. Previews run on workers of their own,
 so they never wait behind a run; a newer preview of the same step replaces one still
 running; the output of intermediate steps is cached up to a size cap, so changing the
 last step usually does not recompute the first ones.

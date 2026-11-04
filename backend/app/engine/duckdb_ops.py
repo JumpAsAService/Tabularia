@@ -492,11 +492,14 @@ def op_sql(rel, params, a, ctx):
     the `tables` the operation brings (a SQL script on the catalog), in an isolated
     SANDBOX connection.
 
-    Security: the input is loaded into a table, then every external access is switched
-    off (`enable_external_access=false` + `lock_configuration=true`):
-    read_csv/read_parquet/attach/copy/install/httpfs are blocked and cannot be turned
-    back on. The result is NOT written by DuckDB (blocked by the sandbox) but by Python
-    (pyarrow), STREAMING → it stays out of core."""
+    Security: the input and the tables are written to parquet files of this run, each read
+    by a view; then every external access is switched off but for those files
+    (`allowed_paths` + `enable_external_access=false` + `lock_configuration=true`):
+    read_csv/read_parquet of anything else, attach, copy, install, httpfs are blocked and
+    cannot be turned back on. The views read in place only the columns and row groups the
+    query needs: copying every column into the sandbox's own tables made a GROUP BY over 60
+    million rows take 45-81 s and some 3 GB (bug hunt 2026-11-03). The result is NOT written
+    by DuckDB (blocked by the sandbox) but by Python (pyarrow), STREAMING → out of core."""
     query = str(_require(params, "query")).strip()
     if not query:
         raise EngineError("sql: the query is empty")
@@ -513,20 +516,22 @@ def op_sql(rel, params, a, ctx):
         others[name] = ctx.tempfile()
         ctx.build_right(ref).write_parquet(others[name])
 
-    # A database on disk, not in memory, with this process's budget and its own
-    # spill directory: `self` holds the whole upstream, and in memory it took about
-    # eight times the parquet even for a 100-row preview. Set before the lock.
+    # A database on disk with this process's budget and its own spill directory, set before
+    # the lock: a query's joins and groups spill there.
     work_dir = tempfile.mkdtemp(prefix="duckdb-sql-")
     sbx = duckdb.connect(os.path.join(work_dir, "sandbox.duckdb"))
     try:
         sbx.execute(f"SET temp_directory = '{os.path.join(work_dir, 'spill')}'")
         duckdb_budget.apply(sbx)
+        files = ([in_tmp] if in_tmp is not None else []) + list(others.values())
+        if files:  # this run's own temporary files, named by ctx.tempfile: no quote inside
+            sbx.execute("SET allowed_paths=[" + ", ".join(f"'{f}'" for f in files) + "]")
         if in_tmp is not None:
-            sbx.execute(f"CREATE TABLE self AS SELECT * FROM read_parquet('{in_tmp}')")
+            sbx.execute(f"CREATE VIEW self AS SELECT * FROM read_parquet('{in_tmp}')")
             sbx.execute("CREATE VIEW input AS SELECT * FROM self")
         for name, path in others.items():  # names checked by table_names: plain lowercase
-            sbx.execute(f"CREATE TABLE {name} AS SELECT * FROM read_parquet('{path}')")
-        sbx.execute("SET enable_external_access=false")  # no files, network, attach or install
+            sbx.execute(f"CREATE VIEW {name} AS SELECT * FROM read_parquet('{path}')")
+        sbx.execute("SET enable_external_access=false")  # no other file, network, attach or install
         sbx.execute("SET lock_configuration=true")  # and the query cannot turn it back on
         try:
             result = sbx.sql(query)

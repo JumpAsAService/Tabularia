@@ -13,7 +13,7 @@ pytestmark = pytest.mark.anyio
 
 
 def test_validate_engine_default_and_known():
-    assert _validate_engine(None) == "polars"
+    assert _validate_engine(None) == "duckdb"  # the default since the bug hunt of 2026-11-03
     assert _validate_engine("polars") == "polars"
     assert _validate_engine("  POLARS ") == "polars"  # normalized
 
@@ -31,11 +31,11 @@ def test_create_flow_persists_engine(session):
     assert flow.engine == "polars"
 
 
-def test_create_flow_defaults_engine_to_polars(session):
+def test_create_flow_defaults_engine_to_duckdb(session):
     admin = make_user(session, email="a@x.local", is_superuser=True)
     p = make_project(session, name="p")
     flow = create_flow(p.id, FlowCreate(name="f"), request=None, user=admin, session=session)
-    assert flow.engine == "polars"
+    assert flow.engine == "duckdb"
 
 
 def test_create_flow_rejects_unavailable_engine(session):

@@ -464,11 +464,14 @@ What some of them do:
 
 ## 9. Install
 
-Tabularia's namespace, with the registry's password for the image downloads, then the
-chart:
+Tabularia's namespace, at the `restricted` Pod Security level (every pod of the chart meets it:
+not root, no privilege, a read-only root filesystem), with the registry's password for the image
+downloads, then the chart:
 
 ```bash
 kubectl create namespace tabularia
+kubectl label namespace tabularia pod-security.kubernetes.io/enforce=restricted \
+  pod-security.kubernetes.io/warn=restricted
 kubectl create secret docker-registry registry --namespace tabularia \
   --docker-server=tabularia-registry:5000 --docker-username=tabularia --docker-password="$REGISTRY_PASSWORD"
 helm install tabularia infrastructure/helm/tabularia --namespace tabularia --values "$WORK/values.yaml"

@@ -145,6 +145,18 @@ def test_the_admin_sees_workers_queues_and_processes(app, session):
     assert state["concurrency_editable"] and not state["scaling_editable"] and state["workers_known"]
 
 
+def test_on_a_cluster_with_the_panel_s_scaling_off_the_pods_are_the_chart_s(app, session, monkeypatch):
+    """Not a `docker compose --scale` on Kubernetes (bug hunt 2026-11-03): the page says the
+    chart's values set them."""
+    import app.core.config as config
+
+    boss = _login(app, session, "boss@x.local", is_superuser=True)
+    assert _group(boss.get("/admin/workers").json(), "run")["scaling"] == {**_group(boss.get("/admin/workers").json(), "run")["scaling"], "mode": "none", "on_kubernetes": False}
+    monkeypatch.setattr(config, "on_kubernetes", lambda: True)
+    scaling = _group(boss.get("/admin/workers").json(), "run")["scaling"]
+    assert (scaling["mode"], scaling["on_kubernetes"]) == ("none", True)
+
+
 def test_processes_are_engine_settings_and_show_here(app, session, engine):
     boss = _login(app, session, "boss@x.local", is_superuser=True)
     r = boss.put("/admin/engine-settings", json={"values": {"workers.run_concurrency": 4}}, headers=CSRF)

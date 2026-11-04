@@ -22,7 +22,6 @@ import (
 	"github.com/JumpAsAService/Tabularia/gateway-go/internal/pyd/gatewaymodels"
 	"github.com/JumpAsAService/Tabularia/gateway-go/internal/pyjson"
 	"github.com/JumpAsAService/Tabularia/gateway-go/internal/savedscripts"
-	"github.com/JumpAsAService/Tabularia/gateway-go/internal/scriptcfg"
 	"github.com/JumpAsAService/Tabularia/gateway-go/internal/scriptnodes"
 	"github.com/JumpAsAService/Tabularia/gateway-go/internal/server"
 )
@@ -183,9 +182,9 @@ func nbDetailOf(ctx context.Context, c *perm.Checker, q perm.Querier, n *nbRow) 
 	if err != nil {
 		return nil, err
 	}
-	limits := scriptcfg.Get().Notebooks
+	perApp, ceiling := notebooksVisitors()
 	det := &notebookDetail{notebookOut: out, Content: content, Author: author, MaxVisitors: n.MaxVisitors,
-		VisitorsDefault: min(limits.MaxVisitorsPerApp, limits.MaxVisitorsCeiling), VisitorsCeiling: limits.MaxVisitorsCeiling}
+		VisitorsDefault: int(min(perApp, ceiling)), VisitorsCeiling: int(ceiling)}
 	if out.Editable && n.Draft != nil {
 		det.Draft, det.DraftAt = n.Draft, isoPtr(n.DraftAt)
 		if by, err := nbPersonOf(ctx, q, n.DraftBy); err != nil {
@@ -268,8 +267,8 @@ func nbEnvironment(ctx context.Context, c *perm.Checker, q perm.Querier, userID,
 
 // nbMaxVisitors is _max_visitors: within the installation's ceiling.
 func nbMaxVisitors(v *int64) *auth.Refusal {
-	ceiling := scriptcfg.Get().Notebooks.MaxVisitorsCeiling
-	if v != nil && *v > int64(ceiling) {
+	_, ceiling := notebooksVisitors()
+	if v != nil && *v > ceiling {
 		return &auth.Refusal{Status: http.StatusUnprocessableEntity, Detail: fmt.Sprintf("At most %d people at once: the most this installation "+
 			"allows (NOTEBOOKS__MAX_VISITORS_CEILING)", ceiling)}
 	}

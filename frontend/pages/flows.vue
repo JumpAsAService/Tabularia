@@ -24,7 +24,7 @@ import {
 import { useProjects } from '~/composables/useProjects'
 import { useRuns, type RunInfo } from '~/composables/useRuns'
 import { usePagedList } from '~/composables/usePagedList'
-import type { EngineOpt } from '~/composables/useEngine'
+import { DEFAULT_ENGINE_OPTION, type EngineOpt } from '~/composables/useEngine'
 
 const flowsApi = useFlows()
 const projectsApi = useProjects()
@@ -57,7 +57,7 @@ const { q, items, total, offset, pageSize, loading, error, load, next, prev } =
 
 // engines available for the "New flow" picker (the flow is pinned to the chosen engine).
 // DuckDB shows as "coming" until its engine is ready.
-const engines = ref<EngineOpt[]>([{ id: 'polars', label: 'Polars', available: true, description: '' }])
+const engines = ref<EngineOpt[]>([DEFAULT_ENGINE_OPTION])
 const { preferredEngine } = usePreferredEngine()
 const newMenu = ref(false)
 const newPop = ref<HTMLElement | null>(null)
@@ -165,7 +165,7 @@ onBeforeUnmount(() => {
 onMounted(() => Promise.allSettled([
   // the folder names are an extra
   projectsApi.list().then((projects) => { folderName.value = Object.fromEntries(projects.map((p) => [p.id, p.name])) }),
-  // fallback: Polars only (in the default already)
+  // fallback: the default engine only (in the list already)
   api.engines().then((e) => { engines.value = e }),
   // without SMTP connections the notice's section does not show, and that is all
   connectionsApi.list().then((conns) => {

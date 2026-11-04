@@ -6,6 +6,8 @@
 //	POST   /__script    [{"method": "GET", "path": "^/engines$", "status": 200, "body": …}, …]
 //	GET    /__recorded  the requests since the last call, then forgotten
 //	anything else       the first rule matching method and path, or 200 {} when none does
+//
+// It answers on port 2719 too (a notebook editor's pod, whose file the reaper reads).
 package main
 
 import (
@@ -32,7 +34,9 @@ type rule struct {
 	Type   string          `json:"type"` // its content type (default application/json)
 	// Headers are set on the answer (a Content-Disposition)
 	Headers map[string]string `json:"headers"`
-	re      *regexp.Regexp
+	// Drop closes the connection without an answer (an engine that went away mid-request)
+	Drop bool `json:"drop"`
+	re   *regexp.Regexp
 }
 
 type recorded struct {
@@ -47,6 +51,9 @@ type recorded struct {
 	// (the content's type and encoding, the credential, the configuration's own), its body
 	// read through a gzip encoding
 	Headers map[string]string `json:"headers,omitempty"`
+	// a webhook's delivery (X-Tabularia-Event): its own headers, the fake engine stands in for
+	// the receivers too
+	Webhook map[string]string `json:"webhook,omitempty"`
 }
 
 // lineageHeaders are the headers of a request to the lineage collector, but those every
@@ -125,6 +132,12 @@ func main() {
 		}
 		mu.Lock()
 		rec := recorded{Method: r.Method, Path: r.URL.Path, Query: r.URL.RawQuery, Body: body}
+		if r.Header.Get("X-Tabularia-Event") != "" {
+			rec.Webhook = map[string]string{}
+			for _, h := range []string{"Content-Type", "User-Agent", "X-Tabularia-Event", "X-Tabularia-Delivery", "X-Tabularia-Signature"} {
+				rec.Webhook[h] = r.Header.Get(h)
+			}
+		}
 		if a := r.Header.Get("Authorization"); strings.HasPrefix(a, "Splunk ") {
 			rec.Splunk, rec.Body = a, sentNow(body)
 		}
@@ -143,6 +156,14 @@ func main() {
 			}
 		}
 		mu.Unlock()
+		if hit != nil && hit.Drop {
+			if hj, ok := w.(http.Hijacker); ok {
+				if conn, _, err := hj.Hijack(); err == nil {
+					conn.Close()
+					return
+				}
+			}
+		}
 		if hit == nil && strings.HasPrefix(r.URL.Path, "/idp/") && idp(w, r, raw) {
 			return
 		}

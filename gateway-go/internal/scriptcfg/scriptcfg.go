@@ -241,3 +241,10 @@ func normalOrigin(v string) string {
 	}
 	return scheme + "://" + host
 }
+
+// Reload reads the process's settings again from its environment: cmd/jobsonce, whose rounds
+// may set variables of their own (an installation where a feature is on).
+func Reload() {
+	once.Do(func() {})
+	current = Load(config.FromOS())
+}

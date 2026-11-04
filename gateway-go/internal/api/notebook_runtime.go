@@ -26,6 +26,7 @@ import (
 
 	"github.com/JumpAsAService/Tabularia/gateway-go/internal/audit"
 	"github.com/JumpAsAService/Tabularia/gateway-go/internal/auth"
+	"github.com/JumpAsAService/Tabularia/gateway-go/internal/jobs"
 	"github.com/JumpAsAService/Tabularia/gateway-go/internal/kube"
 	"github.com/JumpAsAService/Tabularia/gateway-go/internal/notebookpod"
 	"github.com/JumpAsAService/Tabularia/gateway-go/internal/perm"
@@ -100,9 +101,8 @@ func nbRowOf(ctx context.Context, q perm.Querier, notebookID int64, mode string)
 		LIMIT 1`, notebookID, mode))
 }
 
-func nbKube() scriptcfg.Kubernetes { return scriptcfg.Get().Kubernetes }
-
-func nbNaiveNow() time.Time { return nowNaive() }
+// nbNaiveNow is _now(): naive UTC, to the microsecond, at the round's moment in cmd/jobsonce.
+func nbNaiveNow() time.Time { return jobs.Now().Truncate(time.Microsecond) }
 
 func nbAge(t time.Time) float64 { return nbNaiveNow().Sub(t).Seconds() }
 
@@ -404,18 +404,9 @@ func nbJobManifest(name string, notebookID int64, mode string, img *nbImage, con
 		{Key: "apiVersion", Value: "batch/v1"}, {Key: "kind", Value: "Job"},
 		{Key: "metadata", Value: pyjson.Object{{Key: "name", Value: name}, {Key: "labels", Value: tags}}},
 		{Key: "spec", Value: pyjson.Object{{Key: "backoffLimit", Value: int64(0)}, {Key: "activeDeadlineSeconds", Value: rt.NotebooksMaxLifetimeHours * 3600},
-			{Key: "ttlSecondsAfterFinished", Value: rt.ScriptsJobTTL},
+			{Key: "ttlSecondsAfterFinished", Value: scriptsJobTTL()},
 			{Key: "template", Value: pyjson.Object{{Key: "metadata", Value: pyjson.Object{{Key: "labels", Value: tags}}}, {Key: "spec", Value: pod}}}}},
 	}
-}
-
-// nbCreateObject is kube_jobs.create_object: a ConfigMap or a Secret; one already there is fine.
-func nbCreateObject(ctx context.Context, namespace, kind string, manifest pyjson.Object) error {
-	_, err := kube.Call(ctx, nbKube(), http.MethodPost, "/api/v1/namespaces/"+namespace+"/"+kind, manifest, false)
-	if kube.Status(err) == 409 {
-		return nil
-	}
-	return err
 }
 
 // nbCreatePod is _create_pod: the Job, then its ConfigMap and Secret, owned by it.
@@ -423,14 +414,12 @@ func nbCreatePod(ctx context.Context, row *nbSession, img *nbImage, source, toke
 	configName, secretName := row.JobName+"-files", row.JobName+"-token"
 	manifest := nbJobManifest(row.JobName, row.NotebookID, row.Mode, img, configName, secretName, plain)
 	tags := nbLabels(row.NotebookID, row.Mode)
-	job, err := kube.CreateJob(ctx, nbKube(), row.Namespace, manifest)
+	job, err := kube.CreateJob(ctx, kubeAPI(), row.Namespace, manifest)
 	if err != nil {
 		return err
 	}
-	meta := kube.Dict(kube.Dict(job).Value("metadata"))
-	owners := []any{pyjson.Object{{Key: "apiVersion", Value: "batch/v1"}, {Key: "kind", Value: "Job"}, {Key: "name", Value: meta.Value("name")},
-		{Key: "uid", Value: meta.Value("uid")}}}
-	if err := nbCreateObject(ctx, row.Namespace, "configmaps", pyjson.Object{{Key: "apiVersion", Value: "v1"}, {Key: "kind", Value: "ConfigMap"},
+	owners := kube.OwnedBy(job)
+	if err := kube.CreateObject(ctx, kubeAPI(), row.Namespace, "configmaps", pyjson.Object{{Key: "apiVersion", Value: "v1"}, {Key: "kind", Value: "ConfigMap"},
 		{Key: "metadata", Value: pyjson.Object{{Key: "name", Value: configName}, {Key: "labels", Value: tags}, {Key: "ownerReferences", Value: owners}}},
 		{Key: "data", Value: pyjson.Object{{Key: "notebook.py", Value: source}, {Key: "tabularia.py", Value: notebookpod.Module}}}}); err != nil {
 		return err
@@ -440,7 +429,7 @@ func nbCreatePod(ctx context.Context, row *nbSession, img *nbImage, source, toke
 		data = append(data, pyjson.KV{Key: x.k, Value: x.v})
 	}
 	data = data.Set(nbTokenEnv, token)
-	return nbCreateObject(ctx, row.Namespace, "secrets", pyjson.Object{{Key: "apiVersion", Value: "v1"}, {Key: "kind", Value: "Secret"},
+	return kube.CreateObject(ctx, kubeAPI(), row.Namespace, "secrets", pyjson.Object{{Key: "apiVersion", Value: "v1"}, {Key: "kind", Value: "Secret"},
 		{Key: "type", Value: "Opaque"}, {Key: "metadata", Value: pyjson.Object{{Key: "name", Value: secretName}, {Key: "labels", Value: tags},
 			{Key: "ownerReferences", Value: owners}}}, {Key: "stringData", Value: data}})
 }
@@ -631,7 +620,7 @@ func nbEnded(ctx context.Context, d *Deps, row *nbSession, pod any) (string, err
 	if stopped != "" {
 		return kube.StoppedByClusterText, nil
 	}
-	log, err := kube.PodLog(ctx, nbKube(), row.Namespace, kube.Text(kube.Dict(kube.Dict(pod).Value("metadata")).Value("name")), "marimo", 40)
+	log, err := kube.PodLog(ctx, kubeAPI(), row.Namespace, kube.Text(kube.Dict(kube.Dict(pod).Value("metadata")).Value("name")), "marimo", 40)
 	var ke *kube.Error
 	if errors.As(err, &ke) {
 		log = ""
@@ -695,7 +684,7 @@ func nbRefresh(ctx context.Context, d *Deps, row *nbSession, force bool) error {
 }
 
 func nbRefreshStep(ctx context.Context, d *Deps, row *nbSession) error {
-	k := nbKube()
+	k := kubeAPI()
 	job, err := kube.GetJob(ctx, k, row.Namespace, row.JobName)
 	if err != nil {
 		return err
@@ -784,7 +773,7 @@ func nbFail(ctx context.Context, d *Deps, row *nbSession, why string) error {
 	if first {
 		nbTellLineage(ctx, d, d.DB, row, "FAIL", message, nil)
 	}
-	err = kube.DeleteJob(ctx, nbKube(), row.Namespace, row.JobName)
+	err = kube.DeleteJob(ctx, kubeAPI(), row.Namespace, row.JobName)
 	var ke *kube.Error
 	if errors.As(err, &ke) {
 		return nil
@@ -794,7 +783,7 @@ func nbFail(ctx context.Context, d *Deps, row *nbSession, why string) error {
 
 // nbAlive is alive: a ready session's marimo still runs; when it does not, it is stopped.
 func nbAlive(ctx context.Context, d *Deps, row *nbSession) (bool, error) {
-	k := nbKube()
+	k := kubeAPI()
 	var ke *kube.Error
 	job, err := kube.GetJob(ctx, k, row.Namespace, row.JobName)
 	if errors.As(err, &ke) {
@@ -844,13 +833,34 @@ func nbReadFile(ctx context.Context, d *Deps, row *nbSession) (string, bool) {
 		return "", false
 	}
 	data, err := io.ReadAll(io.LimitReader(res.Body, nbMaxFileBytes+1))
-	if err != nil || len(data) > nbMaxFileBytes {
+	if err != nil {
+		d.Log.Info(fmt.Sprintf("notebooks: the editor's file of session %d not read (%v)", row.ID, err))
 		return "", false
 	}
-	if utf8.Valid(data) {
-		return string(data), true
+	if len(data) > nbMaxFileBytes {
+		d.Log.Warn(fmt.Sprintf("notebooks: the editor's file of session %d is too large", row.ID))
+		return "", false
 	}
-	return strings.ToValidUTF8(string(data), "�"), true
+	return nbDecode(data), true
+}
+
+// nbDecode is bytes.decode("utf-8", errors="replace"): a replacement character for each byte
+// that is not part of a valid sequence.
+func nbDecode(data []byte) string {
+	if utf8.Valid(data) {
+		return string(data)
+	}
+	var b strings.Builder
+	for len(data) > 0 {
+		r, size := utf8.DecodeRune(data)
+		if r == utf8.RuneError && size == 1 {
+			b.WriteRune('\uFFFD')
+		} else {
+			b.Write(data[:size])
+		}
+		data = data[size:]
+	}
+	return b.String()
 }
 
 // nbSyncDraft is sync_draft: the editor's file becomes the notebook's draft when it differs
@@ -870,6 +880,7 @@ func nbSyncDraft(ctx context.Context, d *Deps, row *nbSession) error {
 		draft = &source
 	}
 	if draft != nil && len(*draft) > nbMaxSourceBytes {
+		d.Log.Warn(fmt.Sprintf("notebooks: the editor's file of notebook %d is over the size of a version: not kept", n.ID))
 		return nil
 	}
 	same := (draft == nil && n.Draft == nil) || (draft != nil && n.Draft != nil && *draft == *n.Draft)
@@ -879,7 +890,7 @@ func nbSyncDraft(ctx context.Context, d *Deps, row *nbSession) error {
 	var by *int64
 	var at *time.Time
 	if draft != nil {
-		now := time.Now().UTC()
+		now := jobs.Now()
 		by, at = &row.UserID, &now
 	}
 	_, err = d.DB.Exec(ctx, `UPDATE notebooks SET draft = $2, draft_by = $3, draft_at = $4 WHERE id = $1`, n.ID, draft, by, at)
@@ -895,7 +906,7 @@ func nbStop(ctx context.Context, d *Deps, row *nbSession, actor *auth.User, reas
 		}
 	}
 	var ke *kube.Error
-	if err := kube.DeleteJob(ctx, nbKube(), row.Namespace, row.JobName); errors.As(err, &ke) {
+	if err := kube.DeleteJob(ctx, kubeAPI(), row.Namespace, row.JobName); errors.As(err, &ke) {
 		d.Log.Warn(fmt.Sprintf("notebooks: the Job %s not deleted now (%s)", row.JobName, ke.Message))
 	} else if err != nil {
 		return err

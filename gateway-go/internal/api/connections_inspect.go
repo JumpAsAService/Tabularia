@@ -636,7 +636,7 @@ func previewPlaceholders(d *Deps) authedFunc {
 			}
 		}
 		if body.Get("pushmail") == true {
-			payload = append(payload, pyjson.KV{Key: "lang", Value: emailLanguage(&p.User)})
+			payload = append(payload, pyjson.KV{Key: "lang", Value: emailLanguageOf(p.User.Locale)})
 		}
 		res, raw, err := d.Engine.JSON(r.Context(), http.MethodPost, "/placeholders/preview", payload)
 		if err != nil {
@@ -653,16 +653,4 @@ func previewPlaceholders(d *Deps) authedFunc {
 		}
 		engineJSON(w, raw)
 	}
-}
-
-// emailLanguage is services/pushmail.py email_language: the language the user's emails are
-// written in.
-func emailLanguage(u *auth.User) string {
-	if u.Locale != nil {
-		switch *u.Locale {
-		case "en", "it", "fr", "de", "es":
-			return *u.Locale
-		}
-	}
-	return "en"
 }

@@ -102,3 +102,9 @@ func (r *Runtime) ReleaseNamespace() string {
 	}
 	return strings.TrimSpace(string(b))
 }
+
+// ReloadRuntime reads the Runtime again from the process's environment (see Reload).
+func ReloadRuntime() {
+	rtOnce.Do(func() {})
+	rt = LoadRuntime(config.FromOS())
+}

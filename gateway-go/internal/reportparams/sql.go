@@ -8,6 +8,7 @@ import (
 	"strings"
 	"unicode"
 
+	"github.com/JumpAsAService/Tabularia/gateway-go/internal/enginepolicy"
 	"github.com/JumpAsAService/Tabularia/gateway-go/internal/pyjson"
 	"github.com/JumpAsAService/Tabularia/gateway-go/internal/pystr"
 )
@@ -41,7 +42,10 @@ var Dialects = map[string]Dialect{
 
 // DialectOf is dialect_of.
 func DialectOf(key string) Dialect {
-	if d, ok := Dialects[key]; ok && key != "" {
+	if key == "" {
+		key = enginepolicy.DefaultEngine
+	}
+	if d, ok := Dialects[key]; ok {
 		return d
 	}
 	return Dialects["polars"]

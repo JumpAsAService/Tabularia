@@ -460,6 +460,48 @@ async def test_the_worker_takes_runs_and_stops(session, queue_, monkeypatch):
     assert orch._wakeup is None  # stopped: `wake()` goes back to doing nothing
 
 
+async def test_a_stopping_worker_takes_no_more_runs_and_leaves_them_queued(session, queue_, monkeypatch):
+    """Its stop signal received, an orchestrator takes nothing more from the queue: what it took in the
+    seconds before it ended was closed as interrupted at every rollout (bug hunt 2026-11-03). The run
+    stays queued for the next orchestrator."""
+    import signal
+
+    user_, folder = queue_
+    monkeypatch.setattr(orch._orc(), "queue_poll_seconds", 0.05)
+    stop = asyncio.Event()
+    worker = asyncio.create_task(orch.queue_loop(stop))
+    passed: list[int] = []
+    previous = signal.getsignal(signal.SIGTERM)
+    try:
+        signal.signal(signal.SIGTERM, lambda signum, frame: passed.append(signum))  # as uvicorn's
+        orch.drain_on_stop_signal(asyncio.get_running_loop())
+        await asyncio.sleep(0.1)
+        signal.raise_signal(signal.SIGTERM)
+        await asyncio.sleep(0.1)
+        assert passed == [signal.SIGTERM]  # uvicorn still hears it
+        run = orch.create_orchestration_run(session, user_, _flow(session, user_, folder))
+        orch.wake()
+        await asyncio.sleep(0.5)
+        assert (_state(session, run.id).status, _state(session, run.id).claimed_by) == ("PENDING", None)
+    finally:
+        signal.signal(signal.SIGTERM, previous)
+        stop.set()
+        await asyncio.wait_for(worker, timeout=5)
+    assert _state(session, run.id).status == "PENDING"  # nor closed at the end: it was never taken
+    # a new worker in the same process (the tests) starts taking again
+    assert orch._draining is True
+    worker = asyncio.create_task(orch.queue_loop(stop := asyncio.Event()))
+    try:
+        for _ in range(100):
+            if _state(session, run.id).status == "SUCCESS":
+                break
+            await asyncio.sleep(0.05)
+        assert _state(session, run.id).status == "SUCCESS"
+    finally:
+        stop.set()
+        await asyncio.wait_for(worker, timeout=5)
+
+
 def test_waking_where_there_is_no_worker_does_nothing():
     assert orch._wakeup is None
     orch.wake()  # an `api` process: no error, an orchestrator will find the row

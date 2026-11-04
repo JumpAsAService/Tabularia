@@ -57,8 +57,14 @@ type Step struct {
 	// Scrub: regular expressions whose matches, inside any string of the answer's JSON, are
 	// random (an id or a moment written inside a longer text, as a webhook's payload)
 	Scrub []string
-	// EngineUnordered: the requests sent to the engine go out side by side (asyncio.gather):
-	// compared in any order
+
+	// Tick, instead of a request: ONE round of a background loop (ticks.go), at Now (RFC 3339;
+	// empty = the real now), with Env on top of the stacks' environment
+	Tick string
+	Now  string
+	Env  map[string]string
+	// EngineUnordered: the requests sent to the engine go out side by side (asyncio.gather, a
+	// loop's parallel deliveries): compared in any order
 	EngineUnordered bool
 	// Prepare changes the request of one side ("python" or "go") before it goes: what an
 	// earlier answer of that side gave it (an SSO sign-in's state and cookie). Capture reads
@@ -69,8 +75,11 @@ type Step struct {
 	// (a Location's state, a cookie's name and value)
 	HeaderScrub []string
 	// EngineScrub: regular expressions whose matches in the requests sent to the engine are
-	// random (a Job's name, a pod's token)
+	// random (a Job's name, a pod's token, a step's uuid inside a key)
 	EngineScrub []string
+	// Settle: a wait after the answer, before what was sent to the engine and the databases
+	// are read (a route that goes on in the background, as the editor's trial of a node)
+	Settle time.Duration
 }
 
 // EngineRule is one scripted answer of the fake engine (cmd/fakeengine).
@@ -82,6 +91,7 @@ type EngineRule struct {
 	Text    string            `json:"text,omitempty"`    // a body that is not JSON (Body then unused)
 	Type    string            `json:"type,omitempty"`    // its content type
 	Headers map[string]string `json:"headers,omitempty"` // set on the answer (cmd/fakeengine)
+	Drop    bool              `json:"drop,omitempty"`    // the connection closed without an answer
 }
 
 // Suite is the comparison of one module.
@@ -205,6 +215,9 @@ type side struct {
 	db      *pgxpool.Pool
 	gateway string
 	engine  string
+	ticks   string // the server of one round (ticks.go); empty when not started
+	// engineHost is the fake engine as the stack's containers reach it («host:port»)
+	engineHost string
 }
 
 // World is both stacks and the people seeded in them.
@@ -223,8 +236,9 @@ func main() {
 	if key := os.Getenv("DIFF_FERNET"); key != "" {
 		fernet, _ = secret.NewFernet(key)
 	}
-	w.a = &side{"python", pool(ctx, must("DIFF_A_DSN")), must("DIFF_A_URL"), must("DIFF_A_ENGINE")}
-	w.b = &side{"go", pool(ctx, must("DIFF_B_DSN")), must("DIFF_B_URL"), must("DIFF_B_ENGINE")}
+	w.a = &side{"python", pool(ctx, must("DIFF_A_DSN")), must("DIFF_A_URL"), must("DIFF_A_ENGINE"), os.Getenv("DIFF_A_TICKS"), ""}
+	w.b = &side{"go", pool(ctx, must("DIFF_B_DSN")), must("DIFF_B_URL"), must("DIFF_B_ENGINE"), os.Getenv("DIFF_B_TICKS"), ""}
+	w.a.engineHost, w.b.engineHost = os.Getenv("DIFF_A_ENGINE_HOST"), os.Getenv("DIFF_B_ENGINE_HOST")
 	w.seedPeople()
 
 	only := map[string]bool{}
@@ -464,6 +478,9 @@ var (
 var noRedirects = &http.Client{CheckRedirect: func(*http.Request, []*http.Request) error { return http.ErrUseLastResponse }}
 
 func (w *World) ask(s *side, st Step) answer {
+	if st.Tick != "" {
+		return w.askTick(s, st)
+	}
 	var body io.Reader
 	contentType := st.ContentType
 	switch {
@@ -563,6 +580,15 @@ func (w *World) ask(s *side, st Step) answer {
 	} else {
 		a.Body = string(bytes.TrimSpace(raw))
 	}
+	w.finish(s, st, &a)
+	return a
+}
+
+// finish adds what the step sent to the engine and the databases' content.
+func (w *World) finish(s *side, st Step, a *answer) {
+	if st.Settle > 0 {
+		time.Sleep(st.Settle)
+	}
 	a.Engine = w.sent(s)
 	for _, path := range st.EngineMask {
 		a.Engine = maskPath(a.Engine, strings.Split(path, "."))
@@ -579,7 +605,6 @@ func (w *World) ask(s *side, st Step) answer {
 	}
 	a.Engine = sortRuns(a.Engine)
 	a.Tables = dump(w.ctx, s)
-	return a
 }
 
 func (w *World) compare(st Step) string {

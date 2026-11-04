@@ -6,14 +6,12 @@ import (
 	"context"
 	"fmt"
 	"net/http"
-	"os"
 	"time"
 
 	"github.com/jackc/pgx/v5"
 
 	"github.com/JumpAsAService/Tabularia/gateway-go/internal/audit"
 	"github.com/JumpAsAService/Tabularia/gateway-go/internal/auth"
-	"github.com/JumpAsAService/Tabularia/gateway-go/internal/config"
 	"github.com/JumpAsAService/Tabularia/gateway-go/internal/flowgroups"
 	"github.com/JumpAsAService/Tabularia/gateway-go/internal/openlineage"
 	"github.com/JumpAsAService/Tabularia/gateway-go/internal/perm"
@@ -37,22 +35,6 @@ func init() {
 				})},
 		}
 	})
-}
-
-// scOpenLineageOn is openlineage.enabled: events go somewhere (Deps.Lineage sends them).
-func scOpenLineageOn() bool {
-	env := config.FromOS()
-	for _, n := range []string{"OPENLINEAGE__URL", "OPENLINEAGE__FILE"} {
-		if v, _ := env(n); v != "" {
-			return true
-		}
-	}
-	for _, n := range []string{"OPENLINEAGE_URL", "OPENLINEAGE_CONFIG"} {
-		if os.Getenv(n) != "" {
-			return true
-		}
-	}
-	return false
 }
 
 // sqlName is _name: the name stripped, not empty, free in the folder.

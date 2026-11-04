@@ -158,6 +158,24 @@ func flowBodySteps(w *World) []Step {
 	create("engine normalized", FL.Sales, w.As("editor"), map[string]any{"name": "fl Engine", "engine": " DuckDB ", "production_engine": "chdb"})
 	create("empty production engine", FL.Sales, w.As("editor"), map[string]any{"name": "fl Prod", "production_engine": "  "})
 	create("unknown engine", FL.Sales, w.As("editor"), map[string]any{"name": "fl X", "engine": "spark"})
+	// no engine asked: engine_policy.default_engine among the allowed ones
+	create("engine null", FL.Sales, w.As("editor"), map[string]any{"name": "fl Null engine", "engine": nil})
+	create("engine empty", FL.Sales, w.As("editor"), map[string]any{"name": "fl Empty engine", "engine": ""})
+	s = append(s, Step{Name: "create · no engine, DuckDB disabled", Method: "POST", Path: f("/projects/%v/flows", FL.Sales),
+		Auth: w.As("editor"), JSON: map[string]any{"name": "fl No duck"}, Before: func(w *World) {
+			w.Exec(`INSERT INTO disabled_engines (engine_id, disabled_at) VALUES ('duckdb', '2026-01-01') ON CONFLICT DO NOTHING`)
+		}})
+	s = append(s, Step{Name: "create · no engine, only BigQuery allowed", Method: "POST", Path: f("/projects/%v/flows", FL.Sales),
+		Auth: w.As("editor"), JSON: map[string]any{"name": "fl Only bq"}, Before: func(w *World) {
+			w.Exec(`INSERT INTO disabled_engines (engine_id, disabled_at) VALUES ('polars', '2026-01-01'), ('chdb', '2026-01-01'),
+				('clickhouse', '2026-01-01') ON CONFLICT DO NOTHING`)
+		}})
+	s = append(s, Step{Name: "create · no engine, every engine disabled", Method: "POST", Path: f("/projects/%v/flows", FL.Sales),
+		Auth: w.As("editor"), JSON: map[string]any{"name": "fl None allowed"}, Before: func(w *World) {
+			w.Exec(`INSERT INTO disabled_engines (engine_id, disabled_at) VALUES ('bigquery', '2026-01-01') ON CONFLICT DO NOTHING`)
+		}})
+	s = append(s, Step{Name: "create · engines enabled again", Method: "GET", Path: "/flows/999999", Auth: w.As("editor"),
+		Before: func(w *World) { w.Exec(`DELETE FROM disabled_engines`) }})
 	create("unknown production engine", FL.Sales, w.As("editor"), map[string]any{"name": "fl X", "production_engine": "Spark"})
 	create("a tab in the name", FL.Sales, w.As("editor"), map[string]any{"name": "fl\tTab"})
 	create("definition not JSON", FL.Sales, w.As("editor"), map[string]any{"name": "fl X", "definition": "{"})

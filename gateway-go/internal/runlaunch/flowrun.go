@@ -9,7 +9,6 @@ import (
 	"net/http"
 	"regexp"
 	"strings"
-	"time"
 
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgxpool"
@@ -19,6 +18,7 @@ import (
 	"github.com/JumpAsAService/Tabularia/gateway-go/internal/connpayload"
 	"github.com/JumpAsAService/Tabularia/gateway-go/internal/engine"
 	"github.com/JumpAsAService/Tabularia/gateway-go/internal/flowresolver"
+	"github.com/JumpAsAService/Tabularia/gateway-go/internal/jobs"
 	"github.com/JumpAsAService/Tabularia/gateway-go/internal/objects"
 	"github.com/JumpAsAService/Tabularia/gateway-go/internal/perm"
 	"github.com/JumpAsAService/Tabularia/gateway-go/internal/pyd"
@@ -237,11 +237,13 @@ func LaunchFlowRun(ctx context.Context, env FlowEnv, user *auth.User, f *Flow, b
 	if operations == nil {
 		operations = []any{}
 	}
-	if engineMode != "development" {
+	// a run reads every record, from the editor too: a Script or Container node's trial
+	// from its panel stays on the sample (routes/runs.py, bug hunt 2026-11-03)
+	if trigger != "trial" {
 		var removed int
 		operations, removed = flowresolver.StripDevSampleOps(operations)
 		if removed > 0 {
-			env.Log.Warn("production run: development samples removed", "flow", f.ID, "removed", removed)
+			env.Log.Info("run: development samples removed, it reads every record", "flow", f.ID, "removed", removed)
 		}
 	}
 	bucket, inputKey := str(body, "bucket"), str(body, "input_key")
@@ -577,12 +579,13 @@ func LaunchFlowRun(ctx context.Context, env FlowEnv, user *auth.User, f *Flow, b
 			trig = "dry_run"
 		}
 		kind := "flow"
+		now := jobs.Now()
 		// at launch, not at reconciliation: who asked to send what to whom (no request: record_audit
 		// without one writes neither the address nor the agent)
 		audit.Record(context.Background(), env.DB, env.Log, audit.Event{Actor: user, Action: "email.send", TargetType: &kind,
 			TargetID: &f.ID, TargetLabel: &f.Name, Detail: pyjson.Object{{Key: "connection_id", Value: econn.ID},
 				{Key: "host", Value: econn.Host}, {Key: "to", Value: anyList(recipients)}, {Key: "subject", Value: subject},
-				{Key: "format", Value: str(email, "attachment_format")}, {Key: "trigger", Value: trig}}})
+				{Key: "format", Value: str(email, "attachment_format")}, {Key: "trigger", Value: trig}}, At: &now})
 	}
 
 	outputKey := "out/" + Hex32() + ".parquet"
@@ -606,7 +609,7 @@ func LaunchFlowRun(ctx context.Context, env FlowEnv, user *auth.User, f *Flow, b
 			destination, mirror, email, started_at) VALUES ('flow', $1, $2, 'PENDING', $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14,
 			$15, $16, $17, $18) RETURNING id`, f.ID, taskID, user.ID, trigger, o.ParentRunID, engineName, inputKey, bucket, outputKey,
 			publishName, publishProject, publishDescription, publishOverwrite, dumps(anyList(publishKeys)), destSummary, mirrorSummary,
-			emailSummary, time.Now().UTC()).Scan(&rid)
+			emailSummary, jobs.Now()).Scan(&rid)
 		return rid, err
 	}
 

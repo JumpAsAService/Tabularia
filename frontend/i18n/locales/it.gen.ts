@@ -3054,6 +3054,7 @@ export default {
     "pods": {
       "title": "Pod",
       "compose": "Su questa installazione il numero di container si cambia fuori dall'app, per esempio:",
+      "chart": "Su questo cluster i pod li decidono i valori del chart (repliche o autoscaling); per cambiarne i limiti da qui, attiva adminScaling nel chart.",
       "noAutoscaler": "Senza autoscaling i pod li decide la chart ({replicas}): accendi l'autoscaling su questi worker per cambiarne i limiti da qui.",
       "hpa": "Autoscaling sulla CPU (HPA)",
       "keda": "Autoscaling sulla coda «{queue}» (KEDA)",

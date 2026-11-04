@@ -35,7 +35,7 @@ from app.schemas.models import (
     FlowVersionOut,
     Page,
 )
-from app.services.engine_policy import KNOWN_ENGINES, disabled_engines
+from app.services.engine_policy import KNOWN_ENGINES, allowed_engines, default_engine, disabled_engines
 from app.services.pagination import paginate
 from app.services import permissions as perm_service
 from app.services import flow_access, registry_access, schedule_authority, script_nodes
@@ -61,7 +61,7 @@ def _validate_engine(engine: str | None, session: Session | None = None) -> str:
     without a database (the validation tests use it). The administrative criterion
     applies where there is a session, that is in all the routes — creation, engine
     change and production engine, the three points where an engine is chosen."""
-    e = (engine or "polars").strip().lower()
+    e = (engine or default_engine(allowed_engines(session) if session is not None else None)).strip().lower()
     if e not in _AVAILABLE_ENGINES:
         raise HTTPException(
             status_code=422,
