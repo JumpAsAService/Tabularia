@@ -77,6 +77,7 @@ type EngineRule struct {
 	Text    string            `json:"text,omitempty"`    // a body that is not JSON (Body then unused)
 	Type    string            `json:"type,omitempty"`    // its content type
 	Headers map[string]string `json:"headers,omitempty"` // set on the answer (cmd/fakeengine)
+	Drop    bool              `json:"drop,omitempty"`    // the connection closed without an answer
 }
 
 // Suite is the comparison of one module.
