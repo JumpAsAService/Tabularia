@@ -124,6 +124,12 @@ offsets are in characters (code points), as Python indexes a string.
   it is; its refusals are the 422 it raises.
 - `POST /internal/sql/qualified-tables` — `{"sql", "db_type"}` → `{"tables"}`, the sorted
   qualified names `_qualified_tables` finds (none for a SQL it cannot read).
+- `POST /internal/script/lint` — `{"path", "content", "language_version", "check_imports",
+  "installed", "local", "environment"}` → `{"diagnostics"}`: the editor's check of a Script
+  node's Python file (`routes/internal_script.py`), Ruff (a binary the Python package ships)
+  and the imports read with Python's `ast`, as `routes/scripting.py editor_check` merges them.
+  Who may check, the size, the rate per person and the installed modules are the Go gateway's
+  (`POST /scripting/lint`).
 
 Everything around the parse — who may read which datasource, the refusals' words, the aliases
 put in the text, the engine's chain — is ported to Go and compared as any route
@@ -213,5 +219,6 @@ gateway-go/scripts/inventory.sh
 
 ## Open questions
 
-- WebSocket library for the notebooks' proxy (`nhooyr.io/websocket` → `coder/websocket`,
-  or `gorilla/websocket`).
+- ~~WebSocket library for the notebooks' proxy~~: none. `net/http/httputil.ReverseProxy`
+  carries the upgrade; the gateway's own close frames (an app full: 1013; the minute's check
+  failed: 1008) are written between the pod's frames (`internal/api/notebook_proxy.go`).
