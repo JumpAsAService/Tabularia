@@ -123,3 +123,48 @@ Go is not installed on the machine: the scripts run it in `golang:1.27.3-bookwor
 - touch the Python gateway on this branch (it is the reference the comparison runs);
 - add a dependency to `go.mod` without a reason written in the commit;
 - skip a step of the suite, or mask a value that is not random.
+
+## Porting a background loop
+
+The loops of `app/main.py` `start_background_work` (schedules, the flows' queue, retention,
+housekeeping, backups, webhooks, engine settings, Kubernetes scaling, SIEM, script builds,
+notebooks, settings rollout) run in a process whose `APP__ROLE` is `all` or
+`orchestrator` (`internal/config` `Jobs.Works()`); `api` starts none, and `orchestrator`
+answers only `/health` and `/` (`server.Orchestrator`).
+
+| What | Where |
+|---|---|
+| a loop | `gateway-go/internal/jobs/<loop>/` (or `internal/api/jobs_<loop>.go` when it needs this package's helpers, a run's reconcile…) |
+| its registration | `api.RegisterJob("<python name>", func(d *api.Deps) jobs.Job {…})` in an `init()`; the package listed in `internal/jobs/all` |
+| its rounds' comparison | `gateway-go/cmd/diffcheck/suite_jobs_<loop>.go` + `cmd/diffcheck/ticks/ticks_<loop>.py` |
+
+A `jobs.Job` has the whole `Loop` (as the Python task: its waits, what it reads once at
+start, what it does when stopped) and its `Ticks`: one round each, by name, exactly the
+Python function a round calls (the `ticks_<loop>.py` of the comparison calls that Python
+function under the same name). Rules:
+
+- **The clock**: `jobs.Now()` wherever Python calls `datetime.now(timezone.utc)` (or
+  `time.time()`); where Python asks PostgreSQL's `now()`, so does Go. The comparison freezes
+  both sides' clocks at the step's `Now`.
+- **Several processes, Python and Go together**: the same advisory-lock keys
+  (`pg_advisory_xact_lock(74610001, flow_id)`, `pg_try_advisory_xact_lock(7402118)`…), the
+  same conditional `UPDATE … WHERE` on the value read, the same transactions.
+- `jobs.Instance` is `orchestrator.INSTANCE`; `jobs.Drain()` is `orchestrator.drain`.
+- The panel's settings the loops read are `internal/settings` getters (one per key,
+  `settings_jobs.go`); the environment's are `config.JobsConfig`.
+
+**The comparison «a un giro».** `scripts/diffcheck.sh` also starts, on each stack, a server
+of rounds: in A the Python service's (`cmd/diffcheck/ticks/ticks.py`, the gateway's image,
+`datetime.now`/`date.today`/`time.time` frozen in every `app.*` module), in B
+`cmd/jobsonce serve` (in the same image, which has `pg_dump`). A step with `Tick` runs one
+round on both, at `Now`, with `Env` on top of the stacks' environment (a feature on), then
+compares the round's result (or that it failed), the requests sent to the fake engine
+(which also stands in for Kubernetes with `DIFF_ENV`, for Splunk as `siem.test`, for the
+webhooks' receivers) and both databases, as after a request:
+
+```go
+{Name: "addresses past 90 days", Method: "TICK", Path: "retention", Tick: "retention",
+	Now: "2026-02-01T00:00:00Z", Env: map[string]string{"AUDIT__RETENTION_MINUTES": "60"}}
+```
+
+`jobsonce <round> -now …` runs one round by hand; `jobsonce list` names them.

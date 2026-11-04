@@ -97,6 +97,7 @@ type Config struct {
 
 	Admin AdminConfig // config_admin.go
 	Flows FlowsConfig // config_flows.go
+	Jobs  JobsConfig  // config_jobs.go
 }
 
 // Env reads a variable without regard to case, as pydantic-settings does.
@@ -168,6 +169,7 @@ func Load(env Env) (*Config, error) {
 		}
 	}
 	c.Admin = loadAdmin(&r)
+	c.Jobs = loadJobs(&r)
 	if c.FernetKey == "" && c.KeysDir != "" {
 		// Settings._key_from_keys_dir: the key a first service created in the shared directory
 		key, err := readOrCreate(c.KeysDir, "fernet.key", newFernetKey)
@@ -181,7 +183,9 @@ func Load(env Env) (*Config, error) {
 		r.fail("SECURITY__FERNET_KEY", "is not set: generate one with: openssl rand -base64 32 | tr '+/' '-_'")
 	}
 	upstream := r.str("GATEWAY_GO__UPSTREAM", "")
-	if upstream == "" {
+	if upstream == "" && !c.Jobs.Answers() {
+		// an orchestrator answers only /health: nothing goes to the Python gateway
+	} else if upstream == "" {
 		r.fail("GATEWAY_GO__UPSTREAM", "is required: the Python gateway's address, which answers the routes not ported yet")
 	} else if u, err := url.Parse(upstream); err != nil || u.Scheme == "" || u.Host == "" {
 		r.fail("GATEWAY_GO__UPSTREAM", fmt.Sprintf("is not an address: %q", upstream))
