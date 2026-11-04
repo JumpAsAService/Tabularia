@@ -32,7 +32,9 @@ type rule struct {
 	Type   string          `json:"type"` // its content type (default application/json)
 	// Headers are set on the answer (a Content-Disposition)
 	Headers map[string]string `json:"headers"`
-	re      *regexp.Regexp
+	// Drop closes the connection without an answer (an engine that went away mid-request)
+	Drop bool `json:"drop"`
+	re   *regexp.Regexp
 }
 
 type recorded struct {
@@ -121,6 +123,14 @@ func main() {
 			}
 		}
 		mu.Unlock()
+		if hit != nil && hit.Drop {
+			if hj, ok := w.(http.Hijacker); ok {
+				if conn, _, err := hj.Hijack(); err == nil {
+					conn.Close()
+					return
+				}
+			}
+		}
 		if hit != nil && hit.Type != "" {
 			w.Header().Set("Content-Type", hit.Type)
 		} else {

@@ -14,6 +14,7 @@ import (
 	"github.com/JumpAsAService/Tabularia/gateway-go/internal/auth"
 	"github.com/JumpAsAService/Tabularia/gateway-go/internal/engine"
 	"github.com/JumpAsAService/Tabularia/gateway-go/internal/flowaccess"
+	"github.com/JumpAsAService/Tabularia/gateway-go/internal/jobs"
 	"github.com/JumpAsAService/Tabularia/gateway-go/internal/perm"
 	"github.com/JumpAsAService/Tabularia/gateway-go/internal/pyd"
 	"github.com/JumpAsAService/Tabularia/gateway-go/internal/pyjson"
@@ -65,7 +66,7 @@ func (q *request) readRun(id int64) (*runRow, error) {
 	return &x, err
 }
 
-func ageSeconds(t time.Time) float64 { return time.Since(t).Seconds() }
+func ageSeconds(t time.Time) float64 { return jobs.Now().Sub(t).Seconds() }
 
 func runes(s string, n int) string {
 	r := []rune(s)
@@ -200,7 +201,7 @@ func (q *request) scheduleBlobDeletion(tx pgx.Tx, bucket, key, reason string) er
 	if key == "" {
 		return nil
 	}
-	now := time.Now().UTC()
+	now := jobs.Now()
 	grace := time.Duration(q.d.Panel.RunStaleTimeout()+600) * time.Second
 	_, err := tx.Exec(q.ctx, `INSERT INTO pending_blob_deletions (bucket, key, reason, delete_after, created_at) VALUES ($1, $2, $3, $4, $5)`,
 		bucket, key, reason, now.Add(grace), now)
@@ -373,7 +374,7 @@ func (q *request) reconcile(run *runRow, progress progressOf) (*runRow, error) {
 		sql := `UPDATE runs SET status = $2 WHERE id = $1 AND status NOT IN ('SUCCESS', 'FAILURE')`
 		if newStatus == "STARTED" && run.EngineStartedAt == nil {
 			sql = `UPDATE runs SET status = $2, engine_started_at = $3 WHERE id = $1 AND status NOT IN ('SUCCESS', 'FAILURE')`
-			_, err = q.d.DB.Exec(q.ctx, sql, run.ID, newStatus, time.Now().UTC())
+			_, err = q.d.DB.Exec(q.ctx, sql, run.ID, newStatus, jobs.Now())
 		} else {
 			_, err = q.d.DB.Exec(q.ctx, sql, run.ID, newStatus)
 		}
@@ -387,12 +388,27 @@ func (q *request) reconcile(run *runRow, progress progressOf) (*runRow, error) {
 		name  string
 		value any
 	}
-	values := []col{{"status", newStatus}, {"finished_at", time.Now().UTC()}}
+	values := []col{{"status", newStatus}, {"finished_at", jobs.Now()}}
 	res2, isObj := result.(pyjson.Object)
-	if newStatus == "SUCCESS" {
-		if !isObj {
-			return nil, errors.New("the engine's result is not an object")
+	if newStatus == "SUCCESS" && !isObj {
+		return nil, errors.New("the engine's result is not an object")
+	}
+	// the data contract's report (only a background loop gets here with one: the routes leave
+	// a run whose datasource has a contract to the Python gateway, see needsPython)
+	report, refused, err := q.contractVerdict(run, newStatus, res2)
+	if err != nil {
+		return nil, err
+	}
+	if refused {
+		rows, err := intColumn(res2.Value("rows_written"))
+		if err != nil {
+			return nil, err
 		}
+		values = []col{{"status", "FAILURE"}, values[1], {"rows_written", rows}, {"error", runes(brokenRulesMessage(report), 2000)}}
+		if ns := emailNotSent(run.Email); ns != nil {
+			values = append(values, col{"email", *ns})
+		}
+	} else if newStatus == "SUCCESS" {
 		rows, err := intColumn(res2.Value("rows_written"))
 		if err != nil {
 			return nil, err
@@ -444,13 +460,23 @@ func (q *request) reconcile(run *runRow, progress progressOf) (*runRow, error) {
 			if err != nil {
 				return err
 			}
-			if newStatus == "SUCCESS" && after.Kind == "ingest" {
+			if refused {
+				if err := q.refuseSnapshot(tx, after, report); err != nil {
+					return err
+				}
+			} else if newStatus == "SUCCESS" && after.Kind == "ingest" {
 				if err := q.finalizeIngest(tx, after, res2); err != nil {
+					return err
+				}
+				if err := q.recordContract(tx, run.ID, report, "refresh"); err != nil {
 					return err
 				}
 			} else if newStatus == "SUCCESS" && after.PublishName != nil && *after.PublishName != "" && after.PublishProjectID != nil &&
 				*after.PublishProjectID != 0 && after.DatasourceID == nil {
 				if err := q.publishDatasource(tx, after, res2); err != nil {
+					return err
+				}
+				if err := q.recordContract(tx, run.ID, report, "publish"); err != nil {
 					return err
 				}
 			}
@@ -497,18 +523,20 @@ func scanRunTx(ctx context.Context, tx pgx.Tx, id int64) (*runRow, error) {
 	return &x, err
 }
 
-// closeIfQueuedTooLong is close_if_queued_too_long, for a run that is not a scheduled
-// one (those go to the Python gateway, whose notice may go out).
+// closeIfQueuedTooLong is close_if_queued_too_long. The routes leave a scheduled one to the
+// Python gateway (needsPython); a background loop sends its notice here (notify_failure).
 func (q *request) closeIfQueuedTooLong(run *runRow) (*runRow, error) {
 	if ageSeconds(run.StartedAt) <= q.d.Panel.QueueTimeout() {
 		return run, nil
 	}
+	closed := false
 	err := pgx.BeginFunc(q.ctx, q.d.DB, func(tx pgx.Tx) error {
 		tag, err := tx.Exec(q.ctx, `UPDATE runs SET status = 'FAILURE', error = $2, finished_at = $3 WHERE id = $1 AND status = 'PENDING'`,
-			run.ID, queueTimedOut, time.Now().UTC())
+			run.ID, queueTimedOut, jobs.Now())
 		if err != nil || tag.RowsAffected() != 1 {
 			return err
 		}
+		closed = true
 		after, err := scanRunTx(q.ctx, tx, run.ID)
 		if err != nil {
 			return err
@@ -518,7 +546,11 @@ func (q *request) closeIfQueuedTooLong(run *runRow) (*runRow, error) {
 	if err != nil {
 		return nil, err
 	}
-	return q.readRun(run.ID)
+	after, err := q.readRun(run.ID)
+	if err == nil && closed && after != nil {
+		q.d.notifyFailure(q.ctx, after)
+	}
+	return after, err
 }
 
 // closeIfNeverQueued is _close_if_never_queued.
@@ -527,7 +559,7 @@ func (q *request) closeIfNeverQueued(run *runRow) (*runRow, error) {
 		return run, nil
 	}
 	if _, err := q.d.DB.Exec(q.ctx, `UPDATE runs SET status = 'FAILURE', finished_at = $2, error = $3
-		WHERE id = $1 AND status NOT IN ('SUCCESS', 'FAILURE')`, run.ID, time.Now().UTC(), neverQueued); err != nil {
+		WHERE id = $1 AND status NOT IN ('SUCCESS', 'FAILURE')`, run.ID, jobs.Now(), neverQueued); err != nil {
 		return nil, err
 	}
 	return q.readRun(run.ID)
@@ -567,7 +599,7 @@ func (q *request) finalizeIngest(tx pgx.Tx, run *runRow, result pyjson.Object) e
 	if err != nil {
 		return err
 	}
-	now := time.Now().UTC()
+	now := jobs.Now()
 	if _, err := tx.Exec(q.ctx, `UPDATE datasources SET bucket = $2, key = $3, rows = $4, columns = $5, refreshed_at = $6,
 		updated_at = $6, snapshot_run_id = $7 WHERE id = $1`, ds.ID, pyjson.Str(bucket), run.OutputKey, rows,
 		pyDumps(pyjson.Or(result.Value("columns"), []any{})), now, run.ID); err != nil {
@@ -639,7 +671,7 @@ func (q *request) publishDatasource(tx pgx.Tx, run *runRow, result pyjson.Object
 	for _, name := range candidates {
 		var id int64
 		err := pgx.BeginFunc(q.ctx, tx, func(sp pgx.Tx) error { // a savepoint: a clash undoes this attempt only
-			now := time.Now().UTC()
+			now := jobs.Now()
 			return sp.QueryRow(q.ctx, `INSERT INTO datasources (name, description, project_id, owner_id, bucket, key, rows, columns,
 				sort_keys, column_descriptions, kind, flow_id, snapshot_run_id, created_at, updated_at)
 				VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, '{}', 'flow', $10, $11, $12, $12) RETURNING id`,
@@ -767,7 +799,7 @@ func (q *request) enqueueWebhooks(tx pgx.Tx, run *runRow) error {
 	if err != nil {
 		return nil
 	}
-	at := time.Now().UTC()
+	at := jobs.Now()
 	for _, h := range subscribed {
 		in := h.project == nil
 		if !in && folder != nil {
