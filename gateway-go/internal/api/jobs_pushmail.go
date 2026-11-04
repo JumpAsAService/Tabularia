@@ -32,8 +32,8 @@ const pushmailMaxReportParams = 100 // PUSHMAIL_MAX_REPORT_PARAMS
 
 var pushmailEmail = regexp.MustCompile(`^[^@\s,;<>]+@[^@\s,;<>]+\.[^@\s,;<>]+$`)
 
-// emailLanguageOf is pushmail.email_language.
-func emailLanguageOf(u *auth.User) string {
+// pushmailLanguage is pushmail.email_language.
+func pushmailLanguage(u *auth.User) string {
 	if u.Locale != nil {
 		switch *u.Locale {
 		case "en", "it", "fr", "de", "es":
@@ -529,7 +529,7 @@ func (q *queue) pushmailCell(ctx context.Context, id, userID int64, trigger stri
 	}
 	spec := pyjson.Object{{Key: "to", Value: stringsAny(to)}, {Key: "cc", Value: stringsAny(cc)}, {Key: "subject", Value: cfg.Value("subject")},
 		{Key: "body", Value: cfg.Value("body")}, {Key: "body_is_html", Value: cfg.Value("bodyIsHtml")}, {Key: "timezone", Value: tz},
-		{Key: "run_id", Value: childID}, {Key: "flow", Value: groupName}, {Key: "lang", Value: emailLanguageOf(user)},
+		{Key: "run_id", Value: childID}, {Key: "flow", Value: groupName}, {Key: "lang", Value: pushmailLanguage(user)},
 		{Key: "attachments", Value: attachments}, {Key: "reports", Value: specs(rendered)}, {Key: "dashboards", Value: specs(boards)}}
 	ids := func(docs []renderedDoc) []any {
 		out := []any{}
