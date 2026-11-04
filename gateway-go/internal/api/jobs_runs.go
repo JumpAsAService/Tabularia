@@ -12,13 +12,14 @@ import (
 
 	"github.com/JumpAsAService/Tabularia/gateway-go/internal/audit"
 	"github.com/JumpAsAService/Tabularia/gateway-go/internal/auth"
+	"github.com/JumpAsAService/Tabularia/gateway-go/internal/connpayload"
 	"github.com/JumpAsAService/Tabularia/gateway-go/internal/flowaccess"
 	"github.com/JumpAsAService/Tabularia/gateway-go/internal/jobs"
 	"github.com/JumpAsAService/Tabularia/gateway-go/internal/kube"
 	"github.com/JumpAsAService/Tabularia/gateway-go/internal/perm"
 	"github.com/JumpAsAService/Tabularia/gateway-go/internal/pyjson"
 	"github.com/JumpAsAService/Tabularia/gateway-go/internal/pystr"
-	"github.com/JumpAsAService/Tabularia/gateway-go/internal/reports"
+	"github.com/JumpAsAService/Tabularia/gateway-go/internal/runlaunch"
 	"github.com/JumpAsAService/Tabularia/gateway-go/internal/scriptcfg"
 )
 
@@ -63,30 +64,6 @@ func loadUserOpt(ctx context.Context, q perm.Querier, id *int64) (*auth.User, er
 
 // ── the data contract's verdict on a run (routes/runs.py _reconcile) ──────────
 
-// contractPayload is services/contracts.py payload: the contract turned on, with its
-// version, or nil.
-func (q *request) contractPayload(dsID *int64) (pyjson.Object, error) {
-	if dsID == nil {
-		return nil, nil
-	}
-	c, err := contractOf(q.ctx, q.d.DB, *dsID)
-	if err != nil || c == nil || !c.Enabled {
-		return nil, err
-	}
-	v, lerr := pyjson.Loads(c.Document)
-	if lerr != nil {
-		return nil, nil // JSONDecodeError
-	}
-	doc, ok := v.(pyjson.Object)
-	if !ok {
-		return nil, fmt.Errorf("'%s' object has no attribute 'get'", pyTypeName(v))
-	}
-	if !pyjson.Truthy(doc.Value("rules")) {
-		return nil, nil
-	}
-	return append(pyjson.Object(nil), doc...).Set("version", c.Version), nil
-}
-
 func pyTypeName(v any) string {
 	switch v.(type) {
 	case []any:
@@ -119,7 +96,7 @@ func (q *request) contractVerdict(run *runRow, newStatus string, result pyjson.O
 	if err != nil {
 		return nil, false, err
 	}
-	doc, err := q.contractPayload(target)
+	doc, err := runlaunch.ContractPayload(q.ctx, q.d.DB, target)
 	if err != nil {
 		return nil, false, err
 	}
@@ -443,162 +420,6 @@ func (q *request) closeIfOrphaned(run *runRow, sc *scriptcfg.Settings) (*runRow,
 // pyIntOf is int(x) of a json value (a float truncated, a numeric text parsed).
 func pyIntOf(v any) (int64, bool) { return pyInt(v) }
 
-// reconcileAny is _reconcile for any run, as a background loop calls it: a Script or
-// Container run only closed when orphaned.
-func (q *request) reconcileAny(run *runRow, sc *scriptcfg.Settings) (*runRow, error) {
-	if !terminal[run.Status] && run.Kind != "orchestration" && (run.Kind == "script" || run.Kind == "container") {
-		return q.closeIfOrphaned(run, sc)
-	}
-	return q.reconcile(run, progressOf{})
-}
-
-// ── the connection the engine opens (routes/connections.py engine_connection_payload) ──
-
-type engineConn struct {
-	ID, ProjectID                                   int64
-	Name, DBType, Host, Username, PasswordEncrypted string
-	Port                                            *int64
-	Database, DBSchema, Extra, PrivateKeyEncrypted  string
-	HostKeyType, HostKeyFingerprint                 string
-}
-
-// loadEngineConn is session.get(Connection, id): nil when gone.
-func loadEngineConn(ctx context.Context, q perm.Querier, id int64) (*engineConn, error) {
-	var c engineConn
-	err := q.QueryRow(ctx, `SELECT id, project_id, name, db_type, host, username, password_encrypted, port, database, db_schema, extra,
-		private_key_encrypted, host_key_type, host_key_fingerprint FROM connections WHERE id = $1`, id).Scan(&c.ID, &c.ProjectID, &c.Name,
-		&c.DBType, &c.Host, &c.Username, &c.PasswordEncrypted, &c.Port, &c.Database, &c.DBSchema, &c.Extra, &c.PrivateKeyEncrypted,
-		&c.HostKeyType, &c.HostKeyFingerprint)
-	if errors.Is(err, pgx.ErrNoRows) {
-		return nil, nil
-	}
-	if err != nil {
-		return nil, err
-	}
-	return &c, nil
-}
-
-// extraObject is json.loads(extra or "{}") as a dict, {} when broken or not one.
-func extraObject(extra string) (pyjson.Object, bool) {
-	if extra == "" {
-		extra = "{}"
-	}
-	v, err := pyjson.Loads(extra)
-	if err != nil {
-		return pyjson.Object{}, false
-	}
-	o, ok := v.(pyjson.Object)
-	if !ok {
-		return pyjson.Object{}, false
-	}
-	return o, true
-}
-
-// payload is engine_connection_payload: the secrets still encrypted.
-func (c *engineConn) payload() pyjson.Object {
-	strip := pystr.Strip
-	orText := func(v any) string {
-		if !pyjson.Truthy(v) {
-			return ""
-		}
-		return pyjson.Str(v)
-	}
-	switch c.DBType {
-	case "sharepoint":
-		opts, isDict := extraObject(c.Extra)
-		library := ""
-		if isDict {
-			library = strip(orText(opts.Value("library")))
-		}
-		return pyjson.Object{{Key: "tenant_id", Value: strip(c.Database)}, {Key: "client_id", Value: strip(c.Username)},
-			{Key: "client_secret_encrypted", Value: c.PasswordEncrypted}, {Key: "site_url", Value: strip(c.Host)},
-			{Key: "library", Value: library}}
-	case "smtp":
-		opts, _ := extraObject(c.Extra)
-		var port any = int64(587)
-		if c.Port != nil && *c.Port != 0 {
-			port = *c.Port
-		}
-		return pyjson.Object{{Key: "db_type", Value: "smtp"}, {Key: "host", Value: c.Host}, {Key: "port", Value: port},
-			{Key: "username", Value: c.Username}, {Key: "password_encrypted", Value: c.PasswordEncrypted},
-			{Key: "from_address", Value: pyjson.Or(opts.Value("from_address"), "")}, {Key: "from_name", Value: pyjson.Or(opts.Value("from_name"), "")},
-			{Key: "tls", Value: pyjson.Or(opts.Value("tls"), "starttls")}}
-	case "sftp":
-		opts, isDict := extraObject(c.Extra)
-		authBy := "password"
-		if a, ok := opts.Value("auth").(string); isDict && ok && (a == "password" || a == "key") {
-			authBy = a
-		}
-		var port any = int64(22)
-		if c.Port != nil && *c.Port != 0 {
-			port = *c.Port
-		}
-		password, key := "", ""
-		if authBy == "password" {
-			password = c.PasswordEncrypted
-		} else {
-			key = c.PrivateKeyEncrypted
-		}
-		return pyjson.Object{{Key: "db_type", Value: "sftp"}, {Key: "host", Value: strip(c.Host)}, {Key: "port", Value: port},
-			{Key: "username", Value: strip(c.Username)}, {Key: "auth", Value: authBy}, {Key: "password_encrypted", Value: password},
-			{Key: "private_key_encrypted", Value: key}, {Key: "host_key_type", Value: c.HostKeyType},
-			{Key: "host_key_fingerprint", Value: c.HostKeyFingerprint}}
-	case "s3":
-		return pyjson.Object{{Key: "db_type", Value: "s3"}, {Key: "endpoint_url", Value: c.Host}, {Key: "access_key", Value: c.Username},
-			{Key: "secret_key_encrypted", Value: c.PasswordEncrypted}, {Key: "bucket", Value: c.Database}, {Key: "region", Value: c.DBSchema}}
-	case "api":
-		opts, _ := extraObject(c.Extra)
-		in := func(v any, options ...string) (string, bool) {
-			s, ok := v.(string)
-			if !ok {
-				return "", false
-			}
-			for _, o := range options {
-				if s == o {
-					return s, true
-				}
-			}
-			return "", false
-		}
-		authBy, ok := in(opts.Value("auth"), "none", "api_key", "bearer", "basic", "oauth2")
-		if !ok {
-			authBy = "none"
-		}
-		headers := pyjson.Object{}
-		if h, isDict := opts.Value("headers").(pyjson.Object); isDict {
-			for _, kv := range h {
-				headers = headers.Set(strip(kv.Key), pyjson.Str(kv.Value))
-			}
-		}
-		username, secretEnc := "", ""
-		if authBy == "basic" || authBy == "oauth2" {
-			username = strip(c.Username)
-		}
-		if authBy != "none" {
-			secretEnc = c.PasswordEncrypted
-		}
-		keyIn, ok := in(opts.Value("key_in"), "header", "query")
-		if !ok {
-			keyIn = "header"
-		}
-		clientAuth, ok := in(opts.Value("client_auth"), "body", "basic")
-		if !ok {
-			clientAuth = "body"
-		}
-		return pyjson.Object{{Key: "db_type", Value: "api"}, {Key: "base_url", Value: strip(c.Host)}, {Key: "auth", Value: authBy},
-			{Key: "username", Value: username}, {Key: "secret_encrypted", Value: secretEnc},
-			{Key: "key_name", Value: strip(orText(opts.Value("key_name")))}, {Key: "key_in", Value: keyIn},
-			{Key: "token_url", Value: strip(orText(opts.Value("token_url")))}, {Key: "scope", Value: strip(orText(opts.Value("scope")))},
-			{Key: "client_auth", Value: clientAuth}, {Key: "headers", Value: headers},
-			{Key: "test_path", Value: strip(orText(opts.Value("test_path")))}}
-	case "gsheets":
-		return pyjson.Object{{Key: "db_type", Value: "gsheets"}, {Key: "key_encrypted", Value: c.PasswordEncrypted},
-			{Key: "client_email", Value: c.Host}, {Key: "project_id", Value: c.Database}}
-	}
-	return reports.ConnectionPayload(&reports.Connection{ID: c.ID, Name: c.Name, ProjectID: c.ProjectID, DBType: c.DBType, Host: c.Host,
-		Port: c.Port, Username: c.Username, PasswordEncrypted: c.PasswordEncrypted, Database: c.Database, DBSchema: c.DBSchema, Extra: c.Extra})
-}
-
 // ── the emails' texts (services/email_texts.py) ───────────────────────────────
 
 // emailLanguageOf is language_of.
@@ -739,7 +560,7 @@ func (d *Deps) notifyFailureErr(ctx context.Context, run *runRow) error {
 	if len(to) == 0 || connID == nil || *connID == 0 {
 		return nil
 	}
-	conn, err := loadEngineConn(ctx, d.DB, *connID)
+	conn, err := connpayload.Load(ctx, d.DB, *connID)
 	if err != nil {
 		return err
 	}
@@ -765,7 +586,7 @@ func (d *Deps) notifyFailureErr(ctx context.Context, run *runRow) error {
 	}
 	ok := true
 	for _, g := range groups {
-		took, err := d.postNotice(ctx, pyjson.Object{{Key: "connection", Value: conn.payload()}, {Key: "to", Value: stringsAny(g.to)},
+		took, err := d.postNotice(ctx, pyjson.Object{{Key: "connection", Value: connpayload.Payload(conn)}, {Key: "to", Value: stringsAny(g.to)},
 			{Key: "subject", Value: emailText(g.lang, "flow_subject", "flow", name)}, {Key: "body", Value: failureBody(name, run, g.lang)}})
 		if err != nil {
 			return err

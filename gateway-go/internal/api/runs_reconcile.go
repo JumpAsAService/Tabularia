@@ -12,20 +12,19 @@ import (
 	"github.com/jackc/pgx/v5"
 
 	"github.com/JumpAsAService/Tabularia/gateway-go/internal/auth"
+	"github.com/JumpAsAService/Tabularia/gateway-go/internal/config"
 	"github.com/JumpAsAService/Tabularia/gateway-go/internal/engine"
 	"github.com/JumpAsAService/Tabularia/gateway-go/internal/flowaccess"
 	"github.com/JumpAsAService/Tabularia/gateway-go/internal/jobs"
 	"github.com/JumpAsAService/Tabularia/gateway-go/internal/perm"
 	"github.com/JumpAsAService/Tabularia/gateway-go/internal/pyd"
 	"github.com/JumpAsAService/Tabularia/gateway-go/internal/pyjson"
+	"github.com/JumpAsAService/Tabularia/gateway-go/internal/scriptcfg"
 	"github.com/JumpAsAService/Tabularia/gateway-go/internal/server"
 )
 
 // routes/runs.py: reading one run, or a flow's, reconciled with the engine on the way
-// (_reconcile). Two branches stay with the Python gateway, which gets the whole request:
-// a Script or Container run (its Kubernetes Jobs, script_runs.close_if_orphaned), a
-// scheduled orchestration closed for staying queued too long (notifier.notify_failure's
-// email), a run whose datasource has a data contract on (services/contracts.py), and any
+// (_reconcile). One branch stays with the Python gateway, which gets the whole request: any
 // run not finished while OpenLineage is on (openlineage.run_closed).
 
 func init() {
@@ -225,56 +224,10 @@ func (q *request) contractTargetID(run *runRow) (*int64, error) {
 	return nil, nil
 }
 
-// activeContract is contracts.active_document != None.
-func (q *request) activeContract(dsID *int64) (bool, error) {
-	if dsID == nil {
-		return false, nil
-	}
-	var enabled bool
-	var doc string
-	err := q.d.DB.QueryRow(q.ctx, `SELECT enabled, document FROM data_contracts WHERE datasource_id = $1 ORDER BY id LIMIT 1`, *dsID).
-		Scan(&enabled, &doc)
-	if errors.Is(err, pgx.ErrNoRows) || (err == nil && !enabled) {
-		return false, nil
-	}
-	if err != nil {
-		return false, err
-	}
-	v, lerr := pyjson.Loads(doc)
-	if lerr != nil {
-		return false, nil
-	}
-	o, ok := v.(pyjson.Object)
-	if !ok {
-		return true, nil // doc.get on something else: Python raises, and the Python gateway answers it
-	}
-	return pyjson.Truthy(o.Value("rules")), nil
-}
-
 // needsPython says whether reconciling this run takes a branch the Go gateway leaves to
-// the Python one (see the file's comment).
+// the Python one: only the closing of a run with OpenLineage on (openlineage.run_closed).
 func (q *request) needsPython(run *runRow) (bool, error) {
-	if terminal[run.Status] {
-		return false, nil
-	}
-	if q.d.Config.OpenLineage { // a run that closes tells the catalog (openlineage.run_closed)
-		return true, nil
-	}
-	switch run.Kind {
-	case "script", "container":
-		return true, nil
-	case "orchestration":
-		return run.Status == "PENDING" && run.TriggerType == "schedule" &&
-			ageSeconds(run.StartedAt) > q.d.Panel.QueueTimeout(), nil
-	}
-	if strings.HasPrefix(run.TaskID, placeholderTask) {
-		return false, nil
-	}
-	target, err := q.contractTargetID(run)
-	if err != nil {
-		return false, err
-	}
-	return q.activeContract(target)
+	return !terminal[run.Status] && q.d.Config.OpenLineage, nil
 }
 
 // progressOf keeps the engine's progress of a running run, for run_out (session.info).
@@ -290,6 +243,10 @@ func (q *request) reconcile(run *runRow, progress progressOf) (*runRow, error) {
 			return q.closeIfQueuedTooLong(run)
 		}
 		return run, nil
+	}
+	if run.Kind == "script" || run.Kind == "container" {
+		// a Kubernetes Job the orchestration follows: here only an orphan is closed
+		return q.closeIfOrphaned(run, scriptcfg.Load(config.FromOS()))
 	}
 	if strings.HasPrefix(run.TaskID, placeholderTask) {
 		return q.closeIfNeverQueued(run)
@@ -393,8 +350,7 @@ func (q *request) reconcile(run *runRow, progress progressOf) (*runRow, error) {
 	if newStatus == "SUCCESS" && !isObj {
 		return nil, errors.New("the engine's result is not an object")
 	}
-	// the data contract's report (only a background loop gets here with one: the routes leave
-	// a run whose datasource has a contract to the Python gateway, see needsPython)
+	// the data contract's report
 	report, refused, err := q.contractVerdict(run, newStatus, res2)
 	if err != nil {
 		return nil, err
@@ -523,8 +479,8 @@ func scanRunTx(ctx context.Context, tx pgx.Tx, id int64) (*runRow, error) {
 	return &x, err
 }
 
-// closeIfQueuedTooLong is close_if_queued_too_long. The routes leave a scheduled one to the
-// Python gateway (needsPython); a background loop sends its notice here (notify_failure).
+// closeIfQueuedTooLong is close_if_queued_too_long: the run closed sends its notice
+// (notify_failure).
 func (q *request) closeIfQueuedTooLong(run *runRow) (*runRow, error) {
 	if ageSeconds(run.StartedAt) <= q.d.Panel.QueueTimeout() {
 		return run, nil

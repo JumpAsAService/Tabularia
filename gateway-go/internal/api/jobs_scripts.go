@@ -15,6 +15,7 @@ import (
 
 	"github.com/JumpAsAService/Tabularia/gateway-go/internal/auth"
 	"github.com/JumpAsAService/Tabularia/gateway-go/internal/flowaccess"
+	"github.com/JumpAsAService/Tabularia/gateway-go/internal/flowresolver"
 	"github.com/JumpAsAService/Tabularia/gateway-go/internal/jobs"
 	"github.com/JumpAsAService/Tabularia/gateway-go/internal/kube"
 	"github.com/JumpAsAService/Tabularia/gateway-go/internal/perm"
@@ -354,8 +355,8 @@ type scriptNodeRun struct {
 	parent     int64
 	trigger    string
 	mode       string
-	outputs    map[string]*[2]any
-	resolveDS  dsResolver
+	outputs    flowresolver.ScriptOutputs
+	resolveDS  flowresolver.DsResolver
 	// trial is the editor's «Run» (run_trial): the run is that row (the node's own), the
 	// output asked for even without a node after it; 0 within an orchestration
 	trial int64
@@ -485,7 +486,7 @@ func (d *Deps) environmentOf(ctx context.Context, sc *scriptcfg.Settings, user *
 
 // runScript is script_runs.run_script for a flow's Script node: where its output is, nil
 // when it has none.
-func (q *queue) runScript(ctx context.Context, r *scriptNodeRun) (*[2]any, error) {
+func (q *queue) runScript(ctx context.Context, r *scriptNodeRun) (*flowresolver.Source, error) {
 	d := q.d
 	if reason := q.sc.DisabledReason(); reason != "" {
 		if reason == "kubernetes" {
@@ -545,9 +546,10 @@ func (q *queue) runScript(ctx context.Context, r *scriptNodeRun) (*[2]any, error
 		ns = q.sc.Scripts.TrialNamespace
 	}
 	nodeID := node.Value("id")
-	upstream, hasUpstream := incoming(objectList(r.definition.Value("edges")))[nodeKey(nodeID)]["left"]
-	hasInput := hasUpstream && upstream != nil
-	wantsOutput := scriptHasOutput(r.definition, nodeID)
+	hasInput, wantsOutput, err := scriptIO(r.definition, nodeID)
+	if err != nil {
+		return nil, err
+	}
 	hasOutput := wantsOutput || r.trial != 0
 	stepID := newUUIDText()
 	prefix := fmt.Sprintf("env-%d/%s", env.ID, stepID)
@@ -599,7 +601,7 @@ func (q *queue) runScript(ctx context.Context, r *scriptNodeRun) (*[2]any, error
 	r.io()
 	written := []string{inKey, outKey}
 	defer func() { d.deleteObjects(context.Background(), storage, written) }()
-	out, err := func() (*[2]any, error) {
+	out, err := func() (*flowresolver.Source, error) {
 		inputEnv := pyjson.Object{}
 		if saved != nil {
 			env2, described, keys, err := d.prepareInputs(ctx, declared, storage, prefix)
@@ -662,7 +664,7 @@ func (q *queue) runScript(ctx context.Context, r *scriptNodeRun) (*[2]any, error
 }
 
 // closeChild is the `except` of run_script / run_container: the failure written on the run.
-func (q *queue) closeChild(ctx context.Context, child *childRun, out *[2]any, err error, what string) (*[2]any, error) {
+func (q *queue) closeChild(ctx context.Context, child *childRun, out *flowresolver.Source, err error, what string) (*flowresolver.Source, error) {
 	if err == nil {
 		return out, nil
 	}
@@ -701,7 +703,7 @@ func retrySettings(d pyjson.Object) (int64, int64, int64, error) {
 // the engine into the scripts bucket, awaited.
 func (q *queue) prepareNodeInput(ctx context.Context, r *scriptNodeRun, node pyjson.Object, child *childRun, storage *scriptStorage,
 	inKey, kind, idKey, what, label string) error {
-	req, err := resolveScriptInput(r.definition, node, r.resolveDS, q.d.Config.EngineBucket, r.mode, int64(q.d.Panel.PreviewSampleRows()), r.outputs)
+	req, err := flowresolver.ResolveScriptInput(r.definition, node, r.resolveDS, q.d.Config.EngineBucket, q.d.flowMode(r.mode), r.outputs)
 	if err != nil {
 		return err
 	}
@@ -781,7 +783,7 @@ func (q *queue) attempts(ctx context.Context, child *childRun, kind, what string
 
 // importOutput reads what the node wrote into Tabularia's storage (/scripts/output/import).
 func (q *queue) importOutput(ctx context.Context, child *childRun, hasOutput, wantsOutput bool, storage *scriptStorage, outKey,
-	engineOutKey, what, missing string) (*[2]any, error) {
+	engineOutKey, what, missing string) (*flowresolver.Source, error) {
 	bucket := q.d.Config.EngineBucket
 	if hasOutput {
 		cctx, cancel := context.WithTimeout(ctx, 10*time.Minute)
@@ -818,39 +820,20 @@ func (q *queue) importOutput(ctx context.Context, child *childRun, hasOutput, wa
 		return nil, err
 	}
 	if hasOutput {
-		return &[2]any{bucket, engineOutKey}, nil
+		return &flowresolver.Source{Bucket: bucket, Key: engineOutKey}, nil
 	}
 	return nil, nil
 }
 
-// scriptHasOutput is script_has_output.
-func scriptHasOutput(definition pyjson.Object, nodeID any) bool {
-	for _, e := range objectList(definition.Value("edges")) {
-		if pyjson.Equal(e.Value("source"), nodeID) && !isSeqEdge(e) {
-			return true
-		}
-	}
-	return false
-}
-
-// resolveScriptInput is resolve_script_input.
-func resolveScriptInput(definition, node pyjson.Object, resolveDS dsResolver, defaultBucket, mode string, defaultRows int64,
-	outputs map[string]*[2]any) (pyjson.Object, error) {
-	upstream := incoming(objectList(definition.Value("edges")))[nodeKey(node.Value("id"))]["left"]
-	r := newFlowResolver(objectList(definition.Value("nodes")), objectList(definition.Value("edges")), resolveDS, mode, defaultRows, outputs)
-	source, ops, err := r.chain(upstream)
+// scriptIO is (script_input_edge(definition, node_id) is not None, script_has_output(definition,
+// node_id)).
+func scriptIO(definition pyjson.Object, nodeID any) (bool, bool, error) {
+	upstream, err := flowresolver.ScriptInputEdge(definition, nodeID)
 	if err != nil {
-		return nil, err
+		return false, false, err
 	}
-	if source == nil {
-		label := pyjson.Str(pyjson.Or(nodeData(node).Value("label"), node.Value("id")))
-		return nil, &flowResolveError{fmt.Sprintf("script %s: no source with data upstream (or the source datasource has no snapshot)", label)}
-	}
-	if ops == nil {
-		ops = []any{}
-	}
-	return pyjson.Object{{Key: "bucket", Value: pyjson.Or(source[0], defaultBucket)}, {Key: "input_key", Value: source[1]},
-		{Key: "operations", Value: ops}}, nil
+	has, err := flowresolver.ScriptHasOutput(definition, nodeID)
+	return upstream != nil, has, err
 }
 
 // pyDumpsUnicode is json.dumps(v, ensure_ascii=False).

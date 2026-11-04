@@ -15,7 +15,9 @@ import (
 
 	"github.com/JumpAsAService/Tabularia/gateway-go/internal/auth"
 	"github.com/JumpAsAService/Tabularia/gateway-go/internal/config"
+	"github.com/JumpAsAService/Tabularia/gateway-go/internal/connpayload"
 	"github.com/JumpAsAService/Tabularia/gateway-go/internal/flowaccess"
+	"github.com/JumpAsAService/Tabularia/gateway-go/internal/flowresolver"
 	"github.com/JumpAsAService/Tabularia/gateway-go/internal/jobs"
 	"github.com/JumpAsAService/Tabularia/gateway-go/internal/objects"
 	"github.com/JumpAsAService/Tabularia/gateway-go/internal/perm"
@@ -460,7 +462,7 @@ func (q *queue) runFlow(ctx context.Context, id int64) error {
 	}
 	errs, err := q.orchestrate(ctx, user, flow, 0, map[int64]bool{}, run.TriggerType, id, mode, true)
 	var oe *orchestrationError
-	var fe *flowResolveError
+	var fe *flowresolver.Error
 	switch {
 	case errors.Is(err, errNoLongerOurs):
 		q.d.Log.Warn("orchestrate: stopping", "flow", flow.ID, "err", err)
@@ -516,21 +518,16 @@ func (q *queue) orchestrate(ctx context.Context, user *auth.User, flow *jobFlow,
 		return nil, fmt.Errorf("'%s' object has no attribute 'get'", pyTypeName(v))
 	}
 	bucket := q.d.Config.EngineBucket
-	resolveDS := func(i any) *[2]any {
-		n, ok := pyjson.IsInt(i)
-		if !ok {
-			return nil
-		}
-		var b, k string
-		if q.d.DB.QueryRow(ctx, `SELECT bucket, key FROM datasources WHERE id = $1`, n).Scan(&b, &k) != nil || k == "" {
-			return nil
-		}
-		return &[2]any{b, k}
-	}
+	resolveDS := q.d.flowDsResolver(ctx)
 	var errs []string
 	parentID := &parent
-	outputs := map[string]*[2]any{} // script_outputs
-	for _, node := range sequenceOrder(definition) {
+	outputs := flowresolver.ScriptOutputs{} // script_outputs
+	order, err := flowresolver.SequenceOrder(definition)
+	if err != nil {
+		return nil, err
+	}
+	for _, n := range order {
+		node := pyjson.Obj(n)
 		d := nodeData(node)
 		if guarded {
 			if err := q.stillMine(ctx, parent); err != nil {
@@ -547,7 +544,7 @@ func (q *queue) orchestrate(ctx context.Context, user *auth.User, flow *jobFlow,
 		case "output":
 			stops := d.Value("destType") == "email" && d.Value("stopOnFailure") != false
 			err := func() error {
-				req, err := resolveOutputRequest(definition, node, resolveDS, bucket, mode, int64(q.d.Panel.PreviewSampleRows()), outputs)
+				req, err := flowresolver.ResolveOutputRequest(definition, node, resolveDS, bucket, q.d.flowMode(mode), outputs)
 				if err != nil {
 					return err
 				}
@@ -589,7 +586,7 @@ func (q *queue) orchestrate(ctx context.Context, user *auth.User, flow *jobFlow,
 		case "script", "container":
 			run := &scriptNodeRun{q: q, user: user, flow: flow, definition: definition, node: node, parent: parent, trigger: trigger,
 				mode: mode, outputs: outputs, resolveDS: resolveDS}
-			var out *[2]any
+			var out *flowresolver.Source
 			var err error
 			if node.Value("type") == "script" {
 				out, err = q.runScript(ctx, run)
@@ -597,7 +594,7 @@ func (q *queue) orchestrate(ctx context.Context, user *auth.User, flow *jobFlow,
 				out, err = q.runContainer(ctx, run)
 			}
 			var sf *scriptFailed
-			var fe *flowResolveError
+			var fe *flowresolver.Error
 			if errors.As(err, &sf) || errors.As(err, &fe) {
 				return nil, &orchestrationError{err.Error()}
 			}
@@ -605,7 +602,7 @@ func (q *queue) orchestrate(ctx context.Context, user *auth.User, flow *jobFlow,
 				return nil, err
 			}
 			if out != nil {
-				outputs[nodeKey(node.Value("id"))] = out
+				outputs[flowresolver.ScriptOutputKey(node.Value("id"))] = out
 			}
 		case "runflow":
 			sub := d.Value("flowId")
@@ -671,7 +668,7 @@ func (q *queue) waitRun(ctx context.Context, id int64) (*runRow, error) {
 		if err != nil {
 			return nil, err
 		}
-		if run, err = req.reconcileAny(run, q.sc); err != nil {
+		if run, err = req.reconcile(run, progressOf{}); err != nil {
 			return nil, err
 		}
 		if terminal[run.Status] {
@@ -710,9 +707,9 @@ func (q *queue) refreshAndWait(ctx context.Context, user *auth.User, dsRef any, 
 		}
 		return &orchestrationError{fmt.Sprintf("RUN missing for the refresh of datasource %d", id)}
 	}
-	var conn *engineConn
+	var conn *connpayload.Conn
 	if ds.ConnectionID != nil && *ds.ConnectionID != 0 {
-		if conn, err = loadEngineConn(ctx, q.d.DB, *ds.ConnectionID); err != nil {
+		if conn, err = connpayload.Load(ctx, q.d.DB, *ds.ConnectionID); err != nil {
 			return err
 		}
 	}
@@ -727,7 +724,7 @@ func (q *queue) refreshAndWait(ctx context.Context, user *auth.User, dsRef any, 
 	}
 	var runID int64
 	for range 3 {
-		if runID, err = q.d.startRefreshIfFree(ctx, q.sc, user, id, conn, trigger, parent); err != nil {
+		if runID, err = q.d.startRefreshIfFree(ctx, user, id, conn, trigger, parent); err != nil {
 			return err
 		}
 		if runID == 0 {
@@ -752,7 +749,7 @@ func (q *queue) refreshAndWait(ctx context.Context, user *auth.User, dsRef any, 
 		if run, err = req.readRun(runID); err != nil {
 			return err
 		}
-		if run, err = req.reconcileAny(run, q.sc); err != nil {
+		if run, err = req.reconcile(run, progressOf{}); err != nil {
 			return err
 		}
 		if terminal[run.Status] || !time.Now().Before(deadline) {
@@ -1130,7 +1127,7 @@ func (q *queue) gapsOfFlow(ctx context.Context, user *auth.User, flow *jobFlow, 
 					gaps = append(gaps, fmt.Sprintf("RUN on the folder of datasource '%s' (to refresh it)", ds.Name))
 				}
 				if ds.ConnectionID != nil && *ds.ConnectionID != 0 {
-					conn, err := loadEngineConn(ctx, q.d.DB, *ds.ConnectionID)
+					conn, err := connpayload.Load(ctx, q.d.DB, *ds.ConnectionID)
 					if err != nil {
 						return nil, err
 					}
@@ -1144,7 +1141,7 @@ func (q *queue) gapsOfFlow(ctx context.Context, user *auth.User, flow *jobFlow, 
 				}
 			}
 		case "connection":
-			conn, err := loadEngineConn(ctx, q.d.DB, id)
+			conn, err := connpayload.Load(ctx, q.d.DB, id)
 			if err != nil {
 				return nil, err
 			}

@@ -13,6 +13,7 @@ import (
 
 	"github.com/JumpAsAService/Tabularia/gateway-go/internal/audit"
 	"github.com/JumpAsAService/Tabularia/gateway-go/internal/auth"
+	"github.com/JumpAsAService/Tabularia/gateway-go/internal/connpayload"
 	"github.com/JumpAsAService/Tabularia/gateway-go/internal/jobs"
 	"github.com/JumpAsAService/Tabularia/gateway-go/internal/pyjson"
 	"github.com/JumpAsAService/Tabularia/gateway-go/internal/pystr"
@@ -254,9 +255,9 @@ func (s *scheduler) sendContractNotice(ctx context.Context, id int64) (string, e
 			to = append(to, x)
 		}
 	}
-	var conn *engineConn
+	var conn *connpayload.Conn
 	if c.NotifyConnectionID != nil && *c.NotifyConnectionID != 0 {
-		if conn, err = loadEngineConn(ctx, s.d.DB, *c.NotifyConnectionID); err != nil {
+		if conn, err = connpayload.Load(ctx, s.d.DB, *c.NotifyConnectionID); err != nil {
 			return "", err
 		}
 	}
@@ -270,7 +271,7 @@ func (s *scheduler) sendContractNotice(ctx context.Context, id int64) (string, e
 	ok := true
 	for _, g := range groups {
 		subject, body := contractMessage(dsName, &r, g.lang)
-		took, err := s.d.postNotice(ctx, pyjson.Object{{Key: "connection", Value: conn.payload()}, {Key: "to", Value: stringsAny(g.to)},
+		took, err := s.d.postNotice(ctx, pyjson.Object{{Key: "connection", Value: connpayload.Payload(conn)}, {Key: "to", Value: stringsAny(g.to)},
 			{Key: "subject", Value: subject}, {Key: "body", Value: body}})
 		if err != nil {
 			return "", err

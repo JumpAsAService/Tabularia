@@ -13,6 +13,7 @@ import (
 	"github.com/JumpAsAService/Tabularia/gateway-go/internal/jobs"
 	"github.com/JumpAsAService/Tabularia/gateway-go/internal/perm"
 	"github.com/JumpAsAService/Tabularia/gateway-go/internal/pyjson"
+	"github.com/JumpAsAService/Tabularia/gateway-go/internal/runlaunch"
 	"github.com/JumpAsAService/Tabularia/gateway-go/internal/savedscripts"
 	"github.com/JumpAsAService/Tabularia/gateway-go/internal/scriptnodes"
 )
@@ -212,7 +213,7 @@ func (q *queue) executeSaved(ctx context.Context, user *auth.User, s *savedscrip
 		req := d.jobRequest(ctx, user)
 		var contract pyjson.Object
 		if target != nil {
-			if contract, err = req.contractPayload(&target.ID); err != nil {
+			if contract, err = runlaunch.ContractPayload(req.ctx, req.d.DB, &target.ID); err != nil {
 				return err
 			}
 		}
@@ -276,7 +277,7 @@ func (q *queue) publishSaved(ctx context.Context, req *request, childID int64, s
 		report = nil
 	}
 	if report != nil {
-		doc, err := req.contractPayload(&target.ID)
+		doc, err := runlaunch.ContractPayload(req.ctx, req.d.DB, &target.ID)
 		if err != nil {
 			return err
 		}

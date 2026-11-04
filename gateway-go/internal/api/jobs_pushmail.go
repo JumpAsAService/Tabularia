@@ -12,6 +12,7 @@ import (
 
 	"github.com/JumpAsAService/Tabularia/gateway-go/internal/audit"
 	"github.com/JumpAsAService/Tabularia/gateway-go/internal/auth"
+	"github.com/JumpAsAService/Tabularia/gateway-go/internal/connpayload"
 	"github.com/JumpAsAService/Tabularia/gateway-go/internal/dashboards"
 	"github.com/JumpAsAService/Tabularia/gateway-go/internal/jobs"
 	"github.com/JumpAsAService/Tabularia/gateway-go/internal/perm"
@@ -75,9 +76,9 @@ func (d *Deps) pushmailErrors(ctx context.Context, user *auth.User, cfg pyjson.O
 	}
 	name := pushmailName(cfg)
 	var errs []string
-	var conn *engineConn
+	var conn *connpayload.Conn
 	if id, ok := cfg.Value("connectionId").(int64); ok && id != 0 {
-		if conn, err = loadEngineConn(ctx, d.DB, id); err != nil {
+		if conn, err = connpayload.Load(ctx, d.DB, id); err != nil {
 			return nil, err
 		}
 	}
@@ -437,7 +438,7 @@ func (q *queue) pushmailCell(ctx context.Context, id, userID int64, trigger stri
 		}
 	}
 	connID, _ := cfg.Value("connectionId").(int64)
-	conn, err := loadEngineConn(ctx, d.DB, connID)
+	conn, err := connpayload.Load(ctx, d.DB, connID)
 	if err != nil || conn == nil {
 		return "", errors.Join(err, errors.New("the cell's connection vanished"))
 	}
@@ -552,7 +553,7 @@ func (q *queue) pushmailCell(ctx context.Context, id, userID int64, trigger stri
 	task, failure := func() (string, string) {
 		cctx, cancel := context.WithTimeout(ctx, 30*time.Second)
 		defer cancel()
-		res, raw, err := d.Engine.JSON(cctx, http.MethodPost, "/db/pushmail", pyjson.Object{{Key: "connection", Value: conn.payload()},
+		res, raw, err := d.Engine.JSON(cctx, http.MethodPost, "/db/pushmail", pyjson.Object{{Key: "connection", Value: connpayload.Payload(conn)},
 			{Key: "spec", Value: spec}})
 		if err != nil {
 			return "", transportErrorName(err)

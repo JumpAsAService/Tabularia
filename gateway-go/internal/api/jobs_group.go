@@ -12,14 +12,17 @@ import (
 	"github.com/jackc/pgx/v5/pgconn"
 
 	"github.com/JumpAsAService/Tabularia/gateway-go/internal/auth"
+	"github.com/JumpAsAService/Tabularia/gateway-go/internal/connpayload"
 	"github.com/JumpAsAService/Tabularia/gateway-go/internal/flowaccess"
 	"github.com/JumpAsAService/Tabularia/gateway-go/internal/flowgroups"
+	"github.com/JumpAsAService/Tabularia/gateway-go/internal/flowresolver"
 	"github.com/JumpAsAService/Tabularia/gateway-go/internal/jobs"
 	"github.com/JumpAsAService/Tabularia/gateway-go/internal/perm"
 	"github.com/JumpAsAService/Tabularia/gateway-go/internal/pyd"
 	"github.com/JumpAsAService/Tabularia/gateway-go/internal/pydconv"
 	"github.com/JumpAsAService/Tabularia/gateway-go/internal/pyjson"
 	"github.com/JumpAsAService/Tabularia/gateway-go/internal/reports"
+	"github.com/JumpAsAService/Tabularia/gateway-go/internal/runlaunch"
 	"github.com/JumpAsAService/Tabularia/gateway-go/internal/savedscripts"
 	"github.com/JumpAsAService/Tabularia/gateway-go/internal/sqlscripts"
 )
@@ -398,7 +401,7 @@ func (q *queue) flowCell(ctx context.Context, id, userID int64, trigger string, 
 	}()
 	errs, err := q.orchestrate(ctx, user, flow, 0, map[int64]bool{}, trigger, child, groupEngineMode, true)
 	var oe *orchestrationError
-	var fe *flowResolveError
+	var fe *flowresolver.Error
 	switch {
 	case errors.Is(err, errNoLongerOurs):
 		return fmt.Sprintf("'%s': interrupted", name), nil
@@ -558,7 +561,7 @@ func (q *queue) sqlCell(ctx context.Context, id, userID int64, trigger string, s
 		}
 		rid, refusal, err := d.launchSQLScript(ctx, user, script, trigger, &parent)
 		if refusal != nil {
-			if refusal.Status == 409 && refusal.Detail == sqlAlreadyRunning {
+			if refusal.Status == 409 && refusal.Detail == runlaunch.SQLScriptAlreadyRunning {
 				continue
 			}
 			return fmt.Sprintf("'%s': %s", name, refusal.Detail), nil
@@ -600,7 +603,7 @@ func (q *queue) containerCell(ctx context.Context, id, userID int64, trigger str
 	}
 	node := pyjson.Object{{Key: "id", Value: nodeID}, {Key: "type", Value: "container"}, {Key: "data", Value: data}}
 	r := &scriptNodeRun{q: q, user: user, definition: pyjson.Object{{Key: "nodes", Value: []any{node}}, {Key: "edges", Value: []any{}}},
-		node: node, parent: id, trigger: trigger, mode: groupEngineMode, outputs: map[string]*[2]any{}}
+		node: node, parent: id, trigger: trigger, mode: groupEngineMode, outputs: flowresolver.ScriptOutputs{}}
 	why := ""
 	_, err = q.runContainer(ctx, r)
 	var sf *scriptFailed
@@ -692,7 +695,7 @@ func (q *queue) waitFor(ctx context.Context, id, liveID int64, name string, cell
 				return "", err
 			}
 			if live != nil && !terminal[live.Status] {
-				if _, err := req.reconcileAny(live, q.sc); err != nil {
+				if _, err := req.reconcile(live, progressOf{}); err != nil {
 					return "", err
 				}
 			}
@@ -794,7 +797,7 @@ func (q *queue) gapsOfGroup(ctx context.Context, user *auth.User, name string, p
 					more = append(more, fmt.Sprintf("RUN on the folder of datasource '%s' (to refresh it)", ds.Name))
 				}
 				if ds.ConnectionID != nil && *ds.ConnectionID != 0 {
-					conn, err2 := loadEngineConn(ctx, d.DB, *ds.ConnectionID)
+					conn, err2 := connpayload.Load(ctx, d.DB, *ds.ConnectionID)
 					if err2 != nil {
 						err = err2
 						break

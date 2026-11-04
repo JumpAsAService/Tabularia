@@ -22,6 +22,7 @@ import (
 	"github.com/JumpAsAService/Tabularia/gateway-go/internal/auth"
 	"github.com/JumpAsAService/Tabularia/gateway-go/internal/connpayload"
 	"github.com/JumpAsAService/Tabularia/gateway-go/internal/engine"
+	"github.com/JumpAsAService/Tabularia/gateway-go/internal/jobs"
 	"github.com/JumpAsAService/Tabularia/gateway-go/internal/pyjson"
 )
 
@@ -62,7 +63,7 @@ func SnapshotKey(dsID *int64) string {
 	if dsID != nil && *dsID != 0 {
 		folder = fmt.Sprint(*dsID)
 	}
-	return fmt.Sprintf("datasets/%s/%s-%s.parquet", folder, time.Now().UTC().Format("20060102T150405Z"), Hex8())
+	return fmt.Sprintf("datasets/%s/%s-%s.parquet", folder, jobs.Now().Format("20060102T150405Z"), Hex8())
 }
 
 // ContractPayload is services/contracts.py payload: the datasource's contract, when on and
@@ -375,7 +376,7 @@ func Ingest(ctx context.Context, env Env, userID int64, ds *Source, conn *connpa
 		input_key, output_bucket, output_key, publish_description, publish_overwrite, publish_sort_keys, started_at)
 		VALUES ('ingest', NULL, $1, $2, 'PENDING', $3, $4, $5, $6, $7, $8, '', false, '[]', $9) RETURNING id`,
 		ds.ID, taskID, userID, trigger, parent, conn.DBType+"://"+conn.Host+"/"+conn.Database, env.Bucket, outputKey,
-		time.Now().UTC()).Scan(&id)
+		jobs.Now()).Scan(&id)
 	return id, nil, err
 }
 

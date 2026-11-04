@@ -12,6 +12,7 @@ import (
 	"github.com/JumpAsAService/Tabularia/gateway-go/internal/auth"
 	"github.com/JumpAsAService/Tabularia/gateway-go/internal/config"
 	"github.com/JumpAsAService/Tabularia/gateway-go/internal/flowaccess"
+	"github.com/JumpAsAService/Tabularia/gateway-go/internal/flowresolver"
 	"github.com/JumpAsAService/Tabularia/gateway-go/internal/jobs"
 	"github.com/JumpAsAService/Tabularia/gateway-go/internal/perm"
 	"github.com/JumpAsAService/Tabularia/gateway-go/internal/pyjson"
@@ -271,23 +272,13 @@ func (d *Deps) trialRun(ctx context.Context, runID int64, user *auth.User, nodeI
 	if err != nil {
 		return err
 	}
-	upstream := map[string]*[2]any{}
+	upstream := flowresolver.ScriptOutputs{}
 	for _, n := range nodes {
 		if e := latest[jsonKey(n.id)]; e != nil && e.output != nil {
-			upstream[nodeKey(n.id)] = &[2]any{plainValue(e.output.Value("bucket")), plainValue(e.output.Value("key"))}
+			upstream[flowresolver.ScriptOutputKey(n.id)] = &flowresolver.Source{Bucket: plainValue(e.output.Value("bucket")), Key: plainValue(e.output.Value("key"))}
 		}
 	}
-	resolveDS := func(i any) *[2]any {
-		n, ok := pyjson.IsInt(i)
-		if !ok {
-			return nil
-		}
-		var b, k string
-		if d.DB.QueryRow(ctx, `SELECT bucket, key FROM datasources WHERE id = $1`, n).Scan(&b, &k) != nil || k == "" {
-			return nil
-		}
-		return &[2]any{b, k}
-	}
+	resolveDS := d.flowDsResolver(ctx)
 	r := &scriptNodeRun{q: q, user: current, flow: flow, definition: definition, node: node, trigger: "trial", mode: "development",
 		outputs: upstream, resolveDS: resolveDS, trial: runID, firstIO: firstIO}
 	if run.Kind == "container" {

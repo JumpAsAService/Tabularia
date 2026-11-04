@@ -7,6 +7,7 @@ import (
 	"time"
 
 	"github.com/JumpAsAService/Tabularia/gateway-go/internal/flowaccess"
+	"github.com/JumpAsAService/Tabularia/gateway-go/internal/flowresolver"
 	"github.com/JumpAsAService/Tabularia/gateway-go/internal/perm"
 	"github.com/JumpAsAService/Tabularia/gateway-go/internal/pyjson"
 	registryPkg "github.com/JumpAsAService/Tabularia/gateway-go/internal/registry"
@@ -116,7 +117,7 @@ func containerJobManifest(js jobSettings, name, image string, node, environment,
 }
 
 // runContainer is container_runs.run_container for a flow's Container node.
-func (q *queue) runContainer(ctx context.Context, r *scriptNodeRun) (*[2]any, error) {
+func (q *queue) runContainer(ctx context.Context, r *scriptNodeRun) (*flowresolver.Source, error) {
 	d := q.d
 	if !q.sc.Containers.Enabled || q.sc.Containers.Namespace == "" {
 		return nil, &scriptFailed{"containers are off on this installation (containers.enabled in the Helm chart)"}
@@ -178,9 +179,10 @@ func (q *queue) runContainer(ctx context.Context, r *scriptNodeRun) (*[2]any, er
 		return nil, err
 	}
 	nodeID := node.Value("id")
-	upstream, hasUpstream := incoming(objectList(r.definition.Value("edges")))[nodeKey(nodeID)]["left"]
-	hasInput := hasUpstream && upstream != nil
-	wantsOutput := scriptHasOutput(r.definition, nodeID)
+	hasInput, wantsOutput, err := scriptIO(r.definition, nodeID)
+	if err != nil {
+		return nil, err
+	}
 	if (hasInput || wantsOutput) && !storage.ready() {
 		return nil, &scriptFailed{fmt.Sprintf("container «%s»: its input and output go through the scripts bucket, which is not "+
 			"configured (Administration → Scripting environments)", label)}
@@ -232,7 +234,7 @@ func (q *queue) runContainer(ctx context.Context, r *scriptNodeRun) (*[2]any, er
 	if usesBucket {
 		defer func() { d.deleteObjects(context.Background(), storage, []string{inKey, outKey}) }()
 	}
-	out, err := func() (*[2]any, error) {
+	out, err := func() (*flowresolver.Source, error) {
 		if hasInput {
 			if err := q.prepareNodeInput(ctx, r, node, child, storage, inKey, "container_input", "container_run_id", "container", label); err != nil {
 				return nil, err

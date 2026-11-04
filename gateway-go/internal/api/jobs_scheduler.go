@@ -10,9 +10,9 @@ import (
 
 	"github.com/jackc/pgx/v5"
 
-	"github.com/JumpAsAService/Tabularia/gateway-go/internal/audit"
 	"github.com/JumpAsAService/Tabularia/gateway-go/internal/auth"
 	"github.com/JumpAsAService/Tabularia/gateway-go/internal/config"
+	"github.com/JumpAsAService/Tabularia/gateway-go/internal/connpayload"
 	"github.com/JumpAsAService/Tabularia/gateway-go/internal/cron"
 	"github.com/JumpAsAService/Tabularia/gateway-go/internal/engine"
 	"github.com/JumpAsAService/Tabularia/gateway-go/internal/jobs"
@@ -20,6 +20,7 @@ import (
 	"github.com/JumpAsAService/Tabularia/gateway-go/internal/pyjson"
 	"github.com/JumpAsAService/Tabularia/gateway-go/internal/pystr"
 	"github.com/JumpAsAService/Tabularia/gateway-go/internal/reports"
+	"github.com/JumpAsAService/Tabularia/gateway-go/internal/runlaunch"
 	"github.com/JumpAsAService/Tabularia/gateway-go/internal/savedscripts"
 	"github.com/JumpAsAService/Tabularia/gateway-go/internal/scriptcfg"
 	"github.com/JumpAsAService/Tabularia/gateway-go/internal/sqlscripts"
@@ -84,7 +85,7 @@ func (s *scheduler) tick(ctx context.Context) error {
 		for _, id := range ids {
 			run, err := q.readRun(id)
 			if err == nil && run != nil {
-				_, err = q.reconcileAny(run, s.sc)
+				_, err = q.reconcile(run, progressOf{})
 			}
 			if err != nil {
 				s.d.Log.Error("scheduler: reconcile of a run failed", "run", id, "err", err)
@@ -278,9 +279,9 @@ func (s *scheduler) fireDS(ctx context.Context, id int64, now, seen time.Time) e
 	if user == nil || !user.IsActive {
 		return off("the schedule's author is missing or disabled")
 	}
-	var conn *engineConn
+	var conn *connpayload.Conn
 	if ds.ConnectionID != nil && *ds.ConnectionID != 0 {
-		if conn, err = loadEngineConn(ctx, s.d.DB, *ds.ConnectionID); err != nil {
+		if conn, err = connpayload.Load(ctx, s.d.DB, *ds.ConnectionID); err != nil {
 			return err
 		}
 	}
@@ -311,7 +312,7 @@ func (s *scheduler) fireDS(ctx context.Context, id int64, now, seen time.Time) e
 	if !taken {
 		return nil // another process took the slot
 	}
-	run, err := s.d.startRefreshIfFree(ctx, s.sc, user, id, conn, "schedule", nil)
+	run, err := s.d.startRefreshIfFree(ctx, user, id, conn, "schedule", nil)
 	if err != nil {
 		return err
 	}
@@ -449,9 +450,6 @@ var wakeQueue = func() {}
 
 // ── SQL script: writing its datasource ────────────────────────────────────────
 
-// sqlAlreadyRunning is sql_script_runs.ALREADY_RUNNING.
-const sqlAlreadyRunning = "The script is already writing its datasource: it can write again once it has finished"
-
 // fireSQLScript is _fire_sql_script: the slot taken, then the write started with the
 // author's authority; a write that cannot start recorded as a failed run.
 func (s *scheduler) fireSQLScript(ctx context.Context, id int64, now, seen time.Time) error {
@@ -504,7 +502,7 @@ func (s *scheduler) fireSQLScript(ctx context.Context, id int64, now, seen time.
 	}
 	_, refusal, err := s.d.launchSQLScript(ctx, user, script, "schedule", nil)
 	if refusal != nil {
-		if refusal.Status == http.StatusConflict && refusal.Detail == sqlAlreadyRunning {
+		if refusal.Status == http.StatusConflict && refusal.Detail == runlaunch.SQLScriptAlreadyRunning {
 			s.d.Log.Info("scheduler: SQL script still writing, slot skipped", "script", id, "name", script.Name)
 			return nil
 		}
@@ -549,182 +547,26 @@ type pyJSONError struct{ err error }
 
 func (e *pyJSONError) Error() string { return e.err.Error() }
 
-// launchSQLScript is sql_script_runs.launch: the run's id, or the refusal (an HTTPException
-// in Python). A script on the catalog is read by the AI service (sqlglot).
+// launchSQLScript is sql_script_runs.launch (runlaunch.LaunchSQLScript): the run's id, or
+// the refusal (an HTTPException in Python). A script on the catalog is read by the AI
+// service (sqlglot). The engine down comes back as the transport error it is.
 func (d *Deps) launchSQLScript(ctx context.Context, user *auth.User, script *sqlscripts.Script, trigger string,
 	parent *int64) (int64, *auth.Refusal, error) {
-	c := perm.For(d.DB, user)
-	// _checked_script
-	if see, err := sqlscripts.CanSee(ctx, c, script); err != nil || !see {
-		if err != nil {
-			return 0, nil, err
-		}
-		return 0, &auth.Refusal{Status: 404, Detail: fmt.Sprintf("%s can no longer see the SQL script «%s»", user.Email, script.Name)}, nil
+	id, err := runlaunch.LaunchSQLScript(ctx, runlaunch.SQLEnv{FlowEnv: d.flowEnv(), SQL: d.SQL}, user, script, trigger, parent, false)
+	var ar *auth.Refusal
+	var down *runlaunch.EngineDown
+	switch {
+	case err == nil:
+		return id, nil, nil
+	case errors.As(err, &ar):
+		return 0, ar, nil
+	case errors.As(err, &down):
+		return 0, nil, down.Err
 	}
-	if ok, err := c.Has(ctx, script.ProjectID, perm.Run); err != nil || !ok {
-		if err != nil {
-			return 0, nil, err
-		}
-		return 0, &auth.Refusal{Status: 403, Detail: fmt.Sprintf("RUN missing on the folder of the SQL script «%s»", script.Name)}, nil
+	if ref := sqlRefusal(err); ref != nil {
+		return 0, ref, nil
 	}
-	content, err := sqlscripts.ContentOf(ctx, d.DB, script, nil)
-	if err != nil {
-		return 0, nil, err
-	}
-	output := sqlscripts.OutputOf(content)
-	if output == nil {
-		return 0, &auth.Refusal{Status: 422, Detail: fmt.Sprintf("The SQL script «%s» does not save its result as a datasource: "+
-			"give it a name and a folder first", script.Name)}, nil
-	}
-	sql := ""
-	if pyjson.Truthy(content.Value("sql")) {
-		sql = pyjson.Str(content.Value("sql"))
-	}
-	if stripSQLEnd(reports.StripComments(sql)) == "" {
-		return 0, &auth.Refusal{Status: 422, Detail: fmt.Sprintf("The SQL script «%s» has no SQL yet", script.Name)}, nil
-	}
-	// check_output
-	if ref, err := sqlscripts.CheckOutput(ctx, c, d.DB, user, output); err != nil || ref != nil {
-		return 0, ref, err
-	}
-	target, err := sqlscripts.TargetOf(ctx, d.DB, output)
-	if err != nil {
-		return 0, nil, err
-	}
-	q := d.jobRequest(ctx, user)
-	var targetID *int64
-	if target != nil {
-		targetID = &target.ID
-	}
-	contract, err := q.contractPayload(targetID)
-	if err != nil {
-		return 0, nil, err
-	}
-	outputKey := snapshotKey(targetID)
-	project, _ := sqlscripts.OutputProject(output)
-	outName := pyjson.Str(output.Value("name"))
-	detail := pyjson.Object{{Key: "version", Value: script.CurrentVersion}, {Key: "trigger", Value: trigger},
-		{Key: "sql", Value: runes(sql, 2000)}, {Key: "datasource", Value: pyjson.Object{{Key: "name", Value: output.Value("name")},
-			{Key: "project_id", Value: output.Value("project_id")}}}}
-	var bucket, inputKey, engineName, path string
-	var body pyjson.Object
-	datasourceIDs := []any{}
-	if content.Value("connection_id") != nil {
-		connID, ok := pyjson.IsInt(content.Value("connection_id"))
-		if !ok {
-			return 0, nil, errors.New("a connection id that is not an integer")
-		}
-		usable, ref, err := sqlscripts.UsableConnection(ctx, c, d.DB, connID)
-		if err != nil || ref != nil {
-			return 0, ref, err
-		}
-		conn, err := loadEngineConn(ctx, d.DB, usable.ID)
-		if err != nil {
-			return 0, nil, err
-		}
-		if conn == nil {
-			return 0, nil, errors.New("the connection vanished")
-		}
-		bucket, inputKey, engineName, path = d.Config.EngineBucket, "", conn.Name, "/db/ingest"
-		body = pyjson.Object{{Key: "connection", Value: conn.payload()}, {Key: "source", Value: pyjson.Object{{Key: "mode", Value: "sql"},
-			{Key: "ref", Value: sql}}}, {Key: "bucket", Value: bucket}, {Key: "output_key", Value: outputKey}}
-		if contract != nil {
-			body = append(body, pyjson.KV{Key: "contract", Value: contract})
-		}
-		detail = detail.Set("connection", pyjson.Object{{Key: "id", Value: conn.ID}, {Key: "name", Value: conn.Name}})
-	} else {
-		// on the catalog: the engine allowed, the datasources the SQL names (sqlglot, the AI service)
-		rs := &reports.Resolver{Q: d.DB, C: c, Engine: d.Engine, Log: d.Log, SQL: d.SQL}
-		picked, err := rs.PickEngine(ctx, content.Value("engine"))
-		if ref := sqlRefusal(err); ref != nil {
-			return 0, ref, nil
-		}
-		if err != nil {
-			return 0, nil, err
-		}
-		resolved, err := sqlscripts.Resolve(ctx, d.DB, c, d.SQL, sql, picked)
-		if ref := sqlRefusal(err); ref != nil {
-			return 0, ref, nil
-		}
-		if err != nil {
-			return 0, nil, err
-		}
-		if len(resolved.Tables) == 0 {
-			return 0, &auth.Refusal{Status: 422, Detail: "The query reads no datasource: name one in FROM"}, nil
-		}
-		chain := sqlscripts.CatalogChain(resolved)
-		bucket, inputKey, engineName, path = pyjson.Str(chain.Value("bucket")), pyjson.Str(chain.Value("input_key")), picked, "/tasks/transform-data"
-		body = append(append(pyjson.Object(nil), chain...), pyjson.KV{Key: "output_key", Value: outputKey}, pyjson.KV{Key: "engine", Value: picked})
-		if contract != nil {
-			body = append(body, pyjson.KV{Key: "contract", Value: contract})
-		}
-		named := []any{}
-		for _, n := range resolved.Tables {
-			named = append(named, pyjson.Object{{Key: "id", Value: n.Datasource.ID}, {Key: "name", Value: n.Datasource.Name}})
-			datasourceIDs = append(datasourceIDs, n.Datasource.ID)
-		}
-		detail = detail.Set("engine", picked).Set("datasources", named)
-	}
-
-	var runID int64
-	var refusal *auth.Refusal
-	err = pgx.BeginFunc(ctx, d.DB, func(tx pgx.Tx) error {
-		if err := sqlscripts.InLine(ctx, tx, script.ID); err != nil {
-			return err
-		}
-		if live, err := sqlscripts.LiveRun(ctx, tx, script.ID); err != nil || live {
-			if err == nil {
-				refusal = &auth.Refusal{Status: http.StatusConflict, Detail: sqlAlreadyRunning}
-				err = errRollback
-			}
-			return err
-		}
-		cctx, cancel := context.WithTimeout(ctx, 60*time.Second)
-		res, raw, err := d.Engine.JSON(cctx, http.MethodPost, path, body)
-		cancel()
-		if err != nil {
-			return err
-		}
-		if res.StatusCode >= 400 {
-			ferr := reports.EngineFailure(res.StatusCode, raw, func(s string) string { return s })
-			var r *reports.Refusal
-			if errors.As(ferr, &r) {
-				refusal = &auth.Refusal{Status: r.Status, Detail: pyjson.Str(r.Detail)}
-				return errRollback
-			}
-			return ferr
-		}
-		task, err := engineTaskID(raw)
-		if err != nil {
-			return err
-		}
-		if task == "" {
-			refusal = &auth.Refusal{Status: 502, Detail: "The engine did not return a task_id"}
-			return errRollback
-		}
-		read := pyjson.Object{{Key: "version", Value: script.CurrentVersion}, {Key: "connection_id", Value: content.Value("connection_id")},
-			{Key: "datasources", Value: datasourceIDs}}
-		description := fmt.Sprintf("Written by the SQL script «%s»", script.Name)
-		if target != nil && target.Description != "" {
-			description = target.Description
-		}
-		return tx.QueryRow(ctx, `INSERT INTO runs (kind, sql_script_id, task_id, status, launched_by, trigger_type, parent_run_id, engine,
-			input_key, output_bucket, output_key, publish_name, publish_project_id, publish_overwrite, publish_description,
-			publish_sort_keys, script, started_at) VALUES ('sql', $1, $2, 'PENDING', $3, $4, $5, $6, $7, $8, $9, $10, $11, true, $12, '[]',
-			$13, $14) RETURNING id`, script.ID, task, user.ID, trigger, parent, engineName, inputKey, bucket, outputKey, outName, project,
-			description, pyDumps(read), jobs.Now()).Scan(&runID)
-	})
-	if refusal != nil {
-		return 0, refusal, nil
-	}
-	if err != nil {
-		return 0, nil, err
-	}
-	now := jobs.Now()
-	audit.Record(ctx, d.DB, d.Log, audit.Event{Actor: user, Action: "sql_script.publish", TargetType: strp("sql_script"),
-		TargetID: &script.ID, TargetLabel: &script.Name, At: &now,
-		Detail: append(pyjson.Object{{Key: "run_id", Value: runID}}, detail...)})
-	return runID, nil, nil
+	return 0, nil, err
 }
 
 func pyStripText(s string) string { return pystr.Strip(s) }
@@ -736,23 +578,6 @@ func stripSQLEnd(s string) string {
 		s = s[:len(s)-1]
 	}
 	return pyStripText(s)
-}
-
-// engineTaskID is resp.json().get("task_id"), "" when falsy.
-func engineTaskID(raw []byte) (string, error) {
-	v, err := pyjson.Loads(string(raw))
-	if err != nil {
-		return "", &pyJSONError{err}
-	}
-	o, ok := v.(pyjson.Object)
-	if !ok {
-		return "", fmt.Errorf("'%s' object has no attribute 'get'", pyTypeName(v))
-	}
-	t := o.Value("task_id")
-	if !pyjson.Truthy(t) {
-		return "", nil
-	}
-	return pyjson.Str(t), nil
 }
 
 // failedSQLRun is sql_script_runs.failed_run: a write that could not start, kept as a failed
@@ -769,15 +594,6 @@ func (d *Deps) failedSQLRun(ctx context.Context, user *auth.User, scriptID int64
 		VALUES ('sql', $1, '', 'FAILURE', $2, $3, $4, '', '', '', '', false, '[]', $5, $6)`, scriptID, by, trigger, runes(reason, 2000),
 		jobs.Now(), time.Now().UTC())
 	return err
-}
-
-// snapshotKey is routes/runs.py snapshot_key.
-func snapshotKey(dsID *int64) string {
-	folder := "new"
-	if dsID != nil && *dsID != 0 {
-		folder = fmt.Sprint(*dsID)
-	}
-	return fmt.Sprintf("datasets/%s/%s-%s.parquet", folder, jobs.Now().Format("20060102T150405Z"), newHex()[:8])
 }
 
 // ── the engine's timeouts ─────────────────────────────────────────────────────

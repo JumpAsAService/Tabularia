@@ -11,6 +11,7 @@ import (
 	"github.com/JumpAsAService/Tabularia/gateway-go/internal/audit"
 	"github.com/JumpAsAService/Tabularia/gateway-go/internal/auth"
 	"github.com/JumpAsAService/Tabularia/gateway-go/internal/connpayload"
+	"github.com/JumpAsAService/Tabularia/gateway-go/internal/jobs"
 	"github.com/JumpAsAService/Tabularia/gateway-go/internal/perm"
 	"github.com/JumpAsAService/Tabularia/gateway-go/internal/pyjson"
 	"github.com/JumpAsAService/Tabularia/gateway-go/internal/pystr"
@@ -180,7 +181,7 @@ func LaunchSQLScript(ctx context.Context, env SQLEnv, user *auth.User, s *sqlscr
 		output_bucket, output_key, publish_name, publish_project_id, publish_overwrite, publish_description, publish_sort_keys, script, started_at)
 		VALUES ('sql', $1, $2, 'PENDING', $3, $4, $5, $6, $7, $8, $9, $10, $11, true, $12, '[]', $13, $14) RETURNING id`,
 		s.ID, taskID, user.ID, trigger, parent, engineName, inputKey, bucket, outputKey, output.Value("name"), project, description,
-		dumps(read), time.Now().UTC()).Scan(&runID)
+		dumps(read), jobs.Now()).Scan(&runID)
 	if err != nil {
 		return 0, err
 	}
@@ -192,8 +193,9 @@ func LaunchSQLScript(ctx context.Context, env SQLEnv, user *auth.User, s *sqlscr
 		actx = context.Background()
 	}
 	kind := "sql_script"
+	now := jobs.Now()
 	audit.Record(actx, env.DB, env.Log, audit.Event{Actor: user, Action: "sql_script.publish", TargetType: &kind, TargetID: &s.ID,
-		TargetLabel: &s.Name, Detail: append(pyjson.Object{{Key: "run_id", Value: runID}}, detail...)})
+		TargetLabel: &s.Name, Detail: append(pyjson.Object{{Key: "run_id", Value: runID}}, detail...), At: &now})
 	return runID, nil
 }
 
