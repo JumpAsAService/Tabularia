@@ -355,8 +355,6 @@ func (q *queue) carries(ctx context.Context, flow, group, script *int64) bool {
 		}
 		for _, n := range objectList(pyjson.Obj(v).Value("nodes")) {
 			switch n.Value("type") {
-			case "container":
-				return false
 			case "runflow":
 				if sub, ok := pyjson.IsInt(nodeData(n).Value("flowId")); ok && !walk(sub, depth+1) {
 					return false
@@ -566,10 +564,16 @@ func (q *queue) orchestrate(ctx context.Context, user *auth.User, flow *jobFlow,
 				}
 				errs = append(errs, "output: "+pyStrOfError(err))
 			}
-		case "script":
+		case "script", "container":
 			run := &scriptNodeRun{q: q, user: user, flow: flow, definition: definition, node: node, parent: parent, trigger: trigger,
 				mode: mode, outputs: outputs, resolveDS: resolveDS}
-			out, err := q.runScript(ctx, run)
+			var out *[2]any
+			var err error
+			if node.Value("type") == "script" {
+				out, err = q.runScript(ctx, run)
+			} else {
+				out, err = q.runContainer(ctx, run)
+			}
 			var sf *scriptFailed
 			var fe *flowResolveError
 			if errors.As(err, &sf) || errors.As(err, &fe) {
@@ -581,8 +585,6 @@ func (q *queue) orchestrate(ctx context.Context, user *auth.User, flow *jobFlow,
 			if out != nil {
 				outputs[nodeKey(node.Value("id"))] = out
 			}
-		case "container":
-			return nil, fmt.Errorf("a %s node is not carried by the Go orchestrator", node.Value("type"))
 		case "runflow":
 			sub := d.Value("flowId")
 			if !pyjson.Truthy(sub) {
@@ -1156,8 +1158,17 @@ func (q *queue) gapsOfFlow(ctx context.Context, user *auth.User, flow *jobFlow, 
 				gaps = append(gaps, more...)
 			}
 		case "registry":
-			// only Container nodes name one: such a flow is left to Python (carries)
-			return nil, fmt.Errorf("a flow naming a %s is not carried by the Go orchestrator", r.Kind)
+			reg, err := acc.RegistryByID(ctx, id)
+			if err != nil {
+				return nil, err
+			}
+			if reg != nil {
+				if ok, err := acc.CanUseRegistry(ctx, reg); err != nil {
+					return nil, err
+				} else if !ok {
+					gaps = append(gaps, fmt.Sprintf("use of container registry '%s'", reg.Name))
+				}
+			}
 		case "flow":
 			if seen[id] {
 				continue
@@ -1186,11 +1197,28 @@ func (q *queue) gapsOfFlow(ctx context.Context, user *auth.User, flow *jobFlow, 
 				}
 			}
 		}
-		if n.Value("type") == "container" {
-			return nil, errors.New("a Container node is not carried by the Go orchestrator")
+		if regID, isInt := d.Value("registryId").(int64); n.Value("type") == "container" && isInt && pyjson.Truthy(d.Value("repository")) {
+			reg, err := acc.RegistryByID(ctx, regID)
+			if err != nil {
+				return nil, err
+			}
+			if reg != nil {
+				use, err := acc.CanUseRegistry(ctx, reg)
+				if err != nil {
+					return nil, err
+				}
+				allowed := false
+				if use {
+					if allowed, err = acc.RepositoryAllowed(ctx, reg, pyjson.Str(d.Value("repository"))); err != nil {
+						return nil, err
+					}
+				}
+				if use && !allowed {
+					gaps = append(gaps, fmt.Sprintf("use of the image %s of container registry '%s'", pyjson.Str(d.Value("repository")), reg.Name))
+				}
+			}
 		}
 	}
-	_ = acc
 	if ref, err := objects.EnsureCanReadKeys(ctx, c, q.d.DB, user, keys); err != nil {
 		return nil, err
 	} else if ref != nil {

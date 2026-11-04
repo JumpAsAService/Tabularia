@@ -257,3 +257,9 @@ func (a *Access) RegistryByID(ctx context.Context, id int64) (*Registry, error) 
 func (a *Access) RegistryBlocked(ctx context.Context, definition string) (string, error) {
 	return a.registryBlocked(ctx, definition)
 }
+
+// VariablesOf is container_nodes.variables_of, in the order a dict keeps.
+func VariablesOf(node pyjson.Object) pyjson.Object { return variablesOf(node) }
+
+// StringsOf is container_nodes.strings.
+func StringsOf(v any) []any { return stringsOf(v) }

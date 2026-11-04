@@ -2,12 +2,13 @@ package main
 
 import (
 	"fmt"
+	"strings"
 )
 
 // QU: what the queue's suite seeds.
 var QU = struct {
-	Main, Locked, PG, SMTP, Src, Env, Saved int64
-	Flows                                   map[string]int64
+	Main, Locked, PG, SMTP, Src, Env, Saved, Registry int64
+	Flows                                             map[string]int64
 }{}
 
 // services/orchestrator.py queue_loop, one round at a time: the orchestrations taken from the
@@ -101,6 +102,17 @@ func seedQueue(w *World) {
 	flow("script", fmt.Sprintf(`{"nodes": [%s, %s, {"id": "o", "type": "output", "data": {"name": "qu scripted", "projectId": %d}}],
 		"edges": [{"source": "s", "target": "s1"}, {"source": "s1", "target": "o"}]}`, src, script, QU.Main), false)
 
+	// containers: a registry reached as siem.test (each stack's own fake engine), a flow with a Container node
+	QU.Registry = w.Insert(`INSERT INTO container_registries (name, description, host, protocol, tls, ca_cert, username, repositories,
+		enabled, last_test_message, created_at, updated_at) VALUES ('qu-reg', '', 'siem.test:8000', 'http', 'public', '', '', 'team/*', true,
+		'', '2026-01-01', '2026-01-01') RETURNING id`)
+	apiKey, _ := fernet.Encrypt("k-9")
+	w.Exec(`INSERT INTO container_registry_variables (registry_id, name, secret, value, value_enc, updated_at) VALUES
+		($1, 'LEVEL', false, '3', NULL, '2026-01-01'), ($1, 'API_KEY', true, '', $2, '2026-01-01')`, QU.Registry, apiKey)
+	box := fmt.Sprintf(`{"id": "c1", "type": "container", "data": {"label": "Box", "registryId": %d, "repository": "team/app",
+		"tag": "1.0", "command": ["run"], "args": ["--x", 2], "variables": [{"name": "N", "value": "v"}], "timeoutSeconds": 60}}`, QU.Registry)
+	flow("boxed", fmt.Sprintf(`{"nodes": [%s, %s, {"id": "o", "type": "output", "data": {"name": "qu boxed", "projectId": %d}}],
+		"edges": [{"source": "s", "target": "c1"}, {"source": "c1", "target": "o"}]}`, src, box, QU.Main), false)
 	QU.Saved = w.Insert(`INSERT INTO saved_scripts (name, description, project_id, owner_id, environment_id, current_version, created_at,
 		updated_at) VALUES ('qu saved', '', $1, $2, $3, 2, '2026-01-01', '2026-01-01') RETURNING id`, QU.Main, admin, QU.Env)
 	w.Exec(`INSERT INTO saved_script_versions (script_id, version, content, note, created_at, created_by) VALUES ($1, 1, '{}', 'created',
@@ -166,19 +178,26 @@ func queueSteps(w *World) []Step {
 		st.EngineMask = []string{"*.body.output_key", "*.body.input_key"}
 		return st
 	}
-	job := func(status map[string]any, pod map[string]any) []EngineRule {
+	jobIn := func(ns string, status map[string]any, pod map[string]any) []EngineRule {
 		return append([]EngineRule{
-			{Method: "POST", Path: "^/apis/batch/v1/namespaces/scripts/jobs$", Body: map[string]any{"metadata": map[string]any{"name": "j", "uid": "u-1"}}},
-			{Method: "POST", Path: "^/api/v1/namespaces/scripts/(configmaps|secrets)$", Body: map[string]any{}},
-			{Method: "GET", Path: "^/apis/batch/v1/namespaces/scripts/jobs/", Body: map[string]any{"status": status}},
-			{Method: "GET", Path: "^/api/v1/namespaces/scripts/pods$", Body: map[string]any{"items": []any{map[string]any{
+			{Method: "POST", Path: "^/apis/batch/v1/namespaces/" + ns + "/jobs$", Body: map[string]any{"metadata": map[string]any{"name": "j", "uid": "u-1"}}},
+			{Method: "POST", Path: "^/api/v1/namespaces/" + ns + "/(configmaps|secrets)$", Body: map[string]any{}},
+			{Method: "GET", Path: "^/apis/batch/v1/namespaces/" + ns + "/jobs/", Body: map[string]any{"status": status}},
+			{Method: "GET", Path: "^/api/v1/namespaces/" + ns + "/pods$", Body: map[string]any{"items": []any{map[string]any{
 				"metadata": map[string]any{"name": "p1", "creationTimestamp": "2026-04-02T09:00:00Z"}, "status": pod}}}},
-			{Method: "GET", Path: "^/api/v1/namespaces/scripts/pods/p1/log$", Text: "hello\nworld", Type: "text/plain"},
-			{Method: "DELETE", Path: "^/apis/batch/v1/namespaces/scripts/jobs/", Body: map[string]any{}},
+			{Method: "GET", Path: "^/api/v1/namespaces/" + ns + "/pods/p1/log$", Text: "hello\nworld", Type: "text/plain"},
+			{Method: "DELETE", Path: "^/apis/batch/v1/namespaces/" + ns + "/jobs/", Body: map[string]any{}},
 			{Method: "POST", Path: "^/scripts/output/import$", Body: map[string]any{"found": true, "rows": 4}},
 			{Method: "POST", Path: "^/scripts/objects/delete$", Body: map[string]any{}},
 		}, ok...)
 	}
+	boxTick := func(name string, engine []EngineRule, before func(*World)) Step {
+		st := kubeTick(name, engine, before)
+		st.Env = map[string]string{"CONTAINERS__ENABLED": "true", "CONTAINERS__NAMESPACE": "boxes", "KUBERNETES__API_URL": "http://{engine}",
+			"KUBERNETES__TOKEN_FILE": "/etc/hostname"}
+		return st
+	}
+	job := func(status map[string]any, pod map[string]any) []EngineRule { return jobIn("scripts", status, pod) }
 	terminated := func(code int, reason string) map[string]any {
 		return map[string]any{"containerStatuses": []any{map[string]any{"state": map[string]any{"terminated": map[string]any{
 			"exitCode": code, "reason": reason}}}}}
@@ -187,6 +206,13 @@ func queueSteps(w *World) []Step {
 	savedOK := append([]EngineRule{{Method: "POST", Path: "^/scripts/input/export$", Body: map[string]any{"ok": true}},
 		{Method: "POST", Path: "^/scripts/output/import$", Body: map[string]any{"found": true, "rows": 6,
 			"columns": []any{map[string]any{"name": "a", "dtype": "Int64"}}}}}, kubeOK...)
+	digest := "sha256:" + strings.Repeat("ab12", 16)
+	boxOK := append([]EngineRule{{Method: "GET", Path: "^/v2/$", Body: map[string]any{}},
+		{Method: "HEAD", Path: "^/v2/team/app/manifests/1.0$", Headers: map[string]string{"Docker-Content-Digest": digest}},
+		{Method: "DELETE", Path: "^/api/v1/namespaces/boxes/secrets/", Status: 404, Body: map[string]any{"message": "not found"}}},
+		jobIn("boxes", map[string]any{"succeeded": 1}, terminated(0, "Completed"))...)
+	boxGone := append([]EngineRule{{Method: "GET", Path: "^/v2/$", Body: map[string]any{}},
+		{Method: "HEAD", Path: "^/v2/team/app/manifests/1.0$", Status: 404}}, ok...)
 	kubeFailed := job(map[string]any{"failed": 1, "conditions": []any{map[string]any{"type": "Failed", "status": "True",
 		"reason": "BackoffLimitExceeded", "message": "Job has reached the specified backoff limit"}}}, terminated(1, "Error"))
 	return []Step{
@@ -246,6 +272,15 @@ func queueSteps(w *World) []Step {
 		}),
 		kubeTick("a saved script's schedule whose author cannot use its environment", savedOK, func(w *World) {
 			orchSaved(w, "schedule", "writer")
+		}),
+		boxTick("a Container node: the tag's digest, the pull Secret, its Job, its output published", boxOK, func(w *World) {
+			orch(w, QU.Flows["boxed"], "PENDING", "manual", "admin", "2026-04-02 08:59:00", nil, nil)
+		}),
+		boxTick("a Container node whose tag is not in the registry", boxGone, func(w *World) {
+			orch(w, QU.Flows["boxed"], "PENDING", "manual", "admin", "2026-04-02 08:59:00", nil, nil)
+		}),
+		boxTick("a Container node's schedule whose author may not use the registry", boxOK, func(w *World) {
+			orch(w, QU.Flows["boxed"], "PENDING", "schedule", "writer", "2026-04-02 08:59:00", nil, nil)
 		}),
 		tick("the parquets' random names put away", "queue.beat", ok, putAwayRandomKeys),
 	}
