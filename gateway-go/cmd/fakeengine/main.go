@@ -41,6 +41,9 @@ type recorded struct {
 	// a HEC request's credential («Splunk <token>»): the fake engine stands in for Splunk
 	// too (the SIEM's suite reaches it as siem.test)
 	Splunk string `json:"splunk,omitempty"`
+	// a webhook's delivery (X-Tabularia-Event): its own headers, the fake engine stands in for
+	// the receivers too
+	Webhook map[string]string `json:"webhook,omitempty"`
 }
 
 // sentNow replaces a HEC event's `time` (the moment of sending, in seconds) by «<now>»:
@@ -98,6 +101,12 @@ func main() {
 		}
 		mu.Lock()
 		rec := recorded{Method: r.Method, Path: r.URL.Path, Query: r.URL.RawQuery, Body: body}
+		if r.Header.Get("X-Tabularia-Event") != "" {
+			rec.Webhook = map[string]string{}
+			for _, h := range []string{"Content-Type", "User-Agent", "X-Tabularia-Event", "X-Tabularia-Delivery", "X-Tabularia-Signature"} {
+				rec.Webhook[h] = r.Header.Get(h)
+			}
+		}
 		if a := r.Header.Get("Authorization"); strings.HasPrefix(a, "Splunk ") {
 			rec.Splunk, rec.Body = a, sentNow(body)
 		}
