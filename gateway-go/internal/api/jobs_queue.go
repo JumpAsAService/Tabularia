@@ -20,7 +20,9 @@ import (
 	"github.com/JumpAsAService/Tabularia/gateway-go/internal/objects"
 	"github.com/JumpAsAService/Tabularia/gateway-go/internal/perm"
 	"github.com/JumpAsAService/Tabularia/gateway-go/internal/pyjson"
+	"github.com/JumpAsAService/Tabularia/gateway-go/internal/savedscripts"
 	"github.com/JumpAsAService/Tabularia/gateway-go/internal/scriptcfg"
+	"github.com/JumpAsAService/Tabularia/gateway-go/internal/scriptnodes"
 )
 
 // services/orchestrator.py queue_loop: the queue of the orchestrations (a flow's run, queued
@@ -72,6 +74,7 @@ func init() {
 type queue struct {
 	d    *Deps
 	sc   *scriptcfg.Settings
+	js   jobSettings
 	pool int64 // the pool's size + overflow at start, -1 without a ceiling
 
 	mu      sync.Mutex
@@ -85,7 +88,7 @@ type queue struct {
 }
 
 func newQueue(d *Deps) *queue {
-	q := &queue{d: d, sc: scriptcfg.Load(config.FromOS()), alive: map[int64]bool{}, wake: make(chan struct{}, 1)}
+	q := &queue{d: d, sc: scriptcfg.Load(config.FromOS()), js: loadJobSettings(), alive: map[int64]bool{}, wake: make(chan struct{}, 1)}
 	q.pool = poolCeiling(d)
 	return q
 }
@@ -326,8 +329,11 @@ func (q *queue) claim(ctx context.Context, limit int64) ([]int64, []int64) {
 
 // carries says whether the Go queue runs this orchestration (see the file's comment).
 func (q *queue) carries(ctx context.Context, flow, group, script *int64) bool {
-	if group != nil || script != nil {
+	if group != nil {
 		return false
+	}
+	if script != nil {
+		return true
 	}
 	if flow == nil {
 		return true // run_it closes it as invalid
@@ -349,7 +355,7 @@ func (q *queue) carries(ctx context.Context, flow, group, script *int64) bool {
 		}
 		for _, n := range objectList(pyjson.Obj(v).Value("nodes")) {
 			switch n.Value("type") {
-			case "script", "container":
+			case "container":
 				return false
 			case "runflow":
 				if sub, ok := pyjson.IsInt(nodeData(n).Value("flowId")); ok && !walk(sub, depth+1) {
@@ -394,6 +400,10 @@ func (q *queue) runFlow(ctx context.Context, id int64) error {
 	run, err := req.readRun(id)
 	if err != nil || run == nil {
 		return err
+	}
+	if run.SavedScriptID != nil {
+		// a saved script's run: same queue, claim and heartbeat, its own runner
+		return q.runSavedQueued(ctx, id, run)
 	}
 	var flow *jobFlow
 	if run.FlowID != nil && *run.FlowID != 0 {
@@ -499,6 +509,7 @@ func (q *queue) orchestrate(ctx context.Context, user *auth.User, flow *jobFlow,
 	}
 	var errs []string
 	parentID := &parent
+	outputs := map[string]*[2]any{} // script_outputs
 	for _, node := range sequenceOrder(definition) {
 		d := nodeData(node)
 		if guarded {
@@ -516,7 +527,7 @@ func (q *queue) orchestrate(ctx context.Context, user *auth.User, flow *jobFlow,
 		case "output":
 			stops := d.Value("destType") == "email" && d.Value("stopOnFailure") != false
 			err := func() error {
-				req, err := resolveOutputRequest(definition, node, resolveDS, bucket, mode, int64(q.d.Panel.PreviewSampleRows()), nil)
+				req, err := resolveOutputRequest(definition, node, resolveDS, bucket, mode, int64(q.d.Panel.PreviewSampleRows()), outputs)
 				if err != nil {
 					return err
 				}
@@ -555,7 +566,22 @@ func (q *queue) orchestrate(ctx context.Context, user *auth.User, flow *jobFlow,
 				}
 				errs = append(errs, "output: "+pyStrOfError(err))
 			}
-		case "script", "container":
+		case "script":
+			run := &scriptNodeRun{q: q, user: user, flow: flow, definition: definition, node: node, parent: parent, trigger: trigger,
+				mode: mode, outputs: outputs, resolveDS: resolveDS}
+			out, err := q.runScript(ctx, run)
+			var sf *scriptFailed
+			var fe *flowResolveError
+			if errors.As(err, &sf) || errors.As(err, &fe) {
+				return nil, &orchestrationError{err.Error()}
+			}
+			if err != nil {
+				return nil, err
+			}
+			if out != nil {
+				outputs[nodeKey(node.Value("id"))] = out
+			}
+		case "container":
 			return nil, fmt.Errorf("a %s node is not carried by the Go orchestrator", node.Value("type"))
 		case "runflow":
 			sub := d.Value("flowId")
@@ -1105,8 +1131,32 @@ func (q *queue) gapsOfFlow(ctx context.Context, user *auth.User, flow *jobFlow, 
 					gaps = append(gaps, fmt.Sprintf("CONNECT on connection #%d", id))
 				}
 			}
-		case "environment", "registry", "saved_script":
-			// only Script and Container nodes name them: such a flow is left to Python (carries)
+		case "environment":
+			env, err := loadScriptEnv(ctx, q.d.DB, id)
+			if err != nil {
+				return nil, err
+			}
+			if env != nil {
+				if ok, err := scriptnodes.CanUse(ctx, c, q.d.DB, user.ID, env.ID); err != nil {
+					return nil, err
+				} else if !ok {
+					gaps = append(gaps, fmt.Sprintf("use of scripting environment '%s'", env.Name))
+				}
+			}
+		case "saved_script":
+			s, err := savedscripts.Get(ctx, q.d.DB, id)
+			if err != nil {
+				return nil, err
+			}
+			if s != nil {
+				more, err := q.d.gapsOfScript(ctx, user, s, true)
+				if err != nil {
+					return nil, err
+				}
+				gaps = append(gaps, more...)
+			}
+		case "registry":
+			// only Container nodes name one: such a flow is left to Python (carries)
 			return nil, fmt.Errorf("a flow naming a %s is not carried by the Go orchestrator", r.Kind)
 		case "flow":
 			if seen[id] {

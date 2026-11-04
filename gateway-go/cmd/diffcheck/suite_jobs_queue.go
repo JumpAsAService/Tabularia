@@ -6,8 +6,8 @@ import (
 
 // QU: what the queue's suite seeds.
 var QU = struct {
-	Main, Locked, PG, SMTP, Src int64
-	Flows                       map[string]int64
+	Main, Locked, PG, SMTP, Src, Env, Saved int64
+	Flows                                   map[string]int64
 }{}
 
 // services/orchestrator.py queue_loop, one round at a time: the orchestrations taken from the
@@ -16,7 +16,14 @@ var QU = struct {
 func init() {
 	scrubColumn("runs", "output_key", `out/[0-9a-f]{32}\.parquet`)
 	// a refresh's new snapshot (a random name) is what the outputs after it read
-	scrubColumn("runs", "input_key", `-[0-9a-f]{8}\.parquet`)
+	scrubColumn("runs", "input_key", `-[0-9a-f]{8}\.parquet`, `out/[0-9a-f]{32}\.parquet`)
+	// a Script or Container run's step: a uuid of its own
+	for _, c := range []string{"script", "destination"} {
+		scrubColumn("runs", c, `[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}`)
+	}
+	scrubColumn("datasources", "key", `out/[0-9a-f]{32}\.parquet`)
+	// a saved script's run: a random task id
+	scrubColumn("runs", "task_id", `^[0-9a-f]{32}$`)
 	register(Suite{Module: "jobs_queue", Seed: seedQueue, Steps: queueSteps})
 }
 
@@ -74,6 +81,34 @@ func seedQueue(w *World) {
 	flow("broken", `{"nodes": [{"id": "o", "type": "output", "data": {"name": "nothing", "projectId": 1}}], "edges": []}`, false)
 	flow("plain", fmt.Sprintf(`{"nodes": [%s, {"id": "o", "type": "output", "data": {"name": "qu plain", "projectId": %d}}],
 		"edges": [{"source": "s", "target": "o"}]}`, src, QU.Main), true)
+	// scripting: the bucket, an environment with a built version and its variables, flows with a Script node
+	secretKey, _ := fernet.Encrypt("sk-1")
+	token, _ := fernet.Encrypt("t0k")
+	w.Exec(`INSERT INTO script_storage (id, endpoint, region, bucket, access_key, secret_key_enc) VALUES (1, 'http://minio:9000', '',
+		'scripts', 'AK', $1) ON CONFLICT (id) DO UPDATE SET endpoint = EXCLUDED.endpoint, region = '', bucket = 'scripts', access_key = 'AK',
+		secret_key_enc = EXCLUDED.secret_key_enc`, secretKey)
+	QU.Env = w.Insert(`INSERT INTO script_environments (name, description, language, enabled, cpu_request, cpu_limit, memory_request,
+		memory_limit, max_timeout_seconds, created_at, updated_at) VALUES ('qu-env', '', 'python', true, '500m', '1', '1Gi', '2Gi', 3600,
+		'2026-01-01', '2026-01-01') RETURNING id`)
+	version := w.Insert(`INSERT INTO script_environment_versions (environment_id, number, language_version, base_image, packages, status,
+		image_ref, arch, created_at) VALUES ($1, 3, '3.12', 'python:3.12-slim', '', 'ready', 'reg.x.test/env@sha256:abc', 'amd64', '2026-01-01')
+		RETURNING id`, QU.Env)
+	w.Exec(`UPDATE script_environments SET current_version_id = $2 WHERE id = $1`, QU.Env, version)
+	w.Exec(`INSERT INTO script_environment_variables (environment_id, name, secret, value, value_enc, from_tabularia, updated_at) VALUES
+		($1, 'MODE', false, 'prod', NULL, false, '2026-01-01'), ($1, 'TOKEN', true, '', $2, false, '2026-02-03 04:05:06')`, QU.Env, token)
+	script := fmt.Sprintf(`{"id": "s1", "type": "script", "data": {"label": "Clean", "environmentId": %d, "entrypoint": "main.py",
+		"files": [{"path": "main.py", "content": "import util\nprint(1)"}, {"path": "util.py", "content": "X = 1"}], "timeoutSeconds": 60}}`, QU.Env)
+	flow("script", fmt.Sprintf(`{"nodes": [%s, %s, {"id": "o", "type": "output", "data": {"name": "qu scripted", "projectId": %d}}],
+		"edges": [{"source": "s", "target": "s1"}, {"source": "s1", "target": "o"}]}`, src, script, QU.Main), false)
+
+	QU.Saved = w.Insert(`INSERT INTO saved_scripts (name, description, project_id, owner_id, environment_id, current_version, created_at,
+		updated_at) VALUES ('qu saved', '', $1, $2, $3, 2, '2026-01-01', '2026-01-01') RETURNING id`, QU.Main, admin, QU.Env)
+	w.Exec(`INSERT INTO saved_script_versions (script_id, version, content, note, created_at, created_by) VALUES ($1, 1, '{}', 'created',
+		'2026-01-01', $2), ($1, 2, $3, 'edited', '2026-01-01', $2)`, QU.Saved, admin, fmt.Sprintf(`{"files": [{"path": "run.py",
+		"content": "print(2)"}], "entrypoint": "run.py", "inputs": [{"alias": "SALES", "datasource_id": %d}], "output": {"publish": true,
+		"name": "qu saved out", "project_id": %d, "overwrite": true}, "timeout_seconds": 120, "retries": 0, "retry_delay_seconds": 60}`,
+		QU.Src, QU.Main))
+
 	// the previous scheduled run of «plain» went well: its failure is news
 	w.Exec(`INSERT INTO runs (kind, flow_id, task_id, status, launched_by, trigger_type, engine_mode, input_key, output_bucket, output_key,
 		publish_description, publish_overwrite, publish_sort_keys, started_at, finished_at) VALUES ('orchestration', $1, '', 'SUCCESS', $2,
@@ -91,6 +126,15 @@ func orch(w *World, flow int64, status, trigger, by string, started string, clai
 		VALUES ('orchestration', $1, '', $2, $3, $4, $5, '', '', '', '', false, '[]', $6::timestamp + make_interval(secs => $9), $7, $8)
 		RETURNING id`, flow, status, w.People[by], trigger, map[string]string{"manual": "development", "schedule": "production"}[trigger],
 		started, claimed, beat, float64(orchSeq)/1000)
+}
+
+// orchSaved queues a run of the saved script.
+func orchSaved(w *World, trigger, by string) {
+	orchSeq++
+	w.Exec(`INSERT INTO runs (kind, saved_script_id, task_id, status, launched_by, trigger_type, engine_mode, input_key, output_bucket,
+		output_key, publish_description, publish_overwrite, publish_sort_keys, started_at) VALUES ('orchestration', $1, '', 'PENDING', $2, $3,
+		'production', '', '', '', '', false, '[]', '2026-04-02 08:59:00'::timestamp + make_interval(secs => $4))`, QU.Saved, w.People[by],
+		trigger, float64(orchSeq)/1000)
 }
 
 func queueSteps(w *World) []Step {
@@ -112,6 +156,39 @@ func queueSteps(w *World) []Step {
 	}
 	failing := append([]EngineRule{{Method: "GET", Path: "^/tasks/t-qu-out$", Body: map[string]any{"status": "FAILURE",
 		"error": "SMTP: the server refused the message"}}}, ok...)
+	kubeEnv := map[string]string{"SCRIPTS__ENABLED": "true", "SCRIPTS__NAMESPACE": "scripts", "SCRIPTS__REGISTRY": "reg.x.test",
+		"KUBERNETES__API_URL": "http://{engine}", "KUBERNETES__TOKEN_FILE": "/etc/hostname"}
+	kubeTick := func(name string, engine []EngineRule, before func(*World)) Step {
+		st := tick(name, "queue", engine, before)
+		st.Env = kubeEnv
+		// the step's uuid, the outputs' random names
+		st.EngineScrub = []string{`[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}`, `out/[0-9a-f]{32}\.parquet`, `-[0-9a-f]{8}\.parquet`}
+		st.EngineMask = []string{"*.body.output_key", "*.body.input_key"}
+		return st
+	}
+	job := func(status map[string]any, pod map[string]any) []EngineRule {
+		return append([]EngineRule{
+			{Method: "POST", Path: "^/apis/batch/v1/namespaces/scripts/jobs$", Body: map[string]any{"metadata": map[string]any{"name": "j", "uid": "u-1"}}},
+			{Method: "POST", Path: "^/api/v1/namespaces/scripts/(configmaps|secrets)$", Body: map[string]any{}},
+			{Method: "GET", Path: "^/apis/batch/v1/namespaces/scripts/jobs/", Body: map[string]any{"status": status}},
+			{Method: "GET", Path: "^/api/v1/namespaces/scripts/pods$", Body: map[string]any{"items": []any{map[string]any{
+				"metadata": map[string]any{"name": "p1", "creationTimestamp": "2026-04-02T09:00:00Z"}, "status": pod}}}},
+			{Method: "GET", Path: "^/api/v1/namespaces/scripts/pods/p1/log$", Text: "hello\nworld", Type: "text/plain"},
+			{Method: "DELETE", Path: "^/apis/batch/v1/namespaces/scripts/jobs/", Body: map[string]any{}},
+			{Method: "POST", Path: "^/scripts/output/import$", Body: map[string]any{"found": true, "rows": 4}},
+			{Method: "POST", Path: "^/scripts/objects/delete$", Body: map[string]any{}},
+		}, ok...)
+	}
+	terminated := func(code int, reason string) map[string]any {
+		return map[string]any{"containerStatuses": []any{map[string]any{"state": map[string]any{"terminated": map[string]any{
+			"exitCode": code, "reason": reason}}}}}
+	}
+	kubeOK := job(map[string]any{"succeeded": 1}, terminated(0, "Completed"))
+	savedOK := append([]EngineRule{{Method: "POST", Path: "^/scripts/input/export$", Body: map[string]any{"ok": true}},
+		{Method: "POST", Path: "^/scripts/output/import$", Body: map[string]any{"found": true, "rows": 6,
+			"columns": []any{map[string]any{"name": "a", "dtype": "Int64"}}}}}, kubeOK...)
+	kubeFailed := job(map[string]any{"failed": 1, "conditions": []any{map[string]any{"type": "Failed", "status": "True",
+		"reason": "BackoffLimitExceeded", "message": "Job has reached the specified backoff limit"}}}, terminated(1, "Error"))
 	return []Step{
 		tick("the orchestrations of a process that is gone, and one queued too long", "queue.orphans", ok, func(w *World) {
 			gone := orch(w, QU.Flows["plain"], "STARTED", "manual", "writer", "2026-04-02 08:00:00", "other:9:aaaa", "2026-04-02 08:58:00")
@@ -151,6 +228,24 @@ func queueSteps(w *World) []Step {
 		}),
 		tick("a scheduled run that fails: notice to the flow's addresses", "queue", failing, func(w *World) {
 			orch(w, QU.Flows["plain"], "PENDING", "schedule", "admin", "2026-04-02 08:59:00", nil, nil)
+		}),
+		kubeTick("a Script node: its input prepared, its Job run, its output read and published", kubeOK, func(w *World) {
+			orch(w, QU.Flows["script"], "PENDING", "manual", "admin", "2026-04-02 08:59:00", nil, nil)
+		}),
+		kubeTick("a Script node whose Job fails stops the flow", kubeFailed, func(w *World) {
+			orch(w, QU.Flows["script"], "PENDING", "manual", "admin", "2026-04-02 08:59:00", nil, nil)
+		}),
+		kubeTick("a Script node in an environment its author may not use: the schedule does not start", kubeOK, func(w *World) {
+			orch(w, QU.Flows["script"], "PENDING", "schedule", "writer", "2026-04-02 08:59:00", nil, nil)
+		}),
+		kubeTick("a Script node by hand by whoever may not use its environment", kubeOK, func(w *World) {
+			orch(w, QU.Flows["script"], "PENDING", "manual", "writer", "2026-04-02 08:59:00", nil, nil)
+		}),
+		kubeTick("a saved script: its input copied, its Job run, its output published", savedOK, func(w *World) {
+			orchSaved(w, "manual", "admin")
+		}),
+		kubeTick("a saved script's schedule whose author cannot use its environment", savedOK, func(w *World) {
+			orchSaved(w, "schedule", "writer")
 		}),
 		tick("the parquets' random names put away", "queue.beat", ok, putAwayRandomKeys),
 	}
