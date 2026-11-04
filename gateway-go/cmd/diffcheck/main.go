@@ -66,6 +66,9 @@ type Step struct {
 	// EngineUnordered: the requests sent to the engine compared whatever their order (a loop
 	// that sends them in parallel)
 	EngineUnordered bool
+	// EngineScrub: regular expressions whose matches, inside any string of the requests sent to
+	// the engine, are random (a step's uuid inside a key, a Job's environment)
+	EngineScrub []string
 }
 
 // EngineRule is one scripted answer of the fake engine (cmd/fakeengine).
@@ -408,6 +411,13 @@ func (w *World) finish(s *side, st Step, a *answer) {
 	a.Engine = recorded(s)
 	for _, path := range st.EngineMask {
 		a.Engine = maskPath(a.Engine, strings.Split(path, "."))
+	}
+	if len(st.EngineScrub) > 0 {
+		var res []*regexp.Regexp
+		for _, p := range st.EngineScrub {
+			res = append(res, regexp.MustCompile(p))
+		}
+		a.Engine = scrub(a.Engine, res)
 	}
 	if st.EngineUnordered {
 		a.Engine = sortPath(a.Engine, nil)

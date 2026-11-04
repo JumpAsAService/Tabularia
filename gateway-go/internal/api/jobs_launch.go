@@ -149,6 +149,13 @@ func str(o pyjson.Object, k string) string { s, _ := o.Value(k).(string); return
 // launchFlowRun is _launch_flow_run for an orchestration's Output: the run's id.
 func (d *Deps) launchFlowRun(ctx context.Context, user *auth.User, flow *jobFlow, req pyjson.Object, trigger string, parent *int64,
 	engineMode string) (int64, error) {
+	return d.launchFlowRunTo(ctx, user, flow, req, trigger, parent, engineMode, nil, nil)
+}
+
+// launchFlowRunTo is _launch_flow_run with `script_destination`: (the engine's payload, its
+// summary) of a Script or Container node's input, built by the node's runner.
+func (d *Deps) launchFlowRunTo(ctx context.Context, user *auth.User, flow *jobFlow, req pyjson.Object, trigger string, parent *int64,
+	engineMode string, scriptDest pyjson.Object, scriptSummary *string) (int64, error) {
 	v, errs := gatewaymodels.RunCreate.Type().Validate(pydconv.ToPyd(req))
 	if len(errs) > 0 {
 		// pydantic's ValidationError: its text is not reproduced (see the report)
@@ -263,7 +270,9 @@ func (d *Deps) launchFlowRun(ctx context.Context, user *auth.User, flow *jobFlow
 	var destination, mirror, email pyjson.Object
 	var destSummary, mirrorSummary, emailSummary *string
 	sp := func(o pyjson.Object) *string { s := pyDumps(o); return &s }
-	if dest := pyjson.Obj(body.Value("destination")); dest != nil {
+	if scriptDest != nil {
+		destination, destSummary = scriptDest, scriptSummary
+	} else if dest := pyjson.Obj(body.Value("destination")); dest != nil {
 		conn, err := connOf(dest.Value("connection_id"), "Connection not found", perm.Connect)
 		if err != nil {
 			return 0, err
