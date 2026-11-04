@@ -107,6 +107,10 @@ func init() {
 			run("the same case wins", as("writer"), sql("SELECT * FROM Mixed"))
 			run("on bigquery's dialect", as("writer"), map[string]any{"sql": "SELECT * FROM `Città Nord`", "engine": "polars"})
 			run("in two folders", as("writer"), sql("SELECT * FROM Doppio"))
+			// the folder the refusal suggests is the first of a list ordered by name only: between
+			// two datasources of one name, the table's physical order, which the two databases
+			// need not share (a Python bug, noted): the suggestion is not compared
+			s[len(s)-1].Scrub = []string{`write it as "sr-[ab]"`}
 			run("in two folders of one name", as("writer"), sql("SELECT * FROM Nord.Ordini"))
 			run("in two folders, by case", as("writer"), sql("SELECT * FROM MIXED"))
 			run("one it cannot read", as("writer"), sql("SELECT * FROM Segreto"))
