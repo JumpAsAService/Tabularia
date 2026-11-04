@@ -185,7 +185,7 @@ func writePrompt(ctx context.Context, d *Deps, w http.ResponseWriter, agent, loc
 
 // setAIPrompt is PUT /ai/prompts/{agent} (ai_prompts.save): the default's own text is no
 // change, the row goes.
-func setAIPrompt(d *Deps) bodyHandler {
+func setAIPrompt(d *Deps) adminBodyHandler {
 	return func(w http.ResponseWriter, r *http.Request, p *auth.Principal, body pyd.Body, _ []byte) {
 		var ps pyd.Params
 		b := ps.Body(body, gatewaymodels.AiPromptUpdate)

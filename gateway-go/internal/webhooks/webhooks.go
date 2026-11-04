@@ -78,7 +78,7 @@ func EventsOf(text string) []string {
 	if text == "" {
 		text = "[]"
 	}
-	v, err := pyjson.Loads([]byte(text))
+	v, err := pyjson.Loads(string(text))
 	out := []string{}
 	if err != nil {
 		return out

@@ -105,7 +105,7 @@ func ownPlan(ctx context.Context, d *Deps, w http.ResponseWriter, r *http.Reques
 // outcome; the revision the person confirms.
 func planOut(plan planRow) (PlanOut, error) {
 	actions := []any{}
-	if v, err := pyjson.Loads([]byte(orEmptyList(plan.actions))); err == nil { // _parsed
+	if v, err := pyjson.Loads(orEmptyList(plan.actions)); err == nil { // _parsed
 		if list, ok := v.([]any); ok {
 			for i, a := range list {
 				obj, ok := a.(pyjson.Object)
@@ -124,7 +124,7 @@ func planOut(plan planRow) (PlanOut, error) {
 	}
 	var result any
 	if plan.result != nil && *plan.result != "" { // results_of
-		if v, err := pyjson.Loads([]byte(*plan.result)); err == nil {
+		if v, err := pyjson.Loads(*plan.result); err == nil {
 			list, ok := v.([]any)
 			if !ok && v != nil {
 				return PlanOut{}, errors.New("a result that is not a list")
@@ -215,7 +215,7 @@ func cancelPlan(d *Deps) adminHandler {
 // planViewFails tells where plans.plan_view raises: an action's `diff_lines` that len()
 // refuses (a number, true) or that is sliced when it is not a list or a string.
 func planViewFails(plan planRow) bool {
-	v, err := pyjson.Loads([]byte(orEmptyList(plan.actions)))
+	v, err := pyjson.Loads(orEmptyList(plan.actions))
 	list, ok := v.([]any)
 	if err != nil || !ok {
 		return false
@@ -227,7 +227,7 @@ func planViewFails(plan planRow) bool {
 		}
 		lines, _ := obj.Get("diff_lines")
 		switch x := lines.(type) {
-		case int64, float64, pyjson.BigInt:
+		case int64, float64, pyjson.Int:
 			if pyTruthy(x) {
 				return true
 			}

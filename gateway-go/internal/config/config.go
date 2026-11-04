@@ -12,6 +12,7 @@ import (
 	"path/filepath"
 	"strconv"
 	"strings"
+	"time"
 )
 
 // Config is what the gateway needs today; it grows with the routes ported.
@@ -56,6 +57,12 @@ type Config struct {
 	FernetKey string
 	KeysDir   string
 
+	// APP__TIMEZONE: the installation's day (a report opened «today», a new report's zone)
+	AppTimezone string
+	AppLocation *time.Location
+	// REPORTS__API_WAIT_SECONDS: how long the API waits for a report's file (5–3600)
+	ReportsAPIWaitSeconds int
+
 	Admin AdminConfig // config_admin.go
 }
 
@@ -93,6 +100,15 @@ func Load(env Env) (*Config, error) {
 		EngineBucket:       r.str("ENGINE__BUCKET", "data-prep"),
 		FernetKey:          r.str("SECURITY__FERNET_KEY", ""),
 		KeysDir:            r.str("SECURITY__KEYS_DIR", ""),
+		AppTimezone:        r.str("APP__TIMEZONE", "UTC"),
+		// ReportsSettings.api_wait_seconds
+		ReportsAPIWaitSeconds: r.integer("REPORTS__API_WAIT_SECONDS", 120, 5, 3600),
+	}
+	// AppSettings._valid_timezone: a zone ZoneInfo knows
+	if loc, err := time.LoadLocation(c.AppTimezone); err != nil || c.AppTimezone == "" || c.AppTimezone == "Local" {
+		r.fail("APP__TIMEZONE", fmt.Sprintf("is not a time zone: %q", c.AppTimezone))
+	} else {
+		c.AppLocation = loc
 	}
 	for _, name := range []string{"OPENLINEAGE__URL", "OPENLINEAGE__FILE", "OPENLINEAGE_URL", "OPENLINEAGE_CONFIG"} {
 		if r.str(name, "") != "" {

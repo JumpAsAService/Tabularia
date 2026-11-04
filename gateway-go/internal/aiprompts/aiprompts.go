@@ -20,7 +20,7 @@ const MaxChars = 20_000
 var raw []byte
 
 var data = func() pyjson.Object {
-	v, err := pyjson.Loads(raw)
+	v, err := pyjson.Loads(string(raw))
 	if err != nil {
 		panic("aiprompts: prompts.json: " + err.Error())
 	}

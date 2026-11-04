@@ -17,6 +17,7 @@ import (
 	"unicode/utf8"
 
 	"github.com/JumpAsAService/Tabularia/gateway-go/internal/pyjson"
+	"github.com/JumpAsAService/Tabularia/gateway-go/internal/pystr"
 	"github.com/JumpAsAService/Tabularia/gateway-go/internal/pyurl"
 )
 
@@ -288,7 +289,7 @@ func post(ctx context.Context, t Target, d Destination, body string, timeout tim
 func answer(status int, read []byte) Result {
 	code := status
 	text := clip(strings.ToValidUTF8(string(read[:min(len(read), 500)]), "�"), 500)
-	parsed, err := pyjson.Loads(read)
+	parsed, err := pyjson.Loads(string(read))
 	obj, isObj := parsed.(pyjson.Object)
 	if err != nil {
 		isObj = false
@@ -299,7 +300,7 @@ func answer(status int, read []byte) Result {
 			msg := "Success"
 			if isObj && len(obj) > 0 {
 				if t, ok := obj.Get("text"); ok {
-					msg = pyjson.Str(t)
+					msg = pystr.Str(t)
 				}
 			}
 			return Result{OK: true, Code: &code, Message: msg}
@@ -308,7 +309,7 @@ func answer(status int, read []byte) Result {
 	if isObj {
 		if t, ok := obj.Get("text"); ok && truthy(t) {
 			c, _ := obj.Get("code")
-			text = pyjson.Str(t) + " (code " + pyjson.Str(c) + ")"
+			text = pystr.Str(t) + " (code " + pystr.Str(c) + ")"
 		}
 	}
 	return Result{Code: &code, Message: clip(fmt.Sprintf("response %d: %s", status, text), 500)}

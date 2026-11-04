@@ -40,13 +40,13 @@ func init() {
 	})
 }
 
-// bodyHandler is a route with a JSON body: the body as FastAPI read it, and its raw bytes
+// adminBodyHandler is a route with a JSON body: the body as FastAPI read it, and its raw bytes
 // (to hand the request to Python when only Python can answer it).
-type bodyHandler = func(http.ResponseWriter, *http.Request, *auth.Principal, pyd.Body, []byte)
+type adminBodyHandler = func(http.ResponseWriter, *http.Request, *auth.Principal, pyd.Body, []byte)
 
 // adminBody is withBody (common.go) with the raw bytes kept, then require_superuser: a
 // request only Python can answer goes to it with its body as it came.
-func adminBody(d *Deps, route string, h bodyHandler) http.Handler {
+func adminBody(d *Deps, route string, h adminBodyHandler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		raw, err := io.ReadAll(r.Body)
 		if err != nil {
@@ -230,7 +230,7 @@ func webhookName(v any) (string, bool) {
 }
 
 // createWebhook is POST /webhooks.
-func createWebhook(d *Deps) bodyHandler {
+func createWebhook(d *Deps) adminBodyHandler {
 	return func(w http.ResponseWriter, r *http.Request, p *auth.Principal, body pyd.Body, raw []byte) {
 		var ps pyd.Params
 		b := ps.Body(body, gatewaymodels.WebhookIn)
@@ -345,7 +345,7 @@ func readWebhook(ctx context.Context, d *Deps, id int64) (webhookRow, bool, erro
 
 // updateWebhook is PATCH /webhooks/{wid}: only what is given; nothing is written when a
 // check refuses.
-func updateWebhook(d *Deps) bodyHandler {
+func updateWebhook(d *Deps) adminBodyHandler {
 	return func(w http.ResponseWriter, r *http.Request, p *auth.Principal, body pyd.Body, raw []byte) {
 		var ps pyd.Params
 		wid := ps.Path("wid", r.PathValue("wid"), pyd.Int())
@@ -667,7 +667,7 @@ func redeliver(d *Deps) adminHandler {
 			adminFail(d, w, "reading the delivery", err)
 			return
 		}
-		v, err := pyjson.Loads([]byte(x.payload))
+		v, err := pyjson.Loads(x.payload)
 		body, isObj := v.(pyjson.Object)
 		if err != nil || !isObj {
 			server.InternalError(w) // json.loads failing, or `body["id"] = …` on what is not a dict

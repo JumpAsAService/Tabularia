@@ -178,7 +178,7 @@ func auditDetail(text *string) (any, error) {
 	if text == nil || *text == "" {
 		return nil, nil
 	}
-	v, err := pyjson.Loads([]byte(*text))
+	v, err := pyjson.Loads(*text)
 	if err != nil {
 		return pyjson.Object{{Key: "_raw", Value: *text}}, nil
 	}
@@ -215,7 +215,7 @@ var hiddenDetail = map[string]bool{
 func detailForObserver(v any, key string, keyed bool) any {
 	if keyed && hiddenDetail[key] && v != nil {
 		switch v.(type) {
-		case int64, float64, bool, pyjson.BigInt:
+		case int64, float64, bool, pyjson.Int:
 		default:
 			return "…"
 		}

@@ -16,7 +16,7 @@ import (
 var raw []byte
 
 var data = func() pyjson.Object {
-	v, err := pyjson.Loads(raw)
+	v, err := pyjson.Loads(string(raw))
 	if err != nil {
 		panic("mcp: tools.json: " + err.Error())
 	}

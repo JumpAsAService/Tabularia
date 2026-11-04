@@ -10,13 +10,13 @@ import (
 
 // _detail_for_observer: where and who go, at any depth; numbers under a hidden key stay.
 func TestDetailForObserver(t *testing.T) {
-	in, err := pyjson.Loads([]byte(`{"host": "db", "url": 5, "path": null, "prefix": "tab_x", "to": ["a@b.it"],
-		"n": {"sql": "s", "owner": "carla@x.test", "l": ["x@y.z", 3, {"server": {"a": 1}}]}, "prefix2": "p", "who": "@n"}`))
+	in, err := pyjson.Loads(`{"host": "db", "url": 5, "path": null, "prefix": "tab_x", "to": ["a@b.it"],
+		"n": {"sql": "s", "owner": "carla@x.test", "l": ["x@y.z", 3, {"server": {"a": 1}}]}, "prefix2": "p", "who": "@n"}`)
 	if err != nil {
 		t.Fatal(err)
 	}
-	want, _ := pyjson.Loads([]byte(`{"host": "…", "url": 5, "path": null, "prefix": "tab_…", "to": "…",
-		"n": {"sql": "…", "owner": "c***@x.test", "l": ["x***@y.z", 3, {"server": "…"}]}, "prefix2": "p", "who": "***@n"}`))
+	want, _ := pyjson.Loads(`{"host": "…", "url": 5, "path": null, "prefix": "tab_…", "to": "…",
+		"n": {"sql": "…", "owner": "c***@x.test", "l": ["x***@y.z", 3, {"server": "…"}]}, "prefix2": "p", "who": "***@n"}`)
 	if got := detailForObserver(in, "", false); !reflect.DeepEqual(got, want) {
 		t.Fatalf("got %#v", got)
 	}

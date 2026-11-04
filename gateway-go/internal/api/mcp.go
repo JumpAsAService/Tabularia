@@ -152,7 +152,7 @@ func mcpEndpoint(d *Deps) http.Handler {
 		if len(text) == 0 {
 			text = []byte("null")
 		}
-		body, err := pyjson.Loads(text)
+		body, err := pyjson.Loads(string(text))
 		if err != nil {
 			if !utf8OK(text) || bytes.HasPrefix(text, []byte("\xef\xbb\xbf")) {
 				forwardMCP(d, w, r, raw) // json.loads' guess of another encoding: Python's

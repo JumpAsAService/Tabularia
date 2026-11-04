@@ -18,6 +18,7 @@ import (
 	"github.com/jackc/pgx/v5"
 
 	"github.com/JumpAsAService/Tabularia/gateway-go/internal/pyjson"
+	"github.com/JumpAsAService/Tabularia/gateway-go/internal/pystr"
 	"github.com/JumpAsAService/Tabularia/gateway-go/internal/pyurl"
 )
 
@@ -274,7 +275,7 @@ func OpenAICatalog(ctx context.Context, e Endpoint, secret string) ([]string, er
 			break
 		}
 	}
-	v, err := pyjson.Loads(raw)
+	v, err := pyjson.Loads(string(raw))
 	obj, ok := v.(pyjson.Object)
 	if err != nil || !ok {
 		return nil, unreachable() // not JSON, or .get on what is not a dict
@@ -294,7 +295,7 @@ func OpenAICatalog(ctx context.Context, e Endpoint, secret string) ([]string, er
 			return nil, unreachable()
 		}
 		if id, _ := item.Get("id"); truthy(id) {
-			set[pyjson.Str(id)] = true
+			set[pystr.Str(id)] = true
 		}
 	}
 	out := make([]string, 0, len(set))

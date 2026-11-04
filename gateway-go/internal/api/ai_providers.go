@@ -129,7 +129,7 @@ func nameFree(ctx context.Context, d *Deps, w http.ResponseWriter, name string, 
 	return false
 }
 
-func createAIProvider(d *Deps) bodyHandler {
+func createAIProvider(d *Deps) adminBodyHandler {
 	return func(w http.ResponseWriter, r *http.Request, p *auth.Principal, body pyd.Body, raw []byte) {
 		var ps pyd.Params
 		b := ps.Body(body, gatewaymodels.AiProviderIn)
@@ -193,7 +193,7 @@ func providerRow(ctx context.Context, d *Deps, w http.ResponseWriter, idV any) (
 	return e, true
 }
 
-func updateAIProvider(d *Deps) bodyHandler {
+func updateAIProvider(d *Deps) adminBodyHandler {
 	return func(w http.ResponseWriter, r *http.Request, p *auth.Principal, body pyd.Body, raw []byte) {
 		var ps pyd.Params
 		idV := ps.Path("provider_id", r.PathValue("provider_id"), pyd.Int())
@@ -323,7 +323,7 @@ type AiProviderTestOut struct {
 
 // testAIProvider is POST /ai/providers/test: the provider's own catalog, read with the
 // address and the key given or saved.
-func testAIProvider(d *Deps) bodyHandler {
+func testAIProvider(d *Deps) adminBodyHandler {
 	return func(w http.ResponseWriter, r *http.Request, p *auth.Principal, body pyd.Body, raw []byte) {
 		var ps pyd.Params
 		b := ps.Body(body, gatewaymodels.AiProviderTest)
