@@ -24,19 +24,19 @@ var errConfig = errors.New("Failed to parse OpenLineage config.")
 const envPrefix = "OPENLINEAGE__"
 
 type libConfig struct {
-	transport any // config.transport: None, a dict…
+	transport    any // config.transport: None, a dict…
 	hasTransport bool
 
 	envVars    []string // facets.environment_variables (a list)
 	envVarsStr *string  // … when it is a text: `name in text` is a substring check
 	scl        struct {
-		disabled                                  any
-		repoURL, version, tag, branch, prNumber   any
+		disabled                                any
+		repoURL, version, tag, branch, prNumber any
 	}
-	filters  []libFilter
-	jobTags  pyjson.Object
-	runTags  pyjson.Object
-	reducing any
+	filters                         []libFilter
+	jobTags                         pyjson.Object
+	runTags                         pyjson.Object
+	reducing                        any
 	disabledTrimmers, extraTrimmers []string
 }
 

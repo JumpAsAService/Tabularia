@@ -36,6 +36,20 @@ same addresses, same JSON, same status codes, same cookies, same tables.
    the Go gateway forwards the assistant's routes to it and asks it for the SQL parsing over
    an internal API. Rewriting the assistant in Go with the providers' official SDKs stays
    possible later, checked against a fake provider that answers deterministically.
+5. **One dependency for OpenLineage's own configuration** (2026-11-04): `gopkg.in/yaml.v3`.
+   The Python gateway sends its lineage through openlineage-python, which also reads its
+   own configuration: an `openlineage.yml` (named by `OPENLINEAGE_CONFIG`, or found in the
+   working directory or in `~/.openlineage`) and the `OPENLINEAGE__…` variables (the
+   transport, the tags, the facets, the datasets' reduction, the filters). Reading that file
+   as the library does needs a YAML parser; the standard library has none. yaml.v3 gives the
+   document's nodes, and `internal/openlineage/yaml.go` resolves the plain scalars by YAML
+   1.1's rules, as PyYAML's `safe_load` does (yes/no/on/off are booleans, 0777 is octal, a
+   float needs its dot), not by yaml.v3's YAML 1.2 ones. The transports are the library's:
+   http, file, composite, console, noop, async_http and datadog are sent as it sends them;
+   kafka, msk-iam, amazon_datazone_api, gcplineage (for a RunEvent), transform and a class
+   named by its path fail as they fail in the gateway's image, which has none of the modules
+   they need (confluent_kafka, boto3, google-cloud-datacatalog-lineage, fsspec), with the
+   same words.
 
 ## Architecture
 

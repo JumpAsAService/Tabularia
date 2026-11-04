@@ -60,30 +60,30 @@ func keyError(msg string) error { return &pyErr{"'" + msg + "'"} }
 
 // the library's own classes, by the dotted path a configuration may name instead of a kind
 var builtinClasses = map[string]string{
-	"openlineage.client.transport.composite.CompositeTransport":        "composite",
-	"openlineage.client.transport.http.HttpTransport":                  "http",
-	"openlineage.client.transport.async_http.AsyncHttpTransport":       "async_http",
-	"openlineage.client.transport.kafka.KafkaTransport":                "kafka",
-	"openlineage.client.transport.msk_iam.MSKIAMTransport":             "msk-iam",
-	"openlineage.client.transport.console.ConsoleTransport":            "console",
-	"openlineage.client.transport.noop.NoopTransport":                  "noop",
-	"openlineage.client.transport.file.FileTransport":                  "file",
-	"openlineage.client.transport.transform.transform.TransformTransport": "transform",
+	"openlineage.client.transport.composite.CompositeTransport":            "composite",
+	"openlineage.client.transport.http.HttpTransport":                      "http",
+	"openlineage.client.transport.async_http.AsyncHttpTransport":           "async_http",
+	"openlineage.client.transport.kafka.KafkaTransport":                    "kafka",
+	"openlineage.client.transport.msk_iam.MSKIAMTransport":                 "msk-iam",
+	"openlineage.client.transport.console.ConsoleTransport":                "console",
+	"openlineage.client.transport.noop.NoopTransport":                      "noop",
+	"openlineage.client.transport.file.FileTransport":                      "file",
+	"openlineage.client.transport.transform.transform.TransformTransport":  "transform",
 	"openlineage.client.transport.amazon_datazone.AmazonDataZoneTransport": "amazon_datazone_api",
-	"openlineage.client.transport.datadog.DatadogTransport":            "datadog",
-	"openlineage.client.transport.gcplineage.GCPLineageTransport":      "gcplineage",
-	"openlineage.client.transport.CompositeTransport":                  "composite",
-	"openlineage.client.transport.HttpTransport":                       "http",
-	"openlineage.client.transport.AsyncHttpTransport":                  "async_http",
-	"openlineage.client.transport.KafkaTransport":                      "kafka",
-	"openlineage.client.transport.MSKIAMTransport":                     "msk-iam",
-	"openlineage.client.transport.ConsoleTransport":                    "console",
-	"openlineage.client.transport.NoopTransport":                       "noop",
-	"openlineage.client.transport.FileTransport":                       "file",
-	"openlineage.client.transport.TransformTransport":                  "transform",
-	"openlineage.client.transport.AmazonDataZoneTransport":             "amazon_datazone_api",
-	"openlineage.client.transport.DatadogTransport":                    "datadog",
-	"openlineage.client.transport.GCPLineageTransport":                 "gcplineage",
+	"openlineage.client.transport.datadog.DatadogTransport":                "datadog",
+	"openlineage.client.transport.gcplineage.GCPLineageTransport":          "gcplineage",
+	"openlineage.client.transport.CompositeTransport":                      "composite",
+	"openlineage.client.transport.HttpTransport":                           "http",
+	"openlineage.client.transport.AsyncHttpTransport":                      "async_http",
+	"openlineage.client.transport.KafkaTransport":                          "kafka",
+	"openlineage.client.transport.MSKIAMTransport":                         "msk-iam",
+	"openlineage.client.transport.ConsoleTransport":                        "console",
+	"openlineage.client.transport.NoopTransport":                           "noop",
+	"openlineage.client.transport.FileTransport":                           "file",
+	"openlineage.client.transport.TransformTransport":                      "transform",
+	"openlineage.client.transport.AmazonDataZoneTransport":                 "amazon_datazone_api",
+	"openlineage.client.transport.DatadogTransport":                        "datadog",
+	"openlineage.client.transport.GCPLineageTransport":                     "gcplineage",
 }
 
 type factory struct {
@@ -251,8 +251,8 @@ func (f *factory) build(kind string, cfg pyjson.Object) (ltransport, error) {
 type noopTransport struct{ transportMeta }
 
 func (*noopTransport) emit(context.Context, pyjson.Object) error { return nil }
-func (*noopTransport) class() string                              { return "NoopTransport" }
-func (*noopTransport) kind() string                               { return "noop" }
+func (*noopTransport) class() string                             { return "NoopTransport" }
+func (*noopTransport) kind() string                              { return "noop" }
 
 type consoleTransport struct {
 	transportMeta
@@ -293,9 +293,9 @@ func (*gcpTransport) kind() string  { return "gcplineage" }
 
 type compositeTransport struct {
 	transportMeta
-	children                    []ltransport
-	onFailure, onSuccess        bool
-	log                         *slog.Logger
+	children             []ltransport
+	onFailure, onSuccess bool
+	log                  *slog.Logger
 }
 
 func (f *factory) composite(cfg pyjson.Object) (ltransport, error) {

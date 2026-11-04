@@ -30,14 +30,14 @@ type Emitter struct {
 	Timeout func() float64
 	Log     *slog.Logger
 
-	mu       sync.Mutex
-	sender   *sender
+	mu     sync.Mutex
+	sender *sender
 	// the client (_client), built at the first send and again when the panel's timeout changes
 	clientMu      sync.Mutex
 	client        *libClient
 	clientTimeout float64
-	dropped  int
-	lastWarn time.Time
+	dropped       int
+	lastWarn      time.Time
 }
 
 type sender struct {

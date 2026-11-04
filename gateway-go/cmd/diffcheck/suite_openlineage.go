@@ -143,7 +143,7 @@ func init() {
 			run("out-part", "flow", `flow_id = $2, destination = $3, mirror = $4`, ids["f"],
 				`{"type": "s3", "bucket": "b", "key": "part/day=2026-03-01", "format": "csv"}`,
 				`{"bucket": "b", "key": "part/2026/03/02", "ok": true}`)
-						run("out-input", "flow", `flow_id = $2, destination = '{"type": "script_input"}'`, ids["f"])
+			run("out-input", "flow", `flow_id = $2, destination = '{"type": "script_input"}'`, ids["f"])
 			run("sql-named", "sql", `sql_script_id = $2, script = '{"version": 1}', publish_name = 'olx sql out', publish_project_id = $3, engine = 'duckdb'`,
 				ids["named"], ids["sub"])
 			run("sql-conn", "sql", `sql_script_id = $2, script = $3`, ids["onconn"], fmt.Sprintf(`{"version": 1, "connection_id": %d}`, ids["c-pg"]))
@@ -182,7 +182,7 @@ func init() {
 			add("an S3 Output closes", "GET", "/runs/"+id("out-s3"), nil, task("out-s3", "FAILURE", nil))
 			add("an SFTP Output closes", "GET", "/runs/"+id("out-sftp"), nil, task("out-sftp", "FAILURE", nil))
 			add("a partitioned Output closes", "GET", "/runs/"+id("out-part"), nil, task("out-part", "FAILURE", nil))
-						add("a Script node's input closes", "GET", "/runs/"+id("out-input"), nil, task("out-input", "FAILURE", nil))
+			add("a Script node's input closes", "GET", "/runs/"+id("out-input"), nil, task("out-input", "FAILURE", nil))
 			add("a SQL script's write closes", "GET", "/runs/"+id("sql-named"), nil, task("sql-named", "FAILURE", nil))
 			add("a SQL script on a connection closes", "GET", "/runs/"+id("sql-conn"), nil, task("sql-conn", "FAILURE", nil))
 			add("a SQL script's recorded datasources", "GET", "/runs/"+id("sql-ds"), nil, task("sql-ds", "FAILURE", nil))
