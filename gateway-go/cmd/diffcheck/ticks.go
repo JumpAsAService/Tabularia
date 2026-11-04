@@ -26,7 +26,12 @@ func (w *World) askTick(s *side, st Step) answer {
 	if s.ticks == "" {
 		fail("%s: no round server (DIFF_%s_TICKS): run scripts/diffcheck.sh", s.name, strings.ToUpper(s.name[:1]))
 	}
-	raw, _ := json.Marshal(map[string]any{"tick": st.Tick, "now": st.Now, "env": st.Env})
+	env := map[string]string{}
+	for k, v := range st.Env {
+		// {engine}: the stack's fake engine, as its containers reach it (host:port)
+		env[k] = strings.ReplaceAll(v, "{engine}", s.engineHost)
+	}
+	raw, _ := json.Marshal(map[string]any{"tick": st.Tick, "now": st.Now, "env": env})
 	res, err := tickClient.Post(s.ticks+"/tick", "application/json", bytes.NewReader(raw))
 	if err != nil {
 		fail("%s round %s: %v", s.name, st.Tick, err)

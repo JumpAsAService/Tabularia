@@ -158,6 +158,8 @@ type side struct {
 	gateway string
 	engine  string
 	ticks   string // the server of one round (ticks.go); empty when not started
+	// engineHost is the fake engine as the stack's containers reach it («host:port»)
+	engineHost string
 }
 
 // World is both stacks and the people seeded in them.
@@ -176,8 +178,9 @@ func main() {
 	if key := os.Getenv("DIFF_FERNET"); key != "" {
 		fernet, _ = secret.NewFernet(key)
 	}
-	w.a = &side{"python", pool(ctx, must("DIFF_A_DSN")), must("DIFF_A_URL"), must("DIFF_A_ENGINE"), os.Getenv("DIFF_A_TICKS")}
-	w.b = &side{"go", pool(ctx, must("DIFF_B_DSN")), must("DIFF_B_URL"), must("DIFF_B_ENGINE"), os.Getenv("DIFF_B_TICKS")}
+	w.a = &side{"python", pool(ctx, must("DIFF_A_DSN")), must("DIFF_A_URL"), must("DIFF_A_ENGINE"), os.Getenv("DIFF_A_TICKS"), ""}
+	w.b = &side{"go", pool(ctx, must("DIFF_B_DSN")), must("DIFF_B_URL"), must("DIFF_B_ENGINE"), os.Getenv("DIFF_B_TICKS"), ""}
+	w.a.engineHost, w.b.engineHost = os.Getenv("DIFF_A_ENGINE_HOST"), os.Getenv("DIFF_B_ENGINE_HOST")
 	w.seedPeople()
 
 	only := map[string]bool{}

@@ -96,7 +96,7 @@ type runner struct {
 }
 
 func setup(ctx context.Context, log *slog.Logger) (*runner, error) {
-	cfg, err := load(nil)
+	cfg, err := load()
 	if err != nil {
 		return nil, err
 	}
@@ -111,23 +111,31 @@ func setup(ctx context.Context, log *slog.Logger) (*runner, error) {
 	return r, r.build(ctx, nil)
 }
 
-// load reads the environment, with `overlay` on top. The loops do not depend on the role:
-// it is «orchestrator», which needs no upstream.
-func load(overlay map[string]string) (*config.Config, error) {
+// load reads the environment. The loops do not depend on the role: it is «orchestrator»,
+// which needs no upstream.
+func load() (*config.Config, error) {
 	osEnv := config.FromOS()
-	up := map[string]string{}
-	for k, v := range overlay {
-		up[strings.ToUpper(k)] = v
-	}
 	return config.Load(func(name string) (string, bool) {
 		if strings.EqualFold(name, "APP__ROLE") {
 			return "orchestrator", true
 		}
-		if v, ok := up[strings.ToUpper(name)]; ok {
-			return v, true
-		}
 		return osEnv(name)
 	})
+}
+
+// original is the process's environment at start; a round's overlay goes on top of it, in
+// the process's own environment (some packages read a variable at use, as Python does)
+var original = os.Environ()
+
+func setEnv(overlay map[string]string) {
+	os.Clearenv()
+	for _, kv := range original {
+		k, v, _ := strings.Cut(kv, "=")
+		_ = os.Setenv(k, v)
+	}
+	for k, v := range overlay {
+		_ = os.Setenv(k, v)
+	}
 }
 
 // build makes the jobs with the environment plus `overlay` (a round's own variables: an
@@ -138,7 +146,8 @@ func (r *runner) build(ctx context.Context, overlay map[string]string) error {
 	if r.d != nil && string(key) == r.env {
 		return nil
 	}
-	cfg, err := load(overlay)
+	setEnv(overlay)
+	cfg, err := load()
 	if err != nil {
 		return err
 	}

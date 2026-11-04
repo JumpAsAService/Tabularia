@@ -98,6 +98,7 @@ docker run --rm --network host --user "$(id -u):$(id -g)" -e HOME=/tmp -e GOCACH
     -e DIFF_A_URL="http://127.0.0.1:$(port "$id-pya" 8000)" -e DIFF_B_URL="http://127.0.0.1:$(port "$id-go" 8000)" \
     -e DIFF_A_ENGINE="http://127.0.0.1:$(port "$id-enga" 8000)" -e DIFF_B_ENGINE="http://127.0.0.1:$(port "$id-engb" 8000)" \
     -e DIFF_A_TICKS="http://127.0.0.1:$(port "$id-ticka" 8000)" -e DIFF_B_TICKS="http://127.0.0.1:$(port "$id-tickb" 8000)" \
+    -e DIFF_A_ENGINE_HOST="$id-enga:8000" -e DIFF_B_ENGINE_HOST="$id-engb:8000" \
     -v "$here":/src -v tabularia-gomod:/go/pkg/mod -w /src "$go_image" go run ./cmd/diffcheck || {
         echo "--- the Go gateway's log"; docker logs --tail 20 "$id-go"
         echo "--- the Python gateway A's log"; docker logs --tail 20 "$id-pya"
