@@ -361,15 +361,29 @@ func (w *World) sent(s *side) any {
 		p, _ := m["path"].(string)
 		switch {
 		case m["method"] == "FILE":
-			file = append(file, e)
+			file = append(file, notebookRun(e))
 		case lineagePath.MatchString(p):
-			collector = append(collector, e)
+			collector = append(collector, notebookRun(e))
 		default:
 			engine = append(engine, e)
 		}
 	}
 	out := append(append(append([]any{}, engine...), collector...), file...)
 	return normalize(out)
+}
+
+// notebookRun masks the run id of a notebook session's event: a uuid of its Job's name, which
+// each side draws at random.
+func notebookRun(e any) any {
+	m, _ := e.(map[string]any)
+	body, _ := m["body"].(map[string]any)
+	job, _ := body["job"].(map[string]any)
+	facets, _ := job["facets"].(map[string]any)
+	jt, _ := facets["jobType"].(map[string]any)
+	if run, ok := body["run"].(map[string]any); ok && jt["jobType"] == "NOTEBOOK" {
+		run["runId"] = "<a notebook session>"
+	}
+	return e
 }
 
 func recordedList(s *side) []any {
@@ -413,7 +427,7 @@ func shareLines(s *side) []any {
 		if json.Unmarshal(line, &v) != nil {
 			v = string(line)
 		}
-		out = append(out, map[string]any{"method": "FILE", "path": path[len(dir):], "body": v})
+		out = append(out, map[string]any{"method": "FILE", "path": "/ol.jsonl", "body": v})
 	}
 	return out
 }

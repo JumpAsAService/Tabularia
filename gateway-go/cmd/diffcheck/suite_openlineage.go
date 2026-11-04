@@ -49,9 +49,9 @@ func init() {
 					c = ids[k]
 				}
 				ids[key] = w.Insert(`INSERT INTO datasources (name, description, project_id, bucket, key, rows, columns, sort_keys,
-					column_descriptions, kind, connection_id, source_type, source_ref, created_at, updated_at) VALUES ($1, '', $2, 'data-prep',
-					'datasets/'||$1||'.parquet', 7, '[{"name": "id", "dtype": "Int64"}, {"name": "b"}]', '[]', '{}', $3, $4, $5, $6,
-					'2026-01-01', '2026-01-01') RETURNING id`, name, ids[project], kind, c, sourceType, sourceRef)
+					column_descriptions, kind, connection_id, source_type, source_ref, created_at, updated_at) VALUES ($1::varchar, '', $2, 'data-prep',
+					$7, 7, '[{"name": "id", "dtype": "Int64"}, {"name": "b"}]', '[]', '{}', $3, $4, $5, $6,
+					'2026-01-01', '2026-01-01') RETURNING id`, name, ids[project], kind, c, sourceType, sourceRef, "datasets/"+name+".parquet")
 			}
 			ds("q", "olx query", "sub", "database", "pg", "sql", "WITH x AS (SELECT 1) SELECT * FROM public.orders o JOIN customers c ON 1=1 JOIN x ON 1=1")
 			ds("t", "olx table", "sub", "database", "ora", "table", "sales")
