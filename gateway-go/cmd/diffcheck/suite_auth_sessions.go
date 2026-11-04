@@ -38,8 +38,10 @@ func init() {
 			pw := "a login password 1"
 			login := func(name, email, password string, auth func(*http.Request), header map[string]string) {
 				s = append(s, Step{Name: name, Method: "POST", Path: "/auth/login", Auth: auth, Header: header,
-					JSON: map[string]any{"email": email, "password": password}, Mask: []string{"access_token"},
-					ClockSeconds: strings.Contains(name, "braked")})
+					JSON: map[string]any{"email": email, "password": password}, Mask: []string{"access_token"}})
+				if strings.Contains(name, "braked") {
+					s[len(s)-1].Scrub = []string{`^\d+$`, `in \d+ seconds`} // a brake's seconds left
+				}
 			}
 			csrf := map[string]string{"X-Tabularia-Csrf": "1"}
 			login("a wrong password", "au-pw@x.test", "wrong", nil, nil)
