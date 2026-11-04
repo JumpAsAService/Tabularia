@@ -183,7 +183,9 @@ func init() {
 			}
 			for _, p := range append(readers, "inactive", "nobody") {
 				add(p+" lists the scripts", "GET", "/sql-scripts", as(p), nil)
-				add(p+" reads the catalog", "GET", "/sql-scripts/catalog", as(p), nil)
+				// ordered by name only: two datasources with one name (notebook_data's «nd-twin»)
+				// come in the table's physical order, which the two databases need not share
+				s = append(s, Step{Name: p + " reads the catalog", Method: "GET", Path: "/sql-scripts/catalog", Auth: as(p), Unordered: []string{""}})
 			}
 			for _, p := range readers {
 				for _, f := range []string{"f1", "f2", "f3", "f4", "f5", "f6"} {

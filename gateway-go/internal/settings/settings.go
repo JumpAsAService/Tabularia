@@ -101,6 +101,9 @@ func (p *Panel) WorkerCapacity() int64 { return p.current.Load().workerCapacity 
 // UploadMaxBytes is upload.max_bytes: 0 = no ceiling.
 func (p *Panel) UploadMaxBytes() int64 { return p.current.Load().uploadMaxBytes }
 
+// FromPanel is engine_panel_settings.from_panel: ENGINE__SETTINGS_PANEL.
+func (p *Panel) FromPanel() bool { return p.enabled }
+
 // Apply puts in force the rows just read (key → JSON text): the good ones on top of the
 // environment, the others dropped and logged.
 func (p *Panel) Apply(rows map[string]string) {

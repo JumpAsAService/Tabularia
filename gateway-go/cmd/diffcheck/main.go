@@ -32,6 +32,8 @@ import (
 	"time"
 
 	"github.com/jackc/pgx/v5/pgxpool"
+
+	"github.com/JumpAsAService/Tabularia/gateway-go/internal/secret"
 )
 
 // Step is one request of a suite, sent to both gateways.
@@ -48,6 +50,10 @@ type Step struct {
 	Mask        []string     // dotted paths of the answer's JSON (* for every item) holding random values
 	Before      func(*World) // run before the step (on both databases): a change of state the step needs
 	EngineMask  []string     // as Mask, in the requests sent to the engine (e.g. «*.body.output_key»)
+	// Unordered are dotted paths of lists the Python code builds from a query without ORDER BY
+	// (or with ties): their order is the table's physical one, which differs between the two
+	// databases. "" is the body itself.
+	Unordered []string
 	// Scrub: regular expressions whose matches, inside any string of the answer's JSON, are
 	// random (an id or a moment written inside a longer text, as a webhook's payload)
 	Scrub []string
@@ -157,6 +163,9 @@ type World struct {
 func main() {
 	ctx := context.Background()
 	w := &World{ctx: ctx, secret: []byte(must("DIFF_SECRET")), People: map[string]int64{}}
+	if key := os.Getenv("DIFF_FERNET"); key != "" {
+		fernet, _ = secret.NewFernet(key)
+	}
 	w.a = &side{"python", pool(ctx, must("DIFF_A_DSN")), must("DIFF_A_URL"), must("DIFF_A_ENGINE")}
 	w.b = &side{"go", pool(ctx, must("DIFF_B_DSN")), must("DIFF_B_URL"), must("DIFF_B_ENGINE")}
 	w.seedPeople()
@@ -361,7 +370,15 @@ func (w *World) ask(s *side, st Step) answer {
 			}
 			parsed = scrub(parsed, res)
 		}
-		a.Body = normalize(parsed)
+		parsed = normalize(parsed)
+		for _, path := range st.Unordered {
+			if path == "" { // the body itself is the list
+				parsed = sortPath(parsed, nil)
+				continue
+			}
+			parsed = sortPath(parsed, strings.Split(path, "."))
+		}
+		a.Body = parsed
 	} else {
 		a.Body = string(bytes.TrimSpace(raw))
 	}
@@ -541,6 +558,12 @@ func dump(ctx context.Context, s *side) map[string][]any {
 	return out
 }
 
+// fernet decrypts the connections' and settings' secrets (DIFF_FERNET, the stacks' key)
+var (
+	fernet      *secret.Fernet
+	fernetToken = regexp.MustCompile(`gAAAAA[A-Za-z0-9_-]{40,}={0,2}`)
+)
+
 var stamp = regexp.MustCompile(`^\d{4}-\d\d-\d\d[T ]\d\d:\d\d:\d\d(\.\d+)?(Z|[+-]\d\d:\d\d)?$`)
 
 // runAt is when the run began and stepAt when the current step did. normalize hides every
@@ -566,6 +589,16 @@ func normalize(v any) any {
 			x[i] = normalize(e)
 		}
 	case string:
+		if fernet != nil && strings.Contains(x, "gAAAAA") {
+			// a Fernet token is random on each side: compared by what it encrypts
+			x = fernetToken.ReplaceAllStringFunc(x, func(tok string) string {
+				if plain, err := fernet.Decrypt(tok); err == nil {
+					return "<fernet:" + plain + ">"
+				}
+				return tok
+			})
+			v = x
+		}
 		if stamp.MatchString(x) {
 			s := strings.Replace(x, " ", "T", 1)
 			for _, layout := range []string{time.RFC3339Nano, "2006-01-02T15:04:05.999999999"} {
@@ -575,6 +608,33 @@ func normalize(v any) any {
 					}
 					break
 				}
+			}
+		}
+	}
+	return v
+}
+
+// sortPath orders the list at the path by its items' JSON.
+func sortPath(v any, path []string) any {
+	if len(path) == 0 {
+		if list, ok := v.([]any); ok {
+			sort.SliceStable(list, func(i, j int) bool {
+				a, _ := json.Marshal(list[i])
+				b, _ := json.Marshal(list[j])
+				return string(a) < string(b)
+			})
+		}
+		return v
+	}
+	switch x := v.(type) {
+	case map[string]any:
+		if e, ok := x[path[0]]; ok {
+			x[path[0]] = sortPath(e, path[1:])
+		}
+	case []any:
+		if path[0] == "*" {
+			for i := range x {
+				x[i] = sortPath(x[i], path[1:])
 			}
 		}
 	}

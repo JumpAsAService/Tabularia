@@ -1,6 +1,7 @@
 package main
 
 import (
+	"fmt"
 	"net/http"
 	"time"
 )
@@ -90,6 +91,17 @@ func seedData(w *World) {
 			Data["ds:"+ds], enabled, status, blockedAt, w.People["admin"])
 	}
 	contract("root", true, false, "warning")
+	contract("run", true, false, "pending")
+	w.Exec(`UPDATE data_contracts SET document = '{}', last_report = NULL WHERE datasource_id = $1`, Data["ds:run"])
+	contract("broken", true, false, "passed")
+	w.Exec(`UPDATE data_contracts SET document = '[1]' WHERE datasource_id = $1`, Data["ds:broken"])
+	contract("nulls", true, false, "passed")
+	w.Exec(`UPDATE data_contracts SET last_report = '[2]' WHERE datasource_id = $1`, Data["ds:nulls"])
+	for i, report := range []string{`{"outcome": "passed", "rules": []}`, `[1]`, `not json`, `{"outcome": "failed"}`} {
+		w.Exec(`INSERT INTO data_contract_results (datasource_id, contract_version, trigger, run_id, snapshot_key, outcome, blocked,
+			errors, warnings, rows, report, evaluated_at, notify) VALUES ($1, 3, 'refresh', NULL, 'datasets/a', 'passed', $2, 1, 0, 10, $3,
+			$4, NULL)`, Data["ds:root"], i == 3, report, fmt.Sprintf("2026-02-0%d 00:00:00", 1+i%2))
+	}
 	contract("ready", true, true, "passed")
 	contract("half", false, false, "failed")
 	w.Exec(`INSERT INTO runs (kind, task_id, status, launched_by, trigger_type, input_key, output_bucket, output_key, datasource_id,
@@ -125,6 +137,7 @@ func seedData(w *World) {
 	w.Token("writer", "tab_data_writer_read_000000", "read", time.Hour)
 	w.Token("service", "tab_data_service_write_0000", "write", time.Hour)
 	w.Token("service", "tab_data_service_read_00000", "read", time.Hour)
+	w.Token("admin", "tab_data_admin_write_000000", "write", time.Hour)
 }
 
 // who is one way of asking: a person's session, a token, nobody.
@@ -156,4 +169,24 @@ func forEveryone(w *World, name, method, path string, body any) []Step {
 		out = append(out, Step{Name: name + " · " + p.name, Method: method, Path: path, JSON: body, Auth: p.auth})
 	}
 	return out
+}
+
+var engineRowsSeeded bool
+
+// seedEngineRows is the data lane's seed with the engine settings saved from the panel.
+func seedEngineRows(w *World) {
+	seedData(w)
+	if engineRowsSeeded {
+		return
+	}
+	engineRowsSeeded = true
+	w.Exec(`INSERT INTO engine_settings (key, value, value_json, updated_at, updated_by) VALUES
+		('workers.run_concurrency', 6, NULL, '2026-03-01 10:00:00', 'alice.rossi@example.test'),
+		('ingest.parquet_row_group_rows', 5, '5.5', '2026-03-01', NULL),
+		('preview.cache', 1, 'true', '2026-03-02', '@x.test'),
+		('cache.ratio', 2, '2.5', '2026-03-02', 'é@x.test'),
+		('clickhouse_external.password', 0, '"gAAAAA-not-a-token"', '2026-03-03', ' '),
+		('clickhouse_external.ai_password', 0, 'null', '2026-03-03', 'nobody'),
+		('upload.max_bytes', 1048576, NULL, '2026-03-03', 'a@x.test'),
+		('bad.json', 7, 'not json', '2026-03-03', NULL)`)
 }
