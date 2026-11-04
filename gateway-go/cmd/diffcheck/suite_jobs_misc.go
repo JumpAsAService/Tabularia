@@ -13,6 +13,11 @@ func tidyRuns(w *World) {
 	w.Exec(`UPDATE runs r SET started_at = r.started_at + make_interval(secs => r.id / 1000000.0)
 		WHERE EXISTS (SELECT 1 FROM runs o WHERE o.started_at = r.started_at AND o.id <> r.id)`)
 	w.Exec(`CLUSTER runs USING runs_pkey`)
+	// what the scheduler reads without an ORDER BY too: the due datasources, flows, groups and
+	// scripts, whose rows the suites before (the routes') rewrote apart on the two sides
+	for _, t := range []string{"datasources", "flows", "flow_groups", "saved_scripts", "sql_scripts"} {
+		w.Exec(`CLUSTER ` + t + ` USING ` + t + `_pkey`)
+	}
 }
 
 // tidyRunsStep is tidyRuns as the last step of a suite.
