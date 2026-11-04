@@ -72,6 +72,75 @@ browser / scripts ──► gateway-go ──► every route in Go
   included; a bug is fixed in Python first (on `main`), then the port follows. The Go
   code cites the Python function it ports.
 
+## The AI service (decision 4)
+
+The Python gateway's image, started with `APP__ROLE=ai`: a process that answers the API like
+`api` (no background work) and, only in this role, an **internal API** for the SQL parsing done
+with sqlglot. The Go gateway reaches it at `GATEWAY_GO__AI_SERVICE` (required, like
+`GATEWAY_GO__UPSTREAM`) with two clients:
+
+- `internal/aisvc`: the internal API below, one call per use of sqlglot the gateway makes;
+- a forwarding proxy for the assistant's routes, sent as they came (headers, cookies, body,
+  the answer streamed back), where the Python code authenticates them as it always has.
+
+While the Python gateway behind exists, the AI service may be another process of the same
+image on the same database (the comparison runs it so); at the switch only it stays.
+
+### Where the gateway reads SQL with sqlglot (the whole list)
+
+| Python | What it asks of sqlglot | Internal call |
+|---|---|---|
+| `services/sql_scripts.py` `resolve` | the tables a SQL on the catalog names, where each is written, its CTEs, whether it is one query | `POST /internal/sql/tables` |
+| `services/sql_scripts.py` `_named_tables` (`named_datasources`, the lineage) | the same, without refusing | `POST /internal/sql/tables` |
+| `services/report_params.py` `without_params` | a dataset's SQL with the conditions on some parameters taken for true (a list of choices) | `POST /internal/sql/without-params` |
+| `services/openlineage.py` `_qualified_tables` | the qualified names of the tables a query on a connection reads | `POST /internal/sql/qualified-tables` |
+| `services/report_params.py` `_text` | `exp.Literal.string(v).sql(dialect)`: a string literal | none: a rule of a few lines, ported (`reportparams.Text`) and checked character by character against sqlglot |
+
+The SQL node's fence (`engine/sql_guard.py`) and the dbt export's translation run in the
+engine, not in the gateway: nothing of them goes through this API.
+
+### The internal API
+
+Mounted only when `APP__ROLE=ai`, under `/internal/sql`, outside the OpenAPI schema. Every
+request carries `X-Tabularia-Internal` with the token the gateway already sends the engine
+(`core/crypto.py` `internal_token()`: HMAC-SHA256 of a fixed label with `SECURITY__FERNET_KEY`),
+compared in constant time; without it the answer is a 404 as for a route that does not exist.
+The Go gateway never forwards `/internal/…` from a browser (its forwards are named routes), and
+a process in another role does not have the routes at all. Bodies and answers are JSON; text
+offsets are in characters (code points), as Python indexes a string.
+
+- `POST /internal/sql/tables` — `{"sql", "dialect"}` (a sqlglot dialect: `postgres`, `duckdb`,
+  `clickhouse`, `bigquery`, `mysql`, `tsql`, `oracle`, `trino`) → `{"error", "statements",
+  "query", "ctes", "tables"}`. `error`: sqlglot's message when it cannot read the SQL (then
+  the rest is empty); `statements`: how many statements it holds; `query`: whether the only one
+  is a query (`exp.Query`); `ctes`: the CTEs' names, lower case; `tables`: when there is one
+  statement, every table it names in sqlglot's order (`find_all(exp.Table)`), table functions
+  left out: `{"name", "folder", "catalog", "written", "aliased", "start", "end"}` — the name, its
+  folder (`table.db`), whether a catalog qualifies it, the table as the dialect writes it,
+  whether it has an alias, and where its folder (or its name) starts and its name ends in the
+  text (null when the parser did not say).
+- `POST /internal/sql/without-params` — `{"sql", "dialect", "names"}` (`dialect`: a key of
+  `report_params.DIALECTS`, an engine or a connection type) → `{"sql"}`, `without_params` as
+  it is; its refusals are the 422 it raises.
+- `POST /internal/sql/qualified-tables` — `{"sql", "db_type"}` → `{"tables"}`, the sorted
+  qualified names `_qualified_tables` finds (none for a SQL it cannot read).
+
+Everything around the parse — who may read which datasource, the refusals' words, the aliases
+put in the text, the engine's chain — is ported to Go and compared as any route
+(`sqlscripts.Resolve`).
+
+### The assistant's routes
+
+Forwarded to the AI service as they came: `POST /ai/chat`, `/ai/flow-assist`,
+`/ai/script-assist`; `GET /ai/flow-chats/latest`; `GET /ai/chats`, `GET|DELETE
+/ai/chats/{chat_id}`, `GET /ai/chats/{chat_id}/turns/{seq}/steps/{step_id}/export`; `GET
+/ai/models`, `PUT /ai/models/{model_id:path}`; `POST /agent/plans/{plan_id}/confirm`; the MCP
+server's `tools/call` (the rest of `/mcp` is Go's); the AI comments: `POST
+/reports/preview/comment`, `POST /dashboards/preview/comment`, `POST
+/dashboards/{dashboard_id}/comment`, and every render of a report or a dashboard whose
+definition holds a comment (the comment is written before the render starts). The inventory
+says *AI service* for them.
+
 ## Compatibility contract (what «the same» means)
 
 For a ported route, for every request in its corpus:
@@ -114,8 +183,9 @@ For a ported route, for every request in its corpus:
 4. **The hard parts**: the orchestrator role (schedules, queue locks, retention), SSO
    (OIDC), the notebooks' WebSocket proxy, exports and their slots, OpenLineage; the AI
    service (decision 4): the assistant's routes and an internal API for the SQL parsing.
-5. **Switch**: the images, the compose files and the Helm chart run the Go gateway;
-   the Python one is removed. Only when the inventory has no *Python* line.
+5. **Switch**: the images, the compose files and the Helm chart run the Go gateway and
+   the AI service; the Python gateway behind is removed. Only when the inventory has no
+   *Python* line (*AI service* lines stay).
 
 ## Commands
 
