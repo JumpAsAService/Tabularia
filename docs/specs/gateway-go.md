@@ -203,8 +203,9 @@ For a ported route, for every request in its corpus:
    The background work (`APP__ROLE`, `internal/jobs`, compared «a un giro»: see
    [gateway-go-porting.md](gateway-go-porting.md)) is in Go: schedules, the flows' queue,
    retention, housekeeping, backups, webhooks, engine settings, SIEM and the four Kubernetes
-   loops. Still with a Python orchestrator: OpenLineage's run events and the notebooks'
-   reaper while OpenLineage is on.
+   loops, on the same launching, resolving and Kubernetes code as the routes. Still with a
+   Python orchestrator: OpenLineage's run events and the notebooks' reaper while OpenLineage
+   is on, and a flow group's Pushmail cell that asks for AI comments.
 5. **Switch**: the images, the compose files and the Helm chart run the Go gateway and
    the AI service; the Python gateway behind is removed. Only when the inventory has no
    *Python* line (*AI service* lines stay).
