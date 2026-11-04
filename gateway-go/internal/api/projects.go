@@ -372,10 +372,13 @@ func updateProject(d *Deps) authedFunc {
 			}
 			pr.ParentID = parent
 		}
-		if _, err := d.DB.Exec(ctx, `UPDATE projects SET name = $1, description = $2, parent_id = $3 WHERE id = $4`,
-			pr.Name, pr.Description, pr.ParentID, id); err != nil {
-			fail(d, w, "changing the folder", err)
-			return
+		// as the ORM's flush: no UPDATE when nothing changed (a new row version moves the row)
+		if pr.Name != before.Name || pr.Description != before.Description || !sameID(pr.ParentID, before.ParentID) {
+			if _, err := d.DB.Exec(ctx, `UPDATE projects SET name = $1, description = $2, parent_id = $3 WHERE id = $4`,
+				pr.Name, pr.Description, pr.ParentID, id); err != nil {
+				fail(d, w, "changing the folder", err)
+				return
+			}
 		}
 		var changed pyjson.Object
 		if pr.Name != before.Name {

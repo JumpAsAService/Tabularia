@@ -76,6 +76,8 @@ func init() {
 			add("nobody", "DELETE", "/groups/"+gid("gr-Plain"), nil, nil)
 			add("not an administrator, a bad path", "DELETE", "/groups/x", w.As("editor"), nil)
 			add("a bad path", "DELETE", "/groups/x", w.As("admin"), nil)
+			add("a group past the integers", "DELETE", "/groups/3000000000", w.As("admin"), nil)
+			add("a group past the integers, changed", "PATCH", "/groups/3000000000", w.As("admin"), map[string]any{"description": "x"})
 			add("an unknown group", "DELETE", "/groups/999999", w.As("admin"), nil)
 			add("one's only administrators' group", "DELETE", "/groups/"+gid("Admins"), w.As("admin_group"), nil)
 			add("a group with grants, environments, registries", "DELETE", "/groups/"+gid("gr-Plain"), w.As("admin"), nil)

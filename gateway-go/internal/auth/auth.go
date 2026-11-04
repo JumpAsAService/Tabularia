@@ -342,3 +342,20 @@ func (a *Authenticator) touchToken(ctx context.Context, r *http.Request, p *Prin
 		a.Log.Debug("token's last use not updated", "user", p.User.ID, "err", err)
 	}
 }
+
+// TokenSessionID is how sessions.close_the_cookies_session reads a cookie's token: a valid JWT
+// (signature, expiry, a minute of leeway) carrying a `sid`, whatever its `sub`.
+func (a *Authenticator) TokenSessionID(token string) (string, bool) {
+	claims := jwt.MapClaims{}
+	_, err := jwt.ParseWithClaims(token, claims, func(*jwt.Token) (any, error) { return a.Secret, nil },
+		jwt.WithValidMethods([]string{a.Algorithm}), jwt.WithLeeway(ClockSkew), jwt.WithIssuedAt(),
+		jwt.WithTimeFunc(a.now))
+	if err != nil {
+		return "", false
+	}
+	raw, present := claims["sid"]
+	if !present {
+		return "", false
+	}
+	return pythonStr(raw), true
+}
