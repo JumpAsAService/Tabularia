@@ -289,6 +289,9 @@ func (w *World) ask(s *side, st Step) answer {
 	req.Header.Set("User-Agent", "diffcheck")
 	for k, v := range st.Header {
 		req.Header.Set(k, v)
+		if k == "Host" { // net/http sends req.Host, not the header
+			req.Host = v
+		}
 	}
 	if st.Auth != nil {
 		st.Auth(req)
