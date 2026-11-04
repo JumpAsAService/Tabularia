@@ -13,10 +13,7 @@ import (
 	"sort"
 	"strconv"
 	"strings"
-	"unicode"
 	"unicode/utf8"
-
-	"golang.org/x/text/unicode/norm"
 
 	"github.com/JumpAsAService/Tabularia/gateway-go/internal/audit"
 	"github.com/JumpAsAService/Tabularia/gateway-go/internal/auth"
@@ -196,53 +193,6 @@ func (d *Deps) forward(w http.ResponseWriter, r *http.Request, method, path stri
 	_, _ = io.Copy(w, res.Body)
 }
 
-var (
-	extendedName = regexp.MustCompile(`(?i)filename\*\s*=\s*utf-8''([^;\s]+)`)
-	plainName    = regexp.MustCompile(`(?i)(^|;)\s*filename\s*=`)
-	blanks       = regexp.MustCompile(`\s+`)
-)
-
-// asciiFallback is ascii_fallback: a plain file name before an RFC 5987 one, the accents
-// taken off, for the clients that read only the plain one.
-func asciiFallback(disposition string) string {
-	m := extendedName.FindStringSubmatch(disposition)
-	if m == nil || plainName.MatchString(disposition) {
-		return disposition
-	}
-	name := unquote(m[1])
-	stem, ext := name, ""
-	if i := strings.LastIndex(name, "."); i >= 0 {
-		stem, ext = name[:i], name[i+1:]
-	}
-	var plain strings.Builder
-	for _, c := range norm.NFKD.String(stem) {
-		if unicode.Is(unicode.Mn, c) {
-			continue // combining marks dropped
-		}
-		if c < 0x80 && strconv.IsPrint(c) && c != '"' && c != '\\' {
-			plain.WriteRune(c)
-		} else {
-			plain.WriteByte(' ')
-		}
-	}
-	p := strings.Trim(blanks.ReplaceAllString(plain.String(), " "), " .")
-	if p == "" {
-		p = "report"
-	}
-	var e strings.Builder
-	for _, c := range ext {
-		if c < 0x80 && (unicode.IsLetter(c) || unicode.IsDigit(c)) {
-			e.WriteRune(c)
-		}
-	}
-	kind, rest, _ := strings.Cut(disposition, ";")
-	dotExt := ""
-	if e.Len() > 0 {
-		dotExt = "." + e.String()
-	}
-	return fmt.Sprintf(`%s; filename="%s%s";%s`, strings.TrimSpace(kind), p, dotExt, rest)
-}
-
 // unquote is urllib's unquote (no «+»).
 func unquote(s string) string {
 	var b []byte
@@ -312,7 +262,7 @@ func readJSON(w http.ResponseWriter, r *http.Request) (raw []byte, payload any, 
 	if bytes.HasPrefix(text, []byte("\xef\xbb\xbf")) { // json.loads(bytes) reads it as utf-8-sig
 		text = text[3:]
 	}
-	payload, err = pyjson.LoadsNoConstants(text)
+	payload, err = loadsNoConstants(text)
 	if err != nil {
 		server.JSON(w, http.StatusUnprocessableEntity, map[string]string{"detail": "The request body is not valid JSON"})
 		return nil, nil, false
@@ -353,7 +303,7 @@ func (d *Deps) proxyEngines(w http.ResponseWriter, r *http.Request, _ *auth.Prin
 		starletteResponse(w, res.StatusCode, res.Header.Get("Content-Type"), raw)
 		return
 	}
-	catalog, err := pyjson.Loads(raw)
+	catalog, err := pyjson.Loads(string(raw))
 	if err != nil {
 		server.InternalError(w)
 		return
@@ -439,7 +389,7 @@ func (d *Deps) proxyCacheStatus(w http.ResponseWriter, r *http.Request, p *auth.
 }
 
 // pyLen is len(x) of a value json.loads gave; false where Python raises a TypeError.
-func pyLen(v any) (int, bool) {
+func pyLenOf(v any) (int, bool) {
 	switch x := v.(type) {
 	case []any:
 		return len(x), true
@@ -508,7 +458,7 @@ func (d *Deps) proxyTransform(w http.ResponseWriter, r *http.Request, p *auth.Pr
 		q.refused(objects.EnsureCanRunKeys(q.ctx, q.c, d.DB, &p.User, keys)) {
 		return
 	}
-	n, ok := pyLen(pyjson.Or(o.Value("operations"), []any{}))
+	n, ok := pyLenOf(pyjson.Or(o.Value("operations"), []any{}))
 	if !ok {
 		server.InternalError(w)
 		return
@@ -688,7 +638,7 @@ func (d *Deps) proxyUpload(w http.ResponseWriter, r *http.Request, p *auth.Princ
 
 // recordUpload writes the uploads register's row; a failure is logged, never answered.
 func (d *Deps) recordUpload(q *request, raw []byte) {
-	v, err := pyjson.Loads(raw)
+	v, err := pyjson.Loads(string(raw))
 	o, isObj := v.(pyjson.Object)
 	if err != nil || !isObj {
 		d.Log.Warn("upload not recorded in the uploads register", "err", err)
@@ -751,4 +701,25 @@ func pythonInt(s string) (int64, bool) {
 		n = -n
 	}
 	return n, true
+}
+
+// loadsNoConstants is json.loads(raw, parse_constant=…raise): bytes that are no UTF-8 refused
+// as bytes.decode refuses them, and NaN or Infinity, which can only stand outside a string
+// (the other words of JSON are lowercase), refused before reading.
+func loadsNoConstants(raw []byte) (any, error) {
+	if !utf8.Valid(raw) {
+		return nil, errors.New("the text is not UTF-8")
+	}
+	in := false
+	for i := 0; i < len(raw); i++ {
+		switch c := raw[i]; {
+		case in && c == '\\':
+			i++
+		case c == '"':
+			in = !in
+		case !in && (c == 'N' || c == 'I'):
+			return nil, errors.New("not a JSON value")
+		}
+	}
+	return pyjson.Loads(string(raw))
 }

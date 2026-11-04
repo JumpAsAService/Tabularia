@@ -2,7 +2,6 @@ package pyjson
 
 import (
 	"errors"
-	"fmt"
 	"math"
 	"strconv"
 	"strings"
@@ -10,25 +9,16 @@ import (
 	"unicode/utf8"
 )
 
-// BigInt is an integer of the JSON text too large for an int64: Python's int has no
-// limit, and json.dumps writes it back as it came.
-type BigInt string
+// Int is an integer of JSON beyond int64, kept as its digits: Python's ints have no limit
+// and json.dumps writes them back as they were read.
+type Int string
 
-// Loads is json.loads: the objects as Object (the keys in the order they came; a key
-// repeated keeps its first place and its last value, as a Python dict), the arrays as
-// []any, the integers as int64 (BigInt past it), the other numbers as float64, NaN and
-// Infinity accepted as Python accepts them. Bytes that are not UTF-8 are refused, as
-// bytes.decode refuses them.
-func Loads(raw []byte) (any, error) { return loads(raw, false) }
-
-// LoadsNoConstants is json.loads(raw, parse_constant=…raise): NaN and Infinity refused.
-func LoadsNoConstants(raw []byte) (any, error) { return loads(raw, true) }
-
-func loads(raw []byte, noConstants bool) (any, error) {
-	if !utf8.Valid(raw) {
-		return nil, errors.New("the text is not UTF-8")
-	}
-	p := &parser{s: string(raw), noConstants: noConstants}
+// Loads is json.loads: objects as Object (their keys in the order read; a key repeated keeps
+// its first place and its last value, as dict(pairs) does), arrays as []any, integers as
+// int64 (Int past it), other numbers as float64 (1e400 is +Inf, as float() reads it), NaN
+// and ±Infinity accepted, control characters refused inside strings (strict=True).
+func Loads(text string) (any, error) {
+	p := &parser{s: text}
 	p.space()
 	v, err := p.value()
 	if err != nil {
@@ -36,20 +26,18 @@ func loads(raw []byte, noConstants bool) (any, error) {
 	}
 	p.space()
 	if p.i != len(p.s) {
-		return nil, p.fail("Extra data")
+		return nil, errors.New("Extra data")
 	}
 	return v, nil
 }
 
 type parser struct {
-	s           string
-	i           int
-	noConstants bool
+	s string
+	i int
 }
 
-func (p *parser) fail(what string) error { return fmt.Errorf("%s: char %d", what, p.i) }
+var errSyntax = errors.New("Expecting value")
 
-// space is Python's WHITESPACE: blanks, tabs, line feeds and carriage returns only.
 func (p *parser) space() {
 	for p.i < len(p.s) {
 		switch p.s[p.i] {
@@ -63,7 +51,7 @@ func (p *parser) space() {
 
 func (p *parser) value() (any, error) {
 	if p.i >= len(p.s) {
-		return nil, p.fail("Expecting value")
+		return nil, errSyntax
 	}
 	switch c := p.s[p.i]; {
 	case c == '{':
@@ -81,9 +69,6 @@ func (p *parser) value() (any, error) {
 	case strings.HasPrefix(p.s[p.i:], "false"):
 		p.i += 5
 		return false, nil
-	case p.noConstants && (strings.HasPrefix(p.s[p.i:], "NaN") || strings.HasPrefix(p.s[p.i:], "Infinity") ||
-		strings.HasPrefix(p.s[p.i:], "-Infinity")):
-		return nil, p.fail("not a JSON value")
 	case strings.HasPrefix(p.s[p.i:], "NaN"):
 		p.i += 3
 		return math.NaN(), nil
@@ -96,7 +81,61 @@ func (p *parser) value() (any, error) {
 	case c == '-' || (c >= '0' && c <= '9'):
 		return p.number()
 	}
-	return nil, p.fail("Expecting value")
+	return nil, errSyntax
+}
+
+func digits(s string, i int) int {
+	for i < len(s) && s[i] >= '0' && s[i] <= '9' {
+		i++
+	}
+	return i
+}
+
+// number is json.scanner's NUMBER_RE: -?(0|[1-9]\d*)(\.\d+)?([eE][-+]?\d+)?
+func (p *parser) number() (any, error) {
+	start, i := p.i, p.i
+	if p.s[i] == '-' {
+		i++
+	}
+	if i >= len(p.s) || p.s[i] < '0' || p.s[i] > '9' {
+		return nil, errSyntax
+	}
+	if p.s[i] == '0' {
+		i++
+	} else {
+		i = digits(p.s, i)
+	}
+	integer := true
+	if i+1 < len(p.s) && p.s[i] == '.' && p.s[i+1] >= '0' && p.s[i+1] <= '9' {
+		i = digits(p.s, i+1)
+		integer = false
+	}
+	if i < len(p.s) && (p.s[i] == 'e' || p.s[i] == 'E') {
+		j := i + 1
+		if j < len(p.s) && (p.s[j] == '+' || p.s[j] == '-') {
+			j++
+		}
+		if k := digits(p.s, j); k > j {
+			i, integer = k, false
+		}
+	}
+	p.i = i
+	text := p.s[start:i]
+	if integer {
+		if n, err := strconv.ParseInt(text, 10, 64); err == nil {
+			return n, nil
+		}
+		t := strings.TrimLeft(strings.TrimPrefix(text, "-"), "0")
+		if strings.HasPrefix(text, "-") {
+			t = "-" + t
+		}
+		return Int(t), nil
+	}
+	f, err := strconv.ParseFloat(text, 64)
+	if err != nil && !errors.Is(err, strconv.ErrRange) {
+		return nil, err
+	}
+	return f, nil
 }
 
 func (p *parser) object() (any, error) {
@@ -110,7 +149,7 @@ func (p *parser) object() (any, error) {
 	for {
 		p.space()
 		if p.i >= len(p.s) || p.s[p.i] != '"' {
-			return nil, p.fail("Expecting property name enclosed in double quotes")
+			return nil, errors.New("Expecting property name enclosed in double quotes")
 		}
 		k, err := p.str()
 		if err != nil {
@@ -118,7 +157,7 @@ func (p *parser) object() (any, error) {
 		}
 		p.space()
 		if p.i >= len(p.s) || p.s[p.i] != ':' {
-			return nil, p.fail("Expecting ':' delimiter")
+			return nil, errors.New("Expecting ':' delimiter")
 		}
 		p.i++
 		p.space()
@@ -126,20 +165,19 @@ func (p *parser) object() (any, error) {
 		if err != nil {
 			return nil, err
 		}
-		obj = obj.Set(k, v)
+		obj = obj.Set(k.(string), v)
 		p.space()
 		if p.i >= len(p.s) {
-			return nil, p.fail("Expecting ',' delimiter")
+			return nil, errors.New("Expecting ',' delimiter")
 		}
-		switch p.s[p.i] {
-		case ',':
-			p.i++
-		case '}':
+		if p.s[p.i] == '}' {
 			p.i++
 			return obj, nil
-		default:
-			return nil, p.fail("Expecting ',' delimiter")
 		}
+		if p.s[p.i] != ',' {
+			return nil, errors.New("Expecting ',' delimiter")
+		}
+		p.i++
 	}
 }
 
@@ -160,85 +198,33 @@ func (p *parser) array() (any, error) {
 		out = append(out, v)
 		p.space()
 		if p.i >= len(p.s) {
-			return nil, p.fail("Expecting ',' delimiter")
+			return nil, errors.New("Expecting ',' delimiter")
 		}
-		switch p.s[p.i] {
-		case ',':
-			p.i++
-		case ']':
+		if p.s[p.i] == ']' {
 			p.i++
 			return out, nil
-		default:
-			return nil, p.fail("Expecting ',' delimiter")
 		}
+		if p.s[p.i] != ',' {
+			return nil, errors.New("Expecting ',' delimiter")
+		}
+		p.i++
 	}
 }
 
-func (p *parser) number() (any, error) {
-	start := p.i
-	if p.s[p.i] == '-' {
-		p.i++
+func hex4(s string) (rune, bool) {
+	if len(s) < 4 {
+		return 0, false
 	}
-	digits := func() int {
-		n := 0
-		for p.i < len(p.s) && p.s[p.i] >= '0' && p.s[p.i] <= '9' {
-			p.i++
-			n++
-		}
-		return n
-	}
-	if p.i < len(p.s) && p.s[p.i] == '0' {
-		p.i++
-	} else if digits() == 0 {
-		p.i = start
-		return nil, p.fail("Expecting value")
-	}
-	integer := true
-	if p.i < len(p.s) && p.s[p.i] == '.' {
-		save := p.i
-		p.i++
-		if digits() == 0 { // «1.» is the integer 1 followed by extra data, in Python
-			p.i = save
-		} else {
-			integer = false
-		}
-	}
-	if p.i < len(p.s) && (p.s[p.i] == 'e' || p.s[p.i] == 'E') {
-		save := p.i
-		p.i++
-		if p.i < len(p.s) && (p.s[p.i] == '+' || p.s[p.i] == '-') {
-			p.i++
-		}
-		if digits() == 0 {
-			p.i = save
-		} else {
-			integer = false
-		}
-	}
-	text := p.s[start:p.i]
-	if integer {
-		if n, err := strconv.ParseInt(text, 10, 64); err == nil {
-			return n, nil
-		}
-		return BigInt(text), nil
-	}
-	f, err := strconv.ParseFloat(text, 64)
-	if err != nil { // out of range: ±inf, as float() gives
-		var ne *strconv.NumError
-		if errors.As(err, &ne) && errors.Is(ne.Err, strconv.ErrRange) {
-			return f, nil
-		}
-		return nil, err
-	}
-	return f, nil
+	n, err := strconv.ParseUint(s[:4], 16, 32)
+	return rune(n), err == nil
 }
 
-func (p *parser) str() (string, error) {
+func (p *parser) str() (any, error) {
 	p.i++ // "
 	var b strings.Builder
 	for {
 		if p.i >= len(p.s) {
-			return "", p.fail("Unterminated string starting at")
+			return nil, errors.New("Unterminated string")
 		}
 		c := p.s[p.i]
 		switch {
@@ -246,14 +232,13 @@ func (p *parser) str() (string, error) {
 			p.i++
 			return b.String(), nil
 		case c < 0x20:
-			return "", p.fail("Invalid control character at")
+			return nil, errors.New("Invalid control character")
 		case c == '\\':
-			p.i++
-			if p.i >= len(p.s) {
-				return "", p.fail("Unterminated string starting at")
+			if p.i+1 >= len(p.s) {
+				return nil, errors.New("Unterminated string")
 			}
-			e := p.s[p.i]
-			p.i++
+			e := p.s[p.i+1]
+			p.i += 2
 			switch e {
 			case '"', '\\', '/':
 				b.WriteByte(e)
@@ -268,22 +253,22 @@ func (p *parser) str() (string, error) {
 			case 't':
 				b.WriteByte('\t')
 			case 'u':
-				r, ok := p.hex4()
+				r, ok := hex4(p.s[p.i:])
 				if !ok {
-					return "", p.fail("Invalid \\uXXXX escape")
+					return nil, errors.New("Invalid \\uXXXX escape")
 				}
-				if utf16.IsSurrogate(r) && r < 0xdc00 && strings.HasPrefix(p.s[p.i:], `\u`) {
-					save := p.i
-					p.i += 2
-					if r2, ok := p.hex4(); ok && r2 >= 0xdc00 && r2 <= 0xdfff {
-						r = utf16.DecodeRune(r, r2)
-					} else {
-						p.i = save
+				p.i += 4
+				if utf16.IsSurrogate(r) && strings.HasPrefix(p.s[p.i:], `\u`) {
+					if r2, ok := hex4(p.s[p.i+2:]); ok {
+						if d := utf16.DecodeRune(r, r2); d != utf8.RuneError {
+							p.i += 6
+							r = d
+						}
 					}
 				}
-				b.WriteRune(r) // a lone surrogate becomes U+FFFD (Python keeps it)
+				b.WriteRune(r)
 			default:
-				return "", p.fail("Invalid \\escape")
+				return nil, errors.New("Invalid \\escape")
 			}
 		default:
 			r, size := utf8.DecodeRuneInString(p.s[p.i:])
@@ -293,21 +278,12 @@ func (p *parser) str() (string, error) {
 	}
 }
 
-func (p *parser) hex4() (rune, bool) {
-	if p.i+4 > len(p.s) {
-		return 0, false
-	}
-	n, err := strconv.ParseUint(p.s[p.i:p.i+4], 16, 32)
-	if err != nil {
-		return 0, false
-	}
-	p.i += 4
-	return rune(n), true
-}
-
-// MarshalJSON writes the object as Starlette's JSONResponse does (compact, the keys in
-// their order, no ASCII escaping), so an Object can be a route's answer.
+// MarshalJSON writes the object for encoding/json (an answer, a body to the engine), its keys
+// in their order.
 func (o Object) MarshalJSON() ([]byte, error) {
 	s, err := Dumps(o, Options{Compact: true})
 	return []byte(s), err
 }
+
+// MarshalJSON writes the integer's digits.
+func (i Int) MarshalJSON() ([]byte, error) { return []byte(i), nil }

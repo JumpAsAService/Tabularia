@@ -484,7 +484,7 @@ func parse(definition, fallback string) any {
 	if definition == "" {
 		definition = fallback
 	}
-	v, err := pyjson.Loads([]byte(definition))
+	v, err := pyjson.Loads(definition)
 	if err != nil {
 		return nil
 	}

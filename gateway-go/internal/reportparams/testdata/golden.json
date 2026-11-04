@@ -1,0 +1,7978 @@
+[
+{
+"dialect": "polars",
+"sql": "SELECT * FROM t WHERE r = {r} AND n > {n} AND d >= {d} AND b = {b} AND m IN {m}",
+"values": 0,
+"used": [
+"b",
+"d",
+"m",
+"n",
+"r"
+],
+"placeholders": [],
+"filled": "SELECT * FROM t WHERE r = 'Nord' AND n > 5 AND d >= DATE '2026-01-02' AND b = TRUE AND m IN ('a', 'b')"
+},
+{
+"dialect": "polars",
+"sql": "SELECT * FROM t WHERE r = {r} AND n > {n} AND d >= {d} AND b = {b} AND m IN {m}",
+"values": 1,
+"used": [
+"b",
+"d",
+"m",
+"n",
+"r"
+],
+"placeholders": [],
+"refused": "«m» has no value, and the SQL needs at least one: choose one"
+},
+{
+"dialect": "polars",
+"sql": "SELECT * FROM t WHERE r = {r} AND n > {n} AND d >= {d} AND b = {b} AND m IN {m}",
+"values": 2,
+"used": [
+"b",
+"d",
+"m",
+"n",
+"r"
+],
+"placeholders": [],
+"filled": "SELECT * FROM t WHERE r = NULL AND n > 0.0000001 AND d >= DATE '1999-12-31' AND b = NULL AND m IN (1, 2.0, (-3))"
+},
+{
+"dialect": "polars",
+"sql": "SELECT * FROM t WHERE r = {r} AND n > {n} AND d >= {d} AND b = {b} AND m IN {m}",
+"values": 3,
+"used": [
+"b",
+"d",
+"m",
+"n",
+"r"
+],
+"placeholders": [],
+"filled": "SELECT * FROM t WHERE r = '' AND n > 123456789012345.0 AND d >= NULL AND b = TRUE AND m IN (TRUE, NULL)"
+},
+{
+"dialect": "polars",
+"sql": "SELECT '{today}', {today-7}, {now:yyyy}, {{x}}, '{{today}}' FROM t -- {nope}",
+"values": 0,
+"used": [],
+"placeholders": [
+"now:yyyy",
+"today",
+"today-7"
+],
+"filled": "SELECT '2026-11-03', DATE '2026-10-27', 2026, {x}, '{today}' FROM t -- {nope}"
+},
+{
+"dialect": "polars",
+"sql": "SELECT '{today}', {today-7}, {now:yyyy}, {{x}}, '{{today}}' FROM t -- {nope}",
+"values": 1,
+"used": [],
+"placeholders": [
+"now:yyyy",
+"today",
+"today-7"
+],
+"filled": "SELECT '2026-11-03', DATE '2026-10-27', 2026, {x}, '{today}' FROM t -- {nope}"
+},
+{
+"dialect": "polars",
+"sql": "SELECT '{today}', {today-7}, {now:yyyy}, {{x}}, '{{today}}' FROM t -- {nope}",
+"values": 2,
+"used": [],
+"placeholders": [
+"now:yyyy",
+"today",
+"today-7"
+],
+"filled": "SELECT '2026-11-03', DATE '2026-10-27', 2026, {x}, '{today}' FROM t -- {nope}"
+},
+{
+"dialect": "polars",
+"sql": "SELECT '{today}', {today-7}, {now:yyyy}, {{x}}, '{{today}}' FROM t -- {nope}",
+"values": 3,
+"used": [],
+"placeholders": [
+"now:yyyy",
+"today",
+"today-7"
+],
+"filled": "SELECT '2026-11-03', DATE '2026-10-27', 2026, {x}, '{today}' FROM t -- {nope}"
+},
+{
+"dialect": "polars",
+"sql": "SELECT * FROM t WHERE x = '{r}'",
+"values": 0,
+"refused": "Write {r} without quotes: Tabularia quotes it"
+},
+{
+"dialect": "polars",
+"sql": "SELECT * FROM t WHERE x = '{r}'",
+"values": 1,
+"refused": "Write {r} without quotes: Tabularia quotes it"
+},
+{
+"dialect": "polars",
+"sql": "SELECT * FROM t WHERE x = '{r}'",
+"values": 2,
+"refused": "Write {r} without quotes: Tabularia quotes it"
+},
+{
+"dialect": "polars",
+"sql": "SELECT * FROM t WHERE x = '{r}'",
+"values": 3,
+"refused": "Write {r} without quotes: Tabularia quotes it"
+},
+{
+"dialect": "polars",
+"sql": "SELECT } FROM t",
+"values": 0,
+"refused": "A single } in the SQL: write }} for a literal brace"
+},
+{
+"dialect": "polars",
+"sql": "SELECT } FROM t",
+"values": 1,
+"refused": "A single } in the SQL: write }} for a literal brace"
+},
+{
+"dialect": "polars",
+"sql": "SELECT } FROM t",
+"values": 2,
+"refused": "A single } in the SQL: write }} for a literal brace"
+},
+{
+"dialect": "polars",
+"sql": "SELECT } FROM t",
+"values": 3,
+"refused": "A single } in the SQL: write }} for a literal brace"
+},
+{
+"dialect": "polars",
+"sql": "SELECT { FROM t",
+"values": 0,
+"refused": "A { in the SQL is not closed: add }, or write {{ for a literal brace"
+},
+{
+"dialect": "polars",
+"sql": "SELECT { FROM t",
+"values": 1,
+"refused": "A { in the SQL is not closed: add }, or write {{ for a literal brace"
+},
+{
+"dialect": "polars",
+"sql": "SELECT { FROM t",
+"values": 2,
+"refused": "A { in the SQL is not closed: add }, or write {{ for a literal brace"
+},
+{
+"dialect": "polars",
+"sql": "SELECT { FROM t",
+"values": 3,
+"refused": "A { in the SQL is not closed: add }, or write {{ for a literal brace"
+},
+{
+"dialect": "polars",
+"sql": "SELECT {nope}",
+"values": 0,
+"refused": "{nope} is neither a parameter of the report nor a placeholder: write {{ and }} for literal braces"
+},
+{
+"dialect": "polars",
+"sql": "SELECT {nope}",
+"values": 1,
+"refused": "{nope} is neither a parameter of the report nor a placeholder: write {{ and }} for literal braces"
+},
+{
+"dialect": "polars",
+"sql": "SELECT {nope}",
+"values": 2,
+"refused": "{nope} is neither a parameter of the report nor a placeholder: write {{ and }} for literal braces"
+},
+{
+"dialect": "polars",
+"sql": "SELECT {nope}",
+"values": 3,
+"refused": "{nope} is neither a parameter of the report nor a placeholder: write {{ and }} for literal braces"
+},
+{
+"dialect": "polars",
+"sql": "SELECT {r:fmt}",
+"values": 0,
+"refused": "{r:fmt}: a parameter takes no offset nor format"
+},
+{
+"dialect": "polars",
+"sql": "SELECT {r:fmt}",
+"values": 1,
+"refused": "{r:fmt}: a parameter takes no offset nor format"
+},
+{
+"dialect": "polars",
+"sql": "SELECT {r:fmt}",
+"values": 2,
+"refused": "{r:fmt}: a parameter takes no offset nor format"
+},
+{
+"dialect": "polars",
+"sql": "SELECT {r:fmt}",
+"values": 3,
+"refused": "{r:fmt}: a parameter takes no offset nor format"
+},
+{
+"dialect": "polars",
+"sql": "SELECT 'a\\' , {r} -- '",
+"values": 0,
+"refused": "The SQL is unclear near «{r}»: a backslash makes it uncertain whether it is inside quoted text. Write the text before it without that"
+},
+{
+"dialect": "polars",
+"sql": "SELECT 'a\\' , {r} -- '",
+"values": 1,
+"refused": "The SQL is unclear near «{r}»: a backslash makes it uncertain whether it is inside quoted text. Write the text before it without that"
+},
+{
+"dialect": "polars",
+"sql": "SELECT 'a\\' , {r} -- '",
+"values": 2,
+"refused": "The SQL is unclear near «{r}»: a backslash makes it uncertain whether it is inside quoted text. Write the text before it without that"
+},
+{
+"dialect": "polars",
+"sql": "SELECT 'a\\' , {r} -- '",
+"values": 3,
+"refused": "The SQL is unclear near «{r}»: a backslash makes it uncertain whether it is inside quoted text. Write the text before it without that"
+},
+{
+"dialect": "polars",
+"sql": "SELECT /* /* */ {r} */",
+"values": 0,
+"refused": "The SQL is unclear near «{r}»: a comment inside another makes it uncertain whether it is inside quoted text. Write the text before it without that"
+},
+{
+"dialect": "polars",
+"sql": "SELECT /* /* */ {r} */",
+"values": 1,
+"refused": "The SQL is unclear near «{r}»: a comment inside another makes it uncertain whether it is inside quoted text. Write the text before it without that"
+},
+{
+"dialect": "polars",
+"sql": "SELECT /* /* */ {r} */",
+"values": 2,
+"refused": "The SQL is unclear near «{r}»: a comment inside another makes it uncertain whether it is inside quoted text. Write the text before it without that"
+},
+{
+"dialect": "polars",
+"sql": "SELECT /* /* */ {r} */",
+"values": 3,
+"refused": "The SQL is unclear near «{r}»: a comment inside another makes it uncertain whether it is inside quoted text. Write the text before it without that"
+},
+{
+"dialect": "polars",
+"sql": "SELECT $$ {r} $$, {n}",
+"values": 0,
+"refused": "Write {r} without quotes: Tabularia quotes it"
+},
+{
+"dialect": "polars",
+"sql": "SELECT $$ {r} $$, {n}",
+"values": 1,
+"refused": "Write {r} without quotes: Tabularia quotes it"
+},
+{
+"dialect": "polars",
+"sql": "SELECT $$ {r} $$, {n}",
+"values": 2,
+"refused": "Write {r} without quotes: Tabularia quotes it"
+},
+{
+"dialect": "polars",
+"sql": "SELECT $$ {r} $$, {n}",
+"values": 3,
+"refused": "Write {r} without quotes: Tabularia quotes it"
+},
+{
+"dialect": "polars",
+"sql": "SELECT E'\\' {r}'",
+"values": 0,
+"refused": "The SQL is unclear near «{r}»: a backslash makes it uncertain whether it is inside quoted text. Write the text before it without that"
+},
+{
+"dialect": "polars",
+"sql": "SELECT E'\\' {r}'",
+"values": 1,
+"refused": "The SQL is unclear near «{r}»: a backslash makes it uncertain whether it is inside quoted text. Write the text before it without that"
+},
+{
+"dialect": "polars",
+"sql": "SELECT E'\\' {r}'",
+"values": 2,
+"refused": "The SQL is unclear near «{r}»: a backslash makes it uncertain whether it is inside quoted text. Write the text before it without that"
+},
+{
+"dialect": "polars",
+"sql": "SELECT E'\\' {r}'",
+"values": 3,
+"refused": "The SQL is unclear near «{r}»: a backslash makes it uncertain whether it is inside quoted text. Write the text before it without that"
+},
+{
+"dialect": "polars",
+"sql": "SELECT q'[ {r} ]', {n}",
+"values": 0,
+"refused": "Write {r} without quotes: Tabularia quotes it"
+},
+{
+"dialect": "polars",
+"sql": "SELECT q'[ {r} ]', {n}",
+"values": 1,
+"refused": "Write {r} without quotes: Tabularia quotes it"
+},
+{
+"dialect": "polars",
+"sql": "SELECT q'[ {r} ]', {n}",
+"values": 2,
+"refused": "Write {r} without quotes: Tabularia quotes it"
+},
+{
+"dialect": "polars",
+"sql": "SELECT q'[ {r} ]', {n}",
+"values": 3,
+"refused": "Write {r} without quotes: Tabularia quotes it"
+},
+{
+"dialect": "polars",
+"sql": "SELECT [{r}], {n}",
+"values": 0,
+"used": [
+"n",
+"r"
+],
+"placeholders": [],
+"filled": "SELECT ['Nord'], 5"
+},
+{
+"dialect": "polars",
+"sql": "SELECT [{r}], {n}",
+"values": 1,
+"used": [
+"n",
+"r"
+],
+"placeholders": [],
+"filled": "SELECT ['it''s \\ a\nb\t\u0000é'], (-2.5)"
+},
+{
+"dialect": "polars",
+"sql": "SELECT [{r}], {n}",
+"values": 2,
+"used": [
+"n",
+"r"
+],
+"placeholders": [],
+"filled": "SELECT [NULL], 0.0000001"
+},
+{
+"dialect": "polars",
+"sql": "SELECT [{r}], {n}",
+"values": 3,
+"used": [
+"n",
+"r"
+],
+"placeholders": [],
+"filled": "SELECT [''], 123456789012345.0"
+},
+{
+"dialect": "polars",
+"sql": "SELECT '''{r}''', {n}",
+"values": 0,
+"refused": "Write {r} without quotes: Tabularia quotes it"
+},
+{
+"dialect": "polars",
+"sql": "SELECT '''{r}''', {n}",
+"values": 1,
+"refused": "Write {r} without quotes: Tabularia quotes it"
+},
+{
+"dialect": "polars",
+"sql": "SELECT '''{r}''', {n}",
+"values": 2,
+"refused": "Write {r} without quotes: Tabularia quotes it"
+},
+{
+"dialect": "polars",
+"sql": "SELECT '''{r}''', {n}",
+"values": 3,
+"refused": "Write {r} without quotes: Tabularia quotes it"
+},
+{
+"dialect": "polars",
+"sql": "SELECT \"{r}\" # {r}",
+"values": 0,
+"refused": "Write {r} without quotes: Tabularia quotes it"
+},
+{
+"dialect": "polars",
+"sql": "SELECT \"{r}\" # {r}",
+"values": 1,
+"refused": "Write {r} without quotes: Tabularia quotes it"
+},
+{
+"dialect": "polars",
+"sql": "SELECT \"{r}\" # {r}",
+"values": 2,
+"refused": "Write {r} without quotes: Tabularia quotes it"
+},
+{
+"dialect": "polars",
+"sql": "SELECT \"{r}\" # {r}",
+"values": 3,
+"refused": "Write {r} without quotes: Tabularia quotes it"
+},
+{
+"dialect": "polars",
+"sql": "SELECT `{r}`, {n}",
+"values": 0,
+"refused": "Write {r} without quotes: Tabularia quotes it"
+},
+{
+"dialect": "polars",
+"sql": "SELECT `{r}`, {n}",
+"values": 1,
+"refused": "Write {r} without quotes: Tabularia quotes it"
+},
+{
+"dialect": "polars",
+"sql": "SELECT `{r}`, {n}",
+"values": 2,
+"refused": "Write {r} without quotes: Tabularia quotes it"
+},
+{
+"dialect": "polars",
+"sql": "SELECT `{r}`, {n}",
+"values": 3,
+"refused": "Write {r} without quotes: Tabularia quotes it"
+},
+{
+"dialect": "polars",
+"sql": "SELECT {today} , '{now}', {start_of_month+1m}",
+"values": 0,
+"used": [],
+"placeholders": [
+"now",
+"start_of_month+1m",
+"today"
+],
+"filled": "SELECT DATE '2026-11-03' , '2026-11-03T10:20', 1762160400"
+},
+{
+"dialect": "polars",
+"sql": "SELECT {today} , '{now}', {start_of_month+1m}",
+"values": 1,
+"used": [],
+"placeholders": [
+"now",
+"start_of_month+1m",
+"today"
+],
+"filled": "SELECT DATE '2026-11-03' , '2026-11-03T10:20', 1762160400"
+},
+{
+"dialect": "polars",
+"sql": "SELECT {today} , '{now}', {start_of_month+1m}",
+"values": 2,
+"used": [],
+"placeholders": [
+"now",
+"start_of_month+1m",
+"today"
+],
+"filled": "SELECT DATE '2026-11-03' , '2026-11-03T10:20', 1762160400"
+},
+{
+"dialect": "polars",
+"sql": "SELECT {today} , '{now}', {start_of_month+1m}",
+"values": 3,
+"used": [],
+"placeholders": [
+"now",
+"start_of_month+1m",
+"today"
+],
+"filled": "SELECT DATE '2026-11-03' , '2026-11-03T10:20', 1762160400"
+},
+{
+"dialect": "polars",
+"sql": "SELECT {r}{n}",
+"values": 0,
+"used": [
+"n",
+"r"
+],
+"placeholders": [],
+"filled": "SELECT 'Nord'5"
+},
+{
+"dialect": "polars",
+"sql": "SELECT {r}{n}",
+"values": 1,
+"used": [
+"n",
+"r"
+],
+"placeholders": [],
+"filled": "SELECT 'it''s \\ a\nb\t\u0000é'(-2.5)"
+},
+{
+"dialect": "polars",
+"sql": "SELECT {r}{n}",
+"values": 2,
+"used": [
+"n",
+"r"
+],
+"placeholders": [],
+"filled": "SELECT NULL0.0000001"
+},
+{
+"dialect": "polars",
+"sql": "SELECT {r}{n}",
+"values": 3,
+"used": [
+"n",
+"r"
+],
+"placeholders": [],
+"filled": "SELECT ''123456789012345.0"
+},
+{
+"dialect": "polars",
+"sql": "SELECT {r} -{n}",
+"values": 0,
+"used": [
+"n",
+"r"
+],
+"placeholders": [],
+"filled": "SELECT 'Nord' -5"
+},
+{
+"dialect": "polars",
+"sql": "SELECT {r} -{n}",
+"values": 1,
+"used": [
+"n",
+"r"
+],
+"placeholders": [],
+"filled": "SELECT 'it''s \\ a\nb\t\u0000é' -(-2.5)"
+},
+{
+"dialect": "polars",
+"sql": "SELECT {r} -{n}",
+"values": 2,
+"used": [
+"n",
+"r"
+],
+"placeholders": [],
+"filled": "SELECT NULL -0.0000001"
+},
+{
+"dialect": "polars",
+"sql": "SELECT {r} -{n}",
+"values": 3,
+"used": [
+"n",
+"r"
+],
+"placeholders": [],
+"filled": "SELECT '' -123456789012345.0"
+},
+{
+"dialect": "polars",
+"sql": "SELECT '{today:''x}'",
+"values": 0,
+"used": [],
+"placeholders": [
+"today:''x"
+],
+"refused": "{today:''x} gives «x'y», which cannot go inside quoted text"
+},
+{
+"dialect": "polars",
+"sql": "SELECT '{today:''x}'",
+"values": 1,
+"used": [],
+"placeholders": [
+"today:''x"
+],
+"refused": "{today:''x} gives «x'y», which cannot go inside quoted text"
+},
+{
+"dialect": "polars",
+"sql": "SELECT '{today:''x}'",
+"values": 2,
+"used": [],
+"placeholders": [
+"today:''x"
+],
+"refused": "{today:''x} gives «x'y», which cannot go inside quoted text"
+},
+{
+"dialect": "polars",
+"sql": "SELECT '{today:''x}'",
+"values": 3,
+"used": [],
+"placeholders": [
+"today:''x"
+],
+"refused": "{today:''x} gives «x'y», which cannot go inside quoted text"
+},
+{
+"dialect": "polars",
+"sql": "SELECT 'é' || {r}",
+"values": 0,
+"used": [
+"r"
+],
+"placeholders": [],
+"filled": "SELECT 'é' || 'Nord'"
+},
+{
+"dialect": "polars",
+"sql": "SELECT 'é' || {r}",
+"values": 1,
+"used": [
+"r"
+],
+"placeholders": [],
+"filled": "SELECT 'é' || 'it''s \\ a\nb\t\u0000é'"
+},
+{
+"dialect": "polars",
+"sql": "SELECT 'é' || {r}",
+"values": 2,
+"used": [
+"r"
+],
+"placeholders": [],
+"filled": "SELECT 'é' || NULL"
+},
+{
+"dialect": "polars",
+"sql": "SELECT 'é' || {r}",
+"values": 3,
+"used": [
+"r"
+],
+"placeholders": [],
+"filled": "SELECT 'é' || ''"
+},
+{
+"dialect": "polars",
+"sql": "SELECT {{ {r} }}",
+"values": 0,
+"used": [
+"r"
+],
+"placeholders": [],
+"filled": "SELECT { 'Nord' }"
+},
+{
+"dialect": "polars",
+"sql": "SELECT {{ {r} }}",
+"values": 1,
+"used": [
+"r"
+],
+"placeholders": [],
+"filled": "SELECT { 'it''s \\ a\nb\t\u0000é' }"
+},
+{
+"dialect": "polars",
+"sql": "SELECT {{ {r} }}",
+"values": 2,
+"used": [
+"r"
+],
+"placeholders": [],
+"filled": "SELECT { NULL }"
+},
+{
+"dialect": "polars",
+"sql": "SELECT {{ {r} }}",
+"values": 3,
+"used": [
+"r"
+],
+"placeholders": [],
+"filled": "SELECT { '' }"
+},
+{
+"dialect": "duckdb",
+"sql": "SELECT * FROM t WHERE r = {r} AND n > {n} AND d >= {d} AND b = {b} AND m IN {m}",
+"values": 0,
+"used": [
+"b",
+"d",
+"m",
+"n",
+"r"
+],
+"placeholders": [],
+"filled": "SELECT * FROM t WHERE r = 'Nord' AND n > 5 AND d >= DATE '2026-01-02' AND b = TRUE AND m IN ('a', 'b')"
+},
+{
+"dialect": "duckdb",
+"sql": "SELECT * FROM t WHERE r = {r} AND n > {n} AND d >= {d} AND b = {b} AND m IN {m}",
+"values": 1,
+"used": [
+"b",
+"d",
+"m",
+"n",
+"r"
+],
+"placeholders": [],
+"refused": "«m» has no value, and the SQL needs at least one: choose one"
+},
+{
+"dialect": "duckdb",
+"sql": "SELECT * FROM t WHERE r = {r} AND n > {n} AND d >= {d} AND b = {b} AND m IN {m}",
+"values": 2,
+"used": [
+"b",
+"d",
+"m",
+"n",
+"r"
+],
+"placeholders": [],
+"filled": "SELECT * FROM t WHERE r = NULL AND n > 0.0000001 AND d >= DATE '1999-12-31' AND b = NULL AND m IN (1, 2.0, (-3))"
+},
+{
+"dialect": "duckdb",
+"sql": "SELECT * FROM t WHERE r = {r} AND n > {n} AND d >= {d} AND b = {b} AND m IN {m}",
+"values": 3,
+"used": [
+"b",
+"d",
+"m",
+"n",
+"r"
+],
+"placeholders": [],
+"filled": "SELECT * FROM t WHERE r = '' AND n > 123456789012345.0 AND d >= NULL AND b = TRUE AND m IN (TRUE, NULL)"
+},
+{
+"dialect": "duckdb",
+"sql": "SELECT '{today}', {today-7}, {now:yyyy}, {{x}}, '{{today}}' FROM t -- {nope}",
+"values": 0,
+"used": [],
+"placeholders": [
+"now:yyyy",
+"today",
+"today-7"
+],
+"filled": "SELECT '2026-11-03', DATE '2026-10-27', 2026, {x}, '{today}' FROM t -- {nope}"
+},
+{
+"dialect": "duckdb",
+"sql": "SELECT '{today}', {today-7}, {now:yyyy}, {{x}}, '{{today}}' FROM t -- {nope}",
+"values": 1,
+"used": [],
+"placeholders": [
+"now:yyyy",
+"today",
+"today-7"
+],
+"filled": "SELECT '2026-11-03', DATE '2026-10-27', 2026, {x}, '{today}' FROM t -- {nope}"
+},
+{
+"dialect": "duckdb",
+"sql": "SELECT '{today}', {today-7}, {now:yyyy}, {{x}}, '{{today}}' FROM t -- {nope}",
+"values": 2,
+"used": [],
+"placeholders": [
+"now:yyyy",
+"today",
+"today-7"
+],
+"filled": "SELECT '2026-11-03', DATE '2026-10-27', 2026, {x}, '{today}' FROM t -- {nope}"
+},
+{
+"dialect": "duckdb",
+"sql": "SELECT '{today}', {today-7}, {now:yyyy}, {{x}}, '{{today}}' FROM t -- {nope}",
+"values": 3,
+"used": [],
+"placeholders": [
+"now:yyyy",
+"today",
+"today-7"
+],
+"filled": "SELECT '2026-11-03', DATE '2026-10-27', 2026, {x}, '{today}' FROM t -- {nope}"
+},
+{
+"dialect": "duckdb",
+"sql": "SELECT * FROM t WHERE x = '{r}'",
+"values": 0,
+"refused": "Write {r} without quotes: Tabularia quotes it"
+},
+{
+"dialect": "duckdb",
+"sql": "SELECT * FROM t WHERE x = '{r}'",
+"values": 1,
+"refused": "Write {r} without quotes: Tabularia quotes it"
+},
+{
+"dialect": "duckdb",
+"sql": "SELECT * FROM t WHERE x = '{r}'",
+"values": 2,
+"refused": "Write {r} without quotes: Tabularia quotes it"
+},
+{
+"dialect": "duckdb",
+"sql": "SELECT * FROM t WHERE x = '{r}'",
+"values": 3,
+"refused": "Write {r} without quotes: Tabularia quotes it"
+},
+{
+"dialect": "duckdb",
+"sql": "SELECT } FROM t",
+"values": 0,
+"refused": "A single } in the SQL: write }} for a literal brace"
+},
+{
+"dialect": "duckdb",
+"sql": "SELECT } FROM t",
+"values": 1,
+"refused": "A single } in the SQL: write }} for a literal brace"
+},
+{
+"dialect": "duckdb",
+"sql": "SELECT } FROM t",
+"values": 2,
+"refused": "A single } in the SQL: write }} for a literal brace"
+},
+{
+"dialect": "duckdb",
+"sql": "SELECT } FROM t",
+"values": 3,
+"refused": "A single } in the SQL: write }} for a literal brace"
+},
+{
+"dialect": "duckdb",
+"sql": "SELECT { FROM t",
+"values": 0,
+"refused": "A { in the SQL is not closed: add }, or write {{ for a literal brace"
+},
+{
+"dialect": "duckdb",
+"sql": "SELECT { FROM t",
+"values": 1,
+"refused": "A { in the SQL is not closed: add }, or write {{ for a literal brace"
+},
+{
+"dialect": "duckdb",
+"sql": "SELECT { FROM t",
+"values": 2,
+"refused": "A { in the SQL is not closed: add }, or write {{ for a literal brace"
+},
+{
+"dialect": "duckdb",
+"sql": "SELECT { FROM t",
+"values": 3,
+"refused": "A { in the SQL is not closed: add }, or write {{ for a literal brace"
+},
+{
+"dialect": "duckdb",
+"sql": "SELECT {nope}",
+"values": 0,
+"refused": "{nope} is neither a parameter of the report nor a placeholder: write {{ and }} for literal braces"
+},
+{
+"dialect": "duckdb",
+"sql": "SELECT {nope}",
+"values": 1,
+"refused": "{nope} is neither a parameter of the report nor a placeholder: write {{ and }} for literal braces"
+},
+{
+"dialect": "duckdb",
+"sql": "SELECT {nope}",
+"values": 2,
+"refused": "{nope} is neither a parameter of the report nor a placeholder: write {{ and }} for literal braces"
+},
+{
+"dialect": "duckdb",
+"sql": "SELECT {nope}",
+"values": 3,
+"refused": "{nope} is neither a parameter of the report nor a placeholder: write {{ and }} for literal braces"
+},
+{
+"dialect": "duckdb",
+"sql": "SELECT {r:fmt}",
+"values": 0,
+"refused": "{r:fmt}: a parameter takes no offset nor format"
+},
+{
+"dialect": "duckdb",
+"sql": "SELECT {r:fmt}",
+"values": 1,
+"refused": "{r:fmt}: a parameter takes no offset nor format"
+},
+{
+"dialect": "duckdb",
+"sql": "SELECT {r:fmt}",
+"values": 2,
+"refused": "{r:fmt}: a parameter takes no offset nor format"
+},
+{
+"dialect": "duckdb",
+"sql": "SELECT {r:fmt}",
+"values": 3,
+"refused": "{r:fmt}: a parameter takes no offset nor format"
+},
+{
+"dialect": "duckdb",
+"sql": "SELECT 'a\\' , {r} -- '",
+"values": 0,
+"refused": "The SQL is unclear near «{r}»: a backslash makes it uncertain whether it is inside quoted text. Write the text before it without that"
+},
+{
+"dialect": "duckdb",
+"sql": "SELECT 'a\\' , {r} -- '",
+"values": 1,
+"refused": "The SQL is unclear near «{r}»: a backslash makes it uncertain whether it is inside quoted text. Write the text before it without that"
+},
+{
+"dialect": "duckdb",
+"sql": "SELECT 'a\\' , {r} -- '",
+"values": 2,
+"refused": "The SQL is unclear near «{r}»: a backslash makes it uncertain whether it is inside quoted text. Write the text before it without that"
+},
+{
+"dialect": "duckdb",
+"sql": "SELECT 'a\\' , {r} -- '",
+"values": 3,
+"refused": "The SQL is unclear near «{r}»: a backslash makes it uncertain whether it is inside quoted text. Write the text before it without that"
+},
+{
+"dialect": "duckdb",
+"sql": "SELECT /* /* */ {r} */",
+"values": 0,
+"refused": "The SQL is unclear near «{r}»: a comment inside another makes it uncertain whether it is inside quoted text. Write the text before it without that"
+},
+{
+"dialect": "duckdb",
+"sql": "SELECT /* /* */ {r} */",
+"values": 1,
+"refused": "The SQL is unclear near «{r}»: a comment inside another makes it uncertain whether it is inside quoted text. Write the text before it without that"
+},
+{
+"dialect": "duckdb",
+"sql": "SELECT /* /* */ {r} */",
+"values": 2,
+"refused": "The SQL is unclear near «{r}»: a comment inside another makes it uncertain whether it is inside quoted text. Write the text before it without that"
+},
+{
+"dialect": "duckdb",
+"sql": "SELECT /* /* */ {r} */",
+"values": 3,
+"refused": "The SQL is unclear near «{r}»: a comment inside another makes it uncertain whether it is inside quoted text. Write the text before it without that"
+},
+{
+"dialect": "duckdb",
+"sql": "SELECT $$ {r} $$, {n}",
+"values": 0,
+"refused": "Write {r} without quotes: Tabularia quotes it"
+},
+{
+"dialect": "duckdb",
+"sql": "SELECT $$ {r} $$, {n}",
+"values": 1,
+"refused": "Write {r} without quotes: Tabularia quotes it"
+},
+{
+"dialect": "duckdb",
+"sql": "SELECT $$ {r} $$, {n}",
+"values": 2,
+"refused": "Write {r} without quotes: Tabularia quotes it"
+},
+{
+"dialect": "duckdb",
+"sql": "SELECT $$ {r} $$, {n}",
+"values": 3,
+"refused": "Write {r} without quotes: Tabularia quotes it"
+},
+{
+"dialect": "duckdb",
+"sql": "SELECT E'\\' {r}'",
+"values": 0,
+"refused": "Write {r} without quotes: Tabularia quotes it"
+},
+{
+"dialect": "duckdb",
+"sql": "SELECT E'\\' {r}'",
+"values": 1,
+"refused": "Write {r} without quotes: Tabularia quotes it"
+},
+{
+"dialect": "duckdb",
+"sql": "SELECT E'\\' {r}'",
+"values": 2,
+"refused": "Write {r} without quotes: Tabularia quotes it"
+},
+{
+"dialect": "duckdb",
+"sql": "SELECT E'\\' {r}'",
+"values": 3,
+"refused": "Write {r} without quotes: Tabularia quotes it"
+},
+{
+"dialect": "duckdb",
+"sql": "SELECT q'[ {r} ]', {n}",
+"values": 0,
+"refused": "Write {r} without quotes: Tabularia quotes it"
+},
+{
+"dialect": "duckdb",
+"sql": "SELECT q'[ {r} ]', {n}",
+"values": 1,
+"refused": "Write {r} without quotes: Tabularia quotes it"
+},
+{
+"dialect": "duckdb",
+"sql": "SELECT q'[ {r} ]', {n}",
+"values": 2,
+"refused": "Write {r} without quotes: Tabularia quotes it"
+},
+{
+"dialect": "duckdb",
+"sql": "SELECT q'[ {r} ]', {n}",
+"values": 3,
+"refused": "Write {r} without quotes: Tabularia quotes it"
+},
+{
+"dialect": "duckdb",
+"sql": "SELECT [{r}], {n}",
+"values": 0,
+"used": [
+"n",
+"r"
+],
+"placeholders": [],
+"filled": "SELECT ['Nord'], 5"
+},
+{
+"dialect": "duckdb",
+"sql": "SELECT [{r}], {n}",
+"values": 1,
+"used": [
+"n",
+"r"
+],
+"placeholders": [],
+"filled": "SELECT ['it''s \\ a\nb\t\u0000é'], (-2.5)"
+},
+{
+"dialect": "duckdb",
+"sql": "SELECT [{r}], {n}",
+"values": 2,
+"used": [
+"n",
+"r"
+],
+"placeholders": [],
+"filled": "SELECT [NULL], 0.0000001"
+},
+{
+"dialect": "duckdb",
+"sql": "SELECT [{r}], {n}",
+"values": 3,
+"used": [
+"n",
+"r"
+],
+"placeholders": [],
+"filled": "SELECT [''], 123456789012345.0"
+},
+{
+"dialect": "duckdb",
+"sql": "SELECT '''{r}''', {n}",
+"values": 0,
+"refused": "Write {r} without quotes: Tabularia quotes it"
+},
+{
+"dialect": "duckdb",
+"sql": "SELECT '''{r}''', {n}",
+"values": 1,
+"refused": "Write {r} without quotes: Tabularia quotes it"
+},
+{
+"dialect": "duckdb",
+"sql": "SELECT '''{r}''', {n}",
+"values": 2,
+"refused": "Write {r} without quotes: Tabularia quotes it"
+},
+{
+"dialect": "duckdb",
+"sql": "SELECT '''{r}''', {n}",
+"values": 3,
+"refused": "Write {r} without quotes: Tabularia quotes it"
+},
+{
+"dialect": "duckdb",
+"sql": "SELECT \"{r}\" # {r}",
+"values": 0,
+"refused": "Write {r} without quotes: Tabularia quotes it"
+},
+{
+"dialect": "duckdb",
+"sql": "SELECT \"{r}\" # {r}",
+"values": 1,
+"refused": "Write {r} without quotes: Tabularia quotes it"
+},
+{
+"dialect": "duckdb",
+"sql": "SELECT \"{r}\" # {r}",
+"values": 2,
+"refused": "Write {r} without quotes: Tabularia quotes it"
+},
+{
+"dialect": "duckdb",
+"sql": "SELECT \"{r}\" # {r}",
+"values": 3,
+"refused": "Write {r} without quotes: Tabularia quotes it"
+},
+{
+"dialect": "duckdb",
+"sql": "SELECT `{r}`, {n}",
+"values": 0,
+"refused": "Write {r} without quotes: Tabularia quotes it"
+},
+{
+"dialect": "duckdb",
+"sql": "SELECT `{r}`, {n}",
+"values": 1,
+"refused": "Write {r} without quotes: Tabularia quotes it"
+},
+{
+"dialect": "duckdb",
+"sql": "SELECT `{r}`, {n}",
+"values": 2,
+"refused": "Write {r} without quotes: Tabularia quotes it"
+},
+{
+"dialect": "duckdb",
+"sql": "SELECT `{r}`, {n}",
+"values": 3,
+"refused": "Write {r} without quotes: Tabularia quotes it"
+},
+{
+"dialect": "duckdb",
+"sql": "SELECT {today} , '{now}', {start_of_month+1m}",
+"values": 0,
+"used": [],
+"placeholders": [
+"now",
+"start_of_month+1m",
+"today"
+],
+"filled": "SELECT DATE '2026-11-03' , '2026-11-03T10:20', 1762160400"
+},
+{
+"dialect": "duckdb",
+"sql": "SELECT {today} , '{now}', {start_of_month+1m}",
+"values": 1,
+"used": [],
+"placeholders": [
+"now",
+"start_of_month+1m",
+"today"
+],
+"filled": "SELECT DATE '2026-11-03' , '2026-11-03T10:20', 1762160400"
+},
+{
+"dialect": "duckdb",
+"sql": "SELECT {today} , '{now}', {start_of_month+1m}",
+"values": 2,
+"used": [],
+"placeholders": [
+"now",
+"start_of_month+1m",
+"today"
+],
+"filled": "SELECT DATE '2026-11-03' , '2026-11-03T10:20', 1762160400"
+},
+{
+"dialect": "duckdb",
+"sql": "SELECT {today} , '{now}', {start_of_month+1m}",
+"values": 3,
+"used": [],
+"placeholders": [
+"now",
+"start_of_month+1m",
+"today"
+],
+"filled": "SELECT DATE '2026-11-03' , '2026-11-03T10:20', 1762160400"
+},
+{
+"dialect": "duckdb",
+"sql": "SELECT {r}{n}",
+"values": 0,
+"used": [
+"n",
+"r"
+],
+"placeholders": [],
+"filled": "SELECT 'Nord'5"
+},
+{
+"dialect": "duckdb",
+"sql": "SELECT {r}{n}",
+"values": 1,
+"used": [
+"n",
+"r"
+],
+"placeholders": [],
+"filled": "SELECT 'it''s \\ a\nb\t\u0000é'(-2.5)"
+},
+{
+"dialect": "duckdb",
+"sql": "SELECT {r}{n}",
+"values": 2,
+"used": [
+"n",
+"r"
+],
+"placeholders": [],
+"filled": "SELECT NULL0.0000001"
+},
+{
+"dialect": "duckdb",
+"sql": "SELECT {r}{n}",
+"values": 3,
+"used": [
+"n",
+"r"
+],
+"placeholders": [],
+"filled": "SELECT ''123456789012345.0"
+},
+{
+"dialect": "duckdb",
+"sql": "SELECT {r} -{n}",
+"values": 0,
+"used": [
+"n",
+"r"
+],
+"placeholders": [],
+"filled": "SELECT 'Nord' -5"
+},
+{
+"dialect": "duckdb",
+"sql": "SELECT {r} -{n}",
+"values": 1,
+"used": [
+"n",
+"r"
+],
+"placeholders": [],
+"filled": "SELECT 'it''s \\ a\nb\t\u0000é' -(-2.5)"
+},
+{
+"dialect": "duckdb",
+"sql": "SELECT {r} -{n}",
+"values": 2,
+"used": [
+"n",
+"r"
+],
+"placeholders": [],
+"filled": "SELECT NULL -0.0000001"
+},
+{
+"dialect": "duckdb",
+"sql": "SELECT {r} -{n}",
+"values": 3,
+"used": [
+"n",
+"r"
+],
+"placeholders": [],
+"filled": "SELECT '' -123456789012345.0"
+},
+{
+"dialect": "duckdb",
+"sql": "SELECT '{today:''x}'",
+"values": 0,
+"used": [],
+"placeholders": [
+"today:''x"
+],
+"refused": "{today:''x} gives «x'y», which cannot go inside quoted text"
+},
+{
+"dialect": "duckdb",
+"sql": "SELECT '{today:''x}'",
+"values": 1,
+"used": [],
+"placeholders": [
+"today:''x"
+],
+"refused": "{today:''x} gives «x'y», which cannot go inside quoted text"
+},
+{
+"dialect": "duckdb",
+"sql": "SELECT '{today:''x}'",
+"values": 2,
+"used": [],
+"placeholders": [
+"today:''x"
+],
+"refused": "{today:''x} gives «x'y», which cannot go inside quoted text"
+},
+{
+"dialect": "duckdb",
+"sql": "SELECT '{today:''x}'",
+"values": 3,
+"used": [],
+"placeholders": [
+"today:''x"
+],
+"refused": "{today:''x} gives «x'y», which cannot go inside quoted text"
+},
+{
+"dialect": "duckdb",
+"sql": "SELECT 'é' || {r}",
+"values": 0,
+"used": [
+"r"
+],
+"placeholders": [],
+"filled": "SELECT 'é' || 'Nord'"
+},
+{
+"dialect": "duckdb",
+"sql": "SELECT 'é' || {r}",
+"values": 1,
+"used": [
+"r"
+],
+"placeholders": [],
+"filled": "SELECT 'é' || 'it''s \\ a\nb\t\u0000é'"
+},
+{
+"dialect": "duckdb",
+"sql": "SELECT 'é' || {r}",
+"values": 2,
+"used": [
+"r"
+],
+"placeholders": [],
+"filled": "SELECT 'é' || NULL"
+},
+{
+"dialect": "duckdb",
+"sql": "SELECT 'é' || {r}",
+"values": 3,
+"used": [
+"r"
+],
+"placeholders": [],
+"filled": "SELECT 'é' || ''"
+},
+{
+"dialect": "duckdb",
+"sql": "SELECT {{ {r} }}",
+"values": 0,
+"used": [
+"r"
+],
+"placeholders": [],
+"filled": "SELECT { 'Nord' }"
+},
+{
+"dialect": "duckdb",
+"sql": "SELECT {{ {r} }}",
+"values": 1,
+"used": [
+"r"
+],
+"placeholders": [],
+"filled": "SELECT { 'it''s \\ a\nb\t\u0000é' }"
+},
+{
+"dialect": "duckdb",
+"sql": "SELECT {{ {r} }}",
+"values": 2,
+"used": [
+"r"
+],
+"placeholders": [],
+"filled": "SELECT { NULL }"
+},
+{
+"dialect": "duckdb",
+"sql": "SELECT {{ {r} }}",
+"values": 3,
+"used": [
+"r"
+],
+"placeholders": [],
+"filled": "SELECT { '' }"
+},
+{
+"dialect": "chdb",
+"sql": "SELECT * FROM t WHERE r = {r} AND n > {n} AND d >= {d} AND b = {b} AND m IN {m}",
+"values": 0,
+"used": [
+"b",
+"d",
+"m",
+"n",
+"r"
+],
+"placeholders": [],
+"filled": "SELECT * FROM t WHERE r = 'Nord' AND n > 5 AND d >= toDate('2026-01-02') AND b = TRUE AND m IN ('a', 'b')"
+},
+{
+"dialect": "chdb",
+"sql": "SELECT * FROM t WHERE r = {r} AND n > {n} AND d >= {d} AND b = {b} AND m IN {m}",
+"values": 1,
+"used": [
+"b",
+"d",
+"m",
+"n",
+"r"
+],
+"placeholders": [],
+"refused": "«m» has no value, and the SQL needs at least one: choose one"
+},
+{
+"dialect": "chdb",
+"sql": "SELECT * FROM t WHERE r = {r} AND n > {n} AND d >= {d} AND b = {b} AND m IN {m}",
+"values": 2,
+"used": [
+"b",
+"d",
+"m",
+"n",
+"r"
+],
+"placeholders": [],
+"filled": "SELECT * FROM t WHERE r = NULL AND n > 0.0000001 AND d >= toDate('1999-12-31') AND b = NULL AND m IN (1, 2.0, (-3))"
+},
+{
+"dialect": "chdb",
+"sql": "SELECT * FROM t WHERE r = {r} AND n > {n} AND d >= {d} AND b = {b} AND m IN {m}",
+"values": 3,
+"used": [
+"b",
+"d",
+"m",
+"n",
+"r"
+],
+"placeholders": [],
+"filled": "SELECT * FROM t WHERE r = '' AND n > 123456789012345.0 AND d >= NULL AND b = TRUE AND m IN (TRUE, NULL)"
+},
+{
+"dialect": "chdb",
+"sql": "SELECT '{today}', {today-7}, {now:yyyy}, {{x}}, '{{today}}' FROM t -- {nope}",
+"values": 0,
+"used": [],
+"placeholders": [
+"now:yyyy",
+"today",
+"today-7"
+],
+"filled": "SELECT '2026-11-03', toDate('2026-10-27'), 2026, {x}, '{today}' FROM t -- {nope}"
+},
+{
+"dialect": "chdb",
+"sql": "SELECT '{today}', {today-7}, {now:yyyy}, {{x}}, '{{today}}' FROM t -- {nope}",
+"values": 1,
+"used": [],
+"placeholders": [
+"now:yyyy",
+"today",
+"today-7"
+],
+"filled": "SELECT '2026-11-03', toDate('2026-10-27'), 2026, {x}, '{today}' FROM t -- {nope}"
+},
+{
+"dialect": "chdb",
+"sql": "SELECT '{today}', {today-7}, {now:yyyy}, {{x}}, '{{today}}' FROM t -- {nope}",
+"values": 2,
+"used": [],
+"placeholders": [
+"now:yyyy",
+"today",
+"today-7"
+],
+"filled": "SELECT '2026-11-03', toDate('2026-10-27'), 2026, {x}, '{today}' FROM t -- {nope}"
+},
+{
+"dialect": "chdb",
+"sql": "SELECT '{today}', {today-7}, {now:yyyy}, {{x}}, '{{today}}' FROM t -- {nope}",
+"values": 3,
+"used": [],
+"placeholders": [
+"now:yyyy",
+"today",
+"today-7"
+],
+"filled": "SELECT '2026-11-03', toDate('2026-10-27'), 2026, {x}, '{today}' FROM t -- {nope}"
+},
+{
+"dialect": "chdb",
+"sql": "SELECT * FROM t WHERE x = '{r}'",
+"values": 0,
+"refused": "Write {r} without quotes: Tabularia quotes it"
+},
+{
+"dialect": "chdb",
+"sql": "SELECT * FROM t WHERE x = '{r}'",
+"values": 1,
+"refused": "Write {r} without quotes: Tabularia quotes it"
+},
+{
+"dialect": "chdb",
+"sql": "SELECT * FROM t WHERE x = '{r}'",
+"values": 2,
+"refused": "Write {r} without quotes: Tabularia quotes it"
+},
+{
+"dialect": "chdb",
+"sql": "SELECT * FROM t WHERE x = '{r}'",
+"values": 3,
+"refused": "Write {r} without quotes: Tabularia quotes it"
+},
+{
+"dialect": "chdb",
+"sql": "SELECT } FROM t",
+"values": 0,
+"refused": "A single } in the SQL: write }} for a literal brace"
+},
+{
+"dialect": "chdb",
+"sql": "SELECT } FROM t",
+"values": 1,
+"refused": "A single } in the SQL: write }} for a literal brace"
+},
+{
+"dialect": "chdb",
+"sql": "SELECT } FROM t",
+"values": 2,
+"refused": "A single } in the SQL: write }} for a literal brace"
+},
+{
+"dialect": "chdb",
+"sql": "SELECT } FROM t",
+"values": 3,
+"refused": "A single } in the SQL: write }} for a literal brace"
+},
+{
+"dialect": "chdb",
+"sql": "SELECT { FROM t",
+"values": 0,
+"refused": "A { in the SQL is not closed: add }, or write {{ for a literal brace"
+},
+{
+"dialect": "chdb",
+"sql": "SELECT { FROM t",
+"values": 1,
+"refused": "A { in the SQL is not closed: add }, or write {{ for a literal brace"
+},
+{
+"dialect": "chdb",
+"sql": "SELECT { FROM t",
+"values": 2,
+"refused": "A { in the SQL is not closed: add }, or write {{ for a literal brace"
+},
+{
+"dialect": "chdb",
+"sql": "SELECT { FROM t",
+"values": 3,
+"refused": "A { in the SQL is not closed: add }, or write {{ for a literal brace"
+},
+{
+"dialect": "chdb",
+"sql": "SELECT {nope}",
+"values": 0,
+"refused": "{nope} is neither a parameter of the report nor a placeholder: write {{ and }} for literal braces"
+},
+{
+"dialect": "chdb",
+"sql": "SELECT {nope}",
+"values": 1,
+"refused": "{nope} is neither a parameter of the report nor a placeholder: write {{ and }} for literal braces"
+},
+{
+"dialect": "chdb",
+"sql": "SELECT {nope}",
+"values": 2,
+"refused": "{nope} is neither a parameter of the report nor a placeholder: write {{ and }} for literal braces"
+},
+{
+"dialect": "chdb",
+"sql": "SELECT {nope}",
+"values": 3,
+"refused": "{nope} is neither a parameter of the report nor a placeholder: write {{ and }} for literal braces"
+},
+{
+"dialect": "chdb",
+"sql": "SELECT {r:fmt}",
+"values": 0,
+"refused": "{r:fmt}: a parameter takes no offset nor format"
+},
+{
+"dialect": "chdb",
+"sql": "SELECT {r:fmt}",
+"values": 1,
+"refused": "{r:fmt}: a parameter takes no offset nor format"
+},
+{
+"dialect": "chdb",
+"sql": "SELECT {r:fmt}",
+"values": 2,
+"refused": "{r:fmt}: a parameter takes no offset nor format"
+},
+{
+"dialect": "chdb",
+"sql": "SELECT {r:fmt}",
+"values": 3,
+"refused": "{r:fmt}: a parameter takes no offset nor format"
+},
+{
+"dialect": "chdb",
+"sql": "SELECT 'a\\' , {r} -- '",
+"values": 0,
+"refused": "The SQL is unclear near «{r}»: a backslash makes it uncertain whether it is inside quoted text. Write the text before it without that"
+},
+{
+"dialect": "chdb",
+"sql": "SELECT 'a\\' , {r} -- '",
+"values": 1,
+"refused": "The SQL is unclear near «{r}»: a backslash makes it uncertain whether it is inside quoted text. Write the text before it without that"
+},
+{
+"dialect": "chdb",
+"sql": "SELECT 'a\\' , {r} -- '",
+"values": 2,
+"refused": "The SQL is unclear near «{r}»: a backslash makes it uncertain whether it is inside quoted text. Write the text before it without that"
+},
+{
+"dialect": "chdb",
+"sql": "SELECT 'a\\' , {r} -- '",
+"values": 3,
+"refused": "The SQL is unclear near «{r}»: a backslash makes it uncertain whether it is inside quoted text. Write the text before it without that"
+},
+{
+"dialect": "chdb",
+"sql": "SELECT /* /* */ {r} */",
+"values": 0,
+"refused": "The SQL is unclear near «{r}»: a comment inside another makes it uncertain whether it is inside quoted text. Write the text before it without that"
+},
+{
+"dialect": "chdb",
+"sql": "SELECT /* /* */ {r} */",
+"values": 1,
+"refused": "The SQL is unclear near «{r}»: a comment inside another makes it uncertain whether it is inside quoted text. Write the text before it without that"
+},
+{
+"dialect": "chdb",
+"sql": "SELECT /* /* */ {r} */",
+"values": 2,
+"refused": "The SQL is unclear near «{r}»: a comment inside another makes it uncertain whether it is inside quoted text. Write the text before it without that"
+},
+{
+"dialect": "chdb",
+"sql": "SELECT /* /* */ {r} */",
+"values": 3,
+"refused": "The SQL is unclear near «{r}»: a comment inside another makes it uncertain whether it is inside quoted text. Write the text before it without that"
+},
+{
+"dialect": "chdb",
+"sql": "SELECT $$ {r} $$, {n}",
+"values": 0,
+"refused": "Write {r} without quotes: Tabularia quotes it"
+},
+{
+"dialect": "chdb",
+"sql": "SELECT $$ {r} $$, {n}",
+"values": 1,
+"refused": "Write {r} without quotes: Tabularia quotes it"
+},
+{
+"dialect": "chdb",
+"sql": "SELECT $$ {r} $$, {n}",
+"values": 2,
+"refused": "Write {r} without quotes: Tabularia quotes it"
+},
+{
+"dialect": "chdb",
+"sql": "SELECT $$ {r} $$, {n}",
+"values": 3,
+"refused": "Write {r} without quotes: Tabularia quotes it"
+},
+{
+"dialect": "chdb",
+"sql": "SELECT E'\\' {r}'",
+"values": 0,
+"refused": "The SQL is unclear near «{r}»: a backslash makes it uncertain whether it is inside quoted text. Write the text before it without that"
+},
+{
+"dialect": "chdb",
+"sql": "SELECT E'\\' {r}'",
+"values": 1,
+"refused": "The SQL is unclear near «{r}»: a backslash makes it uncertain whether it is inside quoted text. Write the text before it without that"
+},
+{
+"dialect": "chdb",
+"sql": "SELECT E'\\' {r}'",
+"values": 2,
+"refused": "The SQL is unclear near «{r}»: a backslash makes it uncertain whether it is inside quoted text. Write the text before it without that"
+},
+{
+"dialect": "chdb",
+"sql": "SELECT E'\\' {r}'",
+"values": 3,
+"refused": "The SQL is unclear near «{r}»: a backslash makes it uncertain whether it is inside quoted text. Write the text before it without that"
+},
+{
+"dialect": "chdb",
+"sql": "SELECT q'[ {r} ]', {n}",
+"values": 0,
+"refused": "Write {r} without quotes: Tabularia quotes it"
+},
+{
+"dialect": "chdb",
+"sql": "SELECT q'[ {r} ]', {n}",
+"values": 1,
+"refused": "Write {r} without quotes: Tabularia quotes it"
+},
+{
+"dialect": "chdb",
+"sql": "SELECT q'[ {r} ]', {n}",
+"values": 2,
+"refused": "Write {r} without quotes: Tabularia quotes it"
+},
+{
+"dialect": "chdb",
+"sql": "SELECT q'[ {r} ]', {n}",
+"values": 3,
+"refused": "Write {r} without quotes: Tabularia quotes it"
+},
+{
+"dialect": "chdb",
+"sql": "SELECT [{r}], {n}",
+"values": 0,
+"used": [
+"n",
+"r"
+],
+"placeholders": [],
+"filled": "SELECT ['Nord'], 5"
+},
+{
+"dialect": "chdb",
+"sql": "SELECT [{r}], {n}",
+"values": 1,
+"used": [
+"n",
+"r"
+],
+"placeholders": [],
+"filled": "SELECT ['it''s \\\\ a\\nb\\t\\0é'], (-2.5)"
+},
+{
+"dialect": "chdb",
+"sql": "SELECT [{r}], {n}",
+"values": 2,
+"used": [
+"n",
+"r"
+],
+"placeholders": [],
+"filled": "SELECT [NULL], 0.0000001"
+},
+{
+"dialect": "chdb",
+"sql": "SELECT [{r}], {n}",
+"values": 3,
+"used": [
+"n",
+"r"
+],
+"placeholders": [],
+"filled": "SELECT [''], 123456789012345.0"
+},
+{
+"dialect": "chdb",
+"sql": "SELECT '''{r}''', {n}",
+"values": 0,
+"refused": "Write {r} without quotes: Tabularia quotes it"
+},
+{
+"dialect": "chdb",
+"sql": "SELECT '''{r}''', {n}",
+"values": 1,
+"refused": "Write {r} without quotes: Tabularia quotes it"
+},
+{
+"dialect": "chdb",
+"sql": "SELECT '''{r}''', {n}",
+"values": 2,
+"refused": "Write {r} without quotes: Tabularia quotes it"
+},
+{
+"dialect": "chdb",
+"sql": "SELECT '''{r}''', {n}",
+"values": 3,
+"refused": "Write {r} without quotes: Tabularia quotes it"
+},
+{
+"dialect": "chdb",
+"sql": "SELECT \"{r}\" # {r}",
+"values": 0,
+"refused": "Write {r} without quotes: Tabularia quotes it"
+},
+{
+"dialect": "chdb",
+"sql": "SELECT \"{r}\" # {r}",
+"values": 1,
+"refused": "Write {r} without quotes: Tabularia quotes it"
+},
+{
+"dialect": "chdb",
+"sql": "SELECT \"{r}\" # {r}",
+"values": 2,
+"refused": "Write {r} without quotes: Tabularia quotes it"
+},
+{
+"dialect": "chdb",
+"sql": "SELECT \"{r}\" # {r}",
+"values": 3,
+"refused": "Write {r} without quotes: Tabularia quotes it"
+},
+{
+"dialect": "chdb",
+"sql": "SELECT `{r}`, {n}",
+"values": 0,
+"refused": "Write {r} without quotes: Tabularia quotes it"
+},
+{
+"dialect": "chdb",
+"sql": "SELECT `{r}`, {n}",
+"values": 1,
+"refused": "Write {r} without quotes: Tabularia quotes it"
+},
+{
+"dialect": "chdb",
+"sql": "SELECT `{r}`, {n}",
+"values": 2,
+"refused": "Write {r} without quotes: Tabularia quotes it"
+},
+{
+"dialect": "chdb",
+"sql": "SELECT `{r}`, {n}",
+"values": 3,
+"refused": "Write {r} without quotes: Tabularia quotes it"
+},
+{
+"dialect": "chdb",
+"sql": "SELECT {today} , '{now}', {start_of_month+1m}",
+"values": 0,
+"used": [],
+"placeholders": [
+"now",
+"start_of_month+1m",
+"today"
+],
+"filled": "SELECT toDate('2026-11-03') , '2026-11-03T10:20', 1762160400"
+},
+{
+"dialect": "chdb",
+"sql": "SELECT {today} , '{now}', {start_of_month+1m}",
+"values": 1,
+"used": [],
+"placeholders": [
+"now",
+"start_of_month+1m",
+"today"
+],
+"filled": "SELECT toDate('2026-11-03') , '2026-11-03T10:20', 1762160400"
+},
+{
+"dialect": "chdb",
+"sql": "SELECT {today} , '{now}', {start_of_month+1m}",
+"values": 2,
+"used": [],
+"placeholders": [
+"now",
+"start_of_month+1m",
+"today"
+],
+"filled": "SELECT toDate('2026-11-03') , '2026-11-03T10:20', 1762160400"
+},
+{
+"dialect": "chdb",
+"sql": "SELECT {today} , '{now}', {start_of_month+1m}",
+"values": 3,
+"used": [],
+"placeholders": [
+"now",
+"start_of_month+1m",
+"today"
+],
+"filled": "SELECT toDate('2026-11-03') , '2026-11-03T10:20', 1762160400"
+},
+{
+"dialect": "chdb",
+"sql": "SELECT {r}{n}",
+"values": 0,
+"used": [
+"n",
+"r"
+],
+"placeholders": [],
+"filled": "SELECT 'Nord'5"
+},
+{
+"dialect": "chdb",
+"sql": "SELECT {r}{n}",
+"values": 1,
+"used": [
+"n",
+"r"
+],
+"placeholders": [],
+"filled": "SELECT 'it''s \\\\ a\\nb\\t\\0é'(-2.5)"
+},
+{
+"dialect": "chdb",
+"sql": "SELECT {r}{n}",
+"values": 2,
+"used": [
+"n",
+"r"
+],
+"placeholders": [],
+"filled": "SELECT NULL0.0000001"
+},
+{
+"dialect": "chdb",
+"sql": "SELECT {r}{n}",
+"values": 3,
+"used": [
+"n",
+"r"
+],
+"placeholders": [],
+"filled": "SELECT ''123456789012345.0"
+},
+{
+"dialect": "chdb",
+"sql": "SELECT {r} -{n}",
+"values": 0,
+"used": [
+"n",
+"r"
+],
+"placeholders": [],
+"filled": "SELECT 'Nord' -5"
+},
+{
+"dialect": "chdb",
+"sql": "SELECT {r} -{n}",
+"values": 1,
+"used": [
+"n",
+"r"
+],
+"placeholders": [],
+"filled": "SELECT 'it''s \\\\ a\\nb\\t\\0é' -(-2.5)"
+},
+{
+"dialect": "chdb",
+"sql": "SELECT {r} -{n}",
+"values": 2,
+"used": [
+"n",
+"r"
+],
+"placeholders": [],
+"filled": "SELECT NULL -0.0000001"
+},
+{
+"dialect": "chdb",
+"sql": "SELECT {r} -{n}",
+"values": 3,
+"used": [
+"n",
+"r"
+],
+"placeholders": [],
+"filled": "SELECT '' -123456789012345.0"
+},
+{
+"dialect": "chdb",
+"sql": "SELECT '{today:''x}'",
+"values": 0,
+"used": [],
+"placeholders": [
+"today:''x"
+],
+"refused": "{today:''x} gives «x'y», which cannot go inside quoted text"
+},
+{
+"dialect": "chdb",
+"sql": "SELECT '{today:''x}'",
+"values": 1,
+"used": [],
+"placeholders": [
+"today:''x"
+],
+"refused": "{today:''x} gives «x'y», which cannot go inside quoted text"
+},
+{
+"dialect": "chdb",
+"sql": "SELECT '{today:''x}'",
+"values": 2,
+"used": [],
+"placeholders": [
+"today:''x"
+],
+"refused": "{today:''x} gives «x'y», which cannot go inside quoted text"
+},
+{
+"dialect": "chdb",
+"sql": "SELECT '{today:''x}'",
+"values": 3,
+"used": [],
+"placeholders": [
+"today:''x"
+],
+"refused": "{today:''x} gives «x'y», which cannot go inside quoted text"
+},
+{
+"dialect": "chdb",
+"sql": "SELECT 'é' || {r}",
+"values": 0,
+"used": [
+"r"
+],
+"placeholders": [],
+"filled": "SELECT 'é' || 'Nord'"
+},
+{
+"dialect": "chdb",
+"sql": "SELECT 'é' || {r}",
+"values": 1,
+"used": [
+"r"
+],
+"placeholders": [],
+"filled": "SELECT 'é' || 'it''s \\\\ a\\nb\\t\\0é'"
+},
+{
+"dialect": "chdb",
+"sql": "SELECT 'é' || {r}",
+"values": 2,
+"used": [
+"r"
+],
+"placeholders": [],
+"filled": "SELECT 'é' || NULL"
+},
+{
+"dialect": "chdb",
+"sql": "SELECT 'é' || {r}",
+"values": 3,
+"used": [
+"r"
+],
+"placeholders": [],
+"filled": "SELECT 'é' || ''"
+},
+{
+"dialect": "chdb",
+"sql": "SELECT {{ {r} }}",
+"values": 0,
+"used": [
+"r"
+],
+"placeholders": [],
+"filled": "SELECT { 'Nord' }"
+},
+{
+"dialect": "chdb",
+"sql": "SELECT {{ {r} }}",
+"values": 1,
+"used": [
+"r"
+],
+"placeholders": [],
+"filled": "SELECT { 'it''s \\\\ a\\nb\\t\\0é' }"
+},
+{
+"dialect": "chdb",
+"sql": "SELECT {{ {r} }}",
+"values": 2,
+"used": [
+"r"
+],
+"placeholders": [],
+"filled": "SELECT { NULL }"
+},
+{
+"dialect": "chdb",
+"sql": "SELECT {{ {r} }}",
+"values": 3,
+"used": [
+"r"
+],
+"placeholders": [],
+"filled": "SELECT { '' }"
+},
+{
+"dialect": "clickhouse",
+"sql": "SELECT * FROM t WHERE r = {r} AND n > {n} AND d >= {d} AND b = {b} AND m IN {m}",
+"values": 0,
+"used": [
+"b",
+"d",
+"m",
+"n",
+"r"
+],
+"placeholders": [],
+"filled": "SELECT * FROM t WHERE r = 'Nord' AND n > 5 AND d >= toDate('2026-01-02') AND b = TRUE AND m IN ('a', 'b')"
+},
+{
+"dialect": "clickhouse",
+"sql": "SELECT * FROM t WHERE r = {r} AND n > {n} AND d >= {d} AND b = {b} AND m IN {m}",
+"values": 1,
+"used": [
+"b",
+"d",
+"m",
+"n",
+"r"
+],
+"placeholders": [],
+"refused": "«m» has no value, and the SQL needs at least one: choose one"
+},
+{
+"dialect": "clickhouse",
+"sql": "SELECT * FROM t WHERE r = {r} AND n > {n} AND d >= {d} AND b = {b} AND m IN {m}",
+"values": 2,
+"used": [
+"b",
+"d",
+"m",
+"n",
+"r"
+],
+"placeholders": [],
+"filled": "SELECT * FROM t WHERE r = NULL AND n > 0.0000001 AND d >= toDate('1999-12-31') AND b = NULL AND m IN (1, 2.0, (-3))"
+},
+{
+"dialect": "clickhouse",
+"sql": "SELECT * FROM t WHERE r = {r} AND n > {n} AND d >= {d} AND b = {b} AND m IN {m}",
+"values": 3,
+"used": [
+"b",
+"d",
+"m",
+"n",
+"r"
+],
+"placeholders": [],
+"filled": "SELECT * FROM t WHERE r = '' AND n > 123456789012345.0 AND d >= NULL AND b = TRUE AND m IN (TRUE, NULL)"
+},
+{
+"dialect": "clickhouse",
+"sql": "SELECT '{today}', {today-7}, {now:yyyy}, {{x}}, '{{today}}' FROM t -- {nope}",
+"values": 0,
+"used": [],
+"placeholders": [
+"now:yyyy",
+"today",
+"today-7"
+],
+"filled": "SELECT '2026-11-03', toDate('2026-10-27'), 2026, {x}, '{today}' FROM t -- {nope}"
+},
+{
+"dialect": "clickhouse",
+"sql": "SELECT '{today}', {today-7}, {now:yyyy}, {{x}}, '{{today}}' FROM t -- {nope}",
+"values": 1,
+"used": [],
+"placeholders": [
+"now:yyyy",
+"today",
+"today-7"
+],
+"filled": "SELECT '2026-11-03', toDate('2026-10-27'), 2026, {x}, '{today}' FROM t -- {nope}"
+},
+{
+"dialect": "clickhouse",
+"sql": "SELECT '{today}', {today-7}, {now:yyyy}, {{x}}, '{{today}}' FROM t -- {nope}",
+"values": 2,
+"used": [],
+"placeholders": [
+"now:yyyy",
+"today",
+"today-7"
+],
+"filled": "SELECT '2026-11-03', toDate('2026-10-27'), 2026, {x}, '{today}' FROM t -- {nope}"
+},
+{
+"dialect": "clickhouse",
+"sql": "SELECT '{today}', {today-7}, {now:yyyy}, {{x}}, '{{today}}' FROM t -- {nope}",
+"values": 3,
+"used": [],
+"placeholders": [
+"now:yyyy",
+"today",
+"today-7"
+],
+"filled": "SELECT '2026-11-03', toDate('2026-10-27'), 2026, {x}, '{today}' FROM t -- {nope}"
+},
+{
+"dialect": "clickhouse",
+"sql": "SELECT * FROM t WHERE x = '{r}'",
+"values": 0,
+"refused": "Write {r} without quotes: Tabularia quotes it"
+},
+{
+"dialect": "clickhouse",
+"sql": "SELECT * FROM t WHERE x = '{r}'",
+"values": 1,
+"refused": "Write {r} without quotes: Tabularia quotes it"
+},
+{
+"dialect": "clickhouse",
+"sql": "SELECT * FROM t WHERE x = '{r}'",
+"values": 2,
+"refused": "Write {r} without quotes: Tabularia quotes it"
+},
+{
+"dialect": "clickhouse",
+"sql": "SELECT * FROM t WHERE x = '{r}'",
+"values": 3,
+"refused": "Write {r} without quotes: Tabularia quotes it"
+},
+{
+"dialect": "clickhouse",
+"sql": "SELECT } FROM t",
+"values": 0,
+"refused": "A single } in the SQL: write }} for a literal brace"
+},
+{
+"dialect": "clickhouse",
+"sql": "SELECT } FROM t",
+"values": 1,
+"refused": "A single } in the SQL: write }} for a literal brace"
+},
+{
+"dialect": "clickhouse",
+"sql": "SELECT } FROM t",
+"values": 2,
+"refused": "A single } in the SQL: write }} for a literal brace"
+},
+{
+"dialect": "clickhouse",
+"sql": "SELECT } FROM t",
+"values": 3,
+"refused": "A single } in the SQL: write }} for a literal brace"
+},
+{
+"dialect": "clickhouse",
+"sql": "SELECT { FROM t",
+"values": 0,
+"refused": "A { in the SQL is not closed: add }, or write {{ for a literal brace"
+},
+{
+"dialect": "clickhouse",
+"sql": "SELECT { FROM t",
+"values": 1,
+"refused": "A { in the SQL is not closed: add }, or write {{ for a literal brace"
+},
+{
+"dialect": "clickhouse",
+"sql": "SELECT { FROM t",
+"values": 2,
+"refused": "A { in the SQL is not closed: add }, or write {{ for a literal brace"
+},
+{
+"dialect": "clickhouse",
+"sql": "SELECT { FROM t",
+"values": 3,
+"refused": "A { in the SQL is not closed: add }, or write {{ for a literal brace"
+},
+{
+"dialect": "clickhouse",
+"sql": "SELECT {nope}",
+"values": 0,
+"refused": "{nope} is neither a parameter of the report nor a placeholder: write {{ and }} for literal braces"
+},
+{
+"dialect": "clickhouse",
+"sql": "SELECT {nope}",
+"values": 1,
+"refused": "{nope} is neither a parameter of the report nor a placeholder: write {{ and }} for literal braces"
+},
+{
+"dialect": "clickhouse",
+"sql": "SELECT {nope}",
+"values": 2,
+"refused": "{nope} is neither a parameter of the report nor a placeholder: write {{ and }} for literal braces"
+},
+{
+"dialect": "clickhouse",
+"sql": "SELECT {nope}",
+"values": 3,
+"refused": "{nope} is neither a parameter of the report nor a placeholder: write {{ and }} for literal braces"
+},
+{
+"dialect": "clickhouse",
+"sql": "SELECT {r:fmt}",
+"values": 0,
+"refused": "{r:fmt}: a parameter takes no offset nor format"
+},
+{
+"dialect": "clickhouse",
+"sql": "SELECT {r:fmt}",
+"values": 1,
+"refused": "{r:fmt}: a parameter takes no offset nor format"
+},
+{
+"dialect": "clickhouse",
+"sql": "SELECT {r:fmt}",
+"values": 2,
+"refused": "{r:fmt}: a parameter takes no offset nor format"
+},
+{
+"dialect": "clickhouse",
+"sql": "SELECT {r:fmt}",
+"values": 3,
+"refused": "{r:fmt}: a parameter takes no offset nor format"
+},
+{
+"dialect": "clickhouse",
+"sql": "SELECT 'a\\' , {r} -- '",
+"values": 0,
+"refused": "The SQL is unclear near «{r}»: a backslash makes it uncertain whether it is inside quoted text. Write the text before it without that"
+},
+{
+"dialect": "clickhouse",
+"sql": "SELECT 'a\\' , {r} -- '",
+"values": 1,
+"refused": "The SQL is unclear near «{r}»: a backslash makes it uncertain whether it is inside quoted text. Write the text before it without that"
+},
+{
+"dialect": "clickhouse",
+"sql": "SELECT 'a\\' , {r} -- '",
+"values": 2,
+"refused": "The SQL is unclear near «{r}»: a backslash makes it uncertain whether it is inside quoted text. Write the text before it without that"
+},
+{
+"dialect": "clickhouse",
+"sql": "SELECT 'a\\' , {r} -- '",
+"values": 3,
+"refused": "The SQL is unclear near «{r}»: a backslash makes it uncertain whether it is inside quoted text. Write the text before it without that"
+},
+{
+"dialect": "clickhouse",
+"sql": "SELECT /* /* */ {r} */",
+"values": 0,
+"refused": "The SQL is unclear near «{r}»: a comment inside another makes it uncertain whether it is inside quoted text. Write the text before it without that"
+},
+{
+"dialect": "clickhouse",
+"sql": "SELECT /* /* */ {r} */",
+"values": 1,
+"refused": "The SQL is unclear near «{r}»: a comment inside another makes it uncertain whether it is inside quoted text. Write the text before it without that"
+},
+{
+"dialect": "clickhouse",
+"sql": "SELECT /* /* */ {r} */",
+"values": 2,
+"refused": "The SQL is unclear near «{r}»: a comment inside another makes it uncertain whether it is inside quoted text. Write the text before it without that"
+},
+{
+"dialect": "clickhouse",
+"sql": "SELECT /* /* */ {r} */",
+"values": 3,
+"refused": "The SQL is unclear near «{r}»: a comment inside another makes it uncertain whether it is inside quoted text. Write the text before it without that"
+},
+{
+"dialect": "clickhouse",
+"sql": "SELECT $$ {r} $$, {n}",
+"values": 0,
+"refused": "Write {r} without quotes: Tabularia quotes it"
+},
+{
+"dialect": "clickhouse",
+"sql": "SELECT $$ {r} $$, {n}",
+"values": 1,
+"refused": "Write {r} without quotes: Tabularia quotes it"
+},
+{
+"dialect": "clickhouse",
+"sql": "SELECT $$ {r} $$, {n}",
+"values": 2,
+"refused": "Write {r} without quotes: Tabularia quotes it"
+},
+{
+"dialect": "clickhouse",
+"sql": "SELECT $$ {r} $$, {n}",
+"values": 3,
+"refused": "Write {r} without quotes: Tabularia quotes it"
+},
+{
+"dialect": "clickhouse",
+"sql": "SELECT E'\\' {r}'",
+"values": 0,
+"refused": "The SQL is unclear near «{r}»: a backslash makes it uncertain whether it is inside quoted text. Write the text before it without that"
+},
+{
+"dialect": "clickhouse",
+"sql": "SELECT E'\\' {r}'",
+"values": 1,
+"refused": "The SQL is unclear near «{r}»: a backslash makes it uncertain whether it is inside quoted text. Write the text before it without that"
+},
+{
+"dialect": "clickhouse",
+"sql": "SELECT E'\\' {r}'",
+"values": 2,
+"refused": "The SQL is unclear near «{r}»: a backslash makes it uncertain whether it is inside quoted text. Write the text before it without that"
+},
+{
+"dialect": "clickhouse",
+"sql": "SELECT E'\\' {r}'",
+"values": 3,
+"refused": "The SQL is unclear near «{r}»: a backslash makes it uncertain whether it is inside quoted text. Write the text before it without that"
+},
+{
+"dialect": "clickhouse",
+"sql": "SELECT q'[ {r} ]', {n}",
+"values": 0,
+"refused": "Write {r} without quotes: Tabularia quotes it"
+},
+{
+"dialect": "clickhouse",
+"sql": "SELECT q'[ {r} ]', {n}",
+"values": 1,
+"refused": "Write {r} without quotes: Tabularia quotes it"
+},
+{
+"dialect": "clickhouse",
+"sql": "SELECT q'[ {r} ]', {n}",
+"values": 2,
+"refused": "Write {r} without quotes: Tabularia quotes it"
+},
+{
+"dialect": "clickhouse",
+"sql": "SELECT q'[ {r} ]', {n}",
+"values": 3,
+"refused": "Write {r} without quotes: Tabularia quotes it"
+},
+{
+"dialect": "clickhouse",
+"sql": "SELECT [{r}], {n}",
+"values": 0,
+"used": [
+"n",
+"r"
+],
+"placeholders": [],
+"filled": "SELECT ['Nord'], 5"
+},
+{
+"dialect": "clickhouse",
+"sql": "SELECT [{r}], {n}",
+"values": 1,
+"used": [
+"n",
+"r"
+],
+"placeholders": [],
+"filled": "SELECT ['it''s \\\\ a\\nb\\t\\0é'], (-2.5)"
+},
+{
+"dialect": "clickhouse",
+"sql": "SELECT [{r}], {n}",
+"values": 2,
+"used": [
+"n",
+"r"
+],
+"placeholders": [],
+"filled": "SELECT [NULL], 0.0000001"
+},
+{
+"dialect": "clickhouse",
+"sql": "SELECT [{r}], {n}",
+"values": 3,
+"used": [
+"n",
+"r"
+],
+"placeholders": [],
+"filled": "SELECT [''], 123456789012345.0"
+},
+{
+"dialect": "clickhouse",
+"sql": "SELECT '''{r}''', {n}",
+"values": 0,
+"refused": "Write {r} without quotes: Tabularia quotes it"
+},
+{
+"dialect": "clickhouse",
+"sql": "SELECT '''{r}''', {n}",
+"values": 1,
+"refused": "Write {r} without quotes: Tabularia quotes it"
+},
+{
+"dialect": "clickhouse",
+"sql": "SELECT '''{r}''', {n}",
+"values": 2,
+"refused": "Write {r} without quotes: Tabularia quotes it"
+},
+{
+"dialect": "clickhouse",
+"sql": "SELECT '''{r}''', {n}",
+"values": 3,
+"refused": "Write {r} without quotes: Tabularia quotes it"
+},
+{
+"dialect": "clickhouse",
+"sql": "SELECT \"{r}\" # {r}",
+"values": 0,
+"refused": "Write {r} without quotes: Tabularia quotes it"
+},
+{
+"dialect": "clickhouse",
+"sql": "SELECT \"{r}\" # {r}",
+"values": 1,
+"refused": "Write {r} without quotes: Tabularia quotes it"
+},
+{
+"dialect": "clickhouse",
+"sql": "SELECT \"{r}\" # {r}",
+"values": 2,
+"refused": "Write {r} without quotes: Tabularia quotes it"
+},
+{
+"dialect": "clickhouse",
+"sql": "SELECT \"{r}\" # {r}",
+"values": 3,
+"refused": "Write {r} without quotes: Tabularia quotes it"
+},
+{
+"dialect": "clickhouse",
+"sql": "SELECT `{r}`, {n}",
+"values": 0,
+"refused": "Write {r} without quotes: Tabularia quotes it"
+},
+{
+"dialect": "clickhouse",
+"sql": "SELECT `{r}`, {n}",
+"values": 1,
+"refused": "Write {r} without quotes: Tabularia quotes it"
+},
+{
+"dialect": "clickhouse",
+"sql": "SELECT `{r}`, {n}",
+"values": 2,
+"refused": "Write {r} without quotes: Tabularia quotes it"
+},
+{
+"dialect": "clickhouse",
+"sql": "SELECT `{r}`, {n}",
+"values": 3,
+"refused": "Write {r} without quotes: Tabularia quotes it"
+},
+{
+"dialect": "clickhouse",
+"sql": "SELECT {today} , '{now}', {start_of_month+1m}",
+"values": 0,
+"used": [],
+"placeholders": [
+"now",
+"start_of_month+1m",
+"today"
+],
+"filled": "SELECT toDate('2026-11-03') , '2026-11-03T10:20', 1762160400"
+},
+{
+"dialect": "clickhouse",
+"sql": "SELECT {today} , '{now}', {start_of_month+1m}",
+"values": 1,
+"used": [],
+"placeholders": [
+"now",
+"start_of_month+1m",
+"today"
+],
+"filled": "SELECT toDate('2026-11-03') , '2026-11-03T10:20', 1762160400"
+},
+{
+"dialect": "clickhouse",
+"sql": "SELECT {today} , '{now}', {start_of_month+1m}",
+"values": 2,
+"used": [],
+"placeholders": [
+"now",
+"start_of_month+1m",
+"today"
+],
+"filled": "SELECT toDate('2026-11-03') , '2026-11-03T10:20', 1762160400"
+},
+{
+"dialect": "clickhouse",
+"sql": "SELECT {today} , '{now}', {start_of_month+1m}",
+"values": 3,
+"used": [],
+"placeholders": [
+"now",
+"start_of_month+1m",
+"today"
+],
+"filled": "SELECT toDate('2026-11-03') , '2026-11-03T10:20', 1762160400"
+},
+{
+"dialect": "clickhouse",
+"sql": "SELECT {r}{n}",
+"values": 0,
+"used": [
+"n",
+"r"
+],
+"placeholders": [],
+"filled": "SELECT 'Nord'5"
+},
+{
+"dialect": "clickhouse",
+"sql": "SELECT {r}{n}",
+"values": 1,
+"used": [
+"n",
+"r"
+],
+"placeholders": [],
+"filled": "SELECT 'it''s \\\\ a\\nb\\t\\0é'(-2.5)"
+},
+{
+"dialect": "clickhouse",
+"sql": "SELECT {r}{n}",
+"values": 2,
+"used": [
+"n",
+"r"
+],
+"placeholders": [],
+"filled": "SELECT NULL0.0000001"
+},
+{
+"dialect": "clickhouse",
+"sql": "SELECT {r}{n}",
+"values": 3,
+"used": [
+"n",
+"r"
+],
+"placeholders": [],
+"filled": "SELECT ''123456789012345.0"
+},
+{
+"dialect": "clickhouse",
+"sql": "SELECT {r} -{n}",
+"values": 0,
+"used": [
+"n",
+"r"
+],
+"placeholders": [],
+"filled": "SELECT 'Nord' -5"
+},
+{
+"dialect": "clickhouse",
+"sql": "SELECT {r} -{n}",
+"values": 1,
+"used": [
+"n",
+"r"
+],
+"placeholders": [],
+"filled": "SELECT 'it''s \\\\ a\\nb\\t\\0é' -(-2.5)"
+},
+{
+"dialect": "clickhouse",
+"sql": "SELECT {r} -{n}",
+"values": 2,
+"used": [
+"n",
+"r"
+],
+"placeholders": [],
+"filled": "SELECT NULL -0.0000001"
+},
+{
+"dialect": "clickhouse",
+"sql": "SELECT {r} -{n}",
+"values": 3,
+"used": [
+"n",
+"r"
+],
+"placeholders": [],
+"filled": "SELECT '' -123456789012345.0"
+},
+{
+"dialect": "clickhouse",
+"sql": "SELECT '{today:''x}'",
+"values": 0,
+"used": [],
+"placeholders": [
+"today:''x"
+],
+"refused": "{today:''x} gives «x'y», which cannot go inside quoted text"
+},
+{
+"dialect": "clickhouse",
+"sql": "SELECT '{today:''x}'",
+"values": 1,
+"used": [],
+"placeholders": [
+"today:''x"
+],
+"refused": "{today:''x} gives «x'y», which cannot go inside quoted text"
+},
+{
+"dialect": "clickhouse",
+"sql": "SELECT '{today:''x}'",
+"values": 2,
+"used": [],
+"placeholders": [
+"today:''x"
+],
+"refused": "{today:''x} gives «x'y», which cannot go inside quoted text"
+},
+{
+"dialect": "clickhouse",
+"sql": "SELECT '{today:''x}'",
+"values": 3,
+"used": [],
+"placeholders": [
+"today:''x"
+],
+"refused": "{today:''x} gives «x'y», which cannot go inside quoted text"
+},
+{
+"dialect": "clickhouse",
+"sql": "SELECT 'é' || {r}",
+"values": 0,
+"used": [
+"r"
+],
+"placeholders": [],
+"filled": "SELECT 'é' || 'Nord'"
+},
+{
+"dialect": "clickhouse",
+"sql": "SELECT 'é' || {r}",
+"values": 1,
+"used": [
+"r"
+],
+"placeholders": [],
+"filled": "SELECT 'é' || 'it''s \\\\ a\\nb\\t\\0é'"
+},
+{
+"dialect": "clickhouse",
+"sql": "SELECT 'é' || {r}",
+"values": 2,
+"used": [
+"r"
+],
+"placeholders": [],
+"filled": "SELECT 'é' || NULL"
+},
+{
+"dialect": "clickhouse",
+"sql": "SELECT 'é' || {r}",
+"values": 3,
+"used": [
+"r"
+],
+"placeholders": [],
+"filled": "SELECT 'é' || ''"
+},
+{
+"dialect": "clickhouse",
+"sql": "SELECT {{ {r} }}",
+"values": 0,
+"used": [
+"r"
+],
+"placeholders": [],
+"filled": "SELECT { 'Nord' }"
+},
+{
+"dialect": "clickhouse",
+"sql": "SELECT {{ {r} }}",
+"values": 1,
+"used": [
+"r"
+],
+"placeholders": [],
+"filled": "SELECT { 'it''s \\\\ a\\nb\\t\\0é' }"
+},
+{
+"dialect": "clickhouse",
+"sql": "SELECT {{ {r} }}",
+"values": 2,
+"used": [
+"r"
+],
+"placeholders": [],
+"filled": "SELECT { NULL }"
+},
+{
+"dialect": "clickhouse",
+"sql": "SELECT {{ {r} }}",
+"values": 3,
+"used": [
+"r"
+],
+"placeholders": [],
+"filled": "SELECT { '' }"
+},
+{
+"dialect": "bigquery",
+"sql": "SELECT * FROM t WHERE r = {r} AND n > {n} AND d >= {d} AND b = {b} AND m IN {m}",
+"values": 0,
+"used": [
+"b",
+"d",
+"m",
+"n",
+"r"
+],
+"placeholders": [],
+"filled": "SELECT * FROM t WHERE r = 'Nord' AND n > 5 AND d >= DATE '2026-01-02' AND b = TRUE AND m IN ('a', 'b')"
+},
+{
+"dialect": "bigquery",
+"sql": "SELECT * FROM t WHERE r = {r} AND n > {n} AND d >= {d} AND b = {b} AND m IN {m}",
+"values": 1,
+"used": [
+"b",
+"d",
+"m",
+"n",
+"r"
+],
+"placeholders": [],
+"refused": "«m» has no value, and the SQL needs at least one: choose one"
+},
+{
+"dialect": "bigquery",
+"sql": "SELECT * FROM t WHERE r = {r} AND n > {n} AND d >= {d} AND b = {b} AND m IN {m}",
+"values": 2,
+"used": [
+"b",
+"d",
+"m",
+"n",
+"r"
+],
+"placeholders": [],
+"filled": "SELECT * FROM t WHERE r = NULL AND n > 0.0000001 AND d >= DATE '1999-12-31' AND b = NULL AND m IN (1, 2.0, (-3))"
+},
+{
+"dialect": "bigquery",
+"sql": "SELECT * FROM t WHERE r = {r} AND n > {n} AND d >= {d} AND b = {b} AND m IN {m}",
+"values": 3,
+"used": [
+"b",
+"d",
+"m",
+"n",
+"r"
+],
+"placeholders": [],
+"filled": "SELECT * FROM t WHERE r = '' AND n > 123456789012345.0 AND d >= NULL AND b = TRUE AND m IN (TRUE, NULL)"
+},
+{
+"dialect": "bigquery",
+"sql": "SELECT '{today}', {today-7}, {now:yyyy}, {{x}}, '{{today}}' FROM t -- {nope}",
+"values": 0,
+"used": [],
+"placeholders": [
+"now:yyyy",
+"today",
+"today-7"
+],
+"filled": "SELECT '2026-11-03', DATE '2026-10-27', 2026, {x}, '{today}' FROM t -- {nope}"
+},
+{
+"dialect": "bigquery",
+"sql": "SELECT '{today}', {today-7}, {now:yyyy}, {{x}}, '{{today}}' FROM t -- {nope}",
+"values": 1,
+"used": [],
+"placeholders": [
+"now:yyyy",
+"today",
+"today-7"
+],
+"filled": "SELECT '2026-11-03', DATE '2026-10-27', 2026, {x}, '{today}' FROM t -- {nope}"
+},
+{
+"dialect": "bigquery",
+"sql": "SELECT '{today}', {today-7}, {now:yyyy}, {{x}}, '{{today}}' FROM t -- {nope}",
+"values": 2,
+"used": [],
+"placeholders": [
+"now:yyyy",
+"today",
+"today-7"
+],
+"filled": "SELECT '2026-11-03', DATE '2026-10-27', 2026, {x}, '{today}' FROM t -- {nope}"
+},
+{
+"dialect": "bigquery",
+"sql": "SELECT '{today}', {today-7}, {now:yyyy}, {{x}}, '{{today}}' FROM t -- {nope}",
+"values": 3,
+"used": [],
+"placeholders": [
+"now:yyyy",
+"today",
+"today-7"
+],
+"filled": "SELECT '2026-11-03', DATE '2026-10-27', 2026, {x}, '{today}' FROM t -- {nope}"
+},
+{
+"dialect": "bigquery",
+"sql": "SELECT * FROM t WHERE x = '{r}'",
+"values": 0,
+"refused": "Write {r} without quotes: Tabularia quotes it"
+},
+{
+"dialect": "bigquery",
+"sql": "SELECT * FROM t WHERE x = '{r}'",
+"values": 1,
+"refused": "Write {r} without quotes: Tabularia quotes it"
+},
+{
+"dialect": "bigquery",
+"sql": "SELECT * FROM t WHERE x = '{r}'",
+"values": 2,
+"refused": "Write {r} without quotes: Tabularia quotes it"
+},
+{
+"dialect": "bigquery",
+"sql": "SELECT * FROM t WHERE x = '{r}'",
+"values": 3,
+"refused": "Write {r} without quotes: Tabularia quotes it"
+},
+{
+"dialect": "bigquery",
+"sql": "SELECT } FROM t",
+"values": 0,
+"refused": "A single } in the SQL: write }} for a literal brace"
+},
+{
+"dialect": "bigquery",
+"sql": "SELECT } FROM t",
+"values": 1,
+"refused": "A single } in the SQL: write }} for a literal brace"
+},
+{
+"dialect": "bigquery",
+"sql": "SELECT } FROM t",
+"values": 2,
+"refused": "A single } in the SQL: write }} for a literal brace"
+},
+{
+"dialect": "bigquery",
+"sql": "SELECT } FROM t",
+"values": 3,
+"refused": "A single } in the SQL: write }} for a literal brace"
+},
+{
+"dialect": "bigquery",
+"sql": "SELECT { FROM t",
+"values": 0,
+"refused": "A { in the SQL is not closed: add }, or write {{ for a literal brace"
+},
+{
+"dialect": "bigquery",
+"sql": "SELECT { FROM t",
+"values": 1,
+"refused": "A { in the SQL is not closed: add }, or write {{ for a literal brace"
+},
+{
+"dialect": "bigquery",
+"sql": "SELECT { FROM t",
+"values": 2,
+"refused": "A { in the SQL is not closed: add }, or write {{ for a literal brace"
+},
+{
+"dialect": "bigquery",
+"sql": "SELECT { FROM t",
+"values": 3,
+"refused": "A { in the SQL is not closed: add }, or write {{ for a literal brace"
+},
+{
+"dialect": "bigquery",
+"sql": "SELECT {nope}",
+"values": 0,
+"refused": "{nope} is neither a parameter of the report nor a placeholder: write {{ and }} for literal braces"
+},
+{
+"dialect": "bigquery",
+"sql": "SELECT {nope}",
+"values": 1,
+"refused": "{nope} is neither a parameter of the report nor a placeholder: write {{ and }} for literal braces"
+},
+{
+"dialect": "bigquery",
+"sql": "SELECT {nope}",
+"values": 2,
+"refused": "{nope} is neither a parameter of the report nor a placeholder: write {{ and }} for literal braces"
+},
+{
+"dialect": "bigquery",
+"sql": "SELECT {nope}",
+"values": 3,
+"refused": "{nope} is neither a parameter of the report nor a placeholder: write {{ and }} for literal braces"
+},
+{
+"dialect": "bigquery",
+"sql": "SELECT {r:fmt}",
+"values": 0,
+"refused": "{r:fmt}: a parameter takes no offset nor format"
+},
+{
+"dialect": "bigquery",
+"sql": "SELECT {r:fmt}",
+"values": 1,
+"refused": "{r:fmt}: a parameter takes no offset nor format"
+},
+{
+"dialect": "bigquery",
+"sql": "SELECT {r:fmt}",
+"values": 2,
+"refused": "{r:fmt}: a parameter takes no offset nor format"
+},
+{
+"dialect": "bigquery",
+"sql": "SELECT {r:fmt}",
+"values": 3,
+"refused": "{r:fmt}: a parameter takes no offset nor format"
+},
+{
+"dialect": "bigquery",
+"sql": "SELECT 'a\\' , {r} -- '",
+"values": 0,
+"refused": "The SQL is unclear near «{r}»: a backslash makes it uncertain whether it is inside quoted text. Write the text before it without that"
+},
+{
+"dialect": "bigquery",
+"sql": "SELECT 'a\\' , {r} -- '",
+"values": 1,
+"refused": "The SQL is unclear near «{r}»: a backslash makes it uncertain whether it is inside quoted text. Write the text before it without that"
+},
+{
+"dialect": "bigquery",
+"sql": "SELECT 'a\\' , {r} -- '",
+"values": 2,
+"refused": "The SQL is unclear near «{r}»: a backslash makes it uncertain whether it is inside quoted text. Write the text before it without that"
+},
+{
+"dialect": "bigquery",
+"sql": "SELECT 'a\\' , {r} -- '",
+"values": 3,
+"refused": "The SQL is unclear near «{r}»: a backslash makes it uncertain whether it is inside quoted text. Write the text before it without that"
+},
+{
+"dialect": "bigquery",
+"sql": "SELECT /* /* */ {r} */",
+"values": 0,
+"refused": "The SQL is unclear near «{r}»: a comment inside another makes it uncertain whether it is inside quoted text. Write the text before it without that"
+},
+{
+"dialect": "bigquery",
+"sql": "SELECT /* /* */ {r} */",
+"values": 1,
+"refused": "The SQL is unclear near «{r}»: a comment inside another makes it uncertain whether it is inside quoted text. Write the text before it without that"
+},
+{
+"dialect": "bigquery",
+"sql": "SELECT /* /* */ {r} */",
+"values": 2,
+"refused": "The SQL is unclear near «{r}»: a comment inside another makes it uncertain whether it is inside quoted text. Write the text before it without that"
+},
+{
+"dialect": "bigquery",
+"sql": "SELECT /* /* */ {r} */",
+"values": 3,
+"refused": "The SQL is unclear near «{r}»: a comment inside another makes it uncertain whether it is inside quoted text. Write the text before it without that"
+},
+{
+"dialect": "bigquery",
+"sql": "SELECT $$ {r} $$, {n}",
+"values": 0,
+"used": [
+"n",
+"r"
+],
+"placeholders": [],
+"filled": "SELECT $$ 'Nord' $$, 5"
+},
+{
+"dialect": "bigquery",
+"sql": "SELECT $$ {r} $$, {n}",
+"values": 1,
+"used": [
+"n",
+"r"
+],
+"placeholders": [],
+"filled": "SELECT $$ 'it\\'s \\\\ a\\nb\\t\u0000é' $$, (-2.5)"
+},
+{
+"dialect": "bigquery",
+"sql": "SELECT $$ {r} $$, {n}",
+"values": 2,
+"used": [
+"n",
+"r"
+],
+"placeholders": [],
+"filled": "SELECT $$ NULL $$, 0.0000001"
+},
+{
+"dialect": "bigquery",
+"sql": "SELECT $$ {r} $$, {n}",
+"values": 3,
+"used": [
+"n",
+"r"
+],
+"placeholders": [],
+"filled": "SELECT $$ '' $$, 123456789012345.0"
+},
+{
+"dialect": "bigquery",
+"sql": "SELECT E'\\' {r}'",
+"values": 0,
+"refused": "The SQL is unclear near «{r}»: a backslash makes it uncertain whether it is inside quoted text. Write the text before it without that"
+},
+{
+"dialect": "bigquery",
+"sql": "SELECT E'\\' {r}'",
+"values": 1,
+"refused": "The SQL is unclear near «{r}»: a backslash makes it uncertain whether it is inside quoted text. Write the text before it without that"
+},
+{
+"dialect": "bigquery",
+"sql": "SELECT E'\\' {r}'",
+"values": 2,
+"refused": "The SQL is unclear near «{r}»: a backslash makes it uncertain whether it is inside quoted text. Write the text before it without that"
+},
+{
+"dialect": "bigquery",
+"sql": "SELECT E'\\' {r}'",
+"values": 3,
+"refused": "The SQL is unclear near «{r}»: a backslash makes it uncertain whether it is inside quoted text. Write the text before it without that"
+},
+{
+"dialect": "bigquery",
+"sql": "SELECT q'[ {r} ]', {n}",
+"values": 0,
+"refused": "Write {r} without quotes: Tabularia quotes it"
+},
+{
+"dialect": "bigquery",
+"sql": "SELECT q'[ {r} ]', {n}",
+"values": 1,
+"refused": "Write {r} without quotes: Tabularia quotes it"
+},
+{
+"dialect": "bigquery",
+"sql": "SELECT q'[ {r} ]', {n}",
+"values": 2,
+"refused": "Write {r} without quotes: Tabularia quotes it"
+},
+{
+"dialect": "bigquery",
+"sql": "SELECT q'[ {r} ]', {n}",
+"values": 3,
+"refused": "Write {r} without quotes: Tabularia quotes it"
+},
+{
+"dialect": "bigquery",
+"sql": "SELECT [{r}], {n}",
+"values": 0,
+"used": [
+"n",
+"r"
+],
+"placeholders": [],
+"filled": "SELECT ['Nord'], 5"
+},
+{
+"dialect": "bigquery",
+"sql": "SELECT [{r}], {n}",
+"values": 1,
+"used": [
+"n",
+"r"
+],
+"placeholders": [],
+"filled": "SELECT ['it\\'s \\\\ a\\nb\\t\u0000é'], (-2.5)"
+},
+{
+"dialect": "bigquery",
+"sql": "SELECT [{r}], {n}",
+"values": 2,
+"used": [
+"n",
+"r"
+],
+"placeholders": [],
+"filled": "SELECT [NULL], 0.0000001"
+},
+{
+"dialect": "bigquery",
+"sql": "SELECT [{r}], {n}",
+"values": 3,
+"used": [
+"n",
+"r"
+],
+"placeholders": [],
+"filled": "SELECT [''], 123456789012345.0"
+},
+{
+"dialect": "bigquery",
+"sql": "SELECT '''{r}''', {n}",
+"values": 0,
+"refused": "Write {r} without quotes: Tabularia quotes it"
+},
+{
+"dialect": "bigquery",
+"sql": "SELECT '''{r}''', {n}",
+"values": 1,
+"refused": "Write {r} without quotes: Tabularia quotes it"
+},
+{
+"dialect": "bigquery",
+"sql": "SELECT '''{r}''', {n}",
+"values": 2,
+"refused": "Write {r} without quotes: Tabularia quotes it"
+},
+{
+"dialect": "bigquery",
+"sql": "SELECT '''{r}''', {n}",
+"values": 3,
+"refused": "Write {r} without quotes: Tabularia quotes it"
+},
+{
+"dialect": "bigquery",
+"sql": "SELECT \"{r}\" # {r}",
+"values": 0,
+"refused": "Write {r} without quotes: Tabularia quotes it"
+},
+{
+"dialect": "bigquery",
+"sql": "SELECT \"{r}\" # {r}",
+"values": 1,
+"refused": "Write {r} without quotes: Tabularia quotes it"
+},
+{
+"dialect": "bigquery",
+"sql": "SELECT \"{r}\" # {r}",
+"values": 2,
+"refused": "Write {r} without quotes: Tabularia quotes it"
+},
+{
+"dialect": "bigquery",
+"sql": "SELECT \"{r}\" # {r}",
+"values": 3,
+"refused": "Write {r} without quotes: Tabularia quotes it"
+},
+{
+"dialect": "bigquery",
+"sql": "SELECT `{r}`, {n}",
+"values": 0,
+"refused": "Write {r} without quotes: Tabularia quotes it"
+},
+{
+"dialect": "bigquery",
+"sql": "SELECT `{r}`, {n}",
+"values": 1,
+"refused": "Write {r} without quotes: Tabularia quotes it"
+},
+{
+"dialect": "bigquery",
+"sql": "SELECT `{r}`, {n}",
+"values": 2,
+"refused": "Write {r} without quotes: Tabularia quotes it"
+},
+{
+"dialect": "bigquery",
+"sql": "SELECT `{r}`, {n}",
+"values": 3,
+"refused": "Write {r} without quotes: Tabularia quotes it"
+},
+{
+"dialect": "bigquery",
+"sql": "SELECT {today} , '{now}', {start_of_month+1m}",
+"values": 0,
+"used": [],
+"placeholders": [
+"now",
+"start_of_month+1m",
+"today"
+],
+"filled": "SELECT DATE '2026-11-03' , '2026-11-03T10:20', 1762160400"
+},
+{
+"dialect": "bigquery",
+"sql": "SELECT {today} , '{now}', {start_of_month+1m}",
+"values": 1,
+"used": [],
+"placeholders": [
+"now",
+"start_of_month+1m",
+"today"
+],
+"filled": "SELECT DATE '2026-11-03' , '2026-11-03T10:20', 1762160400"
+},
+{
+"dialect": "bigquery",
+"sql": "SELECT {today} , '{now}', {start_of_month+1m}",
+"values": 2,
+"used": [],
+"placeholders": [
+"now",
+"start_of_month+1m",
+"today"
+],
+"filled": "SELECT DATE '2026-11-03' , '2026-11-03T10:20', 1762160400"
+},
+{
+"dialect": "bigquery",
+"sql": "SELECT {today} , '{now}', {start_of_month+1m}",
+"values": 3,
+"used": [],
+"placeholders": [
+"now",
+"start_of_month+1m",
+"today"
+],
+"filled": "SELECT DATE '2026-11-03' , '2026-11-03T10:20', 1762160400"
+},
+{
+"dialect": "bigquery",
+"sql": "SELECT {r}{n}",
+"values": 0,
+"used": [
+"n",
+"r"
+],
+"placeholders": [],
+"filled": "SELECT 'Nord'5"
+},
+{
+"dialect": "bigquery",
+"sql": "SELECT {r}{n}",
+"values": 1,
+"used": [
+"n",
+"r"
+],
+"placeholders": [],
+"filled": "SELECT 'it\\'s \\\\ a\\nb\\t\u0000é'(-2.5)"
+},
+{
+"dialect": "bigquery",
+"sql": "SELECT {r}{n}",
+"values": 2,
+"used": [
+"n",
+"r"
+],
+"placeholders": [],
+"filled": "SELECT NULL0.0000001"
+},
+{
+"dialect": "bigquery",
+"sql": "SELECT {r}{n}",
+"values": 3,
+"used": [
+"n",
+"r"
+],
+"placeholders": [],
+"filled": "SELECT ''123456789012345.0"
+},
+{
+"dialect": "bigquery",
+"sql": "SELECT {r} -{n}",
+"values": 0,
+"used": [
+"n",
+"r"
+],
+"placeholders": [],
+"filled": "SELECT 'Nord' -5"
+},
+{
+"dialect": "bigquery",
+"sql": "SELECT {r} -{n}",
+"values": 1,
+"used": [
+"n",
+"r"
+],
+"placeholders": [],
+"filled": "SELECT 'it\\'s \\\\ a\\nb\\t\u0000é' -(-2.5)"
+},
+{
+"dialect": "bigquery",
+"sql": "SELECT {r} -{n}",
+"values": 2,
+"used": [
+"n",
+"r"
+],
+"placeholders": [],
+"filled": "SELECT NULL -0.0000001"
+},
+{
+"dialect": "bigquery",
+"sql": "SELECT {r} -{n}",
+"values": 3,
+"used": [
+"n",
+"r"
+],
+"placeholders": [],
+"filled": "SELECT '' -123456789012345.0"
+},
+{
+"dialect": "bigquery",
+"sql": "SELECT '{today:''x}'",
+"values": 0,
+"used": [],
+"placeholders": [
+"today:''x"
+],
+"refused": "{today:''x} gives «x'y», which cannot go inside quoted text"
+},
+{
+"dialect": "bigquery",
+"sql": "SELECT '{today:''x}'",
+"values": 1,
+"used": [],
+"placeholders": [
+"today:''x"
+],
+"refused": "{today:''x} gives «x'y», which cannot go inside quoted text"
+},
+{
+"dialect": "bigquery",
+"sql": "SELECT '{today:''x}'",
+"values": 2,
+"used": [],
+"placeholders": [
+"today:''x"
+],
+"refused": "{today:''x} gives «x'y», which cannot go inside quoted text"
+},
+{
+"dialect": "bigquery",
+"sql": "SELECT '{today:''x}'",
+"values": 3,
+"used": [],
+"placeholders": [
+"today:''x"
+],
+"refused": "{today:''x} gives «x'y», which cannot go inside quoted text"
+},
+{
+"dialect": "bigquery",
+"sql": "SELECT 'é' || {r}",
+"values": 0,
+"used": [
+"r"
+],
+"placeholders": [],
+"filled": "SELECT 'é' || 'Nord'"
+},
+{
+"dialect": "bigquery",
+"sql": "SELECT 'é' || {r}",
+"values": 1,
+"used": [
+"r"
+],
+"placeholders": [],
+"filled": "SELECT 'é' || 'it\\'s \\\\ a\\nb\\t\u0000é'"
+},
+{
+"dialect": "bigquery",
+"sql": "SELECT 'é' || {r}",
+"values": 2,
+"used": [
+"r"
+],
+"placeholders": [],
+"filled": "SELECT 'é' || NULL"
+},
+{
+"dialect": "bigquery",
+"sql": "SELECT 'é' || {r}",
+"values": 3,
+"used": [
+"r"
+],
+"placeholders": [],
+"filled": "SELECT 'é' || ''"
+},
+{
+"dialect": "bigquery",
+"sql": "SELECT {{ {r} }}",
+"values": 0,
+"used": [
+"r"
+],
+"placeholders": [],
+"filled": "SELECT { 'Nord' }"
+},
+{
+"dialect": "bigquery",
+"sql": "SELECT {{ {r} }}",
+"values": 1,
+"used": [
+"r"
+],
+"placeholders": [],
+"filled": "SELECT { 'it\\'s \\\\ a\\nb\\t\u0000é' }"
+},
+{
+"dialect": "bigquery",
+"sql": "SELECT {{ {r} }}",
+"values": 2,
+"used": [
+"r"
+],
+"placeholders": [],
+"filled": "SELECT { NULL }"
+},
+{
+"dialect": "bigquery",
+"sql": "SELECT {{ {r} }}",
+"values": 3,
+"used": [
+"r"
+],
+"placeholders": [],
+"filled": "SELECT { '' }"
+},
+{
+"dialect": "postgresql",
+"sql": "SELECT * FROM t WHERE r = {r} AND n > {n} AND d >= {d} AND b = {b} AND m IN {m}",
+"values": 0,
+"used": [
+"b",
+"d",
+"m",
+"n",
+"r"
+],
+"placeholders": [],
+"filled": "SELECT * FROM t WHERE r = 'Nord' AND n > 5 AND d >= DATE '2026-01-02' AND b = TRUE AND m IN ('a', 'b')"
+},
+{
+"dialect": "postgresql",
+"sql": "SELECT * FROM t WHERE r = {r} AND n > {n} AND d >= {d} AND b = {b} AND m IN {m}",
+"values": 1,
+"used": [
+"b",
+"d",
+"m",
+"n",
+"r"
+],
+"placeholders": [],
+"refused": "«m» has no value, and the SQL needs at least one: choose one"
+},
+{
+"dialect": "postgresql",
+"sql": "SELECT * FROM t WHERE r = {r} AND n > {n} AND d >= {d} AND b = {b} AND m IN {m}",
+"values": 2,
+"used": [
+"b",
+"d",
+"m",
+"n",
+"r"
+],
+"placeholders": [],
+"filled": "SELECT * FROM t WHERE r = NULL AND n > 0.0000001 AND d >= DATE '1999-12-31' AND b = NULL AND m IN (1, 2.0, (-3))"
+},
+{
+"dialect": "postgresql",
+"sql": "SELECT * FROM t WHERE r = {r} AND n > {n} AND d >= {d} AND b = {b} AND m IN {m}",
+"values": 3,
+"used": [
+"b",
+"d",
+"m",
+"n",
+"r"
+],
+"placeholders": [],
+"filled": "SELECT * FROM t WHERE r = '' AND n > 123456789012345.0 AND d >= NULL AND b = TRUE AND m IN (TRUE, NULL)"
+},
+{
+"dialect": "postgresql",
+"sql": "SELECT '{today}', {today-7}, {now:yyyy}, {{x}}, '{{today}}' FROM t -- {nope}",
+"values": 0,
+"used": [],
+"placeholders": [
+"now:yyyy",
+"today",
+"today-7"
+],
+"filled": "SELECT '2026-11-03', DATE '2026-10-27', 2026, {x}, '{today}' FROM t -- {nope}"
+},
+{
+"dialect": "postgresql",
+"sql": "SELECT '{today}', {today-7}, {now:yyyy}, {{x}}, '{{today}}' FROM t -- {nope}",
+"values": 1,
+"used": [],
+"placeholders": [
+"now:yyyy",
+"today",
+"today-7"
+],
+"filled": "SELECT '2026-11-03', DATE '2026-10-27', 2026, {x}, '{today}' FROM t -- {nope}"
+},
+{
+"dialect": "postgresql",
+"sql": "SELECT '{today}', {today-7}, {now:yyyy}, {{x}}, '{{today}}' FROM t -- {nope}",
+"values": 2,
+"used": [],
+"placeholders": [
+"now:yyyy",
+"today",
+"today-7"
+],
+"filled": "SELECT '2026-11-03', DATE '2026-10-27', 2026, {x}, '{today}' FROM t -- {nope}"
+},
+{
+"dialect": "postgresql",
+"sql": "SELECT '{today}', {today-7}, {now:yyyy}, {{x}}, '{{today}}' FROM t -- {nope}",
+"values": 3,
+"used": [],
+"placeholders": [
+"now:yyyy",
+"today",
+"today-7"
+],
+"filled": "SELECT '2026-11-03', DATE '2026-10-27', 2026, {x}, '{today}' FROM t -- {nope}"
+},
+{
+"dialect": "postgresql",
+"sql": "SELECT * FROM t WHERE x = '{r}'",
+"values": 0,
+"refused": "Write {r} without quotes: Tabularia quotes it"
+},
+{
+"dialect": "postgresql",
+"sql": "SELECT * FROM t WHERE x = '{r}'",
+"values": 1,
+"refused": "Write {r} without quotes: Tabularia quotes it"
+},
+{
+"dialect": "postgresql",
+"sql": "SELECT * FROM t WHERE x = '{r}'",
+"values": 2,
+"refused": "Write {r} without quotes: Tabularia quotes it"
+},
+{
+"dialect": "postgresql",
+"sql": "SELECT * FROM t WHERE x = '{r}'",
+"values": 3,
+"refused": "Write {r} without quotes: Tabularia quotes it"
+},
+{
+"dialect": "postgresql",
+"sql": "SELECT } FROM t",
+"values": 0,
+"refused": "A single } in the SQL: write }} for a literal brace"
+},
+{
+"dialect": "postgresql",
+"sql": "SELECT } FROM t",
+"values": 1,
+"refused": "A single } in the SQL: write }} for a literal brace"
+},
+{
+"dialect": "postgresql",
+"sql": "SELECT } FROM t",
+"values": 2,
+"refused": "A single } in the SQL: write }} for a literal brace"
+},
+{
+"dialect": "postgresql",
+"sql": "SELECT } FROM t",
+"values": 3,
+"refused": "A single } in the SQL: write }} for a literal brace"
+},
+{
+"dialect": "postgresql",
+"sql": "SELECT { FROM t",
+"values": 0,
+"refused": "A { in the SQL is not closed: add }, or write {{ for a literal brace"
+},
+{
+"dialect": "postgresql",
+"sql": "SELECT { FROM t",
+"values": 1,
+"refused": "A { in the SQL is not closed: add }, or write {{ for a literal brace"
+},
+{
+"dialect": "postgresql",
+"sql": "SELECT { FROM t",
+"values": 2,
+"refused": "A { in the SQL is not closed: add }, or write {{ for a literal brace"
+},
+{
+"dialect": "postgresql",
+"sql": "SELECT { FROM t",
+"values": 3,
+"refused": "A { in the SQL is not closed: add }, or write {{ for a literal brace"
+},
+{
+"dialect": "postgresql",
+"sql": "SELECT {nope}",
+"values": 0,
+"refused": "{nope} is neither a parameter of the report nor a placeholder: write {{ and }} for literal braces"
+},
+{
+"dialect": "postgresql",
+"sql": "SELECT {nope}",
+"values": 1,
+"refused": "{nope} is neither a parameter of the report nor a placeholder: write {{ and }} for literal braces"
+},
+{
+"dialect": "postgresql",
+"sql": "SELECT {nope}",
+"values": 2,
+"refused": "{nope} is neither a parameter of the report nor a placeholder: write {{ and }} for literal braces"
+},
+{
+"dialect": "postgresql",
+"sql": "SELECT {nope}",
+"values": 3,
+"refused": "{nope} is neither a parameter of the report nor a placeholder: write {{ and }} for literal braces"
+},
+{
+"dialect": "postgresql",
+"sql": "SELECT {r:fmt}",
+"values": 0,
+"refused": "{r:fmt}: a parameter takes no offset nor format"
+},
+{
+"dialect": "postgresql",
+"sql": "SELECT {r:fmt}",
+"values": 1,
+"refused": "{r:fmt}: a parameter takes no offset nor format"
+},
+{
+"dialect": "postgresql",
+"sql": "SELECT {r:fmt}",
+"values": 2,
+"refused": "{r:fmt}: a parameter takes no offset nor format"
+},
+{
+"dialect": "postgresql",
+"sql": "SELECT {r:fmt}",
+"values": 3,
+"refused": "{r:fmt}: a parameter takes no offset nor format"
+},
+{
+"dialect": "postgresql",
+"sql": "SELECT 'a\\' , {r} -- '",
+"values": 0,
+"refused": "The SQL is unclear near «{r}»: a backslash makes it uncertain whether it is inside quoted text. Write the text before it without that"
+},
+{
+"dialect": "postgresql",
+"sql": "SELECT 'a\\' , {r} -- '",
+"values": 1,
+"refused": "The SQL is unclear near «{r}»: a backslash makes it uncertain whether it is inside quoted text. Write the text before it without that"
+},
+{
+"dialect": "postgresql",
+"sql": "SELECT 'a\\' , {r} -- '",
+"values": 2,
+"refused": "The SQL is unclear near «{r}»: a backslash makes it uncertain whether it is inside quoted text. Write the text before it without that"
+},
+{
+"dialect": "postgresql",
+"sql": "SELECT 'a\\' , {r} -- '",
+"values": 3,
+"refused": "The SQL is unclear near «{r}»: a backslash makes it uncertain whether it is inside quoted text. Write the text before it without that"
+},
+{
+"dialect": "postgresql",
+"sql": "SELECT /* /* */ {r} */",
+"values": 0,
+"refused": "The SQL is unclear near «{r}»: a comment inside another makes it uncertain whether it is inside quoted text. Write the text before it without that"
+},
+{
+"dialect": "postgresql",
+"sql": "SELECT /* /* */ {r} */",
+"values": 1,
+"refused": "The SQL is unclear near «{r}»: a comment inside another makes it uncertain whether it is inside quoted text. Write the text before it without that"
+},
+{
+"dialect": "postgresql",
+"sql": "SELECT /* /* */ {r} */",
+"values": 2,
+"refused": "The SQL is unclear near «{r}»: a comment inside another makes it uncertain whether it is inside quoted text. Write the text before it without that"
+},
+{
+"dialect": "postgresql",
+"sql": "SELECT /* /* */ {r} */",
+"values": 3,
+"refused": "The SQL is unclear near «{r}»: a comment inside another makes it uncertain whether it is inside quoted text. Write the text before it without that"
+},
+{
+"dialect": "postgresql",
+"sql": "SELECT $$ {r} $$, {n}",
+"values": 0,
+"refused": "Write {r} without quotes: Tabularia quotes it"
+},
+{
+"dialect": "postgresql",
+"sql": "SELECT $$ {r} $$, {n}",
+"values": 1,
+"refused": "Write {r} without quotes: Tabularia quotes it"
+},
+{
+"dialect": "postgresql",
+"sql": "SELECT $$ {r} $$, {n}",
+"values": 2,
+"refused": "Write {r} without quotes: Tabularia quotes it"
+},
+{
+"dialect": "postgresql",
+"sql": "SELECT $$ {r} $$, {n}",
+"values": 3,
+"refused": "Write {r} without quotes: Tabularia quotes it"
+},
+{
+"dialect": "postgresql",
+"sql": "SELECT E'\\' {r}'",
+"values": 0,
+"refused": "Write {r} without quotes: Tabularia quotes it"
+},
+{
+"dialect": "postgresql",
+"sql": "SELECT E'\\' {r}'",
+"values": 1,
+"refused": "Write {r} without quotes: Tabularia quotes it"
+},
+{
+"dialect": "postgresql",
+"sql": "SELECT E'\\' {r}'",
+"values": 2,
+"refused": "Write {r} without quotes: Tabularia quotes it"
+},
+{
+"dialect": "postgresql",
+"sql": "SELECT E'\\' {r}'",
+"values": 3,
+"refused": "Write {r} without quotes: Tabularia quotes it"
+},
+{
+"dialect": "postgresql",
+"sql": "SELECT q'[ {r} ]', {n}",
+"values": 0,
+"refused": "Write {r} without quotes: Tabularia quotes it"
+},
+{
+"dialect": "postgresql",
+"sql": "SELECT q'[ {r} ]', {n}",
+"values": 1,
+"refused": "Write {r} without quotes: Tabularia quotes it"
+},
+{
+"dialect": "postgresql",
+"sql": "SELECT q'[ {r} ]', {n}",
+"values": 2,
+"refused": "Write {r} without quotes: Tabularia quotes it"
+},
+{
+"dialect": "postgresql",
+"sql": "SELECT q'[ {r} ]', {n}",
+"values": 3,
+"refused": "Write {r} without quotes: Tabularia quotes it"
+},
+{
+"dialect": "postgresql",
+"sql": "SELECT [{r}], {n}",
+"values": 0,
+"used": [
+"n",
+"r"
+],
+"placeholders": [],
+"filled": "SELECT ['Nord'], 5"
+},
+{
+"dialect": "postgresql",
+"sql": "SELECT [{r}], {n}",
+"values": 1,
+"used": [
+"n",
+"r"
+],
+"placeholders": [],
+"filled": "SELECT [E'it''s \\\\ a\nb\t\u0000é'], (-2.5)"
+},
+{
+"dialect": "postgresql",
+"sql": "SELECT [{r}], {n}",
+"values": 2,
+"used": [
+"n",
+"r"
+],
+"placeholders": [],
+"filled": "SELECT [NULL], 0.0000001"
+},
+{
+"dialect": "postgresql",
+"sql": "SELECT [{r}], {n}",
+"values": 3,
+"used": [
+"n",
+"r"
+],
+"placeholders": [],
+"filled": "SELECT [''], 123456789012345.0"
+},
+{
+"dialect": "postgresql",
+"sql": "SELECT '''{r}''', {n}",
+"values": 0,
+"refused": "Write {r} without quotes: Tabularia quotes it"
+},
+{
+"dialect": "postgresql",
+"sql": "SELECT '''{r}''', {n}",
+"values": 1,
+"refused": "Write {r} without quotes: Tabularia quotes it"
+},
+{
+"dialect": "postgresql",
+"sql": "SELECT '''{r}''', {n}",
+"values": 2,
+"refused": "Write {r} without quotes: Tabularia quotes it"
+},
+{
+"dialect": "postgresql",
+"sql": "SELECT '''{r}''', {n}",
+"values": 3,
+"refused": "Write {r} without quotes: Tabularia quotes it"
+},
+{
+"dialect": "postgresql",
+"sql": "SELECT \"{r}\" # {r}",
+"values": 0,
+"refused": "Write {r} without quotes: Tabularia quotes it"
+},
+{
+"dialect": "postgresql",
+"sql": "SELECT \"{r}\" # {r}",
+"values": 1,
+"refused": "Write {r} without quotes: Tabularia quotes it"
+},
+{
+"dialect": "postgresql",
+"sql": "SELECT \"{r}\" # {r}",
+"values": 2,
+"refused": "Write {r} without quotes: Tabularia quotes it"
+},
+{
+"dialect": "postgresql",
+"sql": "SELECT \"{r}\" # {r}",
+"values": 3,
+"refused": "Write {r} without quotes: Tabularia quotes it"
+},
+{
+"dialect": "postgresql",
+"sql": "SELECT `{r}`, {n}",
+"values": 0,
+"refused": "Write {r} without quotes: Tabularia quotes it"
+},
+{
+"dialect": "postgresql",
+"sql": "SELECT `{r}`, {n}",
+"values": 1,
+"refused": "Write {r} without quotes: Tabularia quotes it"
+},
+{
+"dialect": "postgresql",
+"sql": "SELECT `{r}`, {n}",
+"values": 2,
+"refused": "Write {r} without quotes: Tabularia quotes it"
+},
+{
+"dialect": "postgresql",
+"sql": "SELECT `{r}`, {n}",
+"values": 3,
+"refused": "Write {r} without quotes: Tabularia quotes it"
+},
+{
+"dialect": "postgresql",
+"sql": "SELECT {today} , '{now}', {start_of_month+1m}",
+"values": 0,
+"used": [],
+"placeholders": [
+"now",
+"start_of_month+1m",
+"today"
+],
+"filled": "SELECT DATE '2026-11-03' , '2026-11-03T10:20', 1762160400"
+},
+{
+"dialect": "postgresql",
+"sql": "SELECT {today} , '{now}', {start_of_month+1m}",
+"values": 1,
+"used": [],
+"placeholders": [
+"now",
+"start_of_month+1m",
+"today"
+],
+"filled": "SELECT DATE '2026-11-03' , '2026-11-03T10:20', 1762160400"
+},
+{
+"dialect": "postgresql",
+"sql": "SELECT {today} , '{now}', {start_of_month+1m}",
+"values": 2,
+"used": [],
+"placeholders": [
+"now",
+"start_of_month+1m",
+"today"
+],
+"filled": "SELECT DATE '2026-11-03' , '2026-11-03T10:20', 1762160400"
+},
+{
+"dialect": "postgresql",
+"sql": "SELECT {today} , '{now}', {start_of_month+1m}",
+"values": 3,
+"used": [],
+"placeholders": [
+"now",
+"start_of_month+1m",
+"today"
+],
+"filled": "SELECT DATE '2026-11-03' , '2026-11-03T10:20', 1762160400"
+},
+{
+"dialect": "postgresql",
+"sql": "SELECT {r}{n}",
+"values": 0,
+"used": [
+"n",
+"r"
+],
+"placeholders": [],
+"filled": "SELECT 'Nord'5"
+},
+{
+"dialect": "postgresql",
+"sql": "SELECT {r}{n}",
+"values": 1,
+"used": [
+"n",
+"r"
+],
+"placeholders": [],
+"filled": "SELECT E'it''s \\\\ a\nb\t\u0000é'(-2.5)"
+},
+{
+"dialect": "postgresql",
+"sql": "SELECT {r}{n}",
+"values": 2,
+"used": [
+"n",
+"r"
+],
+"placeholders": [],
+"filled": "SELECT NULL0.0000001"
+},
+{
+"dialect": "postgresql",
+"sql": "SELECT {r}{n}",
+"values": 3,
+"used": [
+"n",
+"r"
+],
+"placeholders": [],
+"filled": "SELECT ''123456789012345.0"
+},
+{
+"dialect": "postgresql",
+"sql": "SELECT {r} -{n}",
+"values": 0,
+"used": [
+"n",
+"r"
+],
+"placeholders": [],
+"filled": "SELECT 'Nord' -5"
+},
+{
+"dialect": "postgresql",
+"sql": "SELECT {r} -{n}",
+"values": 1,
+"used": [
+"n",
+"r"
+],
+"placeholders": [],
+"filled": "SELECT E'it''s \\\\ a\nb\t\u0000é' -(-2.5)"
+},
+{
+"dialect": "postgresql",
+"sql": "SELECT {r} -{n}",
+"values": 2,
+"used": [
+"n",
+"r"
+],
+"placeholders": [],
+"filled": "SELECT NULL -0.0000001"
+},
+{
+"dialect": "postgresql",
+"sql": "SELECT {r} -{n}",
+"values": 3,
+"used": [
+"n",
+"r"
+],
+"placeholders": [],
+"filled": "SELECT '' -123456789012345.0"
+},
+{
+"dialect": "postgresql",
+"sql": "SELECT '{today:''x}'",
+"values": 0,
+"used": [],
+"placeholders": [
+"today:''x"
+],
+"refused": "{today:''x} gives «x'y», which cannot go inside quoted text"
+},
+{
+"dialect": "postgresql",
+"sql": "SELECT '{today:''x}'",
+"values": 1,
+"used": [],
+"placeholders": [
+"today:''x"
+],
+"refused": "{today:''x} gives «x'y», which cannot go inside quoted text"
+},
+{
+"dialect": "postgresql",
+"sql": "SELECT '{today:''x}'",
+"values": 2,
+"used": [],
+"placeholders": [
+"today:''x"
+],
+"refused": "{today:''x} gives «x'y», which cannot go inside quoted text"
+},
+{
+"dialect": "postgresql",
+"sql": "SELECT '{today:''x}'",
+"values": 3,
+"used": [],
+"placeholders": [
+"today:''x"
+],
+"refused": "{today:''x} gives «x'y», which cannot go inside quoted text"
+},
+{
+"dialect": "postgresql",
+"sql": "SELECT 'é' || {r}",
+"values": 0,
+"used": [
+"r"
+],
+"placeholders": [],
+"filled": "SELECT 'é' || 'Nord'"
+},
+{
+"dialect": "postgresql",
+"sql": "SELECT 'é' || {r}",
+"values": 1,
+"used": [
+"r"
+],
+"placeholders": [],
+"filled": "SELECT 'é' || E'it''s \\\\ a\nb\t\u0000é'"
+},
+{
+"dialect": "postgresql",
+"sql": "SELECT 'é' || {r}",
+"values": 2,
+"used": [
+"r"
+],
+"placeholders": [],
+"filled": "SELECT 'é' || NULL"
+},
+{
+"dialect": "postgresql",
+"sql": "SELECT 'é' || {r}",
+"values": 3,
+"used": [
+"r"
+],
+"placeholders": [],
+"filled": "SELECT 'é' || ''"
+},
+{
+"dialect": "postgresql",
+"sql": "SELECT {{ {r} }}",
+"values": 0,
+"used": [
+"r"
+],
+"placeholders": [],
+"filled": "SELECT { 'Nord' }"
+},
+{
+"dialect": "postgresql",
+"sql": "SELECT {{ {r} }}",
+"values": 1,
+"used": [
+"r"
+],
+"placeholders": [],
+"filled": "SELECT { E'it''s \\\\ a\nb\t\u0000é' }"
+},
+{
+"dialect": "postgresql",
+"sql": "SELECT {{ {r} }}",
+"values": 2,
+"used": [
+"r"
+],
+"placeholders": [],
+"filled": "SELECT { NULL }"
+},
+{
+"dialect": "postgresql",
+"sql": "SELECT {{ {r} }}",
+"values": 3,
+"used": [
+"r"
+],
+"placeholders": [],
+"filled": "SELECT { '' }"
+},
+{
+"dialect": "mysql",
+"sql": "SELECT * FROM t WHERE r = {r} AND n > {n} AND d >= {d} AND b = {b} AND m IN {m}",
+"values": 0,
+"used": [
+"b",
+"d",
+"m",
+"n",
+"r"
+],
+"placeholders": [],
+"filled": "SELECT * FROM t WHERE r = 'Nord' AND n > 5 AND d >= DATE '2026-01-02' AND b = TRUE AND m IN ('a', 'b')"
+},
+{
+"dialect": "mysql",
+"sql": "SELECT * FROM t WHERE r = {r} AND n > {n} AND d >= {d} AND b = {b} AND m IN {m}",
+"values": 1,
+"used": [
+"b",
+"d",
+"m",
+"n",
+"r"
+],
+"placeholders": [],
+"refused": "«m» has no value, and the SQL needs at least one: choose one"
+},
+{
+"dialect": "mysql",
+"sql": "SELECT * FROM t WHERE r = {r} AND n > {n} AND d >= {d} AND b = {b} AND m IN {m}",
+"values": 2,
+"used": [
+"b",
+"d",
+"m",
+"n",
+"r"
+],
+"placeholders": [],
+"filled": "SELECT * FROM t WHERE r = NULL AND n > 0.0000001 AND d >= DATE '1999-12-31' AND b = NULL AND m IN (1, 2.0, (-3))"
+},
+{
+"dialect": "mysql",
+"sql": "SELECT * FROM t WHERE r = {r} AND n > {n} AND d >= {d} AND b = {b} AND m IN {m}",
+"values": 3,
+"used": [
+"b",
+"d",
+"m",
+"n",
+"r"
+],
+"placeholders": [],
+"filled": "SELECT * FROM t WHERE r = '' AND n > 123456789012345.0 AND d >= NULL AND b = TRUE AND m IN (TRUE, NULL)"
+},
+{
+"dialect": "mysql",
+"sql": "SELECT '{today}', {today-7}, {now:yyyy}, {{x}}, '{{today}}' FROM t -- {nope}",
+"values": 0,
+"used": [],
+"placeholders": [
+"now:yyyy",
+"today",
+"today-7"
+],
+"filled": "SELECT '2026-11-03', DATE '2026-10-27', 2026, {x}, '{today}' FROM t -- {nope}"
+},
+{
+"dialect": "mysql",
+"sql": "SELECT '{today}', {today-7}, {now:yyyy}, {{x}}, '{{today}}' FROM t -- {nope}",
+"values": 1,
+"used": [],
+"placeholders": [
+"now:yyyy",
+"today",
+"today-7"
+],
+"filled": "SELECT '2026-11-03', DATE '2026-10-27', 2026, {x}, '{today}' FROM t -- {nope}"
+},
+{
+"dialect": "mysql",
+"sql": "SELECT '{today}', {today-7}, {now:yyyy}, {{x}}, '{{today}}' FROM t -- {nope}",
+"values": 2,
+"used": [],
+"placeholders": [
+"now:yyyy",
+"today",
+"today-7"
+],
+"filled": "SELECT '2026-11-03', DATE '2026-10-27', 2026, {x}, '{today}' FROM t -- {nope}"
+},
+{
+"dialect": "mysql",
+"sql": "SELECT '{today}', {today-7}, {now:yyyy}, {{x}}, '{{today}}' FROM t -- {nope}",
+"values": 3,
+"used": [],
+"placeholders": [
+"now:yyyy",
+"today",
+"today-7"
+],
+"filled": "SELECT '2026-11-03', DATE '2026-10-27', 2026, {x}, '{today}' FROM t -- {nope}"
+},
+{
+"dialect": "mysql",
+"sql": "SELECT * FROM t WHERE x = '{r}'",
+"values": 0,
+"refused": "Write {r} without quotes: Tabularia quotes it"
+},
+{
+"dialect": "mysql",
+"sql": "SELECT * FROM t WHERE x = '{r}'",
+"values": 1,
+"refused": "Write {r} without quotes: Tabularia quotes it"
+},
+{
+"dialect": "mysql",
+"sql": "SELECT * FROM t WHERE x = '{r}'",
+"values": 2,
+"refused": "Write {r} without quotes: Tabularia quotes it"
+},
+{
+"dialect": "mysql",
+"sql": "SELECT * FROM t WHERE x = '{r}'",
+"values": 3,
+"refused": "Write {r} without quotes: Tabularia quotes it"
+},
+{
+"dialect": "mysql",
+"sql": "SELECT } FROM t",
+"values": 0,
+"refused": "A single } in the SQL: write }} for a literal brace"
+},
+{
+"dialect": "mysql",
+"sql": "SELECT } FROM t",
+"values": 1,
+"refused": "A single } in the SQL: write }} for a literal brace"
+},
+{
+"dialect": "mysql",
+"sql": "SELECT } FROM t",
+"values": 2,
+"refused": "A single } in the SQL: write }} for a literal brace"
+},
+{
+"dialect": "mysql",
+"sql": "SELECT } FROM t",
+"values": 3,
+"refused": "A single } in the SQL: write }} for a literal brace"
+},
+{
+"dialect": "mysql",
+"sql": "SELECT { FROM t",
+"values": 0,
+"refused": "A { in the SQL is not closed: add }, or write {{ for a literal brace"
+},
+{
+"dialect": "mysql",
+"sql": "SELECT { FROM t",
+"values": 1,
+"refused": "A { in the SQL is not closed: add }, or write {{ for a literal brace"
+},
+{
+"dialect": "mysql",
+"sql": "SELECT { FROM t",
+"values": 2,
+"refused": "A { in the SQL is not closed: add }, or write {{ for a literal brace"
+},
+{
+"dialect": "mysql",
+"sql": "SELECT { FROM t",
+"values": 3,
+"refused": "A { in the SQL is not closed: add }, or write {{ for a literal brace"
+},
+{
+"dialect": "mysql",
+"sql": "SELECT {nope}",
+"values": 0,
+"refused": "{nope} is neither a parameter of the report nor a placeholder: write {{ and }} for literal braces"
+},
+{
+"dialect": "mysql",
+"sql": "SELECT {nope}",
+"values": 1,
+"refused": "{nope} is neither a parameter of the report nor a placeholder: write {{ and }} for literal braces"
+},
+{
+"dialect": "mysql",
+"sql": "SELECT {nope}",
+"values": 2,
+"refused": "{nope} is neither a parameter of the report nor a placeholder: write {{ and }} for literal braces"
+},
+{
+"dialect": "mysql",
+"sql": "SELECT {nope}",
+"values": 3,
+"refused": "{nope} is neither a parameter of the report nor a placeholder: write {{ and }} for literal braces"
+},
+{
+"dialect": "mysql",
+"sql": "SELECT {r:fmt}",
+"values": 0,
+"refused": "{r:fmt}: a parameter takes no offset nor format"
+},
+{
+"dialect": "mysql",
+"sql": "SELECT {r:fmt}",
+"values": 1,
+"refused": "{r:fmt}: a parameter takes no offset nor format"
+},
+{
+"dialect": "mysql",
+"sql": "SELECT {r:fmt}",
+"values": 2,
+"refused": "{r:fmt}: a parameter takes no offset nor format"
+},
+{
+"dialect": "mysql",
+"sql": "SELECT {r:fmt}",
+"values": 3,
+"refused": "{r:fmt}: a parameter takes no offset nor format"
+},
+{
+"dialect": "mysql",
+"sql": "SELECT 'a\\' , {r} -- '",
+"values": 0,
+"refused": "The SQL is unclear near «{r}»: a backslash makes it uncertain whether it is inside quoted text. Write the text before it without that"
+},
+{
+"dialect": "mysql",
+"sql": "SELECT 'a\\' , {r} -- '",
+"values": 1,
+"refused": "The SQL is unclear near «{r}»: a backslash makes it uncertain whether it is inside quoted text. Write the text before it without that"
+},
+{
+"dialect": "mysql",
+"sql": "SELECT 'a\\' , {r} -- '",
+"values": 2,
+"refused": "The SQL is unclear near «{r}»: a backslash makes it uncertain whether it is inside quoted text. Write the text before it without that"
+},
+{
+"dialect": "mysql",
+"sql": "SELECT 'a\\' , {r} -- '",
+"values": 3,
+"refused": "The SQL is unclear near «{r}»: a backslash makes it uncertain whether it is inside quoted text. Write the text before it without that"
+},
+{
+"dialect": "mysql",
+"sql": "SELECT /* /* */ {r} */",
+"values": 0,
+"refused": "The SQL is unclear near «{r}»: a comment inside another makes it uncertain whether it is inside quoted text. Write the text before it without that"
+},
+{
+"dialect": "mysql",
+"sql": "SELECT /* /* */ {r} */",
+"values": 1,
+"refused": "The SQL is unclear near «{r}»: a comment inside another makes it uncertain whether it is inside quoted text. Write the text before it without that"
+},
+{
+"dialect": "mysql",
+"sql": "SELECT /* /* */ {r} */",
+"values": 2,
+"refused": "The SQL is unclear near «{r}»: a comment inside another makes it uncertain whether it is inside quoted text. Write the text before it without that"
+},
+{
+"dialect": "mysql",
+"sql": "SELECT /* /* */ {r} */",
+"values": 3,
+"refused": "The SQL is unclear near «{r}»: a comment inside another makes it uncertain whether it is inside quoted text. Write the text before it without that"
+},
+{
+"dialect": "mysql",
+"sql": "SELECT $$ {r} $$, {n}",
+"values": 0,
+"used": [
+"n",
+"r"
+],
+"placeholders": [],
+"filled": "SELECT $$ 'Nord' $$, 5"
+},
+{
+"dialect": "mysql",
+"sql": "SELECT $$ {r} $$, {n}",
+"values": 1,
+"used": [
+"n",
+"r"
+],
+"placeholders": [],
+"filled": "SELECT $$ 'it''s \\\\ a\\nb\\t\u0000é' $$, (-2.5)"
+},
+{
+"dialect": "mysql",
+"sql": "SELECT $$ {r} $$, {n}",
+"values": 2,
+"used": [
+"n",
+"r"
+],
+"placeholders": [],
+"filled": "SELECT $$ NULL $$, 0.0000001"
+},
+{
+"dialect": "mysql",
+"sql": "SELECT $$ {r} $$, {n}",
+"values": 3,
+"used": [
+"n",
+"r"
+],
+"placeholders": [],
+"filled": "SELECT $$ '' $$, 123456789012345.0"
+},
+{
+"dialect": "mysql",
+"sql": "SELECT E'\\' {r}'",
+"values": 0,
+"refused": "The SQL is unclear near «{r}»: a backslash makes it uncertain whether it is inside quoted text. Write the text before it without that"
+},
+{
+"dialect": "mysql",
+"sql": "SELECT E'\\' {r}'",
+"values": 1,
+"refused": "The SQL is unclear near «{r}»: a backslash makes it uncertain whether it is inside quoted text. Write the text before it without that"
+},
+{
+"dialect": "mysql",
+"sql": "SELECT E'\\' {r}'",
+"values": 2,
+"refused": "The SQL is unclear near «{r}»: a backslash makes it uncertain whether it is inside quoted text. Write the text before it without that"
+},
+{
+"dialect": "mysql",
+"sql": "SELECT E'\\' {r}'",
+"values": 3,
+"refused": "The SQL is unclear near «{r}»: a backslash makes it uncertain whether it is inside quoted text. Write the text before it without that"
+},
+{
+"dialect": "mysql",
+"sql": "SELECT q'[ {r} ]', {n}",
+"values": 0,
+"refused": "Write {r} without quotes: Tabularia quotes it"
+},
+{
+"dialect": "mysql",
+"sql": "SELECT q'[ {r} ]', {n}",
+"values": 1,
+"refused": "Write {r} without quotes: Tabularia quotes it"
+},
+{
+"dialect": "mysql",
+"sql": "SELECT q'[ {r} ]', {n}",
+"values": 2,
+"refused": "Write {r} without quotes: Tabularia quotes it"
+},
+{
+"dialect": "mysql",
+"sql": "SELECT q'[ {r} ]', {n}",
+"values": 3,
+"refused": "Write {r} without quotes: Tabularia quotes it"
+},
+{
+"dialect": "mysql",
+"sql": "SELECT [{r}], {n}",
+"values": 0,
+"used": [
+"n",
+"r"
+],
+"placeholders": [],
+"filled": "SELECT ['Nord'], 5"
+},
+{
+"dialect": "mysql",
+"sql": "SELECT [{r}], {n}",
+"values": 1,
+"used": [
+"n",
+"r"
+],
+"placeholders": [],
+"filled": "SELECT ['it''s \\\\ a\\nb\\t\u0000é'], (-2.5)"
+},
+{
+"dialect": "mysql",
+"sql": "SELECT [{r}], {n}",
+"values": 2,
+"used": [
+"n",
+"r"
+],
+"placeholders": [],
+"filled": "SELECT [NULL], 0.0000001"
+},
+{
+"dialect": "mysql",
+"sql": "SELECT [{r}], {n}",
+"values": 3,
+"used": [
+"n",
+"r"
+],
+"placeholders": [],
+"filled": "SELECT [''], 123456789012345.0"
+},
+{
+"dialect": "mysql",
+"sql": "SELECT '''{r}''', {n}",
+"values": 0,
+"refused": "Write {r} without quotes: Tabularia quotes it"
+},
+{
+"dialect": "mysql",
+"sql": "SELECT '''{r}''', {n}",
+"values": 1,
+"refused": "Write {r} without quotes: Tabularia quotes it"
+},
+{
+"dialect": "mysql",
+"sql": "SELECT '''{r}''', {n}",
+"values": 2,
+"refused": "Write {r} without quotes: Tabularia quotes it"
+},
+{
+"dialect": "mysql",
+"sql": "SELECT '''{r}''', {n}",
+"values": 3,
+"refused": "Write {r} without quotes: Tabularia quotes it"
+},
+{
+"dialect": "mysql",
+"sql": "SELECT \"{r}\" # {r}",
+"values": 0,
+"refused": "Write {r} without quotes: Tabularia quotes it"
+},
+{
+"dialect": "mysql",
+"sql": "SELECT \"{r}\" # {r}",
+"values": 1,
+"refused": "Write {r} without quotes: Tabularia quotes it"
+},
+{
+"dialect": "mysql",
+"sql": "SELECT \"{r}\" # {r}",
+"values": 2,
+"refused": "Write {r} without quotes: Tabularia quotes it"
+},
+{
+"dialect": "mysql",
+"sql": "SELECT \"{r}\" # {r}",
+"values": 3,
+"refused": "Write {r} without quotes: Tabularia quotes it"
+},
+{
+"dialect": "mysql",
+"sql": "SELECT `{r}`, {n}",
+"values": 0,
+"refused": "Write {r} without quotes: Tabularia quotes it"
+},
+{
+"dialect": "mysql",
+"sql": "SELECT `{r}`, {n}",
+"values": 1,
+"refused": "Write {r} without quotes: Tabularia quotes it"
+},
+{
+"dialect": "mysql",
+"sql": "SELECT `{r}`, {n}",
+"values": 2,
+"refused": "Write {r} without quotes: Tabularia quotes it"
+},
+{
+"dialect": "mysql",
+"sql": "SELECT `{r}`, {n}",
+"values": 3,
+"refused": "Write {r} without quotes: Tabularia quotes it"
+},
+{
+"dialect": "mysql",
+"sql": "SELECT {today} , '{now}', {start_of_month+1m}",
+"values": 0,
+"used": [],
+"placeholders": [
+"now",
+"start_of_month+1m",
+"today"
+],
+"filled": "SELECT DATE '2026-11-03' , '2026-11-03T10:20', 1762160400"
+},
+{
+"dialect": "mysql",
+"sql": "SELECT {today} , '{now}', {start_of_month+1m}",
+"values": 1,
+"used": [],
+"placeholders": [
+"now",
+"start_of_month+1m",
+"today"
+],
+"filled": "SELECT DATE '2026-11-03' , '2026-11-03T10:20', 1762160400"
+},
+{
+"dialect": "mysql",
+"sql": "SELECT {today} , '{now}', {start_of_month+1m}",
+"values": 2,
+"used": [],
+"placeholders": [
+"now",
+"start_of_month+1m",
+"today"
+],
+"filled": "SELECT DATE '2026-11-03' , '2026-11-03T10:20', 1762160400"
+},
+{
+"dialect": "mysql",
+"sql": "SELECT {today} , '{now}', {start_of_month+1m}",
+"values": 3,
+"used": [],
+"placeholders": [
+"now",
+"start_of_month+1m",
+"today"
+],
+"filled": "SELECT DATE '2026-11-03' , '2026-11-03T10:20', 1762160400"
+},
+{
+"dialect": "mysql",
+"sql": "SELECT {r}{n}",
+"values": 0,
+"used": [
+"n",
+"r"
+],
+"placeholders": [],
+"filled": "SELECT 'Nord'5"
+},
+{
+"dialect": "mysql",
+"sql": "SELECT {r}{n}",
+"values": 1,
+"used": [
+"n",
+"r"
+],
+"placeholders": [],
+"filled": "SELECT 'it''s \\\\ a\\nb\\t\u0000é'(-2.5)"
+},
+{
+"dialect": "mysql",
+"sql": "SELECT {r}{n}",
+"values": 2,
+"used": [
+"n",
+"r"
+],
+"placeholders": [],
+"filled": "SELECT NULL0.0000001"
+},
+{
+"dialect": "mysql",
+"sql": "SELECT {r}{n}",
+"values": 3,
+"used": [
+"n",
+"r"
+],
+"placeholders": [],
+"filled": "SELECT ''123456789012345.0"
+},
+{
+"dialect": "mysql",
+"sql": "SELECT {r} -{n}",
+"values": 0,
+"used": [
+"n",
+"r"
+],
+"placeholders": [],
+"filled": "SELECT 'Nord' -5"
+},
+{
+"dialect": "mysql",
+"sql": "SELECT {r} -{n}",
+"values": 1,
+"used": [
+"n",
+"r"
+],
+"placeholders": [],
+"filled": "SELECT 'it''s \\\\ a\\nb\\t\u0000é' -(-2.5)"
+},
+{
+"dialect": "mysql",
+"sql": "SELECT {r} -{n}",
+"values": 2,
+"used": [
+"n",
+"r"
+],
+"placeholders": [],
+"filled": "SELECT NULL -0.0000001"
+},
+{
+"dialect": "mysql",
+"sql": "SELECT {r} -{n}",
+"values": 3,
+"used": [
+"n",
+"r"
+],
+"placeholders": [],
+"filled": "SELECT '' -123456789012345.0"
+},
+{
+"dialect": "mysql",
+"sql": "SELECT '{today:''x}'",
+"values": 0,
+"used": [],
+"placeholders": [
+"today:''x"
+],
+"refused": "{today:''x} gives «x'y», which cannot go inside quoted text"
+},
+{
+"dialect": "mysql",
+"sql": "SELECT '{today:''x}'",
+"values": 1,
+"used": [],
+"placeholders": [
+"today:''x"
+],
+"refused": "{today:''x} gives «x'y», which cannot go inside quoted text"
+},
+{
+"dialect": "mysql",
+"sql": "SELECT '{today:''x}'",
+"values": 2,
+"used": [],
+"placeholders": [
+"today:''x"
+],
+"refused": "{today:''x} gives «x'y», which cannot go inside quoted text"
+},
+{
+"dialect": "mysql",
+"sql": "SELECT '{today:''x}'",
+"values": 3,
+"used": [],
+"placeholders": [
+"today:''x"
+],
+"refused": "{today:''x} gives «x'y», which cannot go inside quoted text"
+},
+{
+"dialect": "mysql",
+"sql": "SELECT 'é' || {r}",
+"values": 0,
+"used": [
+"r"
+],
+"placeholders": [],
+"filled": "SELECT 'é' || 'Nord'"
+},
+{
+"dialect": "mysql",
+"sql": "SELECT 'é' || {r}",
+"values": 1,
+"used": [
+"r"
+],
+"placeholders": [],
+"filled": "SELECT 'é' || 'it''s \\\\ a\\nb\\t\u0000é'"
+},
+{
+"dialect": "mysql",
+"sql": "SELECT 'é' || {r}",
+"values": 2,
+"used": [
+"r"
+],
+"placeholders": [],
+"filled": "SELECT 'é' || NULL"
+},
+{
+"dialect": "mysql",
+"sql": "SELECT 'é' || {r}",
+"values": 3,
+"used": [
+"r"
+],
+"placeholders": [],
+"filled": "SELECT 'é' || ''"
+},
+{
+"dialect": "mysql",
+"sql": "SELECT {{ {r} }}",
+"values": 0,
+"used": [
+"r"
+],
+"placeholders": [],
+"filled": "SELECT { 'Nord' }"
+},
+{
+"dialect": "mysql",
+"sql": "SELECT {{ {r} }}",
+"values": 1,
+"used": [
+"r"
+],
+"placeholders": [],
+"filled": "SELECT { 'it''s \\\\ a\\nb\\t\u0000é' }"
+},
+{
+"dialect": "mysql",
+"sql": "SELECT {{ {r} }}",
+"values": 2,
+"used": [
+"r"
+],
+"placeholders": [],
+"filled": "SELECT { NULL }"
+},
+{
+"dialect": "mysql",
+"sql": "SELECT {{ {r} }}",
+"values": 3,
+"used": [
+"r"
+],
+"placeholders": [],
+"filled": "SELECT { '' }"
+},
+{
+"dialect": "mariadb",
+"sql": "SELECT * FROM t WHERE r = {r} AND n > {n} AND d >= {d} AND b = {b} AND m IN {m}",
+"values": 0,
+"used": [
+"b",
+"d",
+"m",
+"n",
+"r"
+],
+"placeholders": [],
+"filled": "SELECT * FROM t WHERE r = 'Nord' AND n > 5 AND d >= DATE '2026-01-02' AND b = TRUE AND m IN ('a', 'b')"
+},
+{
+"dialect": "mariadb",
+"sql": "SELECT * FROM t WHERE r = {r} AND n > {n} AND d >= {d} AND b = {b} AND m IN {m}",
+"values": 1,
+"used": [
+"b",
+"d",
+"m",
+"n",
+"r"
+],
+"placeholders": [],
+"refused": "«m» has no value, and the SQL needs at least one: choose one"
+},
+{
+"dialect": "mariadb",
+"sql": "SELECT * FROM t WHERE r = {r} AND n > {n} AND d >= {d} AND b = {b} AND m IN {m}",
+"values": 2,
+"used": [
+"b",
+"d",
+"m",
+"n",
+"r"
+],
+"placeholders": [],
+"filled": "SELECT * FROM t WHERE r = NULL AND n > 0.0000001 AND d >= DATE '1999-12-31' AND b = NULL AND m IN (1, 2.0, (-3))"
+},
+{
+"dialect": "mariadb",
+"sql": "SELECT * FROM t WHERE r = {r} AND n > {n} AND d >= {d} AND b = {b} AND m IN {m}",
+"values": 3,
+"used": [
+"b",
+"d",
+"m",
+"n",
+"r"
+],
+"placeholders": [],
+"filled": "SELECT * FROM t WHERE r = '' AND n > 123456789012345.0 AND d >= NULL AND b = TRUE AND m IN (TRUE, NULL)"
+},
+{
+"dialect": "mariadb",
+"sql": "SELECT '{today}', {today-7}, {now:yyyy}, {{x}}, '{{today}}' FROM t -- {nope}",
+"values": 0,
+"used": [],
+"placeholders": [
+"now:yyyy",
+"today",
+"today-7"
+],
+"filled": "SELECT '2026-11-03', DATE '2026-10-27', 2026, {x}, '{today}' FROM t -- {nope}"
+},
+{
+"dialect": "mariadb",
+"sql": "SELECT '{today}', {today-7}, {now:yyyy}, {{x}}, '{{today}}' FROM t -- {nope}",
+"values": 1,
+"used": [],
+"placeholders": [
+"now:yyyy",
+"today",
+"today-7"
+],
+"filled": "SELECT '2026-11-03', DATE '2026-10-27', 2026, {x}, '{today}' FROM t -- {nope}"
+},
+{
+"dialect": "mariadb",
+"sql": "SELECT '{today}', {today-7}, {now:yyyy}, {{x}}, '{{today}}' FROM t -- {nope}",
+"values": 2,
+"used": [],
+"placeholders": [
+"now:yyyy",
+"today",
+"today-7"
+],
+"filled": "SELECT '2026-11-03', DATE '2026-10-27', 2026, {x}, '{today}' FROM t -- {nope}"
+},
+{
+"dialect": "mariadb",
+"sql": "SELECT '{today}', {today-7}, {now:yyyy}, {{x}}, '{{today}}' FROM t -- {nope}",
+"values": 3,
+"used": [],
+"placeholders": [
+"now:yyyy",
+"today",
+"today-7"
+],
+"filled": "SELECT '2026-11-03', DATE '2026-10-27', 2026, {x}, '{today}' FROM t -- {nope}"
+},
+{
+"dialect": "mariadb",
+"sql": "SELECT * FROM t WHERE x = '{r}'",
+"values": 0,
+"refused": "Write {r} without quotes: Tabularia quotes it"
+},
+{
+"dialect": "mariadb",
+"sql": "SELECT * FROM t WHERE x = '{r}'",
+"values": 1,
+"refused": "Write {r} without quotes: Tabularia quotes it"
+},
+{
+"dialect": "mariadb",
+"sql": "SELECT * FROM t WHERE x = '{r}'",
+"values": 2,
+"refused": "Write {r} without quotes: Tabularia quotes it"
+},
+{
+"dialect": "mariadb",
+"sql": "SELECT * FROM t WHERE x = '{r}'",
+"values": 3,
+"refused": "Write {r} without quotes: Tabularia quotes it"
+},
+{
+"dialect": "mariadb",
+"sql": "SELECT } FROM t",
+"values": 0,
+"refused": "A single } in the SQL: write }} for a literal brace"
+},
+{
+"dialect": "mariadb",
+"sql": "SELECT } FROM t",
+"values": 1,
+"refused": "A single } in the SQL: write }} for a literal brace"
+},
+{
+"dialect": "mariadb",
+"sql": "SELECT } FROM t",
+"values": 2,
+"refused": "A single } in the SQL: write }} for a literal brace"
+},
+{
+"dialect": "mariadb",
+"sql": "SELECT } FROM t",
+"values": 3,
+"refused": "A single } in the SQL: write }} for a literal brace"
+},
+{
+"dialect": "mariadb",
+"sql": "SELECT { FROM t",
+"values": 0,
+"refused": "A { in the SQL is not closed: add }, or write {{ for a literal brace"
+},
+{
+"dialect": "mariadb",
+"sql": "SELECT { FROM t",
+"values": 1,
+"refused": "A { in the SQL is not closed: add }, or write {{ for a literal brace"
+},
+{
+"dialect": "mariadb",
+"sql": "SELECT { FROM t",
+"values": 2,
+"refused": "A { in the SQL is not closed: add }, or write {{ for a literal brace"
+},
+{
+"dialect": "mariadb",
+"sql": "SELECT { FROM t",
+"values": 3,
+"refused": "A { in the SQL is not closed: add }, or write {{ for a literal brace"
+},
+{
+"dialect": "mariadb",
+"sql": "SELECT {nope}",
+"values": 0,
+"refused": "{nope} is neither a parameter of the report nor a placeholder: write {{ and }} for literal braces"
+},
+{
+"dialect": "mariadb",
+"sql": "SELECT {nope}",
+"values": 1,
+"refused": "{nope} is neither a parameter of the report nor a placeholder: write {{ and }} for literal braces"
+},
+{
+"dialect": "mariadb",
+"sql": "SELECT {nope}",
+"values": 2,
+"refused": "{nope} is neither a parameter of the report nor a placeholder: write {{ and }} for literal braces"
+},
+{
+"dialect": "mariadb",
+"sql": "SELECT {nope}",
+"values": 3,
+"refused": "{nope} is neither a parameter of the report nor a placeholder: write {{ and }} for literal braces"
+},
+{
+"dialect": "mariadb",
+"sql": "SELECT {r:fmt}",
+"values": 0,
+"refused": "{r:fmt}: a parameter takes no offset nor format"
+},
+{
+"dialect": "mariadb",
+"sql": "SELECT {r:fmt}",
+"values": 1,
+"refused": "{r:fmt}: a parameter takes no offset nor format"
+},
+{
+"dialect": "mariadb",
+"sql": "SELECT {r:fmt}",
+"values": 2,
+"refused": "{r:fmt}: a parameter takes no offset nor format"
+},
+{
+"dialect": "mariadb",
+"sql": "SELECT {r:fmt}",
+"values": 3,
+"refused": "{r:fmt}: a parameter takes no offset nor format"
+},
+{
+"dialect": "mariadb",
+"sql": "SELECT 'a\\' , {r} -- '",
+"values": 0,
+"refused": "The SQL is unclear near «{r}»: a backslash makes it uncertain whether it is inside quoted text. Write the text before it without that"
+},
+{
+"dialect": "mariadb",
+"sql": "SELECT 'a\\' , {r} -- '",
+"values": 1,
+"refused": "The SQL is unclear near «{r}»: a backslash makes it uncertain whether it is inside quoted text. Write the text before it without that"
+},
+{
+"dialect": "mariadb",
+"sql": "SELECT 'a\\' , {r} -- '",
+"values": 2,
+"refused": "The SQL is unclear near «{r}»: a backslash makes it uncertain whether it is inside quoted text. Write the text before it without that"
+},
+{
+"dialect": "mariadb",
+"sql": "SELECT 'a\\' , {r} -- '",
+"values": 3,
+"refused": "The SQL is unclear near «{r}»: a backslash makes it uncertain whether it is inside quoted text. Write the text before it without that"
+},
+{
+"dialect": "mariadb",
+"sql": "SELECT /* /* */ {r} */",
+"values": 0,
+"refused": "The SQL is unclear near «{r}»: a comment inside another makes it uncertain whether it is inside quoted text. Write the text before it without that"
+},
+{
+"dialect": "mariadb",
+"sql": "SELECT /* /* */ {r} */",
+"values": 1,
+"refused": "The SQL is unclear near «{r}»: a comment inside another makes it uncertain whether it is inside quoted text. Write the text before it without that"
+},
+{
+"dialect": "mariadb",
+"sql": "SELECT /* /* */ {r} */",
+"values": 2,
+"refused": "The SQL is unclear near «{r}»: a comment inside another makes it uncertain whether it is inside quoted text. Write the text before it without that"
+},
+{
+"dialect": "mariadb",
+"sql": "SELECT /* /* */ {r} */",
+"values": 3,
+"refused": "The SQL is unclear near «{r}»: a comment inside another makes it uncertain whether it is inside quoted text. Write the text before it without that"
+},
+{
+"dialect": "mariadb",
+"sql": "SELECT $$ {r} $$, {n}",
+"values": 0,
+"used": [
+"n",
+"r"
+],
+"placeholders": [],
+"filled": "SELECT $$ 'Nord' $$, 5"
+},
+{
+"dialect": "mariadb",
+"sql": "SELECT $$ {r} $$, {n}",
+"values": 1,
+"used": [
+"n",
+"r"
+],
+"placeholders": [],
+"filled": "SELECT $$ 'it''s \\\\ a\\nb\\t\u0000é' $$, (-2.5)"
+},
+{
+"dialect": "mariadb",
+"sql": "SELECT $$ {r} $$, {n}",
+"values": 2,
+"used": [
+"n",
+"r"
+],
+"placeholders": [],
+"filled": "SELECT $$ NULL $$, 0.0000001"
+},
+{
+"dialect": "mariadb",
+"sql": "SELECT $$ {r} $$, {n}",
+"values": 3,
+"used": [
+"n",
+"r"
+],
+"placeholders": [],
+"filled": "SELECT $$ '' $$, 123456789012345.0"
+},
+{
+"dialect": "mariadb",
+"sql": "SELECT E'\\' {r}'",
+"values": 0,
+"refused": "The SQL is unclear near «{r}»: a backslash makes it uncertain whether it is inside quoted text. Write the text before it without that"
+},
+{
+"dialect": "mariadb",
+"sql": "SELECT E'\\' {r}'",
+"values": 1,
+"refused": "The SQL is unclear near «{r}»: a backslash makes it uncertain whether it is inside quoted text. Write the text before it without that"
+},
+{
+"dialect": "mariadb",
+"sql": "SELECT E'\\' {r}'",
+"values": 2,
+"refused": "The SQL is unclear near «{r}»: a backslash makes it uncertain whether it is inside quoted text. Write the text before it without that"
+},
+{
+"dialect": "mariadb",
+"sql": "SELECT E'\\' {r}'",
+"values": 3,
+"refused": "The SQL is unclear near «{r}»: a backslash makes it uncertain whether it is inside quoted text. Write the text before it without that"
+},
+{
+"dialect": "mariadb",
+"sql": "SELECT q'[ {r} ]', {n}",
+"values": 0,
+"refused": "Write {r} without quotes: Tabularia quotes it"
+},
+{
+"dialect": "mariadb",
+"sql": "SELECT q'[ {r} ]', {n}",
+"values": 1,
+"refused": "Write {r} without quotes: Tabularia quotes it"
+},
+{
+"dialect": "mariadb",
+"sql": "SELECT q'[ {r} ]', {n}",
+"values": 2,
+"refused": "Write {r} without quotes: Tabularia quotes it"
+},
+{
+"dialect": "mariadb",
+"sql": "SELECT q'[ {r} ]', {n}",
+"values": 3,
+"refused": "Write {r} without quotes: Tabularia quotes it"
+},
+{
+"dialect": "mariadb",
+"sql": "SELECT [{r}], {n}",
+"values": 0,
+"used": [
+"n",
+"r"
+],
+"placeholders": [],
+"filled": "SELECT ['Nord'], 5"
+},
+{
+"dialect": "mariadb",
+"sql": "SELECT [{r}], {n}",
+"values": 1,
+"used": [
+"n",
+"r"
+],
+"placeholders": [],
+"filled": "SELECT ['it''s \\\\ a\\nb\\t\u0000é'], (-2.5)"
+},
+{
+"dialect": "mariadb",
+"sql": "SELECT [{r}], {n}",
+"values": 2,
+"used": [
+"n",
+"r"
+],
+"placeholders": [],
+"filled": "SELECT [NULL], 0.0000001"
+},
+{
+"dialect": "mariadb",
+"sql": "SELECT [{r}], {n}",
+"values": 3,
+"used": [
+"n",
+"r"
+],
+"placeholders": [],
+"filled": "SELECT [''], 123456789012345.0"
+},
+{
+"dialect": "mariadb",
+"sql": "SELECT '''{r}''', {n}",
+"values": 0,
+"refused": "Write {r} without quotes: Tabularia quotes it"
+},
+{
+"dialect": "mariadb",
+"sql": "SELECT '''{r}''', {n}",
+"values": 1,
+"refused": "Write {r} without quotes: Tabularia quotes it"
+},
+{
+"dialect": "mariadb",
+"sql": "SELECT '''{r}''', {n}",
+"values": 2,
+"refused": "Write {r} without quotes: Tabularia quotes it"
+},
+{
+"dialect": "mariadb",
+"sql": "SELECT '''{r}''', {n}",
+"values": 3,
+"refused": "Write {r} without quotes: Tabularia quotes it"
+},
+{
+"dialect": "mariadb",
+"sql": "SELECT \"{r}\" # {r}",
+"values": 0,
+"refused": "Write {r} without quotes: Tabularia quotes it"
+},
+{
+"dialect": "mariadb",
+"sql": "SELECT \"{r}\" # {r}",
+"values": 1,
+"refused": "Write {r} without quotes: Tabularia quotes it"
+},
+{
+"dialect": "mariadb",
+"sql": "SELECT \"{r}\" # {r}",
+"values": 2,
+"refused": "Write {r} without quotes: Tabularia quotes it"
+},
+{
+"dialect": "mariadb",
+"sql": "SELECT \"{r}\" # {r}",
+"values": 3,
+"refused": "Write {r} without quotes: Tabularia quotes it"
+},
+{
+"dialect": "mariadb",
+"sql": "SELECT `{r}`, {n}",
+"values": 0,
+"refused": "Write {r} without quotes: Tabularia quotes it"
+},
+{
+"dialect": "mariadb",
+"sql": "SELECT `{r}`, {n}",
+"values": 1,
+"refused": "Write {r} without quotes: Tabularia quotes it"
+},
+{
+"dialect": "mariadb",
+"sql": "SELECT `{r}`, {n}",
+"values": 2,
+"refused": "Write {r} without quotes: Tabularia quotes it"
+},
+{
+"dialect": "mariadb",
+"sql": "SELECT `{r}`, {n}",
+"values": 3,
+"refused": "Write {r} without quotes: Tabularia quotes it"
+},
+{
+"dialect": "mariadb",
+"sql": "SELECT {today} , '{now}', {start_of_month+1m}",
+"values": 0,
+"used": [],
+"placeholders": [
+"now",
+"start_of_month+1m",
+"today"
+],
+"filled": "SELECT DATE '2026-11-03' , '2026-11-03T10:20', 1762160400"
+},
+{
+"dialect": "mariadb",
+"sql": "SELECT {today} , '{now}', {start_of_month+1m}",
+"values": 1,
+"used": [],
+"placeholders": [
+"now",
+"start_of_month+1m",
+"today"
+],
+"filled": "SELECT DATE '2026-11-03' , '2026-11-03T10:20', 1762160400"
+},
+{
+"dialect": "mariadb",
+"sql": "SELECT {today} , '{now}', {start_of_month+1m}",
+"values": 2,
+"used": [],
+"placeholders": [
+"now",
+"start_of_month+1m",
+"today"
+],
+"filled": "SELECT DATE '2026-11-03' , '2026-11-03T10:20', 1762160400"
+},
+{
+"dialect": "mariadb",
+"sql": "SELECT {today} , '{now}', {start_of_month+1m}",
+"values": 3,
+"used": [],
+"placeholders": [
+"now",
+"start_of_month+1m",
+"today"
+],
+"filled": "SELECT DATE '2026-11-03' , '2026-11-03T10:20', 1762160400"
+},
+{
+"dialect": "mariadb",
+"sql": "SELECT {r}{n}",
+"values": 0,
+"used": [
+"n",
+"r"
+],
+"placeholders": [],
+"filled": "SELECT 'Nord'5"
+},
+{
+"dialect": "mariadb",
+"sql": "SELECT {r}{n}",
+"values": 1,
+"used": [
+"n",
+"r"
+],
+"placeholders": [],
+"filled": "SELECT 'it''s \\\\ a\\nb\\t\u0000é'(-2.5)"
+},
+{
+"dialect": "mariadb",
+"sql": "SELECT {r}{n}",
+"values": 2,
+"used": [
+"n",
+"r"
+],
+"placeholders": [],
+"filled": "SELECT NULL0.0000001"
+},
+{
+"dialect": "mariadb",
+"sql": "SELECT {r}{n}",
+"values": 3,
+"used": [
+"n",
+"r"
+],
+"placeholders": [],
+"filled": "SELECT ''123456789012345.0"
+},
+{
+"dialect": "mariadb",
+"sql": "SELECT {r} -{n}",
+"values": 0,
+"used": [
+"n",
+"r"
+],
+"placeholders": [],
+"filled": "SELECT 'Nord' -5"
+},
+{
+"dialect": "mariadb",
+"sql": "SELECT {r} -{n}",
+"values": 1,
+"used": [
+"n",
+"r"
+],
+"placeholders": [],
+"filled": "SELECT 'it''s \\\\ a\\nb\\t\u0000é' -(-2.5)"
+},
+{
+"dialect": "mariadb",
+"sql": "SELECT {r} -{n}",
+"values": 2,
+"used": [
+"n",
+"r"
+],
+"placeholders": [],
+"filled": "SELECT NULL -0.0000001"
+},
+{
+"dialect": "mariadb",
+"sql": "SELECT {r} -{n}",
+"values": 3,
+"used": [
+"n",
+"r"
+],
+"placeholders": [],
+"filled": "SELECT '' -123456789012345.0"
+},
+{
+"dialect": "mariadb",
+"sql": "SELECT '{today:''x}'",
+"values": 0,
+"used": [],
+"placeholders": [
+"today:''x"
+],
+"refused": "{today:''x} gives «x'y», which cannot go inside quoted text"
+},
+{
+"dialect": "mariadb",
+"sql": "SELECT '{today:''x}'",
+"values": 1,
+"used": [],
+"placeholders": [
+"today:''x"
+],
+"refused": "{today:''x} gives «x'y», which cannot go inside quoted text"
+},
+{
+"dialect": "mariadb",
+"sql": "SELECT '{today:''x}'",
+"values": 2,
+"used": [],
+"placeholders": [
+"today:''x"
+],
+"refused": "{today:''x} gives «x'y», which cannot go inside quoted text"
+},
+{
+"dialect": "mariadb",
+"sql": "SELECT '{today:''x}'",
+"values": 3,
+"used": [],
+"placeholders": [
+"today:''x"
+],
+"refused": "{today:''x} gives «x'y», which cannot go inside quoted text"
+},
+{
+"dialect": "mariadb",
+"sql": "SELECT 'é' || {r}",
+"values": 0,
+"used": [
+"r"
+],
+"placeholders": [],
+"filled": "SELECT 'é' || 'Nord'"
+},
+{
+"dialect": "mariadb",
+"sql": "SELECT 'é' || {r}",
+"values": 1,
+"used": [
+"r"
+],
+"placeholders": [],
+"filled": "SELECT 'é' || 'it''s \\\\ a\\nb\\t\u0000é'"
+},
+{
+"dialect": "mariadb",
+"sql": "SELECT 'é' || {r}",
+"values": 2,
+"used": [
+"r"
+],
+"placeholders": [],
+"filled": "SELECT 'é' || NULL"
+},
+{
+"dialect": "mariadb",
+"sql": "SELECT 'é' || {r}",
+"values": 3,
+"used": [
+"r"
+],
+"placeholders": [],
+"filled": "SELECT 'é' || ''"
+},
+{
+"dialect": "mariadb",
+"sql": "SELECT {{ {r} }}",
+"values": 0,
+"used": [
+"r"
+],
+"placeholders": [],
+"filled": "SELECT { 'Nord' }"
+},
+{
+"dialect": "mariadb",
+"sql": "SELECT {{ {r} }}",
+"values": 1,
+"used": [
+"r"
+],
+"placeholders": [],
+"filled": "SELECT { 'it''s \\\\ a\\nb\\t\u0000é' }"
+},
+{
+"dialect": "mariadb",
+"sql": "SELECT {{ {r} }}",
+"values": 2,
+"used": [
+"r"
+],
+"placeholders": [],
+"filled": "SELECT { NULL }"
+},
+{
+"dialect": "mariadb",
+"sql": "SELECT {{ {r} }}",
+"values": 3,
+"used": [
+"r"
+],
+"placeholders": [],
+"filled": "SELECT { '' }"
+},
+{
+"dialect": "trino",
+"sql": "SELECT * FROM t WHERE r = {r} AND n > {n} AND d >= {d} AND b = {b} AND m IN {m}",
+"values": 0,
+"used": [
+"b",
+"d",
+"m",
+"n",
+"r"
+],
+"placeholders": [],
+"filled": "SELECT * FROM t WHERE r = 'Nord' AND n > 5 AND d >= DATE '2026-01-02' AND b = TRUE AND m IN ('a', 'b')"
+},
+{
+"dialect": "trino",
+"sql": "SELECT * FROM t WHERE r = {r} AND n > {n} AND d >= {d} AND b = {b} AND m IN {m}",
+"values": 1,
+"used": [
+"b",
+"d",
+"m",
+"n",
+"r"
+],
+"placeholders": [],
+"refused": "«m» has no value, and the SQL needs at least one: choose one"
+},
+{
+"dialect": "trino",
+"sql": "SELECT * FROM t WHERE r = {r} AND n > {n} AND d >= {d} AND b = {b} AND m IN {m}",
+"values": 2,
+"used": [
+"b",
+"d",
+"m",
+"n",
+"r"
+],
+"placeholders": [],
+"filled": "SELECT * FROM t WHERE r = NULL AND n > 0.0000001 AND d >= DATE '1999-12-31' AND b = NULL AND m IN (1, 2.0, (-3))"
+},
+{
+"dialect": "trino",
+"sql": "SELECT * FROM t WHERE r = {r} AND n > {n} AND d >= {d} AND b = {b} AND m IN {m}",
+"values": 3,
+"used": [
+"b",
+"d",
+"m",
+"n",
+"r"
+],
+"placeholders": [],
+"filled": "SELECT * FROM t WHERE r = '' AND n > 123456789012345.0 AND d >= NULL AND b = TRUE AND m IN (TRUE, NULL)"
+},
+{
+"dialect": "trino",
+"sql": "SELECT '{today}', {today-7}, {now:yyyy}, {{x}}, '{{today}}' FROM t -- {nope}",
+"values": 0,
+"used": [],
+"placeholders": [
+"now:yyyy",
+"today",
+"today-7"
+],
+"filled": "SELECT '2026-11-03', DATE '2026-10-27', 2026, {x}, '{today}' FROM t -- {nope}"
+},
+{
+"dialect": "trino",
+"sql": "SELECT '{today}', {today-7}, {now:yyyy}, {{x}}, '{{today}}' FROM t -- {nope}",
+"values": 1,
+"used": [],
+"placeholders": [
+"now:yyyy",
+"today",
+"today-7"
+],
+"filled": "SELECT '2026-11-03', DATE '2026-10-27', 2026, {x}, '{today}' FROM t -- {nope}"
+},
+{
+"dialect": "trino",
+"sql": "SELECT '{today}', {today-7}, {now:yyyy}, {{x}}, '{{today}}' FROM t -- {nope}",
+"values": 2,
+"used": [],
+"placeholders": [
+"now:yyyy",
+"today",
+"today-7"
+],
+"filled": "SELECT '2026-11-03', DATE '2026-10-27', 2026, {x}, '{today}' FROM t -- {nope}"
+},
+{
+"dialect": "trino",
+"sql": "SELECT '{today}', {today-7}, {now:yyyy}, {{x}}, '{{today}}' FROM t -- {nope}",
+"values": 3,
+"used": [],
+"placeholders": [
+"now:yyyy",
+"today",
+"today-7"
+],
+"filled": "SELECT '2026-11-03', DATE '2026-10-27', 2026, {x}, '{today}' FROM t -- {nope}"
+},
+{
+"dialect": "trino",
+"sql": "SELECT * FROM t WHERE x = '{r}'",
+"values": 0,
+"refused": "Write {r} without quotes: Tabularia quotes it"
+},
+{
+"dialect": "trino",
+"sql": "SELECT * FROM t WHERE x = '{r}'",
+"values": 1,
+"refused": "Write {r} without quotes: Tabularia quotes it"
+},
+{
+"dialect": "trino",
+"sql": "SELECT * FROM t WHERE x = '{r}'",
+"values": 2,
+"refused": "Write {r} without quotes: Tabularia quotes it"
+},
+{
+"dialect": "trino",
+"sql": "SELECT * FROM t WHERE x = '{r}'",
+"values": 3,
+"refused": "Write {r} without quotes: Tabularia quotes it"
+},
+{
+"dialect": "trino",
+"sql": "SELECT } FROM t",
+"values": 0,
+"refused": "A single } in the SQL: write }} for a literal brace"
+},
+{
+"dialect": "trino",
+"sql": "SELECT } FROM t",
+"values": 1,
+"refused": "A single } in the SQL: write }} for a literal brace"
+},
+{
+"dialect": "trino",
+"sql": "SELECT } FROM t",
+"values": 2,
+"refused": "A single } in the SQL: write }} for a literal brace"
+},
+{
+"dialect": "trino",
+"sql": "SELECT } FROM t",
+"values": 3,
+"refused": "A single } in the SQL: write }} for a literal brace"
+},
+{
+"dialect": "trino",
+"sql": "SELECT { FROM t",
+"values": 0,
+"refused": "A { in the SQL is not closed: add }, or write {{ for a literal brace"
+},
+{
+"dialect": "trino",
+"sql": "SELECT { FROM t",
+"values": 1,
+"refused": "A { in the SQL is not closed: add }, or write {{ for a literal brace"
+},
+{
+"dialect": "trino",
+"sql": "SELECT { FROM t",
+"values": 2,
+"refused": "A { in the SQL is not closed: add }, or write {{ for a literal brace"
+},
+{
+"dialect": "trino",
+"sql": "SELECT { FROM t",
+"values": 3,
+"refused": "A { in the SQL is not closed: add }, or write {{ for a literal brace"
+},
+{
+"dialect": "trino",
+"sql": "SELECT {nope}",
+"values": 0,
+"refused": "{nope} is neither a parameter of the report nor a placeholder: write {{ and }} for literal braces"
+},
+{
+"dialect": "trino",
+"sql": "SELECT {nope}",
+"values": 1,
+"refused": "{nope} is neither a parameter of the report nor a placeholder: write {{ and }} for literal braces"
+},
+{
+"dialect": "trino",
+"sql": "SELECT {nope}",
+"values": 2,
+"refused": "{nope} is neither a parameter of the report nor a placeholder: write {{ and }} for literal braces"
+},
+{
+"dialect": "trino",
+"sql": "SELECT {nope}",
+"values": 3,
+"refused": "{nope} is neither a parameter of the report nor a placeholder: write {{ and }} for literal braces"
+},
+{
+"dialect": "trino",
+"sql": "SELECT {r:fmt}",
+"values": 0,
+"refused": "{r:fmt}: a parameter takes no offset nor format"
+},
+{
+"dialect": "trino",
+"sql": "SELECT {r:fmt}",
+"values": 1,
+"refused": "{r:fmt}: a parameter takes no offset nor format"
+},
+{
+"dialect": "trino",
+"sql": "SELECT {r:fmt}",
+"values": 2,
+"refused": "{r:fmt}: a parameter takes no offset nor format"
+},
+{
+"dialect": "trino",
+"sql": "SELECT {r:fmt}",
+"values": 3,
+"refused": "{r:fmt}: a parameter takes no offset nor format"
+},
+{
+"dialect": "trino",
+"sql": "SELECT 'a\\' , {r} -- '",
+"values": 0,
+"refused": "The SQL is unclear near «{r}»: a backslash makes it uncertain whether it is inside quoted text. Write the text before it without that"
+},
+{
+"dialect": "trino",
+"sql": "SELECT 'a\\' , {r} -- '",
+"values": 1,
+"refused": "The SQL is unclear near «{r}»: a backslash makes it uncertain whether it is inside quoted text. Write the text before it without that"
+},
+{
+"dialect": "trino",
+"sql": "SELECT 'a\\' , {r} -- '",
+"values": 2,
+"refused": "The SQL is unclear near «{r}»: a backslash makes it uncertain whether it is inside quoted text. Write the text before it without that"
+},
+{
+"dialect": "trino",
+"sql": "SELECT 'a\\' , {r} -- '",
+"values": 3,
+"refused": "The SQL is unclear near «{r}»: a backslash makes it uncertain whether it is inside quoted text. Write the text before it without that"
+},
+{
+"dialect": "trino",
+"sql": "SELECT /* /* */ {r} */",
+"values": 0,
+"refused": "The SQL is unclear near «{r}»: a comment inside another makes it uncertain whether it is inside quoted text. Write the text before it without that"
+},
+{
+"dialect": "trino",
+"sql": "SELECT /* /* */ {r} */",
+"values": 1,
+"refused": "The SQL is unclear near «{r}»: a comment inside another makes it uncertain whether it is inside quoted text. Write the text before it without that"
+},
+{
+"dialect": "trino",
+"sql": "SELECT /* /* */ {r} */",
+"values": 2,
+"refused": "The SQL is unclear near «{r}»: a comment inside another makes it uncertain whether it is inside quoted text. Write the text before it without that"
+},
+{
+"dialect": "trino",
+"sql": "SELECT /* /* */ {r} */",
+"values": 3,
+"refused": "The SQL is unclear near «{r}»: a comment inside another makes it uncertain whether it is inside quoted text. Write the text before it without that"
+},
+{
+"dialect": "trino",
+"sql": "SELECT $$ {r} $$, {n}",
+"values": 0,
+"used": [
+"n",
+"r"
+],
+"placeholders": [],
+"filled": "SELECT $$ 'Nord' $$, 5"
+},
+{
+"dialect": "trino",
+"sql": "SELECT $$ {r} $$, {n}",
+"values": 1,
+"used": [
+"n",
+"r"
+],
+"placeholders": [],
+"filled": "SELECT $$ 'it''s \\ a\nb\t\u0000é' $$, (-2.5)"
+},
+{
+"dialect": "trino",
+"sql": "SELECT $$ {r} $$, {n}",
+"values": 2,
+"used": [
+"n",
+"r"
+],
+"placeholders": [],
+"filled": "SELECT $$ NULL $$, 0.0000001"
+},
+{
+"dialect": "trino",
+"sql": "SELECT $$ {r} $$, {n}",
+"values": 3,
+"used": [
+"n",
+"r"
+],
+"placeholders": [],
+"filled": "SELECT $$ '' $$, 123456789012345.0"
+},
+{
+"dialect": "trino",
+"sql": "SELECT E'\\' {r}'",
+"values": 0,
+"refused": "The SQL is unclear near «{r}»: a backslash makes it uncertain whether it is inside quoted text. Write the text before it without that"
+},
+{
+"dialect": "trino",
+"sql": "SELECT E'\\' {r}'",
+"values": 1,
+"refused": "The SQL is unclear near «{r}»: a backslash makes it uncertain whether it is inside quoted text. Write the text before it without that"
+},
+{
+"dialect": "trino",
+"sql": "SELECT E'\\' {r}'",
+"values": 2,
+"refused": "The SQL is unclear near «{r}»: a backslash makes it uncertain whether it is inside quoted text. Write the text before it without that"
+},
+{
+"dialect": "trino",
+"sql": "SELECT E'\\' {r}'",
+"values": 3,
+"refused": "The SQL is unclear near «{r}»: a backslash makes it uncertain whether it is inside quoted text. Write the text before it without that"
+},
+{
+"dialect": "trino",
+"sql": "SELECT q'[ {r} ]', {n}",
+"values": 0,
+"refused": "Write {r} without quotes: Tabularia quotes it"
+},
+{
+"dialect": "trino",
+"sql": "SELECT q'[ {r} ]', {n}",
+"values": 1,
+"refused": "Write {r} without quotes: Tabularia quotes it"
+},
+{
+"dialect": "trino",
+"sql": "SELECT q'[ {r} ]', {n}",
+"values": 2,
+"refused": "Write {r} without quotes: Tabularia quotes it"
+},
+{
+"dialect": "trino",
+"sql": "SELECT q'[ {r} ]', {n}",
+"values": 3,
+"refused": "Write {r} without quotes: Tabularia quotes it"
+},
+{
+"dialect": "trino",
+"sql": "SELECT [{r}], {n}",
+"values": 0,
+"used": [
+"n",
+"r"
+],
+"placeholders": [],
+"filled": "SELECT ['Nord'], 5"
+},
+{
+"dialect": "trino",
+"sql": "SELECT [{r}], {n}",
+"values": 1,
+"used": [
+"n",
+"r"
+],
+"placeholders": [],
+"filled": "SELECT ['it''s \\ a\nb\t\u0000é'], (-2.5)"
+},
+{
+"dialect": "trino",
+"sql": "SELECT [{r}], {n}",
+"values": 2,
+"used": [
+"n",
+"r"
+],
+"placeholders": [],
+"filled": "SELECT [NULL], 0.0000001"
+},
+{
+"dialect": "trino",
+"sql": "SELECT [{r}], {n}",
+"values": 3,
+"used": [
+"n",
+"r"
+],
+"placeholders": [],
+"filled": "SELECT [''], 123456789012345.0"
+},
+{
+"dialect": "trino",
+"sql": "SELECT '''{r}''', {n}",
+"values": 0,
+"refused": "Write {r} without quotes: Tabularia quotes it"
+},
+{
+"dialect": "trino",
+"sql": "SELECT '''{r}''', {n}",
+"values": 1,
+"refused": "Write {r} without quotes: Tabularia quotes it"
+},
+{
+"dialect": "trino",
+"sql": "SELECT '''{r}''', {n}",
+"values": 2,
+"refused": "Write {r} without quotes: Tabularia quotes it"
+},
+{
+"dialect": "trino",
+"sql": "SELECT '''{r}''', {n}",
+"values": 3,
+"refused": "Write {r} without quotes: Tabularia quotes it"
+},
+{
+"dialect": "trino",
+"sql": "SELECT \"{r}\" # {r}",
+"values": 0,
+"refused": "Write {r} without quotes: Tabularia quotes it"
+},
+{
+"dialect": "trino",
+"sql": "SELECT \"{r}\" # {r}",
+"values": 1,
+"refused": "Write {r} without quotes: Tabularia quotes it"
+},
+{
+"dialect": "trino",
+"sql": "SELECT \"{r}\" # {r}",
+"values": 2,
+"refused": "Write {r} without quotes: Tabularia quotes it"
+},
+{
+"dialect": "trino",
+"sql": "SELECT \"{r}\" # {r}",
+"values": 3,
+"refused": "Write {r} without quotes: Tabularia quotes it"
+},
+{
+"dialect": "trino",
+"sql": "SELECT `{r}`, {n}",
+"values": 0,
+"refused": "Write {r} without quotes: Tabularia quotes it"
+},
+{
+"dialect": "trino",
+"sql": "SELECT `{r}`, {n}",
+"values": 1,
+"refused": "Write {r} without quotes: Tabularia quotes it"
+},
+{
+"dialect": "trino",
+"sql": "SELECT `{r}`, {n}",
+"values": 2,
+"refused": "Write {r} without quotes: Tabularia quotes it"
+},
+{
+"dialect": "trino",
+"sql": "SELECT `{r}`, {n}",
+"values": 3,
+"refused": "Write {r} without quotes: Tabularia quotes it"
+},
+{
+"dialect": "trino",
+"sql": "SELECT {today} , '{now}', {start_of_month+1m}",
+"values": 0,
+"used": [],
+"placeholders": [
+"now",
+"start_of_month+1m",
+"today"
+],
+"filled": "SELECT DATE '2026-11-03' , '2026-11-03T10:20', 1762160400"
+},
+{
+"dialect": "trino",
+"sql": "SELECT {today} , '{now}', {start_of_month+1m}",
+"values": 1,
+"used": [],
+"placeholders": [
+"now",
+"start_of_month+1m",
+"today"
+],
+"filled": "SELECT DATE '2026-11-03' , '2026-11-03T10:20', 1762160400"
+},
+{
+"dialect": "trino",
+"sql": "SELECT {today} , '{now}', {start_of_month+1m}",
+"values": 2,
+"used": [],
+"placeholders": [
+"now",
+"start_of_month+1m",
+"today"
+],
+"filled": "SELECT DATE '2026-11-03' , '2026-11-03T10:20', 1762160400"
+},
+{
+"dialect": "trino",
+"sql": "SELECT {today} , '{now}', {start_of_month+1m}",
+"values": 3,
+"used": [],
+"placeholders": [
+"now",
+"start_of_month+1m",
+"today"
+],
+"filled": "SELECT DATE '2026-11-03' , '2026-11-03T10:20', 1762160400"
+},
+{
+"dialect": "trino",
+"sql": "SELECT {r}{n}",
+"values": 0,
+"used": [
+"n",
+"r"
+],
+"placeholders": [],
+"filled": "SELECT 'Nord'5"
+},
+{
+"dialect": "trino",
+"sql": "SELECT {r}{n}",
+"values": 1,
+"used": [
+"n",
+"r"
+],
+"placeholders": [],
+"filled": "SELECT 'it''s \\ a\nb\t\u0000é'(-2.5)"
+},
+{
+"dialect": "trino",
+"sql": "SELECT {r}{n}",
+"values": 2,
+"used": [
+"n",
+"r"
+],
+"placeholders": [],
+"filled": "SELECT NULL0.0000001"
+},
+{
+"dialect": "trino",
+"sql": "SELECT {r}{n}",
+"values": 3,
+"used": [
+"n",
+"r"
+],
+"placeholders": [],
+"filled": "SELECT ''123456789012345.0"
+},
+{
+"dialect": "trino",
+"sql": "SELECT {r} -{n}",
+"values": 0,
+"used": [
+"n",
+"r"
+],
+"placeholders": [],
+"filled": "SELECT 'Nord' -5"
+},
+{
+"dialect": "trino",
+"sql": "SELECT {r} -{n}",
+"values": 1,
+"used": [
+"n",
+"r"
+],
+"placeholders": [],
+"filled": "SELECT 'it''s \\ a\nb\t\u0000é' -(-2.5)"
+},
+{
+"dialect": "trino",
+"sql": "SELECT {r} -{n}",
+"values": 2,
+"used": [
+"n",
+"r"
+],
+"placeholders": [],
+"filled": "SELECT NULL -0.0000001"
+},
+{
+"dialect": "trino",
+"sql": "SELECT {r} -{n}",
+"values": 3,
+"used": [
+"n",
+"r"
+],
+"placeholders": [],
+"filled": "SELECT '' -123456789012345.0"
+},
+{
+"dialect": "trino",
+"sql": "SELECT '{today:''x}'",
+"values": 0,
+"used": [],
+"placeholders": [
+"today:''x"
+],
+"refused": "{today:''x} gives «x'y», which cannot go inside quoted text"
+},
+{
+"dialect": "trino",
+"sql": "SELECT '{today:''x}'",
+"values": 1,
+"used": [],
+"placeholders": [
+"today:''x"
+],
+"refused": "{today:''x} gives «x'y», which cannot go inside quoted text"
+},
+{
+"dialect": "trino",
+"sql": "SELECT '{today:''x}'",
+"values": 2,
+"used": [],
+"placeholders": [
+"today:''x"
+],
+"refused": "{today:''x} gives «x'y», which cannot go inside quoted text"
+},
+{
+"dialect": "trino",
+"sql": "SELECT '{today:''x}'",
+"values": 3,
+"used": [],
+"placeholders": [
+"today:''x"
+],
+"refused": "{today:''x} gives «x'y», which cannot go inside quoted text"
+},
+{
+"dialect": "trino",
+"sql": "SELECT 'é' || {r}",
+"values": 0,
+"used": [
+"r"
+],
+"placeholders": [],
+"filled": "SELECT 'é' || 'Nord'"
+},
+{
+"dialect": "trino",
+"sql": "SELECT 'é' || {r}",
+"values": 1,
+"used": [
+"r"
+],
+"placeholders": [],
+"filled": "SELECT 'é' || 'it''s \\ a\nb\t\u0000é'"
+},
+{
+"dialect": "trino",
+"sql": "SELECT 'é' || {r}",
+"values": 2,
+"used": [
+"r"
+],
+"placeholders": [],
+"filled": "SELECT 'é' || NULL"
+},
+{
+"dialect": "trino",
+"sql": "SELECT 'é' || {r}",
+"values": 3,
+"used": [
+"r"
+],
+"placeholders": [],
+"filled": "SELECT 'é' || ''"
+},
+{
+"dialect": "trino",
+"sql": "SELECT {{ {r} }}",
+"values": 0,
+"used": [
+"r"
+],
+"placeholders": [],
+"filled": "SELECT { 'Nord' }"
+},
+{
+"dialect": "trino",
+"sql": "SELECT {{ {r} }}",
+"values": 1,
+"used": [
+"r"
+],
+"placeholders": [],
+"filled": "SELECT { 'it''s \\ a\nb\t\u0000é' }"
+},
+{
+"dialect": "trino",
+"sql": "SELECT {{ {r} }}",
+"values": 2,
+"used": [
+"r"
+],
+"placeholders": [],
+"filled": "SELECT { NULL }"
+},
+{
+"dialect": "trino",
+"sql": "SELECT {{ {r} }}",
+"values": 3,
+"used": [
+"r"
+],
+"placeholders": [],
+"filled": "SELECT { '' }"
+},
+{
+"dialect": "oracle",
+"sql": "SELECT * FROM t WHERE r = {r} AND n > {n} AND d >= {d} AND b = {b} AND m IN {m}",
+"values": 0,
+"used": [
+"b",
+"d",
+"m",
+"n",
+"r"
+],
+"placeholders": [],
+"filled": "SELECT * FROM t WHERE r = 'Nord' AND n > 5 AND d >= DATE '2026-01-02' AND b = 1 AND m IN ('a', 'b')"
+},
+{
+"dialect": "oracle",
+"sql": "SELECT * FROM t WHERE r = {r} AND n > {n} AND d >= {d} AND b = {b} AND m IN {m}",
+"values": 1,
+"used": [
+"b",
+"d",
+"m",
+"n",
+"r"
+],
+"placeholders": [],
+"refused": "«m» has no value, and the SQL needs at least one: choose one"
+},
+{
+"dialect": "oracle",
+"sql": "SELECT * FROM t WHERE r = {r} AND n > {n} AND d >= {d} AND b = {b} AND m IN {m}",
+"values": 2,
+"used": [
+"b",
+"d",
+"m",
+"n",
+"r"
+],
+"placeholders": [],
+"filled": "SELECT * FROM t WHERE r = NULL AND n > 0.0000001 AND d >= DATE '1999-12-31' AND b = NULL AND m IN (1, 2.0, (-3))"
+},
+{
+"dialect": "oracle",
+"sql": "SELECT * FROM t WHERE r = {r} AND n > {n} AND d >= {d} AND b = {b} AND m IN {m}",
+"values": 3,
+"used": [
+"b",
+"d",
+"m",
+"n",
+"r"
+],
+"placeholders": [],
+"filled": "SELECT * FROM t WHERE r = '' AND n > 123456789012345.0 AND d >= NULL AND b = 1 AND m IN (1, NULL)"
+},
+{
+"dialect": "oracle",
+"sql": "SELECT '{today}', {today-7}, {now:yyyy}, {{x}}, '{{today}}' FROM t -- {nope}",
+"values": 0,
+"used": [],
+"placeholders": [
+"now:yyyy",
+"today",
+"today-7"
+],
+"filled": "SELECT '2026-11-03', DATE '2026-10-27', 2026, {x}, '{today}' FROM t -- {nope}"
+},
+{
+"dialect": "oracle",
+"sql": "SELECT '{today}', {today-7}, {now:yyyy}, {{x}}, '{{today}}' FROM t -- {nope}",
+"values": 1,
+"used": [],
+"placeholders": [
+"now:yyyy",
+"today",
+"today-7"
+],
+"filled": "SELECT '2026-11-03', DATE '2026-10-27', 2026, {x}, '{today}' FROM t -- {nope}"
+},
+{
+"dialect": "oracle",
+"sql": "SELECT '{today}', {today-7}, {now:yyyy}, {{x}}, '{{today}}' FROM t -- {nope}",
+"values": 2,
+"used": [],
+"placeholders": [
+"now:yyyy",
+"today",
+"today-7"
+],
+"filled": "SELECT '2026-11-03', DATE '2026-10-27', 2026, {x}, '{today}' FROM t -- {nope}"
+},
+{
+"dialect": "oracle",
+"sql": "SELECT '{today}', {today-7}, {now:yyyy}, {{x}}, '{{today}}' FROM t -- {nope}",
+"values": 3,
+"used": [],
+"placeholders": [
+"now:yyyy",
+"today",
+"today-7"
+],
+"filled": "SELECT '2026-11-03', DATE '2026-10-27', 2026, {x}, '{today}' FROM t -- {nope}"
+},
+{
+"dialect": "oracle",
+"sql": "SELECT * FROM t WHERE x = '{r}'",
+"values": 0,
+"refused": "Write {r} without quotes: Tabularia quotes it"
+},
+{
+"dialect": "oracle",
+"sql": "SELECT * FROM t WHERE x = '{r}'",
+"values": 1,
+"refused": "Write {r} without quotes: Tabularia quotes it"
+},
+{
+"dialect": "oracle",
+"sql": "SELECT * FROM t WHERE x = '{r}'",
+"values": 2,
+"refused": "Write {r} without quotes: Tabularia quotes it"
+},
+{
+"dialect": "oracle",
+"sql": "SELECT * FROM t WHERE x = '{r}'",
+"values": 3,
+"refused": "Write {r} without quotes: Tabularia quotes it"
+},
+{
+"dialect": "oracle",
+"sql": "SELECT } FROM t",
+"values": 0,
+"refused": "A single } in the SQL: write }} for a literal brace"
+},
+{
+"dialect": "oracle",
+"sql": "SELECT } FROM t",
+"values": 1,
+"refused": "A single } in the SQL: write }} for a literal brace"
+},
+{
+"dialect": "oracle",
+"sql": "SELECT } FROM t",
+"values": 2,
+"refused": "A single } in the SQL: write }} for a literal brace"
+},
+{
+"dialect": "oracle",
+"sql": "SELECT } FROM t",
+"values": 3,
+"refused": "A single } in the SQL: write }} for a literal brace"
+},
+{
+"dialect": "oracle",
+"sql": "SELECT { FROM t",
+"values": 0,
+"refused": "A { in the SQL is not closed: add }, or write {{ for a literal brace"
+},
+{
+"dialect": "oracle",
+"sql": "SELECT { FROM t",
+"values": 1,
+"refused": "A { in the SQL is not closed: add }, or write {{ for a literal brace"
+},
+{
+"dialect": "oracle",
+"sql": "SELECT { FROM t",
+"values": 2,
+"refused": "A { in the SQL is not closed: add }, or write {{ for a literal brace"
+},
+{
+"dialect": "oracle",
+"sql": "SELECT { FROM t",
+"values": 3,
+"refused": "A { in the SQL is not closed: add }, or write {{ for a literal brace"
+},
+{
+"dialect": "oracle",
+"sql": "SELECT {nope}",
+"values": 0,
+"refused": "{nope} is neither a parameter of the report nor a placeholder: write {{ and }} for literal braces"
+},
+{
+"dialect": "oracle",
+"sql": "SELECT {nope}",
+"values": 1,
+"refused": "{nope} is neither a parameter of the report nor a placeholder: write {{ and }} for literal braces"
+},
+{
+"dialect": "oracle",
+"sql": "SELECT {nope}",
+"values": 2,
+"refused": "{nope} is neither a parameter of the report nor a placeholder: write {{ and }} for literal braces"
+},
+{
+"dialect": "oracle",
+"sql": "SELECT {nope}",
+"values": 3,
+"refused": "{nope} is neither a parameter of the report nor a placeholder: write {{ and }} for literal braces"
+},
+{
+"dialect": "oracle",
+"sql": "SELECT {r:fmt}",
+"values": 0,
+"refused": "{r:fmt}: a parameter takes no offset nor format"
+},
+{
+"dialect": "oracle",
+"sql": "SELECT {r:fmt}",
+"values": 1,
+"refused": "{r:fmt}: a parameter takes no offset nor format"
+},
+{
+"dialect": "oracle",
+"sql": "SELECT {r:fmt}",
+"values": 2,
+"refused": "{r:fmt}: a parameter takes no offset nor format"
+},
+{
+"dialect": "oracle",
+"sql": "SELECT {r:fmt}",
+"values": 3,
+"refused": "{r:fmt}: a parameter takes no offset nor format"
+},
+{
+"dialect": "oracle",
+"sql": "SELECT 'a\\' , {r} -- '",
+"values": 0,
+"refused": "The SQL is unclear near «{r}»: a backslash makes it uncertain whether it is inside quoted text. Write the text before it without that"
+},
+{
+"dialect": "oracle",
+"sql": "SELECT 'a\\' , {r} -- '",
+"values": 1,
+"refused": "The SQL is unclear near «{r}»: a backslash makes it uncertain whether it is inside quoted text. Write the text before it without that"
+},
+{
+"dialect": "oracle",
+"sql": "SELECT 'a\\' , {r} -- '",
+"values": 2,
+"refused": "The SQL is unclear near «{r}»: a backslash makes it uncertain whether it is inside quoted text. Write the text before it without that"
+},
+{
+"dialect": "oracle",
+"sql": "SELECT 'a\\' , {r} -- '",
+"values": 3,
+"refused": "The SQL is unclear near «{r}»: a backslash makes it uncertain whether it is inside quoted text. Write the text before it without that"
+},
+{
+"dialect": "oracle",
+"sql": "SELECT /* /* */ {r} */",
+"values": 0,
+"refused": "The SQL is unclear near «{r}»: a comment inside another makes it uncertain whether it is inside quoted text. Write the text before it without that"
+},
+{
+"dialect": "oracle",
+"sql": "SELECT /* /* */ {r} */",
+"values": 1,
+"refused": "The SQL is unclear near «{r}»: a comment inside another makes it uncertain whether it is inside quoted text. Write the text before it without that"
+},
+{
+"dialect": "oracle",
+"sql": "SELECT /* /* */ {r} */",
+"values": 2,
+"refused": "The SQL is unclear near «{r}»: a comment inside another makes it uncertain whether it is inside quoted text. Write the text before it without that"
+},
+{
+"dialect": "oracle",
+"sql": "SELECT /* /* */ {r} */",
+"values": 3,
+"refused": "The SQL is unclear near «{r}»: a comment inside another makes it uncertain whether it is inside quoted text. Write the text before it without that"
+},
+{
+"dialect": "oracle",
+"sql": "SELECT $$ {r} $$, {n}",
+"values": 0,
+"used": [
+"n",
+"r"
+],
+"placeholders": [],
+"filled": "SELECT $$ 'Nord' $$, 5"
+},
+{
+"dialect": "oracle",
+"sql": "SELECT $$ {r} $$, {n}",
+"values": 1,
+"used": [
+"n",
+"r"
+],
+"placeholders": [],
+"filled": "SELECT $$ 'it''s \\ a\nb\t\u0000é' $$, (-2.5)"
+},
+{
+"dialect": "oracle",
+"sql": "SELECT $$ {r} $$, {n}",
+"values": 2,
+"used": [
+"n",
+"r"
+],
+"placeholders": [],
+"filled": "SELECT $$ NULL $$, 0.0000001"
+},
+{
+"dialect": "oracle",
+"sql": "SELECT $$ {r} $$, {n}",
+"values": 3,
+"used": [
+"n",
+"r"
+],
+"placeholders": [],
+"filled": "SELECT $$ '' $$, 123456789012345.0"
+},
+{
+"dialect": "oracle",
+"sql": "SELECT E'\\' {r}'",
+"values": 0,
+"refused": "The SQL is unclear near «{r}»: a backslash makes it uncertain whether it is inside quoted text. Write the text before it without that"
+},
+{
+"dialect": "oracle",
+"sql": "SELECT E'\\' {r}'",
+"values": 1,
+"refused": "The SQL is unclear near «{r}»: a backslash makes it uncertain whether it is inside quoted text. Write the text before it without that"
+},
+{
+"dialect": "oracle",
+"sql": "SELECT E'\\' {r}'",
+"values": 2,
+"refused": "The SQL is unclear near «{r}»: a backslash makes it uncertain whether it is inside quoted text. Write the text before it without that"
+},
+{
+"dialect": "oracle",
+"sql": "SELECT E'\\' {r}'",
+"values": 3,
+"refused": "The SQL is unclear near «{r}»: a backslash makes it uncertain whether it is inside quoted text. Write the text before it without that"
+},
+{
+"dialect": "oracle",
+"sql": "SELECT q'[ {r} ]', {n}",
+"values": 0,
+"refused": "Write {r} without quotes: Tabularia quotes it"
+},
+{
+"dialect": "oracle",
+"sql": "SELECT q'[ {r} ]', {n}",
+"values": 1,
+"refused": "Write {r} without quotes: Tabularia quotes it"
+},
+{
+"dialect": "oracle",
+"sql": "SELECT q'[ {r} ]', {n}",
+"values": 2,
+"refused": "Write {r} without quotes: Tabularia quotes it"
+},
+{
+"dialect": "oracle",
+"sql": "SELECT q'[ {r} ]', {n}",
+"values": 3,
+"refused": "Write {r} without quotes: Tabularia quotes it"
+},
+{
+"dialect": "oracle",
+"sql": "SELECT [{r}], {n}",
+"values": 0,
+"used": [
+"n",
+"r"
+],
+"placeholders": [],
+"filled": "SELECT ['Nord'], 5"
+},
+{
+"dialect": "oracle",
+"sql": "SELECT [{r}], {n}",
+"values": 1,
+"used": [
+"n",
+"r"
+],
+"placeholders": [],
+"filled": "SELECT ['it''s \\ a\nb\t\u0000é'], (-2.5)"
+},
+{
+"dialect": "oracle",
+"sql": "SELECT [{r}], {n}",
+"values": 2,
+"used": [
+"n",
+"r"
+],
+"placeholders": [],
+"filled": "SELECT [NULL], 0.0000001"
+},
+{
+"dialect": "oracle",
+"sql": "SELECT [{r}], {n}",
+"values": 3,
+"used": [
+"n",
+"r"
+],
+"placeholders": [],
+"filled": "SELECT [''], 123456789012345.0"
+},
+{
+"dialect": "oracle",
+"sql": "SELECT '''{r}''', {n}",
+"values": 0,
+"refused": "Write {r} without quotes: Tabularia quotes it"
+},
+{
+"dialect": "oracle",
+"sql": "SELECT '''{r}''', {n}",
+"values": 1,
+"refused": "Write {r} without quotes: Tabularia quotes it"
+},
+{
+"dialect": "oracle",
+"sql": "SELECT '''{r}''', {n}",
+"values": 2,
+"refused": "Write {r} without quotes: Tabularia quotes it"
+},
+{
+"dialect": "oracle",
+"sql": "SELECT '''{r}''', {n}",
+"values": 3,
+"refused": "Write {r} without quotes: Tabularia quotes it"
+},
+{
+"dialect": "oracle",
+"sql": "SELECT \"{r}\" # {r}",
+"values": 0,
+"refused": "Write {r} without quotes: Tabularia quotes it"
+},
+{
+"dialect": "oracle",
+"sql": "SELECT \"{r}\" # {r}",
+"values": 1,
+"refused": "Write {r} without quotes: Tabularia quotes it"
+},
+{
+"dialect": "oracle",
+"sql": "SELECT \"{r}\" # {r}",
+"values": 2,
+"refused": "Write {r} without quotes: Tabularia quotes it"
+},
+{
+"dialect": "oracle",
+"sql": "SELECT \"{r}\" # {r}",
+"values": 3,
+"refused": "Write {r} without quotes: Tabularia quotes it"
+},
+{
+"dialect": "oracle",
+"sql": "SELECT `{r}`, {n}",
+"values": 0,
+"refused": "Write {r} without quotes: Tabularia quotes it"
+},
+{
+"dialect": "oracle",
+"sql": "SELECT `{r}`, {n}",
+"values": 1,
+"refused": "Write {r} without quotes: Tabularia quotes it"
+},
+{
+"dialect": "oracle",
+"sql": "SELECT `{r}`, {n}",
+"values": 2,
+"refused": "Write {r} without quotes: Tabularia quotes it"
+},
+{
+"dialect": "oracle",
+"sql": "SELECT `{r}`, {n}",
+"values": 3,
+"refused": "Write {r} without quotes: Tabularia quotes it"
+},
+{
+"dialect": "oracle",
+"sql": "SELECT {today} , '{now}', {start_of_month+1m}",
+"values": 0,
+"used": [],
+"placeholders": [
+"now",
+"start_of_month+1m",
+"today"
+],
+"filled": "SELECT DATE '2026-11-03' , '2026-11-03T10:20', 1762160400"
+},
+{
+"dialect": "oracle",
+"sql": "SELECT {today} , '{now}', {start_of_month+1m}",
+"values": 1,
+"used": [],
+"placeholders": [
+"now",
+"start_of_month+1m",
+"today"
+],
+"filled": "SELECT DATE '2026-11-03' , '2026-11-03T10:20', 1762160400"
+},
+{
+"dialect": "oracle",
+"sql": "SELECT {today} , '{now}', {start_of_month+1m}",
+"values": 2,
+"used": [],
+"placeholders": [
+"now",
+"start_of_month+1m",
+"today"
+],
+"filled": "SELECT DATE '2026-11-03' , '2026-11-03T10:20', 1762160400"
+},
+{
+"dialect": "oracle",
+"sql": "SELECT {today} , '{now}', {start_of_month+1m}",
+"values": 3,
+"used": [],
+"placeholders": [
+"now",
+"start_of_month+1m",
+"today"
+],
+"filled": "SELECT DATE '2026-11-03' , '2026-11-03T10:20', 1762160400"
+},
+{
+"dialect": "oracle",
+"sql": "SELECT {r}{n}",
+"values": 0,
+"used": [
+"n",
+"r"
+],
+"placeholders": [],
+"filled": "SELECT 'Nord'5"
+},
+{
+"dialect": "oracle",
+"sql": "SELECT {r}{n}",
+"values": 1,
+"used": [
+"n",
+"r"
+],
+"placeholders": [],
+"filled": "SELECT 'it''s \\ a\nb\t\u0000é'(-2.5)"
+},
+{
+"dialect": "oracle",
+"sql": "SELECT {r}{n}",
+"values": 2,
+"used": [
+"n",
+"r"
+],
+"placeholders": [],
+"filled": "SELECT NULL0.0000001"
+},
+{
+"dialect": "oracle",
+"sql": "SELECT {r}{n}",
+"values": 3,
+"used": [
+"n",
+"r"
+],
+"placeholders": [],
+"filled": "SELECT ''123456789012345.0"
+},
+{
+"dialect": "oracle",
+"sql": "SELECT {r} -{n}",
+"values": 0,
+"used": [
+"n",
+"r"
+],
+"placeholders": [],
+"filled": "SELECT 'Nord' -5"
+},
+{
+"dialect": "oracle",
+"sql": "SELECT {r} -{n}",
+"values": 1,
+"used": [
+"n",
+"r"
+],
+"placeholders": [],
+"filled": "SELECT 'it''s \\ a\nb\t\u0000é' -(-2.5)"
+},
+{
+"dialect": "oracle",
+"sql": "SELECT {r} -{n}",
+"values": 2,
+"used": [
+"n",
+"r"
+],
+"placeholders": [],
+"filled": "SELECT NULL -0.0000001"
+},
+{
+"dialect": "oracle",
+"sql": "SELECT {r} -{n}",
+"values": 3,
+"used": [
+"n",
+"r"
+],
+"placeholders": [],
+"filled": "SELECT '' -123456789012345.0"
+},
+{
+"dialect": "oracle",
+"sql": "SELECT '{today:''x}'",
+"values": 0,
+"used": [],
+"placeholders": [
+"today:''x"
+],
+"refused": "{today:''x} gives «x'y», which cannot go inside quoted text"
+},
+{
+"dialect": "oracle",
+"sql": "SELECT '{today:''x}'",
+"values": 1,
+"used": [],
+"placeholders": [
+"today:''x"
+],
+"refused": "{today:''x} gives «x'y», which cannot go inside quoted text"
+},
+{
+"dialect": "oracle",
+"sql": "SELECT '{today:''x}'",
+"values": 2,
+"used": [],
+"placeholders": [
+"today:''x"
+],
+"refused": "{today:''x} gives «x'y», which cannot go inside quoted text"
+},
+{
+"dialect": "oracle",
+"sql": "SELECT '{today:''x}'",
+"values": 3,
+"used": [],
+"placeholders": [
+"today:''x"
+],
+"refused": "{today:''x} gives «x'y», which cannot go inside quoted text"
+},
+{
+"dialect": "oracle",
+"sql": "SELECT 'é' || {r}",
+"values": 0,
+"used": [
+"r"
+],
+"placeholders": [],
+"filled": "SELECT 'é' || 'Nord'"
+},
+{
+"dialect": "oracle",
+"sql": "SELECT 'é' || {r}",
+"values": 1,
+"used": [
+"r"
+],
+"placeholders": [],
+"filled": "SELECT 'é' || 'it''s \\ a\nb\t\u0000é'"
+},
+{
+"dialect": "oracle",
+"sql": "SELECT 'é' || {r}",
+"values": 2,
+"used": [
+"r"
+],
+"placeholders": [],
+"filled": "SELECT 'é' || NULL"
+},
+{
+"dialect": "oracle",
+"sql": "SELECT 'é' || {r}",
+"values": 3,
+"used": [
+"r"
+],
+"placeholders": [],
+"filled": "SELECT 'é' || ''"
+},
+{
+"dialect": "oracle",
+"sql": "SELECT {{ {r} }}",
+"values": 0,
+"used": [
+"r"
+],
+"placeholders": [],
+"filled": "SELECT { 'Nord' }"
+},
+{
+"dialect": "oracle",
+"sql": "SELECT {{ {r} }}",
+"values": 1,
+"used": [
+"r"
+],
+"placeholders": [],
+"filled": "SELECT { 'it''s \\ a\nb\t\u0000é' }"
+},
+{
+"dialect": "oracle",
+"sql": "SELECT {{ {r} }}",
+"values": 2,
+"used": [
+"r"
+],
+"placeholders": [],
+"filled": "SELECT { NULL }"
+},
+{
+"dialect": "oracle",
+"sql": "SELECT {{ {r} }}",
+"values": 3,
+"used": [
+"r"
+],
+"placeholders": [],
+"filled": "SELECT { '' }"
+},
+{
+"dialect": "sqlserver",
+"sql": "SELECT * FROM t WHERE r = {r} AND n > {n} AND d >= {d} AND b = {b} AND m IN {m}",
+"values": 0,
+"used": [
+"b",
+"d",
+"m",
+"n",
+"r"
+],
+"placeholders": [],
+"filled": "SELECT * FROM t WHERE r = N'Nord' AND n > 5 AND d >= CAST('2026-01-02' AS DATE) AND b = 1 AND m IN (N'a', N'b')"
+},
+{
+"dialect": "sqlserver",
+"sql": "SELECT * FROM t WHERE r = {r} AND n > {n} AND d >= {d} AND b = {b} AND m IN {m}",
+"values": 1,
+"used": [
+"b",
+"d",
+"m",
+"n",
+"r"
+],
+"placeholders": [],
+"refused": "«m» has no value, and the SQL needs at least one: choose one"
+},
+{
+"dialect": "sqlserver",
+"sql": "SELECT * FROM t WHERE r = {r} AND n > {n} AND d >= {d} AND b = {b} AND m IN {m}",
+"values": 2,
+"used": [
+"b",
+"d",
+"m",
+"n",
+"r"
+],
+"placeholders": [],
+"filled": "SELECT * FROM t WHERE r = NULL AND n > 0.0000001 AND d >= CAST('1999-12-31' AS DATE) AND b = NULL AND m IN (1, 2.0, (-3))"
+},
+{
+"dialect": "sqlserver",
+"sql": "SELECT * FROM t WHERE r = {r} AND n > {n} AND d >= {d} AND b = {b} AND m IN {m}",
+"values": 3,
+"used": [
+"b",
+"d",
+"m",
+"n",
+"r"
+],
+"placeholders": [],
+"filled": "SELECT * FROM t WHERE r = N'' AND n > 123456789012345.0 AND d >= NULL AND b = 1 AND m IN (1, NULL)"
+},
+{
+"dialect": "sqlserver",
+"sql": "SELECT '{today}', {today-7}, {now:yyyy}, {{x}}, '{{today}}' FROM t -- {nope}",
+"values": 0,
+"used": [],
+"placeholders": [
+"now:yyyy",
+"today",
+"today-7"
+],
+"filled": "SELECT '2026-11-03', CAST('2026-10-27' AS DATE), 2026, {x}, '{today}' FROM t -- {nope}"
+},
+{
+"dialect": "sqlserver",
+"sql": "SELECT '{today}', {today-7}, {now:yyyy}, {{x}}, '{{today}}' FROM t -- {nope}",
+"values": 1,
+"used": [],
+"placeholders": [
+"now:yyyy",
+"today",
+"today-7"
+],
+"filled": "SELECT '2026-11-03', CAST('2026-10-27' AS DATE), 2026, {x}, '{today}' FROM t -- {nope}"
+},
+{
+"dialect": "sqlserver",
+"sql": "SELECT '{today}', {today-7}, {now:yyyy}, {{x}}, '{{today}}' FROM t -- {nope}",
+"values": 2,
+"used": [],
+"placeholders": [
+"now:yyyy",
+"today",
+"today-7"
+],
+"filled": "SELECT '2026-11-03', CAST('2026-10-27' AS DATE), 2026, {x}, '{today}' FROM t -- {nope}"
+},
+{
+"dialect": "sqlserver",
+"sql": "SELECT '{today}', {today-7}, {now:yyyy}, {{x}}, '{{today}}' FROM t -- {nope}",
+"values": 3,
+"used": [],
+"placeholders": [
+"now:yyyy",
+"today",
+"today-7"
+],
+"filled": "SELECT '2026-11-03', CAST('2026-10-27' AS DATE), 2026, {x}, '{today}' FROM t -- {nope}"
+},
+{
+"dialect": "sqlserver",
+"sql": "SELECT * FROM t WHERE x = '{r}'",
+"values": 0,
+"refused": "Write {r} without quotes: Tabularia quotes it"
+},
+{
+"dialect": "sqlserver",
+"sql": "SELECT * FROM t WHERE x = '{r}'",
+"values": 1,
+"refused": "Write {r} without quotes: Tabularia quotes it"
+},
+{
+"dialect": "sqlserver",
+"sql": "SELECT * FROM t WHERE x = '{r}'",
+"values": 2,
+"refused": "Write {r} without quotes: Tabularia quotes it"
+},
+{
+"dialect": "sqlserver",
+"sql": "SELECT * FROM t WHERE x = '{r}'",
+"values": 3,
+"refused": "Write {r} without quotes: Tabularia quotes it"
+},
+{
+"dialect": "sqlserver",
+"sql": "SELECT } FROM t",
+"values": 0,
+"refused": "A single } in the SQL: write }} for a literal brace"
+},
+{
+"dialect": "sqlserver",
+"sql": "SELECT } FROM t",
+"values": 1,
+"refused": "A single } in the SQL: write }} for a literal brace"
+},
+{
+"dialect": "sqlserver",
+"sql": "SELECT } FROM t",
+"values": 2,
+"refused": "A single } in the SQL: write }} for a literal brace"
+},
+{
+"dialect": "sqlserver",
+"sql": "SELECT } FROM t",
+"values": 3,
+"refused": "A single } in the SQL: write }} for a literal brace"
+},
+{
+"dialect": "sqlserver",
+"sql": "SELECT { FROM t",
+"values": 0,
+"refused": "A { in the SQL is not closed: add }, or write {{ for a literal brace"
+},
+{
+"dialect": "sqlserver",
+"sql": "SELECT { FROM t",
+"values": 1,
+"refused": "A { in the SQL is not closed: add }, or write {{ for a literal brace"
+},
+{
+"dialect": "sqlserver",
+"sql": "SELECT { FROM t",
+"values": 2,
+"refused": "A { in the SQL is not closed: add }, or write {{ for a literal brace"
+},
+{
+"dialect": "sqlserver",
+"sql": "SELECT { FROM t",
+"values": 3,
+"refused": "A { in the SQL is not closed: add }, or write {{ for a literal brace"
+},
+{
+"dialect": "sqlserver",
+"sql": "SELECT {nope}",
+"values": 0,
+"refused": "{nope} is neither a parameter of the report nor a placeholder: write {{ and }} for literal braces"
+},
+{
+"dialect": "sqlserver",
+"sql": "SELECT {nope}",
+"values": 1,
+"refused": "{nope} is neither a parameter of the report nor a placeholder: write {{ and }} for literal braces"
+},
+{
+"dialect": "sqlserver",
+"sql": "SELECT {nope}",
+"values": 2,
+"refused": "{nope} is neither a parameter of the report nor a placeholder: write {{ and }} for literal braces"
+},
+{
+"dialect": "sqlserver",
+"sql": "SELECT {nope}",
+"values": 3,
+"refused": "{nope} is neither a parameter of the report nor a placeholder: write {{ and }} for literal braces"
+},
+{
+"dialect": "sqlserver",
+"sql": "SELECT {r:fmt}",
+"values": 0,
+"refused": "{r:fmt}: a parameter takes no offset nor format"
+},
+{
+"dialect": "sqlserver",
+"sql": "SELECT {r:fmt}",
+"values": 1,
+"refused": "{r:fmt}: a parameter takes no offset nor format"
+},
+{
+"dialect": "sqlserver",
+"sql": "SELECT {r:fmt}",
+"values": 2,
+"refused": "{r:fmt}: a parameter takes no offset nor format"
+},
+{
+"dialect": "sqlserver",
+"sql": "SELECT {r:fmt}",
+"values": 3,
+"refused": "{r:fmt}: a parameter takes no offset nor format"
+},
+{
+"dialect": "sqlserver",
+"sql": "SELECT 'a\\' , {r} -- '",
+"values": 0,
+"refused": "The SQL is unclear near «{r}»: a backslash makes it uncertain whether it is inside quoted text. Write the text before it without that"
+},
+{
+"dialect": "sqlserver",
+"sql": "SELECT 'a\\' , {r} -- '",
+"values": 1,
+"refused": "The SQL is unclear near «{r}»: a backslash makes it uncertain whether it is inside quoted text. Write the text before it without that"
+},
+{
+"dialect": "sqlserver",
+"sql": "SELECT 'a\\' , {r} -- '",
+"values": 2,
+"refused": "The SQL is unclear near «{r}»: a backslash makes it uncertain whether it is inside quoted text. Write the text before it without that"
+},
+{
+"dialect": "sqlserver",
+"sql": "SELECT 'a\\' , {r} -- '",
+"values": 3,
+"refused": "The SQL is unclear near «{r}»: a backslash makes it uncertain whether it is inside quoted text. Write the text before it without that"
+},
+{
+"dialect": "sqlserver",
+"sql": "SELECT /* /* */ {r} */",
+"values": 0,
+"refused": "The SQL is unclear near «{r}»: a comment inside another makes it uncertain whether it is inside quoted text. Write the text before it without that"
+},
+{
+"dialect": "sqlserver",
+"sql": "SELECT /* /* */ {r} */",
+"values": 1,
+"refused": "The SQL is unclear near «{r}»: a comment inside another makes it uncertain whether it is inside quoted text. Write the text before it without that"
+},
+{
+"dialect": "sqlserver",
+"sql": "SELECT /* /* */ {r} */",
+"values": 2,
+"refused": "The SQL is unclear near «{r}»: a comment inside another makes it uncertain whether it is inside quoted text. Write the text before it without that"
+},
+{
+"dialect": "sqlserver",
+"sql": "SELECT /* /* */ {r} */",
+"values": 3,
+"refused": "The SQL is unclear near «{r}»: a comment inside another makes it uncertain whether it is inside quoted text. Write the text before it without that"
+},
+{
+"dialect": "sqlserver",
+"sql": "SELECT $$ {r} $$, {n}",
+"values": 0,
+"used": [
+"n",
+"r"
+],
+"placeholders": [],
+"filled": "SELECT $$ N'Nord' $$, 5"
+},
+{
+"dialect": "sqlserver",
+"sql": "SELECT $$ {r} $$, {n}",
+"values": 1,
+"used": [
+"n",
+"r"
+],
+"placeholders": [],
+"filled": "SELECT $$ N'it''s \\ a\nb\t\u0000é' $$, (-2.5)"
+},
+{
+"dialect": "sqlserver",
+"sql": "SELECT $$ {r} $$, {n}",
+"values": 2,
+"used": [
+"n",
+"r"
+],
+"placeholders": [],
+"filled": "SELECT $$ NULL $$, 0.0000001"
+},
+{
+"dialect": "sqlserver",
+"sql": "SELECT $$ {r} $$, {n}",
+"values": 3,
+"used": [
+"n",
+"r"
+],
+"placeholders": [],
+"filled": "SELECT $$ N'' $$, 123456789012345.0"
+},
+{
+"dialect": "sqlserver",
+"sql": "SELECT E'\\' {r}'",
+"values": 0,
+"refused": "The SQL is unclear near «{r}»: a backslash makes it uncertain whether it is inside quoted text. Write the text before it without that"
+},
+{
+"dialect": "sqlserver",
+"sql": "SELECT E'\\' {r}'",
+"values": 1,
+"refused": "The SQL is unclear near «{r}»: a backslash makes it uncertain whether it is inside quoted text. Write the text before it without that"
+},
+{
+"dialect": "sqlserver",
+"sql": "SELECT E'\\' {r}'",
+"values": 2,
+"refused": "The SQL is unclear near «{r}»: a backslash makes it uncertain whether it is inside quoted text. Write the text before it without that"
+},
+{
+"dialect": "sqlserver",
+"sql": "SELECT E'\\' {r}'",
+"values": 3,
+"refused": "The SQL is unclear near «{r}»: a backslash makes it uncertain whether it is inside quoted text. Write the text before it without that"
+},
+{
+"dialect": "sqlserver",
+"sql": "SELECT q'[ {r} ]', {n}",
+"values": 0,
+"refused": "Write {r} without quotes: Tabularia quotes it"
+},
+{
+"dialect": "sqlserver",
+"sql": "SELECT q'[ {r} ]', {n}",
+"values": 1,
+"refused": "Write {r} without quotes: Tabularia quotes it"
+},
+{
+"dialect": "sqlserver",
+"sql": "SELECT q'[ {r} ]', {n}",
+"values": 2,
+"refused": "Write {r} without quotes: Tabularia quotes it"
+},
+{
+"dialect": "sqlserver",
+"sql": "SELECT q'[ {r} ]', {n}",
+"values": 3,
+"refused": "Write {r} without quotes: Tabularia quotes it"
+},
+{
+"dialect": "sqlserver",
+"sql": "SELECT [{r}], {n}",
+"values": 0,
+"refused": "Write {r} without quotes: Tabularia quotes it"
+},
+{
+"dialect": "sqlserver",
+"sql": "SELECT [{r}], {n}",
+"values": 1,
+"refused": "Write {r} without quotes: Tabularia quotes it"
+},
+{
+"dialect": "sqlserver",
+"sql": "SELECT [{r}], {n}",
+"values": 2,
+"refused": "Write {r} without quotes: Tabularia quotes it"
+},
+{
+"dialect": "sqlserver",
+"sql": "SELECT [{r}], {n}",
+"values": 3,
+"refused": "Write {r} without quotes: Tabularia quotes it"
+},
+{
+"dialect": "sqlserver",
+"sql": "SELECT '''{r}''', {n}",
+"values": 0,
+"refused": "Write {r} without quotes: Tabularia quotes it"
+},
+{
+"dialect": "sqlserver",
+"sql": "SELECT '''{r}''', {n}",
+"values": 1,
+"refused": "Write {r} without quotes: Tabularia quotes it"
+},
+{
+"dialect": "sqlserver",
+"sql": "SELECT '''{r}''', {n}",
+"values": 2,
+"refused": "Write {r} without quotes: Tabularia quotes it"
+},
+{
+"dialect": "sqlserver",
+"sql": "SELECT '''{r}''', {n}",
+"values": 3,
+"refused": "Write {r} without quotes: Tabularia quotes it"
+},
+{
+"dialect": "sqlserver",
+"sql": "SELECT \"{r}\" # {r}",
+"values": 0,
+"refused": "Write {r} without quotes: Tabularia quotes it"
+},
+{
+"dialect": "sqlserver",
+"sql": "SELECT \"{r}\" # {r}",
+"values": 1,
+"refused": "Write {r} without quotes: Tabularia quotes it"
+},
+{
+"dialect": "sqlserver",
+"sql": "SELECT \"{r}\" # {r}",
+"values": 2,
+"refused": "Write {r} without quotes: Tabularia quotes it"
+},
+{
+"dialect": "sqlserver",
+"sql": "SELECT \"{r}\" # {r}",
+"values": 3,
+"refused": "Write {r} without quotes: Tabularia quotes it"
+},
+{
+"dialect": "sqlserver",
+"sql": "SELECT `{r}`, {n}",
+"values": 0,
+"refused": "Write {r} without quotes: Tabularia quotes it"
+},
+{
+"dialect": "sqlserver",
+"sql": "SELECT `{r}`, {n}",
+"values": 1,
+"refused": "Write {r} without quotes: Tabularia quotes it"
+},
+{
+"dialect": "sqlserver",
+"sql": "SELECT `{r}`, {n}",
+"values": 2,
+"refused": "Write {r} without quotes: Tabularia quotes it"
+},
+{
+"dialect": "sqlserver",
+"sql": "SELECT `{r}`, {n}",
+"values": 3,
+"refused": "Write {r} without quotes: Tabularia quotes it"
+},
+{
+"dialect": "sqlserver",
+"sql": "SELECT {today} , '{now}', {start_of_month+1m}",
+"values": 0,
+"used": [],
+"placeholders": [
+"now",
+"start_of_month+1m",
+"today"
+],
+"filled": "SELECT CAST('2026-11-03' AS DATE) , '2026-11-03T10:20', 1762160400"
+},
+{
+"dialect": "sqlserver",
+"sql": "SELECT {today} , '{now}', {start_of_month+1m}",
+"values": 1,
+"used": [],
+"placeholders": [
+"now",
+"start_of_month+1m",
+"today"
+],
+"filled": "SELECT CAST('2026-11-03' AS DATE) , '2026-11-03T10:20', 1762160400"
+},
+{
+"dialect": "sqlserver",
+"sql": "SELECT {today} , '{now}', {start_of_month+1m}",
+"values": 2,
+"used": [],
+"placeholders": [
+"now",
+"start_of_month+1m",
+"today"
+],
+"filled": "SELECT CAST('2026-11-03' AS DATE) , '2026-11-03T10:20', 1762160400"
+},
+{
+"dialect": "sqlserver",
+"sql": "SELECT {today} , '{now}', {start_of_month+1m}",
+"values": 3,
+"used": [],
+"placeholders": [
+"now",
+"start_of_month+1m",
+"today"
+],
+"filled": "SELECT CAST('2026-11-03' AS DATE) , '2026-11-03T10:20', 1762160400"
+},
+{
+"dialect": "sqlserver",
+"sql": "SELECT {r}{n}",
+"values": 0,
+"used": [
+"n",
+"r"
+],
+"placeholders": [],
+"filled": "SELECT N'Nord'5"
+},
+{
+"dialect": "sqlserver",
+"sql": "SELECT {r}{n}",
+"values": 1,
+"used": [
+"n",
+"r"
+],
+"placeholders": [],
+"filled": "SELECT N'it''s \\ a\nb\t\u0000é'(-2.5)"
+},
+{
+"dialect": "sqlserver",
+"sql": "SELECT {r}{n}",
+"values": 2,
+"used": [
+"n",
+"r"
+],
+"placeholders": [],
+"filled": "SELECT NULL0.0000001"
+},
+{
+"dialect": "sqlserver",
+"sql": "SELECT {r}{n}",
+"values": 3,
+"used": [
+"n",
+"r"
+],
+"placeholders": [],
+"filled": "SELECT N''123456789012345.0"
+},
+{
+"dialect": "sqlserver",
+"sql": "SELECT {r} -{n}",
+"values": 0,
+"used": [
+"n",
+"r"
+],
+"placeholders": [],
+"filled": "SELECT N'Nord' -5"
+},
+{
+"dialect": "sqlserver",
+"sql": "SELECT {r} -{n}",
+"values": 1,
+"used": [
+"n",
+"r"
+],
+"placeholders": [],
+"filled": "SELECT N'it''s \\ a\nb\t\u0000é' -(-2.5)"
+},
+{
+"dialect": "sqlserver",
+"sql": "SELECT {r} -{n}",
+"values": 2,
+"used": [
+"n",
+"r"
+],
+"placeholders": [],
+"filled": "SELECT NULL -0.0000001"
+},
+{
+"dialect": "sqlserver",
+"sql": "SELECT {r} -{n}",
+"values": 3,
+"used": [
+"n",
+"r"
+],
+"placeholders": [],
+"filled": "SELECT N'' -123456789012345.0"
+},
+{
+"dialect": "sqlserver",
+"sql": "SELECT '{today:''x}'",
+"values": 0,
+"used": [],
+"placeholders": [
+"today:''x"
+],
+"refused": "{today:''x} gives «x'y», which cannot go inside quoted text"
+},
+{
+"dialect": "sqlserver",
+"sql": "SELECT '{today:''x}'",
+"values": 1,
+"used": [],
+"placeholders": [
+"today:''x"
+],
+"refused": "{today:''x} gives «x'y», which cannot go inside quoted text"
+},
+{
+"dialect": "sqlserver",
+"sql": "SELECT '{today:''x}'",
+"values": 2,
+"used": [],
+"placeholders": [
+"today:''x"
+],
+"refused": "{today:''x} gives «x'y», which cannot go inside quoted text"
+},
+{
+"dialect": "sqlserver",
+"sql": "SELECT '{today:''x}'",
+"values": 3,
+"used": [],
+"placeholders": [
+"today:''x"
+],
+"refused": "{today:''x} gives «x'y», which cannot go inside quoted text"
+},
+{
+"dialect": "sqlserver",
+"sql": "SELECT 'é' || {r}",
+"values": 0,
+"used": [
+"r"
+],
+"placeholders": [],
+"filled": "SELECT 'é' || N'Nord'"
+},
+{
+"dialect": "sqlserver",
+"sql": "SELECT 'é' || {r}",
+"values": 1,
+"used": [
+"r"
+],
+"placeholders": [],
+"filled": "SELECT 'é' || N'it''s \\ a\nb\t\u0000é'"
+},
+{
+"dialect": "sqlserver",
+"sql": "SELECT 'é' || {r}",
+"values": 2,
+"used": [
+"r"
+],
+"placeholders": [],
+"filled": "SELECT 'é' || NULL"
+},
+{
+"dialect": "sqlserver",
+"sql": "SELECT 'é' || {r}",
+"values": 3,
+"used": [
+"r"
+],
+"placeholders": [],
+"filled": "SELECT 'é' || N''"
+},
+{
+"dialect": "sqlserver",
+"sql": "SELECT {{ {r} }}",
+"values": 0,
+"used": [
+"r"
+],
+"placeholders": [],
+"filled": "SELECT { N'Nord' }"
+},
+{
+"dialect": "sqlserver",
+"sql": "SELECT {{ {r} }}",
+"values": 1,
+"used": [
+"r"
+],
+"placeholders": [],
+"filled": "SELECT { N'it''s \\ a\nb\t\u0000é' }"
+},
+{
+"dialect": "sqlserver",
+"sql": "SELECT {{ {r} }}",
+"values": 2,
+"used": [
+"r"
+],
+"placeholders": [],
+"filled": "SELECT { NULL }"
+},
+{
+"dialect": "sqlserver",
+"sql": "SELECT {{ {r} }}",
+"values": 3,
+"used": [
+"r"
+],
+"placeholders": [],
+"filled": "SELECT { N'' }"
+}
+]

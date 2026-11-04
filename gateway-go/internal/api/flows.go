@@ -5,7 +5,6 @@ import (
 	"errors"
 	"fmt"
 	"net/http"
-	"regexp"
 	"strconv"
 	"strings"
 	"time"
@@ -14,6 +13,7 @@ import (
 
 	"github.com/JumpAsAService/Tabularia/gateway-go/internal/audit"
 	"github.com/JumpAsAService/Tabularia/gateway-go/internal/auth"
+	"github.com/JumpAsAService/Tabularia/gateway-go/internal/copynames"
 	"github.com/JumpAsAService/Tabularia/gateway-go/internal/enginepolicy"
 	"github.com/JumpAsAService/Tabularia/gateway-go/internal/flowaccess"
 	"github.com/JumpAsAService/Tabularia/gateway-go/internal/objects"
@@ -444,7 +444,7 @@ func (q *request) authorizeDefinitionKeys(definition string) (*auth.Refusal, err
 	if definition == "" {
 		return nil, nil
 	}
-	parsed, err := pyjson.Loads([]byte(definition))
+	parsed, err := pyjson.Loads(definition)
 	if err != nil {
 		return &auth.Refusal{Status: 422, Detail: "The flow definition is not valid JSON"}, nil
 	}
@@ -482,35 +482,6 @@ func (q *request) checkSave(before, after string) (*auth.Refusal, error) {
 		return ref, err
 	}
 	return q.acc.RegistryCheckDefinition(q.ctx, before, after)
-}
-
-var numbered = regexp.MustCompile(`^(.*\S) \((\d+)\)\n?\z`)
-
-// freeCopyName is copy_names.free_copy_name: the first «base (i)» not taken in the folder.
-func freeCopyName(ctx context.Context, q perm.Querier, table string, projectID int64, name string) (string, error) {
-	base := name
-	if m := numbered.FindStringSubmatch(name); m != nil {
-		base = m[1]
-	}
-	// `startswith(…, autoescape=True)`: the prefix's / % _ escaped with /
-	esc := strings.NewReplacer("/", "//", "%", "/%", "_", "/_").Replace(base + " (")
-	rows, err := q.Query(ctx, `SELECT name FROM `+table+` WHERE project_id = $1 AND name LIKE $2 || '%' ESCAPE '/'`, projectID, esc)
-	if err != nil {
-		return "", err
-	}
-	taken, err := pgx.CollectRows(rows, pgx.RowTo[string])
-	if err != nil {
-		return "", err
-	}
-	used := map[string]bool{}
-	for _, t := range taken {
-		used[t] = true
-	}
-	i := 1
-	for used[fmt.Sprintf("%s (%d)", base, i)] {
-		i++
-	}
-	return fmt.Sprintf("%s (%d)", base, i), nil
 }
 
 // insertFlow writes a new flow and returns it as read back.
@@ -565,7 +536,7 @@ func (d *Deps) duplicateFlow(w http.ResponseWriter, r *http.Request, p *auth.Pri
 		q.refused(q.checkSave("", src.Definition)) {
 		return
 	}
-	name, err := freeCopyName(q.ctx, d.DB, "flows", src.ProjectID, src.Name)
+	name, err := copynames.Free(q.ctx, d.DB, "flows", src.ProjectID, src.Name)
 	if err != nil {
 		q.fail(err)
 		return

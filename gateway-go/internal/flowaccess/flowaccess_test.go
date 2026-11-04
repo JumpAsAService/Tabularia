@@ -37,7 +37,7 @@ func TestDigits(t *testing.T) {
 
 func TestCheckFiles(t *testing.T) {
 	node := func(files string, entry string) pyjson.Object {
-		v, _ := pyjson.Loads([]byte(`{"id": "n", "data": {"label": "L", "entrypoint": "` + entry + `", "files": ` + files + `}}`))
+		v, _ := pyjson.Loads(`{"id": "n", "data": {"label": "L", "entrypoint": "` + entry + `", "files": ` + files + `}}`)
 		return v.(pyjson.Object)
 	}
 	cases := []struct {

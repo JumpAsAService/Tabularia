@@ -504,7 +504,7 @@ func hasRunnableNodes(definition string) (bool, error) {
 	if definition == "" {
 		definition = "{}"
 	}
-	parsed, err := pyjson.Loads([]byte(definition))
+	parsed, err := pyjson.Loads(definition)
 	if err != nil {
 		return false, nil
 	}
@@ -577,7 +577,7 @@ func allowedEmailDomains(c *connection) ([]string, *auth.Refusal) {
 		extra = "{}"
 	}
 	var raw any
-	if v, err := pyjson.Loads([]byte(extra)); err == nil {
+	if v, err := pyjson.Loads(extra); err == nil {
 		if o, ok := v.(pyjson.Object); ok {
 			raw = o.Value("allowed_domains")
 		}

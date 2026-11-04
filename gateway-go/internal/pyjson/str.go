@@ -32,7 +32,7 @@ func Repr(v any) string {
 		return strconv.FormatInt(x, 10)
 	case int:
 		return strconv.Itoa(x)
-	case BigInt:
+	case Int:
 		return string(x)
 	case float64:
 		switch r := FloatRepr(x); r {
@@ -109,7 +109,7 @@ func Truthy(v any) bool {
 		return x != 0
 	case int:
 		return x != 0
-	case BigInt:
+	case Int:
 		return true
 	case float64:
 		return x != 0

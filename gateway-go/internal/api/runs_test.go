@@ -22,12 +22,12 @@ func TestRunHelpers(t *testing.T) {
 	if emailNotSent(strp(`{"ok": true}`)) != nil || emailNotSent(strp(`[1]`)) != nil {
 		t.Error("email already told")
 	}
-	out, _ := pyjson.Loads([]byte(`{"path": "/o/a.csv", "bytes": 3}`))
+	out, _ := pyjson.Loads(`{"path": "/o/a.csv", "bytes": 3}`)
 	if got := sftpWritten(strp(`{"type": "sftp", "file_name": "a.csv"}`), out); got == nil ||
 		*got != `{"type": "sftp", "file_name": "a.csv", "path": "/o/a.csv", "bytes": 3}` {
 		t.Errorf("sftp written: %v", got)
 	}
-	res, _ := pyjson.Loads([]byte(`{"missing": [1, 2], "duplicate_keys": 4}`))
+	res, _ := pyjson.Loads(`{"missing": [1, 2], "duplicate_keys": 4}`)
 	if got := notesOf(res.(pyjson.Object)); got == nil || *got != `{"missing": [1, 2], "missing_count": 2, "expansions": null, "duplicate_keys": 4}` {
 		t.Errorf("notes: %v", got)
 	}

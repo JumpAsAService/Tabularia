@@ -112,7 +112,7 @@ func sftpWritten(summary *string, outcome any) *string {
 	if summary == nil || *summary == "" || !ok {
 		return nil
 	}
-	v, err := pyjson.Loads([]byte(*summary))
+	v, err := pyjson.Loads(*summary)
 	d, isObj := v.(pyjson.Object)
 	if err != nil || !isObj {
 		return nil
@@ -164,7 +164,7 @@ func emailSent(summary *string, outcome any) string {
 	if text == "" {
 		text = "{}"
 	}
-	launched, err := pyjson.Loads([]byte(text))
+	launched, err := pyjson.Loads(text)
 	if err != nil {
 		launched = pyjson.Object{}
 	}
@@ -185,7 +185,7 @@ func emailNotSent(summary *string) *string {
 	if summary == nil || *summary == "" {
 		return nil
 	}
-	v, err := pyjson.Loads([]byte(*summary))
+	v, err := pyjson.Loads(*summary)
 	d, ok := v.(pyjson.Object)
 	if err != nil || !ok || d.Value("ok") != nil {
 		return nil
@@ -239,7 +239,7 @@ func (q *request) activeContract(dsID *int64) (bool, error) {
 	if err != nil {
 		return false, err
 	}
-	v, lerr := pyjson.Loads([]byte(doc))
+	v, lerr := pyjson.Loads(doc)
 	if lerr != nil {
 		return false, nil
 	}
@@ -301,7 +301,7 @@ func (q *request) reconcile(run *runRow, progress progressOf) (*runRow, error) {
 		return run, nil
 	}
 	_ = res
-	parsed, err := pyjson.Loads(raw)
+	parsed, err := pyjson.Loads(string(raw))
 	if err != nil {
 		q.d.Log.Warn("reconciling a run put off", "run", run.ID, "err", err)
 		return run, nil
@@ -710,7 +710,7 @@ func (q *request) enqueueWebhooks(tx pgx.Tx, run *runRow) error {
 		if events == "" {
 			events = "[]"
 		}
-		if v, err := pyjson.Loads([]byte(events)); err == nil {
+		if v, err := pyjson.Loads(events); err == nil {
 			list, _ := v.([]any)
 			for _, e := range list {
 				if e == event {

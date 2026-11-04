@@ -12,6 +12,7 @@ import (
 
 	"github.com/JumpAsAService/Tabularia/gateway-go/internal/audit"
 	"github.com/JumpAsAService/Tabularia/gateway-go/internal/auth"
+	"github.com/JumpAsAService/Tabularia/gateway-go/internal/copynames"
 	"github.com/JumpAsAService/Tabularia/gateway-go/internal/cron"
 	"github.com/JumpAsAService/Tabularia/gateway-go/internal/flowaccess"
 	"github.com/JumpAsAService/Tabularia/gateway-go/internal/language"
@@ -152,7 +153,7 @@ func definitionOf(text string) *groupDef {
 	if text == "" {
 		text = "{}"
 	}
-	if v, err := pyjson.Loads([]byte(text)); err == nil {
+	if v, err := pyjson.Loads(text); err == nil {
 		if g, errs := newGroupDef(toPyd(v)); errs == nil {
 			return g
 		}
@@ -261,7 +262,7 @@ func sqlOutputOf(content string) bool {
 	if content == "" {
 		return false
 	}
-	v, err := pyjson.Loads([]byte(content))
+	v, err := pyjson.Loads(content)
 	o, ok := v.(pyjson.Object)
 	if err != nil || !ok {
 		return false
@@ -741,7 +742,7 @@ func (d *Deps) duplicateFlowGroup(w http.ResponseWriter, r *http.Request, p *aut
 	if q.refused(q.checked(def, nil)) {
 		return
 	}
-	name, err := freeCopyName(q.ctx, d.DB, "flow_groups", src.ProjectID, src.Name)
+	name, err := copynames.Free(q.ctx, d.DB, "flow_groups", src.ProjectID, src.Name)
 	if err != nil {
 		q.fail(err)
 		return
@@ -1058,7 +1059,7 @@ func (q *request) groupRunsOut(runs []*runRow) ([]FlowGroupRunOut, error) {
 	for i, run := range runs {
 		var grid []any
 		if run.GroupCells != nil && *run.GroupCells != "" {
-			if v, err := pyjson.Loads([]byte(*run.GroupCells)); err == nil {
+			if v, err := pyjson.Loads(*run.GroupCells); err == nil {
 				grid, _ = v.([]any)
 			}
 		}

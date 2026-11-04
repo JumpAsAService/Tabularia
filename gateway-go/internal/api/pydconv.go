@@ -23,7 +23,7 @@ func toPyd(v any) any {
 			out[i] = toPyd(e)
 		}
 		return out
-	case pyjson.BigInt:
+	case pyjson.Int:
 		b, _ := new(big.Int).SetString(string(x), 10)
 		return b
 	}
@@ -47,7 +47,7 @@ func fromPyd(v any) any {
 		}
 		return out
 	case *big.Int:
-		return pyjson.BigInt(x.String())
+		return pyjson.Int(x.String())
 	}
 	return v
 }
