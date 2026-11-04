@@ -57,6 +57,10 @@ func init() {
 			}
 			for _, p := range []string{"admin", "admin_group", "obs_flag", "obs_group", "editor", "writer", "service"} {
 				add(p+" lists the accounts", "GET", "/users", w.As(p), nil)
+				// list_users reads `select(User)` without an order: the table's physical order, which
+				// the two databases need not share once their sessions wrote last_seen_at at
+				// different moments (a Python bug, noted)
+				s[len(s)-1].Unordered = []string{""}
 			}
 			add("nobody lists", "GET", "/users", nil, nil)
 			add("the password rule", "GET", "/users/password-rules", w.As("writer"), nil)
@@ -162,6 +166,7 @@ func init() {
 			add("with a personal folder holding a flow", "DELETE", "/users/"+u("us-full"), Bearer("tab_us_admin_write_000000000"), nil)
 			add("a service account", "DELETE", "/users/"+u("us-svc"), w.As("admin_group"), nil)
 			add("the accounts now", "GET", "/users", w.As("admin"), nil)
+			s[len(s)-1].Unordered = []string{""}
 			return s
 		},
 	})
