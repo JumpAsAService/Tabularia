@@ -387,6 +387,14 @@ func (w *World) compare(st Step) string {
 	if !reflect.DeepEqual(pa.Headers, gb.Headers) {
 		out = append(out, fmt.Sprintf("    headers:\n      python %v\n      go     %v", pa.Headers, gb.Headers))
 	}
+	pa.Body, gb.Body = reconcile(pa.Body, gb.Body)
+	for t := range pa.Tables {
+		if g, ok := gb.Tables[t]; ok && len(g) == len(pa.Tables[t]) {
+			for i := range g {
+				pa.Tables[t][i], g[i] = reconcile(pa.Tables[t][i], g[i])
+			}
+		}
+	}
 	if !reflect.DeepEqual(pa.Body, gb.Body) {
 		p, _ := json.Marshal(pa.Body)
 		g, _ := json.Marshal(gb.Body)
@@ -404,6 +412,71 @@ func (w *World) compare(st Step) string {
 		}
 	}
 	return strings.Join(out, "\n")
+}
+
+// randomText is what each side draws by itself and a later read shows: an API token's
+// prefix, a service account's suffix.
+var randomText = []*regexp.Regexp{
+	regexp.MustCompile(`tab_[A-Za-z0-9_-]{8}`),
+	regexp.MustCompile(`report-bot-[0-9a-f]{6}@`),
+}
+
+// reconcile walks the two sides' values together and makes equal what differs only as two
+// sides written a moment apart differ: two timestamps less than five seconds apart (a token
+// expiring in a year, written by both sides in the same step, read back an hour later), and
+// the random texts above. Anything else is left as it is, to be compared.
+func reconcile(a, b any) (any, any) {
+	switch x := a.(type) {
+	case map[string]any:
+		y, ok := b.(map[string]any)
+		if !ok {
+			return a, b
+		}
+		for k, e := range x {
+			if f, has := y[k]; has {
+				x[k], y[k] = reconcile(e, f)
+			}
+		}
+	case []any:
+		y, ok := b.([]any)
+		if !ok || len(x) != len(y) {
+			return a, b
+		}
+		for i := range x {
+			x[i], y[i] = reconcile(x[i], y[i])
+		}
+	case string:
+		y, ok := b.(string)
+		if !ok || x == y {
+			return a, b
+		}
+		if ta, ok := moment(x); ok {
+			if tb, ok := moment(y); ok && ta.Sub(tb).Abs() < 5*time.Second {
+				return "<same moment>", "<same moment>"
+			}
+		}
+		mx, my := x, y
+		for _, re := range randomText {
+			mx, my = re.ReplaceAllString(mx, "<random>"), re.ReplaceAllString(my, "<random>")
+		}
+		if mx == my {
+			return mx, my
+		}
+	}
+	return a, b
+}
+
+func moment(s string) (time.Time, bool) {
+	if !stamp.MatchString(s) {
+		return time.Time{}, false
+	}
+	s = strings.Replace(s, " ", "T", 1)
+	for _, layout := range []string{time.RFC3339Nano, "2006-01-02T15:04:05.999999999"} {
+		if t, err := time.Parse(layout, s); err == nil {
+			return t, true
+		}
+	}
+	return time.Time{}, false
 }
 
 // ── the databases' content ───────────────────────────────────────────────────
