@@ -77,6 +77,9 @@ type Step struct {
 	// EngineScrub: regular expressions whose matches in the requests sent to the engine are
 	// random (a Job's name, a pod's token, a step's uuid inside a key)
 	EngineScrub []string
+	// Settle: a wait after the answer, before what was sent to the engine and the databases
+	// are read (a route that goes on in the background, as the editor's trial of a node)
+	Settle time.Duration
 }
 
 // EngineRule is one scripted answer of the fake engine (cmd/fakeengine).
@@ -471,6 +474,9 @@ func (w *World) ask(s *side, st Step) answer {
 
 // finish adds what the step sent to the engine and the databases' content.
 func (w *World) finish(s *side, st Step, a *answer) {
+	if st.Settle > 0 {
+		time.Sleep(st.Settle)
+	}
 	a.Engine = recorded(s)
 	for _, path := range st.EngineMask {
 		a.Engine = maskPath(a.Engine, strings.Split(path, "."))

@@ -5,7 +5,7 @@ Python gateway as FastAPI serves it, and whether the Go gateway answers it
 ([spec](specs/gateway-go.md)). The Go gateway replaces the Python one when no line says *Python*;
 *AI service* lines are forwarded to the Python AI service (`APP__ROLE=ai`), where they stay.
 
-**313 of 362 in Go**, 14 forwarded to the AI service.
+**314 of 362 in Go**, 14 forwarded to the AI service.
 
 ## core.api_docs (2/2)
 
@@ -480,7 +480,7 @@ Python gateway as FastAPI serves it, and whether the Go gateway answers it
 |---|---|---|---|
 | GET | `/schedule/load` | `schedule_load` | **Go** |
 
-## routes.scripting (17/18)
+## routes.scripting (18/18)
 
 | Method | Path | Python function | Served by |
 |---|---|---|---|
@@ -499,7 +499,7 @@ Python gateway as FastAPI serves it, and whether the Go gateway answers it
 | POST | `/admin/scripting/storage/test` | `trial_storage` | **Go** |
 | GET | `/scripting` | `editor_environments` | **Go** |
 | GET | `/scripting/environments/{environment_id}/completions` | `editor_completions` | **Go** |
-| POST | `/scripting/flows/{flow_id}/nodes/{node_id}/run` | `trial_node` | Python |
+| POST | `/scripting/flows/{flow_id}/nodes/{node_id}/run` | `trial_node` | **Go** |
 | GET | `/scripting/flows/{flow_id}/outputs` | `node_outputs` | **Go** |
 | POST | `/scripting/lint` | `editor_check` | **Go** |
 
