@@ -118,9 +118,6 @@ func (p *Panel) Apply(rows map[string]string) {
 				continue
 			}
 			it.set(&v, x)
-			if _, both := adminItems[key]; both { // app.timezone: read by both lanes' accessors
-				p.applyAdmin(&v, key, raw)
-			}
 		}
 	}
 	p.current.Store(&v)
