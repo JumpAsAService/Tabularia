@@ -30,7 +30,7 @@ func init() {
 			w.Exec(`INSERT INTO permissions (project_id, user_id, capability) VALUES ($1, $2, 'edit'), ($3, $2, 'edit')`, ids["top"],
 				w.People["editor"], ids["dest"])
 			conn := func(key, name, dbType, host string, port any, database, schema, user string) {
-				ids[key] = w.Insert(`INSERT INTO connections (name, description, project_id, db_type, host, port, username, password_encrypted,
+				ids["c-"+key] = w.Insert(`INSERT INTO connections (name, description, project_id, db_type, host, port, username, password_encrypted,
 					database, db_schema, extra, created_at, updated_at) VALUES ($1, '', $2, $3, $4, $5, $6, '', $7, $8, '{}', '2026-01-01',
 					'2026-01-01') RETURNING id`, name, ids["top"], dbType, host, port, user, database, schema)
 			}
@@ -46,7 +46,7 @@ func init() {
 			ds := func(key, name, project, kind string, connKey, sourceType, sourceRef any) {
 				var c any
 				if k, ok := connKey.(string); ok {
-					c = ids[k]
+					c = ids["c-"+k]
 				}
 				ids[key] = w.Insert(`INSERT INTO datasources (name, description, project_id, bucket, key, rows, columns, sort_keys,
 					column_descriptions, kind, connection_id, source_type, source_ref, created_at, updated_at) VALUES ($1::varchar, '', $2, 'data-prep',
@@ -78,7 +78,7 @@ func init() {
 				{"id": "o2", "type": "output", "data": {"destType": "database", "connectionId": %d, "table": "out"}},
 				{"id": "o3", "type": "output", "data": {"destType": "email", "connectionId": %d}}],
 				"edges": [{"source": "s1", "target": "sc"}, {"source": "s2", "target": "sc", "targetHandle": "seq-in"},
-				{"source": "sc", "target": "c1"}]}`, ids["up"], ids["q"], ids["top"], ids["pg"], ids["smtp"]))
+				{"source": "sc", "target": "c1"}]}`, ids["up"], ids["q"], ids["top"], ids["c-pg"], ids["c-smtp"]))
 			flow("reader", "olx reader", "dest", fmt.Sprintf(`{"nodes": [{"id": "s1", "type": "source", "data": {"datasourceId": %d}}]}`, ids["q"]))
 			env := w.Insert(`INSERT INTO script_environments (name, description, language, enabled, cpu_request, cpu_limit, memory_request,
 				memory_limit, max_timeout_seconds, created_at, updated_at) VALUES ('olx-py', '', 'python', true, '1', '1', '1Gi', '1Gi', 60,
@@ -95,7 +95,7 @@ func init() {
 			}
 			sql("named", "olx named", fmt.Sprintf(`{"sql": "SELECT * FROM \"olx query\" JOIN \"olx sub\".\"olx table\" ON 1=1", "engine": "duckdb",
 				"output": {"name": "olx sql out", "project_id": %d}}`, ids["sub"]))
-			sql("onconn", "olx on conn", fmt.Sprintf(`{"sql": "SELECT a FROM s.t1, t2", "connection_id": %d}`, ids["pg"]))
+			sql("onconn", "olx on conn", fmt.Sprintf(`{"sql": "SELECT a FROM s.t1, t2", "connection_id": %d}`, ids["c-pg"]))
 			ids["nb"] = w.Insert(`INSERT INTO notebooks (name, description, project_id, environment_id, current_version, created_at, updated_at)
 				VALUES ('olx board', '', $1, $2, 2, '2026-01-01', '2026-01-01') RETURNING id`, ids["sub"], env)
 			ids["nb2"] = w.Insert(`INSERT INTO notebooks (name, description, project_id, environment_id, current_version, created_at, updated_at)
@@ -116,7 +116,7 @@ func init() {
 				VALUES ('olx group', '', $1, $2, '2026-01-01', '2026-01-01') RETURNING id`, ids["sub"], fmt.Sprintf(`{"steps": [
 				[{"kind": "flow", "id": %d}, {"kind": "container", "id": 7, "container": {"repository": "img", "label": "pack"}}],
 				[{"kind": "pushmail", "id": 8, "pushmail": {"label": " Monthly ", "connectionId": %d, "to": ["a@x.test"]}},
-				 {"kind": "pushmail", "id": 9, "pushmail": {"label": "", "to": ["b@x.test"]}}]]}`, ids["f"], ids["smtp"]))
+				 {"kind": "pushmail", "id": 9, "pushmail": {"label": "", "to": ["b@x.test"]}}]]}`, ids["f"], ids["c-smtp"]))
 			// runs that close at the next read (the engine's answer: see the steps' rules)
 			run := func(key, kind string, extra string, args ...any) {
 				ids[key] = w.Insert(`INSERT INTO runs (kind, task_id, status, launched_by, trigger_type, input_key, output_bucket, output_key,
@@ -133,9 +133,9 @@ func init() {
 				publish_description, publish_overwrite, publish_sort_keys, started_at, finished_at) VALUES ('orchestration', $1, '', 'SUCCESS',
 				'manual', '', '', '', '', false, '[]', '2026-03-01', '2026-03-01') RETURNING id`, ids["f"])
 			run("out", "flow", `flow_id = $2, parent_run_id = $3, destination = $4, mirror = $5, email = $6, engine = 'duckdb'`, ids["f"], ids["orch"],
-				fmt.Sprintf(`{"type": "database", "connection_id": %d, "table": "public.out", "mode": "replace"}`, ids["pg"]),
+				fmt.Sprintf(`{"type": "database", "connection_id": %d, "table": "public.out", "mode": "replace"}`, ids["c-pg"]),
 				`{"endpoint": "https://storage.googleapis.com", "bucket": "m", "key": "/k/m.parquet", "ok": true}`,
-				fmt.Sprintf(`{"connection_id": %d, "to": ["z@x.test"]}`, ids["smtp"]))
+				fmt.Sprintf(`{"connection_id": %d, "to": ["z@x.test"]}`, ids["c-smtp"]))
 			run("out-s3", "flow", `flow_id = $2, destination = $3`, ids["f"],
 				`{"type": "s3", "bucket": "b", "key": "exports/{{ today }}.csv", "format": "csv", "written_key": "exports/2026-03-01.csv"}`)
 			run("out-sftp", "flow", `flow_id = $2, destination = $3`, ids["f"],
@@ -143,14 +143,14 @@ func init() {
 			run("out-input", "flow", `flow_id = $2, destination = '{"type": "script_input"}'`, ids["f"])
 			run("sql-named", "sql", `sql_script_id = $2, script = '{"version": 1}', publish_name = 'olx sql out', publish_project_id = $3, engine = 'duckdb'`,
 				ids["named"], ids["sub"])
-			run("sql-conn", "sql", `sql_script_id = $2, script = $3`, ids["onconn"], fmt.Sprintf(`{"version": 1, "connection_id": %d}`, ids["pg"]))
+			run("sql-conn", "sql", `sql_script_id = $2, script = $3`, ids["onconn"], fmt.Sprintf(`{"version": 1, "connection_id": %d}`, ids["c-pg"]))
 			run("sql-ds", "sql", `sql_script_id = $2, script = $3, datasource_id = $4`, ids["named"], fmt.Sprintf(`{"datasources": [%d, 999999]}`,
 				ids["up"]), ids["up"])
 			ids["grouprun"] = w.Insert(`INSERT INTO runs (kind, flow_group_id, task_id, status, trigger_type, input_key, output_bucket,
 				output_key, publish_description, publish_overwrite, publish_sort_keys, started_at) VALUES ('orchestration', $1, '', 'STARTED',
 				'manual', '', '', '', '', false, '[]', '2026-03-01') RETURNING id`, ids["group"])
 			run("push", "pushmail", `parent_run_id = $2, email = $3`, ids["grouprun"], fmt.Sprintf(`{"cell": " Monthly ", "connection_id": %d,
-				"datasource_ids": [%d, %d], "report_datasource_ids": [%d, 999999]}`, ids["smtp"], ids["q"], ids["up"], ids["q"]))
+				"datasource_ids": [%d, %d], "report_datasource_ids": [%d, 999999]}`, ids["c-smtp"], ids["q"], ids["up"], ids["q"]))
 			run("push-host", "pushmail", `parent_run_id = $2, email = '{"host": "mail.x.test"}'`, ids["grouprun"])
 		},
 		Steps: func(w *World) []Step {
