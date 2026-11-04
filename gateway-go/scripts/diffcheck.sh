@@ -7,6 +7,9 @@
 #
 #   gateway-go/scripts/diffcheck.sh                 every suite
 #   DIFF_ONLY=flows,projects gateway-go/scripts/diffcheck.sh
+#   DIFF_ENV="SCRIPTS__ENABLED=true KUBERNETES__API_URL=http://{engine}:8000" …
+#                    more variables for every gateway of both stacks; {engine} is the
+#                    stack's fake engine (to stand in for another API, as Kubernetes')
 set -eu
 here=$(cd "$(dirname "$0")/.." && pwd)
 repo=$(cd "$here/.." && pwd)
@@ -48,8 +51,11 @@ siem_b="--add-host siem.test:$(ip "$id-engb")"
 
 common="-e DB__USER=t -e DB__PASSWORD=t -e DB__NAME=t -e JWT__SECRET=$secret -e SECURITY__FERNET_KEY=$fernet
     -e AUTH__ADMIN_PASSWORD=$admin_password -e APP__ROLE=api -e AUTH__FIRST_RUN_SETUP=true -e MONITORING__CACHE_SECONDS=0"
+extra() {  # DIFF_ENV for the stack whose engine is $1
+    for kv in ${DIFF_ENV:-}; do printf -- '-e %s ' "$(printf '%s' "$kv" | sed "s/{engine}/$1/g")"; done
+}
 python_gateway() {  # name, its database, its engine, its Splunk
-    docker run -d --name "$1" --network "$net" $common $4 -e DB__HOST="$2" -e ENGINE__BASE_URL="http://$3:8000" \
+    docker run -d --name "$1" --network "$net" $common $4 $(extra "$3") -e DB__HOST="$2" -e ENGINE__BASE_URL="http://$3:8000" \
         -e MONITORING__NODE_EXPORTER_URL="http://$3:8000/metrics" \
         -p 127.0.0.1::8000 -v "$repo/gateway/app:/app/app:ro" "$gateway_image" \
         uvicorn app.main:app --host 0.0.0.0 --port 8000 --proxy-headers --forwarded-allow-ips='*' >/dev/null
@@ -60,7 +66,7 @@ for s in a b; do
     if [ "$s" = a ]; then python_gateway "$id-py$s" "$id-pg$s" "$id-eng$s" "$siem_a"
     else python_gateway "$id-py$s" "$id-pg$s" "$id-eng$s" "$siem_b"; fi
 done
-docker run -d --name "$id-go" --network "$net" $common $siem_b -e DB__HOST="$id-pgb" -e ENGINE__BASE_URL="http://$id-engb:8000" \
+docker run -d --name "$id-go" --network "$net" $common $siem_b $(extra "$id-engb") -e DB__HOST="$id-pgb" -e ENGINE__BASE_URL="http://$id-engb:8000" \
     -e MONITORING__NODE_EXPORTER_URL="http://$id-engb:8000/metrics" \
     -p 127.0.0.1::8000 -e GATEWAY_GO__UPSTREAM="http://$id-pyb:8000" -e GATEWAY_GO__FORWARDED_ALLOW_IPS='*' \
     "$go_gateway" >/dev/null
