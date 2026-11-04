@@ -12,6 +12,7 @@ import (
 	"errors"
 	"fmt"
 	"net/http"
+	"strconv"
 	"strings"
 	"time"
 
@@ -238,11 +239,17 @@ func TaskID(raw []byte) (string, *auth.Refusal, error) {
 	if !pyjson.Truthy(t) {
 		return "", &auth.Refusal{Status: http.StatusBadGateway, Detail: "The engine did not return a task_id"}, nil
 	}
-	s, ok := t.(string)
-	if !ok {
-		return "", nil, ErrPython // a task id the varchar column refuses
+	switch x := t.(type) {
+	case string:
+		return x, nil, nil
+	case int64, pyjson.Int:
+		return pyjson.Str(x), nil, nil // the number PostgreSQL casts into the text column
+	case bool:
+		return "true", nil, nil
+	case float64:
+		return strconv.FormatFloat(x, 'g', -1, 64), nil, nil
 	}
-	return s, nil, nil
+	return "", nil, ErrPython // a task id the column refuses
 }
 
 // textCut is httpx's resp.text[:n].
