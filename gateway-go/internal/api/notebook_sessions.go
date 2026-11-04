@@ -1,10 +1,7 @@
 package api
 
 // routes/notebook_sessions.py: the live pods of a notebook (its sessions) and the frame's
-// ticket. Ported: the list of the sessions and the ticket. Left to the Python gateway:
-// starting and stopping a pod and the editor's «Save version» (services/notebook_runtime.py
-// drives the pods' Jobs and reads the editor's file from its pod), and the list while a
-// pod is starting (asking the cluster whether it is ready is the runtime's).
+// ticket; starting and stopping a pod and «Save version» are in notebook_sessions_runtime.go.
 
 import (
 	"crypto/rand"
@@ -83,55 +80,42 @@ func listNotebookSessions(d *Deps, w http.ResponseWriter, r *http.Request, p *au
 		fail(d, w, "notebooks: the permission", err)
 		return
 	}
-	rows, err := d.DB.Query(ctx, `SELECT s.mode, s.status, s.error, s.user_id, s.started_at, s.last_seen_at FROM notebook_sessions s
-		WHERE s.notebook_id = $1 ORDER BY s.mode`, n.ID)
+	rows, err := d.DB.Query(ctx, `SELECT `+nbSessionColumns+` FROM notebook_sessions WHERE notebook_id = $1 ORDER BY mode`, n.ID)
 	if err != nil {
 		fail(d, w, "notebooks: the sessions", err)
 		return
 	}
-	type row struct {
-		out    nbSessionOut
-		userID int64
-	}
-	var list []row
+	var list []*nbSession
 	for rows.Next() {
-		var x row
-		var started, seen time.Time
-		if err := rows.Scan(&x.out.Mode, &x.out.Status, &x.out.Error, &x.userID, &started, &seen); err != nil {
+		x, err := nbScanSession(rows)
+		if err != nil {
 			rows.Close()
 			fail(d, w, "notebooks: a session", err)
 			return
 		}
-		x.out.StartedAt, x.out.LastSeenAt = pyjson.Isoformat(started), pyjson.Isoformat(seen)
 		list = append(list, x)
 	}
 	rows.Close()
 	out := []nbSessionOut{}
 	for _, x := range list {
-		if x.out.Mode == "edit" && !editable {
+		if x.Mode == "edit" && !editable {
 			continue
 		}
-		if x.out.Status == "starting" {
-			scForward(d, w, r) // notebook_runtime.refresh asks the cluster
+		if x.Status == "starting" && scOpenLineageOn() {
+			scForward(d, w, r) // a session that fails tells the lineage catalog: Python's, while OpenLineage is on
 			return
 		}
-		user, err := nbPersonOf(ctx, d.DB, &x.userID)
+		// notebook_runtime.refresh: a starting session moved forward
+		if err := nbRefresh(ctx, d, x, false); err != nil {
+			fail(d, w, "notebooks: the session's pod", err)
+			return
+		}
+		o, err := nbSessionJSON(d, r, x)
 		if err != nil {
-			fail(d, w, "notebooks: the session's person", err)
+			fail(d, w, "notebooks: the session", err)
 			return
 		}
-		x.out.User = user
-		if x.out.Mode == "app" {
-			var count int64
-			if err := d.DB.QueryRow(ctx, `SELECT count(*) FROM notebook_visitors WHERE notebook_id = $1 AND last_seen_at >= $2`,
-				n.ID, time.Now().UTC().Add(-3*time.Minute)).Scan(&count); err != nil {
-				fail(d, w, "notebooks: the visitors", err)
-				return
-			}
-			capV := nbVisitorsCap(n.MaxVisitors)
-			x.out.Visitors, x.out.MaxVisitors = &count, &capV
-		}
-		out = append(out, x.out)
+		out = append(out, *o)
 	}
 	server.JSON(w, http.StatusOK, out)
 }

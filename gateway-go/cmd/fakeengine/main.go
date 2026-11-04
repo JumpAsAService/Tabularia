@@ -101,6 +101,9 @@ func main() {
 		if a := r.Header.Get("Authorization"); strings.HasPrefix(a, "Splunk ") {
 			rec.Splunk, rec.Body = a, sentNow(body)
 		}
+		if r.URL.Path == "/idp/token" {
+			rec.Body = idpRecord(raw)
+		}
 		log_ = append(log_, rec)
 		var hit *rule
 		for i := range rules {
@@ -110,6 +113,9 @@ func main() {
 			}
 		}
 		mu.Unlock()
+		if hit == nil && strings.HasPrefix(r.URL.Path, "/idp/") && idp(w, r, raw) {
+			return
+		}
 		if hit != nil && hit.Type != "" {
 			w.Header().Set("Content-Type", hit.Type)
 		} else {

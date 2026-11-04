@@ -2,6 +2,7 @@ package scriptcfg
 
 import (
 	"os"
+	"strconv"
 	"strings"
 	"sync"
 
@@ -20,6 +21,13 @@ type Runtime struct {
 	NamespaceFile string
 	// APP__ROLE: all | api | orchestrator | ai
 	Role string
+	// NOTEBOOKS__MAX_LIVE, NOTEBOOKS__START_TIMEOUT_SECONDS, NOTEBOOKS__MAX_LIFETIME_HOURS,
+	// NOTEBOOKS__GATEWAY_URL: the notebooks' pods
+	NotebooksMaxLive, NotebooksStartTimeout, NotebooksMaxLifetimeHours int64
+	NotebooksGatewayURL                                                string
+	// SCRIPTS__REGISTRY_PULL_SECRET, SCRIPTS__JOB_TTL_SECONDS: what the pods' Jobs carry
+	ScriptsPullSecret string
+	ScriptsJobTTL     int64
 }
 
 var (
@@ -48,7 +56,18 @@ func LoadRuntime(env config.Env) *Runtime {
 			rollout = true
 		}
 	}
+	integer := func(name string, def int64) int64 {
+		if v, ok := env(name); ok {
+			if n, err := strconv.ParseInt(strings.TrimSpace(v), 10, 64); err == nil {
+				return n
+			}
+		}
+		return def
+	}
 	return &Runtime{
+		NotebooksMaxLive: integer("NOTEBOOKS__MAX_LIVE", 20), NotebooksStartTimeout: integer("NOTEBOOKS__START_TIMEOUT_SECONDS", 300),
+		NotebooksMaxLifetimeHours: integer("NOTEBOOKS__MAX_LIFETIME_HOURS", 12), NotebooksGatewayURL: str("NOTEBOOKS__GATEWAY_URL", ""),
+		ScriptsPullSecret: str("SCRIPTS__REGISTRY_PULL_SECRET", ""), ScriptsJobTTL: integer("SCRIPTS__JOB_TTL_SECONDS", 3600),
 		Rollout: rollout, Release: str("KUBERNETES__RELEASE", ""), AppName: str("KUBERNETES__APP_NAME", ""),
 		Namespace:     str("KUBERNETES__NAMESPACE", ""),
 		NamespaceFile: str("KUBERNETES__NAMESPACE_FILE", "/var/run/secrets/kubernetes.io/serviceaccount/namespace"),

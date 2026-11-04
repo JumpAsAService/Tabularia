@@ -19,33 +19,33 @@ func init() {
 			folder := func(key, name string) {
 				ids[key] = w.Insert(`INSERT INTO projects (name, description, created_at) VALUES ($1, '', '2026-01-01') RETURNING id`, name)
 			}
-			folder("main", "lr-main")
+			folder("pmain", "lr-main")
 			folder("hidden", "lr-hidden")
-			w.Exec(`INSERT INTO permissions (project_id, user_id, capability) VALUES ($1, $2, 'view'), ($1, $3, 'edit')`, ids["main"],
+			w.Exec(`INSERT INTO permissions (project_id, user_id, capability) VALUES ($1, $2, 'view'), ($1, $3, 'edit')`, ids["pmain"],
 				w.People["editor"], w.People["writer"])
 			ds := func(key, name, project, kind string, refreshed any) {
 				ids[key] = w.Insert(`INSERT INTO datasources (name, description, project_id, bucket, key, rows, columns, sort_keys,
 					column_descriptions, kind, refreshed_at, created_at, updated_at) VALUES ($1, '', $2, 'data-prep', $1, 7, '[]', '[]', '{}', $3,
 					$4, '2026-01-01', '2026-01-01') RETURNING id`, name, ids[project], kind, refreshed)
 			}
-			ds("sales", "lr_sales", "main", "database", "2026-03-01 10:00:00")
+			ds("sales", "lr_sales", "pmain", "database", "2026-03-01 10:00:00")
 			ds("sales2", "LR_Sales", "hidden", "upload", nil)
-			ds("clients", "lr clients", "main", "upload", nil)
+			ds("clients", "lr clients", "pmain", "upload", nil)
 			ds("secret", "lr secret", "hidden", "upload", nil)
 			ids["conn"] = w.Insert(`INSERT INTO connections (name, description, project_id, db_type, host, port, username, password_encrypted,
 				database, db_schema, extra, created_at, updated_at) VALUES ('lr pg', '', $1, 'postgresql', 'db.lr', 5432, 'u', '', 'shop', '',
-				'{}', '2026-01-01', '2026-01-01') RETURNING id`, ids["main"])
+				'{}', '2026-01-01', '2026-01-01') RETURNING id`, ids["pmain"])
 			ids["sftp"] = w.Insert(`INSERT INTO connections (name, description, project_id, db_type, host, port, username, password_encrypted,
 				database, db_schema, extra, created_at, updated_at) VALUES ('lr sftp', '', $1, 'sftp', 'sftp.lr', 22, 'u', '', '', '',
-				'{}', '2026-01-01', '2026-01-01') RETURNING id`, ids["main"])
+				'{}', '2026-01-01', '2026-01-01') RETURNING id`, ids["pmain"])
 			w.Exec(`UPDATE datasources SET connection_id = $1 WHERE id = $2`, ids["conn"], ids["sales"])
 			flow := func(key, name, project, def string, schedule any) {
 				ids[key] = w.Insert(`INSERT INTO flows (name, description, project_id, definition, engine, run_schedule, created_at, updated_at)
 					VALUES ($1, '', $2, $3, 'duckdb', $4, '2026-01-01', '2026-01-01') RETURNING id`, name, ids[project], def, schedule)
 			}
 			flow("hiddenflow", "lr hidden flow", "hidden", `{"nodes": []}`, nil)
-			flow("sub", "lr sub", "main", `not json`, nil)
-			flow("main", "lr main", "main", fmt.Sprintf(`{"nodes": [
+			flow("sub", "lr sub", "pmain", `not json`, nil)
+			flow("main", "lr main", "pmain", fmt.Sprintf(`{"nodes": [
 				{"id": "s1", "type": "source", "data": {"datasourceId": %d}},
 				{"id": "s2", "type": "source", "data": {"datasourceId": %d}},
 				{"id": "s3", "type": "source", "data": {"datasourceId": 999999}},
@@ -63,7 +63,7 @@ func init() {
 				{"id": "c1", "type": "container", "data": {"registryId": 3, "repository": " team/app ", "tag": "v1"}},
 				{"id": "c2", "type": "container", "data": {"repository": ""}}], "edges": []}`,
 				ids["sales"], ids["secret"], ids["clients"], ids["sub"], ids["hiddenflow"], ids["conn"], ids["sftp"]), "0 * * * *")
-			flow("reader", "lr reader", "main", fmt.Sprintf(`{"nodes": [{"id": "s1", "type": "source", "data": {"datasourceId": %d}},
+			flow("reader", "lr reader", "pmain", fmt.Sprintf(`{"nodes": [{"id": "s1", "type": "source", "data": {"datasourceId": %d}},
 				{"id": "s2", "type": "source", "data": {"datasourceId": %d}},
 				{"id": "s3", "type": "source", "data": {"parquetKey": "up/x.parquet"}},
 				{"id": "s4", "type": "source", "data": {"parquetKey": "up/y.parquet", "bucket": "other"}},
@@ -77,7 +77,7 @@ func init() {
 				{"id": "o7", "type": "output", "data": {"destType": "sftp", "connectionId": %d, "sftpFolder": "/in/", "sftpFileName": "f.csv"}},
 				{"id": "o8", "type": "output", "data": {"destType": "email", "connectionId": %d}},
 				{"id": "o9", "type": "output", "data": {"destType": "email", "connectionId": %d}}]}`,
-				ids["clients"], ids["sales"], ids["main"], ids["conn"], ids["main"], ids["conn"], ids["conn"], ids["conn"], ids["sftp"], ids["sftp"],
+				ids["clients"], ids["sales"], ids["pmain"], ids["conn"], ids["pmain"], ids["conn"], ids["conn"], ids["conn"], ids["sftp"], ids["sftp"],
 				ids["conn"]), nil)
 			w.Exec(`UPDATE datasources SET description = 'the clients', columns = '[{"name": "id", "dtype": "Int64"}, {"x": 1}, "y", {"name": ""}]'
 				WHERE id = $1`, ids["clients"])
@@ -93,11 +93,11 @@ func init() {
 			run("reader", "SUCCESS", "2026-03-05 09:00:00", nil)
 			sql := func(name, content string) {
 				id := w.Insert(`INSERT INTO sql_scripts (name, description, project_id, current_version, created_at, updated_at, run_schedule)
-					VALUES ($1, '', $2, 1, '2026-01-01', '2026-01-01', NULL) RETURNING id`, name, ids["main"])
+					VALUES ($1, '', $2, 1, '2026-01-01', '2026-01-01', NULL) RETURNING id`, name, ids["pmain"])
 				w.Exec(`INSERT INTO sql_script_versions (script_id, version, content, note, created_at) VALUES ($1, 1, $2, '', '2026-01-01')`, id, content)
 			}
 			sql("lr q1", `{"sql": "-- x\nWITH t AS (SELECT 1) SELECT * FROM lr_sales s JOIN \"lr clients\" c ON 1=1 JOIN t ON 1=1 JOIN lr_main.lr_sales x ON 1=1;", "engine": "duckdb",
-				"output": {"project_id": `+fmt.Sprint(ids["main"])+`, "name": "lr clients"}}`)
+				"output": {"project_id": `+fmt.Sprint(ids["pmain"])+`, "name": "lr clients"}}`)
 			sql("lr q2", fmt.Sprintf(`{"sql": "SELECT 1", "connection_id": %d}`, ids["conn"]))
 			sql("lr q3", `{"sql": "SELECT * FROM a; SELECT 2"}`)
 			sql("lr q4", `{"sql": "SELEC FROM"}`)
@@ -110,7 +110,7 @@ func init() {
 			w.Exec(`INSERT INTO user_groups (user_id, group_id) VALUES ($1, $2)`, w.People["writer"], group)
 			w.Exec(`INSERT INTO script_environment_groups (environment_id, group_id) VALUES ($1, $2)`, env, group)
 			nb := w.Insert(`INSERT INTO notebooks (name, description, project_id, environment_id, current_version, created_at, updated_at)
-				VALUES ('lr board', '', $1, $2, 3, '2026-01-01', '2026-01-01') RETURNING id`, ids["main"], env)
+				VALUES ('lr board', '', $1, $2, 3, '2026-01-01', '2026-01-01') RETURNING id`, ids["pmain"], env)
 			ids["nb"] = nb
 			for i, d := range []int64{ids["sales"], ids["secret"], ids["sales"]} {
 				mode := []string{"app", "edit", "edit"}[i]
@@ -118,7 +118,7 @@ func init() {
 					'2026-01-01')`, nb, d, fmt.Sprintf("job-%d", i), mode)
 			}
 			ids["group"] = w.Insert(`INSERT INTO flow_groups (name, description, project_id, definition, run_schedule, created_at, updated_at)
-				VALUES ('lr group', '', $1, $2, '5 * * * *', '2026-01-01', '2026-01-01') RETURNING id`, ids["main"], fmt.Sprintf(`{"steps": [
+				VALUES ('lr group', '', $1, $2, '5 * * * *', '2026-01-01', '2026-01-01') RETURNING id`, ids["pmain"], fmt.Sprintf(`{"steps": [
 				[{"kind": "flow", "id": %d}, {"kind": "flow", "id": %d}, null],
 				[{"kind": "refresh", "id": %d}, {"kind": "script", "id": 5}, {"kind": "sql", "id": 999999}],
 				[{"kind": "container", "id": 7, "container": {"registryId": "r", "repository": "img"}},
@@ -126,7 +126,7 @@ func init() {
 				  "attachments": [{"datasourceId": %d}, {"datasourceId": 999997}, {}], "reports": [{"reportId": 1}]}}]]}`,
 				ids["main"], ids["hiddenflow"], ids["sales"], ids["conn"], ids["clients"]))
 			w.Exec(`INSERT INTO flow_groups (name, description, project_id, definition, created_at, updated_at)
-				VALUES ('lr broken group', '', $1, 'not json', '2026-01-01', '2026-01-01')`, ids["main"])
+				VALUES ('lr broken group', '', $1, 'not json', '2026-01-01', '2026-01-01')`, ids["pmain"])
 		},
 		Steps: func(w *World) []Step {
 			var s []Step
@@ -174,11 +174,11 @@ func init() {
 	})
 }
 
-// the static lineage sent to a collector: run it with DIFF_ENV="OPENLINEAGE__URL=http://{engine}:8000"
+// the static lineage sent to a collector: run it with DIFF_ENV="OPENLINEAGE__URL=http://siem.test:8000"
 // (the fake engine is the collector).
 func init() {
 	register(Suite{
-		Module: "lineage_emit",
+		Module: "lineage_x_emit",
 		Asked:  true,
 		Steps: func(w *World) []Step {
 			var flow int64

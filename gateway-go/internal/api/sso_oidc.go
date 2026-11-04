@@ -1272,9 +1272,9 @@ func provisionAndSync(ctx context.Context, d *Deps, cfg oidcCfg, claims map[stri
 		if err != nil {
 			return nil, nil, err
 		}
-		for i := range groups {
-			g := groups[i]
-			write(change.action, membershipDetail(g.name, g.id, g.admin, g.observer), &g)
+		for _, g := range groups {
+			// the target is the person (Python's write() without a group)
+			write(change.action, membershipDetail(g.name, g.id, g.admin, g.observer), nil)
 		}
 	}
 	if actor.IsSuperuser != superuserBefore {

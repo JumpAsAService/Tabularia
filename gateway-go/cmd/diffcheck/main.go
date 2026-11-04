@@ -60,6 +60,14 @@ type Step struct {
 	// EngineUnordered: the requests sent to the engine go out side by side (asyncio.gather):
 	// compared in any order
 	EngineUnordered bool
+	// Prepare changes the request of one side ("python" or "go") before it goes: what an
+	// earlier answer of that side gave it (an SSO sign-in's state and cookie). Capture reads
+	// each side's answer.
+	Prepare func(side string, r *http.Request)
+	Capture func(side string, r *http.Response)
+	// HeaderScrub: regular expressions whose matches in the compared headers are random
+	// (a Location's state, a cookie's name and value)
+	HeaderScrub []string
 }
 
 // EngineRule is one scripted answer of the fake engine (cmd/fakeengine).
@@ -374,9 +382,15 @@ func (w *World) ask(s *side, st Step) answer {
 	if st.Auth != nil {
 		st.Auth(req)
 	}
+	if st.Prepare != nil {
+		st.Prepare(s.name, req)
+	}
 	res, err := noRedirects.Do(req)
 	if err != nil {
 		fail("%s: %v", s.name, err)
+	}
+	if st.Capture != nil {
+		st.Capture(s.name, res)
 	}
 	raw, _ := io.ReadAll(res.Body)
 	res.Body.Close()
@@ -403,6 +417,12 @@ func (w *World) ask(s *side, st Step) answer {
 			}
 			return "tab_token=<token>"
 		})
+	}
+	for _, p := range st.HeaderScrub {
+		re := regexp.MustCompile(p)
+		for k, v := range a.Headers {
+			a.Headers[k] = re.ReplaceAllString(v, "<scrubbed>")
+		}
 	}
 	var parsed any
 	if len(raw) > 0 && json.Unmarshal(raw, &parsed) == nil {
