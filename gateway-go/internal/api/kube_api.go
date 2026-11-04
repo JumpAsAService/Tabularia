@@ -15,7 +15,7 @@ var kubePanel atomic.Pointer[settings.Panel]
 // KUBERNETES__* from the environment, kubernetes.timeout_seconds as the panel has it — the
 // one setting of it an administrator may change, which kube_jobs._call reads at every call.
 func kubeAPI() scriptcfg.Kubernetes {
-	k := kubeAPI()
+	k := scriptcfg.Get().Kubernetes
 	if p := kubePanel.Load(); p != nil {
 		k.TimeoutSeconds = p.KubernetesTimeout()
 	}

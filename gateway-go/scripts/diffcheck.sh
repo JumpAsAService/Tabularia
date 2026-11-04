@@ -108,4 +108,5 @@ docker run --rm --network host --user "$(id -u):$(id -g)" -e HOME=/tmp -e GOCACH
         echo "--- the Python gateway A's log"; docker logs --tail 20 "$id-pya"
         echo "--- the AI service's log"; docker logs --tail 20 "$id-ai"
         echo "--- the Python round server's log"; docker logs --tail 30 "$id-ticka"
-        echo "--- the Go round server's log"; docker logs --tail 30 "$id-tickb"; exit 1; }
+        echo "--- the Go round server's log"; docker logs --tail 30 "$id-tickb"
+        docker logs "$id-tickb" 2>&1 | grep -m1 -A40 -E "^(panic|fatal)"; exit 1; }
