@@ -1,6 +1,7 @@
 package flowaccess
 
 import (
+	"context"
 	"fmt"
 	"regexp"
 	"sort"
@@ -237,4 +238,22 @@ func checkContainerDefinition(definition string, s Settings) *auth.Refusal {
 		}
 	}
 	return nil
+}
+
+// CheckContainer is container_nodes.check, for a flow group's container cell.
+func CheckContainer(node pyjson.Object, complete bool, s Settings) *auth.Refusal {
+	return checkContainer(node, complete, s)
+}
+
+// ContainerLabel is container_nodes.label.
+func ContainerLabel(node pyjson.Object) string { return containerLabel(node) }
+
+// RegistryByID reads a container registry, nil when it does not exist.
+func (a *Access) RegistryByID(ctx context.Context, id int64) (*Registry, error) {
+	return a.registry(ctx, id)
+}
+
+// RegistryBlocked is registry_access.blocked.
+func (a *Access) RegistryBlocked(ctx context.Context, definition string) (string, error) {
+	return a.registryBlocked(ctx, definition)
 }
