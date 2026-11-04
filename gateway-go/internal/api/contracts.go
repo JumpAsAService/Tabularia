@@ -316,7 +316,7 @@ func deleteContract(d *Deps) func(http.ResponseWriter, *http.Request, *auth.Prin
 		kind := "datasource"
 		audit.Record(ctx, d.DB, d.Log, audit.Event{Actor: &p.User, Action: "contract.delete", TargetType: &kind, TargetID: &ds.ID,
 			TargetLabel: &ds.Name})
-		noContent(w)
+		returnsNone(w)
 	}
 }
 

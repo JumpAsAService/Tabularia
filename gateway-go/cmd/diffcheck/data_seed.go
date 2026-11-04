@@ -137,6 +137,7 @@ func seedData(w *World) {
 	w.Token("writer", "tab_data_writer_read_000000", "read", time.Hour)
 	w.Token("service", "tab_data_service_write_0000", "write", time.Hour)
 	w.Token("service", "tab_data_service_read_00000", "read", time.Hour)
+	w.Token("admin", "tab_data_admin_write_000000", "write", time.Hour)
 }
 
 // who is one way of asking: a person's session, a token, nobody.

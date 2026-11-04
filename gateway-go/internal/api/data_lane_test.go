@@ -7,17 +7,6 @@ import (
 )
 
 // the expectations are Python's (services/masking.py, statistics, routes/performance.py)
-func TestMaskEmail(t *testing.T) {
-	for in, want := range map[string]string{
-		"alice.rossi@esempio.it": "a***@esempio.it", "@x.it": "***@x.it", "nobody": "***", "": "", "  ": "",
-		"é@x.test": "é***@x.test", "a@b@c": "a***@c",
-	} {
-		if got := maskEmail(in); got != want {
-			t.Errorf("maskEmail(%q) = %q, want %q", in, got, want)
-		}
-	}
-}
-
 func TestMedianAndPercentile(t *testing.T) {
 	if median(nil) != nil || pct(nil, 0.95) != nil {
 		t.Fatal("empty lists give None")

@@ -106,8 +106,8 @@ func readEngineSettings(d *Deps) deps.Handler {
 				items = append(items, item)
 			}
 		}
-		unavailable, ok := validated(pyd.List(pyd.Str()), orDefault(catalog, "unavailable", []any{}))
-		refresh, ok2 := validated(pyd.Float(), orDefault(catalog, "refresh_seconds", int64(10)))
+		unavailable, ok := fitsType(pyd.List(pyd.Str()), orDefault(catalog, "unavailable", []any{}))
+		refresh, ok2 := fitsType(pyd.Float(), orDefault(catalog, "refresh_seconds", int64(10)))
 		if !ok || !ok2 {
 			server.InternalError(w)
 			return
@@ -133,7 +133,7 @@ func engineSettingOut(d *Deps, v *pyd.Object, rows map[string]engineSettingRow, 
 	}
 	out := pyjson.Object{}
 	field := func(name string, t *pyd.Type, value any) bool {
-		x, ok := validated(t, value)
+		x, ok := fitsType(t, value)
 		out = append(out, pyjson.KV{Key: name, Value: x})
 		return ok
 	}

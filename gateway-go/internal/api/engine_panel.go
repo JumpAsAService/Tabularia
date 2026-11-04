@@ -4,11 +4,10 @@ import (
 	"context"
 	"fmt"
 	"net/http"
-	"strings"
 	"time"
-	"unicode/utf8"
 
 	"github.com/JumpAsAService/Tabularia/gateway-go/internal/engine"
+	"github.com/JumpAsAService/Tabularia/gateway-go/internal/masking"
 	"github.com/JumpAsAService/Tabularia/gateway-go/internal/perm"
 	"github.com/JumpAsAService/Tabularia/gateway-go/internal/pyd"
 )
@@ -66,24 +65,6 @@ func savedEngineSettings(ctx context.Context, q perm.Querier) (map[string]engine
 	return out, rows.Err()
 }
 
-// maskEmail is services/masking.py mask_email: `alice@x.it` → `a***@x.it`.
-func maskEmail(email string) string {
-	text := pyd.Strip(email)
-	i := strings.LastIndex(text, "@")
-	if i < 0 {
-		if text == "" {
-			return ""
-		}
-		return "***"
-	}
-	local, domain := text[:i], text[i+1:]
-	if local == "" {
-		return "***@" + domain
-	}
-	_, size := utf8.DecodeRuneInString(local)
-	return local[:size] + "***@" + domain
-}
-
 // updatedBy is `(by if full else mask_email(by)) if by else None`.
 func updatedBy(by *string, full bool) any {
 	if by == nil || *by == "" {
@@ -92,5 +73,5 @@ func updatedBy(by *string, full bool) any {
 	if full {
 		return *by
 	}
-	return maskEmail(*by)
+	return masking.Email(*by)
 }
