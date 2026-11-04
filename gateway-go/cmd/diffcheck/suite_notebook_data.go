@@ -91,6 +91,22 @@ func init() {
 			read("the engine has no file", "nbk_writer", "nd-sales", []EngineRule{{Method: "GET", Path: "^/files/presigned$", Status: 404,
 				Body: map[string]any{"detail": "no such key"}}})
 			read("the engine fails", "nbk_writer", "nd-sales", []EngineRule{{Method: "GET", Path: "^/files/presigned$", Status: 500, Body: map[string]any{}}})
+			// the engine answers without a link: the audit, the read and the lineage are written,
+			// then the 500 (r.json()["url"] read last)
+			for _, e := range []struct {
+				name string
+				rule EngineRule
+			}{
+				{"no url in the engine's answer", EngineRule{Method: "GET", Path: "^/files/presigned$", Body: map[string]any{"link": "x"}}},
+				{"a list from the engine", EngineRule{Method: "GET", Path: "^/files/presigned$", Body: []any{"x"}}},
+				{"not JSON from the engine", EngineRule{Method: "GET", Path: "^/files/presigned$", Text: "<html>", Type: "text/html"}},
+				{"a refusal that is null", EngineRule{Method: "GET", Path: "^/files/presigned$", Status: 400, Text: "null", Type: "application/json"}},
+				{"a refusal that is a list", EngineRule{Method: "GET", Path: "^/files/presigned$", Status: 403, Body: []any{"no"}}},
+				{"a refusal that is not JSON", EngineRule{Method: "GET", Path: "^/files/presigned$", Status: 503, Text: "busy", Type: "text/plain"}},
+				{"a refusal with an empty detail", EngineRule{Method: "GET", Path: "^/files/presigned$", Status: 404, Body: map[string]any{"detail": ""}}},
+			} {
+				read(e.name, "nbk_writer", "nd-root/nd sub/nd-twin", []EngineRule{e.rule})
+			}
 			read("the inactive one reads", "nbk_inactive", "nd-sales", nil)
 			read("nobody reads", "nbk_nobody", "nd-sales", nil)
 			s = append(s, Step{Name: "broken JSON", Method: "POST", Path: "/notebook-data/read", Raw: []byte("{"), ContentType: "application/json"},

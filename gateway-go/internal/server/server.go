@@ -1,5 +1,5 @@
-// Package server routes a request: to the Go handler when its method and path are among the
-// routes ported, to the Python gateway otherwise.
+// Package server is the framework the Python gateway runs on, as far as a request sees it
+// (uvicorn, Starlette, FastAPI: router.go), and the helpers the handlers answer with.
 package server
 
 import (
@@ -7,7 +7,6 @@ import (
 	"encoding/json"
 	"io"
 	"net/http"
-	"path"
 	"strconv"
 	"strings"
 
@@ -23,77 +22,19 @@ type Route struct {
 	Handler http.Handler
 }
 
-// New answers the routes ported and forwards everything else. Only the exact method is
-// answered here: a HEAD or an OPTIONS on a ported GET still goes to the Python gateway, so
-// that no answer exists that the Python gateway would not give.
-func New(routes []Route, upstream http.Handler) http.Handler {
-	mux := http.NewServeMux()
-	byPattern := map[string]map[string]http.Handler{}
-	for _, r := range routes {
-		if byPattern[r.Pattern] == nil {
-			byPattern[r.Pattern] = map[string]http.Handler{}
-		}
-		h := r.Handler
-		if !(r.Method == http.MethodPost && r.Pattern == "/files") {
-			h = BodyLimit(h)
-		}
-		byPattern[r.Pattern][r.Method] = h
-	}
-	for pattern, methods := range byPattern {
-		mux.HandleFunc(pattern, func(w http.ResponseWriter, req *http.Request) {
-			// a WebSocket's handshake is Starlette's websocket scope, routed apart from the
-			// HTTP routes of the same path (uvicorn's upgrade check)
-			if IsWebSocket(req) {
-				if h, ok := methods[WebSocket]; ok {
-					h.ServeHTTP(w, req)
-				} else {
-					upstream.ServeHTTP(w, req)
-				}
-				return
-			}
-			if h, ok := methods[req.Method]; ok {
-				h.ServeHTTP(w, req)
-				return
-			}
-			upstream.ServeHTTP(w, req)
-		})
-	}
-	mux.Handle("/", upstream)
-	return http.HandlerFunc(func(w http.ResponseWriter, req *http.Request) {
-		// Starlette routes on the DECODED path and never cleans it: «%2F» is a slash that
-		// splits a segment, «..» and «//» stay as they are. net/http's mux would match the
-		// first inside one wildcard and redirect the others: these go to Python as they came.
-		if strings.Contains(strings.ToLower(req.URL.EscapedPath()), "%2f") || !clean(req.URL.Path) {
-			upstream.ServeHTTP(w, req)
-			return
-		}
-		mux.ServeHTTP(w, req)
-	})
-}
-
-// clean says whether the mux would take the path as it is, without a redirect.
-func clean(p string) bool {
-	if p == "" || p[0] != '/' {
-		return false
-	}
-	c := path.Clean(p)
-	return c == p || (strings.HasSuffix(p, "/") && c+"/" == p)
-}
-
 // WebSocket is a Route's Method for a FastAPI WebSocket route (the inventory's «WS»).
 const WebSocket = "WS"
 
-// IsWebSocket is uvicorn's test of a WebSocket handshake: «Upgrade: websocket» with an
-// «upgrade» token in Connection.
+// IsWebSocket is uvicorn's test of a WebSocket handshake (H11Protocol._get_upgrade): the
+// last Connection header has an «upgrade» token, and the last Upgrade header is «websocket».
 func IsWebSocket(r *http.Request) bool {
-	if !strings.EqualFold(strings.TrimSpace(r.Header.Get("Upgrade")), "websocket") {
+	conn, up := r.Header.Values("Connection"), r.Header.Values("Upgrade")
+	if len(conn) == 0 || len(up) == 0 || strings.ToLower(up[len(up)-1]) != "websocket" {
 		return false
 	}
-	for _, v := range r.Header.Values("Connection") {
-		for _, t := range strings.Split(v, ",") {
-			if strings.EqualFold(strings.TrimSpace(t), "upgrade") {
-				return true
-			}
+	for _, t := range strings.Split(conn[len(conn)-1], ",") {
+		if strings.ToLower(strings.TrimSpace(t)) == "upgrade" {
+			return true
 		}
 	}
 	return false

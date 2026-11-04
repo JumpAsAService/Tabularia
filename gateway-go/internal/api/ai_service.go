@@ -2,8 +2,8 @@ package api
 
 // The assistant's routes (decision 4, docs/specs/gateway-go.md «The AI service»): built on
 // pydantic-ai, they stay Python and are forwarded, as they came, to the AI service (the gateway's
-// image with APP__ROLE=ai) instead of the Python gateway behind. The Python code authenticates
-// them as it always has; nothing is read or written here.
+// image with APP__ROLE=ai). The Python code authenticates them as it always has; nothing is read
+// or written here.
 
 import (
 	"bytes"
@@ -46,14 +46,8 @@ func muxPattern(path string) string {
 	return path
 }
 
-// aiService is the AI service's forwarding handler (the Python gateway behind for code that
-// builds the dependencies without it: cmd/gateway always sets it).
-func aiService(d *Deps) http.Handler {
-	if d.AIService != nil {
-		return d.AIService
-	}
-	return d.Upstream
-}
+// aiService is the AI service's forwarding handler (cmd/gateway always sets it).
+func aiService(d *Deps) http.Handler { return d.AIService }
 
 // toAIService forwards a request whose body was read already (`raw`; nil: none) to the AI
 // service, as it came.

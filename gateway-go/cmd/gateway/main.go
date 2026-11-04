@@ -1,5 +1,5 @@
-// The Go gateway (docs/specs/gateway-go.md): answers the routes ported and forwards every
-// other request to the Python gateway.
+// The Go gateway (docs/specs/gateway-go.md): answers every route of the Python gateway, as
+// FastAPI would; the assistant's routes and the SQL parsing are the AI service's.
 package main
 
 import (
@@ -83,13 +83,15 @@ func run(log *slog.Logger) error {
 	// APP__ROLE (app/main.py): «orchestrator» declares no API route, «api» starts no
 	// background work, «all» does both
 	var handler http.Handler
+	if cfg.Upstream != nil {
+		log.Warn("GATEWAY_GO__UPSTREAM is set and ignored: the Go gateway answers every route, nothing goes to the Python gateway",
+			"upstream", cfg.Upstream.String())
+	}
 	if cfg.Jobs.Answers() {
-		upstream := proxy.New(cfg.Upstream, log)
-		deps.Upstream = upstream
 		routes := append([]server.Route{{Method: http.MethodGet, Pattern: "/health", Handler: server.Health()}},
 			api.Routes(deps)...)
 		// the notebooks' own host (NOTEBOOKS__ORIGIN) reaches the notebooks' proxy and nothing else
-		handler = api.WithNotebooksHost(deps, server.New(routes, upstream))
+		handler = api.WithNotebooksHost(deps, server.New(routes, api.ServerOptions(deps, server.MainApp)))
 	} else {
 		handler = server.Orchestrator(cfg.AppName)
 	}

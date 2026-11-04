@@ -114,14 +114,7 @@ func isNotebooksHostOf(host, mine string) bool {
 // the notebooks' proxy exists — not the rest of the API, not even the routes sharing its paths
 // (the editor's «Save version»); anything else is FastAPI's 404.
 func WithNotebooksHost(d *Deps, next http.Handler) http.Handler {
-	notFound := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		if server.IsWebSocket(r) {
-			nbWSRefuse(w)
-			return
-		}
-		detail(w, http.StatusNotFound, "Not Found")
-	})
-	host := server.New(modules["notebook_proxy"](d), notFound)
+	host := server.New(modules["notebook_proxy"](d), ServerOptions(d, server.NotebooksHostApp))
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if nbOrigin() != "" && IsNotebooksHost(r.Host) {
 			host.ServeHTTP(w, r)
@@ -772,11 +765,7 @@ func nbWithoutSlash(w http.ResponseWriter, r *http.Request) {
 
 // nbWSRefuse is a handshake refused before it is accepted (Starlette's close before accept:
 // uvicorn answers 403).
-func nbWSRefuse(w http.ResponseWriter) {
-	w.Header().Set("Content-Type", "text/plain; charset=utf-8")
-	w.Header().Set("Content-Length", "0")
-	w.WriteHeader(http.StatusForbidden)
-}
+func nbWSRefuse(w http.ResponseWriter) { server.WebSocketRefused(w, http.StatusForbidden, "") }
 
 func nbWSAccept(key string) string {
 	sum := sha1.Sum([]byte(key + "258EAFA5-E914-47DA-95CA-C5AB0DC85B11")) //nolint:gosec

@@ -283,6 +283,9 @@ func main() {
 			}
 		}
 	}
+	if trap := os.Getenv("DIFF_TRAP"); trap != "" {
+		fmt.Printf("the Go gateway had no Python gateway behind it (DIFF_TRAP, %s): %d requests reached the trap\n", trap, trappedTotal)
+	}
 	if failed > 0 {
 		fmt.Printf("%d of %d steps differ\n", failed, total)
 		os.Exit(1)
@@ -469,6 +472,26 @@ type answer struct {
 
 var compared = []string{"Content-Type", "Www-Authenticate", "Location", "Cache-Control", "Content-Disposition", "Allow", "Retry-After"}
 
+// comparedToo are the headers a step compares besides `compared`: a HEAD's Content-Length
+// (uvicorn sends the headers of the body it leaves out), and the CORS middleware's answer to a
+// request with an Origin.
+func comparedToo(st Step) []string {
+	var out []string
+	if st.Method == http.MethodHead {
+		out = append(out, "Content-Length")
+	}
+	for k := range st.Header {
+		if strings.EqualFold(k, "Origin") {
+			out = append(out, "Access-Control-Allow-Origin", "Access-Control-Allow-Credentials", "Access-Control-Expose-Headers",
+				"Access-Control-Allow-Methods", "Access-Control-Allow-Headers", "Access-Control-Max-Age", "Vary")
+		}
+	}
+	if st.Header["Upgrade"] != "" {
+		out = append(out, "Connection", "Content-Length")
+	}
+	return out
+}
+
 var (
 	expires  = regexp.MustCompile(`expires=[^;]+`)
 	tokenVal = regexp.MustCompile(`tab_token=[^;"]+`)
@@ -529,7 +552,7 @@ func (w *World) ask(s *side, st Step) answer {
 		}
 	}
 	a := answer{Status: res.StatusCode, Headers: map[string]string{}}
-	for _, h := range compared {
+	for _, h := range append(append([]string(nil), compared...), comparedToo(st)...) {
 		if v := res.Header.Get(h); v != "" {
 			// a redirect to the gateway itself names its address, which differs between the sides
 			a.Headers[h] = strings.Replace(v, s.gateway, "<gateway>", 1)
@@ -634,6 +657,9 @@ func (w *World) compare(st Step) string {
 		g, _ := json.Marshal(gb.Body)
 		p, g = fromFirstDifference(p, g)
 		out = append(out, fmt.Sprintf("    body:\n      python %s\n      go     %s", clip(p), clip(g)))
+	}
+	if trap := trapped(); trap != "" {
+		out = append(out, "    the Python gateway behind received: "+trap)
 	}
 	if !reflect.DeepEqual(pa.Engine, gb.Engine) {
 		p, _ := json.Marshal(pa.Engine)
@@ -967,4 +993,30 @@ func must(name string) string {
 func fail(format string, args ...any) {
 	fmt.Fprintf(os.Stderr, format+"\n", args...)
 	os.Exit(2)
+}
+
+// trappedTotal counts what the trap received (DIFF_TRAP: a fake engine given to the Go gateway
+// as GATEWAY_GO__UPSTREAM, where the Python gateway behind used to be).
+var trappedTotal int
+
+// trapped is what reached the trap since the last step: nothing may, the Go gateway answers
+// every request itself.
+func trapped() string {
+	url := os.Getenv("DIFF_TRAP")
+	if url == "" {
+		return ""
+	}
+	res, err := http.Get(url + "/__recorded")
+	if err != nil {
+		fail("the trap: %v", err)
+	}
+	defer res.Body.Close()
+	var got []any
+	_ = json.NewDecoder(res.Body).Decode(&got)
+	if len(got) == 0 {
+		return ""
+	}
+	trappedTotal += len(got)
+	raw, _ := json.Marshal(got)
+	return clip(raw)
 }

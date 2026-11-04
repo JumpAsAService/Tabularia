@@ -1,10 +1,8 @@
 package api
 
 import (
-	"bytes"
 	"context"
 	"errors"
-	"io"
 	"net/http"
 	"strconv"
 	"time"
@@ -126,13 +124,6 @@ func siemOut(ctx context.Context, d *Deps, s siemRow, full bool, p *auth.Princip
 		out.LastError = s.LastError
 	}
 	return out, nil
-}
-
-// forwardToPython hands the request to the Python gateway, the body as it came.
-func forwardToPython(d *Deps, w http.ResponseWriter, r *http.Request, body []byte) {
-	r.Body = io.NopCloser(bytes.NewReader(body))
-	r.ContentLength = int64(len(body))
-	d.Upstream.ServeHTTP(w, r)
 }
 
 // siemRead is GET /admin/siem.

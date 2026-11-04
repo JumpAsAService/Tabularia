@@ -12,8 +12,8 @@ import (
 	"github.com/JumpAsAService/Tabularia/gateway-go/internal/server"
 )
 
-// The assistant's routes reach the AI service as they came; the rest of the same paths, and
-// what is not ported, the Python gateway behind.
+// The assistant's routes reach the AI service as they came; the rest of the same paths are
+// answered as FastAPI does (405, 404), never forwarded.
 func TestTheAssistantsRoutesGoToTheAIService(t *testing.T) {
 	var to, body string
 	mark := func(name string) http.Handler {
@@ -22,8 +22,8 @@ func TestTheAssistantsRoutesGoToTheAIService(t *testing.T) {
 			to, body = name+" "+r.Method+" "+r.URL.RequestURI(), string(b)
 		})
 	}
-	d := &Deps{Config: &config.Config{}, Log: slog.New(slog.NewTextHandler(io.Discard, nil)), Upstream: mark("python"), AIService: mark("ai")}
-	h := server.New(Routes(d), d.Upstream)
+	d := &Deps{Config: &config.Config{}, Log: slog.New(slog.NewTextHandler(io.Discard, nil)), AIService: mark("ai")}
+	h := server.New(Routes(d), server.Options{})
 	for _, c := range []struct{ method, path, want string }{
 		{"POST", "/ai/chat", "ai POST /ai/chat"},
 		{"GET", "/ai/chats?limit=3", "ai GET /ai/chats?limit=3"},
@@ -33,8 +33,8 @@ func TestTheAssistantsRoutesGoToTheAIService(t *testing.T) {
 		{"POST", "/agent/plans/7/confirm", "ai POST /agent/plans/7/confirm"},
 		{"POST", "/dashboards/3/comment", "ai POST /dashboards/3/comment"},
 		{"POST", "/reports/preview/comment", "ai POST /reports/preview/comment"},
-		{"PATCH", "/ai/chats/abc", "python PATCH /ai/chats/abc"}, // not a route of the assistant: as before
-		{"GET", "/ai/models/x", "python GET /ai/models/x"},
+		{"PATCH", "/ai/chats/abc", ""}, // not a route of the assistant: a 405
+		{"GET", "/ai/models/x", ""},    // not one: a 404
 	} {
 		to = ""
 		h.ServeHTTP(httptest.NewRecorder(), httptest.NewRequest(c.method, c.path, strings.NewReader(`{"q":1}`)))

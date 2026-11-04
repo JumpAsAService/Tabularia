@@ -1,12 +1,9 @@
 package api
 
-// routes/notebook_data.py: what a notebook's pod reads, with its notebook token. Ported: the
-// datasources it may read, a datasource's download link, the reports it may render. Left to
-// the Python gateway: rendering a report (services/reports.render and the export's file). A
-// session's first read of a datasource is told to the lineage catalog.
-//
-// Note: a request handed to the Python gateway comes from the Go gateway's address, which
-// the token's check of the pod's address (NOTEBOOKS__POD_IP_CHECK) refuses there.
+// routes/notebook_data.py: what a notebook's pod reads, with its notebook token: the
+// datasources it may read, a datasource's download link, the reports it may render (their
+// render in notebook_data_report.go). A session's first read of a datasource is told to the
+// lineage catalog.
 
 import (
 	"crypto/sha256"
@@ -322,14 +319,15 @@ func ndRead(d *Deps, w http.ResponseWriter, r *http.Request, call *ndCall, body 
 		}
 	}
 	res.Body.Close()
-	answer, _ := pyjson.Loads(string(raw))
+	answer, parseErr := pyjson.Loads(string(raw))
 	if res.StatusCode >= 400 {
 		var why string
 		if o, ok := answer.(pyjson.Object); ok {
 			if v := scGet(o, "detail"); sqlscripts.Truthy(v) {
 				why = pyjson.Str(v)
 			}
-		} else if answer != nil {
+		} else if parseErr == nil {
+			// r.json().get on a list, a text, a number or null: an AttributeError
 			fail(d, w, "notebook data: the engine's refusal is not an object", nil)
 			return
 		}
@@ -343,12 +341,8 @@ func ndRead(d *Deps, w http.ResponseWriter, r *http.Request, call *ndCall, body 
 		detail(w, status, fmt.Sprintf("The data of «%s» cannot be read: %s", ds.Name, why))
 		return
 	}
-	o, ok := answer.(pyjson.Object)
-	link, has := o.Get("url")
-	if !ok || !has {
-		fail(d, w, "notebook data: the engine's link", nil) // a KeyError in Python
-		return
-	}
+	// the audit, the read and the lineage come first: r.json()["url"] is read only in the answer,
+	// so an answer without it (or not JSON) is a 500 after all of them
 	audit.Record(ctx, d.DB, d.Log, audit.Event{Actor: call.user, Action: "notebook.read", TargetType: scPtrStr("datasource"),
 		TargetID: &ds.ID, TargetLabel: &ds.Name, Detail: pyjson.Object{{Key: "notebook", Value: call.notebookID},
 			{Key: "notebook_name", Value: call.notebook}, {Key: "mode", Value: call.sessionMode}}})
@@ -359,6 +353,12 @@ func ndRead(d *Deps, w http.ResponseWriter, r *http.Request, call *ndCall, body 
 	if first {
 		d.Lineage.NotebookSession(ctx, d.DB, openlineage.SessionRow{NotebookID: call.notebookID, Version: call.version,
 			Mode: call.sessionMode, JobName: call.jobName, StartedAt: call.startedAt}, "RUNNING", "", &ds.ID)
+	}
+	o, ok := answer.(pyjson.Object)
+	link, has := o.Get("url")
+	if parseErr != nil || !ok || !has {
+		fail(d, w, "notebook data: the engine's link", nil) // a ValueError, TypeError or KeyError in Python
+		return
 	}
 	server.JSON(w, http.StatusOK, pyjson.Object{{Key: "url", Value: link}, {Key: "id", Value: ds.ID}, {Key: "name", Value: ds.Name},
 		{Key: "rows", Value: ds.Rows}})
