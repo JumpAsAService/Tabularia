@@ -24,7 +24,6 @@ type adminItem struct {
 }
 
 var adminItems = map[string]adminItem{
-	"app.timezone":                  {kind: "timezone", maxLen: 200, env: func(c *config.Config) any { return c.Admin.Timezone }},
 	"mcp.enabled":                   {kind: "bool", env: func(c *config.Config) any { return c.Admin.MCPEnabled }},
 	"mcp.confirm_in_tabularia_only": {kind: "bool", env: func(c *config.Config) any { return c.Admin.MCPConfirmInTabulariaOnly }},
 	"mcp.metadata_only":             {kind: "bool", env: func(c *config.Config) any { return c.Admin.MCPMetadataOnly }},
@@ -114,9 +113,10 @@ func checkAdmin(it adminItem, raw string) (any, bool) {
 	}
 }
 
-// Timezone is app.timezone: the deployment's zone, a ZoneInfo name.
+// Timezone is app.timezone: the deployment's zone, a ZoneInfo name. One value with
+// AppTimezone (the panel's row is read once, in settings.go's items).
 func (p *Panel) Timezone() string {
-	if z, ok := p.current.Load().admin["app.timezone"].(string); ok {
+	if z := p.AppTimezone(); z != "" {
 		return z
 	}
 	return "UTC"
