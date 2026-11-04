@@ -8,6 +8,7 @@ import (
 	"github.com/jackc/pgx/v5/pgxpool"
 
 	"github.com/JumpAsAService/Tabularia/gateway-go/internal/aisvc"
+	"github.com/JumpAsAService/Tabularia/gateway-go/internal/openlineage"
 	"github.com/JumpAsAService/Tabularia/gateway-go/internal/auth"
 	"github.com/JumpAsAService/Tabularia/gateway-go/internal/config"
 	"github.com/JumpAsAService/Tabularia/gateway-go/internal/engine"
@@ -32,6 +33,8 @@ type Deps struct {
 	// SQL asks it for the SQL parsing (docs/specs/gateway-go.md, «The AI service»)
 	AIService http.Handler
 	SQL       *aisvc.Client
+	// Lineage sends the OpenLineage events (services/openlineage.py); nil or off: nothing
+	Lineage *openlineage.Emitter
 }
 
 // Each file of this package registers its routes in an init(), one module of the Python

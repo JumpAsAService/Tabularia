@@ -567,6 +567,7 @@ func nbStart(ctx context.Context, d *Deps, n *nbRow, mode string, user *auth.Use
 	if err != nil {
 		return nil, err
 	}
+	nbTellLineage(ctx, d, d.DB, row, "START", "", nil) // the session is a run of the notebook's job
 	if err := nbCreatePod(ctx, row, img, source, token, plain, secret); err != nil {
 		var ke *kube.Error
 		if errors.As(err, &ke) {
@@ -764,9 +765,13 @@ func nbRefreshStep(ctx context.Context, d *Deps, row *nbSession) error {
 
 // nbFail is _fail: the row stays, saying why; its Job goes now.
 func nbFail(ctx context.Context, d *Deps, row *nbSession, why string) error {
-	if _, err := d.DB.Exec(ctx, `UPDATE notebook_sessions SET status = 'failed' WHERE id = $1 AND status <> 'failed'`, row.ID); err != nil {
+	// whoever fails it first tells the lineage: a replica following the start and the reaper
+	// can get here together, and the run would fail twice in the catalog
+	tag, err := d.DB.Exec(ctx, `UPDATE notebook_sessions SET status = 'failed' WHERE id = $1 AND status <> 'failed'`, row.ID)
+	if err != nil {
 		return err
 	}
+	first := tag.RowsAffected() == 1
 	message := pystr.Cut("The notebook could not start: "+why, 4000)
 	if _, err := d.DB.Exec(ctx, `UPDATE notebook_sessions SET status = 'failed', error = $2, pod_ip = NULL WHERE id = $1`, row.ID, message); err != nil {
 		return err
@@ -776,7 +781,10 @@ func nbFail(ctx context.Context, d *Deps, row *nbSession, why string) error {
 	delete(nbChecked.at, row.ID)
 	nbChecked.Unlock()
 	d.Log.Info(fmt.Sprintf("notebooks: session %d of notebook %d failed: %s", row.ID, row.NotebookID, pystr.Cut(why, 300)))
-	err := kube.DeleteJob(ctx, nbKube(), row.Namespace, row.JobName)
+	if first {
+		nbTellLineage(ctx, d, d.DB, row, "FAIL", message, nil)
+	}
+	err = kube.DeleteJob(ctx, nbKube(), row.Namespace, row.JobName)
 	var ke *kube.Error
 	if errors.As(err, &ke) {
 		return nil
@@ -897,8 +905,14 @@ func nbStop(ctx context.Context, d *Deps, row *nbSession, actor *auth.User, reas
 		return err
 	}
 	was := row.Status
-	if _, err := d.DB.Exec(ctx, `DELETE FROM notebook_sessions WHERE id = $1`, row.ID); err != nil {
+	tag, err := d.DB.Exec(ctx, `DELETE FROM notebook_sessions WHERE id = $1`, row.ID)
+	if err != nil {
 		return err
+	}
+	if tag.RowsAffected() > 0 && was != "failed" {
+		// its run ends with it, told by whoever removed the row: a person and the reaper
+		// stopping it together tell it once (a failed one was told already)
+		nbTellLineage(ctx, d, d.DB, row, nbEndState(was), "", nil)
 	}
 	nbChecked.Lock()
 	delete(nbChecked.at, row.ID)

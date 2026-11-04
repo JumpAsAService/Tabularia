@@ -2,8 +2,7 @@ package api
 
 // routes/scripts.py: saved scripts, Python or R code kept as an object of a folder, with
 // their versions. Ported: every route but the schedule (croniter reads the cron: the route
-// stays the Python gateway's) and, while OpenLineage is on, the change (a rename tells the
-// catalog).
+// stays the Python gateway's).
 
 import (
 	"context"
@@ -17,6 +16,7 @@ import (
 	"github.com/JumpAsAService/Tabularia/gateway-go/internal/audit"
 	"github.com/JumpAsAService/Tabularia/gateway-go/internal/auth"
 	"github.com/JumpAsAService/Tabularia/gateway-go/internal/copynames"
+	"github.com/JumpAsAService/Tabularia/gateway-go/internal/openlineage"
 	"github.com/JumpAsAService/Tabularia/gateway-go/internal/perm"
 	"github.com/JumpAsAService/Tabularia/gateway-go/internal/pyd"
 	"github.com/JumpAsAService/Tabularia/gateway-go/internal/pyd/gatewaymodels"
@@ -563,10 +563,6 @@ func scRecordOffElsewhere(ctx context.Context, d *Deps, user *auth.User, off []s
 
 // updateScript is PATCH /scripts/{script_id} (update_script).
 func updateScript(d *Deps, w http.ResponseWriter, r *http.Request, p *auth.Principal, body pyd.Body) {
-	if scOpenLineageOn() {
-		scForward(d, w, r)
-		return
-	}
 	var params pyd.Params
 	sid := params.Path("script_id", r.PathValue("script_id"), pyd.Int())
 	in := params.Body(body, gatewaymodels.ScriptUpdate)
@@ -586,6 +582,15 @@ func updateScript(d *Deps, w http.ResponseWriter, r *http.Request, p *auth.Princ
 	s, ok := scriptVisible(d, w, r, c, p, scriptID)
 	if !ok || !scEnsure(d, w, ctx, c, s.ProjectID, perm.Edit) {
 		return
+	}
+	var lineageNames openlineage.Names
+	if in.Get("name") != nil || in.Get("project_id") != nil {
+		var err error
+		if lineageNames, err = d.Lineage.CatalogNames(ctx, d.DB, openlineage.Ref{Kind: openlineage.KindSavedScript, ID: s.ID,
+			ProjectID: s.ProjectID, Name: s.Name}); err != nil {
+			fail(d, w, "scripts: the lineage names", err)
+			return
+		}
 	}
 	changes := pyjson.Object{}
 	target := s.ProjectID
@@ -717,6 +722,7 @@ func updateScript(d *Deps, w http.ResponseWriter, r *http.Request, p *auth.Princ
 		fail(d, w, "scripts: changing the script", err)
 		return
 	}
+	d.Lineage.Renamed(ctx, d.DB, lineageNames)
 	if descChanged {
 		changes = append(changes, pyjson.KV{Key: "description", Value: true})
 	}

@@ -2,8 +2,8 @@ package api
 
 // routes/notebook_data.py: what a notebook's pod reads, with its notebook token. Ported: the
 // datasources it may read, a datasource's download link, the reports it may render. Left to
-// the Python gateway: rendering a report (services/reports.render and the export's file),
-// and every read while OpenLineage is on (a session's first read is told to the catalog).
+// the Python gateway: rendering a report (services/reports.render and the export's file). A
+// session's first read of a datasource is told to the lineage catalog.
 //
 // Note: a request handed to the Python gateway comes from the Go gateway's address, which
 // the token's check of the pod's address (NOTEBOOKS__POD_IP_CHECK) refuses there.
@@ -25,6 +25,7 @@ import (
 	"github.com/JumpAsAService/Tabularia/gateway-go/internal/auth"
 	"github.com/JumpAsAService/Tabularia/gateway-go/internal/copynames"
 	"github.com/JumpAsAService/Tabularia/gateway-go/internal/objects"
+	"github.com/JumpAsAService/Tabularia/gateway-go/internal/openlineage"
 	"github.com/JumpAsAService/Tabularia/gateway-go/internal/perm"
 	"github.com/JumpAsAService/Tabularia/gateway-go/internal/pyd"
 	"github.com/JumpAsAService/Tabularia/gateway-go/internal/pyd/gatewaymodels"
@@ -49,6 +50,8 @@ func init() {
 type ndCall struct {
 	sessionMode string
 	jobName     string
+	version     int64     // the session's, for its lineage
+	startedAt   time.Time // the session's, for its lineage
 	user        *auth.User
 	notebookID  int64
 	notebook    string
@@ -78,9 +81,9 @@ func ndCaller(d *Deps, readBody bool, h ndHandler) http.Handler {
 		var call ndCall
 		var userID int64
 		var podIP *string
-		err := d.DB.QueryRow(ctx, `SELECT s.mode, s.job_name, s.user_id, s.notebook_id, s.pod_ip FROM notebook_sessions s
+		err := d.DB.QueryRow(ctx, `SELECT s.mode, s.job_name, s.user_id, s.notebook_id, s.pod_ip, s.version, s.started_at FROM notebook_sessions s
 			WHERE s.token_fp = $1 AND s.status IN ('starting', 'ready')`, hex.EncodeToString(sum[:])).
-			Scan(&call.sessionMode, &call.jobName, &userID, &call.notebookID, &podIP)
+			Scan(&call.sessionMode, &call.jobName, &userID, &call.notebookID, &podIP, &call.version, &call.startedAt)
 		if err != nil && !scNoRows(err) {
 			fail(d, w, "notebook data: the session", err)
 			return
@@ -260,10 +263,6 @@ func ndPick(d *Deps, r *http.Request, readable []ndItem, wanted any, noun string
 // ndRead is POST /notebook-data/read (read_datasource): a link to download the
 // datasource's parquet, valid for a few minutes.
 func ndRead(d *Deps, w http.ResponseWriter, r *http.Request, call *ndCall, body pyd.Body) {
-	if scOpenLineageOn() {
-		scForward(d, w, r)
-		return
-	}
 	var params pyd.Params
 	in := params.Body(body, gatewaymodels.ReadIn)
 	if resp := params.Response(); resp != nil {
@@ -353,34 +352,39 @@ func ndRead(d *Deps, w http.ResponseWriter, r *http.Request, call *ndCall, body 
 	audit.Record(ctx, d.DB, d.Log, audit.Event{Actor: call.user, Action: "notebook.read", TargetType: scPtrStr("datasource"),
 		TargetID: &ds.ID, TargetLabel: &ds.Name, Detail: pyjson.Object{{Key: "notebook", Value: call.notebookID},
 			{Key: "notebook_name", Value: call.notebook}, {Key: "mode", Value: call.sessionMode}}})
-	if err := ndRecord(r, d, call, ds.ID); err != nil {
+	first, err := ndRecord(r, d, call, ds.ID)
+	if err != nil {
 		d.Log.Warn("notebooks: the read not recorded", "datasource", ds.ID, "notebook", call.notebookID, "err", err)
+	}
+	if first {
+		d.Lineage.NotebookSession(ctx, d.DB, openlineage.SessionRow{NotebookID: call.notebookID, Version: call.version,
+			Mode: call.sessionMode, JobName: call.jobName, StartedAt: call.startedAt}, "RUNNING", "", &ds.ID)
 	}
 	server.JSON(w, http.StatusOK, pyjson.Object{{Key: "url", Value: link}, {Key: "id", Value: ds.ID}, {Key: "name", Value: ds.Name},
 		{Key: "rows", Value: ds.Rows}})
 }
 
 // ndRecord is notebook_reads.record: the session's first read of the datasource kept.
-func ndRecord(r *http.Request, d *Deps, call *ndCall, datasourceID int64) error {
+func ndRecord(r *http.Request, d *Deps, call *ndCall, datasourceID int64) (bool, error) {
 	ctx := r.Context()
 	now := time.Now().UTC()
 	tag, err := d.DB.Exec(ctx, `UPDATE notebook_reads SET last_session = $1, read_at = $2 WHERE notebook_id = $3 AND datasource_id = $4
 		AND mode = $5 AND last_session != $1`, call.jobName, now, call.notebookID, datasourceID, call.sessionMode)
 	if err != nil || tag.RowsAffected() > 0 {
-		return err
+		return err == nil, err
 	}
 	var one int64
 	err = d.DB.QueryRow(ctx, `SELECT id FROM notebook_reads WHERE notebook_id = $1 AND datasource_id = $2 AND mode = $3`,
 		call.notebookID, datasourceID, call.sessionMode).Scan(&one)
 	if err == nil || err != pgx.ErrNoRows {
-		return err
+		return false, err // read already in this session
 	}
 	_, err = d.DB.Exec(ctx, `INSERT INTO notebook_reads (notebook_id, datasource_id, last_session, mode, first_read_at, read_at)
 		VALUES ($1, $2, $3, $4, $5, $5)`, call.notebookID, datasourceID, call.jobName, call.sessionMode, now)
 	if copynames.Clash(err) {
-		return nil
+		return false, nil
 	}
-	return err
+	return err == nil, err
 }
 
 // ndReports is GET /notebook-data/reports (list_reports): the reports the notebook may

@@ -11,6 +11,7 @@ import (
 
 	"github.com/JumpAsAService/Tabularia/gateway-go/internal/audit"
 	"github.com/JumpAsAService/Tabularia/gateway-go/internal/auth"
+	"github.com/JumpAsAService/Tabularia/gateway-go/internal/openlineage"
 	"github.com/JumpAsAService/Tabularia/gateway-go/internal/perm"
 	"github.com/JumpAsAService/Tabularia/gateway-go/internal/personalfolders"
 	"github.com/JumpAsAService/Tabularia/gateway-go/internal/pyd"
@@ -37,12 +38,8 @@ func init() {
 			{Method: http.MethodGet, Pattern: "/projects/{project_id}", Handler: server.Authed(d.Auth, "/projects/{project_id}", getProject(d))},
 			{Method: http.MethodDelete, Pattern: "/projects/{project_id}", Handler: server.Authed(d.Auth, "/projects/{project_id}", deleteProject(d))},
 			{Method: http.MethodPost, Pattern: "/projects", Handler: withBody(server.Authed(d.Auth, "/projects", createProject(d)))},
-		}
-		if !d.Config.OpenLineage {
-			// a rename or a move renames the folder's content in the lineage catalog
-			// (openlineage.folder_names / renamed): with OpenLineage on, Python does it
-			routes = append(routes, server.Route{Method: http.MethodPatch, Pattern: "/projects/{project_id}",
-				Handler: withBody(server.Authed(d.Auth, "/projects/{project_id}", updateProject(d)))})
+			{Method: http.MethodPatch, Pattern: "/projects/{project_id}",
+				Handler: withBody(server.Authed(d.Auth, "/projects/{project_id}", updateProject(d)))},
 		}
 		return routes
 	})
@@ -328,6 +325,15 @@ func updateProject(d *Deps) authedFunc {
 		}
 		before := *pr
 		name, description, parent := optStr(body, "name"), optStr(body, "description"), optInt(body, "parent_id")
+		// the folder path is part of the names its flows and datasources have in an external
+		// lineage catalog: renaming or moving it renames them all there
+		var lineageNames openlineage.Names
+		if name != nil || (parent != nil && (pr.ParentID == nil || *parent != *pr.ParentID)) {
+			if lineageNames, err = d.Lineage.FolderNames(ctx, d.DB, id); err != nil {
+				fail(d, w, "reading the folder's lineage names", err)
+				return
+			}
+		}
 		if name != nil {
 			n := pyd.Strip(*name)
 			if n == "" {
@@ -380,6 +386,7 @@ func updateProject(d *Deps) authedFunc {
 				return
 			}
 		}
+		d.Lineage.Renamed(ctx, d.DB, lineageNames)
 		var changed pyjson.Object
 		if pr.Name != before.Name {
 			changed = append(changed, pyjson.KV{Key: "name", Value: pyjson.Object{{Key: "from", Value: before.Name}, {Key: "to", Value: pr.Name}}})

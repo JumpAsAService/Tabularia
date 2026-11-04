@@ -1,8 +1,8 @@
 package api
 
 // routes/notebooks.py: marimo notebooks kept as objects of a folder, with their versions.
-// Ported: every route; while OpenLineage is on, the change and the delete stay the Python
-// gateway's (a rename tells the catalog, a delete ends the live sessions' runs there).
+// Ported: every route (a rename tells the lineage catalog, a delete ends the live sessions'
+// runs there).
 
 import (
 	"context"
@@ -16,6 +16,7 @@ import (
 	"github.com/JumpAsAService/Tabularia/gateway-go/internal/audit"
 	"github.com/JumpAsAService/Tabularia/gateway-go/internal/auth"
 	"github.com/JumpAsAService/Tabularia/gateway-go/internal/copynames"
+	"github.com/JumpAsAService/Tabularia/gateway-go/internal/openlineage"
 	"github.com/JumpAsAService/Tabularia/gateway-go/internal/perm"
 	"github.com/JumpAsAService/Tabularia/gateway-go/internal/pyd"
 	"github.com/JumpAsAService/Tabularia/gateway-go/internal/pyd/gatewaymodels"
@@ -517,10 +518,6 @@ func createNotebook(d *Deps, w http.ResponseWriter, r *http.Request, p *auth.Pri
 
 // updateNotebook is PATCH /notebooks/{notebook_id} (update_notebook).
 func updateNotebook(d *Deps, w http.ResponseWriter, r *http.Request, p *auth.Principal, body pyd.Body) {
-	if scOpenLineageOn() {
-		scForward(d, w, r)
-		return
-	}
 	var params pyd.Params
 	nid := params.Path("notebook_id", r.PathValue("notebook_id"), pyd.Int())
 	in := params.Body(body, gatewaymodels.NotebookUpdate)
@@ -543,11 +540,19 @@ func updateNotebook(d *Deps, w http.ResponseWriter, r *http.Request, p *auth.Pri
 	}
 	var stop *auth.Refusal
 	var changes pyjson.Object
+	var lineageNames openlineage.Names
 	err := scInTx(ctx, d, func(tx pgx.Tx) error {
 		// read again and held until the commit: a save of a moment ago is the current version
 		var err error
 		if n, err = nbGet(ctx, tx, n.ID, true); err != nil {
 			return err
+		}
+		// the catalog's names before a rename or a move (the folder path is part of the job's name)
+		if in.Get("name") != nil || in.Get("project_id") != nil {
+			if lineageNames, err = d.Lineage.CatalogNames(ctx, tx, openlineage.Ref{Kind: openlineage.KindNotebook, ID: n.ID,
+				ProjectID: n.ProjectID, Name: n.Name}); err != nil {
+				return err
+			}
 		}
 		changes = pyjson.Object{}
 		target := n.ProjectID
@@ -670,12 +675,56 @@ func updateNotebook(d *Deps, w http.ResponseWriter, r *http.Request, p *auth.Pri
 		fail(d, w, "notebooks: changing the notebook", err)
 		return
 	}
+	d.Lineage.Renamed(ctx, d.DB, lineageNames)
 	audit.Record(ctx, d.DB, d.Log, audit.Event{Actor: &p.User, Action: "notebook.update", TargetType: scPtrStr("notebook"),
 		TargetID: &n.ID, TargetLabel: &n.Name, Detail: changes})
 	nbSendDetail(d, w, r, p, n.ID, http.StatusOK)
 }
 
 var errNbNothing = fmt.Errorf("nothing changed")
+
+// nbEndSessionsRuns is notebook_runtime.forget's lineage: each live session of the notebook
+// tells COMPLETE (ready) or ABORT (starting) to the catalog.
+func nbEndSessionsRuns(ctx context.Context, d *Deps, tx pgx.Tx, notebookID int64) error {
+	if !d.Lineage.Enabled() {
+		return nil
+	}
+	rows, err := tx.Query(ctx, `SELECT `+nbSessionColumns+` FROM notebook_sessions WHERE notebook_id = $1 AND status <> 'failed'`, notebookID)
+	if err != nil {
+		return err
+	}
+	var live []*nbSession
+	for rows.Next() {
+		x, err := nbScanSession(rows)
+		if err != nil {
+			rows.Close()
+			return err
+		}
+		live = append(live, x)
+	}
+	rows.Close()
+	if err := rows.Err(); err != nil {
+		return err
+	}
+	for _, x := range live {
+		nbTellLineage(ctx, d, tx, x, nbEndState(x.Status), "", nil)
+	}
+	return nil
+}
+
+// nbEndState is the state a session's run ends in: COMPLETE when it was ready, ABORT before.
+func nbEndState(status string) string {
+	if status == "ready" {
+		return "COMPLETE"
+	}
+	return "ABORT"
+}
+
+// nbTellLineage is openlineage.notebook_session for a row of notebook_sessions.
+func nbTellLineage(ctx context.Context, d *Deps, q perm.Querier, x *nbSession, state, errText string, datasourceID *int64) {
+	d.Lineage.NotebookSession(ctx, q, openlineage.SessionRow{NotebookID: x.NotebookID, Version: x.Version, Mode: x.Mode, JobName: x.JobName,
+		StartedAt: x.StartedAt}, state, errText, datasourceID)
+}
 
 func scSameInt(a, b *int64) bool {
 	return (a == nil && b == nil) || (a != nil && b != nil && *a == *b)
@@ -765,10 +814,6 @@ func duplicateNotebook(d *Deps, w http.ResponseWriter, r *http.Request, p *auth.
 // deleteNotebook is DELETE /notebooks/{notebook_id} (delete_notebook): its live sessions
 // go now, their Jobs with the reaper's next round.
 func deleteNotebook(d *Deps, w http.ResponseWriter, r *http.Request, p *auth.Principal) {
-	if scOpenLineageOn() {
-		scForward(d, w, r) // notebook_runtime.forget ends the sessions' runs in the catalog
-		return
-	}
 	ids, ok := pathInts(w, r, "notebook_id")
 	if !ok {
 		return
@@ -780,6 +825,11 @@ func deleteNotebook(d *Deps, w http.ResponseWriter, r *http.Request, p *auth.Pri
 		return
 	}
 	err := scInTx(ctx, d, func(tx pgx.Tx) error {
+		// notebook_runtime.forget: the runs of its live sessions end in the lineage catalog now
+		// (once deleted, the notebook has no name to tell)
+		if err := nbEndSessionsRuns(ctx, d, tx, n.ID); err != nil {
+			return err
+		}
 		for _, t := range []string{"notebook_visitors", "notebook_sessions", "notebook_tickets", "notebook_versions"} {
 			if _, err := tx.Exec(ctx, fmt.Sprintf(`DELETE FROM %s WHERE notebook_id = $1`, t), n.ID); err != nil {
 				return err

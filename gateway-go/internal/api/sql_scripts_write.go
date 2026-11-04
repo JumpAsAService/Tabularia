@@ -15,6 +15,7 @@ import (
 	"github.com/JumpAsAService/Tabularia/gateway-go/internal/auth"
 	"github.com/JumpAsAService/Tabularia/gateway-go/internal/config"
 	"github.com/JumpAsAService/Tabularia/gateway-go/internal/flowgroups"
+	"github.com/JumpAsAService/Tabularia/gateway-go/internal/openlineage"
 	"github.com/JumpAsAService/Tabularia/gateway-go/internal/perm"
 	"github.com/JumpAsAService/Tabularia/gateway-go/internal/pyd"
 	"github.com/JumpAsAService/Tabularia/gateway-go/internal/pyd/gatewaymodels"
@@ -38,8 +39,7 @@ func init() {
 	})
 }
 
-// scOpenLineageOn is openlineage.enabled: events go somewhere. The port leaves the events
-// (and so the routes that send them, while it is on) to the Python gateway.
+// scOpenLineageOn is openlineage.enabled: events go somewhere (Deps.Lineage sends them).
 func scOpenLineageOn() bool {
 	env := config.FromOS()
 	for _, n := range []string{"OPENLINEAGE__URL", "OPENLINEAGE__FILE"} {
@@ -149,13 +149,9 @@ func createSQLScript(d *Deps, w http.ResponseWriter, r *http.Request, p *auth.Pr
 }
 
 // updateSQLScript is PATCH /sql-scripts/{script_id} (update_sql_script): name, description,
-// folder (a move), content; a change of the content is a new version. While OpenLineage
-// is on, the route stays the Python gateway's: a rename tells the catalog.
+// folder (a move), content; a change of the content is a new version; a rename tells the
+// lineage catalog.
 func updateSQLScript(d *Deps, w http.ResponseWriter, r *http.Request, p *auth.Principal, body pyd.Body) {
-	if scOpenLineageOn() {
-		scForward(d, w, r)
-		return
-	}
 	var params pyd.Params
 	sid := params.Path("script_id", r.PathValue("script_id"), pyd.Int())
 	in := params.Body(body, gatewaymodels.SqlScriptUpdate)
@@ -172,6 +168,15 @@ func updateSQLScript(d *Deps, w http.ResponseWriter, r *http.Request, p *auth.Pr
 	s, ok := sqlVisibleScript(d, w, r, c, scriptID)
 	if !ok || !scEnsure(d, w, ctx, c, s.ProjectID, perm.Edit) {
 		return
+	}
+	var lineageNames openlineage.Names
+	if in.Get("name") != nil || in.Get("project_id") != nil {
+		var err error
+		if lineageNames, err = d.Lineage.CatalogNames(ctx, d.DB, openlineage.Ref{Kind: openlineage.KindSQLScript, ID: s.ID,
+			ProjectID: s.ProjectID, Name: s.Name}); err != nil {
+			fail(d, w, "sql_scripts: the lineage names", err)
+			return
+		}
 	}
 	changes := pyjson.Object{}
 	target := s.ProjectID
@@ -294,6 +299,7 @@ func updateSQLScript(d *Deps, w http.ResponseWriter, r *http.Request, p *auth.Pr
 		fail(d, w, "sql_scripts: changing the script", err)
 		return
 	}
+	d.Lineage.Renamed(ctx, d.DB, lineageNames)
 	if newContent != nil {
 		changes = append(changes, pyjson.KV{Key: "version", Value: version})
 	}

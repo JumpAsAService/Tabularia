@@ -17,6 +17,7 @@ import (
 	"github.com/JumpAsAService/Tabularia/gateway-go/internal/auth"
 	"github.com/JumpAsAService/Tabularia/gateway-go/internal/cron"
 	"github.com/JumpAsAService/Tabularia/gateway-go/internal/language"
+	"github.com/JumpAsAService/Tabularia/gateway-go/internal/openlineage"
 	"github.com/JumpAsAService/Tabularia/gateway-go/internal/perm"
 	"github.com/JumpAsAService/Tabularia/gateway-go/internal/pyd"
 	"github.com/JumpAsAService/Tabularia/gateway-go/internal/pyd/gatewaymodels"
@@ -251,9 +252,7 @@ func (d *Deps) createFlow(w http.ResponseWriter, r *http.Request, p *auth.Princi
 	server.JSON(w, http.StatusCreated, flow.detail())
 }
 
-// toPython hands the request, as it came, to the Python gateway: with OpenLineage on, a
-// rename or a move tells the catalog the new names (openlineage.catalog_names / renamed),
-// which the Go gateway does not do yet.
+// toPython hands the request, as it came, to the Python gateway.
 func (q *request) toPython() { q.d.Upstream.ServeHTTP(q.w, rawBody(q.r)) }
 
 // updateFlow is PATCH /flows/{flow_id} (update_flow).
@@ -298,9 +297,15 @@ func (d *Deps) updateFlow(w http.ResponseWriter, r *http.Request, p *auth.Princi
 			changed = append(changed, k.key)
 		}
 	}
-	if (name != nil || projectID != nil) && q.d.Config.OpenLineage {
-		q.toPython()
-		return
+	// the folder path is part of the flow's name in an external lineage catalog
+	var lineageNames openlineage.Names
+	if name != nil || projectID != nil {
+		var err error
+		if lineageNames, err = q.d.Lineage.CatalogNames(q.ctx, q.d.DB, openlineage.Ref{Kind: openlineage.KindFlow, ID: f.ID,
+			ProjectID: f.ProjectID, Name: f.Name}); err != nil {
+			q.fail(err)
+			return
+		}
 	}
 	moved := projectID != nil && *projectID != f.ProjectID
 	if moved {
@@ -353,6 +358,7 @@ func (d *Deps) updateFlow(w http.ResponseWriter, r *http.Request, p *auth.Princi
 			return
 		}
 	}
+	q.d.Lineage.Renamed(q.ctx, q.d.DB, lineageNames)
 	q.audit(audit.Event{Action: "flow.update", TargetType: strp("flow"), TargetID: &f.ID, TargetLabel: &f.Name,
 		Detail: pyjson.Object{{Key: "changed", Value: changed}}})
 	q.recordScheduleOff(f, off)

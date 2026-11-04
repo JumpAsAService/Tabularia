@@ -19,6 +19,7 @@ import (
 	"github.com/JumpAsAService/Tabularia/gateway-go/internal/config"
 	"github.com/JumpAsAService/Tabularia/gateway-go/internal/db"
 	"github.com/JumpAsAService/Tabularia/gateway-go/internal/engine"
+	"github.com/JumpAsAService/Tabularia/gateway-go/internal/openlineage"
 	"github.com/JumpAsAService/Tabularia/gateway-go/internal/proxy"
 	"github.com/JumpAsAService/Tabularia/gateway-go/internal/secret"
 	"github.com/JumpAsAService/Tabularia/gateway-go/internal/server"
@@ -73,6 +74,10 @@ func run(log *slog.Logger) error {
 	upstream := proxy.New(cfg.Upstream, log)
 	deps := &api.Deps{DB: pool, Auth: authn, Panel: panel, Config: cfg, Log: log, Engine: engineClient, Fernet: fernet,
 		Upstream: upstream, AIService: proxy.New(cfg.AIService, log), SQL: aisvc.New(cfg.AIService, cfg.FernetKey)}
+	// services/openlineage.py: its queue, emptied at the stop (main.py's lifespan, wait_idle 5 s)
+	deps.Lineage = openlineage.New(openlineage.FromEnv(), pool, deps.SQL, panel.OpenLineageTimeout, log)
+	log.Info(deps.Lineage.Describe())
+	defer deps.Lineage.WaitIdle(5 * time.Second)
 	routes := append([]server.Route{{Method: http.MethodGet, Pattern: "/health", Handler: server.Health()}}, api.Routes(deps)...)
 	srv := &http.Server{
 		Addr: cfg.Listen,

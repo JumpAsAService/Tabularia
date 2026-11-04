@@ -36,6 +36,8 @@ var adminItems = map[string]adminItem{
 		env: func(c *config.Config) any { return c.Admin.WebhooksTimeout }},
 	"engine.dbt_export_timeout_seconds": {kind: "float", min: 10, max: 3600, hasRange: true,
 		env: func(c *config.Config) any { return c.Admin.DbtExportTimeout }},
+	"openlineage.timeout_seconds": {kind: "float", min: 1, max: 120, hasRange: true,
+		env: func(c *config.Config) any { return c.Admin.OpenLineageTimeout }},
 }
 
 func adminEnv(cfg *config.Config) map[string]any {
@@ -127,6 +129,14 @@ func (p *Panel) Timezone() string {
 // WebhooksTimeout is webhooks.timeout_seconds: how long a receiver is waited for.
 func (p *Panel) WebhooksTimeout() float64 {
 	if f, ok := p.current.Load().admin["webhooks.timeout_seconds"].(float64); ok && f > 0 {
+		return f
+	}
+	return 10
+}
+
+// OpenLineageTimeout is openlineage.timeout_seconds: how long the lineage collector is waited for.
+func (p *Panel) OpenLineageTimeout() float64 {
+	if f, ok := p.current.Load().admin["openlineage.timeout_seconds"].(float64); ok && f > 0 {
 		return f
 	}
 	return 10

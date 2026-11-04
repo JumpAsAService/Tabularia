@@ -165,6 +165,9 @@ func flowOpenLineage(d *Deps, emit bool) authedFunc {
 			return
 		}
 		s := openlineage.FromEnv()
+		if d.Lineage != nil {
+			s = d.Lineage.Settings() // the panel's timeout (openlineage._get_client)
+		}
 		if emit && !s.Enabled() {
 			detail(w, http.StatusConflict, "OpenLineage is not configured (OPENLINEAGE__URL or OPENLINEAGE__FILE)")
 			return

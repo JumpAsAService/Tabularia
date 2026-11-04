@@ -716,10 +716,6 @@ func nbProxy(d *Deps, w http.ResponseWriter, r *http.Request, mode string) {
 			nbPage(w, "The editor is not running", "It stopped, or it was not started. Open it again from Tabularia.", 409, found.framing, false, 2, nil)
 			return
 		}
-		if scOpenLineageOn() {
-			scForward(d, w, r) // a session started is a run of the notebook's job in the lineage catalog
-			return
-		}
 		ip, ok := nbStartPod(d, w, r, notebookID, mode, found.userID, found.framing)
 		if !ok {
 			return

@@ -4,7 +4,6 @@ import (
 	"errors"
 	"fmt"
 	"net/http"
-	"os"
 	"strings"
 	"time"
 
@@ -12,6 +11,7 @@ import (
 
 	"github.com/JumpAsAService/Tabularia/gateway-go/internal/audit"
 	"github.com/JumpAsAService/Tabularia/gateway-go/internal/auth"
+	"github.com/JumpAsAService/Tabularia/gateway-go/internal/openlineage"
 	"github.com/JumpAsAService/Tabularia/gateway-go/internal/perm"
 	"github.com/JumpAsAService/Tabularia/gateway-go/internal/pyd"
 	"github.com/JumpAsAService/Tabularia/gateway-go/internal/pyd/gatewaymodels"
@@ -25,28 +25,10 @@ const (
 	maxSortKey               = 255  // MAX_SORT_KEY
 )
 
-// openLineageOn is services/openlineage.py enabled: a rename or a move is then told to the
-// collector (catalog_names, renamed), which is not ported: such requests stay Python's.
-func openLineageOn() bool {
-	for _, k := range []string{"OPENLINEAGE__URL", "OPENLINEAGE__FILE", "OPENLINEAGE_URL", "OPENLINEAGE_CONFIG"} {
-		if os.Getenv(k) != "" {
-			return true
-		}
-	}
-	return false
-}
-
 func init() {
 	register("datasources_write", func(d *Deps) []server.Route {
-		patch := withBody(server.Authed(d.Auth, "/datasources/{ds_id}", updateDatasource(d)))
 		return []server.Route{
-			{Method: http.MethodPatch, Pattern: "/datasources/{ds_id}", Handler: http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-				if openLineageOn() {
-					d.Upstream.ServeHTTP(w, r)
-					return
-				}
-				patch.ServeHTTP(w, r)
-			})},
+			{Method: http.MethodPatch, Pattern: "/datasources/{ds_id}", Handler: withBody(server.Authed(d.Auth, "/datasources/{ds_id}", updateDatasource(d)))},
 			{Method: http.MethodDelete, Pattern: "/datasources/{ds_id}", Handler: server.Authed(d.Auth, "/datasources/{ds_id}", deleteDatasource(d))},
 		}
 	})
@@ -185,6 +167,16 @@ func updateDatasource(d *Deps) func(http.ResponseWriter, *http.Request, *auth.Pr
 			return
 		}
 		fromFolder, fromName, scheduleBefore := ds.ProjectID, ds.Name, ds.RefreshSchedule
+		// the folder path is part of the datasource's name in an external lineage catalog
+		var lineageNames openlineage.Names
+		if body.Get("name") != nil || body.Get("project_id") != nil {
+			var err error
+			if lineageNames, err = d.Lineage.CatalogNames(ctx, d.DB, openlineage.Ref{Kind: openlineage.KindDatasource, ID: ds.ID,
+				ProjectID: ds.ProjectID, Name: ds.Name}); err != nil {
+				fail500(d, w, "datasources", err)
+				return
+			}
+		}
 		target, clearSchedule := ds.ProjectID, false
 		if pv := body.Get("project_id"); pv != nil {
 			dest, ok := rowID(pv)
@@ -263,6 +255,7 @@ func updateDatasource(d *Deps) func(http.ResponseWriter, *http.Request, *auth.Pr
 			fail500(d, w, "datasources", err)
 			return
 		}
+		d.Lineage.Renamed(ctx, d.DB, lineageNames)
 		detail := pyjson.Object{}
 		if target != fromFolder {
 			cleared := pyd.Truthy(strOrNil(scheduleBefore)) && clearSchedule

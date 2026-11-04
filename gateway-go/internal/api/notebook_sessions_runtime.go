@@ -1,9 +1,8 @@
 package api
 
 // routes/notebook_sessions.py: a notebook's app or editor started and stopped, and the
-// editor's «Save version» (services/notebook_runtime.py, notebook_runtime.go). While OpenLineage
-// is on, starting and stopping stay the Python gateway's: a session is a run of the notebook's
-// job in the lineage catalog.
+// editor's «Save version» (services/notebook_runtime.py, notebook_runtime.go). A session is a
+// run of the notebook's job in the lineage catalog (nbTellLineage).
 
 import (
 	"errors"
@@ -83,10 +82,6 @@ func nbSessionJSON(d *Deps, r *http.Request, row *nbSession) (*nbSessionOut, err
 // startNotebookSession is POST /notebooks/{notebook_id}/sessions (start_session): the app or
 // the editor started, or the one running returned.
 func startNotebookSession(d *Deps, w http.ResponseWriter, r *http.Request, p *auth.Principal, body pyd.Body) {
-	if scOpenLineageOn() {
-		scForward(d, w, r)
-		return
-	}
 	var ps pyd.Params
 	ids, _ := pathIntsInto(&ps, r, "notebook_id")
 	in := ps.Body(body, gatewaymodels.SessionStart)
@@ -126,10 +121,6 @@ func startNotebookSession(d *Deps, w http.ResponseWriter, r *http.Request, p *au
 
 // stopNotebookSession is DELETE /notebooks/{notebook_id}/sessions/{mode} (stop_session).
 func stopNotebookSession(d *Deps, w http.ResponseWriter, r *http.Request, p *auth.Principal) {
-	if scOpenLineageOn() {
-		scForward(d, w, r)
-		return
-	}
 	var ps pyd.Params
 	ids, _ := pathIntsInto(&ps, r, "notebook_id")
 	mode, _ := ps.Path("mode", r.PathValue("mode"), pyd.Literal("app", "edit")).(string)

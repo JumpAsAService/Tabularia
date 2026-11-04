@@ -24,8 +24,8 @@ import (
 // (_reconcile). Two branches stay with the Python gateway, which gets the whole request:
 // a Script or Container run (its Kubernetes Jobs, script_runs.close_if_orphaned), a
 // scheduled orchestration closed for staying queued too long (notifier.notify_failure's
-// email), a run whose datasource has a data contract on (services/contracts.py), and any
-// run not finished while OpenLineage is on (openlineage.run_closed).
+// email), and a run whose datasource has a data contract on (services/contracts.py). A run
+// that closes tells the lineage catalog (openlineage.run_closed).
 
 func init() {
 	register("runs_read", func(d *Deps) []server.Route {
@@ -256,9 +256,6 @@ func (q *request) needsPython(run *runRow) (bool, error) {
 	if terminal[run.Status] {
 		return false, nil
 	}
-	if q.d.Config.OpenLineage { // a run that closes tells the catalog (openlineage.run_closed)
-		return true, nil
-	}
 	switch run.Kind {
 	case "script", "container":
 		return true, nil
@@ -463,6 +460,7 @@ func (q *request) reconcile(run *runRow, progress progressOf) (*runRow, error) {
 			return q.readRun(run.ID)
 		}
 		if err == nil {
+			q.d.Lineage.RunClosed(q.ctx, q.d.DB, run.ID) // after the commit: tells a fact written already
 			return q.readRun(run.ID)
 		}
 		q.d.Log.Warn("run: post-claim effect failed", "run", run.ID, "attempt", attempt, "err", err)
