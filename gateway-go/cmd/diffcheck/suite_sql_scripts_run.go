@@ -187,6 +187,12 @@ func init() {
 			export("the engine answers no task", as("writer"), sql("SELECT * FROM Vendite"),
 				EngineRule{Method: "POST", Path: "^/tasks/exports$", Body: map[string]any{"queued": true}})
 			export("a script it cannot see", as("writer"), map[string]any{"sql": "SELECT 1", "script_id": id("unseen")})
+			// three «Vendite» when the sql_scripts suites ran before (sq-edit, sq-run, sr-a): the folder
+			// a refusal suggests is the first in the table's physical order, which a full run's history
+			// may leave different on the two databases (the Python bug noted above): not compared
+			for i := range s {
+				s[i].Scrub = append(s[i].Scrub, `write it as "s[qr]-(edit|run|a)"`)
+			}
 			return s
 		},
 	})
