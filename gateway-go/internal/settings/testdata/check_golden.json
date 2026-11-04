@@ -1,0 +1,255 @@
+{
+ "check": [
+  {
+   "values": "{\"auth.session_idle_minutes\": 30}",
+   "changed": [],
+   "good": "{\"auth.session_idle_minutes\": 30}",
+   "errors": "[]"
+  },
+  {
+   "values": "{\"auth.session_idle_minutes\": \"30\", \"auth.personal_tokens\": 1, \"ai.max_cost_per_turn_usd\": true, \"ai.default_model\": 5}",
+   "changed": [],
+   "good": "{}",
+   "errors": "[{\"key\": \"auth.session_idle_minutes\", \"code\": \"integer\"}, {\"key\": \"auth.personal_tokens\", \"code\": \"boolean\"}, {\"key\": \"ai.max_cost_per_turn_usd\", \"code\": \"number\"}, {\"key\": \"ai.default_model\", \"code\": \"text\"}]"
+  },
+  {
+   "values": "{\"auth.session_idle_minutes\": 1441, \"jwt.access_ttl_minutes\": 14, \"webhooks.timeout_seconds\": 0.5}",
+   "changed": [],
+   "good": "{}",
+   "errors": "[{\"key\": \"auth.session_idle_minutes\", \"code\": \"max\", \"limit\": 1440}, {\"key\": \"jwt.access_ttl_minutes\", \"code\": \"min\", \"limit\": 15}, {\"key\": \"webhooks.timeout_seconds\", \"code\": \"min\", \"limit\": 1}]"
+  },
+  {
+   "values": "{\"auth.api_token_max_days\": 30.0}",
+   "changed": [],
+   "good": "{}",
+   "errors": "[{\"key\": \"auth.api_token_max_days\", \"code\": \"integer\"}]"
+  },
+  {
+   "values": "{\"app.timezone\": \"Mars/Base\"}",
+   "changed": [],
+   "good": "{}",
+   "errors": "[{\"key\": \"app.timezone\", \"code\": \"invalid\", \"message\": \"Value error, Invalid APP__TIMEZONE: 'Mars/Base' \\u2014 use an IANA name (e.g. 'Europe/Rome', 'UTC')\"}]"
+  },
+  {
+   "values": "{\"app.timezone\": \"  \"}",
+   "changed": [],
+   "good": "{}",
+   "errors": "[{\"key\": \"app.timezone\", \"code\": \"invalid\"}]"
+  },
+  {
+   "values": "{\"app.timezone\": \" Europe/Rome \"}",
+   "changed": [],
+   "good": "{\"app.timezone\": \"Europe/Rome\"}",
+   "errors": "[]"
+  },
+  {
+   "values": "{\"ai.default_model\": \"mmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmm\"}",
+   "changed": [],
+   "good": "{}",
+   "errors": "[{\"key\": \"ai.default_model\", \"code\": \"too_long\", \"limit\": 200}]"
+  },
+  {
+   "values": "{\"ai.default_model\": \"  gpt  \"}",
+   "changed": [],
+   "good": "{\"ai.default_model\": \"gpt\"}",
+   "errors": "[]"
+  },
+  {
+   "values": "{\"orchestrator.heartbeat_seconds\": 30}",
+   "changed": [
+    "orchestrator.heartbeat_seconds"
+   ],
+   "good": "{}",
+   "errors": "[{\"key\": \"orchestrator.heartbeat_seconds\", \"code\": \"heartbeat_dead_after\"}]"
+  },
+  {
+   "values": "{\"orchestrator.heartbeat_seconds\": 30, \"orchestrator.dead_after_seconds\": 60}",
+   "changed": [
+    "orchestrator.dead_after_seconds"
+   ],
+   "good": "{}",
+   "errors": "[{\"key\": \"orchestrator.dead_after_seconds\", \"code\": \"heartbeat_dead_after\"}, {\"key\": \"orchestrator.heartbeat_seconds\", \"code\": \"heartbeat_dead_after\"}]"
+  },
+  {
+   "values": "{\"orchestrator.max_concurrent\": 200, \"db.pool_size\": 5}",
+   "changed": [
+    "orchestrator.max_concurrent",
+    "db.pool_size"
+   ],
+   "good": "{}",
+   "errors": "[{\"key\": \"orchestrator.max_concurrent\", \"code\": \"concurrent_pool\", \"limit\": 15}, {\"key\": \"db.pool_size\", \"code\": \"concurrent_pool\", \"limit\": 15}]"
+  },
+  {
+   "values": "{\"orchestrator.max_concurrent\": 200, \"db.pool_size\": 5}",
+   "changed": [],
+   "good": "{}",
+   "errors": "[{\"key\": \"orchestrator.max_concurrent\", \"code\": \"concurrent_pool\", \"limit\": 15}, {\"key\": \"db.pool_size\", \"code\": \"concurrent_pool\", \"limit\": 15}]"
+  },
+  {
+   "values": "{\"orchestrator.max_concurrent\": 60}",
+   "changed": [],
+   "good": "{}",
+   "errors": "[{\"key\": \"orchestrator.max_concurrent\", \"code\": \"concurrent_pool\", \"limit\": 50}]"
+  },
+  {
+   "values": "{\"oidc.require_allowlisted_group\": true}",
+   "changed": [],
+   "good": "{}",
+   "errors": "[{\"key\": \"oidc.require_allowlisted_group\", \"code\": \"allowlist_needed\"}]"
+  },
+  {
+   "values": "{\"oidc.require_allowlisted_group\": true, \"oidc.group_allowlist\": \" a \"}",
+   "changed": [],
+   "good": "{\"oidc.require_allowlisted_group\": true, \"oidc.group_allowlist\": \"a\"}",
+   "errors": "[]"
+  },
+  {
+   "values": "{\"notebooks.max_visitors_per_app\": 60}",
+   "changed": [
+    "notebooks.max_visitors_per_app"
+   ],
+   "good": "{}",
+   "errors": "[{\"key\": \"notebooks.max_visitors_per_app\", \"other\": \"notebooks.max_visitors_ceiling\", \"code\": \"visitors_above_ceiling\", \"limit\": 50}]"
+  },
+  {
+   "values": "{\"notebooks.max_visitors_ceiling\": 5}",
+   "changed": [],
+   "good": "{}",
+   "errors": "[{\"key\": \"notebooks.max_visitors_ceiling\", \"other\": \"notebooks.max_visitors_per_app\", \"code\": \"ceiling_below_visitors\", \"limit\": 10}]"
+  },
+  {
+   "values": "{\"ai.max_cost_per_turn_usd\": 2, \"upload.max_bytes\": 100000000000000000000, \"upload.max_bytes2\": 1}",
+   "changed": [],
+   "good": "{\"ai.max_cost_per_turn_usd\": 2.0}",
+   "errors": "[{\"key\": \"upload.max_bytes\", \"code\": \"max\", \"limit\": 1099511627776}, {\"key\": \"upload.max_bytes2\", \"code\": \"unknown\"}]"
+  },
+  {
+   "values": "{\"ai.max_cost_per_turn_usd\": 10000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000}",
+   "changed": [],
+   "good": "{}",
+   "errors": "[{\"key\": \"ai.max_cost_per_turn_usd\", \"code\": \"max\", \"limit\": 100}]"
+  },
+  {
+   "values": "{\"ai.max_cost_per_turn_usd\": -1}",
+   "changed": [],
+   "good": "{}",
+   "errors": "[{\"key\": \"ai.max_cost_per_turn_usd\", \"code\": \"min\", \"limit\": 0}]"
+  },
+  {
+   "values": "{\"orchestrator.poll_interval_seconds\": 0.4}",
+   "changed": [],
+   "good": "{}",
+   "errors": "[{\"key\": \"orchestrator.poll_interval_seconds\", \"code\": \"min\", \"limit\": 0.5}]"
+  },
+  {
+   "values": "{\"orchestrator.poll_interval_seconds\": 61}",
+   "changed": [],
+   "good": "{}",
+   "errors": "[{\"key\": \"orchestrator.poll_interval_seconds\", \"code\": \"max\", \"limit\": 60}]"
+  },
+  {
+   "values": "{\"monitoring.timeout_seconds\": 0.5, \"monitoring.cache_seconds\": 0}",
+   "changed": [],
+   "good": "{\"monitoring.timeout_seconds\": 0.5, \"monitoring.cache_seconds\": 0.0}",
+   "errors": "[]"
+  },
+  {
+   "values": "{\"scripts.build_cpu\": \"0\"}",
+   "changed": [],
+   "good": "{}",
+   "errors": "[{\"key\": \"scripts.build_cpu\", \"code\": \"too_small\", \"message\": \"more than 0\"}]"
+  },
+  {
+   "values": "{\"scripts.build_cpu\": \"5n\"}",
+   "changed": [],
+   "good": "{}",
+   "errors": "[{\"key\": \"scripts.build_cpu\", \"code\": \"invalid\", \"message\": \"Value error, SCRIPTS__BUILD_CPU is a Kubernetes CPU quantity: 2, 1.5 or 1500m\"}]"
+  },
+  {
+   "values": "{\"scripts.build_cpu\": \"abc\"}",
+   "changed": [],
+   "good": "{}",
+   "errors": "[{\"key\": \"scripts.build_cpu\", \"code\": \"invalid\", \"message\": \"Value error, SCRIPTS__BUILD_CPU is a Kubernetes CPU quantity: 2, 1.5 or 1500m\"}]"
+  },
+  {
+   "values": "{\"scripts.build_cpu\": \"1500m\"}",
+   "changed": [],
+   "good": "{\"scripts.build_cpu\": \"1500m\"}",
+   "errors": "[]"
+  },
+  {
+   "values": "{\"scripts.build_memory\": \"1k\"}",
+   "changed": [],
+   "good": "{}",
+   "errors": "[{\"key\": \"scripts.build_memory\", \"code\": \"too_small\", \"message\": \"at least 64Mi\"}]"
+  },
+  {
+   "values": "{\"scripts.build_memory\": \"1e3\"}",
+   "changed": [],
+   "good": "{}",
+   "errors": "[{\"key\": \"scripts.build_memory\", \"code\": \"too_small\", \"message\": \"at least 64Mi\"}]"
+  },
+  {
+   "values": "{\"scripts.build_memory\": \"4Gi\"}",
+   "changed": [],
+   "good": "{\"scripts.build_memory\": \"4Gi\"}",
+   "errors": "[]"
+  },
+  {
+   "values": "{\"scripts.build_memory\": \"4gb\"}",
+   "changed": [],
+   "good": "{}",
+   "errors": "[{\"key\": \"scripts.build_memory\", \"code\": \"invalid\", \"message\": \"Value error, SCRIPTS__BUILD_MEMORY is a Kubernetes memory quantity: 4Gi, 6144Mi\"}]"
+  },
+  {
+   "values": "{\"containers.max_cpu\": \"5n\"}",
+   "changed": [],
+   "good": "{}",
+   "errors": "[{\"key\": \"containers.max_cpu\", \"code\": \"invalid\", \"message\": \"Value error, a Kubernetes CPU quantity: 4, 1.5, 500m\"}]"
+  },
+  {
+   "values": "{\"containers.max_memory\": \"100Mi\"}",
+   "changed": [],
+   "good": "{\"containers.max_memory\": \"100Mi\"}",
+   "errors": "[]"
+  },
+  {
+   "values": "{\"containers.max_memory\": \"x\"}",
+   "changed": [],
+   "good": "{}",
+   "errors": "[{\"key\": \"containers.max_memory\", \"code\": \"invalid\", \"message\": \"Value error, a Kubernetes memory quantity: 16Gi, 512Mi\"}]"
+  },
+  {
+   "values": "{\"oidc.groups_claim\": \" \"}",
+   "changed": [],
+   "good": "{}",
+   "errors": "[{\"key\": \"oidc.groups_claim\", \"code\": \"invalid\"}]"
+  },
+  {
+   "values": "{\"oidc.button_label\": \"xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx\"}",
+   "changed": [],
+   "good": "{}",
+   "errors": "[{\"key\": \"oidc.button_label\", \"code\": \"too_long\", \"limit\": 60}]"
+  },
+  {
+   "values": "{\"db.pool_size\": null}",
+   "changed": [],
+   "good": "{}",
+   "errors": "[{\"key\": \"db.pool_size\", \"code\": \"integer\"}]"
+  },
+  {
+   "values": "{\"x.y\": 1}",
+   "changed": [],
+   "good": "{}",
+   "errors": "[{\"key\": \"x.y\", \"code\": \"unknown\"}]"
+  },
+  {
+   "values": "{\"app.gateway_threads\": 4, \"db.max_overflow\": 0, \"orchestrator.max_concurrent\": 5}",
+   "changed": [
+    "app.gateway_threads"
+   ],
+   "good": "{\"db.max_overflow\": 0, \"orchestrator.max_concurrent\": 5}",
+   "errors": "[{\"key\": \"app.gateway_threads\", \"code\": \"concurrent_pool\", \"limit\": 4}]"
+  }
+ ]
+}

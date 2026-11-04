@@ -34,6 +34,8 @@ var adminItems = map[string]adminItem{
 		env: func(c *config.Config) any { return int64(c.Admin.AIMaxResultRows) }},
 	"webhooks.timeout_seconds": {kind: "float", min: 1, max: 60, hasRange: true,
 		env: func(c *config.Config) any { return c.Admin.WebhooksTimeout }},
+	"engine.dbt_export_timeout_seconds": {kind: "float", min: 10, max: 3600, hasRange: true,
+		env: func(c *config.Config) any { return c.Admin.DbtExportTimeout }},
 }
 
 func adminEnv(cfg *config.Config) map[string]any {
@@ -157,4 +159,11 @@ func (p *Panel) AICommentModel() string { return p.adminStr("ai.comment_model") 
 func (p *Panel) AIMaxResultRows() int {
 	n, _ := p.current.Load().admin["ai.max_result_rows"].(int64)
 	return int(n)
+}
+
+// DbtExportTimeout is engine.dbt_export_timeout_seconds: how long the engine is waited for to
+// build a dbt project.
+func (p *Panel) DbtExportTimeout() float64 {
+	f, _ := p.current.Load().admin["engine.dbt_export_timeout_seconds"].(float64)
+	return f
 }

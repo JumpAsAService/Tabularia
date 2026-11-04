@@ -15,7 +15,9 @@ type JobsConfig struct {
 	// «orchestrator» only works (and answers /health)
 	Role string
 
-	// ORCHESTRATOR__* (OrchestratorSettings)
+	// ORCHESTRATOR__* (OrchestratorSettings). These and the other settings the panel may change
+	// are read here to refuse a value pydantic would (a start that fails as the Python one);
+	// the values in force are internal/settings' (from PanelEnv, with the panel's on top)
 	RefreshWaitSeconds  int64
 	LogRetentionDays    int64
 	ContractResultsKept int64

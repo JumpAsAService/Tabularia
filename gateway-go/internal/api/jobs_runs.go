@@ -601,8 +601,8 @@ func (c *engineConn) payload() pyjson.Object {
 
 // ── the emails' texts (services/email_texts.py) ───────────────────────────────
 
-// emailLanguage is language_of.
-func emailLanguage(code *string) string {
+// emailLanguageOf is language_of.
+func emailLanguageOf(code *string) string {
 	if code != nil {
 		if _, ok := emailTexts[*code]; ok {
 			return *code
@@ -673,7 +673,7 @@ func byLanguage(ctx context.Context, q perm.Querier, addresses []string) ([]lang
 		if l, ok := chosen[strings.ToLower(a)]; ok {
 			code = &l
 		}
-		lang := emailLanguage(code)
+		lang := emailLanguageOf(code)
 		i, ok := at[lang]
 		if !ok {
 			i = len(out)

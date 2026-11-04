@@ -102,6 +102,13 @@ type Config struct {
 	Admin AdminConfig // config_admin.go
 	Flows FlowsConfig // config_flows.go
 	Jobs  JobsConfig  // config_jobs.go
+
+	// PanelEnv: the environment's value of every setting of Administration → Settings
+	// (overrides.ITEMS), by its key, as pydantic types it (config_panel.go)
+	PanelEnv map[string]any
+	// KUBERNETES__TOKEN_FILE: the service account's token; the panel shows the Kubernetes
+	// settings only where it is mounted (routes/gateway_settings.py available)
+	KubernetesTokenFile string
 }
 
 // Env reads a variable without regard to case, as pydantic-settings does.
@@ -174,6 +181,8 @@ func Load(env Env) (*Config, error) {
 	}
 	c.Admin = loadAdmin(&r)
 	c.Jobs = loadJobs(&r)
+	c.PanelEnv = loadPanelEnv(&r)
+	c.KubernetesTokenFile = r.str("KUBERNETES__TOKEN_FILE", "/var/run/secrets/kubernetes.io/serviceaccount/token")
 	if c.FernetKey == "" && c.KeysDir != "" {
 		// Settings._key_from_keys_dir: the key a first service created in the shared directory
 		key, err := readOrCreate(c.KeysDir, "fernet.key", newFernetKey)

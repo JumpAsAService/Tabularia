@@ -115,6 +115,8 @@ func init() {
 			run("in two folders, by case", as("writer"), sql("SELECT * FROM MIXED"))
 			run("one it cannot read", as("writer"), sql("SELECT * FROM Segreto"))
 			run("an admin can", as("admin"), sql("SELECT * FROM Segreto s"))
+			// two «Segreto» when the sql_scripts suite ran before: the same physical order as above
+			s[len(s)-1].Scrub = []string{`write it as "s[qr]-hidden"`}
 			run("one with no data", as("writer"), sql("SELECT * FROM Vuoto"))
 			run("a catalog", as("writer"), sql("SELECT * FROM db.sr.Vendite"))
 			run("two queries", as("writer"), sql("SELECT * FROM Vendite; SELECT 2"))

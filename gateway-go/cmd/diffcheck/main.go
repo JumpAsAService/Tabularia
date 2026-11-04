@@ -433,6 +433,12 @@ func (w *World) ask(s *side, st Step) answer {
 			a.Headers[h] = strings.Replace(v, s.gateway, "<gateway>", 1)
 		}
 	}
+	for h, v := range a.Headers { // a step's Scrub covers the headers it compares too
+		for _, p := range st.Scrub {
+			v = regexp.MustCompile(p).ReplaceAllString(v, "<scrubbed>")
+		}
+		a.Headers[h] = v
+	}
 	if v := res.Header.Values("Set-Cookie"); len(v) > 0 {
 		c := expires.ReplaceAllString(strings.Join(v, " | "), "expires=…")
 		a.Headers["Set-Cookie"] = tokenVal.ReplaceAllStringFunc(c, func(m string) string {
