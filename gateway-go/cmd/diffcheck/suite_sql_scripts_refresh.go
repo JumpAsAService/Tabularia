@@ -38,8 +38,8 @@ func init() {
 					column_descriptions, kind, created_at, updated_at) VALUES ($1, $5, $2, 'data-prep', $3, 1, '[]', '[]', '{}', $4,
 					'2026-01-02', '2026-01-03') RETURNING id`, name, ids[folder], "datasets/"+key+".parquet", kind, desc)
 			}
-			ds("vendite", "Vendite", "src", "flow", "")
-			ds("clienti", "Clienti", "src", "flow", "")
+			ds("vendite", "ssr_vendite", "src", "flow", "")
+			ds("clienti", "ssr_clienti", "src", "flow", "")
 			ds("written", "Scritto", "out", "flow", "a description kept")
 			ds("dbsnap", "Snapshot", "out", "database", "")
 			w.Exec(`INSERT INTO data_contracts (datasource_id, version, document, enabled, status, errors, warnings, created_by, updated_by,
@@ -64,20 +64,20 @@ func init() {
 			out := func(name, folder string) string {
 				return fmt.Sprintf(`"output": {"name": %q, "project_id": %d}`, name, ids[folder])
 			}
-			script("catalog", "scripts", `{"sql": "SELECT * FROM Vendite v JOIN Clienti c ON v.a = c.a", `+out("Nuovo", "out")+`}`)
-			script("again", "scripts", `{"sql": "SELECT * FROM Vendite", "engine": "duckdb", `+out("Scritto", "out")+`}`)
+			script("catalog", "scripts", `{"sql": "SELECT * FROM ssr_vendite v JOIN ssr_clienti c ON v.a = c.a", `+out("Nuovo", "out")+`}`)
+			script("again", "scripts", `{"sql": "SELECT * FROM ssr_vendite", "engine": "duckdb", `+out("Scritto", "out")+`}`)
 			script("conn", "scripts", `{"sql": "select 1;", "connection_id": `+fmt.Sprint(ids["pg"])+`, `+out("Da DB", "out")+`}`)
 			script("mailconn", "scripts", `{"sql": "select 1", "connection_id": `+fmt.Sprint(ids["mail"])+`, `+out("X", "out")+`}`)
 			script("hiddenconn", "scripts", `{"sql": "select 1", "connection_id": `+fmt.Sprint(ids["hidden_pg"])+`, `+out("Y", "out")+`}`)
-			script("nooutput", "scripts", `{"sql": "SELECT * FROM Vendite"}`)
+			script("nooutput", "scripts", `{"sql": "SELECT * FROM ssr_vendite"}`)
 			script("nosql", "scripts", `{"sql": " -- nothing\n ; ", `+out("Z", "out")+`}`)
-			script("snapshot", "scripts", `{"sql": "SELECT * FROM Vendite", `+out("Snapshot", "out")+`}`)
-			script("noedit", "scripts", `{"sql": "SELECT * FROM Vendite", `+out("W", "viewonly")+`}`)
-			script("gone", "scripts", `{"sql": "SELECT * FROM Vendite", "output": {"name": "G", "project_id": 999999}}`)
-			script("noread", "scripts", `{"sql": "SELECT * FROM Segreto", `+out("V", "out")+`}`)
+			script("snapshot", "scripts", `{"sql": "SELECT * FROM ssr_vendite", `+out("Snapshot", "out")+`}`)
+			script("noedit", "scripts", `{"sql": "SELECT * FROM ssr_vendite", `+out("W", "viewonly")+`}`)
+			script("gone", "scripts", `{"sql": "SELECT * FROM ssr_vendite", "output": {"name": "G", "project_id": 999999}}`)
+			script("noread", "scripts", `{"sql": "SELECT * FROM ssr_segreto", `+out("V", "out")+`}`)
 			script("badsql", "scripts", `{"sql": "SELEC FROM (", `+out("B", "out")+`}`)
 			script("hidden", "hidden", `{"sql": "SELECT 1", `+out("H", "out")+`}`)
-			script("live", "scripts", `{"sql": "SELECT * FROM Clienti", `+out("Vivo", "out")+`}`)
+			script("live", "scripts", `{"sql": "SELECT * FROM ssr_clienti", `+out("Vivo", "out")+`}`)
 			w.Exec(`INSERT INTO runs (kind, sql_script_id, task_id, status, launched_by, trigger_type, input_key, output_bucket, output_key,
 				publish_description, publish_overwrite, publish_sort_keys, started_at) VALUES ('sql', $1, 't-live', 'STARTED', NULL, 'manual', '',
 				'data-prep', 'datasets/x.parquet', '', true, '[]', '2026-02-03')`, ids["live"])
