@@ -489,17 +489,6 @@ func (s *scheduler) fireSQLScript(ctx context.Context, id int64, now, seen time.
 	if !run {
 		return off(fmt.Sprintf("%s can no longer run the script", user.Email))
 	}
-	// A script on the catalog is read with sqlglot (services/sql_scripts.resolve), which
-	// stays in Python (docs/specs/gateway-go.md, decision 4): its slot is left to a Python
-	// process, untouched.
-	content, err := sqlscripts.ContentOf(ctx, s.d.DB, script, nil)
-	if err != nil {
-		return err
-	}
-	if content.Value("connection_id") == nil {
-		s.d.Log.Warn("scheduler: SQL script on the catalog left to the Python gateway (sqlglot)", "script", id)
-		return nil
-	}
 	taken := false
 	if err := pgx.BeginFunc(ctx, s.d.DB, func(tx pgx.Tx) error {
 		var err error
@@ -568,8 +557,8 @@ type pyJSONError struct{ err error }
 
 func (e *pyJSONError) Error() string { return e.err.Error() }
 
-// launchSQLScript is sql_script_runs.launch for a script on a connection: the run's id, or
-// the refusal (an HTTPException in Python). The catalog's ones are not ported (sqlglot).
+// launchSQLScript is sql_script_runs.launch: the run's id, or the refusal (an HTTPException
+// in Python). A script on the catalog is read by the AI service (sqlglot).
 func (d *Deps) launchSQLScript(ctx context.Context, user *auth.User, script *sqlscripts.Script, trigger string,
 	parent *int64) (int64, *auth.Refusal, error) {
 	c := perm.For(d.DB, user)
@@ -625,28 +614,65 @@ func (d *Deps) launchSQLScript(ctx context.Context, user *auth.User, script *sql
 	detail := pyjson.Object{{Key: "version", Value: script.CurrentVersion}, {Key: "trigger", Value: trigger},
 		{Key: "sql", Value: runes(sql, 2000)}, {Key: "datasource", Value: pyjson.Object{{Key: "name", Value: output.Value("name")},
 			{Key: "project_id", Value: output.Value("project_id")}}}}
-	connID, ok := pyjson.IsInt(content.Value("connection_id"))
-	if !ok {
-		return 0, nil, errors.New("a SQL script on the catalog needs sqlglot (services/sql_scripts.resolve)")
+	var bucket, inputKey, engineName, path string
+	var body pyjson.Object
+	datasourceIDs := []any{}
+	if content.Value("connection_id") != nil {
+		connID, ok := pyjson.IsInt(content.Value("connection_id"))
+		if !ok {
+			return 0, nil, errors.New("a connection id that is not an integer")
+		}
+		usable, ref, err := sqlscripts.UsableConnection(ctx, c, d.DB, connID)
+		if err != nil || ref != nil {
+			return 0, ref, err
+		}
+		conn, err := loadEngineConn(ctx, d.DB, usable.ID)
+		if err != nil {
+			return 0, nil, err
+		}
+		if conn == nil {
+			return 0, nil, errors.New("the connection vanished")
+		}
+		bucket, inputKey, engineName, path = d.Config.EngineBucket, "", conn.Name, "/db/ingest"
+		body = pyjson.Object{{Key: "connection", Value: conn.payload()}, {Key: "source", Value: pyjson.Object{{Key: "mode", Value: "sql"},
+			{Key: "ref", Value: sql}}}, {Key: "bucket", Value: bucket}, {Key: "output_key", Value: outputKey}}
+		if contract != nil {
+			body = append(body, pyjson.KV{Key: "contract", Value: contract})
+		}
+		detail = detail.Set("connection", pyjson.Object{{Key: "id", Value: conn.ID}, {Key: "name", Value: conn.Name}})
+	} else {
+		// on the catalog: the engine allowed, the datasources the SQL names (sqlglot, the AI service)
+		rs := &reports.Resolver{Q: d.DB, C: c, Engine: d.Engine, Log: d.Log, SQL: d.SQL}
+		picked, err := rs.PickEngine(ctx, content.Value("engine"))
+		if ref := sqlRefusal(err); ref != nil {
+			return 0, ref, nil
+		}
+		if err != nil {
+			return 0, nil, err
+		}
+		resolved, err := sqlscripts.Resolve(ctx, d.DB, c, d.SQL, sql, picked)
+		if ref := sqlRefusal(err); ref != nil {
+			return 0, ref, nil
+		}
+		if err != nil {
+			return 0, nil, err
+		}
+		if len(resolved.Tables) == 0 {
+			return 0, &auth.Refusal{Status: 422, Detail: "The query reads no datasource: name one in FROM"}, nil
+		}
+		chain := sqlscripts.CatalogChain(resolved)
+		bucket, inputKey, engineName, path = pyjson.Str(chain.Value("bucket")), pyjson.Str(chain.Value("input_key")), picked, "/tasks/transform-data"
+		body = append(append(pyjson.Object(nil), chain...), pyjson.KV{Key: "output_key", Value: outputKey}, pyjson.KV{Key: "engine", Value: picked})
+		if contract != nil {
+			body = append(body, pyjson.KV{Key: "contract", Value: contract})
+		}
+		named := []any{}
+		for _, n := range resolved.Tables {
+			named = append(named, pyjson.Object{{Key: "id", Value: n.Datasource.ID}, {Key: "name", Value: n.Datasource.Name}})
+			datasourceIDs = append(datasourceIDs, n.Datasource.ID)
+		}
+		detail = detail.Set("engine", picked).Set("datasources", named)
 	}
-	usable, ref, err := sqlscripts.UsableConnection(ctx, c, d.DB, connID)
-	if err != nil || ref != nil {
-		return 0, ref, err
-	}
-	conn, err := loadEngineConn(ctx, d.DB, usable.ID)
-	if err != nil {
-		return 0, nil, err
-	}
-	if conn == nil {
-		return 0, nil, errors.New("the connection vanished")
-	}
-	bucket, inputKey, engineName := d.Config.EngineBucket, "", conn.Name
-	body := pyjson.Object{{Key: "connection", Value: conn.payload()}, {Key: "source", Value: pyjson.Object{{Key: "mode", Value: "sql"},
-		{Key: "ref", Value: sql}}}, {Key: "bucket", Value: bucket}, {Key: "output_key", Value: outputKey}}
-	if contract != nil {
-		body = append(body, pyjson.KV{Key: "contract", Value: contract})
-	}
-	detail = detail.Set("connection", pyjson.Object{{Key: "id", Value: conn.ID}, {Key: "name", Value: conn.Name}})
 
 	var runID int64
 	var refusal *auth.Refusal
@@ -662,7 +688,7 @@ func (d *Deps) launchSQLScript(ctx context.Context, user *auth.User, script *sql
 			return err
 		}
 		cctx, cancel := context.WithTimeout(ctx, 60*time.Second)
-		res, raw, err := d.Engine.JSON(cctx, http.MethodPost, "/db/ingest", body)
+		res, raw, err := d.Engine.JSON(cctx, http.MethodPost, path, body)
 		cancel()
 		if err != nil {
 			return err
@@ -685,7 +711,7 @@ func (d *Deps) launchSQLScript(ctx context.Context, user *auth.User, script *sql
 			return errRollback
 		}
 		read := pyjson.Object{{Key: "version", Value: script.CurrentVersion}, {Key: "connection_id", Value: content.Value("connection_id")},
-			{Key: "datasources", Value: []any{}}}
+			{Key: "datasources", Value: datasourceIDs}}
 		description := fmt.Sprintf("Written by the SQL script «%s»", script.Name)
 		if target != nil && target.Description != "" {
 			description = target.Description
@@ -766,4 +792,24 @@ func snapshotKey(dsID *int64) string {
 
 func withCheck(ctx context.Context) (context.Context, context.CancelFunc) {
 	return context.WithTimeout(ctx, engine.Check)
+}
+
+// sqlRefusal is the HTTPException a SQL on the catalog raises (pick_engine, resolve,
+// Unreadable): its 422 (or the engine policy's status) and its detail.
+func sqlRefusal(err error) *auth.Refusal {
+	var ref *reports.Refusal
+	var sr *sqlscripts.Refusal
+	var su *sqlscripts.Unreadable
+	var ru *reports.Unreadable
+	switch {
+	case errors.As(err, &ref):
+		return &auth.Refusal{Status: ref.Status, Detail: pyjson.Str(ref.Detail)}
+	case errors.As(err, &sr):
+		return &auth.Refusal{Status: 422, Detail: sr.Message}
+	case errors.As(err, &su):
+		return &auth.Refusal{Status: 422, Detail: su.Message}
+	case errors.As(err, &ru):
+		return &auth.Refusal{Status: 422, Detail: ru.Message}
+	}
+	return nil
 }

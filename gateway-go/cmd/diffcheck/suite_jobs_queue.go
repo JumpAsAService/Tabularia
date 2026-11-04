@@ -135,6 +135,14 @@ func seedQueue(w *World) {
 		QU.Flows["plain"], QU.Src, QU.SQL, QU.Registry))
 	group("stops", fmt.Sprintf(`[[{"kind": "flow", "id": %d}], [{"kind": "flow", "id": %d}], []]`, QU.Flows["broken"], QU.Flows["plain"]))
 	group("gone", `[[{"kind": "flow", "id": 999999}, null], [{"kind": "refresh", "id": 999998}]]`)
+	w.Exec(`INSERT INTO datasources (name, description, project_id, owner_id, bucket, key, columns, sort_keys, column_descriptions, kind,
+		created_at, updated_at) VALUES ('qucat', '', $1, NULL, 'data-prep', 'datasets/qu/cat.parquet', '[]', '[]', '{}', 'flow', '2026-01-01',
+		'2026-01-01')`, QU.Main)
+	sqlCat := w.Insert(`INSERT INTO sql_scripts (name, description, project_id, owner_id, current_version, created_at, updated_at)
+		VALUES ('qu sql cat', '', $1, $2, 1, '2026-01-01', '2026-01-01') RETURNING id`, QU.Main, admin)
+	w.Exec(`INSERT INTO sql_script_versions (script_id, version, content, note, created_at) VALUES ($1, 1, $2, 'created', '2026-01-01')`,
+		sqlCat, fmt.Sprintf(`{"sql": "SELECT * FROM qucat", "engine": "duckdb", "output": {"name": "qu sql cat out", "project_id": %d}}`, QU.Main))
+	group("cat", fmt.Sprintf(`[[{"kind": "sql", "id": %d}]]`, sqlCat))
 	QU.Saved = w.Insert(`INSERT INTO saved_scripts (name, description, project_id, owner_id, environment_id, current_version, created_at,
 		updated_at) VALUES ('qu saved', '', $1, $2, $3, 2, '2026-01-01', '2026-01-01') RETURNING id`, QU.Main, admin, QU.Env)
 	w.Exec(`INSERT INTO saved_script_versions (script_id, version, content, note, created_at, created_by) VALUES ($1, 1, '{}', 'created',
@@ -191,6 +199,8 @@ func queueSteps(w *World) []Step {
 		{Method: "GET", Path: "^/tasks/t-qu-ing$", Body: map[string]any{"status": "SUCCESS", "result": map[string]any{"rows_written": 7,
 			"columns": []any{map[string]any{"name": "a"}}}}},
 		{Method: "POST", Path: "^/tasks/transform-data$", Body: map[string]any{"task_id": "t-qu-out"}},
+		{Method: "GET", Path: "^/engines$", Body: []any{map[string]any{"id": "duckdb", "available": true},
+			map[string]any{"id": "polars", "available": true}, map[string]any{"id": "spark", "available": false}}},
 		{Method: "GET", Path: "^/tasks/t-qu-out$", Body: map[string]any{"status": "SUCCESS", "result": map[string]any{"rows_written": 2}}},
 		{Method: "GET", Path: "^/tasks/t-qu-child$", Body: map[string]any{"status": "STARTED"}},
 		{Method: "DELETE", Path: "^/tasks/", Body: map[string]any{"ok": true}},
@@ -321,6 +331,15 @@ func queueSteps(w *World) []Step {
 		}),
 		tick("a flow group whose objects are gone", "queue", ok, func(w *World) {
 			orchGroup(w, QU.Groups["gone"], "manual", "admin")
+		}),
+		tick("a flow group's SQL script on the catalog", "queue", ok, func(w *World) {
+			orchGroup(w, QU.Groups["cat"], "manual", "admin")
+		}),
+		tick("a flow group's SQL script on the catalog, scheduled by someone who cannot read its table", "queue", ok, func(w *World) {
+			hidden := w.Insert(`INSERT INTO projects (name, description, parent_id, owner_id, created_at) VALUES ('qu-Hidden', '', NULL, $1,
+				'2026-01-01') RETURNING id`, w.People["admin"])
+			w.Exec(`UPDATE datasources SET project_id = $1 WHERE name = 'qucat'`, hidden)
+			orchGroup(w, QU.Groups["cat"], "schedule", "writer")
 		}),
 		boxTick("a flow group's schedule: its author may not use the registry of a cell", boxOK, func(w *World) {
 			orchGroup(w, QU.Groups["all"], "schedule", "writer")

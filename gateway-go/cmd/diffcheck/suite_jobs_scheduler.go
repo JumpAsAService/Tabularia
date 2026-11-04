@@ -215,6 +215,13 @@ func seedScheduler(w *World) {
 	sql("down", onConn(SC.PG, SC.Main, "sc sql down"))
 	sql("gone", onConn(SC.PG, SC.Main, "sc sql gone"))
 	sql("refused", onConn(SC.PG, SC.Main, "sc sql refused"))
+	// on the catalog: the SQL read by the AI service (sqlglot)
+	w.Exec(`INSERT INTO datasources (name, description, project_id, owner_id, bucket, key, columns, sort_keys, column_descriptions, kind,
+		created_at, updated_at) VALUES ('sccat', '', $1, NULL, 'data-prep', 'datasets/sc/cat.parquet', '[{"name": "a", "dtype": "Int64"}]',
+		'[]', '{}', 'flow', '2026-01-01', '2026-01-01')`, SC.Main)
+	sql("cat", fmt.Sprintf(`{"sql": "SELECT a FROM sccat -- the catalog", "engine": "duckdb", "output": {"name": "sc sql cat", "project_id": %d}}`, SC.Main))
+	sql("catmissing", fmt.Sprintf(`{"sql": "SELECT a FROM nothere", "engine": null, "output": {"name": "sc sql cat2", "project_id": %d}}`, SC.Main))
+	sql("catengine", fmt.Sprintf(`{"sql": "SELECT a FROM sccat", "engine": "nosuch", "output": {"name": "sc sql cat3", "project_id": %d}}`, SC.Main))
 	w.Exec(`INSERT INTO datasources (name, description, project_id, owner_id, bucket, key, columns, sort_keys, column_descriptions, kind,
 		created_at, updated_at) VALUES ('sc sql out', 'kept description', $1, NULL, 'data-prep', 'datasets/sc/sqlout.parquet', '[]', '[]',
 		'{}', 'flow', '2026-01-01', '2026-01-01')`, SC.Main)
@@ -342,6 +349,14 @@ func schedulerSteps(w *World) []Step {
 		tick("a SQL script with no task from the engine", "2026-03-02T11:15:00Z", nil,
 			sqlRules(EngineRule{Method: "POST", Path: "^/db/ingest$", Body: map[string]any{"no": "task"}}),
 			due("sql_scripts", "next_run_at", ids(SC.SQL, "gone"), "2026-03-02 11:15:00")),
+		tick("SQL scripts on the catalog: written, a table it cannot name, an engine not allowed", "2026-03-02T11:30:00Z", nil,
+			append([]EngineRule{{Method: "GET", Path: "^/engines$", Body: []any{map[string]any{"id": "duckdb", "available": true},
+				map[string]any{"id": "polars", "available": true}}}},
+				sqlRules(EngineRule{Method: "POST", Path: "^/tasks/transform-data$", Body: map[string]any{"task_id": "t-sc-cat"}})...),
+			func(w *World) {
+				w.Exec(`UPDATE sql_scripts SET next_run_at = NULL WHERE name LIKE 'sc sql %'`)
+				due("sql_scripts", "next_run_at", ids(SC.SQL, "cat", "catmissing", "catengine"), "2026-03-02 11:30:00")(w)
+			}),
 		tick("Rome: the night the clocks go forward", "2026-03-29T00:59:00Z", map[string]string{"APP__TIMEZONE": "Europe/Rome"}, ingest,
 			func(w *World) {
 				// only Rome's: several due at once fire in the tables' physical order

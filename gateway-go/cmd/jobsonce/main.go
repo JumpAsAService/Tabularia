@@ -34,8 +34,8 @@ import (
 	"github.com/JumpAsAService/Tabularia/gateway-go/internal/db"
 	"github.com/JumpAsAService/Tabularia/gateway-go/internal/engine"
 	"github.com/JumpAsAService/Tabularia/gateway-go/internal/jobs"
-	"github.com/JumpAsAService/Tabularia/gateway-go/internal/proxy"
 	_ "github.com/JumpAsAService/Tabularia/gateway-go/internal/jobs/all"
+	"github.com/JumpAsAService/Tabularia/gateway-go/internal/proxy"
 	"github.com/JumpAsAService/Tabularia/gateway-go/internal/secret"
 	"github.com/JumpAsAService/Tabularia/gateway-go/internal/settings"
 )
