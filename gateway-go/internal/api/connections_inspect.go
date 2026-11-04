@@ -262,6 +262,10 @@ func pyDump(mv *pyd.ModelValue) pyjson.Object {
 		switch x := v.(type) {
 		case *pyd.ModelValue:
 			out = out.Set(f.Name, pyDump(x))
+		case int64:
+			if _, isFloat := out.Value(f.Name).(float64); isFloat {
+				out = out.Set(f.Name, x) // a float field's default int, not validated
+			}
 		}
 	}
 	return out
