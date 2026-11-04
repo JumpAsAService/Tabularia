@@ -323,7 +323,99 @@ func (w *World) script(rules []EngineRule) {
 		}
 		res.Body.Close()
 		recorded(s) // forget what came before this step
+		shareLines(s)
 	}
+}
+
+// settle is DIFF_SETTLE_MS: how long the engines (and the files in DIFF_SHARE) must receive
+// nothing before a step's requests are taken as complete, for what a gateway sends after its
+// answer (OpenLineage's events, from a queue of their own).
+var settle = func() time.Duration {
+	ms, _ := strconv.Atoi(os.Getenv("DIFF_SETTLE_MS"))
+	return time.Duration(ms) * time.Millisecond
+}()
+
+// lineagePath: the requests to the lineage collector (the fake engine stands in for it), sent
+// from a queue while the request's own calls to the engine may still be going.
+var lineagePath = regexp.MustCompile(`^/api/v1/(lineage$|namespaces/)`)
+
+// sent is what the side's engine received during the step. With DIFF_SETTLE_MS, also what
+// arrives after the answer, and the lines its gateways appended to /share/ol-<stack>.jsonl
+// (DIFF_SHARE); the collector's requests and the file's lines then come after the engine's
+// calls, each in its own order.
+func (w *World) sent(s *side) any {
+	if settle <= 0 {
+		return recorded(s)
+	}
+	got := append(recordedList(s), shareLines(s)...)
+	quiet := time.Now()
+	for time.Since(quiet) < settle {
+		time.Sleep(50 * time.Millisecond)
+		if more := append(recordedList(s), shareLines(s)...); len(more) > 0 {
+			got, quiet = append(got, more...), time.Now()
+		}
+	}
+	var engine, collector, file []any
+	for _, e := range got {
+		m, _ := e.(map[string]any)
+		p, _ := m["path"].(string)
+		switch {
+		case m["method"] == "FILE":
+			file = append(file, e)
+		case lineagePath.MatchString(p):
+			collector = append(collector, e)
+		default:
+			engine = append(engine, e)
+		}
+	}
+	out := append(append(append([]any{}, engine...), collector...), file...)
+	return normalize(out)
+}
+
+func recordedList(s *side) []any {
+	res, err := http.Get(s.engine + "/__recorded")
+	if err != nil {
+		fail("%s engine: %v", s.name, err)
+	}
+	defer res.Body.Close()
+	var out []any
+	json.NewDecoder(res.Body).Decode(&out)
+	return out
+}
+
+// shareOffsets: how far each side's lineage file was read
+var shareOffsets = map[string]int64{}
+
+// shareLines are the lines a side's gateways appended to /share/ol-<a|b>.jsonl since the last read.
+func shareLines(s *side) []any {
+	dir := os.Getenv("DIFF_SHARE")
+	if dir == "" {
+		return nil
+	}
+	stack := "a"
+	if s.name == "go" {
+		stack = "b"
+	}
+	path := dir + "/ol-" + stack + ".jsonl"
+	raw, err := os.ReadFile(path)
+	if err != nil || int64(len(raw)) <= shareOffsets[path] {
+		return nil
+	}
+	chunk := raw[shareOffsets[path]:]
+	end := bytes.LastIndexByte(chunk, '\n')
+	if end < 0 {
+		return nil // a line still being written
+	}
+	shareOffsets[path] += int64(end + 1)
+	var out []any
+	for _, line := range bytes.Split(chunk[:end], []byte("\n")) {
+		var v any
+		if json.Unmarshal(line, &v) != nil {
+			v = string(line)
+		}
+		out = append(out, map[string]any{"method": "FILE", "path": path[len(dir):], "body": v})
+	}
+	return out
 }
 
 func recorded(s *side) any {
@@ -457,7 +549,7 @@ func (w *World) ask(s *side, st Step) answer {
 	} else {
 		a.Body = string(bytes.TrimSpace(raw))
 	}
-	a.Engine = recorded(s)
+	a.Engine = w.sent(s)
 	for _, path := range st.EngineMask {
 		a.Engine = maskPath(a.Engine, strings.Split(path, "."))
 	}

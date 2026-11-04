@@ -10,7 +10,12 @@
 #   DIFF_ONLY=flows,projects gateway-go/scripts/diffcheck.sh
 #   DIFF_ENV="SCRIPTS__ENABLED=true KUBERNETES__API_URL=http://{engine}:8000" …
 #                    more variables for every gateway of both stacks; {engine} is the
-#                    stack's fake engine (to stand in for another API, as Kubernetes')
+#                    stack's fake engine (to stand in for another API, as Kubernetes'), {stack}
+#                    the stack's letter (a or b)
+#   DIFF_SHARE=<dir>  a folder mounted at /share in every gateway and in the comparison (the
+#                    OpenLineage file: DIFF_ENV="OPENLINEAGE__FILE=/share/ol-{stack}.jsonl")
+#   DIFF_SETTLE_MS=<ms> after each step, wait until the engines (and the files in /share)
+#                    received nothing for so long: what a gateway sends after answering
 set -eu
 here=$(cd "$(dirname "$0")/.." && pwd)
 repo=$(cd "$here/.." && pwd)
@@ -53,7 +58,9 @@ siem_b="--add-host siem.test:$(ip "$id-engb")"
 common="-e DB__USER=t -e DB__PASSWORD=t -e DB__NAME=t -e JWT__SECRET=$secret -e SECURITY__FERNET_KEY=$fernet
     -e AUTH__ADMIN_PASSWORD=$admin_password -e APP__ROLE=api -e AUTH__FIRST_RUN_SETUP=true -e MONITORING__CACHE_SECONDS=0"
 extra() {  # DIFF_ENV for the stack whose engine is $1
-    for kv in ${DIFF_ENV:-}; do printf -- '-e %s ' "$(printf '%s' "$kv" | sed "s/{engine}/$1/g")"; done
+    stack=$(printf '%s' "$1" | tail -c 1)
+    for kv in ${DIFF_ENV:-}; do printf -- '-e %s ' "$(printf '%s' "$kv" | sed "s/{engine}/$1/g; s/{stack}/$stack/g")"; done
+    if [ -n "${DIFF_SHARE:-}" ]; then printf -- '-v %s:/share ' "$DIFF_SHARE"; fi
 }
 python_gateway() {  # name, its database, its engine, its Splunk[, more options]
     docker run -d --name "$1" --network "$net" $common $4 ${5:-} $(extra "$3") -e DB__HOST="$2" -e ENGINE__BASE_URL="http://$3:8000" \
@@ -80,7 +87,9 @@ for c in "$id-pya" "$id-pyb" "$id-ai" "$id-go"; do
     for _ in $(seq 90); do curl -sf "http://127.0.0.1:$(port "$c" 8000)/health" >/dev/null && break; sleep 1; done
 done
 
-docker run --rm --network host --user "$(id -u):$(id -g)" -e HOME=/tmp -e GOCACHE=/tmp/gocache \
+share_runner=""
+if [ -n "${DIFF_SHARE:-}" ]; then share_runner="-v $DIFF_SHARE:/share -e DIFF_SHARE=/share"; fi
+docker run --rm --network host --user "$(id -u):$(id -g)" -e HOME=/tmp -e GOCACHE=/tmp/gocache $share_runner -e DIFF_SETTLE_MS="${DIFF_SETTLE_MS:-}" \
     -e DIFF_SECRET="$secret" -e DIFF_FERNET="$fernet" -e DIFF_ONLY="${DIFF_ONLY:-}" -e DIFF_VERBOSE="${DIFF_VERBOSE:-}" -e DIFF_CLIP="${DIFF_CLIP:-}" \
     -e DIFF_A_DSN="postgresql://t:t@127.0.0.1:$(port "$id-pga" 5432)/t" -e DIFF_B_DSN="postgresql://t:t@127.0.0.1:$(port "$id-pgb" 5432)/t" \
     -e DIFF_A_URL="http://127.0.0.1:$(port "$id-pya" 8000)" -e DIFF_B_URL="http://127.0.0.1:$(port "$id-go" 8000)" \
