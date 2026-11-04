@@ -15,6 +15,8 @@ import (
 	"sync/atomic"
 	"time"
 	_ "time/tzdata" // app.timezone is checked against the zones, whatever the image holds
+	"unicode"
+	"unicode/utf8"
 
 	"github.com/jackc/pgx/v5/pgxpool"
 
@@ -114,11 +116,11 @@ func check(it item, raw string) (any, bool) {
 	case "timezone":
 		// a text, stripped, not empty, a zone ZoneInfo knows (AppSettings._valid_timezone)
 		t, ok := x.(string)
-		t = strings.TrimSpace(t)
-		if !ok || t == "" || len(t) > 200 {
+		t = strings.TrimFunc(t, unicode.IsSpace)
+		if !ok || t == "" || utf8.RuneCountInString(t) > 200 {
 			return nil, false
 		}
-		if _, err := time.LoadLocation(t); err != nil || t == "Local" {
+		if _, err := config.LoadZone(t); err != nil {
 			return nil, false
 		}
 		return t, true

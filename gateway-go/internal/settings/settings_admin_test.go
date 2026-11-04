@@ -10,7 +10,7 @@ import (
 
 // app.timezone: a ZoneInfo name, trimmed; anything else leaves the environment's.
 func TestTheZoneFromThePanel(t *testing.T) {
-	p := New(&config.Config{Admin: config.AdminConfig{Timezone: "UTC"}}, true, slog.New(slog.NewTextHandler(io.Discard, nil)))
+	p := New(&config.Config{AppTimezone: "UTC"}, true, slog.New(slog.NewTextHandler(io.Discard, nil)))
 	for raw, want := range map[string]string{
 		`" Europe/Rome "`: "Europe/Rome", `"Mars/Olympus"`: "UTC", `""`: "UTC", `"Local"`: "UTC", `3`: "UTC",
 	} {
@@ -20,7 +20,7 @@ func TestTheZoneFromThePanel(t *testing.T) {
 		}
 	}
 	p.Apply(nil)
-	if p.Timezone() != "UTC" || p.env.admin["app.timezone"] != "UTC" {
+	if p.Timezone() != "UTC" || p.env.appTimezone != "UTC" {
 		t.Error("the environment's value must come back, untouched")
 	}
 }
