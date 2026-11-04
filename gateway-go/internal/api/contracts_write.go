@@ -247,80 +247,24 @@ func putContract(d *Deps) func(http.ResponseWriter, *http.Request, *auth.Princip
 	}
 }
 
-// saveContract is contracts.save and the commit after it: a changed document is a new version
-// and «to check» again. The datasource's row stays locked until the commit. Answers the
-// contract saved and whether it is to be checked now.
+// saveContract is contracts.save and the commit after it. Answers the contract saved and
+// whether it is to be checked now (on, «to check», with rules).
 func saveContract(ctx context.Context, d *Deps, ds *datasourceRow, document *pyd.Object, enabled bool, userID int64,
 	notify *contractNotify) (*contractRow, bool, error) {
-	now := time.Now().UTC()
-	text, err := pyjson.Dumps(contracts.PyjsonOf(document), pyjson.Options{SortKeys: true})
-	if err != nil {
-		return nil, false, err
-	}
 	tx, err := d.DB.Begin(ctx)
 	if err != nil {
 		return nil, false, err
 	}
 	defer tx.Rollback(ctx)
-	if _, err := tx.Exec(ctx, `SELECT id FROM datasources WHERE id = $1 FOR UPDATE`, ds.ID); err != nil {
+	var n *contracts.Notify
+	if notify != nil {
+		n = &contracts.Notify{Emails: notify.emails, ConnectionID: notify.connID}
+	}
+	if _, err := contracts.Save(ctx, tx, ds.ID, document, enabled, userID, n); err != nil {
 		return nil, false, err
 	}
 	c, err := contractOf(ctx, tx, ds.ID)
 	if err != nil {
-		return nil, false, err
-	}
-	changed := true
-	if c == nil {
-		var last *int64
-		err := tx.QueryRow(ctx, `SELECT version FROM data_contract_versions WHERE datasource_id = $1 ORDER BY version DESC LIMIT 1`,
-			ds.ID).Scan(&last)
-		if err != nil && !errors.Is(err, pgx.ErrNoRows) {
-			return nil, false, err
-		}
-		version := int64(1)
-		if last != nil && *last != 0 {
-			version = *last + 1
-		}
-		var id int64
-		if err := tx.QueryRow(ctx, `INSERT INTO data_contracts (datasource_id, version, document, enabled, status, checked_at, errors,
-			warnings, last_report, blocked_at, blocked_run_id, notify_emails, notify_connection_id, created_by, updated_by, created_at,
-			updated_at) VALUES ($1, $2, $3, $4, 'pending', NULL, 0, 0, NULL, NULL, NULL, NULL, NULL, $5, NULL, $6, $6) RETURNING id`,
-			ds.ID, version, text, enabled, userID, now).Scan(&id); err != nil {
-			return nil, false, err
-		}
-		if c, err = contractOf(ctx, tx, ds.ID); err != nil {
-			return nil, false, err
-		}
-	} else {
-		changed = c.Document != text
-		if changed {
-			c.Version++
-		}
-		if _, err := tx.Exec(ctx, `UPDATE data_contracts SET version = $1, document = $2, enabled = $3 WHERE id = $4`,
-			c.Version, text, enabled, c.ID); err != nil {
-			return nil, false, err
-		}
-	}
-	if changed {
-		if _, err := tx.Exec(ctx, `UPDATE data_contracts SET status = 'pending', checked_at = NULL, errors = 0, warnings = 0,
-			last_report = NULL WHERE id = $1`, c.ID); err != nil {
-			return nil, false, err
-		}
-		if _, err := tx.Exec(ctx, `INSERT INTO data_contract_versions (datasource_id, version, document, created_by, created_at)
-			VALUES ($1, $2, $3, $4, $5)`, ds.ID, c.Version, text, userID, now); err != nil {
-			return nil, false, err
-		}
-	}
-	if notify != nil {
-		if _, err := tx.Exec(ctx, `UPDATE data_contracts SET notify_emails = $1, notify_connection_id = $2 WHERE id = $3`,
-			notify.emails, notify.connID, c.ID); err != nil {
-			return nil, false, err
-		}
-	}
-	if _, err := tx.Exec(ctx, `UPDATE data_contracts SET updated_by = $1, updated_at = $2 WHERE id = $3`, userID, now, c.ID); err != nil {
-		return nil, false, err
-	}
-	if c, err = contractOf(ctx, tx, ds.ID); err != nil {
 		return nil, false, err
 	}
 	if err := tx.Commit(ctx); err != nil {
