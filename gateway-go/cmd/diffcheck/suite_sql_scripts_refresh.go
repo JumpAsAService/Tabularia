@@ -129,7 +129,7 @@ func init() {
 				Auth: Bearer("tab_ssr_writer_write_000000"), EngineMask: masked})
 			s = append(s, Step{Name: "refresh with the writer's read token", Method: "POST", Path: path("conn"),
 				Auth: Bearer("tab_ssr_writer_read_0000000"), EngineMask: masked})
-			return s
+			return append(s, settleRandomKeys("sql_scripts_refresh"))
 		},
 	})
 }

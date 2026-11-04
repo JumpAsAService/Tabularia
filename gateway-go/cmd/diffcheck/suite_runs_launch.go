@@ -254,5 +254,5 @@ func runsLaunchSteps(w *World) []Step {
 	add("editor", "email trial, a bad body", trial("a"), map[string]any{"email": map[string]any{"to": "x"}})
 	s = append(s, Step{Name: "launch with the writer's token", Method: "POST", Path: runs("a"), JSON: email(map[string]any{"connection_id": c("smtp"),
 		"to": []any{"q@x.test"}}), Auth: Bearer("tab_rl_writer_write_0000000"), EngineMask: masked, Scrub: scrub})
-	return s
+	return append(s, settleRandomKeys("runs_launch"))
 }

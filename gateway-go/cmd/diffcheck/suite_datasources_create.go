@@ -283,5 +283,18 @@ func datasourcesCreateSteps(w *World) []Step {
 	add("admin", "duplicate, the file missing", "POST", ds("sftp")+"/duplicate", nil, engine("^/files/copy$", 404, map[string]any{"detail": "no"}))
 	add("admin", "duplicate, the engine fails", "POST", ds("sftp")+"/duplicate", nil, text("^/files/copy$", 500, "x"))
 	add("admin", "duplicate an unknown one", "POST", "/datasources/999999/duplicate", nil)
-	return s
+	return append(s, settleRandomKeys("datasources_create"))
+}
+
+// settleRandomKeys is a last step that writes the same text over the random parts of the keys
+// this suite's launches drew (snapshot_key, out/<uuid>), in both databases: the suites after it
+// list those runs and datasources.
+func settleRandomKeys(name string) Step {
+	return Step{Name: name + ": the random keys settled for the suites after", Method: "GET", Path: "/health", Before: func(w *World) {
+		for _, t := range []struct{ table, column string }{{"runs", "output_key"}, {"datasources", "key"}} {
+			w.Exec(fmt.Sprintf(`UPDATE %s SET %s = regexp_replace(regexp_replace(%s, '\d{8}T\d{6}Z-[0-9a-f]{8}', 'settled'),
+				'out/[0-9a-f]{32}\.parquet', 'out/settled.parquet') WHERE %s ~ '(\d{8}T\d{6}Z-[0-9a-f]{8}|out/[0-9a-f]{32}\.parquet)'`,
+				t.table, t.column, t.column, t.column))
+		}
+	}}
 }
