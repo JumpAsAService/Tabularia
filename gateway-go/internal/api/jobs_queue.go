@@ -332,7 +332,8 @@ func (q *queue) carries(ctx context.Context, flow, group, script *int64) bool {
 		return true
 	}
 	if group != nil {
-		// a Pushmail cell (reports, dashboards, AI comments): left to a Python orchestrator
+		// a Pushmail cell whose report or dashboard has an AI comment (the assistant writes
+		// it): left to a Python orchestrator
 		var definition string
 		if err := q.d.DB.QueryRow(ctx, `SELECT definition FROM flow_groups WHERE id = $1`, *group).Scan(&definition); err != nil {
 			return err == pgx.ErrNoRows
@@ -342,7 +343,7 @@ func (q *queue) carries(ctx context.Context, flow, group, script *int64) bool {
 				if c == nil {
 					continue
 				}
-				if c.kind == "pushmail" {
+				if c.kind == "pushmail" && !q.d.pushmailCarried(ctx, c.pushmail) {
 					return false
 				}
 				if c.kind == "flow" && !q.carries(ctx, &c.id, nil, nil) {

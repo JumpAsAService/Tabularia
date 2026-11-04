@@ -25,7 +25,7 @@ func init() {
 	}
 	scrubColumn("datasources", "key", `out/[0-9a-f]{32}\.parquet`)
 	// a saved script's run: a random task id
-	scrubColumn("runs", "task_id", `^[0-9a-f]{32}$`)
+	scrubColumn("runs", "task_id", `^[0-9a-f]{32}$`, `^pending-[0-9a-f]{32}$`)
 	register(Suite{Module: "jobs_queue", Seed: seedQueue, Steps: queueSteps})
 }
 
@@ -143,6 +143,30 @@ func seedQueue(w *World) {
 	w.Exec(`INSERT INTO sql_script_versions (script_id, version, content, note, created_at) VALUES ($1, 1, $2, 'created', '2026-01-01')`,
 		sqlCat, fmt.Sprintf(`{"sql": "SELECT * FROM qucat", "engine": "duckdb", "output": {"name": "qu sql cat out", "project_id": %d}}`, QU.Main))
 	group("cat", fmt.Sprintf(`[[{"kind": "sql", "id": %d}]]`, sqlCat))
+	// Pushmail: a report and a dashboard reading the source, sent with it
+	report := w.Insert(`INSERT INTO reports (name, description, project_id, owner_id, current_version, created_at, updated_at)
+		VALUES ('qu report', '', $1, $2, 1, '2026-01-01', '2026-01-01') RETURNING id`, QU.Main, admin)
+	w.Exec(`INSERT INTO report_versions (report_id, version, content, note, created_at, created_by) VALUES ($1, 1, $2, 'created',
+		'2026-01-01', $3)`, report, fmt.Sprintf(`{"v": 1, "locale": "it", "parameters": [{"name": "region", "type": "text", "default": "Nord"}],
+		"datasets": [{"name": "orders", "source": {"kind": "datasource", "datasource_id": %d, "filters": [{"column": "region", "op": "=",
+		"value": "{region}"}]}}], "sections": {"body": {"items": []}}}`, QU.Src), admin)
+	board := w.Insert(`INSERT INTO dashboards (name, description, project_id, owner_id, current_version, created_at, updated_at)
+		VALUES ('qu board', '', $1, $2, 1, '2026-01-01', '2026-01-01') RETURNING id`, QU.Main, admin)
+	w.Exec(`INSERT INTO dashboard_versions (dashboard_id, version, content, note, created_at, created_by) VALUES ($1, 1, $2, 'created',
+		'2026-01-01', $3)`, board, fmt.Sprintf(`{"v": 1, "page": {"size": "A4"}, "tiles": [{"id": "t1", "title": "Orders", "grid": {"x": 0, "y": 0},
+		"type": "number", "dataset": "orders"}], "datasets": [{"name": "orders", "source": {"kind": "datasource", "datasource_id": %d}}]}`, QU.Src), admin)
+	mail := func(key, to, reportsJSON, boardsJSON string) {
+		group(key, fmt.Sprintf(`[[{"kind": "pushmail", "id": 11, "pushmail": {"label": " Daily ", "connectionId": %d, "to": [%s],
+			"cc": ["cc@x.test", " "], "subject": "Sales {today}", "body": "Hi", "bodyIsHtml": false, "timezone": "Europe/Rome",
+			"attachments": [{"datasourceId": %d, "fileName": "sales.xlsx", "maxRows": 500}], "reports": %s, "dashboards": %s}}]]`,
+			QU.SMTP, to, QU.Src, reportsJSON, boardsJSON))
+	}
+	rep := fmt.Sprintf(`[{"reportId": %d, "format": "pdf", "params": {"region": "Sud"}, "fileName": "r.pdf", "inBody": true}]`, report)
+	brd := fmt.Sprintf(`[{"dashboardId": %d, "format": "png", "params": {}, "fileName": "b.png"}]`, board)
+	mail("mail", `"boss@x.test"`, rep, brd)
+	mail("mailbad", `"boss@x.test"`, fmt.Sprintf(`[{"reportId": %d, "format": "pdf", "params": {"nope": "x"}, "fileName": "r.pdf"}]`, report), `[]`)
+	mail("mailout", `"who@y.test", "not an address"`, `[]`, brd)
+	mail("mailboard", `"boss@x.test"`, `[]`, brd)
 	QU.Saved = w.Insert(`INSERT INTO saved_scripts (name, description, project_id, owner_id, environment_id, current_version, created_at,
 		updated_at) VALUES ('qu saved', '', $1, $2, $3, 2, '2026-01-01', '2026-01-01') RETURNING id`, QU.Main, admin, QU.Env)
 	w.Exec(`INSERT INTO saved_script_versions (script_id, version, content, note, created_at, created_by) VALUES ($1, 1, '{}', 'created',
@@ -236,6 +260,14 @@ func queueSteps(w *World) []Step {
 		st := kubeTick(name, engine, before)
 		st.Env = map[string]string{"CONTAINERS__ENABLED": "true", "CONTAINERS__NAMESPACE": "boxes", "KUBERNETES__API_URL": "http://{engine}",
 			"KUBERNETES__TOKEN_FILE": "/etc/hostname"}
+		return st
+	}
+	mailOK := append([]EngineRule{{Method: "POST", Path: "^/db/pushmail$", Body: map[string]any{"task_id": "t-qu-mail"}},
+		{Method: "GET", Path: "^/tasks/t-qu-mail$", Body: map[string]any{"status": "SUCCESS", "result": map[string]any{"rows_written": 0,
+			"email": map[string]any{"ok": true}}}}}, ok...)
+	mailTick := func(name string, engine []EngineRule, group string) Step {
+		st := tick(name, "queue", engine, func(w *World) { orchGroup(w, QU.Groups[group], "manual", "admin") })
+		st.EngineScrub = []string{`-[0-9a-f]{8}\.parquet`}
 		return st
 	}
 	job := func(status map[string]any, pod map[string]any) []EngineRule { return jobIn("scripts", status, pod) }
@@ -347,6 +379,13 @@ func queueSteps(w *World) []Step {
 		tick("a flow group run by someone who lost RUN on its folder", "queue", ok, func(w *World) {
 			orchGroup(w, QU.Groups["stops"], "manual", "editor")
 		}),
+		mailTick("a Pushmail cell: a datasource, a report and a dashboard, one email", mailOK, "mail"),
+		mailTick("a Pushmail cell whose report takes no such parameter", mailOK, "mailbad"),
+		mailTick("a Pushmail cell with recipients outside the connection's domains", mailOK, "mailout"),
+		mailTick("a Pushmail cell the engine refuses", append([]EngineRule{{Method: "POST", Path: "^/db/pushmail$", Status: 422,
+			Body: map[string]any{"detail": "the SMTP server is gone"}}}, mailOK...), "mailboard"),
+		mailTick("a Pushmail cell whose email fails", append([]EngineRule{{Method: "GET", Path: "^/tasks/t-qu-mail$",
+			Body: map[string]any{"status": "FAILURE", "error": "SMTP: refused"}}}, mailOK...), "mailboard"),
 		tick("the parquets' random names put away", "queue.beat", ok, putAwayRandomKeys),
 		tidyRunsStep,
 	}

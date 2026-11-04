@@ -42,6 +42,7 @@ type groupCell struct {
 	kind      string
 	id        int64
 	container pyjson.Object
+	pushmail  pyjson.Object // a Pushmail cell's settings, as PushmailCell dumps them (nil: none)
 }
 
 // groupSteps is definition_of(group).steps.
@@ -61,6 +62,9 @@ func groupSteps(definition string) [][]*groupCell {
 			cell.id, _ = cm.Get("id").(int64)
 			if o, ok := cm.Get("container").(*pyd.Object); ok {
 				cell.container = pydconv.FromPyd(o).(pyjson.Object)
+			}
+			if pm, ok := cm.Get("pushmail").(*pyd.ModelValue); ok {
+				cell.pushmail = pydconv.FromPyd(pm.Dump()).(pyjson.Object)
 			}
 			r = append(r, cell)
 		}
@@ -284,6 +288,8 @@ func (q *queue) runCell(ctx context.Context, id, userID int64, trigger string, c
 		why, err = q.sqlCell(ctx, id, userID, trigger, cell.id, cells, step, col, since)
 	case "refresh":
 		why, err = q.refreshCell(ctx, id, userID, trigger, cell.id, cells, step, col)
+	case "pushmail":
+		why, err = q.pushmailCell(ctx, id, userID, trigger, cell, cells, step, col)
 	default:
 		err = fmt.Errorf("a %s cell is not carried by the Go orchestrator", cell.kind)
 	}
@@ -806,6 +812,8 @@ func (q *queue) gapsOfGroup(ctx context.Context, user *auth.User, name string, p
 				if s, err = sqlscripts.Get(ctx, d.DB, cell.id); err == nil && s != nil {
 					more, err = d.sqlGaps(ctx, user, s)
 				}
+			case "pushmail":
+				more, err = d.pushmailErrors(ctx, user, cell.pushmail)
 			default:
 				err = fmt.Errorf("a %s cell is not carried by the Go orchestrator", cell.kind)
 			}

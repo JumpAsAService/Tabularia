@@ -70,6 +70,9 @@ type Resolver struct {
 	// SQL reads a SQL with sqlglot, in the AI service (sql_scripts.resolve,
 	// report_params.without_params); without it those datasets are ErrNeedsPython
 	SQL *aisvc.Client
+	// Read, when not nil, gets the datasources the resolved datasets read (resolve_datasets'
+	// `read`: a flow group's Pushmail cell names them in its run)
+	Read map[int64]bool
 }
 
 func refusal(status int, format string, args ...any) *Refusal {
@@ -898,7 +901,7 @@ func (rs *Resolver) ResolveDatasetsIgnoring(ctx context.Context, def pyjson.Obje
 	}
 	out := pyjson.Object{}
 	for _, p := range plans {
-		resolved, err := rs.finish(ctx, p, def, values, texts, nil)
+		resolved, err := rs.finish(ctx, p, def, values, texts, rs.Read)
 		if err != nil {
 			if errors.Is(err, ErrNeedsPython) || errors.Is(err, ErrInternal) {
 				return nil, err

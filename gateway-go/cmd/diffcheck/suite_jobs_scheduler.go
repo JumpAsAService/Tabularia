@@ -397,7 +397,7 @@ func putAwayRandomKeys(w *World) {
 	// a Script run's step (a uuid) and a saved script's run (a random task id)
 	w.Exec(`UPDATE runs SET script = regexp_replace(script, '[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}', 'step', 'g'),
 		destination = regexp_replace(destination, '[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}', 'step', 'g'),
-		task_id = regexp_replace(task_id, '^[0-9a-f]{32}$', 'task')`)
+		task_id = regexp_replace(regexp_replace(task_id, '^[0-9a-f]{32}$', 'task'), '^pending-[0-9a-f]{32}$', 'pending-task')`)
 	// the runs a round wrote together start at the same frozen moment: apart by their id, or
 	// the history (ORDER BY started_at) lists them in the tables' physical order
 	w.Exec(`UPDATE runs SET started_at = started_at + make_interval(secs => id / 1000000.0)
