@@ -34,8 +34,9 @@ import (
 	"github.com/JumpAsAService/Tabularia/gateway-go/internal/db"
 	"github.com/JumpAsAService/Tabularia/gateway-go/internal/engine"
 	"github.com/JumpAsAService/Tabularia/gateway-go/internal/jobs"
-	"github.com/JumpAsAService/Tabularia/gateway-go/internal/proxy"
 	_ "github.com/JumpAsAService/Tabularia/gateway-go/internal/jobs/all"
+	"github.com/JumpAsAService/Tabularia/gateway-go/internal/proxy"
+	"github.com/JumpAsAService/Tabularia/gateway-go/internal/scriptcfg"
 	"github.com/JumpAsAService/Tabularia/gateway-go/internal/secret"
 	"github.com/JumpAsAService/Tabularia/gateway-go/internal/settings"
 )
@@ -149,6 +150,9 @@ func (r *runner) build(ctx context.Context, overlay map[string]string) error {
 		return nil
 	}
 	setEnv(overlay)
+	// the settings some packages read once per process, read again with the round's variables
+	scriptcfg.Reload()
+	scriptcfg.ReloadRuntime()
 	cfg, err := load()
 	if err != nil {
 		return err

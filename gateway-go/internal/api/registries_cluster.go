@@ -71,7 +71,7 @@ func dockerHub(host string) bool { return host == "docker.io" || host == "index.
 // pullSecret is sync_pull_secret: the registry's pull Secret as its credentials are now; its
 // name, or "" without credentials.
 func pullSecret(ctx context.Context, reg *regRow, password, namespace string) (string, error) {
-	k := nbKube()
+	k := kubeAPI()
 	name := fmt.Sprintf("tabularia-registry-%d", reg.ID)
 	path := "/api/v1/namespaces/" + namespace + "/secrets"
 	if reg.Username == "" {
@@ -128,7 +128,7 @@ func pullSecret(ctx context.Context, reg *regRow, password, namespace string) (s
 
 // pullCheckJob is _pull_check_job.
 func pullCheckJob(name, image, secret string) pyjson.Object {
-	rt := scriptcfg.GetRuntime()
+	pullCheck, _, pullTTL := containersPull()
 	labels := pyjson.Object{{Key: "app.kubernetes.io/managed-by", Value: "tabularia"}, {Key: "app.kubernetes.io/component", Value: "pull-check"}}
 	pod := pyjson.Object{
 		{Key: "restartPolicy", Value: "Never"}, {Key: "automountServiceAccountToken", Value: false},
@@ -144,8 +144,8 @@ func pullCheckJob(name, image, secret string) pyjson.Object {
 	}
 	return pyjson.Object{{Key: "apiVersion", Value: "batch/v1"}, {Key: "kind", Value: "Job"},
 		{Key: "metadata", Value: pyjson.Object{{Key: "name", Value: name}, {Key: "labels", Value: labels}}},
-		{Key: "spec", Value: pyjson.Object{{Key: "backoffLimit", Value: int64(0)}, {Key: "activeDeadlineSeconds", Value: rt.ContainersPullCheck},
-			{Key: "ttlSecondsAfterFinished", Value: rt.ContainersJobTTL},
+		{Key: "spec", Value: pyjson.Object{{Key: "backoffLimit", Value: int64(0)}, {Key: "activeDeadlineSeconds", Value: pullCheck},
+			{Key: "ttlSecondsAfterFinished", Value: pullTTL},
 			{Key: "template", Value: pyjson.Object{{Key: "metadata", Value: pyjson.Object{{Key: "labels", Value: labels}}}, {Key: "spec", Value: pod}}}}}}
 }
 
@@ -160,7 +160,7 @@ func pullPulled(ctx context.Context, namespace string, pods []any) (bool, error)
 				return true, nil
 			}
 		}
-		events, err := kube.JobEvents(ctx, nbKube(), namespace, pyjson.Str(kube.Dict(kube.Dict(pod).Value("metadata")).Value("name")))
+		events, err := kube.JobEvents(ctx, kubeAPI(), namespace, pyjson.Str(kube.Dict(kube.Dict(pod).Value("metadata")).Value("name")))
 		if err != nil {
 			return false, err
 		}
@@ -175,7 +175,7 @@ func pullPulled(ctx context.Context, namespace string, pods []any) (bool, error)
 
 // pullTry is try_pull: {ok, message, image}.
 func pullTry(ctx context.Context, reg *regRow, client registry.Registry, repo, reference string) (pyjson.Object, error) {
-	rt := scriptcfg.GetRuntime()
+	pullCheck, pullPoll, _ := containersPull()
 	out := func(ok bool, image any, message string) pyjson.Object {
 		return pyjson.Object{{Key: "ok", Value: ok}, {Key: "message", Value: message}, {Key: "image", Value: image}}
 	}
@@ -196,22 +196,22 @@ func pullTry(ctx context.Context, reg *regRow, client registry.Registry, repo, r
 	raw := make([]byte, 16)
 	_, _ = rand.Read(raw)
 	name := fmt.Sprintf("tabularia-pull-%d-%s", reg.ID, hex.EncodeToString(raw)[:8])
-	wait := min(rt.ContainersPullCheck+10, pullRequestWait)
+	wait := min(pullCheck+10, pullRequestWait)
 	keep := false
 	result, err := func() (pyjson.Object, error) {
 		secret, err := pullSecret(ctx, reg, client.Password, ns)
 		if err != nil {
 			return nil, err
 		}
-		if _, err := kube.CreateJob(ctx, nbKube(), ns, pullCheckJob(name, image, secret)); err != nil {
+		if _, err := kube.CreateJob(ctx, kubeAPI(), ns, pullCheckJob(name, image, secret)); err != nil {
 			return nil, err
 		}
 		started := time.Now()
 		var failingSince *time.Time
-		poll := time.Duration(rt.ContainersPoll * float64(time.Second))
+		poll := time.Duration(pullPoll * float64(time.Second))
 		for time.Since(started) < time.Duration(wait)*time.Second {
 			time.Sleep(poll)
-			pods, err := kube.JobPods(ctx, nbKube(), ns, name)
+			pods, err := kube.JobPods(ctx, kubeAPI(), ns, name)
 			if err != nil {
 				return nil, err
 			}
@@ -223,7 +223,7 @@ func pullTry(ctx context.Context, reg *regRow, client registry.Registry, repo, r
 				return out(true, image, "A node of the cluster downloaded "+image+"; nothing of it was run"), nil
 			}
 			if len(pods) == 0 && time.Since(started) >= pullNoPodSeconds*time.Second {
-				refused, err := kube.Refused(ctx, nbKube(), ns, name)
+				refused, err := kube.Refused(ctx, kubeAPI(), ns, name)
 				if err != nil {
 					return nil, err
 				}
@@ -231,7 +231,7 @@ func pullTry(ctx context.Context, reg *regRow, client registry.Registry, repo, r
 					return out(false, image, "The check could not run: "+refused), nil
 				}
 			}
-			why, err := kube.PullFailure(ctx, nbKube(), ns, name)
+			why, err := kube.PullFailure(ctx, kubeAPI(), ns, name)
 			if err != nil {
 				return nil, err
 			}
@@ -245,19 +245,19 @@ func pullTry(ctx context.Context, reg *regRow, client registry.Registry, repo, r
 				return out(false, image, why), nil
 			}
 		}
-		if rt.ContainersPullCheck+10 > wait {
+		if pullCheck+10 > wait {
 			keep = true
 			return out(false, image, fmt.Sprintf("A node is still downloading %s after %d s (a large image, or a busy cluster). It goes on "+
-				"downloading it for up to %d s: try again in a few minutes", image, wait, rt.ContainersPullCheck)), nil
+				"downloading it for up to %d s: try again in a few minutes", image, wait, pullCheck)), nil
 		}
-		return out(false, image, fmt.Sprintf("No node downloaded %s within %d s (a large image, or a busy cluster)", image, rt.ContainersPullCheck)), nil
+		return out(false, image, fmt.Sprintf("No node downloaded %s within %d s (a large image, or a busy cluster)", image, pullCheck)), nil
 	}()
 	var ke *kube.Error
 	if errors.As(err, &ke) {
 		result, err = out(false, image, "The cluster refused the check: "+ke.Message), nil
 	}
 	if !keep {
-		_ = kube.DeleteJob(ctx, nbKube(), ns, name) // a KubeError: its TTL removes it
+		_ = kube.DeleteJob(ctx, kubeAPI(), ns, name) // a KubeError: its TTL removes it
 	}
 	return result, err
 }

@@ -110,6 +110,27 @@ func init() {
 	for k, r := range ints {
 		adminItems[k] = adminItem{kind: "int", min: float64(r.min), max: float64(r.max), hasRange: true, env: r.env}
 	}
+	more := map[string]struct {
+		min, max int64
+		env      func(*config.Config) any
+	}{
+		"notebooks.max_visitors_per_app": {1, 1000, func(c *config.Config) any { return c.Jobs.Kube.NotebooksMaxVisitorsPerApp }},
+		"notebooks.max_visitors_ceiling": {1, 1000, func(c *config.Config) any { return c.Jobs.Kube.NotebooksMaxVisitorsCeiling }},
+		"containers.pull_check_seconds":  {30, 3600, func(c *config.Config) any { return c.Jobs.Kube.ContainersPullCheck }},
+		"containers.job_ttl_seconds":     {60, 7 * day, func(c *config.Config) any { return c.Jobs.Kube.ContainersJobTTL }},
+		"containers.max_timeout_seconds": {60, 30 * day, func(c *config.Config) any { return c.Flows.ContainersMaxTimeout }},
+		"containers.log_max_bytes":       {4096, 16 * 1024 * 1024, func(c *config.Config) any { return c.Jobs.Kube.ContainersLogMaxBytes }},
+	}
+	for k, r := range more {
+		adminItems[k] = adminItem{kind: "int", min: float64(r.min), max: float64(r.max), hasRange: true, env: r.env}
+	}
+	adminItems["containers.poll_seconds"] = adminItem{kind: "float", min: 1, max: 60, hasRange: true,
+		env: func(c *config.Config) any { return c.Jobs.Kube.ContainersPoll }}
+	adminItems["scripts.lint"] = adminItem{kind: "bool", env: func(c *config.Config) any { return c.Jobs.Kube.ScriptsLint }}
+	adminItems["containers.max_cpu"] = adminItem{kind: "cpu", maxLen: 200, required: true,
+		env: func(c *config.Config) any { return c.Flows.ContainersMaxCPU }}
+	adminItems["containers.max_memory"] = adminItem{kind: "memory", maxLen: 200, required: true,
+		env: func(c *config.Config) any { return c.Flows.ContainersMaxMemory }}
 	adminItems["kubernetes.timeout_seconds"] = adminItem{kind: "float", min: 1, max: 120, hasRange: true,
 		env: func(c *config.Config) any { return c.Jobs.Kube.Timeout }}
 	adminItems["scripts.poll_seconds"] = adminItem{kind: "float", min: 1, max: 60, hasRange: true,
@@ -151,24 +172,34 @@ const minMemory = 64 * 1024 * 1024
 
 // BuildCPU is scripts.build_cpu: the panel's when it is more than zero and a CPU quantity
 // (overrides.check_one, ScriptsSettings._build_cpu), else the environment's.
-func (p *Panel) BuildCPU() string {
-	v := p.adminStr("scripts.build_cpu")
+func (p *Panel) BuildCPU() string { return p.cpu("scripts.build_cpu") }
+
+// ContainersMaxCPU is containers.max_cpu (ContainersSettings._cpu: the same form).
+func (p *Panel) ContainersMaxCPU() string { return p.cpu("containers.max_cpu") }
+
+func (p *Panel) cpu(key string) string {
+	v := p.adminStr(key)
 	if m := cpuQuantity.FindStringSubmatch(v); m != nil {
 		f, _ := strconv.ParseFloat(m[1], 64)
 		if f <= 0 { // too_small
-			return p.env.admin["scripts.build_cpu"].(string)
+			return p.env.admin[key].(string)
 		}
 	}
 	if !config.ValidBuildCPU(v) {
-		return p.env.admin["scripts.build_cpu"].(string)
+		return p.env.admin[key].(string)
 	}
 	return v
 }
 
 // BuildMemory is scripts.build_memory: the panel's when it is at least 64Mi and a memory
 // quantity, else the environment's.
-func (p *Panel) BuildMemory() string {
-	v := p.adminStr("scripts.build_memory")
+func (p *Panel) BuildMemory() string { return p.memory("scripts.build_memory") }
+
+// ContainersMaxMemory is containers.max_memory (ContainersSettings._memory: the same form).
+func (p *Panel) ContainersMaxMemory() string { return p.memory("containers.max_memory") }
+
+func (p *Panel) memory(key string) string {
+	v := p.adminStr(key)
 	if m := memoryQuantity.FindStringSubmatch(v); m != nil {
 		f, _ := strconv.ParseFloat(m[1], 64)
 		factor := map[string]float64{"Ki": 1 << 10, "Mi": 1 << 20, "Gi": 1 << 30, "Ti": 1 << 40, "k": 1e3, "M": 1e6, "G": 1e9, "T": 1e12}
@@ -180,11 +211,39 @@ func (p *Panel) BuildMemory() string {
 			size = f * x
 		}
 		if math.Trunc(size) < minMemory {
-			return p.env.admin["scripts.build_memory"].(string)
+			return p.env.admin[key].(string)
 		}
 	}
 	if !config.ValidBuildMemory(v) {
-		return p.env.admin["scripts.build_memory"].(string)
+		return p.env.admin[key].(string)
 	}
 	return v
 }
+
+// ScriptsLint is scripts.lint: the editor's checks of a Python script.
+func (p *Panel) ScriptsLint() bool { return p.adminBool("scripts.lint") }
+
+// NotebooksMaxVisitorsPerApp is notebooks.max_visitors_per_app.
+func (p *Panel) NotebooksMaxVisitorsPerApp() int64 {
+	return p.adminInt("notebooks.max_visitors_per_app")
+}
+
+// NotebooksMaxVisitorsCeiling is notebooks.max_visitors_ceiling.
+func (p *Panel) NotebooksMaxVisitorsCeiling() int64 {
+	return p.adminInt("notebooks.max_visitors_ceiling")
+}
+
+// ContainersPullCheck is containers.pull_check_seconds.
+func (p *Panel) ContainersPullCheck() int64 { return p.adminInt("containers.pull_check_seconds") }
+
+// ContainersPoll is containers.poll_seconds.
+func (p *Panel) ContainersPoll() float64 { return p.adminFloat("containers.poll_seconds") }
+
+// ContainersJobTTL is containers.job_ttl_seconds.
+func (p *Panel) ContainersJobTTL() int64 { return p.adminInt("containers.job_ttl_seconds") }
+
+// ContainersMaxTimeout is containers.max_timeout_seconds.
+func (p *Panel) ContainersMaxTimeout() int64 { return p.adminInt("containers.max_timeout_seconds") }
+
+// ContainersLogMaxBytes is containers.log_max_bytes.
+func (p *Panel) ContainersLogMaxBytes() int64 { return p.adminInt("containers.log_max_bytes") }

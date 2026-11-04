@@ -7,5 +7,4 @@ import (
 	_ "github.com/JumpAsAService/Tabularia/gateway-go/internal/jobs/housekeeping"
 	_ "github.com/JumpAsAService/Tabularia/gateway-go/internal/jobs/retention"
 	_ "github.com/JumpAsAService/Tabularia/gateway-go/internal/jobs/scaling"
-	_ "github.com/JumpAsAService/Tabularia/gateway-go/internal/jobs/settingsrollout"
 )

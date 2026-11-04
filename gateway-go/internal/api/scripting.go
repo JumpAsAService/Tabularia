@@ -1307,7 +1307,7 @@ func deleteEnvironment(d *Deps, w http.ResponseWriter, r *http.Request, p *auth.
 			namespaces = append(namespaces, cfg.Scripts.Namespace)
 		}
 		for _, ns := range namespaces {
-			if err := kube.DeleteJobs(ctx, cfg.Kubernetes, ns, fmt.Sprintf("tabularia.io/environment=%d", e.ID)); err != nil {
+			if err := kube.DeleteJobs(ctx, kubeAPI(), ns, fmt.Sprintf("tabularia.io/environment=%d", e.ID)); err != nil {
 				if st := kube.Status(err); st == -1 {
 					fail(d, w, "scripting: the cluster's answer", err)
 					return
@@ -1597,7 +1597,7 @@ func editorEnvironments(d *Deps, w http.ResponseWriter, r *http.Request, p *auth
 		TabulariaVariables []string            `json:"tabularia_variables"`
 		Lint               bool                `json:"lint"`
 	}{scNullable(cfg.DisabledReason()), storage.Bucket != "" && storage.AccessKey != "" && storage.SecretKeyEnc != nil && *storage.SecretKeyEnc != "",
-		out, scTabulariaVariables, cfg.Scripts.Lint})
+		out, scTabulariaVariables, scriptsLint()})
 }
 
 // editorCompletions is GET /scripting/environments/{environment_id}/completions: {module:

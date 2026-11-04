@@ -6,7 +6,6 @@ import (
 	"errors"
 	"fmt"
 	"io"
-	"net"
 	"net/http"
 	"net/url"
 	"os"
@@ -18,6 +17,7 @@ import (
 
 	"github.com/JumpAsAService/Tabularia/gateway-go/internal/audit"
 	"github.com/JumpAsAService/Tabularia/gateway-go/internal/cron"
+	"github.com/JumpAsAService/Tabularia/gateway-go/internal/httpxerr"
 	"github.com/JumpAsAService/Tabularia/gateway-go/internal/jobs"
 	"github.com/JumpAsAService/Tabularia/gateway-go/internal/pyd"
 	"github.com/JumpAsAService/Tabularia/gateway-go/internal/pyjson"
@@ -301,20 +301,8 @@ func (r *dumpReader) Read(p []byte) (int, error) {
 
 // httpxName is type(e).__name__ of the httpx exception a transport failure raises.
 func httpxName(err error) string {
-	var ne net.Error
-	var op *net.OpError
-	switch {
-	case errors.As(err, &op) && op.Op == "dial":
-		if op.Timeout() {
-			return "ConnectTimeout"
-		}
-		return "ConnectError"
-	case errors.As(err, &ne) && ne.Timeout():
-		return "ReadTimeout"
-	case errors.Is(err, io.EOF) || errors.Is(err, io.ErrUnexpectedEOF):
-		return "RemoteProtocolError"
-	}
-	return "ConnectError"
+	name, _ := httpxerr.Of(err)
+	return name
 }
 
 // backupEngineError is _engine_error: the answer's detail, or its text.

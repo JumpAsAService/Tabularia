@@ -77,9 +77,19 @@ type KubeJobsConfig struct {
 	ScriptsLogMaxBytes   int64   // scripts.log_max_bytes
 	ScriptsJobTTLSeconds int64   // scripts.job_ttl_seconds
 
+	ScriptsLint bool // scripts.lint
+
 	// NotebooksSettings
-	NotebooksIdleMinutes  int64
-	NotebooksStartTimeout int64
+	NotebooksIdleMinutes        int64
+	NotebooksStartTimeout       int64
+	NotebooksMaxVisitorsPerApp  int64 // notebooks.max_visitors_per_app
+	NotebooksMaxVisitorsCeiling int64 // notebooks.max_visitors_ceiling
+
+	// ContainersSettings (max_cpu, max_memory, max_timeout_seconds are Flows')
+	ContainersPullCheck   int64   // containers.pull_check_seconds
+	ContainersPoll        float64 // containers.poll_seconds
+	ContainersJobTTL      int64   // containers.job_ttl_seconds
+	ContainersLogMaxBytes int64   // containers.log_max_bytes
 }
 
 var (
@@ -103,32 +113,43 @@ func ValidBuildMemory(v string) bool { return buildMemory.MatchString(strings.Tr
 
 func loadKubeJobs(r *reader) KubeJobsConfig {
 	k := KubeJobsConfig{
-		Namespace:                r.str("KUBERNETES__NAMESPACE", ""),
-		NamespaceFile:            r.str("KUBERNETES__NAMESPACE_FILE", "/var/run/secrets/kubernetes.io/serviceaccount/namespace"),
-		RunWorkerDeployment:      r.str("KUBERNETES__RUN_WORKER_DEPLOYMENT", ""),
-		RunWorkerAutoscaler:      r.str("KUBERNETES__RUN_WORKER_AUTOSCALER", ""),
-		RunWorkerMaxReplicas:     int64(r.integer("KUBERNETES__RUN_WORKER_MAX_REPLICAS", 10, 1, 0)),
-		PreviewWorkerDeployment:  r.str("KUBERNETES__PREVIEW_WORKER_DEPLOYMENT", ""),
-		PreviewWorkerAutoscaler:  r.str("KUBERNETES__PREVIEW_WORKER_AUTOSCALER", ""),
-		PreviewWorkerMaxReplicas: int64(r.integer("KUBERNETES__PREVIEW_WORKER_MAX_REPLICAS", 8, 1, 0)),
-		Timeout:                  r.float("KUBERNETES__TIMEOUT_SECONDS", 10),
-		Rollout:                  r.boolean("KUBERNETES__ROLLOUT", false),
-		Release:                  r.str("KUBERNETES__RELEASE", ""),
-		AppName:                  r.str("KUBERNETES__APP_NAME", ""),
-		RegistryInsecure:         r.boolean("SCRIPTS__REGISTRY_INSECURE", false),
-		RegistryPushSecret:       r.str("SCRIPTS__REGISTRY_PUSH_SECRET", ""),
-		RegistryPullSecret:       r.str("SCRIPTS__REGISTRY_PULL_SECRET", ""),
-		RegistryCAConfigMap:      r.str("SCRIPTS__REGISTRY_CA_CONFIGMAP", ""),
-		BuilderImage:             r.str("SCRIPTS__BUILDER_IMAGE", "moby/buildkit:v0.33.1-rootless"),
-		BuildTimeoutSeconds:      int64(r.integer("SCRIPTS__BUILD_TIMEOUT_SECONDS", 3600, 60, 0)),
-		BuildCPU:                 strings.TrimSpace(r.str("SCRIPTS__BUILD_CPU", "2")),
-		BuildMemory:              strings.TrimSpace(r.str("SCRIPTS__BUILD_MEMORY", "4Gi")),
-		CheckTimeoutSeconds:      int64(r.integer("SCRIPTS__CHECK_TIMEOUT_SECONDS", 300, 30, 0)),
-		ScriptsPollSeconds:       r.float("SCRIPTS__POLL_SECONDS", 5),
-		ScriptsLogMaxBytes:       int64(r.integer("SCRIPTS__LOG_MAX_BYTES", 262_144, 4096, 0)),
-		ScriptsJobTTLSeconds:     int64(r.integer("SCRIPTS__JOB_TTL_SECONDS", 3600, 60, 0)),
-		NotebooksIdleMinutes:     int64(r.integer("NOTEBOOKS__IDLE_MINUTES", 15, 1, 24*60)),
-		NotebooksStartTimeout:    int64(r.integer("NOTEBOOKS__START_TIMEOUT_SECONDS", 300, 30, 3600)),
+		Namespace:                   r.str("KUBERNETES__NAMESPACE", ""),
+		NamespaceFile:               r.str("KUBERNETES__NAMESPACE_FILE", "/var/run/secrets/kubernetes.io/serviceaccount/namespace"),
+		RunWorkerDeployment:         r.str("KUBERNETES__RUN_WORKER_DEPLOYMENT", ""),
+		RunWorkerAutoscaler:         r.str("KUBERNETES__RUN_WORKER_AUTOSCALER", ""),
+		RunWorkerMaxReplicas:        int64(r.integer("KUBERNETES__RUN_WORKER_MAX_REPLICAS", 10, 1, 0)),
+		PreviewWorkerDeployment:     r.str("KUBERNETES__PREVIEW_WORKER_DEPLOYMENT", ""),
+		PreviewWorkerAutoscaler:     r.str("KUBERNETES__PREVIEW_WORKER_AUTOSCALER", ""),
+		PreviewWorkerMaxReplicas:    int64(r.integer("KUBERNETES__PREVIEW_WORKER_MAX_REPLICAS", 8, 1, 0)),
+		Timeout:                     r.float("KUBERNETES__TIMEOUT_SECONDS", 10),
+		Rollout:                     r.boolean("KUBERNETES__ROLLOUT", false),
+		Release:                     r.str("KUBERNETES__RELEASE", ""),
+		AppName:                     r.str("KUBERNETES__APP_NAME", ""),
+		RegistryInsecure:            r.boolean("SCRIPTS__REGISTRY_INSECURE", false),
+		RegistryPushSecret:          r.str("SCRIPTS__REGISTRY_PUSH_SECRET", ""),
+		RegistryPullSecret:          r.str("SCRIPTS__REGISTRY_PULL_SECRET", ""),
+		RegistryCAConfigMap:         r.str("SCRIPTS__REGISTRY_CA_CONFIGMAP", ""),
+		BuilderImage:                r.str("SCRIPTS__BUILDER_IMAGE", "moby/buildkit:v0.33.1-rootless"),
+		BuildTimeoutSeconds:         int64(r.integer("SCRIPTS__BUILD_TIMEOUT_SECONDS", 3600, 60, 0)),
+		BuildCPU:                    strings.TrimSpace(r.str("SCRIPTS__BUILD_CPU", "2")),
+		BuildMemory:                 strings.TrimSpace(r.str("SCRIPTS__BUILD_MEMORY", "4Gi")),
+		CheckTimeoutSeconds:         int64(r.integer("SCRIPTS__CHECK_TIMEOUT_SECONDS", 300, 30, 0)),
+		ScriptsPollSeconds:          r.float("SCRIPTS__POLL_SECONDS", 5),
+		ScriptsLogMaxBytes:          int64(r.integer("SCRIPTS__LOG_MAX_BYTES", 262_144, 4096, 0)),
+		ScriptsJobTTLSeconds:        int64(r.integer("SCRIPTS__JOB_TTL_SECONDS", 3600, 60, 0)),
+		NotebooksIdleMinutes:        int64(r.integer("NOTEBOOKS__IDLE_MINUTES", 15, 1, 24*60)),
+		NotebooksStartTimeout:       int64(r.integer("NOTEBOOKS__START_TIMEOUT_SECONDS", 300, 30, 3600)),
+		ScriptsLint:                 r.boolean("SCRIPTS__LINT", true),
+		NotebooksMaxVisitorsPerApp:  int64(r.integer("NOTEBOOKS__MAX_VISITORS_PER_APP", 10, 1, 1000)),
+		NotebooksMaxVisitorsCeiling: int64(r.integer("NOTEBOOKS__MAX_VISITORS_CEILING", 50, 1, 1000)),
+		ContainersPullCheck:         int64(r.integer("CONTAINERS__PULL_CHECK_SECONDS", 300, 30, 0)),
+		ContainersPoll:              r.float("CONTAINERS__POLL_SECONDS", 3),
+		ContainersJobTTL:            int64(r.integer("CONTAINERS__JOB_TTL_SECONDS", 3600, 60, 0)),
+		ContainersLogMaxBytes:       int64(r.integer("CONTAINERS__LOG_MAX_BYTES", 262_144, 4096, 0)),
+	}
+	if k.ContainersPoll <= 0 {
+		r.fail("CONTAINERS__POLL_SECONDS", "must be greater than 0")
+		k.ContainersPoll = 3
 	}
 	if k.Timeout <= 0 {
 		r.fail("KUBERNETES__TIMEOUT_SECONDS", "must be greater than 0")

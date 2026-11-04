@@ -54,12 +54,11 @@ type nbSessionOut struct {
 
 // nbVisitorsCap is notebook_runtime.visitors_cap.
 func nbVisitorsCap(own *int64) int64 {
-	s := scriptcfg.Get().Notebooks
-	v := int64(s.MaxVisitorsPerApp)
+	v, ceiling := notebooksVisitors()
 	if own != nil && *own != 0 {
 		v = *own
 	}
-	return max(1, min(v, int64(s.MaxVisitorsCeiling)))
+	return max(1, min(v, ceiling))
 }
 
 // listNotebookSessions is GET /notebooks/{notebook_id}/sessions (list_sessions): the live

@@ -159,9 +159,11 @@ func (d *Deps) req(w http.ResponseWriter, r *http.Request, p *auth.Principal) *r
 
 func (d *Deps) flowSettings() flowaccess.Settings {
 	f := d.Config.Flows
+	// containers.max_cpu, max_memory, max_timeout_seconds: the panel's
+	cpu, memory, timeout := d.Panel.ContainersMaxCPU(), d.Panel.ContainersMaxMemory(), d.Panel.ContainersMaxTimeout()
 	return flowaccess.Settings{ScriptsEnabled: f.ScriptsEnabled, ScriptsNamespace: f.ScriptsNamespace,
-		ScriptsRegistry: f.ScriptsRegistry, ContainersEnabled: f.ContainersEnabled, MaxCPU: f.ContainersMaxCPU,
-		MaxMemory: f.ContainersMaxMemory, MaxTimeoutSeconds: f.ContainersMaxTimeout}
+		ScriptsRegistry: f.ScriptsRegistry, ContainersEnabled: f.ContainersEnabled, MaxCPU: cpu,
+		MaxMemory: memory, MaxTimeoutSeconds: timeout}
 }
 
 // fail answers an unexpected error as Starlette does (a 500, plain text).

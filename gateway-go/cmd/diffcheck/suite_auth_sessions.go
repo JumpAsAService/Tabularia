@@ -2,6 +2,7 @@ package main
 
 import (
 	"net/http"
+	"strings"
 	"time"
 )
 
@@ -37,7 +38,8 @@ func init() {
 			pw := "a login password 1"
 			login := func(name, email, password string, auth func(*http.Request), header map[string]string) {
 				s = append(s, Step{Name: name, Method: "POST", Path: "/auth/login", Auth: auth, Header: header,
-					JSON: map[string]any{"email": email, "password": password}, Mask: []string{"access_token"}})
+					JSON: map[string]any{"email": email, "password": password}, Mask: []string{"access_token"},
+					ClockSeconds: strings.Contains(name, "braked")})
 			}
 			csrf := map[string]string{"X-Tabularia-Csrf": "1"}
 			login("a wrong password", "au-pw@x.test", "wrong", nil, nil)

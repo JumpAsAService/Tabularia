@@ -53,7 +53,15 @@ func init() {
 			g := func(k string) string { return fmt.Sprint(Groups[k]) }
 			var s []Step
 			add := func(name, method, path string, auth func(*http.Request), body any) {
-				s = append(s, Step{Name: name, Method: method, Path: path, Auth: auth, JSON: body})
+				st := Step{Name: name, Method: method, Path: path, Auth: auth, JSON: body}
+				if method == "GET" && path == "/users" {
+					// users.list_users: select(User) without an ORDER BY, the table's physical order
+					st.Unordered = []string{""}
+				}
+				if strings.Contains(name, "braked") {
+					st.ClockSeconds = true // a brake's seconds left
+				}
+				s = append(s, st)
 			}
 			for _, p := range []string{"admin", "admin_group", "obs_flag", "obs_group", "editor", "writer", "service"} {
 				add(p+" lists the accounts", "GET", "/users", w.As(p), nil)

@@ -2,346 +2,27 @@ package api
 
 import (
 	"context"
-	"crypto/tls"
-	"crypto/x509"
-	"encoding/base64"
-	"encoding/json"
 	"errors"
 	"fmt"
-	"io"
-	"net"
-	"net/http"
-	"net/url"
-	"regexp"
-	"strings"
 	"time"
-
-	"github.com/jackc/pgx/v5"
 
 	"github.com/JumpAsAService/Tabularia/gateway-go/internal/flowaccess"
 	"github.com/JumpAsAService/Tabularia/gateway-go/internal/jobs"
-	"github.com/JumpAsAService/Tabularia/gateway-go/internal/kube"
 	"github.com/JumpAsAService/Tabularia/gateway-go/internal/perm"
 	"github.com/JumpAsAService/Tabularia/gateway-go/internal/pyjson"
-	"github.com/JumpAsAService/Tabularia/gateway-go/internal/scriptcfg"
+	registryPkg "github.com/JumpAsAService/Tabularia/gateway-go/internal/registry"
 )
 
 // services/container_runs.py run_container (a flow's Container node), with what it needs of
 // services/container_registry.py (the tag's digest), services/container_cluster.py (the image
 // a Pod names, the pull Secret) and services/kube_jobs.py.
 
-// ── services/container_registry.py ────────────────────────────────────────────
-
-const registryTimeout = 15 * time.Second
-
-var (
-	crHost       = regexp.MustCompile(`^[A-Za-z0-9]([A-Za-z0-9-]*[A-Za-z0-9])?(\.[A-Za-z0-9]([A-Za-z0-9-]*[A-Za-z0-9])?)*(:\d{1,5})?$`)
-	crRepository = regexp.MustCompile(`^[a-z0-9]+([._-][a-z0-9]+)*(/[a-z0-9]+([._-][a-z0-9]+)*)*$`)
-	crTag        = regexp.MustCompile(`^[A-Za-z0-9_][A-Za-z0-9_.-]{0,127}$`)
-	crDigest     = regexp.MustCompile(`^sha256:[0-9a-f]{64}$`)
-	crChallenge  = regexp.MustCompile(`(\w+)="([^"]*)"`)
-	crManifests  = "application/vnd.oci.image.index.v1+json, application/vnd.docker.distribution.manifest.list.v2+json, " +
-		"application/vnd.oci.image.manifest.v1+json, application/vnd.docker.distribution.manifest.v2+json"
-	crMetadata = func() []*net.IPNet {
-		var out []*net.IPNet
-		for _, n := range []string{"169.254.0.0/16", "fe80::/10", "100.100.100.200/32", "fd00:ec2::254/128", "168.63.129.16/32"} {
-			_, ipn, _ := net.ParseCIDR(n)
-			out = append(out, ipn)
-		}
-		return out
-	}()
-)
-
-// registryError is RegistryError.
-type registryError struct{ msg string }
-
-func (e *registryError) Error() string { return e.msg }
-
-type registryRow struct {
-	ID                                                        int64
-	Name, Host, Protocol, TLS, CACert, Username, Repositories string
-	PasswordEnc                                               *string
-	Enabled                                                   bool
-}
-
-func loadRegistry(ctx context.Context, q perm.Querier, id int64) (*registryRow, error) {
-	var r registryRow
-	err := q.QueryRow(ctx, `SELECT id, name, host, protocol, tls, ca_cert, username, password_enc, repositories, enabled
-		FROM container_registries WHERE id = $1`, id).Scan(&r.ID, &r.Name, &r.Host, &r.Protocol, &r.TLS, &r.CACert, &r.Username, &r.PasswordEnc,
-		&r.Repositories, &r.Enabled)
-	if errors.Is(err, pgx.ErrNoRows) {
-		return nil, nil
-	}
-	return &r, err
-}
-
-func crAPIHost(host string) string {
-	if host == "docker.io" || host == "index.docker.io" {
-		return "registry-1.docker.io"
-	}
-	return host
-}
-
-// crGuard is _guard: an address resolving to the cloud metadata endpoints refused.
-func crGuard(ctx context.Context, host string) error {
-	name := host
-	if strings.Count(host, ":") == 1 {
-		name = host[:strings.LastIndex(host, ":")]
-	}
-	addrs, err := net.DefaultResolver.LookupIPAddr(ctx, name)
-	if err != nil {
-		return &registryError{fmt.Sprintf("The address %s does not resolve: check its name", host)}
-	}
-	for _, a := range addrs {
-		for _, n := range crMetadata {
-			if n.Contains(a.IP) {
-				return &registryError{fmt.Sprintf("%s resolves to a cloud metadata address, which is never a registry", host)}
-			}
-		}
-	}
-	return nil
-}
-
-type crSession struct {
-	r        *registryRow
-	password string
-	base     string
-	client   *http.Client
-	scheme   string
-	params   map[string]string
-	tokens   map[string]string
-}
-
-func newCRSession(r *registryRow, password string) (*crSession, error) {
-	t := http.DefaultTransport.(*http.Transport).Clone()
-	switch {
-	case r.Protocol == "http" || r.TLS == "none":
-		t.TLSClientConfig = &tls.Config{InsecureSkipVerify: true} //nolint:gosec // the administrator's choice
-	case r.TLS == "ca":
-		if !strings.Contains(r.CACert, "BEGIN CERTIFICATE") {
-			return nil, &registryError{"The authority's certificate is missing: paste it in PEM (-----BEGIN CERTIFICATE-----)"}
-		}
-		pool := x509.NewCertPool()
-		if !pool.AppendCertsFromPEM([]byte(r.CACert)) {
-			return nil, &registryError{"The authority's certificate cannot be read: paste it in PEM"}
-		}
-		t.TLSClientConfig = &tls.Config{RootCAs: pool}
-	}
-	return &crSession{r: r, password: password, base: r.Protocol + "://" + crAPIHost(r.Host), client: &http.Client{Timeout: registryTimeout,
-		Transport: t}, tokens: map[string]string{}, params: map[string]string{}}, nil
-}
-
-func (s *crSession) explain(err error) error {
-	var ue *url.Error
-	if errors.As(err, &ue) && ue.Timeout() {
-		return &registryError{fmt.Sprintf("%s did not answer within %d s", s.r.Host, int(registryTimeout.Seconds()))}
-	}
-	return &registryError{fmt.Sprintf("The gateway cannot reach %s: %s", s.r.Host, runes(err.Error(), 200))}
-}
-
-func (s *crSession) do(ctx context.Context, method, target string, header map[string]string, basic bool) (*http.Response, []byte, error) {
-	req, err := http.NewRequestWithContext(ctx, method, target, nil)
-	if err != nil {
-		return nil, nil, err
-	}
-	for k, v := range header {
-		req.Header.Set(k, v)
-	}
-	if basic {
-		req.SetBasicAuth(s.r.Username, s.password)
-	}
-	res, err := s.client.Do(req)
-	if err != nil {
-		return nil, nil, s.explain(err)
-	}
-	defer res.Body.Close()
-	body, _ := io.ReadAll(res.Body)
-	return res, body, nil
-}
-
-// ping is _Session.ping.
-func (s *crSession) ping(ctx context.Context) error {
-	res, body, err := s.do(ctx, http.MethodGet, s.base+"/v2/", nil, false)
-	if err != nil {
-		return err
-	}
-	if res.StatusCode == 200 {
-		s.scheme = "basic"
-		if s.r.Username == "" {
-			s.scheme = "anonymous"
-		}
-		return nil
-	}
-	if res.StatusCode == 400 && strings.Contains(string(body), "HTTPS server") {
-		return &registryError{"The registry answers in HTTPS: choose HTTPS as the protocol"}
-	}
-	if res.StatusCode != 401 {
-		return &registryError{fmt.Sprintf("%s is not a container registry (it answered %d on /v2/)", s.r.Host, res.StatusCode)}
-	}
-	scheme, rest, _ := strings.Cut(strings.TrimSpace(res.Header.Get("WWW-Authenticate")), " ")
-	s.scheme = strings.ToLower(scheme)
-	for _, m := range crChallenge.FindAllStringSubmatch(rest, -1) {
-		s.params[strings.ToLower(m[1])] = m[2]
-	}
-	if s.scheme != "basic" && s.scheme != "bearer" {
-		shown := s.scheme
-		if shown == "" {
-			shown = "none"
-		}
-		return &registryError{fmt.Sprintf("%s asks for an authentication Tabularia does not speak (%s)", s.r.Host, shown)}
-	}
-	if s.scheme == "basic" {
-		if s.r.Username == "" {
-			return &registryError{"The registry asks for a user and a password"}
-		}
-		check, _, err := s.do(ctx, http.MethodGet, s.base+"/v2/", nil, true)
-		if err != nil {
-			return err
-		}
-		if check.StatusCode == 401 || check.StatusCode == 403 {
-			return &registryError{"The registry refused the user and the password"}
-		}
-	}
-	return nil
-}
-
-// token is _Session._token.
-func (s *crSession) token(ctx context.Context, scope string) (string, error) {
-	if t, ok := s.tokens[scope]; ok {
-		return t, nil
-	}
-	realm := s.params["realm"]
-	if !strings.HasPrefix(realm, "https://") && !strings.HasPrefix(realm, "http://") {
-		return "", &registryError{fmt.Sprintf("%s names no place to ask for a token", s.r.Host)}
-	}
-	u, err := url.Parse(realm)
-	if err != nil {
-		return "", err
-	}
-	if err := crGuard(ctx, u.Host); err != nil {
-		return "", err
-	}
-	query := url.Values{}
-	if s.params["service"] != "" {
-		query.Set("service", s.params["service"])
-	}
-	if scope != "" {
-		query.Set("scope", scope)
-	}
-	target := realm
-	if len(query) > 0 {
-		sep := "?"
-		if strings.Contains(realm, "?") {
-			sep = "&"
-		}
-		target += sep + query.Encode()
-	}
-	res, body, err := s.do(ctx, http.MethodGet, target, nil, s.r.Username != "")
-	if err != nil {
-		return "", err
-	}
-	if res.StatusCode == 401 || res.StatusCode == 403 {
-		if s.r.Username != "" {
-			return "", &registryError{"The registry refused the user and the password"}
-		}
-		return "", &registryError{"The registry asks for a user and a password"}
-	}
-	if res.StatusCode != 200 {
-		return "", &registryError{fmt.Sprintf("%s refused a token (%d)", s.r.Host, res.StatusCode)}
-	}
-	var answer map[string]any
-	_ = json.Unmarshal(body, &answer)
-	t, _ := answer["token"].(string)
-	if t == "" {
-		t, _ = answer["access_token"].(string)
-	}
-	if t == "" {
-		return "", &registryError{fmt.Sprintf("%s gave no token", s.r.Host)}
-	}
-	s.tokens[scope] = t
-	return t, nil
-}
-
-// get is _Session.get.
-func (s *crSession) get(ctx context.Context, method, path, scope string, header map[string]string) (*http.Response, error) {
-	if s.scheme == "" {
-		if err := s.ping(ctx); err != nil {
-			return nil, err
-		}
-	}
-	h := map[string]string{}
-	for k, v := range header {
-		h[k] = v
-	}
-	if s.scheme == "bearer" {
-		t, err := s.token(ctx, scope)
-		if err != nil {
-			return nil, err
-		}
-		h["Authorization"] = "Bearer " + t
-	}
-	target := path
-	if !strings.HasPrefix(path, "http") {
-		target = s.base + path
-	}
-	res, _, err := s.do(ctx, method, target, h, s.scheme == "basic")
-	return res, err
-}
-
-// crNotVisible is _not_visible.
-func crNotVisible(repository string, status int, anonymous bool) error {
-	if status == 401 || status == 403 {
-		if anonymous {
-			return &registryError{fmt.Sprintf("%s is private: the registry asks for a user and a password to read it", repository)}
-		}
-		return &registryError{fmt.Sprintf("The credentials cannot read %s", repository)}
-	}
-	return &registryError{fmt.Sprintf("%s is not in the registry, or not visible with these credentials", repository)}
-}
-
-// crDigestOf is digest: the digest a tag points to now.
-func crDigestOf(ctx context.Context, r *registryRow, password, repository, reference string) (string, error) {
-	repo := flowaccess.RepositoryName(r.Host, repository)
-	if crDigest.MatchString(reference) {
-		return reference, nil
-	}
-	if !crRepository.MatchString(repo) || !crTag.MatchString(reference) {
-		return "", &registryError{fmt.Sprintf("«%s:%s» is not an image name", repository, reference)}
-	}
-	if len(r.Host) > 253 || !crHost.MatchString(r.Host) {
-		return "", &registryError{"The registry's address is a host name, with a port if needed: ghcr.io, registry.acme.internal:5000"}
-	}
-	s, err := newCRSession(r, password)
-	if err != nil {
-		return "", err
-	}
-	if err := crGuard(ctx, crAPIHost(r.Host)); err != nil {
-		return "", err
-	}
-	res, err := s.get(ctx, http.MethodHead, "/v2/"+repo+"/manifests/"+kube.Quote(reference), "repository:"+repo+":pull",
-		map[string]string{"Accept": crManifests})
-	if err != nil {
-		return "", err
-	}
-	if res.StatusCode == 404 {
-		return "", &registryError{fmt.Sprintf("%s has no tag «%s»", repo, reference)}
-	}
-	if res.StatusCode != 200 {
-		return "", crNotVisible(repo, res.StatusCode, r.Username == "")
-	}
-	found := res.Header.Get("Docker-Content-Digest")
-	if !crDigest.MatchString(found) {
-		return "", &registryError{fmt.Sprintf("%s did not say which manifest «%s» is", r.Host, reference)}
-	}
-	return found, nil
-}
-
 // ── services/container_cluster.py ─────────────────────────────────────────────
 
 const labelRegistry = "tabularia.io/registry"
 
 // imageRef is image_ref.
-func imageRef(r *registryRow, repository, digest string) string {
+func imageRef(r *regRow, repository, digest string) string {
 	host := r.Host
 	if host == "docker.io" || host == "index.docker.io" {
 		host = "docker.io"
@@ -349,62 +30,10 @@ func imageRef(r *registryRow, repository, digest string) string {
 	return fmt.Sprintf("%s/%s@%s", host, flowaccess.RepositoryName(r.Host, repository), digest)
 }
 
-// syncPullSecret is sync_pull_secret: the registry's pull Secret in the namespace, its name,
-// "" for a registry without credentials.
-func syncPullSecret(ctx context.Context, k scriptcfg.Kubernetes, r *registryRow, password, ns string) (string, error) {
-	name := fmt.Sprintf("tabularia-registry-%d", r.ID)
-	path := "/api/v1/namespaces/" + ns + "/secrets"
-	if r.Username == "" {
-		_, err := kube.Call(ctx, k, http.MethodDelete, path+"/"+name, nil, false)
-		if err != nil && kube.Status(err) != 404 {
-			return "", err
-		}
-		return "", nil
-	}
-	key := r.Host
-	if key == "docker.io" || key == "index.docker.io" {
-		key = "https://index.docker.io/v1/"
-	}
-	auth := base64.StdEncoding.EncodeToString([]byte(r.Username + ":" + password))
-	config := pyDumps(pyjson.Object{{Key: "auths", Value: pyjson.Object{{Key: key, Value: pyjson.Object{{Key: "username", Value: r.Username},
-		{Key: "password", Value: password}, {Key: "auth", Value: auth}}}}}})
-	data := pyjson.Object{{Key: ".dockerconfigjson", Value: base64.StdEncoding.EncodeToString([]byte(config))}}
-	meta := pyjson.Object{{Key: "name", Value: name}, {Key: "labels", Value: pyjson.Object{{Key: "app.kubernetes.io/managed-by", Value: "tabularia"},
-		{Key: labelRegistry, Value: fmt.Sprint(r.ID)}}}}
-	manifest := pyjson.Object{{Key: "apiVersion", Value: "v1"}, {Key: "kind", Value: "Secret"}, {Key: "type", Value: "kubernetes.io/dockerconfigjson"},
-		{Key: "metadata", Value: meta}, {Key: "data", Value: data}}
-	_, err := kube.Call(ctx, k, http.MethodPost, path, manifest, false)
-	if err == nil {
-		return name, nil
-	}
-	if kube.Status(err) != 409 {
-		return "", err
-	}
-	for attempt := 0; attempt < 3; attempt++ {
-		v, err := kube.Call(ctx, k, http.MethodGet, path+"/"+name, nil, false)
-		if err != nil {
-			return "", err
-		}
-		current := pyjson.Obj(v)
-		if pyjson.Equal(current.Value("data"), data) && pyjson.Equal(current.Value("type"), "kubernetes.io/dockerconfigjson") {
-			return name, nil
-		}
-		m := append(pyjson.Object(nil), meta...).Set("resourceVersion", pyjson.Obj(current.Value("metadata")).Value("resourceVersion"))
-		_, err = kube.Call(ctx, k, http.MethodPut, path+"/"+name, append(pyjson.Object(nil), manifest...).Set("metadata", m), false)
-		if err == nil {
-			return name, nil
-		}
-		if kube.Status(err) != 409 || attempt == 2 {
-			return "", err
-		}
-	}
-	return name, nil
-}
-
 // ── services/container_runs.py ────────────────────────────────────────────────
 
 // containerVariables is container_runs._variables.
-func (d *Deps) containerVariables(ctx context.Context, r *registryRow, node pyjson.Object) (pyjson.Object, pyjson.Object, pyjson.Object, error) {
+func (d *Deps) containerVariables(ctx context.Context, r *regRow, node pyjson.Object) (pyjson.Object, pyjson.Object, pyjson.Object, error) {
 	rows, err := d.DB.Query(ctx, `SELECT name, secret, value, value_enc, updated_at FROM container_registry_variables WHERE registry_id = $1`, r.ID)
 	if err != nil {
 		return nil, nil, nil, err
@@ -500,7 +129,7 @@ func (q *queue) runContainer(ctx context.Context, r *scriptNodeRun) (*[2]any, er
 		return nil, &scriptFailed{ref.Detail}
 	}
 	regID, _ := data.Value("registryId").(int64)
-	registry, err := loadRegistry(ctx, d.DB, regID)
+	registry, err := regGet(ctx, d.DB, regID)
 	if err != nil {
 		return nil, err
 	}
@@ -530,10 +159,11 @@ func (q *queue) runContainer(ctx context.Context, r *scriptNodeRun) (*[2]any, er
 			return nil, err
 		}
 	}
-	digest, err := crDigestOf(ctx, registry, password, repository, reference)
-	var re *registryError
+	digest, err := registryPkg.Digest(ctx, registryPkg.Registry{Host: registry.Host, Protocol: registry.Protocol, TLS: registry.TLS,
+		CACert: registry.CACert, Username: registry.Username, Password: password}, repository, reference)
+	var re *registryPkg.Error
 	if errors.As(err, &re) {
-		return nil, &scriptFailed{fmt.Sprintf("container «%s»: the image %s:%s could not be resolved: %s", label, repository, reference, re.msg)}
+		return nil, &scriptFailed{fmt.Sprintf("container «%s»: the image %s:%s could not be resolved: %s", label, repository, reference, re.Message)}
 	}
 	if err != nil {
 		return nil, err
@@ -607,7 +237,7 @@ func (q *queue) runContainer(ctx context.Context, r *scriptNodeRun) (*[2]any, er
 				return nil, err
 			}
 		}
-		pullSecret, err := syncPullSecret(ctx, q.sc.Kubernetes, registry, password, ns)
+		pullSecret, err := pullSecret(ctx, registry, password, ns)
 		if err != nil {
 			return nil, &scriptFailed{fmt.Sprintf("container «%s»: the registry's pull Secret could not be written: %s", label, err)}
 		}
@@ -650,11 +280,11 @@ func (q *queue) runContainer(ctx context.Context, r *scriptNodeRun) (*[2]any, er
 			if len(secret) > 0 {
 				secretName = name + "-env"
 			}
-			return containerJobManifest(q.js, name, image, node, merge(base, pyjson.Object{{Key: "TABULARIA_ATTEMPT", Value: fmt.Sprint(attempt)}}),
+			return containerJobManifest(q.d.jobSettings(), name, image, node, merge(base, pyjson.Object{{Key: "TABULARIA_ATTEMPT", Value: fmt.Sprint(attempt)}}),
 				labels, timeout, secretName, pullSecret)
 		}
 		ok, reason, err := q.attempts(ctx, child, "container", what, retries, delay, r.parent, hasOutput, storage, outKey, manifest, nil,
-			secret, timeout, ns, q.js.cPollSeconds, q.js.cLogMaxBytes)
+			secret, timeout, ns, q.d.jobSettings().cPollSeconds, q.d.jobSettings().cLogMaxBytes)
 		if err != nil {
 			return nil, err
 		}

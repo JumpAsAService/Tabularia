@@ -14,9 +14,9 @@ import (
 	"github.com/jackc/pgx/v5"
 
 	"github.com/JumpAsAService/Tabularia/gateway-go/internal/auth"
-	"github.com/JumpAsAService/Tabularia/gateway-go/internal/config"
 	"github.com/JumpAsAService/Tabularia/gateway-go/internal/flowaccess"
 	"github.com/JumpAsAService/Tabularia/gateway-go/internal/jobs"
+	"github.com/JumpAsAService/Tabularia/gateway-go/internal/kube"
 	"github.com/JumpAsAService/Tabularia/gateway-go/internal/perm"
 	"github.com/JumpAsAService/Tabularia/gateway-go/internal/pyjson"
 	"github.com/JumpAsAService/Tabularia/gateway-go/internal/savedscripts"
@@ -40,7 +40,7 @@ const (
 )
 
 // jobSettings are ScriptsSettings' and ContainersSettings' values a run reads that
-// internal/scriptcfg has not (read at the job's start, as the rest).
+// internal/scriptcfg has not.
 type jobSettings struct {
 	pollSeconds        float64
 	logMaxBytes        int
@@ -51,22 +51,12 @@ type jobSettings struct {
 	cJobTTL            int64
 }
 
-func loadJobSettings() jobSettings {
-	env := config.FromOS()
-	num := func(name string, def float64) float64 {
-		if v, ok := env(name); ok {
-			var f float64
-			if _, err := fmt.Sscan(strings.TrimSpace(v), &f); err == nil {
-				return f
-			}
-		}
-		return def
-	}
-	str := func(name string) string { v, _ := env(name); return v }
-	return jobSettings{pollSeconds: num("SCRIPTS__POLL_SECONDS", 5), logMaxBytes: int(num("SCRIPTS__LOG_MAX_BYTES", 262144)),
-		jobTTL: int64(num("SCRIPTS__JOB_TTL_SECONDS", 3600)), registryPullSecret: str("SCRIPTS__REGISTRY_PULL_SECRET"),
-		cPollSeconds: num("CONTAINERS__POLL_SECONDS", 5), cLogMaxBytes: int(num("CONTAINERS__LOG_MAX_BYTES", 262144)),
-		cJobTTL: int64(num("CONTAINERS__JOB_TTL_SECONDS", 3600))}
+// jobSettings are read at every use, as get_settings(): the panel may change them.
+func (d *Deps) jobSettings() jobSettings {
+	p := d.Panel
+	return jobSettings{pollSeconds: p.ScriptsPollSeconds(), logMaxBytes: int(p.ScriptsLogMaxBytes()), jobTTL: p.ScriptsJobTTL(),
+		registryPullSecret: d.Config.Jobs.Kube.RegistryPullSecret, cPollSeconds: p.ContainersPoll(),
+		cLogMaxBytes: int(p.ContainersLogMaxBytes()), cJobTTL: p.ContainersJobTTL()}
 }
 
 type scriptEnv struct {
@@ -614,11 +604,11 @@ func (q *queue) runScript(ctx context.Context, r *scriptNodeRun) (*[2]any, error
 			{Key: labelEnv, Value: fmt.Sprint(env.ID)}, {Key: labelScriptRun, Value: fmt.Sprint(childID)},
 			{Key: labelOrchestration, Value: fmt.Sprint(runID)}, {Key: "tabularia.io/stage", Value: "run"}}
 		manifest := func(name string, attempt int64) pyjson.Object {
-			return scriptJobManifest(q.js, name, env, version, node, merge(base, pyjson.Object{{Key: "TABULARIA_ATTEMPT", Value: fmt.Sprint(attempt)}}),
+			return scriptJobManifest(q.d.jobSettings(), name, env, version, node, merge(base, pyjson.Object{{Key: "TABULARIA_ATTEMPT", Value: fmt.Sprint(attempt)}}),
 				labels, timeout, items, name+"-code", name+"-env")
 		}
 		ok, reason, err := q.attempts(ctx, child, "script", "script «"+label+"»", retries, delay, runID, hasOutput, storage, outKey, manifest, code, secret,
-			timeout, ns, q.js.pollSeconds, q.js.logMaxBytes)
+			timeout, ns, q.d.jobSettings().pollSeconds, q.d.jobSettings().logMaxBytes)
 		if err != nil {
 			return nil, err
 		}
@@ -712,7 +702,7 @@ func (q *queue) attempts(ctx context.Context, child *childRun, kind, what string
 		if err := child.save(ctx); err != nil {
 			return false, "", err
 		}
-		ok, log, exitCode, why, err := kjAttempt(ctx, q.sc.Kubernetes, name, m, code, secret, timeout, ns, poll, logMax)
+		ok, log, exitCode, why, err := kjAttempt(ctx, kubeAPI(), name, m, code, secret, timeout, ns, poll, logMax)
 		if err != nil {
 			return false, "", err
 		}
@@ -722,7 +712,7 @@ func (q *queue) attempts(ctx context.Context, child *childRun, kind, what string
 		} else {
 			logs = append(logs, log)
 		}
-		child.info = child.info.Set("log", kjTail(strings.Join(logs, "\n"), logMax)).Set("exit_code", exitCode)
+		child.info = child.info.Set("log", kube.Tail(strings.Join(logs, "\n"), logMax)).Set("exit_code", exitCode)
 		if err := child.save(ctx); err != nil {
 			return false, "", err
 		}

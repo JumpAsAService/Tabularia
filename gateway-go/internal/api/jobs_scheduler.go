@@ -4,7 +4,6 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"net"
 	"net/http"
 	"net/url"
 	"time"
@@ -544,14 +543,7 @@ func transportErrorName(err error) string {
 	if !errors.As(err, &ue) {
 		return ""
 	}
-	if ue.Timeout() {
-		return "ReadTimeout"
-	}
-	var op *net.OpError
-	if errors.As(err, &op) && op.Op == "dial" {
-		return "ConnectError"
-	}
-	return "RemoteProtocolError"
+	return httpxName(err)
 }
 
 // pyErrorName is type(e).__name__ of what is not a transport error.

@@ -116,12 +116,6 @@ type sbEnvironment struct {
 
 func sbStr(s string) *string { return &s }
 
-func (b *scriptBuilds) kubeAPI() scriptcfg.Kubernetes {
-	k := b.s.Kubernetes
-	k.TimeoutSeconds = b.panel.KubernetesTimeout()
-	return k
-}
-
 // buildNamespace is script_builds.build_namespace.
 func (b *scriptBuilds) buildNamespace() string {
 	if b.s.Scripts.BuildNamespace != "" {
@@ -500,7 +494,7 @@ func sbEnvironmentOf(ctx context.Context, tx pgx.Tx, id int64) (*sbEnvironment, 
 // advance is script_builds.advance: one step of a version, if its Job has moved; the
 // caller writes the version back.
 func (b *scriptBuilds) advance(ctx context.Context, tx pgx.Tx, v *sbVersion) error {
-	k := b.kubeAPI()
+	k := kubeAPI()
 	env, err := sbEnvironmentOf(ctx, tx, v.EnvironmentID)
 	if err != nil {
 		return err

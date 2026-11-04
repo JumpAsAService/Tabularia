@@ -75,7 +75,6 @@ func init() {
 type queue struct {
 	d    *Deps
 	sc   *scriptcfg.Settings
-	js   jobSettings
 	pool int64 // the pool's size + overflow at start, -1 without a ceiling
 
 	mu      sync.Mutex
@@ -91,7 +90,7 @@ type queue struct {
 }
 
 func newQueue(d *Deps) *queue {
-	q := &queue{d: d, sc: scriptcfg.Load(config.FromOS()), js: loadJobSettings(), alive: map[int64]bool{}, wake: make(chan struct{}, 1)}
+	q := &queue{d: d, sc: scriptcfg.Load(config.FromOS()), alive: map[int64]bool{}, wake: make(chan struct{}, 1)}
 	q.pool = poolCeiling(d)
 	return q
 }
