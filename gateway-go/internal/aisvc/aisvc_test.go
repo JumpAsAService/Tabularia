@@ -88,3 +88,30 @@ func TestARefusalIsSaidAndAFailureIsAnError(t *testing.T) {
 		t.Error(err)
 	}
 }
+
+func TestTheCommentsAreSentAsEncodedAndTheAnswerGivenBack(t *testing.T) {
+	c := service(t, func(path string, body map[string]any) (int, any) {
+		if path != "/internal/ai/comments" || body["user_id"] != float64(7) || body["title"] != "Sales" {
+			return 400, nil
+		}
+		return 200, map[string]any{"comments": map[string]any{"c1": map[string]any{"text": "up"}}, "reading": "abc"}
+	})
+	raw, err := c.Comments(context.Background(), []byte(`{"user_id":7,"title":"Sales"}`))
+	if err != nil {
+		t.Fatal(err)
+	}
+	var got struct {
+		Comments map[string]any `json:"comments"`
+		Reading  *string        `json:"reading"`
+	}
+	if err := json.Unmarshal(raw, &got); err != nil || got.Reading == nil || *got.Reading != "abc" || got.Comments["c1"] == nil {
+		t.Errorf("%s %v", raw, err)
+	}
+	if _, err := c.Comments(context.Background(), []byte(`{"user_id":8}`)); err == nil {
+		t.Error("a failure of the service is an error")
+	}
+	var none *Client
+	if _, err := none.Comments(context.Background(), nil); !errors.Is(err, ErrNoClient) {
+		t.Error(err)
+	}
+}

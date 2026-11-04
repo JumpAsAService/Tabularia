@@ -80,7 +80,7 @@ with sqlglot. The Go gateway reaches it at `GATEWAY_GO__AI_SERVICE` (required, l
 `GATEWAY_GO__UPSTREAM`) with two clients:
 
 - `internal/aisvc`: the internal API below, one call per use of sqlglot the gateway makes (and of
-  Python's `re.compile`);
+  Python's `re.compile`), and the AI comments of a Pushmail cell's documents;
 - a forwarding proxy for the assistant's routes, sent as they came (headers, cookies, body,
   the answer streamed back), where the Python code authenticates them as it always has.
 
@@ -141,6 +141,23 @@ stand in for.
   not caught, a 500, as in Python). `services/contracts.py` `_check_rule` asks it of a «pattern»
   rule; the Go gateway sends the patterns of a document in one call, only when it has some
   (`internal/contracts.ValidateDocument`).
+
+And one call on `/internal/ai`, behind the same token: the AI comments the queue cannot write itself
+(the assistant's, built on pydantic-ai).
+
+- `POST /internal/ai/comments` — `{"user_id", "definition", "datasets", "params", "given", "where",
+  "title", "of_report", "words_of"}` → `{"comments", "reading"}`: `reports.comments_for` for one
+  report or dashboard of a flow group's Pushmail cell, as `flow_group_runner._cell_comments` calls it
+  (`routes/internal_ai.py`). `definition`, `datasets` and `params` are what the engine renders (a
+  dashboard's definition as laid out), `given` the cell's values (`reports.given_params`), `where`
+  `["report" | "dashboard", id]`, `words_of` a dashboard's content as the screen has it (null for a
+  report); `user_id` is whoever runs the group, on whose bill and with whose rights the comments are
+  written. The numbers they read are asked of the engine by the service, as in Python; `reading` is
+  the random word that names those rows (null in metadata-only mode). The Go queue
+  (`internal/api/jobs_pushmail.go` `cellComments`) asks for the documents of a cell at the same
+  time, only for those whose definition holds a comment and not for a report going as Excel without
+  a summary in the body; a failure leaves that document without comments and the email goes all the
+  same, as in Python. A 422 for a user that does not exist.
 
 Everything around the parse — who may read which datasource, the refusals' words, the aliases
 put in the text, the engine's chain — is ported to Go and compared as any route
@@ -205,7 +222,8 @@ For a ported route, for every request in its corpus:
    retention, housekeeping, backups, webhooks, engine settings, SIEM and the four Kubernetes
    loops, on the same launching, resolving and Kubernetes code as the routes. Still with a
    Python orchestrator: OpenLineage's run events and the notebooks' reaper while OpenLineage
-   is on, and a flow group's Pushmail cell that asks for AI comments.
+   is on. A flow group's Pushmail cell whose reports or dashboards have AI comments is carried
+   by the Go queue, the comments written by the AI service (`POST /internal/ai/comments`).
 5. **Switch**: the images, the compose files and the Helm chart run the Go gateway and
    the AI service; the Python gateway behind is removed. Only when the inventory has no
    *Python* line (*AI service* lines stay).
