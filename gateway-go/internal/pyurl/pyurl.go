@@ -14,6 +14,8 @@ import (
 	"strings"
 	"unicode"
 	"unicode/utf8"
+
+	"golang.org/x/text/unicode/norm"
 )
 
 // ErrNotASCII: an address whose host is not ASCII, which only Python judges faithfully.
@@ -27,7 +29,14 @@ type Split struct {
 const schemeChars = "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789+-."
 
 // URLSplit is urllib.parse.urlsplit(url): a ValueError's text as the error.
-func URLSplit(url string) (Split, error) {
+func URLSplit(url string) (Split, error) { return urlSplit(url, false) }
+
+// URLSplitNFKC is urlsplit(url) for any host: a host that is not ASCII is checked as
+// _checknetloc does (NFKC), not left to Python. For the callers that read only what the
+// split says (its parts, whether there is a host), not the host's case or IDNA form.
+func URLSplitNFKC(url string) (Split, error) { return urlSplit(url, true) }
+
+func urlSplit(url string, nfkc bool) (Split, error) {
 	url = strings.TrimLeftFunc(url, func(r rune) bool { return r <= ' ' })
 	for _, b := range []string{"\t", "\r", "\n"} {
 		url = strings.ReplaceAll(url, b, "")
@@ -70,10 +79,29 @@ func URLSplit(url string) (Split, error) {
 		url, s.Query = url[:i], url[i+1:]
 	}
 	if !isASCII(s.Netloc) {
-		return Split{}, ErrNotASCII // _checknetloc's NFKC
+		if !nfkc {
+			return Split{}, ErrNotASCII // _checknetloc's NFKC
+		}
+		if err := checkNetloc(s.Netloc); err != nil {
+			return Split{}, err
+		}
 	}
 	s.Path = url
 	return s, nil
+}
+
+// checkNetloc is _checknetloc: a host whose NFKC form brings in a character that splits an
+// address is refused.
+func checkNetloc(netloc string) error {
+	n := strings.NewReplacer("@", "", ":", "", "#", "", "?", "").Replace(netloc)
+	n2 := norm.NFKC.String(n)
+	if n == n2 {
+		return nil
+	}
+	if strings.ContainsAny(n2, "/?#@:") {
+		return fmt.Errorf("netloc '%s' contains invalid characters under NFKC normalization", netloc)
+	}
+	return nil
 }
 
 func isASCIIAlpha(c byte) bool { return (c|0x20) >= 'a' && (c|0x20) <= 'z' }

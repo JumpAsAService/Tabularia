@@ -14,6 +14,9 @@ const caMaxBytes = 64 * 1024
 
 const caUnreadable = "The certificate authority cannot be read: paste it in PEM (-----BEGIN CERTIFICATE-----)"
 
+// IsDB says whether the type is one of DB_TYPES.
+func IsDB(dbType string) bool { return isDB(dbType) }
+
 // OptionError is option_error: what is wrong with the encryption options of a database
 // connection, "" when nothing is (or the connection is no database).
 func OptionError(dbType string, data pyjson.Object) string {
