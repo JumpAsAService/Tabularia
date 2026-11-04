@@ -57,6 +57,9 @@ type Step struct {
 	// Scrub: regular expressions whose matches, inside any string of the answer's JSON, are
 	// random (an id or a moment written inside a longer text, as a webhook's payload)
 	Scrub []string
+	// EngineUnordered: the requests sent to the engine go out side by side (asyncio.gather):
+	// compared in any order
+	EngineUnordered bool
 }
 
 // EngineRule is one scripted answer of the fake engine (cmd/fakeengine).
@@ -108,6 +111,46 @@ func maskPattern(table, column, pattern string) {
 		maskedPatterns[table] = map[string][]*regexp.Regexp{}
 	}
 	maskedPatterns[table][column] = append(maskedPatterns[table][column], regexp.MustCompile(pattern))
+}
+
+// unorderedEngine: the paths of requests a gateway sends side by side (asyncio.gather, as the
+// settings' rollout reads the pods of six components): a run of consecutive ones is compared
+// in any order, in every suite.
+var unorderedEngine []*regexp.Regexp
+
+func engineUnordered(pattern string) {
+	unorderedEngine = append(unorderedEngine, regexp.MustCompile(pattern))
+}
+
+// sortRuns sorts every run of consecutive recorded requests whose path is in unorderedEngine.
+func sortRuns(v any) any {
+	list, ok := v.([]any)
+	if !ok || len(unorderedEngine) == 0 {
+		return v
+	}
+	matches := func(e any) bool {
+		m, _ := e.(map[string]any)
+		p, _ := m["path"].(string)
+		for _, re := range unorderedEngine {
+			if re.MatchString(p) {
+				return true
+			}
+		}
+		return false
+	}
+	for i := 0; i < len(list); {
+		if !matches(list[i]) {
+			i++
+			continue
+		}
+		j := i
+		for j < len(list) && matches(list[j]) {
+			j++
+		}
+		sortPath(list[i:j], nil)
+		i = j
+	}
+	return list
 }
 
 // scrubbedColumns: table → column → patterns whose matches inside the text are random
@@ -386,6 +429,10 @@ func (w *World) ask(s *side, st Step) answer {
 	for _, path := range st.EngineMask {
 		a.Engine = maskPath(a.Engine, strings.Split(path, "."))
 	}
+	if st.EngineUnordered {
+		a.Engine = sortPath(a.Engine, nil)
+	}
+	a.Engine = sortRuns(a.Engine)
 	a.Tables = dump(w.ctx, s)
 	return a
 }
