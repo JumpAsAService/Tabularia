@@ -151,6 +151,10 @@ func init() {
 
 			// deletion
 			add("oneself", "DELETE", "/users/"+u("admin"), w.As("admin"), nil)
+			add("an account past the integers", "DELETE", "/users/3000000000", w.As("admin"), nil)
+			add("an account past the integers, changed", "PATCH", "/users/3000000000", w.As("admin"), map[string]any{"full_name": "x"})
+			add("a membership past the integers", "PUT", "/users/3000000000/groups/3000000000", w.As("admin"), nil)
+			add("a membership past the integers, left", "DELETE", "/users/3000000000/groups/3000000000", w.As("admin"), nil)
 			add("an unknown account", "DELETE", "/users/999999", w.As("admin"), nil)
 			add("a bad path", "DELETE", "/users/x", w.As("admin"), nil)
 			add("not an administrator", "DELETE", "/users/"+u("us-gone"), w.As("editor"), nil)

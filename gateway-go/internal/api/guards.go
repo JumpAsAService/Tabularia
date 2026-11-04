@@ -47,8 +47,8 @@ func returnsNone(w http.ResponseWriter) {
 
 // pathInts reads the route's integer path parameters as FastAPI does, in the order the
 // Python function declares them, and answers the 422 of every bad one. FastAPI validates them
-// after the dependencies (authentication, the guards). An integer too big for int64 matches no
-// row in Python (psycopg sends it as a numeric): 0, which no row has, does the same.
+// after the dependencies (authentication, the guards). An integer past the ids' columns
+// (PostgreSQL's integer) matches no row in Python: NoSuchID does the same here.
 func pathInts(w http.ResponseWriter, r *http.Request, names ...string) ([]int64, bool) {
 	var ps pyd.Params
 	out, ok := pathIntsInto(&ps, r, names...)
@@ -68,10 +68,10 @@ func pathIntsInto(ps *pyd.Params, r *http.Request, names ...string) ([]int64, bo
 		case int64:
 			out[i] = v
 		case *big.Int:
-			out[i] = 0
+			out[i] = NoSuchID
 		}
 	}
-	return out, !ps.Failed()
+	return inColumn(out), !ps.Failed()
 }
 
 // validated answers the 422 of the parameters, when there is one.
@@ -92,12 +92,13 @@ func optStr(mv *pyd.ModelValue, name string) *string {
 }
 
 func optInt(mv *pyd.ModelValue, name string) *int64 {
+	// an id past the columns finds no row, as in Python
 	switch v := mv.Get(name).(type) {
 	case int64:
-		return &v
+		return &inColumn([]int64{v})[0]
 	case *big.Int:
-		zero := int64(0)
-		return &zero
+		none := NoSuchID
+		return &none
 	}
 	return nil
 }

@@ -114,6 +114,10 @@ func init() {
 			for _, bad := range []string{"abc", "1.5", "%201%20", "1.0", "+1", "1_0", "-1", "0x1"} {
 				add("path «"+bad+"»", "GET", "/projects/"+bad, w.As("admin"), nil)
 			}
+			add("an id past the integers", "GET", "/projects/3000000000", w.As("admin"), nil)
+			add("an id past int64", "GET", "/projects/99999999999999999999", w.As("admin"), nil)
+			add("a parent past the integers", "POST", "/projects", w.As("admin"), map[string]any{"name": "x", "parent_id": 3000000000})
+			add("move under an id past the integers", "PATCH", "/projects/3000000000", w.As("admin"), map[string]any{"name": "x"})
 			add("nobody, a bad path", "GET", "/projects/abc", nil, nil)
 
 			// creations and changes (forwarded until the bodies' validation is ported)

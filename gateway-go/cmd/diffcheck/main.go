@@ -281,7 +281,8 @@ func (w *World) ask(s *side, st Step) answer {
 	a := answer{Status: res.StatusCode, Headers: map[string]string{}}
 	for _, h := range compared {
 		if v := res.Header.Get(h); v != "" {
-			a.Headers[h] = v
+			// a redirect to the gateway itself names its address, which differs between the sides
+			a.Headers[h] = strings.Replace(v, s.gateway, "<gateway>", 1)
 		}
 	}
 	if v := res.Header.Values("Set-Cookie"); len(v) > 0 {

@@ -69,6 +69,8 @@ func init() {
 			add("without MANAGE", "POST", "/projects/"+b+"/permissions", w.As("writer"), map[string]any{"capability": "edit", "user_id": w.People["writer"]})
 			add("an unknown folder", "POST", "/projects/999999/permissions", w.As("writer"), map[string]any{"capability": "edit", "user_id": w.People["writer"]})
 			s = append(s, bodyEdges("POST", "/projects/"+b+"/permissions", w.As("editor"))...)
+			add("a person past the integers", "POST", "/projects/"+b+"/permissions", w.As("editor"), map[string]any{"capability": "edit", "user_id": 3000000000})
+			add("a folder past the integers", "DELETE", "/permissions/3000000000", w.As("admin"), nil)
 			add("nobody grants", "POST", "/projects/"+b+"/permissions", nil, map[string]any{"capability": "edit", "user_id": w.People["writer"]})
 			add("a bad path", "POST", "/projects/x/permissions", w.As("admin"), map[string]any{"capability": "edit", "user_id": w.People["writer"]})
 

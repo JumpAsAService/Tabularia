@@ -35,6 +35,7 @@ func init() {
 			s = append(s, bodyEdges("POST", "/banners", w.As("admin"))...)
 			add("take one down", "DELETE", fmt.Sprintf("/banners/%d", old), w.As("admin_group"), nil)
 			add("again", "DELETE", fmt.Sprintf("/banners/%d", old), w.As("admin"), nil)
+			add("a banner past the integers", "DELETE", "/banners/3000000000", w.As("admin"), nil)
 			add("a bad path", "DELETE", "/banners/x", w.As("admin"), nil)
 			add("not an administrator", "DELETE", "/banners/1", w.As("writer"), nil)
 			add("nobody", "DELETE", "/banners/1", nil, nil)

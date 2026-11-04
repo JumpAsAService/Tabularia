@@ -76,6 +76,8 @@ func init() {
 			add("someone else's", "DELETE", "/auth/tokens/"+w.tokenID("tab_asv1_svc_00000000000000"), w.As("at-own"), nil, nil)
 			add("a read token revokes itself", "DELETE", "/auth/tokens/"+w.tokenID("tab_aor1_read_0000000000000"), Bearer("tab_aor1_read_0000000000000"), nil, nil)
 			add("a write token revokes itself", "DELETE", "/auth/tokens/"+w.tokenID("tab_aow1_write_000000000000"), Bearer("tab_aow1_write_000000000000"), nil, nil)
+			add("a token past the integers", "DELETE", "/auth/tokens/3000000000", w.As("at-own"), nil, nil)
+			add("a token past the integers, everyone's", "DELETE", "/admin/api-tokens/3000000000", w.As("admin"), nil, nil)
 			add("a bad path", "DELETE", "/auth/tokens/x", w.As("at-own"), nil, nil)
 			add("nobody", "DELETE", "/auth/tokens/1", nil, nil, nil)
 			add("an administrator revokes any", "DELETE", "/admin/api-tokens/"+w.tokenID("tab_asv1_svc_00000000000000"), w.As("admin"), nil, nil)

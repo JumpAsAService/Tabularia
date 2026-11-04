@@ -76,6 +76,8 @@ func init() {
 			add("again", "DELETE", "/service-accounts/"+id("sa-etl")+"/tokens/"+tok("tab_sae2"), w.As("admin"), nil, nil)
 			add("another account's token", "DELETE", "/service-accounts/"+id("sa-bi")+"/tokens/"+tok("tab_sae1"), w.As("admin"), nil, nil)
 			add("an unknown account", "DELETE", "/service-accounts/999999/tokens/1", w.As("admin"), nil, nil)
+			add("ids past the integers", "DELETE", "/service-accounts/3000000000/tokens/3000000000", w.As("admin"), nil, nil)
+			add("an account past the integers", "GET", "/service-accounts/3000000000/tokens", w.As("admin"), nil, nil)
 			add("bad paths", "DELETE", "/service-accounts/x/tokens/y", w.As("admin"), nil, nil)
 			add("an observer revokes", "DELETE", "/service-accounts/"+id("sa-etl")+"/tokens/"+tok("tab_sae1"), w.As("obs_flag"), nil, nil)
 
