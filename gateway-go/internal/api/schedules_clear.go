@@ -65,7 +65,7 @@ func clearSQLScriptSchedule(d *Deps, w http.ResponseWriter, r *http.Request, p *
 	}
 	if _, err := d.DB.Exec(ctx, `UPDATE sql_scripts SET run_schedule = NULL, run_scheduled_by = NULL, next_run_at = NULL,
 		updated_at = $1 WHERE id = $2`, time.Now().UTC(), s.ID); err != nil {
-		scFailed(d, w, "sql_scripts: the schedule", err)
+		fail(d, w, "sql_scripts: the schedule", err)
 		return
 	}
 	audit.Record(ctx, d.DB, d.Log, audit.Event{Actor: &p.User, Action: "sql_script.schedule", TargetType: scPtrStr("sql_script"),
@@ -94,7 +94,7 @@ func clearScriptSchedule(d *Deps, w http.ResponseWriter, r *http.Request, p *aut
 	}
 	if _, err := d.DB.Exec(ctx, `UPDATE saved_scripts SET run_schedule = NULL, run_scheduled_by = NULL, next_run_at = NULL,
 		updated_at = $1 WHERE id = $2`, time.Now().UTC(), s.ID); err != nil {
-		scFailed(d, w, "scripts: the schedule", err)
+		fail(d, w, "scripts: the schedule", err)
 		return
 	}
 	audit.Record(ctx, d.DB, d.Log, audit.Event{Actor: &p.User, Action: "script.schedule", TargetType: scPtrStr("saved_script"),

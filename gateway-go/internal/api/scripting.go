@@ -89,15 +89,15 @@ func scRequire(d *Deps, w http.ResponseWriter, r *http.Request, p *auth.Principa
 	c := perm.For(d.DB, &p.User)
 	roles, err := c.Roles(r.Context())
 	if err != nil {
-		scFailed(d, w, "reading the roles", err)
+		fail(d, w, "reading the roles", err)
 		return false
 	}
 	if admin && !roles.Admin {
-		scRefuse(w, http.StatusForbidden, "Admin privileges required")
+		detail(w, http.StatusForbidden, "Admin privileges required")
 		return false
 	}
 	if !admin && !roles.Observer {
-		scRefuse(w, http.StatusForbidden, "Administrative read access required")
+		detail(w, http.StatusForbidden, "Administrative read access required")
 		return false
 	}
 	if noToken != nil {
@@ -113,10 +113,10 @@ func scRequire(d *Deps, w http.ResponseWriter, r *http.Request, p *auth.Principa
 func scriptingIsOn(w http.ResponseWriter) bool {
 	switch scriptcfg.Get().DisabledReason() {
 	case "kubernetes":
-		scRefuse(w, http.StatusConflict, "Scripting environments need Kubernetes (SCRIPTS__ENABLED)")
+		detail(w, http.StatusConflict, "Scripting environments need Kubernetes (SCRIPTS__ENABLED)")
 		return false
 	case "configuration":
-		scRefuse(w, http.StatusConflict, "Scripting environments are not configured (SCRIPTS__NAMESPACE and SCRIPTS__REGISTRY)")
+		detail(w, http.StatusConflict, "Scripting environments are not configured (SCRIPTS__NAMESPACE and SCRIPTS__REGISTRY)")
 		return false
 	}
 	return true
@@ -215,7 +215,7 @@ func writeStorage(d *Deps, w http.ResponseWriter, r *http.Request, p *auth.Princ
 	ctx := r.Context()
 	s, err := scStorageOf(ctx, d.DB)
 	if err != nil {
-		scFailed(d, w, "scripting: the bucket", err)
+		fail(d, w, "scripting: the bucket", err)
 		return
 	}
 	changes := pyjson.Object{}
@@ -231,7 +231,7 @@ func writeStorage(d *Deps, w http.ResponseWriter, r *http.Request, p *auth.Princ
 	}
 	if s.Endpoint != "" {
 		if scheme, host := scURLSplit(s.Endpoint); (scheme != "http" && scheme != "https") || host == "" {
-			scRefuse(w, http.StatusUnprocessableEntity, "The endpoint is an http(s) address (empty = AWS)")
+			detail(w, http.StatusUnprocessableEntity, "The endpoint is an http(s) address (empty = AWS)")
 			return
 		}
 	}
@@ -239,7 +239,7 @@ func writeStorage(d *Deps, w http.ResponseWriter, r *http.Request, p *auth.Princ
 		if pyd.Strip(v) != "" {
 			enc, err := d.Fernet.Encrypt(pyd.Strip(v))
 			if err != nil {
-				scFailed(d, w, "scripting: encrypting the key", err)
+				fail(d, w, "scripting: encrypting the key", err)
 				return
 			}
 			s.SecretKeyEnc = &enc
@@ -260,7 +260,7 @@ func writeStorage(d *Deps, w http.ResponseWriter, r *http.Request, p *auth.Princ
 		access_key = $4, secret_key_enc = $5, updated_at = $6, updated_by = $7`,
 		s.Endpoint, s.Region, s.Bucket, s.AccessKey, s.SecretKeyEnc, now, p.User.Email)
 	if err != nil {
-		scFailed(d, w, "scripting: saving the bucket", err)
+		fail(d, w, "scripting: saving the bucket", err)
 		return
 	}
 	audit.Record(ctx, d.DB, d.Log, audit.Event{Actor: &p.User, Action: "scripting.storage_update", TargetType: scPtrStr("scripting"),
@@ -280,39 +280,39 @@ func trialStorage(d *Deps, w http.ResponseWriter, r *http.Request, p *auth.Princ
 	ctx := r.Context()
 	s, err := scStorageOf(ctx, d.DB)
 	if err != nil {
-		scFailed(d, w, "scripting: the bucket", err)
+		fail(d, w, "scripting: the bucket", err)
 		return
 	}
 	if s.Bucket == "" || s.AccessKey == "" || s.SecretKeyEnc == nil || *s.SecretKeyEnc == "" {
-		scRefuse(w, http.StatusUnprocessableEntity, "The bucket, the access key and the secret key are needed")
+		detail(w, http.StatusUnprocessableEntity, "The bucket, the access key and the secret key are needed")
 		return
 	}
 	resp, raw, err := d.Engine.JSON(ctx, http.MethodPost, "/scripts/storage/test", pyjson.Object{{Key: "connection", Value: pyjson.Object{
 		{Key: "endpoint_url", Value: s.Endpoint}, {Key: "access_key", Value: s.AccessKey}, {Key: "secret_key_encrypted", Value: *s.SecretKeyEnc},
 		{Key: "region", Value: s.Region}, {Key: "bucket", Value: s.Bucket}}}})
 	if err != nil {
-		scFailed(d, w, "scripting: the engine", err)
+		fail(d, w, "scripting: the engine", err)
 		return
 	}
 	var out storageTestOut
 	if resp.StatusCode >= 400 {
-		detail := string(raw)
+		why := string(raw)
 		if v, err := pyjson.Loads(string(raw)); err == nil {
 			o, ok := v.(pyjson.Object)
 			if !ok {
-				scFailed(d, w, "scripting: the engine's refusal is not an object", nil)
+				fail(d, w, "scripting: the engine's refusal is not an object", nil)
 				return
 			}
 			if dv, has := o.Get("detail"); has {
-				detail = pyjson.Str(dv)
+				why = pyjson.Str(dv)
 			}
 		}
-		out = storageTestOut{OK: false, Message: scClip(detail, 500)}
+		out = storageTestOut{OK: false, Message: scClip(why, 500)}
 	} else {
 		v, err := pyjson.Loads(string(raw))
 		o, isObj := v.(pyjson.Object)
 		if err != nil || !isObj {
-			scFailed(d, w, "scripting: the engine's answer", err)
+			fail(d, w, "scripting: the engine's answer", err)
 			return
 		}
 		okV, errs1 := pyd.Bool().Validate(scGet(o, "ok"))
@@ -325,7 +325,7 @@ func trialStorage(d *Deps, w http.ResponseWriter, r *http.Request, p *auth.Princ
 			canList, errs3 = pyd.Optional(pyd.Bool()).Validate(cl)
 		}
 		if !hasOK || !hasMsg || errs1 != nil || errs2 != nil || errs3 != nil {
-			scFailed(d, w, "scripting: the engine's answer does not validate", nil) // TestOut(**…): a ValidationError
+			fail(d, w, "scripting: the engine's answer does not validate", nil) // TestOut(**…): a ValidationError
 			return
 		}
 		out = storageTestOut{OK: okV.(bool), Message: msgV.(string), CanList: canList}
@@ -566,12 +566,12 @@ func scSendEnv(d *Deps, w http.ResponseWriter, ctx context.Context, id int64, st
 		err = fmt.Errorf("environment %d is gone", id)
 	}
 	if err != nil {
-		scFailed(d, w, "scripting: reading the environment", err)
+		fail(d, w, "scripting: reading the environment", err)
 		return
 	}
 	out, err := scEnvOut(ctx, d.DB, e)
 	if err != nil {
-		scFailed(d, w, "scripting: the environment", err)
+		fail(d, w, "scripting: the environment", err)
 		return
 	}
 	server.JSON(w, status, out)
@@ -648,7 +648,7 @@ func readScripting(d *Deps, w http.ResponseWriter, r *http.Request, p *auth.Prin
 				return less
 			})
 			if mixed {
-				scFailed(d, w, "scripting: language versions that cannot be ordered", nil)
+				fail(d, w, "scripting: language versions that cannot be ordered", nil)
 				return
 			}
 			languages = append(languages, pyjson.KV{Key: lang, Value: vs})
@@ -656,12 +656,12 @@ func readScripting(d *Deps, w http.ResponseWriter, r *http.Request, p *auth.Prin
 	}
 	storage, err := scStorageOf(ctx, d.DB)
 	if err != nil {
-		scFailed(d, w, "scripting: the bucket", err)
+		fail(d, w, "scripting: the bucket", err)
 		return
 	}
 	rows, err := d.DB.Query(ctx, `SELECT `+scEnvColumns+` FROM script_environments ORDER BY lower(name)`)
 	if err != nil {
-		scFailed(d, w, "scripting: the environments", err)
+		fail(d, w, "scripting: the environments", err)
 		return
 	}
 	var envs []scEnvironment
@@ -669,7 +669,7 @@ func readScripting(d *Deps, w http.ResponseWriter, r *http.Request, p *auth.Prin
 		e, err := scScanEnv(rows)
 		if err != nil {
 			rows.Close()
-			scFailed(d, w, "scripting: an environment", err)
+			fail(d, w, "scripting: an environment", err)
 			return
 		}
 		envs = append(envs, *e)
@@ -680,19 +680,19 @@ func readScripting(d *Deps, w http.ResponseWriter, r *http.Request, p *auth.Prin
 	for i := range envs {
 		versions, err := scVersions(ctx, d.DB, envs[i].ID, envs[i].CurrentVersionID)
 		if err != nil {
-			scFailed(d, w, "scripting: the versions", err)
+			fail(d, w, "scripting: the versions", err)
 			return
 		}
 		sum, err := scSummary(ctx, d.DB, &envs[i], versions)
 		if err != nil {
-			scFailed(d, w, "scripting: an environment", err)
+			fail(d, w, "scripting: an environment", err)
 			return
 		}
 		out.Environments = append(out.Environments, sum)
 	}
 	admin, err := perm.For(d.DB, &p.User).IsAdmin(ctx)
 	if err != nil {
-		scFailed(d, w, "scripting: the roles", err)
+		fail(d, w, "scripting: the roles", err)
 		return
 	}
 	out.Editable = admin && p.TokenName == ""
@@ -703,11 +703,11 @@ func readScripting(d *Deps, w http.ResponseWriter, r *http.Request, p *auth.Prin
 func scEnvironmentOr404(d *Deps, w http.ResponseWriter, ctx context.Context, id int64) (*scEnvironment, bool) {
 	e, err := scGetEnv(ctx, d.DB, id)
 	if err != nil {
-		scFailed(d, w, "scripting: the environment", err)
+		fail(d, w, "scripting: the environment", err)
 		return nil, false
 	}
 	if e == nil {
-		scRefuse(w, http.StatusNotFound, "Scripting environment not found")
+		detail(w, http.StatusNotFound, "Scripting environment not found")
 		return nil, false
 	}
 	return e, true
@@ -715,7 +715,7 @@ func scEnvironmentOr404(d *Deps, w http.ResponseWriter, ctx context.Context, id 
 
 // readEnvironment is GET /admin/scripting/environments/{environment_id}.
 func readEnvironment(d *Deps, w http.ResponseWriter, r *http.Request, p *auth.Principal) {
-	ids, ok := scPathInts(w, r, "environment_id")
+	ids, ok := pathInts(w, r, "environment_id")
 	if !ok {
 		return
 	}
@@ -725,7 +725,7 @@ func readEnvironment(d *Deps, w http.ResponseWriter, r *http.Request, p *auth.Pr
 	}
 	out, err := scEnvOut(r.Context(), d.DB, e)
 	if err != nil {
-		scFailed(d, w, "scripting: the environment", err)
+		fail(d, w, "scripting: the environment", err)
 		return
 	}
 	server.JSON(w, http.StatusOK, out)
@@ -807,10 +807,10 @@ func scPackages(lang, text string) (string, *scRefusal) {
 // scRefusal is an HTTPException whose detail may be a dict.
 type scRefusal struct {
 	status int
-	detail any
+	why    any
 }
 
-func (e *scRefusal) send(w http.ResponseWriter) { scRefuseWith(w, e.status, e.detail) }
+func (e *scRefusal) send(w http.ResponseWriter) { scRefuseWith(w, e.status, e.why) }
 
 func scFromRefusal(r *auth.Refusal) *scRefusal {
 	if r == nil {
@@ -902,7 +902,7 @@ func createEnvironment(d *Deps, w http.ResponseWriter, r *http.Request, p *auth.
 	ctx := r.Context()
 	lang, lv := in.Get("language").(string), in.Get("language_version").(string)
 	if lang != "python" && lang != "r" {
-		scRefuse(w, http.StatusUnprocessableEntity, "The language is python or r")
+		detail(w, http.StatusUnprocessableEntity, "The language is python or r")
 		return
 	}
 	if _, refusal, err := scLanguageVersion(lang, lv); scAnswer(d, w, "scripting: the images", refusal, err) {
@@ -955,7 +955,7 @@ func createEnvironment(d *Deps, w http.ResponseWriter, r *http.Request, p *auth.
 		return
 	}
 	if err != nil {
-		scFailed(d, w, "scripting: creating the environment", err)
+		fail(d, w, "scripting: creating the environment", err)
 		return
 	}
 	_ = number
@@ -1050,7 +1050,7 @@ func changeEnvironment(d *Deps, w http.ResponseWriter, r *http.Request, p *auth.
 		}
 		before, _, err := scEnvGroups(ctx, d.DB, e.ID)
 		if err != nil {
-			scFailed(d, w, "scripting: the groups", err)
+			fail(d, w, "scripting: the groups", err)
 			return
 		}
 		after := perm.Sorted(uniq)
@@ -1063,18 +1063,18 @@ func changeEnvironment(d *Deps, w http.ResponseWriter, r *http.Request, p *auth.
 		if len(uniq) > 0 {
 			var found int
 			if err := d.DB.QueryRow(ctx, `SELECT count(*) FROM groups WHERE id = ANY($1)`, after).Scan(&found); err != nil {
-				scFailed(d, w, "scripting: the groups", err)
+				fail(d, w, "scripting: the groups", err)
 				return
 			}
 			if found != len(uniq) {
-				scRefuse(w, http.StatusUnprocessableEntity, "Unknown group")
+				detail(w, http.StatusUnprocessableEntity, "Unknown group")
 				return
 			}
 		}
 	}
 	versions, err := scVersions(ctx, d.DB, e.ID, e.CurrentVersionID)
 	if err != nil {
-		scFailed(d, w, "scripting: the versions", err)
+		fail(d, w, "scripting: the versions", err)
 		return
 	}
 	var latest *scVersion
@@ -1138,15 +1138,15 @@ func changeEnvironment(d *Deps, w http.ResponseWriter, r *http.Request, p *auth.
 		return
 	}
 	if err != nil {
-		scFailed(d, w, "scripting: changing the environment", err)
+		fail(d, w, "scripting: changing the environment", err)
 		return
 	}
-	detail := pyjson.Object{{Key: "changes", Value: changes}}
+	why := pyjson.Object{{Key: "changes", Value: changes}}
 	if build {
-		detail = append(detail, pyjson.KV{Key: "version", Value: number})
+		why = append(why, pyjson.KV{Key: "version", Value: number})
 	}
 	audit.Record(ctx, d.DB, d.Log, audit.Event{Actor: &p.User, Action: "scripting.environment_update", TargetType: scPtrStr("script_environment"),
-		TargetID: &e.ID, TargetLabel: &e.Name, Detail: detail})
+		TargetID: &e.ID, TargetLabel: &e.Name, Detail: why})
 	scSendEnv(d, w, ctx, e.ID, http.StatusOK)
 }
 
@@ -1161,7 +1161,7 @@ func scInts(ids []int64) []any {
 // rebuildEnvironment is POST …/environments/{environment_id}/rebuild (rebuild): a new
 // version from the latest's language version and packages.
 func rebuildEnvironment(d *Deps, w http.ResponseWriter, r *http.Request, p *auth.Principal, _ pyd.Body) {
-	ids, ok := scPathInts(w, r, "environment_id")
+	ids, ok := pathInts(w, r, "environment_id")
 	if !ok || !scriptingIsOn(w) {
 		return
 	}
@@ -1172,16 +1172,16 @@ func rebuildEnvironment(d *Deps, w http.ResponseWriter, r *http.Request, p *auth
 	}
 	versions, err := scVersions(ctx, d.DB, e.ID, e.CurrentVersionID)
 	if err != nil {
-		scFailed(d, w, "scripting: the versions", err)
+		fail(d, w, "scripting: the versions", err)
 		return
 	}
 	if len(versions) == 0 {
-		scRefuse(w, http.StatusUnprocessableEntity, "The environment has no version to build again")
+		detail(w, http.StatusUnprocessableEntity, "The environment has no version to build again")
 		return
 	}
 	latest := versions[0]
 	if latest.Status == "queued" || latest.Status == "building" || latest.Status == "checking" {
-		scRefuse(w, http.StatusConflict, fmt.Sprintf("Version %d is still being built", latest.Number))
+		detail(w, http.StatusConflict, fmt.Sprintf("Version %d is still being built", latest.Number))
 		return
 	}
 	var stop *scRefusal
@@ -1199,7 +1199,7 @@ func rebuildEnvironment(d *Deps, w http.ResponseWriter, r *http.Request, p *auth
 		return
 	}
 	if err != nil {
-		scFailed(d, w, "scripting: the rebuild", err)
+		fail(d, w, "scripting: the rebuild", err)
 		return
 	}
 	audit.Record(ctx, d.DB, d.Log, audit.Event{Actor: &p.User, Action: "scripting.environment_update", TargetType: scPtrStr("script_environment"),
@@ -1210,7 +1210,7 @@ func rebuildEnvironment(d *Deps, w http.ResponseWriter, r *http.Request, p *auth
 
 // makeCurrent is POST …/versions/{version_id}/current (make_current).
 func makeCurrent(d *Deps, w http.ResponseWriter, r *http.Request, p *auth.Principal, _ pyd.Body) {
-	ids, ok := scPathInts(w, r, "environment_id", "version_id")
+	ids, ok := pathInts(w, r, "environment_id", "version_id")
 	if !ok || !scriptingIsOn(w) {
 		return
 	}
@@ -1223,15 +1223,15 @@ func makeCurrent(d *Deps, w http.ResponseWriter, r *http.Request, p *auth.Princi
 	var status string
 	err := d.DB.QueryRow(ctx, `SELECT environment_id, number, status FROM script_environment_versions WHERE id = $1`, ids[1]).Scan(&envID, &number, &status)
 	if err != nil && !scNoRows(err) {
-		scFailed(d, w, "scripting: the version", err)
+		fail(d, w, "scripting: the version", err)
 		return
 	}
 	if scNoRows(err) || envID != e.ID {
-		scRefuse(w, http.StatusNotFound, "Version not found")
+		detail(w, http.StatusNotFound, "Version not found")
 		return
 	}
 	if status != "ready" {
-		scRefuse(w, http.StatusConflict, "Only a version built and checked can run scripts")
+		detail(w, http.StatusConflict, "Only a version built and checked can run scripts")
 		return
 	}
 	if e.CurrentVersionID != nil && *e.CurrentVersionID == ids[1] {
@@ -1240,7 +1240,7 @@ func makeCurrent(d *Deps, w http.ResponseWriter, r *http.Request, p *auth.Princi
 	}
 	if _, err := d.DB.Exec(ctx, `UPDATE script_environments SET current_version_id = $1, updated_at = $2, updated_by = $3 WHERE id = $4`,
 		ids[1], time.Now().UTC(), p.User.Email, e.ID); err != nil {
-		scFailed(d, w, "scripting: the current version", err)
+		fail(d, w, "scripting: the current version", err)
 		return
 	}
 	var from any
@@ -1258,7 +1258,7 @@ func makeCurrent(d *Deps, w http.ResponseWriter, r *http.Request, p *auth.Princi
 // deleteEnvironment is DELETE /admin/scripting/environments/{environment_id}: refused
 // while flows, scripts or notebooks use it; its builds stopped first.
 func deleteEnvironment(d *Deps, w http.ResponseWriter, r *http.Request, p *auth.Principal, _ pyd.Body) {
-	ids, ok := scPathInts(w, r, "environment_id")
+	ids, ok := pathInts(w, r, "environment_id")
 	if !ok {
 		return
 	}
@@ -1269,7 +1269,7 @@ func deleteEnvironment(d *Deps, w http.ResponseWriter, r *http.Request, p *auth.
 	}
 	flows, err := flowsUsingEnvironment(ctx, d.DB, e.ID)
 	if err != nil {
-		scFailed(d, w, "scripting: the flows", err)
+		fail(d, w, "scripting: the flows", err)
 		return
 	}
 	if len(flows) > 0 {
@@ -1278,7 +1278,7 @@ func deleteEnvironment(d *Deps, w http.ResponseWriter, r *http.Request, p *auth.
 	}
 	scripts, err := savedscripts.UsingEnvironment(ctx, d.DB, "saved_scripts", e.ID)
 	if err != nil {
-		scFailed(d, w, "scripting: the scripts", err)
+		fail(d, w, "scripting: the scripts", err)
 		return
 	}
 	if len(scripts) > 0 {
@@ -1287,7 +1287,7 @@ func deleteEnvironment(d *Deps, w http.ResponseWriter, r *http.Request, p *auth.
 	}
 	notebooks, err := savedscripts.UsingEnvironment(ctx, d.DB, "notebooks", e.ID)
 	if err != nil {
-		scFailed(d, w, "scripting: the notebooks", err)
+		fail(d, w, "scripting: the notebooks", err)
 		return
 	}
 	if len(notebooks) > 0 {
@@ -1309,10 +1309,10 @@ func deleteEnvironment(d *Deps, w http.ResponseWriter, r *http.Request, p *auth.
 		for _, ns := range namespaces {
 			if err := kube.DeleteJobs(ctx, cfg.Kubernetes, ns, fmt.Sprintf("tabularia.io/environment=%d", e.ID)); err != nil {
 				if st := kube.Status(err); st == -1 {
-					scFailed(d, w, "scripting: the cluster's answer", err)
+					fail(d, w, "scripting: the cluster's answer", err)
 					return
 				} else if st != 404 {
-					scRefuse(w, http.StatusBadGateway, "The builds in progress could not be stopped: "+err.Error())
+					detail(w, http.StatusBadGateway, "The builds in progress could not be stopped: "+err.Error())
 					return
 				}
 				break
@@ -1329,12 +1329,12 @@ func deleteEnvironment(d *Deps, w http.ResponseWriter, r *http.Request, p *auth.
 		return err
 	})
 	if err != nil {
-		scFailed(d, w, "scripting: deleting the environment", err)
+		fail(d, w, "scripting: deleting the environment", err)
 		return
 	}
 	audit.Record(ctx, d.DB, d.Log, audit.Event{Actor: &p.User, Action: "scripting.environment_delete", TargetType: scPtrStr("script_environment"),
 		TargetID: scPtrInt(ids[0]), TargetLabel: &e.Name})
-	scNoContent(w)
+	returnsNone(w)
 }
 
 // scVarName is _variable_name.
@@ -1379,18 +1379,18 @@ func writeVariable(d *Deps, w http.ResponseWriter, r *http.Request, p *auth.Prin
 	err := d.DB.QueryRow(ctx, `SELECT id, secret, from_tabularia FROM script_environment_variables WHERE environment_id = $1 AND name = $2`,
 		e.ID, name).Scan(&varID, &secret, &fromTab)
 	if err != nil && !scNoRows(err) {
-		scFailed(d, w, "scripting: the variable", err)
+		fail(d, w, "scripting: the variable", err)
 		return
 	}
 	isNew := scNoRows(err)
 	value, hasValue := in.Get("value").(string)
 	wantSecret, wantFrom := in.Get("secret").(bool), in.Get("from_tabularia").(bool)
 	if wantFrom && (!hasValue || !scVariableName.MatchString(pyd.Strip(value))) {
-		scRefuse(w, http.StatusUnprocessableEntity, "Give the name of the Tabularia variable to hand over")
+		detail(w, http.StatusUnprocessableEntity, "Give the name of the Tabularia variable to hand over")
 		return
 	}
 	if !hasValue && (isNew || !secret || !wantSecret || fromTab != wantFrom) {
-		scRefuse(w, http.StatusUnprocessableEntity, "The variable needs a value")
+		detail(w, http.StatusUnprocessableEntity, "The variable needs a value")
 		return
 	}
 	newSecret := wantSecret && !wantFrom
@@ -1402,7 +1402,7 @@ func writeVariable(d *Deps, w http.ResponseWriter, r *http.Request, p *auth.Prin
 		if newSecret {
 			token, err := d.Fernet.Encrypt(value)
 			if err != nil {
-				scFailed(d, w, "scripting: encrypting the value", err)
+				fail(d, w, "scripting: encrypting the value", err)
 				return
 			}
 			plain, enc = "", token
@@ -1435,22 +1435,22 @@ func writeVariable(d *Deps, w http.ResponseWriter, r *http.Request, p *auth.Prin
 		return tx.QueryRow(ctx, `SELECT value FROM script_environment_variables WHERE environment_id = $1 AND name = $2`, e.ID, name).Scan(&stored)
 	})
 	if err != nil {
-		scFailed(d, w, "scripting: saving the variable", err)
+		fail(d, w, "scripting: saving the variable", err)
 		return
 	}
-	detail := pyjson.Object{{Key: "name", Value: name}, {Key: "secret", Value: newSecret}, {Key: "from_tabularia", Value: wantFrom},
+	why := pyjson.Object{{Key: "name", Value: name}, {Key: "secret", Value: newSecret}, {Key: "from_tabularia", Value: wantFrom},
 		{Key: "new", Value: isNew}}
 	if wantFrom {
-		detail = append(detail, pyjson.KV{Key: "tabularia_variable", Value: stored})
+		why = append(why, pyjson.KV{Key: "tabularia_variable", Value: stored})
 	}
 	audit.Record(ctx, d.DB, d.Log, audit.Event{Actor: &p.User, Action: "scripting.variable_set", TargetType: scPtrStr("script_environment"),
-		TargetID: &e.ID, TargetLabel: &e.Name, Detail: detail})
+		TargetID: &e.ID, TargetLabel: &e.Name, Detail: why})
 	scSendEnv(d, w, ctx, e.ID, http.StatusOK)
 }
 
 // deleteVariable is DELETE …/environments/{environment_id}/variables/{name} (delete_variable).
 func deleteVariable(d *Deps, w http.ResponseWriter, r *http.Request, p *auth.Principal, _ pyd.Body) {
-	ids, ok := scPathInts(w, r, "environment_id")
+	ids, ok := pathInts(w, r, "environment_id")
 	if !ok {
 		return
 	}
@@ -1463,15 +1463,15 @@ func deleteVariable(d *Deps, w http.ResponseWriter, r *http.Request, p *auth.Pri
 	tag, err := d.DB.Exec(ctx, `DELETE FROM script_environment_variables WHERE id = (SELECT id FROM script_environment_variables
 		WHERE environment_id = $1 AND name = $2 LIMIT 1)`, e.ID, name)
 	if err != nil {
-		scFailed(d, w, "scripting: deleting the variable", err)
+		fail(d, w, "scripting: deleting the variable", err)
 		return
 	}
 	if tag.RowsAffected() == 0 {
-		scRefuse(w, http.StatusNotFound, "Variable not found")
+		detail(w, http.StatusNotFound, "Variable not found")
 		return
 	}
 	if _, err := d.DB.Exec(ctx, `UPDATE script_environments SET updated_at = $1, updated_by = $2 WHERE id = $3`, time.Now().UTC(), p.User.Email, e.ID); err != nil {
-		scFailed(d, w, "scripting: the environment", err)
+		fail(d, w, "scripting: the environment", err)
 		return
 	}
 	audit.Record(ctx, d.DB, d.Log, audit.Event{Actor: &p.User, Action: "scripting.variable_delete", TargetType: scPtrStr("script_environment"),
@@ -1535,12 +1535,12 @@ func editorEnvironments(d *Deps, w http.ResponseWriter, r *http.Request, p *auth
 	c := perm.For(d.DB, &p.User)
 	storage, err := scStorageOf(ctx, d.DB)
 	if err != nil {
-		scFailed(d, w, "scripting: the bucket", err)
+		fail(d, w, "scripting: the bucket", err)
 		return
 	}
 	rows, err := d.DB.Query(ctx, `SELECT `+scEnvColumns+` FROM script_environments ORDER BY lower(name)`)
 	if err != nil {
-		scFailed(d, w, "scripting: the environments", err)
+		fail(d, w, "scripting: the environments", err)
 		return
 	}
 	var envs []scEnvironment
@@ -1548,7 +1548,7 @@ func editorEnvironments(d *Deps, w http.ResponseWriter, r *http.Request, p *auth
 		e, err := scScanEnv(rows)
 		if err != nil {
 			rows.Close()
-			scFailed(d, w, "scripting: an environment", err)
+			fail(d, w, "scripting: an environment", err)
 			return
 		}
 		envs = append(envs, *e)
@@ -1559,7 +1559,7 @@ func editorEnvironments(d *Deps, w http.ResponseWriter, r *http.Request, p *auth
 		e := &envs[i]
 		ok, err := scriptnodes.CanUse(ctx, c, d.DB, p.User.ID, e.ID)
 		if err != nil {
-			scFailed(d, w, "scripting: who may use it", err)
+			fail(d, w, "scripting: who may use it", err)
 			return
 		}
 		if !ok {
@@ -1567,12 +1567,12 @@ func editorEnvironments(d *Deps, w http.ResponseWriter, r *http.Request, p *auth
 		}
 		cur, err := scCurrentOf(ctx, d.DB, e)
 		if err != nil {
-			scFailed(d, w, "scripting: the version in use", err)
+			fail(d, w, "scripting: the version in use", err)
 			return
 		}
 		vars, err := scEnvVariables(ctx, d.DB, e.ID)
 		if err != nil {
-			scFailed(d, w, "scripting: the variables", err)
+			fail(d, w, "scripting: the variables", err)
 			return
 		}
 		ev := editorEnvironment{ID: e.ID, Name: e.Name, Description: e.Description, Language: e.Language,
@@ -1590,15 +1590,20 @@ func editorEnvironments(d *Deps, w http.ResponseWriter, r *http.Request, p *auth
 		out = append(out, ev)
 	}
 	cfg := scriptcfg.Get()
-	server.JSON(w, http.StatusOK, pyjson.Object{{Key: "disabled_reason", Value: scNullable(cfg.DisabledReason())},
-		{Key: "storage_ready", Value: storage.Bucket != "" && storage.AccessKey != "" && storage.SecretKeyEnc != nil && *storage.SecretKeyEnc != ""},
-		{Key: "environments", Value: out}, {Key: "tabularia_variables", Value: scTabulariaVariables}, {Key: "lint", Value: cfg.Scripts.Lint}})
+	server.JSON(w, http.StatusOK, struct {
+		DisabledReason     *string             `json:"disabled_reason"`
+		StorageReady       bool                `json:"storage_ready"`
+		Environments       []editorEnvironment `json:"environments"`
+		TabulariaVariables []string            `json:"tabularia_variables"`
+		Lint               bool                `json:"lint"`
+	}{scNullable(cfg.DisabledReason()), storage.Bucket != "" && storage.AccessKey != "" && storage.SecretKeyEnc != nil && *storage.SecretKeyEnc != "",
+		out, scTabulariaVariables, cfg.Scripts.Lint})
 }
 
 // editorCompletions is GET /scripting/environments/{environment_id}/completions: {module:
 // [public names]} of the version in use.
 func editorCompletions(d *Deps, w http.ResponseWriter, r *http.Request, p *auth.Principal) {
-	ids, ok := scPathInts(w, r, "environment_id")
+	ids, ok := pathInts(w, r, "environment_id")
 	if !ok {
 		return
 	}
@@ -1609,16 +1614,16 @@ func editorCompletions(d *Deps, w http.ResponseWriter, r *http.Request, p *auth.
 	}
 	can, err := scriptnodes.CanUse(ctx, perm.For(d.DB, &p.User), d.DB, p.User.ID, e.ID)
 	if err != nil {
-		scFailed(d, w, "scripting: who may use it", err)
+		fail(d, w, "scripting: who may use it", err)
 		return
 	}
 	if !can {
-		scRefuse(w, http.StatusForbidden, "You cannot write scripts for this environment")
+		detail(w, http.StatusForbidden, "You cannot write scripts for this environment")
 		return
 	}
 	cur, err := scCurrentOf(ctx, d.DB, e)
 	if err != nil {
-		scFailed(d, w, "scripting: the version in use", err)
+		fail(d, w, "scripting: the version in use", err)
 		return
 	}
 	if cur == nil || cur.Completions == nil || *cur.Completions == "" {
@@ -1631,7 +1636,7 @@ func editorCompletions(d *Deps, w http.ResponseWriter, r *http.Request, p *auth.
 		return
 	}
 	if _, isObj := v.(pyjson.Object); !isObj {
-		scFailed(d, w, "scripting: the completions are not an object", nil) // the answer's validation, a 500
+		fail(d, w, "scripting: the completions are not an object", nil) // the answer's validation, a 500
 		return
 	}
 	server.JSON(w, http.StatusOK, v)

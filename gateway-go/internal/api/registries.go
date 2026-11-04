@@ -90,7 +90,7 @@ func regDisabled() string {
 
 func regIsOn(w http.ResponseWriter) bool {
 	if regDisabled() != "" {
-		scRefuse(w, http.StatusConflict, "Container registries need Kubernetes (CONTAINERS__ENABLED)")
+		detail(w, http.StatusConflict, "Container registries need Kubernetes (CONTAINERS__ENABLED)")
 		return false
 	}
 	return true
@@ -269,11 +269,11 @@ func regGet(ctx context.Context, q perm.Querier, id int64) (*regRow, error) {
 func regOr404(d *Deps, w http.ResponseWriter, ctx context.Context, id int64) (*regRow, bool) {
 	r, err := regGet(ctx, d.DB, id)
 	if err != nil {
-		scFailed(d, w, "registries: the registry", err)
+		fail(d, w, "registries: the registry", err)
 		return nil, false
 	}
 	if r == nil {
-		scRefuse(w, http.StatusNotFound, "Container registry not found")
+		detail(w, http.StatusNotFound, "Container registry not found")
 		return nil, false
 	}
 	return r, true
@@ -285,12 +285,12 @@ func regSend(d *Deps, w http.ResponseWriter, ctx context.Context, id int64, stat
 		err = fmt.Errorf("registry %d is gone", id)
 	}
 	if err != nil {
-		scFailed(d, w, "registries: reading the registry", err)
+		fail(d, w, "registries: reading the registry", err)
 		return
 	}
 	out, err := regOut(ctx, d.DB, r)
 	if err != nil {
-		scFailed(d, w, "registries: the registry", err)
+		fail(d, w, "registries: the registry", err)
 		return
 	}
 	server.JSON(w, status, out)
@@ -301,7 +301,7 @@ func listRegistries(d *Deps, w http.ResponseWriter, r *http.Request, p *auth.Pri
 	ctx := r.Context()
 	rows, err := d.DB.Query(ctx, `SELECT `+regColumns+` FROM container_registries ORDER BY lower(name)`)
 	if err != nil {
-		scFailed(d, w, "registries: the list", err)
+		fail(d, w, "registries: the list", err)
 		return
 	}
 	var list []regRow
@@ -309,7 +309,7 @@ func listRegistries(d *Deps, w http.ResponseWriter, r *http.Request, p *auth.Pri
 		x, err := regScan(rows)
 		if err != nil {
 			rows.Close()
-			scFailed(d, w, "registries: a registry", err)
+			fail(d, w, "registries: a registry", err)
 			return
 		}
 		list = append(list, *x)
@@ -317,25 +317,28 @@ func listRegistries(d *Deps, w http.ResponseWriter, r *http.Request, p *auth.Pri
 	rows.Close()
 	admin, err := perm.For(d.DB, &p.User).IsAdmin(ctx)
 	if err != nil {
-		scFailed(d, w, "registries: the roles", err)
+		fail(d, w, "registries: the roles", err)
 		return
 	}
 	out := []*registryOut{}
 	for i := range list {
 		o, err := regOut(ctx, d.DB, &list[i])
 		if err != nil {
-			scFailed(d, w, "registries: a registry", err)
+			fail(d, w, "registries: a registry", err)
 			return
 		}
 		out = append(out, o)
 	}
-	server.JSON(w, http.StatusOK, pyjson.Object{{Key: "disabled_reason", Value: scNullable(regDisabled())},
-		{Key: "editable", Value: admin && p.TokenName == ""}, {Key: "registries", Value: out}})
+	server.JSON(w, http.StatusOK, struct {
+		DisabledReason *string        `json:"disabled_reason"`
+		Editable       bool           `json:"editable"`
+		Registries     []*registryOut `json:"registries"`
+	}{scNullable(regDisabled()), admin && p.TokenName == "", out})
 }
 
 // readRegistry is GET /admin/registries/{registry_id} (read).
 func readRegistry(d *Deps, w http.ResponseWriter, r *http.Request, p *auth.Principal) {
-	ids, ok := scPathInts(w, r, "registry_id")
+	ids, ok := pathInts(w, r, "registry_id")
 	if !ok {
 		return
 	}
@@ -361,8 +364,8 @@ func regName(ctx context.Context, q perm.Querier, name string, id int64) (string
 	return name, nil, nil
 }
 
-func regUnprocessable(detail string) *auth.Refusal {
-	return &auth.Refusal{Status: http.StatusUnprocessableEntity, Detail: detail}
+func regUnprocessable(why string) *auth.Refusal {
+	return &auth.Refusal{Status: http.StatusUnprocessableEntity, Detail: why}
 }
 
 // regHostOf is _host: lower-case, without a pasted scheme or slash, a host name with a port.
@@ -644,7 +647,7 @@ func createRegistry(d *Deps, w http.ResponseWriter, r *http.Request, p *auth.Pri
 	if pw := in.Get("password").(string); pw != "" {
 		enc, err := d.Fernet.Encrypt(pw)
 		if err != nil {
-			scFailed(d, w, "registries: encrypting the password", err)
+			fail(d, w, "registries: encrypting the password", err)
 			return
 		}
 		password = &enc
@@ -676,17 +679,17 @@ func createRegistry(d *Deps, w http.ResponseWriter, r *http.Request, p *auth.Pri
 		return
 	}
 	if err != nil {
-		scFailed(d, w, "registries: creating the registry", err)
+		fail(d, w, "registries: creating the registry", err)
 		return
 	}
 	saved, err := regGet(ctx, d.DB, id)
 	if err != nil {
-		scFailed(d, w, "registries: reading the registry", err)
+		fail(d, w, "registries: reading the registry", err)
 		return
 	}
 	access, err := regAccessOf(ctx, d.DB, id)
 	if err != nil {
-		scFailed(d, w, "registries: the access", err)
+		fail(d, w, "registries: the access", err)
 		return
 	}
 	audit.Record(ctx, d.DB, d.Log, audit.Event{Actor: &p.User, Action: "registry.create", TargetType: scPtrStr("container_registry"),
@@ -778,7 +781,7 @@ func updateRegistry(d *Deps, w http.ResponseWriter, r *http.Request, p *auth.Pri
 		if v != "" {
 			enc, err := d.Fernet.Encrypt(v)
 			if err != nil {
-				scFailed(d, w, "registries: encrypting the password", err)
+				fail(d, w, "registries: encrypting the password", err)
 				return
 			}
 			reg.PasswordEnc = &enc
@@ -853,7 +856,7 @@ func updateRegistry(d *Deps, w http.ResponseWriter, r *http.Request, p *auth.Pri
 		return
 	}
 	if err != nil {
-		scFailed(d, w, "registries: changing the registry", err)
+		fail(d, w, "registries: changing the registry", err)
 		return
 	}
 	audit.Record(ctx, d.DB, d.Log, audit.Event{Actor: &p.User, Action: "registry.update", TargetType: scPtrStr("container_registry"),
@@ -864,7 +867,7 @@ func updateRegistry(d *Deps, w http.ResponseWriter, r *http.Request, p *auth.Pri
 // deleteRegistry is DELETE /admin/registries/{registry_id} (delete): its credentials leave
 // the cluster with it.
 func deleteRegistry(d *Deps, w http.ResponseWriter, r *http.Request, p *auth.Principal, _ pyd.Body) {
-	ids, ok := scPathInts(w, r, "registry_id")
+	ids, ok := pathInts(w, r, "registry_id")
 	if !ok {
 		return
 	}
@@ -886,7 +889,7 @@ func deleteRegistry(d *Deps, w http.ResponseWriter, r *http.Request, p *auth.Pri
 			_, err := kube.Call(ctx, cfg.Kubernetes, http.MethodDelete, fmt.Sprintf("/api/v1/namespaces/%s/secrets/tabularia-registry-%d", ns, reg.ID), nil, false)
 			if err != nil && kube.Status(err) != 404 {
 				if kube.Status(err) == -1 {
-					scFailed(d, w, "registries: the cluster's answer", err)
+					fail(d, w, "registries: the cluster's answer", err)
 					return
 				}
 				d.Log.Warn("registry: pull Secrets not removed", "registry", reg.ID, "err", err)
@@ -904,12 +907,12 @@ func deleteRegistry(d *Deps, w http.ResponseWriter, r *http.Request, p *auth.Pri
 		return err
 	})
 	if err != nil {
-		scFailed(d, w, "registries: deleting the registry", err)
+		fail(d, w, "registries: deleting the registry", err)
 		return
 	}
 	audit.Record(ctx, d.DB, d.Log, audit.Event{Actor: &p.User, Action: "registry.delete", TargetType: scPtrStr("container_registry"),
 		TargetID: scPtrInt(ids[0]), TargetLabel: &reg.Name})
-	scNoContent(w)
+	returnsNone(w)
 }
 
 // writeRegistryVariable is PUT /admin/registries/{registry_id}/variables/{name}.
@@ -943,14 +946,14 @@ func writeRegistryVariable(d *Deps, w http.ResponseWriter, r *http.Request, p *a
 	err := d.DB.QueryRow(ctx, `SELECT id, secret FROM container_registry_variables WHERE registry_id = $1 AND name = $2`,
 		reg.ID, name).Scan(&varID, &secret)
 	if err != nil && !scNoRows(err) {
-		scFailed(d, w, "registries: the variable", err)
+		fail(d, w, "registries: the variable", err)
 		return
 	}
 	isNew := scNoRows(err)
 	value, hasValue := in.Get("value").(string)
 	wantSecret := in.Get("secret").(bool)
 	if !hasValue && (isNew || !secret || !wantSecret) {
-		scRefuse(w, http.StatusUnprocessableEntity, "The variable needs a value")
+		detail(w, http.StatusUnprocessableEntity, "The variable needs a value")
 		return
 	}
 	var plain, enc any
@@ -958,7 +961,7 @@ func writeRegistryVariable(d *Deps, w http.ResponseWriter, r *http.Request, p *a
 		if wantSecret {
 			token, err := d.Fernet.Encrypt(value)
 			if err != nil {
-				scFailed(d, w, "registries: encrypting the value", err)
+				fail(d, w, "registries: encrypting the value", err)
 				return
 			}
 			plain, enc = "", token
@@ -987,7 +990,7 @@ func writeRegistryVariable(d *Deps, w http.ResponseWriter, r *http.Request, p *a
 		return err
 	})
 	if err != nil {
-		scFailed(d, w, "registries: saving the variable", err)
+		fail(d, w, "registries: saving the variable", err)
 		return
 	}
 	audit.Record(ctx, d.DB, d.Log, audit.Event{Actor: &p.User, Action: "registry.variable_set", TargetType: scPtrStr("container_registry"),
@@ -998,7 +1001,7 @@ func writeRegistryVariable(d *Deps, w http.ResponseWriter, r *http.Request, p *a
 
 // deleteRegistryVariable is DELETE /admin/registries/{registry_id}/variables/{name}.
 func deleteRegistryVariable(d *Deps, w http.ResponseWriter, r *http.Request, p *auth.Principal, _ pyd.Body) {
-	ids, ok := scPathInts(w, r, "registry_id")
+	ids, ok := pathInts(w, r, "registry_id")
 	if !ok {
 		return
 	}
@@ -1011,16 +1014,16 @@ func deleteRegistryVariable(d *Deps, w http.ResponseWriter, r *http.Request, p *
 	tag, err := d.DB.Exec(ctx, `DELETE FROM container_registry_variables WHERE id = (SELECT id FROM container_registry_variables
 		WHERE registry_id = $1 AND name = $2 LIMIT 1)`, reg.ID, name)
 	if err != nil {
-		scFailed(d, w, "registries: deleting the variable", err)
+		fail(d, w, "registries: deleting the variable", err)
 		return
 	}
 	if tag.RowsAffected() == 0 {
-		scRefuse(w, http.StatusNotFound, "Variable not found")
+		detail(w, http.StatusNotFound, "Variable not found")
 		return
 	}
 	if _, err := d.DB.Exec(ctx, `UPDATE container_registries SET updated_at = $1, updated_by = $2 WHERE id = $3`,
 		time.Now().UTC(), p.User.Email, reg.ID); err != nil {
-		scFailed(d, w, "registries: the registry", err)
+		fail(d, w, "registries: the registry", err)
 		return
 	}
 	audit.Record(ctx, d.DB, d.Log, audit.Event{Actor: &p.User, Action: "registry.variable_delete", TargetType: scPtrStr("container_registry"),
@@ -1091,12 +1094,12 @@ func editorRegistries(d *Deps, w http.ResponseWriter, r *http.Request, p *auth.P
 	ctx := r.Context()
 	admin, err := perm.For(d.DB, &p.User).IsAdmin(ctx)
 	if err != nil {
-		scFailed(d, w, "registries: the roles", err)
+		fail(d, w, "registries: the roles", err)
 		return
 	}
 	rows, err := d.DB.Query(ctx, `SELECT `+regColumns+` FROM container_registries WHERE enabled = true ORDER BY name`)
 	if err != nil {
-		scFailed(d, w, "registries: the list", err)
+		fail(d, w, "registries: the list", err)
 		return
 	}
 	var list []regRow
@@ -1104,7 +1107,7 @@ func editorRegistries(d *Deps, w http.ResponseWriter, r *http.Request, p *auth.P
 		x, err := regScan(rows)
 		if err != nil {
 			rows.Close()
-			scFailed(d, w, "registries: a registry", err)
+			fail(d, w, "registries: a registry", err)
 			return
 		}
 		list = append(list, *x)
@@ -1114,7 +1117,7 @@ func editorRegistries(d *Deps, w http.ResponseWriter, r *http.Request, p *auth.P
 	var all map[int64]bool
 	if !admin {
 		if grants, all, err = regGrants(ctx, d.DB, p.User.ID); err != nil {
-			scFailed(d, w, "registries: the grants", err)
+			fail(d, w, "registries: the grants", err)
 			return
 		}
 	}
@@ -1141,7 +1144,7 @@ func editorRegistries(d *Deps, w http.ResponseWriter, r *http.Request, p *auth.P
 		}
 		vars, err := regVariables(ctx, d.DB, reg.ID)
 		if err != nil {
-			scFailed(d, w, "registries: the variables", err)
+			fail(d, w, "registries: the variables", err)
 			return
 		}
 		ev := editorRegistry{ID: reg.ID, Name: reg.Name, Description: reg.Description, Host: reg.Host, Repositories: repos,
@@ -1153,7 +1156,7 @@ func editorRegistries(d *Deps, w http.ResponseWriter, r *http.Request, p *auth.P
 	}
 	storage, err := scStorageOf(ctx, d.DB)
 	if err != nil {
-		scFailed(d, w, "registries: the bucket", err)
+		fail(d, w, "registries: the bucket", err)
 		return
 	}
 	cfg := scriptcfg.Get()
@@ -1179,12 +1182,19 @@ func editorRegistries(d *Deps, w http.ResponseWriter, r *http.Request, p *auth.P
 		}
 		registries = append(registries, x)
 	}
-	server.JSON(w, http.StatusOK, pyjson.Object{{Key: "disabled_reason", Value: scNullable(regDisabled())},
-		{Key: "registries", Value: registries},
-		{Key: "limits", Value: pyjson.Object{{Key: "max_cpu", Value: cfg.Containers.MaxCPU}, {Key: "max_memory", Value: cfg.Containers.MaxMemory},
-			{Key: "max_timeout_seconds", Value: cfg.Containers.MaxTimeoutSecond}}},
-		{Key: "storage_ready", Value: storage.Bucket != "" && storage.AccessKey != "" && storage.SecretKeyEnc != nil && *storage.SecretKeyEnc != ""},
-		{Key: "tabularia_variables", Value: scTabulariaVariables}})
+	type limits struct {
+		MaxCPU            string `json:"max_cpu"`
+		MaxMemory         string `json:"max_memory"`
+		MaxTimeoutSeconds int    `json:"max_timeout_seconds"`
+	}
+	server.JSON(w, http.StatusOK, struct {
+		DisabledReason     *string             `json:"disabled_reason"`
+		Registries         []regEditorRegistry `json:"registries"`
+		Limits             limits              `json:"limits"`
+		StorageReady       bool                `json:"storage_ready"`
+		TabulariaVariables []string            `json:"tabularia_variables"`
+	}{scNullable(regDisabled()), registries, limits{cfg.Containers.MaxCPU, cfg.Containers.MaxMemory, cfg.Containers.MaxTimeoutSecond},
+		storage.Bucket != "" && storage.AccessKey != "" && storage.SecretKeyEnc != nil && *storage.SecretKeyEnc != "", scTabulariaVariables})
 }
 
 func regContains(list []string, s string) bool {

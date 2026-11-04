@@ -262,12 +262,12 @@ func scriptSendDetail(d *Deps, w http.ResponseWriter, r *http.Request, p *auth.P
 	ctx := r.Context()
 	s, err := savedscripts.Get(ctx, d.DB, id)
 	if err != nil || s == nil {
-		scFailed(d, w, "scripts: reading the script again", fmt.Errorf("script %d: %v", id, err))
+		fail(d, w, "scripts: reading the script again", fmt.Errorf("script %d: %v", id, err))
 		return
 	}
 	det, err := scriptDetailOf(ctx, perm.For(d.DB, &p.User), d.DB, s)
 	if err != nil {
-		scFailed(d, w, "scripts: the script's detail", err)
+		fail(d, w, "scripts: the script's detail", err)
 		return
 	}
 	server.JSON(w, status, det)
@@ -276,7 +276,7 @@ func scriptSendDetail(d *Deps, w http.ResponseWriter, r *http.Request, p *auth.P
 func scriptVisible(d *Deps, w http.ResponseWriter, r *http.Request, c *perm.Checker, p *auth.Principal, id int64) (*savedscripts.Script, bool) {
 	s, refusal, err := savedscripts.GetVisible(r.Context(), c, d.DB, p.User.ID, id)
 	if err != nil {
-		scFailed(d, w, "scripts: reading the script", err)
+		fail(d, w, "scripts: reading the script", err)
 		return nil, false
 	}
 	if refusal != nil {
@@ -289,7 +289,7 @@ func scriptVisible(d *Deps, w http.ResponseWriter, r *http.Request, c *perm.Chec
 // scriptNeedOn is _need_on.
 func scriptNeedOn(w http.ResponseWriter) bool {
 	if !scriptsOn() {
-		scRefuse(w, http.StatusConflict, "Scripts need the scripting environments (Kubernetes)")
+		detail(w, http.StatusConflict, "Scripts need the scripting environments (Kubernetes)")
 		return false
 	}
 	return true
@@ -302,19 +302,19 @@ func scriptsMany(d *Deps, w http.ResponseWriter, r *http.Request, c *perm.Checke
 	ctx := r.Context()
 	rows, err := savedscripts.Visible(ctx, c, d.DB, p.User.ID, projects)
 	if err != nil {
-		scFailed(d, w, "scripts: the list", err)
+		fail(d, w, "scripts: the list", err)
 		return
 	}
 	out := make([]scriptOut, 0, len(rows))
 	for i := range rows {
 		env, err := scGetEnv(ctx, d.DB, rows[i].EnvironmentID)
 		if err != nil {
-			scFailed(d, w, "scripts: an environment", err)
+			fail(d, w, "scripts: an environment", err)
 			return
 		}
 		o, err := scriptOutOf(ctx, c, d.DB, &rows[i], env)
 		if err != nil {
-			scFailed(d, w, "scripts: a script of the list", err)
+			fail(d, w, "scripts: a script of the list", err)
 			return
 		}
 		// the latest of each script's own runs
@@ -325,7 +325,7 @@ func scriptsMany(d *Deps, w http.ResponseWriter, r *http.Request, c *perm.Checke
 		if err == nil {
 			o.LastRunStatus, o.LastRunAt = &status, isoPtr(&at)
 		} else if !scNoRows(err) {
-			scFailed(d, w, "scripts: the latest run", err)
+			fail(d, w, "scripts: the latest run", err)
 			return
 		}
 		out = append(out, o)
@@ -344,18 +344,18 @@ func listScripts(d *Deps, w http.ResponseWriter, r *http.Request, p *auth.Princi
 
 // listProjectScripts is GET /projects/{project_id}/scripts (list_project_scripts).
 func listProjectScripts(d *Deps, w http.ResponseWriter, r *http.Request, p *auth.Principal) {
-	ids, ok := scPathInts(w, r, "project_id")
+	ids, ok := pathInts(w, r, "project_id")
 	if !ok {
 		return
 	}
 	ctx := r.Context()
 	exists, err := scFolderExists(ctx, d.DB, ids[0])
 	if err != nil {
-		scFailed(d, w, "scripts: the folder", err)
+		fail(d, w, "scripts: the folder", err)
 		return
 	}
 	if !exists {
-		scRefuse(w, http.StatusNotFound, "Folder not found")
+		detail(w, http.StatusNotFound, "Folder not found")
 		return
 	}
 	c := perm.For(d.DB, &p.User)
@@ -371,12 +371,12 @@ func listProjectScripts(d *Deps, w http.ResponseWriter, r *http.Request, p *auth
 
 // getScript is GET /scripts/{script_id} (get_script).
 func getScript(d *Deps, w http.ResponseWriter, r *http.Request, p *auth.Principal) {
-	ids, ok := scPathInts(w, r, "script_id")
+	ids, ok := pathInts(w, r, "script_id")
 	if !ok {
 		return
 	}
 	if !scriptsOn() {
-		scRefuse(w, http.StatusNotFound, "Script not found")
+		detail(w, http.StatusNotFound, "Script not found")
 		return
 	}
 	c := perm.For(d.DB, &p.User)
@@ -386,7 +386,7 @@ func getScript(d *Deps, w http.ResponseWriter, r *http.Request, p *auth.Principa
 	}
 	det, err := scriptDetailOf(r.Context(), c, d.DB, s)
 	if err != nil {
-		scFailed(d, w, "scripts: the script's detail", err)
+		fail(d, w, "scripts: the script's detail", err)
 		return
 	}
 	server.JSON(w, http.StatusOK, det)
@@ -432,7 +432,7 @@ func scObjectName(ctx context.Context, q perm.Querier, table, noun, what string,
 // scAnswer writes a refusal or a failure; true when there was one.
 func scAnswer(d *Deps, w http.ResponseWriter, what string, refusal *auth.Refusal, err error) bool {
 	if err != nil {
-		scFailed(d, w, what, err)
+		fail(d, w, what, err)
 		return true
 	}
 	if refusal != nil {
@@ -461,11 +461,11 @@ func createScript(d *Deps, w http.ResponseWriter, r *http.Request, p *auth.Princ
 	ctx := r.Context()
 	exists, err := scFolderExists(ctx, d.DB, project)
 	if err != nil {
-		scFailed(d, w, "scripts: the folder", err)
+		fail(d, w, "scripts: the folder", err)
 		return
 	}
 	if !exists {
-		scRefuse(w, http.StatusNotFound, "Folder not found")
+		detail(w, http.StatusNotFound, "Folder not found")
 		return
 	}
 	c := perm.For(d.DB, &p.User)
@@ -505,7 +505,7 @@ func createScript(d *Deps, w http.ResponseWriter, r *http.Request, p *auth.Princ
 		return err
 	})
 	if err != nil {
-		scFailed(d, w, "scripts: creating the script", err)
+		fail(d, w, "scripts: creating the script", err)
 		return
 	}
 	audit.Record(ctx, d.DB, d.Log, audit.Event{Actor: &p.User, Action: "script.create", TargetType: scPtrStr("saved_script"),
@@ -535,13 +535,13 @@ func scriptOffElsewhere(ctx context.Context, tx pgx.Tx, user *auth.User, s *save
 				continue
 			}
 			done[o.ID] = true
-			detail := pyjson.Object{{Key: "turned_off", Value: true}, {Key: "author", Value: *o.RunScheduledBy},
+			why := pyjson.Object{{Key: "turned_off", Value: true}, {Key: "author", Value: *o.RunScheduledBy},
 				{Key: "reason", Value: fmt.Sprintf("the saved script '%s' it runs changed: %s", name, strings.Join(reasons, "; "))}}
 			if _, err := tx.Exec(ctx, fmt.Sprintf(`UPDATE %s SET run_schedule = NULL, run_scheduled_by = NULL, next_run_at = NULL
 				WHERE id = $1`, part.table), o.ID); err != nil {
 				return nil, err
 			}
-			off = append(off, scOffRecord{part.action, part.kind, o.ID, o.Name, detail})
+			off = append(off, scOffRecord{part.action, part.kind, o.ID, o.Name, why})
 		}
 	}
 	return off, nil
@@ -551,13 +551,13 @@ type scOffRecord struct {
 	action, kind string
 	id           int64
 	name         string
-	detail       pyjson.Object
+	why          pyjson.Object
 }
 
 func scRecordOffElsewhere(ctx context.Context, d *Deps, user *auth.User, off []scOffRecord) {
 	for _, o := range off {
 		audit.Record(ctx, d.DB, d.Log, audit.Event{Actor: user, Action: o.action, TargetType: scPtrStr(o.kind),
-			TargetID: scPtrInt(o.id), TargetLabel: scPtrStr(o.name), Detail: o.detail})
+			TargetID: scPtrInt(o.id), TargetLabel: scPtrStr(o.name), Detail: o.why})
 	}
 }
 
@@ -597,11 +597,11 @@ func updateScript(d *Deps, w http.ResponseWriter, r *http.Request, p *auth.Princ
 		if dest != s.ProjectID {
 			exists, err := scFolderExists(ctx, d.DB, dest)
 			if err != nil {
-				scFailed(d, w, "scripts: the folder", err)
+				fail(d, w, "scripts: the folder", err)
 				return
 			}
 			if !exists {
-				scRefuse(w, http.StatusNotFound, "Destination folder not found")
+				detail(w, http.StatusNotFound, "Destination folder not found")
 				return
 			}
 			if !scEnsure(d, w, ctx, c, dest, perm.Edit) {
@@ -626,7 +626,7 @@ func updateScript(d *Deps, w http.ResponseWriter, r *http.Request, p *auth.Princ
 	}
 	env, err := scGetEnv(ctx, d.DB, s.EnvironmentID)
 	if err != nil {
-		scFailed(d, w, "scripts: the environment", err)
+		fail(d, w, "scripts: the environment", err)
 		return
 	}
 	envChanged := false
@@ -641,12 +641,12 @@ func updateScript(d *Deps, w http.ResponseWriter, r *http.Request, p *auth.Princ
 		}
 	}
 	if env == nil {
-		scRefuse(w, http.StatusUnprocessableEntity, "Its scripting environment no longer exists: choose another")
+		detail(w, http.StatusUnprocessableEntity, "Its scripting environment no longer exists: choose another")
 		return
 	}
 	current, err := savedscripts.ContentOf(ctx, d.DB, s, 0)
 	if err != nil {
-		scFailed(d, w, "scripts: the content", err)
+		fail(d, w, "scripts: the content", err)
 		return
 	}
 	var newContent pyjson.Object
@@ -714,7 +714,7 @@ func updateScript(d *Deps, w http.ResponseWriter, r *http.Request, p *auth.Princ
 		return err
 	})
 	if err != nil {
-		scFailed(d, w, "scripts: changing the script", err)
+		fail(d, w, "scripts: changing the script", err)
 		return
 	}
 	if descChanged {
@@ -735,7 +735,7 @@ func updateScript(d *Deps, w http.ResponseWriter, r *http.Request, p *auth.Princ
 
 // duplicateScript is POST /scripts/{script_id}/duplicate (duplicate_script).
 func duplicateScript(d *Deps, w http.ResponseWriter, r *http.Request, p *auth.Principal) {
-	ids, ok := scPathInts(w, r, "script_id")
+	ids, ok := pathInts(w, r, "script_id")
 	if !ok || !scriptNeedOn(w) {
 		return
 	}
@@ -770,11 +770,11 @@ func duplicateScript(d *Deps, w http.ResponseWriter, r *http.Request, p *auth.Pr
 		return err
 	})
 	if copynames.Clash(err) {
-		scRefuse(w, http.StatusConflict, copynames.ClashDetail)
+		detail(w, http.StatusConflict, copynames.ClashDetail)
 		return
 	}
 	if err != nil {
-		scFailed(d, w, "scripts: the copy", err)
+		fail(d, w, "scripts: the copy", err)
 		return
 	}
 	audit.Record(ctx, d.DB, d.Log, audit.Event{Actor: &p.User, Action: "script.create", TargetType: scPtrStr("saved_script"),
@@ -785,7 +785,7 @@ func duplicateScript(d *Deps, w http.ResponseWriter, r *http.Request, p *auth.Pr
 // deleteScript is DELETE /scripts/{script_id} (delete_script): its runs stay in the
 // history, no longer attached to it.
 func deleteScript(d *Deps, w http.ResponseWriter, r *http.Request, p *auth.Principal) {
-	ids, ok := scPathInts(w, r, "script_id")
+	ids, ok := pathInts(w, r, "script_id")
 	if !ok {
 		return
 	}
@@ -796,7 +796,7 @@ func deleteScript(d *Deps, w http.ResponseWriter, r *http.Request, p *auth.Princ
 		return
 	}
 	var status int
-	var detail any
+	var why any
 	err := scInTx(ctx, d, func(tx pgx.Tx) error {
 		if _, err := tx.Exec(ctx, `SELECT pg_advisory_xact_lock(74610003, $1)`, s.ID); err != nil {
 			return err
@@ -804,7 +804,7 @@ func deleteScript(d *Deps, w http.ResponseWriter, r *http.Request, p *auth.Princ
 		var live int64
 		err := tx.QueryRow(ctx, `SELECT id FROM runs WHERE saved_script_id = $1 AND status NOT IN ('SUCCESS', 'FAILURE')`, s.ID).Scan(&live)
 		if err == nil {
-			status, detail = http.StatusConflict, "The script is queued or running: delete it once it has finished"
+			status, why = http.StatusConflict, "The script is queued or running: delete it once it has finished"
 			return scRefused
 		}
 		if !scNoRows(err) {
@@ -830,7 +830,7 @@ func deleteScript(d *Deps, w http.ResponseWriter, r *http.Request, p *auth.Princ
 			if len(names) > 10 {
 				more = " …"
 			}
-			status, detail = http.StatusConflict, pyjson.Object{
+			status, why = http.StatusConflict, pyjson.Object{
 				{Key: "message", Value: "The script is used by " + strings.Join(shown, ", ") + more + ": remove it from there first"},
 				{Key: "flows", Value: flows}, {Key: "groups", Value: groups}}
 			return scRefused
@@ -845,23 +845,23 @@ func deleteScript(d *Deps, w http.ResponseWriter, r *http.Request, p *auth.Princ
 		return err
 	})
 	if status != 0 {
-		scRefuseWith(w, status, detail)
+		scRefuseWith(w, status, why)
 		return
 	}
 	if err != nil {
-		scFailed(d, w, "scripts: deleting the script", err)
+		fail(d, w, "scripts: deleting the script", err)
 		return
 	}
 	audit.Record(ctx, d.DB, d.Log, audit.Event{Actor: &p.User, Action: "script.delete", TargetType: scPtrStr("saved_script"),
 		TargetID: scPtrInt(ids[0]), TargetLabel: scPtrStr(s.Name)})
-	scNoContent(w)
+	returnsNone(w)
 }
 
 // ── versions ──────────────────────────────────────────────────────────────────
 
 // listScriptVersions is GET /scripts/{script_id}/versions (list_versions).
 func listScriptVersions(d *Deps, w http.ResponseWriter, r *http.Request, p *auth.Principal) {
-	ids, ok := scPathInts(w, r, "script_id")
+	ids, ok := pathInts(w, r, "script_id")
 	if !ok {
 		return
 	}
@@ -871,7 +871,7 @@ func listScriptVersions(d *Deps, w http.ResponseWriter, r *http.Request, p *auth
 	}
 	out, err := scVersionsOf(r.Context(), d.DB, "saved_script_versions", "script_id", s.ID, s.CurrentVersion)
 	if err != nil {
-		scFailed(d, w, "scripts: the versions", err)
+		fail(d, w, "scripts: the versions", err)
 		return
 	}
 	server.JSON(w, http.StatusOK, out)
@@ -880,7 +880,7 @@ func listScriptVersions(d *Deps, w http.ResponseWriter, r *http.Request, p *auth
 // getScriptVersion is GET /scripts/{script_id}/versions/{version} (get_version): 0 is the
 // current one.
 func getScriptVersion(d *Deps, w http.ResponseWriter, r *http.Request, p *auth.Principal) {
-	ids, ok := scPathInts(w, r, "script_id", "version")
+	ids, ok := pathInts(w, r, "script_id", "version")
 	if !ok {
 		return
 	}
@@ -891,16 +891,16 @@ func getScriptVersion(d *Deps, w http.ResponseWriter, r *http.Request, p *auth.P
 	}
 	exists, _, err := savedscripts.VersionRow(ctx, d.DB, "saved_script_versions", "script_id", s.ID, s.CurrentVersion, ids[1])
 	if err != nil {
-		scFailed(d, w, "scripts: the version", err)
+		fail(d, w, "scripts: the version", err)
 		return
 	}
 	if !exists {
-		scRefuse(w, http.StatusNotFound, "Version not found")
+		detail(w, http.StatusNotFound, "Version not found")
 		return
 	}
 	content, err := savedscripts.ContentOf(ctx, d.DB, s, ids[1])
 	if err != nil {
-		scFailed(d, w, "scripts: the version's content", err)
+		fail(d, w, "scripts: the version's content", err)
 		return
 	}
 	server.JSON(w, http.StatusOK, content)
@@ -908,7 +908,7 @@ func getScriptVersion(d *Deps, w http.ResponseWriter, r *http.Request, p *auth.P
 
 // restoreScriptVersion is POST /scripts/{script_id}/versions/{version}/restore (restore_version).
 func restoreScriptVersion(d *Deps, w http.ResponseWriter, r *http.Request, p *auth.Principal) {
-	ids, ok := scPathInts(w, r, "script_id", "version")
+	ids, ok := pathInts(w, r, "script_id", "version")
 	if !ok || !scriptNeedOn(w) {
 		return
 	}
@@ -921,11 +921,11 @@ func restoreScriptVersion(d *Deps, w http.ResponseWriter, r *http.Request, p *au
 	version := ids[1]
 	exists, _, err := savedscripts.VersionRow(ctx, d.DB, "saved_script_versions", "script_id", s.ID, s.CurrentVersion, version)
 	if err != nil {
-		scFailed(d, w, "scripts: the version", err)
+		fail(d, w, "scripts: the version", err)
 		return
 	}
 	if !exists {
-		scRefuse(w, http.StatusNotFound, "Version not found")
+		detail(w, http.StatusNotFound, "Version not found")
 		return
 	}
 	if version == s.CurrentVersion {
@@ -934,21 +934,21 @@ func restoreScriptVersion(d *Deps, w http.ResponseWriter, r *http.Request, p *au
 	}
 	env, err := scGetEnv(ctx, d.DB, s.EnvironmentID)
 	if err != nil {
-		scFailed(d, w, "scripts: the environment", err)
+		fail(d, w, "scripts: the environment", err)
 		return
 	}
 	if env == nil {
-		scRefuse(w, http.StatusUnprocessableEntity, "Its scripting environment no longer exists: choose another")
+		detail(w, http.StatusUnprocessableEntity, "Its scripting environment no longer exists: choose another")
 		return
 	}
 	old, err := savedscripts.ContentOf(ctx, d.DB, s, version)
 	if err != nil {
-		scFailed(d, w, "scripts: the version's content", err)
+		fail(d, w, "scripts: the version's content", err)
 		return
 	}
 	current, err := savedscripts.ContentOf(ctx, d.DB, s, 0)
 	if err != nil {
-		scFailed(d, w, "scripts: the content", err)
+		fail(d, w, "scripts: the content", err)
 		return
 	}
 	content, refusal, err := savedscripts.CheckContent(ctx, c, d.DB, s.Name, old, env.checks(), current)
@@ -977,7 +977,7 @@ func restoreScriptVersion(d *Deps, w http.ResponseWriter, r *http.Request, p *au
 		return err
 	})
 	if err != nil {
-		scFailed(d, w, "scripts: restoring the version", err)
+		fail(d, w, "scripts: restoring the version", err)
 		return
 	}
 	audit.Record(ctx, d.DB, d.Log, audit.Event{Actor: &p.User, Action: "script.restore", TargetType: scPtrStr("saved_script"),
@@ -996,7 +996,7 @@ func restoreScriptVersion(d *Deps, w http.ResponseWriter, r *http.Request, p *au
 // runScriptNow is POST /scripts/{script_id}/run (run_script_now): a run of the current
 // version queued with the caller's authority; an orchestrator takes it from the queue.
 func runScriptNow(d *Deps, w http.ResponseWriter, r *http.Request, p *auth.Principal) {
-	ids, ok := scPathInts(w, r, "script_id")
+	ids, ok := pathInts(w, r, "script_id")
 	if !ok || !scriptNeedOn(w) {
 		return
 	}
@@ -1008,15 +1008,15 @@ func runScriptNow(d *Deps, w http.ResponseWriter, r *http.Request, p *auth.Princ
 	}
 	content, err := savedscripts.ContentOf(ctx, d.DB, s, 0)
 	if err != nil {
-		scFailed(d, w, "scripts: the content", err)
+		fail(d, w, "scripts: the content", err)
 		return
 	}
 	if !sqlscripts.Truthy(scGet(content, "files")) {
-		scRefuse(w, http.StatusUnprocessableEntity, "The script has no code yet: write it and save it first")
+		detail(w, http.StatusUnprocessableEntity, "The script has no code yet: write it and save it first")
 		return
 	}
 	var status int
-	var detail string
+	var why string
 	var runID int64
 	err = scInTx(ctx, d, func(tx pgx.Tx) error {
 		if _, err := tx.Exec(ctx, `SELECT pg_advisory_xact_lock(74610003, $1)`, s.ID); err != nil {
@@ -1024,7 +1024,7 @@ func runScriptNow(d *Deps, w http.ResponseWriter, r *http.Request, p *auth.Princ
 		}
 		var one int64
 		if err := tx.QueryRow(ctx, `SELECT id FROM saved_scripts WHERE id = $1`, s.ID).Scan(&one); scNoRows(err) {
-			status, detail = http.StatusNotFound, "Script not found" // deleted while waiting in line
+			status, why = http.StatusNotFound, "Script not found" // deleted while waiting in line
 			return scRefused
 		} else if err != nil {
 			return err
@@ -1032,7 +1032,7 @@ func runScriptNow(d *Deps, w http.ResponseWriter, r *http.Request, p *auth.Princ
 		err := tx.QueryRow(ctx, `SELECT id FROM runs WHERE kind = 'orchestration' AND saved_script_id = $1
 			AND status IN ('PENDING', 'STARTED') LIMIT 1`, s.ID).Scan(&one)
 		if err == nil {
-			status, detail = http.StatusConflict, "The script is already queued or running: it can be run again once it has finished"
+			status, why = http.StatusConflict, "The script is already queued or running: it can be run again once it has finished"
 			return scRefused
 		}
 		if !scNoRows(err) {
@@ -1044,11 +1044,11 @@ func runScriptNow(d *Deps, w http.ResponseWriter, r *http.Request, p *auth.Princ
 			s.ID, p.User.ID, time.Now().UTC()).Scan(&runID)
 	})
 	if status != 0 {
-		scRefuse(w, status, detail)
+		detail(w, status, why)
 		return
 	}
 	if err != nil {
-		scFailed(d, w, "scripts: queueing the run", err)
+		fail(d, w, "scripts: queueing the run", err)
 		return
 	}
 	audit.Record(ctx, d.DB, d.Log, audit.Event{Actor: &p.User, Action: "script.run", TargetType: scPtrStr("saved_script"),
@@ -1100,7 +1100,7 @@ func listScriptRuns(d *Deps, w http.ResponseWriter, r *http.Request, p *auth.Pri
 		FROM runs h LEFT JOIN users u ON u.id = h.launched_by
 		WHERE h.saved_script_id = $1 AND h.kind = 'orchestration' ORDER BY h.started_at DESC, h.id DESC LIMIT $2`, s.ID, lim.(int64))
 	if err != nil {
-		scFailed(d, w, "scripts: the runs", err)
+		fail(d, w, "scripts: the runs", err)
 		return
 	}
 	out := []scriptRunOut{}
@@ -1110,7 +1110,7 @@ func listScriptRuns(d *Deps, w http.ResponseWriter, r *http.Request, p *auth.Pri
 		var finished *time.Time
 		if err := rows.Scan(&o.RunID, &o.Status, &o.TriggerType, &started, &finished, &o.Error, &o.LaunchedBy); err != nil {
 			rows.Close()
-			scFailed(d, w, "scripts: a run", err)
+			fail(d, w, "scripts: a run", err)
 			return
 		}
 		o.StartedAt, o.FinishedAt, o.Log, o.Columns = isoPtr(&started), isoPtr(finished), "", []any{}
@@ -1127,14 +1127,14 @@ func listScriptRuns(d *Deps, w http.ResponseWriter, r *http.Request, p *auth.Pri
 		crow, err := d.DB.Query(ctx, `SELECT id, status, script, rows_written, datasource_id, output_key FROM runs
 			WHERE parent_run_id = $1 AND kind = 'script'`, out[i].RunID)
 		if err != nil {
-			scFailed(d, w, "scripts: a run's child", err)
+			fail(d, w, "scripts: a run's child", err)
 			return
 		}
 		found := false
 		for crow.Next() {
 			if err := crow.Scan(&childID, &status, &script, &rowsWritten, &dsID, &outputKey); err != nil {
 				crow.Close()
-				scFailed(d, w, "scripts: a run's child", err)
+				fail(d, w, "scripts: a run's child", err)
 				return
 			}
 			found = true
@@ -1152,7 +1152,7 @@ func listScriptRuns(d *Deps, w http.ResponseWriter, r *http.Request, p *auth.Pri
 			if o, ok := v.(pyjson.Object); ok {
 				info = o
 			} else {
-				scFailed(d, w, "scripts: a run's script is not an object", fmt.Errorf("run %d", childID))
+				fail(d, w, "scripts: a run's script is not an object", fmt.Errorf("run %d", childID))
 				return
 			}
 		}
@@ -1200,26 +1200,26 @@ func previewScriptOutput(d *Deps, w http.ResponseWriter, r *http.Request, p *aut
 	err := d.DB.QueryRow(ctx, `SELECT status, output_bucket, output_key FROM runs WHERE parent_run_id = $1 AND kind = 'script'
 		AND saved_script_id = $2`, runID, s.ID).Scan(&status, &bucket, &key)
 	if err != nil && !scNoRows(err) {
-		scFailed(d, w, "scripts: the run", err)
+		fail(d, w, "scripts: the run", err)
 		return
 	}
 	if scNoRows(err) || status != "SUCCESS" || key == "" {
-		scRefuse(w, http.StatusNotFound, "This run left no output")
+		detail(w, http.StatusNotFound, "This run left no output")
 		return
 	}
 	resp, raw, err := d.Engine.JSON(ctx, http.MethodPost, "/tasks/preview", pyjson.Object{{Key: "bucket", Value: bucket},
 		{Key: "input_key", Value: key}, {Key: "operations", Value: []any{}}, {Key: "limit", Value: lim}, {Key: "no_cache", Value: true}})
 	if err != nil {
-		scFailed(d, w, "scripts: the engine", err)
+		fail(d, w, "scripts: the engine", err)
 		return
 	}
 	if resp.StatusCode >= 400 {
-		detail, ok := scEngineDetail(raw)
+		why, ok := scEngineDetail(raw)
 		if !ok {
-			scFailed(d, w, "scripts: the engine's refusal is not an object", nil)
+			fail(d, w, "scripts: the engine's refusal is not an object", nil)
 			return
 		}
-		scRefuse(w, http.StatusBadGateway, "The output could not be read: "+scClip(detail, 500))
+		detail(w, http.StatusBadGateway, "The output could not be read: "+scClip(why, 500))
 		return
 	}
 	scRelay(w, raw)

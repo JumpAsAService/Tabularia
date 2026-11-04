@@ -68,7 +68,7 @@ func nbVisitorsCap(own *int64) int64 {
 // listNotebookSessions is GET /notebooks/{notebook_id}/sessions (list_sessions): the live
 // pods (and a failed one, saying why); the editor's only to whoever may edit.
 func listNotebookSessions(d *Deps, w http.ResponseWriter, r *http.Request, p *auth.Principal) {
-	ids, ok := scPathInts(w, r, "notebook_id")
+	ids, ok := pathInts(w, r, "notebook_id")
 	if !ok {
 		return
 	}
@@ -80,13 +80,13 @@ func listNotebookSessions(d *Deps, w http.ResponseWriter, r *http.Request, p *au
 	}
 	editable, err := c.Has(ctx, n.ProjectID, perm.Edit)
 	if err != nil {
-		scFailed(d, w, "notebooks: the permission", err)
+		fail(d, w, "notebooks: the permission", err)
 		return
 	}
 	rows, err := d.DB.Query(ctx, `SELECT s.mode, s.status, s.error, s.user_id, s.started_at, s.last_seen_at FROM notebook_sessions s
 		WHERE s.notebook_id = $1 ORDER BY s.mode`, n.ID)
 	if err != nil {
-		scFailed(d, w, "notebooks: the sessions", err)
+		fail(d, w, "notebooks: the sessions", err)
 		return
 	}
 	type row struct {
@@ -99,7 +99,7 @@ func listNotebookSessions(d *Deps, w http.ResponseWriter, r *http.Request, p *au
 		var started, seen time.Time
 		if err := rows.Scan(&x.out.Mode, &x.out.Status, &x.out.Error, &x.userID, &started, &seen); err != nil {
 			rows.Close()
-			scFailed(d, w, "notebooks: a session", err)
+			fail(d, w, "notebooks: a session", err)
 			return
 		}
 		x.out.StartedAt, x.out.LastSeenAt = pyjson.Isoformat(started), pyjson.Isoformat(seen)
@@ -117,7 +117,7 @@ func listNotebookSessions(d *Deps, w http.ResponseWriter, r *http.Request, p *au
 		}
 		user, err := nbPersonOf(ctx, d.DB, &x.userID)
 		if err != nil {
-			scFailed(d, w, "notebooks: the session's person", err)
+			fail(d, w, "notebooks: the session's person", err)
 			return
 		}
 		x.out.User = user
@@ -125,7 +125,7 @@ func listNotebookSessions(d *Deps, w http.ResponseWriter, r *http.Request, p *au
 			var count int64
 			if err := d.DB.QueryRow(ctx, `SELECT count(*) FROM notebook_visitors WHERE notebook_id = $1 AND last_seen_at >= $2`,
 				n.ID, time.Now().UTC().Add(-3*time.Minute)).Scan(&count); err != nil {
-				scFailed(d, w, "notebooks: the visitors", err)
+				fail(d, w, "notebooks: the visitors", err)
 				return
 			}
 			capV := nbVisitorsCap(n.MaxVisitors)
@@ -198,7 +198,7 @@ func frameTicket(d *Deps, w http.ResponseWriter, r *http.Request, p *auth.Princi
 	cfg := scriptcfg.Get()
 	if cfg.Notebooks.Origin == "" {
 		if !cfg.Notebooks.AllowSameOrigin {
-			scRefuse(w, http.StatusConflict, nbNeedsOrigin)
+			detail(w, http.StatusConflict, nbNeedsOrigin)
 			return
 		}
 		server.JSON(w, http.StatusOK, pyjson.Object{{Key: "url", Value: nil}, {Key: "same_origin", Value: true}, {Key: "expires_in", Value: 0}})
@@ -206,26 +206,26 @@ func frameTicket(d *Deps, w http.ResponseWriter, r *http.Request, p *auth.Princi
 	}
 	page := strings.ToLower(strings.TrimRight(strings.TrimSpace(r.Header.Get("Origin")), "/"))
 	if p.SessionID == "" || !nbPlainOrigin.MatchString(page) || !scSameOrigin(r) {
-		scRefuse(w, http.StatusForbidden, "A notebook opens from its page in Tabularia, signed in in the browser")
+		detail(w, http.StatusForbidden, "A notebook opens from its page in Tabularia, signed in in the browser")
 		return
 	}
 	// notebook_frames.issue: the expired tickets go, a new one is kept by its fingerprint
 	raw := make([]byte, 32)
 	if _, err := rand.Read(raw); err != nil {
-		scFailed(d, w, "notebooks: a ticket", err)
+		fail(d, w, "notebooks: a ticket", err)
 		return
 	}
 	ticket := base64.RawURLEncoding.EncodeToString(raw)
 	sum := sha256.Sum256([]byte(ticket))
 	now := time.Now().UTC()
 	if _, err := d.DB.Exec(ctx, `DELETE FROM notebook_tickets WHERE expires_at < $1`, now); err != nil {
-		scFailed(d, w, "notebooks: the old tickets", err)
+		fail(d, w, "notebooks: the old tickets", err)
 		return
 	}
 	if _, err := d.DB.Exec(ctx, `INSERT INTO notebook_tickets (token_fp, notebook_id, mode, user_id, sid, frame_origin, expires_at)
 		VALUES ($1, $2, $3, $4, $5, $6, $7)`, hex.EncodeToString(sum[:]), n.ID, mode, p.User.ID, p.SessionID, page,
 		now.Add(nbTicketSeconds*time.Second)); err != nil {
-		scFailed(d, w, "notebooks: the ticket", err)
+		fail(d, w, "notebooks: the ticket", err)
 		return
 	}
 	url := fmt.Sprintf("%s%s/notebooks/%d/%s/?ticket=%s", cfg.Notebooks.Origin, cfg.App.RootPath, n.ID, mode, ticket)

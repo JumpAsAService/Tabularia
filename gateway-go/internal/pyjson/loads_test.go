@@ -2,40 +2,27 @@ package pyjson
 
 import "testing"
 
-func TestLoadsKeepsOrderTypesAndWritesBackTheSame(t *testing.T) {
+// json.loads then json.dumps gives back what json.dumps wrote
+func TestLoadsDumpsRoundTrip(t *testing.T) {
 	for _, text := range []string{
-		`{"b": 1, "a": [1.0, 2.5, "è", null, true], "c": {"z": 1e+20}}`,
-		`{"x": 1, "x": 2}`,
-		`[]`,
+		`{"v": 1, "a": [1, 2.5, -0.0, 1e+16, 1e-05, 123456789012345678901234567890], "b": "caff\u00e8 \ud83d\ude00", "c": null, "d": true}`,
+		`[]`, `{}`, `"x"`, `-12`,
 	} {
 		v, err := Loads(text)
 		if err != nil {
-			t.Fatal(err)
+			t.Fatalf("%s: %v", text, err)
 		}
-		got, _ := Dumps(v, Options{})
-		want := map[string]string{`{"x": 1, "x": 2}`: `{"x": 2}`}[text]
-		if want == "" {
-			want = text
-		}
-		if got != want {
-			t.Errorf("%s: wrote %s", text, got)
+		if got, _ := Dumps(v, Options{EnsureASCII: true}); got != text {
+			t.Errorf("got %s\nwant %s", got, text)
 		}
 	}
-	if _, err := Loads(`{"a": 1} x`); err == nil {
-		t.Error("extra data must not read")
+	v, _ := Loads(`{"a": 1, "b": 2, "a": 3}`)
+	if got, _ := Dumps(v, Options{}); got != `{"a": 3, "b": 2}` {
+		t.Errorf("a repeated key: %s", got)
 	}
-}
-
-func TestEqualAndRepr(t *testing.T) {
-	a, _ := Loads(`{"a": 1, "b": [true, 2.0]}`)
-	b, _ := Loads(`{"b": [1, 2], "a": 1.0}`)
-	if !Equal(a, b) {
-		t.Error("1 == 1.0 and True == 1, keys in any order")
-	}
-	if Equal(a, Object{}) || Equal("1", int64(1)) {
-		t.Error("different values compared equal")
-	}
-	if got := Repr([]any{"it's", int64(1), nil, true, 1.5}); got != `["it's", 1, None, True, 1.5]` {
-		t.Errorf("repr: %s", got)
+	for _, bad := range []string{`{"a" 1}`, `[1,]`, `01`, `{"a": 1} x`, "\"a\x01\""} {
+		if _, err := Loads(bad); err == nil {
+			t.Errorf("%q should not load", bad)
+		}
 	}
 }

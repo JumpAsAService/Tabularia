@@ -88,11 +88,11 @@ func createSQLScript(d *Deps, w http.ResponseWriter, r *http.Request, p *auth.Pr
 	ctx := r.Context()
 	exists, err := scFolderExists(ctx, d.DB, project)
 	if err != nil {
-		scFailed(d, w, "sql_scripts: the folder", err)
+		fail(d, w, "sql_scripts: the folder", err)
 		return
 	}
 	if !exists {
-		scRefuse(w, http.StatusNotFound, "Folder not found")
+		detail(w, http.StatusNotFound, "Folder not found")
 		return
 	}
 	c := perm.For(d.DB, &p.User)
@@ -101,7 +101,7 @@ func createSQLScript(d *Deps, w http.ResponseWriter, r *http.Request, p *auth.Pr
 	}
 	name, refusal, err := sqlName(ctx, d.DB, project, in.Get("name").(string), 0)
 	if err != nil {
-		scFailed(d, w, "sql_scripts: the name", err)
+		fail(d, w, "sql_scripts: the name", err)
 		return
 	}
 	if refusal != nil {
@@ -114,7 +114,7 @@ func createSQLScript(d *Deps, w http.ResponseWriter, r *http.Request, p *auth.Pr
 	}
 	checked, refusal, err := sqlChecked(ctx, c, d.DB, &p.User, content, nil)
 	if err != nil {
-		scFailed(d, w, "sql_scripts: checking the content", err)
+		fail(d, w, "sql_scripts: checking the content", err)
 		return
 	}
 	if refusal != nil {
@@ -140,7 +140,7 @@ func createSQLScript(d *Deps, w http.ResponseWriter, r *http.Request, p *auth.Pr
 	})
 	if err != nil {
 		// two creations at once with the same name: the unique name refuses the second (a 500 in Python too)
-		scFailed(d, w, "sql_scripts: creating the script", err)
+		fail(d, w, "sql_scripts: creating the script", err)
 		return
 	}
 	audit.Record(ctx, d.DB, d.Log, audit.Event{Actor: &p.User, Action: "sql_script.create", TargetType: scPtrStr("sql_script"),
@@ -183,11 +183,11 @@ func updateSQLScript(d *Deps, w http.ResponseWriter, r *http.Request, p *auth.Pr
 		if dest != s.ProjectID {
 			exists, err := scFolderExists(ctx, d.DB, dest)
 			if err != nil {
-				scFailed(d, w, "sql_scripts: the folder", err)
+				fail(d, w, "sql_scripts: the folder", err)
 				return
 			}
 			if !exists {
-				scRefuse(w, http.StatusNotFound, "Destination folder not found")
+				detail(w, http.StatusNotFound, "Destination folder not found")
 				return
 			}
 			if !scEnsure(d, w, ctx, c, dest, perm.Edit) {
@@ -202,7 +202,7 @@ func updateSQLScript(d *Deps, w http.ResponseWriter, r *http.Request, p *auth.Pr
 	}
 	name, refusal, err := sqlName(ctx, d.DB, target, wanted, s.ID)
 	if err != nil {
-		scFailed(d, w, "sql_scripts: the name", err)
+		fail(d, w, "sql_scripts: the name", err)
 		return
 	}
 	if refusal != nil {
@@ -220,7 +220,7 @@ func updateSQLScript(d *Deps, w http.ResponseWriter, r *http.Request, p *auth.Pr
 	if raw := in.Get("content"); raw != nil {
 		current, err := sqlscripts.ContentOf(ctx, d.DB, s, nil)
 		if err != nil {
-			scFailed(d, w, "sql_scripts: the current content", err)
+			fail(d, w, "sql_scripts: the current content", err)
 			return
 		}
 		// what the request does not name stays as it is (null names it: «no datasource»)
@@ -230,7 +230,7 @@ func updateSQLScript(d *Deps, w http.ResponseWriter, r *http.Request, p *auth.Pr
 		}
 		checked, refusal, err := sqlChecked(ctx, c, d.DB, &p.User, merged, current)
 		if err != nil {
-			scFailed(d, w, "sql_scripts: checking the content", err)
+			fail(d, w, "sql_scripts: checking the content", err)
 			return
 		}
 		if refusal != nil {
@@ -238,14 +238,14 @@ func updateSQLScript(d *Deps, w http.ResponseWriter, r *http.Request, p *auth.Pr
 			return
 		}
 		if sqlscripts.Truthy(scGet(current, "output")) && !sqlscripts.Truthy(scGet(checked, "output")) {
-			detail, err := sqlNotInGroups(ctx, d.DB, s.ID, "The flow groups {names} write the script's datasource: "+
+			why, err := sqlNotInGroups(ctx, d.DB, s.ID, "The flow groups {names} write the script's datasource: "+
 				"remove it from there first")
 			if err != nil {
-				scFailed(d, w, "sql_scripts: the groups", err)
+				fail(d, w, "sql_scripts: the groups", err)
 				return
 			}
-			if detail != nil {
-				scRefuseWith(w, http.StatusConflict, detail)
+			if why != nil {
+				scRefuseWith(w, http.StatusConflict, why)
 				return
 			}
 		}
@@ -291,7 +291,7 @@ func updateSQLScript(d *Deps, w http.ResponseWriter, r *http.Request, p *auth.Pr
 		return err
 	})
 	if err != nil {
-		scFailed(d, w, "sql_scripts: changing the script", err)
+		fail(d, w, "sql_scripts: changing the script", err)
 		return
 	}
 	if newContent != nil {
@@ -346,7 +346,7 @@ func listSQLScriptRuns(d *Deps, w http.ResponseWriter, r *http.Request, p *auth.
 		FROM runs r LEFT JOIN users u ON u.id = r.launched_by LEFT JOIN datasources ds ON ds.id = r.datasource_id
 		WHERE r.sql_script_id = $1 AND r.kind = 'sql' ORDER BY r.id DESC LIMIT $2`, s.ID, lim.(int64))
 	if err != nil {
-		scFailed(d, w, "sql_scripts: the runs", err)
+		fail(d, w, "sql_scripts: the runs", err)
 		return
 	}
 	type item struct {
@@ -361,7 +361,7 @@ func listSQLScriptRuns(d *Deps, w http.ResponseWriter, r *http.Request, p *auth.
 		if err := rows.Scan(&it.out.RunID, &it.out.Status, &it.out.TriggerType, &started, &finished, &it.out.Error,
 			&it.out.LaunchedBy, &it.out.Rows, &it.out.DatasourceID, &it.out.ParentRunID, &it.folder); err != nil {
 			rows.Close()
-			scFailed(d, w, "sql_scripts: a run", err)
+			fail(d, w, "sql_scripts: a run", err)
 			return
 		}
 		it.out.StartedAt, it.out.FinishedAt = isoPtr(&started), isoPtr(finished)
@@ -377,7 +377,7 @@ func listSQLScriptRuns(d *Deps, w http.ResponseWriter, r *http.Request, p *auth.
 		sees := false
 		if it.folder != nil {
 			if sees, err = c.Has(ctx, *it.folder, perm.View); err != nil {
-				scFailed(d, w, "sql_scripts: a permission", err)
+				fail(d, w, "sql_scripts: a permission", err)
 				return
 			}
 		}

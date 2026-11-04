@@ -197,12 +197,12 @@ func sqlSendDetail(d *Deps, w http.ResponseWriter, r *http.Request, p *auth.Prin
 	ctx := r.Context()
 	s, err := sqlscripts.Get(ctx, d.DB, id)
 	if err != nil || s == nil {
-		scFailed(d, w, "sql_scripts: reading the script again", fmt.Errorf("script %d: %v", id, err))
+		fail(d, w, "sql_scripts: reading the script again", fmt.Errorf("script %d: %v", id, err))
 		return
 	}
 	det, err := sqlDetailOf(ctx, perm.For(d.DB, &p.User), d.DB, s)
 	if err != nil {
-		scFailed(d, w, "sql_scripts: the script's detail", err)
+		fail(d, w, "sql_scripts: the script's detail", err)
 		return
 	}
 	det.send(w, status)
@@ -212,7 +212,7 @@ func sqlSendDetail(d *Deps, w http.ResponseWriter, r *http.Request, p *auth.Prin
 func sqlVisibleScript(d *Deps, w http.ResponseWriter, r *http.Request, c *perm.Checker, id int64) (*sqlscripts.Script, bool) {
 	s, refusal, err := sqlscripts.GetVisible(r.Context(), c, d.DB, id)
 	if err != nil {
-		scFailed(d, w, "sql_scripts: reading the script", err)
+		fail(d, w, "sql_scripts: reading the script", err)
 		return nil, false
 	}
 	if refusal != nil {
@@ -226,7 +226,7 @@ func sqlVisibleScript(d *Deps, w http.ResponseWriter, r *http.Request, c *perm.C
 func scEnsure(d *Deps, w http.ResponseWriter, ctx context.Context, c *perm.Checker, project int64, need perm.Capability) bool {
 	refusal, err := c.Ensure(ctx, project, need)
 	if err != nil {
-		scFailed(d, w, "checking a permission", err)
+		fail(d, w, "checking a permission", err)
 		return false
 	}
 	if refusal != nil {
@@ -252,19 +252,19 @@ func sqlSendList(d *Deps, w http.ResponseWriter, r *http.Request, c *perm.Checke
 	ctx := r.Context()
 	scripts, err := sqlscripts.Visible(ctx, c, d.DB, projects)
 	if err != nil {
-		scFailed(d, w, "sql_scripts: the list", err)
+		fail(d, w, "sql_scripts: the list", err)
 		return
 	}
 	contents, err := sqlscripts.CurrentContents(ctx, d.DB, scripts)
 	if err != nil {
-		scFailed(d, w, "sql_scripts: the contents", err)
+		fail(d, w, "sql_scripts: the contents", err)
 		return
 	}
 	out := make([]sqlScriptOut, 0, len(scripts))
 	for i := range scripts {
 		o, err := sqlOutOf(ctx, c, d.DB, &scripts[i], contents[scripts[i].ID])
 		if err != nil {
-			scFailed(d, w, "sql_scripts: a script of the list", err)
+			fail(d, w, "sql_scripts: a script of the list", err)
 			return
 		}
 		out = append(out, o)
@@ -279,18 +279,18 @@ func listSQLScripts(d *Deps, w http.ResponseWriter, r *http.Request, p *auth.Pri
 
 // listProjectSQLScripts is GET /projects/{project_id}/sql-scripts (list_project_sql_scripts).
 func listProjectSQLScripts(d *Deps, w http.ResponseWriter, r *http.Request, p *auth.Principal) {
-	ids, ok := scPathInts(w, r, "project_id")
+	ids, ok := pathInts(w, r, "project_id")
 	if !ok {
 		return
 	}
 	ctx := r.Context()
 	exists, err := scFolderExists(ctx, d.DB, ids[0])
 	if err != nil {
-		scFailed(d, w, "sql_scripts: the folder", err)
+		fail(d, w, "sql_scripts: the folder", err)
 		return
 	}
 	if !exists {
-		scRefuse(w, http.StatusNotFound, "Folder not found")
+		detail(w, http.StatusNotFound, "Folder not found")
 		return
 	}
 	c := perm.For(d.DB, &p.User)
@@ -306,20 +306,20 @@ func sqlCatalog(d *Deps, w http.ResponseWriter, r *http.Request, p *auth.Princip
 	ctx := r.Context()
 	folders, err := sqlscripts.Folders(ctx, d.DB)
 	if err != nil {
-		scFailed(d, w, "sql_scripts: the folders", err)
+		fail(d, w, "sql_scripts: the folders", err)
 		return
 	}
 	paths := sqlscripts.Paths(folders, " / ")
 	list, err := sqlscripts.ReadableDatasources(ctx, perm.For(d.DB, &p.User), d.DB)
 	if err != nil {
-		scFailed(d, w, "sql_scripts: the datasources", err)
+		fail(d, w, "sql_scripts: the datasources", err)
 		return
 	}
 	out := make([]sqlCatalogItem, 0, len(list))
 	for _, ds := range list {
 		cols, err := sqlCatalogColumns(ds.Columns)
 		if err != nil {
-			scFailed(d, w, "sql_scripts: a datasource's columns", err)
+			fail(d, w, "sql_scripts: a datasource's columns", err)
 			return
 		}
 		folder := ""
@@ -370,7 +370,7 @@ func sqlCatalogColumns(raw string) ([]sqlCatalogColumn, error) {
 
 // getSQLScript is GET /sql-scripts/{script_id} (get_sql_script).
 func getSQLScript(d *Deps, w http.ResponseWriter, r *http.Request, p *auth.Principal) {
-	ids, ok := scPathInts(w, r, "script_id")
+	ids, ok := pathInts(w, r, "script_id")
 	if !ok {
 		return
 	}
@@ -381,7 +381,7 @@ func getSQLScript(d *Deps, w http.ResponseWriter, r *http.Request, p *auth.Princ
 	}
 	det, err := sqlDetailOf(r.Context(), c, d.DB, s)
 	if err != nil {
-		scFailed(d, w, "sql_scripts: the script's detail", err)
+		fail(d, w, "sql_scripts: the script's detail", err)
 		return
 	}
 	det.send(w, http.StatusOK)
@@ -392,7 +392,7 @@ func getSQLScript(d *Deps, w http.ResponseWriter, r *http.Request, p *auth.Princ
 // duplicateSQLScript is POST /sql-scripts/{script_id}/duplicate (duplicate_sql_script): a
 // copy in its folder, as «name (i)», from the current version.
 func duplicateSQLScript(d *Deps, w http.ResponseWriter, r *http.Request, p *auth.Principal) {
-	ids, ok := scPathInts(w, r, "script_id")
+	ids, ok := pathInts(w, r, "script_id")
 	if !ok {
 		return
 	}
@@ -429,11 +429,11 @@ func duplicateSQLScript(d *Deps, w http.ResponseWriter, r *http.Request, p *auth
 		return err
 	})
 	if copynames.Clash(err) {
-		scRefuse(w, http.StatusConflict, copynames.ClashDetail)
+		detail(w, http.StatusConflict, copynames.ClashDetail)
 		return
 	}
 	if err != nil {
-		scFailed(d, w, "sql_scripts: the copy", err)
+		fail(d, w, "sql_scripts: the copy", err)
 		return
 	}
 	audit.Record(ctx, d.DB, d.Log, audit.Event{Actor: &p.User, Action: "sql_script.create", TargetType: scPtrStr("sql_script"),
@@ -474,7 +474,7 @@ func sqlNotInGroups(ctx context.Context, q perm.Querier, scriptID int64, message
 // deleteSQLScript is DELETE /sql-scripts/{script_id} (delete_sql_script): its runs stay in
 // the history, no longer attached to it; its datasource stays.
 func deleteSQLScript(d *Deps, w http.ResponseWriter, r *http.Request, p *auth.Principal) {
-	ids, ok := scPathInts(w, r, "script_id")
+	ids, ok := pathInts(w, r, "script_id")
 	if !ok {
 		return
 	}
@@ -486,7 +486,7 @@ func deleteSQLScript(d *Deps, w http.ResponseWriter, r *http.Request, p *auth.Pr
 	}
 	type refusal struct {
 		status int
-		detail any
+		why    any
 	}
 	var no *refusal
 	err := scInTx(ctx, d, func(tx pgx.Tx) error {
@@ -510,16 +510,16 @@ func deleteSQLScript(d *Deps, w http.ResponseWriter, r *http.Request, p *auth.Pr
 			no = &refusal{http.StatusConflict, inGroups}
 			return scRefused
 		}
-		if ref, detail, err := reports.NotReadByReports(ctx, c, tx, "sql_script", s.ID, "The script"); err != nil {
+		if ref, why, err := reports.NotReadByReports(ctx, c, tx, "sql_script", s.ID, "The script"); err != nil {
 			return err
 		} else if ref != nil {
-			no = &refusal{ref.Status, detail}
+			no = &refusal{ref.Status, why}
 			return scRefused
 		}
-		if ref, detail, err := dashboards.NotReadBy(ctx, c, tx, "sql_script", s.ID, "The script"); err != nil {
+		if ref, why, err := dashboards.NotReadBy(ctx, c, tx, "sql_script", s.ID, "The script"); err != nil {
 			return err
 		} else if ref != nil {
-			no = &refusal{ref.Status, detail}
+			no = &refusal{ref.Status, why}
 			return scRefused
 		}
 		if _, err := tx.Exec(ctx, `UPDATE runs SET sql_script_id = NULL WHERE sql_script_id = $1`, s.ID); err != nil {
@@ -532,16 +532,16 @@ func deleteSQLScript(d *Deps, w http.ResponseWriter, r *http.Request, p *auth.Pr
 		return err
 	})
 	if no != nil {
-		scRefuseWith(w, no.status, no.detail)
+		scRefuseWith(w, no.status, no.why)
 		return
 	}
 	if err != nil {
-		scFailed(d, w, "sql_scripts: deleting the script", err)
+		fail(d, w, "sql_scripts: deleting the script", err)
 		return
 	}
 	audit.Record(ctx, d.DB, d.Log, audit.Event{Actor: &p.User, Action: "sql_script.delete", TargetType: scPtrStr("sql_script"),
 		TargetID: scPtrInt(ids[0]), TargetLabel: scPtrStr(s.Name)})
-	scNoContent(w)
+	returnsNone(w)
 }
 
 var scRefused = fmt.Errorf("refused")
@@ -550,7 +550,7 @@ var scRefused = fmt.Errorf("refused")
 
 // listSQLScriptVersions is GET /sql-scripts/{script_id}/versions (list_versions).
 func listSQLScriptVersions(d *Deps, w http.ResponseWriter, r *http.Request, p *auth.Principal) {
-	ids, ok := scPathInts(w, r, "script_id")
+	ids, ok := pathInts(w, r, "script_id")
 	if !ok {
 		return
 	}
@@ -560,7 +560,7 @@ func listSQLScriptVersions(d *Deps, w http.ResponseWriter, r *http.Request, p *a
 	}
 	out, err := scVersionsOf(r.Context(), d.DB, "sql_script_versions", "script_id", s.ID, s.CurrentVersion)
 	if err != nil {
-		scFailed(d, w, "sql_scripts: the versions", err)
+		fail(d, w, "sql_scripts: the versions", err)
 		return
 	}
 	server.JSON(w, http.StatusOK, out)
@@ -589,7 +589,7 @@ func scVersionsOf(ctx context.Context, q perm.Querier, table, fk string, id, cur
 
 // getSQLScriptVersion is GET /sql-scripts/{script_id}/versions/{version} (get_version).
 func getSQLScriptVersion(d *Deps, w http.ResponseWriter, r *http.Request, p *auth.Principal) {
-	ids, ok := scPathInts(w, r, "script_id", "version")
+	ids, ok := pathInts(w, r, "script_id", "version")
 	if !ok {
 		return
 	}
@@ -600,16 +600,16 @@ func getSQLScriptVersion(d *Deps, w http.ResponseWriter, r *http.Request, p *aut
 	}
 	exists, content, err := sqlscripts.VersionRow(ctx, d.DB, s, &ids[1])
 	if err != nil {
-		scFailed(d, w, "sql_scripts: the version", err)
+		fail(d, w, "sql_scripts: the version", err)
 		return
 	}
 	if !exists {
-		scRefuse(w, http.StatusNotFound, "Version not found")
+		detail(w, http.StatusNotFound, "Version not found")
 		return
 	}
 	parsed, err := sqlscripts.Parsed(content)
 	if err != nil {
-		scFailed(d, w, "sql_scripts: the version's content", err)
+		fail(d, w, "sql_scripts: the version's content", err)
 		return
 	}
 	server.JSON(w, http.StatusOK, parsed)
@@ -702,7 +702,7 @@ func scRecordOff(ctx context.Context, d *Deps, user *auth.User, action, targetTy
 // restoreSQLScriptVersion is POST /sql-scripts/{script_id}/versions/{version}/restore
 // (restore_version): an older version becomes the newest, and the current one.
 func restoreSQLScriptVersion(d *Deps, w http.ResponseWriter, r *http.Request, p *auth.Principal) {
-	ids, ok := scPathInts(w, r, "script_id", "version")
+	ids, ok := pathInts(w, r, "script_id", "version")
 	if !ok {
 		return
 	}
@@ -715,11 +715,11 @@ func restoreSQLScriptVersion(d *Deps, w http.ResponseWriter, r *http.Request, p 
 	version := ids[1]
 	exists, raw, err := sqlscripts.VersionRow(ctx, d.DB, s, &version)
 	if err != nil {
-		scFailed(d, w, "sql_scripts: the version", err)
+		fail(d, w, "sql_scripts: the version", err)
 		return
 	}
 	if !exists {
-		scRefuse(w, http.StatusNotFound, "Version not found")
+		detail(w, http.StatusNotFound, "Version not found")
 		return
 	}
 	if version == s.CurrentVersion {
@@ -728,17 +728,17 @@ func restoreSQLScriptVersion(d *Deps, w http.ResponseWriter, r *http.Request, p 
 	}
 	current, err := sqlscripts.ContentOf(ctx, d.DB, s, nil)
 	if err != nil {
-		scFailed(d, w, "sql_scripts: the current content", err)
+		fail(d, w, "sql_scripts: the current content", err)
 		return
 	}
 	old, err := sqlscripts.Parsed(raw)
 	if err != nil {
-		scFailed(d, w, "sql_scripts: the version's content", err)
+		fail(d, w, "sql_scripts: the version's content", err)
 		return
 	}
 	content, refusal, err := sqlChecked(ctx, c, d.DB, &p.User, old, current)
 	if err != nil {
-		scFailed(d, w, "sql_scripts: checking the content", err)
+		fail(d, w, "sql_scripts: checking the content", err)
 		return
 	}
 	if refusal != nil {
@@ -747,14 +747,14 @@ func restoreSQLScriptVersion(d *Deps, w http.ResponseWriter, r *http.Request, p 
 	}
 	// _keeps_its_datasource
 	if sqlscripts.Truthy(scGet(current, "output")) && !sqlscripts.Truthy(scGet(content, "output")) {
-		detail, err := sqlNotInGroups(ctx, d.DB, s.ID, "The flow groups {names} write the script's datasource: "+
+		why, err := sqlNotInGroups(ctx, d.DB, s.ID, "The flow groups {names} write the script's datasource: "+
 			"remove it from there first")
 		if err != nil {
-			scFailed(d, w, "sql_scripts: the groups", err)
+			fail(d, w, "sql_scripts: the groups", err)
 			return
 		}
-		if detail != nil {
-			scRefuseWith(w, http.StatusConflict, detail)
+		if why != nil {
+			scRefuseWith(w, http.StatusConflict, why)
 			return
 		}
 	}
@@ -781,7 +781,7 @@ func restoreSQLScriptVersion(d *Deps, w http.ResponseWriter, r *http.Request, p 
 		return err
 	})
 	if err != nil {
-		scFailed(d, w, "sql_scripts: restoring the version", err)
+		fail(d, w, "sql_scripts: restoring the version", err)
 		return
 	}
 	audit.Record(ctx, d.DB, d.Log, audit.Event{Actor: &p.User, Action: "sql_script.restore", TargetType: scPtrStr("sql_script"),

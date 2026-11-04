@@ -12,41 +12,14 @@ import (
 	"io"
 	"math/big"
 	"net/http"
-	"sync"
 
 	"github.com/jackc/pgx/v5"
 
 	"github.com/JumpAsAService/Tabularia/gateway-go/internal/auth"
-	"github.com/JumpAsAService/Tabularia/gateway-go/internal/proxy"
 	"github.com/JumpAsAService/Tabularia/gateway-go/internal/pyd"
 	"github.com/JumpAsAService/Tabularia/gateway-go/internal/pyjson"
 	"github.com/JumpAsAService/Tabularia/gateway-go/internal/server"
 )
-
-// scPathInts reads the integer path parameters with pyd, in the order the Python function
-// declares them; when one is not an integer it answers FastAPI's 422, every bad one listed.
-// A number past int64 is read as -1: pydantic takes it, and no row has such an id, so the
-// route answers as for an id that does not exist.
-func scPathInts(w http.ResponseWriter, r *http.Request, names ...string) ([]int64, bool) {
-	var p pyd.Params
-	vals := make([]any, len(names))
-	for i, n := range names {
-		vals[i] = p.Path(n, r.PathValue(n), pyd.Int())
-	}
-	if resp := p.Response(); resp != nil {
-		resp.Write(w)
-		return nil, false
-	}
-	out := make([]int64, len(names))
-	for i, v := range vals {
-		if n, ok := v.(int64); ok {
-			out[i] = n
-		} else {
-			out[i] = -1
-		}
-	}
-	return out, true
-}
 
 // scFromPyd turns a value pyd validated (its *Object dicts) into pyjson's (Object), the
 // form the ported services work with.
@@ -76,52 +49,27 @@ func scFromPyd(v any) any {
 type scBodyHandler func(d *Deps, w http.ResponseWriter, r *http.Request, p *auth.Principal, body pyd.Body)
 
 // scWithBody is withBody (FastAPI's body read before the dependencies), then the
-// authentication, then the handler with the body. The body's bytes stay in the request,
-// for one handed to the Python gateway.
+// authentication, then the handler with the body.
 func scWithBody(d *Deps, pattern string, h scBodyHandler) http.Handler {
-	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		raw, err := io.ReadAll(r.Body)
-		if err != nil {
-			pyd.BadRequestBody().Write(w)
-			return
-		}
-		r.Body = io.NopCloser(bytes.NewReader(raw))
-		withBody(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-			r.Body = io.NopCloser(bytes.NewReader(raw))
-			server.Authed(d.Auth, pattern, func(w http.ResponseWriter, r *http.Request, p *auth.Principal) {
-				h(d, w, r, p, bodyOf(r))
-			}).ServeHTTP(w, r)
-		})).ServeHTTP(w, r)
-	})
+	return withBody(server.Authed(d.Auth, pattern, func(w http.ResponseWriter, r *http.Request, p *auth.Principal) {
+		h(d, w, r, p, bodyOf(r))
+	}))
 }
 
-// scUpstreams: one forwarding handler per Deps, made at the first use.
-var scUpstreams sync.Map
-
-// scForward hands the request to the Python gateway as it came: the port leaves there what
-// depends on a feature it does not carry (OpenLineage's events, sqlglot's reading of a SQL).
+// scForward hands the request to the Python gateway as it came, its body included: the
+// port leaves there what depends on a feature it does not carry (OpenLineage's events,
+// sqlglot's or croniter's reading of a text, the cluster's pods).
 func scForward(d *Deps, w http.ResponseWriter, r *http.Request) {
-	h, ok := scUpstreams.Load(d)
-	if !ok {
-		h, _ = scUpstreams.LoadOrStore(d, proxy.New(d.Config.Upstream, d.Log))
+	if raw := rawOf(r); raw != nil {
+		r.Body = io.NopCloser(bytes.NewReader(raw))
+		r.ContentLength = int64(len(raw))
 	}
-	h.(http.Handler).ServeHTTP(w, r)
-}
-
-// scRefuse answers an HTTPException.
-func scRefuse(w http.ResponseWriter, status int, detail string) {
-	server.Refuse(w, &auth.Refusal{Status: status, Detail: detail})
+	d.Upstream.ServeHTTP(w, r)
 }
 
 // scRefuseWith answers an HTTPException whose detail is not a text (a dict the page reads).
-func scRefuseWith(w http.ResponseWriter, status int, detail any) {
-	server.JSON(w, status, map[string]any{"detail": detail})
-}
-
-// scFailed is an error no handler catches: Starlette's 500, logged.
-func scFailed(d *Deps, w http.ResponseWriter, what string, err error) {
-	d.Log.Error(what, "err", err)
-	server.InternalError(w)
+func scRefuseWith(w http.ResponseWriter, status int, why any) {
+	server.JSON(w, status, map[string]any{"detail": why})
 }
 
 // scNoRows tells a missing row from a failure.
@@ -142,12 +90,6 @@ func scInTx(ctx context.Context, d *Deps, fn func(tx pgx.Tx) error) error {
 
 func scPtrStr(s string) *string { return &s }
 func scPtrInt(i int64) *int64   { return &i }
-
-// scNoContent is FastAPI's 204 of a route that returns nothing: no body, its JSON type.
-func scNoContent(w http.ResponseWriter) {
-	w.Header().Set("Content-Type", "application/json")
-	w.WriteHeader(http.StatusNoContent)
-}
 
 // scClip is Python's text[:n], in code points.
 func scClip(s string, n int) string {

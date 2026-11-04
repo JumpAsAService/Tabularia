@@ -212,12 +212,12 @@ func nbSendDetail(d *Deps, w http.ResponseWriter, r *http.Request, p *auth.Princ
 		err = fmt.Errorf("notebook %d is gone", id)
 	}
 	if err != nil {
-		scFailed(d, w, "notebooks: reading the notebook again", err)
+		fail(d, w, "notebooks: reading the notebook again", err)
 		return
 	}
 	det, err := nbDetailOf(ctx, perm.For(d.DB, &p.User), d.DB, n)
 	if err != nil {
-		scFailed(d, w, "notebooks: the notebook's detail", err)
+		fail(d, w, "notebooks: the notebook's detail", err)
 		return
 	}
 	server.JSON(w, status, det)
@@ -227,26 +227,26 @@ func nbVisible(d *Deps, w http.ResponseWriter, r *http.Request, c *perm.Checker,
 	ctx := r.Context()
 	n, err := nbGet(ctx, d.DB, id, false)
 	if err != nil {
-		scFailed(d, w, "notebooks: reading the notebook", err)
+		fail(d, w, "notebooks: reading the notebook", err)
 		return nil, false
 	}
 	if n != nil {
 		ok, err := savedscripts.CanSee(ctx, c, d.DB, p.User.ID, n.ProjectID, n.EnvironmentID)
 		if err != nil {
-			scFailed(d, w, "notebooks: who sees it", err)
+			fail(d, w, "notebooks: who sees it", err)
 			return nil, false
 		}
 		if ok {
 			return n, true
 		}
 	}
-	scRefuse(w, http.StatusNotFound, "Notebook not found")
+	detail(w, http.StatusNotFound, "Notebook not found")
 	return nil, false
 }
 
 func nbNeedOn(w http.ResponseWriter) bool {
 	if !scriptsOn() {
-		scRefuse(w, http.StatusConflict, "Notebooks need the scripting environments (Kubernetes)")
+		detail(w, http.StatusConflict, "Notebooks need the scripting environments (Kubernetes)")
 		return false
 	}
 	return true
@@ -337,14 +337,14 @@ func nbMany(d *Deps, w http.ResponseWriter, r *http.Request, c *perm.Checker, p 
 	ctx := r.Context()
 	where, args, ok, err := savedscripts.VisibleFilter(ctx, c, d.DB, p.User.ID, projects)
 	if err != nil {
-		scFailed(d, w, "notebooks: the list", err)
+		fail(d, w, "notebooks: the list", err)
 		return
 	}
 	out := []notebookOut{}
 	if ok {
 		rows, err := d.DB.Query(ctx, `SELECT `+nbColumns+` FROM notebooks`+where+` ORDER BY name`, args...)
 		if err != nil {
-			scFailed(d, w, "notebooks: the list", err)
+			fail(d, w, "notebooks: the list", err)
 			return
 		}
 		var list []nbRow
@@ -352,7 +352,7 @@ func nbMany(d *Deps, w http.ResponseWriter, r *http.Request, c *perm.Checker, p 
 			n, err := nbScan(rows)
 			if err != nil {
 				rows.Close()
-				scFailed(d, w, "notebooks: a notebook", err)
+				fail(d, w, "notebooks: a notebook", err)
 				return
 			}
 			list = append(list, *n)
@@ -361,7 +361,7 @@ func nbMany(d *Deps, w http.ResponseWriter, r *http.Request, c *perm.Checker, p 
 		for i := range list {
 			o, err := nbOutOf(ctx, c, d.DB, &list[i])
 			if err != nil {
-				scFailed(d, w, "notebooks: a notebook", err)
+				fail(d, w, "notebooks: a notebook", err)
 				return
 			}
 			out = append(out, o)
@@ -381,18 +381,18 @@ func listNotebooks(d *Deps, w http.ResponseWriter, r *http.Request, p *auth.Prin
 
 // listProjectNotebooks is GET /projects/{project_id}/notebooks.
 func listProjectNotebooks(d *Deps, w http.ResponseWriter, r *http.Request, p *auth.Principal) {
-	ids, ok := scPathInts(w, r, "project_id")
+	ids, ok := pathInts(w, r, "project_id")
 	if !ok {
 		return
 	}
 	ctx := r.Context()
 	exists, err := scFolderExists(ctx, d.DB, ids[0])
 	if err != nil {
-		scFailed(d, w, "notebooks: the folder", err)
+		fail(d, w, "notebooks: the folder", err)
 		return
 	}
 	if !exists {
-		scRefuse(w, http.StatusNotFound, "Folder not found")
+		detail(w, http.StatusNotFound, "Folder not found")
 		return
 	}
 	c := perm.For(d.DB, &p.User)
@@ -408,12 +408,12 @@ func listProjectNotebooks(d *Deps, w http.ResponseWriter, r *http.Request, p *au
 
 // getNotebook is GET /notebooks/{notebook_id} (get_notebook).
 func getNotebook(d *Deps, w http.ResponseWriter, r *http.Request, p *auth.Principal) {
-	ids, ok := scPathInts(w, r, "notebook_id")
+	ids, ok := pathInts(w, r, "notebook_id")
 	if !ok {
 		return
 	}
 	if !scriptsOn() {
-		scRefuse(w, http.StatusNotFound, "Notebook not found")
+		detail(w, http.StatusNotFound, "Notebook not found")
 		return
 	}
 	c := perm.For(d.DB, &p.User)
@@ -423,7 +423,7 @@ func getNotebook(d *Deps, w http.ResponseWriter, r *http.Request, p *auth.Princi
 	}
 	det, err := nbDetailOf(r.Context(), c, d.DB, n)
 	if err != nil {
-		scFailed(d, w, "notebooks: the notebook's detail", err)
+		fail(d, w, "notebooks: the notebook's detail", err)
 		return
 	}
 	server.JSON(w, http.StatusOK, det)
@@ -454,11 +454,11 @@ func createNotebook(d *Deps, w http.ResponseWriter, r *http.Request, p *auth.Pri
 	ctx := r.Context()
 	exists, err := scFolderExists(ctx, d.DB, project)
 	if err != nil {
-		scFailed(d, w, "notebooks: the folder", err)
+		fail(d, w, "notebooks: the folder", err)
 		return
 	}
 	if !exists {
-		scRefuse(w, http.StatusNotFound, "Folder not found")
+		detail(w, http.StatusNotFound, "Folder not found")
 		return
 	}
 	c := perm.For(d.DB, &p.User)
@@ -507,7 +507,7 @@ func createNotebook(d *Deps, w http.ResponseWriter, r *http.Request, p *auth.Pri
 		return err
 	})
 	if err != nil {
-		scFailed(d, w, "notebooks: creating the notebook", err)
+		fail(d, w, "notebooks: creating the notebook", err)
 		return
 	}
 	audit.Record(ctx, d.DB, d.Log, audit.Event{Actor: &p.User, Action: "notebook.create", TargetType: scPtrStr("notebook"),
@@ -667,7 +667,7 @@ func updateNotebook(d *Deps, w http.ResponseWriter, r *http.Request, p *auth.Pri
 		return
 	}
 	if err != nil {
-		scFailed(d, w, "notebooks: changing the notebook", err)
+		fail(d, w, "notebooks: changing the notebook", err)
 		return
 	}
 	audit.Record(ctx, d.DB, d.Log, audit.Event{Actor: &p.User, Action: "notebook.update", TargetType: scPtrStr("notebook"),
@@ -690,7 +690,7 @@ func scIntOrNil(p *int64) any {
 
 // discardDraft is DELETE /notebooks/{notebook_id}/draft (discard_draft).
 func discardDraft(d *Deps, w http.ResponseWriter, r *http.Request, p *auth.Principal) {
-	ids, ok := scPathInts(w, r, "notebook_id")
+	ids, ok := pathInts(w, r, "notebook_id")
 	if !ok {
 		return
 	}
@@ -705,7 +705,7 @@ func discardDraft(d *Deps, w http.ResponseWriter, r *http.Request, p *auth.Princ
 		return
 	}
 	if _, err := d.DB.Exec(ctx, `UPDATE notebooks SET draft = NULL, draft_by = NULL, draft_at = NULL WHERE id = $1`, n.ID); err != nil {
-		scFailed(d, w, "notebooks: the draft", err)
+		fail(d, w, "notebooks: the draft", err)
 		return
 	}
 	audit.Record(ctx, d.DB, d.Log, audit.Event{Actor: &p.User, Action: "notebook.update", TargetType: scPtrStr("notebook"),
@@ -715,7 +715,7 @@ func discardDraft(d *Deps, w http.ResponseWriter, r *http.Request, p *auth.Princ
 
 // duplicateNotebook is POST /notebooks/{notebook_id}/duplicate (duplicate_notebook).
 func duplicateNotebook(d *Deps, w http.ResponseWriter, r *http.Request, p *auth.Principal) {
-	ids, ok := scPathInts(w, r, "notebook_id")
+	ids, ok := pathInts(w, r, "notebook_id")
 	if !ok || !nbNeedOn(w) {
 		return
 	}
@@ -750,11 +750,11 @@ func duplicateNotebook(d *Deps, w http.ResponseWriter, r *http.Request, p *auth.
 		return err
 	})
 	if copynames.Clash(err) {
-		scRefuse(w, http.StatusConflict, copynames.ClashDetail)
+		detail(w, http.StatusConflict, copynames.ClashDetail)
 		return
 	}
 	if err != nil {
-		scFailed(d, w, "notebooks: the copy", err)
+		fail(d, w, "notebooks: the copy", err)
 		return
 	}
 	audit.Record(ctx, d.DB, d.Log, audit.Event{Actor: &p.User, Action: "notebook.create", TargetType: scPtrStr("notebook"),
@@ -769,7 +769,7 @@ func deleteNotebook(d *Deps, w http.ResponseWriter, r *http.Request, p *auth.Pri
 		scForward(d, w, r) // notebook_runtime.forget ends the sessions' runs in the catalog
 		return
 	}
-	ids, ok := scPathInts(w, r, "notebook_id")
+	ids, ok := pathInts(w, r, "notebook_id")
 	if !ok {
 		return
 	}
@@ -789,18 +789,18 @@ func deleteNotebook(d *Deps, w http.ResponseWriter, r *http.Request, p *auth.Pri
 		return err
 	})
 	if err != nil {
-		scFailed(d, w, "notebooks: deleting the notebook", err)
+		fail(d, w, "notebooks: deleting the notebook", err)
 		return
 	}
 	audit.Record(ctx, d.DB, d.Log, audit.Event{Actor: &p.User, Action: "notebook.delete", TargetType: scPtrStr("notebook"),
 		TargetID: scPtrInt(ids[0]), TargetLabel: &n.Name})
-	scNoContent(w)
+	returnsNone(w)
 }
 
 // ── versions ──────────────────────────────────────────────────────────────────
 
 func listNotebookVersions(d *Deps, w http.ResponseWriter, r *http.Request, p *auth.Principal) {
-	ids, ok := scPathInts(w, r, "notebook_id")
+	ids, ok := pathInts(w, r, "notebook_id")
 	if !ok {
 		return
 	}
@@ -810,14 +810,14 @@ func listNotebookVersions(d *Deps, w http.ResponseWriter, r *http.Request, p *au
 	}
 	out, err := scVersionsOf(r.Context(), d.DB, "notebook_versions", "notebook_id", n.ID, n.CurrentVersion)
 	if err != nil {
-		scFailed(d, w, "notebooks: the versions", err)
+		fail(d, w, "notebooks: the versions", err)
 		return
 	}
 	server.JSON(w, http.StatusOK, out)
 }
 
 func getNotebookVersion(d *Deps, w http.ResponseWriter, r *http.Request, p *auth.Principal) {
-	ids, ok := scPathInts(w, r, "notebook_id", "version")
+	ids, ok := pathInts(w, r, "notebook_id", "version")
 	if !ok {
 		return
 	}
@@ -828,16 +828,16 @@ func getNotebookVersion(d *Deps, w http.ResponseWriter, r *http.Request, p *auth
 	}
 	exists, _, err := savedscripts.VersionRow(ctx, d.DB, "notebook_versions", "notebook_id", n.ID, n.CurrentVersion, ids[1])
 	if err != nil {
-		scFailed(d, w, "notebooks: the version", err)
+		fail(d, w, "notebooks: the version", err)
 		return
 	}
 	if !exists {
-		scRefuse(w, http.StatusNotFound, "Version not found")
+		detail(w, http.StatusNotFound, "Version not found")
 		return
 	}
 	content, err := nbContentOf(ctx, d.DB, n, ids[1])
 	if err != nil {
-		scFailed(d, w, "notebooks: the version's content", err)
+		fail(d, w, "notebooks: the version's content", err)
 		return
 	}
 	server.JSON(w, http.StatusOK, content)
@@ -846,7 +846,7 @@ func getNotebookVersion(d *Deps, w http.ResponseWriter, r *http.Request, p *auth
 // restoreNotebookVersion is POST /notebooks/{notebook_id}/versions/{version}/restore: the
 // app then runs with the rights of whoever restores it.
 func restoreNotebookVersion(d *Deps, w http.ResponseWriter, r *http.Request, p *auth.Principal) {
-	ids, ok := scPathInts(w, r, "notebook_id", "version")
+	ids, ok := pathInts(w, r, "notebook_id", "version")
 	if !ok || !nbNeedOn(w) {
 		return
 	}
@@ -859,11 +859,11 @@ func restoreNotebookVersion(d *Deps, w http.ResponseWriter, r *http.Request, p *
 	version := ids[1]
 	exists, _, err := savedscripts.VersionRow(ctx, d.DB, "notebook_versions", "notebook_id", n.ID, n.CurrentVersion, version)
 	if err != nil {
-		scFailed(d, w, "notebooks: the version", err)
+		fail(d, w, "notebooks: the version", err)
 		return
 	}
 	if !exists {
-		scRefuse(w, http.StatusNotFound, "Version not found")
+		detail(w, http.StatusNotFound, "Version not found")
 		return
 	}
 	if version == n.CurrentVersion {
@@ -875,7 +875,7 @@ func restoreNotebookVersion(d *Deps, w http.ResponseWriter, r *http.Request, p *
 	}
 	old, err := nbContentOf(ctx, d.DB, n, version)
 	if err != nil {
-		scFailed(d, w, "notebooks: the version's content", err)
+		fail(d, w, "notebooks: the version's content", err)
 		return
 	}
 	content, refusal := nbCheckContent(n.Name, old)
@@ -893,7 +893,7 @@ func restoreNotebookVersion(d *Deps, w http.ResponseWriter, r *http.Request, p *
 		return err
 	})
 	if err != nil {
-		scFailed(d, w, "notebooks: restoring the version", err)
+		fail(d, w, "notebooks: restoring the version", err)
 		return
 	}
 	audit.Record(ctx, d.DB, d.Log, audit.Event{Actor: &p.User, Action: "notebook.restore", TargetType: scPtrStr("notebook"),

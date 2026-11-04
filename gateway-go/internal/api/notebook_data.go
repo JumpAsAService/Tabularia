@@ -9,11 +9,9 @@ package api
 // the token's check of the pod's address (NOTEBOOKS__POD_IP_CHECK) refuses there.
 
 import (
-	"bytes"
 	"crypto/sha256"
 	"encoding/hex"
 	"fmt"
-	"io"
 	"net/http"
 	"net/url"
 	"regexp"
@@ -58,29 +56,16 @@ type ndCall struct {
 
 type ndHandler func(d *Deps, w http.ResponseWriter, r *http.Request, call *ndCall, body pyd.Body)
 
-func ndEnded(w http.ResponseWriter, detail string) {
+func ndEnded(w http.ResponseWriter, why string) {
 	w.Header().Set("WWW-Authenticate", "Bearer")
-	server.JSON(w, http.StatusUnauthorized, map[string]string{"detail": detail})
+	server.JSON(w, http.StatusUnauthorized, map[string]string{"detail": why})
 }
 
 // ndCaller is notebook_caller, in FastAPI's order: the body read first (with one), then the
 // token, then the handler.
-func ndCaller(d *Deps, withBody bool, h ndHandler) http.Handler {
-	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		var body pyd.Body
-		if withBody {
-			raw, err := io.ReadAll(r.Body)
-			if err != nil {
-				pyd.BadRequestBody().Write(w)
-				return
-			}
-			var early *pyd.Response
-			if body, early = pyd.ReadBody(raw, r.Header.Get("Content-Type")); early != nil {
-				early.Write(w)
-				return
-			}
-			r.Body = io.NopCloser(bytes.NewReader(raw))
-		}
+func ndCaller(d *Deps, readBody bool, h ndHandler) http.Handler {
+	inner := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		body := bodyOf(r)
 		ctx := r.Context()
 		const ended = "This notebook's session has ended: open the notebook again"
 		scheme, token, _ := strings.Cut(r.Header.Get("Authorization"), " ")
@@ -97,7 +82,7 @@ func ndCaller(d *Deps, withBody bool, h ndHandler) http.Handler {
 			WHERE s.token_fp = $1 AND s.status IN ('starting', 'ready')`, hex.EncodeToString(sum[:])).
 			Scan(&call.sessionMode, &call.jobName, &userID, &call.notebookID, &podIP)
 		if err != nil && !scNoRows(err) {
-			scFailed(d, w, "notebook data: the session", err)
+			fail(d, w, "notebook data: the session", err)
 			return
 		}
 		if scNoRows(err) {
@@ -108,13 +93,13 @@ func ndCaller(d *Deps, withBody bool, h ndHandler) http.Handler {
 		err = d.DB.QueryRow(ctx, `SELECT id, email, full_name, is_active, is_superuser, is_observer, is_service FROM users WHERE id = $1`,
 			userID).Scan(&user.ID, &user.Email, &user.FullName, &user.IsActive, &user.IsSuperuser, &user.IsObserver, &user.IsService)
 		if err != nil && !scNoRows(err) {
-			scFailed(d, w, "notebook data: the person", err)
+			fail(d, w, "notebook data: the person", err)
 			return
 		}
 		missingUser := scNoRows(err)
 		err = d.DB.QueryRow(ctx, `SELECT name FROM notebooks WHERE id = $1`, call.notebookID).Scan(&call.notebook)
 		if err != nil && !scNoRows(err) {
-			scFailed(d, w, "notebook data: the notebook", err)
+			fail(d, w, "notebook data: the notebook", err)
 			return
 		}
 		if missingUser || scNoRows(err) {
@@ -134,12 +119,16 @@ func ndCaller(d *Deps, withBody bool, h ndHandler) http.Handler {
 			}
 		}
 		if !user.IsActive {
-			scRefuse(w, http.StatusForbidden, fmt.Sprintf("The account this notebook reads with, %s, is deactivated", user.Email))
+			detail(w, http.StatusForbidden, fmt.Sprintf("The account this notebook reads with, %s, is deactivated", user.Email))
 			return
 		}
 		call.user = &user
 		h(d, w, reqinfo.With(r, d.Auth.ClientIP, &auth.Principal{User: user}), &call, body)
 	})
+	if readBody {
+		return withBody(inner)
+	}
+	return inner
 }
 
 // ndReadable is _readable: the datasources the person may read, by name.
@@ -172,13 +161,13 @@ func ndColumns(raw string) []any {
 func ndDatasources(d *Deps, w http.ResponseWriter, r *http.Request, call *ndCall, _ pyd.Body) {
 	folders, err := sqlscripts.Folders(r.Context(), d.DB)
 	if err != nil {
-		scFailed(d, w, "notebook data: the folders", err)
+		fail(d, w, "notebook data: the folders", err)
 		return
 	}
 	paths := sqlscripts.Paths(folders, "/")
 	list, err := ndReadable(d, r, call.user)
 	if err != nil {
-		scFailed(d, w, "notebook data: the datasources", err)
+		fail(d, w, "notebook data: the datasources", err)
 		return
 	}
 	out := []any{}
@@ -284,7 +273,7 @@ func ndRead(d *Deps, w http.ResponseWriter, r *http.Request, call *ndCall, body 
 	ctx := r.Context()
 	list, err := ndReadable(d, r, call.user)
 	if err != nil {
-		scFailed(d, w, "notebook data: the datasources", err)
+		fail(d, w, "notebook data: the datasources", err)
 		return
 	}
 	items := make([]ndItem, len(list))
@@ -293,7 +282,7 @@ func ndRead(d *Deps, w http.ResponseWriter, r *http.Request, call *ndCall, body 
 	}
 	picked, no, err := ndPick(d, r, items, in.Get("datasource"), "datasource")
 	if err != nil {
-		scFailed(d, w, "notebook data: the datasource", err)
+		fail(d, w, "notebook data: the datasource", err)
 		return
 	}
 	if no != nil {
@@ -316,12 +305,12 @@ func ndRead(d *Deps, w http.ResponseWriter, r *http.Request, call *ndCall, body 
 	query := "bucket=" + url.QueryEscape(ds.Bucket) + "&key=" + url.QueryEscape(ds.Key) + "&expires=600"
 	req, err := d.Engine.Request(ctx, http.MethodGet, "/files/presigned?"+query, nil)
 	if err != nil {
-		scFailed(d, w, "notebook data: the engine", err)
+		fail(d, w, "notebook data: the engine", err)
 		return
 	}
 	res, err := d.Engine.Do(req)
 	if err != nil {
-		scFailed(d, w, "notebook data: the engine", err)
+		fail(d, w, "notebook data: the engine", err)
 		return
 	}
 	raw := make([]byte, 0)
@@ -342,7 +331,7 @@ func ndRead(d *Deps, w http.ResponseWriter, r *http.Request, call *ndCall, body 
 				why = pyjson.Str(v)
 			}
 		} else if answer != nil {
-			scFailed(d, w, "notebook data: the engine's refusal is not an object", nil)
+			fail(d, w, "notebook data: the engine's refusal is not an object", nil)
 			return
 		}
 		if why == "" {
@@ -352,13 +341,13 @@ func ndRead(d *Deps, w http.ResponseWriter, r *http.Request, call *ndCall, body 
 		if res.StatusCode == 404 {
 			status = http.StatusNotFound
 		}
-		scRefuse(w, status, fmt.Sprintf("The data of «%s» cannot be read: %s", ds.Name, why))
+		detail(w, status, fmt.Sprintf("The data of «%s» cannot be read: %s", ds.Name, why))
 		return
 	}
 	o, ok := answer.(pyjson.Object)
 	link, has := o.Get("url")
 	if !ok || !has {
-		scFailed(d, w, "notebook data: the engine's link", nil) // a KeyError in Python
+		fail(d, w, "notebook data: the engine's link", nil) // a KeyError in Python
 		return
 	}
 	audit.Record(ctx, d.DB, d.Log, audit.Event{Actor: call.user, Action: "notebook.read", TargetType: scPtrStr("datasource"),
@@ -401,7 +390,7 @@ func ndReports(d *Deps, w http.ResponseWriter, r *http.Request, call *ndCall, _ 
 	c := perm.For(d.DB, call.user)
 	admin, err := c.IsAdmin(ctx)
 	if err != nil {
-		scFailed(d, w, "notebook data: the roles", err)
+		fail(d, w, "notebook data: the roles", err)
 		return
 	}
 	sql := `SELECT r.id, r.name, r.project_id, v.content FROM reports r LEFT JOIN report_versions v
@@ -410,7 +399,7 @@ func ndReports(d *Deps, w http.ResponseWriter, r *http.Request, call *ndCall, _ 
 	if !admin {
 		readable, err := c.Readable(ctx)
 		if err != nil {
-			scFailed(d, w, "notebook data: the folders", err)
+			fail(d, w, "notebook data: the folders", err)
 			return
 		}
 		if len(readable) == 0 {
@@ -422,7 +411,7 @@ func ndReports(d *Deps, w http.ResponseWriter, r *http.Request, call *ndCall, _ 
 	}
 	rows, err := d.DB.Query(ctx, sql+` ORDER BY r.name`, args...)
 	if err != nil {
-		scFailed(d, w, "notebook data: the reports", err)
+		fail(d, w, "notebook data: the reports", err)
 		return
 	}
 	type rep struct {
@@ -435,7 +424,7 @@ func ndReports(d *Deps, w http.ResponseWriter, r *http.Request, call *ndCall, _ 
 		var x rep
 		if err := rows.Scan(&x.id, &x.name, &x.project, &x.content); err != nil {
 			rows.Close()
-			scFailed(d, w, "notebook data: a report", err)
+			fail(d, w, "notebook data: a report", err)
 			return
 		}
 		list = append(list, x)
@@ -443,7 +432,7 @@ func ndReports(d *Deps, w http.ResponseWriter, r *http.Request, call *ndCall, _ 
 	rows.Close()
 	folders, err := sqlscripts.Folders(ctx, d.DB)
 	if err != nil {
-		scFailed(d, w, "notebook data: the folders", err)
+		fail(d, w, "notebook data: the folders", err)
 		return
 	}
 	paths := sqlscripts.Paths(folders, "/")
