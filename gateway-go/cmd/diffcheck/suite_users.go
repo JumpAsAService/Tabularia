@@ -97,11 +97,16 @@ func init() {
 			add("with a token", "POST", "/users/me/password", Bearer("tab_us_pw_write_000000000000"), change)
 			add("a weak new password", "POST", "/users/me/password", w.As("us-pw"), map[string]any{"current_password": "x", "new_password": "admin"})
 			add("braked", "POST", "/users/me/password", w.As("us-brake"), change)
+			// the seconds left are counted by each side a moment apart, across a second's edge
+			s[len(s)-1].Scrub = []string{`^\d+$`, `in \d+ seconds`}
 			for i := 1; i <= 6; i++ {
 				add(fmt.Sprintf("a wrong current password (%d)", i), "POST", "/users/me/password", w.As("us-pw"),
 					map[string]any{"current_password": "wrong", "new_password": "the new password 22"})
+				s[len(s)-1].Scrub = []string{`^\d+$`, `in \d+ seconds`} // the last one is braked
 			}
 			add("now braked", "POST", "/users/me/password", w.As("us-pw"), change)
+			// the seconds left are counted by each side a moment apart, across a second's edge
+			s[len(s)-1].Scrub = []string{`^\d+$`, `in \d+ seconds`}
 			add("changed", "POST", "/users/me/password", w.As("us-target"), change)
 			add("the session it was changed from holds", "GET", "/users/password-rules", w.As("us-target"), nil)
 			add("the other session is closed", "GET", "/users/password-rules", Cookie(w.JWT("us-target", "s-us-target-2")), nil)
