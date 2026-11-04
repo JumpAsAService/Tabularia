@@ -76,11 +76,6 @@ func init() {
 	})
 }
 
-// likePattern is search._like: the special characters of LIKE made literal.
-func likePattern(q string) string {
-	return "%" + strings.NewReplacer(`\`, `\\`, `%`, `\%`, `_`, `\_`).Replace(q) + "%"
-}
-
 // searchEverything is routes/search.py search_everything: by NAME over every kind, each with
 // its own permission (the navigable folders, the readable content, CONNECT for connections).
 //

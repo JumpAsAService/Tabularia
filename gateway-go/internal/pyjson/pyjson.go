@@ -91,6 +91,8 @@ func write(b *strings.Builder, v any, o Options) error {
 		}
 	case string:
 		writeString(b, x, o.EnsureASCII)
+	case Int: // an integer past int64, as Loads read it
+		b.WriteString(string(x))
 	case int:
 		b.WriteString(strconv.Itoa(x))
 	case int32:
