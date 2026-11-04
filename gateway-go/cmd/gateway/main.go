@@ -71,12 +71,13 @@ func run(log *slog.Logger) error {
 		return err
 	}
 	upstream := proxy.New(cfg.Upstream, log)
-	routes := append([]server.Route{{Method: http.MethodGet, Pattern: "/health", Handler: server.Health()}},
-		api.Routes(&api.Deps{DB: pool, Auth: authn, Panel: panel, Config: cfg, Log: log, Engine: engineClient, Fernet: fernet,
-			Upstream: upstream, AIService: proxy.New(cfg.AIService, log), SQL: aisvc.New(cfg.AIService, cfg.FernetKey)})...)
+	deps := &api.Deps{DB: pool, Auth: authn, Panel: panel, Config: cfg, Log: log, Engine: engineClient, Fernet: fernet,
+		Upstream: upstream, AIService: proxy.New(cfg.AIService, log), SQL: aisvc.New(cfg.AIService, cfg.FernetKey)}
+	routes := append([]server.Route{{Method: http.MethodGet, Pattern: "/health", Handler: server.Health()}}, api.Routes(deps)...)
 	srv := &http.Server{
-		Addr:              cfg.Listen,
-		Handler:           server.New(routes, upstream),
+		Addr: cfg.Listen,
+		// the notebooks' own host (NOTEBOOKS__ORIGIN) reaches the notebooks' proxy and nothing else
+		Handler:           api.WithNotebooksHost(deps, server.New(routes, upstream)),
 		ReadHeaderTimeout: 30 * time.Second,
 		// as uvicorn's --timeout-keep-alive 130 in the production compose
 		IdleTimeout: 130 * time.Second,

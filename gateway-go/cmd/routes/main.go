@@ -12,6 +12,7 @@ import (
 
 	"github.com/JumpAsAService/Tabularia/gateway-go/internal/api"
 	"github.com/JumpAsAService/Tabularia/gateway-go/internal/config"
+	"github.com/JumpAsAService/Tabularia/gateway-go/internal/server"
 )
 
 func main() {
@@ -25,7 +26,7 @@ func main() {
 	}
 	for _, r := range api.Routes(d) {
 		if !forwarded[[2]string{r.Method, r.Pattern}] {
-			out = append(out, []string{r.Method, r.Pattern})
+			out = append(out, []string{r.Method, server.FastAPIPath(r.Pattern)})
 		}
 	}
 	for _, r := range ai {

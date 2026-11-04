@@ -57,6 +57,20 @@ type Step struct {
 	// Scrub: regular expressions whose matches, inside any string of the answer's JSON, are
 	// random (an id or a moment written inside a longer text, as a webhook's payload)
 	Scrub []string
+	// EngineUnordered: the requests sent to the engine go out side by side (asyncio.gather):
+	// compared in any order
+	EngineUnordered bool
+	// Prepare changes the request of one side ("python" or "go") before it goes: what an
+	// earlier answer of that side gave it (an SSO sign-in's state and cookie). Capture reads
+	// each side's answer.
+	Prepare func(side string, r *http.Request)
+	Capture func(side string, r *http.Response)
+	// HeaderScrub: regular expressions whose matches in the compared headers are random
+	// (a Location's state, a cookie's name and value)
+	HeaderScrub []string
+	// EngineScrub: regular expressions whose matches in the requests sent to the engine are
+	// random (a Job's name, a pod's token)
+	EngineScrub []string
 }
 
 // EngineRule is one scripted answer of the fake engine (cmd/fakeengine).
@@ -79,6 +93,9 @@ type Suite struct {
 	Phases []Phase
 	Engine []EngineRule
 	Steps  func(w *World) []Step
+	// Asked: run only when DIFF_ONLY names it, as its DIFF_ENV points a service at the fake
+	// engine (without it, the steps would reach the real one: PyPI, an identity provider)
+	Asked bool
 }
 
 // Phase is a set of panel settings (gateway_settings) both gateways read again within ten
@@ -108,6 +125,46 @@ func maskPattern(table, column, pattern string) {
 		maskedPatterns[table] = map[string][]*regexp.Regexp{}
 	}
 	maskedPatterns[table][column] = append(maskedPatterns[table][column], regexp.MustCompile(pattern))
+}
+
+// unorderedEngine: the paths of requests a gateway sends side by side (asyncio.gather, as the
+// settings' rollout reads the pods of six components): a run of consecutive ones is compared
+// in any order, in every suite.
+var unorderedEngine []*regexp.Regexp
+
+func engineUnordered(pattern string) {
+	unorderedEngine = append(unorderedEngine, regexp.MustCompile(pattern))
+}
+
+// sortRuns sorts every run of consecutive recorded requests whose path is in unorderedEngine.
+func sortRuns(v any) any {
+	list, ok := v.([]any)
+	if !ok || len(unorderedEngine) == 0 {
+		return v
+	}
+	matches := func(e any) bool {
+		m, _ := e.(map[string]any)
+		p, _ := m["path"].(string)
+		for _, re := range unorderedEngine {
+			if re.MatchString(p) {
+				return true
+			}
+		}
+		return false
+	}
+	for i := 0; i < len(list); {
+		if !matches(list[i]) {
+			i++
+			continue
+		}
+		j := i
+		for j < len(list) && matches(list[j]) {
+			j++
+		}
+		sortPath(list[i:j], nil)
+		i = j
+	}
+	return list
 }
 
 // scrubbedColumns: table → column → patterns whose matches inside the text are random
@@ -179,7 +236,7 @@ func main() {
 	sort.SliceStable(suites, func(i, j int) bool { return suites[i].Module < suites[j].Module })
 	failed, total := 0, 0
 	for _, s := range suites {
-		if len(only) > 0 && !only[s.Module] {
+		if (len(only) > 0 || s.Asked) && !only[s.Module] {
 			continue
 		}
 		if s.Seed != nil {
@@ -328,9 +385,15 @@ func (w *World) ask(s *side, st Step) answer {
 	if st.Auth != nil {
 		st.Auth(req)
 	}
+	if st.Prepare != nil {
+		st.Prepare(s.name, req)
+	}
 	res, err := noRedirects.Do(req)
 	if err != nil {
 		fail("%s: %v", s.name, err)
+	}
+	if st.Capture != nil {
+		st.Capture(s.name, res)
 	}
 	raw, _ := io.ReadAll(res.Body)
 	res.Body.Close()
@@ -357,6 +420,12 @@ func (w *World) ask(s *side, st Step) answer {
 			}
 			return "tab_token=<token>"
 		})
+	}
+	for _, p := range st.HeaderScrub {
+		re := regexp.MustCompile(p)
+		for k, v := range a.Headers {
+			a.Headers[k] = re.ReplaceAllString(v, "<scrubbed>")
+		}
 	}
 	var parsed any
 	if len(raw) > 0 && json.Unmarshal(raw, &parsed) == nil {
@@ -386,6 +455,17 @@ func (w *World) ask(s *side, st Step) answer {
 	for _, path := range st.EngineMask {
 		a.Engine = maskPath(a.Engine, strings.Split(path, "."))
 	}
+	if len(st.EngineScrub) > 0 {
+		var res []*regexp.Regexp
+		for _, p := range st.EngineScrub {
+			res = append(res, regexp.MustCompile(p))
+		}
+		a.Engine = scrub(a.Engine, res)
+	}
+	if st.EngineUnordered {
+		a.Engine = sortPath(a.Engine, nil)
+	}
+	a.Engine = sortRuns(a.Engine)
 	a.Tables = dump(w.ctx, s)
 	return a
 }
