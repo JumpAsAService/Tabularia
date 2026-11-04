@@ -77,6 +77,7 @@ func gatewaySettingsMore(w *World) []Step {
 		return []EngineRule{{Method: "GET", Path: "^/settings$", Body: map[string]any{"items": []any{map[string]any{"key": "other"}, item}}}}
 	}
 	odd := func(w *World) {
+		w.Exec(`DELETE FROM gateway_settings`)
 		w.Exec(`INSERT INTO gateway_settings (key, value, updated_at, updated_by) VALUES
 			('x.unknown', '1', '2026-03-01 10:00:00', 'alice.rossi@example.test'),
 			('auth.api_token_max_days', 'not json', '2026-03-01', NULL),
