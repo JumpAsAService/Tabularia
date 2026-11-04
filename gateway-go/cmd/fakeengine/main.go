@@ -114,6 +114,9 @@ func main() {
 		if a := r.Header.Get("Authorization"); strings.HasPrefix(a, "Splunk ") {
 			rec.Splunk, rec.Body = a, sentNow(body)
 		}
+		if r.URL.Path == "/idp/token" {
+			rec.Body = idpRecord(raw)
+		}
 		log_ = append(log_, rec)
 		var hit *rule
 		for i := range rules {
@@ -130,6 +133,9 @@ func main() {
 					return
 				}
 			}
+		}
+		if hit == nil && strings.HasPrefix(r.URL.Path, "/idp/") && idp(w, r, raw) {
+			return
 		}
 		if hit != nil && hit.Type != "" {
 			w.Header().Set("Content-Type", hit.Type)
@@ -158,8 +164,10 @@ func main() {
 	if addr == "" {
 		addr = ":8000"
 	}
-	// it stands in for a notebook editor's pod too, whose file is read on port 2719
-	// (notebook_runtime.FILES_PORT): the same answers and the same record
-	go func() { log.Fatal(http.ListenAndServe(":2719", nil)) }()
+	// a notebook's pod stands at the fake engine too (its podIP «siem.test»): marimo's port and
+	// the editor's file server, answered by the same rules and recorded with the rest
+	for _, port := range []string{":2718", ":2719"} {
+		go func() { _ = http.ListenAndServe(port, nil) }()
+	}
 	log.Fatal(http.ListenAndServe(addr, nil))
 }

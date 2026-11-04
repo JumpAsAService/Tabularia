@@ -48,10 +48,6 @@ func (h *objectsAPI) parameters(w http.ResponseWriter, r *http.Request, p *auth.
 		h.fail(w, r, versioned.ErrNotAnObject)
 		return
 	}
-	if reports.NeedsSQLGlot(def) {
-		h.toUpstream(w, r, nil)
-		return
-	}
 	out, err := h.resolver(c).ParametersOut(ctx, def, queryParams(pyd.ParseQuery(r.URL.RawQuery)),
 		func(string) (pyjson.Object, error) { return def, nil }, "")
 	if err != nil {
@@ -76,10 +72,6 @@ func (h *objectsAPI) parametersEdited(w http.ResponseWriter, r *http.Request, p 
 		return
 	}
 	definition := toPython(b.Get("definition"))
-	if reports.NeedsSQLGlot(definition) {
-		h.toUpstream(w, r, raw)
-		return
-	}
 	def, err := reportdef.CheckParameters(definition)
 	if err != nil {
 		h.writeErr(w, r, raw, problemRefusal(err, definition))
@@ -133,10 +125,6 @@ func (h *objectsAPI) fields(w http.ResponseWriter, r *http.Request, p *auth.Prin
 			return
 		}
 		definition := toPython(dv)
-		if reports.NeedsSQLGlot(definition) {
-			h.toUpstream(w, r, raw)
-			return
-		}
 		checked, err := reportdef.CheckDataset(definition, dataset)
 		if err != nil {
 			h.writeErr(w, r, raw, problemRefusal(err, definition))
@@ -151,10 +139,6 @@ func (h *objectsAPI) fields(w http.ResponseWriter, r *http.Request, p *auth.Prin
 		}
 		if def, _ = content.(pyjson.Object); def == nil {
 			h.fail(w, r, versioned.ErrNotAnObject)
-			return
-		}
-		if reports.NeedsSQLGlot(def) {
-			h.toUpstream(w, r, raw)
 			return
 		}
 	}

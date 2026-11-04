@@ -26,6 +26,7 @@ import (
 
 	"github.com/jackc/pgx/v5/pgxpool"
 
+	"github.com/JumpAsAService/Tabularia/gateway-go/internal/aisvc"
 	"github.com/JumpAsAService/Tabularia/gateway-go/internal/api"
 	"github.com/JumpAsAService/Tabularia/gateway-go/internal/auth"
 	"github.com/JumpAsAService/Tabularia/gateway-go/internal/clientip"
@@ -33,6 +34,7 @@ import (
 	"github.com/JumpAsAService/Tabularia/gateway-go/internal/db"
 	"github.com/JumpAsAService/Tabularia/gateway-go/internal/engine"
 	"github.com/JumpAsAService/Tabularia/gateway-go/internal/jobs"
+	"github.com/JumpAsAService/Tabularia/gateway-go/internal/proxy"
 	_ "github.com/JumpAsAService/Tabularia/gateway-go/internal/jobs/all"
 	"github.com/JumpAsAService/Tabularia/gateway-go/internal/secret"
 	"github.com/JumpAsAService/Tabularia/gateway-go/internal/settings"
@@ -164,6 +166,10 @@ func (r *runner) build(ctx context.Context, overlay map[string]string) error {
 	authn := &auth.Authenticator{DB: r.pool, Secret: cfg.JWTSecret, Algorithm: cfg.JWTAlgorithm, CookieDomain: cfg.CookieDomain,
 		Settings: panel, ClientIP: clientip.New(cfg.ForwardedAllowIPs), Log: r.log}
 	d := &api.Deps{DB: r.pool, Auth: authn, Panel: panel, Config: cfg, Log: r.log, Engine: engineClient, Fernet: fernet}
+	if cfg.AIService != nil {
+		// GATEWAY_GO__AI_SERVICE: the SQL a loop parses (a SQL script on the catalog)
+		d.AIService, d.SQL = proxy.New(cfg.AIService, r.log), aisvc.New(cfg.AIService, cfg.FernetKey)
+	}
 	ticks := map[string]jobs.Tick{}
 	for _, j := range api.Jobs(d) {
 		for name, t := range j.Ticks {

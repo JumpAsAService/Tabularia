@@ -23,14 +23,15 @@ const (
 	MaxStateBytes = 64 * 1024
 )
 
-// NeedsPython says, before anything is asked of the engine, whether reading the definition may
-// need sqlglot (NeedsSQLGlot) or writes an AI comment (HasComment): services/ai_comment.py stays
-// in Python, the AI service of docs/specs/gateway-go.md. The Python gateway answers then.
+// NeedsPython says whether reading the definition may need sqlglot (NeedsSQLGlot) or writes an
+// AI comment (HasComment). The routes ask HasComment alone now: a comment is the AI service's
+// (services/ai_comment.py), and the SQL is read by sqlglot over the AI service's internal API.
 func NeedsPython(definition any) bool { return NeedsSQLGlot(definition) || HasComment(definition) }
 
 // NeedsSQLGlot is where the Python code may read a SQL with sqlglot: a SQL on the catalog
 // (sql_scripts.resolve), a script (on the catalog or not: a superset), the choices of a list read
-// from a SQL (report_params.without_params). A superset, so the answer is always Python's.
+// from a SQL (report_params.without_params). A superset. The Resolver reads those itself with
+// the AI service (Resolver.SQL); it is kept for code that builds one without it.
 func NeedsSQLGlot(definition any) bool {
 	def := obj(definition)
 	sqlSets := map[string]bool{}
@@ -120,6 +121,7 @@ type Choices struct {
 	Choices   []any
 	Truncated bool
 	Whole     bool
+	Problem   string // why they cannot be read (_unread)
 }
 
 // DatasetChoices is dataset_choices for a dataset that reads a datasource or a view (a SQL one
@@ -141,7 +143,8 @@ func (rs *Resolver) DatasetChoices(ctx context.Context, def pyjson.Object, value
 			}
 		}
 	}
-	datasets, err := rs.ResolveDatasets(ctx, def, reading, map[string]bool{dataset: true}, nil)
+	left := map[string]bool{}
+	datasets, err := rs.ResolveDatasetsIgnoring(ctx, def, reading, map[string]bool{dataset: true}, nil, ignoring, left)
 	if err != nil {
 		return nil, err
 	}
@@ -170,6 +173,9 @@ func (rs *Resolver) DatasetChoices(ctx context.Context, def pyjson.Object, value
 		return nil, nil
 	}
 	name := pystr.Str(get(param, "name"))
+	if res.StatusCode >= 400 && left[name] { // a NULL the database does not take there
+		return unread(name), nil
+	}
 	if res.StatusCode >= 400 {
 		return nil, EngineFailure(res.StatusCode, raw, func(d string) string { return fmt.Sprintf("The choices of «%s»: %s", name, pystr.Within(d)) })
 	}
@@ -187,7 +193,19 @@ func (rs *Resolver) DatasetChoices(ctx context.Context, def pyjson.Object, value
 			found = append(found, c)
 		}
 	}
-	return &Choices{Choices: found, Truncated: pystr.Truthy(get(answer, "truncated")), Whole: true}, nil
+	if len(found) == 0 && left[name] {
+		return unread(name), nil
+	}
+	return &Choices{Choices: found, Truncated: pystr.Truthy(get(answer, "truncated")), Whole: len(left) == 0}, nil
+}
+
+// unread is _unread: the choices of a parameter whose dataset writes it outside a condition,
+// where it has no value yet.
+func unread(param string) *Choices {
+	name := "{" + param + "}"
+	return &Choices{Choices: []any{}, Problem: fmt.Sprintf("The choices of «%s» cannot be read: their dataset writes %s outside a WHERE, "+
+		"HAVING or ON condition, where it has no value yet. Move it into a condition, such as %s IS "+
+		"NULL OR a_column = %s, or read the choices from a dataset of their own", param, name, name, name)}
 }
 
 // Prepare is prepare: the parameters' values (400 naming the one that does not fit) and every
@@ -286,11 +304,15 @@ var (
 )
 
 // Filename is filename: the file's name, the object's without what a file name cannot hold.
-func Filename(name string, fmtName string) string {
+func Filename(name string, fmtName string) string { return FilenameOr(name, fmtName, "report") }
+
+// FilenameOr is Filename with another name for an object that has none (a SQL script's
+// export_filename: «sql-script»).
+func FilenameOr(name, fmtName, fallback string) string {
 	n := badFileChars.ReplaceAllString(name, " ")
 	n = strings.Trim(pySpaces.ReplaceAllString(n, " "), " .")
 	if n == "" {
-		n = "report"
+		n = fallback
 	}
 	return n + "." + fmtName
 }
@@ -502,6 +524,10 @@ func (rs *Resolver) ParametersOutCached(ctx context.Context, def pyjson.Object, 
 				}
 				if got == nil {
 					setErr("The engine cannot read choices from a dataset yet")
+					return nil
+				}
+				if got.Problem != "" {
+					setErr(got.Problem)
 					return nil
 				}
 				item.Choices = []Choice{}

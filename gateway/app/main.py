@@ -83,9 +83,9 @@ logging.basicConfig(level=logging.INFO)
 
 def start_background_work(stop: asyncio.Event) -> list[asyncio.Task]:
     """The background work, for whoever does it (`APP__ROLE`): a process that only answers
-    (`api`) starts none. Every item holds with several processes doing it together,
-    without duplicates."""
-    if get_settings().app.role == "api":
+    (`api`, and the AI service `ai`) starts none. Every item holds with several processes
+    doing it together, without duplicates."""
+    if get_settings().app.role in ("api", "ai"):
         return []
     return [
         # schedules: datasource refreshes and flow runs
@@ -344,6 +344,15 @@ if settings.app.role != "orchestrator":
     from app.routes import notebook_proxy
 
     notebook_proxy.install(app)
+
+# The AI service (APP__ROLE=ai, docs/specs/gateway-go.md): the SQL parsing the Go gateway
+# asks for, behind the internal token. No other role has these routes.
+if settings.app.role == "ai":
+    from app.routes.internal_script import router as internal_script_router
+    from app.routes.internal_sql import router as internal_sql_router
+
+    app.include_router(internal_sql_router)
+    app.include_router(internal_script_router)
 
 
 @app.get("/", tags=["health"])

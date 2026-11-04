@@ -71,7 +71,8 @@ func idOf(v any) int64 {
 	return NoSuchID
 }
 
-// toUpstream hands the request to the Python gateway as it came: what it reads needs sqlglot.
+// toUpstream hands the request to the Python gateway as it came: what it reads needs sqlglot and
+// no AI service was given (reports.ErrNeedsPython).
 func (h *objectsAPI) toUpstream(w http.ResponseWriter, r *http.Request, raw []byte) {
 	r2 := r.Clone(r.Context())
 	r2.Body = io.NopCloser(bytes.NewReader(raw))
@@ -96,7 +97,7 @@ func (h *objectsAPI) answerErr(w http.ResponseWriter, r *http.Request, raw []byt
 }
 
 func (h *objectsAPI) reviewer(c *perm.Checker) *reports.Reviewer {
-	return &reports.Reviewer{Q: h.d.DB, C: c, Engine: h.d.Engine, Log: h.d.Log}
+	return &reports.Reviewer{Q: h.d.DB, C: c, Engine: h.d.Engine, Log: h.d.Log, SQL: h.d.SQL}
 }
 
 // name is _name: the name stripped, not empty, free in the folder.

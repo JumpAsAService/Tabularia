@@ -51,6 +51,11 @@ answers only the exact method, everything else still goes to Python.
   `server.Authed`.
 - `reqinfo` — the request's address, user agent, token, agent.
 - `roles`, `settings` (the panel's values), `language`, `clientip`, `config`.
+- `aisvc` (`Deps.SQL`) — what the Python code reads with sqlglot, asked of the AI service
+  ([gateway-go.md](gateway-go.md), «The AI service»); `sqlscripts.Resolve` is
+  `sql_scripts.resolve` on top of it. Never parse SQL in Go. A route of the assistant (built
+  on pydantic-ai) is not ported: it goes to the AI service whole (`ai_service.go`,
+  `toAIService`).
 
 A service that several modules need and that does not exist yet: write it in its own
 package, small, with the Python function it ports cited in its comment.

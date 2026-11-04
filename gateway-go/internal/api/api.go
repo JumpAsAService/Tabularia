@@ -7,6 +7,7 @@ import (
 
 	"github.com/jackc/pgx/v5/pgxpool"
 
+	"github.com/JumpAsAService/Tabularia/gateway-go/internal/aisvc"
 	"github.com/JumpAsAService/Tabularia/gateway-go/internal/auth"
 	"github.com/JumpAsAService/Tabularia/gateway-go/internal/config"
 	"github.com/JumpAsAService/Tabularia/gateway-go/internal/engine"
@@ -27,6 +28,10 @@ type Deps struct {
 	// Upstream is the Python gateway behind: what a ported route cannot answer yet goes there
 	// untouched (see intPath)
 	Upstream http.Handler
+	// AIService forwards to the AI service (APP__ROLE=ai) the assistant's routes, untouched;
+	// SQL asks it for the SQL parsing (docs/specs/gateway-go.md, «The AI service»)
+	AIService http.Handler
+	SQL       *aisvc.Client
 }
 
 // Each file of this package registers its routes in an init(), one module of the Python

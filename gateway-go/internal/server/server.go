@@ -41,6 +41,16 @@ func New(routes []Route, upstream http.Handler) http.Handler {
 	}
 	for pattern, methods := range byPattern {
 		mux.HandleFunc(pattern, func(w http.ResponseWriter, req *http.Request) {
+			// a WebSocket's handshake is Starlette's websocket scope, routed apart from the
+			// HTTP routes of the same path (uvicorn's upgrade check)
+			if IsWebSocket(req) {
+				if h, ok := methods[WebSocket]; ok {
+					h.ServeHTTP(w, req)
+				} else {
+					upstream.ServeHTTP(w, req)
+				}
+				return
+			}
 			if h, ok := methods[req.Method]; ok {
 				h.ServeHTTP(w, req)
 				return
@@ -68,6 +78,34 @@ func clean(p string) bool {
 	}
 	c := path.Clean(p)
 	return c == p || (strings.HasSuffix(p, "/") && c+"/" == p)
+}
+
+// WebSocket is a Route's Method for a FastAPI WebSocket route (the inventory's «WS»).
+const WebSocket = "WS"
+
+// IsWebSocket is uvicorn's test of a WebSocket handshake: «Upgrade: websocket» with an
+// «upgrade» token in Connection.
+func IsWebSocket(r *http.Request) bool {
+	if !strings.EqualFold(strings.TrimSpace(r.Header.Get("Upgrade")), "websocket") {
+		return false
+	}
+	for _, v := range r.Header.Values("Connection") {
+		for _, t := range strings.Split(v, ",") {
+			if strings.EqualFold(strings.TrimSpace(t), "upgrade") {
+				return true
+			}
+		}
+	}
+	return false
+}
+
+// FastAPIPath is a Route's Pattern as FastAPI declares the path: «{name...}» is «{name:path}»,
+// «/{$}» the root alone.
+func FastAPIPath(pattern string) string {
+	if pattern == "/{$}" {
+		return "/"
+	}
+	return strings.Replace(pattern, "...}", ":path}", 1)
 }
 
 // JSON writes an answer as Starlette's JSONResponse does: compact, UTF-8, no HTML escaping.

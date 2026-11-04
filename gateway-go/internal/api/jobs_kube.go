@@ -341,10 +341,10 @@ func transient(err error) bool {
 }
 
 const (
-	noPodSeconds       = 10  // NO_POD_SECONDS
-	pullFailureSeconds = 20  // PULL_FAILURE_SECONDS
-	logRetrySeconds    = 30  // LOG_RETRY_SECONDS
-	jobGraceSeconds    = 180 // GRACE_SECONDS
+	noPodSeconds = 10 // NO_POD_SECONDS
+	// PULL_FAILURE_SECONDS is pullFailureSeconds (registries_cluster.go)
+	logRetrySeconds = 30  // LOG_RETRY_SECONDS
+	jobGraceSeconds = 180 // GRACE_SECONDS
 )
 
 // kjAttempt is script_runs._attempt: one Job, (succeeded, log, exit code, the reason it failed).

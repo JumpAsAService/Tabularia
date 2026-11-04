@@ -10,6 +10,7 @@ import (
 	"github.com/JumpAsAService/Tabularia/gateway-go/internal/perm"
 	"github.com/JumpAsAService/Tabularia/gateway-go/internal/pyjson"
 	"github.com/JumpAsAService/Tabularia/gateway-go/internal/pystr"
+	"github.com/JumpAsAService/Tabularia/gateway-go/internal/sqlscripts"
 )
 
 // What a dataset's source names, read with the reader's rights (services/reports.py `_connection`,
@@ -250,72 +251,6 @@ func ScriptContent(ctx context.Context, q perm.Querier, s *Script) (pyjson.Objec
 // ErrInternal is where the Python code fails by itself: a 500.
 var ErrInternal = errors.New("the Python code fails here")
 
-// StripComments is sql_scripts.strip_comments: the SQL without its comments, quoted text left
-// alone.
-func StripComments(sql string) string {
-	s := []rune(sql)
-	var out []rune
-	i, n := 0, len(s)
-	startsWith := func(p string, at int) bool {
-		r := []rune(p)
-		if at+len(r) > n {
-			return false
-		}
-		for k := range r {
-			if s[at+k] != r[k] {
-				return false
-			}
-		}
-		return true
-	}
-	find := func(p string, from int) int {
-		for k := from; k < n; k++ {
-			if startsWith(p, k) {
-				return k
-			}
-		}
-		return -1
-	}
-	for i < n {
-		c := s[i]
-		switch {
-		case c == '\'' || c == '"' || c == '`':
-			j := i + 1
-			for j < n {
-				if s[j] == c {
-					if j+1 < n && s[j+1] == c {
-						j += 2
-						continue
-					}
-					break
-				}
-				if s[j] == '\\' && c == '\'' {
-					j += 2
-					continue
-				}
-				j++
-			}
-			out = append(out, s[i:min(j+1, n)]...)
-			i = j + 1
-		case startsWith("--", i):
-			j := find("\n", i)
-			if j < 0 {
-				i = n
-			} else {
-				i = j
-			}
-		case startsWith("/*", i):
-			j := find("*/", i+2)
-			out = append(out, ' ')
-			if j < 0 {
-				i = n
-			} else {
-				i = j + 2
-			}
-		default:
-			out = append(out, c)
-			i++
-		}
-	}
-	return string(out)
-}
+// StripComments is sql_scripts.strip_comments (sqlscripts.StripComments): the SQL without its
+// comments, quoted text left alone.
+func StripComments(sql string) string { return sqlscripts.StripComments(sql) }

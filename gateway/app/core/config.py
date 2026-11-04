@@ -324,9 +324,11 @@ class AppSettings(BaseModel):
     # both, as it always has: one process. To have more replicas they are split: `api`
     # only answers, as many copies as wanted; `orchestrator` does only the background
     # work, in several copies too (they share the work through the database, without
-    # duplicates).
+    # duplicates). `ai` answers like `api` and, only in this role, the internal API the Go
+    # gateway asks for the SQL parsing done with sqlglot (routes/internal_sql.py,
+    # docs/specs/gateway-go.md «The AI service»).
     # env: APP__ROLE
-    role: Literal["all", "api", "orchestrator"] = "all"
+    role: Literal["all", "api", "orchestrator", "ai"] = "all"
     cors_origins: list[str] = Field(
         default_factory=lambda: ["http://localhost:3000", "http://127.0.0.1:3000"]
     )

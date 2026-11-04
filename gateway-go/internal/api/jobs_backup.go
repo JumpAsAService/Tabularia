@@ -15,7 +15,6 @@ import (
 	"strconv"
 	"strings"
 	"time"
-	"unicode/utf8"
 
 	"github.com/JumpAsAService/Tabularia/gateway-go/internal/audit"
 	"github.com/JumpAsAService/Tabularia/gateway-go/internal/cron"
@@ -222,13 +221,6 @@ func backupClose(ctx context.Context, d *Deps, sets string, args ...any) {
 		sets+` WHERE id = 1`, args...); err != nil {
 		d.Log.Error("backup: the outcome not recorded", "err", err)
 	}
-}
-
-func runeClip(s string, n int) string {
-	if utf8.RuneCountInString(s) <= n {
-		return s
-	}
-	return string([]rune(s)[:n])
 }
 
 // pgDumpFor is pg_dump_for: the server's own version's pg_dump when the image has it.

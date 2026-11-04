@@ -1,7 +1,8 @@
 #!/bin/sh
 # The two gateways compared on twin disposable stacks (cmd/diffcheck): in stack A the Python
 # gateway answers; in stack B the Go gateway, with a Python gateway behind it for the routes
-# not ported yet. Each stack has its own PostgreSQL, brought to the schema by this branch's
+# not ported yet and the AI service (the same image, APP__ROLE=ai) for the assistant's routes
+# and the SQL parsing. Each stack has its own PostgreSQL, brought to the schema by this branch's
 # migrations, and its own fake engine. Nothing of an installation is touched; everything is
 # removed at the end.
 #
@@ -20,7 +21,7 @@ net=$id-net
 secret=$(openssl rand -hex 32)
 fernet=$(openssl rand -base64 32 | tr '+/' '-_')
 admin_password=$(openssl rand -hex 16)
-containers="$id-pga $id-pgb $id-enga $id-engb $id-pya $id-pyb $id-go $id-ticka $id-tickb"
+containers="$id-pga $id-pgb $id-enga $id-engb $id-pya $id-pyb $id-ai $id-go $id-ticka $id-tickb"
 bin=$(mktemp -d)  # cmd/jobsonce, built for the round server of stack B
 # images of this run only: comparisons run side by side, each with its own build
 go_gateway=tabularia-gateway-go:$id
@@ -56,8 +57,8 @@ common="-e DB__USER=t -e DB__PASSWORD=t -e DB__NAME=t -e JWT__SECRET=$secret -e 
 extra() {  # DIFF_ENV for the stack whose engine is $1
     for kv in ${DIFF_ENV:-}; do printf -- '-e %s ' "$(printf '%s' "$kv" | sed "s/{engine}/$1/g")"; done
 }
-python_gateway() {  # name, its database, its engine, its Splunk
-    docker run -d --name "$1" --network "$net" $common $4 $(extra "$3") -e DB__HOST="$2" -e ENGINE__BASE_URL="http://$3:8000" \
+python_gateway() {  # name, its database, its engine, its Splunk[, more options]
+    docker run -d --name "$1" --network "$net" $common $4 ${5:-} $(extra "$3") -e DB__HOST="$2" -e ENGINE__BASE_URL="http://$3:8000" \
         -e MONITORING__NODE_EXPORTER_URL="http://$3:8000/metrics" \
         -p 127.0.0.1::8000 -v "$repo/gateway/app:/app/app:ro" "$gateway_image" \
         uvicorn app.main:app --host 0.0.0.0 --port 8000 --proxy-headers --forwarded-allow-ips='*' >/dev/null
@@ -68,9 +69,12 @@ for s in a b; do
     if [ "$s" = a ]; then python_gateway "$id-py$s" "$id-pg$s" "$id-eng$s" "$siem_a"
     else python_gateway "$id-py$s" "$id-pg$s" "$id-eng$s" "$siem_b"; fi
 done
+# stack B's AI service: the same image on B's database (docs/specs/gateway-go.md, «The AI service»)
+python_gateway "$id-ai" "$id-pgb" "$id-engb" "$siem_b" "-e APP__ROLE=ai"
 docker run -d --name "$id-go" --network "$net" $common $siem_b $(extra "$id-engb") -e DB__HOST="$id-pgb" -e ENGINE__BASE_URL="http://$id-engb:8000" \
     -e MONITORING__NODE_EXPORTER_URL="http://$id-engb:8000/metrics" \
     -p 127.0.0.1::8000 -e GATEWAY_GO__UPSTREAM="http://$id-pyb:8000" -e GATEWAY_GO__FORWARDED_ALLOW_IPS='*' \
+    -e GATEWAY_GO__AI_SERVICE="http://$id-ai:8000" \
     "$go_gateway" >/dev/null
 
 # the comparison «a un giro» (cmd/diffcheck/ticks.go): ONE round of a background loop, in A
@@ -84,11 +88,11 @@ docker run -d --name "$id-ticka" --network "$net" $common $siem_a $(extra "$id-e
     -e ENGINE__BASE_URL="http://$id-enga:8000" -p 127.0.0.1::8000 -v "$repo/gateway/app:/app/app:ro" \
     -v "$here/cmd/diffcheck/ticks:/ticks:ro" "$gateway_image" python /ticks/ticks.py >/dev/null
 docker run -d --name "$id-tickb" --network "$net" $common $siem_b $(extra "$id-engb") $instance -e DB__HOST="$id-pgb" \
-    -e ENGINE__BASE_URL="http://$id-engb:8000" -p 127.0.0.1::8000 -v "$bin/jobsonce:/jobsonce:ro" \
+    -e ENGINE__BASE_URL="http://$id-engb:8000" -e GATEWAY_GO__AI_SERVICE="http://$id-ai:8000" -p 127.0.0.1::8000 -v "$bin/jobsonce:/jobsonce:ro" \
     "$gateway_image" /jobsonce serve >/dev/null
 
 port() { docker port "$1" "$2/tcp" | head -1 | sed 's/.*://'; }
-for c in "$id-pya" "$id-pyb" "$id-go" "$id-ticka"; do
+for c in "$id-pya" "$id-pyb" "$id-ai" "$id-go" "$id-ticka"; do
     for _ in $(seq 90); do curl -sf "http://127.0.0.1:$(port "$c" 8000)/health" >/dev/null && break; sleep 1; done
 done
 
@@ -102,5 +106,6 @@ docker run --rm --network host --user "$(id -u):$(id -g)" -e HOME=/tmp -e GOCACH
     -v "$here":/src -v tabularia-gomod:/go/pkg/mod -w /src "$go_image" go run ./cmd/diffcheck || {
         echo "--- the Go gateway's log"; docker logs --tail 20 "$id-go"
         echo "--- the Python gateway A's log"; docker logs --tail 20 "$id-pya"
+        echo "--- the AI service's log"; docker logs --tail 20 "$id-ai"
         echo "--- the Python round server's log"; docker logs --tail 30 "$id-ticka"
         echo "--- the Go round server's log"; docker logs --tail 30 "$id-tickb"; exit 1; }
