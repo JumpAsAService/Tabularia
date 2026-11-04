@@ -114,6 +114,12 @@ For a ported route, for every request in its corpus:
 4. **The hard parts**: the orchestrator role (schedules, queue locks, retention), SSO
    (OIDC), the notebooks' WebSocket proxy, exports and their slots, OpenLineage; the AI
    service (decision 4): the assistant's routes and an internal API for the SQL parsing.
+   The background work (`APP__ROLE`, `internal/jobs`, compared «a un giro»: see
+   [gateway-go-porting.md](gateway-go-porting.md)) is in Go: schedules, the flows' queue,
+   retention, housekeeping, backups, webhooks, engine settings, SIEM and the four Kubernetes
+   loops. Still with a Python orchestrator: OpenLineage's run events, the notebooks' reaper
+   while OpenLineage is on, a SQL script on the catalog (sqlglot, the AI service), and
+   whatever of the queue `internal/api/jobs_queue.go` names as carried.
 5. **Switch**: the images, the compose files and the Helm chart run the Go gateway;
    the Python one is removed. Only when the inventory has no *Python* line.
 
