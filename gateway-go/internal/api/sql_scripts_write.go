@@ -308,9 +308,8 @@ type sqlRunOut struct {
 }
 
 // listSQLScriptRuns is GET /sql-scripts/{script_id}/runs (list_sql_script_runs): the
-// latest writes of the script's datasource, newest first. A write still going is brought
-// up to date with the engine (routes/runs._reconcile, which the port leaves to the Python
-// gateway): then the request is answered there.
+// latest writes of the script's datasource, newest first; one still going is brought up to
+// date with the engine first (routes/runs._reconcile: published once it has succeeded).
 func listSQLScriptRuns(d *Deps, w http.ResponseWriter, r *http.Request, p *auth.Principal) {
 	var params pyd.Params
 	sid := params.Path("script_id", r.PathValue("script_id"), pyd.Int())
@@ -324,55 +323,90 @@ func listSQLScriptRuns(d *Deps, w http.ResponseWriter, r *http.Request, p *auth.
 		scriptID = -1
 	}
 	ctx := r.Context()
-	c := perm.For(d.DB, &p.User)
+	q := d.req(w, r, p)
+	c := q.c
 	s, ok := sqlVisibleScript(d, w, r, c, scriptID)
 	if !ok {
 		return
 	}
-	rows, err := d.DB.Query(ctx, `SELECT r.id, r.status, r.trigger_type, r.started_at, r.finished_at, r.error, u.email,
-		r.rows_written, r.datasource_id, r.parent_run_id, ds.project_id
-		FROM runs r LEFT JOIN users u ON u.id = r.launched_by LEFT JOIN datasources ds ON ds.id = r.datasource_id
-		WHERE r.sql_script_id = $1 AND r.kind = 'sql' ORDER BY r.id DESC LIMIT $2`, s.ID, lim.(int64))
+	rows, err := d.DB.Query(ctx, `SELECT `+runColumns+` FROM runs r WHERE r.sql_script_id = $1 AND r.kind = 'sql'
+		ORDER BY r.id DESC LIMIT $2`, s.ID, lim.(int64))
 	if err != nil {
 		fail(d, w, "sql_scripts: the runs", err)
 		return
 	}
-	type item struct {
-		out    sqlRunOut
-		folder *int64
-	}
-	var items []item
+	var runs []*runRow
 	for rows.Next() {
-		var it item
-		var started time.Time
-		var finished *time.Time
-		if err := rows.Scan(&it.out.RunID, &it.out.Status, &it.out.TriggerType, &started, &finished, &it.out.Error,
-			&it.out.LaunchedBy, &it.out.Rows, &it.out.DatasourceID, &it.out.ParentRunID, &it.folder); err != nil {
+		var x runRow
+		if err := rows.Scan(x.dest()...); err != nil {
 			rows.Close()
 			fail(d, w, "sql_scripts: a run", err)
 			return
 		}
-		it.out.StartedAt, it.out.FinishedAt = isoPtr(&started), isoPtr(finished)
-		items = append(items, it)
+		runs = append(runs, &x)
 	}
 	rows.Close()
-	out := make([]sqlRunOut, 0, len(items))
-	for _, it := range items {
-		if it.out.Status != "SUCCESS" && it.out.Status != "FAILURE" {
-			scForward(d, w, r) // _reconcile: the engine's status, the datasource published
-			return
-		}
-		sees := false
-		if it.folder != nil {
-			if sees, err = c.Has(ctx, *it.folder, perm.View); err != nil {
-				fail(d, w, "sql_scripts: a permission", err)
+	for i, run := range runs {
+		if !terminal[run.Status] {
+			if runs[i], err = q.reconcile(run, progressOf{}); err != nil {
+				fail(d, w, "sql_scripts: reconciling a run", err)
 				return
 			}
 		}
-		if !sees {
-			it.out.Rows, it.out.DatasourceID = nil, nil
+	}
+	// who launched them and the folders of the datasources they wrote, as they are now
+	emails, folders := map[int64]string{}, map[int64]int64{}
+	for _, run := range runs {
+		if run.LaunchedBy != nil {
+			if _, seen := emails[*run.LaunchedBy]; !seen {
+				var email string
+				err := d.DB.QueryRow(ctx, `SELECT email FROM users WHERE id = $1`, *run.LaunchedBy).Scan(&email)
+				if err != nil && !scNoRows(err) {
+					fail(d, w, "sql_scripts: who launched a run", err)
+					return
+				}
+				if err == nil {
+					emails[*run.LaunchedBy] = email
+				}
+			}
 		}
-		out = append(out, it.out)
+		if run.DatasourceID != nil {
+			if _, seen := folders[*run.DatasourceID]; !seen {
+				var folder int64
+				err := d.DB.QueryRow(ctx, `SELECT project_id FROM datasources WHERE id = $1`, *run.DatasourceID).Scan(&folder)
+				if err != nil && !scNoRows(err) {
+					fail(d, w, "sql_scripts: a run's datasource", err)
+					return
+				}
+				if err == nil {
+					folders[*run.DatasourceID] = folder
+				}
+			}
+		}
+	}
+	out := make([]sqlRunOut, 0, len(runs))
+	for _, run := range runs {
+		o := sqlRunOut{RunID: run.ID, Status: run.Status, TriggerType: run.TriggerType, StartedAt: isoPtr(&run.StartedAt),
+			FinishedAt: isoPtr(run.FinishedAt), Error: run.Error, Rows: run.RowsWritten, DatasourceID: run.DatasourceID,
+			ParentRunID: run.ParentRunID}
+		if run.LaunchedBy != nil {
+			if e, has := emails[*run.LaunchedBy]; has {
+				o.LaunchedBy = &e
+			}
+		}
+		sees := false
+		if run.DatasourceID != nil {
+			if folder, has := folders[*run.DatasourceID]; has {
+				if sees, err = c.Has(ctx, folder, perm.View); err != nil {
+					fail(d, w, "sql_scripts: a permission", err)
+					return
+				}
+			}
+		}
+		if !sees {
+			o.Rows, o.DatasourceID = nil, nil
+		}
+		out = append(out, o)
 	}
 	server.JSON(w, http.StatusOK, out)
 }

@@ -1,15 +1,12 @@
 package api
 
 // What the routes of the scripting modules (sql_scripts, scripts, scripting, registries,
-// notebooks…) share: the integer path parameters as FastAPI reads them, the forwarding of a
-// request to the Python gateway when a feature the port leaves there is on, and the small
-// helpers of their answers.
+// notebooks…) share: the integer path parameters as FastAPI reads them and the small helpers
+// of their answers.
 
 import (
-	"bytes"
 	"context"
 	"errors"
-	"io"
 	"math/big"
 	"net/http"
 
@@ -54,16 +51,6 @@ func scWithBody(d *Deps, pattern string, h scBodyHandler) http.Handler {
 	return withBody(server.Authed(d.Auth, pattern, func(w http.ResponseWriter, r *http.Request, p *auth.Principal) {
 		h(d, w, r, p, bodyOf(r))
 	}))
-}
-
-// scForward hands the request to the Python gateway as it came, its body included: the
-// port leaves there what depends on a feature it does not carry (sqlglot's or croniter's reading of a text, the cluster's pods).
-func scForward(d *Deps, w http.ResponseWriter, r *http.Request) {
-	if raw := rawOf(r); raw != nil {
-		r.Body = io.NopCloser(bytes.NewReader(raw))
-		r.ContentLength = int64(len(raw))
-	}
-	d.Upstream.ServeHTTP(w, r)
 }
 
 // scRefuseWith answers an HTTPException whose detail is not a text (a dict the page reads).

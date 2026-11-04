@@ -1,10 +1,8 @@
 package api
 
-// routes/sql_scripts.py: SQL kept as an object of a folder, with its versions. Ported: the
-// lists, the catalog, a script and its versions, a copy, deleting it, restoring a version.
-// The runs on the catalog read the SQL with sqlglot (services/sql_scripts.resolve), which the
-// port leaves to the Python gateway: «Run», «Export», «Refresh now» and the schedule stay
-// there, with the routes whose bodies wait for the shared validation.
+// routes/sql_scripts.py: SQL kept as an object of a folder, with its versions: the lists, the
+// catalog, a script and its versions, a copy, deleting it, restoring a version. The SQL on the
+// catalog is read with sqlglot by the AI service (services/sql_scripts.resolve, Deps.SQL).
 
 import (
 	"context"
