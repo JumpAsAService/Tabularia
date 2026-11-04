@@ -24,26 +24,14 @@ import (
 	"github.com/JumpAsAService/Tabularia/gateway-go/internal/versioned"
 )
 
-// bodyHandler is a route with a body: the bytes, read before the authentication as FastAPI
-// reads them (a JSON that does not parse is a 422 even for whoever is not signed in).
+// bodyHandler is a route with a body (read by withBody before the authentication): the body
+// and its bytes.
 type bodyHandler func(w http.ResponseWriter, r *http.Request, p *auth.Principal, body pyd.Body, raw []byte)
 
-func withBody(a *auth.Authenticator, pattern string, h bodyHandler) http.Handler {
-	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		raw, err := io.ReadAll(r.Body)
-		if err != nil {
-			server.InternalError(w)
-			return
-		}
-		body, early := pyd.ReadBody(raw, r.Header.Get("Content-Type"))
-		if early != nil {
-			early.Write(w)
-			return
-		}
-		server.Authed(a, pattern, func(w http.ResponseWriter, r *http.Request, p *auth.Principal) {
-			h(w, r, p, body, raw)
-		}).ServeHTTP(w, r)
-	})
+// bodyRoute is a route with a body: withBody, then the authentication, then the handler.
+func bodyRoute(a *auth.Authenticator, method, pattern string, h bodyHandler) server.Route {
+	return server.Route{Method: method, Pattern: pattern, Handler: withBody(server.Authed(a, pattern,
+		func(w http.ResponseWriter, r *http.Request, p *auth.Principal) { h(w, r, p, bodyOf(r), rawOf(r)) }))}
 }
 
 // toPython is a value pyd validated, as the Python code holds it (pyjson's values).
@@ -455,6 +443,7 @@ func (h *objectsAPI) restore(w http.ResponseWriter, r *http.Request, p *auth.Pri
 	if !ok {
 		return
 	}
+	ids = inColumn(ids)
 	ctx, c := r.Context(), perm.For(h.d.DB, &p.User)
 	it := h.visible(w, r, c, ids[0])
 	if it == nil || !h.ensure(w, r, c, it.ProjectID, perm.Edit) {

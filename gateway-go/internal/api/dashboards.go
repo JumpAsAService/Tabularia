@@ -26,7 +26,7 @@ func init() {
 			return server.Route{Method: method, Pattern: pattern, Handler: server.Authed(d.Auth, pattern, fn)}
 		}
 		body := func(method, pattern string, fn bodyHandler) server.Route {
-			return server.Route{Method: method, Pattern: pattern, Handler: withBody(d.Auth, pattern, fn)}
+			return bodyRoute(d.Auth, method, pattern, fn)
 		}
 		return []server.Route{
 			route(http.MethodGet, "/dashboards", h.list),

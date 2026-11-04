@@ -238,6 +238,7 @@ func (h *objectsAPI) listProject(w http.ResponseWriter, r *http.Request, p *auth
 	if !ok {
 		return
 	}
+	ids = inColumn(ids)
 	ctx, c := r.Context(), perm.For(h.d.DB, &p.User)
 	exists, err := projectExists(ctx, h.d.DB, ids[0])
 	if err != nil {
@@ -270,6 +271,7 @@ func (h *objectsAPI) get(w http.ResponseWriter, r *http.Request, p *auth.Princip
 	if !ok {
 		return
 	}
+	ids = inColumn(ids)
 	c := perm.For(h.d.DB, &p.User)
 	it := h.visible(w, r, c, ids[0])
 	if it == nil {
@@ -290,6 +292,7 @@ func (h *objectsAPI) opened(w http.ResponseWriter, r *http.Request, p *auth.Prin
 	if !ok {
 		return
 	}
+	ids = inColumn(ids)
 	c := perm.For(h.d.DB, &p.User)
 	it := h.visible(w, r, c, ids[0])
 	if it == nil {
@@ -304,13 +307,7 @@ func (h *objectsAPI) opened(w http.ResponseWriter, r *http.Request, p *auth.Prin
 			h.record(r.Context(), p, h.openAudit, it.ID, it.Name, nil)
 		}
 	}
-	noContent(w)
-}
-
-// noContent is FastAPI's answer of a 204 route: no body, and the JSON content type all the same.
-func noContent(w http.ResponseWriter) {
-	w.Header().Set("Content-Type", "application/json")
-	w.WriteHeader(http.StatusNoContent)
+	returnsNone(w)
 }
 
 // remove is DELETE /reports/{report_id} (delete_report).
@@ -319,6 +316,7 @@ func (h *objectsAPI) remove(w http.ResponseWriter, r *http.Request, p *auth.Prin
 	if !ok {
 		return
 	}
+	ids = inColumn(ids)
 	ctx, c := r.Context(), perm.For(h.d.DB, &p.User)
 	it := h.visible(w, r, c, ids[0])
 	if it == nil || !h.ensure(w, r, c, it.ProjectID, perm.Edit) {
@@ -345,7 +343,7 @@ func (h *objectsAPI) remove(w http.ResponseWriter, r *http.Request, p *auth.Prin
 		return
 	}
 	h.record(ctx, p, h.kind.Label+".delete", ids[0], it.Name, nil)
-	noContent(w)
+	returnsNone(w)
 }
 
 // usedBy is the 409 of an object still in use: what says it, and who uses it.
@@ -384,6 +382,7 @@ func (h *objectsAPI) duplicate(w http.ResponseWriter, r *http.Request, p *auth.P
 	if !ok {
 		return
 	}
+	ids = inColumn(ids)
 	ctx, c := r.Context(), perm.For(h.d.DB, &p.User)
 	src := h.visible(w, r, c, ids[0])
 	if src == nil || !h.ensure(w, r, c, src.ProjectID, perm.Edit) {
@@ -445,6 +444,7 @@ func (h *objectsAPI) versions(w http.ResponseWriter, r *http.Request, p *auth.Pr
 	if !ok {
 		return
 	}
+	ids = inColumn(ids)
 	ctx, c := r.Context(), perm.For(h.d.DB, &p.User)
 	it := h.visible(w, r, c, ids[0])
 	if it == nil {
@@ -527,6 +527,7 @@ func (h *objectsAPI) version(w http.ResponseWriter, r *http.Request, p *auth.Pri
 	if !ok {
 		return
 	}
+	ids = inColumn(ids)
 	ctx, c := r.Context(), perm.For(h.d.DB, &p.User)
 	it := h.visible(w, r, c, ids[0])
 	if it == nil {

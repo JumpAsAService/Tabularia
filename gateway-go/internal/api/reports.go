@@ -17,7 +17,7 @@ func init() {
 			createModel: gatewaymodels.ReportCreate, updateModel: gatewaymodels.ReportUpdate, checkModel: gatewaymodels.ReportsCheckRequest,
 			empty: reports.Empty}
 		body := func(method, pattern string, fn bodyHandler) server.Route {
-			return server.Route{Method: method, Pattern: pattern, Handler: withBody(d.Auth, pattern, fn)}
+			return bodyRoute(d.Auth, method, pattern, fn)
 		}
 		route := func(method, pattern string, fn func(http.ResponseWriter, *http.Request, *auth.Principal)) server.Route {
 			return server.Route{Method: method, Pattern: pattern, Handler: server.Authed(d.Auth, pattern, fn)}

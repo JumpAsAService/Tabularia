@@ -2,7 +2,6 @@ package api
 
 import (
 	"net/http"
-	"strconv"
 	"strings"
 	"time"
 
@@ -243,5 +242,3 @@ func (h *objectsAPI) search(w http.ResponseWriter, r *http.Request, p *auth.Prin
 	}
 	server.JSON(w, http.StatusOK, page{Items: items, Total: total})
 }
-
-func itoa(n int) string { return strconv.Itoa(n) }

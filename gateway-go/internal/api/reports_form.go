@@ -32,6 +32,7 @@ func (h *objectsAPI) parameters(w http.ResponseWriter, r *http.Request, p *auth.
 	if !ok {
 		return
 	}
+	ids = inColumn(ids)
 	ctx, c := r.Context(), perm.For(h.d.DB, &p.User)
 	it := h.visible(w, r, c, ids[0])
 	if it == nil {
