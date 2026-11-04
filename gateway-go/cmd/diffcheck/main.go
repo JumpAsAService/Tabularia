@@ -82,6 +82,9 @@ type Suite struct {
 	Phases []Phase
 	Engine []EngineRule
 	Steps  func(w *World) []Step
+	// Asked: run only when DIFF_ONLY names it, as its DIFF_ENV points a service at the fake
+	// engine (without it, the steps would reach the real one: PyPI, an identity provider)
+	Asked bool
 }
 
 // Phase is a set of panel settings (gateway_settings) both gateways read again within ten
@@ -222,7 +225,7 @@ func main() {
 	sort.SliceStable(suites, func(i, j int) bool { return suites[i].Module < suites[j].Module })
 	failed, total := 0, 0
 	for _, s := range suites {
-		if len(only) > 0 && !only[s.Module] {
+		if (len(only) > 0 || s.Asked) && !only[s.Module] {
 			continue
 		}
 		if s.Seed != nil {

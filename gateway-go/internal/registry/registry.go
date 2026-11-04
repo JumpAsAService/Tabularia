@@ -20,13 +20,13 @@ import (
 	"net/http"
 	"net/netip"
 	"net/url"
-	"os"
 	"regexp"
 	"strconv"
 	"strings"
 	"time"
 	"unicode/utf8"
 
+	"github.com/JumpAsAService/Tabularia/gateway-go/internal/httpxerr"
 	"github.com/JumpAsAService/Tabularia/gateway-go/internal/pyjson"
 )
 
@@ -185,34 +185,7 @@ func (c *deadlineConn) Write(b []byte) (int, error) {
 }
 
 // kind names the httpx exception a Go error stands for, and its str().
-func kind(err error) (string, string) {
-	var cert *tls.CertificateVerificationError
-	var hostErr x509.HostnameError
-	var unknown x509.UnknownAuthorityError
-	var invalid x509.CertificateInvalidError
-	var record tls.RecordHeaderError
-	var op *net.OpError
-	var ne net.Error
-	switch {
-	case errors.As(err, &record), strings.Contains(err.Error(), "server gave HTTP response to HTTPS client"):
-		return "ConnectError", "[SSL: WRONG_VERSION_NUMBER] wrong version number (_ssl.c:1010)"
-	case errors.As(err, &cert), errors.As(err, &hostErr), errors.As(err, &unknown), errors.As(err, &invalid):
-		return "ConnectError", "[SSL: CERTIFICATE_VERIFY_FAILED] certificate verify failed: " + err.Error()
-	case errors.As(err, &op) && op.Op == "dial":
-		if op.Timeout() {
-			return "ConnectTimeout", ""
-		}
-		return "ConnectError", "All connection attempts failed"
-	case errors.As(err, &ne) && ne.Timeout():
-		if errors.Is(err, os.ErrDeadlineExceeded) && strings.Contains(err.Error(), "TLS handshake") {
-			return "ConnectTimeout", "_ssl.c:983: The handshake operation timed out"
-		}
-		return "ReadTimeout", ""
-	case errors.Is(err, io.EOF), errors.Is(err, io.ErrUnexpectedEOF):
-		return "RemoteProtocolError", "Server disconnected without sending a response."
-	}
-	return "ConnectError", err.Error()
-}
+func kind(err error) (string, string) { return httpxerr.Of(err) }
 
 // explain is _explain.
 func explain(err error, r Registry) *Error {
