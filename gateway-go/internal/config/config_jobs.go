@@ -1,6 +1,11 @@
 package config
 
-import "fmt"
+import (
+	"fmt"
+	"regexp"
+	"strconv"
+	"strings"
+)
 
 // JobsConfig is what the background work reads of the environment (app/main.py
 // start_background_work and the services it starts). The panel may change several of
@@ -34,6 +39,114 @@ type JobsConfig struct {
 	// are in Admin
 	BackupPgDump  string
 	BackupTimeout int64
+
+	// Kube is what the Kubernetes loops read (scaling, script builds, notebooks, settings
+	// rollout) that internal/scriptcfg and internal/kube do not
+	Kube KubeJobsConfig
+}
+
+// KubeJobsConfig are the KUBERNETES__*, SCRIPTS__* and NOTEBOOKS__* values the Kubernetes
+// loops read, with core/config.py's defaults and bounds. Some are on the panel too
+// (internal/settings, settings_jobs.go): these are then the environment's.
+type KubeJobsConfig struct {
+	// KubernetesSettings
+	Namespace                string // empty = the pod's own (NamespaceFile)
+	NamespaceFile            string
+	RunWorkerDeployment      string
+	RunWorkerAutoscaler      string // "hpa/<name>" | "scaledobject/<name>" | ""
+	RunWorkerMaxReplicas     int64
+	PreviewWorkerDeployment  string
+	PreviewWorkerAutoscaler  string
+	PreviewWorkerMaxReplicas int64
+	Timeout                  float64 // kubernetes.timeout_seconds
+	Rollout                  bool
+	Release                  string
+	AppName                  string
+
+	// ScriptsSettings
+	RegistryInsecure     bool
+	RegistryPushSecret   string
+	RegistryPullSecret   string
+	RegistryCAConfigMap  string
+	BuilderImage         string
+	BuildTimeoutSeconds  int64   // scripts.build_timeout_seconds
+	BuildCPU             string  // scripts.build_cpu
+	BuildMemory          string  // scripts.build_memory
+	CheckTimeoutSeconds  int64   // scripts.check_timeout_seconds
+	ScriptsPollSeconds   float64 // scripts.poll_seconds
+	ScriptsLogMaxBytes   int64   // scripts.log_max_bytes
+	ScriptsJobTTLSeconds int64   // scripts.job_ttl_seconds
+
+	// NotebooksSettings
+	NotebooksIdleMinutes  int64
+	NotebooksStartTimeout int64
+}
+
+var (
+	// ScriptsSettings._build_cpu and _build_memory
+	buildCPU    = regexp.MustCompile(`^[0-9]+(\.[0-9]+)?m?$`)
+	buildMemory = regexp.MustCompile(`^[0-9]+(\.[0-9]+)?(Ki|Mi|Gi|Ti|K|M|G|T)?$`)
+)
+
+// ValidBuildCPU is ScriptsSettings._build_cpu: a CPU quantity above zero (stripped).
+func ValidBuildCPU(v string) bool {
+	v = strings.TrimSpace(v)
+	if !buildCPU.MatchString(v) {
+		return false
+	}
+	f, err := strconv.ParseFloat(strings.TrimRight(v, "m"), 64)
+	return err == nil && f > 0
+}
+
+// ValidBuildMemory is ScriptsSettings._build_memory.
+func ValidBuildMemory(v string) bool { return buildMemory.MatchString(strings.TrimSpace(v)) }
+
+func loadKubeJobs(r *reader) KubeJobsConfig {
+	k := KubeJobsConfig{
+		Namespace:                r.str("KUBERNETES__NAMESPACE", ""),
+		NamespaceFile:            r.str("KUBERNETES__NAMESPACE_FILE", "/var/run/secrets/kubernetes.io/serviceaccount/namespace"),
+		RunWorkerDeployment:      r.str("KUBERNETES__RUN_WORKER_DEPLOYMENT", ""),
+		RunWorkerAutoscaler:      r.str("KUBERNETES__RUN_WORKER_AUTOSCALER", ""),
+		RunWorkerMaxReplicas:     int64(r.integer("KUBERNETES__RUN_WORKER_MAX_REPLICAS", 10, 1, 0)),
+		PreviewWorkerDeployment:  r.str("KUBERNETES__PREVIEW_WORKER_DEPLOYMENT", ""),
+		PreviewWorkerAutoscaler:  r.str("KUBERNETES__PREVIEW_WORKER_AUTOSCALER", ""),
+		PreviewWorkerMaxReplicas: int64(r.integer("KUBERNETES__PREVIEW_WORKER_MAX_REPLICAS", 8, 1, 0)),
+		Timeout:                  r.float("KUBERNETES__TIMEOUT_SECONDS", 10),
+		Rollout:                  r.boolean("KUBERNETES__ROLLOUT", false),
+		Release:                  r.str("KUBERNETES__RELEASE", ""),
+		AppName:                  r.str("KUBERNETES__APP_NAME", ""),
+		RegistryInsecure:         r.boolean("SCRIPTS__REGISTRY_INSECURE", false),
+		RegistryPushSecret:       r.str("SCRIPTS__REGISTRY_PUSH_SECRET", ""),
+		RegistryPullSecret:       r.str("SCRIPTS__REGISTRY_PULL_SECRET", ""),
+		RegistryCAConfigMap:      r.str("SCRIPTS__REGISTRY_CA_CONFIGMAP", ""),
+		BuilderImage:             r.str("SCRIPTS__BUILDER_IMAGE", "moby/buildkit:v0.33.1-rootless"),
+		BuildTimeoutSeconds:      int64(r.integer("SCRIPTS__BUILD_TIMEOUT_SECONDS", 3600, 60, 0)),
+		BuildCPU:                 strings.TrimSpace(r.str("SCRIPTS__BUILD_CPU", "2")),
+		BuildMemory:              strings.TrimSpace(r.str("SCRIPTS__BUILD_MEMORY", "4Gi")),
+		CheckTimeoutSeconds:      int64(r.integer("SCRIPTS__CHECK_TIMEOUT_SECONDS", 300, 30, 0)),
+		ScriptsPollSeconds:       r.float("SCRIPTS__POLL_SECONDS", 5),
+		ScriptsLogMaxBytes:       int64(r.integer("SCRIPTS__LOG_MAX_BYTES", 262_144, 4096, 0)),
+		ScriptsJobTTLSeconds:     int64(r.integer("SCRIPTS__JOB_TTL_SECONDS", 3600, 60, 0)),
+		NotebooksIdleMinutes:     int64(r.integer("NOTEBOOKS__IDLE_MINUTES", 15, 1, 24*60)),
+		NotebooksStartTimeout:    int64(r.integer("NOTEBOOKS__START_TIMEOUT_SECONDS", 300, 30, 3600)),
+	}
+	if k.Timeout <= 0 {
+		r.fail("KUBERNETES__TIMEOUT_SECONDS", "must be greater than 0")
+		k.Timeout = 10
+	}
+	if k.ScriptsPollSeconds <= 0 {
+		r.fail("SCRIPTS__POLL_SECONDS", "must be greater than 0")
+		k.ScriptsPollSeconds = 5
+	}
+	if !ValidBuildCPU(k.BuildCPU) {
+		r.fail("SCRIPTS__BUILD_CPU", "is a Kubernetes CPU quantity: 2, 1.5 or 1500m")
+		k.BuildCPU = "2"
+	}
+	if !ValidBuildMemory(k.BuildMemory) {
+		r.fail("SCRIPTS__BUILD_MEMORY", "is a Kubernetes memory quantity: 4Gi, 6144Mi")
+		k.BuildMemory = "4Gi"
+	}
+	return k
 }
 
 // Roles are AppSettings.role's Literal.
@@ -62,6 +175,7 @@ func loadJobs(r *reader) JobsConfig {
 		WebhooksRetentionDays: int64(r.integer("WEBHOOKS__RETENTION_DAYS", 30, 1, -1)),
 		BackupPgDump:          r.str("BACKUP__PG_DUMP", "pg_dump"),
 		BackupTimeout:         int64(r.integer("BACKUP__TIMEOUT_SECONDS", 3600, 60, -1)),
+		Kube:                  loadKubeJobs(r),
 	}
 	known := false
 	for _, role := range Roles {
