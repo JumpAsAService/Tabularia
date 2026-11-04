@@ -51,24 +51,12 @@ var workerQueues = map[string]string{"run": "celery", "preview": "preview"}
 
 func init() {
 	register("workers", func(d *Deps) []server.Route {
-		k := kube.FromEnv()
-		onKube := func(h http.Handler) http.Handler {
-			// the autoscaling bounds live on the cluster (services/kube_scaling.py): with
-			// KUBERNETES__SCALING on, the routes are still Python's
-			return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-				if k.Scaling {
-					d.Upstream.ServeHTTP(w, r)
-					return
-				}
-				h.ServeHTTP(w, r)
-			})
-		}
 		return []server.Route{
-			{Method: http.MethodGet, Pattern: "/admin/workers", Handler: onKube(deps.Observer(d.Auth, d.DB, d.Log, "/admin/workers", readWorkers(d)))},
+			{Method: http.MethodGet, Pattern: "/admin/workers", Handler: deps.Observer(d.Auth, d.DB, d.Log, "/admin/workers", readWorkers(d))},
 			{Method: http.MethodPut, Pattern: "/admin/workers/{kind}/scaling",
-				Handler: onKube(withBody(deps.Superuser(d.Auth, d.DB, d.Log, "/admin/workers/{kind}/scaling", setScaling(d, true))))},
+				Handler: withBody(deps.Superuser(d.Auth, d.DB, d.Log, "/admin/workers/{kind}/scaling", setScaling(d, true)))},
 			{Method: http.MethodDelete, Pattern: "/admin/workers/{kind}/scaling",
-				Handler: onKube(deps.Superuser(d.Auth, d.DB, d.Log, "/admin/workers/{kind}/scaling", setScaling(d, false)))},
+				Handler: deps.Superuser(d.Auth, d.DB, d.Log, "/admin/workers/{kind}/scaling", setScaling(d, false))},
 		}
 	})
 }
@@ -93,7 +81,7 @@ func dictGet(o *pyd.Object, k string) any {
 	return v
 }
 
-// workersState is routes/workers.py _state, off Kubernetes's scaling (ScalingOut mode none).
+// workersState is routes/workers.py _state.
 func workersState(d *Deps, w http.ResponseWriter, r *http.Request, p *auth.Principal) {
 	ctx := r.Context()
 	refused := func(status int) {
@@ -169,11 +157,12 @@ func workersState(d *Deps, w http.ResponseWriter, r *http.Request, p *auth.Princ
 			}
 			queued = dictGet(q, workerQueues[kind])
 		}
-		queuedOut, ok := fitsType(pyd.Optional(pyd.Int()), queued)
+		// ConcurrencyOut(...) and the WorkerOut(**w), arguments of GroupOut, are checked as they
+		// are built; the scaling is awaited next; GroupOut checks `queued` last
 		min, ok2 := fitsType(pyd.Int(), orDefault(item, "min", int64(1)))
 		max, ok3 := fitsType(pyd.Int(), orDefault(item, "max", int64(32)))
 		applied, ok4 := fitsType(pyd.Optional(pyd.Int()), dictGet(item, "value"))
-		if !ok || !ok2 || !ok3 || !ok4 {
+		if !ok2 || !ok3 || !ok4 {
 			server.InternalError(w)
 			return
 		}
@@ -209,12 +198,22 @@ func workersState(d *Deps, w http.ResponseWriter, r *http.Request, p *auth.Princ
 				list = append(list, out)
 			}
 		}
+		scaling, err := workerScaling(ctx, d, kind, full)
+		if err != nil {
+			fail500(d, w, "workers: the cluster", err)
+			return
+		}
+		queuedOut, ok := fitsType(pyd.Optional(pyd.Int()), queued)
+		if !ok {
+			server.InternalError(w)
+			return
+		}
 		groups = append(groups, pyjson.Object{
 			{Key: "kind", Value: kind}, {Key: "queue", Value: workerQueues[kind]}, {Key: "queued", Value: queuedOut},
 			{Key: "concurrency", Value: pyjson.Object{{Key: "key", Value: key}, {Key: "min", Value: min}, {Key: "max", Value: max},
 				{Key: "value", Value: value}, {Key: "applied", Value: applied}, {Key: "updated_at", Value: at}, {Key: "updated_by", Value: by}}},
 			{Key: "workers", Value: list},
-			{Key: "scaling", Value: noScaling(d.Config.Admin.OnKubernetes)},
+			{Key: "scaling", Value: scaling},
 		})
 	}
 	tick, _ := live.Get("tick_seconds")
@@ -229,7 +228,7 @@ func workersState(d *Deps, w http.ResponseWriter, r *http.Request, p *auth.Princ
 	writePy(w, pyjson.Object{
 		{Key: "groups", Value: groups}, {Key: "workers_known", Value: hasWorkers && workers != nil},
 		{Key: "concurrency_editable", Value: full && d.Panel.FromPanel() && !fromToken},
-		{Key: "scaling_editable", Value: false}, // full and kube.enabled(): off here
+		{Key: "scaling_editable", Value: full && kube.FromEnv().Scaling && !fromToken},
 		{Key: "panel_enabled", Value: d.Panel.FromPanel()}, {Key: "tick_seconds", Value: tickOut},
 	})
 }
@@ -263,8 +262,8 @@ func readWorkers(d *Deps) deps.Handler {
 	return func(w http.ResponseWriter, r *http.Request, p *auth.Principal) { workersState(d, w, r, p) }
 }
 
-// setScaling is PUT and DELETE /admin/workers/{kind}/scaling off Kubernetes's scaling: a
-// token refused first (_no_token), then the parameters, then the 409 of _scaling_on.
+// setScaling is PUT and DELETE /admin/workers/{kind}/scaling (scala, give_back): a token
+// refused first (_no_token), then the parameters, then the 409 of _scaling_on.
 func setScaling(d *Deps, put bool) deps.Handler {
 	return func(w http.ResponseWriter, r *http.Request, p *auth.Principal) {
 		if p.TokenName != "" {
@@ -272,15 +271,25 @@ func setScaling(d *Deps, put bool) deps.Handler {
 			return
 		}
 		var ps pyd.Params
-		ps.Path("kind", r.PathValue("kind"), pyd.Literal("run", "preview"))
+		kindV := ps.Path("kind", r.PathValue("kind"), pyd.Literal("run", "preview"))
+		var body *pyd.ModelValue
 		if put {
-			ps.Body(bodyOf(r), gatewaymodels.ScalingIn)
+			body = ps.Body(bodyOf(r), gatewaymodels.ScalingIn)
 		}
 		if resp := ps.Response(); resp != nil {
 			resp.Write(w)
 			return
 		}
-		server.Refuse(w, &auth.Refusal{Status: http.StatusConflict, Detail: "On this installation the workers are not scaled from the panel: " +
-			"it works on Kubernetes, with adminScaling.enabled in the Helm chart (KUBERNETES__SCALING=true)"})
+		if !kube.FromEnv().Scaling {
+			server.Refuse(w, &auth.Refusal{Status: http.StatusConflict, Detail: "On this installation the workers are not scaled from the panel: " +
+				"it works on Kubernetes, with adminScaling.enabled in the Helm chart (KUBERNETES__SCALING=true)"})
+			return
+		}
+		kind := kindV.(string)
+		if put {
+			changeScaling(d, w, r, p, kind, body.Get("min_replicas").(int64), body.Get("max_replicas").(int64))
+		} else {
+			giveBackScaling(d, w, r, p, kind)
+		}
 	}
 }
