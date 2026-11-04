@@ -226,6 +226,10 @@ func init() {
 						VALUES ('script', '', 'SUCCESS', 'manual', '', '', '', '', false, '', '2025-12-01', '2025-12-01', '["log": "q"]'),
 						('script', '', 'SUCCESS', 'manual', '', '', '', '', false, '', '2025-12-01', '2025-12-01', '[{"log": "q"}]')`)
 				}),
+				// the pass rewrote other suites' runs: the same rows, laid out apart on the two sides, which
+				// the history's ties (ORDER BY started_at) would show — the table rewritten in id order on both
+				{Name: "the runs' table in id order on both sides", Method: "GET", Path: "/health",
+					Before: func(w *World) { w.Exec(`CLUSTER runs USING runs_pkey`) }},
 			}
 		},
 	})
