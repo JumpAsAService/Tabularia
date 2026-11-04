@@ -217,7 +217,7 @@ func SubmitTask(ctx context.Context, e *engine.Client, path string, body pyjson.
 	defer cancel()
 	res, raw, err := e.JSON(ctx, http.MethodPost, path, body)
 	if err != nil {
-		return "", nil, err
+		return "", nil, &EngineDown{err}
 	}
 	if res.StatusCode >= 400 {
 		return "", &auth.Refusal{Status: res.StatusCode, Detail: textCut(raw, 500)}, nil

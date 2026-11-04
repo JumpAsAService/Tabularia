@@ -64,7 +64,7 @@ func launchRun(d *Deps, emailTest bool) authedFunc {
 		flow := &runlaunch.Flow{ID: f.ID, ProjectID: f.ProjectID, Name: f.Name, Engine: f.Engine, ProductionEngine: f.ProductionEngine}
 		runID, ref, err := runlaunch.LaunchFlowRun(q.ctx, d.flowEnv(), &p.User, flow, body, opts)
 		if err != nil {
-			q.fail(err)
+			launchErr(d, w, err)
 			return
 		}
 		if ref != nil {

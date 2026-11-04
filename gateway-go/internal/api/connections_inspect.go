@@ -18,6 +18,7 @@ import (
 	"github.com/JumpAsAService/Tabularia/gateway-go/internal/pydconv"
 	"github.com/JumpAsAService/Tabularia/gateway-go/internal/pyjson"
 	"github.com/JumpAsAService/Tabularia/gateway-go/internal/pystr"
+	"github.com/JumpAsAService/Tabularia/gateway-go/internal/runlaunch"
 	"github.com/JumpAsAService/Tabularia/gateway-go/internal/server"
 )
 
@@ -151,7 +152,7 @@ func engineInspect(ctx context.Context, d *Deps, payload pyjson.Object, action, 
 	}
 	res, raw, err := d.Engine.JSON(ctx, http.MethodPost, route, body)
 	if err != nil {
-		return nil, nil, err
+		return nil, nil, &runlaunch.EngineDown{Err: err}
 	}
 	if res.StatusCode < 400 {
 		return raw, nil, nil
@@ -199,7 +200,7 @@ func engineInspect(ctx context.Context, d *Deps, payload pyjson.Object, action, 
 // inspectAnswer answers the engine's inspection as the route returns it.
 func inspectAnswer(d *Deps, w http.ResponseWriter, raw []byte, ref *auth.Refusal, err error) {
 	if err != nil {
-		fail500(d, w, "connections", err)
+		launchErr(d, w, err)
 		return
 	}
 	if ref != nil {
@@ -635,7 +636,7 @@ func previewPlaceholders(d *Deps) authedFunc {
 		}
 		res, raw, err := d.Engine.JSON(r.Context(), http.MethodPost, "/placeholders/preview", payload)
 		if err != nil {
-			fail500(d, w, "placeholders", err)
+			launchErr(d, w, &runlaunch.EngineDown{Err: err})
 			return
 		}
 		if res.StatusCode >= 400 {

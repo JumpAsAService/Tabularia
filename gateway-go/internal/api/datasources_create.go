@@ -349,7 +349,7 @@ func (d *Deps) ingestEnv(db runlaunch.DB) runlaunch.Env {
 // launchFailure answers what stopped an import's launch: the engine's refusal, or the 500.
 func launchFailure(d *Deps, w http.ResponseWriter, ref *auth.Refusal, err error) {
 	if err != nil {
-		fail500(d, w, "datasources", err)
+		launchErr(d, w, err)
 		return
 	}
 	server.Refuse(w, ref)
