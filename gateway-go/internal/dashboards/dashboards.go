@@ -355,7 +355,7 @@ func Review(ctx context.Context, rv *reports.Reviewer, definition any, current a
 	var where *string
 	checked, err := Check(definition)
 	if err == nil {
-		err = reports.CheckReferences(ctx, rv.Q, rv.C, checked, current)
+		err = reports.CheckReferencesWith(ctx, rv.Q, rv.C, rv.SQL, checked, current)
 	}
 	if err != nil {
 		p, ok := reportdef.AsProblem(err)

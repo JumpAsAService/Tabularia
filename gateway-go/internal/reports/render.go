@@ -13,11 +13,13 @@ import (
 	"strings"
 	"time"
 
+	"github.com/JumpAsAService/Tabularia/gateway-go/internal/aisvc"
 	"github.com/JumpAsAService/Tabularia/gateway-go/internal/engine"
 	"github.com/JumpAsAService/Tabularia/gateway-go/internal/perm"
 	"github.com/JumpAsAService/Tabularia/gateway-go/internal/pyjson"
 	"github.com/JumpAsAService/Tabularia/gateway-go/internal/pystr"
 	"github.com/JumpAsAService/Tabularia/gateway-go/internal/reportparams"
+	"github.com/JumpAsAService/Tabularia/gateway-go/internal/sqlscripts"
 )
 
 // Given is the parameters' values as they arrive (given_params): one list per name, in order.
@@ -64,6 +66,9 @@ type Resolver struct {
 	Engine *engine.Client
 	Log    *slog.Logger
 	Fernet interface{ Decrypt(string) (string, error) }
+	// SQL reads a SQL with sqlglot, in the AI service (sql_scripts.resolve,
+	// report_params.without_params); without it those datasets are ErrNeedsPython
+	SQL *aisvc.Client
 }
 
 func refusal(status int, format string, args ...any) *Refusal {
@@ -320,6 +325,11 @@ type Engines struct {
 // NewEngines starts a resolution's choices.
 func (rs *Resolver) NewEngines() *Engines { return &Engines{rs: rs, picked: map[string]string{}} }
 
+// PickEngine is engine_policy.pick_engine: the engine of a query, available and allowed.
+func (rs *Resolver) PickEngine(ctx context.Context, requested any) (string, error) {
+	return rs.pickEngine(ctx, requested)
+}
+
 func (rs *Resolver) pickEngine(ctx context.Context, requested any) (string, error) {
 	disabled := map[string]bool{}
 	rows, err := rs.Q.Query(ctx, `SELECT engine_id FROM disabled_engines`)
@@ -446,6 +456,7 @@ type Plan struct {
 	DatasourceID int64
 	Filters      []any
 	Placeholders map[string]bool
+	Left         map[string]bool // the parameters to ignore that its SQL still names
 }
 
 var ops = map[string]string{"=": "eq", "<>": "ne", "<": "lt", "<=": "le", ">": "gt", ">=": "ge", "in": "in", "contains": "contains"}
@@ -576,7 +587,9 @@ func ViewOperations(spec pyjson.Object, ds *Datasource) []any {
 	return out
 }
 
-func (rs *Resolver) plan(ctx context.Context, ds pyjson.Object, params map[string]bool, engines *Engines) (*Plan, error) {
+// plan is _plan. `ignoring`: parameters read as having no value, their conditions in a SQL taken
+// for true (the choices of a parameter); the SQL is checked before and after.
+func (rs *Resolver) plan(ctx context.Context, ds pyjson.Object, params map[string]bool, engines *Engines, ignoring map[string]bool) (*Plan, error) {
 	src, name := obj(get(ds, "source")), pystr.Str(get(ds, "name"))
 	switch get(src, "kind") {
 	case "sql", "sql_script":
@@ -584,14 +597,50 @@ func (rs *Resolver) plan(ctx context.Context, ds pyjson.Object, params map[strin
 		if err != nil {
 			return nil, err
 		}
-		if s.Conn == nil {
-			return nil, ErrNeedsPython // the catalog: sql_scripts.resolve at _finish
+		if (s.Conn == nil || len(ignoring) > 0) && rs.SQL == nil {
+			return nil, ErrNeedsPython // read by sqlglot: without the AI service, the Python gateway's
 		}
-		_, placeholders, r := reportparams.CheckSQL(s.SQL, s.Dialect(), params)
+		p := &Plan{Name: name, Kind: "connection", SQL: s.SQL, Conn: s.Conn, Left: map[string]bool{}}
+		key := ""
+		if s.Conn != nil {
+			key = s.Conn.DBType
+		} else {
+			if p.Engine, err = engines.Pick(ctx, s.Engine, false); err != nil {
+				return nil, err
+			}
+			p.Kind, key = "sql", p.Engine
+		}
+		dialect := reportparams.DialectOf(key)
+		_, placeholders, r := reportparams.CheckSQL(s.SQL, dialect, params)
 		if r != nil {
 			return nil, r
 		}
-		return &Plan{Name: name, Kind: "connection", SQL: s.SQL, Conn: s.Conn, Placeholders: placeholders}, nil
+		p.Placeholders = placeholders
+		if len(ignoring) > 0 {
+			names := make([]string, 0, len(ignoring))
+			for n := range ignoring {
+				names = append(names, n)
+			}
+			sort.Strings(names)
+			if p.SQL, err = rs.SQL.WithoutParams(ctx, s.SQL, key, names); err != nil {
+				var refused *aisvc.Refusal
+				if errors.As(err, &refused) {
+					return nil, &reportparams.Refusal{Message: refused.Message}
+				}
+				return nil, err
+			}
+			used, placeholders, r := reportparams.CheckSQL(p.SQL, dialect, params)
+			if r != nil {
+				return nil, r
+			}
+			p.Placeholders = placeholders
+			for u := range used {
+				if ignoring[u] {
+					p.Left[u] = true
+				}
+			}
+		}
+		return p, nil
 	}
 	var target *Datasource
 	var operations []any
@@ -696,7 +745,8 @@ func filterOp(f pyjson.Object, value any) pyjson.Object {
 		{Key: "operator", Value: ops[pystr.Str(get(f, "op"))]}, {Key: "value", Value: value}}}}
 }
 
-func (rs *Resolver) finish(p *Plan, def pyjson.Object, values pyjson.Object, placeholders map[string]string, read map[int64]bool) (pyjson.Object, error) {
+func (rs *Resolver) finish(ctx context.Context, p *Plan, def pyjson.Object, values pyjson.Object, placeholders map[string]string,
+	read map[int64]bool) (pyjson.Object, error) {
 	types := map[string]string{}
 	paramNames := map[string]bool{}
 	for _, q := range parameters(def) {
@@ -704,10 +754,32 @@ func (rs *Resolver) finish(p *Plan, def pyjson.Object, values pyjson.Object, pla
 		types[n] = pystr.Str(get(q, "type"))
 		paramNames[n] = true
 	}
-	if p.Kind == "connection" {
+	if p.Kind == "connection" || p.Kind == "sql" {
 		vals := map[string]any{}
 		for _, kv := range values {
 			vals[kv.Key] = kv.Value
+		}
+		for n := range p.Left { // what to ignore that the SQL still names: NULL, several values or one
+			vals[n] = nil
+		}
+		if p.Kind == "sql" {
+			sql, r := reportparams.Fill(p.SQL, reportparams.DialectOf(p.Engine), types, vals, placeholders)
+			if r != nil {
+				return nil, r
+			}
+			resolved, err := rs.resolveCatalog(ctx, sql, p.Engine)
+			if err != nil {
+				return nil, err
+			}
+			if len(resolved.Tables) == 0 {
+				return nil, refusal(422, "the query reads no datasource: name one in FROM")
+			}
+			if read != nil {
+				for _, n := range resolved.Tables {
+					read[n.Datasource.ID] = true
+				}
+			}
+			return append(sqlscripts.CatalogChain(resolved), pyjson.KV{Key: "engine", Value: p.Engine}), nil
 		}
 		sql, r := reportparams.Fill(p.SQL, reportparams.DialectOf(p.Conn.DBType), types, vals, placeholders)
 		if r != nil {
@@ -727,10 +799,42 @@ func (rs *Resolver) finish(p *Plan, def pyjson.Object, values pyjson.Object, pla
 	return append(chain, pyjson.KV{Key: "engine", Value: p.Engine}), nil
 }
 
+// resolveCatalog is sql_scripts.resolve with the person's rights, its refusals said as the
+// report's.
+func (rs *Resolver) resolveCatalog(ctx context.Context, sql, engineName string) (*sqlscripts.Resolved, error) {
+	if rs.SQL == nil {
+		return nil, ErrNeedsPython
+	}
+	resolved, err := sqlscripts.Resolve(ctx, rs.Q, rs.C, rs.SQL, sql, engineName)
+	return resolved, fromSQLScripts(err)
+}
+
+// fromSQLScripts says a refusal of sqlscripts as this package's.
+func fromSQLScripts(err error) error {
+	var u *sqlscripts.Unreadable
+	var r *sqlscripts.Refusal
+	switch {
+	case errors.As(err, &u):
+		return &Unreadable{Message: u.Message}
+	case errors.As(err, &r):
+		return &Refusal{Status: http.StatusUnprocessableEntity, Detail: r.Message}
+	case errors.Is(err, sqlscripts.ErrInternal):
+		return ErrInternal
+	}
+	return err
+}
+
 // ResolveDatasets is resolve_datasets: every dataset (or those in `only`) as the engine reads
 // it, with the person's rights and the parameters' values in place.
 func (rs *Resolver) ResolveDatasets(ctx context.Context, def pyjson.Object, values pyjson.Object, only map[string]bool,
 	engines *Engines) (pyjson.Object, error) {
+	return rs.ResolveDatasetsIgnoring(ctx, def, values, only, engines, nil, nil)
+}
+
+// ResolveDatasetsIgnoring is resolve_datasets with `ignoring` (see plan); the parameters to
+// ignore that a SQL still names go in `left`, when given.
+func (rs *Resolver) ResolveDatasetsIgnoring(ctx context.Context, def pyjson.Object, values pyjson.Object, only map[string]bool,
+	engines *Engines, ignoring map[string]bool, left map[string]bool) (pyjson.Object, error) {
 	params := map[string]bool{}
 	for _, q := range parameters(def) {
 		params[pystr.Str(get(q, "name"))] = true
@@ -745,7 +849,7 @@ func (rs *Resolver) ResolveDatasets(ctx context.Context, def pyjson.Object, valu
 		if only != nil && !only[name] {
 			continue
 		}
-		p, err := rs.plan(ctx, ds, params, engines)
+		p, err := rs.plan(ctx, ds, params, engines, ignoring)
 		if err != nil {
 			if errors.Is(err, ErrNeedsPython) || errors.Is(err, ErrInternal) {
 				return nil, err
@@ -753,6 +857,11 @@ func (rs *Resolver) ResolveDatasets(ctx context.Context, def pyjson.Object, valu
 			return nil, InDataset(name, err)
 		}
 		plans = append(plans, p)
+		if left != nil {
+			for n := range p.Left {
+				left[n] = true
+			}
+		}
 	}
 	bodies := map[string]bool{}
 	for _, p := range plans {
@@ -789,8 +898,11 @@ func (rs *Resolver) ResolveDatasets(ctx context.Context, def pyjson.Object, valu
 	}
 	out := pyjson.Object{}
 	for _, p := range plans {
-		resolved, err := rs.finish(p, def, values, texts, nil)
+		resolved, err := rs.finish(ctx, p, def, values, texts, nil)
 		if err != nil {
+			if errors.Is(err, ErrNeedsPython) || errors.Is(err, ErrInternal) {
+				return nil, err
+			}
 			return nil, InDataset(p.Name, err)
 		}
 		out = out.Set(p.Name, resolved)

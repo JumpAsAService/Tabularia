@@ -72,10 +72,6 @@ func (h *objectsAPI) data(w http.ResponseWriter, r *http.Request, p *auth.Princi
 		h.fail(w, r, versioned.ErrNotAnObject)
 		return
 	}
-	if reports.NeedsSQLGlot(def) {
-		h.toUpstream(w, r, raw)
-		return
-	}
 	a, err := asked(b)
 	if err != nil {
 		h.writeErr(w, r, raw, err)
@@ -100,10 +96,6 @@ func (h *objectsAPI) previewNumbers(w http.ResponseWriter, r *http.Request, p *a
 		return
 	}
 	definition := toPython(b.Get("definition"))
-	if reports.NeedsSQLGlot(definition) {
-		h.toUpstream(w, r, raw)
-		return
-	}
 	var current any
 	if it != nil {
 		var err error
@@ -265,8 +257,8 @@ func (h *objectsAPI) renderDashboard(w http.ResponseWriter, r *http.Request, p *
 		h.fail(w, r, versioned.ErrNotAnObject)
 		return
 	}
-	if reports.NeedsPython(def) {
-		h.toUpstream(w, r, raw)
+	if reports.HasComment(def) { // the comment is written first, by the AI service
+		toAIService(h.d, w, r, raw)
 		return
 	}
 	clicks, _ := toPython(b.Get("clicks")).([]any)
@@ -306,8 +298,8 @@ func (h *objectsAPI) renderDashboardFile(w http.ResponseWriter, r *http.Request,
 		h.fail(w, r, versioned.ErrNotAnObject)
 		return
 	}
-	if reports.NeedsPython(def) {
-		h.toUpstream(w, r, nil)
+	if reports.HasComment(def) { // the comment is written first, by the AI service
+		toAIService(h.d, w, r, nil)
 		return
 	}
 	started, err := h.dashboardRender(ctx, p, c, it, def, format.(string), given, clicks, nil, false, "api", false)
@@ -353,10 +345,6 @@ func (h *objectsAPI) dashboardParameters(w http.ResponseWriter, r *http.Request,
 		h.fail(w, r, versioned.ErrNotAnObject)
 		return
 	}
-	if reports.NeedsSQLGlot(def) {
-		h.toUpstream(w, r, nil)
-		return
-	}
 	shaped := dashboards.AsReport(def)
 	cache := dashboards.CacheOf(ctx, h.d.Engine, def, it.ID, false)
 	out, err := h.resolver(c).ParametersOutCached(ctx, shaped, queryParams(pyd.ParseQuery(r.URL.RawQuery)),
@@ -382,10 +370,6 @@ func (h *objectsAPI) dashboardParametersEdited(w http.ResponseWriter, r *http.Re
 		return
 	}
 	definition := toPython(b.Get("definition"))
-	if reports.NeedsSQLGlot(definition) {
-		h.toUpstream(w, r, raw)
-		return
-	}
 	def, err := dashboards.CheckParameters(definition)
 	if err != nil {
 		h.writeErr(w, r, raw, problemRefusal(err, definition))
@@ -421,10 +405,6 @@ func (h *objectsAPI) dashboardFields(w http.ResponseWriter, r *http.Request, p *
 		return
 	}
 	definition := toPython(b.Get("definition"))
-	if reports.NeedsSQLGlot(definition) {
-		h.toUpstream(w, r, raw)
-		return
-	}
 	dataset := b.Get("dataset").(string)
 	def, err := dashboards.CheckDataset(definition, dataset)
 	if err != nil {
