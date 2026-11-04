@@ -21,7 +21,7 @@ import (
 // routes/agent_plans.py: a plan of the agent read and cancelled by its owner. Confirming
 // one applies its actions through the agent's tools (services/agent/plans.py apply_plan):
 // that stays with the Python AI service (docs/specs/gateway-go.md, decision 4), so
-// POST /agent/plans/{plan_id}/confirm is not registered here and goes on to Python.
+// POST /agent/plans/{plan_id}/confirm is forwarded there (ai_service.go).
 func init() {
 	register("agent_plans", func(d *Deps) []server.Route {
 		return []server.Route{

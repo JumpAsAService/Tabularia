@@ -23,8 +23,8 @@ func isoPtr(t *time.Time) *string {
 
 type bodyKey struct{}
 
-// rawKey holds the body's bytes as they came: a route answered in part hands the request to the
-// Python gateway with them (rawOf).
+// rawKey holds the body's bytes as they came (rawOf): what a route forwards to the AI service
+// as it came.
 type rawKey struct{}
 
 // withBody is FastAPI's reading of a route's body, BEFORE its dependencies: a JSON that does

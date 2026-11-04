@@ -45,14 +45,6 @@ func init() {
 	})
 }
 
-// forward is a method no client sends: a pattern registered with it only keeps a more
-// general ported pattern from taking its paths, which still go to the Python gateway.
-const forward = "FORWARD"
-
-var notAllowed = http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
-	server.JSON(w, http.StatusMethodNotAllowed, map[string]string{"detail": "Method Not Allowed"})
-})
-
 // flowRow is the `flows` row (models/flow.py).
 type flowRow struct {
 	ID                 int64

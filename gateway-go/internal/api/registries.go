@@ -1,11 +1,10 @@
 package api
 
 // routes/registries.py: the container registries (Administration → Container registries)
-// and what the flow editor reads of them. Ported: the list, a registry, creating, changing
-// and deleting one (its pull Secrets removed from the cluster), its variables, the editor's
-// list. Left to the Python gateway: the routes that speak to a registry or make the cluster
-// pull an image (test, cluster-test, tags, image: services/container_registry.py and
-// container_cluster.py).
+// and what the flow editor reads of them: the list, a registry, creating, changing and
+// deleting one (its pull Secrets removed from the cluster), its variables, the editor's list
+// (the routes that speak to a registry or make the cluster pull an image in
+// registries_runtime.go).
 
 import (
 	"context"

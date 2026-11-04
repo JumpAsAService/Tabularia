@@ -40,8 +40,7 @@ func init() {
 	})
 }
 
-// adminBodyHandler is a route with a JSON body: the body as FastAPI read it, and its raw bytes
-// (to hand the request to Python when only Python can answer it).
+// adminBodyHandler is a route with a JSON body: the body as FastAPI read it, and its raw bytes.
 type adminBodyHandler = func(http.ResponseWriter, *http.Request, *auth.Principal, pyd.Body, []byte)
 
 // adminBody is withBody (common.go) with the raw bytes kept, then require_superuser: a

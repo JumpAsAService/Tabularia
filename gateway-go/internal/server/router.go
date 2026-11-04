@@ -243,7 +243,8 @@ func (rt *router) redirectSlash(w http.ResponseWriter, r *http.Request, path str
 		scheme = rt.opt.Scheme(r)
 	}
 	netloc, hasNetloc := "", false
-	if h, ok := firstHeader(r, "Host"); ok && hostRE.MatchString(h) {
+	// net/http keeps the Host header in r.Host (empty when the request had none)
+	if h := r.Host; h != "" && hostRE.MatchString(h) {
 		netloc, hasNetloc = h, true
 	} else if a, ok := r.Context().Value(http.LocalAddrContextKey).(net.Addr); ok {
 		if host, port, err := net.SplitHostPort(a.String()); err == nil {
@@ -508,8 +509,8 @@ func handshakeRefused(w http.ResponseWriter, r *http.Request) bool {
 		return true
 	}
 	if r.Method != http.MethodGet {
-		WebSocketRefused(w, http.StatusMethodNotAllowed, "Failed to open a WebSocket connection: unsupported HTTP method: "+r.Method+".\n")
 		w.Header().Set("Allow", "GET")
+		WebSocketRefused(w, http.StatusMethodNotAllowed, "Failed to open a WebSocket connection: unsupported HTTP method: "+r.Method+".\n")
 		return true
 	}
 	// the protocol is never checked: uvicorn hands the request on as HTTP/1.1

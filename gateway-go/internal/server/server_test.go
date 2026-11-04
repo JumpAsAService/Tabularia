@@ -60,7 +60,7 @@ func TestTheRoutesAsStarletteTriesThem(t *testing.T) {
 		{"HEAD", "/openapi.json", 200, "", ""}, // a Starlette Route: HEAD is its GET, without body
 		{"HEAD", "/health", 405, "", ""},
 	} {
-		rec := serve(h, c.method, c.target, map[string]string{"Host": "example.com"})
+		rec := serve(h, c.method, c.target, nil)
 		body, _ := io.ReadAll(rec.Body)
 		if rec.Code != c.status || (c.method != "HEAD" && string(body) != c.body) || rec.Header().Get("Location") != c.location {
 			t.Errorf("%s %s: %d %q %q", c.method, c.target, rec.Code, body, rec.Header().Get("Location"))

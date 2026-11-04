@@ -39,26 +39,29 @@ same addresses, same JSON, same status codes, same cookies, same tables.
 
 ## Architecture
 
+While routes were being ported, the Go gateway stood in front of the Python one and forwarded
+what it did not answer yet. Since 2026-11-04 every route is Go's and nothing is forwarded to the
+Python gateway (decision 4): only a small Python service stays.
+
 ```
-browser / scripts ──► gateway-go :8000 ──► ported route: answered in Go
-                                      └──► anything else: forwarded to gateway (Python)
-                         │
+browser / scripts ──► gateway-go :8000 ──► every route in Go
+                         ├──► the assistant's routes forwarded to the AI service (Python, APP__ROLE=ai)
+                         ├──► SQL parsing (sqlglot), Python's regexes and IDNA, Ruff and the AI
+                         │    comments asked of the AI service over an internal API
                          ├── PostgreSQL (the same database, the same tables)
                          └── Valkey (the same keys)
 ```
 
-At the end (decision 4) the Python gateway behind is gone, and a small Python service stays:
-
-```
-browser / scripts ──► gateway-go ──► every route in Go
-                         ├──► the assistant's routes forwarded to the AI service (Python, APP__ROLE=ai)
-                         └──► SQL parsing asked of the AI service over an internal API (sqlglot)
-```
-
-- **One table of ported routes** (`internal/routes`): method + path pattern → handler.
-  Everything not in it goes to the upstream (`GATEWAY_GO__UPSTREAM`, the Python gateway's
-  address). The upstream sees the request as the browser sent it (headers, cookies, body,
-  client address in `X-Forwarded-For` as the proxy set it).
+- **The framework too** (`internal/server/router.go`): every request is answered as uvicorn,
+  Starlette and FastAPI answer it, around the routes as well as in them. The routes are tried in
+  the order FastAPI declares them, from a table generated from the Python app itself
+  (`internal/server/fastapi_routes_gen.go`, `internal/server/testdata/run.sh`): the path decoded
+  as uvicorn decodes it («%2F» splits a segment, «..» and «//» are never cleaned), 405 with the
+  first matching route's `Allow`, the trailing slash's 307, 404 `{"detail":"Not Found"}`, HEAD
+  answered without a body, the CORS middleware (`APP__CORS_ORIGINS`), the body's ceiling before the
+  routes, a WebSocket handshake checked as the `websockets` library checks it and refused with 403
+  where no WebSocket route is. A test fails when a route of the table has no Go handler, or Go one
+  the table lacks. `GATEWAY_GO__UPSTREAM` is optional and unused (logged when set).
 - **The database belongs to Alembic.** The Go gateway never creates or migrates a table:
   it reads and writes the schema the Python migrations define, and refuses to start when
   the database is at a revision it does not know (`alembic_version`), as the Python
@@ -76,16 +79,15 @@ browser / scripts ──► gateway-go ──► every route in Go
 
 The Python gateway's image, started with `APP__ROLE=ai`: a process that answers the API like
 `api` (no background work) and, only in this role, an **internal API** for the SQL parsing done
-with sqlglot. The Go gateway reaches it at `GATEWAY_GO__AI_SERVICE` (required, like
-`GATEWAY_GO__UPSTREAM`) with two clients:
+with sqlglot. The Go gateway reaches it at `GATEWAY_GO__AI_SERVICE` (required) with two clients:
 
 - `internal/aisvc`: the internal API below, one call per use of sqlglot the gateway makes (and of
   Python's `re.compile`), and the AI comments of a Pushmail cell's documents;
 - a forwarding proxy for the assistant's routes, sent as they came (headers, cookies, body,
   the answer streamed back), where the Python code authenticates them as it always has.
 
-While the Python gateway behind exists, the AI service may be another process of the same
-image on the same database (the comparison runs it so); at the switch only it stays.
+The AI service is another process of the same image on the same database (the comparison runs it
+so); it is the only Python process left.
 
 ### Where the gateway reads SQL with sqlglot (the whole list)
 
@@ -230,10 +232,11 @@ For a ported route, for every request in its corpus:
    The background work (`APP__ROLE`, `internal/jobs`, compared «a un giro»: see
    [gateway-go-porting.md](gateway-go-porting.md)) is in Go: schedules, the flows' queue,
    retention, housekeeping, backups, webhooks, engine settings, SIEM and the four Kubernetes
-   loops, on the same launching, resolving and Kubernetes code as the routes. Still with a
-   Python orchestrator: OpenLineage's run events and the notebooks' reaper while OpenLineage
-   is on. A flow group's Pushmail cell whose reports or dashboards have AI comments is carried
-   by the Go queue, the comments written by the AI service (`POST /internal/ai/comments`).
+   loops, on the same launching, resolving and Kubernetes code as the routes, OpenLineage's run
+   events included. A flow group's Pushmail cell whose reports or dashboards have AI comments is
+   carried by the Go queue, the comments written by the AI service (`POST /internal/ai/comments`).
+   Since 2026-11-04 no request goes to the Python gateway (`DIFF_NO_PYTHON=1` proves it: see
+   [gateway-go-porting.md](gateway-go-porting.md)).
 5. **Switch**: the images, the compose files and the Helm chart run the Go gateway and
    the AI service; the Python gateway behind is removed. Only when the inventory has no
    *Python* line (*AI service* lines stay).

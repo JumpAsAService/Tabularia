@@ -1,11 +1,10 @@
 package api
 
 // routes/scripting.py: the scripting environments (Admin → Scripting environments) and
-// what the flow editor reads of them. Ported: the section, the bucket and its test, the
-// environments, their versions and variables, the editor's list and completions. Left to
-// the Python gateway: the package search (it reads PyPI or CRAN), the lint (Ruff runs in
-// the Python process), a Script node's trial (run by the Python process that answers) and
-// the outputs of a flow's nodes (services/script_runs).
+// what the flow editor reads of them: the section, the bucket and its test, the environments,
+// their versions and variables, the editor's list and completions (the package search, the
+// lint with the AI service's Ruff, a Script node's trial and the nodes' outputs in the
+// scripting_*.go files).
 
 import (
 	"context"
