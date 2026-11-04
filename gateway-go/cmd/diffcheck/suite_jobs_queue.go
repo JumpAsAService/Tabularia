@@ -30,6 +30,12 @@ func init() {
 }
 
 func seedQueue(w *World) {
+	// the queue is this suite's: what the suites before it queued with nobody to run it (a «run
+	// now» answered by APP__ROLE=api gateways) would be taken by the rounds, and waited for on
+	// an engine that never finishes it
+	w.Exec(`UPDATE runs SET status = 'FAILURE', error = 'left in the queue by another suite', finished_at = started_at
+		WHERE kind = 'orchestration' AND status IN ('PENDING', 'STARTED')`)
+	tidyRuns(w)
 	admin, writer := w.People["admin"], w.People["writer"]
 	folder := func(name string) int64 {
 		return w.Insert(`INSERT INTO projects (name, description, parent_id, owner_id, created_at) VALUES ($1, '', NULL, $2, '2026-01-01')
@@ -323,5 +329,6 @@ func queueSteps(w *World) []Step {
 			orchGroup(w, QU.Groups["stops"], "manual", "editor")
 		}),
 		tick("the parquets' random names put away", "queue.beat", ok, putAwayRandomKeys),
+		tidyRunsStep,
 	}
 }

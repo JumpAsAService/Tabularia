@@ -2,6 +2,22 @@ package main
 
 // The rounds of engine_settings_loop, siem_loop and housekeeping_loop.
 
+// tidyRuns rewrites the runs' table in id order on both databases. The rounds read runs
+// without an ORDER BY, as the Python code does (the scheduler's reconcile, the history's
+// ties): their order is the table's physical one, which the two sides' writes lay out apart
+// (the same rows, written by different statements). Between the suites of the loops, both
+// tables are made the same again, and the runs that start at the same moment are set apart
+// by their id (a millionth of a second each), so that a later step's writes cannot reorder
+// a tie.
+func tidyRuns(w *World) {
+	w.Exec(`UPDATE runs r SET started_at = r.started_at + make_interval(secs => r.id / 1000000.0)
+		WHERE EXISTS (SELECT 1 FROM runs o WHERE o.started_at = r.started_at AND o.id <> r.id)`)
+	w.Exec(`CLUSTER runs USING runs_pkey`)
+}
+
+// tidyRunsStep is tidyRuns as the last step of a suite.
+var tidyRunsStep = Step{Name: "the runs' table in id order on both sides", Method: "GET", Path: "/health", Before: tidyRuns}
+
 func encrypted(plain string) string {
 	if fernet == nil {
 		fail("DIFF_FERNET is not set")
@@ -228,8 +244,7 @@ func init() {
 				}),
 				// the pass rewrote other suites' runs: the same rows, laid out apart on the two sides, which
 				// the history's ties (ORDER BY started_at) would show — the table rewritten in id order on both
-				{Name: "the runs' table in id order on both sides", Method: "GET", Path: "/health",
-					Before: func(w *World) { w.Exec(`CLUSTER runs USING runs_pkey`) }},
+				tidyRunsStep,
 			}
 		},
 	})

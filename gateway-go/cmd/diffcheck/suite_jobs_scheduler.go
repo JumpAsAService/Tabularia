@@ -31,6 +31,7 @@ func init() {
 }
 
 func seedScheduler(w *World) {
+	tidyRuns(w)
 	admin, writer := w.People["admin"], w.People["writer"]
 	folder := func(name string) int64 {
 		return w.Insert(`INSERT INTO projects (name, description, parent_id, owner_id, created_at) VALUES ($1, '', NULL, $2, '2026-01-01')
@@ -365,6 +366,7 @@ func schedulerSteps(w *World) []Step {
 				}
 			}),
 		tick("the parquets' random names put away", "2026-03-10T08:00:00Z", nil, tasks, putAwayRandomKeys),
+		tidyRunsStep,
 	}
 }
 
