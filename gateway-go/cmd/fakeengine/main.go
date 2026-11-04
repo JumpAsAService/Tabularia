@@ -6,6 +6,8 @@
 //	POST   /__script    [{"method": "GET", "path": "^/engines$", "status": 200, "body": …}, …]
 //	GET    /__recorded  the requests since the last call, then forgotten
 //	anything else       the first rule matching method and path, or 200 {} when none does
+//
+// It answers on port 2719 too (a notebook editor's pod, whose file the reaper reads).
 package main
 
 import (
@@ -146,5 +148,8 @@ func main() {
 	if addr == "" {
 		addr = ":8000"
 	}
+	// it stands in for a notebook editor's pod too, whose file is read on port 2719
+	// (notebook_runtime.FILES_PORT): the same answers and the same record
+	go func() { log.Fatal(http.ListenAndServe(":2719", nil)) }()
 	log.Fatal(http.ListenAndServe(addr, nil))
 }

@@ -1,6 +1,13 @@
 package settings
 
-import "github.com/JumpAsAService/Tabularia/gateway-go/internal/config"
+import (
+	"math"
+	"regexp"
+	"strconv"
+	"strings"
+
+	"github.com/JumpAsAService/Tabularia/gateway-go/internal/config"
+)
 
 // The entries of overrides.ITEMS the background work reads (orchestration, history kept,
 // backups), with the panel's ranges: one reader per key, below.
@@ -85,3 +92,99 @@ func (p *Panel) Heartbeat() float64 { return p.adminFloat("orchestrator.heartbea
 
 // DeadAfter is orchestrator.dead_after_seconds.
 func (p *Panel) DeadAfter() float64 { return p.adminFloat("orchestrator.dead_after_seconds") }
+
+// The entries of overrides.ITEMS the Kubernetes loops read (kubernetes.*, scripts.*): the
+// panel's ranges, then the setting's own validation (ScriptsSettings' validators), which
+// the getters below run for the CPU and memory quantities.
+func init() {
+	const day = 86400
+	ints := map[string]struct {
+		min, max int64
+		env      func(*config.Config) any
+	}{
+		"scripts.job_ttl_seconds":       {60, 7 * day, func(c *config.Config) any { return c.Jobs.Kube.ScriptsJobTTLSeconds }},
+		"scripts.log_max_bytes":         {4096, 16 * 1024 * 1024, func(c *config.Config) any { return c.Jobs.Kube.ScriptsLogMaxBytes }},
+		"scripts.build_timeout_seconds": {60, 6 * 3600, func(c *config.Config) any { return c.Jobs.Kube.BuildTimeoutSeconds }},
+		"scripts.check_timeout_seconds": {30, 3600, func(c *config.Config) any { return c.Jobs.Kube.CheckTimeoutSeconds }},
+	}
+	for k, r := range ints {
+		adminItems[k] = adminItem{kind: "int", min: float64(r.min), max: float64(r.max), hasRange: true, env: r.env}
+	}
+	adminItems["kubernetes.timeout_seconds"] = adminItem{kind: "float", min: 1, max: 120, hasRange: true,
+		env: func(c *config.Config) any { return c.Jobs.Kube.Timeout }}
+	adminItems["scripts.poll_seconds"] = adminItem{kind: "float", min: 1, max: 60, hasRange: true,
+		env: func(c *config.Config) any { return c.Jobs.Kube.ScriptsPollSeconds }}
+	// a text, stripped, not empty: the quantity itself is checked by the getter
+	adminItems["scripts.build_cpu"] = adminItem{kind: "cpu", maxLen: 200, required: true,
+		env: func(c *config.Config) any { return c.Jobs.Kube.BuildCPU }}
+	adminItems["scripts.build_memory"] = adminItem{kind: "memory", maxLen: 200, required: true,
+		env: func(c *config.Config) any { return c.Jobs.Kube.BuildMemory }}
+}
+
+// KubernetesTimeout is kubernetes.timeout_seconds: how long a request to the Kubernetes API
+// may take.
+func (p *Panel) KubernetesTimeout() float64 { return p.adminFloat("kubernetes.timeout_seconds") }
+
+// ScriptsPollSeconds is scripts.poll_seconds: the image builds' round.
+func (p *Panel) ScriptsPollSeconds() float64 { return p.adminFloat("scripts.poll_seconds") }
+
+// ScriptsJobTTL is scripts.job_ttl_seconds.
+func (p *Panel) ScriptsJobTTL() int64 { return p.adminInt("scripts.job_ttl_seconds") }
+
+// ScriptsLogMaxBytes is scripts.log_max_bytes.
+func (p *Panel) ScriptsLogMaxBytes() int64 { return p.adminInt("scripts.log_max_bytes") }
+
+// BuildTimeout is scripts.build_timeout_seconds.
+func (p *Panel) BuildTimeout() int64 { return p.adminInt("scripts.build_timeout_seconds") }
+
+// CheckTimeout is scripts.check_timeout_seconds.
+func (p *Panel) CheckTimeout() int64 { return p.adminInt("scripts.check_timeout_seconds") }
+
+var (
+	// cluster_view._CPU and _MEMORY: the sizes overrides.check_one measures
+	cpuQuantity    = regexp.MustCompile(`^([0-9]+(?:\.[0-9]+)?)(n|u|m)?$`)
+	memoryQuantity = regexp.MustCompile(`^([0-9]+(?:\.[0-9]+)?)(Ki|Mi|Gi|Ti|k|M|G|T|e[0-9]+)?$`)
+)
+
+// minMemory is overrides.MIN_MEMORY.
+const minMemory = 64 * 1024 * 1024
+
+// BuildCPU is scripts.build_cpu: the panel's when it is more than zero and a CPU quantity
+// (overrides.check_one, ScriptsSettings._build_cpu), else the environment's.
+func (p *Panel) BuildCPU() string {
+	v := p.adminStr("scripts.build_cpu")
+	if m := cpuQuantity.FindStringSubmatch(v); m != nil {
+		f, _ := strconv.ParseFloat(m[1], 64)
+		if f <= 0 { // too_small
+			return p.env.admin["scripts.build_cpu"].(string)
+		}
+	}
+	if !config.ValidBuildCPU(v) {
+		return p.env.admin["scripts.build_cpu"].(string)
+	}
+	return v
+}
+
+// BuildMemory is scripts.build_memory: the panel's when it is at least 64Mi and a memory
+// quantity, else the environment's.
+func (p *Panel) BuildMemory() string {
+	v := p.adminStr("scripts.build_memory")
+	if m := memoryQuantity.FindStringSubmatch(v); m != nil {
+		f, _ := strconv.ParseFloat(m[1], 64)
+		factor := map[string]float64{"Ki": 1 << 10, "Mi": 1 << 20, "Gi": 1 << 30, "Ti": 1 << 40, "k": 1e3, "M": 1e6, "G": 1e9, "T": 1e12}
+		size := f
+		if strings.HasPrefix(m[2], "e") {
+			e, _ := strconv.Atoi(m[2][1:])
+			size = f * math.Pow(10, float64(e))
+		} else if x, ok := factor[m[2]]; ok {
+			size = f * x
+		}
+		if math.Trunc(size) < minMemory {
+			return p.env.admin["scripts.build_memory"].(string)
+		}
+	}
+	if !config.ValidBuildMemory(v) {
+		return p.env.admin["scripts.build_memory"].(string)
+	}
+	return v
+}
