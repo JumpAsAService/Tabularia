@@ -1,32 +1,6 @@
 package main
 
-import (
-	"github.com/jackc/pgx/v5/pgxpool"
-)
-
 // The rounds of engine_settings_loop, siem_loop and housekeeping_loop.
-
-// holdLock takes a session advisory lock on both databases from a connection of its own, as
-// another orchestrator holding it; the returned function lets it go.
-func (w *World) holdLock(key int64) func() {
-	var conns []*pgxpool.Conn
-	for _, s := range []*side{w.a, w.b} {
-		c, err := s.db.Acquire(w.ctx)
-		if err != nil {
-			fail("%s: %v", s.name, err)
-		}
-		if _, err := c.Exec(w.ctx, `SELECT pg_advisory_lock($1)`, key); err != nil {
-			fail("%s: %v", s.name, err)
-		}
-		conns = append(conns, c)
-	}
-	return func() {
-		for _, c := range conns {
-			_, _ = c.Exec(w.ctx, `SELECT pg_advisory_unlock_all()`)
-			c.Release()
-		}
-	}
-}
 
 func encrypted(plain string) string {
 	if fernet == nil {
@@ -62,7 +36,6 @@ func init() {
 				return Step{Name: name, Method: "TICK", Path: "engine_settings", Tick: "engine_settings", Now: "2026-02-01T00:00:00Z",
 					Engine: engine, Before: before, Env: env}
 			}
-			var release func()
 			return []Step{
 				tick("the engine takes them", put(200, map[string]any{"ok": true}), nil, nil),
 				tick("with the gateway's upload limit from its panel", put(200, map[string]any{}), func(w *World) {
@@ -81,9 +54,9 @@ func init() {
 				tick("a refusal that is not a dict", put(422, []any{1}), nil, nil),
 				tick("the engine fails", put(500, map[string]any{"detail": "down"}), nil, nil),
 				tick("someone is saving: the round skips", put(200, map[string]any{}), func(w *World) {
-					release = w.holdLock(7402118)
+					holdLock(w, 7402118)
 				}, nil),
-				tick("the lock is free again", put(200, map[string]any{}), func(w *World) { release() }, nil),
+				tick("the lock is free again", put(200, map[string]any{}), func(w *World) { releaseLocks(w) }, nil),
 				tick("the panel off: nothing of it is sent", put(200, map[string]any{}), nil,
 					map[string]string{"ENGINE__SETTINGS_PANEL": "false"}),
 				tick("a JSON value that is NaN", put(200, map[string]any{}), func(w *World) {
@@ -121,7 +94,6 @@ func init() {
 			tick := func(name, now string, engine []EngineRule, before func(*World)) Step {
 				return Step{Name: name, Method: "TICK", Path: "siem", Tick: "siem", Now: now, Engine: engine, Before: before}
 			}
-			var release func()
 			return []Step{
 				tick("off: nothing goes", "2026-01-01T00:00:00Z", ok, nil),
 				tick("on: the old items go, the last 10 seconds wait", "2026-01-01T00:00:00Z", ok, func(w *World) {
@@ -141,9 +113,9 @@ func init() {
 				}),
 				tick("another process holds the lock", "2026-01-01T00:05:00Z", ok, func(w *World) {
 					w.Exec(`INSERT INTO audit_logs (ts, actor_label, action, outcome) VALUES ('2025-12-03', 'x', 'siem.more', 'success')`)
-					release = w.holdLock(7402122)
+					holdLock(w, 7402122)
 				}),
-				tick("the lock free again", "2026-01-01T00:05:00Z", ok, func(w *World) { release() }),
+				tick("the lock free again", "2026-01-01T00:05:00Z", ok, func(w *World) { releaseLocks(w) }),
 				tick("no token", "2026-01-01T00:06:00Z", ok, func(w *World) {
 					w.Exec(`INSERT INTO audit_logs (ts, actor_label, action, outcome) VALUES ('2025-12-03', 'x', 'siem.more', 'success')`)
 					w.Exec(`UPDATE siem_destinations SET token_enc = NULL`)
