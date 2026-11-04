@@ -61,7 +61,8 @@ type renderStarted struct {
 func (h *objectsAPI) writeErr(w http.ResponseWriter, r *http.Request, raw []byte, err error) {
 	var down *reports.EngineDown
 	if errors.As(err, &down) {
-		server.JSON(w, http.StatusServiceUnavailable, map[string]any{"detail": "The engine is not answering"})
+		// main.py _service_down
+		server.JSON(w, http.StatusServiceUnavailable, map[string]any{"detail": "The engine is not answering: try again in a moment"})
 		return
 	}
 	h.answerErr(w, r, raw, err)
