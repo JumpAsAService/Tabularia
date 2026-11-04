@@ -1,9 +1,9 @@
 package config
 
 import (
-	"math"
 	"encoding/json"
 	"fmt"
+	"math"
 	"os"
 	"strconv"
 	"strings"

@@ -56,15 +56,15 @@ func errorText(message string) string {
 
 // Run is the part of a run the events read.
 type Run struct {
-	ID                                                 int64
-	Kind, Status, TriggerType                          string
-	FlowID, FlowGroupID, SavedScriptID, SQLScriptID    *int64
-	DatasourceID, ParentRunID, PublishProjectID        *int64
-	RowsWritten                                        *int64
-	PublishName, Destination, Email, Mirror, Script    *string
-	Engine, Error                                      *string
-	StartedAt                                          time.Time
-	FinishedAt                                         *time.Time
+	ID                                              int64
+	Kind, Status, TriggerType                       string
+	FlowID, FlowGroupID, SavedScriptID, SQLScriptID *int64
+	DatasourceID, ParentRunID, PublishProjectID     *int64
+	RowsWritten                                     *int64
+	PublishName, Destination, Email, Mirror, Script *string
+	Engine, Error                                   *string
+	StartedAt                                       time.Time
+	FinishedAt                                      *time.Time
 }
 
 const runColumns = `id, kind, status, trigger_type, flow_id, flow_group_id, saved_script_id, sql_script_id, datasource_id,

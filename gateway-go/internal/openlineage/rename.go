@@ -13,8 +13,8 @@ import (
 
 	"github.com/JumpAsAService/Tabularia/gateway-go/internal/perm"
 	"github.com/JumpAsAService/Tabularia/gateway-go/internal/pyd"
-	"github.com/JumpAsAService/Tabularia/gateway-go/internal/savedscripts"
 	"github.com/JumpAsAService/Tabularia/gateway-go/internal/pyjson"
+	"github.com/JumpAsAService/Tabularia/gateway-go/internal/savedscripts"
 )
 
 // ── renames and moves: the new name in the catalog, the old one removed ─────────────────────
@@ -618,4 +618,3 @@ func tail(s string) string {
 	}
 	return s[1:]
 }
-
