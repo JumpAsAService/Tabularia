@@ -12,6 +12,7 @@ import (
 	"syscall"
 	"time"
 
+	"github.com/JumpAsAService/Tabularia/gateway-go/internal/aisvc"
 	"github.com/JumpAsAService/Tabularia/gateway-go/internal/api"
 	"github.com/JumpAsAService/Tabularia/gateway-go/internal/auth"
 	"github.com/JumpAsAService/Tabularia/gateway-go/internal/clientip"
@@ -36,6 +37,9 @@ func run(log *slog.Logger) error {
 	cfg, err := config.Load(config.FromOS())
 	if err != nil {
 		return err
+	}
+	if cfg.AIService == nil {
+		return errors.New("configuration: GATEWAY_GO__AI_SERVICE is required: the AI service's address (the gateway's image with APP__ROLE=ai)")
 	}
 	ctx, stop := signal.NotifyContext(context.Background(), syscall.SIGTERM, syscall.SIGINT)
 	defer stop()
@@ -68,7 +72,7 @@ func run(log *slog.Logger) error {
 	upstream := proxy.New(cfg.Upstream, log)
 	routes := append([]server.Route{{Method: http.MethodGet, Pattern: "/health", Handler: server.Health()}},
 		api.Routes(&api.Deps{DB: pool, Auth: authn, Panel: panel, Config: cfg, Log: log, Engine: engineClient, Fernet: fernet,
-			Upstream: upstream})...)
+			Upstream: upstream, AIService: proxy.New(cfg.AIService, log), SQL: aisvc.New(cfg.AIService, cfg.FernetKey)})...)
 	srv := &http.Server{
 		Addr:              cfg.Listen,
 		Handler:           server.New(routes, upstream),
@@ -78,7 +82,7 @@ func run(log *slog.Logger) error {
 	}
 	errc := make(chan error, 1)
 	go func() {
-		log.Info("listening", "addr", cfg.Listen, "upstream", cfg.Upstream.String())
+		log.Info("listening", "addr", cfg.Listen, "upstream", cfg.Upstream.String(), "ai_service", cfg.AIService.String())
 		errc <- srv.ListenAndServe()
 	}()
 	select {

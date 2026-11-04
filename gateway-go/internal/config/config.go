@@ -22,6 +22,10 @@ type Config struct {
 	Listen string
 	// GATEWAY_GO__UPSTREAM: the Python gateway, which answers every route not ported yet
 	Upstream *url.URL
+	// GATEWAY_GO__AI_SERVICE: the AI service (the Python image with APP__ROLE=ai), which answers
+	// the assistant's routes and the SQL parsing (docs/specs/gateway-go.md, «The AI service»);
+	// the gateway does not start without it (cmd/gateway)
+	AIService *url.URL
 	// GATEWAY_GO__FORWARDED_ALLOW_IPS: the proxies whose X-Forwarded-For is believed, as
 	// uvicorn's --forwarded-allow-ips (127.0.0.1 by default; «*» = any)
 	ForwardedAllowIPs []string
@@ -187,6 +191,13 @@ func Load(env Env) (*Config, error) {
 		r.fail("GATEWAY_GO__UPSTREAM", fmt.Sprintf("is not an address: %q", upstream))
 	} else {
 		c.Upstream = u
+	}
+	if ai := r.str("GATEWAY_GO__AI_SERVICE", ""); ai != "" {
+		if u, err := url.Parse(ai); err != nil || u.Scheme == "" || u.Host == "" {
+			r.fail("GATEWAY_GO__AI_SERVICE", fmt.Sprintf("is not an address: %q", ai))
+		} else {
+			c.AIService = u
+		}
 	}
 	c.DSN = dsn(&r)
 	if c.JWTAlgorithm != "HS256" && c.JWTAlgorithm != "HS384" && c.JWTAlgorithm != "HS512" {

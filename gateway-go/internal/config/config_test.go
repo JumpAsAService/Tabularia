@@ -86,3 +86,15 @@ func TestTheFernetKeyFromTheSharedDirectory(t *testing.T) {
 		t.Errorf("without a key the gateway must not start: %v", err)
 	}
 }
+
+// GATEWAY_GO__AI_SERVICE: read as an address; cmd/gateway refuses to start without it
+func TestTheAIServiceAddress(t *testing.T) {
+	c, err := Load(env(map[string]string{"GATEWAY_GO__UPSTREAM": "http://g:8000", "SECURITY__FERNET_KEY": "k", "GATEWAY_GO__AI_SERVICE": "http://ai:8000"}))
+	if err != nil || c.AIService == nil || c.AIService.Host != "ai:8000" {
+		t.Fatalf("%v %v", c, err)
+	}
+	if _, err := Load(env(map[string]string{"GATEWAY_GO__UPSTREAM": "http://g:8000", "SECURITY__FERNET_KEY": "k", "GATEWAY_GO__AI_SERVICE": "ai"})); err == nil ||
+		!strings.Contains(err.Error(), "GATEWAY_GO__AI_SERVICE") {
+		t.Errorf("a bad address must be refused by name: %v", err)
+	}
+}

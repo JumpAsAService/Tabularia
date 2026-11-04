@@ -1,7 +1,7 @@
 // Package sqlscripts is services/sql_scripts.py and the parts of services/sql_script_runs.py
 // the routes read: who sees a SQL script, what its versions hold, the connections and the
-// datasources it may name. Reading a SQL (sqlglot: `resolve`, `named_datasources`) stays in
-// the Python gateway: the routes that need it are forwarded there.
+// datasources it may name, and how a SQL on the catalog becomes the engine's (resolve.go: the
+// SQL read by sqlglot in the AI service).
 package sqlscripts
 
 import (

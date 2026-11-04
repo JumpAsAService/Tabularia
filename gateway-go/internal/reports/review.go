@@ -10,19 +10,22 @@ import (
 	"regexp"
 	"sort"
 	"strings"
+	"time"
 
+	"github.com/JumpAsAService/Tabularia/gateway-go/internal/aisvc"
 	"github.com/JumpAsAService/Tabularia/gateway-go/internal/engine"
 	"github.com/JumpAsAService/Tabularia/gateway-go/internal/perm"
 	"github.com/JumpAsAService/Tabularia/gateway-go/internal/pyjson"
 	"github.com/JumpAsAService/Tabularia/gateway-go/internal/pystr"
 	"github.com/JumpAsAService/Tabularia/gateway-go/internal/reportdef"
 	"github.com/JumpAsAService/Tabularia/gateway-go/internal/reportparams"
+	"github.com/JumpAsAService/Tabularia/gateway-go/internal/sqlscripts"
 )
 
 // ErrNeedsPython is where the Python code reads a SQL with sqlglot (sql_scripts.resolve: the
-// datasources a SQL on the catalog names, report_params.without_params): there is no Go
-// equivalent, so the request is answered by the Python gateway, as it came. Up to that point
-// the Go code only read the database.
+// datasources a SQL on the catalog names, report_params.without_params) and no AI service was
+// given to ask (Resolver.SQL, Reviewer.SQL): the request is answered by the Python gateway, as
+// it came. Up to that point the Go code only read the database.
 var ErrNeedsPython = errors.New("this request reads a SQL with sqlglot: the Python gateway answers it")
 
 var paramRef = regexp.MustCompile(`^\{([A-Za-z_][A-Za-z0-9_]*)\}\n?$`)
@@ -186,6 +189,12 @@ func paramsOf(def pyjson.Object) (map[string]bool, []pyjson.Object) {
 // source is new or changed must point to something that exists and that this person may read;
 // every SQL uses only the report's parameters; two lists of choices do not follow each other.
 func CheckReferences(ctx context.Context, q perm.Querier, c *perm.Checker, def pyjson.Object, current any) error {
+	return CheckReferencesWith(ctx, q, c, nil, def, current)
+}
+
+// CheckReferencesWith is CheckReferences with the AI service that reads a SQL on the catalog
+// (_resolve_catalog); without it such a dataset is ErrNeedsPython.
+func CheckReferencesWith(ctx context.Context, q perm.Querier, c *perm.Checker, svc *aisvc.Client, def pyjson.Object, current any) error {
 	before := map[string]any{}
 	if current != nil {
 		cur, ok := current.(pyjson.Object)
@@ -230,8 +239,11 @@ func CheckReferences(ctx context.Context, q perm.Querier, c *perm.Checker, def p
 				for k := range u {
 					used[k] = true
 				}
-				if changed && s.Conn == nil {
-					return ErrNeedsPython // _resolve_catalog: sql_scripts.resolve
+				if changed && s.Conn == nil { // the datasources it names, as a render finds them
+					if svc == nil {
+						return ErrNeedsPython
+					}
+					return resolveCatalog(ctx, q, c, svc, s, paramDefs(def))
 				}
 				return nil
 			}
@@ -266,6 +278,50 @@ func CheckReferences(ctx context.Context, q perm.Querier, c *perm.Checker, def p
 		uses[name] = used
 	}
 	return checkNoCircle(def, uses)
+}
+
+// paramDefs is {p["name"]: p for p in definition["parameters"]}.
+func paramDefs(def pyjson.Object) map[string]pyjson.Object {
+	out := map[string]pyjson.Object{}
+	for _, p := range list(or(get(def, "parameters"), []any{})) {
+		po := obj(p)
+		out[pystr.Str(get(po, "name"))] = po
+	}
+	return out
+}
+
+// resolveCatalog is _resolve_catalog: a SQL on the catalog read as a render reads it, without
+// asking the engine: every parameter a value of its type, every placeholder a date. A refusal
+// for a datasource the person cannot read (or that does not exist), or a SQL that cannot be read.
+func resolveCatalog(ctx context.Context, q perm.Querier, c *perm.Checker, svc *aisvc.Client, s *SQLSource, params map[string]pyjson.Object) error {
+	engineName, _ := s.Engine.(string)
+	dialect := reportparams.DialectOf(engineName)
+	names := make(map[string]bool, len(params))
+	types := make(map[string]string, len(params))
+	for n, p := range params {
+		names[n] = true
+		types[n] = pystr.Str(get(p, "type"))
+	}
+	_, bodies, r := reportparams.CheckSQL(s.SQL, dialect, names)
+	if r != nil {
+		return r
+	}
+	now := time.Now().UTC() // date.today() of the gateway, which runs in UTC
+	today := reportparams.Date{T: time.Date(now.Year(), now.Month(), now.Day(), 0, 0, 0, 0, time.UTC)}
+	values := make(map[string]any, len(params))
+	for n, p := range params {
+		values[n] = neutral(p, today)
+	}
+	placeholders := make(map[string]string, len(bodies))
+	for b := range bodies {
+		placeholders[b] = "2000-01-01"
+	}
+	sql, r := reportparams.Fill(s.SQL, dialect, types, values, placeholders)
+	if r != nil {
+		return r
+	}
+	_, err := sqlscripts.Resolve(ctx, q, c, svc, sql, engineName)
+	return fromSQLScripts(err)
 }
 
 func choicesDataset(p pyjson.Object) any {
@@ -493,6 +549,7 @@ type Reviewer struct {
 	C      *perm.Checker
 	Engine *engine.Client
 	Log    *slog.Logger
+	SQL    *aisvc.Client // reads a SQL on the catalog (the AI service)
 }
 
 func pair(p pyjson.Object) string {
@@ -507,7 +564,7 @@ func (rv *Reviewer) Review(ctx context.Context, definition any, current any) (*R
 	var where *string
 	checked, err := reportdef.Check(definition)
 	if err == nil {
-		err = CheckReferences(ctx, rv.Q, rv.C, checked, current)
+		err = CheckReferencesWith(ctx, rv.Q, rv.C, rv.SQL, checked, current)
 	}
 	if err != nil {
 		p, ok := reportdef.AsProblem(err)

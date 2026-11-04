@@ -28,7 +28,7 @@ import (
 )
 
 func (h *objectsAPI) resolver(c *perm.Checker) *reports.Resolver {
-	return &reports.Resolver{Q: h.d.DB, C: c, Engine: h.d.Engine, Log: h.d.Log}
+	return &reports.Resolver{Q: h.d.DB, C: c, Engine: h.d.Engine, Log: h.d.Log, SQL: h.d.SQL}
 }
 
 // exportWait is routes/proxy.py export_wait: code (an API token, the API's routes) waits its
@@ -61,7 +61,8 @@ type renderStarted struct {
 func (h *objectsAPI) writeErr(w http.ResponseWriter, r *http.Request, raw []byte, err error) {
 	var down *reports.EngineDown
 	if errors.As(err, &down) {
-		server.JSON(w, http.StatusServiceUnavailable, map[string]any{"detail": "The engine is not answering"})
+		// main.py _service_down
+		server.JSON(w, http.StatusServiceUnavailable, map[string]any{"detail": "The engine is not answering: try again in a moment"})
 		return
 	}
 	h.answerErr(w, r, raw, err)
@@ -125,8 +126,8 @@ func (h *objectsAPI) render(w http.ResponseWriter, r *http.Request, p *auth.Prin
 		h.fail(w, r, err)
 		return
 	}
-	if reports.NeedsPython(content) {
-		h.toUpstream(w, r, raw)
+	if reports.HasComment(content) { // the comment is written first, by the AI service
+		toAIService(h.d, w, r, raw)
 		return
 	}
 	given, err := reports.GivenParams(toPython(b.Get("params")).(pyjson.Object))
@@ -158,8 +159,8 @@ func (h *objectsAPI) preview(w http.ResponseWriter, r *http.Request, p *auth.Pri
 		return
 	}
 	definition := toPython(b.Get("definition"))
-	if reports.NeedsPython(definition) {
-		h.toUpstream(w, r, raw)
+	if reports.HasComment(definition) { // the comment is written first, by the AI service
+		toAIService(h.d, w, r, raw)
 		return
 	}
 	checked, err := h.reviewer(c).Checked(ctx, definition, nil)
@@ -216,8 +217,8 @@ func (h *objectsAPI) renderFile(w http.ResponseWriter, r *http.Request, p *auth.
 		h.fail(w, r, err)
 		return
 	}
-	if reports.NeedsPython(content) {
-		h.toUpstream(w, r, nil)
+	if reports.HasComment(content) { // the comment is written first, by the AI service
+		toAIService(h.d, w, r, nil)
 		return
 	}
 	started, err := h.startRender(ctx, p, c, it, content, format.(string), queryParams(query), nil, false, "api", false)

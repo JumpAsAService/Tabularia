@@ -174,7 +174,7 @@ func mcpEndpoint(d *Deps) http.Handler {
 			}
 			for _, m := range list {
 				if callsATool(m) {
-					forwardMCP(d, w, r, raw)
+					toAIService(d, w, r, raw) // the tools are the assistant's: the AI service
 					return
 				}
 			}
@@ -192,7 +192,7 @@ func mcpEndpoint(d *Deps) http.Handler {
 			return
 		}
 		if callsATool(body) {
-			forwardMCP(d, w, r, raw)
+			toAIService(d, w, r, raw) // the tools are the assistant's: the AI service
 			return
 		}
 		a := mcpHandle(d, level, withheld, body)
