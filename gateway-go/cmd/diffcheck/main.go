@@ -150,6 +150,7 @@ func main() {
 				}
 				w.script(rules)
 				total++
+				stepAt = time.Now()
 				if diff := w.compare(st); diff != "" {
 					failed++
 					fmt.Printf("  DIFF  %-6s %-40s %s\n%s\n", st.Method, short(st.Path), st.Name, diff)
@@ -400,8 +401,13 @@ func dump(ctx context.Context, s *side) map[string][]any {
 
 var stamp = regexp.MustCompile(`^\d{4}-\d\d-\d\d[T ]\d\d:\d\d:\d\d(\.\d+)?(Z|[+-]\d\d:\d\d)?$`)
 
-// normalize replaces the timestamps of the last ten minutes by «<now>»: the two sides write
-// them a few milliseconds apart.
+// stepAt is when the current step began: normalize measures «the last ten minutes» from it,
+// so that both sides of a step see the same window (measured from each side's own read, a
+// timestamp near the edge was «<now>» on one side and itself on the other).
+var stepAt = time.Now()
+
+// normalize replaces the timestamps of the ten minutes around the step by «<now>»: the two
+// sides write them a few milliseconds apart.
 func normalize(v any) any {
 	switch x := v.(type) {
 	case map[string]any:
@@ -417,7 +423,7 @@ func normalize(v any) any {
 			s := strings.Replace(x, " ", "T", 1)
 			for _, layout := range []string{time.RFC3339Nano, "2006-01-02T15:04:05.999999999"} {
 				if t, err := time.Parse(layout, s); err == nil {
-					if d := time.Since(t); d < 10*time.Minute && d > -10*time.Minute {
+					if d := stepAt.Sub(t); d < 10*time.Minute && d > -10*time.Minute {
 						return "<now>"
 					}
 					break
