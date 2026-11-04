@@ -644,13 +644,6 @@ func refreshDatasource(d *Deps) authedFunc {
 			return
 		}
 		if last != nil && !terminal[last.Status] {
-			if py, err := q.needsPython(last); err != nil {
-				q.fail(err)
-				return
-			} else if py {
-				d.Upstream.ServeHTTP(w, r)
-				return
-			}
 			if _, err := q.reconcile(last, progressOf{}); err != nil {
 				q.fail(err)
 				return
@@ -824,15 +817,6 @@ func listDatasourceRuns(d *Deps) authedFunc {
 			runs = append(runs, &x)
 		}
 		rows.Close()
-		for _, run := range runs {
-			if py, err := q.needsPython(run); err != nil {
-				q.fail(err)
-				return
-			} else if py {
-				d.Upstream.ServeHTTP(w, r)
-				return
-			}
-		}
 		progress := progressOf{}
 		out := []RunOut{}
 		for _, run := range runs {

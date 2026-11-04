@@ -23,38 +23,6 @@ const (
 	MaxStateBytes = 64 * 1024
 )
 
-// NeedsPython says whether reading the definition may need sqlglot (NeedsSQLGlot) or writes an
-// AI comment (HasComment). The routes ask HasComment alone now: a comment is the AI service's
-// (services/ai_comment.py), and the SQL is read by sqlglot over the AI service's internal API.
-func NeedsPython(definition any) bool { return NeedsSQLGlot(definition) || HasComment(definition) }
-
-// NeedsSQLGlot is where the Python code may read a SQL with sqlglot: a SQL on the catalog
-// (sql_scripts.resolve), a script (on the catalog or not: a superset), the choices of a list read
-// from a SQL (report_params.without_params). A superset. The Resolver reads those itself with
-// the AI service (Resolver.SQL); it is kept for code that builds one without it.
-func NeedsSQLGlot(definition any) bool {
-	def := obj(definition)
-	sqlSets := map[string]bool{}
-	for _, d := range list(or(get(def, "datasets"), []any{})) {
-		src := obj(get(obj(d), "source"))
-		switch get(src, "kind") {
-		case "sql_script":
-			return true
-		case "sql":
-			if get(src, "connection_id") == nil {
-				return true
-			}
-			sqlSets[pystr.Str(get(obj(d), "name"))] = true
-		}
-	}
-	for _, p := range list(or(get(def, "parameters"), []any{})) {
-		if ds, ok := choicesDataset(obj(p)).(string); ok && sqlSets[ds] {
-			return true
-		}
-	}
-	return false
-}
-
 // HasComment is ai_comment.has_comment.
 func HasComment(definition any) bool {
 	for _, kv := range ElementsOf(definition) {
@@ -124,8 +92,7 @@ type Choices struct {
 	Problem   string // why they cannot be read (_unread)
 }
 
-// DatasetChoices is dataset_choices for a dataset that reads a datasource or a view (a SQL one
-// goes to Python, NeedsPython): the choices of a parameter, read by the engine with the
+// DatasetChoices is dataset_choices for a dataset that reads a datasource or a view: the choices of a parameter, read by the engine with the
 // person's rights; nil when the engine has no such route.
 func (rs *Resolver) DatasetChoices(ctx context.Context, def pyjson.Object, values pyjson.Object, param pyjson.Object, cache pyjson.Object,
 	ofDashboard bool) (*Choices, error) {

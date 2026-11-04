@@ -68,7 +68,7 @@ type Resolver struct {
 	Log    *slog.Logger
 	Fernet interface{ Decrypt(string) (string, error) }
 	// SQL reads a SQL with sqlglot, in the AI service (sql_scripts.resolve,
-	// report_params.without_params); without it those datasets are ErrNeedsPython
+	// report_params.without_params); every route and loop gives it
 	SQL *aisvc.Client
 	// Read, when not nil, gets the datasources the resolved datasets read (resolve_datasets'
 	// `read`: a flow group's Pushmail cell names them in its run)
@@ -601,7 +601,7 @@ func (rs *Resolver) plan(ctx context.Context, ds pyjson.Object, params map[strin
 			return nil, err
 		}
 		if (s.Conn == nil || len(ignoring) > 0) && rs.SQL == nil {
-			return nil, ErrNeedsPython // read by sqlglot: without the AI service, the Python gateway's
+			return nil, errNoAIService
 		}
 		p := &Plan{Name: name, Kind: "connection", SQL: s.SQL, Conn: s.Conn, Left: map[string]bool{}}
 		key := ""
@@ -806,7 +806,7 @@ func (rs *Resolver) finish(ctx context.Context, p *Plan, def pyjson.Object, valu
 // report's.
 func (rs *Resolver) resolveCatalog(ctx context.Context, sql, engineName string) (*sqlscripts.Resolved, error) {
 	if rs.SQL == nil {
-		return nil, ErrNeedsPython
+		return nil, errNoAIService
 	}
 	resolved, err := sqlscripts.Resolve(ctx, rs.Q, rs.C, rs.SQL, sql, engineName)
 	return resolved, fromSQLScripts(err)
@@ -854,7 +854,7 @@ func (rs *Resolver) ResolveDatasetsIgnoring(ctx context.Context, def pyjson.Obje
 		}
 		p, err := rs.plan(ctx, ds, params, engines, ignoring)
 		if err != nil {
-			if errors.Is(err, ErrNeedsPython) || errors.Is(err, ErrInternal) {
+			if errors.Is(err, ErrInternal) {
 				return nil, err
 			}
 			return nil, InDataset(name, err)
@@ -903,7 +903,7 @@ func (rs *Resolver) ResolveDatasetsIgnoring(ctx context.Context, def pyjson.Obje
 	for _, p := range plans {
 		resolved, err := rs.finish(ctx, p, def, values, texts, rs.Read)
 		if err != nil {
-			if errors.Is(err, ErrNeedsPython) || errors.Is(err, ErrInternal) {
+			if errors.Is(err, ErrInternal) {
 				return nil, err
 			}
 			return nil, InDataset(p.Name, err)

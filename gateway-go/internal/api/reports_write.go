@@ -1,11 +1,9 @@
 package api
 
 import (
-	"bytes"
 	"context"
 	"errors"
 	"fmt"
-	"io"
 	"math"
 	"math/big"
 	"net/http"
@@ -71,22 +69,11 @@ func idOf(v any) int64 {
 	return NoSuchID
 }
 
-// toUpstream hands the request to the Python gateway as it came: what it reads needs sqlglot and
-// no AI service was given (reports.ErrNeedsPython).
-func (h *objectsAPI) toUpstream(w http.ResponseWriter, r *http.Request, raw []byte) {
-	r2 := r.Clone(r.Context())
-	r2.Body = io.NopCloser(bytes.NewReader(raw))
-	r2.ContentLength = int64(len(raw))
-	h.d.Upstream.ServeHTTP(w, r2)
-}
-
-// answerErr writes what an error of the services means: a refusal, a request for Python, a 500.
+// answerErr writes what an error of the services means: a refusal or a 500.
 func (h *objectsAPI) answerErr(w http.ResponseWriter, r *http.Request, raw []byte, err error) {
 	var ref *reports.Refusal
 	var u *reports.Unreadable
 	switch {
-	case errors.Is(err, reports.ErrNeedsPython):
-		h.toUpstream(w, r, raw)
 	case errors.As(err, &ref):
 		server.JSON(w, ref.Status, map[string]any{"detail": ref.Detail})
 	case errors.As(err, &u):

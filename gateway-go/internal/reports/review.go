@@ -22,11 +22,10 @@ import (
 	"github.com/JumpAsAService/Tabularia/gateway-go/internal/sqlscripts"
 )
 
-// ErrNeedsPython is where the Python code reads a SQL with sqlglot (sql_scripts.resolve: the
-// datasources a SQL on the catalog names, report_params.without_params) and no AI service was
-// given to ask (Resolver.SQL, Reviewer.SQL): the request is answered by the Python gateway, as
-// it came. Up to that point the Go code only read the database.
-var ErrNeedsPython = errors.New("this request reads a SQL with sqlglot: the Python gateway answers it")
+// errNoAIService is a Resolver or a Reviewer built without the AI service where the Python code
+// reads a SQL with sqlglot (sql_scripts.resolve, report_params.without_params): a programming
+// error, answered as an internal one. Every route and loop gives it (Deps.SQL).
+var errNoAIService = fmt.Errorf("%w: no AI service to read the SQL with sqlglot", ErrInternal)
 
 var paramRef = regexp.MustCompile(`^\{([A-Za-z_][A-Za-z0-9_]*)\}\n?$`)
 
@@ -185,15 +184,8 @@ func paramsOf(def pyjson.Object) (map[string]bool, []pyjson.Object) {
 	return names, params
 }
 
-// CheckReferences is check_references: what a definition points to, at a save. A dataset whose
-// source is new or changed must point to something that exists and that this person may read;
-// every SQL uses only the report's parameters; two lists of choices do not follow each other.
-func CheckReferences(ctx context.Context, q perm.Querier, c *perm.Checker, def pyjson.Object, current any) error {
-	return CheckReferencesWith(ctx, q, c, nil, def, current)
-}
-
-// CheckReferencesWith is CheckReferences with the AI service that reads a SQL on the catalog
-// (_resolve_catalog); without it such a dataset is ErrNeedsPython.
+// CheckReferencesWith is check_references, with the AI service that reads a SQL on the catalog
+// (_resolve_catalog).
 func CheckReferencesWith(ctx context.Context, q perm.Querier, c *perm.Checker, svc *aisvc.Client, def pyjson.Object, current any) error {
 	before := map[string]any{}
 	if current != nil {
@@ -241,7 +233,7 @@ func CheckReferencesWith(ctx context.Context, q perm.Querier, c *perm.Checker, s
 				}
 				if changed && s.Conn == nil { // the datasources it names, as a render finds them
 					if svc == nil {
-						return ErrNeedsPython
+						return errNoAIService
 					}
 					return resolveCatalog(ctx, q, c, svc, s, paramDefs(def))
 				}
