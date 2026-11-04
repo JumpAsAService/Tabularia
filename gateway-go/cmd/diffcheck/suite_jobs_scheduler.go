@@ -372,9 +372,15 @@ func schedulerSteps(w *World) []Step {
 // of a jobs' suite: the suites after it list the runs and the datasources (GET /runs), and
 // would see the two sides' random names.
 func putAwayRandomKeys(w *World) {
-	for _, tc := range [][2]string{{"runs", "output_key"}, {"datasources", "key"}, {"pending_blob_deletions", "key"},
+	for _, tc := range [][2]string{{"runs", "output_key"}, {"runs", "input_key"}, {"datasources", "key"}, {"pending_blob_deletions", "key"},
 		{"data_contract_results", "snapshot_key"}} {
 		w.Exec(fmt.Sprintf(`UPDATE %s SET %s = regexp_replace(regexp_replace(%s, '-[0-9a-f]{8}\.parquet$', '-00000000.parquet'),
 			'^out/[0-9a-f]{32}\.parquet$', 'out/0.parquet')`, tc[0], tc[1], tc[1]))
 	}
+	// the runs a round wrote together start at the same frozen moment: apart by their id, or
+	// the history (ORDER BY started_at) lists them in the tables' physical order
+	w.Exec(`UPDATE runs SET started_at = started_at + make_interval(secs => id / 1000000.0)
+		WHERE sql_script_id IN (SELECT id FROM sql_scripts WHERE name LIKE 'sc sql %')
+		OR flow_id IN (SELECT id FROM flows WHERE name LIKE 'sc %' OR name LIKE 'qu %')
+		OR datasource_id IN (SELECT id FROM datasources WHERE name LIKE 'sc %' OR name LIKE 'qu %')`)
 }
