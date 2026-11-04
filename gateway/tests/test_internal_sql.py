@@ -16,7 +16,7 @@ from sqlmodel import select
 
 from app.core.crypto import INTERNAL_HEADER, internal_token
 from app.models import Datasource, Project
-from app.routes.internal_sql import router
+from app.routes.internal_sql import regex_router, router
 from app.services import openlineage, report_params, sql_scripts
 
 
@@ -24,6 +24,7 @@ from app.services import openlineage, report_params, sql_scripts
 def client():
     app = FastAPI()
     app.include_router(router)
+    app.include_router(regex_router)
     return TestClient(app)
 
 
@@ -136,6 +137,18 @@ def test_qualified_tables_is_openlineages_own(client):
     assert _post(client, "qualified-tables", {"sql": "not sql at all (", "db_type": "mysql"}).json() == {"tables": []}
 
 
+# ── Python's regular expressions ─────────────────────────────────────────────
+def test_re_compile_says_what_python_takes(client):
+    """contracts._check_rule's re.compile: Python's syntax, not another engine's."""
+    patterns = ["^[A-Z]{2}\\d+$", "(?<=a)b", "(?P<x>a)(?P=x)", "[", "a{2,1}", "(?i)x", ""]
+    headers = {INTERNAL_HEADER: internal_token()}
+    r = client.post("/internal/python/re-compile", json={"patterns": patterns}, headers=headers)
+    assert r.status_code == 200
+    assert r.json() == {"compiles": [True, True, True, False, False, True, True]}
+    assert client.post("/internal/python/re-compile", json={"patterns": ["x"]}).status_code == 404
+    assert client.post("/internal/python/re-compile", json={"patterns": [1]}, headers=headers).status_code == 422
+
+
 # ── the role ─────────────────────────────────────────────────────────────────
 @pytest.mark.parametrize("role, mounted", [("ai", True), ("api", False), ("all", False)])
 def test_only_the_ai_role_has_the_routes(role, mounted):
@@ -145,7 +158,8 @@ def test_only_the_ai_role_has_the_routes(role, mounted):
              "def walk(rs):\n"
              "    for r in rs:\n"
              "        yield from walk(r.effective_candidates()) if hasattr(r, 'effective_candidates') else [getattr(r, 'path', '')]\n"
-             "print('/internal/sql/tables' in set(walk(app.routes)))")
+             "paths = set(walk(app.routes))\n"
+             "print('/internal/sql/tables' in paths and '/internal/python/re-compile' in paths)")
     out = subprocess.run([sys.executable, "-c", probe], capture_output=True, text=True, env=env,
                          cwd=os.path.dirname(os.path.dirname(__file__)), check=True)
     assert out.stdout.strip().splitlines()[-1] == str(mounted)

@@ -149,3 +149,22 @@ func (c *Client) QualifiedTables(ctx context.Context, sql, dbType string) ([]str
 	}
 	return out.Tables, nil
 }
+
+// Compiles says, for each pattern, whether Python's `re.compile` takes it
+// (POST /internal/python/re-compile): contracts.validate_document's check of a «pattern» rule,
+// which Go's regexp (RE2, another syntax) cannot answer.
+func (c *Client) Compiles(ctx context.Context, patterns []string) ([]bool, error) {
+	if c == nil {
+		return nil, ErrNoClient
+	}
+	var out struct {
+		Compiles []bool `json:"compiles"`
+	}
+	if err := c.post(ctx, "/internal/python/re-compile", map[string]any{"patterns": patterns}, &out); err != nil {
+		return nil, err
+	}
+	if len(out.Compiles) != len(patterns) {
+		return nil, fmt.Errorf("aisvc: /internal/python/re-compile answered %d results for %d patterns", len(out.Compiles), len(patterns))
+	}
+	return out.Compiles, nil
+}
