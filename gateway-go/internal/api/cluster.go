@@ -10,20 +10,26 @@ import (
 	"github.com/JumpAsAService/Tabularia/gateway-go/internal/server"
 )
 
+// routes/cluster.py: Administration → Cluster, read by administrators and observers. With
+// nothing to show the reason («kubernetes» off it, «off» with the chart's clusterView off);
+// on Kubernetes what runs now (services/cluster_view.py snapshot, cluster_view.go).
 func init() {
 	register("cluster", func(d *Deps) []server.Route {
 		k := kube.FromEnv()
-		answer := deps.Observer(d.Auth, d.DB, d.Log, "/admin/cluster", func(w http.ResponseWriter, _ *http.Request, _ *auth.Principal) {
-			writePy(w, pyjson.Object{{Key: "disabled_reason", Value: k.ClusterDisabledReason()}})
-		})
-		return []server.Route{{Method: http.MethodGet, Pattern: "/admin/cluster", Handler: http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-			// routes/cluster.py cluster: with nothing to show, the reason; the snapshot of the
-			// pods (services/cluster_view.py, the Kubernetes API) is still Python's
-			if k.ClusterDisabledReason() == "" {
-				d.Upstream.ServeHTTP(w, r)
+		answer := deps.Observer(d.Auth, d.DB, d.Log, "/admin/cluster", func(w http.ResponseWriter, r *http.Request, _ *auth.Principal) {
+			if reason := k.ClusterDisabledReason(); reason != "" {
+				writePy(w, pyjson.Object{{Key: "disabled_reason", Value: reason}})
 				return
 			}
-			answer.ServeHTTP(w, r)
-		})}}
+			// the route's `except KubeError` never fires: _namespace keeps a KubeError as the
+			// namespace's error, and nothing else in snapshot raises one
+			snap, err := clusterSnapshot(r.Context(), d)
+			if err != nil {
+				fail(d, w, "the cluster's snapshot", err)
+				return
+			}
+			writePy(w, append(pyjson.Object{{Key: "disabled_reason", Value: nil}}, snap...))
+		})
+		return []server.Route{{Method: http.MethodGet, Pattern: "/admin/cluster", Handler: answer}}
 	})
 }
