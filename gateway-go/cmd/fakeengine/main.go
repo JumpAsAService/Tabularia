@@ -23,10 +23,10 @@ type rule struct {
 	Path   string          `json:"path"`
 	Status int             `json:"status"`
 	Body   json.RawMessage `json:"body"`
-	// Headers replace the answer's (a Content-Type, a Content-Disposition); Raw, when set, is
-	// the body as text instead of Body
+	Text   string          `json:"text"` // a body that is not JSON, written as it is
+	Type   string          `json:"type"` // its content type (default application/json)
+	// Headers are set on the answer (a Content-Disposition)
 	Headers map[string]string `json:"headers"`
-	Raw     *string           `json:"raw"`
 	re      *regexp.Regexp
 }
 
@@ -89,7 +89,11 @@ func main() {
 			}
 		}
 		mu.Unlock()
-		w.Header().Set("Content-Type", "application/json")
+		if hit != nil && hit.Type != "" {
+			w.Header().Set("Content-Type", hit.Type)
+		} else {
+			w.Header().Set("Content-Type", "application/json")
+		}
 		if hit == nil {
 			w.Write([]byte("{}"))
 			return
@@ -102,8 +106,8 @@ func main() {
 			w.Header().Set(k, v)
 		}
 		w.WriteHeader(status)
-		if hit.Raw != nil {
-			w.Write([]byte(*hit.Raw))
+		if hit.Text != "" {
+			w.Write([]byte(hit.Text))
 		} else if len(hit.Body) > 0 {
 			w.Write(hit.Body)
 		}

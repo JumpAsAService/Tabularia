@@ -127,9 +127,9 @@ func (w *World) seedFlows() {
 	run(FL.Alpha, "FAILURE", "flow", ptr("2026-01-04 10:00:00"), ptr("2026-01-04 10:01:00.000001"), nil)
 	run(FL.Alpha, "SUCCESS", "flow", ptr("2026-01-05 10:00:00"), ptr("2026-01-05 10:00:00.333333"), nil)
 	run(FL.Alpha, "SUCCESS", "flow", ptr("2026-01-06 10:00:00"), ptr("2026-01-06 09:00:00"), nil) // finished before it started
-	doomedRun := run(FL.Doomed, "SUCCESS", "orchestration", ptr("2026-01-03 10:00:00"), ptr("2026-01-03 10:00:01"), nil)
-	run(FL.Alpha, "SUCCESS", "flow", ptr("2026-01-03 10:00:00"), ptr("2026-01-03 10:00:02"), &doomedRun) // a child of Doomed's
-	run(FL.Doomed, "SUCCESS", "flow", ptr("2026-01-03 10:00:00"), nil, &doomedRun)
+	doomedRun := run(FL.Doomed, "SUCCESS", "orchestration", ptr("2026-01-03 09:59:57"), ptr("2026-01-03 10:00:01"), nil)
+	run(FL.Alpha, "SUCCESS", "flow", ptr("2026-01-03 09:59:58"), ptr("2026-01-03 10:00:02"), &doomedRun) // a child of Doomed's
+	run(FL.Doomed, "SUCCESS", "flow", ptr("2026-01-03 09:59:59"), nil, &doomedRun)                       // no two runs start together: the history's order
 	FL.SalesDS = w.Insert(`INSERT INTO datasources (name, description, project_id, owner_id, bucket, key, columns, sort_keys,
 		column_descriptions, kind, flow_id, created_at, updated_at) VALUES ('fl-sales-ds', '', $1, $2, 'data-prep', 'datasets/sales.parquet',
 		'[]', '[]', '{}', 'flow', $3, '2026-01-01', '2026-01-01') RETURNING id`, FL.Sales, w.People["admin"], FL.Doomed)

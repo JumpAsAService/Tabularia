@@ -9,6 +9,7 @@ import (
 	"io"
 	"net/http"
 	"net/url"
+	"strings"
 	"time"
 
 	"github.com/JumpAsAService/Tabularia/gateway-go/internal/secret"
@@ -32,19 +33,23 @@ func New(baseURL, fernetKey string) (*Client, error) {
 	if err != nil {
 		return nil, err
 	}
-	return &Client{base: u, token: secret.InternalToken(fernetKey), http: &http.Client{}}, nil
+	// httpx does not follow redirects (follow_redirects=False): the answer is the engine's
+	noRedirects := func(*http.Request, []*http.Request) error { return http.ErrUseLastResponse }
+	return &Client{base: u, token: secret.InternalToken(fernetKey), http: &http.Client{CheckRedirect: noRedirects}}, nil
 }
 
-// Request builds a request to the engine's `path` (with its query), with the internal token.
+// Request builds a request to the engine's `path` (with its query, escaped already: see
+// Path), with the internal token. The path is sent as it is, after the base URL's own path,
+// as httpx joins them.
 func (c *Client) Request(ctx context.Context, method, path string, body io.Reader) (*http.Request, error) {
-	ref, err := url.Parse(path)
+	p, query, _ := strings.Cut(path, "?")
+	u := &url.URL{Scheme: c.base.Scheme, Host: c.base.Host, User: c.base.User,
+		Opaque: strings.TrimSuffix(c.base.EscapedPath(), "/") + p, RawQuery: query}
+	req, err := http.NewRequestWithContext(ctx, method, c.base.String(), body)
 	if err != nil {
 		return nil, err
 	}
-	req, err := http.NewRequestWithContext(ctx, method, c.base.ResolveReference(ref).String(), body)
-	if err != nil {
-		return nil, err
-	}
+	req.URL = u
 	req.Header.Set(secret.InternalHeader, c.token)
 	return req, nil
 }

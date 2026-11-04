@@ -1,6 +1,8 @@
 package api
 
 import (
+	"bytes"
+	"context"
 	"errors"
 	"fmt"
 	"io"
@@ -28,53 +30,54 @@ func init() {
 	register("flows_body", func(d *Deps) []server.Route {
 		return []server.Route{
 			{Method: http.MethodGet, Pattern: "/flows/search", Handler: server.Authed(d.Auth, "/flows/search", d.searchFlows)},
-			{Method: http.MethodPost, Pattern: "/projects/{project_id}/flows", Handler: withBody(d, "/projects/{project_id}/flows", d.createFlow)},
-			{Method: http.MethodPatch, Pattern: "/flows/{flow_id}", Handler: withBody(d, "/flows/{flow_id}", d.updateFlow)},
-			{Method: http.MethodPost, Pattern: "/flows/{flow_id}/presence", Handler: withBody(d, "/flows/{flow_id}/presence", d.flowPresenceBeat)},
-			{Method: http.MethodPut, Pattern: "/flows/{flow_id}/schedule", Handler: withBody(d, "/flows/{flow_id}/schedule", d.setFlowSchedule)},
+			{Method: http.MethodPost, Pattern: "/projects/{project_id}/flows", Handler: authedBody(d, "/projects/{project_id}/flows", d.createFlow)},
+			{Method: http.MethodPatch, Pattern: "/flows/{flow_id}", Handler: authedBody(d, "/flows/{flow_id}", d.updateFlow)},
+			{Method: http.MethodPost, Pattern: "/flows/{flow_id}/presence", Handler: authedBody(d, "/flows/{flow_id}/presence", d.flowPresenceBeat)},
+			{Method: http.MethodPut, Pattern: "/flows/{flow_id}/schedule", Handler: authedBody(d, "/flows/{flow_id}/schedule", d.setFlowSchedule)},
 			{Method: http.MethodPost, Pattern: "/flows/{flow_id}/run-now", Handler: server.Authed(d.Auth, "/flows/{flow_id}/run-now", d.runFlowNow)},
 		}
 	})
 }
 
-// withBody is a route with a body: FastAPI reads it before the dependencies, so a JSON
-// that does not parse is a 422 even for whoever is not signed in.
-func withBody(d *Deps, pattern string, h func(http.ResponseWriter, *http.Request, *auth.Principal, pyd.Body)) http.Handler {
+// authedBody is a signed-in route with a body (withBody, then the authentication). The
+// bytes stay readable in the request: a branch handed to the Python gateway sends them on.
+func authedBody(d *Deps, pattern string, h func(http.ResponseWriter, *http.Request, *auth.Principal, pyd.Body)) http.Handler {
+	inner := withBody(server.Authed(d.Auth, pattern, func(w http.ResponseWriter, r *http.Request, p *auth.Principal) {
+		h(w, r, p, bodyOf(r))
+	}))
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		raw, err := io.ReadAll(r.Body)
 		if err != nil {
-			server.InternalError(w)
+			pyd.BadRequestBody().Write(w)
 			return
 		}
-		body, early := pyd.ReadBody(raw, r.Header.Get("Content-Type"))
-		if early != nil {
-			early.Write(w)
-			return
-		}
-		server.Authed(d.Auth, pattern, func(w http.ResponseWriter, r *http.Request, p *auth.Principal) {
-			h(w, r, p, body)
-		}).ServeHTTP(w, r)
+		r.Body = io.NopCloser(bytes.NewReader(raw))
+		inner.ServeHTTP(w, r.WithContext(context.WithValue(r.Context(), rawBodyKey{}, raw)))
 	})
 }
 
-func optStr(v any) *string {
+type rawBodyKey struct{}
+
+// rawBody gives the request back its body, as it came, for the Python gateway.
+func rawBody(r *http.Request) *http.Request {
+	raw, _ := r.Context().Value(rawBodyKey{}).([]byte)
+	r.Body = io.NopCloser(bytes.NewReader(raw))
+	r.ContentLength = int64(len(raw))
+	return r
+}
+
+func anyStr(v any) *string {
 	if s, ok := v.(string); ok {
 		return &s
 	}
 	return nil
 }
 
-func optInt(v any) *int64 {
+func anyInt(v any) *int64 {
 	if n, ok := v.(int64); ok {
 		return &n
 	}
 	return nil
-}
-
-// Page is schemas/models.py Page.
-type Page[T any] struct {
-	Items []T   `json:"items"`
-	Total int64 `json:"total"`
 }
 
 // searchFlows is GET /flows/search: the readable flows, paginated, searched over all.
@@ -222,11 +225,11 @@ func (d *Deps) createFlow(w http.ResponseWriter, r *http.Request, p *auth.Princi
 	if q.refused(checkFlowName(name), nil) || q.refused(q.authorizeDefinitionKeys(definition)) || q.refused(q.checkSave("", definition)) {
 		return
 	}
-	engine, ref, err := q.validateEngine(optStr(body.Get("engine")))
+	engine, ref, err := q.validateEngine(anyStr(body.Get("engine")))
 	if q.refused(ref, err) {
 		return
 	}
-	prod, ref, err := q.validateProductionEngine(optStr(body.Get("production_engine")))
+	prod, ref, err := q.validateProductionEngine(anyStr(body.Get("production_engine")))
 	if q.refused(ref, err) {
 		return
 	}
@@ -248,14 +251,10 @@ func (d *Deps) createFlow(w http.ResponseWriter, r *http.Request, p *auth.Princi
 	server.JSON(w, http.StatusCreated, flow.detail())
 }
 
-// lineageRenamed stands for openlineage.catalog_names / renamed: with OpenLineage on, the
-// Python gateway tells the catalog the new names; the Go gateway does not send OpenLineage
-// events yet, and says so.
-func (q *request) lineageRenamed(what string) {
-	if q.d.Config.Flows.OpenLineage {
-		q.d.Log.Warn("openlineage: the rename is not sent to the catalog by the Go gateway", "object", what)
-	}
-}
+// toPython hands the request, as it came, to the Python gateway: with OpenLineage on, a
+// rename or a move tells the catalog the new names (openlineage.catalog_names / renamed),
+// which the Go gateway does not do yet.
+func (q *request) toPython() { q.d.Upstream.ServeHTTP(q.w, rawBody(q.r)) }
 
 // updateFlow is PATCH /flows/{flow_id} (update_flow).
 func (d *Deps) updateFlow(w http.ResponseWriter, r *http.Request, p *auth.Principal, b pyd.Body) {
@@ -271,8 +270,8 @@ func (d *Deps) updateFlow(w http.ResponseWriter, r *http.Request, p *auth.Princi
 	if f == nil || !q.ensure(f.ProjectID, perm.Edit) || q.refused(q.acc.EnsureCanOpen(q.ctx, f.Definition)) {
 		return
 	}
-	name, description, definition := optStr(body.Get("name")), optStr(body.Get("description")), optStr(body.Get("definition"))
-	projectID, engine, production := optInt(body.Get("project_id")), optStr(body.Get("engine")), optStr(body.Get("production_engine"))
+	name, description, definition := anyStr(body.Get("name")), anyStr(body.Get("description")), anyStr(body.Get("definition"))
+	projectID, engine, production := anyInt(body.Get("project_id")), anyStr(body.Get("engine")), anyStr(body.Get("production_engine"))
 	if definition != nil {
 		if q.refused(q.authorizeDefinitionKeys(*definition)) || q.refused(q.checkSave(f.Definition, *definition)) {
 			return
@@ -299,8 +298,9 @@ func (d *Deps) updateFlow(w http.ResponseWriter, r *http.Request, p *auth.Princi
 			changed = append(changed, k.key)
 		}
 	}
-	if name != nil || projectID != nil {
-		q.lineageRenamed(fmt.Sprintf("flow %d", f.ID))
+	if (name != nil || projectID != nil) && q.d.Config.OpenLineage {
+		q.toPython()
+		return
 	}
 	moved := projectID != nil && *projectID != f.ProjectID
 	if moved {
@@ -653,7 +653,7 @@ func (d *Deps) setFlowSchedule(w http.ResponseWriter, r *http.Request, p *auth.P
 		return
 	}
 	spec := ""
-	if s := optStr(body.Get("cron")); s != nil {
+	if s := anyStr(body.Get("cron")); s != nil {
 		spec = pyStrip(*s)
 	}
 	if spec == "" {
@@ -680,14 +680,14 @@ func (d *Deps) setFlowSchedule(w http.ResponseWriter, r *http.Request, p *auth.P
 		}
 		f.RunSchedule, f.RunScheduledBy, f.NextRunAt = &spec, &p.User.ID, &next
 	}
-	if prod := optStr(body.Get("production_engine")); prod != nil { // omitted = unchanged; "" = as development
+	if prod := anyStr(body.Get("production_engine")); prod != nil { // omitted = unchanged; "" = as development
 		e, ref, err := q.validateProductionEngine(prod)
 		if q.refused(ref, err) {
 			return
 		}
 		f.ProductionEngine = e
 	}
-	emails, connID := optStr(body.Get("notify_emails")), optInt(body.Get("notify_connection_id"))
+	emails, connID := anyStr(body.Get("notify_emails")), anyInt(body.Get("notify_connection_id"))
 	if emails != nil || connID != nil {
 		if q.refused(q.setFailureNotice(f, emails, connID)) {
 			return

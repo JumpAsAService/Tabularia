@@ -19,9 +19,6 @@ type FlowsConfig struct {
 	ContainersMaxCPU     string
 	ContainersMaxMemory  string
 	ContainersMaxTimeout int64
-	// OpenLineage on: OPENLINEAGE__URL or __FILE, or the library's OPENLINEAGE_URL /
-	// OPENLINEAGE_CONFIG (services/openlineage.py enabled)
-	OpenLineage bool
 	// UPLOAD__MAX_BYTES (0 = no ceiling; the panel may change it), REPORTS__API_WAIT_SECONDS
 	UploadMaxBytes        int64
 	ReportsAPIWaitSeconds int64
@@ -50,8 +47,6 @@ func loadFlows(r *reader) FlowsConfig {
 		QueueTimeoutSeconds:   r.float("ORCHESTRATOR__QUEUE_TIMEOUT_SECONDS", 900),
 		WorkerCapacity:        int64(r.integer("SCHEDULING__WORKER_CAPACITY", 2, -(1 << 62), -(1<<62)-1)),
 		ReportsAPIWaitSeconds: int64(r.integer("REPORTS__API_WAIT_SECONDS", 120, 5, 3600)),
-		OpenLineage: r.str("OPENLINEAGE__URL", "") != "" || r.str("OPENLINEAGE__FILE", "") != "" ||
-			r.str("OPENLINEAGE_URL", "") != "" || r.str("OPENLINEAGE_CONFIG", "") != "",
 	}
 }
 

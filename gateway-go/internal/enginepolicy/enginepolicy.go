@@ -1,5 +1,5 @@
 // Package enginepolicy is services/engine_policy.py: which run engines the installation
-// allows to choose. The FORBIDDEN ones are stored (disabled_engines); an empty table is
+// allows to CHOOSE. The FORBIDDEN engines are stored (disabled_engines): an empty table is
 // everything allowed.
 package enginepolicy
 
@@ -10,8 +10,18 @@ import (
 	"github.com/jackc/pgx/v5"
 )
 
-// Known is KNOWN_ENGINES, in sync with the engine's catalog.
+// Known is KNOWN_ENGINES, in its order.
 var Known = []string{"polars", "duckdb", "chdb", "clickhouse", "bigquery"}
+
+// IsKnown says whether the id is among Known.
+func IsKnown(id string) bool {
+	for _, e := range Known {
+		if e == id {
+			return true
+		}
+	}
+	return false
+}
 
 // Querier is a pool, a connection or a transaction.
 type Querier interface {
@@ -24,11 +34,11 @@ func Disabled(ctx context.Context, q Querier) (map[string]bool, error) {
 	if err != nil {
 		return nil, err
 	}
-	defer rows.Close()
 	out := map[string]bool{}
 	for rows.Next() {
 		var id string
 		if err := rows.Scan(&id); err != nil {
+			rows.Close()
 			return nil, err
 		}
 		out[id] = true
@@ -36,17 +46,23 @@ func Disabled(ctx context.Context, q Querier) (map[string]bool, error) {
 	return out, rows.Err()
 }
 
-// IsKnown says whether the engine is in the catalog.
-func IsKnown(e string) bool {
-	for _, k := range Known {
-		if k == e {
-			return true
+// Allowed is allowed_engines: the known ones not disabled.
+func Allowed(ctx context.Context, q Querier) (map[string]bool, error) {
+	off, err := Disabled(ctx, q)
+	if err != nil {
+		return nil, err
+	}
+	out := map[string]bool{}
+	for _, e := range Known {
+		if !off[e] {
+			out[e] = true
 		}
 	}
-	return false
+	return out, nil
 }
 
-// SortedKnown is sorted(KNOWN_ENGINES), less the ones given.
+// SortedKnown is sorted(KNOWN_ENGINES) less the ones given (routes/flows.py _validate_engine's
+// messages).
 func SortedKnown(except map[string]bool) []string {
 	var out []string
 	for _, k := range Known {

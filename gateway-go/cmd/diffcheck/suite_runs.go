@@ -118,7 +118,7 @@ func init() {
 			{Method: "GET", Path: "^/tasks/t-revoked$", Body: map[string]any{"status": "REVOKED"}},
 			{Method: "GET", Path: "^/tasks/t-stale$", Body: map[string]any{"status": "STARTED"}},
 			{Method: "GET", Path: "^/tasks/t-silent$", Body: map[string]any{"status": "PENDING"}},
-			{Method: "GET", Path: "^/tasks/t-garbled$", Raw: ptr("not json")},
+			{Method: "GET", Path: "^/tasks/t-garbled$", Text: "not json"},
 			{Method: "GET", Path: "^/tasks/t-publishes$", Body: map[string]any{"status": "SUCCESS", "result": map[string]any{"rows_written": 2,
 				"columns": []any{map[string]any{"name": "città"}}}}},
 			{Method: "GET", Path: "^/tasks/t-clashes$", Body: map[string]any{"status": "SUCCESS", "result": map[string]any{"rows_written": 1.0}}},

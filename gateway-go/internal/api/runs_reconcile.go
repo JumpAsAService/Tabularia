@@ -24,7 +24,8 @@ import (
 // (_reconcile). Two branches stay with the Python gateway, which gets the whole request:
 // a Script or Container run (its Kubernetes Jobs, script_runs.close_if_orphaned), a
 // scheduled orchestration closed for staying queued too long (notifier.notify_failure's
-// email), and a run whose datasource has a data contract on (services/contracts.py).
+// email), a run whose datasource has a data contract on (services/contracts.py), and any
+// run not finished while OpenLineage is on (openlineage.run_closed).
 
 func init() {
 	register("runs_read", func(d *Deps) []server.Route {
@@ -255,6 +256,9 @@ func (q *request) needsPython(run *runRow) (bool, error) {
 	if terminal[run.Status] {
 		return false, nil
 	}
+	if q.d.Config.OpenLineage { // a run that closes tells the catalog (openlineage.run_closed)
+		return true, nil
+	}
 	switch run.Kind {
 	case "script", "container":
 		return true, nil
@@ -459,9 +463,6 @@ func (q *request) reconcile(run *runRow, progress progressOf) (*runRow, error) {
 			return q.readRun(run.ID)
 		}
 		if err == nil {
-			if q.d.Config.Flows.OpenLineage {
-				q.d.Log.Warn("openlineage: the run's events are not sent by the Go gateway", "run", run.ID)
-			}
 			return q.readRun(run.ID)
 		}
 		q.d.Log.Warn("run: post-claim effect failed", "run", run.ID, "attempt", attempt, "err", err)
@@ -852,7 +853,7 @@ func runOut(run *runRow, progress progressOf) RunOut {
 // getRun is GET /runs/{run_id} (get_run): read with the rights of the object it belongs to,
 // then reconciled.
 func (d *Deps) getRun(w http.ResponseWriter, r *http.Request, p *auth.Principal) {
-	ids, ok := pathInts(w, r, "run_id")
+	ids, ok := pathIDs(w, r, "run_id")
 	if !ok {
 		return
 	}
@@ -1023,7 +1024,7 @@ func (d *Deps) getRun(w http.ResponseWriter, r *http.Request, p *auth.Principal)
 
 // listRuns is GET /flows/{flow_id}/runs: the flow's last 50 runs, each reconciled.
 func (d *Deps) listRuns(w http.ResponseWriter, r *http.Request, p *auth.Principal) {
-	ids, ok := pathInts(w, r, "flow_id")
+	ids, ok := pathIDs(w, r, "flow_id")
 	if !ok {
 		return
 	}

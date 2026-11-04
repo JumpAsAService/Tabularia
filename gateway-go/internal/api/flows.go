@@ -129,14 +129,6 @@ type FlowDetail struct {
 	Definition string `json:"definition"`
 }
 
-func isoPtr(t *time.Time) *string {
-	if t == nil {
-		return nil
-	}
-	s := pyjson.Isoformat(*t)
-	return &s
-}
-
 func iso(t time.Time) *string { return isoPtr(&t) }
 
 func (f *flowRow) out() FlowOut {
@@ -279,7 +271,7 @@ func (d *Deps) listAllFlows(w http.ResponseWriter, r *http.Request, p *auth.Prin
 
 // listFlows is GET /projects/{project_id}/flows (list_flows).
 func (d *Deps) listFlows(w http.ResponseWriter, r *http.Request, p *auth.Principal) {
-	ids, ok := pathInts(w, r, "project_id")
+	ids, ok := pathIDs(w, r, "project_id")
 	if !ok {
 		return
 	}
@@ -309,7 +301,7 @@ func (d *Deps) listFlows(w http.ResponseWriter, r *http.Request, p *auth.Princip
 
 // getFlow is GET /flows/{flow_id} (get_flow).
 func (d *Deps) getFlow(w http.ResponseWriter, r *http.Request, p *auth.Principal) {
-	ids, ok := pathInts(w, r, "flow_id")
+	ids, ok := pathIDs(w, r, "flow_id")
 	if !ok {
 		return
 	}
@@ -328,7 +320,7 @@ func (d *Deps) getFlow(w http.ResponseWriter, r *http.Request, p *auth.Principal
 // deleteFlow is DELETE /flows/{flow_id} (delete_flow): the run history dies with the flow,
 // the published datasources survive without their provenance.
 func (d *Deps) deleteFlow(w http.ResponseWriter, r *http.Request, p *auth.Principal) {
-	ids, ok := pathInts(w, r, "flow_id")
+	ids, ok := pathIDs(w, r, "flow_id")
 	if !ok {
 		return
 	}
@@ -361,7 +353,7 @@ func (d *Deps) deleteFlow(w http.ResponseWriter, r *http.Request, p *auth.Princi
 		return
 	}
 	q.audit(audit.Event{Action: "flow.delete", TargetType: strp("flow"), TargetID: &f.ID, TargetLabel: &f.Name})
-	noContent(w)
+	returnsNone(w)
 }
 
 // forgetFlowChats is ai_chats.forget_flow: the flow editor's conversations about it.
@@ -560,7 +552,7 @@ func (q *request) snapshotVersion(flowID int64, note string) (*flowRow, error) {
 // duplicateFlow is POST /flows/{flow_id}/duplicate (duplicate_flow): a copy in its
 // folder, as «name (i)», under the same rules as a new flow.
 func (d *Deps) duplicateFlow(w http.ResponseWriter, r *http.Request, p *auth.Principal) {
-	ids, ok := pathInts(w, r, "flow_id")
+	ids, ok := pathIDs(w, r, "flow_id")
 	if !ok {
 		return
 	}
@@ -623,7 +615,7 @@ type FlowVersionOut struct {
 
 // listFlowVersions is GET /flows/{flow_id}/versions: the history, the newest first.
 func (d *Deps) listFlowVersions(w http.ResponseWriter, r *http.Request, p *auth.Principal) {
-	ids, ok := pathInts(w, r, "flow_id")
+	ids, ok := pathIDs(w, r, "flow_id")
 	if !ok {
 		return
 	}
@@ -664,7 +656,7 @@ func (d *Deps) listFlowVersions(w http.ResponseWriter, r *http.Request, p *auth.
 // promoteFlowVersion is POST /flows/{flow_id}/versions/{version}/promote: an old
 // version's definition becomes the flow's, recorded as a new version.
 func (d *Deps) promoteFlowVersion(w http.ResponseWriter, r *http.Request, p *auth.Principal) {
-	ids, ok := pathInts(w, r, "flow_id", "version")
+	ids, ok := pathIDs(w, r, "flow_id", "version")
 	if !ok {
 		return
 	}
@@ -754,7 +746,7 @@ type FlowStatsOut struct {
 
 // flowStats is GET /flows/{flow_id}/stats: counts and average time from the run history.
 func (d *Deps) flowStats(w http.ResponseWriter, r *http.Request, p *auth.Principal) {
-	ids, ok := pathInts(w, r, "flow_id")
+	ids, ok := pathIDs(w, r, "flow_id")
 	if !ok {
 		return
 	}
@@ -814,7 +806,7 @@ func pyRound(x float64, ndigits int) float64 {
 
 // flowPresenceLeave is DELETE /flows/{flow_id}/presence/{instance}: the tab closed.
 func (d *Deps) flowPresenceLeave(w http.ResponseWriter, r *http.Request, p *auth.Principal) {
-	ids, ok := pathInts(w, r, "flow_id")
+	ids, ok := pathIDs(w, r, "flow_id")
 	if !ok {
 		return
 	}
@@ -827,7 +819,7 @@ func (d *Deps) flowPresenceLeave(w http.ResponseWriter, r *http.Request, p *auth
 		q.fail(err)
 		return
 	}
-	noContent(w)
+	returnsNone(w)
 }
 
 // pyStrip is str.strip().
@@ -835,10 +827,4 @@ func pyStrip(s string) string {
 	return strings.TrimFunc(s, func(r rune) bool {
 		return strings.ContainsRune(" \t\n\r\v\f\x1c\x1d\x1e\x1f\u0085                 　", r)
 	})
-}
-
-// noContent is FastAPI's 204: no body, the route's JSON type all the same.
-func noContent(w http.ResponseWriter) {
-	w.Header().Set("Content-Type", "application/json")
-	w.WriteHeader(http.StatusNoContent)
 }

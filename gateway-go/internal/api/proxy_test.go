@@ -22,7 +22,6 @@ func TestASCIIFallback(t *testing.T) {
 	}
 }
 
-
 func TestDescribeBytes(t *testing.T) {
 	if describeBytes(1<<30) != "1 GB" || describeBytes(3<<20) != "3 MB" || describeBytes(1000) != "1000 bytes" {
 		t.Error("describe_bytes")

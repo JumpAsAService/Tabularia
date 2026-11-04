@@ -1,7 +1,7 @@
 #!/bin/sh
 # The route inventory (docs/gateway-go-routes.md): every route of the Python gateway, as
-# FastAPI serves it, and whether the Go gateway answers it yet (the routes of
-# cmd/gateway/main.go and internal/api). Run after porting a route.
+# FastAPI serves it, and whether the Go gateway answers it yet (as its route registry
+# says: cmd/routes). Run after porting a route.
 #
 #   GATEWAY_IMAGE=… gateway-go/scripts/inventory.sh
 set -eu
@@ -35,12 +35,15 @@ walk(app.routes)
 print(json.dumps(out))
 PY
 
-python3 - "$routes" "$here" "$repo/docs/gateway-go-routes.md" <<'PY'
-import collections, glob, json, re, sys
+ported=$(mktemp)
+trap 'rm -f "$routes" "$ported"' EXIT
+docker run --rm --user "$(id -u):$(id -g)" -e HOME=/tmp -e GOCACHE=/tmp/gocache -v "$here":/src \
+    -v tabularia-gomod:/go/pkg/mod -w /src golang:1.27.3-bookworm go run ./cmd/routes >"$ported"
+
+python3 - "$routes" "$ported" "$repo/docs/gateway-go-routes.md" <<'PY'
+import collections, json, sys
 routes = json.load(open(sys.argv[1]))
-go = "".join(open(f).read() for f in [sys.argv[2] + "/cmd/gateway/main.go", *glob.glob(sys.argv[2] + "/internal/api/*.go")])
-ported = set(re.findall(r'Method:\s*http\.Method(\w+),\s*Pattern:\s*"([^"]+)"', go))
-ported = {(m.upper(), p) for m, p in ported}
+ported = {(m.upper(), p) for m, p in json.load(open(sys.argv[2]))}
 by_module = collections.defaultdict(list)
 for r in routes:
     by_module[r["module"]].append(r)

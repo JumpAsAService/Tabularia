@@ -49,8 +49,7 @@ func init() {
 					w.Exec(`INSERT INTO disabled_engines (engine_id, disabled_at) VALUES ('duckdb', '2026-01-01') ON CONFLICT DO NOTHING`)
 				}})
 			s = append(s, Step{Name: "engines · the engine fails", Method: "GET", Path: "/engines", Auth: w.As("editor"),
-				Engine: []EngineRule{{Method: "GET", Path: "^/engines$", Status: 503, Raw: ptr("down"),
-					Headers: map[string]string{"Content-Type": "text/plain"}}},
+				Engine: []EngineRule{{Method: "GET", Path: "^/engines$", Status: 503, Text: "down", Type: "text/plain"}},
 				Before: func(w *World) { w.Exec(`DELETE FROM disabled_engines`) }})
 
 			// ── previews ──
@@ -119,8 +118,8 @@ func init() {
 				"attachment; filename=\"a.csv\"; filename*=UTF-8''%C3%A8.csv", "inline; filename*=utf-8''%22%E2%98%83%22", "attachment"} {
 				s = append(s, Step{Name: "export's file · a disposition " + d, Method: "GET", Auth: w.As("editor"),
 					Path: "/tasks/exports/0b4c1f0e-0000-4000-8000-00000000000" + string(rune('2'+i)) + "/file",
-					Engine: []EngineRule{{Method: "GET", Path: "/file$", Raw: ptr("a,b\n"),
-						Headers: map[string]string{"Content-Type": "text/csv; charset=utf-8", "Content-Disposition": d}}}})
+					Engine: []EngineRule{{Method: "GET", Path: "/file$", Text: "a,b\n", Type: "text/csv; charset=utf-8",
+						Headers: map[string]string{"Content-Disposition": d}}}})
 			}
 			get("export's file · not an id", "/tasks/exports/0B4C1F0E-0000-4000-8000-000000000001/file", w.As("editor"))
 			get("a task's state", "/tasks/abc-123?verbose=1", w.As("writer"))

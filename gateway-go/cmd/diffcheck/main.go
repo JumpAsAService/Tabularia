@@ -52,13 +52,13 @@ type Step struct {
 
 // EngineRule is one scripted answer of the fake engine (cmd/fakeengine).
 type EngineRule struct {
-	Method string `json:"method,omitempty"`
-	Path   string `json:"path"` // a regular expression on the path
-	Status int    `json:"status,omitempty"`
-	Body   any    `json:"body,omitempty"`
-	// the answer's headers, and its body as text instead of Body (cmd/fakeengine)
-	Headers map[string]string `json:"headers,omitempty"`
-	Raw     *string           `json:"raw,omitempty"`
+	Method  string            `json:"method,omitempty"`
+	Path    string            `json:"path"` // a regular expression on the path
+	Status  int               `json:"status,omitempty"`
+	Body    any               `json:"body,omitempty"`
+	Text    string            `json:"text,omitempty"`    // a body that is not JSON (Body then unused)
+	Type    string            `json:"type,omitempty"`    // its content type
+	Headers map[string]string `json:"headers,omitempty"` // set on the answer (cmd/fakeengine)
 }
 
 // Suite is the comparison of one module.
@@ -314,6 +314,11 @@ func (w *World) ask(s *side, st Step) answer {
 
 func (w *World) compare(st Step) string {
 	pa, gb := w.ask(w.a, st), w.ask(w.b, st)
+	if os.Getenv("DIFF_VERBOSE") != "" { // what Python answered, to see which branch a step reached
+		p, _ := json.Marshal(pa.Body)
+		e, _ := json.Marshal(pa.Engine)
+		fmt.Printf("        python %d %s\n        engine %s\n", pa.Status, clip(p), clip(e))
+	}
 	var out []string
 	if pa.Status != gb.Status {
 		out = append(out, fmt.Sprintf("    status: python %d, go %d", pa.Status, gb.Status))

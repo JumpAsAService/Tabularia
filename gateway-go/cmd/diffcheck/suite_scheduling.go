@@ -1,6 +1,9 @@
 package main
 
-import "net/http"
+import (
+	"net/http"
+	"time"
+)
 
 // routes/scheduling.py: the schedules' forecast load.
 func init() {
@@ -12,8 +15,12 @@ func init() {
 		FL.schedSeeded = true
 		folder := w.Insert(`INSERT INTO projects (name, description, parent_id, owner_id, created_at)
 			VALUES ('fl-Schedules', '', NULL, $1, '2026-01-01') RETURNING id`, w.People["admin"])
-		sales := Groups["Sales"]
-		w.Exec(`INSERT INTO permissions (project_id, user_id, group_id, capability) VALUES ($1, NULL, $2, 'view')`, folder, sales)
+		// a person who sees this folder only: the flows the other suites changed are read in the
+		// heap's order (no ORDER BY in Python), which differs with the writes of each side
+		w.People["fl_sched"] = w.Insert(`INSERT INTO users (email, full_name, hashed_password, is_active, is_superuser, is_observer,
+			is_service, created_at) VALUES ('flsched@x.test', 'Person fl_sched', 'x', true, false, false, false, '2026-01-01') RETURNING id`)
+		w.Session("fl_sched", "s-fl_sched", 5*time.Minute, time.Hour)
+		w.Exec(`INSERT INTO permissions (project_id, user_id, group_id, capability) VALUES ($1, $2, NULL, 'view')`, folder, w.People["fl_sched"])
 		for _, s := range [][2]string{{"fl every 15", "*/15 * * * *"}, {"fl hourly", "0 * * * *"}, {"fl at three", "0 3 * * *"},
 			{"fl at three too", "0 3 * * *"}, {"fl weekdays", "0 9 * * mon-fri"}, {"fl broken cron", "61 * * * *"},
 			{"fl at three too", "0 3 * * *"}, {"fl last day", "0 0 L * *"}} {
@@ -31,9 +38,9 @@ func init() {
 			s = append(s, Step{Name: name, Method: "GET", Path: "/schedule/load" + q, Auth: auth})
 		}
 		for _, q := range []string{"", "?days=1", "?days=31", "?days=0", "?days=32", "?days=x", "?days=2.0"} {
-			get("load "+q+" · editor", q, w.As("editor"))
+			get("load "+q+" · fl_sched", q, w.As("fl_sched"))
 		}
-		for _, p := range []string{"admin", "writer", "obs_flag"} {
+		for _, p := range []string{"writer", "obs_flag"} {
 			get("load · "+p, "", w.As(p))
 		}
 		get("load · nobody", "", nil)
