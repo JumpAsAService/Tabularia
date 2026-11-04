@@ -1,11 +1,8 @@
 package api
 
 import (
-	"bytes"
-	"context"
 	"errors"
 	"fmt"
-	"io"
 	"math"
 	"net/http"
 	"strings"
@@ -40,31 +37,11 @@ func init() {
 	})
 }
 
-// authedBody is a signed-in route with a body (withBody, then the authentication). The
-// bytes stay readable in the request: a branch handed to the Python gateway sends them on.
+// authedBody is a signed-in route with a body (withBody, then the authentication).
 func authedBody(d *Deps, pattern string, h func(http.ResponseWriter, *http.Request, *auth.Principal, pyd.Body)) http.Handler {
-	inner := withBody(server.Authed(d.Auth, pattern, func(w http.ResponseWriter, r *http.Request, p *auth.Principal) {
+	return withBody(server.Authed(d.Auth, pattern, func(w http.ResponseWriter, r *http.Request, p *auth.Principal) {
 		h(w, r, p, bodyOf(r))
 	}))
-	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		raw, err := io.ReadAll(r.Body)
-		if err != nil {
-			pyd.BadRequestBody().Write(w)
-			return
-		}
-		r.Body = io.NopCloser(bytes.NewReader(raw))
-		inner.ServeHTTP(w, r.WithContext(context.WithValue(r.Context(), rawBodyKey{}, raw)))
-	})
-}
-
-type rawBodyKey struct{}
-
-// rawBody gives the request back its body, as it came, for the Python gateway.
-func rawBody(r *http.Request) *http.Request {
-	raw, _ := r.Context().Value(rawBodyKey{}).([]byte)
-	r.Body = io.NopCloser(bytes.NewReader(raw))
-	r.ContentLength = int64(len(raw))
-	return r
 }
 
 func anyStr(v any) *string {
@@ -251,9 +228,6 @@ func (d *Deps) createFlow(w http.ResponseWriter, r *http.Request, p *auth.Princi
 	}
 	server.JSON(w, http.StatusCreated, flow.detail())
 }
-
-// toPython hands the request, as it came, to the Python gateway.
-func (q *request) toPython() { q.d.Upstream.ServeHTTP(q.w, rawBody(q.r)) }
 
 // updateFlow is PATCH /flows/{flow_id} (update_flow).
 func (d *Deps) updateFlow(w http.ResponseWriter, r *http.Request, p *auth.Principal, b pyd.Body) {

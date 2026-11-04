@@ -29,13 +29,8 @@ import (
 
 // services/orchestrator.py queue_loop: the queue of the orchestrations (a flow's run, queued
 // by «Run now» or by the scheduler) taken by this process and carried to the end, its
-// heartbeat, and the runs of processes that are gone closed.
-//
-// What the Go queue does not carry yet (see the report of the port): a flow group's run
-// (flow_group_runner.run_group), a saved script's (saved_script_runs.run_queued), and a flow
-// whose definition (or a sub-flow's) has a Script or Container node (script_runs,
-// container_runs: Kubernetes Jobs). It leaves those queued, untouched, for a Python
-// orchestrator: claim skips them.
+// heartbeat, and the runs of processes that are gone closed. Every orchestration is carried:
+// a flow's, a flow group's (jobs_group.go) and a saved script's.
 
 const (
 	maxFlowDepth       = 5    // MAX_FLOW_DEPTH
@@ -276,11 +271,10 @@ func (q *queue) roundTick(ctx context.Context) (any, error) {
 // launches of a flow running already (to close as failed).
 func (q *queue) claim(ctx context.Context, limit int64) ([]int64, []int64) {
 	type cand struct {
-		id                  int64
-		trigger             string
-		flow, group, script *int64
+		id      int64
+		trigger string
 	}
-	rows, err := q.d.DB.Query(ctx, `SELECT id, trigger_type, flow_id, flow_group_id, saved_script_id FROM runs
+	rows, err := q.d.DB.Query(ctx, `SELECT id, trigger_type FROM runs
 		WHERE kind = 'orchestration' AND status = 'PENDING' ORDER BY id LIMIT $1`, limit+20)
 	if err != nil {
 		q.d.Log.Error("orchestrate: the queue cannot be read", "err", err)
@@ -289,7 +283,7 @@ func (q *queue) claim(ctx context.Context, limit int64) ([]int64, []int64) {
 	var cands []cand
 	for rows.Next() {
 		var c cand
-		if rows.Scan(&c.id, &c.trigger, &c.flow, &c.group, &c.script) == nil {
+		if rows.Scan(&c.id, &c.trigger) == nil {
 			cands = append(cands, c)
 		}
 	}
@@ -298,9 +292,6 @@ func (q *queue) claim(ctx context.Context, limit int64) ([]int64, []int64) {
 	for _, c := range cands {
 		if int64(len(taken)) >= limit {
 			break
-		}
-		if !q.carries(ctx, c.flow, c.group, c.script) {
-			continue // left to a Python orchestrator
 		}
 		tag, err := q.d.DB.Exec(ctx, `UPDATE runs SET status = 'STARTED', claimed_by = $2, heartbeat_at = $3 WHERE id = $1 AND status = 'PENDING'`,
 			c.id, jobs.Instance, jobs.Now())
@@ -326,64 +317,6 @@ func (q *queue) claim(ctx context.Context, limit int64) ([]int64, []int64) {
 		}
 	}
 	return taken, refused
-}
-
-// carries says whether the Go queue runs this orchestration (see the file's comment).
-func (q *queue) carries(ctx context.Context, flow, group, script *int64) bool {
-	if script != nil {
-		return true
-	}
-	if group != nil {
-		// a Pushmail cell whose report or dashboard has an AI comment (the assistant writes
-		// it): left to a Python orchestrator
-		var definition string
-		if err := q.d.DB.QueryRow(ctx, `SELECT definition FROM flow_groups WHERE id = $1`, *group).Scan(&definition); err != nil {
-			return err == pgx.ErrNoRows
-		}
-		for _, row := range groupSteps(definition) {
-			for _, c := range row {
-				if c == nil {
-					continue
-				}
-				if c.kind == "pushmail" && !q.d.pushmailCarried(ctx, c.pushmail) {
-					return false
-				}
-				if c.kind == "flow" && !q.carries(ctx, &c.id, nil, nil) {
-					return false
-				}
-			}
-		}
-		return true
-	}
-	if flow == nil {
-		return true // run_it closes it as invalid
-	}
-	seen := map[int64]bool{}
-	var walk func(id int64, depth int) bool
-	walk = func(id int64, depth int) bool {
-		if seen[id] || depth > maxFlowDepth {
-			return true
-		}
-		seen[id] = true
-		f, err := loadJobFlow(ctx, q.d.DB, id)
-		if err != nil || f == nil {
-			return err == nil
-		}
-		v, err := pyjson.Loads(pyjson.Str(pyjson.Or(f.Definition, "{}")))
-		if err != nil {
-			return true
-		}
-		for _, n := range objectList(pyjson.Obj(v).Value("nodes")) {
-			switch n.Value("type") {
-			case "runflow":
-				if sub, ok := pyjson.IsInt(nodeData(n).Value("flowId")); ok && !walk(sub, depth+1) {
-					return false
-				}
-			}
-		}
-		return true
-	}
-	return walk(*flow, 0)
 }
 
 // ── carrying a run ────────────────────────────────────────────────────────────

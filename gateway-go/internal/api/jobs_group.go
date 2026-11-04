@@ -29,8 +29,8 @@ import (
 
 // services/flow_group_runner.py run_group: a flow group's steps in order, the cells of a step
 // at the same time (flows, saved scripts, SQL scripts on a connection, containers, refreshes).
-// A Pushmail cell (reports and dashboards rendered, their AI comments) is not carried by the Go
-// queue: a group with one is left queued for a Python orchestrator (queue.carries).
+// A Pushmail cell's reports and dashboards are rendered by the engine in the email's task; their
+// AI comments are written by the AI service (jobs_pushmail.go cellComments).
 
 const (
 	cellWaiting, cellRunning, cellSucceeded, cellFailed, cellSkipped = "waiting", "running", "succeeded", "failed", "skipped"
@@ -731,7 +731,7 @@ func (q *queue) waitFor(ctx context.Context, id, liveID int64, name string, cell
 	}
 }
 
-// gapsOfGroup is schedule_authority.gaps_of_group (its Pushmail cells left to Python).
+// gapsOfGroup is schedule_authority.gaps_of_group.
 func (q *queue) gapsOfGroup(ctx context.Context, user *auth.User, name string, project int64, steps [][]*groupCell) ([]string, error) {
 	d := q.d
 	c := perm.For(d.DB, user)
@@ -816,7 +816,7 @@ func (q *queue) gapsOfGroup(ctx context.Context, user *auth.User, name string, p
 					more, err = d.sqlGaps(ctx, user, s)
 				}
 			case "pushmail":
-				more, err = d.pushmailErrors(ctx, user, cell.pushmail)
+				more, err = d.pushmailErrors(ctx, user, cell.pushmail, nil)
 			default:
 				err = fmt.Errorf("a %s cell is not carried by the Go orchestrator", cell.kind)
 			}

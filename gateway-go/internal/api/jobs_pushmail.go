@@ -8,6 +8,7 @@ import (
 	"regexp"
 	"sort"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/JumpAsAService/Tabularia/gateway-go/internal/audit"
@@ -26,8 +27,8 @@ import (
 // A flow group's Pushmail cell (services/flow_group_runner.py _pushmail_cell, services/pushmail.py):
 // one email through an SMTP connection, with one .xlsx per datasource and one file per report or
 // dashboard, rendered by the engine in the task that writes the email. Every part is checked
-// again with the rights of whoever runs the group. A cell whose reports or dashboards have AI
-// comments (reports.comments_for asks the assistant) is not carried by the Go queue.
+// again with the rights of whoever runs the group. The AI comments of its reports and dashboards
+// (reports.comments_for: the assistant) are written by the AI service (cellComments).
 
 const pushmailMaxReportParams = 100 // PUSHMAIL_MAX_REPORT_PARAMS
 
@@ -64,15 +65,18 @@ func pushmailName(cfg pyjson.Object) string {
 	return "Pushmail"
 }
 
-// pushmailErrors is pushmail_errors: what the person lacks, or what is wrong, to send the cell.
-func (d *Deps) pushmailErrors(ctx context.Context, user *auth.User, cfg pyjson.Object) ([]string, error) {
+// pushmailErrors is pushmail_errors: what the person lacks, or what is wrong, to send the cell;
+// `readable` the folders they read (nil: read here), as the caller may pass them.
+func (d *Deps) pushmailErrors(ctx context.Context, user *auth.User, cfg pyjson.Object, readable map[int64]bool) ([]string, error) {
 	if cfg == nil {
 		return []string{"pushmail: the cell has no settings"}, nil
 	}
 	c := perm.For(d.DB, user)
-	readable, err := c.Readable(ctx)
-	if err != nil {
-		return nil, err
+	var err error
+	if readable == nil {
+		if readable, err = c.Readable(ctx); err != nil {
+			return nil, err
+		}
 	}
 	name := pushmailName(cfg)
 	var errs []string
@@ -270,40 +274,17 @@ func (d *Deps) visibleDocument(ctx context.Context, c *perm.Checker, kind *versi
 	return item, def, nil
 }
 
-// pushmailCarried says whether the Go queue runs this cell: not when one of its reports or
-// dashboards has an AI comment (the assistant writes it).
-func (d *Deps) pushmailCarried(ctx context.Context, cfg pyjson.Object) bool {
-	for _, k := range []struct {
-		list, id string
-		kind     *versioned.Kind
-	}{{"reports", "reportId", reports.Kind}, {"dashboards", "dashboardId", dashboards.Kind}} {
-		for _, r := range cfgList(cfg, k.list) {
-			id, ok := r.Value(k.id).(int64)
-			if !ok {
-				continue
-			}
-			item, err := k.kind.Get(ctx, d.DB, id)
-			if err != nil || item == nil {
-				continue
-			}
-			content, err := k.kind.ContentOf(ctx, d.DB, item, nil)
-			if err != nil {
-				return false
-			}
-			if def, ok := content.(pyjson.Object); ok && reports.HasComment(def) {
-				return false
-			}
-		}
-	}
-	return true
-}
-
 // renderedDoc is one report or dashboard of a cell, prepared.
 type renderedDoc struct {
 	item    *versioned.Item
 	spec    pyjson.Object // what the engine renders
 	summary pyjson.Object // in the run's summary
 	detail  pyjson.Object
+	// what its AI comments are written from (_cell_comments)
+	definition, datasets, params pyjson.Object
+	given                        reports.Given
+	content                      pyjson.Object // a dashboard's, as the screen has it (words_of); nil for a report
+	format, inBody               any
 }
 
 // cellDocuments is _cell_reports (boards false) and _cell_dashboards: every document as the
@@ -376,10 +357,15 @@ func (q *queue) cellDocuments(ctx context.Context, user *auth.User, cfg pyjson.O
 			spec = append(spec, pyjson.KV{Key: "in_body", Value: r.Value("inBody")})
 			summary = append(summary, pyjson.KV{Key: "in_body", Value: r.Value("inBody")})
 		}
-		// _cell_comments: a definition without AI comments has none, and no reading
+		// the AI comments are written by cellComments once every document is prepared
 		spec = append(spec, pyjson.KV{Key: "locale", Value: locale}, pyjson.KV{Key: "comments", Value: pyjson.Object{}},
 			pyjson.KV{Key: "reading", Value: nil})
-		out = append(out, renderedDoc{item: item, spec: spec, summary: summary, detail: detail})
+		doc := renderedDoc{item: item, spec: spec, summary: summary, detail: detail, definition: def, datasets: datasets,
+			params: params, given: given, format: r.Value("format"), inBody: r.Value("inBody")}
+		if boards {
+			doc.content = content
+		}
+		out = append(out, doc)
 	}
 	return out, "", nil
 }
@@ -417,7 +403,7 @@ func (q *queue) pushmailCell(ctx context.Context, id, userID int64, trigger stri
 		return userGone, nil
 	}
 	cfg := cell.pushmail
-	problems, err := d.pushmailErrors(ctx, user, cfg)
+	problems, err := d.pushmailErrors(ctx, user, cfg, nil)
 	if err != nil {
 		return "", err
 	}
@@ -479,6 +465,7 @@ func (q *queue) pushmailCell(ctx context.Context, id, userID int64, trigger stri
 	if failed != "" {
 		return fmt.Sprintf("«%s»: %s", name, failed), nil
 	}
+	q.cellComments(ctx, user, rendered, boards)
 	to, cc := strippedList(cfg.Value("to")), strippedList(cfg.Value("cc"))
 	all := stringsAny(append(append([]string{}, to...), cc...))
 	names, dsIDs := []any{}, []any{}
@@ -599,4 +586,73 @@ func (q *queue) pushmailCell(ctx context.Context, id, userID int64, trigger stri
 		return fmt.Sprintf("«%s»: %s", name, *done.Error), nil
 	}
 	return fmt.Sprintf("«%s»: the email was not sent", name), nil
+}
+
+// cellComments is _cell_comments: the AI comments of what a cell sends, on the numbers it sends,
+// all at the same time, on the bill of whoever runs the group, written by the AI service
+// (/internal/ai/comments: reports.comments_for). Whatever happens to them the cell goes on: a
+// comment is no tile in error. A report going as Excel with no summary in the body has no place
+// for one, and asks nothing; a definition without a comment asks nothing either (comments_for).
+func (q *queue) cellComments(ctx context.Context, user *auth.User, rendered, boards []renderedDoc) {
+	var wg sync.WaitGroup
+	one := func(doc *renderedDoc, where string, ofReport bool) {
+		defer wg.Done()
+		if ofReport && doc.format == "xlsx" && !pyjson.Truthy(doc.inBody) {
+			return
+		}
+		if !reports.HasComment(doc.definition) {
+			return
+		}
+		comments, reading, err := q.d.documentComments(ctx, user, doc, where, ofReport)
+		if err != nil {
+			q.d.Log.Error("flow group: the AI comments not written", "document", doc.item.Name, "err", err)
+			return
+		}
+		doc.spec = doc.spec.Set("comments", comments).Set("reading", reading)
+	}
+	for i := range rendered {
+		wg.Add(1)
+		go one(&rendered[i], "report", true)
+	}
+	for i := range boards {
+		wg.Add(1)
+		go one(&boards[i], "dashboard", false)
+	}
+	wg.Wait()
+}
+
+// documentComments asks the AI service for reports.comments_for of one document.
+func (d *Deps) documentComments(ctx context.Context, user *auth.User, doc *renderedDoc, where string, ofReport bool) (pyjson.Object, any, error) {
+	var wordsOf any
+	if doc.content != nil {
+		wordsOf = doc.content
+	}
+	given := doc.given
+	if given == nil {
+		given = reports.Given{}
+	}
+	body, err := pyjson.Dumps(pyjson.Object{{Key: "user_id", Value: user.ID}, {Key: "definition", Value: doc.definition},
+		{Key: "datasets", Value: pyjson.Or(doc.datasets, pyjson.Object{})}, {Key: "params", Value: doc.params}, {Key: "given", Value: given},
+		{Key: "where", Value: []any{where, doc.item.ID}}, {Key: "title", Value: doc.item.Name}, {Key: "of_report", Value: ofReport},
+		{Key: "words_of", Value: wordsOf}}, pyjson.Options{Compact: true})
+	if err != nil {
+		return nil, nil, err
+	}
+	raw, err := d.SQL.Comments(ctx, []byte(body))
+	if err != nil {
+		return nil, nil, err
+	}
+	v, err := pyjson.Loads(string(raw))
+	if err != nil {
+		return nil, nil, err
+	}
+	answer, ok := v.(pyjson.Object)
+	if !ok {
+		return nil, nil, errors.New("the AI service's comments are not an object")
+	}
+	comments, ok := answer.Value("comments").(pyjson.Object)
+	if !ok {
+		return nil, nil, errors.New("the AI service's comments are not an object")
+	}
+	return comments, answer.Value("reading"), nil
 }

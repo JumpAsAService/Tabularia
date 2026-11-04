@@ -346,8 +346,10 @@ if settings.app.role != "orchestrator":
     notebook_proxy.install(app)
 
 # The AI service (APP__ROLE=ai, docs/specs/gateway-go.md): the SQL parsing the Go gateway
-# asks for, behind the internal token. No other role has these routes.
+# asks for, and the AI comments of a Pushmail cell, behind the internal token. No other role
+# has these routes.
 if settings.app.role == "ai":
+    from app.routes.internal_ai import router as internal_ai_router
     from app.routes.internal_script import router as internal_script_router
     from app.routes.internal_sql import regex_router as internal_regex_router
     from app.routes.internal_sql import router as internal_sql_router
@@ -355,6 +357,7 @@ if settings.app.role == "ai":
     app.include_router(internal_sql_router)
     app.include_router(internal_regex_router)
     app.include_router(internal_script_router)
+    app.include_router(internal_ai_router)
 
 
 @app.get("/", tags=["health"])
