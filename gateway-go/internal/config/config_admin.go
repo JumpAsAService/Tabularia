@@ -1,6 +1,7 @@
 package config
 
 import (
+	"encoding/json"
 	"fmt"
 	"os"
 	"strconv"
@@ -34,6 +35,12 @@ type AdminConfig struct {
 	// MCP__ENABLED, MCP__CONFIRM_IN_TABULARIA_ONLY, MCP__METADATA_ONLY, AI__METADATA_ONLY:
 	// the starting values; the panel may change them
 	MCPEnabled, MCPConfirmInTabulariaOnly, MCPMetadataOnly, AIMetadataOnly bool
+	// AI__DEFAULT_MODEL, AI__COMMENT_MODEL (the panel may change them)
+	AIDefaultModel, AICommentModel string
+	// AI__MAX_RESULT_ROWS: the rows an assistant query returns (the panel may change it)
+	AIMaxResultRows int
+	// APP__CORS_ORIGINS: the interface's origins (a JSON list)
+	CORSOrigins []string
 }
 
 func loadAdmin(r *reader) AdminConfig {
@@ -55,6 +62,14 @@ func loadAdmin(r *reader) AdminConfig {
 	c.MCPConfirmInTabulariaOnly = r.boolean("MCP__CONFIRM_IN_TABULARIA_ONLY", false)
 	c.MCPMetadataOnly = r.boolean("MCP__METADATA_ONLY", false)
 	c.AIMetadataOnly = r.boolean("AI__METADATA_ONLY", false)
+	c.AIDefaultModel, c.AICommentModel = r.str("AI__DEFAULT_MODEL", ""), r.str("AI__COMMENT_MODEL", "")
+	c.AIMaxResultRows = r.integer("AI__MAX_RESULT_ROWS", 200, 1, 2000)
+	c.CORSOrigins = []string{"http://localhost:3000", "http://127.0.0.1:3000"}
+	if v, ok := r.env("APP__CORS_ORIGINS"); ok {
+		if err := json.Unmarshal([]byte(v), &c.CORSOrigins); err != nil {
+			r.fail("APP__CORS_ORIGINS", "is not a JSON list of addresses")
+		}
+	}
 	if _, err := LoadZone(c.Timezone); err != nil {
 		// AppSettings._valid_timezone: the gateway does not start with a zone ZoneInfo lacks
 		r.fail("APP__TIMEZONE", fmt.Sprintf("is not a known time zone: %q", c.Timezone))

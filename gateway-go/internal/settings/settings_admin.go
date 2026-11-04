@@ -24,7 +24,15 @@ type adminItem struct {
 }
 
 var adminItems = map[string]adminItem{
-	"app.timezone": {kind: "timezone", maxLen: 200, env: func(c *config.Config) any { return c.Admin.Timezone }},
+	"app.timezone":                  {kind: "timezone", maxLen: 200, env: func(c *config.Config) any { return c.Admin.Timezone }},
+	"mcp.enabled":                   {kind: "bool", env: func(c *config.Config) any { return c.Admin.MCPEnabled }},
+	"mcp.confirm_in_tabularia_only": {kind: "bool", env: func(c *config.Config) any { return c.Admin.MCPConfirmInTabulariaOnly }},
+	"mcp.metadata_only":             {kind: "bool", env: func(c *config.Config) any { return c.Admin.MCPMetadataOnly }},
+	"ai.metadata_only":              {kind: "bool", env: func(c *config.Config) any { return c.Admin.AIMetadataOnly }},
+	"ai.default_model":              {kind: "str", maxLen: 200, env: func(c *config.Config) any { return c.Admin.AIDefaultModel }},
+	"ai.comment_model":              {kind: "str", maxLen: 200, env: func(c *config.Config) any { return c.Admin.AICommentModel }},
+	"ai.max_result_rows": {kind: "int", min: 1, max: 2000, hasRange: true,
+		env: func(c *config.Config) any { return int64(c.Admin.AIMaxResultRows) }},
 	"webhooks.timeout_seconds": {kind: "float", min: 1, max: 60, hasRange: true,
 		env: func(c *config.Config) any { return c.Admin.WebhooksTimeout }},
 }
@@ -120,4 +128,33 @@ func (p *Panel) WebhooksTimeout() float64 {
 		return f
 	}
 	return 10
+}
+
+func (p *Panel) adminBool(key string) bool { b, _ := p.current.Load().admin[key].(bool); return b }
+
+func (p *Panel) adminStr(key string) string { s, _ := p.current.Load().admin[key].(string); return s }
+
+// MCPEnabled is mcp.enabled: off, /mcp answers 404.
+func (p *Panel) MCPEnabled() bool { return p.adminBool("mcp.enabled") }
+
+// MCPConfirmInTabulariaOnly is mcp.confirm_in_tabularia_only.
+func (p *Panel) MCPConfirmInTabulariaOnly() bool { return p.adminBool("mcp.confirm_in_tabularia_only") }
+
+// MetadataOnly is metadata_only.on(origin): ai.metadata_only for the chat, mcp.metadata_only
+// for MCP.
+func (p *Panel) MetadataOnly(origin string) bool {
+	if origin == "mcp" {
+		return p.adminBool("mcp.metadata_only")
+	}
+	return p.adminBool("ai.metadata_only")
+}
+
+// AIDefaultModel is ai.default_model; AICommentModel is ai.comment_model.
+func (p *Panel) AIDefaultModel() string { return p.adminStr("ai.default_model") }
+func (p *Panel) AICommentModel() string { return p.adminStr("ai.comment_model") }
+
+// AIMaxResultRows is ai.max_result_rows.
+func (p *Panel) AIMaxResultRows() int {
+	n, _ := p.current.Load().admin["ai.max_result_rows"].(int64)
+	return int(n)
 }
