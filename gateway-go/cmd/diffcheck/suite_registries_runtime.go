@@ -208,7 +208,7 @@ func init() {
 			head := EngineRule{Method: "HEAD", Path: "^/v2/team/app/manifests/", Headers: map[string]string{"Docker-Content-Digest": digest}}
 			running := EngineRule{Method: "GET", Path: "^/api/v1/namespaces/trials/pods$", Body: map[string]any{"items": []any{map[string]any{
 				"metadata": map[string]any{"name": "p1"}, "status": map[string]any{"containerStatuses": []any{map[string]any{"state": map[string]any{
-					"running": map[string]any{}}}}}}}}}
+					"running": map[string]any{"startedAt": "2026-01-01T00:00:00Z"}}}}}}}}}
 			pulled := EngineRule{Method: "GET", Path: "^/api/v1/namespaces/trials/pods$", Body: map[string]any{"items": []any{map[string]any{
 				"metadata": map[string]any{"name": "p2"}, "status": map[string]any{}}}}}
 			cluster := func(name, key, p string, body any, rules ...EngineRule) {

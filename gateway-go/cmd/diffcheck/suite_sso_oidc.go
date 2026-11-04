@@ -8,6 +8,9 @@ import (
 	"strings"
 )
 
+// ssoRandom: what a sign-in's answer holds at random (its state, nonce, PKCE challenge, cookie)
+var ssoRandom = []string{`state=[^&#]+`, `nonce=[^&#]+`, `code_challenge=[^&#]+`, `tab_sso_tx_[0-9a-f]{16}`, `=eyJ[A-Za-z0-9_.-]+`}
+
 // routes/sso.py with single sign-on configured, against the fake engine's OpenID provider
 // (cmd/fakeengine/idp.go). Run only when asked, with DIFF_ENV="OIDC__ISSUER=http://siem.test:8000/idp
 // OIDC__CLIENT_ID=tabularia OIDC__CLIENT_SECRET=s3cr3t OIDC__REDIRECT_URI=http://gw.test/auth/sso/callback
@@ -18,7 +21,7 @@ import (
 func init() {
 	type tx struct{ state, nonce, challenge, cookie string }
 	txs := map[string]*tx{}
-	scrub := []string{`state=[^&#]+`, `nonce=[^&#]+`, `code_challenge=[^&#]+`, `tab_sso_tx_[0-9a-f]{16}`, `=eyJ[A-Za-z0-9_.-]+`}
+	scrub := ssoRandom
 	capture := func(side string, res *http.Response) {
 		t := &tx{}
 		if u, err := url.Parse(res.Header.Get("Location")); err == nil {
