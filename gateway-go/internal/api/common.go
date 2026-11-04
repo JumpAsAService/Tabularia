@@ -23,6 +23,10 @@ func isoPtr(t *time.Time) *string {
 
 type bodyKey struct{}
 
+// rawKey holds the body's bytes as they came: a route answered in part hands the request to the
+// Python gateway with them (rawOf).
+type rawKey struct{}
+
 // withBody is FastAPI's reading of a route's body, BEFORE its dependencies: a JSON that does
 // not parse is a 422 (a 400 when it cannot be read) even for whoever is not signed in. The
 // body read waits in the request for the validation (bodyOf), after the guards.
@@ -38,12 +42,19 @@ func withBody(h http.Handler) http.Handler {
 			early.Write(w)
 			return
 		}
-		h.ServeHTTP(w, r.WithContext(context.WithValue(r.Context(), bodyKey{}, body)))
+		ctx := context.WithValue(context.WithValue(r.Context(), bodyKey{}, body), rawKey{}, raw)
+		h.ServeHTTP(w, r.WithContext(ctx))
 	})
 }
 
 // bodyOf is the body withBody read.
 func bodyOf(r *http.Request) pyd.Body {
 	b, _ := r.Context().Value(bodyKey{}).(pyd.Body)
+	return b
+}
+
+// rawOf is the body's bytes withBody read.
+func rawOf(r *http.Request) []byte {
+	b, _ := r.Context().Value(rawKey{}).([]byte)
 	return b
 }

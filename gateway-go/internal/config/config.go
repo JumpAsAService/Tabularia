@@ -7,11 +7,13 @@ import (
 	"crypto/rand"
 	"encoding/base64"
 	"fmt"
+	"math"
 	"net/url"
 	"os"
 	"path/filepath"
 	"strconv"
 	"strings"
+	"time"
 )
 
 // Config is what the gateway needs today; it grows with the routes ported.
@@ -39,6 +41,37 @@ type Config struct {
 	APITokenMaxDays    int
 	CookieDomain       string
 
+	// JWT__ACCESS_TTL_MINUTES: a session's maximum length (the panel may change it)
+	AccessTTLMinutes int
+
+	// AUTH__FIRST_RUN_SETUP and APP__ENV_NAME: the first administrator from the sign-in page,
+	// never in production (services/first_run.py)
+	FirstRunSetup bool
+	EnvName       string
+
+	// APP__NAME, APP__VERSION, APP__CODENAME, APP__TIMEZONE: what /system/info tells (the
+	// time zone the panel may change)
+	AppName, AppVersion, AppCodename string
+	// PREVIEW__DEFAULT_SAMPLE_ROWS: the automatic development sample (the panel may change it)
+	PreviewDefaultSampleRows int
+
+	// MONITORING__NODE_EXPORTER_URL, MONITORING__TIMEOUT_SECONDS, MONITORING__CACHE_SECONDS:
+	// the host's memory badge (/system/memory)
+	NodeExporterURL                    string
+	MonitoringTimeout, MonitoringCache float64
+
+	// SCRIPTS__ENABLED, SCRIPTS__NAMESPACE, SCRIPTS__REGISTRY: whether the scripting
+	// environments can be built here (script_builds.disabled_reason)
+	ScriptsEnabled                    bool
+	ScriptsNamespace, ScriptsRegistry string
+
+	// OIDC__ISSUER and OIDC__CLIENT_ID (SSO on when both are set), OIDC__POST_LOGIN_URL,
+	// OIDC__BUTTON_LABEL
+	OIDCIssuer, OIDCClientID, OIDCPostLoginURL, OIDCButtonLabel string
+
+	// AUDIT__RETENTION_MINUTES: how long the audit is kept (0 = forever), told by the privacy notice
+	AuditRetentionMinutes int
+
 	// ENGINE__SETTINGS_PANEL: false = the panel's values are ignored, the environment only
 	SettingsPanel bool
 
@@ -55,6 +88,12 @@ type Config struct {
 	// SECURITY__FERNET_KEY, or the one created in SECURITY__KEYS_DIR (fernet.key)
 	FernetKey string
 	KeysDir   string
+
+	// APP__TIMEZONE: the installation's day (a report opened «today», a new report's zone)
+	AppTimezone string
+	AppLocation *time.Location
+	// REPORTS__API_WAIT_SECONDS: how long the API waits for a report's file (5–3600)
+	ReportsAPIWaitSeconds int
 }
 
 // Env reads a variable without regard to case, as pydantic-settings does.
@@ -78,19 +117,46 @@ func FromOS() Env {
 func Load(env Env) (*Config, error) {
 	r := reader{env: env}
 	c := &Config{
-		Listen:             r.str("GATEWAY_GO__LISTEN", ":8000"),
-		ForwardedAllowIPs:  splitList(r.str("GATEWAY_GO__FORWARDED_ALLOW_IPS", "127.0.0.1")),
-		JWTSecret:          []byte(r.str("JWT__SECRET", "change-me-in-production")),
-		JWTAlgorithm:       r.str("JWT__ALGORITHM", "HS256"),
-		SessionIdleMinutes: r.integer("AUTH__SESSION_IDLE_MINUTES", 0, 0, -1),
-		PersonalTokens:     r.boolean("AUTH__PERSONAL_TOKENS", true),
-		APITokenMaxDays:    r.integer("AUTH__API_TOKEN_MAX_DAYS", 365, 1, 3650),
-		CookieDomain:       r.str("AUTH__COOKIE_DOMAIN", ""),
-		SettingsPanel:      r.boolean("ENGINE__SETTINGS_PANEL", true),
-		EngineBaseURL:      r.str("ENGINE__BASE_URL", "http://localhost:8000"),
-		EngineBucket:       r.str("ENGINE__BUCKET", "data-prep"),
-		FernetKey:          r.str("SECURITY__FERNET_KEY", ""),
-		KeysDir:            r.str("SECURITY__KEYS_DIR", ""),
+		Listen:                   r.str("GATEWAY_GO__LISTEN", ":8000"),
+		ForwardedAllowIPs:        splitList(r.str("GATEWAY_GO__FORWARDED_ALLOW_IPS", "127.0.0.1")),
+		JWTSecret:                []byte(r.str("JWT__SECRET", "change-me-in-production")),
+		JWTAlgorithm:             r.str("JWT__ALGORITHM", "HS256"),
+		SessionIdleMinutes:       r.integer("AUTH__SESSION_IDLE_MINUTES", 0, 0, -1),
+		PersonalTokens:           r.boolean("AUTH__PERSONAL_TOKENS", true),
+		APITokenMaxDays:          r.integer("AUTH__API_TOKEN_MAX_DAYS", 365, 1, 3650),
+		CookieDomain:             r.str("AUTH__COOKIE_DOMAIN", ""),
+		SettingsPanel:            r.boolean("ENGINE__SETTINGS_PANEL", true),
+		AccessTTLMinutes:         r.integer("JWT__ACCESS_TTL_MINUTES", 12*60, math.MinInt, math.MinInt),
+		ScriptsEnabled:           r.boolean("SCRIPTS__ENABLED", false),
+		ScriptsNamespace:         r.str("SCRIPTS__NAMESPACE", ""),
+		ScriptsRegistry:          r.str("SCRIPTS__REGISTRY", ""),
+		OIDCIssuer:               r.str("OIDC__ISSUER", ""),
+		OIDCClientID:             r.str("OIDC__CLIENT_ID", ""),
+		OIDCPostLoginURL:         r.str("OIDC__POST_LOGIN_URL", "http://localhost:3000/auth/callback"),
+		OIDCButtonLabel:          r.str("OIDC__BUTTON_LABEL", "Single sign-on"),
+		AuditRetentionMinutes:    r.integer("AUDIT__RETENTION_MINUTES", 0, 0, -1),
+		FirstRunSetup:            r.boolean("AUTH__FIRST_RUN_SETUP", false),
+		EnvName:                  r.str("APP__ENV_NAME", "development"),
+		AppName:                  r.str("APP__NAME", "Tabularia"),
+		AppVersion:               r.str("APP__VERSION", "1.3.0"),
+		AppCodename:              r.str("APP__CODENAME", "Catone"),
+		AppTimezone:              r.str("APP__TIMEZONE", "UTC"),
+		PreviewDefaultSampleRows: r.integer("PREVIEW__DEFAULT_SAMPLE_ROWS", 0, 0, -1),
+		NodeExporterURL:          r.str("MONITORING__NODE_EXPORTER_URL", "http://node-exporter:9100/metrics"),
+		MonitoringTimeout:        r.float("MONITORING__TIMEOUT_SECONDS", 3),
+		MonitoringCache:          r.float("MONITORING__CACHE_SECONDS", 3),
+		EngineBaseURL:            r.str("ENGINE__BASE_URL", "http://localhost:8000"),
+		EngineBucket:             r.str("ENGINE__BUCKET", "data-prep"),
+		FernetKey:                r.str("SECURITY__FERNET_KEY", ""),
+		KeysDir:                  r.str("SECURITY__KEYS_DIR", ""),
+		// ReportsSettings.api_wait_seconds
+		ReportsAPIWaitSeconds: r.integer("REPORTS__API_WAIT_SECONDS", 120, 5, 3600),
+	}
+	// AppSettings._valid_timezone: a zone ZoneInfo knows
+	if loc, err := time.LoadLocation(c.AppTimezone); err != nil || c.AppTimezone == "" || c.AppTimezone == "Local" {
+		r.fail("APP__TIMEZONE", fmt.Sprintf("is not a time zone: %q", c.AppTimezone))
+	} else {
+		c.AppLocation = loc
 	}
 	for _, name := range []string{"OPENLINEAGE__URL", "OPENLINEAGE__FILE", "OPENLINEAGE_URL", "OPENLINEAGE_CONFIG"} {
 		if r.str(name, "") != "" {
@@ -172,6 +238,29 @@ func (r *reader) integer(name string, def, min, max int) int {
 		return def
 	}
 	return n
+}
+
+// float: a number as pydantic reads it
+func (r *reader) float(name string, def float64) float64 {
+	v, ok := r.env(name)
+	if !ok || strings.TrimSpace(v) == "" {
+		return def
+	}
+	f, err := strconv.ParseFloat(strings.TrimSpace(v), 64)
+	if err != nil {
+		r.fail(name, fmt.Sprintf("is not a number: %q", v))
+		return def
+	}
+	return f
+}
+
+// SSOEnabled is OidcSettings.enabled: on only when configured.
+func (c *Config) SSOEnabled() bool { return c.OIDCIssuer != "" && c.OIDCClientID != "" }
+
+// IsProduction is Settings.is_production.
+func (c *Config) IsProduction() bool {
+	e := strings.ToLower(c.EnvName)
+	return e == "production" || e == "prod"
 }
 
 // boolean: the spellings pydantic accepts

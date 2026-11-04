@@ -16,6 +16,7 @@ import (
 	"strings"
 	"sync/atomic"
 	"time"
+	_ "time/tzdata" // app.timezone is checked against the zones, whatever the image holds
 
 	"github.com/jackc/pgx/v5/pgxpool"
 
@@ -30,20 +31,26 @@ type values struct {
 	sessionIdleMinutes int
 	personalTokens     bool
 	apiTokenMaxDays    int
+	accessTTLMinutes   int
+	appTimezone        string
+	previewSampleRows  int
 	runStaleTimeout    int // engine.run_stale_timeout_seconds
 }
 
 // item is an entry of overrides.ITEMS the Go gateway reads: its kind and the panel's range.
 type item struct {
-	kind     string // int | bool
+	kind     string // int | bool | timezone
 	min, max int64
 	set      func(v *values, raw any)
 }
 
 var items = map[string]item{
-	"auth.session_idle_minutes": {kind: "int", min: 0, max: 24 * 60, set: func(v *values, x any) { v.sessionIdleMinutes = int(x.(int64)) }},
-	"auth.personal_tokens":      {kind: "bool", set: func(v *values, x any) { v.personalTokens = x.(bool) }},
-	"auth.api_token_max_days":   {kind: "int", min: 1, max: 3650, set: func(v *values, x any) { v.apiTokenMaxDays = int(x.(int64)) }},
+	"auth.session_idle_minutes":   {kind: "int", min: 0, max: 24 * 60, set: func(v *values, x any) { v.sessionIdleMinutes = int(x.(int64)) }},
+	"auth.personal_tokens":        {kind: "bool", set: func(v *values, x any) { v.personalTokens = x.(bool) }},
+	"auth.api_token_max_days":     {kind: "int", min: 1, max: 3650, set: func(v *values, x any) { v.apiTokenMaxDays = int(x.(int64)) }},
+	"jwt.access_ttl_minutes":      {kind: "int", min: 15, max: 7 * 24 * 60, set: func(v *values, x any) { v.accessTTLMinutes = int(x.(int64)) }},
+	"app.timezone":                {kind: "timezone", set: func(v *values, x any) { v.appTimezone = x.(string) }},
+	"preview.default_sample_rows": {kind: "int", min: 0, max: 10_000_000, set: func(v *values, x any) { v.previewSampleRows = int(x.(int64)) }},
 	"engine.run_stale_timeout_seconds": {kind: "int", min: 900, max: 7 * 86400,
 		set: func(v *values, x any) { v.runStaleTimeout = int(x.(int64)) }},
 }
@@ -71,7 +78,8 @@ type Panel struct {
 
 // New starts from the environment.
 func New(cfg *config.Config, panelEnabled bool, log *slog.Logger) *Panel {
-	p := &Panel{env: values{cfg.SessionIdleMinutes, cfg.PersonalTokens, cfg.APITokenMaxDays, runStaleFromEnv()}, enabled: panelEnabled, log: log}
+	p := &Panel{env: values{cfg.SessionIdleMinutes, cfg.PersonalTokens, cfg.APITokenMaxDays, cfg.AccessTTLMinutes,
+		cfg.AppTimezone, cfg.PreviewDefaultSampleRows, runStaleFromEnv()}, enabled: panelEnabled, log: log}
 	v := p.env
 	p.current.Store(&v)
 	return p
@@ -80,6 +88,9 @@ func New(cfg *config.Config, panelEnabled bool, log *slog.Logger) *Panel {
 func (p *Panel) SessionIdleMinutes() int { return p.current.Load().sessionIdleMinutes }
 func (p *Panel) PersonalTokens() bool    { return p.current.Load().personalTokens }
 func (p *Panel) APITokenMaxDays() int    { return p.current.Load().apiTokenMaxDays }
+func (p *Panel) AccessTTLMinutes() int   { return p.current.Load().accessTTLMinutes }
+func (p *Panel) AppTimezone() string     { return p.current.Load().appTimezone }
+func (p *Panel) PreviewSampleRows() int  { return p.current.Load().previewSampleRows }
 
 // RunStaleTimeout is engine.run_stale_timeout_seconds.
 func (p *Panel) RunStaleTimeout() int { return p.current.Load().runStaleTimeout }
@@ -121,6 +132,17 @@ func check(it item, raw string) (any, bool) {
 	case "bool":
 		b, ok := x.(bool)
 		return b, ok
+	case "timezone":
+		// a text, stripped, not empty, a zone ZoneInfo knows (AppSettings._valid_timezone)
+		t, ok := x.(string)
+		t = strings.TrimSpace(t)
+		if !ok || t == "" || len(t) > 200 {
+			return nil, false
+		}
+		if _, err := time.LoadLocation(t); err != nil || t == "Local" {
+			return nil, false
+		}
+		return t, true
 	case "int":
 		n, ok := x.(json.Number)
 		if !ok || strings.ContainsAny(n.String(), ".eE") {

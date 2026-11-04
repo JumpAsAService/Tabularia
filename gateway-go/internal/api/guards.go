@@ -5,47 +5,20 @@ import (
 	"net/http"
 
 	"github.com/JumpAsAService/Tabularia/gateway-go/internal/auth"
+	"github.com/JumpAsAService/Tabularia/gateway-go/internal/deps"
 	"github.com/JumpAsAService/Tabularia/gateway-go/internal/pyd"
-	"github.com/JumpAsAService/Tabularia/gateway-go/internal/roles"
 	"github.com/JumpAsAService/Tabularia/gateway-go/internal/server"
 )
 
 type authedFunc = func(http.ResponseWriter, *http.Request, *auth.Principal)
 
-// superuser is deps/auth.py require_superuser: an EFFECTIVE administrator (the flag or an
-// administrators' group), 403 otherwise.
+// superuser and observer are deps.Superuser and deps.Observer with the routes' Deps.
 func superuser(d *Deps, route string, h authedFunc) http.Handler {
-	return server.Authed(d.Auth, route, func(w http.ResponseWriter, r *http.Request, p *auth.Principal) {
-		rs, err := roles.Of(r.Context(), d.DB, p.User.ID, p.User.IsSuperuser, p.User.IsObserver)
-		if err != nil {
-			d.Log.Error("reading the roles", "user", p.User.ID, "err", err)
-			server.InternalError(w)
-			return
-		}
-		if !rs.Admin {
-			server.JSON(w, http.StatusForbidden, map[string]string{"detail": "Admin privileges required"})
-			return
-		}
-		h(w, r, p)
-	})
+	return deps.Superuser(d.Auth, d.DB, d.Log, route, h)
 }
 
-// observer is deps/auth.py require_observer: an administrator or an observer, to READ an
-// administration panel.
 func observer(d *Deps, route string, h authedFunc) http.Handler {
-	return server.Authed(d.Auth, route, func(w http.ResponseWriter, r *http.Request, p *auth.Principal) {
-		rs, err := roles.Of(r.Context(), d.DB, p.User.ID, p.User.IsSuperuser, p.User.IsObserver)
-		if err != nil {
-			d.Log.Error("reading the roles", "user", p.User.ID, "err", err)
-			server.InternalError(w)
-			return
-		}
-		if !rs.Observer {
-			server.JSON(w, http.StatusForbidden, map[string]string{"detail": "Administrative read access required"})
-			return
-		}
-		h(w, r, p)
-	})
+	return deps.Observer(d.Auth, d.DB, d.Log, route, h)
 }
 
 // fail answers an error of the database (or any unexpected one) as Starlette does: logged,
@@ -74,8 +47,8 @@ func returnsNone(w http.ResponseWriter) {
 
 // pathInts reads the route's integer path parameters as FastAPI does, in the order the
 // Python function declares them, and answers the 422 of every bad one. FastAPI validates them
-// after the dependencies (authentication, the guards). An integer too big for int64 matches no
-// row in Python (psycopg sends it as a numeric): 0, which no row has, does the same.
+// after the dependencies (authentication, the guards). An integer past the ids' columns
+// (PostgreSQL's integer) matches no row in Python: NoSuchID does the same here.
 func pathInts(w http.ResponseWriter, r *http.Request, names ...string) ([]int64, bool) {
 	var ps pyd.Params
 	out, ok := pathIntsInto(&ps, r, names...)
@@ -95,10 +68,10 @@ func pathIntsInto(ps *pyd.Params, r *http.Request, names ...string) ([]int64, bo
 		case int64:
 			out[i] = v
 		case *big.Int:
-			out[i] = 0
+			out[i] = NoSuchID
 		}
 	}
-	return out, !ps.Failed()
+	return inColumn(out), !ps.Failed()
 }
 
 // validated answers the 422 of the parameters, when there is one.
@@ -119,12 +92,13 @@ func optStr(mv *pyd.ModelValue, name string) *string {
 }
 
 func optInt(mv *pyd.ModelValue, name string) *int64 {
+	// an id past the columns finds no row, as in Python
 	switch v := mv.Get(name).(type) {
 	case int64:
-		return &v
+		return &inColumn([]int64{v})[0]
 	case *big.Int:
-		zero := int64(0)
-		return &zero
+		none := NoSuchID
+		return &none
 	}
 	return nil
 }
