@@ -220,7 +220,7 @@ func detailForObserver(v any, key string, keyed bool) any {
 			return "…"
 		}
 	}
-	if keyed && key == "prefix" && truthy(v) {
+	if keyed && key == "prefix" && pyTruthy(v) {
 		return "tab_…"
 	}
 	switch x := v.(type) {

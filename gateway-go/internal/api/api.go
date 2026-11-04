@@ -24,8 +24,8 @@ type Deps struct {
 	Log    *slog.Logger
 	Engine *engine.Client // core/engine_client.py
 	Fernet *secret.Fernet // core/crypto.py
-	// Upstream is the Python gateway: a ported route hands it a request only Python can
-	// answer faithfully (a host that is not ASCII, for one)
+	// Upstream is the Python gateway behind: what a ported route cannot answer yet goes there
+	// untouched (see intPath)
 	Upstream http.Handler
 }
 

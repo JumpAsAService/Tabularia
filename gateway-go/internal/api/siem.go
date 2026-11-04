@@ -118,9 +118,9 @@ func siemOut(ctx context.Context, d *Deps, s siemRow, full bool, p *auth.Princip
 	out := SiemOut{
 		Kind: s.Kind, Enabled: s.Enabled, URL: url, TokenSet: s.TokenEnc != nil && *s.TokenEnc != "", Index: s.Index,
 		Source: s.Source, Sourcetype: s.Sourcetype, Host: s.Host, VerifyTLS: s.VerifyTLS,
-		Editable: full && p.TokenName == "", SentTotal: s.SentTotal, Backlog: n, OldestPendingAt: utcISO(oldest),
-		LastOKAt: utcISO(s.LastOKAt), LastErrorAt: utcISO(s.LastErrorAt), Failures: s.Failures,
-		NextAttemptAt: utcISO(s.NextAttemptAt),
+		Editable: full && p.TokenName == "", SentTotal: s.SentTotal, Backlog: n, OldestPendingAt: isoPtr(oldest),
+		LastOKAt: isoPtr(s.LastOKAt), LastErrorAt: isoPtr(s.LastErrorAt), Failures: s.Failures,
+		NextAttemptAt: isoPtr(s.NextAttemptAt),
 	}
 	if full {
 		out.LastError = s.LastError
@@ -128,8 +128,8 @@ func siemOut(ctx context.Context, d *Deps, s siemRow, full bool, p *auth.Princip
 	return out, true, nil
 }
 
-// forward hands the request to the Python gateway, the body as it came.
-func forward(d *Deps, w http.ResponseWriter, r *http.Request, body []byte) {
+// forwardToPython hands the request to the Python gateway, the body as it came.
+func forwardToPython(d *Deps, w http.ResponseWriter, r *http.Request, body []byte) {
 	r.Body = io.NopCloser(bytes.NewReader(body))
 	r.ContentLength = int64(len(body))
 	d.Upstream.ServeHTTP(w, r)
@@ -154,7 +154,7 @@ func siemRead(d *Deps) adminHandler {
 		case err != nil:
 			adminFail(d, w, "the SIEM's backlog", err)
 		case !ok:
-			forward(d, w, r, nil)
+			forwardToPython(d, w, r, nil)
 		default:
 			server.JSON(w, http.StatusOK, out)
 		}
@@ -164,30 +164,21 @@ func siemRead(d *Deps) adminHandler {
 // siemWrite is PUT /admin/siem: the body read first (a broken JSON is a 422 for anyone),
 // then require_superuser and _no_token, then the body's validation.
 func siemWrite(d *Deps) http.Handler {
-	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		raw, _ := io.ReadAll(r.Body)
-		body, early := pyd.ReadBody(raw, r.Header.Get("Content-Type"))
-		if early != nil {
-			early.Write(w)
+	return adminBody(d, "/admin/siem", func(w http.ResponseWriter, r *http.Request, p *auth.Principal, body pyd.Body, raw []byte) {
+		if denyFromToken(w, r, p, noSIEMFromToken) {
 			return
 		}
-		r.Body = io.NopCloser(bytes.NewReader(raw))
-		adminRole(d, "/admin/siem", true, func(w http.ResponseWriter, r *http.Request, p *auth.Principal) {
-			if denyFromToken(w, r, p, noSIEMFromToken) {
-				return
-			}
-			var ps pyd.Params
-			b := ps.Body(body, gatewaymodels.SiemUpdate)
-			if resp := ps.Response(); resp != nil {
-				resp.Write(w)
-				return
-			}
-			siemUpdate(d, w, r, p, b, raw)
-		}).ServeHTTP(w, r)
+		var ps pyd.Params
+		b := ps.Body(body, gatewaymodels.SiemUpdate)
+		if resp := ps.Response(); resp != nil {
+			resp.Write(w)
+			return
+		}
+		siemUpdate(d, w, r, p, b, raw)
 	})
 }
 
-func optStr(v any) *string {
+func strOf(v any) *string {
 	if s, ok := v.(string); ok {
 		return &s
 	}
@@ -217,7 +208,7 @@ func siemUpdate(d *Deps, w http.ResponseWriter, r *http.Request, p *auth.Princip
 	}
 	before := s
 	changes := pyjson.Object{}
-	if u := optStr(b.Get("url")); u != nil {
+	if u := strOf(b.Get("url")); u != nil {
 		url := pyd.Strip(*u)
 		if url != "" {
 			_, err := webhooks.ValidateURL(url)
@@ -228,7 +219,7 @@ func siemUpdate(d *Deps, w http.ResponseWriter, r *http.Request, p *auth.Princip
 				}
 			}
 			if errors.Is(err, webhooks.ErrNotASCII) {
-				forward(d, w, r, raw)
+				forwardToPython(d, w, r, raw)
 				return
 			}
 			if err != nil {
@@ -239,7 +230,7 @@ func siemUpdate(d *Deps, w http.ResponseWriter, r *http.Request, p *auth.Princip
 		s.URL = url
 	}
 	text := func(v any) *string { // _text: stripped, empty is none
-		t := pyd.Strip(*optStr(v))
+		t := pyd.Strip(*strOf(v))
 		if t == "" {
 			return nil
 		}
@@ -256,7 +247,7 @@ func siemUpdate(d *Deps, w http.ResponseWriter, r *http.Request, p *auth.Princip
 	if v, ok := b.Get("verify_tls").(bool); ok {
 		s.VerifyTLS = v
 	}
-	if t := optStr(b.Get("token")); t != nil {
+	if t := strOf(b.Get("token")); t != nil {
 		if tok := pyd.Strip(*t); tok != "" {
 			enc, err := d.Fernet.Encrypt(tok)
 			if err != nil {
@@ -360,7 +351,7 @@ func siemAnswer(d *Deps, w http.ResponseWriter, r *http.Request, out SiemOut, ok
 	case err != nil:
 		adminFail(d, w, "the SIEM's backlog", err)
 	case !ok:
-		forward(d, w, r, raw)
+		forwardToPython(d, w, r, raw)
 	default:
 		server.JSON(w, http.StatusOK, out)
 	}
@@ -392,7 +383,7 @@ func siemTrial(d *Deps) adminHandler {
 		}
 		parts, err := pyurl.URLSplit(s.URL)
 		if err != nil {
-			forward(d, w, r, nil)
+			forwardToPython(d, w, r, nil)
 			return
 		}
 		token, err := d.Fernet.Decrypt(*s.TokenEnc)
@@ -403,8 +394,8 @@ func siemTrial(d *Deps) adminHandler {
 		at := time.Now().UTC()
 		ts, _ := strconv.ParseFloat(strconv.FormatFloat(float64(at.UnixMicro())/1e6, 'f', 3, 64), 64) // round(…, 3)
 		ev := pyjson.Object{
-			{Key: "time", Value: ts}, {Key: "host", Value: orDefault(s.Host, siem.Host)},
-			{Key: "source", Value: orDefault(s.Source, siem.Source)}, {Key: "sourcetype", Value: orDefault(s.Sourcetype, siem.Sourcetype)},
+			{Key: "time", Value: ts}, {Key: "host", Value: siemOr(s.Host, siem.Host)},
+			{Key: "source", Value: siemOr(s.Source, siem.Source)}, {Key: "sourcetype", Value: siemOr(s.Sourcetype, siem.Sourcetype)},
 		}
 		if s.Index != nil && *s.Index != "" {
 			ev = append(ev, pyjson.KV{Key: "index", Value: *s.Index})
@@ -434,8 +425,8 @@ func siemTrial(d *Deps) adminHandler {
 	}
 }
 
-// orDefault is `x or DEFAULT`.
-func orDefault(s *string, def string) string {
+// siemOr is `x or DEFAULT`.
+func siemOr(s *string, def string) string {
 	if s == nil || *s == "" {
 		return def
 	}

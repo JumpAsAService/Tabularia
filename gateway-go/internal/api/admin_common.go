@@ -92,15 +92,6 @@ func denyFromToken(w http.ResponseWriter, r *http.Request, p *auth.Principal, ta
 	return true
 }
 
-// utcISO is a UtcDateTime field: naive UTC written with +00:00; nil stays null.
-func utcISO(t *time.Time) *string {
-	if t == nil {
-		return nil
-	}
-	s := pyjson.Isoformat(*t)
-	return &s
-}
-
 // nowNaive is datetime.now(timezone.utc).replace(tzinfo=None): how the columns hold time.
 func nowNaive() time.Time {
 	u := time.Now().UTC()
@@ -133,8 +124,8 @@ func int8(v any) (int64, bool) {
 	return x, ok
 }
 
-// truthy is Python's bool() of a value json.loads gave.
-func truthy(v any) bool {
+// pyTruthy is Python's bool() of a value json.loads gave.
+func pyTruthy(v any) bool {
 	switch x := v.(type) {
 	case nil:
 		return false

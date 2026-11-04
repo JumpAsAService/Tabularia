@@ -1,7 +1,6 @@
 package api
 
 import (
-	"bytes"
 	"context"
 	"crypto/rand"
 	"errors"
@@ -30,8 +29,8 @@ func init() {
 		return []server.Route{
 			{Method: http.MethodGet, Pattern: "/webhooks/events", Handler: adminRole(d, "/webhooks/events", false, webhookEvents)},
 			{Method: http.MethodGet, Pattern: "/webhooks", Handler: adminRole(d, "/webhooks", false, listWebhooks(d))},
-			{Method: http.MethodPost, Pattern: "/webhooks", Handler: withBody(d, "/webhooks", createWebhook(d))},
-			{Method: http.MethodPatch, Pattern: "/webhooks/{wid}", Handler: withBody(d, "/webhooks/{wid}", updateWebhook(d))},
+			{Method: http.MethodPost, Pattern: "/webhooks", Handler: adminBody(d, "/webhooks", createWebhook(d))},
+			{Method: http.MethodPatch, Pattern: "/webhooks/{wid}", Handler: adminBody(d, "/webhooks/{wid}", updateWebhook(d))},
 			{Method: http.MethodPost, Pattern: "/webhooks/{wid}/rotate-secret", Handler: adminRole(d, "/webhooks/{wid}/rotate-secret", true, rotateWebhookSecret(d))},
 			{Method: http.MethodDelete, Pattern: "/webhooks/{wid}", Handler: adminRole(d, "/webhooks/{wid}", true, deleteWebhook(d))},
 			{Method: http.MethodPost, Pattern: "/webhooks/{wid}/test", Handler: adminRole(d, "/webhooks/{wid}/test", true, testWebhook(d))},
@@ -45,17 +44,20 @@ func init() {
 // (to hand the request to Python when only Python can answer it).
 type bodyHandler = func(http.ResponseWriter, *http.Request, *auth.Principal, pyd.Body, []byte)
 
-// withBody reads the body before the authentication (a broken JSON is a 422 for anyone,
-// as FastAPI does), then require_superuser.
-func withBody(d *Deps, route string, h bodyHandler) http.Handler {
+// adminBody is withBody (common.go) with the raw bytes kept, then require_superuser: a
+// request only Python can answer goes to it with its body as it came.
+func adminBody(d *Deps, route string, h bodyHandler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		raw, _ := io.ReadAll(r.Body)
+		raw, err := io.ReadAll(r.Body)
+		if err != nil {
+			pyd.BadRequestBody().Write(w)
+			return
+		}
 		body, early := pyd.ReadBody(raw, r.Header.Get("Content-Type"))
 		if early != nil {
 			early.Write(w)
 			return
 		}
-		r.Body = io.NopCloser(bytes.NewReader(raw))
 		adminRole(d, route, true, func(w http.ResponseWriter, r *http.Request, p *auth.Principal) {
 			h(w, r, p, body, raw)
 		}).ServeHTTP(w, r)
@@ -117,7 +119,7 @@ func webhookOut(ctx context.Context, d *Deps, x webhookRow, full bool) (WebhookO
 		if delivered == nil {
 			delivered = &created
 		}
-		out.LastDeliveryAt = utcISO(delivered)
+		out.LastDeliveryAt = isoPtr(delivered)
 	case !errors.Is(err, pgx.ErrNoRows):
 		return out, true, err
 	}
@@ -167,7 +169,7 @@ func listWebhooks(d *Deps) adminHandler {
 				return
 			}
 			if !ok {
-				forward(d, w, r, nil)
+				forwardToPython(d, w, r, nil)
 				return
 			}
 			out = append(out, o)
@@ -245,7 +247,7 @@ func createWebhook(d *Deps) bodyHandler {
 		secret := webhooks.NewSecret()
 		url, err := webhooks.ValidateURL(b.Get("url").(string))
 		if errors.Is(err, webhooks.ErrNotASCII) {
-			forward(d, w, r, raw)
+			forwardToPython(d, w, r, raw)
 			return
 		}
 		if err != nil {
@@ -374,7 +376,7 @@ func updateWebhook(d *Deps) bodyHandler {
 		if v := b.Get("url"); v != nil {
 			url, err := webhooks.ValidateURL(v.(string))
 			if errors.Is(err, webhooks.ErrNotASCII) {
-				forward(d, w, r, raw)
+				forwardToPython(d, w, r, raw)
 				return
 			}
 			if err != nil {
@@ -538,7 +540,7 @@ func scanDelivery(row pgx.Row) (deliveryRow, error) {
 	var next, delivered *time.Time
 	err := row.Scan(&x.out.ID, &x.webhook, &x.out.Event, &x.out.Status, &x.out.Attempts, &created, &next, &delivered,
 		&x.out.LastStatusCode, &x.out.LastError, &x.payload)
-	x.out.CreatedAt, x.out.NextAttemptAt, x.out.DeliveredAt = pyjson.Isoformat(created), utcISO(next), utcISO(delivered)
+	x.out.CreatedAt, x.out.NextAttemptAt, x.out.DeliveredAt = pyjson.Isoformat(created), isoPtr(next), isoPtr(delivered)
 	return x, err
 }
 
