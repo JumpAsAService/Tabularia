@@ -84,7 +84,13 @@ func contractsWrite(w *World, ds func(string) string) []Step {
 		s = append(s, Step{Name: "write: " + name + " · " + person, Method: "PUT", Path: ds(k), Auth: w.As(person), JSON: body, Engine: rules})
 	}
 	odcs := func(person, name, k string) {
-		s = append(s, Step{Name: "ODCS: " + name + " · " + person, Method: "GET", Path: ds(k) + "/odcs", Auth: w.As(person)})
+		// the moment a contract was created goes in the file to the second: one made by the run is set
+		// to a fixed moment on both sides, as a seeded one is
+		fixed := func(w *World) {
+			w.Exec(`UPDATE data_contracts SET created_at = '2026-02-05 06:07:08.9' WHERE datasource_id = $1 AND created_at > now() - interval '1 day'`,
+				Data["ds:"+k])
+		}
+		s = append(s, Step{Name: "ODCS: " + name + " · " + person, Method: "GET", Path: ds(k) + "/odcs", Auth: w.As(person), Before: fixed})
 	}
 	rich := map[string]any{"description": "Sales «net»\u2028", "rules": []any{
 		map[string]any{"kind": "column", "severity": "error", "column": "a", "dtype": "integer", "id": "keep"},
