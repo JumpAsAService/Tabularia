@@ -15,6 +15,7 @@ import (
 
 	"github.com/JumpAsAService/Tabularia/gateway-go/internal/audit"
 	"github.com/JumpAsAService/Tabularia/gateway-go/internal/auth"
+	"github.com/JumpAsAService/Tabularia/gateway-go/internal/copynames"
 	"github.com/JumpAsAService/Tabularia/gateway-go/internal/perm"
 	"github.com/JumpAsAService/Tabularia/gateway-go/internal/pyd"
 	"github.com/JumpAsAService/Tabularia/gateway-go/internal/pyd/gatewaymodels"
@@ -185,7 +186,7 @@ func nbDetailOf(ctx context.Context, c *perm.Checker, q perm.Querier, n *nbRow) 
 	det := &notebookDetail{notebookOut: out, Content: content, Author: author, MaxVisitors: n.MaxVisitors,
 		VisitorsDefault: min(limits.MaxVisitorsPerApp, limits.MaxVisitorsCeiling), VisitorsCeiling: limits.MaxVisitorsCeiling}
 	if out.Editable && n.Draft != nil {
-		det.Draft, det.DraftAt = n.Draft, scIso(n.DraftAt)
+		det.Draft, det.DraftAt = n.Draft, isoPtr(n.DraftAt)
 		if by, err := nbPersonOf(ctx, q, n.DraftBy); err != nil {
 			return nil, err
 		} else if by != nil {
@@ -728,7 +729,7 @@ func duplicateNotebook(d *Deps, w http.ResponseWriter, r *http.Request, p *auth.
 	var name string
 	err := scInTx(ctx, d, func(tx pgx.Tx) error {
 		var err error
-		if name, err = scFreeCopyName(ctx, tx, "notebooks", src.ProjectID, src.Name); err != nil {
+		if name, err = copynames.Free(ctx, tx, "notebooks", src.ProjectID, src.Name); err != nil {
 			return err
 		}
 		content, err := nbContentOf(ctx, tx, src, 0)
@@ -748,8 +749,8 @@ func duplicateNotebook(d *Deps, w http.ResponseWriter, r *http.Request, p *auth.
 		_, err = tx.Exec(ctx, `UPDATE notebooks SET current_version = $1 WHERE id = $2`, v, id)
 		return err
 	})
-	if scUniqueViolation(err) {
-		scRefuse(w, http.StatusConflict, "Another copy took that name at the same moment: try again")
+	if copynames.Clash(err) {
+		scRefuse(w, http.StatusConflict, copynames.ClashDetail)
 		return
 	}
 	if err != nil {

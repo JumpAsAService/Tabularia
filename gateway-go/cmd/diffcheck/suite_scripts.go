@@ -320,7 +320,16 @@ func init() {
 			del("admin deletes Rscript", "x2", "admin")
 			add("delete a word", "DELETE", "/scripts/x", "writer", nil)
 			add("the list at the end", "GET", "/scripts", "admin", nil)
-			add("forwarded: schedule", "PUT", fmt.Sprintf("/scripts/%d/schedule", id("x8")), "writer", map[string]any{"cron": ""})
+			sched := func(name, key, p string, body any) {
+				add(name, "PUT", fmt.Sprintf("/scripts/%v/schedule", key), p, body)
+			}
+			sched("writer clears Restorable's schedule", fmt.Sprint(id("x8")), "writer", map[string]any{"cron": ""})
+			sched("editor clears Main's (RUN)", fmt.Sprint(id("x1")), "editor", map[string]any{})
+			sched("obs_flag clears (VIEW)", fmt.Sprint(id("x1")), "obs_flag", map[string]any{})
+			sched("a clear of a hidden one", fmt.Sprint(id("x3")), "writer", map[string]any{})
+			sched("a clear by words", "x", "writer", map[string]any{"cron": []any{}})
+			sched("writer sets a cron (forwarded)", fmt.Sprint(id("x8")), "writer", map[string]any{"cron": "*/5 * * * *"})
+			sched("writer sets one on Empty (forwarded)", fmt.Sprint(id("x15")), "writer", map[string]any{"cron": "*/5 * * * *"})
 			return s
 		},
 	})

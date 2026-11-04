@@ -213,7 +213,7 @@ func regVariables(ctx context.Context, q perm.Querier, id int64) ([]regVariable,
 		if !v.Secret {
 			v.Value = &value
 		}
-		v.UpdatedAt = scIso(&at)
+		v.UpdatedAt = isoPtr(&at)
 		out = append(out, v)
 	}
 	return out, rows.Err()
@@ -254,8 +254,8 @@ func regOut(ctx context.Context, q perm.Querier, r *regRow) (*registryOut, error
 	return &registryOut{ID: r.ID, Name: r.Name, Description: r.Description, Host: r.Host, Protocol: r.Protocol, TLS: r.TLS,
 		CACert: r.CACert, Username: r.Username, PasswordSet: r.PasswordEnc != nil && *r.PasswordEnc != "",
 		Repositories: regPatterns(r.Repositories), Enabled: r.Enabled, Access: access, Variables: vars,
-		LastTestAt: scIso(r.LastTestAt), LastTestOK: r.LastTestOK, LastTestMessage: r.LastTestMessage,
-		CreatedAt: scIso(&r.CreatedAt), CreatedBy: r.CreatedBy, UpdatedAt: scIso(&r.UpdatedAt), UpdatedBy: r.UpdatedBy}, nil
+		LastTestAt: isoPtr(r.LastTestAt), LastTestOK: r.LastTestOK, LastTestMessage: r.LastTestMessage,
+		CreatedAt: isoPtr(&r.CreatedAt), CreatedBy: r.CreatedBy, UpdatedAt: isoPtr(&r.UpdatedAt), UpdatedBy: r.UpdatedBy}, nil
 }
 
 func regGet(ctx context.Context, q perm.Querier, id int64) (*regRow, error) {

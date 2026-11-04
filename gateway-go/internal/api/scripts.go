@@ -16,6 +16,7 @@ import (
 
 	"github.com/JumpAsAService/Tabularia/gateway-go/internal/audit"
 	"github.com/JumpAsAService/Tabularia/gateway-go/internal/auth"
+	"github.com/JumpAsAService/Tabularia/gateway-go/internal/copynames"
 	"github.com/JumpAsAService/Tabularia/gateway-go/internal/perm"
 	"github.com/JumpAsAService/Tabularia/gateway-go/internal/pyd"
 	"github.com/JumpAsAService/Tabularia/gateway-go/internal/pyd/gatewaymodels"
@@ -138,7 +139,7 @@ func (e *scEnvironment) checks() savedscripts.Environment {
 func scriptOutOf(ctx context.Context, c *perm.Checker, q perm.Querier, s *savedscripts.Script, env *scEnvironment) (scriptOut, error) {
 	out := scriptOut{ID: s.ID, Name: s.Name, Description: s.Description, ProjectID: s.ProjectID, EnvironmentID: s.EnvironmentID,
 		CurrentVersion: s.CurrentVersion, RunSchedule: s.RunSchedule, RunScheduledBy: s.RunScheduledBy,
-		NextRunAt: scIso(s.NextRunAt), CreatedAt: pyjson.Isoformat(s.CreatedAt), UpdatedAt: pyjson.Isoformat(s.UpdatedAt)}
+		NextRunAt: isoPtr(s.NextRunAt), CreatedAt: pyjson.Isoformat(s.CreatedAt), UpdatedAt: pyjson.Isoformat(s.UpdatedAt)}
 	if env != nil {
 		out.EnvironmentName, out.Language = &env.Name, &env.Language
 	}
@@ -322,7 +323,7 @@ func scriptsMany(d *Deps, w http.ResponseWriter, r *http.Request, c *perm.Checke
 		err = d.DB.QueryRow(ctx, `SELECT status, started_at FROM runs WHERE id = (SELECT max(id) FROM runs
 			WHERE kind = 'orchestration' AND saved_script_id = $1)`, rows[i].ID).Scan(&status, &at)
 		if err == nil {
-			o.LastRunStatus, o.LastRunAt = &status, scIso(&at)
+			o.LastRunStatus, o.LastRunAt = &status, isoPtr(&at)
 		} else if !scNoRows(err) {
 			scFailed(d, w, "scripts: the latest run", err)
 			return
@@ -748,7 +749,7 @@ func duplicateScript(d *Deps, w http.ResponseWriter, r *http.Request, p *auth.Pr
 	var name string
 	err := scInTx(ctx, d, func(tx pgx.Tx) error {
 		var err error
-		if name, err = scFreeCopyName(ctx, tx, "saved_scripts", src.ProjectID, src.Name); err != nil {
+		if name, err = copynames.Free(ctx, tx, "saved_scripts", src.ProjectID, src.Name); err != nil {
 			return err
 		}
 		content, err := savedscripts.ContentOf(ctx, tx, src, 0)
@@ -768,8 +769,8 @@ func duplicateScript(d *Deps, w http.ResponseWriter, r *http.Request, p *auth.Pr
 		_, err = tx.Exec(ctx, `UPDATE saved_scripts SET current_version = $1 WHERE id = $2`, v, id)
 		return err
 	})
-	if scUniqueViolation(err) {
-		scRefuse(w, http.StatusConflict, "Another copy took that name at the same moment: try again")
+	if copynames.Clash(err) {
+		scRefuse(w, http.StatusConflict, copynames.ClashDetail)
 		return
 	}
 	if err != nil {
@@ -1112,7 +1113,7 @@ func listScriptRuns(d *Deps, w http.ResponseWriter, r *http.Request, p *auth.Pri
 			scFailed(d, w, "scripts: a run", err)
 			return
 		}
-		o.StartedAt, o.FinishedAt, o.Log, o.Columns = scIso(&started), scIso(finished), "", []any{}
+		o.StartedAt, o.FinishedAt, o.Log, o.Columns = isoPtr(&started), isoPtr(finished), "", []any{}
 		out = append(out, o)
 	}
 	rows.Close()

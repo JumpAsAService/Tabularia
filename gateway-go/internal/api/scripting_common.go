@@ -75,21 +75,23 @@ func scFromPyd(v any) any {
 // scBodyHandler is a route's handler with its body as FastAPI read it.
 type scBodyHandler func(d *Deps, w http.ResponseWriter, r *http.Request, p *auth.Principal, body pyd.Body)
 
-// scWithBody is FastAPI's order for a route with a body: the body read first (a JSON that
-// does not parse is a 422 before any dependency), then the authentication, then the
-// handler. The body stays readable, for a request handed to the Python gateway.
+// scWithBody is withBody (FastAPI's body read before the dependencies), then the
+// authentication, then the handler with the body. The body's bytes stay in the request,
+// for one handed to the Python gateway.
 func scWithBody(d *Deps, pattern string, h scBodyHandler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		raw, _ := io.ReadAll(r.Body)
-		body, early := pyd.ReadBody(raw, r.Header.Get("Content-Type"))
-		if early != nil {
-			early.Write(w)
+		raw, err := io.ReadAll(r.Body)
+		if err != nil {
+			pyd.BadRequestBody().Write(w)
 			return
 		}
 		r.Body = io.NopCloser(bytes.NewReader(raw))
-		server.Authed(d.Auth, pattern, func(w http.ResponseWriter, r *http.Request, p *auth.Principal) {
-			h(d, w, r, p, body)
-		}).ServeHTTP(w, r)
+		withBody(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			r.Body = io.NopCloser(bytes.NewReader(raw))
+			server.Authed(d.Auth, pattern, func(w http.ResponseWriter, r *http.Request, p *auth.Principal) {
+				h(d, w, r, p, bodyOf(r))
+			}).ServeHTTP(w, r)
+		})).ServeHTTP(w, r)
 	})
 }
 

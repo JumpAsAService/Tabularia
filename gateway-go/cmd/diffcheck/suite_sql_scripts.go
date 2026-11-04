@@ -360,6 +360,19 @@ func init() {
 			patch("editor renames Alpha (RUN only)", sid("s1"), "editor", map[string]any{"name": "N"})
 			add("the list after the changes", "GET", "/sql-scripts", as("admin"), nil)
 
+			// the schedule: a clear here, a cron forwarded (croniter)
+			sched := func(name, key, p string, body any) {
+				add(name, "PUT", fmt.Sprintf("/sql-scripts/%v/schedule", key), as(p), body)
+			}
+			sched("writer clears Tau's schedule", sid("s20"), "writer", map[string]any{"cron": "  "})
+			sched("writer clears it again", sid("s20"), "writer", map[string]any{})
+			sched("editor clears Alpha's (RUN)", sid("s1"), "editor", map[string]any{"cron": nil})
+			sched("obs_flag clears (VIEW)", sid("s1"), "obs_flag", map[string]any{})
+			sched("a clear by words", "x", "writer", map[string]any{"cron": 5})
+			sched("nobody clears", sid("s1"), "nobody", map[string]any{})
+			sched("writer sets a cron (forwarded)", sid("s20"), "writer", map[string]any{"cron": "0 3 * * *"})
+			sched("writer sets a bad cron (forwarded)", sid("s20"), "writer", map[string]any{"cron": "x"})
+
 			// still forwarded to Python
 			add("forwarded: schedule", "PUT", fmt.Sprintf("/sql-scripts/%d/schedule", id("s7")), as("writer"), map[string]any{"cron": ""})
 			add("forwarded: runs", "GET", fmt.Sprintf("/sql-scripts/%d/runs?limit=5", id("s13")), as("writer"), nil)

@@ -364,7 +364,7 @@ func listSQLScriptRuns(d *Deps, w http.ResponseWriter, r *http.Request, p *auth.
 			scFailed(d, w, "sql_scripts: a run", err)
 			return
 		}
-		it.out.StartedAt, it.out.FinishedAt = scIso(&started), scIso(finished)
+		it.out.StartedAt, it.out.FinishedAt = isoPtr(&started), isoPtr(finished)
 		items = append(items, it)
 	}
 	rows.Close()

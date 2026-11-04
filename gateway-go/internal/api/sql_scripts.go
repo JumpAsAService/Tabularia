@@ -8,18 +8,16 @@ package api
 
 import (
 	"context"
-	"errors"
 	"fmt"
 	"net/http"
-	"regexp"
 	"strings"
 	"time"
 
 	"github.com/jackc/pgx/v5"
-	"github.com/jackc/pgx/v5/pgconn"
 
 	"github.com/JumpAsAService/Tabularia/gateway-go/internal/audit"
 	"github.com/JumpAsAService/Tabularia/gateway-go/internal/auth"
+	"github.com/JumpAsAService/Tabularia/gateway-go/internal/copynames"
 	"github.com/JumpAsAService/Tabularia/gateway-go/internal/dashboards"
 	"github.com/JumpAsAService/Tabularia/gateway-go/internal/flowgroups"
 	"github.com/JumpAsAService/Tabularia/gateway-go/internal/perm"
@@ -113,14 +111,6 @@ type scVersionOut struct {
 	Current   bool    `json:"current"`
 }
 
-func scIso(t *time.Time) *string {
-	if t == nil {
-		return nil
-	}
-	s := pyjson.Isoformat(*t)
-	return &s
-}
-
 // ── helpers ───────────────────────────────────────────────────────────────────
 
 // connectionRefOf is _connection_ref.
@@ -166,7 +156,7 @@ func sqlOutOf(ctx context.Context, c *perm.Checker, q perm.Querier, s *sqlscript
 	return sqlScriptOut{ID: s.ID, Name: s.Name, Description: s.Description, ProjectID: s.ProjectID,
 		CurrentVersion: s.CurrentVersion, Engine: engine, Connection: conn, Output: output,
 		CreatedAt: pyjson.Isoformat(s.CreatedAt), UpdatedAt: pyjson.Isoformat(s.UpdatedAt), Editable: editable,
-		Runnable: runnable, RunSchedule: s.RunSchedule, RunScheduledBy: s.RunScheduledBy, NextRunAt: scIso(s.NextRunAt)}, nil
+		Runnable: runnable, RunSchedule: s.RunSchedule, RunScheduledBy: s.RunScheduledBy, NextRunAt: isoPtr(s.NextRunAt)}, nil
 }
 
 // sqlDetailOf is _detail.
@@ -188,7 +178,7 @@ func sqlDetailOf(ctx context.Context, c *perm.Checker, q perm.Querier, s *sqlscr
 			}
 			if ok {
 				ref = &sqlDatasourceRef{ID: target.ID, Name: target.Name, ProjectID: target.ProjectID, Rows: target.Rows,
-					UpdatedAt: scIso(&target.UpdatedAt)}
+					UpdatedAt: isoPtr(&target.UpdatedAt)}
 			}
 		}
 	}
@@ -399,51 +389,6 @@ func getSQLScript(d *Deps, w http.ResponseWriter, r *http.Request, p *auth.Princ
 
 // ── copy, delete ──────────────────────────────────────────────────────────────
 
-var scNumbered = regexp.MustCompile(`^(.*\S) \((\d+)\)$`)
-
-// scBaseName is copy_names.base_name.
-func scBaseName(name string) string {
-	if m := scNumbered.FindStringSubmatch(name); m != nil {
-		return m[1]
-	}
-	return name
-}
-
-// scFreeCopyName is copy_names.free_copy_name: the first «base (i)» not taken in the folder.
-func scFreeCopyName(ctx context.Context, q perm.Querier, table string, project int64, name string) (string, error) {
-	base := scBaseName(name)
-	rows, err := q.Query(ctx, fmt.Sprintf(`SELECT name FROM %s WHERE project_id = $1`, table), project)
-	if err != nil {
-		return "", err
-	}
-	used := map[string]bool{}
-	for rows.Next() {
-		var n string
-		if err := rows.Scan(&n); err != nil {
-			rows.Close()
-			return "", err
-		}
-		if strings.HasPrefix(n, base+" (") {
-			used[n] = true
-		}
-	}
-	rows.Close()
-	if err := rows.Err(); err != nil {
-		return "", err
-	}
-	for i := 1; ; i++ {
-		if c := fmt.Sprintf("%s (%d)", base, i); !used[c] {
-			return c, nil
-		}
-	}
-}
-
-// scUniqueViolation: the folder's unique name refused a row (an IntegrityError in Python).
-func scUniqueViolation(err error) bool {
-	var pg *pgconn.PgError
-	return err != nil && errors.As(err, &pg) && pg.Code == "23505"
-}
-
 // duplicateSQLScript is POST /sql-scripts/{script_id}/duplicate (duplicate_sql_script): a
 // copy in its folder, as «name (i)», from the current version.
 func duplicateSQLScript(d *Deps, w http.ResponseWriter, r *http.Request, p *auth.Principal) {
@@ -460,7 +405,7 @@ func duplicateSQLScript(d *Deps, w http.ResponseWriter, r *http.Request, p *auth
 	var copyID int64
 	var copyName string
 	err := scInTx(ctx, d, func(tx pgx.Tx) error {
-		name, err := scFreeCopyName(ctx, tx, "sql_scripts", src.ProjectID, src.Name)
+		name, err := copynames.Free(ctx, tx, "sql_scripts", src.ProjectID, src.Name)
 		if err != nil {
 			return err
 		}
@@ -483,8 +428,8 @@ func duplicateSQLScript(d *Deps, w http.ResponseWriter, r *http.Request, p *auth
 		_, err = tx.Exec(ctx, `UPDATE sql_scripts SET current_version = $1 WHERE id = $2`, cp.CurrentVersion, copyID)
 		return err
 	})
-	if scUniqueViolation(err) {
-		scRefuse(w, http.StatusConflict, "Another copy took that name at the same moment: try again")
+	if copynames.Clash(err) {
+		scRefuse(w, http.StatusConflict, copynames.ClashDetail)
 		return
 	}
 	if err != nil {

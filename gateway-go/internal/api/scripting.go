@@ -19,10 +19,10 @@ import (
 
 	"github.com/jackc/pgx/v5"
 
+	"github.com/JumpAsAService/Tabularia/gateway-go/internal/apitokens"
 	"github.com/JumpAsAService/Tabularia/gateway-go/internal/audit"
 	"github.com/JumpAsAService/Tabularia/gateway-go/internal/auth"
 	"github.com/JumpAsAService/Tabularia/gateway-go/internal/kube"
-	"github.com/JumpAsAService/Tabularia/gateway-go/internal/language"
 	"github.com/JumpAsAService/Tabularia/gateway-go/internal/perm"
 	"github.com/JumpAsAService/Tabularia/gateway-go/internal/pyd"
 	"github.com/JumpAsAService/Tabularia/gateway-go/internal/pyd/gatewaymodels"
@@ -100,9 +100,11 @@ func scRequire(d *Deps, w http.ResponseWriter, r *http.Request, p *auth.Principa
 		scRefuse(w, http.StatusForbidden, "Administrative read access required")
 		return false
 	}
-	if noToken != nil && p.TokenName != "" {
-		scRefuse(w, http.StatusForbidden, language.Pick(noToken, r.Header.Get("Accept-Language")))
-		return false
+	if noToken != nil {
+		if refusal := apitokens.DenyIfFromToken(r, p, noToken); refusal != nil {
+			server.Refuse(w, refusal)
+			return false
+		}
 	}
 	return true
 }
@@ -160,7 +162,7 @@ type storageOut struct {
 }
 
 func (s *scStorage) out() storageOut {
-	return storageOut{s.Endpoint, s.Region, s.Bucket, s.AccessKey, s.SecretKeyEnc != nil && *s.SecretKeyEnc != "", scIso(s.UpdatedAt), s.UpdatedBy}
+	return storageOut{s.Endpoint, s.Region, s.Bucket, s.AccessKey, s.SecretKeyEnc != nil && *s.SecretKeyEnc != "", isoPtr(s.UpdatedAt), s.UpdatedBy}
 }
 
 // scURLSplit is urllib.parse.urlsplit's scheme and hostname.
@@ -376,7 +378,7 @@ func scVersions(ctx context.Context, q perm.Querier, envID int64, current *int64
 			&v.BuildLog, &v.Error, &created, &v.CreatedBy, &started, &finished, &v.completions); err != nil {
 			return nil, err
 		}
-		v.CreatedAt, v.StartedAt, v.FinishedAt = pyjson.Isoformat(created), scIso(started), scIso(finished)
+		v.CreatedAt, v.StartedAt, v.FinishedAt = pyjson.Isoformat(created), isoPtr(started), isoPtr(finished)
 		v.Current = current != nil && *current == v.ID
 		out = append(out, v)
 	}

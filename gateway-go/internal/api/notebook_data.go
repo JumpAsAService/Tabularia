@@ -9,9 +9,11 @@ package api
 // the token's check of the pod's address (NOTEBOOKS__POD_IP_CHECK) refuses there.
 
 import (
+	"bytes"
 	"crypto/sha256"
 	"encoding/hex"
 	"fmt"
+	"io"
 	"net/http"
 	"net/url"
 	"regexp"
@@ -23,6 +25,7 @@ import (
 
 	"github.com/JumpAsAService/Tabularia/gateway-go/internal/audit"
 	"github.com/JumpAsAService/Tabularia/gateway-go/internal/auth"
+	"github.com/JumpAsAService/Tabularia/gateway-go/internal/copynames"
 	"github.com/JumpAsAService/Tabularia/gateway-go/internal/objects"
 	"github.com/JumpAsAService/Tabularia/gateway-go/internal/perm"
 	"github.com/JumpAsAService/Tabularia/gateway-go/internal/pyd"
@@ -66,20 +69,17 @@ func ndCaller(d *Deps, withBody bool, h ndHandler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		var body pyd.Body
 		if withBody {
-			raw := make([]byte, 0)
-			buf := make([]byte, 32*1024)
-			for {
-				n, err := r.Body.Read(buf)
-				raw = append(raw, buf[:n]...)
-				if err != nil {
-					break
-				}
+			raw, err := io.ReadAll(r.Body)
+			if err != nil {
+				pyd.BadRequestBody().Write(w)
+				return
 			}
 			var early *pyd.Response
 			if body, early = pyd.ReadBody(raw, r.Header.Get("Content-Type")); early != nil {
 				early.Write(w)
 				return
 			}
+			r.Body = io.NopCloser(bytes.NewReader(raw))
 		}
 		ctx := r.Context()
 		const ended = "This notebook's session has ended: open the notebook again"
@@ -388,7 +388,7 @@ func ndRecord(r *http.Request, d *Deps, call *ndCall, datasourceID int64) error 
 	}
 	_, err = d.DB.Exec(ctx, `INSERT INTO notebook_reads (notebook_id, datasource_id, last_session, mode, first_read_at, read_at)
 		VALUES ($1, $2, $3, $4, $5, $5)`, call.notebookID, datasourceID, call.jobName, call.sessionMode, now)
-	if scUniqueViolation(err) {
+	if copynames.Clash(err) {
 		return nil
 	}
 	return err
