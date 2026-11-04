@@ -12,10 +12,13 @@ import (
 	"encoding/json"
 	"io"
 	"log"
+	"math"
 	"net/http"
 	"os"
 	"regexp"
+	"strings"
 	"sync"
+	"time"
 )
 
 type rule struct {
@@ -33,6 +36,20 @@ type recorded struct {
 	Path   string `json:"path"`
 	Query  string `json:"query"`
 	Body   any    `json:"body"`
+	// a HEC request's credential («Splunk <token>»): the fake engine stands in for Splunk
+	// too (the SIEM's suite reaches it as siem.test)
+	Splunk string `json:"splunk,omitempty"`
+}
+
+// sentNow replaces a HEC event's `time` (the moment of sending, in seconds) by «<now>»:
+// the two gateways send a few milliseconds apart.
+func sentNow(body any) any {
+	if m, ok := body.(map[string]any); ok {
+		if t, ok := m["time"].(float64); ok && math.Abs(t-float64(time.Now().Unix())) < 600 {
+			m["time"] = "<now>"
+		}
+	}
+	return body
 }
 
 var (
@@ -78,7 +95,11 @@ func main() {
 			body = string(raw)
 		}
 		mu.Lock()
-		log_ = append(log_, recorded{r.Method, r.URL.Path, r.URL.RawQuery, body})
+		rec := recorded{Method: r.Method, Path: r.URL.Path, Query: r.URL.RawQuery, Body: body}
+		if a := r.Header.Get("Authorization"); strings.HasPrefix(a, "Splunk ") {
+			rec.Splunk, rec.Body = a, sentNow(body)
+		}
+		log_ = append(log_, rec)
 		var hit *rule
 		for i := range rules {
 			if (rules[i].Method == "" || rules[i].Method == r.Method) && rules[i].re.MatchString(r.URL.Path) {

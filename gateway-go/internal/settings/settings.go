@@ -34,7 +34,8 @@ type values struct {
 	accessTTLMinutes   int
 	appTimezone        string
 	previewSampleRows  int
-	runStaleTimeout    int // engine.run_stale_timeout_seconds
+	runStaleTimeout    int            // engine.run_stale_timeout_seconds
+	admin              map[string]any // settings_admin.go
 }
 
 // item is an entry of overrides.ITEMS the Go gateway reads: its kind and the panel's range.
@@ -79,7 +80,8 @@ type Panel struct {
 // New starts from the environment.
 func New(cfg *config.Config, panelEnabled bool, log *slog.Logger) *Panel {
 	p := &Panel{env: values{cfg.SessionIdleMinutes, cfg.PersonalTokens, cfg.APITokenMaxDays, cfg.AccessTTLMinutes,
-		cfg.AppTimezone, cfg.PreviewDefaultSampleRows, runStaleFromEnv()}, enabled: panelEnabled, log: log}
+		cfg.AppTimezone, cfg.PreviewDefaultSampleRows, runStaleFromEnv(), nil}, enabled: panelEnabled, log: log}
+	p.env.admin = adminEnv(cfg)
 	v := p.env
 	p.current.Store(&v)
 	return p
@@ -104,9 +106,11 @@ func (p *Panel) Apply(rows map[string]string) {
 	v := p.env
 	if p.enabled {
 		for key, raw := range rows {
+			// a key may be read on both sides (app.timezone): each keeps its own view of it
+			p.applyAdmin(&v, key, raw)
 			it, ok := items[key]
 			if !ok {
-				continue // a setting of the Python gateway's: not read here
+				continue // adminItems', or a setting of the Python gateway's: not read here
 			}
 			x, ok := check(it, raw)
 			if !ok {

@@ -291,13 +291,6 @@ func updateDatasource(d *Deps) func(http.ResponseWriter, *http.Request, *auth.Pr
 	}
 }
 
-func strOrNil(s *string) any {
-	if s == nil {
-		return nil
-	}
-	return *s
-}
-
 // deleteDatasource is DELETE /datasources/{ds_id}: refused while saved views, reports or
 // dashboards read it; the runs keep their history without the reference; the contract goes
 // with it, and the blob is deleted after the grace.
