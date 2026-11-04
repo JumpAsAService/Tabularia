@@ -283,6 +283,10 @@ func datasourcesCreateSteps(w *World) []Step {
 	add("admin", "duplicate, the file missing", "POST", ds("sftp")+"/duplicate", nil, engine("^/files/copy$", 404, map[string]any{"detail": "no"}))
 	add("admin", "duplicate, the engine fails", "POST", ds("sftp")+"/duplicate", nil, text("^/files/copy$", 500, "x"))
 	add("admin", "duplicate an unknown one", "POST", "/datasources/999999/duplicate", nil)
+	for i := range s {
+		// the seconds a queued import has waited: counted by each side a moment apart
+		s[i].Mask = append(s[i].Mask, "*.progress.seconds")
+	}
 	return append(s, settleRandomKeys("datasources_create"))
 }
 
