@@ -470,6 +470,13 @@ func repRenders(w *World) []Step {
 		EngineRule{Method: "GET", Path: "^/engines$", Body: []any{map[string]any{"id": "duckdb", "available": true}}})
 	add("no engine is available", "POST", r1, w.As("editor"), map[string]any{},
 		EngineRule{Method: "GET", Path: "^/engines$", Body: []any{}})
+	// engine_policy.default_engine: the first of PREFERRED_ENGINES among the usable ones
+	add("only ClickHouse and BigQuery are available", "POST", r1, w.As("editor"), map[string]any{},
+		EngineRule{Method: "GET", Path: "^/engines$", Body: []any{map[string]any{"id": "bigquery", "available": true},
+			map[string]any{"id": "clickhouse", "available": true}}})
+	add("Polars and chDB are available", "POST", r1, w.As("editor"), map[string]any{},
+		EngineRule{Method: "GET", Path: "^/engines$", Body: []any{map[string]any{"id": "chdb", "available": true},
+			map[string]any{"id": "polars", "available": true}}})
 	r2 := "/reports/" + id(rep.r2) + "/render"
 	add("a choice from a dataset", "POST", r2, w.As("editor"), map[string]any{"params": map[string]any{"region": "Sud", "agent": []any{"Nord"}}})
 	add("a choice not among them", "POST", r2, w.As("editor"), map[string]any{"params": map[string]any{"region": "Est"}})

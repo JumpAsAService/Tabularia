@@ -14,6 +14,7 @@ import (
 	"time"
 
 	"github.com/JumpAsAService/Tabularia/gateway-go/internal/engine"
+	"github.com/JumpAsAService/Tabularia/gateway-go/internal/enginepolicy"
 	"github.com/JumpAsAService/Tabularia/gateway-go/internal/perm"
 	"github.com/JumpAsAService/Tabularia/gateway-go/internal/pyjson"
 	"github.com/JumpAsAService/Tabularia/gateway-go/internal/pystr"
@@ -364,12 +365,11 @@ func (rs *Resolver) pickEngine(ctx context.Context, requested any) (string, erro
 	if len(usable) == 0 {
 		return "", refusal(422, "No engine is available")
 	}
+	in := map[string]bool{}
 	for _, u := range usable {
-		if u == "polars" {
-			return u, nil
-		}
+		in[u] = true
 	}
-	return usable[0], nil
+	return enginepolicy.Default(in), nil
 }
 
 // usableEngines reads the engine's catalog (GET /engines); false when it cannot be read.

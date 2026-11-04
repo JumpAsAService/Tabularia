@@ -214,7 +214,7 @@ func workersState(d *Deps, w http.ResponseWriter, r *http.Request, p *auth.Princ
 			{Key: "concurrency", Value: pyjson.Object{{Key: "key", Value: key}, {Key: "min", Value: min}, {Key: "max", Value: max},
 				{Key: "value", Value: value}, {Key: "applied", Value: applied}, {Key: "updated_at", Value: at}, {Key: "updated_by", Value: by}}},
 			{Key: "workers", Value: list},
-			{Key: "scaling", Value: noScaling()},
+			{Key: "scaling", Value: noScaling(d.Config.Admin.OnKubernetes)},
 		})
 	}
 	tick, _ := live.Get("tick_seconds")
@@ -244,9 +244,9 @@ func orDefault(o *pyd.Object, k string, def any) any {
 	return def
 }
 
-// noScaling is ScalingOut(mode="none").
-func noScaling() pyjson.Object {
-	out := pyjson.Object{{Key: "mode", Value: "none"}}
+// noScaling is ScalingOut(mode="none", on_kubernetes=on_kubernetes()).
+func noScaling(onKubernetes bool) pyjson.Object {
+	out := pyjson.Object{{Key: "mode", Value: "none"}, {Key: "on_kubernetes", Value: onKubernetes}}
 	for _, k := range []string{"deployment", "autoscaler", "autoscaler_name", "replicas", "current", "ready", "desired", "min", "max",
 		"floor", "ceiling"} {
 		out = append(out, pyjson.KV{Key: k, Value: nil})
