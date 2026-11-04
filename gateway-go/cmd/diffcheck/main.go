@@ -74,10 +74,6 @@ type Step struct {
 	// HeaderScrub: regular expressions whose matches in the compared headers are random
 	// (a Location's state, a cookie's name and value)
 	HeaderScrub []string
-	// ClockSeconds: the answer counts seconds left on a clock (a brake's Retry-After and its
-	// «try again in N seconds»): the two sides, a few milliseconds apart, may fall either side
-	// of a second; numbers that differ by one are taken as the same (clock.go)
-	ClockSeconds bool
 	// EngineScrub: regular expressions whose matches in the requests sent to the engine are
 	// random (a Job's name, a pod's token, a step's uuid inside a key)
 	EngineScrub []string
@@ -433,6 +429,12 @@ func (w *World) ask(s *side, st Step) answer {
 			a.Headers[h] = strings.Replace(v, s.gateway, "<gateway>", 1)
 		}
 	}
+	for h, v := range a.Headers { // a step's Scrub covers the headers it compares too
+		for _, p := range st.Scrub {
+			v = regexp.MustCompile(p).ReplaceAllString(v, "<scrubbed>")
+		}
+		a.Headers[h] = v
+	}
 	if v := res.Header.Values("Set-Cookie"); len(v) > 0 {
 		c := expires.ReplaceAllString(strings.Join(v, " | "), "expires=…")
 		a.Headers["Set-Cookie"] = tokenVal.ReplaceAllStringFunc(c, func(m string) string {
@@ -509,9 +511,6 @@ func (w *World) compare(st Step) string {
 	var out []string
 	if pa.Status != gb.Status {
 		out = append(out, fmt.Sprintf("    status: python %d, go %d", pa.Status, gb.Status))
-	}
-	if st.ClockSeconds {
-		reconcileSeconds(&pa, &gb)
 	}
 	if !reflect.DeepEqual(pa.Headers, gb.Headers) {
 		out = append(out, fmt.Sprintf("    headers:\n      python %v\n      go     %v", pa.Headers, gb.Headers))

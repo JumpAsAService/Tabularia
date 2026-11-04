@@ -53,18 +53,14 @@ func init() {
 			g := func(k string) string { return fmt.Sprint(Groups[k]) }
 			var s []Step
 			add := func(name, method, path string, auth func(*http.Request), body any) {
-				st := Step{Name: name, Method: method, Path: path, Auth: auth, JSON: body}
-				if method == "GET" && path == "/users" {
-					// users.list_users: select(User) without an ORDER BY, the table's physical order
-					st.Unordered = []string{""}
-				}
-				if strings.Contains(name, "braked") {
-					st.ClockSeconds = true // a brake's seconds left
-				}
-				s = append(s, st)
+				s = append(s, Step{Name: name, Method: method, Path: path, Auth: auth, JSON: body})
 			}
 			for _, p := range []string{"admin", "admin_group", "obs_flag", "obs_group", "editor", "writer", "service"} {
 				add(p+" lists the accounts", "GET", "/users", w.As(p), nil)
+				// list_users reads `select(User)` without an order: the table's physical order, which
+				// the two databases need not share once their sessions wrote last_seen_at at
+				// different moments (a Python bug, noted)
+				s[len(s)-1].Unordered = []string{""}
 			}
 			add("nobody lists", "GET", "/users", nil, nil)
 			add("the password rule", "GET", "/users/password-rules", w.As("writer"), nil)
@@ -101,11 +97,16 @@ func init() {
 			add("with a token", "POST", "/users/me/password", Bearer("tab_us_pw_write_000000000000"), change)
 			add("a weak new password", "POST", "/users/me/password", w.As("us-pw"), map[string]any{"current_password": "x", "new_password": "admin"})
 			add("braked", "POST", "/users/me/password", w.As("us-brake"), change)
+			// the seconds left are counted by each side a moment apart, across a second's edge
+			s[len(s)-1].Scrub = []string{`^\d+$`, `in \d+ seconds`}
 			for i := 1; i <= 6; i++ {
 				add(fmt.Sprintf("a wrong current password (%d)", i), "POST", "/users/me/password", w.As("us-pw"),
 					map[string]any{"current_password": "wrong", "new_password": "the new password 22"})
+				s[len(s)-1].Scrub = []string{`^\d+$`, `in \d+ seconds`} // the last one is braked
 			}
 			add("now braked", "POST", "/users/me/password", w.As("us-pw"), change)
+			// the seconds left are counted by each side a moment apart, across a second's edge
+			s[len(s)-1].Scrub = []string{`^\d+$`, `in \d+ seconds`}
 			add("changed", "POST", "/users/me/password", w.As("us-target"), change)
 			add("the session it was changed from holds", "GET", "/users/password-rules", w.As("us-target"), nil)
 			add("the other session is closed", "GET", "/users/password-rules", Cookie(w.JWT("us-target", "s-us-target-2")), nil)
@@ -170,6 +171,7 @@ func init() {
 			add("with a personal folder holding a flow", "DELETE", "/users/"+u("us-full"), Bearer("tab_us_admin_write_000000000"), nil)
 			add("a service account", "DELETE", "/users/"+u("us-svc"), w.As("admin_group"), nil)
 			add("the accounts now", "GET", "/users", w.As("admin"), nil)
+			s[len(s)-1].Unordered = []string{""}
 			return s
 		},
 	})

@@ -23,6 +23,7 @@ import (
 	"github.com/jackc/pgx/v5/pgxpool"
 
 	"github.com/JumpAsAService/Tabularia/gateway-go/internal/config"
+	"github.com/JumpAsAService/Tabularia/gateway-go/internal/pyjson"
 )
 
 // RereadEvery is overrides.REREAD_EVERY.
@@ -41,6 +42,8 @@ type values struct {
 	workerCapacity     int64
 	runStaleTimeout    int64
 	queueTimeout       float64
+	rows               map[string]string // the panel's rows Apply put in force (panel_state.go)
+	good               pyjson.Object     // overrides.check of them: the good values (settings_jobs.go)
 }
 
 // item is an entry of overrides.ITEMS the Go gateway reads: its kind and the panel's range.
@@ -69,14 +72,18 @@ type Panel struct {
 	enabled bool
 	current atomic.Pointer[values]
 	log     *slog.Logger
+	// panel_state.go: the environment of overrides.ITEMS, and what this process started with
+	panelEnv    map[string]any
+	startedWith atomic.Pointer[map[string]any]
 }
 
 // New starts from the environment.
 func New(cfg *config.Config, panelEnabled bool, log *slog.Logger) *Panel {
 	p := &Panel{env: values{cfg.SessionIdleMinutes, cfg.PersonalTokens, cfg.APITokenMaxDays, cfg.AccessTTLMinutes,
 		cfg.AppTimezone, cfg.PreviewDefaultSampleRows, nil, cfg.Flows.UploadMaxBytes, cfg.Flows.WorkerCapacity,
-		cfg.Flows.RunStaleTimeout, cfg.Flows.QueueTimeoutSeconds}, enabled: panelEnabled, log: log}
+		cfg.Flows.RunStaleTimeout, cfg.Flows.QueueTimeoutSeconds, nil, nil}, enabled: panelEnabled, log: log}
 	p.env.admin = adminEnv(cfg)
+	p.panelEnv = cfg.PanelEnv
 	v := p.env
 	p.current.Store(&v)
 	return p
@@ -109,6 +116,8 @@ func (p *Panel) FromPanel() bool { return p.enabled }
 func (p *Panel) Apply(rows map[string]string) {
 	v := p.env
 	if p.enabled {
+		v.rows = rows
+		v.good = p.goodValues(rows)
 		for key, raw := range rows {
 			it, ok := items[key]
 			if !ok {

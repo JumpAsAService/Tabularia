@@ -57,6 +57,7 @@ func run(log *slog.Logger) error {
 
 	panel := settings.New(cfg, cfg.SettingsPanel, log)
 	panel.Reload(ctx, pool)
+	panel.RememberStart() // overrides.load_at_start → remember_start
 	go panel.Loop(ctx, pool)
 
 	authn := &auth.Authenticator{

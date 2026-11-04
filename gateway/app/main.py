@@ -349,9 +349,11 @@ if settings.app.role != "orchestrator":
 # asks for, behind the internal token. No other role has these routes.
 if settings.app.role == "ai":
     from app.routes.internal_script import router as internal_script_router
+    from app.routes.internal_sql import regex_router as internal_regex_router
     from app.routes.internal_sql import router as internal_sql_router
 
     app.include_router(internal_sql_router)
+    app.include_router(internal_regex_router)
     app.include_router(internal_script_router)
 
 
