@@ -5,26 +5,26 @@ Python gateway as FastAPI serves it, and whether the Go gateway answers it
 ([spec](specs/gateway-go.md)). The Go gateway replaces the Python one when no line says *Python*;
 *AI service* lines are forwarded to the Python AI service (`APP__ROLE=ai`), where they stay.
 
-**274 of 362 in Go**, 14 forwarded to the AI service.
+**313 of 362 in Go**, 14 forwarded to the AI service.
 
-## core.api_docs (0/2)
-
-| Method | Path | Python function | Served by |
-|---|---|---|---|
-| GET | `/docs` | `swagger` | Python |
-| GET | `/redoc` | `redoc` | Python |
-
-## fastapi.applications (0/1)
+## core.api_docs (2/2)
 
 | Method | Path | Python function | Served by |
 |---|---|---|---|
-| GET | `/openapi.json` | `openapi` | Python |
+| GET | `/docs` | `swagger` | **Go** |
+| GET | `/redoc` | `redoc` | **Go** |
 
-## main (1/2)
+## fastapi.applications (1/1)
 
 | Method | Path | Python function | Served by |
 |---|---|---|---|
-| GET | `/` | `root` | Python |
+| GET | `/openapi.json` | `openapi` | **Go** |
+
+## main (2/2)
+
+| Method | Path | Python function | Served by |
+|---|---|---|---|
+| GET | `/` | `root` | **Go** |
 | GET | `/health` | `health` | **Go** |
 
 ## routes.agent_plans (2/3)
@@ -261,15 +261,15 @@ Python gateway as FastAPI serves it, and whether the Go gateway answers it
 | GET | `/projects/{project_id}/flows` | `list_flows` | **Go** |
 | POST | `/projects/{project_id}/flows` | `create_flow` | **Go** |
 
-## routes.gateway_settings (0/5)
+## routes.gateway_settings (3/5)
 
 | Method | Path | Python function | Served by |
 |---|---|---|---|
 | GET | `/admin/gateway-settings` | `read` | Python |
 | PUT | `/admin/gateway-settings` | `write` | Python |
-| GET | `/admin/settings-rollout` | `rollout_state` | Python |
-| POST | `/admin/settings-rollout` | `rollout_start` | Python |
-| DELETE | `/admin/settings-rollout/{component}` | `rollout_cancel` | Python |
+| GET | `/admin/settings-rollout` | `rollout_state` | **Go** |
+| POST | `/admin/settings-rollout` | `rollout_start` | **Go** |
+| DELETE | `/admin/settings-rollout/{component}` | `rollout_cancel` | **Go** |
 
 ## routes.groups (4/4)
 
@@ -280,13 +280,13 @@ Python gateway as FastAPI serves it, and whether the Go gateway answers it
 | DELETE | `/groups/{group_id}` | `delete_group` | **Go** |
 | PATCH | `/groups/{group_id}` | `update_group` | **Go** |
 
-## routes.lineage (0/3)
+## routes.lineage (3/3)
 
 | Method | Path | Python function | Served by |
 |---|---|---|---|
-| GET | `/flows/{flow_id}/openlineage` | `flow_openlineage` | Python |
-| POST | `/flows/{flow_id}/openlineage` | `emit_flow_openlineage` | Python |
-| GET | `/lineage` | `get_lineage` | Python |
+| GET | `/flows/{flow_id}/openlineage` | `flow_openlineage` | **Go** |
+| POST | `/flows/{flow_id}/openlineage` | `emit_flow_openlineage` | **Go** |
+| GET | `/lineage` | `get_lineage` | **Go** |
 
 ## routes.mcp (3/3)
 
@@ -296,44 +296,44 @@ Python gateway as FastAPI serves it, and whether the Go gateway answers it
 | GET | `/mcp` | `mcp_no_stream` | **Go** |
 | POST | `/mcp` | `mcp_endpoint` | **Go** |
 
-## routes.notebook_data (3/4)
+## routes.notebook_data (4/4)
 
 | Method | Path | Python function | Served by |
 |---|---|---|---|
 | GET | `/notebook-data/datasources` | `list_datasources` | **Go** |
 | POST | `/notebook-data/read` | `read_datasource` | **Go** |
-| POST | `/notebook-data/report` | `render_report` | Python |
+| POST | `/notebook-data/report` | `render_report` | **Go** |
 | GET | `/notebook-data/reports` | `list_reports` | **Go** |
 
-## routes.notebook_proxy (0/16)
+## routes.notebook_proxy (16/16)
 
 | Method | Path | Python function | Served by |
 |---|---|---|---|
-| GET | `/notebooks/{notebook_id}/app` | `without_slash` | Python |
-| DELETE | `/notebooks/{notebook_id}/app/{path:path}` | `app_http` | Python |
-| GET | `/notebooks/{notebook_id}/app/{path:path}` | `app_http` | Python |
-| OPTIONS | `/notebooks/{notebook_id}/app/{path:path}` | `app_http` | Python |
-| PATCH | `/notebooks/{notebook_id}/app/{path:path}` | `app_http` | Python |
-| POST | `/notebooks/{notebook_id}/app/{path:path}` | `app_http` | Python |
-| PUT | `/notebooks/{notebook_id}/app/{path:path}` | `app_http` | Python |
-| WS | `/notebooks/{notebook_id}/app/{path:path}` | `app_ws` | Python |
-| GET | `/notebooks/{notebook_id}/edit` | `without_slash` | Python |
-| DELETE | `/notebooks/{notebook_id}/edit/{path:path}` | `edit_http` | Python |
-| GET | `/notebooks/{notebook_id}/edit/{path:path}` | `edit_http` | Python |
-| OPTIONS | `/notebooks/{notebook_id}/edit/{path:path}` | `edit_http` | Python |
-| PATCH | `/notebooks/{notebook_id}/edit/{path:path}` | `edit_http` | Python |
-| POST | `/notebooks/{notebook_id}/edit/{path:path}` | `edit_http` | Python |
-| PUT | `/notebooks/{notebook_id}/edit/{path:path}` | `edit_http` | Python |
-| WS | `/notebooks/{notebook_id}/edit/{path:path}` | `edit_ws` | Python |
+| GET | `/notebooks/{notebook_id}/app` | `without_slash` | **Go** |
+| DELETE | `/notebooks/{notebook_id}/app/{path:path}` | `app_http` | **Go** |
+| GET | `/notebooks/{notebook_id}/app/{path:path}` | `app_http` | **Go** |
+| OPTIONS | `/notebooks/{notebook_id}/app/{path:path}` | `app_http` | **Go** |
+| PATCH | `/notebooks/{notebook_id}/app/{path:path}` | `app_http` | **Go** |
+| POST | `/notebooks/{notebook_id}/app/{path:path}` | `app_http` | **Go** |
+| PUT | `/notebooks/{notebook_id}/app/{path:path}` | `app_http` | **Go** |
+| WS | `/notebooks/{notebook_id}/app/{path:path}` | `app_ws` | **Go** |
+| GET | `/notebooks/{notebook_id}/edit` | `without_slash` | **Go** |
+| DELETE | `/notebooks/{notebook_id}/edit/{path:path}` | `edit_http` | **Go** |
+| GET | `/notebooks/{notebook_id}/edit/{path:path}` | `edit_http` | **Go** |
+| OPTIONS | `/notebooks/{notebook_id}/edit/{path:path}` | `edit_http` | **Go** |
+| PATCH | `/notebooks/{notebook_id}/edit/{path:path}` | `edit_http` | **Go** |
+| POST | `/notebooks/{notebook_id}/edit/{path:path}` | `edit_http` | **Go** |
+| PUT | `/notebooks/{notebook_id}/edit/{path:path}` | `edit_http` | **Go** |
+| WS | `/notebooks/{notebook_id}/edit/{path:path}` | `edit_ws` | **Go** |
 
-## routes.notebook_sessions (2/5)
+## routes.notebook_sessions (5/5)
 
 | Method | Path | Python function | Served by |
 |---|---|---|---|
-| POST | `/notebooks/{notebook_id}/edit/save` | `save_from_editor` | Python |
+| POST | `/notebooks/{notebook_id}/edit/save` | `save_from_editor` | **Go** |
 | GET | `/notebooks/{notebook_id}/sessions` | `list_sessions` | **Go** |
-| POST | `/notebooks/{notebook_id}/sessions` | `start_session` | Python |
-| DELETE | `/notebooks/{notebook_id}/sessions/{mode}` | `stop_session` | Python |
+| POST | `/notebooks/{notebook_id}/sessions` | `start_session` | **Go** |
+| DELETE | `/notebooks/{notebook_id}/sessions/{mode}` | `stop_session` | **Go** |
 | POST | `/notebooks/{notebook_id}/ticket` | `frame_ticket` | **Go** |
 
 ## routes.notebooks (11/11)
@@ -408,7 +408,7 @@ Python gateway as FastAPI serves it, and whether the Go gateway answers it
 | GET | `/queue` | `queue_overview` | **Go** |
 | POST | `/queue/jobs/{task_id}/stop` | `stop_job` | **Go** |
 
-## routes.registries (8/13)
+## routes.registries (13/13)
 
 | Method | Path | Python function | Served by |
 |---|---|---|---|
@@ -417,14 +417,14 @@ Python gateway as FastAPI serves it, and whether the Go gateway answers it
 | DELETE | `/admin/registries/{registry_id}` | `delete` | **Go** |
 | GET | `/admin/registries/{registry_id}` | `read` | **Go** |
 | PUT | `/admin/registries/{registry_id}` | `update` | **Go** |
-| POST | `/admin/registries/{registry_id}/cluster-test` | `trial_in_cluster` | Python |
-| GET | `/admin/registries/{registry_id}/tags` | `tag` | Python |
-| POST | `/admin/registries/{registry_id}/test` | `trial` | Python |
+| POST | `/admin/registries/{registry_id}/cluster-test` | `trial_in_cluster` | **Go** |
+| GET | `/admin/registries/{registry_id}/tags` | `tag` | **Go** |
+| POST | `/admin/registries/{registry_id}/test` | `trial` | **Go** |
 | DELETE | `/admin/registries/{registry_id}/variables/{name}` | `delete_variable` | **Go** |
 | PUT | `/admin/registries/{registry_id}/variables/{name}` | `write_variable` | **Go** |
 | GET | `/registries` | `editor_listing` | **Go** |
-| GET | `/registries/{registry_id}/image` | `editor_image` | Python |
-| GET | `/registries/{registry_id}/tags` | `editor_tag` | Python |
+| GET | `/registries/{registry_id}/image` | `editor_image` | **Go** |
+| GET | `/registries/{registry_id}/tags` | `editor_tag` | **Go** |
 
 ## routes.reports (19/20)
 
@@ -480,7 +480,7 @@ Python gateway as FastAPI serves it, and whether the Go gateway answers it
 |---|---|---|---|
 | GET | `/schedule/load` | `schedule_load` | **Go** |
 
-## routes.scripting (13/18)
+## routes.scripting (17/18)
 
 | Method | Path | Python function | Served by |
 |---|---|---|---|
@@ -493,15 +493,15 @@ Python gateway as FastAPI serves it, and whether the Go gateway answers it
 | DELETE | `/admin/scripting/environments/{environment_id}/variables/{name}` | `delete_variable` | **Go** |
 | PUT | `/admin/scripting/environments/{environment_id}/variables/{name}` | `write_variable` | **Go** |
 | POST | `/admin/scripting/environments/{environment_id}/versions/{version_id}/current` | `make_current` | **Go** |
-| GET | `/admin/scripting/packages` | `search_packages` | Python |
-| GET | `/admin/scripting/packages/{language}/{name}` | `package_versions` | Python |
+| GET | `/admin/scripting/packages` | `search_packages` | **Go** |
+| GET | `/admin/scripting/packages/{language}/{name}` | `package_versions` | **Go** |
 | PUT | `/admin/scripting/storage` | `write_storage` | **Go** |
 | POST | `/admin/scripting/storage/test` | `trial_storage` | **Go** |
 | GET | `/scripting` | `editor_environments` | **Go** |
 | GET | `/scripting/environments/{environment_id}/completions` | `editor_completions` | **Go** |
 | POST | `/scripting/flows/{flow_id}/nodes/{node_id}/run` | `trial_node` | Python |
-| GET | `/scripting/flows/{flow_id}/outputs` | `node_outputs` | Python |
-| POST | `/scripting/lint` | `editor_check` | Python |
+| GET | `/scripting/flows/{flow_id}/outputs` | `node_outputs` | **Go** |
+| POST | `/scripting/lint` | `editor_check` | **Go** |
 
 ## routes.scripts (14/14)
 
