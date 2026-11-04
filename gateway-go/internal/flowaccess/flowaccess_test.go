@@ -1,10 +1,6 @@
 package flowaccess
 
-import (
-	"testing"
-
-	"github.com/JumpAsAService/Tabularia/gateway-go/internal/pyjson"
-)
+import "testing"
 
 func TestWidens(t *testing.T) {
 	before := `{"nodes": [{"type": "source", "data": {"datasourceId": 3, "key": "datasets/a.parquet"}}]}`
@@ -32,39 +28,5 @@ func TestDigits(t *testing.T) {
 		if _, ok := Digits(c.v); ok != c.ok {
 			t.Errorf("Digits(%#v) = %v", c.v, ok)
 		}
-	}
-}
-
-func TestCheckFiles(t *testing.T) {
-	node := func(files string, entry string) pyjson.Object {
-		v, _ := pyjson.Loads(`{"id": "n", "data": {"label": "L", "entrypoint": "` + entry + `", "files": ` + files + `}}`)
-		return v.(pyjson.Object)
-	}
-	cases := []struct {
-		files, entry, lang, want string
-	}{
-		{`[{"path": "main.py", "content": "print(1)"}]`, "main.py", "python", ""},
-		{`[{"path": "main.py", "content": 1}]`, "main.py", "", "Script «L»: the file «main.py» has no text"},
-		{`[{"path": "../x.py", "content": ""}]`, "", "", "Script «L»: «../x.py» is not a file name: letters, digits, . _ - and / between folders"},
-		{`[{"path": "a.py", "content": ""}, {"path": "A.py", "content": ""}]`, "", "", "Script «L»: two files are called «A.py»"},
-		{`[{"path": "a.py", "content": "read s3://Bucket/x"}]`, "", "", "Script «L»: a.py, line 1 names the scripts bucket: read the input from TABULARIA_INPUT and write the output to TABULARIA_OUTPUT"},
-		{`[{"path": "main.R", "content": ""}]`, "main.R", "python", "Script «L»: the file to run is a Python file (.py)"},
-		{`[{"path": "main.py", "content": ""}]`, "other.py", "", "Script «L»: the file to run («other.py») is not among its files"},
-	}
-	for _, c := range cases {
-		got := ""
-		if r := checkFiles(node(c.files, c.entry), c.lang, "bucket", false); r != nil {
-			got = r.Detail
-		}
-		if got != c.want {
-			t.Errorf("%s: %q, want %q", c.files, got, c.want)
-		}
-	}
-}
-
-func TestSplitLines(t *testing.T) {
-	got := pySplitLines("a\r\nb\rc d\n")
-	if len(got) != 4 || got[3] != "d" {
-		t.Fatalf("%q", got)
 	}
 }

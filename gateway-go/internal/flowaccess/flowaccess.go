@@ -19,6 +19,8 @@ import (
 	"github.com/JumpAsAService/Tabularia/gateway-go/internal/auth"
 	"github.com/JumpAsAService/Tabularia/gateway-go/internal/perm"
 	"github.com/JumpAsAService/Tabularia/gateway-go/internal/pyjson"
+	"github.com/JumpAsAService/Tabularia/gateway-go/internal/savedscripts"
+	"github.com/JumpAsAService/Tabularia/gateway-go/internal/scriptnodes"
 )
 
 // Settings are the installation's switches the checks read (SCRIPTS__*, CONTAINERS__*).
@@ -57,7 +59,7 @@ func refuse(status int, detail string) *auth.Refusal {
 
 func patterns(text string) []string {
 	var out []string
-	for _, x := range pySplitLines(text) {
+	for _, x := range scriptnodes.SplitLines(text) {
 		if x = pyStrip(x); x != "" {
 			out = append(out, x)
 		}
@@ -304,7 +306,8 @@ func (a *Access) RegistryCheckDefinition(ctx context.Context, before, after stri
 
 // ── scripting environments and saved scripts ─────────────────────────────────
 
-// UsableEnvironments is saved_scripts.usable_environment_ids; nil for an administrator.
+// UsableEnvironments is saved_scripts.usable_environment_ids (internal/savedscripts); nil for
+// an administrator. Read once per request.
 func (a *Access) UsableEnvironments(ctx context.Context) (map[int64]bool, error) {
 	if admin, err := a.C.IsAdmin(ctx); err != nil || admin {
 		return nil, err
@@ -312,25 +315,11 @@ func (a *Access) UsableEnvironments(ctx context.Context) (map[int64]bool, error)
 	if a.envs != nil {
 		return a.envs, nil
 	}
-	rows, err := a.Q.Query(ctx, `SELECT seg.environment_id FROM script_environment_groups seg
-		JOIN user_groups ug ON ug.group_id = seg.group_id WHERE ug.user_id = $1`, a.User.ID)
-	if err != nil {
-		return nil, err
+	envs, err := savedscripts.UsableEnvironments(ctx, a.C, a.Q, a.User.ID)
+	if err == nil {
+		a.envs = envs
 	}
-	defer rows.Close()
-	out := map[int64]bool{}
-	for rows.Next() {
-		var id int64
-		if err := rows.Scan(&id); err != nil {
-			return nil, err
-		}
-		out[id] = true
-	}
-	if err := rows.Err(); err != nil {
-		return nil, err
-	}
-	a.envs = out
-	return out, nil
+	return envs, err
 }
 
 // Environment is a script_environments row, the columns the checks read.
@@ -351,19 +340,9 @@ func (a *Access) environment(ctx context.Context, id int64) (*Environment, error
 	return &e, err
 }
 
-// CanUseEnvironment is script_nodes.can_use: an administrator, or a group of the
-// environment's.
+// CanUseEnvironment is script_nodes.can_use (internal/scriptnodes).
 func (a *Access) CanUseEnvironment(ctx context.Context, envID int64) (bool, error) {
-	if admin, err := a.C.IsAdmin(ctx); err != nil || admin {
-		return admin, err
-	}
-	var one int
-	err := a.Q.QueryRow(ctx, `SELECT 1 FROM script_environment_groups seg JOIN user_groups ug ON ug.group_id = seg.group_id
-		WHERE seg.environment_id = $1 AND ug.user_id = $2 LIMIT 1`, envID, a.User.ID).Scan(&one)
-	if errors.Is(err, pgx.ErrNoRows) {
-		return false, nil
-	}
-	return err == nil, err
+	return scriptnodes.CanUse(ctx, a.C, a.Q, a.User.ID, envID)
 }
 
 // SavedScript is a saved_scripts row, the columns the checks read.
@@ -385,16 +364,9 @@ func (a *Access) SavedScriptByID(ctx context.Context, id int64) (*SavedScript, e
 	return &s, err
 }
 
-// CanSeeScript is saved_scripts.can_see: its environment usable and VIEW on its folder.
+// CanSeeScript is saved_scripts.can_see (internal/savedscripts).
 func (a *Access) CanSeeScript(ctx context.Context, s *SavedScript) (bool, error) {
-	if admin, err := a.C.IsAdmin(ctx); err != nil || admin {
-		return admin, err
-	}
-	envs, err := a.UsableEnvironments(ctx)
-	if err != nil || !envs[s.EnvironmentID] {
-		return false, err
-	}
-	return a.C.Has(ctx, s.ProjectID, perm.View)
+	return savedscripts.CanSee(ctx, a.C, a.Q, a.User.ID, s.ProjectID, s.EnvironmentID)
 }
 
 // ── flow_access ────────────────────────────────────────────────────────────────

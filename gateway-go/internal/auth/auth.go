@@ -302,7 +302,7 @@ func (a *Authenticator) apiToken(ctx context.Context, r *http.Request, cred cred
 	if !u.IsService && (u.IsObserver || observerG) && !(u.IsSuperuser || adminG) {
 		return nil, a.refuse(r, cred) // observer only: no personal tokens
 	}
-	if p.TokenScope == "read" && !safeMethods[r.Method] && !(r.Method == http.MethodPost && readingPosts[route]) {
+	if route != levelCheckedByCaller && p.TokenScope == "read" && !safeMethods[r.Method] && !(r.Method == http.MethodPost && readingPosts[route]) {
 		return nil, &Refusal{Status: http.StatusForbidden, Detail: language.Pick(readOnly, r.Header.Get("Accept-Language"))}
 	}
 	a.touchToken(ctx, r, p, tokenID, lastUsed, (u.IsObserver || observerG) && !(u.IsSuperuser || adminG))

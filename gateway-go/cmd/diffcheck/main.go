@@ -48,6 +48,9 @@ type Step struct {
 	Mask        []string     // dotted paths of the answer's JSON (* for every item) holding random values
 	Before      func(*World) // run before the step (on both databases): a change of state the step needs
 	EngineMask  []string     // as Mask, in the requests sent to the engine (e.g. «*.body.output_key»)
+	// Scrub: regular expressions whose matches, inside any string of the answer's JSON, are
+	// random (an id or a moment written inside a longer text, as a webhook's payload)
+	Scrub []string
 }
 
 // EngineRule is one scripted answer of the fake engine (cmd/fakeengine).
@@ -99,6 +102,38 @@ func maskPattern(table, column, pattern string) {
 		maskedPatterns[table] = map[string][]*regexp.Regexp{}
 	}
 	maskedPatterns[table][column] = append(maskedPatterns[table][column], regexp.MustCompile(pattern))
+}
+
+// scrubbedColumns: table → column → patterns whose matches inside the text are random
+var scrubbedColumns = map[string]map[string][]*regexp.Regexp{}
+
+func scrubColumn(table, column string, patterns ...string) {
+	if scrubbedColumns[table] == nil {
+		scrubbedColumns[table] = map[string][]*regexp.Regexp{}
+	}
+	for _, p := range patterns {
+		scrubbedColumns[table][column] = append(scrubbedColumns[table][column], regexp.MustCompile(p))
+	}
+}
+
+// scrub replaces the patterns' matches in every string of v by «<scrubbed>».
+func scrub(v any, res []*regexp.Regexp) any {
+	switch x := v.(type) {
+	case map[string]any:
+		for k, e := range x {
+			x[k] = scrub(e, res)
+		}
+	case []any:
+		for i, e := range x {
+			x[i] = scrub(e, res)
+		}
+	case string:
+		for _, re := range res {
+			x = re.ReplaceAllString(x, "<scrubbed>")
+		}
+		return x
+	}
+	return v
 }
 
 // side is one stack.
@@ -158,6 +193,7 @@ func main() {
 					st.Before(w)
 				}
 				total++
+				stepAt = time.Now()
 				if diff := w.compare(st); diff != "" {
 					failed++
 					fmt.Printf("  DIFF  %-6s %-40s %s\n%s\n", st.Method, short(st.Path), st.Name, diff)
@@ -276,6 +312,9 @@ func (w *World) ask(s *side, st Step) answer {
 	req.Header.Set("User-Agent", "diffcheck")
 	for k, v := range st.Header {
 		req.Header.Set(k, v)
+		if k == "Host" { // net/http sends req.Host, not the header
+			req.Host = v
+		}
 	}
 	if st.Auth != nil {
 		st.Auth(req)
@@ -314,6 +353,13 @@ func (w *World) ask(s *side, st Step) answer {
 	if len(raw) > 0 && json.Unmarshal(raw, &parsed) == nil {
 		for _, path := range st.Mask {
 			parsed = maskPath(parsed, strings.Split(path, "."))
+		}
+		if len(st.Scrub) > 0 {
+			var res []*regexp.Regexp
+			for _, p := range st.Scrub {
+				res = append(res, regexp.MustCompile(p))
+			}
+			parsed = scrub(parsed, res)
 		}
 		a.Body = normalize(parsed)
 	} else {
@@ -400,6 +446,11 @@ func dump(ctx context.Context, s *side) map[string][]any {
 						m[c] = v
 					}
 				}
+				for c, res := range scrubbedColumns[t] {
+					if v, has := m[c]; has {
+						m[c] = scrub(v, res)
+					}
+				}
 			}
 		}
 		if len(list) > 0 {
@@ -419,12 +470,18 @@ func dump(ctx context.Context, s *side) map[string][]any {
 
 var stamp = regexp.MustCompile(`^\d{4}-\d\d-\d\d[T ]\d\d:\d\d:\d\d(\.\d+)?(Z|[+-]\d\d:\d\d)?$`)
 
-// startedAt is when the comparison began, ten minutes early: what is dated after it was
-// written during the run.
-var startedAt = time.Now().Add(-10 * time.Minute)
+// runAt is when the run began and stepAt when the current step did. normalize hides every
+// timestamp from ten minutes before the run to ten minutes after the step: the same window
+// for both sides of a step (each side measuring from its own read put a timestamp near the
+// edge inside on one side and outside on the other), and one that does not leave behind,
+// in a run of more than an hour, what the first suites wrote a few milliseconds apart.
+var (
+	runAt  = time.Now()
+	stepAt = runAt
+)
 
-// normalize replaces the timestamps written during the run by «<now>»: the two sides write
-// them a few milliseconds apart.
+// normalize replaces the timestamps written during the run (or seeded just before it) by
+// «<now>»: the two sides write them a few milliseconds apart.
 func normalize(v any) any {
 	switch x := v.(type) {
 	case map[string]any:
@@ -440,9 +497,7 @@ func normalize(v any) any {
 			s := strings.Replace(x, " ", "T", 1)
 			for _, layout := range []string{time.RFC3339Nano, "2006-01-02T15:04:05.999999999"} {
 				if t, err := time.Parse(layout, s); err == nil {
-					// written during the comparison (a full run lasts over an hour: a row written
-					// at its start must not turn into two different instants later on)
-					if t.After(startedAt) && time.Until(t) < 10*time.Minute {
+					if t.After(runAt.Add(-10*time.Minute)) && t.Before(stepAt.Add(10*time.Minute)) {
 						return "<now>"
 					}
 					break

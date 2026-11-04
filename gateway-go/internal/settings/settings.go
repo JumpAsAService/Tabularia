@@ -34,7 +34,8 @@ type values struct {
 	accessTTLMinutes   int
 	appTimezone        string
 	previewSampleRows  int
-	uploadMaxBytes     int64 // upload.max_bytes
+	admin              map[string]any // settings_admin.go
+	uploadMaxBytes     int64          // upload.max_bytes
 	workerCapacity     int64
 	runStaleTimeout    int64
 	queueTimeout       float64
@@ -71,8 +72,9 @@ type Panel struct {
 // New starts from the environment.
 func New(cfg *config.Config, panelEnabled bool, log *slog.Logger) *Panel {
 	p := &Panel{env: values{cfg.SessionIdleMinutes, cfg.PersonalTokens, cfg.APITokenMaxDays, cfg.AccessTTLMinutes,
-		cfg.AppTimezone, cfg.PreviewDefaultSampleRows, cfg.Flows.UploadMaxBytes, cfg.Flows.WorkerCapacity,
+		cfg.AppTimezone, cfg.PreviewDefaultSampleRows, nil, cfg.Flows.UploadMaxBytes, cfg.Flows.WorkerCapacity,
 		cfg.Flows.RunStaleTimeout, cfg.Flows.QueueTimeoutSeconds}, enabled: panelEnabled, log: log}
+	p.env.admin = adminEnv(cfg)
 	v := p.env
 	p.current.Store(&v)
 	return p
@@ -105,7 +107,8 @@ func (p *Panel) Apply(rows map[string]string) {
 		for key, raw := range rows {
 			it, ok := items[key]
 			if !ok {
-				continue // a setting of the Python gateway's: not read here
+				p.applyAdmin(&v, key, raw)
+				continue // or a setting of the Python gateway's: not read here
 			}
 			x, ok := check(it, raw)
 			if !ok {
@@ -113,6 +116,9 @@ func (p *Panel) Apply(rows map[string]string) {
 				continue
 			}
 			it.set(&v, x)
+			if _, both := adminItems[key]; both { // app.timezone: read by both lanes' accessors
+				p.applyAdmin(&v, key, raw)
+			}
 		}
 	}
 	p.current.Store(&v)

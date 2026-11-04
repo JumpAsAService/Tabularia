@@ -15,6 +15,7 @@ import (
 	"github.com/JumpAsAService/Tabularia/gateway-go/internal/copynames"
 	"github.com/JumpAsAService/Tabularia/gateway-go/internal/cron"
 	"github.com/JumpAsAService/Tabularia/gateway-go/internal/flowaccess"
+	"github.com/JumpAsAService/Tabularia/gateway-go/internal/flowgroups"
 	"github.com/JumpAsAService/Tabularia/gateway-go/internal/language"
 	"github.com/JumpAsAService/Tabularia/gateway-go/internal/perm"
 	"github.com/JumpAsAService/Tabularia/gateway-go/internal/pyd"
@@ -121,11 +122,15 @@ type groupDef struct {
 }
 
 func newGroupDef(v any) (*groupDef, []*pyd.Error) {
-	out, errs := gatewaymodels.FlowGroupDefinition.Type().Validate(v)
-	if len(errs) > 0 {
+	mv, errs := flowgroups.Model(v)
+	if errs != nil {
 		return nil, errs
 	}
-	mv := out.(*pyd.ModelValue)
+	return groupDefOf(mv), nil
+}
+
+// groupDefOf reads a validated grid's cells.
+func groupDefOf(mv *pyd.ModelValue) *groupDef {
 	g := &groupDef{mv: mv}
 	steps, _ := mv.Get("steps").([]any)
 	for _, row := range steps {
@@ -145,22 +150,11 @@ func newGroupDef(v any) (*groupDef, []*pyd.Error) {
 		}
 		g.steps = append(g.steps, r)
 	}
-	return g, nil
-}
-
-// definitionOf is services/flow_groups.definition_of: an unreadable grid reads as empty.
-func definitionOf(text string) *groupDef {
-	if text == "" {
-		text = "{}"
-	}
-	if v, err := pyjson.Loads(text); err == nil {
-		if g, errs := newGroupDef(toPyd(v)); errs == nil {
-			return g
-		}
-	}
-	g, _ := newGroupDef(pyd.NewObject())
 	return g
 }
+
+// definitionOf is services/flow_groups.definition_of (internal/flowgroups.Parse).
+func definitionOf(text string) *groupDef { return groupDefOf(flowgroups.Parse(text)) }
 
 func (g *groupDef) cells() []*cell {
 	var out []*cell
