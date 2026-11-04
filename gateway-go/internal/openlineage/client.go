@@ -101,8 +101,8 @@ func (s Settings) newClient(env environ, log *slog.Logger) (*libClient, error) {
 		}
 	}
 	c := &libClient{transport: transport, cfg: cfg, env: env, log: log}
-	for _, fc := range cfg.filters {
-		fc.compile(log)
+	for i := range cfg.filters {
+		cfg.filters[i].compile(log)
 	}
 	return c, nil
 }

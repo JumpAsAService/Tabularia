@@ -9,6 +9,8 @@
 package main
 
 import (
+	"bytes"
+	"compress/gzip"
 	"encoding/json"
 	"io"
 	"log"
@@ -41,6 +43,23 @@ type recorded struct {
 	// a HEC request's credential («Splunk <token>»): the fake engine stands in for Splunk
 	// too (the SIEM's suite reaches it as siem.test)
 	Splunk string `json:"splunk,omitempty"`
+	// an OpenLineage collector's request (/api/v1/lineage): the headers its client chose
+	// (the content's type and encoding, the credential, the configuration's own), its body
+	// read through a gzip encoding
+	Headers map[string]string `json:"headers,omitempty"`
+}
+
+// lineageHeaders are the headers of a request to the lineage collector, but those every
+// HTTP client writes in its own way.
+func lineageHeaders(r *http.Request) map[string]string {
+	skip := map[string]bool{"User-Agent": true, "Accept-Encoding": true, "Accept": true, "Connection": true, "Content-Length": true}
+	out := map[string]string{}
+	for k, v := range r.Header {
+		if !skip[k] {
+			out[k] = strings.Join(v, ", ")
+		}
+	}
+	return out
 }
 
 // sentNow replaces a HEC event's `time` (the moment of sending, in seconds) by «<now>»:
@@ -92,6 +111,14 @@ func main() {
 	})
 	http.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
 		raw, _ := io.ReadAll(r.Body)
+		lineage := strings.HasPrefix(r.URL.Path, "/api/v1/lineage")
+		if lineage && r.Header.Get("Content-Encoding") == "gzip" {
+			if zr, err := gzip.NewReader(bytes.NewReader(raw)); err == nil {
+				if plain, err := io.ReadAll(zr); err == nil {
+					raw = plain
+				}
+			}
+		}
 		var body any
 		if len(raw) > 0 && json.Unmarshal(raw, &body) != nil {
 			body = string(raw)
@@ -103,6 +130,9 @@ func main() {
 		}
 		if r.URL.Path == "/idp/token" {
 			rec.Body = idpRecord(raw)
+		}
+		if lineage {
+			rec.Headers = lineageHeaders(r)
 		}
 		log_ = append(log_, rec)
 		var hit *rule
