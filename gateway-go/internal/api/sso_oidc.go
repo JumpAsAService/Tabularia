@@ -458,12 +458,15 @@ func signingKey(ctx context.Context, cfg oidcCfg, uri, token string) (any, error
 	if k, ok := e.keys[header.Kid]; ok {
 		return k, nil
 	}
-	if e, err = fetchJWKS(ctx, cfg, uri); err != nil {
-		return nil, err
-	}
-	jwksCache.sets[key] = e
-	if k, ok := e.keys[header.Kid]; ok {
-		return k, nil
+	// PyJWKClient: an unknown kid reads the keys again, unless a fetch happened in the last 30 s
+	if time.Since(e.at) >= 30*time.Second {
+		if e, err = fetchJWKS(ctx, cfg, uri); err != nil {
+			return nil, err
+		}
+		jwksCache.sets[key] = e
+		if k, ok := e.keys[header.Kid]; ok {
+			return k, nil
+		}
 	}
 	return nil, fmt.Errorf("Unable to find a signing key that matches: %q", header.Kid)
 }

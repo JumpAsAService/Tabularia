@@ -68,6 +68,9 @@ type Step struct {
 	// HeaderScrub: regular expressions whose matches in the compared headers are random
 	// (a Location's state, a cookie's name and value)
 	HeaderScrub []string
+	// EngineScrub: regular expressions whose matches in the requests sent to the engine are
+	// random (a Job's name, a pod's token)
+	EngineScrub []string
 }
 
 // EngineRule is one scripted answer of the fake engine (cmd/fakeengine).
@@ -451,6 +454,13 @@ func (w *World) ask(s *side, st Step) answer {
 	a.Engine = recorded(s)
 	for _, path := range st.EngineMask {
 		a.Engine = maskPath(a.Engine, strings.Split(path, "."))
+	}
+	if len(st.EngineScrub) > 0 {
+		var res []*regexp.Regexp
+		for _, p := range st.EngineScrub {
+			res = append(res, regexp.MustCompile(p))
+		}
+		a.Engine = scrub(a.Engine, res)
 	}
 	if st.EngineUnordered {
 		a.Engine = sortPath(a.Engine, nil)

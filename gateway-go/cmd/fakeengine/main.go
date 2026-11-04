@@ -143,5 +143,10 @@ func main() {
 	if addr == "" {
 		addr = ":8000"
 	}
+	// a notebook's pod stands at the fake engine too (its podIP «siem.test»): marimo's port and
+	// the editor's file server, answered by the same rules and recorded with the rest
+	for _, port := range []string{":2718", ":2719"} {
+		go func() { _ = http.ListenAndServe(port, nil) }()
+	}
 	log.Fatal(http.ListenAndServe(addr, nil))
 }
