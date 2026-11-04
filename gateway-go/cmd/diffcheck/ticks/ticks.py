@@ -203,6 +203,10 @@ def main() -> None:
                 environment(body.get("env") or {})
                 await asyncio.to_thread(overrides.reload, engine)
                 result = await fn()
+                # the lineage events the round queued, sent before it answers (as cmd/jobsonce)
+                from app.services import openlineage
+
+                await asyncio.to_thread(openlineage.wait_idle, 5.0)
             except Exception as e:  # noqa: BLE001 — the round's own failure, compared as one
                 traceback.print_exc()
                 return JSONResponse(status_code=500, content={"error": f"{type(e).__name__}: {e}"})

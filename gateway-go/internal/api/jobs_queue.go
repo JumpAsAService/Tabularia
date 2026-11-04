@@ -800,6 +800,8 @@ func (q *queue) finalize(ctx context.Context, id int64, status string, msg *stri
 	if !closed {
 		return
 	}
+	// after the commit, as _finalize_orch_run: the lineage catalog, then the failure notice
+	q.d.Lineage.RunClosed(ctx, q.d.DB, id)
 	if run, err := req.readRun(id); err == nil && run != nil {
 		q.d.notifyFailure(ctx, run)
 	}

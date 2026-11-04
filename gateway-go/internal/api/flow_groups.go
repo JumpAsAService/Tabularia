@@ -17,6 +17,7 @@ import (
 	"github.com/JumpAsAService/Tabularia/gateway-go/internal/flowaccess"
 	"github.com/JumpAsAService/Tabularia/gateway-go/internal/flowgroups"
 	"github.com/JumpAsAService/Tabularia/gateway-go/internal/language"
+	"github.com/JumpAsAService/Tabularia/gateway-go/internal/openlineage"
 	"github.com/JumpAsAService/Tabularia/gateway-go/internal/perm"
 	"github.com/JumpAsAService/Tabularia/gateway-go/internal/pyd"
 	"github.com/JumpAsAService/Tabularia/gateway-go/internal/pyd/gatewaymodels"
@@ -783,9 +784,14 @@ func (d *Deps) updateFlowGroup(w http.ResponseWriter, r *http.Request, p *auth.P
 		q.toPython()
 		return
 	}
-	if (newName != nil || newProject != nil) && q.d.Config.OpenLineage {
-		q.toPython()
-		return
+	var lineageNames openlineage.Names
+	if newName != nil || newProject != nil {
+		var err error
+		if lineageNames, err = q.d.Lineage.CatalogNames(q.ctx, q.d.DB, openlineage.Ref{Kind: openlineage.KindFlowGroup, ID: g.ID,
+			ProjectID: g.ProjectID, Name: g.Name}); err != nil {
+			q.fail(err)
+			return
+		}
 	}
 	detail := pyjson.Object{}
 	var off pyjson.Object
@@ -859,6 +865,7 @@ func (d *Deps) updateFlowGroup(w http.ResponseWriter, r *http.Request, p *auth.P
 		q.fail(err)
 		return
 	}
+	q.d.Lineage.Renamed(q.ctx, q.d.DB, lineageNames)
 	var auditDetail pyjson.Object
 	if len(detail) > 0 {
 		auditDetail = detail

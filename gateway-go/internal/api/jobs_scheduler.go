@@ -589,11 +589,17 @@ func (d *Deps) failedSQLRun(ctx context.Context, user *auth.User, scriptID int64
 	}
 	// started_at is the model's default (models/run.py _now); finished_at the
 	// datetime.now that failed_run imports inside itself: both the real clock in production
-	_, err := d.DB.Exec(ctx, `INSERT INTO runs (kind, sql_script_id, task_id, status, launched_by, trigger_type, error, input_key,
+	var id int64
+	err := d.DB.QueryRow(ctx, `INSERT INTO runs (kind, sql_script_id, task_id, status, launched_by, trigger_type, error, input_key,
 		output_bucket, output_key, publish_description, publish_overwrite, publish_sort_keys, started_at, finished_at)
-		VALUES ('sql', $1, '', 'FAILURE', $2, $3, $4, '', '', '', '', false, '[]', $5, $6)`, scriptID, by, trigger, runes(reason, 2000),
-		jobs.Now(), time.Now().UTC())
-	return err
+		VALUES ('sql', $1, '', 'FAILURE', $2, $3, $4, '', '', '', '', false, '[]', $5, $6) RETURNING id`, scriptID, by, trigger,
+		runes(reason, 2000), jobs.Now(), time.Now().UTC()).Scan(&id)
+	if err != nil {
+		return err
+	}
+	// a failed run as any other: the catalog sees its FAIL (failed_run's run_closed)
+	d.Lineage.RunClosed(ctx, d.DB, id)
+	return nil
 }
 
 // ── the engine's timeouts ─────────────────────────────────────────────────────

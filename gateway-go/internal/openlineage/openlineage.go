@@ -14,6 +14,7 @@ import (
 
 	"github.com/jackc/pgx/v5"
 
+	"github.com/JumpAsAService/Tabularia/gateway-go/internal/aisvc"
 	"github.com/JumpAsAService/Tabularia/gateway-go/internal/config"
 	"github.com/JumpAsAService/Tabularia/gateway-go/internal/perm"
 	"github.com/JumpAsAService/Tabularia/gateway-go/internal/pyjson"
@@ -23,6 +24,7 @@ import (
 const (
 	Producer       = "https://github.com/JumpAsAService/Tabularia"
 	ClientProducer = "https://github.com/OpenLineage/OpenLineage/tree/1.53.0/client/python"
+	ClientVersion  = "1.53.0"
 	specs          = "https://openlineage.io/spec/facets/"
 )
 
@@ -32,6 +34,15 @@ type Settings struct {
 	Timeout                                float64
 	LibraryURL, LibraryConfig              string // OPENLINEAGE_URL, OPENLINEAGE_CONFIG
 	EngineBucket                           string // ENGINE__BUCKET
+	// OPENLINEAGE_ENDPOINT, OPENLINEAGE_API_KEY: the library's own HTTP settings, with
+	// OPENLINEAGE_URL alone
+	LibraryEndpoint, LibraryAPIKey string
+	// OPENLINEAGE_DISABLED=true: the client sends nothing (its NoopTransport)
+	Disabled bool
+	// libraryTransport: an OPENLINEAGE__TRANSPORT__… variable, the library's dynamic
+	// configuration, which this port does not read (as OPENLINEAGE_CONFIG's file)
+	libraryTransport bool
+	retries          int // urllib3's total: 2 (openlineage._get_client), 5 (the library's default)
 }
 
 // FromEnv reads them (the same names and defaults as core/config.py).
@@ -46,7 +57,14 @@ func FromEnv() Settings {
 	s := Settings{URL: str("OPENLINEAGE__URL", ""), Endpoint: str("OPENLINEAGE__ENDPOINT", "api/v1/lineage"),
 		APIKey: str("OPENLINEAGE__API_KEY", ""), File: str("OPENLINEAGE__FILE", ""), Namespace: str("OPENLINEAGE__NAMESPACE", "tabularia"),
 		Timeout: 10, LibraryURL: os.Getenv("OPENLINEAGE_URL"), LibraryConfig: os.Getenv("OPENLINEAGE_CONFIG"),
-		EngineBucket: str("ENGINE__BUCKET", "data-prep")}
+		EngineBucket: str("ENGINE__BUCKET", "data-prep"), LibraryEndpoint: os.Getenv("OPENLINEAGE_ENDPOINT"),
+		LibraryAPIKey: os.Getenv("OPENLINEAGE_API_KEY"),
+		Disabled:      strings.ToLower(strings.TrimSpace(os.Getenv("OPENLINEAGE_DISABLED"))) == "true"}
+	for _, kv := range os.Environ() {
+		if strings.HasPrefix(kv, "OPENLINEAGE__TRANSPORT__") {
+			s.libraryTransport = true
+		}
+	}
 	if v, ok := env("OPENLINEAGE__TIMEOUT_SECONDS"); ok {
 		var f float64
 		if _, err := fmt.Sscan(strings.TrimSpace(v), &f); err == nil && f > 0 {
@@ -113,6 +131,7 @@ func outputStatistics(rows *int64) pyjson.Object {
 type Builder struct {
 	S       Settings
 	Q       perm.Querier
+	SQL     *aisvc.Client // sqlglot's reading, asked of the AI service
 	names   map[int64]string
 	parents map[int64]*int64
 }

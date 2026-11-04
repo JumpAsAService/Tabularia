@@ -35,6 +35,7 @@ import (
 	"github.com/JumpAsAService/Tabularia/gateway-go/internal/engine"
 	"github.com/JumpAsAService/Tabularia/gateway-go/internal/jobs"
 	_ "github.com/JumpAsAService/Tabularia/gateway-go/internal/jobs/all"
+	"github.com/JumpAsAService/Tabularia/gateway-go/internal/openlineage"
 	"github.com/JumpAsAService/Tabularia/gateway-go/internal/proxy"
 	"github.com/JumpAsAService/Tabularia/gateway-go/internal/scriptcfg"
 	"github.com/JumpAsAService/Tabularia/gateway-go/internal/secret"
@@ -174,6 +175,11 @@ func (r *runner) build(ctx context.Context, overlay map[string]string) error {
 		// GATEWAY_GO__AI_SERVICE: the SQL a loop parses (a SQL script on the catalog)
 		d.AIService, d.SQL = proxy.New(cfg.AIService, r.log), aisvc.New(cfg.AIService, cfg.FernetKey)
 	}
+	// the lineage catalog the rounds tell (OPENLINEAGE__* of the round's environment)
+	if r.d != nil {
+		r.d.Lineage.WaitIdle(5 * time.Second)
+	}
+	d.Lineage = openlineage.New(openlineage.FromEnv(), r.pool, d.SQL, panel.OpenLineageTimeout, r.log)
 	ticks := map[string]jobs.Tick{}
 	for _, j := range api.Jobs(d) {
 		for name, t := range j.Ticks {
@@ -206,7 +212,10 @@ func (r *runner) run(ctx context.Context, name, now string, overlay map[string]s
 		defer jobs.Freeze(nil)
 	}
 	r.d.Panel.Reload(ctx, r.d.DB)
-	return t(ctx)
+	out, err := t(ctx)
+	// the events the round queued, sent before it answers (both sides wait the same way)
+	r.d.Lineage.WaitIdle(5 * time.Second)
+	return out, err
 }
 
 // ServeHTTP is POST /tick.

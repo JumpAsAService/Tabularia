@@ -24,8 +24,10 @@ import (
 )
 
 // routes/runs.py: reading one run, or a flow's, reconciled with the engine on the way
-// (_reconcile). One branch stays with the Python gateway, which gets the whole request: any
-// run not finished while OpenLineage is on (openlineage.run_closed).
+// (_reconcile), every branch in Go: a Script or Container run (script_runs.close_if_orphaned),
+// a scheduled orchestration closed for staying queued too long (its notice), a run whose
+// datasource has a data contract on. A run that closes tells the lineage catalog
+// (openlineage.run_closed), after the commit.
 
 func init() {
 	register("runs_read", func(d *Deps) []server.Route {
@@ -225,9 +227,10 @@ func (q *request) contractTargetID(run *runRow) (*int64, error) {
 }
 
 // needsPython says whether reconciling this run takes a branch the Go gateway leaves to
-// the Python one: only the closing of a run with OpenLineage on (openlineage.run_closed).
+// the Python one: none any more (the contracts', the Kubernetes Jobs', the notices' and
+// OpenLineage's branches are all in Go). Kept for the routes that ask.
 func (q *request) needsPython(run *runRow) (bool, error) {
-	return !terminal[run.Status] && q.d.Config.OpenLineage, nil
+	return false, nil
 }
 
 // progressOf keeps the engine's progress of a running run, for run_out (session.info).
@@ -445,6 +448,7 @@ func (q *request) reconcile(run *runRow, progress progressOf) (*runRow, error) {
 			return q.readRun(run.ID)
 		}
 		if err == nil {
+			q.d.Lineage.RunClosed(q.ctx, q.d.DB, run.ID) // after the commit: tells a fact written already
 			return q.readRun(run.ID)
 		}
 		q.d.Log.Warn("run: post-claim effect failed", "run", run.ID, "attempt", attempt, "err", err)

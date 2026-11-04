@@ -12,9 +12,7 @@ package api
 // The session's steps are notebook_runtime.go's, the ones the routes use (nbRefresh, nbAlive,
 // nbSyncDraft, nbStop).
 //
-// Not ported: the OpenLineage events of the sessions that end (openlineage.notebook_session).
-// With OpenLineage on, the loop is left to the Python gateway's orchestrator, as the routes
-// that tell the catalog are left to it.
+// The sessions that end tell the lineage catalog through those steps (nbStop, nbFail).
 
 import (
 	"context"
@@ -41,8 +39,7 @@ const (
 
 func init() {
 	RegisterJob("notebooks_loop", func(d *Deps) jobs.Job {
-		n := &notebookReaper{d: d, db: d.DB, log: d.Log, panel: d.Panel, cfg: d.Config.Jobs.Kube, s: scriptcfg.Load(config.FromOS()),
-			lineage: d.Config.OpenLineage}
+		n := &notebookReaper{d: d, db: d.DB, log: d.Log, panel: d.Panel, cfg: d.Config.Jobs.Kube, s: scriptcfg.Load(config.FromOS())}
 		return jobs.Job{Order: 11, Loop: n.loop, Ticks: map[string]jobs.Tick{
 			// the loop's guard, then one_round
 			"notebooks": func(ctx context.Context) (any, error) {
@@ -56,13 +53,12 @@ func init() {
 }
 
 type notebookReaper struct {
-	d       *Deps
-	db      *pgxpool.Pool
-	log     *slog.Logger
-	panel   *settings.Panel
-	cfg     config.KubeJobsConfig
-	s       *scriptcfg.Settings
-	lineage bool
+	d     *Deps
+	db    *pgxpool.Pool
+	log   *slog.Logger
+	panel *settings.Panel
+	cfg   config.KubeJobsConfig
+	s     *scriptcfg.Settings
 }
 
 // oneRound is notebook_runtime.one_round.
@@ -208,10 +204,6 @@ func (n *notebookReaper) reap(ctx context.Context, row *nbSession, jobsByName ma
 // loop is reaper_loop.
 func (n *notebookReaper) loop(ctx context.Context) {
 	if n.s.DisabledReason() != "" {
-		return
-	}
-	if n.lineage {
-		n.log.Info("notebooks: OpenLineage is on, the notebooks' pods are left to the Python gateway's orchestrator")
 		return
 	}
 	for ctx.Err() == nil {

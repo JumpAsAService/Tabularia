@@ -3,6 +3,7 @@ package config
 import (
 	"encoding/json"
 	"fmt"
+	"math"
 	"os"
 	"strconv"
 	"strings"
@@ -44,6 +45,9 @@ type AdminConfig struct {
 	// ENGINE__DBT_EXPORT_TIMEOUT_SECONDS: how long the engine is waited for to build a dbt
 	// project (the panel may change it)
 	DbtExportTimeout float64
+	// OPENLINEAGE__TIMEOUT_SECONDS: how long the lineage collector is waited for (the panel may
+	// change it)
+	OpenLineageTimeout float64
 }
 
 func loadAdmin(r *reader) AdminConfig {
@@ -68,6 +72,7 @@ func loadAdmin(r *reader) AdminConfig {
 	c.AIDefaultModel, c.AICommentModel = r.str("AI__DEFAULT_MODEL", ""), r.str("AI__COMMENT_MODEL", "")
 	c.AIMaxResultRows = r.integer("AI__MAX_RESULT_ROWS", 200, 1, 2000)
 	c.DbtExportTimeout = r.adminFloat("ENGINE__DBT_EXPORT_TIMEOUT_SECONDS", 100, 0, 3600)
+	c.OpenLineageTimeout = r.adminFloat("OPENLINEAGE__TIMEOUT_SECONDS", 10, 0, math.MaxFloat64)
 	c.CORSOrigins = []string{"http://localhost:3000", "http://127.0.0.1:3000"}
 	if v, ok := r.env("APP__CORS_ORIGINS"); ok {
 		if err := json.Unmarshal([]byte(v), &c.CORSOrigins); err != nil {

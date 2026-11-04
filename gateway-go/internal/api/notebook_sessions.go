@@ -100,10 +100,6 @@ func listNotebookSessions(d *Deps, w http.ResponseWriter, r *http.Request, p *au
 		if x.Mode == "edit" && !editable {
 			continue
 		}
-		if x.Status == "starting" && scOpenLineageOn() {
-			scForward(d, w, r) // a session that fails tells the lineage catalog: Python's, while OpenLineage is on
-			return
-		}
 		// notebook_runtime.refresh: a starting session moved forward
 		if err := nbRefresh(ctx, d, x, false); err != nil {
 			fail(d, w, "notebooks: the session's pod", err)

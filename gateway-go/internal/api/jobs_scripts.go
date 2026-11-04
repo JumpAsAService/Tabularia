@@ -309,7 +309,16 @@ func (c *childRun) save(ctx context.Context, values ...any) error {
 		set = append(set, fmt.Sprintf("%s = $%d", values[i], len(args)))
 	}
 	_, err := c.d.DB.Exec(ctx, `UPDATE runs SET `+strings.Join(set, ", ")+` WHERE id = $1`, args...)
-	return err
+	if err != nil || c.unchecked || pyjson.Truthy(c.info.Value("trial")) {
+		return err // saved_script_runs' save tells nobody; a trial publishes nothing
+	}
+	for i := 0; i < len(values); i += 2 {
+		if values[i] == "status" && terminal[values[i+1].(string)] {
+			// script_runs/container_runs save: the run closed, the lineage catalog told
+			c.d.Lineage.RunClosed(ctx, c.d.DB, c.id)
+		}
+	}
+	return nil
 }
 
 // deleteObjects is _delete_objects / the `finally` of a run: the step's keys removed from the

@@ -57,8 +57,7 @@ func scWithBody(d *Deps, pattern string, h scBodyHandler) http.Handler {
 }
 
 // scForward hands the request to the Python gateway as it came, its body included: the
-// port leaves there what depends on a feature it does not carry (OpenLineage's events,
-// sqlglot's or croniter's reading of a text, the cluster's pods).
+// port leaves there what depends on a feature it does not carry (sqlglot's or croniter's reading of a text, the cluster's pods).
 func scForward(d *Deps, w http.ResponseWriter, r *http.Request) {
 	if raw := rawOf(r); raw != nil {
 		r.Body = io.NopCloser(bytes.NewReader(raw))
