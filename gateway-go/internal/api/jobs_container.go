@@ -583,10 +583,16 @@ func (q *queue) runContainer(ctx context.Context, r *scriptNodeRun) (*[2]any, er
 	if hasOutput {
 		outBucket = bucket
 	}
+	// without a flow: a container cell of a flow group, a run under the group's
+	var flowID any
+	flowIDText, flowName := "", ""
+	if r.flow != nil {
+		flowID, flowIDText, flowName = r.flow.ID, fmt.Sprint(r.flow.ID), r.flow.Name
+	}
 	var childID int64
 	if err := d.DB.QueryRow(ctx, `INSERT INTO runs (kind, flow_id, task_id, status, launched_by, trigger_type, parent_run_id, engine,
 		input_key, output_bucket, output_key, publish_description, publish_overwrite, publish_sort_keys, script, started_at)
-		VALUES ('container', $1, '', 'STARTED', $2, $3, $4, $5, '', $6, $7, '', false, '[]', $8, $9) RETURNING id`, r.flow.ID, r.user.ID,
+		VALUES ('container', $1, '', 'STARTED', $2, $3, $4, $5, '', $6, $7, '', false, '[]', $8, $9) RETURNING id`, flowID, r.user.ID,
 		r.trigger, r.parent, registry.Name, outBucket, engineOutKey, pyDumps(info), jobs.Now()).Scan(&childID); err != nil {
 		return nil, err
 	}
@@ -625,7 +631,7 @@ func (q *queue) runContainer(ctx context.Context, r *scriptNodeRun) (*[2]any, er
 		}
 		base := merge(pyjson.Object{{Key: "TABULARIA_INPUT", Value: inURL}, {Key: "TABULARIA_OUTPUT", Value: outURL},
 			{Key: "TABULARIA_STEP_ID", Value: stepID}, {Key: "TABULARIA_RUN_ID", Value: fmt.Sprint(r.parent)},
-			{Key: "TABULARIA_FLOW_ID", Value: fmt.Sprint(r.flow.ID)}, {Key: "TABULARIA_FLOW_NAME", Value: r.flow.Name},
+			{Key: "TABULARIA_FLOW_ID", Value: flowIDText}, {Key: "TABULARIA_FLOW_NAME", Value: flowName},
 			{Key: "TABULARIA_NODE_ID", Value: pyjson.Str(nodeID)}}, storageEnv, plain)
 		secret := pyjson.Object{}
 		if usesBucket {

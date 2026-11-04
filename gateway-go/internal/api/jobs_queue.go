@@ -23,6 +23,7 @@ import (
 	"github.com/JumpAsAService/Tabularia/gateway-go/internal/savedscripts"
 	"github.com/JumpAsAService/Tabularia/gateway-go/internal/scriptcfg"
 	"github.com/JumpAsAService/Tabularia/gateway-go/internal/scriptnodes"
+	"github.com/JumpAsAService/Tabularia/gateway-go/internal/sqlscripts"
 )
 
 // services/orchestrator.py queue_loop: the queue of the orchestrations (a flow's run, queued
@@ -80,7 +81,9 @@ type queue struct {
 	mu      sync.Mutex
 	alive   map[int64]bool // _alive
 	running int            // len(_running)
-	wake    chan struct{}
+	// runningCells is running_cells: the flow groups' cells running here, in the same budget
+	runningCells int
+	wake         chan struct{}
 
 	okSince       time.Time // _heartbeat_ok_since (zero: not healthy)
 	lastThreshold *float64
@@ -185,7 +188,7 @@ func (q *queue) loop(ctx context.Context) {
 		default:
 		}
 		q.mu.Lock()
-		free := q.concurrency() - int64(q.running) - runningCells
+		free := q.concurrency() - int64(q.running) - int64(q.runningCells)
 		q.mu.Unlock()
 		if free > 0 && !jobs.Draining() {
 			taken, refused := q.claim(ctx, free)
@@ -217,10 +220,6 @@ func (q *queue) loop(ctx context.Context) {
 	q.d.Log.Info("orchestrator stopped", "instance", jobs.Instance)
 }
 
-// runningCells is orchestrator.running_cells: the flow groups' cells running here (the Go
-// queue runs no groups yet).
-const runningCells = 0
-
 // start is _start: the run carried on in a goroutine of its own, alive for the heartbeat.
 func (q *queue) start(ctx context.Context, wg *sync.WaitGroup, id int64) {
 	q.mu.Lock()
@@ -242,7 +241,9 @@ func (q *queue) start(ctx context.Context, wg *sync.WaitGroup, id int64) {
 
 // roundTick is one round of the loop, its runs carried to their end before it returns.
 func (q *queue) roundTick(ctx context.Context) (any, error) {
-	free := q.concurrency() - runningCells
+	q.mu.Lock()
+	free := q.concurrency() - int64(q.runningCells)
+	q.mu.Unlock()
 	if free <= 0 || jobs.Draining() {
 		return pyjson.Object{{Key: "taken", Value: []any{}}, {Key: "refused", Value: []any{}}}, nil
 	}
@@ -329,10 +330,36 @@ func (q *queue) claim(ctx context.Context, limit int64) ([]int64, []int64) {
 
 // carries says whether the Go queue runs this orchestration (see the file's comment).
 func (q *queue) carries(ctx context.Context, flow, group, script *int64) bool {
-	if group != nil {
-		return false
-	}
 	if script != nil {
+		return true
+	}
+	if group != nil {
+		// a Pushmail cell (reports, dashboards, AI comments) or a SQL script on the catalog
+		// (sqlglot): left to a Python orchestrator
+		var definition string
+		if err := q.d.DB.QueryRow(ctx, `SELECT definition FROM flow_groups WHERE id = $1`, *group).Scan(&definition); err != nil {
+			return err == pgx.ErrNoRows
+		}
+		for _, row := range groupSteps(definition) {
+			for _, c := range row {
+				if c == nil {
+					continue
+				}
+				if c.kind == "pushmail" {
+					return false
+				}
+				if c.kind == "sql" {
+					if s, err := sqlscripts.Get(ctx, q.d.DB, c.id); err == nil && s != nil {
+						if content, err := sqlscripts.ContentOf(ctx, q.d.DB, s, nil); err == nil && content.Value("connection_id") == nil {
+							return false
+						}
+					}
+				}
+				if c.kind == "flow" && !q.carries(ctx, &c.id, nil, nil) {
+					return false
+				}
+			}
+		}
 		return true
 	}
 	if flow == nil {
@@ -402,6 +429,10 @@ func (q *queue) runFlow(ctx context.Context, id int64) error {
 	if run.SavedScriptID != nil {
 		// a saved script's run: same queue, claim and heartbeat, its own runner
 		return q.runSavedQueued(ctx, id, run)
+	}
+	if run.FlowGroupID != nil {
+		// a flow group's run: same queue, claim and heartbeat, its own runner
+		return q.runGroup(ctx, id, run)
 	}
 	var flow *jobFlow
 	if run.FlowID != nil && *run.FlowID != 0 {

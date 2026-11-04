@@ -7,8 +7,9 @@ import (
 
 // QU: what the queue's suite seeds.
 var QU = struct {
-	Main, Locked, PG, SMTP, Src, Env, Saved, Registry int64
-	Flows                                             map[string]int64
+	Main, Locked, PG, SMTP, Src, Env, Saved, Registry, SQL int64
+	Groups                                                 map[string]int64
+	Flows                                                  map[string]int64
 }{}
 
 // services/orchestrator.py queue_loop, one round at a time: the orchestrations taken from the
@@ -113,6 +114,21 @@ func seedQueue(w *World) {
 		"tag": "1.0", "command": ["run"], "args": ["--x", 2], "variables": [{"name": "N", "value": "v"}], "timeoutSeconds": 60}}`, QU.Registry)
 	flow("boxed", fmt.Sprintf(`{"nodes": [%s, %s, {"id": "o", "type": "output", "data": {"name": "qu boxed", "projectId": %d}}],
 		"edges": [{"source": "s", "target": "c1"}, {"source": "c1", "target": "o"}]}`, src, box, QU.Main), false)
+	// flow groups: a step per cell (cells of one step run together, in an order no comparison can fix)
+	QU.SQL = w.Insert(`INSERT INTO sql_scripts (name, description, project_id, owner_id, current_version, created_at, updated_at)
+		VALUES ('qu sql', '', $1, $2, 1, '2026-01-01', '2026-01-01') RETURNING id`, QU.Main, admin)
+	w.Exec(`INSERT INTO sql_script_versions (script_id, version, content, note, created_at) VALUES ($1, 1, $2, 'created', '2026-01-01')`,
+		QU.SQL, fmt.Sprintf(`{"sql": "select 1 as a", "connection_id": %d, "output": {"name": "qu sql out", "project_id": %d}}`, QU.PG, QU.Main))
+	QU.Groups = map[string]int64{}
+	group := func(key, steps string) {
+		QU.Groups[key] = w.Insert(`INSERT INTO flow_groups (name, description, project_id, owner_id, definition, created_at, updated_at)
+			VALUES ($1, '', $2, $3, $4, '2026-01-01', '2026-01-01') RETURNING id`, "qu "+key, QU.Main, admin, `{"steps": `+steps+`}`)
+	}
+	group("all", fmt.Sprintf(`[[{"kind": "flow", "id": %d}], [{"kind": "refresh", "id": %d}, null], [null, {"kind": "sql", "id": %d}],
+		[{"kind": "container", "id": 7, "container": {"registryId": %d, "repository": "team/app", "tag": "1.0", "label": "Cell box"}}]]`,
+		QU.Flows["plain"], QU.Src, QU.SQL, QU.Registry))
+	group("stops", fmt.Sprintf(`[[{"kind": "flow", "id": %d}], [{"kind": "flow", "id": %d}], []]`, QU.Flows["broken"], QU.Flows["plain"]))
+	group("gone", `[[{"kind": "flow", "id": 999999}, null], [{"kind": "refresh", "id": 999998}]]`)
 	QU.Saved = w.Insert(`INSERT INTO saved_scripts (name, description, project_id, owner_id, environment_id, current_version, created_at,
 		updated_at) VALUES ('qu saved', '', $1, $2, $3, 2, '2026-01-01', '2026-01-01') RETURNING id`, QU.Main, admin, QU.Env)
 	w.Exec(`INSERT INTO saved_script_versions (script_id, version, content, note, created_at, created_by) VALUES ($1, 1, '{}', 'created',
@@ -138,6 +154,15 @@ func orch(w *World, flow int64, status, trigger, by string, started string, clai
 		VALUES ('orchestration', $1, '', $2, $3, $4, $5, '', '', '', '', false, '[]', $6::timestamp + make_interval(secs => $9), $7, $8)
 		RETURNING id`, flow, status, w.People[by], trigger, map[string]string{"manual": "development", "schedule": "production"}[trigger],
 		started, claimed, beat, float64(orchSeq)/1000)
+}
+
+// orchGroup queues a run of a flow group.
+func orchGroup(w *World, group int64, trigger, by string) {
+	orchSeq++
+	w.Exec(`INSERT INTO runs (kind, flow_group_id, task_id, status, launched_by, trigger_type, engine_mode, input_key, output_bucket,
+		output_key, publish_description, publish_overwrite, publish_sort_keys, started_at) VALUES ('orchestration', $1, '', 'PENDING', $2, $3,
+		'production', '', '', '', '', false, '[]', '2026-04-02 08:59:00'::timestamp + make_interval(secs => $4))`, group, w.People[by],
+		trigger, float64(orchSeq)/1000)
 }
 
 // orchSaved queues a run of the saved script.
@@ -281,6 +306,21 @@ func queueSteps(w *World) []Step {
 		}),
 		boxTick("a Container node's schedule whose author may not use the registry", boxOK, func(w *World) {
 			orch(w, QU.Flows["boxed"], "PENDING", "schedule", "writer", "2026-04-02 08:59:00", nil, nil)
+		}),
+		boxTick("a flow group: a flow, a refresh, a SQL script, a container, one step after the other", boxOK, func(w *World) {
+			orchGroup(w, QU.Groups["all"], "manual", "admin")
+		}),
+		tick("a flow group whose first step fails: the steps after it skipped", "queue", ok, func(w *World) {
+			orchGroup(w, QU.Groups["stops"], "manual", "admin")
+		}),
+		tick("a flow group whose objects are gone", "queue", ok, func(w *World) {
+			orchGroup(w, QU.Groups["gone"], "manual", "admin")
+		}),
+		boxTick("a flow group's schedule: its author may not use the registry of a cell", boxOK, func(w *World) {
+			orchGroup(w, QU.Groups["all"], "schedule", "writer")
+		}),
+		tick("a flow group run by someone who lost RUN on its folder", "queue", ok, func(w *World) {
+			orchGroup(w, QU.Groups["stops"], "manual", "editor")
 		}),
 		tick("the parquets' random names put away", "queue.beat", ok, putAwayRandomKeys),
 	}
