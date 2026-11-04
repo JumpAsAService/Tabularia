@@ -1,6 +1,9 @@
 package main
 
-import "fmt"
+import (
+	"fmt"
+	"strings"
+)
 
 // routes/lineage.py: the lineage graph and the flows' OpenLineage events.
 func init() {
@@ -23,6 +26,13 @@ func init() {
 			as("an unknown flow's OpenLineage", "GET", "/flows/999999/openlineage")
 			as("emit, not configured", "POST", "/flows/"+flow+"/openlineage")
 			as("emit an unknown flow", "POST", "/flows/x/openlineage")
+			// services/lineage.py reads flows and datasources without an order: the graph's
+			// lists come in the tables' physical order, which the two databases need not share
+			for i := range s {
+				if s[i].Path == "/lineage" || strings.HasPrefix(s[i].Path, "/lineage?") {
+					s[i].Unordered = []string{"nodes", "edges"}
+				}
+			}
 			return s
 		},
 	})

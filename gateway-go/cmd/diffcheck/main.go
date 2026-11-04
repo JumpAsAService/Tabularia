@@ -46,6 +46,9 @@ type Step struct {
 	Header      map[string]string
 	Engine      []EngineRule // scripted on both engines before this step (nil: the suite's)
 	Mask        []string     // dotted paths of the answer's JSON (* for every item) holding random values
+	// Unordered are dotted paths of lists the Python code builds from a query without ORDER BY:
+	// their order is the table's physical one, which differs between the two databases
+	Unordered []string
 }
 
 // EngineRule is one scripted answer of the fake engine (cmd/fakeengine).
@@ -304,7 +307,11 @@ func (w *World) ask(s *side, st Step) answer {
 		for _, path := range st.Mask {
 			parsed = maskPath(parsed, strings.Split(path, "."))
 		}
-		a.Body = normalize(parsed)
+		parsed = normalize(parsed)
+		for _, path := range st.Unordered {
+			parsed = sortPath(parsed, strings.Split(path, "."))
+		}
+		a.Body = parsed
 	} else {
 		a.Body = string(bytes.TrimSpace(raw))
 	}
@@ -443,6 +450,33 @@ func normalize(v any) any {
 					}
 					break
 				}
+			}
+		}
+	}
+	return v
+}
+
+// sortPath orders the list at the path by its items' JSON.
+func sortPath(v any, path []string) any {
+	if len(path) == 0 {
+		if list, ok := v.([]any); ok {
+			sort.SliceStable(list, func(i, j int) bool {
+				a, _ := json.Marshal(list[i])
+				b, _ := json.Marshal(list[j])
+				return string(a) < string(b)
+			})
+		}
+		return v
+	}
+	switch x := v.(type) {
+	case map[string]any:
+		if e, ok := x[path[0]]; ok {
+			x[path[0]] = sortPath(e, path[1:])
+		}
+	case []any:
+		if path[0] == "*" {
+			for i := range x {
+				x[i] = sortPath(x[i], path[1:])
 			}
 		}
 	}
