@@ -94,6 +94,8 @@ type Config struct {
 	AppLocation *time.Location
 	// REPORTS__API_WAIT_SECONDS: how long the API waits for a report's file (5–3600)
 	ReportsAPIWaitSeconds int
+
+	Admin AdminConfig // config_admin.go
 }
 
 // Env reads a variable without regard to case, as pydantic-settings does.
@@ -163,6 +165,7 @@ func Load(env Env) (*Config, error) {
 			c.OpenLineage = true
 		}
 	}
+	c.Admin = loadAdmin(&r)
 	if c.FernetKey == "" && c.KeysDir != "" {
 		// Settings._key_from_keys_dir: the key a first service created in the shared directory
 		key, err := readOrCreate(c.KeysDir, "fernet.key", newFernetKey)

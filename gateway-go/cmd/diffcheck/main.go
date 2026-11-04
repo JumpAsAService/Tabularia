@@ -44,6 +44,9 @@ type Step struct {
 	Header      map[string]string
 	Engine      []EngineRule // scripted on both engines before this step (nil: the suite's)
 	Mask        []string     // dotted paths of the answer's JSON (* for every item) holding random values
+	// Scrub: regular expressions whose matches, inside any string of the answer's JSON, are
+	// random (an id or a moment written inside a longer text, as a webhook's payload)
+	Scrub []string
 }
 
 // EngineRule is one scripted answer of the fake engine (cmd/fakeengine).
@@ -94,6 +97,38 @@ func maskPattern(table, column, pattern string) {
 		maskedPatterns[table] = map[string][]*regexp.Regexp{}
 	}
 	maskedPatterns[table][column] = append(maskedPatterns[table][column], regexp.MustCompile(pattern))
+}
+
+// scrubbedColumns: table → column → patterns whose matches inside the text are random
+var scrubbedColumns = map[string]map[string][]*regexp.Regexp{}
+
+func scrubColumn(table, column string, patterns ...string) {
+	if scrubbedColumns[table] == nil {
+		scrubbedColumns[table] = map[string][]*regexp.Regexp{}
+	}
+	for _, p := range patterns {
+		scrubbedColumns[table][column] = append(scrubbedColumns[table][column], regexp.MustCompile(p))
+	}
+}
+
+// scrub replaces the patterns' matches in every string of v by «<scrubbed>».
+func scrub(v any, res []*regexp.Regexp) any {
+	switch x := v.(type) {
+	case map[string]any:
+		for k, e := range x {
+			x[k] = scrub(e, res)
+		}
+	case []any:
+		for i, e := range x {
+			x[i] = scrub(e, res)
+		}
+	case string:
+		for _, re := range res {
+			x = re.ReplaceAllString(x, "<scrubbed>")
+		}
+		return x
+	}
+	return v
 }
 
 // side is one stack.
@@ -269,6 +304,9 @@ func (w *World) ask(s *side, st Step) answer {
 	req.Header.Set("User-Agent", "diffcheck")
 	for k, v := range st.Header {
 		req.Header.Set(k, v)
+		if k == "Host" { // net/http sends req.Host, not the header
+			req.Host = v
+		}
 	}
 	if st.Auth != nil {
 		st.Auth(req)
@@ -299,6 +337,13 @@ func (w *World) ask(s *side, st Step) answer {
 	if len(raw) > 0 && json.Unmarshal(raw, &parsed) == nil {
 		for _, path := range st.Mask {
 			parsed = maskPath(parsed, strings.Split(path, "."))
+		}
+		if len(st.Scrub) > 0 {
+			var res []*regexp.Regexp
+			for _, p := range st.Scrub {
+				res = append(res, regexp.MustCompile(p))
+			}
+			parsed = scrub(parsed, res)
 		}
 		a.Body = normalize(parsed)
 	} else {
@@ -380,6 +425,11 @@ func dump(ctx context.Context, s *side) map[string][]any {
 							v = re.ReplaceAllString(v, "<masked>")
 						}
 						m[c] = v
+					}
+				}
+				for c, res := range scrubbedColumns[t] {
+					if v, has := m[c]; has {
+						m[c] = scrub(v, res)
 					}
 				}
 			}
