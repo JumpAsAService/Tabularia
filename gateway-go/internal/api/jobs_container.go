@@ -7,7 +7,6 @@ import (
 	"time"
 
 	"github.com/JumpAsAService/Tabularia/gateway-go/internal/flowaccess"
-	"github.com/JumpAsAService/Tabularia/gateway-go/internal/jobs"
 	"github.com/JumpAsAService/Tabularia/gateway-go/internal/perm"
 	"github.com/JumpAsAService/Tabularia/gateway-go/internal/pyjson"
 	registryPkg "github.com/JumpAsAService/Tabularia/gateway-go/internal/registry"
@@ -159,6 +158,7 @@ func (q *queue) runContainer(ctx context.Context, r *scriptNodeRun) (*[2]any, er
 			return nil, err
 		}
 	}
+	r.io()
 	digest, err := registryPkg.Digest(ctx, registryPkg.Registry{Host: registry.Host, Protocol: registry.Protocol, TLS: registry.TLS,
 		CACert: registry.CACert, Username: registry.Username, Password: password}, repository, reference)
 	var re *registryPkg.Error
@@ -170,6 +170,9 @@ func (q *queue) runContainer(ctx context.Context, r *scriptNodeRun) (*[2]any, er
 	}
 	image := imageRef(registry, repository, digest)
 	ns := q.sc.Containers.Namespace
+	if r.trial != 0 && q.sc.Containers.TrialNamespace != "" {
+		ns = q.sc.Containers.TrialNamespace
+	}
 	storage, err := loadScriptStorage(ctx, d.DB)
 	if err != nil {
 		return nil, err
@@ -182,7 +185,8 @@ func (q *queue) runContainer(ctx context.Context, r *scriptNodeRun) (*[2]any, er
 		return nil, &scriptFailed{fmt.Sprintf("container «%s»: its input and output go through the scripts bucket, which is not "+
 			"configured (Administration → Scripting environments)", label)}
 	}
-	hasOutput := wantsOutput
+	// a trial asks for the output even with no node after it: the editor previews it
+	hasOutput := wantsOutput || (r.trial != 0 && storage.ready())
 	usesBucket := hasInput || hasOutput
 	stepID := newUUIDText()
 	prefix := fmt.Sprintf("container-%d/%s", registry.ID, stepID)
@@ -206,7 +210,7 @@ func (q *queue) runContainer(ctx context.Context, r *scriptNodeRun) (*[2]any, er
 		{Key: "output", Value: hasOutput}, {Key: "command", Value: flowaccess.StringsOf(data.Value("command"))},
 		{Key: "args", Value: flowaccess.StringsOf(data.Value("args"))}, {Key: "cpu", Value: cpu}, {Key: "memory", Value: memory},
 		{Key: "attempts", Value: int64(0)}, {Key: "exit_code", Value: nil}, {Key: "variables", Value: snapshot}, {Key: "log", Value: ""},
-		{Key: "trial", Value: false}, {Key: "fingerprint", Value: flowaccess.ContainerFingerprint(node)}, {Key: "budget_seconds", Value: budget},
+		{Key: "trial", Value: r.trial != 0}, {Key: "fingerprint", Value: flowaccess.ContainerFingerprint(node)}, {Key: "budget_seconds", Value: budget},
 		{Key: "namespace", Value: ns}}
 	bucket := d.Config.EngineBucket
 	outBucket := ""
@@ -219,11 +223,8 @@ func (q *queue) runContainer(ctx context.Context, r *scriptNodeRun) (*[2]any, er
 	if r.flow != nil {
 		flowID, flowIDText, flowName = r.flow.ID, fmt.Sprint(r.flow.ID), r.flow.Name
 	}
-	var childID int64
-	if err := d.DB.QueryRow(ctx, `INSERT INTO runs (kind, flow_id, task_id, status, launched_by, trigger_type, parent_run_id, engine,
-		input_key, output_bucket, output_key, publish_description, publish_overwrite, publish_sort_keys, script, started_at)
-		VALUES ('container', $1, '', 'STARTED', $2, $3, $4, $5, '', $6, $7, '', false, '[]', $8, $9) RETURNING id`, flowID, r.user.ID,
-		r.trigger, r.parent, registry.Name, outBucket, engineOutKey, pyDumps(info), jobs.Now()).Scan(&childID); err != nil {
+	childID, err := r.startChild(ctx, d, "container", flowID, registry.Name, outBucket, engineOutKey, info)
+	if err != nil {
 		return nil, err
 	}
 	child := &childRun{d: d, id: childID, info: info}
@@ -260,7 +261,7 @@ func (q *queue) runContainer(ctx context.Context, r *scriptNodeRun) (*[2]any, er
 			storageEnv = storage.env()
 		}
 		base := merge(pyjson.Object{{Key: "TABULARIA_INPUT", Value: inURL}, {Key: "TABULARIA_OUTPUT", Value: outURL},
-			{Key: "TABULARIA_STEP_ID", Value: stepID}, {Key: "TABULARIA_RUN_ID", Value: fmt.Sprint(r.parent)},
+			{Key: "TABULARIA_STEP_ID", Value: stepID}, {Key: "TABULARIA_RUN_ID", Value: fmt.Sprint(r.orchestrationOf(childID))},
 			{Key: "TABULARIA_FLOW_ID", Value: flowIDText}, {Key: "TABULARIA_FLOW_NAME", Value: flowName},
 			{Key: "TABULARIA_NODE_ID", Value: pyjson.Str(nodeID)}}, storageEnv, plain)
 		secret := pyjson.Object{}
@@ -274,7 +275,7 @@ func (q *queue) runContainer(ctx context.Context, r *scriptNodeRun) (*[2]any, er
 		secret = merge(secret, secretVars)
 		labels := pyjson.Object{{Key: "app.kubernetes.io/managed-by", Value: "tabularia"}, {Key: "app.kubernetes.io/component", Value: "container"},
 			{Key: labelRegistry, Value: fmt.Sprint(registry.ID)}, {Key: labelContainerRun, Value: fmt.Sprint(childID)},
-			{Key: labelOrchestration, Value: fmt.Sprint(r.parent)}, {Key: "tabularia.io/stage", Value: "run"}}
+			{Key: labelOrchestration, Value: fmt.Sprint(r.orchestrationOf(childID))}, {Key: "tabularia.io/stage", Value: "run"}}
 		manifest := func(name string, attempt int64) pyjson.Object {
 			secretName := ""
 			if len(secret) > 0 {
@@ -283,7 +284,7 @@ func (q *queue) runContainer(ctx context.Context, r *scriptNodeRun) (*[2]any, er
 			return containerJobManifest(q.d.jobSettings(), name, image, node, merge(base, pyjson.Object{{Key: "TABULARIA_ATTEMPT", Value: fmt.Sprint(attempt)}}),
 				labels, timeout, secretName, pullSecret)
 		}
-		ok, reason, err := q.attempts(ctx, child, "container", what, retries, delay, r.parent, hasOutput, storage, outKey, manifest, nil,
+		ok, reason, err := q.attempts(ctx, child, "container", what, retries, delay, r.orchestrationOf(childID), hasOutput, storage, outKey, manifest, nil,
 			secret, timeout, ns, q.d.jobSettings().cPollSeconds, q.d.jobSettings().cLogMaxBytes)
 		if err != nil {
 			return nil, err

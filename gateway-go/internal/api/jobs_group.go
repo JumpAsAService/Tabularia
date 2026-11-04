@@ -860,9 +860,16 @@ func (d *Deps) sqlGaps(ctx context.Context, user *auth.User, script *sqlscripts.
 		}
 		return []string{ref.Detail}, nil
 	}
+	if content.Value("connection_id") == nil {
+		_, err := sqlscripts.Resolve(ctx, d.DB, c, d.SQL, sql, textOrEmpty(content.Value("engine")))
+		if ref := sqlRefusal(err); ref != nil {
+			return []string{ref.Detail}, nil
+		}
+		return nil, err
+	}
 	connID, ok := pyjson.IsInt(content.Value("connection_id"))
 	if !ok {
-		return nil, errors.New("a SQL script on the catalog needs sqlglot (services/sql_scripts.resolve)")
+		return nil, errors.New("a connection id that is not an integer")
 	}
 	if _, ref, err := sqlscripts.UsableConnection(ctx, c, d.DB, connID); err != nil || ref != nil {
 		if err != nil {

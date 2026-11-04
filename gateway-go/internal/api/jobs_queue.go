@@ -23,7 +23,6 @@ import (
 	"github.com/JumpAsAService/Tabularia/gateway-go/internal/savedscripts"
 	"github.com/JumpAsAService/Tabularia/gateway-go/internal/scriptcfg"
 	"github.com/JumpAsAService/Tabularia/gateway-go/internal/scriptnodes"
-	"github.com/JumpAsAService/Tabularia/gateway-go/internal/sqlscripts"
 )
 
 // services/orchestrator.py queue_loop: the queue of the orchestrations (a flow's run, queued
@@ -333,8 +332,7 @@ func (q *queue) carries(ctx context.Context, flow, group, script *int64) bool {
 		return true
 	}
 	if group != nil {
-		// a Pushmail cell (reports, dashboards, AI comments) or a SQL script on the catalog
-		// (sqlglot): left to a Python orchestrator
+		// a Pushmail cell (reports, dashboards, AI comments): left to a Python orchestrator
 		var definition string
 		if err := q.d.DB.QueryRow(ctx, `SELECT definition FROM flow_groups WHERE id = $1`, *group).Scan(&definition); err != nil {
 			return err == pgx.ErrNoRows
@@ -346,13 +344,6 @@ func (q *queue) carries(ctx context.Context, flow, group, script *int64) bool {
 				}
 				if c.kind == "pushmail" {
 					return false
-				}
-				if c.kind == "sql" {
-					if s, err := sqlscripts.Get(ctx, q.d.DB, c.id); err == nil && s != nil {
-						if content, err := sqlscripts.ContentOf(ctx, q.d.DB, s, nil); err == nil && content.Value("connection_id") == nil {
-							return false
-						}
-					}
 				}
 				if c.kind == "flow" && !q.carries(ctx, &c.id, nil, nil) {
 					return false

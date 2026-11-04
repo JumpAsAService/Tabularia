@@ -356,6 +356,46 @@ type scriptNodeRun struct {
 	mode       string
 	outputs    map[string]*[2]any
 	resolveDS  dsResolver
+	// trial is the editor's «Run» (run_trial): the run is that row (the node's own), the
+	// output asked for even without a node after it; 0 within an orchestration
+	trial int64
+	// firstIO: called when the run first waits on the network (the trial's beat starts there)
+	firstIO func()
+}
+
+func (r *scriptNodeRun) io() {
+	if r.firstIO != nil {
+		r.firstIO()
+	}
+}
+
+// orchestrationOf is `parent_run_id or child.id`.
+func (r *scriptNodeRun) orchestrationOf(child int64) int64 {
+	if r.parent != 0 {
+		return r.parent
+	}
+	return child
+}
+
+// startChild writes the node's run STARTED: the trial's row, or a new child of the
+// orchestration.
+func (r *scriptNodeRun) startChild(ctx context.Context, d *Deps, kind string, flowID any, engine, outBucket, outKey string,
+	info pyjson.Object) (int64, error) {
+	if r.trial != 0 {
+		_, err := d.DB.Exec(ctx, `UPDATE runs SET status = 'STARTED', engine = $2, script = $3, output_bucket = $4, output_key = $5
+			WHERE id = $1`, r.trial, engine, pyDumps(info), outBucket, outKey)
+		return r.trial, err
+	}
+	var parent any
+	if r.parent != 0 {
+		parent = r.parent
+	}
+	var id int64
+	err := d.DB.QueryRow(ctx, `INSERT INTO runs (kind, flow_id, task_id, status, launched_by, trigger_type, parent_run_id, engine,
+		input_key, output_bucket, output_key, publish_description, publish_overwrite, publish_sort_keys, script, started_at)
+		VALUES ($1, $2, '', 'STARTED', $3, $4, $5, $6, '', $7, $8, '', false, '[]', $9, $10) RETURNING id`, kind, flowID, r.user.ID,
+		r.trigger, parent, engine, outBucket, outKey, pyDumps(info), jobs.Now()).Scan(&id)
+	return id, err
 }
 
 // fingerprintOf is script_nodes.fingerprint.
@@ -501,11 +541,14 @@ func (q *queue) runScript(ctx context.Context, r *scriptNodeRun) (*[2]any, error
 		}
 	}
 	ns := q.sc.Scripts.Namespace
+	if r.trial != 0 && q.sc.Scripts.TrialNamespace != "" {
+		ns = q.sc.Scripts.TrialNamespace
+	}
 	nodeID := node.Value("id")
 	upstream, hasUpstream := incoming(objectList(r.definition.Value("edges")))[nodeKey(nodeID)]["left"]
 	hasInput := hasUpstream && upstream != nil
 	wantsOutput := scriptHasOutput(r.definition, nodeID)
-	hasOutput := wantsOutput
+	hasOutput := wantsOutput || r.trial != 0
 	stepID := newUUIDText()
 	prefix := fmt.Sprintf("env-%d/%s", env.ID, stepID)
 	inKey, outKey := prefix+"/input.parquet", prefix+"/output.parquet"
@@ -533,7 +576,7 @@ func (q *queue) runScript(ctx context.Context, r *scriptNodeRun) (*[2]any, error
 		{Key: "image", Value: deref(version.ImageRef)}, {Key: "step_id", Value: stepID}, {Key: "input", Value: hasInput},
 		{Key: "output", Value: hasOutput}, {Key: "entrypoint", Value: data.Value("entrypoint")}, {Key: "files", Value: files},
 		{Key: "attempts", Value: int64(0)}, {Key: "exit_code", Value: nil}, {Key: "variables", Value: snapshot}, {Key: "log", Value: ""},
-		{Key: "trial", Value: false}, {Key: "fingerprint", Value: fingerprint}, {Key: "budget_seconds", Value: budget},
+		{Key: "trial", Value: r.trial != 0}, {Key: "fingerprint", Value: fingerprint}, {Key: "budget_seconds", Value: budget},
 		{Key: "namespace", Value: ns}}
 	if saved != nil {
 		inputs := []any{}
@@ -548,15 +591,12 @@ func (q *queue) runScript(ctx context.Context, r *scriptNodeRun) (*[2]any, error
 	if hasOutput {
 		outBucket = bucket
 	}
-	var childID int64
-	if err := d.DB.QueryRow(ctx, `INSERT INTO runs (kind, flow_id, task_id, status, launched_by, trigger_type, parent_run_id, engine,
-		input_key, output_bucket, output_key, publish_description, publish_overwrite, publish_sort_keys, script, started_at)
-		VALUES ('script', $1, '', 'STARTED', $2, $3, $4, $5, '', $6, $7, '', false, '[]', $8, $9) RETURNING id`, r.flow.ID, r.user.ID,
-		r.trigger, r.parent, fmt.Sprintf("%s v%d", env.Name, version.Number), outBucket, engineOutKey, pyDumps(info), jobs.Now()).
-		Scan(&childID); err != nil {
+	childID, err := r.startChild(ctx, d, "script", r.flow.ID, fmt.Sprintf("%s v%d", env.Name, version.Number), outBucket, engineOutKey, info)
+	if err != nil {
 		return nil, err
 	}
 	child := &childRun{d: d, id: childID, info: info}
+	r.io()
 	written := []string{inKey, outKey}
 	defer func() { d.deleteObjects(context.Background(), storage, written) }()
 	out, err := func() (*[2]any, error) {
@@ -589,7 +629,7 @@ func (q *queue) runScript(ctx context.Context, r *scriptNodeRun) (*[2]any, error
 		if hasOutput {
 			outURL = bucketURL + "/" + outKey
 		}
-		runID := r.parent
+		runID := r.orchestrationOf(childID)
 		base := merge(pyjson.Object{{Key: "TABULARIA_INPUT", Value: inURL}, {Key: "TABULARIA_OUTPUT", Value: outURL},
 			{Key: "TABULARIA_STEP_ID", Value: stepID}, {Key: "TABULARIA_RUN_ID", Value: fmt.Sprint(runID)},
 			{Key: "TABULARIA_FLOW_ID", Value: fmt.Sprint(r.flow.ID)}, {Key: "TABULARIA_FLOW_NAME", Value: r.flow.Name},
@@ -669,8 +709,13 @@ func (q *queue) prepareNodeInput(ctx context.Context, r *scriptNodeRun, node pyj
 		{Key: "bucket", Value: storage.Bucket}, {Key: "key", Value: inKey}, {Key: "format", Value: "parquet"}, {Key: "partition_by", Value: []any{}}}}}
 	summary := pyDumps(pyjson.Object{{Key: "type", Value: kind}, {Key: idKey, Value: child.id}, {Key: "bucket", Value: storage.Bucket},
 		{Key: "key", Value: inKey}})
-	parent := r.parent
-	runID, err := q.d.launchFlowRunTo(ctx, r.user, r.flow, req, r.trigger, &parent, r.mode, target, &summary)
+	var parent *int64
+	if r.trial != 0 {
+		parent = &child.id
+	} else if r.parent != 0 {
+		parent = &r.parent
+	}
+	runID, err := q.d.launchFlowRunTo(ctx, r.user, r.flow, req, r.trigger, parent, r.mode, target, &summary)
 	if err != nil {
 		return err
 	}
