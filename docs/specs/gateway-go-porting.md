@@ -57,6 +57,17 @@ answers only the exact method, everything else still goes to Python.
   on pydantic-ai) is not ported: it goes to the AI service whole (`ai_service.go`,
   `toAIService`).
 
+- `connpayload` — `engine_connection_payload` (the engine's `connection` of every kind, the
+  secret still encrypted) and the tolerant readings of a connection's options (SMTP domains,
+  SFTP method, API options); `dbtls` — `services/db_tls.py`.
+- `runlaunch` — the launching half of `routes/runs.py` and `services/sql_script_runs.py`:
+  `SnapshotKey`, `ContractPayload` (`contracts.payload`), `Ingest` (`launch_ingest_run`) with
+  `InLine`/`LiveRefresh` (the refresh lock), `LaunchFlowRun` (`_launch_flow_run`, on a validated
+  `RunCreate`), `LaunchSQLScript` (`sql_script_runs.launch`); `EngineDown` is httpx's
+  TransportError, main.py's 503. The routes and the background work share them.
+- `flowresolver` — `services/flow_resolver.py`; `contracts` — `services/contracts.py`
+  (validation, save, ODCS).
+
 A service that several modules need and that does not exist yet: write it in its own
 package, small, with the Python function it ports cited in its comment.
 
