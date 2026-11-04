@@ -216,7 +216,9 @@ func queueSteps(w *World) []Step {
 	at := "2026-04-02T09:00:00Z"
 	tick := func(name, round string, engine []EngineRule, before func(*World)) Step {
 		return Step{Name: name, Method: "TICK", Path: round, Tick: round, Now: at, Engine: engine, Before: before,
-			EngineMask: []string{"*.body.output_key", "*.body.input_key"}, Unordered: []string{"", "taken", "refused"}}
+			EngineMask: []string{"*.body.output_key", "*.body.input_key"}, Unordered: []string{"", "taken", "refused"},
+			// the parquets' random names inside the lineage events too (OpenLineage on)
+			EngineScrub: []string{`out/[0-9a-f]{32}\.parquet`, `-[0-9a-f]{8}\.parquet`}}
 	}
 	ok := []EngineRule{
 		{Method: "POST", Path: "^/db/ingest$", Body: map[string]any{"task_id": "t-qu-ing"}},
