@@ -189,7 +189,11 @@ func flowOpenLineage(d *Deps, emit bool) authedFunc {
 		}
 		n := 0
 		if err == nil {
-			n, err = s.Emit(q.ctx, events)
+			if d.Lineage != nil {
+				n, err = d.Lineage.EmitNow(q.ctx, events) // the process's client (_get_client)
+			} else {
+				n, err = s.Emit(q.ctx, events)
+			}
 		}
 		if err != nil {
 			detail(w, http.StatusBadGateway, "The OpenLineage collector rejected the events: "+runeClip(err.Error(), 300))

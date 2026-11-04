@@ -53,17 +53,18 @@ func TestURLSplit(t *testing.T) {
 }
 
 func TestRunEventsGetTheClientsTags(t *testing.T) {
+	c := &libClient{cfg: &libConfig{}, log: quiet()}
 	e := pyjson.Object{{Key: "eventType", Value: "START"}, {Key: "run", Value: pyjson.Object{{Key: "runId", Value: "x"},
-		{Key: "facets", Value: pyjson.Object{}}}}}
-	out, _ := pyjson.Dumps(withClientTags(e), pyjson.Options{SortKeys: true})
+		{Key: "facets", Value: pyjson.Object{}}}}, {Key: "job", Value: pyjson.Object{{Key: "name", Value: "j"}}}}
+	out, _ := pyjson.Dumps(c.tags(e, true, true), pyjson.Options{SortKeys: true})
 	if !strings.Contains(out, `"tags": [{"key": "openlineage_client_version", "source": "OPENLINEAGE_CLIENT", "value": "1.53.0"}]`) {
 		t.Fatal(out)
 	}
-	if facets := e.Value("run").(pyjson.Object).Value("facets").(pyjson.Object); len(facets) != 0 {
-		t.Fatal("the event itself is not changed")
+	if strings.Contains(out, "TagsJobFacet") {
+		t.Fatal("no job tags without the configuration's")
 	}
 	job := pyjson.Object{{Key: "job", Value: pyjson.Object{}}}
-	if out, _ := pyjson.Dumps(withClientTags(job), pyjson.Options{}); strings.Contains(out, "tags") {
+	if out, _ := pyjson.Dumps(c.tags(job, false, true), pyjson.Options{}); strings.Contains(out, "tags") {
 		t.Fatal("a JobEvent has no run")
 	}
 }
@@ -134,7 +135,8 @@ func TestOffDoesNothing(t *testing.T) {
 }
 
 func TestDisabledSendsNothing(t *testing.T) {
-	n, err := Settings{URL: "http://127.0.0.1:1", Disabled: true}.Emit(context.Background(), []pyjson.Object{{}, {}})
+	t.Setenv("OPENLINEAGE_DISABLED", "true")
+	n, err := Settings{URL: "http://127.0.0.1:1"}.Emit(context.Background(), []pyjson.Object{{}, {}})
 	if n != 2 || err != nil {
 		t.Fatal(n, err)
 	}
