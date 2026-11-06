@@ -259,7 +259,7 @@ onBeforeUnmount(() => {
   pointer-events: none;
 }
 @media (prefers-reduced-motion: no-preference) {
-  .ordering-field { animation: field-in 1100ms cubic-bezier(0.16, 1, 0.3, 1) backwards; }
+  .ordering-field { animation: field-in 1100ms var(--ease-out) backwards; }
 }
 @keyframes field-in {
   from { opacity: 0; }

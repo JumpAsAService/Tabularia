@@ -800,7 +800,7 @@ const zones = computed(() => {
 .box > summary::-webkit-details-marker { display: none; }
 .box > summary:hover { background: var(--bg-soft); }
 .box > summary:focus-visible { outline: 2px solid var(--accent); outline-offset: -2px; }
-.arrow { flex: none; color: var(--muted); transition: transform 0.15s ease; }
+.arrow { flex: none; color: var(--muted); transition: transform var(--dur-2) ease; }
 .box[open] > summary .arrow { transform: rotate(90deg); }
 .box[open] > summary { border-bottom: 1px solid var(--border-soft); border-radius: var(--radius) var(--radius) 0 0; }
 .group-icon { flex: none; color: var(--muted); }

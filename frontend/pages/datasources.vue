@@ -475,7 +475,7 @@ async function saveSchedule(cron: string) {
 .ds-row { display: flex; align-items: center; }
 .ds-head { flex: 1; display: grid; grid-template-columns: 18px minmax(200px, 1.6fr) minmax(90px, 1fr) 110px 120px; align-items: center; gap: 10px; padding: 10px 12px; background: transparent; border: none; text-align: left; cursor: pointer; color: inherit; font: inherit; }
 .ds-head:hover { background: var(--panel-2); }
-.chev { color: var(--muted); transition: transform 0.15s; flex: none; }
+.chev { color: var(--muted); transition: transform var(--dur-2); flex: none; }
 .chev.rot { transform: rotate(90deg); }
 .dcell { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
 .dprog { font-size: 12px; color: var(--accent-2); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; font-variant-numeric: tabular-nums; }

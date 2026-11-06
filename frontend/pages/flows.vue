@@ -489,7 +489,7 @@ async function saveSchedule(cron: string, productionEngine?: string, notify?: { 
 .flow-row { display: flex; align-items: center; }
 .flow-head { flex: 1; min-width: 0; display: grid; grid-template-columns: 18px minmax(160px, 1.4fr) minmax(90px, 1fr) auto 150px; align-items: center; gap: 10px; padding: 10px 12px; background: transparent; border: none; text-align: left; cursor: pointer; }
 .flow-head:hover { background: var(--panel-2); }
-.chev { color: var(--muted); transition: transform 0.15s; flex: none; }
+.chev { color: var(--muted); transition: transform var(--dur-2); flex: none; }
 .chev.rot { transform: rotate(90deg); }
 .fname { display: inline-flex; align-items: center; gap: 7px; font-weight: 550; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .rstat { flex: none; }

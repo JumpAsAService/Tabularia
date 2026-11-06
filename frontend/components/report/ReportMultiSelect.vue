@@ -137,7 +137,7 @@ const uid = Math.random().toString(36).slice(2, 9)
   flex-shrink: 0; font-size: 11px; line-height: 16px; min-width: 18px; padding: 0 5px; border-radius: 999px; text-align: center;
   background: var(--tint-accent); color: var(--accent-hi); font-variant-numeric: tabular-nums;
 }
-.chev { color: var(--muted); flex-shrink: 0; transition: transform 0.15s; }
+.chev { color: var(--muted); flex-shrink: 0; transition: transform var(--dur-2); }
 .chev.flip { transform: rotate(180deg); }
 .ms-panel {
   position: absolute; z-index: 60; top: calc(100% + 4px); left: 0; min-width: 100%; max-width: 340px;

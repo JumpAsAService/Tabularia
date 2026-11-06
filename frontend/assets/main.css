@@ -274,7 +274,7 @@ button {
   align-items: center;
   gap: 6px;
   justify-content: center;
-  transition: border-color 0.15s, background 0.15s, transform 0.1s, box-shadow 0.15s;
+  transition: border-color var(--dur-2), background var(--dur-2), transform var(--dur-1), box-shadow var(--dur-2);
 }
 button:hover { border-color: var(--accent); box-shadow: var(--shadow-1); }
 button:active { transform: translateY(1px); }
@@ -335,7 +335,7 @@ input[type="date"], input[type="datetime-local"], input[type="time"], textarea {
   border-radius: 8px;
   padding: 6px 10px;
   width: 100%;
-  transition: border-color 0.15s, box-shadow 0.15s;
+  transition: border-color var(--dur-2), box-shadow var(--dur-2);
 }
 select:focus, input:focus, textarea:focus {
   outline: none;
@@ -470,7 +470,7 @@ optgroup { font-style: normal; color: var(--muted); }
 .panel-resizer, .grid-resizer {
   position: absolute;
   z-index: 20;
-  transition: background 0.15s;
+  transition: background var(--dur-2);
 }
 .panel-resizer {
   left: -3px;
@@ -515,7 +515,7 @@ optgroup { font-style: normal; color: var(--muted); }
   /* no overflow:hidden: it would cut the handles sticking out of the border */
   font-size: 13px;
   box-shadow: var(--shadow-1);
-  transition: box-shadow 0.15s, border-color 0.15s;
+  transition: box-shadow var(--dur-2), border-color var(--dur-2);
 }
 .node:hover { box-shadow: var(--shadow-2); }
 .vue-flow__node.selected .node {

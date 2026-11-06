@@ -401,7 +401,7 @@ const updated = computed(() => {
 /* ── every pod, by state ── */
 .health { margin: 18px 0 0; display: flex; flex-direction: column; gap: 8px; }
 .hbar { display: flex; gap: 2px; height: 8px; border-radius: 999px; overflow: hidden; background: var(--panel-2); }
-.seg { flex: 1 1 0; min-width: 6px; background: var(--tone); transition: flex-grow .4s cubic-bezier(.16, 1, .3, 1); }
+.seg { flex: 1 1 0; min-width: 6px; background: var(--tone); transition: flex-grow .4s var(--ease-out); }
 .seg.done { background: color-mix(in srgb, var(--muted) 45%, transparent); }
 .seg.empty { background: transparent; }
 .legend { display: flex; flex-wrap: wrap; gap: 4px 18px; margin: 0; padding: 0; list-style: none; font-size: 12.5px; color: var(--muted); }
@@ -429,14 +429,14 @@ const updated = computed(() => {
   width: 16px; height: 16px; min-height: 0; padding: 0; border-radius: 3px; cursor: pointer;
   border: 1px solid color-mix(in srgb, var(--tone) 70%, var(--panel));
   background: color-mix(in srgb, var(--tone) 34%, var(--panel));
-  transition: background-color .2s ease, border-color .2s ease, transform .15s ease;
+  transition: background-color .2s ease, border-color .2s ease, transform var(--dur-2) ease;
 }
 .tile.code { border-radius: 50%; }
 .tile.done { background: transparent; }
 .tile.bad { background: var(--danger); }
 .tile:hover { transform: scale(1.18); box-shadow: var(--shadow-1); border-color: var(--tone); }
 .tile:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
-.tile.lit { animation: tile-lit 1.6s cubic-bezier(.16, 1, .3, 1); }
+.tile.lit { animation: tile-lit 1.6s var(--ease-out); }
 @keyframes tile-lit { from { box-shadow: 0 0 0 4px color-mix(in srgb, var(--tone) 45%, transparent); } }
 
 /* ── the pods ── */
@@ -461,7 +461,7 @@ table.pods { width: 100%; border-collapse: separate; border-spacing: 0; border: 
 .pods tr.grp .muted { font-weight: 400; margin-left: 6px; }
 .pods tr.pod { transition: background-color .2s ease; }
 .pods tr.pod:hover td { background: var(--panel-2); }
-.pods tr.pod.lit td { animation: row-lit 1.6s cubic-bezier(.16, 1, .3, 1); }
+.pods tr.pod.lit td { animation: row-lit 1.6s var(--ease-out); }
 @keyframes row-lit { from { background: color-mix(in srgb, var(--tone) 22%, var(--panel)); } }
 .pods tr.done { color: var(--muted); }
 .num { text-align: right; font-variant-numeric: tabular-nums; }
@@ -486,7 +486,7 @@ th.num { text-align: right; }
 .spark .area { fill: color-mix(in srgb, var(--accent) 16%, transparent); stroke: none; }
 .val { font-variant-numeric: tabular-nums; }
 .track { flex: none; width: 72px; height: 6px; border-radius: 999px; background: var(--panel-2); overflow: hidden; }
-.fill { display: block; height: 100%; background: var(--accent); border-radius: 999px; transition: width .6s cubic-bezier(.16, 1, .3, 1); }
+.fill { display: block; height: 100%; background: var(--accent); border-radius: 999px; transition: width .6s var(--ease-out); }
 .fill.warm { background: var(--warning); }
 .fill.hot { background: var(--danger); }
 .idle { margin: 14px 0 0; }
@@ -521,7 +521,7 @@ table.data { width: 100%; }
   .pods td.cpu, .pods td.mem { grid-column: 1 / -1; min-width: 0; }
   .lbl-s { display: inline; color: var(--muted); font-size: 11px; margin-right: 3px; }
   .pods tr.pod.lit td { animation: none; }
-  .pods tr.pod.lit { animation: row-lit 1.6s cubic-bezier(.16, 1, .3, 1); }
+  .pods tr.pod.lit { animation: row-lit 1.6s var(--ease-out); }
   /* an event per block too: when and why, then where, then what it says (a message of a
      few hundred characters made the whole page as wide as itself) */
   table.events, .events tbody { display: block; }

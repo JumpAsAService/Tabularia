@@ -181,7 +181,7 @@ function tooLong(agent: AiAgent): boolean {
 .agent-head:hover { background: var(--bg-soft); box-shadow: none; }
 .agent-head:active { transform: none; }
 .agent-head:focus-visible { outline: 2px solid var(--accent); outline-offset: -2px; }
-.chev { flex: none; color: var(--muted); transition: transform 0.15s ease; }
+.chev { flex: none; color: var(--muted); transition: transform var(--dur-2) ease; }
 .agent.open .chev { transform: rotate(90deg); }
 .agent-name { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 2px; }
 .agent-name strong { font-size: 13px; font-weight: 600; }

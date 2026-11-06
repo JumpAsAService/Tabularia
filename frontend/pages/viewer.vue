@@ -619,7 +619,7 @@ onMounted(async () => {
 .empty { padding: 24px; }
 .body { display: grid; grid-template-columns: 300px 6px 1fr; gap: 0; flex: 1; min-height: 0; }
 .resizer { cursor: col-resize; background: transparent; position: relative; }
-.resizer::before { content: ''; position: absolute; inset: 0 2px; border-radius: 2px; background: var(--border); transition: background 0.15s; }
+.resizer::before { content: ''; position: absolute; inset: 0 2px; border-radius: 2px; background: var(--border); transition: background var(--dur-2); }
 .resizer:hover::before { background: var(--accent); }
 
 .cfg { overflow-y: auto; display: flex; flex-direction: column; gap: 14px; padding: 0 10px 0 2px; }

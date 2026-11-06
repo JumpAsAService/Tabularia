@@ -40,7 +40,7 @@ const uid = `rsec-${Math.random().toString(36).slice(2, 9)}`
 .rsec-t:hover { color: var(--text); box-shadow: none; }
 .rsec-t:active { transform: none; }
 .rsec.bad .rsec-t { color: var(--danger); }
-.rsec-chev { transition: transform 0.15s ease; }
+.rsec-chev { transition: transform var(--dur-2) ease; }
 .rsec-t[aria-expanded='true'] .rsec-chev { transform: rotate(90deg); }
 .rsec-n { font-size: 10.5px; letter-spacing: 0; text-transform: none; padding: 0 6px; border-radius: 999px; background: var(--panel-2); color: var(--muted); font-weight: 500; }
 .rsec-body { display: flex; flex-direction: column; gap: 10px; padding: 2px 0 6px; }

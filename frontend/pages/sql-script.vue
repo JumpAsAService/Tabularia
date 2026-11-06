@@ -851,7 +851,7 @@ watch(() => route.query.id, (id) => {
 }
 .chev { padding: 4px 2px; color: var(--muted); }
 .chev[aria-expanded='true'] svg { transform: rotate(90deg); }
-.chev svg { transition: transform 0.15s ease; }
+.chev svg { transition: transform var(--dur-2) ease; }
 .dsname { flex: 1; min-width: 0; display: flex; flex-direction: column; align-items: flex-start; justify-content: flex-start; padding: 3px 6px; border-radius: 6px; }
 .dsname:hover:not(:disabled), .cols button:hover:not(:disabled) { background: var(--bg-soft); }
 .dsname:active, .cols button:active { transform: none; }

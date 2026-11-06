@@ -350,7 +350,7 @@ watch(notebookId, open)
   color: var(--text);
   text-decoration: none;
   white-space: nowrap;
-  transition: border-color 0.15s, box-shadow 0.15s;
+  transition: border-color var(--dur-2), box-shadow var(--dur-2);
 }
 .btn:hover { border-color: var(--accent); box-shadow: var(--shadow-1); }
 .frame { flex: 1; min-height: 0; width: 100%; border: 0; display: block; background: var(--bg); }

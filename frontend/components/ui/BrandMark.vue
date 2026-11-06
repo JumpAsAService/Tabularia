@@ -93,7 +93,7 @@ const enter = import.meta.server || useNuxtApp().isHydrating
    nothing; what it animates from is all in the keyframes, so without it the mark is simply
    complete. */
 @media (prefers-reduced-motion: no-preference) {
-  .enter .noise { animation: mark-noise 240ms cubic-bezier(0.16, 1, 0.3, 1) backwards; }
+  .enter .noise { animation: mark-noise 240ms var(--ease-out) backwards; }
   .enter .flow { animation: mark-flow 620ms cubic-bezier(0.33, 0, 0.2, 1) backwards; }
   .enter .order { animation: mark-order 560ms cubic-bezier(0.33, 0, 0.2, 1) 60ms backwards; }
 }

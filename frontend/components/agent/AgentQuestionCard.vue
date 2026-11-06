@@ -125,7 +125,7 @@ watch(() => props.locked, focusFirst)
 .q { margin: 0; padding: 0; border: 0; min-width: 0; }
 .q + .q { margin-top: 12px; }
 .q legend { padding: 0; margin: 0 0 6px; font-size: 13.5px; font-weight: 500; overflow-wrap: anywhere; }
-.opt { display: flex; align-items: flex-start; gap: 9px; margin-top: 5px; padding: 7px 10px; border: 1px solid var(--border-soft); border-radius: 9px; background: var(--bg-soft); cursor: pointer; transition: border-color 0.15s, background 0.15s; }
+.opt { display: flex; align-items: flex-start; gap: 9px; margin-top: 5px; padding: 7px 10px; border: 1px solid var(--border-soft); border-radius: 9px; background: var(--bg-soft); cursor: pointer; transition: border-color var(--dur-2), background var(--dur-2); }
 .opt:hover { border-color: color-mix(in srgb, var(--accent) 45%, var(--border)); }
 .opt.on { border-color: var(--accent); background: var(--tint-accent); }
 .opt input[type="radio"] { flex: none; margin: 3px 0 0; }

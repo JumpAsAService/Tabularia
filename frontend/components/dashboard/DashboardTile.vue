@@ -195,7 +195,7 @@ const chosenColumns = computed(() => clicksOfTile(props.clicks ?? [], props.tile
   position: relative; display: flex; flex-direction: column; min-width: 0; min-height: 0; overflow: hidden; box-sizing: border-box;
   padding: 10px 12px; background: var(--panel); border: 1px solid var(--border-soft); border-radius: 10px; color: var(--text);
   /* not at once: an answer from the cache comes back before the eye would notice */
-  transition: opacity 0.15s ease 0.15s;
+  transition: opacity var(--dur-2) ease 0.15s;
 }
 .tile.dim { opacity: 0.45; }
 .t-kpi { justify-content: center; }

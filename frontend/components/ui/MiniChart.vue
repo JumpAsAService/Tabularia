@@ -248,7 +248,7 @@ defineExpose({ downloadPng })
 /* the button sits on the chart but not over the data: top corner, it appears on hover */
 .png {
   position: absolute; top: 0; right: 0; padding: 3px 6px; min-height: 22px;
-  opacity: 0; transition: opacity 0.15s ease;
+  opacity: 0; transition: opacity var(--dur-2) ease;
 }
 .mini:hover .png, .png:focus-visible { opacity: 1; }
 @media (pointer: coarse) { .png { opacity: 1; } }

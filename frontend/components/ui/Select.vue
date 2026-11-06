@@ -287,7 +287,7 @@ const flatIndex = (o: SelectOption) => filtered.value.indexOf(o)
   color: var(--text);
   cursor: pointer;
   text-align: left;
-  transition: border-color 0.15s, box-shadow 0.15s;
+  transition: border-color var(--dur-2), box-shadow var(--dur-2);
 }
 /* the default width with no specificity: a width the parent gives (`.vwsel { width: 200px }`)
    always wins, whatever order the stylesheets load in */
@@ -301,7 +301,7 @@ const flatIndex = (o: SelectOption) => filtered.value.indexOf(o)
 .sel-name { flex: 0 0 auto; max-width: 100%; overflow: hidden; text-overflow: ellipsis; }
 .sel-hint { flex: 1 1 auto; min-width: 0; overflow: hidden; text-overflow: ellipsis; font-size: 12px; color: var(--muted); }
 .sel-label.ph { color: var(--muted); }
-.chev { color: var(--muted); flex-shrink: 0; transition: transform 0.15s; }
+.chev { color: var(--muted); flex-shrink: 0; transition: transform var(--dur-2); }
 .chev.flip { transform: rotate(180deg); }
 </style>
 

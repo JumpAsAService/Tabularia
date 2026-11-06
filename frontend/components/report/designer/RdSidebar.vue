@@ -328,7 +328,7 @@ const fieldTitle = computed(() => {
 }
 .rds-chev:hover, .rds-icon:hover { color: var(--text); background: var(--panel-2); box-shadow: none; }
 .rds-icon.danger:hover { color: var(--danger); }
-.rds-chev svg { transition: transform 0.15s ease; }
+.rds-chev svg { transition: transform var(--dur-2) ease; }
 .rds-chev[aria-expanded='true'] svg { transform: rotate(90deg); }
 .rds-setname { flex: 1; min-width: 0; display: flex; flex-direction: column; padding: 2px 4px; }
 .rds-mono { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 12.5px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }

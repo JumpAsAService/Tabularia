@@ -241,7 +241,7 @@ a.iconbtn {
   background: var(--panel-2);
   color: var(--text);
   vertical-align: middle;
-  transition: border-color 0.15s, box-shadow 0.15s;
+  transition: border-color var(--dur-2), box-shadow var(--dur-2);
 }
 a.iconbtn:hover { border-color: var(--accent); box-shadow: var(--shadow-1); }
 a.iconbtn:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }

@@ -924,7 +924,7 @@ const bandLabel = (b: BandName) => t(`reportDesigner.bands.${b}`)
 
 .rdc-blabel {
   position: absolute; display: flex; flex-direction: column; align-items: flex-end; gap: 2px; padding: 4px 8px 4px 10px;
-  border-radius: 8px; cursor: pointer; transition: background 0.15s, color 0.15s; transform: translateY(-1px);
+  border-radius: 8px; cursor: pointer; transition: background var(--dur-2), color var(--dur-2); transform: translateY(-1px);
   box-sizing: border-box; text-align: right; overflow-wrap: anywhere;
 }
 .rdc-blabel:hover { background: var(--panel); }
@@ -965,7 +965,7 @@ const bandLabel = (b: BandName) => t(`reportDesigner.bands.${b}`)
   background: #fff; padding: 2px 6px; border-radius: 6px; border: 1px solid #e3e6ec;
 }
 .rdc-grip { position: absolute; height: 8px; cursor: row-resize; z-index: 5; display: grid; place-items: center; outline: none; }
-.rdc-griptab { width: 34px; height: 4px; border-radius: 2px; background: rgba(59, 91, 219, 0.35); opacity: 0; transition: opacity 0.15s, background 0.15s; }
+.rdc-griptab { width: 34px; height: 4px; border-radius: 2px; background: rgba(59, 91, 219, 0.35); opacity: 0; transition: opacity var(--dur-2), background var(--dur-2); }
 .rdc-grip:hover .rdc-griptab, .rdc-grip:focus-visible .rdc-griptab { opacity: 1; background: var(--accent); }
 .rdc-grip:hover, .rdc-grip:focus-visible { background: color-mix(in srgb, var(--accent) 14%, transparent); }
 .rdc-guide { position: absolute; pointer-events: none; z-index: 6; }

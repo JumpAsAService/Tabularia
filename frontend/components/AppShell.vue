@@ -421,7 +421,7 @@ onMounted(async () => {
   text-decoration: none;
   border-bottom: 2px solid transparent;
   border-top: 2px solid transparent; /* compensates: the text stays centred */
-  transition: color 0.15s;
+  transition: color var(--dur-2);
 }
 .navlink:hover { color: var(--text); }
 .navlink.on { color: var(--text); border-bottom-color: var(--accent); }
@@ -515,7 +515,7 @@ onMounted(async () => {
   transform: none;
 }
 .menuwrap .navlink:not(.on) { border-bottom-color: transparent; border-top-color: transparent; }
-.menuwrap .caret { opacity: 0.7; transition: transform 0.15s ease; }
+.menuwrap .caret { opacity: 0.7; transition: transform var(--dur-2) ease; }
 .menuwrap .caret.up { transform: rotate(180deg); }
 .navmenu {
   position: fixed;

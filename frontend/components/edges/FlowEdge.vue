@@ -78,7 +78,7 @@ const visible = computed(() => !!props.selected || hoveredEdge.value === props.i
   box-shadow: var(--shadow-1);
   opacity: 0;
   pointer-events: none;
-  transition: opacity 0.15s, color 0.15s, border-color 0.15s, background 0.15s;
+  transition: opacity var(--dur-2), color var(--dur-2), border-color var(--dur-2), background var(--dur-2);
 }
 .edge-remove.is-visible { opacity: 1; pointer-events: all; }
 .edge-remove.is-selected { border-color: var(--accent); color: var(--text); }

@@ -164,7 +164,7 @@ const STATUSES = computed<{ value: 'FAILURE' | 'SUCCESS' | ''; label: string }[]
 .run.open { border-color: var(--border); }
 .run-row { width: 100%; display: grid; grid-template-columns: 18px 78px minmax(150px, 1fr) minmax(0, 2fr) 120px 130px; align-items: center; gap: 10px; padding: 9px 12px; background: transparent; border: none; text-align: left; cursor: pointer; }
 .run-row:hover { background: var(--panel-2); }
-.chev { color: var(--muted); transition: transform 0.15s; flex: none; }
+.chev { color: var(--muted); transition: transform var(--dur-2); flex: none; }
 .chev.rot { transform: rotate(90deg); }
 .stpill { font-size: 11px; font-weight: 600; padding: 2px 7px; border-radius: 20px; text-align: center; }
 .stpill.failure { background: color-mix(in srgb, var(--danger) 15%, transparent); color: color-mix(in srgb, var(--danger) 70%, var(--text)); }

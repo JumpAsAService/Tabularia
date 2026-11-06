@@ -22,7 +22,7 @@
 }
 .rp-ctitle:hover { box-shadow: none; }
 .rp-ctitle:active { transform: none; }
-.rp-chev { flex: none; color: var(--muted); transition: transform 0.15s ease; }
+.rp-chev { flex: none; color: var(--muted); transition: transform var(--dur-2) ease; }
 .rp-ctitle[aria-expanded='true'] .rp-chev { transform: rotate(90deg); }
 .rp-cname { font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 55%; }
 .rp-cexpr {

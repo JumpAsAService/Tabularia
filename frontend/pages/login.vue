@@ -251,7 +251,7 @@ async function onSubmit() {
   box-shadow: var(--shadow-2);
 }
 @media (prefers-reduced-motion: no-preference) {
-  .card { animation: card-in 620ms cubic-bezier(0.16, 1, 0.3, 1) backwards; }
+  .card { animation: card-in 620ms var(--ease-out) backwards; }
   @keyframes card-in {
     from { opacity: 0; transform: translateY(10px); }
   }
