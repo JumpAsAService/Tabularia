@@ -122,7 +122,8 @@ const folderPaths = useFolderPaths()
 const route = useRoute()
 
 const projects = ref<Project[]>([])
-const currentId = ref<number | null>(null)
+// from the address at once: the first frame already shows the linked folder's path, not the top level
+const currentId = ref<number | null>(folderOfRoute())
 const error = ref('')
 
 const flows = ref<FlowSummary[]>([])
