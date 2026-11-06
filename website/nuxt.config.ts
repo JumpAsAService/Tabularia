@@ -5,6 +5,7 @@ import GithubSlugger from 'github-slugger'
 import { githubHeadingIds, PUBLIC_DOC_ASSET_DIRS, rewriteMarkdownLinks } from './lib/doc-links.mjs'
 import { isPublished } from './lib/repo-files.mjs'
 import { groupOsSections } from './lib/os-tabs.mjs'
+import { enhanceProse } from './lib/prose-blocks.mjs'
 
 const repoRoot = resolve(__dirname, '..')
 
@@ -108,6 +109,8 @@ export default defineNuxtConfig({
       githubHeadingIds(ctx.content, GithubSlugger)
       // "#### Windows" / "#### Linux" / "#### macOS" blocks become tabs (lib/os-tabs.mjs)
       groupOsSections(ctx.content)
+      // site-only touches: "On this page" for narrow screens, … (lib/prose-blocks.mjs)
+      enhanceProse(ctx.content)
       // a folder's README is the folder's page: /docs/examples/keycloak
       if (typeof ctx.content.path === 'string') ctx.content.path = ctx.content.path.replace(/\/readme$/, '')
       // the file the page comes from, for "Edit this page": only when it is (or will be) on GitHub

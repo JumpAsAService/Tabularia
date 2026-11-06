@@ -26,6 +26,8 @@ const next = computed(() => (index.value >= 0 && index.value < flat.value.length
 const group = computed(() => (nav.value || []).find(g => g.items.some(i => i.path === path.value))?.title)
 
 const toc = computed(() => (page.value as any)?.body?.toc?.links || [])
+// for the "On this page" list under the title on narrow screens (components/content/PageToc.vue)
+provide('docs-toc', toc)
 
 // the file this page was generated from, for "Edit this page" (null when it is not on GitHub)
 const editUrl = computed(() => {
