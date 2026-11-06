@@ -27,7 +27,7 @@ The tag starts [`.github/workflows/release-images.yml`](../.github/workflows/rel
    licence check.
 2. **Tests.** The CI workflow (`ci.yml`, below) on the tag's commit: no image is built
    unless the engine's and the gateway's suites and the interface's type check pass.
-3. **One job per image and architecture** (backend, gateway, frontend × amd64,
+3. **One job per image and architecture** (backend, gateway, gateway-go, frontend × amd64,
    arm64; arm64 runs on GitHub's native ARM runners, no emulation). Each job:
    - builds the image from scratch on fresh base images;
    - smoke-tests it: runs as uid 10001, has the right architecture and version

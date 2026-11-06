@@ -30,8 +30,15 @@ image:
     repository: tabularia-backend
     tag: "1.3.0"
 
+  # The Python gateway's image: the AI service (APP__ROLE=ai, see `ai` below) and the
+  # database migrations (python -m app.db.migra, the init container of the gateway pods).
   gateway:
     repository: tabularia-gateway
+    tag: "1.3.0"
+
+  # The gateway itself (gateway-go/Dockerfile): the gateway and orchestrator pods.
+  gatewayGo:
+    repository: tabularia-gateway-go
     tag: "1.3.0"
 
   # If you build it yourself: from frontend/Dockerfile.prod, not
@@ -492,24 +499,20 @@ migrations:
     limits: { memory: 512Mi }
 
 # Control plane: the only public entry point for the API. Auth, RBAC, metadata.
-# It runs as two workloads from the same image — see README → Scaling the
-# gateway.
+# The Go gateway (image.gatewayGo). It runs as two workloads from the same image —
+# see README → Scaling the gateway.
 gateway:
-  # Pods that answer requests. One Python process uses one core and tops out
-  # around 95 requests a second (a few hundred people clicking at once): past
-  # that, add replicas. Measured with 500 simulated users: one replica
-  # saturated (95th percentile 5.8 s), three answered in 0.12 s. Two by default,
-  # so that a node drain or a crash never leaves nobody answering.
+  # Pods that answer requests. Past what one replica answers, add replicas.
+  # Two by default, so that a node drain or a crash never leaves nobody answering.
   replicas: 2
   # Who may tell the gateway the client's address (X-Forwarded-For): the ingress
-  # controller's pods. uvicorn reads the chain from the right and stops at the
+  # controller's pods. The gateway reads the chain from the right and stops at the
   # first address NOT in this list, so a client cannot pass off a forged one.
   # The default trusts the private ranges, where pod networks live; narrow it to
   # your controller's pod CIDR. Behind a cloud load balancer the controller must
   # see the client at all: externalTrafficPolicy: Local, or the PROXY protocol.
   trustedProxies: "10.0.0.0/8,172.16.0.0/12,192.168.0.0/16"
-  # Threads per process. Fewer serve more: Python runs one at a time and they
-  # only contend (measured: 68 requests/s with 40, 79 with 6).
+  # Sizes each pod's database pool (threads + threads/4 + 10, see below).
   threads: 12
   # How long a pod that is stopping (an upgrade, a restart from Administration →
   # Settings, a drain, a scale-in) may finish what it is answering: a preview waits up
@@ -556,6 +559,21 @@ gateway:
   #   (gateway replicas + orchestrator replicas) x 25
   # under your PostgreSQL's max_connections (100 by default), with room for
   # whatever else connects to it.
+
+# The AI service: the Python gateway's image with APP__ROLE=ai. It answers the
+# assistant's routes (the gateway forwards them) and the SQL parsing the gateway and
+# the orchestrator ask it for. No Service outside the cluster, no background work.
+aiService:
+  replicas: 1
+  resources:
+    requests: { cpu: 50m, memory: 256Mi }
+    limits: { memory: 1Gi }
+  tmpSizeLimit: 256Mi
+  terminationGracePeriodSeconds: 60
+  nodeSelector: {}
+  tolerations: []
+  affinity: {}
+  podAnnotations: {}
 
 # Data plane HTTP API. Internal only — never expose it: it answers only requests
 # carrying the gateway's internal token, and holds credentials that read the

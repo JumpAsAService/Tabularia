@@ -152,7 +152,7 @@ time a release runs, minikube downloads its images, which takes a few minutes.
 
 ```bash
 kubectl get pods --namespace tabularia
-kubectl exec --namespace tabularia deploy/tabularia-tabularia-gateway -c gateway -- python -m app.db.migra stato
+kubectl exec --namespace tabularia deploy/tabularia-tabularia-ai -c ai -- python -m app.db.migra stato
 ```
 
 Every pod is `Running` and `1/1`, and the second command prints the same revision for the
@@ -188,7 +188,7 @@ revision can be read at any moment:
 
 ```bash
 kubectl logs deployment/<release>-tabularia-gateway -c migrate --namespace <namespace>
-kubectl exec deployment/<release>-tabularia-gateway -c gateway --namespace <namespace> -- python -m app.db.migra stato
+kubectl exec deployment/<release>-tabularia-ai -c ai --namespace <namespace> -- python -m app.db.migra stato
 ```
 
 The log ends with `database at revision 0021 (was 0020)` when a migration ran, and with

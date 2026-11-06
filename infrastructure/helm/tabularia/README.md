@@ -40,7 +40,8 @@ depend on them, and both degrade quietly rather than breaking:
 ## Building the images
 
 The release images are public on Docker Hub and the chart pulls them by default:
-`jumpasaservice/tabularia-backend`, `jumpasaservice/tabularia-gateway` and
+`jumpasaservice/tabularia-backend`, `jumpasaservice/tabularia-gateway-go` (the gateway and
+the orchestrator), `jumpasaservice/tabularia-gateway` (the AI service and the migrations) and
 `jumpasaservice/tabularia-frontend`, tagged with the release (`1.3.0`). The backend
 one is built without chDB. Releases are built by the release workflow for amd64 and
 arm64, and each image is scanned for secrets before it is pushed
@@ -59,6 +60,7 @@ docker build -t <registry>/tabularia-backend:1.3.0 backend/
 #   (docs/sqlserver.md).
 
 docker build -t <registry>/tabularia-gateway:1.3.0 gateway/
+docker build -t <registry>/tabularia-gateway-go:1.3.0 gateway-go/
 
 # NOTE the -f: frontend/Dockerfile is the hot-reload DEVELOPMENT server.
 docker build -f frontend/Dockerfile.prod -t <registry>/tabularia-frontend:1.3.0 frontend/

@@ -1,11 +1,12 @@
 {{/*
 Control plane — the only public entry point for the API — as TWO workloads built
-from the same image. The gateway has two jobs, and each scales on its own:
+from the same image, the Go gateway (gateway-go/). The gateway has two jobs, and
+each scales on its own:
 
   gateway        answers requests (APP__ROLE=api). Stateless: sessions are a
                  signed token, and the sign-in throttle and the editor's "also
-                 open by" notice live in Postgres. One Python process uses one
-                 core, so this is the one to replicate when people wait.
+                 open by" notice live in Postgres. This is the one to replicate
+                 when people wait.
 
   orchestrator   does the background work (APP__ROLE=orchestrator): fires the
                  schedules, executes the flows, reconciles runs, cleans up. It
@@ -13,6 +14,12 @@ from the same image. The gateway has two jobs, and each scales on its own:
                  the work through the database — a schedule slot and a flow
                  execution are each taken by exactly one, and a flow never has
                  two executions running.
+
+  ai             the AI service: the Python gateway's image with APP__ROLE=ai. It
+                 answers the assistant's routes (forwarded by the gateway) and the
+                 SQL parsing the Go processes ask it for, on an internal API that
+                 wants the internal token. Only the gateway and the orchestrator
+                 call it (docs/specs/gateway-go.md, «The AI service»).
 
 Both roll: a new pod starts before an old one stops. For the orchestrator that
 means the executions the old pod was carrying are closed as interrupted when it
@@ -97,27 +104,10 @@ spec:
       {{- end }}
       containers:
         - name: {{ .component }}
-          image: {{ include "tabularia.image" (dict "root" $ "component" "gateway") }}
+          image: {{ include "tabularia.image" (dict "root" $ "component" "gatewayGo") }}
           imagePullPolicy: {{ $.Values.image.pullPolicy }}
           securityContext:
             {{- toYaml $.Values.containerSecurityContext | nindent 12 }}
-          # The client's address: ingress controllers add it to X-Forwarded-For,
-          # and uvicorn reads the chain from the right, past the proxies it
-          # trusts. Without this every request seems to come from the
-          # controller, and the sign-in throttle, keyed by (address, email),
-          # becomes per email: five wrong passwords lock anyone out, the
-          # administrator included. Keep-alive above the controller's (60 s),
-          # or a request can land on a connection the gateway just closed: 502.
-          command:
-            - uvicorn
-            - app.main:app
-            - --host=0.0.0.0
-            - --port=8000
-            - --proxy-headers
-            - --forwarded-allow-ips={{ $.Values.gateway.trustedProxies }}
-            - --timeout-keep-alive=75
-            # stopping: the requests in flight finish, within the grace period
-            - --timeout-graceful-shutdown={{ max 5 (sub (.cfg.terminationGracePeriodSeconds | default 60) 15) }}
           {{- if ne .role "orchestrator" }}
           # Stopping, the pod first waits for the Service to drop it: closing its socket
           # at once refused the requests still sent to it (a 500 from the gateway's proxy,
@@ -138,6 +128,16 @@ spec:
               value: {{ .role | quote }}
             - name: APP__GATEWAY_THREADS
               value: {{ $.Values.gateway.threads | quote }}
+            # The client's address: ingress controllers add it to X-Forwarded-For, and
+            # the gateway reads the chain from the right, past the proxies it trusts.
+            # Without this every request seems to come from the controller, and the
+            # sign-in throttle, keyed by (address, email), becomes per email: five
+            # wrong passwords lock anyone out, the administrator included.
+            - name: GATEWAY_GO__FORWARDED_ALLOW_IPS
+              value: {{ $.Values.gateway.trustedProxies | quote }}
+            # the AI service (below): the assistant's routes and the SQL parsing
+            - name: GATEWAY_GO__AI_SERVICE
+              value: {{ printf "http://%s-ai:8000" (include "tabularia.fullname" $) | quote }}
             {{- if $.Values.adminScaling.enabled }}
             {{- include "tabularia.scalingEnv" $ | nindent 12 }}
             {{- end }}
@@ -169,8 +169,7 @@ spec:
             {{- include "tabularia.envFrom" $ | nindent 12 }}
           # The schema is migrated by the init container above; the application
           # starts once it is done. Room before probing for a cold start.
-          # /health answers on the event loop, apart from the threads that serve the
-          # requests: a busy gateway is not a dead one. 5 s, not the default 1 s.
+          # 5 s, not the default 1 s: a busy gateway is not a dead one.
           startupProbe:
             httpGet: { path: /health, port: http }
             periodSeconds: 5
@@ -240,3 +239,158 @@ spec:
     app.kubernetes.io/name: {{ include "tabularia.name" . }}
     app.kubernetes.io/instance: {{ .Release.Name }}
     app.kubernetes.io/component: gateway
+---
+{{- /* The AI service: the Python gateway's image with APP__ROLE=ai. No background work,
+no Kubernetes account; it reads the same ConfigMap and Secret (the internal token is
+derived from the Fernet key). At its start it also creates the first administrator from
+the environment and the start-up token, which the Go gateway does not. */}}
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ include "tabularia.fullname" . }}-ai
+  labels:
+    {{- include "tabularia.labels" . | nindent 4 }}
+    app.kubernetes.io/component: ai
+spec:
+  replicas: {{ .Values.aiService.replicas }}
+  strategy:
+    type: RollingUpdate
+    rollingUpdate:
+      maxSurge: 1
+      maxUnavailable: 0
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: {{ include "tabularia.name" . }}
+      app.kubernetes.io/instance: {{ .Release.Name }}
+      app.kubernetes.io/component: ai
+  template:
+    metadata:
+      annotations:
+        checksum/config: {{ include (print $.Template.BasePath "/configmap.yaml") . | sha256sum }}
+        {{- include "tabularia.secretChecksum" . | nindent 8 }}
+        {{- with .Values.aiService.podAnnotations }}
+        {{- toYaml . | nindent 8 }}
+        {{- end }}
+      labels:
+        {{- include "tabularia.labels" . | nindent 8 }}
+        app.kubernetes.io/component: ai
+    spec:
+      {{- include "tabularia.imagePullSecrets" . | nindent 6 }}
+      serviceAccountName: {{ include "tabularia.serviceAccountName" . }}
+      automountServiceAccountToken: {{ .Values.serviceAccount.automountToken }}
+      securityContext:
+        {{- toYaml .Values.podSecurityContext | nindent 8 }}
+      terminationGracePeriodSeconds: {{ .Values.aiService.terminationGracePeriodSeconds | default 60 }}
+      {{- if .Values.migrations.enabled }}
+      initContainers:
+        # as in the gateway pods: the Go gateway only checks the schema revision, and this
+        # process creates the first administrator from the environment once it is there
+        - name: migrate
+          image: {{ include "tabularia.image" (dict "root" . "component" "gateway") }}
+          imagePullPolicy: {{ .Values.image.pullPolicy }}
+          securityContext:
+            {{- toYaml .Values.containerSecurityContext | nindent 12 }}
+          command: ["python", "-m", "app.db.migra"]
+          envFrom:
+            {{- include "tabularia.envFrom" . | nindent 12 }}
+          env:
+            {{- include "tabularia.withoutEngineSecrets" . | nindent 12 }}
+          resources:
+            {{- toYaml .Values.migrations.resources | nindent 12 }}
+          volumeMounts:
+            - name: tmp
+              mountPath: /tmp
+      {{- end }}
+      containers:
+        - name: ai
+          image: {{ include "tabularia.image" (dict "root" . "component" "gateway") }}
+          imagePullPolicy: {{ .Values.image.pullPolicy }}
+          securityContext:
+            {{- toYaml .Values.containerSecurityContext | nindent 12 }}
+          command:
+            - uvicorn
+            - app.main:app
+            - --host=0.0.0.0
+            - --port=8000
+            # the gateway forwards the assistant's routes with the client's address
+            - --proxy-headers
+            - --forwarded-allow-ips={{ .Values.gateway.trustedProxies }}
+            - --timeout-keep-alive=75
+            - --timeout-graceful-shutdown={{ max 5 (sub (.Values.aiService.terminationGracePeriodSeconds | default 60) 15) }}
+          lifecycle:
+            preStop:
+              exec: { command: ["sleep", "5"] }
+          ports:
+            - name: http
+              containerPort: 8000
+          env:
+            - name: APP__ROLE
+              value: "ai"
+            {{- include "tabularia.withoutEngineSecrets" . | nindent 12 }}
+          envFrom:
+            {{- include "tabularia.envFrom" . | nindent 12 }}
+          startupProbe:
+            httpGet: { path: /health, port: http }
+            periodSeconds: 5
+            timeoutSeconds: 5
+            failureThreshold: 30
+          readinessProbe:
+            httpGet: { path: /health, port: http }
+            periodSeconds: 10
+            timeoutSeconds: 5
+          livenessProbe:
+            httpGet: { path: /health, port: http }
+            periodSeconds: 20
+            timeoutSeconds: 5
+            failureThreshold: 3
+          resources:
+            {{- toYaml .Values.aiService.resources | nindent 12 }}
+          volumeMounts:
+            - name: tmp
+              mountPath: /tmp
+            {{- if include "tabularia.oidcCa" . }}
+            - name: oidc-ca
+              mountPath: /etc/tabularia/oidc-ca
+              readOnly: true
+            {{- end }}
+      volumes:
+        - name: tmp
+          emptyDir:
+            sizeLimit: {{ .Values.aiService.tmpSizeLimit }}
+        {{- with include "tabularia.oidcCa" . }}
+        {{- $ca := splitList "|" . }}
+        - name: oidc-ca
+          configMap:
+            name: {{ index $ca 0 }}
+            items: [{ key: {{ index $ca 1 | quote }}, path: ca.crt }]
+        {{- end }}
+      {{- with .Values.aiService.nodeSelector }}
+      nodeSelector:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- with .Values.aiService.tolerations }}
+      tolerations:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- with .Values.aiService.affinity }}
+      affinity:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: {{ include "tabularia.fullname" . }}-ai
+  labels:
+    {{- include "tabularia.labels" . | nindent 4 }}
+    app.kubernetes.io/component: ai
+spec:
+  type: ClusterIP
+  ports:
+    - port: 8000
+      targetPort: http
+      name: http
+  selector:
+    app.kubernetes.io/name: {{ include "tabularia.name" . }}
+    app.kubernetes.io/instance: {{ .Release.Name }}
+    app.kubernetes.io/component: ai

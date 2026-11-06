@@ -1,0 +1,12 @@
+{
+  "query": {
+    "list": [["limit", "int", {"ge": 1, "le": 200}, 50], ["offset", "int", {"ge": 0}, 0], ["q", "opt:str", {}, null]],
+    "flags": [["confirm", "bool", {}, false], ["with_report", "bool", {}, false], ["tz_offset", "int", {}, 0]],
+    "req": [["flow_id", "int", {}, "REQUIRED"], ["language", "str", {}, "REQUIRED"], ["table", "str", {"min_length": 1, "max_length": 500}, "REQUIRED"]],
+    "audit": [["actor_id", "opt:int", {}, null], ["since", "opt:datetime", {}, null], ["until", "opt:datetime", {}, null], ["limit", "int", {"ge": 1, "le": 200}, 50]],
+    "lits": [["sort", "lit:trending,name,updated", {}, "trending"], ["type", "opt:lit:flow,datasource,connection,script,sql,notebook,group", {}, null], ["direction", "lit:both,upstream,downstream", {}, "both"]],
+    "pat": [["target", "str", {"pattern": "^(duckdb|native|clickhouse)$"}, "duckdb"], ["reference", "str", {"max_length": 200}, "latest"], ["fmt", "str", {}, "csv"]],
+    "num": [["ratio", "float", {"ge": 0, "le": 1}, 0.5], ["minutes", "int", {"ge": 5, "le": 1440}, 60], ["depth", "int", {"ge": 1, "le": 8}, 3]]
+  },
+  "path": {"int": "int", "str": "str", "lit": "lit:run,preview"}
+}

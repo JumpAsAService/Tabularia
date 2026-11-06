@@ -291,8 +291,9 @@ it, with the authority of step 3.
 > echo "$REGISTRY_PASSWORD" | docker login 127.0.0.1:5443 -u tabularia --password-stdin
 > docker build -t "127.0.0.1:5443/tabularia/tabularia-backend:${VERSION}" backend/
 > docker build -t "127.0.0.1:5443/tabularia/tabularia-gateway:${VERSION}" gateway/
+> docker build -t "127.0.0.1:5443/tabularia/tabularia-gateway-go:${VERSION}" gateway-go/
 > docker build -f frontend/Dockerfile.prod -t "127.0.0.1:5443/tabularia/tabularia-frontend:${VERSION}" frontend/
-> for c in backend gateway frontend; do docker push "127.0.0.1:5443/tabularia/tabularia-${c}:${VERSION}"; done
+> for c in backend gateway gateway-go frontend; do docker push "127.0.0.1:5443/tabularia/tabularia-${c}:${VERSION}"; done
 > unset DOCKER_CONFIG
 > ```
 >
