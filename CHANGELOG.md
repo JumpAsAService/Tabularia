@@ -5,6 +5,11 @@ exposes at `/system/info` and in the app's settings menu.
 
 ## Unreleased
 
+- **Explore from the keyboard, and Back goes up**: each folder opened is a step of the
+  browser's history (Back went out of Explore); `/` focuses the filter, ↑ ↓ move the active
+  row, Enter opens it, Backspace or Alt+↑ goes up a folder (landing on the one left),
+  F2 renames, Shift+F10 or the Menu key opens the row's menu. A link to a folder from the
+  search now opens it even when Explore is already on screen.
 - **Explore on a phone**: under 720px a row's details move to a second line under its name
   instead of disappearing, the row keeps only «⋯», and the filter takes the bar's spare
   room so its buttons stay on one line.

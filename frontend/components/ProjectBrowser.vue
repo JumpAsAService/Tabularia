@@ -78,7 +78,7 @@ import { starterReport, useReports, type Report } from '~/composables/useReports
 import { starterDashboard, useDashboards, type Dashboard } from '~/composables/useDashboards'
 import ContractBadge from '~/components/ui/ContractBadge.vue'
 import ContractDialog from '~/components/ui/ContractDialog.vue'
-import { listState, rowActions, primaryAction, type RowAction, type RowFacts } from '~/composables/exploreList'
+import { listState, rowActions, primaryAction, keyCommand, stepRow, type RowAction, type RowFacts } from '~/composables/exploreList'
 import RowMenu, { type RowMenuItem } from '~/components/ui/RowMenu.vue'
 import { searchEverywhere } from '~/composables/useSearch'
 import {
@@ -195,13 +195,31 @@ function personalLabel(p: Project): string {
   return email ? t('projectBrowser.personalFolderOf', { who: email }) : t('projectBrowser.personalFolderTitle')
 }
 
-function openFolder(id: number | null) {
+/**
+ * Opens a folder. Each one is a step of the browser's history: Back goes up the way one
+ * came (before, the address was replaced and Back left Explore). `focus`: where the
+ * keyboard lands once the folder is in — its first row, or a given row (the folder one
+ * came up from).
+ */
+function openFolder(id: number | null, focus: string | null = null) {
+  pendingFocus = focus
+  if (folderOfRoute() !== id) navigateTo(id == null ? '/' : `/?folder=${id}`)
   currentId.value = id
-  // the path is in the URL: reloading the page or going back with the browser brings back
-  // where one was, and `/search` can link a folder
-  navigateTo(id == null ? '/' : `/?folder=${id}`, { replace: true })
   loadFolder(id)
 }
+
+function folderOfRoute(): number | null {
+  const linked = Number(route.query.folder)
+  return Number.isInteger(linked) && linked > 0 ? linked : null
+}
+// Back, Forward, a link to a folder from the search: the address leads, the list follows
+watch(() => route.query.folder, () => {
+  if (route.path !== '/') return
+  const id = folderOfRoute()
+  if (id === currentId.value) return
+  currentId.value = id
+  loadFolder(id)
+})
 
 // ── Unified row: one kind of row for six kinds of resource ────────────
 type Kind = 'folder' | 'flow' | 'group' | 'datasource' | 'view' | 'script' | 'sql' | 'notebook' | 'report' | 'dashboard' | 'connection'
@@ -430,8 +448,7 @@ async function loadFolder(id: number | null) {
 }
 
 onMounted(async () => {
-  const linked = Number(route.query.folder)
-  currentId.value = Number.isInteger(linked) && linked > 0 ? linked : null
+  currentId.value = folderOfRoute()
   // side by side: the folder's lists do not wait for the tree, nor the engines for either
   await Promise.all([
     loadProjects(),
@@ -1079,6 +1096,101 @@ async function deleteCurrentFolder() {
   } catch (e) { toast.error(errMessage(e)) }
 }
 
+// ── Keyboard ──────────────────────────────────────────────────────────────────
+// `/` the filter, ↑ ↓ the active row, Enter opens it, Backspace or Alt+↑ up a folder, F2
+// renames, Shift+F10 or the Menu key its commands (exploreList.keyCommand). No motion on
+// any of them: they are repeated all day.
+const searchInput = ref<HTMLInputElement | null>(null)
+const activeKey = ref<string | null>(null)
+let pendingFocus: string | null = null
+
+function rowEl(key: string): HTMLElement | null {
+  return document.querySelector<HTMLElement>(`table.rows tr[data-key="${key}"]`)
+}
+/** Makes a row the active one and puts the focus on it (on its name when it has one). */
+function activate(key: string) {
+  activeKey.value = key
+  const tr = rowEl(key)
+  if (!tr) return
+  const target = tr.querySelector<HTMLElement>('.asname:not(.plain)') ?? tr
+  target.focus({ preventScroll: true })
+  tr.scrollIntoView({ block: 'nearest' })
+}
+function onRowsFocus(e: FocusEvent) {
+  const key = (e.target as HTMLElement | null)?.closest?.('tr[data-key]')?.getAttribute('data-key')
+  if (key) activeKey.value = key
+}
+// once a folder is in, the keyboard lands where openFolder asked
+watch([state, rows], ([now]) => {
+  if (now !== 'rows' || !pendingFocus) return
+  const want = pendingFocus
+  pendingFocus = null
+  const key = want === 'first' ? (visibleRows.value[0] && rowKey(visibleRows.value[0])) : want
+  if (key && rowEl(key)) activate(key)
+  else if (visibleRows.value[0]) activate(rowKey(visibleRows.value[0]))
+}, { flush: 'post' })
+
+function openRow(r: Row) {
+  if (r.locked) return
+  if (r.kind === 'folder') openFolder(r.id, 'first')
+  else if (r.kind === 'connection') openConnDialog(r.raw)
+  else if (r.to) navigateTo(r.to)
+}
+
+function onKey(e: KeyboardEvent) {
+  if (e.defaultPrevented) return
+  // a dialog, a side panel or a menu open: the keys are theirs
+  if (document.querySelector('[aria-modal="true"], [role="menu"], .menu-pop, .sel-panel')) return
+  const el = e.target as HTMLElement | null
+  const inField = !!el?.closest?.('input, textarea, select, [contenteditable=""], [contenteditable="true"]')
+  const onControl = !!el?.closest?.('button, a[href]')
+  const cmd = keyCommand({ key: e.key, altKey: e.altKey, ctrlKey: e.ctrlKey, metaKey: e.metaKey, shiftKey: e.shiftKey, inField, onControl })
+  if (!cmd) return
+  const list = visibleRows.value
+  const at = list.findIndex((r) => rowKey(r) === activeKey.value)
+  const row = at >= 0 ? list[at] : null
+  switch (cmd) {
+    case 'filter':
+      e.preventDefault()
+      searchInput.value?.focus()
+      return
+    case 'next':
+    case 'prev': {
+      const i = stepRow(at, list.length, cmd === 'next' ? 1 : -1)
+      if (i < 0) return
+      e.preventDefault()
+      activate(rowKey(list[i]))
+      return
+    }
+    case 'open':
+      if (!row) return
+      e.preventDefault()
+      openRow(row)
+      return
+    case 'up':
+      if (currentId.value == null) return
+      e.preventDefault()
+      openFolder(current.value?.parent_id ?? null, `folder-${currentId.value}`)
+      return
+    case 'rename':
+      if (!row || row.locked || !RENAMABLE.has(row.kind)) return
+      e.preventDefault()
+      startRename(row)
+      return
+    case 'menu': {
+      if (!row) return
+      e.preventDefault()
+      const more = rowEl(rowKey(row))?.querySelector<HTMLElement>('.rmore')
+      const b = more?.getBoundingClientRect()
+      more?.focus({ preventScroll: true })
+      if (b) openRowMenu(row, { x: b.right, y: b.bottom + 4, align: 'end' }, true)
+      return
+    }
+  }
+}
+onMounted(() => document.addEventListener('keydown', onKey))
+onUnmounted(() => document.removeEventListener('keydown', onKey))
+
 // ── Dialogs ────────────────────────────────────────────────────────────────
 const showConnDialog = ref(false)
 const editingConn = ref<ConnectionInfo | null>(null)
@@ -1292,7 +1404,7 @@ watch(currentId, () => { q.value = ''; kindFilter.value = null; settingsOpen.val
 
       <span class="searchbox">
         <Search :size="14" />
-        <input v-model="q" type="text" :placeholder="$t('projectBrowser.searchPlaceholder')" :aria-label="$t('projectBrowser.searchPlaceholder')" />
+        <input ref="searchInput" v-model="q" type="text" aria-keyshortcuts="/" :placeholder="$t('projectBrowser.searchPlaceholder')" :aria-label="$t('projectBrowser.searchPlaceholder')" />
         <!-- always in place, hidden without a query: the box does not grow when typing starts -->
         <button class="x" :class="{ idle: !q }" :tabindex="q ? 0 : -1" :aria-hidden="q ? undefined : 'true'"
                 :title="$t('projectBrowser.clearSearch')" :aria-label="$t('projectBrowser.clearSearch')" @click="q = ''">
@@ -1433,11 +1545,13 @@ watch(currentId, () => { q.value = ''; kindFilter.value = null; settingsOpen.val
       <Search :size="14" /> {{ $t('projectBrowser.searchEverywhere', { q: q.trim() }) }} <ArrowRight :size="14" />
     </button>
 
-    <table v-else class="rows">
+    <table v-else class="rows" @focusin="onRowsFocus">
       <tbody>
         <template v-for="r in visibleRows" :key="`${r.kind}-${r.id}`">
           <tr
-            :class="{ folderrow: r.kind === 'folder', openable: openable(r), blocked: !!r.locked }"
+            :data-key="rowKey(r)"
+            tabindex="-1"
+            :class="{ folderrow: r.kind === 'folder', openable: openable(r), blocked: !!r.locked, active: activeKey === rowKey(r) }"
             :title="r.locked || undefined"
             :aria-disabled="r.locked ? 'true' : undefined"
             @click="rowClick($event, r)"
@@ -1458,7 +1572,7 @@ watch(currentId, () => { q.value = ''; kindFilter.value = null; settingsOpen.val
                   @blur="commitRename(r)"
                 />
               </span>
-              <button v-else-if="r.kind === 'folder'" class="asname" @click="openFolder(r.id)">
+              <button v-else-if="r.kind === 'folder'" class="asname" @click="openFolder(r.id, $event.detail === 0 ? 'first' : null)">
                 <FolderKey v-if="r.raw.personal_of != null" :size="15" class="kicon" />
                 <component :is="KIND_ICON[r.kind]" v-else :size="15" class="kicon" /> {{ r.name }}
               </button>
@@ -1802,6 +1916,9 @@ table.rows tr.blocked:hover td { background: none; }
 .lock { margin-left: 6px; vertical-align: -1px; color: var(--muted); }
 table.rows tr.openable:hover td,
 table.rows tr.openable:has(.asname:focus-visible) td { background: var(--tint-accent); }
+/* the row the keyboard is on (a row without a link takes the focus itself) */
+table.rows tr:focus-visible { outline: none; }
+table.rows tr:focus-visible td { background: var(--tint-accent); }
 table.rows tr.openable:hover .asname,
 table.rows tr.openable:has(.asname:focus-visible) .asname { color: var(--accent); }
 table.rows tr.openable:active td { background: color-mix(in srgb, var(--accent) 18%, transparent); }

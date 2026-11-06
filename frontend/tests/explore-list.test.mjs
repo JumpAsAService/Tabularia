@@ -49,3 +49,34 @@ test('a personal folder keeps only Rename; a locked flow has no command; the row
   assert.equal(L.primaryAction({ kind: 'folder' }), null)
   assert.equal(L.primaryAction({ kind: 'flow', locked: true }), null)
 })
+
+test('the keyboard: the shortcuts outside the fields, the browser and the controls keep theirs', () => {
+  const k = (key, extra = {}) => L.keyCommand({ key, ...extra })
+  assert.equal(k('/'), 'filter')
+  assert.equal(k('ArrowDown'), 'next')
+  assert.equal(k('ArrowUp'), 'prev')
+  assert.equal(k('ArrowUp', { altKey: true }), 'up')
+  assert.equal(k('Backspace'), 'up')
+  assert.equal(k('Enter'), 'open')
+  assert.equal(k('Enter', { onControl: true }), null) // the focused link or button opens it itself
+  assert.equal(k('F2'), 'rename')
+  assert.equal(k('F10', { shiftKey: true }), 'menu')
+  assert.equal(k('F10'), null)
+  assert.equal(k('ContextMenu'), 'menu')
+  // typing in a field: nothing is taken from it
+  for (const key of ['/', 'Backspace', 'ArrowDown', 'Enter', 'F2']) assert.equal(k(key, { inField: true }), null, key)
+  // Ctrl/⌘ combinations are the browser's; Alt+← is history's
+  assert.equal(k('ArrowDown', { ctrlKey: true }), null)
+  assert.equal(k('Backspace', { metaKey: true }), null)
+  assert.equal(k('ArrowLeft', { altKey: true }), null)
+  assert.equal(k('ArrowDown', { altKey: true }), null)
+})
+
+test('↑ ↓ start from the first or the last row and hold at the ends', () => {
+  assert.equal(L.stepRow(-1, 5, 1), 0)
+  assert.equal(L.stepRow(-1, 5, -1), 4)
+  assert.equal(L.stepRow(2, 5, 1), 3)
+  assert.equal(L.stepRow(4, 5, 1), 4)
+  assert.equal(L.stepRow(0, 5, -1), 0)
+  assert.equal(L.stepRow(3, 0, 1), -1)
+})

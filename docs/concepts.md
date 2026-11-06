@@ -38,6 +38,11 @@ named after their email (`leonardtriv` for `leonardtriv@example.com`): first in 
 
 ***Explore** in the `Sample` folder: the subfolders `Flows`, `Private tables` and `Public tables`, the saved views and the two connections, with a filter by kind at the top.*
 
+A row's commands (rename, duplicate, move, delete, and the ones of its kind) are in its
+**⋯** menu, also on right click. Explore works from the keyboard: `/` puts the cursor in
+the filter, ↑ ↓ move between rows, Enter opens, Backspace or Alt+↑ goes up a folder, F2
+renames, Shift+F10 opens the row's menu; each folder is a step of the browser's history.
+
 Permissions are granted on a folder, to a user or to a group, and hold for every folder
 below it. There are five:
 

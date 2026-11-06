@@ -54,7 +54,7 @@ test('a page change shows at once: the bar while the code arrives, the code fetc
 
 test('a page asks the server once, side by side, not one request after another', () => {
   const explore = read('components/ProjectBrowser.vue')
-  const load = explore.slice(explore.indexOf('async function loadFolder('), explore.indexOf('onMounted(async () => {\n  const linked'))
+  const load = explore.slice(explore.indexOf('async function loadFolder('), explore.indexOf('onMounted(async () => {\n  currentId.value = folderOfRoute()'))
   assert.equal((load.match(/await /g) ?? []).length, 2) // the lists at once, then the grant dialog's
   assert.match(load, /if \(mine !== folderLoad\) return/) // a folder no longer open gets nothing
   const admin = read('components/AdminPanel.vue')

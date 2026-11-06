@@ -65,3 +65,45 @@ export function primaryAction(r: RowFacts): RowAction | null {
   if (r.kind === 'datasource' && r.dbDatasource) return 'refresh'
   return null
 }
+
+/**
+ * Explore's keys, outside the text fields: `/` the filter, ↑ ↓ the active row, Enter opens
+ * it, Backspace or Alt+↑ the parent folder, F2 renames, Shift+F10 or the Menu key its
+ * commands. With Ctrl or ⌘ the browser's own shortcuts win; Enter on a button or a link is
+ * the control's own (it opens the same thing).
+ */
+export type KeyCommand = 'filter' | 'next' | 'prev' | 'open' | 'up' | 'rename' | 'menu'
+
+export function keyCommand(k: {
+  key: string
+  altKey?: boolean
+  ctrlKey?: boolean
+  metaKey?: boolean
+  shiftKey?: boolean
+  /** the focus is in a text field (input, textarea, select, contenteditable) */
+  inField?: boolean
+  /** the focus is on a button or a link, which answers Enter by itself */
+  onControl?: boolean
+}): KeyCommand | null {
+  if (k.inField || k.ctrlKey || k.metaKey) return null
+  if (k.key === 'ArrowUp' && k.altKey) return 'up'
+  if (k.altKey) return null
+  switch (k.key) {
+    case '/': return 'filter'
+    case 'ArrowDown': return 'next'
+    case 'ArrowUp': return 'prev'
+    case 'Enter': return k.onControl ? null : 'open'
+    case 'Backspace': return 'up'
+    case 'F2': return 'rename'
+    case 'F10': return k.shiftKey ? 'menu' : null
+    case 'ContextMenu': return 'menu'
+  }
+  return null
+}
+
+/** The row index after ↑ or ↓ from `at` (-1 = none yet), held at the ends. */
+export function stepRow(at: number, count: number, dir: 1 | -1): number {
+  if (!count) return -1
+  if (at < 0) return dir > 0 ? 0 : count - 1
+  return Math.min(count - 1, Math.max(0, at + dir))
+}
