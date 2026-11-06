@@ -29,6 +29,42 @@ const toc = computed(() => (page.value as any)?.body?.toc?.links || [])
 // for the "On this page" list under the title on narrow screens (components/content/PageToc.vue)
 provide('docs-toc', toc)
 
+// The side list follows the reading: the section whose heading is in the top band of the
+// window (or the last one above it) is marked, and the list scrolls itself to keep it in view.
+const active = ref('')
+const tocBox = ref<HTMLElement | null>(null)
+let spy: IntersectionObserver | null = null
+function watchHeadings () {
+  spy?.disconnect()
+  active.value = ''
+  const ids = toc.value.flatMap((l: any) => [l.id, ...(l.children || []).map((c: any) => c.id)])
+  const els = ids.map((id: string) => document.getElementById(id)).filter(Boolean) as HTMLElement[]
+  if (!els.length) return
+  const inBand = new Set<string>()
+  spy = new IntersectionObserver((entries) => {
+    for (const e of entries) {
+      if (e.isIntersecting) inBand.add(e.target.id)
+      else inBand.delete(e.target.id)
+    }
+    const first = els.find(el => inBand.has(el.id))
+    const above = first ? null : els.filter(el => el.getBoundingClientRect().top < 100).pop()
+    active.value = (first || above)?.id || ''
+  }, { rootMargin: '-80px 0px -66% 0px' })
+  els.forEach(el => spy!.observe(el))
+}
+watch(active, (id) => {
+  const box = tocBox.value
+  const link = id && box?.querySelector<HTMLElement>(`a[href="#${CSS.escape(id)}"]`)
+  if (!box || !link || box.scrollHeight <= box.clientHeight) return
+  const top = link.getBoundingClientRect().top - box.getBoundingClientRect().top + box.scrollTop
+  if (top < box.scrollTop + 48 || top > box.scrollTop + box.clientHeight - 48) {
+    box.scrollTo({ top: top - box.clientHeight / 3, behavior: 'instant' })
+  }
+})
+onMounted(() => watchHeadings())
+watch(path, () => nextTick(watchHeadings))
+onBeforeUnmount(() => spy?.disconnect())
+
 // the file this page was generated from, for "Edit this page" (null when it is not on GitHub)
 const editUrl = computed(() => {
   const source = (page.value as any)?.meta?.source
@@ -104,13 +140,13 @@ watch(group, (g) => { if (g) opened.value = { ...opened.value, [g]: true } })
       </nav>
     </main>
 
-    <aside v-if="toc.length" class="docs__toc" aria-label="On this page">
+    <aside v-if="toc.length" ref="tocBox" class="docs__toc" aria-label="On this page">
       <p class="docs__grouptitle">On this page</p>
       <ul role="list">
         <li v-for="l in toc" :key="l.id">
-          <a :href="`#${l.id}`">{{ l.text }}</a>
+          <a :href="`#${l.id}`" :aria-current="active === l.id ? 'location' : undefined">{{ l.text }}</a>
           <ul v-if="l.children?.length" role="list">
-            <li v-for="c in l.children" :key="c.id"><a :href="`#${c.id}`">{{ c.text }}</a></li>
+            <li v-for="c in l.children" :key="c.id"><a :href="`#${c.id}`" :aria-current="active === c.id ? 'location' : undefined">{{ c.text }}</a></li>
           </ul>
         </li>
       </ul>
@@ -171,6 +207,7 @@ watch(group, (g) => { if (g) opened.value = { ...opened.value, [g]: true } })
 }
 .docs__toc a { display: block; padding: 4px 0; color: var(--soft); text-decoration: none; line-height: 1.35; }
 .docs__toc a:hover { color: var(--text); }
+.docs__toc a[aria-current="location"] { color: var(--text); font-weight: 600; }
 .docs__toc ul ul { padding-left: 12px; }
 
 @media (max-width: 1180px) {
