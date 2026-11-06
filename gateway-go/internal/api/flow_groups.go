@@ -26,8 +26,8 @@ import (
 )
 
 // routes/flow_groups.py: groups of flows, a grid of steps run one after another, the cells
-// of a step in parallel. A save whose Pushmail cells must be checked (new or changed) goes
-// to the Python gateway: pushmail_errors reads the reports' and dashboards' parameters.
+// of a step in parallel. A Pushmail cell new or changed is checked as the group is saved
+// (services/pushmail.py pushmail_errors, internal/api/jobs_pushmail.go).
 
 func init() {
 	register("flow_groups", func(d *Deps) []server.Route {
@@ -320,33 +320,6 @@ func (q *request) containerErrors(c *cell) ([]string, error) {
 	return nil, nil
 }
 
-// pushmailToCheck says whether a save has a Pushmail cell to check (new or changed).
-func pushmailToCheck(def, before *groupDef) bool {
-	already := map[string]bool{}
-	if before != nil {
-		for _, c := range before.cells() {
-			already[cellKey(c)] = true
-		}
-	}
-	for _, row := range def.steps {
-		seen := map[string]bool{}
-		for _, c := range row {
-			if c == nil {
-				continue
-			}
-			k := c.kind + "\x00" + c.idText
-			if seen[k] {
-				continue
-			}
-			seen[k] = true
-			if c.kind == "pushmail" && !already[cellKey(c)] {
-				return true
-			}
-		}
-	}
-	return false
-}
-
 // checked is _checked: every cell new or changed must exist, be visible and runnable by
 // whoever saves; a 422 lists the first ten problems.
 func (q *request) checked(def, before *groupDef) (*auth.Refusal, error) {
@@ -391,7 +364,18 @@ func (q *request) checked(def, before *groupDef) (*auth.Refusal, error) {
 				continue
 			}
 			if c.kind == "pushmail" {
-				return nil, errors.New("a Pushmail cell reached the Go checks") // handed to Python before
+				var cfg pyjson.Object
+				if c.pushmail != nil {
+					cfg, _ = fromPyd(c.pushmail.Dump()).(pyjson.Object)
+				}
+				pe, err := q.d.pushmailErrors(q.ctx, &q.p.User, cfg, readable)
+				if err != nil {
+					return nil, err
+				}
+				for _, e := range pe {
+					errs = append(errs, fmt.Sprintf("step %d: %s", n+1, e))
+				}
+				continue
 			}
 			o := objects[c.kind][c.id]
 			see := false
@@ -697,10 +681,6 @@ func (d *Deps) createFlowGroup(w http.ResponseWriter, r *http.Request, p *auth.P
 		return
 	}
 	def, _ := newGroupDef(asInput(body.Get("definition")))
-	if pushmailToCheck(def, nil) {
-		q.toPython()
-		return
-	}
 	if q.refused(q.checked(def, nil)) {
 		return
 	}
@@ -730,10 +710,6 @@ func (d *Deps) duplicateFlowGroup(w http.ResponseWriter, r *http.Request, p *aut
 		return
 	}
 	def := definitionOf(src.Definition)
-	if pushmailToCheck(def, nil) {
-		q.toPython()
-		return
-	}
 	if q.refused(q.checked(def, nil)) {
 		return
 	}
@@ -780,10 +756,6 @@ func (d *Deps) updateFlowGroup(w http.ResponseWriter, r *http.Request, p *auth.P
 		newDef, _ = newGroupDef(asInput(v))
 	}
 	before := definitionOf(g.Definition)
-	if newDef != nil && pushmailToCheck(newDef, before) {
-		q.toPython()
-		return
-	}
 	var lineageNames openlineage.Names
 	if newName != nil || newProject != nil {
 		var err error

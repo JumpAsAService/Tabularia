@@ -20,7 +20,8 @@ import (
 type Config struct {
 	// GATEWAY_GO__LISTEN: where the Go gateway listens (the Python one's port in production)
 	Listen string
-	// GATEWAY_GO__UPSTREAM: the Python gateway, which answers every route not ported yet
+	// GATEWAY_GO__UPSTREAM: the Python gateway that used to answer the routes not ported yet;
+	// optional and unused (every route is Go's)
 	Upstream *url.URL
 	// GATEWAY_GO__AI_SERVICE: the AI service (the Python image with APP__ROLE=ai), which answers
 	// the assistant's routes and the SQL parsing (docs/specs/gateway-go.md, «The AI service»);
@@ -195,15 +196,14 @@ func Load(env Env) (*Config, error) {
 		// check_required_secrets: the gateway does not start without it
 		r.fail("SECURITY__FERNET_KEY", "is not set: generate one with: openssl rand -base64 32 | tr '+/' '-_'")
 	}
-	upstream := r.str("GATEWAY_GO__UPSTREAM", "")
-	if upstream == "" && !c.Jobs.Answers() {
-		// an orchestrator answers only /health: nothing goes to the Python gateway
-	} else if upstream == "" {
-		r.fail("GATEWAY_GO__UPSTREAM", "is required: the Python gateway's address, which answers the routes not ported yet")
-	} else if u, err := url.Parse(upstream); err != nil || u.Scheme == "" || u.Host == "" {
-		r.fail("GATEWAY_GO__UPSTREAM", fmt.Sprintf("is not an address: %q", upstream))
-	} else {
-		c.Upstream = u
+	// optional, and only read: no request goes to the Python gateway any more (cmd/gateway
+	// says so when it is set)
+	if upstream := r.str("GATEWAY_GO__UPSTREAM", ""); upstream != "" {
+		if u, err := url.Parse(upstream); err != nil || u.Scheme == "" || u.Host == "" {
+			r.fail("GATEWAY_GO__UPSTREAM", fmt.Sprintf("is not an address: %q", upstream))
+		} else {
+			c.Upstream = u
+		}
 	}
 	if ai := r.str("GATEWAY_GO__AI_SERVICE", ""); ai != "" {
 		if u, err := url.Parse(ai); err != nil || u.Scheme == "" || u.Host == "" {

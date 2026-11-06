@@ -48,24 +48,33 @@ func (c *Client) post(ctx context.Context, path string, body, out any) error {
 	if err != nil {
 		return err
 	}
-	ctx, cancel := context.WithTimeout(ctx, Timeout)
+	answer, err := c.postRaw(ctx, path, raw, Timeout)
+	if err != nil {
+		return err
+	}
+	return json.Unmarshal(answer, out)
+}
+
+// postRaw sends a body already encoded and gives back the answer's bytes (a 200's).
+func (c *Client) postRaw(ctx context.Context, path string, raw []byte, timeout time.Duration) ([]byte, error) {
+	ctx, cancel := context.WithTimeout(ctx, timeout)
 	defer cancel()
 	u := *c.base
 	u.Path = strings.TrimSuffix(u.Path, "/") + path
 	req, err := http.NewRequestWithContext(ctx, http.MethodPost, u.String(), bytes.NewReader(raw))
 	if err != nil {
-		return err
+		return nil, err
 	}
 	req.Header.Set("Content-Type", "application/json")
 	req.Header.Set(secret.InternalHeader, c.token)
 	res, err := c.http.Do(req)
 	if err != nil {
-		return fmt.Errorf("aisvc: %s: %w", path, err)
+		return nil, fmt.Errorf("aisvc: %s: %w", path, err)
 	}
 	defer res.Body.Close()
 	answer, err := io.ReadAll(res.Body)
 	if err != nil {
-		return fmt.Errorf("aisvc: %s: %w", path, err)
+		return nil, fmt.Errorf("aisvc: %s: %w", path, err)
 	}
 	if res.StatusCode == http.StatusUnprocessableEntity {
 		var refused struct {
@@ -73,14 +82,14 @@ func (c *Client) post(ctx context.Context, path string, body, out any) error {
 		}
 		if json.Unmarshal(answer, &refused) == nil {
 			if text, ok := refused.Detail.(string); ok {
-				return &Refusal{Message: text}
+				return nil, &Refusal{Message: text}
 			}
 		}
 	}
 	if res.StatusCode != http.StatusOK {
-		return fmt.Errorf("aisvc: %s answered %d", path, res.StatusCode)
+		return nil, fmt.Errorf("aisvc: %s answered %d", path, res.StatusCode)
 	}
-	return json.Unmarshal(answer, out)
+	return answer, nil
 }
 
 // Table is a table a SQL names, as sqlglot read it.
@@ -167,4 +176,27 @@ func (c *Client) Compiles(ctx context.Context, patterns []string) ([]bool, error
 		return nil, fmt.Errorf("aisvc: /internal/python/re-compile answered %d results for %d patterns", len(out.Compiles), len(patterns))
 	}
 	return out.Compiles, nil
+}
+
+// IDNAEncode is httpx's encoding of a host that is not ASCII
+// (POST /internal/python/idna-encode): idna.encode(host.lower()).decode("ascii") of the Python
+// package idna, whose IDNA 2008 rules and Unicode tables Go has no faithful twin of; ok=false
+// for its IDNAError. A pyurl.IDNAEncoder.
+func (c *Client) IDNAEncode(host string) (string, bool, error) {
+	if c == nil {
+		return "", false, ErrNoClient
+	}
+	var out struct {
+		Hosts []*string `json:"hosts"`
+	}
+	if err := c.post(context.Background(), "/internal/python/idna-encode", map[string]any{"hosts": []string{host}}, &out); err != nil {
+		return "", false, err
+	}
+	if len(out.Hosts) != 1 {
+		return "", false, fmt.Errorf("aisvc: /internal/python/idna-encode answered %d hosts for 1", len(out.Hosts))
+	}
+	if out.Hosts[0] == nil {
+		return "", false, nil
+	}
+	return *out.Hosts[0], true, nil
 }

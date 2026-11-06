@@ -87,9 +87,7 @@ func (h *objectsAPI) startRender(ctx context.Context, p *auth.Principal, c *perm
 	started, detail, err := h.resolver(c).Render(ctx, def, reports.RenderRequest{Name: name, Format: format, Given: given, State: state,
 		HasState: hasState, Origin: origin, Owner: fmt.Sprintf("user:%d", p.User.ID), Wait: h.exportWait(p, origin)})
 	if err != nil {
-		if !errors.Is(err, reports.ErrNeedsPython) {
-			h.auditRender(ctx, p, it, "failure", detail)
-		}
+		h.auditRender(ctx, p, it, "failure", detail)
 		return nil, err
 	}
 	if auditSuccess {

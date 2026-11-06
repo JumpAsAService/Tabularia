@@ -1,7 +1,7 @@
-// Package proxy forwards to the Python gateway every request the Go gateway does not answer
-// yet, as it came: method, path, query, headers (the client's address as the proxy in front
-// set it, the cookies, the Host), body; the answer streamed back as it arrives (the
-// assistant's chat, the exports) and WebSockets upgraded (the notebooks).
+// Package proxy forwards to the AI service (APP__ROLE=ai) the requests that are its own (the
+// assistant's routes, docs/specs/gateway-go.md «The AI service»), as they came: method, path,
+// query, headers (the client's address as the proxy in front set it, the cookies, the Host),
+// body; the answer streamed back as it arrives (the assistant's chat).
 package proxy
 
 import (
@@ -16,7 +16,7 @@ func New(upstream *url.URL, log *slog.Logger) http.Handler {
 	return &httputil.ReverseProxy{
 		Rewrite: func(r *httputil.ProxyRequest) {
 			r.SetURL(upstream)
-			// the Python gateway reads the Host (same_origin, the notebooks' proxy) and the
+			// the Python code reads the Host (same_origin) and the
 			// X-Forwarded-* headers as the proxy in front wrote them (Rewrite removes them
 			// from the outgoing request: put back as they came). Behind the Go gateway,
 			// uvicorn must trust it as a proxy (--forwarded-allow-ips)

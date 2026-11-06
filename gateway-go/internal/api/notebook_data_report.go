@@ -97,9 +97,7 @@ func ndReport(d *Deps, w http.ResponseWriter, r *http.Request, call *ndCall, bod
 	started, detailOut, err := h.resolver(c).Render(ctx, def, reports.RenderRequest{Name: &name, Format: format, Given: given,
 		Origin: "notebook", Owner: owner, Wait: d.Config.ReportsAPIWaitSeconds})
 	if err != nil {
-		if !errors.Is(err, reports.ErrNeedsPython) {
-			h.auditRender(ctx, p, it, "failure", withExtra(detailOut))
-		}
+		h.auditRender(ctx, p, it, "failure", withExtra(detailOut))
 		h.writeErr(w, r, rawOf(r), err)
 		return
 	}

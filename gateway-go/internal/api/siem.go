@@ -1,10 +1,8 @@
 package api
 
 import (
-	"bytes"
 	"context"
 	"errors"
-	"io"
 	"net/http"
 	"strconv"
 	"time"
@@ -96,22 +94,22 @@ type SiemOut struct {
 	NextAttemptAt   *string `json:"next_attempt_at"`
 }
 
-// siemOut is _out: to the observer only the scheme and the host, no Splunk error. ok=false
-// with an address only Python reads faithfully.
-func siemOut(ctx context.Context, d *Deps, s siemRow, full bool, p *auth.Principal) (SiemOut, bool, error) {
+// siemOut is _out: to the observer only the scheme and the host, no Splunk error. urlsplit's
+// ValueError (an address no save lets in) is an error, a 500 as in Python.
+func siemOut(ctx context.Context, d *Deps, s siemRow, full bool, p *auth.Principal) (SiemOut, error) {
 	var n int64
 	var oldest *time.Time
 	if s.Enabled {
 		// siem.backlog
 		if err := d.DB.QueryRow(ctx, `SELECT count(*), min(ts) FROM audit_logs WHERE id > $1`, s.CursorID).Scan(&n, &oldest); err != nil {
-			return SiemOut{}, true, err
+			return SiemOut{}, err
 		}
 	}
 	url := s.URL
 	if url != "" && !full {
 		parts, err := pyurl.URLSplit(url)
 		if err != nil {
-			return SiemOut{}, false, nil
+			return SiemOut{}, err
 		}
 		url = parts.Scheme + "://" + parts.HostnameOrNone() + "/…"
 	}
@@ -125,14 +123,7 @@ func siemOut(ctx context.Context, d *Deps, s siemRow, full bool, p *auth.Princip
 	if full {
 		out.LastError = s.LastError
 	}
-	return out, true, nil
-}
-
-// forwardToPython hands the request to the Python gateway, the body as it came.
-func forwardToPython(d *Deps, w http.ResponseWriter, r *http.Request, body []byte) {
-	r.Body = io.NopCloser(bytes.NewReader(body))
-	r.ContentLength = int64(len(body))
-	d.Upstream.ServeHTTP(w, r)
+	return out, nil
 }
 
 // siemRead is GET /admin/siem.
@@ -149,15 +140,8 @@ func siemRead(d *Deps) adminHandler {
 			adminFail(d, w, "reading the roles", err)
 			return
 		}
-		out, ok, err := siemOut(ctx, d, s, full, p)
-		switch {
-		case err != nil:
-			adminFail(d, w, "the SIEM's backlog", err)
-		case !ok:
-			forwardToPython(d, w, r, nil)
-		default:
-			server.JSON(w, http.StatusOK, out)
-		}
+		out, err := siemOut(ctx, d, s, full, p)
+		siemAnswer(d, w, out, err)
 	}
 }
 
@@ -218,8 +202,8 @@ func siemUpdate(d *Deps, w http.ResponseWriter, r *http.Request, p *auth.Princip
 					_, err = webhooks.ValidateURL(ep)
 				}
 			}
-			if errors.Is(err, webhooks.ErrNotASCII) {
-				forwardToPython(d, w, r, raw)
+			if errors.Is(err, webhooks.ErrNotASCII) || errors.Is(err, webhooks.ErrIDNAUnavailable) {
+				adminFail(d, w, "the address's IDNA encoding", err)
 				return
 			}
 			if err != nil {
@@ -304,8 +288,8 @@ func siemUpdate(d *Deps, w http.ResponseWriter, r *http.Request, p *auth.Princip
 		change("verify_tls", before.VerifyTLS, s.VerifyTLS)
 	}
 	if len(changes) == 0 { // nothing saved; the answer shows the object as changed in memory
-		out, ok, err := siemOut(ctx, d, s, true, p)
-		siemAnswer(d, w, r, out, ok, err, raw)
+		out, err := siemOut(ctx, d, s, true, p)
+		siemAnswer(d, w, out, err)
 		return
 	}
 	now := nowNaive()
@@ -342,19 +326,16 @@ func siemUpdate(d *Deps, w http.ResponseWriter, r *http.Request, p *auth.Princip
 		adminFail(d, w, "reading the SIEM", err)
 		return
 	}
-	out, ok, err := siemOut(ctx, d, saved, true, p)
-	siemAnswer(d, w, r, out, ok, err, raw)
+	out, err := siemOut(ctx, d, saved, true, p)
+	siemAnswer(d, w, out, err)
 }
 
-func siemAnswer(d *Deps, w http.ResponseWriter, r *http.Request, out SiemOut, ok bool, err error, raw []byte) {
-	switch {
-	case err != nil:
+func siemAnswer(d *Deps, w http.ResponseWriter, out SiemOut, err error) {
+	if err != nil {
 		adminFail(d, w, "the SIEM's backlog", err)
-	case !ok:
-		forwardToPython(d, w, r, raw)
-	default:
-		server.JSON(w, http.StatusOK, out)
+		return
 	}
+	server.JSON(w, http.StatusOK, out)
 }
 
 // SiemTestOut is routes/siem.py SiemTestOut.
@@ -381,11 +362,6 @@ func siemTrial(d *Deps) adminHandler {
 			adminDetail(w, http.StatusUnprocessableEntity, "The Splunk address and token are needed")
 			return
 		}
-		parts, err := pyurl.URLSplit(s.URL)
-		if err != nil {
-			forwardToPython(d, w, r, nil)
-			return
-		}
 		token, err := d.Fernet.Decrypt(*s.TokenEnc)
 		if err != nil {
 			adminFail(d, w, "decrypting the Splunk token", err)
@@ -409,6 +385,13 @@ func siemTrial(d *Deps) adminHandler {
 		outcome := "success"
 		if !res.OK {
 			outcome = "failure"
+		}
+		// urlsplit(d.url).hostname, after the send: its ValueError (an address no save lets
+		// in) is a 500 with the event sent and nothing audited
+		parts, err := pyurl.URLSplit(s.URL)
+		if err != nil {
+			adminFail(d, w, "the SIEM's address", err)
+			return
 		}
 		var label *string
 		if h, ok := parts.Hostname(); ok {

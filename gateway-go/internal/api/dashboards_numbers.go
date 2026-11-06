@@ -208,9 +208,7 @@ func (h *objectsAPI) dashboardRender(ctx context.Context, p *auth.Principal, c *
 		case errors.As(err, &down):
 			detail = detail.Set("error", "The engine is not answering")
 		}
-		if !errors.Is(err, reports.ErrNeedsPython) {
-			h.auditRender(ctx, p, it, "failure", detail)
-		}
+		h.auditRender(ctx, p, it, "failure", detail)
 		return nil, err
 	}
 	started.Detail = detail

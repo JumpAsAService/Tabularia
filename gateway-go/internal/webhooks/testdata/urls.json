@@ -306,7 +306,10 @@
   "valid": "http://hé.test/",
   "scheme": "http",
   "hostname": "hé.test",
-  "endpoint": "http://hé.test/services/collector/event"
+  "endpoint": "http://hé.test/services/collector/event",
+  "idna": {
+   "hé.test": "xn--h-bga.test"
+  }
  },
  {
   "url": "http://host.test/é",
@@ -419,7 +422,10 @@
   "url": "http://١.test/",
   "error": "Invalid address: Invalid IDNA hostname: '١.test'",
   "scheme": "http",
-  "hostname": "١.test"
+  "hostname": "١.test",
+  "idna": {
+   "١.test": null
+  }
  },
  {
   "url": "",
@@ -432,5 +438,204 @@
   "error": "The address must be http:// or https:// with a host",
   "scheme": "",
   "hostname": null
+ },
+ {
+  "url": "http://BÜCHER.example/",
+  "valid": "http://BÜCHER.example/",
+  "scheme": "http",
+  "hostname": "bücher.example",
+  "endpoint": "http://BÜCHER.example/services/collector/event",
+  "idna": {
+   "BÜCHER.example": "xn--bcher-kva.example"
+  }
+ },
+ {
+  "url": "https://bücher.example/h",
+  "valid": "https://bücher.example/h",
+  "scheme": "https",
+  "hostname": "bücher.example",
+  "endpoint": "https://bücher.example/h",
+  "idna": {
+   "bücher.example": "xn--bcher-kva.example"
+  }
+ },
+ {
+  "url": "http://İstanbul.test/",
+  "valid": "http://İstanbul.test/",
+  "scheme": "http",
+  "hostname": "i̇stanbul.test",
+  "endpoint": "http://İstanbul.test/services/collector/event",
+  "idna": {
+   "İstanbul.test": "xn--istanbul-o0e.test"
+  }
+ },
+ {
+  "url": "http://ΟΔΟΣ.test/x",
+  "valid": "http://ΟΔΟΣ.test/x",
+  "scheme": "http",
+  "hostname": "οδοσ.test",
+  "endpoint": "http://ΟΔΟΣ.test/x",
+  "idna": {
+   "ΟΔΟΣ.test": "xn--pxavbq.test"
+  }
+ },
+ {
+  "url": "http://ΑΣ.ΣΑ/",
+  "valid": "http://ΑΣ.ΣΑ/",
+  "scheme": "http",
+  "hostname": "ασ.σα",
+  "endpoint": "http://ΑΣ.ΣΑ/services/collector/event",
+  "idna": {
+   "ΑΣ.ΣΑ": "xn--mxa0b.xn--mxa9a"
+  }
+ },
+ {
+  "url": "http://a／b.test/",
+  "error": "netloc 'a／b.test' contains invalid characters under NFKC normalization",
+  "split_error": "netloc 'a／b.test' contains invalid characters under NFKC normalization"
+ },
+ {
+  "url": "http://℀.test/",
+  "error": "netloc '℀.test' contains invalid characters under NFKC normalization",
+  "split_error": "netloc '℀.test' contains invalid characters under NFKC normalization"
+ },
+ {
+  "url": "http://ｅｘａｍｐｌｅ.com/",
+  "error": "Invalid address: Invalid IDNA hostname: 'ｅｘａｍｐｌｅ.com'",
+  "scheme": "http",
+  "hostname": "ｅｘａｍｐｌｅ.com",
+  "idna": {
+   "ｅｘａｍｐｌｅ.com": null
+  }
+ },
+ {
+  "url": "http://xn--bcher-kva.example/",
+  "valid": "http://xn--bcher-kva.example/",
+  "scheme": "http",
+  "hostname": "xn--bcher-kva.example",
+  "endpoint": "http://xn--bcher-kva.example/services/collector/event"
+ },
+ {
+  "url": "http://ü:8080/",
+  "valid": "http://ü:8080/",
+  "scheme": "http",
+  "hostname": "ü",
+  "endpoint": "http://ü:8080/services/collector/event",
+  "idna": {
+   "ü": "xn--tda"
+  }
+ },
+ {
+  "url": "https://user:pä@host.test/",
+  "valid": "https://user:pä@host.test/",
+  "scheme": "https",
+  "hostname": "host.test",
+  "endpoint": "https://user:pä@host.test/services/collector/event"
+ },
+ {
+  "url": "http://☃.net/",
+  "error": "Invalid address: Invalid IDNA hostname: '☃.net'",
+  "scheme": "http",
+  "hostname": "☃.net",
+  "idna": {
+   "☃.net": null
+  }
+ },
+ {
+  "url": "http://ß.de/",
+  "valid": "http://ß.de/",
+  "scheme": "http",
+  "hostname": "ß.de",
+  "endpoint": "http://ß.de/services/collector/event",
+  "idna": {
+   "ß.de": "xn--zca.de"
+  }
+ },
+ {
+  "url": "http://a‍b.test/",
+  "error": "Invalid address: Invalid IDNA hostname: 'a\\u200db.test'",
+  "scheme": "http",
+  "hostname": "a‍b.test",
+  "idna": {
+   "a‍b.test": null
+  }
+ },
+ {
+  "url": "http://日本語.jp/",
+  "valid": "http://日本語.jp/",
+  "scheme": "http",
+  "hostname": "日本語.jp",
+  "endpoint": "http://日本語.jp/services/collector/event",
+  "idna": {
+   "日本語.jp": "xn--wgv71a119e.jp"
+  }
+ },
+ {
+  "url": "http://-ü.test/",
+  "error": "Invalid address: Invalid IDNA hostname: '-ü.test'",
+  "scheme": "http",
+  "hostname": "-ü.test",
+  "idna": {
+   "-ü.test": null
+  }
+ },
+ {
+  "url": "http://ü-.test/",
+  "error": "Invalid address: Invalid IDNA hostname: 'ü-.test'",
+  "scheme": "http",
+  "hostname": "ü-.test",
+  "idna": {
+   "ü-.test": null
+  }
+ },
+ {
+  "url": "http://üüüüüüüüüüüüüüüüüüüüüüüüüüüüüüüüüüüüüüüüüüüüüüüüüüüüüüüüüüüüüüüüüüüüüü.test/",
+  "error": "Invalid address: Invalid IDNA hostname: 'üüüüüüüüüüüüüüüüüüüüüüüüüüüüüüüüüüüüüüüüüüüüüüüüüüüüüüüüüüüüüüüüüüüüüü.test'",
+  "scheme": "http",
+  "hostname": "üüüüüüüüüüüüüüüüüüüüüüüüüüüüüüüüüüüüüüüüüüüüüüüüüüüüüüüüüüüüüüüüüüüüüü.test",
+  "idna": {
+   "üüüüüüüüüüüüüüüüüüüüüüüüüüüüüüüüüüüüüüüüüüüüüüüüüüüüüüüüüüüüüüüüüüüüüü.test": null
+  }
+ },
+ {
+  "url": "http://ü..test/",
+  "error": "Invalid address: Invalid IDNA hostname: 'ü..test'",
+  "scheme": "http",
+  "hostname": "ü..test",
+  "idna": {
+   "ü..test": null
+  }
+ },
+ {
+  "url": "http://[ü]/",
+  "error": "'ü' does not appear to be an IPv4 or IPv6 address",
+  "split_error": "'ü' does not appear to be an IPv4 or IPv6 address"
+ },
+ {
+  "url": "http://ü.test:99999/",
+  "error": "Invalid address: port out of range: 99999",
+  "scheme": "http",
+  "hostname": "ü.test",
+  "idna": {
+   "ü.test": "xn--tda.test"
+  }
+ },
+ {
+  "url": "http://Ǆ.test/",
+  "error": "Invalid address: Invalid IDNA hostname: 'Ǆ.test'",
+  "scheme": "http",
+  "hostname": "ǆ.test",
+  "idna": {
+   "Ǆ.test": null
+  }
+ },
+ {
+  "url": "http://ﬀ.test/",
+  "error": "Invalid address: Invalid IDNA hostname: 'ﬀ.test'",
+  "scheme": "http",
+  "hostname": "ﬀ.test",
+  "idna": {
+   "ﬀ.test": null
+  }
  }
 ]

@@ -1,8 +1,8 @@
 #!/bin/sh
 # The two gateways compared on twin disposable stacks (cmd/diffcheck): in stack A the Python
-# gateway answers; in stack B the Go gateway, with a Python gateway behind it for the routes
-# not ported yet and the AI service (the same image, APP__ROLE=ai) for the assistant's routes
-# and the SQL parsing. Each stack has its own PostgreSQL, brought to the schema by this branch's
+# gateway answers; in stack B the Go gateway (with a Python gateway behind it, which it no
+# longer sends anything to, or a trap that proves it: DIFF_NO_PYTHON) and the AI service (the
+# same image, APP__ROLE=ai) for the assistant's routes and the SQL parsing. Each stack has its own PostgreSQL, brought to the schema by this branch's
 # migrations, and its own fake engine. Nothing of an installation is touched; everything is
 # removed at the end.
 #
@@ -16,6 +16,9 @@
 #                    OpenLineage file: DIFF_ENV="OPENLINEAGE__FILE=/share/ol-{stack}.jsonl")
 #   DIFF_SETTLE_MS=<ms> after each step, wait until the engines (and the files in /share)
 #                    received nothing for so long: what a gateway sends after answering
+#   DIFF_NO_PYTHON=1  stack B without a Python gateway behind the Go one: in its place a trap
+#                    (a fake engine that records what reaches it), given as GATEWAY_GO__UPSTREAM;
+#                    a step fails if anything reaches it. Stack B keeps the AI service.
 set -eu
 here=$(cd "$(dirname "$0")/.." && pwd)
 repo=$(cd "$here/.." && pwd)
@@ -26,7 +29,7 @@ net=$id-net
 secret=$(openssl rand -hex 32)
 fernet=$(openssl rand -base64 32 | tr '+/' '-_')
 admin_password=$(openssl rand -hex 16)
-containers="$id-pga $id-pgb $id-enga $id-engb $id-pya $id-pyb $id-ai $id-go $id-ticka $id-tickb"
+containers="$id-pga $id-pgb $id-enga $id-engb $id-pya $id-pyb $id-trap $id-ai $id-go $id-ticka $id-tickb"
 bin=$(mktemp -d)  # cmd/jobsonce, built for the round server of stack B
 # images of this run only: comparisons run side by side, each with its own build
 go_gateway=tabularia-gateway-go:$id
@@ -74,13 +77,19 @@ for s in a b; do
     docker run --rm --network "$net" $common -e DB__HOST="$id-pg$s" -v "$repo/gateway/app:/app/app:ro" \
         "$gateway_image" python -m app.db.migra >/dev/null 2>&1
     if [ "$s" = a ]; then python_gateway "$id-py$s" "$id-pg$s" "$id-eng$s" "$siem_a"
-    else python_gateway "$id-py$s" "$id-pg$s" "$id-eng$s" "$siem_b"; fi
+    elif [ -z "${DIFF_NO_PYTHON:-}" ]; then python_gateway "$id-py$s" "$id-pg$s" "$id-eng$s" "$siem_b"; fi
 done
+# what stands behind the Go gateway: the Python gateway B, or the trap (DIFF_NO_PYTHON)
+behind="$id-pyb"
+if [ -n "${DIFF_NO_PYTHON:-}" ]; then
+    behind="$id-trap"
+    docker run -d --name "$id-trap" --network "$net" -p 127.0.0.1::8000 "$fake_engine" >/dev/null
+fi
 # stack B's AI service: the same image on B's database (docs/specs/gateway-go.md, «The AI service»)
 python_gateway "$id-ai" "$id-pgb" "$id-engb" "$siem_b" "-e APP__ROLE=ai"
 docker run -d --name "$id-go" --network "$net" $common $siem_b $(extra "$id-engb") -e DB__HOST="$id-pgb" -e ENGINE__BASE_URL="http://$id-engb:8000" \
     -e MONITORING__NODE_EXPORTER_URL="http://$id-engb:8000/metrics" \
-    -p 127.0.0.1::8000 -e GATEWAY_GO__UPSTREAM="http://$id-pyb:8000" -e GATEWAY_GO__FORWARDED_ALLOW_IPS='*' \
+    -p 127.0.0.1::8000 -e GATEWAY_GO__UPSTREAM="http://$behind:8000" -e GATEWAY_GO__FORWARDED_ALLOW_IPS='*' \
     -e GATEWAY_GO__AI_SERVICE="http://$id-ai:8000" \
     "$go_gateway" >/dev/null
 
@@ -99,13 +108,17 @@ docker run -d --name "$id-tickb" --network "$net" $common $siem_b $(extra "$id-e
     "$gateway_image" /jobsonce serve >/dev/null
 
 port() { docker port "$1" "$2/tcp" | head -1 | sed 's/.*://'; }
-for c in "$id-pya" "$id-pyb" "$id-ai" "$id-go" "$id-ticka"; do
+waited="$id-pya $id-ai $id-go $id-ticka"
+if [ -z "${DIFF_NO_PYTHON:-}" ]; then waited="$waited $id-pyb"; fi  # the trap is asked nothing, not even /health
+for c in $waited; do
     for _ in $(seq 90); do curl -sf "http://127.0.0.1:$(port "$c" 8000)/health" >/dev/null && break; sleep 1; done
 done
 
 share_runner=""
 if [ -n "${DIFF_SHARE:-}" ]; then share_runner="-v $DIFF_SHARE:/share -e DIFF_SHARE=/share"; fi
-docker run --rm --network host --user "$(id -u):$(id -g)" -e HOME=/tmp -e GOCACHE=/tmp/gocache $share_runner -e DIFF_SETTLE_MS="${DIFF_SETTLE_MS:-}" \
+trap_runner=""
+if [ -n "${DIFF_NO_PYTHON:-}" ]; then trap_runner="-e DIFF_TRAP=http://127.0.0.1:$(port "$id-trap" 8000)"; fi
+docker run --rm --network host --user "$(id -u):$(id -g)" -e HOME=/tmp -e GOCACHE=/tmp/gocache $share_runner $trap_runner -e DIFF_SETTLE_MS="${DIFF_SETTLE_MS:-}" \
     -e DIFF_SECRET="$secret" -e DIFF_FERNET="$fernet" -e DIFF_ONLY="${DIFF_ONLY:-}" -e DIFF_VERBOSE="${DIFF_VERBOSE:-}" -e DIFF_CLIP="${DIFF_CLIP:-}" \
     -e DIFF_A_DSN="postgresql://t:t@127.0.0.1:$(port "$id-pga" 5432)/t" -e DIFF_B_DSN="postgresql://t:t@127.0.0.1:$(port "$id-pgb" 5432)/t" \
     -e DIFF_A_URL="http://127.0.0.1:$(port "$id-pya" 8000)" -e DIFF_B_URL="http://127.0.0.1:$(port "$id-go" 8000)" \

@@ -79,6 +79,12 @@ func loadAdmin(r *reader) AdminConfig {
 			r.fail("APP__CORS_ORIGINS", "is not a JSON list of addresses")
 		}
 	}
+	for _, o := range c.CORSOrigins {
+		// AppSettings._no_wildcard_origin: with credentials, «*» would mirror any origin
+		if t := strings.TrimSpace(o); t == "*" || t == "null" {
+			r.fail("APP__CORS_ORIGINS", fmt.Sprintf("cannot contain '%s': list the addresses of the interface", t))
+		}
+	}
 	if _, err := LoadZone(c.Timezone); err != nil {
 		// AppSettings._valid_timezone: the gateway does not start with a zone ZoneInfo lacks
 		r.fail("APP__TIMEZONE", fmt.Sprintf("is not a known time zone: %q", c.Timezone))

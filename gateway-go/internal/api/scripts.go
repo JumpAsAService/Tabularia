@@ -1,8 +1,7 @@
 package api
 
 // routes/scripts.py: saved scripts, Python or R code kept as an object of a folder, with
-// their versions. Ported: every route but the schedule (croniter reads the cron: the route
-// stays the Python gateway's).
+// their versions.
 
 import (
 	"context"

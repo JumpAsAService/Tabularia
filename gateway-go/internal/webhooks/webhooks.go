@@ -28,11 +28,16 @@ var Events = []string{
 // Ping is PING.
 const Ping = "ping"
 
-// ErrNotASCII: an address only Python judges (pyurl.ErrNotASCII).
+// ErrNotASCII: a host that is not ASCII with no IDNA encoder given (pyurl.ErrNotASCII).
 var ErrNotASCII = pyurl.ErrNotASCII
 
+// ErrIDNAUnavailable: the AI service could not be asked a host's IDNA encoding
+// (pyurl.ErrIDNAUnavailable): not the address's fault, an internal error.
+var ErrIDNAUnavailable = pyurl.ErrIDNAUnavailable
+
 // ValidateURL is validate_url: the address's form at saving, stripped; the error's text
-// is the ValueError's. pyurl.ErrNotASCII for a host only Python can judge.
+// is the ValueError's. ErrNotASCII or ErrIDNAUnavailable (wrapped) when a host that is not
+// ASCII could not be encoded.
 func ValidateURL(url string) (string, error) {
 	url = strings.TrimFunc(url, unicode.IsSpace)
 	parts, err := pyurl.URLSplit(url)
@@ -46,7 +51,7 @@ func ValidateURL(url string) (string, error) {
 		return "", errors.New("Address too long (at most 2000 characters)")
 	}
 	if err := readHost(url); err != nil {
-		if errors.Is(err, pyurl.ErrNotASCII) {
+		if errors.Is(err, pyurl.ErrNotASCII) || errors.Is(err, pyurl.ErrIDNAUnavailable) {
 			return "", err
 		}
 		return "", fmt.Errorf("Invalid address: %s", err.Error())

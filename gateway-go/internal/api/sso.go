@@ -16,9 +16,7 @@ type SSOConfigOut struct {
 
 // routes/sso.py, on an installation WITHOUT single sign-on: the button is not shown, and the
 // flow's two routes send back to the interface with «sso_disabled». With SSO configured
-// (OIDC__ISSUER and OIDC__CLIENT_ID) the three routes stay in the Python gateway: the OIDC
-// flow (discovery, PKCE, the ID token's signature, the provisioning and the groups) is not
-// ported yet.
+// (OIDC__ISSUER and OIDC__CLIENT_ID) the three routes are sso_oidc.go's.
 func init() {
 	register("sso", func(d *Deps) []server.Route {
 		if d.Config.SSOEnabled() {

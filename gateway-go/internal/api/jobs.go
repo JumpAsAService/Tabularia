@@ -21,6 +21,7 @@ func RegisterJob(name string, build func(*Deps) jobs.Job) {
 // Jobs is every background loop, in start_background_work's order.
 func Jobs(d *Deps) []jobs.Job {
 	kubePanel.Store(d.Panel)
+	useIDNA(d)
 	var out []jobs.Job
 	for name, build := range jobBuilders {
 		j := build(d)

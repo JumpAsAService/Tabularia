@@ -226,13 +226,6 @@ func (q *request) contractTargetID(run *runRow) (*int64, error) {
 	return nil, nil
 }
 
-// needsPython says whether reconciling this run takes a branch the Go gateway leaves to
-// the Python one: none any more (the contracts', the Kubernetes Jobs', the notices' and
-// OpenLineage's branches are all in Go). Kept for the routes that ask.
-func (q *request) needsPython(run *runRow) (bool, error) {
-	return false, nil
-}
-
 // progressOf keeps the engine's progress of a running run, for run_out (session.info).
 type progressOf map[int64]pyjson.Object
 
@@ -999,13 +992,6 @@ func (d *Deps) getRun(w http.ResponseWriter, r *http.Request, p *auth.Principal)
 			}
 		}
 	}
-	if py, err := q.needsPython(run); err != nil {
-		q.fail(err)
-		return
-	} else if py {
-		d.Upstream.ServeHTTP(w, r)
-		return
-	}
 	progress := progressOf{}
 	if run, err = q.reconcile(run, progress); err != nil {
 		q.fail(err)
@@ -1041,15 +1027,6 @@ func (d *Deps) listRuns(w http.ResponseWriter, r *http.Request, p *auth.Principa
 		runs = append(runs, &x)
 	}
 	rows.Close()
-	for _, run := range runs {
-		if py, err := q.needsPython(run); err != nil {
-			q.fail(err)
-			return
-		} else if py {
-			d.Upstream.ServeHTTP(w, r)
-			return
-		}
-	}
 	progress := progressOf{}
 	out := []RunOut{}
 	for _, run := range runs {

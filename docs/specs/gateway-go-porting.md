@@ -32,8 +32,13 @@ func init() {
 }
 ```
 
-`Pattern` is the path exactly as FastAPI declares it (`/flows/{flow_id}`); the gateway
-answers only the exact method, everything else still goes to Python.
+`Pattern` is the path exactly as FastAPI declares it (`/flows/{flow_id}`, `{name...}` for
+`{name:path}`). The router (`internal/server/router.go`) tries the routes in FastAPI's order, from
+the table generated from the Python app (`internal/server/testdata/run.sh` writes
+`fastapi_routes_gen.go`: rerun it when a route is added or moved in Python), and answers what the
+framework answers around them (405, the trailing slash's redirect, 404, HEAD, CORS, WebSocket
+handshakes). `TestEveryPythonRouteHasItsGoHandler` fails when a route of the table has no
+handler. Nothing is forwarded to the Python gateway.
 
 ## The shared packages
 
@@ -106,7 +111,9 @@ package, small, with the Python function it ports cited in its comment.
 ## Proving it: the comparison
 
 `gateway-go/scripts/diffcheck.sh` starts twin stacks (each its own PostgreSQL and fake
-engine; Python in A, Go in B with Python behind) and sends each step of each suite to both.
+engine; Python in A, Go in B with the AI service) and sends each step of each suite to both.
+With `DIFF_NO_PYTHON=1` stack B has no Python gateway behind the Go one: a trap stands in its
+place (a fake engine given as `GATEWAY_GO__UPSTREAM`) and a step fails if anything reaches it.
 After every step it compares the answer, the **whole content of both databases** and the
 requests sent to the engine. A suite:
 

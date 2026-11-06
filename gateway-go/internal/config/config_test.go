@@ -54,7 +54,7 @@ func TestBadValuesAreRefusedByName(t *testing.T) {
 	if err == nil {
 		t.Fatal("expected an error")
 	}
-	for _, name := range []string{"GATEWAY_GO__UPSTREAM", "AUTH__SESSION_IDLE_MINUTES", "AUTH__API_TOKEN_MAX_DAYS", "AUTH__PERSONAL_TOKENS", "JWT__ALGORITHM"} {
+	for _, name := range []string{"AUTH__SESSION_IDLE_MINUTES", "AUTH__API_TOKEN_MAX_DAYS", "AUTH__PERSONAL_TOKENS", "JWT__ALGORITHM"} {
 		if !strings.Contains(err.Error(), name) {
 			t.Errorf("%s not named in %q", name, err)
 		}
@@ -96,5 +96,18 @@ func TestTheAIServiceAddress(t *testing.T) {
 	if _, err := Load(env(map[string]string{"GATEWAY_GO__UPSTREAM": "http://g:8000", "SECURITY__FERNET_KEY": "k", "GATEWAY_GO__AI_SERVICE": "ai"})); err == nil ||
 		!strings.Contains(err.Error(), "GATEWAY_GO__AI_SERVICE") {
 		t.Errorf("a bad address must be refused by name: %v", err)
+	}
+}
+
+// GATEWAY_GO__UPSTREAM is optional: nothing is forwarded to the Python gateway any more; set,
+// it must still be an address
+func TestTheUpstreamIsOptional(t *testing.T) {
+	c, err := Load(env(map[string]string{"SECURITY__FERNET_KEY": "k"}))
+	if err != nil || c.Upstream != nil {
+		t.Fatalf("without it: %v %v", c, err)
+	}
+	if _, err := Load(env(map[string]string{"SECURITY__FERNET_KEY": "k", "GATEWAY_GO__UPSTREAM": "gateway"})); err == nil ||
+		!strings.Contains(err.Error(), "GATEWAY_GO__UPSTREAM") {
+		t.Errorf("a bad address: %v", err)
 	}
 }

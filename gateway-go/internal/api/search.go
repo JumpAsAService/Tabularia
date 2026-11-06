@@ -100,13 +100,9 @@ func searchEverything(d *Deps) authedFunc {
 			server.JSON(w, http.StatusOK, out)
 			return
 		}
-		hits, forward, err := searchHits(ctx, d, p, term)
+		hits, err := searchHits(ctx, d, p, term)
 		if err != nil {
 			fail(d, w, "searching", err)
-			return
-		}
-		if forward {
-			d.Upstream.ServeHTTP(w, r)
 			return
 		}
 		for _, h := range hits {
@@ -163,38 +159,37 @@ func bounded(offset any, n int) int {
 	return int(o)
 }
 
-// searchHits runs the queries of search_everything in its order; `forward` when a flow found
-// needs flow_access.blocked.
-func searchHits(ctx context.Context, d *Deps, p *auth.Principal, term string) ([]SearchHit, bool, error) {
+// searchHits runs the queries of search_everything in its order.
+func searchHits(ctx context.Context, d *Deps, p *auth.Principal, term string) ([]SearchHit, error) {
 	pattern := likePattern(term)
 	checker := perm.For(d.DB, &p.User)
 	admin, err := checker.IsAdmin(ctx)
 	if err != nil {
-		return nil, false, err
+		return nil, err
 	}
 	readable, err := checker.Readable(ctx)
 	if err != nil {
-		return nil, false, err
+		return nil, err
 	}
 	navigable, err := checker.Visible(ctx)
 	if err != nil {
-		return nil, false, err
+		return nil, err
 	}
 	connectable, err := checker.Projects(ctx, perm.Connect)
 	if err != nil {
-		return nil, false, err
+		return nil, err
 	}
 	folderNames := map[int64]string{}
 	rows, err := d.DB.Query(ctx, `SELECT id, name FROM projects`)
 	if err != nil {
-		return nil, false, err
+		return nil, err
 	}
 	for rows.Next() {
 		var id int64
 		var name string
 		if err := rows.Scan(&id, &name); err != nil {
 			rows.Close()
-			return nil, false, err
+			return nil, err
 		}
 		folderNames[id] = name
 	}
@@ -240,7 +235,7 @@ func searchHits(ctx context.Context, d *Deps, p *auth.Principal, term string) ([
 	if len(navigable) > 0 {
 		if err := scan("folder", `SELECT id, name, parent_id FROM projects WHERE id = ANY($1) AND name ILIKE $2 ESCAPE '\'`,
 			false, false, perm.Sorted(navigable), pattern); err != nil {
-			return nil, false, err
+			return nil, err
 		}
 	}
 	if len(readable) > 0 {
@@ -252,12 +247,12 @@ func searchHits(ctx context.Context, d *Deps, p *auth.Principal, term string) ([
 			{"view", `SELECT id, name, project_id FROM saved_views WHERE project_id = ANY($1) AND name ILIKE $2 ESCAPE '\'`},
 		} {
 			if err := scan(k.kind, k.q, k.kind == "flow", k.kind == "datasource", ids, pattern); err != nil {
-				return nil, false, err
+				return nil, err
 			}
 			if k.kind == "flow" {
 				// who may not open one is told why (flow_access.blocked)
 				if err := lockFlows(ctx, d, checker, p, hits); err != nil {
-					return nil, false, err
+					return nil, err
 				}
 			}
 		}
@@ -269,10 +264,10 @@ func searchHits(ctx context.Context, d *Deps, p *auth.Principal, term string) ([
 		rows, err := d.DB.Query(ctx, `SELECT seg.environment_id FROM script_environment_groups seg
 			JOIN user_groups ug ON ug.group_id = seg.group_id WHERE ug.user_id = $1`, p.User.ID)
 		if err != nil {
-			return nil, false, err
+			return nil, err
 		}
 		if envs, err = pgx.CollectRows(rows, pgx.RowTo[int64]); err != nil {
-			return nil, false, err
+			return nil, err
 		}
 	}
 	visible := func(kind, table string, withEnv bool) error {
@@ -293,42 +288,70 @@ func searchHits(ctx context.Context, d *Deps, p *auth.Principal, term string) ([
 	}
 	if scriptsOn {
 		if err := visible("script", "saved_scripts", true); err != nil {
-			return nil, false, err
+			return nil, err
 		}
 	}
 	if err := visible("sql", "sql_scripts", false); err != nil {
-		return nil, false, err
+		return nil, err
 	}
 	if scriptsOn {
 		if err := visible("notebook", "notebooks", true); err != nil {
-			return nil, false, err
+			return nil, err
 		}
 	}
 	for _, k := range []struct{ kind, table string }{{"report", "reports"}, {"dashboard", "dashboards"}} {
 		if err := visible(k.kind, k.table, false); err != nil {
-			return nil, false, err
+			return nil, err
 		}
 	}
 	// CONNECT is orthogonal to VIEW: another set
 	if len(connectable) > 0 {
 		if err := scan("connection", `SELECT id, name, project_id, db_type FROM connections WHERE project_id = ANY($1) AND name ILIKE $2 ESCAPE '\'`,
 			true, false, perm.Sorted(connectable), pattern); err != nil {
-			return nil, false, err
+			return nil, err
 		}
 	}
-	return hits, false, nil
+	return hits, nil
 }
 
 // lockFlows sets each flow hit's locked_reason (flow_access.blocked on its definition).
 func lockFlows(ctx context.Context, d *Deps, checker *perm.Checker, p *auth.Principal, hits []SearchHit) error {
+	var ids []int64
+	for _, h := range hits {
+		if h.Kind == "flow" && h.LockedReason == nil {
+			ids = append(ids, int64(h.ID))
+		}
+	}
+	if len(ids) == 0 {
+		return nil
+	}
+	// every definition in one read: one query per hit made a search slower than Python's
+	definitions := make(map[int64]string, len(ids))
+	rows, err := d.DB.Query(ctx, `SELECT id, definition FROM flows WHERE id = ANY($1)`, ids)
+	if err != nil {
+		return err
+	}
+	for rows.Next() {
+		var id int64
+		var definition string
+		if err := rows.Scan(&id, &definition); err != nil {
+			rows.Close()
+			return err
+		}
+		definitions[id] = definition
+	}
+	rows.Close()
+	if err := rows.Err(); err != nil {
+		return err
+	}
 	acc := flowaccess.New(d.DB, checker, &p.User, d.flowSettings())
 	for i := range hits {
 		if hits[i].Kind != "flow" || hits[i].LockedReason != nil {
 			continue
 		}
-		var definition string
-		if err := d.DB.QueryRow(ctx, `SELECT definition FROM flows WHERE id = $1`, hits[i].ID).Scan(&definition); err != nil {
-			return err
+		definition, found := definitions[int64(hits[i].ID)]
+		if !found {
+			return pgx.ErrNoRows // as the single read did, for a flow deleted meanwhile
 		}
 		why, err := acc.Blocked(ctx, definition)
 		if err != nil {

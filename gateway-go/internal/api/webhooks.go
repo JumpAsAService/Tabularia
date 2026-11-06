@@ -40,8 +40,7 @@ func init() {
 	})
 }
 
-// adminBodyHandler is a route with a JSON body: the body as FastAPI read it, and its raw bytes
-// (to hand the request to Python when only Python can answer it).
+// adminBodyHandler is a route with a JSON body: the body as FastAPI read it, and its raw bytes.
 type adminBodyHandler = func(http.ResponseWriter, *http.Request, *auth.Principal, pyd.Body, []byte)
 
 // adminBody is withBody (common.go) with the raw bytes kept, then require_superuser: a
@@ -104,8 +103,9 @@ func scanWebhook(row pgx.Row) (webhookRow, error) {
 	return x, err
 }
 
-// webhookOut is _out; ok=false for an address only Python reads faithfully.
-func webhookOut(ctx context.Context, d *Deps, x webhookRow, full bool) (WebhookOut, bool, error) {
+// webhookOut is _out; urlsplit's ValueError (an address no save lets in) is an error, a 500 as
+// in Python.
+func webhookOut(ctx context.Context, d *Deps, x webhookRow, full bool) (WebhookOut, error) {
 	out := WebhookOut{ID: x.id, Name: x.name, URL: x.url, Events: webhooks.EventsOf(x.events), ProjectID: x.project,
 		Active: x.active, CreatedAt: pyjson.Isoformat(x.created)}
 	var status *string
@@ -121,7 +121,7 @@ func webhookOut(ctx context.Context, d *Deps, x webhookRow, full bool) (WebhookO
 		}
 		out.LastDeliveryAt = isoPtr(delivered)
 	case !errors.Is(err, pgx.ErrNoRows):
-		return out, true, err
+		return out, err
 	}
 	if x.project != nil && *x.project != 0 {
 		var name string
@@ -129,17 +129,17 @@ func webhookOut(ctx context.Context, d *Deps, x webhookRow, full bool) (WebhookO
 		if err == nil {
 			out.ProjectName = &name
 		} else if !errors.Is(err, pgx.ErrNoRows) {
-			return out, true, err
+			return out, err
 		}
 	}
 	if !full {
 		parts, err := pyurl.URLSplit(x.url)
 		if err != nil {
-			return out, false, nil
+			return out, err
 		}
 		out.URL = parts.Scheme + "://" + parts.HostnameOrNone() + "/…"
 	}
-	return out, true, nil
+	return out, nil
 }
 
 // listWebhooks is GET /webhooks, by name.
@@ -163,13 +163,9 @@ func listWebhooks(d *Deps) adminHandler {
 		}
 		out := []WebhookOut{}
 		for _, x := range list {
-			o, ok, err := webhookOut(ctx, d, x, full)
+			o, err := webhookOut(ctx, d, x, full)
 			if err != nil {
 				adminFail(d, w, "reading the webhooks", err)
-				return
-			}
-			if !ok {
-				forwardToPython(d, w, r, nil)
 				return
 			}
 			out = append(out, o)
@@ -246,8 +242,8 @@ func createWebhook(d *Deps) adminBodyHandler {
 		}
 		secret := webhooks.NewSecret()
 		url, err := webhooks.ValidateURL(b.Get("url").(string))
-		if errors.Is(err, webhooks.ErrNotASCII) {
-			forwardToPython(d, w, r, raw)
+		if errors.Is(err, webhooks.ErrNotASCII) || errors.Is(err, webhooks.ErrIDNAUnavailable) {
+			adminFail(d, w, "the address's IDNA encoding", err)
 			return
 		}
 		if err != nil {
@@ -290,7 +286,7 @@ func createWebhook(d *Deps) adminBodyHandler {
 			TargetID: &x.id, TargetLabel: &x.name, Detail: pyjson.Object{
 				{Key: "host", Value: hostOf(x.url)}, {Key: "events", Value: stringsAny(webhooks.EventsOf(x.events))},
 				{Key: "project_id", Value: int64OrNil(x.project)}}})
-		o, _, err := webhookOut(ctx, d, x, true)
+		o, err := webhookOut(ctx, d, x, true)
 		if err != nil {
 			adminFail(d, w, "reading the webhook", err)
 			return
@@ -375,8 +371,8 @@ func updateWebhook(d *Deps) adminBodyHandler {
 		}
 		if v := b.Get("url"); v != nil {
 			url, err := webhooks.ValidateURL(v.(string))
-			if errors.Is(err, webhooks.ErrNotASCII) {
-				forwardToPython(d, w, r, raw)
+			if errors.Is(err, webhooks.ErrNotASCII) || errors.Is(err, webhooks.ErrIDNAUnavailable) {
+				adminFail(d, w, "the address's IDNA encoding", err)
 				return
 			}
 			if err != nil {
@@ -421,7 +417,7 @@ func updateWebhook(d *Deps) adminBodyHandler {
 			audit.Record(ctx, d.DB, d.Log, audit.Event{Actor: &p.User, Action: "webhook.update", TargetType: &tt,
 				TargetID: &x.id, TargetLabel: &x.name, Detail: changes})
 		}
-		o, _, err := webhookOut(ctx, d, x, true)
+		o, err := webhookOut(ctx, d, x, true)
 		if err != nil {
 			adminFail(d, w, "reading the webhook", err)
 			return
@@ -471,7 +467,7 @@ func rotateWebhookSecret(d *Deps) adminHandler {
 		tt := "webhook"
 		audit.Record(ctx, d.DB, d.Log, audit.Event{Actor: &p.User, Action: "webhook.update", TargetType: &tt,
 			TargetID: &x.id, TargetLabel: &x.name, Detail: pyjson.Object{{Key: "secret", Value: "rotated"}}})
-		o, _, err := webhookOut(ctx, d, x, true)
+		o, err := webhookOut(ctx, d, x, true)
 		if err != nil {
 			adminFail(d, w, "reading the webhook", err)
 			return

@@ -183,7 +183,7 @@ func UsageObject(chats, enabled int64) pyjson.Object {
 }
 
 // NormalizeBaseURL is normalize_base_url: the address as it is stored, or the ValueError's
-// text; pyurl.ErrNotASCII for a host only Python judges.
+// text.
 func NormalizeBaseURL(kind, url string) (string, error) {
 	url = strings.TrimRight(strings.TrimFunc(url, unicode.IsSpace), "/")
 	if url == "" {

@@ -1,8 +1,6 @@
 package api
 
 import (
-	"bytes"
-	"errors"
 	"io"
 	"net/http"
 	"strings"
@@ -15,7 +13,7 @@ import (
 
 // routes/mcp.py: the MCP server, JSON-RPC 2.0 over HTTP without sessions. initialize, ping,
 // tools/list and the protocol's errors are answered here; a request carrying a tools/call
-// goes whole to Python, where the agent's tools run (services/agent).
+// goes whole to the AI service, where the agent's tools run (services/agent).
 func init() {
 	register("mcp", func(d *Deps) []server.Route {
 		return []server.Route{
@@ -89,9 +87,10 @@ func mcpSwitchedOn(d *Deps, w http.ResponseWriter) bool {
 }
 
 // sameOrigin is deps/auth.py same_origin: the Origin names the host it was sent to, or
-// one of APP__CORS_ORIGINS.
+// one of APP__CORS_ORIGINS. Starlette reads the headers as latin-1, and the host's case is
+// str.lower's; urlsplit's ValueError (an Origin whose netloc NFKC breaks) is the error.
 func sameOrigin(d *Deps, r *http.Request) (bool, error) {
-	origin := r.Header.Get("Origin")
+	origin := latin1(r.Header.Get("Origin"))
 	if origin == "" || origin == "null" {
 		return false, nil
 	}
@@ -100,7 +99,7 @@ func sameOrigin(d *Deps, r *http.Request) (bool, error) {
 			return true, nil
 		}
 	}
-	host := strings.ToLower(r.Host)
+	host := pyurl.Lower(latin1(r.Host))
 	if host == "" {
 		return false, nil
 	}
@@ -108,7 +107,21 @@ func sameOrigin(d *Deps, r *http.Request) (bool, error) {
 	if err != nil {
 		return false, err
 	}
-	return strings.ToLower(parts.Netloc) == host, nil
+	return pyurl.Lower(parts.Netloc) == host, nil
+}
+
+// latin1 is a header's bytes as Starlette decodes them: one character per byte.
+func latin1(s string) string {
+	for i := 0; i < len(s); i++ {
+		if s[i] >= 0x80 {
+			rs := make([]rune, len(s))
+			for j := 0; j < len(s); j++ {
+				rs[j] = rune(s[j])
+			}
+			return string(rs)
+		}
+	}
+	return s
 }
 
 // mcpEndpoint is POST /mcp: mcp_user (only an API token in the header), then the messages.
@@ -120,9 +133,6 @@ func mcpEndpoint(d *Deps) http.Handler {
 		if r.Header.Get("Origin") != "" {
 			same, err := sameOrigin(d, r)
 			switch {
-			case errors.Is(err, pyurl.ErrNotASCII):
-				forwardMCP(d, w, r, nil)
-				return
 			case err != nil:
 				server.InternalError(w) // urlsplit's ValueError, uncaught in Python
 				return
@@ -152,12 +162,13 @@ func mcpEndpoint(d *Deps) http.Handler {
 		if len(text) == 0 {
 			text = []byte("null")
 		}
-		body, err := pyjson.Loads(string(text))
-		if err != nil {
-			if !utf8OK(text) || bytes.HasPrefix(text, []byte("\xef\xbb\xbf")) {
-				forwardMCP(d, w, r, raw) // json.loads' guess of another encoding: Python's
-				return
-			}
+		var body any
+		var err error
+		decoded, ok := jsonBytesText(text)
+		if ok {
+			body, err = pyjson.Loads(decoded)
+		}
+		if !ok || err != nil {
 			writeRaw(w, http.StatusBadRequest, rpcError(nil, rpcParseError, "Parse error"))
 			return
 		}
@@ -204,12 +215,6 @@ func mcpEndpoint(d *Deps) http.Handler {
 	})
 }
 
-func forwardMCP(d *Deps, w http.ResponseWriter, r *http.Request, raw []byte) {
-	r.Body = io.NopCloser(bytes.NewReader(raw))
-	r.ContentLength = int64(len(raw))
-	d.Upstream.ServeHTTP(w, r)
-}
-
 func contains(list []string, s string) bool {
 	for _, x := range list {
 		if x == s {
@@ -218,8 +223,6 @@ func contains(list []string, s string) bool {
 	}
 	return false
 }
-
-func utf8OK(b []byte) bool { return strings.ToValidUTF8(string(b), "�") == string(b) }
 
 // callsATool: a message _handle would run a tool for.
 func callsATool(m any) bool {

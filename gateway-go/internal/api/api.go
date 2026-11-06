@@ -26,9 +26,6 @@ type Deps struct {
 	Log    *slog.Logger
 	Engine *engine.Client // core/engine_client.py
 	Fernet *secret.Fernet // core/crypto.py
-	// Upstream is the Python gateway behind: what a ported route cannot answer yet goes there
-	// untouched (see intPath)
-	Upstream http.Handler
 	// AIService forwards to the AI service (APP__ROLE=ai) the assistant's routes, untouched;
 	// SQL asks it for the SQL parsing (docs/specs/gateway-go.md, «The AI service»)
 	AIService http.Handler
@@ -52,6 +49,7 @@ func register(module string, routes func(*Deps) []server.Route) {
 // Routes is every ported route, module by module in name order.
 func Routes(d *Deps) []server.Route {
 	kubePanel.Store(d.Panel)
+	useIDNA(d)
 	names := make([]string, 0, len(modules))
 	for n := range modules {
 		names = append(names, n)

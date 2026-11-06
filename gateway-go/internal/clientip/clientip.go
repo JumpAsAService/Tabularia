@@ -110,3 +110,22 @@ func hostOf(v string) string {
 	}
 	return v
 }
+
+// Scheme is the scheme uvicorn's ProxyHeadersMiddleware puts in an HTTP request's scope: the
+// last X-Forwarded-Proto, stripped, when the connection comes from a trusted proxy and it is
+// http, https, ws or wss; «http» otherwise (the gateway serves no TLS itself).
+func (r *Resolver) Scheme(req *http.Request) string {
+	host, _, err := net.SplitHostPort(req.RemoteAddr)
+	if err != nil {
+		host = req.RemoteAddr
+	}
+	v := req.Header.Values("X-Forwarded-Proto")
+	if len(v) == 0 || !r.trusted(host) {
+		return "http"
+	}
+	switch p := strings.TrimSpace(v[len(v)-1]); p {
+	case "http", "https", "ws", "wss":
+		return p
+	}
+	return "http"
+}

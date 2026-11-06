@@ -3,6 +3,7 @@ package api
 import (
 	"context"
 	"errors"
+	"fmt"
 	"io"
 	"net/http"
 	"regexp"
@@ -22,9 +23,9 @@ import (
 
 // routes/backups.py: the automatic backup of this database (services/db_backup.py). Read by
 // administrators and observers; changed, started and downloaded by administrators, never
-// with an API token. On Kubernetes the backups run (the orchestrators' pg_dump, the engine's
-// listing): those answers stay Python's until the orchestrator is ported; with Docker
-// Compose the section is greyed out (disabled_reason «kubernetes») and answered here.
+// with an API token. On Kubernetes the backups run (the orchestrators' pg_dump, jobs_backup.go)
+// and the page lists the ones the engine keeps; with Docker Compose the section is greyed out
+// (disabled_reason «kubernetes»), and «pg_dump» when the program is not in the image.
 func init() {
 	register("backups", func(d *Deps) []server.Route {
 		return []server.Route{
@@ -108,7 +109,7 @@ func (d *Deps) backupEffective(r backupRow) (backupEffective, pyjson.Object, pyj
 
 type backupItem struct {
 	Name     string  `json:"name"`
-	Size     int64   `json:"size"`
+	Size     any     `json:"size"` // an int (past int64: a *big.Int)
 	Modified *string `json:"modified"`
 }
 
@@ -139,19 +140,116 @@ type BackupOut struct {
 	Editable       bool          `json:"editable"`
 }
 
-// backupOut is _out with Docker Compose's disabled_reason: no listing asked of the engine.
+// backupItemModel is routes/backups.py BackupItem.
+var backupItemModel = pyd.NewModel("BackupItem",
+	pyd.F("name", pyd.Str()),
+	pyd.F("size", pyd.Int()),
+	pyd.F("modified", pyd.Optional(pyd.Str())).Default(nil),
+)
+
+// errBackupOut is a listing BackupOut cannot be built from (a ValidationError, a TypeError):
+// a 500.
+var errBackupOut = errors.New("backups: the engine's listing does not fit BackupOut")
+
+// backupListing is db_backup.listing: where the backups go and the ones there (the engine's
+// GET /backups), or why they could not be listed.
+func backupListing(ctx context.Context, d *Deps) (any, error) {
+	cctx, cancel := context.WithTimeout(ctx, 30*time.Second)
+	defer cancel()
+	res, raw, err := d.Engine.JSON(cctx, http.MethodGet, "/backups", nil)
+	failed := func(why string) *pyd.Object {
+		o := pyd.NewObject()
+		for _, k := range []string{"bucket", "prefix", "same_as_data"} {
+			o.Set(k, nil)
+		}
+		o.Set("items", []any{})
+		o.Set("error", why)
+		return o
+	}
+	switch {
+	case err != nil:
+		return failed(fmt.Sprintf("The engine could not be reached (%s)", httpxName(err))), nil
+	case res.StatusCode >= 400:
+		return failed(backupEngineError(raw)), nil
+	}
+	return pyd.LoadsStr(string(raw)) // a ValueError: a 500
+}
+
+// backupFound fills what _out reads of the listing, checked as BackupOut checks it.
+func backupFound(out *BackupOut, found any, full bool) error {
+	o, ok := found.(*pyd.Object)
+	if !ok {
+		return errBackupOut // found.get: an AttributeError
+	}
+	get := func(k string) any { v, _ := o.Get(k); return v }
+	text := func(k string) (*string, error) {
+		v, ok := fitsType(pyd.Optional(pyd.Str()), get(k))
+		if !ok {
+			return nil, errBackupOut
+		}
+		if s, isStr := v.(string); isStr {
+			return &s, nil
+		}
+		return nil, nil
+	}
+	var err error
+	if out.Bucket, err = text("bucket"); err != nil {
+		return err
+	}
+	if out.Prefix, err = text("prefix"); err != nil {
+		return err
+	}
+	same, ok := fitsType(pyd.Optional(pyd.Bool()), get("same_as_data"))
+	if !ok {
+		return errBackupOut
+	}
+	if b, isBool := same.(bool); isBool {
+		out.SameAsData = &b
+	}
+	if items := get("items"); pyd.Truthy(items) {
+		list, isList := items.([]any)
+		if !isList {
+			return errBackupOut // a dict's keys, a text's characters: no BackupItem(**i)
+		}
+		for _, it := range list {
+			v, ok := fitsType(pyd.ModelOf(backupItemModel), it)
+			if !ok {
+				return errBackupOut
+			}
+			item := v.(pyjson.Object)
+			bi := backupItem{Name: item.Value("name").(string), Size: item.Value("size")}
+			if m, isStr := item.Value("modified").(string); isStr {
+				bi.Modified = &m
+			}
+			out.Items = append(out.Items, bi)
+		}
+	}
+	if full {
+		out.StorageError, err = text("error")
+		return err
+	} else if pyd.Truthy(get("error")) {
+		s := "The backups could not be listed"
+		out.StorageError = &s
+	}
+	return nil
+}
+
+// backupOut is _out: the state, and on Kubernetes the backups the engine lists.
 func backupOut(ctx context.Context, d *Deps, full bool) (BackupOut, error) {
+	reason := backupDisabledReason(d)
 	r, err := readBackupRow(ctx, d)
 	if err != nil {
 		return BackupOut{}, err
 	}
 	e, defaults, changed := d.backupEffective(r)
-	reason := "kubernetes"
 	out := BackupOut{
-		DisabledReason: &reason, Enabled: e.enabled, Schedule: e.schedule, Keep: e.keep, Timezone: d.Panel.Timezone(),
+		Available: reason == "", Enabled: e.enabled, Schedule: e.schedule, Keep: e.keep, Timezone: d.Panel.Timezone(),
 		Defaults: defaults, Changed: changed, RequestedAt: isoPtr(r.RequestedAt), LastOKAt: isoPtr(r.LastOKAt),
 		LastName: r.LastName, LastSize: r.LastSize, LastSeconds: r.LastSeconds, LastErrorAt: isoPtr(r.LastErrorAt),
 		Items: []backupItem{}, Editable: full,
+	}
+	if reason != "" {
+		out.DisabledReason = &reason
 	}
 	if e.enabled {
 		out.NextAt = isoPtr(r.NextAt)
@@ -168,24 +266,21 @@ func backupOut(ctx context.Context, d *Deps, full bool) (BackupOut, error) {
 	if full {
 		out.LastError = r.LastError
 	}
-	return out, nil
-}
-
-// onKubernetes answers false here: on a cluster the request goes to Python.
-func backupsOnKubernetes(d *Deps, w http.ResponseWriter, r *http.Request, raw []byte) bool {
-	if d.Config.Admin.OnKubernetes {
-		forwardToPython(d, w, r, raw)
-		return true
+	if reason == "" {
+		found, err := backupListing(ctx, d)
+		if err != nil {
+			return BackupOut{}, err
+		}
+		if err := backupFound(&out, found, full); err != nil {
+			return BackupOut{}, err
+		}
 	}
-	return false
+	return out, nil
 }
 
 // backupState is GET /admin/backups.
 func backupState(d *Deps) adminHandler {
 	return func(w http.ResponseWriter, r *http.Request, p *auth.Principal) {
-		if backupsOnKubernetes(d, w, r, nil) {
-			return
-		}
 		full, err := isAdmin(d, r, p)
 		if err != nil {
 			adminFail(d, w, "reading the roles", err)
@@ -211,9 +306,6 @@ func backupChange(d *Deps) http.Handler {
 		b := ps.Body(body, gatewaymodels.BackupUpdate)
 		if resp := ps.Response(); resp != nil {
 			resp.Write(w)
-			return
-		}
-		if backupsOnKubernetes(d, w, r, raw) {
 			return
 		}
 		ctx := r.Context()
@@ -292,16 +384,43 @@ func saveBackupChanges(ctx context.Context, d *Deps, changes pyjson.Object, by s
 	return err
 }
 
-// backupNow is POST /admin/backups/run: «Back up now»; never with Docker Compose.
+// backupNow is POST /admin/backups/run: «Back up now»: the first orchestrator that looks
+// makes it; never with Docker Compose.
 func backupNow(d *Deps) adminHandler {
 	return func(w http.ResponseWriter, r *http.Request, p *auth.Principal) {
 		if denyFromToken(w, r, p, noBackupFromToken) {
 			return
 		}
-		if backupsOnKubernetes(d, w, r, nil) {
+		if backupDisabledReason(d) != "" {
+			adminDetail(w, http.StatusConflict, "Backups are not available on this installation")
 			return
 		}
-		adminDetail(w, http.StatusConflict, "Backups are not available on this installation")
+		ctx := r.Context()
+		if _, err := readBackupRow(ctx, d); err != nil {
+			adminFail(d, w, "reading the backups", err)
+			return
+		}
+		now := nowNaive()
+		// db_backup.stop(): no live backup running; and none asked for already
+		tag, err := d.DB.Exec(ctx, `UPDATE database_backups SET requested_at = $1, requested_by = $2 WHERE id = 1
+			AND (running_since IS NULL OR coalesce(alive_at, running_since) < $3) AND requested_at IS NULL`,
+			now, p.User.Email, now.Add(-backupAlive))
+		if err != nil {
+			adminFail(d, w, "asking for a backup", err)
+			return
+		}
+		if tag.RowsAffected() != 1 {
+			adminDetail(w, http.StatusConflict, "A backup is already running or about to start")
+			return
+		}
+		tt := "database_backup"
+		audit.Record(ctx, d.DB, d.Log, audit.Event{Actor: &p.User, Action: "backup.request", TargetType: &tt})
+		out, err := backupOut(ctx, d, true)
+		if err != nil {
+			adminFail(d, w, "reading the backups", err)
+			return
+		}
+		server.JSON(w, http.StatusOK, out)
 	}
 }
 
