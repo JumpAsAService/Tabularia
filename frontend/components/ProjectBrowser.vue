@@ -2270,8 +2270,7 @@ table.perm td.right { text-align: right; width: 32px; }
 /* the deletion sits at the bottom of the panel, apart: it is not met by chance */
 .dangerzone { margin-top: auto; padding-top: 14px; border-top: 1px solid var(--border-soft); }
 button.mini { padding: 2px 8px; min-height: 24px; }
-button.danger, .mini.danger { border-color: var(--danger); color: var(--danger); }
-button.danger:hover { background: var(--danger-fill); color: var(--on-danger); }
+/* button.danger (rest, mini hover, sweep) lives in main.css */
 
 @media (max-width: 720px) {
   .bar { flex-wrap: wrap; }

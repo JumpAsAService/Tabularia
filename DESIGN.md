@@ -329,9 +329,10 @@ Small, quiet, tactile: the default button is a neutral chip, and the press is fe
 - **Shape:** 8px radius, 6px 12px padding, inline-flex with a 6px gap for a leading lucide icon; inherits the body font.
 - **Default:** `panel-2` fill, `border` outline, `text` colour.
 - **Primary (`.primary`, and `.btn-link` for anchors):** `--grad-accent` fill, transparent border, `--on-accent` text, weight 500. One per view or dialog footer.
-- **Danger (`.danger`):** `danger` outline and text at rest; fills `danger` on hover.
+- **Danger (`.danger`):** `danger` outline and text at rest (global, `main.css`); on hover the `danger-fill` sweeps in and the text turns `on-danger` as it passes the middle.
 - **Mini (`.mini`):** 3px 8px, 24px minimum height (the AA target floor), for row actions and pager arrows.
-- **Hover / active / disabled:** border turns `accent` with `--shadow-1` (primary instead brightens 1.12 with an accent glow); `:active` moves 1px down; disabled is 45% opacity, no shadow, no press. Transitions 0.15s (transform 0.1s).
+- **Hover sweep:** on buttons with a label (plain, `.primary`, `.danger`, `.btn-link`) a fill slides in from the left: a `::before` under the content, `clip-path: inset(0 100% 0 0)` → `inset(0)`, 220ms `--ease-out` in, 120ms ease-out out. Plain buttons take `--tint-accent` (and the `accent` border with `--shadow-1`); primaries take `--sweep-primary`, a veil that pushes the gradient away from `--on-accent` (darker under white text, lighter under Dracula's and Monokai's dark text), so the hover only raises contrast, plus the accent glow; danger takes `danger-fill`. Only under `(hover: hover) and (pointer: fine)`. Never on mini, icon-only (`aria-label`), tab, segment, menu, list or option buttons, nor disabled ones: those keep a plain colour change (mini: `--dur-1`). Under reduced motion the fill fades in place over 100ms.
+- **Active / disabled:** `:active` shrinks to `scale(0.97)` in `--dur-1` (none under reduced motion); disabled is 45% opacity, no shadow, no press, no sweep.
 - **Focus:** `:focus-visible` only: `outline: 2px solid var(--accent); outline-offset: 2px`. Outline, not box-shadow, so it follows the theme and does not fight the hover shadow.
 - **Busy:** the leading icon is replaced by a spinner (lucide `Loader` with `.spin`, 1s linear) and the label changes to the progressive form; the button is disabled.
 

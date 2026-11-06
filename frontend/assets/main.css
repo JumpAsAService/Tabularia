@@ -68,6 +68,10 @@
   --sheen: rgba(255, 255, 255, 0.03);     /* sheen on the node titles */
   --edge: #3d4a66;                        /* canvas edges */
   --tint-accent: rgba(79, 140, 255, 0.1); /* accent tint (active tabs/badges) */
+  /* the veil that sweeps across a primary button on hover: it pushes the gradient AWAY
+     from --on-accent, so the text's contrast only grows (white text: a darker veil, 5.2+
+     like the old brightness(0.92); dark text, Dracula and Monokai: a lighter one) */
+  --sweep-primary: rgba(0, 0, 0, 0.1);
   --shimmer: rgba(255, 255, 255, 0.07);   /* moving glow of the skeletons */
   color-scheme: dark;                     /* native controls (calendars, selects) */
 }
@@ -146,6 +150,7 @@
   --sheen: rgba(255, 255, 255, 0.03);
   --edge: #6272a4;
   --tint-accent: rgba(189, 147, 249, 0.16);
+  --sweep-primary: rgba(255, 255, 255, 0.22); /* dark text on a light gradient */
   --shimmer: rgba(248, 248, 242, 0.07);
   color-scheme: dark;
 }
@@ -184,6 +189,7 @@
   --sheen: rgba(255, 255, 255, 0.03);
   --edge: #75715e;
   --tint-accent: rgba(102, 217, 239, 0.15);
+  --sweep-primary: rgba(255, 255, 255, 0.22); /* dark text on a light gradient */
   --shimmer: rgba(248, 248, 242, 0.07);
   color-scheme: dark;
 }
@@ -274,19 +280,79 @@ button {
   align-items: center;
   gap: 6px;
   justify-content: center;
-  transition: border-color var(--dur-2), background var(--dur-2), transform var(--dur-1), box-shadow var(--dur-2);
+  transition: border-color var(--dur-2), background var(--dur-2), color var(--dur-2), transform var(--dur-1) ease-out, box-shadow var(--dur-2);
 }
 button:hover { border-color: var(--accent); box-shadow: var(--shadow-1); }
-button:active { transform: translateY(1px); }
+/* the press is felt: a slight shrink, no layout shift */
+button:active { transform: scale(0.97); }
 button.primary {
   background: var(--grad-accent);
   border-color: transparent;
   color: var(--on-accent);
   font-weight: 500;
 }
-/* the hover DARKENS: lightening took the white on the primary under AA (3.80 with the
-   light theme); darkened by 0.92 it stays above 5.2 in every theme. The glow follows the theme. */
-button.primary:hover { filter: brightness(0.92); box-shadow: 0 2px 12px color-mix(in srgb, var(--accent) 35%, transparent); }
+/* the glow follows the theme; the fill's change is the sweep below (no filter: the veil
+   alone sets the hover's contrast) */
+button.primary:hover { box-shadow: 0 2px 12px color-mix(in srgb, var(--accent) 35%, transparent); }
+/* :where() keeps these at the element's specificity: a component's own rules always win */
+button:where(.danger) { border-color: var(--danger); color: var(--danger); }
+button:where(.danger):hover { border-color: var(--danger); } /* not the accent of the plain hover */
+/* row and bar buttons are small and frequent: an immediate colour change, no sweep */
+button.mini { transition: border-color var(--dur-1), background var(--dur-1), color var(--dur-1), transform var(--dur-1) ease-out, box-shadow var(--dur-1); }
+button.mini.danger:hover:not(:disabled) { background: var(--danger-fill); color: var(--on-danger); }
+
+/* Hover sweep: on the buttons with a label (plain, primary, danger, .btn-link anchors) a
+   fill slides in from the left edge, through clip-path on a pseudo-element under the
+   content (text and icon stay on top): in 220ms with the ease-out, back out in 120ms, quick
+   where the system answers. Not on the mini and icon-only (aria-label) buttons, tabs,
+   segments, menu and list items, options: they keep their own colour change. The hover
+   only flips custom properties, so no other ::before of a button is ever touched. */
+button:where(:not([class]), .primary, .danger, .btn-link):where(:not(
+  .mini, .fa-mini, [aria-label], [aria-pressed], [role="tab"], [role="radio"], [role="option"],
+  [role="menuitem"], [role="menuitemradio"], [role="menuitemcheckbox"],
+  [role="tablist"] *, [role="radiogroup"] *, [role="menu"] *, [role="listbox"] *, li > *
+)), a:where(.btn-link) {
+  position: relative;
+  isolation: isolate;
+}
+:where(button.primary, .btn-link) { --sweep: var(--sweep-primary); }
+:where(button.danger) { --sweep: var(--danger-fill); }
+button:where(:not([class]), .primary, .danger, .btn-link):where(:not(
+  .mini, .fa-mini, [aria-label], [aria-pressed], [role="tab"], [role="radio"], [role="option"],
+  [role="menuitem"], [role="menuitemradio"], [role="menuitemcheckbox"],
+  [role="tablist"] *, [role="radiogroup"] *, [role="menu"] *, [role="listbox"] *, li > *
+))::before, a:where(.btn-link)::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+  background: var(--sweep, var(--tint-accent));
+  z-index: -1;              /* above the button's own fill, under its content */
+  pointer-events: none;
+  clip-path: inset(0 var(--sweep-x, 100%) 0 0);
+  opacity: var(--sweep-o, 1);
+  transition: clip-path var(--sweep-t, 120ms ease-out), opacity 100ms ease-out;
+}
+a:where(.btn-link) { transition: transform var(--dur-1) ease-out, box-shadow var(--dur-2); }
+a:where(.btn-link):active { transform: scale(0.97); }
+@media (hover: hover) and (pointer: fine) {
+  :where(button:not(:disabled, [aria-disabled="true"]), a.btn-link):hover {
+    --sweep-x: 0%;
+    --sweep-t: 220ms var(--ease-out);
+  }
+  /* the danger text turns with the fill as the sweep passes the middle (~25ms in, ~40ms
+     out): a short crossfade instead of a jump */
+  button:where(.danger:not(.mini)) { transition: border-color var(--dur-2), transform var(--dur-1) ease-out, box-shadow var(--dur-2), color 60ms linear 10ms; }
+  button:where(.danger:not(.mini, :disabled):hover) { color: var(--on-danger); transition: border-color var(--dur-2), transform var(--dur-1) ease-out, box-shadow var(--dur-2), color 60ms linear; }
+}
+/* reduced motion: no sweep and no shrink, the fill fades in and out in place */
+@media (prefers-reduced-motion: reduce) {
+  button:active, a:where(.btn-link):active { transform: none; }
+  :where(button, a.btn-link) { --sweep-x: 0%; --sweep-o: 0; }
+}
+@media (prefers-reduced-motion: reduce) and (hover: hover) and (pointer: fine) {
+  :where(button:not(:disabled, [aria-disabled="true"]), a.btn-link):hover { --sweep-o: 1; }
+}
 button:disabled { opacity: 0.45; cursor: not-allowed; box-shadow: none; transform: none; }
 /* Keyboard navigation: the fields had their ring (further below), the buttons did not —
    the browser's default stayed, barely visible on these backgrounds. `outline` instead
