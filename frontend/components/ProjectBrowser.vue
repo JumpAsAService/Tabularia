@@ -1478,6 +1478,11 @@ watch(currentId, () => { q.value = ''; kindFilter.value = null; settingsOpen.val
               </span>
               <span v-if="r.kind === 'datasource' && r.raw.kind === 'database'" class="tag">db</span>
               <ContractBadge v-if="r.kind === 'datasource'" :contract="r.raw.contract" :size="15" />
+              <!-- on a phone the meta's column is gone: the meta goes under the name -->
+              <span v-if="r.meta || r.progressRun" class="rmeta-sub muted">
+                <RunProgressText v-if="r.progressRun" :run="r.progressRun" :sr-label="r.meta" />
+                <template v-else>{{ r.meta }}</template>
+              </span>
             </td>
             <td class="rmeta muted">
               <span class="rmeta-text" :title="r.progressRun ? undefined : r.meta">
@@ -1839,6 +1844,7 @@ tr.folderrow .kicon { color: var(--accent-2); }
    the room the name and the actions leave, and cuts only what does not fit (whole in the
    tooltip) — before, a fixed 36ch cut it on wide screens too */
 .rmeta-text { display: block; overflow: hidden; text-overflow: ellipsis; }
+.rmeta-sub { display: none; }
 .racts { text-align: right; white-space: nowrap; display: flex; gap: 4px; justify-content: flex-end; }
 .tag {
   font-size: 10px;
@@ -1935,7 +1941,13 @@ button.danger:hover { background: var(--danger-fill); color: var(--on-danger); }
   .bar { flex-wrap: wrap; }
   /* the path on a line of its own, scrolled sideways if long: it was cut to «All f» */
   .crumbs { flex-basis: 100%; overflow-x: auto; }
-  .searchbox input { width: 120px; }
+  /* the filter takes the line's room: the bar's buttons stay on the same line */
+  .searchbox { flex: 1 1 0; min-width: 0; }
+  .searchbox input, .searchbox input:focus { width: 100%; min-width: 0; }
   .rmeta { display: none; }
+  /* the meta on a second line under the name, the row's commands in «⋯» alone */
+  .rmeta-sub { display: block; margin: 2px 0 0 23px; font-size: 12px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; max-width: 62vw; }
+  .rprimary { display: none; }
+  .rname { width: auto; }
 }
 </style>

@@ -5,6 +5,9 @@ exposes at `/system/info` and in the app's settings menu.
 
 ## Unreleased
 
+- **Explore on a phone**: under 720px a row's details move to a second line under its name
+  instead of disappearing, the row keeps only «⋯», and the filter takes the bar's spare
+  room so its buttons stay on one line.
 - **Explore's row actions in one menu**: each row keeps at most its kind's main command
   (a flow's run history, a database datasource's refresh) and a «⋯» button; the menu, also
   on right click where the pointer is, lists the commands in the same order for every kind
