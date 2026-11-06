@@ -43,6 +43,12 @@ spec:
               app.kubernetes.io/name: {{ include "tabularia.name" . }}
               app.kubernetes.io/instance: {{ .Release.Name }}
               app.kubernetes.io/component: orchestrator
+        # the AI service: the assistant reads the data through the engine
+        - podSelector:
+            matchLabels:
+              app.kubernetes.io/name: {{ include "tabularia.name" . }}
+              app.kubernetes.io/instance: {{ .Release.Name }}
+              app.kubernetes.io/component: ai
         - podSelector:
             matchLabels:
               app.kubernetes.io/name: {{ include "tabularia.name" . }}
