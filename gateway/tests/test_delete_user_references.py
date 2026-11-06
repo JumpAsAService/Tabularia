@@ -18,6 +18,7 @@ from tests.conftest import make_datasource, make_flow, make_project, make_user
 
 # every foreign key to users, and what deleting the account does with it. A new
 # one makes the first test fail: handle it in `remove_user`, then list it here.
+# share_links.creator_id is ON DELETE CASCADE: the database takes the links with the account.
 REFERENCES = {
     ("ai_models", "updated_by"), ("ai_providers", "updated_by"), ("api_tokens", "user_id"), ("api_tokens", "created_by"),
     ("audit_logs", "actor_id"), ("banners", "created_by"), ("connections", "owner_id"),
@@ -28,7 +29,7 @@ REFERENCES = {
     ("flows", "run_scheduled_by"), ("permissions", "user_id"), ("privacy_notice", "updated_by"),
     ("notebook_sessions", "user_id"), ("notebook_tickets", "user_id"), ("notebook_visitors", "user_id"), ("notebook_versions", "created_by"), ("notebooks", "draft_by"), ("notebooks", "owner_id"),
     ("projects", "owner_id"), ("report_versions", "created_by"), ("report_views", "user_id"), ("reports", "owner_id"), ("runs", "launched_by"), ("saved_script_versions", "created_by"),
-    ("saved_scripts", "owner_id"), ("saved_scripts", "run_scheduled_by"), ("saved_views", "owner_id"),
+    ("saved_scripts", "owner_id"), ("share_links", "creator_id"), ("saved_scripts", "run_scheduled_by"), ("saved_views", "owner_id"),
     ("sql_script_versions", "created_by"), ("sql_scripts", "owner_id"), ("sql_scripts", "run_scheduled_by"), ("uploads", "owner_id"),
     ("user_groups", "user_id"), ("user_sessions", "user_id"), ("webhooks", "created_by"),
 }

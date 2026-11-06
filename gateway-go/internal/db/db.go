@@ -13,7 +13,7 @@ import (
 // SchemaRevision is the Alembic head the Go code reads and writes
 // (gateway/app/db/migrations/versions). A database at another revision is refused at
 // start: a column read here may have moved.
-const SchemaRevision = "0038"
+const SchemaRevision = "0039"
 
 // Open makes the pool. maxConns 0 = pgx's default.
 func Open(ctx context.Context, dsn string, maxConns int32) (*pgxpool.Pool, error) {

@@ -40,6 +40,7 @@ from app.models.privacy import PrivacyNotice
 from app.models.shared_state import FlowPresence, LoginAttempt
 from app.models.contract import DataContract, DataContractResult, DataContractVersion
 from app.models.dbt_ai_text import DbtAiText
+from app.models.share_link import ShareLink, ShareLinkSession, ShareLinkSettings
 
 __all__ = [
     "User", "Group", "UserGroupLink", "UserSession", "ApiToken", "Webhook", "WebhookDelivery", "Project", "Permission", "Capability",
@@ -49,4 +50,5 @@ __all__ = [
     "ContainerRegistryVariable", "SavedScript", "SavedScriptVersion", "SavedView", "SqlScript", "SqlScriptVersion", "Report", "ReportVersion", "ReportView", "Dashboard", "DashboardVersion", "DashboardView", "Notebook", "NotebookVersion", "NotebookSession", "NotebookVisitor", "NotebookTicket", "NotebookRead", "FlowGroup", "AiModel", "AiPrompt", "AiProvider", "AiChat", "AiChatTurn", "AiSpend", "AiComment", "AiCommentThread", "AgentDraft", "AgentPlan", "PrivacyNotice",
     "FlowPresence", "LoginAttempt",
     "DataContract", "DataContractResult", "DataContractVersion", "DbtAiText",
+    "ShareLink", "ShareLinkSession", "ShareLinkSettings",
 ]

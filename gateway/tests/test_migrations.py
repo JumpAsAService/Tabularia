@@ -296,3 +296,27 @@ def test_0038_adds_the_flow_shortcuts_and_leaves_what_was_there(temporary_databa
     with temporary_database.begin() as c:
         c.execute(text("INSERT INTO users (id, email, full_name, is_active, is_superuser, is_observer, created_at) "
                        "VALUES (2, 'bob@example.com', '', true, false, false, now())"))
+
+
+def test_0039_adds_the_share_links_and_leaves_what_was_there(temporary_database):
+    """Three tables the previous version does not know, and the settings' one row with the
+    feature on; a deleted creator takes their links and the links' sessions with them."""
+    with temporary_database.begin() as c:
+        command.upgrade(m._config(c), "0038")
+        c.execute(text("INSERT INTO users (id, email, full_name, is_active, is_superuser, is_observer, created_at) "
+                       "VALUES (1, 'ann@example.com', 'Ann', true, false, false, now())"))
+    m.migra(temporary_database)  # stops if the database and the models differ
+    with temporary_database.connect() as c:
+        assert c.execute(text("SELECT email FROM users")).scalar() == "ann@example.com"
+        assert c.execute(text("SELECT enabled, max_days, ai_comments_per_hour FROM share_link_settings")).one() == (True, 90, 20)
+    with temporary_database.begin() as c:
+        c.execute(text(
+            "INSERT INTO share_links (id, token_hash, token_hint, kind, object_id, label, creator_id, embeddable, origins, "
+            "password_temporary, failures, params, downloads, expires_at, created_at, openings, ai_calls) "
+            "VALUES (1, 'h', 'abcd', 'report', 7, '', 1, false, '[]', true, 0, '{}', '[]', now(), now(), 0, 0)"))
+        c.execute(text("INSERT INTO share_link_sessions (id, link_id, purpose, created_at, last_seen_at, expires_at) "
+                       "VALUES ('s', 1, 'view', now(), now(), now())"))
+    with temporary_database.begin() as c:
+        c.execute(text("DELETE FROM users WHERE id = 1"))
+    with temporary_database.connect() as c:
+        assert [c.execute(text(f"SELECT count(*) FROM {t}")).scalar() for t in ("share_links", "share_link_sessions")] == [0, 0]
