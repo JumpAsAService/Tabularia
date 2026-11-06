@@ -30,8 +30,9 @@ certificate authority), follow [A company-like cluster on one computer](kind.md)
 | Component | Image | Command | Exposure | Replicas |
 |---|---|---|---|---|
 | Frontend (Nuxt 3) | `frontend/Dockerfile.prod`, see [Frontend](#frontend) | image default | public | N |
-| Gateway (FastAPI control plane) | `gateway/Dockerfile`, see [Gateway image](#gateway-image-gatewaydockerfile) | image default, `APP__ROLE=api` | public | N |
-| Orchestrator (the gateway's background work) | `gateway/Dockerfile` | image default, `APP__ROLE=orchestrator` | none | 1, or more for failover |
+| Gateway (Go control plane) | `gateway-go/Dockerfile` | image default, `APP__ROLE=api` | public | N |
+| Orchestrator (the gateway's background work) | `gateway-go/Dockerfile` | image default, `APP__ROLE=orchestrator` | none | 1, or more for failover |
+| AI service (assistant, SQL parsing, first administrator) | `gateway/Dockerfile`, see [Gateway image](#gateway-image-gatewaydockerfile) | `uvicorn app.main:app`, `APP__ROLE=ai` | internal only | 1, or more for failover |
 | Engine API | `backend/Dockerfile`, see [Backend image](#backend-image-backenddockerfile) | image default | **internal only** | N |
 | Run worker | `backend/Dockerfile` | `celery -A app.tasks.celery_app worker -E -Q celery --loglevel=info` | none | N |
 | Preview worker | `backend/Dockerfile` | `celery -A app.tasks.celery_app worker -E -Q preview --loglevel=info` | none | N |
@@ -198,6 +199,11 @@ sources from and writes results to the bucket. Uploads, exports, database refres
 database/S3 outputs still use `/tmp` whatever the engine.
 
 ## Gateway image (`gateway/Dockerfile`)
+
+The Python image: the AI service and the schema migrations (`python -m app.db.migra`, the
+init container of the gateway pods). The gateway and the orchestrator run the Go image
+(`gateway-go/Dockerfile`: the binary, `pg_dump`/`pg_restore` of PostgreSQL 14 to 18 for the
+backups, uid/gid 10001), which reaches the AI service at `GATEWAY_GO__AI_SERVICE`.
 
 Same rules as the backend image: one Dockerfile for development and production, uid/gid
 **10001**, compatible with a read-only root filesystem, `/tmp` the only writable path.

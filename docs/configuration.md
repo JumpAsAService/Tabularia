@@ -30,8 +30,12 @@ default shown below. Keep comments on their own line: not every tool strips a tr
   Secret you name in `existingSecret`. See [Deploying on Kubernetes](deploy/kubernetes.md).
 
 **Who reads what.** The *gateway* is the control plane (API, sign-in, permissions,
-schedules, flow orchestration), in one process or split into `api` and `orchestrator`
-copies (`APP__ROLE`). The *engine* is one image with several roles: the internal engine
+schedules, flow orchestration), a Go program (`gateway-go/`), in one process or split into
+`api` and `orchestrator` copies (`APP__ROLE`). Next to it runs the *AI service*: the Python
+gateway image with `APP__ROLE=ai`, which answers the assistant's routes and the SQL parsing
+the gateway asks for (`GATEWAY_GO__AI_SERVICE`, required, is its address), creates the first
+administrator and, as before, runs the schema migrations (`python -m app.db.migra`). Both
+read the same variables. The *engine* is one image with several roles: the internal engine
 API, the run and preview workers, and the beat scheduler; they all read the same
 settings. The *frontend* reads a few public values at startup. A variable only matters to
 the service it is listed under; giving it to the others is harmless.
@@ -107,7 +111,7 @@ Read by both services, so listed under [Shared by the gateway and the engine](#s
 | `APP__NAME` | string | `Tabularia` | `extraEnv` | Product name shown by the API. Product identity, not a deployment setting: leave it. |
 | `APP__VERSION` | string | `1.3.0` | `extraEnv` | The release, shown by `/system/info` and in the interface's menu. Set by the code; leave it. |
 | `APP__CODENAME` | string | `Catone` | `extraEnv` | The release's name. Set by the code; leave it. |
-| `APP__ROLE` | one of `all`, `api`, `orchestrator` | `all` | set per workload: `api` for the gateway, `orchestrator` for the orchestrator | What this gateway process does: `all` answers requests and does the background work (schedules, flow executions, clean-up); `api` only answers; `orchestrator` only does the background work. Split them to run several copies: they share the work through the database. |
+| `APP__ROLE` | one of `all`, `api`, `orchestrator` (`ai`: the AI service only) | `all` | set per workload: `api` for the gateway, `orchestrator` for the orchestrator | What this gateway process does: `all` answers requests and does the background work (schedules, flow executions, clean-up); `api` only answers; `orchestrator` only does the background work. Split them to run several copies: they share the work through the database. |
 | `APP__ROOT_PATH` | string; a path such as `/api` | empty | `ingress.apiPrefix` | Path prefix a reverse proxy publishes the gateway under, stripping it before forwarding (`/api` when one host serves interface and API). It fixes the paths the gateway writes for the browser: the SSO cookie, `/docs`, redirects. Empty = published at the root. |
 | `APP__GATEWAY_THREADS` | integer, ≥ 4 | `40` | `gateway.threads` | Threads serving the synchronous routes. More do not serve more (Python runs one at a time); the database pool follows this number. A different name from the engine's `APP__ENGINE_API_THREADS` because both read the same file and want opposite values. Also adjustable in Administration → Settings, applied after a restart of the gateway and orchestrator. |
 | `APP__TIMEZONE` | string; an IANA name, e.g. `Europe/Rome` | `UTC` | `app.timezone` | Time zone in which cron schedules are read (wall-clock time, daylight saving included); they are stored in UTC. Timestamps are still shown in each viewer's own time zone. Also adjustable in Administration → Settings. |
@@ -676,7 +680,7 @@ containers.
 | `SAMPLES_SCALE` | `small` | Compose (`infrastructure/.env`) | Size of the sample data: `small` (seconds, fits a laptop), `medium`, `robust` (42M order lines, minutes and a few GB), `massive` (a billion CRM activities in ClickHouse, a couple of hours and about 50 GB free). Generated once; `robusta`, `robust`'s earlier name, is still accepted. |
 | `SAMPLES_ENGINE` | empty | Compose (`infrastructure/.env`) | Engine of the sample flows. Empty = the first one the policy allows, DuckDB first (it spills to disk where Polars holds a group in memory), then Polars. |
 | `SAMPLES_RUN_FLOWS` | `true` | Compose (`infrastructure/.env`) | Run the sample flows once at initialisation, so their outputs and views exist. |
-| `FORWARDED_ALLOW_IPS` | `127.0.0.1` | Compose (`infrastructure/.env`), read by the gateway's server | uvicorn's own variable: the addresses (comma-separated, networks allowed) from which the gateway believes `X-Forwarded-For`. From anyone else the header is ignored and the client is the connection's address, which is what the sign-in throttle, the sessions and the audit log record. Behind your own reverse proxy put its address here; never `*` while the gateway's port is reachable by others, or anyone can choose the address they sign in from. On Kubernetes the chart sets it from `gateway.trustedProxies`. |
+| `FORWARDED_ALLOW_IPS` | `127.0.0.1` | Compose (`infrastructure/.env`), read by the gateway's server | uvicorn's own variable: the addresses (comma-separated, networks allowed) from which the gateway believes `X-Forwarded-For`. From anyone else the header is ignored and the client is the connection's address, which is what the sign-in throttle, the sessions and the audit log record. Behind your own reverse proxy put its address here; never `*` while the gateway's port is reachable by others, or anyone can choose the address they sign in from. The Go gateway reads it as `GATEWAY_GO__FORWARDED_ALLOW_IPS`, which the compose file sets from this variable. On Kubernetes the chart sets it from `gateway.trustedProxies`. |
 | `MALLOC_ARENA_MAX` | `2` | Compose and Helm (set on the engine containers) | glibc's variable, set to 2 on the engine containers: one memory arena per thread inflates the resident memory of Polars and Arrow thread pools. |
 
 ## Changing this page
