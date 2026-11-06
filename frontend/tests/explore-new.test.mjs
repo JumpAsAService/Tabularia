@@ -37,7 +37,7 @@ test('without a folder of one’s own (an observer, a service account) there is 
 test('Explore offers the flow and the other objects wherever New has a folder to create in', () => {
   const vue = readFileSync(new URL('../components/ProjectBrowser.vue', import.meta.url), 'utf8')
   assert.match(vue, /<div v-if="!treeLoaded \|\| target !== null \|\| isSuper" class="newwrap">/)
-  assert.match(vue, /<template v-if="target !== null">\s*<div v-if="isSuper \|\| canManage" class="menu-sep" \/>\s*<div v-if="currentId === null" class="menu-label">/)
+  assert.match(vue, /<template v-if="target !== null">\s*<div v-if="isSuper \|\| canManage" class="menu-sep" \/>\s*<div v-if="currentId === null" class="menu-note">/)
   // every «create» goes where target says, none to the open folder alone
   for (const page of ['flow-group', 'script', 'notebook', 'sql-script']) {
     assert.ok(vue.includes(`navigateTo(\`/${page}?project=\${target.value}\`)`), page)

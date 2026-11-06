@@ -1215,7 +1215,9 @@ watch(currentId, () => { q.value = ''; kindFilter.value = null; settingsOpen.val
       <span class="searchbox">
         <Search :size="14" />
         <input v-model="q" type="text" :placeholder="$t('projectBrowser.searchPlaceholder')" :aria-label="$t('projectBrowser.searchPlaceholder')" />
-        <button v-if="q" class="x" :title="$t('projectBrowser.clearSearch')" :aria-label="$t('projectBrowser.clearSearch')" @click="q = ''">
+        <!-- always in place, hidden without a query: the box does not grow when typing starts -->
+        <button class="x" :class="{ idle: !q }" :tabindex="q ? 0 : -1" :aria-hidden="q ? undefined : 'true'"
+                :title="$t('projectBrowser.clearSearch')" :aria-label="$t('projectBrowser.clearSearch')" @click="q = ''">
           <X :size="12" />
         </button>
       </span>
@@ -1240,7 +1242,8 @@ watch(currentId, () => { q.value = ''; kindFilter.value = null; settingsOpen.val
             </template>
             <template v-if="target !== null">
               <div v-if="isSuper || canManage" class="menu-sep" />
-              <div v-if="currentId === null" class="menu-label">{{ $t('projectBrowser.inMyFolderLabel', { name: myFolder?.name }) }}</div>
+              <div v-if="currentId === null" class="menu-note">{{ $t('projectBrowser.inMyFolderLabel', { name: myFolder?.name }) }}</div>
+              <div class="menu-label">{{ $t('projectBrowser.createGroup') }}</div>
               <button class="menu-item" @click="engineStep = true">
                 <span class="mi-top"><Workflow :size="14" /> {{ $t('projectBrowser.newFlowButton') }}</span>
               </button>
@@ -1266,18 +1269,20 @@ watch(currentId, () => { q.value = ''; kindFilter.value = null; settingsOpen.val
                 <span class="mi-top"><FileCode2 :size="14" /> {{ $t('projectBrowser.newScriptButton') }}</span>
               </button>
               <button v-else-if="scriptingEditor.state.value?.disabled_reason === 'kubernetes'" class="menu-item off"
-                      disabled :title="$t('scripting.kubernetesOnly')">
+                      aria-disabled="true" :title="$t('scripting.kubernetesOnly')" @click.prevent>
                 <span class="mi-top"><FileCode2 :size="14" /> {{ $t('projectBrowser.newScriptButton') }}</span>
-                <span class="mi-desc">{{ $t('scripting.kubernetesOnly') }}</span>
+                <span class="sr-only">{{ $t('scripting.kubernetesOnly') }}</span>
               </button>
               <button v-if="notebooksAvailable" class="menu-item" @click="createNotebook">
                 <span class="mi-top"><NotebookPen :size="14" /> {{ $t('projectBrowser.newNotebookButton') }}</span>
               </button>
               <button v-else-if="scriptingEditor.state.value?.disabled_reason === 'kubernetes'" class="menu-item off"
-                      disabled :title="$t('scripting.kubernetesOnly')">
+                      aria-disabled="true" :title="$t('scripting.kubernetesOnly')" @click.prevent>
                 <span class="mi-top"><NotebookPen :size="14" /> {{ $t('projectBrowser.newNotebookButton') }}</span>
-                <span class="mi-desc">{{ $t('scripting.kubernetesOnly') }}</span>
+                <span class="sr-only">{{ $t('scripting.kubernetesOnly') }}</span>
               </button>
+              <div class="menu-sep" />
+              <div class="menu-label">{{ $t('projectBrowser.importGroup') }}</div>
               <button class="menu-item" @click="openDbDsDialog">
                 <span class="mi-top"><Database :size="14" /> {{ $t('projectBrowser.fromDatabaseButton') }}</span>
               </button>
@@ -1598,6 +1603,8 @@ watch(currentId, () => { q.value = ''; kindFilter.value = null; settingsOpen.val
 
 <style scoped>
 .menu-item.off { opacity: .45; cursor: not-allowed; }
+.menu-item.off:hover { background: transparent; }
+.menu-note { font-size: 11.5px; color: var(--muted); padding: 6px 8px 2px; }
 .explore { display: flex; flex-direction: column; min-height: 0; }
 
 /* ── bar: path, search, action ─────────────────────────────────────── */
@@ -1622,15 +1629,28 @@ watch(currentId, () => { q.value = ''; kindFilter.value = null; settingsOpen.val
   display: inline-flex;
   align-items: center;
   gap: 7px;
-  padding: 5px 9px;
+  height: 32px;
+  box-sizing: border-box;
+  padding: 0 4px 0 9px;
   border: 1px solid var(--control-border);
   border-radius: 8px;
   background: var(--panel-2);
   color: var(--muted);
   flex-shrink: 0;
+  transition: border-color var(--dur-2), box-shadow var(--dur-2);
 }
-.searchbox input { border: none; background: transparent; outline: none; color: var(--text); width: 190px; font-size: 13px; }
-.searchbox .x { padding: 1px 5px; min-height: 0; }
+/* one ring, the box's: the field inside drops the global input halo */
+.searchbox:focus-within {
+  border-color: var(--accent);
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--accent) 18%, transparent);
+}
+.searchbox input,
+.searchbox input:focus { border: none; background: transparent; outline: none; box-shadow: none; color: var(--text); width: 190px; font-size: 13px; padding: 0; }
+.searchbox .x { display: grid; place-items: center; width: 22px; height: 22px; padding: 0; min-height: 0; border: none; background: none; color: var(--muted); }
+.searchbox .x:hover { color: var(--text); background: var(--panel); box-shadow: none; }
+.searchbox .x.idle { visibility: hidden; }
+/* the bar's controls share one height */
+.bar > button.mini { height: 32px; min-width: 32px; justify-content: center; }
 .newwrap { position: relative; flex-shrink: 0; }
 /* `.btn-link` lives in assets/listpage.css, which is NOT imported here: with scoped
    styles that rule does not arrive, and without this the button would fall on the base
@@ -1643,7 +1663,9 @@ watch(currentId, () => { q.value = ''; kindFilter.value = null; settingsOpen.val
   display: inline-flex;
   align-items: center;
   gap: 6px;
-  padding: 7px 14px;
+  height: 32px;
+  box-sizing: border-box;
+  padding: 0 14px;
   border-radius: 8px;
   text-decoration: none;
   background: var(--grad-accent);
@@ -1724,7 +1746,7 @@ table.rows tr.openable:active td { background: color-mix(in srgb, var(--accent) 
 table.rows tr.openable .racts { cursor: default; }
 tr.folderrow .kicon { color: var(--accent-2); }
 .kicon { color: var(--muted); flex-shrink: 0; }
-.rname { width: 55%; }
+.rname { width: 45%; }
 .rname :deep(.contract-badge) { margin-left: 5px; }
 .asname {
   display: inline-flex;
@@ -1753,10 +1775,12 @@ tr.folderrow .kicon { color: var(--accent-2); }
   outline: none;
   box-shadow: 0 0 0 3px var(--tint-accent);
 }
-.rmeta { font-size: 12px; white-space: nowrap; }
+.rmeta { font-size: 12px; white-space: nowrap; width: 55%; max-width: 0; }
 /* a long description must not widen the table to push the actions off screen (between
-   721 and ~1170px it happened): it is cut, whole in the tooltip */
-.rmeta-text { display: block; max-width: 36ch; overflow: hidden; text-overflow: ellipsis; }
+   721 and ~1170px it happened). `max-width: 0` with a share of the width: the cell takes
+   the room the name and the actions leave, and cuts only what does not fit (whole in the
+   tooltip) — before, a fixed 36ch cut it on wide screens too */
+.rmeta-text { display: block; overflow: hidden; text-overflow: ellipsis; }
 .racts { text-align: right; white-space: nowrap; display: flex; gap: 4px; justify-content: flex-end; }
 .tag {
   font-size: 10px;

@@ -5,6 +5,11 @@ exposes at `/system/info` and in the app's settings menu.
 
 ## Unreleased
 
+- **Explore's bar and New menu, tidied**: the filter box has a single focus ring, keeps
+  its width when the clear button appears and shares the height of the buttons beside it;
+  a folder's description takes the room there is instead of stopping at 36 characters; the
+  New menu is grouped into «Create» and «Import / Connect», and an item not available here
+  stays on one line with its reason in a tooltip (and read out to screen readers).
 - **An empty folder in Explore says what can be made in it**: «New flow» (straight to the
   editor on the preferred engine), «Datasource from a database» and «New folder», each
   only to whoever may create it.

@@ -2306,6 +2306,8 @@ export default {
     "sortHint": "Rows are sorted by the first column; the next ones decide between equal values.",
   },
   "projectBrowser": {
+    "createGroup": "Create",
+    "importGroup": "Import / Connect",
     "newFolderButton": "New folder",
     "searchEverywhere": "Search \"{q}\" everywhere",
     "kind_script": "Scripts",

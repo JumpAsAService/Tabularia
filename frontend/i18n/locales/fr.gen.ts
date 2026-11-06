@@ -2280,6 +2280,8 @@ export default {
     "sortHint": "Les lignes sont triées sur la première colonne ; les suivantes départagent les valeurs égales.",
   },
   "projectBrowser": {
+    "createGroup": "Créer",
+    "importGroup": "Importer / Connecter",
     "newFolderButton": "Nouveau dossier",
     "searchEverywhere": "Chercher « {q} » partout",
     "kind_script": "Scripts",
