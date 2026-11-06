@@ -33,6 +33,12 @@ def validate_schedule(spec: str) -> str:
             f"Invalid cron expression: '{spec}' "
             "(format: 'minute hour day month day-of-week', e.g. '0 3 * * *')"
         )
+    # croniter accepts a valid cron that never fires ('0 0 31 2 *': February has no 31st),
+    # then fails when asked for the next instant: refused here, with words
+    try:
+        croniter(spec, datetime.now(timezone.utc)).get_next(datetime)
+    except ValueError:  # CroniterBadDateError
+        raise ScheduleError(f"The cron expression '{spec}' never fires: no date matches it") from None
     return spec
 
 

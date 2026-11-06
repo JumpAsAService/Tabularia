@@ -1,6 +1,7 @@
 """The privacy notice: only one, anyone reads it, the admin writes it."""
 import pytest
 from fastapi import HTTPException
+from starlette.requests import Request
 from sqlmodel import select
 
 from app.models import AuditLog, PrivacyNotice
@@ -8,6 +9,11 @@ from app.routes import privacy as privacy_routes
 from app.routes.privacy import PrivacyUpdate
 from app.services import audit as audit_svc
 from tests.conftest import make_user
+
+
+def _req() -> Request:
+    return Request({"type": "http", "method": "PUT", "path": "/privacy-notice", "query_string": b"",
+                    "headers": [(b"user-agent", b"pytest")], "client": ("172.18.0.1", 1)})
 
 
 def test_it_is_readable_without_signing_in(session):
@@ -49,7 +55,7 @@ def test_an_administrator_rewrites_it_and_it_leaves_a_trace(session):
     boss = make_user(session, email="capo@x.it", is_superuser=True)
     outside = privacy_routes.update_privacy(
         PrivacyUpdate(summary="La nostra informativa", url="https://esempio.it/privacy"),
-        current=boss, session=session,
+        request=_req(), current=boss, session=session,
     )
     assert outside.summary == "La nostra informativa"
     assert outside.url == "https://esempio.it/privacy"
@@ -57,11 +63,14 @@ def test_an_administrator_rewrites_it_and_it_leaves_a_trace(session):
 
     actions = [a.action for a in session.exec(select(AuditLog)).all()]
     assert audit_svc.PRIVACY_UPDATE in actions
+    # who changed it and from where, as every other event (it was written without the request)
+    event = session.exec(select(AuditLog).where(AuditLog.action == audit_svc.PRIVACY_UPDATE)).one()
+    assert event.ip == "172.18.0.1" and event.user_agent == "pytest"
 
 
 def test_it_can_be_switched_off(session):
     boss = make_user(session, email="capo2@x.it", is_superuser=True)
-    privacy_routes.update_privacy(PrivacyUpdate(enabled=False), current=boss, session=session)
+    privacy_routes.update_privacy(PrivacyUpdate(enabled=False), request=_req(), current=boss, session=session)
     assert privacy_routes.get_privacy(session=session).enabled is False
 
 
@@ -122,6 +131,6 @@ def test_an_unknown_placeholder_is_left_alone(session, monkeypatch):
     boss = make_user(session, email="capo-par@x.it", is_superuser=True)
     outside = privacy_routes.update_privacy(
         PrivacyUpdate(body="Conserviamo per {audit_retention}. Scrivi a {qualcosa}."),
-        current=boss, session=session,
+        request=_req(), current=boss, session=session,
     )
     assert outside.body == "Conserviamo per 1 hour. Scrivi a {qualcosa}."

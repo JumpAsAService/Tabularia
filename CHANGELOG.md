@@ -5,6 +5,16 @@ exposes at `/system/info` and in the app's settings menu.
 
 ## Unreleased
 
+- **A schedule that never fires is refused when it is saved**: a valid cron with no date
+  ('0 0 31 2 *', February has no 31st) answered 500 from every schedule's PUT and, once
+  saved, made the schedule load page answer 500 to everyone. Now the save says it never
+  fires; one saved earlier is skipped by the load page and disabled by the scheduler.
+- **A SQL script's write and a flow group's queue no longer wait for each other**: they
+  used the same advisory-lock namespace, so a script and a group with the same id
+  serialised; the SQL scripts have a namespace of their own.
+- **Changing the privacy notice is audited with its address and browser**, as every other
+  event.
+
 - **The sample data at the scale of a billion rows**: `SAMPLES_SCALE=massive` fills the
   ClickHouse CRM log with a billion activities (the order system stays at `robust`'s
   size), for trying Tabularia on a table that size — about an hour to generate, a quarter

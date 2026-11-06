@@ -40,7 +40,7 @@ from app.services.engine_policy import pick_engine
 logger = logging.getLogger(__name__)
 
 # the advisory locks of «start a SQL script's write», in a namespace of their own
-_SQL_SCRIPT_LOCK = 74610004
+_SQL_SCRIPT_LOCK = 74610005  # 74610004 is the flow groups queue's (orchestrator._GROUP_QUEUE_LOCK)
 ALREADY_RUNNING = "The script is already writing its datasource: it can write again once it has finished"
 # the engine's answer to a submitted task comes quickly; the task itself runs on
 CHECK = 60

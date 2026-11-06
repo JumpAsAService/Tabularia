@@ -5,7 +5,7 @@ what this installation really collects, role by role. Whoever adopts it stays fr
 rewrite it — they are the controller — but starts from something true instead of from
 a placeholder.
 """
-from fastapi import APIRouter, Depends
+from fastapi import APIRouter, Depends, Request
 from pydantic import BaseModel
 from sqlmodel import Session, select
 
@@ -140,6 +140,7 @@ def get_privacy(session: Session = Depends(get_session)):
 @router.put("/privacy-notice", response_model=PrivacyOut)
 def update_privacy(
     body: PrivacyUpdate,
+    request: Request,
     current: User = Depends(require_superuser),
     session: Session = Depends(get_session),
 ):
@@ -157,5 +158,5 @@ def update_privacy(
     # that must leave a trace like the others
     audit.record_audit(session, actor=current, action=audit.PRIVACY_UPDATE,
                        target_type="privacy_notice", target_id=n.id,
-                       detail={"enabled": n.enabled})
+                       detail={"enabled": n.enabled}, request=request)
     return _out(n)
