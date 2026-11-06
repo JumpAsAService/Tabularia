@@ -316,14 +316,42 @@ func searchHits(ctx context.Context, d *Deps, p *auth.Principal, term string) ([
 
 // lockFlows sets each flow hit's locked_reason (flow_access.blocked on its definition).
 func lockFlows(ctx context.Context, d *Deps, checker *perm.Checker, p *auth.Principal, hits []SearchHit) error {
+	var ids []int64
+	for _, h := range hits {
+		if h.Kind == "flow" && h.LockedReason == nil {
+			ids = append(ids, int64(h.ID))
+		}
+	}
+	if len(ids) == 0 {
+		return nil
+	}
+	// every definition in one read: one query per hit made a search slower than Python's
+	definitions := make(map[int64]string, len(ids))
+	rows, err := d.DB.Query(ctx, `SELECT id, definition FROM flows WHERE id = ANY($1)`, ids)
+	if err != nil {
+		return err
+	}
+	for rows.Next() {
+		var id int64
+		var definition string
+		if err := rows.Scan(&id, &definition); err != nil {
+			rows.Close()
+			return err
+		}
+		definitions[id] = definition
+	}
+	rows.Close()
+	if err := rows.Err(); err != nil {
+		return err
+	}
 	acc := flowaccess.New(d.DB, checker, &p.User, d.flowSettings())
 	for i := range hits {
 		if hits[i].Kind != "flow" || hits[i].LockedReason != nil {
 			continue
 		}
-		var definition string
-		if err := d.DB.QueryRow(ctx, `SELECT definition FROM flows WHERE id = $1`, hits[i].ID).Scan(&definition); err != nil {
-			return err
+		definition, found := definitions[int64(hits[i].ID)]
+		if !found {
+			return pgx.ErrNoRows // as the single read did, for a flow deleted meanwhile
 		}
 		why, err := acc.Blocked(ctx, definition)
 		if err != nil {
