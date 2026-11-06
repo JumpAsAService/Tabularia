@@ -2,7 +2,7 @@
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
 // @ts-expect-error plain JavaScript module
-import { pageTocAfterTitle, stackTable } from '../lib/prose-blocks.mjs'
+import { markChecks, pageTocAfterTitle, stackTable } from '../lib/prose-blocks.mjs'
 
 const h = (lv: number, t: string) => [`h${lv}`, { id: t.toLowerCase() }, t]
 const p = (...c: any[]) => ['p', {}, ...c]
@@ -39,4 +39,11 @@ test('few columns with long unbreakable values: stacked; a short last column sta
     ['GET', '/api/v1/projects/{project_id}/flows/{flow_id}/versions/{version}/lineage', 'app.api.routes.flows.get_flow_version_lineage_handler']))
   assert.equal(t[1].class, 'is-stacked')
   assert.deepEqual(cells(t)[0].map((c: any) => c[1]), ['title', 'meta', 'meta'])
+})
+
+test('a paragraph that starts with **Check:** is a check, at any depth; others are not', () => {
+  const nodes = [p(['strong', {}, 'Check:'], ' it answers'), p('A ', ['strong', {}, 'Check:']),
+    ['li', {}, p(['strong', {}, 'Check:'], ' nested')], p(['strong', {}, 'Check files'], ' x')]
+  markChecks(nodes)
+  assert.deepEqual(nodes.map((n: any) => (n[0] === 'li' ? n[2][1].class : n[1].class)), ['check', undefined, 'check', undefined])
 })

@@ -91,3 +91,17 @@
   .prose .table-wrap.is-stacked tr { display: block; }
   .prose .table-wrap.is-stacked td[data-place="body"] { padding-top: 6px; }
 }
+
+/* "**Check:** …": how to see that a step worked (lib/prose-blocks.mjs marks the paragraph) */
+.prose p.check {
+  position: relative; padding: 12px 16px 12px 46px; border-radius: var(--radius);
+  background: color-mix(in srgb, var(--ok) 9%, var(--tile));
+  border: 1px solid color-mix(in srgb, var(--ok) 34%, transparent);
+}
+.prose p.check::before {
+  content: ''; position: absolute; left: 16px; top: calc(12px + .25em); width: 18px; height: 18px;
+  background: var(--ok);
+  -webkit-mask: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='black' stroke-width='2.2' stroke-linecap='round' stroke-linejoin='round'%3E%3Ccircle cx='12' cy='12' r='10'/%3E%3Cpath d='m8 12 3 3 5-6'/%3E%3C/svg%3E") center / contain no-repeat;
+  mask: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='black' stroke-width='2.2' stroke-linecap='round' stroke-linejoin='round'%3E%3Ccircle cx='12' cy='12' r='10'/%3E%3Cpath d='m8 12 3 3 5-6'/%3E%3C/svg%3E") center / contain no-repeat;
+}
+@media (forced-colors: active) { .prose p.check::before { background: CanvasText; } }

@@ -9,6 +9,8 @@
 //   first column as the row's title, the short columns on one line, a long last column
 //   (a description) below, full width. Table roles are written out, so the CSS layout keeps
 //   the table's meaning for screen readers.
+// - markChecks: a paragraph that starts with **Check:** (how to see that a step worked)
+//   gets class "check", drawn as a box of its own.
 
 const isEl = (n, tag) => Array.isArray(n) && (tag ? n[0] === tag : typeof n[0] === 'string')
 
@@ -68,10 +70,23 @@ export function stackTables (nodes) {
   return nodes
 }
 
+/** Gives class "check" to the paragraphs that start with **Check:**, at any depth. */
+export function markChecks (nodes) {
+  for (const n of nodes) {
+    if (!Array.isArray(n)) continue
+    const first = n[0] === 'p' ? n.slice(2).find(c => !(typeof c === 'string' && !c.trim())) : null
+    if (first && isEl(first, 'strong') && textOf(first).trim() === 'Check:') {
+      n[1] = { ...n[1], class: [n[1]?.class, 'check'].filter(Boolean).join(' ') }
+    } else markChecks(n.slice(2))
+  }
+  return nodes
+}
+
 /** Nuxt Content hook helper: every touch above, in place. */
 export function enhanceProse (content) {
   const body = content?.body
   if (!body || body.type !== 'minimark' || !Array.isArray(body.value)) return
   body.value = pageTocAfterTitle(body.value)
   stackTables(body.value)
+  markChecks(body.value)
 }

@@ -244,9 +244,10 @@ kubectl rollout status deployment ingress-nginx-controller --namespace ingress-n
 ```
 
 The `patch` keeps the controller on the control plane, the only node that receives port
-8080: kind's manifest lets it start on any of the three nodes. **Check:**
-`curl -s -o /dev/null -w '%{http_code}\n' http://localhost:8080/` answers `404` (nothing
-is installed behind it yet), not `000`.
+8080: kind's manifest lets it start on any of the three nodes.
+
+**Check:** `curl -s -o /dev/null -w '%{http_code}\n' http://localhost:8080/` answers `404`
+(nothing is installed behind it yet), not `000`.
 
 CPU and memory of the pods, for `kubectl top` and for Tabularia's **Administration →
 Cluster**, come from metrics-server. kind's nodes have self-signed certificates, which
@@ -556,6 +557,7 @@ A Python environment also runs **marimo notebooks**: **Explore → New → Noteb
 `http://localhost:8080` shows the notebook in a frame from
 `http://notebooks.localhost:8080`, the address of step 8: a notebook's code runs there,
 away from your Tabularia session ([An address of their own](../capabilities/notebooks.md#an-address-of-their-own)).
+
 **Check:** `curl -s -o /dev/null -w '%{http_code}\n' http://notebooks.localhost:8080/api/health`
 answers `404` (the gateway answers there only for the notebooks), and so does
 `http://notebooks.localhost:8080/` (no interface on that host).
