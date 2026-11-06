@@ -241,6 +241,36 @@ For a ported route, for every request in its corpus:
    the AI service; the Python gateway behind is removed. Only when the inventory has no
    *Python* line (*AI service* lines stay).
 
+## Measured: the Go gateway against the Python one (2026-11-06)
+
+`gateway-go/scripts/bench/bench.sh`: one container each, 2 CPUs and 2 GB, on the same
+PostgreSQL and the same data (40 folders, 600 flows), the requests of an editor who reaches
+the folders through a group (the whole permission model). A closed-loop load: N clients,
+each sending its next request as soon as the last one answers; 20 s measured after 5 s of
+warm-up. The Python gateway runs as in production (one uvicorn process per container).
+No errors on either side in any run.
+
+| Request | Clients | Python req/s | Go req/s | Go/Python | Median latency, Python → Go |
+|---|---|---|---|---|---|
+| `GET /auth/me` | 1 | 144 | 1757 | 12× | 6.9 → 0.6 ms |
+| | 64 | 169 | 7618 | 45× | 362 → 8.1 ms |
+| `GET /projects` (folder tree) | 1 | 102 | 906 | 9× | 9.7 → 1.1 ms |
+| | 64 | 111 | 3276 | 30× | 558 → 19.6 ms |
+| `GET /projects/{id}/flows` (a folder) | 1 | 106 | 912 | 9× | 9.4 → 1.1 ms |
+| | 64 | 128 | 3302 | 26× | 493 → 19.0 ms |
+| mix (the three above, `/flows`, `/search`) | 1 | 56 | 434 | 8× | 9.4 → 1.3 ms |
+| | 64 | 48 | 1142 | 24× | 1345 → 45 ms |
+| `GET /flows` (600 flows) | 16 | 22 | 581 | 26× | 740 → 27 ms |
+| `GET /search?q=Flow` | 16 | 30 | 613 | 20× | 553 → 26 ms |
+
+- CPU: a Python process never passes about 1.1 cores (the GIL); Go uses both. Per core,
+  on `/auth/me`: about 155 requests a second against about 4,000.
+- Memory: 141 MB idle and 188 MB at most under load for Python; 10 MB idle and 39 MB at
+  most for Go.
+- The measure found one place where Go was slower: `/search` read each flow hit's
+  definition with a query of its own (19 against 32 requests a second); one query now
+  (c740044), with the same answers.
+
 ## Commands
 
 All in a container (no Go on the maintainer's machine):
@@ -252,6 +282,8 @@ docker run --rm -v "$PWD/gateway-go":/src -w /src golang:1.27.3-bookworm go test
 docker build -t tabularia-gateway-go:dev gateway-go
 # the two gateways side by side on a disposable stack, the same requests to both
 gateway-go/scripts/diffcheck.sh
+# the Python gateway against the Go one under load (requests/s, latency, CPU, memory)
+gateway-go/scripts/bench/bench.sh
 # the route inventory (docs/gateway-go-routes.md), after porting a route
 gateway-go/scripts/inventory.sh
 ```
