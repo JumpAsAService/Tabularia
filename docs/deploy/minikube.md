@@ -19,6 +19,7 @@ What you get at the end:
 
 Plan about an hour the first time, most of it waiting for downloads.
 
+> [!IMPORTANT]
 > **A trial, not a server.** Everything runs on your computer: when it sleeps or shuts
 > down, Tabularia stops. To install Tabularia for a team, on a real Kubernetes cluster,
 > see [Kubernetes and Helm](kubernetes.md). To try it on one computer the way a company
@@ -86,6 +87,7 @@ Kubernetes) and Helm (the command that installs Tabularia).
 
 3. **Close PowerShell and open it again**, so it finds the new commands.
 
+> [!IMPORTANT]
 > Docker Desktop is free for personal use, education and small businesses. Larger
 > companies need a paid Docker subscription: check with your IT department.
 
@@ -106,6 +108,7 @@ kubectl ([kubernetes.io](https://kubernetes.io/docs/tasks/tools/)) and Helm
    brew install minikube kubectl helm
    ```
 
+> [!IMPORTANT]
 > Docker Desktop is free for personal use, education and small businesses. Larger
 > companies need a paid Docker subscription: check with your IT department.
 
@@ -163,6 +166,7 @@ minikube start --driver=docker --cpus=4 --memory=12g --disk-size=40g
 Without Python and R scripts, `--memory=6g` is enough. The first start downloads about
 1 GB and takes a few minutes.
 
+> [!WARNING]
 > Choose the memory now: minikube keeps the size it was created with. Changing it later
 > means deleting minikube and starting again from this step.
 
@@ -219,6 +223,7 @@ cloud provider's console:
 | AWS | `https://s3.eu-west-1.amazonaws.com` (your region) | `eu-west-1` |
 | Other S3-compatible | the S3 address in your provider's documentation | its region |
 
+> [!IMPORTANT]
 > **Scaleway:** an API key works on its **preferred project** for Object Storage. When
 > you create the key (IAM → API keys), choose the project that holds the bucket.
 > Otherwise the key is valid but Tabularia cannot see the bucket.
@@ -269,6 +274,7 @@ openssl rand -hex 32
 
 #### All systems
 
+> [!WARNING]
 > **Keep the Fernet key.** If it changes, the passwords saved in Tabularia's connections
 > can no longer be read and must be typed again.
 
@@ -336,6 +342,7 @@ becomes
 Leave the lines that start with `#` as they are for now: they are the optional parts of
 steps 9 and 10.
 
+> [!WARNING]
 > **Spaces matter in this file.** Do not change how far each line starts from the left,
 > and never use the Tab key in it.
 
@@ -458,9 +465,11 @@ finds it on your computer by itself, through the same `port-forward`. If you cha
 port of the `port-forward`, change it in `origin` too. [marimo notebooks as
 apps](../capabilities/notebooks.md) explains them, and why the separate address.
 
+> [!NOTE]
 > The registry's address changes if you turn the add-on off and on again. Then put the
 > new address in `my-values.yaml` and run the `helm upgrade` of point 2 again.
 
+> [!NOTE]
 > The chart also adds a network rule that keeps the scripts and the image builds away
 > from Tabularia's own pods and from the cloud's metadata address. minikube's network
 > does not apply such rules: here the rule is written but has no effect. A company

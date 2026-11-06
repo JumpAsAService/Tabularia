@@ -220,6 +220,7 @@ kubectl get nodes
 Three nodes, `Ready`. Calico enforces the network policies, Kubernetes applies Pod
 Security: nothing more to install for them.
 
+> [!TIP]
 > **Cilium instead of Calico**, if your company runs it. Install the
 > [Cilium CLI](https://docs.cilium.io/en/stable/gettingstarted/k8s-install-default/#install-the-cilium-cli),
 > then, in place of the Calico commands above:
@@ -315,6 +316,7 @@ Docker trusts registries on `127.0.0.1` without checking their certificate, so y
 computer needs no change. The nodes download from `tabularia-registry:5000` and check
 it, with the authority of step 3.
 
+> [!NOTE]
 > **The code of a branch instead of a release** (to try a change before it is released):
 > clone without `--branch`, take the version from the chart, and build the three images
 > from the clone instead of pulling them. Then go on with step 7.
@@ -392,6 +394,7 @@ In your cloud provider's console:
 | AWS | `https://s3.eu-west-1.amazonaws.com` (your region) | `eu-west-1` |
 | Other S3-compatible | the S3 address in your provider's documentation | its region |
 
+> [!IMPORTANT]
 > **Scaleway:** an API key works on its **preferred project** for Object Storage. When
 > you create the key (IAM → API keys), choose the project that holds the buckets.
 

@@ -128,6 +128,7 @@ kubectl cp "tabularia-deps/${POD}:/tmp/tabularia.dump" tabularia-backup.dump
 `tabularia-backup.dump` is now in the folder your terminal is in. Keep it until you have
 used the new release for a while.
 
+> [!WARNING]
 > Copy the file out with `kubectl cp`, not with `kubectl exec … > file`: on Windows
 > PowerShell the `>` rewrites binary output, and the backup would not restore.
 
@@ -144,6 +145,7 @@ apply it again. This is safe: the volume and its data stay.
 kubectl apply -f infrastructure/minikube/dependencies.yaml
 ```
 
+> [!CAUTION]
 > **Never delete the namespace `tabularia-deps`** (nor run `minikube delete`) to "start
 > clean": the volume goes with it, and Tabularia's records with the volume.
 

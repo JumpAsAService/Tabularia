@@ -118,10 +118,12 @@ sales = pl.scan_parquet(os.environ[<span class="s">"TABULARIA_INPUT_SALES"</span
 .f-status--sm { font-size: 15px; margin-top: 4px; }
 .f-grid { display: grid; grid-template-columns: 28px minmax(0, 1fr) minmax(0, 1fr); gap: 8px; align-items: stretch; }
 .f-step { display: grid; place-items: center; font-family: var(--mono); font-size: 13px; color: var(--soft); }
-.f-cell { padding: 10px 12px; border-radius: 6px; background: var(--tile-3); font-size: 14px; font-weight: 600; border-left: 3px solid var(--accent); }
-.f-cell--code { border-left-color: var(--ok); }
-.f-cell--box { border-left-color: var(--soft); }
-.f-cell--mail { border-left-color: var(--warn-ink, var(--accent)); }
+/* a dot of the step's kind before its name: flow, script, container, mail */
+.f-cell { --kind: var(--accent); display: flex; align-items: center; gap: 8px; padding: 10px 12px; border-radius: 6px; background: var(--tile-3); font-size: 14px; font-weight: 600; }
+.f-cell::before { content: ''; width: 8px; height: 8px; flex: none; border-radius: 50%; background: var(--kind); }
+.f-cell--code { --kind: var(--ok); }
+.f-cell--box { --kind: var(--soft); }
+.f-cell--mail { --kind: var(--warn-ink, var(--accent)); }
 
 @media (max-width: 860px) {
   .code__list { gap: 40px; }

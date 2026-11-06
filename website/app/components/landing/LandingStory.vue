@@ -276,7 +276,7 @@ const spaces = (v: string) => v.match(/^(\s*)(.*?)(\s*)$/)!
   transition: border-color 160ms ease, background-color 160ms ease;
 }
 .ui-node:hover { border-color: var(--muted); }
-.ui-node.is-src { border-left: 4px solid var(--ok); }
+.ui-node.is-src { border-color: color-mix(in srgb, var(--ok) 70%, var(--tile-3)); }
 .ui-node.is-on { border-color: var(--accent); background: color-mix(in srgb, var(--accent) 16%, var(--tile)); }
 .ui-node__name { font-weight: 600; font-size: 13px; line-height: 1.2; }
 .ui-node__sub { font-size: 13px; color: var(--soft); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }

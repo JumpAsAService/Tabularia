@@ -13,6 +13,9 @@
 //   gets class "check", drawn as a box of its own.
 // - markZoomableImages: the screenshots (images under media/ that are not a link already)
 //   can be enlarged (components/content/ProseImg.vue).
+// - markCallouts: GitHub's alerts ("> [!NOTE]", TIP, IMPORTANT, WARNING, CAUTION, which
+//   GitHub draws itself) become callouts of three kinds, note (NOTE, TIP), important and
+//   warning (WARNING, CAUTION), with their title; a plain quote stays a quote.
 
 const isEl = (n, tag) => Array.isArray(n) && (tag ? n[0] === tag : typeof n[0] === 'string')
 
@@ -94,6 +97,44 @@ export function markZoomableImages (nodes, inLink = false) {
   return nodes
 }
 
+const ALERTS = { NOTE: ['note', 'Note'], TIP: ['note', 'Tip'], IMPORTANT: ['important', 'Important'], WARNING: ['warning', 'Warning'], CAUTION: ['warning', 'Caution'] }
+const ALERT = /^\s*\[!(NOTE|TIP|IMPORTANT|WARNING|CAUTION)\][ \t]*\n?/
+
+/** Turns the blockquotes that start with a GitHub alert marker into callouts, in place. */
+export function markCallouts (nodes) {
+  for (const n of nodes) {
+    if (!Array.isArray(n)) continue
+    if (n[0] === 'blockquote') {
+      const pi = n.findIndex((c, i) => i >= 2 && isEl(c, 'p'))
+      const para = pi >= 0 ? n[pi] : null
+      // the first thing of the paragraph: "[!NOTE]" as text, or as the span MDC makes of it
+      const ti = para ? para.findIndex((c, i) => i >= 2 && !(typeof c === 'string' && !c.trim())) : -1
+      const first = ti >= 0 ? para[ti] : null
+      const m = typeof first === 'string'
+        ? ALERT.exec(first)
+        : isEl(first, 'span') && /^!(NOTE|TIP|IMPORTANT|WARNING|CAUTION)$/.exec(textOf(first).trim())
+          ? [textOf(first), textOf(first).trim().slice(1)] : null
+      if (m) {
+        const [kind, title] = ALERTS[m[1]]
+        const rest = typeof first === 'string' ? first.slice(m[0].length) : ''
+        if (rest.trim()) para[ti] = rest
+        else para.splice(ti, 1)
+        // what follows the marker starts on the next line
+        if (typeof para[ti] === 'string') {
+          para[ti] = para[ti].replace(/^\s*\n/, '')
+          if (!para[ti]) para.splice(ti, 1)
+        }
+        // the marker alone on its line leaves an empty paragraph behind: drop it
+        if (para.length <= 2) n.splice(pi, 1)
+        n[1] = { ...n[1], class: `callout callout--${kind}` }
+        n.splice(2, 0, ['p', { class: 'callout__title' }, title])
+      }
+    }
+    markCallouts(n.slice(2))
+  }
+  return nodes
+}
+
 /** Nuxt Content hook helper: every touch above, in place. */
 export function enhanceProse (content) {
   const body = content?.body
@@ -102,4 +143,5 @@ export function enhanceProse (content) {
   stackTables(body.value)
   markChecks(body.value)
   markZoomableImages(body.value)
+  markCallouts(body.value)
 }

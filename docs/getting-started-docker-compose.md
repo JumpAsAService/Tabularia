@@ -94,6 +94,7 @@ browser on the same machine.
 | 5433 | PostgreSQL (Tabularia's metadata) |
 | 5434, 8124 | the sample databases (PostgreSQL, ClickHouse), unless you leave the sample data out |
 
+> [!NOTE]
 > On a remote server the browser needs both 3000 and 8000 on its own `localhost`:
 > the app calls the gateway at `http://localhost:8000`. Forwarding only 3000 is not
 > enough.
@@ -491,6 +492,7 @@ docker compose up -d
 docker compose down -v
 ```
 
+> [!WARNING]
 > **`-v` deletes all the data**: users, flows, schedules, connections, run history,
 > every dataset, the sample databases. Only the images and your `.env` remain. Without
 > `-v`, `docker compose down` keeps the data.

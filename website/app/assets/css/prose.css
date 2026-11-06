@@ -18,11 +18,38 @@
 .prose ul, .prose ol { padding-left: 1.4em; }
 .prose li + li { margin-top: .35em; }
 .prose li > ul, .prose li > ol { margin-top: .35em; }
+/* A quote, and the callouts made from GitHub's alerts (lib/prose-blocks.mjs): note, important,
+   warning. A tinted box with a titled icon, no side stripe. */
 .prose blockquote {
   padding: 14px 20px; background: var(--tile); border-radius: var(--radius); color: var(--soft);
-  border-left: 4px solid var(--accent);
+  border: 1px solid var(--tile-3);
 }
 .prose blockquote > * + * { margin-top: .6em; }
+.prose blockquote.callout { color: var(--text); }
+.prose blockquote.callout p, .prose blockquote.callout li { color: inherit; }
+.prose .callout__title {
+  display: flex; align-items: center; gap: 8px;
+  font-size: 15px; font-weight: 600; letter-spacing: .01em; color: var(--accent-ink);
+}
+.prose .callout__title::before {
+  content: ''; width: 18px; height: 18px; flex: none; background: currentColor;
+  -webkit-mask: var(--callout-icon) center / contain no-repeat; mask: var(--callout-icon) center / contain no-repeat;
+}
+.prose .callout--note {
+  --callout-icon: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='black' stroke-width='2' stroke-linecap='round'%3E%3Ccircle cx='12' cy='12' r='10'/%3E%3Cpath d='M12 16v-4M12 8h.01'/%3E%3C/svg%3E");
+}
+.prose .callout--important {
+  --callout-icon: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='black' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z'/%3E%3Cpath d='M12 7v4M12 14h.01'/%3E%3C/svg%3E");
+  background: color-mix(in srgb, var(--accent) 9%, var(--tile));
+  border-color: color-mix(in srgb, var(--accent) 38%, transparent);
+}
+.prose .callout--warning {
+  --callout-icon: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='black' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='m21.73 18-8-14a2 2 0 0 0-3.48 0l-8 14A2 2 0 0 0 4 21h16a2 2 0 0 0 1.73-3'/%3E%3Cpath d='M12 9v4M12 17h.01'/%3E%3C/svg%3E");
+  background: var(--warn-bg);
+  border-color: color-mix(in srgb, var(--warn) 45%, transparent);
+}
+.prose .callout--warning .callout__title { color: var(--warn-ink); }
+@media (forced-colors: active) { .prose .callout__title::before { background: CanvasText; } }
 .prose hr { border: 0; height: 8px; background: var(--tile); border-radius: var(--radius); margin: 2.4em 0; }
 .prose img { height: auto; border-radius: var(--radius); background: var(--tile); }
 .prose p[align="center"] { text-align: center; }

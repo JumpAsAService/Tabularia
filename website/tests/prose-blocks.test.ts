@@ -2,7 +2,7 @@
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
 // @ts-expect-error plain JavaScript module
-import { markChecks, markZoomableImages, pageTocAfterTitle, stackTable } from '../lib/prose-blocks.mjs'
+import { markCallouts, markChecks, markZoomableImages, pageTocAfterTitle, stackTable } from '../lib/prose-blocks.mjs'
 
 const h = (lv: number, t: string) => [`h${lv}`, { id: t.toLowerCase() }, t]
 const p = (...c: any[]) => ['p', {}, ...c]
@@ -55,4 +55,19 @@ test('screenshots under media/ can be enlarged, unless they are a link already',
   assert.equal((nodes[0] as any)[2][1].zoom, 'true')
   assert.equal((nodes[1] as any)[2][1].zoom, undefined)
   assert.equal((nodes[2] as any)[2][1].zoom, undefined)
+})
+
+test('GitHub alerts become callouts with a title; a plain quote stays a quote', () => {
+  const asSpan = ['blockquote', {}, p(['span', {}, '!WARNING'], '\n', ['strong', {}, 'Keep the key.'], ' If it changes…')]
+  const asText = ['blockquote', {}, p('[!TIP]\nCilium works too.')]
+  const alone = ['blockquote', {}, p(['span', {}, '!IMPORTANT']), p('Second paragraph.')]
+  const plain = ['blockquote', {}, p('A quotation.')]
+  markCallouts([asSpan, asText, alone, plain])
+  assert.equal((asSpan as any)[1].class, 'callout callout--warning')
+  assert.deepEqual((asSpan as any)[2], ['p', { class: 'callout__title' }, 'Warning'])
+  assert.deepEqual((asSpan as any)[3].slice(2), [['strong', {}, 'Keep the key.'], ' If it changes…'])
+  assert.equal((asText as any)[1].class, 'callout callout--note')
+  assert.deepEqual((asText as any)[3], p('Cilium works too.'))
+  assert.deepEqual((alone as any).slice(2).map((n: any) => n[2]), ['Important', 'Second paragraph.'])
+  assert.equal((plain as any)[1].class, undefined)
 })
