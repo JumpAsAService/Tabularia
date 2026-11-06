@@ -2,7 +2,13 @@
 
 This guide installs Tabularia on one computer, step by step. You do not need to know
 Kubernetes: every command is given in full, and each step says what it does and how to
-check that it worked. It works on Windows, macOS and Linux.
+check that it worked.
+
+**Systems:** Windows 10 or 11, Linux, macOS. What each needs is installed in step 1:
+- **Windows**: Docker Desktop (with WSL 2), minikube, kubectl and Helm. Every command runs
+  in **PowerShell**, a normal one, not as administrator.
+- **Linux**: Docker Engine, minikube, kubectl and Helm, in your usual terminal.
+- **macOS**: Docker Desktop, and minikube, kubectl and Helm with Homebrew, in Terminal.
 
 What you get at the end:
 - Tabularia in your browser at `http://localhost:8080`, with you as its administrator;
@@ -40,22 +46,32 @@ Plan about an hour the first time, most of it waiting for downloads.
 
 **Your cloud account**, with object storage. You will create a bucket and a key in step 4.
 
-**A terminal**, the window where you type commands:
-- **Windows**: open the Start menu, type `PowerShell`, open **Windows PowerShell**.
-- **macOS**: open **Terminal** (Applications → Utilities).
-- **Linux**: your usual terminal.
+**A terminal**, the window where you type commands. Copy each command exactly, one at a
+time, and press Enter. When a command differs between systems, the guide shows one block
+per system, under the name of the system; the other commands are the same everywhere.
+Text between `<` and `>`, such as `<your-password>`, is a placeholder: replace all of it,
+`<` and `>` included, with your own value.
 
-Copy each command exactly, one at a time, and press Enter. When a command differs
-between systems, the guide shows one block per system. Text between `<` and `>`, such
-as `<your-password>`, is a placeholder: replace all of it, `<` and `>` included, with
-your own value.
+#### Windows
+
+Open the Start menu, type `PowerShell`, open **Windows PowerShell**. Every command of
+this guide runs there, as it is written, including the ones in the blocks that are the
+same on every system. It does not need to be opened as administrator.
+
+#### Linux
+
+Your usual terminal.
+
+#### macOS
+
+Open **Terminal** (Applications → Utilities).
 
 ## Step 1 — Install the tools
 
 You need four programs: Docker, minikube, kubectl (the command that talks to
 Kubernetes) and Helm (the command that installs Tabularia).
 
-**Windows**
+#### Windows
 
 1. Install **Docker Desktop** from [docker.com](https://www.docker.com/products/docker-desktop/).
    During the installation keep **Use WSL 2** selected. Restart the computer when asked,
@@ -70,7 +86,17 @@ Kubernetes) and Helm (the command that installs Tabularia).
 
 3. **Close PowerShell and open it again**, so it finds the new commands.
 
-**macOS**
+> Docker Desktop is free for personal use, education and small businesses. Larger
+> companies need a paid Docker subscription: check with your IT department.
+
+#### Linux
+
+Install Docker Engine ([docs.docker.com/engine/install](https://docs.docker.com/engine/install/)),
+then minikube ([minikube.sigs.k8s.io](https://minikube.sigs.k8s.io/docs/start/)),
+kubectl ([kubernetes.io](https://kubernetes.io/docs/tasks/tools/)) and Helm
+([helm.sh](https://helm.sh/docs/intro/install/)) following their pages.
+
+#### macOS
 
 1. Install **Docker Desktop** from [docker.com](https://www.docker.com/products/docker-desktop/)
    and open it once.
@@ -80,15 +106,10 @@ Kubernetes) and Helm (the command that installs Tabularia).
    brew install minikube kubectl helm
    ```
 
-**Linux**
-
-Install Docker Engine ([docs.docker.com/engine/install](https://docs.docker.com/engine/install/)),
-then minikube ([minikube.sigs.k8s.io](https://minikube.sigs.k8s.io/docs/start/)),
-kubectl ([kubernetes.io](https://kubernetes.io/docs/tasks/tools/)) and Helm
-([helm.sh](https://helm.sh/docs/intro/install/)) following their pages.
-
 > Docker Desktop is free for personal use, education and small businesses. Larger
 > companies need a paid Docker subscription: check with your IT department.
+
+#### All systems
 
 **Check:** each of these prints a version number, not an error.
 
@@ -101,8 +122,12 @@ helm version
 
 ## Step 2 — Start minikube
 
-**Windows only: give Docker enough memory first.** Docker Desktop on Windows gets half of
-the computer's memory by default, too little for 12 GB. In PowerShell:
+First give Docker enough memory for minikube.
+
+#### Windows
+
+Docker Desktop on Windows gets half of the computer's memory by default, too little for
+12 GB. In PowerShell:
 
 ```powershell
 notepad "$env:USERPROFILE\.wslconfig"
@@ -118,10 +143,18 @@ memory=14GB
 Then quit Docker Desktop (its icon near the clock → **Quit**), run `wsl --shutdown`, and
 open Docker Desktop again. On a computer with 8 GB, skip this and use `--memory=6g` below.
 
-**macOS only:** in Docker Desktop → **Settings** → **Resources**, set Memory to at least
-14 GB (6 GB on an 8 GB computer), then **Apply & restart**.
+#### Linux
 
-**Start minikube** (all systems):
+Nothing to do: Docker Engine lets its containers use all of the computer's memory.
+
+#### macOS
+
+In Docker Desktop → **Settings** → **Resources**, set Memory to at least 14 GB (6 GB on
+an 8 GB computer), then **Apply & restart**.
+
+#### All systems
+
+**Start minikube**:
 
 ```bash
 minikube start --driver=docker --cpus=4 --memory=12g --disk-size=40g
@@ -147,12 +180,22 @@ minikube addons enable ingress
 2. Under **Assets**, click **Source code (zip)**.
 3. Unzip it, for example in your Documents folder. You get a folder such as
    `Tabularia-1.3.0`, with a folder `infrastructure` inside.
-4. Open your terminal **in that folder**:
-   - **Windows**: open the folder in File Explorer, right-click an empty area,
-     **Open in Terminal**. On Windows 10: hold Shift, right-click, **Open PowerShell
-     window here**.
-   - **macOS**: in Finder, right-click the folder → **New Terminal at Folder**.
-   - **Linux**: `cd` into it.
+4. Open your terminal **in that folder**, as below for your system.
+
+#### Windows
+
+Open the folder in File Explorer, right-click an empty area, **Open in Terminal**. On
+Windows 10: hold Shift, right-click, **Open PowerShell window here**.
+
+#### Linux
+
+`cd` into it.
+
+#### macOS
+
+In Finder, right-click the folder → **New Terminal at Folder**.
+
+#### All systems
 
 Every command from here on runs in that folder.
 
@@ -194,9 +237,9 @@ Open a text file (or your password manager) to keep them; you will paste them in
 | `dbPassword` | Password of Tabularia's PostgreSQL database | command B, run again |
 | `adminPassword` | Your password in Tabularia | choose one: 12 characters or more, not a common one |
 
-**Windows (PowerShell)**
+#### Windows
 
-Command A, the Fernet key (44 characters, ending with `=`):
+In PowerShell. Command A, the Fernet key (44 characters, ending with `=`):
 
 ```powershell
 $b = New-Object byte[] 32; [Security.Cryptography.RandomNumberGenerator]::Create().GetBytes($b); [Convert]::ToBase64String($b).Replace('+','-').Replace('/','_')
@@ -209,15 +252,22 @@ Command B, a 64-character code (run it twice: once for `jwtSecret`, once for
 $b = New-Object byte[] 32; [Security.Cryptography.RandomNumberGenerator]::Create().GetBytes($b); -join ($b | ForEach-Object { $_.ToString('x2') })
 ```
 
-**macOS and Linux**
+#### Linux and macOS
+
+Command A, the Fernet key (44 characters, ending with `=`):
 
 ```bash
 openssl rand -base64 32 | tr '+/' '-_'
 ```
 
+Command B, a 64-character code (run it twice: once for `jwtSecret`, once for
+`dbPassword`):
+
 ```bash
 openssl rand -hex 32
 ```
+
+#### All systems
 
 > **Keep the Fernet key.** If it changes, the passwords saved in Tabularia's connections
 > can no longer be read and must be typed again.
@@ -250,10 +300,25 @@ Copy the example settings file (the same command works on all systems):
 cp infrastructure/minikube/values.example.yaml my-values.yaml
 ```
 
-Open `my-values.yaml` in a plain text editor:
-- **Windows**: `notepad my-values.yaml`
-- **macOS**: `open -e my-values.yaml`
-- **Linux**: your usual editor.
+Open `my-values.yaml` in a plain text editor.
+
+#### Windows
+
+```powershell
+notepad my-values.yaml
+```
+
+#### Linux
+
+Your usual editor, for example `nano my-values.yaml`.
+
+#### macOS
+
+```bash
+open -e my-values.yaml
+```
+
+#### All systems
 
 Replace every `<…>`: the bucket of step 4, the keys of step 5, your email. Keep the
 double quotes around each value. For example:
@@ -411,7 +476,7 @@ minikube stop
 
 Nothing is lost: Tabularia's records stay on minikube's disk, your data in the bucket.
 
-**Start again**: open Docker Desktop, then:
+**Start again**: open Docker Desktop (on Linux, Docker Engine is already running), then:
 
 ```bash
 minikube start

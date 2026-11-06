@@ -13,6 +13,11 @@ the Helm chart: [Kubernetes and Helm](deploy/kubernetes.md).
 Every command and click below was run, in this order, on a clean machine (Docker in
 Docker, a fresh `git clone` of `main`). The screenshots come from that run.
 
+**Systems:** Linux, macOS, Windows 10 or 11. What each needs first (step 1):
+- **Windows**: Docker Desktop, with WSL 2; the commands run in **PowerShell**.
+- **Linux**: Docker Engine with the Compose plugin; the commands run in your terminal.
+- **macOS**: Docker Desktop; the commands run in Terminal.
+
 - [1. Prerequisites](#1-prerequisites)
 - [2. Get the code](#2-get-the-code)
 - [3. Configure](#3-configure)
@@ -29,7 +34,33 @@ Docker, a fresh `git clone` of `main`). The screenshots come from that run.
 
 **Docker.** Docker Engine with the Compose plugin, version 2.24 or later (the
 `docker compose` command, not the old `docker-compose`). This guide was run with Docker Engine 29 and Compose 5 on
-x86_64 Linux; Docker Desktop on macOS and Windows works the same way. Check:
+x86_64 Linux; Docker Desktop on macOS and Windows works the same way.
+
+#### Windows
+
+Install [Docker Desktop](https://www.docker.com/products/docker-desktop/) (it brings
+Compose), keep **Use WSL 2** selected, and open it once. Every command of this guide runs
+in **PowerShell** (Start menu → `PowerShell`), not as administrator. Docker gets half of
+the computer's memory by default; to give it more (see *Resources* below), in PowerShell
+run `notepad "$env:USERPROFILE\.wslconfig"`, write `[wsl2]` and, on the next line,
+`memory=8GB` (or more), save, quit Docker Desktop, run `wsl --shutdown`, and open Docker
+Desktop again.
+
+#### Linux
+
+Install [Docker Engine](https://docs.docker.com/engine/install/) and its Compose plugin
+for your distribution. Every command of this guide runs in your terminal, as your normal
+user.
+
+#### macOS
+
+Install [Docker Desktop](https://www.docker.com/products/docker-desktop/) (it brings
+Compose) and open it once. Its memory is set in *Settings → Resources* (see *Resources*
+below). Every command of this guide runs in **Terminal** (Applications → Utilities).
+
+#### All systems
+
+Check:
 
 ```bash
 docker version
@@ -49,7 +80,7 @@ to edit.
 | Disk | 13.5 GB after the first start, with the sample data (images and build cache take most of it) | 20 GB free |
 | Time | 2 min 42 s for the first `docker compose up -d` (8 cores, a fast connection); then about 15 s until the sign-in page answers | count 5–15 minutes on a laptop or a slower link |
 
-With Docker Desktop the memory is set in *Settings → Resources*.
+With Docker Desktop, give Docker its memory as in *Docker* above for your system.
 
 **Free ports.** The stack publishes these ports **on 127.0.0.1 only**: open the
 browser on the same machine.
@@ -63,15 +94,31 @@ browser on the same machine.
 | 5433 | PostgreSQL (Tabularia's metadata) |
 | 5434, 8124 | the sample databases (PostgreSQL, ClickHouse), unless you leave the sample data out |
 
-On Linux, this prints the ones already taken (nothing printed: all free):
+> On a remote server the browser needs both 3000 and 8000 on its own `localhost`:
+> the app calls the gateway at `http://localhost:8000`. Forwarding only 3000 is not
+> enough.
+
+This prints the ones already taken (nothing printed: all free):
+
+#### Windows
+
+```powershell
+Get-NetTCPConnection -State Listen | Where-Object LocalPort -In 3000,3001,8000,9001,9002,5433,5434,8124
+```
+
+#### Linux
 
 ```bash
 ss -ltn | grep -E ':(3000|3001|8000|9001|9002|5433|5434|8124)\b'
 ```
 
-> On a remote server the browser needs both 3000 and 8000 on its own `localhost`:
-> the app calls the gateway at `http://localhost:8000`. Forwarding only 3000 is not
-> enough.
+#### macOS
+
+```bash
+lsof -nP -iTCP -sTCP:LISTEN | grep -E ':(3000|3001|8000|9001|9002|5433|5434|8124) '
+```
+
+#### All systems
 
 **Architecture.** Compose builds the images for your machine's architecture. This guide
 was run on amd64; the release images on Docker Hub are published for amd64 and arm64
@@ -88,10 +135,19 @@ cd Tabularia/infrastructure
 
 Every `docker compose` command of this guide runs from this `infrastructure` folder.
 
-> **Linux only.** The app container runs as user id 1000 and writes into the
-> `frontend` folder of your clone. If `id -u` prints something other than `1000`, or
-> you cloned as root, give it that folder before starting:
-> `sudo chown -R 1000:1000 ../frontend`. On macOS and Windows there is nothing to do.
+#### Windows
+
+Nothing more to do.
+
+#### Linux
+
+The app container runs as user id 1000 and writes into the `frontend` folder of your
+clone. If `id -u` prints something other than `1000`, or you cloned as root, give it
+that folder before starting: `sudo chown -R 1000:1000 ../frontend`.
+
+#### macOS
+
+Nothing more to do.
 
 ## 3. Configure
 
@@ -489,7 +545,7 @@ docker compose up -d --force-recreate frontend
 **The app keeps restarting: `EACCES: permission denied, mkdir '/app/.nuxt'`.** On
 Linux, `docker compose ps` shows `frontend  Restarting (1)` and
 `docker compose logs frontend` this error. The clone belongs to a user other than id
-1000: see the note in [step 2](#2-get-the-code), then
+1000: see the Linux block of [step 2](#2-get-the-code), then
 `docker compose up -d --force-recreate frontend`.
 
 **Not enough memory.** A worker that runs out of memory is killed and restarted:

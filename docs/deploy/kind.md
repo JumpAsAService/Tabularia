@@ -26,30 +26,36 @@ Tabularia, [the minikube guide](minikube.md) is shorter and needs no Kubernetes 
 It was written by running every command below, in this order, with kind 0.33
 (Kubernetes 1.37, containerd 2.3) and Calico 3.30.
 
+**Systems:** Windows 10 or 11, Linux, macOS. What each needs before step 1 (set up in
+[What you need](#what-you-need)):
+- **Windows**: WSL 2 with Ubuntu, and Docker Engine and the tools installed *inside*
+  Ubuntu. Every command of the guide then runs in the **Ubuntu terminal**, not in PowerShell.
+- **Linux**: Docker Engine and the tools, in your usual terminal.
+- **macOS**: Docker Desktop and the tools, in Terminal.
+
 ## What you need
 
 - **A computer with 16 GB of memory at least** (32 GB to build R environments
   comfortably), 8 cores and 60 GB of free disk.
-- **Linux**, or **macOS** with Docker Desktop, or **Windows** inside WSL 2 (an Ubuntu
-  that runs on Windows: [On Windows](#on-windows) below sets it up).
 - [Docker](https://docs.docker.com/engine/install/), [kind](https://kind.sigs.k8s.io/docs/user/quick-start/#installation)
   0.27 or later, [kubectl](https://kubernetes.io/docs/tasks/tools/),
-  [Helm](https://helm.sh/docs/intro/install/), `openssl` and `git`.
+  [Helm](https://helm.sh/docs/intro/install/), `openssl` and `git`, installed as below
+  for your system.
 
-Run every command in **the same terminal**: the steps keep values in shell variables
-(`$WORK`, `$VERSION`, the passwords). If you open a new terminal, run
-`source "$WORK/env"` (step 1 explains it) to get them back.
-
-### On Windows
+#### Windows
 
 The guide runs in an Ubuntu inside Windows (WSL 2), where every command works as on
-Linux. Set it up once:
+Linux. Two commands of the setup run in PowerShell, as each point says; everything else,
+here and in the whole guide, runs in the **Ubuntu terminal** (Start menu → **Ubuntu**).
+Set it up once:
 
-1. **Install WSL 2 with Ubuntu.** In a PowerShell opened as administrator:
+1. **Install WSL 2 with Ubuntu.** In **PowerShell opened as administrator** (Start menu,
+   type `PowerShell`, right-click → **Run as administrator**):
    `wsl --install -d Ubuntu`, then restart the computer. Ubuntu asks for a user name and
    a password the first time it opens.
 2. **Give it memory and processors.** WSL takes half of the computer's memory by
-   default. In PowerShell, `notepad "$env:USERPROFILE\.wslconfig"`, write
+   default. In a **normal PowerShell** (not as administrator, so the file goes in your
+   own profile): `notepad "$env:USERPROFILE\.wslconfig"`, write
 
    ```ini
    [wsl2]
@@ -58,16 +64,16 @@ Linux. Set it up once:
    ```
 
    (16 GB at least; on a 32 GB computer, 24 leaves Windows enough), save, run
-   `wsl --shutdown`, and open Ubuntu again.
-3. **Install Docker inside Ubuntu**: Docker Engine, following
+   `wsl --shutdown` in the same PowerShell, and open Ubuntu again.
+3. **Install Docker inside Ubuntu**, in the **Ubuntu terminal**: Docker Engine, following
    [Docker's guide for Ubuntu](https://docs.docker.com/engine/install/ubuntu/), then
    `sudo usermod -aG docker $USER` and open Ubuntu again. Docker Engine inside Ubuntu
    behaves as on Linux, ports and mounted folders included, which is what this guide
    was run on. Docker Desktop with its WSL integration can work too, but its ports
    pass through one more machine.
-4. **Install the tools inside Ubuntu**, in their Linux versions:
-   `sudo apt install -y openssl git`, then kind, kubectl and Helm from the links above
-   (the Linux instructions).
+4. **Install the tools inside Ubuntu**, in the **Ubuntu terminal**, in their Linux
+   versions: `sudo apt install -y openssl git`, then kind, kubectl and Helm from the
+   links above (the Linux instructions).
 5. **Work in Ubuntu's home** (`cd ~`), not in `/mnt/c/…`: the Windows disk is much
    slower from Ubuntu, and it does not keep the permissions that protect the files of
    passwords this guide writes.
@@ -75,6 +81,34 @@ Linux. Set it up once:
 Run the guide in the Ubuntu terminal, unchanged. The browser of Windows opens
 Tabularia at **http://localhost:8080**: WSL 2 hands the ports it listens on over to
 Windows.
+
+#### Linux
+
+1. **Install Docker Engine** following [Docker's guide](https://docs.docker.com/engine/install/)
+   for your distribution, then `sudo usermod -aG docker $USER` and sign in again, so
+   `docker` runs without `sudo`.
+2. **Install the tools**: `openssl` and `git` from your distribution (on Ubuntu or
+   Debian, `sudo apt install -y openssl git`), then kind, kubectl and Helm from the links
+   above (the Linux instructions).
+
+Run the guide in your usual terminal.
+
+#### macOS
+
+1. **Install Docker Desktop** from [docker.com](https://www.docker.com/products/docker-desktop/)
+   and open it once. In **Settings → Resources**, give it 16 GB of memory at least
+   (on a 32 GB computer, 24 leaves macOS enough) and 8 CPUs, then **Apply & restart**.
+2. **Install the tools**, for example with [Homebrew](https://brew.sh):
+   `brew install kind kubectl helm`. `openssl` and `git` come with macOS (`git` asks to
+   install the command line developer tools the first time).
+
+Run the guide in **Terminal** (Applications → Utilities).
+
+#### All systems
+
+Run every command in **the same terminal**: the steps keep values in shell variables
+(`$WORK`, `$VERSION`, the passwords). If you open a new terminal, run
+`source "$WORK/env"` (step 1 explains it) to get them back.
 
 ## 1. Get Tabularia and a working folder
 
@@ -490,8 +524,8 @@ done
 kubectl get pods --namespace tabularia --watch
 ```
 
-When every pod is `1/1 Running`, press Ctrl+C and open **http://localhost:8080**. Sign in
-with `$ADMIN_EMAIL` and `$ADMIN_PASSWORD`.
+When every pod is `1/1 Running`, press Ctrl+C and open **http://localhost:8080** (on
+Windows, in the browser of Windows). Sign in with `$ADMIN_EMAIL` and `$ADMIN_PASSWORD`.
 
 **Administration → Cluster** shows, refreshed every three seconds, the pods of Tabularia
 and, from step 10, the Jobs of the scripts and containers while they run, each linked to
@@ -693,7 +727,9 @@ on `Sample`, and CONNECT too to import from its two connections.
   spills to disk: on Polars, *Top 20 Products by Revenue* needed more than 7 GB at
   `robust`. The volumes' sizes in the manifests do not
   limit anything on kind (its `local-path` storage does not enforce them): what counts is
-  the free disk of the computer, under Docker's data directory. Follow the Job with
+  the free disk of the computer, under Docker's data directory (on Windows, the drive
+  that holds WSL's virtual disk, usually `C:`; on macOS, the disk limit of Docker Desktop
+  in **Settings → Resources**). Follow the Job with
   `kubectl logs -f --namespace tabularia-deps job/sampledb-init`.
 - **Run it again** (a flow that failed, a folder deleted by mistake, or a new release
   of Tabularia that brings new samples): it duplicates nothing and only adds what is
@@ -749,8 +785,9 @@ problem.
 
 Build and push the new release's images as in step 6, then follow
 [Upgrading Tabularia](upgrading.md): the commands of its minikube part work here too,
-since PostgreSQL is in the same namespace `tabularia-deps`. MinIO's volume, like
-PostgreSQL's, lives as long as the cluster.
+since PostgreSQL is in the same namespace `tabularia-deps`. On Windows, run them in the
+Ubuntu terminal and take the blocks for Linux and macOS, not the PowerShell ones. MinIO's
+volume, like PostgreSQL's, lives as long as the cluster.
 
 ## Remove it
 

@@ -99,19 +99,27 @@ Tabularia: the backup is written inside the PostgreSQL pod, then copied to your 
 kubectl exec --namespace tabularia-deps deploy/postgres -- pg_dump --username tabularia --format custom --file /tmp/tabularia.dump tabularia
 ```
 
-Then the name of the pod, and the copy (the second command is the same in every shell).
+Then the name of the pod, which differs by system. On Windows, take the PowerShell block
+when you followed the minikube guide, and the one for Linux and macOS when you work in
+the Ubuntu terminal of WSL (the kind guide).
 
-macOS and Linux:
+#### Windows
+
+In PowerShell:
+
+```powershell
+$POD = kubectl get pod --namespace tabularia-deps -l app=postgres -o jsonpath='{.items[0].metadata.name}'
+```
+
+#### Linux and macOS
 
 ```bash
 POD=$(kubectl get pod --namespace tabularia-deps -l app=postgres -o jsonpath='{.items[0].metadata.name}')
 ```
 
-Windows (PowerShell):
+#### All systems
 
-```powershell
-$POD = kubectl get pod --namespace tabularia-deps -l app=postgres -o jsonpath='{.items[0].metadata.name}'
-```
+The copy, the same command in every shell:
 
 ```bash
 kubectl cp "tabularia-deps/${POD}:/tmp/tabularia.dump" tabularia-backup.dump
