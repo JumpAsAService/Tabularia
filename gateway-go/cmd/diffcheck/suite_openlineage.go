@@ -140,6 +140,9 @@ func init() {
 				`{"type": "s3", "bucket": "b", "key": "exports/{{ today }}.csv", "format": "csv", "written_key": "exports/2026-03-01.csv"}`)
 			run("out-sftp", "flow", `flow_id = $2, destination = $3`, ids["f"],
 				`{"type": "sftp", "host": "sftp.olx:2222", "folder": "/out", "file_name": "r-{{ today }}.csv", "path": "/out/r-2026.csv", "format": "csv"}`)
+			run("out-part", "flow", `flow_id = $2, destination = $3, mirror = $4`, ids["f"],
+				`{"type": "s3", "bucket": "b", "key": "part/day=2026-03-01", "format": "csv"}`,
+				`{"bucket": "b", "key": "part/2026/03/02", "ok": true}`)
 			run("out-input", "flow", `flow_id = $2, destination = '{"type": "script_input"}'`, ids["f"])
 			run("sql-named", "sql", `sql_script_id = $2, script = '{"version": 1}', publish_name = 'olx sql out', publish_project_id = $3, engine = 'duckdb'`,
 				ids["named"], ids["sub"])
@@ -178,6 +181,7 @@ func init() {
 			add("an Output closes", "GET", "/runs/"+id("out"), nil, task("out", "FAILURE", failed))
 			add("an S3 Output closes", "GET", "/runs/"+id("out-s3"), nil, task("out-s3", "FAILURE", nil))
 			add("an SFTP Output closes", "GET", "/runs/"+id("out-sftp"), nil, task("out-sftp", "FAILURE", nil))
+			add("a partitioned Output closes", "GET", "/runs/"+id("out-part"), nil, task("out-part", "FAILURE", nil))
 			add("a Script node's input closes", "GET", "/runs/"+id("out-input"), nil, task("out-input", "FAILURE", nil))
 			add("a SQL script's write closes", "GET", "/runs/"+id("sql-named"), nil, task("sql-named", "FAILURE", nil))
 			add("a SQL script on a connection closes", "GET", "/runs/"+id("sql-conn"), nil, task("sql-conn", "FAILURE", nil))

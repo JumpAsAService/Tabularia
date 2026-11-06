@@ -30,10 +30,14 @@ type Emitter struct {
 	Timeout func() float64
 	Log     *slog.Logger
 
-	mu       sync.Mutex
-	sender   *sender
-	dropped  int
-	lastWarn time.Time
+	mu     sync.Mutex
+	sender *sender
+	// the client (_client), built at the first send and again when the panel's timeout changes
+	clientMu      sync.Mutex
+	client        *libClient
+	clientTimeout float64
+	dropped       int
+	lastWarn      time.Time
 }
 
 type sender struct {
@@ -159,8 +163,7 @@ func (e *Emitter) send(it item) {
 		}
 	}
 	s := e.Settings()
-	n, err := s.Emit(ctx, events)
-	_ = n
+	_, err := e.EmitNow(ctx, events)
 	if err != nil {
 		e.Log.Warn(fmt.Sprintf("openlineage: events of run %s not sent: %s", it.label, clip(err.Error(), 300)))
 		return
@@ -181,6 +184,32 @@ func clip(s string, n int) string {
 		return string(r[:n])
 	}
 	return s
+}
+
+// getClient is _get_client: the client built once, again when the timeout changed; a client
+// that cannot be built is tried again at the next send.
+func (e *Emitter) getClient() (*libClient, error) {
+	e.clientMu.Lock()
+	defer e.clientMu.Unlock()
+	s := e.Settings()
+	if e.client != nil && e.clientTimeout == s.Timeout {
+		return e.client, nil
+	}
+	c, err := s.newClient(readEnviron(), e.Log)
+	if err != nil {
+		return nil, err
+	}
+	e.client, e.clientTimeout = c, s.Timeout
+	return c, nil
+}
+
+// EmitNow is _emit: the events sent at once through the client, in order; how many.
+func (e *Emitter) EmitNow(ctx context.Context, events []pyjson.Object) (int, error) {
+	c, err := e.getClient()
+	if err != nil {
+		return 0, err
+	}
+	return c.emitAll(ctx, events)
 }
 
 // WaitIdle is wait_idle: waits for the queue to empty (at most `timeout`), then dismisses the

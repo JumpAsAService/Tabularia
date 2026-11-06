@@ -80,7 +80,11 @@ handler. Nothing is forwarded to the Python gateway.
   process empties the queue for at most 5 s at the stop. The comparison with OpenLineage on:
   `DIFF_ENV="OPENLINEAGE__URL=http://siem.test:8000 OPENLINEAGE__FILE=/share/ol-{stack}.jsonl"
   DIFF_SHARE=<a folder writable by all> DIFF_SETTLE_MS=700` (suite `openlineage_x`, and any
-  other suite the same way).
+  other suite the same way). The library's own configuration (`openlineage.yml`,
+  `OPENLINEAGE__TRANSPORT__…`, `OPENLINEAGE__TAGS__…`, `OPENLINEAGE__FACETS__…`,
+  `OPENLINEAGE__DATASET__…`, the filters) is read as openlineage-python reads it
+  (`libconfig.go`, `client.go`, `transports.go`, `reduce.go`); the fake engine records a
+  collector's headers and reads a gzip body.
 
 A service that several modules need and that does not exist yet: write it in its own
 package, small, with the Python function it ports cited in its comment.
