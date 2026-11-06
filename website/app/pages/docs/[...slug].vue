@@ -34,23 +34,36 @@ provide('docs-toc', toc)
 const active = ref('')
 const tocBox = ref<HTMLElement | null>(null)
 let spy: IntersectionObserver | null = null
+let onScroll: (() => void) | null = null
 function watchHeadings () {
   spy?.disconnect()
+  if (onScroll) window.removeEventListener('scroll', onScroll)
   active.value = ''
   const ids = toc.value.flatMap((l: any) => [l.id, ...(l.children || []).map((c: any) => c.id)])
   const els = ids.map((id: string) => document.getElementById(id)).filter(Boolean) as HTMLElement[]
   if (!els.length) return
   const inBand = new Set<string>()
+  const update = () => {
+    const first = els.find(el => inBand.has(el.id))
+    const above = first ? null : els.filter(el => el.getBoundingClientRect().top < 100).pop()
+    active.value = (first || above)?.id || ''
+  }
   spy = new IntersectionObserver((entries) => {
     for (const e of entries) {
       if (e.isIntersecting) inBand.add(e.target.id)
       else inBand.delete(e.target.id)
     }
-    const first = els.find(el => inBand.has(el.id))
-    const above = first ? null : els.filter(el => el.getBoundingClientRect().top < 100).pop()
-    active.value = (first || above)?.id || ''
+    update()
   }, { rootMargin: '-80px 0px -66% 0px' })
   els.forEach(el => spy!.observe(el))
+  // a jump (a link, Home/End) can carry a heading past the band without crossing it
+  let queued = false
+  onScroll = () => {
+    if (queued) return
+    queued = true
+    requestAnimationFrame(() => { queued = false; update() })
+  }
+  window.addEventListener('scroll', onScroll, { passive: true })
 }
 watch(active, (id) => {
   const box = tocBox.value
@@ -63,7 +76,7 @@ watch(active, (id) => {
 })
 onMounted(() => watchHeadings())
 watch(path, () => nextTick(watchHeadings))
-onBeforeUnmount(() => spy?.disconnect())
+onBeforeUnmount(() => { spy?.disconnect(); if (onScroll) window.removeEventListener('scroll', onScroll) })
 
 // the file this page was generated from, for "Edit this page" (null when it is not on GitHub)
 const editUrl = computed(() => {
