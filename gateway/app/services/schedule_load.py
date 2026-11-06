@@ -67,7 +67,11 @@ def compute_schedule_load(session: Session, user: User, days: int) -> dict:
             continue
         n = 0
         while n < MAX_FIRINGS_PER_SCHEDULE:
-            t = itr.get_next(datetime)
+            try:
+                t = itr.get_next(datetime)
+            except ValueError:  # a cron that never fires, saved before it was refused
+                logger.warning("schedule_load: cron that never fires on %s %s: %r", kind, sid, cron)
+                break
             if t > horizon:
                 break
             grid[(t.weekday(), t.hour)] += 1
