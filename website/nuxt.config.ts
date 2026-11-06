@@ -39,10 +39,11 @@ export default defineNuxtConfig({
           innerHTML: "try{var t=localStorage.getItem('tabularia-site-theme');if(t==='light'||t==='dark')document.documentElement.dataset.theme=t}catch(e){}",
           tagPosition: 'head',
         },
-        // the system the docs' Windows / Linux / macOS tabs open on, before first paint:
+        // data-js: scripts run (the docs' copy buttons, tabs…). Then the system the docs'
+        // Windows / Linux / macOS tabs open on, before first paint:
         // the visitor's last choice, else the browser's system (components/content/OsTabs.vue)
         {
-          innerHTML: "try{var o=localStorage.getItem('tabularia-site-os')}catch(e){}if(o!=='windows'&&o!=='linux'&&o!=='macos'){var p=(navigator.userAgentData&&navigator.userAgentData.platform)||navigator.platform||navigator.userAgent||'';o=/^win|windows/i.test(p)?'windows':/mac|iphone|ipad|ipod/i.test(p)?'macos':'linux'}document.documentElement.dataset.os=o",
+          innerHTML: "document.documentElement.dataset.js='';try{var o=localStorage.getItem('tabularia-site-os')}catch(e){}if(o!=='windows'&&o!=='linux'&&o!=='macos'){var p=(navigator.userAgentData&&navigator.userAgentData.platform)||navigator.platform||navigator.userAgent||'';o=/^win|windows/i.test(p)?'windows':/mac|iphone|ipad|ipod/i.test(p)?'macos':'linux'}document.documentElement.dataset.os=o",
           tagPosition: 'head',
         },
         // Cloudflare Web Analytics, only with a token: cookieless, counts visits and pages

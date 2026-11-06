@@ -16,7 +16,7 @@
     "check-links": "node scripts/check-links.mjs",
     "postinstall": "nuxt prepare",
     "clean": "node -e \"for (const d of ['.data','.nuxt','.output']) require('node:fs').rmSync(d,{recursive:true,force:true})\"",
-    "test": "node --experimental-strip-types --test tests/placeholders.test.ts tests/os-tabs.test.ts"
+    "test": "node --experimental-strip-types --test tests/placeholders.test.ts tests/os-tabs.test.ts tests/code-copy.test.ts"
   },
   "dependencies": {
     "@fontsource/ibm-plex-mono": "5.3.0",

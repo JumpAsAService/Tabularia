@@ -5,6 +5,13 @@
 // none may be added here. Integrations are named for what they are; there is no Airflow plugin.
 
 export default {
+  // the documentation pages' own controls
+  docs: {
+    copy: 'Copy',
+    copyLabel: 'Copy the code',
+    copied: 'Copied',
+    copyFailed: 'Select the text and copy it',
+  },
   meta: {
     title: 'Tabularia · Messy in. Trusted out.',
     description:
