@@ -2,7 +2,7 @@
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
 // @ts-expect-error plain JavaScript module
-import { markChecks, pageTocAfterTitle, stackTable } from '../lib/prose-blocks.mjs'
+import { markChecks, markZoomableImages, pageTocAfterTitle, stackTable } from '../lib/prose-blocks.mjs'
 
 const h = (lv: number, t: string) => [`h${lv}`, { id: t.toLowerCase() }, t]
 const p = (...c: any[]) => ['p', {}, ...c]
@@ -46,4 +46,13 @@ test('a paragraph that starts with **Check:** is a check, at any depth; others a
     ['li', {}, p(['strong', {}, 'Check:'], ' nested')], p(['strong', {}, 'Check files'], ' x')]
   markChecks(nodes)
   assert.deepEqual(nodes.map((n: any) => (n[0] === 'li' ? n[2][1].class : n[1].class)), ['check', undefined, 'check', undefined])
+})
+
+test('screenshots under media/ can be enlarged, unless they are a link already', () => {
+  const shot = (src: string) => ['img', { src, alt: 'x' }]
+  const nodes = [p(shot('/media/guide/a.png')), ['a', { href: 'x' }, shot('/media/b.png')], p(shot('https://img.shields.io/x.svg'))]
+  markZoomableImages(nodes)
+  assert.equal((nodes[0] as any)[2][1].zoom, 'true')
+  assert.equal((nodes[1] as any)[2][1].zoom, undefined)
+  assert.equal((nodes[2] as any)[2][1].zoom, undefined)
 })

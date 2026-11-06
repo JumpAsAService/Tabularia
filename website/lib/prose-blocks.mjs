@@ -11,6 +11,8 @@
 //   the table's meaning for screen readers.
 // - markChecks: a paragraph that starts with **Check:** (how to see that a step worked)
 //   gets class "check", drawn as a box of its own.
+// - markZoomableImages: the screenshots (images under media/ that are not a link already)
+//   can be enlarged (components/content/ProseImg.vue).
 
 const isEl = (n, tag) => Array.isArray(n) && (tag ? n[0] === tag : typeof n[0] === 'string')
 
@@ -82,6 +84,16 @@ export function markChecks (nodes) {
   return nodes
 }
 
+/** Marks the screenshots that can be enlarged: images under media/, not inside a link. */
+export function markZoomableImages (nodes, inLink = false) {
+  for (const n of nodes) {
+    if (!Array.isArray(n)) continue
+    if (n[0] === 'img' && !inLink && /(^|\/)media\//.test(String(n[1]?.src || ''))) n[1] = { ...n[1], zoom: 'true' }
+    else markZoomableImages(n.slice(2), inLink || n[0] === 'a')
+  }
+  return nodes
+}
+
 /** Nuxt Content hook helper: every touch above, in place. */
 export function enhanceProse (content) {
   const body = content?.body
@@ -89,4 +101,5 @@ export function enhanceProse (content) {
   body.value = pageTocAfterTitle(body.value)
   stackTables(body.value)
   markChecks(body.value)
+  markZoomableImages(body.value)
 }
