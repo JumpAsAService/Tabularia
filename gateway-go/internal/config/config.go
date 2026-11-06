@@ -142,7 +142,7 @@ func Load(env Env) (*Config, error) {
 		APITokenMaxDays:          r.integer("AUTH__API_TOKEN_MAX_DAYS", 365, 1, 3650),
 		CookieDomain:             r.str("AUTH__COOKIE_DOMAIN", ""),
 		SettingsPanel:            r.boolean("ENGINE__SETTINGS_PANEL", true),
-		AccessTTLMinutes:         r.integer("JWT__ACCESS_TTL_MINUTES", 12*60, math.MinInt, math.MinInt),
+		AccessTTLMinutes:         r.integer("JWT__ACCESS_TTL_MINUTES", 12*60, math.MinInt, math.MaxInt),
 		ScriptsEnabled:           r.boolean("SCRIPTS__ENABLED", false),
 		ScriptsNamespace:         r.str("SCRIPTS__NAMESPACE", ""),
 		ScriptsRegistry:          r.str("SCRIPTS__REGISTRY", ""),

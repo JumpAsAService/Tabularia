@@ -111,3 +111,11 @@ func TestTheUpstreamIsOptional(t *testing.T) {
 		t.Errorf("a bad address: %v", err)
 	}
 }
+
+// JWT__ACCESS_TTL_MINUTES: any whole number, as pydantic's int (a bound min == max refused them all)
+func TestAccessTTLMinutesUnbounded(t *testing.T) {
+	c, err := Load(env(map[string]string{"SECURITY__FERNET_KEY": "k", "GATEWAY_GO__AI_SERVICE": "http://ai:8000", "JWT__ACCESS_TTL_MINUTES": "720"}))
+	if err != nil || c.AccessTTLMinutes != 720 {
+		t.Fatalf("got %v, %v", c, err)
+	}
+}
