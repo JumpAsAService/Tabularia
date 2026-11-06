@@ -144,9 +144,9 @@ func (d *Deps) scheduleLoad(w http.ResponseWriter, r *http.Request, p *auth.Prin
 		cur := now
 		for n := 0; n < maxFiringsPerSchedule; n++ {
 			t, err := c.Next(cur)
-			if err != nil { // croniter's CroniterBadDateError: not caught in Python either
-				q.fail(err)
-				return
+			if err != nil { // a cron that never fires, saved before it was refused: skipped, as Python
+				d.Log.Warn("schedule_load: cron that never fires", "schedule", s.name, "cron", s.cron)
+				break
 			}
 			if t.Wall.After(horizon) {
 				break

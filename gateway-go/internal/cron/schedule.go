@@ -27,12 +27,17 @@ func ValidateSchedule(spec string) (string, error) {
 	if !IsValid(spec) {
 		return "", &ScheduleError{fmt.Sprintf("Invalid cron expression: '%s' (format: 'minute hour day month day-of-week', e.g. '0 3 * * *')", spec)}
 	}
+	// a valid cron that never fires ('0 0 31 2 *') is refused here, with words
+	if s, err := Parse(spec); err == nil {
+		if _, err := s.Next(FromUTC(time.Now(), time.UTC)); err != nil {
+			return "", &ScheduleError{fmt.Sprintf("The cron expression '%s' never fires: no date matches it", spec)}
+		}
+	}
 	return spec, nil
 }
 
 // NextFire is schedule.next_fire: the next instant strictly after `after`, the cron read
-// in `zone`'s wall time, in UTC. An expression that never fires is ErrBadDate (a 500 in
-// Python).
+// in `zone`'s wall time, in UTC. An expression that never fires is a ScheduleError.
 func NextFire(spec string, after time.Time, zone string) (time.Time, error) {
 	spec, err := ValidateSchedule(spec)
 	if err != nil {

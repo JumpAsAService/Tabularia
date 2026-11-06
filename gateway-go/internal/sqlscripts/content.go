@@ -139,7 +139,7 @@ func GroupsUsing(ctx context.Context, q Querier, scriptID int64) ([]flowgroups.G
 }
 
 // sqlScriptLock is _SQL_SCRIPT_LOCK: the advisory locks of «start a SQL script's write».
-const sqlScriptLock = 74610004
+const sqlScriptLock = 74610005 // 74610004 is the flow groups queue's
 
 // InLine is in_line_for_the_script: released by the transaction's end.
 func InLine(ctx context.Context, tx pgx.Tx, scriptID int64) error {

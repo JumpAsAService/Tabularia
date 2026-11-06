@@ -132,7 +132,7 @@ func updatePrivacy(d *Deps) authedFunc {
 			fail(d, w, "saving the privacy notice", err)
 			return
 		}
-		audit.Record(context.Background(), d.DB, d.Log, audit.Event{Actor: &p.User, Action: "privacy.update",
+		audit.Record(r.Context(), d.DB, d.Log, audit.Event{Actor: &p.User, Action: "privacy.update",
 			TargetType: ptr("privacy_notice"), TargetID: &n.id, Detail: pyjson.Object{{Key: "enabled", Value: n.enabled}}})
 		server.JSON(w, http.StatusOK, d.privacyOut(n))
 	}
