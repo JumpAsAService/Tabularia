@@ -491,6 +491,7 @@ optgroup { font-style: normal; color: var(--muted); }
   background: color-mix(in srgb, var(--accent) 55%, transparent);
   outline: none;
 }
+.canvas:focus { outline: none; }
 .canvas {
   position: relative;
   background:

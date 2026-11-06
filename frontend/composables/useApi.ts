@@ -253,6 +253,13 @@ export function useApi() {
     async changeMyPassword(current_password: string, new_password: string): Promise<void> {
       await apiFetch('/users/me/password', { method: 'POST', body: { current_password, new_password } })
     },
+    // the flow editor's right-click menu, per person: null = never chosen (the defaults)
+    async myFlowShortcuts(): Promise<string[] | null> {
+      return (await apiFetch<{ shortcuts: string[] | null }>('/users/me/flow-shortcuts')).shortcuts
+    },
+    async setMyFlowShortcuts(shortcuts: string[] | null): Promise<string[] | null> {
+      return (await apiFetch<{ shortcuts: string[] | null }>('/users/me/flow-shortcuts', { method: 'PUT', body: { shortcuts } })).shortcuts
+    },
     async auditAccessActivity(hours = 24): Promise<AccessActivity> {
       return await apiFetch<AccessActivity>(`/audit/access-activity?hours=${hours}`)
     },

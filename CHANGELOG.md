@@ -5,6 +5,10 @@ exposes at `/system/info` and in the app's settings menu.
 
 ## Unreleased
 
+- **A right-click menu in the flow editor**: right-click on the canvas or on a node opens a
+  ring of transformations around the pointer; a choice creates the node at the click,
+  connected to the selected node. Each person picks up to eight and their order
+  (**Customize**, kept on the server: `GET`/`PUT /users/me/flow-shortcuts`, migration 0038).
 - **A schedule that never fires is refused when it is saved**: a valid cron with no date
   ('0 0 31 2 *', February has no 31st) answered 500 from every schedule's PUT and, once
   saved, made the schedule load page answer 500 to everyone. Now the save says it never

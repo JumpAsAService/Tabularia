@@ -33,6 +33,10 @@ The editor has five areas:
   to the handle on the next one's left. A connection is removed with a click on it or
   from the keyboard. **Arrange the flow** lays the nodes out, **Undo (Ctrl+Z)** and
   **Redo (Ctrl+Shift+Z)** step through your changes, and a minimap helps on large flows.
+  A right-click on the canvas (or on a node, which it selects) opens a ring of
+  transformations around the pointer: a choice creates the node there, already connected
+  to the selected node. **Customize**, in the ring's centre, picks up to eight
+  transformations and their order, saved for your account.
 - **The panel**, on the right, with the selected node's settings. Column pickers list the
   columns that reach the node, so a filter or a group-by is chosen, not typed. When an
   AI model is configured, a second tab, **Assistant**, builds the flow with you

@@ -32,6 +32,9 @@ import { createFlowHistory } from '~/composables/useFlowHistory'
 import { onBeforeRouteLeave, onBeforeRouteUpdate } from 'vue-router'
 import { opensAnotherFlow } from '~/composables/editorAddress'
 import Modal from '~/components/ui/Modal.vue'
+import FlowQuickMenu from '~/components/ui/FlowQuickMenu.vue'
+import FlowShortcutsDialog from '~/components/ui/FlowShortcutsDialog.vue'
+import { flowShortcutsShown } from '~/composables/flowShortcuts'
 import SheetPickerDialog from '~/components/ui/SheetPickerDialog.vue'
 import { buildClip, instantiateClip, readClip, writeClip, type ClipNode, type FlowClip } from '~/composables/useFlowClipboard'
 import { useFlows } from '~/composables/useFlows'
@@ -67,6 +70,9 @@ const {
   onConnect,
   onNodeClick,
   onPaneClick,
+  onPaneContextMenu,
+  onNodeContextMenu,
+  onMoveStart,
   onEdgeMouseEnter,
   onEdgeMouseLeave,
   getSelectedEdges,
@@ -1125,6 +1131,107 @@ function addOperation() {
   nextTick(() => setCenter(at.x, at.y, { zoom: getViewport().zoom, duration: 300 }))
 }
 
+// ── Right-click menu: the person's transformations around the click ──────
+// Right-click on the canvas opens the ring (components/ui/FlowQuickMenu.vue) where the
+// click was; on a node, it selects that node first. A choice creates the operation AT the
+// click, linked from the selected node as «+» links it. The choices are the person's
+// (GET/PUT /users/me/flow-shortcuts), the defaults until they choose.
+const canvasEl = ref<HTMLElement | null>(null)
+const quickMenu = ref<InstanceType<typeof FlowQuickMenu> | null>(null)
+const savedShortcuts = ref<string[] | null>(null)
+const shortcutsOpen = ref(false)
+const shortcutsSaving = ref(false)
+const shortcutItems = computed(() => flowShortcutsShown(savedShortcuts.value, operations.value))
+let quickAt: { x: number; y: number } | null = null // the click, in flow coordinates
+// node types whose data output an operation can read (the «out» handle)
+const DATA_PARENTS = new Set(['source', 'operation', 'foreach', 'script', 'container'])
+
+onMounted(() => {
+  api.myFlowShortcuts().then((s) => { savedShortcuts.value = s }, () => { /* the defaults */ })
+})
+
+function openQuickMenu(ev: MouseEvent) {
+  ev.preventDefault()
+  if (loadBlocked.value || !operations.value.length || !canvasEl.value) return
+  quickAt = screenToFlowCoordinate({ x: ev.clientX, y: ev.clientY })
+  const r = canvasEl.value.getBoundingClientRect()
+  quickMenu.value?.show({ x: ev.clientX, y: ev.clientY }, { left: r.left, top: r.top, right: r.right, bottom: r.bottom })
+}
+onPaneContextMenu((ev) => openQuickMenu(ev as MouseEvent))
+// the canvas' own selection follows, as after a click
+function selectOnCanvas(id: string) {
+  const n = findNode(id)
+  if (!n) return
+  removeSelectedNodes(getSelectedNodes.value)
+  addSelectedNodes([n])
+}
+onNodeContextMenu(({ event, node }) => {
+  if (selectedId.value !== node.id) {
+    selectedId.value = node.id
+    refreshForNode(node.id)
+  }
+  selectOnCanvas(node.id)
+  openQuickMenu(event as MouseEvent)
+})
+onMoveStart(() => quickMenu.value?.hide())
+
+// the browser's own menu has nothing to do on the canvas, except in a field of a node
+function onCanvasContextMenu(ev: MouseEvent) {
+  const el = ev.target as HTMLElement | null
+  if (el?.closest('input, textarea, [contenteditable="true"]')) return
+  ev.preventDefault()
+}
+
+function onQuickMenuClose(reason: string) {
+  if (reason === 'escape') canvasEl.value?.focus()
+}
+
+function addOperationAt(opType: string) {
+  if (!quickAt) return
+  const position = quickAt
+  fitView_ = false // the node goes where the person put it: a new flow's pending fit must not move the view
+  const parent = selectedId.value ? findNode(selectedId.value) : undefined
+  const id = `op-${++opCounter}`
+  // at the click INSIDE a foreach container → its child, as a drop there
+  const container = getNodes.value.find(
+    (n) =>
+      n.type === 'foreach' &&
+      position.x > n.position.x &&
+      position.x < n.position.x + (n.dimensions?.width ?? 0) &&
+      position.y > n.position.y &&
+      position.y < n.position.y + (n.dimensions?.height ?? 0),
+  )
+  if (container) {
+    addNodes({
+      id, type: 'operation', parentNode: container.id, extent: 'parent',
+      position: { x: position.x - container.position.x, y: position.y - container.position.y },
+      data: { opType, params: defaultParams(opType) },
+    })
+  } else {
+    addNodes({ id, type: 'operation', position, data: { opType, params: defaultParams(opType) } })
+  }
+  if (parent && DATA_PARENTS.has(parent.type ?? '')) {
+    const sourceHandle = parent.type === 'script' || parent.type === 'container' ? 'out' : undefined
+    addEdges({ id: `e-${parent.id}-left-${id}`, source: parent.id, target: id, sourceHandle, targetHandle: 'left' })
+  }
+  selectedId.value = id
+  refreshForNode(id)
+  nextTick(() => selectOnCanvas(id))
+}
+
+async function saveShortcuts(list: string[] | null) {
+  shortcutsSaving.value = true
+  try {
+    savedShortcuts.value = await api.setMyFlowShortcuts(list)
+    shortcutsOpen.value = false
+    setStatus(t('quickMenu.saved'), 'ok')
+  } catch (e) {
+    setStatus(t('quickMenu.saveFailed', { err: errMessage(e) }), 'error')
+  } finally {
+    shortcutsSaving.value = false
+  }
+}
+
 // ── Minimap: each node in the colour of its edge on the canvas ────────────
 const NODE_TYPE_COLOR: Record<string, string> = {
   source: 'var(--accent-2)',
@@ -1170,6 +1277,7 @@ function onCanvasDrop(ev: DragEvent) {
   if (!kind || loadBlocked.value) return // a flow that cannot be opened takes nothing under its notice
   if (!TRANSFORMATION(kind) && deniedToObserver()) return
   const position = screenToFlowCoordinate({ x: ev.clientX, y: ev.clientY })
+  fitView_ = false // the node goes where it was dropped: a new flow's pending fit must not move the view
 
   if (kind === 'source') {
     const id = `src-${++sourceCounter}`
@@ -2208,7 +2316,7 @@ async function pollTask(id: string) {
       />
     </div>
 
-    <div class="canvas" @drop="onCanvasDrop" @dragover="onCanvasDragOver">
+    <div ref="canvasEl" class="canvas" tabindex="-1" @drop="onCanvasDrop" @dragover="onCanvasDragOver" @contextmenu="onCanvasContextMenu">
       <div v-if="loadBlocked" class="not-open" role="alert">
         <ShieldAlert :size="22" />
         <h2>{{ $t('flowEditor.cannotOpenTitle') }}</h2>
@@ -2392,6 +2500,15 @@ async function pollTask(id: string) {
         <ChartPanel v-else :columns="preview?.columns ?? []" :query="chartQuery" />
       </div>
     </div>
+    <FlowQuickMenu ref="quickMenu" :items="shortcutItems" @pick="addOperationAt" @customize="shortcutsOpen = true" @close="onQuickMenuClose" />
+    <FlowShortcutsDialog
+      :open="shortcutsOpen"
+      :available="operations"
+      :current="shortcutItems"
+      :saving="shortcutsSaving"
+      @save="saveShortcuts"
+      @close="shortcutsOpen = false"
+    />
     <Modal :open="leaveOpen" :title="$t('flowEditor.leaveTitle')" :width="440" @close="answerLeaving(false)">
       <p class="leave-body">{{ $t('flowEditor.leaveBody', { name: flowName.trim() || '—' }) }}</p>
       <template #footer>
