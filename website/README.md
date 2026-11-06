@@ -81,6 +81,15 @@ analytics at all.
   any other repository path becomes its GitHub URL.
 - Headings get GitHub's ids, so anchors written for GitHub (`#run-it-on-your-engine--or-on-your-warehouse`)
   work on the site too.
+- A step that differs between operating systems is written as consecutive blocks under fixed
+  level-4 headings, always in this order: `#### Windows`, `#### Linux`, `#### macOS` (or
+  `#### Windows` and `#### Linux and macOS` when those two are the same). A block runs to the
+  next heading, so text common to every system after them goes under `#### All systems`. On
+  GitHub they are plain headings; on the site ([`lib/os-tabs.mjs`](lib/os-tabs.mjs),
+  `components/content/OsTabs.vue`) each run of two or more becomes tabs that open on the
+  visitor's system and remember a choice for the whole site (`localStorage`); without
+  JavaScript every block stays visible under its heading. These headings are left out of
+  "On this page". Cover all three systems in each group, even with "Nothing to do".
 - The sidebar groups are in [`app/utils/docs-nav.ts`](app/utils/docs-nav.ts). A new file in `docs/`
   is published even if it is not listed there: it lands under "Reference" until it is placed.
 - Search is a static index (`/search.json`, one entry per section) loaded on first use and

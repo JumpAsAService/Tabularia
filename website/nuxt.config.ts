@@ -4,6 +4,7 @@ import { site } from './site.config.mjs'
 import GithubSlugger from 'github-slugger'
 import { githubHeadingIds, PUBLIC_DOC_ASSET_DIRS, rewriteMarkdownLinks } from './lib/doc-links.mjs'
 import { isPublished } from './lib/repo-files.mjs'
+import { groupOsSections } from './lib/os-tabs.mjs'
 
 const repoRoot = resolve(__dirname, '..')
 
@@ -36,6 +37,12 @@ export default defineNuxtConfig({
         // theme before first paint: the visitor's choice, else the system's, else dark
         {
           innerHTML: "try{var t=localStorage.getItem('tabularia-site-theme');if(t==='light'||t==='dark')document.documentElement.dataset.theme=t}catch(e){}",
+          tagPosition: 'head',
+        },
+        // the system the docs' Windows / Linux / macOS tabs open on, before first paint:
+        // the visitor's last choice, else the browser's system (components/content/OsTabs.vue)
+        {
+          innerHTML: "try{var o=localStorage.getItem('tabularia-site-os')}catch(e){}if(o!=='windows'&&o!=='linux'&&o!=='macos'){var p=(navigator.userAgentData&&navigator.userAgentData.platform)||navigator.platform||navigator.userAgent||'';o=/^win|windows/i.test(p)?'windows':/mac|iphone|ipad|ipod/i.test(p)?'macos':'linux'}document.documentElement.dataset.os=o",
           tagPosition: 'head',
         },
         // Cloudflare Web Analytics, only with a token: cookieless, counts visits and pages
@@ -98,6 +105,8 @@ export default defineNuxtConfig({
     // GitHub's heading ids, so the docs' own anchors keep working on the site
     'content:file:afterParse' (ctx: any) {
       githubHeadingIds(ctx.content, GithubSlugger)
+      // "#### Windows" / "#### Linux" / "#### macOS" blocks become tabs (lib/os-tabs.mjs)
+      groupOsSections(ctx.content)
       // a folder's README is the folder's page: /docs/examples/keycloak
       if (typeof ctx.content.path === 'string') ctx.content.path = ctx.content.path.replace(/\/readme$/, '')
       // the file the page comes from, for "Edit this page": only when it is (or will be) on GitHub

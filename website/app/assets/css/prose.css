@@ -1,7 +1,7 @@
 /* The documentation's reading surface: long text, tables, code. Both themes. */
 
 .prose { font-size: 17px; line-height: 1.65; color: var(--text); max-width: 76ch; overflow-wrap: break-word; }
-.prose > * + * { margin-top: 1.1em; }
+.prose > * + *, .prose .os-panel > * + * { margin-top: 1.1em; }
 .prose h1 { font-size: clamp(32px, 3.6vw, 48px); line-height: 1.08; letter-spacing: -0.025em; font-weight: 600; margin-bottom: .6em; }
 .prose h2 { font-size: 28px; line-height: 1.2; letter-spacing: -0.015em; font-weight: 600; margin-top: 2.2em; }
 .prose h3 { font-size: 21px; line-height: 1.3; font-weight: 600; margin-top: 1.8em; }
