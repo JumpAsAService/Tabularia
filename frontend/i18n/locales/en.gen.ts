@@ -2306,6 +2306,12 @@ export default {
     "sortHint": "Rows are sorted by the first column; the next ones decide between equal values.",
   },
   "projectBrowser": {
+    "openInViewer": "Open in Viewer",
+    "newFlowFromHere": "New flow from here",
+    "dsSchema": "Columns",
+    "dsFirstRows": "First {n} rows",
+    "dsContract": "Data contract",
+    "dsColumns": "{n} column | {n} columns",
     "depsNotCounted": "Reports, dashboards and saved views reading it are not counted.",
     "deleteDialogTitle": "Delete for good?",
     "deleteCannotUndo": "This cannot be undone.",

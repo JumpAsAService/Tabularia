@@ -2306,6 +2306,12 @@ export default {
     "sortHint": "Le righe si ordinano per la prima colonna; le successive decidono tra valori uguali.",
   },
   "projectBrowser": {
+    "openInViewer": "Apri nel Viewer",
+    "newFlowFromHere": "Nuovo flusso da qui",
+    "dsSchema": "Colonne",
+    "dsFirstRows": "Prime {n} righe",
+    "dsContract": "Contratto dei dati",
+    "dsColumns": "{n} colonna | {n} colonne",
     "depsNotCounted": "Report, dashboard e viste salvate che lo leggono non sono contati.",
     "deleteDialogTitle": "Eliminare definitivamente?",
     "deleteCannotUndo": "Non si può annullare.",

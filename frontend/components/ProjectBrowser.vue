@@ -80,6 +80,7 @@ import ContractBadge from '~/components/ui/ContractBadge.vue'
 import ContractDialog from '~/components/ui/ContractDialog.vue'
 import { listState, rowActions, primaryAction, keyCommand, stepRow, dependentsOf, lineageType, DEPENDENT_TYPES, type DependentType, type RowAction, type RowFacts } from '~/composables/exploreList'
 import Modal from '~/components/ui/Modal.vue'
+import DatasourcePanel from '~/components/ui/DatasourcePanel.vue'
 import RowMenu, { type RowMenuItem } from '~/components/ui/RowMenu.vue'
 import { searchEverywhere } from '~/composables/useSearch'
 import {
@@ -93,7 +94,7 @@ import {
 
 const api = useProjects()
 const coreApi = useApi()
-const { preferredEngine } = usePreferredEngine()
+const { preferredEngine, defaultEngine } = usePreferredEngine()
 const flowsApi = useFlows()
 const runsApi = useRuns()
 const dsApi = useDatasources()
@@ -283,7 +284,8 @@ const rows = computed<Row[]>(() => {
             state?.status === 'SUCCESS' && runNotes(state.notes) ? notesText(runNotes(state.notes)!, t) : '']
             .filter(Boolean)
             .join(' · ')
-    out.push({ kind: 'datasource', id: d.id, name: d.name, meta, raw: d, progressRun: running && state?.progress ? state : undefined })
+    // `to` is where a new tab goes (Ctrl/⌘, middle click): the Viewer; a plain click opens the panel
+    out.push({ kind: 'datasource', id: d.id, name: d.name, meta, to: `/viewer?ds=${d.id}`, raw: d, progressRun: running && state?.progress ? state : undefined })
   }
   for (const v of savedViews.value) {
     out.push({ kind: 'view', id: v.id, name: v.name, meta: v.datasource_name ?? '', to: `/viewer?view=${v.id}`, raw: v })
@@ -1187,6 +1189,7 @@ watch([state, rows], ([now]) => {
 function openRow(r: Row) {
   if (r.locked) return
   if (r.kind === 'folder') openFolder(r.id, 'first')
+  else if (r.kind === 'datasource') openDs(r.raw)
   else if (r.kind === 'connection') openConnDialog(r.raw)
   else if (r.to) navigateTo(r.to)
 }
@@ -1275,7 +1278,9 @@ function rowClick(e: MouseEvent, r: Row) {
   if (window.getSelection()?.toString()) return
   const newTab = e.button === 1 || e.ctrlKey || e.metaKey || e.shiftKey
   if (e.type === 'auxclick' && e.button !== 1) return
-  if (r.to) {
+  if (r.kind === 'datasource' && !newTab) {
+    if (e.type === 'click') openDs(r.raw)
+  } else if (r.to) {
     // as the link would: Ctrl/Cmd/Shift or the middle click open elsewhere
     if (newTab) {
       e.preventDefault()
@@ -1287,6 +1292,26 @@ function rowClick(e: MouseEvent, r: Row) {
     if (r.kind === 'folder') openFolder(r.id)
     else if (r.kind === 'connection') openConnDialog(r.raw)
   }
+}
+
+// ── A datasource opens in a side panel: schema, first rows, contract, the ways on ──
+const dsOpen = ref<DatasourceInfo | null>(null)
+function openDs(ds: DatasourceInfo) {
+  rowMenu.value = null
+  dsOpen.value = ds
+}
+/** The name is a real link (to the Viewer) for the new tab; a plain click opens the panel. */
+function onDsLinkClick(e: MouseEvent, r: Row) {
+  if (e.ctrlKey || e.metaKey || e.shiftKey || e.button !== 0) return
+  e.preventDefault()
+  // the panel gives the focus back to the name it was opened from
+  ;(e.currentTarget as HTMLElement).focus({ preventScroll: true })
+  openDs(r.raw)
+}
+/** A new flow whose source is this datasource, in the datasource's folder. */
+function newFlowFrom(ds: DatasourceInfo) {
+  dsOpen.value = null
+  navigateTo(`/editor?engine=${defaultEngine(engines.value)}&project=${ds.project_id}&ds=${ds.id}`)
 }
 
 function openConnDialog(conn: ConnectionInfo | null) {
@@ -1633,6 +1658,9 @@ watch(currentId, () => { q.value = ''; kindFilter.value = null; settingsOpen.val
               <button v-else-if="r.kind === 'connection'" class="asname" @click="openConnDialog(r.raw)">
                 <component :is="KIND_ICON[r.kind]" :size="15" class="kicon" /> {{ r.name }}
               </button>
+              <a v-else-if="r.kind === 'datasource'" :href="r.to" class="asname" @click="onDsLinkClick($event, r)">
+                <component :is="KIND_ICON[r.kind]" :size="15" class="kicon" /> {{ r.name }}
+              </a>
               <NuxtLink v-else-if="r.to" :to="r.to" class="asname">
                 <component :is="KIND_ICON[r.kind]" :size="15" class="kicon" /> {{ r.name }}
               </NuxtLink>
@@ -1838,6 +1866,14 @@ watch(currentId, () => { q.value = ''; kindFilter.value = null; settingsOpen.val
       :busy="connBusy"
       @confirm="saveConnection"
       @cancel="showConnDialog = false"
+    />
+    <DatasourcePanel
+      :ds="dsOpen"
+      :engine="defaultEngine(engines)"
+      :viewer-href="dsOpen ? `/viewer?ds=${dsOpen.id}` : ''"
+      @close="dsOpen = null"
+      @contract="(d) => { dsOpen = null; contractFor = d }"
+      @new-flow="newFlowFrom"
     />
     <ContractDialog :open="contractFor !== null" :datasource="contractFor" @close="contractFor = null" @changed="loadFolder(currentId)" />
     <DbDatasourceDialog

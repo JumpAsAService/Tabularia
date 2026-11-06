@@ -2280,6 +2280,12 @@ export default {
     "sortHint": "Die Zeilen werden nach der ersten Spalte sortiert; die weiteren entscheiden bei gleichen Werten.",
   },
   "projectBrowser": {
+    "openInViewer": "Im Viewer öffnen",
+    "newFlowFromHere": "Neuer Flow von hier",
+    "dsSchema": "Spalten",
+    "dsFirstRows": "Erste {n} Zeilen",
+    "dsContract": "Datenvertrag",
+    "dsColumns": "{n} Spalte | {n} Spalten",
     "depsNotCounted": "Berichte, Dashboards und gespeicherte Ansichten, die sie lesen, werden nicht mitgezählt.",
     "deleteDialogTitle": "Endgültig löschen?",
     "deleteCannotUndo": "Das lässt sich nicht rückgängig machen.",

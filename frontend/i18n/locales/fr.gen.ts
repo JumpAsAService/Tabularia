@@ -2280,6 +2280,12 @@ export default {
     "sortHint": "Les lignes sont triées sur la première colonne ; les suivantes départagent les valeurs égales.",
   },
   "projectBrowser": {
+    "openInViewer": "Ouvrir dans le Viewer",
+    "newFlowFromHere": "Nouveau flux à partir d'ici",
+    "dsSchema": "Colonnes",
+    "dsFirstRows": "{n} premières lignes",
+    "dsContract": "Contrat de données",
+    "dsColumns": "{n} colonne | {n} colonnes",
     "depsNotCounted": "Les rapports, tableaux de bord et vues enregistrées qui la lisent ne sont pas comptés.",
     "deleteDialogTitle": "Supprimer définitivement ?",
     "deleteCannotUndo": "Cette action est irréversible.",

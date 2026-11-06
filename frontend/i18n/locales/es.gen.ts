@@ -2280,6 +2280,12 @@ export default {
     "sortHint": "Las filas se ordenan por la primera columna; las siguientes deciden entre valores iguales.",
   },
   "projectBrowser": {
+    "openInViewer": "Abrir en el Viewer",
+    "newFlowFromHere": "Nuevo flujo desde aquí",
+    "dsSchema": "Columnas",
+    "dsFirstRows": "Primeras {n} filas",
+    "dsContract": "Contrato de datos",
+    "dsColumns": "{n} columna | {n} columnas",
     "depsNotCounted": "No se cuentan los informes, paneles y vistas guardadas que la leen.",
     "deleteDialogTitle": "¿Eliminar definitivamente?",
     "deleteCannotUndo": "No se puede deshacer.",

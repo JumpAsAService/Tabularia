@@ -5,6 +5,10 @@ exposes at `/system/info` and in the app's settings menu.
 
 ## Unreleased
 
+- **A datasource opens from Explore**: a click on its row opens a side panel with its
+  columns and types, its first 20 rows, its contract, and «Open in Viewer» or «New flow
+  from here» (the editor starts with it as the source; `/editor?ds=<id>`, and the Viewer
+  takes `/viewer?ds=<id>`). Ctrl/⌘ or the middle click opens it in the Viewer in a new tab.
 - **Deleting from Explore asks in the app's dialog, and says what would break**: the
   browser's confirm() is gone; the dialog names the object and its consequence, and what
   uses it as far as the lineage knows («Used by 8 flows»), or says plainly when that is not

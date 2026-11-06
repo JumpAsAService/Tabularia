@@ -832,6 +832,18 @@ onMounted(async () => {
     applyDefinition({ nodes: [], edges: [] })
     selectedId.value = null
   }
+  if (flowId.value === null && route.query.ds) {
+    // «New flow from here» (Explore's datasource panel, ?ds=<id>): the source starts on that
+    // datasource, as if picked in its panel — part of the starting canvas, not a change
+    const fromDs = Number(route.query.ds)
+    const ds = Number.isInteger(fromDs) && fromDs > 0 ? datasources.value.find((d) => d.id === fromDs) : undefined
+    if (ds) {
+      updateNodeData(SOURCE_ID, {
+        datasourceId: ds.id, datasetId: null, bucket: ds.bucket, parquetKey: ds.key,
+        filename: ds.name, sheet: null, rows: ds.rows, columns: ds.columns,
+      })
+    }
+  }
   if (flowId.value === null) {
     // new flow: it starts from the initial canvas, which is also the «saved» reference,
     // and so is its starting name (before: '' against «Untitled flow», and leaving an

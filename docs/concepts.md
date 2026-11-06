@@ -42,6 +42,9 @@ A row's commands (rename, duplicate, move, delete, and the ones of its kind) are
 **⋯** menu, also on right click. Explore works from the keyboard: `/` puts the cursor in
 the filter, ↑ ↓ move between rows, Enter opens, Backspace or Alt+↑ goes up a folder, F2
 renames, Shift+F10 opens the row's menu; each folder is a step of the browser's history.
+A datasource opens in a side panel with its columns, its first rows and its contract, and
+leads on to the Viewer or to a new flow that starts from it (Ctrl/⌘ or the middle click
+opens it in the Viewer, in a new tab).
 
 Permissions are granted on a folder, to a user or to a group, and hold for every folder
 below it. There are five:

@@ -410,7 +410,10 @@ onMounted(async () => {
   // direct opening from a link (?view=<id>): that is how the folder leads here. It goes
   // AFTER loading the datasources, because the view must find one.
   const linked = Number(useRoute().query.view)
+  // ?ds=<id>: a datasource opened from Explore's panel (or in a new tab from its row)
+  const ds = Number(useRoute().query.ds)
   if (Number.isInteger(linked) && linked > 0) await openSavedView(linked)
+  else if (Number.isInteger(ds) && ds > 0 && datasources.value.some((d) => d.id === ds)) await onPickDatasource(ds)
 })
 </script>
 
