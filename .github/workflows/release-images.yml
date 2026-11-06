@@ -85,6 +85,8 @@ jobs:
               "gateway/pyproject.toml": tomllib.load(open("gateway/pyproject.toml", "rb"))["project"]["version"],
               "frontend/package.json": json.load(open("frontend/package.json"))["version"],
               "gateway/app/core/config.py": re.search(r'^\s*version: str = "([^"]+)"', open("gateway/app/core/config.py").read(), re.M).group(1),
+              "gateway-go/internal/config/config.go": re.search(r'r\.str\("APP__VERSION", "([^"]+)"\)', open("gateway-go/internal/config/config.go").read()).group(1),
+              "gateway-go/internal/config/config_admin.go": re.search(r'r\.str\("APP__VERSION", "([^"]+)"\)', open("gateway-go/internal/config/config_admin.go").read()).group(1),
               "infrastructure/helm/tabularia/Chart.yaml": re.search(r'^appVersion: "([^"]+)"', open("infrastructure/helm/tabularia/Chart.yaml").read(), re.M).group(1),
           }
           # the image tags the chart installs by default

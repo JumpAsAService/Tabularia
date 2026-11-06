@@ -28,24 +28,24 @@ image:
   # Server, run your own build of it, see docs/sqlserver.md.
   backend:
     repository: tabularia-backend
-    tag: "1.3.0"
+    tag: "1.3.1"
 
   # The Python gateway's image: the AI service (APP__ROLE=ai, see `ai` below) and the
   # database migrations (python -m app.db.migra, the init container of the gateway pods).
   gateway:
     repository: tabularia-gateway
-    tag: "1.3.0"
+    tag: "1.3.1"
 
   # The gateway itself (gateway-go/Dockerfile): the gateway and orchestrator pods.
   gatewayGo:
     repository: tabularia-gateway-go
-    tag: "1.3.0"
+    tag: "1.3.1"
 
   # If you build it yourself: from frontend/Dockerfile.prod, not
   # frontend/Dockerfile (that one is the hot-reload development server).
   frontend:
     repository: tabularia-frontend
-    tag: "1.3.0"
+    tag: "1.3.1"
 
 # ─────────────────────────────────────────────────────────────────────────────
 # External services — not deployed by this chart

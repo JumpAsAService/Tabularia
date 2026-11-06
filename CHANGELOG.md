@@ -3,7 +3,29 @@
 All notable changes to Tabularia. The version shown here is the one the gateway
 exposes at `/system/info` and in the app's settings menu.
 
-## Unreleased
+## 1.3.1 «Catone» — 2026-11-06
+
+The gateway is rewritten in Go. Every request the browser, the scripts and the engine send
+reaches the same addresses and gets the same answers as before, checked request by request
+against the Python gateway; what changes is how much one replica carries. A right-click
+menu in the flow editor, a calmer Explore, and short motion where things used to pop.
+
+**Upgrading from 1.3.0.** A new image, `tabularia-gateway-go`, runs the gateway and the
+orchestrator; the `tabularia-gateway` image stays, now as the **AI service**
+(`APP__ROLE=ai`: the assistant, the SQL parsing, the migrations) — the Helm chart (2.5.0)
+and `infrastructure/docker-compose.yml` add it for you. The environment variables are the
+same; `FORWARDED_ALLOW_IPS` is read as `GATEWAY_GO__FORWARDED_ALLOW_IPS`. One schema
+migration (0038: a column on `users`). Read docs/deploy/upgrading.md before upgrading.
+
+- **The gateway is in Go.** The same 362 routes (348 answered by the Go gateway, the 14 of
+  the AI assistant by the AI service), the background work by `APP__ROLE` (api,
+  orchestrator, all), the same database, cookies and errors: verified against the Python
+  gateway on 6696 requests and on every background loop, one round at a time. On 2 CPUs a
+  Go replica answers 9 to 45 times the requests a second of a Python one (7,600 a second
+  on `/auth/me`, 3,300 on a folder's list), with a median latency under load of 8 to 45 ms
+  instead of hundreds, and uses 10 MB of memory idle instead of 141
+  (`gateway-go/scripts/bench/bench.sh`). Its image carries `pg_dump` 14 to 18 for the
+  backups. A request still running when the gateway stops is allowed to finish, as before.
 
 - **Explore's two pieces of motion**: a flow's run history drops in (opacity and 4px, the
   shared short duration) when opened with the pointer, at once from the keyboard; a row
