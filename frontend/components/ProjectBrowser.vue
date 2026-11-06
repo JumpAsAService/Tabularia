@@ -811,6 +811,7 @@ async function removeRow(row: Row) {
 interface EngineOpt { id: string; label: string; available: boolean; description: string; optional?: boolean; disabled_by_admin?: boolean }
 const engines = ref<EngineOpt[]>([DEFAULT_ENGINE_OPTION])
 const newMenu = ref(false)
+const newMenuByKey = ref(false) // opened from the keyboard: no motion
 const engineStep = ref(false) // the menu's second level: choosing the engine
 const newFolderName = ref('')
 
@@ -1195,8 +1196,9 @@ watch(currentId, () => { q.value = ''; kindFilter.value = null; settingsOpen.val
       </button>
 
       <div v-if="target !== null || isSuper" class="newwrap">
-        <button class="btn-link" @click="newMenu = !newMenu"><Plus :size="14" /> {{ $t('projectBrowser.newButton') }}</button>
+        <button class="btn-link" @click="newMenuByKey = !newMenu && $event.detail === 0; newMenu = !newMenu"><Plus :size="14" /> {{ $t('projectBrowser.newButton') }}</button>
         <div v-if="newMenu" class="menu-backdrop" @click="closeNew" />
+        <Transition name="pop" :css="!newMenuByKey">
         <div v-if="newMenu" ref="newPop" class="menu-pop">
           <template v-if="!engineStep">
             <!-- as the server asks: MANAGE on the parent, an administrator at the top level -->
@@ -1270,6 +1272,7 @@ watch(currentId, () => { q.value = ''; kindFilter.value = null; settingsOpen.val
             </button>
           </template>
         </div>
+        </Transition>
       </div>
 
       <button
@@ -1465,9 +1468,11 @@ watch(currentId, () => { q.value = ''; kindFilter.value = null; settingsOpen.val
     </table>
 
     <!-- The folder's administration: outside the data's scrolling -->
-    <template v-if="settingsOpen && canManage && current">
-      <div class="drawer-backdrop" @click="settingsOpen = false" />
-      <aside ref="drawerEl" v-label-fields class="drawer" role="dialog" aria-modal="true" tabindex="-1" :aria-label="$t('projectBrowser.folderSettingsTitle')">
+    <Transition name="veil">
+      <div v-if="settingsOpen && canManage && current" class="drawer-backdrop" @click="settingsOpen = false" />
+    </Transition>
+    <Transition name="drawer">
+      <aside v-if="settingsOpen && canManage && current" ref="drawerEl" v-label-fields class="drawer" role="dialog" aria-modal="true" tabindex="-1" :aria-label="$t('projectBrowser.folderSettingsTitle')">
         <div class="drawer-head">
           <span class="dtitle"><Settings2 :size="15" /> {{ current.name }}</span>
           <button class="mini" :aria-label="$t('projectBrowser.closeDrawer')" @click="settingsOpen = false"><X :size="14" /></button>
@@ -1520,7 +1525,7 @@ watch(currentId, () => { q.value = ''; kindFilter.value = null; settingsOpen.val
           </button>
         </div>
       </aside>
-    </template>
+    </Transition>
 
     <ConnectionDialog
       :open="showConnDialog"

@@ -579,9 +579,11 @@ const notesOpen = ref(false)
 
       <!-- versions: a drawer over the page -->
       <Teleport to="body">
-        <template v-if="versionsOpen">
-          <div class="drawer-backdrop" @click="versionsOpen = false" />
-          <aside ref="drawerEl" class="drawer" role="dialog" aria-modal="true" tabindex="-1" :aria-label="$t('report.versionsTitle')">
+        <Transition name="veil">
+          <div v-if="versionsOpen" class="drawer-backdrop" @click="versionsOpen = false" />
+        </Transition>
+        <Transition name="drawer">
+          <aside v-if="versionsOpen" ref="drawerEl" class="drawer" role="dialog" aria-modal="true" tabindex="-1" :aria-label="$t('report.versionsTitle')">
             <div class="drawer-head">
               <h2><History :size="15" aria-hidden="true" /> {{ $t('report.versionsTitle') }}</h2>
               <button type="button" class="mini icon" :title="$t('report.close')" :aria-label="$t('report.close')" @click="versionsOpen = false"><X :size="14" /></button>
@@ -608,7 +610,7 @@ const notesOpen = ref(false)
               </li>
             </ol>
           </aside>
-        </template>
+        </Transition>
       </Teleport>
 
       <ReportApiDialog

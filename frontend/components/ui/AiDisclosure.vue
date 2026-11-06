@@ -29,6 +29,7 @@ const providerNames = computed(() => props.providers?.join(', ') || t('aiDisclos
 
 <template>
   <Teleport to="body">
+    <Transition name="dlg" appear :duration="{ enter: 180, leave: 120 }">
     <div v-if="open" class="ad-backdrop">
       <div
         ref="card"
@@ -48,6 +49,7 @@ const providerNames = computed(() => props.providers?.join(', ') || t('aiDisclos
         </button>
       </div>
     </div>
+    </Transition>
   </Teleport>
 </template>
 

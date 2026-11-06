@@ -434,7 +434,8 @@ const updated = computed(() => {
 .tile.code { border-radius: 50%; }
 .tile.done { background: transparent; }
 .tile.bad { background: var(--danger); }
-.tile:hover { transform: scale(1.18); box-shadow: var(--shadow-1); border-color: var(--tone); }
+.tile:hover { box-shadow: var(--shadow-1); border-color: var(--tone); }
+@media (hover: hover) and (pointer: fine) { .tile:hover { transform: scale(1.18); } }
 .tile:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
 .tile.lit { animation: tile-lit 1.6s var(--ease-out); }
 @keyframes tile-lit { from { box-shadow: 0 0 0 4px color-mix(in srgb, var(--tone) 45%, transparent); } }

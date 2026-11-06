@@ -343,6 +343,7 @@ const targetHint = (id: DbtTarget) =>
 
 <template>
   <Teleport to="body">
+    <Transition name="dlg" appear :duration="{ enter: 180, leave: 120 }">
     <div v-if="flow" class="dx-backdrop" @mousedown.self="emit('close')">
       <div ref="card" class="dx-card" role="dialog" aria-modal="true" aria-labelledby="dx-title" tabindex="-1">
         <div class="dx-head">
@@ -464,6 +465,7 @@ const targetHint = (id: DbtTarget) =>
         </div>
       </div>
     </div>
+    </Transition>
   </Teleport>
 </template>
 

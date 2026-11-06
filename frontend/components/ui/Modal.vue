@@ -17,6 +17,7 @@ useDialogA11y(card, () => props.open, () => emit('close'))
 
 <template>
   <Teleport to="body">
+    <Transition name="dlg" appear :duration="{ enter: 180, leave: 120 }">
     <div v-if="open" class="modal-backdrop" @mousedown.self="emit('close')">
       <div
         ref="card"
@@ -39,6 +40,7 @@ useDialogA11y(card, () => props.open, () => emit('close'))
         <footer v-if="$slots.footer" class="modal-foot"><slot name="footer" /></footer>
       </div>
     </div>
+    </Transition>
   </Teleport>
 </template>
 

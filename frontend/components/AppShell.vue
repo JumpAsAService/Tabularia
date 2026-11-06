@@ -76,7 +76,10 @@ const themeOptions = computed(() => [
 
 // settings menu (gear at the top right): user name + theme + engine + logout
 const menuOpen = ref(false)
-function toggleMenu() {
+// opened from the keyboard (a click with no pointer count): it shows and hides at once
+const menuByKey = ref(false)
+function toggleMenu(ev?: MouseEvent) {
+  if (!menuOpen.value) menuByKey.value = ev?.detail === 0
   menuOpen.value = !menuOpen.value
   if (menuOpen.value) loadCatalog() // loads the engines' catalog at the first opening
 }
@@ -271,9 +274,9 @@ onMounted(async () => {
           <Settings :size="16" />
         </button>
 
-        <template v-if="menuOpen">
-          <div class="menu-backdrop" @click="closeMenu" />
-          <div ref="settingsPanel" class="menu">
+        <div v-if="menuOpen" class="menu-backdrop" @click="closeMenu" />
+        <Transition name="pop" :css="!menuByKey">
+          <div v-if="menuOpen" ref="settingsPanel" class="menu">
             <div v-if="user" class="menu-user">
               <span class="menu-email">{{ user.email }}</span>
               <span v-if="isSuper" class="menu-role">{{ t('settings.admin') }}</span>
@@ -332,7 +335,7 @@ onMounted(async () => {
             </button>
             <div v-if="appInfo" class="menu-version">{{ appInfo.name }} {{ appInfo.version }}<template v-if="appInfo.codename"> · {{ appInfo.codename }}</template></div>
           </div>
-        </template>
+        </Transition>
       </div>
     </header>
 

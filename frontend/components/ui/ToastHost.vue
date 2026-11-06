@@ -64,7 +64,12 @@ const icons = { success: CheckCircle2, error: XCircle, warning: TriangleAlert, i
 }
 .tx:hover { color: var(--text); box-shadow: none; }
 
-.toast-enter-active, .toast-leave-active { transition: all 0.22s ease; }
-.toast-enter-from { opacity: 0; transform: translateY(8px); }
-.toast-leave-to { opacity: 0; transform: translateX(12px); }
+/* in from the right edge the stack hugs, and out through the same edge, faster */
+.toast-enter-active { transition: transform var(--dur-3) var(--ease-out), opacity var(--dur-3) var(--ease-out); }
+.toast-leave-active { transition: transform var(--dur-2) ease-out, opacity var(--dur-2) ease-out; pointer-events: none; }
+.toast-enter-from, .toast-leave-to { opacity: 0; transform: translateX(100%); }
+@media (prefers-reduced-motion: reduce) {
+  .toast-enter-active, .toast-leave-active { transition: opacity 120ms ease-out; }
+  .toast-enter-from, .toast-leave-to { transform: none; }
+}
 </style>

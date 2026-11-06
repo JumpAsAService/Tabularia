@@ -58,6 +58,7 @@ function confirm() {
 
 <template>
   <Teleport to="body">
+    <Transition name="dlg" appear :duration="{ enter: 180, leave: 120 }">
     <div v-if="open" class="rd-backdrop" @mousedown.self="emit('cancel')">
       <div
         ref="card"
@@ -125,6 +126,7 @@ function confirm() {
         </div>
       </div>
     </div>
+    </Transition>
   </Teleport>
 </template>
 

@@ -406,6 +406,38 @@ optgroup { font-style: normal; color: var(--muted); }
   .sk::after { animation: none; }
 }
 
+/* ── Overlays: how they arrive and leave ─────────────────────────────── */
+/* CSS transitions (interruptible), transform and opacity only. Leaving is quicker
+   than arriving and never catches a click. Under reduced motion: opacity alone. */
+/* dialogs, <Transition name="dlg" appear :duration="{ enter: 180, leave: 120 }"> on the
+   veil: the veil fades in, the card grows from 97% at the centre; leaving, all fades */
+.dlg-enter-active { transition: opacity 160ms ease-out; }
+.dlg-leave-active { transition: opacity 120ms ease-out; pointer-events: none; }
+.dlg-enter-from, .dlg-leave-to { opacity: 0; }
+/* side panels: the veil (name="veil") fades, the panel (name="drawer") slides in from
+   the right edge and back out through it */
+.veil-enter-active { transition: opacity 160ms ease-out; }
+.veil-leave-active { transition: opacity 120ms ease-out; pointer-events: none; }
+.veil-enter-from, .veil-leave-to { opacity: 0; }
+.drawer-leave-active { pointer-events: none; }
+/* menus anchored to a button (name="pop"): they grow from the button's corner */
+.pop-enter-active { transition: opacity var(--dur-2) var(--ease-out), transform var(--dur-2) var(--ease-out); transform-origin: top right; }
+.pop-leave-active { transition: opacity var(--dur-1) ease-out; pointer-events: none; }
+.pop-enter-from, .pop-leave-to { opacity: 0; }
+@media (prefers-reduced-motion: no-preference) {
+  .dlg-enter-active > * { transition: opacity 180ms var(--ease-out), transform 180ms var(--ease-out); transform-origin: center; }
+  .dlg-enter-from > * { opacity: 0; transform: scale(0.97); }
+  .drawer-enter-active { transition: transform var(--dur-3) var(--ease-out); }
+  .drawer-leave-active { transition: transform 160ms ease-out; }
+  .drawer-enter-from, .drawer-leave-to { transform: translateX(100%); }
+  .pop-enter-from { transform: scale(0.97); }
+}
+@media (prefers-reduced-motion: reduce) {
+  .dlg-enter-active, .veil-enter-active { transition-duration: 120ms; }
+  .drawer-enter-active, .drawer-leave-active { transition: opacity 120ms ease-out; }
+  .drawer-enter-from, .drawer-leave-to { opacity: 0; }
+}
+
 /* ── Layout editor ───────────────────────────────────────────────────── */
 /* "Also open by …": a pill ABOVE the canvas, in its grid area.
    Not one more row: it would move panels and preview at every appearance. */
@@ -576,10 +608,13 @@ optgroup { font-style: normal; color: var(--muted); }
 .vue-flow__handle-bottom { bottom: 0 !important; left: 50%; transform: translate(-50%, 50%); }
 .vue-flow__handle-left   { left: 0 !important;   top: 50%;  transform: translate(-50%, -50%); }
 .vue-flow__handle-right  { right: 0 !important;  top: 50%;  transform: translate(50%, -50%); }
-.vue-flow__handle-top:hover    { transform: translate(-50%, -50%) scale(1.35); }
-.vue-flow__handle-bottom:hover { transform: translate(-50%, 50%) scale(1.35); }
-.vue-flow__handle-left:hover   { transform: translate(-50%, -50%) scale(1.35); }
-.vue-flow__handle-right:hover  { transform: translate(50%, -50%) scale(1.35); }
+/* the hover growth only where a pointer really hovers (a tap would leave it stuck) */
+@media (hover: hover) and (pointer: fine) {
+  .vue-flow__handle-top:hover    { transform: translate(-50%, -50%) scale(1.35); }
+  .vue-flow__handle-bottom:hover { transform: translate(-50%, 50%) scale(1.35); }
+  .vue-flow__handle-left:hover   { transform: translate(-50%, -50%) scale(1.35); }
+  .vue-flow__handle-right:hover  { transform: translate(50%, -50%) scale(1.35); }
+}
 /* Inputs STACKED on the left border (join/union: table; foreach: driver; output:
    sequence). A double-class selector → beats by specificity the position classes Vue
    Flow derives from the handle's ID (e.g. id="right" generates .vue-flow__handle-right,
@@ -592,8 +627,10 @@ optgroup { font-style: normal; color: var(--muted); }
 }
 .vue-flow__handle.h-left-top    { top: 33% !important; }
 .vue-flow__handle.h-left-bottom { top: 67% !important; }
-.vue-flow__handle.h-left-top:hover,
-.vue-flow__handle.h-left-bottom:hover { transform: translate(-50%, -50%) scale(1.35) !important; }
+@media (hover: hover) and (pointer: fine) {
+  .vue-flow__handle.h-left-top:hover,
+  .vue-flow__handle.h-left-bottom:hover { transform: translate(-50%, -50%) scale(1.35) !important; }
+}
 /* the same on the right edge: the Script node's data output above its sequence */
 .vue-flow__handle.h-right-top,
 .vue-flow__handle.h-right-bottom {
@@ -603,8 +640,10 @@ optgroup { font-style: normal; color: var(--muted); }
 }
 .vue-flow__handle.h-right-top    { top: 33% !important; }
 .vue-flow__handle.h-right-bottom { top: 67% !important; }
-.vue-flow__handle.h-right-top:hover,
-.vue-flow__handle.h-right-bottom:hover { transform: translate(50%, -50%) scale(1.35) !important; }
+@media (hover: hover) and (pointer: fine) {
+  .vue-flow__handle.h-right-top:hover,
+  .vue-flow__handle.h-right-bottom:hover { transform: translate(50%, -50%) scale(1.35) !important; }
+}
 
 /* the 'output' type collides with a BUILT-IN Vue Flow node: the default theme dresses the
    wrapper (white background, 150px, padding, shadows on hover and selection). A full

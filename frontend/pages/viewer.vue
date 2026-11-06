@@ -280,6 +280,7 @@ const savedViews = ref<SavedView[]>([])
 const projects = ref<Project[]>([])
 const currentViewId = ref<number | null>(null)
 const saveOpen = ref(false)
+const saveByKey = ref(false)
 const savePop = ref<HTMLElement | null>(null)
 usePopover(saveOpen, savePop, () => { saveOpen.value = false })
 const saveName = ref('')
@@ -352,8 +353,9 @@ async function openSavedView(id: number | null) {
   }
 }
 
-function openSaveDialog() {
+function openSaveDialog(ev?: MouseEvent) {
   if (!selectedDs.value) return
+  saveByKey.value = ev?.detail === 0 // opened from the keyboard: no motion
   const current_ = savedViews.value.find((v) => v.id === currentViewId.value)
   saveName.value = current_?.name ?? ''
   saveProjectId.value = current_?.project_id ?? selectedDs.value.project_id ?? projects.value[0]?.id ?? null
@@ -428,10 +430,11 @@ onMounted(async () => {
           @update:model-value="openSavedView"
         />
         <div class="savewrap">
-          <button class="btn-link" :disabled="!selectedDs" :title="$t('viewer.saveViewTitle')" @click="openSaveDialog">
+          <button class="btn-link" :disabled="!selectedDs" :title="$t('viewer.saveViewTitle')" @click="openSaveDialog($event)">
             <Save :size="14" /> {{ $t('viewer.saveViewButton') }}
           </button>
           <div v-if="saveOpen" class="menu-backdrop" @click="saveOpen = false" />
+          <Transition name="pop" :css="!saveByKey">
           <div v-if="saveOpen" ref="savePop" class="savepop">
             <label class="lbl">{{ $t('viewer.viewNameLabel') }}</label>
             <input v-model="saveName" type="text" :placeholder="$t('viewer.viewNamePlaceholder')" @keyup.enter="saveView" />
@@ -446,6 +449,7 @@ onMounted(async () => {
               {{ saving ? '…' : $t('viewer.saveViewConfirm') }}
             </button>
           </div>
+          </Transition>
         </div>
         <label class="hl"><Cpu :size="13" /> {{ $t('viewer.engineLabel') }}</label>
         <Select v-model="engine" :options="engineOptions" class="engsel" />

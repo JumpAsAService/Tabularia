@@ -93,6 +93,7 @@ const cronDescription = computed<{ text: string; ok: boolean }>(() => {
 
 <template>
   <Teleport to="body">
+    <Transition name="dlg" appear :duration="{ enter: 180, leave: 120 }">
     <div v-if="open" class="sd-backdrop" @mousedown.self="emit('cancel')">
       <div
         ref="card"
@@ -162,6 +163,7 @@ const cronDescription = computed<{ text: string; ok: boolean }>(() => {
         </div>
       </div>
     </div>
+    </Transition>
   </Teleport>
 </template>
 

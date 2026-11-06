@@ -5,6 +5,10 @@ exposes at `/system/info` and in the app's settings menu.
 
 ## Unreleased
 
+- **Dialogs, side panels, menus and toasts arrive and leave instead of popping**: short
+  fades and a 97% grow for dialogs, a slide from the right edge for side panels, a grow
+  from the button for menus (none when opened from the keyboard), only a fade under
+  reduced motion; the right-click ring no longer lights two items at once.
 - **A right-click menu in the flow editor**: right-click on the canvas or on a node opens a
   ring of transformations around the pointer; a choice creates the node at the click,
   connected to the selected node. Each person picks up to eight and their order

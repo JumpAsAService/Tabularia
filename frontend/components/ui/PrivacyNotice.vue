@@ -43,6 +43,7 @@ onMounted(async () => {
   </aside>
 
   <Teleport to="body">
+    <Transition name="dlg" appear :duration="{ enter: 180, leave: 120 }">
     <div v-if="openOne" class="pv-backdrop" @mousedown.self="openOne = false">
       <div ref="card" class="pv-card" role="dialog" aria-modal="true" aria-labelledby="pv-title" tabindex="-1">
         <div class="pv-head">
@@ -57,6 +58,7 @@ onMounted(async () => {
         </a>
       </div>
     </div>
+    </Transition>
   </Teleport>
 </template>
 

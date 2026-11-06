@@ -60,6 +60,7 @@ const { q, items, total, offset, pageSize, loading, error, load, next, prev } =
 const engines = ref<EngineOpt[]>([DEFAULT_ENGINE_OPTION])
 const { preferredEngine } = usePreferredEngine()
 const newMenu = ref(false)
+const newMenuByKey = ref(false) // opened from the keyboard: no motion
 const newPop = ref<HTMLElement | null>(null)
 usePopover(newMenu, newPop, () => { newMenu.value = false })
 function createWith(engineId: string) {
@@ -317,8 +318,9 @@ async function saveSchedule(cron: string, productionEngine?: string, notify?: { 
       <div class="head-actions">
         <span class="searchbox"><Search :size="14" /><input v-model="q" type="text" :placeholder="$t('flows.searchPlaceholder')" :aria-label="$t('flows.searchPlaceholder')" /></span>
         <div class="newflow">
-          <button class="btn-link" aria-haspopup="menu" :aria-expanded="newMenu" @click="newMenu = !newMenu"><Plus :size="14" /> {{ $t('flows.newFlowButton') }}</button>
+          <button class="btn-link" aria-haspopup="menu" :aria-expanded="newMenu" @click="newMenuByKey = !newMenu && $event.detail === 0; newMenu = !newMenu"><Plus :size="14" /> {{ $t('flows.newFlowButton') }}</button>
           <div v-if="newMenu" class="menu-backdrop" @click="newMenu = false" />
+          <Transition name="pop" :css="!newMenuByKey">
           <div v-if="newMenu" ref="newPop" class="menu-pop">
             <div class="menu-label">{{ $t('flows.engineMenuTitle') }}</div>
             <button
@@ -332,6 +334,7 @@ async function saveSchedule(cron: string, productionEngine?: string, notify?: { 
               <span class="mi-desc">{{ engineDescription(e, $t, $te) }}</span>
             </button>
           </div>
+          </Transition>
         </div>
       </div>
     </div>
