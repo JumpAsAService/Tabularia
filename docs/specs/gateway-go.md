@@ -254,6 +254,9 @@ For a ported route, for every request in its corpus:
 5. **Switch**: the images, the compose files and the Helm chart run the Go gateway and
    the AI service; the Python gateway behind is removed. Only when the inventory has no
    *Python* line (*AI service* lines stay).
+   Done 2026-11-06: the Go image (gateway-go/Dockerfile, with `pg_dump`/`pg_restore` 14-18),
+   the compose file (`gateway` Go, `ai` the Python image), the chart (`image.gatewayGo`,
+   `aiService`), CI and the release workflow; proved on compose and on kind.
 
 ## Measured: the Go gateway against the Python one (2026-11-06)
 
