@@ -78,6 +78,15 @@ jobs:
       - name: Tests
         run: .github/scripts/ci_tests.sh "${{ matrix.suite }}" "tabularia-${{ matrix.component }}:ci"
 
+      # The Go gateway: gofmt, go vet and go test (golang:1.27.3-bookworm), the database tests on
+      # a schema this image's migrations make. The module cache is a named volume the tests
+      # write as the runner's user, not as root.
+      - name: Go gateway tests
+        if: matrix.suite == 'gateway'
+        run: |
+          docker run --rm -v tabularia-gomod:/m alpine:3.20 chmod 777 /m
+          GATEWAY_IMAGE=tabularia-gateway:ci gateway-go/scripts/test.sh
+
   interface:
     name: interface type check
     runs-on: ubuntu-24.04

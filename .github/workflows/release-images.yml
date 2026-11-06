@@ -1,8 +1,8 @@
-# Runs the test suites on the tagged commit (ci.yml), builds the three release images for
+# Runs the test suites on the tagged commit (ci.yml), builds the four release images for
 # amd64 and arm64, checks them, certifies that they hold no secrets, and only then pushes
 # them to Docker Hub. See docs/release-process.md.
 #
-# A tag v1.2.0 publishes jumpasaservice/tabularia-{backend,gateway,frontend} as
+# A tag v1.2.0 publishes jumpasaservice/tabularia-{backend,gateway,gateway-go,frontend} as
 #   1.2.0-amd64, 1.2.0-arm64   the single-architecture images, pushed after their scans
 #   1.2.0                      both architectures under one name
 #   1.2                        when 1.2.0 is the highest 1.2.x tag
@@ -143,7 +143,7 @@ jobs:
     strategy:
       fail-fast: true
       matrix:
-        component: [backend, gateway, frontend]
+        component: [backend, gateway, gateway-go, frontend]
         arch: [amd64, arm64]
         include:
           # frontend/Dockerfile is the hot-reload development server
@@ -207,6 +207,10 @@ jobs:
                 'import importlib.util as u, polars, duckdb; assert u.find_spec("chdb") is None; assert u.find_spec("mssql_python") is None' ;;
             gateway)
               docker run --rm --read-only "$IMAGE" python -c 'import app.db.migra, alembic' ;;
+            gateway-go)
+              # the binary, and the pg_dump of every supported PostgreSQL for the backups
+              docker run --rm --read-only --entrypoint sh "$IMAGE" -c \
+                'test -x /gateway && for v in 14 15 16 17 18; do /usr/lib/postgresql/$v/bin/pg_dump --version || exit 1; done && pg_restore --version' ;;
             frontend)
               cid=$(docker run -d --read-only --tmpfs /tmp -p 127.0.0.1:3000:3000 "$IMAGE")
               for _ in $(seq 60); do curl -fsS -o /dev/null http://127.0.0.1:3000/login && break; sleep 1; done
@@ -224,6 +228,8 @@ jobs:
           # ODBC driver, which comes with the SQL Server driver): docs/release-process.md
           kind=python
           if [[ "$COMPONENT" == frontend ]]; then kind=npm; fi
+          # the Go gateway holds no Python or npm package: its modules are go.mod's
+          if [[ "$COMPONENT" == gateway-go ]]; then exit 0; fi
           python3 ci/.github/scripts/image_licence_check.py check --kind "$kind" "$IMAGE"
 
       - name: Save the image for the scans
@@ -291,7 +297,7 @@ jobs:
 
       - name: Join the architectures under the release tags
         run: |
-          for component in backend gateway frontend; do
+          for component in backend gateway gateway-go frontend; do
             repo="$NAMESPACE/tabularia-$component"
             args=()
             for tag in $TAGS; do args+=(-t "$repo:$tag"); done
