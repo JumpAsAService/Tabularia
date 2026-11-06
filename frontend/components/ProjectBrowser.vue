@@ -78,7 +78,8 @@ import { starterReport, useReports, type Report } from '~/composables/useReports
 import { starterDashboard, useDashboards, type Dashboard } from '~/composables/useDashboards'
 import ContractBadge from '~/components/ui/ContractBadge.vue'
 import ContractDialog from '~/components/ui/ContractDialog.vue'
-import { listState, rowActions, primaryAction, keyCommand, stepRow, type RowAction, type RowFacts } from '~/composables/exploreList'
+import { listState, rowActions, primaryAction, keyCommand, stepRow, dependentsOf, lineageType, DEPENDENT_TYPES, type DependentType, type RowAction, type RowFacts } from '~/composables/exploreList'
+import Modal from '~/components/ui/Modal.vue'
 import RowMenu, { type RowMenuItem } from '~/components/ui/RowMenu.vue'
 import { searchEverywhere } from '~/composables/useSearch'
 import {
@@ -852,66 +853,122 @@ function runAction(id: string, r: Row) {
   }
 }
 
-async function removeRow(row: Row) {
-  const ask = (k: string) => confirm(t(k, { name: row.name }))
+// ── Deletion: the app's dialog, naming the object and what uses it ───────────────
+// No undo: the dialog is the safeguard, so it says what the browser's confirm() could not —
+// the consequence for this kind (its versions, its parquet file) and the objects that use it
+// as the lineage graph knows them (exploreList.dependentsOf). Cancel has the focus.
+const CONFIRM_KEY: Record<Kind, string> = {
+  folder: 'projectBrowser.confirmDeleteFolder',
+  flow: 'projectBrowser.confirmDeleteFlow',
+  group: 'projectBrowser.confirmDeleteFlowGroup',
+  datasource: 'projectBrowser.confirmDeleteDatasource',
+  view: 'projectBrowser.confirmDeleteSavedView',
+  script: 'projectBrowser.confirmDeleteScript',
+  sql: 'projectBrowser.confirmDeleteSqlScript',
+  notebook: 'projectBrowser.confirmDeleteNotebook',
+  report: 'projectBrowser.confirmDeleteReport',
+  dashboard: 'projectBrowser.confirmDeleteDashboard',
+  connection: 'projectBrowser.confirmDeleteConnection',
+}
+type Deps = 'loading' | 'failed' | 'untracked' | Partial<Record<DependentType, number>>
+const delAsk = ref<{ row: Row; deps: Deps; busy: boolean; after?: () => void } | null>(null)
+const delCancel = ref<HTMLButtonElement | null>(null)
+
+/** Asks before deleting: the dialog opens at once, what uses the object arrives in it. */
+async function removeRow(row: Row, after?: () => void) {
+  rowMenu.value = null
+  const lt = lineageType(row.kind)
+  const ask = { row, deps: (lt ? 'loading' : 'untracked') as Deps, busy: false, after }
+  delAsk.value = ask
+  // after the dialog's own focus on its card (useDialogA11y): the safe choice is the default
+  setTimeout(() => delCancel.value?.focus(), 0)
+  if (!lt) return
   try {
-    if (row.kind === 'flow') {
-      if (!ask('projectBrowser.confirmDeleteFlow')) return
-      await flowsApi.remove(row.id)
-      flows.value = flows.value.filter((f) => f.id !== row.id)
-      toast.success(t('projectBrowser.flowDeleted', { name: row.name }))
-    } else if (row.kind === 'group') {
-      if (!ask('projectBrowser.confirmDeleteFlowGroup')) return
-      await groupsApi.remove(row.id)
-      flowGroups.value = flowGroups.value.filter((g) => g.id !== row.id)
-      toast.success(t('projectBrowser.flowGroupDeleted', { name: row.name }))
-    } else if (row.kind === 'datasource') {
-      if (!ask('projectBrowser.confirmDeleteDatasource')) return
-      await dsApi.remove(row.id)
-      dsList.value = dsList.value.filter((d) => d.id !== row.id)
-      toast.success(t('projectBrowser.datasourceDeleted', { name: row.name }))
-    } else if (row.kind === 'view') {
-      if (!ask('projectBrowser.confirmDeleteSavedView')) return
-      await viewsApi.remove(row.id)
-      savedViews.value = savedViews.value.filter((v) => v.id !== row.id)
-      toast.success(t('projectBrowser.savedViewDeleted', { name: row.name }))
-    } else if (row.kind === 'script') {
-      if (!ask('projectBrowser.confirmDeleteScript')) return
-      await scriptsApi.remove(row.id)
-      scripts.value = scripts.value.filter((x) => x.id !== row.id)
-      toast.success(t('projectBrowser.scriptDeleted', { name: row.name }))
-    } else if (row.kind === 'sql') {
-      if (!ask('projectBrowser.confirmDeleteSqlScript')) return
-      await sqlApi.remove(row.id)
-      sqlScripts.value = sqlScripts.value.filter((x) => x.id !== row.id)
-      toast.success(t('projectBrowser.sqlScriptDeleted', { name: row.name }))
-    } else if (row.kind === 'notebook') {
-      if (!ask('projectBrowser.confirmDeleteNotebook')) return
-      await notebooksApi.remove(row.id)
-      notebooks.value = notebooks.value.filter((x) => x.id !== row.id)
-      toast.success(t('projectBrowser.notebookDeleted', { name: row.name }))
-    } else if (row.kind === 'report') {
-      if (!ask('projectBrowser.confirmDeleteReport')) return
-      await reportsApi.remove(row.id)
-      reports.value = reports.value.filter((x) => x.id !== row.id)
-      toast.success(t('projectBrowser.reportDeleted', { name: row.name }))
-    } else if (row.kind === 'dashboard') {
-      if (!ask('projectBrowser.confirmDeleteDashboard')) return
-      await dashboardsApi.remove(row.id)
-      dashboards.value = dashboards.value.filter((x) => x.id !== row.id)
-      toast.success(t('projectBrowser.dashboardDeleted', { name: row.name }))
-    } else if (row.kind === 'connection') {
-      if (!ask('projectBrowser.confirmDeleteConnection')) return
-      await connApi.remove(row.id)
-      connections.value = connections.value.filter((c) => c.id !== row.id)
-      toast.success(t('projectBrowser.connectionDeleted', { name: row.name }))
-    } else if (row.kind === 'folder') {
-      if (!ask('projectBrowser.confirmDeleteFolder')) return
-      await api.remove(row.id)
-      await loadProjects()
-      toast.success(t('projectBrowser.folderDeleted', { name: row.name }))
-    }
-  } catch (e) { toast.error(errMessage(e)) }
+    const g = await coreApi.lineage({ type: lt, id: row.id, direction: 'both', depth: 1 })
+    if (delAsk.value?.row === row) delAsk.value = { ...delAsk.value, deps: dependentsOf(g, g.center ?? '') }
+  } catch {
+    if (delAsk.value?.row === row) delAsk.value = { ...delAsk.value, deps: 'failed' }
+  }
+}
+
+/** «Used by 2 flows and 1 flow group», or what is known instead. */
+const depsText = computed(() => {
+  const a = delAsk.value
+  if (!a) return ''
+  if (a.deps === 'loading') return t('projectBrowser.depsLoading')
+  if (a.deps === 'failed') return t('projectBrowser.depsFailed')
+  if (a.deps === 'untracked') return t(a.row.kind === 'folder' ? 'projectBrowser.depsFolder' : 'projectBrowser.depsUntracked')
+  const counts = a.deps
+  const parts = DEPENDENT_TYPES.filter((k) => counts[k]).map((k) => t(`projectBrowser.depKind_${k}`, { n: counts[k] }, counts[k]!))
+  if (!parts.length) return t('projectBrowser.depsNone')
+  const list = new Intl.ListFormat(String(locale.value), { style: 'long', type: 'conjunction' }).format(parts)
+  return t('projectBrowser.depsUsedBy', { list })
+})
+const depsUsed = computed(() => {
+  const d = delAsk.value?.deps
+  return !!d && typeof d === 'object' && Object.values(d).some((n) => n)
+})
+
+async function confirmDelete() {
+  const a = delAsk.value
+  if (!a || a.busy) return
+  a.busy = true
+  try {
+    await deleteRow(a.row)
+    delAsk.value = null
+    a.after?.()
+  } catch (e) {
+    toast.error(errMessage(e))
+    if (delAsk.value) delAsk.value.busy = false
+  }
+}
+
+async function deleteRow(row: Row) {
+  if (row.kind === 'flow') {
+    await flowsApi.remove(row.id)
+    flows.value = flows.value.filter((f) => f.id !== row.id)
+    toast.success(t('projectBrowser.flowDeleted', { name: row.name }))
+  } else if (row.kind === 'group') {
+    await groupsApi.remove(row.id)
+    flowGroups.value = flowGroups.value.filter((g) => g.id !== row.id)
+    toast.success(t('projectBrowser.flowGroupDeleted', { name: row.name }))
+  } else if (row.kind === 'datasource') {
+    await dsApi.remove(row.id)
+    dsList.value = dsList.value.filter((d) => d.id !== row.id)
+    toast.success(t('projectBrowser.datasourceDeleted', { name: row.name }))
+  } else if (row.kind === 'view') {
+    await viewsApi.remove(row.id)
+    savedViews.value = savedViews.value.filter((v) => v.id !== row.id)
+    toast.success(t('projectBrowser.savedViewDeleted', { name: row.name }))
+  } else if (row.kind === 'script') {
+    await scriptsApi.remove(row.id)
+    scripts.value = scripts.value.filter((x) => x.id !== row.id)
+    toast.success(t('projectBrowser.scriptDeleted', { name: row.name }))
+  } else if (row.kind === 'sql') {
+    await sqlApi.remove(row.id)
+    sqlScripts.value = sqlScripts.value.filter((x) => x.id !== row.id)
+    toast.success(t('projectBrowser.sqlScriptDeleted', { name: row.name }))
+  } else if (row.kind === 'notebook') {
+    await notebooksApi.remove(row.id)
+    notebooks.value = notebooks.value.filter((x) => x.id !== row.id)
+    toast.success(t('projectBrowser.notebookDeleted', { name: row.name }))
+  } else if (row.kind === 'report') {
+    await reportsApi.remove(row.id)
+    reports.value = reports.value.filter((x) => x.id !== row.id)
+    toast.success(t('projectBrowser.reportDeleted', { name: row.name }))
+  } else if (row.kind === 'dashboard') {
+    await dashboardsApi.remove(row.id)
+    dashboards.value = dashboards.value.filter((x) => x.id !== row.id)
+    toast.success(t('projectBrowser.dashboardDeleted', { name: row.name }))
+  } else if (row.kind === 'connection') {
+    await connApi.remove(row.id)
+    connections.value = connections.value.filter((c) => c.id !== row.id)
+    toast.success(t('projectBrowser.connectionDeleted', { name: row.name }))
+  } else if (row.kind === 'folder') {
+    await api.remove(row.id)
+    await loadProjects()
+    toast.success(t('projectBrowser.folderDeleted', { name: row.name }))
+  }
 }
 
 // ── Creation: a single entry point ─────────────────────────────────────
@@ -1083,17 +1140,14 @@ async function revoke(perm: Permission) {
   } catch (e) { toast.error(errMessage(e)) }
 }
 
-async function deleteCurrentFolder() {
+function deleteCurrentFolder() {
   const p = current.value
-  if (!p || !confirm(t('projectBrowser.confirmDeleteFolder', { name: p.name }))) return
-  try {
-    await api.remove(p.id)
+  if (!p) return
+  // the same dialog as a row's: once deleted, the panel closes on the parent folder
+  removeRow({ kind: 'folder', id: p.id, name: p.name, meta: '', raw: p }, () => {
     settingsOpen.value = false
-    const parent = p.parent_id ?? null
-    await loadProjects()
-    openFolder(parent)
-    toast.success(t('projectBrowser.folderDeleted', { name: p.name }))
-  } catch (e) { toast.error(errMessage(e)) }
+    openFolder(p.parent_id ?? null)
+  })
 }
 
 // ── Keyboard ──────────────────────────────────────────────────────────────────
@@ -1692,6 +1746,30 @@ watch(currentId, () => { q.value = ''; kindFilter.value = null; settingsOpen.val
       @close="rowMenu = null"
     />
 
+    <Modal :open="!!delAsk" :title="$t('projectBrowser.deleteDialogTitle')" :width="460" @close="delAsk?.busy || (delAsk = null)">
+      <template v-if="delAsk">
+        <p class="del-what">
+          <component :is="KIND_ICON[delAsk.row.kind]" :size="15" class="kicon" />
+          {{ $t(CONFIRM_KEY[delAsk.row.kind], { name: delAsk.row.name }) }}
+        </p>
+        <p class="del-deps" :class="{ used: depsUsed }" aria-live="polite">
+          <LoaderCircle v-if="delAsk.deps === 'loading'" :size="13" class="spin" />
+          {{ depsText }}
+        </p>
+        <!-- the graph does not see the reports, dashboards and views reading a datasource -->
+        <p v-if="delAsk.row.kind === 'datasource' && typeof delAsk.deps === 'object'" class="muted del-final">{{ $t('projectBrowser.depsNotCounted') }}</p>
+        <p class="muted del-final">{{ $t('projectBrowser.deleteCannotUndo') }}</p>
+      </template>
+      <template #footer>
+        <span class="grow" />
+        <button ref="delCancel" :disabled="delAsk?.busy" @click="delAsk = null">{{ $t('projectBrowser.cancelButton') }}</button>
+        <button class="danger-solid" :disabled="delAsk?.busy" :aria-busy="delAsk?.busy" @click="confirmDelete">
+          <LoaderCircle v-if="delAsk?.busy" :size="13" class="spin" /><Trash2 v-else :size="13" />
+          {{ $t('projectBrowser.deleteTitle') }}
+        </button>
+      </template>
+    </Modal>
+
     <!-- The folder's administration: outside the data's scrolling -->
     <Transition name="veil">
       <div v-if="settingsOpen && canManage && current" class="drawer-backdrop" @click="settingsOpen = false" />
@@ -2007,6 +2085,14 @@ tr.folderrow .kicon { color: var(--accent-2); }
 .err { color: var(--danger); }
 .movesel { width: 130px; font-size: 12px; }
 .activebtn { border-color: var(--accent); }
+.del-what { display: flex; gap: 8px; align-items: flex-start; margin: 0 0 10px; line-height: 1.45; }
+.del-what .kicon { margin-top: 2px; }
+.del-deps { display: flex; gap: 6px; align-items: center; margin: 0 0 10px; font-size: 13px; color: var(--muted); }
+.del-deps.used { color: var(--text); font-weight: 600; }
+.del-final { margin: 0 0 4px; font-size: 12.5px; }
+.grow { flex: 1; }
+.danger-solid { display: inline-flex; align-items: center; gap: 6px; background: var(--danger-fill); border-color: var(--danger-fill); color: var(--on-danger); }
+.danger-solid:hover:not(:disabled) { background: var(--danger-fill); filter: brightness(1.08); }
 .rmore { padding: 2px 6px; }
 
 .runsrow td { background: var(--bg-soft); }

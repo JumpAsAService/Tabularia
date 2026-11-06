@@ -5,6 +5,11 @@ exposes at `/system/info` and in the app's settings menu.
 
 ## Unreleased
 
+- **Deleting from Explore asks in the app's dialog, and says what would break**: the
+  browser's confirm() is gone; the dialog names the object and its consequence, and what
+  uses it as far as the lineage knows («Used by 8 flows»), or says plainly when that is not
+  tracked for its kind. Cancel has the focus; Delete is in the danger colour. The folder
+  panel's deletion uses the same dialog.
 - **Explore from the keyboard, and Back goes up**: each folder opened is a step of the
   browser's history (Back went out of Explore); `/` focuses the filter, ↑ ↓ move the active
   row, Enter opens it, Backspace or Alt+↑ goes up a folder (landing on the one left),

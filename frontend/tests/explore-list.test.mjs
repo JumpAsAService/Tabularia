@@ -80,3 +80,28 @@ test('↑ ↓ start from the first or the last row and hold at the ends', () => 
   assert.equal(L.stepRow(0, 5, -1), 0)
   assert.equal(L.stepRow(3, 0, 1), -1)
 })
+
+test('what uses an object: its readers and its runners, not what it publishes', () => {
+  const nodes = [
+    { id: 'ds:1', type: 'datasource' }, { id: 'flow:2', type: 'flow' }, { id: 'flow:3', type: 'flow' },
+    { id: 'group:4', type: 'flow_group' }, { id: 'sql:5', type: 'sql_script' }, { id: 'ds:6', type: 'datasource' },
+    { id: 'conn:7', type: 'connection' }, { id: 'sink:8', type: 'db_sink' },
+  ]
+  const edges = [
+    { source: 'ds:1', target: 'flow:2', kind: 'read' },
+    { source: 'ds:1', target: 'flow:3', kind: 'read' },
+    { source: 'ds:1', target: 'flow:3', kind: 'read' }, // two sources of the same flow: one flow
+    { source: 'ds:1', target: 'sql:5', kind: 'read' },
+    { source: 'flow:2', target: 'ds:1', kind: 'refresh' }, // flow 2 refreshes it before running
+    { source: 'flow:9', target: 'ds:1', kind: 'publish' }, // who makes it is not a user of it
+    { source: 'conn:7', target: 'ds:1', kind: 'ingest' },
+    { source: 'group:4', target: 'flow:2', kind: 'orchestrate' },
+  ]
+  assert.deepEqual(L.dependentsOf({ nodes, edges }, 'ds:1'), { flow: 2, sql_script: 1 })
+  assert.deepEqual(L.dependentsOf({ nodes, edges }, 'flow:2'), { flow_group: 1 })
+  assert.deepEqual(L.dependentsOf({ nodes, edges }, 'conn:7'), { datasource: 1 })
+  assert.deepEqual(L.dependentsOf({ nodes, edges: [{ source: 'flow:2', target: 'sink:8', kind: 'write' }] }, 'flow:2'), {})
+  assert.equal(L.lineageType('sql'), 'sql')
+  assert.equal(L.lineageType('report'), null)
+  assert.equal(L.lineageType('folder'), null)
+})

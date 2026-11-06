@@ -107,3 +107,38 @@ export function stepRow(at: number, count: number, dir: 1 | -1): number {
   if (at < 0) return dir > 0 ? 0 : count - 1
   return Math.min(count - 1, Math.max(0, at + dir))
 }
+
+/**
+ * What uses an object, from the lineage graph around it (GET /lineage, one hop): who reads
+ * it or imports from it (its edges out, `read` and `ingest`), and who runs or refreshes it
+ * (its edges in, `orchestrate` and `refresh`). What it publishes or writes does not depend
+ * on it. Counted by kind; the nodes this person may not open count too (they would break
+ * just the same). Only the kinds the graph tracks: flows, datasources, connections, scripts,
+ * SQL scripts, notebooks and flow groups — not reports, dashboards nor views.
+ */
+export const DEPENDENT_TYPES = ['flow', 'flow_group', 'datasource', 'sql_script', 'script', 'notebook'] as const
+export type DependentType = typeof DEPENDENT_TYPES[number]
+
+export function dependentsOf(
+  graph: { edges: { source: string; target: string; kind: string }[]; nodes: { id: string; type: string }[] },
+  center: string,
+): Partial<Record<DependentType, number>> {
+  const typeOf = new Map(graph.nodes.map((n) => [n.id, n.type]))
+  const seen = new Set<string>()
+  for (const e of graph.edges) {
+    if (e.source === center && (e.kind === 'read' || e.kind === 'ingest')) seen.add(e.target)
+    if (e.target === center && (e.kind === 'orchestrate' || e.kind === 'refresh')) seen.add(e.source)
+  }
+  seen.delete(center)
+  const out: Partial<Record<DependentType, number>> = {}
+  for (const id of seen) {
+    const t = typeOf.get(id) as DependentType | undefined
+    if (t && (DEPENDENT_TYPES as readonly string[]).includes(t)) out[t] = (out[t] ?? 0) + 1
+  }
+  return out
+}
+
+/** The lineage graph's name for an Explore kind; null for the kinds it does not track. */
+export function lineageType(kind: string): 'flow' | 'datasource' | 'connection' | 'script' | 'sql' | 'notebook' | 'group' | null {
+  return (['flow', 'datasource', 'connection', 'script', 'sql', 'notebook', 'group'] as const).find((k) => k === kind) ?? null
+}
