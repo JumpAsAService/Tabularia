@@ -303,6 +303,6 @@ tr.off > td:first-child .rowpick { color: var(--muted); }
 .nowrap { white-space: nowrap; }
 .right { text-align: right; }
 button.mini { padding: 2px 8px; min-height: 24px; }
-.mini.danger { border-color: var(--danger); color: var(--danger); }
+.mini.danger { border-color: var(--danger); color: var(--danger-text); }
 .mini.danger:hover { background: var(--danger-fill); color: var(--on-danger); }
 </style>

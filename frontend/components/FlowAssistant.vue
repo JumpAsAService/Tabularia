@@ -492,7 +492,7 @@ function stepLabel(s: Step): string {
 .fa-note.err svg { color: var(--danger); }
 .fa-note-actions { display: flex; gap: 6px; width: 100%; padding-left: 19px; }
 .fa-mini { display: inline-flex; align-items: center; gap: 4px; padding: 3px 8px; min-height: 24px; font-size: 12px; }
-.fa-mini.danger:hover:not(:disabled) { color: var(--danger); border-color: color-mix(in srgb, var(--danger) 45%, transparent); }
+.fa-mini.danger:hover:not(:disabled) { color: var(--danger-text); border-color: color-mix(in srgb, var(--danger) 45%, transparent); }
 .fa-composer { padding: 8px 12px 10px; border-top: 1px solid var(--border-soft); }
 .fa-field {
   display: flex; align-items: flex-end; gap: 6px; padding: 4px 4px 4px 9px;

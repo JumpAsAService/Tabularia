@@ -41,6 +41,9 @@
   --dur-1: 0.1s;
   --dur-2: 0.15s;
   --dur-3: 0.22s;
+  /* the hover sweep's own curve: symmetric enough that its middle falls at ~100ms of 240,
+     so the fill is SEEN crossing the button (with --ease-out it was halfway at 22ms) */
+  --ease-sweep: cubic-bezier(0.4, 0, 0.2, 1);
   --shadow-1: 0 1px 2px rgba(0, 0, 0, 0.4);
   --shadow-2: 0 4px 16px rgba(0, 0, 0, 0.45);
   /* The primaries' fill is NOT --accent: white on #4f8cff makes 3.22:1 (and 3.86 on
@@ -52,6 +55,10 @@
      makes 2.78:1; on this 4.59 */
   --danger-fill: #d63c3c;
   --on-danger: #fff;
+  /* red as TEXT (danger buttons and the rows' danger actions): >= 4.5:1 on panel-2, also
+     under --tint-danger, in every theme; --danger stays the state colour. Here: 5.79 / 4.75 */
+  --danger-text: #ff6b6b;
+  --tint-danger: color-mix(in srgb, var(--danger) 12%, transparent); /* danger hover veil */
   /* The ENCODING colours (engines, categories, edges) when they become TEXT are mixed
      with the theme's text as much as AA needs (measured on panel and bg):
      color-mix(in srgb, <colour> var(--enc-text-mix), var(--text)). */
@@ -102,6 +109,7 @@
   --shadow-2: 0 6px 20px rgba(20, 30, 60, 0.12);
   --grad-accent: linear-gradient(135deg, #3b6fe0 0%, #6a5cff 100%);
   --danger-fill: #e02424; /* white on it: 4.72 */
+  --danger-text: #b81e1e; /* 5.72 on panel-2 (#e02424: 4.17) */
   --on-danger: #fff;
   --enc-text-mix: 40%;    /* the encoding colours are born for the dark: here they must be darkened */
 
@@ -140,6 +148,7 @@
   --grad-accent: linear-gradient(135deg, #bd93f9 0%, #ff79c6 100%);
   --on-accent: #21222c;                   /* light accent → dark text on the buttons */
   --danger-fill: #d63c3c; /* white on it: 4.59 (on #ff5555 it was 3.14) */
+  --danger-text: #ff8f8f; /* 5.38 on panel-2 (#ff5555: 3.75) */
   --on-danger: #fff;
   --enc-text-mix: 80%;
 
@@ -179,6 +188,7 @@
   --grad-accent: linear-gradient(135deg, #66d9ef 0%, #a6e22e 100%);
   --on-accent: #1e1f1c;                   /* light accent → dark text on the buttons */
   --danger-fill: #c8306a; /* white on it: 5.14 (on #fb4a8b it was 3.25) */
+  --danger-text: #fc82af; /* 5.37 on panel-2 (#fb4a8b: 3.87) */
   --on-danger: #fff;
   --enc-text-mix: 85%;
 
@@ -227,6 +237,7 @@
   --grad-accent: linear-gradient(135deg, #9a2352 0%, #6e1a40 100%);
   --on-accent: #fff;
   --danger-fill: #b5321e; /* white on it: 6.1:1 */
+  --danger-text: #a52e1b; /* 5.70 on panel-2, 4.64 under the tint */
   --on-danger: #fff;
   --enc-text-mix: 40%;    /* the encoding colours are born for the dark: worst case 4.8:1 */
 
@@ -295,7 +306,7 @@ button.primary {
    alone sets the hover's contrast) */
 button.primary:hover { box-shadow: 0 2px 12px color-mix(in srgb, var(--accent) 35%, transparent); }
 /* :where() keeps these at the element's specificity: a component's own rules always win */
-button:where(.danger) { border-color: var(--danger); color: var(--danger); }
+button:where(.danger) { border-color: var(--danger); color: var(--danger-text); }
 button:where(.danger):hover { border-color: var(--danger); } /* not the accent of the plain hover */
 /* row and bar buttons are small and frequent: an immediate colour change, no sweep */
 button.mini { transition: border-color var(--dur-1), background var(--dur-1), color var(--dur-1), transform var(--dur-1) ease-out, box-shadow var(--dur-1); }
@@ -303,7 +314,7 @@ button.mini.danger:hover:not(:disabled) { background: var(--danger-fill); color:
 
 /* Hover sweep: on the buttons with a label (plain, primary, danger, .btn-link anchors) a
    fill slides in from the left edge, through clip-path on a pseudo-element under the
-   content (text and icon stay on top): in 220ms with the ease-out, back out in 120ms, quick
+   content (text and icon stay on top): in 240ms on --ease-sweep, back out in 120ms, quick
    where the system answers. Not on the mini and icon-only (aria-label) buttons, tabs,
    segments, menu and list items, options: they keep their own colour change. The hover
    only flips custom properties, so no other ::before of a button is ever touched. */
@@ -316,7 +327,7 @@ button:where(:not([class]), .primary, .danger, .btn-link):where(:not(
   isolation: isolate;
 }
 :where(button.primary, .btn-link) { --sweep: var(--sweep-primary); }
-:where(button.danger) { --sweep: var(--danger-fill); }
+:where(button.danger) { --sweep: var(--tint-danger); } /* a tint: the red text stays readable all along */
 button:where(:not([class]), .primary, .danger, .btn-link):where(:not(
   .mini, .fa-mini, [aria-label], [aria-pressed], [role="tab"], [role="radio"], [role="option"],
   [role="menuitem"], [role="menuitemradio"], [role="menuitemcheckbox"],
@@ -338,12 +349,8 @@ a:where(.btn-link):active { transform: scale(0.97); }
 @media (hover: hover) and (pointer: fine) {
   :where(button:not(:disabled, [aria-disabled="true"]), a.btn-link):hover {
     --sweep-x: 0%;
-    --sweep-t: 220ms var(--ease-out);
+    --sweep-t: 240ms var(--ease-sweep);
   }
-  /* the danger text turns with the fill as the sweep passes the middle (~25ms in, ~40ms
-     out): a short crossfade instead of a jump */
-  button:where(.danger:not(.mini)) { transition: border-color var(--dur-2), transform var(--dur-1) ease-out, box-shadow var(--dur-2), color 60ms linear 10ms; }
-  button:where(.danger:not(.mini, :disabled):hover) { color: var(--on-danger); transition: border-color var(--dur-2), transform var(--dur-1) ease-out, box-shadow var(--dur-2), color 60ms linear; }
 }
 /* reduced motion: no sweep and no shrink, the fill fades in and out in place */
 @media (prefers-reduced-motion: reduce) {

@@ -802,7 +802,7 @@ const basePackages = computed(() => (form.value.language === 'python' ? 'polars,
 .heading h4 { flex: 1; }
 button.mini { padding: 2px 10px; min-height: 26px; font-size: 12px; display: inline-flex; align-items: center; gap: 5px; }
 button.mini.icon-only { padding: 2px 6px; }
-button.danger-zone { color: var(--danger); }
+button.danger-zone { color: var(--danger-text); }
 
 .fields { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px 14px; }
 .field { display: flex; flex-direction: column; gap: 4px; font-size: 12px; color: var(--muted); min-width: 0; }

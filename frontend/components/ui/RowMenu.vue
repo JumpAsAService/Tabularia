@@ -172,7 +172,7 @@ const style = computed(() => ({ left: `${pos.value.left}px`, top: `${pos.value.t
 .rm-item:focus { background: var(--panel-2); box-shadow: none; outline: none; }
 .rm-item[aria-disabled="true"] { opacity: 0.5; cursor: not-allowed; }
 .rm-icon { color: var(--muted); flex-shrink: 0; }
-.rm-item.danger, .rm-item.danger .rm-icon { color: var(--danger); }
+.rm-item.danger, .rm-item.danger .rm-icon { color: var(--danger-text); }
 .rm-item.danger:hover:not([aria-disabled="true"]),
 .rm-item.danger:focus { background: color-mix(in srgb, var(--danger) 12%, transparent); }
 .rm-sep { height: 1px; margin: 4px 6px; background: var(--border-soft); }

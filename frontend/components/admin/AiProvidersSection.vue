@@ -375,7 +375,7 @@ td.address { max-width: 260px; overflow: hidden; text-overflow: ellipsis; white-
 .tag.warn { color: var(--warning, #d08700); }
 button.mini { padding: 3px 8px; min-height: 24px; }
 button.mini + button.mini { margin-left: 4px; }
-.mini.danger { border-color: var(--danger); color: var(--danger); }
+.mini.danger { border-color: var(--danger); color: var(--danger-text); }
 .mini.danger:hover:not(:disabled) { background: var(--danger-fill); color: var(--on-danger); }
 .outcome td { padding-top: 0; font-size: 12px; }
 .good, .bad { display: inline-flex; align-items: flex-start; gap: 5px; font-size: 12px; }

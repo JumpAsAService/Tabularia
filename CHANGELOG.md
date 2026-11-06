@@ -86,11 +86,12 @@ migration (0038: a column on `users`). Read docs/deploy/upgrading.md before upgr
   from the button for menus (none when opened from the keyboard), only a fade under
   reduced motion; the right-click ring no longer lights two items at once.
 - **Buttons answer the pointer**: on hover a fill sweeps across a button from left to right
-  (a deeper veil on Run and the other primaries, the accent tint on plain buttons, the red
-  fill on destructive ones, whose text turns as it passes), and a press shrinks it slightly;
-  mouse only, a fade under reduced motion, never on small row buttons, tabs or menus. The
-  «Leave without saving» and the schedule's «Disable» buttons are now red like the other
-  destructive ones.
+  (a deeper veil on Run and the other primaries, the accent tint on plain buttons, a red
+  tint on destructive ones, whose red text stays readable all along), and a press shrinks
+  it slightly; mouse only, a fade under reduced motion, never on small row buttons, tabs or
+  menus. The «Leave without saving» and the schedule's «Disable» buttons are now red like
+  the other destructive ones, and the red of destructive buttons and row actions reaches
+  4.5:1 in every theme (it was 3.75 on Dracula, 3.87 on Monokai, 4.17 on the light theme).
 - **A right-click menu in the flow editor**: right-click on the canvas or on a node opens a
   ring of transformations around the pointer; a choice creates the node at the click,
   connected to the selected node. Each person picks up to eight and their order

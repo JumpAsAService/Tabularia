@@ -1004,7 +1004,7 @@ td.warn { color: var(--warning, #d08700); font-weight: 600; }
 button.mini { padding: 3px 8px; min-height: 24px; }
 button.mini + button.mini { margin-left: 4px; }
 .mini.on { border-color: var(--accent-hi); color: var(--accent-hi); background: var(--panel-2); }
-.mini.danger { border-color: var(--danger); color: var(--danger); }
+.mini.danger { border-color: var(--danger); color: var(--danger-text); }
 .mini.danger:hover:not(:disabled) { background: var(--danger-fill); color: var(--on-danger); }
 .mini:disabled { opacity: 0.4; cursor: not-allowed; }
 @media (max-width: 900px) {
