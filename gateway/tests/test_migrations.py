@@ -281,3 +281,18 @@ def test_0037_adds_the_ai_comments_and_leaves_what_was_there(temporary_database)
         assert [c.execute(text(f"SELECT count(*) FROM {t}")).scalar() for t in ("ai_comments", "ai_comment_threads")] == [0, 0]
     with temporary_database.begin() as c:
         c.execute(text("INSERT INTO ai_models (model_id, enabled, updated_at) VALUES ('another', true, now())"))
+
+
+def test_0038_adds_the_flow_shortcuts_and_leaves_what_was_there(temporary_database):
+    """One nullable column on users: the accounts keep everything, nobody has chosen a menu,
+    and the previous version's insert (without the column) still works."""
+    with temporary_database.begin() as c:
+        command.upgrade(m._config(c), "0037")
+        c.execute(text("INSERT INTO users (id, email, full_name, is_active, is_superuser, is_observer, locale, created_at) "
+                       "VALUES (1, 'ann@example.com', 'Ann', true, false, false, 'it', now())"))
+    m.migra(temporary_database)  # stops if the database and the models differ
+    with temporary_database.connect() as c:
+        assert c.execute(text("SELECT email, locale, flow_shortcuts FROM users")).one() == ("ann@example.com", "it", None)
+    with temporary_database.begin() as c:
+        c.execute(text("INSERT INTO users (id, email, full_name, is_active, is_superuser, is_observer, created_at) "
+                       "VALUES (2, 'bob@example.com', '', true, false, false, now())"))

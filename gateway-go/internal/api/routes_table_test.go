@@ -10,8 +10,9 @@ import (
 )
 
 // Every route of the Python gateway has its Go handler, and Go has no route FastAPI does not
-// declare: the router answers from FastAPI's table (server.New), so a gap would be a 500 and
-// an extra route unreachable. With and without single sign-on (sso.go, sso_oidc.go).
+// declare apart from the Go-only ones listed by name (server/go_only_routes.go): the router
+// answers from FastAPI's table (server.New), so a gap would be a 500 and an extra route
+// unreachable. With and without single sign-on (sso.go, sso_oidc.go).
 func TestEveryPythonRouteHasItsGoHandler(t *testing.T) {
 	for _, sso := range []bool{false, true} {
 		cfg := &config.Config{}
@@ -31,6 +32,13 @@ func TestEveryPythonRouteHasItsGoHandler(t *testing.T) {
 			}
 			if !have[r] {
 				t.Errorf("sso=%v: %s %s has no Go handler", sso, r[0], r[1])
+			}
+		}
+		// the routes only Go has, each declared by name in server/go_only_routes.go
+		for _, r := range server.GoOnlyRoutes() {
+			want[r] = true
+			if !have[r] {
+				t.Errorf("sso=%v: the Go-only %s %s has no Go handler", sso, r[0], r[1])
 			}
 		}
 		for r := range have {

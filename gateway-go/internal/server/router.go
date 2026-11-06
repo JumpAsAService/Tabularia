@@ -69,7 +69,7 @@ type router struct {
 // New answers every request as the Python gateway's application `opt.App` does, with the
 // handlers of `routes` (the Go routes, by method and pattern).
 func New(routes []Route, opt Options) http.Handler {
-	table := fastAPIRoutes
+	table := mainRoutes()
 	if opt.App == NotebooksHostApp {
 		table = notebooksHostRoutes
 	}

@@ -1,6 +1,6 @@
 from datetime import datetime, timezone
 from typing import Optional
-from sqlalchemy import Index
+from sqlalchemy import Column, Index, Text
 from sqlmodel import SQLModel, Field
 
 
@@ -61,6 +61,10 @@ class User(SQLModel, table=True):
     # emails the product sends them speak it (services/email_texts.py). None =
     # never chose: English.
     locale: Optional[str] = Field(default=None, max_length=8)
+    # The transformations of the flow editor's right-click menu, in their order: a JSON
+    # list of operation types (PUT /users/me/flow-shortcuts). None = never chosen: the
+    # interface's defaults.
+    flow_shortcuts: Optional[str] = Field(default=None, sa_column=Column(Text))
 
 
 class Group(SQLModel, table=True):

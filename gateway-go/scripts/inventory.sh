@@ -71,6 +71,13 @@ for module in sorted(by_module):
         who = "**Go**" if key in ported else "AI service" if key in ai else "Python"
         lines.append(f"| {r['method']} | `{r['path']}` | `{r['name']}` | {who} |")
     lines.append("")
+# the routes only the Go gateway has (internal/server/go_only_routes.go): no Python twin
+python_routes = {(r["method"], r["path"]) for r in routes} | {("GET", "/health")}
+go_only = sorted((p, m) for m, p in ported - python_routes if m != "HEAD")  # HEAD: Starlette's, of a GET
+if go_only:
+    lines += [f"## Go only ({len(go_only)})", "", "| Method | Path | Served by |", "|---|---|---|"]
+    lines += [f"| {m} | `{p}` | **Go** |" for p, m in go_only]
+    lines.append("")
 open(sys.argv[3], "w").write("\n".join(lines))
 print(f"{done} of {len(routes)} routes in Go → {sys.argv[3]}")
 PY

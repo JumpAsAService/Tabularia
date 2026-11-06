@@ -618,3 +618,10 @@ Python gateway as FastAPI serves it, and whether the Go gateway answers it
 | GET | `/admin/workers` | `read` | **Go** |
 | DELETE | `/admin/workers/{kind}/scaling` | `give_back` | **Go** |
 | PUT | `/admin/workers/{kind}/scaling` | `scala` | **Go** |
+
+## Go only (2)
+
+| Method | Path | Served by |
+|---|---|---|
+| GET | `/users/me/flow-shortcuts` | **Go** |
+| PUT | `/users/me/flow-shortcuts` | **Go** |
