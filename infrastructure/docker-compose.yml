@@ -134,20 +134,15 @@ services:
     # /app four times a second, a local .venv included, and takes half a core.
     command: uvicorn app.api.main:app --host 0.0.0.0 --port 8000 --reload --reload-dir app
 
-  # Gateway (control plane): the ONLY public entry point (:8000). Auth + RBAC +
-  # Postgres, then forwards to the internal engine. Here ONE process does everything
-  # (APP__ROLE=all, the default): it answers requests, fires the schedules and
-  # executes the flows. In production the same two jobs can be split and
+  # Gateway (control plane): the ONLY public entry point (:8000), the Go gateway
+  # (gateway-go/). Auth + RBAC + Postgres, then forwards to the internal engine. Here ONE
+  # process does everything (APP__ROLE=all, the default): it answers requests, fires the
+  # schedules and executes the flows. In production the same two jobs can be split and
   # replicated (APP__ROLE=api / orchestrator): see infrastructure/.env.example.
   gateway:
-    # SINGLE gateway image (see gateway/Dockerfile): with pytest in development,
-    # without it in production; same rules, non-root user
     build:
-      context: ../gateway
-      dockerfile: Dockerfile
-      args:
-        WITH_DEV: "true"
-    image: tabularia-gateway:dev
+      context: ../gateway-go
+    image: tabularia-gateway-go:dev
     container_name: dataprep-gateway
     restart: unless-stopped
     ports:
@@ -175,9 +170,57 @@ services:
       - ENGINE__BUCKET=${STORAGE__BUCKET:-data-prep}
       - DB__HOST=postgres
       - DB__PORT=5432
-      # development: the gateway applies the schema migrations itself at startup
-      # (in production a separate step applies them: python -m app.db.migra)
+      # the schema: the AI service migrates it at its start (development; in production
+      # a separate step does: python -m app.db.migra), the Go gateway only checks it
+      # the AI service below: the assistant's routes and the SQL parsing
+      - GATEWAY_GO__AI_SERVICE=http://ai:8000
+      # who may report the client's address (X-Forwarded-For): FORWARDED_ALLOW_IPS in
+      # .env, as for the Python gateway's server
+      - GATEWAY_GO__FORWARDED_ALLOW_IPS=${FORWARDED_ALLOW_IPS:-127.0.0.1}
+    volumes:
+      - keys:/var/lib/tabularia/keys
+    depends_on:
+      ai:
+        condition: service_healthy
+      backend:
+        condition: service_started
+    # makes a wedged gateway VISIBLE. The image has no curl/wget: bash's /dev/tcp.
+    healthcheck:
+      test: ["CMD", "bash", "-c", "exec 3<>/dev/tcp/127.0.0.1/8000 && printf 'GET /health HTTP/1.0\\r\\n\\r\\n' >&3 && head -1 <&3 | grep -q ' 200 '"]
+      interval: 15s
+      timeout: 5s
+      retries: 3
+      start_period: 10s
+
+  # The AI service: the Python gateway's image with APP__ROLE=ai (docs/specs/gateway-go.md,
+  # «The AI service»). The assistant's routes (the gateway forwards them) and the SQL
+  # parsing the gateway asks for; at its start it also migrates the schema (development)
+  # and creates the first administrator from the environment. No published port.
+  ai:
+    # SINGLE Python gateway image (see gateway/Dockerfile): with pytest in development,
+    # without it in production; same rules, non-root user
+    build:
+      context: ../gateway
+      dockerfile: Dockerfile
+      args:
+        WITH_DEV: "true"
+    image: tabularia-gateway:dev
+    container_name: dataprep-ai
+    restart: unless-stopped
+    env_file:
+      - path: .env
+        required: false
+    environment:
+      - SECURITY__FERNET_KEY=${SECURITY__FERNET_KEY:-}
+      - SECURITY__KEYS_DIR=/var/lib/tabularia/keys
+      - AUTH__ADMIN_PASSWORD=${AUTH__ADMIN_PASSWORD:-}
+      - AUTH__FIRST_RUN_SETUP=true
+      - ENGINE__BASE_URL=http://backend:8000
+      - ENGINE__BUCKET=${STORAGE__BUCKET:-data-prep}
+      - DB__HOST=postgres
+      - DB__PORT=5432
       - DB__AUTO_MIGRATE=true
+      - APP__ROLE=ai
       # the mounted sources belong to the host's user, not to the container's user
       # 10001: pytest does not try to write its cache into them
       - PYTEST_ADDOPTS=-p no:cacheprovider
@@ -189,10 +232,6 @@ services:
         condition: service_completed_successfully
       postgres:
         condition: service_healthy
-      backend:
-        condition: service_started
-    # makes a wedged gateway VISIBLE: with `uvicorn --reload` a startup failure
-    # (e.g. DB host not resolvable) leaves the container "running" but not serving.
     # The image is slim (no curl/wget) → the Python stdlib is used.
     healthcheck:
       test: ["CMD", "python", "-c", "import urllib.request,sys; sys.exit(0 if urllib.request.urlopen('http://localhost:8000/health', timeout=3).status==200 else 1)"]
