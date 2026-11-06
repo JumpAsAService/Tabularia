@@ -2280,6 +2280,7 @@ export default {
     "sortHint": "Die Zeilen werden nach der ersten Spalte sortiert; die weiteren entscheiden bei gleichen Werten.",
   },
   "projectBrowser": {
+    "newFolderButton": "Neuer Ordner",
     "searchEverywhere": "„{q}“ überall suchen",
     "kind_script": "Skripte",
     "kind_sql": "SQL-Skripte",

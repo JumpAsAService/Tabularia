@@ -2306,6 +2306,7 @@ export default {
     "sortHint": "Le righe si ordinano per la prima colonna; le successive decidono tra valori uguali.",
   },
   "projectBrowser": {
+    "newFolderButton": "Nuova cartella",
     "searchEverywhere": "Cerca \"{q}\" ovunque",
     "kind_script": "Script",
     "kind_sql": "Script SQL",

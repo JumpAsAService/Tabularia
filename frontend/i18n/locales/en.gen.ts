@@ -2306,6 +2306,7 @@ export default {
     "sortHint": "Rows are sorted by the first column; the next ones decide between equal values.",
   },
   "projectBrowser": {
+    "newFolderButton": "New folder",
     "searchEverywhere": "Search \"{q}\" everywhere",
     "kind_script": "Scripts",
     "kind_sql": "SQL scripts",

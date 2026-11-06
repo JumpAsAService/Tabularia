@@ -5,6 +5,9 @@ exposes at `/system/info` and in the app's settings menu.
 
 ## Unreleased
 
+- **An empty folder in Explore says what can be made in it**: «New flow» (straight to the
+  editor on the preferred engine), «Datasource from a database» and «New folder», each
+  only to whoever may create it.
 - **Explore's filter leads on to the search across every folder**: under the filtered list,
   and in place of «Nothing here matches», a row «Search "q" everywhere» hands the same words
   to the top bar's search.

@@ -53,6 +53,7 @@ import {
   LayoutDashboard,
   FolderKey,
   ArrowRight,
+  FolderPlus,
 } from 'lucide-vue-next'
 import { errMessage, useApi } from '~/composables/useApi'
 import { useFlows, type FlowSummary } from '~/composables/useFlows'
@@ -922,6 +923,19 @@ async function createDashboard() {
   }
 }
 
+// the empty folder's own buttons: a flow straight away on the preferred engine (the menu's
+// engine step when that one is not available), a folder through the menu's name field
+function newFlowHere() {
+  const pref = engines.value.find((e) => e.id === preferredEngine.value && e.available)
+  if (pref) createFlowWith(pref.id)
+  else { newMenuByKey.value = false; engineStep.value = true; newMenu.value = true }
+}
+function newFolderHere() {
+  newMenuByKey.value = false
+  engineStep.value = false
+  newMenu.value = true
+}
+
 async function createFolder() {
   const folderName = newFolderName.value.trim()
   if (!folderName) return
@@ -1320,9 +1334,17 @@ watch(currentId, () => { q.value = ''; kindFilter.value = null; settingsOpen.val
 
     <SkeletonRows v-if="state === 'loading'" :rows="6" />
 
-    <p v-else-if="state === 'empty'" class="muted empty">
-      {{ currentId === null ? $t('projectBrowser.emptyRoot') : $t('projectBrowser.emptyFolder') }}
-    </p>
+    <div v-else-if="state === 'empty'" class="emptybox">
+      <p class="muted">{{ currentId === null ? $t('projectBrowser.emptyRoot') : $t('projectBrowser.emptyFolder') }}</p>
+      <!-- what can be made here, by whoever may: the same rights as the New menu -->
+      <div class="empty-acts">
+        <template v-if="currentId !== null && target !== null && !user?.is_observer">
+          <button @click="newFlowHere"><Workflow :size="14" /> {{ $t('projectBrowser.newFlowButton') }}</button>
+          <button @click="openDbDsDialog"><Database :size="14" /> {{ $t('projectBrowser.fromDatabaseButton') }}</button>
+        </template>
+        <button v-if="isSuper || canManage" @click="newFolderHere"><FolderPlus :size="14" /> {{ $t('projectBrowser.newFolderButton') }}</button>
+      </div>
+    </div>
     <!-- the filter looks in this folder only: the way on, to every folder, with the same words -->
     <button v-else-if="state === 'nomatch'" class="everywhere solo" @click="searchEverywhere(q)">
       <Search :size="14" /> {{ $t('projectBrowser.searchEverywhere', { q: q.trim() }) }} <ArrowRight :size="14" />
@@ -1753,6 +1775,11 @@ tr.folderrow .kicon { color: var(--accent-2); }
 }
 .personal-note { font-size: 12px; margin: auto 0 0; padding-top: 14px; border-top: 1px solid var(--border-soft); }
 .empty { padding: 28px 4px; }
+.emptybox { padding: 28px 4px; display: flex; flex-direction: column; gap: 14px; }
+.emptybox p { margin: 0; }
+.empty-acts { display: flex; flex-wrap: wrap; gap: 8px; }
+.empty-acts:empty { display: none; }
+.empty-acts button { display: inline-flex; align-items: center; gap: 7px; }
 /* the filter's way out to the search across every folder: a quiet row under the list */
 .everywhere {
   display: inline-flex;
