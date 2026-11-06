@@ -10,6 +10,7 @@ import { CustomChart } from 'echarts/charts'
 import { GridComponent, TooltipComponent, DataZoomComponent } from 'echarts/components'
 import VChart from 'vue-echarts'
 import type { RunInfo } from '~/composables/useRuns'
+import { executionRuns } from '~/composables/runExecutions'
 import { useChartTheme } from '~/composables/useChartTheme'
 
 use([CanvasRenderer, CustomChart, GridComponent, TooltipComponent, DataZoomComponent])
@@ -36,9 +37,10 @@ function fmt(s: string): string {
   return fmtx.dateTime(s)
 }
 
-// only the last 20 runs (newest at the top): beyond, the chart becomes unreadable
+// only the last 20 executions (newest at the top): beyond, the chart becomes unreadable.
+// One bar per execution: an orchestration's step runs are inside its bar, not rows of their own.
 const rows = computed(() =>
-  props.runs.filter((r) => r.started_at).slice(0, 20),
+  executionRuns(props.runs).filter((r) => r.started_at).slice(0, 20),
 )
 
 const option = computed(() => {

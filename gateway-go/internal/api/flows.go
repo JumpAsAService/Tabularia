@@ -726,22 +726,42 @@ func (d *Deps) flowStats(w http.ResponseWriter, r *http.Request, p *auth.Princip
 	if f == nil || !q.ensure(f.ProjectID, perm.View) {
 		return
 	}
-	var out FlowStatsOut
-	var last *time.Time
-	err := d.DB.QueryRow(q.ctx, `SELECT count(*), count(*) FILTER (WHERE status = 'SUCCESS'),
-		count(*) FILTER (WHERE status = 'FAILURE'), max(started_at) FROM runs WHERE flow_id = $1`, f.ID).
-		Scan(&out.RunCount, &out.SuccessCount, &out.FailureCount, &last)
+	out, err := flowRunStats(q.ctx, d.DB, f.ID)
 	if err != nil {
 		q.fail(err)
 		return
 	}
+	server.JSON(w, http.StatusOK, out)
+}
+
+// ownExecution keeps one row per execution of a flow: a launch writes the orchestration
+// run AND, under it, one child run per step (output, script, container) carrying the same
+// flow_id. Counting the children too doubled the runs (and mixed step times into the
+// average). A child whose parent belongs to another object (a flow group's cell) is the
+// flow's only row for that execution, so it stays.
+const ownExecution = `NOT EXISTS (SELECT 1 FROM runs p WHERE p.id = runs.parent_run_id AND p.flow_id = runs.flow_id)`
+
+type statsQuerier interface {
+	rowsQuerier
+	QueryRow(ctx context.Context, sql string, args ...any) pgx.Row
+}
+
+// flowRunStats counts the flow's executions and averages the last 500 finished ones.
+func flowRunStats(ctx context.Context, db statsQuerier, flowID int64) (FlowStatsOut, error) {
+	var out FlowStatsOut
+	var last *time.Time
+	err := db.QueryRow(ctx, `SELECT count(*), count(*) FILTER (WHERE status = 'SUCCESS'),
+		count(*) FILTER (WHERE status = 'FAILURE'), max(started_at) FROM runs WHERE flow_id = $1 AND `+ownExecution, flowID).
+		Scan(&out.RunCount, &out.SuccessCount, &out.FailureCount, &last)
+	if err != nil {
+		return out, err
+	}
 	out.LastRunAt = isoPtr(last)
 	// the last 500 FINISHED runs, the average computed as Python does (in order, then round)
-	rows, err := d.DB.Query(q.ctx, `SELECT started_at, finished_at FROM runs WHERE flow_id = $1 AND finished_at IS NOT NULL
-		ORDER BY started_at DESC LIMIT 500`, f.ID)
+	rows, err := db.Query(ctx, `SELECT started_at, finished_at FROM runs WHERE flow_id = $1 AND `+ownExecution+` AND finished_at IS NOT NULL
+		ORDER BY started_at DESC LIMIT 500`, flowID)
 	if err != nil {
-		q.fail(err)
-		return
+		return out, err
 	}
 	var sum float64
 	n := 0
@@ -749,8 +769,7 @@ func (d *Deps) flowStats(w http.ResponseWriter, r *http.Request, p *auth.Princip
 		var s, e *time.Time
 		if err := rows.Scan(&s, &e); err != nil {
 			rows.Close()
-			q.fail(err)
-			return
+			return out, err
 		}
 		if s != nil && e != nil && !e.Before(*s) {
 			sum += float64(e.Sub(*s).Microseconds()) / 1e6
@@ -759,14 +778,13 @@ func (d *Deps) flowStats(w http.ResponseWriter, r *http.Request, p *auth.Princip
 	}
 	rows.Close()
 	if err := rows.Err(); err != nil {
-		q.fail(err)
-		return
+		return out, err
 	}
 	if n > 0 {
 		avg := pyRound(sum/float64(n), 2)
 		out.AvgDurationSeconds = &avg
 	}
-	server.JSON(w, http.StatusOK, out)
+	return out, nil
 }
 
 // pyRound is Python's round(x, ndigits) of a float: the exact value rounded half to even.
