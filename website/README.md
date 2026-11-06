@@ -90,6 +90,15 @@ analytics at all.
   visitor's system and remember a choice for the whole site (`localStorage`); without
   JavaScript every block stays visible under its heading. These headings are left out of
   "On this page". Cover all three systems in each group, even with "Nothing to do".
+- Other build-time touches ([`lib/prose-blocks.mjs`](lib/prose-blocks.mjs)), none visible on GitHub:
+  "On this page" under the title on narrow screens; tables too wide for the column (five
+  columns or more, or long unbreakable values) shown as stacked rows, and every table on
+  phones; a paragraph that starts with `**Check:**` drawn as a verification box; screenshots
+  under `media/` that open full-window; GitHub's alerts (`> [!NOTE]`, `[!TIP]`, `[!IMPORTANT]`,
+  `[!WARNING]`, `[!CAUTION]`) drawn as note, important or warning callouts. Use the alert
+  markers for asides in docs/: GitHub draws them too. Code blocks get a copy button and, when
+  certain, the terminal they run in (a `powershell` block, a shell block inside a system's
+  block, or a declared one: ```` ```bash [Ubuntu terminal] ````).
 - The sidebar groups are in [`app/utils/docs-nav.ts`](app/utils/docs-nav.ts). A new file in `docs/`
   is published even if it is not listed there: it lands under "Reference" until it is placed.
 - Search is a static index (`/search.json`, one entry per section) loaded on first use and
