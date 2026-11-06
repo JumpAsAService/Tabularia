@@ -51,6 +51,9 @@ func Record(ctx context.Context, db Execer, log *slog.Logger, e Event) {
 	if p := info.Principal; p != nil && p.TokenName != "" {
 		detail = append(detail, pyjson.KV{Key: "token", Value: p.TokenName})
 	}
+	if info.ShareLink != 0 {
+		detail = append(detail, pyjson.KV{Key: "from_share_link", Value: info.ShareLink})
+	}
 	if info.Via != "" {
 		detail = append(detail, pyjson.KV{Key: "via", Value: info.Via})
 		if info.AgentPlan != 0 {

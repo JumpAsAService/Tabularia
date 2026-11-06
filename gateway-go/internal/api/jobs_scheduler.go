@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"github.com/JumpAsAService/Tabularia/gateway-go/internal/sharelinks"
 	"net/http"
 	"net/url"
 	"time"
@@ -188,6 +189,13 @@ func (s *scheduler) tick(ctx context.Context) error {
 	// the shared state's expired rows
 	if err := s.clean(ctx, now); err != nil {
 		s.d.Log.Error("scheduler: cleanup of the shared state failed", "err", err)
+	}
+
+	// the share links' sessions and the links past their time (docs/specs/share-links.md)
+	if n, err := sharelinks.Sweep(ctx, s.d.DB, now); err != nil {
+		s.d.Log.Error("scheduler: sweep of the share links failed", "err", err)
+	} else if n > 0 {
+		s.d.Log.Info("scheduler: share links deleted", "count", n)
 	}
 
 	// the blobs whose grace expired

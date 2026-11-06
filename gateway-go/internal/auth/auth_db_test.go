@@ -50,6 +50,17 @@ func newWorld(t *testing.T) *world {
 		t.Fatal(err)
 	}
 	t.Cleanup(db.Close)
+	// the tests of other packages that commit users (api's share links) wait for this one:
+	// the TRUNCATE below would take their rows away (gateway-go/scripts/test.sh runs the
+	// packages side by side on one database)
+	lock, err := db.Acquire(ctx)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := lock.Exec(ctx, `SELECT pg_advisory_lock(7101)`); err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { _, _ = lock.Exec(ctx, `SELECT pg_advisory_unlock(7101)`); lock.Release() })
 	if _, err := db.Exec(ctx, `TRUNCATE users, user_sessions, api_tokens, groups, user_groups RESTART IDENTITY CASCADE`); err != nil {
 		t.Fatal(err)
 	}

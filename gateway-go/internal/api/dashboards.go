@@ -17,11 +17,7 @@ import (
 // reports is objectsAPI; their definition is checked as a dashboard's (internal/dashboards).
 func init() {
 	register("dashboards", func(d *Deps) []server.Route {
-		h := &objectsAPI{d: d, kind: dashboards.Kind, pushmail: dashboards.Pushmail, param: "dashboard_id", openAudit: "dashboard.open",
-			createModel: gatewaymodels.DashboardCreate, updateModel: gatewaymodels.DashboardUpdate,
-			checkModel: gatewaymodels.DashboardsCheckRequest, empty: dashboards.Empty,
-			check:  dashboardChecked,
-			review: dashboardProblems, inOurWords: dashboards.InOurWordsErr}
+		h := dashboardsAPI(d)
 		route := func(method, pattern string, fn func(http.ResponseWriter, *http.Request, *auth.Principal)) server.Route {
 			return server.Route{Method: method, Pattern: pattern, Handler: server.Authed(d.Auth, pattern, fn)}
 		}
@@ -83,4 +79,13 @@ func (h *objectsAPI) folders(w http.ResponseWriter, r *http.Request, p *auth.Pri
 		return
 	}
 	server.JSON(w, http.StatusOK, perm.Sorted(ids))
+}
+
+// dashboardsAPI is the dashboards' objectsAPI: their routes, and a share link's (share_public.go).
+func dashboardsAPI(d *Deps) *objectsAPI {
+	return &objectsAPI{d: d, kind: dashboards.Kind, pushmail: dashboards.Pushmail, param: "dashboard_id", openAudit: "dashboard.open",
+		createModel: gatewaymodels.DashboardCreate, updateModel: gatewaymodels.DashboardUpdate,
+		checkModel: gatewaymodels.DashboardsCheckRequest, empty: dashboards.Empty,
+		check:  dashboardChecked,
+		review: dashboardProblems, inOurWords: dashboards.InOurWordsErr}
 }

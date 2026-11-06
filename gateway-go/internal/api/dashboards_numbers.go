@@ -129,7 +129,8 @@ func (h *objectsAPI) previewNumbers(w http.ResponseWriter, r *http.Request, p *a
 // dashboardRender is dashboards.render: a document of the current version, read with the
 // caller's rights; audited with what it showed.
 func (h *objectsAPI) dashboardRender(ctx context.Context, p *auth.Principal, c *perm.Checker, it *versioned.Item, def pyjson.Object,
-	format string, given reports.Given, clicks []any, state pyjson.Object, hasState bool, origin string, auditSuccess bool) (*reports.Started, error) {
+	format string, given reports.Given, clicks []any, state pyjson.Object, hasState bool, origin string, auditSuccess bool,
+	comments ...pyjson.Object) (*reports.Started, error) {
 	a := &dashboards.Asked{Given: given, Clicks: clicks, State: state, HasState: hasState}
 	if a.Clicks == nil {
 		a.Clicks = []any{}
@@ -171,6 +172,9 @@ func (h *objectsAPI) dashboardRender(ctx context.Context, p *auth.Principal, c *
 			pyjson.KV{Key: "format", Value: format}, pyjson.KV{Key: "filename", Value: name}, pyjson.KV{Key: "owner", Value: owner},
 			pyjson.KV{Key: "wait_seconds", Value: int64(wait)}, pyjson.KV{Key: "locale", Value: localeOf(def)},
 			pyjson.KV{Key: "title", Value: pystr.Cut(it.Name, 300)}, pyjson.KV{Key: "cache", Value: cache})
+		if len(comments) > 0 && comments[0] != nil { // a share link's (docs/specs/share-links.md)
+			body = append(body, pyjson.KV{Key: "comments", Value: comments[0]})
+		}
 		cctx, cancel := context.WithTimeout(ctx, time.Duration(60+wait)*time.Second)
 		defer cancel()
 		res, raw, err := h.d.Engine.JSON(cctx, http.MethodPost, "/reports/dashboard-render", body)

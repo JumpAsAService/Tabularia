@@ -13,9 +13,7 @@ import (
 // lacks it), changed with EDIT.
 func init() {
 	register("reports", func(d *Deps) []server.Route {
-		h := &objectsAPI{d: d, kind: reports.Kind, pushmail: reports.Pushmail, param: "report_id",
-			createModel: gatewaymodels.ReportCreate, updateModel: gatewaymodels.ReportUpdate, checkModel: gatewaymodels.ReportsCheckRequest,
-			empty: reports.Empty}
+		h := reportsAPI(d)
 		body := func(method, pattern string, fn bodyHandler) server.Route {
 			return bodyRoute(d.Auth, method, pattern, fn)
 		}
@@ -44,4 +42,11 @@ func init() {
 			body(http.MethodPost, "/reports/{report_id}/fields", h.fields),
 		}
 	})
+}
+
+// reportsAPI is the reports' objectsAPI: their routes, and a share link's (share_public.go).
+func reportsAPI(d *Deps) *objectsAPI {
+	return &objectsAPI{d: d, kind: reports.Kind, pushmail: reports.Pushmail, param: "report_id",
+		createModel: gatewaymodels.ReportCreate, updateModel: gatewaymodels.ReportUpdate, checkModel: gatewaymodels.ReportsCheckRequest,
+		empty: reports.Empty}
 }

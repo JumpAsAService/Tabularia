@@ -301,6 +301,10 @@ type RenderRequest struct {
 	Origin   string
 	Owner    string
 	Wait     int
+	// Comments and Reading are the AI comments the gateway got for this document (a share
+	// link's, docs/specs/share-links.md): sent to the engine only when not nil
+	Comments pyjson.Object
+	Reading  any
 }
 
 // Render is render (without the audit, which the caller writes with the outcome and the detail):
@@ -331,6 +335,9 @@ func (rs *Resolver) Render(ctx context.Context, def pyjson.Object, req RenderReq
 			{Key: "wait_seconds", Value: int64(req.Wait)}, {Key: "locale", Value: or(get(def, "locale"), "en")}, {Key: "state", Value: state}}
 		if req.Name != nil {
 			body = append(body, pyjson.KV{Key: "title", Value: *req.Name})
+		}
+		if req.Comments != nil {
+			body = append(body, pyjson.KV{Key: "comments", Value: req.Comments}, pyjson.KV{Key: "reading", Value: req.Reading})
 		}
 		cctx, cancel := context.WithTimeout(ctx, time.Duration(60+req.Wait)*time.Second)
 		defer cancel()

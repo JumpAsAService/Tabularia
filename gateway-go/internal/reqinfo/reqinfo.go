@@ -21,6 +21,9 @@ type Info struct {
 	// the chat or over MCP (services/agent)
 	Via       string
 	AgentPlan int64
+	// ShareLink is the share link a request came through (its id): served as its creator, and
+	// said in the audit (docs/specs/share-links.md)
+	ShareLink int64
 }
 
 type key struct{}
