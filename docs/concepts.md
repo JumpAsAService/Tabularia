@@ -45,6 +45,9 @@ renames, Shift+F10 opens the row's menu; each folder is a step of the browser's 
 A datasource opens in a side panel with its columns, its first rows and its contract, and
 leads on to the Viewer or to a new flow that starts from it (Ctrl/⌘ or the middle click
 opens it in the Viewer, in a new tab).
+At the top level, above the folders, a band shows what you changed last (**Recent**: the
+objects you saved a version of or own, newest first) and the **failed runs** of the last
+24 hours, two of each with «Show all»; it folds away and stays as you left it.
 
 Permissions are granted on a folder, to a user or to a group, and hold for every folder
 below it. There are five:

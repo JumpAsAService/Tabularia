@@ -81,6 +81,7 @@ import ContractDialog from '~/components/ui/ContractDialog.vue'
 import { listState, rowActions, primaryAction, keyCommand, stepRow, dependentsOf, lineageType, DEPENDENT_TYPES, type DependentType, type RowAction, type RowFacts } from '~/composables/exploreList'
 import Modal from '~/components/ui/Modal.vue'
 import DatasourcePanel from '~/components/ui/DatasourcePanel.vue'
+import ExploreStart from '~/components/ui/ExploreStart.vue'
 import RowMenu, { type RowMenuItem } from '~/components/ui/RowMenu.vue'
 import { searchEverywhere } from '~/composables/useSearch'
 import {
@@ -1157,6 +1158,7 @@ function deleteCurrentFolder() {
 // renames, Shift+F10 or the Menu key its commands (exploreList.keyCommand). No motion on
 // any of them: they are repeated all day.
 const searchInput = ref<HTMLInputElement | null>(null)
+const startBand = ref<InstanceType<typeof ExploreStart> | null>(null)
 const activeKey = ref<string | null>(null)
 let pendingFocus: string | null = null
 
@@ -1491,7 +1493,7 @@ watch(currentId, () => { q.value = ''; kindFilter.value = null; settingsOpen.val
         </button>
       </span>
 
-      <button class="mini" :title="$t('projectBrowser.reloadTitle')" :aria-label="$t('projectBrowser.reloadTitle')" @click="loadProjects(); loadFolder(currentId)">
+      <button class="mini" :title="$t('projectBrowser.reloadTitle')" :aria-label="$t('projectBrowser.reloadTitle')" @click="loadProjects(); loadFolder(currentId); startBand?.load()">
         <RefreshCw :size="13" />
       </button>
 
@@ -1605,6 +1607,9 @@ watch(currentId, () => { q.value = ''; kindFilter.value = null; settingsOpen.val
     </div>
 
     <p v-if="error" class="err">{{ error }}</p>
+
+    <!-- the top level is where one lands: what one changed last and what failed, above the folders -->
+    <ExploreStart v-if="currentId === null" ref="startBand" :projects="projects" :user-id="user?.id ?? null" />
 
     <SkeletonRows v-if="state === 'loading'" :rows="6" />
 

@@ -105,3 +105,23 @@ test('what uses an object: its readers and its runners, not what it publishes', 
   assert.equal(L.lineageType('report'), null)
   assert.equal(L.lineageType('folder'), null)
 })
+
+test('the start band: failures of the last 24 hours, and where each item leads', () => {
+  const now = Date.parse('2026-11-06T12:00:00Z')
+  const run = (id, status, finished, extra = {}) => ({ id, status, started_at: finished, finished_at: finished, flow_id: 1, ...extra })
+  const runs = [
+    run(1, 'FAILURE', '2026-11-06T11:00:00'),          // naive = UTC, an hour ago
+    run(2, 'SUCCESS', '2026-11-06T11:30:00'),
+    run(3, 'FAILURE', '2026-11-05T13:00:00Z'),         // 23 hours ago
+    run(4, 'FAILURE', '2026-11-05T11:00:00+00:00'),    // 25 hours ago
+    run(5, 'FAILURE', null, { started_at: '2026-11-06T10:00:00' }), // still without an end
+  ]
+  assert.deepEqual(L.failedWithin(runs, now).map((r) => r.id), [1, 3, 5])
+  assert.equal(L.runTarget({ flow_id: 4 }), '/editor?flow=4')
+  assert.equal(L.runTarget({ flow_id: null, flow_group_id: 2 }), '/flow-group?id=2')
+  assert.equal(L.runTarget({ flow_id: null, sql_script_id: 7 }), '/sql-script?id=7')
+  assert.equal(L.runTarget({ flow_id: null }), '/runs')
+  assert.equal(L.objectTarget('datasource', 3), '/viewer?ds=3')
+  assert.equal(L.objectTarget('sql', 3), '/sql-script?id=3')
+  assert.equal(L.objectTarget('report', 9), '/report?id=9')
+})

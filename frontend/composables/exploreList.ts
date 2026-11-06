@@ -142,3 +142,48 @@ export function dependentsOf(
 export function lineageType(kind: string): 'flow' | 'datasource' | 'connection' | 'script' | 'sql' | 'notebook' | 'group' | null {
   return (['flow', 'datasource', 'connection', 'script', 'sql', 'notebook', 'group'] as const).find((k) => k === kind) ?? null
 }
+
+// ── The top level's start band: «Recent» and «Failed runs (24h)» ─────────────────────
+
+/** An object of GET /explore/recent. */
+export interface RecentItem { kind: string; id: number; name: string; project_id: number; at: string | null }
+
+/** Where an object opens: the same pages as its row (a datasource: the Viewer). */
+export function objectTarget(kind: string, id: number): string {
+  switch (kind) {
+    case 'flow': return `/editor?flow=${id}`
+    case 'group': return `/flow-group?id=${id}`
+    case 'datasource': return `/viewer?ds=${id}`
+    case 'view': return `/viewer?view=${id}`
+    case 'script': return `/script?id=${id}`
+    case 'sql': return `/sql-script?id=${id}`
+    case 'notebook': return `/notebook?id=${id}`
+    case 'report': return `/report?id=${id}`
+    case 'dashboard': return `/dashboard?id=${id}`
+  }
+  return '/'
+}
+
+interface RunLike {
+  status: string
+  started_at: string | null
+  finished_at: string | null
+  flow_id: number | null
+  flow_group_id?: number | null
+  sql_script_id?: number | null
+}
+
+/** The failed runs that ended (or began) within `hours` of `now`, newest first as given. */
+export function failedWithin<T extends RunLike>(runs: T[], now: number, hours = 24): T[] {
+  const since = now - hours * 3600_000
+  const at = (s: string | null) => (s ? Date.parse(/[zZ]|[+-]\d\d:?\d\d$/.test(s) ? s : `${s}Z`) : NaN)
+  return runs.filter((r) => r.status === 'FAILURE' && (at(r.finished_at) >= since || at(r.started_at) >= since))
+}
+
+/** Where a failed run leads: what ran it, or the Runs page. */
+export function runTarget(r: RunLike): string {
+  if (r.flow_group_id) return `/flow-group?id=${r.flow_group_id}`
+  if (r.sql_script_id) return `/sql-script?id=${r.sql_script_id}`
+  if (r.flow_id) return `/editor?flow=${r.flow_id}`
+  return '/runs'
+}

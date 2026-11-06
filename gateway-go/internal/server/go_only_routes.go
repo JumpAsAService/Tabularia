@@ -12,6 +12,8 @@ var goOnlyRoutes = []struct {
 }{
 	// the flow editor's right-click menu (api/flow_shortcuts.go)
 	{after: "/users/me/locale", route: pyRoute{path: "/users/me/flow-shortcuts", methods: []string{"GET", "PUT"}, regex: `^/users/me/flow\-shortcuts$`}},
+	// Explore's top level, the objects one changed last (api/explore_recent.go)
+	{after: "/search", route: pyRoute{path: "/explore/recent", methods: []string{"GET"}, regex: `^/explore/recent$`}},
 }
 
 // mainRoutes is the main application's table: FastAPI's, with the Go-only routes in place.

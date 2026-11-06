@@ -5,6 +5,10 @@ exposes at `/system/info` and in the app's settings menu.
 
 ## Unreleased
 
+- **Explore's top level is a starting page**: above the folders, a compact band with
+  «Recent» (what you saved a version of or own, newest first; new Go route
+  `GET /explore/recent`, one query, only what you may read) and «Failed runs (24h)», two
+  rows each and «Show all»; it folds away and stays folded per person in the browser.
 - **A datasource opens from Explore**: a click on its row opens a side panel with its
   columns and types, its first 20 rows, its contract, and «Open in Viewer» or «New flow
   from here» (the editor starts with it as the source; `/editor?ds=<id>`, and the Viewer

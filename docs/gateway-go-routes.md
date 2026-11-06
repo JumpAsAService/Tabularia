@@ -619,9 +619,10 @@ Python gateway as FastAPI serves it, and whether the Go gateway answers it
 | DELETE | `/admin/workers/{kind}/scaling` | `give_back` | **Go** |
 | PUT | `/admin/workers/{kind}/scaling` | `scala` | **Go** |
 
-## Go only (2)
+## Go only (3)
 
 | Method | Path | Served by |
 |---|---|---|
+| GET | `/explore/recent` | **Go** |
 | GET | `/users/me/flow-shortcuts` | **Go** |
 | PUT | `/users/me/flow-shortcuts` | **Go** |
