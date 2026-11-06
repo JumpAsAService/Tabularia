@@ -2280,6 +2280,7 @@ export default {
     "sortHint": "Las filas se ordenan por la primera columna; las siguientes deciden entre valores iguales.",
   },
   "projectBrowser": {
+    "searchEverywhere": "Buscar \"{q}\" en todas partes",
     "kind_script": "Scripts",
     "kind_sql": "Scripts SQL",
     "newSqlScriptButton": "Script SQL",

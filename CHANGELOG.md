@@ -5,6 +5,9 @@ exposes at `/system/info` and in the app's settings menu.
 
 ## Unreleased
 
+- **Explore's filter leads on to the search across every folder**: under the filtered list,
+  and in place of «Nothing here matches», a row «Search "q" everywhere» hands the same words
+  to the top bar's search.
 - **Explore no longer says a folder is empty while it is still loading**: the list shows its
   skeleton until both the folder tree and the folder's contents have arrived (the top level
   said «No folders yet» for the moment the tree took); the path keeps its place and «New»

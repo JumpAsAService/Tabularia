@@ -33,6 +33,14 @@ export interface SearchResults {
 }
 
 /** Where a result leads when it is opened. The folders stay in the Explore. */
+/** The window event that hands a question to the top bar's search (detail: `{ q }`). */
+export const GLOBAL_SEARCH_EVENT = 'tabularia:global-search'
+
+/** Asks the top bar's search, across all the folders, for `q`. */
+export function searchEverywhere(q: string): void {
+  if (typeof window !== 'undefined' && q.trim()) window.dispatchEvent(new CustomEvent(GLOBAL_SEARCH_EVENT, { detail: { q: q.trim() } }))
+}
+
 export function searchHitTarget(hit: SearchHit): string {
   switch (hit.kind) {
     case 'flow': return `/editor?flow=${hit.id}`

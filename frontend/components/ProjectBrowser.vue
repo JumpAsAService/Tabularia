@@ -52,6 +52,7 @@ import {
   FileChartColumn,
   LayoutDashboard,
   FolderKey,
+  ArrowRight,
 } from 'lucide-vue-next'
 import { errMessage, useApi } from '~/composables/useApi'
 import { useFlows, type FlowSummary } from '~/composables/useFlows'
@@ -76,6 +77,7 @@ import { starterDashboard, useDashboards, type Dashboard } from '~/composables/u
 import ContractBadge from '~/components/ui/ContractBadge.vue'
 import ContractDialog from '~/components/ui/ContractDialog.vue'
 import { listState } from '~/composables/exploreList'
+import { searchEverywhere } from '~/composables/useSearch'
 import {
   useProjects,
   CAPABILITIES,
@@ -1321,7 +1323,10 @@ watch(currentId, () => { q.value = ''; kindFilter.value = null; settingsOpen.val
     <p v-else-if="state === 'empty'" class="muted empty">
       {{ currentId === null ? $t('projectBrowser.emptyRoot') : $t('projectBrowser.emptyFolder') }}
     </p>
-    <p v-else-if="state === 'nomatch'" class="muted empty">{{ $t('projectBrowser.noMatches', { q }) }}</p>
+    <!-- the filter looks in this folder only: the way on, to every folder, with the same words -->
+    <button v-else-if="state === 'nomatch'" class="everywhere solo" @click="searchEverywhere(q)">
+      <Search :size="14" /> {{ $t('projectBrowser.searchEverywhere', { q: q.trim() }) }} <ArrowRight :size="14" />
+    </button>
 
     <table v-else class="rows">
       <tbody>
@@ -1479,6 +1484,9 @@ watch(currentId, () => { q.value = ''; kindFilter.value = null; settingsOpen.val
         </template>
       </tbody>
     </table>
+    <button v-if="state === 'rows' && q.trim()" class="everywhere" @click="searchEverywhere(q)">
+      <Search :size="14" /> {{ $t('projectBrowser.searchEverywhere', { q: q.trim() }) }} <ArrowRight :size="14" />
+    </button>
 
     <!-- The folder's administration: outside the data's scrolling -->
     <Transition name="veil">
@@ -1745,6 +1753,22 @@ tr.folderrow .kicon { color: var(--accent-2); }
 }
 .personal-note { font-size: 12px; margin: auto 0 0; padding-top: 14px; border-top: 1px solid var(--border-soft); }
 .empty { padding: 28px 4px; }
+/* the filter's way out to the search across every folder: a quiet row under the list */
+.everywhere {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  align-self: flex-start;
+  margin-top: 6px;
+  padding: 7px 8px;
+  border: none;
+  background: none;
+  color: var(--accent);
+  font-size: 13px;
+  border-radius: 8px;
+}
+.everywhere:hover { background: var(--tint-accent); box-shadow: none; }
+.everywhere.solo { margin-top: 22px; }
 /* as `.btn-link`: it lives in listpage.css, not imported here. Without it, the error
    message would come out in the normal text's colour, that is it would not look like an
    error. */

@@ -9,12 +9,12 @@
 // filter and must not filter anything: it shows what the server has decided to show
 // already. If the filter lived here, opening the browser's network tab would be enough
 // to see what cannot be seen.
-import { computed, ref, watch, onUnmounted } from 'vue'
+import { computed, ref, watch, onMounted, onUnmounted } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { Search, X, Folder, Workflow, Database, Bookmark, Plug, LoaderCircle, Rows3, Lock, FileCode2, DatabaseSearch, NotebookPen, FileChartColumn, LayoutDashboard } from 'lucide-vue-next'
 import { errMessage } from '~/composables/useApi'
 import { useFormat } from '~/composables/useFormat'
-import { useSearch, searchHitTarget, type SearchHit, type SearchKind } from '~/composables/useSearch'
+import { useSearch, searchHitTarget, GLOBAL_SEARCH_EVENT, type SearchHit, type SearchKind } from '~/composables/useSearch'
 
 const { t } = useI18n()
 const api = useSearch()
@@ -85,7 +85,21 @@ watch(q, (val) => {
   timer = setTimeout(() => run(term), DEBOUNCE)
 })
 
-onUnmounted(() => { if (timer) clearTimeout(timer) })
+// another page hands its question over (Explore's «Search "q" everywhere»): the box takes
+// it, as if typed here, and opens on its results
+const input = ref<HTMLInputElement | null>(null)
+function takeOver(e: Event) {
+  const term = String((e as CustomEvent<{ q?: string }>).detail?.q ?? '').trim()
+  if (!term) return
+  q.value = term
+  input.value?.focus()
+  open.value = true
+}
+onMounted(() => window.addEventListener(GLOBAL_SEARCH_EVENT, takeOver))
+onUnmounted(() => {
+  if (timer) clearTimeout(timer)
+  window.removeEventListener(GLOBAL_SEARCH_EVENT, takeOver)
+})
 
 function close() {
   open.value = false
@@ -125,6 +139,7 @@ const shown = computed(() => flat.value.length)
     <label class="box" :class="{ active: open && q }">
       <Search :size="14" />
       <input
+        ref="input"
         v-model="q"
         type="text"
         :placeholder="$t('globalSearch.placeholder')"
