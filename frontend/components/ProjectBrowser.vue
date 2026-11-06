@@ -476,6 +476,8 @@ onUnmounted(() => {
 
 // ── Run history (expandable, auto-refreshing) ────────────────────
 const expandedFlowId = ref<number | null>(null)
+// opened from the keyboard: it appears at once (no entrance)
+let runsByKey = false
 const flowRuns = ref<RunInfo[]>([])
 const runsLoading = ref(false)
 const isTerminal = (r: RunInfo) => r.status === 'SUCCESS' || r.status === 'FAILURE'
@@ -552,6 +554,23 @@ async function refreshDatasource(ds: DatasourceInfo) {
   } catch (e) {
     toast.error(errMessage(e))
   }
+}
+
+// ── Rows that arrive or leave because of a command here ───────────────────────
+// A created, duplicated or deleted row fades (150 ms in, 100 ms out) and a new one keeps a
+// short accent tint, so the eye finds it. Only around those commands: the list changing
+// because of a folder, the filter or a segment never moves.
+const animateRows = ref(false)
+let rowMotionTimer: ReturnType<typeof setTimeout> | undefined
+function rowMotion() {
+  animateRows.value = true
+  clearTimeout(rowMotionTimer)
+  rowMotionTimer = setTimeout(() => { animateRows.value = false }, 400)
+}
+const freshKey = ref<string | null>(null)
+function markFresh(key: string) {
+  freshKey.value = key
+  setTimeout(() => { if (freshKey.value === key) freshKey.value = null }, 1600)
 }
 
 // ── Deletions and moving ──────────────────────────────────────────────
@@ -730,43 +749,63 @@ async function duplicateRow(row: Row) {
     let outputs = false
     if (row.kind === 'flow') {
       const copy = await flowsApi.duplicate(row.id)
+      rowMotion()
+      markFresh(`${row.kind}-${copy.id}`)
       flows.value = [...flows.value, copy].sort(byName)
       name = copy.name
       outputs = writesOutputs(copy.definition)
     } else if (row.kind === 'group') {
       const copy = await groupsApi.duplicate(row.id)
+      rowMotion()
+      markFresh(`${row.kind}-${copy.id}`)
       flowGroups.value = [...flowGroups.value, copy].sort(byName)
       name = copy.name
     } else if (row.kind === 'datasource') {
       const copy = await dsApi.duplicate(row.id)
+      rowMotion()
+      markFresh(`${row.kind}-${copy.id}`)
       dsList.value = [...dsList.value, copy].sort(byName)
       name = copy.name
     } else if (row.kind === 'view') {
       const copy = await viewsApi.duplicate(row.id)
+      rowMotion()
+      markFresh(`${row.kind}-${copy.id}`)
       savedViews.value = [...savedViews.value, copy].sort(byName)
       name = copy.name
     } else if (row.kind === 'script') {
       const copy = await scriptsApi.duplicate(row.id)
+      rowMotion()
+      markFresh(`${row.kind}-${copy.id}`)
       scripts.value = [...scripts.value, copy].sort(byName)
       name = copy.name
     } else if (row.kind === 'sql') {
       const copy = await sqlApi.duplicate(row.id)
+      rowMotion()
+      markFresh(`${row.kind}-${copy.id}`)
       sqlScripts.value = [...sqlScripts.value, copy].sort(byName)
       name = copy.name
     } else if (row.kind === 'notebook') {
       const copy = await notebooksApi.duplicate(row.id)
+      rowMotion()
+      markFresh(`${row.kind}-${copy.id}`)
       notebooks.value = [...notebooks.value, copy].sort(byName)
       name = copy.name
     } else if (row.kind === 'report') {
       const copy = await reportsApi.duplicate(row.id)
+      rowMotion()
+      markFresh(`${row.kind}-${copy.id}`)
       reports.value = [...reports.value, copy].sort(byName)
       name = copy.name
     } else if (row.kind === 'dashboard') {
       const copy = await dashboardsApi.duplicate(row.id)
+      rowMotion()
+      markFresh(`${row.kind}-${copy.id}`)
       dashboards.value = [...dashboards.value, copy].sort(byName)
       name = copy.name
     } else if (row.kind === 'connection') {
       const copy = await connApi.duplicate(row.id)
+      rowMotion()
+      markFresh(`${row.kind}-${copy.id}`)
       connections.value = [...connections.value, copy].sort(byName)
       name = copy.name
     } else {
@@ -843,9 +882,10 @@ function onRowContext(e: MouseEvent, r: Row) {
 }
 
 function runAction(id: string, r: Row) {
+  const byKey = !!rowMenu.value?.byKey
   rowMenu.value = null
   switch (id as RowAction) {
-    case 'history': toggleRuns(r.raw); break
+    case 'history': runsByKey = byKey; toggleRuns(r.raw); break
     case 'refresh': refreshDatasource(r.raw); break
     case 'contract': contractFor.value = r.raw; break
     case 'editConnection': openConnDialog(r.raw); break
@@ -929,42 +969,52 @@ async function confirmDelete() {
 async function deleteRow(row: Row) {
   if (row.kind === 'flow') {
     await flowsApi.remove(row.id)
+    rowMotion()
     flows.value = flows.value.filter((f) => f.id !== row.id)
     toast.success(t('projectBrowser.flowDeleted', { name: row.name }))
   } else if (row.kind === 'group') {
     await groupsApi.remove(row.id)
+    rowMotion()
     flowGroups.value = flowGroups.value.filter((g) => g.id !== row.id)
     toast.success(t('projectBrowser.flowGroupDeleted', { name: row.name }))
   } else if (row.kind === 'datasource') {
     await dsApi.remove(row.id)
+    rowMotion()
     dsList.value = dsList.value.filter((d) => d.id !== row.id)
     toast.success(t('projectBrowser.datasourceDeleted', { name: row.name }))
   } else if (row.kind === 'view') {
     await viewsApi.remove(row.id)
+    rowMotion()
     savedViews.value = savedViews.value.filter((v) => v.id !== row.id)
     toast.success(t('projectBrowser.savedViewDeleted', { name: row.name }))
   } else if (row.kind === 'script') {
     await scriptsApi.remove(row.id)
+    rowMotion()
     scripts.value = scripts.value.filter((x) => x.id !== row.id)
     toast.success(t('projectBrowser.scriptDeleted', { name: row.name }))
   } else if (row.kind === 'sql') {
     await sqlApi.remove(row.id)
+    rowMotion()
     sqlScripts.value = sqlScripts.value.filter((x) => x.id !== row.id)
     toast.success(t('projectBrowser.sqlScriptDeleted', { name: row.name }))
   } else if (row.kind === 'notebook') {
     await notebooksApi.remove(row.id)
+    rowMotion()
     notebooks.value = notebooks.value.filter((x) => x.id !== row.id)
     toast.success(t('projectBrowser.notebookDeleted', { name: row.name }))
   } else if (row.kind === 'report') {
     await reportsApi.remove(row.id)
+    rowMotion()
     reports.value = reports.value.filter((x) => x.id !== row.id)
     toast.success(t('projectBrowser.reportDeleted', { name: row.name }))
   } else if (row.kind === 'dashboard') {
     await dashboardsApi.remove(row.id)
+    rowMotion()
     dashboards.value = dashboards.value.filter((x) => x.id !== row.id)
     toast.success(t('projectBrowser.dashboardDeleted', { name: row.name }))
   } else if (row.kind === 'connection') {
     await connApi.remove(row.id)
+    rowMotion()
     connections.value = connections.value.filter((c) => c.id !== row.id)
     toast.success(t('projectBrowser.connectionDeleted', { name: row.name }))
   } else if (row.kind === 'folder') {
@@ -1327,17 +1377,21 @@ async function saveConnection(draft: ConnectionDraft) {
   if (!currentId.value) return
   connBusy.value = true
   connDialogError.value = ''
+  let created: ConnectionInfo | null = null
   try {
     if (editingConn.value) {
       // only what the edit changed (an empty password keeps the stored one)
       await connApi.update(editingConn.value.id, connectionChanges(editingConn.value, draft))
       toast.success(t('projectBrowser.connectionUpdated', { name: draft.name }))
     } else {
-      await connApi.create(currentId.value, draft)
+      created = await connApi.create(currentId.value, draft)
       toast.success(t('projectBrowser.connectionCreated', { name: draft.name }))
     }
     showConnDialog.value = false
-    connections.value = await connApi.listByProject(currentId.value)
+    const list = await connApi.listByProject(currentId.value)
+    if (created) rowMotion()
+    connections.value = list
+    if (created) markFresh(`connection-${created.id}`)
   } catch (e) {
     connDialogError.value = errMessage(e)
   } finally {
@@ -1366,7 +1420,10 @@ async function createDbDatasource(draft: DbDatasourceDraft) {
     const ds = await dsApi.createDb(currentId.value, draft)
     toast.success(t('projectBrowser.datasourceCreated', { name: draft.name }))
     showDbDsDialog.value = false
-    dsList.value = await dsApi.listByProject(currentId.value)
+    const fresh = await dsApi.listByProject(currentId.value)
+    rowMotion()
+    dsList.value = fresh
+    markFresh(`datasource-${ds.id}`)
     pollIngest(ds.id, ingestToken)
   } catch (e) {
     dbDsError.value = errMessage(e)
@@ -1383,7 +1440,10 @@ async function createSharePointDatasource(draft: SharePointDatasourceDraft) {
     const ds = await dsApi.createSharePoint(currentId.value, draft)
     toast.success(t('projectBrowser.datasourceCreated', { name: draft.name }))
     showDbDsDialog.value = false
-    dsList.value = await dsApi.listByProject(currentId.value)
+    const fresh = await dsApi.listByProject(currentId.value)
+    rowMotion()
+    dsList.value = fresh
+    markFresh(`datasource-${ds.id}`)
     pollIngest(ds.id, ingestToken)
   } catch (e) {
     dbDsError.value = errMessage(e)
@@ -1400,7 +1460,10 @@ async function createApiDatasource(draft: ApiDatasourceDraft) {
     const ds = await dsApi.createApi(currentId.value, draft)
     toast.success(t('projectBrowser.datasourceCreated', { name: draft.name }))
     showDbDsDialog.value = false
-    dsList.value = await dsApi.listByProject(currentId.value)
+    const fresh = await dsApi.listByProject(currentId.value)
+    rowMotion()
+    dsList.value = fresh
+    markFresh(`datasource-${ds.id}`)
     pollIngest(ds.id, ingestToken)
   } catch (e) {
     dbDsError.value = errMessage(e)
@@ -1417,7 +1480,10 @@ async function createGsheetsDatasource(draft: GsheetsDatasourceDraft) {
     const ds = await dsApi.createGsheets(currentId.value, draft)
     toast.success(t('projectBrowser.datasourceCreated', { name: draft.name }))
     showDbDsDialog.value = false
-    dsList.value = await dsApi.listByProject(currentId.value)
+    const fresh = await dsApi.listByProject(currentId.value)
+    rowMotion()
+    dsList.value = fresh
+    markFresh(`datasource-${ds.id}`)
     pollIngest(ds.id, ingestToken)
   } catch (e) {
     dbDsError.value = errMessage(e)
@@ -1434,7 +1500,10 @@ async function createS3Datasource(draft: S3DatasourceDraft) {
     const ds = await dsApi.createS3(currentId.value, draft)
     toast.success(t('projectBrowser.datasourceCreated', { name: draft.name }))
     showDbDsDialog.value = false
-    dsList.value = await dsApi.listByProject(currentId.value)
+    const fresh = await dsApi.listByProject(currentId.value)
+    rowMotion()
+    dsList.value = fresh
+    markFresh(`datasource-${ds.id}`)
     pollIngest(ds.id, ingestToken)
   } catch (e) {
     dbDsError.value = errMessage(e)
@@ -1451,7 +1520,10 @@ async function createSftpDatasource(draft: SftpDatasourceDraft) {
     const ds = await dsApi.createSftp(currentId.value, draft)
     toast.success(t('projectBrowser.datasourceCreated', { name: draft.name }))
     showDbDsDialog.value = false
-    dsList.value = await dsApi.listByProject(currentId.value)
+    const fresh = await dsApi.listByProject(currentId.value)
+    rowMotion()
+    dsList.value = fresh
+    markFresh(`datasource-${ds.id}`)
     pollIngest(ds.id, ingestToken)
   } catch (e) {
     dbDsError.value = errMessage(e)
@@ -1630,12 +1702,14 @@ watch(currentId, () => { q.value = ''; kindFilter.value = null; settingsOpen.val
     </button>
 
     <table v-else class="rows" @focusin="onRowsFocus">
-      <tbody>
+      <!-- rows fade in and out only when created, duplicated or deleted here (animateRows):
+           never when the folder, the filter or a segment changes the list -->
+      <TransitionGroup tag="tbody" name="row" :css="animateRows">
         <template v-for="r in visibleRows" :key="`${r.kind}-${r.id}`">
           <tr
             :data-key="rowKey(r)"
             tabindex="-1"
-            :class="{ folderrow: r.kind === 'folder', openable: openable(r), blocked: !!r.locked, active: activeKey === rowKey(r) }"
+            :class="{ folderrow: r.kind === 'folder', openable: openable(r), blocked: !!r.locked, active: activeKey === rowKey(r), fresh: freshKey === rowKey(r) }"
             :title="r.locked || undefined"
             :aria-disabled="r.locked ? 'true' : undefined"
             @click="rowClick($event, r)"
@@ -1713,7 +1787,7 @@ watch(currentId, () => { q.value = ''; kindFilter.value = null; settingsOpen.val
                   :title="$t('projectBrowser.runHistoryTitle')"
                   :aria-label="$t('projectBrowser.runHistoryTitle')"
                   :aria-expanded="expandedFlowId === r.id"
-                  @click="toggleRuns(r.raw)"
+                  @click="runsByKey = $event.detail === 0; toggleRuns(r.raw)"
                 ><History :size="13" /></button>
                 <button
                   v-else-if="primaryAction(rowFacts(r)) === 'refresh'"
@@ -1740,7 +1814,7 @@ watch(currentId, () => { q.value = ''; kindFilter.value = null; settingsOpen.val
             </td>
           </tr>
 
-          <tr v-if="r.kind === 'flow' && expandedFlowId === r.id" class="runsrow">
+          <tr v-if="r.kind === 'flow' && expandedFlowId === r.id" class="runsrow" :class="{ arrive: !runsByKey }">
             <td colspan="3">
               <p v-if="runsLoading" class="muted runmeta">
                 <LoaderCircle :size="13" class="spin" /> {{ $t('projectBrowser.loadingHistory') }}
@@ -1761,7 +1835,7 @@ watch(currentId, () => { q.value = ''; kindFilter.value = null; settingsOpen.val
             </td>
           </tr>
         </template>
-      </tbody>
+      </TransitionGroup>
     </table>
     <button v-if="state === 'rows' && q.trim()" class="everywhere" @click="searchEverywhere(q)">
       <Search :size="14" /> {{ $t('projectBrowser.searchEverywhere', { q: q.trim() }) }} <ArrowRight :size="14" />
@@ -2137,6 +2211,18 @@ tr.folderrow .kicon { color: var(--accent-2); }
 .rmore { padding: 2px 6px; }
 
 .runsrow td { background: var(--bg-soft); }
+/* the history opening (by pointer): it drops in from just above its row */
+.runsrow.arrive td > * { animation: runs-in var(--dur-2) var(--ease-out); }
+@keyframes runs-in { from { opacity: 0; transform: translateY(-4px); } }
+@media (prefers-reduced-motion: reduce) {
+  @keyframes runs-in { from { opacity: 0; } }
+}
+/* a row created, duplicated or deleted here */
+.row-enter-active { transition: opacity 150ms ease-out; }
+.row-leave-active { transition: opacity 100ms ease-out; }
+.row-enter-from, .row-leave-to { opacity: 0; }
+table.rows tr.fresh td { animation: row-fresh 1.4s var(--ease-out); }
+@keyframes row-fresh { from { background: var(--tint-accent); } to { background: transparent; } }
 .runmeta { display: flex; align-items: center; gap: 6px; font-size: 12px; margin: 4px 2px; }
 .runlist { list-style: none; margin: 2px 0; padding: 0; display: flex; flex-direction: column; gap: 3px; }
 .runitem { display: flex; align-items: center; gap: 10px; font-size: 12px; padding: 2px 4px; }

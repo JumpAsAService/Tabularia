@@ -5,6 +5,10 @@ exposes at `/system/info` and in the app's settings menu.
 
 ## Unreleased
 
+- **Explore's two pieces of motion**: a flow's run history drops in (opacity and 4px, the
+  shared short duration) when opened with the pointer, at once from the keyboard; a row
+  created, duplicated or deleted here fades in (150 ms) or out (100 ms), and a new one keeps
+  a short accent tint. Changing folder, filter or segment never animates.
 - **Explore's top level is a starting page**: above the folders, a compact band with
   «Recent» (what you saved a version of or own, newest first; new Go route
   `GET /explore/recent`, one query, only what you may read) and «Failed runs (24h)», two
