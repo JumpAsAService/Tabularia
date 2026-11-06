@@ -125,9 +125,10 @@ func run(log *slog.Logger) error {
 	case <-ctx.Done():
 		// orchestrator.drain_on_stop_signal: no more runs taken from the queue from now on
 		jobs.Drain()
-		shutdown, cancel := context.WithTimeout(context.Background(), 30*time.Second)
-		defer cancel()
-		err := srv.Shutdown(shutdown)
+		// the requests in flight finish, however long (a preview may take minutes): as
+		// uvicorn, which has no graceful timeout, the platform's grace period decides
+		// (terminationGracePeriodSeconds, compose's stop_grace_period), then SIGKILL
+		err := srv.Shutdown(context.Background())
 		stopJobs()
 		waitJobs()
 		return err
