@@ -20,6 +20,6 @@ onBeforeUnmount(() => ro?.disconnect())
     ref="box" class="table-wrap" :tabindex="scrolls ? 0 : undefined" :role="scrolls ? 'region' : undefined"
     :aria-label="scrolls ? 'Table, scrolls sideways' : undefined"
   >
-    <table><slot /></table>
+    <table role="table"><slot /></table>
   </div>
 </template>

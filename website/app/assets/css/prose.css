@@ -52,3 +52,42 @@
 .prose td code, .prose th code { white-space: normal; }
 /* a table written without headings (| | |) gets an empty header row: hide it */
 .prose thead:not(:has(th:not(:empty))) { display: none; }
+
+/* Stacked tables (lib/prose-blocks.mjs): a row is a block, its first cell the title, the
+   others "name: value", a long last column (a description) below at full width, unlabelled. Wide tables are stacked at
+   every width, the others only on narrow screens. The header row stays for screen readers. */
+.prose .table-wrap.is-stacked table { display: block; min-width: 0; }
+.prose .table-wrap.is-stacked thead {
+  position: absolute; width: 1px; height: 1px; margin: -1px; overflow: hidden; clip: rect(0, 0, 0, 0); white-space: nowrap;
+}
+.prose .table-wrap.is-stacked tbody { display: block; border-top: 1px solid var(--tile-3); }
+.prose .table-wrap.is-stacked tr {
+  display: flex; flex-wrap: wrap; align-items: baseline; gap: 6px 22px;
+  padding: 14px 4px; border-bottom: 1px solid var(--tile-3);
+}
+.prose .table-wrap.is-stacked td { display: block; padding: 0; border: 0; min-width: 0; overflow-wrap: anywhere; }
+.prose .table-wrap.is-stacked td:empty { display: none; }
+.prose .table-wrap.is-stacked td[data-place="title"] { font-weight: 600; }
+.prose .table-wrap.is-stacked td[data-place="meta"] { font-size: 15px; }
+.prose .table-wrap.is-stacked td[data-place="meta"][data-label]:not([data-label=""])::before {
+  content: attr(data-label) ": "; color: var(--soft); font-weight: 400;
+}
+.prose .table-wrap.is-stacked td[data-place="body"] { flex: 1 0 100%; color: var(--text); }
+
+@media (max-width: 640px) {
+  .prose .table-wrap table { display: block; min-width: 0; }
+  .prose .table-wrap thead {
+    position: absolute; width: 1px; height: 1px; margin: -1px; overflow: hidden; clip: rect(0, 0, 0, 0); white-space: nowrap;
+  }
+  .prose .table-wrap tbody { display: block; border-top: 1px solid var(--tile-3); }
+  .prose .table-wrap tr { display: block; padding: 12px 2px; border-bottom: 1px solid var(--tile-3); }
+  .prose .table-wrap td { display: block; padding: 2px 0; border: 0; overflow-wrap: anywhere; }
+  .prose .table-wrap td:empty { display: none; }
+  .prose .table-wrap td[data-place="title"] { font-weight: 600; padding-bottom: 4px; }
+  .prose .table-wrap td[data-place="meta"][data-label]:not([data-label=""])::before,
+  .prose .table-wrap:not(.is-stacked) td[data-place="body"][data-label]:not([data-label=""])::before {
+    content: attr(data-label) ": "; color: var(--soft); font-weight: 400;
+  }
+  .prose .table-wrap.is-stacked tr { display: block; }
+  .prose .table-wrap.is-stacked td[data-place="body"] { padding-top: 6px; }
+}
