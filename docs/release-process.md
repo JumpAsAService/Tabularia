@@ -6,8 +6,11 @@ project; installing or upgrading is in [deploy/release-checklist.md](deploy/rele
 ## Cutting a release
 
 1. Set the new version everywhere the code carries it: `backend/pyproject.toml`,
-   `gateway/pyproject.toml`, `gateway/app/core/config.py` (the version the app shows),
-   `frontend/package.json`, and in the Helm chart `appVersion` in `Chart.yaml` plus the
+   `gateway/pyproject.toml` and their `uv.lock` files (the project's own entry: the image
+   build syncs with `--locked` and refuses a stale lock), `gateway/app/core/config.py` (the
+   version the app shows), the Go gateway's default `APP__VERSION`
+   (`gateway-go/internal/config/config.go` and `config_admin.go`), `frontend/package.json`
+   and `package-lock.json`, and in the Helm chart `appVersion` in `Chart.yaml` plus the
    image tags in `values.yaml` and `values-production.example.yaml`. The workflow
    refuses a tag that disagrees with any of them and names the file.
 2. Move the `Unreleased` section of `CHANGELOG.md` under the new version.
