@@ -163,3 +163,13 @@ func TestJSONAsStarlette(t *testing.T) {
 		t.Errorf("%q %q", got, rec.Header().Get("Content-Type"))
 	}
 }
+
+// an uncaught exception's 500 comes from ServerErrorMiddleware, outside CORS: no CORS headers
+func TestNoCORSOnAnUncaughtError(t *testing.T) {
+	h := New([]Route{{Method: "GET", Pattern: "/health", Handler: http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) { InternalError(w) })}},
+		Options{CORSOrigins: []string{"http://ui.test"}})
+	rec := serve(h, "GET", "/health", map[string]string{"Origin": "http://ui.test"})
+	if rec.Code != 500 || rec.Header().Get("Access-Control-Allow-Credentials") != "" || rec.Header().Get("Access-Control-Allow-Origin") != "" {
+		t.Errorf("%d %v", rec.Code, rec.Header())
+	}
+}

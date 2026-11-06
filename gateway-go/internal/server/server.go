@@ -95,6 +95,18 @@ func Authed(a *auth.Authenticator, route string, h func(http.ResponseWriter, *ht
 // InternalError is Starlette's answer to an exception no handler catches: a 500 with
 // «Internal Server Error» as plain text.
 func InternalError(w http.ResponseWriter) {
+	// Starlette's ServerErrorMiddleware is outside every other one: no CORS on this answer
+	for x := w; x != nil; {
+		if c, ok := x.(*corsWriter); ok {
+			c.done = true
+			break
+		}
+		u, ok := x.(interface{ Unwrap() http.ResponseWriter })
+		if !ok {
+			break
+		}
+		x = u.Unwrap()
+	}
 	w.Header().Set("Content-Type", "text/plain; charset=utf-8")
 	w.WriteHeader(http.StatusInternalServerError)
 	_, _ = w.Write([]byte("Internal Server Error"))
