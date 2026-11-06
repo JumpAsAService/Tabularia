@@ -2280,6 +2280,8 @@ export default {
     "sortHint": "Les lignes sont triées sur la première colonne ; les suivantes départagent les valeurs égales.",
   },
   "projectBrowser": {
+    "moreActions": "Plus d'actions",
+    "moreActionsFor": "Actions pour {name}",
     "createGroup": "Créer",
     "importGroup": "Importer / Connecter",
     "newFolderButton": "Nouveau dossier",

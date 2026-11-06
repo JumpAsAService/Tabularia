@@ -3,7 +3,7 @@
 // styled — this component replaces it everywhere. The panel is teleported to the body
 // (position: fixed) so it is never cut by the containers' overflow (node panel, toolbar,
 // table cells).
-import { ref, computed, nextTick, onBeforeUnmount } from 'vue'
+import { ref, computed, nextTick, onBeforeUnmount, onMounted } from 'vue'
 import { ChevronDown, Check, Search } from 'lucide-vue-next'
 import { useI18n } from 'vue-i18n'
 
@@ -29,6 +29,8 @@ const props = defineProps<{
   disabled?: boolean
   // search box: automatic default when the options are many
   searchable?: boolean
+  // opens as soon as it appears (put in place of the command that asked for it)
+  autoOpen?: boolean
 }>()
 const emit = defineEmits<{
   (e: 'update:modelValue', value: any): void
@@ -141,6 +143,7 @@ function close() {
   emit('close')
 }
 onBeforeUnmount(close)
+onMounted(() => { if (props.autoOpen) openPanel() })
 
 function toggle() {
   open.value ? close() : openPanel()

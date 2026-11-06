@@ -2280,6 +2280,8 @@ export default {
     "sortHint": "Las filas se ordenan por la primera columna; las siguientes deciden entre valores iguales.",
   },
   "projectBrowser": {
+    "moreActions": "Más acciones",
+    "moreActionsFor": "Acciones para {name}",
     "createGroup": "Crear",
     "importGroup": "Importar / Conectar",
     "newFolderButton": "Nueva carpeta",

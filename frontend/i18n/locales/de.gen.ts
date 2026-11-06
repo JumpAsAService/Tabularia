@@ -2280,6 +2280,8 @@ export default {
     "sortHint": "Die Zeilen werden nach der ersten Spalte sortiert; die weiteren entscheiden bei gleichen Werten.",
   },
   "projectBrowser": {
+    "moreActions": "Weitere Aktionen",
+    "moreActionsFor": "Aktionen für {name}",
     "createGroup": "Erstellen",
     "importGroup": "Importieren / Verbinden",
     "newFolderButton": "Neuer Ordner",

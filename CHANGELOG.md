@@ -5,6 +5,11 @@ exposes at `/system/info` and in the app's settings menu.
 
 ## Unreleased
 
+- **Explore's row actions in one menu**: each row keeps at most its kind's main command
+  (a flow's run history, a database datasource's refresh) and a «⋯» button; the menu, also
+  on right click where the pointer is, lists the commands in the same order for every kind
+  with Delete last, apart and in the danger colour. From the keyboard it opens without
+  motion and moves with the arrows; «Move» opens the folder picker at once.
 - **Explore's bar and New menu, tidied**: the filter box has a single focus ring, keeps
   its width when the clear button appears and shares the height of the buttons beside it;
   a folder's description takes the room there is instead of stopping at 36 characters; the

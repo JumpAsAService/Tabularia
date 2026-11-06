@@ -2306,6 +2306,8 @@ export default {
     "sortHint": "Le righe si ordinano per la prima colonna; le successive decidono tra valori uguali.",
   },
   "projectBrowser": {
+    "moreActions": "Altre azioni",
+    "moreActionsFor": "Azioni per {name}",
     "createGroup": "Crea",
     "importGroup": "Importa / Collega",
     "newFolderButton": "Nuova cartella",

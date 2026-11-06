@@ -2306,6 +2306,8 @@ export default {
     "sortHint": "Rows are sorted by the first column; the next ones decide between equal values.",
   },
   "projectBrowser": {
+    "moreActions": "More actions",
+    "moreActionsFor": "Actions for {name}",
     "createGroup": "Create",
     "importGroup": "Import / Connect",
     "newFolderButton": "New folder",

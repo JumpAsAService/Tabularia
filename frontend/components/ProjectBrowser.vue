@@ -54,6 +54,7 @@ import {
   FolderKey,
   ArrowRight,
   FolderPlus,
+  Ellipsis,
 } from 'lucide-vue-next'
 import { errMessage, useApi } from '~/composables/useApi'
 import { useFlows, type FlowSummary } from '~/composables/useFlows'
@@ -77,7 +78,8 @@ import { starterReport, useReports, type Report } from '~/composables/useReports
 import { starterDashboard, useDashboards, type Dashboard } from '~/composables/useDashboards'
 import ContractBadge from '~/components/ui/ContractBadge.vue'
 import ContractDialog from '~/components/ui/ContractDialog.vue'
-import { listState } from '~/composables/exploreList'
+import { listState, rowActions, primaryAction, type RowAction, type RowFacts } from '~/composables/exploreList'
+import RowMenu, { type RowMenuItem } from '~/components/ui/RowMenu.vue'
 import { searchEverywhere } from '~/composables/useSearch'
 import {
   useProjects,
@@ -757,6 +759,82 @@ async function duplicateRow(row: Row) {
   }
 }
 
+// ── A row's commands: «⋯», the right click, Shift+F10 ─────────────────────────
+// One list, one order for every kind (exploreList.rowActions); the row itself keeps only its
+// kind's main command beside «⋯».
+const rowFacts = (r: Row): RowFacts => ({
+  kind: r.kind,
+  locked: !!r.locked,
+  fixedFolder: r.kind === 'folder' && personalFixed(r.raw),
+  dbDatasource: r.kind === 'datasource' && r.raw.kind === 'database',
+})
+const ACTION_LABEL: Record<RowAction, string> = {
+  history: 'projectBrowser.runHistoryTitle',
+  refresh: 'projectBrowser.refreshSnapshotTitle',
+  contract: 'contracts.open',
+  editConnection: 'projectBrowser.editConnectionTitle',
+  rename: 'projectBrowser.renameTitle',
+  duplicate: 'projectBrowser.duplicateTitle',
+  move: 'projectBrowser.moveToFolderTitle',
+  delete: 'projectBrowser.deleteTitle',
+}
+const ACTION_ICON: Record<RowAction, any> = {
+  history: History, refresh: RefreshCw, contract: ScrollText, editConnection: Pencil,
+  rename: PencilLine, duplicate: Copy, move: FolderInput, delete: Trash2,
+}
+const ingestBusy = (r: Row) => r.kind === 'datasource' && !!ingestRuns.value[r.id] && !isTerminal(ingestRuns.value[r.id])
+
+const rowMenu = ref<{ key: string; row: Row; x: number; y: number; align: 'start' | 'end'; byKey: boolean } | null>(null)
+const rowMenuItems = computed<RowMenuItem[]>(() => {
+  const m = rowMenu.value
+  if (!m) return []
+  return rowActions(rowFacts(m.row)).map(({ id, sep }) => ({
+    id,
+    sep,
+    label: t(ACTION_LABEL[id]),
+    icon: ACTION_ICON[id],
+    danger: id === 'delete',
+    disabled: (id === 'duplicate' && !!duplicating.value) || (id === 'refresh' && ingestBusy(m.row)),
+  }))
+})
+
+/** Opens a row's menu: under its «⋯» button, or where the right click landed. */
+function openRowMenu(r: Row, at: { x: number; y: number; align: 'start' | 'end' }, byKey: boolean) {
+  if (r.locked || !rowActions(rowFacts(r)).length) return
+  rowMenu.value = { key: rowKey(r), row: r, ...at, byKey }
+}
+function onMoreClick(e: MouseEvent, r: Row) {
+  if (rowMenu.value?.key === rowKey(r)) { rowMenu.value = null; return }
+  // the focus on the button (a script's click, Safari's): the menu gives it back there
+  const btn = e.currentTarget as HTMLElement
+  btn.focus({ preventScroll: true })
+  const b = btn.getBoundingClientRect()
+  openRowMenu(r, { x: b.right, y: b.bottom + 4, align: 'end' }, e.detail === 0)
+}
+function onRowContext(e: MouseEvent, r: Row) {
+  // the rename field keeps the browser's own menu (copy, paste)
+  if ((e.target as HTMLElement | null)?.closest?.('input, textarea')) return
+  if (r.locked) return
+  e.preventDefault()
+  // closing gives the focus back to the row's name: the keyboard carries on from that row
+  ;(e.currentTarget as HTMLElement).querySelector<HTMLElement>('.asname:not(.plain)')?.focus({ preventScroll: true })
+  openRowMenu(r, { x: e.clientX, y: e.clientY, align: 'start' }, false)
+}
+
+function runAction(id: string, r: Row) {
+  rowMenu.value = null
+  switch (id as RowAction) {
+    case 'history': toggleRuns(r.raw); break
+    case 'refresh': refreshDatasource(r.raw); break
+    case 'contract': contractFor.value = r.raw; break
+    case 'editConnection': openConnDialog(r.raw); break
+    case 'rename': startRename(r); break
+    case 'duplicate': duplicateRow(r); break
+    case 'move': moving.value = rowKey(r); break
+    case 'delete': removeRow(r); break
+  }
+}
+
 async function removeRow(row: Row) {
   const ask = (k: string) => confirm(t(k, { name: row.name }))
   try {
@@ -1364,6 +1442,7 @@ watch(currentId, () => { q.value = ''; kindFilter.value = null; settingsOpen.val
             :aria-disabled="r.locked ? 'true' : undefined"
             @click="rowClick($event, r)"
             @auxclick="rowClick($event, r)"
+            @contextmenu="onRowContext($event, r)"
           >
             <td class="rname">
               <span v-if="renaming === rowKey(r)" class="asname renaming">
@@ -1408,83 +1487,50 @@ watch(currentId, () => { q.value = ''; kindFilter.value = null; settingsOpen.val
             </td>
             <td v-if="r.locked" class="racts" />
             <td v-else class="racts">
-              <button
-                v-if="r.kind === 'flow'"
-                class="mini"
-                :class="{ activebtn: expandedFlowId === r.id }"
-                :title="$t('projectBrowser.runHistoryTitle')"
-                :aria-label="$t('projectBrowser.runHistoryTitle')"
-                @click="toggleRuns(r.raw)"
-              ><History :size="13" /></button>
-
               <Select
                 v-if="moving === rowKey(r)"
                 class="movesel"
                 :model-value="null"
                 :options="moveTargets(r)"
                 searchable
+                auto-open
                 :placeholder="$t('projectBrowser.moveToPlaceholder')"
                 @update:model-value="(v: any) => moveRow(r, v)"
                 @close="moving = null"
               />
-              <button
-                v-else-if="!(r.kind === 'folder' && personalFixed(r.raw))"
-                class="mini"
-                :title="$t('projectBrowser.moveToFolderTitle')"
-                :aria-label="$t('projectBrowser.moveToFolderTitle')"
-                @click="moving = rowKey(r)"
-              ><FolderInput :size="13" /></button>
-
-              <button
-                v-if="RENAMABLE.has(r.kind)"
-                class="mini"
-                :title="$t('projectBrowser.renameTitle')"
-                :aria-label="$t('projectBrowser.renameTitle')"
-                :disabled="renaming === rowKey(r)"
-                @click="startRename(r)"
-              ><PencilLine :size="13" /></button>
-
-              <button
-                v-if="r.kind !== 'folder'"
-                class="mini"
-                :title="$t('projectBrowser.duplicateTitle')"
-                :aria-label="$t('projectBrowser.duplicateTitle')"
-                :disabled="!!duplicating"
-                :aria-busy="duplicating === rowKey(r)"
-                @click="duplicateRow(r)"
-              >
-                <LoaderCircle v-if="duplicating === rowKey(r)" :size="13" class="spin" />
-                <Copy v-else :size="13" />
-              </button>
-
-              <button
-                v-if="r.kind === 'datasource' && r.raw.kind === 'database'"
-                class="mini"
-                :title="$t('projectBrowser.refreshSnapshotTitle')"
-                :aria-label="$t('projectBrowser.refreshSnapshotTitle')"
-                :disabled="!!ingestRuns[r.id] && !isTerminal(ingestRuns[r.id])"
-                @click="refreshDatasource(r.raw)"
-              ><RefreshCw :size="13" /></button>
-
-              <button
-                v-if="r.kind === 'datasource'"
-                class="mini"
-                :title="$t('contracts.open')"
-                :aria-label="$t('contracts.open')"
-                @click="contractFor = r.raw"
-              ><ScrollText :size="13" /></button>
-
-              <button
-                v-if="r.kind === 'connection'"
-                class="mini"
-                :title="$t('projectBrowser.editConnectionTitle')"
-                :aria-label="$t('projectBrowser.editConnectionTitle')"
-                @click="openConnDialog(r.raw)"
-              ><Pencil :size="13" /></button>
-
-              <button v-if="!(r.kind === 'folder' && personalFixed(r.raw))" class="mini danger" :title="$t('projectBrowser.deleteTitle')" :aria-label="$t('projectBrowser.deleteTitle')" @click="removeRow(r)">
-                <Trash2 :size="13" />
-              </button>
+              <template v-else>
+                <!-- the kind's main command stays in the row; the others are in «⋯» -->
+                <button
+                  v-if="primaryAction(rowFacts(r)) === 'history'"
+                  class="mini rprimary"
+                  :class="{ activebtn: expandedFlowId === r.id }"
+                  :title="$t('projectBrowser.runHistoryTitle')"
+                  :aria-label="$t('projectBrowser.runHistoryTitle')"
+                  :aria-expanded="expandedFlowId === r.id"
+                  @click="toggleRuns(r.raw)"
+                ><History :size="13" /></button>
+                <button
+                  v-else-if="primaryAction(rowFacts(r)) === 'refresh'"
+                  class="mini rprimary"
+                  :title="$t('projectBrowser.refreshSnapshotTitle')"
+                  :aria-label="$t('projectBrowser.refreshSnapshotTitle')"
+                  :disabled="ingestBusy(r)"
+                  @click="refreshDatasource(r.raw)"
+                ><RefreshCw :size="13" /></button>
+                <button
+                  class="mini rmore"
+                  :class="{ activebtn: rowMenu?.key === rowKey(r) }"
+                  :title="$t('projectBrowser.moreActions')"
+                  :aria-label="$t('projectBrowser.moreActionsFor', { name: r.name })"
+                  aria-haspopup="menu"
+                  :aria-expanded="rowMenu?.key === rowKey(r)"
+                  :aria-busy="duplicating === rowKey(r)"
+                  @click="onMoreClick($event, r)"
+                >
+                  <LoaderCircle v-if="duplicating === rowKey(r)" :size="13" class="spin" />
+                  <Ellipsis v-else :size="14" />
+                </button>
+              </template>
             </td>
           </tr>
 
@@ -1514,6 +1560,18 @@ watch(currentId, () => { q.value = ''; kindFilter.value = null; settingsOpen.val
     <button v-if="state === 'rows' && q.trim()" class="everywhere" @click="searchEverywhere(q)">
       <Search :size="14" /> {{ $t('projectBrowser.searchEverywhere', { q: q.trim() }) }} <ArrowRight :size="14" />
     </button>
+
+    <RowMenu
+      :open="!!rowMenu"
+      :x="rowMenu?.x ?? 0"
+      :y="rowMenu?.y ?? 0"
+      :align="rowMenu?.align"
+      :by-key="rowMenu?.byKey"
+      :items="rowMenuItems"
+      :label="rowMenu ? $t('projectBrowser.moreActionsFor', { name: rowMenu.row.name }) : undefined"
+      @select="(id) => rowMenu && runAction(id, rowMenu.row)"
+      @close="rowMenu = null"
+    />
 
     <!-- The folder's administration: outside the data's scrolling -->
     <Transition name="veil">
@@ -1826,6 +1884,7 @@ tr.folderrow .kicon { color: var(--accent-2); }
 .err { color: var(--danger); }
 .movesel { width: 130px; font-size: 12px; }
 .activebtn { border-color: var(--accent); }
+.rmore { padding: 2px 6px; }
 
 .runsrow td { background: var(--bg-soft); }
 .runmeta { display: flex; align-items: center; gap: 6px; font-size: 12px; margin: 4px 2px; }
