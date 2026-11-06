@@ -22,7 +22,9 @@ const emit = defineEmits<{
 const { t } = useI18n()
 
 const CLOSE_MS = 100
-const PULSE_MS = 120
+// a menu opened again this soon after closing comes up without its entrance: it is
+// opened tens of times a day, and the second time in a row it has nothing to show
+const REOPEN_MS = 300
 
 const visible = ref(false)
 const phase = ref<'open' | 'closing' | 'picking'>('open')
@@ -35,6 +37,9 @@ const root = ref<HTMLElement | null>(null)
 const itemEls: HTMLButtonElement[] = []
 const labelEls: HTMLElement[] = []
 let timer: ReturnType<typeof setTimeout> | null = null
+let closedAt = -Infinity
+// no entrance and no exit: opened from the keyboard (Menu key, Shift+F10) or again at once
+const still = ref(false)
 
 const ring = computed(() => props.items.map((op, i) => {
   const at = radialItemOffset(i, props.items.length)
@@ -47,9 +52,11 @@ function clearTimer() {
   timer = null
 }
 
-/** Opens at `click` (viewport px), kept inside `bounds` (the canvas). */
-async function show(click: { x: number; y: number }, bounds: QuickMenuBox) {
+/** Opens at `click` (viewport px), kept inside `bounds` (the canvas). `keyboard`: opened
+ *  from the keyboard, it appears without motion. */
+async function show(click: { x: number; y: number }, bounds: QuickMenuBox, keyboard = false) {
   clearTimer()
+  still.value = keyboard || performance.now() - closedAt < REOPEN_MS
   picked.value = -1
   phase.value = 'open'
   active.value = 0
@@ -72,11 +79,21 @@ async function show(click: { x: number; y: number }, bounds: QuickMenuBox) {
   })
 }
 
+// the exit: 100ms of fade, or none for a menu that came up without motion
+function leave(to: 'closing' | 'picking') {
+  phase.value = to
+  closedAt = performance.now()
+  clearTimer()
+  if (still.value) {
+    visible.value = false
+    return
+  }
+  timer = setTimeout(() => { visible.value = false; timer = null }, CLOSE_MS)
+}
+
 function hide(reason: 'escape' | 'outside' | 'other' = 'other') {
   if (!visible.value || phase.value !== 'open') return
-  phase.value = 'closing'
-  clearTimer()
-  timer = setTimeout(() => { visible.value = false; timer = null }, CLOSE_MS)
+  leave('closing')
   emit('close', reason)
 }
 
@@ -85,20 +102,14 @@ function choose(i: number) {
   const op = props.items[i]
   if (!op) return
   picked.value = i
-  phase.value = 'picking'
-  clearTimer()
-  timer = setTimeout(() => {
-    visible.value = false
-    timer = null
-    emit('pick', op)
-  }, PULSE_MS)
+  // the node is born at once; the chosen item's pulse plays while the menu fades
+  leave('picking')
+  emit('pick', op)
 }
 
 function customize() {
   if (phase.value !== 'open') return
-  phase.value = 'closing'
-  clearTimer()
-  timer = setTimeout(() => { visible.value = false; timer = null }, CLOSE_MS)
+  leave('closing')
   emit('customize')
 }
 
@@ -157,7 +168,7 @@ defineExpose({ show, hide, isOpen: () => visible.value && phase.value === 'open'
       :key="run"
       ref="root"
       class="qm"
-      :class="phase"
+      :class="[phase, { still }]"
       role="menu"
       :aria-label="t('quickMenu.menuLabel')"
       :style="{ left: `${center.x}px`, top: `${center.y}px` }"
@@ -203,13 +214,12 @@ defineExpose({ show, hide, isOpen: () => visible.value && phase.value === 'open'
 /* The root is a zero-size point at the menu's centre: everything is placed around it. */
 .qm {
   position: fixed; z-index: 1500; width: 0; height: 0;
-  --qm-ease: cubic-bezier(0.22, 1, 0.36, 1);
-  transition: opacity 100ms ease-out, scale 100ms ease-out;
+  transition: opacity var(--dur-1) var(--ease-out), scale var(--dur-1) var(--ease-out);
 }
-.qm.closing { opacity: 0; scale: 0.9; pointer-events: none; }
+.qm.closing { opacity: 0; scale: 0.96; pointer-events: none; }
 .qm.picking { pointer-events: none; }
 .qm.picking .qm-guide, .qm.picking .qm-hub, .qm.picking .qm-item:not(.picked) {
-  opacity: 0; transition: opacity 100ms ease-out;
+  opacity: 0; transition: opacity var(--dur-1) var(--ease-out);
 }
 
 .qm-guide { position: absolute; left: 0; top: 0; translate: -50% -50%; overflow: visible; pointer-events: none; }
@@ -218,7 +228,7 @@ defineExpose({ show, hide, isOpen: () => visible.value && phase.value === 'open'
   /* drawn clockwise from 12 o'clock: a circle's path starts at 3 */
   transform: rotate(-90deg);
   stroke-dasharray: var(--qm-c);
-  animation: qm-draw 220ms var(--qm-ease) 40ms backwards;
+  animation: qm-draw 180ms var(--ease-out) backwards;
 }
 
 .qm-hub, .qm-item {
@@ -229,8 +239,7 @@ defineExpose({ show, hide, isOpen: () => visible.value && phase.value === 'open'
 .qm-hub {
   left: -15px; top: -15px; width: 30px; height: 30px;
   background: var(--panel-2); color: var(--muted);
-  animation: qm-hub 120ms var(--qm-ease) backwards;
-  transition: border-color 120ms ease-out, color 120ms ease-out, scale 120ms var(--qm-ease);
+  animation: qm-hub var(--dur-1) var(--ease-out) backwards;
 }
 .qm-hub:hover, .qm-hub:focus { border-color: var(--accent); color: var(--text); scale: 1.08; }
 
@@ -238,11 +247,10 @@ defineExpose({ show, hide, isOpen: () => visible.value && phase.value === 'open'
   left: calc(var(--x) - 20px); top: calc(var(--y) - 20px); width: 40px; height: 40px;
   background: var(--panel); color: var(--c); box-shadow: var(--shadow-2);
   /* out of the centre one after the other, clockwise from 12 o'clock */
-  animation: qm-out 180ms var(--qm-ease) calc(40ms + var(--i) * 28ms) backwards;
-  transition: border-color 120ms ease-out, scale 120ms var(--qm-ease);
+  animation: qm-out 140ms var(--ease-out) calc(var(--i) * 12ms) backwards;
 }
 .qm-item:hover, .qm-item:focus { border-color: var(--accent); scale: 1.08; z-index: 1; }
-.qm-item.picked { animation: qm-pulse 120ms var(--qm-ease); }
+.qm-item.picked { animation: qm-pulse 120ms var(--ease-out); }
 .qm-hub:focus-visible, .qm-item:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
 
 /* the name, outwards along the item's radius: never over the other items */
@@ -250,7 +258,7 @@ defineExpose({ show, hide, isOpen: () => visible.value && phase.value === 'open'
   position: absolute; white-space: nowrap; pointer-events: none;
   padding: 3px 9px; border-radius: 999px; font-size: 12px; line-height: 16px;
   background: var(--panel-2); color: var(--text); border: 1px solid var(--border-soft); box-shadow: var(--shadow-1);
-  opacity: 0; transition: opacity 120ms ease-out, translate 120ms var(--qm-ease);
+  opacity: 0;
 }
 .qm-right .qm-label { left: calc(100% + 8px); top: 50%; translate: -4px -50%; }
 .qm-left .qm-label { right: calc(100% + 8px); top: 50%; translate: 4px -50%; }
@@ -262,7 +270,17 @@ defineExpose({ show, hide, isOpen: () => visible.value && phase.value === 'open'
 .qm-top:hover .qm-label, .qm-top:focus .qm-label,
 .qm-bottom:hover .qm-label, .qm-bottom:focus .qm-label { translate: -50% 0; }
 
-@keyframes qm-hub { from { opacity: 0; transform: scale(0.8); } }
+/* the pointer's hover eases in; the arrow keys move the focus at once */
+@media (hover: hover) and (pointer: fine) {
+  .qm-hub, .qm-item { transition: border-color 120ms var(--ease-out), color 120ms var(--ease-out), scale 120ms var(--ease-out); }
+  .qm-label { transition: opacity 120ms var(--ease-out), translate 120ms var(--ease-out); }
+}
+.qm-item:focus-visible, .qm-item:focus-visible .qm-label, .qm-hub:focus-visible { transition-duration: 0ms; }
+
+/* opened from the keyboard, or again at once: there, without motion */
+.qm.still, .qm.still * { animation: none !important; transition: none !important; }
+
+@keyframes qm-hub { from { opacity: 0; transform: scale(0.9); } }
 @keyframes qm-draw { from { stroke-dashoffset: var(--qm-c); } }
 @keyframes qm-out { from { opacity: 0; transform: translate(calc(-1 * var(--x)), calc(-1 * var(--y))) scale(0.6); } }
 @keyframes qm-pulse { 50% { transform: scale(1.12); } }
@@ -270,7 +288,7 @@ defineExpose({ show, hide, isOpen: () => visible.value && phase.value === 'open'
 
 @media (prefers-reduced-motion: reduce) {
   .qm-guide circle { animation: none; }
-  .qm-hub, .qm-item { animation: qm-fade 100ms linear backwards; }
+  .qm-hub, .qm-item { animation: qm-fade var(--dur-1) var(--ease-out) backwards; }
   .qm-item.picked { animation: none; }
   .qm.closing { scale: 1; }
   .qm-label, .qm-item, .qm-hub { transition-property: opacity, border-color, color; }

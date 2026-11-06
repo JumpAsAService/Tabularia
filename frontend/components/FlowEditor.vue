@@ -1150,14 +1150,33 @@ onMounted(() => {
   api.myFlowShortcuts().then((s) => { savedShortcuts.value = s }, () => { /* the defaults */ })
 })
 
+function canvasBounds() {
+  const r = canvasEl.value!.getBoundingClientRect()
+  return { left: r.left, top: r.top, right: r.right, bottom: r.bottom }
+}
 function openQuickMenu(ev: MouseEvent) {
   ev.preventDefault()
   if (loadBlocked.value || !operations.value.length || !canvasEl.value) return
   quickAt = screenToFlowCoordinate({ x: ev.clientX, y: ev.clientY })
-  const r = canvasEl.value.getBoundingClientRect()
-  quickMenu.value?.show({ x: ev.clientX, y: ev.clientY }, { left: r.left, top: r.top, right: r.right, bottom: r.bottom })
+  quickMenu.value?.show({ x: ev.clientX, y: ev.clientY }, canvasBounds())
 }
-onPaneContextMenu((ev) => openQuickMenu(ev as MouseEvent))
+// From the keyboard (the Menu key, Shift+F10) there is no pointer: the menu opens beside
+// the selected node, where «+ Operation» would put the next one (the canvas' middle when
+// nothing is selected), and the node is born there.
+function openQuickMenuFromKeyboard() {
+  if (loadBlocked.value || !operations.value.length || !canvasEl.value) return
+  const pane = (canvasEl.value.querySelector('.vue-flow') as HTMLElement | null) ?? canvasEl.value
+  const p = pane.getBoundingClientRect()
+  const { x, y, zoom } = getViewport()
+  const parent = selectedId.value ? findNode(selectedId.value) : undefined
+  quickAt = parent
+    ? { x: parent.computedPosition.x + 230, y: parent.computedPosition.y }
+    : screenToFlowCoordinate({ x: p.left + p.width / 2, y: p.top + p.height / 2 })
+  quickMenu.value?.show({ x: p.left + x + quickAt.x * zoom, y: p.top + y + quickAt.y * zoom }, canvasBounds(), true)
+}
+// a right button (button 2) opens it at the pointer; the keyboard's contextmenu reaches
+// onCanvasContextMenu
+onPaneContextMenu((ev) => { if ((ev as MouseEvent).button === 2) openQuickMenu(ev as MouseEvent) })
 // the canvas' own selection follows, as after a click
 function selectOnCanvas(id: string) {
   const n = findNode(id)
@@ -1166,6 +1185,7 @@ function selectOnCanvas(id: string) {
   addSelectedNodes([n])
 }
 onNodeContextMenu(({ event, node }) => {
+  if ((event as MouseEvent).button !== 2) return
   if (selectedId.value !== node.id) {
     selectedId.value = node.id
     refreshForNode(node.id)
@@ -1180,6 +1200,17 @@ function onCanvasContextMenu(ev: MouseEvent) {
   const el = ev.target as HTMLElement | null
   if (el?.closest('input, textarea, [contenteditable="true"]')) return
   ev.preventDefault()
+  if (ev.button === 2) return // the pointer's: the pane and the nodes open it
+  // the keyboard's, on the focused node (it becomes the selected one) or on the canvas
+  const id = (el?.closest('.vue-flow__node') as HTMLElement | null)?.dataset.id
+  if (id && findNode(id)) {
+    if (selectedId.value !== id) {
+      selectedId.value = id
+      refreshForNode(id)
+    }
+    selectOnCanvas(id)
+  }
+  openQuickMenuFromKeyboard()
 }
 
 function onQuickMenuClose(reason: string) {

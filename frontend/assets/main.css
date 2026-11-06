@@ -36,6 +36,11 @@
   --warning: #f5b53d;
   --on-warning: #1a1205; /* text on the --warning fill */
   --radius: 10px;
+  /* motion: one ease-out for arrivals and exits, three durations (feedback, state, overlay) */
+  --ease-out: cubic-bezier(0.16, 1, 0.3, 1);
+  --dur-1: 0.1s;
+  --dur-2: 0.15s;
+  --dur-3: 0.22s;
   --shadow-1: 0 1px 2px rgba(0, 0, 0, 0.4);
   --shadow-2: 0 4px 16px rgba(0, 0, 0, 0.45);
   /* The primaries' fill is NOT --accent: white on #4f8cff makes 3.22:1 (and 3.86 on

@@ -35,8 +35,9 @@ The editor has five areas:
   **Redo (Ctrl+Shift+Z)** step through your changes, and a minimap helps on large flows.
   A right-click on the canvas (or on a node, which it selects) opens a ring of
   transformations around the pointer: a choice creates the node there, already connected
-  to the selected node. **Customize**, in the ring's centre, picks up to eight
-  transformations and their order, saved for your account.
+  to the selected node (from the keyboard, the Menu key or Shift+F10 opens it beside the
+  selected node). **Customize**, in the ring's centre, picks up to eight transformations
+  and their order, saved for your account.
 - **The panel**, on the right, with the selected node's settings. Column pickers list the
   columns that reach the node, so a filter or a group-by is chosen, not typed. When an
   AI model is configured, a second tab, **Assistant**, builds the flow with you
