@@ -27,6 +27,15 @@ migration (0038: a column on `users`). Read docs/deploy/upgrading.md before upgr
   (`gateway-go/scripts/bench/bench.sh`). Its image carries `pg_dump` 14 to 18 for the
   backups. A request still running when the gateway stops is allowed to finish, as before.
 
+- **A pivot with rows only, or columns only.** The **Pivot** node, the Viewer, saved
+  views, reports and the dbt export (federated target) accept a pivot with just the row
+  keys or just the columns to spread. Rows only: one row per key and one column `values`
+  with the aggregate, as a group by with one measure. Columns only: one row, its first
+  column `values` holding the measure's label (`sum(amount)`), then one column per value
+  with the aggregate over the whole table, named as before. The same on all five
+  engines; a row key already named `values` is refused, as is a pivot with neither.
+  Before, the Viewer ignored such a pivot without a word and the node refused it.
+
 - **Explore's two pieces of motion**: a flow's run history drops in (opacity and 4px, the
   shared short duration) when opened with the pointer, at once from the keyboard; a row
   created, duplicated or deleted here fades in (150 ms) or out (100 ms), and a new one keeps

@@ -39,7 +39,11 @@ from app.engine.operations import (
     temporal_value_error,
     _substitute,
     PIVOT_LABEL_SEP,
+    PIVOT_VALUES_COLUMN,
     SAMPLE_BUCKETS,
+    check_pivot_labels,
+    pivot_measure_label,
+    pivot_params,
     sample_threshold,
     sort_keys,
 )
@@ -412,13 +416,16 @@ def op_union(rel, params, a, ctx):
 # ── pivot / unpivot (rows↔columns) ───────────────────────────────────────────
 @_register("pivot")
 def op_pivot(rel, params, a, ctx):
-    index = _as_list(_require(params, "index"))
-    on = _as_list(_require(params, "on"))  # several columns = combinations
-    values = _require(params, "values")
-    func = params.get("func", "sum")
+    index, on, values, func = pivot_params(params)  # several `on` columns = combinations
     if func not in _AGG:
         raise EngineError(f"pivot: unsupported aggregation function '{func}'")
     name = ctx.register(rel)
+    out = _qi(PIVOT_VALUES_COLUMN)
+    idx_sql = ", ".join(_qi(c) for c in index)
+    if not on:  # rows only: a group by with one measure, named `values`
+        return _recast_hugeint(ctx, ctx.con.sql(
+            f"SELECT {idx_sql}, {_agg_expr(func, values)} AS {out} FROM {_source_for(name, [func])} GROUP BY {idx_sql}"
+        ))
     # the cross-engine label (see operations.pivot_label): the value as text,
     # NULL → 'null', several columns joined by "_" (only the combinations present)
     on_sql = f" || '{PIVOT_LABEL_SEP}' || ".join(f"coalesce(CAST({_qi(c)} AS VARCHAR), 'null')" for c in on)
@@ -430,12 +437,25 @@ def op_pivot(rel, params, a, ctx):
             f"pivot: the chosen columns have {n_cols} distinct combinations ({n_cols} new "
             f"columns, maximum {MAX_PIVOT_COLUMNS}). Are these the right columns?"
         )
-    idx_sql = ", ".join(_qi(c) for c in index)
-    piv = ctx.con.sql(
-        f"PIVOT {_source_for(name, [func])} ON {on_sql} USING {_agg_expr(func, values)} GROUP BY {idx_sql}"
-    )
-    # a sum of integers → HUGEINT (a decimal for Polars): back to BIGINT as the other engines
-    return _recast_hugeint(ctx, piv)
+    if index:
+        piv = ctx.con.sql(
+            f"PIVOT {_source_for(name, [func])} ON {on_sql} USING {_agg_expr(func, values)} GROUP BY {idx_sql}"
+        )
+        # a sum of integers → HUGEINT (a decimal for Polars): back to BIGINT as the other engines
+        return _recast_hugeint(ctx, piv)
+    # columns only: ONE row, led by the measure's label (a constant group: without a
+    # GROUP BY DuckDB's PIVOT would group by every other column)
+    if ctx.con.sql(f"SELECT count(*) FROM {name} WHERE {on_sql} = {_lit(PIVOT_VALUES_COLUMN)}").fetchone()[0]:
+        check_pivot_labels([PIVOT_VALUES_COLUMN])
+    measure = _lit(pivot_measure_label(func, values))
+    if not n_cols:  # no rows at all: the label alone
+        return ctx.con.sql(f"SELECT {measure} AS {out}")
+    grp = "__pivot_measure__"
+    piv = ctx.register(ctx.con.sql(
+        f"PIVOT (SELECT *, {measure} AS {grp} FROM {_source_for(name, [func])}) "
+        f"ON {on_sql} USING {_agg_expr(func, values)} GROUP BY {grp}"
+    ))
+    return _recast_hugeint(ctx, ctx.con.sql(f"SELECT {grp} AS {out}, * EXCLUDE ({grp}) FROM {piv}"))
 
 
 _DK_INTS = {"TINYINT", "SMALLINT", "INTEGER", "BIGINT", "HUGEINT", "UTINYINT", "USMALLINT", "UINTEGER", "UBIGINT", "UHUGEINT"}

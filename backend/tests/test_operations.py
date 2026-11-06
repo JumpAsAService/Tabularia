@@ -452,9 +452,10 @@ def test_pivot_refuses_too_many_columns(monkeypatch):
         apply("pivot", {"index": ["k"], "on": "on", "values": "v"}, df)
 
 
-def test_pivot_without_index_gives_a_clear_error():
-    with pytest.raises(EngineError, match="index"):
-        apply("pivot", {"index": [], "on": "anno", "values": "vendite"}, _df_sales_by_year())
+def test_pivot_without_index_or_on_gives_a_clear_error():
+    # one side alone is a pivot (rows only / columns only, see test_reshape_parity); neither is not
+    with pytest.raises(EngineError, match=r"row keys \(index\), the columns to spread into new columns \(on\)"):
+        apply("pivot", {"index": [], "on": [], "values": "vendite"}, _df_sales_by_year())
 
 
 def test_pivot_unknown_function_gives_a_clear_error():

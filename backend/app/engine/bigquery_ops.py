@@ -31,7 +31,8 @@ from app.engine.context import MAX_CROSS_JOIN_ROWS
 from app.engine.expressions import forbidden_expression
 from app.engine.exceptions import EngineError
 from app.engine.operations import (
-    MAX_PIVOT_COLUMNS, PIVOT_LABEL_SEP, SAMPLE_BUCKETS, check_filter_value, check_strict_union, non_iso_values, pivot_label, sample_threshold, sort_keys,
+    MAX_PIVOT_COLUMNS, PIVOT_LABEL_SEP, PIVOT_VALUES_COLUMN, SAMPLE_BUCKETS, check_filter_value, check_pivot_labels,
+    pivot_measure_label, pivot_params, check_strict_union, non_iso_values, pivot_label, sample_threshold, sort_keys,
     temporal_value_error, TEXT_TRUE, TEXT_FALSE,
 )
 from app.engine.sql_guard import ensure_reads_only_input, table_names
@@ -490,15 +491,16 @@ def op_union(sql, params, ctx):
 # ── pivot / unpivot ───────────────────────────────────────────────────────────
 @_register("pivot")
 def op_pivot(sql, params, ctx):
-    index = _as_list(_require(params, "index"))
-    on = _as_list(_require(params, "on"))
-    values = _require(params, "values")
-    func = params.get("func", "sum")
+    index, on, values, func = pivot_params(params)
     if func not in _AGG:
         raise EngineError(f"pivot: unsupported aggregation function '{func}'")
     if func == "median":
         raise EngineError("pivot: the median is not available in a pivot on BigQuery (use another engine).")
     base = _sub(sql)
+    idx_sql = ", ".join(ctx.qi(c) for c in index)
+    v = ctx.qi(values)
+    if not on:  # rows only: a group by with one measure, named `values`
+        return f"SELECT {idx_sql}, {_agg_expr(func, v)} AS {ctx.qi(PIVOT_VALUES_COLUMN)} FROM {base} GROUP BY {idx_sql}"
     on_sql = ", ".join(ctx.qi(c) for c in on)
     n_cols = ctx.scalar(f"SELECT COUNT(*) FROM (SELECT DISTINCT {on_sql} FROM {base})")
     if n_cols > MAX_PIVOT_COLUMNS:
@@ -508,14 +510,17 @@ def op_pivot(sql, params, ctx):
         )
     combos = ctx.distinct_rows(base, on)
     combos = sorted(combos, key=lambda combo: tuple(pivot_label(v) for v in combo))
-    idx_sql = ", ".join(ctx.qi(c) for c in index)
-    cols = [idx_sql] if idx_sql else []
-    v = ctx.qi(values)
-    for combo in combos:
+    labels = [PIVOT_LABEL_SEP.join(pivot_label(val) for val in combo) for combo in combos]
+    # columns only: ONE row (no GROUP BY), led by the measure's label
+    cols = [idx_sql] if index else [f"{_lit(pivot_measure_label(func, values))} AS {ctx.qi(PIVOT_VALUES_COLUMN)}"]
+    if not index:
+        check_pivot_labels(labels)
+        if not combos:  # no rows at all: the label alone
+            return f"SELECT {cols[0]}"
+    for combo, colname in zip(combos, labels):
         cond = " AND ".join(
             f"{ctx.qi(c)} IS NULL" if val is None else f"{ctx.qi(c)} = {_lit(val)}" for c, val in zip(on, combo)
         )
-        colname = PIVOT_LABEL_SEP.join(pivot_label(val) for val in combo)
         # conditional aggregation: no rows (or only NULLs) → NULL, except
         # count/n_unique → 0, as in the other engines
         expr = _agg_expr(func, f"IF({cond}, {v}, NULL)")

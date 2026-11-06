@@ -161,6 +161,26 @@ def test_pivot_conditional_aggregation_sorted_labels():
         op("pivot", {"index": ["id"], "on": ["nome"], "values": "prezzo", "func": "median"}, ctx)
 
 
+def test_pivot_rows_only_is_a_group_by_with_one_values_column():
+    sql = op("pivot", {"index": ["id"], "values": "prezzo", "func": "sum"})
+    assert sql == "SELECT `id`, SUM(`prezzo`) AS `values` FROM (SELECT * FROM `_src1`) GROUP BY `id`"
+    assert "COUNT(DISTINCT `nome`) AS `values`" in op("pivot", {"index": ["id"], "on": [], "values": "nome", "func": "n_unique"})
+    with pytest.raises(EngineError, match="a row key already has that name"):
+        op("pivot", {"index": ["values"], "values": "prezzo"})
+
+
+def test_pivot_columns_only_is_one_row_led_by_the_measure_label():
+    ctx = FakeCtx(SCHEMA, counts={"scalar": 2}, distinct=[["b"], ["a"]])
+    sql = op("pivot", {"on": ["nome"], "values": "prezzo", "func": "sum"}, ctx)
+    assert sql.startswith("SELECT 'sum(prezzo)' AS `values`, SUM(IF(`nome` = 'a', `prezzo`, NULL)) AS `a`, ")
+    assert "GROUP BY" not in sql
+    assert op("pivot", {"on": ["nome"], "values": "prezzo"}, FakeCtx(SCHEMA)) == "SELECT 'sum(prezzo)' AS `values`"
+    with pytest.raises(EngineError, match="a value of the spread columns is 'values'"):
+        op("pivot", {"on": ["nome"], "values": "prezzo"}, FakeCtx(SCHEMA, counts={"scalar": 1}, distinct=[["values"]]))
+    with pytest.raises(EngineError, match="choose the row keys"):
+        op("pivot", {"index": [], "on": [], "values": "prezzo"})
+
+
 def test_unpivot_native_with_supertype():
     assert unpivot_value_type(["INTEGER", "INT64"]) == "INT64"
     assert unpivot_value_type(["INTEGER", "FLOAT"]) == "FLOAT64"

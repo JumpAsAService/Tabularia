@@ -48,6 +48,9 @@ five engines (BigQuery live, against a real project):
 - `std` and `var` are the **sample** versions (n−1), and `NULL` with fewer than 2 values —
   on every engine, the ClickHouse ones included (ClickHouse alone would give `NaN`), and in
   the pivot too;
+- a pivot with row keys only gives one column `values` (a group by with one measure);
+  with spread columns only, one row led by `values` = `func(column)`; the same names,
+  rows and types on every engine;
 - `median` uses linear interpolation (R7);
 - sorting always puts **nulls last**, ascending and descending — a "top N" never returns
   nulls; on several columns each keeps its own direction, the next ones breaking the ties;

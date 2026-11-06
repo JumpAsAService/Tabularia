@@ -178,7 +178,9 @@ function buildTableOps(): Operation[] {
   const ops = [...baseOps.value]
   const pIndex = pivot.value.index.filter(Boolean)
   const pOn = pivot.value.on.filter(Boolean)
-  if (pivotOn.value && pOn.length && pivot.value.values && pIndex.length) {
+  // rows only, columns only or both (the engine's rule): with rows only one column `values`,
+  // with columns only one row led by the measure's label
+  if (pivotOn.value && (pOn.length || pIndex.length) && pivot.value.values) {
     ops.push({ type: 'pivot', params: { index: pIndex, on: pOn, values: pivot.value.values, func: pivot.value.func } })
   }
   return ops
@@ -516,14 +518,14 @@ onMounted(async () => {
             <label class="lbl">{{ $t('viewer.pivotRowsLabel') }}</label>
             <div v-for="(_, i) in pivot.index" :key="'ix' + i" class="dimrow">
               <Select v-model="pivot.index[i]" :options="colNames" :placeholder="$t('viewer.columnPlaceholder')" class="full" />
-              <button class="rm" :disabled="pivot.index.length === 1" @click="pivot.index.splice(i, 1)"><X :size="13" /></button>
+              <button class="rm" :disabled="pivot.index.length === 1 && !pivot.index[0]" @click="pivot.index.length === 1 ? (pivot.index[0] = '') : pivot.index.splice(i, 1)"><X :size="13" /></button>
             </div>
             <button class="add-dim" @click="pivot.index.push('')"><Plus :size="12" /> {{ $t('viewer.addRow') }}</button>
 
             <label class="lbl">{{ $t('viewer.pivotColumnsLabel') }}</label>
             <div v-for="(_, i) in pivot.on" :key="'on' + i" class="dimrow">
               <Select v-model="pivot.on[i]" :options="colNames" :placeholder="$t('viewer.columnPlaceholder')" class="full" />
-              <button class="rm" :disabled="pivot.on.length === 1" @click="pivot.on.splice(i, 1)"><X :size="13" /></button>
+              <button class="rm" :disabled="pivot.on.length === 1 && !pivot.on[0]" @click="pivot.on.length === 1 ? (pivot.on[0] = '') : pivot.on.splice(i, 1)"><X :size="13" /></button>
             </div>
             <button class="add-dim" @click="pivot.on.push('')"><Plus :size="12" /> {{ $t('viewer.addColumn') }}</button>
 

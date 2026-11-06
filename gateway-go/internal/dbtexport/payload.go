@@ -111,7 +111,7 @@ func knownRefusal(models []any, target string) *Error {
 var required = map[string][]string{
 	"select": {"columns"}, "reorder": {"columns"}, "drop": {"columns"}, "rename": {"mapping"}, "cast": {"columns"},
 	"filter": {"column"}, "sort": {"by"}, "limit": {"n"}, "fill_null": {"columns"}, "group_by": {"by", "aggregations"},
-	"compute": {"columns"}, "sql": {"query"}, "join": {"right"}, "union": {"right"}, "pivot": {"index", "on", "values"},
+	"compute": {"columns"}, "sql": {"query"}, "join": {"right"}, "union": {"right"}, "pivot": {"values"},
 }
 
 // empty is `v in (None, "", [])`.
@@ -147,6 +147,10 @@ func incompleteStep(op any) *Error {
 		if listLen(left) != listLen(right) {
 			return no("join: left_on and right_on must have the same number of columns")
 		}
+	}
+	if kind == "pivot" && empty(pyval.Get(params, "index")) && empty(pyval.Get(params, "on")) {
+		// the row keys, the columns to spread, or both (the engine's rule)
+		return no("required parameter missing: 'index' or 'on'")
 	}
 	if kind == "group_by" {
 		if aggs, ok := pyval.Index(params, "aggregations").([]any); ok {

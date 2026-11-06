@@ -49,7 +49,9 @@ from app.engine.duckdb_ops import (
     unpivot_value_type,
 )
 from app.engine.exceptions import EngineError
-from app.engine.operations import PIVOT_LABEL_SEP, check_filter_value, sort_keys
+from app.engine.operations import (
+    PIVOT_LABEL_SEP, PIVOT_VALUES_COLUMN, check_filter_value, pivot_measure_label, pivot_params, sort_keys,
+)
 
 # a source's resolver ({key} | {model} | {seed}) → (SQL ref, columns, DuckDB type per column)
 logger = logging.getLogger(__name__)
@@ -1346,22 +1348,33 @@ def _compile_op(model: _Model, ref: str, s: _S, op_type: str, params: dict,
                 "with DuckDB's PIVOT. Use the «federated» export (dbt-duckdb), or "
                 "replace the pivot with a sql node that lists the columns.", "pivot_not_portable"
             )
-        index = _as_list(_require(params, "index"))
-        on = _as_list(_require(params, "on"))
-        values = _require(params, "values")
-        func = params.get("func", "sum")
+        # the row keys, the columns to spread or both, checked as the engine does
+        index, on, values, func = pivot_params(params)
         if func not in _AGG:
             raise DbtExportError(f"pivot: unsupported function '{func}'", "pivot_unsupported_func", func=func)
+        idx_sql = ", ".join(q(c) for c in index)
+        using = _first_last(model, func, values, s.order) if func in ("first", "last") else (
+            f"count(DISTINCT {q(values)})" if func == "n_unique" else f"{_AGG[func]}({q(values)})")
+        if func == "sum" and _family(s.kind(values)) in ("integer", "boolean"):
+            using = f"CAST({using} AS BIGINT)"      # as the engine: HUGEINT back to BIGINT
+        agg_type = _aggregate(model, func, values, s.kind(values))[1]
+        out = q(PIVOT_VALUES_COLUMN)
+        if not on:  # rows only: a group by with one measure, named `values` — known columns
+            return (model.add(f"SELECT {idx_sql}, {using} AS {out} FROM {ref} GROUP BY {idx_sql}"),
+                    _S(index + [PIVOT_VALUES_COLUMN], {**{c: s.kind(c) for c in index}, PIVOT_VALUES_COLUMN: agg_type}))
         # the cross-engine label, as the engine: the value as text, NULL → 'null',
         # several columns joined by the separator
         on_sql = f" || '{PIVOT_LABEL_SEP}' || ".join(f"coalesce(CAST({q(c)} AS VARCHAR), 'null')" for c in on)
-        idx_sql = ", ".join(q(c) for c in index)
-        using = _first_last(model, func, values, s.order) if func in ("first", "last") else f"{_AGG[func]}({q(values)})"
-        if func == "sum" and _family(s.kind(values)) in ("integer", "boolean"):
-            using = f"CAST({using} AS BIGINT)"      # as the engine: HUGEINT back to BIGINT
         # the new columns are not known (the data decides them), their type is: the aggregate's
-        return (model.add(f"PIVOT {ref} ON {on_sql} USING {using} GROUP BY {idx_sql}"),
-                _S([], {c: s.kind(c) for c in index}, _aggregate(model, func, values, s.kind(values))[1]))
+        if index:
+            return (model.add(f"PIVOT {ref} ON {on_sql} USING {using} GROUP BY {idx_sql}"),
+                    _S([], {c: s.kind(c) for c in index}, agg_type))
+        # columns only: ONE row led by the measure's label (a constant group: without a
+        # GROUP BY DuckDB's PIVOT groups by every other column)
+        grp, measure = q("__pivot_measure__"), _lit(pivot_measure_label(func, values))
+        return (model.add(f"SELECT {grp} AS {out}, * EXCLUDE ({grp}) FROM (PIVOT (SELECT *, {measure} AS {grp} FROM {ref}) "
+                          f"ON {on_sql} USING {using} GROUP BY {grp})"),
+                _S([], {PIVOT_VALUES_COLUMN: "VARCHAR"}, agg_type))
 
     if op_type == "unpivot":
         on = params.get("on")
@@ -1500,7 +1513,9 @@ def _label(op_type: str, params: dict, resolve: SourceResolver, cols: Optional[l
         "fill_null": ("fill_nulls", lambda: "replace NULL: " + ", ".join(f"{a} with {_v(b)}" for a, b in (p.get("columns") or {}).items())),
         "drop_nulls": ("drop_null_rows", lambda: f"drop rows with NULL in {', '.join(p.get('subset'))}" if p.get("subset") else "drop rows with any NULL"),
         "sql": ("custom_sql", lambda: "SQL written in the flow: " + str(p.get("query") or "")),
-        "pivot": (f"pivot_{'_'.join(_as_list(p.get('on') or [])[:2])}", lambda: f"one column per value of {', '.join(_as_list(p.get('on') or []))}, {p.get('func', 'sum')}({p.get('values')}) by {', '.join(_as_list(p.get('index') or []))}"),
+        "pivot": (f"pivot_{'_'.join(_as_list(p.get('on') or p.get('index') or [])[:2])}", lambda: (
+            f"one column per value of {', '.join(_as_list(p['on']))}, " if p.get("on") else "") + f"{p.get('func', 'sum')}({p.get('values')})"
+            + (f" by {', '.join(_as_list(p['index']))}" if p.get("index") else "")),
         "unpivot": (f"unpivot_{'_'.join((p.get('on') or [])[:2])}", lambda: f"turn {', '.join(p.get('on') or []) or 'the columns'} into rows ({p.get('variable_name') or 'variable'}, {p.get('value_name') or 'value'})"),
     }
     if op_type in simple:
@@ -1539,7 +1554,8 @@ def _wrong_shape(op_type: str, p: dict) -> bool:
         and all(isinstance(a.get("column"), str) and a.get("column") for a in p["aggregations"]),
         "compute": lambda: list_of(p.get("columns"), dict), "sql": lambda: isinstance(p.get("query"), str),
         "join": lambda: isinstance(p.get("right"), dict), "union": lambda: isinstance(p.get("right"), dict),
-        "pivot": lambda: names(p.get("index")) and names(p.get("on")) and isinstance(p.get("values"), str),
+        "pivot": lambda: (names(p.get("index")) or names(p.get("on"))) and all(not p.get(k) or names(p.get(k)) for k in ("index", "on"))
+        and isinstance(p.get("values"), str),
         "unpivot": lambda: not p.get("on") or list_of(p.get("on"), str),
     }
     shape = shapes.get(op_type)

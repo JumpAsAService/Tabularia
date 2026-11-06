@@ -568,7 +568,7 @@ func ViewOperations(spec pyjson.Object, ds *Datasource) []any {
 		out = append(out, pyjson.Object{{Key: "type", Value: "compute"}, {Key: "params", Value: pyjson.Object{{Key: "columns", Value: computed}}}})
 	}
 	pivot := obj(or(get(spec, "pivot"), pyjson.Object{}))
-	var index, on []any
+	index, on := []any{}, []any{}
 	for _, c := range list(or(get(pivot, "index"), []any{})) {
 		if pystr.Truthy(c) {
 			index = append(index, c)
@@ -579,7 +579,8 @@ func ViewOperations(spec pyjson.Object, ds *Datasource) []any {
 			on = append(on, c)
 		}
 	}
-	if pystr.Truthy(get(spec, "pivotOn")) && len(on) > 0 && pystr.Truthy(get(pivot, "values")) && len(index) > 0 {
+	// as the Viewer: the row keys, the columns to spread or both (the engine's rule)
+	if pystr.Truthy(get(spec, "pivotOn")) && (len(on) > 0 || len(index) > 0) && pystr.Truthy(get(pivot, "values")) {
 		out = append(out, pyjson.Object{{Key: "type", Value: "pivot"}, {Key: "params", Value: pyjson.Object{
 			{Key: "index", Value: index}, {Key: "on", Value: on}, {Key: "values", Value: get(pivot, "values")},
 			{Key: "func", Value: or(get(pivot, "func"), "sum")}}}})

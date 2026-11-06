@@ -326,9 +326,11 @@ export const OP_SPECS: Record<string, FieldSpec[]> = {
     { key: 'aggregations', label: 'params.group_by_aggregations', control: 'agglist' },
   ],
   pivot: [
-    { key: 'index', label: 'params.pivot_index', control: 'columns' },
+    // either may be empty, not both: rows only → one column `values`; columns only → one
+    // row led by the measure's label (the engine's cross-engine standard)
+    { key: 'index', label: 'params.pivot_index', control: 'columns', optional: true },
     // several columns = combinations (labels joined with '_', see the cross-engine standard)
-    { key: 'on', label: 'params.pivot_on', control: 'columns' },
+    { key: 'on', label: 'params.pivot_on', control: 'columns', optional: true },
     { key: 'values', label: 'params.pivot_values', control: 'column' },
     { key: 'func', label: 'params.pivot_func', control: 'func' },
   ],

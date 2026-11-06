@@ -14,6 +14,7 @@ from __future__ import annotations
 import datetime as dt
 import importlib.util
 import os
+import re
 
 import polars as pl
 import pytest
@@ -88,6 +89,20 @@ CASES = {
     "unpivot_ints": [{"type": "unpivot", "params": {"index": ["paese"], "on": ["anno", "qta"]}}],
     "unpivot_no_index": [{"type": "unpivot", "params": {"on": ["vendite", "qta"]}}],
     "unpivot_all_mixed": [{"type": "unpivot", "params": {"index": ["paese", "anno"]}}],
+    # rows only: a group by with one measure named `values`
+    "pivot_rows_only_sum": [{"type": "pivot", "params": {"index": ["paese"], "values": "vendite", "func": "sum"}}],
+    "pivot_rows_only_count": [{"type": "pivot", "params": {"index": ["paese"], "on": [], "values": "vendite", "func": "count"}}],
+    "pivot_rows_only_int_multi": [{"type": "pivot", "params": {"index": ["paese", "canale"], "values": "qta", "func": "sum"}}],
+    "pivot_rows_only_n_unique": [{"type": "pivot", "params": {"index": ["canale"], "values": "paese", "func": "n_unique"}}],
+    # columns only: ONE row led by `values` = "func(column)"
+    "pivot_cols_only_sum": [{"type": "pivot", "params": {"on": "anno", "values": "vendite", "func": "sum"}}],
+    "pivot_cols_only_count": [{"type": "pivot", "params": {"index": [], "on": "attivo", "values": "vendite", "func": "count"}}],
+    "pivot_cols_only_multi_on": [{"type": "pivot", "params": {"on": ["anno", "canale"], "values": "qta", "func": "max"}}],
+    "pivot_cols_only_mean_text_order": [{"type": "pivot", "params": {"on": "qta", "values": "vendite", "func": "mean"}}],
+    "pivot_cols_only_then_filter": [
+        {"type": "pivot", "params": {"on": "anno", "values": "qta", "func": "sum"}},
+        {"type": "filter", "params": {"column": "2024", "operator": "gt", "value": 1}},
+    ],
     "pivot_then_filter": [
         {"type": "pivot", "params": {"index": ["paese"], "on": "anno", "values": "qta", "func": "sum"}},
         {"type": "filter", "params": {"column": "2024", "operator": "gt", "value": 1}},
@@ -157,6 +172,68 @@ def test_pivot_standard_on_polars(storage, src):
     assert [c.name for c in res.columns] == ["paese", "false", "null", "true"]
     res = eng.preview(src, CASES["pivot_on_int_text_order"], limit=100)
     assert [c.name for c in res.columns] == ["paese", "1", "10", "2", "3", "4"]
+
+
+def test_pivot_rows_only_and_columns_only_on_polars(storage, src):
+    """The standard of a pivot with one side empty, on the reference."""
+    eng = _engine("polars", storage)
+    res = eng.preview(src, CASES["pivot_rows_only_sum"], limit=100)
+    assert [c.name for c in res.columns] == ["paese", "values"]
+    assert {r["paese"]: r["values"] for r in res.rows} == {"IT": 30.5, "FR": 5.0, "DE": 7.0}
+    res = eng.preview(src, CASES["pivot_rows_only_count"], limit=100)
+    assert {r["paese"]: r["values"] for r in res.rows} == {"IT": 2, "FR": 1, "DE": 1}
+    assert res.columns[1].dtype == "Int64"
+    res = eng.preview(src, CASES["pivot_cols_only_sum"], limit=100)
+    assert [c.name for c in res.columns] == ["values", "2023", "2024"]
+    assert res.rows == [{"values": "sum(vendite)", "2023": 15.5, "2024": 27.0}]
+    assert res.columns[0].dtype == "String"
+    res = eng.preview(src, CASES["pivot_cols_only_multi_on"], limit=100)
+    assert [c.name for c in res.columns] == ["values", "2023_web", "2024_shop", "2024_web"]
+    assert res.rows == [{"values": "max(qta)", "2023_web": 3, "2024_shop": 10, "2024_web": 4}]
+    res = eng.preview(src, CASES["pivot_cols_only_count"], limit=100)
+    assert [c.name for c in res.columns] == ["values", "false", "null", "true"]
+    assert res.rows == [{"values": "count(vendite)", "false": 2, "null": 0, "true": 2}]
+
+
+@pytest.mark.parametrize("engine", [pytest.param("polars")] + OTHER_ENGINES)
+def test_pivot_with_neither_side_or_a_values_name_is_refused_the_same_everywhere(storage, src, engine):
+    from app.engine.exceptions import EngineError
+
+    eng = _engine(engine, storage)
+    for params, words in [
+        ({"index": [], "on": [], "values": "qta", "func": "sum"}, "row keys (index), the columns to spread"),
+        ({"values": "qta"}, "row keys (index), the columns to spread"),
+        ({"index": ["paese"], "values": "qta"}, None),  # fine: rows only
+    ]:
+        ops = [{"type": "pivot", "params": params}]
+        if words is None:
+            assert [c.name for c in eng.preview(src, ops, limit=100).columns] == ["paese", "values"]
+            continue
+        with pytest.raises(EngineError, match=re.escape(words)):
+            eng.preview(src, ops, limit=100)
+    # a row key already named `values`: refused, never renamed in silence
+    renamed = [{"type": "rename", "params": {"mapping": {"paese": "values"}}},
+               {"type": "pivot", "params": {"index": ["values"], "values": "qta", "func": "sum"}}]
+    with pytest.raises(EngineError, match="a row key already has that name"):
+        eng.preview(src, renamed, limit=100)
+    # ...and with columns to spread the same key is an ordinary index
+    renamed[1]["params"]["on"] = "anno"
+    assert [c.name for c in eng.preview(src, renamed, limit=100).columns] == ["values", "2023", "2024"]
+
+
+@pytest.fixture
+def values_label(storage):
+    df = pl.DataFrame({"tipo": ["values", "altro"], "n": [1, 2]})
+    return upload_df(storage, df, "datasets/reshape_values_label.parquet")
+
+
+@pytest.mark.parametrize("engine", [pytest.param("polars")] + OTHER_ENGINES)
+def test_pivot_columns_only_refuses_a_label_named_values(storage, values_label, engine):
+    from app.engine.exceptions import EngineError
+
+    eng = _engine(engine, storage)
+    with pytest.raises(EngineError, match="a value of the spread columns is 'values'"):
+        eng.preview(values_label, [{"type": "pivot", "params": {"on": "tipo", "values": "n"}}], limit=100)
 
 
 @pytest.fixture

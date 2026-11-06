@@ -1297,6 +1297,30 @@ def test_a_join_after_a_pivot_keeps_the_pivot_columns():
     _equal(par, types=False)
 
 
+def test_a_pivot_with_rows_only_or_columns_only_exports_as_the_engine_computes_it():
+    src = {"vendite": _pl.DataFrame({"cliente": [1, 1, 2, 3, 3], "anno": [2023, 2024, 2023, 2024, 2024],
+                                     "importo": [10, 20, None, 40, 5], "canale": ["a", "b", "a", "a", "a"]})}
+    for params in ({"index": ["cliente"], "values": "importo", "func": "sum"},
+                   {"index": ["cliente", "canale"], "on": [], "values": "importo", "func": "count"},
+                   {"index": ["canale"], "values": "cliente", "func": "n_unique"},
+                   {"on": "anno", "values": "importo", "func": "sum"},
+                   {"index": [], "on": ["anno", "canale"], "values": "importo", "func": "max"},
+                   {"on": "canale", "values": "importo", "func": "count"}):
+        par = _parity(src, "vendite", [{"type": "pivot", "params": params}])
+        assert par["polars"][0][-1 if params.get("index") else 0] == "values", params
+        _equal(par)
+    # the rows-only columns are known: a step after it can list them
+    ops = [{"type": "pivot", "params": {"index": ["cliente"], "values": "importo"}},
+           {"type": "rename", "params": {"mapping": {"values": "totale"}}}]
+    _, cols, _ = _export_sql(src, "vendite", ops)
+    assert cols == ["cliente", "totale"]
+    _equal(_parity(src, "vendite", ops))
+    for bad in ({"index": [], "on": [], "values": "importo"}, {"index": ["values"], "values": "importo"}):
+        with pytest.raises(d.DbtExportError) as e:
+            _export_sql({"vendite": src["vendite"].rename({"cliente": "values"})}, "vendite", [{"type": "pivot", "params": bad}])
+        assert e.value.code == "step_invalid"
+
+
 def test_a_pivot_column_that_the_other_side_also_has_gets_the_right_suffix():
     customers = _CUSTOMERS.with_columns(_pl.Series("2023", ["x", "y", "z"]))
     src = {"clienti": customers, "vendite": _SALES}

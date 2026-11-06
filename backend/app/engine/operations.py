@@ -393,7 +393,50 @@ MAX_PIVOT_COLUMNS = 500
 #   present in the data (no Cartesian product);
 # - SQL semantics: a missing group (index × on) → NULL; present but with all values
 #   NULL → NULL (sum too); `count`/`n_unique` → 0 and type Int64.
+# - rows only (no `on`): one row per index group and ONE column `values` with the
+#   aggregate (a group by with one measure); columns only (no `index`): ONE row, the
+#   column `values` holding the measure's label `func(column)` and then one column per
+#   label; neither: refused. The name `values` is never made unique in silence: a row key
+#   (or a label) with that name is refused.
 PIVOT_LABEL_SEP = "_"
+PIVOT_VALUES_COLUMN = "values"
+
+
+def pivot_params(params: dict[str, Any]) -> tuple[list[str], list[str], str, str]:
+    """The pivot's (index, on, values, func), read and checked the same way by every
+    engine and by the dbt export: the row keys, the columns to spread, or both."""
+    def names(v: Any) -> list[str]:
+        return [c for c in (v if isinstance(v, list) else [v]) if c not in (None, "")]
+
+    index, on = names(params.get("index")), names(params.get("on"))
+    values = params.get("values")
+    if values in (None, "", []):
+        raise EngineError("required parameter missing: 'values'")
+    if not index and not on:
+        raise EngineError(
+            "pivot: choose the row keys (index), the columns to spread into new columns (on), or both"
+        )
+    if not on and PIVOT_VALUES_COLUMN in index:
+        raise EngineError(
+            f"pivot: without columns to spread the aggregate goes in a column named "
+            f"'{PIVOT_VALUES_COLUMN}', and a row key already has that name: rename it before the pivot"
+        )
+    return index, on, values, params.get("func") or "sum"
+
+
+def pivot_measure_label(func: str, values: str) -> str:
+    """The text in the `values` column of a pivot without row keys: `sum(amount)`."""
+    return f"{func}({values})"
+
+
+def check_pivot_labels(labels: Any) -> None:
+    """A pivot without row keys starts with the `values` column: a label with that name
+    would be a second column of the same name."""
+    if PIVOT_VALUES_COLUMN in labels:
+        raise EngineError(
+            f"pivot: a value of the spread columns is '{PIVOT_VALUES_COLUMN}', the name of the "
+            f"column that holds the measure's label: choose row keys, or rename that value first"
+        )
 
 
 def pivot_label(v: Any) -> str:
@@ -416,17 +459,8 @@ def pivot_label(v: Any) -> str:
 @register("pivot")
 def op_pivot(lf: pl.LazyFrame, params: dict[str, Any], ctx: OperationContext) -> pl.LazyFrame:
     # params: {"index": ["paese"], "on": "anno", "values": "vendite", "func": "sum"}
-    index = _require(params, "index")
-    on = _require(params, "on")
-    values = _require(params, "values")
-    func = params.get("func") or "sum"
-    if isinstance(index, str):
-        index = [index]
-    on = on if isinstance(on, list) else [on]  # several columns = combinations of the values
-    if not index:
-        raise EngineError("pivot: choose at least one index column (the row keys)")
-    if not on:
-        raise EngineError("pivot: choose at least one column to spread into new columns")
+    # (either index or on may be empty: see the cross-engine standard above)
+    index, on, values, func = pivot_params(params)
     if func not in _AGG:
         raise EngineError(f"pivot: unsupported aggregation function '{func}'")
 
@@ -439,8 +473,11 @@ def op_pivot(lf: pl.LazyFrame, params: dict[str, Any], ctx: OperationContext) ->
         agg_expr = pl.when(pl.col(values).count() > 0).then(agg_expr).otherwise(None)
     elif func in ("count", "n_unique"):
         agg_expr = agg_expr.cast(pl.Int64)
+    if not on:  # rows only: a group by with one measure, named `values`
+        return lf.group_by(index).agg(agg_expr.alias(PIVOT_VALUES_COLUMN))
+    value = "__pivot_value__"
     aggregated = (
-        lf.group_by(index + on).agg(agg_expr.alias(values)).collect(engine="streaming")
+        lf.group_by(index + on).agg(agg_expr.alias(value)).collect(engine="streaming")
     )
 
     n_cols = aggregated.select(on).unique().height  # distinct combinations = new columns
@@ -459,9 +496,17 @@ def op_pivot(lf: pl.LazyFrame, params: dict[str, Any], ctx: OperationContext) ->
         [pl.col(c).cast(pl.Utf8).fill_null("null") for c in on], separator=PIVOT_LABEL_SEP
     ).alias(key)
     aggregated = aggregated.with_columns(label).drop(on)
-    out = aggregated.pivot(key, index=index, values=values, aggregate_function="first", sort_columns=True)
+    rows = index
+    if not index:  # columns only: ONE row, led by the measure's label
+        check_pivot_labels(aggregated[key].to_list())
+        measure = pivot_measure_label(func, values)
+        if aggregated.height == 0:  # no rows at all: the label alone, as the SQL engines
+            return pl.LazyFrame({PIVOT_VALUES_COLUMN: [measure]})
+        aggregated = aggregated.with_columns(pl.lit(measure).alias(PIVOT_VALUES_COLUMN))
+        rows = [PIVOT_VALUES_COLUMN]
+    out = aggregated.pivot(key, index=rows, values=value, aggregate_function="first", sort_columns=True)
     if func in ("count", "n_unique"):  # a missing group = 0 rows, not "unknown"
-        out = out.with_columns(pl.exclude(index).fill_null(0))
+        out = out.with_columns(pl.exclude(rows).fill_null(0))
     return out.lazy()
 
 

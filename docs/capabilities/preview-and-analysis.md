@@ -114,8 +114,11 @@ then build the view in the side panel and press **Apply**:
 - **Computed fields**: a name and a SQL expression in the engine's dialect, for example
   `ricavo / chili`. They can be filtered, pivoted and charted like any column.
 - **Pivot**: **Rows (dimensions)**, **Columns (dimensions)**, **Values** and a
-  **Function** (sum, average, min, max, count). **Don't repeat row dimensions** prints a
-  dimension's value once per group, as in a report.
+  **Function** (sum, average, min, max, count). Rows or columns may be left empty: with
+  rows only, one row per group and one column `values` with the aggregate; with columns
+  only, a single row whose first column `values` names the measure (`sum(margine)`),
+  then one column per value. **Don't repeat row dimensions** prints a dimension's value
+  once per group, as in a report.
 - **Table** and **Chart** tabs: the table shows the first 500 rows of the result; the
   chart works as in the editor, on the filtered and computed data.
 - **Export CSV** and **Export Excel** download the whole current view (filters, computed

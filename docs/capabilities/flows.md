@@ -101,7 +101,7 @@ every engine, with the exceptions listed in [Engine differences](../engines/engi
 | **Group by** | Groups on columns and computes aggregations: sum, average, minimum, maximum, count, median, std deviation, variance, first, last, distinct count. Nulls are ignored, as in SQL. |
 | **Join** | Joins the right branch: inner, left, right, full, semi, anti or cross. Keys with the same name on both sides become one column; a non-key column present on both sides gets the `_right` suffix. A cross join that would exceed `ENGINE_MAX_CROSS_JOIN_ROWS` (50 million by default) is refused. |
 | **Union (append rows)** | Appends the right branch's rows: **align by name** (missing columns become null) or **require identical schemas**. Chain several unions to append more sources. |
-| **Pivot (rows→columns)** | Turns the values of a column into columns, aggregated with one function. Column names are the values as text; at most 500 new columns. |
+| **Pivot (rows→columns)** | Turns the values of a column into columns, aggregated with one function. Column names are the values as text; at most 500 new columns. **Row keys** or **Columns from the values of** may be left empty, not both: with row keys only, one row per key and one column `values` with the aggregate; with columns only, one row whose first column `values` names the measure (`sum(amount)`), then one column per value. A row key named `values` is refused. |
 | **Unpivot (columns→rows)** | Turns columns into a label column and a value column. |
 
 ### Control

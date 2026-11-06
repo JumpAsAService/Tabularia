@@ -79,6 +79,10 @@ func TestIncompleteStep(t *testing.T) {
 		`{"type": "group_by", "params": {"by": ["a"], "aggregations": [{"func": "sum"}]}}`:   "step_invalid",
 		`{"type": "select", "params": {"columns": []}}`:                                      "step_invalid",
 		`{"type": "nope", "params": 5}`:                                                      "",
+		`{"type": "pivot", "params": {"index": ["a"], "values": "v"}}`:                       "",
+		`{"type": "pivot", "params": {"on": ["a"], "index": [], "values": "v"}}`:             "",
+		`{"type": "pivot", "params": {"index": [], "on": [], "values": "v"}}`:                "step_invalid",
+		`{"type": "pivot", "params": {"index": ["a"], "on": ["b"]}}`:                         "step_invalid",
 	} {
 		op, _ := pyjson.Loads(in)
 		got := ""
