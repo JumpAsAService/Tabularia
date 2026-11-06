@@ -9,3 +9,20 @@ export function commandText (code: string): string {
   if (!lines.some(l => PROMPT.test(l))) return text
   return lines.filter(l => PROMPT.test(l)).map(l => l.replace(PROMPT, '')).join('\n')
 }
+
+const SHELLS = new Set(['bash', 'sh', 'shell', 'shellscript', 'zsh', 'console'])
+const POWERSHELL = new Set(['powershell', 'ps1', 'pwsh', 'ps'])
+
+/**
+ * The terminal a code block runs in, when the page says it: a block that declares it
+ * (```bash [Ubuntu terminal]), a PowerShell block anywhere, or a shell block inside a
+ * system's block of the docs (Windows: the Ubuntu terminal of WSL; Linux, macOS: Terminal).
+ * Otherwise nothing: the same command often runs in several terminals.
+ */
+export function terminalLabel (language?: string | null, os?: string | null, filename?: string | null): string {
+  if (filename) return filename
+  const lang = (language || '').toLowerCase()
+  if (POWERSHELL.has(lang)) return 'PowerShell'
+  if (!os || !SHELLS.has(lang)) return ''
+  return os === 'windows' ? 'Ubuntu terminal (WSL)' : 'Terminal'
+}

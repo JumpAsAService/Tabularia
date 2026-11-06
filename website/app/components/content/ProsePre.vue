@@ -1,7 +1,8 @@
 <script setup lang="ts">
-// A code block of the docs with a copy button. The button shows only when scripts run
-// (<html data-js>, set in the head): without them the block is just the code.
-import { commandText } from '~/utils/code-copy'
+// A code block of the docs with a copy button and, when the page says it, the terminal it
+// runs in. The button shows only when scripts run (<html data-js>, set in the head); the
+// label shows in any case.
+import { commandText, terminalLabel } from '~/utils/code-copy'
 
 const props = defineProps({
   code: { type: String, default: '' },
@@ -12,6 +13,8 @@ const props = defineProps({
   class: { type: String, default: null },
 })
 const t = useCopy().docs
+// inside a Windows / Linux / macOS block (OsPanel.vue) the system is known
+const label = computed(() => terminalLabel(props.language, inject<string | null>('os-panel', null), props.filename))
 const state = ref<'idle' | 'copied' | 'failed'>('idle')
 let timer: ReturnType<typeof setTimeout> | undefined
 
@@ -43,7 +46,8 @@ onBeforeUnmount(() => clearTimeout(timer))
 
 <template>
   <div class="code">
-    <div class="code__bar">
+    <div class="code__bar" :class="{ 'has-label': label }">
+      <span v-if="label" class="code__label">{{ label }}</span>
       <button type="button" class="code__copy" :aria-label="t.copyLabel" @click="copy">
         <svg v-if="state === 'copied'" width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M20 6 9 17l-5-5" /></svg>
         <svg v-else width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="9" y="9" width="13" height="13" rx="2" /><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1" /></svg>
@@ -60,13 +64,20 @@ pre code .line { display: block; }
 .prose .code { position: relative; }
 .prose .code > pre { margin: 0; }
 .prose .code__bar { display: none; }
-html[data-js] .prose .code__bar {
+html[data-js] .prose .code__bar, .prose .code__bar.has-label {
   display: flex; align-items: center; justify-content: flex-end; gap: 12px;
   min-height: 36px; padding: 4px 6px 0 16px;
   background: var(--code-bg); border-radius: var(--radius) var(--radius) 0 0;
   font-size: 13px; color: var(--soft);
 }
-html[data-js] .prose .code__bar + pre { border-radius: 0 0 var(--radius) var(--radius); padding-top: 6px; }
+html[data-js] .prose .code__bar + pre, .prose .code__bar.has-label + pre { border-radius: 0 0 var(--radius) var(--radius); padding-top: 6px; }
+html:not([data-js]) .prose .code__copy { display: none; }
+.prose .code__label {
+  margin-right: auto; display: inline-flex; align-items: center; gap: 7px;
+  font-size: 13px; font-weight: 600; color: var(--soft); letter-spacing: .01em;
+}
+.prose .code__label::before { content: '>_'; font-family: var(--mono); font-size: 12px; color: var(--muted); }
+html:not([data-js]) .prose .code__bar.has-label { padding-top: 8px; padding-bottom: 2px; }
 .code__copy {
   display: inline-flex; align-items: center; gap: 6px; min-height: 32px; padding: 0 10px;
   border: 0; border-radius: 6px; background: none; color: var(--soft);

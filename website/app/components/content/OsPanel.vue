@@ -6,6 +6,8 @@ import { panelSystems } from '~/composables/useOsChoice'
 const props = defineProps<{ os: string, label?: string }>()
 const group = inject<{ ready: Ref<boolean>, active: ComputedRef<string>, tabId: (k: string) => string, panelId: (k: string) => string } | null>('os-tabs', null)
 const tabbed = computed(() => Boolean(group?.ready.value))
+// the code blocks inside say which terminal they run in (ProsePre.vue)
+provide('os-panel', props.os)
 </script>
 
 <template>
