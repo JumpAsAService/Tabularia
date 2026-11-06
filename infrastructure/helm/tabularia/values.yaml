@@ -563,7 +563,7 @@ gateway:
 # The AI service: the Python gateway's image with APP__ROLE=ai. It answers the
 # assistant's routes (the gateway forwards them) and the SQL parsing the gateway and
 # the orchestrator ask it for. No Service outside the cluster, no background work.
-ai:
+aiService:
   replicas: 1
   resources:
     requests: { cpu: 50m, memory: 256Mi }

@@ -77,7 +77,7 @@ gateway:
   orchestrator:
     replicas: 1     # 2 for failover: the survivor takes over the queue
 
-ai:
+aiService:
   replicas: 1       # the assistant and the SQL parsing; 2 for failover
 
 engineApi:

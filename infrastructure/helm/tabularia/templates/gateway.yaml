@@ -252,7 +252,7 @@ metadata:
     {{- include "tabularia.labels" . | nindent 4 }}
     app.kubernetes.io/component: ai
 spec:
-  replicas: {{ .Values.ai.replicas }}
+  replicas: {{ .Values.aiService.replicas }}
   strategy:
     type: RollingUpdate
     rollingUpdate:
@@ -268,7 +268,7 @@ spec:
       annotations:
         checksum/config: {{ include (print $.Template.BasePath "/configmap.yaml") . | sha256sum }}
         {{- include "tabularia.secretChecksum" . | nindent 8 }}
-        {{- with .Values.ai.podAnnotations }}
+        {{- with .Values.aiService.podAnnotations }}
         {{- toYaml . | nindent 8 }}
         {{- end }}
       labels:
@@ -280,7 +280,7 @@ spec:
       automountServiceAccountToken: {{ .Values.serviceAccount.automountToken }}
       securityContext:
         {{- toYaml .Values.podSecurityContext | nindent 8 }}
-      terminationGracePeriodSeconds: {{ .Values.ai.terminationGracePeriodSeconds | default 60 }}
+      terminationGracePeriodSeconds: {{ .Values.aiService.terminationGracePeriodSeconds | default 60 }}
       {{- if .Values.migrations.enabled }}
       initContainers:
         # as in the gateway pods: the Go gateway only checks the schema revision, and this
@@ -316,7 +316,7 @@ spec:
             - --proxy-headers
             - --forwarded-allow-ips={{ .Values.gateway.trustedProxies }}
             - --timeout-keep-alive=75
-            - --timeout-graceful-shutdown={{ max 5 (sub (.Values.ai.terminationGracePeriodSeconds | default 60) 15) }}
+            - --timeout-graceful-shutdown={{ max 5 (sub (.Values.aiService.terminationGracePeriodSeconds | default 60) 15) }}
           lifecycle:
             preStop:
               exec: { command: ["sleep", "5"] }
@@ -344,7 +344,7 @@ spec:
             timeoutSeconds: 5
             failureThreshold: 3
           resources:
-            {{- toYaml .Values.ai.resources | nindent 12 }}
+            {{- toYaml .Values.aiService.resources | nindent 12 }}
           volumeMounts:
             - name: tmp
               mountPath: /tmp
@@ -356,7 +356,7 @@ spec:
       volumes:
         - name: tmp
           emptyDir:
-            sizeLimit: {{ .Values.ai.tmpSizeLimit }}
+            sizeLimit: {{ .Values.aiService.tmpSizeLimit }}
         {{- with include "tabularia.oidcCa" . }}
         {{- $ca := splitList "|" . }}
         - name: oidc-ca
@@ -364,15 +364,15 @@ spec:
             name: {{ index $ca 0 }}
             items: [{ key: {{ index $ca 1 | quote }}, path: ca.crt }]
         {{- end }}
-      {{- with .Values.ai.nodeSelector }}
+      {{- with .Values.aiService.nodeSelector }}
       nodeSelector:
         {{- toYaml . | nindent 8 }}
       {{- end }}
-      {{- with .Values.ai.tolerations }}
+      {{- with .Values.aiService.tolerations }}
       tolerations:
         {{- toYaml . | nindent 8 }}
       {{- end }}
-      {{- with .Values.ai.affinity }}
+      {{- with .Values.aiService.affinity }}
       affinity:
         {{- toYaml . | nindent 8 }}
       {{- end }}
