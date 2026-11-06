@@ -40,6 +40,9 @@ let timer: ReturnType<typeof setTimeout> | null = null
 let closedAt = -Infinity
 // no entrance and no exit: opened from the keyboard (Menu key, Shift+F10) or again at once
 const still = ref(false)
+// opened by the pointer: the focus moves without its ring (the hover already shows the
+// item) until a key is pressed, so two items never look current at once
+let quietFocus = false
 
 const ring = computed(() => props.items.map((op, i) => {
   const at = radialItemOffset(i, props.items.length)
@@ -57,6 +60,7 @@ function clearTimer() {
 async function show(click: { x: number; y: number }, bounds: QuickMenuBox, keyboard = false) {
   clearTimer()
   still.value = keyboard || performance.now() - closedAt < REOPEN_MS
+  quietFocus = !keyboard
   picked.value = -1
   phase.value = 'open'
   active.value = 0
@@ -113,18 +117,36 @@ function customize() {
   emit('customize')
 }
 
+function focusEl(el: HTMLElement | null | undefined) {
+  el?.focus({ focusVisible: !quietFocus } as FocusOptions)
+}
+
+function focusHub() {
+  focusEl(root.value?.querySelector<HTMLElement>('.qm-hub'))
+}
+
 function focusItem(i: number) {
   if (!props.items.length) {
-    root.value?.querySelector<HTMLElement>('.qm-hub')?.focus()
+    focusHub()
     return
   }
   active.value = (i + props.items.length) % props.items.length
-  itemEls[active.value]?.focus()
+  focusEl(itemEls[active.value])
+}
+
+// the mouse over an item (or the hub) takes the focus there: the ring's current item is
+// the one under the pointer, and Enter acts on what is lit
+function onPointerMove(ev: PointerEvent, i: number | null) {
+  if (ev.pointerType !== 'mouse' || phase.value !== 'open' || document.activeElement === ev.currentTarget) return
+  quietFocus = true
+  if (i === null) focusHub()
+  else focusItem(i)
 }
 
 function onKey(ev: KeyboardEvent) {
   // the editor's own shortcuts (Delete removes the selected node…) do not act under the menu
   ev.stopPropagation()
+  quietFocus = false // from the first key on, the focus shows its ring
   const onHub = (ev.target as HTMLElement | null)?.classList.contains('qm-hub')
   switch (ev.key) {
     case 'Escape': ev.preventDefault(); hide('escape'); return
@@ -136,7 +158,7 @@ function onKey(ev: KeyboardEvent) {
       // the menu keeps the focus: the ring's current item ↔ the hub
       ev.preventDefault()
       if (onHub) focusItem(active.value)
-      else root.value?.querySelector<HTMLElement>('.qm-hub')?.focus()
+      else focusHub()
       return
     case 'Enter': case ' ':
       ev.preventDefault()
@@ -192,6 +214,7 @@ defineExpose({ show, hide, isOpen: () => visible.value && phase.value === 'open'
         :style="{ '--x': `${it.x}px`, '--y': `${it.y}px`, '--i': it.i, '--c': it.meta.color }"
         @click="choose(it.i)"
         @focus="active = it.i"
+        @pointermove="onPointerMove($event, it.i)"
       >
         <component :is="it.meta.icon" :size="18" aria-hidden="true" />
         <span :ref="(el) => { if (el) labelEls[it.i] = el as HTMLElement }" class="qm-label" aria-hidden="true">{{ t(it.meta.label) }}</span>
@@ -203,6 +226,7 @@ defineExpose({ show, hide, isOpen: () => visible.value && phase.value === 'open'
         :aria-label="t('quickMenu.customize')"
         :title="t('quickMenu.customize')"
         @click="customize"
+        @pointermove="onPointerMove($event, null)"
       >
         <SlidersHorizontal :size="14" aria-hidden="true" />
       </button>
