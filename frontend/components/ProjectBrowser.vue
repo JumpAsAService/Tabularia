@@ -1689,7 +1689,8 @@ watch(currentId, () => { q.value = ''; kindFilter.value = null; settingsOpen.val
       <p class="muted">{{ currentId === null ? $t('projectBrowser.emptyRoot') : $t('projectBrowser.emptyFolder') }}</p>
       <!-- what can be made here, by whoever may: the same rights as the New menu -->
       <div class="empty-acts">
-        <template v-if="currentId !== null && target !== null && !user?.is_observer">
+        <!-- an observer reads only; an administrator is one by definition too, and may create -->
+        <template v-if="currentId !== null && target !== null && !(user?.is_observer && !user?.is_superuser)">
           <button @click="newFlowHere"><Workflow :size="14" /> {{ $t('projectBrowser.newFlowButton') }}</button>
           <button @click="openDbDsDialog"><Database :size="14" /> {{ $t('projectBrowser.fromDatabaseButton') }}</button>
         </template>
