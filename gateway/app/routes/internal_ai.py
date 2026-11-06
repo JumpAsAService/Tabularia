@@ -17,11 +17,12 @@ from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel
 from sqlmodel import Session
 
+from app.core.routing import ReleasingRoute
 from app.db.session import engine
 from app.models import User
 from app.routes.internal_sql import _internal_only
 
-router = APIRouter(prefix="/internal/ai", include_in_schema=False, dependencies=[Depends(_internal_only)])
+router = APIRouter(route_class=ReleasingRoute, prefix="/internal/ai", include_in_schema=False, dependencies=[Depends(_internal_only)])
 
 
 class CommentsIn(BaseModel):

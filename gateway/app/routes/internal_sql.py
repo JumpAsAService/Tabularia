@@ -36,6 +36,7 @@ from pydantic import BaseModel
 from sqlglot import exp
 from sqlglot.errors import SqlglotError
 
+from app.core.routing import ReleasingRoute
 from app.core.crypto import INTERNAL_HEADER, internal_token
 from app.services import openlineage, report_params
 
@@ -48,7 +49,7 @@ def _internal_only(request: Request) -> None:
         raise HTTPException(status_code=404, detail="Not Found")
 
 
-router = APIRouter(prefix="/internal/sql", include_in_schema=False, dependencies=[Depends(_internal_only)])
+router = APIRouter(route_class=ReleasingRoute, prefix="/internal/sql", include_in_schema=False, dependencies=[Depends(_internal_only)])
 
 # the dialects the gateway reads a SQL in: sql_scripts.DIALECTS' values and report_params'
 SqlglotDialect = Literal["postgres", "duckdb", "clickhouse", "bigquery", "mysql", "tsql", "oracle", "trino"]
@@ -139,7 +140,7 @@ def qualified_tables(body: QualifiedIn) -> QualifiedOut:
 
 # ── Python's own regular expressions ────────────────────────────────────────
 
-regex_router = APIRouter(prefix="/internal/python", include_in_schema=False, dependencies=[Depends(_internal_only)])
+regex_router = APIRouter(route_class=ReleasingRoute, prefix="/internal/python", include_in_schema=False, dependencies=[Depends(_internal_only)])
 
 
 class PatternsIn(BaseModel):

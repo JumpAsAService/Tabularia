@@ -16,10 +16,11 @@ from typing import Optional
 from fastapi import APIRouter, Depends
 from pydantic import BaseModel
 
+from app.core.routing import ReleasingRoute
 from app.routes.internal_sql import _internal_only
 from app.services import script_lint
 
-router = APIRouter(prefix="/internal/script", include_in_schema=False, dependencies=[Depends(_internal_only)])
+router = APIRouter(route_class=ReleasingRoute, prefix="/internal/script", include_in_schema=False, dependencies=[Depends(_internal_only)])
 
 
 class LintIn(BaseModel):
