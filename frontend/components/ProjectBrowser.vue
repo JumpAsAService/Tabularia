@@ -2157,7 +2157,11 @@ tr.folderrow .kicon { color: var(--accent-2); }
    tooltip) — before, a fixed 36ch cut it on wide screens too */
 .rmeta-text { display: block; overflow: hidden; text-overflow: ellipsis; }
 .rmeta-sub { display: none; }
-.racts { text-align: right; white-space: nowrap; display: flex; gap: 4px; justify-content: flex-end; }
+/* a real table cell (it was a flex box): its hover and focus background fills the row's
+   whole height, also when the name takes two lines on a phone */
+.racts { text-align: right; white-space: nowrap; vertical-align: middle; width: 1%; }
+.racts > * + * { margin-left: 4px; }
+.racts .movesel { display: inline-block; vertical-align: middle; }
 .tag {
   font-size: 10px;
   text-transform: uppercase;
