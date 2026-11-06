@@ -75,6 +75,7 @@ import { starterReport, useReports, type Report } from '~/composables/useReports
 import { starterDashboard, useDashboards, type Dashboard } from '~/composables/useDashboards'
 import ContractBadge from '~/components/ui/ContractBadge.vue'
 import ContractDialog from '~/components/ui/ContractDialog.vue'
+import { listState } from '~/composables/exploreList'
 import {
   useProjects,
   CAPABILITIES,
@@ -133,6 +134,9 @@ const permissions = ref<Permission[]>([])
 const groups = ref<GroupOut[]>([])
 const users = ref<UserOut[]>([])
 const loading = ref(false)
+// the folder tree has answered once (or failed): before, the top level is not empty, it is
+// still loading
+const treeLoaded = ref(false)
 
 const isSuper = computed(() => !!user.value?.is_superuser)
 const current = computed(() => projects.value.find((p) => p.id === currentId.value) ?? null)
@@ -309,6 +313,9 @@ const counts = computed(() => {
 const visibleRows = computed(() =>
   kindFilter.value ? matching.value.filter((r) => r.kind === kindFilter.value) : matching.value,
 )
+const state = computed(() => listState({
+  treeLoaded: treeLoaded.value, folderLoading: loading.value, total: rows.value.length, visible: visibleRows.value.length,
+}))
 const segments = computed(() =>
   (['folder', 'flow', 'group', 'datasource', 'view', 'script', 'sql', 'notebook', 'report', 'dashboard', 'connection'] as Kind[])
     .filter((k) => counts.value[k])
@@ -322,6 +329,8 @@ async function loadProjects() {
     projects.value = await api.list()
   } catch (e) {
     error.value = errMessage(e)
+  } finally {
+    treeLoaded.value = true
   }
 }
 
@@ -1177,6 +1186,10 @@ watch(currentId, () => { q.value = ''; kindFilter.value = null; settingsOpen.val
         <button class="crumb" :class="{ on: currentId === null }" @click="openFolder(null)">
           <Home :size="14" /> {{ $t('projectBrowser.rootCrumb') }}
         </button>
+        <template v-if="currentId !== null && !current && !treeLoaded">
+          <ChevronRight :size="13" class="sep" />
+          <span class="sk crumb-sk" aria-hidden="true" />
+        </template>
         <template v-for="p in breadcrumb" :key="p.id">
           <ChevronRight :size="13" class="sep" />
           <button class="crumb" :class="{ on: p.id === currentId }" @click="openFolder(p.id)">{{ p.name }}</button>
@@ -1195,8 +1208,8 @@ watch(currentId, () => { q.value = ''; kindFilter.value = null; settingsOpen.val
         <RefreshCw :size="13" />
       </button>
 
-      <div v-if="target !== null || isSuper" class="newwrap">
-        <button class="btn-link" @click="newMenuByKey = !newMenu && $event.detail === 0; newMenu = !newMenu"><Plus :size="14" /> {{ $t('projectBrowser.newButton') }}</button>
+      <div v-if="!treeLoaded || target !== null || isSuper" class="newwrap">
+        <button class="btn-link" :disabled="state === 'loading'" :aria-busy="state === 'loading'" @click="newMenuByKey = !newMenu && $event.detail === 0; newMenu = !newMenu"><Plus :size="14" /> {{ $t('projectBrowser.newButton') }}</button>
         <div v-if="newMenu" class="menu-backdrop" @click="closeNew" />
         <Transition name="pop" :css="!newMenuByKey">
         <div v-if="newMenu" ref="newPop" class="menu-pop">
@@ -1286,7 +1299,7 @@ watch(currentId, () => { q.value = ''; kindFilter.value = null; settingsOpen.val
     </div>
 
     <!-- kind filter: the numbers say what is inside, before looking -->
-    <div v-if="segments.length > 1" class="segs">
+    <div v-if="state !== 'loading' && segments.length > 1" class="segs">
       <button class="seg" :class="{ on: kindFilter === null }" @click="kindFilter = null">
         {{ $t('projectBrowser.allSegment') }} <span class="n">{{ matching.length }}</span>
       </button>
@@ -1303,12 +1316,12 @@ watch(currentId, () => { q.value = ''; kindFilter.value = null; settingsOpen.val
 
     <p v-if="error" class="err">{{ error }}</p>
 
-    <SkeletonRows v-if="loading" :rows="6" />
+    <SkeletonRows v-if="state === 'loading'" :rows="6" />
 
-    <p v-else-if="!rows.length" class="muted empty">
+    <p v-else-if="state === 'empty'" class="muted empty">
       {{ currentId === null ? $t('projectBrowser.emptyRoot') : $t('projectBrowser.emptyFolder') }}
     </p>
-    <p v-else-if="!visibleRows.length" class="muted empty">{{ $t('projectBrowser.noMatches', { q }) }}</p>
+    <p v-else-if="state === 'nomatch'" class="muted empty">{{ $t('projectBrowser.noMatches', { q }) }}</p>
 
     <table v-else class="rows">
       <tbody>
@@ -1594,6 +1607,8 @@ watch(currentId, () => { q.value = ''; kindFilter.value = null; settingsOpen.val
    `button` rule losing the accent fill, that is the visual weight of the page's only
    primary action. Values copied from listpage.css so that Explore's `New` is identical
    to the Flows and Datasources ones. */
+.btn-link:disabled { opacity: 0.6; cursor: progress; }
+.crumb-sk { display: inline-block; width: 120px; height: 14px; border-radius: 6px; }
 .btn-link {
   display: inline-flex;
   align-items: center;

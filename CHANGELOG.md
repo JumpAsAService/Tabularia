@@ -5,6 +5,10 @@ exposes at `/system/info` and in the app's settings menu.
 
 ## Unreleased
 
+- **Explore no longer says a folder is empty while it is still loading**: the list shows its
+  skeleton until both the folder tree and the folder's contents have arrived (the top level
+  said «No folders yet» for the moment the tree took); the path keeps its place and «New»
+  waits, disabled, instead of appearing late.
 - **Dialogs, side panels, menus and toasts arrive and leave instead of popping**: short
   fades and a 97% grow for dialogs, a slide from the right edge for side panels, a grow
   from the button for menus (none when opened from the keyboard), only a fade under
