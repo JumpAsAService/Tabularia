@@ -341,6 +341,7 @@ async function toggleModel(p: AiProvider, m: AiModel) {
   </div>
 </template>
 
+<style scoped src="~/assets/admintable.css"></style>
 <style scoped>
 .card { display: flex; flex-direction: column; gap: 8px; padding: 16px; background: var(--panel); border: 1px solid var(--border); border-radius: var(--radius); }
 .card h4 { margin: 0; display: inline-flex; align-items: center; gap: 7px; }
@@ -356,15 +357,6 @@ async function toggleModel(p: AiProvider, m: AiModel) {
 .link-like { display: inline-flex; align-items: center; gap: 4px; padding: 0; min-height: 0; border: 0; background: none; color: var(--accent-hi); font-size: 12.5px; cursor: pointer; text-decoration: underline; }
 .link-like:hover { box-shadow: none; }
 
-.tablewrap { max-height: 420px; overflow-y: auto; }
-table.rows { width: 100%; border-collapse: collapse; font-size: 13px; }
-table.rows th {
-  text-align: left; padding: 4px; font-size: 11px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.04em;
-  color: var(--muted); border-bottom: 1px solid var(--border); position: sticky; top: 0; background: var(--panel); z-index: 1;
-}
-table.rows td { padding: 6px 4px; border-bottom: 1px solid var(--border-soft); vertical-align: top; }
-table.rows tr:last-child td { border-bottom: none; }
-td.right { text-align: right; width: 80px; }
 td.actions { white-space: nowrap; width: 1%; }
 td.address { max-width: 260px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-variant-numeric: tabular-nums; }
 .tag {

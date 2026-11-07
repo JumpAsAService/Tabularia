@@ -142,79 +142,81 @@ async function act(a: DataApiAdminRow, what: 'pause' | 'delete') {
       </dl>
       <p class="hint">{{ $t('dataApiAdmin.capsHint') }}</p>
 
-      <div class="list-head">
-        <h3>{{ $t('dataApiAdmin.count', { n: rows.length }, rows.length) }}</h3>
-        <div class="tools">
-          <div class="seg" role="group" :aria-label="$t('dataApiAdmin.filter')">
-            <button type="button" class="mini" :class="{ on: filter === 'all' }" :aria-pressed="filter === 'all'" @click="filter = 'all'">{{ $t('dataApiAdmin.all') }}</button>
-            <button type="button" class="mini" :class="{ on: filter === 'active' }" :aria-pressed="filter === 'active'" @click="filter = 'active'">{{ $t('dataApiAdmin.activeOnly') }}</button>
+      <div class="tablecard">
+        <div class="list-head">
+          <h3>{{ $t('dataApiAdmin.count', { n: rows.length }, rows.length) }}</h3>
+          <div class="tools">
+            <div class="seg" role="group" :aria-label="$t('dataApiAdmin.filter')">
+              <button type="button" class="mini" :class="{ on: filter === 'all' }" :aria-pressed="filter === 'all'" @click="filter = 'all'">{{ $t('dataApiAdmin.all') }}</button>
+              <button type="button" class="mini" :class="{ on: filter === 'active' }" :aria-pressed="filter === 'active'" @click="filter = 'active'">{{ $t('dataApiAdmin.activeOnly') }}</button>
+            </div>
+            <button type="button" class="mini" :disabled="loading" :aria-label="$t('dataApiAdmin.reload')" :title="$t('dataApiAdmin.reload')" @click="load">
+              <LoaderCircle v-if="loading" :size="12" class="spin" /><RefreshCw v-else :size="12" />
+            </button>
           </div>
-          <button type="button" class="mini" :disabled="loading" :aria-label="$t('dataApiAdmin.reload')" :title="$t('dataApiAdmin.reload')" @click="load">
-            <LoaderCircle v-if="loading" :size="12" class="spin" /><RefreshCw v-else :size="12" />
-          </button>
         </div>
-      </div>
-      <p v-if="!rows.length" class="muted empty">{{ $t('dataApiAdmin.none') }}</p>
-      <div v-else class="tablewrap">
-        <table class="rows">
-          <thead>
-            <tr>
-              <th>{{ $t('dataApiAdmin.colApi') }}</th>
-              <th>{{ $t('dataApiAdmin.colCreator') }}</th>
-              <th>{{ $t('dataApiAdmin.colState') }}</th>
-              <th>{{ $t('dataApiAdmin.colRuntime') }}</th>
-              <th>{{ $t('dataApiAdmin.colPods') }}</th>
-              <th class="n">{{ $t('dataApiAdmin.colRequests') }}</th>
-              <th class="n">{{ $t('dataApiAdmin.colErrors') }}</th>
-              <th class="n">{{ $t('dataApiAdmin.colKeys') }}</th>
-              <th v-if="props.canWrite" />
-            </tr>
-          </thead>
-          <tbody>
-            <tr v-for="a in rows" :key="a.id" :data-api="a.id">
-              <td>
-                <NuxtLink :to="`/data-api?id=${a.id}`">{{ a.name }}</NuxtLink>
-                <br><span class="mono muted">{{ a.path }}</span>
-                <span v-if="folderPaths.pathOf(a.project_id)" class="muted small"> · {{ folderPaths.pathOf(a.project_id) }}</span>
-              </td>
-              <td>
-                {{ a.creator?.full_name || a.creator?.email || '—' }}
-                <span v-if="a.creator && !a.creator.active" class="tag bad">{{ $t('dataApiAdmin.creatorInactive') }}</span>
-                <br v-if="a.creator?.full_name"><span v-if="a.creator?.full_name" class="muted small">{{ a.creator.email }}</span>
-              </td>
-              <td :class="['state', a.state]">{{ $t(`dataApi.state_${a.state}`) }}</td>
-              <td class="rt">
-                <span class="mono" data-rt="summary">{{ runtimeOf(a) }}</span>
-                <template v-if="a.runtime.autoscale"><br><span class="muted small">{{ $t('dataApiAdmin.autoscaling') }}</span></template>
-              </td>
-              <td>
-                <span :class="['pods', tone(a)]">{{ podsOf(a) }}</span>
-                <template v-if="a.state === 'active' && a.error"><br><span class="small err mono">{{ a.error }}</span></template>
-              </td>
-              <td class="n">{{ fmt.count(a.requests_24h) }}<template v-if="a.last_used_at"><br><span class="muted small">{{ fmt.dateTime(a.last_used_at) }}</span></template></td>
-              <td class="n" :class="{ err: a.errors_24h + a.throttled_24h > 0 }">{{ fmt.count(a.errors_24h + a.throttled_24h) }}</td>
-              <td class="n">{{ a.keys }}</td>
-              <td v-if="props.canWrite" class="act">
-                <template v-if="asking?.id === a.id">
-                  <span class="small">{{ $t(asking.what === 'pause' ? 'dataApiAdmin.pauseAsk' : 'dataApiAdmin.deleteAsk', { name: a.name }) }}</span>
-                  <button type="button" class="mini" :class="{ danger: asking.what === 'delete' }" :disabled="busy === a.id" @click="act(a, asking.what)">
-                    <LoaderCircle v-if="busy === a.id" :size="12" class="spin" />
-                    {{ $t(asking.what === 'pause' ? 'dataApiAdmin.pause' : 'dataApiAdmin.delete') }}
-                  </button>
-                  <button type="button" class="mini" @click="asking = null">{{ $t('dataApi.cancel') }}</button>
-                </template>
-                <template v-else>
-                  <button v-if="list.enabled" type="button" class="mini" :aria-label="$t('dataApiAdmin.runtimeOf', { name: a.name })" data-rt="edit"
-                          :title="$t('dataApiAdmin.runtimeOf', { name: a.name })" @click="openRuntime(a)"><Cpu :size="12" /> {{ $t('dataApiAdmin.runtime') }}</button>
-                  <button v-if="a.state === 'active'" type="button" class="mini" :aria-label="$t('dataApiAdmin.pauseOf', { name: a.name })"
-                          @click="asking = { id: a.id, what: 'pause' }"><Pause :size="12" /> {{ $t('dataApiAdmin.pause') }}</button>
-                  <button type="button" class="mini danger" :aria-label="$t('dataApiAdmin.deleteOf', { name: a.name })"
-                          @click="asking = { id: a.id, what: 'delete' }"><Trash2 :size="12" /> {{ $t('dataApiAdmin.delete') }}</button>
-                </template>
-              </td>
-            </tr>
-          </tbody>
-        </table>
+        <p v-if="!rows.length" class="muted empty">{{ $t('dataApiAdmin.none') }}</p>
+        <div v-else class="tablewrap">
+          <table class="rows">
+            <thead>
+              <tr>
+                <th>{{ $t('dataApiAdmin.colApi') }}</th>
+                <th>{{ $t('dataApiAdmin.colCreator') }}</th>
+                <th>{{ $t('dataApiAdmin.colState') }}</th>
+                <th>{{ $t('dataApiAdmin.colRuntime') }}</th>
+                <th>{{ $t('dataApiAdmin.colPods') }}</th>
+                <th class="n">{{ $t('dataApiAdmin.colRequests') }}</th>
+                <th class="n">{{ $t('dataApiAdmin.colErrors') }}</th>
+                <th class="n">{{ $t('dataApiAdmin.colKeys') }}</th>
+                <th v-if="props.canWrite" />
+              </tr>
+            </thead>
+            <tbody>
+              <tr v-for="a in rows" :key="a.id" :data-api="a.id">
+                <td>
+                  <NuxtLink :to="`/data-api?id=${a.id}`">{{ a.name }}</NuxtLink>
+                  <br><span class="mono muted">{{ a.path }}</span>
+                  <span v-if="folderPaths.pathOf(a.project_id)" class="muted small"> · {{ folderPaths.pathOf(a.project_id) }}</span>
+                </td>
+                <td>
+                  {{ a.creator?.full_name || a.creator?.email || '—' }}
+                  <span v-if="a.creator && !a.creator.active" class="tag bad">{{ $t('dataApiAdmin.creatorInactive') }}</span>
+                  <br v-if="a.creator?.full_name"><span v-if="a.creator?.full_name" class="muted small">{{ a.creator.email }}</span>
+                </td>
+                <td :class="['state', a.state]">{{ $t(`dataApi.state_${a.state}`) }}</td>
+                <td class="rt">
+                  <span class="mono" data-rt="summary">{{ runtimeOf(a) }}</span>
+                  <template v-if="a.runtime.autoscale"><br><span class="muted small">{{ $t('dataApiAdmin.autoscaling') }}</span></template>
+                </td>
+                <td>
+                  <span :class="['pods', tone(a)]">{{ podsOf(a) }}</span>
+                  <template v-if="a.state === 'active' && a.error"><br><span class="small err mono">{{ a.error }}</span></template>
+                </td>
+                <td class="n">{{ fmt.count(a.requests_24h) }}<template v-if="a.last_used_at"><br><span class="muted small">{{ fmt.dateTime(a.last_used_at) }}</span></template></td>
+                <td class="n" :class="{ err: a.errors_24h + a.throttled_24h > 0 }">{{ fmt.count(a.errors_24h + a.throttled_24h) }}</td>
+                <td class="n">{{ a.keys }}</td>
+                <td v-if="props.canWrite" class="act">
+                  <template v-if="asking?.id === a.id">
+                    <span class="small">{{ $t(asking.what === 'pause' ? 'dataApiAdmin.pauseAsk' : 'dataApiAdmin.deleteAsk', { name: a.name }) }}</span>
+                    <button type="button" class="mini" :class="{ danger: asking.what === 'delete' }" :disabled="busy === a.id" @click="act(a, asking.what)">
+                      <LoaderCircle v-if="busy === a.id" :size="12" class="spin" />
+                      {{ $t(asking.what === 'pause' ? 'dataApiAdmin.pause' : 'dataApiAdmin.delete') }}
+                    </button>
+                    <button type="button" class="mini" @click="asking = null">{{ $t('dataApi.cancel') }}</button>
+                  </template>
+                  <template v-else>
+                    <button v-if="list.enabled" type="button" class="mini" :aria-label="$t('dataApiAdmin.runtimeOf', { name: a.name })" data-rt="edit"
+                            :title="$t('dataApiAdmin.runtimeOf', { name: a.name })" @click="openRuntime(a)"><Cpu :size="12" /> {{ $t('dataApiAdmin.runtime') }}</button>
+                    <button v-if="a.state === 'active'" type="button" class="mini" :aria-label="$t('dataApiAdmin.pauseOf', { name: a.name })"
+                            @click="asking = { id: a.id, what: 'pause' }"><Pause :size="12" /> {{ $t('dataApiAdmin.pause') }}</button>
+                    <button type="button" class="mini danger" :aria-label="$t('dataApiAdmin.deleteOf', { name: a.name })"
+                            @click="asking = { id: a.id, what: 'delete' }"><Trash2 :size="12" /> {{ $t('dataApiAdmin.delete') }}</button>
+                  </template>
+                </td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
       </div>
     </template>
     <Modal :open="!!editing" :title="$t('dataApiAdmin.runtimeTitle', { name: editing?.row.name ?? '' })" :width="520"
@@ -238,18 +240,12 @@ async function act(a: DataApiAdminRow, what: 'pause' | 'delete') {
   </section>
 </template>
 
+<style scoped src="~/assets/admintable.css"></style>
 <style scoped>
 .das { display: flex; flex-direction: column; gap: 14px; min-width: 0; }
-/* the panel's table, here too (its styles are scoped to it): it scrolls by itself, never the page */
-.tablewrap { max-height: 520px; overflow: auto; }
-table.rows { width: 100%; border-collapse: collapse; font-size: 13px; }
-table.rows th {
-  text-align: left; padding: 4px; font-size: 11px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.04em;
-  color: var(--muted); border-bottom: 1px solid var(--border); position: sticky; top: 0; background: var(--panel); z-index: 1;
-  white-space: nowrap;
-}
-table.rows td { padding: 6px 4px; border-bottom: 1px solid var(--border-soft); vertical-align: top; }
-table.rows tr:last-child td { border-bottom: none; }
+/* the panel's table (admintable.css), a little taller, with headers on one line */
+.tablewrap { max-height: 520px; }
+table.rows th { white-space: nowrap; }
 .das-head h2 { margin: 0; display: flex; align-items: center; gap: 8px; font-size: 16px; }
 .das-head p { margin: 4px 0 0; max-width: 72ch; line-height: 1.5; }
 .note { margin: 0; padding: 8px 10px; border-radius: 8px; background: var(--bg-soft); border: 1px solid var(--border); max-width: 720px; }

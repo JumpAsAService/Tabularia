@@ -884,6 +884,7 @@ async function toggleEngine(m: EnginePolicy) {
   </div>
 </template>
 
+<style scoped src="~/assets/admintable.css"></style>
 <style scoped>
 .navitem.is-off { opacity: .45; cursor: not-allowed; }
 .rowpick { padding: 0; border: 0; background: none; font: inherit; color: inherit; text-align: left; cursor: pointer; }
@@ -963,29 +964,6 @@ async function toggleEngine(m: EnginePolicy) {
 }
 .rowsearch .count { font-size: 11px; font-variant-numeric: tabular-nums; }
 .rowsearch .x { padding: 1px 6px; }
-/* the table scrolls instead of lengthening the page forever */
-.tablewrap { max-height: 420px; overflow-y: auto; }
-table.rows { width: 100%; border-collapse: collapse; font-size: 13px; }
-table.rows th {
-  text-align: left;
-  padding: 4px;
-  font-size: 11px;
-  font-weight: 600;
-  text-transform: uppercase;
-  letter-spacing: 0.04em;
-  color: var(--muted);
-  border-bottom: 1px solid var(--border);
-  position: sticky;
-  top: 0;
-  background: var(--panel);
-  z-index: 1;
-}
-table.rows td { padding: 6px 4px; border-bottom: 1px solid var(--border-soft); vertical-align: top; }
-table.rows tr:last-child td { border-bottom: none; }
-tr.clickable { cursor: pointer; }
-tr.clickable:hover td { background: var(--panel-2); }
-tr.sel td { background: var(--panel-2); }
-td.right { text-align: right; width: 80px; }
 .nowrap { white-space: nowrap; }
 .small { font-size: 11.5px; }
 .chip {

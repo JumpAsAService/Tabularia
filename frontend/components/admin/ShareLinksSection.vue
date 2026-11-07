@@ -107,53 +107,56 @@ const objectHref = (l: ShareLink) => (l.kind === 'report' ? `/report?id=${l.obje
       </div>
     </div>
 
-    <div class="list-head">
-      <h3>{{ $t('share.adminLinks', { n: shown.length }) }}</h3>
-      <div class="seg" role="group" :aria-label="$t('share.adminFilter')">
-        <button type="button" class="mini" :class="{ on: filter === 'live' }" :aria-pressed="filter === 'live'" @click="filter = 'live'">{{ $t('share.adminLive') }}</button>
-        <button type="button" class="mini" :class="{ on: filter === 'all' }" :aria-pressed="filter === 'all'" @click="filter = 'all'">{{ $t('share.adminAll') }}</button>
+    <div class="tablecard">
+      <div class="list-head">
+        <h3>{{ $t('share.adminLinks', { n: shown.length }) }}</h3>
+        <div class="seg" role="group" :aria-label="$t('share.adminFilter')">
+          <button type="button" class="mini" :class="{ on: filter === 'live' }" :aria-pressed="filter === 'live'" @click="filter = 'live'">{{ $t('share.adminLive') }}</button>
+          <button type="button" class="mini" :class="{ on: filter === 'all' }" :aria-pressed="filter === 'all'" @click="filter = 'all'">{{ $t('share.adminAll') }}</button>
+        </div>
       </div>
-    </div>
-    <p v-if="!shown.length" class="muted empty">{{ $t('share.adminNone') }}</p>
-    <div v-else class="tablewrap">
-      <table class="rows">
-        <thead>
-          <tr>
-            <th>{{ $t('share.adminObject') }}</th>
-            <th>{{ $t('share.label') }}</th>
-            <th>{{ $t('share.mode') }}</th>
-            <th>{{ $t('share.adminCreator') }}</th>
-            <th>{{ $t('share.expires') }}</th>
-            <th class="n">{{ $t('share.adminOpenings') }}</th>
-            <th>{{ $t('share.adminState') }}</th>
-            <th v-if="props.canWrite" />
-          </tr>
-        </thead>
-        <tbody>
-          <tr v-for="l in shown" :key="l.id">
-            <td><NuxtLink :to="objectHref(l)">{{ l.object_name ?? `#${l.object_id}` }}</NuxtLink></td>
-            <td>{{ l.label || $t('share.noLabel') }} <span class="mono muted">…{{ l.hint }}</span></td>
-            <td>{{ l.embeddable ? $t('share.modeEmbed') : $t('share.modePassword') }}<template v-if="l.embeddable"><br><span class="muted small">{{ l.origins.join(', ') }}</span></template></td>
-            <td>{{ l.created_by?.full_name || l.created_by?.email || '—' }}</td>
-            <td>{{ fmt.date(l.expires_at) }}</td>
-            <td class="n">{{ l.openings }}<template v-if="l.last_opened_at"><br><span class="muted small">{{ fmt.dateTime(l.last_opened_at) }}</span></template></td>
-            <td :class="['state', l.state, { off: !!l.suspended }]">{{ stateLabel(l) }}</td>
-            <td v-if="props.canWrite" class="act">
-              <template v-if="l.state !== 'revoked' && l.state !== 'expired'">
-                <template v-if="revoking === l.id">
-                  <button type="button" class="mini danger" @click="revoke(l)">{{ $t('share.revoke') }}</button>
-                  <button type="button" class="mini" @click="revoking = null">{{ $t('share.cancel') }}</button>
+      <p v-if="!shown.length" class="muted empty">{{ $t('share.adminNone') }}</p>
+      <div v-else class="tablewrap">
+        <table class="rows">
+          <thead>
+            <tr>
+              <th>{{ $t('share.adminObject') }}</th>
+              <th>{{ $t('share.label') }}</th>
+              <th>{{ $t('share.mode') }}</th>
+              <th>{{ $t('share.adminCreator') }}</th>
+              <th>{{ $t('share.expires') }}</th>
+              <th class="n">{{ $t('share.adminOpenings') }}</th>
+              <th>{{ $t('share.adminState') }}</th>
+              <th v-if="props.canWrite" />
+            </tr>
+          </thead>
+          <tbody>
+            <tr v-for="l in shown" :key="l.id">
+              <td><NuxtLink :to="objectHref(l)">{{ l.object_name ?? `#${l.object_id}` }}</NuxtLink></td>
+              <td>{{ l.label || $t('share.noLabel') }} <span class="mono muted">…{{ l.hint }}</span></td>
+              <td>{{ l.embeddable ? $t('share.modeEmbed') : $t('share.modePassword') }}<template v-if="l.embeddable"><br><span class="muted small">{{ l.origins.join(', ') }}</span></template></td>
+              <td>{{ l.created_by?.full_name || l.created_by?.email || '—' }}</td>
+              <td>{{ fmt.date(l.expires_at) }}</td>
+              <td class="n">{{ l.openings }}<template v-if="l.last_opened_at"><br><span class="muted small">{{ fmt.dateTime(l.last_opened_at) }}</span></template></td>
+              <td :class="['state', l.state, { off: !!l.suspended }]">{{ stateLabel(l) }}</td>
+              <td v-if="props.canWrite" class="act">
+                <template v-if="l.state !== 'revoked' && l.state !== 'expired'">
+                  <template v-if="revoking === l.id">
+                    <button type="button" class="mini danger" @click="revoke(l)">{{ $t('share.revoke') }}</button>
+                    <button type="button" class="mini" @click="revoking = null">{{ $t('share.cancel') }}</button>
+                  </template>
+                  <button v-else type="button" class="mini" :aria-label="$t('share.revoke')" @click="revoking = l.id"><Trash2 :size="12" /> {{ $t('share.revoke') }}</button>
                 </template>
-                <button v-else type="button" class="mini" :aria-label="$t('share.revoke')" @click="revoking = l.id"><Trash2 :size="12" /> {{ $t('share.revoke') }}</button>
-              </template>
-            </td>
-          </tr>
-        </tbody>
-      </table>
+              </td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
     </div>
   </section>
 </template>
 
+<style scoped src="~/assets/admintable.css"></style>
 <style scoped>
 .sls { display: flex; flex-direction: column; gap: 16px; }
 .sls-head h2 { margin: 0; display: flex; align-items: center; gap: 8px; font-size: 16px; }

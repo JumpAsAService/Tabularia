@@ -1,0 +1,40 @@
+/* The tables of the administration (AdminPanel.vue and its sections in components/admin/):
+   imported as <style scoped src="~/assets/admintable.css"> by each of them, as the list pages
+   import listpage.css. A section's own rules come after it and may change a detail. */
+
+/* the table scrolls instead of lengthening the page forever, and sideways on a phone */
+.tablewrap { max-height: 420px; overflow-y: auto; }
+table.rows { width: 100%; border-collapse: collapse; font-size: 13px; }
+table.rows th {
+  text-align: left;
+  padding: 4px;
+  font-size: 11px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: var(--muted);
+  border-bottom: 1px solid var(--border);
+  position: sticky;
+  top: 0;
+  background: var(--panel);
+  z-index: 1;
+}
+table.rows td { padding: 6px 4px; border-bottom: 1px solid var(--border-soft); vertical-align: top; }
+table.rows tr:last-child td { border-bottom: none; }
+tr.clickable { cursor: pointer; }
+tr.clickable:hover td { background: var(--panel-2); }
+tr.sel td { background: var(--panel-2); }
+td.right { text-align: right; width: 80px; }
+
+/* a section's table where no card of the panel holds it: the panel's card, whose colour is the
+   one its sticky header is drawn in */
+.tablecard {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 16px;
+  background: var(--panel);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  min-width: 0;
+}
