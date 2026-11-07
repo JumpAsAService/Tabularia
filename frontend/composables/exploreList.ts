@@ -160,6 +160,7 @@ export function objectTarget(kind: string, id: number): string {
     case 'notebook': return `/notebook?id=${id}`
     case 'report': return `/report?id=${id}`
     case 'dashboard': return `/dashboard?id=${id}`
+    case 'dataapi': return `/data-api?id=${id}`
   }
   return '/'
 }

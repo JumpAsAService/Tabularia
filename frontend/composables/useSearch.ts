@@ -9,7 +9,7 @@
 // kind: they are the numbers to put in the kind selector, which would otherwise change at
 // every click.
 
-export type SearchKind = 'folder' | 'flow' | 'group' | 'datasource' | 'view' | 'script' | 'sql' | 'notebook' | 'report' | 'dashboard' | 'connection'
+export type SearchKind = 'folder' | 'flow' | 'group' | 'datasource' | 'view' | 'script' | 'sql' | 'notebook' | 'report' | 'dashboard' | 'dataapi' | 'connection'
 
 export interface SearchHit {
   kind: SearchKind
@@ -51,6 +51,7 @@ export function searchHitTarget(hit: SearchHit): string {
     case 'notebook': return `/notebook?id=${hit.id}`
     case 'report': return `/report?id=${hit.id}`
     case 'dashboard': return `/dashboard?id=${hit.id}`
+    case 'dataapi': return `/data-api?id=${hit.id}`
     // with the name as search: the list is paginated, and the item may sit past the first page
     case 'datasource': return `/datasources?q=${encodeURIComponent(hit.name)}&ds=${hit.id}`
     case 'connection': return `/connections?q=${encodeURIComponent(hit.name)}&conn=${hit.id}`

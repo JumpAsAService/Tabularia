@@ -10,7 +10,7 @@ import { GridComponent, TooltipComponent, LegendComponent } from 'echarts/compon
 import VChart from 'vue-echarts'
 import {
   ScrollText, Search, RefreshCw, ChevronLeft, ChevronRight, Circle,
-  LogIn, LogOut, Workflow, Database, Plug, Download, Shield, CheckCircle2, XCircle, AlertTriangle, KeyRound, SlidersHorizontal, Radar, Rows3, Server, Folder, Code2, DatabaseSearch, Boxes, DatabaseBackup, Sparkles, Megaphone, FileCheck, Mail, Cpu, NotebookPen, Bot, FileChartColumn, LayoutDashboard } from 'lucide-vue-next'
+  LogIn, LogOut, Workflow, Database, Plug, Download, Shield, CheckCircle2, XCircle, AlertTriangle, KeyRound, SlidersHorizontal, Radar, Rows3, Server, Folder, Code2, DatabaseSearch, Boxes, DatabaseBackup, Sparkles, Megaphone, FileCheck, Mail, Cpu, NotebookPen, Bot, FileChartColumn, LayoutDashboard, Braces } from 'lucide-vue-next'
 import { useApi, type AuditEntry, type ActiveSession, type AccessActivity } from '~/composables/useApi'
 import { useI18n } from 'vue-i18n'
 import { useFormat } from '~/composables/useFormat'
@@ -184,6 +184,14 @@ const ACTION_META = computed<Record<string, { icon: any; color: string; label: s
     'script.delete': { icon: Code2, color: u.danger, label: t('audit.scriptDeleteAction') },
     'script.restore': { icon: Code2, color: u.accent, label: t('audit.scriptRestoreAction') },
     'sql_script.create': { icon: DatabaseSearch, color: u.accent, label: t('audit.sqlScriptCreateAction') },
+    'data_api.create': { icon: Braces, color: u.accent, label: t('audit.dataApiCreateAction') },
+    'data_api.update': { icon: Braces, color: u.accent, label: t('audit.dataApiUpdateAction') },
+    'data_api.delete': { icon: Braces, color: u.danger, label: t('audit.dataApiDeleteAction') },
+    'data_api.activate': { icon: Braces, color: u.violet, label: t('audit.dataApiActivateAction') },
+    'data_api.pause': { icon: Braces, color: u.muted, label: t('audit.dataApiPauseAction') },
+    'data_api.key_create': { icon: KeyRound, color: u.accent, label: t('audit.dataApiKeyCreateAction') },
+    'data_api.key_revoke': { icon: KeyRound, color: u.danger, label: t('audit.dataApiKeyRevokeAction') },
+    'data_api.key_renew': { icon: KeyRound, color: u.accent, label: t('audit.dataApiKeyRenewAction') },
     'sql_script.update': { icon: DatabaseSearch, color: u.accent, label: t('audit.sqlScriptUpdateAction') },
     'sql_script.delete': { icon: DatabaseSearch, color: u.danger, label: t('audit.sqlScriptDeleteAction') },
     'sql_script.restore': { icon: DatabaseSearch, color: u.accent, label: t('audit.sqlScriptRestoreAction') },

@@ -4,7 +4,7 @@
 // Runs search, failures only). Two rows per section at most, then «Show all»; the band can
 // be folded, and stays as each person left it (in this browser).
 import { computed, onMounted, ref, watch } from 'vue'
-import { ChevronDown, ChevronUp, XCircle, Workflow, Rows3, Database, Bookmark, FileCode2, DatabaseSearch, NotebookPen, FileChartColumn, LayoutDashboard, Folder } from 'lucide-vue-next'
+import { ChevronDown, ChevronUp, XCircle, Workflow, Rows3, Database, Bookmark, FileCode2, DatabaseSearch, NotebookPen, FileChartColumn, LayoutDashboard, Folder, Braces } from 'lucide-vue-next'
 import { useI18n } from 'vue-i18n'
 import { knownError } from '~/composables/knownErrors'
 import { useFormat } from '~/composables/useFormat'
@@ -21,7 +21,7 @@ const { apiFetch } = useApiClient()
 const SHOWN = 2
 const KIND_ICON: Record<string, any> = {
   flow: Workflow, group: Rows3, datasource: Database, view: Bookmark, script: FileCode2,
-  sql: DatabaseSearch, notebook: NotebookPen, report: FileChartColumn, dashboard: LayoutDashboard,
+  sql: DatabaseSearch, notebook: NotebookPen, report: FileChartColumn, dashboard: LayoutDashboard, dataapi: Braces,
 }
 
 // folded or open: per person, in this browser (a preference of the view, not data)

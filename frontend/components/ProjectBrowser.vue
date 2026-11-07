@@ -49,6 +49,7 @@ import {
   FileCode2,
   DatabaseSearch,
   NotebookPen,
+  Braces,
   FileChartColumn,
   LayoutDashboard,
   FolderKey,
@@ -74,6 +75,7 @@ import { useSavedScripts, type SavedScript } from '~/composables/useSavedScripts
 import { useScriptingEditor } from '~/composables/useScripting'
 import { useSqlScripts, type SqlScript } from '~/composables/useSqlScripts'
 import { useNotebooks, type Notebook } from '~/composables/useNotebooks'
+import { useDataApis, type DataApi } from '~/composables/useDataApis'
 import { starterReport, useReports, type Report } from '~/composables/useReports'
 import { starterDashboard, useDashboards, type Dashboard } from '~/composables/useDashboards'
 import ContractBadge from '~/components/ui/ContractBadge.vue'
@@ -105,6 +107,7 @@ const groupsApi = useFlowGroups()
 const scriptsApi = useSavedScripts()
 const sqlApi = useSqlScripts()
 const notebooksApi = useNotebooks()
+const dataApisApi = useDataApis()
 const reportsApi = useReports()
 const dashboardsApi = useDashboards()
 const appInfo = useAppInfo()
@@ -114,6 +117,9 @@ onMounted(() => { scriptingEditor.load() })
 // «New → Notebook» the same, with a Python environment among them (marimo is Python)
 const notebooksAvailable = computed(() => scriptingEditor.available.value
   && !!scriptingEditor.state.value?.environments.some((e) => e.language === 'python'))
+// «New → Data API» only where the installation has them (Kubernetes, switched on): no entry at all otherwise
+const dataApisOn = ref(false)
+onMounted(() => { dataApisApi.limits().then((l) => (dataApisOn.value = l.enabled), () => (dataApisOn.value = false)) })
 const { user } = useAuth()
 const toast = useToast()
 const { t, locale } = useI18n()
@@ -134,6 +140,7 @@ const savedViews = ref<SavedView[]>([])
 const scripts = ref<SavedScript[]>([])
 const sqlScripts = ref<SqlScript[]>([])
 const notebooks = ref<Notebook[]>([])
+const dataApis = ref<DataApi[]>([])
 const reports = ref<Report[]>([])
 const dashboards = ref<Dashboard[]>([])
 const connections = ref<ConnectionInfo[]>([])
@@ -226,7 +233,7 @@ watch(() => route.query.folder, () => {
 })
 
 // ── Unified row: one kind of row for six kinds of resource ────────────
-type Kind = 'folder' | 'flow' | 'group' | 'datasource' | 'view' | 'script' | 'sql' | 'notebook' | 'report' | 'dashboard' | 'connection'
+type Kind = 'folder' | 'flow' | 'group' | 'datasource' | 'view' | 'script' | 'sql' | 'notebook' | 'report' | 'dashboard' | 'dataapi' | 'connection'
 interface Row {
   kind: Kind
   id: number
@@ -253,6 +260,7 @@ const KIND_ICON: Record<Kind, any> = {
   notebook: NotebookPen,
   report: FileChartColumn,
   dashboard: LayoutDashboard,
+  dataapi: Braces,
   connection: Plug,
 }
 
@@ -312,6 +320,10 @@ const rows = computed<Row[]>(() => {
     const meta = [`v${d.current_version}`, fmtDate(d.updated_at)].filter(Boolean).join(' · ')
     out.push({ kind: 'dashboard', id: d.id, name: d.name, meta, to: `/dashboard?id=${d.id}`, raw: d })
   }
+  for (const a of dataApis.value) {
+    const meta = [t(`dataApi.state_${a.state}`), `/data/${a.slug}/`, `v${a.current_version}`, fmtDate(a.updated_at)].filter(Boolean).join(' · ')
+    out.push({ kind: 'dataapi', id: a.id, name: a.name, meta, to: `/data-api?id=${a.id}`, raw: a })
+  }
   for (const c of connections.value) {
     out.push({
       kind: 'connection', id: c.id, name: c.name,
@@ -345,7 +357,7 @@ const state = computed(() => listState({
   treeLoaded: treeLoaded.value, folderLoading: loading.value, total: rows.value.length, visible: visibleRows.value.length,
 }))
 const segments = computed(() =>
-  (['folder', 'flow', 'group', 'datasource', 'view', 'script', 'sql', 'notebook', 'report', 'dashboard', 'connection'] as Kind[])
+  (['folder', 'flow', 'group', 'datasource', 'view', 'script', 'sql', 'notebook', 'report', 'dashboard', 'dataapi', 'connection'] as Kind[])
     .filter((k) => counts.value[k])
     .map((k) => ({ kind: k, n: counts.value[k] })),
 )
@@ -381,6 +393,7 @@ async function loadFolder(id: number | null) {
   notebooks.value = []
   reports.value = []
   dashboards.value = []
+  dataApis.value = []
   connections.value = []
   permissions.value = []
   canManage.value = false
@@ -395,7 +408,7 @@ async function loadFolder(id: number | null) {
 
   loading.value = true
   // all at once: each list is independent, and a refusal empties only its own
-  const [fl, ds, gr, sv, sc, sq, nb, rp, db, cn, pm] = await Promise.all([
+  const [fl, ds, gr, sv, sc, sq, nb, rp, db, da, cn, pm] = await Promise.all([
     settle(flowsApi.listByProject(id)),
     settle(dsApi.listByProject(id)),
     settle(groupsApi.listByProject(id)),
@@ -406,6 +419,8 @@ async function loadFolder(id: number | null) {
     settle(notebooksApi.listByProject(id)),
     settle(reportsApi.listByProject(id)),
     settle(dashboardsApi.listByProject(id)),
+    // none where the installation has no data APIs
+    settle(dataApisApi.listByProject(id)),
     // connections require CONNECT: the refusal is information, not an error
     settle(connApi.listByProject(id)),
     // if the permissions can be read, we have MANAGE
@@ -429,6 +444,7 @@ async function loadFolder(id: number | null) {
   if (nb.ok) notebooks.value = nb.value
   if (rp.ok) reports.value = rp.value
   if (db.ok) dashboards.value = db.value
+  if (da.ok) dataApis.value = da.value
   if (cn.ok) {
     connections.value = cn.value
     canConnect.value = true
@@ -638,6 +654,9 @@ async function moveRow(row: Row, target: number | null) {
     } else if (row.kind === 'dashboard') {
       await dashboardsApi.update(row.id, { project_id: target })
       dashboards.value = dashboards.value.filter((x) => x.id !== row.id)
+    } else if (row.kind === 'dataapi') {
+      await dataApisApi.update(row.id, { project_id: target })
+      dataApis.value = dataApis.value.filter((x) => x.id !== row.id)
     } else if (row.kind === 'connection') {
       await connApi.update(row.id, { project_id: target })
       connections.value = connections.value.filter((c) => c.id !== row.id)
@@ -658,7 +677,7 @@ async function moveRow(row: Row, target: number | null) {
 const renaming = ref<string | null>(null)
 const renameDraft = ref('')
 const renameBusy = ref(false)
-const RENAMABLE = new Set<Kind>(['folder', 'flow', 'group', 'datasource', 'view', 'script', 'sql', 'notebook', 'report', 'dashboard'])
+const RENAMABLE = new Set<Kind>(['folder', 'flow', 'group', 'datasource', 'view', 'script', 'sql', 'notebook', 'report', 'dashboard', 'dataapi'])
 
 function startRename(row: Row) {
   renaming.value = rowKey(row)
@@ -714,6 +733,9 @@ async function commitRename(row: Row) {
     } else if (row.kind === 'dashboard') {
       await dashboardsApi.update(row.id, { name })
       dashboards.value = rename(dashboards.value)
+    } else if (row.kind === 'dataapi') {
+      await dataApisApi.update(row.id, { name })
+      dataApis.value = rename(dataApis.value)
     } else if (row.kind === 'folder') {
       await api.update(row.id, { name })
       projects.value = projects.value.map((p) => (p.id === row.id ? { ...p, name } : p))
@@ -802,6 +824,12 @@ async function duplicateRow(row: Row) {
       rowMotion()
       markFresh(`${row.kind}-${copy.id}`)
       dashboards.value = [...dashboards.value, copy].sort(byName)
+      name = copy.name
+    } else if (row.kind === 'dataapi') {
+      const copy = await dataApisApi.duplicate(row.id)
+      rowMotion()
+      markFresh(`${row.kind}-${copy.id}`)
+      dataApis.value = [...dataApis.value, copy].sort(byName)
       name = copy.name
     } else if (row.kind === 'connection') {
       const copy = await connApi.duplicate(row.id)
@@ -912,6 +940,7 @@ const CONFIRM_KEY: Record<Kind, string> = {
   notebook: 'projectBrowser.confirmDeleteNotebook',
   report: 'projectBrowser.confirmDeleteReport',
   dashboard: 'projectBrowser.confirmDeleteDashboard',
+  dataapi: 'projectBrowser.confirmDeleteDataApi',
   connection: 'projectBrowser.confirmDeleteConnection',
 }
 type Deps = 'loading' | 'failed' | 'untracked' | Partial<Record<DependentType, number>>
@@ -1013,6 +1042,11 @@ async function deleteRow(row: Row) {
     rowMotion()
     dashboards.value = dashboards.value.filter((x) => x.id !== row.id)
     toast.success(t('projectBrowser.dashboardDeleted', { name: row.name }))
+  } else if (row.kind === 'dataapi') {
+    await dataApisApi.remove(row.id)
+    rowMotion()
+    dataApis.value = dataApis.value.filter((x) => x.id !== row.id)
+    toast.success(t('projectBrowser.dataApiDeleted', { name: row.name }))
   } else if (row.kind === 'connection') {
     await connApi.remove(row.id)
     rowMotion()
@@ -1061,6 +1095,13 @@ function createNotebook() {
 function createSqlScript() {
   closeNew()
   if (target.value != null) navigateTo(`/sql-script?project=${target.value}`)
+}
+
+// «New → Data API»: MANAGE on the folder (a personal folder gives EDIT only), an administrator anywhere
+const dataApiHere = computed(() => dataApisOn.value && (isSuper.value || (currentId.value !== null && canManage.value)))
+function createDataApi() {
+  closeNew()
+  if (target.value != null) navigateTo(`/data-api?project=${target.value}`)
 }
 
 // «New → Report»: made here with a starting page (the name as title, «Page X of Y» in the
@@ -1624,6 +1665,9 @@ watch(currentId, () => { q.value = ''; kindFilter.value = null; settingsOpen.val
                       aria-disabled="true" :title="$t('scripting.kubernetesOnly')" @click.prevent>
                 <span class="mi-top"><NotebookPen :size="14" /> {{ $t('projectBrowser.newNotebookButton') }}</span>
                 <span class="sr-only">{{ $t('scripting.kubernetesOnly') }}</span>
+              </button>
+              <button v-if="dataApiHere" class="menu-item" @click="createDataApi">
+                <span class="mi-top"><Braces :size="14" /> {{ $t('projectBrowser.newDataApiButton') }}</span>
               </button>
               <div class="menu-sep" />
               <div class="menu-label">{{ $t('projectBrowser.importGroup') }}</div>
