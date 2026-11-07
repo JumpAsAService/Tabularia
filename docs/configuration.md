@@ -60,8 +60,8 @@ SFTP, S3, APIs, SharePoint) belong to each connection, encrypted with
 | [Gateway](#gateway) | 170 |
 | [Engine and workers](#engine-and-workers) | 104 |
 | [Frontend](#frontend) | 6 |
-| [Compose and Helm only](#compose-and-helm-only) | 24 |
-| **Total** | **311** |
+| [Compose and Helm only](#compose-and-helm-only) | 25 |
+| **Total** | **312** |
 
 ## Before production
 
@@ -692,6 +692,7 @@ containers.
 | `DATA_API__MAX_MEMORY` | `1Gi` | Helm chart | The most memory of one pod of a data API, a Kubernetes quantity (`512Mi`, `2Gi`). |
 | `DATA_API__KEY_MAX_DAYS` | `365` | Helm chart | A data API key's longest life in days, 1 to 3650: every key has an expiry, at most this far. |
 | `DATA_API__KEY_DEFAULT_RATE` | `600` | Helm chart | The requests per minute of a data API key made without a limit of its own. |
+| `DATA_API__POLL_SECONDS` | `20` | Helm chart | How often, in seconds (5 to 600), the pods of a data API ask the gateway for their manifest: a revoked key, a refresh of a datasource or an edit reaches them within it. The manifest carries it to the pods. |
 | `GATEWAY_GO__FORWARDED_ALLOW_IPS` | empty | Helm chart | The addresses of the proxies in front of the gateway whose `X-Forwarded-For` it believes (comma-separated addresses or CIDRs, `*` for any): the client's address of the audit, of the sessions and of the sign-in throttle comes from there. Without the ingress controller's address in it, every request seems to come from the controller. |
 | `GATEWAY_GO__AI_SERVICE` | empty | Helm chart | The AI service's address (the Python gateway's image with `APP__ROLE=ai`): the gateway forwards it the assistant's routes and asks it for the SQL parsing. The gateway does not start without it. |
 

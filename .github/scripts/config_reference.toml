@@ -1436,3 +1436,8 @@ text = "A data API key's longest life in days, 1 to 3650: every key has an expir
 helm = "`dataApi.keyDefaultRate`"
 default = "`600`"
 text = "The requests per minute of a data API key made without a limit of its own."
+
+[var.DATA_API__POLL_SECONDS]
+helm = "`dataApi.pollSeconds`"
+default = "`20`"
+text = "How often, in seconds (5 to 600), the pods of a data API ask the gateway for their manifest: a revoked key, a refresh of a datasource or an edit reaches them within it. The manifest carries it to the pods."

@@ -771,6 +771,7 @@ dataApi:
   maxMemory: 1Gi
   keyMaxDays: 365        # a key's longest life
   keyDefaultRate: 600    # the requests per minute of a key made without a rate
+  pollSeconds: 20        # how often the pods ask for their manifest: a revoked key or a refresh reaches them within it
 
 # Restricts who may reach the engine API. Strongly recommended: the engine holds
 # storage credentials and, through database connections, can reach anything the
