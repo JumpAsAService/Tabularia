@@ -3,12 +3,35 @@
 All notable changes to Tabularia. The version shown here is the one the gateway
 exposes at `/system/info` and in the app's settings menu.
 
-## Unreleased
+## 1.4.0 «Romulus» — 2026-11-07
 
-**Upgrading.** One schema migration (0039: three new tables, `share_links`,
-`share_link_sessions`, `share_link_settings`). The frontend's server reads
+Fifth release, and a new name: «Romulus», after the founder of Rome, because this is the
+first release built on new ground: the gateway is rewritten in Go. Every request the
+browser, the scripts and the engine send reaches the same addresses and gets the same
+answers as before, checked request by request against the Python gateway; what changes is
+how much one replica carries. Reports and dashboards can now be shared outside Tabularia
+through a link with its own password, or embedded in an allowed site. The flow editor gets
+a right-click menu, Explore a calmer and faster list, the whole interface short motion and
+answers to the pointer, and the documentation separate paths for Windows, Linux and macOS.
+
+**Upgrading from 1.3.0.** A new image, `tabularia-gateway-go`, runs the gateway and the
+orchestrator; the `tabularia-gateway` image stays, now as the **AI service**
+(`APP__ROLE=ai`: the assistant, the SQL parsing, the migrations) — the Helm chart (2.5.0)
+and `infrastructure/docker-compose.yml` add it for you. The environment variables are the
+same; `FORWARDED_ALLOW_IPS` is read as `GATEWAY_GO__FORWARDED_ALLOW_IPS`. Two schema
+migrations (0038: a column on `users`; 0039: the share links' three tables). Read docs/deploy/upgrading.md before upgrading. The frontend's server reads
 `NUXT_GATEWAY_INTERNAL_URL` (the production image defaults it to `http://gateway:8000`; the
 chart and `infrastructure/docker-compose.yml` set it).
+
+- **The gateway is in Go.** The same 362 routes (348 answered by the Go gateway, the 14 of
+  the AI assistant by the AI service), the background work by `APP__ROLE` (api,
+  orchestrator, all), the same database, cookies and errors: verified against the Python
+  gateway on 6696 requests and on every background loop, one round at a time. On 2 CPUs a
+  Go replica answers 9 to 45 times the requests a second of a Python one (7,600 a second
+  on `/auth/me`, 3,300 on a folder's list), with a median latency under load of 8 to 45 ms
+  instead of hundreds, and uses 10 MB of memory idle instead of 141
+  (`gateway-go/scripts/bench/bench.sh`). Its image carries `pg_dump` 14 to 18 for the
+  backups. A request still running when the gateway stops is allowed to finish, as before.
 
 - **Hover, everywhere but the report designer and the dashboards.** One answer per kind of
   control, quick and sober: a row's name underlines, the top bar's and the editor's tabs
@@ -36,31 +59,6 @@ chart and `infrastructure/docker-compose.yml` set it).
   and every link. For an installation on an internal network, the chart's `share.publicHost`
   publishes the links alone on a host of their own (and the guide has the same for Caddy):
   [Share links](docs/capabilities/share-links.md).
-
-## 1.3.1 «Catone» — 2026-11-06
-
-The gateway is rewritten in Go. Every request the browser, the scripts and the engine send
-reaches the same addresses and gets the same answers as before, checked request by request
-against the Python gateway; what changes is how much one replica carries. A right-click
-menu in the flow editor, a calmer Explore, and short motion where things used to pop.
-
-**Upgrading from 1.3.0.** A new image, `tabularia-gateway-go`, runs the gateway and the
-orchestrator; the `tabularia-gateway` image stays, now as the **AI service**
-(`APP__ROLE=ai`: the assistant, the SQL parsing, the migrations) — the Helm chart (2.5.0)
-and `infrastructure/docker-compose.yml` add it for you. The environment variables are the
-same; `FORWARDED_ALLOW_IPS` is read as `GATEWAY_GO__FORWARDED_ALLOW_IPS`. One schema
-migration (0038: a column on `users`). Read docs/deploy/upgrading.md before upgrading.
-
-- **The gateway is in Go.** The same 362 routes (348 answered by the Go gateway, the 14 of
-  the AI assistant by the AI service), the background work by `APP__ROLE` (api,
-  orchestrator, all), the same database, cookies and errors: verified against the Python
-  gateway on 6696 requests and on every background loop, one round at a time. On 2 CPUs a
-  Go replica answers 9 to 45 times the requests a second of a Python one (7,600 a second
-  on `/auth/me`, 3,300 on a folder's list), with a median latency under load of 8 to 45 ms
-  instead of hundreds, and uses 10 MB of memory idle instead of 141
-  (`gateway-go/scripts/bench/bench.sh`). Its image carries `pg_dump` 14 to 18 for the
-  backups. A request still running when the gateway stops is allowed to finish, as before.
-
 - **A pivot with rows only, or columns only.** The **Pivot** node, the Viewer, saved
   views, reports and the dbt export (federated target) accept a pivot with just the row
   keys or just the columns to spread. Rows only: one row per key and one column `values`
