@@ -33,6 +33,7 @@ export const DOCS_GROUPS: { title: string, icon: DocsIcon, intro: string, items:
       ['/docs/capabilities/reports', 'Pixel-perfect reports'],
       ['/docs/capabilities/report-functions', 'Report functions'],
       ['/docs/capabilities/dashboards', 'Dashboards'],
+      ['/docs/capabilities/share-links', 'Share links'],
       ['/docs/scripting', 'Python and R'],
       ['/docs/sql-scripts', 'SQL scripts'],
       ['/docs/capabilities/notebooks', 'marimo notebooks as apps'],

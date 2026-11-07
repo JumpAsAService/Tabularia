@@ -834,6 +834,7 @@ outcome and where it came from: the interface, the API, a notebook or a flow gro
 
 - [Report functions](report-functions.md): every function with examples on the sample data
 - [Dashboards](dashboards.md): the same datasets and parameters, on a screen that answers clicks
+- [Share links](share-links.md): a report given to someone outside Tabularia with a link and its own password, or embedded in another site
 - [Pushmail](../pushmail.md#reports): sending a report from a flow group
 - [Flow groups](flow-groups.md) and [Scheduling](scheduling.md)
 - [API: download a report](../api.md#download-a-report),

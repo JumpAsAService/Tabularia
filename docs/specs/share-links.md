@@ -1,6 +1,6 @@
 # Spec: share links
 
-Status: approved by the owner on 2026-11-07 (decisions below), being implemented on `main`.
+Status: approved by the owner on 2026-11-07 (decisions below), implemented on `main`.
 
 ## Objective
 
@@ -29,6 +29,7 @@ that exists and switch the feature off.
 | Off switch | One switch in the Administration panel turns the feature off: every link stops answering, none is deleted, and they work again when it is turned back on |
 | Embedding | An option of each link. An embeddable link asks **no password**: it has a mandatory list of allowed origins (`Content-Security-Policy: frame-ancestors`), it is served **only inside an iframe** (`Sec-Fetch-Dest: iframe`), it has a mandatory expiry, it can be revoked, every opening is audited, and the creation dialog asks for an explicit confirmation that whoever sees the host page sees the data |
 | AI comment | Written at every opening by the AI service, with a cap per link and per hour; past it the last comment written for that link is shown |
+| Internal networks | An installation reachable only on its network or a VPN can publish the links alone on a host of their own: an optional Ingress of the chart (`share.publicHost`), an example for Caddy in the guide |
 
 Out of this version: sharing a flow, a datasource, a SQL script or a notebook; links that
 open several objects; a recipient's account made from a link; email sent by Tabularia
@@ -111,10 +112,14 @@ holding; no Python route uses them. `SchemaRevision` becomes `0039`.
   A suspended link comes back by itself when the reason goes (MANAGE given back, feature
   on).
 - A deleted creator deletes their links (the foreign key) and their sessions with them.
-- What the requests do is what the viewer allows, never more: no definition, no SQL, no
-  dataset's source leaves the gateway; a dashboard's definition is sent as a **projection**
-  (its grid, tiles, texts and parameters, without `datasets`); the render's state and clicks
-  are checked as the viewer's.
+- What the requests do is what the viewer allows, never more: no SQL and no dataset's source
+  leaves the gateway; the definition is sent as a **projection**, everything the viewer draws
+  with (layout, items, tiles, parameters) and of its datasets only their names; the render's
+  state and clicks are checked as the viewer's.
+- The page is the app's own viewer (`pages/report.vue`, `pages/dashboard.vue`) **hosted** by
+  the link's page (`composables/viewerHost.ts`): the same component over the link's routes,
+  without what belongs to the app (versions, designer, folders, the API link). Clicks on a
+  dashboard's tiles work as in the viewer.
 - The audit's actor is the creator, with `from: "share_link"` and the link's id in the detail,
   so a reader of the audit knows it was not the creator in person.
 
@@ -214,6 +219,25 @@ sent along to `/api/…`, is never read by these routes; the link's opens no oth
   ago, and links whose object no longer exists.
 - Revoking deletes the link's sessions at once.
 
+### Exposing the links outside the internal network
+
+- The chart's `share.publicHost` (empty by default) adds an Ingress on that host with only:
+  `/share` and `/_nuxt` (Prefix, the interface), `<apiPrefix>/share` (Prefix, the gateway: a
+  Prefix matches whole segments, so `/api/share-links` is not in it), and the five icons the
+  page names (Exact). Everything else of that host is not routed: the controller's 404.
+- TLS as the main Ingress: with `ingress.tls`, an entry for the host with `share.tlsSecretName`
+  (default `<release>-share-tls`); the annotations are the main Ingress's (cert-manager's
+  among them) plus `share.annotations`, where a rate limit of the controller goes
+  (ingress-nginx `limit-rps`, `limit-connections`), documented as optional.
+- The chart refuses a public host that is one of `ingress.hosts`.
+- `SHARE__PUBLIC_BASE_URL` (the chart sets it from the host, `https` with TLS) is the address
+  the **Share** dialog writes the links with; the gateway gives it to the dialog.
+- For Caddy (the production compose, not in the repository): a second site with the same
+  paths, in the guide.
+- The interface's server reaches the gateway at `NUXT_GATEWAY_INTERNAL_URL` (the chart sets
+  it to the gateway's Service; the production image defaults it to `http://gateway:8000`).
+  Without it, links with a password work and embeddable ones do not open.
+
 ### The page
 
 - `pages/share/[token].vue`, free of the sign-in middleware, with no app chrome: the name, the
@@ -282,6 +306,7 @@ func TestTheLinksCookieOpensNoOtherRoute(t *testing.T) {
 | Diffcheck | 0 differences on the existing routes with `DIFF_NO_PYTHON=1` |
 | Frontend | Helpers (origins, password rule, iframe snippet), typecheck, five languages |
 | Browser, Chrome and Firefox | Create a link from a report and a dashboard; open it in a clean browser; first entry and new password; parameters; download; revoke; an embeddable link in a host page of an allowed origin (shown) and of another origin (blocked by the browser), and opened as a page (refused); screenshots looked at |
+| Chart | `helm lint` and `helm template` with and without `share.publicHost`; on kind, with curl on the public host, the share paths answer and everything else is a 404, and a link opens from there |
 
 ## Boundaries
 
@@ -310,7 +335,8 @@ func TestTheLinksCookieOpensNoOtherRoute(t *testing.T) {
 7. With the switch off no link answers; turned on again they work.
 8. The AI comment is written at the opening, and past the cap the last one is shown with its
    time and values.
-9. All suites green; the diffcheck at 0 differences.
+9. On kind, the public host answers only the share paths, and a link opens from it.
+10. All suites green; the diffcheck at 0 differences.
 
 ## Open questions
 

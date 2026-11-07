@@ -59,9 +59,9 @@ SFTP, S3, APIs, SharePoint) belong to each connection, encrypted with
 | [Shared by the gateway and the engine](#shared-by-the-gateway-and-the-engine) | 7 |
 | [Gateway](#gateway) | 170 |
 | [Engine and workers](#engine-and-workers) | 104 |
-| [Frontend](#frontend) | 5 |
-| [Compose and Helm only](#compose-and-helm-only) | 13 |
-| **Total** | **299** |
+| [Frontend](#frontend) | 6 |
+| [Compose and Helm only](#compose-and-helm-only) | 16 |
+| **Total** | **303** |
 
 ## Before production
 
@@ -109,7 +109,7 @@ Read by both services, so listed under [Shared by the gateway and the engine](#s
 | Variable | Type | Default | Helm value | Description |
 |---|---|---|---|---|
 | `APP__NAME` | string | `Tabularia` | `extraEnv` | Product name shown by the API. Product identity, not a deployment setting: leave it. |
-| `APP__VERSION` | string | `1.3.0` | `extraEnv` | The release, shown by `/system/info` and in the interface's menu. Set by the code; leave it. |
+| `APP__VERSION` | string | `1.3.1` | `extraEnv` | The release, shown by `/system/info` and in the interface's menu. Set by the code; leave it. |
 | `APP__CODENAME` | string | `Catone` | `extraEnv` | The release's name. Set by the code; leave it. |
 | `APP__ROLE` | one of `all`, `api`, `orchestrator` (`ai`: the AI service only) | `all` | set per workload: `api` for the gateway, `orchestrator` for the orchestrator | What this gateway process does: `all` answers requests and does the background work (schedules, flow executions, clean-up); `api` only answers; `orchestrator` only does the background work. Split them to run several copies: they share the work through the database. |
 | `APP__ROOT_PATH` | string; a path such as `/api` | empty | `ingress.apiPrefix` | Path prefix a reverse proxy publishes the gateway under, stripping it before forwarding (`/api` when one host serves interface and API). It fixes the paths the gateway writes for the browser: the SSO cookie, `/docs`, redirects. Empty = published at the root. |
@@ -656,6 +656,7 @@ sets them in the `frontend` service itself, not from `.env`.
 
 | Variable | Default | Helm value | Description |
 |---|---|---|---|
+| `NUXT_GATEWAY_INTERNAL_URL` | `http://gateway:8000` in the production image | set by the chart (the gateway's Service) | The gateway's address inside the installation, read by the frontend's server only (never by the browser): a share link's page asks it whether, and by which sites, it may be framed, and writes its `frame-ancestors`. Empty: share links with a password work, embeddable ones do not open. |
 | `NUXT_PUBLIC_API_BASE` | `http://localhost:8000` | `frontend.publicApiBase` | The gateway's URL as the browser calls it: `/api` when one host serves interface and API, or a full URL on another host. |
 | `NUXT_PUBLIC_BUCKET` | `data-prep` | `externalServices.storage.bucket` | Default bucket; must match `STORAGE__BUCKET`. |
 | `NUXT_PUBLIC_GRAFANA_URL` | `http://localhost:3001` | `frontend.publicGrafanaUrl` | Grafana as the browser reaches it, embedded in the Monitoring tab (administrators only). Optional. |
@@ -672,6 +673,7 @@ containers.
 | `MINIO_IMAGE` | `pgsty/minio:RELEASE.2026-08-04T00-00-00Z` | Compose (`infrastructure/.env`) | Image of the development MinIO (the official one was withdrawn from the registries). |
 | `WITH_MSSQL` | `false` | Compose (build argument) | Build argument: `true` adds Microsoft's SQL Server driver to the backend image you build. Not in the published images, for licensing reasons: see [SQL Server](sqlserver.md). |
 | `BACKEND_MEM_LIMIT` | `4g` | Compose (`infrastructure/.env`) | Memory ceiling of the engine API container. |
+| `FORWARDED_ALLOW_IPS` | `127.0.0.1` | Compose (`infrastructure/.env`), read by the gateway's server | uvicorn's own variable: the addresses (comma-separated, networks allowed) from which the gateway believes `X-Forwarded-For`. From anyone else the header is ignored and the client is the connection's address, which is what the sign-in throttle, the sessions and the audit log record. Behind your own reverse proxy put its address here; never `*` while the gateway's port is reachable by others, or anyone can choose the address they sign in from. On Kubernetes the chart sets it from `gateway.trustedProxies`. |
 | `WORKER_MEM_LIMIT` | `6g` | Compose (`infrastructure/.env`) | Memory ceiling of the run worker. Keep the sum of the ceilings below the machine's RAM; the per-process cap is derived from it. |
 | `PREVIEW_WORKER_CONCURRENCY` | `4` | Compose (`infrastructure/.env`) | Processes of the preview worker (its `CELERY__WORKER_CONCURRENCY`). The per-process memory cap is the ceiling divided by this. |
 | `PREVIEW_WORKER_MEM_LIMIT` | `4g` | Compose (`infrastructure/.env`) | Memory ceiling of the preview worker. |
@@ -680,8 +682,10 @@ containers.
 | `SAMPLES_SCALE` | `small` | Compose (`infrastructure/.env`) | Size of the sample data: `small` (seconds, fits a laptop), `medium`, `robust` (42M order lines, minutes and a few GB), `massive` (a billion CRM activities in ClickHouse, a couple of hours and about 50 GB free). Generated once; `robusta`, `robust`'s earlier name, is still accepted. |
 | `SAMPLES_ENGINE` | empty | Compose (`infrastructure/.env`) | Engine of the sample flows. Empty = the first one the policy allows, DuckDB first (it spills to disk where Polars holds a group in memory), then Polars. |
 | `SAMPLES_RUN_FLOWS` | `true` | Compose (`infrastructure/.env`) | Run the sample flows once at initialisation, so their outputs and views exist. |
-| `FORWARDED_ALLOW_IPS` | `127.0.0.1` | Compose (`infrastructure/.env`), read by the gateway's server | uvicorn's own variable: the addresses (comma-separated, networks allowed) from which the gateway believes `X-Forwarded-For`. From anyone else the header is ignored and the client is the connection's address, which is what the sign-in throttle, the sessions and the audit log record. Behind your own reverse proxy put its address here; never `*` while the gateway's port is reachable by others, or anyone can choose the address they sign in from. The Go gateway reads it as `GATEWAY_GO__FORWARDED_ALLOW_IPS`, which the compose file sets from this variable. On Kubernetes the chart sets it from `gateway.trustedProxies`. |
 | `MALLOC_ARENA_MAX` | `2` | Compose and Helm (set on the engine containers) | glibc's variable, set to 2 on the engine containers: one memory arena per thread inflates the resident memory of Polars and Arrow thread pools. |
+| `SHARE__PUBLIC_BASE_URL` | empty | Helm chart | The address the share links are written with in the **Share** dialog, such as `https://share.example.com`, when the installation exposes the links alone on a host of its own outside its internal network ([Exposing the links outside the internal network](capabilities/share-links.md#exposing-the-links-outside-the-internal-network)). Empty: the links are written with the interface's own address. |
+| `GATEWAY_GO__FORWARDED_ALLOW_IPS` | empty | Helm chart | The addresses of the proxies in front of the gateway whose `X-Forwarded-For` it believes (comma-separated addresses or CIDRs, `*` for any): the client's address of the audit, of the sessions and of the sign-in throttle comes from there. Without the ingress controller's address in it, every request seems to come from the controller. |
+| `GATEWAY_GO__AI_SERVICE` | empty | Helm chart | The AI service's address (the Python gateway's image with `APP__ROLE=ai`): the gateway forwards it the assistant's routes and asks it for the SQL parsing. The gateway does not start without it. |
 
 ## Changing this page
 

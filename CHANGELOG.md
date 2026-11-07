@@ -5,6 +5,11 @@ exposes at `/system/info` and in the app's settings menu.
 
 ## Unreleased
 
+**Upgrading.** One schema migration (0039: three new tables, `share_links`,
+`share_link_sessions`, `share_link_settings`). The frontend's server reads
+`NUXT_GATEWAY_INTERNAL_URL` (the production image defaults it to `http://gateway:8000`; the
+chart and `infrastructure/docker-compose.yml` set it).
+
 - **Hover, everywhere but the report designer and the dashboards.** One answer per kind of
   control, quick and sober: a row's name underlines, the top bar's and the editor's tabs
   grow their accent line, a palette item widens its category bar, checkboxes take a soft
@@ -18,6 +23,19 @@ exposes at `/system/info` and in the app's settings menu.
   block with an icon.
 - **Fixed:** the runs' timeline in Flows drew two or more bars for one run (the
   orchestration and each of its steps), and the flow's run count doubled.
+- **Share links.** A pixel-perfect report or a dashboard can be given to someone outside
+  Tabularia: **Share** in its viewer (an administrator, or MANAGE on the folder) makes a link
+  with a temporary password, which the recipient replaces with their own at the first entry;
+  a link is for one person. They read it live, with the creator's rights, and change its
+  parameters; downloads only if allowed. Or a link is **embeddable**: no password, shown only
+  inside the pages of the sites listed (`frame-ancestors`), and only in a frame. Every link
+  expires (90 days at most by default), can be revoked or given a new temporary password,
+  and every opening and wrong password is in the audit; five wrong passwords from one
+  address brake it, fifty on a link lock it. The AI comment is written at the opening, at most
+  20 times an hour per link. **Administration → Share links** has the off switch, the limits
+  and every link. For an installation on an internal network, the chart's `share.publicHost`
+  publishes the links alone on a host of their own (and the guide has the same for Caddy):
+  [Share links](docs/capabilities/share-links.md).
 
 ## 1.3.1 «Catone» — 2026-11-06
 

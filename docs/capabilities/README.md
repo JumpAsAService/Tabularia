@@ -21,6 +21,7 @@ does not do, with an example on the sample data of the Docker Compose stack.
 | Ask your data | Questions in plain language over the datasources you may read, answered with the query and the table behind the numbers | [Ask your data](ask-your-data.md) |
 | Pixel-perfect reports | Paginated reports designed in the browser: bands in millimetres, tables grouped with subtotals over many pages, 14 kinds of chart and KPI cards, parameters; read on screen, downloaded as PDF or Excel, sent by email | [Reports](reports.md), [functions](report-functions.md) |
 | Dashboards | A screen of live tiles on an adaptive grid: KPIs, 14 kinds of chart, tables, matrices; parameters, a click on a chart that filters the others, a refresh shared by everyone; a PDF or an image, an email from a flow group | [Dashboards](dashboards.md) |
+| Share links | A report or a dashboard given to someone outside Tabularia with a link and a password of their own, live and with your rights, or embedded in another site's pages; expiry, revocation, audit, an off switch for the administrator | [Share links](share-links.md) |
 
 ### Code and containers
 

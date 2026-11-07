@@ -357,6 +357,7 @@ they would drown the log.
 - [Reports](reports.md) and [Report functions](report-functions.md): datasets, parameters,
   expressions
 - [Pushmail](../pushmail.md#dashboards): sending a dashboard from a flow group
+- [Share links](share-links.md): a dashboard given to someone outside Tabularia with a link and its own password, or embedded in another site
 - [API: dashboards](../api.md#dashboards)
 - [Permissions](../governance/permissions.md)
 - [Configuration: dashboards](../configuration.md#dashboards),

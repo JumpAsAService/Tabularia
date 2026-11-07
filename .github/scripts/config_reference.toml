@@ -46,8 +46,12 @@ default shown below. Keep comments on their own line: not every tool strips a tr
   Secret you name in `existingSecret`. See [Deploying on Kubernetes](deploy/kubernetes.md).
 
 **Who reads what.** The *gateway* is the control plane (API, sign-in, permissions,
-schedules, flow orchestration), in one process or split into `api` and `orchestrator`
-copies (`APP__ROLE`). The *engine* is one image with several roles: the internal engine
+schedules, flow orchestration), a Go program (`gateway-go/`), in one process or split into
+`api` and `orchestrator` copies (`APP__ROLE`). Next to it runs the *AI service*: the Python
+gateway image with `APP__ROLE=ai`, which answers the assistant's routes and the SQL parsing
+the gateway asks for (`GATEWAY_GO__AI_SERVICE`, required, is its address), creates the first
+administrator and, as before, runs the schema migrations (`python -m app.db.migra`). Both
+read the same variables. The *engine* is one image with several roles: the internal engine
 API, the run and preview workers, and the beat scheduler; they all read the same
 settings. The *frontend* reads a few public values at startup. A variable only matters to
 the service it is listed under; giving it to the others is harmless.
@@ -413,6 +417,7 @@ text = "The release, shown by `/system/info` and in the interface's menu. Set by
 text = "The release's name. Set by the code; leave it."
 
 [var.APP__ROLE]
+type = "one of `all`, `api`, `orchestrator` (`ai`: the AI service only)"
 text = "What this gateway process does: `all` answers requests and does the background work (schedules, flow executions, clean-up); `api` only answers; `orchestrator` only does the background work. Split them to run several copies: they share the work through the database."
 helm = "set per workload: `api` for the gateway, `orchestrator` for the orchestrator"
 
@@ -1268,6 +1273,15 @@ text = "Default bucket; must match `STORAGE__BUCKET`."
 [var.NUXT_PUBLIC_GRAFANA_URL]
 text = "Grafana as the browser reaches it, embedded in the Monitoring tab (administrators only). Optional."
 
+[var.SHARE__PUBLIC_BASE_URL]
+helm = "from `share.publicHost` (or `share.publicBaseUrl`)"
+text = "The address the share links are written with in the **Share** dialog, such as `https://share.example.com`, when the installation exposes the links alone on a host of its own outside its internal network ([Exposing the links outside the internal network](capabilities/share-links.md#exposing-the-links-outside-the-internal-network)). Empty: the links are written with the interface's own address."
+
+[var.NUXT_GATEWAY_INTERNAL_URL]
+helm = "set by the chart (the gateway's Service)"
+default = "`http://gateway:8000` in the production image"
+text = "The gateway's address inside the installation, read by the frontend's server only (never by the browser): a share link's page asks it whether, and by which sites, it may be framed, and writes its `frame-ancestors`. Empty: share links with a password work, embeddable ones do not open."
+
 [var.NUXT_PUBLIC_NOTEBOOKS_ORIGIN]
 helm = "from `scripts.notebooks.host`"
 text = "The notebooks' own address, the gateway's `NOTEBOOKS__ORIGIN`: the pages' Content-Security-Policy lets them show the notebooks' apps and editors from it."
@@ -1372,3 +1386,13 @@ where = "Helm (set on the workers and the engine)"
 text = "glibc's variable, set to 2 on the engine containers: one memory arena per thread inflates the resident memory of Polars and Arrow thread pools."
 where = "Compose and Helm (set on the engine containers)"
 default = "`2`"
+
+[var.GATEWAY_GO__FORWARDED_ALLOW_IPS]
+section = "gateway-process"
+helm = "`gateway.trustedProxies`"
+text = "The addresses of the proxies in front of the gateway whose `X-Forwarded-For` it believes (comma-separated addresses or CIDRs, `*` for any): the client's address of the audit, of the sessions and of the sign-in throttle comes from there. Without the ingress controller's address in it, every request seems to come from the controller."
+
+[var.GATEWAY_GO__AI_SERVICE]
+section = "gateway-process"
+helm = "set by the chart (the AI service's Service)"
+text = "The AI service's address (the Python gateway's image with `APP__ROLE=ai`): the gateway forwards it the assistant's routes and asks it for the SQL parsing. The gateway does not start without it."

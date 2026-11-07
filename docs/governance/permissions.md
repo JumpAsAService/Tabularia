@@ -85,7 +85,7 @@ The creation is in the audit log as `folder.create`, with `"personal": true`.
 | **VIEW** | see the folder's content; open flows, datasources, saved views, scripts, reports and dashboards; preview and export data; read a report or a dashboard and download it; ask the assistant about the datasources | |
 | **RUN** | run flows, refresh datasources, write a SQL script's datasource, run scripts and flow groups, and schedule all of them | VIEW |
 | **EDIT** | create, change, rename, move, duplicate and delete content; write a datasource's data contract; publish a flow's result into the folder | RUN, VIEW |
-| **MANAGE** | grant and revoke permissions on the folder, create subfolders, move and delete folders | EDIT, RUN, VIEW, CONNECT |
+| **MANAGE** | grant and revoke permissions on the folder, create subfolders, move and delete folders; give its reports and dashboards to people outside Tabularia with [share links](../capabilities/share-links.md) | EDIT, RUN, VIEW, CONNECT |
 | **CONNECT** | see, create, change, test, browse and use the folder's connections | nothing else |
 
 CONNECT stands apart on purpose. Someone with VIEW, RUN or EDIT on a folder does **not
