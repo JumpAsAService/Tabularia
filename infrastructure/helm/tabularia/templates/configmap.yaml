@@ -41,6 +41,10 @@ APP__ROOT_PATH: {{ .Values.ingress.apiPrefix | quote }}
 # Powers the RAM badge. Empty, the badge is off: rendered anyway, or the
 # application would fall back to the docker-compose address and fail every poll.
 MONITORING__NODE_EXPORTER_URL: {{ .Values.monitoring.nodeExporterUrl | default "" | quote }}
+# The address the share links are written with (docs/capabilities/share-links.md): the host
+# of their own (share.publicHost) when the installation exposes only the links outside its
+# network; empty, the interface's own address.
+SHARE__PUBLIC_BASE_URL: {{ include "tabularia.sharePublicBaseUrl" . | quote }}
 
 JWT__ACCESS_TTL_MINUTES: {{ include "tabularia.env" (.Values.auth.jwtAccessTtlMinutes) }}
 AUTH__SESSION_IDLE_MINUTES: {{ include "tabularia.env" (.Values.auth.sessionIdleMinutes) }}
@@ -206,7 +210,7 @@ BIGQUERY__MAXIMUM_BYTES_BILLED: {{ include "tabularia.env" (.Values.externalServ
       "SCRIPTS__BASE_IMAGES" "SCRIPTS__BUILDER_IMAGE" "SCRIPTS__PYPI_INDEX_URL" "SCRIPTS__CRAN_URL"
       "CONTAINERS__NAMESPACE" "CONTAINERS__TRIAL_NAMESPACE" "CONTAINERS__MAX_CPU" "CONTAINERS__MAX_MEMORY" "CONTAINERS__MAX_TIMEOUT_SECONDS"
       "NOTEBOOKS__ORIGIN" "NOTEBOOKS__ALLOW_SAME_ORIGIN" "REPORTS__CHART_URL"
-      "NUXT_PUBLIC_API_BASE" "NUXT_PUBLIC_BUCKET" "NUXT_PUBLIC_GRAFANA_URL" "NUXT_PUBLIC_NOTEBOOKS_ORIGIN" -}}
+      "NUXT_PUBLIC_API_BASE" "NUXT_PUBLIC_BUCKET" "NUXT_PUBLIC_GRAFANA_URL" "NUXT_PUBLIC_NOTEBOOKS_ORIGIN" "NUXT_GATEWAY_INTERNAL_URL" -}}
 {{- range $name, $_ := .Values.extraEnv }}
 {{- if or (hasKey $fixed $name) (has $name $perContainer) }}
 {{- fail (printf "extraEnv.%s: the chart already sets %s from its own value in values.yaml - change that one" $name $name) }}

@@ -65,6 +65,10 @@ spec:
             - name: NUXT_PUBLIC_SOURCE_URL
               value: {{ . | quote }}
             {{- end }}
+            # the gateway inside the cluster, read by the server only: a share link's page asks
+            # it whether, and by which origins, it may be framed (docs/specs/share-links.md)
+            - name: NUXT_GATEWAY_INTERNAL_URL
+              value: {{ printf "http://%s-gateway:%v" (include "tabularia.fullname" .) .Values.service.gatewayPort | quote }}
             # the notebooks' own address (scripts.notebooks.host): the pages may frame it
             {{- with (include "tabularia.notebooksOrigin" .) }}
             - name: NUXT_PUBLIC_NOTEBOOKS_ORIGIN

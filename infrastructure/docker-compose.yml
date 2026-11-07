@@ -398,6 +398,8 @@ services:
       - NUXT_PUBLIC_BUCKET=data-prep
       # Grafana as seen by the BROWSER (iframe of the Monitoring tab)
       - NUXT_PUBLIC_GRAFANA_URL=http://localhost:3001
+      # the gateway inside the network, for the server only (a share link's framing)
+      - NUXT_GATEWAY_INTERNAL_URL=http://gateway:8000
     volumes:
       - ../frontend:/app
       - /app/node_modules

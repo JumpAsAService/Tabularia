@@ -9,6 +9,9 @@
 #   NUXT_PUBLIC_API_BASE     the gateway's public URL, called by the browser
 #   NUXT_PUBLIC_BUCKET       default bucket (must match STORAGE__BUCKET)
 #   NUXT_PUBLIC_GRAFANA_URL  Grafana as the browser sees it (Monitoring tab, optional)
+#   NUXT_GATEWAY_INTERNAL_URL the gateway inside the installation, read by the server only:
+#                            a share link's page asks it how it may be framed (default
+#                            http://gateway:8000, the compose service)
 # The Nuxt server never calls the API while rendering: every call starts from
 # the browser, so the pod does not need to reach the gateway.
 #
@@ -53,7 +56,8 @@ ENV NODE_ENV=production \
     PORT=3000 \
     TMPDIR=/tmp \
     HOME=/tmp \
-    NUXT_TELEMETRY_DISABLED=1
+    NUXT_TELEMETRY_DISABLED=1 \
+    NUXT_GATEWAY_INTERNAL_URL=http://gateway:8000
 
 WORKDIR /app
 

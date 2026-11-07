@@ -741,6 +741,23 @@ ingress:
   # identity provider's redirect URI is https://<host>/api/auth/sso/callback.
   apiPrefix: /api
 
+# Share links (docs/capabilities/share-links.md): a report or a dashboard opened from outside
+# Tabularia with a link and its own password. They work on the interface's own host with no
+# setting here. For an installation reached only on its internal network or a VPN, publicHost
+# publishes the links alone on a host of their own (templates/share-ingress.yaml): /share/…,
+# <apiPrefix>/share/… and the page's static files; every other path of that host is a 404.
+share:
+  publicHost: ""          # e.g. share.example.com; empty: no second Ingress
+  # the address the links are written with; empty: https://<publicHost> (http without TLS)
+  publicBaseUrl: ""
+  # with ingress.tls set (or this), the public host's certificate; empty: <release>-share-tls
+  tlsSecretName: ""
+  # added to the main Ingress's annotations on the public one only, e.g. a rate limit of
+  # ingress-nginx (requests per second and simultaneous connections, per client address):
+  #   nginx.ingress.kubernetes.io/limit-rps: "10"
+  #   nginx.ingress.kubernetes.io/limit-connections: "20"
+  annotations: {}
+
 # Restricts who may reach the engine API. Strongly recommended: the engine holds
 # storage credentials and, through database connections, can reach anything the
 # cluster can reach (see README → Known limits, SSRF).

@@ -1,0 +1,78 @@
+{{- $host := include "tabularia.shareHost" . }}
+{{- if and .Values.ingress.enabled $host }}
+{{/*
+The share links on a host of their own (docs/capabilities/share-links.md, «Exposing the links
+outside the internal network»): for an installation reached only on its internal network or a
+VPN, this second Ingress publishes on share.publicHost the few paths a share link's page needs,
+and nothing else. Every other path of that host is not routed (the controller's 404):
+
+  /share/…                the page (the interface)
+  <apiPrefix>/share/…     its API (the gateway): not /share-links, which is the creators'
+  /_nuxt/…                the page's scripts, styles and fonts
+  /favicon.*, /favicon-*.png, /apple-touch-icon.png   the icons the page names
+
+A Prefix path matches whole segments: /share does not match /share-links.
+
+TLS as the main Ingress: with ingress.tls set, the public host gets an entry with
+share.tlsSecretName (cert-manager makes it from the annotations, which are the main Ingress's
+plus share.annotations, e.g. a rate limit of the controller).
+*/}}
+{{- range .Values.ingress.hosts }}
+{{- if eq (.host | lower) $host }}
+{{- fail (printf "share.publicHost (%s) must be a host of its own, not the interface's (ingress.hosts): on it only the share links are published" $host) }}
+{{- end }}
+{{- end }}
+{{- $s := .Values.share | default dict }}
+{{- $annotations := merge (deepCopy ($s.annotations | default dict)) (deepCopy (.Values.ingress.annotations | default dict)) }}
+{{- $frontend := printf "%s-frontend" (include "tabularia.fullname" .) }}
+{{- $gateway := printf "%s-gateway" (include "tabularia.fullname" .) }}
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: {{ include "tabularia.fullname" . }}-share
+  labels:
+    {{- include "tabularia.labels" . | nindent 4 }}
+    app.kubernetes.io/component: share
+  {{- with $annotations }}
+  annotations:
+    {{- toYaml . | nindent 4 }}
+  {{- end }}
+spec:
+  {{- with .Values.ingress.className }}
+  ingressClassName: {{ . }}
+  {{- end }}
+  {{- if or (.Values.ingress.tls | default list) $s.tlsSecretName }}
+  tls:
+    - hosts: [{{ $host | quote }}]
+      secretName: {{ $s.tlsSecretName | default (printf "%s-share-tls" (include "tabularia.fullname" .)) }}
+  {{- end }}
+  rules:
+    - host: {{ $host | quote }}
+      http:
+        paths:
+          - path: {{ printf "%s/share" .Values.ingress.apiPrefix }}
+            pathType: Prefix
+            backend:
+              service:
+                name: {{ $gateway }}
+                port:
+                  number: {{ .Values.service.gatewayPort }}
+          {{- range (list "/share" "/_nuxt") }}
+          - path: {{ . }}
+            pathType: Prefix
+            backend:
+              service:
+                name: {{ $frontend }}
+                port:
+                  number: {{ $.Values.service.frontendPort }}
+          {{- end }}
+          {{- range (list "/favicon.svg" "/favicon.ico" "/favicon-16.png" "/favicon-32.png" "/apple-touch-icon.png") }}
+          - path: {{ . }}
+            pathType: Exact
+            backend:
+              service:
+                name: {{ $frontend }}
+                port:
+                  number: {{ $.Values.service.frontendPort }}
+          {{- end }}
+{{- end }}

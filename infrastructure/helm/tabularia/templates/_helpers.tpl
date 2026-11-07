@@ -488,3 +488,25 @@ Args (a dict): root, apiVersion, kind, name, field, value (the chart's)
 {{- end -}}
 {{- $v -}}
 {{- end -}}
+
+{{/*
+The share links' host of their own (share.publicHost), lower case; empty when off.
+*/}}
+{{- define "tabularia.shareHost" -}}
+{{- $s := .Values.share | default dict -}}
+{{- $s.publicHost | default "" | lower -}}
+{{- end -}}
+
+{{/*
+SHARE__PUBLIC_BASE_URL: share.publicBaseUrl when given, otherwise the public host with https
+when the Ingress has TLS (http without), empty when there is no public host.
+*/}}
+{{- define "tabularia.sharePublicBaseUrl" -}}
+{{- $s := .Values.share | default dict -}}
+{{- $host := include "tabularia.shareHost" . -}}
+{{- if $s.publicBaseUrl -}}
+{{- $s.publicBaseUrl | trimSuffix "/" -}}
+{{- else if $host -}}
+{{- if or (.Values.ingress.tls | default list) $s.tlsSecretName -}}https://{{ $host }}{{- else -}}http://{{ $host }}{{- end -}}
+{{- end -}}
+{{- end -}}
