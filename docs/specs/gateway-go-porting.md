@@ -1,3 +1,4 @@
+<!-- {% raw %} GitHub Pages: no Liquid in this page -->
 # Porting a module of the gateway to Go
 
 How a module of the Python gateway (`gateway/app/routes/<module>.py` and the services it
@@ -204,3 +205,4 @@ webhooks' receivers) and both databases, as after a request:
 ```
 
 `jobsonce <round> -now …` runs one round by hand; `jobsonce list` names them.
+<!-- {% endraw %} -->
