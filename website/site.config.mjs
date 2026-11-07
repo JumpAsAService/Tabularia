@@ -17,7 +17,7 @@ export const site = {
   // workflow's SITE_ANALYTICS_TOKEN (a repository variable). Empty = no analytics at all.
   // No cookies and no personal data: visits, pages, countries.
   analyticsToken: (process.env.SITE_ANALYTICS_TOKEN || '').trim(),
-  // the site's privacy and cookie policies, hosted by iubenda; iubenda.js opens them
+  // the site's privacy and cookie policies, hosted by iubenda; iubenda.js (plugins/iubenda.client.ts) opens them
   // in a lightbox, and without it they are plain links to the policy pages
   privacyPolicy: 'https://www.iubenda.com/privacy-policy/78100421',
   cookiePolicy: 'https://www.iubenda.com/privacy-policy/78100421/cookie-policy',

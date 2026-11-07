@@ -47,9 +47,6 @@ export default defineNuxtConfig({
           innerHTML: "document.documentElement.dataset.js='';try{var o=localStorage.getItem('tabularia-site-os')}catch(e){}if(o!=='windows'&&o!=='linux'&&o!=='macos'){var p=(navigator.userAgentData&&navigator.userAgentData.platform)||navigator.platform||navigator.userAgent||'';o=/^win|windows/i.test(p)?'windows':/mac|iphone|ipad|ipod/i.test(p)?'macos':'linux'}document.documentElement.dataset.os=o",
           tagPosition: 'head',
         },
-        // iubenda's embed script: turns the footer's policy links into a lightbox
-        // (sets no cookies; the links work without it)
-        { src: 'https://cdn.iubenda.com/iubenda.js', defer: true, tagPosition: 'bodyClose' as const },
         // Cloudflare Web Analytics, only with a token: cookieless, counts visits and pages
         ...(site.analyticsToken
           ? [{ src: 'https://static.cloudflareinsights.com/beacon.min.js', defer: true,
