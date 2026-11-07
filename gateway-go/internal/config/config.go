@@ -103,6 +103,8 @@ type Config struct {
 	Admin AdminConfig // config_admin.go
 	Flows FlowsConfig // config_flows.go
 	Jobs  JobsConfig  // config_jobs.go
+	// DataAPI: the data APIs' switch and caps (config_dataapi.go)
+	DataAPI DataAPIConfig
 
 	// PanelEnv: the environment's value of every setting of Administration → Settings
 	// (overrides.ITEMS), by its key, as pydantic types it (config_panel.go)
@@ -182,6 +184,7 @@ func Load(env Env) (*Config, error) {
 	}
 	c.Admin = loadAdmin(&r)
 	c.Jobs = loadJobs(&r)
+	c.DataAPI = loadDataAPI(&r)
 	c.PanelEnv = loadPanelEnv(&r)
 	c.KubernetesTokenFile = r.str("KUBERNETES__TOKEN_FILE", "/var/run/secrets/kubernetes.io/serviceaccount/token")
 	if c.FernetKey == "" && c.KeysDir != "" {

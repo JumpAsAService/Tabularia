@@ -336,6 +336,10 @@ func deleteDatasource(d *Deps) func(http.ResponseWriter, *http.Request, *auth.Pr
 		if refuseReadBy(d, w, ctx, c, "datasource", ds.ID, "The datasource") {
 			return
 		}
+		// a resource of a data API keeps it (the foreign key is RESTRICT): named, as the views above
+		if refuseDataAPIPublished(ctx, d, w, ds.ID) {
+			return
+		}
 		tx, err := d.DB.Begin(ctx)
 		if err != nil {
 			fail500(d, w, "datasources", err)

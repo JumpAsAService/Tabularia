@@ -54,6 +54,8 @@ type recentScope struct {
 	readable  []int64
 	scriptsOn bool
 	envs      []int64
+	// dataAPIsOn: the installation has data APIs (Kubernetes, switched on)
+	dataAPIsOn bool
 }
 
 type rowsQuerier interface {
@@ -77,6 +79,8 @@ WITH touched AS (
 	UNION ALL SELECT 'report', report_id, max(created_at) FROM report_versions WHERE created_by = $1 GROUP BY report_id
 	UNION ALL SELECT 'dashboard', id, updated_at FROM dashboards WHERE owner_id = $1
 	UNION ALL SELECT 'dashboard', dashboard_id, max(created_at) FROM dashboard_versions WHERE created_by = $1 GROUP BY dashboard_id
+	UNION ALL SELECT 'dataapi', id, updated_at FROM data_apis WHERE creator_id = $1
+	UNION ALL SELECT 'dataapi', data_api_id, max(created_at) FROM data_api_versions WHERE created_by = $1 GROUP BY data_api_id
 ), last AS (
 	SELECT kind, id, max(at) AS at FROM touched GROUP BY kind, id
 ), objects AS (
@@ -89,11 +93,13 @@ WITH touched AS (
 	UNION ALL SELECT 'notebook', id, name, project_id, environment_id FROM notebooks
 	UNION ALL SELECT 'report', id, name, project_id, NULL FROM reports
 	UNION ALL SELECT 'dashboard', id, name, project_id, NULL FROM dashboards
+	UNION ALL SELECT 'dataapi', id, name, project_id, NULL FROM data_apis
 )
 SELECT l.kind, l.id, o.name, o.project_id, l.at
 FROM last l JOIN objects o ON o.kind = l.kind AND o.id = l.id
 WHERE ($2 OR o.project_id = ANY($3))
 	AND (o.kind NOT IN ('script', 'notebook') OR ($4 AND ($2 OR o.env = ANY($5))))
+	AND (o.kind <> 'dataapi' OR $7)
 ORDER BY l.at DESC NULLS LAST, l.kind, l.id
 LIMIT $6`
 
@@ -106,7 +112,7 @@ func recentObjects(ctx context.Context, q rowsQuerier, userID int64, s recentSco
 	if envs == nil {
 		envs = []int64{}
 	}
-	rows, err := q.Query(ctx, recentSQL, userID, s.admin, readable, s.scriptsOn, envs, limit)
+	rows, err := q.Query(ctx, recentSQL, userID, s.admin, readable, s.scriptsOn, envs, limit, s.dataAPIsOn)
 	if err != nil {
 		return nil, err
 	}
@@ -140,7 +146,8 @@ func exploreRecent(d *Deps) authedFunc {
 			fail(d, w, "recent: the roles", err)
 			return
 		}
-		scope := recentScope{admin: admin, scriptsOn: d.Config.ScriptsEnabled && d.Config.ScriptsNamespace != "" && d.Config.ScriptsRegistry != ""}
+		scope := recentScope{admin: admin, scriptsOn: d.Config.ScriptsEnabled && d.Config.ScriptsNamespace != "" && d.Config.ScriptsRegistry != "",
+			dataAPIsOn: dataAPIsOn(d)}
 		if !admin {
 			readable, err := checker.Readable(ctx)
 			if err != nil {

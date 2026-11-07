@@ -32,3 +32,29 @@ func TestTheGoOnlyRoutesTakeTheirPlace(t *testing.T) {
 		t.Errorf("PATCH: %d %v", rec.Code, rec.Header())
 	}
 }
+
+// The data APIs' routes reach their own handlers: «limits» is not an id, a folder's list is not
+// a folder.
+func TestTheDataAPIRoutesReachTheirHandlers(t *testing.T) {
+	var routes []Route
+	for _, r := range [][3]string{
+		{"GET", "/data-apis/limits", "limits"}, {"GET", "/data-apis/{api_id}", "get"}, {"PATCH", "/data-apis/{api_id}", "patch"},
+		{"GET", "/projects/{project_id}/data-apis", "folder"}, {"POST", "/data-apis/{api_id}/keys/{key_id}/renew", "renew"},
+		{"GET", "/data-apis/{api_id}/versions/{version}", "version"},
+	} {
+		routes = append(routes, Route{Method: r[0], Pattern: r[1], Handler: mark(r[2])})
+	}
+	h := New(routes, Options{})
+	for _, c := range [][3]string{
+		{"GET", "/data-apis/limits", "limits "}, {"GET", "/data-apis/7", "get "}, {"PATCH", "/data-apis/7", "patch "},
+		{"GET", "/projects/3/data-apis", "folder "}, {"POST", "/data-apis/7/keys/2/renew", "renew "},
+		{"GET", "/data-apis/7/versions/2", "version "},
+	} {
+		if rec := serve(h, c[0], c[1], nil); rec.Code != 200 || rec.Body.String() != c[2] {
+			t.Errorf("%s %s: %d %q", c[0], c[1], rec.Code, rec.Body.String())
+		}
+	}
+	if rec := serve(h, "PUT", "/data-apis/7", nil); rec.Code != 405 || rec.Header().Get("Allow") != "GET, PATCH, DELETE" {
+		t.Errorf("PUT: %d %v", rec.Code, rec.Header())
+	}
+}

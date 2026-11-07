@@ -159,6 +159,7 @@ var folderContents = []struct{ table, detail string }{
 	{"notebooks", "The folder contains notebooks: move or delete them first"},
 	{"reports", "The folder contains reports: move or delete them first"},
 	{"dashboards", "The folder contains dashboards: move or delete them first"},
+	{"data_apis", "The folder contains data APIs: move or delete them first"},
 }
 
 // deleteProject is routes/projects.py delete_project: MANAGE, not a personal folder (but for

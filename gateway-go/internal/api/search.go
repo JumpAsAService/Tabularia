@@ -69,7 +69,7 @@ type SearchOut struct {
 
 // kindOrder is search._KIND_ORDER: the containers first, then what is opened most often.
 var kindOrder = map[string]int{"folder": 0, "flow": 1, "group": 2, "datasource": 3, "view": 4, "script": 5, "sql": 6,
-	"notebook": 7, "report": 8, "dashboard": 9, "connection": 10}
+	"notebook": 7, "report": 8, "dashboard": 9, "connection": 10, "dataapi": 11}
 
 func init() {
 	register("search", func(d *Deps) []server.Route {
@@ -301,6 +301,12 @@ func searchHits(ctx context.Context, d *Deps, p *auth.Principal, term string) ([
 	}
 	for _, k := range []struct{ kind, table string }{{"report", "reports"}, {"dashboard", "dashboards"}} {
 		if err := visible(k.kind, k.table, false); err != nil {
+			return nil, err
+		}
+	}
+	// data APIs: VIEW on the folder, where the installation has them (Kubernetes, switched on)
+	if dataAPIsOn(d) {
+		if err := visible("dataapi", "data_apis", false); err != nil {
 			return nil, err
 		}
 	}

@@ -31,6 +31,20 @@ var goOnlyRoutes = []struct {
 	{after: "/share/{token}/render", route: pyRoute{path: "/share/{token}/exports/{handle}", methods: []string{"GET"}, regex: `^/share/(?P<token>[^/]+)/exports/(?P<handle>[^/]+)$`}},
 	{after: "/share/{token}/exports/{handle}", route: pyRoute{path: "/share/{token}/exports/{handle}/file", methods: []string{"GET"}, regex: `^/share/(?P<token>[^/]+)/exports/(?P<handle>[^/]+)/file$`}},
 	{after: "/share/{token}/exports/{handle}/file", route: pyRoute{path: "/share/{token}/comment", methods: []string{"POST"}, regex: `^/share/(?P<token>[^/]+)/comment$`}},
+	// data APIs: the object, its versions and its keys (api/data_apis.go, api/data_apis_keys.go)
+	{after: "/share/{token}/comment", route: pyRoute{path: "/data-apis/limits", methods: []string{"GET"}, regex: `^/data\-apis/limits$`}},
+	{after: "/data-apis/limits", route: pyRoute{path: "/data-apis", methods: []string{"GET"}, regex: `^/data\-apis$`}},
+	{after: "/data-apis", route: pyRoute{path: "/projects/{project_id}/data-apis", methods: []string{"GET", "POST"}, regex: `^/projects/(?P<project_id>[^/]+)/data\-apis$`}},
+	{after: "/projects/{project_id}/data-apis", route: pyRoute{path: "/data-apis/{api_id}", methods: []string{"GET", "PATCH", "DELETE"}, regex: `^/data\-apis/(?P<api_id>[^/]+)$`}},
+	{after: "/data-apis/{api_id}", route: pyRoute{path: "/data-apis/{api_id}/duplicate", methods: []string{"POST"}, regex: `^/data\-apis/(?P<api_id>[^/]+)/duplicate$`}},
+	{after: "/data-apis/{api_id}/duplicate", route: pyRoute{path: "/data-apis/{api_id}/activate", methods: []string{"POST"}, regex: `^/data\-apis/(?P<api_id>[^/]+)/activate$`}},
+	{after: "/data-apis/{api_id}/activate", route: pyRoute{path: "/data-apis/{api_id}/pause", methods: []string{"POST"}, regex: `^/data\-apis/(?P<api_id>[^/]+)/pause$`}},
+	{after: "/data-apis/{api_id}/pause", route: pyRoute{path: "/data-apis/{api_id}/versions", methods: []string{"GET"}, regex: `^/data\-apis/(?P<api_id>[^/]+)/versions$`}},
+	{after: "/data-apis/{api_id}/versions", route: pyRoute{path: "/data-apis/{api_id}/versions/{version}", methods: []string{"GET"}, regex: `^/data\-apis/(?P<api_id>[^/]+)/versions/(?P<version>[^/]+)$`}},
+	{after: "/data-apis/{api_id}/versions/{version}", route: pyRoute{path: "/data-apis/{api_id}/versions/{version}/restore", methods: []string{"POST"}, regex: `^/data\-apis/(?P<api_id>[^/]+)/versions/(?P<version>[^/]+)/restore$`}},
+	{after: "/data-apis/{api_id}/versions/{version}/restore", route: pyRoute{path: "/data-apis/{api_id}/keys", methods: []string{"GET", "POST"}, regex: `^/data\-apis/(?P<api_id>[^/]+)/keys$`}},
+	{after: "/data-apis/{api_id}/keys", route: pyRoute{path: "/data-apis/{api_id}/keys/{key_id}/revoke", methods: []string{"POST"}, regex: `^/data\-apis/(?P<api_id>[^/]+)/keys/(?P<key_id>[^/]+)/revoke$`}},
+	{after: "/data-apis/{api_id}/keys/{key_id}/revoke", route: pyRoute{path: "/data-apis/{api_id}/keys/{key_id}/renew", methods: []string{"POST"}, regex: `^/data\-apis/(?P<api_id>[^/]+)/keys/(?P<key_id>[^/]+)/renew$`}},
 }
 
 // mainRoutes is the main application's table: FastAPI's, with the Go-only routes in place.
