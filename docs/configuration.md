@@ -60,8 +60,8 @@ SFTP, S3, APIs, SharePoint) belong to each connection, encrypted with
 | [Gateway](#gateway) | 170 |
 | [Engine and workers](#engine-and-workers) | 104 |
 | [Frontend](#frontend) | 6 |
-| [Compose and Helm only](#compose-and-helm-only) | 16 |
-| **Total** | **303** |
+| [Compose and Helm only](#compose-and-helm-only) | 24 |
+| **Total** | **311** |
 
 ## Before production
 
@@ -684,6 +684,14 @@ containers.
 | `SAMPLES_RUN_FLOWS` | `true` | Compose (`infrastructure/.env`) | Run the sample flows once at initialisation, so their outputs and views exist. |
 | `MALLOC_ARENA_MAX` | `2` | Compose and Helm (set on the engine containers) | glibc's variable, set to 2 on the engine containers: one memory arena per thread inflates the resident memory of Polars and Arrow thread pools. |
 | `SHARE__PUBLIC_BASE_URL` | empty | Helm chart | The address the share links are written with in the **Share** dialog, such as `https://share.example.com`, when the installation exposes the links alone on a host of its own outside its internal network ([Exposing the links outside the internal network](capabilities/share-links.md#exposing-the-links-outside-the-internal-network)). Empty: the links are written with the interface's own address. |
+| `DATA_API__ENABLED` | `false` | Helm chart | Offers the data APIs ([Data APIs](data-apis.md)), read by the Go gateway: «New → Data API» in Explore, their pages and their keys. Only on Kubernetes with the scripting environments on (`SCRIPTS__ENABLED`), as the saved scripts and the notebooks: with Docker Compose they stay off whatever this says. This version keeps the definitions and the keys; the pods that answer them come later. |
+| `DATA_API__MAX_APIS` | `20` | Helm chart | The most data APIs in the installation; making one more, or a copy, is refused. |
+| `DATA_API__MAX_REPLICAS` | `3` | Helm chart | The most pods of one data API: its replicas, or the maximum of its autoscaling. |
+| `DATA_API__MAX_TOTAL_REPLICAS` | `10` | Helm chart | The most pods of all the active data APIs together; an activation, or a larger runtime of an active one, past it is refused. |
+| `DATA_API__MAX_CPU` | `1` | Helm chart | The most CPU of one pod of a data API, a Kubernetes quantity (`500m`, `2`). |
+| `DATA_API__MAX_MEMORY` | `1Gi` | Helm chart | The most memory of one pod of a data API, a Kubernetes quantity (`512Mi`, `2Gi`). |
+| `DATA_API__KEY_MAX_DAYS` | `365` | Helm chart | A data API key's longest life in days, 1 to 3650: every key has an expiry, at most this far. |
+| `DATA_API__KEY_DEFAULT_RATE` | `600` | Helm chart | The requests per minute of a data API key made without a limit of its own. |
 | `GATEWAY_GO__FORWARDED_ALLOW_IPS` | empty | Helm chart | The addresses of the proxies in front of the gateway whose `X-Forwarded-For` it believes (comma-separated addresses or CIDRs, `*` for any): the client's address of the audit, of the sessions and of the sign-in throttle comes from there. Without the ingress controller's address in it, every request seems to come from the controller. |
 | `GATEWAY_GO__AI_SERVICE` | empty | Helm chart | The AI service's address (the Python gateway's image with `APP__ROLE=ai`): the gateway forwards it the assistant's routes and asks it for the SQL parsing. The gateway does not start without it. |
 
