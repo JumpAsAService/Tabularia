@@ -30,6 +30,7 @@ does not do, with an example on the sample data of the Docker Compose stack.
 | Python and R | Code in environments an administrator defines, run as Kubernetes Jobs, as a step of a flow or as a saved script | [Python and R](../scripting.md) |
 | SQL scripts | SQL kept in a folder with its versions, run on the catalogue or on a database connection, exported or written into a datasource | [SQL scripts](../sql-scripts.md) |
 | marimo notebooks | Notebooks written in marimo's editor, kept in a folder and opened as web apps that read the datasources with their author's rights | [marimo notebooks as apps](notebooks.md) |
+| Data APIs | Datasources published as read-only HTTP APIs for other systems, with chosen columns and filters, keys shown once, expiry, rate limits and allowed addresses; Kubernetes only. This version keeps the definitions and the keys; the pods that answer come later | [Data APIs](../data-apis.md) |
 | Docker images in flows | Your own images, from the registries an administrator grants, run as a step of a flow with its input and output | [The Container node](../container-node.md) |
 
 ### Orchestrate

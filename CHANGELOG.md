@@ -3,6 +3,20 @@
 All notable changes to Tabularia. The version shown here is the one the gateway
 exposes at `/system/info` and in the app's settings menu.
 
+## Unreleased
+
+- **Data APIs, first part** ([docs/data-apis.md](docs/data-apis.md)). A new Explore object,
+  on Kubernetes only and behind `DATA_API__ENABLED` (off by default; the chart's
+  `dataApi.enabled`), that will publish datasources as read-only HTTP APIs for other
+  systems. This part keeps its definition with its versions (the address, the resources:
+  a datasource each, the columns that go out, the filterable ones and their operators, the
+  default order, the largest page; the runtime within the administrator's caps), its state
+  and its keys (`tdk_…`, shown once and kept as their SHA-256, with an expiry, a rate
+  limit, resources and addresses; revoked or renewed with a grace period). MANAGE on the
+  folder or an administrator makes and manages them, VIEW reads them; a datasource they
+  publish and a folder that holds them cannot be deleted. Routes of the Go gateway only;
+  migration 0040 adds five tables. The pods that answer the calls come in a later part.
+
 ## 1.4.0 «Romulus» — 2026-11-07
 
 Fifth release, and a new name: «Romulus», after the founder of Rome, because this is the
