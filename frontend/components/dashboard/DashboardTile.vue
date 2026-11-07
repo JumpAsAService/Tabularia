@@ -15,6 +15,7 @@ import type { KindCtx } from '~/composables/chartKinds'
 import { canFilter, clicksOfTile, type ClickSide, type ClickValue, type TileClick } from '~/composables/dashboardClicks'
 import type { CommentSlot } from '~/composables/dashboardComments'
 import { tileStyleOf } from '~/composables/dashboardStyle'
+import { compactFigure } from '~/composables/kpiFit'
 import { tileStates, type TileSlot } from '~/composables/dashboardTiles'
 import { useFormat } from '~/composables/useFormat'
 import type { TileNumbers } from '~/composables/useDashboards'
@@ -90,6 +91,8 @@ const staleTime = computed(() => {
 const kpiChange = computed(() => (numbers.value?.change
   ? { ratio: numbers.value.change.ratio, text: '', shown: numbers.value.change.text }
   : null))
+// the figure in compact notation, in the dashboard's language, for a card too narrow for the whole one
+const kpiShort = computed(() => (kind.value === 'kpi' && numbers.value ? compactFigure(numbers.value.text, numbers.value.value, props.ctx.brief) : null))
 // a data URL the gateway checked when it was saved; anything else is not drawn
 const imageSrc = computed(() => (typeof numbers.value?.src === 'string' && numbers.value.src.startsWith('data:image/') ? numbers.value.src : null))
 const FITS: Record<string, 'contain' | 'cover' | 'fill'> = { contain: 'contain', cover: 'cover', stretch: 'fill' }
@@ -154,6 +157,7 @@ const chosenColumns = computed(() => clicksOfTile(props.clicks ?? [], props.tile
           :label="numbers.label || title"
           :value="numbers.value"
           :text="numbers.text"
+          :short="kpiShort"
           :change="kpiChange"
           :spark="numbers.spark"
         />
