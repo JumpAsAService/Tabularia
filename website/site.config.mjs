@@ -21,4 +21,7 @@ export const site = {
   // in a lightbox, and without it they are plain links to the policy pages
   privacyPolicy: 'https://www.iubenda.com/privacy-policy/78100421',
   cookiePolicy: 'https://www.iubenda.com/privacy-policy/78100421/cookie-policy',
+  // iubenda's cookie banner and consent record (Privacy Controls and Cookie Solution),
+  // configured in the iubenda dashboard; it must sit in every page's <head>
+  cookieBanner: 'https://embeds.iubenda.com/widgets/26a6d9fe-df4a-401c-afa9-908ae962d85c.js',
 }
