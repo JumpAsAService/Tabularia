@@ -46,13 +46,11 @@ MONITORING__NODE_EXPORTER_URL: {{ .Values.monitoring.nodeExporterUrl | default "
 # network; empty, the interface's own address.
 SHARE__PUBLIC_BASE_URL: {{ include "tabularia.sharePublicBaseUrl" . | quote }}
 # Data APIs (docs/data-apis.md): the switch and the caps, read by the gateway (how their pods
-# run is set on the gateway's containers: tabularia.dataApiEnv)
+# run is set on the gateway's containers: tabularia.dataApiEnv; each one's replicas, CPU and
+# memory an administrator sets in Administration → Data APIs)
 DATA_API__ENABLED: {{ .Values.dataApi.enabled | quote }}
 DATA_API__MAX_APIS: {{ include "tabularia.env" (.Values.dataApi.maxApis) }}
-DATA_API__MAX_REPLICAS: {{ include "tabularia.env" (.Values.dataApi.maxReplicas) }}
 DATA_API__MAX_TOTAL_REPLICAS: {{ include "tabularia.env" (.Values.dataApi.maxTotalReplicas) }}
-DATA_API__MAX_CPU: {{ include "tabularia.env" (.Values.dataApi.maxCpu) }}
-DATA_API__MAX_MEMORY: {{ include "tabularia.env" (.Values.dataApi.maxMemory) }}
 DATA_API__KEY_MAX_DAYS: {{ include "tabularia.env" (.Values.dataApi.keyMaxDays) }}
 DATA_API__KEY_DEFAULT_RATE: {{ include "tabularia.env" (.Values.dataApi.keyDefaultRate) }}
 DATA_API__POLL_SECONDS: {{ include "tabularia.env" (.Values.dataApi.pollSeconds) }}

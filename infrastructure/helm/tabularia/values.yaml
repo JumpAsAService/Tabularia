@@ -773,10 +773,11 @@ share:
 dataApi:
   enabled: false
   maxApis: 20            # the most data APIs in the installation
-  maxReplicas: 3         # the most pods of one data API
-  maxTotalReplicas: 10   # the most pods of all the active data APIs together
-  maxCpu: "1"            # the largest pod
-  maxMemory: 1Gi
+  # the most pods of all the active data APIs together. Each one's runtime (replicas or
+  # autoscaling, CPU and memory per pod) is set by an administrator in Administration → Data
+  # APIs, from 100m to 16 CPU and 256Mi to 64Gi a pod, at most 40 pods (and this) for one;
+  # a new data API starts with one pod of 250m and 256Mi (docs/data-apis.md, «The runtime»)
+  maxTotalReplicas: 10
   keyMaxDays: 365        # a key's longest life
   keyDefaultRate: 600    # the requests per minute of a key made without a rate
   pollSeconds: 20        # how often the pods ask for their manifest: a revoked key or a refresh reaches them within it

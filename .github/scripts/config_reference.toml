@@ -1407,25 +1407,10 @@ helm = "`dataApi.maxApis`"
 default = "`20`"
 text = "The most data APIs in the installation; making one more, or a copy, is refused."
 
-[var.DATA_API__MAX_REPLICAS]
-helm = "`dataApi.maxReplicas`"
-default = "`3`"
-text = "The most pods of one data API: its replicas, or the maximum of its autoscaling."
-
 [var.DATA_API__MAX_TOTAL_REPLICAS]
 helm = "`dataApi.maxTotalReplicas`"
 default = "`10`"
-text = "The most pods of all the active data APIs together; an activation, or a larger runtime of an active one, past it is refused."
-
-[var.DATA_API__MAX_CPU]
-helm = "`dataApi.maxCpu`"
-default = "`1`"
-text = "The most CPU of one pod of a data API, a Kubernetes quantity (`500m`, `2`)."
-
-[var.DATA_API__MAX_MEMORY]
-helm = "`dataApi.maxMemory`"
-default = "`1Gi`"
-text = "The most memory of one pod of a data API, a Kubernetes quantity (`512Mi`, `2Gi`)."
+text = "The most pods of all the active data APIs together; an activation, or a larger runtime an administrator gives an active one, past it is refused. Each data API's runtime (replicas or autoscaling, CPU and memory per pod) is not capped by the chart: an administrator sets it in Administration → Data APIs, from 100m to 16 CPU and 256Mi to 64Gi a pod, at most 40 pods (and this) for one."
 
 [var.DATA_API__KEY_MAX_DAYS]
 helm = "`dataApi.keyMaxDays`"

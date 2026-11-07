@@ -60,8 +60,8 @@ SFTP, S3, APIs, SharePoint) belong to each connection, encrypted with
 | [Gateway](#gateway) | 170 |
 | [Engine and workers](#engine-and-workers) | 104 |
 | [Frontend](#frontend) | 6 |
-| [Compose and Helm only](#compose-and-helm-only) | 41 |
-| **Total** | **328** |
+| [Compose and Helm only](#compose-and-helm-only) | 38 |
+| **Total** | **325** |
 
 ## Before production
 
@@ -701,10 +701,7 @@ containers.
 | `SHARE__PUBLIC_BASE_URL` | empty | Helm chart | The address the share links are written with in the **Share** dialog, such as `https://share.example.com`, when the installation exposes the links alone on a host of its own outside its internal network ([Exposing the links outside the internal network](capabilities/share-links.md#exposing-the-links-outside-the-internal-network)). Empty: the links are written with the interface's own address. |
 | `DATA_API__ENABLED` | `false` | Helm chart | Offers the data APIs ([Data APIs](data-apis.md)), read by the Go gateway: «New → Data API» in Explore, their pages and their keys, and the pods the orchestrator runs for each active one. Only on Kubernetes with the scripting environments on (`SCRIPTS__ENABLED`), as the saved scripts and the notebooks: with Docker Compose they stay off whatever this says. Switched off, the orchestrator removes the data APIs' objects from the cluster; their definitions and keys stay. |
 | `DATA_API__MAX_APIS` | `20` | Helm chart | The most data APIs in the installation; making one more, or a copy, is refused. |
-| `DATA_API__MAX_REPLICAS` | `3` | Helm chart | The most pods of one data API: its replicas, or the maximum of its autoscaling. |
-| `DATA_API__MAX_TOTAL_REPLICAS` | `10` | Helm chart | The most pods of all the active data APIs together; an activation, or a larger runtime of an active one, past it is refused. |
-| `DATA_API__MAX_CPU` | `1` | Helm chart | The most CPU of one pod of a data API, a Kubernetes quantity (`500m`, `2`). |
-| `DATA_API__MAX_MEMORY` | `1Gi` | Helm chart | The most memory of one pod of a data API, a Kubernetes quantity (`512Mi`, `2Gi`). |
+| `DATA_API__MAX_TOTAL_REPLICAS` | `10` | Helm chart | The most pods of all the active data APIs together; an activation, or a larger runtime an administrator gives an active one, past it is refused. Each data API's runtime (replicas or autoscaling, CPU and memory per pod) is not capped by the chart: an administrator sets it in Administration → Data APIs, from 100m to 16 CPU and 256Mi to 64Gi a pod, at most 40 pods (and this) for one. |
 | `DATA_API__KEY_MAX_DAYS` | `365` | Helm chart | A data API key's longest life in days, 1 to 3650: every key has an expiry, at most this far. |
 | `DATA_API__KEY_DEFAULT_RATE` | `600` | Helm chart | The requests per minute of a data API key made without a limit of its own. |
 | `DATA_API__POLL_SECONDS` | `20` | Helm chart | How often, in seconds (5 to 600), the pods of a data API ask the gateway for their manifest: a revoked key, a refresh of a datasource or an edit reaches them within it. The manifest carries it to the pods. |
