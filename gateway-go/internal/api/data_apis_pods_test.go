@@ -18,7 +18,8 @@ import (
 // The pods' manifest and usage on a real database: only the pod token of that very data API
 // opens them; the manifest follows the creator's authority now, the keys and the data files.
 
-// a fake engine that signs links for the datasets/ keys and has no `datasets/missing.parquet`
+// a fake engine that signs links for the datasets/ keys (each a file of 250 MB) and has no
+// `datasets/missing.parquet`
 func dapiFakeEngine(t *testing.T, f *dapiFixture) *[]string {
 	asked := &[]string{}
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -33,7 +34,8 @@ func dapiFakeEngine(t *testing.T, f *dapiFixture) *[]string {
 			_, _ = w.Write([]byte(`{"detail": "it has no data yet: refresh it first"}`))
 			return
 		}
-		_ = json.NewEncoder(w).Encode(map[string]string{"url": "http://storage.test/" + r.URL.Query().Get("bucket") + "/" + key + "?sig=1"})
+		_ = json.NewEncoder(w).Encode(map[string]any{"url": "http://storage.test/" + r.URL.Query().Get("bucket") + "/" + key + "?sig=1",
+			"size": 250 << 20})
 	}))
 	t.Cleanup(srv.Close)
 	e, err := engine.New(srv.URL, "a test fernet key, not of anything")
@@ -166,6 +168,11 @@ func TestDataAPIManifest(t *testing.T) {
 	if w := f.call(f.creator, activateDataAPI, http.MethodPost, nil, path); w.Code != http.StatusOK {
 		t.Fatalf("%d %s", w.Code, w.Body.String())
 	}
+	// an activation drops the pod token; the reconcile loop makes the next one
+	if w := f.pod(token, podManifest, http.MethodGet, a.ID, nil); w.Code != http.StatusUnauthorized {
+		t.Fatalf("the token of before the activation: %d", w.Code)
+	}
+	token, _ = dataapis.RotatePodToken(f.ctx, f.db, a.ID)
 	m = f.manifest(token, a.ID)
 	if m.State != "active" || m.Replicas != 2 || len(m.Resources) != 3 || len(m.Keys) != 2 {
 		t.Fatalf("%+v", m)
@@ -246,6 +253,7 @@ func TestDataAPIManifest(t *testing.T) {
 		t.Errorf("%+v", m)
 	}
 	f.call(f.creator, activateDataAPI, http.MethodPost, nil, path)
+	token, _ = dataapis.RotatePodToken(f.ctx, f.db, a.ID)
 	f.d.Config.DataAPI.Enabled = false
 	if m = f.manifest(token, a.ID); m.State != "disabled" || len(m.Resources) != 0 {
 		t.Errorf("%+v", m)

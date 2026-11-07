@@ -823,7 +823,8 @@ func saveDataAPI(d *Deps, w http.ResponseWriter, r *http.Request, p *auth.Princi
 	sendDataAPIDetail(d, w, r, p, a.ID, http.StatusOK)
 }
 
-// DELETE /data-apis/{api_id}: with its versions, resources and keys; its pods stop.
+// DELETE /data-apis/{api_id}: with its versions, resources and keys; the reconcile loop removes
+// its objects from the cluster within its round.
 func deleteDataAPI(d *Deps, w http.ResponseWriter, r *http.Request, p *auth.Principal) {
 	a, _, ok := dataAPIManaged(d, w, r, p)
 	if !ok {
@@ -912,8 +913,8 @@ func duplicateDataAPI(d *Deps, w http.ResponseWriter, r *http.Request, p *auth.P
 	sendDataAPIDetail(d, w, r, p, a.ID, http.StatusCreated)
 }
 
-// POST /data-apis/{api_id}/activate: served (once the pods exist), within the most pods
-// allowed, on the authority of its creator, who must still have it.
+// POST /data-apis/{api_id}/activate: served, within the most pods allowed, on the authority of
+// its creator, who must still have it. The reconcile loop starts its pods within its round.
 func activateDataAPI(d *Deps, w http.ResponseWriter, r *http.Request, p *auth.Principal) {
 	a, _, ok := dataAPIManaged(d, w, r, p)
 	if !ok {
@@ -967,6 +968,11 @@ func activateDataAPI(d *Deps, w http.ResponseWriter, r *http.Request, p *auth.Pr
 		if ref, err = checkDataAPIPods(ctx, d, tx, a.ID, def.Runtime); err != nil || ref != nil {
 			return err
 		}
+		// a new pod token at every activation: the reconcile loop makes it at its next round,
+		// and the previous one stops now
+		if err := dataapis.ForgetPodToken(ctx, tx, a.ID); err != nil {
+			return err
+		}
 		return dataapis.SetState(ctx, tx, a.ID, dataapis.Active)
 	})
 	if answerRefusal(d, w, "data apis: activating", ref, err) {
@@ -977,7 +983,9 @@ func activateDataAPI(d *Deps, w http.ResponseWriter, r *http.Request, p *auth.Pr
 	sendDataAPIDetail(d, w, r, p, a.ID, http.StatusOK)
 }
 
-// POST /data-apis/{api_id}/pause: no longer served; its keys and definition stay.
+// POST /data-apis/{api_id}/pause: no longer served (the reconcile loop takes its pods to zero
+// within its round, and the pods stop answering at their next manifest); its keys and
+// definition stay.
 func pauseDataAPI(d *Deps, w http.ResponseWriter, r *http.Request, p *auth.Principal) {
 	a, _, ok := dataAPIManaged(d, w, r, p)
 	if !ok {

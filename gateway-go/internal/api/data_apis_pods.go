@@ -10,11 +10,9 @@ package api
 import (
 	"context"
 	"encoding/json"
-	"errors"
 	"fmt"
 	"io"
 	"net/http"
-	"net/url"
 	"strconv"
 	"strings"
 
@@ -163,35 +161,15 @@ func buildManifest(ctx context.Context, d *Deps, a *dataapis.API) (*dataapiwire.
 	return m, nil
 }
 
-// dataAPIPresign asks the engine for a short-lived link to an object of the storage (the
-// gateway holds no storage credentials: the engine signs it, as for the notebooks); missing
+// dataAPIPresign is a short-lived link to an object of the storage (dataAPIObject); missing
 // when the object is not there.
 func dataAPIPresign(ctx context.Context, d *Deps, bucket, key string) (link string, missing bool, err error) {
-	if d.Engine == nil {
-		return "", false, errors.New("no engine")
-	}
-	query := "bucket=" + url.QueryEscape(bucket) + "&key=" + url.QueryEscape(key) + "&expires=" + strconv.Itoa(dataAPIURLSeconds)
-	res, raw, err := d.Engine.JSON(ctx, http.MethodGet, "/files/presigned?"+query, nil)
-	if err != nil {
-		return "", false, err
-	}
-	if res.StatusCode == http.StatusNotFound {
-		return "", true, nil
-	}
-	if res.StatusCode != http.StatusOK {
-		return "", false, fmt.Errorf("the engine answered %d", res.StatusCode)
-	}
-	var out struct {
-		URL string `json:"url"`
-	}
-	if err := json.Unmarshal(raw, &out); err != nil || out.URL == "" {
-		return "", false, fmt.Errorf("the engine's link: %v", err)
-	}
-	return out.URL, false, nil
+	link, _, missing, err = dataAPIObject(ctx, d, bucket, key, dataAPIURLSeconds)
+	return link, missing, err
 }
 
 // POST /internal/data-apis/{api_id}/usage: the counts per key and minute a pod sends with its
-// poll, added to data_api_usage.
+// poll, added to data_api_usage, and its status, kept for the page (data_api_pods).
 func podUsage(d *Deps, w http.ResponseWriter, r *http.Request, a *dataapis.API) {
 	raw, err := io.ReadAll(http.MaxBytesReader(w, r.Body, dataAPIUsageMaxBytes))
 	if err != nil {
@@ -211,7 +189,12 @@ func podUsage(d *Deps, w http.ResponseWriter, r *http.Request, a *dataapis.API) 
 	kept := 0
 	err = inTx(ctx, d, func(tx pgx.Tx) error {
 		var err error
-		kept, err = dataapis.RecordUsage(ctx, tx, a.ID, in.Minutes)
+		if kept, err = dataapis.RecordUsage(ctx, tx, a.ID, in.Minutes); err != nil {
+			return err
+		}
+		if in.Status != nil {
+			_, err = dataapis.RecordPodReport(ctx, tx, a.ID, in.Pod, *in.Status)
+		}
 		return err
 	})
 	if err != nil {

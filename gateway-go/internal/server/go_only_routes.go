@@ -48,6 +48,8 @@ var goOnlyRoutes = []struct {
 	// data APIs: their pods, with the pod token of their own API only (api/data_apis_pods.go)
 	{after: "/data-apis/{api_id}/keys/{key_id}/renew", route: pyRoute{path: "/internal/data-apis/{api_id}/manifest", methods: []string{"GET"}, regex: `^/internal/data\-apis/(?P<api_id>[^/]+)/manifest$`}},
 	{after: "/internal/data-apis/{api_id}/manifest", route: pyRoute{path: "/internal/data-apis/{api_id}/usage", methods: []string{"POST"}, regex: `^/internal/data\-apis/(?P<api_id>[^/]+)/usage$`}},
+	// data APIs: how their pods are, for the page (api/data_apis_status.go)
+	{after: "/internal/data-apis/{api_id}/usage", route: pyRoute{path: "/data-apis/{api_id}/status", methods: []string{"GET"}, regex: `^/data\-apis/(?P<api_id>[^/]+)/status$`}},
 }
 
 // mainRoutes is the main application's table: FastAPI's, with the Go-only routes in place.

@@ -5,6 +5,7 @@
 package kube
 
 import (
+	"bytes"
 	"context"
 	"crypto/tls"
 	"crypto/x509"
@@ -35,6 +36,39 @@ const NoToken = "No service account token: is scripts.enabled, containers.enable
 // Call is kube_jobs._call: `body` (nil: none) sent as json.dumps writes it; the answer's
 // JSON (or its text, with `text`). Every failure is an *Error.
 func Call(ctx context.Context, k scriptcfg.Kubernetes, method, path string, body any, text bool) (any, error) {
+	var payload []byte
+	if body != nil {
+		s, err := pyjson.Dumps(body, pyjson.Options{EnsureASCII: true})
+		if err != nil {
+			return nil, err
+		}
+		payload = []byte(s)
+	}
+	accept := "application/json"
+	if text {
+		accept = "*/*" // a Pod's log: the API server refuses text/plain (406)
+	}
+	contentType := ""
+	if body != nil {
+		contentType = "application/json"
+	}
+	data, err := send(ctx, k, method, path, contentType, accept, payload)
+	if err != nil {
+		return nil, err
+	}
+	if text {
+		return string(data), nil
+	}
+	v, err := pyjson.Loads(string(data))
+	if err != nil {
+		return nil, fmt.Errorf("kube: the answer is not JSON: %w", err) // a JSONDecodeError in Python: a 500
+	}
+	return v, nil
+}
+
+// send is one request to the API with the service account's token: the answer's body, or
+// an *Error (Status 0 when the API was not reached, its status and message otherwise).
+func send(ctx context.Context, k scriptcfg.Kubernetes, method, path, contentType, accept string, payload []byte) ([]byte, error) {
 	raw, err := os.ReadFile(k.TokenFile) // read at every call: the kubelet rotates it
 	token := ""
 	if err == nil {
@@ -44,25 +78,17 @@ func Call(ctx context.Context, k scriptcfg.Kubernetes, method, path string, body
 		return nil, &Error{0, NoToken}
 	}
 	var reader io.Reader
-	if body != nil {
-		s, err := pyjson.Dumps(body, pyjson.Options{EnsureASCII: true})
-		if err != nil {
-			return nil, err
-		}
-		reader = strings.NewReader(s)
+	if payload != nil {
+		reader = bytes.NewReader(payload)
 	}
 	req, err := http.NewRequestWithContext(ctx, method, strings.TrimRight(k.APIURL, "/")+path, reader)
 	if err != nil {
 		return nil, &Error{0, "The Kubernetes API is not reachable (UnsupportedProtocol)"}
 	}
 	req.Header.Set("Authorization", "Bearer "+token)
-	if text {
-		req.Header.Set("Accept", "*/*") // a Pod's log: the API server refuses text/plain (406)
-	} else {
-		req.Header.Set("Accept", "application/json")
-	}
-	if body != nil {
-		req.Header.Set("Content-Type", "application/json")
+	req.Header.Set("Accept", accept)
+	if contentType != "" {
+		req.Header.Set("Content-Type", contentType)
 	}
 	client := &http.Client{Timeout: time.Duration(k.TimeoutSeconds * float64(time.Second)), Transport: transport(k.CAFile)}
 	res, err := client.Do(req)
@@ -89,14 +115,7 @@ func Call(ctx context.Context, k scriptcfg.Kubernetes, method, path string, body
 		}
 		return nil, &Error{res.StatusCode, fmt.Sprintf("Kubernetes answered %d: %s", res.StatusCode, string(r))}
 	}
-	if text {
-		return string(data), nil
-	}
-	v, err := pyjson.Loads(string(data))
-	if err != nil {
-		return nil, fmt.Errorf("kube: the answer is not JSON: %w", err) // a JSONDecodeError in Python: a 500
-	}
-	return v, nil
+	return data, nil
 }
 
 func truthy(v any) bool {

@@ -35,6 +35,13 @@ func RotatePodToken(ctx context.Context, q Querier, apiID int64) (string, error)
 	return token, nil
 }
 
+// ForgetPodToken drops the data API's pod token: nothing opens its manifest until the reconcile
+// loop makes a new one (RotatePodToken), as it does at the first round after an activation.
+func ForgetPodToken(ctx context.Context, q Querier, apiID int64) error {
+	_, err := q.Exec(ctx, `UPDATE data_apis SET pod_token_hash = NULL WHERE id = $1`, apiID)
+	return err
+}
+
 // ByPodToken is the data API `apiID` when `token` is its pod token; nil otherwise (no such
 // data API, no token yet, another one's, or not a token at all).
 func ByPodToken(ctx context.Context, q Querier, apiID int64, token string) (*API, error) {
