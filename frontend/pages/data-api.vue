@@ -11,8 +11,8 @@ import { computed, onMounted, onUnmounted, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { onBeforeRouteLeave, onBeforeRouteUpdate } from 'vue-router'
 import {
-  Braces, ChevronDown, ChevronRight, CircleAlert, History, KeyRound, LoaderCircle, Pause, Play, Plus, RefreshCw, RotateCcw,
-  Save, Trash2, X,
+  BookOpen, Braces, ChevronDown, ChevronRight, CircleAlert, History, KeyRound, LoaderCircle, Pause, Play, Plus, RefreshCw, RotateCcw,
+  Save, Server, SlidersHorizontal, Trash2, X,
 } from 'lucide-vue-next'
 import { errMessage } from '~/composables/useApi'
 import { useFormat } from '~/composables/useFormat'
@@ -21,13 +21,14 @@ import { versionNote } from '~/composables/useSavedScripts'
 import { useSqlScripts, type SqlCatalogItem } from '~/composables/useSqlScripts'
 import { dayAfter, endOfDay } from '~/composables/shareLinks'
 import {
-  cidrsOf, keyAnswers, newResource, operatorsFor, slugOf, tidyResource, useDataApis, validLabel,
+  cidrsOf, dataApiOrigin, keyAnswers, newResource, operatorsFor, slugOf, tidyResource, useDataApis, validLabel,
   type DataApiDetail, type DataApiKey, type DataApiLimits, type DataApiOperator, type DataApiResource, type DataApiRuntime,
   type DataApiVersion,
 } from '~/composables/useDataApis'
 import Select from '~/components/ui/Select.vue'
 import SecretOnce from '~/components/ui/SecretOnce.vue'
 import DataApiStatus from '~/components/dataapi/DataApiStatus.vue'
+import DataApiDocs from '~/components/dataapi/DataApiDocs.vue'
 
 const { t } = useI18n()
 const fmtx = useFormat()
@@ -60,6 +61,27 @@ const dirty = computed(() => snapshot() !== savedAs.value)
 const canEdit = computed(() => (detail.value ? detail.value.can_manage : true))
 const folderPath = computed(() => folderPaths.pathOf(projectId.value) ?? '')
 const off = computed(() => !!limits.value && !limits.value.enabled)
+
+// the page's tabs: the definition, the pods and their traffic, the documentation (a saved data
+// API only); the tab is in the address, so a link opens on it
+type Tab = 'definition' | 'pods' | 'docs'
+const TABS: Tab[] = ['definition', 'pods', 'docs']
+const tabOf = (q: unknown): Tab => (TABS.includes(q as Tab) ? (q as Tab) : 'definition')
+const tab = ref<Tab>(tabOf(route.query.tab))
+function setTab(next: Tab) {
+  tab.value = next
+  const query = { ...route.query, tab: next === 'definition' ? undefined : next }
+  navigateTo({ query }, { replace: true })
+}
+watch(() => route.query.tab, (q) => { tab.value = tabOf(q) })
+const shownTab = computed<Tab>(() => (detail.value ? tab.value : 'definition'))
+
+/** Where the other systems call it: its public address, or the interface's own. */
+const callAt = computed(() => {
+  const l = limits.value
+  if (!l || !slug.value) return ''
+  return `${dataApiOrigin(l.base_url ?? '', l.host ?? '', location)}/data/${slug.value}/`
+})
 
 // a new data API takes its address from its name until the address is typed
 watch(name, (n) => { if (apiId.value == null && !slugTouched.value) slug.value = slugOf(n) })
@@ -419,8 +441,24 @@ watch(() => route.query.id, (id) => {
           <p v-if="detail?.suspended" class="note warn small" role="status">
             <CircleAlert :size="14" /> {{ $t(`dataApi.suspended_${detail.suspended}`) }}
           </p>
-          <DataApiStatus v-if="detail" :api-id="detail.id" :state="detail.state" />
+          <div v-if="detail" class="tabs" role="tablist" :aria-label="$t('dataApi.tabs')">
+            <button type="button" role="tab" :aria-selected="shownTab === 'definition'" :class="{ on: shownTab === 'definition' }"
+                    data-tab="definition" @click="setTab('definition')">
+              <SlidersHorizontal :size="13" /> {{ $t('dataApi.tabDefinition') }}
+            </button>
+            <button type="button" role="tab" :aria-selected="shownTab === 'pods'" :class="{ on: shownTab === 'pods' }"
+                    data-tab="pods" @click="setTab('pods')">
+              <Server :size="13" /> {{ $t('dataApi.stTitle') }}
+            </button>
+            <button type="button" role="tab" :aria-selected="shownTab === 'docs'" :class="{ on: shownTab === 'docs' }"
+                    data-tab="docs" @click="setTab('docs')">
+              <BookOpen :size="13" /> {{ $t('dataApi.docTitle') }}
+            </button>
+          </div>
+          <DataApiStatus v-if="detail && shownTab === 'pods'" :api-id="detail.id" :state="detail.state" />
+          <DataApiDocs v-if="detail && shownTab === 'docs'" :api-id="detail.id" :state="detail.state" :version="detail.current_version" />
 
+          <template v-if="shownTab === 'definition'">
           <div class="card">
             <h2>{{ $t('dataApi.address') }}</h2>
             <label class="field">
@@ -433,6 +471,7 @@ watch(() => route.query.id, (id) => {
               </span>
             </label>
             <p class="muted small help">{{ $t(detail?.state === 'active' ? 'dataApi.slugActive' : 'dataApi.slugHelp') }}</p>
+            <p v-if="callAt" class="muted small help">{{ $t('dataApi.callAt') }} <code class="callat">{{ callAt }}</code></p>
             <label class="field">
               <span>{{ $t('dataApi.description') }}</span>
               <textarea v-model="description" rows="2" maxlength="2000" :readonly="!canEdit" :placeholder="$t('dataApi.descriptionPlaceholder')" />
@@ -566,6 +605,7 @@ watch(() => route.query.id, (id) => {
               </label>
             </div>
           </div>
+          </template>
         </section>
 
         <aside class="side">
@@ -747,6 +787,15 @@ watch(() => route.query.id, (id) => {
 .versions { max-height: 40vh; overflow: auto; }
 .versions li.current { border-color: var(--accent); }
 .vacts { display: flex; gap: 6px; margin-top: 3px; }
+.tabs { display: flex; gap: 2px; border-bottom: 1px solid var(--border-soft); overflow-x: auto; scrollbar-width: none; }
+.tabs button {
+  display: inline-flex; align-items: center; gap: 5px; padding: 6px 11px; font-size: 12.5px; white-space: nowrap;
+  border: 0; border-bottom: 2px solid transparent; border-radius: 6px 6px 0 0; background: transparent;
+  color: var(--muted); box-shadow: none; min-height: 0;
+}
+.tabs button:hover { color: var(--text); box-shadow: none; }
+.tabs button.on { color: var(--text); border-bottom-color: var(--accent); }
+.callat { overflow-wrap: anywhere; }
 @media (max-width: 900px) {
   .work { grid-template-columns: minmax(0, 1fr); }
   .row2 { grid-template-columns: 1fr; }

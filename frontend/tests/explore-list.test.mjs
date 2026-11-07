@@ -85,7 +85,7 @@ test('what uses an object: its readers and its runners, not what it publishes', 
   const nodes = [
     { id: 'ds:1', type: 'datasource' }, { id: 'flow:2', type: 'flow' }, { id: 'flow:3', type: 'flow' },
     { id: 'group:4', type: 'flow_group' }, { id: 'sql:5', type: 'sql_script' }, { id: 'ds:6', type: 'datasource' },
-    { id: 'conn:7', type: 'connection' }, { id: 'sink:8', type: 'db_sink' },
+    { id: 'conn:7', type: 'connection' }, { id: 'sink:8', type: 'db_sink' }, { id: 'dataapi:10', type: 'data_api' },
   ]
   const edges = [
     { source: 'ds:1', target: 'flow:2', kind: 'read' },
@@ -96,12 +96,14 @@ test('what uses an object: its readers and its runners, not what it publishes', 
     { source: 'flow:9', target: 'ds:1', kind: 'publish' }, // who makes it is not a user of it
     { source: 'conn:7', target: 'ds:1', kind: 'ingest' },
     { source: 'group:4', target: 'flow:2', kind: 'orchestrate' },
+    { source: 'ds:1', target: 'dataapi:10', kind: 'read' }, // a data API publishes it
   ]
-  assert.deepEqual(L.dependentsOf({ nodes, edges }, 'ds:1'), { flow: 2, sql_script: 1 })
+  assert.deepEqual(L.dependentsOf({ nodes, edges }, 'ds:1'), { flow: 2, sql_script: 1, data_api: 1 })
   assert.deepEqual(L.dependentsOf({ nodes, edges }, 'flow:2'), { flow_group: 1 })
   assert.deepEqual(L.dependentsOf({ nodes, edges }, 'conn:7'), { datasource: 1 })
   assert.deepEqual(L.dependentsOf({ nodes, edges: [{ source: 'flow:2', target: 'sink:8', kind: 'write' }] }, 'flow:2'), {})
   assert.equal(L.lineageType('sql'), 'sql')
+  assert.equal(L.lineageType('dataapi'), 'dataapi')
   assert.equal(L.lineageType('report'), null)
   assert.equal(L.lineageType('folder'), null)
 })

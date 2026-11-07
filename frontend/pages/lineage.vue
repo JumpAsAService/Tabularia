@@ -1,6 +1,6 @@
 <script setup lang="ts">
 // Lineage tab: the provenance/impact graph among flows, datasources, connections,
-// external destinations, saved scripts, SQL scripts, notebooks and flow groups. One chooses an object to centre on (or sees everything);
+// external destinations, saved scripts, SQL scripts, notebooks, flow groups and data APIs. One chooses an object to centre on (or sees everything);
 // nothing loads until the user searches an object and applies it, or asks for the
 // whole graph: with many objects the whole graph is the heavy case, not the start.
 // The graph shows upstream (where the data comes from) and downstream (who breaks if I
@@ -13,7 +13,7 @@ import { Controls } from '@vue-flow/controls'
 import {
   Share2, Workflow, Database, Plug, CloudUpload, HardDriveDownload, Search,
   AlertTriangle, Clock, ExternalLink, X, Crosshair, Server, FileCode2, DatabaseSearch, NotebookPen, Rows3,
-  Container as ContainerIcon, Mail,
+  Container as ContainerIcon, Mail, Braces,
 } from 'lucide-vue-next'
 import { useApi, errMessage, type LineageGraph, type LineageNode, type LineageEdge } from '~/composables/useApi'
 import { useSearch, type SearchHit } from '~/composables/useSearch'
@@ -33,7 +33,7 @@ const loading = ref(false)
 const error = ref('')
 
 // selection: central object + walking parameters
-type CenterType = 'flow' | 'datasource' | 'connection' | 'script' | 'sql' | 'notebook' | 'group'
+type CenterType = 'flow' | 'datasource' | 'connection' | 'script' | 'sql' | 'notebook' | 'group' | 'dataapi'
 const centerType = ref<CenterType | null>(null)
 const centerId = ref<number | null>(null)
 const direction = ref<'both' | 'upstream' | 'downstream'>('both')
@@ -43,7 +43,7 @@ const selected = ref<LineageNode | null>(null) // node open in the detail panel
 
 // filters by node kind (all on by default)
 const ALL_TYPES = [
-  'flow', 'datasource', 'connection', 'script', 'sql_script', 'notebook', 'flow_group', 'container',
+  'flow', 'datasource', 'connection', 'script', 'sql_script', 'notebook', 'flow_group', 'data_api', 'container',
   'db_sink', 's3_sink', 'sftp_sink', 'email_sink',
 ] as const
 const enabledTypes = ref<Set<string>>(new Set(ALL_TYPES))
@@ -62,6 +62,7 @@ const NODE_META = computed<Record<string, { label: string; icon: any; color: str
   sql_script: { label: t('lineage.nodeSqlScript'), icon: DatabaseSearch, color: '#2dd4bf' },
   notebook: { label: t('lineage.nodeNotebook'), icon: NotebookPen, color: '#fb923c' },
   flow_group: { label: t('lineage.nodeFlowGroup'), icon: Rows3, color: '#818cf8' },
+  data_api: { label: t('lineage.nodeDataApi'), icon: Braces, color: '#e879f9' },
   container: { label: t('lineage.nodeContainer'), icon: ContainerIcon, color: '#94a3b8' },
   db_sink: { label: t('lineage.nodeDbSink'), icon: HardDriveDownload, color: '#fbbf24' },
   s3_sink: { label: t('lineage.nodeS3Sink'), icon: CloudUpload, color: '#38bdf8' },
@@ -81,10 +82,12 @@ const EDGE_META = computed<Record<string, { label: string; color: string; dashed
 // the search's kinds (useSearch) → the centre's type; the node types they are drawn as
 const CENTER_OF_KIND: Record<string, CenterType> = {
   flow: 'flow', datasource: 'datasource', connection: 'connection', script: 'script', sql: 'sql', notebook: 'notebook', group: 'group',
+  dataapi: 'dataapi',
 }
-const NODE_TYPE_OF_KIND: Record<string, string> = { sql: 'sql_script', group: 'flow_group' }
+const NODE_TYPE_OF_KIND: Record<string, string> = { sql: 'sql_script', group: 'flow_group', dataapi: 'data_api' }
 const NODE_PREFIX: Record<CenterType, string> = {
   flow: 'flow', datasource: 'ds', connection: 'conn', script: 'script', sql: 'sql', notebook: 'notebook', group: 'group',
+  dataapi: 'dataapi',
 }
 const hits = ref<SearchHit[]>([])
 const searching = ref(false)
@@ -297,8 +300,9 @@ function openNode(n: LineageNode) {
   else if (n.type === 'sql_script') navigateTo(`/sql-script?id=${id}`)
   else if (n.type === 'notebook') navigateTo(`/notebook?id=${id}`)
   else if (n.type === 'flow_group') navigateTo(`/flow-group?id=${id}`)
+  else if (n.type === 'data_api') navigateTo(`/data-api?id=${id}`)
 }
-const OPENABLE = new Set(['flow', 'datasource', 'script', 'sql_script', 'notebook', 'flow_group'])
+const OPENABLE = new Set(['flow', 'datasource', 'script', 'sql_script', 'notebook', 'flow_group', 'data_api'])
 const canRecenter = (n: LineageNode | null) =>
   !!n && (OPENABLE.has(n.type) || n.type === 'connection') && !n.restricted
 const canOpen = (n: LineageNode | null) => !!n && OPENABLE.has(n.type) && !n.restricted
@@ -541,6 +545,11 @@ function nodeIcon(t: string) {
                 <dt>{{ $t('lineage.scheduled') }}</dt><dd>{{ selected.meta?.scheduled ? $t('lineage.yes') : $t('lineage.no') }}</dd>
               </template>
               <template v-else-if="selected.type === 'notebook'">
+                <dt>{{ $t('lineage.version') }}</dt><dd>v{{ selected.meta?.version ?? '—' }}</dd>
+              </template>
+              <template v-else-if="selected.type === 'data_api'">
+                <dt>{{ $t('lineage.dataApiPath') }}</dt><dd class="mono">{{ selected.meta?.path ?? '—' }}</dd>
+                <dt>{{ $t('lineage.dataApiState') }}</dt><dd>{{ selected.meta?.state ? $t(`dataApi.state_${selected.meta.state}`) : '—' }}</dd>
                 <dt>{{ $t('lineage.version') }}</dt><dd>v{{ selected.meta?.version ?? '—' }}</dd>
               </template>
               <template v-else-if="selected.type === 'flow_group'">

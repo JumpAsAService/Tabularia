@@ -572,6 +572,10 @@ func dataAPILimits(d *Deps, w http.ResponseWriter, r *http.Request, p *auth.Prin
 		out["max_page"] = dataapis.MaxPage
 		out["operators"] = dataapis.Operators
 		out["default_runtime"] = dataapis.DefaultRuntime(c)
+		// where the other systems call: the public address (dataApi.publicHost) or the host the
+		// data APIs are published on; both empty: the interface's own
+		out["base_url"] = c.Pods.PublicBaseURL
+		out["host"] = dataapis.IngressHost(c.Pods)
 	}
 	server.JSON(w, http.StatusOK, out)
 }

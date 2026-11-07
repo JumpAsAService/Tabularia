@@ -64,3 +64,33 @@ test('Explore offers «New → Data API» only where the installation has them, 
   assert.match(vue, /<button v-if="dataApiHere" class="menu-item" @click="createDataApi">/)
   assert.ok(vue.includes('navigateTo(`/data-api?project=${target.value}`)'))
 })
+
+test('a column\'s kind is the gateway\'s (dataapiwire.KindOfPolars), which the pods agree with', () => {
+  const cases = {
+    Int64: 'integer', UInt8: 'integer', 'Duration(time_unit=\'us\')': 'integer', Int128: 'other', Float32: 'float',
+    'Decimal(precision=12, scale=2)': 'decimal', Boolean: 'boolean', String: 'string', Categorical: 'string',
+    'Enum(categories=[\'x\'])': 'string', Date: 'date', 'Datetime(time_unit=\'us\', time_zone=None)': 'timestamp',
+    'Datetime(time_unit=\'us\', time_zone=\'Europe/Rome\')': 'timestamptz', Time: 'time', Binary: 'other', 'List(Int64)': 'other',
+  }
+  for (const [type, kind] of Object.entries(cases)) assert.equal(m.kindOfPolars(type), kind, type)
+  assert.deepEqual(m.operatorsFor('Time'), m.DATA_API_OPERATORS)
+  assert.deepEqual(m.operatorsFor('Int128'), [])
+})
+
+test('the documentation writes the address the other systems call, and curl lines with no key in them', () => {
+  const here = { protocol: 'http:', origin: 'http://localhost:8080' }
+  assert.equal(m.dataApiOrigin('', '', here), 'http://localhost:8080')
+  assert.equal(m.dataApiOrigin('', 'data.example.com', here), 'http://data.example.com')
+  assert.equal(m.dataApiOrigin('https://data.example.com/', 'data.example.com', here), 'https://data.example.com')
+  assert.equal(m.filterParam('id', 'eq'), 'id')
+  assert.equal(m.filterParam('id', 'in'), 'id__in')
+  const line = m.curlLine('https://d.example.com/data/crm/customers', { id__in: '1,2', name: 'a b+c' })
+  assert.equal(line, 'curl -H "Authorization: Bearer $TABULARIA_KEY" "https://d.example.com/data/crm/customers?id__in=1,2&name=a%20b%2Bc"')
+  assert.ok(m.curlLine('https://x/data/a/b', {}, 'apikey').includes('-H "X-API-Key: $TABULARIA_KEY"'))
+  const doc = { base_url: '', openapi: { openapi: '3.1.0', servers: [{ url: '/' }] } }
+  assert.deepEqual(m.openapiForDownload(doc, 'http://localhost:8080').servers, [{ url: 'http://localhost:8080' }])
+  assert.deepEqual(doc.openapi.servers, [{ url: '/' }], 'the gateway\'s document is not changed')
+  const pub = { base_url: 'https://d.example.com', openapi: { servers: [{ url: 'https://d.example.com' }] } }
+  assert.deepEqual(m.openapiForDownload(pub, 'http://localhost:8080').servers, [{ url: 'https://d.example.com' }])
+  for (const k of ['integer', 'date', 'timestamp', 'time', 'uuid', 'string']) assert.ok(m.sampleValue(k).length)
+})

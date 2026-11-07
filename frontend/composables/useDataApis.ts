@@ -79,6 +79,10 @@ export interface DataApiLimits {
   default_page?: number
   max_page?: number
   default_runtime?: DataApiRuntime
+  /** the address the other systems call (dataApi.publicHost), '' for the interface's own */
+  base_url?: string
+  /** the host the data APIs are published on, '' for the interface's own */
+  host?: string
 }
 
 export type DataApiKeyState = 'active' | 'grace' | 'replaced' | 'expired' | 'revoked'
@@ -165,6 +169,109 @@ export interface DataApiStatus {
   poll_seconds: number
   path: string
   host: string
+  /** the address the other systems call (dataApi.publicHost); '' for the interface's own */
+  base_url: string
+}
+
+/** The kind a data API gives a column: how a filter reads its value, how an answer writes it. */
+export type DataApiKind = 'integer' | 'float' | 'decimal' | 'boolean' | 'string' | 'date' | 'timestamp' | 'timestamptz'
+  | 'time' | 'uuid' | 'other'
+
+/** GET /data-apis/{id}/documentation: what the page documents, with the pods' own description. */
+export interface DataApiDoc {
+  state: DataApiState
+  base_url: string
+  host: string
+  path: string
+  version: number
+  resources: {
+    name: string
+    path: string
+    /** kind '' : the datasource no longer has the column */
+    columns: { name: string; kind: DataApiKind | '' }[]
+    filters: DataApiFilter[]
+    default_sort: string[]
+    max_page: number
+  }[]
+  max_in_values: number
+  max_sort_keys: number
+  errors: { status: number; code: string; meaning: string }[]
+  openapi: Record<string, any>
+}
+
+/** A data API as the administration lists it. */
+export interface DataApiAdminRow {
+  id: number
+  name: string
+  slug: string
+  path: string
+  project_id: number
+  state: DataApiState
+  creator: (DataApiPerson & { active: boolean }) | null
+  resources: number
+  keys: number
+  created_at: string | null
+  updated_at: string | null
+  wanted: number
+  ready: number
+  error: string
+  checked_at: string | null
+  requests_24h: number
+  errors_24h: number
+  throttled_24h: number
+  last_used_at: string | null
+}
+export interface DataApiAdminList {
+  enabled: boolean
+  reason: '' | 'kubernetes' | 'disabled'
+  max_apis: number
+  max_total_replicas: number
+  base_url: string
+  host: string
+  apis: DataApiAdminRow[]
+}
+
+/** Where the other systems call a data API: its public address, the host it is published on,
+ *  or the page's own origin. */
+export function dataApiOrigin(baseUrl: string, host: string, here: { protocol: string; origin: string }): string {
+  if (baseUrl) return baseUrl.replace(/\/+$/, '')
+  if (host) return `${here.protocol}//${host}`
+  return here.origin
+}
+
+/** A value of this kind to show in an example: one a filter reads. */
+export function sampleValue(kind: DataApiKind | ''): string {
+  switch (kind) {
+    case 'integer': return '42'
+    case 'float': case 'decimal': return '12.50'
+    case 'boolean': return 'true'
+    case 'date': return '2026-01-31'
+    case 'timestamp': return '2026-01-31T08:30:00'
+    case 'timestamptz': return '2026-01-31T08:30:00Z'
+    case 'time': return '08:30:00'
+    case 'uuid': return '123e4567-e89b-12d3-a456-426614174000'
+  }
+  return 'text'
+}
+
+/** The query-string parameter of a filter's operator: col, col__in, col__gte… */
+export function filterParam(column: string, op: DataApiOperator): string {
+  return op === 'eq' ? column : `${column}__${op}`
+}
+
+/** A curl command line for a resource, with the key in a variable (never written here). */
+export function curlLine(url: string, query: Record<string, string> = {}, header: 'bearer' | 'apikey' = 'bearer'): string {
+  const qs = Object.entries(query).map(([k, v]) => `${encodeURIComponent(k)}=${encodeURIComponent(v).replace(/%2C/g, ',')}`).join('&')
+  const auth = header === 'bearer' ? '-H "Authorization: Bearer $TABULARIA_KEY"' : '-H "X-API-Key: $TABULARIA_KEY"'
+  return `curl ${auth} "${url}${qs ? `?${qs}` : ''}"`
+}
+
+/** The OpenAPI document to download: the gateway's, with the address it is called at when the
+ *  gateway wrote it relative («/»: the page's own). */
+export function openapiForDownload(doc: DataApiDoc, origin: string): Record<string, any> {
+  const out = JSON.parse(JSON.stringify(doc.openapi))
+  if (!doc.base_url) out.servers = [{ url: origin }]
+  return out
 }
 
 export function useDataApis() {
@@ -182,6 +289,10 @@ export function useDataApis() {
     activate: (id: number) => apiFetch<DataApiDetail>(`/data-apis/${id}/activate`, { method: 'POST' }),
     pause: (id: number) => apiFetch<DataApiDetail>(`/data-apis/${id}/pause`, { method: 'POST' }),
     status: (id: number, hours = 24) => apiFetch<DataApiStatus>(`/data-apis/${id}/status?hours=${hours}`),
+    documentation: (id: number) => apiFetch<DataApiDoc>(`/data-apis/${id}/documentation`),
+    adminList: () => apiFetch<DataApiAdminList>('/admin/data-apis'),
+    adminPause: (id: number) => apiFetch<void>(`/admin/data-apis/${id}/pause`, { method: 'POST' }),
+    adminRemove: (id: number) => apiFetch<void>(`/admin/data-apis/${id}`, { method: 'DELETE' }),
     versions: (id: number) => apiFetch<DataApiVersion[]>(`/data-apis/${id}/versions`),
     restore: (id: number, version: number) =>
       apiFetch<DataApiDetail>(`/data-apis/${id}/versions/${version}/restore`, { method: 'POST' }),

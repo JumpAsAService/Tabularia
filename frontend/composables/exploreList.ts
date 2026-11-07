@@ -114,9 +114,9 @@ export function stepRow(at: number, count: number, dir: 1 | -1): number {
  * (its edges in, `orchestrate` and `refresh`). What it publishes or writes does not depend
  * on it. Counted by kind; the nodes this person may not open count too (they would break
  * just the same). Only the kinds the graph tracks: flows, datasources, connections, scripts,
- * SQL scripts, notebooks and flow groups — not reports, dashboards nor views.
+ * SQL scripts, notebooks, flow groups and data APIs — not reports, dashboards nor views.
  */
-export const DEPENDENT_TYPES = ['flow', 'flow_group', 'datasource', 'sql_script', 'script', 'notebook'] as const
+export const DEPENDENT_TYPES = ['flow', 'flow_group', 'datasource', 'sql_script', 'script', 'notebook', 'data_api'] as const
 export type DependentType = typeof DEPENDENT_TYPES[number]
 
 export function dependentsOf(
@@ -139,8 +139,8 @@ export function dependentsOf(
 }
 
 /** The lineage graph's name for an Explore kind; null for the kinds it does not track. */
-export function lineageType(kind: string): 'flow' | 'datasource' | 'connection' | 'script' | 'sql' | 'notebook' | 'group' | null {
-  return (['flow', 'datasource', 'connection', 'script', 'sql', 'notebook', 'group'] as const).find((k) => k === kind) ?? null
+export function lineageType(kind: string): 'flow' | 'datasource' | 'connection' | 'script' | 'sql' | 'notebook' | 'group' | 'dataapi' | null {
+  return (['flow', 'datasource', 'connection', 'script', 'sql', 'notebook', 'group', 'dataapi'] as const).find((k) => k === kind) ?? null
 }
 
 // ── The top level's start band: «Recent» and «Failed runs (24h)» ─────────────────────

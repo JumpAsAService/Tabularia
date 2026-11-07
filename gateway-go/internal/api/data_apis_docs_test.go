@@ -127,6 +127,10 @@ func TestDataAPIDocumentation(t *testing.T) {
 	if st["base_url"] != "https://api.example.com" || st["host"] != "api.example.com" {
 		t.Errorf("%v", st)
 	}
+	lim := decode[map[string]any](t, f.call(f.viewer, dataAPILimits, http.MethodGet, nil, nil))
+	if lim["base_url"] != "https://api.example.com" || lim["host"] != "api.example.com" {
+		t.Errorf("%v", lim)
+	}
 }
 
 type userRef struct {

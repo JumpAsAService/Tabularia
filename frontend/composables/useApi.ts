@@ -267,7 +267,7 @@ export function useApi() {
     // lineage graph: without center → the whole readable graph; with center → the subgraph
     // upstream/downstream within `depth` hops
     async lineage(p?: {
-      type?: 'flow' | 'datasource' | 'connection' | 'script' | 'sql' | 'notebook' | 'group'
+      type?: 'flow' | 'datasource' | 'connection' | 'script' | 'sql' | 'notebook' | 'group' | 'dataapi'
       id?: number
       direction?: 'both' | 'upstream' | 'downstream'
       depth?: number
@@ -342,7 +342,7 @@ export function useApi() {
 
 // ── Lineage cross-flow ───────────────────────────────────────────────────────
 export type LineageNodeType =
-  | 'flow' | 'datasource' | 'connection' | 'script' | 'sql_script' | 'notebook' | 'flow_group' | 'container'
+  | 'flow' | 'datasource' | 'connection' | 'script' | 'sql_script' | 'notebook' | 'flow_group' | 'container' | 'data_api'
   | 'db_sink' | 's3_sink' | 'sftp_sink' | 'email_sink'
 export type LineageEdgeKind = 'read' | 'publish' | 'ingest' | 'write' | 'refresh' | 'orchestrate'
 export interface LineageNode {

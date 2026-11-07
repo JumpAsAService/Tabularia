@@ -9,7 +9,7 @@ import { useFormat } from '~/composables/useFormat'
 import {
   CheckCircle2, Cpu, Eye, Plus, Search, Shield, ShieldCheck, Trash2, TriangleAlert,
   User as UserIcon, Users as UsersIcon, X, XCircle, Sparkles, Bot, Webhook as WebhookIcon,
-  SlidersHorizontal, Radar, Server, KeyRound, Code2, Boxes, DatabaseBackup, Link2,
+  SlidersHorizontal, Radar, Server, KeyRound, Code2, Boxes, DatabaseBackup, Link2, Braces,
 } from 'lucide-vue-next'
 // explicit imports: in the container new components are not scanned
 import ServiceAccountsSection from '~/components/admin/ServiceAccountsSection.vue'
@@ -23,6 +23,8 @@ import RegistriesSection from '~/components/admin/RegistriesSection.vue'
 import AiPromptsSection from '~/components/admin/AiPromptsSection.vue'
 import AiProvidersSection from '~/components/admin/AiProvidersSection.vue'
 import ShareLinksSection from '~/components/admin/ShareLinksSection.vue'
+import DataApisSection from '~/components/admin/DataApisSection.vue'
+import { useDataApis } from '~/composables/useDataApis'
 import PasswordDialog from '~/components/ui/PasswordDialog.vue'
 import { passwordProblem, usePasswordRules } from '~/composables/usePasswordRules'
 import { useSiem } from '~/composables/useSiem'
@@ -64,7 +66,7 @@ const canWrite = computed(() => !!me.value?.is_superuser)
 const { t } = useI18n()
 const fmtx = useFormat()
 
-type Section = 'users' | 'groups' | 'service' | 'webhooks' | 'banners' | 'privacy' | 'engines' | 'settings' | 'workers' | 'scripting' | 'registries' | 'siem' | 'backups' | 'ai' | 'share'
+type Section = 'users' | 'groups' | 'service' | 'webhooks' | 'banners' | 'privacy' | 'engines' | 'settings' | 'workers' | 'scripting' | 'registries' | 'siem' | 'backups' | 'ai' | 'share' | 'dataapis'
 const section = ref<Section>('users')
 // the Settings section with changes not saved: asked before going to another section
 const settingsToSave = ref(false)
@@ -106,6 +108,9 @@ const filteredUsers = computed(() =>
 const nService = ref(0)
 const nWebhook = ref(0)
 const nShare = ref(0)
+// the data APIs active now; greyed out without Kubernetes, as the scripting
+const nDataApis = ref(0)
+const dataApisOff = ref(false)
 // how many engine settings were changed from the panel (the others hold from the environment)
 const nSettings = ref(0)
 const nWorker = ref(0)
@@ -145,6 +150,7 @@ const sections = computed(() => [
   { id: 'workers' as Section, label: t('workers.navTitle'), icon: Server, badge: nWorker.value },
   { id: 'scripting' as Section, label: t('scripting.navTitle'), icon: Code2, badge: nEnvironments.value, off: scriptingOff.value },
   { id: 'registries' as Section, label: t('registries.navTitle'), icon: Boxes, badge: nRegistries.value, off: registriesOff.value },
+  { id: 'dataapis' as Section, label: t('dataApiAdmin.navTitle'), icon: Braces, badge: nDataApis.value, off: dataApisOff.value },
   { id: 'siem' as Section, label: t('siem.navTitle'), icon: Radar, badge: siemOn.value ? 1 : 0 },
   // how many models are ENABLED: zero = the assistant cannot be used by anyone
   { id: 'ai' as Section, label: t('adminPanel.aiTitle'), icon: Sparkles, badge: nAiModels.value },
@@ -203,6 +209,10 @@ async function loadAll() {
     registriesApi.get().then((rg) => {
       nRegistries.value = rg.registries.length
       registriesOff.value = rg.disabled_reason === 'kubernetes'
+    }),
+    useDataApis().adminList().then((da) => {
+      nDataApis.value = da.apis.filter((a) => a.state === 'active').length
+      dataApisOff.value = da.reason === 'kubernetes' && !da.apis.length
     }),
     // apart: the assistant may not be configured, and that is not a panel error
     aiApi.models().then((m) => { nAiModels.value = m.filter((x) => x.enabled).length }),
@@ -811,6 +821,10 @@ async function toggleEngine(m: EnginePolicy) {
 
         <template v-else-if="section === 'share'">
           <ShareLinksSection :can-write="canWrite" @count="nShare = $event" />
+        </template>
+
+        <template v-else-if="section === 'dataapis'">
+          <DataApisSection :can-write="canWrite" @count="nDataApis = $event" />
         </template>
 
         <template v-else-if="section === 'ai'">

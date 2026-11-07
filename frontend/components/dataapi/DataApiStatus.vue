@@ -9,7 +9,7 @@ import { useI18n } from 'vue-i18n'
 import { Activity, CircleAlert, Server } from 'lucide-vue-next'
 import { errMessage } from '~/composables/useApi'
 import { useFormat } from '~/composables/useFormat'
-import { useDataApis, type DataApiPod, type DataApiState, type DataApiStatus } from '~/composables/useDataApis'
+import { dataApiOrigin, useDataApis, type DataApiPod, type DataApiState, type DataApiStatus } from '~/composables/useDataApis'
 
 const props = defineProps<{ apiId: number; state: DataApiState }>()
 const { t } = useI18n()
@@ -73,12 +73,11 @@ const tone = computed(() => {
   return s.checked_at && s.wanted > 0 && s.ready >= s.wanted ? 'good' : 'wait'
 })
 
-/** The address the other systems call: the published host, or the page's own. */
+/** The address the other systems call: the public address, the published host, or the page's own. */
 const address = computed(() => {
   const s = status.value
   if (!s) return ''
-  const origin = s.host ? `${location.protocol}//${s.host}` : location.origin
-  return origin + s.path
+  return dataApiOrigin(s.base_url ?? '', s.host, location) + s.path
 })
 
 const short = (name: string) => name.replace(/^.*-data-api-\d+-/, '…')
