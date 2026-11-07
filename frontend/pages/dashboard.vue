@@ -26,7 +26,7 @@
 // /dashboard?id=N
 import { computed, nextTick, onBeforeUnmount, onMounted, ref, shallowRef, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
-import { Clock, Download, FolderTree, Image as ImageIcon, LayoutDashboard, LoaderCircle, Maximize, Minimize, PencilRuler, RefreshCw, TriangleAlert, X } from 'lucide-vue-next'
+import { Clock, Download, FolderTree, Image as ImageIcon, LayoutDashboard, LoaderCircle, Maximize, Minimize, PencilRuler, RefreshCw, Share2, TriangleAlert, X } from 'lucide-vue-next'
 import { errMessage } from '~/composables/useApi'
 import { useChartTheme } from '~/composables/useChartTheme'
 import { dashboardCtx } from '~/composables/dashboardCharts'
@@ -48,12 +48,27 @@ import {
 import DashboardClicks from '~/components/dashboard/DashboardClicks.vue'
 import DashboardGrid from '~/components/dashboard/DashboardGrid.vue'
 import ReportParamsBar from '~/components/report/ReportParamsBar.vue'
+import AppShell from '~/components/AppShell.vue'
+import ShareDialog from '~/components/share/ShareDialog.vue'
+import { useViewerHost } from '~/composables/viewerHost'
+import { useShareLinks } from '~/composables/shareLinks'
 
 const { t } = useI18n()
 const route = useRoute()
 const router = useRouter()
-const api = useDashboards()
-const reportsApi = useReports()
+// a share link's page hosts this viewer: its object, its address, its APIs (composables/viewerHost.ts)
+const host = useViewerHost()
+const api = host?.dashboards ?? useDashboards()
+const reportsApi = host?.reports ?? useReports()
+const here = host?.path ?? '/dashboard'
+// the address of some values: on a share link without the object's id, which is the link's
+const addressOf = (q: Record<string, any>) => {
+  if (!host) return q
+  const { id: _id, ...rest } = q
+  return rest
+}
+const shareOpen = ref(false)
+const canShare = ref(false)
 const fmtx = useFormat()
 const folderPaths = useFolderPaths()
 const { ui } = useChartTheme()
@@ -63,7 +78,8 @@ const detail = ref<DashboardDetail | null>(null)
 const loading = ref(true)
 const notFound = ref(false)
 const loadError = ref('')
-const folderPath = computed(() => (detail.value ? folderPaths.pathOf(detail.value.project_id) ?? '' : ''))
+// a share link's page knows no folder (and may not ask for them)
+const folderPath = computed(() => (detail.value && !host ? folderPaths.pathOf(detail.value.project_id) ?? '' : ''))
 const tiles = computed(() => detail.value?.content.tiles ?? [])
 const tileIds = computed(() => tiles.value.map((tile) => tile.id as string))
 const ctx = computed(() => dashboardCtx(ui.value, detail.value?.content.locale || 'en', t))
@@ -125,11 +141,11 @@ function apply() {
     return
   }
   if (dashboardId.value == null) return
-  const q = { ...dashboardQuery(dashboardId.value, parameters.value, form.value), ...clicksQuery(clicks.value) }
+  const q = addressOf({ ...dashboardQuery(dashboardId.value, parameters.value, form.value), ...clicksQuery(clicks.value) })
   if (queryKey(q) === queryKey(route.query as Record<string, unknown>)) {
     chosen.value = { ...form.value }
     askAll({ changed: false })
-  } else router.push({ path: '/dashboard', query: q })
+  } else router.push({ path: here, query: q })
 }
 
 // ── what a click chose: the address holds it ─────────────────────────────────
@@ -140,7 +156,7 @@ const saidOf = new Map<string, string>()
 const saidKey = (tile: string, on: ClickSide, value: ClickValue) => `${tile}|${on}|${valueText(value)}`
 
 function addressWith(next: TileClick[]) {
-  return { ...dashboardQuery(dashboardId.value!, parameters.value, chosen.value), ...clicksQuery(next) }
+  return addressOf({ ...dashboardQuery(dashboardId.value!, parameters.value, chosen.value), ...clicksQuery(next) })
 }
 function pick(tile: string, on: ClickSide, value: ClickValue, add: boolean) {
   if (dashboardId.value == null) return
@@ -153,15 +169,15 @@ function pick(tile: string, on: ClickSide, value: ClickValue, add: boolean) {
   const title = tiles.value.find((x) => x.id === tile)?.title ?? ''
   const still = next.some((c) => c.tile === tile && c.on === on && c.values.some((v) => valueText(v) === valueText(value)))
   announce.value = still ? t('dashboard.clickChosen', { tile: title, value: name }) : t('dashboard.clickRemoved', { tile: title, value: name })
-  router.push({ path: '/dashboard', query: addressWith(next) })
+  router.push({ path: here, query: addressWith(next) })
 }
 function dropClick(tile: string, on: ClickSide) {
   announce.value = t('dashboard.clickCleared')
-  router.push({ path: '/dashboard', query: addressWith(clicks.value.filter((c) => !(c.tile === tile && c.on === on))) })
+  router.push({ path: here, query: addressWith(clicks.value.filter((c) => !(c.tile === tile && c.on === on))) })
 }
 function clearClicks() {
   announce.value = t('dashboard.clickCleared')
-  router.push({ path: '/dashboard', query: addressWith([]) })
+  router.push({ path: here, query: addressWith([]) })
 }
 // the answer's word on a click: the address follows, with no step for Back and nothing to read again,
 // as this answer already counted only what stayed
@@ -169,12 +185,12 @@ function settle(answered: Record<string, unknown>) {
   const settled = settledClicks(clicks.value, answered)
   if (!settled) return
   clicks.value = settled
-  router.replace({ path: '/dashboard', query: addressWith(settled) })
+  router.replace({ path: here, query: addressWith(settled) })
 }
 
 // ── loading ──────────────────────────────────────────────────────────────────
 async function load() {
-  const id = Number(route.query.id)
+  const id = host ? host.objectId : Number(route.query.id)
   const known = Number.isInteger(id) && id > 0
   dashboardId.value = known ? id : null
   stopAsking()
@@ -205,6 +221,12 @@ async function load() {
     slots.value = emptySlots(found.content.tiles.map((tile) => tile.id))
     // the audit and the count of who reads it, once per opening; never in the way of reading
     api.opened(id).catch(() => {})
+    // the Share button: an administrator, or MANAGE on the folder, with the feature on
+    canShare.value = false
+    if (!host) useShareLinks().of('dashboard', id).then((i) => { canShare.value = i.can_create }, () => {})
+    // the Share button: an administrator, or MANAGE on the folder, with the feature on
+    canShare.value = false
+    if (!host) useShareLinks().of('dashboard', id).then((i) => { canShare.value = i.can_create }, () => {})
     if (found.parameters) {
       const params = await api.parameters(id)
       if (dashboardId.value !== id) return
@@ -220,9 +242,9 @@ async function load() {
     formFromUrl()
     clicks.value = clicksInQuery(route.query, found.content.tiles)
     // an old link: what it says of a tile gone or switched off leaves the address as well
-    const here = route.query as Record<string, unknown>
-    const clean = { ...Object.fromEntries(Object.entries(here).filter(([k]) => !k.startsWith('click.'))), ...clicksQuery(clicks.value) }
-    if (queryKey(clean) !== queryKey(here)) router.replace({ path: '/dashboard', query: clean as Record<string, string> })
+    const inAddress = route.query as Record<string, unknown>
+    const clean = { ...Object.fromEntries(Object.entries(inAddress).filter(([k]) => !k.startsWith('click.'))), ...clicksQuery(clicks.value) }
+    if (queryKey(clean) !== queryKey(inAddress)) router.replace({ path: here, query: clean as Record<string, string> })
   } catch (e: any) {
     if ((e?.response?.status ?? e?.statusCode) === 404) notFound.value = true
     else loadError.value = errMessage(e)
@@ -251,8 +273,8 @@ function showTiles(changed: boolean) {
 
 watch(() => route.fullPath, () => {
   // another page's address is not this page's business: no «not found» on the way out
-  if (route.path !== '/dashboard') return
-  const id = Number(route.query.id)
+  if (route.path !== here) return
+  const id = host ? host.objectId : Number(route.query.id)
   if (id !== dashboardId.value) {
     load()
     return
@@ -565,7 +587,7 @@ onMounted(() => {
   document.addEventListener('visibilitychange', onVisibility)
   document.addEventListener('fullscreenchange', onFullScreenChange)
   document.addEventListener('keydown', onKey)
-  folderPaths.load()
+  if (!host) folderPaths.load()
   load()
 })
 onBeforeUnmount(() => {
@@ -582,14 +604,14 @@ onBeforeUnmount(() => {
 </script>
 
 <template>
-  <AppShell fluid>
+  <component :is="host ? 'div' : AppShell" v-bind="host ? { class: 'hosted' } : { fluid: true }">
     <div class="dv" :class="{ wall }">
       <!-- a dashboard that is not there, or not for this person: the same answer -->
       <div v-if="notFound" class="gone" role="alert">
         <LayoutDashboard :size="28" aria-hidden="true" />
         <h1>{{ $t('dashboard.notFoundTitle') }}</h1>
         <p>{{ $t('dashboard.notFoundBody') }}</p>
-        <NuxtLink to="/" class="back">{{ $t('dashboard.backToExplore') }}</NuxtLink>
+        <NuxtLink v-if="!host" to="/" class="back">{{ $t('dashboard.backToExplore') }}</NuxtLink>
       </div>
       <div v-else-if="loadError" class="gone" role="alert">
         <TriangleAlert :size="28" aria-hidden="true" />
@@ -618,15 +640,19 @@ onBeforeUnmount(() => {
                 <Maximize :size="14" aria-hidden="true" />
                 <span class="lbl">{{ $t('dashboard.fullScreen') }}</span>
               </button>
+              <button v-if="canShare && !host" type="button" :title="$t('share.shareTitle')" @click="shareOpen = true">
+                <Share2 :size="14" aria-hidden="true" />
+                <span class="lbl">{{ $t('share.share') }}</span>
+              </button>
               <button v-if="detail.editable" type="button" class="primary" :title="$t('dashboard.editTitle')" @click="navigateTo(`/dashboard-design?id=${detail.id}`)">
                 <PencilRuler :size="14" aria-hidden="true" />
                 <span class="lbl">{{ $t('dashboard.edit') }}</span>
               </button>
-              <button type="button" :disabled="!canDownload" :aria-busy="downloading === 'pdf'" :title="$t('dashboard.downloadPdfTitle')" :aria-label="$t('dashboard.downloadPdfTitle')" @click="download('pdf')">
+              <button v-if="!host || host.downloads.includes('pdf')" type="button" :disabled="!canDownload" :aria-busy="downloading === 'pdf'" :title="$t('dashboard.downloadPdfTitle')" :aria-label="$t('dashboard.downloadPdfTitle')" @click="download('pdf')">
                 <LoaderCircle v-if="downloading === 'pdf'" :size="14" class="spin" aria-hidden="true" /><Download v-else :size="14" aria-hidden="true" />
                 <span class="lbl">PDF</span>
               </button>
-              <button type="button" :disabled="!canDownload" :aria-busy="downloading === 'png'" :title="$t('dashboard.downloadImageTitle')" :aria-label="$t('dashboard.downloadImageTitle')" @click="download('png')">
+              <button v-if="!host || host.downloads.includes('png')" type="button" :disabled="!canDownload" :aria-busy="downloading === 'png'" :title="$t('dashboard.downloadImageTitle')" :aria-label="$t('dashboard.downloadImageTitle')" @click="download('png')">
                 <LoaderCircle v-if="downloading === 'png'" :size="14" class="spin" aria-hidden="true" /><ImageIcon v-else :size="14" aria-hidden="true" />
                 <span class="lbl">{{ $t('dashboard.downloadImage') }}</span>
               </button>
@@ -713,8 +739,17 @@ onBeforeUnmount(() => {
       </template>
 
       <p v-else-if="loading" class="loading" role="status">{{ $t('dashboard.loading') }}</p>
+      <ShareDialog
+        v-if="detail && !host && shareOpen"
+        :open="shareOpen"
+        kind="dashboard"
+        :object-id="detail.id"
+        :object-name="detail.name"
+        :params="toParams(chosen)"
+        @close="shareOpen = false"
+      />
     </div>
-  </AppShell>
+  </component>
 </template>
 
 <style scoped>

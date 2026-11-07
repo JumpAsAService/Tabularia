@@ -19,7 +19,7 @@ import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 import {
   ChevronDown, ChevronUp, Download, FileChartColumn, FileSpreadsheet, History, Link, ListRestart, LoaderCircle,
-  MoveHorizontal, PencilRuler, RefreshCw, RotateCcw, TriangleAlert, X, ZoomIn, ZoomOut,
+  MoveHorizontal, PencilRuler, Share2, RefreshCw, RotateCcw, TriangleAlert, X, ZoomIn, ZoomOut,
 } from 'lucide-vue-next'
 import { errMessage } from '~/composables/useApi'
 import { useFormat } from '~/composables/useFormat'
@@ -36,13 +36,28 @@ import ReportPages from '~/components/report/ReportPages.vue'
 import ReportParamsBar from '~/components/report/ReportParamsBar.vue'
 import ReportApiDialog from '~/components/report/ReportApiDialog.vue'
 import ApiTokensDialog from '~/components/ui/ApiTokensDialog.vue'
+import AppShell from '~/components/AppShell.vue'
+import ShareDialog from '~/components/share/ShareDialog.vue'
+import { useViewerHost } from '~/composables/viewerHost'
+import { useShareLinks } from '~/composables/shareLinks'
 
 const { t, te } = useI18n()
 const fmtx = useFormat()
 const toast = useToast()
 const route = useRoute()
 const router = useRouter()
-const api = useReports()
+// a share link's page hosts this viewer: its object, its address, its APIs (composables/viewerHost.ts)
+const host = useViewerHost()
+const api = host?.reports ?? useReports()
+const here = host?.path ?? '/report'
+// the address of some values: on a share link without the object's id, which is the link's
+const addressOf = (q: Record<string, any>) => {
+  if (!host) return q
+  const { id: _id, ...rest } = q
+  return rest
+}
+const shareOpen = ref(false)
+const canShare = ref(false)
 const folderPaths = useFolderPaths()
 
 const reportId = ref<number | null>(null)
@@ -50,7 +65,8 @@ const detail = ref<ReportDetail | null>(null)
 const loading = ref(true)
 const notFound = ref(false)
 const loadError = ref('')
-const folderPath = computed(() => (detail.value ? folderPaths.pathOf(detail.value.project_id) ?? '' : ''))
+// a share link's page knows no folder (and may not ask for them)
+const folderPath = computed(() => (detail.value && !host ? folderPaths.pathOf(detail.value.project_id) ?? '' : ''))
 
 // ── the parameters: the form, and the address ────────────────────────────────
 const parameters = ref<ReportParameter[]>([])
@@ -104,7 +120,7 @@ function onForm(values: Record<string, ReportFormValue>) {
 
 // ── loading ──────────────────────────────────────────────────────────────────
 async function load() {
-  const id = Number(route.query.id) || null
+  const id = host ? host.objectId : Number(route.query.id) || null
   reportId.value = id
   controller?.abort()
   detail.value = null
@@ -129,6 +145,9 @@ async function load() {
     parameters.value = params
     // the Reports tab counts who opens it (a person once a day); never in the way of reading
     api.opened(id).catch(() => {})
+    // the Share button: an administrator, or MANAGE on the folder, with the feature on
+    canShare.value = false
+    if (!host) useShareLinks().of('report', id).then((i) => { canShare.value = i.can_create }, () => {})
     // the choices that follow a value given in the link (only the lists: that answer has
     // the link's values as its defaults)
     const given = valuesInQuery(route.query)
@@ -165,16 +184,16 @@ function view() {
     document.getElementById(`rp-field-${missing[0]}`)?.focus()
     return
   }
-  const q = dashboardQuery(reportId.value!, parameters.value, form.value)
+  const q = addressOf(dashboardQuery(reportId.value!, parameters.value, form.value))
   if (queryKey(q) === queryKey(route.query as Record<string, unknown>)) {
     chosen.value = { ...form.value }
     renderScreen()
-  } else router.push({ path: '/report', query: q })
+  } else router.push({ path: here, query: q })
 }
 
 watch(() => route.fullPath, () => {
-  if (route.path !== '/report') return
-  const id = Number(route.query.id) || null
+  if (route.path !== here) return
+  const id = host ? host.objectId : Number(route.query.id) || null
   if (id !== reportId.value) {
     load()
     return
@@ -418,7 +437,7 @@ onMounted(() => {
     if (z && z !== 'fit' && Number.isFinite(Number(z))) zoom.value = Math.min(4, Math.max(0.25, Number(z)))
   } catch { /* fit */ }
   document.addEventListener('keydown', onKey)
-  folderPaths.load()
+  if (!host) folderPaths.load()
   load()
 })
 onBeforeUnmount(() => {
@@ -439,14 +458,14 @@ const notesOpen = ref(false)
 </script>
 
 <template>
-  <AppShell fluid>
+  <component :is="host ? 'div' : AppShell" v-bind="host ? { class: 'hosted' } : { fluid: true }">
     <div class="rv">
       <!-- a report that is not there, or not for this person: the same answer -->
       <div v-if="notFound" class="gone" role="alert">
         <FileChartColumn :size="28" aria-hidden="true" />
         <h1>{{ $t('report.notFoundTitle') }}</h1>
         <p class="muted">{{ $t('report.notFoundBody') }}</p>
-        <NuxtLink to="/" class="back">{{ $t('report.backToExplore') }}</NuxtLink>
+        <NuxtLink v-if="!host" to="/" class="back">{{ $t('report.backToExplore') }}</NuxtLink>
       </div>
       <div v-else-if="loadError" class="gone" role="alert">
         <TriangleAlert :size="28" aria-hidden="true" />
@@ -464,16 +483,19 @@ const notesOpen = ref(false)
           </h1>
           <span v-if="folderPath" class="where muted" :title="folderPath">{{ $t('report.inFolder', { path: folderPath }) }}</span>
           <div v-if="detail" class="head-actions">
-            <button type="button" class="tagbtn" :title="$t('report.versionsTitle')" @click="openVersions">
+            <button v-if="!host" type="button" class="tagbtn" :title="$t('report.versionsTitle')" @click="openVersions">
               <History :size="13" /> v{{ detail.current_version }}
             </button>
-            <button type="button" :disabled="!pageCount" :title="$t('report.copyApiLinkTitle')" @click="copyApiLink">
+            <button v-if="!host && canShare" type="button" :title="$t('share.shareTitle')" @click="shareOpen = true">
+              <Share2 :size="14" /> <span class="lbl">{{ $t('share.share') }}</span>
+            </button>
+            <button v-if="!host" type="button" :disabled="!pageCount" :title="$t('report.copyApiLinkTitle')" @click="copyApiLink">
               <Link :size="14" /> <span class="lbl">{{ $t('report.copyApiLink') }}</span>
             </button>
-            <button type="button" :disabled="!!downloading || !pageCount" :title="$t('report.downloadPdfTitle')" :aria-label="$t('report.downloadPdfTitle')" @click="download('pdf')">
+            <button v-if="!host || host.downloads.includes('pdf')" type="button" :disabled="!!downloading || !pageCount" :title="$t('report.downloadPdfTitle')" :aria-label="$t('report.downloadPdfTitle')" @click="download('pdf')">
               <LoaderCircle v-if="downloading === 'pdf'" :size="14" class="spin" /><Download v-else :size="14" /> PDF
             </button>
-            <button type="button" :disabled="!!downloading || !pageCount" :title="$t('report.downloadExcelTitle')" :aria-label="$t('report.downloadExcelTitle')" @click="download('xlsx')">
+            <button v-if="!host || host.downloads.includes('xlsx')" type="button" :disabled="!!downloading || !pageCount" :title="$t('report.downloadExcelTitle')" :aria-label="$t('report.downloadExcelTitle')" @click="download('xlsx')">
               <LoaderCircle v-if="downloading === 'xlsx'" :size="14" class="spin" /><FileSpreadsheet v-else :size="14" /> Excel
             </button>
             <button v-if="detail.editable" type="button" class="primary" :title="$t('report.editTitle')" @click="navigateTo(`/report-design?id=${detail.id}`)">
@@ -624,8 +646,17 @@ const notesOpen = ref(false)
         @tokens="openTokens"
       />
       <ApiTokensDialog :open="tokensOpen" @close="tokensOpen = false" />
+      <ShareDialog
+        v-if="detail && !host && shareOpen"
+        :open="shareOpen"
+        kind="report"
+        :object-id="detail.id"
+        :object-name="detail.name"
+        :params="apiParams"
+        @close="shareOpen = false"
+      />
     </div>
-  </AppShell>
+  </component>
 </template>
 
 <style scoped>

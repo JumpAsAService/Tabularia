@@ -9,7 +9,7 @@ import { useFormat } from '~/composables/useFormat'
 import {
   CheckCircle2, Cpu, Eye, Plus, Search, Shield, ShieldCheck, Trash2, TriangleAlert,
   User as UserIcon, Users as UsersIcon, X, XCircle, Sparkles, Bot, Webhook as WebhookIcon,
-  SlidersHorizontal, Radar, Server, KeyRound, Code2, Boxes, DatabaseBackup,
+  SlidersHorizontal, Radar, Server, KeyRound, Code2, Boxes, DatabaseBackup, Link2,
 } from 'lucide-vue-next'
 // explicit imports: in the container new components are not scanned
 import ServiceAccountsSection from '~/components/admin/ServiceAccountsSection.vue'
@@ -22,6 +22,7 @@ import ScriptingSection from '~/components/admin/ScriptingSection.vue'
 import RegistriesSection from '~/components/admin/RegistriesSection.vue'
 import AiPromptsSection from '~/components/admin/AiPromptsSection.vue'
 import AiProvidersSection from '~/components/admin/AiProvidersSection.vue'
+import ShareLinksSection from '~/components/admin/ShareLinksSection.vue'
 import PasswordDialog from '~/components/ui/PasswordDialog.vue'
 import { passwordProblem, usePasswordRules } from '~/composables/usePasswordRules'
 import { useSiem } from '~/composables/useSiem'
@@ -63,7 +64,7 @@ const canWrite = computed(() => !!me.value?.is_superuser)
 const { t } = useI18n()
 const fmtx = useFormat()
 
-type Section = 'users' | 'groups' | 'service' | 'webhooks' | 'banners' | 'privacy' | 'engines' | 'settings' | 'workers' | 'scripting' | 'registries' | 'siem' | 'backups' | 'ai'
+type Section = 'users' | 'groups' | 'service' | 'webhooks' | 'banners' | 'privacy' | 'engines' | 'settings' | 'workers' | 'scripting' | 'registries' | 'siem' | 'backups' | 'ai' | 'share'
 const section = ref<Section>('users')
 // the Settings section with changes not saved: asked before going to another section
 const settingsToSave = ref(false)
@@ -104,6 +105,7 @@ const filteredUsers = computed(() =>
 // counts of the two sections that load by themselves (service accounts, webhooks)
 const nService = ref(0)
 const nWebhook = ref(0)
+const nShare = ref(0)
 // how many engine settings were changed from the panel (the others hold from the environment)
 const nSettings = ref(0)
 const nWorker = ref(0)
@@ -130,6 +132,8 @@ const sections = computed(() => [
   { id: 'groups' as Section, label: t('adminPanel.groupsTitle'), icon: UsersIcon, badge: groups.value.length },
   { id: 'service' as Section, label: t('integrations.serviceAccountsTitle'), icon: Bot, badge: nService.value },
   { id: 'webhooks' as Section, label: t('integrations.webhooksTitle'), icon: WebhookIcon, badge: nWebhook.value },
+  // the share links that answer now
+  { id: 'share' as Section, label: t('share.adminTitle'), icon: Link2, badge: nShare.value },
   { id: 'banners' as Section, label: t('adminPanel.bannersTitle'), icon: TriangleAlert, badge: banners.value.length },
   { id: 'privacy' as Section, label: t('adminPanel.privacyTitle'), icon: ShieldCheck, badge: 0 },
   // the count is how many engines are ALLOWED: it is the number describing the
@@ -803,6 +807,10 @@ async function toggleEngine(m: EnginePolicy) {
 
         <template v-else-if="section === 'webhooks'">
           <WebhooksSection :can-write="canWrite" :projects="folders" @count="nWebhook = $event" />
+        </template>
+
+        <template v-else-if="section === 'share'">
+          <ShareLinksSection :can-write="canWrite" @count="nShare = $event" />
         </template>
 
         <template v-else-if="section === 'ai'">

@@ -67,11 +67,32 @@ export async function policy(nuxtHtml: string, apiBase: unknown, grafanaUrl: unk
   ].join('; ')
 }
 
+/** A share link's page (docs/specs/share-links.md): framed only by the link's own origins (its page
+ *  asked the gateway, pages/share/[token].vue), never by the app itself; not indexed, not kept, no
+ *  Referer that would carry the token. */
+export function forShare(csp: string, frameAncestors: unknown): string {
+  const allowed = typeof frameAncestors === 'string' && /^('none'|(https?:\/\/[^\s;,']+)( https?:\/\/[^\s;,']+)*)$/.test(frameAncestors)
+    ? frameAncestors : "'none'"
+  const rest = csp.split('; ').filter((d) => d && !d.startsWith('frame-ancestors'))
+  return [...rest, `frame-ancestors ${allowed}`].join('; ')
+}
+
 export default defineNitroPlugin((nitroApp) => {
-  if (import.meta.dev) return
   nitroApp.hooks.hook('render:html', async (html, { event }) => {
+    const shared = event.path?.startsWith('/share/')
+    if (shared) {
+      setResponseHeader(event, 'referrer-policy', 'no-referrer')
+      setResponseHeader(event, 'x-robots-tag', 'noindex, nofollow')
+      setResponseHeader(event, 'cache-control', 'no-store')
+    }
+    // in development Vite injects scripts of its own: only a share page's framing holds there
+    if (import.meta.dev) {
+      if (shared) setResponseHeader(event, 'content-security-policy', forShare('', event.context.shareFrame?.frame_ancestors))
+      return
+    }
     const { apiBase, grafanaUrl, notebooksOrigin } = useRuntimeConfig(event).public
     const nuxtScripts = [...html.head, ...html.bodyAppend].join('\n')
-    setResponseHeader(event, 'content-security-policy', await policy(nuxtScripts, apiBase, grafanaUrl, notebooksOrigin))
+    const csp = await policy(nuxtScripts, apiBase, grafanaUrl, notebooksOrigin)
+    setResponseHeader(event, 'content-security-policy', shared ? forShare(csp, event.context.shareFrame?.frame_ancestors) : csp)
   })
 })

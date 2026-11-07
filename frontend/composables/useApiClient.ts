@@ -27,7 +27,8 @@ export function useApiClient() {
       return await $fetch<T>(`${base}${path}`, { ...opts, headers, credentials: 'include' })
     } catch (e: any) {
       const code = e?.response?.status ?? e?.statusCode
-      if (code === 401) {
+      // a share link's page (/share/…) has no Tabularia session and never goes to the sign-in
+      if (code === 401 && !(import.meta.client && window.location.pathname.startsWith('/share/'))) {
         dropSession()
         if (import.meta.client) navigateTo('/login')
       }

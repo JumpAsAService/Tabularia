@@ -12,6 +12,9 @@ export default defineNuxtConfig({
   devtools: { enabled: false },
 
   runtimeConfig: {
+    // the gateway's address INSIDE the installation (compose: http://gateway:8000), read by the
+    // server only: a share link's page asks it whether, and by which pages, it may be framed
+    gatewayInternalUrl: process.env.NUXT_GATEWAY_INTERNAL_URL || '',
     public: {
       // URL of the FastAPI backend (the browser calls it directly)
       apiBase: process.env.NUXT_PUBLIC_API_BASE || 'http://localhost:8000',
