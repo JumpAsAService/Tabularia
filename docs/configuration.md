@@ -60,8 +60,8 @@ SFTP, S3, APIs, SharePoint) belong to each connection, encrypted with
 | [Gateway](#gateway) | 170 |
 | [Engine and workers](#engine-and-workers) | 104 |
 | [Frontend](#frontend) | 6 |
-| [Compose and Helm only](#compose-and-helm-only) | 39 |
-| **Total** | **326** |
+| [Compose and Helm only](#compose-and-helm-only) | 41 |
+| **Total** | **328** |
 
 ## Before production
 
@@ -691,7 +691,9 @@ containers.
 | `DATA_API__FORWARDED_ALLOW_IPS` | *(none)* | Helm chart | The proxies (the ingress controller's pods), comma-separated addresses or ranges, whose `X-Forwarded-For` the data APIs' pods believe: the client's address the keys' address limits are checked against. Read from the right, as the gateway does. |
 | `DATA_API__MAX_DISK` | `20Gi` | Helm chart | The most disk a data API's pod gets for its data files (an `emptyDir`, and its ephemeral storage). Each gets six times the parquets it serves plus 256Mi, rounded up to a power of two, at least 1Gi. |
 | `DATA_API__INGRESS_CLASS` | *(none)* | Helm chart | The class of the Ingress each active data API gets, with `/data/{address}/` only. |
-| `DATA_API__INGRESS_HOST` | *(any host)* | Helm chart | The host the data APIs' Ingresses answer on. |
+| `DATA_API__INGRESS_HOST` | *(any host)* | Helm chart | The host the data APIs' Ingresses answer on: with `dataApi.publicHost`, a host of their own with nothing else of Tabularia on it. |
+| `DATA_API__INGRESS_TLS_SECRET` | *(none)* | Helm chart | The certificate of the data APIs' host of their own: a Secret of `DATA_API__NAMESPACE`, named in each data API's Ingress. On the interface's host it stays empty: the host's own certificate applies. |
+| `DATA_API__PUBLIC_BASE_URL` | *(none)* | Helm chart | The address the other systems call the data APIs at, as their pages, their documentation and the downloaded OpenAPI write it (`https://data.example.com`). Empty: the interface's own address, as the browser has it. |
 | `DATA_API__INGRESS_ANNOTATIONS` | `{}` | Helm chart | Annotations of the data APIs' Ingresses, a JSON object: the ingress controller's settings, such as a rate limit per client. |
 | `DATA_API__NETWORK_POLICY` | `true` | Helm chart | Each data API gets a NetworkPolicy: in, the ingress controller only; out, DNS, the gateway and the object storage only. |
 | `DATA_API__NETWORK_POLICY_INGRESS_FROM` | *(set by the chart)* | Helm chart | Who may reach the data APIs' pods, a JSON list of NetworkPolicy peers: the ingress controller's namespace and pods. |

@@ -7,11 +7,14 @@ a SQL script, and is answered by pods of its own on Kubernetes, so the other sys
 traffic never slows the people using Tabularia. The design is in
 [the spec](specs/data-apis.md).
 
-> **What this version does.** It keeps a data API's definition, its versions, its state and
-> its keys, with every check below, and runs the pods that answer the calls: an active data API
-> is published on the app's own host at `/data/{address}/`, and its page shows its pods and its
-> traffic ([On the cluster](#on-the-cluster)). A host of its own for the data APIs, their
-> section in Administration and the API's documentation in its page come with a later version.
+> **In short.** A data API's page keeps its definition, its versions, its state and its keys;
+> the orchestrator runs the pods that answer the calls, at `/data/{address}/` on the app's own
+> host or on a host of the data APIs' own ([A host of their own](#a-host-of-their-own)). The page
+> has three tabs: **Definition**, **Pods and traffic** ([On the cluster](#on-the-cluster)) and
+> **Documentation**, everything the systems that integrate it need
+> ([The Documentation tab](#the-documentation-tab)). Administration lists every data API
+> ([In Administration](#in-administration)), and the lineage shows which datasources each one
+> publishes.
 
 ## Where it is offered
 
@@ -69,13 +72,39 @@ may run together; within half a minute its pods start, download the data and ans
 Deleting it deletes its versions and its keys, and its objects leave the cluster within half a
 minute.
 
-The page's **Pods and traffic** shows what the cluster says, asked again every few seconds:
+The page's **Pods and traffic** tab shows what the cluster says, asked again every few seconds:
 how many pods are ready out of those wanted, each pod (ready, preparing the data, starting, in
 error, stopping; the node it runs on, its restarts and, in the cluster's words, why it does not
 run: an image it cannot pull, a pod that keeps failing, a disk full), the data version each
 resource serves in each pod and whether the latest data of its datasource has reached them,
 the disk each pod has, and the requests, rows, errors and over-the-rate answers of the last
 hour, day or week. What the cluster refused (a quota, a Pod Security rule) is said there too.
+
+## The Documentation tab
+
+The page's **Documentation** tab is what to give whoever integrates the data API: it needs
+VIEW on the folder only, no key and no pod, and documents a draft or a paused data API as
+well (it says that its addresses do not answer yet). The gateway writes it from the current
+definition with the same code the pods use for their `openapi.json`: the description in the
+page and the one an active pod serves are the same document, the columns typed by their
+datasources as the pods type them once they read the data.
+
+- **The address** the other systems call (the public one when there is
+  [a host of their own](#a-host-of-their-own), otherwise the page's own), how to send the key,
+  and a first `curl` to try, filled in with that address.
+- **Each resource**: its path, every column that goes out with its type (whole number, number,
+  decimal, true/false, text, date, date and time, time, UUID, JSON for lists and structures; a
+  column no longer in its datasource says so), the filters each column allows as the
+  parameters to write (`id=`, `id__in=`, `signup__gte=`…), the default order and the largest
+  page; `curl` lines for the first page, a filter, a count and a CSV file, each with a copy
+  button, and an example of the answer.
+- **The parameters** (`_columns`, `_sort`, `_limit`, `_cursor`, `_count`, `_format`, the
+  filters), **the answers** (JSON, the cursor and the version, CSV and its headers, how values
+  are written) and **every error** with its status and code, as below.
+- **OpenAPI (JSON)** downloads the description, with the address filled in, to import into the
+  CRM, Postman or a client generator.
+
+The `curl` lines read the key from a variable, `TABULARIA_KEY`: the page never writes a key.
 
 ## Keys
 
@@ -226,9 +255,11 @@ paused data API, every object named `<release>-data-api-<id>` and labelled with 
   once), or when the Secret is gone: the pods restart with it;
 - a **Service** inside the cluster, which only the ingress controller reaches;
 - an **Ingress** with `/data/{address}/` only, on the app's host (the first of the chart's
-  `ingress.hosts`, or `dataApi.ingress.host`) and its class: the pods' `/healthz` and `/readyz`
-  are not published. On a host with TLS, ingress-nginx serves it with that host's certificate.
-  `dataApi.ingress.annotations` adds the controller's settings, such as a rate limit per client;
+  `ingress.hosts`, or `dataApi.ingress.host`), or on the data APIs' own
+  ([A host of their own](#a-host-of-their-own)), with the app's class: the pods' `/healthz` and
+  `/readyz` are not published. On the app's host with TLS, ingress-nginx serves it with that
+  host's certificate. `dataApi.ingress.annotations` adds the controller's settings, such as a
+  rate limit per client;
 - a **NetworkPolicy**: in, only the ingress controller (`dataApi.networkPolicy.ingressController`,
   ingress-nginx's namespace and pods by default), so no pod nor namespace of the cluster calls
   the pods directly; out, DNS, the gateway's pods (the manifest and the usage) and the object
@@ -259,6 +290,67 @@ that grows the data seldom changes it: a change restarts the pods, one at a time
 1Gi and at most `dataApi.maxDisk` (20Gi), as the `emptyDir`'s limit and the pod's ephemeral
 storage. A pod past it is evicted, and the page says so.
 
+### A host of their own
+
+By default the data APIs answer on the interface's host, next to everything else of Tabularia.
+To give the other systems an address with nothing else on it (a host the firewall opens to the
+internet while the interface stays on the internal network, say), set the chart's
+`dataApi.publicHost`:
+
+```yaml
+dataApi:
+  enabled: true
+  publicHost: data.example.com   # a host of its own: not one of ingress.hosts, nor share.publicHost
+  # publicBaseUrl: ""            # the address the pages write; empty: https://<publicHost>
+  # tlsSecretName: ""            # the certificate; empty: <release>-data-api-tls
+```
+
+Then each active data API's Ingress has `/data/{address}/` on that host only: every other path
+of it is the ingress controller's 404 (the interface, the app's API, `/healthz` of the pods),
+and the interface's host no longer sends `/data/…` to the pods. The data APIs' pages, their
+documentation and the downloaded OpenAPI write the public address (`DATA_API__PUBLIC_BASE_URL`):
+`dataApi.publicBaseUrl` when set (a port, another scheme), otherwise `https://<publicHost>`
+when there is a certificate and `http://` without one. The chart refuses a public host that
+is the interface's or the share links' own.
+
+**The certificate.** With TLS on the interface (`ingress.tls`), or with `dataApi.tlsSecretName`,
+the public host gets a certificate: a Secret of the data APIs' namespace (where their Ingresses
+are), `<release>-data-api-tls` unless named. The chart adds there an Ingress with no path,
+`<release>-data-api-host`, that asks for it with the main Ingress's annotations, so
+cert-manager makes it once for all the data APIs; without cert-manager, create the Secret
+(`kubectl -n <namespace> create secret tls …`) under that name. Each data API's Ingress names
+it.
+
+**Checking it.** With the host pointed at the ingress controller:
+
+```bash
+curl -s -o /dev/null -w '%{http_code}\n' https://data.example.com/data/crm-customers/health  # 200: the pod answers
+curl -s -o /dev/null -w '%{http_code}\n' https://data.example.com/                          # 404: nothing else here
+curl -s -o /dev/null -w '%{http_code}\n' https://data.example.com/api/auth/me               # 404
+```
+
+## In Administration
+
+Administration → **Data APIs** lists every data API of the installation, whoever made it: its
+address and folder, its creator (said when the account is deactivated: the data API then
+stops answering), its state, its pods ready out of those wanted (and what the cluster refused),
+its requests and its errors and over-the-rate answers of the last 24 hours, with the last call,
+and the keys that answer. Above the list, how many data APIs and pods there are against the
+caps below, and the address they are called at.
+
+An administrator may **pause** any active data API or **delete** any data API from there, with
+its versions and its keys, whoever made it; the delete works even with the feature switched
+off, to clean what is left. The audit records both as the page's own actions
+(`data_api.pause`, `data_api.delete`) with `"by": "administration"`. An observer reads the list
+and acts on nothing.
+
+## In the lineage
+
+A data API reads the datasources it publishes: the lineage graph draws it downstream of them
+(an edge *reads* from each datasource to the data API), it can be the centre of the graph, and
+Explore's deletion dialog of a datasource counts the data APIs among what uses it. The search
+and Explore find data APIs like the other objects, by name.
+
 ## What it keeps from being deleted
 
 A datasource a data API publishes cannot be deleted: the refusal names the data APIs, and
@@ -268,7 +360,8 @@ deleted, as with the other objects: move or delete them first.
 ## The administrator's caps
 
 Set in the environment (the chart's `dataApi` values), read by the gateway, which checks
-them at every save, activation and key ([Configuration](configuration.md)):
+them at every save, activation and key ([Configuration](configuration.md)); Administration →
+Data APIs shows them:
 
 | Variable | Default | What it caps |
 |---|---|---|

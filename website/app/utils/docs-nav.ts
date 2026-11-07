@@ -36,6 +36,7 @@ export const DOCS_GROUPS: { title: string, icon: DocsIcon, intro: string, items:
       ['/docs/capabilities/share-links', 'Share links'],
       ['/docs/scripting', 'Python and R'],
       ['/docs/sql-scripts', 'SQL scripts'],
+      ['/docs/data-apis', 'Data APIs'],
       ['/docs/capabilities/notebooks', 'marimo notebooks as apps'],
       ['/docs/container-node', 'Docker images in flows'],
       ['/docs/capabilities/flow-groups', 'Flow groups: orchestration'],

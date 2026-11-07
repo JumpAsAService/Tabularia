@@ -54,6 +54,24 @@ exposes at `/system/info` and in the app's settings menu.
   on three pods of 1 CPU with a p99 of 18 ms, about 230 MB of memory per pod; a revoked key
   refused in 11 s, a refresh served 33 s after its run ended. Migration 0041 adds two tables;
   the chart gives the orchestrator, and it only, the rights it needs in that namespace.
+- **Data APIs, fourth part: a host of their own, the documentation, the administration.**
+  The chart's `dataApi.publicHost` publishes every active data API's `/data/{address}/` on a
+  host with nothing else of Tabularia on it (every other path is the controller's 404), with
+  its certificate in the data APIs' namespace (`dataApi.tlsSecretName`, asked for by a new
+  Ingress with no path, so cert-manager makes it once); `DATA_API__PUBLIC_BASE_URL` is the
+  address the pages write. The page gets three tabs, **Definition**, **Pods and traffic** and
+  **Documentation**: the address, the key, each resource with its columns, types, filters and
+  operators, the parameters, the answers and every error code, `curl` lines filled in with the
+  real address, and the OpenAPI to download; written by the gateway from the definition with
+  the pods' own code (`GET /data-apis/{id}/documentation`, VIEW, no key), now shared in
+  `internal/dataapiwire`, so the page and the pods describe the same API. Administration →
+  **Data APIs** lists every one with its creator, state, pods, keys and last 24 hours, and an
+  administrator pauses or deletes any of them (`/admin/data-apis`, audited with
+  `"by": "administration"`). The lineage draws a data API as a reader of the datasources it
+  publishes, and the deletion dialog of a datasource counts it. Fixed on the way: a time column
+  written by Polars (TIME_NS in the parquet) could not be filtered on in the pods; a 128-bit
+  integer, read as bytes, is no longer offered as filterable. A new Docker Hub page,
+  `tabularia-data-api`.
 
 ## 1.4.0 «Romulus» — 2026-11-07
 

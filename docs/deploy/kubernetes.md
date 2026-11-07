@@ -37,6 +37,7 @@ certificate authority), follow [A company-like cluster on one computer](kind.md)
 | Run worker | `backend/Dockerfile` | `celery -A app.tasks.celery_app worker -E -Q celery --loglevel=info` | none | N |
 | Preview worker | `backend/Dockerfile` | `celery -A app.tasks.celery_app worker -E -Q preview --loglevel=info` | none | N |
 | Celery beat | `backend/Dockerfile` | `celery -A app.tasks.celery_app beat --schedule /tmp/celerybeat-schedule --loglevel=info` | none | **exactly 1** |
+| Data API pods *(optional, one Deployment per active data API, made by the orchestrator)* | `gateway-go/dataapi/Dockerfile` | image default | through the ingress, `/data/{address}/` only | the data API's runtime |
 | PostgreSQL | managed service recommended | — | internal | — |
 | Valkey / Redis | any Redis-compatible | — | internal | 1 |
 | Object storage | any S3-compatible endpoint | — | — | — |
@@ -90,6 +91,11 @@ overrides them with `--reload`, which must not reach production.
   `NOTEBOOKS__ORIGIN`): there the gateway answers only for them, so a notebook's code
   cannot use the session of whoever opens it. A sibling of the interface's host, with
   its certificate. See [An address of their own](../capabilities/notebooks.md#an-address-of-their-own).
+- **The data APIs** (with scripts and `dataApi.enabled`): each active data API's pods,
+  in the scripts' namespace, are reached through an Ingress with `/data/{address}/` only,
+  on the interface's host or on a host of their own (`dataApi.publicHost`, with nothing
+  else of Tabularia on it and its certificate in that namespace), and a NetworkPolicy lets
+  in the ingress controller only. See [Data APIs](../data-apis.md#on-the-cluster).
 - **Internal**: the engine API is reached only by the gateway, through
   `ENGINE__BASE_URL` (cluster DNS, e.g. `http://engine:8000`). Keep it off the ingress:
   it answers only requests carrying the gateway's internal token, derived from

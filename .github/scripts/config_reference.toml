@@ -1488,9 +1488,19 @@ default = "*(none)*"
 text = "The class of the Ingress each active data API gets, with `/data/{address}/` only."
 
 [var.DATA_API__INGRESS_HOST]
-helm = "`dataApi.ingress.host`, else the first of `ingress.hosts`"
+helm = "`dataApi.publicHost`, else `dataApi.ingress.host`, else the first of `ingress.hosts`"
 default = "*(any host)*"
-text = "The host the data APIs' Ingresses answer on."
+text = "The host the data APIs' Ingresses answer on: with `dataApi.publicHost`, a host of their own with nothing else of Tabularia on it."
+
+[var.DATA_API__INGRESS_TLS_SECRET]
+helm = "with `dataApi.publicHost`: `dataApi.tlsSecretName`, else `<release>-data-api-tls` when `ingress.tls` is set"
+default = "*(none)*"
+text = "The certificate of the data APIs' host of their own: a Secret of `DATA_API__NAMESPACE`, named in each data API's Ingress. On the interface's host it stays empty: the host's own certificate applies."
+
+[var.DATA_API__PUBLIC_BASE_URL]
+helm = "from `dataApi.publicHost` (or `dataApi.publicBaseUrl`)"
+default = "*(none)*"
+text = "The address the other systems call the data APIs at, as their pages, their documentation and the downloaded OpenAPI write it (`https://data.example.com`). Empty: the interface's own address, as the browser has it."
 
 [var.DATA_API__INGRESS_ANNOTATIONS]
 helm = "`dataApi.ingress.annotations`, else `{}`"

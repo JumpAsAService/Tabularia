@@ -1,6 +1,7 @@
 # Spec: data APIs
 
-Status: decided with the owner on 2026-11-07; open questions answered the same day.
+Status: decided with the owner on 2026-11-07; open questions answered the same day. Pieces 1-4
+done; open: the live «Data APIs» category of Administration → Settings (see «Administration»).
 
 ## Objective
 
@@ -301,6 +302,65 @@ memory per pod; the poll; the key's longest life and default rate; usage retenti
 Administration lists every data API with its creator, state, pods and traffic, and can
 pause or delete any of them.
 
+Settled while writing piece 4:
+
+- *The list* is Administration → **Data APIs** (`GET /admin/data-apis`, an administrator or an
+  observer, as the other panels): every data API with its folder, its creator (and whether
+  the account is active), its state, the pods the loop last saw ready out of those wanted and
+  what the cluster refused, the requests, errors and `429`s of the last 24 hours with the last
+  call, and the keys that answer now. `POST /admin/data-apis/{id}/pause` and
+  `DELETE /admin/data-apis/{id}` (an administrator only, never an observer) act on any data
+  API; the delete works with the feature switched off too, to clean what is left. The audit
+  records them as the page's actions (`data_api.pause`, `data_api.delete`) with
+  `"by": "administration"`.
+- *The caps stay in the chart* for now (`dataApi.*`, read at start): the section shows them,
+  and the live «Data APIs» category of Administration → Settings is **not done**. Every cap is
+  read in many places of the gateway and of the reconcile loop (the pods, the disk, the
+  Ingress) and the panel's machinery checks each setting against the Python gateway's
+  catalogue: a piece of its own. `enabled` would stay out of it in any case: the chart renders
+  the RBAC and the namespace only with `dataApi.enabled`.
+
+## Piece 4: a host of their own, the documentation, the lineage
+
+Settled while writing it:
+
+- *`dataApi.publicHost`*, as `share.publicHost`: the reconcile loop puts every data API's
+  Ingress on that host (`DATA_API__INGRESS_HOST`) and on no other, so on it only
+  `/data/{slug}/` is routed and everything else is the controller's 404; the interface's host
+  no longer routes `/data/…` to the pods. The chart refuses a host that is one of
+  `ingress.hosts` or `share.publicHost`. The certificate is a Secret of the data APIs'
+  namespace (an Ingress reaches Services and Secrets of its own namespace only),
+  `dataApi.tlsSecretName` or `<release>-data-api-tls` when the interface has TLS; one Ingress
+  of the chart with no path (`<release>-data-api-host`, not labelled as a data API's, so the
+  loop leaves it alone) asks for it with the main Ingress's annotations: with several Ingresses
+  naming one Secret, only one may be cert-manager's. `DATA_API__PUBLIC_BASE_URL`
+  (`dataApi.publicBaseUrl`, else `https://<publicHost>`, `http://` without a certificate) is
+  the address the page, the documentation, the administration and the downloaded OpenAPI
+  write; empty, the page uses its own origin. Measured on kind: see «Testing strategy».
+- *The documentation* is `GET /data-apis/{id}/documentation` (VIEW, no key, a draft too): the
+  resources with each column's kind, the filters, the error catalogue and the OpenAPI document.
+  The generator moved from the pods to `internal/dataapiwire` (standard library only), with the
+  kinds and the catalogue of the errors (`ErrorCodes`, which the description's `code` lists; a
+  test of the pods checks every code they write is in it). The pods type the columns from the
+  DuckDB file, the gateway from the datasource's Polars types (`KindOfPolars`); a test of the
+  pods compares the two documents for the same definition, and one of the gateway compares its
+  document with the one made from the manifest the pods get. The description's version is the
+  definition's (the manifest carries it, `definition_version`), no longer the manifest's time.
+  The column types a reader sees are those of the columns that go out (the API's own
+  contract), never the datasource's other columns. The page's `curl` lines read the key from
+  `$TABULARIA_KEY`: the page never writes one.
+- *Polars and DuckDB agree*: checked on parquet files Polars wrote (Polars 1, DuckDB 1). Two
+  differences came out and are fixed: a Polars `Time` is `TIME_NS` in the parquet, which the
+  pods did not know (now made `TIME` when prepared, to the microsecond), and an `Int128` is
+  bytes (`BLOB`), not filterable (the gateway and the page now refuse it, as the pods would).
+  A `Duration` is its count of time units, a whole number.
+- *The page* has three tabs, Definition, Pods and traffic, Documentation (`?tab=`), the keys
+  and the versions beside them.
+- *The lineage*: a node `dataapi:{id}` (type `data_api`) read from each datasource it
+  publishes (edge `read`), with its address, state and version; a centre of the graph
+  (`type=dataapi`). Explore's deletion dialog of a datasource counts it among its dependents.
+  The search and Explore had the data APIs since piece 1.
+
 ## Model (migration 0040)
 
 - `data_apis`: id, project_id, name, slug (unique), description, state, creator_id
@@ -362,6 +422,19 @@ pause or delete any of them.
   stays flat whatever the table's size.
 - The usual regression: Go, Python engine and migrations, npm, typecheck; the new image in
   the release workflow's checks. No comparison with the Python gateway (owner, 2026-11-07).
+- *Piece 4 on kind* (2026-11-07): with `dataApi.publicHost: data.localhost`, on that host only
+  `/data/{slug}/` answered (the pod's `health` 200, the rows 401 without a key and 200 with
+  one); `/`, `/login`, `/api/health`, `/api/auth/me`, `/share/…`, `/_nuxt/…`, `/healthz`,
+  `/readyz`, `/data/{slug}/../../readyz` and another slug were the controller's 404, and the
+  interface's host no longer reached the pods (`/data/…` went to the interface). Without it,
+  `/data/{slug}/` answered on the interface's host as before. The documentation the gateway
+  wrote for the data API of 42 million rows was byte for byte the `openapi.json` its pod
+  served (a Polars parquet: integers and floats). In Chrome and Firefox (54 checks each): a
+  data API made, keyed and activated from its page (its pod ready in 45 s), the documentation's
+  `curl` lines run as copied against the ingress (200, and on the interface's host not), the
+  downloaded OpenAPI equal to the pod's, paused from Administration (its calls `503` within 2
+  s) and deleted there, audited; no horizontal scroll at 390 px; the lineage centred on a data
+  API in both.
 
 ## Boundaries
 
