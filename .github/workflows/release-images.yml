@@ -1,8 +1,8 @@
-# Runs the test suites on the tagged commit (ci.yml), builds the four release images for
+# Runs the test suites on the tagged commit (ci.yml), builds the five release images for
 # amd64 and arm64, checks them, certifies that they hold no secrets, and only then pushes
 # them to Docker Hub. See docs/release-process.md.
 #
-# A tag v1.2.0 publishes jumpasaservice/tabularia-{backend,gateway,gateway-go,frontend} as
+# A tag v1.2.0 publishes jumpasaservice/tabularia-{backend,gateway,gateway-go,frontend,data-api} as
 #   1.2.0-amd64, 1.2.0-arm64   the single-architecture images, pushed after their scans
 #   1.2.0                      both architectures under one name
 #   1.2                        when 1.2.0 is the highest 1.2.x tag
@@ -145,12 +145,16 @@ jobs:
     strategy:
       fail-fast: true
       matrix:
-        component: [backend, gateway, gateway-go, frontend]
+        component: [backend, gateway, gateway-go, frontend, data-api]
         arch: [amd64, arm64]
         include:
           # frontend/Dockerfile is the hot-reload development server
           - component: frontend
             dockerfile: Dockerfile.prod
+          # the data APIs' pods: a module of its own inside gateway-go/, built with cgo
+          - component: data-api
+            context: gateway-go
+            dockerfile: dataapi/Dockerfile
     env:
       IMAGE: jumpasaservice/tabularia-${{ matrix.component }}:${{ needs.prepare.outputs.version }}-${{ matrix.arch }}
       VERSION: ${{ needs.prepare.outputs.version }}
@@ -177,8 +181,8 @@ jobs:
       - name: Build
         uses: docker/build-push-action@c3c9e263c25d99ce0380d002d59b67737d91b0dc # v7.4.0
         with:
-          context: src/${{ matrix.component }}
-          file: src/${{ matrix.component }}/${{ matrix.dockerfile || 'Dockerfile' }}
+          context: src/${{ matrix.context || matrix.component }}
+          file: src/${{ matrix.context || matrix.component }}/${{ matrix.dockerfile || 'Dockerfile' }}
           platforms: linux/${{ matrix.arch }}
           # a release is built from scratch, on fresh base images
           pull: true
@@ -188,6 +192,9 @@ jobs:
           provenance: false
           sbom: false
           tags: ${{ env.IMAGE }}
+          # the version the data APIs' program says it is (the others read it from their code)
+          build-args: |
+            VERSION=${{ needs.prepare.outputs.version }}
           labels: |
             org.opencontainers.image.title=tabularia-${{ matrix.component }}
             org.opencontainers.image.version=${{ needs.prepare.outputs.version }}
@@ -213,6 +220,19 @@ jobs:
               # the binary, and the pg_dump of every supported PostgreSQL for the backups
               docker run --rm --read-only --entrypoint sh "$IMAGE" -c \
                 'test -x /gateway && for v in 14 15 16 17 18; do /usr/lib/postgresql/$v/bin/pg_dump --version || exit 1; done && pg_restore --version' ;;
+            data-api)
+              # its version, the licences of what it links, and a start with a read-only root
+              # and nothing but /data to write: alive, not ready without a manifest
+              check "version" "$(docker run --rm --read-only "$IMAGE" version)" "tabularia-data-api $VERSION"
+              docker run --rm --read-only --entrypoint test "$IMAGE" -s /usr/share/licenses/tabularia-data-api/modules.json
+              cid=$(docker run -d --read-only --tmpfs /data -p 127.0.0.1:8000:8000 -e DATA_API__ID=1 \
+                -e DATA_API__GATEWAY_URL=http://127.0.0.1:9 -e DATA_API__POD_TOKEN=smoke "$IMAGE")
+              for _ in $(seq 30); do curl -fsS -o /dev/null http://127.0.0.1:8000/healthz && break; sleep 1; done
+              alive=$(curl -s -o /dev/null -w '%{http_code}' http://127.0.0.1:8000/healthz)
+              ready=$(curl -s -o /dev/null -w '%{http_code}' http://127.0.0.1:8000/readyz)
+              docker rm -f "$cid" > /dev/null
+              check "/healthz" "$alive" "200"
+              check "/readyz without a manifest" "$ready" "503" ;;
             frontend)
               cid=$(docker run -d --read-only --tmpfs /tmp -p 127.0.0.1:3000:3000 "$IMAGE")
               for _ in $(seq 60); do curl -fsS -o /dev/null http://127.0.0.1:3000/login && break; sleep 1; done
@@ -232,6 +252,9 @@ jobs:
           if [[ "$COMPONENT" == frontend ]]; then kind=npm; fi
           # the Go gateway holds no Python or npm package: its modules are go.mod's
           if [[ "$COMPONENT" == gateway-go ]]; then exit 0; fi
+          # the data APIs' program: the Go modules it links, each reviewed in
+          # gateway-go/dataapi/licences.json (its build fails on one that is not)
+          if [[ "$COMPONENT" == data-api ]]; then kind=go; fi
           python3 ci/.github/scripts/image_licence_check.py check --kind "$kind" "$IMAGE"
 
       - name: Save the image for the scans
@@ -299,7 +322,7 @@ jobs:
 
       - name: Join the architectures under the release tags
         run: |
-          for component in backend gateway gateway-go frontend; do
+          for component in backend gateway gateway-go frontend data-api; do
             repo="$NAMESPACE/tabularia-$component"
             args=()
             for tag in $TAGS; do args+=(-t "$repo:$tag"); done

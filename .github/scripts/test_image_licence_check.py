@@ -24,6 +24,10 @@ def npm(name, license):
     return {"kind": "npm", "name": name, "version": "1.0", "license": license}
 
 
+def go(name, license):
+    return {"kind": "go", "name": name, "version": "v1.0.0", "license": license}
+
+
 class Expressions(unittest.TestCase):
     def ok(self, text):
         self.assertTrue(lc.expression_ok(text)[0], text)
@@ -97,6 +101,13 @@ class Packages(unittest.TestCase):
         self.assertFalse(lc.verdict(npm("a", "UNLICENSED"))[0])
         self.assertFalse(lc.verdict(npm("a", "SEE LICENSE IN EULA.txt"))[0])
 
+    def test_go_modules_are_read_by_their_reviewed_identifier(self):
+        for p in (go("github.com/duckdb/duckdb-go/v2", "MIT"), go("github.com/google/uuid", "BSD-3-Clause"),
+                  go("std", "BSD-3-Clause")):
+            self.assertTrue(lc.verdict(p)[0], p["name"])
+        self.assertFalse(lc.verdict(go("example.com/x", "BUSL-1.1"))[0])
+        self.assertEqual(lc.verdict(go("example.com/y", ""))[1], lc.UNDECLARED)
+
     def test_no_declared_licence_is_reported_not_failed(self):
         ok, why = lc.verdict(py("mssql-python"))
         self.assertTrue(ok)
@@ -138,6 +149,16 @@ class Main(unittest.TestCase):
         code, log = self.run_main([py("polars", classifiers=["OSI Approved :: MIT License"]), npm("vue", "MIT")])
         self.assertEqual(code, 0)
         self.assertIn("2 packages", log)
+
+    def test_the_data_api_image_listing(self):
+        listing = Path(__file__).parents[2] / "gateway-go" / "dataapi" / "licences.json"
+        reviewed = json.loads(listing.read_text())
+        packages = [go(name, lic) for name, lic in reviewed.items() if name != "_"]
+        code, log = self.run_main(packages)
+        self.assertEqual(code, 0, log)
+        code, log = self.run_main(packages + [go("example.com/sspl", "SSPL-1.0")])
+        self.assertEqual(code, 1)
+        self.assertIn("example.com/sspl", log)
 
     def test_an_empty_listing_cannot_certify(self):
         code, _ = self.run_main([])

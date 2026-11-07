@@ -2,7 +2,9 @@
 """Certify that a release image carries no package whose licence an AGPL-3.0 image cannot carry.
 
   check   lists the packages inside a built image — the Python distributions (backend,
-          gateway) or the npm packages the server bundle ships (frontend) — reads the
+          gateway), the npm packages the server bundle ships (frontend) or the Go modules
+          linked into the data APIs' program (data-api, the listing its build writes after
+          checking each module against gateway-go/dataapi/licences.json) — reads the
           licence each declares, and exits 1 if one is proprietary or incompatible with
           AGPL-3.0: Proprietary, SSPL, BUSL, Commons Clause, Elastic License,
           non-commercial, GPL-2.0-only without an alternative, npm's UNLICENSED or
@@ -11,13 +13,15 @@
 
             python3 .github/scripts/image_licence_check.py check --kind python jumpasaservice/tabularia-backend:1.2.0-amd64
             python3 .github/scripts/image_licence_check.py check --kind npm jumpasaservice/tabularia-frontend:1.2.0-amd64
+            python3 .github/scripts/image_licence_check.py check --kind go jumpasaservice/tabularia-data-api:1.2.0-amd64
 
 Why: Microsoft's SQL Server driver (mssql-python-odbc) can be redistributed only under
 terms an AGPL image cannot meet, so the published images must never contain it
 (docs/sqlserver.md). This check makes that, and any similar slip, fail the release.
 
 What it reads is what packages DECLARE (the PEP 639 License-Expression first, else the
-License field and the trove classifiers; npm's `license`). A package that declares
+License field and the trove classifiers; npm's `license`; for Go, which declares nothing, the
+SPDX identifier reviewed by hand in gateway-go/dataapi/licences.json). A package that declares
 nothing is listed as a notice, not a failure. A package already reviewed by hand goes in
 REVIEWED with the exact licence it declares: if that changes, it is checked again.
 System packages of the base image (Debian, Alpine) are out of scope.
@@ -137,6 +141,8 @@ def expression_ok(text: str) -> tuple[bool, str]:
 # ── packages ────────────────────────────────────────────────────────────────────
 def declared(package: dict) -> str:
     """The licence as the package declares it, as one string (for REVIEWED and the log)."""
+    if package.get("kind") == "go":
+        return str(package.get("license") or "")
     if package.get("kind") == "npm":
         lic = package.get("license")
         if isinstance(lic, dict):
@@ -154,7 +160,7 @@ def declared(package: dict) -> str:
 
 def verdict(package: dict) -> tuple[bool, str]:
     """(may ship, why). A package that declares nothing may ship, with UNDECLARED."""
-    if package.get("kind") == "npm":
+    if package.get("kind") in ("npm", "go"):
         text = declared(package)
         return expression_ok(text) if text.strip() else (True, UNDECLARED)
     if package.get("expression"):  # PEP 639: authoritative
@@ -234,10 +240,16 @@ console.log(JSON.stringify(out))
 """
 
 
+# the listing the data APIs' image carries (gateway-go/dataapi/licences.sh)
+GO_LISTING = "/usr/share/licenses/tabularia-data-api/modules.json"
+
+
 def collect(image: str, kind: str, roots: list[str]) -> list[dict]:
     base = ["docker", "run", "--rm", "--read-only", "--network", "none", "--user", "10001:10001"]
     if kind == "python":
         cmd = base + ["--entrypoint", "python", image, "-I", "-c", PYTHON_COLLECTOR]
+    elif kind == "go":
+        cmd = base + ["--entrypoint", "cat", image, GO_LISTING]
     else:
         cmd = base + ["--entrypoint", "node", image, "-e", NPM_COLLECTOR, *roots]
     done = subprocess.run(cmd, capture_output=True, text=True, timeout=300)
@@ -251,7 +263,7 @@ def main(argv: list[str] | None = None) -> int:
     sub = parser.add_subparsers(dest="command", required=True)
     c = sub.add_parser("check", help="fail on a package an AGPL-3.0 image cannot carry")
     c.add_argument("image")
-    c.add_argument("--kind", choices=("python", "npm"), default="python")
+    c.add_argument("--kind", choices=("python", "npm", "go"), default="python")
     c.add_argument("--root", action="append", default=None,
                    help="npm: folders to search for node_modules (default /app and /usr/local/lib/node_modules)")
     c.add_argument("--from-json", help="read a listing saved before instead of running the image (tests)")

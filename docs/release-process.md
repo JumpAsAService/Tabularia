@@ -32,12 +32,16 @@ The tag starts [`.github/workflows/release-images.yml`](../.github/workflows/rel
    licence check.
 2. **Tests.** The CI workflow (`ci.yml`, below) on the tag's commit: no image is built
    unless the engine's and the gateway's suites and the interface's type check pass.
-3. **One job per image and architecture** (backend, gateway, gateway-go, frontend × amd64,
-   arm64; arm64 runs on GitHub's native ARM runners, no emulation). Each job:
+3. **One job per image and architecture** (backend, gateway, gateway-go, frontend, data-api ×
+   amd64, arm64; arm64 runs on GitHub's native ARM runners, no emulation). The data APIs'
+   pods (`tabularia-data-api`) are a Go module of their own inside `gateway-go/dataapi`, built
+   with cgo for DuckDB from `gateway-go/` with `dataapi/Dockerfile`. Each job:
    - builds the image from scratch on fresh base images;
    - smoke-tests it: runs as uid 10001, has the right architecture and version
      label; the engine has no chDB and no SQL Server driver, the gateway imports its migrations, the
-     interface answers `/login` with a read-only filesystem;
+     interface answers `/login` with a read-only filesystem; the data API's program says the
+     release's version, carries the licences of what it links, and starts with a read-only root
+     (alive, not ready without a manifest);
    - **checks the licences** of the packages inside it (below);
    - saves it with `docker save` and **scans it for secrets**, twice (below);
    - only then logs in to Docker Hub and pushes `1.2.0-amd64` or `1.2.0-arm64`. The
@@ -58,7 +62,8 @@ release calls it on the tagged commit:
 - **engine**: the backend's suite in its development image (pytest, chDB), next to a real
   ClickHouse, PostgreSQL, MinIO and Valkey started for the run;
 - **gateway**: the gateway's suite, with a real PostgreSQL for the migrations, the queue
-  locks and the retention;
+  locks and the retention, and the data APIs' program (`gateway-go/dataapi`, on real DuckDB
+  files) in the same script;
 - **interface**: `npm ci` and the type check (`vue-tsc`, pinned).
 
 A test that skips because its server is missing would pass unseen, so any skip fails the
@@ -71,14 +76,24 @@ need a whole stack and stay a step of the release (`e2e/dbt_export/run_all.py al
 
 Tabularia is AGPL-3.0: an image can carry only packages whose licence allows it.
 `.github/scripts/image_licence_check.py` runs the built image, lists the Python
-distributions inside it (backend, gateway) or the npm packages next to the server
-bundle (frontend), reads the licence each declares, and stops the release on one that
+distributions inside it (backend, gateway), the npm packages next to the server
+bundle (frontend) or the Go modules linked into the data APIs' program (data-api), reads
+the licence each declares, and stops the release on one that
 is proprietary or incompatible: Proprietary, SSPL, BUSL, Commons Clause, Elastic
 License, non-commercial, GPL-2.0-only without an alternative, npm's `UNLICENSED` or
 `SEE LICENSE IN`. An SPDX expression with an acceptable alternative passes
 (`BSD-3-Clause OR GPL-2.0`); a package that declares nothing is listed as a notice.
 Packages reviewed by hand go in its `REVIEWED` list with the exact licence they
 declare, so that a change of licence is checked again.
+
+Go modules declare no licence: the data APIs' image is built with
+`gateway-go/dataapi/licences.sh`, which fails the build on a linked module (for that
+platform: `go list -deps`) that is not in `gateway-go/dataapi/licences.json` with an SPDX
+identifier reviewed by hand, or that has no licence file. The image keeps the files under
+`/usr/share/licenses/tabularia-data-api/` and the listing in `modules.json` there, which the
+check reads (`--kind go`). The Go gateway's image is not checked: its modules are `go.mod`'s
+and none is new without a review. A module added to the data APIs' program means a line in
+`licences.json`, after reading its licence.
 
 It exists because of Microsoft's SQL Server driver: `mssql-python` depends on
 `mssql-python-odbc`, Microsoft's proprietary ODBC driver, so the backend is built
@@ -89,6 +104,7 @@ built with `WITH_MSSQL=true` fails this check, by design.
 python3 .github/scripts/test_image_licence_check.py
 python3 .github/scripts/image_licence_check.py check --kind python <backend or gateway image>
 python3 .github/scripts/image_licence_check.py check --kind npm <frontend image>
+python3 .github/scripts/image_licence_check.py check --kind go <data-api image>
 ```
 
 ## The two secret scans
