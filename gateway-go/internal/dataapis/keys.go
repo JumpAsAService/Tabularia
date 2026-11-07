@@ -1,94 +1,60 @@
 package dataapis
 
 import (
-	"crypto/rand"
-	"crypto/sha256"
-	"encoding/hex"
 	"errors"
 	"fmt"
-	"math/big"
 	"net/netip"
 	"strconv"
 	"strings"
 	"time"
+
+	"github.com/JumpAsAService/Tabularia/gateway-go/internal/dataapiwire"
 )
 
 // A key is `tdk_` and 40 random letters and digits, shown once; the database keeps its
-// sha-256 and the first 8 characters after `tdk_` to recognise it.
+// sha-256 and the first 8 characters after `tdk_` to recognise it (dataapiwire: the pods
+// check them with the same rules).
 const (
-	KeyPrefix    = "tdk_"
-	keyRandom    = 40
-	HintLength   = 8
+	KeyPrefix    = dataapiwire.KeyPrefix
+	HintLength   = dataapiwire.HintLength
 	MaxKeyName   = 200
 	MaxRate      = 100_000
 	MaxCIDRs     = 50
 	MaxGraceDays = 30
 )
 
-const keyAlphabet = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789"
-
 // NewKey is a fresh key: the key itself (shown once), its hint and its hash.
 func NewKey() (key, hint, hash string, err error) {
-	b := make([]byte, keyRandom)
-	max := big.NewInt(int64(len(keyAlphabet)))
-	for i := range b {
-		n, err := rand.Int(rand.Reader, max)
-		if err != nil {
-			return "", "", "", err
-		}
-		b[i] = keyAlphabet[n.Int64()]
+	key, err = dataapiwire.Random(KeyPrefix)
+	if err != nil {
+		return "", "", "", err
 	}
-	key = KeyPrefix + string(b)
-	return key, string(b[:HintLength]), HashKey(key), nil
+	return key, key[len(KeyPrefix) : len(KeyPrefix)+HintLength], HashKey(key), nil
 }
 
 // HashKey is what the table keeps of a key: its sha-256, hex.
-func HashKey(key string) string {
-	h := sha256.Sum256([]byte(key))
-	return hex.EncodeToString(h[:])
-}
+func HashKey(key string) string { return dataapiwire.Hash(key) }
 
 // WellFormedKey says whether a text can be one of our keys; anything else is not looked up.
-func WellFormedKey(key string) bool {
-	rest, ok := strings.CutPrefix(key, KeyPrefix)
-	if !ok || len(rest) != keyRandom {
-		return false
-	}
-	for i := 0; i < len(rest); i++ {
-		if !strings.ContainsRune(keyAlphabet, rune(rest[i])) {
-			return false
-		}
-	}
-	return true
-}
+func WellFormedKey(key string) bool { return dataapiwire.WellFormed(key, KeyPrefix) }
 
 // The states of a key: answering (active; grace, renewed and still kept for a while), or not
 // (replaced, its grace over; expired; revoked).
 const (
-	KeyActive   = "active"
-	KeyGrace    = "grace"
-	KeyReplaced = "replaced"
-	KeyExpired  = "expired"
-	KeyRevoked  = "revoked"
+	KeyActive   = dataapiwire.KeyActive
+	KeyGrace    = dataapiwire.KeyGrace
+	KeyReplaced = dataapiwire.KeyReplaced
+	KeyExpired  = dataapiwire.KeyExpired
+	KeyRevoked  = dataapiwire.KeyRevoked
 )
 
 // KeyState is a key's state at `now`.
 func KeyState(k *Key, now time.Time) string {
-	switch {
-	case k.RevokedAt != nil:
-		return KeyRevoked
-	case !k.ExpiresAt.After(now):
-		return KeyExpired
-	case k.GraceUntil != nil && !k.GraceUntil.After(now):
-		return KeyReplaced
-	case k.GraceUntil != nil:
-		return KeyGrace
-	}
-	return KeyActive
+	return dataapiwire.KeyStateAt(k.RevokedAt, k.ExpiresAt, k.GraceUntil, now)
 }
 
 // Answers says whether a key in this state is let in.
-func Answers(state string) bool { return state == KeyActive || state == KeyGrace }
+func Answers(state string) bool { return dataapiwire.Answers(state) }
 
 // KeyExpiry reads a key's expiry: a date and time (RFC 3339), in the future, within the
 // longest life of a key (and a day of margin, for the end of the last day in any time zone).

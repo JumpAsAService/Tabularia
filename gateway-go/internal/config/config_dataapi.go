@@ -27,6 +27,9 @@ type DataAPIConfig struct {
 	// per minute of a key made without a rate
 	KeyMaxDays     int
 	KeyDefaultRate int
+	// DATA_API__POLL_SECONDS: how often the pods ask for their manifest (a revoked key, a
+	// refresh, an edit reach them within it); the manifest carries it to them
+	PollSeconds int
 }
 
 var (
@@ -70,6 +73,7 @@ func loadDataAPI(r *reader) DataAPIConfig {
 		MaxMemory:        strings.TrimSpace(r.str("DATA_API__MAX_MEMORY", "1Gi")),
 		KeyMaxDays:       r.integer("DATA_API__KEY_MAX_DAYS", 365, 1, 3650),
 		KeyDefaultRate:   r.integer("DATA_API__KEY_DEFAULT_RATE", 600, 1, 1_000_000),
+		PollSeconds:      r.integer("DATA_API__POLL_SECONDS", 20, 5, 600),
 	}
 	if _, err := Millicores(c.MaxCPU); err != nil {
 		r.fail("DATA_API__MAX_CPU", err.Error())

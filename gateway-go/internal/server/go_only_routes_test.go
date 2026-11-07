@@ -41,6 +41,7 @@ func TestTheDataAPIRoutesReachTheirHandlers(t *testing.T) {
 		{"GET", "/data-apis/limits", "limits"}, {"GET", "/data-apis/{api_id}", "get"}, {"PATCH", "/data-apis/{api_id}", "patch"},
 		{"GET", "/projects/{project_id}/data-apis", "folder"}, {"POST", "/data-apis/{api_id}/keys/{key_id}/renew", "renew"},
 		{"GET", "/data-apis/{api_id}/versions/{version}", "version"},
+		{"GET", "/internal/data-apis/{api_id}/manifest", "manifest"}, {"POST", "/internal/data-apis/{api_id}/usage", "usage"},
 	} {
 		routes = append(routes, Route{Method: r[0], Pattern: r[1], Handler: mark(r[2])})
 	}
@@ -49,6 +50,7 @@ func TestTheDataAPIRoutesReachTheirHandlers(t *testing.T) {
 		{"GET", "/data-apis/limits", "limits "}, {"GET", "/data-apis/7", "get "}, {"PATCH", "/data-apis/7", "patch "},
 		{"GET", "/projects/3/data-apis", "folder "}, {"POST", "/data-apis/7/keys/2/renew", "renew "},
 		{"GET", "/data-apis/7/versions/2", "version "},
+		{"GET", "/internal/data-apis/7/manifest", "manifest "}, {"POST", "/internal/data-apis/7/usage", "usage "},
 	} {
 		if rec := serve(h, c[0], c[1], nil); rec.Code != 200 || rec.Body.String() != c[2] {
 			t.Errorf("%s %s: %d %q", c[0], c[1], rec.Code, rec.Body.String())
