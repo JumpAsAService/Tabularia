@@ -13,6 +13,8 @@ project; installing or upgrading is in [deploy/release-checklist.md](deploy/rele
    and `package-lock.json`, and in the Helm chart `appVersion` in `Chart.yaml` plus the
    image tags in `values.yaml` and `values-production.example.yaml`. The workflow
    refuses a tag that disagrees with any of them and names the file.
+   Then regenerate the configuration reference, which quotes the version and the
+   codename: `python3 .github/scripts/config_reference.py` (its workflow fails otherwise).
 2. Move the `Unreleased` section of `CHANGELOG.md` under the new version.
 3. Commit on `main`, tag and push the tag:
 
