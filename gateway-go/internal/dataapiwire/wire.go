@@ -96,11 +96,50 @@ func (k Key) State(now time.Time) string {
 	return KeyStateAt(k.RevokedAt, k.ExpiresAt, k.GraceUntil, now)
 }
 
-// Usage is POST /internal/data-apis/{id}/usage: what a pod counted since it last sent.
+// Usage is POST /internal/data-apis/{id}/usage: what a pod counted since it last sent, and
+// how it is (sent at every poll, with or without counts).
 type Usage struct {
 	Pod     string        `json:"pod"`
 	Minutes []UsageMinute `json:"minutes"`
+	// nil from a pod of before piece 3: the counts only
+	Status *PodStatus `json:"status,omitempty"`
 }
+
+// PodStatus is what a pod says of itself: the page shows it next to what the cluster says.
+type PodStatus struct {
+	// it answers: an active data API, a fresh manifest, every available resource prepared
+	Ready bool `json:"ready"`
+	// the state of the manifest it applies ("" before the first one)
+	State string `json:"state"`
+	// when it last had a manifest; nil: never
+	ManifestAt *time.Time `json:"manifest_at"`
+	// when it started
+	Started   time.Time        `json:"started"`
+	Resources []ResourceStatus `json:"resources"`
+	// the last thing that went wrong (a manifest not had, a version not prepared), "" when
+	// the last attempt of each went well
+	Error   string     `json:"error,omitempty"`
+	ErrorAt *time.Time `json:"error_at,omitempty"`
+}
+
+// ResourceStatus is one resource as a pod serves it.
+type ResourceStatus struct {
+	Name string `json:"name"`
+	// the data version it serves, "" none yet
+	Version string `json:"version,omitempty"`
+	// the version it is preparing, "" none
+	Preparing string `json:"preparing,omitempty"`
+	// why the manifest's version did not prepare (tried again later), "" when it did
+	Error string `json:"error,omitempty"`
+	// the size of the file it serves from, in bytes
+	Bytes int64 `json:"bytes,omitempty"`
+}
+
+// The most a status may say: names and errors are cut to these.
+const (
+	MaxStatusResources = 100
+	MaxStatusText      = 500
+)
 
 // UsageMinute is one key's counts in one minute.
 type UsageMinute struct {

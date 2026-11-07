@@ -35,7 +35,8 @@ type Config struct {
 	// thirds prepare (sorting a table wants about 200 MB per thread: Budget)
 	MemoryMB int
 	// DATA_API__THREADS: DuckDB's threads preparing a version (within the memory: Budget); by
-	// default the container's CPUs. Serving, each query has one, and the requests run side by side
+	// default the container's CPUs. Serving, each query has one, and as many queries run at
+	// once (the others wait their turn: Server.gate)
 	Threads int
 	// DATA_API__FORWARDED_ALLOW_IPS: the proxies (the ingress controller) whose
 	// X-Forwarded-For is believed, for the keys' address limits; «*» for any

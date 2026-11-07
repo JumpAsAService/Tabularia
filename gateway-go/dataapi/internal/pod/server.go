@@ -9,11 +9,13 @@ import (
 	"fmt"
 	"log/slog"
 	"net/http"
+	"os"
 	"sort"
 	"strconv"
 	"sync"
 	"sync/atomic"
 	"time"
+	"unicode/utf8"
 
 	"github.com/JumpAsAService/Tabularia/gateway-go/internal/clientip"
 	"github.com/JumpAsAService/Tabularia/gateway-go/internal/dataapiwire"
@@ -40,6 +42,19 @@ type Server struct {
 
 	stopping atomic.Bool
 	wake     chan struct{}
+	// a preparation ended: the status goes to the gateway now, not at the next poll
+	reportNow chan struct{}
+	// the queries that run at once: as many as the container's CPUs (DATA_API__THREADS). More
+	// side by side made DuckDB slower in all, not faster: measured with 1 CPU, 1,150 lookups a
+	// second one at a time, 430 with three at once and 280 with eight; gated, 1,300 with eight
+	gate chan struct{}
+
+	// what the status reports: when the pod started, the version each resource is being
+	// prepared at, the last manifest that could not be had
+	started     time.Time
+	preparing   map[string]string
+	manifestErr string
+	manifestAt  time.Time
 }
 
 type snapshot struct {
@@ -59,7 +74,7 @@ type failure struct {
 func NewServer(cfg Config, log *slog.Logger, gateway *Gateway, prep *Preparer) *Server {
 	return &Server{cfg: cfg, log: log, gateway: gateway, prep: prep, limiter: NewLimiter(time.Now), usage: NewUsage(),
 		clientIP: clientip.New(cfg.ForwardedAllowIPs), now: time.Now, tables: map[string]*Table{}, failed: map[string]failure{},
-		wake: make(chan struct{}, 1)}
+		wake: make(chan struct{}, 1), reportNow: make(chan struct{}, 1), gate: make(chan struct{}, max(cfg.Threads, 1)), started: time.Now().UTC(), preparing: map[string]string{}}
 }
 
 // ── the manifest ──────────────────────────────────────────────────────────────
@@ -130,11 +145,18 @@ func (s *Server) prepareOne(ctx context.Context, r dataapiwire.Resource) {
 	snap := s.snap.Load()
 	serveMB, prepareMB, prepareThreads := s.cfg.Budget(len(snap.m.Resources))
 	name := fmt.Sprintf("r%d", s.seq.Add(1))
+	s.mu.Lock()
+	s.preparing[r.Name] = r.Version
+	s.mu.Unlock()
 	// serving, one thread per query: a lookup touches one block, and the requests run side by
 	// side on their own connections (more threads per query made a lookup three times slower)
 	t, err := s.prep.Prepare(ctx, r, name, Budgeted{ServeMB: serveMB, PrepareMB: prepareMB, PrepareThreads: prepareThreads,
 		ServeThreads: 1})
 	key := r.Name + "/" + Generation(r)
+	s.mu.Lock()
+	delete(s.preparing, r.Name)
+	s.mu.Unlock()
+	defer s.report()
 	if err != nil {
 		s.mu.Lock()
 		f := s.failed[key]
@@ -212,36 +234,114 @@ func (s *Server) Run(ctx context.Context) {
 		if m, err := s.gateway.Manifest(ctx); err != nil {
 			if ctx.Err() == nil {
 				s.log.Error("manifest", "err", err.Error())
+				s.mu.Lock()
+				s.manifestErr, s.manifestAt = "the manifest: "+err.Error(), s.now().UTC()
+				s.mu.Unlock()
 			}
 		} else {
+			s.mu.Lock()
+			s.manifestErr = ""
+			s.mu.Unlock()
 			s.Apply(m)
 			if m.PollSeconds > 0 {
 				poll = time.Duration(m.PollSeconds) * time.Second
 			}
 		}
 		s.sendUsage(ctx)
-		select {
-		case <-ctx.Done():
-			return
-		case <-time.After(poll):
+		timer := time.NewTimer(poll)
+		for waiting := true; waiting; {
+			select {
+			case <-ctx.Done():
+				timer.Stop()
+				return
+			case <-timer.C:
+				waiting = false
+			case <-s.reportNow:
+				s.sendUsage(ctx)
+			}
 		}
 	}
 }
 
+// report asks for the status to be sent now (a preparation ended, well or not)
+func (s *Server) report() {
+	select {
+	case s.reportNow <- struct{}{}:
+	default:
+	}
+}
+
+// sendUsage sends the counts of the last minutes and the pod's status: at every poll, even
+// with nothing counted, so the page knows how each pod is.
 func (s *Server) sendUsage(ctx context.Context) {
 	list := s.usage.Take()
-	if len(list) == 0 {
-		return
-	}
 	sort.Slice(list, func(i, j int) bool { return list[i].Minute.Before(list[j].Minute) })
 	if len(list) > dataapiwire.MaxUsageMinutes {
 		s.usage.Return(list[dataapiwire.MaxUsageMinutes:])
 		list = list[:dataapiwire.MaxUsageMinutes]
 	}
-	if err := s.gateway.SendUsage(ctx, dataapiwire.Usage{Pod: s.cfg.PodName, Minutes: list}); err != nil {
+	if list == nil {
+		list = []dataapiwire.UsageMinute{}
+	}
+	status := s.Status()
+	if err := s.gateway.SendUsage(ctx, dataapiwire.Usage{Pod: s.cfg.PodName, Minutes: list, Status: &status}); err != nil {
 		s.log.Error("usage", "err", err.Error())
 		s.usage.Return(list)
 	}
+}
+
+// Status is how the pod is now, as the usage reports carry it.
+func (s *Server) Status() dataapiwire.PodStatus {
+	snap := s.snap.Load()
+	out := dataapiwire.PodStatus{Ready: s.Ready(), Started: s.started, Resources: []dataapiwire.ResourceStatus{}}
+	if snap != nil {
+		out.State = snap.m.State
+		at := snap.at.UTC()
+		out.ManifestAt = &at
+	}
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+	if s.manifestErr != "" {
+		at := s.manifestAt
+		out.Error, out.ErrorAt = cut(s.manifestErr), &at
+	}
+	if snap == nil {
+		return out
+	}
+	for _, r := range snap.m.Resources {
+		if len(out.Resources) == dataapiwire.MaxStatusResources {
+			break
+		}
+		rs := dataapiwire.ResourceStatus{Name: r.Name, Preparing: s.preparing[r.Name]}
+		if t := s.tables[r.Name]; t != nil {
+			rs.Version = t.Version
+			if fi, err := os.Stat(t.path); err == nil {
+				rs.Bytes = fi.Size()
+			}
+		}
+		if r.Available {
+			if f, ok := s.failed[r.Name+"/"+Generation(r)]; ok {
+				rs.Error = cut(f.error)
+				if out.Error == "" {
+					out.Error = cut(r.Name + ": " + f.error)
+				}
+			}
+		}
+		out.Resources = append(out.Resources, rs)
+	}
+	return out
+}
+
+// cut keeps a status text within dataapiwire.MaxStatusText bytes, on a rune boundary
+func cut(text string) string {
+	if len(text) <= dataapiwire.MaxStatusText {
+		return text
+	}
+	b := text[:dataapiwire.MaxStatusText]
+	for len(b) > 0 && !utf8.ValidString(b) {
+		b = b[:len(b)-1]
+	}
+	return b + "…"
 }
 
 // FlushUsage sends what is left, at the end.
@@ -555,6 +655,13 @@ func (s *Server) page(ctx context.Context, q *Query, t *Table) (*page, *Problem)
 		}
 		s.log.Error("query", "resource", t.Resource, "err", err.Error())
 		return &Problem{Status: 500, Code: "internal", Detail: "The data API could not answer: try again"}
+	}
+	// a turn among the queries running now (Server.gate), within the request's time
+	select {
+	case s.gate <- struct{}{}:
+		defer func() { <-s.gate }()
+	case <-ctx.Done():
+		return nil, queryFailed(ctx.Err())
 	}
 	if q.Count {
 		text, args := q.CountSQL()
