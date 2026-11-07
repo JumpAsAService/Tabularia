@@ -366,3 +366,31 @@ def test_0040_adds_the_data_apis_and_leaves_what_was_there(temporary_database):
         assert [c.execute(text(f"SELECT count(*) FROM {t}")).scalar()
                 for t in ("data_apis", "data_api_versions", "data_api_resources", "data_api_keys", "data_api_usage")] == [0] * 5
         assert c.execute(text("SELECT count(*) FROM datasources")).scalar() == 1
+
+
+def test_0041_adds_the_data_api_pods_and_leaves_what_was_there(temporary_database):
+    """Two tables the previous version does not know; both go with their data API."""
+    with temporary_database.begin() as c:
+        command.upgrade(m._config(c), "0040")
+        c.execute(text("INSERT INTO users (id, email, full_name, is_active, is_superuser, is_observer, created_at) "
+                       "VALUES (1, 'ann@example.com', 'Ann', true, false, false, now())"))
+        c.execute(text("INSERT INTO projects (id, name, description, created_at) VALUES (1, 'p', '', now())"))
+        c.execute(text(
+            "INSERT INTO data_apis (id, name, slug, description, project_id, creator_id, state, runtime, current_version, "
+            "created_at, updated_at) VALUES (1, 'CRM', 'crm', '', 1, 1, 'active', '{}', 1, now(), now())"))
+    m.migra(temporary_database)  # stops if the database and the models differ
+    with temporary_database.connect() as c:
+        assert c.execute(text("SELECT slug, state FROM data_apis")).one() == ("crm", "active")
+        assert [c.execute(text(f"SELECT count(*) FROM {t}")).scalar() for t in ("data_api_status", "data_api_pods")] == [0, 0]
+    with temporary_database.begin() as c:
+        c.execute(text("INSERT INTO data_api_status (data_api_id, cluster, checked_at) VALUES (1, '{}', now())"))
+        c.execute(text("INSERT INTO data_api_pods (data_api_id, pod, cluster, report, reported_at) "
+                       "VALUES (1, 'tabularia-data-api-1-abc', '{}', '{}', now())"))
+    with pytest.raises(Exception, match="uq_data_api_pod"):
+        with temporary_database.begin() as c:
+            c.execute(text("INSERT INTO data_api_pods (data_api_id, pod, cluster, report) "
+                           "VALUES (1, 'tabularia-data-api-1-abc', '{}', '{}')"))
+    with temporary_database.begin() as c:
+        c.execute(text("DELETE FROM data_apis WHERE id = 1"))
+    with temporary_database.connect() as c:
+        assert [c.execute(text(f"SELECT count(*) FROM {t}")).scalar() for t in ("data_api_status", "data_api_pods")] == [0, 0]

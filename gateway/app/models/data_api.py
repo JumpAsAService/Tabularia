@@ -15,6 +15,11 @@ database and the models stay one and the same. The times are naive UTC, as the r
 - `DataApiKey`: the keys the other systems call with; the key itself is never kept, only
   its sha-256 and its first 8 characters.
 - `DataApiUsage`: the counts per key per minute the pods send.
+- `DataApiStatus`: what the reconcile loop last saw of a data API in the cluster (JSON): the
+  pods wanted and ready, the disk each was given, what the cluster refused.
+- `DataApiPod`: one of its pods, as the cluster sees it (`cluster`, from the reconcile loop) and
+  as it reports itself with its poll (`report`: the data version each resource serves, whether
+  it is preparing one, its last error).
 """
 from datetime import datetime, timezone
 from typing import Optional
@@ -110,3 +115,24 @@ class DataApiUsage(SQLModel, table=True):
     rows: int = 0
     errors: int = 0
     throttled: int = 0
+
+
+class DataApiStatus(SQLModel, table=True):
+    __tablename__ = "data_api_status"
+
+    data_api_id: int = Field(foreign_key="data_apis.id", primary_key=True, ondelete="CASCADE")
+    cluster: str = Field(default="{}", sa_column=Column(Text, nullable=False))  # JSON
+    checked_at: datetime = Field(default_factory=_now)
+
+
+class DataApiPod(SQLModel, table=True):
+    __tablename__ = "data_api_pods"
+    __table_args__ = (UniqueConstraint("data_api_id", "pod", name="uq_data_api_pod"),)
+
+    id: Optional[int] = Field(default=None, primary_key=True)
+    data_api_id: int = Field(foreign_key="data_apis.id", index=True, ondelete="CASCADE")
+    pod: str = Field(max_length=253)
+    cluster: str = Field(default="{}", sa_column=Column(Text, nullable=False))  # JSON, the reconcile loop's
+    cluster_at: Optional[datetime] = None
+    report: str = Field(default="{}", sa_column=Column(Text, nullable=False))  # JSON, the pod's own
+    reported_at: Optional[datetime] = None
