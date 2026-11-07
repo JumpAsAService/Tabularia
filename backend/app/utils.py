@@ -372,6 +372,20 @@ class StorageService:
                 return False
             raise
 
+    def object_size(self, bucket: str, object_key: str) -> int | None:
+        """The object's size in bytes (HEAD, no download); None when it is not there. Any other
+        error (credentials, network) is propagated."""
+        from botocore.exceptions import ClientError
+
+        try:
+            return int(self.client.head_object(Bucket=bucket, Key=object_key).get("ContentLength") or 0)
+        except ClientError as e:
+            code = str(e.response.get("Error", {}).get("Code", ""))
+            status = e.response.get("ResponseMetadata", {}).get("HTTPStatusCode")
+            if code in ("404", "NoSuchKey", "NotFound") or status == 404:
+                return None
+            raise
+
     def head_object(self, bucket: str, object_key: str) -> dict:
         """
         Gets an object's metadata without downloading it.

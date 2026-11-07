@@ -105,10 +105,11 @@ def copy_object(bucket: str, source_key: str, target_key: str):
 
 @router.get("/presigned")
 def presigned_link(bucket: str, key: str, expires: int = Query(600, ge=60, le=3600)):
-    """A link to download a datasource's data file, valid for `expires` seconds: a
-    notebook's pod reads it straight from the storage (docs/specs/notebooks.md, «Data»).
-    INTERNAL, for the gateway, which asks for it only after checking that the person may
-    read that datasource; limited to the managed data prefixes and to the storage's own
+    """A link to download a datasource's data file, valid for `expires` seconds, and the
+    file's size: a notebook's pod reads it straight from the storage (docs/specs/notebooks.md,
+    «Data»), so does a data API's (docs/specs/data-apis.md, whose pods get a disk sized from
+    it). INTERNAL, for the gateway, which asks for it only after checking that the person
+    may read that datasource; limited to the managed data prefixes and to the storage's own
     bucket."""
     from app.core.config import get_settings
     from app.utils import get_storage_service
@@ -118,9 +119,10 @@ def presigned_link(bucket: str, key: str, expires: int = Query(600, ge=60, le=36
     if bucket != get_settings().storage.bucket:
         raise HTTPException(422, "bucket outside the storage's own")
     storage = get_storage_service()
-    if not storage.object_exists(bucket, key):
+    size = storage.object_size(bucket, key)
+    if size is None:
         raise HTTPException(404, "it has no data yet: refresh it first")
-    return {"url": storage.get_presigned_url(bucket, key, expiration=expires)}
+    return {"url": storage.get_presigned_url(bucket, key, expiration=expires), "size": size}
 
 
 @router.delete("/object", status_code=204)
