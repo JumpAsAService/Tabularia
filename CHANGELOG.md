@@ -16,6 +16,21 @@ exposes at `/system/info` and in the app's settings menu.
   folder or an administrator makes and manages them, VIEW reads them; a datasource they
   publish and a folder that holds them cannot be deleted. Routes of the Go gateway only;
   migration 0040 adds five tables. The pods that answer the calls come in a later part.
+- **Data APIs, second part: the pods' program and image.** A new image,
+  `tabularia-data-api` (built for amd64 and arm64 like the others, from
+  `gateway-go/dataapi`, a Go module of its own with DuckDB linked in, so the gateway's image
+  stays without cgo), answers `/data/{api}/{resource}`: typed filters (`col=`, `__in`,
+  `__gt/__gte/__lt/__lte`, `__null`), `_columns`, `_sort`, `_limit`, cursors bound to the data's
+  version (`409` after a refresh), `_count=true`, CSV, `openapi.json` (OpenAPI 3.1), the keys
+  checked in the pod (expiry, revocation, grace, resources, addresses, a rate per key divided
+  by the replicas) and a JSON log line per request. The data are downloaded once per version
+  through a short-lived link and served from a read-only DuckDB file sorted by the first
+  filterable column: on 20 million rows in a pod of 1 GB, a lookup by key answers in 1.3 ms
+  (p50, in the pod) with about 220 MB of memory. The gateway gives the pods their manifest and takes their usage
+  (`/internal/data-apis/{id}/manifest` and `/usage`, with the pod token of that data API
+  only), checking the creator's authority at every poll; `DATA_API__POLL_SECONDS` (20,
+  the chart's `dataApi.pollSeconds`) sets the poll. Tabularia does not start the pods yet:
+  that comes with the next part.
 
 ## 1.4.0 «Romulus» — 2026-11-07
 

@@ -105,15 +105,32 @@ GET /data/{api}/health
   filters as parameters with their types, the row schema from the columns that go out,
   the bearer scheme. The page in Tabularia shows it, with a `curl` example per resource.
   It needs a valid key, as the data.
+- Settled while writing the pods (piece 2): `next` is the value to give `_cursor`, and a
+  cursor carries its query, so `_cursor` comes alone (with `_format` at most); the default
+  page is the resource's largest; the `version` is when the datasource's data was written (the
+  run that wrote it ended, or its refresh), to the second, and the pods prepare again whenever
+  the data file changes (another object, another run) or the columns and the order do; a
+  cursor is bound to both. CSV gives the cursor, the version and the count in `X-Next-Cursor`,
+  `X-Data-Version` and `X-Total-Count`. A float that is not a number goes out as `"NaN"` or
+  `"Infinity"`. A key sent in the address is refused (`400 key_in_query`). The `openapi.json`
+  lists only the resources the key may read. A pod whose manifest is older than
+  `DATA_API__MANIFEST_MAX_AGE_SECONDS` (15 minutes) answers `503`: a revoked key must not
+  live on while the gateway is out of reach. `GET /data/{api}/health` needs no key.
 
 ## Runtime
 
-- **Program and image (measured 2026-11-07)**: a Go program, `gateway-go/cmd/dataapi`,
-  with DuckDB linked in (`github.com/duckdb/duckdb-go/v2`, MIT, prebuilt static libraries
-  for linux amd64 and arm64; cgo, so a build stage of its own). Its own image,
-  `tabularia-data-api` (about 80 MB of binary): the gateway's image stays small and
-  without cgo. Keys, limits, cursors and the HTTP answers are written once, in Go, with
-  the gateway's conventions.
+- **Program and image (measured 2026-11-07)**: a Go program with DuckDB linked in
+  (`github.com/duckdb/duckdb-go/v2`, MIT, prebuilt static libraries for linux amd64 and
+  arm64; cgo, so a build stage of its own), in **a Go module of its own**,
+  `gateway-go/dataapi` (`internal/pod`: the server, DuckDB, keys, cursor, OpenAPI). In the
+  gateway's module, `go mod download` in its image would fetch DuckDB's libraries of every
+  platform: its build stage went from 26 s to 38 s and its module cache from 52 MB to
+  1.2 GB. The module shares the gateway's own code that is the standard library only
+  (`internal/dataapiwire`: the manifest, the usage, the keys' rules; `internal/clientip`)
+  through a `replace` of the checkout. Its own image, `tabularia-data-api`
+  (`gateway-go/dataapi/Dockerfile`, built from `gateway-go/`; 84 MB of binary, 168 MB in all):
+  the gateway's image stays small and without cgo. Keys, limits, cursors and the HTTP
+  answers are written once, in Go, with the gateway's conventions.
 - **Data, read lazily**: the table is **never loaded in memory**. At start and at every
   change, a pod downloads each resource's parquet through a **short-lived presigned URL**
   into its `emptyDir` and turns it once into a **DuckDB database file**: only the columns
@@ -135,6 +152,20 @@ GET /data/{api}/health
   | the parquet with row groups of 10,000 | 14 s | 35 ms / 47 ms | 72 ms | 75 MB |
   | **a DuckDB file, sorted by the key** (chosen) | 13 s, 213 MB on disk | **0.8 ms / 1.7 ms** | 13 ms | 70 MB |
   | the same with an index (ART) on the key | 19 s, 654 MB | 0.5 ms / 0.9 ms | 16 ms | 80 MB |
+
+  The pods' program as built (piece 2, `gateway-go/dataapi/scripts/standalone.sh`: the
+  gateway, MinIO and the pod in a container of 1 GB and 2 CPUs, a datasource of 20 million
+  rows and five columns, 346 MB of parquet): ready 15 s after starting (download and
+  preparation, 14 s; 144 MB on disk); a lookup by key over HTTP, 1,000 random customers,
+  **1.3 ms in the pod (p50; 1.5 ms average, 3.7 ms p99)**, 1.8 ms for the client; a filter on
+  two other columns with a page of 1,000, 15 ms; a count on a column, 47 ms. The program's
+  memory serving 221 MB (166 MB anonymous in the cgroup), 500 MB at its highest while
+  preparing. A revoked key refused 4 s after the revocation, a refresh served 14 s after it
+  (poll 5 s). Preparing sorts the table: 244 MB of DuckDB memory fail with two threads and
+  pass with one (23 s), 400 MB pass with two (13 s); hence the pod gives DuckDB 60% of its
+  memory, a third to serve and two thirds to prepare, with as many threads as 200 MB each
+  allow. Each request prepared its query again at first: keeping the prepared statements by
+  their text took a lookup from 2.5 ms to 1.5 ms (average, in the pod).
 
   Smaller row groups make the parquet slower, not faster: the cost is checking every
   group's statistics, not reading the data. The index saves 0.3 ms for three times the
@@ -200,9 +231,10 @@ pause or delete any of them.
 - **Gateway: Go only** (`gateway-go/internal/dataapis`): the object's routes, keys,
   manifest, usage, reconcile loop (`internal/kube`), search, Explore, lineage (a data API
   is a reader of its datasources), audit, settings. Nothing in the Python gateway.
-- **The pods' program**: `gateway-go/cmd/dataapi` and `gateway-go/internal/dataapi` (the
-  server, DuckDB, keys, cursor, OpenAPI), its Dockerfile and its place in the release
-  workflow (built for amd64 and arm64, smoke-tested, licences and secrets scanned).
+- **The pods' program**: `gateway-go/dataapi`, a module of its own (`main.go`, and
+  `internal/pod`: the server, DuckDB, keys, cursor, OpenAPI), what it shares with the gateway
+  in `gateway-go/internal/dataapiwire`, its Dockerfile and its place in the release workflow
+  (built for amd64 and arm64, smoke-tested, licences and secrets scanned).
 - **Frontend**: Explore type, the page (resources, columns, filters, runtime, keys, usage,
   OpenAPI and examples), the admin section, i18n in the 5 languages.
 - **Helm**: RBAC on Deployments, Services, Secrets, PDBs, HPAs and Ingresses in the
