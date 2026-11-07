@@ -13,8 +13,8 @@ traffic never slows the people using Tabularia. The design is in
 > has three tabs: **Definition**, **Pods and traffic** ([On the cluster](#on-the-cluster)) and
 > **Documentation**, everything the systems that integrate it need
 > ([The Documentation tab](#the-documentation-tab)). Administration lists every data API
-> ([In Administration](#in-administration)), and the lineage shows which datasources each one
-> publishes.
+> ([In Administration](#in-administration)) and decides how many pods each one gets and how big
+> ([The runtime](#the-runtime)); the lineage shows which datasources each one publishes.
 
 ## Where it is offered
 
@@ -28,6 +28,8 @@ other route answers 409.
 
 - **MANAGE** on the folder, or an administrator, makes a data API, edits it, activates and
   pauses it, deletes it and manages its keys. An observer never does.
+- Only an **administrator** decides its **runtime**: how many pods answer it and how big each
+  one is ([The runtime](#the-runtime)).
 - **VIEW** on the folder reads its page (without its keys).
 - Whoever saves a resource must be able to read its datasource. A resource someone else
   published on a datasource you may not read stays as it is when you save; you may take it
@@ -57,11 +59,46 @@ Explore → **New → Data API** in a folder where you have MANAGE. The page has
     cannot be filtered on;
   - the **default order**, on a filterable column, ascending or descending;
   - the **largest page**, 1,000 rows by default, at most 10,000.
-- **Runtime**: a number of replicas, or a minimum and a maximum with autoscaling on CPU, and
-  the CPU and memory of each pod, within the administrator's caps.
+- **Runtime**: shown, not chosen: a new data API starts with one pod of 250m CPU and 256Mi of
+  memory, and an administrator changes it ([The runtime](#the-runtime)).
 
-Every save that changes the resources or the runtime is a **version**; an older one can be
-restored, and it becomes the newest (its columns must still be in the datasources).
+Every save that changes the resources is a **version**; an older one can be restored, and it
+becomes the newest (its columns must still be in the datasources; the runtime stays as the
+administrator set it).
+
+## The runtime
+
+How a data API's pods run: a number of **replicas**, or a minimum and a maximum with
+**autoscaling on CPU** (at 70% of the request), and the **CPU** and **memory** of each pod. It
+is decided by an **administrator only**, for each data API (decided on 2026-11-07): whoever
+makes the data API sees it on the page, read-only, with a line saying so. A new data API and a
+copy start with **one pod of 250m and 256Mi**, enough for a few million rows; a bigger table,
+more traffic or a CRM that cannot wait need an administrator to give it more.
+
+An administrator sets it from **Administration → Data APIs** (the **Runtime** button of each
+row opens a dialog) or from the data API's own page (**Change** on its Runtime card). The
+bounds:
+
+| | Least | Most |
+|---|---|---|
+| CPU of a pod | `100m` | `16` |
+| Memory of a pod | `256Mi` | `64Gi` |
+| Pods of one data API (replicas, or the autoscaling's maximum) | 1 | 40, and never more than `DATA_API__MAX_TOTAL_REPLICAS` |
+
+CPU and memory are Kubernetes quantities (`500m`, `2`, `512Mi`, `4Gi`). For an active data
+API, the pods of all the active ones together stay within `DATA_API__MAX_TOTAL_REPLICAS`: a
+change past it is refused, saying how many the others take. A change is not a version, and the
+audit records it as `data_api.runtime` with the runtime before and after and
+`"by": "administration"`.
+
+An active data API gets its new runtime within half a minute (the orchestrator's next round):
+its pods are replaced one at a time, a new one ready, its data prepared, before an old one
+stops, so the calls go on answering. DuckDB takes 60% of the new memory by itself. A pod
+bigger than any node of the cluster waits to be scheduled while the old ones keep answering,
+and the **Pods and traffic** tab says why. Through the API, `PUT /admin/data-apis/{id}/runtime`
+with `{"replicas": 2, "cpu": "1", "memory": "2Gi"}` (or `"autoscale": true` with
+`"min_replicas"` and `"max_replicas"`); a create or an edit of the data API that sends another
+runtime is refused with `403` and `"code": "runtime_admin_only"`.
 
 ## States
 
@@ -219,7 +256,8 @@ wants about 200 MB per thread for it (the pod uses as many threads as its memory
 least one). A pod of 1Gi prepares tens of millions of rows; a small one (256Mi) a few
 million. A pod answers as many queries at once as it has CPUs and lines up the
 others: more at once made DuckDB slower in all (with 1 CPU, 1,150 lookups a second one at a
-time, 280 with eight at once; lined up, 1,300). For more requests, more replicas or more CPU.
+time, 280 with eight at once; lined up, 1,300). For more requests, more replicas or more CPU,
+which an administrator gives ([The runtime](#the-runtime)).
 A preparation that fails is logged and tried again, and the previous version keeps
 answering meanwhile (the page shows why). The disk of the data directory holds the new parquet
 and the new file next to the one being served: see [On the cluster](#on-the-cluster).
@@ -335,14 +373,16 @@ Administration → **Data APIs** lists every data API of the installation, whoev
 address and folder, its creator (said when the account is deactivated: the data API then
 stops answering), its state, its pods ready out of those wanted (and what the cluster refused),
 its requests and its errors and over-the-rate answers of the last 24 hours, with the last call,
-and the keys that answer. Above the list, how many data APIs and pods there are against the
-caps below, and the address they are called at.
+and the keys that answer, and its **runtime** (`2 × 500m · 1Gi`: pods, CPU and memory of each).
+Above the list, how many data APIs and pods there are against the caps below, the bounds of a
+runtime, and the address they are called at.
 
-An administrator may **pause** any active data API or **delete** any data API from there, with
+An administrator sets the **runtime** of any data API there ([The runtime](#the-runtime)). An
+administrator may **pause** any active data API or **delete** any data API from there, with
 its versions and its keys, whoever made it; the delete works even with the feature switched
 off, to clean what is left. The audit records both as the page's own actions
 (`data_api.pause`, `data_api.delete`) with `"by": "administration"`. An observer reads the list
-and acts on nothing.
+and acts on nothing, the runtime included.
 
 ## In the lineage
 
@@ -360,17 +400,15 @@ deleted, as with the other objects: move or delete them first.
 ## The administrator's caps
 
 Set in the environment (the chart's `dataApi` values), read by the gateway, which checks
-them at every save, activation and key ([Configuration](configuration.md)); Administration →
-Data APIs shows them:
+them at every activation, runtime and key ([Configuration](configuration.md)); Administration →
+Data APIs shows them. The runtime of each data API is not among them: an administrator sets it
+([The runtime](#the-runtime)).
 
 | Variable | Default | What it caps |
 |---|---|---|
 | `DATA_API__ENABLED` | `false` | the feature |
 | `DATA_API__MAX_APIS` | `20` | the data APIs of the installation |
-| `DATA_API__MAX_REPLICAS` | `3` | the pods of one data API |
-| `DATA_API__MAX_TOTAL_REPLICAS` | `10` | the pods of all the active ones together |
-| `DATA_API__MAX_CPU` | `1` | the CPU of one pod |
-| `DATA_API__MAX_MEMORY` | `1Gi` | the memory of one pod |
+| `DATA_API__MAX_TOTAL_REPLICAS` | `10` | the pods of all the active ones together (and of any one) |
 | `DATA_API__KEY_MAX_DAYS` | `365` | a key's life |
 | `DATA_API__KEY_DEFAULT_RATE` | `600` | a key's requests per minute, when none is given |
 | `DATA_API__POLL_SECONDS` | `20` | how often the pods ask for their manifest: a revoked key or a refresh reaches them within it |

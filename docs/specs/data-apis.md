@@ -1,7 +1,9 @@
 # Spec: data APIs
 
 Status: decided with the owner on 2026-11-07; open questions answered the same day. Pieces 1-4
-done; open: the live «Data APIs» category of Administration → Settings (see «Administration»).
+done, and the runtime made the administrator's (owner, 2026-11-07: «The runtime is the
+administrator's»); open: the live «Data APIs» category of Administration → Settings (see
+«Administration»).
 
 ## Objective
 
@@ -25,7 +27,7 @@ minute; the API's description imports into the CRM or Postman as OpenAPI.
 | Topic | Decision |
 |---|---|
 | Where | **Kubernetes only**. With Docker Compose the feature is off and the object is not offered (as saved scripts and notebooks) |
-| Pods | **One Deployment per data API**, with its replicas, CPU and memory chosen on its page, within the caps the administrator sets |
+| Pods | **One Deployment per data API**, with its replicas, CPU and memory **set by an administrator only** (owner, later the same day: see «The runtime is the administrator's») |
 | Data | A Tabularia datasource is served from its **latest parquet**: the pods keep a local copy, swapped at every refresh. No query reaches the source databases |
 | Who creates | Whoever has **MANAGE** on the folder, or an administrator: the data API and its keys |
 | First version | **Read only** (filters, pagination, chosen columns) **plus an OpenAPI description** of every data API |
@@ -50,7 +52,7 @@ to see its page. Its page has:
   - the **columns one may filter on**, and for each the operators allowed (below);
   - the **default order** and the **largest page** (default 1,000, at most 10,000).
 - **Runtime**: replicas (or minimum and maximum with autoscaling on CPU), CPU and memory
-  per pod, within the administrator's caps.
+  per pod: shown on the page, set by an administrator only (below).
 - **Keys** (below), **state** (draft, active, paused), and what the cluster says: pods
   ready out of wanted, the data version each resource serves, the last error.
 - Versions of the definition, as the other objects, and **Activate**, **Pause**,
@@ -297,10 +299,10 @@ GET /data/{api}/health
 ## Administration
 
 Administration → Settings, category «Data APIs» (live, as the other panel settings):
-enabled; the most data APIs; the most replicas per API and in total; the largest CPU and
-memory per pod; the poll; the key's longest life and default rate; usage retention.
-Administration lists every data API with its creator, state, pods and traffic, and can
-pause or delete any of them.
+enabled; the most data APIs; the most replicas in total; the poll; the key's longest life and
+default rate; usage retention. Administration lists every data API with its creator, state,
+runtime, pods and traffic, sets the runtime of any of them, and can pause or delete any of
+them.
 
 Settled while writing piece 4:
 
@@ -319,6 +321,65 @@ Settled while writing piece 4:
   Ingress) and the panel's machinery checks each setting against the Python gateway's
   catalogue: a piece of its own. `enabled` would stay out of it in any case: the chart renders
   the RBAC and the namespace only with `dataApi.enabled`.
+
+## The runtime is the administrator's (owner, 2026-11-07)
+
+Decided by the owner after piece 4: **only an administrator decides the resources of a data
+API**, for each one. Whoever creates it (MANAGE) no longer chooses them.
+
+- *The creator's side*: the page shows the runtime read-only (the pods, or the minimum and the
+  maximum with autoscaling, the CPU and the memory of each pod), with a line saying an
+  administrator decides it. A new data API, and a copy, start from the default: **one pod of
+  250m and 256Mi** (`dataapis.DefaultRuntime`). The gateway refuses a create or an edit that
+  sends a different runtime: `403` with `{"code": "runtime_admin_only"}`; the same one sent back
+  (as a page that sends the whole document does, whatever the spelling: `1` and `1000m`,
+  `1Gi` and `1024Mi`) passes. The page itself no longer sends it, so an administrator's change
+  made while it was open is never undone by a save. A version restored brings back its
+  resources, not its runtime; an edit never writes the runtime (only the creation does). The
+  data APIs made before keep the runtime they have.
+- *The administrator's side*: `PUT /admin/data-apis/{id}/runtime` (an administrator, never an
+  observer, on any data API), from Administration → Data APIs (a dialog per row) and from the
+  API's page when an administrator opens it (`can_set_runtime` in the detail). It is **not a
+  version**: what the data API publishes stays as it is. The audit records `data_api.runtime`
+  with the runtime `before` and `after`, the state and `"by": "administration"`; the same
+  runtime again answers `200` and records nothing. An active data API's change is taken with
+  the activations' lock (7140), so the two count each other's pods. Refused: a runtime out of
+  the bounds below (`422`), an active one past the most pods of all the active ones (`409`),
+  with the feature switched off (`409`).
+- *The chart's per-API caps are gone*: `dataApi.maxReplicas`, `maxCpu` and `maxMemory`
+  (`DATA_API__MAX_REPLICAS`, `_MAX_CPU`, `_MAX_MEMORY`) limited what a creator could ask; the
+  administrator decides now, and was told «even above the chart's caps». The data APIs were in
+  no release yet, so nothing is kept for compatibility. **Kept**: `dataApi.maxTotalReplicas`
+  (the most pods of all the active ones together, checked at every activation and every
+  change of an active one's runtime) and `dataApi.maxDisk` (the disk of a pod).
+- *The bounds of sense* (`dataapis.CheckRuntime`, not settings): CPU and memory are Kubernetes
+  quantities; **100m to 16 CPU** a pod; **256Mi to 64Gi** a pod (DuckDB takes 60% of the pod's
+  memory and prepares with two thirds of it: below 256Mi it fails on a table of a few million
+  rows, and 128Mi was the old minimum); **at most 40 pods** for one data API (the status keeps
+  50 pods' rows, with room for a rollout's), and never more than `maxTotalReplicas`, which no
+  activation could then pass. A pod larger than any node waits unscheduled: its old pods keep
+  answering (the rollout never takes one down before a new one is ready) and the Pods tab says
+  why.
+- *Applied by the reconcile loop*: the Deployment is applied from the database at every round
+  (30 s), so a change of an active data API reaches it at the next one: the replicas, the HPA
+  and the PodDisruptionBudget, and the requests and limits of the pods' template, which rolls
+  (`maxSurge: 1`, `maxUnavailable: 0`: a new pod is ready, its data prepared, before an old one
+  stops). DuckDB's memory follows by itself: the pod reads its own limit
+  (`/sys/fs/cgroup/memory.max`, 60% of it) and its CPUs for the threads; the disk does not
+  depend on the runtime (six times the parquets, `dataApi.maxDisk` at most).
+- *Measured on kind* (2026-11-07, the data API of 42 million rows, active, calls in a loop
+  through the ingress all along): an administrator took it from one pod of 1 CPU and 1Gi to two
+  of 1 CPU and 1536Mi. The loop's next round applied it, the rollout ended 71 s after the
+  change (the new pods prepare their data before they are ready), and the 1,400 calls made
+  meanwhile all answered `200` (p50 2.8 ms); two took 5 s, each right after an old pod
+  stopped: the ingress controller still had its address and waited its connect timeout before
+  trying another pod. Each new pod has requests and limits of 1 CPU and 1536Mi, and DuckDB
+  921 MB (60%), where it had 614 MB with 1Gi. Back to one pod of 1Gi: 59 s, every call
+  answered. In Chrome and Firefox (50 checks each): someone with MANAGE sees the runtime
+  read-only and the gateway refuses theirs; an observer sees it in Administration and changes
+  nothing; the administrator sets 3 pods of 2 CPU and 3Gi from Administration's dialog (100Mi
+  said below the bounds first) and autoscaling 1 to 4 from the page; the creator's next edit
+  keeps it; no horizontal scroll at 390 px, the dialog included.
 
 ## Piece 4: a host of their own, the documentation, the lineage
 
@@ -364,7 +425,9 @@ Settled while writing it:
 ## Model (migration 0040)
 
 - `data_apis`: id, project_id, name, slug (unique), description, state, creator_id
-  (`ON DELETE CASCADE`), runtime JSON (replicas or min/max, cpu, memory), pod token hash,
+  (`ON DELETE CASCADE`), runtime JSON (replicas or min/max, cpu, memory: an
+  administrator's, outside the versions; a version's content keeps the runtime it had), pod
+  token hash,
   versioned definition (as the other objects), created/updated.
 - `data_api_resources`: id, data_api_id, name, datasource_id (`ON DELETE RESTRICT`: a
   datasource published by an API cannot be deleted until it is taken out, the dialog
@@ -409,7 +472,10 @@ Settled while writing it:
 - Go with a database: create with and without MANAGE, as admin, with the feature off or on
   Compose; slug and resource names; keys created, expired, revoked, renewed with grace;
   the creator losing VIEW on a datasource or MANAGE, deactivated; the manifest with a
-  wrong or another API's token; datasource deletion refused; caps; audit of each event.
+  wrong or another API's token; datasource deletion refused; caps; audit of each event; the
+  runtime refused to the creator (`403`) and passed when sent back the same, set by an
+  administrator on someone else's data API past the old caps, refused out of the bounds or
+  past the total, refused to an observer, audited, a copy back to the default.
 - The pods' program (Go): filters of each type and operator, wrong types, unknown columns, `_columns`,
   `_sort`, pages and cursors across a version swap (`409`), CSV, rate limit, address
   limits, `503` before the load, no SQL from the request (injection attempts in every

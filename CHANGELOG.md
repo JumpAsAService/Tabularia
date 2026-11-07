@@ -72,6 +72,18 @@ exposes at `/system/info` and in the app's settings menu.
   written by Polars (TIME_NS in the parquet) could not be filtered on in the pods; a 128-bit
   integer, read as bytes, is no longer offered as filterable. A new Docker Hub page,
   `tabularia-data-api`.
+- **Data APIs: the runtime is the administrator's.** Only an administrator decides how a data
+  API's pods run (replicas or autoscaling, CPU and memory of each pod), for each one: from
+  Administration → Data APIs (a Runtime dialog per row) or from the data API's page when an
+  administrator opens it (`PUT /admin/data-apis/{id}/runtime`, never an observer; audited as
+  `data_api.runtime` with the runtime before and after). Whoever makes a data API sees its
+  runtime read-only; a new one and a copy start with one pod of 250m and 256Mi, and a save that
+  would change the runtime is refused (`403`, `runtime_admin_only`). An active data API gets the
+  new runtime within half a minute, its pods replaced one at a time with no pause in the answers,
+  DuckDB taking 60% of the new memory. The chart's per-API caps `dataApi.maxReplicas`, `maxCpu`
+  and `maxMemory` are gone (an administrator may go past them): a runtime is from 100m to 16 CPU
+  and 256Mi to 64Gi a pod, at most 40 pods, and `dataApi.maxTotalReplicas` still caps the pods of
+  all the active data APIs together.
 
 ## 1.4.0 «Romulus» — 2026-11-07
 
