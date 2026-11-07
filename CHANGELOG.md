@@ -5,85 +5,76 @@ exposes at `/system/info` and in the app's settings menu.
 
 ## Unreleased
 
-- **Data APIs, first part** ([docs/data-apis.md](docs/data-apis.md)). A new Explore object,
-  on Kubernetes only and behind `DATA_API__ENABLED` (off by default; the chart's
-  `dataApi.enabled`), that will publish datasources as read-only HTTP APIs for other
-  systems. This part keeps its definition with its versions (the address, the resources:
-  a datasource each, the columns that go out, the filterable ones and their operators, the
-  default order, the largest page; the runtime within the administrator's caps), its state
-  and its keys (`tdk_…`, shown once and kept as their SHA-256, with an expiry, a rate
-  limit, resources and addresses; revoked or renewed with a grace period). MANAGE on the
-  folder or an administrator makes and manages them, VIEW reads them; a datasource they
-  publish and a folder that holds them cannot be deleted. Routes of the Go gateway only;
-  migration 0040 adds five tables. The pods that answer the calls come in a later part.
-- **Data APIs, second part: the pods' program and image.** A new image,
-  `tabularia-data-api` (built for amd64 and arm64 like the others, from
+## 1.4.1 «Romulus» — 2026-11-07
+
+Data APIs: on Kubernetes, a datasource can now be published as a read-only HTTP API for the
+systems that integrate with Tabularia, a CRM first of all, each API with pods of its own. Off
+by default (`dataApi.enabled`); with it off, upgrading from 1.4.0 changes nothing but the
+schema (migrations 0040 and 0041) and two fixes in the interface. A new image,
+`tabularia-data-api`; chart 2.6.0.
+
+- **Data APIs** ([docs/data-apis.md](docs/data-apis.md)). A new Explore object, on Kubernetes
+  only: an address, one or more resources (a datasource each, the columns that go out, the
+  filterable ones and their operators, the default order, the largest page) and keys
+  (`tdk_…`, shown once and kept as their SHA-256, with an expiry, a rate limit, resources and
+  addresses; revoked, or renewed with a grace period). MANAGE on the folder or an
+  administrator makes and manages them, VIEW reads them; a datasource they publish and a
+  folder that holds them cannot be deleted. The definition keeps its versions; the audit
+  records every change and every key event. The lineage draws a data API as a reader of the
+  datasources it publishes.
+- **The pods.** A new image, `tabularia-data-api` (amd64 and arm64, from
   `gateway-go/dataapi`, a Go module of its own with DuckDB linked in, so the gateway's image
   stays without cgo), answers `/data/{api}/{resource}`: typed filters (`col=`, `__in`,
-  `__gt/__gte/__lt/__lte`, `__null`), `_columns`, `_sort`, `_limit`, cursors bound to the data's
-  version (`409` after a refresh), `_count=true`, CSV, `openapi.json` (OpenAPI 3.1), the keys
-  checked in the pod (expiry, revocation, grace, resources, addresses, a rate per key divided
-  by the replicas) and a JSON log line per request. The data are downloaded once per version
-  through a short-lived link and served from a read-only DuckDB file sorted by the first
-  filterable column: on 20 million rows in a pod of 1 GB, a lookup by key answers in 1.3 ms
-  (p50, in the pod) with about 220 MB of memory. The gateway gives the pods their manifest and takes their usage
-  (`/internal/data-apis/{id}/manifest` and `/usage`, with the pod token of that data API
-  only), checking the creator's authority at every poll; `DATA_API__POLL_SECONDS` (20,
-  the chart's `dataApi.pollSeconds`) sets the poll. Tabularia does not start the pods yet:
-  that comes with the next part.
-- **Data APIs, third part: the pods run.** The orchestrator keeps, every 30 seconds, the
-  Kubernetes objects of every active data API in the scripts' namespace (or
-  `dataApi.namespace`): a Deployment of its pods (not root, read-only root, no capability,
-  requests equal to limits, `/readyz` and `/healthz` as probes, a rollout that keeps one
-  answering), a Secret with a pod token made anew at every activation, a Service, an Ingress
-  with `/data/{address}/` only on the app's host, a NetworkPolicy (in, the ingress controller
-  only; out, DNS, the gateway and the object storage only), a PodDisruptionBudget from two pods
-  and an autoscaler on CPU when asked. A paused data API keeps its objects with no pod; a deleted
-  one, or one gone with its creator's account, loses them, and so does every one when the
-  feature is switched off. Each pod's data directory gets six times its parquets plus 256Mi,
-  rounded up to a power of two (`dataApi.maxDisk`, 20Gi at most); the engine's signed links now
-  carry the file's size. The keys' address limits read the client's address from the ingress
-  controller (`dataApi.trustedProxies`, by default `gateway.trustedProxies`). The page shows
-  **Pods and traffic**: the pods ready out of those wanted, each pod's state and the data
-  version it serves, whether a refresh has reached them, what the cluster refused, and the
-  requests, rows, errors and over-the-rate answers of the last hour, day or week
-  (`GET /data-apis/{id}/status`); the pods report their status at every poll and as soon as a
-  version is prepared. The usage is kept `DATA_API__USAGE_RETENTION_DAYS` (30). A pod runs at
-  most as many queries at once as it has CPUs: more made DuckDB slower in all. On kind (3
-  nodes, Calico), 42 million rows: a lookup by key in 2 ms in the pod, 1,100 requests a second
-  on three pods of 1 CPU with a p99 of 18 ms, about 230 MB of memory per pod; a revoked key
-  refused in 11 s, a refresh served 33 s after its run ended. Migration 0041 adds two tables;
-  the chart gives the orchestrator, and it only, the rights it needs in that namespace.
-- **Data APIs, fourth part: a host of their own, the documentation, the administration.**
-  The chart's `dataApi.publicHost` publishes every active data API's `/data/{address}/` on a
-  host with nothing else of Tabularia on it (every other path is the controller's 404), with
-  its certificate in the data APIs' namespace (`dataApi.tlsSecretName`, asked for by a new
-  Ingress with no path, so cert-manager makes it once); `DATA_API__PUBLIC_BASE_URL` is the
-  address the pages write. The page gets three tabs, **Definition**, **Pods and traffic** and
-  **Documentation**: the address, the key, each resource with its columns, types, filters and
-  operators, the parameters, the answers and every error code, `curl` lines filled in with the
-  real address, and the OpenAPI to download; written by the gateway from the definition with
-  the pods' own code (`GET /data-apis/{id}/documentation`, VIEW, no key), now shared in
-  `internal/dataapiwire`, so the page and the pods describe the same API. Administration →
-  **Data APIs** lists every one with its creator, state, pods, keys and last 24 hours, and an
-  administrator pauses or deletes any of them (`/admin/data-apis`, audited with
-  `"by": "administration"`). The lineage draws a data API as a reader of the datasources it
-  publishes, and the deletion dialog of a datasource counts it. Fixed on the way: a time column
-  written by Polars (TIME_NS in the parquet) could not be filtered on in the pods; a 128-bit
-  integer, read as bytes, is no longer offered as filterable. A new Docker Hub page,
-  `tabularia-data-api`.
-- **Data APIs: the runtime is the administrator's.** Only an administrator decides how a data
-  API's pods run (replicas or autoscaling, CPU and memory of each pod), for each one: from
-  Administration → Data APIs (a Runtime dialog per row) or from the data API's page when an
-  administrator opens it (`PUT /admin/data-apis/{id}/runtime`, never an observer; audited as
-  `data_api.runtime` with the runtime before and after). Whoever makes a data API sees its
-  runtime read-only; a new one and a copy start with one pod of 250m and 256Mi, and a save that
-  would change the runtime is refused (`403`, `runtime_admin_only`). An active data API gets the
-  new runtime within half a minute, its pods replaced one at a time with no pause in the answers,
-  DuckDB taking 60% of the new memory. The chart's per-API caps `dataApi.maxReplicas`, `maxCpu`
-  and `maxMemory` are gone (an administrator may go past them): a runtime is from 100m to 16 CPU
-  and 256Mi to 64Gi a pod, at most 40 pods, and `dataApi.maxTotalReplicas` still caps the pods of
-  all the active data APIs together.
+  `__gt/__gte/__lt/__lte`, `__null`), `_columns`, `_sort`, `_limit`, cursors bound to the
+  data's version (`409` after a refresh), `_count=true`, CSV, `openapi.json` (OpenAPI 3.1),
+  the keys checked in the pod and a JSON log line per request. Each pod downloads the
+  datasource's latest parquet once per version through a short-lived signed link and serves
+  it from a read-only DuckDB file sorted by the first filterable column, never loading the
+  table in memory; it runs at most as many queries at once as it has CPUs. The pods ask the
+  gateway for their manifest every `DATA_API__POLL_SECONDS` (20) with a token of their own
+  API, and the gateway checks the creator's authority at every poll.
+- **On the cluster.** The orchestrator keeps the Kubernetes objects of every active data API
+  in the scripts' namespace (or `dataApi.namespace`): a Deployment (not root, read-only root,
+  no capability, requests equal to limits, a rollout that keeps one pod answering), a Secret
+  with a pod token made anew at every activation, a Service, an Ingress with
+  `/data/{address}/` only, a NetworkPolicy (in, the ingress controller only; out, DNS, the
+  gateway and the object storage only), a PodDisruptionBudget from two pods and a CPU
+  autoscaler when asked. A paused API keeps its objects with no pod; a deleted one, or one
+  gone with its creator's account, loses them. Each pod's data directory gets six times its
+  parquets plus 256Mi, up to `dataApi.maxDisk` (20Gi). The chart gives the orchestrator, and it
+  only, the rights it needs in that namespace. On kind (3 nodes, Calico) with 42 million
+  rows: a lookup by key in 2 ms in the pod, 1,100 requests a second on three pods of 1 CPU
+  with a p99 of 18 ms, about 230 MB of memory per pod, a revoked key refused in 11 s, a
+  refresh served 33 s after its run ended.
+- **A host of their own.** `dataApi.publicHost` publishes every active API's
+  `/data/{address}/` on a host with nothing else of Tabularia on it, with its certificate
+  (`dataApi.tlsSecretName`, asked for once by an Ingress with no path);
+  `DATA_API__PUBLIC_BASE_URL` is the address the pages write.
+- **The page.** Three tabs: **Definition**; **Pods and traffic** (the pods ready, the data
+  version each serves, what the cluster refused, the requests, rows, errors and over-the-rate
+  answers of the last hour, day or week; usage kept `DATA_API__USAGE_RETENTION_DAYS`, 30);
+  **Documentation** (the address, the key, each resource with its columns, types, filters
+  and operators, the parameters, the answers and every error code, `curl` lines with the real
+  address, the OpenAPI to download), written by the gateway with the pods' own code, so it
+  needs VIEW and no key.
+- **The runtime is the administrator's.** Only an administrator decides how an API's pods run
+  (replicas or autoscaling, CPU and memory of each pod): from Administration → **Data APIs**,
+  which lists every API with its creator, state, pods, keys and last 24 hours and pauses or
+  deletes any of them, or from the API's page (`PUT /admin/data-apis/{id}/runtime`, audited).
+  A new API starts with one pod of 250m and 256Mi; whoever made it sees the runtime read-only.
+  A runtime is from 100m to 16 CPU and 256Mi to 64Gi a pod, at most 40 pods, and
+  `dataApi.maxTotalReplicas` caps the pods of all the active APIs together; an active API gets
+  a new runtime within half a minute, its pods replaced one at a time.
+
+### Fixed
+
+- A dashboard's KPI tile never cuts its figure: it gets smaller to fit, down to 16 px, then
+  turns to the compact form (€ 7.54B) with the whole figure in its tooltip; in print it only
+  gets smaller. On the viewer and the share links' pages.
+- The administration's sections share the panel's table style: the share links' table was
+  bare, and on a phone pushed the page sideways.
+- A time column written by Polars (TIME_NS in the parquet) can be filtered on in a data API; a
+  128-bit integer is no longer offered as filterable.
 
 ## 1.4.0 «Romulus» — 2026-11-07
 

@@ -10,11 +10,11 @@ description: |
 type: application
 
 # Chart version — bump on every chart change.
-version: 2.5.0
+version: 2.6.0
 
 # Version of Tabularia this chart was written against. Overridden per component
 # by image.tag values when you pin your own builds.
-appVersion: "1.4.0"  # release «Romulus»
+appVersion: "1.4.1"  # release «Romulus»
 
 keywords:
   - data-preparation

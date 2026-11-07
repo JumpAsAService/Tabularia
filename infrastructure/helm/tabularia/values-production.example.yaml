@@ -7,11 +7,11 @@
 
 image:
   registry: registry.example.com
-  backend:  { repository: tabularia-backend,  tag: "1.4.0" }
-  gateway:  { repository: tabularia-gateway,  tag: "1.4.0" }   # the AI service + migrations
-  gatewayGo: { repository: tabularia-gateway-go, tag: "1.4.0" }
-  frontend: { repository: tabularia-frontend, tag: "1.4.0" }
-  dataApi:  { repository: tabularia-data-api, tag: "1.4.0" }   # the data APIs' pods (dataApi.enabled)
+  backend:  { repository: tabularia-backend,  tag: "1.4.1" }
+  gateway:  { repository: tabularia-gateway,  tag: "1.4.1" }   # the AI service + migrations
+  gatewayGo: { repository: tabularia-gateway-go, tag: "1.4.1" }
+  frontend: { repository: tabularia-frontend, tag: "1.4.1" }
+  dataApi:  { repository: tabularia-data-api, tag: "1.4.1" }   # the data APIs' pods (dataApi.enabled)
   pullSecrets:
     - name: regcred
 
