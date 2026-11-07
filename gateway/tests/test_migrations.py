@@ -320,3 +320,49 @@ def test_0039_adds_the_share_links_and_leaves_what_was_there(temporary_database)
         c.execute(text("DELETE FROM users WHERE id = 1"))
     with temporary_database.connect() as c:
         assert [c.execute(text(f"SELECT count(*) FROM {t}")).scalar() for t in ("share_links", "share_link_sessions")] == [0, 0]
+
+
+def test_0040_adds_the_data_apis_and_leaves_what_was_there(temporary_database):
+    """Five tables the previous version does not know. A datasource a resource publishes cannot
+    be deleted; a deleted creator takes their data APIs, and with them the resources, versions,
+    keys and usage; who saved a version or made a key is forgotten with the account."""
+    with temporary_database.begin() as c:
+        command.upgrade(m._config(c), "0039")
+        c.execute(text("INSERT INTO users (id, email, full_name, is_active, is_superuser, is_observer, created_at) "
+                       "VALUES (1, 'ann@example.com', 'Ann', true, false, false, now()), "
+                       "(2, 'bob@example.com', 'Bob', true, false, false, now())"))
+    m.migra(temporary_database)  # stops if the database and the models differ
+    with temporary_database.connect() as c:
+        assert c.execute(text("SELECT email FROM users WHERE id = 1")).scalar() == "ann@example.com"
+        assert [c.execute(text(f"SELECT count(*) FROM {t}")).scalar()
+                for t in ("data_apis", "data_api_versions", "data_api_resources", "data_api_keys", "data_api_usage")] == [0] * 5
+    with temporary_database.begin() as c:
+        c.execute(text("INSERT INTO projects (id, name, description, created_at) VALUES (1, 'p', '', now())"))
+        c.execute(text("INSERT INTO datasources (id, name, description, project_id, bucket, key, columns, sort_keys, "
+                       "column_descriptions, kind, created_at, updated_at) "
+                       "VALUES (1, 'customers', '', 1, 'b', 'k', '[]', '[]', '{}', 'flow', now(), now())"))
+        c.execute(text(
+            "INSERT INTO data_apis (id, name, slug, description, project_id, creator_id, state, runtime, current_version, "
+            "created_at, updated_at) VALUES (1, 'CRM', 'crm', '', 1, 1, 'draft', '{}', 1, now(), now())"))
+        c.execute(text("INSERT INTO data_api_versions (data_api_id, version, content, note, created_at, created_by) "
+                       "VALUES (1, 1, '{}', 'created', now(), 2)"))
+        c.execute(text("INSERT INTO data_api_resources (data_api_id, position, name, source_kind, datasource_id, columns, "
+                       "filters, default_sort, max_page) VALUES (1, 0, 'customers', 'datasource', 1, '[]', '[]', '[]', 1000)"))
+        c.execute(text("INSERT INTO data_api_keys (id, data_api_id, name, prefix, hash, expires_at, rate_per_minute, "
+                       "resources, cidrs, created_by, created_at) VALUES (1, 1, 'CRM', 'abcdefgh', 'h', now(), 600, '[]', '[]', 2, now())"))
+        c.execute(text("INSERT INTO data_api_usage (data_api_id, key_id, minute, requests, rows, errors, throttled) "
+                       "VALUES (1, 1, now(), 1, 1, 0, 0)"))
+    with pytest.raises(Exception, match="data_api_resources"):
+        with temporary_database.begin() as c:
+            c.execute(text("DELETE FROM datasources WHERE id = 1"))
+    with temporary_database.begin() as c:
+        c.execute(text("DELETE FROM users WHERE id = 2"))
+    with temporary_database.connect() as c:
+        assert c.execute(text("SELECT created_by FROM data_api_versions")).scalar() is None
+        assert c.execute(text("SELECT created_by FROM data_api_keys")).scalar() is None
+    with temporary_database.begin() as c:
+        c.execute(text("DELETE FROM users WHERE id = 1"))
+    with temporary_database.connect() as c:
+        assert [c.execute(text(f"SELECT count(*) FROM {t}")).scalar()
+                for t in ("data_apis", "data_api_versions", "data_api_resources", "data_api_keys", "data_api_usage")] == [0] * 5
+        assert c.execute(text("SELECT count(*) FROM datasources")).scalar() == 1

@@ -41,6 +41,7 @@ from app.models.shared_state import FlowPresence, LoginAttempt
 from app.models.contract import DataContract, DataContractResult, DataContractVersion
 from app.models.dbt_ai_text import DbtAiText
 from app.models.share_link import ShareLink, ShareLinkSession, ShareLinkSettings
+from app.models.data_api import DataApi, DataApiKey, DataApiResource, DataApiUsage, DataApiVersion
 
 __all__ = [
     "User", "Group", "UserGroupLink", "UserSession", "ApiToken", "Webhook", "WebhookDelivery", "Project", "Permission", "Capability",
@@ -51,4 +52,5 @@ __all__ = [
     "FlowPresence", "LoginAttempt",
     "DataContract", "DataContractResult", "DataContractVersion", "DbtAiText",
     "ShareLink", "ShareLinkSession", "ShareLinkSettings",
+    "DataApi", "DataApiVersion", "DataApiResource", "DataApiKey", "DataApiUsage",
 ]
