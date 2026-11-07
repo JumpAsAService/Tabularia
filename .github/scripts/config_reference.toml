@@ -1400,7 +1400,7 @@ text = "The AI service's address (the Python gateway's image with `APP__ROLE=ai`
 [var.DATA_API__ENABLED]
 helm = "`dataApi.enabled`"
 default = "`false`"
-text = "Offers the data APIs ([Data APIs](data-apis.md)), read by the Go gateway: «New → Data API» in Explore, their pages and their keys. Only on Kubernetes with the scripting environments on (`SCRIPTS__ENABLED`), as the saved scripts and the notebooks: with Docker Compose they stay off whatever this says. This version keeps the definitions and the keys; the pods that answer them come later."
+text = "Offers the data APIs ([Data APIs](data-apis.md)), read by the Go gateway: «New → Data API» in Explore, their pages and their keys, and the pods the orchestrator runs for each active one. Only on Kubernetes with the scripting environments on (`SCRIPTS__ENABLED`), as the saved scripts and the notebooks: with Docker Compose they stay off whatever this says. Switched off, the orchestrator removes the data APIs' objects from the cluster; their definitions and keys stay."
 
 [var.DATA_API__MAX_APIS]
 helm = "`dataApi.maxApis`"
@@ -1441,3 +1441,73 @@ text = "The requests per minute of a data API key made without a limit of its ow
 helm = "`dataApi.pollSeconds`"
 default = "`20`"
 text = "How often, in seconds (5 to 600), the pods of a data API ask the gateway for their manifest: a revoked key, a refresh of a datasource or an edit reaches them within it. The manifest carries it to the pods."
+
+[var.DATA_API__USAGE_RETENTION_DAYS]
+helm = "`dataApi.usageRetentionDays`"
+default = "`30`"
+text = "How long, in days (1 to 3650), the requests, rows, errors and over-the-rate answers of each data API key and minute are kept for the pages; older ones are deleted by the orchestrator."
+
+[var.DATA_API__NAMESPACE]
+helm = "`dataApi.namespace`"
+default = "the scripts' namespace"
+text = "Where the orchestrator runs the data APIs' pods and keeps their objects (Deployment, Service, Secret, Ingress, NetworkPolicy, PodDisruptionBudget, autoscaler). Empty: `SCRIPTS__NAMESPACE`. The chart gives the orchestrator, and it only, the rights there."
+
+[var.DATA_API__IMAGE]
+helm = "`image.registry`, `image.dataApi`"
+default = "*(set by the chart)*"
+text = "The image of the data APIs' pods, `tabularia-data-api`."
+
+[var.DATA_API__IMAGE_PULL_POLICY]
+helm = "`image.pullPolicy`"
+default = "`IfNotPresent`"
+text = "The pull policy of the data APIs' pods: `Always`, `IfNotPresent` or `Never`."
+
+[var.DATA_API__IMAGE_PULL_SECRETS]
+helm = "`image.pullSecrets`"
+default = "*(none)*"
+text = "The Secrets, comma-separated, the data APIs' pods pull their image with; they must exist in `DATA_API__NAMESPACE`."
+
+[var.DATA_API__GATEWAY_URL]
+helm = "*(set by the chart)*"
+default = "`NOTEBOOKS__GATEWAY_URL`"
+text = "The gateway's address inside the cluster, where the data APIs' pods ask for their manifest and send their usage."
+
+[var.DATA_API__FORWARDED_ALLOW_IPS]
+helm = "`dataApi.trustedProxies`, else `gateway.trustedProxies`"
+default = "*(none)*"
+text = "The proxies (the ingress controller's pods), comma-separated addresses or ranges, whose `X-Forwarded-For` the data APIs' pods believe: the client's address the keys' address limits are checked against. Read from the right, as the gateway does."
+
+[var.DATA_API__MAX_DISK]
+helm = "`dataApi.maxDisk`"
+default = "`20Gi`"
+text = "The most disk a data API's pod gets for its data files (an `emptyDir`, and its ephemeral storage). Each gets six times the parquets it serves plus 256Mi, rounded up to a power of two, at least 1Gi."
+
+[var.DATA_API__INGRESS_CLASS]
+helm = "`dataApi.ingress.className`, else `ingress.className`"
+default = "*(none)*"
+text = "The class of the Ingress each active data API gets, with `/data/{address}/` only."
+
+[var.DATA_API__INGRESS_HOST]
+helm = "`dataApi.ingress.host`, else the first of `ingress.hosts`"
+default = "*(any host)*"
+text = "The host the data APIs' Ingresses answer on."
+
+[var.DATA_API__INGRESS_ANNOTATIONS]
+helm = "`dataApi.ingress.annotations`, else `{}`"
+default = "`{}`"
+text = "Annotations of the data APIs' Ingresses, a JSON object: the ingress controller's settings, such as a rate limit per client."
+
+[var.DATA_API__NETWORK_POLICY]
+helm = "`dataApi.networkPolicy.enabled`"
+default = "`true`"
+text = "Each data API gets a NetworkPolicy: in, the ingress controller only; out, DNS, the gateway and the object storage only."
+
+[var.DATA_API__NETWORK_POLICY_INGRESS_FROM]
+helm = "`dataApi.networkPolicy.ingressController`"
+default = "*(set by the chart)*"
+text = "Who may reach the data APIs' pods, a JSON list of NetworkPolicy peers: the ingress controller's namespace and pods."
+
+[var.DATA_API__NETWORK_POLICY_EGRESS]
+helm = "*(set by the chart)*, `dataApi.networkPolicy.storageCIDRs`, `dataApi.networkPolicy.extraEgress`"
+default = "*(set by the chart)*"
+text = "Where the data APIs' pods may go besides DNS, a JSON list of NetworkPolicy egress rules: the gateway's pods, and the object storage (its namespace when it is a Service of the cluster, else `storageCIDRs` or any public address, on its port)."

@@ -11,6 +11,7 @@ image:
   gateway:  { repository: tabularia-gateway,  tag: "1.4.0" }   # the AI service + migrations
   gatewayGo: { repository: tabularia-gateway-go, tag: "1.4.0" }
   frontend: { repository: tabularia-frontend, tag: "1.4.0" }
+  dataApi:  { repository: tabularia-data-api, tag: "1.4.0" }   # the data APIs' pods (dataApi.enabled)
   pullSecrets:
     - name: regcred
 

@@ -47,6 +47,12 @@ image:
     repository: tabularia-frontend
     tag: "1.4.0"
 
+  # The pods of the data APIs (gateway-go/dataapi/Dockerfile, built from gateway-go/): run
+  # by the orchestrator in dataApi.namespace, one Deployment per active data API.
+  dataApi:
+    repository: tabularia-data-api
+    tag: "1.4.0"
+
 # ─────────────────────────────────────────────────────────────────────────────
 # External services — not deployed by this chart
 # ─────────────────────────────────────────────────────────────────────────────
@@ -760,8 +766,10 @@ share:
 
 # Data APIs (docs/data-apis.md): datasources published as read-only HTTP APIs for other
 # systems, answered by pods of their own. Kubernetes only, and only with scripts.enabled (the
-# same criterion as the saved scripts and the notebooks). Off by default: this version keeps
-# their definitions and keys; the pods that answer them come with a later version.
+# same criterion as the saved scripts and the notebooks). Off by default. The orchestrator
+# keeps, for each active data API, a Deployment, a Service, a Secret, an Ingress with
+# /data/{address}/ only, a NetworkPolicy, and a PodDisruptionBudget or an autoscaler when its
+# runtime asks (templates/data-api.yaml gives it the rights to, in the namespace below only).
 dataApi:
   enabled: false
   maxApis: 20            # the most data APIs in the installation
@@ -772,6 +780,42 @@ dataApi:
   keyMaxDays: 365        # a key's longest life
   keyDefaultRate: 600    # the requests per minute of a key made without a rate
   pollSeconds: 20        # how often the pods ask for their manifest: a revoked key or a refresh reaches them within it
+  usageRetentionDays: 30 # how long the requests per key and minute are kept for the pages
+  # where the pods and their objects go; empty: the scripts' namespace (scripts.namespace).
+  # Another one is created with scripts.createNamespaces, at the `restricted` Pod Security
+  # level; it needs the image pull secrets of image.pullSecrets.
+  namespace: ""
+  # the most disk a pod gets for its data files: each gets six times its parquets plus
+  # 256Mi, rounded up to a power of two, at least 1Gi (docs/data-apis.md, «On the cluster»)
+  maxDisk: 20Gi
+  # who may tell the pods the client's address (X-Forwarded-For), for the keys' address
+  # limits: the ingress controller's pods; empty: gateway.trustedProxies
+  trustedProxies: ""
+  # the Ingress of each data API: on the interface's host (the first of ingress.hosts) and its
+  # class unless set here; the TLS of that host applies (ingress-nginx serves every Ingress of
+  # a host with its certificate). Annotations of the controller, e.g. a rate limit per client:
+  #   nginx.ingress.kubernetes.io/limit-rps: "50"
+  ingress:
+    host: ""
+    className: ""
+    annotations: {}
+  # The pods' NetworkPolicy, one per data API: in, the ingress controller only (no pod or
+  # namespace of the cluster may call them); out, DNS, the gateway's manifest and usage
+  # endpoints and the object storage, nothing else. Needs a network plugin that enforces
+  # NetworkPolicy (Calico, Cilium…).
+  networkPolicy:
+    enabled: true
+    # the ingress controller's pods, by namespace and labels (ingress-nginx's own by default)
+    ingressController:
+      namespace: ingress-nginx
+      podLabels:
+        app.kubernetes.io/name: ingress-nginx
+    # where the object storage is, when it is not a Service of this cluster (its namespace is
+    # then read from externalServices.storage.endpoint): its addresses. Empty: any public
+    # address on the storage's port, never the private ranges nor the cloud metadata
+    storageCIDRs: []
+    # more egress rules, as NetworkPolicyEgressRule (a proxy, a storage elsewhere)
+    extraEgress: []
 
 # Restricts who may reach the engine API. Strongly recommended: the engine holds
 # storage credentials and, through database connections, can reach anything the

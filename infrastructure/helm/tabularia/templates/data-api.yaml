@@ -1,0 +1,69 @@
+{{- if and .Values.scripts.enabled .Values.dataApi.enabled }}
+{{/*
+The data APIs' pods (docs/data-apis.md): the orchestrator keeps, in their namespace, the
+objects of every active data API (internal/dataapis/cluster.go) and removes the ones of the
+data APIs that are gone. Only the orchestrator: the gateway, which answers the internet, gets
+no right here. Server-side apply creates and updates (create, patch); the loop lists what is
+labelled for the data APIs and deletes what is left over; it reads the pod token back from the
+Secret, and the pods for the page.
+*/}}
+{{- $full := include "tabularia.fullname" . }}
+{{- $ns := include "tabularia.dataApiNamespace" . }}
+{{- if eq $ns .Release.Namespace }}
+{{- fail (printf "dataApi.namespace must not be Tabularia's own (%s): the Role below would reach the release's Secret" $ns) }}
+{{- end }}
+{{- if and (ne $ns (include "tabularia.scriptsNamespace" .)) .Values.scripts.createNamespaces }}
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: {{ $ns }}
+  labels:
+    {{- include "tabularia.labels" . | nindent 4 }}
+    pod-security.kubernetes.io/enforce: restricted
+    pod-security.kubernetes.io/warn: restricted
+---
+{{- end }}
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  name: {{ $full }}-data-apis
+  namespace: {{ $ns }}
+  labels:
+    {{- include "tabularia.labels" . | nindent 4 }}
+rules:
+  - apiGroups: ["apps"]
+    resources: ["deployments"]
+    verbs: ["get", "list", "create", "patch", "delete"]
+  - apiGroups: [""]
+    resources: ["services", "secrets"]
+    verbs: ["get", "list", "create", "patch", "delete"]
+  - apiGroups: ["policy"]
+    resources: ["poddisruptionbudgets"]
+    verbs: ["get", "list", "create", "patch", "delete"]
+  - apiGroups: ["autoscaling"]
+    resources: ["horizontalpodautoscalers"]
+    verbs: ["get", "list", "create", "patch", "delete"]
+  - apiGroups: ["networking.k8s.io"]
+    resources: ["ingresses", "networkpolicies"]
+    verbs: ["get", "list", "create", "patch", "delete"]
+  # the page's status: the pods, as the cluster has them
+  - apiGroups: [""]
+    resources: ["pods"]
+    verbs: ["get", "list"]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: {{ $full }}-data-apis
+  namespace: {{ $ns }}
+  labels:
+    {{- include "tabularia.labels" . | nindent 4 }}
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: Role
+  name: {{ $full }}-data-apis
+subjects:
+  - kind: ServiceAccount
+    name: {{ $full }}-orchestrator
+    namespace: {{ .Release.Namespace }}
+{{- end }}

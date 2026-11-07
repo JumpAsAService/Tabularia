@@ -400,6 +400,83 @@ Empty without scripts. docs/capabilities/notebooks.md, «An address of their own
   value: {{ $n.allowSameOrigin | default false | quote }}
 {{- end -}}
 
+{{/* The namespace of the data APIs' pods: dataApi.namespace, or the scripts' one. */}}
+{{- define "tabularia.dataApiNamespace" -}}
+{{- .Values.dataApi.namespace | default (include "tabularia.scriptsNamespace" .) -}}
+{{- end -}}
+
+{{/*
+How the orchestrator runs the data APIs' pods (internal/dataapis/cluster.go): their image, the
+gateway's address they ask for their manifest, the Ingress of each, and their NetworkPolicy:
+in, the ingress controller only; out, the gateway's pods and the object storage (DNS the
+gateway adds). The storage's namespace is read from its endpoint when it is a Service of this
+cluster (minio.deps.svc → deps; a bare name: the release's own namespace); otherwise
+dataApi.networkPolicy.storageCIDRs, or any public address, on the storage's port.
+*/}}
+{{- define "tabularia.dataApiEnv" -}}
+{{- $d := .Values.dataApi -}}
+{{- $np := $d.networkPolicy | default dict -}}
+{{- $ing := $d.ingress | default dict -}}
+{{- $secrets := list -}}
+{{- range .Values.image.pullSecrets }}{{ $secrets = append $secrets .name }}{{ end -}}
+{{- $firstHost := "" -}}
+{{- with .Values.ingress.hosts }}{{ $firstHost = (first .).host | default "" }}{{ end -}}
+{{- $gateway := dict "to" (list (dict
+      "namespaceSelector" (dict "matchLabels" (dict "kubernetes.io/metadata.name" .Release.Namespace))
+      "podSelector" (dict "matchLabels" (dict "app.kubernetes.io/name" (include "tabularia.name" .) "app.kubernetes.io/instance" .Release.Name "app.kubernetes.io/component" "gateway"))))
+    "ports" (list (dict "protocol" "TCP" "port" 8000)) -}}
+{{- $endpoint := urlParse (.Values.externalServices.storage.endpoint | default "") -}}
+{{- $hostport := splitList ":" ($endpoint.host | default "") -}}
+{{- $storageHost := first $hostport | default "" -}}
+{{- $storagePort := 443 -}}
+{{- if eq $endpoint.scheme "http" }}{{ $storagePort = 80 }}{{ end -}}
+{{- if eq (len $hostport) 2 }}{{ $storagePort = atoi (index $hostport 1) }}{{ end -}}
+{{- $labels := splitList "." $storageHost -}}
+{{- $to := list -}}
+{{- if and (ge (len $labels) 3) (eq (index $labels 2) "svc") -}}
+{{- $to = list (dict "namespaceSelector" (dict "matchLabels" (dict "kubernetes.io/metadata.name" (index $labels 1)))) -}}
+{{- else if and (eq (len $labels) 1) $storageHost -}}
+{{- $to = list (dict "namespaceSelector" (dict "matchLabels" (dict "kubernetes.io/metadata.name" .Release.Namespace))) -}}
+{{- else if $np.storageCIDRs -}}
+{{- range $np.storageCIDRs }}{{ $to = append $to (dict "ipBlock" (dict "cidr" .)) }}{{ end -}}
+{{- else -}}
+{{- $to = list (dict "ipBlock" (dict "cidr" "0.0.0.0/0" "except" (list "10.0.0.0/8" "172.16.0.0/12" "192.168.0.0/16" "100.64.0.0/10" "169.254.0.0/16"))) -}}
+{{- end -}}
+{{- $storage := dict "to" $to "ports" (list (dict "protocol" "TCP" "port" $storagePort)) -}}
+{{- $egress := concat (list $gateway $storage) ($np.extraEgress | default list) -}}
+{{- $ctl := $np.ingressController | default dict -}}
+{{- $from := list (dict
+      "namespaceSelector" (dict "matchLabels" (dict "kubernetes.io/metadata.name" ($ctl.namespace | default "ingress-nginx")))
+      "podSelector" (dict "matchLabels" ($ctl.podLabels | default (dict "app.kubernetes.io/name" "ingress-nginx")))) -}}
+- name: DATA_API__NAMESPACE
+  value: {{ include "tabularia.dataApiNamespace" . | quote }}
+- name: DATA_API__IMAGE
+  value: {{ include "tabularia.image" (dict "root" . "component" "dataApi") | quote }}
+- name: DATA_API__IMAGE_PULL_POLICY
+  value: {{ .Values.image.pullPolicy | quote }}
+- name: DATA_API__IMAGE_PULL_SECRETS
+  value: {{ join "," $secrets | quote }}
+- name: DATA_API__GATEWAY_URL
+  value: {{ printf "http://%s-gateway.%s.svc:%v" (include "tabularia.fullname" .) .Release.Namespace .Values.service.gatewayPort | quote }}
+- name: DATA_API__FORWARDED_ALLOW_IPS
+  value: {{ $d.trustedProxies | default .Values.gateway.trustedProxies | quote }}
+- name: DATA_API__MAX_DISK
+  value: {{ $d.maxDisk | default "20Gi" | quote }}
+- name: DATA_API__INGRESS_CLASS
+  value: {{ $ing.className | default .Values.ingress.className | default "" | quote }}
+# the host the data APIs are published on
+- name: DATA_API__INGRESS_HOST
+  value: {{ $ing.host | default $firstHost | quote }}
+- name: DATA_API__INGRESS_ANNOTATIONS
+  value: {{ toJson ($ing.annotations | default dict) | quote }}
+- name: DATA_API__NETWORK_POLICY
+  value: {{ ne $np.enabled false | quote }}
+- name: DATA_API__NETWORK_POLICY_INGRESS_FROM
+  value: {{ toJson $from | quote }}
+- name: DATA_API__NETWORK_POLICY_EGRESS
+  value: {{ toJson $egress | quote }}
+{{- end -}}
+
 {{/*
 The subjects of the Roles that let Tabularia talk to the Kubernetes API: the
 gateway's account and the orchestrator's (scaling-rbac.yaml).

@@ -60,8 +60,8 @@ SFTP, S3, APIs, SharePoint) belong to each connection, encrypted with
 | [Gateway](#gateway) | 170 |
 | [Engine and workers](#engine-and-workers) | 104 |
 | [Frontend](#frontend) | 6 |
-| [Compose and Helm only](#compose-and-helm-only) | 25 |
-| **Total** | **312** |
+| [Compose and Helm only](#compose-and-helm-only) | 39 |
+| **Total** | **326** |
 
 ## Before production
 
@@ -683,8 +683,21 @@ containers.
 | `SAMPLES_ENGINE` | empty | Compose (`infrastructure/.env`) | Engine of the sample flows. Empty = the first one the policy allows, DuckDB first (it spills to disk where Polars holds a group in memory), then Polars. |
 | `SAMPLES_RUN_FLOWS` | `true` | Compose (`infrastructure/.env`) | Run the sample flows once at initialisation, so their outputs and views exist. |
 | `MALLOC_ARENA_MAX` | `2` | Compose and Helm (set on the engine containers) | glibc's variable, set to 2 on the engine containers: one memory arena per thread inflates the resident memory of Polars and Arrow thread pools. |
+| `DATA_API__NAMESPACE` | the scripts' namespace | Helm chart | Where the orchestrator runs the data APIs' pods and keeps their objects (Deployment, Service, Secret, Ingress, NetworkPolicy, PodDisruptionBudget, autoscaler). Empty: `SCRIPTS__NAMESPACE`. The chart gives the orchestrator, and it only, the rights there. |
+| `DATA_API__IMAGE` | *(set by the chart)* | Helm chart | The image of the data APIs' pods, `tabularia-data-api`. |
+| `DATA_API__IMAGE_PULL_POLICY` | `IfNotPresent` | Helm chart | The pull policy of the data APIs' pods: `Always`, `IfNotPresent` or `Never`. |
+| `DATA_API__IMAGE_PULL_SECRETS` | *(none)* | Helm chart | The Secrets, comma-separated, the data APIs' pods pull their image with; they must exist in `DATA_API__NAMESPACE`. |
+| `DATA_API__GATEWAY_URL` | `NOTEBOOKS__GATEWAY_URL` | Helm chart | The gateway's address inside the cluster, where the data APIs' pods ask for their manifest and send their usage. |
+| `DATA_API__FORWARDED_ALLOW_IPS` | *(none)* | Helm chart | The proxies (the ingress controller's pods), comma-separated addresses or ranges, whose `X-Forwarded-For` the data APIs' pods believe: the client's address the keys' address limits are checked against. Read from the right, as the gateway does. |
+| `DATA_API__MAX_DISK` | `20Gi` | Helm chart | The most disk a data API's pod gets for its data files (an `emptyDir`, and its ephemeral storage). Each gets six times the parquets it serves plus 256Mi, rounded up to a power of two, at least 1Gi. |
+| `DATA_API__INGRESS_CLASS` | *(none)* | Helm chart | The class of the Ingress each active data API gets, with `/data/{address}/` only. |
+| `DATA_API__INGRESS_HOST` | *(any host)* | Helm chart | The host the data APIs' Ingresses answer on. |
+| `DATA_API__INGRESS_ANNOTATIONS` | `{}` | Helm chart | Annotations of the data APIs' Ingresses, a JSON object: the ingress controller's settings, such as a rate limit per client. |
+| `DATA_API__NETWORK_POLICY` | `true` | Helm chart | Each data API gets a NetworkPolicy: in, the ingress controller only; out, DNS, the gateway and the object storage only. |
+| `DATA_API__NETWORK_POLICY_INGRESS_FROM` | *(set by the chart)* | Helm chart | Who may reach the data APIs' pods, a JSON list of NetworkPolicy peers: the ingress controller's namespace and pods. |
+| `DATA_API__NETWORK_POLICY_EGRESS` | *(set by the chart)* | Helm chart | Where the data APIs' pods may go besides DNS, a JSON list of NetworkPolicy egress rules: the gateway's pods, and the object storage (its namespace when it is a Service of the cluster, else `storageCIDRs` or any public address, on its port). |
 | `SHARE__PUBLIC_BASE_URL` | empty | Helm chart | The address the share links are written with in the **Share** dialog, such as `https://share.example.com`, when the installation exposes the links alone on a host of its own outside its internal network ([Exposing the links outside the internal network](capabilities/share-links.md#exposing-the-links-outside-the-internal-network)). Empty: the links are written with the interface's own address. |
-| `DATA_API__ENABLED` | `false` | Helm chart | Offers the data APIs ([Data APIs](data-apis.md)), read by the Go gateway: «New → Data API» in Explore, their pages and their keys. Only on Kubernetes with the scripting environments on (`SCRIPTS__ENABLED`), as the saved scripts and the notebooks: with Docker Compose they stay off whatever this says. This version keeps the definitions and the keys; the pods that answer them come later. |
+| `DATA_API__ENABLED` | `false` | Helm chart | Offers the data APIs ([Data APIs](data-apis.md)), read by the Go gateway: «New → Data API» in Explore, their pages and their keys, and the pods the orchestrator runs for each active one. Only on Kubernetes with the scripting environments on (`SCRIPTS__ENABLED`), as the saved scripts and the notebooks: with Docker Compose they stay off whatever this says. Switched off, the orchestrator removes the data APIs' objects from the cluster; their definitions and keys stay. |
 | `DATA_API__MAX_APIS` | `20` | Helm chart | The most data APIs in the installation; making one more, or a copy, is refused. |
 | `DATA_API__MAX_REPLICAS` | `3` | Helm chart | The most pods of one data API: its replicas, or the maximum of its autoscaling. |
 | `DATA_API__MAX_TOTAL_REPLICAS` | `10` | Helm chart | The most pods of all the active data APIs together; an activation, or a larger runtime of an active one, past it is refused. |
@@ -693,6 +706,7 @@ containers.
 | `DATA_API__KEY_MAX_DAYS` | `365` | Helm chart | A data API key's longest life in days, 1 to 3650: every key has an expiry, at most this far. |
 | `DATA_API__KEY_DEFAULT_RATE` | `600` | Helm chart | The requests per minute of a data API key made without a limit of its own. |
 | `DATA_API__POLL_SECONDS` | `20` | Helm chart | How often, in seconds (5 to 600), the pods of a data API ask the gateway for their manifest: a revoked key, a refresh of a datasource or an edit reaches them within it. The manifest carries it to the pods. |
+| `DATA_API__USAGE_RETENTION_DAYS` | `30` | Helm chart | How long, in days (1 to 3650), the requests, rows, errors and over-the-rate answers of each data API key and minute are kept for the pages; older ones are deleted by the orchestrator. |
 | `GATEWAY_GO__FORWARDED_ALLOW_IPS` | empty | Helm chart | The addresses of the proxies in front of the gateway whose `X-Forwarded-For` it believes (comma-separated addresses or CIDRs, `*` for any): the client's address of the audit, of the sessions and of the sign-in throttle comes from there. Without the ingress controller's address in it, every request seems to come from the controller. |
 | `GATEWAY_GO__AI_SERVICE` | empty | Helm chart | The AI service's address (the Python gateway's image with `APP__ROLE=ai`): the gateway forwards it the assistant's routes and asks it for the SQL parsing. The gateway does not start without it. |
 

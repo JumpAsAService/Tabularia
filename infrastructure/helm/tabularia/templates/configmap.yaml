@@ -45,7 +45,8 @@ MONITORING__NODE_EXPORTER_URL: {{ .Values.monitoring.nodeExporterUrl | default "
 # of their own (share.publicHost) when the installation exposes only the links outside its
 # network; empty, the interface's own address.
 SHARE__PUBLIC_BASE_URL: {{ include "tabularia.sharePublicBaseUrl" . | quote }}
-# Data APIs (docs/data-apis.md): the switch and the caps, read by the gateway
+# Data APIs (docs/data-apis.md): the switch and the caps, read by the gateway (how their pods
+# run is set on the gateway's containers: tabularia.dataApiEnv)
 DATA_API__ENABLED: {{ .Values.dataApi.enabled | quote }}
 DATA_API__MAX_APIS: {{ include "tabularia.env" (.Values.dataApi.maxApis) }}
 DATA_API__MAX_REPLICAS: {{ include "tabularia.env" (.Values.dataApi.maxReplicas) }}
@@ -55,6 +56,7 @@ DATA_API__MAX_MEMORY: {{ include "tabularia.env" (.Values.dataApi.maxMemory) }}
 DATA_API__KEY_MAX_DAYS: {{ include "tabularia.env" (.Values.dataApi.keyMaxDays) }}
 DATA_API__KEY_DEFAULT_RATE: {{ include "tabularia.env" (.Values.dataApi.keyDefaultRate) }}
 DATA_API__POLL_SECONDS: {{ include "tabularia.env" (.Values.dataApi.pollSeconds) }}
+DATA_API__USAGE_RETENTION_DAYS: {{ include "tabularia.env" (.Values.dataApi.usageRetentionDays) }}
 
 JWT__ACCESS_TTL_MINUTES: {{ include "tabularia.env" (.Values.auth.jwtAccessTtlMinutes) }}
 AUTH__SESSION_IDLE_MINUTES: {{ include "tabularia.env" (.Values.auth.sessionIdleMinutes) }}
@@ -220,6 +222,9 @@ BIGQUERY__MAXIMUM_BYTES_BILLED: {{ include "tabularia.env" (.Values.externalServ
       "SCRIPTS__BASE_IMAGES" "SCRIPTS__BUILDER_IMAGE" "SCRIPTS__PYPI_INDEX_URL" "SCRIPTS__CRAN_URL"
       "CONTAINERS__NAMESPACE" "CONTAINERS__TRIAL_NAMESPACE" "CONTAINERS__MAX_CPU" "CONTAINERS__MAX_MEMORY" "CONTAINERS__MAX_TIMEOUT_SECONDS"
       "NOTEBOOKS__ORIGIN" "NOTEBOOKS__ALLOW_SAME_ORIGIN" "REPORTS__CHART_URL"
+      "DATA_API__NAMESPACE" "DATA_API__IMAGE" "DATA_API__IMAGE_PULL_POLICY" "DATA_API__IMAGE_PULL_SECRETS" "DATA_API__GATEWAY_URL"
+      "DATA_API__FORWARDED_ALLOW_IPS" "DATA_API__MAX_DISK" "DATA_API__INGRESS_CLASS" "DATA_API__INGRESS_HOST"
+      "DATA_API__INGRESS_ANNOTATIONS" "DATA_API__NETWORK_POLICY" "DATA_API__NETWORK_POLICY_INGRESS_FROM" "DATA_API__NETWORK_POLICY_EGRESS"
       "NUXT_PUBLIC_API_BASE" "NUXT_PUBLIC_BUCKET" "NUXT_PUBLIC_GRAFANA_URL" "NUXT_PUBLIC_NOTEBOOKS_ORIGIN" "NUXT_GATEWAY_INTERNAL_URL" -}}
 {{- range $name, $_ := .Values.extraEnv }}
 {{- if or (hasKey $fixed $name) (has $name $perContainer) }}

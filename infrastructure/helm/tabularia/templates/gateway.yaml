@@ -147,6 +147,9 @@ spec:
             {{- if $.Values.scripts.enabled }}
             {{- include "tabularia.scriptsEnv" $ | nindent 12 }}
             {{- end }}
+            {{- if and $.Values.scripts.enabled $.Values.dataApi.enabled }}
+            {{- include "tabularia.dataApiEnv" $ | nindent 12 }}
+            {{- end }}
             {{- if $.Values.clusterView.enabled }}
             - name: KUBERNETES__CLUSTER_VIEW
               value: "true"
