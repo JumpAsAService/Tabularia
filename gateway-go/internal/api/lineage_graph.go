@@ -2,7 +2,8 @@ package api
 
 // services/lineage.py: the cross-flow lineage graph among flows, datasources, connections,
 // external destinations, saved scripts, SQL scripts, notebooks and flow groups, derived on
-// demand and filtered by the folders the person can read.
+// demand and filtered by the folders the person can read; and, in the Go gateway only, the data
+// APIs (readers of the datasources they publish).
 
 import (
 	"context"
@@ -698,6 +699,46 @@ func buildLineage(ctx context.Context, q perm.Querier, c *perm.Checker, userID i
 				source, _ := dsRef(d)
 				g.edge(source, nid, edgeRead)
 			}
+		}
+	}
+
+	// data APIs: readers of the datasources they publish (docs/specs/data-apis.md)
+	rows, err = q.Query(ctx, `SELECT a.id, a.name, a.project_id, a.slug, a.state, a.current_version, r.datasource_id
+		FROM data_apis a LEFT JOIN data_api_resources r ON r.data_api_id = a.id AND r.datasource_id IS NOT NULL
+		WHERE a.project_id = ANY($1) ORDER BY a.name, a.id, r.position`, readable)
+	if err != nil {
+		return nil, err
+	}
+	type dapi struct {
+		id, project, version int64
+		name, slug, state    string
+		reads                []int64
+	}
+	var dapis []*dapi
+	for rows.Next() {
+		var x dapi
+		var ds *int64
+		if err := rows.Scan(&x.id, &x.name, &x.project, &x.slug, &x.state, &x.version, &ds); err != nil {
+			rows.Close()
+			return nil, err
+		}
+		if n := len(dapis); n == 0 || dapis[n-1].id != x.id {
+			dapis = append(dapis, &x)
+		}
+		if ds != nil {
+			last := dapis[len(dapis)-1]
+			last.reads = append(last.reads, *ds)
+		}
+	}
+	rows.Close()
+	for _, x := range dapis {
+		aid := fmt.Sprintf("dataapi:%d", x.id)
+		g.add(aid, pyjson.Object{{Key: "type", Value: "data_api"}, {Key: "label", Value: x.name}, {Key: "project_id", Value: x.project},
+			{Key: "meta", Value: pyjson.Object{{Key: "path", Value: "/data/" + x.slug + "/"}, {Key: "state", Value: x.state},
+				{Key: "version", Value: x.version}, {Key: "resources", Value: int64(len(x.reads))}}}})
+		for _, d := range x.reads {
+			source, _ := dsRef(d)
+			g.edge(source, aid, edgeRead)
 		}
 	}
 

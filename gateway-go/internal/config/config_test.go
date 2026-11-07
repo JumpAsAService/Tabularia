@@ -119,3 +119,22 @@ func TestAccessTTLMinutesUnbounded(t *testing.T) {
 		t.Fatalf("got %v, %v", c, err)
 	}
 }
+
+// The data APIs' public address (the chart's dataApi.publicHost): trimmed, an http(s) address.
+func TestTheDataAPIsPublicAddress(t *testing.T) {
+	base := map[string]string{"GATEWAY_GO__UPSTREAM": "http://g:8000", "SECURITY__FERNET_KEY": "k"}
+	c, err := Load(env(base))
+	if err != nil || c.DataAPI.Pods.PublicBaseURL != "" {
+		t.Fatalf("%v %q", err, c.DataAPI.Pods.PublicBaseURL)
+	}
+	base["DATA_API__PUBLIC_BASE_URL"] = " https://api.example.com/ "
+	base["DATA_API__INGRESS_HOST"], base["DATA_API__INGRESS_TLS_SECRET"] = "api.example.com", "api-tls"
+	if c, err = Load(env(base)); err != nil || c.DataAPI.Pods.PublicBaseURL != "https://api.example.com" ||
+		c.DataAPI.Pods.IngressHost != "api.example.com" || c.DataAPI.Pods.IngressTLSSecret != "api-tls" {
+		t.Fatalf("%v %+v", err, c.DataAPI.Pods)
+	}
+	base["DATA_API__PUBLIC_BASE_URL"] = "api.example.com"
+	if _, err := Load(env(base)); err == nil || !strings.Contains(err.Error(), "DATA_API__PUBLIC_BASE_URL") {
+		t.Fatalf("%v", err)
+	}
+}

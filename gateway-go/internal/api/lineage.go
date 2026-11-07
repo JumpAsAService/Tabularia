@@ -28,7 +28,7 @@ func init() {
 }
 
 var lineageCenter = map[string]string{"flow": "flow", "datasource": "ds", "connection": "conn", "script": "script", "sql": "sql",
-	"notebook": "notebook", "group": "group"}
+	"notebook": "notebook", "group": "group", "dataapi": "dataapi"}
 
 // subgraph is lineage.subgraph: what is reachable from `center` within `depth` hops, following
 // the edges upstream, downstream or both. Its nodes come from a set in Python: no order.
@@ -117,7 +117,7 @@ func getLineage(d *Deps) authedFunc {
 	return func(w http.ResponseWriter, r *http.Request, p *auth.Principal) {
 		var ps pyd.Params
 		q := pyd.ParseQuery(r.URL.RawQuery)
-		kind := ps.Query(q, "type", pyd.Optional(pyd.Literal("flow", "datasource", "connection", "script", "sql", "notebook", "group")), nil)
+		kind := ps.Query(q, "type", pyd.Optional(pyd.Literal("flow", "datasource", "connection", "script", "sql", "notebook", "group", "dataapi")), nil)
 		id := ps.Query(q, "id", pyd.Optional(pyd.Int()), nil)
 		direction, _ := ps.Query(q, "direction", pyd.Literal("both", "upstream", "downstream"), "both").(string)
 		depth, _ := ps.Query(q, "depth", pyd.Int().Ge(1).Le(8), int64(3)).(int64)

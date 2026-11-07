@@ -247,8 +247,9 @@ func HorizontalPodAutoscaler(c config.DataAPIPods, w Want) map[string]any {
 		}}
 }
 
-// IngressHost is the host the data API is published on: the app's own (DATA_API__INGRESS_HOST,
-// empty for any). Piece 4 gives it a host of its own (dataApi.publicHost) here.
+// IngressHost is the host the data APIs are published on (DATA_API__INGRESS_HOST, empty for
+// any): the app's own, or the chart's dataApi.publicHost, a host with nothing else of Tabularia
+// on it, whose certificate is DATA_API__INGRESS_TLS_SECRET.
 func IngressHost(c config.DataAPIPods) string { return c.IngressHost }
 
 // Ingress publishes /data/{slug}/ and nothing else of the pods (not /healthz nor /readyz).

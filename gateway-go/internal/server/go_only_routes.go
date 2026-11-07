@@ -50,6 +50,12 @@ var goOnlyRoutes = []struct {
 	{after: "/internal/data-apis/{api_id}/manifest", route: pyRoute{path: "/internal/data-apis/{api_id}/usage", methods: []string{"POST"}, regex: `^/internal/data\-apis/(?P<api_id>[^/]+)/usage$`}},
 	// data APIs: how their pods are, for the page (api/data_apis_status.go)
 	{after: "/internal/data-apis/{api_id}/usage", route: pyRoute{path: "/data-apis/{api_id}/status", methods: []string{"GET"}, regex: `^/data\-apis/(?P<api_id>[^/]+)/status$`}},
+	// data APIs: the documentation, for the page, with no key (api/data_apis_docs.go)
+	{after: "/data-apis/{api_id}/status", route: pyRoute{path: "/data-apis/{api_id}/documentation", methods: []string{"GET"}, regex: `^/data\-apis/(?P<api_id>[^/]+)/documentation$`}},
+	// data APIs in Administration: every one, paused or deleted by an administrator (api/data_apis_admin.go)
+	{after: "/data-apis/{api_id}/documentation", route: pyRoute{path: "/admin/data-apis", methods: []string{"GET"}, regex: `^/admin/data\-apis$`}},
+	{after: "/admin/data-apis", route: pyRoute{path: "/admin/data-apis/{api_id}/pause", methods: []string{"POST"}, regex: `^/admin/data\-apis/(?P<api_id>[^/]+)/pause$`}},
+	{after: "/admin/data-apis/{api_id}/pause", route: pyRoute{path: "/admin/data-apis/{api_id}", methods: []string{"DELETE"}, regex: `^/admin/data\-apis/(?P<api_id>[^/]+)$`}},
 }
 
 // mainRoutes is the main application's table: FastAPI's, with the Go-only routes in place.

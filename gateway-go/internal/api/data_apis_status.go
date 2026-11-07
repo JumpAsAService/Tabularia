@@ -91,6 +91,9 @@ type dataAPIStatusOut struct {
 	Path      string             `json:"path"`
 	// the host the Ingress publishes it on, "" for the app's own
 	Host string `json:"host"`
+	// the address the other systems call it at (DATA_API__PUBLIC_BASE_URL), "" for the
+	// interface's own
+	BaseURL string `json:"base_url"`
 }
 
 // how far back the traffic goes, and in what buckets
@@ -114,7 +117,8 @@ func dataAPIStatus(d *Deps, w http.ResponseWriter, r *http.Request, p *auth.Prin
 		return
 	}
 	out := dataAPIStatusOut{State: a.State, CheckedAt: isoPtr(checked), Pods: []dataAPIPodOut{}, Resources: []dataAPIServedOut{},
-		Poll: d.Config.DataAPI.PollSeconds, Path: "/data/" + a.Slug + "/", Host: d.Config.DataAPI.Pods.IngressHost}
+		Poll: d.Config.DataAPI.PollSeconds, Path: "/data/" + a.Slug + "/", Host: dataapis.IngressHost(d.Config.DataAPI.Pods),
+		BaseURL: d.Config.DataAPI.Pods.PublicBaseURL}
 	if cluster != nil {
 		out.Wanted, out.Ready, out.Updated, out.Disk, out.Error = cluster.Wanted, cluster.Ready, cluster.Updated, cluster.Disk, cluster.Error
 	}

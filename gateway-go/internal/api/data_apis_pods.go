@@ -82,7 +82,8 @@ func podManifest(d *Deps, w http.ResponseWriter, r *http.Request, a *dataapis.AP
 // buildManifest is what the pods of `a` serve now: nothing but its state when it is not
 // active, or not on its creator's authority any longer.
 func buildManifest(ctx context.Context, d *Deps, a *dataapis.API) (*dataapiwire.Manifest, error) {
-	m := &dataapiwire.Manifest{ID: a.ID, Slug: a.Slug, Name: a.Name, State: a.State, Replicas: max(a.Runtime.Replicas, 1),
+	m := &dataapiwire.Manifest{ID: a.ID, Slug: a.Slug, Name: a.Name, State: a.State, DefinitionVersion: a.CurrentVersion,
+		Replicas:    max(a.Runtime.Replicas, 1),
 		PollSeconds: d.Config.DataAPI.PollSeconds, Resources: []dataapiwire.Resource{}, Keys: []dataapiwire.Key{}, At: dataapis.Now()}
 	if m.PollSeconds <= 0 {
 		m.PollSeconds = 20
@@ -124,11 +125,7 @@ func buildManifest(ctx context.Context, d *Deps, a *dataapis.API) (*dataapiwire.
 		return nil, err
 	}
 	for _, res := range def.Resources {
-		out := dataapiwire.Resource{Name: res.Name, Columns: res.Columns, Filters: []dataapiwire.Filter{},
-			DefaultSort: res.DefaultSort, MaxPage: res.MaxPage}
-		for _, f := range res.Filters {
-			out.Filters = append(out.Filters, dataapiwire.Filter{Column: f.Column, Operators: f.Operators})
-		}
+		out := dataapis.WireResource(res)
 		ds, file := sources[res.Source.ID], files[res.Source.ID]
 		readable := false
 		if ds != nil && res.Source.Kind == dataapis.SourceDatasource {

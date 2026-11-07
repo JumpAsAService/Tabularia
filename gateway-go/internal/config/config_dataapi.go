@@ -62,11 +62,16 @@ type DataAPIPods struct {
 	// DATA_API__INGRESS_CLASS, DATA_API__INGRESS_HOST (empty: any host),
 	// DATA_API__INGRESS_TLS_SECRET (a Secret of the namespace; empty: none),
 	// DATA_API__INGRESS_ANNOTATIONS (a JSON object): the Ingress of each data API, with
-	// /data/{slug}/ only
+	// /data/{slug}/ only. The chart puts dataApi.publicHost, when set, as the host, with its
+	// certificate
 	IngressClass       string
 	IngressHost        string
 	IngressTLSSecret   string
 	IngressAnnotations map[string]string
+	// DATA_API__PUBLIC_BASE_URL: the address the other systems call the data APIs at, as the
+	// pages and the documentation write it (https://api.example.com); empty: the interface's
+	// own address, as the browser has it
+	PublicBaseURL string
 	// DATA_API__NETWORK_POLICY: each data API gets a NetworkPolicy: in, the peers of
 	// DATA_API__NETWORK_POLICY_INGRESS_FROM (a JSON list of NetworkPolicyPeer: the ingress
 	// controller) and nothing else; out, DNS and the rules of DATA_API__NETWORK_POLICY_EGRESS
@@ -175,6 +180,11 @@ func loadDataAPI(r *reader) DataAPIConfig {
 	p.IngressClass = strings.TrimSpace(r.str("DATA_API__INGRESS_CLASS", ""))
 	p.IngressHost = strings.TrimSpace(r.str("DATA_API__INGRESS_HOST", ""))
 	p.IngressTLSSecret = strings.TrimSpace(r.str("DATA_API__INGRESS_TLS_SECRET", ""))
+	p.PublicBaseURL = strings.TrimRight(strings.TrimSpace(r.str("DATA_API__PUBLIC_BASE_URL", "")), "/")
+	if p.PublicBaseURL != "" && !strings.HasPrefix(p.PublicBaseURL, "https://") && !strings.HasPrefix(p.PublicBaseURL, "http://") {
+		r.fail("DATA_API__PUBLIC_BASE_URL", fmt.Sprintf("is not an http(s) address: %q", p.PublicBaseURL))
+		p.PublicBaseURL = ""
+	}
 	if text := strings.TrimSpace(r.str("DATA_API__INGRESS_ANNOTATIONS", "")); text != "" {
 		if err := json.Unmarshal([]byte(text), &p.IngressAnnotations); err != nil {
 			r.fail("DATA_API__INGRESS_ANNOTATIONS", "is not a JSON object of texts: "+err.Error())
