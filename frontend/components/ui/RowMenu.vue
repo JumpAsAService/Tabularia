@@ -171,7 +171,8 @@ const style = computed(() => ({ left: `${pos.value.left}px`, top: `${pos.value.t
 .rm-item:focus-visible,
 .rm-item:focus { background: var(--panel-2); box-shadow: none; outline: none; }
 .rm-item[aria-disabled="true"] { opacity: 0.5; cursor: not-allowed; }
-.rm-icon { color: var(--muted); flex-shrink: 0; }
+.rm-icon { color: var(--muted); flex-shrink: 0; transition: color var(--dur-tint); }
+.rm-item:hover:not([aria-disabled="true"]) .rm-icon { color: var(--text); }
 .rm-item.danger, .rm-item.danger .rm-icon { color: var(--danger-text); }
 .rm-item.danger:hover:not([aria-disabled="true"]),
 .rm-item.danger:focus { background: color-mix(in srgb, var(--danger) 12%, transparent); }

@@ -238,12 +238,35 @@ function onDragStart(ev: DragEvent, kind: string) {
   font-size: 13px;
   cursor: grab;
   user-select: none;
-  transition: background 0.12s, border-color 0.12s, transform 0.12s;
+  transition: background var(--dur-tint), border-color var(--dur-tint);
+}
+.item { position: relative; }
+/* the category's colour as a thin bar on the left that WIDENS under the pointer: the item
+   says what kind of step it is, and that it can be picked up */
+.item::before {
+  content: "";
+  position: absolute;
+  left: -1px;
+  top: 7px;
+  bottom: 7px;
+  width: 4px;
+  border-radius: 0 2px 2px 0;
+  background: var(--item-color);
+  transform: scaleX(0.5);
+  transform-origin: left center;
+  opacity: 0;
+  transition: transform var(--dur-hover) var(--ease-out), opacity var(--dur-hover);
+  pointer-events: none;
 }
 .item:hover {
   background: var(--panel-2);
   border-color: var(--border);
-  transform: translateX(2px);
+}
+@media (hover: hover) and (pointer: fine) {
+  .item:hover::before { opacity: 1; transform: scaleX(1); }
+}
+@media (prefers-reduced-motion: reduce) {
+  .item::before { transform: none; }
 }
 .item:active { cursor: grabbing; }
 .item-icon { color: var(--item-color); flex-shrink: 0; }

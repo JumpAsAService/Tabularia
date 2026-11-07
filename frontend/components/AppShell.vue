@@ -428,6 +428,29 @@ onMounted(async () => {
 }
 .navlink:hover { color: var(--text); }
 .navlink.on { color: var(--text); border-bottom-color: var(--accent); }
+/* hover: the current section's underline grows from the centre, at half strength, under
+   the link the pointer is on (a preview of where a click lands) */
+.navlink { position: relative; }
+@media (hover: hover) and (pointer: fine) {
+  .navlink:not(.on)::after {
+    content: "";
+    position: absolute;
+    left: 13px;
+    right: 13px;
+    bottom: -2px;
+    height: 2px;
+    background: var(--accent);
+    opacity: 0.5;
+    transform: scaleX(0);
+    transition: transform var(--dur-hover) var(--ease-out);
+    pointer-events: none;
+  }
+  .navlink:not(.on):hover::after { transform: scaleX(1); }
+}
+@media (prefers-reduced-motion: reduce) {
+  .navlink:not(.on)::after { transform: none; opacity: 0; transition: opacity var(--dur-hover); }
+  .navlink:not(.on):hover::after { opacity: 0.5; }
+}
 .spacer { flex: 1 1 0; min-width: 0; }
 
 /* ── Settings (gear + menu) ──────────────────────────────────────────── */

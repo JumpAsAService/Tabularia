@@ -3,6 +3,22 @@
 All notable changes to Tabularia. The version shown here is the one the gateway
 exposes at `/system/info` and in the app's settings menu.
 
+## Unreleased
+
+- **Hover, everywhere but the report designer and the dashboards.** One answer per kind of
+  control, quick and sober: a row's name underlines, the top bar's and the editor's tabs
+  grow their accent line, a palette item widens its category bar, checkboxes take a soft
+  halo, and an action's icon moves by what it does (reload turns, add and close turn a
+  quarter, download drops, forward slides). Fine pointer only; touch and reduced motion keep
+  the colour change alone.
+- **The data preview reads better** (the editor's grid and the Viewer's table): column type
+  small in mono under the name, header ruled while the body scrolls, every digit tabular,
+  long texts cut with the whole value in the tooltip, the row and the column under the
+  pointer tinted, nulls shown as `∅` in the Viewer too (they were blank), errors in a framed
+  block with an icon.
+- **Fixed:** the runs' timeline in Flows drew two or more bars for one run (the
+  orchestration and each of its steps), and the flow's run count doubled.
+
 ## 1.3.1 «Catone» — 2026-11-06
 
 The gateway is rewritten in Go. Every request the browser, the scripts and the engine send

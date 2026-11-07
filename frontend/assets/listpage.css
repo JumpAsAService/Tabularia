@@ -80,10 +80,15 @@ table.list tbody tr:hover td { background: var(--panel-2); }
   align-items: center;
   gap: 8px;
   color: var(--text);
-  text-decoration: none;
+  text-decoration: underline transparent 1px;
+  text-underline-offset: 3px;
   font-weight: 500;
 }
 .rowlink:hover { color: var(--accent); }
+@media (hover: hover) and (pointer: fine) {
+  /* the name's underline comes in with the accent (HOVER LANGUAGE in main.css) */
+  .rowlink:hover { text-decoration-color: color-mix(in srgb, currentColor 55%, transparent); }
+}
 .desc { font-size: 12px; margin-top: 2px; }
 .nowrap { white-space: nowrap; }
 .right { text-align: right; white-space: nowrap; }

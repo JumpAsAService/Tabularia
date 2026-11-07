@@ -321,7 +321,7 @@ button.mini.danger:hover:not(:disabled) { background: var(--danger-fill); color:
 button:where(:not([class]), .primary, .danger, .btn-link):where(:not(
   .mini, .fa-mini, [aria-label], [aria-pressed], [role="tab"], [role="radio"], [role="option"],
   [role="menuitem"], [role="menuitemradio"], [role="menuitemcheckbox"],
-  [role="tablist"] *, [role="radiogroup"] *, [role="menu"] *, [role="listbox"] *, li > *
+  [role="tablist"] *, [role="radiogroup"] *, [role="menu"] *, [role="listbox"] *, li > *, .viewtabs *
 )), a:where(.btn-link) {
   position: relative;
   isolation: isolate;
@@ -331,7 +331,7 @@ button:where(:not([class]), .primary, .danger, .btn-link):where(:not(
 button:where(:not([class]), .primary, .danger, .btn-link):where(:not(
   .mini, .fa-mini, [aria-label], [aria-pressed], [role="tab"], [role="radio"], [role="option"],
   [role="menuitem"], [role="menuitemradio"], [role="menuitemcheckbox"],
-  [role="tablist"] *, [role="radiogroup"] *, [role="menu"] *, [role="listbox"] *, li > *
+  [role="tablist"] *, [role="radiogroup"] *, [role="menu"] *, [role="listbox"] *, li > *, .viewtabs *
 ))::before, a:where(.btn-link)::before {
   content: "";
   position: absolute;
@@ -829,3 +829,140 @@ table.data td.null { color: var(--muted); font-style: italic; }
 .contract-badge.warning { color: var(--warning); }
 .contract-badge.failed { color: var(--danger); }
 .contract-badge-text { font-size: 11px; font-weight: 600; }
+
+/* ══ HOVER LANGUAGE ═══════════════════════════════════════════════════════════════
+   One answer per kind of control, quick and sober, that only raises contrast: no weight
+   change, no layout shift. Motion (transforms, drawn lines) only for a fine pointer and
+   without reduced motion; elsewhere the hover is a colour change and nothing more. What
+   is met hundreds of times a day (grid rows, menu entries) only tints, in --dur-tint.
+   The report designer and viewer and the dashboards (.rv .dv .rdz .ddz) keep their own:
+   every rule hangs on --hv-scope, at zero specificity, so the components' own rules win. */
+:root {
+  --dur-tint: 80ms;    /* rows, menu entries, options: tinted at once */
+  --dur-hover: 140ms;  /* links, tabs, chips, checkboxes */
+  --dur-icon: 200ms;   /* an icon moving by its meaning */
+}
+
+/* colour changes everywhere (also on touch, where they are just the tap state) */
+:where(:root:not(:has(.rv, .dv, .rdz, .ddz))) :where(
+  [role="menuitem"], [role="menuitemradio"], [role="menuitemcheckbox"], [role="option"],
+  .menu-item, .rm-item, .crumb, .seg, .navitem
+) { transition: background-color var(--dur-tint), color var(--dur-tint), border-color var(--dur-tint); }
+:where(:root:not(:has(.rv, .dv, .rdz, .ddz))) :where(table.list, table.rows, table.data) :where(td) {
+  transition: background-color var(--dur-tint);
+}
+:where(:root:not(:has(.rv, .dv, .rdz, .ddz))) :where(.rowlink, .asname) {
+  transition: color var(--dur-hover), text-decoration-color var(--dur-hover);
+}
+:where(:root:not(:has(.rv, .dv, .rdz, .ddz))) :where(.vue-flow__edge-path) { transition: stroke var(--dur-hover); }
+:where(:root:not(:has(.rv, .dv, .rdz, .ddz))) :where(input[type="checkbox"], input[type="radio"]) {
+  transition: box-shadow var(--dur-hover);
+}
+
+@media (hover: hover) and (pointer: fine) {
+  /* a row's name (.rowlink, Explore's .asname): accent and its underline comes in, set in
+     listpage.css and ProjectBrowser.vue, whose own rules would win over these */
+  /* checkbox and radio: a soft accent halo, the focus ring keeps the outline */
+  :where(:root:not(:has(.rv, .dv, .rdz, .ddz))) :where(input[type="checkbox"], input[type="radio"]):where(:not(:disabled)):hover {
+    box-shadow: 0 0 0 3px var(--tint-accent);
+  }
+}
+
+@media (hover: hover) and (pointer: fine) and (prefers-reduced-motion: no-preference) {
+  /* prose links (an <a> with no class, or .link): the underline is DRAWN from the left */
+  :where(:root:not(:has(.rv, .dv, .rdz, .ddz))) :where(a:not([class]), a.link) {
+    text-decoration: none;
+    background: linear-gradient(currentColor, currentColor) left 100% / 0 1px no-repeat;
+    transition: background-size var(--dur-hover) var(--ease-out), color var(--dur-hover);
+  }
+  :where(:root:not(:has(.rv, .dv, .rdz, .ddz))) :where(a:not([class]), a.link):hover { background-size: 100% 1px; }
+
+  /* the editor's view tabs: an accent line grows from the centre under the tab, the one the
+     active tab carries in full */
+  :where(:root:not(:has(.rv, .dv, .rdz, .ddz))) :where(.viewtabs button) { position: relative; }
+  :where(:root:not(:has(.rv, .dv, .rdz, .ddz))) :where(.viewtabs button:not(.active))::after {
+    content: "";
+    position: absolute;
+    left: 10px;
+    right: 10px;
+    bottom: -2px;
+    height: 2px;
+    border-radius: 1px;
+    background: var(--accent);
+    opacity: 0.6;
+    transform: scaleX(0);
+    transition: transform var(--dur-hover) var(--ease-out);
+    pointer-events: none;
+  }
+  :where(:root:not(:has(.rv, .dv, .rdz, .ddz))) :where(.viewtabs button:not(.active)):hover::after { transform: scaleX(1); }
+
+  /* ── Icons that move by their meaning ──────────────────────────────────────────
+     A lucide icon is an <svg class="lucide lucide-<name>">: inside any control under the
+     pointer it moves once, in --dur-icon, by what it does. Only the icons of actions; the
+     spinners and the status icons never move. */
+  :where(:root:not(:has(.rv, .dv, .rdz, .ddz))) :where(button, a, [role="button"], [role="menuitem"], [role="option"], [role="tab"], label) :where(svg.lucide) {
+    transition: transform var(--dur-icon) var(--ease-out);
+  }
+  :where(:root:not(:has(.rv, .dv, .rdz, .ddz))) :where(button:not(:disabled, [aria-disabled="true"]), a, [role="button"], [role="menuitem"]:not([aria-disabled="true"]), [role="option"], [role="tab"]):hover :where(svg.lucide) {
+    /* reload, again */
+    &:where(.lucide-refresh-cw, .lucide-rotate-cw, .lucide-repeat, .lucide-history) { transform: rotate(180deg); }
+    &:where(.lucide-rotate-ccw) { transform: rotate(-180deg); }
+    /* forward, open, out */
+    &:where(.lucide-chevron-right, .lucide-arrow-right, .lucide-log-out, .lucide-log-in, .lucide-redo-2) { transform: translateX(2px); }
+    &:where(.lucide-chevron-left, .lucide-arrow-left, .lucide-undo-2) { transform: translateX(-2px); }
+    &:where(.lucide-external-link, .lucide-arrow-up-right, .lucide-send) { transform: translate(1.5px, -1.5px); }
+    /* open below, close above */
+    &:where(.lucide-chevron-down, .lucide-arrow-down) { transform: translateY(1.5px); }
+    &:where(.lucide-chevron-up, .lucide-arrow-up) { transform: translateY(-1.5px); }
+    /* add, close */
+    &:where(.lucide-plus, .lucide-x, .lucide-circle-plus, .lucide-image-plus, .lucide-user-plus) { transform: rotate(90deg); }
+    /* bring in, send out */
+    &:where(.lucide-download, .lucide-hard-drive-download) { transform: translateY(2px); }
+    &:where(.lucide-upload, .lucide-cloud-upload, .lucide-file-up) { transform: translateY(-2px); }
+    /* copy: the two sheets part */
+    &:where(.lucide-copy, .lucide-files) { transform: translate(1px, -1px); }
+    /* settings */
+    &:where(.lucide-settings, .lucide-cog) { transform: rotate(60deg); }
+    /* run: a step forward */
+    &:where(.lucide-play, .lucide-circle-play) { transform: translateX(1px) scale(1.08); }
+    /* look */
+    &:where(.lucide-search, .lucide-folder-search, .lucide-eye, .lucide-maximize, .lucide-zoom-in) { transform: scale(1.1); }
+    &:where(.lucide-minimize, .lucide-zoom-out) { transform: scale(0.9); }
+    /* delete: the bin tips, just */
+    &:where(.lucide-trash-2, .lucide-trash) { transform: rotate(-8deg) scale(1.05); }
+    /* write */
+    &:where(.lucide-pencil, .lucide-pencil-line, .lucide-square-pen) { transform: rotate(-12deg); }
+    /* the assistant */
+    &:where(.lucide-sparkles, .lucide-wand-2, .lucide-wand-sparkles) { transform: rotate(-10deg) scale(1.08); }
+    /* save: pressed in */
+    &:where(.lucide-save) { transform: translateY(1px); }
+    /* link, share */
+    &:where(.lucide-link-2, .lucide-link) { transform: rotate(-20deg); }
+    &:where(.lucide-share-2) { transform: scale(1.1); }
+  }
+}
+/* ══ end HOVER LANGUAGE ═══ */
+
+/* ══ DATA GRID (the preview of a step, the assistant's tables) ══════════════════════
+   The data is the subject: the header says the column (name in text, its type small and
+   in the mono stack under it) and stays ruled while the body scrolls under it; every
+   digit is tabular (ids, dates and times line up, not only the numbers); a long text
+   stops at a cap with an ellipsis, whole in its tooltip; the row and the column under
+   the pointer tint at once, nothing moves. */
+table.data th {
+  color: var(--text);
+  vertical-align: bottom;
+  /* border-collapse drops a sticky cell's borders as it scrolls: the rule is drawn inside */
+  box-shadow: inset 0 -1px 0 var(--border);
+}
+table.data th .cn { display: block; }
+table.data th .ct {
+  display: block;
+  margin-top: 1px;
+  font: 400 10.5px/1.3 ui-monospace, SFMono-Regular, Menlo, monospace;
+  color: var(--muted);
+}
+table.data td { font-variant-numeric: tabular-nums; max-width: 28em; overflow: hidden; text-overflow: ellipsis; }
+table.data col.hc { background: var(--row-hover); }
+table.data td.null { font-style: normal; } /* the ∅ in muted: upright, an italic symbol reads as noise */
+/* ══ end DATA GRID ═══ */

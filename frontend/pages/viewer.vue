@@ -233,6 +233,18 @@ const colFormat = computed(() => {
 const cell = (col: string, v: any) =>
   v === null || v === undefined ? '' : colFormat.value[col] ? colFormat.value[col](v) : typeof v === 'object' ? JSON.stringify(v) : String(v)
 
+// a long text stops at the column's cap (CSS): the whole value in the tooltip
+const cellTip = (col: string, v: any) => {
+  const s = cell(col, v)
+  return s.length > 48 ? s : undefined
+}
+// the column under the pointer tints like the row, through its <col>
+const gridCol = ref(-1)
+function onGridOver(e: MouseEvent) {
+  const c = (e.target as HTMLElement).closest?.('td, th') as HTMLTableCellElement | null
+  gridCol.value = c ? c.cellIndex : -1
+}
+
 // export of the current view (csv/xlsx), written by a worker: Polars writes the file,
 // whatever the engine chosen for the display.
 const exporting = ref('')
@@ -567,7 +579,10 @@ onMounted(async () => {
             <div class="sk-row sk-head"><span v-for="m in 7" :key="m" class="sk-cell" /></div>
             <div v-for="n in 14" :key="n" class="sk-row"><span v-for="m in 7" :key="m" class="sk-cell" /></div>
           </div>
-          <table v-else-if="rows.length" class="dt">
+          <table v-else-if="rows.length" class="dt" @mouseover="onGridOver" @mouseleave="gridCol = -1">
+            <colgroup>
+              <col v-for="(c, j) in tableCols" :key="c.name" :class="{ hc: j === gridCol }" />
+            </colgroup>
             <thead>
               <tr>
                 <th v-for="c in tableCols" :key="c.name" :class="{ num: isNumCol(c.dtype) }">
@@ -577,7 +592,12 @@ onMounted(async () => {
             </thead>
             <tbody>
               <tr v-for="(row, i) in displayRows" :key="i">
-                <td v-for="c in tableCols" :key="c.name" :class="{ num: isNumCol(c.dtype) }">{{ cell(c.name, row[c.name]) }}</td>
+                <td
+                  v-for="c in tableCols"
+                  :key="c.name"
+                  :class="{ num: isNumCol(c.dtype), null: row[c.name] === null || row[c.name] === undefined }"
+                  :title="cellTip(c.name, row[c.name])"
+                >{{ row[c.name] === null || row[c.name] === undefined ? '∅' : cell(c.name, row[c.name]) }}</td>
               </tr>
             </tbody>
           </table>
@@ -679,12 +699,19 @@ onMounted(async () => {
   vertical-align: top;
 }
 .dt th:last-child, .dt td:last-child { border-right: none; }
-.dt th { position: sticky; top: 0; background: var(--panel); z-index: 1; font-weight: 600; vertical-align: bottom; }
-.dt .dtype { display: block; font-size: 9px; color: var(--muted); font-weight: 400; text-transform: lowercase; }
-/* the numbers on the right with tabular digits: unit under unit, as the login promises */
+.dt th {
+  position: sticky; top: 0; background: var(--panel-2); z-index: 1; font-weight: 600; vertical-align: bottom;
+  box-shadow: inset 0 -1px 0 var(--border); /* the rule a sticky collapsed cell would lose */
+}
+.dt .dtype { display: block; margin-top: 1px; font: 400 10.5px/1.3 ui-monospace, SFMono-Regular, Menlo, monospace; color: var(--muted); }
+/* the numbers on the right; every digit tabular (ids, dates, times line up too) */
 .dt td.num, .dt th.num { text-align: right; }
-.dt td.num { font-variant-numeric: tabular-nums; }
-.dt tbody tr:hover { background: var(--panel-2); }
+.dt td { font-variant-numeric: tabular-nums; max-width: 28em; overflow: hidden; text-overflow: ellipsis; }
+.dt td.null { color: var(--muted); }
+.dt tbody tr:nth-child(even) { background: var(--row-even); }
+/* the row and the column under the pointer: tinted at once, nothing moves */
+.dt tbody tr:hover { background: var(--row-hover); }
+.dt col.hc { background: var(--row-hover); }
 
 /* loading skeleton (shimmer) */
 .skeleton { padding: 12px 14px; }

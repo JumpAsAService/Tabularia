@@ -2128,13 +2128,18 @@ tr.folderrow .kicon { color: var(--accent-2); }
   align-items: center;
   gap: 8px;
   color: var(--text);
-  text-decoration: none;
+  text-decoration: underline transparent 1px; text-underline-offset: 3px; /* drawn in on hover (main.css, HOVER LANGUAGE) */
   border: none;
   background: none;
   padding: 0;
   font-size: 13px;
 }
 .asname:hover:not(.plain) { color: var(--accent); box-shadow: none; }
+@media (hover: hover) and (pointer: fine) {
+  /* the name's underline comes in with the accent (HOVER LANGUAGE in main.css) */
+  .asname:hover:not(.plain),
+  table.rows tr.openable:hover .asname:not(.plain) { text-decoration-color: color-mix(in srgb, currentColor 55%, transparent); }
+}
 .asname.plain { cursor: default; }
 .asname.renaming { width: min(100%, 440px); }
 .rename-input {
