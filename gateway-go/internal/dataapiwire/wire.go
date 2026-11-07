@@ -31,6 +31,8 @@ type Manifest struct {
 	Slug  string `json:"slug"`
 	Name  string `json:"name"`
 	State string `json:"state"`
+	// the version of the definition it serves (the description's version)
+	DefinitionVersion int64 `json:"definition_version"`
 	// why a suspended data API does not answer: creator_inactive, creator_rights
 	Suspended string `json:"suspended,omitempty"`
 	// the replicas a key's rate is divided by (each pod counts its own requests)

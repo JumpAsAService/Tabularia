@@ -200,10 +200,26 @@ export function useDataApis() {
  * scalar column equality, a list and «is null»; numbers and dates the comparisons too; lists,
  * structures and binaries none. The gateway decides the same. */
 export function operatorsFor(type: string): DataApiOperator[] {
-  const t = type.trim()
-  if (/^(List|Array|Struct|Object|Binary|Null|Unknown)/.test(t)) return []
-  if (/^(Int|UInt|Float|Decimal|Date|Datetime|Time)/.test(t)) return [...DATA_API_OPERATORS]
+  const kind = kindOfPolars(type)
+  if (kind === 'other') return []
+  if (['integer', 'float', 'decimal', 'date', 'timestamp', 'timestamptz', 'time'].includes(kind)) return [...DATA_API_OPERATORS]
   return ['eq', 'in', 'null']
+}
+
+/** The kind a data API gives a datasource's column, from its Polars type: the gateway's
+ *  dataapiwire.KindOfPolars, which the pods agree with once they read the parquet. */
+export function kindOfPolars(type: string): DataApiKind {
+  const t = type.trim()
+  const name = t.split('(')[0]!
+  if (['Int8', 'Int16', 'Int32', 'Int64', 'UInt8', 'UInt16', 'UInt32', 'UInt64', 'Duration'].includes(name)) return 'integer'
+  if (name === 'Float32' || name === 'Float64') return 'float'
+  if (name === 'Decimal') return 'decimal'
+  if (name === 'Boolean') return 'boolean'
+  if (['String', 'Utf8', 'Categorical', 'Enum'].includes(name)) return 'string'
+  if (name === 'Date') return 'date'
+  if (name === 'Datetime') return /time_zone=/.test(t) && !/time_zone=None/.test(t) ? 'timestamptz' : 'timestamp'
+  if (name === 'Time') return 'time'
+  return 'other'
 }
 
 /** A resource's name from a datasource's: lowercase letters, digits and dashes, at most 63. */

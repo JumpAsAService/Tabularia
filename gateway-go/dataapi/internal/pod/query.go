@@ -15,9 +15,9 @@ import (
 
 // The most values of a `col__in=` filter, and of a cursor's text.
 const (
-	MaxInValues   = 500
+	MaxInValues   = dataapiwire.MaxInValues
 	MaxCursorText = 32 << 10
-	MaxSortKeys   = 5
+	MaxSortKeys   = dataapiwire.MaxSortKeys
 )
 
 // the operators as the query string writes them: col=, col__in=, col__gte=…

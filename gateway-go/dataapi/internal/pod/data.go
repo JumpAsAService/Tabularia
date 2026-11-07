@@ -263,6 +263,31 @@ func (p *Preparer) build(ctx context.Context, res dataapiwire.Resource, parquet,
 	for i, c := range res.Columns {
 		cols[i] = ident(c)
 	}
+	// Polars writes its times in nanoseconds, which DuckDB reads as TIME_NS: kept as TIME (to
+	// the microsecond), the type the filters and the answers know
+	nanos := map[string]bool{}
+	rows, err := db.QueryContext(ctx, "SELECT column_name, column_type FROM (DESCRIBE SELECT "+strings.Join(cols, ", ")+
+		" FROM read_parquet("+literal(parquet)+"))")
+	if err != nil {
+		return err
+	}
+	for rows.Next() {
+		var name, typ string
+		if err := rows.Scan(&name, &typ); err != nil {
+			rows.Close()
+			return err
+		}
+		nanos[name] = typ == "TIME_NS"
+	}
+	rows.Close()
+	if err := rows.Err(); err != nil {
+		return err
+	}
+	for i, c := range res.Columns {
+		if nanos[c] {
+			cols[i] = "CAST(" + ident(c) + " AS TIME) AS " + ident(c)
+		}
+	}
 	query := "CREATE TABLE serve AS SELECT " + strings.Join(cols, ", ") + " FROM read_parquet(" + literal(parquet) + ")"
 	if order := fileOrder(res); order != "" {
 		query += " ORDER BY " + ident(order) + " ASC NULLS LAST"

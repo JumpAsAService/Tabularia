@@ -13,23 +13,25 @@ import (
 	"time"
 
 	"github.com/duckdb/duckdb-go/v2"
+
+	"github.com/JumpAsAService/Tabularia/gateway-go/internal/dataapiwire"
 )
 
 // The kinds of column the pods know: how a filter's value is read and bound, and how a value
 // is written in an answer. Anything else (lists, structs, maps, blobs, intervals) goes out as
 // JSON but cannot be filtered on or sorted by.
 const (
-	KindInt         = "integer"
-	KindFloat       = "float"
-	KindDecimal     = "decimal"
-	KindBool        = "boolean"
-	KindString      = "string"
-	KindDate        = "date"
-	KindTimestamp   = "timestamp"
-	KindTimestampTZ = "timestamptz"
-	KindTime        = "time"
-	KindUUID        = "uuid"
-	KindOther       = "other"
+	KindInt         = dataapiwire.KindInt
+	KindFloat       = dataapiwire.KindFloat
+	KindDecimal     = dataapiwire.KindDecimal
+	KindBool        = dataapiwire.KindBool
+	KindString      = dataapiwire.KindString
+	KindDate        = dataapiwire.KindDate
+	KindTimestamp   = dataapiwire.KindTimestamp
+	KindTimestampTZ = dataapiwire.KindTimestampTZ
+	KindTime        = dataapiwire.KindTime
+	KindUUID        = dataapiwire.KindUUID
+	KindOther       = dataapiwire.KindOther
 )
 
 // Column is a column of a prepared resource: its name and DuckDB's type.

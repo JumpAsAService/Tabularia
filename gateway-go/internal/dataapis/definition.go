@@ -12,6 +12,7 @@ import (
 	"strings"
 
 	"github.com/JumpAsAService/Tabularia/gateway-go/internal/config"
+	"github.com/JumpAsAService/Tabularia/gateway-go/internal/dataapiwire"
 )
 
 // The states of a data API: made and edited as a draft, served while active, kept with its
@@ -178,20 +179,19 @@ type Datasource struct {
 }
 
 // filterable says which operators a column's type allows: nil when it cannot be filtered on.
+// The kind is the one the pods give the column once they read its parquet (lists, structures,
+// binary columns cannot be filtered on; ranges only on numbers, dates and times).
 func filterable(typ string) map[string]bool {
-	t := strings.TrimSpace(typ)
-	for _, no := range []string{"List", "Array", "Struct", "Object", "Binary", "Null", "Unknown"} {
-		if strings.HasPrefix(t, no) {
-			return nil
-		}
+	kind := dataapiwire.KindOfPolars(typ)
+	if kind == dataapiwire.KindOther {
+		return nil
 	}
 	ops := map[string]bool{"eq": true, "in": true, "null": true}
-	for _, ordered := range []string{"Int", "UInt", "Float", "Decimal", "Date", "Datetime", "Time"} {
-		if strings.HasPrefix(t, ordered) {
-			for op := range rangeOperators {
-				ops[op] = true
-			}
-			break
+	switch kind {
+	case dataapiwire.KindInt, dataapiwire.KindFloat, dataapiwire.KindDecimal, dataapiwire.KindDate,
+		dataapiwire.KindTimestamp, dataapiwire.KindTimestampTZ, dataapiwire.KindTime:
+		for op := range rangeOperators {
+			ops[op] = true
 		}
 	}
 	return ops
