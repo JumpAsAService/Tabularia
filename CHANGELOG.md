@@ -31,6 +31,29 @@ exposes at `/system/info` and in the app's settings menu.
   only), checking the creator's authority at every poll; `DATA_API__POLL_SECONDS` (20,
   the chart's `dataApi.pollSeconds`) sets the poll. Tabularia does not start the pods yet:
   that comes with the next part.
+- **Data APIs, third part: the pods run.** The orchestrator keeps, every 30 seconds, the
+  Kubernetes objects of every active data API in the scripts' namespace (or
+  `dataApi.namespace`): a Deployment of its pods (not root, read-only root, no capability,
+  requests equal to limits, `/readyz` and `/healthz` as probes, a rollout that keeps one
+  answering), a Secret with a pod token made anew at every activation, a Service, an Ingress
+  with `/data/{address}/` only on the app's host, a NetworkPolicy (in, the ingress controller
+  only; out, DNS, the gateway and the object storage only), a PodDisruptionBudget from two pods
+  and an autoscaler on CPU when asked. A paused data API keeps its objects with no pod; a deleted
+  one, or one gone with its creator's account, loses them, and so does every one when the
+  feature is switched off. Each pod's data directory gets six times its parquets plus 256Mi,
+  rounded up to a power of two (`dataApi.maxDisk`, 20Gi at most); the engine's signed links now
+  carry the file's size. The keys' address limits read the client's address from the ingress
+  controller (`dataApi.trustedProxies`, by default `gateway.trustedProxies`). The page shows
+  **Pods and traffic**: the pods ready out of those wanted, each pod's state and the data
+  version it serves, whether a refresh has reached them, what the cluster refused, and the
+  requests, rows, errors and over-the-rate answers of the last hour, day or week
+  (`GET /data-apis/{id}/status`); the pods report their status at every poll and as soon as a
+  version is prepared. The usage is kept `DATA_API__USAGE_RETENTION_DAYS` (30). A pod runs at
+  most as many queries at once as it has CPUs: more made DuckDB slower in all. On kind (3
+  nodes, Calico), 42 million rows: a lookup by key in 2 ms in the pod, 1,100 requests a second
+  on three pods of 1 CPU with a p99 of 18 ms, about 230 MB of memory per pod; a revoked key
+  refused in 11 s, a refresh served 33 s after its run ended. Migration 0041 adds two tables;
+  the chart gives the orchestrator, and it only, the rights it needs in that namespace.
 
 ## 1.4.0 «Romulus» — 2026-11-07
 

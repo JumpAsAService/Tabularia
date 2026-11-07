@@ -204,6 +204,94 @@ GET /data/{api}/health
   chart's `dataApi.publicHost` is set (the address to give the CRM, with nothing else of
   Tabularia on it, as `share.publicHost` for the share links); the TLS secret from the
   chart. The Service is internal and only the ingress controller reaches it.
+- **Settled while writing the reconcile loop (piece 3)**:
+  - *The objects* (`gateway-go/internal/dataapis/cluster.go`, the loop in
+    `internal/api/jobs_data_apis.go`): every one named `<release>-data-api-<id>` and labelled
+    with the release, `app.kubernetes.io/component: data-api` and `tabularia.org/data-api:
+    <id>`; applied server-side (field manager `tabularia-data-apis`), so a round that changes
+    nothing writes nothing. Every labelled object of a data API the database does not have
+    as active or paused (deleted, a draft, gone with its creator's account in cascade, the
+    feature switched off) is removed. One round at a time across orchestrators (advisory
+    lock 7402150). The kinds: Secret, Service, NetworkPolicy, Deployment, Ingress, PDB
+    (`maxUnavailable: 1`, while the pods are at least two), HPA (`autoscaling/v2`, CPU at 70%
+    of the request; the Deployment's count is then left to it).
+  - *The Deployment*: requests equal to the limits (the runtime's CPU and memory; the
+    pods are Guaranteed), no service account token, no service links, `/readyz` as readiness
+    (every 5 s) and `/healthz` as liveness (every 10 s, six failures), 40 s to stop; a
+    rollout adds a pod before it removes one (`maxSurge: 1, maxUnavailable: 0`), and the
+    replicas spread over the nodes when they can (`ScheduleAnyway`).
+  - *The pod token*: an activation drops the stored hash (the previous token stops at
+    once); the loop's next round makes a new token (`RotatePodToken`), writes it to the
+    Secret, and puts its fingerprint's first 16 characters on the pod template, which
+    restarts the pods with it. A Secret whose token is not the stored one (deleted, edited)
+    gets a new token the same way.
+  - *The disk*: the pod's `emptyDir` (`sizeLimit`), its ephemeral storage requested at the
+    same size and limited 256Mi above. Measured on kind (42 million rows, six columns, a
+    parquet of 465 MB, a pod of 1 CPU and 1Gi): at a refresh the data directory went from
+    312 MB (the file served) to 2,321 MB at its highest (the new parquet, the new file of
+    312 MB and 1.2 GB that DuckDB spilled while sorting), five times the parquet. Hence six
+    times the parquets plus 256Mi, rounded up to a power of two (a refresh that grows the
+    data seldom changes it, and a change restarts the pods), at least 1Gi and at most
+    `DATA_API__MAX_DISK` (20Gi). The parquet's size comes from the engine's signed-link route,
+    which now returns it (`/files/presigned` → `size`, from the storage's HEAD), asked once an
+    hour per data file.
+  - *The client's address*: `DATA_API__FORWARDED_ALLOW_IPS` is the chart's
+    `dataApi.trustedProxies`, by default `gateway.trustedProxies` (the private ranges).
+    ingress-nginx replaces the `X-Forwarded-For` a client sends with the address it sees, so a
+    forged header changes nothing: on kind a key limited to `203.0.113.0/24` was refused
+    with and without `X-Forwarded-For: 203.0.113.9`, one limited to the host's address let in.
+  - *The NetworkPolicy*, one per data API, made from what the chart computes: in, the
+    ingress controller's namespace and pods (`dataApi.networkPolicy.ingressController`) on
+    port 8000, nothing else; out, DNS (port 53, anywhere: the cluster's DNS may be a
+    node-local cache), the gateway's pods on 8000, the storage on its port (its namespace when
+    the endpoint is a Service of the cluster, else `storageCIDRs` or every public address).
+    The scripts' own policy (`podSelector: {}` in the same namespace) would open the pods to
+    the internet, policies adding up: it leaves the data APIs' pods out. Measured on kind
+    with Calico: a pod in `default`, in the scripts' namespace and in Tabularia's own reached
+    neither the pods nor their Service (the ingress controller did); from a data API's pod the
+    gateway and MinIO answered, PostgreSQL, Valkey, the frontend, the Kubernetes API, the
+    registry and the internet did not, all of them reachable from a pod of Tabularia's
+    namespace without the policy.
+  - *Exposure*: the Ingress is in the data APIs' namespace (an Ingress reaches the Services of
+    its own namespace only), on `DATA_API__INGRESS_HOST` (the first of `ingress.hosts` or
+    `dataApi.ingress.host`), with the app's class and `dataApi.ingress.annotations`. Without a
+    `tls` of its own: on the app's host ingress-nginx serves every Ingress of a host with that
+    host's certificate. `DATA_API__INGRESS_TLS_SECRET` (a Secret of the namespace) and the
+    `IngressHost` hook are where piece 4's `dataApi.publicHost` comes in. On kind: `/data/{slug}/`
+    reaches the pods, `/healthz`, `/readyz`, `/data/{slug}/../../readyz` and another slug do not.
+  - *RBAC*: a Role in the namespace, bound to the orchestrator's account only (the gateway,
+    which answers the internet, gets nothing there): `get, list, create, patch, delete` on
+    Deployments, Services, Secrets, PDBs, HPAs, Ingresses and NetworkPolicies; `get, list` on
+    the pods.
+  - *Queries take turns*: the load test on kind found a pod of 1 CPU answering fewer
+    requests with three clients than with one (440 a second with one, 180 with three, 150 with
+    eight). DuckDB alone does the same (20 million rows, 1 CPU: 1,150 lookups a second one at a
+    time, 430 three at once, 280 eight at once). The pod now runs at most as many queries at
+    once as it has CPUs (`DATA_API__THREADS`), the others waiting their turn within the
+    request's time: 1,300 a second with eight at once, and on kind 455 with three clients, 385
+    with eight.
+  - *Measured on kind* (42 million rows, three pods of 1 CPU and 1Gi on two workers, through
+    ingress-nginx, keep-alive, random keys): a lookup by key 2 ms in the pod, 2.2 ms for the
+    client one at a time; 895 requests a second with three clients (p99 5.7 ms), 1,093 with
+    eight (p99 18 ms), 1,074 with 24 (p99 64 ms, the pods' CPU spent). Activated, the first pod
+    answered 44 s later (the next round, then 26.5 s to download and prepare); a refresh of the
+    datasource was served 33 s after its run ended (a poll, then 22 s to prepare); a revoked key
+    refused 11 s after the revocation (poll 20 s). Memory serving: about 230 MB anonymous per pod
+    for 42 million rows, 47 MB for 150,000: DuckDB's cache stops at its share of the pod's
+    memory, the file itself stays in the page cache, which the kernel reclaims. Preparing, the
+    pod's memory reached its limit of 1Gi with page cache, 650 MB of it anonymous, without
+    being killed. Switched to autoscaling (one to three pods), a load on one pod made the autoscaler ask
+    for a second 33 s later, ready 17 s after; the loop leaves the count to it (switching to
+    autoscaling takes the Deployment to the minimum first: its count is no longer the loop's).
+  - *Status*: migration 0041 adds `data_api_status` (what the loop saw of the Deployment: the
+    pods wanted, ready, updated, the disk, what the cluster refused) and `data_api_pods` (each
+    pod as the cluster sees it — phase, ready, restarts, node, the reason it does not run —
+    and as it reports itself). The pods send their status at every poll with the usage (even
+    with nothing counted): ready, the manifest's state, the version each resource serves or
+    prepares, the size of its file, the last error. `GET /data-apis/{id}/status` (VIEW) gives
+    the page all that, the version each datasource has now and how many pods serve it, and the
+    traffic of the last hour, day or week; the page asks it every 5 s while the API is active.
+    The loop deletes the usage older than `DATA_API__USAGE_RETENTION_DAYS`.
 
 ## Administration
 

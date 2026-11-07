@@ -8,11 +8,10 @@ traffic never slows the people using Tabularia. The design is in
 [the spec](specs/data-apis.md).
 
 > **What this version does.** It keeps a data API's definition, its versions, its state and
-> its keys, with every check below, and it has the program and the image of the pods that
-> answer the calls (`tabularia-data-api`, below: [How a data API answers](#how-a-data-api-answers)).
-> Tabularia does not start those pods yet, nor give them an address on the ingress: that,
-> and the usage on the page, come with a later version. Until then an active data API
-> answers nothing, and its page says so.
+> its keys, with every check below, and runs the pods that answer the calls: an active data API
+> is published on the app's own host at `/data/{address}/`, and its page shows its pods and its
+> traffic ([On the cluster](#on-the-cluster)). A host of its own for the data APIs, their
+> section in Administration and the API's documentation in its page come with a later version.
 
 ## Where it is offered
 
@@ -63,9 +62,20 @@ restored, and it becomes the newest (its columns must still be in the datasource
 
 ## States
 
-A new data API is a **draft**. **Activate** needs at least one resource, the creator's
-authority above, and room within the most pods the active data APIs may run together;
-**Pause** keeps the definition and the keys. Deleting it deletes its versions and its keys.
+A new data API is a **draft**: it has nothing in the cluster. **Activate** needs at least one
+resource, the creator's authority above, and room within the most pods the active data APIs
+may run together; within half a minute its pods start, download the data and answer.
+**Pause** keeps the definition, the keys and the objects in the cluster, with no pod.
+Deleting it deletes its versions and its keys, and its objects leave the cluster within half a
+minute.
+
+The page's **Pods and traffic** shows what the cluster says, asked again every few seconds:
+how many pods are ready out of those wanted, each pod (ready, preparing the data, starting, in
+error, stopping; the node it runs on, its restarts and, in the cluster's words, why it does not
+run: an image it cannot pull, a pod that keeps failing, a disk full), the data version each
+resource serves in each pod and whether the latest data of its datasource has reached them,
+the disk each pod has, and the requests, rows, errors and over-the-rate answers of the last
+hour, day or week. What the cluster refused (a quota, a Pod Security rule) is said there too.
 
 ## Keys
 
@@ -178,9 +188,12 @@ million rows in a pod of 1 GB and 2 CPUs: see the spec.
 **Sizing.** Serving takes little memory; preparing a version sorts the table, and DuckDB
 wants about 200 MB per thread for it (the pod uses as many threads as its memory allows, at
 least one). A pod of 1Gi prepares tens of millions of rows; a small one (256Mi) a few
-million. A preparation that fails is logged and tried again, and the previous version keeps
-answering meanwhile. The disk of the data directory holds the new parquet and the new file
-next to the one being served.
+million. A pod answers as many queries at once as it has CPUs and lines up the
+others: more at once made DuckDB slower in all (with 1 CPU, 1,150 lookups a second one at a
+time, 280 with eight at once; lined up, 1,300). For more requests, more replicas or more CPU.
+A preparation that fails is logged and tried again, and the previous version keeps
+answering meanwhile (the page shows why). The disk of the data directory holds the new parquet
+and the new file next to the one being served: see [On the cluster](#on-the-cluster).
 
 Each request is logged on the pod's standard output as one JSON line (the key's first
 characters, the resource, the status, the rows, the milliseconds, the client's address),
@@ -192,10 +205,59 @@ never the key nor the query. The pod reads its environment, which Tabularia sets
 | `DATA_API__DATA_DIR` | `/data` | where the data files go (the only place it writes) |
 | `DATA_API__PORT` | `8000` | the port; `/healthz` and `/readyz` for Kubernetes |
 | `DATA_API__MEMORY_LIMIT_MB` | 60% of the container's memory | DuckDB's memory: a third serves the resources, two thirds prepare the next version |
-| `DATA_API__THREADS` | the container's CPUs | DuckDB's threads preparing a version (serving, one per query, the requests side by side) |
+| `DATA_API__THREADS` | the container's CPUs | DuckDB's threads preparing a version; serving, one per query, and as many queries at once (the others wait their turn, within `DATA_API__QUERY_SECONDS`) |
 | `DATA_API__FORWARDED_ALLOW_IPS` | none | the proxies (the ingress controller) whose `X-Forwarded-For` gives the client's address for the keys' address limits |
 | `DATA_API__QUERY_SECONDS` | `30` | the longest a request may take |
 | `DATA_API__MANIFEST_MAX_AGE_SECONDS` | `900` | past this without a manifest the pod stops answering |
+
+## On the cluster
+
+The orchestrator keeps the data APIs in line with the database every 30 seconds, in the
+namespace of the scripts (the chart's `dataApi.namespace` for another one). For each active or
+paused data API, every object named `<release>-data-api-<id>` and labelled with its id:
+
+- a **Deployment** of its pods (`tabularia-data-api`): the replicas of its runtime (none while
+  paused; the autoscaler's count while autoscaling), its CPU and memory as requests and limits,
+  not root (10001), the root filesystem read-only, no capability, no service account token,
+  `/readyz` (ready once every resource is prepared, with a fresh manifest) and `/healthz` as
+  probes; a rollout starts a new pod and waits for it to be ready before an old one stops, and
+  the replicas spread over the nodes when they can;
+- a **Secret** with the pod token, a new one at every activation (the previous one stops at
+  once), or when the Secret is gone: the pods restart with it;
+- a **Service** inside the cluster, which only the ingress controller reaches;
+- an **Ingress** with `/data/{address}/` only, on the app's host (the first of the chart's
+  `ingress.hosts`, or `dataApi.ingress.host`) and its class: the pods' `/healthz` and `/readyz`
+  are not published. On a host with TLS, ingress-nginx serves it with that host's certificate.
+  `dataApi.ingress.annotations` adds the controller's settings, such as a rate limit per client;
+- a **NetworkPolicy**: in, only the ingress controller (`dataApi.networkPolicy.ingressController`,
+  ingress-nginx's namespace and pods by default), so no pod nor namespace of the cluster calls
+  the pods directly; out, DNS, the gateway's pods (the manifest and the usage) and the object
+  storage on its port (its namespace when it is a Service of the cluster, read from
+  `externalServices.storage.endpoint`; otherwise `dataApi.networkPolicy.storageCIDRs`, or any
+  public address), nothing else. The scripts' own policy leaves the data APIs' pods out;
+- a **PodDisruptionBudget** while it has at least two pods (one at a time stops in a drain),
+  and a **HorizontalPodAutoscaler** while it autoscales (on CPU, at 70% of the request).
+
+Objects labelled for a data API the database no longer has (deleted, or gone with its
+creator's account) are removed; switched off (`dataApi.enabled: false`), every one is. Only the
+orchestrator has rights in that namespace (`templates/data-api.yaml`): Deployments, Services,
+Secrets, Ingresses, NetworkPolicies, PodDisruptionBudgets and autoscalers, and reading the pods.
+The namespace needs the image pull secrets of `image.pullSecrets`.
+
+**The client's address.** The keys' address limits read the client's address from the
+`X-Forwarded-For` the ingress controller sets, believed only from the proxies of
+`dataApi.trustedProxies` (by default `gateway.trustedProxies`, the private ranges): ingress-nginx
+replaces whatever the client sent with the address it sees, so a client cannot pass another one
+off. Behind a cloud load balancer the controller must see the client's address at all
+(`externalTrafficPolicy: Local`, or the PROXY protocol).
+
+**The disk.** Each pod downloads each resource's parquet into its data directory, an
+`emptyDir`, and prepares a DuckDB file from it; while a new version is prepared the pod holds
+the file it serves, the new parquet and the new file, and what DuckDB spills while sorting. It
+gets six times the size of its parquets plus 256Mi, rounded up to a power of two (so a refresh
+that grows the data seldom changes it: a change restarts the pods, one at a time), at least
+1Gi and at most `dataApi.maxDisk` (20Gi), as the `emptyDir`'s limit and the pod's ephemeral
+storage. A pod past it is evicted, and the page says so.
 
 ## What it keeps from being deleted
 
@@ -219,3 +281,9 @@ them at every save, activation and key ([Configuration](configuration.md)):
 | `DATA_API__KEY_MAX_DAYS` | `365` | a key's life |
 | `DATA_API__KEY_DEFAULT_RATE` | `600` | a key's requests per minute, when none is given |
 | `DATA_API__POLL_SECONDS` | `20` | how often the pods ask for their manifest: a revoked key or a refresh reaches them within it |
+| `DATA_API__USAGE_RETENTION_DAYS` | `30` | how long the requests per key and minute are kept for the pages |
+| `DATA_API__MAX_DISK` | `20Gi` | the disk of one pod for its data files |
+
+How the orchestrator runs the pods (their image, namespace, Ingress and NetworkPolicy) is set
+by the chart from the `dataApi` values and `image.dataApi`: see
+[Configuration](configuration.md).
