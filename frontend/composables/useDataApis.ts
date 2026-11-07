@@ -120,6 +120,53 @@ export interface DataApiSave {
   runtime?: DataApiRuntime
 }
 
+/** One pod of a data API, as the cluster sees it and as it reports itself. */
+export type DataApiPodCondition = 'ready' | 'preparing' | 'starting' | 'error' | 'stopping'
+export interface DataApiPodResource {
+  name: string
+  /** the data version it serves, absent when none yet */
+  version?: string
+  /** the version it is preparing */
+  preparing?: string
+  /** why the latest version did not prepare (tried again later) */
+  error?: string
+  bytes?: number
+}
+export interface DataApiPod {
+  name: string
+  condition: DataApiPodCondition
+  phase: string
+  ready: boolean
+  restarts: number
+  node: string
+  started: string | null
+  reason: string
+  message: string
+  terminating: boolean
+  reported_at: string | null
+  state: string
+  error: string
+  resources: DataApiPodResource[]
+}
+export interface DataApiUsagePoint { at: string; requests: number; rows: number; errors: number; throttled: number }
+export interface DataApiStatus {
+  state: DataApiState
+  /** when the reconcile loop last looked; null: not yet */
+  checked_at: string | null
+  wanted: number
+  ready: number
+  updated: number
+  disk: string
+  error: string
+  pods: DataApiPod[]
+  /** each resource: the version its datasource has now, and how many pods serve it */
+  resources: { name: string; latest: string; serving: number }[]
+  traffic: { hours: number; bucket_minutes: number; points: DataApiUsagePoint[]; totals: Omit<DataApiUsagePoint, 'at'> }
+  poll_seconds: number
+  path: string
+  host: string
+}
+
 export function useDataApis() {
   const { apiFetch } = useApiClient()
   return {
@@ -134,6 +181,7 @@ export function useDataApis() {
     remove: (id: number) => apiFetch<void>(`/data-apis/${id}`, { method: 'DELETE' }),
     activate: (id: number) => apiFetch<DataApiDetail>(`/data-apis/${id}/activate`, { method: 'POST' }),
     pause: (id: number) => apiFetch<DataApiDetail>(`/data-apis/${id}/pause`, { method: 'POST' }),
+    status: (id: number, hours = 24) => apiFetch<DataApiStatus>(`/data-apis/${id}/status?hours=${hours}`),
     versions: (id: number) => apiFetch<DataApiVersion[]>(`/data-apis/${id}/versions`),
     restore: (id: number, version: number) =>
       apiFetch<DataApiDetail>(`/data-apis/${id}/versions/${version}/restore`, { method: 'POST' }),

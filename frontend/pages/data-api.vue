@@ -4,8 +4,7 @@
 // resources (a datasource each, the columns that go out, the ones one may filter on and how,
 // the default order, the largest page), its runtime within the administrator's caps, its
 // state, its keys and its versions. Whoever has MANAGE on the folder edits it and manages its
-// keys; VIEW reads it. The pods that answer it come with a later version: for now the page
-// keeps the definition and the keys.
+// keys; VIEW reads it. Its pods' status and traffic are DataApiStatus's.
 //
 // /data-api?id=N opens a data API; /data-api?project=P starts a new one in folder P.
 import { computed, onMounted, onUnmounted, ref, watch } from 'vue'
@@ -13,7 +12,7 @@ import { useI18n } from 'vue-i18n'
 import { onBeforeRouteLeave, onBeforeRouteUpdate } from 'vue-router'
 import {
   Braces, ChevronDown, ChevronRight, CircleAlert, History, KeyRound, LoaderCircle, Pause, Play, Plus, RefreshCw, RotateCcw,
-  Save, Server, Trash2, X,
+  Save, Trash2, X,
 } from 'lucide-vue-next'
 import { errMessage } from '~/composables/useApi'
 import { useFormat } from '~/composables/useFormat'
@@ -28,6 +27,7 @@ import {
 } from '~/composables/useDataApis'
 import Select from '~/components/ui/Select.vue'
 import SecretOnce from '~/components/ui/SecretOnce.vue'
+import DataApiStatus from '~/components/dataapi/DataApiStatus.vue'
 
 const { t } = useI18n()
 const fmtx = useFormat()
@@ -415,11 +415,11 @@ watch(() => route.query.id, (id) => {
 
       <div v-else class="work">
         <section class="main">
-          <p class="note small" role="note"><Server :size="14" /> {{ $t('dataApi.podsLater') }}</p>
           <p v-if="!canEdit" class="note small" role="note">{{ $t('dataApi.readOnly') }}</p>
           <p v-if="detail?.suspended" class="note warn small" role="status">
             <CircleAlert :size="14" /> {{ $t(`dataApi.suspended_${detail.suspended}`) }}
           </p>
+          <DataApiStatus v-if="detail" :api-id="detail.id" :state="detail.state" />
 
           <div class="card">
             <h2>{{ $t('dataApi.address') }}</h2>
