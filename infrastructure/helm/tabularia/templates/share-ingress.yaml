@@ -10,6 +10,7 @@ and nothing else. Every other path of that host is not routed (the controller's 
   <apiPrefix>/share/…     its API (the gateway): not /share-links, which is the creators'
   /_nuxt/…                the page's scripts, styles and fonts
   /favicon.*, /favicon-*.png, /apple-touch-icon.png   the icons the page names
+                          (ImplementationSpecific: ingress-nginx refuses a dot in Exact paths)
 
 A Prefix path matches whole segments: /share does not match /share-links.
 
@@ -66,9 +67,11 @@ spec:
                 port:
                   number: {{ $.Values.service.frontendPort }}
           {{- end }}
+          {{- /* the icons: ImplementationSpecific, as ingress-nginx refuses a dot in an Exact or Prefix
+               path (strict path validation); nginx reads each as the start of the path */}}
           {{- range (list "/favicon.svg" "/favicon.ico" "/favicon-16.png" "/favicon-32.png" "/apple-touch-icon.png") }}
           - path: {{ . }}
-            pathType: Exact
+            pathType: ImplementationSpecific
             backend:
               service:
                 name: {{ $frontend }}

@@ -224,7 +224,8 @@ sent along to `/api/…`, is never read by these routes; the link's opens no oth
 - The chart's `share.publicHost` (empty by default) adds an Ingress on that host with only:
   `/share` and `/_nuxt` (Prefix, the interface), `<apiPrefix>/share` (Prefix, the gateway: a
   Prefix matches whole segments, so `/api/share-links` is not in it), and the five icons the
-  page names (Exact). Everything else of that host is not routed: the controller's 404.
+  page names (ImplementationSpecific: ingress-nginx refuses a dot in an Exact path). Everything
+  else of that host is not routed: the controller's 404.
 - TLS as the main Ingress: with `ingress.tls`, an entry for the host with `share.tlsSecretName`
   (default `<release>-share-tls`); the annotations are the main Ingress's (cert-manager's
   among them) plus `share.annotations`, where a rate limit of the controller goes
