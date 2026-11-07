@@ -2,16 +2,18 @@
 // A data API: datasources published as a read-only HTTP API for other systems, answered by pods
 // of its own on Kubernetes (docs/specs/data-apis.md). Its address (/data/{slug}/), its
 // resources (a datasource each, the columns that go out, the ones one may filter on and how,
-// the default order, the largest page), its runtime within the administrator's caps, its
-// state, its keys and its versions. Whoever has MANAGE on the folder edits it and manages its
-// keys; VIEW reads it. Its pods' status and traffic are DataApiStatus's.
+// the default order, the largest page), its runtime, its state, its keys and its versions.
+// Whoever has MANAGE on the folder edits it and manages its keys; VIEW reads it. The runtime
+// (replicas, CPU, memory) is an administrator's alone: shown to the others, changed here only
+// when an administrator opens the page (and in Administration → Data APIs). Its pods' status
+// and traffic are DataApiStatus's.
 //
 // /data-api?id=N opens a data API; /data-api?project=P starts a new one in folder P.
 import { computed, onMounted, onUnmounted, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { onBeforeRouteLeave, onBeforeRouteUpdate } from 'vue-router'
 import {
-  BookOpen, Braces, ChevronDown, ChevronRight, CircleAlert, History, KeyRound, LoaderCircle, Pause, Play, Plus, RefreshCw, RotateCcw,
+  BookOpen, Braces, ChevronDown, ChevronRight, CircleAlert, Cpu, History, KeyRound, LoaderCircle, Pause, Play, Plus, RefreshCw, RotateCcw,
   Save, Server, SlidersHorizontal, Trash2, X,
 } from 'lucide-vue-next'
 import { errMessage } from '~/composables/useApi'
@@ -21,7 +23,7 @@ import { versionNote } from '~/composables/useSavedScripts'
 import { useSqlScripts, type SqlCatalogItem } from '~/composables/useSqlScripts'
 import { dayAfter, endOfDay } from '~/composables/shareLinks'
 import {
-  cidrsOf, dataApiOrigin, keyAnswers, newResource, operatorsFor, slugOf, tidyResource, useDataApis, validLabel,
+  cidrsOf, dataApiOrigin, keyAnswers, newResource, operatorsFor, runtimeProblem, slugOf, tidyResource, tidyRuntime, useDataApis, validLabel,
   type DataApiDetail, type DataApiKey, type DataApiLimits, type DataApiOperator, type DataApiResource, type DataApiRuntime,
   type DataApiVersion,
 } from '~/composables/useDataApis'
@@ -29,6 +31,7 @@ import Select from '~/components/ui/Select.vue'
 import SecretOnce from '~/components/ui/SecretOnce.vue'
 import DataApiStatus from '~/components/dataapi/DataApiStatus.vue'
 import DataApiDocs from '~/components/dataapi/DataApiDocs.vue'
+import DataApiRuntimeForm from '~/components/dataapi/DataApiRuntimeForm.vue'
 
 const { t } = useI18n()
 const fmtx = useFormat()
@@ -54,8 +57,9 @@ const description = ref('')
 const resources = ref<DataApiResource[]>([])
 const runtime = ref<DataApiRuntime>({ autoscale: false, replicas: 1, min_replicas: 1, max_replicas: 1, cpu: '250m', memory: '256Mi' })
 const savedAs = ref('')
+// the runtime is not the page's to save (an administrator's, saved on its own): not in it
 const snapshot = () => JSON.stringify([name.value.trim(), slug.value.trim(), description.value.trim(),
-  resources.value.map(tidyResource), runtime.value])
+  resources.value.map(tidyResource)])
 const dirty = computed(() => snapshot() !== savedAs.value)
 
 const canEdit = computed(() => (detail.value ? detail.value.can_manage : true))
@@ -199,6 +203,7 @@ function apply(d: DataApiDetail) {
     columns: [...r.columns], filters: r.filters.map((f) => ({ column: f.column, operators: [...f.operators] })),
     default_sort: [...r.default_sort], max_page: r.max_page }))
   runtime.value = { ...d.runtime }
+  runtimeDraft.value = null
   savedAs.value = snapshot()
 }
 
@@ -230,8 +235,9 @@ async function save() {
     return
   }
   saving.value = true
+  // never the runtime: an administrator may have changed it since the page opened
   const body = { name: name.value.trim(), slug: slug.value.trim(), description: description.value.trim(),
-    resources: resources.value.map(tidyResource), runtime: runtime.value }
+    resources: resources.value.map(tidyResource) }
   try {
     if (apiId.value != null) {
       apply(await api.update(apiId.value, body))
@@ -248,6 +254,33 @@ async function save() {
     toast.error(errMessage(e))
   } finally {
     saving.value = false
+  }
+}
+
+// ── the runtime, an administrator's ─────────────────────────────────────────
+const runtimeDraft = ref<DataApiRuntime | null>(null)
+const savingRuntime = ref(false)
+const runtimeIssue = computed(() => {
+  const l = limits.value?.runtime_limits
+  const p = runtimeDraft.value && l ? runtimeProblem(runtimeDraft.value, l) : null
+  return p ? t(`dataApi.${p.key}`, p.values ?? {}) : ''
+})
+function editRuntime() {
+  runtimeDraft.value = { ...runtime.value }
+}
+async function saveRuntime() {
+  if (!detail.value || !runtimeDraft.value || savingRuntime.value || runtimeIssue.value) return
+  savingRuntime.value = true
+  try {
+    const got = await api.adminSetRuntime(detail.value.id, tidyRuntime(runtimeDraft.value))
+    runtime.value = { ...got }
+    detail.value = { ...detail.value, runtime: { ...got } }
+    runtimeDraft.value = null
+    toast.success(t(detail.value.state === 'active' ? 'dataApi.runtimeSavedActive' : 'dataApi.runtimeSaved'))
+  } catch (e) {
+    toast.error(errMessage(e))
+  } finally {
+    savingRuntime.value = false
   }
 }
 
@@ -572,38 +605,32 @@ watch(() => route.query.id, (id) => {
             </div>
           </div>
 
-          <div class="card">
-            <h2>{{ $t('dataApi.runtime') }}</h2>
-            <p class="muted small help">
-              {{ $t('dataApi.runtimeCaps', { replicas: limits?.max_replicas ?? '', cpu: limits?.max_cpu ?? '', memory: limits?.max_memory ?? '' }) }}
+          <div class="card" data-runtime>
+            <h2>
+              <Cpu :size="14" /> {{ $t('dataApi.runtime') }}
+              <button v-if="detail?.can_set_runtime && !runtimeDraft" type="button" class="mini push" data-rt="edit" @click="editRuntime">
+                {{ $t('dataApi.runtimeChange') }}
+              </button>
+            </h2>
+            <dl v-if="!runtimeDraft" class="rtsum">
+              <div><dt>{{ $t('dataApi.rtPods') }}</dt>
+                <dd data-rt="pods">{{ runtime.autoscale ? $t('dataApi.rtPodsAuto', { min: runtime.min_replicas, max: runtime.max_replicas })
+                  : $t('dataApi.rtPodsFixed', { n: runtime.replicas }, runtime.replicas) }}</dd></div>
+              <div><dt>{{ $t('dataApi.cpu') }}</dt><dd class="mono" data-rt="cpu">{{ runtime.cpu }}</dd></div>
+              <div><dt>{{ $t('dataApi.memory') }}</dt><dd class="mono" data-rt="memory">{{ runtime.memory }}</dd></div>
+            </dl>
+            <template v-else>
+              <DataApiRuntimeForm v-model="runtimeDraft" :limits="limits?.runtime_limits" :disabled="savingRuntime" />
+              <div class="formacts">
+                <button type="button" class="primary" :disabled="savingRuntime || !!runtimeIssue" data-rt="save" @click="saveRuntime">
+                  <LoaderCircle v-if="savingRuntime" :size="14" class="spin" /><Save v-else :size="14" /> {{ $t('dataApi.runtimeApply') }}
+                </button>
+                <button type="button" :disabled="savingRuntime" @click="runtimeDraft = null">{{ $t('dataApi.cancel') }}</button>
+              </div>
+            </template>
+            <p class="muted small help" data-rt="who">
+              {{ detail?.can_set_runtime ? $t('dataApi.runtimeAdminHint') : detail ? $t('dataApi.runtimeByAdmin') : $t('dataApi.runtimeNew') }}
             </p>
-            <label class="check">
-              <input v-model="runtime.autoscale" type="checkbox" :disabled="!canEdit" /> {{ $t('dataApi.autoscale') }}
-            </label>
-            <div class="row3">
-              <label v-if="!runtime.autoscale" class="field">
-                <span>{{ $t('dataApi.replicas') }}</span>
-                <input v-model.number="runtime.replicas" type="number" min="1" :max="limits?.max_replicas" :readonly="!canEdit" />
-              </label>
-              <template v-else>
-                <label class="field">
-                  <span>{{ $t('dataApi.minReplicas') }}</span>
-                  <input v-model.number="runtime.min_replicas" type="number" min="1" :max="limits?.max_replicas" :readonly="!canEdit" />
-                </label>
-                <label class="field">
-                  <span>{{ $t('dataApi.maxReplicas') }}</span>
-                  <input v-model.number="runtime.max_replicas" type="number" min="1" :max="limits?.max_replicas" :readonly="!canEdit" />
-                </label>
-              </template>
-              <label class="field">
-                <span>{{ $t('dataApi.cpu') }}</span>
-                <input v-model="runtime.cpu" type="text" class="mono" :readonly="!canEdit" />
-              </label>
-              <label class="field">
-                <span>{{ $t('dataApi.memory') }}</span>
-                <input v-model="runtime.memory" type="text" class="mono" :readonly="!canEdit" />
-              </label>
-            </div>
           </div>
           </template>
         </section>
@@ -775,6 +802,11 @@ watch(() => route.query.id, (id) => {
 .add { display: flex; align-items: center; gap: 10px; }
 .add button, .card > button { display: inline-flex; align-items: center; gap: 6px; align-self: flex-start; }
 .check { display: inline-flex; align-items: center; gap: 6px; font-size: 12.5px; color: var(--text); }
+.card h2 .push { margin-left: auto; font-size: 12px; font-weight: 500; }
+.rtsum { display: grid; grid-template-columns: repeat(auto-fit, minmax(120px, 1fr)); gap: 8px; margin: 0; }
+.rtsum > div { min-width: 0; }
+.rtsum dt { font-size: 12px; color: var(--muted); }
+.rtsum dd { margin: 2px 0 0; font-size: 13px; overflow-wrap: anywhere; }
 .mini { display: inline-flex; align-items: center; gap: 4px; }
 .danger { color: var(--danger); }
 .keyform, .renew { display: flex; flex-direction: column; gap: 8px; padding: 8px; border: 1px solid var(--border-soft); border-radius: 8px; }

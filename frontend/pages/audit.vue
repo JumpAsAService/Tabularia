@@ -189,6 +189,7 @@ const ACTION_META = computed<Record<string, { icon: any; color: string; label: s
     'data_api.delete': { icon: Braces, color: u.danger, label: t('audit.dataApiDeleteAction') },
     'data_api.activate': { icon: Braces, color: u.violet, label: t('audit.dataApiActivateAction') },
     'data_api.pause': { icon: Braces, color: u.muted, label: t('audit.dataApiPauseAction') },
+    'data_api.runtime': { icon: Braces, color: u.accent, label: t('audit.dataApiRuntimeAction') },
     'data_api.key_create': { icon: KeyRound, color: u.accent, label: t('audit.dataApiKeyCreateAction') },
     'data_api.key_revoke': { icon: KeyRound, color: u.danger, label: t('audit.dataApiKeyRevokeAction') },
     'data_api.key_renew': { icon: KeyRound, color: u.accent, label: t('audit.dataApiKeyRenewAction') },

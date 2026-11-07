@@ -6,6 +6,8 @@ export type DataApiState = 'draft' | 'active' | 'paused'
 export type DataApiOperator = 'eq' | 'in' | 'gt' | 'gte' | 'lt' | 'lte' | 'null'
 export const DATA_API_OPERATORS: DataApiOperator[] = ['eq', 'in', 'gt', 'gte', 'lt', 'lte', 'null']
 
+/** How a data API's pods run. Only an administrator sets it (Administration → Data APIs, or the
+ *  page when an administrator opens it); a new data API and a copy start from the default. */
 export interface DataApiRuntime {
   autoscale: boolean
   replicas: number
@@ -13,6 +15,16 @@ export interface DataApiRuntime {
   max_replicas: number
   cpu: string
   memory: string
+}
+
+/** The bounds of a runtime (dataapis.CheckRuntime): not the chart's, only what makes sense. */
+export interface DataApiRuntimeLimits {
+  min_cpu: string
+  max_cpu: string
+  min_memory: string
+  max_memory: string
+  /** the most pods of one data API: 40, or DATA_API__MAX_TOTAL_REPLICAS when fewer */
+  max_replicas: number
 }
 
 export interface DataApiFilter {
@@ -48,6 +60,8 @@ export interface DataApi {
   updated_at: string | null
   /** MANAGE on its folder, or an administrator: editing and the keys */
   can_manage: boolean
+  /** an administrator (not an observer): the runtime */
+  can_set_runtime: boolean
 }
 
 export interface DataApiResourceOut extends DataApiResource {
@@ -68,10 +82,8 @@ export interface DataApiLimits {
   reason: '' | 'kubernetes' | 'disabled'
   count?: number
   max_apis?: number
-  max_replicas?: number
   max_total_replicas?: number
-  max_cpu?: string
-  max_memory?: string
+  runtime_limits?: DataApiRuntimeLimits
   key_max_days?: number
   key_default_rate?: number
   key_max_rate?: number
@@ -121,7 +133,6 @@ export interface DataApiSave {
   description?: string
   project_id?: number
   resources?: DataApiResource[]
-  runtime?: DataApiRuntime
 }
 
 /** One pod of a data API, as the cluster sees it and as it reports itself. */
@@ -207,6 +218,7 @@ export interface DataApiAdminRow {
   path: string
   project_id: number
   state: DataApiState
+  runtime: DataApiRuntime
   creator: (DataApiPerson & { active: boolean }) | null
   resources: number
   keys: number
@@ -226,9 +238,71 @@ export interface DataApiAdminList {
   reason: '' | 'kubernetes' | 'disabled'
   max_apis: number
   max_total_replicas: number
+  runtime_limits: DataApiRuntimeLimits
+  default_runtime: DataApiRuntime
   base_url: string
   host: string
   apis: DataApiAdminRow[]
+}
+
+// ── the runtime ──────────────────────────────────────────────────────────────
+
+/** A CPU quantity («500m», «2», «1.5») in thousandths of a core; null when it is not one. */
+export function millicores(q: string): number | null {
+  const m = /^([0-9]+(?:\.[0-9]+)?)(m?)$/.exec(q.trim())
+  if (!m) return null
+  const f = Number(m[1])
+  return Math.round(m[2] ? f : f * 1000)
+}
+
+const MEMORY_UNITS: Record<string, number> = { '': 1, K: 1e3, M: 1e6, G: 1e9, T: 1e12, Ki: 2 ** 10, Mi: 2 ** 20, Gi: 2 ** 30, Ti: 2 ** 40 }
+
+/** A memory quantity («512Mi», «2Gi», «1G») in bytes; null when it is not one. */
+export function memoryBytes(q: string): number | null {
+  const m = /^([0-9]+(?:\.[0-9]+)?)(Ki|Mi|Gi|Ti|K|M|G|T)?$/.exec(q.trim())
+  if (!m) return null
+  return Math.floor(Number(m[1]) * MEMORY_UNITS[m[2] ?? '']!)
+}
+
+/** The most pods the runtime may run. */
+export function runtimePods(rt: DataApiRuntime): number {
+  return rt.autoscale ? rt.max_replicas : rt.replicas
+}
+
+/** Whether two runtimes run the same pods (the gateway's SameRuntime). */
+export function sameRuntime(a: DataApiRuntime, b: DataApiRuntime): boolean {
+  if (a.autoscale !== b.autoscale) return false
+  if (a.autoscale ? a.min_replicas !== b.min_replicas || a.max_replicas !== b.max_replicas : a.replicas !== b.replicas) return false
+  const ca = millicores(a.cpu), cb = millicores(b.cpu), ma = memoryBytes(a.memory), mb = memoryBytes(b.memory)
+  return (ca == null || cb == null ? a.cpu.trim() === b.cpu.trim() : ca === cb)
+    && (ma == null || mb == null ? a.memory.trim() === b.memory.trim() : ma === mb)
+}
+
+/** What is wrong with a runtime before the gateway says it: an i18n key of dataApi and its
+ *  values, null when nothing. The gateway checks the same (and the pods of all the active ones). */
+export function runtimeProblem(rt: DataApiRuntime, l: DataApiRuntimeLimits): { key: string; values?: Record<string, string | number> } | null {
+  const whole = (n: number) => Number.isInteger(n) && n >= 1
+  if (rt.autoscale) {
+    if (!whole(rt.min_replicas) || !whole(rt.max_replicas) || rt.max_replicas < rt.min_replicas) return { key: 'rtBadRange' }
+  } else if (!whole(rt.replicas)) return { key: 'rtBadReplicas' }
+  if (runtimePods(rt) > l.max_replicas) return { key: 'rtTooManyPods', values: { n: l.max_replicas } }
+  const cpu = millicores(rt.cpu)
+  if (cpu == null) return { key: 'rtBadCpu' }
+  if (cpu < millicores(l.min_cpu)! || cpu > millicores(l.max_cpu)!) return { key: 'rtCpuRange', values: { min: l.min_cpu, max: l.max_cpu } }
+  const mem = memoryBytes(rt.memory)
+  if (mem == null) return { key: 'rtBadMemory' }
+  if (mem < memoryBytes(l.min_memory)! || mem > memoryBytes(l.max_memory)!) {
+    return { key: 'rtMemoryRange', values: { min: l.min_memory, max: l.max_memory } }
+  }
+  return null
+}
+
+/** The runtime tidied as the gateway keeps it: the unused numbers in line with the used ones. */
+export function tidyRuntime(rt: DataApiRuntime): DataApiRuntime {
+  const out = { ...rt, cpu: rt.cpu.trim(), memory: rt.memory.trim() }
+  if (out.autoscale) out.replicas = out.min_replicas
+  else out.min_replicas = out.max_replicas = out.replicas
+  return out
 }
 
 /** Where the other systems call a data API: its public address, the host it is published on,
@@ -292,6 +366,8 @@ export function useDataApis() {
     documentation: (id: number) => apiFetch<DataApiDoc>(`/data-apis/${id}/documentation`),
     adminList: () => apiFetch<DataApiAdminList>('/admin/data-apis'),
     adminPause: (id: number) => apiFetch<void>(`/admin/data-apis/${id}/pause`, { method: 'POST' }),
+    adminSetRuntime: (id: number, runtime: DataApiRuntime) =>
+      apiFetch<DataApiRuntime>(`/admin/data-apis/${id}/runtime`, { method: 'PUT', body: runtime }),
     adminRemove: (id: number) => apiFetch<void>(`/admin/data-apis/${id}`, { method: 'DELETE' }),
     versions: (id: number) => apiFetch<DataApiVersion[]>(`/data-apis/${id}/versions`),
     restore: (id: number, version: number) =>

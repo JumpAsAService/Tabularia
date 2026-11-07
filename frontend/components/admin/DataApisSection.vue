@@ -1,15 +1,22 @@
 <script setup lang="ts">
 // Administration → Data APIs (docs/specs/data-apis.md, «Administration»): every data API of the
-// installation with its creator, its state, its pods and its traffic of the last 24 hours; an
-// administrator pauses or deletes any of them, whoever made it (the delete even with the feature
-// switched off, to clean what is left). The caps are the chart's (dataApi.*), shown here.
+// installation with its creator, its state, its runtime, its pods and its traffic of the last 24
+// hours; an administrator sets the runtime of any of them (only an administrator does: replicas
+// or autoscaling, CPU and memory per pod), pauses or deletes any of them, whoever made it (the
+// delete even with the feature switched off, to clean what is left). The caps are the chart's
+// (dataApi.*), shown here; an observer reads it all and changes nothing.
 import { computed, onMounted, ref } from 'vue'
 import { useI18n } from 'vue-i18n'
-import { Braces, LoaderCircle, Pause, RefreshCw, Trash2 } from 'lucide-vue-next'
+import { Braces, Cpu, LoaderCircle, Pause, RefreshCw, Save, Trash2 } from 'lucide-vue-next'
 import { errMessage } from '~/composables/useApi'
 import { useFormat } from '~/composables/useFormat'
 import { useFolderPaths } from '~/composables/useFolderPaths'
-import { dataApiOrigin, useDataApis, type DataApiAdminList, type DataApiAdminRow, type DataApiLimits } from '~/composables/useDataApis'
+import {
+  dataApiOrigin, runtimePods, runtimeProblem, tidyRuntime, useDataApis, type DataApiAdminList, type DataApiAdminRow, type DataApiLimits,
+  type DataApiRuntime,
+} from '~/composables/useDataApis'
+import Modal from '~/components/ui/Modal.vue'
+import DataApiRuntimeForm from '~/components/dataapi/DataApiRuntimeForm.vue'
 
 const props = defineProps<{ canWrite: boolean }>()
 const emit = defineEmits<{ (e: 'count', n: number): void }>()
@@ -55,6 +62,46 @@ function podsOf(a: DataApiAdminRow): string {
 }
 const tone = (a: DataApiAdminRow) => (a.state !== 'active' ? '' : a.error ? 'bad' : a.checked_at && a.ready >= a.wanted && a.wanted > 0 ? 'good' : 'wait')
 
+/** The runtime in a few characters: «2 × 500m · 1Gi», «1–3 × 250m · 256Mi». */
+function runtimeOf(a: DataApiAdminRow): string {
+  const rt = a.runtime
+  const pods = rt.autoscale ? `${rt.min_replicas}–${rt.max_replicas}` : String(rt.replicas)
+  return `${pods} × ${rt.cpu} · ${rt.memory}`
+}
+
+// the runtime of one data API, in a dialog
+const editing = ref<{ row: DataApiAdminRow; rt: DataApiRuntime } | null>(null)
+const savingRuntime = ref(false)
+const runtimeIssue = computed(() => {
+  const e = editing.value
+  const p = e && list.value ? runtimeProblem(e.rt, list.value.runtime_limits) : null
+  return p ? t(`dataApi.${p.key}`, p.values ?? {}) : ''
+})
+/** The pods the other active data APIs take, when this one is active: what is left of the total. */
+const othersPods = computed(() => {
+  const e = editing.value
+  if (!e || !list.value) return 0
+  return list.value.apis.filter((a) => a.state === 'active' && a.id !== e.row.id).reduce((n, a) => n + runtimePods(a.runtime), 0)
+})
+function openRuntime(a: DataApiAdminRow) {
+  editing.value = { row: a, rt: { ...a.runtime } }
+}
+async function saveRuntime() {
+  const e = editing.value
+  if (!e || savingRuntime.value || runtimeIssue.value) return
+  savingRuntime.value = true
+  try {
+    await api.adminSetRuntime(e.row.id, tidyRuntime(e.rt))
+    toast.success(t(e.row.state === 'active' ? 'dataApiAdmin.runtimeSavedActive' : 'dataApiAdmin.runtimeSaved', { name: e.row.name }))
+    editing.value = null
+    await load()
+  } catch (err) {
+    toast.error(errMessage(err))
+  } finally {
+    savingRuntime.value = false
+  }
+}
+
 async function act(a: DataApiAdminRow, what: 'pause' | 'delete') {
   busy.value = a.id
   try {
@@ -85,8 +132,10 @@ async function act(a: DataApiAdminRow, what: 'pause' | 'delete') {
       <dl class="caps">
         <div><dt>{{ $t('dataApiAdmin.capApis') }}</dt><dd>{{ $t('dataApiAdmin.ofMost', { n: list.apis.length, max: list.max_apis }) }}</dd></div>
         <div><dt>{{ $t('dataApiAdmin.capPods') }}</dt><dd>{{ $t('dataApiAdmin.ofMost', { n: pods, max: list.max_total_replicas }) }}</dd></div>
-        <div v-if="limits?.enabled"><dt>{{ $t('dataApiAdmin.capPod') }}</dt>
-          <dd>{{ $t('dataApiAdmin.capPodValue', { replicas: limits.max_replicas, cpu: limits.max_cpu, memory: limits.max_memory }) }}</dd></div>
+        <div v-if="list.runtime_limits"><dt>{{ $t('dataApiAdmin.capPod') }}</dt>
+          <dd>{{ $t('dataApiAdmin.capPodValue', { replicas: list.runtime_limits.max_replicas, minCpu: list.runtime_limits.min_cpu,
+                                                  maxCpu: list.runtime_limits.max_cpu, minMemory: list.runtime_limits.min_memory,
+                                                  maxMemory: list.runtime_limits.max_memory }) }}</dd></div>
         <div v-if="limits?.enabled"><dt>{{ $t('dataApiAdmin.capKeys') }}</dt>
           <dd>{{ $t('dataApiAdmin.capKeysValue', { days: limits.key_max_days, rate: fmt.count(limits.key_default_rate ?? 0) }) }}</dd></div>
         <div><dt>{{ $t('dataApiAdmin.address') }}</dt><dd class="mono">{{ origin }}/data/…</dd></div>
@@ -113,6 +162,7 @@ async function act(a: DataApiAdminRow, what: 'pause' | 'delete') {
               <th>{{ $t('dataApiAdmin.colApi') }}</th>
               <th>{{ $t('dataApiAdmin.colCreator') }}</th>
               <th>{{ $t('dataApiAdmin.colState') }}</th>
+              <th>{{ $t('dataApiAdmin.colRuntime') }}</th>
               <th>{{ $t('dataApiAdmin.colPods') }}</th>
               <th class="n">{{ $t('dataApiAdmin.colRequests') }}</th>
               <th class="n">{{ $t('dataApiAdmin.colErrors') }}</th>
@@ -133,6 +183,10 @@ async function act(a: DataApiAdminRow, what: 'pause' | 'delete') {
                 <br v-if="a.creator?.full_name"><span v-if="a.creator?.full_name" class="muted small">{{ a.creator.email }}</span>
               </td>
               <td :class="['state', a.state]">{{ $t(`dataApi.state_${a.state}`) }}</td>
+              <td class="rt">
+                <span class="mono" data-rt="summary">{{ runtimeOf(a) }}</span>
+                <template v-if="a.runtime.autoscale"><br><span class="muted small">{{ $t('dataApiAdmin.autoscaling') }}</span></template>
+              </td>
               <td>
                 <span :class="['pods', tone(a)]">{{ podsOf(a) }}</span>
                 <template v-if="a.state === 'active' && a.error"><br><span class="small err mono">{{ a.error }}</span></template>
@@ -150,6 +204,8 @@ async function act(a: DataApiAdminRow, what: 'pause' | 'delete') {
                   <button type="button" class="mini" @click="asking = null">{{ $t('dataApi.cancel') }}</button>
                 </template>
                 <template v-else>
+                  <button v-if="list.enabled" type="button" class="mini" :aria-label="$t('dataApiAdmin.runtimeOf', { name: a.name })" data-rt="edit"
+                          :title="$t('dataApiAdmin.runtimeOf', { name: a.name })" @click="openRuntime(a)"><Cpu :size="12" /> {{ $t('dataApiAdmin.runtime') }}</button>
                   <button v-if="a.state === 'active'" type="button" class="mini" :aria-label="$t('dataApiAdmin.pauseOf', { name: a.name })"
                           @click="asking = { id: a.id, what: 'pause' }"><Pause :size="12" /> {{ $t('dataApiAdmin.pause') }}</button>
                   <button type="button" class="mini danger" :aria-label="$t('dataApiAdmin.deleteOf', { name: a.name })"
@@ -161,6 +217,24 @@ async function act(a: DataApiAdminRow, what: 'pause' | 'delete') {
         </table>
       </div>
     </template>
+    <Modal :open="!!editing" :title="$t('dataApiAdmin.runtimeTitle', { name: editing?.row.name ?? '' })" :width="520"
+           @close="savingRuntime || (editing = null)">
+      <div v-if="editing" class="rtdlg">
+        <p class="muted small">{{ $t('dataApiAdmin.runtimeLead') }}</p>
+        <DataApiRuntimeForm v-model="editing.rt" :limits="list?.runtime_limits" :disabled="savingRuntime" />
+        <p class="muted small" data-rt="total">
+          {{ editing.row.state === 'active'
+            ? $t('dataApiAdmin.runtimeTotalActive', { others: othersPods, max: list?.max_total_replicas ?? 0 })
+            : $t('dataApiAdmin.runtimeTotalIdle', { max: list?.max_total_replicas ?? 0 }) }}
+        </p>
+      </div>
+      <template #footer>
+        <button type="button" :disabled="savingRuntime" @click="editing = null">{{ $t('dataApi.cancel') }}</button>
+        <button type="button" class="primary" :disabled="savingRuntime || !!runtimeIssue" data-rt="save" @click="saveRuntime">
+          <LoaderCircle v-if="savingRuntime" :size="14" class="spin" /><Save v-else :size="14" /> {{ $t('dataApi.runtimeApply') }}
+        </button>
+      </template>
+    </Modal>
   </section>
 </template>
 
@@ -203,6 +277,9 @@ table.rows tr:last-child td { border-bottom: none; }
 .tag { font-size: 10px; text-transform: uppercase; letter-spacing: 0.04em; padding: 0 6px; border-radius: 8px; border: 1px solid var(--border); margin-left: 4px; }
 .tag.bad { color: var(--danger); }
 .act { white-space: nowrap; text-align: right; }
+.rt { white-space: nowrap; }
+.rtdlg { display: flex; flex-direction: column; gap: 12px; }
+.rtdlg p { margin: 0; line-height: 1.45; }
 .act .small { margin-right: 6px; white-space: normal; }
 .act button + button { margin-left: 4px; }
 .danger { color: var(--danger); }

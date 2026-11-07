@@ -94,3 +94,47 @@ test('the documentation writes the address the other systems call, and curl line
   assert.deepEqual(m.openapiForDownload(pub, 'http://localhost:8080').servers, [{ url: 'https://d.example.com' }])
   for (const k of ['integer', 'date', 'timestamp', 'time', 'uuid', 'string']) assert.ok(m.sampleValue(k).length)
 })
+
+test('the runtime: quantities read as the gateway reads them, the same runtime whatever its spelling', () => {
+  assert.equal(m.millicores('500m'), 500)
+  assert.equal(m.millicores(' 1.5 '), 1500)
+  assert.equal(m.millicores('2'), 2000)
+  assert.equal(m.millicores('a lot'), null)
+  assert.equal(m.memoryBytes('256Mi'), 256 * 2 ** 20)
+  assert.equal(m.memoryBytes('1G'), 1e9)
+  assert.equal(m.memoryBytes('512MB'), null)
+  const rt = { autoscale: false, replicas: 2, min_replicas: 2, max_replicas: 2, cpu: '1', memory: '1Gi' }
+  assert.ok(m.sameRuntime(rt, { ...rt, min_replicas: 9, cpu: '1000m', memory: '1024Mi' }))
+  assert.ok(!m.sameRuntime(rt, { ...rt, replicas: 3 }))
+  assert.ok(!m.sameRuntime(rt, { ...rt, autoscale: true }))
+  assert.deepEqual(m.tidyRuntime({ ...rt, autoscale: true, min_replicas: 1, max_replicas: 3, cpu: ' 250m ' }),
+    { autoscale: true, replicas: 1, min_replicas: 1, max_replicas: 3, cpu: '250m', memory: '1Gi' })
+  assert.equal(m.runtimePods({ ...rt, autoscale: true, max_replicas: 4 }), 4)
+})
+
+test('the runtime\'s bounds, as the gateway checks them, past the chart\'s old caps', () => {
+  const l = { min_cpu: '100m', max_cpu: '16', min_memory: '256Mi', max_memory: '64Gi', max_replicas: 10 }
+  const ok = { autoscale: false, replicas: 6, min_replicas: 6, max_replicas: 6, cpu: '4', memory: '8Gi' }
+  assert.equal(m.runtimeProblem(ok, l), null)
+  const key = (rt) => m.runtimeProblem({ ...ok, ...rt }, l)?.key
+  assert.equal(key({ replicas: 0 }), 'rtBadReplicas')
+  assert.equal(key({ replicas: 1.5 }), 'rtBadReplicas')
+  assert.equal(key({ replicas: 11 }), 'rtTooManyPods')
+  assert.equal(key({ autoscale: true, min_replicas: 3, max_replicas: 2 }), 'rtBadRange')
+  assert.equal(key({ autoscale: true, min_replicas: 1, max_replicas: 11 }), 'rtTooManyPods')
+  assert.equal(key({ cpu: 'lots' }), 'rtBadCpu')
+  assert.equal(key({ cpu: '50m' }), 'rtCpuRange')
+  assert.equal(key({ cpu: '17' }), 'rtCpuRange')
+  assert.equal(key({ memory: '1 GB' }), 'rtBadMemory')
+  assert.equal(key({ memory: '128Mi' }), 'rtMemoryRange')
+  assert.equal(key({ memory: '65Gi' }), 'rtMemoryRange')
+})
+
+test('the page never sends the runtime with an edit: an administrator\'s, saved on its own route', () => {
+  const page = readFileSync(new URL('../pages/data-api.vue', import.meta.url), 'utf8')
+  const save = page.slice(page.indexOf('async function save()'), page.indexOf('// ── the runtime, an administrator'))
+  assert.ok(!/runtime/.test(save.replace(/\/\/.*$/gm, '')), 'save() sends a runtime')
+  assert.ok(page.includes('api.adminSetRuntime('))
+  const comp = readFileSync(new URL('../composables/useDataApis.ts', import.meta.url), 'utf8')
+  assert.ok(/adminSetRuntime: .*\n.*`\/admin\/data-apis\/\$\{id\}\/runtime`, \{ method: 'PUT'/.test(comp))
+})
