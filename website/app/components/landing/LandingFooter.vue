@@ -41,6 +41,7 @@ const isInternal = (target: string) => target.startsWith('/')
         <p>{{ t.footer.copyright }}</p>
         <p class="small soft foot__tm">{{ t.footer.trademarks }}</p>
         <p class="small soft foot__tm">{{ t.footer.warranty }} <a :href="`${config.public.repo}/blob/main/LICENSE`">{{ t.footer.licence }}</a>. · <a :href="`${config.app.baseURL}third-party-notices.txt`">Open source licences</a></p>
+        <p class="small soft foot__tm"><a :href="config.public.privacyPolicy" class="iubenda-nostyle iubenda-noiframe iubenda-embed" title="Privacy Policy">Privacy Policy</a> · <a :href="config.public.cookiePolicy" class="iubenda-nostyle iubenda-noiframe iubenda-embed" title="Cookie Policy">Cookie Policy</a></p>
         <p v-if="config.public.analytics" class="small soft foot__tm">{{ t.footer.analytics }}</p>
       </div>
       <div class="foot__actions">

@@ -9,7 +9,9 @@ const config = useRuntimeConfig()
       <a :href="config.public.repo">Source on GitHub</a> ·
       <a :href="`${config.public.repo}/issues`">Issues</a> ·
       <a :href="config.public.dockerHub">Images on Docker Hub</a> ·
-      <a :href="`${config.app.baseURL}third-party-notices.txt`">Open source licences</a>
+      <a :href="`${config.app.baseURL}third-party-notices.txt`">Open source licences</a> ·
+      <a :href="config.public.privacyPolicy" class="iubenda-nostyle iubenda-noiframe iubenda-embed" title="Privacy Policy">Privacy Policy</a> ·
+      <a :href="config.public.cookiePolicy" class="iubenda-nostyle iubenda-noiframe iubenda-embed" title="Cookie Policy">Cookie Policy</a>
     </p>
     <p v-if="config.public.analytics" class="docs-footer__note">
       Visits are counted with Cloudflare Web Analytics: no cookies, no personal data.
