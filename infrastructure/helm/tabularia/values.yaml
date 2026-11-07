@@ -799,6 +799,18 @@ dataApi:
     host: ""
     className: ""
     annotations: {}
+  # A host of their own (docs/data-apis.md, «A host of their own»): the address to give the
+  # other systems, with nothing else of Tabularia on it. Each active data API's Ingress goes
+  # there with /data/{address}/ only, every other path of that host is the controller's 404,
+  # and the interface's host no longer answers /data/…. Empty: the interface's host.
+  publicHost: ""          # e.g. data.example.com
+  # the address the pages and the documentation write; empty: https://<publicHost> (http
+  # without TLS)
+  publicBaseUrl: ""
+  # with ingress.tls set (or this), the public host's certificate: a Secret of the data APIs'
+  # namespace. templates/data-api-host.yaml asks for it with the main Ingress's annotations
+  # (cert-manager makes it); empty: <release>-data-api-tls
+  tlsSecretName: ""
   # The pods' NetworkPolicy, one per data API: in, the ingress controller only (no pod or
   # namespace of the cluster may call them); out, DNS, the gateway's manifest and usage
   # endpoints and the object storage, nothing else. Needs a network plugin that enforces

@@ -1,0 +1,50 @@
+{{- $host := include "tabularia.dataApiHost" . }}
+{{- if and .Values.scripts.enabled .Values.dataApi.enabled $host }}
+{{/*
+The data APIs on a host of their own (docs/data-apis.md, «A host of their own»): the reconcile
+loop publishes each active data API's /data/{address}/ on dataApi.publicHost
+(DATA_API__INGRESS_HOST), with its certificate (DATA_API__INGRESS_TLS_SECRET); nothing else of
+Tabularia is on that host, so every other path is the controller's 404.
+
+The host must be its own: not the interface's (ingress.hosts), nor the share links'.
+
+With TLS, the certificate is a Secret of the data APIs' namespace, where their Ingresses are.
+This Ingress, with no path at all, asks for it with the main Ingress's annotations (cert-manager
+makes the Secret from them); the data APIs' Ingresses name the same Secret and are not
+cert-manager's. With the Secret made by hand, it is harmless. Not labelled as a data API's: the
+reconcile loop leaves it alone.
+*/}}
+{{- range .Values.ingress.hosts }}
+{{- if eq (.host | lower) $host }}
+{{- fail (printf "dataApi.publicHost (%s) must be a host of its own, not the interface's (ingress.hosts): on it only the data APIs are published" $host) }}
+{{- end }}
+{{- end }}
+{{- if eq (include "tabularia.shareHost" .) $host }}
+{{- fail (printf "dataApi.publicHost (%s) must not be share.publicHost: each is a host of its own" $host) }}
+{{- end }}
+{{- $secret := include "tabularia.dataApiTLSSecret" . }}
+{{- if $secret }}
+{{- $annotations := merge (deepCopy (.Values.dataApi.ingress.annotations | default dict)) (deepCopy (.Values.ingress.annotations | default dict)) }}
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: {{ include "tabularia.fullname" . }}-data-api-host
+  namespace: {{ include "tabularia.dataApiNamespace" . }}
+  labels:
+    {{- include "tabularia.labels" . | nindent 4 }}
+    app.kubernetes.io/component: data-api-host
+  {{- with $annotations }}
+  annotations:
+    {{- toYaml . | nindent 4 }}
+  {{- end }}
+spec:
+  {{- with (.Values.dataApi.ingress.className | default .Values.ingress.className) }}
+  ingressClassName: {{ . }}
+  {{- end }}
+  tls:
+    - hosts: [{{ $host | quote }}]
+      secretName: {{ $secret }}
+  rules:
+    - host: {{ $host | quote }}
+{{- end }}
+{{- end }}

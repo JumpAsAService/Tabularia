@@ -464,9 +464,13 @@ dataApi.networkPolicy.storageCIDRs, or any public address, on the storage's port
   value: {{ $d.maxDisk | default "20Gi" | quote }}
 - name: DATA_API__INGRESS_CLASS
   value: {{ $ing.className | default .Values.ingress.className | default "" | quote }}
-# the host the data APIs are published on
+# the host the data APIs are published on: their own (dataApi.publicHost), or the interface's
 - name: DATA_API__INGRESS_HOST
-  value: {{ $ing.host | default $firstHost | quote }}
+  value: {{ include "tabularia.dataApiHost" . | default $ing.host | default $firstHost | quote }}
+- name: DATA_API__INGRESS_TLS_SECRET
+  value: {{ include "tabularia.dataApiTLSSecret" . | quote }}
+- name: DATA_API__PUBLIC_BASE_URL
+  value: {{ include "tabularia.dataApiPublicBaseUrl" . | quote }}
 - name: DATA_API__INGRESS_ANNOTATIONS
   value: {{ toJson ($ing.annotations | default dict) | quote }}
 - name: DATA_API__NETWORK_POLICY
@@ -564,6 +568,42 @@ Args (a dict): root, apiVersion, kind, name, field, value (the chart's)
 {{- end -}}
 {{- end -}}
 {{- $v -}}
+{{- end -}}
+
+{{/*
+The data APIs' host of their own (dataApi.publicHost), lower case; empty when off.
+*/}}
+{{- define "tabularia.dataApiHost" -}}
+{{- $d := .Values.dataApi | default dict -}}
+{{- $d.publicHost | default "" | lower -}}
+{{- end -}}
+
+{{/*
+The certificate of the data APIs' host of their own: dataApi.tlsSecretName, or
+<release>-data-api-tls when the interface has TLS (ingress.tls); empty without a host of their
+own, or without TLS.
+*/}}
+{{- define "tabularia.dataApiTLSSecret" -}}
+{{- $d := .Values.dataApi | default dict -}}
+{{- if include "tabularia.dataApiHost" . -}}
+{{- if $d.tlsSecretName -}}{{ $d.tlsSecretName }}
+{{- else if .Values.ingress.tls | default list -}}{{ include "tabularia.fullname" . }}-data-api-tls
+{{- end -}}
+{{- end -}}
+{{- end -}}
+
+{{/*
+DATA_API__PUBLIC_BASE_URL: dataApi.publicBaseUrl when given, otherwise the host of their own
+with https when it has a certificate (http without), empty without a host of their own.
+*/}}
+{{- define "tabularia.dataApiPublicBaseUrl" -}}
+{{- $d := .Values.dataApi | default dict -}}
+{{- $host := include "tabularia.dataApiHost" . -}}
+{{- if $d.publicBaseUrl -}}
+{{- $d.publicBaseUrl | trimSuffix "/" -}}
+{{- else if $host -}}
+{{- if include "tabularia.dataApiTLSSecret" . -}}https://{{ $host }}{{- else -}}http://{{ $host }}{{- end -}}
+{{- end -}}
 {{- end -}}
 
 {{/*
