@@ -4,12 +4,7 @@ import (
 	"strings"
 	"testing"
 	"time"
-
-	"github.com/JumpAsAService/Tabularia/gateway-go/internal/config"
 )
-
-var caps = config.DataAPIConfig{Enabled: true, MaxAPIs: 5, MaxReplicas: 3, MaxTotalReplicas: 4, MaxCPU: "1", MaxMemory: "1Gi",
-	KeyMaxDays: 365, KeyDefaultRate: 600}
 
 func TestSlugs(t *testing.T) {
 	for _, ok := range []string{"crm", "crm-customers", "a1", strings.Repeat("a", 63)} {
@@ -24,35 +19,80 @@ func TestSlugs(t *testing.T) {
 	}
 }
 
-func TestRuntimeWithinTheCaps(t *testing.T) {
-	rt, err := CheckRuntime(Runtime{Replicas: 2, CPU: " 500m ", Memory: "512Mi"}, caps)
+func TestRuntimeWithinTheBounds(t *testing.T) {
+	rt, err := CheckRuntime(Runtime{Replicas: 2, CPU: " 500m ", Memory: "512Mi"}, 4)
 	if err != nil || rt.CPU != "500m" || rt.MinReplicas != 2 || rt.MaxReplicas != 2 || rt.Pods() != 2 {
 		t.Fatalf("%+v %v", rt, err)
 	}
-	rt, err = CheckRuntime(Runtime{Autoscale: true, MinReplicas: 1, MaxReplicas: 3, Replicas: 9, CPU: "1", Memory: "1Gi"}, caps)
+	rt, err = CheckRuntime(Runtime{Autoscale: true, MinReplicas: 1, MaxReplicas: 3, Replicas: 9, CPU: "1", Memory: "1Gi"}, 4)
 	if err != nil || rt.Replicas != 1 || rt.Pods() != 3 {
 		t.Fatalf("%+v %v", rt, err)
 	}
-	for _, bad := range []Runtime{
-		{Replicas: 0, CPU: "500m", Memory: "512Mi"},
-		{Replicas: 4, CPU: "500m", Memory: "512Mi"},
-		{Autoscale: true, MinReplicas: 2, MaxReplicas: 1, CPU: "500m", Memory: "512Mi"},
-		{Autoscale: true, MinReplicas: 1, MaxReplicas: 4, CPU: "500m", Memory: "512Mi"},
-		{Replicas: 1, CPU: "1.5", Memory: "512Mi"},
-		{Replicas: 1, CPU: "10m", Memory: "512Mi"},
-		{Replicas: 1, CPU: "a lot", Memory: "512Mi"},
-		{Replicas: 1, CPU: "500m", Memory: "2Gi"},
-		{Replicas: 1, CPU: "500m", Memory: "64Mi"},
-		{Replicas: 1, CPU: "500m", Memory: "512MB"},
+	// far past what the chart used to allow one data API: the administrator's to decide
+	if rt, err = CheckRuntime(Runtime{Replicas: 12, CPU: "8", Memory: "32Gi"}, 100); err != nil || rt.Pods() != 12 {
+		t.Fatalf("%+v %v", rt, err)
+	}
+	if _, err = CheckRuntime(Runtime{Replicas: 1, CPU: "16", Memory: "64Gi"}, 100); err != nil {
+		t.Errorf("the largest pod: %v", err)
+	}
+	if _, err = CheckRuntime(Runtime{Replicas: 1, CPU: "100m", Memory: "256Mi"}, 100); err != nil {
+		t.Errorf("the smallest pod: %v", err)
+	}
+	for _, bad := range []struct {
+		rt    Runtime
+		total int
+		why   string
+	}{
+		{Runtime{Replicas: 0, CPU: "500m", Memory: "512Mi"}, 4, "at least 1 replica"},
+		{Runtime{Replicas: 5, CPU: "500m", Memory: "512Mi"}, 4, "at most 4 replicas"},
+		{Runtime{Replicas: 41, CPU: "500m", Memory: "512Mi"}, 1000, "at most 40 replicas"},
+		{Runtime{Autoscale: true, MinReplicas: 2, MaxReplicas: 1, CPU: "500m", Memory: "512Mi"}, 4, "autoscaling"},
+		{Runtime{Autoscale: true, MinReplicas: 1, MaxReplicas: 5, CPU: "500m", Memory: "512Mi"}, 4, "at most 4 replicas"},
+		{Runtime{Replicas: 1, CPU: "50m", Memory: "512Mi"}, 4, "at least 100m"},
+		{Runtime{Replicas: 1, CPU: "17", Memory: "512Mi"}, 4, "at most 16"},
+		{Runtime{Replicas: 1, CPU: "a lot", Memory: "512Mi"}, 4, "not a CPU quantity"},
+		{Runtime{Replicas: 1, CPU: "500m", Memory: "65Gi"}, 4, "at most 64Gi"},
+		{Runtime{Replicas: 1, CPU: "500m", Memory: "128Mi"}, 4, "at least 256Mi"},
+		{Runtime{Replicas: 1, CPU: "500m", Memory: "512MB"}, 4, "not a memory quantity"},
 	} {
-		if _, err := CheckRuntime(bad, caps); err == nil {
-			t.Errorf("%+v accepted", bad)
+		if _, err := CheckRuntime(bad.rt, bad.total); err == nil || !strings.Contains(err.Error(), bad.why) {
+			t.Errorf("%+v: %v", bad.rt, err)
 		}
 	}
-	small := caps
-	small.MaxCPU, small.MaxMemory = "100m", "200Mi"
-	if d := DefaultRuntime(small); d.CPU != "100m" || d.Memory != "200Mi" {
-		t.Errorf("the default above the caps: %+v", d)
+	if d := DefaultRuntime(); d.Pods() != 1 || d.CPU != DefaultCPU || d.Memory != DefaultMemory {
+		t.Errorf("the default: %+v", d)
+	}
+	if _, err := CheckRuntime(DefaultRuntime(), 1); err != nil {
+		t.Errorf("the default refused: %v", err)
+	}
+}
+
+func TestSameRuntime(t *testing.T) {
+	base := Runtime{Replicas: 2, MinReplicas: 2, MaxReplicas: 2, CPU: "1", Memory: "1Gi"}
+	for _, same := range []Runtime{
+		base,
+		{Replicas: 2, CPU: "1000m", Memory: "1024Mi"}, // the unused numbers, the spelling
+		{Replicas: 2, MinReplicas: 9, CPU: " 1 ", Memory: "1Gi"},
+	} {
+		if !SameRuntime(base, same) {
+			t.Errorf("%+v differs", same)
+		}
+	}
+	for _, other := range []Runtime{
+		{Replicas: 3, CPU: "1", Memory: "1Gi"},
+		{Replicas: 2, CPU: "500m", Memory: "1Gi"},
+		{Replicas: 2, CPU: "1", Memory: "2Gi"},
+		{Autoscale: true, MinReplicas: 2, MaxReplicas: 2, CPU: "1", Memory: "1Gi"},
+		{Replicas: 2, CPU: "x", Memory: "1Gi"},
+	} {
+		if SameRuntime(base, other) {
+			t.Errorf("%+v the same", other)
+		}
+	}
+	auto := Runtime{Autoscale: true, Replicas: 1, MinReplicas: 1, MaxReplicas: 3, CPU: "250m", Memory: "256Mi"}
+	if !SameRuntime(auto, Runtime{Autoscale: true, Replicas: 7, MinReplicas: 1, MaxReplicas: 3, CPU: "250m", Memory: "256Mi"}) ||
+		SameRuntime(auto, Runtime{Autoscale: true, MinReplicas: 1, MaxReplicas: 4, CPU: "250m", Memory: "256Mi"}) {
+		t.Error("autoscaling compared on its minimum and maximum")
 	}
 }
 

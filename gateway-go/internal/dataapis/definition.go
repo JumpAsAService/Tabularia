@@ -32,8 +32,6 @@ const (
 	DefaultPage      = 1000
 	MaxPage          = 10000
 	MaxSortColumns   = 5
-	MinMillicores    = 50
-	MinMemoryBytes   = 128 << 20
 	DefaultCPU       = "250m"
 	DefaultMemory    = "256Mi"
 	SourceDatasource = "datasource"
@@ -60,7 +58,9 @@ func CheckSlug(slug string) string {
 }
 
 // Runtime is how the pods of a data API run: a fixed number of replicas, or a minimum and a
-// maximum with autoscaling on CPU; the CPU and memory of each pod.
+// maximum with autoscaling on CPU; the CPU and memory of each pod. Only an administrator sets
+// it (Administration → Data APIs, or the API's page when an administrator opens it): a new
+// data API, and a copy, start from DefaultRuntime.
 type Runtime struct {
 	Autoscale   bool   `json:"autoscale"`
 	Replicas    int    `json:"replicas"`
@@ -70,16 +70,31 @@ type Runtime struct {
 	Memory      string `json:"memory"`
 }
 
-// DefaultRuntime is the runtime of a new data API, within the caps.
-func DefaultRuntime(c config.DataAPIConfig) Runtime {
-	rt := Runtime{Replicas: 1, MinReplicas: 1, MaxReplicas: 1, CPU: DefaultCPU, Memory: DefaultMemory}
-	if m, _ := config.Millicores(c.MaxCPU); m < 250 {
-		rt.CPU = c.MaxCPU
-	}
-	if b, _ := config.MemoryBytes(c.MaxMemory); b < 256<<20 {
-		rt.Memory = c.MaxMemory
-	}
-	return rt
+// The bounds of a runtime the administrator sets: not caps of the installation, only what a
+// pod of DuckDB needs to prepare a table (below them it fails on a medium one) and what is
+// reasonable to ask of a node. The pods of one data API are also at most the installation's
+// DATA_API__MAX_TOTAL_REPLICAS, and MaxReplicasPerAPI (the status keeps MaxPodRows pods).
+const (
+	MinMillicores     = 100
+	MaxMillicores     = 16_000
+	MinMemoryBytes    = int64(256) << 20
+	MaxMemoryBytes    = int64(64) << 30
+	MinCPU            = "100m"
+	MaxCPU            = "16"
+	MinMemory         = "256Mi"
+	MaxMemory         = "64Gi"
+	MaxReplicasPerAPI = 40
+)
+
+// DefaultRuntime is the runtime of a new data API and of a copy.
+func DefaultRuntime() Runtime {
+	return Runtime{Replicas: 1, MinReplicas: 1, MaxReplicas: 1, CPU: DefaultCPU, Memory: DefaultMemory}
+}
+
+// MostReplicas is the most pods one data API may run on this installation: MaxReplicasPerAPI,
+// or the most of all the active ones together when that is fewer.
+func MostReplicas(maxTotal int) int {
+	return max(min(MaxReplicasPerAPI, maxTotal), 1)
 }
 
 // Pods is the most pods the runtime may run.
@@ -90,24 +105,55 @@ func (r Runtime) Pods() int {
 	return r.Replicas
 }
 
-// CheckRuntime checks a runtime against the administrator's caps; it is returned tidied (the
-// quantities trimmed, the unused numbers in line with the used ones).
-func CheckRuntime(r Runtime, c config.DataAPIConfig) (Runtime, error) {
+// SameRuntime says whether two runtimes run the same pods: the same replicas (the ones used),
+// the same CPU and memory, whatever the quantities' spelling («1» and «1000m»).
+func SameRuntime(a, b Runtime) bool {
+	if a.Autoscale != b.Autoscale {
+		return false
+	}
+	if a.Autoscale && (a.MinReplicas != b.MinReplicas || a.MaxReplicas != b.MaxReplicas) {
+		return false
+	}
+	if !a.Autoscale && a.Replicas != b.Replicas {
+		return false
+	}
+	ca, errA := config.Millicores(a.CPU)
+	cb, errB := config.Millicores(b.CPU)
+	if errA != nil || errB != nil {
+		if strings.TrimSpace(a.CPU) != strings.TrimSpace(b.CPU) {
+			return false
+		}
+	} else if ca != cb {
+		return false
+	}
+	ma, errA := config.MemoryBytes(a.Memory)
+	mb, errB := config.MemoryBytes(b.Memory)
+	if errA != nil || errB != nil {
+		return strings.TrimSpace(a.Memory) == strings.TrimSpace(b.Memory)
+	}
+	return ma == mb
+}
+
+// CheckRuntime checks a runtime against the bounds above, with at most MostReplicas(maxTotal)
+// pods; it is returned tidied (the quantities trimmed, the unused numbers in line with the
+// used ones).
+func CheckRuntime(r Runtime, maxTotal int) (Runtime, error) {
 	r.CPU, r.Memory = strings.TrimSpace(r.CPU), strings.TrimSpace(r.Memory)
+	most := MostReplicas(maxTotal)
 	if r.Autoscale {
 		if r.MinReplicas < 1 || r.MaxReplicas < r.MinReplicas {
 			return r, errors.New("with autoscaling, the replicas go from a minimum of at least 1 to a maximum not below it")
 		}
-		if r.MaxReplicas > c.MaxReplicas {
-			return r, fmt.Errorf("at most %d replicas per data API", c.MaxReplicas)
+		if r.MaxReplicas > most {
+			return r, fmt.Errorf("at most %d replicas per data API", most)
 		}
 		r.Replicas = r.MinReplicas
 	} else {
 		if r.Replicas < 1 {
 			return r, errors.New("at least 1 replica")
 		}
-		if r.Replicas > c.MaxReplicas {
-			return r, fmt.Errorf("at most %d replicas per data API", c.MaxReplicas)
+		if r.Replicas > most {
+			return r, fmt.Errorf("at most %d replicas per data API", most)
 		}
 		r.MinReplicas, r.MaxReplicas = r.Replicas, r.Replicas
 	}
@@ -115,23 +161,21 @@ func CheckRuntime(r Runtime, c config.DataAPIConfig) (Runtime, error) {
 	if err != nil {
 		return r, err
 	}
-	maxCPU, _ := config.Millicores(c.MaxCPU)
 	if cpu < MinMillicores {
-		return r, fmt.Errorf("at least %dm of CPU per pod", MinMillicores)
+		return r, fmt.Errorf("at least %s of CPU per pod", MinCPU)
 	}
-	if cpu > maxCPU {
-		return r, fmt.Errorf("at most %s of CPU per pod", c.MaxCPU)
+	if cpu > MaxMillicores {
+		return r, fmt.Errorf("at most %s of CPU per pod", MaxCPU)
 	}
 	mem, err := config.MemoryBytes(r.Memory)
 	if err != nil {
 		return r, err
 	}
-	maxMem, _ := config.MemoryBytes(c.MaxMemory)
 	if mem < MinMemoryBytes {
-		return r, errors.New("at least 128Mi of memory per pod")
+		return r, fmt.Errorf("at least %s of memory per pod", MinMemory)
 	}
-	if mem > maxMem {
-		return r, fmt.Errorf("at most %s of memory per pod", c.MaxMemory)
+	if mem > MaxMemoryBytes {
+		return r, fmt.Errorf("at most %s of memory per pod", MaxMemory)
 	}
 	return r, nil
 }

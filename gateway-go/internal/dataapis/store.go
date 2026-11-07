@@ -58,6 +58,15 @@ func Get(ctx context.Context, q Querier, id int64) (*API, error) {
 	return a, err
 }
 
+// GetForUpdate is Get, the row locked until the transaction ends.
+func GetForUpdate(ctx context.Context, tx pgx.Tx, id int64) (*API, error) {
+	a, err := scanAPI(tx.QueryRow(ctx, `SELECT `+apiColumns+` FROM data_apis WHERE id = $1 FOR UPDATE`, id))
+	if errors.Is(err, pgx.ErrNoRows) {
+		return nil, nil
+	}
+	return a, err
+}
+
 // Visible are the data APIs this person sees (VIEW on their folder; an administrator every
 // one), in `projects` when not nil, by name.
 func Visible(ctx context.Context, q Querier, c *perm.Checker, projects []int64) ([]*API, error) {
@@ -164,7 +173,9 @@ func Insert(ctx context.Context, tx pgx.Tx, name, slug, description string, proj
 }
 
 // SaveDefinition writes a new version of the definition, which becomes the current one: the
-// resources' rows (kept by name, so a key's resources stay theirs) and the runtime.
+// resources' rows (kept by name, so a key's resources stay theirs). The version records the
+// runtime as it is; the data API's own runtime is the administrator's (SetRuntime), never
+// changed here.
 func SaveDefinition(ctx context.Context, tx pgx.Tx, a *API, def Definition, note string, userID int64) error {
 	if _, err := tx.Exec(ctx, `SELECT id FROM data_apis WHERE id = $1 FOR UPDATE`, a.ID); err != nil {
 		return err
@@ -200,12 +211,19 @@ func SaveDefinition(ctx context.Context, tx pgx.Tx, a *API, def Definition, note
 			return err
 		}
 	}
-	if _, err := tx.Exec(ctx, `UPDATE data_apis SET current_version = $2, runtime = $3, updated_at = $4 WHERE id = $1`,
-		a.ID, last+1, dumps(def.Runtime), now); err != nil {
+	if _, err := tx.Exec(ctx, `UPDATE data_apis SET current_version = $2, updated_at = $3 WHERE id = $1`,
+		a.ID, last+1, now); err != nil {
 		return err
 	}
-	a.CurrentVersion, a.Runtime, a.UpdatedAt = last+1, def.Runtime, now
+	a.CurrentVersion, a.UpdatedAt = last+1, now
 	return nil
+}
+
+// SetRuntime changes the runtime of the data API, outside its versions; the reconcile loop
+// applies it to the pods at its next round.
+func SetRuntime(ctx context.Context, q Querier, id int64, rt Runtime) error {
+	_, err := q.Exec(ctx, `UPDATE data_apis SET runtime = $2, updated_at = $3 WHERE id = $1`, id, dumps(rt), Now())
+	return err
 }
 
 // Version is a row of data_api_versions.

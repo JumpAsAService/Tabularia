@@ -9,21 +9,17 @@ import (
 )
 
 // DataAPIConfig is what the data APIs read of the environment (docs/specs/data-apis.md): a
-// feature of the Go gateway only, with no twin in the Python settings. The administrator's
-// caps; the panel's «Data APIs» category may change them later.
+// feature of the Go gateway only, with no twin in the Python settings. The installation's caps;
+// the runtime of each data API (replicas, CPU, memory) is not capped here: an administrator
+// sets it, within the bounds of dataapis.CheckRuntime and the most pods of all of them.
 type DataAPIConfig struct {
 	// DATA_API__ENABLED: the feature, on Kubernetes only (the scripting's settings say where
 	// that is); off by default
 	Enabled bool
 	// DATA_API__MAX_APIS: the most data APIs in the installation
 	MaxAPIs int
-	// DATA_API__MAX_REPLICAS, DATA_API__MAX_TOTAL_REPLICAS: the most pods of one data API, and
-	// of all the active ones together
-	MaxReplicas      int
+	// DATA_API__MAX_TOTAL_REPLICAS: the most pods of all the active data APIs together
 	MaxTotalReplicas int
-	// DATA_API__MAX_CPU, DATA_API__MAX_MEMORY: the largest pod, as Kubernetes quantities
-	MaxCPU    string
-	MaxMemory string
 	// DATA_API__KEY_MAX_DAYS: a key's longest life; DATA_API__KEY_DEFAULT_RATE: the requests
 	// per minute of a key made without a rate
 	KeyMaxDays     int
@@ -136,10 +132,7 @@ func loadDataAPI(r *reader) DataAPIConfig {
 	c := DataAPIConfig{
 		Enabled:            r.boolean("DATA_API__ENABLED", false),
 		MaxAPIs:            r.integer("DATA_API__MAX_APIS", 20, 0, 10000),
-		MaxReplicas:        r.integer("DATA_API__MAX_REPLICAS", 3, 1, 100),
 		MaxTotalReplicas:   r.integer("DATA_API__MAX_TOTAL_REPLICAS", 10, 1, 1000),
-		MaxCPU:             strings.TrimSpace(r.str("DATA_API__MAX_CPU", "1")),
-		MaxMemory:          strings.TrimSpace(r.str("DATA_API__MAX_MEMORY", "1Gi")),
 		KeyMaxDays:         r.integer("DATA_API__KEY_MAX_DAYS", 365, 1, 3650),
 		KeyDefaultRate:     r.integer("DATA_API__KEY_DEFAULT_RATE", 600, 1, 1_000_000),
 		PollSeconds:        r.integer("DATA_API__POLL_SECONDS", 20, 5, 600),
@@ -194,13 +187,5 @@ func loadDataAPI(r *reader) DataAPIConfig {
 	p.NetworkPolicy = r.boolean("DATA_API__NETWORK_POLICY", true)
 	p.IngressFrom = jsonList(r, "DATA_API__NETWORK_POLICY_INGRESS_FROM")
 	p.Egress = jsonList(r, "DATA_API__NETWORK_POLICY_EGRESS")
-	if _, err := Millicores(c.MaxCPU); err != nil {
-		r.fail("DATA_API__MAX_CPU", err.Error())
-		c.MaxCPU = "1"
-	}
-	if _, err := MemoryBytes(c.MaxMemory); err != nil {
-		r.fail("DATA_API__MAX_MEMORY", err.Error())
-		c.MaxMemory = "1Gi"
-	}
 	return c
 }

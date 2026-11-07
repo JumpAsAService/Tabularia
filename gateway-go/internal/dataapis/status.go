@@ -84,7 +84,7 @@ func SetPodsCluster(ctx context.Context, q Querier, apiID int64, pods []PodClust
 var podNameRe = regexp.MustCompile(`^[a-z0-9]([a-z0-9.-]{0,251}[a-z0-9])?$`)
 
 // MaxPodRows is the most pods a data API keeps rows of: a report from one more is left out
-// (the pods of one data API are at most DATA_API__MAX_REPLICAS, and a rollout's new ones).
+// (the pods of one data API are at most MaxReplicasPerAPI, and a rollout's new ones).
 const MaxPodRows = 50
 
 // RecordPodReport keeps a pod's report of itself; false when it is left out (not a pod's

@@ -63,8 +63,7 @@ func newDapiFixture(t *testing.T) *dapiFixture {
 	}
 	log := slog.New(slog.NewTextHandler(io.Discard, nil))
 	cfg := &config.Config{ScriptsEnabled: true, ScriptsNamespace: "scripts", ScriptsRegistry: "registry:5000",
-		DataAPI: config.DataAPIConfig{Enabled: true, MaxAPIs: 1000, MaxReplicas: 3, MaxTotalReplicas: 1000, MaxCPU: "1",
-			MaxMemory: "1Gi", KeyMaxDays: 365, KeyDefaultRate: 600}}
+		DataAPI: config.DataAPIConfig{Enabled: true, MaxAPIs: 1000, MaxTotalReplicas: 1000, KeyMaxDays: 365, KeyDefaultRate: 600}}
 	f.d = &Deps{DB: db, Log: log, Config: cfg,
 		Auth: &auth.Authenticator{DB: db, Secret: []byte("a test secret, not of anything"), Algorithm: "HS256",
 			Settings: shareSettingsStub{}, ClientIP: clientip.New(nil), Log: log}}
@@ -395,11 +394,6 @@ func TestDataAPIDefinitionChecks(t *testing.T) {
 			"columns": []string{"id"}, "max_page": 10001}}}, "largest page"},
 		{map[string]any{"name": "Bad", "slug": f.slug("x"), "resources": []any{map[string]any{"name": "c", "source": map[string]any{"id": 999999999},
 			"columns": []string{"id"}}}}, "may not read it"},
-		{map[string]any{"name": "Bad", "slug": f.slug("x"), "runtime": map[string]any{"replicas": 4, "cpu": "500m", "memory": "512Mi"}}, "at most 3 replicas"},
-		{map[string]any{"name": "Bad", "slug": f.slug("x"), "runtime": map[string]any{"replicas": 1, "cpu": "2", "memory": "512Mi"}}, "at most 1 of CPU"},
-		{map[string]any{"name": "Bad", "slug": f.slug("x"), "runtime": map[string]any{"replicas": 1, "cpu": "500m", "memory": "4Gi"}}, "at most 1Gi of memory"},
-		{map[string]any{"name": "Bad", "slug": f.slug("x"), "runtime": map[string]any{"autoscale": true, "min_replicas": 3, "max_replicas": 2,
-			"cpu": "500m", "memory": "512Mi"}}, "autoscaling"},
 	} {
 		if _, w := f.create(f.creator, f.folder, bad.body, http.StatusUnprocessableEntity); !strings.Contains(w.Body.String(), bad.why) {
 			t.Errorf("%s: %s", bad.why, w.Body.String())
@@ -472,11 +466,16 @@ func TestDataAPIStatesAndCaps(t *testing.T) {
 	others, _ := dataapis.ActivePods(f.ctx, f.db, 0)
 	f.d.Config.DataAPI.MaxTotalReplicas = others + 3
 	rt := map[string]any{"replicas": 2, "cpu": "500m", "memory": "512Mi"}
-	a, _ := f.create(f.creator, f.folder, map[string]any{"name": "A", "slug": f.slug("a"), "runtime": rt,
+	a, _ := f.create(f.creator, f.folder, map[string]any{"name": "A", "slug": f.slug("a"),
 		"resources": []any{f.resource("customers", f.customers)}}, http.StatusCreated)
-	b, _ := f.create(f.creator, f.folder, map[string]any{"name": "B", "slug": f.slug("b"), "runtime": rt,
+	b, _ := f.create(f.creator, f.folder, map[string]any{"name": "B", "slug": f.slug("b"),
 		"resources": []any{f.resource("orders", f.orders)}}, http.StatusCreated)
 	pa, pb := map[string]string{"api_id": dapiID(a.ID)}, map[string]string{"api_id": dapiID(b.ID)}
+	for _, p := range []map[string]string{pa, pb} {
+		if w := f.call(f.admin, adminDataAPIRuntimeRoute, http.MethodPut, rt, p); w.Code != http.StatusOK {
+			t.Fatalf("%d %s", w.Code, w.Body.String())
+		}
+	}
 	if v := decode[dapiDetail](t, f.call(f.creator, activateDataAPI, http.MethodPost, nil, pa)); v.State != "active" || v.Suspended != "" {
 		t.Fatalf("%+v", v)
 	}
@@ -485,15 +484,16 @@ func TestDataAPIStatesAndCaps(t *testing.T) {
 		t.Errorf("past the total: %d %s", w.Code, w.Body.String())
 	}
 	// an active API's runtime grows only within the total
-	if w := f.call(f.creator, updateDataAPI, http.MethodPatch, map[string]any{"runtime": map[string]any{"replicas": 3, "cpu": "500m",
-		"memory": "512Mi"}}, pa); w.Code != http.StatusOK {
+	if w := f.call(f.admin, adminDataAPIRuntimeRoute, http.MethodPut, map[string]any{"replicas": 3, "cpu": "500m",
+		"memory": "512Mi"}, pa); w.Code != http.StatusOK {
 		t.Errorf("within the total: %d %s", w.Code, w.Body.String())
 	}
 	f.d.Config.DataAPI.MaxTotalReplicas = others + 2
-	if w := f.call(f.creator, updateDataAPI, http.MethodPatch, map[string]any{"runtime": map[string]any{"autoscale": true, "min_replicas": 1,
-		"max_replicas": 3, "cpu": "250m", "memory": "512Mi"}}, pa); w.Code != http.StatusConflict {
-		t.Errorf("past the total: %d %s", w.Code, w.Body.String())
+	if w := f.call(f.admin, adminDataAPIRuntimeRoute, http.MethodPut, map[string]any{"autoscale": true, "min_replicas": 1,
+		"max_replicas": 2, "cpu": "250m", "memory": "512Mi"}, pa); w.Code != http.StatusOK {
+		t.Errorf("down to the total: %d %s", w.Code, w.Body.String())
 	}
+	f.d.Config.DataAPI.MaxTotalReplicas = others + 3
 	// the address of an active API stays
 	if w := f.call(f.creator, updateDataAPI, http.MethodPatch, map[string]any{"slug": f.slug("moved")}, pa); w.Code != http.StatusConflict {
 		t.Errorf("slug of an active API: %d", w.Code)
@@ -710,5 +710,159 @@ func TestDataAPIKeepsItsDatasourceAndFolder(t *testing.T) {
 	deleteDatasource(f.d)(w, dsPath(f.customers), &auth.Principal{User: *f.creator})
 	if w.Code != http.StatusNoContent {
 		t.Errorf("deleting it once taken out: %d %s", w.Code, w.Body.String())
+	}
+}
+
+// The runtime is the administrator's (the user's decision of 2026-11-07): the creator cannot
+// change it, sending it back as it is passes; an administrator sets it on any data API, past
+// what one data API could ask before, within the bounds and the most pods of all the active
+// ones; the audit has it with before and after; a copy starts again from the default.
+func TestDataAPIRuntimeIsTheAdministrators(t *testing.T) {
+	f := newDapiFixture(t)
+	big := map[string]any{"replicas": 6, "cpu": "4", "memory": "8Gi"}
+	code := func(w *httptest.ResponseRecorder) string {
+		return decode[struct {
+			Code string `json:"code"`
+		}](t, w).Code
+	}
+	if _, w := f.create(f.creator, f.folder, map[string]any{"name": "Mine", "slug": f.slug("rt"), "runtime": big},
+		http.StatusForbidden); code(w) != "runtime_admin_only" {
+		t.Fatalf("a new one with its own runtime: %s", w.Body.String())
+	}
+	// the default as the page has it, spelled otherwise: the same
+	a, _ := f.create(f.creator, f.folder, map[string]any{"name": "Runtime", "slug": f.slug("rt"),
+		"runtime":   map[string]any{"replicas": 1, "min_replicas": 1, "max_replicas": 1, "cpu": "0.25", "memory": "256Mi"},
+		"resources": []any{f.resource("customers", f.customers)}}, http.StatusCreated)
+	if !dataapis.SameRuntime(a.Runtime, dataapis.DefaultRuntime()) || a.Runtime.CPU != dataapis.DefaultCPU {
+		t.Fatalf("%+v", a.Runtime)
+	}
+	path := map[string]string{"api_id": dapiID(a.ID)}
+	if w := f.call(f.creator, updateDataAPI, http.MethodPatch, map[string]any{"runtime": big}, path); w.Code != http.StatusForbidden ||
+		code(w) != "runtime_admin_only" {
+		t.Fatalf("the creator changing it: %d %s", w.Code, w.Body.String())
+	}
+	if w := f.call(f.creator, updateDataAPI, http.MethodPatch, map[string]any{"name": "Runtime 2", "runtime": a.Runtime}, path); w.Code != http.StatusOK {
+		t.Fatalf("the page sending it back: %d %s", w.Code, w.Body.String())
+	}
+	// who may set it: an administrator only, not an observer, not whoever manages the folder
+	for _, u := range []*auth.User{f.creator, f.manager, f.observer, f.viewer} {
+		if w := f.call(u, adminDataAPIRuntimeRoute, http.MethodPut, big, path); w.Code != http.StatusForbidden {
+			t.Errorf("%s: %d", u.FullName, w.Code)
+		}
+	}
+	for u, want := range map[*auth.User]bool{f.admin: true, f.creator: false, f.observer: false} {
+		if got := decode[struct {
+			Can bool `json:"can_set_runtime"`
+		}](t, f.call(u, getDataAPI, http.MethodGet, nil, path)); got.Can != want {
+			t.Errorf("%s: can_set_runtime %v", u.FullName, got.Can)
+		}
+	}
+	// an administrator, on someone else's data API, past the chart's old caps (3 pods, 1 CPU, 1Gi)
+	w := f.call(f.admin, adminDataAPIRuntimeRoute, http.MethodPut, map[string]any{"replicas": 6, "cpu": " 4 ", "memory": "8Gi"}, path)
+	if w.Code != http.StatusOK {
+		t.Fatalf("%d %s", w.Code, w.Body.String())
+	}
+	if got := decode[dataapis.Runtime](t, w); got.Replicas != 6 || got.MinReplicas != 6 || got.CPU != "4" || got.Memory != "8Gi" {
+		t.Fatalf("%+v", got)
+	}
+	v := decode[dapiDetail](t, f.call(f.creator, getDataAPI, http.MethodGet, nil, path))
+	if v.Runtime.Replicas != 6 || v.Runtime.Memory != "8Gi" || v.CurrentVersion != 1 {
+		t.Fatalf("not a version, and the page has it: %+v", v)
+	}
+	var before, after, by string
+	if err := f.db.QueryRow(f.ctx, `SELECT detail::json->'before'->>'replicas', detail::json->'after'->>'memory', detail::json->>'by'
+		FROM audit_logs WHERE target_type = 'data_api' AND target_id = $1 AND action = 'data_api.runtime' AND actor_id = $2`,
+		a.ID, f.admin.ID).Scan(&before, &after, &by); err != nil || before != "1" || after != "8Gi" || by != "administration" {
+		t.Fatalf("the audit: %v %q %q %q", err, before, after, by)
+	}
+	// the same again: answered, not recorded twice
+	if w := f.call(f.admin, adminDataAPIRuntimeRoute, http.MethodPut, map[string]any{"replicas": 6, "cpu": "4000m", "memory": "8192Mi"}, path); w.Code != http.StatusOK ||
+		f.audited(a.ID, "data_api.runtime") != 1 {
+		t.Errorf("the same runtime: %d, audited %d", w.Code, f.audited(a.ID, "data_api.runtime"))
+	}
+	// the creator's page, opened before: its old runtime is now a change, refused; the new one passes
+	if w := f.call(f.creator, updateDataAPI, http.MethodPatch, map[string]any{"runtime": dataapis.DefaultRuntime()}, path); w.Code != http.StatusForbidden {
+		t.Errorf("the old runtime sent back: %d", w.Code)
+	}
+	r2 := f.resource("customers", f.customers)
+	r2["columns"] = []string{"id", "name"}
+	r2["filters"] = []any{map[string]any{"column": "id", "operators": []string{"eq"}}}
+	if w := f.call(f.creator, updateDataAPI, http.MethodPatch, map[string]any{"resources": []any{r2}, "runtime": v.Runtime}, path); w.Code != http.StatusOK {
+		t.Fatalf("an edit with the runtime as it is: %d %s", w.Code, w.Body.String())
+	}
+	// a version restored keeps the administrator's runtime
+	restored := decode[dapiDetail](t, f.call(f.creator, restoreDataAPIVersion, http.MethodPost, nil,
+		map[string]string{"api_id": dapiID(a.ID), "version": "1"}))
+	if restored.CurrentVersion != 3 || restored.Runtime.Replicas != 6 || restored.Runtime.CPU != "4" {
+		t.Fatalf("restored: %+v", restored)
+	}
+	// not valid, whoever asks
+	f.d.Config.DataAPI.MaxTotalReplicas = 5
+	for _, bad := range []struct {
+		rt  map[string]any
+		why string
+	}{
+		{map[string]any{"replicas": 1, "cpu": "lots", "memory": "1Gi"}, "not a CPU quantity"},
+		{map[string]any{"replicas": 1, "cpu": "1", "memory": "1GB of RAM"}, "not a memory quantity"},
+		{map[string]any{"replicas": 1, "cpu": "50m", "memory": "1Gi"}, "at least 100m"},
+		{map[string]any{"replicas": 1, "cpu": "1", "memory": "128Mi"}, "at least 256Mi"},
+		{map[string]any{"replicas": 1, "cpu": "32", "memory": "1Gi"}, "at most 16"},
+		{map[string]any{"replicas": 1, "cpu": "1", "memory": "128Gi"}, "at most 64Gi"},
+		{map[string]any{"replicas": 0, "cpu": "1", "memory": "1Gi"}, "at least 1 replica"},
+		{map[string]any{"replicas": 6, "cpu": "1", "memory": "1Gi"}, "at most 5 replicas"},
+		{map[string]any{"autoscale": true, "min_replicas": 2, "max_replicas": 9, "cpu": "1", "memory": "1Gi"}, "at most 5 replicas"},
+	} {
+		w := f.call(f.admin, adminDataAPIRuntimeRoute, http.MethodPut, bad.rt, path)
+		if w.Code != http.StatusUnprocessableEntity || !strings.Contains(w.Body.String(), bad.why) {
+			t.Errorf("%v: %d %s", bad.rt, w.Code, w.Body.String())
+		}
+	}
+	// active: within the most pods of all the active ones together
+	if w := f.call(f.admin, adminDataAPIRuntimeRoute, http.MethodPut, map[string]any{"replicas": 2, "cpu": "500m", "memory": "512Mi"}, path); w.Code != http.StatusOK {
+		t.Fatalf("%d %s", w.Code, w.Body.String())
+	}
+	if w := f.call(f.creator, activateDataAPI, http.MethodPost, nil, path); w.Code != http.StatusOK {
+		t.Fatalf("%d %s", w.Code, w.Body.String())
+	}
+	// another active one with two pods, so the total is past the pods of one
+	b, _ := f.create(f.manager, f.folder, map[string]any{"name": "Other", "slug": f.slug("rt"),
+		"resources": []any{f.resource("orders", f.orders)}}, http.StatusCreated)
+	pb := map[string]string{"api_id": dapiID(b.ID)}
+	if w := f.call(f.admin, adminDataAPIRuntimeRoute, http.MethodPut, map[string]any{"replicas": 2, "cpu": "250m", "memory": "256Mi"}, pb); w.Code != http.StatusOK {
+		t.Fatalf("%d %s", w.Code, w.Body.String())
+	}
+	if w := f.call(f.manager, activateDataAPI, http.MethodPost, nil, pb); w.Code != http.StatusOK {
+		t.Fatalf("%d %s", w.Code, w.Body.String())
+	}
+	others, _ := dataapis.ActivePods(f.ctx, f.db, a.ID)
+	f.d.Config.DataAPI.MaxTotalReplicas = others + 2
+	if w := f.call(f.admin, adminDataAPIRuntimeRoute, http.MethodPut, map[string]any{"autoscale": true, "min_replicas": 1, "max_replicas": 3,
+		"cpu": "500m", "memory": "1Gi"}, path); w.Code != http.StatusConflict || !strings.Contains(w.Body.String(), "pods together") {
+		t.Errorf("past the total: %d %s", w.Code, w.Body.String())
+	}
+	if w := f.call(f.admin, adminDataAPIRuntimeRoute, http.MethodPut, map[string]any{"replicas": 2, "cpu": "1", "memory": "2Gi"}, path); w.Code != http.StatusOK {
+		t.Errorf("within the total: %d %s", w.Code, w.Body.String())
+	}
+	// a paused one is not counted: its runtime may wait for the others
+	if w := f.call(f.manager, pauseDataAPI, http.MethodPost, nil, pb); w.Code != http.StatusOK {
+		t.Fatal(w.Code)
+	}
+	if w := f.call(f.admin, adminDataAPIRuntimeRoute, http.MethodPut, map[string]any{"replicas": 4, "cpu": "250m", "memory": "256Mi"}, pb); w.Code != http.StatusOK {
+		t.Errorf("a paused one: %d %s", w.Code, w.Body.String())
+	}
+	f.d.Config.DataAPI.MaxTotalReplicas = 1000
+	// a copy starts from the default
+	cp := decode[dapiDetail](t, f.call(f.manager, duplicateDataAPI, http.MethodPost, nil, path))
+	if !dataapis.SameRuntime(cp.Runtime, dataapis.DefaultRuntime()) {
+		t.Errorf("the copy's runtime: %+v", cp.Runtime)
+	}
+	// with the feature off, nothing to set
+	f.d.Config.DataAPI.Enabled = false
+	if w := f.call(f.admin, adminDataAPIRuntimeRoute, http.MethodPut, big, path); w.Code != http.StatusConflict {
+		t.Errorf("switched off: %d", w.Code)
+	}
+	f.d.Config.DataAPI.Enabled = true
+	if w := f.call(f.admin, adminDataAPIRuntimeRoute, http.MethodPut, big, map[string]string{"api_id": "999999999"}); w.Code != http.StatusNotFound {
+		t.Errorf("not there: %d", w.Code)
 	}
 }

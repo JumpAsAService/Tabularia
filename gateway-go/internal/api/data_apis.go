@@ -7,10 +7,12 @@ package api
 // (server/go_only_routes.go).
 //
 // Who: VIEW on the folder sees a data API; MANAGE on it (or an administrator) makes, edits
-// and manages its keys, and must be able to read every datasource it publishes. Where: on
+// and manages its keys, and must be able to read every datasource it publishes. Its runtime
+// (replicas, CPU, memory) is the administrator's alone (data_apis_admin.go): here a new one
+// and a copy get DefaultRuntime, and an edit that would change it is refused. Where: on
 // Kubernetes only, with DATA_API__ENABLED; elsewhere the lists are empty and the rest
-// answers 409, as the saved scripts do. The pods, their manifest and the reconcile loop come
-// later: for now the state is only kept.
+// answers 409, as the saved scripts do. The pods' side is data_apis_pods.go, the reconcile
+// loop that runs them jobs_data_apis.go.
 
 import (
 	"context"
@@ -25,6 +27,7 @@ import (
 
 	"github.com/JumpAsAService/Tabularia/gateway-go/internal/audit"
 	"github.com/JumpAsAService/Tabularia/gateway-go/internal/auth"
+	"github.com/JumpAsAService/Tabularia/gateway-go/internal/config"
 	"github.com/JumpAsAService/Tabularia/gateway-go/internal/copynames"
 	"github.com/JumpAsAService/Tabularia/gateway-go/internal/dataapis"
 	"github.com/JumpAsAService/Tabularia/gateway-go/internal/perm"
@@ -113,6 +116,8 @@ type dataAPIOut struct {
 	UpdatedAt      *string        `json:"updated_at"`
 	// MANAGE on the folder (or an administrator), not an observer: editing, the keys
 	CanManage bool `json:"can_manage"`
+	// an administrator (not an observer): the runtime (PUT /admin/data-apis/{id}/runtime)
+	CanSetRuntime bool `json:"can_set_runtime"`
 }
 
 // dataAPIDatasource is the datasource of a resource, as the page shows it: its name and its
@@ -196,6 +201,11 @@ func (o *dataAPIOuts) of(a *dataapis.API, resources int) (dataAPIOut, error) {
 		out.Creator = &dataAPIPerson{ID: creator.ID, Email: creator.Email, FullName: creator.FullName}
 	}
 	out.CanManage, err = o.canManage(a.ProjectID)
+	if err != nil {
+		return out, err
+	}
+	rs, err := o.c.Roles(o.ctx)
+	out.CanSetRuntime = rs.Admin
 	return out, err
 }
 
@@ -414,17 +424,12 @@ func refused422(err error) *dataAPIRefusal {
 	return &dataAPIRefusal{http.StatusUnprocessableEntity, dataapis.Sentence(err.Error())}
 }
 
-// checkDataAPIDefinition checks a definition this person saves: the runtime within the caps,
-// the resources against their datasources; and this person must be able to read the
-// datasource of every resource that is new or changed (`before`: the resources as they were;
-// what someone else published and is left as it is stays).
+// checkDataAPIDefinition checks the resources of a definition this person saves against their
+// datasources; and this person must be able to read the datasource of every resource that is
+// new or changed (`before`: the resources as they were; what someone else published and is
+// left as it is stays). The runtime is not theirs: it is left as it comes.
 func checkDataAPIDefinition(ctx context.Context, d *Deps, c *perm.Checker, def dataapis.Definition,
 	before []dataapis.Resource) (dataapis.Definition, *dataAPIRefusal, error) {
-	rt, err := dataapis.CheckRuntime(def.Runtime, d.Config.DataAPI)
-	if err != nil {
-		return def, refused422(fmt.Errorf("the runtime: %w", err)), nil
-	}
-	def.Runtime = rt
 	ids := []int64{}
 	for _, r := range def.Resources {
 		ids = append(ids, r.Source.ID)
@@ -454,6 +459,19 @@ func checkDataAPIDefinition(ctx context.Context, d *Deps, c *perm.Checker, def d
 		}
 	}
 	return def, nil, nil
+}
+
+// runtimeAdminOnly is the 403 of a save that would change the runtime: only an administrator
+// sets it, from the administration (a page that sends it back as it is, is fine).
+func runtimeAdminOnly(w http.ResponseWriter) {
+	server.JSON(w, http.StatusForbidden, map[string]string{"code": "runtime_admin_only",
+		"detail": "The runtime (replicas, CPU, memory) is set by an administrator, in Administration → Data APIs"})
+}
+
+// runtimeLimits are the bounds of a runtime, as the pages check them before the gateway does.
+func runtimeLimits(c config.DataAPIConfig) map[string]any {
+	return map[string]any{"min_cpu": dataapis.MinCPU, "max_cpu": dataapis.MaxCPU, "min_memory": dataapis.MinMemory,
+		"max_memory": dataapis.MaxMemory, "max_replicas": dataapis.MostReplicas(c.MaxTotalReplicas)}
 }
 
 // checkDataAPIPods refuses a runtime that would take the active data APIs past the most
@@ -560,10 +578,8 @@ func dataAPILimits(d *Deps, w http.ResponseWriter, r *http.Request, p *auth.Prin
 		}
 		out["count"] = n
 		out["max_apis"] = c.MaxAPIs
-		out["max_replicas"] = c.MaxReplicas
 		out["max_total_replicas"] = c.MaxTotalReplicas
-		out["max_cpu"] = c.MaxCPU
-		out["max_memory"] = c.MaxMemory
+		out["runtime_limits"] = runtimeLimits(c)
 		out["key_max_days"] = c.KeyMaxDays
 		out["key_default_rate"] = c.KeyDefaultRate
 		out["key_max_rate"] = dataapis.MaxRate
@@ -571,7 +587,7 @@ func dataAPILimits(d *Deps, w http.ResponseWriter, r *http.Request, p *auth.Prin
 		out["default_page"] = dataapis.DefaultPage
 		out["max_page"] = dataapis.MaxPage
 		out["operators"] = dataapis.Operators
-		out["default_runtime"] = dataapis.DefaultRuntime(c)
+		out["default_runtime"] = dataapis.DefaultRuntime()
 		// where the other systems call: the public address (dataApi.publicHost) or the host the
 		// data APIs are published on; both empty: the interface's own
 		out["base_url"] = c.Pods.PublicBaseURL
@@ -660,9 +676,10 @@ func createDataAPI(d *Deps, w http.ResponseWriter, r *http.Request, p *auth.Prin
 	if answerRefusal(d, w, "", ref, nil) {
 		return
 	}
-	def := dataapis.Definition{Resources: in.Resources, Runtime: dataapis.DefaultRuntime(d.Config.DataAPI)}
-	if in.Runtime != nil {
-		def.Runtime = *in.Runtime
+	def := dataapis.Definition{Resources: in.Resources, Runtime: dataapis.DefaultRuntime()}
+	if in.Runtime != nil && !dataapis.SameRuntime(*in.Runtime, def.Runtime) {
+		runtimeAdminOnly(w)
+		return
 	}
 	def, ref, err = checkDataAPIDefinition(ctx, d, c, def, nil)
 	if answerRefusal(d, w, "data apis: the definition", ref, err) {
@@ -698,8 +715,9 @@ type dataAPIUpdateIn struct {
 	Runtime     *dataapis.Runtime    `json:"runtime"`
 }
 
-// PATCH /data-apis/{api_id}: its name, address, description, folder, resources, runtime. A
-// change of what it publishes is a new version.
+// PATCH /data-apis/{api_id}: its name, address, description, folder, resources. A change of
+// what it publishes is a new version. The runtime may come back as it is (the page sends the
+// whole document); a different one is refused (runtimeAdminOnly).
 func updateDataAPI(d *Deps, w http.ResponseWriter, r *http.Request, p *auth.Principal) {
 	a, c, ok := dataAPIManaged(d, w, r, p)
 	if !ok {
@@ -761,15 +779,14 @@ func saveDataAPI(d *Deps, w http.ResponseWriter, r *http.Request, p *auth.Princi
 		fail(d, w, "data apis: the definition", err)
 		return
 	}
+	if in.Runtime != nil && !dataapis.SameRuntime(*in.Runtime, current.Runtime) {
+		runtimeAdminOnly(w)
+		return
+	}
 	def := current
 	newDefinition := false
-	if in.Resources != nil || in.Runtime != nil {
-		if in.Resources != nil {
-			def.Resources = *in.Resources
-		}
-		if in.Runtime != nil {
-			def.Runtime = *in.Runtime
-		}
+	if in.Resources != nil {
+		def.Resources = *in.Resources
 		def, ref, err = checkDataAPIDefinition(ctx, d, c, def, current.Resources)
 		if answerRefusal(d, w, "data apis: the definition", ref, err) {
 			return
@@ -792,11 +809,6 @@ func saveDataAPI(d *Deps, w http.ResponseWriter, r *http.Request, p *auth.Princi
 		}
 	}
 	err = inTx(ctx, d, func(tx pgx.Tx) error {
-		if a.State == dataapis.Active && newDefinition {
-			if ref, err = checkDataAPIPods(ctx, d, tx, a.ID, def.Runtime); err != nil || ref != nil {
-				return err
-			}
-		}
 		if newDefinition {
 			if err := dataapis.SaveDefinition(ctx, tx, a, def, note, p.User.ID); err != nil {
 				return err
@@ -866,8 +878,9 @@ func copySlug(ctx context.Context, q dataapis.Querier, slug string) (string, err
 	return "", errors.New("no free address for the copy")
 }
 
-// POST /data-apis/{api_id}/duplicate: a copy in its folder, a draft, with no keys, whose
-// creator is whoever copies it (who must read every datasource it publishes).
+// POST /data-apis/{api_id}/duplicate: a copy in its folder, a draft, with no keys and the
+// default runtime, whose creator is whoever copies it (who must read every datasource it
+// publishes).
 func duplicateDataAPI(d *Deps, w http.ResponseWriter, r *http.Request, p *auth.Principal) {
 	src, c, ok := dataAPIManaged(d, w, r, p)
 	if !ok {
@@ -888,6 +901,7 @@ func duplicateDataAPI(d *Deps, w http.ResponseWriter, r *http.Request, p *auth.P
 		fail(d, w, "data apis: the definition", err)
 		return
 	}
+	def.Runtime = dataapis.DefaultRuntime()
 	def, ref, err := checkDataAPIDefinition(ctx, d, c, def, nil)
 	if answerRefusal(d, w, "data apis: the definition", ref, err) {
 		return
@@ -938,8 +952,9 @@ func activateDataAPI(d *Deps, w http.ResponseWriter, r *http.Request, p *auth.Pr
 		detail(w, http.StatusConflict, "A data API needs at least one resource to be activated")
 		return
 	}
-	if _, err := dataapis.CheckRuntime(def.Runtime, d.Config.DataAPI); err != nil {
-		detail(w, http.StatusConflict, dataapis.Sentence("the runtime is past the caps: "+err.Error()))
+	if _, err := dataapis.CheckRuntime(def.Runtime, d.Config.DataAPI.MaxTotalReplicas); err != nil {
+		detail(w, http.StatusConflict, dataapis.Sentence("the runtime is not valid ("+err.Error()+
+			"): an administrator sets it again, in Administration → Data APIs"))
 		return
 	}
 	ids := []int64{}
@@ -968,6 +983,14 @@ func activateDataAPI(d *Deps, w http.ResponseWriter, r *http.Request, p *auth.Pr
 	err = inTx(ctx, d, func(tx pgx.Tx) error {
 		if _, err := tx.Exec(ctx, `SELECT pg_advisory_xact_lock(7140)`); err != nil { // two activations at once count each other
 			return err
+		}
+		// the runtime as it is now: an administrator may have changed it since it was read
+		now, err := dataapis.GetForUpdate(ctx, tx, a.ID)
+		if err != nil {
+			return err
+		}
+		if now != nil {
+			def.Runtime = now.Runtime
 		}
 		if ref, err = checkDataAPIPods(ctx, d, tx, a.ID, def.Runtime); err != nil || ref != nil {
 			return err
@@ -1066,8 +1089,9 @@ func getDataAPIVersion(d *Deps, w http.ResponseWriter, r *http.Request, p *auth.
 	server.JSON(w, http.StatusOK, def)
 }
 
-// POST /data-apis/{api_id}/versions/{version}/restore: that version becomes the newest, checked
-// as an edit (its columns must still be in the datasources).
+// POST /data-apis/{api_id}/versions/{version}/restore: that version's resources become the
+// newest, checked as an edit (its columns must still be in the datasources); the runtime stays
+// the administrator's.
 func restoreDataAPIVersion(d *Deps, w http.ResponseWriter, r *http.Request, p *auth.Principal) {
 	a, c, ok := dataAPIManaged(d, w, r, p)
 	if !ok {
@@ -1081,7 +1105,7 @@ func restoreDataAPIVersion(d *Deps, w http.ResponseWriter, r *http.Request, p *a
 		sendDataAPIDetail(d, w, r, p, a.ID, http.StatusOK)
 		return
 	}
-	saveDataAPI(d, w, r, p, a, c, dataAPIUpdateIn{Resources: &def.Resources, Runtime: &def.Runtime},
+	saveDataAPI(d, w, r, p, a, c, dataAPIUpdateIn{Resources: &def.Resources},
 		"restored from v"+strconv.FormatInt(v, 10), v)
 }
 

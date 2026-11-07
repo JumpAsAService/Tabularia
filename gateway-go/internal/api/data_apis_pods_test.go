@@ -143,8 +143,11 @@ func TestDataAPIManifest(t *testing.T) {
 	_, _ = f.db.Exec(f.ctx, `UPDATE datasources SET bucket = 'tabularia', key = 'datasets/missing.parquet' WHERE id = $1`, f.orders)
 	secretRes := f.resource("salaries", f.secret)
 	a, _ := f.create(f.creator, f.folder, map[string]any{"name": "CRM", "slug": f.slug("crm"),
-		"resources": []any{f.resource("customers", f.customers), f.resource("orders", f.orders), secretRes},
-		"runtime":   map[string]any{"replicas": 2, "cpu": "500m", "memory": "512Mi"}}, http.StatusCreated)
+		"resources": []any{f.resource("customers", f.customers), f.resource("orders", f.orders), secretRes}}, http.StatusCreated)
+	if w := f.call(f.admin, adminDataAPIRuntimeRoute, http.MethodPut, map[string]any{"replicas": 2, "cpu": "500m", "memory": "512Mi"},
+		map[string]string{"api_id": dapiID(a.ID)}); w.Code != http.StatusOK {
+		t.Fatalf("%d %s", w.Code, w.Body.String())
+	}
 	token, err := dataapis.RotatePodToken(f.ctx, f.db, a.ID)
 	if err != nil {
 		t.Fatal(err)

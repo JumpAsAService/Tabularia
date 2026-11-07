@@ -230,9 +230,9 @@ func TestDataAPIReconcile(t *testing.T) {
 	if w := f.call(f.outsider, dataAPIStatus, http.MethodGet, nil, path); w.Code != http.StatusNotFound {
 		t.Errorf("%d", w.Code)
 	}
-	// two replicas: a budget; autoscaling: an autoscaler and no count of pods
-	w := f.call(f.creator, updateDataAPI, http.MethodPatch, map[string]any{"runtime": map[string]any{"replicas": 2, "cpu": "250m",
-		"memory": "256Mi"}}, path)
+	// set by an administrator: two replicas and more memory, the Deployment follows at the next
+	// round (a budget too); autoscaling: an autoscaler and no count of pods
+	w := f.call(f.admin, adminDataAPIRuntimeRoute, http.MethodPut, map[string]any{"replicas": 2, "cpu": "500m", "memory": "2Gi"}, path)
 	if w.Code != http.StatusOK {
 		t.Fatalf("%d %s", w.Code, w.Body.String())
 	}
@@ -241,8 +241,14 @@ func TestDataAPIReconcile(t *testing.T) {
 		kube.Int(ns.get("deployments", name), "spec", "replicas") != 2 {
 		t.Fatalf("two replicas: %s", got)
 	}
-	f.call(f.creator, updateDataAPI, http.MethodPatch, map[string]any{"runtime": map[string]any{"autoscale": true, "min_replicas": 1,
-		"max_replicas": 3, "cpu": "250m", "memory": "256Mi"}}, path)
+	containers, _ := kube.At(ns.get("deployments", name), "spec", "template", "spec", "containers").([]any)
+	limits := kube.At(containers[0].(kube.Obj), "resources", "limits")
+	if kube.Str(containers[0].(kube.Obj), "resources", "limits", "memory") != "2Gi" ||
+		kube.Str(containers[0].(kube.Obj), "resources", "requests", "cpu") != "500m" {
+		t.Fatalf("the pods' limits: %v", limits)
+	}
+	f.call(f.admin, adminDataAPIRuntimeRoute, http.MethodPut, map[string]any{"autoscale": true, "min_replicas": 1,
+		"max_replicas": 3, "cpu": "250m", "memory": "256Mi"}, path)
 	round()
 	if got := strings.Join(ns.of(rel, a.ID), ","); strings.Contains(got, "poddisruptionbudgets") || !strings.Contains(got, "horizontal") {
 		t.Fatalf("autoscaling: %s", got)
