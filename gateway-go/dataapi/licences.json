@@ -1,0 +1,10 @@
+{
+  "_": "The licences of the modules linked into the data APIs' program, reviewed by hand (licences.sh fails the image's build on a module not listed here). SPDX identifiers.",
+  "std": "BSD-3-Clause",
+  "github.com/duckdb/duckdb-go/v2": "MIT",
+  "github.com/duckdb/duckdb-go-bindings": "MIT",
+  "go.duckdb.org/libduckdb/linux-amd64": "MIT",
+  "go.duckdb.org/libduckdb/linux-arm64": "MIT",
+  "github.com/go-viper/mapstructure/v2": "MIT",
+  "github.com/google/uuid": "BSD-3-Clause"
+}

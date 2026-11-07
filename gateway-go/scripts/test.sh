@@ -3,6 +3,9 @@
 # Python gateway's migrations make, from this branch's own source: the schema is Alembic's,
 # and this is how the Go code is tested on exactly the tables production has.
 #
+# The data APIs' program (gateway-go/dataapi, a module of its own, with cgo for DuckDB) is
+# tested after the gateway, in the same image.
+#
 #   gateway-go/scripts/test.sh            all the tests
 #   GATEWAY_IMAGE=… gateway-go/scripts/test.sh   the image whose Python runs the migrations
 set -eu
@@ -26,4 +29,5 @@ docker run --rm --network host -e DB__URL="$dsn" -v "$repo/gateway/app:/app/app:
 
 docker run --rm --network host --user "$(id -u):$(id -g)" -e HOME=/tmp -e GOCACHE=/tmp/gocache \
     -e TEST_DATABASE_URL="$dsn" -v "$here":/src -v tabularia-gomod:/go/pkg/mod -w /src "$go_image" \
-    sh -c 'test -z "$(gofmt -l .)" || { gofmt -l .; echo "gofmt: the files above"; exit 1; }; go vet ./... && go test -count=1 ./...'
+    sh -c 'test -z "$(gofmt -l .)" || { gofmt -l .; echo "gofmt: the files above"; exit 1; }; go vet ./... && go test -count=1 ./... &&
+        cd dataapi && go vet ./... && go test -count=1 ./...'
