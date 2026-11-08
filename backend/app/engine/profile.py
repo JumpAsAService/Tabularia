@@ -1,6 +1,6 @@
 """A step's column profile, for the preview's header: how many nulls each column holds, how
-many distinct values (estimated), its smallest and largest value, a text's shortest and
-longest length; and, asked apart for one column, its most frequent values.
+many distinct values, the smallest and largest number or date, a text's shortest and longest
+length; and, asked apart for one column when it is opened, its most frequent values.
 
 Asked after the preview's rows and after their count, never before them, and as cheap as
 the step allows (the same order as the row count, app/engine/rowcount.py):
@@ -11,18 +11,18 @@ the step allows (the same order as the row count, app/engine/rowcount.py):
 2. read: when the step is a source, or a step the cache holds, followed only by operations
    that keep every row and every value (select, reorder, drop, rename, sort), the nulls of
    every column and the min and max of its numbers and dates are in the parquet footer
-   (the row groups' statistics), read with one ranged GET. A text's min and max are never
-   taken from there: writers may cut them or leave them out. A cast or a computed column
-   changes values, a filter or a limit changes rows: then nothing is read from a footer;
-3. computed: ONE aggregate query for every column, over the chain's first SAMPLE_ROWS rows,
-   starting from the nearest step the cache holds (`Engine.profile_aggregates`).
+   (the row groups' statistics), read with one ranged GET. Those are exact over every row
+   and win over the sample's. A text's min and max are never asked: an alphabetical range
+   says little, only its lengths are. A cast or a computed column changes values, a filter
+   or a limit changes rows: then nothing is read from a footer;
+3. computed: ONE aggregate query for every column, over the chain's FIRST SAMPLE_ROWS rows
+   (a LIMIT the engine stops at: no spread sample, which would make it compute the whole
+   chain), starting from the nearest step the cache holds (`Engine.profile_aggregates`).
 
-Never said as exact when it is not: the distinct values are the engine's own estimate
-(ClickHouse and chDB `uniq`, BigQuery `APPROX_COUNT_DISTINCT`; DuckDB and Polars count
-them over the sample, their estimators being far off: see `sql_aggregate`), always shown as
-an estimate; and past SAMPLE_ROWS rows the query
-sees the first SAMPLE_ROWS only, which the answer says (`sampled`), column by column for
-what the footer gave over every row instead (`whole`).
+Never said as exact when it is not: past SAMPLE_ROWS rows the query sees the first
+SAMPLE_ROWS only, which the answer says (`sampled`), column by column for what the footer
+gave over every row instead (`whole`). The distinct values are counted exactly over the
+rows seen on every engine (`distinct_exact`), the sample being small enough for it.
 
 The semantics are the same on every engine (docs/engines, the cross-engine standard): a
 null is a missing value (an empty text is not one, a NaN is not one); the distinct values
@@ -43,10 +43,11 @@ from app.engine import rowcount
 
 logger = logging.getLogger(__name__)
 
-# Past this many rows the query looks at the first ones only, and says so. Measured on kind
-# (2026-11-08, DuckDB): every column of a million rows of a 42-million row table in about a
-# second; the HyperLogLog's error does not depend on the rows it sees.
-SAMPLE_ROWS = 1_000_000
+# Past this many rows the query looks at the first ones only, and says so. A hundred
+# thousand, not a million (decided 2026-11-08): the profile must never slow the workers nor
+# the person building the flow; what the whole table knows exactly (the nulls, a number's
+# range) comes from the footer instead.
+SAMPLE_ROWS = 100_000
 TOP_K = 5
 PROFILE_PREFIX = "dataprep:stepprofile:"
 # The operations after which a footer's statistics still describe the step: every row and
@@ -75,8 +76,8 @@ def kind_of(dtype: str) -> str:
 
 # ── the aggregates a profile asks for ────────────────────────────────────────
 # (alias, function, column): «rows» counts every row; «count» a column's values that are
-# not null; «distinct» its distinct values, estimated; «min», «max»; «min_len», «max_len» a
-# text's length in characters.
+# not null; «distinct» its distinct values; «min», «max» a number's or a date's;
+# «min_len», «max_len» a text's length in characters.
 Spec = tuple[str, str, "str | None"]
 
 
@@ -88,14 +89,11 @@ def sql_aggregate(dialect: str, func: str, col: str | None, quote) -> str:
     if func == "count":
         return f"count({q})"
     if func == "distinct":
-        # DuckDB's approx_count_distinct was measured far off (1,249 for 1,000 values, 8,571
-        # for 10,000, 11 for 10: 2026-11-08, DuckDB 1.5) while counting them exactly over the
-        # sample's million rows takes under 0.1 s: DuckDB counts them, and Polars too (its
-        # approx_n_unique, natively in the Polars engine, was up to 12.8% off on kind).
-        # ClickHouse's adaptive `uniq` is exact below 65,536 values and within about 2%
-        # past them; BigQuery's APPROX_COUNT_DISTINCT is its HyperLogLog++.
-        return {"duckdb": f"count(DISTINCT {q})", "clickhouse": f"uniq({q})",
-                "bigquery": f"APPROX_COUNT_DISTINCT({q})"}[dialect]
+        # Counted, never estimated: over the sample's hundred thousand rows an exact count
+        # costs little on every engine, and the estimators were measured far off (DuckDB's
+        # approx_count_distinct 1,249 for 1,000 values; Polars' approx_n_unique up to 12.8%).
+        return {"duckdb": f"count(DISTINCT {q})", "clickhouse": f"uniqExact({q})",
+                "bigquery": f"COUNT(DISTINCT {q})"}[dialect]
     if func in ("min", "max"):
         return f"{func}({q})"
     length = {"duckdb": f"length({q})", "clickhouse": f"lengthUTF8({q})", "bigquery": f"LENGTH({q})"}[dialect]
@@ -113,7 +111,7 @@ def plan(columns: list[dict[str, str]], footer: dict[str, dict] | None) -> list[
             specs.append((f"c{j}_count", "count", name))
         if kind != "other":
             specs.append((f"c{j}_distinct", "distinct", name))
-        if kind == "text" or (kind in ("number", "time") and not got.get("range")):
+        if kind in ("number", "time") and not got.get("range"):
             specs += [(f"c{j}_min", "min", name), (f"c{j}_max", "max", name)]
         if kind == "text":
             specs += [(f"c{j}_min_len", "min_len", name), (f"c{j}_max_len", "max_len", name)]
@@ -156,7 +154,7 @@ def assemble(columns: list[dict[str, str]], row: dict[str, Any], footer: dict | 
         if kind != "other":
             d = row.get(f"c{j}_distinct")
             col["distinct"] = int(d) if d is not None else None
-        if kind in ("number", "time", "text"):
+        if kind in ("number", "time"):
             if got.get("range"):
                 col["min"], col["max"] = got["min"], got["max"]
                 whole += ["min", "max"]
@@ -171,7 +169,7 @@ def assemble(columns: list[dict[str, str]], row: dict[str, Any], footer: dict | 
         col["whole"] = whole
         out[name] = col
     return {"rows": seen, "sampled": sampled, "sample_rows": sample, "total": total,
-            "footer": bool(footer), "columns": out}
+            "footer": bool(footer), "distinct_exact": True, "columns": out}
 
 
 # ── the footer ──────────────────────────────────────────────────────────────
@@ -288,8 +286,10 @@ def profile_key(engine_name: str, bucket: str, key: str, operations: list[dict[s
                 columns: list[dict[str, str]], column: str | None = None) -> str:
     """Where a step's profile (or one column's most frequent values) is remembered."""
     step = rowcount.count_key(engine_name, bucket, key, operations)[len(rowcount.COUNT_PREFIX):]
-    what = json.dumps([[c["name"], c.get("dtype", "")] for c in columns] if column is None else ["top", column, TOP_K],
-                      ensure_ascii=False)
+    if column is None:
+        what = json.dumps([[c["name"], c.get("dtype", "")] for c in columns], ensure_ascii=False)
+    else:
+        what = json.dumps(["top", column, TOP_K], ensure_ascii=False)
     digest = hashlib.sha256(f"{SAMPLE_ROWS}|{what}".encode()).hexdigest()[:24]
     return f"{PROFILE_PREFIX}{step}:{digest}"
 
@@ -391,3 +391,4 @@ def _order(v: Any) -> tuple:
     if isinstance(v, (int, float)):
         return (0, v, "")
     return (1, 0, str(v))
+

@@ -1,12 +1,14 @@
 """A step's column profile, for the preview's header (app/engine/profile.py, profile_task,
 POST /tasks/profile).
 
-Fixed here: the same numbers on every engine of the catalog (nulls, min, max and a text's
-lengths exactly, the distinct values within the estimate's error); the nulls and the
+Fixed here: the same numbers on every engine of the catalog (nulls, a number's and a
+date's min and max, a text's lengths and the distinct values, exactly); the nulls and the
 numbers' and dates' range of a source, or of a cached step followed only by operations that
 keep rows and values, come from the parquet footer, and never a text's range; a cast or a
 filter after it is computed; past the sample the answer says it saw only the first rows;
-a profile is remembered; a column's most frequent values come in order, a tie by value.
+a profile is remembered; a column's most frequent values come in order, a tie by value;
+the sample is the first hundred
+thousand rows and the route gives up after 20 seconds (the owner's decisions, 2026-11-08).
 """
 import datetime as dt
 
@@ -97,12 +99,12 @@ def test_every_engine_says_the_same_numbers(name, storage, table, valkey, fredis
     assert (cols["amount"]["min"], cols["amount"]["max"]) == (-700.0, 798.5)
     assert (cols["day"]["min"], cols["day"]["max"]) == ("2024-01-01", "2024-01-30")
     assert (cols["at"]["min"], cols["at"]["max"]) == ("2024-03-01T08:00:00", "2024-03-02T00:39:00")
-    # texts by their bytes, their length in characters; an empty text is a value, not a null
-    assert (cols["region"]["min"], cols["region"]["max"]) == ("East", "South")
-    assert (cols["city"]["min"], cols["city"]["max"]) == ("", "Forlì")
+    # a text: its length in characters, never an alphabetical range; an empty text is a value
+    assert "min" not in cols["region"] and "max" not in cols["city"]
     assert (cols["city"]["min_len"], cols["city"]["max_len"]) == (0, 17)
     assert "min" not in cols["flag"] and "min" not in cols["tags"] and "distinct" not in cols["tags"]
-    # the distinct values leave the nulls out, within the estimate's error
+    # the distinct values leave the nulls out, counted exactly
+    assert got["distinct_exact"] is True
     assert cols["region"]["distinct"] == 3 and cols["city"]["distinct"] == 4 and cols["flag"]["distinct"] == 2
     assert cols["day"]["distinct"] == 30
     assert cols["id"]["distinct"] == 1000
@@ -175,10 +177,9 @@ def test_a_source_s_profile_takes_the_footer_and_queries_the_rest(name, storage,
     assert got["footer"] is True and got["total"] == N and got["sampled"] is False
     a = got["columns"]["amount"]
     assert (a["nulls"], a["min"], a["max"]) == (200, -700.0, 2298.5)
-    # DuckDB and Polars count them; chDB's uniq is exact under 65,536 values
     assert set(a["whole"]) == {"nulls", "min", "max"} and a["distinct"] == 1800
     c = got["columns"]["city"]
-    assert (c["nulls"], c["min"], c["max"], c["min_len"], c["max_len"]) == (400, "", "Forlì", 0, 17)
+    assert (c["nulls"], c["min_len"], c["max_len"]) == (400, 0, 17) and "min" not in c
 
 
 # ── the sample ───────────────────────────────────────────────────────────────
@@ -187,7 +188,7 @@ def test_past_the_sample_it_says_it_saw_the_first_rows(storage, table, valkey, f
     got = _profile("duckdb", storage, fredis, table, [SORT])  # sort: the footer gives the nulls of every row
     assert got["rows"] == 500 and got["sampled"] is True and got["total"] == N
     assert got["columns"]["amount"]["whole"] == ["nulls", "min", "max"] and got["columns"]["amount"]["of"] == N
-    # the text's range and every distinct count are of the first 500 rows only
+    # a text's lengths and every distinct count are of the first 500 rows only
     assert got["columns"]["city"]["whole"] == ["nulls"]
     filtered = _profile("duckdb", storage, fredis, table, [{"type": "filter", "params": {"column": "id", "operator": "ge", "value": 0}}])
     assert filtered["sampled"] is True and filtered["columns"]["amount"]["whole"] == [] and filtered["columns"]["amount"]["of"] == 500
@@ -365,3 +366,19 @@ def test_the_route_passes_footer_only_to_the_worker(storage, table, valkey, monk
     tasks.profile_step(ProfileRequest(bucket=table.bucket, input_key=table.key, operations=[FILTER],
                                       engine="duckdb", columns=[{"name": "id", "dtype": "Int64"}]))
     assert "footer_only" not in seen["kwargs"]
+
+
+# ── the owner's prudence (2026-11-08) ────────────────────────────────────────
+def test_the_sample_is_the_first_hundred_thousand_rows_and_the_route_gives_up_in_20_seconds():
+    assert profile.SAMPLE_ROWS == 100_000
+    assert tasks.PROFILE_TIMEOUT_SECONDS == 20.0
+    # the distinct values counted exactly on every dialect, never estimated
+    q = Engine._profile_quote
+    assert profile.sql_aggregate("clickhouse", "distinct", "a", q) == "uniqExact(`a`)"
+    assert profile.sql_aggregate("bigquery", "distinct", "a", q) == "COUNT(DISTINCT `a`)"
+
+
+def test_a_text_asks_its_lengths_not_its_range():
+    specs = profile.plan([{"name": "t", "dtype": "String"}], None)
+    assert [s[1] for s in specs] == ["rows", "count", "distinct", "min_len", "max_len"]
+

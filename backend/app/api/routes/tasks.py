@@ -271,16 +271,18 @@ def count_step(request: CountRequest) -> dict:
     return payload["result"]
 
 
-# A profile is a hint on the columns of the rows already on screen: as the count, it gives
-# up after a minute
-PROFILE_TIMEOUT_SECONDS = 60.0
+# A profile is a hint on the columns of the rows already on screen: it gives up after 20
+# seconds (a minute until 2026-11-08), sooner than the count, so that it never holds a
+# worker the next preview needs for long
+PROFILE_TIMEOUT_SECONDS = 20.0
 
 
 @router.post("/profile")
 def profile_step(request: ProfileRequest) -> dict:
-    """A step's column profile (app/engine/profile.py): nulls, distinct values (estimated),
-    min and max, a text's lengths, column by column; with `column`, that column's most
-    frequent values. Asked after the preview's rows and their count, never before them.
+    """A step's column profile (app/engine/profile.py): nulls, distinct values, a number's
+    or a date's min and max, a text's lengths, column by column; with `column`, that
+    column's most frequent values. Asked after the preview's rows and their count, never
+    before them.
 
     Remembered on Valkey and answered here at once; otherwise made by the preview worker
     (the footer's statistics, then one query over the chain's first rows), at most
