@@ -4,6 +4,7 @@
 // formatters cost: they are built once per language and options, not at every cell (the
 // Viewer created one per cell at every render).
 import { useI18n } from 'vue-i18n'
+import { gridColumnFormatter } from '~/composables/previewGrid'
 
 const numberCache = new Map<string, Intl.NumberFormat>()
 const dateCache = new Map<string, Intl.DateTimeFormat>()
@@ -94,20 +95,7 @@ export function useFormat() {
    * language's separator.
    */
   function columnFormatter(values: unknown[]): (v: unknown) => string {
-    let decimals = 0
-    let integersOnly = true
-    for (const v of values) {
-      if (typeof v !== 'number' || !Number.isFinite(v)) continue
-      if (!Number.isInteger(v)) {
-        integersOnly = false
-        const frac = String(v).split(/[.e]/)[1]?.length ?? 4
-        decimals = Math.max(decimals, Math.min(4, frac))
-      }
-    }
-    const f = integersOnly
-      ? numberFormat(locale.value, { useGrouping: false, maximumFractionDigits: 0 })
-      : numberFormat(locale.value, { minimumFractionDigits: decimals, maximumFractionDigits: decimals })
-    return (v) => (typeof v === 'number' ? f.format(v) : v == null ? '' : String(v))
+    return gridColumnFormatter(values, locale.value)
   }
 
   return { count, number, dateTime, date, ago, columnFormatter, locale }

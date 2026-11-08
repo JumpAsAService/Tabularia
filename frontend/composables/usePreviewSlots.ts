@@ -13,9 +13,10 @@
 //  - on the server: the `slot` tells the backend to knock down the preview that held it —
 //    revoking the task and KILLing the query. The HTTP cancellation alone does not get
 //    that far (ingress, gateway, synchronous route).
-import { useApi, type PreviewResult } from './useApi'
+import { useApi, type CountResult, type PreviewResult } from './useApi'
 
 type PreviewBody = Parameters<ReturnType<typeof useApi>['preview']>[0]
+type CountBody = Parameters<ReturnType<typeof useApi>['count']>[0]
 
 /** True when the error is only "overtaken by a newer one": never to show. */
 export function isSuperseded(e: any): boolean {
@@ -49,17 +50,39 @@ export function usePreviewSlots(scope: string) {
     })
   }
 
+  /** A step's row count, on a slot as a preview: a newer one knocks it down. */
+  function count(body: CountBody, slot: string): Promise<CountResult> {
+    inflight.get(slot)?.abort()
+    const ctl = new AbortController()
+    inflight.set(slot, ctl)
+    return api.count({ ...body, slot: `${owner}-${slot}` }, { signal: ctl.signal }).finally(() => {
+      if (inflight.get(slot) === ctl) inflight.delete(slot)
+    })
+  }
+
   /** Cancels the request in flight of ONE slot only (e.g. a deleted node's preview). */
   function cancel(slot: string) {
     inflight.get(slot)?.abort()
     inflight.delete(slot)
   }
 
-  /** At the page's closing: no orphaned work on the server. */
-  function cancelAll() {
-    for (const ctl of inflight.values()) ctl.abort()
-    inflight.clear()
+  /** Is a request of this slot in flight? */
+  function busy(slot: string): boolean {
+    return inflight.has(slot)
   }
 
-  return { preview, cancel, cancelAll }
+  /** «Cancel»: the request is dropped here AND its work stopped on the server (the task
+   *  revoked, its query killed), which the dropped connection alone does not reach. */
+  function stop(slot: string) {
+    const was = inflight.has(slot)
+    cancel(slot)
+    if (was) api.cancelSlot(`${owner}-${slot}`).catch(() => { /* gone already: nothing to stop */ })
+  }
+
+  /** At the page's closing: no orphaned work on the server. */
+  function cancelAll() {
+    for (const slot of [...inflight.keys()]) stop(slot)
+  }
+
+  return { preview, count, cancel, stop, busy, cancelAll }
 }

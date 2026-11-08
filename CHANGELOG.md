@@ -5,6 +5,17 @@ exposes at `/system/info` and in the app's settings menu.
 
 ## Unreleased
 
+- **One data grid.** The Viewer now uses the editor's grid (`DataGrid.vue`), which scrolls in
+  its own box with the header in place and draws only the rows in view: 500 rows × 40 columns
+  scroll at about 23 ms a frame where the old table took 82. The Viewer is as tall as the
+  window: header, Apply, the count and the export stay in view. Numbers keep the same
+  decimals on a whole column (the exact value in the tooltip and in a copy; selected cells
+  copy as tab-separated exact values), the type is said short at 11px (`Datetime(us)`), rows
+  are numbered, a column's name copies with a click, and a step's columns are marked `new`,
+  `renamed` or `type changed` against its input, with «N removed» in the summary.
+- **The real row count, said one way everywhere.** «First 100 of 764 rows», «First 100 of
+  more than 10,000,000 rows», «First 100 rows» while counting: in the editor, in the Viewer
+  and on a node of the canvas.
 - **A step's real row count.** `POST /tasks/count` (a route of the Go gateway only, checked
   as a preview) says how many rows a step gives, up to 10,000,000 («more than» past it). It
   is asked after the preview's rows, never before them: a count made before for the same step

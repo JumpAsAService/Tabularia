@@ -153,5 +153,7 @@ const describe = (name: string) => props.ds?.column_descriptions?.[name] ?? prop
 .dsp-schema td { padding: 4px 6px; border-bottom: 1px solid var(--border-soft); }
 .dsp-schema .cn { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 12px; overflow-wrap: anywhere; }
 .dsp-schema .ct { color: var(--muted); text-align: right; white-space: nowrap; font-size: 11.5px; }
-.dsp-grid { border: 1px solid var(--border-soft); border-radius: 8px; overflow: auto; max-height: 420px; }
+.dsp-grid { border: 1px solid var(--border-soft); border-radius: 8px; overflow: hidden; }
+/* the grid scrolls in its own box: its header stays in view */
+.dsp-grid :deep(.datagrid) { max-height: 420px; }
 </style>

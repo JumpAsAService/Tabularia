@@ -20,6 +20,15 @@ export interface PreviewResult {
   cache_cap_rows?: number | null
 }
 
+// How many rows a step gives (POST /tasks/count): `rows` up to `at_most`, `over` past it.
+// `how`: remembered, read from a parquet footer («metadata») or counted.
+export interface CountResult {
+  rows: number
+  over: boolean
+  at_most: number
+  how: 'remembered' | 'metadata' | 'counted'
+}
+
 export interface IngestResult {
   dataset_id: string
   status: 'ready' | 'processing'
@@ -187,6 +196,24 @@ export function useApi() {
       slot?: string // in every slot only the last preview counts (see usePreviewSlots)
     }, opts: { signal?: AbortSignal } = {}): Promise<PreviewResult> {
       return await apiFetch<PreviewResult>('/tasks/preview', { method: 'POST', body, signal: opts.signal })
+    },
+
+    // the real row count of a preview's chain, asked after its rows (never before them)
+    async count(body: {
+      bucket: string
+      input_key: string
+      operations: Operation[]
+      engine?: string
+      no_cache?: boolean
+      at_most?: number
+      slot?: string
+    }, opts: { signal?: AbortSignal } = {}): Promise<CountResult> {
+      return await apiFetch<CountResult>('/tasks/count', { method: 'POST', body, signal: opts.signal })
+    },
+
+    // stops on the server what holds one of this person's slots (a slow preview, a count)
+    async cancelSlot(slot: string): Promise<{ cancelled: boolean }> {
+      return await apiFetch<{ cancelled: boolean }>('/tasks/preview/cancel', { method: 'POST', body: { slot } })
     },
 
     async transform(body: {

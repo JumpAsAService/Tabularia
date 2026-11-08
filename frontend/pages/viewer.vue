@@ -12,7 +12,9 @@ import { usePopover } from '~/composables/usePopover'
 import {
   PieChart, Table2, Filter, Sigma, Plus, X, Play, Cpu, Rows3, Download, FileSpreadsheet, Bookmark, Save,
 } from 'lucide-vue-next'
-import { useApi, errMessage, type Operation, type ColumnInfo } from '~/composables/useApi'
+import { useApi, errMessage, type Operation, type ColumnInfo, type PreviewResult } from '~/composables/useApi'
+import DataGrid from '~/components/ui/DataGrid.vue'
+import { rowsPhrase, type RowCount } from '~/composables/previewGrid'
 import { usePreviewSlots, isSuperseded } from '~/composables/usePreviewSlots'
 import { useDatasources, type DatasourceInfo } from '~/composables/useDatasources'
 import ContractBadge from '~/components/ui/ContractBadge.vue'
@@ -165,7 +167,7 @@ async function chartQuery(ops: Operation[], limit?: number) {
 
 async function onPickDatasource(id: number | null) {
   dsId.value = id
-  rows.value = []; error.value = ''
+  rows.value = []; error.value = ''; applied.value = false
   const ds = selectedDs.value
   baseCols.value = ds?.columns ? ds.columns.map((c) => ({ name: c.name, dtype: c.dtype })) : []
   tableCols.value = baseCols.value
@@ -190,6 +192,8 @@ async function apply() {
   const ds = selectedDs.value
   if (!ds) return
   const seq = ++applySeq
+  if (previewSlots.busy('count')) previewSlots.stop('count')
+  rowCount.value = { state: 'none' }
   loading.value = true; error.value = ''
   try {
     const ops = buildTableOps()
@@ -206,44 +210,44 @@ async function apply() {
     }
     const res = await previewSlots.preview({ bucket: ds.bucket, input_key: ds.key, operations: ops, engine: engine.value, limit: ROW_LIMIT, no_cache: true, sort_keys: ds.sort_keys }, 'table')
     rows.value = res.rows
+    applied.value = true
     truncated.value = !!res.truncated
     tableCols.value = res.columns
     if (!withPivot) baseCols.value = res.columns
+    // the real count, after the rows and apart from them
+    if (res.truncated) void countRows(ds, ops, seq)
+    else rowCount.value = { state: 'done', rows: res.rows.length, over: false }
   } catch (e) {
     // an Apply overtaken by a newer Apply is not an error to show: the new one governs state
     // and spinner
     if (isSuperseded(e)) return
-    error.value = errMessage(e); rows.value = []
+    error.value = errMessage(e); rows.value = []; applied.value = false
   } finally {
     if (applySeq === seq) loading.value = false
   }
 }
 
-// A formatter per numeric column, from the values in view: the same decimals on the
-// whole column and integers without a thousands separator (see useFormat). Recomputed
-// when the data changes, not at every key in the filters.
-const isNumCol = (dtype: string) => /Int|Float|Decimal/i.test(dtype)
-const colFormat = computed(() => {
-  const m: Record<string, (v: unknown) => string> = {}
-  for (const c of tableCols.value) {
-    if (isNumCol(c.dtype)) m[c.name] = fmtx.columnFormatter(displayRows.value.map((r: any) => r[c.name]))
+// How many rows the view really has: read from the datasource's footer when nothing filters
+// it, counted (up to a cap) otherwise. An Apply drops the count of the one before.
+const rowCount = ref<RowCount>({ state: 'none' })
+async function countRows(ds: DatasourceInfo, ops: Operation[], seq: number) {
+  rowCount.value = { state: 'counting' }
+  try {
+    const c = await previewSlots.count({ bucket: ds.bucket, input_key: ds.key, operations: ops, engine: engine.value, no_cache: true }, 'count')
+    if (seq === applySeq) rowCount.value = { state: 'done', rows: c.rows, over: c.over }
+  } catch (e) {
+    if (seq !== applySeq || isSuperseded(e)) return
+    const status = (e as any)?.response?.status ?? (e as any)?.statusCode
+    rowCount.value = { state: 'failed', slow: status === 504 }
   }
-  return m
-})
-const cell = (col: string, v: any) =>
-  v === null || v === undefined ? '' : colFormat.value[col] ? colFormat.value[col](v) : typeof v === 'object' ? JSON.stringify(v) : String(v)
-
-// a long text stops at the column's cap (CSS): the whole value in the tooltip
-const cellTip = (col: string, v: any) => {
-  const s = cell(col, v)
-  return s.length > 48 ? s : undefined
 }
-// the column under the pointer tints like the row, through its <col>
-const gridCol = ref(-1)
-function onGridOver(e: MouseEvent) {
-  const c = (e.target as HTMLElement).closest?.('td, th') as HTMLTableCellElement | null
-  gridCol.value = c ? c.cellIndex : -1
-}
+// the table of the last Apply that answered (none before the first one)
+const applied = ref(false)
+const gridResult = computed<PreviewResult | null>(() =>
+  applied.value
+    ? { columns: tableCols.value, rows: displayRows.value, row_count: rows.value.length, truncated: truncated.value }
+    : null)
+const summaryRows = computed(() => rowsPhrase(rows.value.length, truncated.value, rowCount.value, t, (n) => fmtx.count(n)))
 
 // export of the current view (csv/xlsx), written by a worker: Polars writes the file,
 // whatever the engine chosen for the display.
@@ -563,7 +567,13 @@ onMounted(async () => {
           <button class="primary apply" :disabled="!selectedDs || loading" @click="apply"><Play :size="14" /> {{ $t('viewer.applyButton') }}</button>
           <span v-if="loading" class="muted">{{ $t('viewer.computing') }}</span>
           <span v-else-if="error" class="err">{{ error }}</span>
-          <span class="rmeta muted">{{ truncated ? $t('viewer.rowsColsMetaFirst', { n: rows.length, m: tableCols.length }) : $t('viewer.rowsColsMeta', { n: rows.length, m: tableCols.length }) }}</span>
+          <span id="vw-summary" class="rmeta muted" role="status" aria-live="polite">
+            <template v-if="applied">
+              {{ summaryRows }}<template v-if="rowCount.state === 'counting'"> · {{ $t('dataGrid.counting') }}</template><template
+                v-else-if="rowCount.state === 'failed'"> · {{ rowCount.slow ? $t('dataGrid.countSlow') : $t('dataGrid.countFailed') }}</template>
+              · {{ $t('dataGrid.columns', { n: tableCols.length }) }}
+            </template>
+          </span>
           <div class="expbtns">
             <button :disabled="!rows.length || !!exporting" :title="$t('viewer.exportCsvTitle')" @click="exportView('csv')">
               <Download :size="13" /> {{ exporting === 'csv' ? '…' : 'CSV' }}
@@ -575,33 +585,15 @@ onMounted(async () => {
         </div>
 
         <div v-show="view === 'table'" class="tablewrap">
-          <div v-if="loading" class="skeleton">
-            <div class="sk-row sk-head"><span v-for="m in 7" :key="m" class="sk-cell" /></div>
-            <div v-for="n in 14" :key="n" class="sk-row"><span v-for="m in 7" :key="m" class="sk-cell" /></div>
-          </div>
-          <table v-else-if="rows.length" class="dt" @mouseover="onGridOver" @mouseleave="gridCol = -1">
-            <colgroup>
-              <col v-for="(c, j) in tableCols" :key="c.name" :class="{ hc: j === gridCol }" />
-            </colgroup>
-            <thead>
-              <tr>
-                <th v-for="c in tableCols" :key="c.name" :class="{ num: isNumCol(c.dtype) }">
-                  {{ c.name }}<span class="dtype">{{ c.dtype }}</span>
-                </th>
-              </tr>
-            </thead>
-            <tbody>
-              <tr v-for="(row, i) in displayRows" :key="i">
-                <td
-                  v-for="c in tableCols"
-                  :key="c.name"
-                  :class="{ num: isNumCol(c.dtype), null: row[c.name] === null || row[c.name] === undefined }"
-                  :title="cellTip(c.name, row[c.name])"
-                >{{ row[c.name] === null || row[c.name] === undefined ? '∅' : cell(c.name, row[c.name]) }}</td>
-              </tr>
-            </tbody>
-          </table>
-          <p v-else-if="!loading" class="muted empty">{{ $t('viewer.noDataHint') }}</p>
+          <DataGrid
+            :result="gridResult"
+            :loading="loading && !gridResult"
+            :stale="loading && !!gridResult"
+            :summary="summaryRows"
+            summary-id="vw-summary"
+            :empty="$t('viewer.noDataHint')"
+            :label="$t('viewer.tableTab')"
+          />
         </div>
 
         <div v-show="view === 'chart'" class="chartwrap">
@@ -615,7 +607,15 @@ onMounted(async () => {
 
 <style scoped src="~/assets/listpage.css"></style>
 <style scoped>
-.viewer { display: flex; flex-direction: column; flex: 1; min-height: 0; }
+/* the Viewer is as tall as the window: the table scrolls inside it, and the header, Apply,
+   the count and the export stay in view (critique of 2026-11-08: a page 13,000 px tall) */
+.viewer {
+  display: flex; flex-direction: column; flex: none; min-height: 420px;
+  height: calc(100vh - 52px - 44px); height: calc(100dvh - 52px - 44px);
+}
+@media (max-width: 760px) {
+  .viewer { height: calc(100vh - 52px - 32px); height: calc(100dvh - 52px - 32px); }
+}
 .head-actions { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
 .vwsel { width: 200px; }
 /* save box: the same mechanics as the "new flow" menu — a backdrop catching the click
@@ -678,52 +678,15 @@ onMounted(async () => {
 .add-dim { font-size: 11px; padding: 3px 8px; margin: 2px 0 4px; }
 .checkline { display: flex; align-items: center; gap: 6px; font-size: 12px; color: var(--text); margin-top: 8px; cursor: pointer; }
 
-.result { display: flex; flex-direction: column; min-height: 0; border: 1px solid var(--border); border-radius: 10px; overflow: hidden; }
+.result { display: flex; flex-direction: column; min-height: 0; min-width: 0; border: 1px solid var(--border); border-radius: 10px; overflow: hidden; background: var(--panel); }
 .rtabs { display: flex; align-items: center; gap: 6px; padding: 8px 10px; border-bottom: 1px solid var(--border); }
 .rtabs button { padding: 5px 10px; }
 .rtabs button.active { border-color: var(--accent); background: color-mix(in srgb, var(--accent) 12%, transparent); }
 .rtabs .apply { margin-left: 8px; }
-.rmeta { margin-left: auto; font-size: 12px; }
+.rmeta { margin-left: auto; font-size: 12px; font-variant-numeric: tabular-nums; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .expbtns { display: flex; gap: 4px; }
 .expbtns button { padding: 5px 9px; }
 .err { color: var(--danger); font-size: 12px; }
-.tablewrap { flex: 1; overflow: auto; min-height: 0; }
+.tablewrap { flex: 1; min-height: 0; display: flex; flex-direction: column; }
 .chartwrap { flex: 1; min-height: 0; padding: 12px; }
-.dt { border-collapse: collapse; font-size: 12px; width: max-content; min-width: 100%; }
-.dt th, .dt td {
-  border-bottom: 1px solid var(--border-soft);
-  border-right: 1px solid var(--border-soft); /* column separator */
-  padding: 5px 12px;
-  text-align: left;
-  white-space: nowrap;
-  vertical-align: top;
-}
-.dt th:last-child, .dt td:last-child { border-right: none; }
-.dt th {
-  position: sticky; top: 0; background: var(--panel-2); z-index: 1; font-weight: 600; vertical-align: bottom;
-  box-shadow: inset 0 -1px 0 var(--border); /* the rule a sticky collapsed cell would lose */
-}
-.dt .dtype { display: block; margin-top: 1px; font: 400 10.5px/1.3 ui-monospace, SFMono-Regular, Menlo, monospace; color: var(--muted); }
-/* the numbers on the right; every digit tabular (ids, dates, times line up too) */
-.dt td.num, .dt th.num { text-align: right; }
-.dt td { font-variant-numeric: tabular-nums; max-width: 28em; overflow: hidden; text-overflow: ellipsis; }
-.dt td.null { color: var(--muted); }
-.dt tbody tr:nth-child(even) { background: var(--row-even); }
-/* the row and the column under the pointer: tinted at once, nothing moves */
-.dt tbody tr:hover { background: var(--row-hover); }
-.dt col.hc { background: var(--row-hover); }
-
-/* loading skeleton (shimmer) */
-.skeleton { padding: 12px 14px; }
-.sk-row { display: flex; gap: 12px; margin-bottom: 11px; }
-.sk-row.sk-head .sk-cell { height: 20px; opacity: 0.85; }
-.sk-cell {
-  flex: 1;
-  height: 13px;
-  border-radius: 4px;
-  background: linear-gradient(90deg, var(--panel-2) 25%, var(--border) 37%, var(--panel-2) 63%);
-  background-size: 400% 100%;
-  animation: sk-shimmer 1.4s ease infinite;
-}
-@keyframes sk-shimmer { 0% { background-position: 100% 50%; } 100% { background-position: 0 50%; } }
 </style>
