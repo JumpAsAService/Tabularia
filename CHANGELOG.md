@@ -5,6 +5,48 @@ exposes at `/system/info` and in the app's settings menu.
 
 ## Unreleased
 
+- **An honest column profile, on the first 100,000 rows.** The profile's query reads the
+  step's first 100,000 rows (a million before), stops after 20 seconds (a minute before) and
+  never runs beside the rows or their count: what the parquet statistics know over every row
+  (nulls, a number's or a date's range) still wins over the sample. The panel now says first
+  which rows its figures are of («First 100,000 of 42,007,616 rows», «All 764 rows»), marks
+  «all rows» beside the figures that are exact for the whole table, counts the distinct values
+  exactly on every engine («28,510 in the sample», no «≈» any more), shows a text's lengths
+  only (no alphabetical range), and says «Unique in the sample, likely a key» for a column of
+  (almost) all different values, without asking its most frequent values.
+- **A profile to act on.** An opened column shows a number's spread as a 20-bar histogram
+  (`POST /tasks/profile` with `histogram`, one query for that column), or a category's five
+  most frequent values with their share and a bar; the nulls appear among them, as ∅, only
+  when there are some. In the editor each value has **Filter to this value** and **Exclude**,
+  which add a Filter step after the node on screen, and ∅ has **Fill nulls…**, which adds a
+  Fill nulls step for the column; in the Viewer they add a filter to the view.
+- **The null bar reads at a glance.** No line at all under a column without nulls; with
+  nulls, the line fills in the null-handling colour (`--op-nulls-ink`, 3:1 at least on the
+  header in every theme) and «33% ∅» follows the type when there is room. A grey line only
+  keeps the place while the profile is asked, with a shimmer (none under reduced motion).
+- **The editor's summary never breaks in a word.** As the bar narrows, «Use a sample» goes
+  into a «…» menu, the cache's mark keeps its icon, «12 columns removed» becomes «−12», and
+  in a 1024px window the tabs keep their icons and the count its short form; the node's name
+  keeps 14 characters, whole in its tooltip, and the buttons' focus rings are no longer cut.
+  «Use a sample» is offered for a source of more than a million rows, never for a slow step
+  alone.
+- **Keyboard and focus.** Ctrl+Home goes to the first cell, and the active cell keeps its ring
+  after Ctrl+Home and Ctrl+End; a column's profile takes the focus itself (a second Enter no
+  longer copies the name), describes its figures for a screen reader, moves to the column
+  beside with ← and →, and closes on a click anywhere outside (every popover of the app does
+  now, on a part of the page that takes no focus too). The Table and Chart tabs say which is
+  pressed; «0% null» is no longer read for every column; a keyboard icon above the table lists
+  the keys.
+- **Failures that say why.** A profile or a count that did not come says why (it took more than
+  20 seconds, the worker was lost) and offers **Try again** or **Count again**. The Viewer keeps
+  «of N» while a new Apply computes, and no longer stretches a table of a few columns.
+- **A profile never restarts a worker.** The preview workers' restarts were the kernel
+  stopping a whole worker at its 4 GiB while a profile ran Polars on a join of 42 million rows
+  with 12 million at full width (Polars' hash join needs more than that there, for a 100-row
+  preview too). A profile now watches its process's memory and, past its share of the
+  container, stops itself alone: the other previews go on, and the panel says at once that
+  the profile needed more than the worker's memory, instead of waiting for its time cap.
+
 - **The editor profiles a step's columns on request.** A profile is a query over up to a
   million rows of the step, at every click: too much on chains of billions. The editor now asks
   by itself only what the parquet footer says, with no query (`footer_only`: the nulls of every

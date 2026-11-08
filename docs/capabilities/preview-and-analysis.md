@@ -44,44 +44,72 @@ rows)». Scheduled runs and **Run in production** always read everything.
 ### The column profile
 
 After the rows and their count, the editor (and the Viewer, for its applied view) profiles
-the result's columns. Under every column's name and type a thin bar fills in proportion to
-its nulls; an empty bar means none, and the share is in the column's tooltip («12% null»).
-Click a column's name, or press **Enter** on it, for its numbers:
+the result's columns. Under a column's name and type a thin bar, in the colour of the
+null-handling operations (Fill nulls, Drop nulls), fills in proportion to its nulls, and
+«33% ∅» follows the type when there is room; a column without nulls has no bar at all. A
+grey line only holds the bar's place while the profile is asked. In the editor the profile
+comes by itself only from what the parquet file's statistics say (no query: a source, or a
+cached step followed only by select, reorder, drop, rename or sort), so only the columns
+those statistics describe get a bar until a column is opened.
+
+Click a column's name, or press **Enter** on it, to open its profile. Its first line says
+which rows its figures are of: «All 764 rows», or «First 100,000 of 42,007,616 rows» on a
+larger step. Then:
 
 | | |
 |---|---|
-| Nulls | how many, and their share of the rows |
-| Distinct values | an estimate, written «≈ 1,204» |
-| Min and max | in the column's own format (numbers, dates, texts by their characters' codes) |
-| Length | a text's shortest and longest, in characters |
-| Most frequent | the five values held by the most rows, with their rows (asked at the click) |
+| Distinct values | counted exactly: «1,204» over every row, «1,204 in the sample» over the first rows |
+| Min and max | a number's or a date's, in the column's own format; «all rows» beside them when they come from the file's statistics |
+| Length | a text's shortest and longest, in characters (never an alphabetical range) |
+| Values | a category's five most frequent values, each with its share of the rows and a bar; a number's spread over 20 equal intervals between its min and max, as a small histogram |
+| ∅ | the nulls, among the values, only when there are some |
 
-A profile is made as cheaply as the step allows. For a source, or a cached step followed
-only by operations that keep every row and value (select, reorder, drop, rename, sort), the
-nulls of every column and the range of its numbers and dates are read from the parquet
-file's statistics, exact for every row, without reading data; a text's range is never taken
-from there. The rest is one query over the step's **first 1,000,000 rows**: past them the
-panel says which figures are of every row and which of the first million («Nulls, min and
-max from every row, the rest from the first 1,000,000 rows»). A profile is remembered as
-long as the step cache keeps its copies, is stopped at the next click and gives up after a
-minute; it never runs beside the preview it follows.
+A column whose values are (almost) all different, 99% or more of the rows seen, is said to be
+«Unique in the sample, likely a key»: no frequent values are asked, they would all be held by
+one row.
 
-The distinct values are always shown as an estimate («≈»). DuckDB and Polars count them
-exactly over the rows the profile reads (their built-in estimators were measured up to 25%
-and 13% off on real tables, while an exact count over a million rows costs little); the
-ClickHouse engines use `uniq`, exact under 65,536 values and within about 2% past them;
-BigQuery its `APPROX_COUNT_DISTINCT`. On the ClickHouse engines a list is never null, so a
-list column shows no nulls there ([engine differences](../engines/engine-differences.md)).
+**From a value to a step.** In the editor each frequent value has **Filter to this value**
+and **Exclude**, which add a Filter step after the node on screen (equals, or is not equal
+to, the value), linked from it, selected and previewed, as **+ Operation** adds a step; the
+∅ line has **Fill nulls…**, which adds a Fill nulls step with the column already chosen.
+Nothing downstream is rewired, and **Undo** takes the step away. In the Viewer the same
+buttons add a filter to the view's **Filters** and apply it (not on a pivot).
+
+With a profile open, **←** and **→** move it to the column beside, and **Esc** gives the focus
+back to that column's name. A click anywhere outside closes it.
+
+A profile is made as cheaply as the step allows, and never at the expense of the rows or the
+workers. The nulls of every column and the range of its numbers and dates are read from the
+parquet statistics when they apply, exact for every row, and win over the sample. The rest is
+one query over the step's **first 100,000 rows**: the engine stops reading there (a sample
+spread over the table would make it compute the whole chain first). A column's values or
+histogram are one more query, for that column only, once the profile has come. A profile is
+remembered as long as the step cache keeps its copies, is stopped at the next click and gives
+up after 20 seconds; it never runs beside the preview or the count it follows, and one that
+would take more than its share of the worker's memory stops itself, alone, and says so. When it does
+not come, the panel says why («it took more than 20 seconds and was stopped») and offers
+**Try again**; a count that failed says why in its tooltip and offers **Count again**.
+
+The same numbers on every engine: the distinct values are counted exactly over the rows
+read, everywhere. On the ClickHouse engines a list is never null, so a list column shows no
+nulls there ([engine differences](../engines/engine-differences.md)).
 
 ### Moving with the keyboard
 
 The table is one stop of the **Tab** key. The arrow keys move from cell to cell and up into
 the column names; **Home** and **End** go to the row's first and last cell, **Ctrl+Home**
-and **Ctrl+End** to the first column's name and the last cell, **Page Up** and **Page Down**
-by a screenful, past the rows drawn too. **Ctrl+C** (**Cmd+C** on a Mac) copies the cell's
-exact value (the tooltip's, not the rounded one), or a column's name; cells selected with the
-mouse copy as tab-separated values a spreadsheet pastes. **Esc** stops a preview being
-computed.
+and **Ctrl+End** to the table's first cell and its last, **Page Up** and **Page Down**
+by a screenful, past the rows drawn too; the active cell keeps its ring whichever key moved
+it. **Ctrl+C** (**Cmd+C** on a Mac) copies the cell's exact value (the tooltip's, not the
+rounded one), or a column's name; cells selected with the mouse copy as tab-separated values a
+spreadsheet pastes. **Esc** stops a preview being computed. The keyboard icon in the bar above
+the table lists these keys.
+
+The summary beside the tabs stays on one line and is never cut in the middle of a word: as
+the panel narrows, **Use a sample** goes into a **…** menu, the cache's mark keeps its icon,
+and «12 columns removed» becomes «−12»; the node's name keeps at least 14 characters (all of
+it in its tooltip). **Use a sample** is offered when the step's source holds more than a
+million rows, not because a preview was slow.
 
 The **Chart** tab draws the selected node. The chart is an aggregation the engine
 computes on all the node's rows, not on the 100 shown: choose the kind (**Bars**,
