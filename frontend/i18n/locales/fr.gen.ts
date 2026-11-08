@@ -828,6 +828,7 @@ export default {
     "joinOn": "{name} sur {keys}",
     "sourceNode": "Source",
     "keysHint": "Les flèches passent d'une cellule à l'autre. Ctrl+C copie la valeur d'une cellule ou le nom d'une colonne.",
+    "cacheCap": "au-delà du plafond du cache",
   },
   "aiPrompts": {
     "title": "Instructions des agents",
@@ -1879,7 +1880,6 @@ export default {
     "leaveDiscard": "Quitter sans enregistrer",
     "leaveSave": "Enregistrer et quitter",
     "readOnlyNodes": "Compte en lecture seule : seuls des nœuds de transformation peuvent être ajoutés",
-    "cacheSkippedToast": "Étape amont au-dessus du plafond du cache ({n} lignes) : les aperçus de ce nœud recalculent depuis la source.",
     "chooseSmtpConnection": "choisissez la connexion SMTP",
     "connectionNotSmtp": "la connexion choisie n'est pas SMTP",
     "emailLabel": "E-mail à {to}",

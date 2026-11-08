@@ -828,6 +828,7 @@ export default {
     "joinOn": "{name} on {keys}",
     "sourceNode": "Source",
     "keysHint": "Arrow keys move between cells. Ctrl+C copies the value of a cell, or the name of a column.",
+    "cacheCap": "over the cache cap",
   },
   "aiPrompts": {
     "title": "Agent instructions",
@@ -1884,7 +1885,6 @@ export default {
     "leaveDiscard": "Leave without saving",
     "leaveSave": "Save and leave",
     "readOnlyNodes": "Read-only account: only transformation nodes can be added",
-    "cacheSkippedToast": "Upstream step above the cache cap ({n} rows): previews of this node recompute from the source.",
     "backendUnreachable": "Backend unreachable: {error}",
     "chartTab": "Chart",
     "chooseConnection": "choose the connection",

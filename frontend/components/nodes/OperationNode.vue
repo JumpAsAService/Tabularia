@@ -60,10 +60,13 @@ const summary = computed(() => opSummary(props.data?.opType ?? '', props.data?.p
         <span v-if="stats.rows">{{ stats.rows }}</span>
         <span v-if="stats.rows" class="dot" aria-hidden="true">·</span>
         <span>{{ stats.cols }}</span>
-        <span v-if="stats.noCache" class="nocache" :title="stats.noCache" role="img" :aria-label="stats.noCache"><RefreshCw :size="11" /></span>
       </template>
       <span v-if="cached" class="incache" :title="$t('nodeStats.cached')" role="img" :aria-label="$t('nodeStats.cached')"><DatabaseZap :size="11" /></span>
     </div>
+
+    <!-- the step before is over the cache cap: this one is computed again at every preview.
+         A quiet mark on the border; the preview's summary and the panel say it in words -->
+    <span v-if="stats?.noCache" class="node-mark-nocache" :title="stats.noCache" role="img" :aria-label="stats.noCache"><RefreshCw :size="9" /></span>
 
     <Handle id="out" type="source" :position="Position.Right" />
   </div>

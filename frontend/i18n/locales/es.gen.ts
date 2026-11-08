@@ -828,6 +828,7 @@ export default {
     "joinOn": "{name} por {keys}",
     "sourceNode": "Origen",
     "keysHint": "Las flechas se mueven entre las celdas. Ctrl+C copia el valor de una celda o el nombre de una columna.",
+    "cacheCap": "por encima del límite de la caché",
   },
   "aiPrompts": {
     "title": "Instrucciones de los agentes",
@@ -1879,7 +1880,6 @@ export default {
     "leaveDiscard": "Salir sin guardar",
     "leaveSave": "Guardar y salir",
     "readOnlyNodes": "Cuenta de solo lectura: solo se pueden añadir nodos de transformación",
-    "cacheSkippedToast": "Paso anterior por encima del límite de la caché ({n} filas): las vistas previas de este nodo recalculan desde la fuente.",
     "chooseSmtpConnection": "elige la conexión SMTP",
     "connectionNotSmtp": "la conexión elegida no es SMTP",
     "emailLabel": "Correo a {to}",

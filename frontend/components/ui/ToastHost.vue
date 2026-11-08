@@ -1,25 +1,19 @@
 <script setup lang="ts">
 // Rendering the toasts' queue (see composables/useToast.ts).
-// Mounted once in app.vue for the page's corner (every page, the editor included); a surface
-// that keeps its own corner mounts one more with its `host` (the flow editor, over the
-// canvas), and only the toasts pushed for that host show there.
-import { computed } from 'vue'
+// Mounted once only in app.vue: it covers every page, the editor included.
 import { CheckCircle2, XCircle, TriangleAlert, Info, X } from 'lucide-vue-next'
 import { useToast } from '~/composables/useToast'
 
-defineOptions({ inheritAttrs: false })
-const props = withDefaults(defineProps<{ host?: string }>(), { host: 'page' })
 const { toasts, dismiss } = useToast()
-const mine = computed(() => toasts.value.filter((t) => (t.host ?? 'page') === props.host))
 
 const icons = { success: CheckCircle2, error: XCircle, warning: TriangleAlert, info: Info }
 </script>
 
 <template>
-  <Teleport to="body" :disabled="host !== 'page'">
-    <div class="toasts" :class="{ inline: host !== 'page' }" aria-live="polite" v-bind="$attrs">
+  <Teleport to="body">
+    <div class="toasts" aria-live="polite">
       <TransitionGroup name="toast">
-        <div v-for="t in mine" :key="t.id" class="toast" :class="t.kind" @click="dismiss(t.id)">
+        <div v-for="t in toasts" :key="t.id" class="toast" :class="t.kind" @click="dismiss(t.id)">
           <component :is="icons[t.kind]" :size="16" class="ticon" />
           <span class="tmsg">{{ t.message }}</span>
           <button class="tx" :title="$t('toastHost.dismiss')" :aria-label="$t('toastHost.dismiss')" @click.stop="dismiss(t.id)"><X :size="13" /></button>
@@ -40,8 +34,6 @@ const icons = { success: CheckCircle2, error: XCircle, warning: TriangleAlert, i
   gap: 8px;
   max-width: 380px;
 }
-/* a surface's own corner: placed by the surface, in its flow */
-.toasts.inline { position: static; }
 .toast {
   display: flex;
   align-items: flex-start;
@@ -76,12 +68,8 @@ const icons = { success: CheckCircle2, error: XCircle, warning: TriangleAlert, i
 .toast-enter-active { transition: transform var(--dur-3) var(--ease-out), opacity var(--dur-3) var(--ease-out); }
 .toast-leave-active { transition: transform var(--dur-2) ease-out, opacity var(--dur-2) ease-out; pointer-events: none; }
 .toast-enter-from, .toast-leave-to { opacity: 0; transform: translateX(100%); }
-/* a surface's corner is not the window's edge: there a toast sliding in from the right would
-   stick out past the window (the page then scrolls sideways for a moment and the canvas
-   resizes under it), so it drops in from just above instead */
-.toasts.inline .toast-enter-from, .toasts.inline .toast-leave-to { transform: translateY(-8px); }
 @media (prefers-reduced-motion: reduce) {
   .toast-enter-active, .toast-leave-active { transition: opacity 120ms ease-out; }
-  .toast-enter-from, .toast-leave-to, .toasts.inline .toast-enter-from, .toasts.inline .toast-leave-to { transform: none; }
+  .toast-enter-from, .toast-leave-to { transform: none; }
 }
 </style>

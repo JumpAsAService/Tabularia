@@ -76,8 +76,8 @@ const summary = computed(() => {
       <span v-if="stats.rows">{{ stats.rows }}</span>
       <span v-if="stats.rows" class="dot" aria-hidden="true">·</span>
       <span>{{ stats.cols }}</span>
-      <span v-if="stats.noCache" class="nocache" :title="stats.noCache" role="img" :aria-label="stats.noCache"><RefreshCw :size="11" /></span>
     </div>
+    <span v-if="stats?.noCache" class="node-mark-nocache" :title="stats.noCache" role="img" :aria-label="stats.noCache"><RefreshCw :size="9" /></span>
     <!-- SEQUENCE output towards the next control/output node -->
     <Handle id="seq-out" type="source" :position="Position.Right" class="handle-seq" />
   </div>

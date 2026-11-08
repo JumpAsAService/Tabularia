@@ -828,6 +828,7 @@ export default {
     "joinOn": "{name} über {keys}",
     "sourceNode": "Quelle",
     "keysHint": "Die Pfeiltasten wechseln zwischen den Zellen. Strg+C kopiert den Wert einer Zelle oder den Namen einer Spalte.",
+    "cacheCap": "über der Cache-Grenze",
   },
   "aiPrompts": {
     "title": "Anweisungen der Agenten",
@@ -1879,7 +1880,6 @@ export default {
     "leaveDiscard": "Ohne Speichern verlassen",
     "leaveSave": "Speichern und verlassen",
     "readOnlyNodes": "Nur-Lese-Konto: es können nur Transformationsknoten hinzugefügt werden",
-    "cacheSkippedToast": "Vorgelagerter Schritt über der Cache-Grenze ({n} Zeilen): Vorschauen dieses Knotens rechnen ab der Quelle neu.",
     "chooseSmtpConnection": "SMTP-Verbindung wählen",
     "connectionNotSmtp": "Die gewählte Verbindung ist kein SMTP",
     "emailLabel": "E-Mail an {to}",

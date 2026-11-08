@@ -7,7 +7,7 @@ import { Controls, ControlButton } from '@vue-flow/controls'
 import { MiniMap } from '@vue-flow/minimap'
 import { opMeta } from '~/composables/useOpIcons'
 
-import { Table2, BarChart3, Wand2, Users, Undo2, Redo2, Sparkles, SlidersHorizontal, ShieldAlert, FlaskConical, X, RotateCw } from 'lucide-vue-next'
+import { Table2, BarChart3, Wand2, Users, Undo2, Redo2, Sparkles, SlidersHorizontal, ShieldAlert, FlaskConical, X, RotateCw, RefreshCw } from 'lucide-vue-next'
 import FlowAssistant from '~/components/FlowAssistant.vue'
 import { useAi, type AiStatus } from '~/composables/useAi'
 import { useApi, errMessage } from '~/composables/useApi'
@@ -250,19 +250,6 @@ const busy = ref(false)
 // extra query, and never saved in the flow (provide → node components).
 // `rows` is missing when only the columns are known (`cols` request, limit 1).
 const nodeStats = reactive<Record<string, NodeStats>>({})
-// steps for which the «upstream step over the cache cap» warning has been shown already in
-// this browser session (this flow's node): the toast once, then the node and its panel speak
-const CACHE_WARNED_KEY = 'tabularia-cache-cap-warned'
-const cacheWarned = new Set<string>()
-function firstCacheWarning(nodeId: string): boolean {
-  const id = `${flowId.value ?? 'new'}:${nodeId}`
-  let seen: string[] = []
-  try { seen = JSON.parse(sessionStorage.getItem(CACHE_WARNED_KEY) || '[]') } catch { /* no storage: this page's memory */ }
-  if (cacheWarned.has(id) || seen.includes(id)) return false
-  cacheWarned.add(id)
-  try { sessionStorage.setItem(CACHE_WARNED_KEY, JSON.stringify([...seen, id].slice(-200))) } catch { /* idem */ }
-  return true
-}
 provide('nodeStats', nodeStats)
 
 // ── Which nodes have their result in the step cache (a halo on the node) ────────
@@ -2038,11 +2025,6 @@ async function runPreview(nodeId: string) {
     const res = await apiPreview(body, 'preview')
     previewMemo.set(key, { at: Date.now(), res })
     cacheCheckAfterPreview()
-    if (res.cache_state === 'skipped' && firstCacheWarning(nodeId)) {
-      // one toast for the whole editor, its text updated: three nodes over the cap made three.
-      // Over the canvas, top right: the page's corner is over the preview's numbers.
-      toast.warning(t('flowEditor.cacheSkippedToast', { n: fmt.count(res.cache_cap_rows ?? 0) }), 'cache-cap', 'canvas')
-    }
     if (seq === previewSeq) {
       if (skeleton) await skeletonPad(t0)
       if (seq !== previewSeq) return
@@ -2072,6 +2054,12 @@ const computeSeconds = computed(() => (computingNodeId.value ? Math.floor((clock
 // the columns of the node being computed when this page knows them (its last preview, a
 // source's schema): the grid's header names them at once over the rows that are going
 const computingColumns = computed<ColumnInfo[] | null>(() => (computingNodeId.value ? knownColumns(computingNodeId.value) : null))
+// the step on screen is recomputed from its source at every preview: its upstream step is
+// over the cache cap (the panel and the node say it too)
+const shownCacheSkipped = computed(() => {
+  const s = previewNodeId.value && !computingNodeId.value ? nodeStats[previewNodeId.value] : null
+  return s?.cacheState === 'skipped' ? fmt.count(s.cacheCap ?? 0) : null
+})
 const slowCompute = computed(() => !!computingNodeId.value && computeSeconds.value >= 2)
 // the source of the chain on screen (or being computed), and its development sample
 const shownSource = computed(() => {
@@ -2105,12 +2093,17 @@ const previewChanges = computed(() => {
   const renames = op === 'rename' ? (node.data?.params?.mapping ?? {}) : {}
   return columnChanges(upstream, preview.value.columns, renames, consumedColumns(op, node.data?.params))
 })
-// «N columns removed» opens the list of the columns removed, under its own button
+// «N columns removed» opens the list of the columns removed, under its own button; the
+// cache's mark opens what it means
 const removedOpen = ref(false)
 const removedPop = ref<HTMLElement | null>(null)
+const cacheOpen = ref(false)
+const cachePop = ref<HTMLElement | null>(null)
 const popLeft = ref(0)
 usePopover(removedOpen, removedPop, () => { removedOpen.value = false })
+usePopover(cacheOpen, cachePop, () => { cacheOpen.value = false })
 watch(previewChanges, () => { removedOpen.value = false })
+watch(previewNodeId, () => { cacheOpen.value = false })
 /** Where a popover of the bar opens: under the button that opened it, kept inside the bar. */
 function anchorTo(e: MouseEvent, width = 260) {
   const btn = e.currentTarget as HTMLElement | null
@@ -2121,7 +2114,13 @@ function anchorTo(e: MouseEvent, width = 260) {
 }
 function toggleRemoved(e: MouseEvent) {
   anchorTo(e)
+  cacheOpen.value = false
   removedOpen.value = !removedOpen.value
+}
+function toggleCache(e: MouseEvent) {
+  anchorTo(e, 320)
+  removedOpen.value = false
+  cacheOpen.value = !cacheOpen.value
 }
 // the list takes the focus (read out, and leaving it closes it); a click elsewhere closes it
 function onRemovedOutside(e: PointerEvent) {
@@ -2129,6 +2128,8 @@ function onRemovedOutside(e: PointerEvent) {
   if (removedPop.value?.contains(el) || el?.closest?.('.pv-removed')) return
   removedOpen.value = false
 }
+// the explanation holds no control: the panel itself takes the focus, so Esc and Tab close it
+watch(cacheOpen, (open) => { if (open) nextTick(() => cachePop.value?.focus()) })
 watch(removedOpen, (open) => {
   if (open) {
     document.addEventListener('pointerdown', onRemovedOutside, true)
@@ -2154,6 +2155,7 @@ const settledSummary = computed(() => {
   parts.push(t('dataGrid.columns', { n: r.columns.length }))
   const removed = previewChanges.value?.removed.length ?? 0
   if (removed) parts.push(t('dataGrid.removed', { n: removed }, removed))
+  if (shownCacheSkipped.value) parts.push(t('dataGrid.cacheCap'))
   return parts.filter(Boolean).join(' · ')
 })
 watch(settledSummary, (now) => {
@@ -2945,6 +2947,18 @@ async function pollTask(id: string) {
               </span>
               <!-- the place of «N columns removed» while the input's columns are asked: nothing moves when it comes -->
               <span v-else-if="changesPending" class="pv-part pv-reserve" aria-hidden="true">{{ $t('dataGrid.removed', { n: 0 }, 2) }}</span>
+              <!-- the step is computed again at every preview: said quietly, explained on demand -->
+              <span v-if="shownCacheSkipped" class="pv-part">
+                <button
+                  type="button"
+                  class="pv-removed pv-cache"
+                  aria-haspopup="true"
+                  :aria-expanded="cacheOpen"
+                  aria-controls="pv-cache-why"
+                  :title="$t('nodeStats.noCache', { n: shownCacheSkipped })"
+                  @click="toggleCache"
+                ><RefreshCw :size="11" aria-hidden="true" /> {{ $t('dataGrid.cacheCap') }}</button>
+              </span>
             </template>
             <span v-if="shownSample && (computingNodeId || preview)" class="pv-part pv-sample"><FlaskConical :size="11" aria-hidden="true" /> {{ shownSample }}</span>
           </p>
@@ -2962,6 +2976,18 @@ async function pollTask(id: string) {
             <ul>
               <li v-for="c in previewChanges.removed" :key="c">{{ c }}</li>
             </ul>
+          </div>
+          <div
+            v-if="cacheOpen && shownCacheSkipped"
+            id="pv-cache-why"
+            ref="cachePop"
+            class="pv-pop pv-pop-text"
+            :style="{ left: `${popLeft}px` }"
+            role="group"
+            :aria-label="$t('dataGrid.cacheCap')"
+            tabindex="-1"
+          >
+            <p>{{ $t('nodePanel.cacheSkipped', { n: shownCacheSkipped }) }}</p>
           </div>
           <span class="sr-only" role="status" aria-live="polite">{{ liveText }}</span>
           <button
@@ -3002,9 +3028,6 @@ async function pollTask(id: string) {
         <ChartPanel v-else :columns="preview?.columns ?? []" :query="chartQuery" />
       </div>
     </div>
-    <!-- the editor's own corner for toasts: over the canvas, top right, never over the
-         preview's numbers -->
-    <ToastHost host="canvas" class="canvas-toasts" />
     <FlowQuickMenu ref="quickMenu" :items="shortcutItems" @pick="addOperationAt" @customize="shortcutsOpen = true" @close="onQuickMenuClose" />
     <FlowShortcutsDialog
       :open="shortcutsOpen"
@@ -3072,6 +3095,9 @@ async function pollTask(id: string) {
   border-radius: var(--radius); box-shadow: var(--shadow-2); font-size: 12px;
 }
 .pv-pop:focus { outline: none; }
+.pv-pop-text { max-width: min(320px, 100%); }
+.pv-pop-text p { margin: 0; line-height: 1.45; color: var(--text); }
+.pv-cache { display: inline-flex; align-items: center; gap: 3px; }
 .pv-pop-title { margin: 0 0 4px; color: var(--muted); }
 .pv-pop ul { margin: 0; padding: 0; list-style: none; }
 .pv-pop li { padding: 2px 0; font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 11.5px; overflow-wrap: anywhere; }

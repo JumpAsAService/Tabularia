@@ -9,9 +9,6 @@ export interface Toast {
   // a toast that speaks for a recurring situation: a new one with the same key replaces it
   // instead of piling up beside it
   key?: string
-  // where it shows: the page's corner (bottom right) unless a surface keeps its own stack
-  // (the flow editor's, over the canvas, away from the preview's numbers)
-  host?: string
 }
 
 let nextId = 1
@@ -26,12 +23,12 @@ export function useToast() {
     timers.delete(id)
   }
 
-  function push(kind: Toast['kind'], message: string, ttlMs?: number, key?: string, host?: string) {
+  function push(kind: Toast['kind'], message: string, ttlMs?: number, key?: string) {
     const same = key ? toasts.value.find((t) => t.key === key) : undefined
     const id = same?.id ?? nextId++
     toasts.value = same
       ? toasts.value.map((t) => (t.id === id ? { ...t, kind, message } : t))
-      : [...toasts.value, { id, kind, message, key, host }]
+      : [...toasts.value, { id, kind, message, key }]
     // the errors stay longer: they must be read, not glimpsed
     const ttl = ttlMs ?? (kind === 'error' ? 6500 : kind === 'warning' ? 5000 : 3500)
     if (import.meta.client) {
@@ -46,7 +43,7 @@ export function useToast() {
     success: (message: string) => push('success', message),
     error: (message: string) => push('error', message),
     // warnings: something to know, not to fix
-    warning: (message: string, key?: string, host?: string) => push('warning', message, undefined, key, host),
+    warning: (message: string, key?: string) => push('warning', message, undefined, key),
     info: (message: string) => push('info', message),
   }
 }

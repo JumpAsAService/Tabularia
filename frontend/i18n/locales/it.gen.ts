@@ -828,6 +828,7 @@ export default {
     "joinOn": "{name} su {keys}",
     "sourceNode": "Sorgente",
     "keysHint": "Le frecce si muovono tra le celle. Ctrl+C copia il valore di una cella o il nome di una colonna.",
+    "cacheCap": "oltre il tetto della cache",
   },
   "aiPrompts": {
     "title": "Istruzioni degli agenti",
@@ -1884,7 +1885,6 @@ export default {
     "leaveDiscard": "Esci senza salvare",
     "leaveSave": "Salva ed esci",
     "readOnlyNodes": "Account di sola lettura: puoi aggiungere solo nodi di trasformazione",
-    "cacheSkippedToast": "Passo a monte oltre il tetto della cache ({n} righe): le anteprime di questo nodo ricalcolano dalla sorgente.",
     "backendUnreachable": "Backend non raggiungibile: {error}",
     "chartTab": "Grafico",
     "chooseConnection": "scegli la connessione",
