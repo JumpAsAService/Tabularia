@@ -153,6 +153,45 @@ def preview_task(
         raise
 
 
+@celery_app.task(name="app.tasks.jobs.count_task")
+def count_task(
+    bucket: str,
+    input_key: str,
+    operations: list[dict[str, Any]],
+    at_most: int,
+    engine: str | None = None,
+    no_cache: bool = False,
+) -> dict:
+    """How many rows a step gives, up to `at_most` (app/engine/rowcount.py): asked by the
+    editor and the Viewer after the preview's rows, on the preview queue. Tagged as
+    preview_task's answer; its queries carry the task's id, so a count knocked down (a
+    click elsewhere, «Cancel») is stopped on the server too."""
+    from celery import current_task
+
+    from app.engine import DEFAULT_ENGINE
+    from app.engine import rowcount
+    from app.engine.exceptions import EngineError, OperationError, SourceNotFoundError, UnknownOperationError
+    from app.engine.query_tag import query_tag, was_interrupted
+
+    task_id = getattr(getattr(current_task, "request", None), "id", None)
+    name = (engine or DEFAULT_ENGINE).lower()
+    try:
+        with query_tag(f"tab-prev:{task_id}" if task_id else None):
+            rows, over = rowcount.count(get_engine(engine), name, bucket, input_key, operations, at_most,
+                                        use_cache=not no_cache)
+        return {"ok": True, "result": {"rows": rows, "over": over, "at_most": at_most, "how": "counted"}}
+    except Exception as e:
+        if was_interrupted(e):
+            return {"ok": False, "error": "superseded", "detail": "The count was superseded or stopped"}
+        if isinstance(e, SourceNotFoundError):
+            return {"ok": False, "error": "not_found", "detail": str(e)}
+        if isinstance(e, (UnknownOperationError, OperationError)):
+            return {"ok": False, "error": "unprocessable", "detail": str(e)}
+        if isinstance(e, EngineError):
+            return {"ok": False, "error": "bad_request", "detail": str(e)}
+        raise
+
+
 # A copy of a step into the cache is an optimisation nobody waits for, but it ran on
 # the preview worker's slots in arrival order: during the review of 2026-10-14 copies
 # took 39% of that worker's time, and clicks queued behind them. Now a copy goes to

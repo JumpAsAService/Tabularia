@@ -10,6 +10,9 @@ var goOnlyRoutes = []struct {
 	after string
 	route pyRoute
 }{
+	// a step's row count and «Cancel» on a slow preview (api/proxy.go)
+	{after: "/tasks/cache-status", route: pyRoute{path: "/tasks/count", methods: []string{"POST"}, regex: `^/tasks/count$`}},
+	{after: "/tasks/count", route: pyRoute{path: "/tasks/preview/cancel", methods: []string{"POST"}, regex: `^/tasks/preview/cancel$`}},
 	// the flow editor's right-click menu (api/flow_shortcuts.go)
 	{after: "/users/me/locale", route: pyRoute{path: "/users/me/flow-shortcuts", methods: []string{"GET", "PUT"}, regex: `^/users/me/flow\-shortcuts$`}},
 	// Explore's top level, the objects one changed last (api/explore_recent.go)

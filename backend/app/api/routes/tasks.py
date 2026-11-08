@@ -10,9 +10,10 @@ from app.tasks.jobs import transform_data_task
 from app.tasks.celery_app import celery_app
 from app.tasks import worker_pool
 from app.api import exports, preview_slots
+from app.api.preview_slots import CANCELLED as SLOT_CANCELLED
 from app.api.models import (
     TransformOperation, TaskResponse, TransformDataRequest, TaskStatusResponse,
-    PreviewRequest, ExportRequest, ExportStart, CacheStatusRequest,
+    PreviewRequest, ExportRequest, ExportStart, CacheStatusRequest, CountRequest, CancelSlotRequest,
 )
 from functools import lru_cache
 
@@ -116,7 +117,7 @@ def on_preview_worker(task_name: str, kwargs: dict, slot: str | None, seconds: f
     async_result = celery_app.send_task(
         task_name, kwargs=kwargs, queue="preview", task_id=task_id,
     )
-    if previous and previous != task_id:
+    if previous and previous not in (task_id, SLOT_CANCELLED):
         # Knocks down the preview that held the slot. Queued: the worker discards it on
         # arrival. Running: SIGUSR1 = SoftTimeLimitExceeded INSIDE the task — the process
         # survives (no 1.5 s reload) and the engine cleans up (client, query on the
@@ -229,6 +230,55 @@ def cache_status(request: CacheStatusRequest) -> dict:
         elif cache.is_skipped(final):
             too_big.append(chain.node_id)
     return {"cached": cached, "too_big": too_big}
+
+
+# A count is a hint next to the rows already on screen: it gives up sooner than a preview
+COUNT_TIMEOUT_SECONDS = 60.0
+
+
+@router.post("/count")
+def count_step(request: CountRequest) -> dict:
+    """How many rows a step gives, up to `at_most` (app/engine/rowcount.py): {"rows",
+    "over", "at_most", "how"}. Asked after the preview's rows, never before them.
+
+    Remembered or read from a parquet footer here, in milliseconds; otherwise counted by
+    the preview worker, starting from the step cache, at most COUNT_TIMEOUT_SECONDS (504
+    past them). With a `slot`, a newer request on it (or POST /tasks/preview/cancel)
+    knocks this one down (409)."""
+    from app.engine import rowcount
+    from app.utils import get_storage_service
+
+    name = (request.engine or DEFAULT_ENGINE).lower()
+    ops = [Operation(**op.model_dump()).model_dump() for op in request.operations]
+    try:
+        quick = rowcount.known(name, request.bucket, request.input_key, ops, request.at_most,
+                               get_storage_service(), None if name == "bigquery" else _step_cache(name))
+    except Exception as e:  # noqa: BLE001 — a fast path only: the worker counts instead
+        logger.info("row count: no fast answer (%s)", e)
+        quick = None
+    if quick is not None:
+        rows, over, how = quick
+        return {"rows": rows, "over": over, "at_most": request.at_most, "how": how}
+    kwargs = {"bucket": request.bucket, "input_key": request.input_key, "operations": ops,
+              "at_most": request.at_most, "engine": request.engine, "no_cache": request.no_cache}
+    payload = said_by_preview_worker(
+        lambda: on_preview_worker("app.tasks.jobs.count_task", kwargs, request.slot, seconds=COUNT_TIMEOUT_SECONDS),
+        PREVIEW_OUT_OF_MEMORY)
+    if not payload.get("ok"):
+        status = _PREVIEW_ERROR_STATUS.get(payload.get("error"), 400)
+        raise HTTPException(status_code=status, detail=payload.get("detail", "Count failed"))
+    return payload["result"]
+
+
+@router.post("/preview/cancel")
+def cancel_slot(request: CancelSlotRequest) -> dict:
+    """Stops the preview or count that holds `slot` («Cancel» on a slow preview): the
+    task is revoked and its query killed on the server, as a newer request on the slot
+    would do; the request waiting for it answers 409 at once."""
+    previous = preview_slots.cancel(request.slot)
+    if previous:
+        celery_app.control.revoke(previous, terminate=True, signal="SIGUSR1")
+    return {"cancelled": bool(previous)}
 
 
 # tag of an export task's expected error → HTTP status

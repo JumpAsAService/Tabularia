@@ -287,6 +287,7 @@ class DuckDBEngine(DeferredStepCache, Engine):
         source: DataSource,
         operations: list[Operation] | list[dict[str, Any]],
         at_most: int,
+        use_cache: bool = False,
     ) -> int:
         """As the base's, but the count goes on the relation: the chain's last step keeps
         a preview's limit (a `sql` step followed by others computed its whole result)."""
@@ -297,7 +298,7 @@ class DuckDBEngine(DeferredStepCache, Engine):
             ctx = DuckContext(con, self.storage, tmp, preview_limit=at_most + 1, direct=self.direct)
             hashes = plan_hashes(self._source_id(source), [op.model_dump() for op in ops])
             try:
-                rel = self._rel_from_cache(ctx, source, ops, hashes, use_cache=False)
+                rel = self._rel_from_cache(ctx, source, ops, hashes, use_cache=use_cache)
                 return int(rel.limit(at_most + 1).aggregate("count(*)").fetchone()[0])
             except EngineError:
                 raise

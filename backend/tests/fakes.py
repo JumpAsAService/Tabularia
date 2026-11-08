@@ -32,6 +32,13 @@ class FakeStorage:
         # idempotent as S3: deleting what is not there is not an error
         self.blobs.pop((bucket, key), None)
 
+    def read_tail(self, bucket: str, key: str, length: int) -> tuple[bytes, int]:
+        data = self.blobs.get((bucket, key))
+        if data is None:
+            raise FileNotFoundError(f"{bucket}/{key} non esiste nel FakeStorage")
+        self.tail_reads = getattr(self, "tail_reads", 0) + 1
+        return data[-length:], len(data)
+
     # a convenience for the tests' asserts
     def exists(self, bucket: str, key: str) -> bool:
         return (bucket, key) in self.blobs
@@ -87,13 +94,14 @@ class FakeRedis:
         return len(doomed)
 
     # ── strings (SET NX lock, «too large» steps) ───────────────
-    def set(self, key, value, nx=False, ex=None):
+    def set(self, key, value, nx=False, ex=None, get=False):
         if not hasattr(self, "strings"):
             self.strings: dict[str, str] = {}
         if nx and key in self.strings:
             return None
+        previous = self.strings.get(key)
         self.strings[key] = value
-        return True
+        return previous if get else True
 
     def get(self, key):
         return getattr(self, "strings", {}).get(key)

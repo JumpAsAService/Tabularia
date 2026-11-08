@@ -619,10 +619,53 @@ Python gateway as FastAPI serves it, and whether the Go gateway answers it
 | DELETE | `/admin/workers/{kind}/scaling` | `give_back` | **Go** |
 | PUT | `/admin/workers/{kind}/scaling` | `scala` | **Go** |
 
-## Go only (3)
+## Go only (46)
 
 | Method | Path | Served by |
 |---|---|---|
+| GET | `/admin/data-apis` | **Go** |
+| DELETE | `/admin/data-apis/{api_id}` | **Go** |
+| POST | `/admin/data-apis/{api_id}/pause` | **Go** |
+| PUT | `/admin/data-apis/{api_id}/runtime` | **Go** |
+| GET | `/admin/share-links` | **Go** |
+| PUT | `/admin/share-links/settings` | **Go** |
+| GET | `/data-apis` | **Go** |
+| GET | `/data-apis/limits` | **Go** |
+| DELETE | `/data-apis/{api_id}` | **Go** |
+| GET | `/data-apis/{api_id}` | **Go** |
+| PATCH | `/data-apis/{api_id}` | **Go** |
+| POST | `/data-apis/{api_id}/activate` | **Go** |
+| GET | `/data-apis/{api_id}/documentation` | **Go** |
+| POST | `/data-apis/{api_id}/duplicate` | **Go** |
+| GET | `/data-apis/{api_id}/keys` | **Go** |
+| POST | `/data-apis/{api_id}/keys` | **Go** |
+| POST | `/data-apis/{api_id}/keys/{key_id}/renew` | **Go** |
+| POST | `/data-apis/{api_id}/keys/{key_id}/revoke` | **Go** |
+| POST | `/data-apis/{api_id}/pause` | **Go** |
+| GET | `/data-apis/{api_id}/status` | **Go** |
+| GET | `/data-apis/{api_id}/versions` | **Go** |
+| GET | `/data-apis/{api_id}/versions/{version}` | **Go** |
+| POST | `/data-apis/{api_id}/versions/{version}/restore` | **Go** |
 | GET | `/explore/recent` | **Go** |
+| GET | `/internal/data-apis/{api_id}/manifest` | **Go** |
+| POST | `/internal/data-apis/{api_id}/usage` | **Go** |
+| GET | `/projects/{project_id}/data-apis` | **Go** |
+| POST | `/projects/{project_id}/data-apis` | **Go** |
+| GET | `/share-links` | **Go** |
+| POST | `/share-links` | **Go** |
+| POST | `/share-links/{link_id}/password` | **Go** |
+| POST | `/share-links/{link_id}/revoke` | **Go** |
+| GET | `/share/{token}` | **Go** |
+| POST | `/share/{token}/comment` | **Go** |
+| POST | `/share/{token}/data` | **Go** |
+| GET | `/share/{token}/exports/{handle}` | **Go** |
+| GET | `/share/{token}/exports/{handle}/file` | **Go** |
+| GET | `/share/{token}/frame` | **Go** |
+| GET | `/share/{token}/parameters` | **Go** |
+| POST | `/share/{token}/password` | **Go** |
+| POST | `/share/{token}/render` | **Go** |
+| POST | `/share/{token}/session` | **Go** |
+| POST | `/tasks/count` | **Go** |
+| POST | `/tasks/preview/cancel` | **Go** |
 | GET | `/users/me/flow-shortcuts` | **Go** |
 | PUT | `/users/me/flow-shortcuts` | **Go** |

@@ -386,6 +386,15 @@ class StorageService:
                 return None
             raise
 
+    def read_tail(self, bucket: str, object_key: str, length: int) -> tuple[bytes, int]:
+        """The last `length` bytes of an object (all of it when shorter) and its whole size:
+        one ranged GET, for a parquet file's footer (engine/rowcount.py)."""
+        response = self.client.get_object(Bucket=bucket, Key=object_key, Range=f"bytes=-{int(length)}")
+        body = response["Body"].read()
+        # «bytes 100-199/200»: the size after the slash; no range in the answer = the whole object
+        total = str(response.get("ContentRange") or "").rpartition("/")[2]
+        return body, int(total) if total.isdigit() else len(body)
+
     def head_object(self, bucket: str, object_key: str) -> dict:
         """
         Gets an object's metadata without downloading it.

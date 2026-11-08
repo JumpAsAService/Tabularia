@@ -21,6 +21,8 @@ _PREFIX = "dataprep:preview:slot:"
 # compare-and-delete: the slot is freed only while it is still OURS
 _RELEASE = "if redis.call('get', KEYS[1]) == ARGV[1] then return redis.call('del', KEYS[1]) else return 0 end"
 _client: redis.Redis | None = None
+# what a cancelled slot holds for a moment: no task has this id
+CANCELLED = "cancelled"
 
 
 def _r() -> redis.Redis:
@@ -52,3 +54,15 @@ def release(slot: str, task_id: str) -> None:
         _r().eval(_RELEASE, 1, _PREFIX + slot, task_id)
     except Exception:
         pass
+
+
+def cancel(slot: str) -> str | None:
+    """Takes the slot away from whoever holds it and returns who that was (None when no
+    one). The slot keeps a marker for a moment, so the waiting request sees that it is no
+    longer its turn (409) at the next look instead of waiting for the revoke."""
+    try:
+        previous = _r().set(_PREFIX + slot, CANCELLED, ex=30, get=True)
+        return previous if previous and previous != CANCELLED else None
+    except Exception as e:
+        logger.warning("preview slot not cancelled (%s)", e)
+        return None

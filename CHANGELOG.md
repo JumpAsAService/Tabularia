@@ -5,6 +5,16 @@ exposes at `/system/info` and in the app's settings menu.
 
 ## Unreleased
 
+- **A step's real row count.** `POST /tasks/count` (a route of the Go gateway only, checked
+  as a preview) says how many rows a step gives, up to 10,000,000 («more than» past it). It
+  is asked after the preview's rows, never before them: a count made before for the same step
+  is remembered on Valkey under the step cache's fingerprint; a source, or a step the cache
+  holds, followed only by operations that keep every row (select, rename, cast, computed
+  column, sort, fill nulls; a `limit` counted in) is read from the parquet footer in
+  milliseconds; anything else is counted by the preview worker from the nearest cached step,
+  on every engine, at most 60 s. `POST /tasks/preview/cancel` stops the preview or count that
+  holds one of the person's own slots, killing its query on the server.
+
 ## 1.4.1 «Romulus» — 2026-11-07
 
 Data APIs: on Kubernetes, a datasource can now be published as a read-only HTTP API for the

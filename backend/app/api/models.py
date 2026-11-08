@@ -127,6 +127,29 @@ class CacheChain(BaseModel):
     operations: list[TransformOperation] = Field(default_factory=list)
 
 
+# The editor's and the Viewer's «First 100 of N rows»: counting goes as far as this and
+# says «more than» past it (app/engine/rowcount.py)
+COUNT_AT_MOST = 10_000_000
+
+
+class CountRequest(BaseModel):
+    """How many rows a step gives (POST /tasks/count): the preview's chain, counted up to a cap."""
+    bucket: str = Field(..., description="The S3 bucket's name")
+    input_key: str = Field(..., description="Key of the input parquet")
+    operations: list[TransformOperation] = Field(default_factory=list, description="The chain to count")
+    engine: Optional[str] = Field(default=None, description="The engine to use; None = the default")
+    no_cache: bool = Field(default=False, description="Do not start from the step cache (the Viewer)")
+    at_most: int = Field(default=COUNT_AT_MOST, ge=1, le=100_000_000,
+                         description="Count up to here; past it the answer is «more than at_most»")
+    slot: Optional[str] = Field(default=None, max_length=96, pattern=r"^[A-Za-z0-9:_-]+$",
+                                description="Slot: a newer request on the same slot cancels this one")
+
+
+class CancelSlotRequest(BaseModel):
+    """Stops what holds a slot (a preview or a count): «Cancel» on a slow preview."""
+    slot: str = Field(..., max_length=96, pattern=r"^[A-Za-z0-9:_-]+$")
+
+
 class CacheStatusRequest(BaseModel):
     """The nodes whose result the editor asks about, for its engine."""
     engine: Optional[str] = None

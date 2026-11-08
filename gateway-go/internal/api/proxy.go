@@ -36,6 +36,8 @@ func init() {
 			{Method: http.MethodGet, Pattern: "/engines", Handler: a("/engines", d.proxyEngines)},
 			{Method: http.MethodPost, Pattern: "/tasks/preview", Handler: a("/tasks/preview", d.proxyPreview)},
 			{Method: http.MethodPost, Pattern: "/tasks/cache-status", Handler: a("/tasks/cache-status", d.proxyCacheStatus)},
+			{Method: http.MethodPost, Pattern: "/tasks/count", Handler: a("/tasks/count", d.proxyCount)},
+			{Method: http.MethodPost, Pattern: "/tasks/preview/cancel", Handler: a("/tasks/preview/cancel", d.proxyCancelSlot)},
 			{Method: http.MethodPost, Pattern: "/tasks/transform-data", Handler: a("/tasks/transform-data", d.proxyTransform)},
 			{Method: http.MethodPost, Pattern: "/tasks/export", Handler: a("/tasks/export", d.proxyExport)},
 			{Method: http.MethodPost, Pattern: "/tasks/exports", Handler: a("/tasks/exports", d.proxyStartExport)},
@@ -386,6 +388,47 @@ func (d *Deps) proxyCacheStatus(w http.ResponseWriter, r *http.Request, p *auth.
 		return
 	}
 	d.forward(w, r, http.MethodPost, withQuery("/tasks/cache-status", parseQSL(r.URL.RawQuery)), raw, false)
+}
+
+// proxyCount is POST /tasks/count: how many rows a step gives, up to a cap (the editor's
+// and the Viewer's «First 100 of N rows»). Checked as a preview, its slot made the user's.
+// A route of the Go gateway only.
+func (d *Deps) proxyCount(w http.ResponseWriter, r *http.Request, p *auth.Principal) {
+	raw, payload, ok := readJSON(w, r)
+	if !ok {
+		return
+	}
+	q := d.req(w, r, p)
+	if !q.readChecks(payload) {
+		return
+	}
+	d.forward(w, r, http.MethodPost, "/tasks/count", scopePreviewSlot(raw, payload, p.User.ID), false)
+}
+
+// proxyCancelSlot is POST /tasks/preview/cancel: «Cancel» on a slow preview or count. The
+// slot is made the user's as a preview's is, so a person stops only their own; a body
+// without a valid slot is refused before the engine. A route of the Go gateway only.
+func (d *Deps) proxyCancelSlot(w http.ResponseWriter, r *http.Request, p *auth.Principal) {
+	raw, payload, ok := readJSON(w, r)
+	if !ok {
+		return
+	}
+	// a malformed slot is taken out by scopePreviewSlot: then there is none
+	body := scopePreviewSlot(raw, payload, p.User.ID)
+	if scoped, err := pyjson.Loads(string(body)); err != nil || !hasSlot(pyjson.Obj(scoped)) {
+		server.JSON(w, http.StatusUnprocessableEntity, map[string]string{"detail": "A slot is needed: the one of the preview to stop"})
+		return
+	}
+	d.forward(w, r, http.MethodPost, "/tasks/preview/cancel", body, false)
+}
+
+// hasSlot says whether a body carries a slot.
+func hasSlot(o pyjson.Object) bool {
+	if o == nil {
+		return false
+	}
+	_, has := o.Get("slot")
+	return has
 }
 
 // pyLen is len(x) of a value json.loads gave; false where Python raises a TypeError.

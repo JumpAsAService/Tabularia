@@ -141,10 +141,12 @@ class Engine(ABC):
         source: DataSource,
         operations: list[Operation] | list[dict[str, Any]],
         at_most: int,
+        use_cache: bool = False,
     ) -> int:
         """How many rows the chain gives, counted up to `at_most` + 1 and no further (one
-        more says «more»): the chain capped and counted, read as a preview without the
-        cache. Polars and the SQL engines stop reading at the cap."""
+        more says «more»): the chain capped and counted, read as a preview. Polars and the
+        SQL engines stop reading at the cap. `use_cache`: start from the nearest step the
+        step cache holds (the editor's counts); nothing is written to the cache."""
         ops = [op.model_dump() if isinstance(op, Operation) else dict(op) for op in operations]
         rows = at_most + 1
         last = ops[-1] if ops else None
@@ -156,5 +158,9 @@ class Engine(ABC):
         else:
             ops += [{"type": "limit", "params": {"n": rows}},
                     {"type": "sql", "params": {"query": "SELECT COUNT(*) AS n FROM self"}}]
-        result = self.preview(source, ops, limit=1, use_cache=False)
+        result = self.preview(source, ops, limit=1, use_cache=use_cache)
+        # the copies a preview leaves to make would be of the capped chain: none of them
+        take_pending = getattr(self, "take_pending", None)
+        if use_cache and take_pending is not None:
+            take_pending()
         return int(next(iter(result.rows[0].values()), 0) or 0) if result.rows else 0
