@@ -5,6 +5,34 @@ exposes at `/system/info` and in the app's settings menu.
 
 ## Unreleased
 
+- **A step's column profile.** After the rows and their count, the editor and the Viewer
+  ask `POST /tasks/profile`: under every column's name a thin bar fills with its share of
+  nulls (the share in the tooltip), and a click on the name, or Enter, opens its numbers:
+  nulls, distinct values (an estimate, «≈»), min and max, a text's lengths, and the five
+  most frequent values (one query for that column, at the click). For a source, or a cached
+  step followed only by select, reorder, drop, rename or sort, the nulls and the range of
+  numbers and dates are read from the parquet footer, exact for every row; the rest is one
+  aggregate query over the step's first 1,000,000 rows, and the panel says so. Remembered
+  on Valkey with the step's fingerprint, stopped at the next click, at most 60 s; it never
+  runs beside the preview, and on DuckDB it stops at once at the next click. Same numbers on
+  Polars, DuckDB and chDB; DuckDB and Polars count the distinct values of the sample, their
+  own estimates were measured 25% and 13% off.
+- **The keyboard in the grid.** One tab stop, an active cell moved by the arrows (up into
+  the column names), Home and End, Ctrl+Home and Ctrl+End, Page Up and Page Down, past the
+  rows drawn too; Ctrl+C (Cmd+C) copies the cell's exact value. A column's accessible name
+  is its name (the actions described once), the row numbers are row headers, and «Compute
+  again» gives the focus back to the preview, not the page. In the editor Delete and Ctrl+C
+  in the grid no longer touch the selected nodes, and an Esc right after a click cancels for
+  good.
+- **The header of the node being computed.** Its columns are named at once when the page
+  knows them, over a skeleton; otherwise the old header dims with the old rows. The pinned
+  row numbers are ruled, cast a shadow once the columns scroll under them, and no longer
+  let a pixel of them through. Rows with `∅` are as tall as the others, a value cut by a
+  rounding has two pixels of air and any cut value its tooltip, «new» reads at 4.5:1 in
+  the light theme, «1 column removed» says columns and its list opens under its button.
+- **The cache cap, said quietly.** The toast is gone: a small mark sits on the node's
+  border and the summary says «over the cache cap», a button explaining it; the node's
+  panel keeps its note.
 - **The Viewer cuts no value.** A column's width was measured once, with a canvas that knows
   neither the page's tabular figures nor, on a first visit, IBM Plex (not loaded yet), and on
   the values with the most characters rather than the widest: 95 cells were cut by a pixel or
@@ -20,8 +48,6 @@ exposes at `/system/info` and in the app's settings menu.
   `partita_iva`, `periodo`: `groupsThousands` in `previewGrid.ts`). Sums keep two decimals
   once a column reaches a thousand (`281,667,430.94`), the exact value in the tooltip and in a
   copy.
-- **The cache-cap toast moves off the data.** It shows over the canvas, top right, below the
-  «also open by» notice, never over the preview's numbers, and once a browser session per step.
 - **A step's changes arrive with its rows.** The `new` / `renamed` / `type changed` marks and
   «N removed» are computed from the columns of the node before as the page knows them,
   instead of after a request for them (0.2 to 1.8 s later, the bar reshaping meanwhile); when
@@ -37,9 +63,8 @@ exposes at `/system/info` and in the app's settings menu.
 - **Accessibility of the grid.** While computing only the body dims, the header keeps its
   contrast (the type fell to 1.75:1 in the light theme); `aria-rowcount` is the real total
   when known and -1 otherwise (it said 101 of 42 million); a screen reader hears the summary
-  once a click, when everything has arrived; the header's names are one tab stop moved with
-  the arrows, Home and End; the region's focus ring is no longer covered by the pinned row
-  numbers; the Viewer's + and × buttons have names, its error is an alert and the grid no
+  once a click, when everything has arrived; the region's focus ring is no longer covered by
+  the pinned row numbers; the Viewer's + and × buttons have names, its error is an alert and the grid no
   longer says «No data» under it; the skeleton no longer draws a summary line the table does
   not have.
 
@@ -48,8 +73,7 @@ exposes at `/system/info` and in the app's settings menu.
   «Cancel» (which stops the query on the server) and «Use a sample» (it opens the source's
   sample setting, nothing changes by itself). A step opened again in the same page shows at
   once from memory: the fixed half-second wait is gone. The rows come before the input
-  columns, and a columns request left over from the node before is stopped. The cache-cap warning is one
-  toast, updated, not a pile.
+  columns, and a columns request left over from the node before is stopped.
 - **One data grid.** The Viewer now uses the editor's grid (`DataGrid.vue`), which scrolls in
   its own box with the header in place and draws only the rows in view: 500 rows × 40 columns
   scroll at about 23 ms a frame where the old table took 82. The Viewer is as tall as the

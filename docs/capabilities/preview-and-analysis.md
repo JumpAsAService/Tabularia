@@ -22,11 +22,12 @@ access to the folder can reopen. Nothing in either place changes the data.
 ## Previewing each step of a flow
 
 Clicking a node runs the chain that leads to it and shows its first 100 rows, with the
-column types, in the **Table** tab. The count above the table says how many rows came
-back and whether there are more («100 rows (truncated)»); the node keeps the same count
-(«100+ rows · 12 columns») so you can read the shape of a flow at a glance. Values are
-shown raw, nulls as `∅`. A node that is not configured yet asks to be set, instead of
-showing an error.
+column types, in the **Table** tab. The summary beside the tabs names the node and says how
+many rows there are: «First 100 rows» at once, then the real total when it has been read
+or counted («First 100 of 42,007,616 rows», «First 100 of more than 10,000,000 rows» past
+the counting cap); the node keeps the same count so you can read the shape of a flow at a
+glance. Nulls are shown as `∅`. A node that is not configured yet asks to be set, instead
+of showing an error.
 
 ![Clicking the nodes of the sample flow one after another: the table under the canvas changes to each step's result](../media/guide/flows/preview-any-step.gif)
 
@@ -39,6 +40,48 @@ runs read instead of the full table. An administrator can give every source an
 automatic sample with `PREVIEW__DEFAULT_SAMPLE_ROWS` (0 by default: no sample); the
 source node then shows «automatic (first N rows)» and anyone can switch it to «off (all
 rows)». Scheduled runs and **Run in production** always read everything.
+
+### The column profile
+
+After the rows and their count, the editor (and the Viewer, for its applied view) profiles
+the result's columns. Under every column's name and type a thin bar fills in proportion to
+its nulls; an empty bar means none, and the share is in the column's tooltip («12% null»).
+Click a column's name, or press **Enter** on it, for its numbers:
+
+| | |
+|---|---|
+| Nulls | how many, and their share of the rows |
+| Distinct values | an estimate, written «≈ 1,204» |
+| Min and max | in the column's own format (numbers, dates, texts by their characters' codes) |
+| Length | a text's shortest and longest, in characters |
+| Most frequent | the five values held by the most rows, with their rows (asked at the click) |
+
+A profile is made as cheaply as the step allows. For a source, or a cached step followed
+only by operations that keep every row and value (select, reorder, drop, rename, sort), the
+nulls of every column and the range of its numbers and dates are read from the parquet
+file's statistics, exact for every row, without reading data; a text's range is never taken
+from there. The rest is one query over the step's **first 1,000,000 rows**: past them the
+panel says which figures are of every row and which of the first million («Nulls, min and
+max from every row, the rest from the first 1,000,000 rows»). A profile is remembered as
+long as the step cache keeps its copies, is stopped at the next click and gives up after a
+minute; it never runs beside the preview it follows.
+
+The distinct values are always shown as an estimate («≈»). DuckDB and Polars count them
+exactly over the rows the profile reads (their built-in estimators were measured up to 25%
+and 13% off on real tables, while an exact count over a million rows costs little); the
+ClickHouse engines use `uniq`, exact under 65,536 values and within about 2% past them;
+BigQuery its `APPROX_COUNT_DISTINCT`. On the ClickHouse engines a list is never null, so a
+list column shows no nulls there ([engine differences](../engines/engine-differences.md)).
+
+### Moving with the keyboard
+
+The table is one stop of the **Tab** key. The arrow keys move from cell to cell and up into
+the column names; **Home** and **End** go to the row's first and last cell, **Ctrl+Home**
+and **Ctrl+End** to the first column's name and the last cell, **Page Up** and **Page Down**
+by a screenful, past the rows drawn too. **Ctrl+C** (**Cmd+C** on a Mac) copies the cell's
+exact value (the tooltip's, not the rounded one), or a column's name; cells selected with the
+mouse copy as tab-separated values a spreadsheet pastes. **Esc** stops a preview being
+computed.
 
 The **Chart** tab draws the selected node. The chart is an aggregation the engine
 computes on all the node's rows, not on the 100 shown: choose the kind (**Bars**,
@@ -85,7 +128,8 @@ them.
   a small icon, «Result in cache: the nodes after this one start from here».
 - **Large steps are not copied.** A step over `CACHE__MAX_STEP_ROWS` rows (1 million by
   default) is recomputed at every preview: a copy as large as the source saves nothing.
-  The node shows a refresh icon and the editor warns once, suggesting a development
+  The node carries a small refresh mark on its border, the preview's summary says «over
+  the cache cap» (a button explaining it), and the node's panel suggests a development
   sample or an earlier filter.
 - **Entries expire.** A step unused for `CACHE__TTL_SECONDS` (one day by default) is
   deleted. On BigQuery the cache is a set of expiring tables in a dataset of its own
