@@ -664,7 +664,9 @@ function onPopKey(e: KeyboardEvent) {
 }
 // The column's most frequent values or its histogram, asked once the whole profile says
 // which (a key asks nothing): after the profile, never beside it on the worker.
-watch(popKind, () => { void loadDetail() })
+// keyed by the column too: the arrows (or a click on another name) move the panel from one
+// category to another, the kind the same
+watch(() => (popColumn.value && popKind.value ? `${popColumn.value.name}\u0001${popKind.value}` : ''), () => { void loadDetail() })
 async function loadDetail() {
   const c = popColumn.value
   const st = popStats.value

@@ -390,3 +390,18 @@ test('the Viewer offers a value as a filter only on the datasource\'s own column
   assert.match(grid, /!a\.columns \|\| a\.columns\.includes\(c\.name\)/)
   assert.doesNotMatch(grid, /v-if="valueActions"/)
 })
+
+test('a column\'s values are asked again when the profile moves to another column of the same kind', async () => {
+  const { readFileSync } = await import('node:fs')
+  const grid = readFileSync(new URL('../components/ui/DataGrid.vue', import.meta.url), 'utf8')
+  // the watch that asks a column's values is keyed by the column, not by the kind alone
+  assert.match(grid, /watch\(\(\) => \(popColumn\.value && popKind\.value \? `\$\{popColumn\.value\.name\}/)
+  assert.doesNotMatch(grid, /watch\(popKind,/)
+})
+
+test('a popover opened without the focus on its button still closes at a press outside', async () => {
+  const { readFileSync } = await import('node:fs')
+  const popover = readFileSync(new URL('../composables/usePopover.ts', import.meta.url), 'utf8')
+  // the page's body is never taken for the opener (it contains every press)
+  assert.match(popover, /origin !== document\.body && origin !== document\.documentElement/)
+})

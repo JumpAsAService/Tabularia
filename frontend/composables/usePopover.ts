@@ -42,7 +42,10 @@ export function usePopover(isOpen: Ref<boolean>, panel: Ref<HTMLElement | null>,
   // opened it: that one toggles the panel by itself.
   function onPointerDown(e: PointerEvent) {
     const el = e.target as Node | null
-    if (inside(el) || (origin && el && origin.contains(el))) return
+    // the opener, when one had the focus: opened by a click that gives no focus (a button in
+    // Safari, a script's click) the page itself would be «the opener» and nothing would close
+    const opener = origin && origin !== document.body && origin !== document.documentElement ? origin : null
+    if (inside(el) || (opener && el && opener.contains(el))) return
     origin = null
     close()
   }
