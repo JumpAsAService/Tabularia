@@ -619,7 +619,7 @@ Python gateway as FastAPI serves it, and whether the Go gateway answers it
 | DELETE | `/admin/workers/{kind}/scaling` | `give_back` | **Go** |
 | PUT | `/admin/workers/{kind}/scaling` | `scala` | **Go** |
 
-## Go only (46)
+## Go only (47)
 
 | Method | Path | Served by |
 |---|---|---|
@@ -667,5 +667,6 @@ Python gateway as FastAPI serves it, and whether the Go gateway answers it
 | POST | `/share/{token}/session` | **Go** |
 | POST | `/tasks/count` | **Go** |
 | POST | `/tasks/preview/cancel` | **Go** |
+| POST | `/tasks/profile` | **Go** |
 | GET | `/users/me/flow-shortcuts` | **Go** |
 | PUT | `/users/me/flow-shortcuts` | **Go** |
