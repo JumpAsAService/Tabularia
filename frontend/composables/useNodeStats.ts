@@ -35,7 +35,7 @@ export function useNodeStats(
       ? null
       : nodeRowsPhrase(s.rows, !!s.truncated, s.count ?? { state: 'none' }, t, (n) => fmt.count(n))
     const skipped = s.cacheState === 'skipped'
-    const cap = (s.cacheCap ?? 0).toLocaleString()
+    const cap = fmt.count(s.cacheCap ?? 0)
     return {
       rows,
       cols: t('nodeStats.cols', { n: s.cols }),

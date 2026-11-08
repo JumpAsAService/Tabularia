@@ -6,9 +6,12 @@ import { computed, inject, type ComputedRef } from 'vue'
 import ContractBadge from '~/components/ui/ContractBadge.vue'
 import type { ContractSummary } from '~/composables/useContracts'
 import { sampleLabel, sourceFilterCount } from '~/composables/useFlowModel'
+import { useFormat } from '~/composables/useFormat'
 
 const props = defineProps<{ id: string; data: any }>()
 const { t } = useI18n()
+const fmt = useFormat()
+const sample = computed(() => sampleLabel(props.data, t, fmt.count))
 // the data contract state of the datasource read: whoever consumes data sees on the node
 // whether whoever produces it is keeping the promise
 const contracts = inject<ComputedRef<Map<number, ContractSummary>> | null>('datasourceContracts', null)
@@ -25,12 +28,12 @@ const contract = computed(() => (props.data?.datasourceId != null ? contracts?.v
       <template v-if="data.parquetKey">
         <div class="srcname">{{ data.filename }} <ContractBadge :contract="contract" :size="12" /></div>
         <div v-if="data.sheet" class="sheet"><FileSpreadsheet :size="11" /> {{ data.sheet }}</div>
-        <div class="muted">{{ $t('sourceNode.rowsCount', { n: data.rows }, data.rows ?? 2) }}</div>
+        <div class="muted">{{ $t('sourceNode.rowsCount', { n: fmt.count(data.rows) }, data.rows ?? 2) }}</div>
         <div v-if="sourceFilterCount(data)" class="filters" :title="$t('sourceNode.filtersTitle')">
           <Filter :size="11" /> {{ $t('sourceNode.filtersBadge', { n: sourceFilterCount(data) }) }}
         </div>
-        <div v-if="sampleLabel(data, t)" class="sample" :title="$t('sourceNode.sampleTitle')">
-          <FlaskConical :size="11" /> {{ sampleLabel(data, t) }}
+        <div v-if="sample" class="sample" :title="$t('sourceNode.sampleTitle')">
+          <FlaskConical :size="11" /> {{ sample }}
         </div>
       </template>
       <span v-else class="muted">{{ $t('sourceNode.noData') }}</span>

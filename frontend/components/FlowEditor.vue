@@ -1967,7 +1967,7 @@ async function runPreview(nodeId: string) {
     if (res.cache_state === 'skipped' && !cacheWarned.has(nodeId)) {
       cacheWarned.add(nodeId)
       // one toast for the whole editor, its text updated: three nodes over the cap made three
-      toast.warning(t('flowEditor.cacheSkippedToast', { n: (res.cache_cap_rows ?? 0).toLocaleString() }), 'cache-cap')
+      toast.warning(t('flowEditor.cacheSkippedToast', { n: fmt.count(res.cache_cap_rows ?? 0) }), 'cache-cap')
     }
     if (seq === previewSeq) {
       if (skeleton) await skeletonPad(t0)
@@ -2001,7 +2001,7 @@ const shownSource = computed(() => {
   const id = computingNodeId.value ?? previewNodeId.value
   return id ? resolveChain(getNodes.value, getEdges.value, id, scriptSources.value).sourceNode : null
 })
-const shownSample = computed(() => (shownSource.value?.type === 'source' ? sampleLabel(shownSource.value.data, t) : null))
+const shownSample = computed(() => (shownSource.value?.type === 'source' ? sampleLabel(shownSource.value.data, t, fmt.count) : null))
 // the step's changes against its input: the selected node's own preview only
 const previewChanges = computed(() => {
   const id = previewNodeId.value

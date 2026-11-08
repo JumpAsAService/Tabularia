@@ -6,8 +6,8 @@ import { test } from 'node:test'
 import assert from 'node:assert/strict'
 
 import {
-  Recent, columnChanges, exactText, gridColumnFormatter, gridColumnFormatters, isNumericDtype, nodeRowsPhrase,
-  previewKey, rowsPhrase, shortDtype, suggestSample, toTsv, visibleWindow,
+  Recent, columnChanges, exactText, gridColumnFormatter, gridColumnFormatters, groupsThousands, isNumericDtype,
+  nodeRowsPhrase, previewKey, rowsPhrase, shortDtype, suggestSample, toTsv, visibleWindow,
 } from '../composables/previewGrid.ts'
 
 // a stand-in for vue-i18n's t with the English texts
@@ -48,12 +48,39 @@ test('a column of floats keeps the same decimals on every row, up to four', () =
   assert.equal(gridColumnFormatter([1e-7], 'en')(1e-7), '0.0000')
 })
 
-test('a column of integers has no thousands separator: codes and periods stay readable', () => {
+test('a column of integers is grouped only when it is a quantity: codes and periods stay readable', () => {
   const f = gridColumnFormatter([202607, 42007616], 'en')
   assert.equal(f(202607), '202607')
   assert.equal(f(42007616), '42007616')
   assert.equal(f(null), '')
   assert.equal(f('n/a'), 'n/a')
+  const q = gridColumnFormatter([5629, 42007616], 'en', { group: true })
+  assert.deepEqual([q(5629), q(42007616)], ['5,629', '42,007,616'])
+  // the language's own separator, the same as every count of the interface
+  assert.equal(gridColumnFormatter([42007616], 'it', { group: true })(42007616), '42.007.616')
+})
+
+test('an integer column is a quantity unless its name says identifier, code, year or period', () => {
+  for (const n of ['id', 'ID', 'cliente_id', 'id_ordine', 'clienteId', 'agente_id', 'cap', 'zip', 'anno', 'year',
+    'codice', 'codice_articolo', 'product_code', 'cod_fiscale', 'partita_iva', 'periodo', 'yyyymm', 'telefono', 'ean']) {
+    assert.equal(groupsThousands(n), false, n)
+  }
+  for (const n of ['ordini', 'clienti', 'quantita', 'rows_in', 'valore', 'n_ordini', 'idle_seconds', 'capitale', 'anni_cliente', 'codes_count_total']) {
+    assert.equal(groupsThousands(n), true, n)
+  }
+  // the grid's formatters follow the name
+  const fs = gridColumnFormatters(
+    [{ name: 'cliente_id', dtype: 'Int64' }, { name: 'clienti', dtype: 'Int64' }, { name: 'anno', dtype: 'Int32' }],
+    [{ cliente_id: 1048576, clienti: 11123, anno: 2026 }], 'en')
+  assert.deepEqual([fs.cliente_id(1048576), fs.clienti(11123), fs.anno(2026)], ['1048576', '11,123', '2026'])
+})
+
+test('a column of sums keeps two decimals at most, the exact value apart', () => {
+  const f = gridColumnFormatter([281667430.9443, 559355154.3117, 12.5], 'en')
+  assert.deepEqual([f(281667430.9443), f(12.5)], ['281,667,430.94', '12.50'])
+  // small values keep their four
+  assert.equal(gridColumnFormatter([0.12345, 3.5], 'en')(0.12345), '0.1235')
+  assert.equal(exactText(281667430.9443), '281667430.9443')
 })
 
 test('the formatters of a result: numeric columns aligned, the others as they are', () => {

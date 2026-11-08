@@ -4,7 +4,6 @@
 // formatters cost: they are built once per language and options, not at every cell (the
 // Viewer created one per cell at every render).
 import { useI18n } from 'vue-i18n'
-import { gridColumnFormatter } from '~/composables/previewGrid'
 
 const numberCache = new Map<string, Intl.NumberFormat>()
 const dateCache = new Map<string, Intl.DateTimeFormat>()
@@ -88,15 +87,5 @@ export function useFormat() {
     return dateTime(d)
   }
 
-  /**
-   * The formatter of a data grid's numeric column: the same decimals on the whole column
-   * (the most seen, up to 4) and integers WITHOUT a thousands separator — a code or a
-   * YYYYMM period grouped («202.607») reads as a quantity. The decimals keep the
-   * language's separator.
-   */
-  function columnFormatter(values: unknown[]): (v: unknown) => string {
-    return gridColumnFormatter(values, locale.value)
-  }
-
-  return { count, number, dateTime, date, ago, columnFormatter, locale }
+  return { count, number, dateTime, date, ago, locale }
 }

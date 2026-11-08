@@ -2239,7 +2239,6 @@ export default {
     "postSqlPlaceholder": "es. ANALYZE analytics.vendite_pulite",
     "refreshDatasourceTitle": "Aggiorna datasource",
     "refreshHint": "Al run, questa datasource viene aggiornata (ri-eseguita dalla sorgente) e il flusso attende prima di procedere: così gli Output girano su dati freschi.",
-    "rowsColsSummary": "{rows} righe - {cols} colonne",
     "rowsCountLabel": "{rows} righe",
     "runFlowHint": "Al run, dopo gli Output di questo flusso, viene eseguito il flusso scelto (i suoi nodi Output). Utile per concatenare pipeline. Cicli bloccati automaticamente.",
     "runFlowTitle": "Esegui flusso",

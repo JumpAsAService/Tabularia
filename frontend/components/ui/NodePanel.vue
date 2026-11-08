@@ -8,6 +8,7 @@ import type { DatasourceInfo } from '~/composables/useDatasources'
 import { defaultParams, isCompleteSourceFilter, getDefaultSampleRows, type SourceFilter } from '~/composables/useFlowModel'
 import { opMeta } from '~/composables/useOpIcons'
 import { useNodeStats } from '~/composables/useNodeStats'
+import { useFormat } from '~/composables/useFormat'
 import { useFolderPaths } from '~/composables/useFolderPaths'
 import { usePlaceholderPreview, type PreviewRequest, type TemplateTarget } from '~/composables/usePlaceholders'
 import TemplatePreview from '~/components/ui/TemplatePreview.vue'
@@ -39,6 +40,7 @@ const props = defineProps<{
   readOnly?: boolean
 }>()
 const { t } = useI18n()
+const fmt = useFormat()
 // names repeat across folders: every catalog picker shows where each option lives
 const { pathOf } = useFolderPaths()
 const nodeStats = useNodeStats(() => props.node?.id ?? '', inject, t)
@@ -170,7 +172,7 @@ const sampleMode = computed(() => {
 })
 const sampleOptions = computed(() => [
   ...(autoSampleRows.value > 0
-    ? [{ value: 'auto', label: t('nodePanel.sampleAuto', { n: autoSampleRows.value.toLocaleString() }) }]
+    ? [{ value: 'auto', label: t('nodePanel.sampleAuto', { n: fmt.count(autoSampleRows.value) }) }]
     : []),
   { value: 'off', label: t('nodePanel.sampleOff') },
   { value: 'first', label: t('nodePanel.sampleFirst') },
@@ -244,7 +246,7 @@ function pickDatasource(id: number | null) {
       </div>
       <template v-if="node.data.parquetKey">
         <p><strong>{{ node.data.filename }}</strong><span v-if="node.data.sheet" class="muted"> · {{ $t('sheetPicker.sheet', { name: node.data.sheet }) }}</span></p>
-        <p class="muted">{{ $t('nodePanel.rowsColsSummary', { rows: node.data.rows, cols: (node.data.columns || []).length }) }}</p>
+        <p class="muted">{{ $t('dataGrid.rows', { n: fmt.count(node.data.rows) }) }} · {{ $t('dataGrid.columns', { n: (node.data.columns || []).length }) }}</p>
         <p class="muted mono">{{ node.data.parquetKey }}</p>
         <div class="exportbar">
           <label>{{ $t('nodePanel.downloadNodeData') }}</label>
@@ -313,7 +315,7 @@ function pickDatasource(id: number | null) {
           <span v-if="node.data.sample?.mode === 'random'" class="muted">%</span>
         </div>
         <p class="muted outhint">{{ $t('nodePanel.sampleHint') }}</p>
-        <p v-if="autoSampleRows > 0" class="muted outhint">{{ $t('nodePanel.sampleAutoHint', { n: autoSampleRows.toLocaleString() }) }}</p>
+        <p v-if="autoSampleRows > 0" class="muted outhint">{{ $t('nodePanel.sampleAutoHint', { n: fmt.count(autoSampleRows) }) }}</p>
       </div>
 
       <div class="dspick">

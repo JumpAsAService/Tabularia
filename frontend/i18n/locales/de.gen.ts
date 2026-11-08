@@ -2212,7 +2212,6 @@ export default {
     "postSqlPlaceholder": "z. B. ANALYZE analytics.bereinigte_verkaeufe",
     "refreshDatasourceTitle": "Datasource aktualisieren",
     "refreshHint": "Beim Run wird diese Datasource aktualisiert (erneut aus ihrer Quelle ausgeführt) und der Flow wartet, bevor er fortfährt: so laufen die Output-Knoten mit aktuellen Daten.",
-    "rowsColsSummary": "{rows} Zeilen - {cols} Spalten",
     "rowsCountLabel": "{rows} Zeilen",
     "runFlowHint": "Beim Run wird nach den Output-Knoten dieses Flows der gewählte Flow ausgeführt (dessen Output-Knoten). Nützlich zum Verketten von Pipelines. Zyklen werden automatisch blockiert.",
     "runFlowTitle": "Flow ausführen",

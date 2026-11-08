@@ -2239,7 +2239,6 @@ export default {
     "postSqlPlaceholder": "e.g. ANALYZE analytics.clean_sales",
     "refreshDatasourceTitle": "Refresh datasource",
     "refreshHint": "On run, this datasource is refreshed (re-run from its source) and the flow waits before continuing: so Output nodes run on fresh data.",
-    "rowsColsSummary": "{rows} rows - {cols} columns",
     "rowsCountLabel": "{rows} rows",
     "runFlowHint": "On run, after this flow's Output nodes, the chosen flow is executed (its Output nodes). Useful for chaining pipelines. Cycles are blocked automatically.",
     "runFlowTitle": "Run flow",

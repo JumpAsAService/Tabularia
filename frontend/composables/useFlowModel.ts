@@ -106,14 +106,15 @@ export function devSampleOperation(data: any, defaultRows: number = _defaultSamp
   return null
 }
 
-/** Short label of the active sample (badge on the node), or null. */
-export function sampleLabel(data: any, t: (k: string, p?: any) => string): string | null {
+/** Short label of the active sample (badge on the node), or null. `fmt` writes a count in
+ *  the interface's language (useFormat().count), as every other count on screen. */
+export function sampleLabel(data: any, t: (k: string, p?: any) => string, fmt: (n: number) => string): string | null {
   const s: SourceSample | null | undefined = data?.sample
   if (!s) {
     const n = _defaultSampleRows
-    return n > 0 ? t('sourceNode.sampleAuto', { n: n.toLocaleString() }) : null
+    return n > 0 ? t('sourceNode.sampleAuto', { n: fmt(n) }) : null
   }
-  if (s.mode === 'first' && Number(s.rows) > 0) return t('sourceNode.sampleFirst', { n: Number(s.rows).toLocaleString() })
+  if (s.mode === 'first' && Number(s.rows) > 0) return t('sourceNode.sampleFirst', { n: fmt(Number(s.rows)) })
   if (s.mode === 'random' && Number(s.percent) > 0 && Number(s.percent) < 100) return t('sourceNode.sampleRandom', { p: s.percent })
   return null
 }

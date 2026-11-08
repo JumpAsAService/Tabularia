@@ -2212,7 +2212,6 @@ export default {
     "postSqlPlaceholder": "ex. ANALYZE analytics.ventes_nettoyees",
     "refreshDatasourceTitle": "Actualiser la datasource",
     "refreshHint": "Lors de l'exécution, cette datasource est actualisée (réexécutée depuis sa source) et le flux attend avant de continuer : ainsi les nœuds Output s'exécutent sur des données fraîches.",
-    "rowsColsSummary": "{rows} lignes - {cols} colonnes",
     "rowsCountLabel": "{rows} lignes",
     "runFlowHint": "Lors de l'exécution, après les nœuds Output de ce flux, le flux choisi est exécuté (ses nœuds Output). Utile pour enchaîner des pipelines. Les cycles sont bloqués automatiquement.",
     "runFlowTitle": "Exécuter le flux",

@@ -64,37 +64,69 @@ function numberFormat(locale: string | undefined, opts: Intl.NumberFormatOptions
 const DECIMALS_SAMPLE = 2000
 
 /**
- * The formatter of a data grid's numeric column: the same decimals on the whole column (the
- * most seen, up to 4) and integers WITHOUT a thousands separator — a code or a YYYYMM period
- * grouped («202.607») reads as a quantity. The decimals keep the language's separator.
+ * Does an integer column read as a quantity (thousands grouped: «42,007,616 ordini») or as
+ * an identifier (as it is: «202607», «40121», «742054932»)? Decided on the column's name,
+ * since the values alone cannot tell an order count from an order number. The name is cut
+ * into words (`_`, `-`, spaces, camelCase) and it is an identifier when its FIRST or LAST
+ * word is one of these:
+ *   id · cap / zip / postcode · anno / year · code / codice / cod · iva / piva / vat ·
+ *   ean / sku · phone / telefono / tel · period / periodo / yyyymm · matricola
+ * so `id`, `cliente_id`, `id_ordine`, `clienteId`, `cap`, `anno`, `codice_articolo`,
+ * `product_code`, `partita_iva`, `periodo` keep their digits together, and `ordini`,
+ * `clienti`, `quantita`, `rows_in` are grouped. Floats are always grouped.
  */
-export function gridColumnFormatter(values: unknown[], locale?: string): (v: unknown) => string {
+const IDENTIFIER_WORDS = new Set([
+  'id', 'cap', 'zip', 'postcode', 'anno', 'year', 'code', 'codice', 'cod', 'iva', 'piva', 'vat',
+  'ean', 'sku', 'phone', 'telefono', 'tel', 'period', 'periodo', 'yyyymm', 'matricola',
+])
+export function groupsThousands(name: string): boolean {
+  const words = String(name ?? '')
+    .replace(/([a-z0-9])([A-Z])/g, '$1_$2')
+    .toLowerCase()
+    .split(/[^a-z0-9]+/)
+    .filter(Boolean)
+  if (!words.length) return true
+  return !IDENTIFIER_WORDS.has(words[0]) && !IDENTIFIER_WORDS.has(words[words.length - 1])
+}
+
+/**
+ * The formatter of a data grid's numeric column: the same decimals on the whole column (the
+ * most seen, up to 4; up to 2 when the column holds values of a thousand or more, as a sum
+ * does), the language's separators. Integers are grouped only when `group` says the column
+ * is a quantity (see groupsThousands): a code or a YYYYMM period grouped («202.607») reads
+ * as a quantity. The exact value stays for the tooltip and the copy.
+ */
+export function gridColumnFormatter(values: unknown[], locale?: string, opts: { group?: boolean } = {}): (v: unknown) => string {
   let decimals = 0
   let integersOnly = true
+  let largest = 0
   const n = Math.min(values.length, DECIMALS_SAMPLE)
   for (let i = 0; i < n; i++) {
     const v = values[i]
-    if (typeof v !== 'number' || !Number.isFinite(v) || Number.isInteger(v)) continue
+    if (typeof v !== 'number' || !Number.isFinite(v)) continue
+    const a = Math.abs(v)
+    if (a > largest) largest = a
+    if (Number.isInteger(v) || decimals === 4) continue
     integersOnly = false
     const s = String(v)
     // 1e-7 has 7 decimals, not «-7»: an exponent means «as many as allowed»
     const frac = s.includes('e') ? 4 : (s.split('.')[1]?.length ?? 0)
     decimals = Math.max(decimals, Math.min(4, frac))
-    if (decimals === 4) break
   }
+  if (largest >= 1000) decimals = Math.min(decimals, 2)
   const f = integersOnly
-    ? numberFormat(locale, { useGrouping: false, maximumFractionDigits: 0 })
+    ? numberFormat(locale, { useGrouping: !!opts.group, maximumFractionDigits: 0 })
     : numberFormat(locale, { minimumFractionDigits: decimals, maximumFractionDigits: decimals })
   return (v) => (typeof v === 'number' && Number.isFinite(v) ? f.format(v) : exactText(v))
 }
 
-/** A formatter per column of a result: numeric columns aligned on their decimals, the others
- *  as they are. */
+/** A formatter per column of a result: numeric columns aligned on their decimals and
+ *  grouped by their name's role, the others as they are. */
 export function gridColumnFormatters(columns: GridColumn[], rows: Record<string, unknown>[], locale?: string): Record<string, (v: unknown) => string> {
   const out: Record<string, (v: unknown) => string> = {}
   for (const c of columns) {
     out[c.name] = isNumericDtype(c.dtype)
-      ? gridColumnFormatter(rows.map((r) => r[c.name]), locale)
+      ? gridColumnFormatter(rows.map((r) => r[c.name]), locale, { group: groupsThousands(c.name) })
       : exactText
   }
   return out
