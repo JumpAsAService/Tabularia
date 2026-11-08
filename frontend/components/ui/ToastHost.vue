@@ -76,8 +76,12 @@ const icons = { success: CheckCircle2, error: XCircle, warning: TriangleAlert, i
 .toast-enter-active { transition: transform var(--dur-3) var(--ease-out), opacity var(--dur-3) var(--ease-out); }
 .toast-leave-active { transition: transform var(--dur-2) ease-out, opacity var(--dur-2) ease-out; pointer-events: none; }
 .toast-enter-from, .toast-leave-to { opacity: 0; transform: translateX(100%); }
+/* a surface's corner is not the window's edge: there a toast sliding in from the right would
+   stick out past the window (the page then scrolls sideways for a moment and the canvas
+   resizes under it), so it drops in from just above instead */
+.toasts.inline .toast-enter-from, .toasts.inline .toast-leave-to { transform: translateY(-8px); }
 @media (prefers-reduced-motion: reduce) {
   .toast-enter-active, .toast-leave-active { transition: opacity 120ms ease-out; }
-  .toast-enter-from, .toast-leave-to { transform: none; }
+  .toast-enter-from, .toast-leave-to, .toasts.inline .toast-enter-from, .toasts.inline .toast-leave-to { transform: none; }
 }
 </style>
