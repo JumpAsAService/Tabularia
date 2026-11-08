@@ -212,6 +212,7 @@ def profile_task(
     column: str | None = None,
     engine: str | None = None,
     no_cache: bool = False,
+    footer_only: bool = False,
 ) -> dict:
     """A step's column profile, or one column's most frequent values (app/engine/profile.py):
     asked by the editor and the Viewer after the rows and their count, on the preview queue.
@@ -228,7 +229,7 @@ def profile_task(
     name = (engine or DEFAULT_ENGINE).lower()
     try:
         impl = get_engine(engine)
-        if not no_cache:
+        if not no_cache and not footer_only:
             from app.engine.stepcache_defer import wait_for_running_copy
 
             wait_for_running_copy(impl, DataSource(bucket=bucket, key=input_key), operations)
@@ -238,7 +239,8 @@ def profile_task(
                                                    use_cache=not no_cache)
             else:
                 result = column_profile.profile(impl, name, bucket, input_key, operations, columns,
-                                                get_storage_service(), use_cache=not no_cache)
+                                                get_storage_service(), use_cache=not no_cache,
+                                                footer_only=footer_only)
         return {"ok": True, "result": result}
     except Exception as e:
         if was_interrupted(e):

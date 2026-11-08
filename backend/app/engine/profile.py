@@ -319,9 +319,33 @@ def _total(engine_name: str, bucket: str, key: str, operations, storage, cache, 
     return got[0] if got is not None and not got[1] else None
 
 
+def footer_only_doc(columns: list[dict[str, str]], footer: dict[str, Any] | None) -> dict[str, Any]:
+    """What a profile says without a query: the nulls of every row, and the numbers' and
+    dates' range, of the columns the footer describes; nothing when no footer applies.
+    `partial`: the distinct values, a text's lengths and the other columns are not known."""
+    out: dict[str, Any] = {}
+    rows = int(footer["rows"]) if footer else 0
+    fcols = (footer or {}).get("columns") or {}
+    for c in columns:
+        name, kind = c["name"], kind_of(c.get("dtype", ""))
+        got = fcols.get(name) or {}
+        if got.get("nulls") is None:
+            continue
+        col: dict[str, Any] = {"kind": kind, "nulls": int(got["nulls"]), "of": rows, "whole": ["nulls"]}
+        if kind in ("number", "time") and got.get("range"):
+            col["min"], col["max"] = got["min"], got["max"]
+            col["whole"] += ["min", "max"]
+        out[name] = col
+    return {"rows": rows, "sampled": False, "sample_rows": SAMPLE_ROWS, "total": rows if footer else None,
+            "footer": bool(footer), "partial": True, "columns": out, "how": "footer"}
+
+
 def profile(engine, engine_name: str, bucket: str, key: str, operations: list[dict[str, Any]],
-            columns: list[dict[str, str]], storage, use_cache: bool = True, client=None) -> dict[str, Any]:
-    """The step's profile, made and remembered (see the module's docstring)."""
+            columns: list[dict[str, str]], storage, use_cache: bool = True, client=None,
+            footer_only: bool = False) -> dict[str, Any]:
+    """The step's profile, made and remembered (see the module's docstring). `footer_only`:
+    never a query, only what the parquet footer says (the editor, until a column is opened);
+    a whole profile remembered for the step is still answered whole."""
     from app.engine.base import DataSource
 
     mem = profile_key(engine_name, bucket, key, operations, columns)
@@ -330,6 +354,8 @@ def profile(engine, engine_name: str, bucket: str, key: str, operations: list[di
         return {**got, "how": "remembered"}
     cache = getattr(engine, "cache", None) if engine_name != "bigquery" else None
     footer = from_footer(engine_name, bucket, key, operations, columns, storage, cache)
+    if footer_only:
+        return footer_only_doc(columns, footer)
     total = footer["rows"] if footer else _total(engine_name, bucket, key, operations, storage, cache, client)
     specs = plan(columns, (footer or {}).get("columns"))
     row = engine.profile_aggregates(DataSource(bucket=bucket, key=key), operations, specs, SAMPLE_ROWS,

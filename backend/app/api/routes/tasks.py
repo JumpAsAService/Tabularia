@@ -300,6 +300,8 @@ def profile_step(request: ProfileRequest) -> dict:
         return {**got, "how": "remembered"}
     kwargs = {"bucket": request.bucket, "input_key": request.input_key, "operations": ops, "columns": columns,
               "column": request.column, "engine": request.engine, "no_cache": request.no_cache}
+    if request.footer_only and request.column is None:
+        kwargs["footer_only"] = True
     payload = said_by_preview_worker(
         lambda: on_preview_worker("app.tasks.jobs.profile_task", kwargs, request.slot, seconds=PROFILE_TIMEOUT_SECONDS),
         PREVIEW_OUT_OF_MEMORY)

@@ -162,6 +162,9 @@ class ProfileRequest(BaseModel):
                                          description="The step's columns, as its preview gave them")
     column: Optional[str] = Field(default=None, max_length=1000,
                                   description="One column's most frequent values instead of the profile")
+    footer_only: bool = Field(default=False,
+                              description="Never a query: only what the parquet footer says (`partial`), "
+                                          "or a whole profile remembered for the step")
     slot: Optional[str] = Field(default=None, max_length=96, pattern=r"^[A-Za-z0-9:_-]+$",
                                 description="Slot: a newer request on the same slot cancels this one")
 

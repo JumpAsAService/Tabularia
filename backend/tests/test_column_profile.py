@@ -303,3 +303,65 @@ def test_a_duckdb_profile_stops_at_once_when_its_task_is_interrupted():
     finally:
         signal.signal(signal.SIGUSR1, previous)
         con.close()
+
+
+# ── the editor's footer-only profile: never a query ──────────────────────────
+def _no_query(monkeypatch):
+    from app.engine.duckdb_engine import DuckDBEngine
+
+    monkeypatch.setattr(Engine, "profile_aggregates", lambda *a, **k: pytest.fail("a query was made"))
+    monkeypatch.setattr(DuckDBEngine, "profile_aggregates", lambda *a, **k: pytest.fail("a query was made"))
+
+
+def test_footer_only_says_a_source_s_nulls_and_ranges_without_a_query(storage, table, valkey, fredis, monkeypatch):
+    _no_query(monkeypatch)
+    eng = _engine("duckdb", storage, fredis)
+    renamed = [{**c, "name": {"amount": "value", "region": "area"}.get(c["name"], c["name"])}
+               for c in _columns(_frame())]
+    got = profile.profile(eng, "duckdb", table.bucket, table.key, [RENAME], renamed, storage,
+                          footer_only=True)
+    assert got["partial"] and got["how"] == "footer" and got["rows"] == N and not got["sampled"]
+    cols = got["columns"]
+    assert cols["value"] == {"kind": "number", "nulls": 200, "of": N, "whole": ["nulls", "min", "max"],
+                             "min": -700.0, "max": 2298.5}
+    # a text: its nulls, never its range; nothing known of the distinct values
+    assert cols["city"] == {"kind": "text", "nulls": 400, "of": N, "whole": ["nulls"]}
+    assert "tags" not in cols and "distinct" not in cols["area"]
+    # not remembered as the step's profile: the whole one is still made when asked
+    assert profile.remembered(profile.profile_key("duckdb", table.bucket, table.key, [RENAME],
+                                                  renamed)) is None
+
+
+def test_footer_only_after_a_filter_says_nothing(storage, table, valkey, fredis, monkeypatch):
+    _no_query(monkeypatch)
+    eng = _engine("duckdb", storage, fredis)
+    got = profile.profile(eng, "duckdb", table.bucket, table.key, [FILTER], _columns(_frame()), storage,
+                          footer_only=True)
+    assert got["partial"] and got["columns"] == {} and got["total"] is None and not got["footer"]
+
+
+def test_footer_only_answers_a_whole_remembered_profile(storage, table, valkey, fredis, monkeypatch):
+    whole = _profile("duckdb", storage, fredis, table, [FILTER])
+    _no_query(monkeypatch)
+    eng = _engine("duckdb", storage, fredis)
+    got = profile.profile(eng, "duckdb", table.bucket, table.key, [FILTER], _columns(_frame()), storage,
+                          footer_only=True)
+    assert got["how"] == "remembered" and "partial" not in got and got["columns"] == whole["columns"]
+
+
+def test_the_route_passes_footer_only_to_the_worker(storage, table, valkey, monkeypatch):
+    seen = {}
+
+    def worker(task, kwargs, slot, seconds=None, watch_worker=False):
+        seen.update(kwargs=kwargs)
+        return {"ok": True, "result": {"rows": 0, "columns": {}, "partial": True, "how": "footer"}}
+
+    monkeypatch.setattr(tasks, "on_preview_worker", worker)
+    body = ProfileRequest(bucket=table.bucket, input_key=table.key, operations=[FILTER], engine="duckdb",
+                          footer_only=True, columns=[{"name": "id", "dtype": "Int64"}])
+    assert tasks.profile_step(body)["partial"] is True
+    assert seen["kwargs"]["footer_only"] is True
+    # without it, the worker's kwargs stay as they were
+    tasks.profile_step(ProfileRequest(bucket=table.bucket, input_key=table.key, operations=[FILTER],
+                                      engine="duckdb", columns=[{"name": "id", "dtype": "Int64"}]))
+    assert "footer_only" not in seen["kwargs"]
