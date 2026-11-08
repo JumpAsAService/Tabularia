@@ -272,3 +272,34 @@ def test_a_failed_or_empty_profile_says_why(storage, table, valkey, monkeypatch)
     with pytest.raises(HTTPException) as e:
         tasks.profile_step(ProfileRequest(bucket=table.bucket, input_key=table.key))
     assert e.value.status_code == 422
+
+
+def test_a_duckdb_profile_stops_at_once_when_its_task_is_interrupted():
+    """The task's interruption (SIGUSR1 → an exception in the main thread) used to reach a
+    DuckDB query seconds later; the profile's query is interrupted at once."""
+    import os
+    import signal
+    import threading
+    import time
+
+    import duckdb
+
+    from app.engine.duckdb_engine import _interruptible
+
+    class Stopped(Exception):
+        pass
+
+    def raise_stopped(signum, frame):
+        raise Stopped
+
+    con = duckdb.connect()
+    previous = signal.signal(signal.SIGUSR1, raise_stopped)
+    try:
+        threading.Timer(0.3, lambda: os.kill(os.getpid(), signal.SIGUSR1)).start()
+        t0 = time.monotonic()
+        with pytest.raises(Stopped):
+            _interruptible(con, lambda: con.sql("SELECT sum(a.range * b.range) FROM range(200000000) a, range(1000) b").fetchone())
+        assert time.monotonic() - t0 < 2.0
+    finally:
+        signal.signal(signal.SIGUSR1, previous)
+        con.close()

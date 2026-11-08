@@ -132,6 +132,34 @@ class DuckContext:
 
 from contextlib import contextmanager
 
+
+def _interruptible(con, work):
+    """`work()` (a DuckDB query on `con`) in a thread of its own: an exception raised in the
+    calling thread while it waits (the task's interruption) interrupts the query at once and
+    is raised again. The connection is used by one thread at a time all the same."""
+    import threading
+
+    box: dict = {}
+
+    def run():
+        try:
+            box["value"] = work()
+        except BaseException as e:  # noqa: BLE001 — handed back to the caller
+            box["error"] = e
+
+    worker = threading.Thread(target=run, name="duckdb-profile", daemon=True)
+    worker.start()
+    try:
+        while worker.is_alive():
+            worker.join(0.05)
+    except BaseException:
+        con.interrupt()
+        worker.join(10)
+        raise
+    if "error" in box:
+        raise box["error"]
+    return box.get("value")
+
 from app.engine.stepcache_defer import DeferredStepCache
 
 
@@ -311,6 +339,13 @@ class DuckDBEngine(DeferredStepCache, Engine):
     # ── The column profile (app/engine/profile.py): on the relation, natively ─────
     # A `sql` step would copy the whole input into its sandbox first (op_sql): the profile
     # reads the chain's first rows as the count does, and aggregates them in place.
+    #
+    # A profile is stopped at the next click: the worker gets SIGUSR1 and the task's
+    # interruption is raised in its main thread, but only once DuckDB hands the thread back,
+    # which a join over 42 million rows did 3 to 8 seconds later (measured on kind,
+    # 2026-11-08), in the next node's preview's way. The query runs in a thread of its own
+    # instead, the main thread waits for it in short steps, and the interruption reaching
+    # the main thread interrupts DuckDB at once.
     def _profile_relation(self, source, operations, sample, use_cache, then):
         ops = _coerce_ops(operations)
         tmp: list[str] = []
@@ -319,7 +354,8 @@ class DuckDBEngine(DeferredStepCache, Engine):
             ctx = DuckContext(con, self.storage, tmp, preview_limit=sample, direct=self.direct)
             hashes = plan_hashes(self._source_id(source), [op.model_dump() for op in ops])
             try:
-                return then(self._rel_from_cache(ctx, source, ops, hashes, use_cache=use_cache).limit(sample))
+                rel = self._rel_from_cache(ctx, source, ops, hashes, use_cache=use_cache).limit(sample)
+                return _interruptible(con, lambda: then(rel))
             except EngineError:
                 raise
             except Exception as e:
