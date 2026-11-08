@@ -330,3 +330,31 @@ func TestDataAPIUsage(t *testing.T) {
 		t.Errorf("%d", w.Code)
 	}
 }
+
+// While autoscaling, a key's rate is divided by the pods running now (the autoscaler's count),
+// not by the fewest: scaled out, the pods together would let through many times the rate.
+func TestDataAPIManifestAutoscaleReplicas(t *testing.T) {
+	f := newDapiFixture(t)
+	a, _ := f.create(f.creator, f.folder, map[string]any{"name": "Scaled", "slug": f.slug("scaled"),
+		"resources": []any{f.resource("customers", f.customers)}}, http.StatusCreated)
+	path := map[string]string{"api_id": dapiID(a.ID)}
+	if w := f.call(f.admin, adminDataAPIRuntimeRoute, http.MethodPut, map[string]any{"autoscale": true, "min_replicas": 2,
+		"max_replicas": 8, "cpu": "500m", "memory": "512Mi"}, path); w.Code != http.StatusOK {
+		t.Fatalf("%d %s", w.Code, w.Body.String())
+	}
+	if w := f.call(f.creator, activateDataAPI, http.MethodPost, nil, path); w.Code != http.StatusOK {
+		t.Fatalf("%d %s", w.Code, w.Body.String())
+	}
+	token, _ := dataapis.RotatePodToken(f.ctx, f.db, a.ID)
+	if m := f.manifest(token, a.ID); m.Replicas != 2 {
+		t.Errorf("before the loop saw the cluster: %d replicas, want the fewest (2)", m.Replicas)
+	}
+	for _, c := range []struct{ wanted, want int }{{6, 6}, {1, 2}, {20, 8}} {
+		if err := dataapis.SetClusterStatus(f.ctx, f.db, a.ID, dataapis.ClusterStatus{Wanted: c.wanted}); err != nil {
+			t.Fatal(err)
+		}
+		if m := f.manifest(token, a.ID); m.Replicas != c.want {
+			t.Errorf("the autoscaler at %d: %d replicas, want %d", c.wanted, m.Replicas, c.want)
+		}
+	}
+}

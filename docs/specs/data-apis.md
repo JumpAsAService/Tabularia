@@ -183,8 +183,9 @@ GET /data/{api}/health
 - **Pod token**: random, per data API, in the Deployment's Secret, its SHA-256 in the
   database; valid only on the manifest and usage endpoints of its own API; rotated at
   every activation.
-- **Rate limit**: per key, in each pod, at the key's limit divided by the replicas
-  (documented as approximate).
+- **Rate limit**: per key, in each pod, at the key's limit divided by the replicas (while
+  autoscaling, the count the reconcile loop last saw, within min and max; documented as
+  approximate).
 - **Usage**: each pod sends with its poll the counts per key per minute (requests, rows,
   errors, `429`s) → table `data_api_usage` (minute buckets, kept
   `DATA_API__USAGE_RETENTION_DAYS`, default 30); the page draws them. Every request is

@@ -63,6 +63,22 @@ func SetClusterStatus(ctx context.Context, q Querier, apiID int64, s ClusterStat
 	return err
 }
 
+// WantedPods is the pods the reconcile loop last saw wanted for the data API (the autoscaler's
+// count while autoscaling); 0 when it has seen none yet.
+func WantedPods(ctx context.Context, q Querier, apiID int64) (int, error) {
+	var text string
+	err := q.QueryRow(ctx, `SELECT cluster FROM data_api_status WHERE data_api_id = $1`, apiID).Scan(&text)
+	if errors.Is(err, pgx.ErrNoRows) {
+		return 0, nil
+	}
+	if err != nil {
+		return 0, err
+	}
+	var s ClusterStatus
+	_ = json.Unmarshal([]byte(text), &s)
+	return s.Wanted, nil
+}
+
 // SetPodsCluster keeps the pods the cluster has of the data API now; the rows of the pods it
 // no longer has go (with their reports).
 func SetPodsCluster(ctx context.Context, q Querier, apiID int64, pods []PodCluster) error {

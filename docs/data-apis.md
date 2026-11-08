@@ -235,7 +235,8 @@ The answer:
   paused or suspended, or the pod out of touch with Tabularia for more than 15 minutes
   (`manifest_stale`: it then refuses every key rather than miss a revocation).
 - **Rate limit**: each pod counts its own requests, at the key's rate divided by the data
-  API's replicas: approximate when the traffic is uneven between them.
+  API's replicas (while autoscaling, the pods running now, within a poll): approximate when
+  the traffic is uneven between them.
 - **`GET /data/{api}/health`** answers without a key: `ready`, `loading`, `paused`…
 
 ### The pods

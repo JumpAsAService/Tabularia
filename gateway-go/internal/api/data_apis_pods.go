@@ -95,6 +95,15 @@ func buildManifest(ctx context.Context, d *Deps, a *dataapis.API) (*dataapiwire.
 	if a.State != dataapis.Active {
 		return m, nil
 	}
+	if a.Runtime.Autoscale {
+		// a key's rate is divided by the pods running now, as the autoscaler set them, within
+		// its bounds: divided by the fewest, the pods scaled out would let through many times it
+		wanted, err := dataapis.WantedPods(ctx, d.DB, a.ID)
+		if err != nil {
+			return nil, err
+		}
+		m.Replicas = min(max(wanted, a.Runtime.MinReplicas, 1), max(a.Runtime.MaxReplicas, 1))
+	}
 	creator, err := loadUser(ctx, d.DB, a.CreatorID)
 	if err != nil {
 		return nil, err
