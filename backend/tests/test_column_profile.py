@@ -382,3 +382,26 @@ def test_a_text_asks_its_lengths_not_its_range():
     specs = profile.plan([{"name": "t", "dtype": "String"}], None)
     assert [s[1] for s in specs] == ["rows", "count", "distinct", "min_len", "max_len"]
 
+
+def test_polars_collects_the_sample_before_it_aggregates(storage, table, valkey, fredis, monkeypatch):
+    """The aggregates on the lazy chain took Polars off the streaming engine, which computed
+    the whole chain before its head (a worker killed for its memory on a 42M x 12M join):
+    the sample is collected first, then aggregated."""
+    import polars as _pl
+
+    eng = _engine("polars", storage, fredis)
+    columns = _columns(_frame())
+    collected: list[int] = []
+    real = _pl.LazyFrame.collect
+
+    def spy(self, *a, **k):
+        out = real(self, *a, **k)
+        if k.get("engine") == "streaming":  # the chain's, not Polars' own eager internals
+            collected.append(out.height)
+        return out
+
+    monkeypatch.setattr(_pl.LazyFrame, "collect", spy)
+    monkeypatch.setattr(profile, "SAMPLE_ROWS", 300)
+    got = profile.profile(eng, "polars", table.bucket, table.key, [FILTER], columns, storage)
+    # one collect of the chain, of the sample's rows (not of one row of aggregates)
+    assert collected == [300] and got["rows"] == 300 and got["sampled"] is True

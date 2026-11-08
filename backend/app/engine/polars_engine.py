@@ -220,14 +220,23 @@ class PolarsEngine(DeferredStepCache, Engine):
                 cache_state=cstate, cache_cap_rows=ccap,
             )
 
-    # ── The column profile (app/engine/profile.py): natively, on the lazy chain ──
-    def _profile_frame(self, source, operations, sample, use_cache, then):
+    # ── The column profile (app/engine/profile.py): natively, on the chain's first rows ──
+    # The sample is COLLECTED first, in streaming, and only then aggregated, eagerly: the
+    # aggregates on the lazy chain (a distinct count, say) took Polars off the streaming
+    # engine, which then computed the whole chain before its head. On flow 25's «evasi» (a
+    # join of 42 million rows with 12 million) a worker reached its 4 GiB and the kernel
+    # killed it, three times in a few minutes (kind, 2026-11-08). Collected first, the chain
+    # stops at the sample's rows as a preview stops at its own, and the memory is the
+    # sample's. `columns`: only those read.
+    def _profile_frame(self, source, operations, sample, use_cache, then, columns=None):
         ops = _coerce_ops(operations)
         with self._session() as ctx:
             hashes = plan_hashes(self._source_id(source), [op.model_dump() for op in ops])
-            lf = self._lazy_from_cache(ctx, source, ops, hashes, use_cache=use_cache).head(sample)
+            lf = self._lazy_from_cache(ctx, source, ops, hashes, use_cache=use_cache)
+            if columns:
+                lf = lf.select([pl.col(c) for c in columns])
             try:
-                return then(lf)
+                return then(lf.head(sample).collect(engine="streaming"))
             except EngineError:
                 raise
             except _POLARS_ERRORS as e:
@@ -253,19 +262,21 @@ class PolarsEngine(DeferredStepCache, Engine):
         return lengths.min() if func == "min_len" else lengths.max()
 
     def profile_aggregates(self, source, operations, specs, sample, use_cache=False) -> dict[str, Any]:
-        def run(lf):
-            df = lf.select([self._profile_expr(f, c).alias(a) for a, f, c in specs]).collect(engine="streaming")
-            return df.row(0, named=True) if df.height else {}
+        needed = list(dict.fromkeys(c for _, _, c in specs if c is not None))
 
-        return self._profile_frame(source, operations, sample, use_cache, run)
+        def run(df):
+            out = df.select([self._profile_expr(f, c).alias(a) for a, f, c in specs])
+            return out.row(0, named=True) if out.height else {}
+
+        return self._profile_frame(source, operations, sample, use_cache, run, columns=needed)
 
     def profile_top(self, source, operations, column, sample, k, use_cache=False) -> list[tuple[Any, int]]:
-        def run(lf):
-            df = (lf.select(pl.col(column).alias("v")).drop_nulls().group_by("v").agg(pl.len().alias("n"))
-                  .sort(["n", "v"], descending=[True, False], nulls_last=True).head(k).collect(engine="streaming"))
-            return [(v, int(n)) for v, n in df.iter_rows()]
+        def run(df):
+            top = (df.select(pl.col(column).alias("v")).drop_nulls().group_by("v").agg(pl.len().alias("n"))
+                   .sort(["n", "v"], descending=[True, False], nulls_last=True).head(k))
+            return [(v, int(n)) for v, n in top.iter_rows()]
 
-        return self._profile_frame(source, operations, sample, use_cache, run)
+        return self._profile_frame(source, operations, sample, use_cache, run, columns=[column])
 
     # ── Export (direct download, intermediate nodes too) ──────────────────
     # The xlsx format's physical limit (rows per sheet). A memory guard too: the
