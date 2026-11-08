@@ -156,13 +156,17 @@ test('one way to say how many rows: all of them, the first of how many, or of mo
   assert.equal(nodeRowsPhrase(100, true, { state: 'none' }, t, fmt), 'first 100 rows')
 })
 
-test('a sample is suggested past a million rows or a slow preview, never for a small step', () => {
-  assert.equal(suggestSample({ state: 'done', rows: 764, over: false }, 300), false)
-  assert.equal(suggestSample({ state: 'done', rows: 2_000_000, over: false }, 300), true)
-  assert.equal(suggestSample({ state: 'done', rows: 10_000_000, over: true }, 300), true)
-  assert.equal(suggestSample({ state: 'none' }, 6_000), true)
-  assert.equal(suggestSample({ state: 'failed', slow: true }, 300), true)
-  assert.equal(suggestSample({ state: 'failed', slow: false }, 300), false)
+test('a sample is suggested for a big source, never for the time alone nor a small one', () => {
+  // the source's rows decide: a Group by's 30 rows over 42 million still cost the 42 million
+  assert.equal(suggestSample(42_007_616, { state: 'done', rows: 30, over: false }), true)
+  assert.equal(suggestSample(764, { state: 'done', rows: 764, over: false }), false)
+  assert.equal(suggestSample(150_000, { state: 'failed', slow: true }), false)
+  // the source's rows not known: the step's own count
+  assert.equal(suggestSample(null, { state: 'done', rows: 764, over: false }), false)
+  assert.equal(suggestSample(null, { state: 'done', rows: 2_000_000, over: false }), true)
+  assert.equal(suggestSample(undefined, { state: 'done', rows: 10_000_000, over: true }), true)
+  assert.equal(suggestSample(null, { state: 'none' }), false)
+  assert.equal(suggestSample(null, { state: 'failed', slow: true }), false)
 })
 
 test('a scrolled grid draws the rows in view and a margin, moving in steps', () => {
@@ -339,5 +343,27 @@ test('the column profile takes the focus itself, describes its figures, and clos
   // a press anywhere outside closes, even where nothing takes the focus
   assert.match(popover, /addEventListener\('pointerdown', onPointerDown, true\)/)
   assert.match(popover, /removeEventListener\('pointerdown', onPointerDown, true\)/)
+})
+
+test('the summary bar gives way in order: the sample into a menu, the cache to its icon, then «−N»', async () => {
+  const { readFileSync } = await import('node:fs')
+  const editor = readFileSync(new URL('../components/FlowEditor.vue', import.meta.url), 'utf8')
+  const queries = [...editor.matchAll(/@container pvbar \(max-width: (\d+)px\) \{([\s\S]*?)\n\}/g)].map((m) => [Number(m[1]), m[2]])
+  const at = (what) => queries.find(([, body]) => body.includes(what))?.[0]
+  const sample = at('.pv-sample-btn { display: none; }')
+  const cache = at('.pv-cache .pv-long { display: none; }')
+  const removed = at('.pv-removed .pv-short { display: inline; }')
+  assert.ok(sample && cache && removed, 'the three steps are there')
+  // the wider the threshold, the sooner the part gives way
+  assert.ok(sample > cache && cache > removed, `${sample} > ${cache} > ${removed}`)
+  // last, in a 1024px window: the tabs keep their icons, the count its short form
+  const narrow = at('.pv-rows .pv-short { display: inline; }')
+  assert.ok(narrow && narrow < removed && at('.viewtabs .vt-label { display: none; }') === narrow)
+  // no part is ever cut: a part is whole or on the hidden second line; the node keeps 14ch
+  assert.match(editor, /\.pv-part \{ flex: none; \}/)
+  assert.match(editor, /\.pv-summary \{[\s\S]*?flex-wrap: wrap;[\s\S]*?overflow: hidden;/)
+  assert.match(editor, /\.pv-node \{[^}]*min-width: 14ch;/)
+  // and no place kept for «N removed» when there is none
+  assert.doesNotMatch(editor, /pv-reserve/)
 })
 

@@ -232,13 +232,13 @@ export function nodeRowsPhrase(shown: number, truncated: boolean, count: RowCoun
   return t('dataGrid.firstShort', { shown: fmt(shown) })
 }
 
-/** Is the step big enough to suggest a sample on its source? Over a million rows, or a
- *  preview that made the person wait. */
+/** Is the chain big enough to suggest a sample on its source? When its source holds more
+ *  than a million rows (the rows coming in, not the few a Group by gives out, and never
+ *  because of the time alone: a slow step on a small table is not helped by a sample).
+ *  The source's rows not known: the step's own count, past the same threshold. */
 export const SAMPLE_HINT_ROWS = 1_000_000
-export const SAMPLE_HINT_MS = 5_000
-export function suggestSample(count: RowCount, previewMs: number): boolean {
-  if (previewMs >= SAMPLE_HINT_MS) return true
-  if (count.state === 'failed' && count.slow) return true
+export function suggestSample(sourceRows: number | null | undefined, count: RowCount): boolean {
+  if (typeof sourceRows === 'number' && Number.isFinite(sourceRows)) return sourceRows > SAMPLE_HINT_ROWS
   return count.state === 'done' && (count.over || count.rows > SAMPLE_HINT_ROWS)
 }
 

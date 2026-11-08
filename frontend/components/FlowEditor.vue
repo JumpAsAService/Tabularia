@@ -7,7 +7,7 @@ import { Controls, ControlButton } from '@vue-flow/controls'
 import { MiniMap } from '@vue-flow/minimap'
 import { opMeta } from '~/composables/useOpIcons'
 
-import { Table2, BarChart3, Wand2, Users, Undo2, Redo2, Sparkles, SlidersHorizontal, ShieldAlert, FlaskConical, X, RotateCw, RefreshCw } from 'lucide-vue-next'
+import { Table2, BarChart3, Wand2, Users, Undo2, Redo2, Sparkles, SlidersHorizontal, ShieldAlert, FlaskConical, X, RotateCw, RefreshCw, MoreHorizontal } from 'lucide-vue-next'
 import FlowAssistant from '~/components/FlowAssistant.vue'
 import { useAi, type AiStatus } from '~/composables/useAi'
 import { useApi, errMessage } from '~/composables/useApi'
@@ -25,9 +25,11 @@ import ContainerNode from '~/components/nodes/ContainerNode.vue'
 import { useScriptingEditor, type ScriptOutputs } from '~/composables/useScripting'
 import { useRegistriesEditor } from '~/composables/useRegistries'
 import { useFormat } from '~/composables/useFormat'
-import type { PreviewResult, ColumnInfo, Operation, IngestResult, ProfileResult, TopValuesResult } from '~/composables/useApi'
+import type { PreviewResult, ColumnInfo, Operation, IngestResult, ProfileResult, TopValuesResult, HistogramResult } from '~/composables/useApi'
+import type { DetailAsk } from '~/components/ui/DataGrid.vue'
+import GridKeys from '~/components/ui/GridKeys.vue'
 import { SOURCE_ID, buildIncoming, resolveChain, leafNodeId, defaultParams, sampleLabel } from '~/composables/useFlowModel'
-import { Recent, previewKey, columnChanges, consumedColumns, rowsPhrase, suggestSample, type RowCount } from '~/composables/previewGrid'
+import { Recent, previewKey, columnChanges, consumedColumns, nodeRowsPhrase, rowsPhrase, suggestSample, type RowCount } from '~/composables/previewGrid'
 import { opSubject } from '~/composables/opSummary'
 import { usePopover } from '~/composables/usePopover'
 import { computeAutoLayout } from '~/composables/useFlowLayout'
@@ -354,6 +356,7 @@ const cancelledNodeId = ref<string | null>(null)
 // their count, dropped as soon as the person looks elsewhere, like the count
 const profile = ref<ProfileResult | null>(null)
 const profileState = ref<'none' | 'loading' | 'done' | 'failed'>('none')
+const profileError = ref('') // why the whole profile was not made, said in its place
 // The previews and counts this page has seen: a step opened again shows at once, without
 // asking the server (whose step cache would still recompute the last step). Same engine,
 // source, chain and limit, same answer; kept a few minutes.
@@ -1944,8 +1947,12 @@ function showPreview(nodeId: string, res: PreviewResult, key: string, body: NonN
 // elsewhere: a click on another node stops it on the server too (it would take a worker
 // the next preview needs).
 let countSeq = 0
+const countError = ref('') // why the rows were not counted: the bar's tooltip
+let countAsk: { nodeId: string; key: string; body: NonNullable<ReturnType<typeof previewBody>['body']> } | null = null
 async function startCount(nodeId: string, key: string, body: NonNullable<ReturnType<typeof previewBody>['body']>) {
   const seq = ++countSeq
+  countAsk = { nodeId, key, body }
+  countError.value = ''
   rowCount.value = { state: 'counting' }
   try {
     const c = await previewSlots.count({ bucket: body.bucket, input_key: body.input_key, operations: body.operations, engine: flowEngine.value }, 'count')
@@ -1956,10 +1963,17 @@ async function startCount(nodeId: string, key: string, body: NonNullable<ReturnT
   } catch (e) {
     if (seq !== countSeq || isSuperseded(e)) return
     const status = (e as any)?.response?.status ?? (e as any)?.statusCode
+    countError.value = whyNot(e, 'count')
     rowCount.value = { state: 'failed', slow: status === 504 }
   }
   // the profile after the count, whatever it said: never beside it on the worker
   if (seq === countSeq && preview.value) queueProfile(key, body, preview.value.columns)
+}
+/** «Try again» on a count that failed: the same step, counted again. */
+function countRetry() {
+  const a = countAsk
+  if (!a || a.nodeId !== previewNodeId.value || computingNodeId.value) return
+  void startCount(a.nodeId, a.key, a.body)
 }
 function stopCount() {
   countSeq++
@@ -2008,15 +2022,32 @@ async function askProfile(seq: number, footerOnly: boolean) {
     profileState.value = 'done'
   } catch (e) {
     if (seq !== profileSeq || isSuperseded(e) || (footerOnly && wholeAsked === seq)) return
-    // a whole profile that failed leaves what the footer said on screen
-    profileState.value = profile.value ? 'done' : 'failed'
+    // a whole profile that failed leaves what the footer said on screen, with the reason
+    profileError.value = whyNot(e, 'profile')
+    profileState.value = footerOnly && profile.value ? 'done' : 'failed'
   }
+}
+/** Why a count or a profile was not made, in words: too slow (the cap), the worker's memory,
+ *  or the server's own reason. */
+function whyNot(e: unknown, what: 'count' | 'profile'): string {
+  const status = (e as any)?.response?.status ?? (e as any)?.statusCode
+  if (status === 504) return t(what === 'count' ? 'dataGrid.countSlowWhy' : 'dataGrid.profileSlowWhy')
+  if (status === 503) return t('dataGrid.workerBusyWhy')
+  return errMessage(e)
+}
+/** «Try again» on a whole profile that failed. */
+function profileRetry() {
+  if (!profileAsk) return
+  wholeAsked = -1
+  profileError.value = ''
+  profileWhole()
 }
 /** A column opened in the grid: the step's whole profile (one query for every column). */
 function profileWhole() {
   if (!profileAsk || (profile.value && !profile.value.partial) || wholeAsked === profileSeq) return
   wholeAsked = profileSeq
   clearTimeout(profileTimer)
+  profileError.value = ''
   profileState.value = 'loading'
   // on the same slot: a footer-only request still out is knocked down by this one
   void askProfile(profileSeq, false)
@@ -2028,23 +2059,65 @@ function stopProfile() {
   if (previewSlots.busy('top')) previewSlots.stop('top')
   profile.value = null
   profileState.value = 'none'
+  profileError.value = ''
   profileAsk = null
 }
-// a column's most frequent values, at a click on its name in the grid: one query a column
-const topMemo = new Recent<{ at: number; res: TopValuesResult }>(120)
-async function topValues(column: string): Promise<TopValuesResult> {
+// a column's most frequent values or a number's histogram, when the column is opened in the
+// grid (after the whole profile): one query a column
+const topMemo = new Recent<{ at: number; res: TopValuesResult | HistogramResult }>(120)
+async function columnDetail(column: string, ask: DetailAsk): Promise<TopValuesResult | HistogramResult> {
   const id = previewNodeId.value
   const { body, key } = id ? previewBody(id) : { body: null, key: null }
   if (!body || !key) throw new Error('no step')
-  const mk = `${key}\u0001${column}`
+  const histogram = ask.kind === 'histogram' ? { lo: ask.lo, hi: ask.hi, bins: ask.bins } : undefined
+  const mk = `${key}\u0001${column}\u0001${JSON.stringify(histogram ?? null)}`
   const known = fresh(topMemo.get(mk))
   if (known) return known.res
-  const res = await previewSlots.profile<TopValuesResult>({
+  const res = await previewSlots.profile<TopValuesResult | HistogramResult>({
     bucket: body.bucket, input_key: body.input_key, operations: body.operations, engine: flowEngine.value, column,
+    ...(histogram ? { histogram } : {}),
   }, 'top')
   topMemo.set(mk, { at: Date.now(), res })
   return res
 }
+// What a value of the profile can do in the editor: a Filter step after the node on screen
+// (keep it, or leave it out), a Fill nulls step for its nulls, added as «+ Operation» adds
+// a step after the selected node: beside it, linked from it, selected, its preview asked.
+// Nothing downstream is rewired: the flow's other steps keep reading what they read.
+function addStepAfter(parentId: string, opType: string, params: Record<string, any>) {
+  // a transformation: an observer may add one too, as from the palette
+  const parent = findNode(parentId)
+  if (!parent || !DATA_PARENTS.has(parent.type ?? '')) return
+  fitView_ = false
+  const id = `op-${++opCounter}`
+  // beside the node, lower down while that place is taken by another node
+  const x = (parent.position.x ?? 60) + 230
+  let y = parent.position.y ?? 140
+  const taken = (yy: number) => getNodes.value.some((n) => !n.parentNode && Math.abs(n.position.x - x) < 180 && Math.abs(n.position.y - yy) < 80)
+  for (let k = 0; k < 12 && taken(y); k++) y += 90
+  addNodes({ id, type: 'operation', position: { x, y }, parentNode: parent.parentNode, extent: parent.parentNode ? 'parent' : undefined, data: { opType, params } })
+  const sourceHandle = parent.type === 'script' || parent.type === 'container' ? 'out' : undefined
+  addEdges({ id: `e-${parent.id}-left-${id}`, source: parent.id, target: id, sourceHandle, targetHandle: 'left' })
+  selectedId.value = id
+  refreshForNode(id)
+  nextTick(() => {
+    selectOnCanvas(id)
+    setCenter(x + 80, y + 40, { zoom: getViewport().zoom, duration: 300 })
+  })
+}
+const valueActions = computed(() => {
+  const id = previewNodeId.value
+  if (!id || loadBlocked.value) return null
+  return {
+    filter: (column: string, value: unknown, exclude: boolean) => {
+      const params = value === null || value === undefined
+        ? { column, operator: exclude ? 'is_not_null' : 'is_null' }
+        : { column, operator: exclude ? 'ne' : 'eq', value }
+      addStepAfter(id, 'filter', params)
+    },
+    fillNulls: (column: string) => addStepAfter(id, 'fill_null', { columns: { [column]: null } }),
+  }
+})
 
 /** «Cancel» on a slow preview (or Esc): stopped on the server too, nothing of another node
  *  shown, and the way back in the grid's place, with the focus on it. */
@@ -2235,6 +2308,12 @@ const summaryRows = computed(() => {
   if (!r) return ''
   return rowsPhrase(r.rows.length, r.truncated, rowCount.value, t, (n) => fmt.count(n))
 })
+// the same, as short as a node of the canvas says it, for a narrow bar
+const summaryRowsShort = computed(() => {
+  const r = preview.value
+  if (!r) return ''
+  return nodeRowsPhrase(r.rows.length, r.truncated, rowCount.value, t, (n) => fmt.count(n))
+})
 // One announcement a click, once everything about it has arrived (rows, count, changes): the
 // summary itself changes three or four times, and the running seconds are never read out.
 const liveText = ref('')
@@ -2255,11 +2334,22 @@ watch(settledSummary, (now) => {
   liveText.value = ''
   nextTick(() => { liveText.value = now })
 })
-// a sample on the source is suggested, never switched on behind the person's back
+// a sample on the source is suggested, never switched on behind the person's back: when the
+// source is big (its rows, not the step's: a Group by's 30 rows over 42 million still cost
+// the 42 million), while a node computes slowly or beside its rows
 const offerSample = computed(() => {
   if (shownSample.value || shownSource.value?.type !== 'source') return false
-  return slowCompute.value || (!!preview.value && !computingNodeId.value && suggestSample(rowCount.value, previewMs.value))
+  if (!suggestSample(shownSource.value.data?.rows, rowCount.value)) return false
+  return slowCompute.value || (!!preview.value && !computingNodeId.value)
 })
+// the «…» menu the sample goes into when the bar is narrow
+const moreOpen = ref(false)
+const morePop = ref<HTMLElement | null>(null)
+usePopover(moreOpen, morePop, () => { moreOpen.value = false })
+function sampleFromMenu() {
+  moreOpen.value = false
+  openSourceSample()
+}
 function openSourceSample() {
   const src = shownSource.value
   if (!src) return
@@ -2999,18 +3089,24 @@ async function pollTask(id: string) {
       />
       <div class="viewhead">
       <div class="viewtabs">
-        <button :class="{ active: viewTab === 'table' }" @click="viewTab = 'table'">
-          <Table2 :size="13" /> {{ $t('flowEditor.tableTab') }}
-        </button>
-        <button :class="{ active: viewTab === 'chart' }" @click="viewTab = 'chart'">
-          <BarChart3 :size="13" /> {{ $t('flowEditor.chartTab') }}
-        </button>
+        <button
+          :class="{ active: viewTab === 'table' }"
+          :aria-pressed="viewTab === 'table'"
+          :aria-label="$t('flowEditor.tableTab')"
+          @click="viewTab = 'table'"
+        ><Table2 :size="13" aria-hidden="true" /><span class="vt-label">{{ $t('flowEditor.tableTab') }}</span></button>
+        <button
+          :class="{ active: viewTab === 'chart' }"
+          :aria-pressed="viewTab === 'chart'"
+          :aria-label="$t('flowEditor.chartTab')"
+          @click="viewTab = 'chart'"
+        ><BarChart3 :size="13" aria-hidden="true" /><span class="vt-label">{{ $t('flowEditor.chartTab') }}</span></button>
       </div>
         <!-- what the rows on screen are: whose (always first, where it stays), how many of how
              many, what the step removed; while a node computes, its name, the seconds, and
              the way out. Not a live region: one announcement a click, below. -->
         <div class="pv-bar">
-          <p id="pv-summary" class="pv-summary">
+          <p id="pv-summary" class="pv-summary" :title="settledSummary || undefined">
             <template v-if="computingNodeId">
               <span class="pv-node" :title="nodeFullName(computingNodeId)">{{ nodeName(computingNodeId) }}</span>
               <span v-if="computingWord" class="pv-part">{{ $t('dataGrid.computing') }}</span>
@@ -3018,14 +3114,21 @@ async function pollTask(id: string) {
             </template>
             <template v-else-if="preview">
               <span class="pv-node" :title="nodeFullName(previewNodeId)">{{ nodeName(previewNodeId) }}</span>
-              <span class="pv-part">{{ summaryRows }}</span>
+              <span class="pv-part pv-rows"><span class="pv-long">{{ summaryRows }}</span><span class="pv-short">{{ summaryRowsShort }}</span></span>
               <span v-if="rowCount.state === 'counting'" class="pv-part pv-quiet">{{ $t('dataGrid.counting') }}</span>
               <span
                 v-else-if="rowCount.state === 'failed'"
-                class="pv-part pv-quiet"
-                :title="rowCount.slow ? $t('dataGrid.countSlowTitle') : undefined"
-              >{{ rowCount.slow ? $t('dataGrid.countSlow') : $t('dataGrid.countFailed') }}</span>
+                class="pv-part pv-quiet pv-failed"
+                :title="rowCount.slow ? $t('dataGrid.countSlowTitle') : countError || undefined"
+              >{{ rowCount.slow ? $t('dataGrid.countSlow') : $t('dataGrid.countFailed') }}<button
+                type="button"
+                class="pv-retry"
+                :aria-label="$t('dataGrid.countAgain')"
+                :title="$t('dataGrid.countAgain')"
+                @click="countRetry"
+              ><RotateCw :size="11" aria-hidden="true" /></button></span>
               <span class="pv-part">{{ $t('dataGrid.columns', { n: preview.columns.length }) }}</span>
+              <!-- «N columns removed», «−N» when the bar is narrow (its name stays whole) -->
               <span v-if="previewChanges?.removed.length" class="pv-part">
                 <button
                   type="button"
@@ -3033,12 +3136,15 @@ async function pollTask(id: string) {
                   aria-haspopup="true"
                   :aria-expanded="removedOpen"
                   aria-controls="pv-removed-list"
+                  :aria-label="$t('dataGrid.removed', { n: previewChanges.removed.length }, previewChanges.removed.length)"
                   @click="toggleRemoved"
-                >{{ $t('dataGrid.removed', { n: previewChanges.removed.length }, previewChanges.removed.length) }}</button>
+                ><span class="pv-long">{{ $t('dataGrid.removed', { n: previewChanges.removed.length }, previewChanges.removed.length) }}</span><span
+                  class="pv-short"
+                  aria-hidden="true"
+                >−{{ previewChanges.removed.length }}</span></button>
               </span>
-              <!-- the place of «N columns removed» while the input's columns are asked: nothing moves when it comes -->
-              <span v-else-if="changesPending" class="pv-part pv-reserve" aria-hidden="true">{{ $t('dataGrid.removed', { n: 0 }, 2) }}</span>
-              <!-- the step is computed again at every preview: said quietly, explained on demand -->
+              <!-- the step is computed again at every preview: said quietly, explained on
+                   demand; an icon alone (its name kept) when the bar is narrow -->
               <span v-if="shownCacheSkipped" class="pv-part">
                 <button
                   type="button"
@@ -3046,9 +3152,10 @@ async function pollTask(id: string) {
                   aria-haspopup="true"
                   :aria-expanded="cacheOpen"
                   aria-controls="pv-cache-why"
+                  :aria-label="$t('dataGrid.cacheCap')"
                   :title="$t('nodeStats.noCache', { n: shownCacheSkipped })"
                   @click="toggleCache"
-                ><RefreshCw :size="11" aria-hidden="true" /> {{ $t('dataGrid.cacheCap') }}</button>
+                ><RefreshCw :size="11" aria-hidden="true" /><span class="pv-long">{{ $t('dataGrid.cacheCap') }}</span></button>
               </span>
             </template>
             <span v-if="shownSample && (computingNodeId || preview)" class="pv-part pv-sample"><FlaskConical :size="11" aria-hidden="true" /> {{ shownSample }}</span>
@@ -3081,17 +3188,35 @@ async function pollTask(id: string) {
             <p>{{ $t('nodePanel.cacheSkipped', { n: shownCacheSkipped }) }}</p>
           </div>
           <span class="sr-only" role="status" aria-live="polite">{{ liveText }}</span>
+          <GridKeys v-if="viewTab === 'table' && (preview || computingNodeId)" profile />
           <button
             v-if="offerSample"
             type="button"
-            class="pv-action"
+            class="pv-action pv-sample-btn"
             :title="$t('dataGrid.useSampleTitle')"
             @click="openSourceSample"
           >
-            <FlaskConical :size="12" /> {{ $t('dataGrid.useSample') }}
+            <FlaskConical :size="12" aria-hidden="true" /> {{ $t('dataGrid.useSample') }}
           </button>
+          <!-- the bar narrow: «Use a sample» goes into a menu, first of what gives way -->
+          <span v-if="offerSample" class="pv-more">
+            <button
+              type="button"
+              class="pv-more-btn"
+              aria-haspopup="menu"
+              :aria-expanded="moreOpen"
+              :aria-label="$t('dataGrid.moreActions')"
+              :title="$t('dataGrid.moreActions')"
+              @click="moreOpen = !moreOpen"
+            ><MoreHorizontal :size="14" aria-hidden="true" /></button>
+            <div v-if="moreOpen" ref="morePop" class="pv-pop pv-more-pop" role="menu">
+              <button type="button" role="menuitem" class="pv-more-item" :title="$t('dataGrid.useSampleTitle')" @click="sampleFromMenu">
+                <FlaskConical :size="12" aria-hidden="true" /> {{ $t('dataGrid.useSample') }}
+              </button>
+            </div>
+          </span>
           <button v-if="slowCompute" type="button" class="pv-action" @click="cancelPreview">
-            <X :size="12" /> {{ $t('dataGrid.cancel') }}
+            <X :size="12" aria-hidden="true" /> {{ $t('dataGrid.cancel') }}
           </button>
         </div>
       </div>
@@ -3110,8 +3235,11 @@ async function pollTask(id: string) {
           :pending-columns="computingColumns"
           :profile="profile"
           :profile-state="profileState"
+          :profile-error="profileError"
+          :profile-retry="profileRetry"
           :profile-whole="profileWhole"
-          :top-values="topValues"
+          :column-detail="columnDetail"
+          :value-actions="valueActions"
           :empty="selectedId ? $t('dataGrid.nothingYet') : undefined"
         >
           <template #action>
@@ -3166,23 +3294,68 @@ async function pollTask(id: string) {
 /* the preview's summary, in the tab bar: one line after the tabs, the node first and where
    it stays (the parts that arrive later are added after it, nothing before it moves), the
    actions at the right edge */
-.viewhead { display: flex; align-items: center; gap: 12px; flex-shrink: 0; min-width: 0; }
+/* The bar is a size container: as it narrows, the parts give way in order, never cut in
+   the middle of a word (critique of 2026-11-08: «Filter s…», «12 columns remove»):
+   1. «Use a sample» goes into a «…» menu;  2. the cache's mark keeps its icon alone;
+   3. «N columns removed» becomes «−N». The node's name keeps 14 characters at least, all of
+   it in the tooltip; a part that still finds no room goes to a second line that is not
+   shown (the whole sentence is the summary's tooltip). */
+.viewhead { position: relative; z-index: 5; display: flex; align-items: center; gap: 12px; flex-shrink: 0; min-width: 0; container: pvbar / inline-size; }
 .pv-bar { position: relative; flex: 1; min-width: 0; display: flex; align-items: center; gap: 6px; }
 .pv-summary {
-  display: flex; align-items: baseline; min-width: 0; margin: 0 auto 0 0; overflow: hidden; white-space: nowrap;
-  font-size: 12px; color: var(--muted); font-variant-numeric: tabular-nums;
+  display: flex; flex-wrap: wrap; align-items: baseline; row-gap: 12px; min-width: 0;
+  /* room inside for the buttons' focus rings, which the clip would cut */
+  height: 24px; padding: 4px; margin: -4px auto -4px -4px; overflow: hidden; white-space: nowrap;
+  font-size: 12px; line-height: 16px; color: var(--muted); font-variant-numeric: tabular-nums;
 }
-.pv-node { flex: 0 1 auto; min-width: 4em; overflow: hidden; text-overflow: ellipsis; color: var(--text); font-weight: 500; }
+.pv-node { flex: 1 1 14ch; min-width: 14ch; max-width: max-content; overflow: hidden; text-overflow: ellipsis; color: var(--text); font-weight: 500; }
 .pv-part { flex: none; }
 .pv-part::before { content: '·'; margin: 0 6px; color: var(--muted); }
 .pv-quiet { opacity: 0.8; }
-.pv-reserve { visibility: hidden; }
+.pv-failed { display: inline-flex; align-items: baseline; gap: 4px; }
+.pv-retry {
+  margin: 0; padding: 0 2px; border: 0; background: none; box-shadow: none; color: inherit; line-height: 1;
+  align-self: center; cursor: pointer;
+}
+.pv-retry:hover { color: var(--text); background: none; box-shadow: none; }
+.pv-retry:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; border-radius: 3px; }
+.pv-short { display: none; }
+.pv-more { display: none; position: relative; flex: none; }
+.pv-more-btn {
+  display: inline-flex; align-items: center; justify-content: center; width: 24px; height: 24px; padding: 0;
+  border: 1px solid transparent; border-radius: 6px; background: none; box-shadow: none; color: var(--muted);
+}
+.pv-more-btn:hover, .pv-more-btn[aria-expanded="true"] { color: var(--text); background: var(--panel-2); border-color: var(--border); box-shadow: none; }
+.pv-more-btn:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; }
+.pv-more-pop { right: 0; left: auto; min-width: 0; width: max-content; padding: 4px; }
+.pv-more-item { display: inline-flex; align-items: center; gap: 6px; width: 100%; padding: 5px 8px; font-size: 12px; border: 0; background: none; box-shadow: none; }
+.pv-more-item:hover { background: var(--row-hover); box-shadow: none; }
+@container pvbar (max-width: 960px) {
+  .pv-bar .pv-sample-btn { display: none; }
+  .pv-bar .pv-more { display: inline-flex; }
+}
+@container pvbar (max-width: 860px) {
+  .pv-cache .pv-long { display: none; }
+}
+@container pvbar (max-width: 780px) {
+  .pv-removed .pv-long { display: none; }
+  .pv-removed .pv-short { display: inline; }
+}
+/* 4. narrower still (a 1024px window): the tabs keep their icons (their names kept for the
+   screen reader), the count says it as a node does («42,007,616 rows») */
+.viewtabs button { display: inline-flex; align-items: center; gap: 5px; }
+@container pvbar (max-width: 600px) {
+  .viewtabs .vt-label { display: none; }
+  .viewtabs button { padding: 4px 9px; }
+  .pv-rows .pv-long { display: none; }
+  .pv-rows .pv-short { display: inline; }
+}
 .pv-removed {
   margin: 0; padding: 0; border: 0; background: none; box-shadow: none; font: inherit; color: inherit;
   text-decoration: underline dotted; text-underline-offset: 3px; cursor: pointer;
 }
 .pv-removed:hover, .pv-removed[aria-expanded="true"] { color: var(--text); background: none; box-shadow: none; }
-.pv-removed:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; border-radius: 3px; }
+.pv-removed:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; border-radius: 3px; }
 .pv-pop {
   position: absolute; top: calc(100% + 6px); z-index: 30;
   min-width: 180px; max-width: min(360px, 100%); max-height: 240px; overflow: auto;
@@ -3192,7 +3365,8 @@ async function pollTask(id: string) {
 .pv-pop:focus { outline: none; }
 .pv-pop-text { max-width: min(320px, 100%); }
 .pv-pop-text p { margin: 0; line-height: 1.45; color: var(--text); }
-.pv-cache { display: inline-flex; align-items: center; gap: 3px; }
+.pv-cache { display: inline-flex; align-items: center; gap: 3px; text-decoration: none; }
+.pv-cache .pv-long { text-decoration: underline dotted; text-underline-offset: 3px; }
 .pv-pop-title { margin: 0 0 4px; color: var(--muted); }
 .pv-pop ul { margin: 0; padding: 0; list-style: none; }
 .pv-pop li { padding: 2px 0; font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 11.5px; overflow-wrap: anywhere; }
