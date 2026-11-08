@@ -105,7 +105,7 @@ def test_every_engine_says_the_same_numbers(name, storage, table, valkey, fredis
     # the distinct values leave the nulls out, within the estimate's error
     assert cols["region"]["distinct"] == 3 and cols["city"]["distinct"] == 4 and cols["flag"]["distinct"] == 2
     assert cols["day"]["distinct"] == 30
-    assert abs(cols["id"]["distinct"] - 1000) <= 30
+    assert cols["id"]["distinct"] == 1000
     assert set(cols["id"]["whole"]) == {"nulls", "min", "max"}
 
 
@@ -175,8 +175,8 @@ def test_a_source_s_profile_takes_the_footer_and_queries_the_rest(name, storage,
     assert got["footer"] is True and got["total"] == N and got["sampled"] is False
     a = got["columns"]["amount"]
     assert (a["nulls"], a["min"], a["max"]) == (200, -700.0, 2298.5)
-    # Polars' HyperLogLog is the loosest of the three here: 1,706 for 1,800 floats
-    assert set(a["whole"]) == {"nulls", "min", "max"} and abs(a["distinct"] - 1800) <= 1800 * 0.06
+    # DuckDB and Polars count them; chDB's uniq is exact under 65,536 values
+    assert set(a["whole"]) == {"nulls", "min", "max"} and a["distinct"] == 1800
     c = got["columns"]["city"]
     assert (c["nulls"], c["min"], c["max"], c["min_len"], c["max_len"]) == (400, "", "Forlì", 0, 17)
 

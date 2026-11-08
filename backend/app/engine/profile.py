@@ -18,8 +18,9 @@ the step allows (the same order as the row count, app/engine/rowcount.py):
    starting from the nearest step the cache holds (`Engine.profile_aggregates`).
 
 Never said as exact when it is not: the distinct values are the engine's own estimate
-(Polars `approx_n_unique`, ClickHouse and chDB `uniq`, BigQuery `APPROX_COUNT_DISTINCT`;
-DuckDB counts them, see `sql_aggregate`), always shown as one; and past SAMPLE_ROWS rows the query
+(ClickHouse and chDB `uniq`, BigQuery `APPROX_COUNT_DISTINCT`; DuckDB and Polars count
+them over the sample, their estimators being far off: see `sql_aggregate`), always shown as
+an estimate; and past SAMPLE_ROWS rows the query
 sees the first SAMPLE_ROWS only, which the answer says (`sampled`), column by column for
 what the footer gave over every row instead (`whole`).
 
@@ -89,9 +90,10 @@ def sql_aggregate(dialect: str, func: str, col: str | None, quote) -> str:
     if func == "distinct":
         # DuckDB's approx_count_distinct was measured far off (1,249 for 1,000 values, 8,571
         # for 10,000, 11 for 10: 2026-11-08, DuckDB 1.5) while counting them exactly over the
-        # sample's million rows takes under 0.1 s: DuckDB counts them. The others estimate
-        # within about 1% (Polars' HyperLogLog, ClickHouse's adaptive `uniq`, exact below
-        # 65,536 values).
+        # sample's million rows takes under 0.1 s: DuckDB counts them, and Polars too (its
+        # approx_n_unique, natively in the Polars engine, was up to 12.8% off on kind).
+        # ClickHouse's adaptive `uniq` is exact below 65,536 values and within about 2%
+        # past them; BigQuery's APPROX_COUNT_DISTINCT is its HyperLogLog++.
         return {"duckdb": f"count(DISTINCT {q})", "clickhouse": f"uniq({q})",
                 "bigquery": f"APPROX_COUNT_DISTINCT({q})"}[dialect]
     if func in ("min", "max"):
