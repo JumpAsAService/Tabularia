@@ -5,6 +5,44 @@ exposes at `/system/info` and in the app's settings menu.
 
 ## Unreleased
 
+- **The Viewer cuts no value.** A column's width was measured once, with a canvas that knows
+  neither the page's tabular figures nor, on a first visit, IBM Plex (not loaded yet), and on
+  the values with the most characters rather than the widest: 95 cells were cut by a pixel or
+  four on the customers table at 1440 px in Chrome («Palermo», «Bergamo»). Now the ~8 longest values of each
+  column are measured in the page itself, in the cells' own type, with a character of air,
+  and again when the fonts finish loading; a column that reaches its cap (28em) gives every
+  value its tooltip.
+- **One way to write a number.** The cache-cap toast and the node's panel said «1.000.000» in
+  the browser's language beside «42,007,616», and a source said «42007616 rows - 6 columns»:
+  every count now goes through the interface's formatter. In the grid, integer columns that
+  are quantities are grouped (`11,123` clienti); identifiers, codes, years and periods stay as
+  they are, by the column's name (`id`, `*_id`, `cap`, `anno`, `codice_*`, `*_code`,
+  `partita_iva`, `periodo`: `groupsThousands` in `previewGrid.ts`). Sums keep two decimals
+  once a column reaches a thousand (`281,667,430.94`), the exact value in the tooltip and in a
+  copy.
+- **The cache-cap toast moves off the data.** It shows over the canvas, top right, below the
+  «also open by» notice, never over the preview's numbers, and once a browser session per step.
+- **A step's changes arrive with its rows.** The `new` / `renamed` / `type changed` marks and
+  «N removed» are computed from the columns of the node before as the page knows them,
+  instead of after a request for them (0.2 to 1.8 s later, the bar reshaping meanwhile); when
+  they are not known the summary keeps their place. «N removed» is a button opening the list
+  of the columns removed, from the keyboard too; a Pivot's spread column and its values are no
+  longer counted as removed.
+- **The summary keeps the node in place and names it.** It follows the tabs, the node first
+  («Group by regione, segmento», «Join on ordine_id»: two Group by nodes are told apart; a
+  node's own label when it has one), the later parts added after it; «Computing…» shows only
+  past 300 ms, so a quick answer does not flash it (the old rows dim at once all the same).
+  After «Cancel», or Esc from the preview or the canvas, «Compute again» takes the grid's place
+  and the focus.
+- **Accessibility of the grid.** While computing only the body dims, the header keeps its
+  contrast (the type fell to 1.75:1 in the light theme); `aria-rowcount` is the real total
+  when known and -1 otherwise (it said 101 of 42 million); a screen reader hears the summary
+  once a click, when everything has arrived; the header's names are one tab stop moved with
+  the arrows, Home and End; the region's focus ring is no longer covered by the pinned row
+  numbers; the Viewer's + and × buttons have names, its error is an alert and the grid no
+  longer says «No data» under it; the skeleton no longer draws a summary line the table does
+  not have.
+
 - **The editor never shows a node's rows as another's.** At the click the rows on screen dim
   and the summary says «Computing Group by…»; past 2 s it counts the seconds and offers
   «Cancel» (which stops the query on the server) and «Use a sample» (it opens the source's
