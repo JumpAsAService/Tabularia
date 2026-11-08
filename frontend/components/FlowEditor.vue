@@ -1684,6 +1684,19 @@ async function ensureColumns(nodeId: string): Promise<ColumnInfo[]> {
 }
 
 const CLICK_SETTLE_MS = 180
+let columnsNodeId: string | null = null // whose fields the panel shows
+function leftOf(nodeId: string): string | undefined {
+  const inc = buildIncoming(getEdges.value)
+  const node = findNode(nodeId)
+  return inc.get(nodeId)?.left ?? (node?.parentNode ? inc.get(node.parentNode)?.left : undefined)
+}
+/** A node's output columns when known without asking (a source's, or a preview's). */
+function knownColumns(id: string | undefined): ColumnInfo[] | null {
+  const n = id ? findNode(id) : null
+  if (!n) return id ? null : []
+  if (n.type === 'source') return (n.data.columns as ColumnInfo[]) ?? []
+  return nodeColumns[n.id] ?? null
+}
 let columnsSeq = 0 // as previewSeq: only the last resolution turns the skeleton off
 async function refreshForNode(nodeId: string) {
   const inc = buildIncoming(getEdges.value)
@@ -1691,6 +1704,14 @@ async function refreshForNode(nodeId: string) {
   columnsLoading.value = true
   const colSeq = ++columnsSeq
   const t0 = performance.now()
+  // the panel's fields are the new node's from the click on: its input columns at once when
+  // they are known, otherwise none (the fields' skeleton), never the node before's
+  if (nodeId !== columnsNodeId) {
+    columnsNodeId = nodeId
+    const known = knownColumns(leftOf(nodeId))
+    inputColumns.value = known ?? []
+    rightColumns.value = []
+  }
   // A step seen already in this page shows at once: no wait, no request. Otherwise the
   // rows on screen are dimmed NOW and the summary names this node, then whoever goes
   // through the nodes one after another gets a moment before anything starts: if
@@ -1700,8 +1721,12 @@ async function refreshForNode(nodeId: string) {
     beginCompute(nodeId)
     await new Promise((r) => setTimeout(r, CLICK_SETTLE_MS))
     if (colSeq !== columnsSeq) return
-    // the rows first: the preview starts now, beside the input columns (its own slot)
-    void runPreview(nodeId)
+    // The rows first, then the input columns when they are not known already: side by side
+    // they computed the same upstream chain twice at once (measured on kind: a worker at
+    // 2.7 GB instead of 1.7 on a Group by after a 42M x 12M join), and the rows matter more.
+    if (knownColumns(leftOf(nodeId)) !== null) void runPreview(nodeId)
+    else await runPreview(nodeId)
+    if (colSeq !== columnsSeq) return
   }
 
   // input columns (the left parent's output); the FIRST node of a foreach body has no
@@ -1798,6 +1823,9 @@ function tickClock() {
 /** From the click on: the rows on screen are not this node's. */
 function beginCompute(nodeId: string) {
   stopCount()
+  // the input columns still being asked for the node before are no one's now: stopped on
+  // the server, or they take a worker from this preview
+  if (previewSlots.busy('cols')) previewSlots.stop('cols')
   // a preview still in flight for the node before no longer writes (its answer is kept in
   // memory all the same; the next preview on the slot knocks it down on the server)
   previewSeq++
