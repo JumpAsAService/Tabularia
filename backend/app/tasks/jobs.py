@@ -227,6 +227,8 @@ def profile_task(
     from app.engine.exceptions import EngineError, OperationError, SourceNotFoundError, UnknownOperationError
     from app.engine.query_tag import query_tag, was_interrupted
 
+    from app.tasks.memory_guard import memory_guard
+
     task_id = getattr(getattr(current_task, "request", None), "id", None)
     name = (engine or DEFAULT_ENGINE).lower()
     try:
@@ -235,7 +237,9 @@ def profile_task(
             from app.engine.stepcache_defer import wait_for_running_copy
 
             wait_for_running_copy(impl, DataSource(bucket=bucket, key=input_key), operations)
-        with query_tag(f"tab-prev:{task_id}" if task_id else None):
+        # a profile past this process's share of the memory stops itself, alone, before the
+        # kernel stops the whole worker (a Polars join at full width did: memory_guard)
+        with query_tag(f"tab-prev:{task_id}" if task_id else None), memory_guard(f"profile on {name}"):
             if column is not None and histogram is not None:
                 result = column_profile.histogram(impl, name, bucket, input_key, operations, column, histogram,
                                                   use_cache=not no_cache)

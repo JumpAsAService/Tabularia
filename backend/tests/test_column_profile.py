@@ -465,3 +465,37 @@ def test_polars_collects_the_sample_before_it_aggregates(storage, table, valkey,
     got = profile.profile(eng, "polars", table.bucket, table.key, [FILTER], columns, storage)
     # one collect of the chain, of the sample's rows (not of one row of aggregates)
     assert collected == [300] and got["rows"] == 300 and got["sampled"] is True
+
+
+# ── a profile past its process's memory stops itself, alone ──────────────────
+def test_the_memory_guard_kills_its_process_past_the_limit_and_only_then():
+    import time
+
+    from app.tasks.memory_guard import memory_guard
+
+    killed: list[str] = []
+    with memory_guard("t", limit=1000, rss=lambda: 2000, kill=lambda: killed.append("x"), poll=0.01):
+        time.sleep(0.1)
+    assert killed == ["x"]
+    killed.clear()
+    with memory_guard("t", limit=1000, rss=lambda: 500, kill=lambda: killed.append("x"), poll=0.01):
+        time.sleep(0.05)
+    assert killed == []
+    # no limit known (outside a container): no watch at all
+    with memory_guard("t", limit=0, rss=lambda: 10**12, kill=lambda: killed.append("x"), poll=0.01):
+        time.sleep(0.05)
+    assert killed == []
+
+
+def test_the_route_says_a_profile_out_of_memory_in_words(storage, table, valkey, monkeypatch):
+    from celery.exceptions import WorkerLostError
+    from fastapi import HTTPException
+
+    def worker(*a, **k):
+        raise WorkerLostError("Worker exited prematurely: signal 9 (SIGKILL) Job: 3.")
+
+    monkeypatch.setattr(tasks, "on_preview_worker", worker)
+    with pytest.raises(HTTPException) as e:
+        tasks.profile_step(ProfileRequest(bucket=table.bucket, input_key=table.key, engine="polars",
+                                          columns=[{"name": "id", "dtype": "Int64"}]))
+    assert e.value.status_code == 422 and "profile needed more than the worker's memory" in e.value.detail

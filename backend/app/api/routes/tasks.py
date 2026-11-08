@@ -98,6 +98,8 @@ _SUPERSEDED = "Preview superseded by a more recent request"
 WORKER_LOST = "The worker computing this was lost: try again"
 PREVIEW_OUT_OF_MEMORY = ("The preview ran out of the worker's memory: give the source a development sample, "
                          "or filter it earlier in the flow, and try again")
+PROFILE_OUT_OF_MEMORY = ("The profile needed more than the worker's memory and was stopped: give the source a "
+                         "development sample, or filter it earlier in the flow, and try again")
 # how long the synchronous export waits for a worker to pick it up, on top of the
 # workers' time limit for the export itself
 EXPORT_QUEUE_WAIT_SECONDS = 600
@@ -314,7 +316,7 @@ def profile_step(request: ProfileRequest) -> dict:
         kwargs["histogram"] = hist
     payload = said_by_preview_worker(
         lambda: on_preview_worker("app.tasks.jobs.profile_task", kwargs, request.slot, seconds=PROFILE_TIMEOUT_SECONDS),
-        PREVIEW_OUT_OF_MEMORY)
+        PROFILE_OUT_OF_MEMORY)
     if not payload.get("ok"):
         status = _PREVIEW_ERROR_STATUS.get(payload.get("error"), 400)
         raise HTTPException(status_code=status, detail=payload.get("detail", "Profile failed"))
