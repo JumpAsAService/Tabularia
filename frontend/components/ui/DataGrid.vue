@@ -13,14 +13,14 @@
 // Ctrl+C copies its exact value; the headers are its first row.
 import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
-import { Check, CircleAlert, Copy, MousePointerClick } from 'lucide-vue-next'
-import type { ColumnStats, PreviewResult, ProfileResult, TopValuesResult } from '~/composables/useApi'
+import { Ban, Check, CircleAlert, Copy, Filter, MousePointerClick, PaintBucket } from 'lucide-vue-next'
+import type { ColumnStats, HistogramResult, PreviewResult, ProfileResult, TopValuesResult } from '~/composables/useApi'
 import { readableNumber } from '~/composables/readableNumber'
 import { usePopover } from '~/composables/usePopover'
 import { isSuperseded } from '~/composables/usePreviewSlots'
 import {
-  ariaRowCount, exactText, gridColumnFormatters, isNumericDtype, moveCell, nullBarWidth, profileBasis, shareText,
-  shortDtype, toTsv, visibleWindow,
+  ariaRowCount, columnDetail, exactText, gridColumnFormatters, histogramBins, histogramEdges, histogramHeights,
+  isIntegerDtype, isNumericDtype, moveCell, nullBarWidth, profileBasisText, profileStep, shareText, shortDtype, toTsv, visibleWindow,
   type CellPos, type ColumnChanges, type ColumnMark, type GridColumn, type RowCount,
 } from '~/composables/previewGrid'
 
@@ -53,17 +53,26 @@ const props = withDefaults(defineProps<{
   // last preview, a source's schema): the header names them at once, over a skeleton.
   // Not known: the header of the rows on screen dims with them.
   pendingColumns?: GridColumn[] | null
-  // the step's column profile (POST /tasks/profile) and where it stands; with `topValues`
+  // the step's column profile (POST /tasks/profile) and where it stands; with `columnDetail`
   // a click on a column's name (or Enter) opens the column's profile
   profile?: ProfileResult | null
   profileState?: 'none' | 'loading' | 'done' | 'failed'
-  topValues?: (column: string) => Promise<TopValuesResult>
+  // why the profile failed, said in its place, with «Try again» (`profileRetry`)
+  profileError?: string
+  profileRetry?: () => void
+  // an opened column's most frequent values, or a number's histogram (one query a column)
+  columnDetail?: (column: string, ask: DetailAsk) => Promise<TopValuesResult | HistogramResult>
   // the profile is partial (the footer's nulls) until a column is opened: this asks the whole
   profileWhole?: () => void
+  // what a value of the profile can do: keep only its rows or leave them out (the editor
+  // adds a Filter step, the Viewer a filter), and the nulls be filled (the editor)
+  valueActions?: { filter: (column: string, value: unknown, exclude: boolean) => void; fillNulls?: (column: string) => void } | null
 }>(), {
   summary: undefined, summaryId: undefined, changes: null, count: null, empty: undefined, label: undefined,
-  pendingColumns: null, profile: null, profileState: 'none', topValues: undefined, profileWhole: undefined,
+  pendingColumns: null, profile: null, profileState: 'none', profileError: undefined, profileRetry: undefined,
+  columnDetail: undefined, profileWhole: undefined, valueActions: null,
 })
+export type DetailAsk = { kind: 'top' } | { kind: 'histogram'; lo: number; hi: number; bins: number }
 
 const { t, locale } = useI18n()
 const uid = `dg-${Math.random().toString(36).slice(2, 9)}`
@@ -147,7 +156,7 @@ function markLabel(m: ColumnMark): string {
 }
 
 // ── the column profile ───────────────────────────────────────────────────────
-const profiling = computed(() => props.topValues !== undefined)
+const profiling = computed(() => props.columnDetail !== undefined)
 // a profile speaks for the rows on screen only: none while they are being replaced
 function stats(name: string): ColumnStats | undefined {
   return props.stale || pending.value ? undefined : props.profile?.columns?.[name]
@@ -167,8 +176,15 @@ function headTitle(c: GridColumn): string {
   if (m?.kind === 'renamed') lines.push(t('dataGrid.markRenamedTitle', { from: m.from }))
   if (m?.kind === 'retyped') lines.push(t('dataGrid.markRetypedTitle', { from: shortDtype(m.from) }))
   const st = stats(c.name)
-  if (st) lines.push(nullsLine(st))
+  if (st && st.nulls > 0) lines.push(nullsLine(st))
   return lines.join('\n')
+}
+// the header's null bar: a grey track while the profile is asked (its place kept), nothing
+// for a column with no nulls, the null-handling colour in proportion when there are some
+function nullBar(name: string): 'wait' | 'on' | 'off' {
+  const st = stats(name)
+  if (st) return st.nulls > 0 ? 'on' : 'off'
+  return props.profileState === 'loading' && !props.profile && !props.stale && !pending.value ? 'wait' : 'off'
 }
 
 // ── copy: a column's name, a cell's exact value, a selection's ──────────────────
@@ -234,6 +250,9 @@ function onCopy(e: ClipboardEvent) {
 
 // ── the keyboard: one active cell, the only tab stop ───────────────────────────
 const active = ref<CellPos>({ r: -1, c: 0 })
+// moved by the keyboard last (not the pointer): the active cell's ring is drawn from a class,
+// since Chromium gives no :focus-visible after a key with a modifier (Ctrl+Home, Ctrl+End)
+const kbd = ref(false)
 // an active cell scrolled out of the rows drawn: its column's header keeps the tab stop
 const activeDrawn = computed(() => active.value.r < 0 || (active.value.r >= win.value.start && active.value.r < win.value.end))
 const headTab = (j: number) => (active.value.c === j && (active.value.r < 0 || !activeDrawn.value) ? 0 : -1)
@@ -276,6 +295,7 @@ async function goTo(p: CellPos) {
   cellEl(p)?.focus({ preventScroll: true })
 }
 function onGridKey(e: KeyboardEvent) {
+  kbd.value = true
   const el = e.target as HTMLElement
   const inHead = !!el.closest?.('thead .cn')
   const inCell = !inHead && !!el.matches?.('td[data-c]')
@@ -424,7 +444,7 @@ watch(cols, async (cs) => {
 })
 watch(() => props.result, async () => {
   popOpen.value = false
-  top.value = null
+  detail.value = null
   await nextTick()
   measure()
 })
@@ -492,7 +512,8 @@ function measureInPage(plans: Plan[]): { cells: number[]; head: number[]; ch: nu
     if (p.mark) {
       const mk = el.appendChild(document.createElement('span'))
       mk.style.font = `600 10.5px ${SANS}`
-      mk.textContent = ` · ${p.mark}`
+      mk.style.marginLeft = '4px' // the type line's gap (a flex row in the header)
+      mk.textContent = `· ${p.mark}`
     }
     return el
   })
@@ -502,7 +523,7 @@ function measureInPage(plans: Plan[]): { cells: number[]; head: number[]; ch: nu
     return {
       ch: w(zero),
       cells: cellEls.map((els) => els.reduce((m, el) => Math.max(m, w(el)), 0)),
-      head: plans.map((_, j) => Math.max(w(nameEls[j]) + 16, w(typeEls[j]))), // + the copied tick
+      head: plans.map((_, j) => Math.max(w(nameEls[j]) + 16, w(typeEls[j]) + 1)), // + the copied tick; a pixel for the type line's rounding
     }
   } finally {
     table.remove()
@@ -576,10 +597,24 @@ const popEl = ref<HTMLElement | null>(null)
 const popStyle = ref<Record<string, string>>({})
 // a click on the same header closes it: the focus leaving the panel closed it a moment before
 let closed = { col: -1, at: 0 }
-usePopover(popOpen, popEl, () => { closed = { col: popCol.value, at: performance.now() }; popOpen.value = false })
+// The focus goes to the panel itself, not to its first button: a second Enter must not copy
+// the name. Esc gives it back to the header of the column shown (the arrows move it).
+usePopover(popOpen, popEl, () => { closed = { col: popCol.value, at: performance.now() }; popOpen.value = false },
+  { focus: 'panel', returnTo: () => headButton(popCol.value) })
 const popColumn = computed(() => (popOpen.value ? cols.value[popCol.value] ?? null : null))
 const popStats = computed(() => (popColumn.value ? stats(popColumn.value.name) ?? null : null))
-const top = ref<{ col: string; state: 'loading' | 'done' | 'failed'; res?: TopValuesResult } | null>(null)
+// what the column shows past its figures, once the whole profile has come (a footer-only
+// one does not know the distinct values yet)
+const popKind = computed(() => {
+  const c = popColumn.value
+  const st = popStats.value
+  if (!c || !st || !props.profile || props.profile.partial) return null
+  return columnDetail(st, c.dtype, props.profile.rows)
+})
+type Detail = { col: string; kind: 'top' | 'histogram'; state: 'loading' | 'done' | 'failed'; res?: TopValuesResult | HistogramResult }
+const detail = ref<Detail | null>(null)
+// the column's name and type said when the arrows move the panel to another column
+const popSaid = ref('')
 watch(() => props.stale, (s) => { if (s) popOpen.value = false })
 function place(j: number) {
   const th = headButton(j)?.closest('th') as HTMLElement | null
@@ -595,50 +630,114 @@ function place(j: number) {
 }
 function openProfile(j: number) {
   const c = cols.value[j]
-  if (!c || !props.topValues) return
+  if (!c || !props.columnDetail) return
   if (popOpen.value && popCol.value === j) { popOpen.value = false; return }
   if (closed.col === j && performance.now() - closed.at < 400) return
   popCol.value = j
+  popSaid.value = ''
   place(j)
   popOpen.value = true
   if (props.profileWhole && (!props.profile || props.profile.partial)) props.profileWhole()
-  void loadTop(c)
 }
-async function loadTop(c: GridColumn) {
-  const st = stats(c.name)
-  if (!props.topValues || st?.kind === 'other' || (top.value?.col === c.name && top.value.state !== 'failed')) return
-  top.value = { col: c.name, state: 'loading' }
+/** ← and → with the panel open: the column beside, the panel open on it. */
+async function moveProfile(j: number) {
+  const c = cols.value[j]
+  if (!c) return
+  popCol.value = j
+  active.value = { r: -1, c: j }
+  reveal({ r: -1, c: j })
+  await nextTick()
+  place(j)
+  popSaid.value = `${c.name}, ${shortDtype(c.dtype)}`
+}
+function onPopKey(e: KeyboardEvent) {
+  const to = profileStep(e.key, { alt: e.altKey, ctrl: e.ctrlKey, meta: e.metaKey, shift: e.shiftKey }, popCol.value, cols.value.length)
+  if (e.key === 'ArrowLeft' || e.key === 'ArrowRight') { e.preventDefault(); e.stopPropagation() }
+  if (to !== null) void moveProfile(to)
+}
+// The column's most frequent values or its histogram, asked once the whole profile says
+// which (a key asks nothing): after the profile, never beside it on the worker.
+watch(popKind, () => { void loadDetail() })
+async function loadDetail() {
+  const c = popColumn.value
+  const st = popStats.value
+  const kind = popKind.value
+  if (!c || !st || !props.columnDetail || (kind !== 'top' && kind !== 'histogram')) return
+  if (detail.value?.col === c.name && detail.value.kind === kind && detail.value.state !== 'failed') return
+  let ask: DetailAsk = { kind: 'top' }
+  if (kind === 'histogram') {
+    const lo = Number(st.min); const hi = Number(st.max)
+    ask = { kind: 'histogram', lo, hi, bins: histogramBins(lo, hi, isIntegerDtype(c.dtype)) }
+  }
+  detail.value = { col: c.name, kind, state: 'loading' }
   try {
-    const res = await props.topValues(c.name)
-    if (top.value?.col === c.name) top.value = { col: c.name, state: 'done', res }
+    const res = await props.columnDetail(c.name, ask)
+    if (detail.value?.col === c.name) detail.value = { col: c.name, kind, state: 'done', res }
   } catch (e) {
-    if (top.value?.col === c.name) top.value = isSuperseded(e) ? null : { col: c.name, state: 'failed' }
+    if (detail.value?.col === c.name) detail.value = isSuperseded(e) ? null : { col: c.name, kind, state: 'failed' }
   }
 }
-const popTop = computed(() => (popColumn.value && top.value?.col === popColumn.value.name ? top.value : null))
+const popDetail = computed(() => (popColumn.value && detail.value?.col === popColumn.value.name ? detail.value : null))
+const popTop = computed(() => (popDetail.value?.kind === 'top' && popDetail.value.state === 'done' ? (popDetail.value.res as TopValuesResult) : null))
+const popHist = computed(() => (popDetail.value?.kind === 'histogram' && popDetail.value.state === 'done' ? (popDetail.value.res as HistogramResult) : null))
 function shown(v: unknown, c: GridColumn): string {
   if (v === null || v === undefined) return '—'
   if (v === '') return t('dataGrid.profileEmptyText')
   return text(v, c.name, c.dtype)
 }
-const popNote = computed(() => {
-  const p = props.profile
+// «First 100,000 of 42,007,616 rows» / «All 764 rows»: once, under the column's name
+const popBasis = computed(() => (props.profile ? profileBasisText(props.profile, props.count, t, fmtCount) : ''))
+const popSampled = computed(() => !!props.profile?.sampled)
+// a figure of every row, said so when the rest is of the first rows only
+const exact = (st: ColumnStats, what: string) => popSampled.value && st.whole.includes(what)
+const distinctText = computed(() => {
   const st = popStats.value
-  if (!p || !st) return ''
-  const n = fmtCount(p.rows)
-  switch (profileBasis(p.sampled, st.whole)) {
-    case 'all': return t('dataGrid.profileAll', { n }, p.rows)
-    case 'sample': return t('dataGrid.profileSample', { n })
-    case 'nulls': return t('dataGrid.profileSampleNulls', { n })
-    default: return t('dataGrid.profileSampleRange', { n })
-  }
+  if (!st || st.distinct == null) return ''
+  const n = fmtCount(st.distinct)
+  const estimated = props.profile?.distinct_exact === false
+  if (popSampled.value) return t(estimated ? 'dataGrid.profileDistinctSampleAbout' : 'dataGrid.profileDistinctSample', { n })
+  return estimated ? `≈ ${n}` : n
 })
+// a value's share of the rows seen (the nulls' of the rows they are counted on)
+const sampleRows = computed(() => props.profile?.rows ?? 0)
+const pctOf = (n: number, of: number) => shareText(n, of, locale.value)
+const barOf = (n: number, of: number) => (of > 0 && n > 0 ? `${Math.max(2, Math.min(100, (n / of) * 100)).toFixed(1)}%` : '0%')
+const histBars = computed(() => (popHist.value ? histogramHeights(popHist.value.counts) : []))
+const histEdges = computed(() => {
+  const h = popHist.value
+  const c = popColumn.value
+  if (!h || !c) return []
+  return histogramEdges(h.lo, h.hi, h.counts.length, isIntegerDtype(c.dtype))
+})
+function histTitle(i: number): string {
+  const c = popColumn.value!
+  const e = histEdges.value[i]
+  const n = popHist.value!.counts[i] ?? 0
+  const from = text(e.from, c.name, c.dtype)
+  const to = text(e.to, c.name, c.dtype)
+  return from === to ? t('dataGrid.profileHistBarOne', { v: from, n: fmtCount(n) }, n) : t('dataGrid.profileHistBar', { from, to, n: fmtCount(n) }, n)
+}
+const histLabel = computed(() => {
+  const h = popHist.value
+  const c = popColumn.value
+  if (!h || !c) return ''
+  const n = h.counts.reduce((a, b) => a + b, 0)
+  return t('dataGrid.profileHistLabel', { n: fmtCount(n), bins: h.counts.length, min: text(h.lo, c.name, c.dtype), max: text(h.hi, c.name, c.dtype) })
+})
+function act(kind: 'keep' | 'exclude' | 'fill', value?: unknown) {
+  const c = popColumn.value
+  const a = props.valueActions
+  if (!c || !a) return
+  popOpen.value = false
+  if (kind === 'fill') a.fillNulls?.(c.name)
+  else a.filter(c.name, value, kind === 'exclude')
+}
 </script>
 
 <template>
   <div
     class="datagrid"
-    :class="{ 'dg-stale': stale && !!result && !pending, 'dg-stale-head': staleHead, 'dg-profiled': profiling }"
+    :class="{ 'dg-stale': stale && !!result && !pending, 'dg-stale-head': staleHead, 'dg-profiled': profiling, 'dg-kbd': kbd }"
     tabindex="-1"
     role="region"
     :aria-label="label ?? $t('dataGrid.regionLabel')"
@@ -690,6 +789,7 @@ const popNote = computed(() => {
           @keydown="onGridKey"
           @focusin="onGridFocus"
           @click="onGridClick"
+          @pointerdown="kbd = false"
         >
           <table
             class="data dg-table"
@@ -718,6 +818,7 @@ const popNote = computed(() => {
                   <button
                     type="button"
                     class="cn"
+                    :class="{ 'dg-act': active.r < 0 && active.c === j }"
                     :tabindex="headTab(j)"
                     :aria-describedby="hintId"
                     :aria-haspopup="profiling ? 'dialog' : undefined"
@@ -728,13 +829,21 @@ const popNote = computed(() => {
                     <span class="cn-text">{{ c.name }}</span>
                     <Check v-if="copied === c.name" :size="11" class="cn-done" aria-hidden="true" />
                   </button>
-                  <span class="ct"><span class="ct-type">{{ shortDtype(c.dtype) }}</span><span v-if="markOf(c.name)" class="mk"> · {{ markLabel(markOf(c.name)!) }}</span></span>
+                  <!-- the type, the step's mark, and the share of nulls when there is room for it
+                       (a part that does not fit goes to a second line, which is not shown) -->
+                  <span class="ct"><span class="ct-type">{{ shortDtype(c.dtype) }}</span><span v-if="markOf(c.name)" class="mk">· {{ markLabel(markOf(c.name)!) }}</span><span
+                    v-if="profiling && nullBar(c.name) === 'on'"
+                    class="ct-null"
+                    aria-hidden="true"
+                  >· {{ shareText(stats(c.name)!.nulls, stats(c.name)!.of, locale) }} ∅</span></span>
                   <template v-if="profiling">
-                    <span class="nb" :class="{ on: !!stats(c.name) }" aria-hidden="true"><span
+                    <span class="nb" :class="nullBar(c.name)" aria-hidden="true"><span
+                      v-if="nullBar(c.name) === 'on'"
                       class="nb-fill"
-                      :style="{ width: stats(c.name) ? nullBarWidth(stats(c.name)!.nulls, stats(c.name)!.of) : '0%' }"
+                      :style="{ width: nullBarWidth(stats(c.name)!.nulls, stats(c.name)!.of) }"
                     /></span>
-                    <span v-if="stats(c.name)" class="sr-only">, {{ nullsLine(stats(c.name)!) }}</span>
+                    <!-- said once, with the column, and only when there are nulls -->
+                    <span v-if="nullBar(c.name) === 'on'" class="sr-only">, {{ nullsLine(stats(c.name)!) }}</span>
                   </template>
                 </th>
               </tr>
@@ -750,7 +859,7 @@ const popNote = computed(() => {
                   :aria-colindex="j + 2"
                   :data-r="i"
                   :data-c="j"
-                  :class="[cell.cls, { 'dg-copied': copiedCell === `${i}:${j}` }]"
+                  :class="[cell.cls, { 'dg-copied': copiedCell === `${i}:${j}`, 'dg-act': active.r === i && active.c === j }]"
                   :title="cell.tip"
                   :tabindex="cellTab(i, j)"
                 >{{ cell.text }}</td>
@@ -777,26 +886,34 @@ const popNote = computed(() => {
         ref="popEl"
         class="dg-pop"
         role="dialog"
+        tabindex="-1"
         :aria-labelledby="`${uid}-pop-t`"
+        :aria-describedby="`${uid}-pop-d`"
         :style="popStyle"
+        @keydown="onPopKey"
       >
         <div class="dg-pop-head">
           <p :id="`${uid}-pop-t`" class="dg-pop-name">{{ popColumn.name }}</p>
           <span class="dg-pop-type">{{ shortDtype(popColumn.dtype) }}</span>
         </div>
-        <template v-if="popStats">
-          <dl class="dg-pop-stats">
-            <div>
-              <dt>{{ $t('dataGrid.profileNulls') }}</dt>
-              <dd>{{ fmtCount(popStats.nulls) }} <span class="dg-pop-q">· {{ shareText(popStats.nulls, popStats.of, locale) }}</span></dd>
-            </div>
+        <span class="sr-only" aria-live="polite">{{ popSaid }}</span>
+        <div :id="`${uid}-pop-d`">
+          <!-- which rows the figures are of: once, at the top -->
+          <p v-if="popStats && popBasis" class="dg-pop-basis">{{ popBasis }}</p>
+          <dl v-if="popStats" class="dg-pop-stats">
             <div v-if="popStats.distinct != null">
               <dt>{{ $t('dataGrid.profileDistinct') }}</dt>
-              <dd>≈ {{ fmtCount(popStats.distinct) }}</dd>
+              <dd>{{ distinctText }}</dd>
             </div>
-            <template v-if="'min' in popStats">
-              <div><dt>{{ $t('dataGrid.profileMin') }}</dt><dd class="dg-pop-v">{{ shown(popStats.min, popColumn) }}</dd></div>
-              <div><dt>{{ $t('dataGrid.profileMax') }}</dt><dd class="dg-pop-v">{{ shown(popStats.max, popColumn) }}</dd></div>
+            <template v-if="'min' in popStats && popStats.min != null">
+              <div>
+                <dt>{{ $t('dataGrid.profileMin') }}</dt>
+                <dd><span class="dg-pop-v">{{ shown(popStats.min, popColumn) }}</span><span v-if="exact(popStats, 'min')" class="dg-pop-all">{{ $t('dataGrid.profileAllRowsTag') }}</span></dd>
+              </div>
+              <div>
+                <dt>{{ $t('dataGrid.profileMax') }}</dt>
+                <dd><span class="dg-pop-v">{{ shown(popStats.max, popColumn) }}</span><span v-if="exact(popStats, 'max')" class="dg-pop-all">{{ $t('dataGrid.profileAllRowsTag') }}</span></dd>
+              </div>
             </template>
             <div v-if="popStats.min_len != null">
               <dt>{{ $t('dataGrid.profileLength') }}</dt>
@@ -805,23 +922,69 @@ const popNote = computed(() => {
                 : $t('dataGrid.profileLengthRange', { min: fmtCount(popStats.min_len!), max: fmtCount(popStats.max_len ?? 0) }) }}</dd>
             </div>
           </dl>
-          <template v-if="popStats.kind !== 'other'">
+          <p v-if="popKind === 'key'" class="dg-pop-key">{{ popSampled ? $t('dataGrid.profileKeySample') : $t('dataGrid.profileKey') }}</p>
+        </div>
+        <template v-if="popStats">
+          <!-- a number's spread: 20 bars between its min and max -->
+          <figure v-if="popHist" class="dg-hist" role="img" :aria-label="histLabel">
+            <div class="dg-hist-bars">
+              <span v-for="(h, k) in histBars" :key="k" class="dg-hist-bar" :title="histTitle(k)"><span :style="{ height: `${h}%` }" /></span>
+            </div>
+            <div class="dg-hist-axis" aria-hidden="true">
+              <span>{{ shown(popHist.lo, popColumn) }}</span><span>{{ shown(popHist.hi, popColumn) }}</span>
+            </div>
+          </figure>
+          <p v-else-if="popDetail?.kind === 'histogram' && popDetail.state === 'loading'" class="dg-pop-wait">{{ $t('dataGrid.profileHistLoading') }}</p>
+          <p v-else-if="popDetail?.kind === 'histogram' && popDetail.state === 'failed'" class="dg-pop-wait">
+            {{ $t('dataGrid.profileDetailFailed') }}
+            <button type="button" class="dg-pop-link" @click="loadDetail">{{ $t('dataGrid.tryAgain') }}</button>
+          </p>
+          <!-- the most frequent values, a bar of their share, and what to do with one -->
+          <template v-if="popKind === 'top'">
             <p class="dg-pop-sub">{{ $t('dataGrid.profileTop') }}</p>
-            <p v-if="!popTop || popTop.state === 'loading'" class="dg-pop-wait">{{ $t('dataGrid.profileTopLoading') }}</p>
-            <p v-else-if="popTop.state === 'failed'" class="dg-pop-wait">{{ $t('dataGrid.profileTopFailed') }}</p>
-            <p v-else-if="!popTop.res?.values.length" class="dg-pop-wait">{{ $t('dataGrid.profileTopNone') }}</p>
-            <ol v-else class="dg-pop-top">
-              <li v-for="(v, k) in popTop.res!.values" :key="k">
-                <span class="dg-pop-v">{{ shown(v.value, popColumn) }}</span>
-                <span class="dg-pop-n">{{ fmtCount(v.count) }}</span>
-              </li>
-            </ol>
+            <p v-if="!popDetail || popDetail.state === 'loading'" class="dg-pop-wait">{{ $t('dataGrid.profileTopLoading') }}</p>
+            <p v-else-if="popDetail.state === 'failed'" class="dg-pop-wait">
+              {{ $t('dataGrid.profileDetailFailed') }}
+              <button type="button" class="dg-pop-link" @click="loadDetail">{{ $t('dataGrid.tryAgain') }}</button>
+            </p>
+            <p v-else-if="!popTop?.values.length" class="dg-pop-wait">{{ $t('dataGrid.profileTopNone') }}</p>
           </template>
+          <ul v-if="(popTop?.values.length && popKind === 'top') || popStats.nulls > 0" class="dg-pop-top">
+            <template v-if="popKind === 'top'">
+              <li v-for="(v, k) in popTop?.values ?? []" :key="k" :style="{ '--share': barOf(v.count, sampleRows) }">
+                <span class="dg-pop-v">{{ shown(v.value, popColumn) }}</span>
+                <span class="dg-pop-n" :title="fmtCount(v.count)">{{ pctOf(v.count, sampleRows) }}</span>
+                <span v-if="valueActions" class="dg-pop-acts">
+                  <button type="button" class="dg-pop-act" :aria-label="$t('dataGrid.profileKeepValue', { v: shown(v.value, popColumn) })" :title="$t('dataGrid.profileKeepTitle')" @click="act('keep', v.value)"><Filter :size="12" aria-hidden="true" /></button>
+                  <button type="button" class="dg-pop-act" :aria-label="$t('dataGrid.profileExcludeValue', { v: shown(v.value, popColumn) })" :title="$t('dataGrid.profileExcludeTitle')" @click="act('exclude', v.value)"><Ban :size="12" aria-hidden="true" /></button>
+                </span>
+              </li>
+            </template>
+            <!-- the nulls, among the values when there are some -->
+            <li v-if="popStats.nulls > 0" class="dg-pop-nulls" :style="{ '--share': barOf(popStats.nulls, popStats.of) }">
+              <span class="dg-pop-v"><span aria-hidden="true">∅</span><span class="sr-only">{{ $t('dataGrid.profileNulls') }}</span><span v-if="exact(popStats, 'nulls')" class="dg-pop-all">{{ $t('dataGrid.profileAllRowsTag') }}</span></span>
+              <span class="dg-pop-n" :title="fmtCount(popStats.nulls)">{{ pctOf(popStats.nulls, popStats.of) }}</span>
+              <span v-if="valueActions" class="dg-pop-acts">
+                <template v-if="valueActions.fillNulls">
+                  <button type="button" class="dg-pop-act dg-pop-fill" :title="$t('dataGrid.profileFillTitle')" @click="act('fill')"><PaintBucket :size="12" aria-hidden="true" /> {{ $t('dataGrid.profileFill') }}</button>
+                </template>
+                <template v-else>
+                  <button type="button" class="dg-pop-act" :aria-label="$t('dataGrid.profileKeepNulls')" :title="$t('dataGrid.profileKeepTitle')" @click="act('keep', null)"><Filter :size="12" aria-hidden="true" /></button>
+                  <button type="button" class="dg-pop-act" :aria-label="$t('dataGrid.profileExcludeNulls')" :title="$t('dataGrid.profileExcludeTitle')" @click="act('exclude', null)"><Ban :size="12" aria-hidden="true" /></button>
+                </template>
+              </span>
+            </li>
+          </ul>
           <p v-if="profile?.partial && profileState === 'loading'" class="dg-pop-wait">{{ $t('dataGrid.profileLoading') }}</p>
-          <p class="dg-pop-note">{{ popNote }}</p>
+          <p v-else-if="profile?.partial && profileState === 'failed'" class="dg-pop-wait">
+            {{ profileError || $t('dataGrid.profileFailedWhy') }}
+            <button v-if="profileRetry" type="button" class="dg-pop-link" @click="profileRetry">{{ $t('dataGrid.tryAgain') }}</button>
+          </p>
         </template>
+        <p v-else-if="profileState === 'loading' || profileState === 'none'" class="dg-pop-wait">{{ $t('dataGrid.profileLoading') }}</p>
         <p v-else class="dg-pop-wait">
-          {{ profileState === 'loading' || profileState === 'none' ? $t('dataGrid.profileLoading') : $t('dataGrid.profileFailed') }}
+          {{ profileError || (profile ? $t('dataGrid.profileNoColumn') : $t('dataGrid.profileFailedWhy')) }}
+          <button v-if="profileRetry && !profile" type="button" class="dg-pop-link" @click="profileRetry">{{ $t('dataGrid.tryAgain') }}</button>
         </p>
         <div class="dg-pop-actions">
           <button type="button" class="mini" @click="copyName(popColumn.name)">
@@ -854,7 +1017,7 @@ const popNote = computed(() => {
 .dg-stale-head .dg-table thead th > * { opacity: 0.42; }
 @media (prefers-reduced-motion: reduce) { .dg-table tbody, .dg-table thead th > * { transition: none; } }
 
-.dg-table { table-layout: fixed; min-width: 100%; }
+.dg-table { table-layout: fixed; }
 .data th.num, .data td.num { text-align: right; }
 /* one line height for every row: a ∅ drawn from a fallback font made its row 3px taller */
 .dg-table td { white-space: nowrap; line-height: 15px; }
@@ -863,9 +1026,11 @@ const popNote = computed(() => {
 .dg-table tbody tr.even:nth-child(n) { background: var(--row-even); }
 .dg-table tbody tr[aria-rowindex]:nth-child(n):hover { background: var(--row-hover); }
 .dg-table tr.spacer td { padding: 0; border: 0; }
-/* the active cell, from the keyboard */
+/* the active cell, from the keyboard: its ring drawn from the grid's own state, since
+   Chromium gives no :focus-visible after Ctrl+Home or Ctrl+End */
 .dg-table td[data-c]:focus { outline: none; }
-.dg-table td[data-c]:focus-visible { outline: 2px solid var(--accent); outline-offset: -2px; }
+.dg-table td[data-c]:focus-visible,
+.dg-kbd .dg-scroll:focus-within .dg-table td.dg-act { outline: 2px solid var(--accent); outline-offset: -2px; }
 .dg-table td.dg-copied { background-image: linear-gradient(var(--tint-accent), var(--tint-accent)); }
 
 /* the row numbers: pinned on the left while the columns scroll, ruled on their right like the
@@ -906,19 +1071,33 @@ const popNote = computed(() => {
 .dg-profiled .dg-table th .cn { cursor: pointer; }
 .dg-table th.num .cn { margin-left: auto; justify-content: flex-end; }
 .dg-table th .cn:hover, .dg-table th .cn[aria-expanded="true"] { color: var(--accent-hi, var(--accent)); background: none; box-shadow: none; }
-.dg-table th .cn:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; border-radius: 3px; }
+.dg-table th .cn:focus-visible,
+.dg-kbd .dg-scroll:focus-within .dg-table th .cn.dg-act:focus { outline: 2px solid var(--accent); outline-offset: 2px; border-radius: 3px; }
 .cn-text { overflow: hidden; text-overflow: ellipsis; }
 .cn-done { flex: none; color: var(--accent-2); }
 .dg-table th .mk { font-family: var(--dg-sans, inherit); font-size: 10.5px; font-weight: 600; color: var(--accent-hi); }
-/* the share of nulls: a hairline under the type, filled from the left; its place is kept
-   while the profile is asked, so the header does not grow when it comes */
+/* the type's line: the type, the step's mark, the share of nulls; one line, a part with
+   no room going to a second one that is not shown, never cut */
+.dg-table th .ct { display: flex; flex-wrap: wrap; column-gap: 4px; height: 1.3em; overflow: hidden; }
+.dg-table th.num .ct { justify-content: flex-end; }
+.dg-table th .ct-type { flex: none; }
+.dg-table th .ct-null { flex: none; color: var(--op-nulls-ink); }
+/* the share of nulls: a hairline under the type, filled from the left in the null-handling
+   colour (Fill nulls, Drop nulls); no line at all with no nulls; a grey track (its place
+   kept, so the header does not grow) only while the profile is asked */
 .dg-table th .nb {
-  display: block; height: 2px; margin-top: 4px; border-radius: 1px; overflow: hidden;
+  display: block; position: relative; height: 2px; margin-top: 4px; border-radius: 1px; overflow: hidden;
   background: color-mix(in srgb, var(--muted) 24%, transparent);
   visibility: hidden;
 }
-.dg-table th .nb.on { visibility: visible; }
-.dg-table th .nb-fill { display: block; height: 100%; background: var(--muted); }
+.dg-table th .nb.on, .dg-table th .nb.wait { visibility: visible; }
+.dg-table th .nb-fill { display: block; height: 100%; background: var(--op-nulls-ink); }
+.dg-table th .nb.wait::after {
+  content: ''; position: absolute; inset: 0; transform: translateX(-100%);
+  background: linear-gradient(90deg, transparent, var(--muted), transparent); opacity: 0.5;
+  animation: sk-shimmer 1.1s infinite;
+}
+@media (prefers-reduced-motion: reduce) { .dg-table th .nb.wait::after { animation: none; display: none; } }
 
 .dg-skrow td { border-color: transparent; }
 .dg-skrow td.num .sk { margin-left: auto; display: block; }
@@ -947,21 +1126,55 @@ const popNote = computed(() => {
   font-variant-numeric: tabular-nums;
 }
 .dg-pop:focus { outline: none; }
-.dg-pop-head { display: flex; align-items: baseline; gap: 8px; min-width: 0; margin-bottom: 8px; }
+.dg-pop-head { display: flex; align-items: baseline; gap: 8px; min-width: 0; }
 .dg-pop-name { margin: 0; font-weight: 600; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .dg-pop-type { flex: none; font: 400 11px/1.3 ui-monospace, SFMono-Regular, Menlo, monospace; color: var(--muted); }
+/* which rows: under the name, before any figure */
+.dg-pop-basis { margin: 2px 0 8px; color: var(--muted); font-size: 11.5px; }
 .dg-pop-stats { display: grid; gap: 3px; margin: 0; }
 .dg-pop-stats > div { display: flex; justify-content: space-between; gap: 12px; min-width: 0; }
 .dg-pop-stats dt { color: var(--muted); flex: none; }
-.dg-pop-stats dd { margin: 0; min-width: 0; text-align: right; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.dg-pop-q { color: var(--muted); }
-.dg-pop-v { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.dg-pop-stats dd { margin: 0; min-width: 0; display: flex; justify-content: flex-end; align-items: baseline; gap: 6px; overflow: hidden; white-space: nowrap; }
+.dg-pop-v { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+/* a figure of every row, beside one of the first rows: said small, never in colour */
+.dg-pop-all { flex: none; color: var(--muted); font-size: 10.5px; }
+.dg-pop-key { margin: 8px 0 0; color: var(--text); }
 .dg-pop-sub { margin: 10px 0 3px; color: var(--muted); }
-.dg-pop-top { margin: 0; padding: 0; list-style: none; display: grid; gap: 2px; }
-.dg-pop-top li { display: flex; justify-content: space-between; gap: 12px; min-width: 0; }
+/* a value, its share in figures and as a bar under it, what to do with it */
+.dg-pop-top { margin: 6px 0 0; padding: 0; list-style: none; display: grid; gap: 1px; }
+.dg-pop-top li {
+  position: relative; display: flex; align-items: center; gap: 8px; min-width: 0; min-height: 24px; padding: 0 0 3px;
+}
+.dg-pop-top li::after {
+  content: ''; position: absolute; left: 0; bottom: 0; height: 2px; width: var(--share, 0%);
+  border-radius: 1px; background: var(--accent-hi, var(--accent)); opacity: 0.75;
+}
+.dg-pop-top li.dg-pop-nulls::after { background: var(--op-nulls-ink); opacity: 1; }
+.dg-pop-top .dg-pop-v { flex: 1; display: flex; align-items: baseline; gap: 6px; }
 .dg-pop-n { flex: none; color: var(--muted); }
-.dg-pop-wait { margin: 2px 0; color: var(--muted); }
-.dg-pop-note { margin: 10px 0 0; color: var(--muted); font-size: 11.5px; line-height: 1.4; white-space: normal; }
+.dg-pop-acts { flex: none; display: inline-flex; gap: 2px; }
+.dg-pop-act {
+  display: inline-flex; align-items: center; justify-content: center; gap: 4px; min-width: 22px; height: 22px; padding: 0 4px;
+  border: 1px solid transparent; border-radius: 6px; background: none; box-shadow: none; color: var(--muted); font-size: 11.5px;
+}
+.dg-pop-act:hover { color: var(--text); border-color: var(--border); background: var(--panel-2); box-shadow: none; }
+.dg-pop-act:focus-visible { outline: 2px solid var(--accent); outline-offset: 0; }
+.dg-pop-fill { padding: 0 6px; }
+.dg-pop-wait { margin: 6px 0 0; color: var(--muted); }
+.dg-pop-link {
+  margin: 0 0 0 4px; padding: 0; border: 0; background: none; box-shadow: none; font: inherit; color: var(--accent-hi, var(--accent));
+  text-decoration: underline; text-underline-offset: 3px; cursor: pointer;
+}
+.dg-pop-link:hover { background: none; box-shadow: none; color: var(--text); }
+.dg-pop-link:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; border-radius: 3px; }
+/* the histogram: bars from the floor, the min and max under them */
+.dg-hist { margin: 10px 0 0; }
+.dg-hist-bars { display: flex; align-items: flex-end; gap: 1px; height: 44px; border-bottom: 1px solid var(--border); }
+.dg-hist-bar { flex: 1; height: 100%; display: flex; align-items: flex-end; }
+.dg-hist-bar > span { display: block; width: 100%; border-radius: 1px 1px 0 0; background: var(--accent-hi, var(--accent)); opacity: 0.75; }
+.dg-hist-bar:hover > span { opacity: 1; }
+.dg-hist-axis { display: flex; justify-content: space-between; gap: 12px; margin-top: 3px; color: var(--muted); font-size: 11px; }
+.dg-hist-axis span { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .dg-pop-actions { display: flex; justify-content: flex-end; margin-top: 10px; }
 .dg-pop-actions .mini { display: inline-flex; align-items: center; gap: 5px; }
 </style>

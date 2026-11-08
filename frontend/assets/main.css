@@ -29,6 +29,9 @@
   --accent-hi: #7aa8ff;
   --accent-2: #6ee7b7;
   --violet: #a78bfa;
+  /* the null-handling category (Fill nulls, Drop nulls) as ink on a header: its own colour
+     where it reads at 3:1 on panel-2, a darker violet on the light themes */
+  --op-nulls-ink: #a78bfa;
   /* the ring of a node whose result is in the step cache: the positive green of
      each theme (resolved per theme), Imperium keeps its gold (see its block) */
   --cache-ring: var(--accent-2);
@@ -104,6 +107,7 @@
   /* it was #0e9f6e: 3.39:1 on white — and this colour dresses the outcome messages */
   --accent-2: #0a7d56;
   --violet: #7c3aed;
+  --op-nulls-ink: #7c3aed; /* 5.0:1 on panel-2 */
   --danger: #e02424;
   --warning: #b45309;
   --on-warning: #ffffff; /* text on the --warning fill */
@@ -232,6 +236,7 @@
   --accent-2: #4a6a26;    /* laurel: 5.1:1 on panel-2, white on it 6.2 */
   --on-accent-2: #ffffff;
   --violet: #7a5a0e;      /* gold darkened for the light theme: 5.2:1 on panel-2 */
+  --op-nulls-ink: #7c3aed; /* the null-handling violet, 4.7:1 on panel-2 */
   --cache-ring: var(--violet);
   --danger: #b5321e;      /* Pompeian red: 5.0:1 on panel-2 */
   --warning: #a64a08;     /* burnt ochre, far from the gold: 4.75:1 on panel-2 */

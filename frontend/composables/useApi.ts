@@ -52,6 +52,9 @@ export interface ProfileResult {
   // `footer_only`: what the parquet footer says without a query (the nulls, a number's or a
   // date's range, of the columns it describes); the rest is asked when a column is opened
   partial?: boolean
+  // the distinct values counted over the rows seen (every engine, since 2026-11-08); false
+  // would say they are an estimate («≈»)
+  distinct_exact?: boolean
   columns: Record<string, ColumnStats>
   how: 'remembered' | 'computed' | 'footer'
 }
@@ -59,6 +62,16 @@ export interface ProfileResult {
 export interface TopValuesResult {
   column: string
   values: { value: unknown; count: number }[]
+  sample_rows: number
+  how: 'remembered' | 'computed'
+}
+// a number's histogram: how many of its values (nulls left out) fall in each of
+// `counts.length` equal intervals between `lo` and `hi`, over the same rows as the profile
+export interface HistogramResult {
+  column: string
+  lo: number
+  hi: number
+  counts: number[]
   sample_rows: number
   how: 'remembered' | 'computed'
 }
@@ -253,6 +266,8 @@ export function useApi() {
       operations: Operation[]
       columns?: ColumnInfo[]
       column?: string
+      // with `column`: its histogram instead of its most frequent values
+      histogram?: { lo: number; hi: number; bins: number }
       engine?: string
       no_cache?: boolean
       footer_only?: boolean // never a query: only what the parquet footer says

@@ -198,7 +198,7 @@ export type RowCount =
   | { state: 'done'; rows: number; over: boolean }
   | { state: 'failed'; slow: boolean }
 
-type T = (key: string, params?: Record<string, unknown>) => string
+type T = (key: string, params?: Record<string, unknown>, plural?: number) => string
 
 /**
  * The one way the product says how many rows a preview shows: «764 rows», «First 100 of
@@ -266,8 +266,9 @@ export interface CellPos { r: number; c: number }
 /**
  * Where a key moves the active cell, or null when the key is not the grid's: the arrows a
  * cell (up from the first row to the header), Home and End to the row's first and last cell,
- * Ctrl (or Cmd) with them to the header's first cell and the last row's last cell, Page Up
- * and Page Down by `page` rows (stopping at the first row, the header is one arrow up).
+ * Ctrl (or Cmd) with them to the first row's first cell (the header when there are no rows)
+ * and the last row's last cell, Page Up and Page Down by `page` rows (stopping at the first
+ * row, the header is one arrow up).
  */
 export function moveCell(at: CellPos, key: string, ctrl: boolean, rows: number, cols: number, page: number): CellPos | null {
   if (cols <= 0) return null
@@ -280,13 +281,21 @@ export function moveCell(at: CellPos, key: string, ctrl: boolean, rows: number, 
     case 'ArrowRight': c += 1; break
     case 'ArrowUp': r -= 1; break
     case 'ArrowDown': r += 1; break
-    case 'Home': if (ctrl) r = -1; c = 0; break
+    case 'Home': if (ctrl) r = rows > 0 ? 0 : -1; c = 0; break
     case 'End': if (ctrl) r = lastR; c = lastC; break
     case 'PageDown': r = r < 0 ? step - 1 : r + step; break
     case 'PageUp': r = r < 0 ? -1 : Math.max(0, r - step); break
     default: return null
   }
   return { r: Math.max(-1, Math.min(lastR, r)), c: Math.max(0, Math.min(lastC, c)) }
+}
+
+/** ← and → with a column's profile open: the column beside (the profile stays open on it),
+ *  or null when the key is not one of them or there is no column there. */
+export function profileStep(key: string, mods: { alt?: boolean; ctrl?: boolean; meta?: boolean; shift?: boolean }, col: number, cols: number): number | null {
+  if (mods.alt || mods.ctrl || mods.meta || mods.shift) return null
+  const to = key === 'ArrowLeft' ? col - 1 : key === 'ArrowRight' ? col + 1 : null
+  return to === null || to < 0 || to >= cols ? null : to
 }
 
 // ── the column profile ────────────────────────────────────────────────────────
@@ -312,20 +321,99 @@ export function shareText(part: number, of: number, locale?: string): string {
   return percent(r, r < 0.1 || r > 0.99 ? 1 : 0, locale)
 }
 
-/** The width of a header's null bar: nothing for no nulls, at least a pixel for a few. */
+/** The width of a header's null bar: nothing for no nulls, at least a pixel for a few
+ *  (with no nulls the bar is not drawn at all: see DataGrid). */
 export function nullBarWidth(nulls: number, of: number): string {
   if (!of || nulls <= 0) return '0%'
   const pct = Math.min(100, (nulls / of) * 100)
   return pct >= 100 ? '100%' : `max(1px, ${pct.toFixed(2)}%)`
 }
 
-/** What a column's profile says about the rows it saw: «every row», the first rows, or the
- *  nulls (and the range) of every row and the rest of the first ones. */
-export type ProfileBasis = 'all' | 'sample' | 'nulls' | 'range'
-export function profileBasis(sampled: boolean, whole: string[]): ProfileBasis {
-  if (!sampled) return 'all'
-  if (whole.includes('min') && whole.includes('max') && whole.includes('nulls')) return 'range'
-  return whole.includes('nulls') ? 'nulls' : 'sample'
+/**
+ * Which rows a profile's figures are of, said once at the top of a column's profile: «All
+ * 764 rows», «First 100,000 of 42,007,616 rows», «First 100,000 of more than 10,000,000
+ * rows», «First 100,000 rows» while the total is not known. The total is the step's count
+ * when the page has it, the profile's own otherwise (a footer's).
+ */
+export function profileBasisText(
+  p: { rows: number; sampled: boolean; total: number | null },
+  count: RowCount | null | undefined,
+  t: T,
+  fmt: (n: number) => string,
+): string {
+  if (!p.sampled) return t('dataGrid.profileAllRows', { n: fmt(p.rows) }, p.rows)
+  const shown = fmt(p.rows)
+  if (count?.state === 'done') {
+    if (count.over) return t('dataGrid.firstOfMore', { shown, n: fmt(count.rows) })
+    if (count.rows > p.rows) return t('dataGrid.firstOf', { shown, n: fmt(count.rows) })
+  }
+  if (p.total != null && p.total > p.rows) return t('dataGrid.firstOf', { shown, n: fmt(p.total) })
+  return t('dataGrid.first', { shown })
+}
+
+/** What a column's profile goes on to show when it is opened, past its figures:
+ *  - `key`: (almost) every value differs, an identifier more than a measure: said in a
+ *    line, and nothing asked (its most frequent values would all be ×1);
+ *  - `histogram`: a number with more than CATEGORY_MAX distinct values and a range: how
+ *    its values spread;
+ *  - `top`: the most frequent values (a category, a date, a text);
+ *  - `none`: nothing more (a list, a struct). */
+export type ColumnDetail = 'key' | 'histogram' | 'top' | 'none'
+export const CATEGORY_MAX = 50
+export const KEY_SHARE = 0.99
+const INTEGER = /^U?Int(8|16|32|64|128)\b/
+export function columnDetail(
+  st: { kind: string; nulls: number; of: number; distinct?: number | null; min?: unknown; max?: unknown },
+  dtype: string,
+  rows: number,
+): ColumnDetail {
+  if (st.kind === 'other') return 'none'
+  if (likelyKey(st, dtype, rows)) return 'key'
+  const lo = Number(st.min); const hi = Number(st.max)
+  if (st.kind === 'number' && (st.distinct ?? 0) > CATEGORY_MAX && Number.isFinite(lo) && Number.isFinite(hi) && hi > lo) return 'histogram'
+  return 'top'
+}
+
+/** Are a column's values (almost) all different in the rows seen: 99% distinct or more, of
+ *  a whole number or a text (a measure in decimals is all different too, and no key), over
+ *  enough rows to tell (20). */
+export function likelyKey(st: { kind: string; nulls: number; of: number; distinct?: number | null }, dtype: string, rows: number): boolean {
+  if (st.distinct == null || !(st.kind === 'text' || (st.kind === 'number' && INTEGER.test(dtype || '')))) return false
+  const filled = rows * (st.of > 0 ? 1 - st.nulls / st.of : 1)
+  return filled >= 20 && st.distinct >= KEY_SHARE * filled
+}
+
+/** How many intervals a number's histogram has: 20, fewer for whole numbers of a short
+ *  range (one a value: 1 to 7 gives 7), one when every value is the same. */
+export const HISTOGRAM_BINS = 20
+export function histogramBins(lo: number, hi: number, integer: boolean): number {
+  if (!(hi > lo)) return 1
+  if (integer) return Math.max(1, Math.min(HISTOGRAM_BINS, Math.floor(hi - lo) + 1))
+  return HISTOGRAM_BINS
+}
+export const isIntegerDtype = (dtype: string): boolean => INTEGER.test(dtype || '')
+
+/** The intervals of a histogram, as the tooltips say them: [from, to) each, the last one
+ *  closed (the server's floor((x - lo) / width)); for whole numbers the first and the last
+ *  whole number each holds (one a bar when there are as many bars as values). */
+export function histogramEdges(lo: number, hi: number, bins: number, integer = false): { from: number; to: number }[] {
+  const n = Math.max(1, bins)
+  const w = hi > lo ? (hi - lo) / n : 0
+  return Array.from({ length: n }, (_, i) => {
+    const a = lo + i * w
+    const b = i === n - 1 ? hi : lo + (i + 1) * w
+    if (!integer) return { from: a, to: b }
+    const from = Math.ceil(a - 1e-9) + 0 // never -0
+    const to = i === n - 1 ? hi : Math.ceil(b - 1e-9) - 1
+    return { from, to: Math.max(from, to) }
+  })
+}
+
+/** The heights of a histogram's bars, in percent of the tallest: a bar with rows is never
+ *  drawn as none (2% at least). */
+export function histogramHeights(counts: number[]): number[] {
+  const top = Math.max(0, ...counts)
+  return counts.map((n) => (n <= 0 || top <= 0 ? 0 : Math.max(2, Math.round((n / top) * 100))))
 }
 
 // ── the previews a page has already seen ──────────────────────────────────────

@@ -210,7 +210,7 @@ test('the arrows, Home, End and the page keys move one active cell, the header o
   assert.deepEqual(m(at(99, 1), 'ArrowDown'), at(99, 1))
   assert.deepEqual(m(at(7, 3), 'Home'), at(7, 0))
   assert.deepEqual(m(at(7, 1), 'End'), at(7, 4))
-  assert.deepEqual(m(at(7, 3), 'Home', true), at(-1, 0))
+  assert.deepEqual(m(at(7, 3), 'Home', true), at(0, 0)) // the first CELL, not the header
   assert.deepEqual(m(at(7, 1), 'End', true), at(99, 4))
   assert.deepEqual(m(at(5, 1), 'PageDown'), at(15, 1))
   assert.deepEqual(m(at(95, 1), 'PageDown'), at(99, 1))
@@ -222,6 +222,7 @@ test('the arrows, Home, End and the page keys move one active cell, the header o
   // a result with no rows: only the header
   assert.deepEqual(moveCell(at(-1, 1), 'ArrowDown', false, 0, 3, 10), at(-1, 1))
   assert.deepEqual(moveCell(at(-1, 1), 'End', true, 0, 3, 10), at(-1, 2))
+  assert.deepEqual(moveCell(at(-1, 1), 'Home', true, 0, 3, 10), at(-1, 0))
   assert.equal(moveCell(at(0, 0), 'ArrowDown', false, 10, 0, 10), null)
 })
 
@@ -249,10 +250,94 @@ test('the null bar is empty for none, a pixel at least for a few, full for all',
   assert.equal(nullBarWidth(100, 100), '100%')
 })
 
-test('a profile says which of its figures are of every row', async () => {
-  const { profileBasis } = await import('../composables/previewGrid.ts')
-  assert.equal(profileBasis(false, []), 'all')
-  assert.equal(profileBasis(true, []), 'sample')
-  assert.equal(profileBasis(true, ['nulls']), 'nulls')
-  assert.equal(profileBasis(true, ['nulls', 'min', 'max']), 'range')
+// ── round 5: an honest profile, a profile to act on ─────────────────────────────
+const EN5 = {
+  ...EN,
+  'dataGrid.profileAllRows': 'The one row | All {n} rows',
+}
+const t5 = (k, p = {}, plural) => {
+  const forms = EN5[k].split(' | ')
+  const msg = forms.length > 1 ? forms[plural === 1 ? 0 : 1] : forms[0]
+  return msg.replace(/\{(\w+)\}/g, (_, x) => String(p[x]))
+}
+
+test('a profile says once which rows its figures are of, the total from the count first', async () => {
+  const { profileBasisText } = await import('../composables/previewGrid.ts')
+  const fmt = (n) => n.toLocaleString('en')
+  const none = { state: 'none' }
+  assert.equal(profileBasisText({ rows: 764, sampled: false, total: 764 }, none, t5, fmt), 'All 764 rows')
+  assert.equal(profileBasisText({ rows: 1, sampled: false, total: 1 }, none, t5, fmt), 'The one row')
+  // the first 100,000: of the count when the page has it, of the footer's total otherwise
+  assert.equal(profileBasisText({ rows: 100_000, sampled: true, total: null }, { state: 'done', rows: 42_007_616, over: false }, t5, fmt),
+    'First 100,000 of 42,007,616 rows')
+  assert.equal(profileBasisText({ rows: 100_000, sampled: true, total: 60_000_000 }, none, t5, fmt), 'First 100,000 of 60,000,000 rows')
+  assert.equal(profileBasisText({ rows: 100_000, sampled: true, total: null }, { state: 'done', rows: 10_000_000, over: true }, t5, fmt),
+    'First 100,000 of more than 10,000,000 rows')
+  assert.equal(profileBasisText({ rows: 100_000, sampled: true, total: null }, { state: 'failed', slow: true }, t5, fmt), 'First 100,000 rows')
 })
+
+test('a column (almost) all different is likely a key, and asks nothing more', async () => {
+  const { columnDetail, likelyKey } = await import('../composables/previewGrid.ts')
+  const st = (o) => ({ kind: 'number', nulls: 0, of: 100_000, distinct: 100_000, min: 1, max: 100_000, ...o })
+  // riga_id: 100,000 distinct of the first 100,000 rows
+  assert.equal(columnDetail(st({}), 'Int64', 100_000), 'key')
+  // 99% of the rows that hold a value (the nulls left out)
+  assert.equal(likelyKey(st({ nulls: 50_000, distinct: 49_600 }), 'Int64', 100_000), true)
+  assert.equal(likelyKey(st({ distinct: 98_000 }), 'Int64', 100_000), false)
+  // a measure in decimals is all different too, and no key: its histogram
+  assert.equal(columnDetail(st({ kind: 'number', distinct: 99_997, min: 0.5, max: 99.7 }), 'Float64', 100_000), 'histogram')
+  // a text key: an identifier; a handful of rows tells nothing
+  assert.equal(columnDetail({ kind: 'text', nulls: 0, of: 1000, distinct: 1000 }, 'String', 1000), 'key')
+  assert.equal(columnDetail({ kind: 'text', nulls: 0, of: 5, distinct: 5 }, 'String', 5), 'top')
+  // a category: the most frequent values; a number with few values too
+  assert.equal(columnDetail({ kind: 'text', nulls: 0, of: 100_000, distinct: 4 }, 'String', 100_000), 'top')
+  assert.equal(columnDetail(st({ distinct: 12, min: 1, max: 12 }), 'Int64', 100_000), 'top')
+  assert.equal(columnDetail(st({ distinct: 30, min: 1, max: 30 }), 'Int32', 100_000), 'top')
+  // a number with one value only, a boolean, a list
+  assert.equal(columnDetail(st({ distinct: 1, min: 3, max: 3 }), 'Int64', 100_000), 'top')
+  assert.equal(columnDetail({ kind: 'bool', nulls: 0, of: 10, distinct: 2 }, 'Boolean', 10), 'top')
+  assert.equal(columnDetail({ kind: 'other', nulls: 0, of: 10 }, 'List(String)', 10), 'none')
+})
+
+test('a histogram has 20 equal intervals, fewer for a short range of whole numbers', async () => {
+  const { histogramBins, histogramEdges, histogramHeights } = await import('../composables/previewGrid.ts')
+  assert.equal(histogramBins(0, 1000.5, false), 20)
+  assert.equal(histogramBins(1, 7, true), 7) // one bar a value
+  assert.equal(histogramBins(1, 1000, true), 20)
+  assert.equal(histogramBins(5, 5, true), 1)
+  // the whole numbers each bar holds, as the server's floor((x - lo) / width) puts them
+  assert.deepEqual(histogramEdges(1, 7, 7, true).map((e) => [e.from, e.to]), [[1, 1], [2, 2], [3, 3], [4, 4], [5, 5], [6, 6], [7, 7]])
+  assert.deepEqual(histogramEdges(0, 100, 20, true).slice(0, 2).map((e) => [e.from, e.to]), [[0, 4], [5, 9]])
+  assert.deepEqual(histogramEdges(0, 100, 20, true).at(-1), { from: 95, to: 100 })
+  assert.deepEqual(histogramEdges(0, 1, 4).map((e) => e.to), [0.25, 0.5, 0.75, 1])
+  // heights in percent of the tallest, a bar with rows never drawn as none
+  assert.deepEqual(histogramHeights([0, 1, 500, 1000]), [0, 2, 50, 100])
+  assert.deepEqual(histogramHeights([0, 0]), [0, 0])
+})
+
+test('the arrows move a column profile to the column beside, and only there', async () => {
+  const { profileStep } = await import('../composables/previewGrid.ts')
+  assert.equal(profileStep('ArrowRight', {}, 2, 5), 3)
+  assert.equal(profileStep('ArrowLeft', {}, 2, 5), 1)
+  assert.equal(profileStep('ArrowLeft', {}, 0, 5), null) // no column before the first
+  assert.equal(profileStep('ArrowRight', {}, 4, 5), null)
+  assert.equal(profileStep('ArrowDown', {}, 2, 5), null)
+  assert.equal(profileStep('ArrowRight', { ctrl: true }, 2, 5), null)
+  assert.equal(profileStep('ArrowRight', { shift: true }, 2, 5), null)
+})
+
+test('the column profile takes the focus itself, describes its figures, and closes on a click outside', async () => {
+  const { readFileSync } = await import('node:fs')
+  const grid = readFileSync(new URL('../components/ui/DataGrid.vue', import.meta.url), 'utf8')
+  const pop = grid.slice(grid.indexOf('class="dg-pop"') - 200, grid.indexOf('class="dg-pop"') + 600)
+  // the panel itself (not «Copy name»: a second Enter would copy) and its figures described
+  assert.match(pop, /tabindex="-1"/)
+  assert.match(pop, /:aria-describedby=/)
+  assert.match(pop, /@keydown="onPopKey"/)
+  assert.match(grid, /usePopover\(popOpen, popEl,[\s\S]*?focus: 'panel'/)
+  const popover = readFileSync(new URL('../composables/usePopover.ts', import.meta.url), 'utf8')
+  // a press anywhere outside closes, even where nothing takes the focus
+  assert.match(popover, /addEventListener\('pointerdown', onPointerDown, true\)/)
+  assert.match(popover, /removeEventListener\('pointerdown', onPointerDown, true\)/)
+})
+

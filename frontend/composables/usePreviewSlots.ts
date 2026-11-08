@@ -13,7 +13,7 @@
 //  - on the server: the `slot` tells the backend to knock down the preview that held it —
 //    revoking the task and KILLing the query. The HTTP cancellation alone does not get
 //    that far (ingress, gateway, synchronous route).
-import { useApi, type CountResult, type PreviewResult, type ProfileResult, type TopValuesResult } from './useApi'
+import { useApi, type CountResult, type HistogramResult, type PreviewResult, type ProfileResult, type TopValuesResult } from './useApi'
 
 type PreviewBody = Parameters<ReturnType<typeof useApi>['preview']>[0]
 type CountBody = Parameters<ReturnType<typeof useApi>['count']>[0]
@@ -61,9 +61,9 @@ export function usePreviewSlots(scope: string) {
     })
   }
 
-  /** A step's column profile (or, with `column`, one column's most frequent values), on a
-   *  slot as a preview: a newer one knocks it down. */
-  function profile<R extends ProfileResult | TopValuesResult = ProfileResult>(body: ProfileBody, slot: string): Promise<R> {
+  /** A step's column profile (or, with `column`, one column's most frequent values or its
+   *  histogram), on a slot as a preview: a newer one knocks it down. */
+  function profile<R extends ProfileResult | TopValuesResult | HistogramResult = ProfileResult>(body: ProfileBody, slot: string): Promise<R> {
     inflight.get(slot)?.abort()
     const ctl = new AbortController()
     inflight.set(slot, ctl)
