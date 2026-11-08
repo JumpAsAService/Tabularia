@@ -380,3 +380,13 @@ test('a Fill nulls step added from a profile, its value not written yet, asks to
   assert.deepEqual(ops({ citta: 'n/a', cap: null }), { type: 'fill_null', params: { columns: { citta: 'n/a' } } })
   assert.deepEqual(ops({ citta: '' }), { type: 'fill_null', params: { columns: { citta: '' } } })
 })
+
+test('the Viewer offers a value as a filter only on the datasource\'s own columns', async () => {
+  const { readFileSync } = await import('node:fs')
+  const viewer = readFileSync(new URL('../pages/viewer.vue', import.meta.url), 'utf8')
+  const grid = readFileSync(new URL('../components/ui/DataGrid.vue', import.meta.url), 'utf8')
+  // the filters come before the computed fields: a computed field cannot be filtered on
+  assert.match(viewer, /const valueActions = computed\(\(\) => \{[\s\S]*?columns: \(selectedDs\.value\?\.columns \?\? \[\]\)\.map/)
+  assert.match(grid, /!a\.columns \|\| a\.columns\.includes\(c\.name\)/)
+  assert.doesNotMatch(grid, /v-if="valueActions"/)
+})

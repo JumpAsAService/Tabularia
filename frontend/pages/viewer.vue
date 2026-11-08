@@ -320,10 +320,12 @@ async function columnDetail(column: string, ask: DetailAsk): Promise<TopValuesRe
   }, 'top')
 }
 // A value of the profile kept or left out: a filter added to the view's Filters, applied.
-// Not on a pivot (its columns are not the ones the filters read).
+// Not on a pivot (its columns are not the ones the filters read), nor on a computed field
+// (the filters come before the computed fields): the datasource's own columns only.
 const valueActions = computed(() => {
   if (!applied.value || tableCols.value !== baseCols.value) return null
   return {
+    columns: (selectedDs.value?.columns ?? []).map((c) => c.name),
     filter: (column: string, value: unknown, exclude: boolean) => {
       if (value === null || value === undefined) {
         filters.value.push({ column, operator: exclude ? 'is_not_null' : 'is_null', value: '', value2: '' })

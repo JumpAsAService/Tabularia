@@ -66,7 +66,8 @@ const props = withDefaults(defineProps<{
   profileWhole?: () => void
   // what a value of the profile can do: keep only its rows or leave them out (the editor
   // adds a Filter step, the Viewer a filter), and the nulls be filled (the editor)
-  valueActions?: { filter: (column: string, value: unknown, exclude: boolean) => void; fillNulls?: (column: string) => void } | null
+  // (`columns`: the only columns they apply to, all when left out)
+  valueActions?: { filter: (column: string, value: unknown, exclude: boolean) => void; fillNulls?: (column: string) => void; columns?: string[] } | null
 }>(), {
   summary: undefined, summaryId: undefined, changes: null, count: null, empty: undefined, label: undefined,
   pendingColumns: null, profile: null, profileState: 'none', profileError: undefined, profileRetry: undefined,
@@ -730,9 +731,15 @@ const histLabel = computed(() => {
   const n = h.counts.reduce((a, b) => a + b, 0)
   return t('dataGrid.profileHistLabel', { n: fmtCount(n), bins: h.counts.length, min: text(h.lo, c.name, c.dtype), max: text(h.hi, c.name, c.dtype) })
 })
+// the value actions of the column open, when the surface has some for it
+const popActs = computed(() => {
+  const a = props.valueActions
+  const c = popColumn.value
+  return a && c && (!a.columns || a.columns.includes(c.name)) ? a : null
+})
 function act(kind: 'keep' | 'exclude' | 'fill', value?: unknown) {
   const c = popColumn.value
-  const a = props.valueActions
+  const a = popActs.value
   if (!c || !a) return
   popOpen.value = false
   if (kind === 'fill') a.fillNulls?.(c.name)
@@ -960,7 +967,7 @@ function act(kind: 'keep' | 'exclude' | 'fill', value?: unknown) {
               <li v-for="(v, k) in popTop?.values ?? []" :key="k" :style="{ '--share': barOf(v.count, sampleRows) }">
                 <span class="dg-pop-v">{{ shown(v.value, popColumn) }}</span>
                 <span class="dg-pop-n" :title="fmtCount(v.count)">{{ pctOf(v.count, sampleRows) }}</span>
-                <span v-if="valueActions" class="dg-pop-acts">
+                <span v-if="popActs" class="dg-pop-acts">
                   <button type="button" class="dg-pop-act" :aria-label="$t('dataGrid.profileKeepValue', { v: shown(v.value, popColumn) })" :title="$t('dataGrid.profileKeepTitle')" @click="act('keep', v.value)"><Filter :size="12" aria-hidden="true" /></button>
                   <button type="button" class="dg-pop-act" :aria-label="$t('dataGrid.profileExcludeValue', { v: shown(v.value, popColumn) })" :title="$t('dataGrid.profileExcludeTitle')" @click="act('exclude', v.value)"><Ban :size="12" aria-hidden="true" /></button>
                 </span>
@@ -970,8 +977,8 @@ function act(kind: 'keep' | 'exclude' | 'fill', value?: unknown) {
             <li v-if="popStats.nulls > 0" class="dg-pop-nulls" :style="{ '--share': barOf(popStats.nulls, popStats.of) }">
               <span class="dg-pop-v"><span aria-hidden="true">∅</span><span class="sr-only">{{ $t('dataGrid.profileNulls') }}</span><span v-if="exact(popStats, 'nulls')" class="dg-pop-all">{{ $t('dataGrid.profileAllRowsTag') }}</span></span>
               <span class="dg-pop-n" :title="fmtCount(popStats.nulls)">{{ pctOf(popStats.nulls, popStats.of) }}</span>
-              <span v-if="valueActions" class="dg-pop-acts">
-                <template v-if="valueActions.fillNulls">
+              <span v-if="popActs" class="dg-pop-acts">
+                <template v-if="popActs.fillNulls">
                   <button type="button" class="dg-pop-act dg-pop-fill" :title="$t('dataGrid.profileFillTitle')" @click="act('fill')"><PaintBucket :size="12" aria-hidden="true" /> {{ $t('dataGrid.profileFill') }}</button>
                 </template>
                 <template v-else>
