@@ -367,3 +367,16 @@ test('the summary bar gives way in order: the sample into a menu, the cache to i
   assert.doesNotMatch(editor, /pv-reserve/)
 })
 
+
+test('a Fill nulls step added from a profile, its value not written yet, asks to be completed', async () => {
+  const { resolveChain } = await import('../composables/useFlowModel.ts')
+  const src = { id: 's', type: 'source', data: { bucket: 'b', parquetKey: 'k' } }
+  const fill = (columns) => ({ id: 'f', type: 'operation', data: { opType: 'fill_null', params: { columns } } })
+  const edges = [{ id: 'e', source: 's', target: 'f', targetHandle: 'left' }]
+  const ops = (columns) => resolveChain([src, fill(columns)], edges, 'f').operations.at(-1)
+  // no value yet: no `columns`, so the engine says a parameter is missing («complete the node»)
+  assert.deepEqual(ops({ citta: null }), { type: 'fill_null', params: {} })
+  // the values written are kept, the others left out
+  assert.deepEqual(ops({ citta: 'n/a', cap: null }), { type: 'fill_null', params: { columns: { citta: 'n/a' } } })
+  assert.deepEqual(ops({ citta: '' }), { type: 'fill_null', params: { columns: { citta: '' } } })
+})

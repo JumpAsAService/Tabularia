@@ -197,6 +197,15 @@ function operationFor(
   const node = nodes.find((n) => n.id === id)!
   const params: Record<string, any> = { ...(node.data.params ?? {}) }
 
+  // Fill nulls: a column whose value is not written yet (a step added from a column's
+  // profile, «Fill nulls…») is not filled with null, which an engine refuses or does
+  // nothing with; with no column left the step asks to be completed, as a new one does
+  if (node.data.opType === 'fill_null' && params.columns && typeof params.columns === 'object') {
+    const set = Object.fromEntries(Object.entries(params.columns).filter(([, v]) => v !== null && v !== undefined))
+    if (Object.keys(set).length) params.columns = set
+    else delete params.columns
+  }
+
   if (node.data.opType === 'join' || node.data.opType === 'union') {
     const rightId = buildIncoming(edges).get(id)?.right
     if (rightId) {
