@@ -413,7 +413,10 @@ const skW = (r: number, c: number) => `${SK_WIDTHS[(r * 3 + c) % SK_WIDTHS.lengt
       <CircleAlert :size="16" class="dg-state-icon" aria-hidden="true" />
       <span>{{ error }}</span>
     </div>
-    <div v-else-if="note && !result" class="dg-state muted">{{ note }}</div>
+    <div v-else-if="note && !result" class="dg-state dg-note-state muted">
+      <span>{{ note }}</span>
+      <slot name="action" />
+    </div>
     <div v-else-if="!result" class="dg-state dg-empty muted">
       <MousePointerClick :size="16" class="dg-state-icon" aria-hidden="true" />
       <span>{{ empty ?? $t('dataGrid.selectNode') }}</span>
@@ -559,6 +562,7 @@ const skW = (r: number, c: number) => `${SK_WIDTHS[(r * 3 + c) % SK_WIDTHS.lengt
 /* empty, note and error: said in the panel's place of the table, with an icon */
 .dg-state { display: flex; align-items: flex-start; gap: 8px; margin: 12px; font-size: 12.5px; line-height: 1.5; }
 .dg-state-icon { flex: none; margin-top: 2px; }
+.dg-note-state { flex-wrap: wrap; align-items: center; gap: 8px 12px; }
 .dg-error {
   padding: 10px 12px;
   border: 1px solid color-mix(in srgb, var(--danger) 45%, transparent);

@@ -7,7 +7,7 @@ import { Controls, ControlButton } from '@vue-flow/controls'
 import { MiniMap } from '@vue-flow/minimap'
 import { opMeta } from '~/composables/useOpIcons'
 
-import { Table2, BarChart3, Wand2, Users, Undo2, Redo2, Sparkles, SlidersHorizontal, ShieldAlert, FlaskConical, X } from 'lucide-vue-next'
+import { Table2, BarChart3, Wand2, Users, Undo2, Redo2, Sparkles, SlidersHorizontal, ShieldAlert, FlaskConical, X, RotateCw } from 'lucide-vue-next'
 import FlowAssistant from '~/components/FlowAssistant.vue'
 import { useAi, type AiStatus } from '~/composables/useAi'
 import { useApi, errMessage } from '~/composables/useApi'
@@ -1626,6 +1626,16 @@ function onKeydown(e: KeyboardEvent) {
     return
   }
   if (typingInAField() || runDialogOpen.value) return
+  // Esc stops a preview being computed, from the preview or the canvas (the radial menu, a
+  // dialog, a popover and an open Select take their own Esc first)
+  if (e.key === 'Escape') {
+    if (e.defaultPrevented || !computingNodeId.value) return
+    const el = document.activeElement as HTMLElement | null
+    if (el && el !== document.body && !el.closest('.grid, .canvas')) return
+    e.preventDefault()
+    cancelPreview()
+    return
+  }
   if ((e.ctrlKey || e.metaKey) && !e.altKey) {
     const key_ = e.key.toLowerCase()
     if (key_ === 'z' || key_ === 'y') {
@@ -1863,6 +1873,7 @@ function beginCompute(nodeId: string) {
   // a preview still in flight for the node before no longer writes (its answer is kept in
   // memory all the same; the next preview on the slot knocks it down on the server)
   previewSeq++
+  cancelledNodeId.value = null
   computingNodeId.value = nodeId
   computeStartedAt.value = performance.now()
   tickClock()
@@ -1907,6 +1918,7 @@ function showFromMemory(nodeId: string): boolean {
 
 function showPreview(nodeId: string, res: PreviewResult, key: string, body: NonNullable<ReturnType<typeof previewBody>['body']>, ms: number) {
   stopCount()
+  cancelledNodeId.value = null
   preview.value = res
   previewNodeId.value = nodeId
   previewError.value = ''
@@ -1949,9 +1961,12 @@ function stopCount() {
   if (rowCount.value.state === 'counting') rowCount.value = { state: 'none' }
 }
 
-/** «Cancel» on a slow preview: stopped on the server too, and nothing of another node shown. */
+/** «Cancel» on a slow preview (or Esc): stopped on the server too, nothing of another node
+ *  shown, and the way back in the grid's place, with the focus on it. */
 function cancelPreview() {
-  const name = nodeName(computingNodeId.value)
+  const id = computingNodeId.value
+  if (!id) return
+  const name = nodeName(id)
   previewSeq++
   previewSlots.stop('preview')
   endCompute()
@@ -1960,6 +1975,16 @@ function cancelPreview() {
   previewLoading.value = false
   previewError.value = ''
   previewNote.value = t('dataGrid.cancelled', { name })
+  cancelledNodeId.value = id
+  nextTick(() => (document.querySelector('.pv-again') as HTMLElement | null)?.focus())
+}
+/** «Compute again» after a Cancel: the same node, from the start. */
+function computeAgain() {
+  const id = cancelledNodeId.value
+  cancelledNodeId.value = null
+  if (!id || !findNode(id)) return
+  previewNote.value = ''
+  refreshForNode(id)
 }
 
 let previewSeq = 0 // only the LAST preview launched writes the result and turns the skeleton off
@@ -2938,7 +2963,13 @@ async function pollTask(id: string) {
           :changes="previewChanges"
           :count="rowCount"
           :empty="selectedId ? $t('dataGrid.nothingYet') : undefined"
-        />
+        >
+          <template #action>
+            <button v-if="cancelledNodeId" type="button" class="pv-again" @click="computeAgain">
+              <RotateCw :size="13" aria-hidden="true" /> {{ $t('dataGrid.computeAgain') }}
+            </button>
+          </template>
+        </DataGrid>
         <ChartPanel v-else :columns="preview?.columns ?? []" :query="chartQuery" />
       </div>
     </div>
@@ -3021,6 +3052,7 @@ async function pollTask(id: string) {
   flex: none; display: inline-flex; align-items: center; gap: 4px;
   padding: 3px 9px; font-size: 12px;
 }
+.pv-again { display: inline-flex; align-items: center; gap: 5px; padding: 4px 10px; font-size: 12px; }
 
 /* the «unsaved changes» dialog's text */
 .leave-body { margin: 0; line-height: 1.5; }
