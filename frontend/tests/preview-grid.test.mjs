@@ -6,8 +6,8 @@ import { test } from 'node:test'
 import assert from 'node:assert/strict'
 
 import {
-  Recent, columnChanges, consumedColumns, exactText, gridColumnFormatter, gridColumnFormatters, groupsThousands,
-  isNumericDtype, nodeRowsPhrase, previewKey, rowsPhrase, shortDtype, suggestSample, toTsv, visibleWindow,
+  Recent, ariaRowCount, columnChanges, consumedColumns, exactText, gridColumnFormatter, gridColumnFormatters,
+  groupsThousands, isNumericDtype, nodeRowsPhrase, previewKey, rowsPhrase, shortDtype, suggestSample, toTsv, visibleWindow,
 } from '../composables/previewGrid.ts'
 import { opSubject } from '../composables/opSummary.ts'
 
@@ -132,6 +132,14 @@ test('a node is named by what it works on, not only by its operation', () => {
   assert.equal(opSubject('join', { how: 'inner', left_on: ['id'], right_on: ['cliente_id'] }), 'id')
   assert.equal(opSubject('filter', { column: 'stato', operator: 'eq', value: 'evaso' }), 'stato = evaso')
   assert.equal(opSubject('group_by', {}), '')
+})
+
+test('aria-rowcount is the real total when it is known, -1 when it is not', () => {
+  assert.equal(ariaRowCount(30, false, { state: 'none' }), 31)
+  assert.equal(ariaRowCount(100, true, { state: 'done', rows: 42007616, over: false }), 42007617)
+  assert.equal(ariaRowCount(100, true, { state: 'done', rows: 10000000, over: true }), -1)
+  assert.equal(ariaRowCount(100, true, { state: 'counting' }), -1)
+  assert.equal(ariaRowCount(100, true, { state: 'none' }), -1)
 })
 
 test('one way to say how many rows: all of them, the first of how many, or of more than the cap', () => {

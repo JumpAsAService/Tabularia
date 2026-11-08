@@ -2936,6 +2936,7 @@ async function pollTask(id: string) {
           :summary="summaryRows"
           summary-id="pv-summary"
           :changes="previewChanges"
+          :count="rowCount"
           :empty="selectedId ? $t('dataGrid.nothingYet') : undefined"
         />
         <ChartPanel v-else :columns="preview?.columns ?? []" :query="chartQuery" />

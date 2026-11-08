@@ -13,8 +13,8 @@ import { Check, CircleAlert, MousePointerClick } from 'lucide-vue-next'
 import type { PreviewResult } from '~/composables/useApi'
 import { readableNumber } from '~/composables/readableNumber'
 import {
-  exactText, gridColumnFormatters, isNumericDtype, shortDtype, toTsv, visibleWindow,
-  type ColumnChanges, type ColumnMark,
+  ariaRowCount, exactText, gridColumnFormatters, isNumericDtype, shortDtype, toTsv, visibleWindow,
+  type ColumnChanges, type ColumnMark, type RowCount,
 } from '~/composables/previewGrid'
 
 const props = withDefaults(defineProps<{
@@ -37,10 +37,12 @@ const props = withDefaults(defineProps<{
   summaryId?: string
   // what the step changed against its input: marks in the headers
   changes?: ColumnChanges | null
+  // the real row count, when the surface asked for it: the grid's aria-rowcount
+  count?: RowCount | null
   // what to say when there is nothing at all
   empty?: string
   label?: string
-}>(), { summary: undefined, summaryId: undefined, changes: null, empty: undefined, label: undefined })
+}>(), { summary: undefined, summaryId: undefined, changes: null, count: null, empty: undefined, label: undefined })
 
 const { t, locale } = useI18n()
 
@@ -97,6 +99,8 @@ const ownSummary = computed(() => {
   return `${rowsText} · ${t('dataGrid.columns', { n: props.result.columns.length })}`
 })
 const describedBy = computed(() => props.summaryId ?? (ownSummary.value ? ownSummaryId : undefined))
+// the real total when it is known, -1 («unknown») while it is not: never the rows drawn
+const rowCountAria = computed(() => ariaRowCount(rows.value.length, !!props.result?.truncated, props.count ?? { state: 'none' }))
 
 // ── marks: what the step changed ───────────────────────────────────────────────
 function markOf(name: string): ColumnMark | undefined {
@@ -144,6 +148,32 @@ function onCopy(e: ClipboardEvent) {
   }
   e.clipboardData.setData('text/plain', toTsv([...byRow.values()]))
   e.preventDefault()
+}
+
+// ── the header: one tab stop, the arrows move along the names ───────────────────
+const activeHead = ref(0)
+function headButton(j: number): HTMLButtonElement | null {
+  return scroller.value?.querySelector<HTMLButtonElement>(`thead th[aria-colindex="${j + 2}"] .cn`) ?? null
+}
+function onHeadKey(e: KeyboardEvent, j: number) {
+  const last = cols.value.length - 1
+  const to = e.key === 'ArrowRight' ? j + 1 : e.key === 'ArrowLeft' ? j - 1 : e.key === 'Home' ? 0 : e.key === 'End' ? last : null
+  if (to === null) return
+  e.preventDefault()
+  const k = Math.max(0, Math.min(last, to))
+  activeHead.value = k
+  const btn = headButton(k)
+  if (!btn) return
+  btn.focus({ preventScroll: true })
+  // into view by hand: the pinned row numbers would cover a column scrolled to the left edge
+  const box = scroller.value
+  const th = btn.closest('th') as HTMLElement | null
+  if (box && th) {
+    const left = th.offsetLeft - rnWidth.value
+    const right = th.offsetLeft + th.offsetWidth - box.clientWidth
+    if (box.scrollLeft > left) box.scrollLeft = Math.max(0, left)
+    else if (box.scrollLeft < right) box.scrollLeft = right
+  }
 }
 
 // ── the column under the pointer, tinted like the row (its <col>, one class) ──────
@@ -215,6 +245,7 @@ watch(() => props.result, async (r) => {
   const shape = r ? r.columns.map((c) => c.name).join('\u0001') : ''
   if (shape !== lastShape) {
     lastShape = shape
+    activeHead.value = 0
     scrollTop.value = 0
     await nextTick()
     if (scroller.value) { scroller.value.scrollTop = 0; scroller.value.scrollLeft = 0 }
@@ -359,7 +390,9 @@ const skW = (r: number, c: number) => `${SK_WIDTHS[(r * 3 + c) % SK_WIDTHS.lengt
 <template>
   <div class="datagrid" :class="{ 'dg-stale': stale && !!result }" :aria-busy="stale || loading ? 'true' : undefined">
     <div v-if="loading && !result" class="dg-skeleton">
-      <div class="pad"><span class="sk" style="width: 150px" /></div>
+      <!-- the summary's line only where the grid says its own: the surfaces with a tab bar
+           say it there, and the table must not jump up by a line when it arrives -->
+      <div v-if="summary === undefined" class="pad"><span class="sk" style="width: 150px" /></div>
       <table class="data">
         <thead>
           <tr>
@@ -388,64 +421,74 @@ const skW = (r: number, c: number) => `${SK_WIDTHS[(r * 3 + c) % SK_WIDTHS.lengt
     <template v-else>
       <div v-if="note" class="pad dg-note">{{ note }}</div>
       <div v-if="ownSummary" :id="ownSummaryId" class="dg-summary">{{ ownSummary }}</div>
-      <div
-        ref="scroller"
-        class="dg-scroll"
-        tabindex="0"
-        role="region"
-        :aria-label="label ?? $t('dataGrid.regionLabel')"
-        @scroll.passive="onScroll"
-        @copy="onCopy"
-        @mouseover="onOver"
-        @mouseleave="hoverCol = -1"
-      >
-        <table
-          class="data dg-table"
-          :style="{ width: `${tableWidth}px` }"
-          :aria-rowcount="rows.length + 1"
-          :aria-colcount="cols.length + 1"
-          :aria-describedby="describedBy"
+      <div class="dg-frame">
+        <div
+          ref="scroller"
+          class="dg-scroll"
+          tabindex="0"
+          role="region"
+          :aria-label="label ?? $t('dataGrid.regionLabel')"
+          @scroll.passive="onScroll"
+          @copy="onCopy"
+          @mouseover="onOver"
+          @mouseleave="hoverCol = -1"
         >
-          <colgroup>
-            <col :style="{ width: `${rnWidth}px` }" />
-            <col v-for="(c, j) in cols" :key="c.name" :style="{ width: `${widths[j]}px` }" :class="{ hc: j + 1 === hoverCol }" />
-          </colgroup>
-          <thead>
-            <tr aria-rowindex="1">
-              <th class="rn" scope="col" aria-colindex="1"><span class="sr-only">{{ $t('dataGrid.rowNumber') }}</span></th>
-              <th
-                v-for="(c, j) in cols"
-                :key="c.name"
-                scope="col"
-                :aria-colindex="j + 2"
-                :class="{ num: isNum(c.dtype), marked: !!markOf(c.name) }"
-                :title="headTitle(c)"
-              >
-                <button type="button" class="cn" :aria-label="$t('dataGrid.copyName', { name: c.name })" @click="copyName(c.name)">
-                  <span class="cn-text">{{ c.name }}</span>
-                  <Check v-if="copied === c.name" :size="11" class="cn-done" aria-hidden="true" />
-                </button>
-                <span class="ct"><span class="ct-type">{{ shortDtype(c.dtype) }}</span><span v-if="markOf(c.name)" class="mk"> · {{ markLabel(markOf(c.name)!) }}</span></span>
-              </th>
-            </tr>
-          </thead>
-          <tbody>
-            <tr v-if="padTop" class="spacer" aria-hidden="true"><td :colspan="cols.length + 1" :style="{ height: `${padTop}px` }" /></tr>
-            <tr v-for="i in shownRows" :key="i" :aria-rowindex="i + 2" :class="{ even: i % 2 === 1 }">
-              <td class="rn" aria-hidden="true">{{ i + 1 }}</td>
-              <td
-                v-for="(cell, j) in cellsFor(i)"
-                :key="j"
-                :data-r="i"
-                :data-c="j"
-                :class="cell.cls"
-                :title="cell.tip"
-              >{{ cell.text }}</td>
-            </tr>
-            <tr v-if="padBottom" class="spacer" aria-hidden="true"><td :colspan="cols.length + 1" :style="{ height: `${padBottom}px` }" /></tr>
-          </tbody>
-        </table>
-        <p v-if="!rows.length" class="dg-norows muted">{{ $t('dataGrid.noRows') }}</p>
+          <table
+            class="data dg-table"
+            :style="{ width: `${tableWidth}px` }"
+            :aria-rowcount="rowCountAria"
+            :aria-colcount="cols.length + 1"
+            :aria-describedby="describedBy"
+          >
+            <colgroup>
+              <col :style="{ width: `${rnWidth}px` }" />
+              <col v-for="(c, j) in cols" :key="c.name" :style="{ width: `${widths[j]}px` }" :class="{ hc: j + 1 === hoverCol }" />
+            </colgroup>
+            <thead>
+              <tr aria-rowindex="1">
+                <th class="rn" scope="col" aria-colindex="1"><span class="sr-only">{{ $t('dataGrid.rowNumber') }}</span></th>
+                <th
+                  v-for="(c, j) in cols"
+                  :key="c.name"
+                  scope="col"
+                  :aria-colindex="j + 2"
+                  :class="{ num: isNum(c.dtype), marked: !!markOf(c.name) }"
+                  :title="headTitle(c)"
+                >
+                  <button
+                    type="button"
+                    class="cn"
+                    :tabindex="j === activeHead ? 0 : -1"
+                    :aria-label="$t('dataGrid.copyName', { name: c.name })"
+                    @click="copyName(c.name)"
+                    @focus="activeHead = j"
+                    @keydown="onHeadKey($event, j)"
+                  >
+                    <span class="cn-text">{{ c.name }}</span>
+                    <Check v-if="copied === c.name" :size="11" class="cn-done" aria-hidden="true" />
+                  </button>
+                  <span class="ct"><span class="ct-type">{{ shortDtype(c.dtype) }}</span><span v-if="markOf(c.name)" class="mk"> · {{ markLabel(markOf(c.name)!) }}</span></span>
+                </th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr v-if="padTop" class="spacer" aria-hidden="true"><td :colspan="cols.length + 1" :style="{ height: `${padTop}px` }" /></tr>
+              <tr v-for="i in shownRows" :key="i" :aria-rowindex="i + 2" :class="{ even: i % 2 === 1 }">
+                <td class="rn" aria-hidden="true">{{ i + 1 }}</td>
+                <td
+                  v-for="(cell, j) in cellsFor(i)"
+                  :key="j"
+                  :data-r="i"
+                  :data-c="j"
+                  :class="cell.cls"
+                  :title="cell.tip"
+                >{{ cell.text }}</td>
+              </tr>
+              <tr v-if="padBottom" class="spacer" aria-hidden="true"><td :colspan="cols.length + 1" :style="{ height: `${padBottom}px` }" /></tr>
+            </tbody>
+          </table>
+          <p v-if="!rows.length" class="dg-norows muted">{{ $t('dataGrid.noRows') }}</p>
+        </div>
       </div>
     </template>
   </div>
@@ -458,11 +501,23 @@ const skW = (r: number, c: number) => `${SK_WIDTHS[(r * 3 + c) % SK_WIDTHS.lengt
 .pad { padding: 8px; }
 .dg-note { color: var(--muted); padding-bottom: 0; }
 .dg-summary { font-variant-numeric: tabular-nums; font-size: 12px; padding: 7px 9px; color: var(--muted); flex: none; }
+.dg-frame { position: relative; flex: 1; min-height: 0; display: flex; flex-direction: column; }
 .dg-scroll { flex: 1; min-height: 0; overflow: auto; border-radius: 6px; }
-.dg-scroll:focus-visible { outline: 2px solid var(--accent); outline-offset: -2px; }
-/* the rows of what is being replaced: still there, plainly not the answer */
-.dg-stale .dg-scroll { opacity: 0.42; transition: opacity var(--dur-2) ease-out; }
-@media (prefers-reduced-motion: reduce) { .dg-stale .dg-scroll { transition: none; } }
+/* the region's focus ring is drawn over the table, not under the pinned row numbers and
+   header that would cover an outline */
+.dg-scroll:focus-visible { outline: none; }
+.dg-frame:has(> .dg-scroll:focus-visible)::after {
+  content: ''; position: absolute; inset: 0; z-index: 4; pointer-events: none;
+  border: 2px solid var(--accent); border-radius: 6px;
+}
+@supports not selector(:has(*)) {
+  .dg-scroll:focus-visible { outline: 2px solid var(--accent); outline-offset: -2px; }
+}
+/* the rows of what is being replaced: still there, plainly not the answer. Only the body:
+   the header keeps its contrast, the columns are still the ones being computed */
+.dg-table tbody { transition: opacity var(--dur-2) ease-out; }
+.dg-stale .dg-table tbody { opacity: 0.42; }
+@media (prefers-reduced-motion: reduce) { .dg-table tbody { transition: none; } }
 
 .dg-table { table-layout: fixed; min-width: 100%; }
 .data th.num, .data td.num { text-align: right; }

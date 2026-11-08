@@ -212,6 +212,14 @@ export function rowsPhrase(shown: number, truncated: boolean, count: RowCount, t
   return t('dataGrid.first', { shown: fmt(shown) })
 }
 
+/** The grid's `aria-rowcount`: the real total (plus the header row) when it is known
+ *  exactly, -1 (ARIA's «unknown») while it is not or is past the counting cap. */
+export function ariaRowCount(shown: number, truncated: boolean, count: RowCount): number {
+  if (!truncated) return shown + 1
+  if (count.state === 'done' && !count.over && count.rows >= shown) return count.rows + 1
+  return -1
+}
+
 /** The same, short, for a node of the canvas: «764 rows», «more than 10,000,000 rows», «first 100 rows». */
 export function nodeRowsPhrase(shown: number, truncated: boolean, count: RowCount, t: T, fmt: (n: number) => string): string {
   if (!truncated) return t('dataGrid.rows', { n: fmt(shown) })

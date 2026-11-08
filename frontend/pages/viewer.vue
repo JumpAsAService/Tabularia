@@ -5,7 +5,7 @@
 // the charts (ChartPanel, aggregation over the whole dataset) run on the same
 // transformed data. Nothing is saved.
 import { DEFAULT_ENGINE_OPTION } from '~/composables/useEngine'
-import { ref, computed } from 'vue'
+import { ref, computed, watch, nextTick } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { useFormat } from '~/composables/useFormat'
 import { usePopover } from '~/composables/usePopover'
@@ -248,6 +248,20 @@ const gridResult = computed<PreviewResult | null>(() =>
     ? { columns: tableCols.value, rows: displayRows.value, row_count: rows.value.length, truncated: truncated.value }
     : null)
 const summaryRows = computed(() => rowsPhrase(rows.value.length, truncated.value, rowCount.value, t, (n) => fmtx.count(n)))
+// one announcement an Apply, once the rows and their count have arrived (not one a change)
+const liveText = ref('')
+const settledSummary = computed(() => {
+  if (!applied.value || loading.value || rowCount.value.state === 'counting') return ''
+  const parts = [summaryRows.value]
+  if (rowCount.value.state === 'failed') parts.push(rowCount.value.slow ? t('dataGrid.countSlow') : t('dataGrid.countFailed'))
+  parts.push(t('dataGrid.columns', { n: tableCols.value.length }))
+  return parts.join(' · ')
+})
+watch(settledSummary, (now) => {
+  if (!now) return
+  liveText.value = ''
+  nextTick(() => { liveText.value = now })
+})
 
 // export of the current view (csv/xlsx), written by a worker: Polars writes the file,
 // whatever the engine chosen for the display.
@@ -487,13 +501,16 @@ onMounted(async () => {
       </div>
     </div>
 
-    <p v-if="!selectedDs" class="muted empty">{{ $t('viewer.emptyStateHint') }}</p>
+    <template v-if="!selectedDs">
+      <p v-if="error" class="err empty" role="alert">{{ error }}</p>
+      <p class="muted empty">{{ $t('viewer.emptyStateHint') }}</p>
+    </template>
 
     <div v-else class="body" :style="{ gridTemplateColumns: `${sidebarW}px 6px 1fr` }">
       <!-- panel of the on-the-fly transformations -->
       <aside class="cfg">
         <div class="cfg-sec">
-          <div class="cfg-head"><Filter :size="13" /> {{ $t('viewer.filtersTitle') }} <button class="add" @click="addFilter"><Plus :size="13" /></button></div>
+          <div class="cfg-head"><Filter :size="13" /> {{ $t('viewer.filtersTitle') }} <button class="add" :aria-label="$t('viewer.addFilter')" :title="$t('viewer.addFilter')" @click="addFilter"><Plus :size="13" aria-hidden="true" /></button></div>
           <p v-if="!filters.length" class="muted small">{{ $t('viewer.noFilters') }}</p>
           <div v-for="(f, i) in filters" :key="i" class="frow">
             <Select v-model="f.column" :options="colNames" :placeholder="$t('viewer.columnPlaceholder')" class="fc" />
@@ -509,17 +526,17 @@ onMounted(async () => {
               class="fv"
               :placeholder="$t('viewer.valuePlaceholder')"
             />
-            <button class="rm" @click="filters.splice(i, 1)"><X :size="13" /></button>
+            <button class="rm" :aria-label="$t('viewer.removeFilter')" :title="$t('viewer.removeFilter')" @click="filters.splice(i, 1)"><X :size="13" aria-hidden="true" /></button>
           </div>
         </div>
 
         <div class="cfg-sec">
-          <div class="cfg-head"><Sigma :size="13" /> {{ $t('viewer.computedFieldsTitle') }} <button class="add" @click="addComputed"><Plus :size="13" /></button></div>
+          <div class="cfg-head"><Sigma :size="13" /> {{ $t('viewer.computedFieldsTitle') }} <button class="add" :aria-label="$t('viewer.addComputed')" :title="$t('viewer.addComputed')" @click="addComputed"><Plus :size="13" aria-hidden="true" /></button></div>
           <p class="muted small">{{ $t('viewer.computedFieldsHint', { engine }) }}</p>
           <div v-for="(c, i) in computedFields" :key="i" class="crow">
             <div class="crow-top">
               <input v-model="c.name" type="text" class="cn" :placeholder="$t('viewer.fieldNamePlaceholder')" />
-              <button class="rm" @click="computedFields.splice(i, 1)"><X :size="13" /></button>
+              <button class="rm" :aria-label="$t('viewer.removeComputed')" :title="$t('viewer.removeComputed')" @click="computedFields.splice(i, 1)"><X :size="13" aria-hidden="true" /></button>
             </div>
             <textarea v-model="c.expr" class="ce" rows="2" :placeholder="$t('viewer.exprPlaceholder')" />
           </div>
@@ -534,14 +551,26 @@ onMounted(async () => {
             <label class="lbl">{{ $t('viewer.pivotRowsLabel') }}</label>
             <div v-for="(_, i) in pivot.index" :key="'ix' + i" class="dimrow">
               <Select v-model="pivot.index[i]" :options="colNames" :placeholder="$t('viewer.columnPlaceholder')" class="full" />
-              <button class="rm" :disabled="pivot.index.length === 1 && !pivot.index[0]" @click="pivot.index.length === 1 ? (pivot.index[0] = '') : pivot.index.splice(i, 1)"><X :size="13" /></button>
+              <button
+                class="rm"
+                :aria-label="$t('viewer.removeRowDim')"
+                :title="$t('viewer.removeRowDim')"
+                :disabled="pivot.index.length === 1 && !pivot.index[0]"
+                @click="pivot.index.length === 1 ? (pivot.index[0] = '') : pivot.index.splice(i, 1)"
+              ><X :size="13" aria-hidden="true" /></button>
             </div>
             <button class="add-dim" @click="pivot.index.push('')"><Plus :size="12" /> {{ $t('viewer.addRow') }}</button>
 
             <label class="lbl">{{ $t('viewer.pivotColumnsLabel') }}</label>
             <div v-for="(_, i) in pivot.on" :key="'on' + i" class="dimrow">
               <Select v-model="pivot.on[i]" :options="colNames" :placeholder="$t('viewer.columnPlaceholder')" class="full" />
-              <button class="rm" :disabled="pivot.on.length === 1 && !pivot.on[0]" @click="pivot.on.length === 1 ? (pivot.on[0] = '') : pivot.on.splice(i, 1)"><X :size="13" /></button>
+              <button
+                class="rm"
+                :aria-label="$t('viewer.removeColumnDim')"
+                :title="$t('viewer.removeColumnDim')"
+                :disabled="pivot.on.length === 1 && !pivot.on[0]"
+                @click="pivot.on.length === 1 ? (pivot.on[0] = '') : pivot.on.splice(i, 1)"
+              ><X :size="13" aria-hidden="true" /></button>
             </div>
             <button class="add-dim" @click="pivot.on.push('')"><Plus :size="12" /> {{ $t('viewer.addColumn') }}</button>
 
@@ -565,15 +594,17 @@ onMounted(async () => {
           <button :class="{ active: view === 'table' }" @click="view = 'table'"><Table2 :size="14" /> {{ $t('viewer.tableTab') }}</button>
           <button :class="{ active: view === 'chart' }" @click="view = 'chart'"><PieChart :size="14" /> {{ $t('viewer.chartTab') }}</button>
           <button class="primary apply" :disabled="!selectedDs || loading" @click="apply"><Play :size="14" /> {{ $t('viewer.applyButton') }}</button>
-          <span v-if="loading" class="muted">{{ $t('viewer.computing') }}</span>
-          <span v-else-if="error" class="err">{{ error }}</span>
-          <span id="vw-summary" class="rmeta muted" role="status" aria-live="polite">
+          <span v-if="loading" class="muted">{{ $t('dataGrid.computing') }}</span>
+          <!-- an error with a table on screen (an export): here; without one, in the table's place -->
+          <span v-else-if="error && applied" class="err" role="alert">{{ error }}</span>
+          <span id="vw-summary" class="rmeta muted">
             <template v-if="applied">
               {{ summaryRows }}<template v-if="rowCount.state === 'counting'"> · {{ $t('dataGrid.counting') }}</template><template
                 v-else-if="rowCount.state === 'failed'"> · {{ rowCount.slow ? $t('dataGrid.countSlow') : $t('dataGrid.countFailed') }}</template>
               · {{ $t('dataGrid.columns', { n: tableCols.length }) }}
             </template>
           </span>
+          <span class="sr-only" role="status" aria-live="polite">{{ liveText }}</span>
           <div class="expbtns">
             <button :disabled="!rows.length || !!exporting" :title="$t('viewer.exportCsvTitle')" @click="exportView('csv')">
               <Download :size="13" /> {{ exporting === 'csv' ? '…' : 'CSV' }}
@@ -589,8 +620,10 @@ onMounted(async () => {
             :result="gridResult"
             :loading="loading && !gridResult"
             :stale="loading && !!gridResult"
+            :error="applied ? '' : error"
             :summary="summaryRows"
             summary-id="vw-summary"
+            :count="rowCount"
             :empty="$t('viewer.noDataHint')"
             :label="$t('viewer.tableTab')"
           />
