@@ -98,6 +98,12 @@ def preview_task(
 
     try:
         engine_impl = get_engine(engine)
+        if not no_cache:
+            # a copy of a step of this chain being written now: start from it, do not
+            # compute the same rows beside it
+            from app.engine.stepcache_defer import wait_for_running_copy
+
+            wait_for_running_copy(engine_impl, DataSource(bucket=bucket, key=input_key), operations)
         with query_tag(f"tab-prev:{_tid}" if _tid else None), query_principal(principal):
             result = engine_impl.preview(
                 source=DataSource(bucket=bucket, key=input_key),
@@ -176,8 +182,13 @@ def count_task(
     task_id = getattr(getattr(current_task, "request", None), "id", None)
     name = (engine or DEFAULT_ENGINE).lower()
     try:
+        impl = get_engine(engine)
+        if not no_cache:
+            from app.engine.stepcache_defer import wait_for_running_copy
+
+            wait_for_running_copy(impl, DataSource(bucket=bucket, key=input_key), operations)
         with query_tag(f"tab-prev:{task_id}" if task_id else None):
-            rows, over = rowcount.count(get_engine(engine), name, bucket, input_key, operations, at_most,
+            rows, over = rowcount.count(impl, name, bucket, input_key, operations, at_most,
                                         use_cache=not no_cache)
         return {"ok": True, "result": {"rows": rows, "over": over, "at_most": at_most, "how": "counted"}}
     except Exception as e:

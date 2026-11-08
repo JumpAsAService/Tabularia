@@ -32,6 +32,11 @@ exposes at `/system/info` and in the app's settings menu.
   milliseconds; anything else is counted by the preview worker from the nearest cached step,
   on every engine, at most 60 s. `POST /tasks/preview/cancel` stops the preview or count that
   holds one of the person's own slots, killing its query on the server.
+- **A preview waits for a copy of its own steps that is being written.** A Pivot clicked right
+  after its Group by found the copy of the Group by's input running and computed the same
+  rows again beside it (16.6 s on 42M × 12M rows, the two sharing the worker). Now a preview
+  or a count whose chain has a step being copied into the cache waits for that copy (at most
+  120 s) and starts from it: 5.6 s, the copy's remaining time and 0.1 s of pivot.
 
 ## 1.4.1 «Romulus» — 2026-11-07
 

@@ -166,3 +166,86 @@ def test_preview_reports_the_cache_state_of_the_parent(name, storage, src, cap):
     assert eng.preview(src, small + SORT, limit=10).cache_state == "hit"
     # the Viewer: cache not used
     assert eng.preview(src, FILTER + SORT, limit=10, use_cache=False).cache_state == "off"
+
+
+# ── a preview waits for a copy of its own chain that is being written ────────────
+def test_wait_for_running_copy_nothing_running(storage, src):
+    from app.engine.stepcache_defer import wait_for_running_copy
+
+    eng = PolarsEngine(storage=storage, cache=StepCache(storage, redis_client=FakeRedis()))
+    assert wait_for_running_copy(eng, src, FILTER + SORT) == 0.0
+    assert wait_for_running_copy(eng, src, []) == 0.0
+
+
+def test_wait_for_running_copy_waits_until_written(storage, src, monkeypatch):
+    """A Pivot clicked while the copy of its upstream steps runs: it waits for the copy,
+    then starts from the cache (it does not compute the same rows beside it)."""
+    from app.engine import stepcache_defer
+
+    cache = StepCache(storage, redis_client=FakeRedis())
+    eng = PolarsEngine(storage=storage, cache=cache)
+    parent = plan_hashes(eng._source_id(src), FILTER)[-1]
+    assert cache.try_lock(parent)
+    sleeps = []
+
+    def fake_sleep(s):
+        # the copy finishes during the third poll
+        sleeps.append(s)
+        if len(sleeps) == 3:
+            cache.unlock(parent)
+            with eng._materialize_session(src) as ctx:
+                eng._materialize(ctx, src, [stepcache_defer._coerce(FILTER)[0]])
+
+    monkeypatch.setattr(stepcache_defer.time, "sleep", fake_sleep)
+    stepcache_defer.wait_for_running_copy(eng, src, FILTER + SORT)
+    assert len(sleeps) == 3 and cache.has(parent)
+    res = eng.preview(src, FILTER + SORT, limit=10)
+    assert res.row_count == 8 and eng.take_pending() == []  # started from the copy
+
+
+def test_wait_for_running_copy_stops_when_the_copy_gives_up(storage, src, monkeypatch):
+    """A copy that ends without writing (too large, failed) releases its lock: the
+    preview goes on from the source."""
+    from app.engine import stepcache_defer
+
+    cache = StepCache(storage, redis_client=FakeRedis())
+    eng = PolarsEngine(storage=storage, cache=cache)
+    parent = plan_hashes(eng._source_id(src), FILTER)[-1]
+    cache.try_lock(parent)
+    monkeypatch.setattr(stepcache_defer.time, "sleep", lambda s: cache.unlock(parent))
+    stepcache_defer.wait_for_running_copy(eng, src, FILTER + SORT)
+    assert not cache.has(parent) and not cache.is_locked(parent)
+
+
+def test_wait_for_running_copy_is_bounded(storage, src, monkeypatch):
+    from app.engine import stepcache_defer
+
+    cache = StepCache(storage, redis_client=FakeRedis())
+    eng = PolarsEngine(storage=storage, cache=cache)
+    cache.try_lock(plan_hashes(eng._source_id(src), FILTER)[-1])
+    clock = iter(range(0, 1000, 10))
+    monkeypatch.setattr(stepcache_defer.time, "monotonic", lambda: next(clock))
+    monkeypatch.setattr(stepcache_defer.time, "sleep", lambda s: None)
+    waited = stepcache_defer.wait_for_running_copy(eng, src, FILTER + SORT, max_seconds=30)
+    assert 30 <= waited <= 50
+
+
+def test_wait_ignores_a_copy_below_a_cached_step(storage, src):
+    """A lock on a step shorter than one cached already: nothing to wait for."""
+    from app.engine.stepcache_defer import wait_for_running_copy
+
+    cache = StepCache(storage, redis_client=FakeRedis())
+    eng = PolarsEngine(storage=storage, cache=cache)
+    assert eng.materialize(src, FILTER + SORT) is True
+    cache.try_lock(plan_hashes(eng._source_id(src), FILTER)[-1])
+    assert wait_for_running_copy(eng, src, FILTER + SORT + [{"type": "limit", "params": {"n": 3}}]) == 0.0
+
+
+def test_is_locked_fail_open(storage):
+    import redis as _redis
+
+    class Broken(FakeRedis):
+        def exists(self, *a):
+            raise _redis.RedisError("down")
+
+    assert StepCache(storage, redis_client=Broken()).is_locked("x") is False

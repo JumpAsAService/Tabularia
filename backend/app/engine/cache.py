@@ -157,6 +157,13 @@ class StepCache:
         except redis.RedisError:
             return True
 
+    def is_locked(self, h: str) -> bool:
+        """Is a materialization of `h` running now? Valkey down → False (nobody waits)."""
+        try:
+            return bool(self.redis.exists(self._lock_key(h)))
+        except redis.RedisError:
+            return False
+
     def unlock(self, h: str) -> None:
         try:
             self.redis.delete(self._lock_key(h))

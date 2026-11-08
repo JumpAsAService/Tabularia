@@ -20,6 +20,7 @@ and calls `_too_big(ctx, obj, final)` inside `_materialize`.
 from __future__ import annotations
 
 import logging
+import time
 from typing import Any
 
 from app.core.config import get_settings
@@ -31,6 +32,46 @@ logger = logging.getLogger(__name__)
 
 def _coerce(operations) -> list[Operation]:
     return [op if isinstance(op, Operation) else Operation(**op) for op in operations]
+
+
+# How long a preview waits at most for a copy of one of its own steps that is being
+# written now. Measured on kind (2026-11-08): a Pivot clicked right after its Group by
+# answered found the copy of the Group by's input running; computing the chain again
+# beside it took 16.6 s (the two shared the worker), the copy had 10 s left. Waiting is
+# never longer than the copy itself, and the copy computes a prefix of this very chain.
+COPY_WAIT_SECONDS = 120.0
+COPY_WAIT_POLL = 0.2
+
+
+def wait_for_running_copy(engine, source: DataSource, operations, max_seconds: float = COPY_WAIT_SECONDS) -> float:
+    """When a step of this chain is being copied into the cache right now (beyond the
+    nearest step cached already), waits for that copy to finish, so the preview starts
+    from it instead of computing the same rows a second time beside it. Returns the
+    seconds waited (0 = nothing running). A copy that ends without writing (too large,
+    failed) releases its lock, and the preview goes on from the source."""
+    cache = getattr(engine, "cache", None)
+    source_id = getattr(engine, "_source_id", None)
+    if cache is None or source_id is None or not operations or max_seconds <= 0:
+        return 0.0
+    hashes = plan_hashes(source_id(source), [op.model_dump() for op in _coerce(operations)])
+    done = 0
+    for k in range(len(hashes), 0, -1):
+        if cache.has(hashes[k - 1]):
+            done = k
+            break
+    running = [h for h in hashes[done:] if cache.is_locked(h)]
+    if not running:
+        return 0.0
+    target = running[-1]  # the longest prefix being written
+    t0 = time.monotonic()
+    while time.monotonic() - t0 < max_seconds:
+        if cache.has(target) or not cache.is_locked(target):
+            break
+        time.sleep(COPY_WAIT_POLL)
+    waited = time.monotonic() - t0
+    logger.info("step %s: waited %.1f s for its copy into the cache (%s)", target[:12], waited,
+                "written" if cache.has(target) else "not written")
+    return waited
 
 
 def max_step_rows() -> int:
