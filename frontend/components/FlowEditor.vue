@@ -1753,9 +1753,13 @@ async function refreshForNode(nodeId: string) {
     // The rows first, then the input columns when they are not known already: side by side
     // they computed the same upstream chain twice at once (measured on kind: a worker at
     // 2.7 GB instead of 1.7 on a Group by after a 42M x 12M join), and the rows matter more.
-    if (knownColumns(leftOf(nodeId)) !== null) void runPreview(nodeId)
-    else await runPreview(nodeId)
-    if (colSeq !== columnsSeq) return
+    // Cancelled in the pause itself (Esc right after the click): no preview, and «Compute
+    // again» stays; the panel's columns come all the same.
+    if (cancelledNodeId.value !== nodeId) {
+      if (knownColumns(leftOf(nodeId)) !== null) void runPreview(nodeId)
+      else await runPreview(nodeId)
+      if (colSeq !== columnsSeq) return
+    }
   }
 
   // input columns (the left parent's output); the FIRST node of a foreach body has no
