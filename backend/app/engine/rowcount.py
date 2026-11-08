@@ -99,10 +99,10 @@ def remember(key: str, rows: int, over: bool, at_most: int, client=None) -> None
         pass
 
 
-def parquet_rows(storage, bucket: str, key: str) -> int | None:
-    """The rows a parquet object holds, read from its footer (one or two ranged reads of
-    the last bytes, no data). None when the storage cannot read a range or the object is
-    not a parquet file: then the rows are counted."""
+def parquet_metadata(storage, bucket: str, key: str):
+    """A parquet object's footer (pyarrow's FileMetaData: rows, schema, the row groups'
+    statistics), read with one or two ranged reads of its last bytes, no data. None when
+    the storage cannot read a range or the object is not a parquet file."""
     read_tail = getattr(storage, "read_tail", None)
     if read_tail is None:
         return None
@@ -119,15 +119,21 @@ def parquet_rows(storage, bucket: str, key: str) -> int | None:
         import pyarrow.parquet as pq
 
         # the footer as a file of its own: the reader looks only at the end of it
-        meta = pq.read_metadata(pa.BufferReader(_MAGIC + tail[-(footer_len + 8):]))
-        return int(meta.num_rows)
+        return pq.read_metadata(pa.BufferReader(_MAGIC + tail[-(footer_len + 8):]))
     except Exception as e:  # noqa: BLE001 — any doubt: count instead
         from app.engine.query_tag import was_interrupted
 
         if was_interrupted(e):
             raise
-        logger.info("row count: the footer of %s/%s was not read (%s)", bucket, key, e)
+        logger.info("the footer of %s/%s was not read (%s)", bucket, key, e)
         return None
+
+
+def parquet_rows(storage, bucket: str, key: str) -> int | None:
+    """The rows a parquet object holds, read from its footer. None when it cannot be read:
+    then the rows are counted."""
+    meta = parquet_metadata(storage, bucket, key)
+    return int(meta.num_rows) if meta is not None else None
 
 
 def _after(rows: int, over: bool, tail: list[dict[str, Any]], at_most: int) -> tuple[int, bool]:

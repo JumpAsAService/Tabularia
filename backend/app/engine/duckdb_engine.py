@@ -308,6 +308,46 @@ class DuckDBEngine(DeferredStepCache, Engine):
             con.close()
             self._cleanup(tmp)
 
+    # ── The column profile (app/engine/profile.py): on the relation, natively ─────
+    # A `sql` step would copy the whole input into its sandbox first (op_sql): the profile
+    # reads the chain's first rows as the count does, and aggregates them in place.
+    def _profile_relation(self, source, operations, sample, use_cache, then):
+        ops = _coerce_ops(operations)
+        tmp: list[str] = []
+        con = self._connection(tmp)
+        try:
+            ctx = DuckContext(con, self.storage, tmp, preview_limit=sample, direct=self.direct)
+            hashes = plan_hashes(self._source_id(source), [op.model_dump() for op in ops])
+            try:
+                return then(self._rel_from_cache(ctx, source, ops, hashes, use_cache=use_cache).limit(sample))
+            except EngineError:
+                raise
+            except Exception as e:
+                raise EngineError(f"Error while running the flow: {e}") from e
+        finally:
+            con.close()
+            self._cleanup(tmp)
+
+    def profile_aggregates(self, source, operations, specs, sample, use_cache=False) -> dict[str, Any]:
+        from app.engine.profile import sql_aggregate
+
+        select = ", ".join(f"{sql_aggregate('duckdb', f, c, _qi)} AS {a}" for a, f, c in specs)
+
+        def run(rel):
+            row = rel.aggregate(select).fetchone()
+            return dict(zip([a for a, _, _ in specs], row or ()))
+
+        return self._profile_relation(source, operations, sample, use_cache, run)
+
+    def profile_top(self, source, operations, column, sample, k, use_cache=False) -> list[tuple[Any, int]]:
+        q = _qi(column)
+
+        def run(rel):
+            top = rel.filter(f"{q} IS NOT NULL").aggregate(f"{q} AS v, count(*) AS n", q).order("n DESC, v ASC").limit(k)
+            return [(v, int(n)) for v, n in top.fetchall()]
+
+        return self._profile_relation(source, operations, sample, use_cache, run)
+
     # ── Run (materializza l'output in streaming su disco) ─────────────────
     def run(
         self,

@@ -77,6 +77,7 @@ without any error.
 | `contains` / `ends_with` on a **numeric** column | The number is turned into text differently: `100.0` on Polars and DuckDB, `100` on the ClickHouse engines and BigQuery. | chDB, ClickHouse, BigQuery |
 | `join` with key columns of different types | Two integer types of different widths join on every engine, on a common type (the only pair refused: `Int64` with `UInt64` on the ClickHouse engines). A date with a datetime, or a decimal with an integer, also joins on DuckDB and the ClickHouse engines. A number with a text, or an integer with a float, joins only on DuckDB, which coerces and finds matches. Everywhere else these pairs raise an error. | all |
 | `cast` to boolean | Polars **fails** on text; DuckDB and BigQuery parse `"true"`/`"false"` (DuckDB also `t`/`1`/`yes`/`y` and `f`/`0`/`no`/`n`, in any case; BigQuery: any non-zero number is `true`); the ClickHouse engines return an integer and turn `-1` into `NULL`. | all |
+| A list or a struct column's nulls in the preview's column profile | A ClickHouse array is never null: the ClickHouse engines read a missing list as an empty one, and the profile says 0 nulls where the others count them. | chDB, ClickHouse |
 
 **The size of the `contains` difference, measured on real data.** On a table of 150,000
 Italian company names, 37,396 of which contain a full stop, the filter `contains "."`

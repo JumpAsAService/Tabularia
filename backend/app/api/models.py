@@ -145,6 +145,27 @@ class CountRequest(BaseModel):
                                 description="Slot: a newer request on the same slot cancels this one")
 
 
+class ProfileColumn(BaseModel):
+    name: str = Field(..., max_length=1000)
+    dtype: str = Field(default="", max_length=500)
+
+
+class ProfileRequest(BaseModel):
+    """A step's column profile (POST /tasks/profile): the preview's chain, and the columns
+    its preview gave; or, with `column`, that column's most frequent values."""
+    bucket: str = Field(..., description="The S3 bucket's name")
+    input_key: str = Field(..., description="Key of the input parquet")
+    operations: list[TransformOperation] = Field(default_factory=list, description="The chain to profile")
+    engine: Optional[str] = Field(default=None, description="The engine to use; None = the default")
+    no_cache: bool = Field(default=False, description="Do not start from the step cache (the Viewer)")
+    columns: list[ProfileColumn] = Field(default_factory=list, max_length=2000,
+                                         description="The step's columns, as its preview gave them")
+    column: Optional[str] = Field(default=None, max_length=1000,
+                                  description="One column's most frequent values instead of the profile")
+    slot: Optional[str] = Field(default=None, max_length=96, pattern=r"^[A-Za-z0-9:_-]+$",
+                                description="Slot: a newer request on the same slot cancels this one")
+
+
 class CancelSlotRequest(BaseModel):
     """Stops what holds a slot (a preview or a count): «Cancel» on a slow preview."""
     slot: str = Field(..., max_length=96, pattern=r"^[A-Za-z0-9:_-]+$")

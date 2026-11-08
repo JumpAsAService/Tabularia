@@ -220,6 +220,50 @@ class PolarsEngine(DeferredStepCache, Engine):
                 cache_state=cstate, cache_cap_rows=ccap,
             )
 
+    # ── The column profile (app/engine/profile.py): natively, on the lazy chain ──
+    def _profile_frame(self, source, operations, sample, use_cache, then):
+        ops = _coerce_ops(operations)
+        with self._session() as ctx:
+            hashes = plan_hashes(self._source_id(source), [op.model_dump() for op in ops])
+            lf = self._lazy_from_cache(ctx, source, ops, hashes, use_cache=use_cache).head(sample)
+            try:
+                return then(lf)
+            except EngineError:
+                raise
+            except _POLARS_ERRORS as e:
+                raise EngineError(f"Error while running the flow: {e}") from e
+
+    @staticmethod
+    def _profile_expr(func: str, col: str | None) -> pl.Expr:
+        if func == "rows":
+            return pl.len()
+        c = pl.col(col)
+        if func == "count":
+            return c.count()  # the values that are not null
+        if func == "distinct":
+            return c.drop_nulls().approx_n_unique()  # without the drop, a null counts as a value
+        if func == "min":
+            return c.min()
+        if func == "max":
+            return c.max()
+        lengths = c.str.len_chars()
+        return lengths.min() if func == "min_len" else lengths.max()
+
+    def profile_aggregates(self, source, operations, specs, sample, use_cache=False) -> dict[str, Any]:
+        def run(lf):
+            df = lf.select([self._profile_expr(f, c).alias(a) for a, f, c in specs]).collect(engine="streaming")
+            return df.row(0, named=True) if df.height else {}
+
+        return self._profile_frame(source, operations, sample, use_cache, run)
+
+    def profile_top(self, source, operations, column, sample, k, use_cache=False) -> list[tuple[Any, int]]:
+        def run(lf):
+            df = (lf.select(pl.col(column).alias("v")).drop_nulls().group_by("v").agg(pl.len().alias("n"))
+                  .sort(["n", "v"], descending=[True, False], nulls_last=True).head(k).collect(engine="streaming"))
+            return [(v, int(n)) for v, n in df.iter_rows()]
+
+        return self._profile_frame(source, operations, sample, use_cache, run)
+
     # ── Export (direct download, intermediate nodes too) ──────────────────
     # The xlsx format's physical limit (rows per sheet). A memory guard too: the
     # collect of the Excel export never goes beyond ~1M rows.

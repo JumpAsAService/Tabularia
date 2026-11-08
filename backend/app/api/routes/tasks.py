@@ -14,6 +14,7 @@ from app.api.preview_slots import CANCELLED as SLOT_CANCELLED
 from app.api.models import (
     TransformOperation, TaskResponse, TransformDataRequest, TaskStatusResponse,
     PreviewRequest, ExportRequest, ExportStart, CacheStatusRequest, CountRequest, CancelSlotRequest,
+    ProfileRequest,
 )
 from functools import lru_cache
 
@@ -267,6 +268,44 @@ def count_step(request: CountRequest) -> dict:
     if not payload.get("ok"):
         status = _PREVIEW_ERROR_STATUS.get(payload.get("error"), 400)
         raise HTTPException(status_code=status, detail=payload.get("detail", "Count failed"))
+    return payload["result"]
+
+
+# A profile is a hint on the columns of the rows already on screen: as the count, it gives
+# up after a minute
+PROFILE_TIMEOUT_SECONDS = 60.0
+
+
+@router.post("/profile")
+def profile_step(request: ProfileRequest) -> dict:
+    """A step's column profile (app/engine/profile.py): nulls, distinct values (estimated),
+    min and max, a text's lengths, column by column; with `column`, that column's most
+    frequent values. Asked after the preview's rows and their count, never before them.
+
+    Remembered on Valkey and answered here at once; otherwise made by the preview worker
+    (the footer's statistics, then one query over the chain's first rows), at most
+    PROFILE_TIMEOUT_SECONDS (504 past them). With a `slot`, a newer request on it (or POST
+    /tasks/preview/cancel) knocks this one down (409)."""
+    from app.engine import profile as column_profile
+
+    name = (request.engine or DEFAULT_ENGINE).lower()
+    ops = [Operation(**op.model_dump()).model_dump() for op in request.operations]
+    columns = [c.model_dump() for c in request.columns]
+    if request.column is None and not columns:
+        raise HTTPException(status_code=422, detail="The columns to profile are needed")
+    mem = column_profile.profile_key(name, request.bucket, request.input_key, ops,
+                                     [] if request.column is not None else columns, request.column)
+    got = column_profile.remembered(mem)
+    if got is not None:
+        return {**got, "how": "remembered"}
+    kwargs = {"bucket": request.bucket, "input_key": request.input_key, "operations": ops, "columns": columns,
+              "column": request.column, "engine": request.engine, "no_cache": request.no_cache}
+    payload = said_by_preview_worker(
+        lambda: on_preview_worker("app.tasks.jobs.profile_task", kwargs, request.slot, seconds=PROFILE_TIMEOUT_SECONDS),
+        PREVIEW_OUT_OF_MEMORY)
+    if not payload.get("ok"):
+        status = _PREVIEW_ERROR_STATUS.get(payload.get("error"), 400)
+        raise HTTPException(status_code=status, detail=payload.get("detail", "Profile failed"))
     return payload["result"]
 
 

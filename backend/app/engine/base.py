@@ -164,3 +164,68 @@ class Engine(ABC):
         if use_cache and take_pending is not None:
             take_pending()
         return int(next(iter(result.rows[0].values()), 0) or 0) if result.rows else 0
+
+    # The column profile (app/engine/profile.py). The dialect its aggregates are written in
+    # when they go through a `sql` step: ClickHouse's for chDB and an external ClickHouse,
+    # GoogleSQL for BigQuery. DuckDB and Polars build them natively instead.
+    profile_dialect = "clickhouse"
+
+    @staticmethod
+    def _profile_quote(name: str) -> str:
+        """An identifier in backticks: ClickHouse's and GoogleSQL's quoting alike."""
+        return "`" + str(name).replace("\\", "\\\\").replace("`", "\\`") + "`"
+
+    def _through_sql(self, source: DataSource, operations, sample: int, query_of, limit: int,
+                     use_cache: bool) -> list[dict[str, Any]]:
+        """The rows of `query_of(self_name)` over the chain's first `sample` rows, as a last
+        `sql` step read by a preview (or inside the chain's own last `sql` step, as a count
+        does: see `count_inside_sql`). Nothing is left to copy into the step cache."""
+        ops = [op.model_dump() if isinstance(op, Operation) else dict(op) for op in operations]
+        last = ops[-1] if ops else None
+        if self.count_inside_sql and last is not None and last.get("type") == "sql":
+            params = dict(last.get("params") or {})
+            inner = str(params.get("query") or "").strip().rstrip(";").strip()
+            params["query"] = query_of(f"(SELECT * FROM ({inner}\n) AS _p LIMIT {sample}) AS _q")
+            ops[-1] = {**last, "params": params}
+        else:
+            ops += [{"type": "limit", "params": {"n": sample}}, {"type": "sql", "params": {"query": query_of("self")}}]
+        result = self.preview(source, ops, limit=limit, use_cache=use_cache)
+        take_pending = getattr(self, "take_pending", None)
+        if use_cache and take_pending is not None:
+            take_pending()
+        return result.rows
+
+    def profile_aggregates(
+        self,
+        source: DataSource,
+        operations: list[Operation] | list[dict[str, Any]],
+        specs: list[tuple[str, str, str | None]],
+        sample: int,
+        use_cache: bool = False,
+    ) -> dict[str, Any]:
+        """One row of aggregates, `specs` = (alias, function, column) (profile.plan), over the
+        chain's first `sample` rows, in ONE query; `use_cache`: from the nearest step the
+        step cache holds, writing nothing to it."""
+        from app.engine.profile import sql_aggregate
+
+        select = ", ".join(f"{sql_aggregate(self.profile_dialect, f, c, self._profile_quote)} AS {a}" for a, f, c in specs)
+        rows = self._through_sql(source, operations, sample, lambda t: f"SELECT {select} FROM {t}", 1, use_cache)
+        return dict(rows[0]) if rows else {}
+
+    def profile_top(
+        self,
+        source: DataSource,
+        operations: list[Operation] | list[dict[str, Any]],
+        column: str,
+        sample: int,
+        k: int,
+        use_cache: bool = False,
+    ) -> list[tuple[Any, int]]:
+        """A column's `k` most frequent values that are not null, (value, rows), over the
+        chain's first `sample` rows; the most frequent first, a tie by the value."""
+        q = self._profile_quote(column)
+        rows = self._through_sql(
+            source, operations, sample,
+            lambda t: f"SELECT {q} AS v, count(*) AS n FROM {t} WHERE {q} IS NOT NULL GROUP BY {q} ORDER BY n DESC, v LIMIT {k}",
+            k, use_cache)
+        return [(r.get("v"), int(r.get("n") or 0)) for r in rows]

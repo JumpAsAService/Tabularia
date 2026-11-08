@@ -414,6 +414,7 @@ class BigQueryContext:
 
 class BigQueryEngine(Engine):
     engine_name = "bigquery"
+    profile_dialect = "bigquery"  # the column profile's aggregates (Engine.profile_aggregates)
 
     # the cap on billed bytes is set from the panel (core/panel_settings.py): the engine
     # lives as long as the process, its section is read from there at every use
