@@ -262,7 +262,14 @@ func readQuery(raw map[string]string, res *dataapiwire.Resource, t *Table) (*Que
 		q.Conds = append(q.Conds, cond)
 	}
 	if q.Columns == nil {
-		q.Columns = t.Columns
+		// the file's columns that the definition still publishes: a file prepared before a
+		// column was taken out may be served until the new one is ready, never that column
+		q.Columns = []Column{}
+		for _, c := range t.Columns {
+			if slices.Contains(res.Columns, c.Name) {
+				q.Columns = append(q.Columns, c)
+			}
+		}
 	}
 	if !sortGiven {
 		sortText = strings.Join(res.DefaultSort, ",")

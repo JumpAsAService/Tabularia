@@ -827,3 +827,24 @@ func TestFileOrderAcrossRowGroups(t *testing.T) {
 		}
 	}
 }
+
+// A column taken out of a resource is not served a moment longer, while the file with the
+// new columns is prepared, or when it cannot be (the data missing, a preparation failing).
+func TestColumnTakenOutStopsAtOnce(t *testing.T) {
+	f := newFixture(t)
+	f.load()
+	res := &f.m.Resources[0]
+	res.Columns = slices.DeleteFunc(slices.Clone(res.Columns), func(c string) bool { return c == "name" })
+	res.Filters = slices.DeleteFunc(slices.Clone(res.Filters), func(x dataapiwire.Filter) bool { return x.Column == "name" })
+	res.Available, res.Unavailable, res.URL = false, "no_data", "" // the old file stays the one served
+	f.s.Apply(f.m)
+	for _, path := range []string{"/data/crm/customers?id=1", "/data/crm/customers?id=1&_format=csv"} {
+		a := f.get(path, "main")
+		f.want(a, 200, "")
+		if bytes.Contains(a.body, []byte(`name`)) {
+			t.Errorf("%s: the column taken out is still served: %s", path, a.body)
+		}
+	}
+	f.want(f.get("/data/crm/customers?_columns=id,name", "main"), 400, "unknown_column")
+	f.want(f.get("/data/crm/customers?name=x", "main"), 400, "not_filterable")
+}
