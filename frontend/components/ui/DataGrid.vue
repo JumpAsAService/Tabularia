@@ -4,8 +4,9 @@
 //
 // It draws only the rows in view (and a margin around them): a Viewer of thousands of rows
 // and dozens of columns costs what the rows on screen cost. The columns get their widths
-// once per result, measured from the longest values, so they do not move while the rows
-// under them change. The header stays in place over its own scroll box.
+// once per result, measured in the page's own type on the longest values, so they do not
+// move while the rows under them change and no value is cut below a column's cap. The
+// header stays in place over its own scroll box.
 import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { Check, CircleAlert, MousePointerClick } from 'lucide-vue-next'
@@ -55,30 +56,33 @@ function text(v: unknown, name: string, dtype: string): string {
   const f = formatters.value?.[name]
   return f ? f(v) : exactText(v)
 }
-// the exact value whenever the cell shows it otherwise (rounded, cut at the column's cap)
-const LONG = 48
-function tip(v: unknown, name: string, dtype: string): string | undefined {
+// the exact value whenever the cell shows it otherwise: rounded or grouped, or in a column
+// whose longest values pass its cap (where a value may be cut)
+function tip(v: unknown, name: string, dtype: string, j: number): string | undefined {
   if (v === null || v === undefined) return undefined
   const exact = exactText(v)
   const shown = text(v, name, dtype)
-  return shown !== exact || exact.length > LONG ? exact : undefined
+  return shown !== exact || cappedCols.value[j] ? exact : undefined
 }
 
 // A row's cells as drawn (text, tooltip, class), made the first time the row comes into
 // view and kept for the result: scrolling back and forth only diffs, it formats nothing.
 // A plain Map, not reactive: it follows the result through `cellsFor`'s dependency on it.
 type Cell = { text: string; tip: string | undefined; cls: string }
+// the columns whose longest values pass the cap (see computeWidths)
+const cappedCols = ref<boolean[]>([])
 let cellMemo = new Map<number, Cell[]>()
-watch([() => props.result, formatters, () => props.readable], () => { cellMemo = new Map() })
+watch([() => props.result, formatters, () => props.readable, cappedCols], () => { cellMemo = new Map() })
 function cellsFor(i: number): Cell[] {
   void props.result // re-read when the result changes
+  void cappedCols.value // and when the columns that take a tooltip do
   let cells = cellMemo.get(i)
   if (cells) return cells
   const row = rows.value[i] ?? {}
-  cells = cols.value.map((c) => {
+  cells = cols.value.map((c, j) => {
     const v = row[c.name]
     const nul = v === null || v === undefined
-    return { text: text(v, c.name, c.dtype), tip: tip(v, c.name, c.dtype), cls: (nul ? 'null' : '') + (isNum(c.dtype) ? ' num' : '') }
+    return { text: text(v, c.name, c.dtype), tip: tip(v, c.name, c.dtype, j), cls: (nul ? 'null' : '') + (isNum(c.dtype) ? ' num' : '') }
   })
   cellMemo.set(i, cells)
   return cells
@@ -222,61 +226,128 @@ watch(() => props.result, async (r) => {
 })
 
 // ── the columns' widths, once per result ──────────────────────────────────────
-// Measured on the longest values (by characters: a few per column), so they hold while
-// the rows drawn change under them. Capped as a cell is (28em at 12px), whole in the tooltip.
+// Measured in the page itself, in the cells' own type (IBM Plex Sans with tabular figures,
+// which a canvas does not draw), on the ~8 longest values of each column plus a character
+// of air; measured again when the fonts finish loading, so a first visit does not keep the
+// widths of a fallback font. Capped as a cell is (28em at 12px): a column whose longest
+// values pass the cap gives every value its tooltip.
 const CAP = 336
 const MIN = 44
 const PAD = 19 // 9px each side + the rule
+const CANDIDATES = 8
+const SANS = '"IBM Plex Sans", system-ui, sans-serif'
 let ctx: CanvasRenderingContext2D | null = null
-let family = '"IBM Plex Sans", system-ui, sans-serif'
-const MONO = 'ui-monospace, SFMono-Regular, Menlo, monospace'
 function measureText(s: string, font: string): number {
   if (!ctx) {
     if (typeof document === 'undefined') return s.length * 7
     ctx = document.createElement('canvas').getContext('2d')
-    const f = scroller.value ? getComputedStyle(scroller.value).fontFamily : ''
-    if (f) family = f
   }
   if (!ctx) return s.length * 7
   ctx.font = font
   return ctx.measureText(s).width
 }
-function longest(values: string[], k = 3): string[] {
+/** The k longest strings by characters: the few worth measuring in pixels. */
+function longest(values: string[], k = CANDIDATES): string[] {
   const top: string[] = []
+  let floor = -1 // the shortest length kept, once the list is full
   for (const s of values) {
-    if (top.length < k) { top.push(s); top.sort((a, b) => b.length - a.length); continue }
-    if (s.length > top[k - 1].length) { top[k - 1] = s; top.sort((a, b) => b.length - a.length) }
+    if (top.length === k && s.length <= floor) continue
+    top.push(s)
+    top.sort((a, b) => b.length - a.length)
+    if (top.length > k) top.pop()
+    if (top.length === k) floor = top[k - 1].length
   }
   return top
 }
-const widths = computed<number[]>(() => {
+type Plan = { cells: string[]; name: string; type: string; mark: string }
+/** One hidden table in the page, every candidate in it, read in one layout. */
+function measureInPage(plans: Plan[]): { cells: number[]; head: number[]; ch: number } | null {
+  if (typeof document === 'undefined' || !document.body) return null
+  const table = document.createElement('table')
+  table.className = 'data'
+  table.setAttribute('aria-hidden', 'true')
+  table.style.cssText = 'position:absolute;left:0;top:0;width:auto;visibility:hidden;pointer-events:none;contain:layout style'
+  const th = table.createTHead().insertRow().appendChild(document.createElement('th'))
+  const td = table.createTBody().insertRow().insertCell()
+  td.style.cssText = 'max-width:none;overflow:visible'
+  const block = (parent: HTMLElement, text: string, cls = '') => {
+    const el = parent.appendChild(document.createElement(cls ? 'span' : 'div'))
+    if (cls) el.className = cls
+    el.style.cssText = 'display:block;width:max-content'
+    el.textContent = text
+    return el
+  }
+  const zero = block(td, '0')
+  const cellEls = plans.map((p) => p.cells.map((c) => block(td, c)))
+  const nameEls = plans.map((p) => block(th, p.name))
+  const typeEls = plans.map((p) => {
+    const el = block(th, p.type, 'ct')
+    if (p.mark) {
+      const mk = el.appendChild(document.createElement('span'))
+      mk.style.font = `600 10.5px ${SANS}`
+      mk.textContent = ` · ${p.mark}`
+    }
+    return el
+  })
+  document.body.appendChild(table)
+  try {
+    const w = (el: HTMLElement) => el.getBoundingClientRect().width
+    return {
+      ch: w(zero),
+      cells: cellEls.map((els) => els.reduce((m, el) => Math.max(m, w(el)), 0)),
+      head: plans.map((_, j) => Math.max(w(nameEls[j]) + 16, w(typeEls[j]))), // + the copied tick
+    }
+  } finally {
+    table.remove()
+  }
+}
+const fontsEpoch = ref(0) // moves when a font finishes loading: the widths are measured again
+const widths = ref<number[]>([])
+function computeWidths() {
   const rs = rows.value
-  return cols.value.map((c) => {
-    let candidates: string[]
+  const plans: Plan[] = cols.value.map((c) => {
+    let cells: string[]
     if (isNum(c.dtype) && !props.readable) {
-      // the longest number is the largest or the smallest one, or one with the most decimals
-      let lo: unknown = null; let hi: unknown = null
+      // the longest number is the largest or the smallest one (one count of decimals a column)
+      let lo: number | null = null; let hi: number | null = null
       for (const r of rs) {
         const v = r[c.name]
         if (typeof v !== 'number') continue
-        if (lo === null || v < (lo as number)) lo = v
-        if (hi === null || v > (hi as number)) hi = v
+        if (lo === null || v < lo) lo = v
+        if (hi === null || v > hi) hi = v
       }
-      candidates = [lo, hi].filter((v) => v !== null).map((v) => text(v, c.name, c.dtype))
+      cells = [lo, hi].filter((v) => v !== null).map((v) => text(v, c.name, c.dtype))
     } else {
-      candidates = longest(rs.map((r) => text(r[c.name], c.name, c.dtype)))
+      cells = longest(rs.map((r) => text(r[c.name], c.name, c.dtype)))
     }
-    let w = 0
-    for (const s of candidates) w = Math.max(w, measureText(s, `400 12px ${family}`))
     const m = markOf(c.name)
-    const head = Math.max(
-      measureText(c.name, `600 12px ${family}`) + 16, // the copied tick beside the name
-      measureText(shortDtype(c.dtype), `400 11px ${MONO}`) + (m ? measureText(` · ${markLabel(m)}`, `600 10.5px ${family}`) : 0),
-    )
-    return Math.round(Math.min(CAP, Math.max(MIN, w, head)) + PAD)
+    return { cells, name: c.name, type: shortDtype(c.dtype), mark: m ? markLabel(m) : '' }
   })
+  const got = measureInPage(plans)
+  const ws: number[] = []; const capped: boolean[] = []
+  plans.forEach((p, j) => {
+    // no page to measure in (a render on the server): the canvas, in the font asked for
+    const cell = got ? got.cells[j] + got.ch : Math.max(0, ...p.cells.map((c) => measureText(c, `400 12px ${SANS}`))) + 7
+    const head = got ? got.head[j] : Math.max(measureText(p.name, `600 12px ${SANS}`) + 16, measureText(p.type, '400 11px ui-monospace, monospace') + (p.mark ? measureText(` · ${p.mark}`, `600 10.5px ${SANS}`) : 0))
+    capped.push(cell > CAP)
+    ws.push(Math.ceil(Math.min(CAP, Math.max(MIN, cell, head)) + PAD))
+  })
+  widths.value = ws
+  if (capped.join() !== cappedCols.value.join()) cappedCols.value = capped
+}
+// the marks as text: a new object with the same marks (the editor recomputes them) measures nothing
+watch([() => props.result, formatters, () => JSON.stringify(props.changes?.marks ?? {}), () => props.readable, fontsEpoch], computeWidths, { immediate: true })
+function onFontsLoaded() { fontsEpoch.value++ }
+onMounted(() => {
+  const fonts = typeof document !== 'undefined' ? document.fonts : undefined
+  if (!fonts) return
+  fonts.addEventListener?.('loadingdone', onFontsLoaded)
+  if (fonts.status !== 'loaded') fonts.ready.then(onFontsLoaded, () => {})
 })
-const rnWidth = computed(() => Math.round(measureText(String(rows.value.length), `400 11px ${family}`) + 18))
+onBeforeUnmount(() => {
+  if (typeof document !== 'undefined') document.fonts?.removeEventListener?.('loadingdone', onFontsLoaded)
+})
+const rnWidth = computed(() => Math.round(measureText(String(rows.value.length), `400 11px ${SANS}`) + 18))
 const tableWidth = computed(() => widths.value.reduce((s, w) => s + w, rnWidth.value))
 
 // ── the skeleton: the same columns as the last result (clamp 3–8), stable widths ──
