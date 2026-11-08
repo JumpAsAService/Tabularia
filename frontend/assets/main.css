@@ -538,6 +538,9 @@ optgroup { font-style: normal; color: var(--muted); }
 .also-open span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .also-open-why { color: var(--muted); }
 @media (max-width: 900px) { .also-open-why { display: none; } }
+/* the editor's own toasts (ToastHost host="canvas"): over the canvas, top right, below the
+   line of the «also open by» notice, never over the preview's numbers */
+.canvas-toasts { grid-area: canvas; align-self: start; justify-self: end; z-index: 7; margin: 50px 14px 0 0; }
 
 .app {
   display: grid;

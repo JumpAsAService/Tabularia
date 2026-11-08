@@ -248,9 +248,19 @@ const busy = ref(false)
 // extra query, and never saved in the flow (provide → node components).
 // `rows` is missing when only the columns are known (`cols` request, limit 1).
 const nodeStats = reactive<Record<string, NodeStats>>({})
-// nodes for which the «upstream step over the cache cap» warning has been shown already
-// in this session: the toast once, then the node speaks
+// steps for which the «upstream step over the cache cap» warning has been shown already in
+// this browser session (this flow's node): the toast once, then the node and its panel speak
+const CACHE_WARNED_KEY = 'tabularia-cache-cap-warned'
 const cacheWarned = new Set<string>()
+function firstCacheWarning(nodeId: string): boolean {
+  const id = `${flowId.value ?? 'new'}:${nodeId}`
+  let seen: string[] = []
+  try { seen = JSON.parse(sessionStorage.getItem(CACHE_WARNED_KEY) || '[]') } catch { /* no storage: this page's memory */ }
+  if (cacheWarned.has(id) || seen.includes(id)) return false
+  cacheWarned.add(id)
+  try { sessionStorage.setItem(CACHE_WARNED_KEY, JSON.stringify([...seen, id].slice(-200))) } catch { /* idem */ }
+  return true
+}
 provide('nodeStats', nodeStats)
 
 // ── Which nodes have their result in the step cache (a halo on the node) ────────
@@ -1964,10 +1974,10 @@ async function runPreview(nodeId: string) {
     const res = await apiPreview(body, 'preview')
     previewMemo.set(key, { at: Date.now(), res })
     cacheCheckAfterPreview()
-    if (res.cache_state === 'skipped' && !cacheWarned.has(nodeId)) {
-      cacheWarned.add(nodeId)
-      // one toast for the whole editor, its text updated: three nodes over the cap made three
-      toast.warning(t('flowEditor.cacheSkippedToast', { n: fmt.count(res.cache_cap_rows ?? 0) }), 'cache-cap')
+    if (res.cache_state === 'skipped' && firstCacheWarning(nodeId)) {
+      // one toast for the whole editor, its text updated: three nodes over the cap made three.
+      // Over the canvas, top right: the page's corner is over the preview's numbers.
+      toast.warning(t('flowEditor.cacheSkippedToast', { n: fmt.count(res.cache_cap_rows ?? 0) }), 'cache-cap', 'canvas')
     }
     if (seq === previewSeq) {
       if (skeleton) await skeletonPad(t0)
@@ -2822,6 +2832,9 @@ async function pollTask(id: string) {
         <ChartPanel v-else :columns="preview?.columns ?? []" :query="chartQuery" />
       </div>
     </div>
+    <!-- the editor's own corner for toasts: over the canvas, top right, never over the
+         preview's numbers -->
+    <ToastHost host="canvas" class="canvas-toasts" />
     <FlowQuickMenu ref="quickMenu" :items="shortcutItems" @pick="addOperationAt" @customize="shortcutsOpen = true" @close="onQuickMenuClose" />
     <FlowShortcutsDialog
       :open="shortcutsOpen"
