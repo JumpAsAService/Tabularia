@@ -802,7 +802,7 @@ export default {
     "moreThan": "oltre {n} righe",
     "firstShort": "prime {shown} righe",
     "columns": "{n} colonne",
-    "removed": "{n} rimosse",
+    "removed": "{n} colonna rimossa | {n} colonne rimosse",
     "removedTitle": "Colonne tolte da questo passo",
     "computing": "Calcolo…",
     "seconds": "{s} s",

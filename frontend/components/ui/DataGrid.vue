@@ -14,7 +14,7 @@ import type { PreviewResult } from '~/composables/useApi'
 import { readableNumber } from '~/composables/readableNumber'
 import {
   ariaRowCount, exactText, gridColumnFormatters, isNumericDtype, shortDtype, toTsv, visibleWindow,
-  type ColumnChanges, type ColumnMark, type RowCount,
+  type ColumnChanges, type ColumnMark, type GridColumn, type RowCount,
 } from '~/composables/previewGrid'
 
 const props = withDefaults(defineProps<{
@@ -42,12 +42,29 @@ const props = withDefaults(defineProps<{
   // what to say when there is nothing at all
   empty?: string
   label?: string
-}>(), { summary: undefined, summaryId: undefined, changes: null, count: null, empty: undefined, label: undefined })
+  // the columns of what is being computed, when the page knows them already (the node's
+  // last preview, a source's schema): the header names them at once, over a skeleton.
+  // Not known: the header of the rows on screen dims with them.
+  pendingColumns?: GridColumn[] | null
+}>(), { summary: undefined, summaryId: undefined, changes: null, count: null, empty: undefined, label: undefined, pendingColumns: null })
 
 const { t, locale } = useI18n()
+const uid = `dg-${Math.random().toString(36).slice(2, 9)}`
 
-const cols = computed(() => props.result?.columns ?? [])
-const rows = computed(() => props.result?.rows ?? [])
+// ── what is drawn: the result, or the header of what is being computed ──────────
+const sameColumns = (a: GridColumn[], b: GridColumn[]) =>
+  a.length === b.length && a.every((c, j) => c.name === b[j].name && c.dtype === b[j].dtype)
+// the columns being computed are known and are not the ones on screen: their header, a skeleton under it
+const pending = computed(() => {
+  const next = props.pendingColumns
+  if (!next?.length) return false
+  if (props.loading && !props.result) return true
+  return !!props.stale && !!props.result && !sameColumns(next, props.result.columns)
+})
+// the rows on screen are being replaced by rows of columns not known: the header dims too
+const staleHead = computed(() => !!props.stale && !!props.result && !props.pendingColumns?.length)
+const cols = computed<GridColumn[]>(() => (pending.value ? props.pendingColumns! : props.result?.columns ?? []))
+const rows = computed<Record<string, unknown>[]>(() => (pending.value ? [] : props.result?.rows ?? []))
 const isNum = (dtype: string) => isNumericDtype(dtype)
 
 // one formatter per column, built once per result
@@ -74,7 +91,7 @@ type Cell = { text: string; tip: string | undefined; cls: string }
 // the columns whose longest values pass the cap (see computeWidths)
 const cappedCols = ref<boolean[]>([])
 let cellMemo = new Map<number, Cell[]>()
-watch([() => props.result, formatters, () => props.readable, cappedCols], () => { cellMemo = new Map() })
+watch([() => props.result, formatters, () => props.readable, cappedCols, pending], () => { cellMemo = new Map() })
 function cellsFor(i: number): Cell[] {
   void props.result // re-read when the result changes
   void cappedCols.value // and when the columns that take a tooltip do
@@ -91,7 +108,7 @@ function cellsFor(i: number): Cell[] {
 }
 
 // ── the summary the grid says itself (the surfaces without a tab bar) ─────────────
-const ownSummaryId = `dg-sum-${Math.random().toString(36).slice(2, 9)}`
+const ownSummaryId = `${uid}-sum`
 const ownSummary = computed(() => {
   if (props.summary !== undefined || !props.result) return null
   const n = props.result.rows.length.toLocaleString(locale.value)
@@ -100,16 +117,17 @@ const ownSummary = computed(() => {
 })
 const describedBy = computed(() => props.summaryId ?? (ownSummary.value ? ownSummaryId : undefined))
 // the real total when it is known, -1 («unknown») while it is not: never the rows drawn
-const rowCountAria = computed(() => ariaRowCount(rows.value.length, !!props.result?.truncated, props.count ?? { state: 'none' }))
+const rowCountAria = computed(() =>
+  pending.value ? -1 : ariaRowCount(rows.value.length, !!props.result?.truncated, props.count ?? { state: 'none' }))
 
 // ── marks: what the step changed ───────────────────────────────────────────────
 function markOf(name: string): ColumnMark | undefined {
-  return props.changes?.marks[name]
+  return pending.value ? undefined : props.changes?.marks[name]
 }
 function markLabel(m: ColumnMark): string {
   return t(m.kind === 'new' ? 'dataGrid.markNew' : m.kind === 'renamed' ? 'dataGrid.markRenamed' : 'dataGrid.markRetyped')
 }
-function headTitle(c: { name: string; dtype: string }): string {
+function headTitle(c: GridColumn): string {
   const m = markOf(c.name)
   const lines = [c.name, c.dtype]
   if (m?.kind === 'new') lines.push(t('dataGrid.markNewTitle'))
@@ -181,6 +199,11 @@ const hoverCol = ref(-1)
 function onOver(e: MouseEvent) {
   const cell = (e.target as HTMLElement).closest?.('td, th') as HTMLTableCellElement | null
   hoverCol.value = cell ? cell.cellIndex : -1
+  // a value wider than its cell without a tooltip of its own gets one, the first time it is pointed at
+  if (cell?.tagName === 'TD' && cell.dataset.c !== undefined && !cell.title && cell.scrollWidth > cell.clientWidth) {
+    const c = cols.value[Number(cell.dataset.c)]
+    if (c) cell.title = exactText(rows.value[Number(cell.dataset.r)]?.[c.name])
+  }
 }
 
 // ── which rows are drawn ───────────────────────────────────────────────────────
@@ -189,6 +212,8 @@ const rowH = ref(26) // measured on the first row drawn
 const headH = ref(41)
 const viewport = ref(400)
 const scrollTop = ref(0)
+// scrolled sideways: the pinned row numbers cast a shadow on the columns under them
+const scrolledX = ref(false)
 const win = computed(() => visibleWindow(Math.max(0, scrollTop.value - headH.value), viewport.value, rowH.value, rows.value.length))
 const shownRows = computed(() => {
   const out: number[] = []
@@ -205,6 +230,9 @@ function onScroll() {
     frame = 0
     const el = scroller.value
     if (!el) return
+    // read once a frame, nothing written to the layout: only a change of side flips a class
+    const sx = el.scrollLeft > 0
+    if (sx !== scrolledX.value) scrolledX.value = sx
     // only a move that changes the rows drawn re-renders (see visibleWindow's snap)
     const next = el.scrollTop
     const before = win.value
@@ -248,12 +276,13 @@ onBeforeUnmount(() => {
 // a new result with other columns starts from the top-left; the same columns (a parameter
 // changed, the same step again) keep the place
 let lastShape = ''
-watch(() => props.result, async (r) => {
-  const shape = r ? r.columns.map((c) => c.name).join('\u0001') : ''
+watch(cols, async (cs) => {
+  const shape = cs.map((c) => c.name).join('\u0001')
   if (shape !== lastShape) {
     lastShape = shape
     activeHead.value = 0
     scrollTop.value = 0
+    scrolledX.value = false
     await nextTick()
     if (scroller.value) { scroller.value.scrollTop = 0; scroller.value.scrollLeft = 0 }
   } else {
@@ -262,16 +291,23 @@ watch(() => props.result, async (r) => {
   }
   measure()
 })
+watch(() => props.result, async () => {
+  await nextTick()
+  measure()
+})
 
 // ── the columns' widths, once per result ──────────────────────────────────────
 // Measured in the page itself, in the cells' own type (IBM Plex Sans with tabular figures,
 // which a canvas does not draw), on the ~8 longest values of each column plus a character
-// of air; measured again when the fonts finish loading, so a first visit does not keep the
-// widths of a fallback font. Capped as a cell is (28em at 12px): a column whose longest
-// values pass the cap gives every value its tooltip.
+// of air and two pixels, so a value is never cut by a rounding; measured again when the
+// fonts finish loading, so a first visit does not keep the widths of a fallback font.
+// Capped as a cell is (28em at 12px): a column whose longest values pass the cap gives
+// every value its tooltip. The same columns again (another node of the same shape, the
+// rows arriving under a header named before them) never narrow: nothing jumps back.
 const CAP = 336
 const MIN = 44
 const PAD = 19 // 9px each side + the rule
+const AIR = 2
 const CANDIDATES = 8
 const SANS = '"IBM Plex Sans", system-ui, sans-serif'
 let ctx: CanvasRenderingContext2D | null = null
@@ -341,6 +377,8 @@ function measureInPage(plans: Plan[]): { cells: number[]; head: number[]; ch: nu
 }
 const fontsEpoch = ref(0) // moves when a font finishes loading: the widths are measured again
 const widths = ref<number[]>([])
+let widthShape = ''
+let refit = false // the fonts changed: the widths may narrow to the real type's
 function computeWidths() {
   const rs = rows.value
   const plans: Plan[] = cols.value.map((c) => {
@@ -362,20 +400,24 @@ function computeWidths() {
     return { cells, name: c.name, type: shortDtype(c.dtype), mark: m ? markLabel(m) : '' }
   })
   const got = measureInPage(plans)
-  const ws: number[] = []; const capped: boolean[] = []
+  let ws: number[] = []; const capped: boolean[] = []
   plans.forEach((p, j) => {
     // no page to measure in (a render on the server): the canvas, in the font asked for
     const cell = got ? got.cells[j] + got.ch : Math.max(0, ...p.cells.map((c) => measureText(c, `400 12px ${SANS}`))) + 7
     const head = got ? got.head[j] : Math.max(measureText(p.name, `600 12px ${SANS}`) + 16, measureText(p.type, '400 11px ui-monospace, monospace') + (p.mark ? measureText(` · ${p.mark}`, `600 10.5px ${SANS}`) : 0))
     capped.push(cell > CAP)
-    ws.push(Math.ceil(Math.min(CAP, Math.max(MIN, cell, head)) + PAD))
+    ws.push(Math.ceil(Math.min(CAP, Math.max(MIN, cell + (p.cells.length ? AIR : 0), head)) + PAD))
   })
+  const shape = cols.value.map((c) => `${c.name}\u0002${c.dtype}`).join('\u0001')
+  if (shape === widthShape && !refit && widths.value.length === ws.length) ws = ws.map((w, j) => Math.max(w, widths.value[j]))
+  widthShape = shape
+  refit = false
   widths.value = ws
   if (capped.join() !== cappedCols.value.join()) cappedCols.value = capped
 }
 // the marks as text: a new object with the same marks (the editor recomputes them) measures nothing
-watch([() => props.result, formatters, () => JSON.stringify(props.changes?.marks ?? {}), () => props.readable, fontsEpoch], computeWidths, { immediate: true })
-function onFontsLoaded() { fontsEpoch.value++ }
+watch([() => props.result, cols, formatters, () => JSON.stringify(props.changes?.marks ?? {}), () => props.readable, fontsEpoch], computeWidths, { immediate: true })
+function onFontsLoaded() { refit = true; fontsEpoch.value++ }
 onMounted(() => {
   const fonts = typeof document !== 'undefined' ? document.fonts : undefined
   if (!fonts) return
@@ -385,7 +427,8 @@ onMounted(() => {
 onBeforeUnmount(() => {
   if (typeof document !== 'undefined') document.fonts?.removeEventListener?.('loadingdone', onFontsLoaded)
 })
-const rnWidth = computed(() => Math.round(measureText(String(rows.value.length), `400 11px ${SANS}`) + 18))
+// the row numbers' width: of the rows on screen, or of the ones before while the next compute
+const rnWidth = computed(() => Math.round(measureText(String(pending.value ? props.result?.rows.length || 100 : rows.value.length), `400 11px ${SANS}`) + 18))
 const tableWidth = computed(() => widths.value.reduce((s, w) => s + w, rnWidth.value))
 
 // ── the skeleton: the same columns as the last result (clamp 3–8), stable widths ──
@@ -395,8 +438,12 @@ const skW = (r: number, c: number) => `${SK_WIDTHS[(r * 3 + c) % SK_WIDTHS.lengt
 </script>
 
 <template>
-  <div class="datagrid" :class="{ 'dg-stale': stale && !!result }" :aria-busy="stale || loading ? 'true' : undefined">
-    <div v-if="loading && !result" class="dg-skeleton">
+  <div
+    class="datagrid"
+    :class="{ 'dg-stale': stale && !!result && !pending, 'dg-stale-head': staleHead }"
+    :aria-busy="stale || loading ? 'true' : undefined"
+  >
+    <div v-if="loading && !result && !pending" class="dg-skeleton">
       <!-- the summary's line only where the grid says its own: the surfaces with a tab bar
            say it there, and the table must not jump up by a line when it arrives -->
       <div v-if="summary === undefined" class="pad"><span class="sk" style="width: 150px" /></div>
@@ -416,22 +463,22 @@ const skW = (r: number, c: number) => `${SK_WIDTHS[(r * 3 + c) % SK_WIDTHS.lengt
         </tbody>
       </table>
     </div>
-    <div v-else-if="error" class="dg-state dg-error" role="alert">
+    <div v-else-if="error && !pending" class="dg-state dg-error" role="alert">
       <CircleAlert :size="16" class="dg-state-icon" aria-hidden="true" />
       <span>{{ error }}</span>
     </div>
-    <div v-else-if="note && !result" class="dg-state dg-note-state muted">
+    <div v-else-if="note && !result && !pending" class="dg-state dg-note-state muted">
       <span>{{ note }}</span>
       <slot name="action" />
     </div>
-    <div v-else-if="!result" class="dg-state dg-empty muted">
+    <div v-else-if="!result && !pending" class="dg-state dg-empty muted">
       <MousePointerClick :size="16" class="dg-state-icon" aria-hidden="true" />
       <span>{{ empty ?? $t('dataGrid.selectNode') }}</span>
     </div>
     <template v-else>
       <div v-if="note" class="pad dg-note">{{ note }}</div>
       <div v-if="ownSummary" :id="ownSummaryId" class="dg-summary">{{ ownSummary }}</div>
-      <div class="dg-frame">
+      <div class="dg-frame" :class="{ 'dg-sx': scrolledX }">
         <div
           ref="scroller"
           class="dg-scroll"
@@ -495,12 +542,20 @@ const skW = (r: number, c: number) => `${SK_WIDTHS[(r * 3 + c) % SK_WIDTHS.lengt
                 >{{ cell.text }}</td>
               </tr>
               <tr v-if="padBottom" class="spacer" aria-hidden="true"><td :colspan="cols.length + 1" :style="{ height: `${padBottom}px` }" /></tr>
+              <!-- the rows of what is being computed, under its header -->
+              <template v-if="pending">
+                <tr v-for="r in 8" :key="`sk${r}`" class="dg-skrow" aria-hidden="true">
+                  <td class="rn" />
+                  <td v-for="(c, j) in cols" :key="c.name" :class="{ num: isNum(c.dtype) }"><span class="sk" :style="{ width: skW(r, j) }" /></td>
+                </tr>
+              </template>
             </tbody>
           </table>
-          <p v-if="!rows.length" class="dg-norows muted">{{ $t('dataGrid.noRows') }}</p>
+          <p v-if="!rows.length && !pending" class="dg-norows muted">{{ $t('dataGrid.noRows') }}</p>
         </div>
       </div>
     </template>
+
   </div>
 </template>
 
@@ -523,32 +578,50 @@ const skW = (r: number, c: number) => `${SK_WIDTHS[(r * 3 + c) % SK_WIDTHS.lengt
 @supports not selector(:has(*)) {
   .dg-scroll:focus-visible { outline: 2px solid var(--accent); outline-offset: -2px; }
 }
-/* the rows of what is being replaced: still there, plainly not the answer. Only the body:
-   the header keeps its contrast, the columns are still the ones being computed */
-.dg-table tbody { transition: opacity var(--dur-2) ease-out; }
+/* the rows of what is being replaced: still there, plainly not the answer. The header keeps
+   its contrast when it names the columns being computed, and dims with the rows when it
+   cannot */
+.dg-table tbody, .dg-table thead th > * { transition: opacity var(--dur-2) ease-out; }
 .dg-stale .dg-table tbody { opacity: 0.42; }
-@media (prefers-reduced-motion: reduce) { .dg-table tbody { transition: none; } }
+.dg-stale-head .dg-table thead th > * { opacity: 0.42; }
+@media (prefers-reduced-motion: reduce) { .dg-table tbody, .dg-table thead th > * { transition: none; } }
 
 .dg-table { table-layout: fixed; min-width: 100%; }
 .data th.num, .data td.num { text-align: right; }
-.dg-table td { white-space: nowrap; }
+/* one line height for every row: a ∅ drawn from a fallback font made its row 3px taller */
+.dg-table td { white-space: nowrap; line-height: 15px; }
 /* the zebra by the row's own index: drawn rows change as it scrolls, their parity must not */
 .dg-table tbody tr:nth-child(n) { background: transparent; }
 .dg-table tbody tr.even:nth-child(n) { background: var(--row-even); }
 .dg-table tbody tr[aria-rowindex]:nth-child(n):hover { background: var(--row-hover); }
 .dg-table tr.spacer td { padding: 0; border: 0; }
 
-/* the row numbers: pinned on the left while the columns scroll */
+/* the row numbers: pinned on the left while the columns scroll, ruled on their right like the
+   header (an inset shadow: border-collapse drops a sticky cell's borders), and casting a
+   shadow on the columns once they scroll under them */
 .dg-table .rn {
   position: sticky; left: 0; z-index: 1;
   background: var(--dg-bg);
   color: var(--muted); font-size: 11px; text-align: right; padding-left: 6px; padding-right: 8px;
   font-variant-numeric: tabular-nums;
+  box-shadow: inset -1px 0 0 var(--border);
+  transition: box-shadow var(--dur-2) ease-out;
+  overflow: visible; /* a cell clips: the cover below must reach past its padding box */
 }
+/* border-collapse paints a cell's background from the middle of its borders, and the
+   collapsed left border stays where the cell was before it stuck: the first pixel of the
+   pinned cell let the scrolled cells through. Covered from the box's edge inwards */
+.dg-table .rn::before {
+  content: ''; position: absolute; top: -1px; bottom: -1px; left: -1px; width: 3px;
+  background: inherit; pointer-events: none;
+}
+.dg-sx .dg-table .rn { box-shadow: inset -1px 0 0 var(--border), var(--shadow-pin); }
 .dg-table tbody tr.even td.rn { background-image: linear-gradient(var(--row-even), var(--row-even)); }
 .dg-table tbody tr:hover td.rn { background-image: linear-gradient(var(--row-hover), var(--row-hover)); }
 .dg-table thead th { z-index: 2; }
-.dg-table thead th.rn { z-index: 3; background: var(--panel-2); }
+.dg-table thead th.rn { z-index: 3; background: var(--panel-2); box-shadow: inset 0 -1px 0 var(--border), inset -1px 0 0 var(--border); }
+.dg-sx .dg-table thead th.rn { box-shadow: inset 0 -1px 0 var(--border), inset -1px 0 0 var(--border), var(--shadow-pin); }
+@media (prefers-reduced-motion: reduce) { .dg-table .rn { transition: none; } }
 
 /* the header: the name (a button that copies it) over the short type and the step's mark */
 .dg-table th { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
@@ -562,7 +635,9 @@ const skW = (r: number, c: number) => `${SK_WIDTHS[(r * 3 + c) % SK_WIDTHS.lengt
 .dg-table th .cn:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; border-radius: 3px; }
 .cn-text { overflow: hidden; text-overflow: ellipsis; }
 .cn-done { flex: none; color: var(--accent-2); }
-.dg-table th .mk { font-family: var(--dg-sans, inherit); font-size: 10.5px; font-weight: 600; color: var(--accent); }
+.dg-table th .mk { font-family: var(--dg-sans, inherit); font-size: 10.5px; font-weight: 600; color: var(--accent-hi); }
+.dg-skrow td { border-color: transparent; }
+.dg-skrow td.num .sk { margin-left: auto; display: block; }
 
 .dg-norows { margin: 10px 12px; font-size: 12.5px; }
 
@@ -579,4 +654,5 @@ const skW = (r: number, c: number) => `${SK_WIDTHS[(r * 3 + c) % SK_WIDTHS.lengt
   white-space: pre-wrap;
   overflow-wrap: anywhere;
 }
+
 </style>

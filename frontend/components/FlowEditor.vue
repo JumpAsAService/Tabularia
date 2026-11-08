@@ -2063,6 +2063,9 @@ async function runPreview(nodeId: string) {
 
 // ── What the tab bar says about the rows on screen ─────────────────────────────────
 const computeSeconds = computed(() => (computingNodeId.value ? Math.floor((clock.value - computeStartedAt.value) / 1000) : 0))
+// the columns of the node being computed when this page knows them (its last preview, a
+// source's schema): the grid's header names them at once over the rows that are going
+const computingColumns = computed<ColumnInfo[] | null>(() => (computingNodeId.value ? knownColumns(computingNodeId.value) : null))
 const slowCompute = computed(() => !!computingNodeId.value && computeSeconds.value >= 2)
 // the source of the chain on screen (or being computed), and its development sample
 const shownSource = computed(() => {
@@ -2096,11 +2099,24 @@ const previewChanges = computed(() => {
   const renames = op === 'rename' ? (node.data?.params?.mapping ?? {}) : {}
   return columnChanges(upstream, preview.value.columns, renames, consumedColumns(op, node.data?.params))
 })
-// «N removed» opens the list of the columns removed
+// «N columns removed» opens the list of the columns removed, under its own button
 const removedOpen = ref(false)
 const removedPop = ref<HTMLElement | null>(null)
+const popLeft = ref(0)
 usePopover(removedOpen, removedPop, () => { removedOpen.value = false })
 watch(previewChanges, () => { removedOpen.value = false })
+/** Where a popover of the bar opens: under the button that opened it, kept inside the bar. */
+function anchorTo(e: MouseEvent, width = 260) {
+  const btn = e.currentTarget as HTMLElement | null
+  const bar = btn?.closest('.pv-bar') as HTMLElement | null
+  if (!btn || !bar) return
+  const b = bar.getBoundingClientRect()
+  popLeft.value = Math.max(0, Math.min(btn.getBoundingClientRect().left - b.left, b.width - width))
+}
+function toggleRemoved(e: MouseEvent) {
+  anchorTo(e)
+  removedOpen.value = !removedOpen.value
+}
 // the list takes the focus (read out, and leaving it closes it); a click elsewhere closes it
 function onRemovedOutside(e: PointerEvent) {
   const el = e.target as HTMLElement | null
@@ -2130,7 +2146,8 @@ const settledSummary = computed(() => {
   const parts = [nodeFullName(previewNodeId.value), summaryRows.value]
   if (rowCount.value.state === 'failed') parts.push(rowCount.value.slow ? t('dataGrid.countSlow') : t('dataGrid.countFailed'))
   parts.push(t('dataGrid.columns', { n: r.columns.length }))
-  if (previewChanges.value?.removed.length) parts.push(t('dataGrid.removed', { n: previewChanges.value.removed.length }))
+  const removed = previewChanges.value?.removed.length ?? 0
+  if (removed) parts.push(t('dataGrid.removed', { n: removed }, removed))
   return parts.filter(Boolean).join(' · ')
 })
 watch(settledSummary, (now) => {
@@ -2917,11 +2934,11 @@ async function pollTask(id: string) {
                   aria-haspopup="true"
                   :aria-expanded="removedOpen"
                   aria-controls="pv-removed-list"
-                  @click="removedOpen = !removedOpen"
-                >{{ $t('dataGrid.removed', { n: previewChanges.removed.length }) }}</button>
+                  @click="toggleRemoved"
+                >{{ $t('dataGrid.removed', { n: previewChanges.removed.length }, previewChanges.removed.length) }}</button>
               </span>
-              <!-- the place of «N removed» while the input's columns are asked: nothing moves when it comes -->
-              <span v-else-if="changesPending" class="pv-part pv-reserve" aria-hidden="true">{{ $t('dataGrid.removed', { n: 0 }) }}</span>
+              <!-- the place of «N columns removed» while the input's columns are asked: nothing moves when it comes -->
+              <span v-else-if="changesPending" class="pv-part pv-reserve" aria-hidden="true">{{ $t('dataGrid.removed', { n: 0 }, 2) }}</span>
             </template>
             <span v-if="shownSample && (computingNodeId || preview)" class="pv-part pv-sample"><FlaskConical :size="11" aria-hidden="true" /> {{ shownSample }}</span>
           </p>
@@ -2930,6 +2947,7 @@ async function pollTask(id: string) {
             id="pv-removed-list"
             ref="removedPop"
             class="pv-pop"
+            :style="{ left: `${popLeft}px` }"
             role="group"
             :aria-label="$t('dataGrid.removedTitle')"
             tabindex="-1"
@@ -2966,6 +2984,7 @@ async function pollTask(id: string) {
           summary-id="pv-summary"
           :changes="previewChanges"
           :count="rowCount"
+          :pending-columns="computingColumns"
           :empty="selectedId ? $t('dataGrid.nothingYet') : undefined"
         >
           <template #action>
@@ -3041,7 +3060,7 @@ async function pollTask(id: string) {
 .pv-removed:hover, .pv-removed[aria-expanded="true"] { color: var(--text); background: none; box-shadow: none; }
 .pv-removed:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; border-radius: 3px; }
 .pv-pop {
-  position: absolute; top: calc(100% + 6px); left: 0; z-index: 30;
+  position: absolute; top: calc(100% + 6px); z-index: 30;
   min-width: 180px; max-width: min(360px, 100%); max-height: 240px; overflow: auto;
   padding: 8px 10px; background: var(--panel); border: 1px solid var(--border);
   border-radius: var(--radius); box-shadow: var(--shadow-2); font-size: 12px;

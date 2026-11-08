@@ -46,6 +46,8 @@
   --ease-sweep: cubic-bezier(0.4, 0, 0.2, 1);
   --shadow-1: 0 1px 2px rgba(0, 0, 0, 0.4);
   --shadow-2: 0 4px 16px rgba(0, 0, 0, 0.45);
+  /* a pinned column over the ones scrolled under it (the data grid's row numbers) */
+  --shadow-pin: 6px 0 6px -4px rgba(0, 0, 0, 0.45);
   /* The primaries' fill is NOT --accent: white on #4f8cff makes 3.22:1 (and 3.86 on
      #7c6cff), under AA for the buttons' text. It is the same gradient as the light theme:
      4.63 and 4.58. --accent stays #4f8cff for borders, focus and links. */
@@ -107,6 +109,7 @@
   --on-warning: #ffffff; /* text on the --warning fill */
   --shadow-1: 0 1px 2px rgba(20, 30, 60, 0.08);
   --shadow-2: 0 6px 20px rgba(20, 30, 60, 0.12);
+  --shadow-pin: 6px 0 6px -4px rgba(20, 30, 60, 0.14);
   --grad-accent: linear-gradient(135deg, #3b6fe0 0%, #6a5cff 100%);
   --danger-fill: #e02424; /* white on it: 4.72 */
   --danger-text: #b81e1e; /* 5.72 on panel-2 (#e02424: 4.17) */
@@ -145,6 +148,7 @@
   --on-warning: #1a1205; /* text on the --warning fill */
   --shadow-1: 0 1px 2px rgba(0, 0, 0, 0.4);
   --shadow-2: 0 4px 16px rgba(0, 0, 0, 0.5);
+  --shadow-pin: 6px 0 6px -4px rgba(0, 0, 0, 0.5);
   --grad-accent: linear-gradient(135deg, #bd93f9 0%, #ff79c6 100%);
   --on-accent: #21222c;                   /* light accent → dark text on the buttons */
   --danger-fill: #d63c3c; /* white on it: 4.59 (on #ff5555 it was 3.14) */
@@ -185,6 +189,7 @@
   --on-warning: #1a1205; /* text on the --warning fill */
   --shadow-1: 0 1px 2px rgba(0, 0, 0, 0.4);
   --shadow-2: 0 4px 16px rgba(0, 0, 0, 0.5);
+  --shadow-pin: 6px 0 6px -4px rgba(0, 0, 0, 0.5);
   --grad-accent: linear-gradient(135deg, #66d9ef 0%, #a6e22e 100%);
   --on-accent: #1e1f1c;                   /* light accent → dark text on the buttons */
   --danger-fill: #c8306a; /* white on it: 5.14 (on #fb4a8b it was 3.25) */
@@ -233,6 +238,7 @@
   --on-warning: #ffffff;  /* 5,8:1 */
   --shadow-1: 0 1px 2px rgba(60, 30, 25, 0.08);
   --shadow-2: 0 6px 20px rgba(60, 30, 25, 0.13);
+  --shadow-pin: 6px 0 6px -4px rgba(60, 30, 25, 0.15);
   /* purple, from the brightest to the darkest: white on it, 7.7:1 and 11.1:1 */
   --grad-accent: linear-gradient(135deg, #9a2352 0%, #6e1a40 100%);
   --on-accent: #fff;

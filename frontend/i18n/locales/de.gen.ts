@@ -802,7 +802,7 @@ export default {
     "moreThan": "mehr als {n} Zeilen",
     "firstShort": "erste {shown} Zeilen",
     "columns": "{n} Spalten",
-    "removed": "{n} entfernt",
+    "removed": "{n} Spalte entfernt | {n} Spalten entfernt",
     "removedTitle": "Von diesem Schritt entfernte Spalten",
     "computing": "Wird berechnet…",
     "seconds": "{s} s",

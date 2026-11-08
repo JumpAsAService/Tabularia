@@ -802,7 +802,7 @@ export default {
     "moreThan": "más de {n} filas",
     "firstShort": "primeras {shown} filas",
     "columns": "{n} columnas",
-    "removed": "{n} eliminadas",
+    "removed": "{n} columna eliminada | {n} columnas eliminadas",
     "removedTitle": "Columnas que este paso quitó",
     "computing": "Calculando…",
     "seconds": "{s} s",
