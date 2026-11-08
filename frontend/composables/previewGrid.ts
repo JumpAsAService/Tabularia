@@ -150,12 +150,15 @@ export interface ColumnChanges { marks: Record<string, ColumnMark>; removed: str
  * The columns a step added, renamed or retyped against its input, and the ones it dropped.
  * `upstream` null (a source, or an input not known yet): nothing to compare, no marks.
  * `renames` old → new: a Rename step's mapping, the only way to tell a rename from a
- * column dropped and another added.
+ * column dropped and another added. `consumed`: columns the step turned into others rather
+ * than dropped (a Pivot's spread column and its values, an Unpivot's melted columns): not
+ * «removed».
  */
 export function columnChanges(
   upstream: GridColumn[] | null | undefined,
   current: GridColumn[],
   renames: Record<string, string> = {},
+  consumed: string[] = [],
 ): ColumnChanges {
   if (!upstream || !upstream.length) return { marks: {}, removed: [] }
   const before = new Map(upstream.map((c) => [c.name, c.dtype]))
@@ -171,9 +174,18 @@ export function columnChanges(
     else if (!before.has(c.name)) marks[c.name] = { kind: 'new' }
     else if (before.get(c.name) !== c.dtype) marks[c.name] = { kind: 'retyped', from: before.get(c.name)! }
   }
-  const gone = new Set(renamedFrom.values())
+  const gone = new Set([...renamedFrom.values(), ...consumed])
   const removed = upstream.map((c) => c.name).filter((n) => !now.has(n) && !gone.has(n))
   return { marks, removed }
+}
+
+/** The columns a step reshapes into others: a Pivot's `on` and `values`, an Unpivot's `on`. */
+export function consumedColumns(opType: string, params: Record<string, any> | null | undefined): string[] {
+  const p = params ?? {}
+  const names = (v: unknown): string[] => (Array.isArray(v) ? v : v == null ? [] : [v]).map(String).filter(Boolean)
+  if (opType === 'pivot') return [...names(p.on), ...names(p.values)]
+  if (opType === 'unpivot') return names(p.on ?? p.columns ?? p.value_vars)
+  return []
 }
 
 // ── how many rows ─────────────────────────────────────────────────────────────

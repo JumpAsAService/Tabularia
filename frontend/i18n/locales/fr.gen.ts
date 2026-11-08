@@ -803,7 +803,8 @@ export default {
     "firstShort": "{shown} premières lignes",
     "columns": "{n} colonnes",
     "removed": "{n} supprimées",
-    "computing": "Calcul de {name}…",
+    "removedTitle": "Colonnes retirées par cette étape",
+    "computing": "Calcul…",
     "seconds": "{s} s",
     "counting": "comptage des lignes…",
     "countSlow": "non comptées : trop long",
@@ -824,6 +825,7 @@ export default {
     "markNewTitle": "Nouvelle dans cette étape",
     "markRenamedTitle": "Renommée depuis {from}",
     "markRetypedTitle": "Type changé depuis {from}",
+    "joinOn": "{name} sur {keys}",
     "sourceNode": "Source",
   },
   "aiPrompts": {

@@ -6,9 +6,10 @@ import { test } from 'node:test'
 import assert from 'node:assert/strict'
 
 import {
-  Recent, columnChanges, exactText, gridColumnFormatter, gridColumnFormatters, groupsThousands, isNumericDtype,
-  nodeRowsPhrase, previewKey, rowsPhrase, shortDtype, suggestSample, toTsv, visibleWindow,
+  Recent, columnChanges, consumedColumns, exactText, gridColumnFormatter, gridColumnFormatters, groupsThousands,
+  isNumericDtype, nodeRowsPhrase, previewKey, rowsPhrase, shortDtype, suggestSample, toTsv, visibleWindow,
 } from '../composables/previewGrid.ts'
+import { opSubject } from '../composables/opSummary.ts'
 
 // a stand-in for vue-i18n's t with the English texts
 const EN = {
@@ -111,6 +112,26 @@ test('what a step changed: new, renamed, retyped columns and the ones it removed
   // no input known (a source): nothing to say
   assert.deepEqual(columnChanges(null, now), { marks: {}, removed: [] })
   assert.deepEqual(columnChanges([], now), { marks: {}, removed: [] })
+})
+
+test('a pivot spreads a column and its values: they are reshaped, not removed', () => {
+  const up = [{ name: 'regione', dtype: 'String' }, { name: 'segmento', dtype: 'String' }, { name: 'valore', dtype: 'Float64' }, { name: 'clienti', dtype: 'Int64' }]
+  const now = [{ name: 'regione', dtype: 'String' }, { name: 'Champion', dtype: 'Float64' }, { name: 'Loyal', dtype: 'Float64' }]
+  const params = { index: ['regione'], on: ['segmento'], values: 'valore', func: 'sum' }
+  assert.deepEqual(consumedColumns('pivot', params), ['segmento', 'valore'])
+  const ch = columnChanges(up, now, {}, consumedColumns('pivot', params))
+  assert.deepEqual(ch.removed, ['clienti'])
+  assert.deepEqual(Object.keys(ch.marks), ['Champion', 'Loyal'])
+  assert.deepEqual(consumedColumns('unpivot', { index: ['id'], on: ['q1', 'q2'] }), ['q1', 'q2'])
+  assert.deepEqual(consumedColumns('group_by', { by: ['regione'] }), [])
+})
+
+test('a node is named by what it works on, not only by its operation', () => {
+  assert.equal(opSubject('group_by', { by: ['regione', 'segmento'], aggregations: [{ column: 'valore', func: 'sum' }] }), 'regione, segmento')
+  assert.equal(opSubject('join', { how: 'left', on: ['ordine_id'] }), 'ordine_id')
+  assert.equal(opSubject('join', { how: 'inner', left_on: ['id'], right_on: ['cliente_id'] }), 'id')
+  assert.equal(opSubject('filter', { column: 'stato', operator: 'eq', value: 'evaso' }), 'stato = evaso')
+  assert.equal(opSubject('group_by', {}), '')
 })
 
 test('one way to say how many rows: all of them, the first of how many, or of more than the cap', () => {

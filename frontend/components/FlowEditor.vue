@@ -27,7 +27,9 @@ import { useRegistriesEditor } from '~/composables/useRegistries'
 import { useFormat } from '~/composables/useFormat'
 import type { PreviewResult, ColumnInfo, Operation, IngestResult } from '~/composables/useApi'
 import { SOURCE_ID, buildIncoming, resolveChain, leafNodeId, defaultParams, sampleLabel } from '~/composables/useFlowModel'
-import { Recent, previewKey, columnChanges, rowsPhrase, suggestSample, type RowCount } from '~/composables/previewGrid'
+import { Recent, previewKey, columnChanges, consumedColumns, rowsPhrase, suggestSample, type RowCount } from '~/composables/previewGrid'
+import { opSubject } from '~/composables/opSummary'
+import { usePopover } from '~/composables/usePopover'
 import { computeAutoLayout } from '~/composables/useFlowLayout'
 import { createFlowHistory } from '~/composables/useFlowHistory'
 import { onBeforeRouteLeave, onBeforeRouteUpdate } from 'vue-router'
@@ -354,6 +356,13 @@ const clock = ref(0) // ticks while something computes: the elapsed seconds
 let clockTimer: ReturnType<typeof setInterval> | undefined
 const previewMs = ref(0) // how long the preview on screen took (0: from this page's memory)
 const rowCount = ref<RowCount>({ state: 'none' })
+// «Computing…» said only past a short wait: a quick answer does not flash it (the rows
+// before dim at once all the same)
+const COMPUTING_WORD_MS = 300
+const computingWord = ref(false)
+let computingWordTimer: ReturnType<typeof setTimeout> | undefined
+// the node whose preview was cancelled: «Compute again» in the grid's place
+const cancelledNodeId = ref<string | null>(null)
 // The previews and counts this page has seen: a step opened again shows at once, without
 // asking the server (whose step cache would still recompute the last step). Same engine,
 // source, chain and limit, same answer; kept a few minutes.
@@ -1802,16 +1811,31 @@ async function refreshForNode(nodeId: string) {
 }
 
 // ── The preview on screen: whose it is, how long it takes, how many rows ─────────────
-/** The name a person knows a node by (the palette's name of its operation, a source's file). */
-function nodeName(id: string | null): string {
+/** The name a person knows a node by: the label given to it, else its operation and what it
+ *  works on («Group by regione, segmento», «Join on ordine_id»: two Group by nodes are told
+ *  apart), a source's file. Cut at NODE_NAME_MAX characters, whole in the summary's tooltip. */
+const NODE_NAME_MAX = 44
+function clipName(s: string): string {
+  return s.length > NODE_NAME_MAX ? `${s.slice(0, NODE_NAME_MAX - 1).trimEnd()}…` : s
+}
+function nodeFullName(id: string | null): string {
   const n = id ? findNode(id) : null
   if (!n) return ''
+  const given = String(n.data?.label ?? '').trim()
   if (n.type === 'operation') {
-    const m = opMeta(n.data?.opType ?? '')
-    return m.label.startsWith('ops.') ? t(m.label) : String(n.data?.opType ?? '')
+    if (given) return given
+    const op = String(n.data?.opType ?? '')
+    const m = opMeta(op)
+    const name = m.label.startsWith('ops.') ? t(m.label) : op
+    const what = opSubject(op, n.data?.params)
+    if (!what) return name
+    return op === 'join' ? t('dataGrid.joinOn', { name, keys: what }) : `${name} ${what}`
   }
   if (n.type === 'source') return String(n.data?.filename || n.data?.dsName || t('dataGrid.sourceNode'))
-  return String(n.data?.label || n.data?.name || n.type || '')
+  return String(given || n.data?.name || n.type || '')
+}
+function nodeName(id: string | null): string {
+  return clipName(nodeFullName(id))
 }
 
 /** The request a node's preview is, or null when the node has no data to read. */
@@ -1844,6 +1868,9 @@ function beginCompute(nodeId: string) {
   tickClock()
   clearInterval(clockTimer)
   clockTimer = setInterval(tickClock, 500)
+  computingWord.value = false
+  clearTimeout(computingWordTimer)
+  computingWordTimer = setTimeout(() => { computingWord.value = true }, COMPUTING_WORD_MS)
   // nothing on screen yet: the skeleton (never «select a node» with a node selected)
   if (!preview.value) previewLoading.value = true
   previewError.value = ''
@@ -1860,8 +1887,10 @@ function endCompute() {
   computingNodeId.value = null
   clearInterval(clockTimer)
   clockTimer = undefined
+  clearTimeout(computingWordTimer)
+  computingWord.value = false
 }
-onUnmounted(() => { clearInterval(clockTimer); stopCount() })
+onUnmounted(() => { clearInterval(clockTimer); clearTimeout(computingWordTimer); stopCount() })
 
 /** A node's preview this page has seen already: on screen at once, with its count. */
 function showFromMemory(nodeId: string): boolean {
@@ -2012,18 +2041,74 @@ const shownSource = computed(() => {
   return id ? resolveChain(getNodes.value, getEdges.value, id, scriptSources.value).sourceNode : null
 })
 const shownSample = computed(() => (shownSource.value?.type === 'source' ? sampleLabel(shownSource.value.data, t, fmt.count) : null))
-// the step's changes against its input: the selected node's own preview only
-const previewChanges = computed(() => {
+// the step's changes against its input: the selected node's own preview only. Compared with
+// the columns of the node before as this page knows them already (a source's, or that node's
+// own preview), so the marks come with the rows; when they are not known yet the input's
+// columns are asked after the rows, and the summary keeps the place of «N removed» meanwhile.
+const previewInput = computed<ColumnInfo[] | null>(() => {
   const id = previewNodeId.value
   const node = id ? findNode(id) : null
-  if (!preview.value || !node || id !== selectedId.value || node.type !== 'operation' || columnsLoading.value) return null
-  const renames = node.data?.opType === 'rename' ? (node.data?.params?.mapping ?? {}) : {}
-  return columnChanges(inputColumns.value, preview.value.columns, renames)
+  if (!preview.value || !node || id !== selectedId.value || node.type !== 'operation') return null
+  return knownColumns(leftOf(id!))
 })
+const changesPending = computed(() => {
+  const id = previewNodeId.value
+  const node = id ? findNode(id) : null
+  // asked after the rows while the panel's columns load; a node before that never says its
+  // columns (a Script's) leaves no marks rather than a place kept forever
+  return !!preview.value && !computingNodeId.value && node?.type === 'operation' && id === selectedId.value
+    && previewInput.value === null && columnsLoading.value
+})
+const previewChanges = computed(() => {
+  const node = previewNodeId.value ? findNode(previewNodeId.value) : null
+  const upstream = previewInput.value
+  if (!preview.value || !node || !upstream) return null
+  const op = String(node.data?.opType ?? '')
+  const renames = op === 'rename' ? (node.data?.params?.mapping ?? {}) : {}
+  return columnChanges(upstream, preview.value.columns, renames, consumedColumns(op, node.data?.params))
+})
+// «N removed» opens the list of the columns removed
+const removedOpen = ref(false)
+const removedPop = ref<HTMLElement | null>(null)
+usePopover(removedOpen, removedPop, () => { removedOpen.value = false })
+watch(previewChanges, () => { removedOpen.value = false })
+// the list takes the focus (read out, and leaving it closes it); a click elsewhere closes it
+function onRemovedOutside(e: PointerEvent) {
+  const el = e.target as HTMLElement | null
+  if (removedPop.value?.contains(el) || el?.closest?.('.pv-removed')) return
+  removedOpen.value = false
+}
+watch(removedOpen, (open) => {
+  if (open) {
+    document.addEventListener('pointerdown', onRemovedOutside, true)
+    nextTick(() => removedPop.value?.focus())
+  } else {
+    document.removeEventListener('pointerdown', onRemovedOutside, true)
+  }
+})
+onUnmounted(() => document.removeEventListener('pointerdown', onRemovedOutside, true))
 const summaryRows = computed(() => {
   const r = preview.value
   if (!r) return ''
   return rowsPhrase(r.rows.length, r.truncated, rowCount.value, t, (n) => fmt.count(n))
+})
+// One announcement a click, once everything about it has arrived (rows, count, changes): the
+// summary itself changes three or four times, and the running seconds are never read out.
+const liveText = ref('')
+const settledSummary = computed(() => {
+  const r = preview.value
+  if (!r || computingNodeId.value || rowCount.value.state === 'counting' || changesPending.value) return ''
+  const parts = [nodeFullName(previewNodeId.value), summaryRows.value]
+  if (rowCount.value.state === 'failed') parts.push(rowCount.value.slow ? t('dataGrid.countSlow') : t('dataGrid.countFailed'))
+  parts.push(t('dataGrid.columns', { n: r.columns.length }))
+  if (previewChanges.value?.removed.length) parts.push(t('dataGrid.removed', { n: previewChanges.value.removed.length }))
+  return parts.filter(Boolean).join(' · ')
+})
+watch(settledSummary, (now) => {
+  if (!now) return
+  // emptied first: the same words again (a step computed again) are said again
+  liveText.value = ''
+  nextTick(() => { liveText.value = now })
 })
 // a sample on the source is suggested, never switched on behind the person's back
 const offerSample = computed(() => {
@@ -2776,16 +2861,18 @@ async function pollTask(id: string) {
           <BarChart3 :size="13" /> {{ $t('flowEditor.chartTab') }}
         </button>
       </div>
-        <!-- what the rows on screen are: whose, how many of how many; while a node computes,
-             its name, the seconds, and the way out -->
+        <!-- what the rows on screen are: whose (always first, where it stays), how many of how
+             many, what the step removed; while a node computes, its name, the seconds, and
+             the way out. Not a live region: one announcement a click, below. -->
         <div class="pv-bar">
-          <span id="pv-summary" class="pv-summary" role="status" aria-live="polite">
+          <p id="pv-summary" class="pv-summary">
             <template v-if="computingNodeId">
-              <span class="pv-computing">{{ $t('dataGrid.computing', { name: nodeName(computingNodeId) }) }}</span>
-              <span v-if="slowCompute" class="pv-part" aria-hidden="true">{{ $t('dataGrid.seconds', { s: computeSeconds }) }}</span>
+              <span class="pv-node" :title="nodeFullName(computingNodeId)">{{ nodeName(computingNodeId) }}</span>
+              <span v-if="computingWord" class="pv-part">{{ $t('dataGrid.computing') }}</span>
+              <span v-if="slowCompute" class="pv-part">{{ $t('dataGrid.seconds', { s: computeSeconds }) }}</span>
             </template>
             <template v-else-if="preview">
-              <span class="pv-node" :title="nodeName(previewNodeId)">{{ nodeName(previewNodeId) }}</span>
+              <span class="pv-node" :title="nodeFullName(previewNodeId)">{{ nodeName(previewNodeId) }}</span>
               <span class="pv-part">{{ summaryRows }}</span>
               <span v-if="rowCount.state === 'counting'" class="pv-part pv-quiet">{{ $t('dataGrid.counting') }}</span>
               <span
@@ -2794,14 +2881,36 @@ async function pollTask(id: string) {
                 :title="rowCount.slow ? $t('dataGrid.countSlowTitle') : undefined"
               >{{ rowCount.slow ? $t('dataGrid.countSlow') : $t('dataGrid.countFailed') }}</span>
               <span class="pv-part">{{ $t('dataGrid.columns', { n: preview.columns.length }) }}</span>
-              <span
-                v-if="previewChanges?.removed.length"
-                class="pv-part pv-removed"
-                :title="previewChanges.removed.join(', ')"
-              >{{ $t('dataGrid.removed', { n: previewChanges.removed.length }) }}</span>
+              <span v-if="previewChanges?.removed.length" class="pv-part">
+                <button
+                  type="button"
+                  class="pv-removed"
+                  aria-haspopup="true"
+                  :aria-expanded="removedOpen"
+                  aria-controls="pv-removed-list"
+                  @click="removedOpen = !removedOpen"
+                >{{ $t('dataGrid.removed', { n: previewChanges.removed.length }) }}</button>
+              </span>
+              <!-- the place of «N removed» while the input's columns are asked: nothing moves when it comes -->
+              <span v-else-if="changesPending" class="pv-part pv-reserve" aria-hidden="true">{{ $t('dataGrid.removed', { n: 0 }) }}</span>
             </template>
             <span v-if="shownSample && (computingNodeId || preview)" class="pv-part pv-sample"><FlaskConical :size="11" aria-hidden="true" /> {{ shownSample }}</span>
-          </span>
+          </p>
+          <div
+            v-if="removedOpen && previewChanges?.removed.length"
+            id="pv-removed-list"
+            ref="removedPop"
+            class="pv-pop"
+            role="group"
+            :aria-label="$t('dataGrid.removedTitle')"
+            tabindex="-1"
+          >
+            <p class="pv-pop-title">{{ $t('dataGrid.removedTitle') }}</p>
+            <ul>
+              <li v-for="c in previewChanges.removed" :key="c">{{ c }}</li>
+            </ul>
+          </div>
+          <span class="sr-only" role="status" aria-live="polite">{{ liveText }}</span>
           <button
             v-if="offerSample"
             type="button"
@@ -2875,19 +2984,36 @@ async function pollTask(id: string) {
 .panel-tabs button:hover { color: var(--text); box-shadow: none; }
 .panel-tabs button.on { color: var(--text); border-bottom-color: var(--accent); }
 
-/* the preview's summary, in the tab bar: one line, the node first, cut before the actions */
+/* the preview's summary, in the tab bar: one line after the tabs, the node first and where
+   it stays (the parts that arrive later are added after it, nothing before it moves), the
+   actions at the right edge */
 .viewhead { display: flex; align-items: center; gap: 12px; flex-shrink: 0; min-width: 0; }
-.pv-bar { flex: 1; min-width: 0; display: flex; align-items: center; justify-content: flex-end; gap: 6px; }
+.pv-bar { position: relative; flex: 1; min-width: 0; display: flex; align-items: center; gap: 6px; }
 .pv-summary {
-  min-width: 0; overflow: hidden; white-space: nowrap; text-overflow: ellipsis;
+  display: flex; align-items: baseline; min-width: 0; margin: 0 auto 0 0; overflow: hidden; white-space: nowrap;
   font-size: 12px; color: var(--muted); font-variant-numeric: tabular-nums;
 }
-.pv-node { color: var(--text); font-weight: 500; }
-.pv-computing { color: var(--text); }
+.pv-node { flex: 0 1 auto; min-width: 4em; overflow: hidden; text-overflow: ellipsis; color: var(--text); font-weight: 500; }
+.pv-part { flex: none; }
 .pv-part::before { content: '·'; margin: 0 6px; color: var(--muted); }
-.pv-computing + .pv-part::before { content: '·'; }
 .pv-quiet { opacity: 0.8; }
-.pv-removed { cursor: help; text-decoration: underline dotted; text-underline-offset: 3px; }
+.pv-reserve { visibility: hidden; }
+.pv-removed {
+  margin: 0; padding: 0; border: 0; background: none; box-shadow: none; font: inherit; color: inherit;
+  text-decoration: underline dotted; text-underline-offset: 3px; cursor: pointer;
+}
+.pv-removed:hover, .pv-removed[aria-expanded="true"] { color: var(--text); background: none; box-shadow: none; }
+.pv-removed:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; border-radius: 3px; }
+.pv-pop {
+  position: absolute; top: calc(100% + 6px); left: 0; z-index: 30;
+  min-width: 180px; max-width: min(360px, 100%); max-height: 240px; overflow: auto;
+  padding: 8px 10px; background: var(--panel); border: 1px solid var(--border);
+  border-radius: var(--radius); box-shadow: var(--shadow-2); font-size: 12px;
+}
+.pv-pop:focus { outline: none; }
+.pv-pop-title { margin: 0 0 4px; color: var(--muted); }
+.pv-pop ul { margin: 0; padding: 0; list-style: none; }
+.pv-pop li { padding: 2px 0; font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 11.5px; overflow-wrap: anywhere; }
 .pv-sample { display: inline-flex; align-items: center; gap: 3px; }
 .pv-sample svg { vertical-align: -1px; }
 .pv-action {

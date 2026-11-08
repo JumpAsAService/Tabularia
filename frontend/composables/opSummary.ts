@@ -79,3 +79,15 @@ export function opSummary(op: string, params: Record<string, any> | null | undef
     }
   }
 }
+
+/**
+ * What a node works on, shorter than its summary: the grouping keys of a Group by, the keys
+ * of a Join, otherwise the summary. It tells two nodes of the same operation apart where the
+ * operation's name alone does not («Group by regione, segmento», «Join on ordine_id»).
+ */
+export function opSubject(op: string, params: Record<string, any> | null | undefined): string {
+  const p = params ?? {}
+  if (op === 'group_by') return listing(p.by)
+  if (op === 'join') return listing(p.on ?? p.left_on)
+  return opSummary(op, p)
+}
