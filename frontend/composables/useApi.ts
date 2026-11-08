@@ -29,6 +29,37 @@ export interface CountResult {
   how: 'remembered' | 'metadata' | 'counted'
 }
 
+// A step's column profile (POST /tasks/profile), asked after its rows and their count. The
+// distinct values are an estimate; past `sample_rows` rows (`sampled`) the figures are of
+// the first rows, except those in a column's `whole` (from the parquet footer, every row).
+export interface ColumnStats {
+  kind: 'number' | 'time' | 'text' | 'bool' | 'other'
+  nulls: number
+  of: number // the rows the nulls are out of
+  distinct?: number | null
+  min?: unknown
+  max?: unknown
+  min_len?: number | null
+  max_len?: number | null
+  whole: string[]
+}
+export interface ProfileResult {
+  rows: number
+  sampled: boolean
+  sample_rows: number
+  total: number | null
+  footer: boolean
+  columns: Record<string, ColumnStats>
+  how: 'remembered' | 'computed'
+}
+// one column's most frequent values (nulls left out), over the same rows as the profile
+export interface TopValuesResult {
+  column: string
+  values: { value: unknown; count: number }[]
+  sample_rows: number
+  how: 'remembered' | 'computed'
+}
+
 export interface IngestResult {
   dataset_id: string
   status: 'ready' | 'processing'
@@ -209,6 +240,21 @@ export function useApi() {
       slot?: string
     }, opts: { signal?: AbortSignal } = {}): Promise<CountResult> {
       return await apiFetch<CountResult>('/tasks/count', { method: 'POST', body, signal: opts.signal })
+    },
+
+    // a step's column profile, or with `column` that column's most frequent values: asked
+    // after the rows and their count
+    async profile<R = ProfileResult>(body: {
+      bucket: string
+      input_key: string
+      operations: Operation[]
+      columns?: ColumnInfo[]
+      column?: string
+      engine?: string
+      no_cache?: boolean
+      slot?: string
+    }, opts: { signal?: AbortSignal } = {}): Promise<R> {
+      return await apiFetch<R>('/tasks/profile', { method: 'POST', body, signal: opts.signal })
     },
 
     // stops on the server what holds one of this person's slots (a slow preview, a count)

@@ -7,7 +7,8 @@
 // - the one sentence that says how many rows a preview shows of how many there are, the
 //   same in the editor, in the Viewer and on a node of the canvas;
 // - which rows a scrolled grid draws (it draws only those);
-// - where the keyboard moves the grid's one active cell.
+// - where the keyboard moves the grid's one active cell;
+// - how a column's profile is written (a share of nulls, a range of lengths).
 
 export interface GridColumn { name: string; dtype: string }
 
@@ -286,6 +287,45 @@ export function moveCell(at: CellPos, key: string, ctrl: boolean, rows: number, 
     default: return null
   }
   return { r: Math.max(-1, Math.min(lastR, r)), c: Math.max(0, Math.min(lastC, c)) }
+}
+
+// ── the column profile ────────────────────────────────────────────────────────
+const percentFormats = new Map<string, Intl.NumberFormat>()
+function percent(r: number, digits: number, locale?: string): string {
+  const key = `${locale ?? ''}|${digits}`
+  let f = percentFormats.get(key)
+  if (!f) percentFormats.set(key, (f = new Intl.NumberFormat(locale, { style: 'percent', minimumFractionDigits: digits, maximumFractionDigits: digits })))
+  return f.format(r)
+}
+
+/**
+ * A share of rows as the interface writes it, never rounded into what it is not: «0%» only
+ * for none and «100%» only for all («<0.1%», «>99.9%» at the edges), one decimal under 10%
+ * and over 99%, whole percents between.
+ */
+export function shareText(part: number, of: number, locale?: string): string {
+  if (!of || part <= 0) return percent(0, 0, locale)
+  if (part >= of) return percent(1, 0, locale)
+  const r = part / of
+  if (r < 0.001) return `<${percent(0.001, 1, locale)}`
+  if (r > 0.999) return `>${percent(0.999, 1, locale)}`
+  return percent(r, r < 0.1 || r > 0.99 ? 1 : 0, locale)
+}
+
+/** The width of a header's null bar: nothing for no nulls, at least a pixel for a few. */
+export function nullBarWidth(nulls: number, of: number): string {
+  if (!of || nulls <= 0) return '0%'
+  const pct = Math.min(100, (nulls / of) * 100)
+  return pct >= 100 ? '100%' : `max(1px, ${pct.toFixed(2)}%)`
+}
+
+/** What a column's profile says about the rows it saw: «every row», the first rows, or the
+ *  nulls (and the range) of every row and the rest of the first ones. */
+export type ProfileBasis = 'all' | 'sample' | 'nulls' | 'range'
+export function profileBasis(sampled: boolean, whole: string[]): ProfileBasis {
+  if (!sampled) return 'all'
+  if (whole.includes('min') && whole.includes('max') && whole.includes('nulls')) return 'range'
+  return whole.includes('nulls') ? 'nulls' : 'sample'
 }
 
 // ── the previews a page has already seen ──────────────────────────────────────

@@ -12,7 +12,7 @@ import { usePopover } from '~/composables/usePopover'
 import {
   PieChart, Table2, Filter, Sigma, Plus, X, Play, Cpu, Rows3, Download, FileSpreadsheet, Bookmark, Save,
 } from 'lucide-vue-next'
-import { useApi, errMessage, type Operation, type ColumnInfo, type PreviewResult } from '~/composables/useApi'
+import { useApi, errMessage, type Operation, type ColumnInfo, type PreviewResult, type ProfileResult, type TopValuesResult } from '~/composables/useApi'
 import DataGrid from '~/components/ui/DataGrid.vue'
 import { rowsPhrase, type RowCount } from '~/composables/previewGrid'
 import { usePreviewSlots, isSuperseded } from '~/composables/usePreviewSlots'
@@ -193,6 +193,7 @@ async function apply() {
   if (!ds) return
   const seq = ++applySeq
   if (previewSlots.busy('count')) previewSlots.stop('count')
+  stopProfile()
   rowCount.value = { state: 'none' }
   loading.value = true; error.value = ''
   try {
@@ -216,7 +217,10 @@ async function apply() {
     if (!withPivot) baseCols.value = res.columns
     // the real count, after the rows and apart from them
     if (res.truncated) void countRows(ds, ops, seq)
-    else rowCount.value = { state: 'done', rows: res.rows.length, over: false }
+    else {
+      rowCount.value = { state: 'done', rows: res.rows.length, over: false }
+      void profileView(ds, ops, res.columns, seq)
+    }
   } catch (e) {
     // an Apply overtaken by a newer Apply is not an error to show: the new one governs state
     // and spinner
@@ -240,6 +244,44 @@ async function countRows(ds: DatasourceInfo, ops: Operation[], seq: number) {
     const status = (e as any)?.response?.status ?? (e as any)?.statusCode
     rowCount.value = { state: 'failed', slow: status === 504 }
   }
+  // the columns' profile after the count, never beside it
+  if (seq === applySeq) void profileView(ds, ops, tableCols.value, seq)
+}
+
+// The columns' profile of the applied view (nulls, distinct values, min and max), after its
+// rows and their count; an Apply drops the one before, on the server too.
+const profile = ref<ProfileResult | null>(null)
+const profileState = ref<'none' | 'loading' | 'done' | 'failed'>('none')
+let viewOps: { ds: DatasourceInfo; ops: Operation[] } | null = null
+async function profileView(ds: DatasourceInfo, ops: Operation[], columns: ColumnInfo[], seq: number) {
+  if (!columns.length) return
+  viewOps = { ds, ops }
+  profileState.value = 'loading'
+  try {
+    const res = await previewSlots.profile({
+      bucket: ds.bucket, input_key: ds.key, operations: ops, engine: engine.value, no_cache: true,
+      columns: columns.map((c) => ({ name: c.name, dtype: c.dtype })),
+    }, 'profile')
+    if (seq !== applySeq) return
+    profile.value = res
+    profileState.value = 'done'
+  } catch (e) {
+    if (seq !== applySeq || isSuperseded(e)) return
+    profileState.value = 'failed'
+  }
+}
+function stopProfile() {
+  for (const slot of ['profile', 'top']) if (previewSlots.busy(slot)) previewSlots.stop(slot)
+  profile.value = null
+  profileState.value = 'none'
+  viewOps = null
+}
+async function topValues(column: string): Promise<TopValuesResult> {
+  if (!viewOps) throw new Error('no view')
+  const { ds, ops } = viewOps
+  return await previewSlots.profile<TopValuesResult>({
+    bucket: ds.bucket, input_key: ds.key, operations: ops, engine: engine.value, no_cache: true, column,
+  }, 'top')
 }
 // the table of the last Apply that answered (none before the first one)
 const applied = ref(false)
@@ -624,6 +666,9 @@ onMounted(async () => {
             :summary="summaryRows"
             summary-id="vw-summary"
             :count="rowCount"
+            :profile="profile"
+            :profile-state="profileState"
+            :top-values="topValues"
             :empty="$t('viewer.noDataHint')"
             :label="$t('viewer.tableTab')"
           />

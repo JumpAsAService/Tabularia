@@ -25,7 +25,7 @@ import ContainerNode from '~/components/nodes/ContainerNode.vue'
 import { useScriptingEditor, type ScriptOutputs } from '~/composables/useScripting'
 import { useRegistriesEditor } from '~/composables/useRegistries'
 import { useFormat } from '~/composables/useFormat'
-import type { PreviewResult, ColumnInfo, Operation, IngestResult } from '~/composables/useApi'
+import type { PreviewResult, ColumnInfo, Operation, IngestResult, ProfileResult, TopValuesResult } from '~/composables/useApi'
 import { SOURCE_ID, buildIncoming, resolveChain, leafNodeId, defaultParams, sampleLabel } from '~/composables/useFlowModel'
 import { Recent, previewKey, columnChanges, consumedColumns, rowsPhrase, suggestSample, type RowCount } from '~/composables/previewGrid'
 import { opSubject } from '~/composables/opSummary'
@@ -350,12 +350,17 @@ const computingWord = ref(false)
 let computingWordTimer: ReturnType<typeof setTimeout> | undefined
 // the node whose preview was cancelled: «Compute again» in the grid's place
 const cancelledNodeId = ref<string | null>(null)
+// The step's column profile (nulls, distinct values, min and max): asked after the rows and
+// their count, dropped as soon as the person looks elsewhere, like the count
+const profile = ref<ProfileResult | null>(null)
+const profileState = ref<'none' | 'loading' | 'done' | 'failed'>('none')
 // The previews and counts this page has seen: a step opened again shows at once, without
 // asking the server (whose step cache would still recompute the last step). Same engine,
 // source, chain and limit, same answer; kept a few minutes.
 const PREVIEW_MEMO_MS = 10 * 60 * 1000
 const previewMemo = new Recent<{ at: number; res: PreviewResult }>(40)
 const countMemo = new Recent<{ at: number; rows: number; over: boolean }>(120)
+const profileMemo = new Recent<{ at: number; res: ProfileResult }>(60)
 const fresh = <V extends { at: number }>(e: V | undefined): V | undefined =>
   e && Date.now() - e.at < PREVIEW_MEMO_MS ? e : undefined
 
@@ -1862,6 +1867,7 @@ function tickClock() {
 /** From the click on: the rows on screen are not this node's. */
 function beginCompute(nodeId: string) {
   stopCount()
+  stopProfile()
   // the input columns still being asked for the node before are no one's now: stopped on
   // the server, or they take a worker from this preview
   if (previewSlots.busy('cols')) previewSlots.stop('cols')
@@ -1885,6 +1891,7 @@ function beginCompute(nodeId: string) {
 function clearPreview() {
   endCompute()
   stopCount()
+  stopProfile()
   preview.value = null
   previewNodeId.value = null
   previewLoading.value = false
@@ -1896,7 +1903,7 @@ function endCompute() {
   clearTimeout(computingWordTimer)
   computingWord.value = false
 }
-onUnmounted(() => { clearInterval(clockTimer); clearTimeout(computingWordTimer); stopCount() })
+onUnmounted(() => { clearInterval(clockTimer); clearTimeout(computingWordTimer); stopCount(); stopProfile() })
 
 /** A node's preview this page has seen already: on screen at once, with its count. */
 function showFromMemory(nodeId: string): boolean {
@@ -1913,6 +1920,7 @@ function showFromMemory(nodeId: string): boolean {
 
 function showPreview(nodeId: string, res: PreviewResult, key: string, body: NonNullable<ReturnType<typeof previewBody>['body']>, ms: number) {
   stopCount()
+  stopProfile()
   cancelledNodeId.value = null
   preview.value = res
   previewNodeId.value = nodeId
@@ -1929,6 +1937,7 @@ function showPreview(nodeId: string, res: PreviewResult, key: string, body: NonN
     count: rowCount.value,
   }
   if (res.truncated && !counted) void startCount(nodeId, key, body)
+  else queueProfile(key, body, res.columns)
 }
 
 // The real count comes after the rows, apart, and is dropped as soon as the person looks
@@ -1949,11 +1958,71 @@ async function startCount(nodeId: string, key: string, body: NonNullable<ReturnT
     const status = (e as any)?.response?.status ?? (e as any)?.statusCode
     rowCount.value = { state: 'failed', slow: status === 504 }
   }
+  // the profile after the count, whatever it said: never beside it on the worker
+  if (seq === countSeq && preview.value) queueProfile(key, body, preview.value.columns)
 }
 function stopCount() {
   countSeq++
   if (previewSlots.busy('count')) previewSlots.stop('count')
   if (rowCount.value.state === 'counting') rowCount.value = { state: 'none' }
+}
+
+// The column profile comes last, after a short pause (whoever goes through the nodes one
+// after another never starts one), on its own slot, and is stopped on the server as soon
+// as another node is clicked: it never shares the worker with the next preview.
+const PROFILE_SETTLE_MS = 250
+let profileSeq = 0
+let profileTimer: ReturnType<typeof setTimeout> | undefined
+function queueProfile(key: string, body: NonNullable<ReturnType<typeof previewBody>['body']>, columns: ColumnInfo[]) {
+  stopProfile()
+  if (!columns.length) return
+  const seq = profileSeq
+  const known = fresh(profileMemo.get(key))
+  if (known) {
+    profile.value = known.res
+    profileState.value = 'done'
+    return
+  }
+  profileState.value = 'loading'
+  profileTimer = setTimeout(async () => {
+    if (seq !== profileSeq) return
+    try {
+      const res = await previewSlots.profile({
+        bucket: body.bucket, input_key: body.input_key, operations: body.operations, engine: flowEngine.value,
+        columns: columns.map((c) => ({ name: c.name, dtype: c.dtype })),
+      }, 'profile')
+      profileMemo.set(key, { at: Date.now(), res })
+      if (seq !== profileSeq) return
+      profile.value = res
+      profileState.value = 'done'
+    } catch (e) {
+      if (seq !== profileSeq || isSuperseded(e)) return
+      profileState.value = 'failed'
+    }
+  }, PROFILE_SETTLE_MS)
+}
+function stopProfile() {
+  profileSeq++
+  clearTimeout(profileTimer)
+  if (previewSlots.busy('profile')) previewSlots.stop('profile')
+  if (previewSlots.busy('top')) previewSlots.stop('top')
+  profile.value = null
+  profileState.value = 'none'
+}
+// a column's most frequent values, at a click on its name in the grid: one query a column
+const topMemo = new Recent<{ at: number; res: TopValuesResult }>(120)
+async function topValues(column: string): Promise<TopValuesResult> {
+  const id = previewNodeId.value
+  const { body, key } = id ? previewBody(id) : { body: null, key: null }
+  if (!body || !key) throw new Error('no step')
+  const mk = `${key}\u0001${column}`
+  const known = fresh(topMemo.get(mk))
+  if (known) return known.res
+  const res = await previewSlots.profile<TopValuesResult>({
+    bucket: body.bucket, input_key: body.input_key, operations: body.operations, engine: flowEngine.value, column,
+  }, 'top')
+  topMemo.set(mk, { at: Date.now(), res })
+  return res
 }
 
 /** «Cancel» on a slow preview (or Esc): stopped on the server too, nothing of another node
@@ -1965,6 +2034,7 @@ function cancelPreview() {
   previewSeq++
   previewSlots.stop('preview')
   endCompute()
+  stopProfile()
   preview.value = null
   previewNodeId.value = null
   previewLoading.value = false
@@ -3017,6 +3087,9 @@ async function pollTask(id: string) {
           :changes="previewChanges"
           :count="rowCount"
           :pending-columns="computingColumns"
+          :profile="profile"
+          :profile-state="profileState"
+          :top-values="topValues"
           :empty="selectedId ? $t('dataGrid.nothingYet') : undefined"
         >
           <template #action>

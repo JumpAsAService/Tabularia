@@ -13,11 +13,14 @@
 // Ctrl+C copies its exact value; the headers are its first row.
 import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
-import { Check, CircleAlert, MousePointerClick } from 'lucide-vue-next'
-import type { PreviewResult } from '~/composables/useApi'
+import { Check, CircleAlert, Copy, MousePointerClick } from 'lucide-vue-next'
+import type { ColumnStats, PreviewResult, ProfileResult, TopValuesResult } from '~/composables/useApi'
 import { readableNumber } from '~/composables/readableNumber'
+import { usePopover } from '~/composables/usePopover'
+import { isSuperseded } from '~/composables/usePreviewSlots'
 import {
-  ariaRowCount, exactText, gridColumnFormatters, isNumericDtype, moveCell, shortDtype, toTsv, visibleWindow,
+  ariaRowCount, exactText, gridColumnFormatters, isNumericDtype, moveCell, nullBarWidth, profileBasis, shareText,
+  shortDtype, toTsv, visibleWindow,
   type CellPos, type ColumnChanges, type ColumnMark, type GridColumn, type RowCount,
 } from '~/composables/previewGrid'
 
@@ -50,7 +53,15 @@ const props = withDefaults(defineProps<{
   // last preview, a source's schema): the header names them at once, over a skeleton.
   // Not known: the header of the rows on screen dims with them.
   pendingColumns?: GridColumn[] | null
-}>(), { summary: undefined, summaryId: undefined, changes: null, count: null, empty: undefined, label: undefined, pendingColumns: null })
+  // the step's column profile (POST /tasks/profile) and where it stands; with `topValues`
+  // a click on a column's name (or Enter) opens the column's profile
+  profile?: ProfileResult | null
+  profileState?: 'none' | 'loading' | 'done' | 'failed'
+  topValues?: (column: string) => Promise<TopValuesResult>
+}>(), {
+  summary: undefined, summaryId: undefined, changes: null, count: null, empty: undefined, label: undefined,
+  pendingColumns: null, profile: null, profileState: 'none', topValues: undefined,
+})
 
 const { t, locale } = useI18n()
 const uid = `dg-${Math.random().toString(36).slice(2, 9)}`
@@ -132,12 +143,29 @@ function markOf(name: string): ColumnMark | undefined {
 function markLabel(m: ColumnMark): string {
   return t(m.kind === 'new' ? 'dataGrid.markNew' : m.kind === 'renamed' ? 'dataGrid.markRenamed' : 'dataGrid.markRetyped')
 }
+
+// ── the column profile ───────────────────────────────────────────────────────
+const profiling = computed(() => props.topValues !== undefined)
+// a profile speaks for the rows on screen only: none while they are being replaced
+function stats(name: string): ColumnStats | undefined {
+  return props.stale || pending.value ? undefined : props.profile?.columns?.[name]
+}
+const fmtCount = (n: number) => n.toLocaleString(locale.value)
+function nullsLine(st: ColumnStats): string {
+  const share = shareText(st.nulls, st.of, locale.value)
+  const sampled = !!props.profile?.sampled && !st.whole.includes('nulls')
+  return sampled
+    ? t('dataGrid.profileNullShareSample', { share, n: fmtCount(props.profile!.rows) })
+    : t('dataGrid.profileNullShare', { share })
+}
 function headTitle(c: GridColumn): string {
   const m = markOf(c.name)
   const lines = [c.name, c.dtype]
   if (m?.kind === 'new') lines.push(t('dataGrid.markNewTitle'))
   if (m?.kind === 'renamed') lines.push(t('dataGrid.markRenamedTitle', { from: m.from }))
   if (m?.kind === 'retyped') lines.push(t('dataGrid.markRetypedTitle', { from: shortDtype(m.from) }))
+  const st = stats(c.name)
+  if (st) lines.push(nullsLine(st))
   return lines.join('\n')
 }
 
@@ -260,6 +288,11 @@ function onGridKey(e: KeyboardEvent) {
     return
   }
   if (mod && e.key !== 'Home' && e.key !== 'End') return // the page's shortcuts (save, undo)
+  if (e.key === 'Enter' && inCell && profiling.value) {
+    e.preventDefault()
+    openProfile(active.value.c)
+    return
+  }
   const page = Math.max(1, Math.floor((viewport.value - headH.value) / rowH.value) - 1)
   const to = moveCell(active.value, e.key, mod, rows.value.length, cols.value.length, page)
   if (!to) return
@@ -284,7 +317,8 @@ function onHeadClick(j: number) {
   const c = cols.value[j]
   if (!c) return
   active.value = { r: -1, c: j }
-  void copyName(c.name)
+  if (profiling.value) openProfile(j)
+  else void copyName(c.name)
 }
 
 // ── the column under the pointer, tinted like the row (its <col>, one class) ──────
@@ -318,6 +352,7 @@ const padBottom = computed(() => Math.max(0, (rows.value.length - win.value.end)
 
 let frame = 0
 function onScroll() {
+  if (popOpen.value) popOpen.value = false // anchored to a header that moved
   if (frame) return
   frame = requestAnimationFrame(() => {
     frame = 0
@@ -386,6 +421,8 @@ watch(cols, async (cs) => {
   measure()
 })
 watch(() => props.result, async () => {
+  popOpen.value = false
+  top.value = null
   await nextTick()
   measure()
 })
@@ -529,12 +566,76 @@ const tableWidth = computed(() => widths.value.reduce((s, w) => s + w, rnWidth.v
 const SK_WIDTHS = [64, 40, 88, 52, 72, 46, 60, 78]
 const skCols = computed(() => Math.min(8, Math.max(3, props.result?.columns.length ?? 5)))
 const skW = (r: number, c: number) => `${SK_WIDTHS[(r * 3 + c) % SK_WIDTHS.length]}px`
+
+// ── a column's profile, in a small panel under its header ──────────────────────
+const popOpen = ref(false)
+const popCol = ref(-1)
+const popEl = ref<HTMLElement | null>(null)
+const popStyle = ref<Record<string, string>>({})
+// a click on the same header closes it: the focus leaving the panel closed it a moment before
+let closed = { col: -1, at: 0 }
+usePopover(popOpen, popEl, () => { closed = { col: popCol.value, at: performance.now() }; popOpen.value = false })
+const popColumn = computed(() => (popOpen.value ? cols.value[popCol.value] ?? null : null))
+const popStats = computed(() => (popColumn.value ? stats(popColumn.value.name) ?? null : null))
+const top = ref<{ col: string; state: 'loading' | 'done' | 'failed'; res?: TopValuesResult } | null>(null)
+watch(() => props.stale, (s) => { if (s) popOpen.value = false })
+function place(j: number) {
+  const th = headButton(j)?.closest('th') as HTMLElement | null
+  if (!th) return
+  const r = th.getBoundingClientRect()
+  const W = 300
+  const left = Math.max(8, Math.min(r.left, window.innerWidth - W - 8))
+  const below = window.innerHeight - r.bottom - 12
+  const above = r.top - 12
+  popStyle.value = below >= 260 || below >= above
+    ? { left: `${left}px`, top: `${r.bottom + 4}px`, maxHeight: `${Math.max(140, below)}px` }
+    : { left: `${left}px`, bottom: `${window.innerHeight - r.top + 4}px`, maxHeight: `${Math.max(140, above)}px` }
+}
+function openProfile(j: number) {
+  const c = cols.value[j]
+  if (!c || !props.topValues) return
+  if (popOpen.value && popCol.value === j) { popOpen.value = false; return }
+  if (closed.col === j && performance.now() - closed.at < 400) return
+  popCol.value = j
+  place(j)
+  popOpen.value = true
+  void loadTop(c)
+}
+async function loadTop(c: GridColumn) {
+  const st = stats(c.name)
+  if (!props.topValues || st?.kind === 'other' || (top.value?.col === c.name && top.value.state !== 'failed')) return
+  top.value = { col: c.name, state: 'loading' }
+  try {
+    const res = await props.topValues(c.name)
+    if (top.value?.col === c.name) top.value = { col: c.name, state: 'done', res }
+  } catch (e) {
+    if (top.value?.col === c.name) top.value = isSuperseded(e) ? null : { col: c.name, state: 'failed' }
+  }
+}
+const popTop = computed(() => (popColumn.value && top.value?.col === popColumn.value.name ? top.value : null))
+function shown(v: unknown, c: GridColumn): string {
+  if (v === null || v === undefined) return '—'
+  if (v === '') return t('dataGrid.profileEmptyText')
+  return text(v, c.name, c.dtype)
+}
+const popNote = computed(() => {
+  const p = props.profile
+  const st = popStats.value
+  if (!p || !st) return ''
+  const n = fmtCount(p.rows)
+  switch (profileBasis(p.sampled, st.whole)) {
+    case 'all': return t('dataGrid.profileAll', { n }, p.rows)
+    case 'sample': return t('dataGrid.profileSample', { n })
+    case 'nulls': return t('dataGrid.profileSampleNulls', { n })
+    default: return t('dataGrid.profileSampleRange', { n })
+  }
+})
 </script>
 
 <template>
   <div
     class="datagrid"
-    :class="{ 'dg-stale': stale && !!result && !pending, 'dg-stale-head': staleHead }"
+    :class="{ 'dg-stale': stale && !!result && !pending, 'dg-stale-head': staleHead, 'dg-profiled': profiling }"
     tabindex="-1"
     role="region"
     :aria-label="label ?? $t('dataGrid.regionLabel')"
@@ -616,6 +717,8 @@ const skW = (r: number, c: number) => `${SK_WIDTHS[(r * 3 + c) % SK_WIDTHS.lengt
                     class="cn"
                     :tabindex="headTab(j)"
                     :aria-describedby="hintId"
+                    :aria-haspopup="profiling ? 'dialog' : undefined"
+                    :aria-expanded="profiling ? popOpen && popCol === j : undefined"
                     @click="onHeadClick(j)"
                     @focus="active = { r: -1, c: j }"
                   >
@@ -623,6 +726,13 @@ const skW = (r: number, c: number) => `${SK_WIDTHS[(r * 3 + c) % SK_WIDTHS.lengt
                     <Check v-if="copied === c.name" :size="11" class="cn-done" aria-hidden="true" />
                   </button>
                   <span class="ct"><span class="ct-type">{{ shortDtype(c.dtype) }}</span><span v-if="markOf(c.name)" class="mk"> · {{ markLabel(markOf(c.name)!) }}</span></span>
+                  <template v-if="profiling">
+                    <span class="nb" :class="{ on: !!stats(c.name) }" aria-hidden="true"><span
+                      class="nb-fill"
+                      :style="{ width: stats(c.name) ? nullBarWidth(stats(c.name)!.nulls, stats(c.name)!.of) : '0%' }"
+                    /></span>
+                    <span v-if="stats(c.name)" class="sr-only">, {{ nullsLine(stats(c.name)!) }}</span>
+                  </template>
                 </th>
               </tr>
             </thead>
@@ -654,10 +764,69 @@ const skW = (r: number, c: number) => `${SK_WIDTHS[(r * 3 + c) % SK_WIDTHS.lengt
           </table>
           <p v-if="!rows.length && !pending" class="dg-norows muted">{{ $t('dataGrid.noRows') }}</p>
         </div>
-        <span :id="hintId" class="sr-only">{{ $t('dataGrid.keysHint') }}</span>
+        <span :id="hintId" class="sr-only">{{ profiling ? $t('dataGrid.keysHintProfile') : $t('dataGrid.keysHint') }}</span>
       </div>
     </template>
 
+    <Teleport to="body">
+      <div
+        v-if="popOpen && popColumn"
+        ref="popEl"
+        class="dg-pop"
+        role="dialog"
+        :aria-labelledby="`${uid}-pop-t`"
+        :style="popStyle"
+      >
+        <div class="dg-pop-head">
+          <p :id="`${uid}-pop-t`" class="dg-pop-name">{{ popColumn.name }}</p>
+          <span class="dg-pop-type">{{ shortDtype(popColumn.dtype) }}</span>
+        </div>
+        <template v-if="popStats">
+          <dl class="dg-pop-stats">
+            <div>
+              <dt>{{ $t('dataGrid.profileNulls') }}</dt>
+              <dd>{{ fmtCount(popStats.nulls) }} <span class="dg-pop-q">· {{ shareText(popStats.nulls, popStats.of, locale) }}</span></dd>
+            </div>
+            <div v-if="popStats.distinct != null">
+              <dt>{{ $t('dataGrid.profileDistinct') }}</dt>
+              <dd>≈ {{ fmtCount(popStats.distinct) }}</dd>
+            </div>
+            <template v-if="'min' in popStats">
+              <div><dt>{{ $t('dataGrid.profileMin') }}</dt><dd class="dg-pop-v">{{ shown(popStats.min, popColumn) }}</dd></div>
+              <div><dt>{{ $t('dataGrid.profileMax') }}</dt><dd class="dg-pop-v">{{ shown(popStats.max, popColumn) }}</dd></div>
+            </template>
+            <div v-if="popStats.min_len != null">
+              <dt>{{ $t('dataGrid.profileLength') }}</dt>
+              <dd>{{ popStats.min_len === popStats.max_len
+                ? $t('dataGrid.profileLengthOne', { n: fmtCount(popStats.min_len!) }, popStats.min_len!)
+                : $t('dataGrid.profileLengthRange', { min: fmtCount(popStats.min_len!), max: fmtCount(popStats.max_len ?? 0) }) }}</dd>
+            </div>
+          </dl>
+          <template v-if="popStats.kind !== 'other'">
+            <p class="dg-pop-sub">{{ $t('dataGrid.profileTop') }}</p>
+            <p v-if="!popTop || popTop.state === 'loading'" class="dg-pop-wait">{{ $t('dataGrid.profileTopLoading') }}</p>
+            <p v-else-if="popTop.state === 'failed'" class="dg-pop-wait">{{ $t('dataGrid.profileTopFailed') }}</p>
+            <p v-else-if="!popTop.res?.values.length" class="dg-pop-wait">{{ $t('dataGrid.profileTopNone') }}</p>
+            <ol v-else class="dg-pop-top">
+              <li v-for="(v, k) in popTop.res!.values" :key="k">
+                <span class="dg-pop-v">{{ shown(v.value, popColumn) }}</span>
+                <span class="dg-pop-n">{{ fmtCount(v.count) }}</span>
+              </li>
+            </ol>
+          </template>
+          <p class="dg-pop-note">{{ popNote }}</p>
+        </template>
+        <p v-else class="dg-pop-wait">
+          {{ profileState === 'loading' || profileState === 'none' ? $t('dataGrid.profileLoading') : $t('dataGrid.profileFailed') }}
+        </p>
+        <div class="dg-pop-actions">
+          <button type="button" class="mini" @click="copyName(popColumn.name)">
+            <component :is="copied === popColumn.name ? Check : Copy" :size="12" aria-hidden="true" />
+            {{ copied === popColumn.name ? $t('dataGrid.copiedName') : $t('dataGrid.copyName') }}
+          </button>
+        </div>
+      </div>
+    </Teleport>
   </div>
 </template>
 
@@ -722,19 +891,31 @@ const skW = (r: number, c: number) => `${SK_WIDTHS[(r * 3 + c) % SK_WIDTHS.lengt
 .dg-sx .dg-table thead th.rn { box-shadow: inset 0 -1px 0 var(--border), inset -1px 0 0 var(--border), var(--shadow-pin); }
 @media (prefers-reduced-motion: reduce) { .dg-table .rn { transition: none; } }
 
-/* the header: the name (a button that copies it) over the short type and the step's mark */
+/* the header: the name (a button: the profile, or a copy of the name) over the short type,
+   the step's mark and the share of nulls */
 .dg-table th { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .dg-table th .cn {
   display: flex; align-items: center; gap: 4px; max-width: 100%;
   margin: 0; padding: 0; border: 0; background: none; box-shadow: none;
   font: inherit; color: inherit; text-align: inherit; cursor: copy;
 }
+.dg-profiled .dg-table th .cn { cursor: pointer; }
 .dg-table th.num .cn { margin-left: auto; justify-content: flex-end; }
-.dg-table th .cn:hover { color: var(--accent-hi, var(--accent)); background: none; box-shadow: none; }
+.dg-table th .cn:hover, .dg-table th .cn[aria-expanded="true"] { color: var(--accent-hi, var(--accent)); background: none; box-shadow: none; }
 .dg-table th .cn:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; border-radius: 3px; }
 .cn-text { overflow: hidden; text-overflow: ellipsis; }
 .cn-done { flex: none; color: var(--accent-2); }
 .dg-table th .mk { font-family: var(--dg-sans, inherit); font-size: 10.5px; font-weight: 600; color: var(--accent-hi); }
+/* the share of nulls: a hairline under the type, filled from the left; its place is kept
+   while the profile is asked, so the header does not grow when it comes */
+.dg-table th .nb {
+  display: block; height: 2px; margin-top: 4px; border-radius: 1px; overflow: hidden;
+  background: color-mix(in srgb, var(--muted) 24%, transparent);
+  visibility: hidden;
+}
+.dg-table th .nb.on { visibility: visible; }
+.dg-table th .nb-fill { display: block; height: 100%; background: var(--muted); }
+
 .dg-skrow td { border-color: transparent; }
 .dg-skrow td.num .sk { margin-left: auto; display: block; }
 
@@ -754,4 +935,29 @@ const skW = (r: number, c: number) => `${SK_WIDTHS[(r * 3 + c) % SK_WIDTHS.lengt
   overflow-wrap: anywhere;
 }
 
+/* a column's profile: a small panel under its header (teleported: the grid's box clips) */
+.dg-pop {
+  position: fixed; z-index: 2600; width: 300px; overflow: auto;
+  padding: 10px 12px; background: var(--panel); border: 1px solid var(--border);
+  border-radius: var(--radius); box-shadow: var(--shadow-2); font-size: 12px; color: var(--text);
+  font-variant-numeric: tabular-nums;
+}
+.dg-pop:focus { outline: none; }
+.dg-pop-head { display: flex; align-items: baseline; gap: 8px; min-width: 0; margin-bottom: 8px; }
+.dg-pop-name { margin: 0; font-weight: 600; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.dg-pop-type { flex: none; font: 400 11px/1.3 ui-monospace, SFMono-Regular, Menlo, monospace; color: var(--muted); }
+.dg-pop-stats { display: grid; gap: 3px; margin: 0; }
+.dg-pop-stats > div { display: flex; justify-content: space-between; gap: 12px; min-width: 0; }
+.dg-pop-stats dt { color: var(--muted); flex: none; }
+.dg-pop-stats dd { margin: 0; min-width: 0; text-align: right; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.dg-pop-q { color: var(--muted); }
+.dg-pop-v { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.dg-pop-sub { margin: 10px 0 3px; color: var(--muted); }
+.dg-pop-top { margin: 0; padding: 0; list-style: none; display: grid; gap: 2px; }
+.dg-pop-top li { display: flex; justify-content: space-between; gap: 12px; min-width: 0; }
+.dg-pop-n { flex: none; color: var(--muted); }
+.dg-pop-wait { margin: 2px 0; color: var(--muted); }
+.dg-pop-note { margin: 10px 0 0; color: var(--muted); font-size: 11.5px; line-height: 1.4; white-space: normal; }
+.dg-pop-actions { display: flex; justify-content: flex-end; margin-top: 10px; }
+.dg-pop-actions .mini { display: inline-flex; align-items: center; gap: 5px; }
 </style>

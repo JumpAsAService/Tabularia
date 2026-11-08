@@ -224,3 +224,35 @@ test('the arrows, Home, End and the page keys move one active cell, the header o
   assert.deepEqual(moveCell(at(-1, 1), 'End', true, 0, 3, 10), at(-1, 2))
   assert.equal(moveCell(at(0, 0), 'ArrowDown', false, 10, 0, 10), null)
 })
+
+test('a share of nulls is never rounded into none or all', async () => {
+  const { shareText } = await import('../composables/previewGrid.ts')
+  assert.equal(shareText(0, 1000, 'en'), '0%')
+  assert.equal(shareText(1, 42_007_616, 'en'), '<0.1%')
+  assert.equal(shareText(24, 1000, 'en'), '2.4%')
+  assert.equal(shareText(120, 1000, 'en'), '12%')
+  assert.equal(shareText(995, 1000, 'en'), '99.5%')
+  assert.equal(shareText(42_007_615, 42_007_616, 'en'), '>99.9%')
+  assert.equal(shareText(1000, 1000, 'en'), '100%')
+  assert.equal(shareText(0, 0, 'en'), '0%')
+  // in the interface's language
+  assert.equal(shareText(24, 1000, 'it'), '2,4%')
+  assert.match(shareText(120, 1000, 'de'), /^12\s%$/)
+})
+
+test('the null bar is empty for none, a pixel at least for a few, full for all', async () => {
+  const { nullBarWidth } = await import('../composables/previewGrid.ts')
+  assert.equal(nullBarWidth(0, 100), '0%')
+  assert.equal(nullBarWidth(5, 0), '0%')
+  assert.equal(nullBarWidth(1, 42_007_616), 'max(1px, 0.00%)')
+  assert.equal(nullBarWidth(12, 100), 'max(1px, 12.00%)')
+  assert.equal(nullBarWidth(100, 100), '100%')
+})
+
+test('a profile says which of its figures are of every row', async () => {
+  const { profileBasis } = await import('../composables/previewGrid.ts')
+  assert.equal(profileBasis(false, []), 'all')
+  assert.equal(profileBasis(true, []), 'sample')
+  assert.equal(profileBasis(true, ['nulls']), 'nulls')
+  assert.equal(profileBasis(true, ['nulls', 'min', 'max']), 'range')
+})
