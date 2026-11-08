@@ -49,8 +49,11 @@ export interface ProfileResult {
   sample_rows: number
   total: number | null
   footer: boolean
+  // `footer_only`: what the parquet footer says without a query (the nulls, a number's or a
+  // date's range, of the columns it describes); the rest is asked when a column is opened
+  partial?: boolean
   columns: Record<string, ColumnStats>
-  how: 'remembered' | 'computed'
+  how: 'remembered' | 'computed' | 'footer'
 }
 // one column's most frequent values (nulls left out), over the same rows as the profile
 export interface TopValuesResult {
@@ -252,6 +255,7 @@ export function useApi() {
       column?: string
       engine?: string
       no_cache?: boolean
+      footer_only?: boolean // never a query: only what the parquet footer says
       slot?: string
     }, opts: { signal?: AbortSignal } = {}): Promise<R> {
       return await apiFetch<R>('/tasks/profile', { method: 'POST', body, signal: opts.signal })

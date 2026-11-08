@@ -5,6 +5,11 @@ exposes at `/system/info` and in the app's settings menu.
 
 ## Unreleased
 
+- **The editor profiles a step's columns on request.** A profile is a query over up to a
+  million rows of the step, at every click: too much on chains of billions. The editor now asks
+  by itself only what the parquet footer says, with no query (`footer_only`: the nulls of every
+  row, a number's or a date's range, of a source or a cached step that keeps rows and values),
+  and makes the whole profile when a column is opened. The Viewer profiles whole as before.
 - **A step's column profile.** After the rows and their count, the editor and the Viewer
   ask `POST /tasks/profile`: under every column's name a thin bar fills with its share of
   nulls (the share in the tooltip), and a click on the name, or Enter, opens its numbers:

@@ -1970,36 +1970,56 @@ function stopCount() {
 // The column profile comes last, after a short pause (whoever goes through the nodes one
 // after another never starts one), on its own slot, and is stopped on the server as soon
 // as another node is clicked: it never shares the worker with the next preview.
+// In the editor a step's profile costs a query on rows that may be billions: by itself it
+// asks only what the parquet footer says (the nulls, a number's range: no query), and the
+// whole profile is made when a column is opened (`profileWhole`). The Viewer profiles whole.
 const PROFILE_SETTLE_MS = 250
 let profileSeq = 0
 let profileTimer: ReturnType<typeof setTimeout> | undefined
+let wholeAsked = -1 // the profileSeq whose whole profile was asked
+let profileAsk: { key: string; body: NonNullable<ReturnType<typeof previewBody>['body']>; columns: ColumnInfo[] } | null = null
 function queueProfile(key: string, body: NonNullable<ReturnType<typeof previewBody>['body']>, columns: ColumnInfo[]) {
   stopProfile()
   if (!columns.length) return
+  profileAsk = { key, body, columns }
   const seq = profileSeq
-  const known = fresh(profileMemo.get(key))
+  const known = fresh(profileMemo.get(key)) ?? fresh(profileMemo.get(`${key}\u0001footer`))
   if (known) {
     profile.value = known.res
     profileState.value = 'done'
     return
   }
   profileState.value = 'loading'
-  profileTimer = setTimeout(async () => {
-    if (seq !== profileSeq) return
-    try {
-      const res = await previewSlots.profile({
-        bucket: body.bucket, input_key: body.input_key, operations: body.operations, engine: flowEngine.value,
-        columns: columns.map((c) => ({ name: c.name, dtype: c.dtype })),
-      }, 'profile')
-      profileMemo.set(key, { at: Date.now(), res })
-      if (seq !== profileSeq) return
-      profile.value = res
-      profileState.value = 'done'
-    } catch (e) {
-      if (seq !== profileSeq || isSuperseded(e)) return
-      profileState.value = 'failed'
-    }
-  }, PROFILE_SETTLE_MS)
+  profileTimer = setTimeout(() => { void askProfile(seq, true) }, PROFILE_SETTLE_MS)
+}
+async function askProfile(seq: number, footerOnly: boolean) {
+  const ask = profileAsk
+  if (seq !== profileSeq || !ask) return
+  try {
+    const res = await previewSlots.profile({
+      bucket: ask.body.bucket, input_key: ask.body.input_key, operations: ask.body.operations, engine: flowEngine.value,
+      columns: ask.columns.map((c) => ({ name: c.name, dtype: c.dtype })),
+      ...(footerOnly ? { footer_only: true } : {}),
+    }, 'profile')
+    profileMemo.set(res.partial ? `${ask.key}\u0001footer` : ask.key, { at: Date.now(), res })
+    // a footer-only answer that comes after the whole was asked does not stand for it
+    if (seq !== profileSeq || (footerOnly && wholeAsked === seq)) return
+    profile.value = res
+    profileState.value = 'done'
+  } catch (e) {
+    if (seq !== profileSeq || isSuperseded(e) || (footerOnly && wholeAsked === seq)) return
+    // a whole profile that failed leaves what the footer said on screen
+    profileState.value = profile.value ? 'done' : 'failed'
+  }
+}
+/** A column opened in the grid: the step's whole profile (one query for every column). */
+function profileWhole() {
+  if (!profileAsk || (profile.value && !profile.value.partial) || wholeAsked === profileSeq) return
+  wholeAsked = profileSeq
+  clearTimeout(profileTimer)
+  profileState.value = 'loading'
+  // on the same slot: a footer-only request still out is knocked down by this one
+  void askProfile(profileSeq, false)
 }
 function stopProfile() {
   profileSeq++
@@ -2008,6 +2028,7 @@ function stopProfile() {
   if (previewSlots.busy('top')) previewSlots.stop('top')
   profile.value = null
   profileState.value = 'none'
+  profileAsk = null
 }
 // a column's most frequent values, at a click on its name in the grid: one query a column
 const topMemo = new Recent<{ at: number; res: TopValuesResult }>(120)
@@ -3089,6 +3110,7 @@ async function pollTask(id: string) {
           :pending-columns="computingColumns"
           :profile="profile"
           :profile-state="profileState"
+          :profile-whole="profileWhole"
           :top-values="topValues"
           :empty="selectedId ? $t('dataGrid.nothingYet') : undefined"
         >

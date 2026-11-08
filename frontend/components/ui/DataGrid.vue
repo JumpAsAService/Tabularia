@@ -58,9 +58,11 @@ const props = withDefaults(defineProps<{
   profile?: ProfileResult | null
   profileState?: 'none' | 'loading' | 'done' | 'failed'
   topValues?: (column: string) => Promise<TopValuesResult>
+  // the profile is partial (the footer's nulls) until a column is opened: this asks the whole
+  profileWhole?: () => void
 }>(), {
   summary: undefined, summaryId: undefined, changes: null, count: null, empty: undefined, label: undefined,
-  pendingColumns: null, profile: null, profileState: 'none', topValues: undefined,
+  pendingColumns: null, profile: null, profileState: 'none', topValues: undefined, profileWhole: undefined,
 })
 
 const { t, locale } = useI18n()
@@ -599,6 +601,7 @@ function openProfile(j: number) {
   popCol.value = j
   place(j)
   popOpen.value = true
+  if (props.profileWhole && (!props.profile || props.profile.partial)) props.profileWhole()
   void loadTop(c)
 }
 async function loadTop(c: GridColumn) {
@@ -814,6 +817,7 @@ const popNote = computed(() => {
               </li>
             </ol>
           </template>
+          <p v-if="profile?.partial && profileState === 'loading'" class="dg-pop-wait">{{ $t('dataGrid.profileLoading') }}</p>
           <p class="dg-pop-note">{{ popNote }}</p>
         </template>
         <p v-else class="dg-pop-wait">
