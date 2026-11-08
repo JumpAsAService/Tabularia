@@ -445,9 +445,8 @@ def test_the_route_sends_a_histogram_and_refuses_a_bad_one(storage, table, valke
 
 
 def test_polars_collects_the_sample_before_it_aggregates(storage, table, valkey, fredis, monkeypatch):
-    """The aggregates on the lazy chain took Polars off the streaming engine, which computed
-    the whole chain before its head (a worker killed for its memory on a 42M x 12M join):
-    the sample is collected first, then aggregated."""
+    """The sample's rows are collected first, in streaming as a preview's are, then
+    aggregated: the memory is the sample's, whatever the aggregates."""
     import polars as _pl
 
     eng = _engine("polars", storage, fredis)

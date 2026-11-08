@@ -221,13 +221,11 @@ class PolarsEngine(DeferredStepCache, Engine):
             )
 
     # ── The column profile (app/engine/profile.py): natively, on the chain's first rows ──
-    # The sample is COLLECTED first, in streaming, and only then aggregated, eagerly: the
-    # aggregates on the lazy chain (a distinct count, say) took Polars off the streaming
-    # engine, which then computed the whole chain before its head. On flow 25's «evasi» (a
-    # join of 42 million rows with 12 million) a worker reached its 4 GiB and the kernel
-    # killed it, three times in a few minutes (kind, 2026-11-08). Collected first, the chain
-    # stops at the sample's rows as a preview stops at its own, and the memory is the
-    # sample's. `columns`: only those read (a column's values, its histogram).
+    # The sample is collected first, in streaming, only the columns profiled, as a preview
+    # collects its rows, and aggregated eagerly: its memory is the sample's whatever the
+    # aggregates are. (A chain whose own preview does not fit in the worker's memory, such
+    # as a join of 42 million rows with 12 million at full width on Polars, does not fit
+    # here either: the profile is asked only after the preview's rows have come.)
     def _profile_frame(self, source, operations, sample, use_cache, then, columns=None):
         ops = _coerce_ops(operations)
         with self._session() as ctx:
