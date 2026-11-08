@@ -9,8 +9,8 @@ exposes at `/system/info` and in the app's settings menu.
   and the summary says «Computing Group by…»; past 2 s it counts the seconds and offers
   «Cancel» (which stops the query on the server) and «Use a sample» (it opens the source's
   sample setting, nothing changes by itself). A step opened again in the same page shows at
-  once from memory: the fixed half-second wait is gone. The rows of a step and its input
-  columns are asked side by side, not one after the other. The cache-cap warning is one
+  once from memory: the fixed half-second wait is gone. The rows come before the input
+  columns, and a columns request left over from the node before is stopped. The cache-cap warning is one
   toast, updated, not a pile.
 - **One data grid.** The Viewer now uses the editor's grid (`DataGrid.vue`), which scrolls in
   its own box with the header in place and draws only the rows in view: 500 rows × 40 columns
