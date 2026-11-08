@@ -194,3 +194,33 @@ test('a preview is the same when engine, source, chain and limit are', () => {
   assert.notEqual(previewKey({ ...body, engine: 'duckdb' }), previewKey({ ...body, engine: 'duckdb', limit: 500 }))
   assert.notEqual(previewKey(body), previewKey({ ...body, operations: [] }))
 })
+
+// ── round 4: the keyboard and the column profile ────────────────────────────────
+test('the arrows, Home, End and the page keys move one active cell, the header one row up', async () => {
+  const { moveCell } = await import('../composables/previewGrid.ts')
+  const at = (r, c) => ({ r, c })
+  // 100 rows, 5 columns, 10 rows a page
+  const m = (pos, key, ctrl = false) => moveCell(pos, key, ctrl, 100, 5, 10)
+  assert.deepEqual(m(at(0, 0), 'ArrowRight'), at(0, 1))
+  assert.deepEqual(m(at(0, 4), 'ArrowRight'), at(0, 4)) // the last column stays
+  assert.deepEqual(m(at(0, 0), 'ArrowLeft'), at(0, 0))
+  assert.deepEqual(m(at(0, 2), 'ArrowUp'), at(-1, 2)) // to the column's header
+  assert.deepEqual(m(at(-1, 2), 'ArrowUp'), at(-1, 2))
+  assert.deepEqual(m(at(-1, 2), 'ArrowDown'), at(0, 2))
+  assert.deepEqual(m(at(99, 1), 'ArrowDown'), at(99, 1))
+  assert.deepEqual(m(at(7, 3), 'Home'), at(7, 0))
+  assert.deepEqual(m(at(7, 1), 'End'), at(7, 4))
+  assert.deepEqual(m(at(7, 3), 'Home', true), at(-1, 0))
+  assert.deepEqual(m(at(7, 1), 'End', true), at(99, 4))
+  assert.deepEqual(m(at(5, 1), 'PageDown'), at(15, 1))
+  assert.deepEqual(m(at(95, 1), 'PageDown'), at(99, 1))
+  assert.deepEqual(m(at(-1, 1), 'PageDown'), at(9, 1))
+  assert.deepEqual(m(at(5, 1), 'PageUp'), at(0, 1)) // stops at the first row
+  assert.deepEqual(m(at(0, 1), 'PageUp'), at(0, 1))
+  assert.equal(m(at(0, 0), 'Enter'), null)
+  assert.equal(m(at(0, 0), 'a'), null)
+  // a result with no rows: only the header
+  assert.deepEqual(moveCell(at(-1, 1), 'ArrowDown', false, 0, 3, 10), at(-1, 1))
+  assert.deepEqual(moveCell(at(-1, 1), 'End', true, 0, 3, 10), at(-1, 2))
+  assert.equal(moveCell(at(0, 0), 'ArrowDown', false, 10, 0, 10), null)
+})

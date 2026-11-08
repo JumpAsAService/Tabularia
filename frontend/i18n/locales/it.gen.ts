@@ -819,7 +819,6 @@ export default {
     "noRows": "Nessuna riga.",
     "regionLabel": "Anteprima dei dati",
     "rowNumber": "Riga",
-    "copyName": "Copia il nome della colonna {name}",
     "markNew": "nuova",
     "markRenamed": "rinominata",
     "markRetyped": "tipo cambiato",
@@ -828,6 +827,7 @@ export default {
     "markRetypedTitle": "Tipo cambiato da {from}",
     "joinOn": "{name} su {keys}",
     "sourceNode": "Sorgente",
+    "keysHint": "Le frecce si muovono tra le celle. Ctrl+C copia il valore di una cella o il nome di una colonna.",
   },
   "aiPrompts": {
     "title": "Istruzioni degli agenti",

@@ -819,7 +819,6 @@ export default {
     "noRows": "Keine Zeilen.",
     "regionLabel": "Datenvorschau",
     "rowNumber": "Zeile",
-    "copyName": "Spaltennamen {name} kopieren",
     "markNew": "neu",
     "markRenamed": "umbenannt",
     "markRetyped": "Typ geändert",
@@ -828,6 +827,7 @@ export default {
     "markRetypedTitle": "Typ geändert von {from}",
     "joinOn": "{name} über {keys}",
     "sourceNode": "Quelle",
+    "keysHint": "Die Pfeiltasten wechseln zwischen den Zellen. Strg+C kopiert den Wert einer Zelle oder den Namen einer Spalte.",
   },
   "aiPrompts": {
     "title": "Anweisungen der Agenten",

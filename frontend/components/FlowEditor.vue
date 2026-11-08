@@ -1636,8 +1636,11 @@ function onKeydown(e: KeyboardEvent) {
     cancelPreview()
     return
   }
+  // in the preview's grid Delete and Ctrl+C belong to its cells, never to the nodes selected
+  const inGrid = !!(document.activeElement as HTMLElement | null)?.closest?.('.datagrid')
   if ((e.ctrlKey || e.metaKey) && !e.altKey) {
     const key_ = e.key.toLowerCase()
+    if (inGrid && key_ !== 'z' && key_ !== 'y') return
     if (key_ === 'z' || key_ === 'y') {
       e.preventDefault()
       if (key_ === 'y' || e.shiftKey) redo()
@@ -1662,6 +1665,7 @@ function onKeydown(e: KeyboardEvent) {
     return
   }
   if (e.key !== 'Delete' && e.key !== 'Backspace') return
+  if (inGrid) return
   // a selected edge (click on the stroke) is removed with the same key as the node
   const edges = getSelectedEdges.value
   if (edges.length) {
@@ -1989,6 +1993,8 @@ function computeAgain() {
   if (!id || !findNode(id)) return
   previewNote.value = ''
   refreshForNode(id)
+  // the button goes with the note: the focus to the preview's region, not to the page
+  nextTick(() => (document.querySelector('.viewbody .datagrid') as HTMLElement | null)?.focus())
 }
 
 let previewSeq = 0 // only the LAST preview launched writes the result and turns the skeleton off

@@ -6,7 +6,8 @@
 // - which columns a step added, renamed, retyped or removed against the step before it;
 // - the one sentence that says how many rows a preview shows of how many there are, the
 //   same in the editor, in the Viewer and on a node of the canvas;
-// - which rows a scrolled grid draws (it draws only those).
+// - which rows a scrolled grid draws (it draws only those);
+// - where the keyboard moves the grid's one active cell.
 
 export interface GridColumn { name: string; dtype: string }
 
@@ -254,6 +255,37 @@ export function visibleWindow(scrollTop: number, viewport: number, rowHeight: nu
   const visible = Math.ceil(Math.max(viewport, rowHeight) / rowHeight)
   const end = Math.min(total, start + visible + overscan * 2 + snap)
   return { start, end }
+}
+
+// ── the keyboard: one active cell ─────────────────────────────────────────────
+/** The grid's active cell: `r` is the row's index in the result, -1 the header row; `c`
+ *  the column's index (the row numbers are headers, not cells one moves to). */
+export interface CellPos { r: number; c: number }
+
+/**
+ * Where a key moves the active cell, or null when the key is not the grid's: the arrows a
+ * cell (up from the first row to the header), Home and End to the row's first and last cell,
+ * Ctrl (or Cmd) with them to the header's first cell and the last row's last cell, Page Up
+ * and Page Down by `page` rows (stopping at the first row, the header is one arrow up).
+ */
+export function moveCell(at: CellPos, key: string, ctrl: boolean, rows: number, cols: number, page: number): CellPos | null {
+  if (cols <= 0) return null
+  const lastR = rows - 1
+  const lastC = cols - 1
+  let { r, c } = at
+  const step = Math.max(1, page)
+  switch (key) {
+    case 'ArrowLeft': c -= 1; break
+    case 'ArrowRight': c += 1; break
+    case 'ArrowUp': r -= 1; break
+    case 'ArrowDown': r += 1; break
+    case 'Home': if (ctrl) r = -1; c = 0; break
+    case 'End': if (ctrl) r = lastR; c = lastC; break
+    case 'PageDown': r = r < 0 ? step - 1 : r + step; break
+    case 'PageUp': r = r < 0 ? -1 : Math.max(0, r - step); break
+    default: return null
+  }
+  return { r: Math.max(-1, Math.min(lastR, r)), c: Math.max(0, Math.min(lastC, c)) }
 }
 
 // ── the previews a page has already seen ──────────────────────────────────────

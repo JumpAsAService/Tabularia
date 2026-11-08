@@ -7,14 +7,18 @@
 // once per result, measured in the page's own type on the longest values, so they do not
 // move while the rows under them change and no value is cut below a column's cap. The
 // header stays in place over its own scroll box.
+//
+// It is an ARIA grid with one active cell (one tab stop): the arrows, Home and End, Page Up
+// and Page Down move it (composables/previewGrid.ts, moveCell), past the rows drawn too;
+// Ctrl+C copies its exact value; the headers are its first row.
 import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { Check, CircleAlert, MousePointerClick } from 'lucide-vue-next'
 import type { PreviewResult } from '~/composables/useApi'
 import { readableNumber } from '~/composables/readableNumber'
 import {
-  ariaRowCount, exactText, gridColumnFormatters, isNumericDtype, shortDtype, toTsv, visibleWindow,
-  type ColumnChanges, type ColumnMark, type GridColumn, type RowCount,
+  ariaRowCount, exactText, gridColumnFormatters, isNumericDtype, moveCell, shortDtype, toTsv, visibleWindow,
+  type CellPos, type ColumnChanges, type ColumnMark, type GridColumn, type RowCount,
 } from '~/composables/previewGrid'
 
 const props = withDefaults(defineProps<{
@@ -115,7 +119,8 @@ const ownSummary = computed(() => {
   const rowsText = props.result.truncated ? t('dataGrid.first', { shown: n }) : t('dataGrid.rows', { n })
   return `${rowsText} · ${t('dataGrid.columns', { n: props.result.columns.length })}`
 })
-const describedBy = computed(() => props.summaryId ?? (ownSummary.value ? ownSummaryId : undefined))
+const hintId = `${uid}-hint`
+const describedBy = computed(() => [props.summaryId ?? (ownSummary.value ? ownSummaryId : null), hintId].filter(Boolean).join(' '))
 // the real total when it is known, -1 («unknown») while it is not: never the rows drawn
 const rowCountAria = computed(() =>
   pending.value ? -1 : ariaRowCount(rows.value.length, !!props.result?.truncated, props.count ?? { state: 'none' }))
@@ -136,16 +141,45 @@ function headTitle(c: GridColumn): string {
   return lines.join('\n')
 }
 
-// ── copy: a column's name, and cells with their exact values ───────────────────
+// ── copy: a column's name, a cell's exact value, a selection's ──────────────────
 const copied = ref('')
+const copiedCell = ref('')
 let copiedTimer: ReturnType<typeof setTimeout> | undefined
-async function copyName(name: string) {
+async function writeClipboard(value: string): Promise<boolean> {
   try {
-    await navigator.clipboard.writeText(name)
-    copied.value = name
-    clearTimeout(copiedTimer)
-    copiedTimer = setTimeout(() => { copied.value = '' }, 1200)
-  } catch { /* no clipboard (an insecure page): nothing to say */ }
+    await navigator.clipboard.writeText(value)
+    return true
+  } catch {
+    // no async clipboard (a page not served over https): the older way, through a field
+    const back = document.activeElement as HTMLElement | null
+    const area = document.createElement('textarea')
+    area.value = value
+    area.setAttribute('readonly', '')
+    area.style.cssText = 'position:fixed;left:-9999px;top:0;opacity:0'
+    document.body.appendChild(area)
+    area.select()
+    let ok = false
+    try { ok = document.execCommand('copy') } catch { /* nothing to copy with */ }
+    area.remove()
+    back?.focus?.({ preventScroll: true })
+    return ok
+  }
+}
+async function copyName(name: string) {
+  if (!(await writeClipboard(name))) return
+  copied.value = name
+  clearTimeout(copiedTimer)
+  copiedTimer = setTimeout(() => { copied.value = ''; copiedCell.value = '' }, 1200)
+}
+async function copyActive() {
+  const { r, c } = active.value
+  const col = cols.value[c]
+  if (!col) return
+  if (r < 0) return copyName(col.name)
+  if (!(await writeClipboard(exactText(rows.value[r]?.[col.name])))) return
+  copiedCell.value = `${r}:${c}`
+  clearTimeout(copiedTimer)
+  copiedTimer = setTimeout(() => { copied.value = ''; copiedCell.value = '' }, 700)
 }
 // Selected cells are copied with their exact values, tab-separated, a line per row: what a
 // spreadsheet pastes. A part of one text cell is copied as the browser selected it.
@@ -168,30 +202,89 @@ function onCopy(e: ClipboardEvent) {
   e.preventDefault()
 }
 
-// ── the header: one tab stop, the arrows move along the names ───────────────────
-const activeHead = ref(0)
+// ── the keyboard: one active cell, the only tab stop ───────────────────────────
+const active = ref<CellPos>({ r: -1, c: 0 })
+// an active cell scrolled out of the rows drawn: its column's header keeps the tab stop
+const activeDrawn = computed(() => active.value.r < 0 || (active.value.r >= win.value.start && active.value.r < win.value.end))
+const headTab = (j: number) => (active.value.c === j && (active.value.r < 0 || !activeDrawn.value) ? 0 : -1)
+const cellTab = (i: number, j: number) => (active.value.r === i && active.value.c === j ? 0 : undefined)
 function headButton(j: number): HTMLButtonElement | null {
   return scroller.value?.querySelector<HTMLButtonElement>(`thead th[aria-colindex="${j + 2}"] .cn`) ?? null
 }
-function onHeadKey(e: KeyboardEvent, j: number) {
-  const last = cols.value.length - 1
-  const to = e.key === 'ArrowRight' ? j + 1 : e.key === 'ArrowLeft' ? j - 1 : e.key === 'Home' ? 0 : e.key === 'End' ? last : null
-  if (to === null) return
-  e.preventDefault()
-  const k = Math.max(0, Math.min(last, to))
-  activeHead.value = k
-  const btn = headButton(k)
-  if (!btn) return
-  btn.focus({ preventScroll: true })
-  // into view by hand: the pinned row numbers would cover a column scrolled to the left edge
+function cellEl(p: CellPos): HTMLElement | null {
+  if (p.r < 0) return headButton(p.c)
+  return scroller.value?.querySelector<HTMLElement>(`tbody tr[aria-rowindex="${p.r + 2}"] td[data-c="${p.c}"]`) ?? null
+}
+/** Into view by hand: the sticky header and the pinned row numbers would cover a cell the
+ *  browser scrolled to an edge. Moves the rows drawn at once, so the cell exists after a tick. */
+function reveal(p: CellPos) {
   const box = scroller.value
-  const th = btn.closest('th') as HTMLElement | null
-  if (box && th) {
+  if (!box) return
+  if (p.r >= 0) {
+    const top = headH.value + p.r * rowH.value
+    let st = box.scrollTop
+    if (top < st + headH.value) st = top - headH.value
+    else if (top + rowH.value > st + box.clientHeight) st = top + rowH.value - box.clientHeight
+    st = Math.max(0, st)
+    if (Math.abs(st - box.scrollTop) > 0.5) {
+      box.scrollTop = st
+      scrollTop.value = box.scrollTop
+    }
+  }
+  const th = headButton(p.c)?.closest('th') as HTMLElement | null
+  if (th) {
     const left = th.offsetLeft - rnWidth.value
     const right = th.offsetLeft + th.offsetWidth - box.clientWidth
     if (box.scrollLeft > left) box.scrollLeft = Math.max(0, left)
     else if (box.scrollLeft < right) box.scrollLeft = right
   }
+}
+async function goTo(p: CellPos) {
+  active.value = p
+  reveal(p)
+  await nextTick()
+  cellEl(p)?.focus({ preventScroll: true })
+}
+function onGridKey(e: KeyboardEvent) {
+  const el = e.target as HTMLElement
+  const inHead = !!el.closest?.('thead .cn')
+  const inCell = !inHead && !!el.matches?.('td[data-c]')
+  if ((!inHead && !inCell) || e.altKey) return
+  const mod = e.ctrlKey || e.metaKey
+  if (mod && !e.shiftKey && e.key.toLowerCase() === 'c') {
+    const sel = window.getSelection()
+    if (sel && !sel.isCollapsed && scroller.value?.contains(sel.anchorNode)) return // a selection: onCopy
+    e.preventDefault()
+    e.stopPropagation() // the editor's Ctrl+C copies nodes
+    void copyActive()
+    return
+  }
+  if (mod && e.key !== 'Home' && e.key !== 'End') return // the page's shortcuts (save, undo)
+  const page = Math.max(1, Math.floor((viewport.value - headH.value) / rowH.value) - 1)
+  const to = moveCell(active.value, e.key, mod, rows.value.length, cols.value.length, page)
+  if (!to) return
+  e.preventDefault()
+  e.stopPropagation()
+  void goTo(to)
+}
+function onGridFocus(e: FocusEvent) {
+  const td = (e.target as HTMLElement).closest?.('td[data-c]') as HTMLElement | null
+  if (td) active.value = { r: Number(td.dataset.r), c: Number(td.dataset.c) }
+}
+// a click makes its cell the active one (not while selecting text, which the focus would end)
+function onGridClick(e: MouseEvent) {
+  const td = (e.target as HTMLElement).closest?.('td[data-c]') as HTMLElement | null
+  if (!td) return
+  const sel = window.getSelection()
+  if (sel && !sel.isCollapsed) return
+  active.value = { r: Number(td.dataset.r), c: Number(td.dataset.c) }
+  nextTick(() => { if (td.isConnected) td.focus({ preventScroll: true }) })
+}
+function onHeadClick(j: number) {
+  const c = cols.value[j]
+  if (!c) return
+  active.value = { r: -1, c: j }
+  void copyName(c.name)
 }
 
 // ── the column under the pointer, tinted like the row (its <col>, one class) ──────
@@ -280,12 +373,13 @@ watch(cols, async (cs) => {
   const shape = cs.map((c) => c.name).join('\u0001')
   if (shape !== lastShape) {
     lastShape = shape
-    activeHead.value = 0
+    active.value = { r: -1, c: 0 }
     scrollTop.value = 0
     scrolledX.value = false
     await nextTick()
     if (scroller.value) { scroller.value.scrollTop = 0; scroller.value.scrollLeft = 0 }
   } else {
+    if (active.value.r >= rows.value.length) active.value = { r: rows.value.length - 1, c: active.value.c }
     await nextTick()
     if (scroller.value) scrollTop.value = scroller.value.scrollTop
   }
@@ -441,6 +535,9 @@ const skW = (r: number, c: number) => `${SK_WIDTHS[(r * 3 + c) % SK_WIDTHS.lengt
   <div
     class="datagrid"
     :class="{ 'dg-stale': stale && !!result && !pending, 'dg-stale-head': staleHead }"
+    tabindex="-1"
+    role="region"
+    :aria-label="label ?? $t('dataGrid.regionLabel')"
     :aria-busy="stale || loading ? 'true' : undefined"
   >
     <div v-if="loading && !result && !pending" class="dg-skeleton">
@@ -482,17 +579,19 @@ const skW = (r: number, c: number) => `${SK_WIDTHS[(r * 3 + c) % SK_WIDTHS.lengt
         <div
           ref="scroller"
           class="dg-scroll"
-          tabindex="0"
-          role="region"
-          :aria-label="label ?? $t('dataGrid.regionLabel')"
           @scroll.passive="onScroll"
           @copy="onCopy"
           @mouseover="onOver"
           @mouseleave="hoverCol = -1"
+          @keydown="onGridKey"
+          @focusin="onGridFocus"
+          @click="onGridClick"
         >
           <table
             class="data dg-table"
+            role="grid"
             :style="{ width: `${tableWidth}px` }"
+            :aria-label="label ?? $t('dataGrid.regionLabel')"
             :aria-rowcount="rowCountAria"
             :aria-colcount="cols.length + 1"
             :aria-describedby="describedBy"
@@ -502,12 +601,12 @@ const skW = (r: number, c: number) => `${SK_WIDTHS[(r * 3 + c) % SK_WIDTHS.lengt
               <col v-for="(c, j) in cols" :key="c.name" :style="{ width: `${widths[j]}px` }" :class="{ hc: j + 1 === hoverCol }" />
             </colgroup>
             <thead>
-              <tr aria-rowindex="1">
-                <th class="rn" scope="col" aria-colindex="1"><span class="sr-only">{{ $t('dataGrid.rowNumber') }}</span></th>
+              <tr role="row" aria-rowindex="1">
+                <th class="rn" role="columnheader" aria-colindex="1"><span class="sr-only">{{ $t('dataGrid.rowNumber') }}</span></th>
                 <th
                   v-for="(c, j) in cols"
                   :key="c.name"
-                  scope="col"
+                  role="columnheader"
                   :aria-colindex="j + 2"
                   :class="{ num: isNum(c.dtype), marked: !!markOf(c.name) }"
                   :title="headTitle(c)"
@@ -515,11 +614,10 @@ const skW = (r: number, c: number) => `${SK_WIDTHS[(r * 3 + c) % SK_WIDTHS.lengt
                   <button
                     type="button"
                     class="cn"
-                    :tabindex="j === activeHead ? 0 : -1"
-                    :aria-label="$t('dataGrid.copyName', { name: c.name })"
-                    @click="copyName(c.name)"
-                    @focus="activeHead = j"
-                    @keydown="onHeadKey($event, j)"
+                    :tabindex="headTab(j)"
+                    :aria-describedby="hintId"
+                    @click="onHeadClick(j)"
+                    @focus="active = { r: -1, c: j }"
                   >
                     <span class="cn-text">{{ c.name }}</span>
                     <Check v-if="copied === c.name" :size="11" class="cn-done" aria-hidden="true" />
@@ -530,15 +628,18 @@ const skW = (r: number, c: number) => `${SK_WIDTHS[(r * 3 + c) % SK_WIDTHS.lengt
             </thead>
             <tbody>
               <tr v-if="padTop" class="spacer" aria-hidden="true"><td :colspan="cols.length + 1" :style="{ height: `${padTop}px` }" /></tr>
-              <tr v-for="i in shownRows" :key="i" :aria-rowindex="i + 2" :class="{ even: i % 2 === 1 }">
-                <td class="rn" aria-hidden="true">{{ i + 1 }}</td>
+              <tr v-for="i in shownRows" :key="i" role="row" :aria-rowindex="i + 2" :class="{ even: i % 2 === 1 }">
+                <td class="rn" role="rowheader" aria-colindex="1">{{ i + 1 }}</td>
                 <td
                   v-for="(cell, j) in cellsFor(i)"
                   :key="j"
+                  role="gridcell"
+                  :aria-colindex="j + 2"
                   :data-r="i"
                   :data-c="j"
-                  :class="cell.cls"
+                  :class="[cell.cls, { 'dg-copied': copiedCell === `${i}:${j}` }]"
                   :title="cell.tip"
+                  :tabindex="cellTab(i, j)"
                 >{{ cell.text }}</td>
               </tr>
               <tr v-if="padBottom" class="spacer" aria-hidden="true"><td :colspan="cols.length + 1" :style="{ height: `${padBottom}px` }" /></tr>
@@ -553,6 +654,7 @@ const skW = (r: number, c: number) => `${SK_WIDTHS[(r * 3 + c) % SK_WIDTHS.lengt
           </table>
           <p v-if="!rows.length && !pending" class="dg-norows muted">{{ $t('dataGrid.noRows') }}</p>
         </div>
+        <span :id="hintId" class="sr-only">{{ $t('dataGrid.keysHint') }}</span>
       </div>
     </template>
 
@@ -561,6 +663,9 @@ const skW = (r: number, c: number) => `${SK_WIDTHS[(r * 3 + c) % SK_WIDTHS.lengt
 
 <style scoped>
 .datagrid { height: 100%; min-height: 0; display: flex; flex-direction: column; --dg-bg: var(--panel); }
+/* focused from outside (back to the preview after «Compute again»): a ring on the region */
+.datagrid:focus { outline: none; }
+.datagrid:focus-visible { outline: 2px solid var(--accent); outline-offset: -2px; border-radius: 6px; }
 .datagrid .dg-table { --dg-sans: "IBM Plex Sans", system-ui, -apple-system, "Segoe UI", Roboto, sans-serif; }
 .dg-skeleton { overflow: hidden; }
 .pad { padding: 8px; }
@@ -568,16 +673,6 @@ const skW = (r: number, c: number) => `${SK_WIDTHS[(r * 3 + c) % SK_WIDTHS.lengt
 .dg-summary { font-variant-numeric: tabular-nums; font-size: 12px; padding: 7px 9px; color: var(--muted); flex: none; }
 .dg-frame { position: relative; flex: 1; min-height: 0; display: flex; flex-direction: column; }
 .dg-scroll { flex: 1; min-height: 0; overflow: auto; border-radius: 6px; }
-/* the region's focus ring is drawn over the table, not under the pinned row numbers and
-   header that would cover an outline */
-.dg-scroll:focus-visible { outline: none; }
-.dg-frame:has(> .dg-scroll:focus-visible)::after {
-  content: ''; position: absolute; inset: 0; z-index: 4; pointer-events: none;
-  border: 2px solid var(--accent); border-radius: 6px;
-}
-@supports not selector(:has(*)) {
-  .dg-scroll:focus-visible { outline: 2px solid var(--accent); outline-offset: -2px; }
-}
 /* the rows of what is being replaced: still there, plainly not the answer. The header keeps
    its contrast when it names the columns being computed, and dims with the rows when it
    cannot */
@@ -595,6 +690,10 @@ const skW = (r: number, c: number) => `${SK_WIDTHS[(r * 3 + c) % SK_WIDTHS.lengt
 .dg-table tbody tr.even:nth-child(n) { background: var(--row-even); }
 .dg-table tbody tr[aria-rowindex]:nth-child(n):hover { background: var(--row-hover); }
 .dg-table tr.spacer td { padding: 0; border: 0; }
+/* the active cell, from the keyboard */
+.dg-table td[data-c]:focus { outline: none; }
+.dg-table td[data-c]:focus-visible { outline: 2px solid var(--accent); outline-offset: -2px; }
+.dg-table td.dg-copied { background-image: linear-gradient(var(--tint-accent), var(--tint-accent)); }
 
 /* the row numbers: pinned on the left while the columns scroll, ruled on their right like the
    header (an inset shadow: border-collapse drops a sticky cell's borders), and casting a

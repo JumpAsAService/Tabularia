@@ -819,7 +819,6 @@ export default {
     "noRows": "No rows.",
     "regionLabel": "Data preview",
     "rowNumber": "Row",
-    "copyName": "Copy the column name {name}",
     "markNew": "new",
     "markRenamed": "renamed",
     "markRetyped": "type changed",
@@ -828,6 +827,7 @@ export default {
     "markRetypedTitle": "Type changed from {from}",
     "joinOn": "{name} on {keys}",
     "sourceNode": "Source",
+    "keysHint": "Arrow keys move between cells. Ctrl+C copies the value of a cell, or the name of a column.",
   },
   "aiPrompts": {
     "title": "Agent instructions",
