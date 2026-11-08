@@ -444,29 +444,6 @@ def test_the_route_sends_a_histogram_and_refuses_a_bad_one(storage, table, valke
     assert k_top != k_hist
 
 
-def test_polars_collects_the_sample_before_it_aggregates(storage, table, valkey, fredis, monkeypatch):
-    """The sample's rows are collected first, in streaming as a preview's are, then
-    aggregated: the memory is the sample's, whatever the aggregates."""
-    import polars as _pl
-
-    eng = _engine("polars", storage, fredis)
-    columns = _columns(_frame())
-    collected: list[int] = []
-    real = _pl.LazyFrame.collect
-
-    def spy(self, *a, **k):
-        out = real(self, *a, **k)
-        if k.get("engine") == "streaming":  # the chain's, not Polars' own eager internals
-            collected.append(out.height)
-        return out
-
-    monkeypatch.setattr(_pl.LazyFrame, "collect", spy)
-    monkeypatch.setattr(profile, "SAMPLE_ROWS", 300)
-    got = profile.profile(eng, "polars", table.bucket, table.key, [FILTER], columns, storage)
-    # one collect of the chain, of the sample's rows (not of one row of aggregates)
-    assert collected == [300] and got["rows"] == 300 and got["sampled"] is True
-
-
 # ── a profile past its process's memory stops itself, alone ──────────────────
 def test_the_memory_guard_kills_its_process_past_the_limit_and_only_then():
     import time

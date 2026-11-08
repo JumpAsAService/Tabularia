@@ -220,21 +220,17 @@ class PolarsEngine(DeferredStepCache, Engine):
                 cache_state=cstate, cache_cap_rows=ccap,
             )
 
-    # ── The column profile (app/engine/profile.py): natively, on the chain's first rows ──
-    # The sample is collected first, in streaming, only the columns profiled, as a preview
-    # collects its rows, and aggregated eagerly: its memory is the sample's whatever the
-    # aggregates are. (A chain whose own preview does not fit in the worker's memory, such
-    # as a join of 42 million rows with 12 million at full width on Polars, does not fit
-    # here either: the profile is asked only after the preview's rows have come.)
-    def _profile_frame(self, source, operations, sample, use_cache, then, columns=None):
+    # ── The column profile (app/engine/profile.py): natively, on the lazy chain's head ──
+    # The aggregates go on the lazy chain's first `sample` rows, one streaming collect.
+    # (Collecting the sample first and aggregating it eagerly was tried on 2026-11-08: 0.3
+    # to 0.4 s slower on kind, for the same memory.)
+    def _profile_frame(self, source, operations, sample, use_cache, then):
         ops = _coerce_ops(operations)
         with self._session() as ctx:
             hashes = plan_hashes(self._source_id(source), [op.model_dump() for op in ops])
-            lf = self._lazy_from_cache(ctx, source, ops, hashes, use_cache=use_cache)
-            if columns:
-                lf = lf.select([pl.col(c) for c in columns])
+            lf = self._lazy_from_cache(ctx, source, ops, hashes, use_cache=use_cache).head(sample)
             try:
-                return then(lf.head(sample).collect(engine="streaming"))
+                return then(lf)
             except EngineError:
                 raise
             except _POLARS_ERRORS as e:
@@ -260,33 +256,31 @@ class PolarsEngine(DeferredStepCache, Engine):
         return lengths.min() if func == "min_len" else lengths.max()
 
     def profile_aggregates(self, source, operations, specs, sample, use_cache=False) -> dict[str, Any]:
-        needed = list(dict.fromkeys(c for _, _, c in specs if c is not None))
+        def run(lf):
+            df = lf.select([self._profile_expr(f, c).alias(a) for a, f, c in specs]).collect(engine="streaming")
+            return df.row(0, named=True) if df.height else {}
 
-        def run(df):
-            out = df.select([self._profile_expr(f, c).alias(a) for a, f, c in specs])
-            return out.row(0, named=True) if out.height else {}
-
-        return self._profile_frame(source, operations, sample, use_cache, run, columns=needed)
+        return self._profile_frame(source, operations, sample, use_cache, run)
 
     def profile_top(self, source, operations, column, sample, k, use_cache=False) -> list[tuple[Any, int]]:
-        def run(df):
-            top = (df.select(pl.col(column).alias("v")).drop_nulls().group_by("v").agg(pl.len().alias("n"))
-                   .sort(["n", "v"], descending=[True, False], nulls_last=True).head(k))
-            return [(v, int(n)) for v, n in top.iter_rows()]
+        def run(lf):
+            df = (lf.select(pl.col(column).alias("v")).drop_nulls().group_by("v").agg(pl.len().alias("n"))
+                  .sort(["n", "v"], descending=[True, False], nulls_last=True).head(k).collect(engine="streaming"))
+            return [(v, int(n)) for v, n in df.iter_rows()]
 
-        return self._profile_frame(source, operations, sample, use_cache, run, columns=[column])
+        return self._profile_frame(source, operations, sample, use_cache, run)
 
     def profile_histogram(self, source, operations, column, sample, lo, hi, bins, use_cache=False) -> list[tuple[int, int]]:
         width = (hi - lo) / bins if hi > lo else 1.0
 
-        def run(df):
+        def run(lf):
             x = pl.col(column).cast(pl.Float64)
-            got = (df.select(x.alias("x")).filter(pl.col("x").is_between(lo, hi) & pl.col("x").is_not_nan())
+            got = (lf.select(x.alias("x")).filter(pl.col("x").is_between(lo, hi) & pl.col("x").is_not_nan())
                    .select(((pl.col("x") - lo) / width).floor().clip(0, bins - 1).cast(pl.Int64).alias("b"))
-                   .group_by("b").agg(pl.len().alias("n")))
+                   .group_by("b").agg(pl.len().alias("n")).collect(engine="streaming"))
             return [(int(b), int(n)) for b, n in got.iter_rows()]
 
-        return self._profile_frame(source, operations, sample, use_cache, run, columns=[column])
+        return self._profile_frame(source, operations, sample, use_cache, run)
 
     # ── Export (direct download, intermediate nodes too) ──────────────────
     # The xlsx format's physical limit (rows per sheet). A memory guard too: the
