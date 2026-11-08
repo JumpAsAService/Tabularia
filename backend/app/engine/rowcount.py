@@ -16,8 +16,9 @@ and it is made as cheap as the step allows, in this order:
    holds, and stops one row past the cap (`Engine.count_rows`); the result is then
    remembered.
 
-Past the cap the answer is «more than `at_most` rows»: counting a join of billions of
-rows to the last one costs more than the number is worth.
+Past the cap a count says «more than `at_most` rows»: counting a join of billions of rows
+to the last one costs more than the number is worth. A number read from a footer costs
+nothing and is said as it is, however large.
 """
 from __future__ import annotations
 
@@ -87,7 +88,7 @@ def remembered(key: str, at_most: int, client=None) -> tuple[int, bool] | None:
     except (ValueError, KeyError, TypeError):
         return None
     if not over:
-        return (min(rows, at_most), rows > at_most)
+        return (rows, False)  # exact: said as it is, past the cap too
     return (at_most, True) if cap >= at_most else None
 
 
@@ -130,7 +131,8 @@ def parquet_rows(storage, bucket: str, key: str) -> int | None:
 
 
 def _after(rows: int, over: bool, tail: list[dict[str, Any]], at_most: int) -> tuple[int, bool]:
-    """(rows, over) after operations that keep every row, and `limit`s."""
+    """(rows, over) after operations that keep every row, and `limit`s. An exact count stays
+    exact past the cap: the cap bounds the work of counting, and reading a footer is none."""
     for op in tail:
         if op.get("type") != "limit":
             continue
@@ -144,8 +146,6 @@ def _after(rows: int, over: bool, tail: list[dict[str, Any]], at_most: int) -> t
             rows = min(rows, n)
         elif n <= at_most:  # more than the cap before, so more than n: exactly n
             rows, over = n, False
-    if rows > at_most:
-        return at_most, True
     return rows, over
 
 

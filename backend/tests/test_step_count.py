@@ -79,10 +79,17 @@ def test_operations_that_keep_every_row_keep_the_footer_s_answer(storage, orders
 def test_a_limit_after_them_is_counted_in(storage, orders, valkey):
     assert rowcount.known("duckdb", orders.bucket, orders.key, [limit(100), RENAME], 10_000, storage, None)[:2] == (100, False)
     assert rowcount.known("duckdb", orders.bucket, orders.key, [RENAME, limit(N * 2)], 10_000, storage, None)[:2] == (N, False)
-    # past the cap: «more than», but a limit under the cap after it is exact
-    assert rowcount.known("duckdb", orders.bucket, orders.key, [], 1_000, storage, None)[:2] == (1_000, True)
+    # a footer is exact past the cap too: the cap bounds counting, and nothing was counted
+    assert rowcount.known("duckdb", orders.bucket, orders.key, [], 1_000, storage, None)[:2] == (N, False)
     assert rowcount.known("duckdb", orders.bucket, orders.key, [limit(700)], 1_000, storage, None)[:2] == (700, False)
-    assert rowcount.known("duckdb", orders.bucket, orders.key, [limit(2_000)], 1_000, storage, None)[:2] == (1_000, True)
+    assert rowcount.known("duckdb", orders.bucket, orders.key, [limit(2_000)], 1_000, storage, None)[:2] == (2_000, False)
+
+
+def test_a_limit_under_the_cap_after_a_count_past_it_is_exact(storage, orders, valkey, fredis):
+    eng = _engine("duckdb", storage, fredis)
+    assert rowcount.count(eng, "duckdb", orders.bucket, orders.key, [FILTER], 300) == (300, True)
+    assert rowcount.known("duckdb", orders.bucket, orders.key, [FILTER, limit(50)], 300, storage, None)[:2] == (50, False)
+    assert rowcount.known("duckdb", orders.bucket, orders.key, [FILTER, limit(400)], 300, storage, None)[:2] == (300, True)
 
 
 def test_a_filter_is_not_guessed(storage, orders, valkey):
