@@ -60,8 +60,9 @@ export function usePopover(isOpen: Ref<boolean>, panel: Ref<HTMLElement | null>,
     } else {
       document.removeEventListener('keydown', onKey)
       document.removeEventListener('pointerdown', onPointerDown, true)
+      // back without scrolling: a grid scrolled by the focus closes a popover opened next
       const back = origin ? (opts.returnTo?.() ?? origin) : null
-      back?.focus?.()
+      back?.focus?.({ preventScroll: true })
       origin = null
     }
   })

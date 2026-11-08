@@ -631,7 +631,13 @@ function place(j: number) {
 function openProfile(j: number) {
   const c = cols.value[j]
   if (!c || !props.columnDetail) return
-  if (popOpen.value && popCol.value === j) { popOpen.value = false; return }
+  if (popOpen.value && popCol.value === j) {
+    popOpen.value = false
+    // the focus given back to the name, as it closes, counts as leaving the panel: that is
+    // not a click to swallow, the next one opens it again
+    nextTick(() => { closed = { col: -1, at: 0 } })
+    return
+  }
   if (closed.col === j && performance.now() - closed.at < 400) return
   popCol.value = j
   popSaid.value = ''
