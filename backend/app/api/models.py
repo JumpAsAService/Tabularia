@@ -150,6 +150,14 @@ class ProfileColumn(BaseModel):
     dtype: str = Field(default="", max_length=500)
 
 
+class ProfileHistogram(BaseModel):
+    """A number's histogram (POST /tasks/profile with `column`): `bins` equal intervals
+    between `lo` and `hi`, the profile's min and max."""
+    lo: float
+    hi: float
+    bins: int = Field(default=20, ge=1, le=50)
+
+
 class ProfileRequest(BaseModel):
     """A step's column profile (POST /tasks/profile): the preview's chain, and the columns
     its preview gave; or, with `column`, that column's most frequent values."""
@@ -162,6 +170,8 @@ class ProfileRequest(BaseModel):
                                          description="The step's columns, as its preview gave them")
     column: Optional[str] = Field(default=None, max_length=1000,
                                   description="One column's most frequent values instead of the profile")
+    histogram: Optional[ProfileHistogram] = Field(
+        default=None, description="With `column`: how the number's values spread over equal intervals instead")
     footer_only: bool = Field(default=False,
                               description="Never a query: only what the parquet footer says (`partial`), "
                                           "or a whole profile remembered for the step")

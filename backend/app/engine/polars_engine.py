@@ -227,7 +227,7 @@ class PolarsEngine(DeferredStepCache, Engine):
     # join of 42 million rows with 12 million) a worker reached its 4 GiB and the kernel
     # killed it, three times in a few minutes (kind, 2026-11-08). Collected first, the chain
     # stops at the sample's rows as a preview stops at its own, and the memory is the
-    # sample's. `columns`: only those read.
+    # sample's. `columns`: only those read (a column's values, its histogram).
     def _profile_frame(self, source, operations, sample, use_cache, then, columns=None):
         ops = _coerce_ops(operations)
         with self._session() as ctx:
@@ -275,6 +275,18 @@ class PolarsEngine(DeferredStepCache, Engine):
             top = (df.select(pl.col(column).alias("v")).drop_nulls().group_by("v").agg(pl.len().alias("n"))
                    .sort(["n", "v"], descending=[True, False], nulls_last=True).head(k))
             return [(v, int(n)) for v, n in top.iter_rows()]
+
+        return self._profile_frame(source, operations, sample, use_cache, run, columns=[column])
+
+    def profile_histogram(self, source, operations, column, sample, lo, hi, bins, use_cache=False) -> list[tuple[int, int]]:
+        width = (hi - lo) / bins if hi > lo else 1.0
+
+        def run(df):
+            x = pl.col(column).cast(pl.Float64)
+            got = (df.select(x.alias("x")).filter(pl.col("x").is_between(lo, hi) & pl.col("x").is_not_nan())
+                   .select(((pl.col("x") - lo) / width).floor().clip(0, bins - 1).cast(pl.Int64).alias("b"))
+                   .group_by("b").agg(pl.len().alias("n")))
+            return [(int(b), int(n)) for b, n in got.iter_rows()]
 
         return self._profile_frame(source, operations, sample, use_cache, run, columns=[column])
 

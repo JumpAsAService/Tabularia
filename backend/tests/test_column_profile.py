@@ -7,7 +7,7 @@ numbers' and dates' range of a source, or of a cached step followed only by oper
 keep rows and values, come from the parquet footer, and never a text's range; a cast or a
 filter after it is computed; past the sample the answer says it saw only the first rows;
 a profile is remembered; a column's most frequent values come in order, a tie by value;
-the sample is the first hundred
+a number's histogram counts its values in equal intervals; the sample is the first hundred
 thousand rows and the route gives up after 20 seconds (the owner's decisions, 2026-11-08).
 """
 import datetime as dt
@@ -381,6 +381,67 @@ def test_the_sample_is_the_first_hundred_thousand_rows_and_the_route_gives_up_in
 def test_a_text_asks_its_lengths_not_its_range():
     specs = profile.plan([{"name": "t", "dtype": "String"}], None)
     assert [s[1] for s in specs] == ["rows", "count", "distinct", "min_len", "max_len"]
+
+
+# ── a number's histogram ─────────────────────────────────────────────────────
+@pytest.mark.parametrize("name", ENGINES)
+def test_a_histogram_counts_a_number_s_values_in_equal_intervals(name, storage, table, valkey, fredis):
+    eng = _engine(name, storage, fredis)
+    # amount: i * 1.5 - 700 for i < 1000 (FILTER), a null every tenth row: -700 .. 798.5
+    got = profile.histogram(eng, name, table.bucket, table.key, [FILTER], "amount", {"lo": -700.0, "hi": 798.5, "bins": 10})
+    df = _frame().filter(pl.col("id") < 1000)["amount"].drop_nulls().to_list()
+    width = (798.5 + 700) / 10
+    want = [0] * 10
+    for v in df:
+        want[min(9, int((v + 700) // width))] += 1
+    assert got["counts"] == want and sum(got["counts"]) == 900 and got["how"] == "computed"
+    assert (got["lo"], got["hi"]) == (-700.0, 798.5)
+    again = profile.histogram(eng, name, table.bucket, table.key, [FILTER], "amount", {"lo": -700.0, "hi": 798.5, "bins": 10})
+    assert again["how"] == "remembered" and again["counts"] == want
+
+
+@pytest.mark.parametrize("name", ENGINES)
+def test_a_histogram_of_one_value_is_one_interval_and_skips_what_is_outside(name, storage, table, valkey, fredis):
+    eng = _engine(name, storage, fredis)
+    got = profile.histogram(eng, name, table.bucket, table.key, [FILTER], "id", {"lo": 5, "hi": 5, "bins": 20})
+    assert got["counts"] == [1]
+    # values outside the range asked are left out, never piled on the edges
+    part = profile.histogram(eng, name, table.bucket, table.key, [FILTER], "id", {"lo": 0, "hi": 9, "bins": 10})
+    assert part["counts"] == [1] * 10
+
+
+def test_a_histogram_needs_a_finite_range_and_a_few_intervals():
+    with pytest.raises(ValueError):
+        profile.histogram_ask(3, 1, 10)
+    with pytest.raises(ValueError):
+        profile.histogram_ask(0, float("inf"), 10)
+    with pytest.raises(ValueError):
+        profile.histogram_ask(0, 1, 51)
+    assert profile.histogram_ask(2, 2, 20) == {"lo": 2.0, "hi": 2.0, "bins": 1}
+
+
+def test_the_route_sends_a_histogram_and_refuses_a_bad_one(storage, table, valkey, monkeypatch):
+    from fastapi import HTTPException
+
+    seen = {}
+
+    def worker(task, kwargs, slot, seconds=None, watch_worker=False):
+        seen.update(kwargs=kwargs)
+        return {"ok": True, "result": {"column": "amount", "counts": [1, 2], "how": "computed"}}
+
+    monkeypatch.setattr(tasks, "on_preview_worker", worker)
+    body = ProfileRequest(bucket=table.bucket, input_key=table.key, operations=[FILTER], engine="duckdb",
+                          column="amount", histogram={"lo": 0, "hi": 10, "bins": 2})
+    assert tasks.profile_step(body)["counts"] == [1, 2]
+    assert seen["kwargs"]["histogram"] == {"lo": 0.0, "hi": 10.0, "bins": 2} and seen["kwargs"]["column"] == "amount"
+    with pytest.raises(HTTPException) as e:
+        tasks.profile_step(ProfileRequest(bucket=table.bucket, input_key=table.key, column="amount",
+                                          histogram={"lo": 10, "hi": 0, "bins": 2}))
+    assert e.value.status_code == 422
+    # the histogram and the most frequent values of a column are remembered apart
+    k_top = profile.profile_key("duckdb", table.bucket, table.key, [], [], "amount")
+    k_hist = profile.profile_key("duckdb", table.bucket, table.key, [], [], "amount", {"lo": 0.0, "hi": 10.0, "bins": 2})
+    assert k_top != k_hist
 
 
 def test_polars_collects_the_sample_before_it_aggregates(storage, table, valkey, fredis, monkeypatch):

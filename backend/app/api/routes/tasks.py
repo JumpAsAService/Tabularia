@@ -281,8 +281,8 @@ PROFILE_TIMEOUT_SECONDS = 20.0
 def profile_step(request: ProfileRequest) -> dict:
     """A step's column profile (app/engine/profile.py): nulls, distinct values, a number's
     or a date's min and max, a text's lengths, column by column; with `column`, that
-    column's most frequent values. Asked after the preview's rows and their count, never
-    before them.
+    column's most frequent values, or with `histogram` how its values spread. Asked after
+    the preview's rows and their count, never before them.
 
     Remembered on Valkey and answered here at once; otherwise made by the preview worker
     (the footer's statistics, then one query over the chain's first rows), at most
@@ -295,8 +295,14 @@ def profile_step(request: ProfileRequest) -> dict:
     columns = [c.model_dump() for c in request.columns]
     if request.column is None and not columns:
         raise HTTPException(status_code=422, detail="The columns to profile are needed")
+    hist = None
+    if request.column is not None and request.histogram is not None:
+        try:
+            hist = column_profile.histogram_ask(request.histogram.lo, request.histogram.hi, request.histogram.bins)
+        except ValueError as e:
+            raise HTTPException(status_code=422, detail=str(e)) from e
     mem = column_profile.profile_key(name, request.bucket, request.input_key, ops,
-                                     [] if request.column is not None else columns, request.column)
+                                     [] if request.column is not None else columns, request.column, hist)
     got = column_profile.remembered(mem)
     if got is not None:
         return {**got, "how": "remembered"}
@@ -304,6 +310,8 @@ def profile_step(request: ProfileRequest) -> dict:
               "column": request.column, "engine": request.engine, "no_cache": request.no_cache}
     if request.footer_only and request.column is None:
         kwargs["footer_only"] = True
+    if hist is not None:
+        kwargs["histogram"] = hist
     payload = said_by_preview_worker(
         lambda: on_preview_worker("app.tasks.jobs.profile_task", kwargs, request.slot, seconds=PROFILE_TIMEOUT_SECONDS),
         PREVIEW_OUT_OF_MEMORY)

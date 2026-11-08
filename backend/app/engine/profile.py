@@ -1,6 +1,7 @@
 """A step's column profile, for the preview's header: how many nulls each column holds, how
 many distinct values, the smallest and largest number or date, a text's shortest and longest
-length; and, asked apart for one column when it is opened, its most frequent values.
+length; and, asked apart for one column when it is opened, its most frequent values or, for
+a number, how its values spread over a few equal intervals (a histogram).
 
 Asked after the preview's rows and after their count, never before them, and as cheap as
 the step allows (the same order as the row count, app/engine/rowcount.py):
@@ -49,6 +50,8 @@ logger = logging.getLogger(__name__)
 # range) comes from the footer instead.
 SAMPLE_ROWS = 100_000
 TOP_K = 5
+# a number's histogram: at most this many equal intervals between its min and max
+HISTOGRAM_MAX_BINS = 50
 PROFILE_PREFIX = "dataprep:stepprofile:"
 # The operations after which a footer's statistics still describe the step: every row and
 # every value kept, only the columns chosen, named or ordered otherwise.
@@ -283,11 +286,14 @@ def _origin(name: str, tail: list[dict[str, Any]]) -> str | None:
 
 # ── remembered ──────────────────────────────────────────────────────────────
 def profile_key(engine_name: str, bucket: str, key: str, operations: list[dict[str, Any]],
-                columns: list[dict[str, str]], column: str | None = None) -> str:
-    """Where a step's profile (or one column's most frequent values) is remembered."""
+                columns: list[dict[str, str]], column: str | None = None, histogram: dict | None = None) -> str:
+    """Where a step's profile (or one column's most frequent values, or its histogram) is
+    remembered."""
     step = rowcount.count_key(engine_name, bucket, key, operations)[len(rowcount.COUNT_PREFIX):]
     if column is None:
         what = json.dumps([[c["name"], c.get("dtype", "")] for c in columns], ensure_ascii=False)
+    elif histogram is not None:
+        what = json.dumps(["hist", column, histogram["lo"], histogram["hi"], histogram["bins"]], ensure_ascii=False)
     else:
         what = json.dumps(["top", column, TOP_K], ensure_ascii=False)
     digest = hashlib.sha256(f"{SAMPLE_ROWS}|{what}".encode()).hexdigest()[:24]
@@ -392,3 +398,49 @@ def _order(v: Any) -> tuple:
         return (0, v, "")
     return (1, 0, str(v))
 
+
+# ── a number's histogram ─────────────────────────────────────────────────────
+def histogram_ask(lo: Any, hi: Any, bins: Any) -> dict[str, Any]:
+    """The intervals asked for, checked: `lo` ≤ `hi` finite, 1 to HISTOGRAM_MAX_BINS bins
+    (one when every value is the same)."""
+    lo, hi, bins = float(lo), float(hi), int(bins)
+    if not (math.isfinite(lo) and math.isfinite(hi)) or lo > hi:
+        raise ValueError("A histogram needs a finite range, its lowest value first")
+    if not 1 <= bins <= HISTOGRAM_MAX_BINS:
+        raise ValueError(f"A histogram has 1 to {HISTOGRAM_MAX_BINS} intervals")
+    return {"lo": lo, "hi": hi, "bins": 1 if hi == lo else bins}
+
+
+def sql_histogram_bin(dialect: str, q: str, lo: float, hi: float, bins: int) -> tuple[str, str]:
+    """(the interval a value falls in, 0 to bins-1; the condition that keeps the values in
+    [lo, hi]) in a SQL dialect. The value is compared as a double: a decimal against a
+    float literal is not allowed everywhere; a NaN or an infinity is left out."""
+    width = (hi - lo) / bins if hi > lo else 1.0
+    x = {"duckdb": f"CAST({q} AS DOUBLE)", "clickhouse": f"toFloat64({q})", "bigquery": f"CAST({q} AS FLOAT64)"}[dialect]
+    as_int = {"duckdb": "CAST({} AS BIGINT)", "clickhouse": "toInt64({})", "bigquery": "CAST({} AS INT64)"}[dialect]
+    b = f"least({bins - 1}, greatest(0, {as_int.format(f'floor(({x} - ({lo!r})) / {width!r})')}))"
+    if dialect == "bigquery":
+        b = b.replace("least(", "LEAST(").replace("greatest(", "GREATEST(")
+    return b, f"{x} BETWEEN {lo!r} AND {hi!r}"
+
+
+def histogram(engine, engine_name: str, bucket: str, key: str, operations: list[dict[str, Any]],
+              column: str, ask: dict[str, Any], use_cache: bool = True, client=None) -> dict[str, Any]:
+    """How a number's values spread over `ask["bins"]` equal intervals between `ask["lo"]`
+    and `ask["hi"]` (the profile's min and max), over the same rows as the profile (the
+    chain's first SAMPLE_ROWS): one count an interval, nulls left out."""
+    from app.engine.base import DataSource
+
+    ask = histogram_ask(ask["lo"], ask["hi"], ask["bins"])
+    mem = profile_key(engine_name, bucket, key, operations, [], column, ask)
+    got = remembered(mem, client)
+    if got is not None:
+        return {**got, "how": "remembered"}
+    counts = [0] * ask["bins"]
+    for b, n in engine.profile_histogram(DataSource(bucket=bucket, key=key), operations, column, SAMPLE_ROWS,
+                                         ask["lo"], ask["hi"], ask["bins"], use_cache=use_cache):
+        if b is not None and 0 <= int(b) < ask["bins"]:
+            counts[int(b)] += int(n)
+    doc = {"column": column, "lo": ask["lo"], "hi": ask["hi"], "counts": counts, "sample_rows": SAMPLE_ROWS}
+    remember(mem, doc, client)
+    return {**doc, "how": "computed"}

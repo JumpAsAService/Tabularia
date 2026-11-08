@@ -229,3 +229,26 @@ class Engine(ABC):
             lambda t: f"SELECT {q} AS v, count(*) AS n FROM {t} WHERE {q} IS NOT NULL GROUP BY {q} ORDER BY n DESC, v LIMIT {k}",
             k, use_cache)
         return [(r.get("v"), int(r.get("n") or 0)) for r in rows]
+
+    def profile_histogram(
+        self,
+        source: DataSource,
+        operations: list[Operation] | list[dict[str, Any]],
+        column: str,
+        sample: int,
+        lo: float,
+        hi: float,
+        bins: int,
+        use_cache: bool = False,
+    ) -> list[tuple[int, int]]:
+        """How many of a number's values fall in each of `bins` equal intervals between `lo`
+        and `hi`, (interval, rows), over the chain's first `sample` rows; nulls, NaN and
+        values outside the range left out. Intervals with no value are not said."""
+        from app.engine.profile import sql_histogram_bin
+
+        b, keep = sql_histogram_bin(self.profile_dialect, self._profile_quote(column), lo, hi, bins)
+        rows = self._through_sql(
+            source, operations, sample,
+            lambda t: f"SELECT {b} AS b, count(*) AS n FROM {t} WHERE {keep} GROUP BY b",
+            bins, use_cache)
+        return [(int(r.get("b")), int(r.get("n") or 0)) for r in rows if r.get("b") is not None]

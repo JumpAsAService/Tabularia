@@ -213,8 +213,10 @@ def profile_task(
     engine: str | None = None,
     no_cache: bool = False,
     footer_only: bool = False,
+    histogram: dict[str, Any] | None = None,
 ) -> dict:
-    """A step's column profile, or one column's most frequent values (app/engine/profile.py):
+    """A step's column profile, or one column's most frequent values or its histogram
+    (app/engine/profile.py):
     asked by the editor and the Viewer after the rows and their count, on the preview queue.
     Tagged as count_task's answer, its queries carry the task's id: a profile knocked down
     (a click elsewhere) is stopped on the server too."""
@@ -234,7 +236,10 @@ def profile_task(
 
             wait_for_running_copy(impl, DataSource(bucket=bucket, key=input_key), operations)
         with query_tag(f"tab-prev:{task_id}" if task_id else None):
-            if column is not None:
+            if column is not None and histogram is not None:
+                result = column_profile.histogram(impl, name, bucket, input_key, operations, column, histogram,
+                                                  use_cache=not no_cache)
+            elif column is not None:
                 result = column_profile.top_values(impl, name, bucket, input_key, operations, column,
                                                    use_cache=not no_cache)
             else:
@@ -247,7 +252,7 @@ def profile_task(
             return {"ok": False, "error": "superseded", "detail": "The profile was superseded or stopped"}
         if isinstance(e, SourceNotFoundError):
             return {"ok": False, "error": "not_found", "detail": str(e)}
-        if isinstance(e, (UnknownOperationError, OperationError)):
+        if isinstance(e, (UnknownOperationError, OperationError, ValueError)):
             return {"ok": False, "error": "unprocessable", "detail": str(e)}
         if isinstance(e, EngineError):
             return {"ok": False, "error": "bad_request", "detail": str(e)}

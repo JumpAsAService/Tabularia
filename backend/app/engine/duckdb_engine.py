@@ -384,6 +384,16 @@ class DuckDBEngine(DeferredStepCache, Engine):
 
         return self._profile_relation(source, operations, sample, use_cache, run)
 
+    def profile_histogram(self, source, operations, column, sample, lo, hi, bins, use_cache=False) -> list[tuple[int, int]]:
+        from app.engine.profile import sql_histogram_bin
+
+        b, keep = sql_histogram_bin("duckdb", _qi(column), lo, hi, bins)
+
+        def run(rel):
+            return [(int(i), int(n)) for i, n in rel.filter(keep).aggregate(f"{b} AS b, count(*) AS n", b).fetchall()]
+
+        return self._profile_relation(source, operations, sample, use_cache, run)
+
     # ── Run (materializza l'output in streaming su disco) ─────────────────
     def run(
         self,
