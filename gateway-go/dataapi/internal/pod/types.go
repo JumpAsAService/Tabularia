@@ -193,7 +193,8 @@ func (c Column) ParseValue(text string) (Param, error) {
 		if c.Kind == KindTimestampTZ {
 			return Param{"CAST(? AS TIMESTAMP WITH TIME ZONE)", t.UTC().Format("2006-01-02 15:04:05.999999") + "+00"}, nil
 		}
-		return Param{"CAST(? AS " + c.Type + ")", t.Format("2006-01-02 15:04:05.999999999")}, nil
+		// a time without a zone is UTC, as the answers write it: one with a zone is that instant
+		return Param{"CAST(? AS " + c.Type + ")", t.UTC().Format("2006-01-02 15:04:05.999999999")}, nil
 	case KindTime:
 		for _, layout := range []string{"15:04:05.999999999", "15:04"} {
 			if t, err := time.Parse(layout, text); err == nil {

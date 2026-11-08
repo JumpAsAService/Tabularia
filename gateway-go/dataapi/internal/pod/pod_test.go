@@ -398,6 +398,8 @@ func TestFilters(t *testing.T) {
 		}},
 		{"seen__lte=2026-01-01", func(r row) bool { return false }},
 		{"seen__lte=2026-01-01T08:02:00Z", func(r row) bool { return r.id <= 2 }},
+		// a zone other than UTC is the same instant: 10:02 in Rome's summer is 08:02 UTC
+		{"seen__lte=2026-01-01T10:02:00%2B02:00", func(r row) bool { return r.id <= 2 }},
 		{"active=true&id__lt=10", func(r row) bool { return r.active && r.id < 10 }},
 		{"active=FALSE&id__lt=10", func(r row) bool { return !r.active && r.id < 10 }},
 		{"ratio__lt=0.5", func(r row) bool { return r.ratio < 0.5 }},
