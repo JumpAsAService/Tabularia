@@ -10,10 +10,11 @@ import { useI18n } from 'vue-i18n'
 import { useFormat } from '~/composables/useFormat'
 import { usePopover } from '~/composables/usePopover'
 import {
-  PieChart, Table2, Filter, Sigma, Plus, X, Play, Cpu, Rows3, Download, FileSpreadsheet, Bookmark, Save,
+  PieChart, Table2, Filter, Sigma, Plus, X, Play, Cpu, Rows3, Download, FileSpreadsheet, Bookmark, Save, RotateCw,
 } from 'lucide-vue-next'
-import { useApi, errMessage, type Operation, type ColumnInfo, type PreviewResult, type ProfileResult, type TopValuesResult } from '~/composables/useApi'
-import DataGrid from '~/components/ui/DataGrid.vue'
+import { useApi, errMessage, type Operation, type ColumnInfo, type PreviewResult, type ProfileResult, type TopValuesResult, type HistogramResult } from '~/composables/useApi'
+import DataGrid, { type DetailAsk } from '~/components/ui/DataGrid.vue'
+import GridKeys from '~/components/ui/GridKeys.vue'
 import { rowsPhrase, type RowCount } from '~/composables/previewGrid'
 import { usePreviewSlots, isSuperseded } from '~/composables/usePreviewSlots'
 import { useDatasources, type DatasourceInfo } from '~/composables/useDatasources'
@@ -131,9 +132,10 @@ const chartCols = computed<ColumnInfo[]>(() => {
 })
 const isNum = (name: string) => /Int|Float|Decimal/i.test(baseCols.value.find((c) => c.name === name)?.dtype || '')
 
-function parseVal(v: string, col: string): any {
+function parseVal(v: string, col: string, operator = 'in'): any {
   if (v === '' || v == null) return v
-  if (v.includes(',')) return v.split(',').map((s) => s.trim()) // lists for in/not_in
+  // lists for in/not_in only: a text with a comma compared with = is one value
+  if ((operator === 'in' || operator === 'not_in') && v.includes(',')) return v.split(',').map((s) => s.trim())
   if (isNum(col)) { const n = Number(v); return Number.isNaN(n) ? v : n }
   return v
 }
@@ -146,9 +148,9 @@ const baseOps = computed<Operation[]>(() => {
     const params: any = { column: f.column, operator: f.operator }
     if (f.operator === 'between') {
       if (f.value === '' || f.value2 === '') continue // both bounds are needed
-      params.value = [parseVal(f.value, f.column), parseVal(f.value2, f.column)]
+      params.value = [parseVal(f.value, f.column, f.operator), parseVal(f.value2, f.column, f.operator)]
     } else if (!NO_VALUE.has(f.operator)) {
-      params.value = parseVal(f.value, f.column)
+      params.value = parseVal(f.value, f.column, f.operator)
     }
     ops.push({ type: 'filter', params })
   }
@@ -194,7 +196,10 @@ async function apply() {
   const seq = ++applySeq
   if (previewSlots.busy('count')) previewSlots.stop('count')
   stopProfile()
-  rowCount.value = { state: 'none' }
+  // the rows on screen keep their «of N» while the new ones are computed (they are dimmed);
+  // a count of theirs still going is dropped
+  if (rowCount.value.state === 'counting') rowCount.value = { state: 'none' }
+  countError.value = ''
   loading.value = true; error.value = ''
   try {
     const ops = buildTableOps()
@@ -210,6 +215,8 @@ async function apply() {
       baseCols.value = base.columns
     }
     const res = await previewSlots.preview({ bucket: ds.bucket, input_key: ds.key, operations: ops, engine: engine.value, limit: ROW_LIMIT, no_cache: true, sort_keys: ds.sort_keys }, 'table')
+    if (seq !== applySeq) return
+    rowCount.value = { state: 'none' }
     rows.value = res.rows
     applied.value = true
     truncated.value = !!res.truncated
@@ -234,7 +241,11 @@ async function apply() {
 // How many rows the view really has: read from the datasource's footer when nothing filters
 // it, counted (up to a cap) otherwise. An Apply drops the count of the one before.
 const rowCount = ref<RowCount>({ state: 'none' })
+const countError = ref('') // why the rows were not counted
+let countAsk: { ds: DatasourceInfo; ops: Operation[] } | null = null
 async function countRows(ds: DatasourceInfo, ops: Operation[], seq: number) {
+  countAsk = { ds, ops }
+  countError.value = ''
   rowCount.value = { state: 'counting' }
   try {
     const c = await previewSlots.count({ bucket: ds.bucket, input_key: ds.key, operations: ops, engine: engine.value, no_cache: true }, 'count')
@@ -242,20 +253,38 @@ async function countRows(ds: DatasourceInfo, ops: Operation[], seq: number) {
   } catch (e) {
     if (seq !== applySeq || isSuperseded(e)) return
     const status = (e as any)?.response?.status ?? (e as any)?.statusCode
+    countError.value = whyNot(e, 'count')
     rowCount.value = { state: 'failed', slow: status === 504 }
   }
   // the columns' profile after the count, never beside it
   if (seq === applySeq) void profileView(ds, ops, tableCols.value, seq)
 }
 
+/** «Try again» on a count that failed. */
+function countRetry() {
+  if (!countAsk || loading.value) return
+  void countRows(countAsk.ds, countAsk.ops, applySeq)
+}
+/** Why a count or a profile was not made, in words. */
+function whyNot(e: unknown, what: 'count' | 'profile'): string {
+  const status = (e as any)?.response?.status ?? (e as any)?.statusCode
+  if (status === 504) return t(what === 'count' ? 'dataGrid.countSlowWhy' : 'dataGrid.profileSlowWhy')
+  if (status === 503) return t('dataGrid.workerBusyWhy')
+  return errMessage(e)
+}
+
 // The columns' profile of the applied view (nulls, distinct values, min and max), after its
 // rows and their count; an Apply drops the one before, on the server too.
 const profile = ref<ProfileResult | null>(null)
 const profileState = ref<'none' | 'loading' | 'done' | 'failed'>('none')
+const profileError = ref('')
 let viewOps: { ds: DatasourceInfo; ops: Operation[] } | null = null
+let profileCols: ColumnInfo[] = []
 async function profileView(ds: DatasourceInfo, ops: Operation[], columns: ColumnInfo[], seq: number) {
   if (!columns.length) return
   viewOps = { ds, ops }
+  profileCols = columns
+  profileError.value = ''
   profileState.value = 'loading'
   try {
     const res = await previewSlots.profile({
@@ -267,22 +296,44 @@ async function profileView(ds: DatasourceInfo, ops: Operation[], columns: Column
     profileState.value = 'done'
   } catch (e) {
     if (seq !== applySeq || isSuperseded(e)) return
+    profileError.value = whyNot(e, 'profile')
     profileState.value = 'failed'
   }
+}
+function profileRetry() {
+  if (viewOps && !loading.value) void profileView(viewOps.ds, viewOps.ops, profileCols, applySeq)
 }
 function stopProfile() {
   for (const slot of ['profile', 'top']) if (previewSlots.busy(slot)) previewSlots.stop(slot)
   profile.value = null
   profileState.value = 'none'
+  profileError.value = ''
   viewOps = null
 }
-async function topValues(column: string): Promise<TopValuesResult> {
+// an opened column's most frequent values, or a number's histogram
+async function columnDetail(column: string, ask: DetailAsk): Promise<TopValuesResult | HistogramResult> {
   if (!viewOps) throw new Error('no view')
   const { ds, ops } = viewOps
-  return await previewSlots.profile<TopValuesResult>({
+  return await previewSlots.profile<TopValuesResult | HistogramResult>({
     bucket: ds.bucket, input_key: ds.key, operations: ops, engine: engine.value, no_cache: true, column,
+    ...(ask.kind === 'histogram' ? { histogram: { lo: ask.lo, hi: ask.hi, bins: ask.bins } } : {}),
   }, 'top')
 }
+// A value of the profile kept or left out: a filter added to the view's Filters, applied.
+// Not on a pivot (its columns are not the ones the filters read).
+const valueActions = computed(() => {
+  if (!applied.value || tableCols.value !== baseCols.value) return null
+  return {
+    filter: (column: string, value: unknown, exclude: boolean) => {
+      if (value === null || value === undefined) {
+        filters.value.push({ column, operator: exclude ? 'is_not_null' : 'is_null', value: '', value2: '' })
+      } else {
+        filters.value.push({ column, operator: exclude ? 'ne' : 'eq', value: String(value), value2: '' })
+      }
+      void apply()
+    },
+  }
+})
 // the table of the last Apply that answered (none before the first one)
 const applied = ref(false)
 const gridResult = computed<PreviewResult | null>(() =>
@@ -633,8 +684,8 @@ onMounted(async () => {
       <!-- result area: table or chart -->
       <section class="result">
         <div class="rtabs">
-          <button :class="{ active: view === 'table' }" @click="view = 'table'"><Table2 :size="14" /> {{ $t('viewer.tableTab') }}</button>
-          <button :class="{ active: view === 'chart' }" @click="view = 'chart'"><PieChart :size="14" /> {{ $t('viewer.chartTab') }}</button>
+          <button :class="{ active: view === 'table' }" :aria-pressed="view === 'table'" @click="view = 'table'"><Table2 :size="14" aria-hidden="true" /> {{ $t('viewer.tableTab') }}</button>
+          <button :class="{ active: view === 'chart' }" :aria-pressed="view === 'chart'" @click="view = 'chart'"><PieChart :size="14" aria-hidden="true" /> {{ $t('viewer.chartTab') }}</button>
           <button class="primary apply" :disabled="!selectedDs || loading" @click="apply"><Play :size="14" /> {{ $t('viewer.applyButton') }}</button>
           <span v-if="loading" class="muted">{{ $t('dataGrid.computing') }}</span>
           <!-- an error with a table on screen (an export): here; without one, in the table's place -->
@@ -642,11 +693,18 @@ onMounted(async () => {
           <span id="vw-summary" class="rmeta muted">
             <template v-if="applied">
               {{ summaryRows }}<template v-if="rowCount.state === 'counting'"> · {{ $t('dataGrid.counting') }}</template><template
-                v-else-if="rowCount.state === 'failed'"> · {{ rowCount.slow ? $t('dataGrid.countSlow') : $t('dataGrid.countFailed') }}</template>
+                v-else-if="rowCount.state === 'failed'"> · <span :title="rowCount.slow ? $t('dataGrid.countSlowTitle') : countError || undefined">{{ rowCount.slow ? $t('dataGrid.countSlow') : $t('dataGrid.countFailed') }}</span><button
+                  type="button"
+                  class="vw-retry"
+                  :aria-label="$t('dataGrid.countAgain')"
+                  :title="$t('dataGrid.countAgain')"
+                  @click="countRetry"
+                ><RotateCw :size="11" aria-hidden="true" /></button></template>
               · {{ $t('dataGrid.columns', { n: tableCols.length }) }}
             </template>
           </span>
           <span class="sr-only" role="status" aria-live="polite">{{ liveText }}</span>
+          <GridKeys v-if="view === 'table' && applied" profile />
           <div class="expbtns">
             <button :disabled="!rows.length || !!exporting" :title="$t('viewer.exportCsvTitle')" @click="exportView('csv')">
               <Download :size="13" /> {{ exporting === 'csv' ? '…' : 'CSV' }}
@@ -668,7 +726,10 @@ onMounted(async () => {
             :count="rowCount"
             :profile="profile"
             :profile-state="profileState"
-            :top-values="topValues"
+            :profile-error="profileError"
+            :profile-retry="profileRetry"
+            :column-detail="columnDetail"
+            :value-actions="valueActions"
             :empty="$t('viewer.noDataHint')"
             :label="$t('viewer.tableTab')"
           />
@@ -761,6 +822,9 @@ onMounted(async () => {
 .rtabs button { padding: 5px 10px; }
 .rtabs button.active { border-color: var(--accent); background: color-mix(in srgb, var(--accent) 12%, transparent); }
 .rtabs .apply { margin-left: 8px; }
+.vw-retry { margin: 0 0 0 4px; padding: 0 2px; border: 0; background: none; box-shadow: none; color: inherit; vertical-align: -1px; cursor: pointer; }
+.vw-retry:hover { color: var(--text); background: none; box-shadow: none; }
+.vw-retry:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; border-radius: 3px; }
 .rmeta { margin-left: auto; font-size: 12px; font-variant-numeric: tabular-nums; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .expbtns { display: flex; gap: 4px; }
 .expbtns button { padding: 5px 9px; }
