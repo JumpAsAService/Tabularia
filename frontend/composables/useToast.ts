@@ -6,23 +6,35 @@ export interface Toast {
   id: number
   kind: 'success' | 'error' | 'warning' | 'info'
   message: string
+  // a toast that speaks for a recurring situation: a new one with the same key replaces it
+  // instead of piling up beside it
+  key?: string
 }
 
 let nextId = 1
+const timers = new Map<number, ReturnType<typeof setTimeout>>()
 
 export function useToast() {
   const toasts = useState<Toast[]>('toasts', () => [])
 
   function dismiss(id: number) {
     toasts.value = toasts.value.filter((t) => t.id !== id)
+    clearTimeout(timers.get(id))
+    timers.delete(id)
   }
 
-  function push(kind: Toast['kind'], message: string, ttlMs?: number) {
-    const id = nextId++
-    toasts.value = [...toasts.value, { id, kind, message }]
+  function push(kind: Toast['kind'], message: string, ttlMs?: number, key?: string) {
+    const same = key ? toasts.value.find((t) => t.key === key) : undefined
+    const id = same?.id ?? nextId++
+    toasts.value = same
+      ? toasts.value.map((t) => (t.id === id ? { ...t, kind, message } : t))
+      : [...toasts.value, { id, kind, message, key }]
     // the errors stay longer: they must be read, not glimpsed
     const ttl = ttlMs ?? (kind === 'error' ? 6500 : kind === 'warning' ? 5000 : 3500)
-    if (import.meta.client) setTimeout(() => dismiss(id), ttl)
+    if (import.meta.client) {
+      clearTimeout(timers.get(id))
+      timers.set(id, setTimeout(() => dismiss(id), ttl))
+    }
   }
 
   return {
@@ -31,7 +43,7 @@ export function useToast() {
     success: (message: string) => push('success', message),
     error: (message: string) => push('error', message),
     // warnings: something to know, not to fix
-    warning: (message: string) => push('warning', message),
+    warning: (message: string, key?: string) => push('warning', message, undefined, key),
     info: (message: string) => push('info', message),
   }
 }

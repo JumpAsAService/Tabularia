@@ -7,7 +7,7 @@ import { Controls, ControlButton } from '@vue-flow/controls'
 import { MiniMap } from '@vue-flow/minimap'
 import { opMeta } from '~/composables/useOpIcons'
 
-import { Table2, BarChart3, Wand2, Users, Undo2, Redo2, Sparkles, SlidersHorizontal, ShieldAlert } from 'lucide-vue-next'
+import { Table2, BarChart3, Wand2, Users, Undo2, Redo2, Sparkles, SlidersHorizontal, ShieldAlert, FlaskConical, X } from 'lucide-vue-next'
 import FlowAssistant from '~/components/FlowAssistant.vue'
 import { useAi, type AiStatus } from '~/composables/useAi'
 import { useApi, errMessage } from '~/composables/useApi'
@@ -26,7 +26,8 @@ import { useScriptingEditor, type ScriptOutputs } from '~/composables/useScripti
 import { useRegistriesEditor } from '~/composables/useRegistries'
 import { useFormat } from '~/composables/useFormat'
 import type { PreviewResult, ColumnInfo, Operation, IngestResult } from '~/composables/useApi'
-import { SOURCE_ID, buildIncoming, resolveChain, leafNodeId, defaultParams } from '~/composables/useFlowModel'
+import { SOURCE_ID, buildIncoming, resolveChain, leafNodeId, defaultParams, sampleLabel } from '~/composables/useFlowModel'
+import { Recent, previewKey, columnChanges, rowsPhrase, suggestSample, type RowCount } from '~/composables/previewGrid'
 import { computeAutoLayout } from '~/composables/useFlowLayout'
 import { createFlowHistory } from '~/composables/useFlowHistory'
 import { onBeforeRouteLeave, onBeforeRouteUpdate } from 'vue-router'
@@ -332,6 +333,25 @@ const previewLoading = ref(false)
 const previewError = ref('')
 // why there is no preview when it is not an error (the nodes after a Script node)
 const previewNote = ref('')
+// Whose rows `preview` holds, and the node being computed now (null: nothing in flight). The
+// grid never passes a node's rows off as another's: from the click on, the rows of the node
+// before are dimmed and the summary names the node being computed (critique of 2026-11-08:
+// Group by selected, the Pivot's table on screen for a second and a half).
+const previewNodeId = ref<string | null>(null)
+const computingNodeId = ref<string | null>(null)
+const computeStartedAt = ref(0)
+const clock = ref(0) // ticks while something computes: the elapsed seconds
+let clockTimer: ReturnType<typeof setInterval> | undefined
+const previewMs = ref(0) // how long the preview on screen took (0: from this page's memory)
+const rowCount = ref<RowCount>({ state: 'none' })
+// The previews and counts this page has seen: a step opened again shows at once, without
+// asking the server (whose step cache would still recompute the last step). Same engine,
+// source, chain and limit, same answer; kept a few minutes.
+const PREVIEW_MEMO_MS = 10 * 60 * 1000
+const previewMemo = new Recent<{ at: number; res: PreviewResult }>(40)
+const countMemo = new Recent<{ at: number; rows: number; over: boolean }>(120)
+const fresh = <V extends { at: number }>(e: V | undefined): V | undefined =>
+  e && Date.now() - e.at < PREVIEW_MEMO_MS ? e : undefined
 
 // the nodes that run outside the engine and hand their output to the nodes after them
 const STEP_TYPES = new Set(['script', 'container'])
@@ -371,7 +391,8 @@ function stepTexts(nodeId: string): string {
 // nodes after it preview from that. Read when the flow opens, after a save, after a
 // trial.
 const scriptOutputs = ref<ScriptOutputs>({})
-const fmtWhen = useFormat().dateTime
+const fmt = useFormat()
+const fmtWhen = fmt.dateTime
 const scriptSources = computed(() => Object.fromEntries(Object.entries(scriptOutputs.value)
   .filter(([, v]) => v.output).map(([k, v]) => [k, { bucket: v.output!.bucket, key: v.output!.key }])))
 async function loadScriptOutputs() {
@@ -624,7 +645,7 @@ function restoreSnapshot(snapshot: string) {
   if (selectedId.value) {
     refreshForNode(selectedId.value)
   } else {
-    preview.value = null
+    clearPreview()
     inputColumns.value = []
     rightColumns.value = []
   }
@@ -1476,7 +1497,7 @@ function deleteNodes(ids: string[]) {
     delete nodeColumns[id]
   }
   selectedId.value = null
-  preview.value = null
+  clearPreview()
   inputColumns.value = []
   rightColumns.value = []
   invalidateColumns()
@@ -1670,11 +1691,18 @@ async function refreshForNode(nodeId: string) {
   columnsLoading.value = true
   const colSeq = ++columnsSeq
   const t0 = performance.now()
-  // Whoever goes through the nodes one after another does not want each one's preview: it
-  // waits a moment, and if another click arrived meanwhile this one does not even start.
-  // The skeleton is on already: the delay does not show.
-  await new Promise((r) => setTimeout(r, CLICK_SETTLE_MS))
-  if (colSeq !== columnsSeq) return
+  // A step seen already in this page shows at once: no wait, no request. Otherwise the
+  // rows on screen are dimmed NOW and the summary names this node, then whoever goes
+  // through the nodes one after another gets a moment before anything starts: if
+  // another click arrives meanwhile this one does not even start.
+  const shown = showFromMemory(nodeId)
+  if (!shown) {
+    beginCompute(nodeId)
+    await new Promise((r) => setTimeout(r, CLICK_SETTLE_MS))
+    if (colSeq !== columnsSeq) return
+    // the rows first: the preview starts now, beside the input columns (its own slot)
+    void runPreview(nodeId)
+  }
 
   // input columns (the left parent's output); the FIRST node of a foreach body has no
   // internal edges → its input is the container's
@@ -1732,33 +1760,161 @@ async function refreshForNode(nodeId: string) {
     rightColumns.value = []
   }
 
-  // turns the columns' skeleton off after the minimum visibility, WITHOUT delaying the
-  // preview's start (which starts right here below)
+  // turns the columns' skeleton off after the minimum visibility
   skeletonPad(t0).then(() => {
     if (colSeq === columnsSeq) columnsLoading.value = false
   })
-  // Overtaken while resolving the columns: do NOT launch the old node's preview — it
-  // would take the slot and knock down the new node's.
-  if (colSeq !== columnsSeq) return
-  await runPreview(nodeId)
+}
+
+// ── The preview on screen: whose it is, how long it takes, how many rows ─────────────
+/** The name a person knows a node by (the palette's name of its operation, a source's file). */
+function nodeName(id: string | null): string {
+  const n = id ? findNode(id) : null
+  if (!n) return ''
+  if (n.type === 'operation') {
+    const m = opMeta(n.data?.opType ?? '')
+    return m.label.startsWith('ops.') ? t(m.label) : String(n.data?.opType ?? '')
+  }
+  if (n.type === 'source') return String(n.data?.filename || n.data?.dsName || t('dataGrid.sourceNode'))
+  return String(n.data?.label || n.data?.name || n.type || '')
+}
+
+/** The request a node's preview is, or null when the node has no data to read. */
+function previewBody(nodeId: string) {
+  const chain = resolveChain(getNodes.value, getEdges.value, nodeId, scriptSources.value)
+  if (!chain.sourceNode?.data?.parquetKey) return { chain, body: null }
+  const body = {
+    bucket: chain.sourceNode.data.bucket ?? bucket,
+    input_key: chain.sourceNode.data.parquetKey as string,
+    operations: chain.operations,
+    limit: 100,
+  }
+  return { chain, body, key: previewKey({ ...body, engine: flowEngine.value }) }
+}
+
+function tickClock() {
+  clock.value = performance.now()
+}
+/** From the click on: the rows on screen are not this node's. */
+function beginCompute(nodeId: string) {
+  stopCount()
+  // a preview still in flight for the node before no longer writes (its answer is kept in
+  // memory all the same; the next preview on the slot knocks it down on the server)
+  previewSeq++
+  computingNodeId.value = nodeId
+  computeStartedAt.value = performance.now()
+  tickClock()
+  clearInterval(clockTimer)
+  clockTimer = setInterval(tickClock, 500)
+  // nothing on screen yet: the skeleton (never «select a node» with a node selected)
+  if (!preview.value) previewLoading.value = true
+  previewError.value = ''
+}
+/** Nothing on screen: the node shown went away. */
+function clearPreview() {
+  endCompute()
+  stopCount()
+  preview.value = null
+  previewNodeId.value = null
+  previewLoading.value = false
+}
+function endCompute() {
+  computingNodeId.value = null
+  clearInterval(clockTimer)
+  clockTimer = undefined
+}
+onUnmounted(() => { clearInterval(clockTimer); stopCount() })
+
+/** A node's preview this page has seen already: on screen at once, with its count. */
+function showFromMemory(nodeId: string): boolean {
+  const { body, key } = previewBody(nodeId)
+  const hit = body && key ? fresh(previewMemo.get(key)) : undefined
+  if (!body || !key || !hit) return false
+  previewSeq++ // a preview still in flight for another node no longer writes
+  previewSlots.cancel('preview')
+  endCompute()
+  showPreview(nodeId, hit.res, key, body, 0)
+  previewLoading.value = false
+  return true
+}
+
+function showPreview(nodeId: string, res: PreviewResult, key: string, body: NonNullable<ReturnType<typeof previewBody>['body']>, ms: number) {
+  stopCount()
+  preview.value = res
+  previewNodeId.value = nodeId
+  previewError.value = ''
+  previewMs.value = ms
+  nodeColumns[nodeId] = res.columns
+  const counted = res.truncated ? fresh(countMemo.get(key)) : undefined
+  rowCount.value = !res.truncated
+    ? { state: 'done', rows: res.rows.length, over: false }
+    : counted ? { state: 'done', rows: counted.rows, over: counted.over } : { state: 'none' }
+  nodeStats[nodeId] = {
+    rows: res.row_count, truncated: res.truncated, cols: res.columns.length,
+    cacheState: res.cache_state ?? null, cacheCap: res.cache_cap_rows ?? null,
+    count: rowCount.value,
+  }
+  if (res.truncated && !counted) void startCount(nodeId, key, body)
+}
+
+// The real count comes after the rows, apart, and is dropped as soon as the person looks
+// elsewhere: a click on another node stops it on the server too (it would take a worker
+// the next preview needs).
+let countSeq = 0
+async function startCount(nodeId: string, key: string, body: NonNullable<ReturnType<typeof previewBody>['body']>) {
+  const seq = ++countSeq
+  rowCount.value = { state: 'counting' }
+  try {
+    const c = await previewSlots.count({ bucket: body.bucket, input_key: body.input_key, operations: body.operations, engine: flowEngine.value }, 'count')
+    countMemo.set(key, { at: Date.now(), rows: c.rows, over: c.over })
+    if (seq !== countSeq) return
+    rowCount.value = { state: 'done', rows: c.rows, over: c.over }
+    if (nodeStats[nodeId]) nodeStats[nodeId] = { ...nodeStats[nodeId], count: rowCount.value }
+  } catch (e) {
+    if (seq !== countSeq || isSuperseded(e)) return
+    const status = (e as any)?.response?.status ?? (e as any)?.statusCode
+    rowCount.value = { state: 'failed', slow: status === 504 }
+  }
+}
+function stopCount() {
+  countSeq++
+  if (previewSlots.busy('count')) previewSlots.stop('count')
+  if (rowCount.value.state === 'counting') rowCount.value = { state: 'none' }
+}
+
+/** «Cancel» on a slow preview: stopped on the server too, and nothing of another node shown. */
+function cancelPreview() {
+  const name = nodeName(computingNodeId.value)
+  previewSeq++
+  previewSlots.stop('preview')
+  endCompute()
+  preview.value = null
+  previewNodeId.value = null
+  previewLoading.value = false
+  previewError.value = ''
+  previewNote.value = t('dataGrid.cancelled', { name })
 }
 
 let previewSeq = 0 // only the LAST preview launched writes the result and turns the skeleton off
 async function runPreview(nodeId: string) {
-  const { sourceNode, operations: ops, afterScript } = resolveChain(getNodes.value, getEdges.value, nodeId, scriptSources.value)
+  const { chain, body, key } = previewBody(nodeId)
+  const { sourceNode, afterScript } = chain
+  if (body && key && !fresh(previewMemo.get(key)) && computingNodeId.value !== nodeId) beginCompute(nodeId)
   // the seq ALWAYS moves on: a preview that does not start must invalidate the old one
   // still in flight too, or that one would write its result on the new node
   const seq = ++previewSeq
-  if (!sourceNode?.data?.parquetKey) {
+  if (!sourceNode?.data?.parquetKey || !body || !key) {
     previewSlots.cancel('preview')
+    endCompute()
+    stopCount()
     preview.value = null
+    previewNodeId.value = nodeId
     previewLoading.value = false
     // what a script writes exists only during a run: the editor cannot preview it
     previewError.value = ''
     previewNote.value = afterScript ? t(`${stepTexts(afterScript)}.previewAfterRun`) : ''
     return
   }
-  const t0 = performance.now()
   previewError.value = ''
   // the data come from a script's last run: say which, and whether its code changed since
   const fromScript = afterScript ? scriptOutputs.value[afterScript]?.output : null
@@ -1767,38 +1923,81 @@ async function runPreview(nodeId: string) {
       { when: fmtWhen(fromScript.finished_at) })
       + (fromScript.stale ? ` ${t(`${stepTexts(afterScript)}.previewStale`)}` : '')
     : ''
-  previewLoading.value = true
+  const hit = fresh(previewMemo.get(key))
+  if (hit) {
+    endCompute()
+    showPreview(nodeId, hit.res, key, body, 0)
+    previewLoading.value = false
+    return
+  }
+  const t0 = performance.now()
+  const skeleton = previewLoading.value // the skeleton is up: it stays its minimum, no flash
   try {
-    const res = await apiPreview({
-      bucket: sourceNode.data.bucket ?? bucket,
-      input_key: sourceNode.data.parquetKey,
-      operations: ops,
-      limit: 100,
-    }, 'preview')
-    nodeColumns[nodeId] = res.columns
-    nodeStats[nodeId] = {
-      rows: res.row_count, truncated: res.truncated, cols: res.columns.length,
-      cacheState: res.cache_state ?? null, cacheCap: res.cache_cap_rows ?? null,
-    }
+    const res = await apiPreview(body, 'preview')
+    previewMemo.set(key, { at: Date.now(), res })
     cacheCheckAfterPreview()
     if (res.cache_state === 'skipped' && !cacheWarned.has(nodeId)) {
       cacheWarned.add(nodeId)
-      toast.warning(t('flowEditor.cacheSkippedToast', { n: (res.cache_cap_rows ?? 0).toLocaleString() }))
+      // one toast for the whole editor, its text updated: three nodes over the cap made three
+      toast.warning(t('flowEditor.cacheSkippedToast', { n: (res.cache_cap_rows ?? 0).toLocaleString() }), 'cache-cap')
     }
-    if (seq === previewSeq) preview.value = res
+    if (seq === previewSeq) {
+      if (skeleton) await skeletonPad(t0)
+      if (seq !== previewSeq) return
+      endCompute()
+      showPreview(nodeId, res, key, body, performance.now() - t0)
+    } else {
+      nodeColumns[nodeId] = res.columns
+    }
   } catch (e) {
     // "overtaken by a newer one" is not an error: it must never be shown
     if (seq === previewSeq && !isSuperseded(e)) {
+      endCompute()
       preview.value = null
+      previewNodeId.value = nodeId
       const message = errMessage(e)
       // a node just added and not set yet: not an error in red, the hint to set it
       if (/required parameter missing: '/.test(message)) previewNote.value = t('flowEditor.completeNodeHint')
       else previewError.value = message
     }
   } finally {
-    await skeletonPad(t0) // skeleton visible at least the minimum: no flash
     if (seq === previewSeq) previewLoading.value = false
   }
+}
+
+// ── What the tab bar says about the rows on screen ─────────────────────────────────
+const computeSeconds = computed(() => (computingNodeId.value ? Math.floor((clock.value - computeStartedAt.value) / 1000) : 0))
+const slowCompute = computed(() => !!computingNodeId.value && computeSeconds.value >= 2)
+// the source of the chain on screen (or being computed), and its development sample
+const shownSource = computed(() => {
+  const id = computingNodeId.value ?? previewNodeId.value
+  return id ? resolveChain(getNodes.value, getEdges.value, id, scriptSources.value).sourceNode : null
+})
+const shownSample = computed(() => (shownSource.value?.type === 'source' ? sampleLabel(shownSource.value.data, t) : null))
+// the step's changes against its input: the selected node's own preview only
+const previewChanges = computed(() => {
+  const id = previewNodeId.value
+  const node = id ? findNode(id) : null
+  if (!preview.value || !node || id !== selectedId.value || node.type !== 'operation' || columnsLoading.value) return null
+  const renames = node.data?.opType === 'rename' ? (node.data?.params?.mapping ?? {}) : {}
+  return columnChanges(inputColumns.value, preview.value.columns, renames)
+})
+const summaryRows = computed(() => {
+  const r = preview.value
+  if (!r) return ''
+  return rowsPhrase(r.rows.length, r.truncated, rowCount.value, t, (n) => fmt.count(n))
+})
+// a sample on the source is suggested, never switched on behind the person's back
+const offerSample = computed(() => {
+  if (shownSample.value || shownSource.value?.type !== 'source') return false
+  return slowCompute.value || (!!preview.value && !computingNodeId.value && suggestSample(rowCount.value, previewMs.value))
+})
+function openSourceSample() {
+  const src = shownSource.value
+  if (!src) return
+  selectedId.value = src.id
+  refreshForNode(src.id)
+  nextTick(() => (document.querySelector('.samplebox .sel-trigger, .samplebox select') as HTMLElement | null)?.focus())
 }
 
 // ── Distinct values of a column at the selected node's INPUT ─────────
@@ -2530,6 +2729,7 @@ async function pollTask(id: string) {
         @mousedown="startGridResize"
         @keydown="viewKeys"
       />
+      <div class="viewhead">
       <div class="viewtabs">
         <button :class="{ active: viewTab === 'table' }" @click="viewTab = 'table'">
           <Table2 :size="13" /> {{ $t('flowEditor.tableTab') }}
@@ -2538,8 +2738,59 @@ async function pollTask(id: string) {
           <BarChart3 :size="13" /> {{ $t('flowEditor.chartTab') }}
         </button>
       </div>
-      <div class="viewbody" :class="{ scroll: viewTab === 'table' }">
-        <DataGrid v-if="viewTab === 'table'" :result="preview" :loading="previewLoading" :error="previewError" :note="previewNote" />
+        <!-- what the rows on screen are: whose, how many of how many; while a node computes,
+             its name, the seconds, and the way out -->
+        <div class="pv-bar">
+          <span id="pv-summary" class="pv-summary" role="status" aria-live="polite">
+            <template v-if="computingNodeId">
+              <span class="pv-computing">{{ $t('dataGrid.computing', { name: nodeName(computingNodeId) }) }}</span>
+              <span v-if="slowCompute" class="pv-part" aria-hidden="true">{{ $t('dataGrid.seconds', { s: computeSeconds }) }}</span>
+            </template>
+            <template v-else-if="preview">
+              <span class="pv-node" :title="nodeName(previewNodeId)">{{ nodeName(previewNodeId) }}</span>
+              <span class="pv-part">{{ summaryRows }}</span>
+              <span v-if="rowCount.state === 'counting'" class="pv-part pv-quiet">{{ $t('dataGrid.counting') }}</span>
+              <span
+                v-else-if="rowCount.state === 'failed'"
+                class="pv-part pv-quiet"
+                :title="rowCount.slow ? $t('dataGrid.countSlowTitle') : undefined"
+              >{{ rowCount.slow ? $t('dataGrid.countSlow') : $t('dataGrid.countFailed') }}</span>
+              <span class="pv-part">{{ $t('dataGrid.columns', { n: preview.columns.length }) }}</span>
+              <span
+                v-if="previewChanges?.removed.length"
+                class="pv-part pv-removed"
+                :title="previewChanges.removed.join(', ')"
+              >{{ $t('dataGrid.removed', { n: previewChanges.removed.length }) }}</span>
+            </template>
+            <span v-if="shownSample && (computingNodeId || preview)" class="pv-part pv-sample"><FlaskConical :size="11" aria-hidden="true" /> {{ shownSample }}</span>
+          </span>
+          <button
+            v-if="offerSample"
+            type="button"
+            class="pv-action"
+            :title="$t('dataGrid.useSampleTitle')"
+            @click="openSourceSample"
+          >
+            <FlaskConical :size="12" /> {{ $t('dataGrid.useSample') }}
+          </button>
+          <button v-if="slowCompute" type="button" class="pv-action" @click="cancelPreview">
+            <X :size="12" /> {{ $t('dataGrid.cancel') }}
+          </button>
+        </div>
+      </div>
+      <div class="viewbody">
+        <DataGrid
+          v-if="viewTab === 'table'"
+          :result="preview"
+          :loading="previewLoading"
+          :stale="!!computingNodeId"
+          :error="previewError"
+          :note="previewNote"
+          :summary="summaryRows"
+          summary-id="pv-summary"
+          :changes="previewChanges"
+          :empty="selectedId ? $t('dataGrid.nothingYet') : undefined"
+        />
         <ChartPanel v-else :columns="preview?.columns ?? []" :query="chartQuery" />
       </div>
     </div>
@@ -2582,6 +2833,26 @@ async function pollTask(id: string) {
 }
 .panel-tabs button:hover { color: var(--text); box-shadow: none; }
 .panel-tabs button.on { color: var(--text); border-bottom-color: var(--accent); }
+
+/* the preview's summary, in the tab bar: one line, the node first, cut before the actions */
+.viewhead { display: flex; align-items: center; gap: 12px; flex-shrink: 0; min-width: 0; }
+.pv-bar { flex: 1; min-width: 0; display: flex; align-items: center; justify-content: flex-end; gap: 6px; }
+.pv-summary {
+  min-width: 0; overflow: hidden; white-space: nowrap; text-overflow: ellipsis;
+  font-size: 12px; color: var(--muted); font-variant-numeric: tabular-nums;
+}
+.pv-node { color: var(--text); font-weight: 500; }
+.pv-computing { color: var(--text); }
+.pv-part::before { content: '·'; margin: 0 6px; color: var(--muted); }
+.pv-computing + .pv-part::before { content: '·'; }
+.pv-quiet { opacity: 0.8; }
+.pv-removed { cursor: help; text-decoration: underline dotted; text-underline-offset: 3px; }
+.pv-sample { display: inline-flex; align-items: center; gap: 3px; }
+.pv-sample svg { vertical-align: -1px; }
+.pv-action {
+  flex: none; display: inline-flex; align-items: center; gap: 4px;
+  padding: 3px 9px; font-size: 12px;
+}
 
 /* the «unsaved changes» dialog's text */
 .leave-body { margin: 0; line-height: 1.5; }
