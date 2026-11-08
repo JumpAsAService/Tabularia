@@ -223,9 +223,15 @@ function measure() {
   if (h && Math.abs(h - rowH.value) > 0.5) rowH.value = h
 }
 let resize: ResizeObserver | undefined
+let resizeFrame = 0
 onMounted(() => {
   if (typeof ResizeObserver !== 'undefined') {
-    resize = new ResizeObserver(() => { measure() })
+    // measured in the next frame: a re-render inside the observer's own delivery (rows drawn,
+    // a scrollbar coming or going) is what browsers report as «ResizeObserver loop»
+    resize = new ResizeObserver(() => {
+      if (resizeFrame) return
+      resizeFrame = requestAnimationFrame(() => { resizeFrame = 0; measure() })
+    })
   }
 })
 watch(scroller, (el, old) => {
@@ -235,6 +241,7 @@ watch(scroller, (el, old) => {
 onBeforeUnmount(() => {
   resize?.disconnect()
   if (frame) cancelAnimationFrame(frame)
+  if (resizeFrame) cancelAnimationFrame(resizeFrame)
   clearTimeout(copiedTimer)
 })
 
