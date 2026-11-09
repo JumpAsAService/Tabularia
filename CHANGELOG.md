@@ -5,6 +5,15 @@ exposes at `/system/info` and in the app's settings menu.
 
 ## Unreleased
 
+- **Active sessions, by person.** Administration → Audit showed one card a browser or script,
+  hundreds on a busy installation. It is now a table a person (sessions active and open, their
+  devices, when last seen), online ones by default with «All» beside, a search over name,
+  e-mail, IP and device, the first eight people and the rest on request; a person opens on
+  their sessions, the identical ones (same device, address and way in) as one line that
+  signs out together, six lines and the rest on request.
+- **Every icon of the top bar moves**, by what it holds (Analysis's bars rise, Connections
+  plugs in, Administration's shield grows…), the «…» of more actions ripples its three dots,
+  and a schedule's calendar-clock ticks: only for a fine pointer and without reduced motion.
 - **The privacy notice starts switched off.** A new installation no longer shows the sample
   privacy bar on the sign-in page: the administrator adapts its text and switches it on in
   Administration. An installation that already has a notice keeps its own setting.

@@ -9,7 +9,7 @@ import { BarChart } from 'echarts/charts'
 import { GridComponent, TooltipComponent, LegendComponent } from 'echarts/components'
 import VChart from 'vue-echarts'
 import {
-  ScrollText, Search, RefreshCw, ChevronLeft, ChevronRight, Circle,
+  ScrollText, Search, RefreshCw, ChevronLeft, ChevronRight, ChevronDown, Circle,
   LogIn, LogOut, Workflow, Database, Plug, Download, Shield, CheckCircle2, XCircle, AlertTriangle, KeyRound, SlidersHorizontal, Radar, Rows3, Server, Folder, Code2, DatabaseSearch, Boxes, DatabaseBackup, Sparkles, Megaphone, FileCheck, Mail, Cpu, NotebookPen, Bot, FileChartColumn, LayoutDashboard, Braces } from 'lucide-vue-next'
 import { useApi, type AuditEntry, type ActiveSession, type AccessActivity } from '~/composables/useApi'
 import { useI18n } from 'vue-i18n'
@@ -67,20 +67,85 @@ const sessions = ref<ActiveSession[]>([])
 const sessionsTotal = ref(0) // all the open ones: the list carries only the newest
 async function loadSessions() {
   try {
-    const page = await api.auditSessions()
+    const page = await api.auditSessions(SESSIONS_READ)
     sessions.value = page.items
     sessionsTotal.value = page.total
   } catch { /* ignore */ }
 }
 const onlineCount = computed(() => sessions.value.filter((s) => s.online).length)
-const canRevoke = computed(() => !!user.value?.is_superuser)
-const revoking = ref<string | null>(null)
-async function revoke(s: ActiveSession) {
-  const who = s.full_name || s.email
-  if (!confirm(t('audit.revokeConfirm', { who, device: deviceLabel(s.user_agent) ?? t('sessions.unknownDevice') }))) return
-  revoking.value = s.id
+
+// The sessions grouped by person: one per browser or script is hundreds on a busy
+// installation, and the question is «who is in, from where», not a wall of cards. A row a
+// person (their sessions online and open, their devices, when last seen), opened on its
+// sessions to close one; online ones by default, a search over name, e-mail, IP and device,
+// the first PEOPLE_SHOWN people and the rest on request.
+const SESSIONS_READ = 500
+const PEOPLE_SHOWN = 8
+const sessFilter = ref<'online' | 'all'>('online')
+const sessQuery = ref('')
+const sessShowAll = ref(false)
+const sessOpen = ref<Set<number>>(new Set())
+// nobody online: «Online» would show an empty table, so the filter starts on «All»
+watch(sessions, (all) => { if (!all.some((x) => x.online)) sessFilter.value = 'all' }, { once: true })
+type SessionPerson = {
+  id: number; name: string; email: string; admin: boolean; current: boolean
+  sessions: ActiveSession[]; online: number; devices: string[]; lastSeen: string
+}
+const people = computed<SessionPerson[]>(() => {
+  const q = sessQuery.value.trim().toLowerCase()
+  const byUser = new Map<number, SessionPerson>()
+  for (const x of sessions.value) {
+    if (sessFilter.value === 'online' && !x.online) continue
+    const device = deviceLabel(x.user_agent) ?? t('sessions.unknownDevice')
+    if (q && ![x.full_name, x.email, x.ip ?? '', device].some((v) => v.toLowerCase().includes(q))) continue
+    let p = byUser.get(x.user_id)
+    if (!p) {
+      p = { id: x.user_id, name: x.full_name || x.email, email: x.email, admin: x.is_superuser, current: false,
+        sessions: [], online: 0, devices: [], lastSeen: x.last_seen_at }
+      byUser.set(x.user_id, p)
+    }
+    p.sessions.push(x)
+    if (x.online) p.online++
+    if (x.current) p.current = true
+    if (!p.devices.includes(device)) p.devices.push(device)
+    if (x.last_seen_at > p.lastSeen) p.lastSeen = x.last_seen_at
+  }
+  // whoever is looking first, then the ones online, then the most recently seen
+  return [...byUser.values()].sort((a, b) =>
+    Number(b.current) - Number(a.current) || b.online - a.online || b.lastSeen.localeCompare(a.lastSeen))
+})
+const peopleShown = computed(() => (sessShowAll.value ? people.value : people.value.slice(0, PEOPLE_SHOWN)))
+// A person's sessions, the identical ones as one line (the same device, address and way in:
+// a script that signs in every hour, a browser reopened), the most recent first
+type SessionGroup = { key: string; device: string; ip: string; sso: boolean; ids: string[]; online: boolean; current: boolean; lastSeen: string }
+function groupsOf(p: SessionPerson): SessionGroup[] {
+  const by = new Map<string, SessionGroup>()
+  for (const x of p.sessions) {
+    const device = deviceLabel(x.user_agent) ?? t('sessions.unknownDevice')
+    const key = `${device}\u0001${x.ip ?? ''}\u0001${x.method}`
+    let g = by.get(key)
+    if (!g) {
+      g = { key, device, ip: x.ip || '—', sso: x.method === 'sso', ids: [], online: false, current: false, lastSeen: x.last_seen_at }
+      by.set(key, g)
+    }
+    g.ids.push(x.id)
+    if (x.online) g.online = true
+    if (x.current) g.current = true
+    if (x.last_seen_at > g.lastSeen) g.lastSeen = x.last_seen_at
+  }
+  return [...by.values()].sort((a, b) => Number(b.current) - Number(a.current) || b.lastSeen.localeCompare(a.lastSeen))
+}
+const GROUPS_SHOWN = 6
+const groupsAll = ref<Set<number>>(new Set())
+function showAllGroups(id: number) { groupsAll.value = new Set([...groupsAll.value, id]) }
+// close a line: every session in it, but never the one being looked from
+async function revokeGroup(p: SessionPerson, g: SessionGroup) {
+  const ids = g.ids.filter((id) => !p.sessions.find((x) => x.id === id)?.current)
+  if (!ids.length) return
+  if (!confirm(t('audit.revokeGroupConfirm', { who: p.name, device: g.device, n: ids.length }, ids.length))) return
+  revoking.value = g.key
   try {
-    await api.revokeSession(s.id)
+    for (const id of ids) await api.revokeSession(id)
     await Promise.all([loadSessions(), load()])
   } catch (e: any) {
     error.value = e?.message ?? t('audit.errorGeneric')
@@ -88,6 +153,15 @@ async function revoke(s: ActiveSession) {
     revoking.value = null
   }
 }
+function togglePerson(id: number) {
+  const next = new Set(sessOpen.value)
+  if (next.has(id)) next.delete(id)
+  else next.add(id)
+  sessOpen.value = next
+}
+const DEVICES_SHOWN = 2
+const canRevoke = computed(() => !!user.value?.is_superuser)
+const revoking = ref<string | null>(null)
 
 // ── sign-ins chart, last 24h ───────────────────────────────────────────────
 const access = ref<AccessActivity | null>(null)
@@ -393,36 +467,104 @@ function detailSummary(e: AuditEntry): string {
         <VChart class="acc-chart" :option="accessOption" autoresize />
       </section>
 
-      <!-- active sessions -->
-      <section class="sess">
+      <!-- active sessions: one row a person, opened on its sessions -->
+      <section class="sess" :aria-labelledby="'sess-title'">
         <div class="sess-head">
-          <span class="sess-title">{{ $t('audit.sessionsTitle') }}</span>
-          <span class="sess-count"><Circle :size="8" class="dot on" /> {{ $t('audit.sessionsCount', { online: onlineCount, total: sessionsTotal }) }}<template v-if="sessions.length < sessionsTotal"> · {{ $t('audit.sessionsShown', { n: sessions.length }) }}</template></span>
-        </div>
-        <div class="sess-grid">
-          <div v-for="s in sessions" :key="s.id" class="sess-card" :class="{ off: !s.online }">
-            <Circle :size="8" class="dot" :class="{ on: s.online }" />
-            <div class="sess-who">
-              <span class="sess-name">
-                {{ s.full_name || s.email }}<span v-if="s.is_superuser" class="adm">{{ $t('audit.adminBadge') }}</span><span v-if="s.current" class="here">{{ $t('sessions.thisDevice') }}</span>
-              </span>
-              <span class="sess-meta muted">
-                <template v-if="deviceLabel(s.user_agent)">{{ deviceLabel(s.user_agent) }} · </template>{{ s.ip || '—' }} · {{ fmtAgo(s.last_seen_at) }}<template v-if="s.method === 'sso'"> · SSO</template>
-              </span>
+          <h2 id="sess-title" class="sess-title">{{ $t('audit.sessionsTitle') }}</h2>
+          <span class="sess-count"><Circle :size="8" class="dot on" aria-hidden="true" /> {{ $t('audit.sessionsCount', { online: onlineCount, total: sessionsTotal }) }}<template v-if="sessions.length < sessionsTotal"> · {{ $t('audit.sessionsShown', { n: sessions.length }) }}</template></span>
+          <div class="sess-tools">
+            <div class="seg" role="group" :aria-label="$t('audit.sessionsFilter')">
+              <button type="button" class="mini" :class="{ on: sessFilter === 'online' }" :aria-pressed="sessFilter === 'online'" @click="sessFilter = 'online'">{{ $t('audit.sessionsOnline') }}</button>
+              <button type="button" class="mini" :class="{ on: sessFilter === 'all' }" :aria-pressed="sessFilter === 'all'" @click="sessFilter = 'all'">{{ $t('audit.sessionsAll') }}</button>
             </div>
-            <button
-              v-if="canRevoke && !s.current"
-              class="sess-revoke"
-              :disabled="revoking === s.id"
-              :title="$t('audit.revokeTitle')"
-              :aria-label="$t('audit.revokeAria', { who: s.full_name || s.email })"
-              @click="revoke(s)"
-            >
-              <LogOut :size="13" />
-            </button>
+            <span class="searchbox sess-search"><Search :size="13" aria-hidden="true" /><input v-model="sessQuery" type="search" :placeholder="$t('audit.sessionsSearch')" :aria-label="$t('audit.sessionsSearch')" /></span>
           </div>
-          <p v-if="!sessions.length" class="muted empty">{{ $t('audit.noSessions') }}</p>
         </div>
+        <p v-if="!sessions.length" class="muted empty">{{ $t('audit.noSessions') }}</p>
+        <p v-else-if="!people.length" class="muted empty">{{ $t('audit.sessionsNoMatch') }}</p>
+        <table v-else class="sess-tbl">
+          <thead>
+            <tr>
+              <th scope="col">{{ $t('audit.sessionsColPerson') }}</th>
+              <th scope="col">{{ $t('audit.sessionsColSessions') }}</th>
+              <th scope="col">{{ $t('audit.sessionsColDevices') }}</th>
+              <th scope="col">{{ $t('audit.sessionsColLastSeen') }}</th>
+            </tr>
+          </thead>
+          <tbody>
+            <template v-for="p in peopleShown" :key="p.id">
+              <tr class="sess-person" :class="{ open: sessOpen.has(p.id), off: !p.online }">
+                <td>
+                  <button
+                    type="button"
+                    class="sess-toggle"
+                    :aria-expanded="sessOpen.has(p.id)"
+                                        :aria-label="$t('audit.sessionsExpand', { who: p.name })"
+                    @click="togglePerson(p.id)"
+                  >
+                    <ChevronDown :size="13" class="caret" aria-hidden="true" />
+                    <Circle :size="8" class="dot" :class="{ on: p.online > 0 }" aria-hidden="true" />
+                    <span class="sess-name">{{ p.name }}</span>
+                    <span v-if="p.admin" class="adm">{{ $t('audit.adminBadge') }}</span>
+                    <span v-if="p.current" class="here">{{ $t('sessions.thisDevice') }}</span>
+                  </button>
+                  <span v-if="p.name !== p.email" class="sess-mail muted">{{ p.email }}</span>
+                </td>
+                <td class="num">{{ $t('audit.sessionsOf', { online: p.online, n: p.sessions.length }) }}</td>
+                <td class="sess-devices">
+                  {{ p.devices.slice(0, DEVICES_SHOWN).join(', ') }}<span v-if="p.devices.length > DEVICES_SHOWN" class="muted more" :title="p.devices.slice(DEVICES_SHOWN).join(', ')">{{ $t('audit.sessionsMoreDevices', { n: p.devices.length - DEVICES_SHOWN }) }}</span>
+                </td>
+                <td class="when">{{ fmtAgo(p.lastSeen) }}</td>
+              </tr>
+              <template v-if="sessOpen.has(p.id)">
+                <tr
+                  v-for="g in (groupsAll.has(p.id) ? groupsOf(p) : groupsOf(p).slice(0, GROUPS_SHOWN))"
+                  :key="g.key"
+                  class="sess-sub"
+                  :class="{ off: !g.online }"
+                  :data-owner="`sess-${p.id}`"
+                >
+                  <td class="sub-dev">
+                    <Circle :size="7" class="dot" :class="{ on: g.online }" aria-hidden="true" />
+                    {{ g.device }}<span v-if="g.ids.length > 1" class="times">×{{ g.ids.length }}</span>
+                    <span v-if="g.current" class="here">{{ $t('sessions.thisDevice') }}</span>
+                  </td>
+                  <td class="ip">{{ g.ip }}</td>
+                  <td class="muted">{{ g.sso ? 'SSO' : $t('audit.sessionsPassword') }}</td>
+                  <td class="when">
+                    <div class="sub-last">
+                    {{ fmtAgo(g.lastSeen) }}
+                    <button
+                      v-if="canRevoke && !(g.current && g.ids.length === 1)"
+                      type="button"
+                      class="mini sess-revoke"
+                      :disabled="revoking === g.key"
+                      :title="g.ids.length > 1 ? $t('audit.revokeGroupTitle', { n: g.ids.length }) : $t('audit.revokeTitle')"
+                      :aria-label="$t('audit.revokeAria', { who: `${p.name}, ${g.device}` })"
+                      @click="revokeGroup(p, g)"
+                    >
+                      <LogOut :size="13" aria-hidden="true" />
+                    </button>
+                    </div>
+                  </td>
+                </tr>
+                <tr v-if="!groupsAll.has(p.id) && groupsOf(p).length > GROUPS_SHOWN" class="sess-sub">
+                  <td colspan="4" class="sub-dev">
+                    <button type="button" class="mini" @click="showAllGroups(p.id)">{{ $t('audit.sessionsShowLines', { n: groupsOf(p).length }) }}</button>
+                  </td>
+                </tr>
+              </template>
+            </template>
+          </tbody>
+        </table>
+        <button
+          v-if="people.length > PEOPLE_SHOWN"
+          type="button"
+          class="mini sess-more"
+          @click="sessShowAll = !sessShowAll"
+        >
+          {{ sessShowAll ? $t('audit.sessionsShowFewer') : $t('audit.sessionsShowAll', { n: people.length }) }}
+        </button>
       </section>
 
       <!-- filters -->
@@ -504,24 +646,50 @@ function detailSummary(e: AuditEntry): string {
 .acc-stats .ko { color: var(--danger); }
 .acc-chart { width: 100%; height: 160px; }
 
-/* sessions */
+/* sessions: one row a person, opened on its sessions */
 .sess { background: var(--panel); border: 1px solid var(--border); border-radius: 11px; padding: 12px 14px; }
-.sess-head { display: flex; align-items: baseline; gap: 12px; margin-bottom: 10px; }
-.sess-title { font-size: 13px; font-weight: 600; }
+.sess-head { display: flex; align-items: center; gap: 12px; margin-bottom: 10px; flex-wrap: wrap; }
+.sess-title { font-size: 13px; font-weight: 600; margin: 0; }
 .sess-count { font-size: 12px; color: var(--muted); display: inline-flex; align-items: center; gap: 6px; }
-.dot { color: var(--muted); }
+.sess-tools { margin-left: auto; display: flex; align-items: center; gap: 8px; }
+.seg { display: flex; gap: 4px; }
+.seg .on { border-color: var(--accent); background: var(--tint-accent); color: var(--accent-hi); }
+.sess-search input { min-width: 200px; font-size: 12.5px; }
+.dot { color: var(--muted); flex: none; }
 .dot.on { color: var(--accent-2); fill: var(--accent-2); }
-.sess-grid { display: flex; flex-wrap: wrap; gap: 8px; }
-.sess-card { display: flex; align-items: center; gap: 8px; padding: 7px 11px; border: 1px solid var(--border); border-radius: 9px; background: var(--panel-2); min-width: 190px; }
-.sess-card.off { opacity: 0.6; }
-.sess-who { display: flex; flex-direction: column; }
-.sess-name { font-size: 13px; font-weight: 550; display: inline-flex; align-items: center; gap: 6px; }
+.sess-tbl { width: 100%; border-collapse: collapse; font-size: 12.5px; }
+.sess-tbl th { text-align: left; font-size: 11px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.05em; color: var(--muted); padding: 7px 10px; border-bottom: 1px solid var(--border); }
+.sess-tbl td { padding: 6px 10px; border-bottom: 1px solid var(--border-soft); vertical-align: middle; }
+.sess-tbl tbody tr:last-child td { border-bottom: none; }
+.sess-person:hover td { background: var(--panel-2); }
+.sess-person.off .sess-name { color: var(--muted); }
+.sess-toggle {
+  all: unset; display: inline-flex; align-items: center; gap: 7px; cursor: pointer;
+  border-radius: 6px; padding: 2px 4px; margin-left: -4px;
+}
+.sess-toggle:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; }
+.sess-toggle .caret { color: var(--muted); transform: rotate(-90deg); transition: transform var(--dur-1, 120ms) ease-out; }
+.sess-person.open .caret { transform: none; }
+.sess-name { font-weight: 550; }
+.sess-mail { display: block; font-size: 11px; padding-left: 33px; }
+.num { font-variant-numeric: tabular-nums; white-space: nowrap; }
+.sess-devices { color: var(--text); max-width: 280px; }
+.sess-tbl .when { white-space: nowrap; font-variant-numeric: tabular-nums; color: var(--muted); }
+.sess-sub td { background: var(--bg-soft); padding-top: 4px; padding-bottom: 4px; font-size: 12px; }
+.sess-sub.off { color: var(--muted); }
+.sub-dev { padding-left: 37px !important; }
+.sub-dev .dot { margin-right: 6px; vertical-align: -1px; }
+.times { margin-left: 6px; color: var(--muted); font-variant-numeric: tabular-nums; }
+.sub-dev .here { margin-left: 6px; }
+.sub-last { display: flex; align-items: center; gap: 10px; }
+.more { margin-left: 6px; }
 .adm { font-size: 9.5px; text-transform: uppercase; letter-spacing: 0.03em; color: var(--accent); background: var(--tint-accent); border-radius: 4px; padding: 0 5px; }
-.sess-meta { font-size: 11px; }
 .here { font-size: 9.5px; text-transform: uppercase; letter-spacing: 0.03em; color: var(--accent-hi); background: var(--tint-accent); border-radius: 4px; padding: 0 5px; }
-.sess-revoke { margin-left: auto; padding: 4px 6px; color: var(--muted); background: transparent; border-color: transparent; }
-.sess-revoke:hover { color: var(--danger); border-color: var(--danger); box-shadow: none; }
+.sess-revoke { margin-left: auto; color: var(--muted); }
+.sess-revoke:hover:not(:disabled) { color: var(--danger); border-color: var(--danger); }
+.sess-more { margin-top: 8px; }
 .empty { font-size: 12.5px; }
+@media (prefers-reduced-motion: reduce) { .sess-toggle .caret { transition: none; } }
 
 /* filters */
 .filters { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }

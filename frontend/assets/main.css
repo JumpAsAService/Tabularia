@@ -957,6 +957,33 @@ table.data td.null { color: var(--muted); font-style: italic; }
     /* link, share */
     &:where(.lucide-link-2, .lucide-link) { transform: rotate(-20deg); }
     &:where(.lucide-share-2) { transform: scale(1.1); }
+    /* schedule: the calendar's clock gives a tick */
+    &:where(.lucide-calendar-clock, .lucide-clock, .lucide-alarm-clock) { transform: rotate(-12deg) scale(1.06); }
+    /* the top bar's places, each by what it holds */
+    &:where(.lucide-folder-tree) { transform: translateX(1.5px); }            /* Explore: into the tree */
+    &:where(.lucide-workflow) { transform: translate(1px, -1px); }            /* Flows: one step to the next */
+    &:where(.lucide-database) { transform: translateY(-1.5px); }              /* Datasources: lifted */
+    &:where(.lucide-chart-no-axes-combined, .lucide-chart-column, .lucide-chart-line) { transform: scaleY(1.16); } /* Analysis: the bars rise */
+    &:where(.lucide-plug) { transform: translateY(-2px); }                    /* Connections: plugged in */
+    &:where(.lucide-terminal) { transform: translateX(1.5px); }               /* Scripting: the prompt moves on */
+    &:where(.lucide-shield) { transform: scale(1.12); }                       /* Administration: on guard */
+  }
+  /* the bars rise from their floor, not from their middle */
+  :where(:root:not(:has(.rv, .dv, .rdz, .ddz))) :where(svg.lucide-chart-no-axes-combined, svg.lucide-chart-column, svg.lucide-chart-line) {
+    transform-origin: 50% 85%;
+  }
+
+  /* more actions: the three dots ripple once, left to right (lucide draws the middle one
+     first, then the right, then the left) */
+  :where(:root:not(:has(.rv, .dv, .rdz, .ddz))) :where(button:not(:disabled, [aria-disabled="true"]), a, [role="button"]):hover :where(svg.lucide-ellipsis, svg.lucide-ellipsis-vertical) circle {
+    animation: hv-dots 420ms var(--ease-out) 1 both;
+  }
+  :where(:root:not(:has(.rv, .dv, .rdz, .ddz))) :where(svg.lucide-ellipsis, svg.lucide-ellipsis-vertical) circle:nth-child(1) { animation-delay: 60ms; }
+  :where(:root:not(:has(.rv, .dv, .rdz, .ddz))) :where(svg.lucide-ellipsis, svg.lucide-ellipsis-vertical) circle:nth-child(2) { animation-delay: 120ms; }
+  :where(:root:not(:has(.rv, .dv, .rdz, .ddz))) :where(svg.lucide-ellipsis, svg.lucide-ellipsis-vertical) circle:nth-child(3) { animation-delay: 0ms; }
+  @keyframes hv-dots {
+    0%, 100% { transform: translateY(0); }
+    45% { transform: translateY(-2.5px); }
   }
 }
 /* ══ end HOVER LANGUAGE ═══ */

@@ -324,8 +324,8 @@ export function useApi() {
       return await apiFetch<string[]>('/audit/actions')
     },
     // the newest, and how many there are in all
-    async auditSessions(): Promise<Page<ActiveSession>> {
-      return await apiFetch<Page<ActiveSession>>('/audit/sessions')
+    async auditSessions(limit?: number): Promise<Page<ActiveSession>> {
+      return await apiFetch<Page<ActiveSession>>(limit ? `/audit/sessions?limit=${limit}` : '/audit/sessions')
     },
     // the administrator closes someone's session: out at the next request
     async revokeSession(id: string): Promise<void> {
