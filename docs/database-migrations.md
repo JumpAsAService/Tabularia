@@ -32,7 +32,27 @@ rolls everything back — two installations of the same version have the same sc
 Outside development the application **never migrates**: at startup it checks the database
 revision. Behind its code → it refuses to start and says to run the migration step. Ahead
 of its code → it starts with a warning: that is the previous version during a rolling
-update, and revisions are written so that it keeps working (below).
+update, or after a rollback, and revisions are written so that it keeps working (below).
+
+This holds for every process that reads the database: the Go gateway and orchestrator
+(from 1.4.2; before, they wanted the exact revision), the AI service and the migration
+step itself, which finds nothing to do on a database ahead of its code. The Go gateway's
+warning reads:
+
+```text
+database at 0043, this gateway reads 0042: running, the migrations of a patch only add
+```
+
+### Rolling back a patch of the LTS line
+
+The patches of an [LTS line](lts.md) migrate **only by adding** (a table, a nullable
+column, an index): the code of the previous patch never meets something it does not
+expect. From 1.4.2 a rollback to an earlier patch of the line (`helm rollback`, or the
+earlier image tag in the compose) therefore starts on the database as it is, with the
+warning above. Going back to a release **before 1.4.2** is not covered: 1.4.1's gateway
+wants its exact revision and refuses a newer database, so that needs the backup taken
+before the upgrade (Administration → Backups, or `pg_dump`). Between minor releases
+(1.4 → 1.5) a migration may do more than add: roll back with the backup.
 
 ## Adding a revision
 
@@ -48,7 +68,8 @@ update, and revisions are written so that it keeps working (below).
    `test_migrations.py` fails if the models and the revisions do not agree.
 
 Revisions are numbered `0002`, `0003`… in one chain. They go **forward only**: a mistake is
-fixed by a new revision, and a rollback of the database is a restore from backup.
+fixed by a new revision, a revision's downgrade refuses, and a rollback of the database is
+a restore from backup. A revision meant for an LTS patch only adds (see above).
 
 ## Rules for rolling updates (expand / contract)
 

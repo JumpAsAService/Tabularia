@@ -108,7 +108,7 @@ func setup(ctx context.Context, log *slog.Logger) (*runner, error) {
 	if err != nil {
 		return nil, err
 	}
-	if err := db.CheckSchema(ctx, pool); err != nil {
+	if err := db.CheckSchema(ctx, pool, log); err != nil {
 		return nil, err
 	}
 	r := &runner{log: log, pool: pool}

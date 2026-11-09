@@ -52,7 +52,7 @@ func run(log *slog.Logger) error {
 		return err
 	}
 	defer pool.Close()
-	if err := db.CheckSchema(ctx, pool); err != nil {
+	if err := db.CheckSchema(ctx, pool, log); err != nil {
 		return err
 	}
 

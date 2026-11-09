@@ -21,6 +21,17 @@
 New features land on `main` and ship in the next minor release (1.5, 1.6, …). A fix is
 made on `main` first, then brought to `release/1.4` when it qualifies.
 
+## Rolling back a patch
+
+Since a patch's migrations only add, the gateway of an earlier patch runs on the database
+a later one migrated: from 1.4.2 it accepts a database ahead of its own revision, with a
+warning in its log (`database at 0043, this gateway reads 0042: running, the migrations of
+a patch only add`), and still refuses one behind it. So 1.4.3 → 1.4.2 is a `helm rollback`
+(or the earlier image tag), with nothing to do on the database. 1.4.2 → 1.4.1 is not:
+1.4.1's gateway refuses a database newer than its own, so take a backup before upgrading
+to 1.4.2 and restore it to go back. [Database migrations](database-migrations.md) has the
+details.
+
 ## Which tag to run
 
 | You want | Run |

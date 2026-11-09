@@ -176,6 +176,20 @@ exposes at `/system/info` and in the app's settings menu.
   or a count whose chain has a step being copied into the cache waits for that copy (at most
   120 s) and starts from it: 5.6 s, the copy's remaining time and 0.1 s of pivot.
 
+- **A rollback between patches of the LTS line works.** The Go gateway and orchestrator start
+  on a database at a later schema revision than theirs, with a warning in the log («database
+  at 0043, this gateway reads 0042: running, the migrations of a patch only add»), and still
+  refuse an older one, which needs the migration step. The patches of the 1.4 line migrate
+  only by adding, so 1.4.3 → 1.4.2 is a `helm rollback` with nothing to do on the database.
+  docs/database-migrations.md, docs/lts.md.
+
+### Upgrading
+
+- **Take a backup of the database before upgrading to 1.4.2.** Its migration (0042) brings
+  the database past what 1.4.1 reads, and 1.4.1's gateway wants its exact revision: going
+  back from 1.4.2 to 1.4.1 means restoring that backup (Administration → Backups, or
+  `pg_dump`). From 1.4.2 on, a rollback to an earlier 1.4 patch needs no backup.
+
 ### Security
 
 - The gateway's internal routes (`/api/internal/data-apis/…`, for the data APIs' pods) are
