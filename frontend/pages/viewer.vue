@@ -275,30 +275,45 @@ function whyNot(e: unknown, what: 'count' | 'profile'): string {
 
 // The columns' profile of the applied view (nulls, distinct values, min and max), after its
 // rows and their count; an Apply drops the one before, on the server too.
+// On BigQuery every query is billed by the bytes of the columns it reads, a LIMIT included:
+// there the profile asks by itself only what the parquet footer says (no query), and the
+// whole one is made when a column is opened (`profileWhole`), as in the editor.
+const billedByBytes = computed(() => engine.value === 'bigquery')
 const profile = ref<ProfileResult | null>(null)
 const profileState = ref<'none' | 'loading' | 'done' | 'failed'>('none')
 const profileError = ref('')
 let viewOps: { ds: DatasourceInfo; ops: Operation[] } | null = null
 let profileCols: ColumnInfo[] = []
-async function profileView(ds: DatasourceInfo, ops: Operation[], columns: ColumnInfo[], seq: number) {
+let wholeAsked = -1 // the applySeq whose whole profile was asked (BigQuery)
+async function profileView(ds: DatasourceInfo, ops: Operation[], columns: ColumnInfo[], seq: number, whole = false) {
   if (!columns.length) return
   viewOps = { ds, ops }
   profileCols = columns
   profileError.value = ''
   profileState.value = 'loading'
+  const footerOnly = billedByBytes.value && !whole
   try {
     const res = await previewSlots.profile({
       bucket: ds.bucket, input_key: ds.key, operations: ops, engine: engine.value, no_cache: true,
       columns: columns.map((c) => ({ name: c.name, dtype: c.dtype })),
+      ...(footerOnly ? { footer_only: true } : {}),
     }, 'profile')
     if (seq !== applySeq) return
+    // a footer-only answer that comes after the whole was asked does not stand for it
+    if (footerOnly && wholeAsked === seq) return
     profile.value = res
     profileState.value = 'done'
   } catch (e) {
-    if (seq !== applySeq || isSuperseded(e)) return
+    if (seq !== applySeq || isSuperseded(e) || (footerOnly && wholeAsked === seq)) return
     profileError.value = whyNot(e, 'profile')
     profileState.value = 'failed'
   }
+}
+/** A column opened on BigQuery: the view's whole profile (one billed query, every column). */
+function profileWhole() {
+  if (!viewOps || loading.value || (profile.value && !profile.value.partial) || wholeAsked === applySeq) return
+  wholeAsked = applySeq
+  void profileView(viewOps.ds, viewOps.ops, profileCols, applySeq, true)
 }
 function profileRetry() {
   if (viewOps && !loading.value) void profileView(viewOps.ds, viewOps.ops, profileCols, applySeq)
@@ -730,6 +745,7 @@ onMounted(async () => {
             :profile-state="profileState"
             :profile-error="profileError"
             :profile-retry="profileRetry"
+            :profile-whole="billedByBytes ? profileWhole : undefined"
             :column-detail="columnDetail"
             :value-actions="valueActions"
             :empty="$t('viewer.noDataHint')"
