@@ -38,7 +38,7 @@ chDB, ClickHouse or BigQuery.</em></p>
 > *Tabularia takes its name from the Tabularium, the records office of ancient Rome —
 > the place where the state's tables were kept in order.*
 
-Current release: **1.4.1 «Romulus»**, the long-term support line ([LTS](docs/lts.md): fixes only, image tag `lts`) — see [CHANGELOG.md](CHANGELOG.md).
+Current release: **1.4.1 «Romulus»**. The next one, **1.4.2**, starts the long-term support line ([LTS](docs/lts.md): fixes only afterwards, image tag `lts`) — see [CHANGELOG.md](CHANGELOG.md).
 
 ---
 

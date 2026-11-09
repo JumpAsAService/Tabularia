@@ -1,19 +1,19 @@
 # Long-term support
 
-**1.4 «Romulus» is the long-term support (LTS) line**, from 1.4.1 (2026-11-07).
+**1.4 «Romulus» is the long-term support (LTS) line**, from 1.4.2.
 
 | | |
 |---|---|
 | LTS line | 1.4 |
-| First LTS release | 1.4.1 |
-| Branch | [`release/1.4`](https://github.com/JumpAsAService/Tabularia/tree/release/1.4) |
+| First LTS release | 1.4.2 |
+| Branch | `release/1.4`, cut from the `v1.4.2` tag |
 | Image tag | `lts` — follows the newest 1.4.x on every image (`tabularia-backend`, `tabularia-gateway`, `tabularia-gateway-go`, `tabularia-frontend`, `tabularia-data-api`) |
 | Helm chart | the chart version shipped with the 1.4.x tag |
 
 ## What the LTS line gets
 
 - **Security fixes** and **data-correctness fixes** (a wrong result, a lost or duplicated
-  row, a schema read wrong), released as patch versions: 1.4.2, 1.4.3, …
+  row, a schema read wrong), released as patch versions after 1.4.2: 1.4.3, 1.4.4, …
 - **Fixes that keep it running**: a crash, a leak, an upgrade or a migration that fails.
 - **No new features** and no changes of behaviour, configuration or API. A patch release
   never needs a configuration change, and its database migrations, if any, only add.
@@ -28,7 +28,7 @@ made on `main` first, then brought to `release/1.4` when it qualifies.
 | Stability: fixes only, no surprises | `lts`, or pin an exact `1.4.x` |
 | The newest features | `latest`, or pin an exact version |
 
-Pinning an exact version (`1.4.1`) is the safest choice in production; move to the next
+Pinning an exact version (`1.4.2`) is the safest choice in production; move to the next
 patch after reading its [changelog](../CHANGELOG.md).
 
 ## How long
