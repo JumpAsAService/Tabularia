@@ -93,7 +93,9 @@ spec:
     matchExpressions:
       - key: app.kubernetes.io/component
         operator: In
-        values: [engine, worker, preview-worker, beat]
+        # and the egress proxy of the scripts without internet access: the storage it
+        # reaches is the engine's and the scripts bucket, already allowed below
+        values: [engine, worker, preview-worker, beat, egress-proxy]
   policyTypes:
     - Egress
   egress:

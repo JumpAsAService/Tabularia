@@ -5,7 +5,11 @@ disruptions (node drains, cluster upgrades): they move one by one. maxUnavailabl
 rather than minAvailable, so that a component scaled to one replica is never
 blocked from moving. Beat is left out: it is a singleton with Recreate.
 */}}
-{{- range $component := list "gateway" "orchestrator" "engine" "worker" "preview-worker" "frontend" }}
+{{- $components := list "gateway" "orchestrator" "engine" "worker" "preview-worker" "frontend" }}
+{{- if include "tabularia.egressProxyOn" . }}
+{{- $components = append $components "egress-proxy" }}
+{{- end }}
+{{- range $component := $components }}
 ---
 apiVersion: policy/v1
 kind: PodDisruptionBudget

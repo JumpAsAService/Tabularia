@@ -302,9 +302,21 @@ A version of a scripting environment whose **Internet access** an administrator 
 runs its scripts and notebooks with the label `tabularia.io/internet=off`, under a policy
 of their own in the scripts' and trials' namespaces (`templates/scripts-no-internet.yaml`):
 the cluster's DNS (`scripts.noInternet.dns`), the storage's namespace and
-`scripts.noInternet.allowNamespaces`, `scripts.noInternet.allowCIDRs` (a scripts bucket in
-a cloud), the gateway for the notebooks; nothing else. It changes nothing until a version
-is switched off ([docs/scripting.md](../../../docs/scripting.md#internet-access)).
+`scripts.noInternet.allowNamespaces`, the egress proxy, `scripts.noInternet.allowCIDRs`
+(openings by hand), the gateway for the notebooks; nothing else. It changes nothing until
+a version is switched off ([docs/scripting.md](../../../docs/scripting.md#internet-access)).
+A storage **outside the cluster** (AWS S3, Scaleway, GCS, a MinIO elsewhere) is reached
+through the **egress proxy** (`templates/egress-proxy.yaml`, `scripts.noInternet.proxy`,
+on by default with scripting): the Go gateway's image with `APP__ROLE=egress-proxy`, two
+replicas, which lets through the hosts of `externalServices.storage.endpoint` and of the
+scripts bucket set in Administration (with their virtual-hosted names) and answers 403 to
+anything else. It resolves the names itself and never connects to a loopback, link-local
+or metadata address; only those pods reach it, on its ports. The pods get its address as
+`HTTPS_PROXY`/`HTTP_PROXY`, and the bucket's names in their `/etc/hosts` for Arrow, which
+ignores those variables: its Service passes the bucket's port (`proxy.ports`, 443, 80 and
+9000 by default) to the proxy, which reads the name asked for and passes TLS through
+untouched. No `allowCIDRs` for the bucket any more; it reads the database with its
+password alone, none of the other secrets.
 
 ## Storage and `/tmp`
 

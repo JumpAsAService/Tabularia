@@ -11,13 +11,16 @@ access is held even where the users' code is not.
 What they reach:
 - the cluster's DNS, on port 53 (scripts.noInternet.dns): never a resolver on the internet,
   which would be a way out on port 53;
+- the egress proxy (egress-proxy.yaml, scripts.noInternet.proxy), on its ports only: the
+  storage outside the cluster (AWS S3, Scaleway, GCS, a MinIO elsewhere) and nothing else,
+  whatever its addresses — the proxy checks the names;
 - the namespaces of the storage: the one of externalServices.storage.endpoint when it is a
   Service name (minio.deps.svc.cluster.local → deps), and scripts.noInternet.allowNamespaces
   — where the scripts bucket is when it is a Service of this cluster; never Tabularia's own
   with scripts.blockTabularia;
-- scripts.noInternet.allowCIDRs: addresses outside the cluster, e.g. the scripts bucket when
-  it is in a cloud (its endpoint's addresses), a proxy, a company database. The cloud
-  metadata address is carved out of any range that holds it;
+- scripts.noInternet.allowCIDRs: addresses outside the cluster opened by hand, e.g. a
+  company database, or the scripts bucket without the egress proxy. The cloud metadata
+  address is carved out of any range that holds it;
 - the notebooks also reach the gateway, to read datasources (notebooks-networkpolicy.yaml).
 Nothing else: not the internet, not the other namespaces of the cluster. Nothing calls
 them but what notebooks-networkpolicy.yaml lets in.
@@ -66,6 +69,20 @@ spec:
           port: 53
         - protocol: TCP
           port: 53
+    {{- if include "tabularia.egressProxyOn" $ }}
+    # the egress proxy (egress-proxy.yaml): the storage outside the cluster, nothing else
+    - to:
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: {{ $.Release.Namespace | quote }}
+          podSelector:
+            matchLabels:
+              app.kubernetes.io/name: {{ include "tabularia.name" $ }}
+              app.kubernetes.io/instance: {{ $.Release.Name }}
+              app.kubernetes.io/component: egress-proxy
+      ports:
+        {{- include "tabularia.egressPorts" $ | nindent 8 }}
+    {{- end }}
     {{- with ($namespaces | uniq) }}
     # the storage's namespaces in this cluster
     - to:

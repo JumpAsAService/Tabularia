@@ -1,0 +1,173 @@
+{{- $proxy := .Values.scripts.noInternet.proxy | default dict }}
+{{- if include "tabularia.egressProxyOn" . }}
+{{/*
+The egress proxy of the scripts and notebooks without internet access (docs/scripting.md,
+«Internet access»; gateway-go/internal/egress): the Go gateway's image with
+APP__ROLE=egress-proxy, a workload of its own so that the scripts' data never pass through
+the pods that answer the users. It lets through only the hosts of the storage: the
+chart's (externalServices.storage.endpoint) and the scripts bucket set in Administration,
+with their virtual-hosted names (bucket.host). Everything else gets 403; it resolves the
+names itself and never connects to a loopback, link-local (the cloud metadata), multicast
+or unspecified address.
+
+The gateway gives the pods labelled tabularia.io/internet=off its address as HTTPS_PROXY /
+HTTP_PROXY, and, for the libraries that ignore those (Arrow's S3), puts the bucket's names
+at this Service's address in their /etc/hosts: the Service passes the bucket's port
+(scripts.noInternet.proxy.ports) to a port of the proxy that reads the name asked for (TLS
+SNI, HTTP Host) and passes the bytes through, TLS untouched. A bucket that is a Service of
+the cluster goes around it, through its namespace (scripts-no-internet.yaml).
+
+It reads the database (the scripts bucket) with the database's password alone: none of the
+other secrets.
+*/}}
+{{- $component := "egress-proxy" }}
+{{- $labels := dict "app.kubernetes.io/name" (include "tabularia.name" .) "app.kubernetes.io/instance" .Release.Name "app.kubernetes.io/component" $component }}
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ include "tabularia.fullname" . }}-{{ $component }}
+  labels:
+    {{- include "tabularia.labels" . | nindent 4 }}
+    app.kubernetes.io/component: {{ $component }}
+spec:
+  replicas: {{ $proxy.replicas | default 2 }}
+  strategy:
+    type: RollingUpdate
+    rollingUpdate:
+      maxSurge: 1
+      maxUnavailable: 0
+  selector:
+    matchLabels:
+      {{- toYaml $labels | nindent 6 }}
+  template:
+    metadata:
+      annotations:
+        checksum/config: {{ include (print $.Template.BasePath "/configmap.yaml") . | sha256sum }}
+        {{- include "tabularia.secretChecksum" . | nindent 8 }}
+      labels:
+        {{- include "tabularia.labels" . | nindent 8 }}
+        app.kubernetes.io/component: {{ $component }}
+    spec:
+      {{- include "tabularia.imagePullSecrets" . | nindent 6 }}
+      serviceAccountName: {{ include "tabularia.serviceAccountName" . }}
+      automountServiceAccountToken: false
+      enableServiceLinks: false
+      securityContext:
+        {{- toYaml .Values.podSecurityContext | nindent 8 }}
+      # the tunnels open (a script reading its input) finish before the pod goes
+      terminationGracePeriodSeconds: {{ $proxy.terminationGracePeriodSeconds | default 120 }}
+      containers:
+        - name: {{ $component }}
+          image: {{ include "tabularia.image" (dict "root" . "component" "gatewayGo") }}
+          imagePullPolicy: {{ .Values.image.pullPolicy }}
+          securityContext:
+            {{- toYaml .Values.containerSecurityContext | nindent 12 }}
+          # the Service drops the pod before it stops taking connections
+          lifecycle:
+            preStop:
+              exec: { command: ["sleep", "5"] }
+          ports:
+            - name: proxy
+              containerPort: 3128
+            {{- range $i, $port := $proxy.ports }}
+            - name: {{ printf "storage-%d" (int $port) | quote }}
+              containerPort: {{ add 20000 $i }}
+            {{- end }}
+          env:
+            - name: APP__ROLE
+              value: egress-proxy
+            - name: EGRESS__LISTEN
+              value: ":3128"
+            - name: EGRESS__TRANSPARENT
+              value: {{ include "tabularia.egressTransparent" . | quote }}
+            - name: EGRESS__MAX_CONNECTIONS
+              value: {{ $proxy.maxConnections | default 1024 | quote }}
+            - name: EGRESS__MAX_PER_CLIENT
+              value: {{ $proxy.maxPerClient | default 256 | quote }}
+            - name: EGRESS__IDLE_SECONDS
+              value: {{ $proxy.idleTimeoutSeconds | default 300 | quote }}
+            # the database, for the scripts bucket: its password, none of the other secrets
+            - name: DB__PASSWORD
+              valueFrom:
+                secretKeyRef: { name: {{ include "tabularia.secretName" . }}, key: DB__PASSWORD, optional: true }
+            - name: DB__URL
+              valueFrom:
+                secretKeyRef: { name: {{ include "tabularia.secretName" . }}, key: DB__URL, optional: true }
+          envFrom:
+            # the database's address and the storage's endpoint and bucket
+            - configMapRef:
+                name: {{ include "tabularia.configMapName" . }}
+          readinessProbe:
+            httpGet: { path: /healthz, port: proxy }
+            periodSeconds: 10
+            timeoutSeconds: 3
+          livenessProbe:
+            httpGet: { path: /healthz, port: proxy }
+            periodSeconds: 20
+            timeoutSeconds: 5
+            failureThreshold: 3
+          resources:
+            {{- toYaml ($proxy.resources | default dict) | nindent 12 }}
+      {{- with $proxy.nodeSelector }}
+      nodeSelector:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- with $proxy.tolerations }}
+      tolerations:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- with $proxy.affinity }}
+      affinity:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: {{ include "tabularia.fullname" . }}-{{ $component }}
+  labels:
+    {{- include "tabularia.labels" . | nindent 4 }}
+    app.kubernetes.io/component: {{ $component }}
+spec:
+  type: ClusterIP
+  ports:
+    - name: proxy
+      port: 3128
+      targetPort: proxy
+    # the storage's ports: the pods' /etc/hosts sends the bucket's names here
+    {{- range $i, $port := $proxy.ports }}
+    - name: {{ printf "storage-%d" (int $port) | quote }}
+      port: {{ int $port }}
+      targetPort: {{ add 20000 $i }}
+    {{- end }}
+  selector:
+    {{- toYaml $labels | nindent 4 }}
+---
+{{/*
+Only the pods without internet access, in the scripts' and the trials' namespaces, reach it.
+*/}}
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: {{ include "tabularia.fullname" . }}-{{ $component }}
+  labels:
+    {{- include "tabularia.labels" . | nindent 4 }}
+spec:
+  podSelector:
+    matchLabels:
+      {{- toYaml $labels | nindent 6 }}
+  policyTypes:
+    - Ingress
+  ingress:
+    - from:
+        {{- range $ns := list (include "tabularia.scriptsNamespace" .) (include "tabularia.scriptTrialsNamespace" .) }}
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: {{ $ns | quote }}
+          podSelector:
+            matchLabels:
+              tabularia.io/internet: "off"
+        {{- end }}
+      ports:
+        {{- include "tabularia.egressPorts" . | nindent 8 }}
+{{- end }}

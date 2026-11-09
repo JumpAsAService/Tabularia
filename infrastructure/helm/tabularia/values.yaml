@@ -923,14 +923,43 @@ scripts:
     # externalServices.storage.endpoint is added by itself when that is a Service name
     # (minio.deps.svc.cluster.local → deps); Tabularia's own never with blockTabularia.
     allowNamespaces: []
-    # addresses outside the cluster they may reach, as CIDRs: the scripts bucket when it is
-    # in a cloud (the addresses of its endpoint, e.g. Scaleway's s3.fr-par.scw.cloud), a
-    # proxy, a company database. Without the bucket's addresses, the scripts of such a
-    # version cannot read their input nor write their output. The cloud metadata address
-    # is always carved out of a range that holds it.
+    # addresses outside the cluster they may reach directly, as CIDRs, opened by hand: a
+    # company database, or the scripts bucket when the egress proxy below is off (or its
+    # endpoint is an address, or on a port the proxy does not pass on, for Arrow). The
+    # storage outside the cluster needs nothing here: it goes through the proxy. The cloud
+    # metadata address is always carved out of a range that holds it.
     allowCIDRs: []
     # more egress rules, as NetworkPolicyEgressRule (a NodeLocal DNSCache on 169.254.20.10)
     extraEgress: []
+    # The egress proxy (templates/egress-proxy.yaml): how those pods reach a storage OUTSIDE
+    # the cluster (AWS S3, Scaleway, GCS, a MinIO elsewhere) without allowCIDRs. It lets
+    # through the hosts of externalServices.storage.endpoint and of the scripts bucket set in
+    # Administration, with their virtual-hosted names, and answers 403 to anything else; it
+    # resolves the names itself and never connects to a loopback, link-local or metadata
+    # address. The pods get its address as HTTPS_PROXY/HTTP_PROXY, and the bucket's names in
+    # their /etc/hosts for Arrow, which ignores those variables. A storage that is a Service
+    # of the cluster goes around it, through its namespace. Off: allowCIDRs alone, as before.
+    proxy:
+      enabled: true
+      replicas: 2
+      # the storage ports its Service passes on to the bucket for the libraries that ignore
+      # HTTPS_PROXY (Arrow's S3, in Python and R): an endpoint on another port is reached by
+      # the others only. 443 for the clouds, 80 and 9000 for a MinIO in http
+      ports: [443, 80, 9000]
+      # names that go around it, besides the cluster's own (.svc, .cluster.local)
+      noProxy: []
+      # at most this many connections at once, and from one pod; a tunnel where nothing
+      # passes for idleTimeoutSeconds is closed
+      maxConnections: 1024
+      maxPerClient: 256
+      idleTimeoutSeconds: 300
+      terminationGracePeriodSeconds: 120
+      resources:
+        requests: { cpu: 50m, memory: 64Mi }
+        limits: { memory: 256Mi }
+      nodeSelector: {}
+      tolerations: []
+      affinity: {}
   # where the scripts and the image checks run; empty = "<release namespace>-scripts"
   namespace: ""
   # where the builds run; empty = "<release namespace>-script-builds". Rootless

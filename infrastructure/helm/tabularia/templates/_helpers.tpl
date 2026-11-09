@@ -398,6 +398,9 @@ Empty without scripts. docs/capabilities/notebooks.md, «An address of their own
 {{- end }}
 - name: NOTEBOOKS__ALLOW_SAME_ORIGIN
   value: {{ $n.allowSameOrigin | default false | quote }}
+{{- if include "tabularia.egressProxyOn" . }}
+{{ include "tabularia.egressProxyEnv" . }}
+{{- end }}
 {{- end -}}
 
 {{/* The namespace of the data APIs' pods: dataApi.namespace, or the scripts' one. */}}
@@ -626,4 +629,44 @@ when the Ingress has TLS (http without), empty when there is no public host.
 {{- else if $host -}}
 {{- if or (.Values.ingress.tls | default list) $s.tlsSecretName -}}https://{{ $host }}{{- else -}}http://{{ $host }}{{- end -}}
 {{- end -}}
+{{- end -}}
+
+{{/*
+The egress proxy of the scripts without internet access (templates/egress-proxy.yaml):
+whether it runs, its transparent ports (listened on → the storage's port), the ports its
+pods take connections on, and what the gateway hands the pods.
+*/}}
+{{- define "tabularia.egressProxyOn" -}}
+{{- if and .Values.scripts.enabled (.Values.scripts.noInternet.proxy | default dict).enabled -}}true{{- end -}}
+{{- end -}}
+
+{{- define "tabularia.egressTransparent" -}}
+{{- $out := list -}}
+{{- range $i, $port := .Values.scripts.noInternet.proxy.ports -}}
+{{- $out = append $out (printf "%d=%d" (add 20000 $i) (int $port)) -}}
+{{- end -}}
+{{- join "," $out -}}
+{{- end -}}
+
+{{- define "tabularia.egressPorts" -}}
+- protocol: TCP
+  port: 3128
+{{- range $i, $port := .Values.scripts.noInternet.proxy.ports }}
+- protocol: TCP
+  port: {{ add 20000 $i }}
+{{- end }}
+{{- end -}}
+
+{{- define "tabularia.egressProxyEnv" -}}
+{{- $p := .Values.scripts.noInternet.proxy -}}
+# the egress proxy (templates/egress-proxy.yaml): the way to the storage of the scripts and
+# notebooks without internet access
+- name: SCRIPTS__EGRESS_PROXY
+  value: {{ printf "http://%s-egress-proxy.%s.svc:3128" (include "tabularia.fullname" .) .Release.Namespace | quote }}
+- name: SCRIPTS__EGRESS_PORTS
+  value: {{ join "," $p.ports | quote }}
+{{- with $p.noProxy }}
+- name: SCRIPTS__EGRESS_NO_PROXY
+  value: {{ join "," . | quote }}
+{{- end }}
 {{- end -}}
