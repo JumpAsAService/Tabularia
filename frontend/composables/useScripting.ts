@@ -121,6 +121,10 @@ export interface ScriptingState {
   languages: Record<ScriptLanguage, string[]>
   registry: string
   storage: ScriptStorage
+  // the chart's egress proxy of the versions without internet access, and the storage ports
+  // its Service passes on (for Arrow); null: none, the bucket outside the cluster needs
+  // scripts.noInternet.allowCIDRs
+  egress_proxy: { ports: number[] } | null
   environments: EnvironmentSummary[]
   editable: boolean
 }

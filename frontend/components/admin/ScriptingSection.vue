@@ -11,7 +11,7 @@ import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 import {
   ArrowLeft, CheckCircle2, CircleDot, Code2, Database, Globe, GlobeOff, KeyRound, LoaderCircle, Plus, RotateCcw, Search, Send,
-  Trash2, TriangleAlert, XCircle,
+  ShieldCheck, Trash2, TriangleAlert, XCircle,
 } from 'lucide-vue-next'
 import { errMessage } from '~/composables/useApi'
 import { useFormat } from '~/composables/useFormat'
@@ -280,22 +280,39 @@ async function setInternet(v: EnvironmentVersion) {
   }
 }
 
-// the scripts bucket outside the cluster: a version without internet access reaches it only
-// through the chart's scripts.noInternet.allowCIDRs. Its host, or '' when it is a Service of
-// the cluster (a name without dots, or *.svc / *.svc.cluster.local)
-const outsideBucket = computed(() => {
+// how a version without internet access reaches the scripts bucket: a Service of the cluster
+// (a name without dots, or *.svc / *.svc.cluster.local) directly, as nothing to say; outside
+// the cluster through the chart's egress proxy ('proxy'), or only through
+// scripts.noInternet.allowCIDRs: no proxy, an endpoint given by address, or a port the
+// proxy's Service does not pass on (Arrow, which ignores HTTPS_PROXY, would not get through)
+type BucketRoute = { host: string; port: number; via: 'proxy' | 'noProxy' | 'address' | 'port' }
+const offlineBucket = computed<BucketRoute | null>(() => {
   const endpoint = state.value?.storage.endpoint.trim() ?? ''
   let host = 's3.amazonaws.com' // empty = AWS
+  let port = 443
   if (endpoint) {
     try {
-      host = new URL(endpoint).hostname.toLowerCase()
+      const u = new URL(endpoint)
+      host = u.hostname.toLowerCase().replace(/\.$/, '')
+      port = u.port ? Number(u.port) : u.protocol === 'http:' ? 80 : 443
     } catch {
-      return ''
+      return null
     }
   }
-  if (!host.includes('.') || /\.svc(\.cluster\.local)?\.?$/.test(host)) return ''
-  return host
+  const address = /^\[.*\]$/.test(host) || /^\d{1,3}(\.\d{1,3}){3}$/.test(host)
+  if (!address && (!host.includes('.') || /\.svc(\.|$)/.test(host))) return null
+  const proxy = state.value?.egress_proxy
+  if (!proxy) return { host, port, via: 'noProxy' }
+  if (address) return { host, port, via: 'address' }
+  if (!proxy.ports.includes(port)) return { host, port, via: 'port' }
+  return { host, port, via: 'proxy' }
 })
+const bucketNote: Record<BucketRoute['via'], string> = {
+  proxy: 'scripting.internetBucketProxy',
+  noProxy: 'scripting.internetBucketNoProxy',
+  address: 'scripting.internetBucketAddress',
+  port: 'scripting.internetBucketPort',
+}
 const anyOffline = computed(() => !!env.value?.versions.some((v) => !v.internet_access))
 
 // while a version is being built, the page follows it
@@ -797,9 +814,15 @@ const basePackages = computed(() => (form.value.language === 'python' ? 'polars,
         </div>
         <p class="hint muted small">{{ $t('scripting.versionsLead') }}</p>
         <p class="hint muted small internet-lead"><Globe :size="12" /> {{ $t('scripting.internetLead') }}</p>
-        <p v-if="anyOffline && outsideBucket" class="notice" role="note">
-          <TriangleAlert :size="13" /> {{ $t('scripting.internetOutsideBucket', { host: outsideBucket }) }}
-        </p>
+        <template v-if="anyOffline && offlineBucket">
+          <p v-if="offlineBucket.via === 'proxy'" class="hint muted small internet-lead">
+            <ShieldCheck :size="12" /> {{ $t('scripting.internetBucketProxy', { host: offlineBucket.host }) }}
+          </p>
+          <p v-else class="notice" role="note">
+            <TriangleAlert :size="13" />
+            {{ $t(bucketNote[offlineBucket.via], { host: offlineBucket.host, port: offlineBucket.port }) }}
+          </p>
+        </template>
         <ul class="versions">
           <li v-for="v in env.versions" :key="v.id" :class="v.status">
             <div class="version-row">
