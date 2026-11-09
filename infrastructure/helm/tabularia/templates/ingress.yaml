@@ -74,6 +74,16 @@ spec:
                 name: {{ include "tabularia.fullname" $ }}-gateway
                 port:
                   number: {{ $.Values.service.gatewayPort }}
+          {{- /* the gateway's internal routes (the data APIs' pods ask them inside the
+          cluster, with a pod token) are never published: the longer prefix sends them to
+          the interface, which answers its «not found» page */}}
+          - path: {{ $.Values.ingress.apiPrefix }}/internal
+            pathType: Prefix
+            backend:
+              service:
+                name: {{ include "tabularia.fullname" $ }}-frontend
+                port:
+                  number: {{ $.Values.service.frontendPort }}
           {{- range .paths }}
           - path: {{ .path }}
             pathType: {{ .pathType }}
