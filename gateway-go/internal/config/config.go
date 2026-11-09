@@ -225,6 +225,13 @@ func Load(env Env) (*Config, error) {
 	return c, nil
 }
 
+// DSN is the database's address alone, for a process that reads nothing else of the
+// configuration (APP__ROLE=egress-proxy).
+func DSN(env Env) string {
+	r := reader{env: env}
+	return dsn(&r)
+}
+
 // dsn is app/core/config.py's DbSettings.dsn: DB__URL wins; otherwise the parts, with user
 // and password escaped (a generated password often holds «@», «/», «%» or a space).
 func dsn(r *reader) string {

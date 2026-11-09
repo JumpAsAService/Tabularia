@@ -9,6 +9,7 @@ import (
 	"net/http"
 	"os"
 	"os/signal"
+	"strings"
 	"syscall"
 	"time"
 
@@ -37,6 +38,11 @@ func main() {
 }
 
 func run(log *slog.Logger) error {
+	// the egress proxy of the scripts without internet access reads the database's address
+	// and its own variables only (cmd/gateway/egress.go)
+	if strings.TrimSpace(os.Getenv("APP__ROLE")) == "egress-proxy" {
+		return runEgress(log)
+	}
 	cfg, err := config.Load(config.FromOS())
 	if err != nil {
 		return err
