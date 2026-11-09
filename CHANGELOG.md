@@ -147,6 +147,39 @@ exposes at `/system/info` and in the app's settings menu.
   or a count whose chain has a step being copied into the cache waits for that copy (at most
   120 s) and starts from it: 5.6 s, the copy's remaining time and 0.1 s of pivot.
 
+### Security
+
+- The gateway's internal routes (`/api/internal/data-apis/…`, for the data APIs' pods) are
+  no longer published by the chart's Ingress: the pods reach them inside the cluster, and
+  from outside the path now ends on the interface.
+- A data API deleted stops answering at its pods' next poll (10 s measured), instead of
+  serving its last keys and data until its Deployment was removed (30–50 s, up to 15
+  minutes if the reconcile loop was stuck).
+- certifi 2026.10.23 (it no longer trusts a root whose intermediates' keys are compromised),
+  pyasn1 0.6.5, dnspython 2.9.2 and opentelemetry-api 1.45.2, in the backend's and the
+  gateway's locks.
+
+### Fixed
+
+- On the external ClickHouse a preview and a column profile read the first rows in the
+  file's order, as the other engines do: a large dataset gave other rows at every request,
+  and in the Viewer a column's histogram could count another sample than its profile's (all
+  zeros).
+- On the external ClickHouse, -0.0 and 0.0 are one key in a group by, a unique, a join and a
+  pivot, as on DuckDB and Polars: they made two groups, and a join on a float key missed
+  the rows of the other zero. The column profile counts them as one distinct value too.
+- On the external ClickHouse a group by's `count` and `n_unique` are Int64, as on DuckDB and
+  BigQuery (they were UInt64): a flow made on DuckDB no longer writes other column types
+  when it runs on ClickHouse. A flow that already ran there writes Int64 from its next run.
+- A data API answers 400 `key_in_query` to a key sent only in the address (it said
+  `key_missing`), 400 `not_sortable` to an empty `_sort=` (the order was dropped without a
+  word), 503 `no_data` for a resource whose datasource has no data file (it said «still
+  loading» for ever), and pages past a NaN or an infinity in a float sort column (the next
+  page's cursor was refused).
+- A data API's pod stopping (a rollout, a scale-in) keeps serving 8 s after it leaves the
+  readiness, so the ingress controller stops sending it requests first: two requests waited
+  5 s at every rollout.
+
 ## 1.4.1 «Romulus» — 2026-11-07
 
 Data APIs: on Kubernetes, a datasource can now be published as a read-only HTTP API for the
