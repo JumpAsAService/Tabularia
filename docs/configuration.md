@@ -60,8 +60,8 @@ SFTP, S3, APIs, SharePoint) belong to each connection, encrypted with
 | [Gateway](#gateway) | 170 |
 | [Engine and workers](#engine-and-workers) | 104 |
 | [Frontend](#frontend) | 6 |
-| [Compose and Helm only](#compose-and-helm-only) | 38 |
-| **Total** | **325** |
+| [Compose and Helm only](#compose-and-helm-only) | 46 |
+| **Total** | **333** |
 
 ## Before production
 
@@ -127,7 +127,7 @@ Users, groups, permissions, flows, connections, runs, schedules and the audit lo
 | `DB__USER` | string | `tabularia` | `externalServices.postgres.user` | Postgres user. The development Compose file also creates the database with it. |
 | `DB__PASSWORD` | string | development value (hidden) | `secrets.dbPassword` | **Production:** replace the development password (the gateway refuses it in production unless `DB__URL` is set). Postgres password. |
 | `DB__NAME` | string | `tabularia` | `externalServices.postgres.database` | Postgres database. |
-| `DB__URL` | string | empty | `existingSecret` | A full DSN (`postgresql://user:password@host:5432/dbname`) for a managed Postgres that does not fit the pieces above; when set it wins over them. It holds the password: treat it as a secret. |
+| `DB__URL` | string | empty | set by the chart | A full DSN (`postgresql://user:password@host:5432/dbname`) for a managed Postgres that does not fit the pieces above; when set it wins over them. It holds the password: treat it as a secret. |
 | `DB__POOL_SIZE` | integer, ≥ 1 | empty | `extraEnv` | Connections kept open to Postgres. Empty = one per thread (`APP__GATEWAY_THREADS`), which is what the gateway needs. Pool plus overflow, summed over every gateway process, must stay under Postgres' `max_connections`. Also adjustable in Administration → Settings, applied after a restart of the gateway and orchestrator. |
 | `DB__MAX_OVERFLOW` | integer, ≥ 0 | `10` | `extraEnv` | Extra connections opened at a peak and closed when returned. Also adjustable in Administration → Settings, applied after a restart of the gateway and orchestrator. |
 | `DB__AUTO_MIGRATE` | boolean | `false` | `extraEnv` | `true`: the gateway migrates the schema itself at startup (the development Compose file sets it). `false`: migrations are a step of their own (`python -m app.db.migra`, the chart's init container) and the gateway only refuses a database behind its code. |
@@ -699,6 +699,9 @@ containers.
 | `DATA_API__NETWORK_POLICY_INGRESS_FROM` | *(set by the chart)* | Helm chart | Who may reach the data APIs' pods, a JSON list of NetworkPolicy peers: the ingress controller's namespace and pods. |
 | `DATA_API__NETWORK_POLICY_EGRESS` | *(set by the chart)* | Helm chart | Where the data APIs' pods may go besides DNS, a JSON list of NetworkPolicy egress rules: the gateway's pods, and the object storage (its namespace when it is a Service of the cluster, else `storageCIDRs` or any public address, on its port). |
 | `SHARE__PUBLIC_BASE_URL` | empty | Helm chart | The address the share links are written with in the **Share** dialog, such as `https://share.example.com`, when the installation exposes the links alone on a host of its own outside its internal network ([Exposing the links outside the internal network](capabilities/share-links.md#exposing-the-links-outside-the-internal-network)). Empty: the links are written with the interface's own address. |
+| `SCRIPTS__EGRESS_PROXY` | *(empty: no proxy)* | Helm chart | The egress proxy's address (`http://<release>-egress-proxy.<namespace>.svc:3128`): the scripts and notebooks of a version without internet access get it as `HTTPS_PROXY` and `HTTP_PROXY`, and reach the storage outside the cluster through it. Empty: they reach it only through `scripts.noInternet.allowCIDRs`. |
+| `SCRIPTS__EGRESS_PORTS` | `443,80,9000` | Helm chart | The storage ports the egress proxy's Service passes on for the libraries that ignore `HTTPS_PROXY`: the bucket's names are added to those pods' `/etc/hosts` only when the bucket is on one of these ports. |
+| `SCRIPTS__EGRESS_NO_PROXY` | *(empty)* | Helm chart | More names, comma separated, that the scripts and notebooks without internet access reach without the egress proxy, besides the cluster's own (`.svc`, `.cluster.local`) and the gateway. |
 | `DATA_API__ENABLED` | `false` | Helm chart | Offers the data APIs ([Data APIs](data-apis.md)), read by the Go gateway: «New → Data API» in Explore, their pages and their keys, and the pods the orchestrator runs for each active one. Only on Kubernetes with the scripting environments on (`SCRIPTS__ENABLED`), as the saved scripts and the notebooks: with Docker Compose they stay off whatever this says. Switched off, the orchestrator removes the data APIs' objects from the cluster; their definitions and keys stay. |
 | `DATA_API__MAX_APIS` | `20` | Helm chart | The most data APIs in the installation; making one more, or a copy, is refused. |
 | `DATA_API__MAX_TOTAL_REPLICAS` | `10` | Helm chart | The most pods of all the active data APIs together; an activation, or a larger runtime an administrator gives an active one, past it is refused. Each data API's runtime (replicas or autoscaling, CPU and memory per pod) is not capped by the chart: an administrator sets it in Administration → Data APIs, from 100m to 16 CPU and 256Mi to 64Gi a pod, at most 40 pods (and this) for one. |
@@ -706,6 +709,11 @@ containers.
 | `DATA_API__KEY_DEFAULT_RATE` | `600` | Helm chart | The requests per minute of a data API key made without a limit of its own. |
 | `DATA_API__POLL_SECONDS` | `20` | Helm chart | How often, in seconds (5 to 600), the pods of a data API ask the gateway for their manifest: a revoked key, a refresh of a datasource or an edit reaches them within it. The manifest carries it to the pods. |
 | `DATA_API__USAGE_RETENTION_DAYS` | `30` | Helm chart | How long, in days (1 to 3650), the requests, rows, errors and over-the-rate answers of each data API key and minute are kept for the pages; older ones are deleted by the orchestrator. |
+| `EGRESS__LISTEN` | `:3128` | Helm chart | Where the egress proxy listens as a forward proxy (CONNECT for HTTPS, absolute-form for HTTP): the address the scripts and notebooks without internet access get as `HTTPS_PROXY`. Read only by the `egress-proxy` role. |
+| `EGRESS__TRANSPARENT` | *(set by the chart)* | Helm chart | The egress proxy's transparent ports, `listening port=storage port` pairs (20000=443, 20001=80…): for the libraries that ignore `HTTPS_PROXY` (Arrow, in Python and R), the bucket's names point to the proxy's Service, which reads the name asked (TLS SNI or HTTP Host) and passes the bytes on unchanged to an allowed storage host. |
+| `EGRESS__MAX_CONNECTIONS` | `1024` | Helm chart | The most connections the egress proxy holds at once, all clients together. |
+| `EGRESS__MAX_PER_CLIENT` | `256` | Helm chart | The most connections the egress proxy holds at once for one pod. |
+| `EGRESS__IDLE_SECONDS` | `300` | Helm chart | A tunnel of the egress proxy where nothing passes for this many seconds is closed. |
 | `GATEWAY_GO__FORWARDED_ALLOW_IPS` | empty | Helm chart | The addresses of the proxies in front of the gateway whose `X-Forwarded-For` it believes (comma-separated addresses or CIDRs, `*` for any): the client's address of the audit, of the sessions and of the sign-in throttle comes from there. Without the ingress controller's address in it, every request seems to come from the controller. |
 | `GATEWAY_GO__AI_SERVICE` | empty | Helm chart | The AI service's address (the Python gateway's image with `APP__ROLE=ai`): the gateway forwards it the assistant's routes and asks it for the SQL parsing. The gateway does not start without it. |
 
