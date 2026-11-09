@@ -903,6 +903,34 @@ scripts:
   # cloud metadata addresses (templates/user-code-networkpolicy.yaml). Needs a network
   # plugin that enforces NetworkPolicy; without one it is inert.
   blockTabularia: true
+  # A version of a scripting environment without internet access (Administration →
+  # Scripting environments → «Internet access» on the version; every version has it unless
+  # an administrator takes it away): its scripts and notebooks run with the label
+  # tabularia.io/internet=off and a NetworkPolicy of the scripts' namespaces lets them reach
+  # only the cluster's DNS, the storage and what is listed here; the notebooks also reach the
+  # gateway to read datasources (templates/scripts-no-internet.yaml). Nothing changes for
+  # the versions that keep the internet. Needs a network plugin that enforces egress rules
+  # (Calico, Cilium…); without one it is inert. docs/scripting.md, «Internet access».
+  noInternet:
+    # the cluster's DNS, by namespace and pod labels: CoreDNS's (kube-dns's) by default, on
+    # kubeadm, kind, GKE, EKS and AKS alike
+    dns:
+      namespace: kube-system
+      podLabels:
+        k8s-app: kube-dns
+    # namespaces of this cluster they may reach: where the scripts bucket is when it is a
+    # Service here (a MinIO in its own namespace). The namespace of
+    # externalServices.storage.endpoint is added by itself when that is a Service name
+    # (minio.deps.svc.cluster.local → deps); Tabularia's own never with blockTabularia.
+    allowNamespaces: []
+    # addresses outside the cluster they may reach, as CIDRs: the scripts bucket when it is
+    # in a cloud (the addresses of its endpoint, e.g. Scaleway's s3.fr-par.scw.cloud), a
+    # proxy, a company database. Without the bucket's addresses, the scripts of such a
+    # version cannot read their input nor write their output. The cloud metadata address
+    # is always carved out of a range that holds it.
+    allowCIDRs: []
+    # more egress rules, as NetworkPolicyEgressRule (a NodeLocal DNSCache on 169.254.20.10)
+    extraEgress: []
   # where the scripts and the image checks run; empty = "<release namespace>-scripts"
   namespace: ""
   # where the builds run; empty = "<release namespace>-script-builds". Rootless

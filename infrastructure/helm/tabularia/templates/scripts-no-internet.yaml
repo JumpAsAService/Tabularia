@@ -1,0 +1,93 @@
+{{- if .Values.scripts.enabled }}
+{{/*
+A scripting environment's version without internet access (Administration → Scripting
+environments → a version's «Internet access», docs/scripting.md): the gateway puts the label
+tabularia.io/internet=off on the pods of its scripts and notebooks, in the scripts' namespace
+and in the trials' one. This policy holds them; the policy of the users' code
+(user-code-networkpolicy.yaml) leaves them out, or its rules would add the internet back
+(policies add up). It does not depend on scripts.blockTabularia: a version without internet
+access is held even where the users' code is not.
+
+What they reach:
+- the cluster's DNS, on port 53 (scripts.noInternet.dns): never a resolver on the internet,
+  which would be a way out on port 53;
+- the namespaces of the storage: the one of externalServices.storage.endpoint when it is a
+  Service name (minio.deps.svc.cluster.local → deps), and scripts.noInternet.allowNamespaces
+  — where the scripts bucket is when it is a Service of this cluster; never Tabularia's own
+  with scripts.blockTabularia;
+- scripts.noInternet.allowCIDRs: addresses outside the cluster, e.g. the scripts bucket when
+  it is in a cloud (its endpoint's addresses), a proxy, a company database. The cloud
+  metadata address is carved out of any range that holds it;
+- the notebooks also reach the gateway, to read datasources (notebooks-networkpolicy.yaml).
+Nothing else: not the internet, not the other namespaces of the cluster. Nothing calls
+them but what notebooks-networkpolicy.yaml lets in.
+
+Without a network plugin that enforces egress rules (Calico, Cilium, the managed ones when
+switched on; not kindnet nor minikube's default) the policy is inert.
+*/}}
+{{- $offline := .Values.scripts.noInternet }}
+{{- $namespaces := $offline.allowNamespaces | default list }}
+{{- $labels := splitList "." (first (splitList ":" ((urlParse (.Values.externalServices.storage.endpoint | default "")).host | default ""))) }}
+{{- if and (ge (len $labels) 3) (eq (index $labels 2) "svc") }}
+{{- $namespaces = append $namespaces (index $labels 1) }}
+{{- end }}
+{{- if .Values.scripts.blockTabularia }}
+{{- $namespaces = without $namespaces .Release.Namespace }}
+{{- end }}
+{{- range $ns := (list (include "tabularia.scriptsNamespace" .) (include "tabularia.scriptTrialsNamespace" .)) }}
+---
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: {{ include "tabularia.fullname" $ }}-scripts-no-internet
+  namespace: {{ $ns }}
+  labels:
+    {{- include "tabularia.labels" $ | nindent 4 }}
+spec:
+  podSelector:
+    matchLabels:
+      tabularia.io/internet: "off"
+  policyTypes:
+    - Ingress
+    - Egress
+  # nothing calls them (the notebooks: notebooks-networkpolicy.yaml)
+  ingress: []
+  egress:
+    # the cluster's DNS
+    - to:
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: {{ $offline.dns.namespace | quote }}
+          podSelector:
+            matchLabels:
+              {{- toYaml $offline.dns.podLabels | nindent 14 }}
+      ports:
+        - protocol: UDP
+          port: 53
+        - protocol: TCP
+          port: 53
+    {{- with ($namespaces | uniq) }}
+    # the storage's namespaces in this cluster
+    - to:
+        {{- range . }}
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: {{ . | quote }}
+        {{- end }}
+    {{- end }}
+    {{- with $offline.allowCIDRs }}
+    # outside the cluster: what the administrators allow (scripts.noInternet.allowCIDRs)
+    - to:
+        {{- range . }}
+        - ipBlock:
+            cidr: {{ . | quote }}
+            {{- if include "tabularia.coversMetadata" . }}
+            except: [{{ ternary "fd00:ec2::254/128" "169.254.169.254/32" (contains ":" .) | quote }}]
+            {{- end }}
+        {{- end }}
+    {{- end }}
+    {{- with $offline.extraEgress }}
+    {{- toYaml . | nindent 4 }}
+    {{- end }}
+{{- end }}
+{{- end }}

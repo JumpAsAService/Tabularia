@@ -56,14 +56,25 @@ metadata:
   labels:
     {{- include "tabularia.labels" $ | nindent 4 }}
 spec:
-  {{- if and $.Values.dataApi.enabled (eq $ns (include "tabularia.dataApiNamespace" $)) }}
-  # every pod but the data APIs': theirs have a policy of their own, narrower (internal/
-  # dataapis/cluster.go), and policies add up, so this one would open them to the internet
+  {{- $dataApis := and $.Values.dataApi.enabled (eq $ns (include "tabularia.dataApiNamespace" $)) }}
+  {{- $offline := and $.Values.scripts.enabled (has $ns (list (include "tabularia.scriptsNamespace" $) (include "tabularia.scriptTrialsNamespace" $))) }}
+  {{- if or $dataApis $offline }}
   podSelector:
     matchExpressions:
+      {{- if $dataApis }}
+      # every pod but the data APIs': theirs have a policy of their own, narrower (internal/
+      # dataapis/cluster.go), and policies add up, so this one would open them to the internet
       - key: app.kubernetes.io/component
         operator: NotIn
         values: [data-api]
+      {{- end }}
+      {{- if $offline }}
+      # every pod but the scripts' and notebooks' of a version without internet access:
+      # scripts-no-internet.yaml holds them, and this one would open the internet to them
+      - key: tabularia.io/internet
+        operator: NotIn
+        values: ["off"]
+      {{- end }}
   {{- else }}
   podSelector: {}
   {{- end }}

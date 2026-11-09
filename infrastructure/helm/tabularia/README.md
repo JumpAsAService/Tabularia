@@ -298,6 +298,13 @@ namespace of the cluster is reachable from that code: give it a policy of its ow
 The policy needs a network plugin that enforces egress rules (Calico, Cilium);
 without one it has no effect. What to list, in
 [docs/scripting.md](../../../docs/scripting.md#network-policies).
+A version of a scripting environment whose **Internet access** an administrator turns off
+runs its scripts and notebooks with the label `tabularia.io/internet=off`, under a policy
+of their own in the scripts' and trials' namespaces (`templates/scripts-no-internet.yaml`):
+the cluster's DNS (`scripts.noInternet.dns`), the storage's namespace and
+`scripts.noInternet.allowNamespaces`, `scripts.noInternet.allowCIDRs` (a scripts bucket in
+a cloud), the gateway for the notebooks; nothing else. It changes nothing until a version
+is switched off ([docs/scripting.md](../../../docs/scripting.md#internet-access)).
 
 ## Storage and `/tmp`
 

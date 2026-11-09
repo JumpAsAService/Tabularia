@@ -9,8 +9,10 @@ With blockTabularia, the policy of the users' code (user-code-networkpolicy.yaml
 them from Tabularia's namespace, as every script; the second policy lets them reach the
 gateway's pods there, on its port, to read datasources (gateway/app/routes/notebook_data.py,
 which takes nothing but a notebook's token). Network policies add up: the rest of that
-policy holds. Without blockTabularia there is no egress policy, and none is added here:
-an egress policy alone would cut them off from everything else.
+policy holds. Without blockTabularia there is no egress policy, and the second one holds
+only the notebooks of a version without internet access, which scripts-no-internet.yaml
+cuts off already: on every other notebook an egress policy alone would cut it off from
+everything else.
 */}}
 {{- $tabularia := dict "kubernetes.io/metadata.name" .Release.Namespace }}
 apiVersion: networking.k8s.io/v1
@@ -44,7 +46,6 @@ spec:
           port: 2718   # marimo
         - protocol: TCP
           port: 2719   # the editor's file, read-only
-{{- if .Values.scripts.blockTabularia }}
 ---
 apiVersion: networking.k8s.io/v1
 kind: NetworkPolicy
@@ -57,6 +58,9 @@ spec:
   podSelector:
     matchLabels:
       app.kubernetes.io/component: notebook
+      {{- if not .Values.scripts.blockTabularia }}
+      tabularia.io/internet: "off"
+      {{- end }}
   policyTypes:
     - Egress
   egress:
@@ -72,5 +76,4 @@ spec:
       ports:
         - protocol: TCP
           port: 8000   # the gateway's container port (its Service may expose another)
-{{- end }}
 {{- end }}
