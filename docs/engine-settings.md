@@ -111,14 +111,14 @@ Container node) or greyed out (an engine that is not configured).
 |---|---|---|---|
 | Metadata-only mode | `AI__METADATA_ONLY` | on / off | live |
 | Model proposed first | `AI__DEFAULT_MODEL` | text | live |
-| Rows of an assistant's query | `AI__MAX_RESULT_ROWS` | 1 – 2,000 | live |
-| Model rounds per message | `AI__MAX_REQUESTS` | 1 – 50 | live |
-| Model rounds when an assistant builds | `AI__MAX_FLOW_REQUESTS` | 1 – 80 | live |
+| Rows of an assistant's query | `AI__MAX_RESULT_ROWS` | 1 – 20,000 | live |
+| Model rounds per message | `AI__MAX_REQUESTS` | 1 – 200 | live |
+| Model rounds when an assistant builds | `AI__MAX_FLOW_REQUESTS` | 1 – 400 | live |
 | Messages of history sent back | `AI__MAX_HISTORY_MESSAGES` | 0 – 400 | live |
 | Most spent per answer | `AI__MAX_COST_PER_TURN_USD` | 0 USD – 100 USD | live |
 | Most spent per user per day | `AI__MAX_COST_PER_DAY_USD` | 0 USD – 10000 USD | live |
 | Most spent per day, everyone together | `AI__MAX_COST_PER_DAY_TOTAL_USD` | 0 USD – 100000 USD | live |
-| Most tokens read per answer | `AI__MAX_INPUT_TOKENS_PER_TURN` | 1,000 – 2,000,000 | live |
+| Most tokens read per answer | `AI__MAX_INPUT_TOKENS_PER_TURN` | 1,000 – 40,000,000 | live |
 | Conversations listed per user | `AI__MAX_CHATS_LISTED` | 1 – 500 | live |
 | AI time of a dbt export | `AI__DBT_EXPORT_TIMEOUT_SECONDS` | 10 s – 1 h | live |
 | Model of the AI comments | `AI__COMMENT_MODEL` | text | live |

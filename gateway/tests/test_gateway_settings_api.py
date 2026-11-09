@@ -75,7 +75,7 @@ def test_what_another_replica_saved_is_shown_applied_at_once(app, session):
     from datetime import datetime
 
     boss = _sign_in(app, session, "capo@x.local", is_superuser=True)
-    assert _item(boss.get(URL).json(), "ai.max_requests")["applied"] == 12
+    assert _item(boss.get(URL).json(), "ai.max_requests")["applied"] == 120
     session.add(GatewaySetting(key="ai.max_requests", value="15", updated_at=datetime(2026, 10, 24)))
     session.commit()  # written by the other replica: this process has not reloaded
     v = _item(boss.get(URL).json(), "ai.max_requests")

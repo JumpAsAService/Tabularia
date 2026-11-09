@@ -211,6 +211,17 @@ exposes at `/system/info` and in the app's settings menu.
   models (`dall-e`, `gpt-image`, `moderation`, `babbage`…) join embedding, audio and
   reranker among those that cannot be enabled. The environment's provider (`AI__BASE_URL`)
   still starts with none.
+- **The assistant's limits by default, ten times as wide, and a daily ceiling.** For an
+  installation that never set them: round-trips per question `AI__MAX_REQUESTS` 12 → 120
+  (up to 200), for the assistants that build `AI__MAX_FLOW_REQUESTS` 30 → 300 (up to 400),
+  rows per query `AI__MAX_RESULT_ROWS` 200 → 2000 (up to 20,000; a query still stops at the
+  engine's preview cap of 1000 rows, and the model is told so), spending per answer
+  `AI__MAX_COST_PER_TURN_USD` 0.50 → 5, input tokens per answer
+  `AI__MAX_INPUT_TOKENS_PER_TURN` 400,000 → 4,000,000 (up to 40,000,000), and the whole
+  installation's spending per day `AI__MAX_COST_PER_DAY_TOTAL_USD` 0 (none) → 20 USD, about
+  20 euros (the costs are counted in dollars). The ceiling per person per day stays off. Only
+  the defaults change: a value set in Administration → Settings, in the environment or in
+  the chart's values stays as it is.
 
 ### Upgrading
 

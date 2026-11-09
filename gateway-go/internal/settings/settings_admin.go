@@ -30,7 +30,7 @@ var adminItems = map[string]adminItem{
 	"ai.metadata_only":              {kind: "bool", env: func(c *config.Config) any { return c.Admin.AIMetadataOnly }},
 	"ai.default_model":              {kind: "str", maxLen: 200, env: func(c *config.Config) any { return c.Admin.AIDefaultModel }},
 	"ai.comment_model":              {kind: "str", maxLen: 200, env: func(c *config.Config) any { return c.Admin.AICommentModel }},
-	"ai.max_result_rows": {kind: "int", min: 1, max: 2000, hasRange: true,
+	"ai.max_result_rows": {kind: "int", min: 1, max: 20_000, hasRange: true,
 		env: func(c *config.Config) any { return int64(c.Admin.AIMaxResultRows) }},
 	"webhooks.timeout_seconds": {kind: "float", min: 1, max: 60, hasRange: true,
 		env: func(c *config.Config) any { return c.Admin.WebhooksTimeout }},

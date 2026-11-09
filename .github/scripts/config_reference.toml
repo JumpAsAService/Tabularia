@@ -448,7 +448,7 @@ text = "Its API key. Empty = no such provider."
 text = "Model proposed first in the picker, if an administrator enabled it, on any provider: its name, e.g. `claude-opus-5-5`."
 
 [var.AI__MAX_RESULT_ROWS]
-text = "Rows a query of the assistant may return, to the model and to the chat."
+text = "Rows a query of the assistant may return, to the model and to the chat. Each query also stops at the engine's preview cap, 1000 rows."
 
 [var.AI__MAX_REQUESTS]
 text = "Model round-trips per message of the data chat: the cap on its tool-calling loop."
@@ -470,7 +470,7 @@ text = "Daily ceiling per user, in dollars. 0 = none."
 production = "set it, and `AI__MAX_COST_PER_DAY_TOTAL_USD`, wherever people you do not know can sign in (every question is paid with your key)."
 
 [var.AI__MAX_COST_PER_DAY_TOTAL_USD]
-text = "Daily ceiling of the whole installation, in dollars: where many people share one account (a public demo) the per-user ceiling protects nothing. Once reached, the assistant is unavailable until the next day. 0 = none."
+text = "Daily ceiling of the whole installation, in dollars: where many people share one account (a public demo) the per-user ceiling protects nothing. Once reached, the assistant is unavailable until the next day. 20 USD by default (about 20 euros: the costs are counted in dollars, with no exchange rate); 0 = none."
 
 [var.AI__MAX_INPUT_TOKENS_PER_TURN]
 text = "Input tokens one turn may send to the model, without those read from the provider's cache: the spending ceilings stand for those."

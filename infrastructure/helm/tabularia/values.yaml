@@ -146,8 +146,9 @@ externalServices:
     maximumBytesBilled: 21474836480
 
 # AI assistant: a chat over the catalog against any OpenAI-compatible endpoint.
-# Users only reach the datasources they can read; every query is audited. No
-# model is usable until an administrator enables it in Admin → AI models.
+# Users only reach the datasources they can read; every query is audited. A model
+# of this endpoint is usable once an administrator enables it in Admin → AI models;
+# a provider added there starts with all its chat models enabled.
 # `enabled` adds this endpoint as a provider; the limits and the comment below apply as well
 # to the providers an administrator adds in Admin → AI models.
 ai:
@@ -155,17 +156,19 @@ ai:
   baseUrl: ""            # e.g. https://api.scaleway.ai/v1
   accessKey: ""          # id of the key (informational; auth uses secrets.aiSecretKey)
   defaultModel: ""
-  maxResultRows: 200
-  maxRequests: 12
+  # rows of one assistant query (each query also stops at the engine's preview cap, 1000)
+  maxResultRows: 2000
+  maxRequests: 120
   # the assistants that build (the flow editor's, the Assistant page's): one round-trip
   # per step they build and check
-  maxFlowRequests: 30
-  # Spending caps, in dollars. Per turn it is always on; per user per day and for
-  # the whole installation per day are off at 0. Without them anyone who can
-  # chat can spend on the key's owner: set both where strangers can sign in.
-  maxCostPerTurnUsd: 0.50
+  maxFlowRequests: 300
+  # Spending caps, in dollars. Per turn, and for the whole installation per day (20 USD,
+  # about 20 euros): on by default; per user per day off at 0. Without a per-user cap
+  # anyone who can chat can spend the whole day's budget: set it where strangers can
+  # sign in.
+  maxCostPerTurnUsd: 5.0
   maxCostPerDayUsd: 0
-  maxCostPerDayTotalUsd: 0
+  maxCostPerDayTotalUsd: 20
   # The AI comment on the numbers of a dashboard or a report: how long what it wrote is kept
   # for whoever reads the same numbers (seconds), how often a refresh with new numbers may make
   # a call per element, how long a report or a document waits for the text (under the ingress'

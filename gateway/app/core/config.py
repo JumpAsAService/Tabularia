@@ -420,7 +420,8 @@ class AiSettings(BaseModel):
     OpenAI-compatible endpoint (Scaleway Generative APIs, or any other): the URL and the key
     are enough. The others are added from the panel (services/ai_models.py), and the assistant
     is off while there is none. Which MODELS may be used the administrator decides from the
-    panel (the ai_models table): no model is enabled until they enable it.
+    panel (the ai_models table): a provider added there starts with every chat model of its
+    catalog enabled, the environment's with none until they enable it.
 
     env: AI__BASE_URL, AI__ACCESS_KEY, AI__SECRET_KEY, AI__DEFAULT_MODEL,
     AI__MAX_RESULT_ROWS, AI__MAX_REQUESTS, AI__MAX_HISTORY_MESSAGES, AI__METADATA_ONLY,
@@ -437,20 +438,21 @@ class AiSettings(BaseModel):
     # (services/metadata_only.py)
     metadata_only: bool = False
     # the maximum rows an assistant query returns (to the model and to the chat)
-    max_result_rows: int = Field(default=200, ge=1, le=2000)
+    # (each query also stops at the engine's preview cap: ai_agent.result_rows_cap)
+    max_result_rows: int = Field(default=2000, ge=1, le=20_000)
     # the model's rounds per message: the cap on the loop of tool calls
-    max_requests: int = Field(default=12, ge=1, le=50)
+    max_requests: int = Field(default=120, ge=1, le=200)
     # the same for the assistants that build — the flow editor's, and the Assistant page's
     # for a person who may make changes — whose turns take a model round-trip per step
     # they build and check (env: AI__MAX_FLOW_REQUESTS)
-    max_flow_requests: int = Field(default=30, ge=1, le=80)
+    max_flow_requests: int = Field(default=300, ge=1, le=400)
     # the history messages the client may send back at every turn
     max_history_messages: int = Field(default=60, ge=0, le=400)
     # Caps per TURN, applied by pydantic-ai itself (`UsageLimits`). Without them, any user
     # can make the key's owner spend as much as they like: the cap on the rounds does not
     # cap the tokens (audit 2026-09-19, A8).
     # env: AI__MAX_COST_PER_TURN_USD, AI__MAX_INPUT_TOKENS_PER_TURN
-    max_cost_per_turn_usd: float = Field(default=0.50, ge=0)
+    max_cost_per_turn_usd: float = Field(default=5.0, ge=0)
     # A DAILY cap per user, in dollars. The per-turn cap alone is not enough: a thousand
     # turns under the threshold still cost a thousand times. It matters above all on an
     # installation open to strangers (a public demo), where every question goes through
@@ -461,11 +463,12 @@ class AiSettings(BaseModel):
     # A DAILY cap for the WHOLE installation, in dollars. The per-user one is not enough
     # where the account is shared: on a public demo everyone signs in as the same guest,
     # and the bill is one. With the cap reached the assistant says it is unavailable until
-    # the next day.
+    # the next day. 20 by default (chosen as about 20 euros; counted in dollars, with no
+    # exchange rate): room to try the assistant, and a bound on a forgotten key.
     # 0 = no cap.
     # env: AI__MAX_COST_PER_DAY_TOTAL_USD
-    max_cost_per_day_total_usd: float = Field(default=0, ge=0)
-    max_input_tokens_per_turn: int = Field(default=400_000, ge=1000)
+    max_cost_per_day_total_usd: float = Field(default=20.0, ge=0)
+    max_input_tokens_per_turn: int = Field(default=4_000_000, ge=1000)
     # Seconds for every AI call of ONE dbt export (descriptions, translations and their
     # sample reads together). The export is one request and the ingress cuts it at 300 s
     # (Helm values: proxy-read-timeout): the AI gives up first, with the reason, and leaves

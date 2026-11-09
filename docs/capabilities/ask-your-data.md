@@ -59,7 +59,7 @@ and the conversation works on them, without searching the catalog first.
 | names, folders, row counts and descriptions of the datasources you can read | storage paths, buckets, credentials, connection details |
 | columns, types and field descriptions of the ones it describes | the rows beyond the cap of each query |
 | **five sample rows** of each datasource it describes | data of a connection that was never imported |
-| **the rows each query returns**, up to `AI__MAX_RESULT_ROWS` (200 by default), each text value cut at 300 characters | |
+| **the rows each query returns**, up to `AI__MAX_RESULT_ROWS` (2000 by default, and never more than the engine's preview cap of 1000), each text value cut at 300 characters | |
 | today's date, the engine's SQL dialect, the interface language | |
 
 With [metadata-only mode](../integrations/ai.md#metadata-only-mode) on, the rows above
@@ -233,11 +233,12 @@ Act (article 50) asks of a system people talk to.
 
 - One `SELECT` per query, reading `FROM self`, with no leading `WITH`: subqueries go in
   `FROM`. At most two datasources in one query (one join).
-- Rows per query: `AI__MAX_RESULT_ROWS` (200 by default, up to 2000), to the model and
-  to the chat.
-- Model round-trips per question: `AI__MAX_REQUESTS` (12). Per question, also a cost cap
-  (`AI__MAX_COST_PER_TURN_USD`, $0.50) and an input-token cap; per day, the caps per
-  person and per installation, when the administrator sets them. A cap reached says so.
+- Rows per query: `AI__MAX_RESULT_ROWS` (2000 by default, up to 20,000), to the model and
+  to the chat, within the engine's preview cap of 1000 rows per query.
+- Model round-trips per question: `AI__MAX_REQUESTS` (120). Per question, also a cost cap
+  (`AI__MAX_COST_PER_TURN_USD`, $5) and an input-token cap (4,000,000); per day, a cap for
+  the whole installation (`AI__MAX_COST_PER_DAY_TOTAL_USD`, $20, about 20 euros) and one per
+  person when the administrator sets it. A cap reached says so.
 - A new question in the same conversation stops the query still running for the
   previous one.
 - The assistant reads datasources only: not flows, saved views, scripts or

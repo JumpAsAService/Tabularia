@@ -3695,7 +3695,7 @@ export default {
       },
       "ai_max_cost_per_day_total_usd": {
         "label": "Höchstkosten pro Tag, alle zusammen",
-        "help": "Darüber ist der Assistent bis zum nächsten Tag nicht verfügbar. Nützlich, wo ein Konto geteilt wird, etwa bei einer öffentlichen Demo. 0 = keine Grenze."
+        "help": "Darüber ist der Assistent bis zum nächsten Tag nicht verfügbar. Nützlich, wo ein Konto geteilt wird, etwa bei einer öffentlichen Demo. Standard: 20 USD (etwa 20 Euro). 0 = keine Grenze."
       },
       "ai_max_input_tokens_per_turn": {
         "label": "Höchstzahl gelesener Token pro Antwort",

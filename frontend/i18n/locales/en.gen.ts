@@ -3722,7 +3722,7 @@ export default {
       },
       "ai_max_cost_per_day_total_usd": {
         "label": "Most spent per day, everyone together",
-        "help": "Past it, the assistant is unavailable until the next day. Useful where an account is shared, such as a public demo. 0 = no limit."
+        "help": "Past it, the assistant is unavailable until the next day. Useful where an account is shared, such as a public demo. Default: 20 USD (about 20 euros). 0 = no limit."
       },
       "ai_max_input_tokens_per_turn": {
         "label": "Most tokens read per answer",

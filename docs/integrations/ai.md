@@ -251,13 +251,13 @@ priced, which is not zero.
 
 | Variable | Default | Caps |
 |---|---|---|
-| `AI__MAX_REQUESTS` | 12 | model round-trips per question of the data assistant |
-| `AI__MAX_FLOW_REQUESTS` | 30 | the same for the assistants that build: the flow assistant, and the Assistant page for whoever may make changes |
-| `AI__MAX_COST_PER_TURN_USD` | 0.5 | dollars per question |
-| `AI__MAX_INPUT_TOKENS_PER_TURN` | 400000 | input tokens per question |
+| `AI__MAX_REQUESTS` | 120 | model round-trips per question of the data assistant |
+| `AI__MAX_FLOW_REQUESTS` | 300 | the same for the assistants that build: the flow assistant, and the Assistant page for whoever may make changes |
+| `AI__MAX_COST_PER_TURN_USD` | 5 | dollars per question |
+| `AI__MAX_INPUT_TOKENS_PER_TURN` | 4000000 | input tokens per question |
 | `AI__MAX_COST_PER_DAY_USD` | 0 (none) | dollars per person per day |
-| `AI__MAX_COST_PER_DAY_TOTAL_USD` | 0 (none) | dollars for the whole installation per day |
-| `AI__MAX_RESULT_ROWS` | 200 | rows of a data assistant query, to the model and to the chat |
+| `AI__MAX_COST_PER_DAY_TOTAL_USD` | 20 | dollars for the whole installation per day: 20 USD, about 20 euros (the costs are counted in dollars, with no exchange rate) |
+| `AI__MAX_RESULT_ROWS` | 2000 | rows of a data assistant query, to the model and to the chat; each query also stops at the engine's preview cap, 1000 |
 | `AI__MAX_HISTORY_MESSAGES` | 60 | past messages replayed to the model at each question ([metadata-only mode](#metadata-only-mode): only those of turns made in it) |
 | `AI__DBT_EXPORT_TIMEOUT_SECONDS` | 180 | seconds for all the AI calls of one dbt export |
 

@@ -3695,7 +3695,7 @@ export default {
       },
       "ai_max_cost_per_day_total_usd": {
         "label": "Dépense maximale par jour, tous ensemble",
-        "help": "Au-delà, l'assistant n'est plus disponible jusqu'au lendemain. Utile quand un compte est partagé, comme pour une démo publique. 0 = aucune limite."
+        "help": "Au-delà, l'assistant n'est plus disponible jusqu'au lendemain. Utile quand un compte est partagé, comme pour une démo publique. Par défaut : 20 USD (environ 20 euros). 0 = aucune limite."
       },
       "ai_max_input_tokens_per_turn": {
         "label": "Jetons lus au maximum par réponse",

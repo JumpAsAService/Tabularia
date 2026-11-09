@@ -70,7 +70,7 @@ func loadAdmin(r *reader) AdminConfig {
 	c.MCPMetadataOnly = r.boolean("MCP__METADATA_ONLY", false)
 	c.AIMetadataOnly = r.boolean("AI__METADATA_ONLY", false)
 	c.AIDefaultModel, c.AICommentModel = r.str("AI__DEFAULT_MODEL", ""), r.str("AI__COMMENT_MODEL", "")
-	c.AIMaxResultRows = r.integer("AI__MAX_RESULT_ROWS", 200, 1, 2000)
+	c.AIMaxResultRows = r.integer("AI__MAX_RESULT_ROWS", 2000, 1, 20_000)
 	c.DbtExportTimeout = r.adminFloat("ENGINE__DBT_EXPORT_TIMEOUT_SECONDS", 100, 0, 3600)
 	c.OpenLineageTimeout = r.adminFloat("OPENLINEAGE__TIMEOUT_SECONDS", 10, 0, math.MaxFloat64)
 	c.CORSOrigins = []string{"http://localhost:3000", "http://127.0.0.1:3000"}

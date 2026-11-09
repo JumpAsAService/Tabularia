@@ -3722,7 +3722,7 @@ export default {
       },
       "ai_max_cost_per_day_total_usd": {
         "label": "Spesa massima al giorno, tutti insieme",
-        "help": "Superata, l'assistente non è disponibile fino al giorno dopo. Utile dove un account è condiviso, come una demo pubblica. 0 = nessun tetto."
+        "help": "Superata, l'assistente non è disponibile fino al giorno dopo. Utile dove un account è condiviso, come una demo pubblica. Predefinito: 20 USD (circa 20 euro). 0 = nessun tetto."
       },
       "ai_max_input_tokens_per_turn": {
         "label": "Token letti al massimo per risposta",
