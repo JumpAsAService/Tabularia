@@ -41,7 +41,10 @@ type Server struct {
 	seq    atomic.Int64
 
 	stopping atomic.Bool
-	wake     chan struct{}
+	// the gateway refused the pod token: the data API was deleted, or its pods are being
+	// replaced with a new token. Nothing is served until a manifest comes again.
+	refused atomic.Bool
+	wake    chan struct{}
 	// a preparation ended: the status goes to the gateway now, not at the next poll
 	reportNow chan struct{}
 	// the queries that run at once: as many as the container's CPUs (DATA_API__THREADS). More
@@ -86,6 +89,7 @@ func (s *Server) Apply(m *dataapiwire.Manifest) {
 		snap.resources[m.Resources[i].Name] = &m.Resources[i]
 	}
 	s.snap.Store(snap)
+	s.refused.Store(false)
 	// what is no longer published, or no longer readable on the creator's authority, stops now
 	s.mu.Lock()
 	for name, t := range s.tables {
@@ -202,7 +206,7 @@ func (s *Server) stale(snap *snapshot) bool { return s.now().Sub(snap.at) > s.cf
 // available prepared.
 func (s *Server) Ready() bool {
 	snap := s.snap.Load()
-	if s.stopping.Load() || snap == nil || snap.m.State != dataapiwire.StateActive || s.stale(snap) {
+	if s.stopping.Load() || s.refused.Load() || snap == nil || snap.m.State != dataapiwire.StateActive || s.stale(snap) {
 		return false
 	}
 	s.mu.RLock()
@@ -232,6 +236,9 @@ func (s *Server) Run(ctx context.Context) {
 	poll := s.cfg.Poll
 	for {
 		if m, err := s.gateway.Manifest(ctx); err != nil {
+			if errors.Is(err, ErrTokenRefused) && ctx.Err() == nil {
+				s.refuse()
+			}
 			if ctx.Err() == nil {
 				s.log.Error("manifest", "err", err.Error())
 				s.mu.Lock()
@@ -261,6 +268,17 @@ func (s *Server) Run(ctx context.Context) {
 			}
 		}
 	}
+}
+
+// refuse stops serving at once: the gateway no longer knows the pod token (the data API was
+// deleted, or a new token is on its way with new pods). Waiting for the manifest to grow
+// stale would keep answering, with the keys of a data API that is no more, for minutes.
+func (s *Server) refuse() {
+	if s.refused.Swap(true) {
+		return
+	}
+	s.log.Warn("the gateway refused the pod token: nothing is served until a manifest comes again")
+	s.Close()
 }
 
 // report asks for the status to be sent now (a preparation ended, well or not)
@@ -503,6 +521,10 @@ func (s *Server) health(w http.ResponseWriter, r *http.Request) {
 // address and its rate.
 func (s *Server) admit(w http.ResponseWriter, r *http.Request) (*snapshot, *KeyRule, bool) {
 	snap := s.snap.Load()
+	if s.refused.Load() {
+		s.fail(w, r, &Problem{Status: 404, Code: "not_found", Detail: "No such data API"})
+		return nil, nil, false
+	}
 	if snap == nil {
 		s.fail(w, r, &Problem{Status: 503, Code: "loading", Detail: "The data API is starting: try again in a moment", RetryAfter: 5})
 		return nil, nil, false

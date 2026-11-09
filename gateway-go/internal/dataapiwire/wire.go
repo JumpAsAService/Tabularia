@@ -71,6 +71,11 @@ type Resource struct {
 	URL string `json:"url,omitempty"`
 }
 
+// PodTerminationGraceSeconds is the pods' grace period at a stop (their Deployment's
+// terminationGracePeriodSeconds): the program's drain, shutdown and last usage
+// (dataapi/main.go) fit in it.
+const PodTerminationGraceSeconds = 40
+
 // The reasons a resource is not available.
 const (
 	UnavailableRights = "datasource_rights" // the creator may no longer read it

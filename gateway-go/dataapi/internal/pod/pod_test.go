@@ -6,6 +6,7 @@ import (
 	"database/sql"
 	"encoding/csv"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"log/slog"
 	"math/big"
@@ -886,4 +887,40 @@ func TestCursorOverNaN(t *testing.T) {
 			t.Errorf("%s: %d rows over %d pages, not each once", s, len(got), len(cursors)+1)
 		}
 	}
+}
+
+// The gateway refuses the pod token (the data API was deleted): the pod stops serving at
+// once, out of the readiness, instead of answering until the manifest grows stale; a manifest
+// that comes again puts it back.
+func TestTokenRefusedStopsServing(t *testing.T) {
+	f := newFixture(t)
+	f.load()
+	refuse := true
+	gw := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if refuse {
+			w.WriteHeader(401)
+			return
+		}
+		_ = json.NewEncoder(w).Encode(f.m)
+	}))
+	defer gw.Close()
+	f.s.gateway = &Gateway{URL: gw.URL, ID: 1, Token: "tdp_x", HTTP: gw.Client()}
+	if _, err := f.s.gateway.Manifest(context.Background()); !errors.Is(err, ErrTokenRefused) {
+		t.Fatal(err)
+	}
+	ctx, cancel := context.WithCancel(context.Background())
+	done := make(chan struct{})
+	go func() { f.s.Run(ctx); close(done) }()
+	deadline := time.Now().Add(10 * time.Second)
+	for !f.s.refused.Load() && time.Now().Before(deadline) {
+		time.Sleep(10 * time.Millisecond)
+	}
+	cancel()
+	<-done
+	f.want(f.get("/data/crm/customers?id=1", "main"), 404, "not_found")
+	if f.s.Ready() || len(f.s.tables) != 0 {
+		t.Error("still serving")
+	}
+	f.load()
+	f.want(f.get("/data/crm/customers?id=1", "main"), 200, "")
 }

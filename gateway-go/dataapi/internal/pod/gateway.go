@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 	"net/http"
@@ -23,6 +24,10 @@ type Gateway struct {
 // the most a manifest may weigh: a few thousand keys
 const maxManifestBytes = 16 << 20
 
+// ErrTokenRefused: the gateway does not know the pod token (401): the data API was deleted,
+// or the pods are being replaced with a new one. Not a passing failure.
+var ErrTokenRefused = errors.New("the gateway refused the pod token")
+
 // Manifest is the data API's manifest now.
 func (g *Gateway) Manifest(ctx context.Context) (*dataapiwire.Manifest, error) {
 	ctx, cancel := context.WithTimeout(ctx, 15*time.Second)
@@ -40,6 +45,9 @@ func (g *Gateway) Manifest(ctx context.Context) (*dataapiwire.Manifest, error) {
 	raw, err := io.ReadAll(io.LimitReader(res.Body, maxManifestBytes))
 	if err != nil {
 		return nil, err
+	}
+	if res.StatusCode == http.StatusUnauthorized {
+		return nil, ErrTokenRefused
 	}
 	if res.StatusCode != http.StatusOK {
 		return nil, fmt.Errorf("the gateway answered %d to the manifest", res.StatusCode)

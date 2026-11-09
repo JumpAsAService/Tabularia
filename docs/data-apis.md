@@ -232,11 +232,12 @@ The answer:
   `key_revoked`, `key_replaced`: renewed and past its grace); `403` a key not allowed on the
   resource (`key_not_allowed`) or from this address (`address_not_allowed`), or a resource
   whose datasource the creator may no longer read (`resource_unavailable`); `404` no such
-  data API or resource; `409` a cursor of older data; `429` past the key's rate, with
-  `Retry-After`; `503` the data still loading (`loading`, with `Retry-After`), a datasource
-  without a data file, never written or missing from the storage (`no_data`), the data API
-  paused or suspended, or the pod out of touch with Tabularia for more than 15 minutes
-  (`manifest_stale`: it then refuses every key rather than miss a revocation).
+  data API or resource (a data API just deleted answers so from its pods' next poll);
+  `409` a cursor of older data; `429` past the key's rate, with `Retry-After`; `503` the
+  data still loading (`loading`, with `Retry-After`), a datasource without a data file,
+  never written or missing from the storage (`no_data`), the data API paused or suspended,
+  or the pod out of touch with Tabularia for more than 15 minutes (`manifest_stale`: it then
+  refuses every key rather than miss a revocation).
 - **Rate limit**: each pod counts its own requests, at the key's rate divided by the data
   API's replicas (while autoscaling, the pods running now, within a poll): approximate when
   the traffic is uneven between them.

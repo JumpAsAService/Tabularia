@@ -13,6 +13,7 @@ import (
 	"strconv"
 
 	"github.com/JumpAsAService/Tabularia/gateway-go/internal/config"
+	"github.com/JumpAsAService/Tabularia/gateway-go/internal/dataapiwire"
 )
 
 // The labels and annotations of the objects.
@@ -169,7 +170,7 @@ func Deployment(c config.DataAPIPods, w Want) map[string]any {
 		"automountServiceAccountToken": false,
 		"enableServiceLinks":           false,
 		// SIGTERM: out of the Service, the requests in flight, the last usage (dataapi/main.go)
-		"terminationGracePeriodSeconds": 40,
+		"terminationGracePeriodSeconds": dataapiwire.PodTerminationGraceSeconds,
 		"securityContext": map[string]any{"runAsNonRoot": true, "runAsUser": 10001, "runAsGroup": 10001, "fsGroup": 10001,
 			"seccompProfile": map[string]any{"type": "RuntimeDefault"}},
 		"containers": []any{container},

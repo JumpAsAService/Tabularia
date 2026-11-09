@@ -3,6 +3,7 @@ package pod
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"net/http"
 	"net/http/httptest"
 	"os"
@@ -94,9 +95,9 @@ func TestRunAgainstAGateway(t *testing.T) {
 		last.Resources[0].Bytes <= 0 || last.Resources[0].Preparing != "" || last.Error != "" {
 		t.Fatalf("status %+v", last)
 	}
-	// a wrong token: the pod keeps what it had and says so
+	// a wrong token: refused, not a passing failure (TestTokenRefusedStopsServing)
 	f.s.gateway.Token = "tdp_wrong"
-	if _, err := f.s.gateway.Manifest(context.Background()); err == nil || !strings.Contains(err.Error(), "401") {
+	if _, err := f.s.gateway.Manifest(context.Background()); !errors.Is(err, ErrTokenRefused) {
 		t.Error(err)
 	}
 	// another API's manifest is not taken

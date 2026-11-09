@@ -20,6 +20,17 @@ import (
 	"github.com/JumpAsAService/Tabularia/gateway-go/dataapi/internal/pod"
 )
 
+// At SIGTERM: how long the pod keeps serving while it is out of the readiness, so that the
+// Service's endpoints and the ingress controller stop sending it requests first (two seconds
+// were not enough: requests still came and waited the shutdown out, measured on kind); then
+// how long the requests in flight have, then the last usage. Together within the
+// Deployment's terminationGracePeriodSeconds (dataapis.TerminationGraceSeconds).
+const (
+	drainDelay   = 8 * time.Second
+	shutdownWait = 25 * time.Second
+	flushWait    = 5 * time.Second
+)
+
 // version is the release's, set at the build (-X main.version)
 var version = "dev"
 
@@ -68,12 +79,12 @@ func main() {
 	// usage goes to the gateway
 	log.Info("stopping")
 	s.Stop()
-	time.Sleep(2 * time.Second) // the endpoints follow the readiness, then the server stops taking requests
-	shutdown, cancel := context.WithTimeout(context.Background(), 25*time.Second)
+	time.Sleep(drainDelay) // the endpoints follow the readiness, then the server stops taking requests
+	shutdown, cancel := context.WithTimeout(context.Background(), shutdownWait)
 	defer cancel()
 	_ = srv.Shutdown(shutdown)
 	<-polled
-	flush, cancelFlush := context.WithTimeout(context.Background(), 5*time.Second)
+	flush, cancelFlush := context.WithTimeout(context.Background(), flushWait)
 	defer cancelFlush()
 	s.FlushUsage(flush)
 	s.Close()
