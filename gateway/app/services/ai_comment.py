@@ -62,9 +62,12 @@ STATES = ("ready", "off", "no_provider", "no_access", "too_much", "failed", "bud
 MAX_SENT_CHARS = 20_000  # the instruction and the numbers
 MAX_ANSWER_CHARS = 1_500
 MAX_ANSWER_TOKENS = 500
-# On Claude, thinking counts towards `max_tokens` and today's models cannot turn it off
-# (services/ai_anthropic.py): with 500 they would often run out before the first word. What the reader
-# gets is capped by MAX_ANSWER_CHARS all the same.
+# Thinking counts towards `max_tokens`: on Claude (services/ai_anthropic.py) and on the
+# reasoning models behind an OpenAI-compatible endpoint (DeepSeek, gpt-oss, Qwen3 on Scaleway
+# and the like), which think before the first word and cannot be told not to. With 500 they
+# ran out while thinking and answered no text at all (UnexpectedModelBehavior: «The AI
+# comment is not available»). Every model gets the room; a model that does not think stops
+# at its answer and pays only for it. What the reader gets is capped by MAX_ANSWER_CHARS.
 THINKING_TOKENS = 3_500
 FAILURE_SECONDS = 60
 CALL_SECONDS = 120.0  # the provider's answer, all the SDK's own retries together
@@ -449,7 +452,7 @@ class _NoAnswer(Exception):
 
 def _token_settings(model: Any) -> dict[str, Any]:
     own = ai_agent.one_off_settings(model, quick=True)
-    return {**(own or {}), "max_tokens": MAX_ANSWER_TOKENS + (THINKING_TOKENS if own is not None else 0)}
+    return {**(own or {}), "max_tokens": MAX_ANSWER_TOKENS + THINKING_TOKENS}
 
 
 async def _ask(job: _Job, spent: Any) -> str:

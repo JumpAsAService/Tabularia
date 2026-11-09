@@ -204,6 +204,11 @@ exposes at `/system/info` and in the app's settings menu.
 
 ### Fixed
 
+- The AI comment of a report and a dashboard works on the reasoning models behind an
+  OpenAI-compatible endpoint (DeepSeek, gpt-oss, Qwen3 on Scaleway and the like): they think
+  before the first word, and with 500 tokens they ran out while thinking and gave no text
+  («The AI comment is not available. (UnexpectedModelBehavior)»). Every model now has the
+  thinking room Claude had; a model that does not think pays only for its answer.
 - In the flow editor «Upload file» is a real button: it had none of its neighbours' hover,
   press and focus, and it could not be reached with the keyboard. The «Explore» and logout
   buttons of the bar now press like the others too.

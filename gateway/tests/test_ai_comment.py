@@ -503,7 +503,9 @@ async def test_one_call_no_tools_at_most_500_tokens_of_answer_in_the_language_of
     assert "in Italian" in s.system
     # on a model that thinks, what it thinks counts towards the ceiling: 500 would leave no answer
     assert s.body["max_tokens"] == ai_comment.MAX_ANSWER_TOKENS + ai_comment.THINKING_TOKENS
-    assert ai_comment._token_settings(None)["max_tokens"] == 500
+    # an OpenAI-compatible model may think too (DeepSeek, gpt-oss, Qwen3 on Scaleway): with 500 it
+    # ran out while thinking and gave no text (UnexpectedModelBehavior). Every model has the room.
+    assert ai_comment._token_settings(None)["max_tokens"] == ai_comment.MAX_ANSWER_TOKENS + ai_comment.THINKING_TOKENS
 
 
 @pytest.mark.anyio
