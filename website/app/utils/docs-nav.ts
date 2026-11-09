@@ -18,6 +18,7 @@ export const DOCS_GROUPS: { title: string, icon: DocsIcon, intro: string, items:
       ['/docs/getting-started-docker-compose', 'Walkthrough with Docker Compose'],
       ['/docs/deploy/minikube', 'Try it on your computer (minikube)'],
       ['/docs/concepts', 'Concepts'],
+      ['/docs/how-it-works', 'How it works'],
       ['/docs/overview', 'Overview (README)'],
     ],
   },
