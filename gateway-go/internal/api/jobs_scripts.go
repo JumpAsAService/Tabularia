@@ -235,8 +235,9 @@ func envList(environment pyjson.Object) []any {
 }
 
 // scriptJobManifest is script_runs.job_manifest.
+// net: the egress proxy of a version without internet access (offlineNetwork), nil otherwise.
 func scriptJobManifest(js jobSettings, name string, env *scriptEnv, version *scriptVersion, node pyjson.Object, environment pyjson.Object,
-	labels pyjson.Object, timeout int64, items []any, codeName, secretName string) pyjson.Object {
+	labels pyjson.Object, timeout int64, items []any, codeName, secretName string, net *offlineNet) pyjson.Object {
 	entry := nodeData(node).Value("entrypoint")
 	var command []any
 	if env.Language == "python" {
@@ -245,6 +246,7 @@ func scriptJobManifest(js jobSettings, name string, env *scriptEnv, version *scr
 	} else {
 		command = []any{"Rscript", entry}
 	}
+	environment = net.applyEnv(environment)
 	container := pyjson.Object{{Key: "name", Value: "script"}, {Key: "image", Value: deref(version.ImageRef)}, {Key: "command", Value: command},
 		{Key: "workingDir", Value: codeDir}, {Key: "env", Value: envList(environment)},
 		{Key: "envFrom", Value: []any{pyjson.Object{{Key: "secretRef", Value: pyjson.Object{{Key: "name", Value: secretName}}}}}},
@@ -267,6 +269,7 @@ func scriptJobManifest(js jobSettings, name string, env *scriptEnv, version *scr
 	if js.registryPullSecret != "" {
 		pod = append(pod, pyjson.KV{Key: "imagePullSecrets", Value: []any{pyjson.Object{{Key: "name", Value: js.registryPullSecret}}}})
 	}
+	pod = net.applyPod(pod)
 	return jobManifestOf(name, withInternet(labels, version.InternetAccess), timeout, js.jobTTL, pod)
 }
 
@@ -688,9 +691,13 @@ func (q *queue) runScript(ctx context.Context, r *scriptNodeRun) (*flowresolver.
 		labels := pyjson.Object{{Key: "app.kubernetes.io/managed-by", Value: "tabularia"}, {Key: "app.kubernetes.io/component", Value: "scripting"},
 			{Key: labelEnv, Value: fmt.Sprint(env.ID)}, {Key: labelScriptRun, Value: fmt.Sprint(childID)},
 			{Key: labelOrchestration, Value: fmt.Sprint(runID)}, {Key: "tabularia.io/stage", Value: "run"}}
+		var offline *offlineNet
+		if !version.InternetAccess {
+			offline = offlineNetwork(ctx, storage, d.Log)
+		}
 		manifest := func(name string, attempt int64) pyjson.Object {
 			return scriptJobManifest(q.d.jobSettings(), name, env, version, node, merge(base, pyjson.Object{{Key: "TABULARIA_ATTEMPT", Value: fmt.Sprint(attempt)}}),
-				labels, timeout, items, name+"-code", name+"-env")
+				labels, timeout, items, name+"-code", name+"-env", offline)
 		}
 		ok, reason, err := q.attempts(ctx, child, "script", "script «"+label+"»", retries, delay, runID, hasOutput, storage, outKey, manifest, code, secret,
 			timeout, ns, q.d.jobSettings().pollSeconds, q.d.jobSettings().logMaxBytes)

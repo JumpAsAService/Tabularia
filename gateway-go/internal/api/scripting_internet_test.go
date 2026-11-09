@@ -45,7 +45,7 @@ func TestAScriptOfAVersionWithoutInternetCarriesTheLabel(t *testing.T) {
 	for _, internet := range []bool{true, false} {
 		version := &scriptVersion{Number: 2, Status: "ready", ImageRef: &image, InternetAccess: internet}
 		m := scriptJobManifest(jobSettings{jobTTL: 60}, "tabularia-script-9-a1", env, version, node, pyjson.Object{}, labels, 900,
-			[]any{}, "code", "env")
+			[]any{}, "code", "env", nil)
 		job, pod := podLabels(t, m)
 		for what, l := range map[string]pyjson.Object{"job": job, "pod": pod} {
 			v, has := l.Get(labelInternet)

@@ -186,9 +186,13 @@ func (q *queue) executeSaved(ctx context.Context, user *auth.User, s *savedscrip
 		labels := pyjson.Object{{Key: "app.kubernetes.io/managed-by", Value: "tabularia"}, {Key: "app.kubernetes.io/component", Value: "scripting"},
 			{Key: labelEnv, Value: fmt.Sprint(env.ID)}, {Key: labelScriptRun, Value: fmt.Sprint(childID)},
 			{Key: labelOrchestration, Value: fmt.Sprint(parent)}, {Key: "tabularia.io/stage", Value: "run"}}
+		var offline *offlineNet
+		if !version.InternetAccess {
+			offline = offlineNetwork(ctx, storage, d.Log)
+		}
 		manifest := func(name string, attempt int64) pyjson.Object {
 			return scriptJobManifest(q.d.jobSettings(), name, env, version, node, merge(base, pyjson.Object{{Key: "TABULARIA_ATTEMPT", Value: fmt.Sprint(attempt)}}),
-				labels, timeout, items, name+"-code", name+"-env")
+				labels, timeout, items, name+"-code", name+"-env", offline)
 		}
 		ok, reason, err := q.attempts(ctx, child, "script", what, retries, delay, parent, true, storage, outKey, manifest, code, secret,
 			timeout, ns, q.d.jobSettings().pollSeconds, q.d.jobSettings().logMaxBytes)

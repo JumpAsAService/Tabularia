@@ -33,6 +33,14 @@ type Runtime struct {
 	ContainersPullCheck int64
 	ContainersPoll      float64
 	ContainersJobTTL    int64
+	// SCRIPTS__EGRESS_PROXY, SCRIPTS__EGRESS_PORTS, SCRIPTS__EGRESS_NO_PROXY: the egress proxy
+	// of the versions without internet access (internal/egress, the chart's
+	// templates/egress-proxy.yaml): its address as HTTPS_PROXY ("" = none), the storage
+	// ports its Service passes on transparently, and what goes around it besides the
+	// cluster's own names
+	EgressProxy   string
+	EgressPorts   []int
+	EgressNoProxy []string
 }
 
 var (
@@ -87,7 +95,32 @@ func LoadRuntime(env config.Env) *Runtime {
 		Namespace:     str("KUBERNETES__NAMESPACE", ""),
 		NamespaceFile: str("KUBERNETES__NAMESPACE_FILE", "/var/run/secrets/kubernetes.io/serviceaccount/namespace"),
 		Role:          str("APP__ROLE", "all"),
+		EgressProxy:   strings.TrimSpace(str("SCRIPTS__EGRESS_PROXY", "")),
+		EgressPorts:   ports(str("SCRIPTS__EGRESS_PORTS", "")),
+		EgressNoProxy: list(str("SCRIPTS__EGRESS_NO_PROXY", "")),
 	}
+}
+
+// ports is "443,80,9000": the ports that parse.
+func ports(s string) []int {
+	var out []int
+	for _, p := range list(s) {
+		if n, err := strconv.Atoi(p); err == nil && n > 0 && n < 65536 {
+			out = append(out, n)
+		}
+	}
+	return out
+}
+
+// list is a comma-separated list, without empty items.
+func list(s string) []string {
+	var out []string
+	for _, p := range strings.Split(s, ",") {
+		if p = strings.TrimSpace(p); p != "" {
+			out = append(out, p)
+		}
+	}
+	return out
 }
 
 // ReleaseNamespace is cluster_view.release_namespace: KUBERNETES__NAMESPACE, or the pod's

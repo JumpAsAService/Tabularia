@@ -200,8 +200,10 @@ type nbImage struct {
 	env            *scEnvironment
 	versionID      int64
 	imageRef, arch string
-	// the version's internet access: false puts labelInternet "off" on the notebook's pod
+	// the version's internet access: false puts labelInternet "off" on the notebook's pod,
+	// and offline its way to the storage through the egress proxy (offlineNetwork)
 	internet bool
+	offline  *offlineNet
 }
 
 // nbImageOf is _image: the environment's image, ready and with marimo.
@@ -236,6 +238,15 @@ func nbImageOf(ctx context.Context, d *Deps, n *nbRow) (*nbImage, error) {
 		return nil, nbRefusal(422, "%s", nbNoMarimoText(env.Name))
 	}
 	img := &nbImage{env: env, versionID: *env.CurrentVersionID, imageRef: *imageRef, internet: internet}
+	if !internet {
+		// a notebook reads datasources through the gateway, and the scripts bucket with a key
+		// of its variables, if it has one
+		storage, err := loadScriptStorage(ctx, d.DB)
+		if err != nil {
+			return nil, err
+		}
+		img.offline = offlineNetwork(ctx, storage, d.Log)
+	}
 	if arch != nil {
 		img.arch = *arch
 	}
@@ -336,13 +347,20 @@ func nbJobManifest(name string, notebookID int64, mode string, img *nbImage, con
 		args = append(args, "--no-token", "--skip-update-check")
 	}
 	var env []any
+	proxyVars := img.offline.applyEnv(nil)
 	for _, x := range plain {
+		if _, theProxys := proxyVars.Get(x.k); theProxys {
+			continue // the egress proxy's own variables win
+		}
 		env = append(env, pyjson.Object{{Key: "name", Value: x.k}, {Key: "value", Value: x.v}})
 	}
 	env = append(env, pyjson.Object{{Key: "name", Value: "HOME"}, {Key: "value", Value: "/tmp"}},
 		pyjson.Object{{Key: "name", Value: "PYTHONPATH"}, {Key: "value", Value: nbLibDir}})
 	if g := strings.TrimSpace(rt.NotebooksGatewayURL); g != "" {
 		env = append(env, pyjson.Object{{Key: "name", Value: "TABULARIA_URL"}, {Key: "value", Value: strings.TrimRight(g, "/")}})
+	}
+	for _, kv := range proxyVars {
+		env = append(env, pyjson.Object{{Key: "name", Value: kv.Key}, {Key: "value", Value: kv.Value}})
 	}
 	command := append([]any{"python", "-c", nbCopyAndRun}, args...)
 	threshold := (rt.NotebooksStartTimeout + 27) / 28
@@ -402,6 +420,7 @@ func nbJobManifest(name string, notebookID int64, mode string, img *nbImage, con
 	if rt.ScriptsPullSecret != "" {
 		pod = append(pod, pyjson.KV{Key: "imagePullSecrets", Value: []any{pyjson.Object{{Key: "name", Value: rt.ScriptsPullSecret}}}})
 	}
+	pod = img.offline.applyPod(pod)
 	tags := withInternet(nbLabels(notebookID, mode), img.internet)
 	return pyjson.Object{
 		{Key: "apiVersion", Value: "batch/v1"}, {Key: "kind", Value: "Job"},

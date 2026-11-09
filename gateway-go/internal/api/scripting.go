@@ -622,12 +622,14 @@ func scIsDigits(s string) bool {
 }
 
 type scriptingOut struct {
-	DisabledReason *string              `json:"disabled_reason"`
-	Languages      pyjson.Object        `json:"languages"`
-	Registry       string               `json:"registry"`
-	Storage        storageOut           `json:"storage"`
-	Environments   []environmentSummary `json:"environments"`
-	Editable       bool                 `json:"editable"`
+	DisabledReason *string       `json:"disabled_reason"`
+	Languages      pyjson.Object `json:"languages"`
+	Registry       string        `json:"registry"`
+	Storage        storageOut    `json:"storage"`
+	// the egress proxy of the versions without internet access (scripting_egress.go)
+	EgressProxy  *egressProxyOut      `json:"egress_proxy"`
+	Environments []environmentSummary `json:"environments"`
+	Editable     bool                 `json:"editable"`
 }
 
 // readScripting is GET /admin/scripting (read).
@@ -684,7 +686,7 @@ func readScripting(d *Deps, w http.ResponseWriter, r *http.Request, p *auth.Prin
 	}
 	rows.Close()
 	out := scriptingOut{DisabledReason: scNullable(cfg.DisabledReason()), Languages: languages, Registry: cfg.Scripts.Registry,
-		Storage: storage.out(), Environments: []environmentSummary{}}
+		Storage: storage.out(), EgressProxy: egressProxyOf(), Environments: []environmentSummary{}}
 	for i := range envs {
 		versions, err := scVersions(ctx, d.DB, envs[i].ID, envs[i].CurrentVersionID)
 		if err != nil {
