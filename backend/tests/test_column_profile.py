@@ -80,7 +80,7 @@ def test_what_each_type_is_profiled_for():
     assert profile.kind_of("List(String)") == profile.kind_of("Struct({'a': Int64})") == "other"
     specs = profile.plan([{"name": "a", "dtype": "Int64"}, {"name": "t", "dtype": "List(String)"}], {"a": {"nulls": 3, "range": True}})
     # the footer gave a's nulls and range: only its distinct values are asked; a list only its nulls
-    assert [s[1:] for s in specs] == [("rows", None), ("distinct", "a"), ("count", "t")]
+    assert [s[1:] for s in specs] == [("rows", None), ("distinct_number", "a"), ("count", "t")]
 
 
 # ── the same numbers on every engine ─────────────────────────────────────────
@@ -476,3 +476,14 @@ def test_the_route_says_a_profile_out_of_memory_in_words(storage, table, valkey,
         tasks.profile_step(ProfileRequest(bucket=table.bucket, input_key=table.key, engine="polars",
                                           columns=[{"name": "id", "dtype": "Int64"}]))
     assert e.value.status_code == 422 and "profile needed more than the worker's memory" in e.value.detail
+
+
+def test_a_number_s_distinct_values_hold_minus_zero_as_zero_on_clickhouse():
+    """ClickHouse hashes a float's bits: -0.0 and 0.0 would be two values there, one on the
+    other engines. A number's distinct count adds 0 on ClickHouse; the others count as they did."""
+    specs = profile.plan([{"name": "x", "dtype": "Float64"}, {"name": "t", "dtype": "String"}], None)
+    assert ("c0_distinct", "distinct_number", "x") in specs and ("c1_distinct", "distinct", "t") in specs
+    q = lambda c: f"`{c}`"
+    assert profile.sql_aggregate("clickhouse", "distinct_number", "x", q) == "uniqExact(`x` + 0)"
+    assert profile.sql_aggregate("duckdb", "distinct_number", "x", lambda c: f'"{c}"') == 'count(DISTINCT "x")'
+    assert profile.sql_aggregate("bigquery", "distinct_number", "x", q) == "COUNT(DISTINCT `x`)"

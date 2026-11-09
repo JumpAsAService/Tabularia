@@ -243,7 +243,7 @@ class PolarsEngine(DeferredStepCache, Engine):
         c = pl.col(col)
         if func == "count":
             return c.count()  # the values that are not null
-        if func == "distinct":
+        if func in ("distinct", "distinct_number"):
             # counted, not estimated: approx_n_unique was measured up to 12.8% off on kind
             # (2,004 for 2,298 values) and the sample bounds the work. Without the drop a null
             # counts as a value.

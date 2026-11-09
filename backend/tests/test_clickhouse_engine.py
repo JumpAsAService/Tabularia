@@ -160,6 +160,15 @@ def test_group_by(storage, src):
     assert tot == {"IT": 400, "FR": 50, "DE": 250}
 
 
+def test_a_profile_counts_minus_zero_and_zero_as_one_value(storage):
+    from app.engine import profile
+
+    src = upload_df(storage, pl.DataFrame({"x": [0.0, -0.0, 1.5, None]}), "datasets/negzero_profile_ch.parquet")
+    specs = profile.plan([{"name": "x", "dtype": "Float64"}], None)
+    got = _engine(storage).profile_aggregates(src, [], specs, 100_000)
+    assert got["c0_distinct"] == 2 and got["c0_count"] == 3
+
+
 def test_a_count_is_int64_as_on_duckdb(storage, src):
     ops = [{"type": "group_by", "params": {"by": ["paese"], "aggregations": [
         {"column": "citta", "func": "count", "alias": "n"}, {"column": "citta", "func": "n_unique", "alias": "u"}]}}]

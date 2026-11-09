@@ -91,7 +91,11 @@ def sql_aggregate(dialect: str, func: str, col: str | None, quote) -> str:
     q = quote(col)
     if func == "count":
         return f"count({q})"
-    if func == "distinct":
+    if func in ("distinct", "distinct_number"):
+        if func == "distinct_number" and dialect == "clickhouse":
+            # ClickHouse counts -0.0 and 0.0 as two values (it hashes a float's bits), the
+            # other engines as one: adding 0 makes -0.0 0.0 and leaves the rest
+            return f"uniqExact({q} + 0)"
         # Counted, never estimated: over the sample's hundred thousand rows an exact count
         # costs little on every engine, and the estimators were measured far off (DuckDB's
         # approx_count_distinct 1,249 for 1,000 values; Polars' approx_n_unique up to 12.8%).
@@ -113,7 +117,7 @@ def plan(columns: list[dict[str, str]], footer: dict[str, dict] | None) -> list[
         if got.get("nulls") is None:
             specs.append((f"c{j}_count", "count", name))
         if kind != "other":
-            specs.append((f"c{j}_distinct", "distinct", name))
+            specs.append((f"c{j}_distinct", "distinct_number" if kind == "number" else "distinct", name))
         if kind in ("number", "time") and not got.get("range"):
             specs += [(f"c{j}_min", "min", name), (f"c{j}_max", "max", name)]
         if kind == "text":
