@@ -90,6 +90,7 @@ export const DOCS_GROUPS: { title: string, icon: DocsIcon, intro: string, items:
       ['/docs/integrations', 'All integrations'],
       ['/docs/integrations/ai', 'AI: where it is used'],
       ['/docs/api', 'API, tokens and webhooks'],
+      ['/docs/integrations/mcp', 'MCP: agents outside Tabularia'],
       ['/docs/dbt-export', 'Export to dbt'],
       ['/docs/openlineage', 'OpenLineage'],
       ['/docs/sso-keycloak', 'Single sign-on with Keycloak'],

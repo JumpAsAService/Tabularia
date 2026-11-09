@@ -71,7 +71,7 @@ audit log; every gateway replica applies a change within 10 seconds:
 | Variable | Covers | Whose model |
 |---|---|---|
 | `AI__METADATA_ONLY` | the chat, the flow assistant, the script assistant, the dbt export, the AI comments | those configured in Tabularia, whichever the provider |
-| `MCP__METADATA_ONLY` | the [MCP server](../specs/mcp-agent.md) | the client's, outside the administrator's control |
+| `MCP__METADATA_ONLY` | the [MCP server](mcp.md) | the client's, outside the administrator's control |
 
 Administration → AI models shows the state of both.
 
