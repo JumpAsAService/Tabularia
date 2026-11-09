@@ -163,6 +163,9 @@ exposes at `/system/info` and in the app's settings menu.
 
 ### Fixed
 
+- In the flow editor «Upload file» is a real button: it had none of its neighbours' hover,
+  press and focus, and it could not be reached with the keyboard. The «Explore» and logout
+  buttons of the bar now press like the others too.
 - On BigQuery the SQL node no longer refuses a query that holds two backtick-quoted names
   with a dot between them, as in `` SELECT `a` * 1.5 AS `b` FROM self ``: the check against
   `dataset.table` names read the text between two quoted names as one. Found against a real

@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import BrandMark from '~/components/ui/BrandMark.vue'
-import { computed } from 'vue'
+import { computed, ref } from 'vue'
 import { useI18n } from 'vue-i18n'
 import {
   Upload,
@@ -59,6 +59,9 @@ const emit = defineEmits<{
   (e: 'update:projectId', id: number | null): void
 }>()
 
+// «Upload file» is a real button (the same hover, press and focus as its neighbours, and
+// reachable by keyboard) that opens a hidden file input
+const fileInput = ref<HTMLInputElement | null>(null)
 function onFile(ev: Event) {
   const input = ev.target as HTMLInputElement
   const file = input.files?.[0]
@@ -113,10 +116,18 @@ const statusIcon = computed(() => {
 
     <span class="sep" />
 
-    <label v-if="!readOnly" class="filebtn">
-      <Upload :size="15" /> {{ $t('toolbar.uploadFile') }}
-      <input type="file" accept=".csv,.tsv,.txt,.json,.ndjson,.jsonl,.xlsx,.xls,.parquet" @change="onFile" />
-    </label>
+    <template v-if="!readOnly">
+      <button type="button" @click="fileInput?.click()"><Upload :size="15" /> {{ $t('toolbar.uploadFile') }}</button>
+      <input
+        ref="fileInput"
+        class="fileinput"
+        type="file"
+        tabindex="-1"
+        aria-hidden="true"
+        accept=".csv,.tsv,.txt,.json,.ndjson,.jsonl,.xlsx,.xls,.parquet"
+        @change="onFile"
+      />
+    </template>
 
     <button v-if="!readOnly" @click="emit('add-source')"><Plus :size="15" /> {{ $t('toolbar.source') }}</button>
     <button @click="emit('add-op')"><Plus :size="15" /> {{ $t('toolbar.operation') }}</button>
@@ -200,18 +211,10 @@ const statusIcon = computed(() => {
   white-space: nowrap;
   cursor: pointer;
 }
-.navbtn:hover { border-color: var(--accent); }
-.filebtn {
-  display: inline-flex;
-  align-items: center;
-  gap: 6px;
-  background: var(--panel-2);
-  border: 1px solid var(--border);
-  border-radius: 6px;
-  padding: 6px 12px;
-  cursor: pointer;
-  white-space: nowrap;
+.navbtn {
+  transition: border-color var(--dur-2), box-shadow var(--dur-2), transform var(--dur-1) ease-out;
 }
-.filebtn:hover { border-color: var(--accent); }
-.filebtn input { display: none; }
+.navbtn:hover { border-color: var(--accent); box-shadow: var(--shadow-1); }
+.navbtn:active { transform: scale(0.97); }
+.fileinput { display: none; }
 </style>
