@@ -160,6 +160,32 @@ def test_group_by(storage, src):
     assert tot == {"IT": 400, "FR": 50, "DE": 250}
 
 
+def test_negative_zero_is_zero_in_groups_uniques_joins_and_pivots(storage):
+    """-0.0 and 0.0 are one value, as on DuckDB and Polars: ClickHouse compares a float's
+    bits when it groups, deduplicates or hash-joins (two groups, a join without its rows)."""
+    df = pl.DataFrame({"k": [0.0, -0.0, 1.5], "k32": pl.Series([0.0, -0.0, 1.5], dtype=pl.Float32),
+                       "v": [1, 2, 3], "name": ["a", "b", "c"]})
+    src = upload_df(storage, df, "datasets/negzero_ch.parquet")
+    right = upload_df(storage, pl.DataFrame({"k": [0.0], "label": ["zero"]}), "datasets/negzero_right_ch.parquet")
+    eng = _engine(storage)
+    for key in ("k", "k32"):
+        res = eng.preview(src, [{"type": "group_by", "params": {
+            "by": [key], "aggregations": [{"column": "v", "func": "sum", "alias": "s"}]}}], limit=10)
+        assert sorted((r[key], r["s"]) for r in res.rows) == [(0.0, 3), (1.5, 3)], key
+        assert {c.name: c.dtype for c in res.columns}[key] == ("Float64" if key == "k" else "Float32")
+    res = eng.preview(src, [{"type": "unique", "params": {"subset": ["k"]}}], limit=10)
+    assert res.row_count == 2
+    res = eng.preview(src, [{"type": "select", "params": {"columns": ["k"]}}, {"type": "unique", "params": {}}], limit=10)
+    assert res.row_count == 2
+    res = eng.preview(src, [{"type": "join", "params": {"right": right.model_dump(), "on": ["k"], "how": "inner"}}], limit=10)
+    assert sorted(r["name"] for r in res.rows) == ["a", "b"]
+    res = eng.preview(src, [{"type": "join", "params": {"right": right.model_dump(), "left_on": ["k"], "right_on": ["k"],
+                                                        "how": "left"}}], limit=10)
+    assert sorted((r["name"], r["label"]) for r in res.rows) == [("a", "zero"), ("b", "zero"), ("c", None)]
+    res = eng.preview(src, [{"type": "pivot", "params": {"index": ["k"], "values": "v", "func": "sum"}}], limit=10)
+    assert res.row_count == 2
+
+
 def test_join(storage, src, anagrafica):
     ops = [{"type": "join", "params": {"right": anagrafica.model_dump(), "on": ["paese"], "how": "left"}}]
     res = _engine(storage).preview(src, ops, limit=10)

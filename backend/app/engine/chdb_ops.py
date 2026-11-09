@@ -84,6 +84,28 @@ def _sub(sql: str) -> str:
     return f"({sql})"
 
 
+def _zero_signless(sql: str, cols, ctx) -> str:
+    """`sql` with -0.0 made 0.0 in its float columns among `cols` (None: all of them), for
+    the operations that compare values by their bits. ClickHouse groups, deduplicates and
+    hash-joins a float by its bits, so -0.0 and 0.0 are two keys there (`0.0 = -0.0` is true
+    all the same), where DuckDB and Polars hold them one: a group_by gave an extra group, a
+    join on a float key missed its rows. Adding 0.0 turns -0.0 into 0.0 and leaves every
+    other value, NaN and NULL as they are; Float32 stays Float32."""
+    want = None if cols is None else set(cols)
+    repl = []
+    for name, t in ctx.schema_of(sql):
+        if want is not None and name not in want:
+            continue
+        bare = _bare_type(t)
+        if bare == "Float64":
+            repl.append(f"({_qi(name)} + 0.) AS {_qi(name)}")
+        elif bare == "Float32":
+            repl.append(f"toFloat32({_qi(name)} + 0.) AS {_qi(name)}")
+    if not repl:
+        return sql
+    return f"SELECT * REPLACE ({', '.join(repl)}) FROM {_sub(sql)}"
+
+
 # a "try" cast: ClickHouse's *OrNull functions (NULL instead of an error)
 _CH_CAST = {
     "int": "toInt64OrNull(toString({c}))",
@@ -278,8 +300,8 @@ def op_unique(sql, params, ctx):
     subset = params.get("subset")
     if subset:
         part = ", ".join(_qi(c) for c in subset)
-        return f"SELECT * FROM {_sub(sql)} LIMIT 1 BY {part}"
-    return f"SELECT DISTINCT * FROM {_sub(sql)}"
+        return f"SELECT * FROM {_sub(_zero_signless(sql, subset, ctx))} LIMIT 1 BY {part}"
+    return f"SELECT DISTINCT * FROM {_sub(_zero_signless(sql, None, ctx))}"
 
 
 @_register("fill_null")
@@ -328,7 +350,7 @@ def op_group_by(sql, params, ctx):
         alias = agg.get("alias") or f"{col}_{func}"
         expr = f"uniqExact({_qi(col)})" if func == "n_unique" else _aggregate(func, _qi(col))
         parts.append(f"{expr} AS {_qi(alias)}")
-    return f"SELECT {', '.join(parts)} FROM {_sub(sql)} GROUP BY {by_sql}"
+    return f"SELECT {', '.join(parts)} FROM {_sub(_zero_signless(sql, by, ctx))} GROUP BY {by_sql}"
 
 
 # ── compute (scalar expressions, WITHOUT subqueries or file/network reads) ────
@@ -506,6 +528,11 @@ def op_join(sql, params, ctx):
         return f"SELECT {sel} FROM {L} AS l CROSS JOIN {R} AS r"
 
     clause, kind = _join_condition(params)
+    if kind == "using":
+        keys_l = keys_r = _as_list(params["on"])
+    else:
+        keys_l, keys_r = _as_list(params["left_on"]), _as_list(params["right_on"])
+    L, R = _sub(_zero_signless(sql, keys_l, ctx)), _sub(_zero_signless(right, keys_r, ctx))
     if how in ("semi", "anti"):
         kw = "LEFT SEMI JOIN" if how == "semi" else "LEFT ANTI JOIN"
         return f"SELECT l.* FROM {L} AS l {kw} {R} AS r {clause}"
@@ -555,7 +582,7 @@ def op_pivot(sql, params, ctx):
     index, on, values, func = pivot_params(params)  # several `on` columns = combinations
     if func not in _AGG:
         raise EngineError(f"pivot: unsupported aggregation function '{func}'")
-    base = _sub(sql)
+    base = _sub(_zero_signless(sql, [*index, *on], ctx))
     idx_sql = ", ".join(_qi(c) for c in index)
     if not on:  # rows only: a group by with one measure, named `values`
         expr = _aggregate(func, _qi(values))
