@@ -487,3 +487,21 @@ def test_a_number_s_distinct_values_hold_minus_zero_as_zero_on_clickhouse():
     assert profile.sql_aggregate("clickhouse", "distinct_number", "x", q) == "uniqExact(`x` + 0)"
     assert profile.sql_aggregate("duckdb", "distinct_number", "x", lambda c: f'"{c}"') == 'count(DISTINCT "x")'
     assert profile.sql_aggregate("bigquery", "distinct_number", "x", q) == "COUNT(DISTINCT `x`)"
+
+
+def test_the_sql_aggregates_quote_every_alias(monkeypatch):
+    """`rows` is a reserved word on BigQuery: an unquoted `AS rows` is a syntax error there
+    (found against a real project). Every alias of the aggregate query is quoted."""
+    from app.engine.bigquery_engine import BigQueryEngine
+
+    seen = {}
+
+    def through(self, source, operations, sample, query_of, limit, use_cache):
+        seen["sql"] = query_of("t")
+        return [{"rows": 3}]
+
+    monkeypatch.setattr(BigQueryEngine, "_through_sql", through)
+    eng = BigQueryEngine.__new__(BigQueryEngine)
+    specs = profile.plan([{"name": "a", "dtype": "Int64"}], None)
+    assert eng.profile_aggregates(DataSource(bucket="b", key="k"), [], specs, 10) == {"rows": 3}
+    assert "AS `rows`" in seen["sql"] and " AS rows" not in seen["sql"]

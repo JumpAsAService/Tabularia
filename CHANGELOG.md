@@ -163,6 +163,13 @@ exposes at `/system/info` and in the app's settings menu.
 
 ### Fixed
 
+- On BigQuery the SQL node no longer refuses a query that holds two backtick-quoted names
+  with a dot between them, as in `` SELECT `a` * 1.5 AS `b` FROM self ``: the check against
+  `dataset.table` names read the text between two quoted names as one. Found against a real
+  project, where it refused the column profile's histogram.
+- On BigQuery the column profile works: its query named a column `rows`, a reserved word
+  there (a syntax error). Checked against a real project: the profile, the row count, the
+  most frequent values and the histogram say the same numbers as DuckDB.
 - On the external ClickHouse a preview and a column profile read the first rows in the
   file's order, as the other engines do: a large dataset gave other rows at every request,
   and in the Viewer a column's histogram could count another sample than its profile's (all

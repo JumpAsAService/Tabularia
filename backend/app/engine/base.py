@@ -208,7 +208,9 @@ class Engine(ABC):
         step cache holds, writing nothing to it."""
         from app.engine.profile import sql_aggregate
 
-        select = ", ".join(f"{sql_aggregate(self.profile_dialect, f, c, self._profile_quote)} AS {a}" for a, f, c in specs)
+        # every alias quoted: `rows` is a reserved word on BigQuery (a syntax error unquoted)
+        select = ", ".join(f"{sql_aggregate(self.profile_dialect, f, c, self._profile_quote)} AS {self._profile_quote(a)}"
+                           for a, f, c in specs)
         rows = self._through_sql(source, operations, sample, lambda t: f"SELECT {select} FROM {t}", 1, use_cache)
         return dict(rows[0]) if rows else {}
 
