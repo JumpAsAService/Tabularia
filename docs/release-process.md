@@ -2,6 +2,7 @@
 
 How a release goes from a tag to Docker Hub. Written for whoever maintains the
 project; installing or upgrading is in [deploy/release-checklist.md](deploy/release-checklist.md).
+The long-term support line, its branch and its `lts` image tag: [lts.md](lts.md).
 
 ## Cutting a release
 

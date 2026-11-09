@@ -129,6 +129,7 @@ export const DOCS_GROUPS: { title: string, icon: DocsIcon, intro: string, items:
     icon: 'reference',
     intro: 'Release process and the remaining reference pages.',
     items: [
+      ['/docs/lts', 'Long-term support'],
       ['/docs/release-process', 'Release process'],
     ],
   },
