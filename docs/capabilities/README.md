@@ -18,6 +18,7 @@ does not do, with an example on the sample data of the Docker Compose stack.
 |---|---|---|
 | Low-code flows | A pipeline drawn on a canvas: sources, 19 transformations and a loop, outputs, each step previewed on the whole table | [Flows](flows.md) |
 | Preview and analysis | The data of every step as a table or a chart, the Viewer with filters, computed fields and pivots, saved views, CSV and Excel downloads | [Preview and analysis](preview-and-analysis.md) |
+| Lineage | How connections, datasources, flows, scripts, notebooks, flow groups and destinations depend on each other, what a change would reach, what is stale | [Lineage](lineage.md) |
 | Ask your data | Questions in plain language over the datasources you may read, answered with the query and the table behind the numbers | [Ask your data](ask-your-data.md) |
 | Pixel-perfect reports | Paginated reports designed in the browser: bands in millimetres, tables grouped with subtotals over many pages, 14 kinds of chart and KPI cards, parameters; read on screen, downloaded as PDF or Excel, sent by email | [Reports](reports.md), [functions](report-functions.md) |
 | Dashboards | A screen of live tiles on an adaptive grid: KPIs, 14 kinds of chart, tables, matrices; parameters, a click on a chart that filters the others, a refresh shared by everyone; a PDF or an image, an email from a flow group | [Dashboards](dashboards.md) |
@@ -30,7 +31,7 @@ does not do, with an example on the sample data of the Docker Compose stack.
 | Python and R | Code in environments an administrator defines, run as Kubernetes Jobs, as a step of a flow or as a saved script | [Python and R](../scripting.md) |
 | SQL scripts | SQL kept in a folder with its versions, run on the catalogue or on a database connection, exported or written into a datasource | [SQL scripts](../sql-scripts.md) |
 | marimo notebooks | Notebooks written in marimo's editor, kept in a folder and opened as web apps that read the datasources with their author's rights | [marimo notebooks as apps](notebooks.md) |
-| Data APIs | Datasources published as read-only HTTP APIs for other systems, with chosen columns and filters, keys shown once, expiry, rate limits and allowed addresses; Kubernetes only. This version keeps the definitions and the keys; the pods that answer come later | [Data APIs](../data-apis.md) |
+| Data APIs | Datasources published as read-only HTTP APIs for other systems, with chosen columns and filters, keys shown once, expiry, rate limits and allowed addresses, answered by pods of their own; Kubernetes only | [Data APIs](../data-apis.md) |
 | Docker images in flows | Your own images, from the registries an administrator grants, run as a step of a flow with its input and output | [The Container node](../container-node.md) |
 
 ### Orchestrate
