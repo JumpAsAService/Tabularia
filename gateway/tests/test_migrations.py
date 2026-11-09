@@ -394,3 +394,33 @@ def test_0041_adds_the_data_api_pods_and_leaves_what_was_there(temporary_databas
         c.execute(text("DELETE FROM data_apis WHERE id = 1"))
     with temporary_database.connect() as c:
         assert [c.execute(text(f"SELECT count(*) FROM {t}")).scalar() for t in ("data_api_status", "data_api_pods")] == [0, 0]
+
+
+def test_0042_adds_internet_access_to_the_versions_and_leaves_what_was_there(temporary_database):
+    """One NOT NULL column with the server default true: every existing version keeps
+    reaching the internet, and the previous version's insert (without the column) still works."""
+    with temporary_database.begin() as c:
+        command.upgrade(m._config(c), "0041")
+        c.execute(text(
+            "INSERT INTO script_environments (id, name, description, language, enabled, cpu_request, cpu_limit, memory_request, "
+            "memory_limit, max_timeout_seconds, created_at, updated_at) "
+            "VALUES (1, 'Python', '', 'python', true, '500m', '2', '1Gi', '4Gi', 3600, now(), now())"))
+        c.execute(text(
+            "INSERT INTO script_environment_versions (id, environment_id, number, language_version, base_image, packages, status, "
+            "created_at) VALUES (1, 1, 1, '3.12', 'python:3.12-slim', 'polars==1.41.0', 'ready', now())"))
+    m.migra(temporary_database)  # stops if the database and the models differ
+    with temporary_database.connect() as c:
+        assert c.execute(text("SELECT number, packages, status, internet_access FROM script_environment_versions")).one() == (
+            1, "polars==1.41.0", "ready", True)
+    with temporary_database.begin() as c:
+        # the previous version's insert, without the column
+        c.execute(text(
+            "INSERT INTO script_environment_versions (id, environment_id, number, language_version, base_image, packages, status, "
+            "created_at) VALUES (2, 1, 2, '3.12', 'python:3.12-slim', '', 'queued', now())"))
+        c.execute(text("UPDATE script_environment_versions SET internet_access = false WHERE id = 1"))
+    with temporary_database.connect() as c:
+        assert c.execute(text("SELECT id, internet_access FROM script_environment_versions ORDER BY id")).all() == [
+            (1, False), (2, True)]
+    with pytest.raises(Exception, match="internet_access"):
+        with temporary_database.begin() as c:
+            c.execute(text("UPDATE script_environment_versions SET internet_access = NULL WHERE id = 2"))

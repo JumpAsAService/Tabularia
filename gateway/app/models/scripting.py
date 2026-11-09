@@ -93,6 +93,10 @@ class ScriptEnvironmentVersion(SQLModel, table=True):
     created_by: Optional[str] = Field(default=None, max_length=320)
     started_at: Optional[datetime] = None
     finished_at: Optional[datetime] = None
+    # whether its scripts and notebooks may reach the internet: false = their pods carry the
+    # label tabularia.io/internet=off, which the chart's NetworkPolicy confines to the
+    # cluster's DNS, the storage and what the administrators allow (docs/scripting.md)
+    internet_access: bool = Field(default=True, sa_column_kwargs={"server_default": "true"})
 
 
 class ScriptEnvironmentVariable(SQLModel, table=True):
