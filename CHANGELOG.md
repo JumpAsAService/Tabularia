@@ -29,6 +29,23 @@ exposes at `/system/info` and in the app's settings menu.
   (`script_environment_versions.internet_access`, true for every existing version).
   `PATCH /admin/scripting/environments/{id}/versions/{version_id}` sets it, administrators
   only. docs/scripting.md, «Internet access».
+- **Scripts without internet access reach a storage outside the cluster, through an egress
+  proxy.** A scripts bucket on AWS S3, Scaleway, GCS or a MinIO elsewhere no longer needs
+  its addresses in `scripts.noInternet.allowCIDRs` (they change, and a NetworkPolicy takes
+  no names): the chart runs an egress proxy (`templates/egress-proxy.yaml`,
+  `scripts.noInternet.proxy`, on with scripting; the Go gateway's image with
+  `APP__ROLE=egress-proxy`, two replicas) that lets through only the hosts of
+  `externalServices.storage.endpoint` and of the scripts bucket, with their virtual-hosted
+  names, and answers 403 to anything else. It resolves the names itself, never connects to
+  a loopback, link-local or metadata address, limits and times out its connections, logs
+  each one, and only the pods without internet access reach it. They get `HTTPS_PROXY` /
+  `HTTP_PROXY` / `NO_PROXY` (requests, urllib, boto3, s3fs, Polars, R's curl and httr), and
+  the bucket's names at the proxy in their `/etc/hosts` for Arrow (pyarrow and R's arrow),
+  which ignores those variables: the proxy passes their TLS through by its server name. The
+  scripts change in nothing. A bucket that is a Service of the cluster is reached directly,
+  as before. The panel says how the bucket is reached, and warns only when `allowCIDRs` is
+  still needed (an endpoint given by address, a port the proxy does not pass on, the proxy
+  switched off). docs/scripting.md, «Internet access».
 - **The privacy notice starts switched off.** A new installation no longer shows the sample
   privacy bar on the sign-in page: the administrator adapts its text and switches it on in
   Administration. An installation that already has a notice keeps its own setting.

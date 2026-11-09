@@ -324,11 +324,12 @@ packages.
 `tabularia.io/internet=off`. A NetworkPolicy of the chart, in the scripts' namespace and
 in the trials' one, lets them reach only:
 - the cluster's DNS (`scripts.noInternet.dns`, CoreDNS in `kube-system` by default);
+- Tabularia's **egress proxy** (below), on its ports: the storage outside the cluster;
 - the namespace of the storage when `externalServices.storage.endpoint` is a Service of
   the cluster (`minio.deps.svc.cluster.local` → `deps`), and the namespaces in
   `scripts.noInternet.allowNamespaces` — where the scripts bucket is, when it is a
   Service of the cluster elsewhere;
-- the addresses in `scripts.noInternet.allowCIDRs`;
+- the addresses in `scripts.noInternet.allowCIDRs`, openings by hand;
 - for the notebooks, the gateway, to read datasources.
 
 Nothing else: not the internet, not the other namespaces of the cluster, not the
@@ -336,12 +337,44 @@ company's private networks of `networkPolicy.userCodePrivateCIDRs`. The policy o
 users' code above leaves those pods out, or its rules would add the internet back. This
 holds with `scripts.blockTabularia` on or off.
 
-When the scripts bucket is **outside the cluster** — Scaleway, GCS, S3 — list its
-endpoint's addresses, or the provider's ranges, in `scripts.noInternet.allowCIDRs`;
-otherwise the scripts of such a version cannot read their input. The panel warns when
-the bucket's endpoint is not a Service of the cluster. For example, with the bucket on
-Scaleway's `s3.fr-par.scw.cloud`, look its addresses up (`dig +short s3.fr-par.scw.cloud`)
-or take the ranges your provider publishes for its object storage, and list them:
+**A storage outside the cluster works through the egress proxy; `allowCIDRs` is no longer
+needed for it.** When the scripts bucket is in a cloud — AWS S3, Scaleway, GCS through S3
+— or on a MinIO elsewhere, the pods reach it through the chart's egress proxy
+(`templates/egress-proxy.yaml`, `scripts.noInternet.proxy`, on with scripting): a small
+workload of its own, the Go gateway's image with `APP__ROLE=egress-proxy`, two replicas.
+It lets through only the hosts of the storage the pods use — the endpoint of
+`externalServices.storage.endpoint` and the scripts bucket's endpoint set above, each with
+its virtual-hosted name (`bucket.host`), on their own port — and answers **403** to
+anything else, saying the version has no internet access. It resolves the names itself and
+never connects to a loopback, link-local (the cloud metadata, `169.254.169.254`),
+multicast or unspecified address, whatever a name resolves to; only the pods without
+internet access reach it, from the scripts' and the trials' namespaces. Each connection is
+one line of its log (who, where, bytes, seconds), each refusal a warning. A change of the
+bucket in the panel holds for it within 15 seconds.
+
+How the code goes through it, with nothing to change in the scripts:
+- the pods get `HTTPS_PROXY`, `HTTP_PROXY` (and their lower-case forms) at the proxy, and
+  `NO_PROXY` for the cluster's own names (`.svc`, `.cluster.local`, the gateway). Python's
+  `requests`, `urllib`, `boto3`, `s3fs`, Polars, R's `curl` and `httr` read them;
+- **Arrow ignores them** — `pyarrow` and R's `arrow` read and write `s3://` through the AWS
+  C++ SDK, which does not read those variables. For them the pods' `/etc/hosts` sends the
+  bucket's names to the proxy's Service (`hostAliases`), on the bucket's own port: the
+  proxy reads the name asked for (the TLS server name, or the HTTP `Host`) and passes the
+  bytes through, TLS untouched, so the client still checks the storage's own certificate.
+  The Service passes on the ports of `scripts.noInternet.proxy.ports` (443, 80 and 9000
+  by default): add yours for a MinIO on another port.
+
+The internet stays closed: `requests.get("https://pypi.org")` gets the proxy's 403, and
+the same request without the proxy is dropped by the policy. A bucket that is a Service
+of the cluster (`minio.deps.svc.cluster.local`) is reached directly, through its
+namespace, as before.
+
+Two cases still want `scripts.noInternet.allowCIDRs`, and the panel says so: an endpoint
+given by **address** rather than by name (`/etc/hosts` holds names: Arrow would connect to
+the address directly), and the chart's proxy switched off
+(`scripts.noInternet.proxy.enabled: false`). Then list the endpoint's addresses, or the
+ranges your provider publishes for its object storage — a provider may move its endpoint
+to new addresses, so prefer its ranges to a single address:
 
 ```yaml
 scripts:
@@ -349,10 +382,6 @@ scripts:
     allowCIDRs:
       - 198.51.100.0/24   # the addresses of the bucket's endpoint (an example range)
 ```
-
-A provider may move its endpoint to new addresses: prefer the ranges it publishes to a
-single address, and the scripts of such a version fail to read their input when a range
-is missing, saying the bucket cannot be reached.
 
 On a cluster whose DNS is a NodeLocal DNSCache on a link-local address, add it to
 `scripts.noInternet.extraEgress`:
