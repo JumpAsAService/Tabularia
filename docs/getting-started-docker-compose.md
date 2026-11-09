@@ -409,8 +409,8 @@ read, run with Ctrl+Enter, saved with its versions in a folder and shared with i
 
 **Data contracts.** The **Data contract** button of a datasource (in Datasources and
 Explore) declares its columns, types and rules on the values; every new load is checked,
-with a warning or an error, and the contract exports to ODCS. See the
-[overview](../README.md#what-you-get).
+with a warning or an error, and the contract exports to ODCS. See
+[Data contracts](governance/data-contracts.md).
 
 **Export to dbt.** On the Flows page, **Export flow → dbt** turns a flow into a dbt
 project for your data team, with the data contract as tests. Read its

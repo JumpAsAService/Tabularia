@@ -69,7 +69,7 @@ is the starting file.
 ## Then
 
 - Add an engine: a managed **ClickHouse** or **Google BigQuery** is configuration only:
-  see the [overview](../README.md#run-it-on-your-engine--or-on-your-warehouse) and the
+  see the [overview](../README.md#engines) and the
   [engine differences](engines/engine-differences.md).
 - Connect your sign-in: [SSO and group mapping](design/sso-group-mapping.md).
 - Let another system drive Tabularia: [API, tokens and webhooks](api.md).
