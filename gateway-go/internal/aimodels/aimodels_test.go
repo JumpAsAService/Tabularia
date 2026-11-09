@@ -12,6 +12,17 @@ func TestRefs(t *testing.T) {
 	if IsChatModel("provider:1/Text-Embedding-3") || !IsChatModel("gpt-x") {
 		t.Error("chat models")
 	}
+	for _, m := range []string{"dall-e-3", "gpt-image-1", "omni-moderation-latest", "gpt-4o-realtime-preview", "babbage-002",
+		"davinci-002", "sora-2", "imagen-4", "tts-1", "whisper-1", "gpt-4o-transcribe", "rerank-2", "bge-m3"} {
+		if IsChatModel(m) {
+			t.Error("a chat model:", m)
+		}
+	}
+	for _, m := range []string{"gpt-5", "claude-opus-5-5", "llama-3.3-70b-instruct", "mistral-large-latest", "qwen3-235b-a22b"} {
+		if !IsChatModel(m) {
+			t.Error("not a chat model:", m)
+		}
+	}
 }
 
 // preferred: the configured one, then the same name with the environment's or the lowest

@@ -54,7 +54,8 @@ func RefOf(providerID *int64, model string) string {
 // ModelName is model_name.
 func ModelName(ref string) string { _, n := SplitRef(ref); return n }
 
-var notChat = []string{"embedding", "embed-", "bge-", "whisper", "rerank", "tts", "speech", "transcri"}
+var notChat = []string{"embedding", "embed-", "bge-", "whisper", "rerank", "tts", "speech", "transcri",
+	"dall-e", "gpt-image", "imagen", "sora", "moderation", "realtime", "babbage", "davinci"}
 
 // IsChatModel is is_chat_model.
 func IsChatModel(ref string) bool {

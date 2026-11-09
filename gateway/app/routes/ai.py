@@ -94,7 +94,7 @@ class AiModelOut(BaseModel):
     provider: str = ai_models.ENVIRONMENT
     provider_name: str = ""
     enabled: bool
-    chat: bool  # False = embedding/audio/reranker: cannot be enabled for the chat
+    chat: bool  # False = embedding/audio/reranker/image…: cannot be enabled for the chat
     available: bool  # False = enabled in the past, but the provider no longer lists it
     priced: bool = True  # False = no known price: the spending caps count it at an assumed one
 
@@ -171,7 +171,7 @@ async def set_ai_model(
     if name not in offered and row is None:
         raise HTTPException(status_code=404, detail=f"Model unknown to the provider: {name}")
     if body.enabled and not is_chat_model(name):
-        raise HTTPException(status_code=422, detail="This model is not a chat model (embedding, audio or reranker)")
+        raise HTTPException(status_code=422, detail="This model is not a chat model (embedding, audio, image or reranker)")
     if body.enabled and name not in offered:
         raise HTTPException(status_code=422, detail="The provider no longer offers this model")
     if row is None:

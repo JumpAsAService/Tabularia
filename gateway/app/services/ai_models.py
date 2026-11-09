@@ -48,9 +48,11 @@ ANTHROPIC_BASE_URL = "https://api.anthropic.com"
 ENVIRONMENT = "env"
 _REF = re.compile(r"^provider:(\d+)/(.+)$", re.DOTALL)
 
-# Models the endpoint lists but that cannot converse: embedding, audio, reranker. They
-# stay visible to the administrator, but cannot be enabled for the chat.
-_NOT_CHAT = ("embedding", "embed-", "bge-", "whisper", "rerank", "tts", "speech", "transcri")
+# Models the endpoint lists but that cannot converse: embedding, audio, reranker, image,
+# moderation, the realtime API's and the old completion ones. They stay visible to the
+# administrator, but cannot be enabled for the chat (nor are they when a provider is added).
+_NOT_CHAT = ("embedding", "embed-", "bge-", "whisper", "rerank", "tts", "speech", "transcri",
+             "dall-e", "gpt-image", "imagen", "sora", "moderation", "realtime", "babbage", "davinci")
 
 
 def _new_session() -> Session:

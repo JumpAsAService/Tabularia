@@ -201,6 +201,9 @@ def test_status_says_off_when_not_configured(session):
     user = make_user(session)
     assert ai_routes.ai_status(user=user, session=session).enabled is False
     assert ai_models.is_chat_model("llama-3.3-70b-instruct") and not ai_models.is_chat_model("bge-multilingual-gemma2")
+    # what a provider lists and cannot converse: not enabled when it is added, nor by hand
+    for name in ("dall-e-3", "gpt-image-1", "omni-moderation-latest", "gpt-4o-realtime-preview", "babbage-002", "sora-2"):
+        assert not ai_models.is_chat_model(name), name
 
 
 # ── 5. the chat, with a simulated model ──────────────────────────────────────
