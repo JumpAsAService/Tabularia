@@ -42,6 +42,45 @@ Current release: **1.4.1 «Romulus»**. The next one, **1.4.2**, starts the long
 
 ---
 
+## The problem
+
+Visual data-prep tools either cost thousands per seat, or quietly work on **samples** of
+your data and hope for the best. And once a pipeline exists, moving it to bigger iron
+usually means rebuilding it: the tool that was comfortable on a laptop does not speak to
+the warehouse the company already pays for.
+
+Tabularia is an open-source alternative you host yourself: a visual pipeline builder that
+runs on the **entire** dataset, connects straight to your databases, keeps a full record of
+who did what — and runs the same flow on five engines, from an in-process library to a
+serverless warehouse.
+
+## What you get
+
+- **Pipelines built visually, no code.** Drag transformations onto a canvas and see every
+  step's rows as you go, on the whole table, with its real row count and a profile of
+  every column.
+- **Compute where it makes sense.** Design on DuckDB or Polars, hand production to an
+  external ClickHouse or BigQuery: the parquet stays in your bucket and the warehouse reads
+  it in place.
+- **Your data where it already lives.** Seven databases, S3, SFTP, HTTP APIs, SharePoint
+  and Google Sheets in; datasources, database tables, files and email out, checked by data
+  contracts before anything is published.
+- **From numbers to people.** Pixel-perfect reports, dashboards with password-protected
+  share links, and datasources served as read-only HTTP APIs to a CRM.
+- **Governed by design.** Folders and permissions, single sign-on, an audit log that can
+  stream to a SIEM, Python and R in environments the administrators control (internet
+  access included), and an AI assistant that can be kept away from the data's values.
+- **No lock-in.** AGPL, self-hosted, parquet files, an open REST API, MCP, dbt export and
+  OpenLineage: what you build can leave with you.
+
+## Who it's for
+
+Data and analytics teams that want a self-hosted, governed, no-sampling data-prep tool
+without enterprise licensing — and anyone who needs an auditable, multi-user pipeline
+builder that can start on one machine and grow onto the warehouse they already have.
+
+---
+
 ## Contents
 
 Every feature below has one line, a short example taken from the code or tried on a running
