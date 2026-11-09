@@ -81,6 +81,8 @@ _MATERIALIZE_MAX_SECONDS = 60
 
 # one ClickHouse client per thread (see _client): the handshake costs more than the query
 _CLIENTS_PER_THREAD = threading.local()
+# set while the column profile's queries run in this thread (ClickHouseEngine._through_sql)
+_SAMPLING = threading.local()
 # how long a client may stay idle before it is validated again (seconds)
 _VALIDATE_CLIENT_AFTER = 30.0
 
@@ -753,12 +755,20 @@ class ClickHouseEngine(DeferredStepCache, Engine):
         # (without sort_keys), duplicating the whole dataset, and (c) the step-cache
         # blobs written READING from the copy would land in the same hash namespace the
         # runs use, which do not have the copy.
+        sampling = getattr(_SAMPLING, "on", False)
         ctx = ClickHouseContext(client, self.storage, self.cfg, [], preview_limit=limit + 1,
                                 matviews=self.matviews,
                                 # the materialized copy is CREATED on the server: the
-                                # `ai` user is read-only, so it reads the parquet
-                                allow_matview=not use_cache and not self._as_ai(),
+                                # `ai` user is read-only, so it reads the parquet. A
+                                # profile's sample neither: see _through_sql
+                                allow_matview=not use_cache and not self._as_ai() and not sampling,
                                 sort_keys=sort_keys)
+        # a preview's rows, and a profile's sample, are the FIRST ones, in the file's order,
+        # as on the other engines: without it the server reads the row groups in parallel
+        # and a LIMIT keeps whichever came first, other rows at every request (measured on
+        # 12 million rows: ids from 1,000,001 one time, from 1 the next). Free on a LIMIT,
+        # and not measurable on a GROUP BY over 42 million rows.
+        ctx.settings["input_format_parquet_preserve_order"] = 1
         if _needs_scan_tuning(ops):
             threads = self._scan_max_threads(ctx)
             if threads:
@@ -828,6 +838,18 @@ class ClickHouseEngine(DeferredStepCache, Engine):
             # NO client.close(): it is shared with this thread's next task. It dies
             # with the process (the Celery children are recycled), and if the
             # connection drops the validation in _client() replaces it.
+
+    def _through_sql(self, *args, **kwargs):
+        """The column profile's queries (profile, most frequent values, histogram) read the
+        chain's first rows from the parquet, never from the Viewer's materialized copy: its
+        rows are in no order, so the profile, then the histogram drawn between the profile's
+        min and max, would each take ANOTHER sample of a large dataset (an histogram of
+        zeros, measured on kind). The sample is small: the copy brings no speed."""
+        _SAMPLING.on = True
+        try:
+            return super()._through_sql(*args, **kwargs)
+        finally:
+            _SAMPLING.on = False
 
     # ── Run ───────────────────────────────────────────────────────────────
     def run(
