@@ -292,6 +292,84 @@ link and has no actions. Reached by its address, the editor says the same in pla
 the canvas. Its versions, a copy, a run, a schedule and adding it to a group of flows
 are refused the same way. An environment that no longer exists blocks nobody.
 
+### Internet access
+
+Every version of an environment has an **Internet access** switch, in the list of its
+versions. It is on for every version, so nothing changes until an administrator turns
+it off. **Off**: the scripts of that version — Script nodes, their **Run**, saved
+scripts — and the notebooks on it cannot reach the internet. They still read their
+input from the scripts bucket and write their output there; the data stay reachable.
+In the pickers of the flow editor, of a saved script and of a notebook the environment
+shows *no internet* next to its version, and a run's log starts with a line that says
+so, which explains a request that fails:
+
+```text
+Internet access is off for «Python 3.12» v4: the code reaches the scripts bucket and the cluster's DNS, not the internet (Administration → Scripting environments).
+Traceback (most recent call last):
+  File "/tabularia/code/main.py", line 3, in <module>
+    requests.get("https://pypi.org", timeout=10)
+  ...
+requests.exceptions.ConnectionError: HTTPSConnectionPool(host='pypi.org', port=443): Max retries exceeded
+```
+
+A change holds from the next run: a script or a notebook already running keeps the
+network it started with (a notebook until it stops, 15 minutes after its last use by
+default). A new version (new packages, **Build again**) starts with the setting of the
+version in use, so a change of packages does not give the internet back. Only an
+administrator changes it, and the audit log records each change
+(`scripting.version_internet`). Builds always reach the internet: they download the
+packages.
+
+**How it is enforced.** The pods of such a version carry the label
+`tabularia.io/internet=off`. A NetworkPolicy of the chart, in the scripts' namespace and
+in the trials' one, lets them reach only:
+- the cluster's DNS (`scripts.noInternet.dns`, CoreDNS in `kube-system` by default);
+- the namespace of the storage when `externalServices.storage.endpoint` is a Service of
+  the cluster (`minio.deps.svc.cluster.local` → `deps`), and the namespaces in
+  `scripts.noInternet.allowNamespaces` — where the scripts bucket is, when it is a
+  Service of the cluster elsewhere;
+- the addresses in `scripts.noInternet.allowCIDRs`;
+- for the notebooks, the gateway, to read datasources.
+
+Nothing else: not the internet, not the other namespaces of the cluster, not the
+company's private networks of `networkPolicy.userCodePrivateCIDRs`. The policy of the
+users' code above leaves those pods out, or its rules would add the internet back. This
+holds with `scripts.blockTabularia` on or off.
+
+When the scripts bucket is **outside the cluster** — Scaleway, GCS, S3 — list its
+endpoint's addresses, or the provider's ranges, in `scripts.noInternet.allowCIDRs`;
+otherwise the scripts of such a version cannot read their input. The panel warns when
+the bucket's endpoint is not a Service of the cluster. For example, with the bucket on
+Scaleway's `s3.fr-par.scw.cloud`, look its addresses up (`dig +short s3.fr-par.scw.cloud`)
+or take the ranges your provider publishes for its object storage, and list them:
+
+```yaml
+scripts:
+  noInternet:
+    allowCIDRs:
+      - 198.51.100.0/24   # the addresses of the bucket's endpoint (an example range)
+```
+
+A provider may move its endpoint to new addresses: prefer the ranges it publishes to a
+single address, and the scripts of such a version fail to read their input when a range
+is missing, saying the bucket cannot be reached.
+
+On a cluster whose DNS is a NodeLocal DNSCache on a link-local address, add it to
+`scripts.noInternet.extraEgress`:
+
+```yaml
+scripts:
+  noInternet:
+    extraEgress:
+      - to: [{ipBlock: {cidr: 169.254.20.10/32}}]
+        ports: [{protocol: UDP, port: 53}, {protocol: TCP, port: 53}]
+```
+
+Like every policy, it needs a network plugin that enforces what pods send out (Calico,
+Cilium; not kindnet nor minikube's default): without one the switch is recorded and the
+label set, but nothing is blocked. Scripting environments run on Kubernetes only, so
+there is nothing to block with Docker Compose.
+
 ### Variables
 
 The variables are what the scripts find in their environment, and they are separate
@@ -640,5 +718,5 @@ your catalog, and a flow's Script node a child job of the flow's run.
 ## Audit
 
 Every change is in the audit log: the bucket, the environments, a version put in use,
-every variable set or removed, and every saved script created, changed, restored, run,
+a version's internet access, every variable set or removed, and every saved script created, changed, restored, run,
 scheduled or deleted. A variable's value is never recorded.

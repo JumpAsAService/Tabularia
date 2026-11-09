@@ -14,6 +14,21 @@ exposes at `/system/info` and in the app's settings menu.
 - **Every icon of the top bar moves**, by what it holds (Analysis's bars rise, Connections
   plugs in, Administration's shield grows…), the «…» of more actions ripples its three dots,
   and a schedule's calendar-clock ticks: only for a fine pointer and without reduced motion.
+- **Internet access, version by version, for scripts and notebooks.** Administration →
+  Scripting environments has an **Internet access** switch on every version of a Python or
+  R environment. Off, the scripts of that version (Script nodes, their trials, saved
+  scripts) and the notebooks on it cannot reach the internet: the chart's new
+  NetworkPolicy (`templates/scripts-no-internet.yaml`) lets the pods labelled
+  `tabularia.io/internet=off` reach only the cluster's DNS, the storage's namespace and
+  what `scripts.noInternet.allowNamespaces` / `allowCIDRs` list (a scripts bucket in a
+  cloud goes there), and the notebooks the gateway; the policy of the users' code leaves
+  them out. The pickers show *no internet* next to the environment, a run's log starts
+  with a line saying so, and the audit records each change (`scripting.version_internet`).
+  Every version keeps the internet unless an administrator turns it off; a new version
+  starts with the setting of the version in use. Database migration 0042 adds the column
+  (`script_environment_versions.internet_access`, true for every existing version).
+  `PATCH /admin/scripting/environments/{id}/versions/{version_id}` sets it, administrators
+  only. docs/scripting.md, «Internet access».
 - **The privacy notice starts switched off.** A new installation no longer shows the sample
   privacy bar on the sign-in page: the administrator adapts its text and switches it on in
   Administration. An installation that already has a notice keeps its own setting.
