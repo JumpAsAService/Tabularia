@@ -75,15 +75,28 @@ func (d *Deps) privacyOut(n *privacyNotice) PrivacyOut {
 // readPrivacy is privacy._read: the single row, created at the first read with the starting
 // text.
 func readPrivacy(ctx context.Context, d *Deps) (*privacyNotice, error) {
+	return readPrivacyFrom(ctx, d.DB)
+}
+
+// privacyDefaultEnabled: a new installation starts with the notice switched off. The
+// sample text is there for the administrator to adapt and switch on; a bar on the sign-in
+// page that speaks for an organization nobody has asked is not a default. An installation
+// whose notice was already created keeps its own setting.
+const privacyDefaultEnabled = false
+
+// readPrivacyFrom reads the one notice, creating it (switched off) the first time.
+func readPrivacyFrom(ctx context.Context, db interface {
+	QueryRow(context.Context, string, ...any) pgx.Row
+}) (*privacyNotice, error) {
 	var n privacyNotice
 	scan := func(row pgx.Row) error {
 		return row.Scan(&n.id, &n.enabled, &n.summary, &n.body, &n.url, &n.updatedAt)
 	}
-	err := scan(d.DB.QueryRow(ctx, `SELECT id, enabled, summary, body, url, updated_at FROM privacy_notice LIMIT 1`))
+	err := scan(db.QueryRow(ctx, `SELECT id, enabled, summary, body, url, updated_at FROM privacy_notice LIMIT 1`))
 	if errors.Is(err, pgx.ErrNoRows) {
-		err = scan(d.DB.QueryRow(ctx, `INSERT INTO privacy_notice (id, enabled, summary, body, url, updated_at)
-			VALUES (1, true, $1, $2, '', $3) RETURNING id, enabled, summary, body, url, updated_at`,
-			privacyDefaultSummary, privacyDefaultText, time.Now().UTC()))
+		err = scan(db.QueryRow(ctx, `INSERT INTO privacy_notice (id, enabled, summary, body, url, updated_at)
+			VALUES (1, $1, $2, $3, '', $4) RETURNING id, enabled, summary, body, url, updated_at`,
+			privacyDefaultEnabled, privacyDefaultSummary, privacyDefaultText, time.Now().UTC()))
 	}
 	return &n, err
 }

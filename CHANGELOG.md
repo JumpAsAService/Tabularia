@@ -5,6 +5,9 @@ exposes at `/system/info` and in the app's settings menu.
 
 ## Unreleased
 
+- **The privacy notice starts switched off.** A new installation no longer shows the sample
+  privacy bar on the sign-in page: the administrator adapts its text and switches it on in
+  Administration. An installation that already has a notice keeps its own setting.
 - **An honest column profile, on the first 100,000 rows.** The profile's query reads the
   step's first 100,000 rows (a million before), stops after 20 seconds (a minute before) and
   never runs beside the rows or their count: what the parquet statistics know over every row

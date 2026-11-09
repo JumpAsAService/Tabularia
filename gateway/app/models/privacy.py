@@ -20,7 +20,7 @@ class PrivacyNotice(SQLModel, table=True):
     __tablename__ = "privacy_notice"
 
     id: Optional[int] = Field(default=1, primary_key=True)
-    enabled: bool = True
+    enabled: bool = False  # a new installation starts with the notice off (the Go gateway creates it)
     # the line that shows in the bar: it must fit on one line
     summary: str = Field(default="", sa_column=Column(Text, nullable=False))
     # the whole text, which opens from «Details»
