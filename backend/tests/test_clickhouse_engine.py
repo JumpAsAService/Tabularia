@@ -160,6 +160,15 @@ def test_group_by(storage, src):
     assert tot == {"IT": 400, "FR": 50, "DE": 250}
 
 
+def test_a_count_is_int64_as_on_duckdb(storage, src):
+    ops = [{"type": "group_by", "params": {"by": ["paese"], "aggregations": [
+        {"column": "citta", "func": "count", "alias": "n"}, {"column": "citta", "func": "n_unique", "alias": "u"}]}}]
+    res = _engine(storage).preview(src, ops, limit=10)
+    assert {c.name: c.dtype for c in res.columns}["n"] == "Int64"
+    assert {c.name: c.dtype for c in res.columns}["u"] == "Int64"
+    assert {r["paese"]: (r["n"], r["u"]) for r in res.rows} == {"IT": (2, 2), "FR": (1, 1), "DE": (0, 0)}
+
+
 def test_negative_zero_is_zero_in_groups_uniques_joins_and_pivots(storage):
     """-0.0 and 0.0 are one value, as on DuckDB and Polars: ClickHouse compares a float's
     bits when it groups, deduplicates or hash-joins (two groups, a join without its rows)."""

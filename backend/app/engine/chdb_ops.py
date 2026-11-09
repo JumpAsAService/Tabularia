@@ -349,6 +349,10 @@ def op_group_by(sql, params, ctx):
             raise EngineError(f"group_by: unsupported aggregation function '{func}'")
         alias = agg.get("alias") or f"{col}_{func}"
         expr = f"uniqExact({_qi(col)})" if func == "n_unique" else _aggregate(func, _qi(col))
+        if func in ("count", "n_unique"):
+            # Int64, as DuckDB's and BigQuery's, and as the pivot's: ClickHouse's own UInt64
+            # gave a flow made on DuckDB another column type when it ran on ClickHouse
+            expr = f"toInt64({expr})"
         parts.append(f"{expr} AS {_qi(alias)}")
     return f"SELECT {', '.join(parts)} FROM {_sub(_zero_signless(sql, by, ctx))} GROUP BY {by_sql}"
 
