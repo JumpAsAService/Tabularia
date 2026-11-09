@@ -213,6 +213,17 @@ def _short(text: str) -> str:
     return text if len(text) <= LIST_DESCRIPTION_CHARS else text[:LIST_DESCRIPTION_CHARS].rstrip() + "…"
 
 
+# the most rows the engine's preview returns (backend api/models.py, PreviewRequest.limit):
+# above it the engine refuses the query
+ENGINE_PREVIEW_MAX_ROWS = 1000
+
+
+def result_rows_cap() -> int:
+    """The rows one query of the assistant may return: AI__MAX_RESULT_ROWS, within the
+    engine's preview cap."""
+    return min(get_settings().ai.max_result_rows, ENGINE_PREVIEW_MAX_ROWS)
+
+
 def _trim(rows: list[dict[str, Any]]) -> list[dict[str, Any]]:
     out = []
     for r in rows:
@@ -301,7 +312,7 @@ def context(engine: Optional[str], locale: str, focus: list[dict[str, Any]] | No
         if history_withheld:
             lines.append(HISTORY_WITHHELD_CONTEXT)
     else:
-        lines.append(f"- Query results are capped at {get_settings().ai.max_result_rows} rows.")
+        lines.append(f"- Query results are capped at {result_rows_cap()} rows.")
     if level != "write":
         lines.append("- This user can only read: the tools that build, change, run or schedule are not available. "
                      "If they ask for a change, say they need an account that may make changes.")
@@ -500,8 +511,7 @@ async def query_datasource(
     - bullet: each category's measure (`chart_y`) against its target (`chart_y2`).
     Leave them unset for a single number (unless the user asks for an indicator: then kpi or gauge), for a couple of rows that already read fine, or for a non-numeric result: a chart of three rows is noise."""
     deps = ctx.deps
-    cap = get_settings().ai.max_result_rows
-    limit = max(1, min(int(limit or 50), cap))
+    limit = max(1, min(int(limit or 50), result_rows_cap()))
     query = sql.strip().rstrip(";").strip()
     if not _SELECT_ONLY.match(query) or ";" in query:
         raise ModelRetry("Only ONE statement starting with SELECT is allowed (no leading WITH, no ';'). Use subqueries in FROM instead of CTEs.")

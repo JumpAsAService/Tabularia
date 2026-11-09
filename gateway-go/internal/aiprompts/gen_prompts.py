@@ -19,6 +19,7 @@ ROWS = 987654321
 
 ai_prompts.today = lambda: f"Today is {TODAY}."
 ai_agent.get_settings = lambda: SimpleNamespace(ai=SimpleNamespace(max_result_rows=ROWS))
+ai_agent.ENGINE_PREVIEW_MAX_ROWS = ROWS  # the number shown is the setting's, within it
 
 out = {"agents": list(ai_prompts.AGENTS), "defaults": dict(ai_prompts.DEFAULTS), "today": TODAY, "rows": str(ROWS),
        "contexts": {}}

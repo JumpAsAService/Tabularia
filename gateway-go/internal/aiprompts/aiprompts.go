@@ -61,6 +61,10 @@ func languageName(locale string) string {
 	return "English"
 }
 
+// EnginePreviewMaxRows is ai_agent.ENGINE_PREVIEW_MAX_ROWS: the most rows the engine's preview
+// returns, and so one query of the assistant, whatever AI__MAX_RESULT_ROWS says.
+const EnginePreviewMaxRows = 1000
+
 // ExampleContext is routes/ai.py _example_context(agent, locale): today's date and the
 // rows' cap filled in.
 func ExampleContext(agent, locale string, withheld bool, maxResultRows int, today time.Time) string {

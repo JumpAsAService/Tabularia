@@ -101,7 +101,7 @@ type AiPromptOut struct {
 func promptOut(ctx context.Context, d *Deps, full bool, agent, locale string) (AiPromptOut, error) {
 	def, _ := aiprompts.Default(agent)
 	out := AiPromptOut{Agent: agent, Text: def, Default: def,
-		Context: aiprompts.ExampleContext(agent, locale, d.Panel.MetadataOnly("chat"), d.Panel.AIMaxResultRows(), time.Now())}
+		Context: aiprompts.ExampleContext(agent, locale, d.Panel.MetadataOnly("chat"), min(d.Panel.AIMaxResultRows(), aiprompts.EnginePreviewMaxRows), time.Now())}
 	var text string
 	var at time.Time
 	var by *string

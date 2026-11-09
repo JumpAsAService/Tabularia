@@ -109,6 +109,20 @@ async def test_describe_carries_the_field_descriptions_and_sample_rows(session, 
 
 
 @pytest.mark.anyio
+async def test_a_query_stays_within_the_engines_preview_cap(session, ai_on, fake_engine, monkeypatch):
+    """AI__MAX_RESULT_ROWS above the engine's preview cap (1000) asks the engine for no more
+    than it serves, and the model is told the cap it really has."""
+    monkeypatch.setattr(ai_on.ai, "max_result_rows", 2000)
+    _, user, visible, _ = _catalog(session)
+    fake_engine.preview_response = (200, {"columns": [], "rows": [], "row_count": 0, "truncated": False})
+    await ai_agent.query_datasource(_ctx(session, user), visible.id, "SELECT * FROM self", limit=1500)
+    assert fake_engine.previews[-1]["limit"] == ai_agent.ENGINE_PREVIEW_MAX_ROWS == 1000
+    assert ai_agent.result_rows_cap() == 1000
+    monkeypatch.setattr(ai_on.ai, "max_result_rows", 300)
+    assert ai_agent.result_rows_cap() == 300
+
+
+@pytest.mark.anyio
 async def test_query_runs_a_sql_node_on_the_right_source_and_is_audited(session, ai_on, fake_engine):
     _, user, visible, _ = _catalog(session)
     fake_engine.preview_response = (200, {"columns": [{"name": "paese", "dtype": "String"}, {"name": "n", "dtype": "Int64"}],
