@@ -434,6 +434,8 @@ function detailSummary(e: AuditEntry): string {
   if (d.cron === null || d.cron === '(disattivato)') parts.push(t('audit.scheduleOff'))
   else if (d.cron) parts.push(t('audit.cronLabel', { cron: d.cron }))
   if (Array.isArray(d.changed) && d.changed.length) parts.push(t('audit.fieldsLabel', { fields: d.changed.join(', ') }))
+  // the chat models a provider just added came with (ai.model_enable on the provider)
+  if (Array.isArray(d.models) && d.models.length) parts.push(d.models.join(', '))
   if (d.capability) parts.push(String(d.capability))
   if (d.db_type) parts.push(String(d.db_type))
   if (d.engine) parts.push(t('audit.engineLabel', { engine: d.engine }))

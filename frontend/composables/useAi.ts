@@ -50,6 +50,8 @@ export interface AiProvider {
   read_only: boolean // the environment's: changed where it is set
   chats: number
   enabled_models: number
+  // on a provider just added: why its chat models could not be enabled by themselves
+  models_problem?: string
 }
 
 export interface AiProviderTestResult {

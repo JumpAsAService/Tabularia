@@ -1,5 +1,7 @@
 """The AI service's internal API: the AI comments of a document a flow group's Pushmail cell
-sends, which the Go gateway's queue asks for. docs/specs/gateway-go.md, «The AI service».
+sends, which the Go gateway's queue asks for, and the catalog of a provider an administrator
+just added, whose chat models the Go gateway then enables. docs/specs/gateway-go.md, «The AI
+service».
 
 The comments are the assistant's (services/ai_comment.py, pydantic-ai): they stay in Python.
 Mounted only when `APP__ROLE=ai` (main.py), out of the OpenAPI schema, behind the internal
@@ -54,3 +56,28 @@ async def comments(body: CommentsIn) -> CommentsOut:
             s, user, body.definition, body.datasets, body.params, body.given, where=body.where, title=body.title,
             of_report=body.of_report, words_of=body.words_of)
     return CommentsOut(comments=said, reading=reading)
+
+
+class CatalogIn(BaseModel):
+    provider_id: int
+
+
+class CatalogOut(BaseModel):
+    models: list[str] = []  # the names at the provider, as PUT /ai/models checks them
+    problem: Optional[str] = None  # the catalog could not be read: why, in words
+
+
+@router.post("/catalog", response_model=CatalogOut)
+async def catalog(body: CatalogIn) -> CatalogOut:
+    """A saved provider's catalog, read as the panel and PUT /ai/models read it (its kind's
+    reader: Anthropic's SDK, or GET /models), fresh, and kept in the cache they use."""
+    from app.services import ai_models
+
+    with Session(engine) as s:
+        ep = ai_models.endpoint_of_key(s, f"provider:{body.provider_id}")
+    if ep is None:
+        raise HTTPException(status_code=422, detail="No such provider")
+    try:
+        return CatalogOut(models=await ai_models.provider_models(force=True, provider=ep))
+    except HTTPException as e:  # 502: the provider's failure; 409: its key can no longer be read
+        return CatalogOut(problem=str(e.detail))

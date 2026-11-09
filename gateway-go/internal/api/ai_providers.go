@@ -46,6 +46,9 @@ type AiProviderOut struct {
 	ReadOnly      bool   `json:"read_only"`
 	Chats         int64  `json:"chats"`
 	EnabledModels int64  `json:"enabled_models"`
+	// ModelsProblem: on a provider just added, why its models could not be enabled by
+	// themselves (its catalog did not answer); absent otherwise
+	ModelsProblem *string `json:"models_problem,omitempty"`
 }
 
 func (d *Deps) aiEnv() *aimodels.Endpoint {
@@ -163,14 +166,61 @@ func createAIProvider(d *Deps) adminBodyHandler {
 		tt := "ai_provider"
 		audit.Record(ctx, d.DB, d.Log, audit.Event{Actor: &p.User, Action: "ai.provider_create", TargetType: &tt,
 			TargetID: &id, TargetLabel: &name, Detail: pyjson.Object{{Key: "kind", Value: kind}, {Key: "base_url", Value: url}}})
+		problem := enableOfferedModels(ctx, d, p, id, name)
 		e := aimodels.Endpoint{ProviderID: &id, Name: name, Kind: kind, BaseURL: url, Active: true}
 		out, err := providerOut(ctx, d, e, true)
 		if err != nil {
 			adminFail(d, w, "reading the provider", err)
 			return
 		}
+		out.ModelsProblem = problem
 		server.JSON(w, http.StatusCreated, out)
 	}
+}
+
+// enableOfferedModels turns on every chat model a provider just added offers, so that people
+// can try the assistant at once and the administrator turns off what they do not want. The
+// catalog is the AI service's, the one the panel shows and PUT /ai/models checks against
+// (Anthropic's read through its SDK), and the same is_chat_model check applies: no embedding,
+// audio, image or reranker. One audit entry lists them. A catalog that cannot be read leaves the
+// provider saved with no model on, and the words say so (nil: nothing to say).
+func enableOfferedModels(ctx context.Context, d *Deps, p *auth.Principal, id int64, name string) *string {
+	byHand := func(why string) *string {
+		s := "Its models were not enabled: " + why + " Enable them by hand in Administration → AI models."
+		return &s
+	}
+	cat, err := d.SQL.Catalog(ctx, id)
+	if err != nil {
+		d.Log.Warn("reading the catalog of a new AI provider", "provider", id, "err", err)
+		return byHand("the AI service did not answer.")
+	}
+	if cat.Problem != nil {
+		return byHand(*cat.Problem)
+	}
+	refs, names := []string{}, []string{}
+	for _, m := range cat.Models {
+		if aimodels.IsChatModel(m) {
+			refs, names = append(refs, aimodels.RefOf(&id, m)), append(names, m)
+		}
+	}
+	if len(refs) == 0 {
+		return nil
+	}
+	if _, err := d.DB.Exec(ctx, `INSERT INTO ai_models (model_id, enabled, updated_at, updated_by)
+		SELECT unnest($1::text[]), true, $2, $3
+		ON CONFLICT (model_id) DO UPDATE SET enabled = true, updated_at = EXCLUDED.updated_at, updated_by = EXCLUDED.updated_by`,
+		refs, nowNaive(), p.User.ID); err != nil {
+		d.Log.Error("enabling the models of a new AI provider", "provider", id, "err", err)
+		return byHand("they could not be saved.")
+	}
+	tt := "ai_provider"
+	listed := make([]any, len(names))
+	for i, n := range names {
+		listed[i] = n
+	}
+	audit.Record(ctx, d.DB, d.Log, audit.Event{Actor: &p.User, Action: "ai.model_enable", TargetType: &tt,
+		TargetID: &id, TargetLabel: &name, Detail: pyjson.Object{{Key: "models", Value: listed}, {Key: "automatic", Value: true}}})
+	return nil
 }
 
 // providerRow is _provider_row: the path's id validated, then the row or a 404.

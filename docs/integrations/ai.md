@@ -15,7 +15,7 @@ audit it.
 | Providers | any number: Anthropic, through its own SDK, and any endpoint that speaks the OpenAI chat-completions protocol, with tool calls, and lists its models at `GET /models` |
 | Who talks to them | the gateway only; the engine and the workers never call a provider |
 | On | when a provider is added in Administration → AI models, or `AI__BASE_URL` and `AI__SECRET_KEY` are set, and at least one model is enabled |
-| Models | chosen by the administrator from each provider's catalog; none enabled by default |
+| Models | chosen by the administrator from each provider's catalog: a provider added in the panel starts with all its chat models enabled, the environment's with none |
 | Instructions | six system prompts, editable in Administration → AI models → **Agent instructions** |
 | Costs | estimated per answer; caps per answer, per person per day, per installation per day |
 | Audit | every query on data, every provider changed, every model enabled or disabled, every instruction changed |
@@ -225,9 +225,13 @@ another model are not on.
 ### The models
 
 Administration → **AI models** lists each provider's catalog; one that does not answer says
-so without hiding the others. Nothing is enabled by default: every message is billed by the
-provider, so an administrator enables each model people may choose. Embedding, audio and
-reranker models are listed but cannot be enabled. A model the provider stops offering stays
+so without hiding the others. A provider added there starts with every chat model of its
+catalog enabled, so people can try the assistant at once: the administrator turns off those
+they do not want (each message is billed by the provider), and the audit lists the models
+turned on. If the catalog does not answer when the provider is saved, the provider is saved
+all the same and its models are enabled by hand. The models of the environment's provider
+(`AI__BASE_URL`) start off. Embedding, audio, image, moderation and reranker models are
+listed but cannot be enabled. A model the provider stops offering stays
 in the list, marked «no longer offered», so it can be disabled. The same name on two providers
 is two models, and the pickers show each model with its provider. The dbt export uses
 `AI__DEFAULT_MODEL` when it is enabled, otherwise the first enabled model. That setting holds
@@ -331,7 +335,8 @@ The dbt export's own audit entry names the AI models that wrote its texts
 ## Example: turning it on
 
 **From the panel**: Administration → AI models → **Add a provider**: a name, the type, the API
-key, **Test**, **Save**. Enable a model in the list below it (`claude-opus-5-5`, for instance).
+key, **Test**, **Save**. Its chat models are enabled at once: turn off, in the list below it,
+those people should not choose.
 
 **Docker Compose**, in `infrastructure/.env`:
 

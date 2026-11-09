@@ -200,6 +200,18 @@ exposes at `/system/info` and in the app's settings menu.
   only by adding, so 1.4.3 → 1.4.2 is a `helm rollback` with nothing to do on the database.
   docs/database-migrations.md, docs/lts.md.
 
+### Changed
+
+- **A provider added starts with its chat models on.** Administration → AI models → Add a
+  provider (and `POST /ai/providers`) now enables every chat model its catalog offers, so
+  people can try the assistant at once: the administrator turns off those they do not want.
+  The audit records them in one line (`ai.model_enable` on the provider, the models listed).
+  If the catalog does not answer, the provider is saved all the same and the panel says its
+  models are to be enabled by hand. Image, moderation, realtime and the old completion
+  models (`dall-e`, `gpt-image`, `moderation`, `babbage`…) join embedding, audio and
+  reranker among those that cannot be enabled. The environment's provider (`AI__BASE_URL`)
+  still starts with none.
+
 ### Upgrading
 
 - **Take a backup of the database before upgrading to 1.4.2.** Its migration (0042) brings

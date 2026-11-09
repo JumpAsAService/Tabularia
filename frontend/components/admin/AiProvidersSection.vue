@@ -104,9 +104,15 @@ async function save() {
       const updated = await api.updateProvider(editing.value.id, { name: form.name, base_url: form.base_url, api_key: form.api_key })
       await refreshRow(updated)
     } else {
+      // its chat models come enabled (the server reads its catalog): say how many, or why none
       const made = await api.createProvider({ ...form })
       providers.value = [...(providers.value ?? []), made]
       await loadModels(made)
+      if (made.models_problem) toast.warning(`${t('adminPanel.aiProviderSaved', { name: made.name })}. ${made.models_problem}`)
+      else if (made.enabled_models > 0) toast.success(t('adminPanel.aiProviderSavedModels', { name: made.name, n: made.enabled_models }))
+      else toast.success(t('adminPanel.aiProviderSaved', { name: made.name }))
+      closeForm()
+      return
     }
     toast.success(t('adminPanel.aiProviderSaved', { name: form.name }))
     closeForm()

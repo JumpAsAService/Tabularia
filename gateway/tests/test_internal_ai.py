@@ -68,3 +68,48 @@ def test_a_definition_without_a_comment_says_nothing(client, db_engine):
         uid = u.id
     r = client.post("/internal/ai/comments", headers={INTERNAL_HEADER: internal_token()}, json=_body(uid))
     assert r.status_code == 200 and r.json() == {"comments": {}, "reading": None}
+
+
+# ── the catalog of a provider just added (the Go gateway then enables its chat models) ──
+def _provider(db_engine, name="Fake LLM"):
+    from sqlmodel import Session
+
+    from app.core.crypto import encrypt_secret
+    from app.models import AiProvider
+
+    with Session(db_engine) as s:
+        row = AiProvider(name=name, kind="openai_compatible", base_url="http://llm.example/v1",
+                         secret_encrypted=encrypt_secret("not a key"), active=True)
+        s.add(row)
+        s.commit()
+        return row.id
+
+
+def test_the_catalog_needs_the_token_and_a_provider(client):
+    assert client.post("/internal/ai/catalog", json={"provider_id": 1}).status_code == 404
+    r = client.post("/internal/ai/catalog", json={"provider_id": 999}, headers={INTERNAL_HEADER: internal_token()})
+    assert r.status_code == 422 and r.json() == {"detail": "No such provider"}
+
+
+def test_the_catalog_is_read_fresh_and_its_failure_said(client, db_engine, monkeypatch):
+    from app.services import ai_models
+
+    pid = _provider(db_engine)
+    calls = []
+
+    async def read_catalog(ep):
+        calls.append(ep.key)
+        if len(calls) == 1:
+            return ["gpt-x", "text-embedding-3-small"]
+        raise ai_models.CatalogError("provider_rejected", "«Fake LLM» refused the request (401).")
+
+    monkeypatch.setattr(ai_models, "read_catalog", read_catalog)
+    ai_models.clear_cache()
+    headers = {INTERNAL_HEADER: internal_token()}
+    r = client.post("/internal/ai/catalog", json={"provider_id": pid}, headers=headers)
+    assert r.status_code == 200 and r.json() == {"models": ["gpt-x", "text-embedding-3-small"], "problem": None}
+    # fresh every time: not the cached answer of a moment ago
+    r = client.post("/internal/ai/catalog", json={"provider_id": pid}, headers=headers)
+    assert r.status_code == 200 and r.json() == {"models": [], "problem": "«Fake LLM» refused the request (401)."}
+    assert calls == [f"provider:{pid}", f"provider:{pid}"]
+    ai_models.clear_cache()
