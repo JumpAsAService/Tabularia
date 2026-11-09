@@ -125,9 +125,16 @@ def test_compute_and_sql_guards():
     ok = op("sql", {"query": "SELECT nome, COUNT(*) AS n FROM self GROUP BY nome"})
     assert ok.startswith("WITH input AS (SELECT * FROM `_src1`), self AS (SELECT * FROM input) SELECT nome")
     for bad in ("SELECT * FROM `proj.ds.tab`", "SELECT * FROM self; DROP TABLE x", "SELECT * FROM self -- c",
-                "DELETE FROM self WHERE 1=1", "SELECT * FROM altra"):
+                "DELETE FROM self WHERE 1=1", "SELECT * FROM altra", "SELECT `a` FROM self JOIN `ds.t` ON TRUE",
+                "SELECT * FROM self, `my-proj`.`ds.tab`"):
         with pytest.raises(EngineError):
             op("sql", {"query": bad})
+    # a dot BETWEEN two quoted names is no table path (a number, a decimal): found against a
+    # real project, where the column profile's histogram was refused
+    for good in ("SELECT `a` * 1.5 AS `b` FROM self",
+                 "SELECT LEAST(9, GREATEST(0, CAST(floor((CAST(`amount` AS FLOAT64) - (-700.0)) / 450.0) AS INT64))) AS b, "
+                 "count(*) AS n FROM self WHERE CAST(`amount` AS FLOAT64) BETWEEN -700.0 AND 3800.0 GROUP BY b"):
+        assert op("sql", {"query": good}).endswith(good)
 
 
 def test_joins():

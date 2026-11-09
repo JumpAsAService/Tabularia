@@ -381,6 +381,13 @@ _SQL_FORBIDDEN = re.compile(
 )
 
 
+def _quoted_path(query: str) -> bool:
+    """A backtick-quoted name holding a dot (`dataset.table`, `project.dataset.table`): a
+    reference to the project's tables. The quoted names are read pair by pair, so the text
+    BETWEEN two of them (`a` * 1.5 AS `b`) is never taken for one."""
+    return any("." in m.group(1) for m in re.finditer(r"`((?:[^`\\]|\\.)*)`", query))
+
+
 @_register("sql")
 def op_sql(sql, params, ctx):
     """A free query on the node's input, exposed as the CTE `self` (alias `input`), the
@@ -397,7 +404,7 @@ def op_sql(sql, params, ctx):
         raise EngineError("sql: comments (-- and /* */) are not allowed in the SQL node.")
     if ";" in query:
         raise EngineError("sql: only one SELECT statement is allowed (no ';').")
-    if _SQL_FORBIDDEN.search(query) or re.search(r"`[^`]*\.[^`]*`", query):
+    if _SQL_FORBIDDEN.search(query) or _quoted_path(query):
         raise EngineError(
             "sql: the query may only read the node's input. DDL/DML, scripts, "
             "EXTERNAL_QUERY, ML/AI and references to the project's tables are not allowed."
