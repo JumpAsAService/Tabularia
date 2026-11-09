@@ -619,7 +619,7 @@ Python gateway as FastAPI serves it, and whether the Go gateway answers it
 | DELETE | `/admin/workers/{kind}/scaling` | `give_back` | **Go** |
 | PUT | `/admin/workers/{kind}/scaling` | `scala` | **Go** |
 
-## Go only (47)
+## Go only (48)
 
 | Method | Path | Served by |
 |---|---|---|
@@ -627,6 +627,7 @@ Python gateway as FastAPI serves it, and whether the Go gateway answers it
 | DELETE | `/admin/data-apis/{api_id}` | **Go** |
 | POST | `/admin/data-apis/{api_id}/pause` | **Go** |
 | PUT | `/admin/data-apis/{api_id}/runtime` | **Go** |
+| PATCH | `/admin/scripting/environments/{environment_id}/versions/{version_id}` | **Go** |
 | GET | `/admin/share-links` | **Go** |
 | PUT | `/admin/share-links/settings` | **Go** |
 | GET | `/data-apis` | **Go** |

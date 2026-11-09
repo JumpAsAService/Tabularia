@@ -38,6 +38,10 @@ const (
 	codeDir   = "/tabularia/code" // CODE_DIR
 	scriptUID = 10001             // script_builds.SCRIPT_UID
 	labelEnv  = "tabularia.io/environment"
+	// labelInternet "off" is on the pods of a version without internet access: the chart's
+	// NetworkPolicy (templates/scripts-no-internet.yaml) confines them to the cluster's DNS,
+	// the storage and what scripts.noInternet allows, and the users' code policy leaves them
+	labelInternet = "tabularia.io/internet"
 )
 
 // jobSettings are ScriptsSettings' and ContainersSettings' values a run reads that
@@ -84,6 +88,31 @@ type scriptVersion struct {
 	Number         int64
 	Status         string
 	ImageRef, Arch *string
+	InternetAccess bool
+}
+
+// withInternet is the labels of a pod of this version: labelInternet "off" added when it has
+// no internet access. A copy: the caller's labels are kept for the next attempt.
+func withInternet(labels pyjson.Object, internet bool) pyjson.Object {
+	if internet {
+		return labels
+	}
+	return append(append(pyjson.Object(nil), labels...), pyjson.KV{Key: labelInternet, Value: "off"})
+}
+
+// offlineNotice is the first line of the log of a run whose version has no internet access:
+// when a request fails, the log says why.
+func offlineNotice(env string, version int64) string {
+	return fmt.Sprintf("Internet access is off for «%s» v%d: the code reaches the scripts bucket and the cluster's DNS, "+
+		"not the internet (Administration → Scripting environments).", env, version)
+}
+
+// offlineFailure is what a failure of such a run adds to its reason.
+func offlineFailure(internet bool) string {
+	if internet {
+		return ""
+	}
+	return " (internet access is off for this environment's version)"
 }
 
 type scriptStorage struct{ Endpoint, Region, Bucket, AccessKey, SecretEnc string }
@@ -238,7 +267,7 @@ func scriptJobManifest(js jobSettings, name string, env *scriptEnv, version *scr
 	if js.registryPullSecret != "" {
 		pod = append(pod, pyjson.KV{Key: "imagePullSecrets", Value: []any{pyjson.Object{{Key: "name", Value: js.registryPullSecret}}}})
 	}
-	return jobManifestOf(name, labels, timeout, js.jobTTL, pod)
+	return jobManifestOf(name, withInternet(labels, version.InternetAccess), timeout, js.jobTTL, pod)
 }
 
 func jobManifestOf(name string, labels pyjson.Object, timeout, ttl int64, pod pyjson.Object) pyjson.Object {
@@ -292,6 +321,8 @@ type childRun struct {
 	// unchecked: saved_script_runs.execute's save, which writes a terminal outcome without
 	// asking whether the run is still open
 	unchecked bool
+	// preface: a line written above the attempts' log (offlineNotice)
+	preface string
 }
 
 // save is save(**values): the values and the info written; a terminal outcome only on a run
@@ -472,8 +503,8 @@ func (d *Deps) environmentOf(ctx context.Context, sc *scriptcfg.Settings, user *
 	var version *scriptVersion
 	if env.CurrentVersionID != nil && *env.CurrentVersionID != 0 {
 		var v scriptVersion
-		err := d.DB.QueryRow(ctx, `SELECT number, status, image_ref, arch FROM script_environment_versions WHERE id = $1`, *env.CurrentVersionID).
-			Scan(&v.Number, &v.Status, &v.ImageRef, &v.Arch)
+		err := d.DB.QueryRow(ctx, `SELECT number, status, image_ref, arch, internet_access FROM script_environment_versions WHERE id = $1`,
+			*env.CurrentVersionID).Scan(&v.Number, &v.Status, &v.ImageRef, &v.Arch, &v.InternetAccess)
 		if err == nil {
 			version = &v
 		} else if !errors.Is(err, pgx.ErrNoRows) {
@@ -588,7 +619,7 @@ func (q *queue) runScript(ctx context.Context, r *scriptNodeRun) (*flowresolver.
 		{Key: "output", Value: hasOutput}, {Key: "entrypoint", Value: data.Value("entrypoint")}, {Key: "files", Value: files},
 		{Key: "attempts", Value: int64(0)}, {Key: "exit_code", Value: nil}, {Key: "variables", Value: snapshot}, {Key: "log", Value: ""},
 		{Key: "trial", Value: r.trial != 0}, {Key: "fingerprint", Value: fingerprint}, {Key: "budget_seconds", Value: budget},
-		{Key: "namespace", Value: ns}}
+		{Key: "namespace", Value: ns}, {Key: "internet_access", Value: version.InternetAccess}}
 	if saved != nil {
 		inputs := []any{}
 		for _, in := range declared {
@@ -607,6 +638,9 @@ func (q *queue) runScript(ctx context.Context, r *scriptNodeRun) (*flowresolver.
 		return nil, err
 	}
 	child := &childRun{d: d, id: childID, info: info}
+	if !version.InternetAccess {
+		child.preface = offlineNotice(env.Name, version.Number)
+	}
 	r.io()
 	written := []string{inKey, outKey}
 	defer func() { d.deleteObjects(context.Background(), storage, written) }()
@@ -664,7 +698,7 @@ func (q *queue) runScript(ctx context.Context, r *scriptNodeRun) (*flowresolver.
 			return nil, err
 		}
 		if !ok {
-			return nil, &scriptFailed{fmt.Sprintf("script «%s» failed: %s", label, reason)}
+			return nil, &scriptFailed{fmt.Sprintf("script «%s» failed: %s%s", label, reason, offlineFailure(version.InternetAccess))}
 		}
 		return q.importOutput(ctx, child, hasOutput, wantsOutput, storage, outKey, engineOutKey, "script «"+label+"»",
 			fmt.Sprintf("script «%s» did not write its output: the nodes after it read the parquet file the script writes at TABULARIA_OUTPUT", label))
@@ -768,7 +802,11 @@ func (q *queue) attempts(ctx context.Context, child *childRun, kind, what string
 		} else {
 			logs = append(logs, log)
 		}
-		child.info = child.info.Set("log", kube.Tail(strings.Join(logs, "\n"), logMax)).Set("exit_code", exitCode)
+		tail := kube.Tail(strings.Join(logs, "\n"), logMax)
+		if child.preface != "" {
+			tail = child.preface + "\n" + tail
+		}
+		child.info = child.info.Set("log", tail).Set("exit_code", exitCode)
 		if err := child.save(ctx); err != nil {
 			return false, "", err
 		}

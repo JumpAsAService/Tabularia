@@ -144,7 +144,8 @@ func (q *queue) executeSaved(ctx context.Context, user *auth.User, s *savedscrip
 		{Key: "version", Value: version.Number}, {Key: "image", Value: deref(version.ImageRef)}, {Key: "step_id", Value: stepID},
 		{Key: "output", Value: true}, {Key: "entrypoint", Value: content.Value("entrypoint")}, {Key: "files", Value: files},
 		{Key: "attempts", Value: int64(0)}, {Key: "exit_code", Value: nil}, {Key: "inputs", Value: declared},
-		{Key: "publish", Value: publishes}, {Key: "variables", Value: snapshot}, {Key: "log", Value: ""}, {Key: "namespace", Value: ns}}
+		{Key: "publish", Value: publishes}, {Key: "variables", Value: snapshot}, {Key: "log", Value: ""}, {Key: "namespace", Value: ns},
+		{Key: "internet_access", Value: version.InternetAccess}}
 	var childID int64
 	if err := d.DB.QueryRow(ctx, `INSERT INTO runs (kind, saved_script_id, task_id, status, launched_by, trigger_type, parent_run_id, engine,
 		input_key, output_bucket, output_key, publish_description, publish_overwrite, publish_sort_keys, script, started_at)
@@ -154,6 +155,9 @@ func (q *queue) executeSaved(ctx context.Context, user *auth.User, s *savedscrip
 	}
 	// execute's own save: no check of the run still open
 	child := &childRun{d: d, id: childID, info: info, unchecked: true}
+	if !version.InternetAccess {
+		child.preface = offlineNotice(env.Name, version.Number)
+	}
 	what := fmt.Sprintf("the saved script «%s»", s.Name)
 	written := []string{outKey}
 	defer func() { d.deleteObjects(context.Background(), storage, written) }()
@@ -192,7 +196,7 @@ func (q *queue) executeSaved(ctx context.Context, user *auth.User, s *savedscrip
 			return err
 		}
 		if !ok {
-			return &scriptFailed{fmt.Sprintf("%s failed: %s", what, reason)}
+			return &scriptFailed{fmt.Sprintf("%s failed: %s%s", what, reason, offlineFailure(version.InternetAccess))}
 		}
 		// the datasource the output will replace, read now; its contract checked on the copy
 		var target *jobDatasource

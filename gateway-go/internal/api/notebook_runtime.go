@@ -200,6 +200,8 @@ type nbImage struct {
 	env            *scEnvironment
 	versionID      int64
 	imageRef, arch string
+	// the version's internet access: false puts labelInternet "off" on the notebook's pod
+	internet bool
 }
 
 // nbImageOf is _image: the environment's image, ready and with marimo.
@@ -216,10 +218,11 @@ func nbImageOf(ctx context.Context, d *Deps, n *nbRow) (*nbImage, error) {
 	}
 	var status string
 	var imageRef, lock, arch *string
+	internet := true
 	found := false
 	if env.CurrentVersionID != nil && *env.CurrentVersionID != 0 {
-		err := d.DB.QueryRow(ctx, `SELECT status, image_ref, lock, arch FROM script_environment_versions WHERE id = $1`, *env.CurrentVersionID).
-			Scan(&status, &imageRef, &lock, &arch)
+		err := d.DB.QueryRow(ctx, `SELECT status, image_ref, lock, arch, internet_access FROM script_environment_versions WHERE id = $1`,
+			*env.CurrentVersionID).Scan(&status, &imageRef, &lock, &arch, &internet)
 		if err != nil && !errors.Is(err, pgx.ErrNoRows) {
 			return nil, err
 		}
@@ -232,7 +235,7 @@ func nbImageOf(ctx context.Context, d *Deps, n *nbRow) (*nbImage, error) {
 	if lock != nil && *lock != "" && !nbMarimoLocked.MatchString(*lock) {
 		return nil, nbRefusal(422, "%s", nbNoMarimoText(env.Name))
 	}
-	img := &nbImage{env: env, versionID: *env.CurrentVersionID, imageRef: *imageRef}
+	img := &nbImage{env: env, versionID: *env.CurrentVersionID, imageRef: *imageRef, internet: internet}
 	if arch != nil {
 		img.arch = *arch
 	}
@@ -399,7 +402,7 @@ func nbJobManifest(name string, notebookID int64, mode string, img *nbImage, con
 	if rt.ScriptsPullSecret != "" {
 		pod = append(pod, pyjson.KV{Key: "imagePullSecrets", Value: []any{pyjson.Object{{Key: "name", Value: rt.ScriptsPullSecret}}}})
 	}
-	tags := nbLabels(notebookID, mode)
+	tags := withInternet(nbLabels(notebookID, mode), img.internet)
 	return pyjson.Object{
 		{Key: "apiVersion", Value: "batch/v1"}, {Key: "kind", Value: "Job"},
 		{Key: "metadata", Value: pyjson.Object{{Key: "name", Value: name}, {Key: "labels", Value: tags}}},
@@ -570,6 +573,9 @@ func nbStart(ctx context.Context, d *Deps, n *nbRow, mode string, user *auth.Use
 	}
 	detail := pyjson.Object{{Key: "mode", Value: mode}, {Key: "version", Value: row.Version}, {Key: "rights_of", Value: holder.Email},
 		{Key: "environment", Value: img.env.Name}}
+	if !img.internet {
+		detail = append(detail, pyjson.KV{Key: "internet_access", Value: false})
+	}
 	if row.Status == "failed" {
 		detail = append(detail, pyjson.KV{Key: "outcome", Value: row.Error})
 	}

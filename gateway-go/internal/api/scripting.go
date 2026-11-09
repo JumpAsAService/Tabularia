@@ -46,9 +46,7 @@ func init() {
 		admin := func(method, pattern string, h scBodyHandler) server.Route {
 			return server.Route{Method: method, Pattern: pattern, Handler: scWithBody(d, pattern,
 				func(d *Deps, w http.ResponseWriter, r *http.Request, p *auth.Principal, body pyd.Body) {
-					if scRequire(d, w, r, p, true, scNoScriptingFromToken) {
-						h(d, w, r, p, body)
-					}
+					scAsAdmin(d, w, r, p, body, h)
 				})}
 		}
 		person := func(method, pattern string, h func(*Deps, http.ResponseWriter, *http.Request, *auth.Principal)) server.Route {
@@ -64,6 +62,7 @@ func init() {
 			admin(http.MethodPut, "/admin/scripting/environments/{environment_id}", changeEnvironment),
 			admin(http.MethodPost, "/admin/scripting/environments/{environment_id}/rebuild", rebuildEnvironment),
 			admin(http.MethodPost, "/admin/scripting/environments/{environment_id}/versions/{version_id}/current", makeCurrent),
+			admin(http.MethodPatch, "/admin/scripting/environments/{environment_id}/versions/{version_id}", changeVersion),
 			admin(http.MethodDelete, "/admin/scripting/environments/{environment_id}", deleteEnvironment),
 			admin(http.MethodPut, "/admin/scripting/environments/{environment_id}/variables/{name}", writeVariable),
 			admin(http.MethodDelete, "/admin/scripting/environments/{environment_id}/variables/{name}", deleteVariable),
@@ -80,6 +79,14 @@ var scNoScriptingFromToken = map[string]string{
 	"fr": "Un jeton d'API ne peut pas modifier les environnements de script ni leur bucket : faites-le depuis l'interface",
 	"de": "Ein API-Token kann die Skriptumgebungen und ihren Bucket nicht ändern: Das geht über die Oberfläche",
 	"es": "Un token de API no puede cambiar los entornos de scripting ni su bucket: hazlo desde la interfaz",
+}
+
+// scAsAdmin is what every administrator's route of the section runs: require_superuser, then
+// _no_token, then the handler.
+func scAsAdmin(d *Deps, w http.ResponseWriter, r *http.Request, p *auth.Principal, body pyd.Body, h scBodyHandler) {
+	if scRequire(d, w, r, p, true, scNoScriptingFromToken) {
+		h(d, w, r, p, body)
+	}
 }
 
 // scRequire is require_observer (admin false) or require_superuser, then, with a table,
@@ -356,14 +363,15 @@ type scVersion struct {
 	StartedAt       *string `json:"started_at"`
 	FinishedAt      *string `json:"finished_at"`
 	Current         bool    `json:"current"`
+	InternetAccess  bool    `json:"internet_access"` // false: labelInternet "off" on its scripts' and notebooks' pods
 	completions     *string
 }
 
 // scVersions is _versions: newest first.
 func scVersions(ctx context.Context, q perm.Querier, envID int64, current *int64) ([]scVersion, error) {
 	rows, err := q.Query(ctx, `SELECT id, number, language_version, base_image, packages, status, image_ref, lock, build_log, error,
-		created_at, created_by, started_at, finished_at, completions FROM script_environment_versions WHERE environment_id = $1
-		ORDER BY number DESC`, envID)
+		created_at, created_by, started_at, finished_at, completions, internet_access FROM script_environment_versions
+		WHERE environment_id = $1 ORDER BY number DESC`, envID)
 	if err != nil {
 		return nil, err
 	}
@@ -374,7 +382,7 @@ func scVersions(ctx context.Context, q perm.Querier, envID int64, current *int64
 		var created time.Time
 		var started, finished *time.Time
 		if err := rows.Scan(&v.ID, &v.Number, &v.LanguageVersion, &v.BaseImage, &v.Packages, &v.Status, &v.ImageRef, &v.Lock,
-			&v.BuildLog, &v.Error, &created, &v.CreatedBy, &started, &finished, &v.completions); err != nil {
+			&v.BuildLog, &v.Error, &created, &v.CreatedBy, &started, &finished, &v.completions, &v.InternetAccess); err != nil {
 			return nil, err
 		}
 		v.CreatedAt, v.StartedAt, v.FinishedAt = pyjson.Isoformat(created), isoPtr(started), isoPtr(finished)
@@ -494,6 +502,7 @@ type environmentSummary struct {
 	CurrentNumber   *int64   `json:"current_number"`
 	LatestNumber    *int64   `json:"latest_number"`
 	LatestStatus    *string  `json:"latest_status"`
+	InternetAccess  *bool    `json:"internet_access"` // the version in use's, null without one
 	Variables       int64    `json:"variables"`
 	Groups          []string `json:"groups"`
 	UpdatedAt       string   `json:"updated_at"`
@@ -522,7 +531,7 @@ func scSummary(ctx context.Context, q perm.Querier, e *scEnvironment, versions [
 	}
 	for i := range versions {
 		if versions[i].Current {
-			out.CurrentNumber = &versions[i].Number
+			out.CurrentNumber, out.InternetAccess = &versions[i].Number, &versions[i].InternetAccess
 			break
 		}
 	}
@@ -873,10 +882,28 @@ func scNewVersion(ctx context.Context, tx pgx.Tx, e *scEnvironment, lv, packages
 	if err != nil || refusal != nil {
 		return 0, scFromRefusal(refusal), err
 	}
+	internet, err := scInheritedInternet(ctx, tx, e.ID)
+	if err != nil {
+		return 0, nil, err
+	}
 	_, err = tx.Exec(ctx, `INSERT INTO script_environment_versions (environment_id, number, language_version, base_image, packages,
-		status, created_at, created_by) VALUES ($1, $2, $3, $4, $5, 'queued', $6, $7)`, e.ID, number, lv, image, packages,
-		time.Now().UTC(), who)
+		status, created_at, created_by, internet_access) VALUES ($1, $2, $3, $4, $5, 'queued', $6, $7, $8)`, e.ID, number, lv, image,
+		packages, time.Now().UTC(), who, internet)
 	return number, nil, err
+}
+
+// scInheritedInternet is the internet access of an environment's next version: the one of
+// the version in use, else of the newest, else on. An administrator who took the internet
+// away from an environment does not get it back by changing a package.
+func scInheritedInternet(ctx context.Context, q perm.Querier, envID int64) (bool, error) {
+	var on bool
+	err := q.QueryRow(ctx, `SELECT v.internet_access FROM script_environment_versions v JOIN script_environments e
+		ON e.id = v.environment_id WHERE v.environment_id = $1 ORDER BY (v.id = e.current_version_id) DESC, v.number DESC LIMIT 1`,
+		envID).Scan(&on)
+	if scNoRows(err) {
+		return true, nil
+	}
+	return on, err
 }
 
 func scLines(s string) []string {
@@ -1254,6 +1281,66 @@ func makeCurrent(d *Deps, w http.ResponseWriter, r *http.Request, p *auth.Princi
 	scSendEnv(d, w, ctx, e.ID, http.StatusOK)
 }
 
+// versionChange is PATCH …/versions/{version_id}'s body: what an administrator changes of a
+// version that is not what its image is built from.
+var versionChange = pyd.NewModel("VersionChange",
+	pyd.F("internet_access", pyd.Bool()),
+)
+
+// changeVersion is PATCH /admin/scripting/environments/{environment_id}/versions/{version_id}:
+// whether the version's scripts and notebooks may reach the internet. It holds from their next
+// run: a pod running already keeps the network it started with.
+func changeVersion(d *Deps, w http.ResponseWriter, r *http.Request, p *auth.Principal, body pyd.Body) {
+	var params pyd.Params
+	ids, _ := pathIntsInto(&params, r, "environment_id", "version_id")
+	in := params.Body(body, versionChange)
+	if resp := params.Response(); resp != nil {
+		resp.Write(w)
+		return
+	}
+	if !scriptingIsOn(w) {
+		return
+	}
+	ctx := r.Context()
+	e, ok := scEnvironmentOr404(d, w, ctx, ids[0])
+	if !ok {
+		return
+	}
+	on := in.Get("internet_access").(bool)
+	var envID, number int64
+	var was bool
+	err := d.DB.QueryRow(ctx, `SELECT environment_id, number, internet_access FROM script_environment_versions WHERE id = $1`,
+		ids[1]).Scan(&envID, &number, &was)
+	if err != nil && !scNoRows(err) {
+		fail(d, w, "scripting: the version", err)
+		return
+	}
+	if scNoRows(err) || envID != e.ID {
+		detail(w, http.StatusNotFound, "Version not found")
+		return
+	}
+	if was == on {
+		scSendEnv(d, w, ctx, e.ID, http.StatusOK)
+		return
+	}
+	err = scInTx(ctx, d, func(tx pgx.Tx) error {
+		if _, err := tx.Exec(ctx, `UPDATE script_environment_versions SET internet_access = $1 WHERE id = $2`, on, ids[1]); err != nil {
+			return err
+		}
+		_, err := tx.Exec(ctx, `UPDATE script_environments SET updated_at = $1, updated_by = $2 WHERE id = $3`,
+			time.Now().UTC(), p.User.Email, e.ID)
+		return err
+	})
+	if err != nil {
+		fail(d, w, "scripting: the version's internet access", err)
+		return
+	}
+	audit.Record(ctx, d.DB, d.Log, audit.Event{Actor: &p.User, Action: "scripting.version_internet", TargetType: scPtrStr("script_environment"),
+		TargetID: &e.ID, TargetLabel: &e.Name, Detail: pyjson.Object{{Key: "version", Value: number},
+			{Key: "internet_access", Value: pyjson.Object{{Key: "from", Value: was}, {Key: "to", Value: on}}}}})
+	scSendEnv(d, w, ctx, e.ID, http.StatusOK)
+}
+
 // deleteEnvironment is DELETE /admin/scripting/environments/{environment_id}: refused
 // while flows, scripts or notebooks use it; its builds stopped first.
 func deleteEnvironment(d *Deps, w http.ResponseWriter, r *http.Request, p *auth.Principal, _ pyd.Body) {
@@ -1495,6 +1582,7 @@ type editorEnvironment struct {
 	LanguageVersion   *string          `json:"language_version"`
 	Version           *int64           `json:"version"`
 	Ready             bool             `json:"ready"`
+	InternetAccess    bool             `json:"internet_access"` // the version in use's: false = no internet for its code
 	MaxTimeoutSeconds int64            `json:"max_timeout_seconds"`
 	Variables         []editorVariable `json:"variables"`
 	Packages          []string         `json:"packages"`
@@ -1512,6 +1600,7 @@ type scCurrent struct {
 	Status          string
 	Lock            *string
 	Completions     *string
+	InternetAccess  bool
 }
 
 func scCurrentOf(ctx context.Context, q perm.Querier, e *scEnvironment) (*scCurrent, error) {
@@ -1519,8 +1608,8 @@ func scCurrentOf(ctx context.Context, q perm.Querier, e *scEnvironment) (*scCurr
 		return nil, nil
 	}
 	var c scCurrent
-	err := q.QueryRow(ctx, `SELECT language_version, number, status, lock, completions FROM script_environment_versions WHERE id = $1`,
-		*e.CurrentVersionID).Scan(&c.LanguageVersion, &c.Number, &c.Status, &c.Lock, &c.Completions)
+	err := q.QueryRow(ctx, `SELECT language_version, number, status, lock, completions, internet_access FROM script_environment_versions
+		WHERE id = $1`, *e.CurrentVersionID).Scan(&c.LanguageVersion, &c.Number, &c.Status, &c.Lock, &c.Completions, &c.InternetAccess)
 	if scNoRows(err) {
 		return nil, nil
 	}
@@ -1574,13 +1663,13 @@ func editorEnvironments(d *Deps, w http.ResponseWriter, r *http.Request, p *auth
 			fail(d, w, "scripting: the variables", err)
 			return
 		}
-		ev := editorEnvironment{ID: e.ID, Name: e.Name, Description: e.Description, Language: e.Language,
+		ev := editorEnvironment{ID: e.ID, Name: e.Name, Description: e.Description, Language: e.Language, InternetAccess: true,
 			MaxTimeoutSeconds: e.MaxTimeoutSeconds, Variables: []editorVariable{}, Packages: []string{}}
 		for _, v := range vars {
 			ev.Variables = append(ev.Variables, editorVariable{v.Name, v.Secret, v.Value, v.FromTabularia})
 		}
 		if cur != nil {
-			ev.LanguageVersion, ev.Version = &cur.LanguageVersion, &cur.Number
+			ev.LanguageVersion, ev.Version, ev.InternetAccess = &cur.LanguageVersion, &cur.Number, cur.InternetAccess
 			ev.Ready = e.Enabled && cur.Status == "ready"
 			if cur.Lock != nil {
 				ev.Packages = scLines(*cur.Lock)

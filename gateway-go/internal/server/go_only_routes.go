@@ -63,6 +63,10 @@ var goOnlyRoutes = []struct {
 	{after: "/admin/data-apis/{api_id}/pause", route: pyRoute{path: "/admin/data-apis/{api_id}", methods: []string{"DELETE"}, regex: `^/admin/data\-apis/(?P<api_id>[^/]+)$`}},
 	// the runtime of a data API, set by an administrator only (api/data_apis_admin.go)
 	{after: "/admin/data-apis/{api_id}", route: pyRoute{path: "/admin/data-apis/{api_id}/runtime", methods: []string{"PUT"}, regex: `^/admin/data\-apis/(?P<api_id>[^/]+)/runtime$`}},
+	// a scripting environment's version: its internet access, set by an administrator (api/scripting.go)
+	{after: "/admin/scripting/environments/{environment_id}/versions/{version_id}/current", route: pyRoute{
+		path: "/admin/scripting/environments/{environment_id}/versions/{version_id}", methods: []string{"PATCH"},
+		regex: `^/admin/scripting/environments/(?P<environment_id>[^/]+)/versions/(?P<version_id>[^/]+)$`}},
 }
 
 // mainRoutes is the main application's table: FastAPI's, with the Go-only routes in place.
