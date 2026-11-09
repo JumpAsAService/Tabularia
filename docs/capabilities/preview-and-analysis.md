@@ -29,6 +29,9 @@ the counting cap); the node keeps the same count so you can read the shape of a 
 glance. Nulls are shown as `∅`. A node that is not configured yet asks to be set, instead
 of showing an error.
 
+> The real row count, the column profile and the keyboard of the grid described on this
+> page are on `main`, for the next release: the 1.4.1 LTS does not have them.
+
 ![Clicking the nodes of the sample flow one after another: the table under the canvas changes to each step's result](../media/guide/flows/preview-any-step.gif)
 
 *Each click shows that step's first 100 rows: the order lines, the computed revenue, the join with the orders, the margin by category and month.*
@@ -74,6 +77,10 @@ to, the value), linked from it, selected and previewed, as **+ Operation** adds 
 ∅ line has **Fill nulls…**, which adds a Fill nulls step with the column already chosen.
 Nothing downstream is rewired, and **Undo** takes the step away. In the Viewer the same
 buttons add a filter to the view's **Filters** and apply it (not on a pivot).
+
+![The Viewer on the sample table customers, 150,000 rows, with the profile of the column regione open: first 100,000 of 150,000 rows, 15 distinct values in the sample, lengths from 5 to 21 characters, and the five most frequent regions with their share and the buttons to filter or exclude each](../media/guide/analysis/viewer-column-profile.png)
+
+*The profile of `regione` in the Viewer: the rows its figures are of, the distinct values, the lengths, and the most frequent values, each one click from a filter.*
 
 With a profile open, **←** and **→** move it to the column beside, and **Esc** gives the focus
 back to that column's name. A click anywhere outside closes it.
