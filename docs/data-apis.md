@@ -225,13 +225,16 @@ The answer:
   refresh). A refresh reaches the pods within the poll: they download the new data, prepare
   it, and switch to it at once; until then the previous version answers.
 - **Errors**: `{"detail": "a sentence", "code": "…"}`. `400` a wrong parameter (the detail
-  says which; `key_in_query` for a key sent in the address, which should then be revoked);
+  says which; `key_in_query` for a key sent in the address, which should then be revoked,
+  even when no other key comes with it; `not_sortable` for an empty `_sort=`: leave it out
+  for the file's order);
   `401` no key, or not a valid one (`key_missing`, `key_invalid`, `key_expired`,
   `key_revoked`, `key_replaced`: renewed and past its grace); `403` a key not allowed on the
   resource (`key_not_allowed`) or from this address (`address_not_allowed`), or a resource
   whose datasource the creator may no longer read (`resource_unavailable`); `404` no such
   data API or resource; `409` a cursor of older data; `429` past the key's rate, with
-  `Retry-After`; `503` the data still loading (`loading`, with `Retry-After`), the data API
+  `Retry-After`; `503` the data still loading (`loading`, with `Retry-After`), a datasource
+  without a data file, never written or missing from the storage (`no_data`), the data API
   paused or suspended, or the pod out of touch with Tabularia for more than 15 minutes
   (`manifest_stale`: it then refuses every key rather than miss a revocation).
 - **Rate limit**: each pod counts its own requests, at the key's rate divided by the data

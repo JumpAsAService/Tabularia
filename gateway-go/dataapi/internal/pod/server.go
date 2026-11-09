@@ -524,6 +524,10 @@ func (s *Server) admit(w http.ResponseWriter, r *http.Request) (*snapshot, *KeyR
 			Detail: "This data API cannot check its keys at the moment: try again later", RetryAfter: 30})
 		return nil, nil, false
 	}
+	if KeyInQuery(r.URL.RawQuery) {
+		s.fail(w, r, keyInQuery())
+		return nil, nil, false
+	}
 	key, p := snap.keys.Check(KeyOf(r), s.now())
 	if p != nil {
 		recordOf(r).key = key // a revoked or expired key is still counted as its own
@@ -583,6 +587,13 @@ func (s *Server) data(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	t := s.table(name)
+	if t == nil && res.Unavailable == dataapiwire.UnavailableNoData {
+		// with a file served already, that one goes on (a refresh under way); without, there
+		// is nothing to wait for
+		s.fail(w, r, &Problem{Status: 503, Code: "no_data",
+			Detail: fmt.Sprintf("«%s» is not available: its datasource has no data file (never written, or its file is missing from the storage)", name), RetryAfter: 60})
+		return
+	}
 	if t == nil {
 		s.fail(w, r, &Problem{Status: 503, Code: "loading", Detail: fmt.Sprintf("«%s» is still loading: try again in a moment", name),
 			RetryAfter: 5})

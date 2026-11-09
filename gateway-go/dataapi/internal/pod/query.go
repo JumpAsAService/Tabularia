@@ -89,19 +89,38 @@ func EncodeCursor(generation string, raw map[string]string, at Position) string 
 	return base64.RawURLEncoding.EncodeToString(b)
 }
 
+// KeyInQuery says whether a query string carries a key (as any parameter's value): refused
+// before the key is looked for, so a key sent only in the address is told so, not «missing».
+func KeyInQuery(rawQuery string) bool {
+	values, err := url.ParseQuery(rawQuery)
+	if err != nil {
+		return strings.Contains(rawQuery, dataapiwire.KeyPrefix)
+	}
+	for _, list := range values {
+		for _, v := range list {
+			if strings.HasPrefix(strings.TrimSpace(v), dataapiwire.KeyPrefix) {
+				return true
+			}
+		}
+	}
+	return false
+}
+
+func keyInQuery() *Problem {
+	return &Problem{Status: 400, Code: "key_in_query",
+		Detail: "Send the key in the Authorization header (Bearer) or in X-API-Key, never in the address: revoke this one, it was exposed"}
+}
+
 // ParseQuery reads a request's query string for a resource.
 func ParseQuery(rawQuery string, res *dataapiwire.Resource, t *Table) (*Query, *Problem) {
 	values, err := url.ParseQuery(rawQuery)
 	if err != nil {
 		return nil, badRequest("bad_query", "The query string cannot be read: %v", err)
 	}
+	if KeyInQuery(rawQuery) {
+		return nil, keyInQuery()
+	}
 	for name, list := range values {
-		for _, v := range list {
-			if strings.HasPrefix(v, dataapiwire.KeyPrefix) {
-				return nil, &Problem{Status: 400, Code: "key_in_query",
-					Detail: "Send the key in the Authorization header (Bearer) or in X-API-Key, never in the address: revoke this one, it was exposed"}
-			}
-		}
 		if len(list) > 1 {
 			return nil, badRequest("repeated_parameter", "«%s» is given %d times: give it once", name, len(list))
 		}
@@ -274,11 +293,13 @@ func readQuery(raw map[string]string, res *dataapiwire.Resource, t *Table) (*Que
 	if !sortGiven {
 		sortText = strings.Join(res.DefaultSort, ",")
 	}
-	keys, problem := readSort(sortText, res, t)
-	if problem != nil {
-		return nil, problem
+	if sortGiven || sortText != "" {
+		keys, problem := readSort(sortText, res, t)
+		if problem != nil {
+			return nil, problem
+		}
+		q.Sort = keys
 	}
-	q.Sort = keys
 	return q, nil
 }
 
@@ -338,7 +359,8 @@ func readColumns(value string, res *dataapiwire.Resource, t *Table) ([]Column, *
 
 func readSort(value string, res *dataapiwire.Resource, t *Table) ([]SortKey, *Problem) {
 	if strings.TrimSpace(value) == "" {
-		return nil, nil
+		// given empty, it would drop the order without a word: the file's order is no _sort at all
+		return nil, badRequest("not_sortable", "_sort names no column: give one or more, or leave _sort out for the file's order")
 	}
 	keys := []SortKey{}
 	seen := map[string]bool{}
@@ -467,7 +489,7 @@ func (q *Query) keyset() (string, []any, error) {
 		var p Param
 		if v != nil {
 			var err error
-			if p, err = k.Column.ParseValue(*v); err != nil {
+			if p, err = k.Column.cursorValue(*v); err != nil {
 				return "", nil, badRequest("bad_cursor", "The cursor cannot be read: ask the first page again")
 			}
 			op := ">"

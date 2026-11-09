@@ -118,6 +118,7 @@ var ErrorCodes = []ErrorCode{
 	{429, "rate_limited", "Past the key's requests per minute: wait the Retry-After seconds"},
 	{500, "internal", "The data API could not answer: try again"},
 	{503, "loading", "The data is still loading: try again after Retry-After"},
+	{503, "no_data", "The datasource the resource publishes has no data file: never written, or missing from the storage"},
 	{503, "api_paused", "The data API is paused"},
 	{503, "api_suspended", "The data API's creator may no longer publish it"},
 	{503, "manifest_stale", "The pod has been out of touch with Tabularia too long, and refuses every key"},

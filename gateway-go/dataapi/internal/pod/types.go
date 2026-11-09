@@ -130,6 +130,18 @@ var kindExample = map[string]string{
 	KindTimestampTZ: "a date and time such as 2026-01-31T08:30:00Z", KindTime: "a time such as 08:30:00", KindUUID: "a UUID",
 }
 
+// cursorValue is a value a cursor carries, as ParseValue reads it, but for a float column
+// NaN and the infinities too: they are values of the column that a page may end on (DuckDB
+// orders NaN after every number), where a filter has no use for them.
+func (c Column) cursorValue(text string) (Param, error) {
+	if c.Kind == KindFloat {
+		if f, err := strconv.ParseFloat(text, 64); err == nil && (math.IsNaN(f) || math.IsInf(f, 0)) {
+			return Param{"CAST(? AS DOUBLE)", f}, nil
+		}
+	}
+	return c.ParseValue(text)
+}
+
 // ParseValue reads a request's text as a value of the column; the error says what it should be.
 func (c Column) ParseValue(text string) (Param, error) {
 	bad := func() (Param, error) {

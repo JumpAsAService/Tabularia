@@ -276,10 +276,11 @@ func TestKeys(t *testing.T) {
 	// X-API-Key does as well; another scheme does not
 	f.want(f.get(ok, "", func(r *http.Request) { r.Header.Set("X-API-Key", f.keys["main"]) }), 200, "")
 	f.want(f.get(ok, "", func(r *http.Request) { r.Header.Set("Authorization", "Basic "+f.keys["main"]) }), 401, "key_missing")
-	// never in the address
+	// never in the address: said so even when it is the only key sent, and on the description
 	for _, q := range []string{"?api_key=", "?id=1&key=", "?_cursor="} {
-		f.want(f.get("/data/crm/customers"+q+f.keys["main"], ""), 401, "key_missing")
+		f.want(f.get("/data/crm/customers"+q+f.keys["main"], ""), 400, "key_in_query")
 		f.want(f.get("/data/crm/customers"+q+f.keys["main"], "grace"), 400, "key_in_query")
+		f.want(f.get("/data/crm/openapi.json"+q+f.keys["main"], ""), 400, "key_in_query")
 	}
 	// a key of another resource
 	f.want(f.get(ok, "orders"), 403, "key_not_allowed")
@@ -466,6 +467,8 @@ func TestWrongRequests(t *testing.T) {
 		{"_columns=id,phone", "unknown_column", "«phone»"},
 		{"_columns=", "unknown_column", "«»"},
 		{"_sort=tags", "not_sortable", "«tags»"},
+		{"_sort=", "not_sortable", "names no column"},
+		{"_sort=%20", "not_sortable", "names no column"},
 		{"_sort=id,-id", "not_sortable", "twice"},
 		{"_sort=id,region,score,signup,seen,active", "not_sortable", "at most 5"},
 		{"_limit=0", "bad_limit", "from 1 to 100"},
@@ -695,6 +698,15 @@ func TestStates(t *testing.T) {
 	f.s.Apply(f.m)
 	f.want(f.get("/data/crm/customers?id=1", "main"), 403, "resource_unavailable")
 	f.want(f.get("/data/crm/orders", "main"), 200, "")
+	// no data file (never written, or gone from the storage) and none served: said so, not
+	// «still loading» for ever
+	f.m.Resources[0].Unavailable = "no_data"
+	f.s.Apply(f.m)
+	a := f.get("/data/crm/customers?id=1", "main")
+	f.want(a, 503, "no_data")
+	if !strings.Contains(fmt.Sprint(a.json["detail"]), "no data file") {
+		t.Errorf("%s", a.body)
+	}
 	// a gateway out of reach for too long: no more answers
 	f.now = f.now.Add(16 * time.Minute)
 	f.want(f.get("/data/crm/orders", "main"), 503, "manifest_stale")
@@ -849,4 +861,29 @@ func TestColumnTakenOutStopsAtOnce(t *testing.T) {
 	}
 	f.want(f.get("/data/crm/customers?_columns=id,name", "main"), 400, "unknown_column")
 	f.want(f.get("/data/crm/customers?name=x", "main"), 400, "not_filterable")
+}
+
+// A page that ends on a NaN (or an infinity) in the sort column: its cursor reads, and the
+// pages give every row once (DuckDB orders NaN after every number, before the nulls).
+func TestCursorOverNaN(t *testing.T) {
+	f := newFixture(t)
+	nan := strings.Replace(sourceSQL, "i / 7.0 AS ratio",
+		"CASE WHEN i %% 5 = 0 THEN 'NaN'::DOUBLE WHEN i %% 97 = 0 THEN 'Infinity'::DOUBLE ELSE i / 7.0 END AS ratio", 1)
+	db, err := sql.Open("duckdb", "")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := db.Exec(fmt.Sprintf(nan, 1001, 7, filepath.Join(f.dir, "storage", "v1.parquet"))); err != nil {
+		t.Fatal(err)
+	}
+	db.Close()
+	f.load()
+	for _, s := range []string{"ratio", "-ratio", "ratio,-id"} {
+		got, cursors := f.pages("_sort=" + s + "&_limit=50&_columns=id")
+		sorted := slices.Clone(got)
+		slices.Sort(sorted)
+		if !slices.Equal(sorted, expected(1000, func(row) bool { return true })) || len(cursors) != 19 {
+			t.Errorf("%s: %d rows over %d pages, not each once", s, len(got), len(cursors)+1)
+		}
+	}
 }
