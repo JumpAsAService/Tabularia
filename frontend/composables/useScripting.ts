@@ -40,6 +40,7 @@ export interface EnvironmentSummary {
   current_number: number | null
   latest_number: number | null
   latest_status: VersionStatus | null
+  internet_access: boolean | null // the version in use's; null without one
   variables: number
   groups: string[]
   updated_at: string
@@ -61,6 +62,9 @@ export interface EnvironmentVersion {
   started_at: string | null
   finished_at: string | null
   current: boolean
+  // false: its scripts and notebooks cannot reach the internet (the chart's NetworkPolicy);
+  // the storage stays reachable
+  internet_access: boolean
 }
 
 export interface EnvironmentVariable {
@@ -135,6 +139,8 @@ export function useScripting() {
     rebuild: (id: number) => apiFetch<Environment>(`${env(id)}/rebuild`, { method: 'POST' }),
     makeCurrent: (id: number, versionId: number) =>
       apiFetch<Environment>(`${env(id)}/versions/${versionId}/current`, { method: 'POST' }),
+    setInternet: (id: number, versionId: number, internet_access: boolean) =>
+      apiFetch<Environment>(`${env(id)}/versions/${versionId}`, { method: 'PATCH', body: { internet_access } }),
     setVariable: (id: number, name: string, body: { value?: string; secret: boolean; from_tabularia: boolean }) =>
       apiFetch<Environment>(`${env(id)}/variables/${encodeURIComponent(name)}`, { method: 'PUT', body }),
     searchPackages: (language: ScriptLanguage, q: string) =>
@@ -163,6 +169,7 @@ export interface EditorEnvironment {
   language_version: string | null
   version: number | null
   ready: boolean
+  internet_access: boolean // the version in use's: false = its code cannot reach the internet
   max_timeout_seconds: number
   variables: EditorVariable[]
   packages: string[]

@@ -4,11 +4,14 @@
 // image by the cluster; changing its language version or packages makes a new
 // version, everything else applies to the next run. Kubernetes only: elsewhere the
 // section says why. Observers read it all, without any secret, and change nothing.
+// A version's «Internet access» is switched on the version itself, at once: off, the
+// chart's NetworkPolicy keeps its scripts and notebooks from the internet, from their
+// next run.
 import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 import {
-  ArrowLeft, CheckCircle2, CircleDot, Code2, Database, KeyRound, LoaderCircle, Plus, RotateCcw, Search, Send, Trash2,
-  TriangleAlert, XCircle,
+  ArrowLeft, CheckCircle2, CircleDot, Code2, Database, Globe, GlobeOff, KeyRound, LoaderCircle, Plus, RotateCcw, Search, Send,
+  Trash2, TriangleAlert, XCircle,
 } from 'lucide-vue-next'
 import { errMessage } from '~/composables/useApi'
 import { useFormat } from '~/composables/useFormat'
@@ -260,6 +263,40 @@ async function makeCurrent(v: EnvironmentVersion) {
     toast.error(errMessage(e))
   }
 }
+
+// a version's internet access, saved at once (and audited) like «Use this version»
+const switching = ref<number | null>(null)
+async function setInternet(v: EnvironmentVersion) {
+  if (!env.value || switching.value !== null) return
+  switching.value = v.id
+  try {
+    env.value = await api.setInternet(env.value.id, v.id, !v.internet_access)
+    const summary = state.value?.environments.find((e) => e.id === env.value?.id)
+    if (summary) summary.internet_access = env.value.internet_access
+  } catch (e) {
+    toast.error(errMessage(e))
+  } finally {
+    switching.value = null
+  }
+}
+
+// the scripts bucket outside the cluster: a version without internet access reaches it only
+// through the chart's scripts.noInternet.allowCIDRs. Its host, or '' when it is a Service of
+// the cluster (a name without dots, or *.svc / *.svc.cluster.local)
+const outsideBucket = computed(() => {
+  const endpoint = state.value?.storage.endpoint.trim() ?? ''
+  let host = 's3.amazonaws.com' // empty = AWS
+  if (endpoint) {
+    try {
+      host = new URL(endpoint).hostname.toLowerCase()
+    } catch {
+      return ''
+    }
+  }
+  if (!host.includes('.') || /\.svc(\.cluster\.local)?\.?$/.test(host)) return ''
+  return host
+})
+const anyOffline = computed(() => !!env.value?.versions.some((v) => !v.internet_access))
 
 // while a version is being built, the page follows it
 const building = computed(() => env.value?.versions.some((v) => ['queued', 'building', 'checking'].includes(v.status)))
@@ -532,7 +569,12 @@ const basePackages = computed(() => (form.value.language === 'python' ? 'polars,
       <ul v-else class="environments">
         <li v-for="e in state.environments" :key="e.id">
           <button type="button" class="environment" @click="openEnvironment(e.id)">
-            <span class="name">{{ e.name }}<em v-if="!e.enabled" class="off">{{ $t('scripting.disabled') }}</em></span>
+            <span class="name">
+              {{ e.name }}<em v-if="!e.enabled" class="off">{{ $t('scripting.disabled') }}</em>
+              <em v-if="e.internet_access === false" class="off offline" :title="$t('scripting.internetOffHint')">
+                <GlobeOff :size="11" /> {{ $t('scripting.noInternet') }}
+              </em>
+            </span>
             <span class="language">{{ languageLabel(e.language, e.language_version) }}</span>
             <span class="version-state" :class="e.latest_status ?? ''">
               <component :is="statusIcon(e.latest_status)" :size="13" :class="{ spin: e.latest_status && e.latest_status !== 'ready' && e.latest_status !== 'failed' }" />
@@ -754,6 +796,10 @@ const basePackages = computed(() => (form.value.language === 'python' ? 'polars,
           </button>
         </div>
         <p class="hint muted small">{{ $t('scripting.versionsLead') }}</p>
+        <p class="hint muted small internet-lead"><Globe :size="12" /> {{ $t('scripting.internetLead') }}</p>
+        <p v-if="anyOffline && outsideBucket" class="notice" role="note">
+          <TriangleAlert :size="13" /> {{ $t('scripting.internetOutsideBucket', { host: outsideBucket }) }}
+        </p>
         <ul class="versions">
           <li v-for="v in env.versions" :key="v.id" :class="v.status">
             <div class="version-row">
@@ -766,6 +812,20 @@ const basePackages = computed(() => (form.value.language === 'python' ? 'polars,
               <button v-if="editable && v.status === 'ready' && !v.current" type="button" class="mini" @click="makeCurrent(v)">
                 {{ $t('scripting.makeCurrent') }}
               </button>
+              <span class="internet" :class="{ offline: !v.internet_access }">
+                <button
+                  v-if="editable"
+                  type="button"
+                  class="switch"
+                  role="switch"
+                  :aria-checked="v.internet_access"
+                  :aria-label="$t('scripting.internetAria', { n: v.number })"
+                  :disabled="switching !== null"
+                  @click="setInternet(v)"
+                ><span class="knob" /></button>
+                <component :is="v.internet_access ? Globe : GlobeOff" v-else :size="13" />
+                {{ v.internet_access ? $t('scripting.internetAccess') : $t('scripting.noInternet') }}
+              </span>
             </div>
             <p v-if="v.error" class="version-error"><code>{{ v.error }}</code></p>
             <details v-if="v.packages">
@@ -847,6 +907,7 @@ button.danger-zone { color: var(--danger-text); }
 .environment:hover { border-color: var(--border); }
 .name { font-weight: 600; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .off { font-style: normal; font-weight: 400; font-size: 11px; color: var(--muted); margin-left: 8px; }
+.off.offline { display: inline-flex; align-items: center; gap: 3px; color: var(--warning); }
 .version-state { display: inline-flex; align-items: center; gap: 5px; font-size: 12px; }
 .version-state.ready svg, .versions li.ready > .version-row svg { color: var(--accent-2); }
 .version-state.failed, .version-state.failed svg, .versions li.failed > .version-row svg { color: var(--danger); }
@@ -864,6 +925,17 @@ button.danger-zone { color: var(--danger-text); }
 .version-row { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; font-size: 13px; }
 .label { font-size: 11px; padding: 1px 7px; border-radius: 999px; border: 1px solid var(--border); }
 .label.current { border-color: color-mix(in srgb, var(--accent-2) 55%, var(--border)); color: var(--accent-2); }
+.internet-lead { display: flex; gap: 6px; align-items: flex-start; }
+.internet-lead svg { flex: none; margin-top: 2px; }
+.internet { margin-left: auto; display: inline-flex; align-items: center; gap: 7px; font-size: 12px; color: var(--muted); }
+.internet.offline { color: var(--warning); }
+/* the version's state colours its row's icons: not this one */
+.versions li > .version-row .internet svg { color: inherit; }
+.switch { position: relative; width: 34px; height: 20px; min-height: 0; padding: 0; border-radius: 999px; background: var(--panel-2); border: 1px solid var(--control-border); }
+.switch .knob { position: absolute; top: 2px; left: 2px; width: 14px; height: 14px; border-radius: 50%; background: var(--muted); transition: transform var(--dur-2), background var(--dur-2); }
+.switch[aria-checked="true"] { background: var(--tint-accent); border-color: var(--accent); }
+.switch[aria-checked="true"] .knob { transform: translateX(14px); background: var(--accent); }
+.switch:disabled { opacity: .6; }
 .version-error { margin: 0; }
 .version-error code { display: block; font-size: 11.5px; white-space: pre-wrap; overflow-wrap: anywhere; color: var(--danger); }
 details summary { cursor: pointer; font-size: 12px; color: var(--muted); }

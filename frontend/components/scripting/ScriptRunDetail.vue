@@ -4,7 +4,7 @@
 // variables it was given — secret ones by name only — and the end of its log.
 import { computed } from 'vue'
 import { useI18n } from 'vue-i18n'
-import { KeyRound } from 'lucide-vue-next'
+import { GlobeOff, KeyRound } from 'lucide-vue-next'
 
 const props = defineProps<{ script: string }>()
 const { t } = useI18n()
@@ -14,6 +14,7 @@ interface ScriptInfo {
   environment?: string
   language?: string
   version?: number
+  internet_access?: boolean // false: the version had no internet access (older runs: absent)
   image?: string
   entrypoint?: string
   files?: string[]
@@ -57,7 +58,15 @@ const io = computed(() => [
         <dt>{{ $t('scripting.run.inputs') }}</dt>
         <dd><span v-for="(i, k) in info.inputs" :key="i.alias"><template v-if="k"> · </template><code>{{ i.alias }}</code> {{ i.name }}</span></dd>
       </div>
-      <div><dt>{{ $t('scripting.run.environment') }}</dt><dd>{{ info.environment }} · v{{ info.version }}</dd></div>
+      <div>
+        <dt>{{ $t('scripting.run.environment') }}</dt>
+        <dd>
+          {{ info.environment }} · v{{ info.version }}
+          <span v-if="info.internet_access === false" class="offline" :title="$t('scripting.internetOffHint')">
+            · <GlobeOff :size="12" /> {{ $t('scripting.noInternet') }}
+          </span>
+        </dd>
+      </div>
       <div><dt>{{ $t('scripting.run.runs') }}</dt><dd><code>{{ info.entrypoint }}</code> <span class="muted">({{ (info.files ?? []).length }})</span></dd></div>
       <div><dt>{{ $t('scripting.run.attempts') }}</dt><dd>{{ info.attempts ?? 0 }}</dd></div>
       <div><dt>{{ $t('scripting.run.exitCode') }}</dt><dd>{{ info.exit_code ?? '—' }}</dd></div>
@@ -97,5 +106,6 @@ summary { cursor: pointer; font-size: 12px; color: var(--muted); }
 .log { margin: 6px 0 0; max-height: 420px; overflow: auto; font-size: 11.5px; padding: 8px; border-radius: 6px; background: var(--bg-soft); white-space: pre-wrap; overflow-wrap: anywhere; }
 .small { font-size: 12px; margin: 0; }
 .image { overflow-wrap: anywhere; }
+.offline { display: inline-flex; align-items: center; gap: 3px; color: var(--warning); }
 @media (max-width: 720px) { dl { grid-template-columns: 1fr 1fr; } }
 </style>

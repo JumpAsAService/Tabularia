@@ -169,6 +169,7 @@ const ACTION_META = computed<Record<string, { icon: any; color: string; label: s
     'scripting.environment_update': { icon: Code2, color: u.accent, label: t('audit.scriptingEnvUpdateAction') },
     'scripting.environment_delete': { icon: Code2, color: u.danger, label: t('audit.scriptingEnvDeleteAction') },
     'scripting.version_current': { icon: Code2, color: u.accent, label: t('audit.scriptingVersionCurrentAction') },
+    'scripting.version_internet': { icon: Code2, color: u.accent, label: t('audit.scriptingVersionInternetAction') },
     'scripting.variable_set': { icon: Code2, color: u.accent, label: t('audit.scriptingVariableSetAction') },
     'scripting.variable_delete': { icon: Code2, color: u.muted, label: t('audit.scriptingVariableDeleteAction') },
     'registry.create': { icon: Boxes, color: u.accent, label: t('audit.registryCreateAction') },

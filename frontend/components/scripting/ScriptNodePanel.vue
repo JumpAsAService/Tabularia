@@ -86,7 +86,7 @@ async function openEditor() {
 const options = computed(() => environments.value.map((e) => ({
   value: e.id,
   label: e.name,
-  hint: `${e.language === 'r' ? 'R' : 'Python'} ${e.language_version ?? ''}${e.ready ? '' : ` · ${t('scripting.node.notReady')}`}`,
+  hint: `${e.language === 'r' ? 'R' : 'Python'} ${e.language_version ?? ''}${e.ready ? '' : ` · ${t('scripting.node.notReady')}`}${e.internet_access ? '' : ` · ${t('scripting.noInternet')}`}`,
 })))
 
 function pickEnvironment(id: number | null) {

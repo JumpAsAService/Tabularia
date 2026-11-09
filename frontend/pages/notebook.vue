@@ -79,7 +79,7 @@ const environment = computed(() => environments.value.find((e) => e.id === envir
 const envOptions = computed(() => environments.value.map((e) => ({
   value: e.id,
   label: e.name,
-  hint: `Python ${e.language_version ?? ''}${e.ready ? '' : ` · ${t('scripting.node.notReady')}`}`,
+  hint: `Python ${e.language_version ?? ''}${e.ready ? '' : ` · ${t('scripting.node.notReady')}`}${e.internet_access ? '' : ` · ${t('scripting.noInternet')}`}`,
 })))
 const lines = computed(() => (source.value ? source.value.split('\n').length : 0))
 const author = computed(() => {

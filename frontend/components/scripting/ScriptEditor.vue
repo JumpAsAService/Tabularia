@@ -14,7 +14,7 @@
 import { computed, nextTick, onBeforeUnmount, onMounted, ref, shallowRef, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 import {
-  Check, CheckCircle2, FilePlus2, FileCode2, KeyRound, LoaderCircle, Package, Pencil, Play, Sparkles, Trash2, Variable, X, XCircle,
+  Check, CheckCircle2, FilePlus2, FileCode2, GlobeOff, KeyRound, LoaderCircle, Package, Pencil, Play, Sparkles, Trash2, Variable, X, XCircle,
 } from 'lucide-vue-next'
 import type * as Monaco from 'monaco-editor'
 import Modal from '~/components/ui/Modal.vue'
@@ -459,6 +459,9 @@ onBeforeUnmount(() => {
       <span class="environment">
         <FileCode2 :size="13" /> {{ environment.name }} · {{ environment.language === 'r' ? 'R' : 'Python' }}
         {{ environment.language_version ?? '' }}
+        <span v-if="environment.internet_access === false" class="offline" :title="$t('scripting.internetOffHint')">
+          · <GlobeOff :size="12" /> {{ $t('scripting.noInternet') }}
+        </span>
       </span>
       <button v-if="aiAvailable" type="button" class="assist-toggle" :class="{ on: side === 'assistant' }"
               :aria-pressed="side === 'assistant'" @click="side = side === 'assistant' ? 'env' : 'assistant'">
@@ -587,6 +590,7 @@ onBeforeUnmount(() => {
 
 <style scoped>
 .environment { display: inline-flex; align-items: center; gap: 6px; font-size: 12px; color: var(--muted); margin-right: 8px; }
+.environment .offline { display: inline-flex; align-items: center; gap: 4px; color: var(--warning); }
 .assist-toggle { display: inline-flex; align-items: center; gap: 5px; padding: 3px 10px; font-size: 12px; margin-right: 6px; }
 .assist-toggle.on { border-color: var(--accent); color: var(--accent-hi); background: color-mix(in srgb, var(--accent) 10%, transparent); }
 .layout { display: grid; grid-template-columns: 230px minmax(0, 1fr) 260px; gap: 12px; height: min(72vh, 900px); min-height: 420px; }
