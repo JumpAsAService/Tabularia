@@ -39,11 +39,18 @@ depend on them, and both degrade quietly rather than breaking:
 
 ## Building the images
 
-The release images are public on Docker Hub and the chart pulls them by default:
-`jumpasaservice/tabularia-backend`, `jumpasaservice/tabularia-gateway-go` (the gateway and
-the orchestrator), `jumpasaservice/tabularia-gateway` (the AI service and the migrations) and
-`jumpasaservice/tabularia-frontend`, tagged with the release (`1.3.0`). The backend
-one is built without chDB. Releases are built by the release workflow for amd64 and
+The release images are public on Docker Hub and the chart pulls them by default, tagged
+with the release (`1.4.3`):
+
+| Image | Runs |
+|---|---|
+| `jumpasaservice/tabularia-backend` | the engine API, the workers and beat |
+| `jumpasaservice/tabularia-gateway-go` | the gateway, the orchestrator and the egress proxy |
+| `jumpasaservice/tabularia-gateway` | the AI service and the database migrations |
+| `jumpasaservice/tabularia-frontend` | the interface, and the reports' chart renderer |
+| `jumpasaservice/tabularia-data-api` | the pods of the data APIs, one Deployment per active data API |
+
+The backend one is built without chDB. Releases are built by the release workflow for amd64 and
 arm64, and each image is scanned for secrets before it is pushed
 ([docs/release-process.md](../../../docs/release-process.md)).
 
@@ -52,21 +59,23 @@ to your registry, and set `image.registry` and the tags:
 
 ```bash
 # Engine, workers and beat all run this one image.
-docker build -t <registry>/tabularia-backend:1.3.0 backend/
+docker build -t <registry>/tabularia-backend:1.4.3 backend/
 #   Add --build-arg WITH_CHDB=true only if your flows use the embedded chDB
 #   engine: it takes the image from about 800 MB to about 1.4 GB.
 #   Add --build-arg WITH_MSSQL=true only if you read from SQL Server: the driver
 #   is Microsoft's, under Microsoft's licence, and not in the published images
 #   (docs/sqlserver.md).
 
-docker build -t <registry>/tabularia-gateway:1.3.0 gateway/
-docker build -t <registry>/tabularia-gateway-go:1.3.0 gateway-go/
+docker build -t <registry>/tabularia-gateway:1.4.3 gateway/
+docker build -t <registry>/tabularia-gateway-go:1.4.3 gateway-go/
+# The data APIs' pods: its own Dockerfile, built from gateway-go/.
+docker build -f gateway-go/dataapi/Dockerfile -t <registry>/tabularia-data-api:1.4.3 gateway-go/
 
 # NOTE the -f: frontend/Dockerfile is the hot-reload DEVELOPMENT server.
-docker build -f frontend/Dockerfile.prod -t <registry>/tabularia-frontend:1.3.0 frontend/
+docker build -f frontend/Dockerfile.prod -t <registry>/tabularia-frontend:1.4.3 frontend/
 ```
 
-All three run as uid 10001 with a read-only root filesystem.
+All five run as uid 10001 with a read-only root filesystem.
 
 ## Quick start
 
@@ -79,9 +88,6 @@ helm install tabularia infrastructure/helm/tabularia \
 A minimal `my-values.yaml`:
 
 ```yaml
-image:
-  registry: registry.example.com
-
 externalServices:
   postgres: { host: db.internal, database: tabularia, user: tabularia }
   redis:    { host: valkey.internal }
@@ -103,18 +109,39 @@ ingress:
       paths: [{ path: /, pathType: Prefix, service: frontend }]
 ```
 
+The images come from Docker Hub (`image.registry: jumpasaservice`, the default). Set
+`image.registry` only when the cluster pulls from a registry of yours, after copying or
+building the five images there (`image.registry: registry.example.com/tabularia`, and
+`image.pullSecrets` if it asks for a login).
+
 In production set `existingSecret` instead of `secrets` and manage the Secret
-with your usual tooling.
+with your usual tooling. Its keys are the variable names the pods read:
+
+| Key | Needed |
+|---|---|
+| `SECURITY__FERNET_KEY` | always |
+| `JWT__SECRET` | always |
+| `DB__PASSWORD` | always |
+| `STORAGE__ACCESS_KEY`, `STORAGE__SECRET_KEY` | always |
+| `AUTH__ADMIN_PASSWORD` | always |
+| `REDIS__PASSWORD` | when Redis asks for a password |
+| `BACKUP__ACCESS_KEY`, `BACKUP__SECRET_KEY` | when the backups' bucket has keys of its own |
+| `OIDC__CLIENT_SECRET` | with `oidc.enabled` |
+| `CLICKHOUSE_EXTERNAL__PASSWORD` | with `externalServices.clickhouse.enabled` |
+| `CLICKHOUSE_EXTERNAL__AI_PASSWORD` | with `externalServices.clickhouse.aiUsername` |
+| `BIGQUERY__CREDENTIALS_B64` | with `externalServices.bigquery.enabled` |
+| `AI__SECRET_KEY` | with `ai.enabled` |
+| `OPENLINEAGE__API_KEY` | when the OpenLineage collector asks for one |
+
+The chart cannot check a Secret of your own: a missing key shows when the pods start.
 
 The pods restart by themselves when the chart's Secret changes (`checksum/secret`,
 as `checksum/config` does for the ConfigMap). A Secret of your own is outside the
 chart: after changing it, restart them with
 `kubectl rollout restart deployment --namespace <namespace>`.
 
-Optional keys follow the feature they belong to. With
-`externalServices.clickhouse.aiUsername` set, the Secret must also hold
-`CLICKHOUSE_EXTERNAL__AI_PASSWORD`: the read-only ClickHouse user the AI
-assistant's queries run as (grants in `docs/engines/clickhouse-ai-user.md`).
+`CLICKHOUSE_EXTERNAL__AI_PASSWORD` is the password of the read-only ClickHouse user the
+AI assistant's queries run as (grants in `docs/engines/clickhouse-ai-user.md`).
 
 Every other setting in `infrastructure/.env.example` goes through `extraEnv`, by
 its variable name (`DB__POOL_SIZE`, `INGEST__PARQUET_ROW_GROUP_ROWS`…): it lands in
@@ -134,12 +161,13 @@ the same image. What tells them apart is one variable, `APP__ROLE`.
 | `…-gateway` | `api` | answers requests; the Ingress points here | `gateway.replicas`, or `gateway.autoscaling` |
 | `…-orchestrator` | `orchestrator` | fires the schedules, executes the flows, reconciles runs, cleans up; no Service, nothing calls it | `gateway.orchestrator.replicas` |
 
-**Requests.** One Python process uses one core and tops out around 95 requests a
-second — a few hundred people clicking at once. Past that, add replicas. Nothing
-is tied to a pod: sessions, the sign-in throttle and the editor's "also open by"
-notice live in PostgreSQL. Measured with 500 simulated
-users on one eight-core machine: one replica saturated (95th percentile of page
-requests 5.8 s), three answered all of them in 0.12 s at 44% CPU each.
+**Requests.** The gateway is a Go program (from 1.4.0) and uses every core its pod is
+given. Measured on 2 CPUs, one replica answers 7,600 requests a second on `/auth/me` and
+3,300 on a folder's list, with a median latency under load of 8 to 45 ms, and uses
+10 MB of memory idle (`gateway-go/scripts/bench/bench.sh`). Two replicas are the default
+so that a node drain leaves someone answering, not for capacity. Nothing is tied to a
+pod: sessions, the sign-in throttle and the editor's "also open by" notice live in
+PostgreSQL.
 
 **Background work.** Orchestrators share their work through the database. A
 schedule slot is taken by whoever moves the next run time forward first, a queued
@@ -151,10 +179,11 @@ ten seconds; if a pod dies, another orchestrator closes them as interrupted afte
 have written their output, and the flow has to be launched again. One
 orchestrator is enough for most installations; the second is there for failover.
 
-**Database connections.** Every gateway and orchestrator pod keeps its own pool,
-up to `threads + threads/4 + 10` connections (25 with the default twelve
-threads). Keep `(gateway replicas + orchestrator replicas) × 25` below your
-PostgreSQL's `max_connections`.
+**Database connections.** Every gateway and orchestrator pod keeps its own pool.
+Budget `threads + threads/4 + 10` connections a pod (25 with the default twelve
+`gateway.threads`) and keep `(gateway replicas + orchestrator replicas) × 25` below
+your PostgreSQL's `max_connections`. The figure is a ceiling, kept from the Python
+gateway: the Go gateway opens its pool at the driver's default size, which is smaller.
 
 A single process doing both jobs still exists (`APP__ROLE=all`, the application's
 default, and what the development compose file runs); the chart does not use it.
@@ -173,7 +202,7 @@ itself, so one small pod is enough.
 | Engine API | freely | receives uploads, builds exports |
 | Run worker | freely | the heavy one; size `/tmp` and memory together |
 | Preview worker | freely | keeps interactive previews off the run queue |
-| Gateway | freely | one core per replica; see above |
+| Gateway | freely | see above |
 | Orchestrator | freely | one is enough, a second is for failover; see above |
 | Beat | **no** | see above |
 
@@ -355,9 +384,19 @@ fails at deploy time rather than at the first run. (The Compose stack of
 does not need it: an administrator closes it from the Audit page, and a password
 change closes all of that user's sessions.
 
-One Secret is mounted by every pod, so the engine pods also receive gateway-only
-values. That keeps the chart readable; split it per component if your policy
-requires least privilege.
+There is one Secret. The gateway, the orchestrator, the AI service, the engine API, the
+workers and beat read all of it as environment variables (`envFrom`), and the chart then
+empties, in each role, the variables that role has no use for:
+
+| Role | Emptied |
+|---|---|
+| Engine API, workers, beat | `JWT__SECRET`, `DB__PASSWORD`, `DB__URL`, `AUTH__ADMIN_PASSWORD`, `OIDC__CLIENT_SECRET`, `AI__SECRET_KEY`, `OPENLINEAGE__API_KEY` |
+| Gateway, orchestrator, AI service, the `migrate` step | `STORAGE__ACCESS_KEY`, `STORAGE__SECRET_KEY`, `BACKUP__ACCESS_KEY`, `BACKUP__SECRET_KEY`, `REDIS__PASSWORD`, `CLICKHOUSE_EXTERNAL__PASSWORD`, `CLICKHOUSE_EXTERNAL__AI_PASSWORD`, `BIGQUERY__CREDENTIALS_B64` |
+
+The egress proxy reads `DB__PASSWORD` alone; the frontend reads nothing of the Secret. So
+a process taken over does not find the other side's keys in its environment. It is still
+one Secret object: whoever may read Secrets in the namespace reads all of it. Split it
+per component if your policy asks for that.
 
 ## Ingress
 
@@ -391,9 +430,10 @@ whole site, which counts pages and assets and hurts an office behind one NAT.
 **The engine API** has no Ingress and must never get one. The NetworkPolicy (on
 by default; it needs a CNI that enforces it) admits only the gateway, the
 orchestrator and the workers, and every request must carry the gateway's
-internal token, derived from the Fernet key. Each role also loses the secrets
-it has no use for: the engine roles never see the session key or the metadata
-password, the gateway never sees the storage or warehouse keys.
+internal token, derived from the Fernet key. Each role's environment also loses the
+secrets it has no use for: the engine roles never see the session key or the metadata
+password, the gateway never sees the storage or warehouse keys ([Secrets](#secrets)
+lists them).
 
 ## Administration → Settings: restarts
 
