@@ -39,7 +39,7 @@ details.
 | Stability: fixes only, no surprises | `lts`, or pin an exact `1.4.x` |
 | The newest features | `latest`, or pin an exact version |
 
-Pinning an exact version (`1.4.3`) is the safest choice in production; move to the next
+Pinning an exact version (`1.4.4`) is the safest choice in production; move to the next
 patch after reading its [changelog](../CHANGELOG.md).
 
 ## How long
