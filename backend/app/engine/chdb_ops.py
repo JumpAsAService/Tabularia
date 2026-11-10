@@ -109,11 +109,11 @@ def _zero_signless(sql: str, cols, ctx) -> str:
 # a "try" cast: ClickHouse's *OrNull functions (NULL instead of an error)
 _CH_CAST = {
     "int": "toInt64OrNull(toString({c}))",
-    "float": "toFloat64OrNull(toString({c}))",
+    "float": "toFloat64({c})",
     "str": "CAST({c} AS Nullable(String))",
     "bool": "toUInt8OrNull(toString({c}))",
     "date": "toDate32OrNull(toString({c}))",
-    "datetime": "parseDateTimeBestEffortOrNull(toString({c}))",
+    "datetime": "parseDateTime64BestEffortOrNull(toString({c}), 6)",
 }
 
 
@@ -165,6 +165,10 @@ def _cast_expr(c: str, base: str, dt: str) -> str:
     if dt == "float":
         if is_text:
             return f"toFloat64OrNull(trimBoth({c}))"
+        if is_num or base in _CH_INTS:
+            # the nearest double, as Polars and DuckDB: accurateCastOrNull gave NULL for an integer
+            # a double cannot hold exactly (2^53 + 1)
+            return f"toFloat64({c})"
         return f"accurateCastOrNull({c}, 'Float64')"
     if dt == "str":
         if base in _CH_FLOATS:
@@ -178,7 +182,12 @@ def _cast_expr(c: str, base: str, dt: str) -> str:
             return f"if(toString(toDate32OrNull(trimBoth({c}))) = trimBoth({c}), toDate32OrNull(trimBoth({c})), NULL)"
         return f"toDate32OrNull(toString({c}))"
     if dt == "datetime":
-        return f"parseDateTimeBestEffortOrNull(trimBoth(toString({c})))"
+        # a DateTime64(6): parseDateTimeBestEffort's 32-bit DateTime made 1955 1970-01-01, 2150 2106,
+        # and dropped the microseconds. A year a DateTime64 cannot hold (before 1900, after 2299)
+        # is NULL: ClickHouse would move it to the edge, a made-up value
+        t = f"trimBoth(toString({c}))"
+        return (f"if(match({t}, '^[0-9]{{4}}-') AND toUInt16(substring({t}, 1, 4)) NOT BETWEEN 1900 AND 2299, NULL, "
+                f"parseDateTime64BestEffortOrNull({t}, 6))")
     if dt == "bool":
         if is_text:  # the words DuckDB takes («true» was NULL, «2» was 2)
             w = f"lower(trimBoth({c}))"
