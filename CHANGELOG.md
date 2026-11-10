@@ -5,6 +5,19 @@ exposes at `/system/info` and in the app's settings menu.
 
 ## Unreleased
 
+## 1.4.2 «Romulus» — 2026-11-10 · long-term support
+
+The first long-term support release: from here on the 1.4 line takes security, data-correctness
+and keep-running fixes only, as 1.4.x patches, and the `lts` image tag follows it
+([docs/lts.md](docs/lts.md)). It carries everything made since 1.4.1: a preview that never
+shows another node's rows, the real row count and a column profile to act on; one data grid
+for the editor and the Viewer, with a keyboard; the engines checked against each other on a
+real external ClickHouse and a real BigQuery, with what differed fixed; an «Internet access»
+switch on every version of a Python or R environment, its storage reached through a small
+egress proxy; the AI assistant's limits ten times as wide by default and a provider's chat
+models on as soon as it is added; and a security and robustness pass. Read **Upgrading**
+below before upgrading: take a backup of the database first.
+
 - **Active sessions, by person.** Administration → Audit showed one card a browser or script,
   hundreds on a busy installation. It is now a table a person (sessions active and open, their
   devices, when last seen), online ones by default with «All» beside, a search over name,

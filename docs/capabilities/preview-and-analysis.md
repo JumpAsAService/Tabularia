@@ -30,7 +30,7 @@ glance. Nulls are shown as `∅`. A node that is not configured yet asks to be s
 of showing an error.
 
 > The real row count, the column profile and the keyboard of the grid described on this
-> page are on `main`, for the next release: the 1.4.1 LTS does not have them.
+> page arrived with 1.4.2.
 
 ![Clicking the nodes of the sample flow one after another: the table under the canvas changes to each step's result](../media/guide/flows/preview-any-step.gif)
 

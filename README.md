@@ -38,7 +38,7 @@ chDB, ClickHouse or BigQuery.</em></p>
 > *Tabularia takes its name from the Tabularium, the records office of ancient Rome —
 > the place where the state's tables were kept in order.*
 
-Current release: **1.4.1 «Romulus»**. The next one, **1.4.2**, starts the long-term support line ([LTS](docs/lts.md): fixes only afterwards, image tag `lts`) — see [CHANGELOG.md](CHANGELOG.md).
+Current release: **1.4.2 «Romulus»**, the long-term support line ([LTS](docs/lts.md): fixes only from here on, image tag `lts`) — see [CHANGELOG.md](CHANGELOG.md).
 
 ---
 
@@ -84,8 +84,7 @@ builder that can start on one machine and grow onto the warehouse they already h
 ## Contents
 
 Every feature below has one line, a short example taken from the code or tried on a running
-installation, and the page with the complete one. Features marked **next release** are on
-`main` and not in the 1.4.1 LTS images.
+installation, and the page with the complete one.
 
 | Area | What is in it |
 |---|---|
@@ -129,7 +128,7 @@ Then: [Quickstart](#quickstart) · [How it works](#how-it-works) · [Sample data
   published images: two lines on top of the backend image add it.
   [Microsoft SQL Server](docs/sqlserver.md)
   ```dockerfile
-  FROM jumpasaservice/tabularia-backend:1.4.1
+  FROM jumpasaservice/tabularia-backend:1.4.2
   USER root
   RUN pip --python /opt/venv/bin/python install --no-cache-dir "mssql-python==1.15.0"
   USER 10001:10001
@@ -245,14 +244,14 @@ Then: [Quickstart](#quickstart) · [How it works](#how-it-works) · [Sample data
 - **A step cache.** Each step's result is kept by content, written after the preview has
   answered, so changing the last of ten steps recomputes one. `CACHE__MAX_STEP_ROWS=1000000`
   keeps huge steps out of it. [The step cache](docs/capabilities/preview-and-analysis.md#the-step-cache)
-- **The real row count** — *next release*. «First 100 of 42,007,616 rows»: read from the
+- **The real row count.** «First 100 of 42,007,616 rows»: read from the
   parquet footer when it can be, counted up to 10 million otherwise, in the editor, the
   Viewer and on each node. [Previewing each step](docs/capabilities/preview-and-analysis.md#previewing-each-step-of-a-flow)
   ```bash
   curl -X POST …/api/tasks/count -d '{"bucket": "tabularia", "input_key": "…", "operations": […]}'
   # {"rows": 5, "over": false, "at_most": 10000000, "how": "metadata"}
   ```
-- **A column profile to act on** — *next release*. A null bar under every column; a click
+- **A column profile to act on.** A null bar under every column; a click
   opens its distinct values, range, lengths, a histogram or the five most frequent values,
   each with **Filter to this value**, **Exclude** or **Fill nulls…**, which add the step.
   [The column profile](docs/capabilities/preview-and-analysis.md#the-column-profile)
@@ -260,7 +259,7 @@ Then: [Quickstart](#quickstart) · [How it works](#how-it-works) · [Sample data
   curl -X POST …/api/tasks/profile -d '{"bucket": "tabularia", "input_key": "…", "column": "categoria"}'
   # {"column": "categoria", "values": [{"value": "Insaccati cotti", "count": 37}, …], "how": "computed"}
   ```
-- **A data grid for the keyboard** — *next release*. Arrows, Home/End, Page Up/Down,
+- **A data grid for the keyboard.** Arrows, Home/End, Page Up/Down,
   Ctrl+C copies a cell's exact value, Esc cancels a slow preview, which stops its query on
   the server. [Moving with the keyboard](docs/capabilities/preview-and-analysis.md#moving-with-the-keyboard)
 - **Charts on all rows.** Thirteen kinds, from bars and lines to waterfall, funnel, heatmap, KPI,
