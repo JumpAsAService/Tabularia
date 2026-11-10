@@ -181,7 +181,7 @@ const situation = computed<{ tone: 'off' | 'ok' | 'error' | 'waiting'; text: str
     <p class="hint muted small">{{ $t('backups.settingsLead') }}</p>
 
     <label class="tick">
-      <input v-model="draft.enabled" type="checkbox" :disabled="!editable || saving" />
+      <input v-model="draft.enabled" type="checkbox" role="switch" :disabled="!editable || saving" />
       <span>{{ $t('backups.enabled') }}</span>
       <button v-if="editable && state.changed.enabled" type="button" class="link" @click="save({ reset: ['enabled'] })">
         {{ $t('backups.reset', { value: state.defaults.enabled ? $t('backups.on') : $t('backups.off') }) }}

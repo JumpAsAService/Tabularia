@@ -180,7 +180,7 @@ const DATE_EXAMPLE = '{today:yyyy-MM-dd}'
       <label for="pm-body">{{ t('pushmail.bodyLabel') }}</label>
       <textarea id="pm-body" :value="config.body" rows="4" maxlength="20000"
                 @input="emit('update', { body: ($event.target as HTMLTextAreaElement).value })" />
-      <label class="chk"><input type="checkbox" :checked="config.bodyIsHtml"
+      <label class="chk"><input type="checkbox" role="switch" :checked="config.bodyIsHtml"
              @change="emit('update', { bodyIsHtml: ($event.target as HTMLInputElement).checked })" /> {{ t('pushmail.bodyHtml') }}</label>
 
       <div class="atthead">
@@ -254,7 +254,7 @@ const DATE_EXAMPLE = '{today:yyyy-MM-dd}'
                                 @update:model-value="(v) => setReport(i, { params: v })" />
         </div>
         <label class="chk body">
-          <input type="checkbox" :checked="r.inBody" @change="setInBody(i, ($event.target as HTMLInputElement).checked)" />
+          <input type="checkbox" role="switch" :checked="r.inBody" @change="setInBody(i, ($event.target as HTMLInputElement).checked)" />
           <span>{{ t('pushmail.inBody') }} <span class="muted">{{ t('pushmail.inBodyHint') }}</span></span>
         </label>
       </div>

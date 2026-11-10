@@ -5,6 +5,19 @@ exposes at `/system/info` and in the app's settings menu.
 
 ## Unreleased
 
+- **Every on/off is a switch, and the switch moves.** What turns a setting or a function on
+  and off was a checkbox in most places (a contract's «active», automatic backups, the
+  privacy notice, share links, a scripting environment or a registry «enabled», a variable's
+  «secret», an Output node's «overwrite», the yes/no options of a step, of a report's table
+  or chart, of a dashboard tile, of a data API's runtime, the Viewer's «don't repeat row
+  dimensions»): 48 of them are now switches, with the two that already were (a webhook's
+  Active, a version's Internet access) and the panel's settings, all drawn by one rule that
+  hangs on `role="switch"`. A choice in a set (columns, sheets, values, events, groups,
+  formats, a consent) stays a checkbox. Nothing changes in what they do: same labels, same
+  keys, same saved values; a screen reader now hears «switch, on / off». Pressed, the knob
+  gives towards the other side; released, it slides across on a short spring (260 ms, a pixel
+  past its place and back) while the track's colour fades. Under reduced motion it changes
+  place without the spring.
 - **The Viewer's table starts empty, and you build it by dragging fields onto three
   areas**, as a report's matrix: **Rows** down the left, **Columns** across the top,
   **Measures** in the middle. Opening a datasource no longer loads every column: the page

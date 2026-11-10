@@ -58,7 +58,7 @@ function setFilters(e: Event) {
     <p v-if="titleProblem" class="rp-err" role="alert">{{ titleProblem.message }}</p>
     <template v-if="filterable">
       <label class="rp-check">
-        <input type="checkbox" data-field="filters-others" :checked="tile.filters_others !== false" @change="setFilters" />
+        <input type="checkbox" role="switch" data-field="filters-others" :checked="tile.filters_others !== false" @change="setFilters" />
         {{ $t('dashboardDesigner.filtersOthers') }}
       </label>
       <p class="rp-help">{{ $t('dashboardDesigner.filtersOthersHelp') }}</p>

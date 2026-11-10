@@ -582,7 +582,7 @@ function confirm() {
                 ]"
               />
             </div>
-            <label class="dd-check"><input v-model="ftHeader" type="checkbox" /> {{ $t('sftp.headerLabel') }}</label>
+            <label class="dd-check"><input v-model="ftHeader" type="checkbox" role="switch" /> {{ $t('sftp.headerLabel') }}</label>
           </div>
           <template v-if="showsSheet">
             <label>{{ $t('sftp.sheetLabel') }} <span v-if="sheetList" class="dd-soft">{{ $t('sheetPicker.fromFile', { file: sheetFile }) }}</span></label>

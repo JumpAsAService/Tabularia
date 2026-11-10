@@ -731,7 +731,7 @@ async function toggleEngine(m: EnginePolicy) {
             <p class="muted small hint">{{ $t('adminPanel.privacyHint') }}</p>
             <template v-if="privacy">
               <label class="chk">
-                <input v-model="privacy.enabled" type="checkbox" :disabled="!canWrite" />
+                <input v-model="privacy.enabled" type="checkbox" role="switch" :disabled="!canWrite" />
                 {{ $t('adminPanel.privacyEnabled') }}
               </label>
               <label class="dlabel" for="pv-sum">{{ $t('adminPanel.privacySummary') }}</label>

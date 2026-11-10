@@ -40,7 +40,7 @@ function setSpark(on: boolean) {
   </RdSection>
   <RdSection :title="$t('reportDesigner.kpi.sparkline')" skey="kpi-spark" :bad="has('sparkline')">
     <label class="rp-check">
-      <input type="checkbox" :checked="!!item.sparkline" @change="setSpark(($event.target as HTMLInputElement).checked)" />
+      <input type="checkbox" role="switch" :checked="!!item.sparkline" @change="setSpark(($event.target as HTMLInputElement).checked)" />
       {{ $t('reportDesigner.kpi.showSparkline') }}
     </label>
     <template v-if="item.sparkline">

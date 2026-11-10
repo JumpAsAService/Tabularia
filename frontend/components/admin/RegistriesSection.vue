@@ -468,7 +468,7 @@ function testIcon(ok: boolean | null) {
       </fieldset>
 
       <label class="tick">
-        <input v-model="form.enabled" type="checkbox" :disabled="!editable || saving" />
+        <input v-model="form.enabled" type="checkbox" role="switch" :disabled="!editable || saving" />
         <span>{{ $t('registries.enabled') }}</span>
       </label>
 
@@ -569,7 +569,7 @@ function testIcon(ok: boolean | null) {
           <input v-model="variable.value" :type="variable.secret ? 'password' : 'text'" autocomplete="new-password"
                  :placeholder="editingVariable && variable.secret ? $t('registries.secretKeep') : $t('registries.variableValue')"
                  :disabled="savingVariable" spellcheck="false" />
-          <label class="tick"><input v-model="variable.secret" type="checkbox" :disabled="savingVariable" /> {{ $t('registries.secret') }}</label>
+          <label class="tick"><input v-model="variable.secret" type="checkbox" role="switch" :disabled="savingVariable" /> {{ $t('registries.secret') }}</label>
           <button type="submit" class="primary mini" :disabled="savingVariable || !variable.name.trim()">
             {{ editingVariable ? $t('registries.save') : $t('registries.add') }}
           </button>

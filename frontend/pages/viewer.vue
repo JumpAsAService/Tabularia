@@ -1278,7 +1278,7 @@ onMounted(async () => {
               @shift="(i, d) => shelfShift('rows', i, d)" @send="(i, to) => shelfSend('rows', i, to)"
             ><template #icon><Rows3 :size="12" aria-hidden="true" /></template></FieldShelf>
             <label v-if="pivotShown && chosen.length > 1" class="xt-outline" :title="$t('viewer.outlineHint')">
-              <input v-model="outline" type="checkbox" /> {{ $t('viewer.outlineToggle') }}
+              <input v-model="outline" type="checkbox" role="switch" /> {{ $t('viewer.outlineToggle') }}
             </label>
           </div>
           <div class="xt-main" :class="{ empty: tableEmpty }">

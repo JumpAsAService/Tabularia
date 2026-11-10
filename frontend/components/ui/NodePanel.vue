@@ -376,7 +376,7 @@ function pickDatasource(id: number | null) {
         />
         <label class="chk ovw">
           <input
-            type="checkbox"
+            type="checkbox" role="switch"
             :checked="node.data.overwrite ?? false"
             @change="emit('update', { overwrite: ($event.target as HTMLInputElement).checked })"
           />
@@ -403,7 +403,7 @@ function pickDatasource(id: number | null) {
              (if it fails the run stays valid) -->
         <label class="chk ovw">
           <input
-            type="checkbox"
+            type="checkbox" role="switch"
             :checked="node.data.mirrorEnabled ?? false"
             @change="emit('update', { mirrorEnabled: ($event.target as HTMLInputElement).checked })"
           />
@@ -549,7 +549,7 @@ function pickDatasource(id: number | null) {
         />
         <label class="chk ovw">
           <input
-            type="checkbox"
+            type="checkbox" role="switch"
             :checked="node.data.emailHtml ?? false"
             @change="emit('update', { emailHtml: ($event.target as HTMLInputElement).checked })"
           />
@@ -578,7 +578,7 @@ function pickDatasource(id: number | null) {
              the next steps go on -->
         <label class="chk ovw">
           <input
-            type="checkbox"
+            type="checkbox" role="switch"
             :checked="node.data.stopOnFailure !== false"
             @change="emit('update', { stopOnFailure: ($event.target as HTMLInputElement).checked })"
           />

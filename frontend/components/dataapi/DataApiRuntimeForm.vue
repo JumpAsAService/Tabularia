@@ -22,7 +22,7 @@ defineExpose({ problem })
 <template>
   <div class="rtf">
     <label class="check">
-      <input v-model="model.autoscale" type="checkbox" :disabled="disabled" data-rt="autoscale" /> {{ $t('dataApi.autoscale') }}
+      <input v-model="model.autoscale" type="checkbox" role="switch" :disabled="disabled" data-rt="autoscale" /> {{ $t('dataApi.autoscale') }}
     </label>
     <div class="rtf-row">
       <label v-if="!model.autoscale" class="field">

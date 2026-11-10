@@ -361,7 +361,7 @@ function close() {
           <LoaderCircle v-if="busy === 'propose'" :size="13" class="spin" /><Sparkles v-else :size="13" />
           {{ $t('contracts.propose') }}
         </button>
-        <label class="cd-on"><input v-model="enabled" type="checkbox" :disabled="!!busy" /> {{ $t('contracts.enabled') }}</label>
+        <label class="cd-on"><input v-model="enabled" type="checkbox" role="switch" :disabled="!!busy" /> {{ $t('contracts.enabled') }}</label>
         <span v-if="changed && info" class="cd-note">{{ $t('contracts.unsaved') }}</span>
       </div>
 

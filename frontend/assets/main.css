@@ -47,6 +47,11 @@
   /* the hover sweep's own curve: symmetric enough that its middle falls at ~100ms of 240,
      so the fill is SEEN crossing the button (with --ease-out it was halfway at 22ms) */
   --ease-sweep: cubic-bezier(0.4, 0, 0.2, 1);
+  /* the switch's knob alone: a damped spring (ζ 0.65) that passes its place by 7% at half
+     its time and is back by the end; made for --dur-spring, where 7% of the knob's 14px is
+     one pixel. The bezier is for the browsers without linear() (see @supports below) */
+  --ease-spring: cubic-bezier(0.3, 1.45, 0.5, 1);
+  --dur-spring: 0.26s;
   --shadow-1: 0 1px 2px rgba(0, 0, 0, 0.4);
   --shadow-2: 0 4px 16px rgba(0, 0, 0, 0.45);
   /* a pinned column over the ones scrolled under it (the data grid's row numbers) */
@@ -428,6 +433,125 @@ select:focus, input:focus, textarea:focus {
   box-shadow: 0 0 0 3px color-mix(in srgb, var(--accent) 18%, transparent);
 }
 textarea { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; resize: vertical; }
+
+/* ── Switch ───────────────────────────────────────────────────────────────
+   The on/off of a setting or of a function is a switch; a choice in a set (columns, rows,
+   formats, «select all», a consent) stays a checkbox. The look hangs on the role, so the
+   two never part: a native checkbox with role="switch" (v-model, forms, disabled, label and
+   Space are the checkbox's own), or a button with role="switch" and aria-checked where the
+   state comes back from the server. 32×18, the knob 12px with 14px to travel.
+   The knob gives under the finger (it widens by a quarter towards where it will go,
+   anchored where it rests), then slides over on --ease-spring and is a circle again; the
+   track's colour fades while it crosses. Transitions, not keyframes: a second click takes
+   it from where it is. On and off are the knob's place, never the colour alone. */
+@supports (transition-timing-function: linear(0, 1)) {
+  :root {
+    --ease-spring: linear(
+      0, 0.046 4%, 0.158 8%, 0.304 12%, 0.459 16%, 0.607 20%, 0.767 25%, 0.89 30%, 0.977 35%,
+      1.031 40%, 1.059 45%, 1.068 50%, 1.065 55%, 1.054 60%, 1.039 66%, 1.024 72%, 1.009 80%,
+      0.998 90%, 1
+    );
+  }
+}
+input[type="checkbox"][role="switch"], button[role="switch"] {
+  appearance: none;
+  -webkit-appearance: none;
+  position: relative;
+  display: inline-block;
+  flex: none;
+  box-sizing: border-box;
+  /* min- too: the panels' own `input { width: auto }` must not shrink it */
+  width: 32px; min-width: 32px;
+  height: 18px; min-height: 18px;
+  /* the focus ring (2px at 2px) keeps clear of the label's first letter */
+  margin: 0 2px 0 0;
+  padding: 0;
+  vertical-align: middle;
+  border: 1px solid var(--control-border);
+  border-radius: 999px;
+  background: var(--bg-soft);
+  cursor: pointer;
+  transition: background-color var(--dur-3) ease-out, border-color var(--dur-3) ease-out, box-shadow var(--dur-hover);
+}
+/* the knob */
+input[type="checkbox"][role="switch"]::before, button[role="switch"]::before {
+  content: "";
+  position: absolute;
+  top: 2px; left: 2px;
+  width: 12px; height: 12px;
+  border-radius: 999px;
+  background: var(--muted);
+  box-shadow: var(--shadow-1);
+  transform-origin: 0 50%;
+  transform: translateX(0) scaleX(1);
+  transition: transform var(--dur-spring) var(--ease-spring), background-color var(--dur-3) ease-out;
+}
+/* the target is 36×24 whatever the row around it */
+input[type="checkbox"][role="switch"]::after, button[role="switch"]::after {
+  content: "";
+  position: absolute;
+  inset: -4px -3px;
+}
+/* the fields' focus (accent border and halo, also after a click) is not the switch's */
+input[type="checkbox"][role="switch"]:focus { border-color: var(--control-border); box-shadow: none; }
+button[role="switch"]:hover { border-color: var(--control-border); box-shadow: none; }
+button[role="switch"]:active { transform: none; }
+input[type="checkbox"][role="switch"]:checked, button[role="switch"][aria-checked="true"],
+input[type="checkbox"][role="switch"]:checked:focus, button[role="switch"][aria-checked="true"]:hover {
+  background: var(--accent);
+  border-color: var(--accent);
+}
+input[type="checkbox"][role="switch"]:checked::before, button[role="switch"][aria-checked="true"]::before {
+  background: var(--on-accent);
+  transform: translateX(14px) scaleX(1);
+}
+/* pressed: the knob gives towards the other side, quickly */
+input[type="checkbox"][role="switch"]:enabled:active::before, button[role="switch"]:enabled:active::before {
+  transform: translateX(0) scaleX(1.25);
+  transition: transform var(--dur-1) ease-out, background-color var(--dur-3) ease-out;
+}
+input[type="checkbox"][role="switch"]:enabled:checked:active::before, button[role="switch"][aria-checked="true"]:enabled:active::before {
+  transform: translateX(11px) scaleX(1.25);
+}
+input[type="checkbox"][role="switch"]:focus-visible, button[role="switch"]:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
+input[type="checkbox"][role="switch"]:disabled, button[role="switch"]:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+  box-shadow: none;
+}
+input[type="checkbox"][role="switch"]:disabled::before, button[role="switch"]:disabled::before { transition: none; }
+@media (hover: hover) and (pointer: fine) {
+  /* the checkboxes' answer: a soft accent halo */
+  input[type="checkbox"][role="switch"]:enabled:hover, button[role="switch"]:enabled:hover {
+    box-shadow: 0 0 0 3px var(--tint-accent);
+  }
+}
+@media (pointer: coarse) {
+  input[type="checkbox"][role="switch"]::after, button[role="switch"]::after { inset: -8px -3px; }
+}
+/* reduced motion: the colour fades, the knob changes place with no spring and no give */
+@media (prefers-reduced-motion: reduce) {
+  input[type="checkbox"][role="switch"], button[role="switch"] {
+    transition: background-color var(--dur-1) linear, border-color var(--dur-1) linear;
+  }
+  input[type="checkbox"][role="switch"]::before, button[role="switch"]::before,
+  input[type="checkbox"][role="switch"]:enabled:active::before, button[role="switch"]:enabled:active::before {
+    transition: transform 80ms ease-out, background-color var(--dur-1) linear;
+  }
+  input[type="checkbox"][role="switch"]:enabled:active::before, button[role="switch"]:enabled:active::before { transform: translateX(0) scaleX(1); }
+  input[type="checkbox"][role="switch"]:enabled:checked:active::before,
+  button[role="switch"][aria-checked="true"]:enabled:active::before { transform: translateX(14px) scaleX(1); }
+}
+/* forced colours: the system's own, the state still the knob's place */
+@media (forced-colors: active) {
+  input[type="checkbox"][role="switch"], button[role="switch"] { border-color: ButtonText; background: Canvas; }
+  input[type="checkbox"][role="switch"]::before, button[role="switch"]::before { background: ButtonText; forced-color-adjust: none; }
+  input[type="checkbox"][role="switch"]:checked, button[role="switch"][aria-checked="true"] { background: Highlight; border-color: Highlight; }
+  input[type="checkbox"][role="switch"]:checked::before, button[role="switch"][aria-checked="true"]::before { background: HighlightText; }
+}
 
 /* the browser's autofill (username/password): the filling popup would impose a light
    system background. We force it to our dark theme: the inset box-shadow "repaints" the

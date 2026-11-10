@@ -249,8 +249,8 @@ function rename(old: string, name: string) {
           <Select :model-value="draft.type" :options="typeOptions" :aria-label="$t('reportDesigner.param.type')" @update:model-value="chooseType" />
         </label>
         <div class="rp-f rpd-checks">
-          <label class="rp-check"><input v-model="draft.multi" type="checkbox" /> {{ $t('reportDesigner.param.multi') }}</label>
-          <label class="rp-check"><input v-model="draft.required" type="checkbox" /> {{ $t('reportDesigner.param.required') }}</label>
+          <label class="rp-check"><input v-model="draft.multi" type="checkbox" role="switch" /> {{ $t('reportDesigner.param.multi') }}</label>
+          <label class="rp-check"><input v-model="draft.required" type="checkbox" role="switch" /> {{ $t('reportDesigner.param.required') }}</label>
         </div>
       </div>
       <label class="rp-f">
@@ -286,7 +286,7 @@ function rename(old: string, name: string) {
         <p class="rp-help">{{ $t('reportDesigner.param.datasetHelp') }}</p>
         <div v-if="draft.dataset && draft.value.trim()" class="rpd-follow">
           <template v-if="canTick">
-            <label class="rp-check"><input v-model="draft.filterIt" type="checkbox" /> {{ $t('reportDesigner.param.filterIt') }}</label>
+            <label class="rp-check"><input v-model="draft.filterIt" type="checkbox" role="switch" /> {{ $t('reportDesigner.param.filterIt') }}</label>
             <p class="rp-help">{{ filterSays }}</p>
           </template>
           <p v-else-if="listKind === 'datasource' || listKind === 'view'" class="rp-help">{{ $t('reportDesigner.param.filterItField') }}</p>

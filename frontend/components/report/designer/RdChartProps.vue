@@ -140,8 +140,8 @@ function addSeries() {
 
   <RdSection :title="$t('reportDesigner.chart.options')" skey="chart-options" :bad="has('options')">
     <div class="rp-checks">
-      <label v-if="stackable" class="rp-check"><input type="checkbox" :checked="!!o.stacked" @change="opts().stacked = ($event.target as HTMLInputElement).checked" /> {{ $t('reportDesigner.chart.stacked') }}</label>
-      <label class="rp-check"><input type="checkbox" :checked="!!o.labels" @change="opts().labels = ($event.target as HTMLInputElement).checked" /> {{ $t('reportDesigner.chart.labels') }}</label>
+      <label v-if="stackable" class="rp-check"><input type="checkbox" role="switch" :checked="!!o.stacked" @change="opts().stacked = ($event.target as HTMLInputElement).checked" /> {{ $t('reportDesigner.chart.stacked') }}</label>
+      <label class="rp-check"><input type="checkbox" role="switch" :checked="!!o.labels" @change="opts().labels = ($event.target as HTMLInputElement).checked" /> {{ $t('reportDesigner.chart.labels') }}</label>
     </div>
     <label class="rp-f">
       <span>{{ $t('reportDesigner.chart.legend') }}</span>

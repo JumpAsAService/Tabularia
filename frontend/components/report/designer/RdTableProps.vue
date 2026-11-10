@@ -156,7 +156,7 @@ function interactive() {
     </label>
     <p v-if="store.problemAt(id, 'dataset')" class="rp-err" role="alert">{{ store.problemAt(id, 'dataset')?.message }}</p>
     <label class="rp-check">
-      <input type="checkbox" :checked="!!item.matrix" @change="setMatrix(($event.target as HTMLInputElement).checked)" />
+      <input type="checkbox" role="switch" :checked="!!item.matrix" @change="setMatrix(($event.target as HTMLInputElement).checked)" />
       {{ $t('reportDesigner.table.isMatrix') }}
     </label>
     <RdExprField :obj="item" prop="filter" :label="$t('reportDesigner.table.filter')" path="filter" :item="id" :fields="fields" optional
@@ -188,7 +188,7 @@ function interactive() {
         <RdNum v-model="item.matrix.width" unit="mm" :min="1" nullable :placeholder="$t('reportDesigner.table.auto')" />
       </label>
     </div>
-    <label class="rp-check"><input type="checkbox" :checked="item.matrix.total !== false" @change="item.matrix!.total = ($event.target as HTMLInputElement).checked" /> {{ $t('reportDesigner.table.matrixTotal') }}</label>
+    <label class="rp-check"><input type="checkbox" role="switch" :checked="item.matrix.total !== false" @change="item.matrix!.total = ($event.target as HTMLInputElement).checked" /> {{ $t('reportDesigner.table.matrixTotal') }}</label>
     <label class="rp-f">
       <span>{{ $t('reportDesigner.table.rowHeader') }}</span>
       <input type="text" :value="item.columns[0]?.header ?? ''" maxlength="500" @input="setRowHeader(($event.target as HTMLInputElement).value)" />
@@ -253,7 +253,7 @@ function interactive() {
             </div>
             <RdStyleFields :obj="r" :parts="['color', 'fill']" :item="id" :path="`columns[${i}].rules[${j}]`" />
             <label class="rp-check">
-              <input type="checkbox" :checked="r.style?.weight === 'bold'" @change="r.style = { ...(r.style ?? {}), weight: ($event.target as HTMLInputElement).checked ? 'bold' : null }" />
+              <input type="checkbox" role="switch" :checked="r.style?.weight === 'bold'" @change="r.style = { ...(r.style ?? {}), weight: ($event.target as HTMLInputElement).checked ? 'bold' : null }" />
               {{ $t('reportDesigner.style.bold') }}
             </label>
           </div>
@@ -294,9 +294,9 @@ function interactive() {
           <Select :model-value="g.page_break ?? 'none'" :options="breakOptions" :aria-label="$t('reportDesigner.table.pageBreak')" @update:model-value="g.page_break = $event" />
         </label>
         <div class="rp-checks">
-          <label class="rp-check"><input type="checkbox" :checked="g.header !== false" @change="g.header = ($event.target as HTMLInputElement).checked" /> {{ $t('reportDesigner.table.groupHeader') }}</label>
-          <label class="rp-check"><input type="checkbox" :checked="g.footer !== false" @change="g.footer = ($event.target as HTMLInputElement).checked" /> {{ $t('reportDesigner.table.groupFooter') }}</label>
-          <label class="rp-check"><input type="checkbox" :checked="g.keep_together !== false" @change="g.keep_together = ($event.target as HTMLInputElement).checked" /> {{ $t('reportDesigner.table.keepTogether') }}</label>
+          <label class="rp-check"><input type="checkbox" role="switch" :checked="g.header !== false" @change="g.header = ($event.target as HTMLInputElement).checked" /> {{ $t('reportDesigner.table.groupHeader') }}</label>
+          <label class="rp-check"><input type="checkbox" role="switch" :checked="g.footer !== false" @change="g.footer = ($event.target as HTMLInputElement).checked" /> {{ $t('reportDesigner.table.groupFooter') }}</label>
+          <label class="rp-check"><input type="checkbox" role="switch" :checked="g.keep_together !== false" @change="g.keep_together = ($event.target as HTMLInputElement).checked" /> {{ $t('reportDesigner.table.keepTogether') }}</label>
         </div>
       </div>
     </div>
@@ -304,11 +304,11 @@ function interactive() {
 
   <RdSection :title="$t('reportDesigner.table.layout')" skey="table-layout">
     <div class="rp-checks">
-      <label v-if="!item.matrix" class="rp-check"><input type="checkbox" :checked="item.detail !== false" @change="item.detail = ($event.target as HTMLInputElement).checked" /> {{ $t('reportDesigner.table.detail') }}</label>
-      <label class="rp-check"><input type="checkbox" :checked="!!item.grand_total" @change="item.grand_total = ($event.target as HTMLInputElement).checked" /> {{ $t('reportDesigner.table.grandTotal') }}</label>
+      <label v-if="!item.matrix" class="rp-check"><input type="checkbox" role="switch" :checked="item.detail !== false" @change="item.detail = ($event.target as HTMLInputElement).checked" /> {{ $t('reportDesigner.table.detail') }}</label>
+      <label class="rp-check"><input type="checkbox" role="switch" :checked="!!item.grand_total" @change="item.grand_total = ($event.target as HTMLInputElement).checked" /> {{ $t('reportDesigner.table.grandTotal') }}</label>
       <p v-if="noTotals && item.grand_total" class="rp-help">{{ $t('reportDesigner.table.noTotals') }}</p>
-      <label class="rp-check"><input type="checkbox" :checked="item.repeat_header !== false" @change="item.repeat_header = ($event.target as HTMLInputElement).checked" /> {{ $t('reportDesigner.table.repeatHeader') }}</label>
-      <label class="rp-check"><input type="checkbox" :checked="!!item.zebra" @change="item.zebra = ($event.target as HTMLInputElement).checked" /> {{ $t('reportDesigner.table.zebra') }}</label>
+      <label class="rp-check"><input type="checkbox" role="switch" :checked="item.repeat_header !== false" @change="item.repeat_header = ($event.target as HTMLInputElement).checked" /> {{ $t('reportDesigner.table.repeatHeader') }}</label>
+      <label class="rp-check"><input type="checkbox" role="switch" :checked="!!item.zebra" @change="item.zebra = ($event.target as HTMLInputElement).checked" /> {{ $t('reportDesigner.table.zebra') }}</label>
     </div>
     <label class="rp-f">
       <span>{{ $t(word('reportDesigner.table.title')) }}</span>
@@ -321,8 +321,8 @@ function interactive() {
     <p class="rp-help">{{ $t('reportDesigner.table.onScreenHelp') }}</p>
     <div class="rp-checks">
       <!-- a matrix is not sorted by a column (the engine leaves it as it is) -->
-      <label v-if="!item.matrix" class="rp-check"><input type="checkbox" :checked="!!item.interactive?.sort" @change="interactive().sort = ($event.target as HTMLInputElement).checked" /> {{ $t('reportDesigner.table.interactiveSort') }}</label>
-      <label class="rp-check"><input type="checkbox" :checked="!!item.interactive?.toggle" @change="interactive().toggle = ($event.target as HTMLInputElement).checked" /> {{ $t('reportDesigner.table.interactiveToggle') }}</label>
+      <label v-if="!item.matrix" class="rp-check"><input type="checkbox" role="switch" :checked="!!item.interactive?.sort" @change="interactive().sort = ($event.target as HTMLInputElement).checked" /> {{ $t('reportDesigner.table.interactiveSort') }}</label>
+      <label class="rp-check"><input type="checkbox" role="switch" :checked="!!item.interactive?.toggle" @change="interactive().toggle = ($event.target as HTMLInputElement).checked" /> {{ $t('reportDesigner.table.interactiveToggle') }}</label>
     </div>
   </RdSection>
 </template>
