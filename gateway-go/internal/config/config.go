@@ -156,7 +156,7 @@ func Load(env Env) (*Config, error) {
 		FirstRunSetup:            r.boolean("AUTH__FIRST_RUN_SETUP", false),
 		EnvName:                  r.str("APP__ENV_NAME", "development"),
 		AppName:                  r.str("APP__NAME", "Tabularia"),
-		AppVersion:               r.str("APP__VERSION", "1.4.2"),
+		AppVersion:               r.str("APP__VERSION", "1.4.3"),
 		AppCodename:              r.str("APP__CODENAME", "Romulus"),
 		AppTimezone:              r.str("APP__TIMEZONE", "UTC"),
 		PreviewDefaultSampleRows: r.integer("PREVIEW__DEFAULT_SAMPLE_ROWS", 0, 0, -1),

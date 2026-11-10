@@ -5,6 +5,34 @@ exposes at `/system/info` and in the app's settings menu.
 
 ## Unreleased
 
+## 1.4.3 «Romulus» — 2026-11-10 · long-term support
+
+A patch of the 1.4 line: data-correctness fixes found by a second hunt on the dbt export's
+ClickHouse paths and on MySQL sources, run with real dbt against a Kubernetes stack. No new
+feature, no change of configuration, no migration: upgrading from 1.4.2 is replacing the images.
+
+- **The ClickHouse engines cast a date outside 1970–2106 to an instant as it is.** A cast to an
+  instant read the value as a 32-bit `DateTime`: 1955-03-12 became 1970-01-01 and 2150-06-01
+  became 2106-02-07. It is now read on `DateTime64`, as the other engines do; and an integer
+  cast to a float is rounded to the nearest float instead of becoming NULL beyond 2^53.
+- **dbt export, a federated MySQL or MariaDB source is filtered as Tabularia filters it.**
+  DuckDB pushed a filter down into MySQL, where a case-insensitive collation kept «Alfa» and
+  «ALFA » for `name = 'alfa'`, and read a `TINYINT(1)` holding 2 as true. The profile of a
+  project that reads MySQL turns both off (`mysql_experimental_filter_pushdown`,
+  `mysql_tinyint1_as_boolean`), and the folder package's guide says so.
+- **dbt export, a Postgres query on the ClickHouse target keeps its numbers.** An integer
+  divided by an integer is `intDiv` (Postgres truncates; ClickHouse divided with decimals), a
+  `::numeric` without precision is no longer a decimal without decimals, a `::int` rounds as
+  Postgres does, and `date_trunc` holds dates before 1970. A query whose types the export cannot
+  tell is refused as not translatable, so the AI proposal or the federated target take it,
+  instead of a model that changes the numbers.
+- **dbt export, -0.0 and 0.0 are one key on ClickHouse** in a group by, a unique and a join (the
+  join missed their rows), as in the ClickHouse engine; and a float among texts in an unpivot
+  keeps its `.0`.
+- **dbt export, the ClickHouse syntax check stays on.** On a stack without chDB it read a valid
+  model's answer as «no answer» and turned itself off, so an untranslatable query reached
+  `dbt run` instead of the export's refusal and its AI proposal.
+
 ## 1.4.2 «Romulus» — 2026-11-10 · long-term support
 
 The first long-term support release: from here on the 1.4 line takes security, data-correctness
