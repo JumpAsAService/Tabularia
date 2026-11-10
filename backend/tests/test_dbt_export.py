@@ -4039,3 +4039,32 @@ def test_an_instant_as_text_on_native_postgres_is_what_the_flows_engine_writes(d
     files = _export_in({"id": "Int64", "t": dtype}, [{"type": "cast", "params": {"columns": {"t": "str"}}}], "native", dialect=engine)
     got = dict(_su_postgres(f"SELECT * FROM ({_model(files, values)}) AS m"))
     assert got == {**dict(enumerate(expected)), 3: None}
+
+
+@pytest.mark.parametrize("dtype,column", [(_DT, "DateTime64(6)"), (_MS, "DateTime64(3)"), (_UTC, "DateTime64(6)")])
+@pytest.mark.parametrize("operator,value,ids", [
+    ("ge", "2024-01-05T10:30", [2, 3]), ("lt", "2024-01-05T10:30", [1]), ("eq", "2024-01-05T10:30:00.5", [3]),
+    ("in", ["2024-01-05T10:30", "1965-06-01T08:00"], [1, 2]), ("between", ["2024-01-05T10:30", "2024-01-05T10:30:01"], [2, 3]),
+    # an offset is an instant: in UTC, as the ClickHouse engine reads it
+    ("eq", "2024-01-05T12:30:00+02:00", [2]),
+])
+def test_a_filter_on_an_instant_with_the_calendars_value_runs_on_clickhouse(dtype, column, operator, value, ids):
+    """The editor's calendar writes 2024-01-05T10:30, without seconds: ClickHouse refused it
+    (CANNOT_PARSE_DATETIME) and the model failed. Written as the ClickHouse engine writes it."""
+    values = f"(SELECT * FROM values('id Int64, t Nullable({column})', (1, '1965-06-01 08:00:00'), (2, '2024-01-05 10:30:00'), " \
+             "(3, '2024-01-05 10:30:00.5'), (4, NULL)))"
+    files = _export_in({"id": "Int64", "t": dtype}, [{"type": "filter", "params": {"column": "t", "operator": operator, "value": value}}], "clickhouse")
+    assert sorted(r[0] for r in _su_clickhouse(_model(files, values))) == ids
+
+
+@pytest.mark.parametrize("column,dtype", [("Decimal(10, 2)", "Decimal(precision=10, scale=2)"), ("Decimal(18, 4)", "Decimal(precision=18, scale=4)"),
+                                          ("Decimal(38, 4)", "Decimal(precision=38, scale=4)")])
+def test_a_clickhouse_decimal_cast_to_an_integer_runs(column, dtype):
+    """The range check compared the decimal with -2^63, which ClickHouse cannot hold in a
+    Decimal(10, 2): DECIMAL_OVERFLOW, and the model failed. The engine truncates; out of the
+    64-bit range it gives NULL."""
+    big = "99999999999999.9999" if "18" in column else ("99999999.99" if "10" in column else "99999999999999999999999999.9999")
+    values = f"(SELECT * FROM values('id Int64, x Nullable({column})', (1, '1.25'), (2, '-2.5'), (3, NULL), (4, '0.01'), (5, '{big}')))"
+    files = _export_in({"id": "Int64", "x": dtype}, [{"type": "cast", "params": {"columns": {"x": "int"}}}], "clickhouse")
+    got = dict(_su_clickhouse(_model(files, values)))
+    assert got == {1: 1, 2: -2, 3: None, 4: 0, 5: None if "38" in column else int(big.split(".")[0])}

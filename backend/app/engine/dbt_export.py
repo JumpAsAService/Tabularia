@@ -48,6 +48,7 @@ from app.engine.duckdb_ops import (
     _require,
     unpivot_value_type,
 )
+from app.engine.chdb_ops import _datetime_literal, _iso_datetime
 from app.engine.exceptions import EngineError
 from app.engine.operations import (
     PIVOT_LABEL_SEP, PIVOT_VALUES_COLUMN, check_filter_value, pivot_measure_label, pivot_params, sort_keys,
@@ -688,7 +689,10 @@ def _portable_cast(q: str, src: Optional[str], duck_t: str, dialect: Optional[st
                     f"WHEN lower({t}) IN ('false', 'f', '0', 'no', 'n') THEN FALSE END")
         return f"CAST({t} AS {duck_t})"
     if duck_t == "BIGINT" and fam == "number":
-        return f"CASE WHEN {q} >= {_MIN_BIGINT} AND {q} < {_BEYOND_BIGINT} THEN CAST(trunc({q}) AS BIGINT) END"
+        # ClickHouse compares a Decimal(10, 2) with -2^63 in that decimal, which overflows (the model
+        # failed): the bounds are checked on the value as a double
+        v = f"CAST({q} AS DOUBLE)" if dialect == "clickhouse" and str(src or "").upper().startswith("DECIMAL") else q
+        return f"CASE WHEN {v} >= {_MIN_BIGINT} AND {v} < {_BEYOND_BIGINT} THEN CAST(trunc({q}) AS BIGINT) END"
     # boolean ↔ number: Postgres has no such cast (only boolean ↔ integer); the engine's values, written out
     if fam == "boolean" and duck_t in ("BIGINT", "DOUBLE"):
         return f"CAST(CASE WHEN {q} THEN 1 WHEN NOT {q} THEN 0 END AS {duck_t})"
@@ -1200,6 +1204,12 @@ def _compile_op(model: _Model, ref: str, s: _S, op_type: str, params: dict,
             check_filter_value(operator, value)
         except EngineError as e:
             raise DbtExportError(f"filter on «{col}»: {e}", "filter_value_missing", column=col, operator=operator) from e
+        if nat and model.dialect == "clickhouse" and _family(s.kind(col)).startswith("timestamp") \
+                and operator not in ("contains", "starts_with", "ends_with"):
+            # the editor's calendar writes 2024-01-05T10:30, which ClickHouse does not read as a
+            # DateTime (CANNOT_PARSE_DATETIME): the full form, in UTC, as the ClickHouse engine writes it
+            norm = [_datetime_literal(v) if _iso_datetime(v) else v for v in _as_list(value)]
+            value = norm if isinstance(value, list) else norm[0]
         pred = _portable_predicate(col, operator, value, _per_byte(model, s.kind(col))) if nat else _predicate(col, operator, value)
         return model.add(f"SELECT {all_} FROM {ref} WHERE {pred}"), s
 
