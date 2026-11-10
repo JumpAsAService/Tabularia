@@ -1093,6 +1093,13 @@ function createNotebook() {
   if (target.value != null) navigateTo(`/notebook?project=${target.value}`)
 }
 
+// «New → View»: the Viewer, with this folder as the place the view will be saved in. It asks
+// for the datasource there and opens on an empty table; nothing is created until «Save view»
+function createView() {
+  closeNew()
+  if (target.value != null) navigateTo(`/viewer?project=${target.value}`)
+}
+
 function createSqlScript() {
   closeNew()
   if (target.value != null) navigateTo(`/sql-script?project=${target.value}`)
@@ -1684,6 +1691,9 @@ watch(currentId, () => { q.value = ''; kindFilter.value = null; settingsOpen.val
               <button class="menu-item" @click="createSqlScript">
                 <span class="mi-top"><DatabaseSearch :size="14" /> {{ $t('projectBrowser.newSqlScriptButton') }}</span>
               </button>
+              <button class="menu-item" @click="createView">
+                <span class="mi-top"><Bookmark :size="14" /> {{ $t('projectBrowser.newViewButton') }}</span>
+              </button>
               <button class="menu-item" :disabled="creatingReport" :aria-busy="creatingReport" @click="createReport">
                 <span class="mi-top">
                   <LoaderCircle v-if="creatingReport" :size="14" class="spin" /><FileChartColumn v-else :size="14" />
@@ -1786,6 +1796,7 @@ watch(currentId, () => { q.value = ''; kindFilter.value = null; settingsOpen.val
         <template v-if="currentId !== null && target !== null && !(user?.is_observer && !user?.is_superuser)">
           <button @click="newFlowHere"><Workflow :size="14" /> {{ $t('projectBrowser.newFlowButton') }}</button>
           <button @click="openDbDsDialog"><Database :size="14" /> {{ $t('projectBrowser.fromDatabaseButton') }}</button>
+          <button @click="createView"><Bookmark :size="14" /> {{ $t('projectBrowser.newViewButton') }}</button>
         </template>
         <button v-if="isSuper || canManage" @click="newFolderHere"><FolderPlus :size="14" /> {{ $t('projectBrowser.newFolderButton') }}</button>
       </div>
