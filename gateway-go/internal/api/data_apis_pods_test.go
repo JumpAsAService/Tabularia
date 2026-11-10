@@ -99,7 +99,13 @@ func TestDataAPIPodToken(t *testing.T) {
 	}
 	// another API's token, a wrong one, none, a session-like text, a key of the API: refused
 	_, _ = dataapis.RotatePodToken(f.ctx, f.db, 0) // no such data API: an error, nothing changed
-	for _, bad := range []string{tokenB, tokenA[:len(tokenA)-1] + "x", "", "tdk_" + tokenA[4:], "Bearer"} {
+	// one character changed: never the same one (a token that ended in «x» made «x» the right
+	// token, one run in 64)
+	last := "x"
+	if strings.HasSuffix(tokenA, "x") {
+		last = "y"
+	}
+	for _, bad := range []string{tokenB, tokenA[:len(tokenA)-1] + last, "", "tdk_" + tokenA[4:], "Bearer"} {
 		for _, h := range []podHandler{podManifest, podUsage} {
 			if w := f.pod(bad, h, http.MethodGet, a.ID, []byte(`{"minutes": []}`)); w.Code != http.StatusUnauthorized {
 				t.Errorf("%q: %d %s", bad, w.Code, w.Body.String())
