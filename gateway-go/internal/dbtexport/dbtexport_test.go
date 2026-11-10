@@ -1,11 +1,15 @@
 package dbtexport
 
 import (
+	"context"
 	"encoding/json"
 	"os"
 	"testing"
 
+	"github.com/jackc/pgx/v5"
+
 	"github.com/JumpAsAService/Tabularia/gateway-go/internal/pyjson"
+	"github.com/JumpAsAService/Tabularia/gateway-go/internal/pyval"
 )
 
 // testdata/python_cases.json is what services/dbt_export.py, dbt_messages.py and
@@ -102,4 +106,38 @@ func TestThousandsAndRebuildable(t *testing.T) {
 	if !rebuildable("orders") || rebuildable("ùàòìéèùàòìéèùàòìéèùàòìéèùàòì") {
 		t.Error("rebuildable")
 	}
+}
+
+// A file loaded in the editor has its rows in its node: over SeedMaxRows the plan offered the
+// targets and the download then failed (the engine counts the rows); now both refuse it, naming
+// the file.
+func TestAFileSeedOverTheCapIsRefusedByItsNode(t *testing.T) {
+	for rows, refused := range map[string]bool{"50000": false, "50001": true, "50001.0": true, "null": false} {
+		p := newProject(context.Background(), emptyCatalog{}, "b", "clickhouse", nil, nil)
+		def := `{"nodes": [{"id": "a", "type": "source", "data": {"parquetKey": "files/x.parquet", "filename": "orders big.csv", "rows": ` + rows + `}}]}`
+		p.context(&Flow{ID: 1, Name: "f", Definition: def})
+		err := pyval.Catch(func() { p.seed(nil, "files/x.parquet") })
+		if !refused {
+			if err != nil {
+				t.Errorf("rows %s: %v", rows, err)
+			}
+			continue
+		}
+		e, ok := err.(*Error)
+		if !ok || e.Code != "seed_too_large" || e.Params.Value("source") != "orders big.csv" || e.Params.Value("rows") != "50,001" {
+			t.Errorf("rows %s: %#v", rows, err)
+		}
+	}
+}
+
+// emptyCatalog is a database with no rows at all.
+type emptyCatalog struct{}
+
+type noRow struct{}
+
+func (noRow) Scan(...any) error { return pgx.ErrNoRows }
+
+func (emptyCatalog) QueryRow(context.Context, string, ...any) pgx.Row { return noRow{} }
+func (emptyCatalog) Query(context.Context, string, ...any) (pgx.Rows, error) {
+	return nil, pgx.ErrNoRows
 }

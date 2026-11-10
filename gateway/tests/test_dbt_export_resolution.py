@@ -268,6 +268,20 @@ def test_a_seed_over_the_engine_cap_is_refused_before_the_download(session, scen
     assert d.build_export_payload(session, flow, "data-prep", "duckdb")["seeds"][0]["name"] == "seed_big_list"
 
 
+def test_a_file_seed_over_the_cap_is_refused_by_its_node_s_rows(session, scene):
+    """A file loaded in the editor has its rows in its node: the plan offered the targets and the
+    download failed when the engine counted them. Refused before, naming the file."""
+    def flow_with(rows):
+        node = {"id": "f", "type": "source", "data": {"parquetKey": "files/x.parquet", "bucket": "data-prep", "filename": "orders big.csv", "rows": rows}}
+        return _flow(session, scene, f"File {rows}", [_src_node("s", scene.orders.id), node, _op("j", "join", {"how": "left", "on": ["id"]}),
+                                                     _ds_output("o", f"File out {rows}", scene.folder.id)],
+                     [_edge("s", "j"), _edge("f", "j", "right"), _edge("j", "o")])
+    e = _refusal(session, flow_with(d.SEED_MAX_ROWS + 1))
+    assert e.code == "seed_too_large" and e.params == {"source": "orders big.csv", "rows": "50,001", "max": "50,000"}
+    assert not any(t["available"] for t in d.export_plan(session, flow_with(50_001.0), "data-prep")["targets"])
+    assert d.build_export_payload(session, flow_with(d.SEED_MAX_ROWS), "data-prep", "duckdb")["seeds"][0]["name"] == "seed_orders_big"
+
+
 # ── #12: no native target for MySQL/MariaDB ──────────────────────────────────
 @pytest.mark.parametrize("db_type", ["mysql", "mariadb"])
 def test_mysql_and_mariadb_have_no_native_target_and_the_reason_points_to_the_others(session, scene, db_type):

@@ -545,6 +545,7 @@ type Project struct {
 	FlowsSeen  map[int64]bool
 	note       []any
 	fileNames  *pyval.Dict
+	fileRows   *pyval.Dict // parquet key → the rows its file node says it has
 	references *pyval.Dict
 	root       *int64
 	dest       map[string]pyjson.Object
@@ -562,7 +563,7 @@ func newProject(ctx context.Context, q Querier, bucket, target string, exportedB
 		o = DefaultOptions(target)
 	}
 	p := &Project{ctx: ctx, q: q, bucket: bucket, target: target, options: byPackage(o), Outputs: []any{},
-		tables: pyval.NewDict(), FlowsSeen: map[int64]bool{}, note: []any{}, fileNames: pyval.NewDict(), references: pyval.NewDict(),
+		tables: pyval.NewDict(), FlowsSeen: map[int64]bool{}, note: []any{}, fileNames: pyval.NewDict(), fileRows: pyval.NewDict(), references: pyval.NewDict(),
 		dest: map[string]pyjson.Object{}, contexts: map[int64]*flowContext{}, running: pyval.NewDict(), waiting: pyval.NewDict(),
 		done: pyval.NewDict(), withoutSch: pyval.NewDict(), sourceBase: pyval.NewDict()}
 	if options == nil || options.Emails {
@@ -846,10 +847,14 @@ func (p *Project) upstreamFlow(ds *Datasource, depth int) string {
 // seed is _seed: a file, or a source dbt cannot read live, becomes a CSV seed.
 func (p *Project) seed(ds *Datasource, key any) string {
 	if ds != nil && ds.Rows != nil && *ds.Rows > SeedMaxRows {
-		rows := thousands(*ds.Rows)
-		max := thousands(SeedMaxRows)
-		refuse(fmt.Sprintf("the source «%s» has %s rows: too many for a dbt seed (at most %s). Import it into a database and use that as the source.",
-			ds.Name, rows, max), "seed_too_large", "source", ds.Name, "rows", rows, "max", max)
+		tooLarge(ds.Name, *ds.Rows)
+	}
+	if ds == nil {
+		// a file loaded in the editor: the rows its node says it has (the plan offered the targets and
+		// the download failed, when the engine counted them)
+		if n, ok := fileRows(p.fileRows.Get(key)); ok && n > SeedMaxRows {
+			tooLarge(pyval.Str(pyval.Or(p.fileNames.Get(key), key)), n)
+		}
 	}
 	var base string
 	if ds != nil {
@@ -888,6 +893,30 @@ func (p *Project) seed(ds *Datasource, key any) string {
 		{Key: "columns", Value: p.columnItems(ds, false)}})
 	p.note = append(p.note, "The seed `"+name+"` is a copy of the data at export time: reload it (`dbt seed`) when it changes.")
 	return name
+}
+
+// tooLarge refuses a seed over SeedMaxRows; source: the datasource or the file, as the user named it.
+func tooLarge(source string, n int64) {
+	rows := thousands(n)
+	max := thousands(SeedMaxRows)
+	refuse(fmt.Sprintf("the source «%s» has %s rows: too many for a dbt seed (at most %s). Import it into a database and use that as the source.",
+		source, rows, max), "seed_too_large", "source", source, "rows", rows, "max", max)
+}
+
+// fileRows is a file node's `rows`, when it is a number.
+func fileRows(v any) (int64, bool) {
+	switch x := v.(type) {
+	case int64:
+		return x, true
+	case float64:
+		if x > 1e18 {
+			return SeedMaxRows + 1, true
+		}
+		return int64(x), x == x
+	case pyjson.Int:
+		return SeedMaxRows + 1, true // past int64: over the cap all the same
+	}
+	return 0, false
 }
 
 // thousands is f"{n:,}".
@@ -943,6 +972,7 @@ func (p *Project) context(f *Flow) *flowContext {
 			data := pyval.Or(pyval.Get(n, "data"), pyjson.Object{})
 			if pyval.Eq(pyval.Get(n, "type"), "source") && pyval.Truthy(pyval.Get(data, "parquetKey")) && pyval.Truthy(pyval.Get(data, "filename")) {
 				p.fileNames.Set(pyval.Index(data, "parquetKey"), pyval.Str(pyval.Index(data, "filename")))
+				p.fileRows.Set(pyval.Index(data, "parquetKey"), pyval.Get(data, "rows"))
 			}
 			if pyval.Eq(pyval.Get(n, "type"), "output") && pyval.Eq(pyval.Or(pyval.Get(data, "destType"), "datasource"), "datasource") &&
 				pyval.Strip(pyval.Or(pyval.Get(data, "name"), "")) != "" {
