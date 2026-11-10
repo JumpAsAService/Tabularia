@@ -1,4 +1,5 @@
-"""The duckdb and chdb engines read the object storage in place, without downloading.
+"""The duckdb and chdb engines read the object storage in place, without downloading,
+and so does Polars for what is read while someone waits (previews, counts, profiles).
 
 A parquet on S3 is read by ranges: its footer, then only the columns and row groups
 the query needs. The engines used to download every source (and every cached step)
@@ -13,7 +14,10 @@ DuckDB reads through its `httpfs` extension, installed in the image at build tim
 (backend/Dockerfile) and only loaded here, so a worker never downloads code; the
 credentials are a temporary secret of each connection. chDB is ClickHouse: its
 `s3()` takes the credentials from the process environment, so they never appear in
-a query or in the error messages that quote one.
+a query or in the error messages that quote one. Polars reads through its own object
+store client, with the keys as options of the scan; a flow's run and an export, which
+read their source whole, still download it first (a file on disk is read at the
+disk's pace, and no connection is held for the minutes a run may last).
 
 Neither the Execute-SQL node nor a computed column can reach the storage: their
 checks refuse table functions (app/engine/sql_guard.py, app/engine/expressions.py),
@@ -139,3 +143,37 @@ def chdb_url(bucket: str, key: str) -> str | None:
 
 def chdb_source_sql(url: str) -> str:
     return f"SELECT * FROM s3({_lit(url)}, 'Parquet')"
+
+
+# ── Polars ────────────────────────────────────────────────────────────────────
+@lru_cache(maxsize=1)
+def polars_available() -> bool:
+    """Whether Polars reads the storage in place in this process (decided once)."""
+    return configured()
+
+
+def polars_options() -> dict[str, str]:
+    """The backend's storage address and keys as the options of a Polars scan."""
+    st = get_settings().storage
+    endpoint = urlparse(st.endpoint or "")
+    options = {
+        "aws_access_key_id": st.access_key,
+        "aws_secret_access_key": st.secret_key.get_secret_value(),
+        "aws_region": st.region or "us-east-1",
+    }
+    if endpoint.netloc:  # no endpoint: AWS itself
+        options["aws_endpoint_url"] = f"{endpoint.scheme}://{endpoint.netloc}"
+        options["aws_allow_http"] = "false" if endpoint.scheme == "https" else "true"
+        options["aws_virtual_hosted_style_request"] = "false"  # as the storage service addresses buckets
+    return options
+
+
+def polars_url(bucket: str, key: str) -> str | None:
+    """`s3://bucket/key`, or None for a name Polars would read as a pattern."""
+    return f"s3://{bucket}/{key}" if _addressable(bucket, key) else None
+
+
+def not_found(error: Exception) -> bool:
+    """An object store's answer «no such object» (or bucket), read from its message."""
+    text = str(error)
+    return "404" in text or "not found" in text.lower() or "NoSuchKey" in text or "NoSuchBucket" in text

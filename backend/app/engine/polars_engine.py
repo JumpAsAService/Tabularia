@@ -70,10 +70,25 @@ class PolarsEngine(DeferredStepCache, Engine):
             storage = get_storage_service()
         self.storage = storage
         self.cache = cache or StepCache(storage)
+        # previews, counts and profiles read the sources in place on the object storage
+        # (see storage_direct); a storage that is not the real one (the tests' in-memory
+        # one) is downloaded from, as before
+        self.direct = self._reads_in_place(storage)
+
+    @staticmethod
+    def _reads_in_place(storage) -> bool:
+        try:
+            from app.engine import storage_direct
+            from app.utils import StorageService
+        except ImportError:  # no DuckDB in this build: its module holds the shared rules
+            return False
+        return isinstance(storage, StorageService) and storage_direct.polars_available()
 
     @contextmanager
-    def _session(self) -> Iterator[OperationContext]:
-        ctx = OperationContext(self.storage)
+    def _session(self, direct: bool = False) -> Iterator[OperationContext]:
+        """`direct`: the sources read in place on the object storage (what is read while
+        someone waits: a preview, a count, a profile), when this engine can."""
+        ctx = OperationContext(self.storage, direct=direct and self.direct)
         try:
             yield ctx
         finally:
@@ -190,7 +205,7 @@ class PolarsEngine(DeferredStepCache, Engine):
         frame: bool = False,
     ) -> PreviewResult:
         ops = _coerce_ops(operations)
-        with self._session() as ctx:
+        with self._session(direct=True) as ctx:
             # The PARENT is cached, but AFTER the answer (a deferred task): while one
             # iterates on this node's parameters the next previews start from there.
             # The Viewer passes use_cache=False → no materialization.
@@ -226,7 +241,7 @@ class PolarsEngine(DeferredStepCache, Engine):
     # to 0.4 s slower on kind, for the same memory.)
     def _profile_frame(self, source, operations, sample, use_cache, then):
         ops = _coerce_ops(operations)
-        with self._session() as ctx:
+        with self._session(direct=True) as ctx:
             hashes = plan_hashes(self._source_id(source), [op.model_dump() for op in ops])
             lf = self._lazy_from_cache(ctx, source, ops, hashes, use_cache=use_cache).head(sample)
             try:
@@ -289,7 +304,7 @@ class PolarsEngine(DeferredStepCache, Engine):
 
     def count(self, source: DataSource) -> int:
         """The rows of a source, counted in streaming (memory: nothing)."""
-        with self._session() as ctx:
+        with self._session(direct=True) as ctx:
             lf = self._lazy_from_cache(ctx, source, [], plan_hashes(self._source_id(source), []), record=False)
             try:
                 return int(lf.select(pl.len()).collect(engine="streaming").item())

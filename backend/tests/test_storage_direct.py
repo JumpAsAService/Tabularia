@@ -19,6 +19,7 @@ from app.engine.base import DataSource
 from app.engine.cache import StepCache
 from app.engine.duckdb_engine import DuckDBEngine
 from app.engine.exceptions import SourceNotFoundError
+from app.engine.polars_engine import PolarsEngine
 from tests.fakes import FakeRedis
 
 
@@ -240,3 +241,96 @@ def test_chdb_queries_never_carry_the_storage_keys(direct_chdb, s3, monkeypatch)
     direct_chdb.preview(s3.put(SALES), [], limit=5, use_cache=False)
     secret = get_settings().storage.secret_key.get_secret_value()
     assert seen and any("s3(" in q for q in seen) and not any(secret in q for q in seen)
+
+
+# ── Polars: what is read while someone waits ─────────────────────────────────────
+def test_polars_scan_options_carry_the_storage_s_address_and_keys(monkeypatch):
+    monkeypatch.setattr(storage_direct, "get_settings", lambda: _settings(secret="k3y"))
+    assert storage_direct.polars_options() == {
+        "aws_access_key_id": "AKIA", "aws_secret_access_key": "k3y", "aws_region": "eu-west-1",
+        "aws_endpoint_url": "http://minio:9000", "aws_allow_http": "true", "aws_virtual_hosted_style_request": "false"}
+    monkeypatch.setattr(storage_direct, "get_settings", lambda: _settings(endpoint="https://s3.fr-par.scw.cloud"))
+    assert storage_direct.polars_options()["aws_allow_http"] == "false"
+    monkeypatch.setattr(storage_direct, "get_settings", lambda: _settings(endpoint=""))
+    assert "aws_endpoint_url" not in storage_direct.polars_options()  # AWS itself
+    assert storage_direct.polars_url("b", "datasets/a.parquet") == "s3://b/datasets/a.parquet"
+    assert storage_direct.polars_url("b", "datasets/a[1].parquet") is None
+
+
+@pytest.mark.parametrize("settings", [_settings(direct=False), _settings(endpoint="http://minio:9000/prefix")],
+                         ids=["switched off", "endpoint with a path"])
+def test_polars_switched_off_or_unaddressable_downloads(monkeypatch, settings):
+    monkeypatch.setattr(storage_direct, "get_settings", lambda: settings)
+    storage_direct.polars_available.cache_clear()
+    try:
+        assert storage_direct.polars_available() is False
+    finally:
+        storage_direct.polars_available.cache_clear()
+
+
+def test_polars_on_an_in_memory_storage_downloads_as_before(storage, fredis):
+    engine = PolarsEngine(storage=storage, cache=StepCache(storage, redis_client=fredis))
+    assert engine.direct is False
+
+
+def test_a_missing_object_is_told_from_its_message():
+    assert storage_direct.not_found(OSError("object-store error: Object at location a/b.parquet not found: 404 Not Found"))
+    assert storage_direct.not_found(OSError("NoSuchBucket: the bucket is gone"))
+    assert not storage_direct.not_found(OSError("connection refused"))
+
+
+@pytest.fixture
+def direct_polars(s3, monkeypatch):
+    storage_direct.polars_available.cache_clear()
+    engine = PolarsEngine(storage=s3, cache=StepCache(s3, redis_client=FakeRedis()))
+    assert engine.direct
+    s3.create_bucket(engine.cache.bucket)
+    calls: list[str] = []
+    real = s3.download_file
+
+    def download(bucket, key, path):
+        calls.append(key)
+        return real(bucket, key, path)
+
+    monkeypatch.setattr(s3, "download_file", download)
+    engine.downloads = calls
+    return engine
+
+
+@live
+def test_polars_previews_counts_and_profiles_in_place(direct_polars, s3):
+    src = s3.put(SALES)
+    right = s3.put(pl.DataFrame({"country": ["IT", "FR"], "name": ["Italia", "Francia"]}))
+    ops = [{"type": "filter", "params": {"column": "amount", "operator": "gt", "value": 60}},
+           {"type": "join", "params": {"how": "inner", "on": ["country"], "right": {"bucket": right.bucket, "key": right.key}}},
+           {"type": "select", "params": {"columns": ["name", "amount"]}}]
+    res = direct_polars.preview(src, ops, limit=10, use_cache=False)
+    assert [c.name for c in res.columns] == ["name", "amount"]
+    assert sorted((r["name"], r["amount"]) for r in res.rows) == [("Italia", 100), ("Italia", 300)]
+    assert direct_polars.count(src) == 4
+    assert direct_polars.count_rows(src, ops[:1], at_most=100) == 3
+    assert direct_polars.downloads == [], "read while someone waits: nothing is downloaded"
+
+
+@live
+def test_polars_still_downloads_what_a_run_reads_whole(direct_polars, s3):
+    src = s3.put(SALES)
+    out = DataSource(bucket=src.bucket, key=f"out/zz-{uuid.uuid4().hex[:8]}.parquet")
+    try:
+        assert direct_polars.run(src, [{"type": "limit", "params": {"n": 2}}], destination=out).rows_written == 2
+        assert direct_polars.downloads == [src.key]
+    finally:
+        s3.delete_object(out.bucket, out.key)
+
+
+@live
+def test_polars_says_a_missing_source_is_missing(direct_polars):
+    with pytest.raises(SourceNotFoundError):
+        direct_polars.preview(DataSource(bucket=os.environ["S3_TEST_BUCKET"], key="datasets/zz-gone.parquet"), [], limit=5, use_cache=False)
+
+
+@live
+def test_polars_downloads_a_key_that_looks_like_a_pattern(direct_polars, s3):
+    src = s3.put(SALES, key=f"datasets/zz-[{uuid.uuid4().hex[:6]}].parquet")
+    assert direct_polars.preview(src, [], limit=10, use_cache=False).row_count == 4
+    assert direct_polars.downloads == [src.key]

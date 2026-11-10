@@ -445,7 +445,7 @@ Read by both services, so listed under [Shared by the gateway and the engine](#s
 | `STORAGE__SECRET_KEY` | string | development value (hidden) | `secrets.storageSecretKey` | **Production:** use credentials of your own. Secret key of the storage. |
 | `STORAGE__BUCKET` | string | `data-prep` | `externalServices.storage.bucket` | Bucket of every snapshot, cached step and output. The gateway (`ENGINE__BUCKET`) and the frontend (`NUXT_PUBLIC_BUCKET`) need the same name; the Compose file and the chart derive them from this one. |
 | `STORAGE__REGION` | string | `us-east-1` | `externalServices.storage.region` | Region of the storage (`auto` for Google Cloud Storage). |
-| `STORAGE__DIRECT_READ` | boolean | `true` | `extraEnv` | The DuckDB and chDB engines read sources and cached steps in place, only the columns and row groups a query needs. `false`: download each file first, for a service that does not serve range reads. |
+| `STORAGE__DIRECT_READ` | boolean | `true` | `extraEnv` | The DuckDB and chDB engines read sources and cached steps in place, only the columns and row groups a query needs; Polars does for previews, counts and column profiles (a run and an export still download their source). `false`: download each file first, for a service that does not serve range reads. |
 | `DUCKDB_EXTENSION_DIRECTORY` | string | empty (the image sets `/opt/duckdb-extensions`) | `extraEnv` | Where DuckDB finds its extensions (`httpfs`, for reading the storage in place). The image sets it to the extensions it ships, so nothing is downloaded at runtime. |
 
 ### Where the database backups go
