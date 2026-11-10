@@ -28,16 +28,29 @@ The editor has five areas:
 
 - **The palette**, on the left, with a search box. Its groups are **Sources**,
   **Transforms**, **Control** (the **Foreach loop**, **Script** and **Container**),
-  **Output** and **Notes**. Drag an item onto the canvas to create the node.
+  **Output** and **Notes**. Drag an item onto the canvas to create the node: a
+  transformation dropped on a node becomes its next step, dropped on a connection it
+  goes into that connection (both light up under it), dropped on the empty canvas it
+  stays a free node.
 - **The canvas**, where you connect nodes by dragging from the handle on a node's right
   to the handle on the next one's left. A connection is removed with a click on it or
   from the keyboard. **Arrange the flow** lays the nodes out, **Undo (Ctrl+Z)** and
   **Redo (Ctrl+Shift+Z)** step through your changes, and a minimap helps on large flows.
-  A right-click on the canvas (or on a node, which it selects) opens a ring of
-  transformations around the pointer: a choice creates the node there, already connected
-  to the selected node (from the keyboard, the Menu key or Shift+F10 opens it beside the
-  selected node). **Customize**, in the ring's centre, picks up to eight transformations
-  and their order, saved for your account.
+  A right-click on a node (which it selects) opens a ring of transformations around the
+  pointer: a choice adds the step beside that node. When the node already feeds another,
+  the step goes **between the two** and the rest of the chain moves on; hold **Shift**
+  while choosing to start a new branch instead (a node that already forks always gets
+  one more branch). A right-click on the empty canvas puts the step where you clicked.
+  From the keyboard, the Menu key or Shift+F10 opens the ring beside the selected node.
+  **Customize**, in the ring's centre, picks up to eight transformations and their
+  order, saved for your account. A flow too long to read whole opens on its outputs; the
+  fit button shows all of it.
+- **The keyboard**: the keyboard button in the canvas' top right corner (or **?**) lists
+  every key. Tab moves between the nodes and Enter selects the one in focus; **Alt+←**
+  and **Alt+→** go to the step before and after, **Alt+↑** and **Alt+↓** to the branch
+  above and below; **Shift+arrows** move the selected node; **Ctrl+Enter** (⌘ on a Mac)
+  runs the flow, **Esc** stops a preview being computed, **Ctrl+C/X/V/D** copy, cut,
+  paste and duplicate nodes, **Del** removes them.
 - **The panel**, on the right, with the selected node's settings. Column pickers list the
   columns that reach the node, so a filter or a group-by is chosen, not typed. When an
   AI model is configured, a second tab, **Assistant**, builds the flow with you
@@ -45,8 +58,8 @@ The editor has five areas:
 - **The data view**, at the bottom, with a **Table** tab and a **Chart** tab for the
   selected node ([Preview and analysis](preview-and-analysis.md)).
 - **The toolbar**: the flow's name and folder, **Save** (Ctrl+S, with an **Unsaved**
-  marker while there are changes), **Upload file**, **Source**, **Operation** and
-  **Run**.
+  marker while there are changes), **Upload file**, **Source**, **Operation** (the same
+  ring, beside the selected node or the flow's last one) and **Run**.
 
 Nodes that need a second input, **Join** and **Union (append rows)**, have two handles
 on their left: the top one takes the previous step (the left table), the bottom one the

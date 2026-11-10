@@ -5,6 +5,32 @@ exposes at `/system/info` and in the app's settings menu.
 
 ## Unreleased
 
+- **Adding a step puts it in the chain.** In the flow editor a transformation added to a
+  node that already feeds another goes between the two, and what follows slides one step
+  on; at the end of a chain it is appended; a node that forks, or Shift, gets one more
+  branch. One rule for the right-click ring (mouse and keyboard), **+ Operation** (which
+  now opens the ring beside the node instead of always making the first transformation of
+  the list) and a drop from the palette, which goes into the edge or after the node it is
+  dropped on. The new node never lands on the node clicked, and one Undo takes the whole
+  insertion back.
+- **A long flow opens readable**: at 60% on its outputs, the rest in the minimap, instead
+  of fitted whole at a third of its size. The fit button still shows everything.
+- **A step not configured yet shows its input's rows**, with a line saying so, instead of
+  an empty table, when the editor already holds them. Nothing more is asked of the engine.
+- **The canvas from the keyboard.** The panel and the preview follow a node selected with
+  Tab and Enter; Alt+←/→ walk to the step before and after, Alt+↑/↓ between branches;
+  Ctrl/⌘+Enter is Run; a bare arrow no longer nudges the selected node (Shift+arrow moves
+  it). A keyboard button on the canvas, and «?», list every key of the editor. The zoom,
+  fit and lock buttons have a name and a tooltip.
+- **Edges move only where the engine works**: along what leads to the node being
+  previewed, and during a run started in the editor. At rest they are still.
+- **Runs**: a failed run's detail links to its flow, flow group, datasource or script;
+  failures that follow one another for the same reason on the same object are one row
+  («×9, last 13:14») that lists its runs. The filter in force is readable on every theme
+  (it was 3.2:1 on the dark one), in the Flows calendar too.
+- The editor's «Flow loaded» leaves the bar after a few seconds and is no longer a toast as
+  well; an installation without the memory reading is asked for it once a browser session,
+  not once a page; the announcement banners have a plain 1px border.
 - **The dbt export's ClickHouse paths give Tabularia's data**, found by a new end-to-end
   oracle against the ClickHouse engine (`e2e/dbt_export/clickhouse_paths.py`):
   - a Postgres query datasource translated for the ClickHouse target keeps Postgres'
