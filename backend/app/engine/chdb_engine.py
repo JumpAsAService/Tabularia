@@ -31,7 +31,7 @@ from chdb import session as chdb_session
 from app.core.panel_settings import value_at_start
 from app.engine import storage_direct
 from app.engine.base import DataSource, Engine, Operation, PreviewResult, RunResult, preview_rows
-from app.engine.cache import StepCache, plan_hashes
+from app.engine.cache import StepCache, plan_hashes, source_fingerprint
 from app.engine.chdb_ops import get_chdb_operation, temporal_safe_sql
 from app.engine.exceptions import EngineError, OperationError, SourceNotFoundError
 from app.engine.polars_engine import _coerce_ops, _columns_of
@@ -189,7 +189,7 @@ class ChdbEngine(DeferredStepCache, Engine):
         return sess, state_dir
 
     def _source_id(self, source: DataSource) -> str:
-        return f"{self.engine_name}:{source.bucket}/{source.key}"
+        return source_fingerprint(self.engine_name, source.bucket, source.key)
 
     # ── Incremental cache (mirror of DuckDB/Polars) ───────────────────────
     def _sql_from_cache(self, ctx: ChdbContext, source, operations, hashes, record=False, use_cache=True) -> str:

@@ -116,6 +116,8 @@ ENV DUCKDB_EXTENSION_DIRECTORY=/opt/duckdb-extensions
 # Only the application's code: no tests, no development files.
 # Local secrets stay out thanks to .dockerignore.
 COPY --chown=10001:10001 app ./app
+# the release the caches' fingerprints carry (app/core/release.py)
+COPY --chown=10001:10001 pyproject.toml ./
 
 USER 10001:10001
 

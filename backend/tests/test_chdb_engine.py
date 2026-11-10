@@ -212,7 +212,7 @@ def test_step_cache_materializes_the_parent(storage, src):
 
 def test_namespacing_engine(storage, src):
     e = _engine(storage)
-    assert e._source_id(src).startswith("chdb:")
+    assert e._source_id(src).startswith("chdb@")
 
 
 def test_a_cast_to_an_instant_keeps_the_dates_a_32_bit_datetime_cannot_hold(storage):

@@ -40,7 +40,7 @@ import pyarrow.parquet as pq
 
 from app.core.config import BigQuerySettings, get_settings
 from app.engine.base import DataSource, Engine, Operation, PreviewResult, RunResult, preview_rows
-from app.engine.cache import StepCache, plan_hashes
+from app.engine.cache import StepCache, plan_hashes, source_fingerprint
 from app.engine.bigquery_ops import _qi, get_bigquery_operation
 from app.engine.exceptions import EngineError, OperationError, SourceNotFoundError
 from app.engine.polars_engine import _coerce_ops, _columns_of
@@ -523,7 +523,7 @@ class BigQueryEngine(Engine):
         return self._cache_ok
 
     def _source_id(self, source: DataSource) -> str:
-        return f"{self.engine_name}:{source.bucket}/{source.key}"
+        return source_fingerprint(self.engine_name, source.bucket, source.key)
 
     def _sql_from_cache(self, ctx: BigQueryContext, source, operations, hashes, record=False, use_cache=True) -> str:
         """Builds the chain from the nearest cached ancestor, applying only the remaining

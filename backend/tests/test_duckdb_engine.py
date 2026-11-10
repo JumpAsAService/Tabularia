@@ -287,7 +287,7 @@ def test_step_cache_result_identical(storage, src):
 
 def test_step_cache_namespaced_by_engine(storage, src):
     # DuckDB and Polars must not share the blobs: the source_id carries the tag
-    assert _engine(storage)._source_id(src).startswith("duckdb:")
+    assert _engine(storage)._source_id(src).startswith("duckdb@")
 
 
 # ── join / union / pivot / unpivot / compute ─────────────────────────────────

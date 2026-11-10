@@ -57,6 +57,7 @@ import redis
 from fastapi import HTTPException
 from starlette.concurrency import run_in_threadpool
 
+from app.core import release
 from app.core.config import get_settings
 from app.core.panel_settings import value_at_start
 from app.engine.cache import StepCache
@@ -129,8 +130,10 @@ def stats() -> dict[str, int]:
 
 def _hash(*parts: Any) -> str:
     """JSON, with its quotes and escapes: no value can pass for two, nor end a key. Only hex
-    digits ever reach Valkey, and no credential: a connection's password is hashed as encrypted."""
-    return hashlib.sha256(json.dumps(parts, sort_keys=True, separators=(",", ":"), default=str).encode()).hexdigest()
+    digits ever reach Valkey, and no credential: a connection's password is hashed as encrypted.
+    The release is one of the parts: what another release computed is not this one's answer
+    (it expires as anything no longer asked for)."""
+    return hashlib.sha256(json.dumps([release.current(), *parts], sort_keys=True, separators=(",", ":"), default=str).encode()).hexdigest()
 
 
 def lifetime(refresh_seconds: Any = 0) -> int:

@@ -26,7 +26,7 @@ from botocore.exceptions import ClientError
 
 from app.engine import duckdb_budget, storage_direct
 from app.engine.base import DataSource, Engine, Operation, PreviewResult, RunResult, preview_rows
-from app.engine.cache import StepCache, plan_hashes
+from app.engine.cache import StepCache, plan_hashes, source_fingerprint
 from app.engine.duckdb_ops import _qi, get_duck_operation
 from app.engine.exceptions import EngineError, OperationError, SourceNotFoundError
 from app.engine.polars_engine import _coerce_ops, _columns_of
@@ -202,7 +202,7 @@ class DuckDBEngine(DeferredStepCache, Engine):
         return con
 
     def _source_id(self, source: DataSource) -> str:
-        return f"{self.engine_name}:{source.bucket}/{source.key}"
+        return source_fingerprint(self.engine_name, source.bucket, source.key)
 
     # ── Incremental cache (mirror of PolarsEngine) ────────────────────────
     def _rel_from_cache(self, ctx: "DuckContext", source, operations, hashes, record=False, use_cache=True):
