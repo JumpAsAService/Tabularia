@@ -3235,8 +3235,10 @@ def _real_table_lines(m: dict) -> list[str]:
                          "another order than this model's, the values land in the wrong columns without an error. Keep the "
                          "table's columns in the model's order.")
         else:
-            lines.append("dbt-postgres widens the column types the new rows do not fit in (a varchar(20), a numeric(10,2)), and "
-                         "the run fails if the table has a column the model lacks.")
+            lines.append("dbt-postgres widens the column types the new rows do not fit in (a varchar(20) for a text): it adds a "
+                         "new column and drops the old one with CASCADE, so that column moves to the end, loses NOT NULL, and "
+                         "its indexes and the views that read it are dropped. The run fails if the table has a column the "
+                         "model lacks.")
         lines.append("`dbt run --full-refresh` rebuilds the table from this model: what is listed for a table model is lost.")
         return lines
     lost = ("its engine, ORDER BY, column types and comment" if ch else
@@ -3263,7 +3265,10 @@ def _model_header(m: dict) -> str:
     head = "{{ config(" + ", ".join(parts) + ") }}\n\n"
     real = _real_table_lines(m)
     if real:
-        head += "".join(f"-- {_comment(line)}\n" for line in real) + "\n"
+        import textwrap
+
+        # `_comment` keeps 200 characters of a line: the sentences go on lines of their own
+        head += "".join(f"-- {_comment(part)}\n" for line in real for part in textwrap.wrap(line, 110)) + "\n"
     if m.get("ai_translated"):
         head += f"-- Translated by AI from {_comment(m.get('ai_translated_from') or 'another dialect')}: review it before use.\n\n"
     review: dict[str, list[str]] = {}

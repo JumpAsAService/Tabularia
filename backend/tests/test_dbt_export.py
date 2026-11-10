@@ -4123,8 +4123,9 @@ def test_a_model_that_writes_the_real_table_says_what_dbt_does_to_it(mode, mater
     assert model.startswith("{{ config(")
     head = " ".join(line[3:] for line in model.splitlines() if line.startswith("-- "))
     assert "vendite.ordini" in head and "vendite.ordini" in readme
+    assert all(len(line) <= 120 for line in model.splitlines() if line.startswith("-- ")), "a note cut at 200 characters"
     if materialized == "table":
-        assert "rebuilds" in head and (("dropped" in readme and "views" in readme) if mode == "native-pg" else "ORDER BY" in readme)
+        assert "rebuilds" in head and (mode == "native-ch" or "views and foreign keys" in head) and (("dropped" in readme and "views" in readme) if mode == "native-pg" else "ORDER BY" in readme)
     if mode == "native-pg" and materialized == "incremental":
         assert "column types" in head and "--full-refresh" in readme
     if mode == "native-ch" and materialized == "incremental":

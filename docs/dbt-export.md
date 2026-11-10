@@ -452,7 +452,9 @@ dbt keeps its own way, and the project says so in the model's header and in the 
   refuses a table another table references, dbt drops the foreign key); on ClickHouse the
   engine, `ORDER BY`, column types and comment;
 - an *append* (`incremental`) model on Postgres widens a column type the new rows do not fit
-  in (`expand_target_column_types`: a `varchar(20)` becomes a `varchar(42)`), and fails if the
+  in (`expand_target_column_types`: a `varchar(20)` for a text becomes a `varchar(256)`) by
+  adding a new column and dropping the old one with `CASCADE`: the column moves to the end,
+  loses `NOT NULL`, and its indexes and the views that read it are dropped. It fails if the
   table has a column the model lacks (an audit column with a `DEFAULT`);
   `dbt run --full-refresh` rebuilds the table as a *replace* does, views dropped included;
 - **on native ClickHouse an append inserts by position**: dbt-clickhouse writes
