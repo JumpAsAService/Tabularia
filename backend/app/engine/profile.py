@@ -233,8 +233,12 @@ _NO = object()
 def _stat_value(v: Any) -> Any:
     """A statistic as a comparable Python value, or _NO (bytes, an unknown type)."""
     if isinstance(v, (bool, int, float, Decimal, _dt.date, _dt.time, _dt.timedelta)):
-        if isinstance(v, float) and math.isnan(v):
-            return _NO
+        if isinstance(v, float):
+            if math.isnan(v):
+                return _NO
+            # a writer stores a minimum 0.0 as -0.0 (Parquet's rule for an ambiguous zero):
+            # a zero is said as 0.0, not «-0.0»
+            return v + 0.0
         return v
     to_py = getattr(v, "to_pydatetime", None)  # a pandas Timestamp (nanoseconds)
     if to_py is not None:

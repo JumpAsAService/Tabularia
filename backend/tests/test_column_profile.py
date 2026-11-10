@@ -142,6 +142,19 @@ def test_a_source_s_nulls_and_ranges_come_from_its_footer(storage, table, valkey
     assert "tags" not in cols  # nested: no flat statistics
 
 
+def test_a_footer_s_zero_minimum_is_zero_not_minus_zero(storage, valkey):
+    """Parquet writers store a float column's minimum 0.0 as -0.0 (the format's rule for an
+    ambiguous zero): the profile said «Min -0.0» for an amount column whose smallest value is
+    0, in the Viewer of every such table (found on kind, 2026-11-10). A zero is said as 0.0."""
+    df = pl.DataFrame({"amount": [0.0, 2.5, 5.0, None], "low": [-0.0, -0.0, 1.0, 2.0], "neg": [-3.5, 0.0, 1.0, 4.0]})
+    src = upload_df(storage, df, "datasets/profile_zero.parquet")
+    cols = profile.from_footer("polars", src.bucket, src.key, [], _columns(df), storage, None)["columns"]
+    assert cols["amount"]["range"] and cols["amount"]["min"] == 0.0 and str(cols["amount"]["min"]) == "0.0"
+    assert str(cols["low"]["min"]) == "0.0" and cols["low"]["max"] == 2.0
+    assert cols["neg"]["min"] == -3.5 and cols["neg"]["max"] == 4.0
+    assert str(cols["amount"]["max"]) == "5.0"
+
+
 @pytest.mark.parametrize("chain, names", [
     ([RENAME], ["id", "area", "value"]),
     ([SELECT, SORT], ["id", "region", "amount"]),
