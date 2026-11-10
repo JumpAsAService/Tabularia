@@ -13,7 +13,7 @@ password and with an unreachable source: the password is in no file and not on t
 usage: python3 lifecycle.py"""
 import json, os, re, shutil, subprocess, sys, time
 
-from common import api, clickhouse_databases, sample_clickhouse, sign_in, outcomes, export, ok, connection_passwords, sample_postgres, datasource_rows
+from common import api, clickhouse_databases, suite_database, test_outcomes, test_slug as slug, sample_clickhouse, sign_in, outcomes, export, ok, connection_passwords, sample_postgres, datasource_rows
 from matrix import wait_run, compare, dbt, read_dbt
 
 sign_in()
@@ -33,43 +33,6 @@ def psql(sql):
 def files_with(folder, text):
     """The files under the project that hold the text (logs/, target/…)."""
     return [os.path.join(r, f) for r, _, fs in os.walk(folder) for f in fs if text.encode() in open(os.path.join(r, f), "rb").read()]
-
-
-def slug(s):
-    """The engine's slug of a test name (backend/app/engine/dbt_export.py `_slug`)."""
-    s = "".join(ch if (ch.isalnum() or ch == "_") else "_" for ch in str(s).lower()).strip("_") or "model"
-    return s if not s[0].isdigit() else f"m_{s}"
-
-
-def test_outcomes(folder, model, rules):
-    """{rule id: dbt status}, from what dbt ran: the generic tests (only not_null) by their column,
-    the singular ones by name — `<model>__<kind>_<rule id>`, or `<model>__<kind>_<column>` for a
-    column rule (one-column unique, accepted_values), `_2`, `_3` when two share a file name."""
-    results = json.load(open(f"{folder}/target/run_results.json"))["results"]
-    nodes = json.load(open(f"{folder}/target/manifest.json"))["nodes"]
-    dbt_outcomes = {}
-    for r in results:
-        n = nodes.get(r["unique_id"]) or {}
-        if n.get("resource_type") != "test":
-            continue
-        meta = n.get("test_metadata")
-        if meta:
-            col = (n.get("column_name") or (meta.get("kwargs") or {}).get("column_name") or "").strip('"`')
-            for rule in rules:
-                if rule["kind"] == meta.get("name") and rule.get("column") == col:
-                    dbt_outcomes[rule["id"]] = r["status"]
-            continue
-        m = re.fullmatch(rf"{model}__(\w+?)_(r\d+)", n["name"])
-        if m:
-            dbt_outcomes[m.group(2)] = r["status"]
-            continue
-        m = re.fullmatch(rf"{model}__(not_null|unique|accepted_values)_(\w+?)(?:_(\d+))?", n["name"])
-        if m:
-            alike = [x for x in rules if x["kind"] == m.group(1) and slug(x.get("column") or (x.get("columns") or [""])[0]) == m.group(2)]
-            k = int(m.group(3) or 1) - 1
-            for x in (alike[k:k + 1] if len(alike) > 1 else alike):
-                dbt_outcomes[x["id"]] = r["status"]
-    return dbt_outcomes
 
 
 def flow(name, nodes, edges):
@@ -184,7 +147,7 @@ try:
             continue
         if target == "clickhouse":
             matrix.clean_clickhouse()
-            ok(f"B · {target}: before the macro the federated databases are not there", not any(n.startswith("tab_src_") for n in clickhouse_databases()))
+            ok(f"B · {target}: before the macro the federated databases are not there", not any(n.startswith("tab_src_") and suite_database(n) for n in clickhouse_databases()))
             rc, out = matrix.prepare_clickhouse(folder, variables)
             ok(f"B · {target}: dbt run-operation create_tabularia_sources", rc == 0, out[-800:])
             ok(f"B · {target}: the macro really creates the federated database", f"tab_src_{pg['id']}_zzdbt" in clickhouse_databases(), sorted(clickhouse_databases()))

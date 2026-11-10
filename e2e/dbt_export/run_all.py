@@ -30,7 +30,9 @@ SUITE = {
     "browser": ["browser_dialog", "browser_dialog_state"],
     "ai": ["ai_descriptions", "ai_translation"],
 }
-SUITE["all"] = SUITE["complete"] + SUITE["browser"] + SUITE["ai"]
+# the two hunting oracles (their own zz… objects, a throwaway MariaDB on Kubernetes for native_targets' part D)
+SUITE["hunt"] = ["clickhouse_paths", "native_targets"]
+SUITE["all"] = SUITE["complete"] + SUITE["hunt"] + SUITE["browser"] + SUITE["ai"]
 
 
 def prerequisites() -> list[str]:

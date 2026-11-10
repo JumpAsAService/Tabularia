@@ -96,12 +96,20 @@ def remove_folder(folder):
                    capture_output=True)
 
 
-def run_dbt_image(folder, command, variables=None):
+def run_dbt_image(folder, command, variables=None, retry_memory=False):
     """`command` (e.g. ["dbt", "run"] or ["python", "/dump.py", …]) in the dbt image, in the project
-    `folder` seen as /project, with dump.py as /dump.py: (exit code, console)."""
+    `folder` seen as /project, with dump.py as /dump.py: (exit code, console).
+    `retry_memory`, on Kubernetes only: the sample ClickHouse of kind has 2 GiB and other work runs
+    on it, so a MEMORY_LIMIT_EXCEEDED is that stack's limit, not the export's — waited out and run
+    again (three times at most)."""
     base = {"HOME": "/tmp", "DBT_PROFILES_DIR": "/project", "TZ": TZ_NAME, "PGTZ": TZ_NAME}
     if KUBE:
-        return _run_in_pod(folder, command, {**base, **(variables or {})})
+        for attempt in range(4 if retry_memory else 1):
+            rc, out = _run_in_pod(folder, command, {**base, **(variables or {})})
+            if "MEMORY_LIMIT_EXCEEDED" not in out or attempt == 3 or not retry_memory:
+                return rc, out
+            print(f"  (the ClickHouse of the stack is out of memory: again in {20 * (attempt + 1)} s)", flush=True)
+            time.sleep(20 * (attempt + 1))
     # with MY user, so the files dbt writes (target/, logs/) stay mine
     cmd = ["docker", "run", "--rm", "--network", NETWORK, "--user", f"{os.getuid()}:{os.getgid()}",
            "-v", f"{folder}:/project", "-v", f"{HERE}/dump.py:/dump.py:ro", "-w", "/project"]
@@ -229,12 +237,15 @@ def ensure_runner():
 
 # the NetworkPolicy the oracles add when the engine's ClickHouse cannot reach a source database
 # (the ClickHouse target's federated databases): the sample databases' policy lets in the app's
-# namespace only. Removed by kube_cleanup
+# namespace only. It belongs to one run of the oracles, named and labelled by its OWNER (by default
+# its dbt pod: two runs in parallel have two pods), and kube_cleanup removes that run's only — it
+# removed every oracle's, and a run in parallel lost its way to the sources half way
 REACH_POLICY = "zz-dbt-e2e-clickhouse-to-sources"
+OWNER = env("E2E_OWNER") or DBT_POD
 
 
-def reach_sources(hosts) -> str | None:
-    """The engine's ClickHouse reaches every (host, port) of `hosts`, a NetworkPolicy of the oracles
+def reach_sources(hosts, owner=OWNER) -> str | None:
+    """The engine's ClickHouse reaches every (host, port) of `hosts`, a NetworkPolicy of `owner`
     if it does not (Kubernetes only). None when it does; otherwise what is still closed."""
     from environment import CH_CONTAINER
 
@@ -254,7 +265,7 @@ def reach_sources(hosts) -> str | None:
         if not selector or not ch_labels:
             return f"the engine's ClickHouse does not reach {host}:{port}, and its pods cannot be told apart"
         policy = {"apiVersion": "networking.k8s.io/v1", "kind": "NetworkPolicy",
-                  "metadata": {"name": f"{REACH_POLICY}-{svc}"[:63], "namespace": ns, "labels": {"e2e.tabularia.org/owner": "dbt-export"}},
+                  "metadata": {"name": f"{owner}-to-{svc}"[:63], "namespace": ns, "labels": {"e2e.tabularia.org/owner": owner}},
                   "spec": {"podSelector": {"matchLabels": selector}, "policyTypes": ["Ingress"],
                            "ingress": [{"from": [{"namespaceSelector": {"matchLabels": {"kubernetes.io/metadata.name": ch_ns}},
                                                   "podSelector": {"matchLabels": ch_labels}}],
@@ -271,10 +282,11 @@ def reach_sources(hosts) -> str | None:
     return f"the engine's ClickHouse still does not reach {shut}"
 
 
-def kube_cleanup():
-    """The dbt pod and the NetworkPolicies of the oracles, gone (the image stays on the node)."""
+def kube_cleanup(owner=OWNER):
+    """The dbt pod and the NetworkPolicies of this run of the oracles (`owner`), gone (the image
+    stays on the node); another run's, in parallel, stay."""
     kubectl("-n", KUBE_NAMESPACE, "delete", "pod", DBT_POD, "--ignore-not-found", "--wait=true", "--grace-period=1")
-    kubectl("delete", "networkpolicy", "-A", "-l", "e2e.tabularia.org/owner=dbt-export", "--ignore-not-found")
+    kubectl("delete", "networkpolicy", "-A", "-l", f"e2e.tabularia.org/owner={owner}", "--ignore-not-found")
 
 
 def connection_passwords():
@@ -415,14 +427,23 @@ def clickhouse_databases() -> set:
     return set(engine_clickhouse("SELECT name FROM system.databases FORMAT TSV").stdout.split())
 
 
-def clean_clickhouse():
-    """Drops the databases of dbt and of the federated sources, and checks they are gone."""
-    names = [n for n in clickhouse_databases() if n == "dbt_tabularia" or n.startswith("tab_src_")]
+def suite_database(name: str) -> bool:
+    """A ClickHouse database of the suite: dbt_tabularia and the federated databases of the sample
+    schemas and of zzdbt (schema.sql). The oracles that hunt on their own name everything they make
+    zz<letter>… (clickhouse_paths.py: zzc, native_targets.py: zzn) and clean only that: the suite's
+    cleanup, which dropped every tab_src_*, never drops theirs while they run."""
+    return name == "dbt_tabularia" or (name.startswith("tab_src_") and not re.match(r"^tab_src_\d+_zz(?!dbt(_|$))", name))
+
+
+def clean_clickhouse(own=suite_database):
+    """Drops the databases of dbt and of the federated sources that `own` says are this oracle's,
+    and checks they are gone."""
+    names = [n for n in clickhouse_databases() if own(n)]
     if names:
         r = engine_clickhouse("".join(f"DROP DATABASE IF EXISTS `{n}`;\n" for n in names))
         if r.returncode != 0:
             raise RuntimeError(f"ClickHouse cleanup failed: {r.stderr[-300:]}")
-    left = [n for n in clickhouse_databases() if n == "dbt_tabularia" or n.startswith("tab_src_")]
+    left = [n for n in clickhouse_databases() if own(n)]
     if left:
         raise RuntimeError(f"ClickHouse cleanup: {left} are still there")
 
@@ -449,3 +470,40 @@ def wait_run(rid, seconds=900):
 def summary():
     print(f"\n{sum(outcomes)}/{len(outcomes)} checks passed")
     sys.exit(0 if all(outcomes) else 1)
+
+
+def test_slug(s):
+    """The engine's slug of a test name (backend/app/engine/dbt_export.py `_slug`)."""
+    s = "".join(ch if (ch.isalnum() or ch == "_") else "_" for ch in str(s).lower()).strip("_") or "model"
+    return s if not s[0].isdigit() else f"m_{s}"
+
+
+def test_outcomes(folder, model, rules):
+    """{rule id: dbt status}, from what dbt ran: the generic tests (only not_null) by their column,
+    the singular ones by name — `<model>__<kind>_<rule id>`, or `<model>__<kind>_<column>` for a
+    column rule (one-column unique, accepted_values), `_2`, `_3` when two share a file name."""
+    results = json.load(open(f"{folder}/target/run_results.json"))["results"]
+    nodes = json.load(open(f"{folder}/target/manifest.json"))["nodes"]
+    found = {}
+    for r in results:
+        n = nodes.get(r["unique_id"]) or {}
+        if n.get("resource_type") != "test":
+            continue
+        meta = n.get("test_metadata")
+        if meta:
+            col = (n.get("column_name") or (meta.get("kwargs") or {}).get("column_name") or "").strip('"`')
+            for rule in rules:
+                if rule["kind"] == meta.get("name") and rule.get("column") == col:
+                    found[rule["id"]] = r["status"]
+            continue
+        m = re.fullmatch(rf"{model}__(\w+?)_(r\d+)", n["name"])
+        if m:
+            found[m.group(2)] = r["status"]
+            continue
+        m = re.fullmatch(rf"{model}__(not_null|unique|accepted_values)_(\w+?)(?:_(\d+))?", n["name"])
+        if m:
+            alike = [x for x in rules if x["kind"] == m.group(1) and test_slug(x.get("column") or (x.get("columns") or [""])[0]) == m.group(2)]
+            k = int(m.group(3) or 1) - 1
+            for x in (alike[k:k + 1] if len(alike) > 1 else alike):
+                found[x["id"]] = r["status"]
+    return found
