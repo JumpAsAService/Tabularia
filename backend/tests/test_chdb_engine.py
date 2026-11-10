@@ -213,3 +213,28 @@ def test_step_cache_materializes_the_parent(storage, src):
 def test_namespacing_engine(storage, src):
     e = _engine(storage)
     assert e._source_id(src).startswith("chdb:")
+
+
+def test_a_cast_to_an_instant_keeps_the_dates_a_32_bit_datetime_cannot_hold(storage):
+    """The cast went through ClickHouse's 32-bit DateTime: a birth date of 1955 became
+    1970-01-01, 2150 became 2106, and an instant lost its microseconds. A DateTime64(6) now;
+    a year it cannot hold either (before 1900, after 2299) is NULL, never moved to the edge."""
+    from datetime import date, datetime
+
+    df = pl.DataFrame({"id": [1, 2, 3, 4], "d": [date(1955, 3, 12), date(2150, 6, 1), date(2024, 1, 5), None],
+                       "t": ["1955-03-12 10:30:00.123456", "1800-01-01", "abc", " 2024-01-05T10:30 "]})
+    src = upload_df(storage, df, "datasets/instants_chdb.parquet")
+    ops = [{"type": "cast", "params": {"columns": {"d": "datetime", "t": "datetime"}}}, {"type": "sort", "params": {"by": ["id"]}}]
+    res = _engine(storage).preview(src, ops, limit=10)
+    assert [r["d"] for r in res.rows] == [datetime(1955, 3, 12), datetime(2150, 6, 1), datetime(2024, 1, 5), None]
+    assert [r["t"] for r in res.rows] == [datetime(1955, 3, 12, 10, 30, 0, 123456), None, None, datetime(2024, 1, 5, 10, 30)]
+
+
+def test_a_big_integer_cast_to_a_float_is_rounded_as_on_the_other_engines(storage):
+    """2^53 + 1 is not exactly a double: ClickHouse's accurateCastOrNull gave NULL, Polars and
+    DuckDB the nearest double."""
+    df = pl.DataFrame({"id": [1, 2, 3], "big": [9007199254740993, -9007199254740995, 5]})
+    src = upload_df(storage, df, "datasets/big_float_chdb.parquet")
+    ops = [{"type": "cast", "params": {"columns": {"big": "float"}}}, {"type": "sort", "params": {"by": ["id"]}}]
+    res = _engine(storage).preview(src, ops, limit=10)
+    assert [r["big"] for r in res.rows] == df["big"].cast(pl.Float64).to_list() == [9007199254740992.0, -9007199254740996.0, 5.0]
