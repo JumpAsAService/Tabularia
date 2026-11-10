@@ -73,10 +73,11 @@ one row.
 
 **From a value to a step.** In the editor each frequent value has **Filter to this value**
 and **Exclude**, which add a Filter step after the node on screen (equals, or is not equal
-to, the value), linked from it, selected and previewed, as **+ Operation** adds a step; the
-∅ line has **Fill nulls…**, which adds a Fill nulls step with the column already chosen.
-Nothing downstream is rewired, and **Undo** takes the step away. In the Viewer the same
-buttons add a filter to the view's **Filters** and apply it (not on a pivot).
+to, the value), selected and previewed; the ∅ line has **Fill nulls…**, which adds a Fill
+nulls step with the column already chosen. The step goes where every added step goes:
+between the node and the one it feeds, at the end of the chain otherwise, as a new branch
+when the node already forks. **Undo** takes it away. In the Viewer the same buttons add a
+filter to the view's **Filters** and apply it (not on a cross table).
 
 ![The Viewer on the sample table customers, 150,000 rows, with the profile of the column regione open: first 100,000 of 150,000 rows, 15 distinct values in the sample, lengths from 5 to 21 characters, and the five most frequent regions with their share and the buttons to filter or exclude each](../media/guide/analysis/viewer-column-profile.png)
 
