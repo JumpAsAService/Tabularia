@@ -26,7 +26,7 @@ import json
 import logging
 import re
 import unicodedata
-from typing import Callable, Literal, Optional
+from typing import Any, Callable, Literal, Optional
 
 import httpx
 from pydantic import BaseModel, ConfigDict, Field
@@ -261,6 +261,7 @@ class _Project:
         self.flows_seen: set[int] = set()
         self.note: list[str] = []
         self.file_names: dict[str, str] = {}   # the parquet key of an uploaded file → the file's name (from the node)
+        self.file_rows: dict[str, Any] = {}    # the parquet key of an uploaded file → the rows its node says it has
         # a source's key → how it is referenced: {"key"} (table), {"model"} (query/upstream flow), {"seed"}
         self.references: dict[str, dict] = {}
         self.root: int | None = None        # the exported flow
@@ -419,11 +420,15 @@ class _Project:
         return self._done[slot_key]
 
     def _seed(self, ds: Datasource | None, key: str) -> str:
-        if ds is not None and ds.rows is not None and ds.rows > SEED_MAX_ROWS:
+        rows = self.file_rows.get(key) if ds is None else ds.rows
+        if isinstance(rows, (int, float)) and not isinstance(rows, bool) and rows > SEED_MAX_ROWS:
+            # a datasource, or a file loaded in the editor (the rows its node says it has: the plan
+            # offered the targets and the download failed, when the engine counted them)
+            source = ds.name if ds is not None else self.file_names.get(key) or key
             raise DbtExportError(
-                f"the source «{ds.name}» has {ds.rows:,} rows: too many for a dbt seed (at most {SEED_MAX_ROWS:,}). "
+                f"the source «{source}» has {int(rows):,} rows: too many for a dbt seed (at most {SEED_MAX_ROWS:,}). "
                 "Import it into a database and use that as the source.",
-                "seed_too_large", source=ds.name, rows=f"{ds.rows:,}", max=f"{SEED_MAX_ROWS:,}",
+                "seed_too_large", source=source, rows=f"{int(rows):,}", max=f"{SEED_MAX_ROWS:,}",
             )
         base = ds.name if ds is not None else (self.file_names.get(key) or key.rsplit("/", 1)[-1]).rsplit(".", 1)[0]
         name = self.names.new(f"seed_{base}")
@@ -457,6 +462,7 @@ class _Project:
                     data = n.get("data") or {}
                     if n.get("type") == "source" and data.get("parquetKey") and data.get("filename"):
                         self.file_names[data["parquetKey"]] = str(data["filename"])
+                        self.file_rows[data["parquetKey"]] = data.get("rows")
                     if n.get("type") == "output" and (data.get("destType") or "datasource") == "datasource" and (data.get("name") or "").strip():
                         slot_key = ((data.get("name") or "").strip(), data.get("projectId"))
                         if slot_key in published:
