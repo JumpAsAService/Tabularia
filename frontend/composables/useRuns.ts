@@ -21,6 +21,8 @@ export interface RunInfo {
   kind?: string
   flow_id: number | null // null for the run of a flow group
   flow_group_id?: number | null
+  sql_script_id?: number | null
+  saved_script_id?: number | null
   status: 'PENDING' | 'STARTED' | 'SUCCESS' | 'FAILURE' | string
   launched_by: number | null
   trigger_type?: string // "manual" | "schedule"
@@ -49,6 +51,7 @@ export interface RunInfo {
   source_name?: string | null
   group_name?: string | null
   sql_script_name?: string | null // a SQL script writing its datasource (kind "sql")
+  script_name?: string | null // a script of the Scripting page, run by itself
   launched_by_name?: string | null // the name of whoever started it (null when scheduled)
 }
 

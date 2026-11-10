@@ -272,8 +272,8 @@ const dailyTotal = computed(() =>
 .segmented { display: inline-flex; border: 1px solid var(--border); border-radius: 7px; overflow: hidden; }
 .segmented button { padding: 4px 10px; background: var(--panel-2); color: var(--muted); border: none; border-right: 1px solid var(--border); font-size: 12px; cursor: pointer; }
 .segmented button:last-child { border-right: none; }
-/* --on-accent, not #fff: on Dracula and Monokai the accent is light and wants dark text */
-.segmented button.on { background: var(--accent); color: var(--on-accent); }
+/* as the Runs page's filter: the accent's tint under accent-hi (white on the plain accent was 3.22:1) */
+.segmented button.on { background-image: linear-gradient(var(--tint-accent), var(--tint-accent)); color: var(--accent-hi); box-shadow: inset 0 0 0 1px var(--accent); }
 
 .cal-scroll { overflow-x: auto; overflow-y: hidden; }
 .hour-wrap { margin-top: 4px; }
