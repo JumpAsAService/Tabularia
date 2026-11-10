@@ -31,6 +31,7 @@ import GridKeys from '~/components/ui/GridKeys.vue'
 import { SOURCE_ID, buildIncoming, resolveChain, leafNodeId, defaultParams, sampleLabel } from '~/composables/useFlowModel'
 import { Recent, previewKey, columnChanges, consumedColumns, nodeRowsPhrase, rowsPhrase, suggestSample, type RowCount } from '~/composables/previewGrid'
 import { opSubject } from '~/composables/opSummary'
+import { profileOpen, profileStart } from '~/composables/profileAsk'
 import { usePopover } from '~/composables/usePopover'
 import { computeAutoLayout } from '~/composables/useFlowLayout'
 import { createFlowHistory } from '~/composables/useFlowHistory'
@@ -1991,19 +1992,27 @@ const PROFILE_SETTLE_MS = 250
 let profileSeq = 0
 let profileTimer: ReturnType<typeof setTimeout> | undefined
 let wholeAsked = -1 // the profileSeq whose whole profile was asked
+let wholeWanted = false // a column opened before the step's profile was asked (composables/profileAsk.ts)
 let profileAsk: { key: string; body: NonNullable<ReturnType<typeof previewBody>['body']>; columns: ColumnInfo[] } | null = null
 function queueProfile(key: string, body: NonNullable<ReturnType<typeof previewBody>['body']>, columns: ColumnInfo[]) {
+  const wanted = wholeWanted
   stopProfile()
   if (!columns.length) return
   profileAsk = { key, body, columns }
   const seq = profileSeq
   const known = fresh(profileMemo.get(key)) ?? fresh(profileMemo.get(`${key}\u0001footer`))
-  if (known) {
-    profile.value = known.res
+  const start = profileStart(known?.res, wanted)
+  if (known) profile.value = known.res
+  if (start === 'known') {
     profileState.value = 'done'
     return
   }
   profileState.value = 'loading'
+  if (start === 'whole') {
+    wholeAsked = seq
+    void askProfile(seq, false)
+    return
+  }
   profileTimer = setTimeout(() => { void askProfile(seq, true) }, PROFILE_SETTLE_MS)
 }
 async function askProfile(seq: number, footerOnly: boolean) {
@@ -2044,7 +2053,9 @@ function profileRetry() {
 }
 /** A column opened in the grid: the step's whole profile (one query for every column). */
 function profileWhole() {
-  if (!profileAsk || (profile.value && !profile.value.partial) || wholeAsked === profileSeq) return
+  const next = profileOpen(!!profileAsk, profile.value, wholeAsked === profileSeq)
+  if (next === 'remember') wholeWanted = true // asked as soon as the count is done
+  if (next !== 'ask') return
   wholeAsked = profileSeq
   clearTimeout(profileTimer)
   profileError.value = ''
@@ -2054,6 +2065,7 @@ function profileWhole() {
 }
 function stopProfile() {
   profileSeq++
+  wholeWanted = false
   clearTimeout(profileTimer)
   if (previewSlots.busy('profile')) previewSlots.stop('profile')
   if (previewSlots.busy('top')) previewSlots.stop('top')
