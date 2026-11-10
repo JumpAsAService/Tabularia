@@ -41,7 +41,8 @@ class StorageSettings(BaseModel):
     bucket: str = "data-prep"
     region: str = "us-east-1"
     # env: STORAGE__DIRECT_READ — the duckdb and chdb engines read sources and cached
-    # steps in place, only the parts a query needs (app/engine/storage_direct.py).
+    # steps in place, only the parts a query needs (app/engine/storage_direct.py), and
+    # Polars does for its previews, counts and profiles.
     # false = download each file first, as before.
     direct_read: bool = True
 
