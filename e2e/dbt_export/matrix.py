@@ -255,6 +255,8 @@ def norm(v, fam=None):
             return s
     if math.isnan(x):
         return "nan"
+    if math.isinf(x):
+        return "inf" if x > 0 else "-inf"   # int(x) failed with OverflowError
     return int(x) if x == int(x) and abs(x) < 1e15 else round(x, 6)
 
 

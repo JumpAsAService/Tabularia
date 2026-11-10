@@ -219,6 +219,10 @@ try:
         ok("the append table is an incremental model" + (f" in the destination table «{ROWS_SCHEMA}».dbt_righe" if target == "native" else ""),
            "materialized='incremental', incremental_strategy='append'" in head
            and (target != "native" or (f"schema='{ROWS_SCHEMA}'" in head and "alias='dbt_righe'" in head)), head[:400])
+        if target == "native":
+            # the user's choice (2026-11-10): dbt writes the real table its own way, and the project says how
+            ok("native: the append model's header and the README say what dbt does to the table Tabularia writes",
+               f"This model appends to `{ROWS_SCHEMA}.dbt_righe`" in head and "--full-refresh" in read("README.md"), head[:600])
         before = dbt_righe_count()
         rc, out = dbt(folder, "run", variables=variables)
         if not ok("dbt run passes on the upstream flow (2 models, 1 ephemeral)", rc == 0 and "Completed successfully" in out, out[-2500:]):
