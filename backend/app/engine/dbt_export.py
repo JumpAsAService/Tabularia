@@ -1088,6 +1088,26 @@ def _aggregate(model: "_Model", func: str, col: str, kind: Optional[str], order:
     return expr, kind
 
 
+_FLOATS = ("DOUBLE", "FLOAT", "REAL")
+
+
+def _zero_signless(model: _Model, ref: str, s: _S, keys: list) -> str:
+    """ClickHouse groups, deduplicates and hash-joins a float by its bits: -0.0 and 0.0 were two
+    groups there, two distinct rows, keys that never met, where the engines hold them one (the
+    ClickHouse engine adds 0.0 to its float keys first, `chdb_ops._zero_signless`). The same
+    here, on the ClickHouse dialect: a step that turns -0.0 into 0.0 in the float keys and leaves
+    every other value, NaN and NULL as they are. Postgres and DuckDB need none."""
+    if not (model.native and model.dialect == "clickhouse" and s.cols):
+        return ref
+    floats = [c for c in dict.fromkeys(keys) if c in s.types and str(s.kind(c) or "").upper() in _FLOATS]
+    if not floats:
+        return ref
+    expr_ = {c: f"CAST({_qi(c)} + 0.0 AS {s.kind(c)})" for c in floats}
+    names = ", ".join(floats)
+    return model.add(f"SELECT {_column_list(s.cols, expr_=expr_)} FROM {ref}", step_name=f"zero_without_sign_{names}",
+                     note=f"-0.0 as 0.0 in {names}: ClickHouse tells them apart as keys, Tabularia does not")
+
+
 def _compile_op(model: _Model, ref: str, s: _S, op_type: str, params: dict,
                 resolve: SourceResolver, right_namer: _Namer) -> tuple[str, _S]:
     """Writes the CTE(s) of an operation. Returns (new ref, new schema)."""
@@ -1177,6 +1197,7 @@ def _compile_op(model: _Model, ref: str, s: _S, op_type: str, params: dict,
 
     if op_type == "unique":
         subset = params.get("subset")
+        ref = _zero_signless(model, ref, s, subset or cols)
         if subset:
             part = ", ".join(q(c) for c in subset)
             return model.add(f"SELECT {all_} FROM {ref} QUALIFY row_number() OVER (PARTITION BY {part}) = 1"), s
@@ -1199,6 +1220,7 @@ def _compile_op(model: _Model, ref: str, s: _S, op_type: str, params: dict,
     if op_type == "group_by":
         by = _as_list(_require(params, "by"))
         aggs = _require(params, "aggregations")
+        ref = _zero_signless(model, ref, s, by)
         parts, out_cols, out_t = [", ".join(q(c) for c in by)], list(by), {c: s.kind(c) for c in by}
         for agg in aggs:
             col, func = agg["column"], agg.get("func", "sum")
@@ -1315,6 +1337,11 @@ def _compile_op(model: _Model, ref: str, s: _S, op_type: str, params: dict,
             out = cols + [c if c not in lset else c + "_right" for c in rs.cols]
             ot = {**types, **{(c if c not in lset else c + "_right"): rs.types.get(c) for c in rs.cols}}
             return model.add(f"SELECT {sel} FROM {ref} CROSS JOIN {r_ref}"), _S(out, ot)
+        if params.get("on"):
+            ref, r_ref = _zero_signless(model, ref, s, _as_list(params["on"])), _zero_signless(model, r_ref, rs, _as_list(params["on"]))
+        elif params.get("left_on") and params.get("right_on"):
+            ref, r_ref = (_zero_signless(model, ref, s, _as_list(params["left_on"])),
+                          _zero_signless(model, r_ref, rs, _as_list(params["right_on"])))
         clause, kind = _join_condition(ref, r_ref, params)
         if how in ("semi", "anti"):
             sel = ", ".join(f"{ref}.{q(c)} AS {q(c)}" for c in cols) if (nat and cols) else f"{ref}.*"
@@ -1392,6 +1419,10 @@ def _compile_op(model: _Model, ref: str, s: _S, op_type: str, params: dict,
         # a portable form, the same in both targets: one SELECT per unpivoted column, NULLs
         # included (as the engine, which uses UNPIVOT INCLUDE NULLS)
         value_sql = (lambda m: f"CAST({q(m)} AS {vtype})") if vtype else (lambda m: q(m))
+        if nat and vtype == "VARCHAR":
+            # a float among texts is written as the engine writes it ('7.0', not the warehouse's '7')
+            as_text = value_sql
+            value_sql = lambda m: _float_as_text(q(m), model.dialect) if str(s.kind(m) or "").upper() in _FLOATS else as_text(m)  # noqa: E731
         pieces = [
             "SELECT " + ", ".join([q(c) for c in keep] + [f"{_lit(m)} AS {q(var)}", f"{value_sql(m)} AS {q(val)}"]) + f" FROM {ref}"
             for m in melt
