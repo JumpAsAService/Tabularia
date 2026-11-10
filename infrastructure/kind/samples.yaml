@@ -1,5 +1,5 @@
 # The sample data of the Docker Compose stack (infrastructure/sampledb), for the kind
-# guide (docs/deploy/kind.md, "Play with sample data"): a cured-meats company's order
+# guide (docs/deploy/kind.md, "Play with sample data"): a pasta and bakery company's order
 # system (PostgreSQL) and CRM (ClickHouse), and a Job that fills them and builds the
 # «Sample» folder in Tabularia through the gateway: the two connections, the tables,
 # eleven flows run once, four saved views, the reports «Margin review» and «Agent

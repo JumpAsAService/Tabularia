@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Fills the two sample databases of the CURED-MEATS company with realistic data.
+"""Fills the two sample databases of the PASTA AND BAKERY company with realistic data.
 
   Postgres «shop»       → ORDER MANAGEMENT: product catalogue, price list,
                           production costs, orders, lines, commercial costs.
@@ -62,7 +62,7 @@ DAYS = (END_DATE - START_DATE).days
 ANNUAL_GROWTH = 0.18
 # annual growth of the average order value (a basket that widens over time)
 ANNUAL_BASKET_GROWTH = 0.05
-# monthly seasonality of cured meats (index 1..12; 0 = placeholder):
+# monthly seasonality of pasta and bakery goods (index 1..12; 0 = placeholder):
 # Christmas very strong, Easter (Apr) up, August down (holidays), autumn recovering.
 # This weighs the total VOLUME; the MIX (product/channel) and the fulfilment
 # anomalies have tables of their own further down (CATEGORY_SEASON, CHANNEL_SEASON,
@@ -82,6 +82,10 @@ fake = Faker("it_IT")
 Faker.seed(SEED)
 
 ORDERS_CHUNK = 1_000_000      # orders per COPY block (caps the memory)
+# a line's quantity is a gamma of shape 2 with this scale (kilos or pieces): pasta and
+# biscuits cost a few euros a kilo and move by the pallet; and what a unit costs to ship
+QTY_BULK, QTY_BASE = 45.0, 20.0
+LOGISTICS_PER_UNIT = 0.02
 ACTIVITIES_CHUNK = 2_000_000  # CRM activity rows per insert
 
 
@@ -89,101 +93,123 @@ def log(msg: str) -> None:
     print(f"[{time.strftime('%H:%M:%S')}] {msg}", flush=True)
 
 
-# ── cured-meats catalogue (curated) → SKUs per format ────────────────────────
-# (name, category, kind, months of ageing, price per kg, raw material share)
+# ── pasta and bakery catalogue (curated) → SKUs per format ───────────────────
+# (name, category, kind, shelf life in months, price per kg, raw material share).
+# The shelf life goes into `stagionatura_mesi`: the column keeps its name, and for a
+# pasta maker it holds the months a product keeps (nothing here is aged).
 BASE_PRODUCTS = [
-    ("Prosciutto Crudo di Parma DOP", "Prosciutti", "crudo", 18, 27.0, 0.58),
-    ("Prosciutto San Daniele DOP", "Prosciutti", "crudo", 16, 29.0, 0.60),
-    ("Prosciutto Cotto Alta Qualità", "Insaccati cotti", "cotto", 0, 12.5, 0.50),
-    ("Speck Alto Adige IGP", "Prosciutti", "crudo", 5, 22.0, 0.52),
-    ("Culatello di Zibello DOP", "Prosciutti", "crudo", 14, 48.0, 0.62),
-    ("Mortadella Bologna IGP", "Insaccati cotti", "cotto", 0, 9.5, 0.46),
-    ("Salame Milano", "Salami", "stagionato", 3, 15.5, 0.55),
-    ("Salame Napoli", "Salami", "stagionato", 3, 16.0, 0.55),
-    ("Salame Felino IGP", "Salami", "stagionato", 4, 19.0, 0.57),
-    ("Soppressata Calabra DOP", "Salami", "stagionato", 3, 21.0, 0.56),
-    ("Finocchiona IGP", "Salami", "stagionato", 4, 17.5, 0.55),
-    ("Coppa Piacentina DOP", "Salumi stagionati", "stagionato", 6, 24.0, 0.58),
-    ("Pancetta Arrotolata", "Salumi stagionati", "stagionato", 3, 15.0, 0.53),
-    ("Pancetta Tesa", "Salumi stagionati", "stagionato", 2, 13.5, 0.52),
-    ("Guanciale", "Salumi stagionati", "stagionato", 3, 14.0, 0.50),
-    ("Lardo di Colonnata IGP", "Salumi stagionati", "stagionato", 6, 20.0, 0.55),
-    ("Bresaola della Valtellina IGP", "Salumi stagionati", "stagionato", 2, 34.0, 0.64),
-    ("Cotechino Modena IGP", "Insaccati da cuocere", "fresco", 0, 11.0, 0.48),
-    ("Zampone Modena IGP", "Insaccati da cuocere", "fresco", 0, 12.0, 0.48),
-    ("'Nduja di Spilinga", "Salami", "stagionato", 2, 18.0, 0.54),
-    ("Salsiccia Stagionata", "Salami", "stagionato", 2, 13.0, 0.50),
-    ("Prosciutto di Praga", "Insaccati cotti", "cotto", 0, 13.5, 0.51),
-    ("Porchetta di Ariccia IGP", "Insaccati cotti", "cotto", 0, 14.5, 0.52),
-    ("Wurstel di Suino", "Insaccati cotti", "cotto", 0, 6.5, 0.42),
+    ("Tortellini di carne", "Pasta fresca", "fresca", 2, 8.50, 0.50),
+    ("Ravioli ricotta e spinaci", "Pasta fresca", "fresca", 2, 7.80, 0.49),
+    ("Spaghetti di semola di grano duro", "Pasta di semola", "secca", 36, 1.60, 0.58),
+    ("Tagliatelle all'uovo", "Pasta fresca", "fresca", 1, 5.20, 0.47),
+    ("Gnocchi di patate", "Pasta fresca", "fresca", 2, 3.40, 0.44),
+    ("Penne rigate di semola di grano duro", "Pasta di semola", "secca", 36, 1.65, 0.58),
+    ("Frollini al burro", "Biscotti", "da forno", 12, 4.20, 0.52),
+    ("Frollini al cacao", "Biscotti", "da forno", 12, 4.40, 0.52),
+    ("Biscotti integrali ai cereali", "Biscotti", "da forno", 10, 4.60, 0.53),
+    ("Cantucci alle mandorle", "Biscotti", "da forno", 12, 9.50, 0.57),
+    ("Savoiardi", "Biscotti", "da forno", 9, 5.80, 0.50),
+    ("Grissini stirati", "Sostitutivi del pane", "da forno", 8, 5.20, 0.52),
+    ("Grissini al sesamo", "Sostitutivi del pane", "da forno", 8, 5.60, 0.53),
+    ("Cracker salati", "Sostitutivi del pane", "da forno", 10, 3.40, 0.50),
+    ("Fette biscottate", "Sostitutivi del pane", "da forno", 10, 3.90, 0.51),
+    ("Crostini tostati", "Sostitutivi del pane", "da forno", 9, 4.80, 0.52),
+    ("Taralli all'olio d'oliva", "Sostitutivi del pane", "da forno", 8, 5.90, 0.54),
+    ("Panettone classico", "Dolci da ricorrenza", "lievitato", 6, 9.00, 0.48),
+    ("Pandoro classico", "Dolci da ricorrenza", "lievitato", 6, 8.50, 0.48),
+    ("Amaretti", "Biscotti", "da forno", 12, 10.50, 0.56),
+    ("Biscotti secchi da colazione", "Biscotti", "da forno", 12, 3.60, 0.51),
+    ("Fusilli di semola di grano duro", "Pasta di semola", "secca", 36, 1.65, 0.57),
+    ("Rigatoni trafilati al bronzo", "Pasta di semola", "secca", 36, 2.60, 0.55),
+    ("Spaghetti integrali", "Pasta di semola", "secca", 24, 2.10, 0.56),
 ]
-# (format, unit, average weight in kg, price markup, packaging cost per piece)
-FORMATS = [
-    ("intero sottovuoto", "kg", 6.500, 1.00, 0.35),
-    ("mezzo sottovuoto", "kg", 3.200, 1.02, 0.30),
-    ("banco taglio", "kg", 1.000, 1.05, 0.15),
-    ("tranci 500g", "pz", 0.500, 1.20, 0.45),
-    ("affettato vaschetta 100g", "pz", 0.100, 1.55, 0.55),
-    ("affettato vaschetta 150g", "pz", 0.150, 1.50, 0.55),
-]
-CHANNELS = ["GDO", "HoReCa", "Grossista", "Dettaglio", "Gastronomia"]
-DEPOTS = ["Parma", "Modena", "San Daniele", "Milano", "Napoli"]
+# kind → its formats: (format, unit, weight of a piece in kg, price markup, packaging
+# cost per piece). The large ones are for catering and are sold by the kilo, the small
+# ones by the piece; the seasonal cakes come in three sizes, always by the piece.
+FORMATS = {
+    "secca": [
+        ("sacco 5 kg", "kg", 5.000, 1.00, 0.12),
+        ("sacco 3 kg", "kg", 3.000, 1.02, 0.09),
+        ("pacco 1 kg", "kg", 1.000, 1.05, 0.05),
+        ("pacco 500 g", "pz", 0.500, 1.20, 0.04),
+    ],
+    "fresca": [
+        ("vaschetta 2 kg", "kg", 2.000, 1.00, 0.18),
+        ("vaschetta 1 kg", "kg", 1.000, 1.03, 0.12),
+        ("confezione 500 g", "pz", 0.500, 1.15, 0.09),
+        ("confezione 250 g", "pz", 0.250, 1.25, 0.07),
+    ],
+    "da forno": [
+        ("cartone 5 kg", "kg", 5.000, 1.00, 0.30),
+        ("cartone 2 kg", "kg", 2.000, 1.03, 0.16),
+        ("sacchetto 500 g", "pz", 0.500, 1.15, 0.07),
+        ("sacchetto 250 g", "pz", 0.250, 1.25, 0.05),
+    ],
+    "lievitato": [
+        ("scatola 1 kg", "pz", 1.000, 1.00, 0.45),
+        ("scatola 750 g", "pz", 0.750, 1.04, 0.40),
+        ("incarto 500 g", "pz", 0.500, 1.10, 0.22),
+    ],
+}
+CHANNELS = ["Supermercati", "Ristorazione", "Ingrosso", "Negozi", "Online"]
+DEPOTS = ["Verona", "Torino", "Bari", "Roma", "Ancona"]
 AREAS = ["Nord-Ovest", "Nord-Est", "Centro", "Sud", "Isole"]
 
 # ── product mix × season ─────────────────────────────────────────────────────
 # Besides the total VOLUME (MONTH_MULT), the MIX changes too: each category has a
 # monthly profile (index 1..12; 0 = placeholder) that weighs the chance that one
 # of its SKUs lands on a line, month by month.
-#   · Insaccati da cuocere (cotechino/zampone): a New Year's spike, almost nothing
-#     the rest of the year.  · Insaccati cotti (mortadella/cotto/wurstel): summer
-#     up (sandwiches, barbecues).  · Fine prosciutti: Christmas + Easter gifts.
+#   · Dolci da ricorrenza (panettone/pandoro): a Christmas spike, almost nothing
+#     the rest of the year.  · Sostitutivi del pane (grissini/cracker): summer up
+#     (aperitifs, picnics).  · Pasta fresca: the tables of Christmas and Easter.
+#   · Biscotti: low in summer, up again when the schools open.
 CATEGORY_SEASON = {
-    "Prosciutti":           [0.0, 0.90, 0.85, 1.00, 1.18, 1.00, 0.88, 0.82, 0.68, 1.00, 1.18, 1.40, 1.95],
-    "Insaccati cotti":      [0.0, 0.85, 0.85, 1.00, 1.05, 1.18, 1.30, 1.40, 1.10, 1.00, 0.95, 1.00, 1.10],
-    "Salami":               [0.0, 1.05, 1.00, 1.00, 1.00, 1.00, 0.95, 0.88, 0.80, 1.05, 1.10, 1.18, 1.30],
-    "Salumi stagionati":    [0.0, 1.00, 0.95, 1.00, 1.05, 1.08, 1.08, 1.02, 0.85, 1.05, 1.05, 1.12, 1.25],
-    "Insaccati da cuocere": [0.0, 0.55, 0.28, 0.18, 0.14, 0.10, 0.08, 0.08, 0.08, 0.16, 0.42, 1.70, 4.20],
+    "Pasta fresca":         [0.0, 0.90, 0.85, 1.00, 1.18, 1.00, 0.88, 0.82, 0.68, 1.00, 1.18, 1.40, 1.95],
+    "Sostitutivi del pane": [0.0, 0.85, 0.85, 1.00, 1.05, 1.18, 1.30, 1.40, 1.10, 1.00, 0.95, 1.00, 1.10],
+    "Biscotti":             [0.0, 1.05, 1.00, 1.00, 1.00, 0.95, 0.85, 0.80, 0.75, 1.10, 1.15, 1.18, 1.25],
+    "Pasta di semola":      [0.0, 1.05, 1.00, 1.00, 1.00, 1.02, 1.05, 1.02, 0.88, 1.05, 1.05, 1.08, 1.10],
+    "Dolci da ricorrenza":  [0.0, 0.40, 0.12, 0.10, 0.10, 0.08, 0.08, 0.08, 0.08, 0.20, 0.60, 2.00, 4.20],
 }
-# override for a single product (key = substring of the name): Bresaola is the
-# hero of summer (light, "diet food") and leads the hot months.
+# override for a single product (key = substring of the name): taralli are the
+# aperitif of summer and lead the hot months.
 PRODUCT_SEASON = {
-    "Bresaola": [0.0, 0.85, 0.85, 1.00, 1.15, 1.40, 1.65, 1.75, 1.35, 1.10, 0.90, 0.85, 0.90],
+    "Taralli": [0.0, 0.85, 0.85, 1.00, 1.15, 1.40, 1.65, 1.75, 1.35, 1.10, 0.90, 0.85, 0.90],
 }
 # base popularity per category (season being equal, how much it "sells")
 CATEGORY_POP = {
-    "Prosciutti": 1.3, "Insaccati cotti": 1.6, "Salami": 1.4,
-    "Salumi stagionati": 1.0, "Insaccati da cuocere": 0.5,
+    "Pasta fresca": 1.3, "Pasta di semola": 1.6, "Biscotti": 1.4,
+    "Sostitutivi del pane": 1.0, "Dolci da ricorrenza": 0.5,
 }
 
 # ── channel mix × season ─────────────────────────────────────────────────────
 # Moves each channel's SHARE month by month (the month's total volume is still
-# set by MONTH_MULT). HoReCa booms in summer (tourism/restaurants), GDO and
-# Dettaglio at Christmas; Grossista/Gastronomia flatter.
+# set by MONTH_MULT). Ristorazione booms in summer (tourism/restaurants),
+# Supermercati and Negozi at Christmas; Ingrosso/Online flatter.
 CHANNEL_SEASON = {
-    "GDO":         [0.0, 0.90, 0.85, 0.95, 1.05, 1.00, 0.95, 0.90, 0.95, 1.05, 1.20, 1.45, 1.60],
-    "HoReCa":      [0.0, 0.70, 0.72, 0.90, 1.10, 1.35, 1.70, 1.85, 1.55, 1.10, 0.85, 0.85, 1.05],
-    "Grossista":   [0.0, 0.95, 0.95, 1.00, 1.00, 1.05, 1.05, 1.00, 1.00, 1.05, 1.15, 1.25, 1.35],
-    "Dettaglio":   [0.0, 0.95, 0.90, 1.00, 1.15, 1.00, 0.92, 0.85, 0.90, 1.05, 1.15, 1.35, 1.70],
-    "Gastronomia": [0.0, 0.90, 0.88, 1.00, 1.10, 1.15, 1.20, 1.15, 1.00, 1.05, 1.10, 1.25, 1.50],
+    "Supermercati": [0.0, 0.90, 0.85, 0.95, 1.05, 1.00, 0.95, 0.90, 0.95, 1.05, 1.20, 1.45, 1.60],
+    "Ristorazione": [0.0, 0.70, 0.72, 0.90, 1.10, 1.35, 1.70, 1.85, 1.55, 1.10, 0.85, 0.85, 1.05],
+    "Ingrosso":     [0.0, 0.95, 0.95, 1.00, 1.00, 1.05, 1.05, 1.00, 1.00, 1.05, 1.15, 1.25, 1.35],
+    "Negozi":       [0.0, 0.95, 0.90, 1.00, 1.15, 1.00, 0.92, 0.85, 0.90, 1.05, 1.15, 1.35, 1.70],
+    "Online":       [0.0, 1.05, 0.95, 1.00, 1.05, 1.00, 0.95, 0.90, 0.85, 1.05, 1.15, 1.40, 1.65],
 }
 
 # ── FULFILMENT anomalies by depot ────────────────────────────────────────────
 # Baseline: ~4% of orders cancelled everywhere. On two depots we inject a
 # pathology to analyse on the fulfilled share:
-#   · "Napoli"  → CHRONIC decline: the cancelled share grows over time (a
-#      structural logistics problem) from ~4% up to ~26% at the end of the window.
-#   · "Modena"  → a one-off INCIDENT: a peak of cancellations in a "black" quarter
-#      (autumn 2025) up to ~30%, then back to normal.
+#   · "Bari"   → CHRONIC decline: the cancelled share grows over time (a
+#      structural logistics problem) from ~4% up to ~24% at the end of the window.
+#   · "Torino" → a one-off INCIDENT: a peak of cancellations in a "black" season
+#      (spring 2025) up to ~32%, then back to normal.
 CANCEL_BASE = 0.04
-CANCEL_CHRONIC = {"Napoli": 0.22}  # highest increase, reached at the end of the window
+CANCEL_CHRONIC = {"Bari": 0.20}    # highest increase, reached at the end of the window
 CANCEL_INCIDENT = {                # depot → (from, to, peak extra)
-    "Modena": (date(2025, 9, 1), date(2025, 12, 15), 0.26),
+    "Torino": (date(2025, 2, 10), date(2025, 5, 31), 0.28),
 }
 
 # region → (province code, city) for geographically consistent registries
 GEO = [
     ("Lombardia", "MI", "Milano"), ("Lombardia", "BG", "Bergamo"), ("Lombardia", "BS", "Brescia"),
-    ("Emilia-Romagna", "PR", "Parma"), ("Emilia-Romagna", "MO", "Modena"), ("Emilia-Romagna", "BO", "Bologna"),
+    ("Emilia-Romagna", "RE", "Reggio Emilia"), ("Emilia-Romagna", "RN", "Rimini"), ("Emilia-Romagna", "BO", "Bologna"),
     ("Veneto", "VR", "Verona"), ("Veneto", "PD", "Padova"), ("Veneto", "VE", "Venezia"),
     ("Piemonte", "TO", "Torino"), ("Piemonte", "CN", "Cuneo"),
     ("Toscana", "FI", "Firenze"), ("Toscana", "SI", "Siena"),
@@ -201,10 +227,9 @@ def build_products() -> pd.DataFrame:
     """Expands the base products by format → SKUs with list price and costs."""
     rows = []
     pid = 0
-    for name, cat, kind, ageing, price_kg, mp_frac in BASE_PRODUCTS:
-        # 3–4 formats per product (deterministic: the first n of the list)
-        n_fmt = 3 if kind in ("fresco",) else 4
-        for fmt, unit, weight, markup, conf in FORMATS[:n_fmt]:
+    for name, cat, kind, shelf_life, price_kg, mp_frac in BASE_PRODUCTS:
+        # 3–4 formats per product: the ones of its kind
+        for fmt, unit, weight, markup, conf in FORMATS[kind]:
             pid += 1
             if unit == "kg":
                 list_price = round(price_kg * markup, 4)           # per kg
@@ -217,7 +242,7 @@ def build_products() -> pd.DataFrame:
                 categoria=cat,
                 tipo=kind,
                 formato=fmt,
-                stagionatura_mesi=ageing,
+                stagionatura_mesi=shelf_life,
                 peso_medio_kg=weight,
                 unita_misura=unit,
                 _price_kg=price_kg,
@@ -342,7 +367,7 @@ def gen_agents() -> pd.DataFrame:
 
 def _agent_row(aid, role, resp, area, comm):
     first, last = fake.first_name(), fake.last_name()
-    email = f"{first}.{last}@salumificio.example".lower().replace(" ", "")
+    email = f"{first}.{last}@pastificio.example".lower().replace(" ", "")
     return dict(
         id=aid, nome=first, cognome=last, ruolo=role, responsabile_id=resp,
         area=area, provvigione_base_pct=round(comm, 2),
@@ -506,7 +531,7 @@ def gen_orders_and_lines(cur, prod: pd.DataFrame, agent_of, channel_of, agents: 
         agent = agent_of[customer]
         channel_i = channel_of[customer]                   # 1..len(CHANNELS)
         channel = np.array(CHANNELS)[channel_i - 1]
-        gdo_like = np.isin(channel_i, [1, 3])              # GDO/Grossista: qty↑ discounts↑
+        bulk = np.isin(channel_i, [1, 3])                  # Supermercati/Ingrosso: qty↑ discounts↑
         depot = np.array(DEPOTS)[rng.integers(0, len(DEPOTS), n)]
         number = np.char.add("ORD-", oid.astype(str))
 
@@ -534,11 +559,11 @@ def gen_orders_and_lines(cur, prod: pd.DataFrame, agent_of, channel_of, agents: 
         n_lines = rng.poisson(2.5, n) + 1
         tot = int(n_lines.sum())
         r_oid = np.repeat(oid, n_lines)
-        r_channel_gdo = np.repeat(gdo_like, n_lines)
+        r_channel_bulk = np.repeat(bulk, n_lines)
         r_agent = np.repeat(agent, n_lines)
         r_days = np.repeat(days, n_lines)
-        # product chosen per month: the MIX follows the season (cotechino at Christmas,
-        # bresaola in summer, …), it is no longer uniform
+        # product chosen per month: the MIX follows the season (panettone at Christmas,
+        # taralli in summer, …), it is no longer uniform
         r_months = day_month[r_days]
         prod_i = np.empty(tot, dtype=np.int64)
         for m in range(1, 13):
@@ -546,14 +571,14 @@ def gen_orders_and_lines(cur, prod: pd.DataFrame, agent_of, channel_of, agents: 
             if sel.size:
                 prod_i[sel] = rng.choice(P_n, size=sel.size, p=prod_w[m])
         list_price = prices[prod_i]
-        # quantity: gamma (skewed), higher for GDO/Grossista, and slowly growing
-        # over time (the average basket widens year on year)
+        # quantity (kilos or pieces): gamma (skewed), higher for Supermercati/Ingrosso,
+        # and slowly growing over time (the average basket widens year on year)
         basket = (1.0 + ANNUAL_BASKET_GROWTH) ** (r_days / 365.25)
-        qty = (rng.gamma(2.0, np.where(r_channel_gdo, 9.0, 4.0)) + 0.5) * basket
+        qty = (rng.gamma(2.0, np.where(r_channel_bulk, QTY_BULK, QTY_BASE)) + 2.0) * basket
         qty = np.round(qty, 3)
         unit_price = np.round(list_price * (1 + rng.normal(0, 0.04, tot)), 4)
-        unit_price = np.maximum(unit_price, 0.5)
-        discount = np.round(np.clip(rng.normal(np.where(r_channel_gdo, 12, 5), 3), 0, 40), 2)
+        unit_price = np.maximum(unit_price, 0.2)
+        discount = np.round(np.clip(rng.normal(np.where(r_channel_bulk, 12, 5), 3), 0, 40), 2)
         rid = np.arange(line_id + 1, line_id + tot + 1, dtype=np.int64)
 
         copy_df(cur, "vendite.righe_ordine", pd.DataFrame({
@@ -565,7 +590,7 @@ def gen_orders_and_lines(cur, prod: pd.DataFrame, agent_of, channel_of, agents: 
         revenue = qty * unit_price * (1 - discount / 100.0)
         pct = base_comm[r_agent]
         comm_amount = np.round(revenue * pct / 100.0, 4)
-        logistics = np.round(qty * 0.12 + 1.5, 4)
+        logistics = np.round(qty * LOGISTICS_PER_UNIT + 1.5, 4)
         promo = np.round(np.where(rng.random(tot) < 0.15, revenue * rng.uniform(0.02, 0.08, tot), 0.0), 4)
         copy_df(cur, "vendite.costi_commerciali", pd.DataFrame({
             "id": rid, "riga_ordine_id": rid, "provvigione_pct": np.round(pct, 2),

@@ -1,4 +1,4 @@
--- Order management of a CURED-MEATS company (database "shop", several schemas).
+-- Order management of a PASTA AND BAKERY company (database "shop", several schemas).
 -- A test source for Tabularia's Postgres connector. The fact tables
 -- (orders/lines/costs) are UNLOGGED: a much faster bulk load (no WAL) —
 -- throwaway data. The secondary indexes are created by `indexes_postgres.sql`
@@ -22,10 +22,10 @@ CREATE TABLE catalogo.prodotti (
     id                int PRIMARY KEY,
     codice            text NOT NULL,          -- SKU
     nome              text NOT NULL,
-    categoria         text NOT NULL,          -- Prosciutti, Salami, Insaccati cotti, …
-    tipo              text NOT NULL,          -- crudo, cotto, stagionato, fresco
-    formato           text NOT NULL,          -- intero, mezzo sottovuoto, affettato 100g, …
-    stagionatura_mesi int  NOT NULL,
+    categoria         text NOT NULL,          -- Pasta di semola, Pasta fresca, Biscotti, …
+    tipo              text NOT NULL,          -- secca, fresca, da forno, lievitato
+    formato           text NOT NULL,          -- sacco 5 kg, pacco 500 g, cartone 2 kg, …
+    stagionatura_mesi int  NOT NULL,          -- months the product keeps (its shelf life)
     peso_medio_kg     numeric(6,3) NOT NULL,
     unita_misura      text NOT NULL           -- kg | pz
 );
@@ -60,7 +60,7 @@ CREATE UNLOGGED TABLE vendite.ordini (
     data_ordine date   NOT NULL,
     cliente_id  int    NOT NULL,     -- → analytics.clienti.id (ClickHouse)
     agente_id   int    NOT NULL,     -- → analytics.agenti.id  (ClickHouse)
-    canale      text   NOT NULL,     -- GDO, HoReCa, Grossista, Dettaglio, Gastronomia
+    canale      text   NOT NULL,     -- Supermercati, Ristorazione, Ingrosso, Negozi, Online
     stato       text   NOT NULL,     -- evaso, in_lavorazione, annullato
     deposito    text   NOT NULL
 );
