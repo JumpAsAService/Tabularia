@@ -4069,3 +4069,43 @@ def test_a_federated_mysql_source_is_read_as_tabularia_reads_it():
     guide = _project(attachments=[my], layout={"package": "folder", "folder": "f"})["INTEGRATION.md"]
     assert "mysql_experimental_filter_pushdown: false" in guide and "mysql_tinyint1_as_boolean: false" in guide
 
+
+_RANGE_INSTANTS = _pl.DataFrame({"id": [1, 2, 3, 4, 5], "visto": [_dt.datetime(2024, 1, 5, 10, 29, 59), _dt.datetime(2024, 1, 5, 10, 30),
+                                                             _dt.datetime(2024, 1, 5, 10, 30, 0, 500000), _dt.datetime(2024, 1, 6), None],
+                                 "giorno": [_dt.date(2024, 1, 4), _dt.date(2024, 1, 5), _dt.date(2024, 1, 5), _dt.date(2024, 1, 7), None]})
+_RANGE_BOUNDS = [("visto", "2024-01-05T10:30", None), ("visto", "2024-01-05T12:30:00+02:00", None), ("visto", None, "2024-01-05T10:30:00Z"),
+                 ("visto", "2024-01-05 10:30:00.5", "2024-01-05T23:59"), ("giorno", "2024-01-05", "2024-01-06")]
+
+
+@pytest.mark.parametrize("mode", ["duckdb", "native", "clickhouse"])
+def test_a_range_rule_on_instants_with_an_offset_or_without_seconds_gives_tabularia_s_verdict(mode):
+    """A bound written as the calendar writes it (no seconds), with an offset or a 'Z': the test
+    ERRORed on ClickHouse (CANNOT_PARSE_DATETIME) and gave another verdict on DuckDB and Postgres,
+    which read the offset otherwise. Each bound is the instant in UTC, as Tabularia's check reads it."""
+    rules = [{"id": f"r{i}", "kind": "range", "column": c, "min": lo, "max": hi, "severity": "error"} for i, (c, lo, hi) in enumerate(_RANGE_BOUNDS, 1)]
+    expected = {f"tests/uno__range_{x['id']}.sql": x["violations"] for x in _evaluate(_RANGE_INSTANTS.lazy(), {"rules": rules})["rules"]}
+    assert [expected[f"tests/uno__range_r{i}.sql"] for i in range(1, 6)] == [1, 1, 2, 3, 2]
+    assert _test_rows(_export_contract(_RANGE_INSTANTS, rules, mode=mode), _RANGE_INSTANTS, _WHERE[mode]) == expected
+
+
+_WORD_REGEX = [r".*\bab\b.*", r"\Bb.*|.\Bb", r"(?s).*\bab\b.*", r"x\\b.*"]
+_WORD_TEXTS = ["x ab y", "xaby", "ab", "a\nab", "bb", "x\\b", "x\\bc"]
+
+
+@pytest.mark.parametrize("where", ["duckdb", "postgres", "clickhouse"])
+def test_a_word_boundary_in_a_pattern_rule_is_one_on_postgres_too(where):
+    """`\\b` is a word boundary for Tabularia (Rust's regex), RE2 and ClickHouse, a backspace for
+    Postgres, whose word boundaries are `\\y` and `\\Y`: the rule passed every value there."""
+    import duckdb
+
+    expected = {r: _pl.Series(_WORD_TEXTS).str.contains(f"^(?:{r})$").to_list() for r in _WORD_REGEX}
+    assert expected[_WORD_REGEX[0]] == [True, False, True, False, False, False, False]
+    dialect = {"duckdb": None, "postgres": "postgres", "clickhouse": "clickhouse"}[where]
+    sql = "SELECT " + ", ".join(f"regexp_matches({d._lit(v)}, {d._lit(d._whole_regex(r, dialect))})" for r in _WORD_REGEX for v in _WORD_TEXTS)
+    if where == "duckdb":
+        line = duckdb.connect().execute(sql).fetchone()
+    else:
+        sql = d.transpile_model(sql, dialect, {})
+        line = (_su_postgres(sql) if where == "postgres" else _su_clickhouse(sql))[0]
+    got = {r: [bool(x) for x in line[i * len(_WORD_TEXTS):(i + 1) * len(_WORD_TEXTS)]] for i, r in enumerate(_WORD_REGEX)}
+    assert got == expected
