@@ -2639,19 +2639,37 @@ class ClickHouseSyntaxCheck:
 
                 chdb.query(f"SET max_query_size = {MAX_QUERY_SIZE}; EXPLAIN AST {sql}", "TSV")
             else:
-                via.query(f"EXPLAIN AST {sql}", settings={"max_query_size": MAX_QUERY_SIZE})
+                # the answer as text: `query()` read EXPLAIN's lines as typed columns and failed on them
+                # («Unrecognized ClickHouse type base»), which looked like a server that does not answer
+                via.raw_query(f"EXPLAIN AST {sql}", settings={"max_query_size": MAX_QUERY_SIZE}, fmt="TabSeparated")
             return None
         except Exception as e:  # noqa: BLE001
             text = str(e)
             if "Syntax error" not in text and "SYNTAX_ERROR" not in text:
-                # no answer (a timeout, a dropped connection): off for the rest of the export, not one wait per model
-                logger.warning("dbt export: the ClickHouse syntax check did not answer (%s)", text[:200])
-                self.close()
-                self._via, self.skipped = False, True
+                if _no_answer(e):
+                    # no answer (a timeout, a dropped connection): off for the rest of the export, not one wait per model
+                    logger.warning("dbt export: the ClickHouse syntax check did not answer (%s)", text[:200])
+                    self.close()
+                    self._via, self.skipped = False, True
+                    return None
+                # an answer that is not about the syntax (memory, a setting): this model was not read,
+                # the next ones still are, and the README says so
+                logger.warning("dbt export: the ClickHouse syntax check could not read a model (%s)", text[:200])
+                self.skipped = True
                 return None
             line = next((r for r in text.splitlines() if "Syntax error" in r), text.splitlines()[0])
             line = re.sub(r"^.*?DB::Exception:\s*", "", line)
             return re.sub(r"\.\s*Expected one of:.*$", "", line).strip()[:200]
+
+
+def _no_answer(e: Exception) -> bool:
+    """Whether the engine's ClickHouse did not answer (no connection, a timeout), as opposed to
+    an answer the check could not use."""
+    try:
+        from clickhouse_connect.driver.exceptions import OperationalError
+    except ImportError:   # pragma: no cover — the check runs only with the library
+        return True
+    return isinstance(e, (OperationalError, OSError, TimeoutError))
 
 
 def reads_a_cte(t) -> bool:

@@ -3987,3 +3987,66 @@ def test_a_postgres_date_trunc_keeps_the_dates_clickhouse_s_datetime_cannot_hold
         monday = D(t.year, t.month, t.day) - _dt.timedelta(days=t.weekday())
         assert got[i] == (D(t.year, t.month, 1), monday, t.replace(minute=0, second=0), D(t.year, 1, 1), D(t.year, t.month, t.day),
                           D(t.year, (t.month - 1) // 3 * 3 + 1, 1), t.replace(second=0), t), i
+
+
+def _engine_clickhouse(monkeypatch):
+    """The engine's ClickHouse is the test server, and there is no chDB (the production image)."""
+    import sys
+
+    from pydantic import SecretStr
+
+    from app.core.config import get_settings
+
+    _clickhouse()   # skips or fails without the server
+    cfg = get_settings().clickhouse_external
+    monkeypatch.setattr(cfg, "host", os.environ["CLICKHOUSE_TEST_HOST"])
+    monkeypatch.setattr(cfg, "port", int(os.getenv("CLICKHOUSE_TEST_PORT", "8123")))
+    monkeypatch.setattr(cfg, "secure", False)
+    monkeypatch.setattr(cfg, "username", os.getenv("CLICKHOUSE_TEST_USER", "default"))
+    monkeypatch.setattr(cfg, "password", SecretStr(os.getenv("CLICKHOUSE_TEST_PASSWORD", "")))
+    monkeypatch.setattr(cfg, "ai_username", "")
+    monkeypatch.setitem(sys.modules, "chdb", None)
+
+
+def test_the_syntax_check_on_the_engine_s_clickhouse_reads_every_model(monkeypatch):
+    """Without chDB the check asks the engine's ClickHouse; the client read EXPLAIN's answer as
+    typed columns and failed on it («Unrecognized ClickHouse type base»), which the check took
+    for a server that does not answer: it went off after the first model, and a query ClickHouse
+    cannot parse reached `dbt run`."""
+    _engine_clickhouse(monkeypatch)
+    check = d.ClickHouseSyntaxCheck()
+    try:
+        assert check.error("SELECT 1 AS uno") is None
+        assert check._via and not check.skipped
+        error = check.error("SELECT id, extract(dow from d) AS dow FROM tab_src_1_zz.dati")
+        assert error and error.startswith("Syntax error"), error
+        assert check.error("SELECT id FROM t WHERE canale SIMILAR TO 'w%'")
+        assert check.error("SELECT 2") is None and not check.skipped
+    finally:
+        check.close()
+
+
+def test_a_clickhouse_answer_the_check_cannot_read_leaves_it_on_and_says_so(monkeypatch):
+    """A server that answers, with something else than a syntax error, is not a server that does
+    not answer: the next models are still read, and the README says that one was not."""
+    from clickhouse_connect.driver.exceptions import DatabaseError
+
+    class Answers:
+        def __init__(self):
+            self.calls = 0
+
+        def raw_query(self, sql, **kw):
+            self.calls += 1
+            if self.calls == 1:
+                raise DatabaseError("Code: 241. DB::Exception: Memory limit exceeded (MEMORY_LIMIT_EXCEEDED)")
+            if "SIMILAR" in sql:
+                raise DatabaseError("Code: 62. DB::Exception: Syntax error: failed at position 40 ('SIMILAR'). (SYNTAX_ERROR)")
+            return b"SelectWithUnionQuery"
+
+        def close(self):
+            pass
+    check = d.ClickHouseSyntaxCheck()
+    check._via = Answers()
+    assert check.error("SELECT 1") is None and check.skipped
+    assert check.error("SELECT x FROM t WHERE x SIMILAR TO 'a'").startswith("Syntax error")
+    assert check.error("SELECT 2") is None and check._via.calls == 3
