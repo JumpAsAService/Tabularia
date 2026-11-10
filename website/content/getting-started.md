@@ -44,7 +44,7 @@ flow, or download any node's data as CSV or Excel.
 
 Already there: an ERP on PostgreSQL and a CRM on ClickHouse for a pasta and bakery company,
 and a `Sample` folder in Tabularia with the two connections, eleven flows (three
-scheduled) and four saved views. It appears a couple of minutes after the administrator
+scheduled), two pixel-perfect reports, a dashboard and four saved views. It appears a couple of minutes after the administrator
 is created. Details, and how to leave it out, in the
 [sample database README](../infrastructure/sampledb/README.md).
 

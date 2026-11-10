@@ -186,8 +186,8 @@ every container has started. Then check:
 docker compose ps
 ```
 
-`postgres`, `redis`, `minio`, `gateway`, `sampledb-postgres` and `sampledb-clickhouse`
-must say `(healthy)`; the others `Up`
+`postgres`, `redis`, `minio`, `gateway`, `ai`, `sampledb-postgres` and
+`sampledb-clickhouse` must say `(healthy)`; the others `Up`
 (`cadvisor` reports `health: starting` for its first minute). A container that says
 `Restarting` has a problem: see [Troubleshooting](#troubleshooting).
 
@@ -281,8 +281,8 @@ With your own file, the steps are the same with your columns.
 **1. A folder.** In **Explore**, at *All folders*, click **New**, type `My first flows`
 and click **Create**. The new folder opens.
 
-**2. A flow.** In the folder, **New → New flow**, then pick the engine: **Polars**. The
-editor opens with one empty *Source* node.
+**2. A flow.** In the folder, **New → New flow**, then pick the engine: **DuckDB**, the default
+for new flows. The editor opens with one empty *Source* node.
 
 ![New flow: pick the engine](media/getting-started/04-new-flow.png)
 
