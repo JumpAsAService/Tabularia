@@ -13,7 +13,7 @@ are in Italian, as a real Italian ERP and CRM would have them.
 
 | table | description |
 |---|---|
-| `catalogo.prodotti` | pasta and bakery SKUs (spaghetti, tortellini, frollini, grissini, panettone…) by format; `stagionatura_mesi` holds the shelf life in months |
+| `catalogo.prodotti` | pasta and bakery SKUs (spaghetti, tortellini, frollini, grissini, panettone…) by format; `conservazione_mesi` holds the shelf life in months |
 | `catalogo.listino_prezzi` | price-list history (two periods, a 2025 increase) |
 | `catalogo.costi_produzione` | raw-material, processing and packaging costs per product |
 | `vendite.ordini` | order headers (customer, agent, channel, status) |
