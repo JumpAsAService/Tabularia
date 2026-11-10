@@ -4109,3 +4109,26 @@ def test_a_word_boundary_in_a_pattern_rule_is_one_on_postgres_too(where):
         line = (_su_postgres(sql) if where == "postgres" else _su_clickhouse(sql))[0]
     got = {r: [bool(x) for x in line[i * len(_WORD_TEXTS):(i + 1) * len(_WORD_TEXTS)]] for i, r in enumerate(_WORD_REGEX)}
     assert got == expected
+
+
+@pytest.mark.parametrize("mode,materialized", [("native-pg", "table"), ("native-pg", "incremental"), ("native-ch", "table"), ("native-ch", "incremental")])
+def test_a_model_that_writes_the_real_table_says_what_dbt_does_to_it(mode, materialized):
+    """dbt does not write a table as Tabularia does (TRUNCATE + INSERT by name, the table kept): it
+    rebuilds it, so what the customer's table has beyond the flow's columns is lost, and the views
+    and foreign keys that read it are dropped (the user's choice, 2026-11-10: dbt keeps rebuilding,
+    the project says so). The model's header and the README say it; on ClickHouse an append inserts
+    by POSITION, and a table whose columns are in another order gets its values swapped silently."""
+    files = _files(_with_names(mode, schema="vendite", alias="ordini", materialized=materialized))
+    model, readme = files["models/uno.sql"], files["README.md"]
+    assert model.startswith("{{ config(")
+    head = " ".join(line[3:] for line in model.splitlines() if line.startswith("-- "))
+    assert "vendite.ordini" in head and "vendite.ordini" in readme
+    if materialized == "table":
+        assert "rebuilds" in head and (("dropped" in readme and "views" in readme) if mode == "native-pg" else "ORDER BY" in readme)
+    if mode == "native-pg" and materialized == "incremental":
+        assert "column types" in head and "--full-refresh" in readme
+    if mode == "native-ch" and materialized == "incremental":
+        assert "by position" in head and "WARNING" in readme
+    # a model in the project's schema says nothing of it
+    plain = _files(_with_names(mode, materialized=materialized))
+    assert "rebuilds" not in plain["models/uno.sql"] and "by position" not in plain["README.md"]

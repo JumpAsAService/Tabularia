@@ -3216,6 +3216,41 @@ def _seeds_yaml(seeds: list[dict]) -> str:
     return "\n".join(out) + "\n"
 
 
+# What dbt does to the table Tabularia writes, when a model writes that very table (the user's choice,
+# 2026-11-10: dbt keeps its own way of writing it, and the project says so). Tabularia empties and fills
+# the customer's table by name and keeps it; dbt REBUILDS a `table` model (Postgres: a new table renamed in
+# place, the old one dropped with CASCADE; ClickHouse: a new table exchanged with it), and dbt-postgres
+# widens a column an incremental model does not fit in. dbt-clickhouse inserts an incremental's rows by
+# POSITION: a table whose columns are in another order than the model's gets its values swapped without
+# an error (an enforced dbt contract would insert by name, but it needs every column's exact type, which
+# the export cannot promise).
+def _real_table_lines(m: dict) -> list[str]:
+    table, ch = m.get("real_table"), m.get("adapter") == "clickhouse"
+    if not table:
+        return []
+    if m.get("materialized") == "incremental":
+        lines = [f"This model appends to `{table}`, the table Tabularia writes."]
+        if ch:
+            lines.append("WARNING: dbt-clickhouse inserts the rows by position, not by name: if the table's columns are in "
+                         "another order than this model's, the values land in the wrong columns without an error. Keep the "
+                         "table's columns in the model's order.")
+        else:
+            lines.append("dbt-postgres widens the column types the new rows do not fit in (a varchar(20), a numeric(10,2)), and "
+                         "the run fails if the table has a column the model lacks.")
+        lines.append("`dbt run --full-refresh` rebuilds the table from this model: what is listed for a table model is lost.")
+        return lines
+    lost = ("its engine, ORDER BY, column types and comment" if ch else
+            "its column types, NOT NULL, defaults, keys, CHECKs, indexes, grants, comments and the columns the flow lacks")
+    return [f"This model rebuilds `{table}`, the table Tabularia writes: Tabularia empties and fills it, dbt makes it again "
+            f"from this SELECT, so {lost} are gone after `dbt run`"
+            + ("." if ch else ", and the views and foreign keys that read it are dropped with it (CASCADE).")]
+
+
+def real_table_note(m: dict) -> str:
+    """README: what dbt does to the table a model writes (see `_real_table_lines`)."""
+    return f"The model `{m['name']}`: " + " ".join(_real_table_lines(m))
+
+
 def _model_header(m: dict) -> str:
     mat = m.get("materialized", "table")
     parts = [f"materialized={_jinja_str(mat)}"]
@@ -3226,6 +3261,9 @@ def _model_header(m: dict) -> str:
     if m.get("alias"):
         parts.append(f"alias={_jinja_str(m['alias'])}")
     head = "{{ config(" + ", ".join(parts) + ") }}\n\n"
+    real = _real_table_lines(m)
+    if real:
+        head += "".join(f"-- {_comment(line)}\n" for line in real) + "\n"
     if m.get("ai_translated"):
         head += f"-- Translated by AI from {_comment(m.get('ai_translated_from') or 'another dialect')}: review it before use.\n\n"
     review: dict[str, list[str]] = {}
