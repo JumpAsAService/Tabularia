@@ -3949,3 +3949,93 @@ def test_a_clickhouse_answer_the_check_cannot_read_leaves_it_on_and_says_so(monk
     assert check.error("SELECT 1") is None and check.skipped
     assert check.error("SELECT x FROM t WHERE x SIMILAR TO 'a'").startswith("Syntax error")
     assert check.error("SELECT 2") is None and check._via.calls == 3
+
+
+# ── the second hunt on the ClickHouse paths (e2e/dbt_export/clickhouse_paths.py, 2026-11-10) ──
+def _export_in(types: dict, ops: list, mode: str, dialect: str | None = None) -> dict:
+    """As `_export`, with the flow's engine (the dialect of its free text) given."""
+    if mode == "native":
+        item, extra = {"ident": "__s_0", "macro": "{{ source('db_1_v', 'ordini') }}"}, {"native": _PG_NATIVE}
+    elif mode == "native-ch":
+        item, extra, mode = {"ident": "__s_0", "macro": "{{ source('db_1_v', 'ordini') }}"}, {"native": _NATIVE_CH}, "native"
+    else:
+        item, extra = {"ident": "__s_0", "macro": "{{ source('db_1_v', 'ordini') }}"}, {"clickhouse": {"connections": [_PG], "target_schema": "dbt_tabularia"}}
+    model = {"name": "uno", "source": {"key": "k"}, "operations": ops, **({"dialect": dialect} if dialect else {})}
+    return _files(_export_request(mode=mode, **extra, source_map={"k": {**item, "columns": list(types), "types": types, "label": "ordini"}},
+                                    models=[model]))
+
+
+_MS = "Datetime(time_unit='ms', time_zone=None)"
+
+
+def test_a_float32_is_a_float_and_an_instant_keeps_its_unit():
+    """A Postgres real, a ClickHouse Float32 is FLOAT (it was DOUBLE: 0.1 as text was
+    '0.10000000149011612'); an instant to the millisecond (an Excel date-time, a ClickHouse
+    DateTime) is TIMESTAMP_MS (as text the engines write three digits of fraction, not six)."""
+    assert d.duck_type("Float32") == "FLOAT" and d.duck_type("Float64") == "DOUBLE"
+    assert d.duck_type(_MS) == "TIMESTAMP_MS" and d.duck_type("Datetime(time_unit='ns', time_zone=None)") == "TIMESTAMP_NS"
+    assert d.duck_type(_DT) == "TIMESTAMP"
+    from app.api.routes.dbt import _type_in_dialect
+
+    # Postgres has no TIMESTAMP_MS: a timestamp there (it holds microseconds)
+    assert _type_in_dialect("TIMESTAMP_MS", "postgres") == "TIMESTAMP" and _type_in_dialect("FLOAT", "postgres") == "REAL"
+    assert _type_in_dialect("TIMESTAMP_MS", "clickhouse") == "Nullable(DateTime64(3))"
+    assert "TIMESTAMP_MS" not in _export_in({"id": "Int64", "t": _MS}, [], "native")["models/uno.sql"]
+
+
+_REALS = [0.1, 7.0, -2.5, None, 1e-7, 123456.7]
+
+
+@pytest.mark.parametrize("op", ["cast"])
+def test_a_float32_as_text_on_clickhouse_is_what_the_clickhouse_engine_writes(op):
+    from app.engine.chdb_ops import _cast_expr as cast_ch
+
+    values = "(SELECT * FROM values('id Int64, r Nullable(Float32), s Nullable(String)', " + \
+        ", ".join(f"({i}, {'NULL' if v is None else repr(str(v))}, 'x')" for i, v in enumerate(_REALS)) + "))"
+    ops = [{"type": "cast", "params": {"columns": {"r": "str"}}}] if op == "cast" else \
+        [{"type": "unpivot", "params": {"index": ["id"], "on": ["s", "r"], "variable_name": "m", "value_name": "v"}}]
+    rows = _su_clickhouse(_model(_export_in({"id": "Int64", "r": "Float32", "s": "String"}, ops, "clickhouse"), values))
+    got = {r[0]: (r[1] if op == "cast" else r[2]) for r in rows if op == "cast" or r[1] == "r"}
+    rif = dict(_su_clickhouse(f"SELECT id, {cast_ch('r', 'Float32', 'str')} FROM {values}"))
+    assert rif[0] == "0.1" and rif[1] == "7.0"
+    assert got == rif
+
+
+def test_a_float32_as_text_on_native_postgres_is_what_the_engine_writes():
+    values = "(SELECT * FROM (VALUES " + ", ".join(f"({i}, CAST({'NULL' if v is None else repr(v)} AS REAL))" for i, v in enumerate(_REALS)) + ') AS t("id", "r"))'
+    files = _export_in({"id": "Int64", "r": "Float32"}, [{"type": "cast", "params": {"columns": {"r": "str"}}}], "native")
+    got = dict(_su_postgres(f"SELECT * FROM ({_model(files, values)}) AS m"))
+    rif = dict(_reference_cast("FLOAT", "str", _REALS))
+    assert rif[0] == "0.1" and rif[1] == "7.0"
+    assert got == rif
+
+
+_INSTANTS = [_dt.datetime(2024, 1, 15, 10, 30), _dt.datetime(2024, 2, 29, 23, 59, 59, 123000), _dt.datetime(1965, 6, 1, 8, 0), None]
+
+
+def test_an_instant_to_the_millisecond_as_text_on_clickhouse_has_three_digits_of_fraction():
+    """As the ClickHouse engine (a DateTime64(3)) and Polars (a Datetime in ms): '….000'."""
+    values = "(SELECT * FROM values('id Int64, t Nullable(DateTime64(3))', " + \
+        ", ".join(f"({i}, {'NULL' if v is None else repr(str(v))})" for i, v in enumerate(_INSTANTS)) + "))"
+    rows = dict(_su_clickhouse(_model(_export_in({"id": "Int64", "t": _MS}, [{"type": "cast", "params": {"columns": {"t": "str"}}}], "clickhouse"), values)))
+    assert rows == {0: "2024-01-15 10:30:00.000", 1: "2024-02-29 23:59:59.123", 2: "1965-06-01 08:00:00.000", 3: None}
+
+
+@pytest.mark.parametrize("dtype,engine,expected", [
+    (_DT, "clickhouse", ["2024-01-15 10:30:00.000000", "2024-02-29 23:59:59.123000", "1965-06-01 08:00:00.000000"]),
+    (_DT, "polars", ["2024-01-15 10:30:00.000000", "2024-02-29 23:59:59.123000", "1965-06-01 08:00:00.000000"]),
+    (_MS, "polars", ["2024-01-15 10:30:00.000", "2024-02-29 23:59:59.123", "1965-06-01 08:00:00.000"]),
+    (_MS, "clickhouse", ["2024-01-15 10:30:00.000", "2024-02-29 23:59:59.123", "1965-06-01 08:00:00.000"]),
+    # the DuckDB engine writes no fraction when it is zero, and so does Postgres
+    (_DT, "duckdb", ["2024-01-15 10:30:00", "2024-02-29 23:59:59.123", "1965-06-01 08:00:00"]),
+])
+def test_an_instant_as_text_on_native_postgres_is_what_the_flows_engine_writes(dtype, engine, expected):
+    import polars as pl
+
+    if engine == "polars":   # the reference: Polars' own cast
+        unit = "ms" if dtype == _MS else "us"
+        assert pl.Series(_INSTANTS[:3], dtype=pl.Datetime(unit)).cast(pl.String).to_list() == expected
+    values = "(SELECT * FROM (VALUES " + ", ".join(f"({i}, CAST({'NULL' if v is None else repr(str(v))} AS TIMESTAMP))" for i, v in enumerate(_INSTANTS)) + ') AS t("id", "t"))'
+    files = _export_in({"id": "Int64", "t": dtype}, [{"type": "cast", "params": {"columns": {"t": "str"}}}], "native", dialect=engine)
+    got = dict(_su_postgres(f"SELECT * FROM ({_model(files, values)}) AS m"))
+    assert got == {**dict(enumerate(expected)), 3: None}

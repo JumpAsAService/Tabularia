@@ -58,6 +58,7 @@ from app.engine.dbt_export import (
     _fix_for_dialect,
     _slug,
     _clickhouse_times,
+    _postgres_times,
     _typed,
 )
 
@@ -207,6 +208,8 @@ def _type_in_dialect(duck_t: str, dialect: str | None) -> str:
     kind = sqlglot.exp.DataType.build(duck_t, dialect="duckdb")
     if dialect == "postgres" and kind.this == sqlglot.exp.DataType.Type.UBIGINT:
         kind = sqlglot.exp.DataType.build("DECIMAL(20, 0)")     # Postgres has no unsigned integer (UInt64)
+    if dialect == "postgres":
+        kind = _postgres_times(kind)                            # TIMESTAMP_MS: a timestamp
     if dialect == "clickhouse":
         kind = _clickhouse_times(kind)                          # Date32, DateTime64(6), a time as text
     return kind.sql(dialect=dialect or "duckdb")
