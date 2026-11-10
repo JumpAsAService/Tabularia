@@ -76,8 +76,20 @@ function onVisibility() {
  * @param opts.fast  whoever needs fresh data (the editor): while there is at least one
  *                   such consumer, it asks every 10 seconds instead of 30.
  */
-// the installation answered 404: there is nothing to read, for the life of the page
-let absent = false
+// The installation answered 404: it has no such reading (no node-exporter configured, as on
+// Kubernetes), and the gateway has no other way of saying so. Asked no more, and not only
+// for the life of the page: every full load of a page asked again and got its 404 (on kind,
+// one red line a page). Remembered for the browser's session — a tab opened tomorrow, or
+// after the reading is configured, asks once again.
+const ABSENT_KEY = 'tabularia.memoryAbsent'
+function rememberedAbsent(): boolean {
+  try {
+    return sessionStorage.getItem(ABSENT_KEY) === '1'
+  } catch {
+    return false // no storage (private mode, the server's render): it is asked
+  }
+}
+let absent = typeof sessionStorage !== 'undefined' && rememberedAbsent()
 
 export function useSystemMemory(opts: { fast?: boolean } = {}) {
   const { apiFetch } = useApiClient()
@@ -92,7 +104,12 @@ export function useSystemMemory(opts: { fast?: boolean } = {}) {
         unavailable.value = true // 503/offline: not an error to show in a toast
         // 404: this installation has no such reading (on Kubernetes, without node-exporter),
         // and asking every 10 s filled the console with red for nothing: asked no more
-        if ((e?.response?.status ?? e?.statusCode) === 404) absent = true
+        if ((e?.response?.status ?? e?.statusCode) === 404) {
+          absent = true
+          try {
+            sessionStorage.setItem(ABSENT_KEY, '1')
+          } catch { /* without storage it is remembered for this page only */ }
+        }
       }
     }
     consumers++
