@@ -85,7 +85,7 @@ try:
         {"id": "r12", "kind": "not_null", "column": "select", "severity": "warning"},          # a reserved word: passes
         {"id": "r13", "kind": "pattern", "column": "intero", "regex": "[0-9]+", "severity": "error"},   # '-4' does not match whole
         {"id": "r14", "kind": "pattern", "column": "data", "regex": "[0-9]{4}-[0-9]{2}-[0-9]{2}", "severity": "warning"},  # a date as text
-        {"id": "r15", "kind": "accepted_values", "column": "città", "values": ["Milano", "Parma", "Città d'altri", "Torino", "Roma"], "severity": "error"},
+        {"id": "r15", "kind": "accepted_values", "column": "città", "values": ["Milano", "Pavia", "Città d'altri", "Torino", "Roma"], "severity": "error"},
         {"id": "r16", "kind": "accepted_values", "column": "intero", "values": [10, 7, -4, 2, 3, 1000000.0], "severity": "error"},
         {"id": "r17", "kind": "unique", "columns": ["intero"], "severity": "error"},           # two NULLs, nothing else twice
         {"id": "r18", "kind": "not_null", "column": "testo", "severity": "warning"},           # two rules on one column: one

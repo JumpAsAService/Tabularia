@@ -26,7 +26,7 @@ def _seed():
 
 seed = _seed()
 NOW = datetime(2026, 11, 2, 9, 0, tzinfo=timezone.utc)
-CATEGORIES = ("Insaccati cotti", "Prosciutti", "Salami")
+CATEGORIES = ("Biscotti", "Pasta di semola", "Pasta fresca")
 AREAS = ("Centro", "Nord-Est", "Nord-Ovest")
 
 

@@ -20,13 +20,13 @@ def _read(tmp_path, data: bytes, options=SNIFF) -> pl.DataFrame:
 
 
 def test_excel_italian_csv(tmp_path):
-    data = ("Città ;Prodotto;Prezzo unitario €;Quantità\nModena;Speck;16,125;3\nParma;Brie;1.234,50;10\n"
-            "Bologna;Coppa;7,5;1\n").encode("cp1252")
+    data = ("Città ;Prodotto;Prezzo unitario €;Quantità\nVerona;Taralli;16,125;3\nTorino;Brie;1.234,50;10\n"
+            "Bologna;Cracker;7,5;1\n").encode("cp1252")
     assert sniff_of(tmp_path, data) == (";", True, "cp1252")
     df = _read(tmp_path, data)
     assert df.columns == ["Città", "Prodotto", "Prezzo unitario €", "Quantità"]
     assert df["Prezzo unitario €"].dtype == pl.Float64 and df["Prezzo unitario €"].to_list()[::2] == [16.125, 7.5]
-    assert df["Città"].to_list() == ["Modena", "Parma", "Bologna"]
+    assert df["Città"].to_list() == ["Verona", "Torino", "Bologna"]
 
 
 def sniff_of(tmp_path, data: bytes):
@@ -65,17 +65,17 @@ def test_a_separator_given_is_kept(tmp_path):
 
 
 def test_a_thousands_dot_with_semicolons_is_never_one_and_a_half(tmp_path):
-    df = _read(tmp_path, "Prodotto;Quantità;Prezzo\nSpeck;1.500;16,50\nBrie;2;7,25\n".encode())
+    df = _read(tmp_path, "Prodotto;Quantità;Prezzo\nTaralli;1.500;16,50\nBrie;2;7,25\n".encode())
     assert df["Quantità"].to_list() == [1500.0, 2.0] and df["Prezzo"].to_list() == [16.5, 7.25]
     # quantities only, no decimal comma anywhere: still thousands
-    df = _read(tmp_path, "Prodotto;Quantità\nSpeck;1.500\nBrie;2.300\n".encode())
+    df = _read(tmp_path, "Prodotto;Quantità\nTaralli;1.500\nBrie;2.300\n".encode())
     assert df["Quantità"].to_list() == [1500.0, 2300.0]
 
 
 def test_thousands_further_down_than_the_sample_are_still_thousands(tmp_path):
     # small quantities in the first lines, «1.500» later: with «;» the decimal comma is on
     head = "".join(f"Art{i};{i % 900}\n" for i in range(80))
-    df = _read(tmp_path, ("Articolo;Quantità\n" + head + "Speck;1.500\nBrie;12.000\n").encode())
+    df = _read(tmp_path, ("Articolo;Quantità\n" + head + "Taralli;1.500\nBrie;12.000\n").encode())
     assert df["Quantità"].to_list()[-2:] == [1500, 12000]
     # a «2.1» elsewhere (a version) does not turn it off, and is not altered
     df = _read(tmp_path, "articolo;versione;importo\nA;2.1;1.500\nB;3.0;2.300\n".encode())

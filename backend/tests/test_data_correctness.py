@@ -116,7 +116,7 @@ ORDERS = pl.DataFrame({
     "id": [1, 2, 3, 4, 5, 6, 7, 8],
     "cliente": ["Rossi", "Bianchi", "O'Neil", 'Ac "me"', "Rossi", "Città Srl", "Bianchi", None],
     "Ragione Sociale": ["Rossi S.p.A.", "Bianchi & C.", "O'Neil Ltd", "Acme", "Rossi S.p.A.", "Città Srl", "Bianchi & C.", "Sconosciuto"],
-    "canale": ["GDO", "HoReCa", "GDO", None, "Dettaglio", "GDO", "HoReCa", "GDO"],
+    "canale": ["Negozi", "Online", "Negozi", None, "Ingrosso", "Negozi", "Online", "Negozi"],
     "importo": [100.5, 200.0, None, 50.25, 100.5, -30.0, 0.1, 0.2],
     "qta": [10, 5, 3, None, 10, 1, 2, 4],
     "data": [D(2024, 1, 5), D(2024, 1, 15), D(2024, 2, 1), D(2024, 2, 29), D(2024, 3, 10), None, D(2024, 12, 31), D(2025, 1, 1)],
@@ -280,9 +280,9 @@ FILTER_CASES = {
     "eq_empty_string_is_not_null": (filt("note", "eq", ""), [1, 5]),
     "eq_preserves_spaces": (filt("note", "eq", "  spazi  "), [4]),
     "ne_excludes_null": (filt("cliente", "ne", "Rossi"), [2, 3, 4, 6, 7]),
-    "in_strings": (filt("canale", "in", ["GDO", "HoReCa"]), [1, 2, 3, 6, 7, 8]),
+    "in_strings": (filt("canale", "in", ["Negozi", "Online"]), [1, 2, 3, 6, 7, 8]),
     "in_ints": (filt("qta", "in", [10, 2]), [1, 5, 7]),
-    "not_in_excludes_null": (filt("canale", "not_in", ["GDO"]), [2, 5, 7]),
+    "not_in_excludes_null": (filt("canale", "not_in", ["Negozi"]), [2, 5, 7]),
     "between_inclusive": (filt("importo", "between", [0.2, 100.5]), [1, 4, 5, 8]),
     "contains": (filt("cliente", "contains", "os"), [1, 5]),
     "starts_with": (filt("cliente", "starts_with", "Bi"), [2, 7]),
@@ -348,7 +348,7 @@ def test_a_preview_cuts_only_what_nobody_reads_after_it(storage, orders, name):
 
 @pytest.mark.parametrize("name", ENGINES)
 def test_filter_chain_is_and(storage, orders, name):
-    res = run(name, storage, orders, [filt("canale", "eq", "GDO"), filt("importo", "is_not_null"), filt("qta", "gt", 1)])
+    res = run(name, storage, orders, [filt("canale", "eq", "Negozi"), filt("importo", "is_not_null"), filt("qta", "gt", 1)])
     assert ids(res) == [1, 8]
 
 
@@ -406,7 +406,7 @@ def test_unique_full_rows(storage, orders, name):
         {"type": "select", "params": {"columns": ["cliente", "canale"]}},
         {"type": "unique", "params": {}},
     ])
-    assert res.row_count == 7  # (Bianchi, HoReCa) appears twice
+    assert res.row_count == 7  # (Bianchi, Online) appears twice
 
 
 @pytest.mark.parametrize("name", ENGINES)
@@ -414,7 +414,7 @@ def test_fill_null_and_drop_nulls(storage, orders, name):
     res = run(name, storage, orders, [{"type": "fill_null", "params": {"columns": {"importo": 0, "canale": "n/d"}}}])
     by = {r["id"]: r for r in res.rows}
     assert _norm(by[3]["importo"]) == 0.0 and by[4]["canale"] == "n/d"
-    assert by[1]["canale"] == "GDO" and _norm(by[1]["importo"]) == 100.5
+    assert by[1]["canale"] == "Negozi" and _norm(by[1]["importo"]) == 100.5
     fam = {c.name: _family(c.dtype) for c in res.columns}
     assert fam["importo"] == "float" and fam["canale"] == "str"
 
@@ -439,9 +439,9 @@ def test_group_by_basic_aggregates(storage, orders, name):
         _agg("id", "count", "n"),
     ]}}]
     res = check(name, storage, orders, ops, [
-        {"canale": "GDO", "somma": 70.7, "n_importi": 3, "media": 70.7 / 3, "qmin": 1, "qmax": 10, "n_clienti": 3, "n": 4},
-        {"canale": "HoReCa", "somma": 200.1, "n_importi": 2, "media": 100.05, "qmin": 2, "qmax": 5, "n_clienti": 1, "n": 2},
-        {"canale": "Dettaglio", "somma": 100.5, "n_importi": 1, "media": 100.5, "qmin": 10, "qmax": 10, "n_clienti": 1, "n": 1},
+        {"canale": "Negozi", "somma": 70.7, "n_importi": 3, "media": 70.7 / 3, "qmin": 1, "qmax": 10, "n_clienti": 3, "n": 4},
+        {"canale": "Online", "somma": 200.1, "n_importi": 2, "media": 100.05, "qmin": 2, "qmax": 5, "n_clienti": 1, "n": 2},
+        {"canale": "Ingrosso", "somma": 100.5, "n_importi": 1, "media": 100.5, "qmin": 10, "qmax": 10, "n_clienti": 1, "n": 1},
         {"canale": None, "somma": 50.25, "n_importi": 1, "media": 50.25, "qmin": None, "qmax": None, "n_clienti": 1, "n": 1},
     ], columns=["canale", "somma", "n_importi", "media", "qmin", "qmax", "n_clienti", "n"])
     fam = {c.name: _family(c.dtype) for c in res.columns}
@@ -454,9 +454,9 @@ def test_group_by_datetime_min_max(storage, orders, name):
     T = dt.datetime
     ops = [{"type": "group_by", "params": {"by": ["canale"], "aggregations": [_agg("ts", "min", "primo"), _agg("ts", "max", "ultimo"), _agg("data", "max", "gg")]}}]
     res = check(name, storage, orders, ops, [
-        {"canale": "GDO", "primo": T(2024, 1, 5, 10, 30), "ultimo": T(2025, 1, 1, 0, 0, 1), "gg": D(2025, 1, 1)},
-        {"canale": "HoReCa", "primo": T(2024, 1, 15, 8, 0), "ultimo": T(2024, 12, 31, 18, 45), "gg": D(2024, 12, 31)},
-        {"canale": "Dettaglio", "primo": T(2024, 3, 10), "ultimo": T(2024, 3, 10), "gg": D(2024, 3, 10)},
+        {"canale": "Negozi", "primo": T(2024, 1, 5, 10, 30), "ultimo": T(2025, 1, 1, 0, 0, 1), "gg": D(2025, 1, 1)},
+        {"canale": "Online", "primo": T(2024, 1, 15, 8, 0), "ultimo": T(2024, 12, 31, 18, 45), "gg": D(2024, 12, 31)},
+        {"canale": "Ingrosso", "primo": T(2024, 3, 10), "ultimo": T(2024, 3, 10), "gg": D(2024, 3, 10)},
         {"canale": None, "primo": T(2024, 2, 29, 12), "ultimo": T(2024, 2, 29, 12), "gg": D(2024, 2, 29)},
     ])
     fam = {c.name: _family(c.dtype) for c in res.columns}
@@ -483,12 +483,12 @@ def test_group_by_std_var_median(storage, orders, name):
     ops = [{"type": "group_by", "params": {"by": ["canale"], "aggregations": [
         _agg("importo", "std", "sd"), _agg("importo", "var", "vr"), _agg("importo", "median", "med"),
     ]}}]
-    gdo = [100.5, -30.0, 0.2]
-    horeca = [200.0, 0.1]
+    negozi = [100.5, -30.0, 0.2]
+    online = [200.0, 0.1]
     check(name, storage, orders, ops, [
-        {"canale": "GDO", "sd": statistics.stdev(gdo), "vr": statistics.variance(gdo), "med": 0.2},
-        {"canale": "HoReCa", "sd": statistics.stdev(horeca), "vr": statistics.variance(horeca), "med": 100.05},
-        {"canale": "Dettaglio", "sd": None, "vr": None, "med": 100.5},  # one value only: sample std/var undefined
+        {"canale": "Negozi", "sd": statistics.stdev(negozi), "vr": statistics.variance(negozi), "med": 0.2},
+        {"canale": "Online", "sd": statistics.stdev(online), "vr": statistics.variance(online), "med": 100.05},
+        {"canale": "Ingrosso", "sd": None, "vr": None, "med": 100.5},  # one value only: sample std/var undefined
         {"canale": None, "sd": None, "vr": None, "med": 50.25},
     ])
 
@@ -501,7 +501,7 @@ def test_std_var_of_one_value_are_null_not_nan(storage, orders, name):
     2026-10-10: «just make it null»). In the pivot too."""
     ops = [{"type": "group_by", "params": {"by": ["canale"], "aggregations": [_agg("importo", "std", "sd"), _agg("importo", "var", "vr")]}}]
     res = run(name, storage, orders, ops)
-    detail = next(r for r in res.rows if r.get("canale") == "Dettaglio")
+    detail = next(r for r in res.rows if r.get("canale") == "Ingrosso")
     assert detail["sd"] is None and detail["vr"] is None, f"[{name}] {detail}"
     piv = [{"type": "pivot", "params": {"index": ["canale"], "on": ["attivo"], "values": "importo", "func": "std"}}]
     res = run(name, storage, orders, piv)
@@ -513,13 +513,13 @@ def test_std_var_of_one_value_are_null_not_nan(storage, orders, name):
 def test_group_by_multiple_keys_with_nulls(storage, orders, name):
     ops = [{"type": "group_by", "params": {"by": ["canale", "attivo"], "aggregations": [_agg("id", "count", "n")]}}]
     check(name, storage, orders, ops, [
-        {"canale": "GDO", "attivo": True, "n": 1},
-        {"canale": "GDO", "attivo": None, "n": 2},
-        {"canale": "GDO", "attivo": False, "n": 1},
-        {"canale": "HoReCa", "attivo": False, "n": 1},
-        {"canale": "HoReCa", "attivo": True, "n": 1},
+        {"canale": "Negozi", "attivo": True, "n": 1},
+        {"canale": "Negozi", "attivo": None, "n": 2},
+        {"canale": "Negozi", "attivo": False, "n": 1},
+        {"canale": "Online", "attivo": False, "n": 1},
+        {"canale": "Online", "attivo": True, "n": 1},
         {"canale": None, "attivo": True, "n": 1},
-        {"canale": "Dettaglio", "attivo": True, "n": 1},
+        {"canale": "Ingrosso", "attivo": True, "n": 1},
     ])
 
 
@@ -529,13 +529,13 @@ def test_group_by_decimal_and_bigint(storage, orders, name):
         _agg("prezzo", "sum", "p"), _agg("big", "sum", "b"), _agg("big", "max", "bm"),
     ]}}]
     res = check(name, storage, orders, ops, [
-        {"canale": "GDO", "p": 100014.4999, "b": BIG + 2 + 5 + 7, "bm": BIG},
-        {"canale": "HoReCa", "p": 4.3333, "b": 1 + 6, "bm": 6},
-        {"canale": "Dettaglio", "p": 12.5, "b": 4, "bm": 4},
+        {"canale": "Negozi", "p": 100014.4999, "b": BIG + 2 + 5 + 7, "bm": BIG},
+        {"canale": "Online", "p": 4.3333, "b": 1 + 6, "bm": 6},
+        {"canale": "Ingrosso", "p": 12.5, "b": 4, "bm": 4},
         {"canale": None, "p": 0.0001, "b": 3, "bm": 3},
     ])
     by = {r["canale"]: r for r in res.rows}
-    assert isinstance(by["GDO"]["b"], int) and by["GDO"]["b"] == BIG + 14  # exact, not float
+    assert isinstance(by["Negozi"]["b"], int) and by["Negozi"]["b"] == BIG + 14  # exact, not float
 
 
 @pytest.mark.parametrize("name", ENGINES)
@@ -577,11 +577,11 @@ def test_sql_cannot_read_a_table_it_was_not_given(storage, orders, customers, na
 @pytest.mark.parametrize("name", ENGINES)
 def test_join_inner_null_key_never_matches_and_collision_suffix(storage, orders, customers, name):
     res = check(name, storage, orders, [_join("inner", customers)], [
-        {"id": 1, "cliente": "Rossi", "regione": "Lazio", "canale": "GDO", "canale_right": "c1"},
-        {"id": 2, "cliente": "Bianchi", "regione": "Lombardia", "canale": "HoReCa", "canale_right": "c2"},
-        {"id": 3, "cliente": "O'Neil", "regione": "Irlanda", "canale": "GDO", "canale_right": "c3"},
-        {"id": 5, "cliente": "Rossi", "regione": "Lazio", "canale": "Dettaglio", "canale_right": "c1"},
-        {"id": 7, "cliente": "Bianchi", "regione": "Lombardia", "canale": "HoReCa", "canale_right": "c2"},
+        {"id": 1, "cliente": "Rossi", "regione": "Lazio", "canale": "Negozi", "canale_right": "c1"},
+        {"id": 2, "cliente": "Bianchi", "regione": "Lombardia", "canale": "Online", "canale_right": "c2"},
+        {"id": 3, "cliente": "O'Neil", "regione": "Irlanda", "canale": "Negozi", "canale_right": "c3"},
+        {"id": 5, "cliente": "Rossi", "regione": "Lazio", "canale": "Ingrosso", "canale_right": "c1"},
+        {"id": 7, "cliente": "Bianchi", "regione": "Lombardia", "canale": "Online", "canale_right": "c2"},
     ])
     assert [c.name for c in res.columns] == COLS + ["regione", "canale_right"]
 
@@ -821,13 +821,13 @@ def test_compute_strings_and_decimal(storage, orders, name):
         {"name": "importo", "expr": "importo * 2"},  # overwrites an existing column, in place
     ]}}]
     res = check(name, storage, orders, ops, [
-        {"id": 1, "etichetta": "Rossi-GDO", "mai": "ROSSI", "lung": 5, "valore": 125.0, "importo": 201.0},
-        {"id": 2, "etichetta": "Bianchi-HoReCa", "mai": "BIANCHI", "lung": 7, "valore": 16.6665, "importo": 400.0},
-        {"id": 3, "etichetta": "O'Neil-GDO", "mai": "O'NEIL", "lung": 6, "valore": None, "importo": None},
+        {"id": 1, "etichetta": "Rossi-Negozi", "mai": "ROSSI", "lung": 5, "valore": 125.0, "importo": 201.0},
+        {"id": 2, "etichetta": "Bianchi-Online", "mai": "BIANCHI", "lung": 7, "valore": 16.6665, "importo": 400.0},
+        {"id": 3, "etichetta": "O'Neil-Negozi", "mai": "O'NEIL", "lung": 6, "valore": None, "importo": None},
         {"id": 4, "etichetta": None, "mai": 'AC "ME"', "lung": 7, "valore": None, "importo": 100.5},
-        {"id": 5, "etichetta": "Rossi-Dettaglio", "mai": "ROSSI", "lung": 5, "valore": 125.0, "importo": 201.0},
-        {"id": 6, "etichetta": "Città Srl-GDO", "mai": "CITTÀ SRL", "lung": 9, "valore": 99999.9999, "importo": -60.0},
-        {"id": 7, "etichetta": "Bianchi-HoReCa", "mai": "BIANCHI", "lung": 7, "valore": 2.0, "importo": 0.2},
+        {"id": 5, "etichetta": "Rossi-Ingrosso", "mai": "ROSSI", "lung": 5, "valore": 125.0, "importo": 201.0},
+        {"id": 6, "etichetta": "Città Srl-Negozi", "mai": "CITTÀ SRL", "lung": 9, "valore": 99999.9999, "importo": -60.0},
+        {"id": 7, "etichetta": "Bianchi-Online", "mai": "BIANCHI", "lung": 7, "valore": 2.0, "importo": 0.2},
         {"id": 8, "etichetta": None, "mai": None, "lung": None, "valore": 8.0, "importo": 0.4},
     ])
     assert [c.name for c in res.columns] == COLS + ["etichetta", "mai", "lung", "valore"]
@@ -930,7 +930,7 @@ def test_cast_to_datetime(storage, orders, name):
 @pytest.mark.parametrize("name", ENGINES)
 def test_chain_top_clients(storage, orders, name):
     ops = [
-        filt("canale", "in", ["GDO", "HoReCa"]),
+        filt("canale", "in", ["Negozi", "Online"]),
         {"type": "group_by", "params": {"by": ["cliente"], "aggregations": [_agg("importo", "sum", "fatturato")]}},
         {"type": "sort", "params": {"by": "fatturato", "descending": True}},
         {"type": "limit", "params": {"n": 2}},
@@ -947,11 +947,11 @@ def test_chain_join_then_aggregate_then_pivot(storage, orders, customers, name):
         {"type": "pivot", "params": {"index": ["regione"], "on": "canale", "values": "tot", "func": "sum"}},
     ]
     res = check(name, storage, orders, ops, [
-        {"regione": "Lazio", "Dettaglio": 100.5, "GDO": 100.5, "HoReCa": None, "null": None},
-        {"regione": "Lombardia", "Dettaglio": None, "GDO": None, "HoReCa": 200.1, "null": None},
-        {"regione": "Irlanda", "Dettaglio": None, "GDO": None, "HoReCa": None, "null": None},  # importo NULL → NULL, not 0
-        {"regione": "n/d", "Dettaglio": None, "GDO": -29.8, "HoReCa": None, "null": 50.25},
-    ], columns=["regione", "Dettaglio", "GDO", "HoReCa", "null"])
+        {"regione": "Lazio", "Ingrosso": 100.5, "Negozi": 100.5, "Online": None, "null": None},
+        {"regione": "Lombardia", "Ingrosso": None, "Negozi": None, "Online": 200.1, "null": None},
+        {"regione": "Irlanda", "Ingrosso": None, "Negozi": None, "Online": None, "null": None},  # importo NULL → NULL, not 0
+        {"regione": "n/d", "Ingrosso": None, "Negozi": -29.8, "Online": None, "null": 50.25},
+    ], columns=["regione", "Ingrosso", "Negozi", "Online", "null"])
 
 
 @pytest.mark.parametrize("name", ENGINES)

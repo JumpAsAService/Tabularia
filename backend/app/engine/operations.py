@@ -209,7 +209,7 @@ def _predicate(column: str, operator: str, value: Any, dtype: pl.DataType | None
             lo, hi = (_coerce_value(v, dtype) for v in (value[0], value[1]))
             return col.is_between(pl.lit(lo), pl.lit(hi))
         case "contains":
-            # the text as written: as a regular expression «Speck+Brie» or «1.5» matched
+            # the text as written: as a regular expression «Pasta+Sugo» or «1.5» matched
             # other rows (or none), and «Vino (» was an error (DuckDB and ClickHouse: literal)
             return col.cast(pl.String).str.contains(str(value), literal=True)
         case "starts_with":

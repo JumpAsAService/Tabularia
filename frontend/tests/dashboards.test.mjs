@@ -457,7 +457,7 @@ test('bars lie along the value and a column stands on it', () => {
 })
 
 test('on a tile a third of the screen wide every bar keeps a name, cut to its room', () => {
-  const five = { cats: ['Prosciutti', 'Salumi stagionati', 'Salami', 'Insaccati cotti', 'Insaccati da cuocere'], series: [series('R', [5, 4, 5, 3, 1])] }
+  const five = { cats: ['Pasta fresca', 'Sostitutivi del pane', 'Biscotti', 'Pasta di semola', 'Dolci da ricorrenza'], series: [series('R', [5, 4, 5, 3, 1])] }
   const label = (kind, width, data = five) => tileChartOption(K, chartOf(kind, data), { width }).xAxis.axisLabel
   assert.equal(label('column', 430).width, 68)
   assert.equal(label('column', 430).overflow, 'truncate')

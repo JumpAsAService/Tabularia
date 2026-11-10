@@ -29,12 +29,12 @@ from tests.reports_both_ways import _columns, both_ways, same_models  # noqa: F4
 
 NOW = datetime(2026, 10, 30, 9, 0, tzinfo=timezone.utc)
 SALES = [
-    {"cat": "Salami", "month": date(2024, 12, 1), "rev": 100.0, "qty": 1, "ok": True},
-    {"cat": "Salami", "month": date(2025, 1, 1), "rev": 150.0, "qty": 2, "ok": False},
-    {"cat": "Salami", "month": date(2025, 2, 1), "rev": None, "qty": 3, "ok": None},
-    {"cat": "Salami", "month": date(2025, 3, 1), "rev": 90.5, "qty": None, "ok": True},
-    {"cat": "Coppa", "month": date(2024, 12, 1), "rev": 10.0, "qty": 4, "ok": True},
-    {"cat": "Coppa", "month": date(2025, 1, 1), "rev": 20.0, "qty": 5, "ok": True},
+    {"cat": "Taralli", "month": date(2024, 12, 1), "rev": 100.0, "qty": 1, "ok": True},
+    {"cat": "Taralli", "month": date(2025, 1, 1), "rev": 150.0, "qty": 2, "ok": False},
+    {"cat": "Taralli", "month": date(2025, 2, 1), "rev": None, "qty": 3, "ok": None},
+    {"cat": "Taralli", "month": date(2025, 3, 1), "rev": 90.5, "qty": None, "ok": True},
+    {"cat": "Cracker", "month": date(2024, 12, 1), "rev": 10.0, "qty": 4, "ok": True},
+    {"cat": "Cracker", "month": date(2025, 1, 1), "rev": 20.0, "qty": 5, "ok": True},
     {"cat": None, "month": date(2025, 1, 1), "rev": 7.0, "qty": 6, "ok": False},
     {"cat": "Città", "month": date(2024, 2, 29), "rev": 1.5, "qty": 7, "ok": True},
     {"cat": "Città", "month": date(2025, 2, 28), "rev": 2.5, "qty": 8, "ok": True},
@@ -270,7 +270,7 @@ def test_previous_on_a_row_starts_again_with_every_group():
               sort=[{"by": "[month]"}])
     m = both(report(t))
     want, change = [], []
-    for cat in ["Città", "Coppa", "Salami", None]:
+    for cat in ["Città", "Cracker", "Taralli", None]:
         rows = sorted_cat(SALES, cat)
         prior = None
         for i, r in enumerate(rows):
@@ -315,11 +315,11 @@ def test_previous_follows_the_designer_s_order_and_closing_a_group_changes_no_nu
     # (sorted by revenue, «vs month before» compared July with December — bug hunt 2026-11-03)
     m = both(defn, state={"items": {"t": {"sort": {"column": 1, "dir": "desc"}}}})
     assert details(m, 2) == details(opened, 2) and footers(m, 2) == footers(opened, 2)
-    coppa = sorted(sorted_cat(SALES, "Coppa"), key=lambda r: r["month"])
-    rows = [r for r in m.tables[0].rows if r.kind == "d" and r.cells[1].value in {x["rev"] for x in coppa}]
-    assert [r.cells[2].value for r in rows[:2]] == [None, coppa[0]["qty"]]
+    cracker = sorted(sorted_cat(SALES, "Cracker"), key=lambda r: r["month"])
+    rows = [r for r in m.tables[0].rows if r.kind == "d" and r.cells[1].value in {x["rev"] for x in cracker}]
+    assert [r.cells[2].value for r in rows[:2]] == [None, cracker[0]["qty"]]
     # a closed group's rows are not shown, and its total is still the one before the next
-    closed = both(defn, state={"items": {"t": {"collapsed": [["Coppa"]]}}})
+    closed = both(defn, state={"items": {"t": {"collapsed": [["Cracker"]]}}})
     assert footers(closed, 2) == footers(opened, 2)
     assert len(details(closed, 2)) == len(details(opened, 2)) - 2 and details(closed, 2)[:2] == details(opened, 2)[:2]
 
@@ -365,7 +365,7 @@ def test_previous_nested_two_rows_above():
     t = table(columns=[{"value": "[month]"}, {"value": "PREVIOUS(PREVIOUS([qty]))"}], sort=[{"by": "[month]"}])
     m = both(report(t))
     want = []
-    for cat in ["Città", "Coppa", "Salami", None]:
+    for cat in ["Città", "Cracker", "Taralli", None]:
         rows = sorted_cat(SALES, cat)
         want += [rows[i - 2]["qty"] if i >= 2 else None for i in range(len(rows))]
     assert details(m) == want
@@ -377,11 +377,11 @@ def test_previous_of_running_and_rownumber_and_in_a_rule():
                        {"value": "[qty]", "rules": [{"when": "[qty] > PREVIOUS([qty])", "style": {"color": "#ff0000"}}]}],
               sort=[{"by": "[month]"}], groups=[{"by": "[cat]"}])
     m = both(report(t))
-    rows = sorted_cat(SALES, "Salami")
-    salami = [r for r in m.tables[0].rows if r.kind == "d"][-len(rows) - 1:-1]
-    assert [r.cells[1].value for r in salami] == [None, 1, 3, 6]
-    assert [r.cells[2].value for r in salami] == [None, 1, 2, 3]
-    assert [bool(r.cells[3].style) for r in salami] == [False, True, True, False]  # 1, 2, 3, NULL
+    rows = sorted_cat(SALES, "Taralli")
+    taralli = [r for r in m.tables[0].rows if r.kind == "d"][-len(rows) - 1:-1]
+    assert [r.cells[1].value for r in taralli] == [None, 1, 3, 6]
+    assert [r.cells[2].value for r in taralli] == [None, 1, 2, 3]
+    assert [bool(r.cells[3].style) for r in taralli] == [False, True, True, False]  # 1, 2, 3, NULL
 
 
 def point(v):
@@ -683,7 +683,7 @@ def test_sumif_and_countif_are_what_they_say_by_hand():
     kpi = lambda i, v: {"id": f"k{i}", "type": "kpi", "dataset": "d", "x": 0, "y": 22 * i, "w": 50, "h": 20, "label": "x",  # noqa: E731
                         "value": v, "format": "0.000"}
     values = ["SUMIF(YEAR([month]) = 2025, [rev])", "SUM(IF(YEAR([month]) = 2025, [rev]))",
-              'COUNTIF([cat] = "Salami")', 'COUNT(IF([cat] = "Salami", 1))',
+              'COUNTIF([cat] = "Taralli")', 'COUNT(IF([cat] = "Taralli", 1))',
               "SUMIF([ok], [qty])", "COUNTIF(NOT [ok])", "SUMIF([rev] > 1000, [rev])", "COUNTIF([rev] > 1000)"]
     m = both(report(*[kpi(i, v) for i, v in enumerate(values)]))
     got = [what["value"] for kind, what in m.blocks if kind == "kpi"]
@@ -721,10 +721,10 @@ def test_sumif_in_running_and_in_percent():
                        {"value": "PERCENT(SUMIF([ok], [qty]))", "total": "PERCENT(SUMIF([ok], [qty]))"}],
               groups=[{"by": "[cat]"}], sort=[{"by": "[month]"}], grand_total=True)
     m = both(report(t))
-    salami = [r for r in m.tables[0].rows if r.kind == "d"][-5:-1]
-    assert [r.cells[1].value for r in salami] == [1, 1, 1, 1]  # 1 true; False, NULL and a NULL quantity add nothing
-    assert [r.cells[2].value for r in salami] == [0.5, 0.0, 0.0, 0.5]
-    assert [r.cells[3].value for r in salami] == [1.0, None, None, None]  # a row with no value has no share
+    taralli = [r for r in m.tables[0].rows if r.kind == "d"][-5:-1]
+    assert [r.cells[1].value for r in taralli] == [1, 1, 1, 1]  # 1 true; False, NULL and a NULL quantity add nothing
+    assert [r.cells[2].value for r in taralli] == [0.5, 0.0, 0.0, 0.5]
+    assert [r.cells[3].value for r in taralli] == [1.0, None, None, None]  # a row with no value has no share
 
 
 def test_sumif_mistakes_are_said():
@@ -841,7 +841,7 @@ def test_every_format_says_the_same(tmp_path):
     x = render.render(defn, specs, None, "xlsx", tmp_path / "x", limits=render.Limits(chart_url=""), now=NOW)
     sheet = zipfile.ZipFile(x.path).read("xl/worksheets/sheet1.xml").decode()
     numbers = [float(v) for v in re.findall(r"<v>(-?[0-9.eE+-]+)</v>", sheet)]
-    assert any(abs(v - 10.0 / 30.0) < 1e-9 for v in numbers)  # the first month's share of Coppa
+    assert any(abs(v - 10.0 / 30.0) < 1e-9 for v in numbers)  # the first month's share of Cracker
     assert any(abs(v - 1.0) < 1e-9 for v in numbers)  # 20 on 10 is +100%
     pdf = render.render(defn, specs, None, "pdf", tmp_path / "p", limits=render.Limits(chart_url=""), now=NOW)
     assert pdf.path.read_bytes().startswith(b"%PDF")
@@ -919,16 +919,16 @@ def test_the_guide_previous_on_rows_and_on_totals():
                               {"value": 'IF(ISNULL(PREVIOUS([ricavo])), "first month", FORMAT([ricavo] / PREVIOUS([ricavo]) - 1, "+0.0%;-0.0%"))'},
                               {"value": "COALESCE(PREVIOUS([ricavo]), 0)", "format": "#,##0"}]})
     first = [cells for kind, _, cells in rows if kind == "d"][:6]
-    assert first == [["Jan 2025", "", "", "first month", "0"], ["Feb 2025", "66,648", "-2.9%", "-2.9%", "66,648"],
-                     ["Mar 2025", "64,693", "+39.4%", "+39.4%", "64,693"], ["Apr 2025", "90,211", "+7.5%", "+7.5%", "90,211"],
-                     ["May 2025", "96,939", "-11.2%", "-11.2%", "96,939"], ["Jun 2025", "86,127", "+0.8%", "+0.8%", "86,127"]]
+    assert first == [["Jan 2025", "", "", "first month", "0"], ["Feb 2025", "203,119", "-20.0%", "-20.0%", "203,119"],
+                     ["Mar 2025", "162,419", "+37.4%", "+37.4%", "162,419"], ["Apr 2025", "223,094", "+3.2%", "+3.2%", "223,094"],
+                     ["May 2025", "230,237", "-29.2%", "-29.2%", "230,237"], ["Jun 2025", "163,094", "+2.8%", "+2.8%", "163,094"]]
     rows = guide({"detail": False, "grand_total": True, "columns": [
         {"value": "[categoria]"}, {"value": "1", "format": "#,##0", "total": "SUM([ricavo])"},
         {"value": "1", "format": "#,##0", "total": "PREVIOUS(SUM([ricavo]))"},
         {"value": "1", "format": change, "total": "SUM([ricavo]) / PREVIOUS(SUM([ricavo])) - 1"}]})
     assert [cells[1:] for kind, _, cells in rows if kind in "ft"] == [
-        ["491,426", "", ""], ["9,218", "491,426", "-98.1%"], ["863,136", "9,218", "+9263.9%"], ["883,922", "863,136", "+2.4%"],
-        ["674,207", "883,922", "-23.7%"], ["2,921,909", "", ""]]
+        ["1,149,609", "", ""], ["23,757", "1,149,609", "-97.9%"], ["394,021", "23,757", "+1558.5%"], ["639,054", "394,021", "+62.2%"],
+        ["594,349", "639,054", "-7.0%"], ["2,800,790", "", ""]]
 
 
 def test_the_guide_a_group_by_name_and_percent():
@@ -942,25 +942,25 @@ def test_the_guide_a_group_by_name_and_percent():
         {"value": "PERCENT(SUM([ricavo]))", "format": "0.0%", "total": "PERCENT(SUM([ricavo]))"},
         {"value": 'PERCENT(SUM([ricavo]), "categoria")', "format": "0.0%", "total": 'PERCENT(SUM([ricavo]), "categoria")'}]})
     march = next(cells for kind, _, cells in rows if kind == "d" and cells[0] == "Mar 2025")
-    assert march == ["Mar 2025", "491,426", "18.4%", "81,904", "96,939", "64,693", "6", "1", "Jan 2025", "Jun 2025", "40.7%", "18.4%"]
+    assert march == ["Mar 2025", "1,149,609", "19.4%", "191,602", "230,237", "162,419", "6", "1", "Jan 2025", "Jun 2025", "37.9%", "19.4%"]
     january = next(cells for kind, _, cells in rows if kind == "d")
-    assert (january[10], january[11]) == ("30.1%", "13.6%")
+    assert (january[10], january[11]) == ("34.5%", "17.7%")
     totals: dict = {}
     for kind, label, cells in rows:
         if kind in "ft":
-            totals.setdefault(label, (cells[2], cells[10], cells[11]))  # the first Q1, of Insaccati cotti
-    assert totals["Total Q1"] == ("45.1%", "45.1%", "45.1%")
-    assert totals["Total Insaccati cotti"] == ("100.0%", "16.8%", "100.0%")
+            totals.setdefault(label, (cells[2], cells[10], cells[11]))  # the first Q1, of Biscotti
+    assert totals["Total Q1"] == ("51.2%", "51.2%", "51.2%")
+    assert totals["Total Biscotti"] == ("100.0%", "41.0%", "100.0%")
     assert totals["Total"] == ("", "100.0%", "")
 
 
 def test_the_guide_sumif_countif_and_lookup_on_their_own():
-    values = {'SUMIF([anno_mese] <= 202503, [ricavo])': "1,399,329", 'SUM(IF([anno_mese] <= 202503, [ricavo]))': "1,399,329",
-              'SUMIF([categoria] = "Salami", [ricavo])': "883,922", 'COUNTIF([ricavo] > 100000)': "16", 'COUNTIF([MarginPct] < 0.22)': "6",
-              'COUNTIF([ricavo] > 1000000)': "0", 'SUMIF(YEAR([Month]) = 2024, [ricavo], "history")': "5,702,681",
-              'COUNTIF(YEAR([Month]) = 2024, "history")': "59", 'LOOKUP(MAX([anno_mese]), [anno_mese], SUM([ricavo]))': "416,174",
-              'LOOKUP(MAX([anno_mese]) - 100, [anno_mese], SUM([ricavo]), "history")': "382,667", 'LOOKUP(202503, [anno_mese], COUNT())': "5",
-              'LOOKUP("Salami", [categoria], [ricavo])': "150,824"}
+    values = {'SUMIF([anno_mese] <= 202503, [ricavo])': "1,339,833", 'SUM(IF([anno_mese] <= 202503, [ricavo]))': "1,339,833",
+              'SUMIF([categoria] = "Pasta fresca", [ricavo])': "639,054", 'COUNTIF([ricavo] > 100000)': "12", 'COUNTIF([MarginPct] < 0.22)': "3",
+              'COUNTIF([ricavo] > 1000000)': "0", 'SUMIF(YEAR([Month]) = 2024, [ricavo], "history")': "5,972,798",
+              'COUNTIF(YEAR([Month]) = 2024, "history")': "58", 'LOOKUP(MAX([anno_mese]), [anno_mese], SUM([ricavo]))': "442,869",
+              'LOOKUP(MAX([anno_mese]) - 100, [anno_mese], SUM([ricavo]), "history")': "409,473", 'LOOKUP(202503, [anno_mese], COUNT())': "5",
+              'LOOKUP("Pasta fresca", [categoria], [ricavo])': "92,326"}
     items = [{"id": f"k{i}", "type": "kpi", "dataset": "margins", "x": 0, "y": 22 * i, "w": 50, "h": 20, "label": "x", "value": v, "format": "#,##0"}
              for i, v in enumerate(values)]
     m = both(report(*items, datasets=GUIDE_DATASETS), guide_data())
@@ -971,19 +971,19 @@ def test_the_guide_the_period_the_year_before_and_the_month_before_the_first():
     rows = guide({"detail": False, "columns": [{"value": "[categoria]"}, {"value": "1", "format": "#,##0", "total": "SUMIF([anno_mese] <= 202503, [ricavo])"},
                                                {"value": "1", "format": "0.0%", "total": "SUMIF([anno_mese] <= 202503, [ricavo]) / SUM([ricavo])"}]})
     totals = {label: cells[1:] for kind, label, cells in rows if kind == "f"}
-    assert totals["Total Insaccati cotti"] == ["221,552", "45.1%"] and totals["Total Salami"] == ["453,337", "51.3%"]
+    assert totals["Total Biscotti"] == ["588,632", "51.2%"] and totals["Total Pasta fresca"] == ["295,245", "46.2%"]
     rows = guide({"dataset": "history", "filter": GUIDE_FILTER, "detail": False,
                   "groups": [{"by": "[Month]", "header": False, "label": 'FORMAT([Month], "MMM yyyy")'}],
                   "columns": [{"value": "[Month]"}, {"value": "1", "format": "#,##0", "total": "SUM([ricavo])"},
                               {"value": "1", "format": "#,##0", "total": GUIDE_YEAR_BEFORE},
                               {"value": "1", "format": "+0.0%;-0.0%;0.0%", "total": f"SUM([ricavo]) / {GUIDE_YEAR_BEFORE} - 1"}]})
-    assert [cells[1:] for _, _, cells in rows] == [["454,816", "429,437", "+5.9%"], ["392,970", "315,245", "+24.7%"], ["551,543", "406,810", "+35.6%"],
-                                                   ["627,418", "511,886", "+22.6%"], ["478,988", "470,593", "+1.8%"], ["416,174", "382,667", "+8.8%"]]
+    assert [cells[1:] for _, _, cells in rows] == [["448,293", "446,646", "+0.4%"], ["375,203", "314,847", "+19.2%"], ["516,338", "422,358", "+22.3%"],
+                                                   ["576,965", "533,538", "+8.1%"], ["441,123", "472,230", "-6.6%"], ["442,869", "409,473", "+8.2%"]]
     key = 'LOOKUP([categoria] & ([anno_mese] - 100), [categoria] & [anno_mese], [ricavo])'
     before = 'LOOKUP([categoria] & [Before], [categoria] & [anno_mese], [ricavo])'
     rows = guide({"dataset": "history", "filter": GUIDE_FILTER, "columns": [
         GUIDE_MONTH, {"value": key, "format": "#,##0"}, {"value": f"[ricavo] / {key} - 1", "format": "+0.0%;-0.0%;0.0%"},
         {"value": before, "format": "#,##0"}, {"value": f"[ricavo] / {before} - 1", "format": "+0.0%;-0.0%;0.0%"}]})
     details_ = [cells for kind, _, cells in rows if kind == "d"]
-    assert details_[0] == ["Jan 2025", "62,408", "+6.8%", "119,264", "-44.1%"]
-    assert details_[1] == ["Feb 2025", "54,765", "+18.1%", "66,648", "-2.9%"]
+    assert details_[0] == ["Jan 2025", "199,141", "+2.0%", "345,165", "-41.2%"]
+    assert details_[1] == ["Feb 2025", "134,373", "+20.9%", "203,119", "-20.0%"]

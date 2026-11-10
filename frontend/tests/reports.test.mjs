@@ -42,7 +42,7 @@ test('a hotspot with the box the engine measured lands exactly on it', () => {
 test('a group\'s hotspot with its box: the box, not the width of the whole table', () => {
   const box = { x: 12, y: 130.6, w: 120, h: 4.5 }
   const [placed] = reports.placeHotspots([
-    { kind: 'toggle', item: 'detail', key: ['Salami'], closed: false, page: 2, x: 13.5, y: 133.83, box },
+    { kind: 'toggle', item: 'detail', key: ['Biscotti'], closed: false, page: 2, x: 13.5, y: 133.83, box },
   ], DEFINITION)
   assert.deepEqual(placed.box, box)
 })
@@ -51,7 +51,7 @@ test('without a box (a render from before), the box is rebuilt from the table\'s
   const hot = [
     { kind: 'sort', item: 'detail', column: 0, page: 1, x: 13.5, y: 129.46 },
     { kind: 'sort', item: 'detail', column: 1, page: 1, x: 41.5, y: 129.46 },
-    { kind: 'toggle', item: 'detail', key: ['Salami'], closed: true, page: 1, x: 13.5, y: 133.83 },
+    { kind: 'toggle', item: 'detail', key: ['Biscotti'], closed: true, page: 1, x: 13.5, y: 133.83 },
   ]
   const [first, last, group] = reports.placeHotspots(hot, DEFINITION)
   // a header spans its column: from its padding to the next column's start
@@ -103,11 +103,11 @@ test('the API link leaves out the values that are the defaults: a default keeps 
     { name: 'since', type: 'date', multi: false, required: true, default: '2026-09-28' }, // {today-30}, resolved today
     { name: 'category', type: 'text', multi: false, required: false, default: null },
     { name: 'from_month', type: 'number', multi: false, required: true, default: 202401 },
-    { name: 'cats', type: 'text', multi: true, required: false, default: ['Salami'] },
+    { name: 'cats', type: 'text', multi: true, required: false, default: ['Biscotti'] },
     { name: 'net', type: 'boolean', multi: false, required: false, default: true },
   ]
-  const onScreen = { since: '2026-09-28', category: 'Salami', from_month: '202401', cats: ['Salami', 'Prosciutti'], net: 'true' }
-  assert.deepEqual(reports.explicitParams(parameters, onScreen), { category: 'Salami', cats: ['Salami', 'Prosciutti'] })
+  const onScreen = { since: '2026-09-28', category: 'Biscotti', from_month: '202401', cats: ['Biscotti', 'Pasta fresca'], net: 'true' }
+  assert.deepEqual(reports.explicitParams(parameters, onScreen), { category: 'Biscotti', cats: ['Biscotti', 'Pasta fresca'] })
   // a value chosen that is not the default is kept, whatever its type
   assert.deepEqual(reports.explicitParams(parameters, { since: '2026-01-01', from_month: '202501', net: 'false' }),
     { since: '2026-01-01', from_month: '202501', net: 'false' })
