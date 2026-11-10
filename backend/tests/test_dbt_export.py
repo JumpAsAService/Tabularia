@@ -4050,3 +4050,22 @@ def test_a_clickhouse_answer_the_check_cannot_read_leaves_it_on_and_says_so(monk
     assert check.error("SELECT 1") is None and check.skipped
     assert check.error("SELECT x FROM t WHERE x SIMILAR TO 'a'").startswith("Syntax error")
     assert check.error("SELECT 2") is None and check._via.calls == 3
+
+
+# ── the second hunt: native targets, contracts, MySQL (e2e/dbt_export/native_targets.py) ──
+def test_a_federated_mysql_source_is_read_as_tabularia_reads_it():
+    """DuckDB pushed a filter into MySQL, where a case-insensitive collation kept 'Alfa' and
+    'ALFA' for `nome = 'alfa'` (3 rows instead of 1, proved with real dbt), and read a
+    TINYINT(1) holding 2 as a boolean (1). The profile turns both off, and the folder
+    package's guide says so; a project without MySQL keeps its profile as it was."""
+    my = {"alias": "db_2", "db_type": "mariadb", "pw_env": "TABULARIA_DB_2_PASSWORD",
+          "conn": {"host": "my.x", "port": 3306, "database": "shop", "username": "web"}}
+    pg = {"alias": "db_1", "db_type": "postgresql", "pw_env": "TABULARIA_DB_1_PASSWORD",
+          "conn": {"host": "db", "port": 5432, "database": "shop", "username": "shop"}}
+    prof = _project(attachments=[pg, my])["profiles.yml"]
+    assert ("      settings:\n        TimeZone: UTC\n        mysql_experimental_filter_pushdown: false\n"
+            "        mysql_tinyint1_as_boolean: false\n") in prof
+    assert "mysql_" not in _project(attachments=[pg])["profiles.yml"]
+    guide = _project(attachments=[my], layout={"package": "folder", "folder": "f"})["INTEGRATION.md"]
+    assert "mysql_experimental_filter_pushdown: false" in guide and "mysql_tinyint1_as_boolean: false" in guide
+

@@ -2179,6 +2179,16 @@ _NATIVE_ADAPTER = {"postgresql": "postgres", "clickhouse": "clickhouse"}
 # flow does with time zones (a cast to TIMESTAMPTZ, a date of an instant) does not depend on the
 # machine that runs dbt
 _DUCK_SETTINGS = "      settings:\n        TimeZone: UTC\n"
+# a MySQL/MariaDB source read as Tabularia reads it: DuckDB pushed a filter into MySQL, where a
+# case-insensitive collation kept 'Alfa' and 'ALFA' for `nome = 'alfa'`, and read a TINYINT(1)
+# holding 2 as the boolean true (1). Both off (proved with real dbt-duckdb)
+_DUCK_MYSQL_SETTINGS = "        mysql_experimental_filter_pushdown: false\n        mysql_tinyint1_as_boolean: false\n"
+
+
+def _duck_settings(attachments: list | None) -> str:
+    """The `settings:` of a dbt-duckdb profile: UTC, and the MySQL ones when it attaches MySQL."""
+    mysql = any(_DUCK_ATTACH_TYPE.get(a.get("db_type")) == "mysql" for a in attachments or [])
+    return _DUCK_SETTINGS + (_DUCK_MYSQL_SETTINGS if mysql else "")
 
 
 # ── target ClickHouse ──────────────────────────────────────────────────────────
@@ -3282,7 +3292,7 @@ def build_dbt_project(
             f"      type: duckdb\n"
             f"      path: {project}.duckdb\n"
             + (f"      schema: {_y_name(schema)}\n" if schema else "")
-            + _DUCK_SETTINGS
+            + _duck_settings(attachments)
             + (f"      extensions: [{', '.join(extensions)}]\n" if extensions else "")
             + (f"      secrets:\n{secrets}\n      attach:\n{attach}\n" if attach else "")
         )
@@ -3537,7 +3547,11 @@ def _integration(flow_name, intro, provenance, flow_description, what, models, s
                    + "\n      attach:\n" + attach + "\n```\n") if attach else \
             "Your **dbt-duckdb** profile: this flow reads no database.\n"
         profile += ("\nIts session must be in UTC, as Tabularia's engine is: otherwise what the flow does with time zones "
-                    "follows the time zone of the machine that runs dbt.\n\n```yaml\n" + _DUCK_SETTINGS + "```\n")
+                    "follows the time zone of the machine that runs dbt."
+                    + (" A MySQL or MariaDB source needs two settings more: without them DuckDB hands a filter to MySQL, "
+                       "whose case-insensitive collation keeps rows Tabularia does not (`nome = 'alfa'` kept 'Alfa'), and "
+                       "reads a TINYINT(1) as a boolean (2 became 1)." if _duck_settings(attachments) != _DUCK_SETTINGS else "")
+                    + "\n\n```yaml\n" + _duck_settings(attachments) + "```\n")
     declared = [x for x in sources if x.get("declared")]
     source_rows = [f"- `{x['name']}` is **declared in your project**: it must list the tables "
                       + ", ".join(f"`{t['name']}`" for t in sorted(x["tables"], key=lambda t: t["name"])) + "."
