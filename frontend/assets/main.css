@@ -769,11 +769,28 @@ optgroup { font-style: normal; color: var(--muted); }
 .vue-flow__edge-path { stroke: var(--edge); stroke-width: 1.6; }
 .vue-flow__edge.selected .vue-flow__edge-path,
 .vue-flow__edge:hover .vue-flow__edge-path { stroke: var(--accent); }
+/* A data edge is drawn whole and still. It runs its dashes only while the engine works
+   along it (`animated`, set by the editor: the edges that lead to the node whose preview
+   is being computed, every data edge while a run of the flow is followed). Vue Flow's own
+   sheet animates every `.animated path`: under reduced motion that is undone, and the edge
+   stays as it is at rest. */
 .vue-flow__edge.animated .vue-flow__edge-path { stroke-dasharray: 5; animation: dashdraw 0.6s linear infinite; }
 @keyframes dashdraw { from { stroke-dashoffset: 10; } }
-/* SEQUENCE edges (orchestration): a dedicated colour and STATIC, to tell them apart from
-   the animated DATA flow now that all the edges are horizontal */
+@media (prefers-reduced-motion: reduce) {
+  .vue-flow__edge.animated path, .vue-flow__edge.animated .vue-flow__edge-path { stroke-dasharray: none; animation: none; }
+}
+/* SEQUENCE edges (orchestration): a dedicated colour, dashed and always STATIC, to tell them
+   apart from the DATA flow (whole at rest, running while computed) by more than colour */
 .vue-flow__edge.edge-seq .vue-flow__edge-path { stroke: #c084fc; stroke-dasharray: 4 5; animation: none; }
+/* a transformation dragged from the palette: the edge it would go into, the node it would
+   follow; and a wider stroke to aim at while something is dragged */
+.vue-flow__edge.drop-into .vue-flow__edge-path { stroke: var(--accent); stroke-width: 2.6; }
+.vue-flow__node.drop-into .node { border-color: var(--accent); box-shadow: 0 0 0 3px var(--tint-accent), var(--shadow-2); }
+.canvas.dropping .vue-flow__edge-interaction { stroke-width: 36; }
+/* the list of the canvas' keys: a quiet button in the top right corner */
+.app > .canvas > .canvas-keys { position: absolute; top: 8px; right: 8px; z-index: 6; }
+.app > .canvas > .canvas-keys .gk-btn { background: var(--panel-2); border-color: var(--border); }
+.app > .canvas > .canvas-keys .gk-btn:hover { border-color: var(--control-border); }
 .vue-flow__edge.edge-seq.selected .vue-flow__edge-path,
 .vue-flow__edge.edge-seq:hover .vue-flow__edge-path { stroke: #d8b4fe; }
 

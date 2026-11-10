@@ -7,7 +7,7 @@ import { Controls, ControlButton } from '@vue-flow/controls'
 import { MiniMap } from '@vue-flow/minimap'
 import { opMeta } from '~/composables/useOpIcons'
 
-import { Table2, BarChart3, Wand2, Users, Undo2, Redo2, Sparkles, SlidersHorizontal, ShieldAlert, FlaskConical, X, RotateCw, RefreshCw, MoreHorizontal } from 'lucide-vue-next'
+import { Table2, BarChart3, Wand2, Users, Undo2, Redo2, Sparkles, SlidersHorizontal, ShieldAlert, FlaskConical, X, RotateCw, RefreshCw, MoreHorizontal, Plus, Minus, Maximize, Lock, LockOpen } from 'lucide-vue-next'
 import FlowAssistant from '~/components/FlowAssistant.vue'
 import { useAi, type AiStatus } from '~/composables/useAi'
 import { useApi, errMessage } from '~/composables/useApi'
@@ -34,6 +34,7 @@ import { opSubject } from '~/composables/opSummary'
 import { profileOpen, profileStart } from '~/composables/profileAsk'
 import { usePopover } from '~/composables/usePopover'
 import { computeAutoLayout } from '~/composables/useFlowLayout'
+import { planStep, chainNeighbour, upstreamEdgeIds, flowEndIds, openingViewport, easeOutExpo, FLOW_STEP_X, type ChainNode, type ChainEdge, type StepOptions, type Walk } from '~/composables/flowChain'
 import { createFlowHistory } from '~/composables/useFlowHistory'
 import { onBeforeRouteLeave, onBeforeRouteUpdate } from 'vue-router'
 import { opensAnotherFlow } from '~/composables/editorAddress'
@@ -88,7 +89,19 @@ const {
   screenToFlowCoordinate,
   fitView,
   setCenter,
+  setViewport,
   getViewport,
+  viewport,
+  dimensions: paneSize,
+  minZoom,
+  maxZoom,
+  zoomIn,
+  zoomOut,
+  setInteractive,
+  nodesDraggable,
+  nodesConnectable,
+  elementsSelectable,
+  onNodeDragStart,
   onNodesInitialized,
 } = useVueFlow()
 
@@ -247,13 +260,28 @@ const idleStatus = computed(() =>
 // kind of state → icon in the toolbar (spinner / check / error)
 const statusKind = ref<'info' | 'ok' | 'error' | 'busy'>('info')
 const toast = useToast()
-function setStatus(msg: string, kind: 'info' | 'ok' | 'error' | 'busy' = 'info') {
+// An outcome that went well is said for a few seconds, then the bar describes the canvas
+// again: «Flow "…" loaded» stayed there in green for the whole session. An error stays
+// until something else is said, and so does what is still going on.
+const STATUS_OK_MS = 4000
+let statusTimer: ReturnType<typeof setTimeout> | undefined
+/** `quiet`: in the bar only, for a fact the canvas shows by itself (a flow that loaded). */
+function setStatus(msg: string, kind: 'info' | 'ok' | 'error' | 'busy' = 'info', quiet = false) {
   status.value = msg
   statusKind.value = kind
+  clearTimeout(statusTimer)
+  if (kind === 'ok') {
+    statusTimer = setTimeout(() => {
+      status.value = null
+      statusKind.value = 'info'
+    }, STATUS_OK_MS)
+  }
+  if (quiet) return
   // successes and errors as toasts too: they show with the bar full/ignored too
   if (kind === 'ok') toast.success(msg)
   else if (kind === 'error') toast.error(msg)
 }
+onUnmounted(() => clearTimeout(statusTimer))
 const busy = ref(false)
 // The known rows and columns of each node, from the LAST preview that touched it: no
 // extra query, and never saved in the flow (provide → node components).
@@ -509,13 +537,90 @@ const apiTransform = (body: Parameters<typeof api.transform>[0]) =>
   dataApi.transform({ ...body, engine: flowEngine.value })
 const projectsList = ref<{ id: number; name: string }[]>([])
 
+// ── Nodes that make room (a step inserted in a chain) ─────────────────────
+// What follows an inserted step moves one step on, over SLIDE_MS with --ease-out. The
+// position IS the transform of Vue Flow's wrapper: a CSS transition there would make every
+// drag rubbery and leave the edges, drawn from the positions, a step ahead of their nodes.
+// So the positions themselves move, frame by frame, for the nodes of this one slide only;
+// the saved form (and so the history: ONE step) holds where they are going from the start.
+const SLIDE_MS = 180
+const slideTo = new Map<string, { x: number; y: number }>()
+let slideFrame = 0
+const reducedMotion = () => window.matchMedia('(prefers-reduced-motion: reduce)').matches
+function settledPosition(n: Node): { x: number; y: number } {
+  // read in any case: whoever watches the saved form keeps watching this node's position
+  const { x, y } = n.position
+  const to = slideTo.get(n.id)
+  return to ? { x: to.x, y: to.y } : { x, y }
+}
+function slideNodes(moves: { id: string; x: number; y: number }[]) {
+  finishSlide()
+  const from = new Map<string, { x: number; y: number }>()
+  for (const m of moves) {
+    const n = findNode(m.id)
+    if (!n) continue
+    if (reducedMotion()) n.position = { x: m.x, y: m.y }
+    else {
+      from.set(m.id, { ...n.position })
+      slideTo.set(m.id, { x: m.x, y: m.y })
+    }
+  }
+  if (!slideTo.size) return
+  // the clock starts at the second frame, not at the call: the frame that draws the new node
+  // is a long one (measured: 170 ms), and --ease-out spends most of its way in its first
+  // third — started at once, the slide was all but over when the first frame showed
+  let t0 = 0
+  let waited = false
+  const frame = (now: number) => {
+    if (!waited) {
+      waited = true
+      slideFrame = requestAnimationFrame(frame)
+      return
+    }
+    t0 ||= now
+    const k = easeOutExpo((now - t0) / SLIDE_MS)
+    if (k >= 1) return finishSlide()
+    for (const [id, to] of slideTo) {
+      const n = findNode(id)
+      const a = from.get(id)
+      if (n && a) n.position = { x: a.x + (to.x - a.x) * k, y: a.y + (to.y - a.y) * k }
+    }
+    slideFrame = requestAnimationFrame(frame)
+  }
+  slideFrame = requestAnimationFrame(frame)
+}
+/** The slide ends now, every node where it was going (a drag starts, another change comes). */
+function finishSlide() {
+  cancelAnimationFrame(slideFrame)
+  for (const [id, to] of slideTo) {
+    const n = findNode(id)
+    if (n) n.position = { ...to }
+  }
+  slideTo.clear()
+}
+/** The canvas is replaced whole (a load, an undo): nothing of the slide is written on it. */
+function dropSlide() {
+  cancelAnimationFrame(slideFrame)
+  slideTo.clear()
+}
+onNodeDragStart(finishSlide)
+onUnmounted(dropSlide)
+/** The canvas as the chain's rules read it (composables/flowChain.ts). */
+function chainNodes(): ChainNode[] {
+  return getNodes.value.map((n) => ({
+    id: n.id, type: n.type, position: slideTo.get(n.id) ?? n.position, parentNode: n.parentNode,
+    width: n.dimensions?.width || undefined, height: n.dimensions?.height || undefined,
+  }))
+}
+const chainEdges = () => getEdges.value as unknown as ChainEdge[]
+
 // serializes ONLY what is needed to rebuild the canvas (no internal Vue Flow state)
 function serializeCanvas(): string {
   return JSON.stringify({
     nodes: getNodes.value.map((n) => ({
       id: n.id,
       type: n.type,
-      position: { x: n.position.x, y: n.position.y },
+      position: settledPosition(n),
       data: n.data,
       // foreach container: children (parentNode) and the box's size
       ...(n.parentNode ? { parentNode: n.parentNode } : {}),
@@ -550,7 +655,7 @@ async function loadFlow(id: number) {
   applyDefinition(JSON.parse(f.definition || '{}'))
   selectedId.value = null
   history.reset() // a flow just loaded has nothing to undo
-  setStatus(t('flowEditor.flowLoaded', { name: f.name }), 'ok')
+  setStatus(t('flowEditor.flowLoaded', { name: f.name }), 'ok', true)
   loadScriptOutputs()
 }
 
@@ -558,6 +663,7 @@ async function loadFlow(id: number) {
 // `keepCounters`: the ids' counters NEVER go back — after an undo a new node must not
 // take again the id of one just gone, or it would inherit its cached columns and counts.
 function applyDefinition(def: any, keepCounters = false) {
+  dropSlide()
   // normalize: sources saved without a bucket (old/external flows) get the default one,
   // otherwise preview/run would start without a bucket (422)
   let nodes = (def.nodes ?? []).map((n: any) => {
@@ -776,8 +882,25 @@ let fitView_ = false
 onNodesInitialized(() => {
   if (!fitView_) return
   fitView_ = false
-  fitView({ padding: 0.15, maxZoom: 1 })
+  fitReadable()
 })
+// A flow too long to be read whole does not open as a row of unreadable rectangles (twelve
+// nodes fitted at 0.35): it opens at the zoom nodes are read at, on its END — the outputs,
+// where the result is and the next step goes — and the rest is in the minimap. A flow that
+// fits at a legible zoom is fitted whole, as before. The Controls' «fit view» button still
+// shows everything.
+function fitReadable(duration = 0) {
+  const rects = getNodes.value
+    .filter((n) => !n.parentNode && !n.hidden && (n.dimensions?.width ?? 0) > 0)
+    .map((n) => ({ id: n.id, x: n.position.x, y: n.position.y, width: n.dimensions.width, height: n.dimensions.height }))
+  const ends = new Set(flowEndIds(chainNodes(), chainEdges()))
+  const pane = paneSize.value
+  // the minimap sits bottom right: on a pane wide enough the flow's end stops at its left
+  const at = openingViewport(rects, rects.filter((r) => ends.has(r.id)), pane, { marginRight: pane.width > 760 ? 220 : 48 })
+  if (reducedMotion()) duration = 0
+  if (at) setViewport(at, { duration })
+  else fitView({ padding: 0.15, maxZoom: 1, duration })
+}
 
 // ── The assistant beside the node panel ───────────────────────────────────
 // A second tab of the right panel, when the installation has an AI model and the
@@ -841,7 +964,7 @@ function applyAssistant(change: { definition: string; touched: string[] }) {
 
 function fitWhenMeasured(ids: string[], frames = 30) {
   const measured = ids.every((id) => (findNode(id)?.dimensions?.width ?? 0) > 0)
-  if (measured || frames <= 0) fitView({ padding: 0.15, duration: 300, maxZoom: 1 })
+  if (measured || frames <= 0) fitReadable(300)
   else requestAnimationFrame(() => fitWhenMeasured(ids, frames - 1))
 }
 
@@ -955,7 +1078,7 @@ async function refreshFlows() {
 // ── Canvas events ─────────────────────────────────────────────────────────
 // Nodes downstream of `fromId` along the DATA edges (fromId included): their counts no
 // longer hold when the chain upstream changes.
-function invalidateStats(fromId?: string) {
+function invalidateStats(fromId?: string, columnsToo = false) {
   if (!fromId) {
     for (const k of Object.keys(nodeStats)) if (findNode(k)?.type !== 'source') delete nodeStats[k]
     return
@@ -967,6 +1090,7 @@ function invalidateStats(fromId?: string) {
     if (seen.has(id)) continue
     seen.add(id)
     delete nodeStats[id]
+    if (columnsToo && findNode(id)?.type !== 'source') delete nodeColumns[id]
     for (const e of getEdges.value) {
       if (e.source === id && (e.targetHandle as string) !== 'seq-in') queue.push(e.target)
     }
@@ -1042,6 +1166,56 @@ onNodeClick(({ node }) => {
   selectedId.value = node.id
   refreshForNode(node.id)
 })
+// The panel and the preview follow the canvas' own selection when it is ONE node, however it
+// was made: Tab and Enter on a node selected it on the canvas and left the panel on the node
+// before (critique of 2026-11-10). Through the click's own path — the pause that lets a
+// person run over the nodes, the page's memory — so it asks the engine nothing a click
+// would not. A click has set `selectedId` already when this runs: nothing is asked twice.
+watch(() => (getSelectedNodes.value.length === 1 ? getSelectedNodes.value[0]!.id : null), (id) => {
+  if (!id || id === selectedId.value || !findNode(id)) return
+  selectedId.value = id
+  refreshForNode(id)
+})
+
+// ── Walking the graph from the keyboard ───────────────────────────────────
+// Alt+← and Alt+→: the step before and the step after; Alt+↑ and Alt+↓: the sibling branch
+// above and below (composables/flowChain.ts). The node reached is selected as a click
+// selects it, takes the focus, and is brought into view.
+const WALKS: Record<string, Walk> = { ArrowLeft: 'upstream', ArrowRight: 'downstream', ArrowUp: 'above', ArrowDown: 'below' }
+function walkGraph(way: Walk) {
+  const focused = (document.activeElement as HTMLElement | null)?.closest?.('.vue-flow__node') as HTMLElement | null
+  const from = focused?.dataset.id ?? selectedId.value
+  // nowhere yet: the walk starts at the flow's first source
+  const to = from && findNode(from) ? chainNeighbour(chainNodes(), chainEdges(), from, way) : firstSource.value?.id ?? null
+  if (!to) return
+  if (selectedId.value !== to) {
+    selectedId.value = to
+    refreshForNode(to)
+  }
+  selectOnCanvas(to)
+  nextTick(() => {
+    const el = canvasEl.value?.querySelector(`.vue-flow__node[data-id="${CSS.escape(to)}"]`) as HTMLElement | null
+    el?.focus({ preventScroll: true })
+    revealNode(to)
+  })
+}
+// On the canvas, before Vue Flow sees the key: an arrow on a selected node moved it by a few
+// pixels (Vue Flow's own keyboard), so that walking the nodes with the arrows left the flow
+// «unsaved» and its nodes out of line. A bare arrow moves nothing now; Shift+arrow still
+// moves the node, for whoever lays a flow out without a mouse; Alt+arrow walks the graph.
+function onCanvasKeys(e: KeyboardEvent) {
+  const way = WALKS[e.key]
+  const el = e.target as HTMLElement | null
+  if (!way || !el || el.closest('input, textarea, select, [contenteditable="true"], .nokey')) return
+  if (e.altKey && !e.ctrlKey && !e.metaKey) {
+    e.preventDefault() // Alt+← is the browser's «back»
+    e.stopPropagation()
+    walkGraph(way)
+  } else if (!e.shiftKey && el.closest('.vue-flow__node, .vue-flow__nodesselection-rect')) {
+    e.preventDefault()
+    e.stopPropagation()
+  }
+}
 
 onPaneClick(() => {
   selectedId.value = null
@@ -1081,7 +1255,7 @@ async function importSheets(names: string[]) {
     if (!(await loadFile(id, c.file, name))) removeNodes(id, true)
   }
   // the new sources stand below the others: the whole canvas in view
-  if (rest.length) nextTick(() => fitView({ padding: 0.15, duration: 300, maxZoom: 1 }))
+  if (rest.length) nextTick(() => fitReadable(300))
 }
 
 // uploads a file into a source (a workbook: `sheet`, or the first visible one);
@@ -1166,23 +1340,73 @@ function addSource(): string {
   return id
 }
 
-function addOperation() {
-  const parentId = selectedId.value ?? leafNodeId(getNodes.value, getEdges.value)
-  const parent = findNode(parentId)
-  const id = `op-${++opCounter}`
+// ── Adding a step ───────────────────────────────────────────────────────
+// One rule for every way of adding a transformation to a node (the right-click menu by
+// mouse and by keyboard, «+ Operation», a drop from the palette on a node or on an edge,
+// a value of a column's profile): composables/flowChain.ts. A node that feeds one node
+// takes the step BETWEEN the two, and what follows moves one step on; at the end of a
+// chain it is appended; a node that forks already, or Shift, takes one more branch.
+// Before, the three ways gave three outcomes, and always a branch (critique of 2026-11-10).
+// Everything happens in one go: ONE step of the history undoes the whole insertion.
+function addStep(parentId: string, opType: string, params: Record<string, any>, opts: StepOptions & { reveal?: boolean } = {}): string | null {
+  finishSlide() // a slide still going: the plan is made on where the nodes end up
+  const id = `op-${opCounter + 1}`
+  const plan = planStep(chainNodes(), chainEdges(), parentId, id, opts)
+  if (!plan) return null
+  opCounter++
+  fitView_ = false // the node goes where it was put: a new flow's pending fit must not move the view
+  history.flush() // what the person was doing stays a step of its own
   addNodes({
-    id,
-    type: 'operation',
-    position: { x: (parent?.position.x ?? 60) + 230, y: parent?.position.y ?? 140 },
-    data: { opType: operations.value[0] ?? 'select', params: {} },
+    id, type: 'operation', position: plan.position,
+    ...(plan.parentNode ? { parentNode: plan.parentNode, extent: 'parent' as const } : {}),
+    data: { opType, params },
   })
-  addEdges({ id: `e-${parentId}-left-${id}`, source: parentId, target: id, targetHandle: 'left' })
+  if (plan.removeEdgeIds.length) removeEdges(plan.removeEdgeIds)
+  addEdges(plan.addEdges.map((e) => ({ ...e, sourceHandle: e.sourceHandle ?? undefined, targetHandle: e.targetHandle ?? undefined })))
+  if (plan.resize) {
+    const box = findNode(plan.resize.id)
+    if (box) box.style = { ...(box.style as object), width: `${plan.resize.width}px` }
+  }
+  slideNodes(plan.moves)
+  if (plan.inserted) {
+    // what follows reads the new step from now on: its columns and counts no longer hold.
+    // Only what follows: the columns of the nodes BEFORE are what the new step's panel
+    // needs, and forgetting them too cost a request to read them again (counted on kind)
+    invalidateStats(plan.addEdges[1]!.target, true)
+  }
   selectedId.value = id
   refreshForNode(id)
-  // the new node beside the last one could land off the canvas, under the minimap: the
-  // view moves to it, at the zoom it has
-  const at = { x: (parent?.position.x ?? 60) + 230 + 80, y: (parent?.position.y ?? 140) + 40 }
-  nextTick(() => setCenter(at.x, at.y, { zoom: getViewport().zoom, duration: 300 }))
+  nextTick(() => {
+    selectOnCanvas(id)
+    if (opts.reveal) revealNode(id)
+  })
+  return id
+}
+
+/** Brings a node into view when it is not whole on the canvas, at the zoom there is. */
+function revealNode(id: string) {
+  const n = findNode(id)
+  if (!n) return
+  const { x, y, zoom } = getViewport()
+  const w = n.dimensions?.width || 170
+  const h = n.dimensions?.height || 70
+  const left = n.computedPosition.x * zoom + x
+  const top = n.computedPosition.y * zoom + y
+  const pane = paneSize.value
+  if (left >= 8 && top >= 8 && left + w * zoom <= pane.width - 8 && top + h * zoom <= pane.height - 8) return
+  setCenter(n.computedPosition.x + w / 2, n.computedPosition.y + h / 2, { zoom, duration: reducedMotion() ? 0 : 300 })
+}
+
+// «+ Operation»: the same menu the right click opens, beside the node the step is for
+// (the selected one, or the flow's last). Before, it always made the first transformation
+// of the list, on top of the next node.
+function addOperation() {
+  if (loadBlocked.value || !operations.value.length) return
+  const parentId = selectedId.value ?? leafNodeId(getNodes.value, getEdges.value)
+  if (!findNode(parentId)) return
+  if (shortcutItems.value.length) openQuickMenuBeside(parentId)
+  // a person who emptied their menu still gets a step: the first of the list, by the same rule
+  else addStep(parentId, operations.value[0]!, defaultParams(operations.value[0]!), { reveal: true })
 }
 
 // ── Right-click menu: the person's transformations around the click ──────
@@ -1197,6 +1421,10 @@ const shortcutsOpen = ref(false)
 const shortcutsSaving = ref(false)
 const shortcutItems = computed(() => flowShortcutsShown(savedShortcuts.value, operations.value))
 let quickAt: { x: number; y: number } | null = null // the click, in flow coordinates
+// the node the step is for, and whether the step stands beside it (a right click ON a
+// node, the keyboard, «+ Operation») or at the click (a right click on the empty canvas)
+let quickParent: string | null = null
+let quickBeside = false
 // node types whose data output an operation can read (the «out» handle)
 const DATA_PARENTS = new Set(['source', 'operation', 'foreach', 'script', 'container'])
 
@@ -1208,25 +1436,35 @@ function canvasBounds() {
   const r = canvasEl.value!.getBoundingClientRect()
   return { left: r.left, top: r.top, right: r.right, bottom: r.bottom }
 }
-function openQuickMenu(ev: MouseEvent) {
+function openQuickMenu(ev: MouseEvent, onNode?: string) {
   ev.preventDefault()
   if (loadBlocked.value || !operations.value.length || !canvasEl.value) return
   quickAt = screenToFlowCoordinate({ x: ev.clientX, y: ev.clientY })
+  // on a node: the step is for THAT node and stands beside it, never on top of it (a foreach
+  // container is a place to put a node in: there the click is a place, as on the canvas)
+  const beside = onNode && findNode(onNode)?.type !== 'foreach' ? onNode : null
+  quickParent = beside ?? selectedId.value
+  quickBeside = !!beside
   quickMenu.value?.show({ x: ev.clientX, y: ev.clientY }, canvasBounds())
 }
-// From the keyboard (the Menu key, Shift+F10) there is no pointer: the menu opens beside
-// the selected node, where «+ Operation» would put the next one (the canvas' middle when
-// nothing is selected), and the node is born there.
-function openQuickMenuFromKeyboard() {
+// Without a pointer on the canvas (the Menu key, Shift+F10, «+ Operation») the menu opens
+// beside the node the step is for, where the step will stand; with no such node, in the
+// canvas' middle, and the node is born there.
+function openQuickMenuBeside(parentId: string | null, keyboard = false) {
   if (loadBlocked.value || !operations.value.length || !canvasEl.value) return
   const pane = (canvasEl.value.querySelector('.vue-flow') as HTMLElement | null) ?? canvasEl.value
   const p = pane.getBoundingClientRect()
   const { x, y, zoom } = getViewport()
-  const parent = selectedId.value ? findNode(selectedId.value) : undefined
+  const parent = parentId ? findNode(parentId) : undefined
   quickAt = parent
-    ? { x: parent.computedPosition.x + 230, y: parent.computedPosition.y }
+    ? { x: parent.computedPosition.x + FLOW_STEP_X, y: parent.computedPosition.y }
     : screenToFlowCoordinate({ x: p.left + p.width / 2, y: p.top + p.height / 2 })
-  quickMenu.value?.show({ x: p.left + x + quickAt.x * zoom, y: p.top + y + quickAt.y * zoom }, canvasBounds(), true)
+  quickParent = parent?.id ?? null
+  quickBeside = !!parent
+  quickMenu.value?.show({ x: p.left + x + quickAt.x * zoom, y: p.top + y + quickAt.y * zoom }, canvasBounds(), keyboard)
+}
+function openQuickMenuFromKeyboard() {
+  openQuickMenuBeside(selectedId.value, true)
 }
 // a right button (button 2) opens it at the pointer; the keyboard's contextmenu reaches
 // onCanvasContextMenu
@@ -1245,7 +1483,7 @@ onNodeContextMenu(({ event, node }) => {
     refreshForNode(node.id)
   }
   selectOnCanvas(node.id)
-  openQuickMenu(event as MouseEvent)
+  openQuickMenu(event as MouseEvent, node.id)
 })
 onMoveStart(() => quickMenu.value?.hide())
 
@@ -1271,14 +1509,9 @@ function onQuickMenuClose(reason: string) {
   if (reason === 'escape') canvasEl.value?.focus()
 }
 
-function addOperationAt(opType: string) {
-  if (!quickAt) return
-  const position = quickAt
-  fitView_ = false // the node goes where the person put it: a new flow's pending fit must not move the view
-  const parent = selectedId.value ? findNode(selectedId.value) : undefined
-  const id = `op-${++opCounter}`
-  // at the click INSIDE a foreach container → its child, as a drop there
-  const container = getNodes.value.find(
+/** The foreach container a point of the canvas falls in. */
+function containerAt(position: { x: number; y: number }) {
+  return getNodes.value.find(
     (n) =>
       n.type === 'foreach' &&
       position.x > n.position.x &&
@@ -1286,6 +1519,26 @@ function addOperationAt(opType: string) {
       position.y > n.position.y &&
       position.y < n.position.y + (n.dimensions?.height ?? 0),
   )
+}
+
+// A choice of the menu: a step for the node the menu was opened for, by the chain's rule
+// (`branch`: Shift was held); a free node at the click when there is no such node.
+function addOperationAt(opType: string, branch = false) {
+  if (!quickAt) return
+  const position = quickAt
+  const parent = quickParent ? findNode(quickParent) : undefined
+  const container = containerAt(position)
+  // at a click INSIDE a foreach container the node is its child, as a drop there: a step of
+  // a node of that body, otherwise free in it
+  const inBody = !quickBeside && !!container && container.id !== parent?.parentNode
+  if (parent && DATA_PARENTS.has(parent.type ?? '') && !inBody) {
+    // the place the person pointed at, in the coordinates of the parent's container
+    const box = parent.parentNode ? findNode(parent.parentNode) : undefined
+    const at = quickBeside ? undefined : { x: position.x - (box?.position.x ?? 0), y: position.y - (box?.position.y ?? 0) }
+    if (addStep(parent.id, opType, defaultParams(opType), { branch, at, reveal: quickBeside })) return
+  }
+  fitView_ = false // the node goes where the person put it: a new flow's pending fit must not move the view
+  const id = `op-${++opCounter}`
   if (container) {
     addNodes({
       id, type: 'operation', parentNode: container.id, extent: 'parent',
@@ -1294,10 +1547,6 @@ function addOperationAt(opType: string) {
     })
   } else {
     addNodes({ id, type: 'operation', position, data: { opType, params: defaultParams(opType) } })
-  }
-  if (parent && DATA_PARENTS.has(parent.type ?? '')) {
-    const sourceHandle = parent.type === 'script' || parent.type === 'container' ? 'out' : undefined
-    addEdges({ id: `e-${parent.id}-left-${id}`, source: parent.id, target: id, sourceHandle, targetHandle: 'left' })
   }
   selectedId.value = id
   refreshForNode(id)
@@ -1317,6 +1566,55 @@ async function saveShortcuts(list: string[] | null) {
   }
 }
 
+// ── The editor's keys, listed ─────────────────────────────────────────────
+// A keyboard button in the canvas' top right corner (always there, whatever is selected)
+// opens the list of EVERY key of the editor, in groups; «?» opens it too. The same quiet
+// button and panel as the data grid's (components/ui/GridKeys.vue). Each line is a key some
+// handler of the editor really takes (`onKeydown`, `onCanvasKeys`, the quick menu, Vue
+// Flow's own, the dividers): a key added there is added here. The quick menu's CHOICES are
+// another thing (FlowShortcutsDialog, «Customize» in the ring).
+const canvasKeys = ref<InstanceType<typeof GridKeys> | null>(null)
+const canvasLocked = computed(() => !(nodesDraggable.value || nodesConnectable.value || elementsSelectable.value))
+const editorKeyGroups = computed(() => {
+  const mac = /Mac|iPhone|iPad/.test(navigator.platform || '')
+  const mod = mac ? '⌘' : 'Ctrl'
+  const nodes: [string, string][] = [
+    ['Tab · Enter', t('canvasKeys.tabEnter')],
+    ['Alt+← · Alt+→', t('canvasKeys.walk')],
+    ['Alt+↑ · Alt+↓', t('canvasKeys.branches')],
+    ['Shift+← ↑ → ↓', t('canvasKeys.move')],
+    [mac ? '⌫ · Del' : 'Del · Backspace', t('canvasKeys.remove')],
+    [`${mod}+C · ${mod}+X · ${mod}+V`, t('canvasKeys.clipboard')],
+    [`${mod}+D`, t('canvasKeys.duplicate')],
+    [`${mod}+Z`, t('canvasKeys.undo')],
+    [`${mod}+Y · ${mod}+Shift+Z`, t('canvasKeys.redo')],
+  ]
+  const steps: [string, string][] = [
+    ['Shift+F10 · Menu', t('canvasKeys.menu')],
+    ['← → · Enter', t('canvasKeys.menuPick')],
+    ['Shift+Enter', t('canvasKeys.branch')],
+    ['Tab · Esc', t('canvasKeys.menuOther')],
+  ]
+  const running: [string, string][] = [
+    ...(observerOnly.value ? [] : [[`${mod}+Enter`, t('canvasKeys.run')] as [string, string]]),
+    ['Esc', t('canvasKeys.stop')],
+    [`${mod}+Enter`, t('canvasKeys.sqlPreview')],
+  ]
+  const rest: [string, string][] = [
+    ...(observerOnly.value ? [] : [[`${mod}+S`, t('canvasKeys.save')] as [string, string]]),
+    ['← → · ↑ ↓', t('canvasKeys.dividers')],
+    ['?', t('canvasKeys.list')],
+  ]
+  return [
+    { title: t('canvasKeys.groupNodes'), keys: nodes },
+    { title: t('canvasKeys.groupSteps'), keys: steps },
+    // the two Ctrl+Enter are told apart by their words: the flow's, and the SQL field's
+    { title: t('canvasKeys.groupRun'), keys: running },
+    { title: t('canvasKeys.groupRest'), keys: rest },
+    { title: t('canvasKeys.groupTable'), keys: [], note: t('canvasKeys.tableKeys') },
+  ]
+})
+
 // ── Minimap: each node in the colour of its edge on the canvas ────────────
 const NODE_TYPE_COLOR: Record<string, string> = {
   source: 'var(--accent-2)',
@@ -1335,6 +1633,7 @@ function miniMapColor(node: { type?: string; data?: any }): string {
 
 // ── Auto-layout ("Tidy the flow", a button in the canvas Controls) ────
 function autoLayout() {
+  finishSlide()
   const { positions, childPositions, containerSizes } = computeAutoLayout(getNodes.value, getEdges.value)
   for (const [id, size] of containerSizes) {
     const n = findNode(id)
@@ -1352,12 +1651,47 @@ function autoLayout() {
 }
 
 // ── Drag & drop from the components' sidebar ─────────────────────────────
+// A transformation dragged from the palette: over an edge it will go IN there, over a node
+// it will be that node's next step (the chain's rule), over the empty canvas it stays a
+// free node. What it is over is lit while it is dragged, so the drop is no surprise. The
+// payload cannot be read before the drop: every drag of ours lights its target, and the
+// drop decides (a Source or an Output dropped on a node still lands free, as before).
+let dropLit: Element | null = null
+function dropTarget(ev: DragEvent): { edge?: string; node?: string; el: Element } | null {
+  const el = ev.target as Element | null
+  const edgeEl = el?.closest?.('.vue-flow__edge')
+  const edgeId = edgeEl?.getAttribute('data-id')
+  if (edgeEl && edgeId && !edgeEl.classList.contains('edge-seq')) return { edge: edgeId, el: edgeEl }
+  const nodeEl = el?.closest?.('.vue-flow__node')
+  const node = nodeEl ? findNode(nodeEl.getAttribute('data-id') ?? '') : undefined
+  // a foreach container takes the node INSIDE; a comment is paper on the canvas
+  if (nodeEl && node && node.type !== 'foreach' && DATA_PARENTS.has(node.type ?? '')) return { node: node.id, el: nodeEl }
+  return null
+}
+function lightDrop(el: Element | null) {
+  if (dropLit === el) return
+  dropLit?.classList.remove('drop-into')
+  dropLit = el
+  dropLit?.classList.add('drop-into')
+}
 function onCanvasDragOver(ev: DragEvent) {
   ev.preventDefault()
   if (ev.dataTransfer) ev.dataTransfer.dropEffect = 'move'
+  canvasEl.value?.classList.add('dropping')
+  lightDrop(ev.dataTransfer?.types.includes('application/tabularia') ? dropTarget(ev)?.el ?? null : null)
+}
+function endDropHint() {
+  canvasEl.value?.classList.remove('dropping')
+  lightDrop(null)
+}
+function onCanvasDragLeave(ev: DragEvent) {
+  // leaving the canvas, not passing from one of its elements to another
+  if (!canvasEl.value?.contains(ev.relatedTarget as globalThis.Node | null)) endDropHint()
 }
 
 function onCanvasDrop(ev: DragEvent) {
+  const over = dropTarget(ev)
+  endDropHint()
   const kind = ev.dataTransfer?.getData('application/tabularia')
   if (!kind || loadBlocked.value) return // a flow that cannot be opened takes nothing under its notice
   if (!TRANSFORMATION(kind) && deniedToObserver()) return
@@ -1445,17 +1779,19 @@ function onCanvasDrop(ev: DragEvent) {
 
   if (kind.startsWith('op:')) {
     const opType = kind.slice(3)
+    // on an edge: in there; on a node: its next step, by the chain's rule (Shift: a branch)
+    if (over?.edge) {
+      const edge = getEdges.value.find((e) => e.id === over.edge)
+      const box = edge && findNode(edge.source)?.parentNode ? findNode(findNode(edge.source)!.parentNode!) : undefined
+      const at = { x: position.x - (box?.position.x ?? 0), y: position.y - (box?.position.y ?? 0) }
+      if (edge && addStep(edge.source, opType, defaultParams(opType), { edgeId: edge.id, at, snap: true })) return
+    } else if (over?.node) {
+      if (addStep(over.node, opType, defaultParams(opType), { branch: ev.shiftKey })) return
+    }
     const id = `op-${++opCounter}`
 
     // drop INSIDE a foreach container → it becomes a child (relative position)
-    const container = getNodes.value.find(
-      (n) =>
-        n.type === 'foreach' &&
-        position.x > n.position.x &&
-        position.x < n.position.x + (n.dimensions?.width ?? 0) &&
-        position.y > n.position.y &&
-        position.y < n.position.y + (n.dimensions?.height ?? 0),
-    )
+    const container = containerAt(position)
     if (container) {
       addNodes({
         id,
@@ -1499,6 +1835,7 @@ function deleteSelected() {
 
 function deleteNodes(ids: string[]) {
   if (!ids.length) return
+  finishSlide()
   // the preview and the columns of the nodes going away must no longer write anything
   previewSeq++
   columnsSeq++
@@ -1640,9 +1977,28 @@ function onKeydown(e: KeyboardEvent) {
   }
   // in the preview's grid Delete and Ctrl+C belong to its cells, never to the nodes selected
   const inGrid = !!(document.activeElement as HTMLElement | null)?.closest?.('.datagrid')
+  // Alt+arrows walk the graph from wherever the focus is, but a cell of the grid (on the
+  // canvas itself `onCanvasKeys` took the key already)
+  if (e.altKey && !e.ctrlKey && !e.metaKey && WALKS[e.key] && !inGrid && !e.defaultPrevented) {
+    e.preventDefault()
+    walkGraph(WALKS[e.key]!)
+    return
+  }
+  // «?» lists the canvas' keys
+  if (e.key === '?' && !e.ctrlKey && !e.metaKey && !e.altKey && !inGrid) {
+    e.preventDefault()
+    canvasKeys.value?.toggle()
+    return
+  }
   if ((e.ctrlKey || e.metaKey) && !e.altKey) {
     const key_ = e.key.toLowerCase()
     if (inGrid && key_ !== 'z' && key_ !== 'y') return
+    // Ctrl/Cmd+Enter runs the flow: the Run button's own way (its dialog, its checks)
+    if (e.key === 'Enter') {
+      e.preventDefault()
+      if (!observerOnly.value && canRun.value && !busy.value) run()
+      return
+    }
     if (key_ === 'z' || key_ === 'y') {
       e.preventDefault()
       if (key_ === 'y' || e.shiftKey) redo()
@@ -1905,6 +2261,7 @@ function clearPreview() {
   preview.value = null
   previewNodeId.value = null
   previewLoading.value = false
+  inputShownFor.value = null
 }
 function endCompute() {
   computingNodeId.value = null
@@ -1917,21 +2274,63 @@ onUnmounted(() => { clearInterval(clockTimer); clearTimeout(computingWordTimer);
 
 /** A node's preview this page has seen already: on screen at once, with its count. */
 function showFromMemory(nodeId: string): boolean {
-  const { body, key } = previewBody(nodeId)
+  const { chain, body, key } = previewBody(nodeId)
   const hit = body && key ? fresh(previewMemo.get(key)) : undefined
   if (!body || !key || !hit) return false
   previewSeq++ // a preview still in flight for another node no longer writes
   previewSlots.cancel('preview')
   endCompute()
+  // the line over the rows is this node's: not the hint left by a step not set yet
+  previewNote.value = scriptNote(chain.afterScript)
   showPreview(nodeId, hit.res, key, body, 0)
   previewLoading.value = false
   return true
+}
+
+/** The data come from a script's last run: which, and whether its code changed since. */
+function scriptNote(afterScript: string | undefined): string {
+  const fromScript = afterScript ? scriptOutputs.value[afterScript]?.output : null
+  if (!fromScript || !afterScript) return ''
+  return t(`${stepTexts(afterScript)}.${fromScript.trial ? 'previewFromTrial' : 'previewFromRun'}`, { when: fmtWhen(fromScript.finished_at) })
+    + (fromScript.stale ? ` ${t(`${stepTexts(afterScript)}.previewStale`)}` : '')
+}
+
+// A step just added and not set yet has no rows of its own, and used to blank the table: the
+// person was asked to pick a column and a value with nothing to look at (critique of
+// 2026-11-10). Its INPUT's rows are shown instead, with a line saying whose they are — only
+// when this page holds them already (the step before was looked at): nothing is asked of the
+// engine for it, neither the rows, nor their count, nor their profile. Without them in
+// memory the hint stays alone, as before.
+const inputShownFor = ref<string | null>(null) // the node whose input is on screen
+function showInputInstead(nodeId: string) {
+  previewNote.value = t('flowEditor.completeNodeHint')
+  const leftId = leftOf(nodeId)
+  const { body, key } = leftId ? previewBody(leftId) : { body: null, key: undefined }
+  const hit = body && key ? fresh(previewMemo.get(key)) : undefined
+  if (!leftId || !body || !key || !hit) return
+  preview.value = hit.res
+  previewNodeId.value = leftId
+  previewMs.value = 0
+  inputShownFor.value = nodeId
+  const counted = hit.res.truncated ? fresh(countMemo.get(key)) : undefined
+  rowCount.value = !hit.res.truncated
+    ? { state: 'done', rows: hit.res.rows.length, over: false }
+    : counted ? { state: 'done', rows: counted.rows, over: counted.over } : { state: 'none' }
+  // the profile this page remembers; a column opened by hand asks its own, as on that step
+  const known = fresh(profileMemo.get(key)) ?? fresh(profileMemo.get(`${key}\u0001footer`))
+  profileAsk = { key, body, columns: hit.res.columns }
+  if (known) {
+    profile.value = known.res
+    profileState.value = 'done'
+  }
+  previewNote.value = t('flowEditor.inputOfStep')
 }
 
 function showPreview(nodeId: string, res: PreviewResult, key: string, body: NonNullable<ReturnType<typeof previewBody>['body']>, ms: number) {
   stopCount()
   stopProfile()
   cancelledNodeId.value = null
+  inputShownFor.value = null
   preview.value = res
   previewNodeId.value = nodeId
   previewError.value = ''
@@ -2099,33 +2498,18 @@ async function columnDetail(column: string, ask: DetailAsk): Promise<TopValuesRe
   return res
 }
 // What a value of the profile can do in the editor: a Filter step after the node on screen
-// (keep it, or leave it out), a Fill nulls step for its nulls, added as «+ Operation» adds
-// a step after the selected node: beside it, linked from it, selected, its preview asked.
-// Nothing downstream is rewired: the flow's other steps keep reading what they read.
+// (keep it, or leave it out), a Fill nulls step for its nulls, added through `addStep` but
+// always as a BRANCH: a value picked while looking at a step's data is a look aside, and
+// nothing downstream is rewired — the flow's other steps keep reading what they read.
 function addStepAfter(parentId: string, opType: string, params: Record<string, any>) {
   // a transformation: an observer may add one too, as from the palette
-  const parent = findNode(parentId)
-  if (!parent || !DATA_PARENTS.has(parent.type ?? '')) return
-  fitView_ = false
-  const id = `op-${++opCounter}`
-  // beside the node, lower down while that place is taken by another node
-  const x = (parent.position.x ?? 60) + 230
-  let y = parent.position.y ?? 140
-  const taken = (yy: number) => getNodes.value.some((n) => !n.parentNode && Math.abs(n.position.x - x) < 180 && Math.abs(n.position.y - yy) < 80)
-  for (let k = 0; k < 12 && taken(y); k++) y += 90
-  addNodes({ id, type: 'operation', position: { x, y }, parentNode: parent.parentNode, extent: parent.parentNode ? 'parent' : undefined, data: { opType, params } })
-  const sourceHandle = parent.type === 'script' || parent.type === 'container' ? 'out' : undefined
-  addEdges({ id: `e-${parent.id}-left-${id}`, source: parent.id, target: id, sourceHandle, targetHandle: 'left' })
-  selectedId.value = id
-  refreshForNode(id)
-  nextTick(() => {
-    selectOnCanvas(id)
-    setCenter(x + 80, y + 40, { zoom: getViewport().zoom, duration: 300 })
-  })
+  addStep(parentId, opType, params, { branch: true, reveal: true })
 }
 const valueActions = computed(() => {
   const id = previewNodeId.value
-  if (!id || loadBlocked.value) return null
+  // the rows of a step's input, shown while the step is not set: they are not the place to
+  // start another step from
+  if (!id || loadBlocked.value || inputShownFor.value) return null
   return {
     filter: (column: string, value: unknown, exclude: boolean) => {
       const params = value === null || value === undefined
@@ -2149,6 +2533,7 @@ function cancelPreview() {
   stopProfile()
   preview.value = null
   previewNodeId.value = null
+  inputShownFor.value = null
   previewLoading.value = false
   previewError.value = ''
   previewNote.value = t('dataGrid.cancelled', { name })
@@ -2180,6 +2565,7 @@ async function runPreview(nodeId: string) {
     stopCount()
     preview.value = null
     previewNodeId.value = nodeId
+    inputShownFor.value = null
     previewLoading.value = false
     // what a script writes exists only during a run: the editor cannot preview it
     previewError.value = ''
@@ -2187,16 +2573,14 @@ async function runPreview(nodeId: string) {
     return
   }
   previewError.value = ''
-  // the data come from a script's last run: say which, and whether its code changed since
-  const fromScript = afterScript ? scriptOutputs.value[afterScript]?.output : null
-  previewNote.value = fromScript && afterScript
-    ? t(`${stepTexts(afterScript)}.${fromScript.trial ? 'previewFromTrial' : 'previewFromRun'}`,
-      { when: fmtWhen(fromScript.finished_at) })
-      + (fromScript.stale ? ` ${t(`${stepTexts(afterScript)}.previewStale`)}` : '')
-    : ''
+  // the data come from a script's last run: say which, and whether its code changed since.
+  // While the input of a step not set yet is on screen its line stays until the answer.
+  const note = scriptNote(afterScript)
+  if (inputShownFor.value !== nodeId) previewNote.value = note
   const hit = fresh(previewMemo.get(key))
   if (hit) {
     endCompute()
+    previewNote.value = note
     showPreview(nodeId, hit.res, key, body, 0)
     previewLoading.value = false
     return
@@ -2211,6 +2595,7 @@ async function runPreview(nodeId: string) {
       if (skeleton) await skeletonPad(t0)
       if (seq !== previewSeq) return
       endCompute()
+      previewNote.value = note
       showPreview(nodeId, res, key, body, performance.now() - t0)
     } else {
       nodeColumns[nodeId] = res.columns
@@ -2221,10 +2606,15 @@ async function runPreview(nodeId: string) {
       endCompute()
       preview.value = null
       previewNodeId.value = nodeId
+      inputShownFor.value = null
       const message = errMessage(e)
-      // a node just added and not set yet: not an error in red, the hint to set it
-      if (/required parameter missing: '/.test(message)) previewNote.value = t('flowEditor.completeNodeHint')
-      else previewError.value = message
+      // a node just added and not set yet: not an error in red, the hint to set it, over
+      // its input's rows when this page has them
+      if (/required parameter missing: '/.test(message)) showInputInstead(nodeId)
+      else {
+        previewNote.value = ''
+        previewError.value = message
+      }
     }
   } finally {
     if (seq === previewSeq) previewLoading.value = false
@@ -2557,6 +2947,38 @@ function describeOutput(n: Node): OutputSummary {
 
 const runOutputs = computed(() => outputNodes().map(describeOutput))
 
+// ── Edges move only where the engine works ────────────────────────────────
+// Every data edge ran its dashes forever (eleven endless animations on a flow nobody was
+// touching): motion that said nothing. At rest the edges are still, drawn whole (the
+// sequence edges stay violet and dashed: the two are told apart by more than colour). They
+// run only along what leads to the node whose preview is being computed, and everywhere
+// while a run of this flow started here is being followed. Nothing under reduced motion
+// (main.css).
+const followedRuns = ref(0) // runs of this flow the editor is polling
+const NO_EDGES = new Set<string>()
+const workingEdges = computed<Set<string>>(() => {
+  const running = followedRuns.value > 0
+    || Object.values(scriptTrials).some((x) => x.status === 'PENDING' || x.status === 'STARTED')
+  if (running) return new Set(getEdges.value.filter((e) => (e.targetHandle as string) !== 'seq-in').map((e) => e.id))
+  if (!computingNodeId.value) return NO_EDGES
+  return upstreamEdgeIds(getNodes.value.map((n) => ({ id: n.id, position: n.position, parentNode: n.parentNode })), chainEdges(), computingNodeId.value)
+})
+watch(workingEdges, (now) => {
+  for (const e of getEdges.value) {
+    const on = now.has(e.id)
+    if (!!e.animated !== on) e.animated = on
+  }
+})
+/** Follows a run to its end: the edges move meanwhile. */
+async function following<T>(poll: () => Promise<T>): Promise<T> {
+  followedRuns.value++
+  try {
+    return await poll()
+  } finally {
+    followedRuns.value--
+  }
+}
+
 // control nodes (refresh/runflow/script/container): they require the server-side orchestration
 const hasControlNodes = () =>
   getNodes.value.some((n) => CONTROL_TYPES.has(n.type ?? ''))
@@ -2620,7 +3042,7 @@ async function executeRun(publish: PublishSpec | null) {
       })
       runDialogOpen.value = false // closed ONLY at a successful launch
       setStatus(t('flowEditor.runStarted', { id: launched.id }), 'busy')
-      pollRun(launched.id) // in the background: no lock on the editor
+      void following(() => pollRun(launched.id)) // in the background: no lock on the editor
     } else {
       // unsaved flow: direct run, without history or publishing. The SERVER assigns the output
       // key (out/<uuid> write-once): here we no longer choose it, only the task_id is polled.
@@ -2632,7 +3054,7 @@ async function executeRun(publish: PublishSpec | null) {
       })
       runDialogOpen.value = false
       setStatus(t('flowEditor.taskStarted', { id: res.task_id }), 'busy')
-      pollTask(res.task_id)
+      void following(() => pollTask(res.task_id))
     }
   } catch (e) {
     // 409 duplicate name / 403 permissions: the dialog stays open with the input intact
@@ -2650,7 +3072,7 @@ async function executeOrchestration() {
   try {
     const { run_id } = await flowsApi.runNow(flowId.value!)
     setStatus(t('flowEditor.orchestrationStarted'), 'busy')
-    pollOrchestration(run_id)
+    void following(() => pollOrchestration(run_id))
   } catch (e) {
     setStatus(t('flowEditor.errorGeneric', { error: errMessage(e) }), 'error')
   } finally {
@@ -2817,7 +3239,7 @@ async function executeOutputRuns() {
           mirror,
         })
         setStatus(`${label}: ${t('flowEditor.outputRunStarted', { id: launched.id })}`, 'busy')
-        pollRun(launched.id, label)
+        void following(() => pollRun(launched.id, label))
       } catch (e) {
         // 409 duplicate name / 403 permissions: the dialog stays open on the error
         runDialogError.value = `${label}: ${errMessage(e)}`
@@ -2934,7 +3356,13 @@ async function pollTask(id: string) {
       />
     </div>
 
-    <div ref="canvasEl" class="canvas" tabindex="-1" @drop="onCanvasDrop" @dragover="onCanvasDragOver" @contextmenu="onCanvasContextMenu">
+    <div
+      ref="canvasEl" class="canvas" tabindex="-1"
+      @drop="onCanvasDrop" @dragover="onCanvasDragOver" @dragleave="onCanvasDragLeave"
+      @contextmenu="onCanvasContextMenu" @keydown.capture="onCanvasKeys"
+    >
+      <!-- the canvas' keys, listed («?» opens it from the keyboard) -->
+      <GridKeys v-if="!loadBlocked" ref="canvasKeys" class="canvas-keys" :groups="editorKeyGroups" :title="$t('canvasKeys.title')" :label="$t('canvasKeys.button')" wide />
       <div v-if="loadBlocked" class="not-open" role="alert">
         <ShieldAlert :size="22" />
         <h2>{{ $t('flowEditor.cannotOpenTitle') }}</h2>
@@ -2944,7 +3372,6 @@ async function pollTask(id: string) {
         :nodes="initialNodes"
         :min-zoom="0.2"
         :delete-key-code="null"
-        :default-edge-options="{ animated: true }"
       >
         <template #edge-default="props">
           <FlowEdge v-bind="props" />
@@ -2977,8 +3404,36 @@ async function pollTask(id: string) {
           <CommentNode :id="props.id" :data="props.data" />
         </template>
         <Background pattern-color="#2a2f3a" :gap="16" />
+        <!-- Vue Flow's four buttons came without a name (an icon alone, nothing for a screen
+             reader, no tooltip): drawn here, in the icons of the three beside them -->
         <Controls>
-          <ControlButton :title="$t('flowEditor.orderFlowTitle')" @click="autoLayout">
+          <template #control-zoom-in>
+            <ControlButton class="vue-flow__controls-zoomin" :title="$t('canvasKeys.zoomIn')" :aria-label="$t('canvasKeys.zoomIn')" :disabled="viewport.zoom >= maxZoom" @click="zoomIn()">
+              <Plus :size="13" />
+            </ControlButton>
+          </template>
+          <template #control-zoom-out>
+            <ControlButton class="vue-flow__controls-zoomout" :title="$t('canvasKeys.zoomOut')" :aria-label="$t('canvasKeys.zoomOut')" :disabled="viewport.zoom <= minZoom" @click="zoomOut()">
+              <Minus :size="13" />
+            </ControlButton>
+          </template>
+          <template #control-fit-view>
+            <ControlButton class="vue-flow__controls-fitview" :title="$t('canvasKeys.fitView')" :aria-label="$t('canvasKeys.fitView')" @click="fitView()">
+              <Maximize :size="13" />
+            </ControlButton>
+          </template>
+          <template #control-interactive>
+            <ControlButton
+              class="vue-flow__controls-interactive"
+              :title="canvasLocked ? $t('canvasKeys.unlock') : $t('canvasKeys.lock')"
+              :aria-label="$t('canvasKeys.lock')"
+              :aria-pressed="canvasLocked"
+              @click="setInteractive(canvasLocked)"
+            >
+              <component :is="canvasLocked ? Lock : LockOpen" :size="13" />
+            </ControlButton>
+          </template>
+          <ControlButton :title="$t('flowEditor.orderFlowTitle')" :aria-label="$t('flowEditor.orderFlowTitle')" @click="autoLayout">
             <Wand2 :size="13" />
           </ControlButton>
           <ControlButton :title="$t('flowEditor.undoTitle')" :aria-label="$t('flowEditor.undoTitle')" :disabled="!canUndo" @click="undo">

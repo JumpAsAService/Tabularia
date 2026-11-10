@@ -15,7 +15,8 @@ import {
 
 const props = defineProps<{ items: string[] }>()
 const emit = defineEmits<{
-  (e: 'pick', op: string): void
+  // `branch`: Shift was held — the step starts a branch instead of going into the chain
+  (e: 'pick', op: string, branch: boolean): void
   (e: 'customize'): void
   (e: 'close', reason: 'escape' | 'outside' | 'other'): void
 }>()
@@ -101,14 +102,14 @@ function hide(reason: 'escape' | 'outside' | 'other' = 'other') {
   emit('close', reason)
 }
 
-function choose(i: number) {
+function choose(i: number, branch = false) {
   if (phase.value !== 'open') return
   const op = props.items[i]
   if (!op) return
   picked.value = i
   // the node is born at once; the chosen item's pulse plays while the menu fades
   leave('picking')
-  emit('pick', op)
+  emit('pick', op, branch)
 }
 
 function customize() {
@@ -163,7 +164,7 @@ function onKey(ev: KeyboardEvent) {
     case 'Enter': case ' ':
       ev.preventDefault()
       if (onHub) customize()
-      else choose(active.value)
+      else choose(active.value, ev.shiftKey)
   }
 }
 
@@ -212,7 +213,7 @@ defineExpose({ show, hide, isOpen: () => visible.value && phase.value === 'open'
         :tabindex="active === it.i ? 0 : -1"
         :aria-label="t(it.meta.label)"
         :style="{ '--x': `${it.x}px`, '--y': `${it.y}px`, '--i': it.i, '--c': it.meta.color }"
-        @click="choose(it.i)"
+        @click="choose(it.i, $event.shiftKey)"
         @focus="active = it.i"
         @pointermove="onPointerMove($event, it.i)"
       >
