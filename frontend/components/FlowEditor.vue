@@ -28,6 +28,7 @@ import { useFormat } from '~/composables/useFormat'
 import type { PreviewResult, ColumnInfo, Operation, IngestResult, ProfileResult, TopValuesResult, HistogramResult } from '~/composables/useApi'
 import type { DetailAsk } from '~/components/ui/DataGrid.vue'
 import GridKeys from '~/components/ui/GridKeys.vue'
+import { useKeyGroups, useKeyHelp } from '~/composables/useKeyHelp'
 import { SOURCE_ID, buildIncoming, resolveChain, leafNodeId, defaultParams, sampleLabel } from '~/composables/useFlowModel'
 import { Recent, previewKey, columnChanges, consumedColumns, nodeRowsPhrase, rowsPhrase, suggestSample, type RowCount } from '~/composables/previewGrid'
 import { opSubject } from '~/composables/opSummary'
@@ -1568,42 +1569,46 @@ async function saveShortcuts(list: string[] | null) {
 
 // ── The editor's keys, listed ─────────────────────────────────────────────
 // A keyboard button in the canvas' top right corner (always there, whatever is selected)
-// opens the list of EVERY key of the editor, in groups; «?» opens it too. The same quiet
-// button and panel as the data grid's (components/ui/GridKeys.vue). Each line is a key some
-// handler of the editor really takes (`onKeydown`, `onCanvasKeys`, the quick menu, Vue
-// Flow's own, the dividers): a key added there is added here. The quick menu's CHOICES are
-// another thing (FlowShortcutsDialog, «Customize» in the ring).
+// opens the list of EVERY key that works here, in groups; «?» opens it too. The same quiet
+// button and panel as the data grid's (components/ui/GridKeys.vue), and the same list as
+// the top bar's on the other pages (composables/useKeyHelp.ts): the editor DECLARES its
+// groups, the keys of everywhere and of the table on screen come with them. Each line is a
+// key some handler of the editor really takes (`onKeydown`, `onCanvasKeys`, the quick menu,
+// Vue Flow's own, the dividers): a key added there is added here. Every action has a way
+// with no function key and no Home, End, Del nor Menu key (a Mac has none of them). The
+// quick menu's CHOICES are another thing (FlowShortcutsDialog, «Customize» in the ring).
 const canvasKeys = ref<InstanceType<typeof GridKeys> | null>(null)
 const canvasLocked = computed(() => !(nodesDraggable.value || nodesConnectable.value || elementsSelectable.value))
-const editorKeyGroups = computed(() => {
-  const mac = /Mac|iPhone|iPad/.test(navigator.platform || '')
-  const mod = mac ? '⌘' : 'Ctrl'
+const keyHelp = useKeyHelp()
+keyHelp.host(() => canvasKeys.value?.toggle())
+useKeyGroups(() => {
+  const k = keyHelp.names
   const nodes: [string, string][] = [
-    ['Tab · Enter', t('canvasKeys.tabEnter')],
-    ['Alt+← · Alt+→', t('canvasKeys.walk')],
-    ['Alt+↑ · Alt+↓', t('canvasKeys.branches')],
-    ['Shift+← ↑ → ↓', t('canvasKeys.move')],
-    [mac ? '⌫ · Del' : 'Del · Backspace', t('canvasKeys.remove')],
-    [`${mod}+C · ${mod}+X · ${mod}+V`, t('canvasKeys.clipboard')],
-    [`${mod}+D`, t('canvasKeys.duplicate')],
-    [`${mod}+Z`, t('canvasKeys.undo')],
-    [`${mod}+Y · ${mod}+Shift+Z`, t('canvasKeys.redo')],
+    [`Tab · ${k.enter}`, t('canvasKeys.tabEnter')],
+    [`${k.chord(k.alt, '←')} · ${k.chord(k.alt, '→')}`, t('canvasKeys.walk')],
+    [`${k.chord(k.alt, '↑')} · ${k.chord(k.alt, '↓')}`, t('canvasKeys.branches')],
+    [k.chord(k.shift, '← ↑ → ↓'), t('canvasKeys.move')],
+    [k.ways({ pc: ['Del'], any: [k.backspace] }), t('canvasKeys.remove')],
+    [['C', 'X', 'V'].map((c) => k.chord(k.mod, c)).join(' · '), t('canvasKeys.clipboard')],
+    [k.chord(k.mod, 'D'), t('canvasKeys.duplicate')],
+    [k.chord(k.mod, 'Z'), t('canvasKeys.undo')],
+    // ⌘Y is the browser's history on a Mac
+    [k.ways({ pc: ['Ctrl+Y'], any: [k.chord(k.mod, k.shift, 'Z')] }), t('canvasKeys.redo')],
   ]
   const steps: [string, string][] = [
-    ['Shift+F10 · Menu', t('canvasKeys.menu')],
-    ['← → · Enter', t('canvasKeys.menuPick')],
-    ['Shift+Enter', t('canvasKeys.branch')],
+    [k.ways({ pc: ['Shift+F10'], any: ['m'] }), t('canvasKeys.menu')],
+    [`← → · ${k.enter}`, t('canvasKeys.menuPick')],
+    [k.chord(k.shift, k.enter), t('canvasKeys.branch')],
     ['Tab · Esc', t('canvasKeys.menuOther')],
   ]
   const running: [string, string][] = [
-    ...(observerOnly.value ? [] : [[`${mod}+Enter`, t('canvasKeys.run')] as [string, string]]),
+    ...(observerOnly.value ? [] : [[k.chord(k.mod, k.enter), t('canvasKeys.run')] as [string, string]]),
     ['Esc', t('canvasKeys.stop')],
-    [`${mod}+Enter`, t('canvasKeys.sqlPreview')],
+    [k.chord(k.mod, k.enter), t('canvasKeys.sqlPreview')],
   ]
   const rest: [string, string][] = [
-    ...(observerOnly.value ? [] : [[`${mod}+S`, t('canvasKeys.save')] as [string, string]]),
+    ...(observerOnly.value ? [] : [[k.chord(k.mod, 'S'), t('canvasKeys.save')] as [string, string]]),
     ['← → · ↑ ↓', t('canvasKeys.dividers')],
-    ['?', t('canvasKeys.list')],
   ]
   return [
     { title: t('canvasKeys.groupNodes'), keys: nodes },
@@ -1611,7 +1616,6 @@ const editorKeyGroups = computed(() => {
     // the two Ctrl+Enter are told apart by their words: the flow's, and the SQL field's
     { title: t('canvasKeys.groupRun'), keys: running },
     { title: t('canvasKeys.groupRest'), keys: rest },
-    { title: t('canvasKeys.groupTable'), keys: [], note: t('canvasKeys.tableKeys') },
   ]
 })
 
@@ -1984,10 +1988,12 @@ function onKeydown(e: KeyboardEvent) {
     walkGraph(WALKS[e.key]!)
     return
   }
-  // «?» lists the canvas' keys
-  if (e.key === '?' && !e.ctrlKey && !e.metaKey && !e.altKey && !inGrid) {
+  // «m» opens the menu of steps beside the selected node, as Shift+F10 and the Menu key do:
+  // the way of a keyboard without them, or whose function keys are its media keys. («?»,
+  // the list of keys, is the whole app's: components/ui/AppKeys.vue.)
+  if (e.key === 'm' && !e.ctrlKey && !e.metaKey && !e.altKey && !e.shiftKey && !inGrid && !e.defaultPrevented) {
     e.preventDefault()
-    canvasKeys.value?.toggle()
+    openQuickMenuFromKeyboard()
     return
   }
   if ((e.ctrlKey || e.metaKey) && !e.altKey) {
@@ -3362,7 +3368,7 @@ async function pollTask(id: string) {
       @contextmenu="onCanvasContextMenu" @keydown.capture="onCanvasKeys"
     >
       <!-- the canvas' keys, listed («?» opens it from the keyboard) -->
-      <GridKeys v-if="!loadBlocked" ref="canvasKeys" class="canvas-keys" :groups="editorKeyGroups" :title="$t('canvasKeys.title')" :label="$t('canvasKeys.button')" wide />
+      <GridKeys v-if="!loadBlocked" ref="canvasKeys" class="canvas-keys" :groups="keyHelp.groups.value" :title="$t('appKeys.title')" :label="$t('canvasKeys.button')" wide />
       <div v-if="loadBlocked" class="not-open" role="alert">
         <ShieldAlert :size="22" />
         <h2>{{ $t('flowEditor.cannotOpenTitle') }}</h2>
@@ -3470,7 +3476,7 @@ async function pollTask(id: string) {
         @mousedown="startPanelResize"
         @keydown="panelKeys"
       />
-      <div v-if="aiReady" class="panel-tabs" role="tablist" :aria-label="$t('flowAssistant.panelTabs')">
+      <div v-if="aiReady" v-roving class="panel-tabs" role="tablist" :aria-label="$t('flowAssistant.panelTabs')">
         <button
           type="button"
           role="tab"
@@ -3561,16 +3567,18 @@ async function pollTask(id: string) {
         @keydown="viewKeys"
       />
       <div class="viewhead">
-      <div class="viewtabs">
+      <div v-roving.main class="viewtabs" role="tablist" :aria-label="$t('appKeys.viewTabs')">
         <button
+          role="tab"
           :class="{ active: viewTab === 'table' }"
-          :aria-pressed="viewTab === 'table'"
+          :aria-selected="viewTab === 'table'"
           :aria-label="$t('flowEditor.tableTab')"
           @click="viewTab = 'table'"
         ><Table2 :size="13" aria-hidden="true" /><span class="vt-label">{{ $t('flowEditor.tableTab') }}</span></button>
         <button
+          role="tab"
           :class="{ active: viewTab === 'chart' }"
-          :aria-pressed="viewTab === 'chart'"
+          :aria-selected="viewTab === 'chart'"
           :aria-label="$t('flowEditor.chartTab')"
           @click="viewTab = 'chart'"
         ><BarChart3 :size="13" aria-hidden="true" /><span class="vt-label">{{ $t('flowEditor.chartTab') }}</span></button>

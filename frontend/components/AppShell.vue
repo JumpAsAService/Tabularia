@@ -3,6 +3,8 @@ import BrandMark from '~/components/ui/BrandMark.vue'
 import SessionsDialog from '~/components/ui/SessionsDialog.vue'
 import ApiTokensDialog from '~/components/ui/ApiTokensDialog.vue'
 import PasswordDialog from '~/components/ui/PasswordDialog.vue'
+import GridKeys from '~/components/ui/GridKeys.vue'
+import { useKeyHelp } from '~/composables/useKeyHelp'
 import { useAppInfo } from '~/composables/useAppInfo'
 import { useScriptingEditor } from '~/composables/useScripting'
 import { useRegistriesEditor } from '~/composables/useRegistries'
@@ -54,10 +56,6 @@ const { locale, setLocale, locales } = useLocale()
 const route = useRoute()
 
 const isSuper = computed(() => !!user.value?.is_superuser)
-// Who may SEE the panels: administrator or observer. The menu item looks at this, the
-// commands inside the panels look at `isSuper`.
-const canObserve = computed(() => isSuper.value || !!user.value?.is_observer)
-
 // engine options for the selector (only the available ones)
 const engineOptions = computed(() =>
   engineCatalog.value.filter((e) => e.available).map((e) => ({ value: e.id, label: e.label })),
@@ -101,47 +99,48 @@ const canChangePassword = computed(() => !!user.value && !(user.value.is_observe
 const scriptingEditor = useScriptingEditor()
 const registriesEditor = useRegistriesEditor()
 onMounted(() => { scriptingEditor.load(); registriesEditor.load() })
-const scriptingTab = computed(() => scriptingEditor.available.value || registriesEditor.available.value)
 
-type NavLink = { to: string; label: string; icon: Component }
+// The list of keys (the keyboard button beside the gear, and «?»): the keys of everywhere
+// and whatever the page on screen declared. This bar's button is where the list opens.
+const keyHelp = useKeyHelp()
+const appKeysBtn = ref<InstanceType<typeof GridKeys> | null>(null)
+keyHelp.host(() => appKeysBtn.value?.toggle())
+
+type NavLink = { to: string; label: string; icon: Component; keys: string }
 type NavMenu = { menu: 'analysis' | 'admin'; label: string; icon: Component; links: NavLink[] }
 
+// The places are one table (composables/appKeys.ts, NAV_SECTIONS), shared with the keys
+// that lead to them: «g» then a place's letter goes only where this bar has a link.
+const ICONS: Record<string, Component> = {
+  explore: FolderTree, flows: Workflow, datasources: Database, lineage: Share2,
+  viewer: PieChart, reports: FileChartColumn, dashboards: LayoutDashboard,
+  assistant: Sparkles, connections: Plug, scripting: Terminal, runs: History,
+  admin: Shield, queue: Cpu, monitoring: Activity, performance: Gauge, cluster: Server, audit: ScrollText,
+}
 /* Analysis: the places where data is read rather than prepared, the Viewer, the Reports
    and the Dashboards tabs. The bar had no room for one more item (measured on Chrome and Firefox: at
    1440px only the English bar fitted, with 44px to spare, and the item takes 83 to 98px
-   by language), so the Viewer's place became a menu with both, as Administration. */
-const analysisLinks = computed<NavLink[]>(() => [
-  { to: '/viewer', label: t('nav.viewer'), icon: PieChart },
-  { to: '/reports', label: t('nav.reports'), icon: FileChartColumn },
-  { to: '/dashboards', label: t('nav.dashboards'), icon: LayoutDashboard },
-])
+   by language), so the Viewer's place became a menu with both, as Administration.
+   Administration: destinations that in the product are ONE place, and in the bar were
+   items at the same level as Flows or Datasources. Gathered under one item with its menu,
+   like the settings gear: the bar tells a structure that exists already. */
+const MENUS: Record<NavMenu['menu'], { label: string; icon: Component }> = {
+  analysis: { label: 'nav.analysis', icon: ChartNoAxesCombined },
+  admin: { label: 'nav.administration', icon: Shield },
+}
 
-/* Administration: five destinations that in the product are ONE place, and in the bar
-   were five items at the same level as Flows or Datasources. Gathered under one item
-   with its menu, like the settings gear: the bar goes from thirteen elements to nine and
-   tells a structure that exists already. */
-const adminLinks = computed<NavLink[]>(() => [
-  { to: '/admin', label: t('nav.admin'), icon: Shield },
-  { to: '/queue', label: t('nav.queue'), icon: Cpu },
-  { to: '/monitoring', label: t('nav.monitoring'), icon: Activity },
-  { to: '/performance', label: t('nav.performance'), icon: Gauge },
-  { to: '/cluster', label: t('nav.cluster'), icon: Server },
-  { to: '/audit', label: t('nav.audit'), icon: ScrollText },
-])
-
-const items = computed<(NavLink | NavMenu)[]>(() => [
-  { to: '/', label: t('nav.explore'), icon: FolderTree },
-  { to: '/flows', label: t('nav.flows'), icon: Workflow },
-  { to: '/datasources', label: t('nav.datasources'), icon: Database },
-  { to: '/lineage', label: t('nav.lineage'), icon: Share2 },
-  { menu: 'analysis', label: t('nav.analysis'), icon: ChartNoAxesCombined, links: analysisLinks.value },
-  { to: '/chat', label: t('nav.assistant'), icon: Sparkles },
-  { to: '/connections', label: t('nav.connections'), icon: Plug },
-  // only to whoever may use a scripting environment or a container registry
-  ...(scriptingTab.value ? [{ to: '/scripting', label: t('nav.scripting'), icon: Terminal }] : []),
-  { to: '/runs', label: t('nav.runs'), icon: History },
-  ...(canObserve.value ? [{ menu: 'admin', label: t('nav.administration'), icon: Shield, links: adminLinks.value } as NavMenu] : []),
-])
+const items = computed<(NavLink | NavMenu)[]>(() => {
+  const out: (NavLink | NavMenu)[] = []
+  for (const s of keyHelp.sections.value) {
+    const link: NavLink = { to: s.to, label: t(s.label), icon: ICONS[s.id], keys: `g ${s.key}` }
+    if (!s.menu) { out.push(link); continue }
+    const which = s.menu
+    let menu = out.find((i): i is NavMenu => 'menu' in i && i.menu === which)
+    if (!menu) out.push(menu = { menu: which, label: t(MENUS[which].label), icon: MENUS[which].icon, links: [] })
+    menu.links.push(link)
+  }
+  return out
+})
 const isMenu = (i: NavLink | NavMenu): i is NavMenu => 'menu' in i
 
 // one menu open at a time, its panel on the body
@@ -231,7 +230,7 @@ onMounted(async () => {
               <ChevronDown :size="13" class="caret" :class="{ up: openMenu === i.menu }" />
             </button>
           </div>
-          <NuxtLink v-else :to="i.to" class="navlink" :class="{ on: route.path === i.to }">
+          <NuxtLink v-else :to="i.to" class="navlink" :class="{ on: route.path === i.to }" :aria-keyshortcuts="i.keys">
             <component :is="i.icon" :size="14" /> {{ i.label }}
           </NuxtLink>
         </template>
@@ -249,6 +248,7 @@ onMounted(async () => {
               class="menu-item"
               :class="{ on: route.path === l.to }"
               role="menuitem"
+              :aria-keyshortcuts="l.keys"
               @click="closeNavMenu()"
             >
               <component :is="l.icon" :size="14" /> {{ l.label }}
@@ -260,6 +260,16 @@ onMounted(async () => {
       <span class="spacer" />
       <GlobalSearch />
       <MemoryGauge />
+      <!-- every key of the app and of this page; «?» opens it too -->
+      <GridKeys
+        ref="appKeysBtn"
+        class="appkeys"
+        wide
+        fixed
+        :groups="keyHelp.groups.value"
+        :title="t('appKeys.title')"
+        :label="t('appKeys.button')"
+      />
 
       <!-- settings: gear → full user name, theme, logout -->
       <div class="settings">
@@ -455,6 +465,9 @@ onMounted(async () => {
 
 /* ── Settings (gear + menu) ──────────────────────────────────────────── */
 .settings { position: relative; }
+/* the keyboard button stands close to the gear and the gauge: the bar's gap on both of its
+   sides would take from the navigation the room of a whole link (it scrolls when crowded) */
+.appkeys { margin-inline: -10px; }
 .gear { padding: 6px 8px; color: var(--muted); }
 .gear:hover, .gear.on { color: var(--text); border-color: var(--accent); }
 /* invisible backdrop: click outside → closes (no global listeners) */
@@ -567,9 +580,11 @@ onMounted(async () => {
    only the mark (it stays for the screen readers). The search and the memory indicator
    shrink by themselves. Measured: with nine admin items, at 1440px Connections, Runs and
    Administration ended up out of the visible part. */
+/* 9px, not 10: the keyboard button took 20px of the bar, and eleven links give them back a
+   pixel a side (measured at 1500px: the Italian bar fits again, as before the button) */
 @media (max-width: 1600px) {
   .topbar { gap: 16px; }
-  .navlink { padding: 0 10px; }
+  .navlink { padding: 0 9px; }
 }
 @media (max-width: 1100px) {
   .brand-name {
