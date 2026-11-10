@@ -15,8 +15,8 @@ const { t } = useI18n()
 const doc = computed(() => store.doc.value as DBoard)
 
 const LANGUAGES = [
-  { value: 'en', label: 'English' }, { value: 'it', label: 'Italiano' }, { value: 'de', label: 'Deutsch' },
-  { value: 'es', label: 'Español' }, { value: 'fr', label: 'Français' },
+  { value: 'en', label: 'English', flag: 'en' }, { value: 'it', label: 'Italiano', flag: 'it' }, { value: 'de', label: 'Deutsch', flag: 'de' },
+  { value: 'es', label: 'Español', flag: 'es' }, { value: 'fr', label: 'Français', flag: 'fr' },
 ]
 const zones = computed(() => {
   let list: string[] = []

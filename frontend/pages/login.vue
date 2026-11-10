@@ -112,7 +112,7 @@ async function onSubmit() {
     <div class="lang">
       <Select
         :model-value="locale"
-        :options="locales.map((l) => ({ value: l.code, label: l.label }))"
+        :options="locales.map((l) => ({ value: l.code, label: l.label, flag: l.code }))"
         :aria-label="$t('login.language')"
         @update:model-value="setLocale($event as any)"
       />
@@ -330,7 +330,7 @@ h1 { margin: 0; font-size: 26px; font-weight: 600; letter-spacing: -0.01em; line
 .sep { display: flex; align-items: center; gap: 10px; margin: -2px 0; color: var(--muted); font-size: 12px; }
 .sep::before, .sep::after { content: ""; flex: 1; height: 1px; background: var(--border); }
 
-.lang { position: absolute; z-index: 3; top: 18px; right: 18px; width: 132px; }
+.lang { position: absolute; z-index: 3; top: 18px; right: 18px; width: 150px; }
 
 .side {
   position: absolute;

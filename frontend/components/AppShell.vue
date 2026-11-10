@@ -61,7 +61,7 @@ const engineOptions = computed(() =>
   engineCatalog.value.filter((e) => e.available).map((e) => ({ value: e.id, label: e.label })),
 )
 // language options for the selector
-const localeOptions = computed(() => locales.map((l) => ({ value: l.code, label: l.label })))
+const localeOptions = computed(() => locales.map((l) => ({ value: l.code, label: l.label, flag: l.code })))
 // theme options: light/dark translated, Dracula/Monokai proper names
 const themeOptions = computed(() => [
   { value: 'dark', label: t('settings.dark') },

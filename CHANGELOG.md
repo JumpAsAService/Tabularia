@@ -5,6 +5,9 @@ exposes at `/system/info` and in the app's settings menu.
 
 ## Unreleased
 
+- **The language menu shows each language's flag beside its name**, at sign-in, in the
+  settings menu and where a report or a dashboard chooses its language. The flags are
+  drawn in the page (no emoji: they differ, or are two letters, from one system to another).
 - **The sample company changes sector: it now makes pasta and bakery goods.** Same two
   databases, same schemas, tables and columns, same sizes at every `SAMPLES_SCALE` and the
   same eleven flows, reports, dashboard and views; what they hold is new. The catalogue has
