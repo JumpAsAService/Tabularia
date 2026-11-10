@@ -86,6 +86,7 @@ import DatasourcePanel from '~/components/ui/DatasourcePanel.vue'
 import ExploreStart from '~/components/ui/ExploreStart.vue'
 import RowMenu, { type RowMenuItem } from '~/components/ui/RowMenu.vue'
 import { searchEverywhere } from '~/composables/useSearch'
+import { useKeyGroups, useKeyHelp } from '~/composables/useKeyHelp'
 import {
   useProjects,
   CAPABILITIES,
@@ -1246,9 +1247,29 @@ function deleteCurrentFolder() {
 }
 
 // ── Keyboard ──────────────────────────────────────────────────────────────────
-// `/` the filter, ↑ ↓ the active row, Enter opens it, Backspace or Alt+↑ up a folder, F2
-// renames, Shift+F10 or the Menu key its commands (exploreList.keyCommand). No motion on
-// any of them: they are repeated all day.
+// `/` the filter, ↑ ↓ the active row, Home and End the first and the last, Enter opens it,
+// Backspace or Alt+↑ up a folder, F2 or `r` renames, Shift+F10, the Menu key or `m` its
+// commands, Del deletes (the dialog asks), `h` a flow's runs, `n` «New»
+// (exploreList.keyCommand). No motion on any of them: they are repeated all day. Each is
+// listed by the top bar's keyboard button and by «?»: a key learnt there is added here.
+const { names: kn } = useKeyHelp()
+useKeyGroups(() => [{
+  title: t('exploreKeys.group'),
+  keys: [
+    ['/', t('exploreKeys.filter')],
+    ['↑ ↓', t('exploreKeys.rows')],
+    [kn.ways({ pc: ['Home · End'], mac: [`${kn.chord(kn.mod, '↑')} · ${kn.chord(kn.mod, '↓')}`] }), t('exploreKeys.ends')],
+    [kn.enter, t('exploreKeys.open')],
+    [`${kn.backspace} · ${kn.chord(kn.alt, '↑')}`, t('exploreKeys.up')],
+    [kn.ways({ pc: ['F2'], any: ['r'] }), t('exploreKeys.rename')],
+    [kn.ways({ pc: ['Shift+F10'], any: ['m'] }), t('exploreKeys.menu')],
+    ['↑ ↓ · ' + kn.enter + ' · Esc', t('exploreKeys.menuPick')],
+    [kn.ways({ pc: ['Del'], mac: [kn.chord(kn.mod, kn.backspace)] }), t('exploreKeys.remove')],
+    ['h', t('exploreKeys.history')],
+    ['n', t('exploreKeys.new')],
+  ] as [string, string][],
+}])
+const newBtn = ref<HTMLButtonElement | null>(null)
 const searchInput = ref<HTMLInputElement | null>(null)
 const startBand = ref<InstanceType<typeof ExploreStart> | null>(null)
 const activeKey = ref<string | null>(null)
@@ -1291,7 +1312,7 @@ function openRow(r: Row) {
 function onKey(e: KeyboardEvent) {
   if (e.defaultPrevented) return
   // a dialog, a side panel or a menu open: the keys are theirs
-  if (document.querySelector('[aria-modal="true"], [role="menu"], .menu-pop, .sel-panel')) return
+  if (document.querySelector('[aria-modal="true"], [role="menu"], .menu-pop, .sel-panel, .gk-pop')) return
   const el = e.target as HTMLElement | null
   const inField = !!el?.closest?.('input, textarea, select, [contenteditable=""], [contenteditable="true"]')
   const onControl = !!el?.closest?.('button, a[href]')
@@ -1313,10 +1334,35 @@ function onKey(e: KeyboardEvent) {
       activate(rowKey(list[i]))
       return
     }
+    case 'first':
+    case 'last':
+      if (!list.length) return
+      e.preventDefault()
+      activate(rowKey(list[cmd === 'first' ? 0 : list.length - 1]))
+      return
     case 'open':
       if (!row) return
       e.preventDefault()
       openRow(row)
+      return
+    case 'delete':
+      // the row's own «Delete»: the same dialog, which asks first
+      if (!row || !rowActions(rowFacts(row)).some((a) => a.id === 'delete')) return
+      e.preventDefault()
+      removeRow(row)
+      return
+    case 'history':
+      if (!row || !rowActions(rowFacts(row)).some((a) => a.id === 'history')) return
+      e.preventDefault()
+      runsByKey = true
+      toggleRuns(row.raw)
+      return
+    case 'new':
+      // the «New» button's own menu, opened as from the keyboard (no motion)
+      if (!newBtn.value || newBtn.value.disabled || newMenu.value) return
+      e.preventDefault()
+      newMenuByKey.value = true
+      newMenu.value = true
       return
     case 'up':
       if (currentId.value == null) return
@@ -1612,7 +1658,7 @@ watch(currentId, () => { q.value = ''; kindFilter.value = null; settingsOpen.val
       </button>
 
       <div v-if="!treeLoaded || target !== null || isSuper" class="newwrap">
-        <button class="btn-link" :disabled="state === 'loading'" :aria-busy="state === 'loading'" @click="newMenuByKey = !newMenu && $event.detail === 0; newMenu = !newMenu"><Plus :size="14" /> {{ $t('projectBrowser.newButton') }}</button>
+        <button ref="newBtn" class="btn-link" aria-keyshortcuts="n" :disabled="state === 'loading'" :aria-busy="state === 'loading'" @click="newMenuByKey = !newMenu && $event.detail === 0; newMenu = !newMenu"><Plus :size="14" /> {{ $t('projectBrowser.newButton') }}</button>
         <div v-if="newMenu" class="menu-backdrop" @click="closeNew" />
         <Transition name="pop" :css="!newMenuByKey">
         <div v-if="newMenu" ref="newPop" class="menu-pop">
@@ -1708,14 +1754,16 @@ watch(currentId, () => { q.value = ''; kindFilter.value = null; settingsOpen.val
     </div>
 
     <!-- kind filter: the numbers say what is inside, before looking -->
-    <div v-if="state !== 'loading' && segments.length > 1" class="segs">
-      <button class="seg" :class="{ on: kindFilter === null }" @click="kindFilter = null">
+    <div v-if="state !== 'loading' && segments.length > 1" v-roving.main class="segs" role="radiogroup" :aria-label="$t('exploreKeys.kindFilter')">
+      <button class="seg" role="radio" :aria-checked="kindFilter === null" :class="{ on: kindFilter === null }" @click="kindFilter = null">
         {{ $t('projectBrowser.allSegment') }} <span class="n">{{ matching.length }}</span>
       </button>
       <button
         v-for="s in segments"
         :key="s.kind"
         class="seg"
+        role="radio"
+        :aria-checked="kindFilter === s.kind"
         :class="{ on: kindFilter === s.kind }"
         @click="kindFilter = kindFilter === s.kind ? null : s.kind"
       >

@@ -67,12 +67,17 @@ export function primaryAction(r: RowFacts): RowAction | null {
 }
 
 /**
- * Explore's keys, outside the text fields: `/` the filter, ↑ ↓ the active row, Enter opens
- * it, Backspace or Alt+↑ the parent folder, F2 renames, Shift+F10 or the Menu key its
- * commands. With Ctrl or ⌘ the browser's own shortcuts win; Enter on a button or a link is
- * the control's own (it opens the same thing).
+ * Explore's keys, outside the text fields: `/` the filter, ↑ ↓ the active row, Home and End
+ * (or Ctrl/⌘+↑ ↓) the first and the last, Enter opens it, Backspace or Alt+↑ the parent
+ * folder, F2 or `r` renames, Shift+F10, the Menu key or `m` its commands, Del (or
+ * Ctrl/⌘+Backspace) deletes after the dialog, `h` a flow's run history, `n` the «New» menu.
+ * Every action has a way with no function key and no Home, End, Del nor Menu key: a Mac has
+ * none of them, and a laptop's function keys are often its media keys. No other chord with
+ * Ctrl or ⌘ (the browser's own win), none with Alt and a letter (on a Mac it types a
+ * character); Enter on a button or a link is the control's own (it opens the same thing).
  */
-export type KeyCommand = 'filter' | 'next' | 'prev' | 'open' | 'up' | 'rename' | 'menu'
+export type KeyCommand =
+  | 'filter' | 'next' | 'prev' | 'first' | 'last' | 'open' | 'up' | 'rename' | 'menu' | 'delete' | 'history' | 'new'
 
 export function keyCommand(k: {
   key: string
@@ -85,18 +90,35 @@ export function keyCommand(k: {
   /** the focus is on a button or a link, which answers Enter by itself */
   onControl?: boolean
 }): KeyCommand | null {
-  if (k.inField || k.ctrlKey || k.metaKey) return null
+  if (k.inField) return null
+  if (k.ctrlKey || k.metaKey) {
+    if (k.altKey || k.shiftKey) return null
+    if (k.key === 'ArrowUp') return 'first'
+    if (k.key === 'ArrowDown') return 'last'
+    if (k.key === 'Backspace') return 'delete'
+    return null
+  }
   if (k.key === 'ArrowUp' && k.altKey) return 'up'
   if (k.altKey) return null
   switch (k.key) {
     case '/': return 'filter'
     case 'ArrowDown': return 'next'
     case 'ArrowUp': return 'prev'
+    case 'Home': return 'first'
+    case 'End': return 'last'
     case 'Enter': return k.onControl ? null : 'open'
     case 'Backspace': return 'up'
+    case 'Delete': return 'delete'
     case 'F2': return 'rename'
     case 'F10': return k.shiftKey ? 'menu' : null
     case 'ContextMenu': return 'menu'
+  }
+  if (k.shiftKey) return null
+  switch (k.key) {
+    case 'r': return 'rename'
+    case 'm': return 'menu'
+    case 'h': return 'history'
+    case 'n': return 'new'
   }
   return null
 }
