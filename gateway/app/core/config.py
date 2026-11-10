@@ -311,7 +311,7 @@ class MonitoringSettings(BaseModel):
 # ─────────────────────────────────────────────────────────────────────────────
 class AppSettings(BaseModel):
     name: str = "Tabularia"
-    version: str = "1.4.3"  # the release: exposed by /system/info and in the app's menu
+    version: str = "1.4.4"  # the release: exposed by /system/info and in the app's menu
     # the release's name. 1.0–1.2 were «Appio»: Appius Claudius Caecus, censor in 312 BC,
     # who rewrote the lists of the citizens and built the first aqueduct. 1.3 is «Catone»:
     # Marcus Porcius Cato, censor in 184 BC, remembered for the rigour of his census: he

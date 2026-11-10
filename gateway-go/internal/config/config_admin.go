@@ -53,7 +53,7 @@ type AdminConfig struct {
 func loadAdmin(r *reader) AdminConfig {
 	c := AdminConfig{
 		Timezone: r.str("APP__TIMEZONE", "UTC"),
-		Version:  r.str("APP__VERSION", "1.4.3"),
+		Version:  r.str("APP__VERSION", "1.4.4"),
 	}
 	c.WebhooksTimeout = r.adminFloat("WEBHOOKS__TIMEOUT_SECONDS", 10, 0, 60)
 	c.BackupEnabled = r.boolean("BACKUP__ENABLED", true)

@@ -5,8 +5,25 @@ exposes at `/system/info` and in the app's settings menu.
 
 ## Unreleased
 
-## 1.4.4 «Romulus» — 2026-11-10 · long-term support
+## 1.4.4 «Romulus» — 2026-11-11 · long-term support
 
+A patch of the 1.4 line: data-correctness fixes on ClickHouse imports and on the dbt export, a
+Polars preview that no longer downloads its whole source, and the new sample company.
+
+**Upgrading.** No migration: replace the images. The first preview after the upgrade recomputes
+(the step cache starts again); the new sample comes with new installations, a loaded one stays until reloaded.
+
+- **A release never reads what another release computed.** The step cache knew a result by
+  engine, source and chain of steps: after an upgrade that changes what a step gives under the
+  same operations (an `Enum` read as its label, here) previews and runs went on starting from
+  the copies the release before had made, with its counts and column profiles, for as long as
+  somebody kept reading them. The release is now part of every fingerprint, and of the
+  dashboards' cached numbers; nothing is deleted, the old copies expire by the cache's TTL.
+- **The Polars engine reads previews, counts and column profiles in place on the storage.** A
+  preview downloaded its whole source before reading the first rows: 6.4 s for 500 rows of an
+  830 MB datasource, now 0.5 s (0.05 s for 3 of its 80 columns), because only the columns and
+  row groups the chain needs travel. A run and an export still read their source whole;
+  `STORAGE__DIRECT_READ=false` goes back to the download.
 - **dbt export, a 4-byte float stays one and an instant keeps its unit.** A Postgres `real` or
   a ClickHouse `Float32` became a double (`0.1` as text was `0.10000000149011612`), and an
   instant read to the millisecond lost its unit: as text it now has three digits of fraction,
@@ -32,6 +49,16 @@ exposes at `/system/info` and in the app's settings menu.
   exported without AI was refused (`step_invalid`) as soon as the AI options were on.
 - **An imported ClickHouse table gives an `Enum` as its label** (it was its code: 'rosso' was
   1) **and a `FixedString` as text** (it was binary, which the CSV export could not write).
+- **The sample company changes sector: it now makes pasta and bakery goods.** Same two
+  databases, same schemas, tables and sizes at every `SAMPLES_SCALE`, and the same eleven
+  flows, reports, dashboard and views; what they hold is new. The catalogue has 24 products in
+  94 SKUs and five categories (`Pasta di semola`, `Pasta fresca`, `Biscotti`,
+  `Sostitutivi del pane`, `Dolci da ricorrenza`), the channels are `Supermercati`,
+  `Ristorazione`, `Ingrosso`, `Negozi` and `Online`, the depots Verona, Torino, Bari, Roma and
+  Ancona; the two fulfilment anomalies are still there to find (Bari's cancelled orders grow
+  year after year, Torino has a bad spring in 2025). One column changes its name: the
+  products' shelf life, in months, is `catalogo.prodotti.conservazione_mesi`. The guides'
+  examples and numbers are those of the new data; their screenshots will follow.
 
 ## 1.4.3 «Romulus» — 2026-11-10 · long-term support
 
