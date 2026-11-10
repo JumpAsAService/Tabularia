@@ -435,6 +435,17 @@ def test_the_engine_s_new_refusals_read_in_every_language(code):
         assert all(str(v) in sentence for v in params.values()), (code, language, sentence)
 
 
+@pytest.mark.parametrize("params", [
+    {"index": ["canale"], "values": "importo", "func": "sum"},    # rows only (84a0762)
+    {"on": "canale", "values": "importo", "func": "sum"},         # columns only
+], ids=["rows_only", "columns_only"])
+def test_a_pivot_with_rows_only_or_columns_only_is_a_whole_step(params):
+    """The engine (operations.pivot_params) and the Go gateway need 'values' and one of
+    'index' or 'on': the AI service's pre-check must not refuse what exports without it."""
+    assert d._incomplete_step({"type": "pivot", "params": params}) is None
+    assert d._incomplete_step({"type": "pivot", "params": {"index": ["canale"]}}).code == "step_invalid"
+
+
 # ── #11: an incomplete node is refused in the plan, not only at the download ──
 @pytest.mark.parametrize("node, right, code", [
     (_op("j", "join", {"how": "left", "on": ["id"]}), False, "step_invalid"),                                   # nothing on the right handle
@@ -447,8 +458,10 @@ def test_the_engine_s_new_refusals_read_in_every_language(code):
     (_op("j", "filter", {"column": "canale", "operator": "in", "value": []}), False, "filter_value_missing"),
     (_op("j", "group_by", {"by": ["canale"], "aggregations": [{"func": "sum"}]}), False, "step_invalid"),
     (_op("j", "sort", {"descending": False}), False, "step_invalid"),
+    (_op("j", "pivot", {"values": "importo", "func": "sum"}), False, "step_invalid"),                          # neither rows nor columns
 ], ids=["join_no_right", "union_no_right", "join_keys_unequal", "join_no_keys", "filter_no_column", "eq_no_value",
-        "between_one_value", "in_empty", "aggregation_no_column", "sort_no_by"])
+        "between_one_value", "in_empty", "aggregation_no_column", "sort_no_by",
+        "pivot_no_rows_no_columns"])
 def test_an_incomplete_node_makes_every_target_unavailable_in_the_plan(session, scene, node, right, code):
     nodes = [_src_node("s", scene.orders.id), _src_node("r", scene.customers.id), node, _ds_output("o", "Out", scene.folder.id)]
     edges = [_edge("s", "j"), _edge("j", "o")] + ([_edge("r", "j", "right")] if right else [])
