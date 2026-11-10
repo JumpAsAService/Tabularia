@@ -5,6 +5,34 @@ exposes at `/system/info` and in the app's settings menu.
 
 ## Unreleased
 
+## 1.4.4 «Romulus» — 2026-11-10 · long-term support
+
+- **dbt export, a 4-byte float stays one and an instant keeps its unit.** A Postgres `real` or
+  a ClickHouse `Float32` became a double (`0.1` as text was `0.10000000149011612`), and an
+  instant read to the millisecond lost its unit: as text it now has three digits of fraction,
+  as in Tabularia. On native Postgres an instant made text has its whole fraction when the
+  flow's engine writes it so.
+- **dbt export, a filter with the calendar's value and a decimal made integer run on
+  ClickHouse.** The editor's calendar writes `2024-01-05T10:30`, without seconds, which
+  ClickHouse refused, and a `Decimal` cast to an integer overflowed in its range check: both
+  failed the model.
+- **dbt export, a file over the seed cap is refused by the plan.** A file loaded in the editor
+  with more than 50,000 rows is refused naming the file; before, the download failed after the
+  plan had offered every target.
+- **dbt export, a contract gives Tabularia's verdict on instants and word boundaries.** A
+  `range` rule on an instant with an offset, a `Z` or the calendar's value without seconds
+  ERRORed on ClickHouse and read the offset otherwise on DuckDB and Postgres; a pattern's `\b`
+  was a backspace on Postgres, so the rule passed every value there.
+- **dbt export, a model that writes the customer's own table says what dbt does to it**, in its
+  header and in the README: dbt rebuilds a *replace* table (types, keys, indexes, grants and
+  comments lost; views and foreign keys dropped on Postgres), widens column types on an append,
+  and on ClickHouse appends **by position** (a table with its columns in another order gets its
+  values swapped). The README also says a MySQL query on ClickHouse compares text by bytes.
+- **dbt export with the AI options takes a pivot with rows only or columns only.** A flow that
+  exported without AI was refused (`step_invalid`) as soon as the AI options were on.
+- **An imported ClickHouse table gives an `Enum` as its label** (it was its code: 'rosso' was
+  1) **and a `FixedString` as text** (it was binary, which the CSV export could not write).
+
 ## 1.4.3 «Romulus» — 2026-11-10 · long-term support
 
 A patch of the 1.4 line: data-correctness fixes found by a second hunt on the dbt export's
