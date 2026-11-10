@@ -15,10 +15,11 @@ import { existsSync, statSync } from 'node:fs'
 import { join, posix } from 'node:path'
 import { isPublished } from './repo-files.mjs'
 
-// Folders and files of docs/ that are not published as pages: internal notes, and the
-// production compose guide that the owner keeps local.
+// Folders and files of docs/ that are not published as pages: internal notes, the
+// production compose guide that the owner keeps local, and the route inventory of the Go
+// port (generated for the developers; its links go to GitHub).
 export const PRIVATE_DOC_DIRS = ['audit', 'specs']
-export const PRIVATE_DOC_FILES = ['deploy/docker-compose.md']
+export const PRIVATE_DOC_FILES = ['deploy/docker-compose.md', 'gateway-go-routes.md']
 
 // Folders of docs/ published as plain files next to the pages (the walkthrough's
 // screenshots, and the guide's screenshots and GIFs; the other files of docs/media are not
