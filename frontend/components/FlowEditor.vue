@@ -65,7 +65,7 @@ const bucket = useRuntimeConfig().public.bucket as string
 const {
   getNodes,
   getEdges,
-  addNodes,
+  addNodes: addNodesNow,
   addEdges,
   setNodes,
   setEdges,
@@ -91,6 +91,12 @@ const {
   getViewport,
   onNodesInitialized,
 } = useVueFlow()
+
+// A node someone adds arrives (`.node-new` in main.css: a short fade and growth, once); a
+// flow that loads is set whole with setNodes and stands there at once. The class is not
+// saved with the flow.
+const addNodes: typeof addNodesNow = (nodes) =>
+  addNodesNow(typeof nodes === 'function' ? nodes : (Array.isArray(nodes) ? nodes : [nodes]).map((n) => ({ ...n, class: 'node-new' })))
 
 const initialNodes: Node[] = [
   {

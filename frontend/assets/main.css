@@ -504,6 +504,14 @@ optgroup { font-style: normal; color: var(--muted); }
 .veil-leave-active { transition: opacity 120ms ease-out; pointer-events: none; }
 .veil-enter-from, .veil-leave-to { opacity: 0; }
 .drawer-leave-active { pointer-events: none; }
+/* a detail that opens under its row (name="unfold", on a wrapper with one child): the
+   wrapper's only grid row grows from 0 to the child's height, so what is below is pushed
+   down instead of jumping; leaving is quicker */
+.unfold-enter-active, .unfold-leave-active { display: grid; grid-template-rows: 1fr; overflow: hidden; }
+.unfold-enter-active > *, .unfold-leave-active > * { min-height: 0; }
+.unfold-enter-active { transition: grid-template-rows var(--dur-3) var(--ease-out), opacity var(--dur-3) var(--ease-out); }
+.unfold-leave-active { transition: grid-template-rows var(--dur-2) ease-out, opacity var(--dur-2) ease-out; pointer-events: none; }
+.unfold-enter-from, .unfold-leave-to { grid-template-rows: 0fr; opacity: 0; }
 /* menus anchored to a button (name="pop"): they grow from the button's corner */
 .pop-enter-active { transition: opacity var(--dur-2) var(--ease-out), transform var(--dur-2) var(--ease-out); transform-origin: top right; }
 .pop-leave-active { transition: opacity var(--dur-1) ease-out; pointer-events: none; }
@@ -520,6 +528,8 @@ optgroup { font-style: normal; color: var(--muted); }
   .dlg-enter-active, .veil-enter-active { transition-duration: 120ms; }
   .drawer-enter-active, .drawer-leave-active { transition: opacity 120ms ease-out; }
   .drawer-enter-from, .drawer-leave-to { opacity: 0; }
+  .unfold-enter-active, .unfold-leave-active { transition: opacity 100ms ease-out; }
+  .unfold-enter-from, .unfold-leave-to { grid-template-rows: 1fr; }
 }
 
 /* ── Layout editor ───────────────────────────────────────────────────── */
@@ -778,6 +788,12 @@ optgroup { font-style: normal; color: var(--muted); }
 .vue-flow__controls-button:disabled { cursor: default; }
 .vue-flow__controls-button:disabled:hover { background: var(--panel-2); }
 .vue-flow__controls-button:disabled svg { opacity: 0.35; }
+/* a node someone adds arrives where it was dropped: on the card inside, never on Vue
+   Flow's wrapper, whose transform is the node's position */
+@media (prefers-reduced-motion: no-preference) {
+  .vue-flow__node.node-new .node { animation: node-in var(--dur-2) var(--ease-out) backwards; }
+}
+@keyframes node-in { from { opacity: 0; transform: scale(0.96); } }
 /* nodes the flow assistant just added or changed glow for a moment */
 .vue-flow__node.ai-touched { animation: ai-touched 2.4s ease-out; border-radius: 10px; }
 @keyframes ai-touched {

@@ -691,7 +691,11 @@ function detailSummary(e: AuditEntry): string {
 .sess-revoke:hover:not(:disabled) { color: var(--danger); border-color: var(--danger); }
 .sess-more { margin-top: 8px; }
 .empty { font-size: 12.5px; }
-@media (prefers-reduced-motion: reduce) { .sess-toggle .caret { transition: none; } }
+/* a person's sessions come in under their row instead of popping (table rows have no
+   height to grow: a short fade) */
+.sess-sub td { animation: sess-in var(--dur-2, 150ms) ease-out; }
+@keyframes sess-in { from { opacity: 0; } }
+@media (prefers-reduced-motion: reduce) { .sess-toggle .caret { transition: none; } .sess-sub td { animation: none; } }
 
 /* filters */
 .filters { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }

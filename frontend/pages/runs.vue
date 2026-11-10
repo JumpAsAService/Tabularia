@@ -118,7 +118,9 @@ const STATUSES = computed<{ value: 'FAILURE' | 'SUCCESS' | ''; label: string }[]
           </span>
           <span class="when muted">{{ fmtDate(r.started_at) }}</span>
         </button>
-        <div v-if="expanded === r.id" class="detail">
+        <Transition name="unfold">
+        <div v-if="expanded === r.id" class="detail-fold">
+        <div class="detail">
           <div v-if="r.error" class="detail-summary">{{ knownError(r.error, t) }}</div>
           <p v-if="r.status === 'SUCCESS' && runNotes(r.notes)?.duplicate_keys" class="run-note small">
             {{ $t('placeholders.repeatedKeys', { n: runNotes(r.notes)!.duplicate_keys }) }}
@@ -136,6 +138,8 @@ const STATUSES = computed<{ value: 'FAILURE' | 'SUCCESS' | ''; label: string }[]
           <pre v-else-if="r.error_detail" class="trace">{{ r.error_detail }}</pre>
           <p v-else-if="!(r.status === 'SUCCESS' && runNotes(r.notes))" class="muted small">{{ $t('runs.noDetail') }}</p>
         </div>
+        </div>
+        </Transition>
       </div>
     </div>
 
