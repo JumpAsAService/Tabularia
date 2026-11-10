@@ -119,7 +119,10 @@ Column names keep their case (`"Città"` stays `"Città"`). A `sql` node keeps i
 its own `WITH` included: `self` and `input` point at the previous step; an expression
 without an alias keeps the name DuckDB gives it (`(i + 1)`, `count_star()`), so the
 steps after it find it. A `pivot` has no portable SQL, so it is refused on the native
-and ClickHouse targets; after a pivot, on the federated target, a join keeps every
+and ClickHouse targets. A pivot has **one measure** (one column aggregated with one
+function), and may have row keys only or columns only, as in Tabularia: rows only is a
+group by whose measure is the column `values`; columns only is one row, led by the
+measure's label (`sum(amount)`) in `values`. After a pivot, on the federated target, a join keeps every
 pivot column (a right-side column with the name of a left-side one gets `_right`, as in
 Tabularia; so does the index when the join reads it back with `left_on`/`right_on`:
 `<index>_right`) and a compute replaces a pivot column in place or adds one. `foreach`
