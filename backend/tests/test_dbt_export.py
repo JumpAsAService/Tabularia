@@ -3739,22 +3739,161 @@ def test_the_probe_keeps_each_step_as_an_empty_table(monkeypatch):
     assert all(types[f"k{k}"] == "BIGINT" for k in range(10))   # what the probe reads, from the tables
 
 
-# ── the second hunt: native targets, contracts, MySQL (e2e/dbt_export/native_targets.py) ──
-def test_a_federated_mysql_source_is_read_as_tabularia_reads_it():
-    """DuckDB pushed a filter into MySQL, where a case-insensitive collation kept 'Alfa' and
-    'ALFA' for `nome = 'alfa'` (3 rows instead of 1, proved with real dbt), and read a
-    TINYINT(1) holding 2 as a boolean (1). The profile turns both off, and the folder
-    package's guide says so; a project without MySQL keeps its profile as it was."""
-    my = {"alias": "db_2", "db_type": "mariadb", "pw_env": "TABULARIA_DB_2_PASSWORD",
-          "conn": {"host": "my.x", "port": 3306, "database": "shop", "username": "web"}}
-    pg = {"alias": "db_1", "db_type": "postgresql", "pw_env": "TABULARIA_DB_1_PASSWORD",
-          "conn": {"host": "db", "port": 5432, "database": "shop", "username": "shop"}}
-    prof = _project(attachments=[pg, my])["profiles.yml"]
-    assert ("      settings:\n        TimeZone: UTC\n        mysql_experimental_filter_pushdown: false\n"
-            "        mysql_tinyint1_as_boolean: false\n") in prof
-    assert "mysql_" not in _project(attachments=[pg])["profiles.yml"]
-    guide = _project(attachments=[my], layout={"package": "folder", "folder": "f"})["INTEGRATION.md"]
-    assert "mysql_experimental_filter_pushdown: false" in guide and "mysql_tinyint1_as_boolean: false" in guide
+# ── the second hunt on the ClickHouse paths (e2e/dbt_export/clickhouse_paths.py, 2026-11-10) ──
+def _export_in(types: dict, ops: list, mode: str, dialect: str | None = None) -> dict:
+    """As `_export`, with the flow's engine (the dialect of its free text) given."""
+    if mode == "native":
+        item, extra = {"ident": "__s_0", "macro": "{{ source('db_1_v', 'ordini') }}"}, {"native": _PG_NATIVE}
+    elif mode == "native-ch":
+        item, extra, mode = {"ident": "__s_0", "macro": "{{ source('db_1_v', 'ordini') }}"}, {"native": _NATIVE_CH}, "native"
+    else:
+        item, extra = {"ident": "__s_0", "macro": "{{ source('db_1_v', 'ordini') }}"}, {"clickhouse": {"connections": [_PG], "target_schema": "dbt_tabularia"}}
+    model = {"name": "uno", "source": {"key": "k"}, "operations": ops, **({"dialect": dialect} if dialect else {})}
+    return _files(_export_request(mode=mode, **extra, source_map={"k": {**item, "columns": list(types), "types": types, "label": "ordini"}},
+                                    models=[model]))
+
+
+_MS = "Datetime(time_unit='ms', time_zone=None)"
+
+
+def test_a_float32_is_a_float_and_an_instant_keeps_its_unit():
+    """A Postgres real, a ClickHouse Float32 is FLOAT (it was DOUBLE: 0.1 as text was
+    '0.10000000149011612'); an instant to the millisecond (an Excel date-time, a ClickHouse
+    DateTime) is TIMESTAMP_MS (as text the engines write three digits of fraction, not six)."""
+    assert d.duck_type("Float32") == "FLOAT" and d.duck_type("Float64") == "DOUBLE"
+    assert d.duck_type(_MS) == "TIMESTAMP_MS" and d.duck_type("Datetime(time_unit='ns', time_zone=None)") == "TIMESTAMP_NS"
+    assert d.duck_type(_DT) == "TIMESTAMP"
+    from app.api.routes.dbt import _type_in_dialect
+
+    # Postgres has no TIMESTAMP_MS: a timestamp there (it holds microseconds)
+    assert _type_in_dialect("TIMESTAMP_MS", "postgres") == "TIMESTAMP" and _type_in_dialect("FLOAT", "postgres") == "REAL"
+    assert _type_in_dialect("TIMESTAMP_MS", "clickhouse") == "Nullable(DateTime64(3))"
+    assert "TIMESTAMP_MS" not in _export_in({"id": "Int64", "t": _MS}, [], "native")["models/uno.sql"]
+
+
+_REALS = [0.1, 7.0, -2.5, None, 1e-7, 123456.7]
+
+
+@pytest.mark.parametrize("op", ["cast", "unpivot"])
+def test_a_float32_as_text_on_clickhouse_is_what_the_clickhouse_engine_writes(op):
+    from app.engine.chdb_ops import _cast_expr as cast_ch
+
+    values = "(SELECT * FROM values('id Int64, r Nullable(Float32), s Nullable(String)', " + \
+        ", ".join(f"({i}, {'NULL' if v is None else repr(str(v))}, 'x')" for i, v in enumerate(_REALS)) + "))"
+    ops = [{"type": "cast", "params": {"columns": {"r": "str"}}}] if op == "cast" else \
+        [{"type": "unpivot", "params": {"index": ["id"], "on": ["s", "r"], "variable_name": "m", "value_name": "v"}}]
+    rows = _su_clickhouse(_model(_export_in({"id": "Int64", "r": "Float32", "s": "String"}, ops, "clickhouse"), values))
+    got = {r[0]: (r[1] if op == "cast" else r[2]) for r in rows if op == "cast" or r[1] == "r"}
+    rif = dict(_su_clickhouse(f"SELECT id, {cast_ch('r', 'Float32', 'str')} FROM {values}"))
+    assert rif[0] == "0.1" and rif[1] == "7.0"
+    assert got == rif
+
+
+def test_a_float32_as_text_on_native_postgres_is_what_the_engine_writes():
+    values = "(SELECT * FROM (VALUES " + ", ".join(f"({i}, CAST({'NULL' if v is None else repr(v)} AS REAL))" for i, v in enumerate(_REALS)) + ') AS t("id", "r"))'
+    files = _export_in({"id": "Int64", "r": "Float32"}, [{"type": "cast", "params": {"columns": {"r": "str"}}}], "native")
+    got = dict(_su_postgres(f"SELECT * FROM ({_model(files, values)}) AS m"))
+    rif = dict(_reference_cast("FLOAT", "str", _REALS))
+    assert rif[0] == "0.1" and rif[1] == "7.0"
+    assert got == rif
+
+
+_INSTANTS = [_dt.datetime(2024, 1, 15, 10, 30), _dt.datetime(2024, 2, 29, 23, 59, 59, 123000), _dt.datetime(1965, 6, 1, 8, 0), None]
+
+
+def test_an_instant_to_the_millisecond_as_text_on_clickhouse_has_three_digits_of_fraction():
+    """As the ClickHouse engine (a DateTime64(3)) and Polars (a Datetime in ms): '….000'."""
+    values = "(SELECT * FROM values('id Int64, t Nullable(DateTime64(3))', " + \
+        ", ".join(f"({i}, {'NULL' if v is None else repr(str(v))})" for i, v in enumerate(_INSTANTS)) + "))"
+    rows = dict(_su_clickhouse(_model(_export_in({"id": "Int64", "t": _MS}, [{"type": "cast", "params": {"columns": {"t": "str"}}}], "clickhouse"), values)))
+    assert rows == {0: "2024-01-15 10:30:00.000", 1: "2024-02-29 23:59:59.123", 2: "1965-06-01 08:00:00.000", 3: None}
+
+
+@pytest.mark.parametrize("dtype,engine,expected", [
+    (_DT, "clickhouse", ["2024-01-15 10:30:00.000000", "2024-02-29 23:59:59.123000", "1965-06-01 08:00:00.000000"]),
+    (_DT, "polars", ["2024-01-15 10:30:00.000000", "2024-02-29 23:59:59.123000", "1965-06-01 08:00:00.000000"]),
+    (_MS, "polars", ["2024-01-15 10:30:00.000", "2024-02-29 23:59:59.123", "1965-06-01 08:00:00.000"]),
+    (_MS, "clickhouse", ["2024-01-15 10:30:00.000", "2024-02-29 23:59:59.123", "1965-06-01 08:00:00.000"]),
+    # the DuckDB engine writes no fraction when it is zero, and so does Postgres
+    (_DT, "duckdb", ["2024-01-15 10:30:00", "2024-02-29 23:59:59.123", "1965-06-01 08:00:00"]),
+])
+def test_an_instant_as_text_on_native_postgres_is_what_the_flows_engine_writes(dtype, engine, expected):
+    import polars as pl
+
+    if engine == "polars":   # the reference: Polars' own cast
+        unit = "ms" if dtype == _MS else "us"
+        assert pl.Series(_INSTANTS[:3], dtype=pl.Datetime(unit)).cast(pl.String).to_list() == expected
+    values = "(SELECT * FROM (VALUES " + ", ".join(f"({i}, CAST({'NULL' if v is None else repr(str(v))} AS TIMESTAMP))" for i, v in enumerate(_INSTANTS)) + ') AS t("id", "t"))'
+    files = _export_in({"id": "Int64", "t": dtype}, [{"type": "cast", "params": {"columns": {"t": "str"}}}], "native", dialect=engine)
+    got = dict(_su_postgres(f"SELECT * FROM ({_model(files, values)}) AS m"))
+    assert got == {**dict(enumerate(expected)), 3: None}
+
+
+_SIGNED_ZEROS = _pl.DataFrame({"id": [1, 2, 3, 4, 5], "f": [-0.0, 0.0, 7.0, None, 2.5], "s": ["a", "b", "c", "d", "e"]})
+
+
+@pytest.mark.parametrize("where", ["postgres", "clickhouse"])
+def test_an_unpivot_of_text_and_a_float_writes_the_float_as_the_engine_does(where):
+    """The value of an unpivot of a text and a float is text: 7.0 is '7.0' as in Tabularia (it
+    was '7' on both warehouses); -0.0 is '0.0' on ClickHouse, as the ClickHouse engine writes
+    it, and '-0.0' on Postgres, as Polars and DuckDB do."""
+    ops = [{"type": "unpivot", "params": {"index": ["id"], "on": ["s", "f"], "variable_name": "m", "value_name": "v"}}]
+    rows = {r[0]: r[2] for r in _native_on(where, _SIGNED_ZEROS, ops) if r[1] == "f"}
+    assert rows == {1: "0.0" if where == "clickhouse" else "-0.0", 2: "0.0", 3: "7.0", 4: None, 5: "2.5"}
+    if where == "postgres":
+        assert rows == {r[0]: r[2] for r in _engine_snapshot("polars", {"t": _SIGNED_ZEROS}, "t", ops)[1] if r[1] == "f"}
+
+
+@pytest.mark.parametrize("where", ["postgres", "clickhouse"])
+@pytest.mark.parametrize("case", ["group_by", "unique", "unique_subset", "join", "join_on", "semi"])
+def test_minus_zero_and_zero_are_one_key_as_in_the_engines(where, case):
+    """ClickHouse groups, deduplicates and hash-joins a float by its bits: -0.0 and 0.0 were two
+    groups, two distinct rows and keys that never met; the engines (the ClickHouse one adds 0.0
+    to its float keys) hold them one."""
+    df = _SIGNED_ZEROS.select("f")
+    right = {"source": {"key": "t"}, "operations": [{"type": "select", "params": {"columns": ["f", "s"]}},
+                                                    {"type": "rename", "params": {"mapping": {"s": "label"}}}]}
+    ops = {"group_by": [{"type": "group_by", "params": {"by": ["f"], "aggregations": [{"column": "f", "func": "count", "alias": "n"}]}}],
+           "unique": [{"type": "unique", "params": {}}],
+           "unique_subset": [{"type": "unique", "params": {"subset": ["f"]}}],
+           "join": [{"type": "join", "params": {"how": "inner", "on": ["f"], "right": right}}],
+           "join_on": [{"type": "join", "params": {"how": "inner", "left_on": ["f"], "right_on": ["f"], "right": right}}],
+           "semi": [{"type": "join", "params": {"how": "semi", "on": ["f"], "right": right}}]}[case]
+    rows = _native_on(where, _SIGNED_ZEROS if case.startswith("join") or case == "semi" else df, ops)
+    key = 1 if case.startswith("join") or case == "semi" else 0
+    zeros = [r for r in rows if r[key] == 0]
+    assert len(zeros) == {"group_by": 1, "unique": 1, "unique_subset": 1, "join": 4, "join_on": 4, "semi": 2}[case], rows
+    if case == "group_by":
+        assert zeros[0][1] == 2
+
+
+@pytest.mark.parametrize("dtype,column", [(_DT, "DateTime64(6)"), (_MS, "DateTime64(3)"), (_UTC, "DateTime64(6)")])
+@pytest.mark.parametrize("operator,value,ids", [
+    ("ge", "2024-01-05T10:30", [2, 3]), ("lt", "2024-01-05T10:30", [1]), ("eq", "2024-01-05T10:30:00.5", [3]),
+    ("in", ["2024-01-05T10:30", "1965-06-01T08:00"], [1, 2]), ("between", ["2024-01-05T10:30", "2024-01-05T10:30:01"], [2, 3]),
+    # an offset is an instant: in UTC, as the ClickHouse engine reads it
+    ("eq", "2024-01-05T12:30:00+02:00", [2]),
+])
+def test_a_filter_on_an_instant_with_the_calendars_value_runs_on_clickhouse(dtype, column, operator, value, ids):
+    """The editor's calendar writes 2024-01-05T10:30, without seconds: ClickHouse refused it
+    (CANNOT_PARSE_DATETIME) and the model failed. Written as the ClickHouse engine writes it."""
+    values = f"(SELECT * FROM values('id Int64, t Nullable({column})', (1, '1965-06-01 08:00:00'), (2, '2024-01-05 10:30:00'), " \
+             "(3, '2024-01-05 10:30:00.5'), (4, NULL)))"
+    files = _export_in({"id": "Int64", "t": dtype}, [{"type": "filter", "params": {"column": "t", "operator": operator, "value": value}}], "clickhouse")
+    assert sorted(r[0] for r in _su_clickhouse(_model(files, values))) == ids
+
+
+@pytest.mark.parametrize("column,dtype", [("Decimal(10, 2)", "Decimal(precision=10, scale=2)"), ("Decimal(18, 4)", "Decimal(precision=18, scale=4)"),
+                                          ("Decimal(38, 4)", "Decimal(precision=38, scale=4)")])
+def test_a_clickhouse_decimal_cast_to_an_integer_runs(column, dtype):
+    """The range check compared the decimal with -2^63, which ClickHouse cannot hold in a
+    Decimal(10, 2): DECIMAL_OVERFLOW, and the model failed. The engine truncates; out of the
+    64-bit range it gives NULL."""
+    big = "99999999999999.9999" if "18" in column else ("99999999.99" if "10" in column else "99999999999999999999999999.9999")
+    values = f"(SELECT * FROM values('id Int64, x Nullable({column})', (1, '1.25'), (2, '-2.5'), (3, NULL), (4, '0.01'), (5, '{big}')))"
+    files = _export_in({"id": "Int64", "x": dtype}, [{"type": "cast", "params": {"columns": {"x": "int"}}}], "clickhouse")
+    got = dict(_su_clickhouse(_model(files, values)))
+    assert got == {1: 1, 2: -2, 3: None, 4: 0, 5: None if "38" in column else int(big.split(".")[0])}
 
 
 # a Postgres query translated for the ClickHouse target, run on the table the federated database
@@ -3850,44 +3989,6 @@ def test_a_postgres_date_trunc_keeps_the_dates_clickhouse_s_datetime_cannot_hold
                           D(t.year, (t.month - 1) // 3 * 3 + 1, 1), t.replace(second=0), t), i
 
 
-_SIGNED_ZEROS = _pl.DataFrame({"id": [1, 2, 3, 4, 5], "f": [-0.0, 0.0, 7.0, None, 2.5], "s": ["a", "b", "c", "d", "e"]})
-
-
-@pytest.mark.parametrize("where", ["postgres", "clickhouse"])
-def test_an_unpivot_of_text_and_a_float_writes_the_float_as_the_engine_does(where):
-    """The value of an unpivot of a text and a float is text: 7.0 is '7.0' as in Tabularia (it
-    was '7' on both warehouses); -0.0 is '0.0' on ClickHouse, as the ClickHouse engine writes
-    it, and '-0.0' on Postgres, as Polars and DuckDB do."""
-    ops = [{"type": "unpivot", "params": {"index": ["id"], "on": ["s", "f"], "variable_name": "m", "value_name": "v"}}]
-    rows = {r[0]: r[2] for r in _native_on(where, _SIGNED_ZEROS, ops) if r[1] == "f"}
-    assert rows == {1: "0.0" if where == "clickhouse" else "-0.0", 2: "0.0", 3: "7.0", 4: None, 5: "2.5"}
-    if where == "postgres":
-        assert rows == {r[0]: r[2] for r in _engine_snapshot("polars", {"t": _SIGNED_ZEROS}, "t", ops)[1] if r[1] == "f"}
-
-
-@pytest.mark.parametrize("where", ["postgres", "clickhouse"])
-@pytest.mark.parametrize("case", ["group_by", "unique", "unique_subset", "join", "join_on", "semi"])
-def test_minus_zero_and_zero_are_one_key_as_in_the_engines(where, case):
-    """ClickHouse groups, deduplicates and hash-joins a float by its bits: -0.0 and 0.0 were two
-    groups, two distinct rows and keys that never met; the engines (the ClickHouse one adds 0.0
-    to its float keys) hold them one."""
-    df = _SIGNED_ZEROS.select("f")
-    right = {"source": {"key": "t"}, "operations": [{"type": "select", "params": {"columns": ["f", "s"]}},
-                                                    {"type": "rename", "params": {"mapping": {"s": "label"}}}]}
-    ops = {"group_by": [{"type": "group_by", "params": {"by": ["f"], "aggregations": [{"column": "f", "func": "count", "alias": "n"}]}}],
-           "unique": [{"type": "unique", "params": {}}],
-           "unique_subset": [{"type": "unique", "params": {"subset": ["f"]}}],
-           "join": [{"type": "join", "params": {"how": "inner", "on": ["f"], "right": right}}],
-           "join_on": [{"type": "join", "params": {"how": "inner", "left_on": ["f"], "right_on": ["f"], "right": right}}],
-           "semi": [{"type": "join", "params": {"how": "semi", "on": ["f"], "right": right}}]}[case]
-    rows = _native_on(where, _SIGNED_ZEROS if case.startswith("join") or case == "semi" else df, ops)
-    key = 1 if case.startswith("join") or case == "semi" else 0
-    zeros = [r for r in rows if r[key] == 0]
-    assert len(zeros) == {"group_by": 1, "unique": 1, "unique_subset": 1, "join": 4, "join_on": 4, "semi": 2}[case], rows
-    if case == "group_by":
-        assert zeros[0][1] == 2
-
-
 def _engine_clickhouse(monkeypatch):
     """The engine's ClickHouse is the test server, and there is no chDB (the production image)."""
     import sys
@@ -3951,123 +4052,22 @@ def test_a_clickhouse_answer_the_check_cannot_read_leaves_it_on_and_says_so(monk
     assert check.error("SELECT 2") is None and check._via.calls == 3
 
 
-# ── the second hunt on the ClickHouse paths (e2e/dbt_export/clickhouse_paths.py, 2026-11-10) ──
-def _export_in(types: dict, ops: list, mode: str, dialect: str | None = None) -> dict:
-    """As `_export`, with the flow's engine (the dialect of its free text) given."""
-    if mode == "native":
-        item, extra = {"ident": "__s_0", "macro": "{{ source('db_1_v', 'ordini') }}"}, {"native": _PG_NATIVE}
-    elif mode == "native-ch":
-        item, extra, mode = {"ident": "__s_0", "macro": "{{ source('db_1_v', 'ordini') }}"}, {"native": _NATIVE_CH}, "native"
-    else:
-        item, extra = {"ident": "__s_0", "macro": "{{ source('db_1_v', 'ordini') }}"}, {"clickhouse": {"connections": [_PG], "target_schema": "dbt_tabularia"}}
-    model = {"name": "uno", "source": {"key": "k"}, "operations": ops, **({"dialect": dialect} if dialect else {})}
-    return _files(_export_request(mode=mode, **extra, source_map={"k": {**item, "columns": list(types), "types": types, "label": "ordini"}},
-                                    models=[model]))
-
-
-_MS = "Datetime(time_unit='ms', time_zone=None)"
-
-
-def test_a_float32_is_a_float_and_an_instant_keeps_its_unit():
-    """A Postgres real, a ClickHouse Float32 is FLOAT (it was DOUBLE: 0.1 as text was
-    '0.10000000149011612'); an instant to the millisecond (an Excel date-time, a ClickHouse
-    DateTime) is TIMESTAMP_MS (as text the engines write three digits of fraction, not six)."""
-    assert d.duck_type("Float32") == "FLOAT" and d.duck_type("Float64") == "DOUBLE"
-    assert d.duck_type(_MS) == "TIMESTAMP_MS" and d.duck_type("Datetime(time_unit='ns', time_zone=None)") == "TIMESTAMP_NS"
-    assert d.duck_type(_DT) == "TIMESTAMP"
-    from app.api.routes.dbt import _type_in_dialect
-
-    # Postgres has no TIMESTAMP_MS: a timestamp there (it holds microseconds)
-    assert _type_in_dialect("TIMESTAMP_MS", "postgres") == "TIMESTAMP" and _type_in_dialect("FLOAT", "postgres") == "REAL"
-    assert _type_in_dialect("TIMESTAMP_MS", "clickhouse") == "Nullable(DateTime64(3))"
-    assert "TIMESTAMP_MS" not in _export_in({"id": "Int64", "t": _MS}, [], "native")["models/uno.sql"]
-
-
-_REALS = [0.1, 7.0, -2.5, None, 1e-7, 123456.7]
-
-
-@pytest.mark.parametrize("op", ["cast"])
-def test_a_float32_as_text_on_clickhouse_is_what_the_clickhouse_engine_writes(op):
-    from app.engine.chdb_ops import _cast_expr as cast_ch
-
-    values = "(SELECT * FROM values('id Int64, r Nullable(Float32), s Nullable(String)', " + \
-        ", ".join(f"({i}, {'NULL' if v is None else repr(str(v))}, 'x')" for i, v in enumerate(_REALS)) + "))"
-    ops = [{"type": "cast", "params": {"columns": {"r": "str"}}}] if op == "cast" else \
-        [{"type": "unpivot", "params": {"index": ["id"], "on": ["s", "r"], "variable_name": "m", "value_name": "v"}}]
-    rows = _su_clickhouse(_model(_export_in({"id": "Int64", "r": "Float32", "s": "String"}, ops, "clickhouse"), values))
-    got = {r[0]: (r[1] if op == "cast" else r[2]) for r in rows if op == "cast" or r[1] == "r"}
-    rif = dict(_su_clickhouse(f"SELECT id, {cast_ch('r', 'Float32', 'str')} FROM {values}"))
-    assert rif[0] == "0.1" and rif[1] == "7.0"
-    assert got == rif
-
-
-def test_a_float32_as_text_on_native_postgres_is_what_the_engine_writes():
-    values = "(SELECT * FROM (VALUES " + ", ".join(f"({i}, CAST({'NULL' if v is None else repr(v)} AS REAL))" for i, v in enumerate(_REALS)) + ') AS t("id", "r"))'
-    files = _export_in({"id": "Int64", "r": "Float32"}, [{"type": "cast", "params": {"columns": {"r": "str"}}}], "native")
-    got = dict(_su_postgres(f"SELECT * FROM ({_model(files, values)}) AS m"))
-    rif = dict(_reference_cast("FLOAT", "str", _REALS))
-    assert rif[0] == "0.1" and rif[1] == "7.0"
-    assert got == rif
-
-
-_INSTANTS = [_dt.datetime(2024, 1, 15, 10, 30), _dt.datetime(2024, 2, 29, 23, 59, 59, 123000), _dt.datetime(1965, 6, 1, 8, 0), None]
-
-
-def test_an_instant_to_the_millisecond_as_text_on_clickhouse_has_three_digits_of_fraction():
-    """As the ClickHouse engine (a DateTime64(3)) and Polars (a Datetime in ms): '….000'."""
-    values = "(SELECT * FROM values('id Int64, t Nullable(DateTime64(3))', " + \
-        ", ".join(f"({i}, {'NULL' if v is None else repr(str(v))})" for i, v in enumerate(_INSTANTS)) + "))"
-    rows = dict(_su_clickhouse(_model(_export_in({"id": "Int64", "t": _MS}, [{"type": "cast", "params": {"columns": {"t": "str"}}}], "clickhouse"), values)))
-    assert rows == {0: "2024-01-15 10:30:00.000", 1: "2024-02-29 23:59:59.123", 2: "1965-06-01 08:00:00.000", 3: None}
-
-
-@pytest.mark.parametrize("dtype,engine,expected", [
-    (_DT, "clickhouse", ["2024-01-15 10:30:00.000000", "2024-02-29 23:59:59.123000", "1965-06-01 08:00:00.000000"]),
-    (_DT, "polars", ["2024-01-15 10:30:00.000000", "2024-02-29 23:59:59.123000", "1965-06-01 08:00:00.000000"]),
-    (_MS, "polars", ["2024-01-15 10:30:00.000", "2024-02-29 23:59:59.123", "1965-06-01 08:00:00.000"]),
-    (_MS, "clickhouse", ["2024-01-15 10:30:00.000", "2024-02-29 23:59:59.123", "1965-06-01 08:00:00.000"]),
-    # the DuckDB engine writes no fraction when it is zero, and so does Postgres
-    (_DT, "duckdb", ["2024-01-15 10:30:00", "2024-02-29 23:59:59.123", "1965-06-01 08:00:00"]),
-])
-def test_an_instant_as_text_on_native_postgres_is_what_the_flows_engine_writes(dtype, engine, expected):
-    import polars as pl
-
-    if engine == "polars":   # the reference: Polars' own cast
-        unit = "ms" if dtype == _MS else "us"
-        assert pl.Series(_INSTANTS[:3], dtype=pl.Datetime(unit)).cast(pl.String).to_list() == expected
-    values = "(SELECT * FROM (VALUES " + ", ".join(f"({i}, CAST({'NULL' if v is None else repr(str(v))} AS TIMESTAMP))" for i, v in enumerate(_INSTANTS)) + ') AS t("id", "t"))'
-    files = _export_in({"id": "Int64", "t": dtype}, [{"type": "cast", "params": {"columns": {"t": "str"}}}], "native", dialect=engine)
-    got = dict(_su_postgres(f"SELECT * FROM ({_model(files, values)}) AS m"))
-    assert got == {**dict(enumerate(expected)), 3: None}
-
-
-@pytest.mark.parametrize("dtype,column", [(_DT, "DateTime64(6)"), (_MS, "DateTime64(3)"), (_UTC, "DateTime64(6)")])
-@pytest.mark.parametrize("operator,value,ids", [
-    ("ge", "2024-01-05T10:30", [2, 3]), ("lt", "2024-01-05T10:30", [1]), ("eq", "2024-01-05T10:30:00.5", [3]),
-    ("in", ["2024-01-05T10:30", "1965-06-01T08:00"], [1, 2]), ("between", ["2024-01-05T10:30", "2024-01-05T10:30:01"], [2, 3]),
-    # an offset is an instant: in UTC, as the ClickHouse engine reads it
-    ("eq", "2024-01-05T12:30:00+02:00", [2]),
-])
-def test_a_filter_on_an_instant_with_the_calendars_value_runs_on_clickhouse(dtype, column, operator, value, ids):
-    """The editor's calendar writes 2024-01-05T10:30, without seconds: ClickHouse refused it
-    (CANNOT_PARSE_DATETIME) and the model failed. Written as the ClickHouse engine writes it."""
-    values = f"(SELECT * FROM values('id Int64, t Nullable({column})', (1, '1965-06-01 08:00:00'), (2, '2024-01-05 10:30:00'), " \
-             "(3, '2024-01-05 10:30:00.5'), (4, NULL)))"
-    files = _export_in({"id": "Int64", "t": dtype}, [{"type": "filter", "params": {"column": "t", "operator": operator, "value": value}}], "clickhouse")
-    assert sorted(r[0] for r in _su_clickhouse(_model(files, values))) == ids
-
-
-@pytest.mark.parametrize("column,dtype", [("Decimal(10, 2)", "Decimal(precision=10, scale=2)"), ("Decimal(18, 4)", "Decimal(precision=18, scale=4)"),
-                                          ("Decimal(38, 4)", "Decimal(precision=38, scale=4)")])
-def test_a_clickhouse_decimal_cast_to_an_integer_runs(column, dtype):
-    """The range check compared the decimal with -2^63, which ClickHouse cannot hold in a
-    Decimal(10, 2): DECIMAL_OVERFLOW, and the model failed. The engine truncates; out of the
-    64-bit range it gives NULL."""
-    big = "99999999999999.9999" if "18" in column else ("99999999.99" if "10" in column else "99999999999999999999999999.9999")
-    values = f"(SELECT * FROM values('id Int64, x Nullable({column})', (1, '1.25'), (2, '-2.5'), (3, NULL), (4, '0.01'), (5, '{big}')))"
-    files = _export_in({"id": "Int64", "x": dtype}, [{"type": "cast", "params": {"columns": {"x": "int"}}}], "clickhouse")
-    got = dict(_su_clickhouse(_model(files, values)))
-    assert got == {1: 1, 2: -2, 3: None, 4: 0, 5: None if "38" in column else int(big.split(".")[0])}
+# ── the second hunt: native targets, contracts, MySQL (e2e/dbt_export/native_targets.py) ──
+def test_a_federated_mysql_source_is_read_as_tabularia_reads_it():
+    """DuckDB pushed a filter into MySQL, where a case-insensitive collation kept 'Alfa' and
+    'ALFA' for `nome = 'alfa'` (3 rows instead of 1, proved with real dbt), and read a
+    TINYINT(1) holding 2 as a boolean (1). The profile turns both off, and the folder
+    package's guide says so; a project without MySQL keeps its profile as it was."""
+    my = {"alias": "db_2", "db_type": "mariadb", "pw_env": "TABULARIA_DB_2_PASSWORD",
+          "conn": {"host": "my.x", "port": 3306, "database": "shop", "username": "web"}}
+    pg = {"alias": "db_1", "db_type": "postgresql", "pw_env": "TABULARIA_DB_1_PASSWORD",
+          "conn": {"host": "db", "port": 5432, "database": "shop", "username": "shop"}}
+    prof = _project(attachments=[pg, my])["profiles.yml"]
+    assert ("      settings:\n        TimeZone: UTC\n        mysql_experimental_filter_pushdown: false\n"
+            "        mysql_tinyint1_as_boolean: false\n") in prof
+    assert "mysql_" not in _project(attachments=[pg])["profiles.yml"]
+    guide = _project(attachments=[my], layout={"package": "folder", "folder": "f"})["INTEGRATION.md"]
+    assert "mysql_experimental_filter_pushdown: false" in guide and "mysql_tinyint1_as_boolean: false" in guide
 
 
 _RANGE_INSTANTS = _pl.DataFrame({"id": [1, 2, 3, 4, 5], "visto": [_dt.datetime(2024, 1, 5, 10, 29, 59), _dt.datetime(2024, 1, 5, 10, 30),
