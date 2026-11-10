@@ -472,7 +472,8 @@ def _compile(req: ExportRequest, seeds: list[dict], ch: TargetClickHouse | None 
         if check:
             check.close()
     if check and check.skipped and notes is not None:
-        notes.append("The ClickHouse SQL of this project was not read by a ClickHouse parser at export time (none answered): "
+        notes.append("The ClickHouse SQL of this project was not read by a ClickHouse parser at export time, or not all of it "
+                     "(none answered, or an answer could not be read): "
                      "an error Tabularia would have caught shows at the first `dbt run`.")
     return models, tests
 
