@@ -817,7 +817,7 @@ def _known_refusal(models: list[dict], target: str) -> DbtExportError | None:
 _REQUIRED = {
     "select": ("columns",), "reorder": ("columns",), "drop": ("columns",), "rename": ("mapping",), "cast": ("columns",),
     "filter": ("column",), "sort": ("by",), "limit": ("n",), "fill_null": ("columns",), "group_by": ("by", "aggregations"),
-    "compute": ("columns",), "sql": ("query",), "join": ("right",), "union": ("right",), "pivot": ("index", "on", "values"),
+    "compute": ("columns",), "sql": ("query",), "join": ("right",), "union": ("right",), "pivot": ("values",),
 }
 _EMPTY = (None, "", [])
 
@@ -842,6 +842,9 @@ def _incomplete_step(op: dict) -> DbtExportError | None:
             return no("required parameter missing: 'on', or 'left_on' and 'right_on'")
         if len(left if isinstance(left, list) else [left]) != len(right if isinstance(right, list) else [right]):
             return no("join: left_on and right_on must have the same number of columns")
+    if kind == "pivot" and params.get("index") in _EMPTY and params.get("on") in _EMPTY:
+        # the row keys, the columns to spread, or both (the engine's operations.pivot_params)
+        return no("required parameter missing: 'index' or 'on'")
     if kind == "group_by" and isinstance(params["aggregations"], list):
         if any(not isinstance(a, dict) or a.get("column") in _EMPTY for a in params["aggregations"]):
             return no("an aggregation has no column")
