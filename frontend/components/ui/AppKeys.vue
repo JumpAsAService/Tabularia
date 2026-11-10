@@ -96,7 +96,8 @@ function onKey(e: KeyboardEvent) {
     case 'search': {
       // a page with its own filter under «/» (Explore) answers by itself
       if (shownEl('[aria-keyshortcuts~="/"]')) return
-      const box = shownEl('.page-head .searchbox input') ?? shownEl('.topbar .gs input')
+      // the page's own box: in its head, or wherever the page marks it (the Viewer's fields)
+      const box = shownEl('.page-head .searchbox input') ?? shownEl('[data-page-search]') ?? shownEl('.topbar .gs input')
       if (!box) return
       take(e)
       box.focus()

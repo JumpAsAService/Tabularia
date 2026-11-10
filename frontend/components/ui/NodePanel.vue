@@ -246,7 +246,7 @@ function pickDatasource(id: number | null) {
       </div>
       <template v-if="node.data.parquetKey">
         <p><strong>{{ node.data.filename }}</strong><span v-if="node.data.sheet" class="muted"> · {{ $t('sheetPicker.sheet', { name: node.data.sheet }) }}</span></p>
-        <p class="muted">{{ $t('dataGrid.rows', { n: fmt.count(node.data.rows) }) }} · {{ $t('dataGrid.columns', { n: (node.data.columns || []).length }) }}</p>
+        <p class="muted">{{ $t('dataGrid.rows', { n: fmt.count(node.data.rows) }) }} · {{ $t('dataGrid.columns', { n: (node.data.columns || []).length }, (node.data.columns || []).length) }}</p>
         <p class="muted mono">{{ node.data.parquetKey }}</p>
         <div class="exportbar">
           <label>{{ $t('nodePanel.downloadNodeData') }}</label>

@@ -10,12 +10,12 @@ access to the folder can reopen. Nothing in either place changes the data.
 
 | | Flow editor | Viewer |
 |---|---|---|
-| Where | The data view under the canvas: **Table** and **Chart** tabs | **Analysis → Viewer** in the navigation, or a saved view opened from **Explore** |
+| Where | The data view under the canvas: **Table** and **Chart** tabs | **Analysis → Viewer** in the navigation, a datasource or a saved view opened from **Explore**, or **Explore → New → View** |
 | Reads | The chain up to the selected node | One datasource |
-| Rows shown | First 100 of the selected node | First 500 of the result |
+| Rows shown | First 100 of the selected node | First 500 of the table you build on **Rows**, **Columns** and **Measures** |
 | Computed on | The whole input, or the source's development sample | The whole datasource |
 | Charts | Bars, Lines, Area, Pie, Treemap, Scatter, Bars and line, Waterfall, Funnel, Heatmap, KPI, Gauge, Bullet, aggregated on all rows | The same |
-| Download | **Download this node's data**: CSV or Excel | **Export CSV** and **Export Excel** of the current view |
+| Download | **Download this node's data**: CSV or Excel | **CSV** and **Excel** of the current view: the table as built |
 | Kept | With the flow | As a **saved view** in a folder |
 | Step cache | Yes | No: every **Apply** reads the datasource |
 
@@ -187,34 +187,85 @@ BigQuery the job is cancelled. A preview that takes longer than `PREVIEW_TIMEOUT
 ## The Viewer
 
 The Viewer is a read-only analysis page over one datasource. Choose the datasource and
-the engine at the top (your **Preferred engine**, from **Settings**, is the default),
-then build the view in the side panel and press **Apply**:
+the engine at the top (your **Preferred engine**, from **Settings**, is the default).
+
+**The table starts empty, and you build it on three areas.** On the left is the list of
+the datasource's **Fields** (name, type, and the description when the datasource has one),
+with a filter box above it. The result panel has **Columns** across the top, **Rows** down
+the left and **Measures** in the middle, each saying what to drop on it. Until a field is
+placed nothing is read: the names and types come from the datasource's metadata, and the
+page says how many rows and fields there are. Drag a field onto an area and it stays there
+as a chip:
+
+| On the areas | The table is | The engine does |
+|---|---|---|
+| Fields in **Rows** only | the rows as they are, with those columns | reads only those columns (three of eighty cost three) |
+| **Rows** and **Measures** | one row per group, each measure aggregated | one group by |
+| **Measures** only | one row of totals | one aggregation |
+| A field in **Columns**, with a measure (and any Rows) | a cross table: one column per value of the field | one pivot |
+
+- A field dropped on **Measures** is summed when it is a number and counted otherwise; the
+  function is chosen on its chip: sum, average, min, max, count, distinct count.
+- A **cross table shows one measure**, the first; the others stay on the area, dashed,
+  and count again as soon as **Columns** is empty. A field in **Columns** with more than
+  500 distinct values is refused, with the number it would have made. **Columns** without a
+  measure asks for one, and reads nothing.
+- Chips are dragged to reorder them and from one area to another, and removed with their
+  **×**. With **Rows** alone, a field can also be dropped between two names of the table's
+  header, a name dragged along it, or out of the table to remove it.
+- A double click on a field puts it in **Rows**; **Add all** puts every field there (the
+  whole table, as it is); **Clear** empties the three areas. The **…** on a field lists
+  where it can go, for a touch screen or a pointer that does not drag.
+- **Drag a field onto Filters** to start a filter on it, ready for its value, and **onto
+  the chart** (hold it over the **Chart** tab to open it) to put it on the **Axis or
+  category** or as the **Value**.
+- The engine always aggregates: no rows travel to the browser to be added up. With Rows
+  alone, moving and removing a column ask nothing and adding one asks its rows once; the
+  row count is asked once per set of filters; an aggregated table is one request per change.
+
+Everything has a way from the keyboard, listed under **?**. In the list of fields ↑ ↓ move,
+**r** (or **Enter**) puts the field in Rows, **c** in Columns, **m** in Measures, **f**
+filters on it, **p** puts it on the chart, **Del** (**Ctrl/⌘+Backspace**) takes it off the
+table. On a chip the arrows move along the area, **Shift** with an arrow moves the chip,
+**r**, **c**, **m** send it to another area and **Del** removes it. In a table of rows as
+they are, **Shift+← →** move the column and **Del** on its name removes it.
+
+Then build the rest of the view in the side panel and press **Apply**:
 
 - **Filters**: =, ≠, >, ≥, <, ≤, between, contains, starts with, in (a,b,…), not in,
   is null, is not null. Dates and times get a calendar.
 - **Computed fields**: a name and a SQL expression in the engine's dialect, for example
-  `ricavo / chili`. They can be filtered, pivoted and charted like any column.
-- **Pivot**: **Rows (dimensions)**, **Columns (dimensions)**, **Values** and a
-  **Function** (sum, average, min, max, count). Rows or columns may be left empty: with
-  rows only, one row per group and one column `values` with the aggregate; with columns
-  only, a single row whose first column `values` names the measure (`sum(margine)`),
-  then one column per value. **Don't repeat row dimensions** prints a dimension's value
-  once per group, as in a report.
+  `ricavo / chili`. They join the list of fields and go on the three areas and on the
+  chart like any column (the filters are applied before them).
+- **Don't repeat row dimensions**, under **Rows** when a table is aggregated on two or more
+  of them, prints a row field's value once per group, as in a report.
 - **Table** and **Chart** tabs: the table shows the first 500 rows of the result; the
-  chart works as in the editor, on the filtered and computed data.
-- **Export CSV** and **Export Excel** download the whole current view (filters, computed
-  fields and pivot applied). The chosen engine computes it; the file is written by a
-  worker with Polars.
+  chart works as in the editor, on the filtered and computed data, and asks nothing
+  until you choose its columns (or drop a field on it).
+- **CSV** and **Excel** download the whole current view (filters and computed fields
+  applied) as the table is built: the Rows' columns in their order, the grouped or the
+  cross table; with the three areas empty, every field. The chosen engine computes it; the file is written by a worker with
+  Polars.
 
 ![The Viewer on Margin by Category and Month with the pivot on: categories as rows, months as columns, the sum of the margin in the cells](../media/guide/analysis/viewer-pivot.png)
 
-*The saved view «Margin by category — month by month»: **Pivot** with **Rows** `categoria`, **Columns** `anno_mese`, **Values** `margine`, **Function** sum.*
+*The saved view «Margin by category — month by month»: **Rows** `categoria`, **Columns** `anno_mese`, **Measures** sum of `margine`.*
 
 ## Saved views
 
 **Save view** stores the current configuration, with a name, in a folder: the engine,
-the filters, the computed fields, the pivot, the open tab and the chart's settings. A
-view holds **no rows**: opening it tomorrow reads tomorrow's data. Saved views appear in
+the three areas (Rows, Columns, Measures with their functions), the filters, the computed
+fields, the open tab and the chart's settings. A view holds **no rows**: opening it
+tomorrow reads tomorrow's data. A view saved before the three areas opens as it did: its
+pivot becomes Rows, Columns and the measure, and a view without a pivot has every field in
+Rows, the whole table. A filter still without its value is not saved. A report or a
+dashboard that reads a view gets its filters, computed fields and cross table (with more
+measures and no Columns, the first one); a view of rows as they are gives them every field.
+
+A view can also start in **Explore**: **New → View** in a folder (or the button of an empty
+folder) opens the Viewer, asks for the datasource, and proposes that folder when you
+**Save view**. Nothing is created until then.
+Saved views appear in
 **Explore** next to flows and datasources, and in the **View** picker of the Viewer.
 Saving again under the same name in the same folder updates the view; the name cannot
 be reused there for a view of another datasource.
@@ -226,13 +277,14 @@ in **Sample / Private tables**, with one row per product category and month:
 `categoria`, `anno_mese` (`202510` for October 2025), `ricavo`, `costo`, `margine`,
 `chili`, `ordini`, `margine_pct`.
 
-1. Open **Analysis → Viewer** and choose `Margin by Category and Month`.
+1. Open **Analysis → Viewer**, choose `Margin by Category and Month` and press **Add all**
+   (the table starts empty; every field goes to **Rows**).
 2. **Filters**: `margine_pct` < `30`, then **Apply**. The table lists the months in
    which a category earned less than 30% of its revenue.
 3. **Computed fields**: `ricavo_al_kg` = `round(ricavo / chili, 2)`, revenue per kilo.
-4. Remove the filter and turn the **Pivot** on: **Rows** `categoria`, **Columns**
-   `anno_mese`, **Values** `margine`, **Function** sum. One row per category, one column
-   per month.
+4. Remove the filter, press **Clear**, and drag `categoria` onto **Rows**, `anno_mese`
+   onto **Columns** and `margine` onto **Measures** (sum). One row per category, one
+   column per month.
 5. Switch to **Chart**, choose **Lines**, X `anno_mese`, series `categoria`, function
    sum of `margine`: the seasons of the sample data (Christmas, summer) show up in
    each category's line.

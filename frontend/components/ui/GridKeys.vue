@@ -13,6 +13,8 @@ import { useKeyGroups, type KeyGroup } from '~/composables/useKeyHelp'
 
 const props = withDefaults(defineProps<{
   profile?: boolean
+  // the surface arranges its columns by hand (the Viewer): the keys that move and remove one
+  arrange?: boolean
   // another surface's keys in place of the grid's, group by group, what the panel calls
   // them and what the button is called
   groups?: KeyGroup[]
@@ -24,7 +26,7 @@ const props = withDefaults(defineProps<{
   fixed?: boolean
   // no button: a page with no bar of its own, where only «?» opens the list
   bare?: boolean
-}>(), { profile: false, wide: false, fixed: false, bare: false })
+}>(), { profile: false, arrange: false, wide: false, fixed: false, bare: false })
 const { t } = useI18n()
 const open = ref(false)
 const panel = ref<HTMLElement | null>(null)
@@ -46,6 +48,13 @@ const keys = computed(() => {
   ]
   if (props.profile) {
     list.push([k.enter, t('gridKeys.enter')], ['← →', t('gridKeys.profileArrows')], ['Esc', t('gridKeys.escape')])
+  }
+  if (props.arrange) {
+    list.push(
+      [`${k.chord(k.shift, '←')} · ${k.chord(k.shift, '→')}`, t('gridKeys.moveColumn')],
+      // a Mac has no Del: ⌘⌫ is its way, shown alone there and beside Del elsewhere
+      [k.ways({ pc: ['Del'], any: [k.chord(k.mod, k.backspace)] }), t('gridKeys.removeColumn')],
+    )
   }
   return list
 })

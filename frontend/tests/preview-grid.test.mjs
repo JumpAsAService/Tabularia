@@ -389,7 +389,9 @@ test('the Viewer offers a value as a filter only on the datasource\'s own column
   const viewer = readFileSync(new URL('../pages/viewer.vue', import.meta.url), 'utf8')
   const grid = readFileSync(new URL('../components/ui/DataGrid.vue', import.meta.url), 'utf8')
   // the filters come before the computed fields: a computed field cannot be filtered on
-  assert.match(viewer, /const valueActions = computed\(\(\) => \{[\s\S]*?columns: \(selectedDs\.value\?\.columns \?\? \[\]\)\.map/)
+  // (the same columns the filters' own pickers offer, and a field dragged onto the filters)
+  assert.match(viewer, /const filterCols = computed\(\(\) => fields\.value\.filter\(\(f\) => !f\.computed\)/)
+  assert.match(viewer, /const valueActions = computed\(\(\) => \{[\s\S]*?columns: filterCols\.value/)
   assert.match(grid, /!a\.columns \|\| a\.columns\.includes\(c\.name\)/)
   assert.doesNotMatch(grid, /v-if="valueActions"/)
 })

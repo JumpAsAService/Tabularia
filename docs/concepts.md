@@ -14,7 +14,7 @@ into detail.
 | Connection | The address and credentials of a database, SFTP server, S3 bucket, HTTP API, SharePoint site or SMTP server | a folder | [Connections](connections/README.md) |
 | Datasource | A named table of the catalog: a parquet snapshot in the object storage | a folder | [Sources](sources/README.md) |
 | Flow | A pipeline drawn on a canvas: source nodes, operations, Output nodes | a folder | [Flows](capabilities/flows.md) |
-| Saved view | A Viewer configuration (filters, pivots, charts) over a datasource; never the rows | a folder | [Preview and analysis](capabilities/preview-and-analysis.md) |
+| Saved view | A Viewer configuration (the table's rows, columns and measures, filters, charts) over a datasource; never the rows | a folder | [Preview and analysis](capabilities/preview-and-analysis.md) |
 | Script | Python or R code with its versions, run on Kubernetes | a folder | [Python and R](scripting.md) |
 | SQL script | SQL over the catalog or over a database connection | a folder | [SQL scripts](sql-scripts.md) |
 | Report | A paginated, pixel-perfect document over datasets, with parameters: read on screen, downloaded as PDF or Excel, sent by email | a folder | [Reports](capabilities/reports.md) |

@@ -5,6 +5,37 @@ exposes at `/system/info` and in the app's settings menu.
 
 ## Unreleased
 
+- **The Viewer's table starts empty, and you build it by dragging fields onto three
+  areas**, as a report's matrix: **Rows** down the left, **Columns** across the top,
+  **Measures** in the middle. Opening a datasource no longer loads every column: the page
+  lists its fields (name, type, description) and says how many rows there are, from the
+  metadata, and asks the engine nothing. Fields in Rows alone are the rows as they are,
+  with those columns (the engine reads only them); with measures the table is grouped and
+  each measure aggregated (sum for a number, count otherwise; average, min, max and
+  distinct count on the chip); a field in Columns makes a cross table, with the first
+  measure and the pivot's cap of 500 columns said in words; measures alone are one row of
+  totals. The engine always aggregates. Chips are dragged within and between the areas and
+  removed with ×; a field dropped on **Filters** starts a filter, on the chart it goes to
+  the axis or to the value. The **Pivot** box of the side panel is gone: the three areas
+  are its face. The chart asks nothing until it has its columns (it used to run a count by
+  the first column of every datasource opened). On a datasource of 12 million rows and 80
+  columns: 4 requests and about 1.6 s at opening before, none now; a column of rows comes
+  in about 0.25 s, a group by on two fields in 0.5 s, a cross table in 0.7 s. All of it
+  from the keyboard too (the list under **?**), with announcements for a screen reader,
+  and by touch.
+- **Saved views keep the three areas.** A view saved before opens as it did (its pivot
+  becomes Rows, Columns and the measure; without a pivot, every field in Rows). A filter
+  left without its value is ignored instead of matching the empty text, and is not saved.
+  **CSV** and **Excel** export the table as built (every field while it is empty).
+- **Explore → New → View** starts a saved view from a folder: the Viewer asks for the
+  datasource, opens on the empty table and proposes that folder at **Save view**; nothing
+  is created before.
+- **Polars previews read the storage in place.** A preview, a count and a column profile
+  on the Polars engine read only the columns and row groups they need from the object
+  storage, as DuckDB and chDB already did, instead of downloading the whole file first:
+  the first 500 rows of an 830 MB datasource went from about 6.4 s to 0.5 s, three of its
+  columns to 0.05 s. A run and an export still download their source.
+  `STORAGE__DIRECT_READ=false` goes back to downloading.
 - **Adding a step puts it in the chain.** In the flow editor a transformation added to a
   node that already feeds another goes between the two, and what follows slides one step
   on; at the end of a chain it is appended; a node that forks, or Shift, gets one more

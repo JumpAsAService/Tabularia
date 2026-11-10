@@ -2736,7 +2736,7 @@ const settledSummary = computed(() => {
   if (!r || computingNodeId.value || rowCount.value.state === 'counting' || changesPending.value) return ''
   const parts = [nodeFullName(previewNodeId.value), summaryRows.value]
   if (rowCount.value.state === 'failed') parts.push(rowCount.value.slow ? t('dataGrid.countSlow') : t('dataGrid.countFailed'))
-  parts.push(t('dataGrid.columns', { n: r.columns.length }))
+  parts.push(t('dataGrid.columns', { n: r.columns.length }, r.columns.length))
   const removed = previewChanges.value?.removed.length ?? 0
   if (removed) parts.push(t('dataGrid.removed', { n: removed }, removed))
   if (shownCacheSkipped.value) parts.push(t('dataGrid.cacheCap'))
@@ -3608,7 +3608,7 @@ async function pollTask(id: string) {
                 :title="$t('dataGrid.countAgain')"
                 @click="countRetry"
               ><RotateCw :size="11" aria-hidden="true" /></button></span>
-              <span class="pv-part">{{ $t('dataGrid.columns', { n: preview.columns.length }) }}</span>
+              <span class="pv-part">{{ $t('dataGrid.columns', { n: preview.columns.length }, preview.columns.length) }}</span>
               <!-- «N columns removed», «−N» when the bar is narrow (its name stays whole) -->
               <span v-if="previewChanges?.removed.length" class="pv-part">
                 <button
