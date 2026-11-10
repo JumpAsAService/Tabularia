@@ -279,8 +279,9 @@ export function moveCell(at: CellPos, key: string, ctrl: boolean, rows: number, 
   switch (key) {
     case 'ArrowLeft': c -= 1; break
     case 'ArrowRight': c += 1; break
-    case 'ArrowUp': r -= 1; break
-    case 'ArrowDown': r += 1; break
+    // with Ctrl or ⌘: the column's first and last row (the way of a keyboard with no Home/End)
+    case 'ArrowUp': r = ctrl ? (rows > 0 ? 0 : -1) : r - 1; break
+    case 'ArrowDown': r = ctrl ? lastR : r + 1; break
     case 'Home': if (ctrl) r = rows > 0 ? 0 : -1; c = 0; break
     case 'End': if (ctrl) r = lastR; c = lastC; break
     case 'PageDown': r = r < 0 ? step - 1 : r + step; break

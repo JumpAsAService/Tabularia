@@ -310,7 +310,8 @@ function onGridKey(e: KeyboardEvent) {
     void copyActive()
     return
   }
-  if (mod && e.key !== 'Home' && e.key !== 'End') return // the page's shortcuts (save, undo)
+  // the page's shortcuts (save, undo) but the grid's own: Ctrl/⌘ with Home, End, ↑ and ↓
+  if (mod && !['Home', 'End', 'ArrowUp', 'ArrowDown'].includes(e.key)) return
   if (e.key === 'Enter' && inCell && profiling.value) {
     e.preventDefault()
     openProfile(active.value.c)
