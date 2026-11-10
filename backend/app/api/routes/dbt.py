@@ -376,7 +376,7 @@ def _compile(req: ExportRequest, seeds: list[dict], ch: TargetClickHouse | None 
                     original = sql
                     try:
                         sql = ch.translate_query(sql, m.translate.get("connection_id"), m.translate.get("label") or m.name,
-                                               proposal=proposal, columns=cols if proposal is not None else None)
+                                               proposal=proposal, columns=cols if proposal is not None else None, dtypes=dtypes)
                         if over_the_limit(in_byte(sql)):
                             raise too_large(m.name, in_byte(sql))
                         error = check.error(sql) if check else None

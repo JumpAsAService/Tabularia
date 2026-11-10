@@ -3894,3 +3894,96 @@ def test_a_clickhouse_decimal_cast_to_an_integer_runs(column, dtype):
     files = _export_in({"id": "Int64", "x": dtype}, [{"type": "cast", "params": {"columns": {"x": "int"}}}], "clickhouse")
     got = dict(_su_clickhouse(_model(files, values)))
     assert got == {1: 1, 2: -2, 3: None, 4: 0, 5: None if "38" in column else int(big.split(".")[0])}
+
+
+# a Postgres query translated for the ClickHouse target, run on the table the federated database
+# would show (what ClickHouse's PostgreSQL engine infers, with the export's own widened types)
+_ZZ_ROWS = [(1, 1, "1.2345", 1.5, 0.1, "2024-01-05 10:30:00"), (2, -7, "2.5", 2.5, -2.5, "1965-06-11 08:00:00"),
+            (3, None, "-2.5", -2.5, 2.5, None), (4, 7, "0.5", 0.5, 1.5, "2150-03-31 23:59:59"),
+            (5, 0, "99999999.9999", 1e20, 3.25, "2024-01-01 00:00:00")]
+_ZZ_TYPES = {"id": "Int32", "k": "Nullable(Int32)", "n": "Nullable(Decimal(12, 4))", "f": "Nullable(Float64)", "r": "Nullable(Float32)",
+             "ts": "Nullable(DateTime64(6))"}
+
+
+def _translated(sql: str, dtypes: dict) -> str:
+    return d.TargetClickHouse([_PG], "ch.local").translate_query(sql, 1, "q", dtypes=dtypes)
+
+
+def _on_clickhouse(sql: str, dtypes: dict) -> dict:
+    """{id: the other columns} of a Postgres query over zz.dati, translated and run on ClickHouse."""
+    import uuid
+
+    cli = _clickhouse()
+    table = f"tab.zzq_{uuid.uuid4().hex[:8]}"
+    cli.command(f"CREATE TABLE {table} ({', '.join(f'`{c}` {t}' for c, t in _ZZ_TYPES.items())}) ENGINE = Memory")
+    try:
+        lit = lambda v: "NULL" if v is None else (repr(v) if isinstance(v, (int, float)) else f"'{v}'")   # noqa: E731
+        cli.command(f"INSERT INTO {table} VALUES " + ", ".join("(" + ", ".join(lit(v) for v in r) + ")" for r in _ZZ_ROWS))
+        rows = cli.query(_translated(sql, dtypes).replace("tab_src_1_zz.dati", table)).result_rows
+    finally:
+        cli.command(f"DROP TABLE {table}")
+    return {r[0]: tuple(r[1:]) for r in rows}
+
+
+def test_a_postgres_division_of_integers_stays_an_integer_division_on_clickhouse():
+    """Postgres divides two integers as integers (truncating towards zero), ClickHouse gives a
+    float: `id / 3 * 3` was `id`. The export types the operands from what the query's output
+    says (a column it returns as an integer; an integer result made only of + - * / % of
+    columns and integer literals) and writes intDiv."""
+    got = _on_clickhouse("SELECT id, id / 3 * 3 AS a, k / 2 * 2 AS b, (id + 0.0) / 4 AS c, id % 3 AS resto FROM zz.dati",
+                         {"id": "Int32", "a": "Int32", "b": "Int32", "c": "Float64", "resto": "Int32"})
+    assert got == {1: (0, 0, 0.25, 1), 2: (0, -6, 0.5, 2), 3: (3, None, 0.75, 0), 4: (3, 6, 1.0, 1), 5: (3, 0, 1.25, 2)}
+    sql = " ".join(_translated("SELECT k, sum(k) / count(*) AS m FROM zz.dati GROUP BY k", {"k": "Int32", "m": "Int64"}).split())
+    assert "intDiv(SUM(k), COUNT(*))" in sql
+
+
+@pytest.mark.parametrize("sql,dtypes,word", [
+    # the types of f and k are not known: the division could be either
+    ("SELECT id, f / k AS x FROM zz.dati", {"id": "Int32", "x": "Float64"}, "f / k"),
+    ("SELECT sum(k) / count(*) AS m FROM zz.dati", {"m": "Float64"}, "SUM(k) / COUNT(*)"),
+    # a Float64 of Tabularia is a numeric or a double precision: they round differently
+    ("SELECT id, f, f::int AS x FROM zz.dati", {"id": "Int32", "f": "Float64", "x": "Int32"}, "CAST(f AS INT)"),
+    ("SELECT id, n::int AS x FROM zz.dati", {"id": "Int32", "x": "Int32"}, "CAST(n AS INT)"),
+    ("SELECT id, date_trunc('decade', ts) AS x FROM zz.dati", {"id": "Int32", "x": "Datetime(time_unit='us', time_zone=None)"}, "decade"),
+])
+def test_a_postgres_number_whose_type_is_not_known_is_refused_not_guessed(sql, dtypes, word):
+    """What could give another number is refused as not translatable (the AI may then propose
+    a translation; the federated target runs the query in Postgres), never changed silently."""
+    with pytest.raises(d.DbtExportError) as e:
+        _translated(sql, dtypes)
+    assert e.value.code == "query_not_translatable" and word in e.value.params["detail"], e.value.params
+
+
+def test_a_postgres_numeric_without_precision_is_a_double_on_clickhouse():
+    """`::numeric` was a Decimal(10, 0) once translated: round(f::numeric, 2) lost the decimals
+    and 1e20 failed (DECIMAL_OVERFLOW). It is the double the federated tables read an unbounded
+    numeric as."""
+    got = _on_clickhouse("SELECT id, round(f::numeric, 2) AS tondo, f::numeric * 2 AS doppio FROM zz.dati",
+                         {"id": "Int32", "tondo": "Float64", "doppio": "Float64"})
+    assert got == {1: (1.5, 3.0), 2: (2.5, 5.0), 3: (-2.5, -5.0), 4: (0.5, 1.0), 5: (1e20, 2e20)}
+
+
+def test_a_postgres_cast_to_an_integer_rounds_as_postgres_does():
+    """Postgres rounds a number cast to an integer — a numeric half away from zero, a double
+    half to even — where ClickHouse truncates: 2.5::int was 2, 1.5::float8::int 1."""
+    got = _on_clickhouse("SELECT id, id::bigint AS ki, (r * 10)::int AS r10, (2.5 * id)::int AS lit, n::numeric::int AS ni, "
+                         "f::float8::int AS fi, r FROM zz.dati WHERE id < 5",
+                         {"id": "Int32", "ki": "Int32", "r10": "Int32", "lit": "Int32", "ni": "Int32", "fi": "Int32", "r": "Float32"})
+    assert {i: v[:5] for i, v in got.items()} == {1: (1, 1, 3, 1, 2), 2: (2, -25, 5, 3, 2), 3: (3, 25, 8, -3, -2), 4: (4, 15, 10, 1, 0)}
+
+
+def test_a_postgres_date_trunc_keeps_the_dates_clickhouse_s_datetime_cannot_hold():
+    """date_trunc was ClickHouse's dateTrunc, a 32-bit DateTime: 1965 came out as 2008, 2150 wrapped."""
+    got = _on_clickhouse("SELECT id, date_trunc('month', ts) AS mese, date_trunc('week', ts) AS settimana, date_trunc('hour', ts) AS ora, "
+                         "date_trunc('year', ts) AS anno, date_trunc('day', ts) AS giorno, date_trunc('quarter', ts) AS trimestre, "
+                         "date_trunc('minute', ts) AS minuto, date_trunc('second', ts) AS secondo FROM zz.dati",
+                         {c: "Datetime(time_unit='us', time_zone=None)" for c in ("mese", "settimana", "ora", "anno", "giorno", "trimestre", "minuto", "secondo")})
+    D = _dt.datetime
+    for i, (_, _, _, _, _, ts) in enumerate(_ZZ_ROWS, 1):
+        if ts is None:
+            assert got[i] == (None,) * 8
+            continue
+        t = D.fromisoformat(ts)
+        monday = D(t.year, t.month, t.day) - _dt.timedelta(days=t.weekday())
+        assert got[i] == (D(t.year, t.month, 1), monday, t.replace(minute=0, second=0), D(t.year, 1, 1), D(t.year, t.month, t.day),
+                          D(t.year, (t.month - 1) // 3 * 3 + 1, 1), t.replace(second=0), t), i
