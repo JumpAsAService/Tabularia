@@ -82,7 +82,10 @@ def test_every_engine_names_its_sources_as_the_route_does(module, name):
 
 @pytest.mark.parametrize("engine_name", ["polars", "duckdb", "chdb", "bigquery"])
 def test_only_clickhouse_forgot_its_copies(engine_name):
-    assert source_fingerprint(engine_name, "b", "k") == f"{engine_name}:b/k"
+    from app.core import release
+
+    assert source_fingerprint(engine_name, "b", "k") == f"{engine_name}@{release.current()}:b/k"
+    assert source_fingerprint("clickhouse", "b", "k") == f"clickhouse.2@{release.current()}:b/k"
 
 
 def test_the_halo_looks_for_a_clickhouse_copy_under_the_name_the_engine_writes_it(storage, fredis, sales, monkeypatch):

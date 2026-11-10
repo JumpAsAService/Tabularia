@@ -169,6 +169,10 @@ them.
 - **Entries expire.** A step unused for `CACHE__TTL_SECONDS` (one day by default) is
   deleted. On BigQuery the cache is a set of expiring tables in a dataset of its own
   (`BIGQUERY__CACHE_DATASET`).
+- **A release reads only what it computed.** The key carries the release, as do the
+  remembered row counts, the column profiles and the dashboards' numbers: after an upgrade
+  the first preview of each step is computed again, once, and what the release before left
+  expires as any unused entry does.
 
 The Viewer does not use the step cache: its filters change at every click, and a cache
 of them would only fill the storage.

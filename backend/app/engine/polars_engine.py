@@ -36,7 +36,7 @@ from app.engine.base import (
     RunResult,
     preview_rows,
 )
-from app.engine.cache import StepCache, plan_hashes
+from app.engine.cache import StepCache, plan_hashes, source_fingerprint
 from app.engine.context import OperationContext
 from app.engine.exceptions import EngineError, OperationError
 from app.engine.operations import get_operation
@@ -96,7 +96,7 @@ class PolarsEngine(DeferredStepCache, Engine):
 
     # ── Helpers ───────────────────────────────────────────────────────────
     def _source_id(self, source: DataSource) -> str:
-        return f"{self.engine_name}:{source.bucket}/{source.key}"
+        return source_fingerprint(self.engine_name, source.bucket, source.key)
 
     def _sink(self, lf: pl.LazyFrame, path: str) -> None:
         """Writes a LazyFrame as parquet: streaming, with an in-memory fallback.

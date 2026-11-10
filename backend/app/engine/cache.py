@@ -20,6 +20,12 @@ Content-addressed ⇒ no invalidation: changing a parameter changes the hash. Th
 no longer accessed are removed by the TTL eviction (`evict_expired`), which deletes
 blob + SET + ZSET together, so index and storage stay aligned.
 
+The release is part of the content: a chain's fingerprints start from the engine, the
+release (`app.core.release`) and the source, so a step copied by another release is never
+read (an upgrade may change what a step gives under the same operations). Nothing is
+deleted at the upgrade: the copies of the release before are no longer accessed, and
+leave with the TTL as any other.
+
 The index is a PROMISE, not a proof: a blob may vanish underneath (deleted by hand on
 the bucket, a lifecycle rule, a change of storage). A hit on a missing blob must never
 break a preview: `nearest` checks it exists (HEAD) before reusing a step, forgets the
@@ -35,6 +41,7 @@ import time
 
 import redis
 
+from app.core import release
 from app.core.config import get_settings
 
 logger = logging.getLogger(__name__)
@@ -52,15 +59,19 @@ def _canonical(op: dict) -> str:
 
 
 # An engine's name in its fingerprints: moved on when what a step writes changes under the
-# same operations, so that nothing goes on reading the old copies (the TTL removes them).
+# same operations WITHIN a release (a stack that follows the development line), so that
+# nothing goes on reading the old copies (the TTL removes them). From one release to the
+# next the release itself does it, see `source_fingerprint`.
 # clickhouse.2: a join's key keeps its name (see chdb_ops._join_select), before 25.3 the
 # copies hold a column `l.k`.
 _FINGERPRINT_NAME = {"clickhouse": "clickhouse.2"}
 
 
 def source_fingerprint(engine: str, bucket: str, key: str) -> str:
-    """Where the fingerprints of an engine's chain on an object start from."""
-    return f"{_FINGERPRINT_NAME.get(engine, engine)}:{bucket}/{key}"
+    """Where the fingerprints of an engine's chain on an object start from: the engine, the
+    release that computes and the object. Every engine's `_source_id`, and what the counts,
+    the column profiles and the editor's haloes are remembered under."""
+    return f"{_FINGERPRINT_NAME.get(engine, engine)}@{release.current()}:{bucket}/{key}"
 
 
 def plan_hashes(source_id: str, operations: list[dict]) -> list[str]:
