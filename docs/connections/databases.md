@@ -307,6 +307,9 @@ keeps the last thirty days.
 - **Time**: ClickHouse may sort a whole table before sending the first row: an import or
   a write waits up to `INGEST__DB_READ_TIMEOUT_SECONDS` (3000 s by default) while the
   server says nothing. Date and time columns keep their types.
+- **Types**: an `Enum8`/`Enum16` arrives as its label (`'rosso'`, not its code 1); a
+  `FixedString` as its text without the zero bytes that pad it, or, when its bytes are not
+  text (a binary hash), as their hexadecimal.
 - **Table list**: the tables of the connection's database.
 - **Writing**: see the staging and `EXCHANGE TABLES` above. On a table you created, the
   columns are matched by name before anything is written, and a missing one is named in

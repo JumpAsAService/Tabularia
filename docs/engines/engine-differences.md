@@ -55,7 +55,8 @@ five engines (BigQuery live, against a real project):
 - sorting always puts **nulls last**, ascending and descending — a "top N" never returns
   nulls; on several columns each keeps its own direction, the next ones breaking the ties;
 - a failed cast yields `NULL`, never an error; numbers cast to integer are **truncated**,
-  not rounded; numeric strings are trimmed of surrounding whitespace;
+  not rounded; an integer cast to float is the nearest double (`2^53 + 1` is `2^53`: the
+  ClickHouse engines gave `NULL`); numeric strings are trimmed of surrounding whitespace;
 - in a join, a `NULL` key never matches; a missing side is `NULL`, never a default value;
   a non-key column with the same name on the right gets the `_right` suffix;
 - a datetime without timezone is an instant in **UTC**.
@@ -97,7 +98,7 @@ Legitimate dialect differences. Know them, choose accordingly.
 |---|---|
 | Integer overflow in `sum` | Polars and chDB wrap around silently; DuckDB and BigQuery raise an error. |
 | `first` / `last`, and which row `unique` keeps | After a `sort`, the first and last rows **in that order**, on Polars, DuckDB and the ClickHouse engines (checked on 400 000 rows, a ClickHouse server included). Without a sort, the first and last rows of the data as read on Polars and DuckDB; any row of the group on the ClickHouse engines and BigQuery. |
-| Casting text to `datetime` | The ClickHouse engines parse almost anything, including a numeric string read as a Unix timestamp; Polars, DuckDB and BigQuery only accept standard formats and return `NULL` otherwise. Polars and DuckDB **drop** a `Z` or a UTC offset written after the seconds and keep the clock time: `2024-01-05 10:30:00+02` is 10:30 UTC, not 08:30. They disagree on `24:00:00` (DuckDB: midnight of the next day; Polars: `NULL`), on `23:59:60`, a `Z` right after the minutes, a lowercase `z` and an offset after a space (Polars reads them; DuckDB: `NULL`). |
+| Casting text to `datetime` | The ClickHouse engines parse almost anything, including a numeric string read as a Unix timestamp, into a `DateTime64(6)` that holds 1900–2299: a year outside it is `NULL` there (a cast to datetime used to go through the 32-bit `DateTime`: a date of 1955 became 1970-01-01, one of 2150 2106, and an instant lost its microseconds); Polars, DuckDB and BigQuery only accept standard formats and return `NULL` otherwise. Polars and DuckDB **drop** a `Z` or a UTC offset written after the seconds and keep the clock time: `2024-01-05 10:30:00+02` is 10:30 UTC, not 08:30. They disagree on `24:00:00` (DuckDB: midnight of the next day; Polars: `NULL`), on `23:59:60`, a `Z` right after the minutes, a lowercase `z` and an offset after a space (Polars reads them; DuckDB: `NULL`). |
 | Casting text to `date` | Permissiveness varies: `2024-1-5` works on Polars, DuckDB and BigQuery, `2024/01/05` and `2024-01-05 10:00` only on DuckDB. A two-digit year is that year, not this century's: `24-01-05` is the year 24 on Polars and DuckDB. Use ISO dates. |
 | Casting text to `float` | `inf`, `nan` and a number beyond the double range (`1e400` → infinity) agree on Polars and DuckDB; `1_000.5` is 1000.5 on DuckDB and `NULL` on Polars. |
 | Position of a text (`strpos`, `position`) | DuckDB counts characters; Polars, and ClickHouse's `position`, count bytes: `strpos('città x', 'x')` is 7 on DuckDB and 8 on Polars. ClickHouse's `positionUTF8` counts characters. |

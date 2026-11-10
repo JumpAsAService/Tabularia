@@ -55,9 +55,25 @@ with portable forms that give Tabularia's values:
   (NaN and infinities give NULL). A bad value gives NULL, as in Tabularia — never a
   failed model on Postgres, never a made-up value on ClickHouse (`2024-02-30` used to
   become 1 March there). A float written as text keeps its `.0` (`200.0`), as the
-  engines write it; boolean ↔ number casts and `min`/`max` of a boolean run on Postgres;
+  engines write it, also as the value of an unpivot of a float with a text (it was `7`,
+  and `-0` for -0.0); a Postgres `real` or a ClickHouse `Float32` stays a 4-byte float
+  (`FLOAT`), so `0.1` as text is `0.1`, not `0.10000000149011612`; an instant Tabularia
+  read to the millisecond (an Excel date-time, a ClickHouse `DateTime`) keeps its unit
+  (`TIMESTAMP_MS`, a `DateTime64(3)` on ClickHouse), so as text it has three digits of
+  fraction as in Tabularia. On native Postgres an instant made text has every digit of its
+  unit's fraction (`10:30:00.000000`) when the flow's engine writes them so (Polars, the
+  ClickHouse engines), and Postgres' own text (no zero fraction, as DuckDB) when it is
+  DuckDB; boolean ↔ number casts and `min`/`max` of a boolean run on Postgres;
   a `UInt64` (a ClickHouse hash key, a MySQL `BIGINT UNSIGNED`) stays unsigned
   (`numeric(20,0)` on Postgres) and a value over 2^63 cast to integer is NULL;
+- **-0.0 and 0.0 are one key on ClickHouse**, as in Tabularia: ClickHouse groups,
+  deduplicates and hash-joins a float by its bits, so a step before a group by, a unique
+  and both sides of a join adds 0.0 to the float keys, as the ClickHouse engine does
+  (-0.0 becomes 0.0; NaN and NULL stay). The editor's calendar value of a filter on an
+  instant (`2024-01-05T10:30`, without seconds, which ClickHouse does not read as a
+  `DateTime`) is written as the ClickHouse engine writes it, an offset turned into UTC; a
+  ClickHouse `Decimal` cast to an integer checks the 64-bit range on the value as a double
+  (comparing a `Decimal(10, 2)` with -2^63 overflowed);
 - **text in byte order on Postgres**, as Tabularia compares it: the first step gives the
   source text columns `COLLATE "C"`, and sort keys, ranges, `min`/`max` and the order of
   `first`/`last` add it to text the flow makes. Equality, joins, `GROUP BY`, `DISTINCT`
@@ -189,6 +205,28 @@ MySQL *database* engine is dropped and made again (it holds no data). `CLICKHOUS
   written as its text (ClickHouse 24 sent `DATE '1970-01-01'` to Postgres as a number of
   days), and the query gets the `*UTF8` functions and the `Date32`/`DateTime64` types as
   the models do. A query that does not translate is refused.
+  **A Postgres query keeps Postgres' numbers and dates.** Postgres divides two integers as
+  integers and rounds a number cast to an integer (a `numeric` half away from zero, a
+  double half to even); ClickHouse divides into a float and truncates. The translation
+  writes `intDiv` for a division of two integers, Postgres' rounding for `::int`
+  (`roundBankers`, or half away from zero), `::numeric` without precision as the double
+  the federated tables read such a numeric as (ClickHouse's own `Decimal(10, 0)` cut the
+  decimals and failed over 10^10), and `date_trunc` on `Date32`/`DateTime64` (ClickHouse's
+  `dateTrunc` is a 32-bit `DateTime`: 1965 came out as 2008). The export knows a column's
+  type only from the query's own output, as Tabularia read it: a column the query returns
+  as it is, and the columns of an integer it returns made only of `+ - * / %` of columns and
+  integer literals. A division or a cast to an integer whose types that does not tell — a
+  column the query does not return, an aggregate of one, a `Float64` (a `numeric` or a
+  `double precision`: Tabularia reads both so) cast to an integer — and a `date_trunc` unit
+  other than second to year are refused as not translatable: with the AI option the AI
+  proposes a translation, and the federated target runs the query in Postgres itself.
+  Return the column, or cast it (`n::numeric::int`, `f::float8::int`), and the query
+  translates. A **MySQL or MariaDB query** compares text in ClickHouse by bytes, where
+  MySQL's usual collations ignore case and accents: a `WHERE nome = 'alfa'`, a `DISTINCT` or
+  a `GROUP BY` on text can keep other rows than Tabularia did (the README says so for each
+  such model). The federated target reads MySQL with the filter kept in DuckDB, as Tabularia
+  does (`mysql_experimental_filter_pushdown: false`), and a `TINYINT(1)` as a number
+  (`mysql_tinyint1_as_boolean: false`).
 - A **ClickHouse connection** is read directly if it is the ClickHouse the project
   runs on; another ClickHouse server is refused (use the native target there).
 - The profile sets `join_use_nulls = 1` (with ClickHouse's default the missing side of
@@ -202,7 +240,10 @@ MySQL *database* engine is dropped and made again (it holds no data). `CLICKHOUS
   ClickHouse model (this target and the native one on ClickHouse) goes through
   `EXPLAIN AST` — no execution, no table needed — on chDB if the engine has it,
   otherwise on the engine's ClickHouse, which gets 10 seconds; if neither answers the
-  check is skipped for the rest of the export and the README says so. A syntax error
+  check is skipped for the rest of the export and the README says so. Only a connection
+  that fails or times out turns it off: an answer that is not about the syntax (memory, a
+  setting) leaves it on for the next models, and the README says that one was not read
+  (before, a client error reading EXPLAIN's answer turned it off after the first model). A syntax error
   there is a model that does not translate: the export says so, or, with the AI option,
   asks the AI for a translation. It does not catch functions ClickHouse does not have —
   that would need the tables.
@@ -245,7 +286,7 @@ were typed (an empty folder stays empty: its default follows the flow's name).
 
 | Option | What it does |
 |---|---|
-| **Where it runs** | ClickHouse, DuckDB (federated) or native. A target that cannot work for the flow is disabled, with the reason: a `pivot` outside DuckDB, sources on several connections or on MySQL/MariaDB for native, an Oracle, SQL Server or Trino source, a seed over 50 000 rows, a step saved half done (a join without its right input or its keys, a filter without a column or a value, an aggregation without a column…), a source or output name with a character the target's dbt adapter cannot write (see Limits). ClickHouse with an Oracle, SQL Server or Trino table becomes available in **Folder for an existing project**: those sources are then ticked «already declared» and cannot be unticked (the team's project must declare them; type the source name it has there); in the complete project ClickHouse stays disabled with the reason |
+| **Where it runs** | ClickHouse, DuckDB (federated) or native. A target that cannot work for the flow is disabled, with the reason: a `pivot` outside DuckDB, sources on several connections or on MySQL/MariaDB for native, an Oracle, SQL Server or Trino source, a seed over 50 000 rows (a datasource's, or a file loaded in the editor, by the rows its node holds), a step saved half done (a join without its right input or its keys, a filter without a column or a value, an aggregation without a column…), a source or output name with a character the target's dbt adapter cannot write (see Limits). ClickHouse with an Oracle, SQL Server or Trino table becomes available in **Folder for an existing project**: those sources are then ticked «already declared» and cannot be unticked (the team's project must declare them; type the source name it has there); in the complete project ClickHouse stays disabled with the reason |
 | **Complete project** | Ready to run: `profiles.yml`, `dbt_project.yml`, README — as described above |
 | **Folder for an existing project** | `models/<folder>/`, `seeds/<folder>/`, `tests/<folder>/`, `macros/<folder>/` to copy into the team's repository, and an `INTEGRATION.md` that says what their profile needs (the DuckDB secrets and attachments and the UTC session, ClickHouse's `custom_settings`), which sources they must already declare, and how to run it: `dbt build -s +tag:<flow>,tag:tabularia` — the flow's models and everything they read, with their tests, but only what came from Tabularia, so a model of the team tagged like the flow is not built, nor what it reads. No `generate_schema_name` macro in a folder: it would rename the schemas of their whole project. The default folder is the flow's name as an ASCII slug (accents dropped, at most 40 characters, `tabularia` when nothing is left) |
 | **Folder, model prefix** | Models and seeds named `<prefix><name>` (e.g. `tab_`), away from the team's own names; the name is the one the dialog shows, with the prefix in front |
@@ -398,6 +439,31 @@ of the full name.
 | Steps shared by several outputs | `int_<step>` model, `ephemeral`, referenced with `ref()` — one definition, as in the editor |
 | Publish sort keys | an `ORDER BY` at the end of the model, as the app does |
 
+**dbt does not write the real table as Tabularia does.** Tabularia empties the customer's
+table and fills it by name (*replace*: `TRUNCATE` + `INSERT`; on ClickHouse a staging copy
+of its definition swapped in with `EXCHANGE TABLES`), or inserts by name (*append*: the
+columns the flow lacks take their `DEFAULT`), and the table stays as the customer made it.
+dbt keeps its own way, and the project says so in the model's header and in the README:
+
+- a *replace* (`table`) model is **rebuilt** at every `dbt run`: on Postgres the column
+  types, `NOT NULL`, defaults, the primary key and `CHECK`s, the indexes, the grants, the
+  comments and the columns the flow lacks are gone, and the views and foreign keys that read
+  the table are **dropped** with it (`CASCADE`, without a word; where Tabularia's `TRUNCATE`
+  refuses a table another table references, dbt drops the foreign key); on ClickHouse the
+  engine, `ORDER BY`, column types and comment;
+- an *append* (`incremental`) model on Postgres widens a column type the new rows do not fit
+  in (`expand_target_column_types`: a `varchar(20)` becomes a `varchar(42)`), and fails if the
+  table has a column the model lacks (an audit column with a `DEFAULT`);
+  `dbt run --full-refresh` rebuilds the table as a *replace* does, views dropped included;
+- **on native ClickHouse an append inserts by position**: dbt-clickhouse writes
+  `INSERT INTO t (its columns) SELECT …` with the model's columns in the model's order, so a
+  table whose columns are in another order gets its values in the wrong columns, **without an
+  error**. Keep the table's columns in the order of the flow's output. (dbt inserts by name
+  only with an enforced model contract, which needs the exact ClickHouse type of every column:
+  the export cannot promise them, so it does not set one.)
+
+Keep these models in a schema of their own if the customer's table must stay as it is.
+
 On the connection dbt runs on, an output keeps its real table only when its model is
 materialized the way Tabularia writes it: `table` for *replace*, `incremental` for
 *append*. Another choice (a `table` or a `view` over an append, a `view` over a replace)
@@ -515,8 +581,8 @@ Tabularia's contract check gives:
 | `not_null` | a generic test on the column in `schema.yml`, with `quote: true` (dbt's generic tests write the name as it is: `Nome Cliente` or `select` was a syntax error, and Postgres read `Canale` as `canale`). Two `not_null` rules on one column (a warning and an error) are one test with the stricter severity; on a column whose name holds a double quote it is a singular test |
 | `unique` (one column) | a singular test `tests/<model>__unique_<column>.sql`, a `GROUP BY` that counts NULLs: two NULLs are a duplicate, as in Tabularia (dbt's generic `unique` ignores them) |
 | `accepted_values` | a singular test `tests/<model>__accepted_values_<column>.sql` that compares as Tabularia does: a number column as numbers (`3` = `3.0`, unless a value is not a number: then as text), a boolean column as booleans (`true`, `false`, `1`, `0`; another value refuses the export), anything else by its text. Quotes and backslashes are escaped for each warehouse (`Sant'Antonio`, `L'Aquila`) |
-| `pattern` | a singular test: the **whole** value must match (`^(?:regex)$`), read as text as Tabularia reads it — a date `2024-01-05`, a timestamp with six fraction digits, a boolean `true`, a decimal with all its scale digits, a whole float with `.0`. `.` does not match a newline, as in Tabularia |
-| `unique` (several columns), `range`, `row_count`, `expression` | a singular test in `tests/`, a query that selects the violations |
+| `pattern` | a singular test: the **whole** value must match (`^(?:regex)$`), read as text as Tabularia reads it — a date `2024-01-05`, a timestamp with the fraction digits of its unit (six, three for one read to the millisecond), a boolean `true`, a decimal with all its scale digits, a whole float with `.0`. `.` does not match a newline, as in Tabularia; `\b` is a word boundary everywhere (`\y` on Postgres) |
+| `unique` (several columns), `range`, `row_count`, `expression` | a singular test in `tests/`, a query that selects the violations. A `range` bound on an instant is the instant in UTC, typed, as Tabularia's check reads it (a `Z`, an offset, the calendar's value without seconds) |
 | `column` (exists, type) | the column is listed, the declared type in its description |
 | `freshness` | a note in the README: dbt checks freshness on sources, not on models |
 
@@ -655,6 +721,12 @@ before a release.
 - A Postgres `char(n)` keeps its trailing blanks in Tabularia (`'ab   '`); the federated
   and native Postgres targets read it without them (the ClickHouse target keeps them),
   so group keys, equality filters and lengths can differ on such columns.
+- On the ClickHouse target a datasource query's `round()` of a numeric that ClickHouse holds
+  as a double (an unbounded `numeric` column, a `::numeric`) rounds an exact tie (`2.5`)
+  half to even, where Postgres rounds it half away from zero; a MySQL query's
+  `CAST(x AS SIGNED)` truncates where MySQL rounds. A ClickHouse `FixedString` read by the
+  ClickHouse and native ClickHouse targets keeps the zero bytes that pad it, which
+  Tabularia drops when it imports the table.
 - Casts on the native and ClickHouse targets, rare cases: on the ClickHouse target a
   year outside 1900–2299 is NULL (`Date32` and `DateTime64` hold no other; ClickHouse
   moved it to 1900 or 2299, a made-up value); ClickHouse's own float parsing (the

@@ -5,6 +5,42 @@ exposes at `/system/info` and in the app's settings menu.
 
 ## Unreleased
 
+- **The dbt export's ClickHouse paths give Tabularia's data**, found by a new end-to-end
+  oracle against the ClickHouse engine (`e2e/dbt_export/clickhouse_paths.py`):
+  - a Postgres query datasource translated for the ClickHouse target keeps Postgres'
+    numbers and dates: a division of two integers stays one (`intDiv`), `::int` rounds as
+    Postgres does, `::numeric` without precision is a double (it was a `Decimal(10, 0)`:
+    decimals cut, 1e20 failed) and `date_trunc` holds dates before 1970 and after 2106. A
+    division or an integer cast whose types the query's output does not tell is refused as
+    not translatable (the AI may propose a translation), never changed silently;
+  - on ClickHouse -0.0 and 0.0 are one key in a group by, a unique and a join, as in
+    Tabularia; a filter with the editor's calendar value (`2024-01-05T10:30`) and a
+    `Decimal` cast to an integer no longer fail the model;
+  - a Postgres `real` or a ClickHouse `Float32` stays a 4-byte float (`0.1` as text was
+    `0.10000000149011612`), an instant read to the millisecond keeps three digits of
+    fraction as text, a float among texts in an unpivot keeps its `.0`, and on native
+    Postgres an instant made text has its whole fraction when the flow's engine writes it so;
+  - the ClickHouse syntax check, without chDB, read only the first model (a client error
+    turned it off): every model is read now;
+  - a file loaded in the editor with more than 50,000 rows is refused by the plan, naming
+    the file (the download failed after the plan had offered every target);
+  - a federated MySQL/MariaDB source keeps its filters in DuckDB (MySQL's case-insensitive
+    collation kept 'Alfa' for `nome = 'alfa'`) and reads a `TINYINT(1)` as a number (2 was 1);
+  - a contract's `range` on an instant with an offset, a `Z` or the calendar's value without
+    seconds gives Tabularia's verdict (it ERRORed on ClickHouse), and a pattern's `\b` is a word
+    boundary on Postgres too;
+  - a model that writes the customer's own table says, in its header and in the README, what
+    dbt does to it: it rebuilds a *replace* table (types, keys, indexes, grants, comments lost;
+    views and foreign keys dropped on Postgres), widens column types on an append, and on
+    ClickHouse appends **by position** (a table with its columns in another order gets its
+    values swapped): a warning, dbt has no standard way to append by name there.
+- **The ClickHouse engines** (chDB and an external ClickHouse) cast to datetime on a
+  `DateTime64`: a date of 1955 was 1970-01-01, one of 2150 2106, and an instant lost its
+  microseconds; a year outside 1900–2299 is `NULL`. An integer cast to float is the nearest
+  double (`2^53 + 1` was `NULL`).
+- **A ClickHouse table imported** gives an `Enum` as its label (it was its code: 'rosso'
+  was 1) and a `FixedString` as text (it was binary, which the CSV export could not write).
+
 ## 1.4.2 «Romulus» — 2026-11-10 · long-term support
 
 The first long-term support release: from here on the 1.4 line takes security, data-correctness
