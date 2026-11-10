@@ -92,7 +92,7 @@ and **One series per value of**, a sparkline's **Along**, the choices of a param
 An aggregate takes no other inside it: `SUM([margine]) / SUM([ricavo])`, not
 `SUM(SUM(...))`. A field written where there is no current row (a group's total row, a
 text) is the value of the first of its rows: in a text on `margins`, `[categoria]` gives
-`Insaccati cotti`.
+`Biscotti`.
 
 All aggregates leave NULLs out. On no rows, or only NULLs, `COUNT` gives 0 and the
 others NULL.
@@ -119,15 +119,15 @@ by: a table grouped by `[categoria]` has the group `categoria`. A group by an ex
 has no name until it is given one, in the group's **Name in expressions**: with
 `"Q" & CEILING(MONTH([Month]) / 3)` named `quarter`, `SUM([ricavo], "quarter")` is the
 quarter's total. On `margins`, grouped by `[categoria]` and by that quarter, sorted by
-`[anno_mese]`, on the row of March 2025 of *Insaccati cotti*:
+`[anno_mese]`, on the row of March 2025 of *Biscotti*:
 
 | Expression | Gives |
 |---|---|
-| `SUM([ricavo], "categoria")`, format `#,##0` | `491,426`, the six months of the category |
-| `[ricavo] / SUM([ricavo], "categoria")`, format `0.0%` | `18.4%`, the month's share of the category |
-| `AVG([ricavo], "categoria")`, format `#,##0` | `81,904` |
-| `MAX([ricavo], "categoria")`, format `#,##0` | `96,939`, April |
-| `MIN([ricavo], "quarter")`, format `#,##0` | `64,693`, February, the smallest of the quarter |
+| `SUM([ricavo], "categoria")`, format `#,##0` | `1,149,609`, the six months of the category |
+| `[ricavo] / SUM([ricavo], "categoria")`, format `0.0%` | `19.4%`, the month's share of the category |
+| `AVG([ricavo], "categoria")`, format `#,##0` | `191,602` |
+| `MAX([ricavo], "categoria")`, format `#,##0` | `230,237`, April |
+| `MIN([ricavo], "quarter")`, format `#,##0` | `162,419`, February, the smallest of the quarter |
 | `COUNT("categoria")` | `6` |
 | `COUNTDISTINCT([categoria], "categoria")` | `1` |
 | `FIRST([Month], "categoria")`, format `MMM yyyy` | `Jan 2025` |
@@ -137,7 +137,7 @@ On a row, `SUM([ricavo])` with no name is the innermost group's total, not the r
 row's share is `[ricavo] / SUM([ricavo], "categoria")`, or
 `PERCENT(SUM([ricavo]), "categoria")` ([PERCENT](#percent)). In a total,
 `SUM([ricavo]) / SUM([ricavo], "categoria")` is that total's share: in the table above,
-`45.1%` for the first quarter of *Insaccati cotti*, `54.9%` for the second, `100.0%` for the
+`51.2%` for the first quarter of *Biscotti*, `48.8%` for the second, `100.0%` for the
 category.
 
 A group has to hold the place the expression is in, or the check says so:
@@ -165,10 +165,10 @@ report is checked: «SUM adds numbers: a field of type text is here».
 
 | Expression | Gives |
 |---|---|
-| `SUM([ricavo])` | `2,921,909.2` |
-| `FORMAT(SUM([ricavo]), "€ #,##0")` | `€ 2,921,909` |
-| `FORMAT(SUM([ricavo], "margins"), "#,##0")` in the page header | `2,921,909` |
-| `FORMAT(SUM(IF([categoria] = "Salami", [ricavo], 0)), "#,##0")` | `883,922`: a sum with a condition, which [SUMIF](#sumif-countif) says in fewer words |
+| `SUM([ricavo])` | `2,800,790.28` |
+| `FORMAT(SUM([ricavo]), "€ #,##0")` | `€ 2,800,790` |
+| `FORMAT(SUM([ricavo], "margins"), "#,##0")` in the page header | `2,800,790` |
+| `FORMAT(SUM(IF([categoria] = "Pasta fresca", [ricavo], 0)), "#,##0")` | `639,054`: a sum with a condition, which [SUMIF](#sumif-countif) says in fewer words |
 
 ### AVG
 
@@ -176,12 +176,12 @@ report is checked: «SUM adds numbers: a field of type text is here».
 
 | Expression | Gives |
 |---|---|
-| `AVG([margine_pct])` | `26.62` |
-| `ROUND(AVG([margine_pct]), 1)` | `26.6` |
-| `AVG([ordini])` as the **Total** of a column, format `#,##0.0` | `422.2` in the total of *Insaccati cotti* |
+| `AVG([margine_pct])` | `27.37` |
+| `ROUND(AVG([margine_pct]), 1)` | `27.4` |
+| `AVG([ordini])` as the **Total** of a column, format `#,##0.0` | `430.7` in the total of *Biscotti* |
 
 The average of the percentages is not the margin percentage of the whole, which is
-`SUM([margine]) / SUM([ricavo])`, `24.5%` ([margin percentage](#margin-percentage)).
+`SUM([margine]) / SUM([ricavo])`, `27.7%` ([margin percentage](#margin-percentage)).
 
 ### MIN, MAX
 
@@ -190,11 +190,11 @@ They compare numbers, texts or dates, one type per column.
 
 | Expression | Gives |
 |---|---|
-| `MIN([ricavo])` | `64.72` (Insaccati da cuocere, June 2025) |
-| `MAX([ricavo])` | `215,195.65` (Prosciutti, April 2025) |
+| `MIN([ricavo])` | `1,654.15` (Dolci da ricorrenza, June 2025) |
+| `MAX([ricavo])` | `230,237.17` (Biscotti, April 2025) |
 | `FORMAT(MIN([Month]), "MMMM yyyy")` | `January 2025` |
 | `FORMAT(MAX([Month]), "MMMM yyyy")` | `June 2025` |
-| `FORMAT(MAX([margine_pct]) / 100, "0.0%")` | `34.2%` |
+| `FORMAT(MAX([margine_pct]) / 100, "0.0%")` | `33.1%` |
 
 ### COUNT
 
@@ -205,9 +205,9 @@ many rows where it is not NULL. `COUNT("margins")` counts the rows of a named da
 | Expression | Gives |
 |---|---|
 | `COUNT()` | `30` |
-| `COUNT(IF([categoria] = "Salami", [ricavo]))` | `6`: `IF` with no third argument is NULL on the other rows |
+| `COUNT(IF([categoria] = "Pasta fresca", [ricavo]))` | `6`: `IF` with no third argument is NULL on the other rows |
 | `COUNT("margins")` in the page header | `30` |
-| `[categoria] & " · " & COUNT() & " months"` as a group's **Label** | `Insaccati cotti · 6 months` |
+| `[categoria] & " · " & COUNT() & " months"` as a group's **Label** | `Biscotti · 6 months` |
 
 ### COUNTDISTINCT
 
@@ -216,7 +216,7 @@ many rows where it is not NULL. `COUNT("margins")` counts the rows of a named da
 | Expression | Gives |
 |---|---|
 | `COUNTDISTINCT([categoria])` | `5` |
-| the same with **Category** `Prosciutti` | `1` |
+| the same with **Category** `Pasta di semola` | `1` |
 
 ### FIRST, LAST
 
@@ -226,8 +226,8 @@ its **Order of the rows**.
 
 | Expression | Gives |
 |---|---|
-| `FIRST([categoria])` | `Insaccati cotti` |
-| `LAST([categoria])` | `Salumi stagionati` |
+| `FIRST([categoria])` | `Biscotti` |
+| `LAST([categoria])` | `Sostitutivi del pane` |
 | `FIRST([Month])` as a column's **Total**, format `MMM`, rows sorted by `[anno_mese]` | `Jan` in every group's total |
 
 ### SUMIF, COUNTIF
@@ -241,14 +241,14 @@ prints nothing: `COALESCE(SUMIF(…), 0)` for a zero. On `margins`:
 
 | Expression | Gives |
 |---|---|
-| `SUMIF([anno_mese] <= 202503, [ricavo])` | `1,399,328.82`, the first quarter |
-| `SUMIF([categoria] = "Salami", [ricavo])` | `883,922.45` |
-| `COUNTIF([ricavo] > 100000)` | `16` |
-| `COUNTIF([MarginPct] < 0.22)` | `6`, the months of Prosciutti |
+| `SUMIF([anno_mese] <= 202503, [ricavo])` | `1,339,833.17`, the first quarter |
+| `SUMIF([categoria] = "Pasta fresca", [ricavo])` | `639,054.19` |
+| `COUNTIF([ricavo] > 100000)` | `12` |
+| `COUNTIF([MarginPct] < 0.22)` | `3`, three months of Pasta di semola |
 | `COUNTIF([ricavo] > 1000000)` | `0` |
-| `SUMIF(YEAR([Month]) = 2024, [ricavo], "history")` | `5,702,681.05`, all of 2024 from another dataset |
-| `COUNTIF(YEAR([Month]) = 2024, "history")` | `59` |
-| `SUMIF([anno_mese] <= 202503, [ricavo]) / SUM([ricavo])` as a **Total**, format `0.0%` | `45.1%` in the total of *Insaccati cotti*, `51.3%` of *Salami* |
+| `SUMIF(YEAR([Month]) = 2024, [ricavo], "history")` | `5,972,798.01`, all of 2024 from another dataset |
+| `COUNTIF(YEAR([Month]) = 2024, "history")` | `58` |
+| `SUMIF([anno_mese] <= 202503, [ricavo]) / SUM([ricavo])` as a **Total**, format `0.0%` | `51.2%` in the total of *Biscotti*, `46.2%` of *Pasta fresca* |
 
 The condition is written on each row, in the dataset the aggregate reads. `SUMIF([ricavo], [ricavo])`
 is refused, «SUMIF: the first argument is a condition», and so is `SUMIF([ricavo] > 0, [categoria])`,
@@ -268,21 +268,21 @@ On `margins`, a table grouped by `[categoria]`, sorted by `[anno_mese]`, with
 
 | Row | Revenue | `PERCENT(SUM([ricavo]))` |
 |---|---|---|
-| Insaccati cotti, January 2025 | 66,648 | `13.6%` of the category's six months |
-| Insaccati cotti, March 2025 | 90,211 | `18.4%` |
-| Total Insaccati cotti | 491,426 | `16.8%` of the whole |
-| Total Prosciutti | 863,136 | `29.5%` |
-| Total Salami | 883,922 | `30.3%` |
-| Grand total | 2,921,909 | `100.0%` |
+| Biscotti, January 2025 | 203,119 | `17.7%` of the category's six months |
+| Biscotti, March 2025 | 223,094 | `19.4%` |
+| Total Biscotti | 1,149,609 | `41.0%` of the whole |
+| Total Pasta di semola | 394,021 | `14.1%` |
+| Total Pasta fresca | 639,054 | `22.8%` |
+| Grand total | 2,800,790 | `100.0%` |
 
 With two levels, by `[categoria]` and by the quarter named `quarter`, the same column
 without a name is the share of the level above, and with one the share of the category:
 
 | Row | `PERCENT(SUM([ricavo]))` | `PERCENT(SUM([ricavo]), "categoria")` |
 |---|---|---|
-| Insaccati cotti, January 2025 | `30.1%` of the quarter | `13.6%` of the category |
-| Total Q1 | `45.1%` of the category | `45.1%` |
-| Total Insaccati cotti | `16.8%` of the whole | `100.0%` |
+| Biscotti, January 2025 | `34.5%` of the quarter | `17.7%` of the category |
+| Total Q1 | `51.2%` of the category | `51.2%` |
+| Total Biscotti | `41.0%` of the whole | `100.0%` |
 | Grand total | `100.0%` | nothing: it is in no group |
 
 ### RUNNING
@@ -294,17 +294,17 @@ runs over the whole table when it has none. It takes an aggregate of the group,
 calculated field, which has no rows shown to run over: write it in a column. When a reader
 sorts the table by another column in the viewer, the running total follows the new order.
 
-| Month (Insaccati cotti) | Revenue | `RUNNING(SUM([ricavo]))` |
+| Month (Biscotti) | Revenue | `RUNNING(SUM([ricavo]))` |
 |---|---|---|
-| January 2025 | 66,648 | `66,648` |
-| February 2025 | 64,693 | `131,341` |
-| March 2025 | 90,211 | `221,552` |
-| June 2025 | 86,809 | `491,426`, the group's total |
+| January 2025 | 203,119 | `203,119` |
+| February 2025 | 162,419 | `365,538` |
+| March 2025 | 223,094 | `588,632` |
+| June 2025 | 167,646 | `1,149,609`, the group's total |
 
 ### ROWNUMBER
 
 `ROWNUMBER()`: the number of the row within its group, from 1. In the first group of the
-table above it goes from 1 to 6, and starts from 1 again in *Insaccati da cuocere*. The
+table above it goes from 1 to 6, and starts from 1 again in *Dolci da ricorrenza*. The
 page header and footer have no rows: there it is refused. So it is in **Rows where**,
 **Group by**, the **Order of the rows** and a matrix's **One column per value of**: there
 the rows are being chosen and put in their order, and none has its number yet.
@@ -318,14 +318,14 @@ with every group: the first row of a group gives NULL, so January of a category 
 compared with December of the one before, and a NULL in a calculation prints nothing,
 with no error. On `margins`, grouped by `[categoria]`, sorted by `[anno_mese]`:
 
-| Month (Insaccati cotti) | Revenue | `PREVIOUS([ricavo])` | `[ricavo] / PREVIOUS([ricavo]) - 1`, format `+0.0%;-0.0%;0.0%` |
+| Month (Biscotti) | Revenue | `PREVIOUS([ricavo])` | `[ricavo] / PREVIOUS([ricavo]) - 1`, format `+0.0%;-0.0%;0.0%` |
 |---|---|---|---|
-| January 2025 | 66,648 | nothing | nothing |
-| February 2025 | 64,693 | `66,648` | `-2.9%` |
-| March 2025 | 90,211 | `64,693` | `+39.4%` |
-| April 2025 | 96,939 | `90,211` | `+7.5%` |
-| May 2025 | 86,127 | `96,939` | `-11.2%` |
-| June 2025 | 86,809 | `86,127` | `+0.8%` |
+| January 2025 | 203,119 | nothing | nothing |
+| February 2025 | 162,419 | `203,119` | `-20.0%` |
+| March 2025 | 223,094 | `162,419` | `+37.4%` |
+| April 2025 | 230,237 | `223,094` | `+3.2%` |
+| May 2025 | 163,094 | `230,237` | `-29.2%` |
+| June 2025 | 167,646 | `163,094` | `+2.8%` |
 
 In a column's **Total** it takes an aggregate, and is the total of the group before at the
 same level, under the same parent: with the groups by month inside a category, the first
@@ -333,12 +333,12 @@ month of each category has none. In the grand total it gives NULL.
 
 | Total row | `SUM([ricavo])` | `PREVIOUS(SUM([ricavo]))` | `SUM([ricavo]) / PREVIOUS(SUM([ricavo])) - 1` |
 |---|---|---|---|
-| Insaccati cotti | 491,426 | nothing | nothing |
-| Insaccati da cuocere | 9,218 | `491,426` | `-98.1%` |
-| Prosciutti | 863,136 | `9,218` | `+9263.9%` |
-| Salami | 883,922 | `863,136` | `+2.4%` |
-| Salumi stagionati | 674,207 | `883,922` | `-23.7%` |
-| Grand total | 2,921,909 | nothing | nothing |
+| Biscotti | 1,149,609 | nothing | nothing |
+| Dolci da ricorrenza | 23,757 | `1,149,609` | `-97.9%` |
+| Pasta di semola | 394,021 | `23,757` | `+1558.5%` |
+| Pasta fresca | 639,054 | `394,021` | `+62.2%` |
+| Sostitutivi del pane | 594,349 | `639,054` | `-7.0%` |
+| Grand total | 2,800,790 | nothing | nothing |
 
 What «before» means, in every case:
 
@@ -386,12 +386,12 @@ On `margins`, in a **KPI**:
 
 | Expression | Gives |
 |---|---|
-| `LOOKUP(MAX([anno_mese]), [anno_mese], SUM([ricavo]))` | `416,174.4`, June 2025, the latest month |
-| `LOOKUP(MAX([anno_mese]) - 100, [anno_mese], SUM([ricavo]), "history")` | `382,666.83`, June 2024 |
+| `LOOKUP(MAX([anno_mese]), [anno_mese], SUM([ricavo]))` | `442,869.15`, June 2025, the latest month |
+| `LOOKUP(MAX([anno_mese]) - 100, [anno_mese], SUM([ricavo]), "history")` | `409,472.83`, June 2024 |
 | `LOOKUP(202503, [anno_mese], COUNT())` | `5`: five rows, one per category |
-| `LOOKUP("Salami", [categoria], [ricavo])` | `150,824.34`, the first row of Salami, January |
-| `LOOKUP("Salami", [categoria], SUM([margine]) / SUM([ricavo]))` | `0.25` |
-| `ISNULL(LOOKUP("Speck", [categoria], [ricavo]))` | `Yes`: no such category |
+| `LOOKUP("Pasta fresca", [categoria], [ricavo])` | `92,326.08`, the first row of Pasta fresca, January |
+| `LOOKUP("Pasta fresca", [categoria], SUM([margine]) / SUM([ricavo]))` | `0.32` |
+| `ISNULL(LOOKUP("Gelati", [categoria], [ricavo]))` | `Yes`: no such category |
 
 It reads the **whole dataset**: the **Rows where** of the table it is written in do not
 apply, so a table of 2025 finds its 2024, as `SUM([ricavo], "history")` would.
@@ -432,10 +432,10 @@ condition: `IF([ricavo], 1, 0)` is refused.
 
 | Expression | Gives |
 |---|---|
-| `IF(SUM([margine]) / SUM([ricavo]) < 0.25, "Below target", "On target")` | `Below target` (24.5%) |
-| `IF([MarginPct] < 0.22, "Below", "OK")` in a column | `Below` in the six months of Prosciutti (20.1% to 21.9%), `OK` in the others |
+| `IF(SUM([margine]) / SUM([ricavo]) < 0.3, "Below target", "On target")` | `Below target` (27.7%) |
+| `IF([MarginPct] < 0.22, "Below", "OK")` in a column | `Below` in three months of Pasta di semola (January, February and June, 21.9%), `OK` in the others |
 | `IF(1 > 2, "yes")` | nothing (NULL) |
-| `IF(ISNULL(PREVIOUS([ricavo])), "first month", FORMAT([ricavo] / PREVIOUS([ricavo]) - 1, "+0.0%;-0.0%"))` in a column | `first month` in January, `-2.9%` in February for Insaccati cotti |
+| `IF(ISNULL(PREVIOUS([ricavo])), "first month", FORMAT([ricavo] / PREVIOUS([ricavo]) - 1, "+0.0%;-0.0%"))` in a column | `first month` in January, `-20.0%` in February for Biscotti |
 
 ### IFS
 
@@ -445,8 +445,8 @@ otherwise that is NULL. Thresholds read from the highest down:
 
 | Expression | Gives |
 |---|---|
-| `IFS(AVG([margine_pct]) >= 30, "High", AVG([margine_pct]) >= 22, "Medium", "Low")` | `Medium` (26.62) |
-| `IFS([margine_pct] >= 30, "High", [margine_pct] >= 22, "Medium", "Low")` in a column | `High` for Insaccati cotti, `Medium` for Salami, `Low` for Prosciutti |
+| `IFS(AVG([margine_pct]) >= 30, "High", AVG([margine_pct]) >= 25, "Medium", "Low")` | `Medium` (27.37) |
+| `IFS([margine_pct] >= 30, "High", [margine_pct] >= 25, "Medium", "Low")` in a column | `High` for Pasta fresca, `Medium` for Biscotti, `Low` for Pasta di semola |
 
 ### ISNULL
 
@@ -454,7 +454,7 @@ otherwise that is NULL. Thresholds read from the highest down:
 
 | Expression | Gives |
 |---|---|
-| `ISNULL(PARAM("category"))` | `Yes` with no category chosen, `No` with `Prosciutti` |
+| `ISNULL(PARAM("category"))` | `Yes` with no category chosen, `No` with `Pasta di semola` |
 | `ISNULL(PREVIOUS([ricavo]))` in a column | `Yes` in January |
 | `ISNULL(10 / 0)` | `Yes`: a division by zero is NULL, never an error |
 
@@ -464,7 +464,7 @@ otherwise that is NULL. Thresholds read from the highest down:
 
 | Expression | Gives |
 |---|---|
-| `COALESCE(PARAM("category"), "All categories")` | `All categories`, or `Prosciutti` when it is chosen |
+| `COALESCE(PARAM("category"), "All categories")` | `All categories`, or `Pasta di semola` when it is chosen |
 | `COALESCE(PREVIOUS([ricavo]), 0)` in a column | `0` in January |
 
 ## Maths
@@ -519,7 +519,7 @@ a real number, or past what a number holds (about 10 to the 308th).
 
 | Expression | Gives |
 |---|---|
-| `"Total " & "Salami"` | `Total Salami` |
+| `"Total " & "Biscotti"` | `Total Biscotti` |
 | `"Revenue: " & 1234567.891` | `Revenue: 1,234,567.89` |
 | `"[" & NULL & "]"` | `[]` |
 
@@ -529,17 +529,17 @@ compared as written: capitals count.
 
 | Function | Gives | Example | Gives |
 |---|---|---|---|
-| `UPPER(text)` | the text in capitals | `UPPER("Prosciutti")` | `PROSCIUTTI` |
-| `LOWER(text)` | the text in lower case | `LOWER("Salumi STAGIONATI")` | `salumi stagionati` |
-| `TRIM(text)` | the text without spaces at its ends | `"[" & TRIM("  Salami  ") & "]"` | `[Salami]` |
-| `LEN(text)` | how many characters | `LEN("Prosciutti")` | `10` |
-| `LEFT(text, count)` | the first characters | `LEFT("Insaccati cotti", 9)` | `Insaccati` |
+| `UPPER(text)` | the text in capitals | `UPPER("Biscotti")` | `BISCOTTI` |
+| `LOWER(text)` | the text in lower case | `LOWER("Pasta FRESCA")` | `pasta fresca` |
+| `TRIM(text)` | the text without spaces at its ends | `"[" & TRIM("  Biscotti  ") & "]"` | `[Biscotti]` |
+| `LEN(text)` | how many characters | `LEN("Biscotti")` | `8` |
+| `LEFT(text, count)` | the first characters | `LEFT("Pasta di semola", 5)` | `Pasta` |
 | `RIGHT(text, count)` | the last characters | `RIGHT(TEXT(202503), 2)` | `03` |
 | `MID(text, start, count)` | `count` characters from `start`, 1 the first | `MID("ORD-12902", 5, 5)` | `12902` |
-| `REPLACE(text, old, new)` | every `old` replaced by `new`; a result over a million characters stops the render | `REPLACE("Insaccati cotti", "Insaccati", "Sausages,")` | `Sausages, cotti` |
-| `CONTAINS(text, part)` | true when the text contains the part | `CONTAINS("Insaccati da cuocere", "cuocere")` | `Yes` |
-| | | `CONTAINS("Prosciutti", "PROSC")` | `No` |
-| `STARTSWITH(text, start)` | true when the text starts with it | `STARTSWITH("Insaccati cotti", "Insaccati")` | `Yes` |
+| `REPLACE(text, old, new)` | every `old` replaced by `new`; a result over a million characters stops the render | `REPLACE("Pasta di semola", "di semola", "secca")` | `Pasta secca` |
+| `CONTAINS(text, part)` | true when the text contains the part | `CONTAINS("Dolci da ricorrenza", "ricorrenza")` | `Yes` |
+| | | `CONTAINS("Biscotti", "BISC")` | `No` |
+| `STARTSWITH(text, start)` | true when the text starts with it | `STARTSWITH("Pasta fresca", "Pasta")` | `Yes` |
 
 ### TEXT
 
@@ -651,7 +651,7 @@ writes a parameter.
 
 | Expression | Gives |
 |---|---|
-| `"Monthly margin" & IF(ISNULL(PARAM("category")), "", " — " & PARAM("category"))` | `Monthly margin`, or `Monthly margin — Prosciutti` |
+| `"Monthly margin" & IF(ISNULL(PARAM("category")), "", " — " & PARAM("category"))` | `Monthly margin`, or `Monthly margin — Pasta di semola` |
 | `"From " & FORMAT(PARAM("since"), "MMMM yyyy")` | `From January 2025` |
 | `PARAM("categry")` | refused: «There is no parameter «categry»: did you mean "category"?» |
 
@@ -713,7 +713,7 @@ As a total, the ratio of the sums, never the sum or the average of the ratios:
 SUM([margine]) / SUM([ricavo])        format 0.0%
 ```
 
-`24.5%` over the six months, `21.2%` in the total of *Prosciutti*. Row by row, the
+`27.7%` over the six months, `22.2%` in the total of *Pasta di semola*. Row by row, the
 calculated field `MarginPct`: `[margine] / [ricavo]` alone would also give NULL on a
 month with no revenue, since a division by zero is NULL; the `IF` says it on purpose.
 
@@ -725,7 +725,7 @@ A column in a table grouped by `[categoria]`, sorted by `[anno_mese]`:
 [ricavo] / PREVIOUS([ricavo]) - 1          format +0.0%;-0.0%;0.0%
 ```
 
-It gives nothing in January, `-2.9%` in February and `+39.4%` in March for Insaccati cotti:
+It gives nothing in January, `-20.0%` in February and `+37.4%` in March for Biscotti:
 the first row of each category has no month before, and the NULL prints as nothing, with
 no error. For the change between totals, as the **Total** of the column:
 `SUM([ricavo]) / PREVIOUS(SUM([ricavo])) - 1`.
@@ -740,7 +740,7 @@ by its key, here with the category inside it, since a month has one row per cate
 ```
 
 with the calculated field `Before`, `YEAR(DATEADD("m", -1, [Month])) * 100 + MONTH(DATEADD("m", -1, [Month]))`:
-January of *Insaccati cotti* gives `-44.1%` on the 119,264 of December 2024.
+January of *Biscotti* gives `-41.2%` on the 345,165 of December 2024.
 
 With SQL, `LAG` does the same in the dataset, and the growth is then a field of the row like
 any other, which is the way when it has to be sorted by, filtered on or charted with a
@@ -772,7 +772,7 @@ Total   PERCENT(SUM([ricavo]), "categoria")
 ```
 
 Each month and each quarter is a share of its category, not of the quarter: January
-`13.6%`, the first quarter `45.1%`, the category `100.0%`, and nothing in the grand total.
+`17.7%`, the first quarter `51.2%`, the category `100.0%`, and nothing in the grand total.
 In the total rows `SUM([ricavo]) / SUM([ricavo], "categoria")` is the same number
 ([a group by name](#a-group-by-name)). The share of the level just above is
 [plain PERCENT](#the-share-of-the-category).
@@ -790,12 +790,12 @@ SUM([ricavo]) / LOOKUP(DATEADD("y", -1, [Month]), [Month], SUM([ricavo])) - 1
 
 | Month | Revenue | Year before | Change |
 |---|---|---|---|
-| Jan 2025 | 454,816 | 429,437 | `+5.9%` |
-| Feb 2025 | 392,970 | 315,245 | `+24.7%` |
-| Mar 2025 | 551,543 | 406,810 | `+35.6%` |
-| Apr 2025 | 627,418 | 511,886 | `+22.6%` |
-| May 2025 | 478,988 | 470,593 | `+1.8%` |
-| Jun 2025 | 416,174 | 382,667 | `+8.8%` |
+| Jan 2025 | 448,293 | 446,646 | `+0.4%` |
+| Feb 2025 | 375,203 | 314,847 | `+19.2%` |
+| Mar 2025 | 516,338 | 422,358 | `+22.3%` |
+| Apr 2025 | 576,965 | 533,538 | `+8.1%` |
+| May 2025 | 441,123 | 472,230 | `-6.6%` |
+| Jun 2025 | 442,869 | 409,473 | `+8.2%` |
 
 The filter does not hide 2024 from `LOOKUP`, which reads the whole dataset. A month has one
 key here, so `SUM` adds its five categories. `DATEADD` keeps the end of the month: 29
@@ -808,8 +808,8 @@ Category by category the key holds both, in a table grouped by `[categoria]`:
 LOOKUP([categoria] & ([anno_mese] - 100), [categoria] & [anno_mese], [ricavo])
 ```
 
-which for *Insaccati cotti* gives `62,408` in January 2025 (the row has `66,648`, so `+6.8%`)
-and `54,765` in February (`+18.1%`). Without the category in the key the first row of that
+which for *Biscotti* gives `199,141` in January 2025 (the row has `203,119`, so `+2.0%`)
+and `134,373` in February (`+20.9%`). Without the category in the key the first row of that
 month in the dataset would answer for all of them, the one of another category.
 
 ### A value from a price list
@@ -832,13 +832,13 @@ LOOKUP([codice], [codice], [prezzo_listino], "prices")     the list price
 
 | Product | Revenue | List price | Sold at | Against the list, `[ricavo] / [quantita] / LOOKUP(…) - 1` |
 |---|---|---|---|---|
-| SKU0019 Culatello di Zibello DOP, counter cut | 750,618 | `53.42` | `45.77` | `-14.3%` |
-| SKU0018 Culatello di Zibello DOP, half vacuum-packed | 745,775 | `51.90` | `44.45` | `-14.4%` |
-| SKU0017 | 709,590 | `50.88` | `43.64` | `-14.2%` |
+| SKU0075 Amaretti, 5 kg carton | 782,268 | `11.13` | `9.55` | `-14.2%` |
+| SKU0076 Amaretti, 2 kg carton | 754,823 | `11.46` | `9.86` | `-14.0%` |
+| SKU0038 | 719,548 | `10.37` | `8.89` | `-14.3%` |
 
 And the whole of it, inside an aggregate, as the **Total** of a column:
-`SUM([quantita] * LOOKUP([codice], [codice], [prezzo_listino], "prices"))` gives `10,113,886`,
-what the twenty products would have made at their list price, against `8,656,855`.
+`SUM([quantita] * LOOKUP([codice], [codice], [prezzo_listino], "prices"))` gives `11,757,518`,
+what the twenty products would have made at their list price, against `10,061,641`.
 
 ### The sum of a period
 
@@ -847,9 +847,9 @@ SUMIF([anno_mese] <= 202503, [ricavo])              format #,##0
 SUMIF([anno_mese] <= 202503, [ricavo]) / SUM([ricavo])    format 0.0%
 ```
 
-In a KPI on `margins`, `1,399,329`, the first quarter of the six months. As the **Total** of
-two columns of a table grouped by `[categoria]`, `221,552` and `45.1%` for *Insaccati cotti*,
-`453,337` and `51.3%` for *Salami*. `SUM(IF([anno_mese] <= 202503, [ricavo]))` gives the very
+In a KPI on `margins`, `1,339,833`, the first quarter of the six months. As the **Total** of
+two columns of a table grouped by `[categoria]`, `588,632` and `51.2%` for *Biscotti*,
+`295,245` and `46.2%` for *Pasta fresca*. `SUM(IF([anno_mese] <= 202503, [ricavo]))` gives the very
 same numbers.
 
 ### Labels with FORMAT
@@ -860,7 +860,7 @@ A text that mixes words and numbers formats each number:
 ="Revenue " & FORMAT(SUM([ricavo]), "€ #,##0") & " · margin " & FORMAT(SUM([margine]) / SUM([ricavo]), "0.0%")
 ```
 
-gives `Revenue € 2,921,909 · margin 24.5%`. A number joined with `&` and no `FORMAT`
+gives `Revenue € 2,800,790 · margin 27.7%`. A number joined with `&` and no `FORMAT`
 keeps up to two decimals (`Revenue: 1,234,567.89`).
 
 ### The share of the category
@@ -880,7 +880,7 @@ category: the revenue from the first month of the category to this one
 A **Rule** colours cells: on the column `Margin %`, when `[MarginPct] < 0.22`, red and
 bold. A column with a word: `IFS([MarginPct] >= 0.3, "High", [MarginPct] >= 0.22,
 "On target", "Below target")`. A text that appears only when it matters: on the dataset
-`margins`, **Shown when** `SUM([margine]) / SUM([ricavo]) < 0.25`; at 24.5% it is shown.
+`margins`, **Shown when** `SUM([margine]) / SUM([ricavo]) < 0.3`; at 27.7% it is shown.
 
 ### Dates in titles
 
@@ -889,7 +889,7 @@ bold. A column with a word: `IFS([MarginPct] >= 0.3, "High", [MarginPct] >= 0.22
 ="From " & FORMAT(PARAM("since"), "MMMM yyyy") & " to " & FORMAT(DATEADD("d", -1, {start_of_month}), "d MMMM yyyy")
 ```
 
-The first gives `Monthly margin — Prosciutti` when a category is chosen; the second, on
+The first gives `Monthly margin — Pasta di semola` when a category is chosen; the second, on
 28 October 2026, `From January 2025 to 30 September 2026`.
 
 ## When an expression is wrong
@@ -905,7 +905,7 @@ Some of the messages:
 | `ricavo * 2` | Unknown name «ricavo»: fields are written in brackets, [ricavo], and functions with their parentheses, RICAVO(…) |
 | `ROUNDD([ricavo], 2)` | Unknown function ROUNDD: did you mean ROUND? |
 | `[ricavo] != 0` | «!=» is not part of the language: write <> for «not equal» |
-| `'Salami'` | «'» is not part of the language: texts go in double quotes: "text" |
+| `'Biscotti'` | «'» is not part of the language: texts go in double quotes: "text" |
 | `[ricavo] ^ 2` | «^» is not part of the language: use POWER(x, y) |
 | `"Total: " + [ricavo]` | «+» works on numbers, and this is a text: join texts with & |
 | `SUM([categoria])` | SUM adds numbers: a field of type text is here |

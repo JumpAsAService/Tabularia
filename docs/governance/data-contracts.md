@@ -116,7 +116,7 @@ those, and adds:
 
 - **Unique** on `id`, **Error**;
 - **Not null** on `cliente_id`, **Error**;
-- **Accepted values** on `canale`: `GDO, HoReCa, Grossista, Dettaglio, Gastronomia`,
+- **Accepted values** on `canale`: `Supermercati, Ristorazione, Ingrosso, Negozi, Online`,
   **Error**;
 - **Pattern** on `numero`: `ORD-[0-9]+`, **Warning**;
 - **Row count** at least `1000`, **Error**;
@@ -143,7 +143,7 @@ curl -X PUT https://tabularia.example.com/api/datasources/12/contract \
         {"kind": "unique", "columns": ["id"], "severity": "error"},
         {"kind": "not_null", "column": "cliente_id", "severity": "error"},
         {"kind": "accepted_values", "column": "canale",
-         "values": ["GDO", "HoReCa", "Grossista", "Dettaglio", "Gastronomia"], "severity": "error"},
+         "values": ["Supermercati", "Ristorazione", "Ingrosso", "Negozi", "Online"], "severity": "error"},
         {"kind": "pattern", "column": "numero", "regex": "ORD-[0-9]+", "severity": "warning"},
         {"kind": "row_count", "min": 1000, "severity": "error"},
         {"kind": "freshness", "max_age_hours": 26, "severity": "warning"},
@@ -196,7 +196,7 @@ schema:
         quality:
           - type: "sql"
             name: "canale has only accepted values"
-            query: "SELECT COUNT(*) FROM ${table} WHERE \"canale\" IS NOT NULL AND \"canale\" NOT IN ('GDO', 'HoReCa', 'Grossista', 'Dettaglio', 'Gastronomia')"
+            query: "SELECT COUNT(*) FROM ${table} WHERE \"canale\" IS NOT NULL AND \"canale\" NOT IN ('Supermercati', 'Ristorazione', 'Ingrosso', 'Negozi', 'Online')"
             mustBe: 0
             unit: "rows"
             dimension: "conformity"

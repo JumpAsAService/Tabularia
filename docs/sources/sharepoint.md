@@ -86,7 +86,7 @@ holding incompatible types fail the refresh, saying so.
 Every row says where it comes from, in the last two columns:
 
 - `_file`: the file's path in the library, with SharePoint's own capitalisation
-  (`Magazzino/Inventari/2026/inventario_modena.xlsx`), however the glob was written;
+  (`Magazzino/Inventari/2026/inventario_torino.xlsx`), however the glob was written;
 - `_file_modified_at`: when the file was last modified on SharePoint (UTC).
 
 With variables there is one `_param_<name>` column per variable as well. Office lock
@@ -111,13 +111,13 @@ the files.
 ## Example: the depots' monthly stock count
 
 Each depot of the company uploads its stock count to the site `Operations`, library
-`Documents`, folder `Magazzino/Inventari/2026`: `inventario_modena_2026-03.xlsx`,
-`inventario_napoli_2026-03.xlsx`, and so on, each with a sheet `Inventario`:
+`Documents`, folder `Magazzino/Inventari/2026`: `inventario_torino_2026-03.xlsx`,
+`inventario_bari_2026-03.xlsx`, and so on, each with a sheet `Inventario`:
 
 | codice | nome | giacenza_kg | valore_eur |
 |---|---|---|---|
-| PRS-PARMA-24 | Prosciutto di Parma 24 mesi intero | 1260.5 | 31512.50 |
-| MRT-BOL-IGP | Mortadella Bologna IGP | 845.0 | 9295.00 |
+| PST-SPAG-5K | Spaghetti di semola di grano duro, sacco 5 kg | 1260.5 | 2016.80 |
+| BSC-FROL-5K | Frollini al burro, cartone 5 kg | 845.0 | 3549.00 |
 
 1. In the folder `Operations`, **New → New connection**, type **SharePoint**: site
    `https://yourcompany.sharepoint.com/sites/Operations`, library empty, and the three
@@ -128,7 +128,7 @@ Each depot of the company uploads its stock count to the site `Operations`, libr
    lists the workbooks found; the sheet field now offers their sheets: choose
    `Inventario`.
 4. **Create & import**. The table holds every depot's rows, with `_file`
-   (`Magazzino/Inventari/2026/inventario_napoli_2026-03.xlsx`) telling them apart.
+   (`Magazzino/Inventari/2026/inventario_bari_2026-03.xlsx`) telling them apart.
 5. **Schedule automatic refresh (cron)**: `0 7 * * 1-5`, every working day at seven.
 
 A flow can then take the depot from `_file` (a regular expression on the name) and join

@@ -231,7 +231,7 @@ Español). The choice is kept by your browser. The same menu has *Your sessions*
 
 ### a. The sample data (already there)
 
-A fictional cured-meats company: an ERP on PostgreSQL and a CRM on ClickHouse, with a
+A fictional pasta and bakery company: an ERP on PostgreSQL and a CRM on ClickHouse, with a
 ready-made `Sample` folder in Tabularia. It is part of the stack: three containers, the
 two databases and `sampledb-init`, which fills them, waits for the administrator of
 step 5, signs in as that administrator and builds the folder. At the `small` scale the

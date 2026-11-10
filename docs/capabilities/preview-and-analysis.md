@@ -145,7 +145,7 @@ target). They are computed on all rows like the others, look as they do in the
 [pixel-perfect reports](reports.md#charts-and-kpis), and the assistant draws them in its
 answers too.
 
-![The Viewer on Margin by Category and Month with the Gauge chart: the average of margine_pct, 28.57, on an arc from 0 to 50 with a target mark at 30, «Target 30 · 95.2%» under it; the row of chart kinds above, in three groups](../media/guide/analysis/viewer-gauge.png)
+![The Viewer on Margin by Category and Month with the Gauge chart: the average of margine_pct, 29.31, on an arc from 0 to 50 with a target mark at 30, «Target 30 · 97.7%» under it; the row of chart kinds above, in three groups](../media/guide/analysis/viewer-gauge.png)
 
 *The Viewer with **Gauge**: the average margin percentage of the sample data against a target of 30; the row of kinds above, the first six, those that compose, those of one number.*
 

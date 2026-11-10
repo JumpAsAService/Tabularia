@@ -70,32 +70,32 @@ objects stay nested.
 
 ## Example: a price list from the sales office
 
-The sales office keeps the price list of the cured meats in an Excel workbook,
+The sales office keeps the price list of pasta and bakery products in an Excel workbook,
 `listino_2026.xlsx`, with two sheets: `Listino` (the prices) and `Note` (hidden). They
-also export the March orders of one depot from their ERP as `ordini_modena_marzo.csv`,
+also export the March orders of one depot from their ERP as `ordini_torino_marzo.csv`,
 written by an Italian Excel:
 
 ```text
 numero;data_ordine;canale;deposito;importo
-ORD-004101;2026-03-02;HoReCa;Modena;1.234,50
-ORD-004102;2026-03-02;GDO;Modena;18.760,00
-ORD-004103;2026-03-03;Gastronomia;Modena;412,80
+ORD-004101;2026-03-02;Ristorazione;Torino;1.234,50
+ORD-004102;2026-03-02;Supermercati;Torino;18.760,00
+ORD-004103;2026-03-03;Online;Torino;412,80
 ```
 
 1. In Explore, open the folder `Sales office`, choose **New → New flow** and an engine.
-2. In the toolbar, **Upload file** and pick `ordini_modena_marzo.csv`. The source shows
+2. In the toolbar, **Upload file** and pick `ordini_torino_marzo.csv`. The source shows
    three rows and five columns; `importo` is a number (1234.5, 18760, 412.8), not text,
    because the separator `;` and the decimal comma were read from the file.
 
    ![The uploaded CSV as the source of a new flow: three rows, importo read as a decimal number](../media/guide/sources/upload-csv-italian.png)
 
-   *`ordini_modena_marzo.csv` right after the upload: `data_ordine` is a date, `importo` a number (`Float64`), read from an Italian-style file.*
+   *`ordini_torino_marzo.csv` right after the upload: `data_ordine` is a date, `importo` a number (`Float64`), read from an Italian-style file.*
 
 3. Add a second source (**Source**) and, with it selected, upload `listino_2026.xlsx`.
    `Listino` is read; the dialog **Sheets to import** shows `Note` as hidden. Leave it.
 4. Build the flow: filter, join, compute. Then add an **Output** node, destination
-   **Tabularia Datasource**, name `ordini_modena_2026_03`, folder `Sales office`.
-5. Save the flow (Ctrl+S) and **Run**. When the run ends, `ordini_modena_2026_03` is in
+   **Tabularia Datasource**, name `ordini_torino_2026_03`, folder `Sales office`.
+5. Save the flow (Ctrl+S) and **Run**. When the run ends, `ordini_torino_2026_03` is in
    the catalog: other flows, saved views, SQL scripts and the AI assistant can read it.
 
 Next month, upload the April file into the same source and run again: with **Overwrite

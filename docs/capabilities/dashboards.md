@@ -57,7 +57,7 @@ A click on a bar, a slice, a point, a cell of a heatmap, a group's name in a tab
 header of a matrix filters the **other tiles on the same dataset**. A strip under the
 parameters says what is active, with a cross on each filter and **Clear all**.
 
-![A click on the Centro bar of Revenue by area: the other bars fade, Revenue goes from 18,961,683 to 10,042,680, Orders from 25,598 to 13,569, Agents from 90 to 48, the combo chart beside it keeps only Centro, and the strip says Revenue by area: Centro; Clear all brings everything back](../media/guide/dashboards/viewer-click-filters.gif)
+![A click on the Centro bar of Revenue by area: the other bars fade, Revenue goes from 19,693,658 to 10,464,499, Orders from 25,560 to 13,594, Agents from 90 to 48, the combo chart beside it keeps only Centro, and the strip says Revenue by area: Centro; Clear all brings everything back](../media/guide/dashboards/viewer-click-filters.gif)
 
 *A click on Centro, then **Clear all**. The tile clicked keeps its bars and marks the one chosen.*
 
@@ -125,7 +125,7 @@ the same sort and closed groups, and **the same numbers**, because they come fro
 reading. It is a document of the numbers, not a picture of the screen: it has a report's
 look, on white, whatever the theme you use.
 
-![Page 1 of the PDF of Sales overview with Category Salami and a click on Centro: the name, the parameter and the click on top, when the data is from, four key figures, the two charts and the start of the table](../media/guide/dashboards/pdf-sales-overview-page-1.png)
+![Page 1 of the PDF of Sales overview with Category Biscotti and a click on Centro: the name, the parameter and the click on top, when the data is from, four key figures, the two charts and the start of the table](../media/guide/dashboards/pdf-sales-overview-page-1.png)
 
 *On top, what it is showing: the name, the parameters that have a value, the clicks, when the rows are from. At the foot, the page's number.*
 
@@ -156,10 +156,10 @@ It has three parameters: **Area** and **Agent** filter `agents`, **Category** fi
 
 | With | Revenue | Orders | Agents | Margin |
 |---|---|---|---|---|
-| nothing chosen | € 18,961,683 | 25,598 | 90 | 26.4% |
-| **Area** `Nord-Ovest` | € 2,818,063 | 3,763 | 13 | 26.4% |
-| a click on the bar `Centro` | € 10,042,680 | 13,569 | 48 | 26.4% |
-| **Category** `Salami` | € 18,961,683 | 25,598 | 90 | 27.2% |
+| nothing chosen | € 19,693,658 | 25,560 | 90 | 29.7% |
+| **Area** `Nord-Ovest` | € 2,823,696 | 3,688 | 13 | 29.7% |
+| a click on the bar `Centro` | € 10,464,499 | 13,594 | 48 | 29.7% |
+| **Category** `Biscotti` | € 19,693,658 | 25,560 | 90 | 28.8% |
 
 ### Build one yourself
 
@@ -185,8 +185,8 @@ reader needs VIEW on it and on `Sample / Private tables`.
 7. **A table.** **Insert → Table**; it opens with columns from the fields. Give it the title
    `Agents`. Leave a column or two, or click fields in **Data** to add them.
 8. **The places.** Drag the tiles where you want them, and their handles to size them.
-9. **Done** saves and opens it as readers see it. Revenue says € 18,961,683. Click the bar
-   `Centro`: € 10,042,680.
+9. **Done** saves and opens it as readers see it. Revenue says € 19,693,658. Click the bar
+   `Centro`: € 10,464,499.
 
 ## The designer
 

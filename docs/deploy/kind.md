@@ -669,7 +669,7 @@ files, in this order.
 
 ## 13. Optional: play with sample data
 
-The Docker Compose stack comes with a fictional cured-meats company to try Tabularia on:
+The Docker Compose stack comes with a fictional pasta and bakery company to try Tabularia on:
 an order system on PostgreSQL, a CRM on ClickHouse, and a `Sample` folder in Tabularia
 built on them. The same on this cluster: the two databases run in `tabularia-deps`, next
 to Tabularia's PostgreSQL and Valkey, and a Job fills them, then builds the folder

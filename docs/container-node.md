@@ -152,16 +152,16 @@ The image above, used in a flow that reads the sample «Margin by Category and M
 6. Drag **Output (datasource / database)** after the node, connect it, name the
    datasource «Demand horizon» in your folder, and **Save**.
 7. **Run** in the node's panel: a node of the cluster pulls the image and runs it on the
-   sources' sample. The panel says «Last run from here now: SUCCESS · 184 rows», **Log**
+   sources' sample. The panel says «Last run from here now: SUCCESS · 183 rows», **Log**
    shows what the container printed, and the preview under the canvas has the input's
    columns and `horizon_days` = 30.
 8. **Run** in the toolbar runs the whole flow. In **Runs**, the node's run shows the
    registry and the image with its digest, the command, the attempts, the exit code and
    the log.
 
-![The same flow after Run in the node's panel: «Last run from here now: SUCCESS · 184 rows», the log with the container's two lines, and the preview under the canvas with the rows the container wrote](media/guide/containers/container-node-run-log.png)
+![The same flow after Run in the node's panel: «Last run from here now: SUCCESS · 183 rows», the log with the container's two lines, and the preview under the canvas with the rows the container wrote](media/guide/containers/container-node-run-log.png)
 
-*Step 7: **Run** in the node's panel has run the image in the cluster. The panel says it succeeded with 184 rows, **Log** shows what the container printed, and the data view has the rows it wrote (scroll right for `horizon_days`).*
+*Step 7: **Run** in the node's panel has run the image in the cluster. The panel says it succeeded with 183 rows, **Log** shows what the container printed, and the data view has the rows it wrote (scroll right for `horizon_days`).*
 
 ## A run
 
