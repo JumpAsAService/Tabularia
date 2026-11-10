@@ -398,7 +398,10 @@ def _compile(req: ExportRequest, seeds: list[dict], ch: TargetClickHouse | None 
                         translated[m.name] = _SQLGLOT_DIALECT.get(origin, origin)
                     if origin != "clickhouse" and notes is not None:
                         notes.append(f"The model `{m.name}` is the SQL query of a datasource, translated from {origin} to ClickHouse "
-                                     "by sqlglot, with its tables read from the `tab_src_*` databases: review it.")
+                                     "by sqlglot, with its tables read from the `tab_src_*` databases: review it."
+                                     + (" ClickHouse compares text by bytes, where MySQL's usual collations ignore case and "
+                                        "accents: `nome = 'alfa'`, a DISTINCT or a GROUP BY on text can keep other rows than "
+                                        "Tabularia did." if origin in ("mysql", "mariadb") else ""))
                 used.update(cte_names(sql, "clickhouse" if (ch and m.translate) else (dialect or "duckdb")))
                 # the query is the user's text: no macro of ours in it, all of it neutralised
                 sql = neutralize_jinja(_typed_raw(sql, cols, dtypes, dialect))
