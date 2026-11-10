@@ -32,7 +32,8 @@ repository:
 | folder | what |
 |---|---|
 | `backend/` | the engine: FastAPI and Celery workers, the five engines (Polars, DuckDB, chDB, ClickHouse, BigQuery) |
-| `gateway/` | the control plane: sign-in, permissions, metadata in Postgres, scheduling, the AI assistant |
+| `gateway-go/` | the gateway (Go): sign-in, permissions, metadata in Postgres, scheduling; `dataapi/` holds the data APIs' pods. New features go here |
+| `gateway/` | the Python image: the AI service (the assistant, the SQL parsing) and the database migrations (Alembic). Frozen otherwise |
 | `frontend/` | the app (Nuxt) |
 | `infrastructure/` | the development Compose stack, the Helm chart, the sample databases |
 | `website/` | the presentation site and the documentation site (GitHub Pages) |

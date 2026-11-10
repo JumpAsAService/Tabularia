@@ -426,7 +426,7 @@ text = "Path prefix a reverse proxy publishes the gateway under, stripping it be
 values = "a path such as `/api`"
 
 [var.APP__GATEWAY_THREADS]
-text = "Threads serving the synchronous routes. More do not serve more (Python runs one at a time); the database pool follows this number. A different name from the engine's `APP__ENGINE_API_THREADS` because both read the same file and want opposite values."
+text = "A number kept from the Python gateway, where it was the threads serving the synchronous routes. The Go gateway (from 1.4.0) serves every request on a goroutine and does not cap them with it. It still counts, with `DB__POOL_SIZE` and `DB__MAX_OVERFLOW`, in the ceiling of `ORCHESTRATOR__MAX_CONCURRENT`. A different name from the engine's `APP__ENGINE_API_THREADS` because both read the same file."
 
 [var.APP__TIMEZONE]
 text = "Time zone in which cron schedules are read (wall-clock time, daylight saving included); they are stored in UTC. Timestamps are still shown in each viewer's own time zone."
@@ -1026,7 +1026,7 @@ text = "Bucket of every snapshot, cached step and output. The gateway (`ENGINE__
 text = "Region of the storage (`auto` for Google Cloud Storage)."
 
 [var.STORAGE__DIRECT_READ]
-text = "The DuckDB and chDB engines read sources and cached steps in place, only the columns and row groups a query needs. `false`: download each file first, for a service that does not serve range reads."
+text = "The DuckDB and chDB engines read sources and cached steps in place, only the columns and row groups a query needs; Polars does for previews, counts and column profiles (a run and an export still download their source). `false`: download each file first, for a service that does not serve range reads."
 
 [var.DUCKDB_EXTENSION_DIRECTORY]
 text = "Where DuckDB finds its extensions (`httpfs`, for reading the storage in place). The image sets it to the extensions it ships, so nothing is downloaded at runtime."
