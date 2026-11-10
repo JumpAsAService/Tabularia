@@ -170,7 +170,7 @@ who saves.
 
 ## Example: revenue by region and channel, on the sample data
 
-The sample databases of the Compose stack (a cured-meats company: orders on Postgres,
+The sample databases of the Compose stack (a pasta and bakery company: orders on Postgres,
 customers on ClickHouse) are imported into **Sample / Private tables**. This flow
 computes the net revenue of fulfilled orders by region and sales channel, joining the
 order system with the CRM. An administrator grants you EDIT on the folder you work in

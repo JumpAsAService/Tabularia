@@ -427,14 +427,14 @@ their seasons; with the threshold at 30%, the table lists the months to look int
 What you see, with the sample data (the pictures at the top of this page):
 
 1. The app opens on **All** categories and the **last 12 months**: one line per
-   category, and the dashed threshold at 30%. *Insaccati cotti* and *Insaccati da
-   cuocere* run around or above it; *Salami*, *Salumi stagionati* and *Prosciutti* run
+   category, and the dashed threshold at 30%. *Pasta fresca* runs above it; *Sostitutivi
+   del pane*, *Biscotti*, *Dolci da ricorrenza* and *Pasta di semola* run
    below, so the table under the chart holds their months.
 2. Move **Flag margins under (%)** to 25: the dashed line drops, and the count above the
-   table falls to the months of the two lowest categories and a few of *Salami*.
+   table falls to the months of *Pasta di semola* and a few of *Dolci da ricorrenza*.
 3. Move **Last months** to 24: the chart shows two years, and you can compare each month
    with the same month of the year before.
-4. Choose **Prosciutti** in **Category**: one line, and the table holds only its months.
+4. Choose **Pasta di semola** in **Category**: one line, and the table holds only its months.
 
 In marimo's editor (**Open editor**) the same cells show their code with their output under
 it; change the threshold's default to 25, **Save version**, and the app opens on 25% for

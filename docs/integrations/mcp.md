@@ -105,7 +105,7 @@ then builds and plans, one `tools/call` each:
 |---|---|
 | `flow_draft_new` | `{"draft_id": 1, "folder": "Sales", "engine": "duckdb", "nodes": []}` |
 | `flow_add_source` `{"draft_id": 1, "datasource_id": 45}` | `{"node": "src-1", "datasource": "orders", "rows": 12000000, "columns": […]}` |
-| `flow_add_step` `{"draft_id": 1, "after": "src-1", "operation": "group_by", "params": {"by": ["canale"], "aggregations": [{"column": "id", "func": "count", "alias": "ordini"}]}}` | `{"node": "op-1", "columns": [canale, ordini], "first_rows": [{"canale": "Gastronomia", "ordini": 2430886}, …]}` |
+| `flow_add_step` `{"draft_id": 1, "after": "src-1", "operation": "group_by", "params": {"by": ["canale"], "aggregations": [{"column": "id", "func": "count", "alias": "ordini"}]}}` | `{"node": "op-1", "columns": [canale, ordini], "first_rows": [{"canale": "Ristorazione", "ordini": 2430886}, …]}` |
 | `flow_add_output` `{"draft_id": 1, "after": "op-1", "kind": "datasource", "datasource_name": "Orders by channel"}` | `{"node": "out-1", "writes": "writes the datasource «Orders by channel» in Sales"}` |
 | `plan_save_flow` `{"draft_id": 1}` | `{"plan_id": 1, "status": "pending", "review_link": "https://tabularia.example.com/agent-plan?id=1", …}` |
 | `plan_schedule` `{"kind": "flow", "draft_id": 1, "cron": "0 6 * * *"}` | the plan with its second action: «Schedule the flow «Orders by channel»: cron `0 6 * * *` in UTC (next run …)» |

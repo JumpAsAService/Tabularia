@@ -99,7 +99,7 @@ that the run did not write are removed. At most 1,000 partitions. See [S3](s3.md
 node with the key `exports/cost_to_serve/{today:yyyy}/week_of_{start_of_week}.csv` and
 format CSV leaves one file per week, `exports/cost_to_serve/2026/week_of_2026-10-26.csv`,
 for a partner who reads the bucket. With key `lake/cost_to_serve`, format Parquet and **Partition by** `canale`,
-the same output becomes `lake/cost_to_serve/canale=GDO/…`, `canale=HoReCa/…`, one folder
+the same output becomes `lake/cost_to_serve/canale=Ingrosso/…`, `canale=Negozi/…`, one folder
 per sales channel.
 
 ## A file on an SFTP server

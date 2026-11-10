@@ -112,7 +112,7 @@ Then: [Quickstart](#quickstart) · [How it works](#how-it-works) · [Sample data
   [Uploaded files](docs/sources/files.md)
   ```text
   numero;data_ordine;canale;importo
-  ORD-004101;2026-03-02;HoReCa;1.234,50     →  importo is a number: 1234.5
+  ORD-004101;2026-03-02;Ristorazione;1.234,50     →  importo is a number: 1234.5
   ```
 - **Database tables and queries.** PostgreSQL, MySQL, MariaDB, ClickHouse, Trino, Oracle
   and SQL Server: a whole table or a SQL query, streamed into a parquet snapshot.
@@ -182,7 +182,7 @@ Then: [Quickstart](#quickstart) · [How it works](#how-it-works) · [Sample data
   [Descriptions](docs/sources/README.md#descriptions), [sort keys](docs/sources/README.md#sort-keys)
   ```bash
   curl -X PATCH -H "Authorization: Bearer $TABULARIA_TOKEN" -H "Content-Type: application/json" \
-    -d '{"column_descriptions": {"codice": "SKU code.", "tipo": "Curing type: crudo, cotto, fresco, stagionato."}}' \
+    -d '{"column_descriptions": {"codice": "SKU code.", "tipo": "Kind of product: secca, fresca, da forno, lievitato."}}' \
     https://tabularia.example.com/api/datasources/47
   ```
 
@@ -239,7 +239,7 @@ Then: [Quickstart](#quickstart) · [How it works](#how-it-works) · [Sample data
     -d '{"bucket": "tabularia", "input_key": "datasets/56/….parquet", "engine": "duckdb", "limit": 5,
          "operations": [{"type": "group_by", "params": {"by": ["categoria"],
            "aggregations": [{"column": "margine", "func": "sum", "alias": "margine"}]}}]}'
-  # {"columns": [{"name": "categoria", "dtype": "String"}, …], "rows": [{"categoria": "Salami", …}], …}
+  # {"columns": [{"name": "categoria", "dtype": "String"}, …], "rows": [{"categoria": "Biscotti", …}], …}
   ```
 - **A step cache.** Each step's result is kept by content, written after the preview has
   answered, so changing the last of ten steps recomputes one. `CACHE__MAX_STEP_ROWS=1000000`
@@ -257,7 +257,7 @@ Then: [Quickstart](#quickstart) · [How it works](#how-it-works) · [Sample data
   [The column profile](docs/capabilities/preview-and-analysis.md#the-column-profile)
   ```bash
   curl -X POST …/api/tasks/profile -d '{"bucket": "tabularia", "input_key": "…", "column": "categoria"}'
-  # {"column": "categoria", "values": [{"value": "Insaccati cotti", "count": 37}, …], "how": "computed"}
+  # {"column": "categoria", "values": [{"value": "Biscotti", "count": 37}, …], "how": "computed"}
   ```
 - **A data grid for the keyboard.** Arrows, Home/End, Page Up/Down,
   Ctrl+C copies a cell's exact value, Esc cancels a slow preview, which stops its query on
@@ -373,7 +373,7 @@ Then: [Quickstart](#quickstart) · [How it works](#how-it-works) · [Sample data
     -d '{"enabled": true, "document": {"rules": [
           {"kind": "unique", "columns": ["id"], "severity": "error"},
           {"kind": "accepted_values", "column": "canale",
-           "values": ["GDO", "HoReCa", "Grossista", "Dettaglio", "Gastronomia"], "severity": "error"},
+           "values": ["Supermercati", "Ristorazione", "Ingrosso", "Negozi", "Online"], "severity": "error"},
           {"kind": "freshness", "max_age_hours": 26, "severity": "warning"}]}}'
   ```
 
@@ -424,11 +424,11 @@ Then: [Quickstart](#quickstart) · [How it works](#how-it-works) · [Sample data
   screen, downloaded as PDF or Excel, sent by email. [Reports](docs/capabilities/reports.md)
   ```bash
   curl -fG -H "Authorization: Bearer $TABULARIA_TOKEN" -o margin_review.pdf \
-    --data-urlencode format=pdf --data-urlencode category=Salami \
+    --data-urlencode format=pdf --data-urlencode category=Biscotti \
     https://tabularia.example.com/api/reports/5/render
   ```
 - **Report functions.** A spreadsheet-like expression language over the report's data:
-  `SUMIF([categoria] = "Salami", [ricavo])`, `FORMAT(SUM([ricavo]), "€ #,##0")`,
+  `SUMIF([categoria] = "Biscotti", [ricavo])`, `FORMAT(SUM([ricavo]), "€ #,##0")`,
   `PREVIOUS`, `LOOKUP`, `RUNNING`. [Report functions](docs/capabilities/report-functions.md)
 - **Dashboards.** Live tiles on an adaptive grid (KPIs, charts, tables, matrices), with
   parameters, a click on one tile that filters the others, a shared refresh, PDF and image.
@@ -497,7 +497,7 @@ Then: [Quickstart](#quickstart) · [How it works](#how-it-works) · [Sample data
   curl -X POST https://tabularia.example.com/api/sql-scripts/run \
     -H "Authorization: Bearer $TABULARIA_TOKEN" -H "Content-Type: application/json" \
     -d '{"sql": "SELECT canale, count(*) AS ordini FROM \"orders\" GROUP BY canale ORDER BY ordini DESC", "engine": "duckdb"}'
-  # {"columns": […], "rows": [{"canale": "Gastronomia", "ordini": 2430886}, …], "datasources": [{"id": 45, "name": "orders"}]}
+  # {"columns": […], "rows": [{"canale": "Ristorazione", "ordini": 2430886}, …], "datasources": [{"id": 45, "name": "orders"}]}
   ```
 - **marimo notebooks as apps** (Kubernetes). Notebooks written in marimo, kept in a folder
   and opened as web apps that read the datasources with their author's rights.
@@ -625,7 +625,7 @@ Then: [Quickstart](#quickstart) · [How it works](#how-it-works) · [Sample data
 - **Five languages, five themes.** English, Italian, French, German and Spanish; Dark,
   Light, Imperium, Dracula and Monokai, chosen per person.
   [Languages and themes](docs/how-it-works.md#languages-and-themes)
-- **Sample data at any scale.** A cured-meats company's ERP and CRM with eleven ready-made
+- **Sample data at any scale.** A pasta and bakery company's ERP and CRM with eleven ready-made
   flows, two reports and a dashboard: `SAMPLES_SCALE=small | medium | robust | massive` (a
   billion CRM activities). [Sample data](#sample-data)
 
@@ -742,7 +742,7 @@ services of the Compose stack are in [How Tabularia works](docs/how-it-works.md)
 
 ## Sample data
 
-A realistic **cured-meats company**, on by default in the Compose stack: an ERP on
+A realistic **pasta and bakery company**, on by default in the Compose stack: an ERP on
 PostgreSQL and a CRM on ClickHouse, generated with built-in seasonality so pivots tell a
 story, and a ready-made **`Sample`** folder on top of it — the two connections, the company's
 tables, public reference tables (a calendar with Italian holidays, the twenty regions),

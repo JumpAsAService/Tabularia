@@ -99,7 +99,7 @@ in the audit log (`export.download`, with the SQL).
 ## Examples with the sample data
 
 The sample data ([the «Sample» folder](../getting-started-docker-compose.md#a-the-sample-data-already-there))
-has a cured-meats company's orders, products, customers and sales network. The numbers
+has a pasta and bakery company's orders, products, customers and sales network. The numbers
 below depend on the size generated; the steps are what to expect.
 
 **«Which sales channel brought in the most revenue in 2025?»**
@@ -121,7 +121,7 @@ below depend on the size generated; the steps are what to expect.
    ORDER BY ricavo_netto DESC
    ```
 
-4. A table of five rows (GDO, HoReCa, Grossista, Dettaglio, Gastronomia), a bar chart,
+4. A table of five rows (Supermercati, Ristorazione, Ingrosso, Negozi, Online), a bar chart,
    and a short answer that names the first channel and its share of the total, and says
    that cancelled orders were left out and that the amounts are net of discount.
 
@@ -135,10 +135,10 @@ GROUP BY deposito, anno
 ORDER BY deposito, anno
 ```
 
-A line chart per depot, and an answer along the lines of: «Napoli stands out: its
-share of cancelled orders grows every year. Modena is higher in 2025 only.» Asked to
-look closer, it runs a second query by month on Modena and places the cancellations
-between September and December 2025. The sample data was generated with exactly these
+A line chart per depot, and an answer along the lines of: «Bari stands out: its
+share of cancelled orders grows every year. Torino is higher in 2025 only.» Asked to
+look closer, it runs a second query by month on Torino and places the cancellations
+between February and May 2025. The sample data was generated with exactly these
 two anomalies, so the answer can be checked.
 
 **«How many CRM activities per agent last month?»** `crm_activities` has no field

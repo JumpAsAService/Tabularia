@@ -550,7 +550,7 @@ would need several steps to compute.
 5. **Save**. In the Script node's panel, **Edit the code**, replace `main.py` with the code
    below, **Close**, and **Save** again.
 6. **Run** in the Script node's panel. In a few seconds the panel says «Last run from here
-   now: SUCCESS · 184 rows»; **Log** shows what the script printed, and the preview under
+   now: SUCCESS · 183 rows»; **Log** shows what the script printed, and the preview under
    the canvas shows the rows it wrote, newest month first.
 7. **Run** in the toolbar runs the whole flow and publishes «Margin trend by category».
 
@@ -583,7 +583,7 @@ trend.write_parquet(os.environ["TABULARIA_OUTPUT"])
 print(f"wrote {trend.height} rows")
 ```
 
-![The flow «Margin trend» in the editor: Source «Margin by Category and Month», the Script node «Margin trend» (Python) and a datasource output. The Script node is selected; Run in its panel shows «Running…», then «Last run from here now: SUCCESS · 184 rows»; the Log opens on «read 184 rows» and «wrote 184 rows», and the preview below lists categoria, anno_mese, ricavo, margine_pct, margin_pct_3m and revenue_vs_last_year_pct, newest month first](media/guide/scripting/script-node-run.gif)
+![The flow «Margin trend» in the editor: Source «Margin by Category and Month», the Script node «Margin trend» (Python) and a datasource output. The Script node is selected; Run in its panel shows «Running…», then «Last run from here now: SUCCESS · 183 rows»; the Log opens on «read 183 rows» and «wrote 183 rows», and the preview below lists categoria, anno_mese, ricavo, margine_pct, margin_pct_3m and revenue_vs_last_year_pct, newest month first](media/guide/scripting/script-node-run.gif)
 
 *Run in the Script node's panel: the trial runs on the cluster, its log arrives in the
 panel, and what it wrote becomes the preview of the nodes after it.*
@@ -688,7 +688,7 @@ someone else that makes the script reach more (other code, other inputs, another
 publish folder, another environment, another folder) switches the schedule off, and
 the audit log says why.
 
-![The Runs of a saved script: two runs on the left, versions 2 and 1; the newest succeeded, by hand, in 7 seconds, with a link to the datasource it published; its log says «43 category-months under 25%», and its output, 43 rows, lists anno_mese, categoria, ricavo, margine and margine_pct](media/guide/scripting/saved-script-run.png)
+![The Runs of a saved script: two runs on the left, versions 2 and 1; the newest succeeded, by hand, in 7 seconds, with a link to the datasource it published; its log says «23 category-months under 25%», and its output, 23 rows, lists anno_mese, categoria, ricavo, margine and margine_pct](media/guide/scripting/saved-script-run.png)
 
 *The script's page follows each run: its outcome, its log and the first rows of what it
 wrote.*

@@ -36,7 +36,7 @@ const web: Cell[][] = [
 ]
 const unionRows = [...typedRows, ...web]
 const customers: Record<number, [string, string]> = {
-  101: ['Salumeria Rossi', 'Milano'], 102: ['Bar Centrale', 'Milano'], 103: ['Gastronomia Bianchi', 'Torino'], 104: ['Hotel Lago', 'Como'],
+  101: ['Panificio Rossi', 'Milano'], 102: ['Bar Centrale', 'Milano'], 103: ['Trattoria Bianchi', 'Torino'], 104: ['Hotel Lago', 'Como'],
 }
 const joined: Cell[][] = unionRows.map(r => [...r, ...(customers[Number(r[2])] || [null, null])])
 const kept = joined.filter(r => r[1] !== null && r[3] !== null)

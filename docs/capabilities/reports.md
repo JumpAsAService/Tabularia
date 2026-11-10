@@ -118,9 +118,9 @@ parameters you choose in the same form the viewer has (the lists read from a dat
 included): the same renderer as the PDF, so what you see is what will print. A report with mistakes is not rendered: the preview lists them, and a click on one
 takes you to its field in **Design**.
 
-![In the designer a table is dragged under the chart; the fields Month, ricavo, costo and margine are dragged into it one after the other; a group by categoria adds the group's row, with no total yet; Sum is chosen in the Total list of ricavo, costo and margine, and the group's total row appears; Preview renders the page with the parameters above it; Salami chosen in Category and View report render that category, down to its total](../media/guide/reports/designer-table-group-preview.gif)
+![In the designer a table is dragged under the chart; the fields Month, ricavo, costo and margine are dragged into it one after the other; a group by categoria adds the group's row, with no total yet; Sum is chosen in the Total list of ricavo, costo and margine, and the group's total row appears; Preview renders the page with the parameters above it; Biscotti chosen in Category and View report render that category, down to its total](../media/guide/reports/designer-table-group-preview.gif)
 
-*A table under the chart: four fields dragged into it, a group by `[categoria]` written in its properties. A new column has no total: **Sum**, chosen in the **Total** of each amount, brings the group's total row. **Preview** asks for the parameters as the viewer does, here **Category** `Salami`.*
+*A table under the chart: four fields dragged into it, a group by `[categoria]` written in its properties. A new column has no total: **Sum**, chosen in the **Total** of each amount, brings the group's total row. **Preview** asks for the parameters as the viewer does, here **Category** `Biscotti`.*
 
 ## Datasets and parameters
 
@@ -390,7 +390,7 @@ rest. A query without `ORDER BY` has no order the database promises, and the col
 change from one run to the next: order the dataset, or the table. A missing value is a
 column too, «(blank)», in its place.
 
-![The last page of the example PDF: the group Salumi stagionati continued from the page before with its label repeated, the margin percentages under 30% in red, the group's total and the grand total, then the matrix of the margin by category and year with its totals](../media/guide/reports/pdf-group-totals-and-matrix.png)
+![The last page of the example PDF: the group Sostitutivi del pane continued from the page before with its label repeated, the margin percentages under 30% in red, the group's total and the grand total, then the matrix of the margin by category and year with its totals](../media/guide/reports/pdf-group-totals-and-matrix.png)
 
 *Page 3 of the example: the group carried over from page 2 repeats its label, the rule paints the margins under 30% red, the group's total and the grand total follow; then the matrix, one column per year.*
 
@@ -445,9 +445,9 @@ optional one), a date picker, Yes or No, several values for a list; `*` marks a 
 one. The fields open with the defaults. An optional field emptied has no value, whatever
 its default; a required one asks for a value. **View report** renders it.
 
-![The viewer of Monthly margin: the bar with the parameters Category (Prosciutti) and From (01/01/2025), View report, and the first page at 100% with the title Monthly margin — Prosciutti, three KPI cards and the chart](../media/guide/reports/viewer-monthly-margin.png)
+![The viewer of Monthly margin: the bar with the parameters Category (Pasta di semola) and From (01/01/2025), View report, and the first page at 100% with the title Monthly margin — Pasta di semola, three KPI cards and the chart](../media/guide/reports/viewer-monthly-margin.png)
 
-*The example with **Category** `Prosciutti`: the title says which category, and the KPIs and the chart count only its rows. Above, **PDF**, **Excel**, **Copy API link**, the versions and **Edit**.*
+*The example with **Category** `Pasta di semola`: the title says which category, and the KPIs and the chart count only its rows. Above, **PDF**, **Excel**, **Copy API link**, the versions and **Edit**.*
 
 The pages are those of the PDF, drawn by the same renderer, with **Page** to move
 between them (**Page Up**, **Page Down**), the zoom (**+**, **−**, **0** to fit the
@@ -459,7 +459,7 @@ table by it (again for descending), unless its value depends on that order, as
 groups closed on screen. The API, the flow groups and the notebooks render it in its own
 order.
 
-![The viewer of Margin growth by month: the year of From is typed over, 2025 becomes 2026, View report renders one page; a click on the header vs month before sorts each category's months by their growth, the arrow beside the header; a click on the label of Insaccati cotti closes the group to its total row; Reset view appears in the bar](../media/guide/reports/viewer-parameter-sort-group.gif)
+![The viewer of Margin growth by month: the year of From is typed over, 2025 becomes 2026, View report renders one page; a click on the header vs month before sorts each category's months by their growth, the arrow beside the header; a click on the label of Biscotti closes the group to its total row; Reset view appears in the bar](../media/guide/reports/viewer-parameter-sort-group.gif)
 
 *«Margin growth by month» from January 2026: a click on the header **vs month before**
 sorts every group by it (the running revenue follows the new order), a click on the
@@ -545,7 +545,7 @@ The summary follows the body of the report, in its order:
 Gmail cuts a message longer than about 100 KB: a long summary shows fewer groups per table
 («… and 40 more: the whole report is attached»), then leaves out the last tables («2 more
 tables are in the attached report»). The same summary goes as plain text, a line per
-total («Total Salami — Revenue 4,854,308 · Margin 1,299,924»), for a mail client that
+total («Total Biscotti — Revenue 6,700,551 · Margin 1,902,242»), for a mail client that
 shows no HTML.
 
 ## Sending it by email
@@ -566,7 +566,7 @@ parameters in the query string:
 
 ```bash
 curl -fG -H "Authorization: Bearer $TABULARIA_TOKEN" -o monthly_margin.pdf \
-  --data-urlencode format=pdf --data-urlencode category=Salami --data-urlencode "since={start_of_year}" \
+  --data-urlencode format=pdf --data-urlencode category=Biscotti --data-urlencode "since={start_of_year}" \
   https://tabularia.example.com/api/reports/12/render
 ```
 
@@ -780,7 +780,7 @@ the first month.
     press **Del**, then add the ready-made **The report's name** on the left and **Page
     number of total** on the right.
 11. **Preview** and look at it, then **Done**: the report is saved and opens in the
-    viewer. It has three pages; with **Category** `Prosciutti`, one.
+    viewer. It has three pages; with **Category** `Pasta di semola`, one.
 12. **PDF** downloads it. To send it every month, put it in a flow group after the
     refresh of its data: step 1 the flow «Margin by Category and Month», step 2 a
     [Pushmail cell](../pushmail.md#reports) with the report as PDF, the file name
