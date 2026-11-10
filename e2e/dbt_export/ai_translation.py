@@ -5,8 +5,8 @@ not read (SIMILAR TO). Without AI the ClickHouse export refuses it saying why
 on ClickHouse and gives the same data as Tabularia; exporting again does not call the
 AI again (same zip). Needs an enabled AI model: paid calls to the provider. usage: python3 ai_translation.py"""
 import hashlib, io, json, os, subprocess, sys, time, zipfile
-from environment import WORKDIR, IMAGE
-from common import wait_run, api, compare, dbt, sign_in, outcomes, ok, connection_passwords, clean_clickhouse
+from environment import WORKDIR
+from common import wait_run, api, compare, dbt, sign_in, outcomes, ok, connection_passwords, clean_clickhouse, remove_folder
 
 QUERY = "SELECT id, canale, stato FROM vendite.ordini WHERE canale SIMILAR TO 'G(DO|astronomia)' AND id < 400"
 sign_in()
@@ -45,7 +45,7 @@ try:
     ok("exporting the same version again: the same zip (the proposal is remembered)", st == 200 and hashlib.sha256(first).digest() == hashlib.sha256(second).digest())
 
     folder = f"{WORKDIR}/zzai_translation"
-    subprocess.run(["docker", "run", "--rm", "-v", f"{WORKDIR}:/x", IMAGE, "sh", "-c", "rm -rf /x/zzai_translation"], capture_output=True)
+    remove_folder(folder)
     os.makedirs(folder)
     zipfile.ZipFile(io.BytesIO(first)).extractall(folder)
     variables = connection_passwords()

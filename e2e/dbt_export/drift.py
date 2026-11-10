@@ -1,8 +1,14 @@
 """The gateway mirrors what the engine's dbt exporter knows, so that the export plan says before the
 download what the engine would refuse (findings #11 and #49, decision 2). This checks, reading the
-code (AST only: no import, no stack, no database), that the two sides have not drifted apart:
+code (no import, no stack, no database: `ast` for Python, golit.py for Go), that the sides have not
+drifted apart. The gateway is the Go one (gateway-go/internal/dbtexport: `required`, `SeedMaxRows`,
+`clickhouseReads`, `federable`, `native`, `dialects`, `notQuotable`, below with the Python names they
+mirror); an export with the AI options still goes to the AI service, which builds it with the Python
+gateway's copy (gateway/app/services/dbt_export.py): that one is checked too, apart.
   · _REQUIRED (gateway) is the `_require(params, "<key>")` calls of each `op_type` branch of the
-    engine's `_compile_op`: a step saved half done is a reason in the plan, not a refused download;
+    engine's `_compile_op`, and the parameters a helper it calls requires (`pivot_params` in
+    operations.py: «required parameter missing: '<key>'»): a step saved half done is a reason in
+    the plan, not a refused download;
   · SEED_MAX_ROWS, the cap on a seed, is the same number on both sides (seed_too_large);
   · _CLICKHOUSE_READS (gateway) is what the ClickHouse target reads: the engine's
     _CH_FEDERATED_ENGINE and the ClickHouse server itself;
@@ -14,12 +20,19 @@ code (AST only: no import, no stack, no database), that the two sides have not d
     for every role either side lists. A flat list (one per adapter) has no role: _quotable applies it to
     every name it checks, a native output's schema and table too, so it must match every role.
 usage: python3 drift.py [repository root]"""
-import ast, os, sys
+import ast, os, re, sys
+
+import golit
 
 R = sys.argv[1] if len(sys.argv) > 1 else os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 ENGINE = f"{R}/backend/app/engine/dbt_export.py"
+OPERATIONS = f"{R}/backend/app/engine/operations.py"
 ROUTE = f"{R}/backend/app/api/routes/dbt.py"
-GATEWAY = f"{R}/gateway/app/services/dbt_export.py"
+GO = f"{R}/gateway-go/internal/dbtexport"
+GO_NAMES = {"_REQUIRED": ("payload.go", "required"), "SEED_MAX_ROWS": ("export.go", "SeedMaxRows"),
+            "_CLICKHOUSE_READS": ("export.go", "clickhouseReads"), "_FEDERABLE": ("export.go", "federable"),
+            "_NATIVE": ("export.go", "native"), "_DIALECT": ("export.go", "dialects"), "_NOT_QUOTABLE": ("export.go", "notQuotable")}
+AI_SERVICE = f"{R}/gateway/app/services/dbt_export.py"
 outcomes = []
 
 
@@ -52,18 +65,33 @@ def branch_types(test: ast.expr) -> list[str]:
     return []
 
 
-def required_by_engine(tree: ast.Module) -> dict[str, set[str]] | None:
+def helpers_required(tree: ast.Module) -> dict[str, set[str]]:
+    """The parameters each function of operations.py refuses as missing:
+    `raise EngineError("required parameter missing: '<key>'")` (pivot_params)."""
+    out = {}
+    for f in tree.body:
+        if isinstance(f, ast.FunctionDef):
+            keys = {m for n in ast.walk(f) if isinstance(n, ast.Constant) and isinstance(n.value, str)
+                    for m in re.findall(r"required parameter missing: '(\w+)'", n.value)}
+            if keys:
+                out[f.name] = keys
+    return out
+
+
+def required_by_engine(tree: ast.Module, helpers: dict[str, set[str]]) -> dict[str, set[str]] | None:
     """The `_require(params, "<key>")` calls of each `if op_type …` branch of `_compile_op` (an
-    `elif` chain too: each branch keeps its own calls). None when there is no `_compile_op`."""
+    `elif` chain too: each branch keeps its own calls), and the keys the helpers it calls require.
+    None when there is no `_compile_op`."""
     function = next((n for n in tree.body if isinstance(n, ast.FunctionDef) and n.name == "_compile_op"), None)
     if function is None:
         return None
     out: dict[str, set[str]] = {}
     for node in function.body:
         while isinstance(node, ast.If):
-            keys = {c.args[1].value for body in node.body for c in ast.walk(body)
-                    if isinstance(c, ast.Call) and getattr(c.func, "id", None) == "_require"
+            calls = [c for body in node.body for c in ast.walk(body) if isinstance(c, ast.Call)]
+            keys = {c.args[1].value for c in calls if getattr(c.func, "id", None) == "_require"
                     and len(c.args) == 2 and isinstance(c.args[1], ast.Constant)}
+            keys |= {k for c in calls for k in helpers.get(getattr(c.func, "id", None) or getattr(c.func, "attr", None), ())}
             for t in branch_types(node.test):
                 out.setdefault(t, set()).update(keys)
             node = node.orelse[0] if len(node.orelse) == 1 else None
@@ -92,11 +120,26 @@ def read(path: str) -> ast.Module | None:
         return None
 
 
-engine, route, gateway = read(ENGINE), read(ROUTE), read(GATEWAY)
-if None in (engine, route, gateway):
+def go_constants() -> dict | None:
+    """The Go gateway's mirror, under the Python names it mirrors."""
+    out, sources = {}, {}
+    for name, (file, go_name) in GO_NAMES.items():
+        path = f"{GO}/{file}"
+        try:
+            sources.setdefault(path, open(path).read())
+            out[name] = golit.value(sources[path], go_name)
+        except (OSError, KeyError, SyntaxError) as e:
+            verify(f"{os.path.relpath(path, R)}: {go_name}", False, f"not read as a literal ({e!r}): renamed or moved?")
+    return out
+
+
+engine, operations, route, ai_service = read(ENGINE), read(OPERATIONS), read(ROUTE), read(AI_SERVICE)
+if None in (engine, operations, route, ai_service):
     print(f"\n{sum(outcomes)}/{len(outcomes)} checks passed")
     sys.exit(1)
-ce, cr, cg = constants(engine), constants(route), constants(gateway)
+ce, cr = constants(engine), constants(route)
+expected = required_by_engine(engine, helpers_required(operations))
+allowed = allowed_dialects(route)
 
 
 def present(side: dict, where: str, *names: str) -> bool:
@@ -106,53 +149,59 @@ def present(side: dict, where: str, *names: str) -> bool:
     return not missing
 
 
-expected = required_by_engine(engine)
-if expected is None or not expected:
-    verify("the engine's _compile_op and its _require calls are found", False, "no _compile_op, or no _require call in it")
-elif present(cg, "the gateway", "_REQUIRED"):
-    gateway_r = {t: set(k) for t, k in cg["_REQUIRED"].items()}
-    different = sorted(t for t in set(gateway_r) | set(expected) if gateway_r.get(t, set()) != expected.get(t, set()))
-    verify(f"_REQUIRED = the _require calls of the engine's _compile_op ({len(expected)} step types)", not different,
-           "; ".join(f"{t}: gateway {sorted(gateway_r.get(t, ()))} / engine {sorted(expected.get(t, ()))}" for t in different))
+def check(cg: dict, where: str) -> None:
+    """One mirror of the gateway (`cg`, its constants under the Python names) against the engine."""
+    if expected is None or not expected:
+        verify("the engine's _compile_op and its _require calls are found", False, "no _compile_op, or no _require call in it")
+    elif present(cg, where, "_REQUIRED"):
+        gateway_r = {t: set(k) for t, k in cg["_REQUIRED"].items()}
+        different = sorted(t for t in set(gateway_r) | set(expected) if gateway_r.get(t, set()) != expected.get(t, set()))
+        verify(f"_REQUIRED = the _require calls of the engine's _compile_op ({len(expected)} step types)", not different,
+               "; ".join(f"{t}: gateway {sorted(gateway_r.get(t, ()))} / engine {sorted(expected.get(t, ()))}" for t in different))
 
-if present(cg, "the gateway", "SEED_MAX_ROWS") and present(ce, "the engine", "SEED_MAX_ROWS"):
-    verify(f"SEED_MAX_ROWS is the same cap on both sides ({ce['SEED_MAX_ROWS']:,})", cg["SEED_MAX_ROWS"] == ce["SEED_MAX_ROWS"],
-           f"gateway {cg['SEED_MAX_ROWS']:,} / engine {ce['SEED_MAX_ROWS']:,}")
+    if present(cg, where, "SEED_MAX_ROWS") and present(ce, "the engine", "SEED_MAX_ROWS"):
+        verify(f"SEED_MAX_ROWS is the same cap on both sides ({ce['SEED_MAX_ROWS']:,})", cg["SEED_MAX_ROWS"] == ce["SEED_MAX_ROWS"],
+               f"gateway {cg['SEED_MAX_ROWS']:,} / engine {ce['SEED_MAX_ROWS']:,}")
 
-if present(cg, "the gateway", "_CLICKHOUSE_READS") and present(ce, "the engine", "_CH_FEDERATED_ENGINE"):
-    reads = set(ce["_CH_FEDERATED_ENGINE"]) | {"clickhouse"}
-    verify("_CLICKHOUSE_READS = what the ClickHouse target reads (_CH_FEDERATED_ENGINE and its own server)",
-           set(cg["_CLICKHOUSE_READS"]) == reads, f"gateway {sorted(cg['_CLICKHOUSE_READS'])} / engine {sorted(reads)}")
+    if present(cg, where, "_CLICKHOUSE_READS") and present(ce, "the engine", "_CH_FEDERATED_ENGINE"):
+        reads = set(ce["_CH_FEDERATED_ENGINE"]) | {"clickhouse"}
+        verify("_CLICKHOUSE_READS = what the ClickHouse target reads (_CH_FEDERATED_ENGINE and its own server)",
+               set(cg["_CLICKHOUSE_READS"]) == reads, f"gateway {sorted(cg['_CLICKHOUSE_READS'])} / engine {sorted(reads)}")
 
-if present(cg, "the gateway", "_FEDERABLE") and present(ce, "the engine", "_DUCK_ATTACH_TYPE"):
-    verify("_FEDERABLE = what the federated target attaches (_DUCK_ATTACH_TYPE)", set(cg["_FEDERABLE"]) == set(ce["_DUCK_ATTACH_TYPE"]),
-           f"gateway {sorted(cg['_FEDERABLE'])} / engine {sorted(ce['_DUCK_ATTACH_TYPE'])}")
+    if present(cg, where, "_FEDERABLE") and present(ce, "the engine", "_DUCK_ATTACH_TYPE"):
+        verify("_FEDERABLE = what the federated target attaches (_DUCK_ATTACH_TYPE)", set(cg["_FEDERABLE"]) == set(ce["_DUCK_ATTACH_TYPE"]),
+               f"gateway {sorted(cg['_FEDERABLE'])} / engine {sorted(ce['_DUCK_ATTACH_TYPE'])}")
 
-if present(cg, "the gateway", "_NATIVE") and present(ce, "the engine", "_NATIVE_ADAPTER"):
-    verify("_NATIVE = the databases with a native adapter (_NATIVE_ADAPTER)", set(cg["_NATIVE"]) == set(ce["_NATIVE_ADAPTER"]),
-           f"gateway {sorted(cg['_NATIVE'])} / engine {sorted(ce['_NATIVE_ADAPTER'])}")
+    if present(cg, where, "_NATIVE") and present(ce, "the engine", "_NATIVE_ADAPTER"):
+        verify("_NATIVE = the databases with a native adapter (_NATIVE_ADAPTER)", set(cg["_NATIVE"]) == set(ce["_NATIVE_ADAPTER"]),
+               f"gateway {sorted(cg['_NATIVE'])} / engine {sorted(ce['_NATIVE_ADAPTER'])}")
 
-allowed = allowed_dialects(route)
-if allowed is None:
-    verify("ModelSpec.dialect in the engine's route is a Literal", False, "not found")
-elif present(cg, "the gateway", "_DIALECT"):
-    outside = sorted(set(cg["_DIALECT"].values()) - allowed)
-    verify(f"every dialect the gateway sends is one ModelSpec.dialect accepts ({', '.join(sorted(allowed))})", not outside,
-           f"the engine would refuse {outside}")
+    if allowed is None:
+        verify("ModelSpec.dialect in the engine's route is a Literal", False, "not found")
+    elif present(cg, where, "_DIALECT"):
+        outside = sorted(set(cg["_DIALECT"].values()) - allowed)
+        verify(f"every dialect the gateway sends is one ModelSpec.dialect accepts ({', '.join(sorted(allowed))})", not outside,
+               f"the engine would refuse {outside}")
 
-if present(cg, "the gateway", "_NOT_QUOTABLE") and present(ce, "the engine", "_NOT_QUOTABLE"):
-    different = []
-    for adapter in sorted(set(cg["_NOT_QUOTABLE"]) | set(ce["_NOT_QUOTABLE"])):
-        g, e = cg["_NOT_QUOTABLE"].get(adapter), ce["_NOT_QUOTABLE"].get(adapter) or {}
-        # a flat list has no role: the gateway refuses it in every name it checks (a source's, and a native
-        # output's schema and table), so it stands for every role. Before, it stood for the source role
-        # only, and the check passed while the plan offered a native output named o'brien that the engine
-        # refused (review2 finding 2). A role only one side lists is a difference too
-        roles = g if isinstance(g, dict) else {role: g or () for role in set(e) | {"source"}}
-        different += [f"{adapter} {role}: gateway {sorted(set(roles.get(role) or ()))} / engine {sorted(set(e.get(role) or ()))}"
-                      for role in sorted(set(roles) | set(e) | {"source"}) if set(roles.get(role) or ()) != set(e.get(role) or ())]
-    verify("_NOT_QUOTABLE: the gateway refuses what the engine refuses in each name, role by role (source, relation, schema)",
-           not different, "; ".join(different))
+    if present(cg, where, "_NOT_QUOTABLE") and present(ce, "the engine", "_NOT_QUOTABLE"):
+        different = []
+        for adapter in sorted(set(cg["_NOT_QUOTABLE"]) | set(ce["_NOT_QUOTABLE"])):
+            g, e = cg["_NOT_QUOTABLE"].get(adapter), ce["_NOT_QUOTABLE"].get(adapter) or {}
+            # a flat list has no role: the gateway refuses it in every name it checks (a source's, and a native
+            # output's schema and table), so it stands for every role. Before, it stood for the source role
+            # only, and the check passed while the plan offered a native output named o'brien that the engine
+            # refused (review2 finding 2). A role only one side lists is a difference too
+            roles = g if isinstance(g, dict) else {role: g or () for role in set(e) | {"source"}}
+            different += [f"{adapter} {role}: gateway {sorted(set(roles.get(role) or ()))} / engine {sorted(set(e.get(role) or ()))}"
+                          for role in sorted(set(roles) | set(e) | {"source"}) if set(roles.get(role) or ()) != set(e.get(role) or ())]
+        verify("_NOT_QUOTABLE: the gateway refuses what the engine refuses in each name, role by role (source, relation, schema)",
+               not different, "; ".join(different))
+
+
+print("the Go gateway (gateway-go/internal/dbtexport)", flush=True)
+check(go_constants(), "the Go gateway")
+print("the AI service's copy (gateway/app/services/dbt_export.py: the exports with the AI options)", flush=True)
+check(constants(ai_service), "the AI service")
 
 # the summary line run_all.py reads
 print(f"\n{sum(outcomes)}/{len(outcomes)} checks passed")

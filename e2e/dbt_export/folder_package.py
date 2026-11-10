@@ -11,17 +11,15 @@ declared» with THEIR name), copied into their project, and:
 ClickHouse target (the engine's ClickHouse) and federated DuckDB.
 usage: python3 folder_package.py [clickhouse|duckdb]"""
 import io, os, re, subprocess, sys, zipfile
-from environment import CH_CONTAINER, CH_PORT, WORKDIR, IMAGE
-from common import api, compare, dbt, sign_in, outcomes, ok, connection_passwords
+from environment import CH_HOST, CH_PORT, WORKDIR
+from common import api, compare, dbt, sign_in, outcomes, ok, connection_passwords, engine_clickhouse, remove_folder, clickhouse_settings
 
 FLOW = "Margin by Category and Month"
 TARGETS = [a for a in sys.argv[1:] if not a.startswith("--")] or ["clickhouse", "duckdb"]
-CH = CH_CONTAINER
 
 
 def ch_sql(sql):
-    return subprocess.run(["docker", "exec", "-i", CH, "sh", "-c", 'clickhouse-client --user "$CLICKHOUSE_USER" --password "$CLICKHOUSE_PASSWORD" --multiquery'],
-                          input=sql, capture_output=True, text=True)
+    return engine_clickhouse(sql)
 
 
 def download(flow, options):
@@ -46,8 +44,7 @@ def selector(integration):
 def team_project(folder, target, pg, their_source, blocks, tag):
     """A dbt project «of a team»: its own name, its own profile (with the blocks INTEGRATION.md asks
     for), a model of its own — tagged like the flow, as a team's own model may well be — a sources.yml of its own."""
-    if os.path.exists(folder):
-        subprocess.run(["docker", "run", "--rm", "-v", f"{WORKDIR}:/x", IMAGE, "sh", "-c", f"rm -rf /x/{os.path.basename(folder)}"], capture_output=True)
+    remove_folder(folder)
     os.makedirs(f"{folder}/models/staging")
     open(f"{folder}/dbt_project.yml", "w").write(
         "name: 'team'\nversion: '1.0.0'\nconfig-version: 2\nprofile: 'team'\nmodel-paths: [\"models\"]\nseed-paths: [\"seeds\"]\n"
@@ -55,7 +52,7 @@ def team_project(folder, target, pg, their_source, blocks, tag):
     if target == "clickhouse":
         open(f"{folder}/profiles.yml", "w").write(
             "team:\n  target: dev\n  outputs:\n    dev:\n      type: clickhouse\n"
-            f"      host: {CH}\n      port: {CH_PORT}\n"
+            f"      host: {CH_HOST}\n      port: {CH_PORT}\n"
             "      user: \"{{ env_var('CLICKHOUSE_USER') }}\"\n      password: \"{{ env_var('CLICKHOUSE_PASSWORD') }}\"\n"
             "      schema: team_analytics\n" + "".join(blocks))
         source = f"  - name: {their_source}\n    schema: team_erp\n"
@@ -68,6 +65,7 @@ def team_project(folder, target, pg, their_source, blocks, tag):
         source = f"  - name: {their_source}\n    database: db_{pg['id']}\n    schema: vendite\n"
     open(f"{folder}/models/staging/sources.yml", "w").write(
         "version: 2\n\nsources:\n" + source + "    tables:\n      - name: ordini\n      - name: righe_ordine\n")
+    clickhouse_settings(f"{folder}/profiles.yml")
     open(f"{folder}/models/staging/stg_esistente.sql", "w").write("{{ config(tags=['%s']) }}\nselect 1 as gia_qui\n" % tag)
 
 

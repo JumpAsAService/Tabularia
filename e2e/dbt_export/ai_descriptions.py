@@ -3,8 +3,8 @@ stack with the real provider: export with the option, check of the texts, second
 identical export (memory per version, no new spend), dbt parse + docs generate.
 usage: python3 ai_descriptions.py (needs an enabled AI model; it is a paid call to the provider)"""
 import hashlib, io, os, re, subprocess, sys, zipfile
-from environment import WORKDIR, IMAGE
-from common import api, dbt, sign_in, ok, outcomes, connection_passwords
+from environment import WORKDIR
+from common import api, dbt, sign_in, ok, outcomes, connection_passwords, remove_folder
 
 FLOW = "Margin by Category and Month"
 sign_in()
@@ -35,7 +35,7 @@ for l in ai[:6]:
 st, second = download()
 ok("the second export of the same version is the same zip (memory per version)", st == 200 and hashlib.sha256(first).hexdigest() == hashlib.sha256(second).hexdigest())
 folder = f"{WORKDIR}/ai_descriptions"
-subprocess.run(["docker", "run", "--rm", "-v", f"{WORKDIR}:/x", IMAGE, "sh", "-c", "rm -rf /x/ai_descriptions"], capture_output=True)
+remove_folder(folder)
 os.makedirs(folder)
 zipfile.ZipFile(io.BytesIO(first)).extractall(folder)
 variables = connection_passwords()

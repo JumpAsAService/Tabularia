@@ -2,14 +2,18 @@
 has finished, and only then take the picture. `--screenshot` shoots at the load event,
 that is before the client has resolved the session: the pages look empty even when
 they are not."""
-import base64, json, socket, time
+import base64, json, os, socket, subprocess, time
+
+# the port Marionette listens on (E2E_MARIONETTE_PORT): another one when 2828 is taken by a
+# Firefox that is not ours
+PORT = int(os.environ.get("E2E_MARIONETTE_PORT") or 2828)
 
 # WebDriver key codes, for `keys`
 ESC, TAB, ENTER = "", "", ""
 
 
 class Firefox:
-    def __init__(self, port=2828, wait=40):
+    def __init__(self, port=PORT, wait=40):
         deadline = time.time() + wait
         while True:
             try:
@@ -23,6 +27,7 @@ class Firefox:
         self._read()          # unsolicited handshake
         self.id = 0
         self.send("WebDriver:NewSession", {})
+        Firefox.last = self   # the session stop() asks to quit
 
     def _read(self):
         n = b""
@@ -104,14 +109,43 @@ class Firefox:
         open(path, "wb").write(base64.b64decode(data))
 
 
+def launch(profile, size="1500,1000"):
+    """A headless Firefox with Marionette on PORT, on the profile `profile` (created if missing)."""
+    os.makedirs(profile, exist_ok=True)
+    prefs = os.path.join(profile, "user.js")
+    lines = [l for l in (open(prefs).read().splitlines() if os.path.exists(prefs) else []) if "marionette.port" not in l]
+    open(prefs, "w").write("\n".join(lines + [f'user_pref("marionette.port", {PORT});']) + "\n")
+    return subprocess.Popen(["firefox", "--headless", "--marionette", "--profile", profile, "--window-size", size, "about:blank"],
+                            stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+
+
 def stop(proc, wait=20):
-    """Closes Firefox and WAITS for it to exit. The tests all use port 2828: if the next
+    """Closes Firefox and WAITS for it to exit. The tests all use the same port: if the next
     test starts while this Firefox is still closing, `Firefox()` hooks onto it instead
-    of the new one (and the test ends up on another one's sign-in page)."""
-    import subprocess
-    proc.terminate()
+    of the new one (and the test ends up on another one's sign-in page).
+    Firefox is asked to quit through Marionette first: the snap's Firefox does not take a
+    signal from the process that started it (AppArmor, «Permission denied»), and a
+    terminate() alone used to leave it running."""
+    if proc.poll() is None:
+        for session in (getattr(Firefox, "last", None), None):
+            try:
+                (session or Firefox(wait=2)).send("Marionette:Quit", {"flags": ["eForceQuit"]})
+                break
+            except (OSError, RuntimeError, ValueError, AttributeError):
+                continue    # that session is gone: a new one, then the signal below
+        Firefox.last = None
     try:
         proc.wait(timeout=wait)
+        return
     except subprocess.TimeoutExpired:
-        proc.kill()
-        proc.wait()
+        pass
+    for signal_it in (proc.terminate, proc.kill):
+        try:
+            signal_it()
+            proc.wait(timeout=wait)
+            return
+        except PermissionError:
+            break
+        except subprocess.TimeoutExpired:
+            continue
+    print(f"  ·  Firefox (pid {proc.pid}) did not exit: close it by hand", flush=True)
