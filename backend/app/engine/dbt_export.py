@@ -2157,6 +2157,219 @@ def _dates_as_text(tree) -> None:
                 c.replace(c.this.copy())
 
 
+# ── a Postgres query's numbers and dates on ClickHouse ────────────────────────
+# Postgres divides two integers as integers and rounds a number cast to an integer (a numeric half
+# away from zero, a double half to even); ClickHouse divides into a float and truncates, and its
+# dateTrunc is a 32-bit DateTime (1970-2106). sqlglot writes the same `/`, CAST and DATE_TRUNC, and
+# the numbers changed without a word. What a column is the export knows only from the query's own
+# output, which Tabularia read: a column the query returns as it is, and the columns of an integer
+# it returns made only of + - * / % of columns and integer literals (an integer result in Postgres
+# means every operand was one). Where that does not tell, the query is refused as not translatable:
+# the AI may propose a translation, the federated target runs it in Postgres itself.
+_PG_INTS = ("int", "int8")                       # integer, bigint (a sum of a bigint is a numeric)
+_PG_NOT_INTEGER = ("numeric", "float", "nonint")  # nonint: a numeric or a double precision, not known which
+
+
+def _pg_kind_of_dtype(dtype: Optional[str]) -> Optional[str]:
+    """What Postgres had, from the Polars dtype Tabularia read it with: a Float64 is a double
+    precision or a numeric (Tabularia reads both so), a Float32 a real."""
+    d = str(dtype or "")
+    if d in ("Int8", "Int16", "Int32"):
+        return "int"
+    if d == "Int64":
+        return "int8"
+    if d == "Float32":
+        return "float"
+    if d == "Float64":
+        return "nonint"
+    if d.startswith("Decimal"):
+        return "numeric"
+    if d in ("String", "Utf8"):
+        return "text"
+    return "bool" if d == "Boolean" else ("other" if d else None)
+
+
+def _pg_kind_of_type(t) -> str:
+    from sqlglot import exp
+
+    T = exp.DataType.Type
+    if t.this in (T.TINYINT, T.SMALLINT, T.MEDIUMINT, T.INT):
+        return "int"
+    if t.this == T.BIGINT:
+        return "int8"
+    if t.this == T.DECIMAL:
+        return "numeric"
+    if t.this in (T.FLOAT, T.DOUBLE):
+        return "float"
+    if t.this in exp.DataType.TEXT_TYPES:
+        return "text"
+    return "bool" if t.this == T.BOOLEAN else "other"
+
+
+def _pg_combine(a: Optional[str], b: Optional[str]) -> Optional[str]:
+    """The kind of `a op b` for + - * / %, as Postgres types it."""
+    if a == "null" or b == "null":
+        return b if a == "null" else a
+    if a is None or b is None:
+        known = b if a is None else a
+        return "float" if known == "float" else ("nonint" if known in ("numeric", "nonint") else None)
+    if {a, b} & {"other", "text", "bool"}:
+        return "other"
+    if a in _PG_INTS and b in _PG_INTS:
+        return "int8" if "int8" in (a, b) else "int"
+    return "float" if "float" in (a, b) else ("nonint" if "nonint" in (a, b) else "numeric")
+
+
+def _pg_kind(node, known: dict) -> Optional[str]:
+    """The kind of a Postgres expression (int, int8, numeric, float, nonint, text, bool, other),
+    or None when it is not known."""
+    from functools import reduce
+
+    from sqlglot import exp
+
+    kind = lambda n: _pg_kind(n, known)   # noqa: E731
+    if isinstance(node, (exp.Paren, exp.Neg, exp.Abs, exp.Min, exp.Max)):
+        return kind(node.this)
+    if isinstance(node, exp.Null):
+        return "null"
+    if isinstance(node, exp.Boolean):
+        return "bool"
+    if isinstance(node, exp.Literal):
+        if node.is_string:
+            return "text"
+        if node.is_int:
+            return "int" if abs(int(node.this)) < 2 ** 31 else ("int8" if abs(int(node.this)) < 2 ** 63 else "numeric")
+        return "numeric"   # 2.5, 1e20: a numeric in Postgres
+    if isinstance(node, (exp.Cast, exp.TryCast)):
+        return _pg_kind_of_type(node.to)
+    if isinstance(node, exp.Column):
+        return known.get(node.name)
+    if isinstance(node, (exp.Add, exp.Sub, exp.Mul, exp.Div, exp.Mod)):
+        return _pg_combine(kind(node.left), kind(node.right))
+    if isinstance(node, exp.Count):
+        return "int8"
+    if isinstance(node, exp.Length):
+        return "int"
+    if isinstance(node, exp.Sum):
+        k = kind(node.this)
+        return {"int": "int8", "int8": "numeric"}.get(k, k)
+    if isinstance(node, exp.Avg):
+        k = kind(node.this)
+        return "numeric" if k in _PG_INTS else k
+    if isinstance(node, exp.Round) and node.args.get("decimals") is not None:
+        return "numeric"   # round(x, n) exists only for a numeric
+    if isinstance(node, (exp.Round, exp.Floor, exp.Ceil)):
+        k = kind(node.this)
+        return "float" if k in _PG_INTS else (k or "nonint")   # round(5) is a double precision
+    if isinstance(node, (exp.Coalesce, exp.Greatest, exp.Least)):
+        return reduce(_pg_combine, [kind(node.this), *(kind(e) for e in node.expressions)])
+    if isinstance(node, exp.Case):
+        branches = [i.args.get("true") for i in node.args.get("ifs") or []] + [node.args.get("default") or exp.Null()]
+        return reduce(_pg_combine, [kind(b) for b in branches])
+    return None
+
+
+def _integer_arithmetic(node) -> Optional[list[str]]:
+    """The columns of an expression made only of + - * / % of columns and integer literals, or None."""
+    from sqlglot import exp
+
+    if isinstance(node, exp.Column):
+        return [node.name]
+    if isinstance(node, exp.Literal):
+        return [] if not node.is_string and node.is_int else None
+    if isinstance(node, (exp.Paren, exp.Neg)):
+        return _integer_arithmetic(node.this)
+    if isinstance(node, (exp.Add, exp.Sub, exp.Mul, exp.Div, exp.Mod)):
+        left, right = _integer_arithmetic(node.left), _integer_arithmetic(node.right)
+        return None if left is None or right is None else left + right
+    return None
+
+
+# date_trunc on ClickHouse's Date32/DateTime64, which hold 1900-2299 (`__x`: the instant)
+_CH_TRUNC = {
+    "YEAR": "makeDateTime64(toYear(__x), 1, 1, 0, 0, 0, 0, 6)",
+    "QUARTER": "makeDateTime64(toYear(__x), (toQuarter(__x) - 1) * 3 + 1, 1, 0, 0, 0, 0, 6)",
+    "MONTH": "makeDateTime64(toYear(__x), toMonth(__x), 1, 0, 0, 0, 0, 6)",
+    "WEEK": "toDateTime64(toDate32(__x) - (toDayOfWeek(__x) - 1), 6)",
+    "DAY": "makeDateTime64(toYear(__x), toMonth(__x), toDayOfMonth(__x), 0, 0, 0, 0, 6)",
+    "HOUR": "makeDateTime64(toYear(__x), toMonth(__x), toDayOfMonth(__x), toHour(__x), 0, 0, 0, 6)",
+    "MINUTE": "makeDateTime64(toYear(__x), toMonth(__x), toDayOfMonth(__x), toHour(__x), toMinute(__x), 0, 0, 6)",
+    "SECOND": "makeDateTime64(toYear(__x), toMonth(__x), toDayOfMonth(__x), toHour(__x), toMinute(__x), toSecond(__x), 0, 6)",
+}
+# Postgres' half away from zero, exact on a double too (x - trunc(x) is exact)
+_CH_HALF_AWAY = "trunc(__x) + if(abs(__x - trunc(__x)) >= 0.5, sign(__x), 0)"
+
+
+def _ch_call(template: str, x):
+    """A ClickHouse expression with `__x` replaced by the node `x`."""
+    import sqlglot
+    from sqlglot import exp
+
+    tree = sqlglot.parse_one(template, read="clickhouse")
+    for c in list(tree.find_all(exp.Column)):
+        if c.name == "__x":
+            c.replace(x.copy())
+    return tree
+
+
+def _postgres_numbers(tree, dtypes: dict, label: str) -> None:
+    """A Postgres query's integer divisions, casts to an integer, `::numeric` and date_trunc
+    written for ClickHouse with Postgres' values (see above), or a refusal."""
+    from sqlglot import exp
+
+    T = exp.DataType.Type
+    known: dict[str, Optional[str]] = {}
+    outputs = [(p.alias_or_name, p.this if isinstance(p, exp.Alias) else p) for p in tree.selects] if isinstance(tree, exp.Select) else []
+    for name, e in outputs:
+        if isinstance(e, exp.Column) and dtypes.get(name):
+            known.setdefault(e.name, _pg_kind_of_dtype(dtypes[name]))
+    for name, e in outputs:
+        if _pg_kind_of_dtype(dtypes.get(name)) in _PG_INTS:
+            for c in _integer_arithmetic(e) or []:
+                known.setdefault(c, "int")
+
+    def refuse(why: str):
+        raise DbtExportError(f"the query of the datasource «{label}» cannot be translated to ClickHouse without changing its values: {why}",
+                             "query_not_translatable", datasource=label, detail=why[:200])
+
+    # decided on the query as written, then rewritten from the inside out
+    work = []
+    for node in tree.walk(bfs=False):
+        if isinstance(node, exp.Div):
+            left, right = _pg_kind(node.left, known), _pg_kind(node.right, known)
+            if left in _PG_INTS and right in _PG_INTS:
+                work.append((node, "intDiv"))
+            elif left not in _PG_NOT_INTEGER and right not in _PG_NOT_INTEGER:
+                refuse(f"the types in `{node.sql('postgres')}` are not known (Postgres divides two integers as integers, ClickHouse into a float)")
+        elif isinstance(node, exp.Cast) and node.to.this in (T.TINYINT, T.SMALLINT, T.MEDIUMINT, T.INT, T.BIGINT):
+            k = _pg_kind(node.this, known)
+            if k in ("float", "numeric"):
+                work.append((node, k))
+            elif k == "nonint" or k is None:
+                refuse(f"`{node.sql('postgres')}`: " + ("a numeric or a double precision, not known which" if k else "the type is not known")
+                       + " (Postgres rounds a numeric half away from zero and a double half to even, ClickHouse truncates)")
+        elif isinstance(node, exp.Cast) and node.to.this == T.DECIMAL and not node.to.expressions:
+            work.append((node, "numeric_double"))
+        elif isinstance(node, (exp.TimestampTrunc, exp.DateTrunc)):
+            unit = str(node.text("unit") or "").upper()
+            if unit not in _CH_TRUNC or node.args.get("zone") is not None:
+                refuse(f"`{node.sql('postgres')}`: ClickHouse's dateTrunc holds 1970-2106 only, and the unit {unit.lower() or '?'} has no other form here")
+            work.append((node, unit))
+    for node, what in reversed(work):
+        if what == "intDiv":
+            node.replace(exp.Anonymous(this="intDiv", expressions=[node.left.copy(), node.right.copy()]))
+        elif what == "float":
+            node.set("this", exp.Anonymous(this="roundBankers", expressions=[node.this.copy()]))
+        elif what == "numeric":
+            node.set("this", _ch_call(_CH_HALF_AWAY, node.this))
+        elif what == "numeric_double":
+            # a numeric without precision, as the federated tables read one: the double Tabularia
+            # reads (ClickHouse's own Decimal(10, 0) cut the decimals and failed over 10^10)
+            node.set("to", exp.DataType.build("DOUBLE"))
+        else:
+            node.replace(_ch_call(_CH_TRUNC[what], node.this))
+
+
 def _default_schema(conn: dict) -> str:
     return "public" if conn["db_type"] == "postgresql" else (conn.get("database") or "")
 
@@ -2213,7 +2426,7 @@ class TargetClickHouse:
         return out
 
     def translate_query(self, sql: str, conn_id: int, label: str, proposal: str | None = None,
-                      columns: list[str] | None = None) -> str:
+                      columns: list[str] | None = None, dtypes: dict | None = None) -> str:
         """A datasource's query, written for Postgres/MySQL, in ClickHouse SQL: its tables
         become those of the federated databases. With a `proposal` (the AI's, already
         ClickHouse SQL with the source's TABLE NAMES) that one is used, after the
@@ -2247,6 +2460,8 @@ class TargetClickHouse:
             from sqlglot.optimizer.normalize_identifiers import normalize_identifiers
 
             tree = normalize_identifiers(tree, dialect="postgres")
+            # `dtypes`: the types Tabularia read the query's output with
+            _postgres_numbers(tree, dtypes or {}, label)
         for t in list(tree.find_all(exp.Table)):
             # a CTE only where it is visible: any other name is a table of the connection
             if not t.name or reads_a_cte(t):
