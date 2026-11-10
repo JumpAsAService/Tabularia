@@ -95,8 +95,7 @@ def log(msg: str) -> None:
 
 # ── pasta and bakery catalogue (curated) → SKUs per format ───────────────────
 # (name, category, kind, shelf life in months, price per kg, raw material share).
-# The shelf life goes into `stagionatura_mesi`: the column keeps its name, and for a
-# pasta maker it holds the months a product keeps (nothing here is aged).
+# The shelf life goes into `conservazione_mesi`: the months a product keeps.
 BASE_PRODUCTS = [
     ("Tortellini di carne", "Pasta fresca", "fresca", 2, 8.50, 0.50),
     ("Ravioli ricotta e spinaci", "Pasta fresca", "fresca", 2, 7.80, 0.49),
@@ -242,7 +241,7 @@ def build_products() -> pd.DataFrame:
                 categoria=cat,
                 tipo=kind,
                 formato=fmt,
-                stagionatura_mesi=shelf_life,
+                conservazione_mesi=shelf_life,
                 peso_medio_kg=weight,
                 unita_misura=unit,
                 _price_kg=price_kg,
@@ -416,7 +415,7 @@ def gen_customers(agents: pd.DataFrame) -> pd.DataFrame:
 def gen_catalogue(cur, prod: pd.DataFrame) -> None:
     """Writes products + price list history + production cost history."""
     cols = ["id", "codice", "nome", "categoria", "tipo", "formato",
-            "stagionatura_mesi", "peso_medio_kg", "unita_misura"]
+            "conservazione_mesi", "peso_medio_kg", "unita_misura"]
     copy_df(cur, "catalogo.prodotti", prod[cols])
 
     price_list, costs = [], []

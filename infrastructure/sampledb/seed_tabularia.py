@@ -231,7 +231,7 @@ COLUMNS = {
                    "sconto_pct": "Discount on the line, in percent."},
     "products": {"id": "Product identifier.", "codice": "SKU code.", "nome": "Commercial name, including the format.",
                  "categoria": "Product family.", "tipo": "Kind of product: secca, fresca, da forno, lievitato.",
-                 "formato": "Selling format.", "stagionatura_mesi": "Shelf life: the months the product keeps.",
+                 "formato": "Selling format.", "conservazione_mesi": "Shelf life: the months the product keeps.",
                  "peso_medio_kg": "Average weight of one piece, in kilos.",
                  "unita_misura": "Unit the quantity is expressed in: kg or pz."},
     "price_list": {"id": "Row identifier.", "prodotto_id": "Product the price applies to. Refers to products.id.",

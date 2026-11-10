@@ -25,7 +25,7 @@ CREATE TABLE catalogo.prodotti (
     categoria         text NOT NULL,          -- Pasta di semola, Pasta fresca, Biscotti, …
     tipo              text NOT NULL,          -- secca, fresca, da forno, lievitato
     formato           text NOT NULL,          -- sacco 5 kg, pacco 500 g, cartone 2 kg, …
-    stagionatura_mesi int  NOT NULL,          -- months the product keeps (its shelf life)
+    conservazione_mesi int  NOT NULL,          -- months the product keeps (its shelf life)
     peso_medio_kg     numeric(6,3) NOT NULL,
     unita_misura      text NOT NULL           -- kg | pz
 );

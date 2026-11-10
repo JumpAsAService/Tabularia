@@ -15,8 +15,8 @@ exposes at `/system/info` and in the app's settings menu.
   Torino, Bari, Roma and Ancona. The seasons follow the new sector (panettone and pandoro in
   December, fresh pasta at Christmas and Easter, grissini, cracker and taralli in summer),
   and the two fulfilment anomalies are still there to find: Bari's cancelled orders grow
-  year after year, Torino has a bad spring in 2025. `catalogo.prodotti.stagionatura_mesi`
-  keeps its name and now holds the shelf life in months. An installation that already has
+  year after year, Torino has a bad spring in 2025. The products' shelf life, in months,
+  is the column `catalogo.prodotti.conservazione_mesi`. An installation that already has
   the sample data keeps it until its volumes are removed; the guides' examples and numbers
   are those of the new data, and their screenshots will follow.
 - **Every on/off is a switch, and the switch moves.** What turns a setting or a function on
