@@ -13,8 +13,7 @@ password and with an unreachable source: the password is in no file and not on t
 usage: python3 lifecycle.py"""
 import json, os, re, shutil, subprocess, sys, time
 
-from environment import CH_SAMPLE_CONTAINER
-from common import api, clickhouse_databases, sign_in, outcomes, export, ok, connection_passwords, sample_postgres, datasource_rows
+from common import api, clickhouse_databases, sample_clickhouse, sign_in, outcomes, export, ok, connection_passwords, sample_postgres, datasource_rows
 from matrix import wait_run, compare, dbt, read_dbt
 
 sign_in()
@@ -308,7 +307,6 @@ finally:
     api("DELETE", f"/projects/{C}")
     psql("DROP SCHEMA IF EXISTS dbt_tabularia CASCADE")
     matrix.clean_clickhouse()
-    subprocess.run(["docker", "exec", "-i", CH_SAMPLE_CONTAINER, "sh", "-c", 'clickhouse-client --user "$CLICKHOUSE_USER" --password "$CLICKHOUSE_PASSWORD"'],
-                   input="DROP DATABASE IF EXISTS dbt_tabularia", capture_output=True, text=True)
+    sample_clickhouse("DROP DATABASE IF EXISTS dbt_tabularia")
 print(f"\n{sum(outcomes)}/{len(outcomes)} checks passed")
 sys.exit(0 if all(outcomes) else 1)

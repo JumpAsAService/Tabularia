@@ -20,12 +20,12 @@ The export POSTs are answered inside the page by a tiny fake zip (no engine work
 last check, which downloads for real. The plans are the gateway's, served from the page WITHOUT
 the AI options: no check can make a call to the AI provider (the AI checks serve their own
 plans, and their downloads are the fake zip).
-Firefox headless via Marionette (port 2828), as browser_dialog.py.
+Firefox headless via Marionette (port E2E_MARIONETTE_PORT, 2828 by default), as browser_dialog.py.
 usage: python3 browser_dialog_state.py [part of a check's name, e.g. 69 or 48real]"""
 import copy, json, os, subprocess, sys, time, urllib.error, urllib.request
 
 from environment import BASE, WORKDIR, UI, env
-from marionette import ENTER, ESC, TAB, Firefox, stop
+from marionette import ENTER, ESC, TAB, Firefox, launch, stop
 
 A_NAME, B_NAME = "Margin by Category and Month", "Cost to Serve by Channel"   # Sample flows
 PROFILE = os.path.join(WORKDIR, "firefox-dbt-dialogo-stato")
@@ -302,9 +302,7 @@ for fid in (A, B):
     PLANS[fid] = p
 DUCK_A = next(t for t in PLANS[A]["targets"] if t["id"] == "duckdb")
 
-os.makedirs(PROFILE, exist_ok=True)
-proc = subprocess.Popen(["firefox", "--headless", "--marionette", "--profile", PROFILE, "--window-size", "1500,1000", "about:blank"],
-                        stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+proc = launch(PROFILE)
 try:
     ff = Firefox()
     ff.send("WebDriver:SetWindowRect", {"x": 0, "y": 0, "width": 1500, "height": 1000})

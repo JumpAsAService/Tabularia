@@ -1,12 +1,13 @@
-"""The helpers the dbt export oracles share: Tabularia's API, a REAL dbt in a throwaway
-container (image E2E_DBT_IMAGE) on the stack's network, the export of a flow, the
+"""The helpers the dbt export oracles share: Tabularia's API, a REAL dbt (image E2E_DBT_IMAGE)
+in a throwaway container on the stack's network or, on Kubernetes, in the oracles' pod,
+SQL on the sample databases and on the engine's ClickHouse, the export of a flow, the
 comparison of a dbt model with the datasource Tabularia publishes (rows and, column by
 column, the sum for numbers and the distinct values for the rest).
 An empty text and NULL are two different values everywhere here (#85).
 The configuration is in environment.py."""
-import io, json, os, re, subprocess, sys, urllib.error, urllib.request, zipfile
+import io, json, os, re, shlex, shutil, subprocess, sys, tarfile, time, urllib.error, urllib.request, zipfile
 
-from environment import BASE, WORKDIR, IMAGE, PASSWORD_FROM, NETWORK, env
+from environment import BASE, WORKDIR, IMAGE, PASSWORD_FROM, NETWORK, HERE, KUBE, KUBE_NAMESPACE, KIND_CLUSTER, DBT_POD, DBT_MEMORY, CH_SETTINGS, env, kubectl
 
 # dbt runs in this time zone (TZ for dbt-duckdb, PGTZ for dbt-postgres): a project that is right only
 # in UTC is wrong for most teams. The models must not depend on it (E2E_TZ=UTC turns it off)
@@ -56,9 +57,224 @@ def sign_in():
     TOK = body["access_token"]
 
 
+# ── where things run: Docker compose or Kubernetes (environment.py) ──────────
+def exec_in(target, shell, input=None) -> subprocess.CompletedProcess:
+    """`sh -c shell` inside a sample database (or the engine's ClickHouse), with `input` on its
+    stdin: `docker exec` on a container, `kubectl exec` on a deployment `namespace/name`."""
+    if KUBE:
+        ns, name = target.split("/", 1)
+        return kubectl("-n", ns, "exec", "-i", f"deploy/{name}", "--", "sh", "-c", shell, input=input or "")
+    return subprocess.run(["docker", "exec", "-i", target, "sh", "-c", shell], input=input or "", capture_output=True, text=True)
+
+
+def present(target) -> bool:
+    """The container, or the deployment, is there."""
+    if KUBE:
+        ns, name = target.split("/", 1)
+        return kubectl("-n", ns, "get", "deploy", name).returncode == 0
+    return subprocess.run(["docker", "inspect", target], capture_output=True).returncode == 0
+
+
 def container_env(name, key):
+    """A variable of a sample database's environment (its password): read here, never printed."""
+    if KUBE:
+        r = exec_in(name, f"printenv {shlex.quote(key)}")
+        return r.stdout.rstrip("\n") if r.returncode == 0 else None
     out = subprocess.run(["docker", "inspect", "--format", "{{range .Config.Env}}{{println .}}{{end}}", name], capture_output=True, text=True).stdout
     return next((r.split("=", 1)[1] for r in out.splitlines() if r.startswith(key + "=")), None)
+
+
+def remove_folder(folder):
+    """An exported project's folder, gone. On compose dbt may have written in it as another user
+    (an old container): a container removes it."""
+    if not os.path.exists(folder):
+        return
+    if KUBE:
+        shutil.rmtree(folder)
+        return
+    subprocess.run(["docker", "run", "--rm", "-v", f"{os.path.dirname(folder)}:/x", IMAGE, "sh", "-c", f"rm -rf /x/{shlex.quote(os.path.basename(folder))}"],
+                   capture_output=True)
+
+
+def run_dbt_image(folder, command, variables=None):
+    """`command` (e.g. ["dbt", "run"] or ["python", "/dump.py", …]) in the dbt image, in the project
+    `folder` seen as /project, with dump.py as /dump.py: (exit code, console)."""
+    base = {"HOME": "/tmp", "DBT_PROFILES_DIR": "/project", "TZ": TZ_NAME, "PGTZ": TZ_NAME}
+    if KUBE:
+        return _run_in_pod(folder, command, {**base, **(variables or {})})
+    # with MY user, so the files dbt writes (target/, logs/) stay mine
+    cmd = ["docker", "run", "--rm", "--network", NETWORK, "--user", f"{os.getuid()}:{os.getgid()}",
+           "-v", f"{folder}:/project", "-v", f"{HERE}/dump.py:/dump.py:ro", "-w", "/project"]
+    for k, v in {**base, **(variables or {})}.items():
+        cmd += ["-e", f"{k}={v}"]
+    r = subprocess.run(cmd + [IMAGE, *command], capture_output=True, text=True)
+    return r.returncode, r.stdout + r.stderr
+
+
+# On Kubernetes dbt runs in ONE pod (DBT_POD, in the app's namespace: the NetworkPolicies of the
+# sample databases let that namespace in). Each call sends the project folder (and dump.py, and
+# the variables in a file of their own OUTSIDE the project, removed before dbt starts, so that
+# the oracles that look for a password in the project's files never find the one they sent)
+# and gets the folder back as dbt left it: target/, logs/, the .duckdb file.
+_RUN = r"""
+set -e
+rm -rf /project /e2e-result && mkdir -p /e2e-result
+tar -x -C / -f -
+set -a; . /e2e-env; set +a; rm -f /e2e-env
+cd /project
+set +e
+"$@" > /e2e-result/out 2>&1
+echo $? > /e2e-result/rc
+tar -c -C / project e2e-result >&3
+"""
+
+
+def _tar_add_bytes(tar, name, data, mode=0o644):
+    info = tarfile.TarInfo(name)
+    info.size, info.mode, info.mtime = len(data), mode, int(time.time())
+    tar.addfile(info, io.BytesIO(data))
+
+
+def _run_in_pod(folder, command, variables):
+    ensure_runner()
+    payload = io.BytesIO()
+    with tarfile.open(fileobj=payload, mode="w") as tar:
+        tar.add(folder, arcname="project")
+        tar.add(os.path.join(HERE, "dump.py"), arcname="dump.py")
+        _tar_add_bytes(tar, "e2e-env", "".join(f"{k}={shlex.quote(str(v))}\n" for k, v in variables.items()).encode(), 0o600)
+    # the folder comes back on fd 3, the console of kubectl (errors) on stderr
+    r = kubectl("-n", KUBE_NAMESPACE, "exec", "-i", DBT_POD, "--", "sh", "-c", "exec 3>&1 1>&2; " + _RUN, "sh", *command,
+                input=payload.getvalue(), text=False)
+    try:
+        back = tarfile.open(fileobj=io.BytesIO(r.stdout), mode="r")
+        members = back.getmembers()
+    except tarfile.TarError:
+        raise RuntimeError(f"the dbt pod gave nothing back (kubectl exit {r.returncode}): {r.stderr.decode(errors='replace')[-600:]}")
+    out = back.extractfile("e2e-result/out").read().decode(errors="replace")
+    rc = int(back.extractfile("e2e-result/rc").read().decode().strip() or 1)
+    # the folder as dbt left it: emptied, then filled again with what came back
+    for name in os.listdir(folder):
+        path = os.path.join(folder, name)
+        shutil.rmtree(path) if os.path.isdir(path) and not os.path.islink(path) else os.remove(path)
+    inside = [m for m in members if m.name.startswith("project/") and (m.isfile() or m.isdir())]
+    for m in inside:
+        m.name = m.name[len("project/"):]
+    back.extractall(folder, members=inside, filter="data")
+    return rc, out
+
+
+def _runner_phase():
+    r = kubectl("-n", KUBE_NAMESPACE, "get", "pod", DBT_POD, "-o", "jsonpath={.status.phase}")
+    return r.stdout.strip() if r.returncode == 0 else None
+
+
+def kube_node():
+    """The node the dbt pod runs on (E2E_KUBE_NODE, or the first worker)."""
+    node = env("E2E_KUBE_NODE")
+    if node:
+        return node
+    names = kubectl("get", "nodes", "-o", "jsonpath={.items[*].metadata.name}").stdout.split()
+    workers = [n for n in names if "control-plane" not in n]
+    return (workers or names)[0]
+
+
+def _image_ref():
+    return IMAGE if "/" in IMAGE.split(":")[0] else f"docker.io/library/{IMAGE}"
+
+
+def load_image() -> str | None:
+    """The dbt image on the pod's node (kind: `kind load docker-image` on that node only, if it is
+    not there or is an older build). None if it is there; otherwise what went wrong."""
+    if not KIND_CLUSTER:
+        return None          # the nodes pull it from a registry
+    node = kube_node()
+    local = subprocess.run(["docker", "image", "inspect", "-f", "{{.Id}}", IMAGE], capture_output=True, text=True).stdout.strip()
+    ref = _image_ref() + ("" if ":" in IMAGE.rsplit("/", 1)[-1] else ":latest")
+    there = subprocess.run(["docker", "exec", node, "crictl", "inspecti", "-o", "json", ref], capture_output=True, text=True)
+    if there.returncode == 0 and local and json.loads(there.stdout).get("status", {}).get("id") == local:
+        return None
+    print(f"loading the image {IMAGE} on the node {node} (kind load)…", flush=True)
+    r = subprocess.run(["kind", "load", "docker-image", IMAGE, "--name", KIND_CLUSTER, "--nodes", node], capture_output=True, text=True)
+    if r.returncode != 0:
+        return f"kind load docker-image {IMAGE}: {r.stderr[-400:]}"
+    if _runner_phase():                 # a pod on the old image: a new one
+        kubectl("-n", KUBE_NAMESPACE, "delete", "pod", DBT_POD, "--wait=true", "--grace-period=1")
+    return None
+
+
+def ensure_runner():
+    """The dbt pod, running (created if missing): on one node, with the image loaded there, sleeping."""
+    phase = _runner_phase()
+    if phase == "Running":
+        limit = kubectl("-n", KUBE_NAMESPACE, "get", "pod", DBT_POD, "-o", "jsonpath={.spec.containers[0].resources.limits.memory}").stdout.strip()
+        if limit == DBT_MEMORY:
+            return
+    if phase:
+        kubectl("-n", KUBE_NAMESPACE, "delete", "pod", DBT_POD, "--wait=true", "--grace-period=1")
+    pod = {"apiVersion": "v1", "kind": "Pod",
+           "metadata": {"name": DBT_POD, "namespace": KUBE_NAMESPACE, "labels": {"app": DBT_POD, "e2e.tabularia.org/owner": "dbt-export"}},
+           "spec": {"nodeSelector": {"kubernetes.io/hostname": kube_node()}, "restartPolicy": "Never", "terminationGracePeriodSeconds": 1,
+                    "automountServiceAccountToken": False,
+                    "containers": [{"name": "dbt", "image": _image_ref(), "imagePullPolicy": "Never" if KIND_CLUSTER else "IfNotPresent",
+                                    "command": ["sleep", "infinity"],
+                                    "resources": {"requests": {"cpu": "100m", "memory": "256Mi"}, "limits": {"memory": DBT_MEMORY}}}]}}
+    r = kubectl("apply", "-f", "-", input=json.dumps(pod))
+    if r.returncode != 0:
+        raise RuntimeError(f"the dbt pod cannot be created: {r.stderr[-400:]}")
+    r = kubectl("-n", KUBE_NAMESPACE, "wait", "--for=condition=Ready", f"pod/{DBT_POD}", "--timeout=180s")
+    if r.returncode != 0:
+        raise RuntimeError(f"the dbt pod does not start: {r.stderr[-400:]} "
+                           + kubectl("-n", KUBE_NAMESPACE, "get", "pod", DBT_POD, "-o", "jsonpath={.status.containerStatuses}").stdout[-400:])
+
+
+# the NetworkPolicy the oracles add when the engine's ClickHouse cannot reach a source database
+# (the ClickHouse target's federated databases): the sample databases' policy lets in the app's
+# namespace only. Removed by kube_cleanup
+REACH_POLICY = "zz-dbt-e2e-clickhouse-to-sources"
+
+
+def reach_sources(hosts) -> str | None:
+    """The engine's ClickHouse reaches every (host, port) of `hosts`, a NetworkPolicy of the oracles
+    if it does not (Kubernetes only). None when it does; otherwise what is still closed."""
+    from environment import CH_CONTAINER
+
+    def closed():
+        return [(h, p) for h, p in hosts
+                if exec_in(CH_CONTAINER, f"timeout 4 bash -c '</dev/tcp/{h}/{int(p)}'").returncode != 0]
+
+    shut = closed()
+    if not shut or not KUBE:
+        return None if not shut else f"the engine's ClickHouse does not reach {shut}"
+    ch_ns, ch_name = CH_CONTAINER.split("/", 1)
+    ch_labels = json.loads(kubectl("-n", ch_ns, "get", "deploy", ch_name, "-o", "jsonpath={.spec.selector.matchLabels}").stdout or "{}")
+    for host, port in shut:
+        svc, _, rest = host.partition(".")
+        ns = rest.split(".")[0] if rest else KUBE_NAMESPACE
+        selector = json.loads(kubectl("-n", ns, "get", "svc", svc, "-o", "jsonpath={.spec.selector}").stdout or "{}")
+        if not selector or not ch_labels:
+            return f"the engine's ClickHouse does not reach {host}:{port}, and its pods cannot be told apart"
+        policy = {"apiVersion": "networking.k8s.io/v1", "kind": "NetworkPolicy",
+                  "metadata": {"name": f"{REACH_POLICY}-{svc}"[:63], "namespace": ns, "labels": {"e2e.tabularia.org/owner": "dbt-export"}},
+                  "spec": {"podSelector": {"matchLabels": selector}, "policyTypes": ["Ingress"],
+                           "ingress": [{"from": [{"namespaceSelector": {"matchLabels": {"kubernetes.io/metadata.name": ch_ns}},
+                                                  "podSelector": {"matchLabels": ch_labels}}],
+                                        "ports": [{"protocol": "TCP", "port": int(port)}]}]}}
+        print(f"the engine's ClickHouse does not reach {host}:{port}: NetworkPolicy {policy['metadata']['name']} in {ns} (removed at the end)", flush=True)
+        r = kubectl("apply", "-f", "-", input=json.dumps(policy))
+        if r.returncode != 0:
+            return f"NetworkPolicy towards {host}: {r.stderr[-300:]}"
+    for _ in range(20):
+        shut = closed()
+        if not shut:
+            return None
+        time.sleep(1)
+    return f"the engine's ClickHouse still does not reach {shut}"
+
+
+def kube_cleanup():
+    """The dbt pod and the NetworkPolicies of the oracles, gone (the image stays on the node)."""
+    kubectl("-n", KUBE_NAMESPACE, "delete", "pod", DBT_POD, "--ignore-not-found", "--wait=true", "--grace-period=1")
+    kubectl("delete", "networkpolicy", "-A", "-l", "e2e.tabularia.org/owner=dbt-export", "--ignore-not-found")
 
 
 def connection_passwords():
@@ -90,13 +306,7 @@ def signature(rows):
 
 
 def dbt(folder, *arguments, variables=None):
-    # with MY user, so the files dbt writes (target/, logs/) stay mine
-    cmd = ["docker", "run", "--rm", "--network", NETWORK, "--user", f"{os.getuid()}:{os.getgid()}", "-e", "HOME=/tmp",
-           "-v", f"{folder}:/project", "-w", "/project", "-e", "DBT_PROFILES_DIR=/project", "-e", f"TZ={TZ_NAME}", "-e", f"PGTZ={TZ_NAME}"]
-    for k, v in (variables or {}).items():
-        cmd += ["-e", f"{k}={v}"]
-    r = subprocess.run(cmd + [IMAGE, "dbt", *arguments, "--no-use-colors"], capture_output=True, text=True)
-    return r.returncode, r.stdout + r.stderr
+    return run_dbt_image(folder, ["dbt", *arguments, "--no-use-colors"], variables)
 
 
 def export(flow, target, suffix=""):
@@ -106,12 +316,29 @@ def export(flow, target, suffix=""):
         return None, (st, zipped[:400] if isinstance(zipped, (bytes, str)) else zipped)
     slug = re.sub(r"[^a-z0-9]+", "_", flow["name"].lower()).strip("_")
     folder = f"{WORKDIR}/{slug}_{target}{suffix}"
-    if os.path.exists(folder):
-        subprocess.run(["docker", "run", "--rm", "-v", f"{WORKDIR}:/x", IMAGE, "sh", "-c", f"rm -rf /x/{os.path.basename(folder)}"], capture_output=True)
+    remove_folder(folder)
     os.makedirs(folder)
     with zipfile.ZipFile(io.BytesIO(zipped)) as z:
         z.extractall(folder)
-        return folder, sorted(z.namelist())
+        names = sorted(z.namelist())
+    clickhouse_settings(f"{folder}/profiles.yml")
+    return folder, names
+
+
+def clickhouse_settings(profile):
+    """E2E_CH_SETTINGS added to the `custom_settings` of every dbt-clickhouse output of the profile
+    (the file as the export, or INTEGRATION.md, writes it): what a team with a small ClickHouse adds
+    so that a big join or group by spills to disk (on kind the sample ClickHouse has 2 GiB). The
+    settings the export writes stay as they are."""
+    if not CH_SETTINGS or not os.path.exists(profile):
+        return
+    text = open(profile).read()
+    if "type: clickhouse" not in text:
+        return
+    patched = re.sub(r"(?m)^( *)custom_settings:\n", lambda m: m.group(0) + "".join(f"{m.group(1)}  {k}: {v}\n" for k, v in CH_SETTINGS.items()), text)
+    if patched == text:
+        raise RuntimeError(f"E2E_CH_SETTINGS: no custom_settings in {profile}")
+    open(profile, "w").write(patched)
 
 
 def model_rows(folder, model, variables):
@@ -174,8 +401,14 @@ def engine_clickhouse(sql: str) -> subprocess.CompletedProcess:
     backticks of the names would be the shell's command substitutions."""
     from environment import CH_CONTAINER
 
-    cmd = ["docker", "exec", "-i", CH_CONTAINER, "sh", "-c", 'clickhouse-client --user "$CLICKHOUSE_USER" --password "$CLICKHOUSE_PASSWORD" --multiquery']
-    return subprocess.run(cmd, input=sql, capture_output=True, text=True)
+    return exec_in(CH_CONTAINER, 'clickhouse-client --user "$CLICKHOUSE_USER" --password "$CLICKHOUSE_PASSWORD" --multiquery', sql)
+
+
+def sample_clickhouse(sql: str) -> subprocess.CompletedProcess:
+    """SQL to the sample ClickHouse (the CRM), on the client's input."""
+    from environment import CH_SAMPLE_CONTAINER
+
+    return exec_in(CH_SAMPLE_CONTAINER, 'clickhouse-client --user "$CLICKHOUSE_USER" --password "$CLICKHOUSE_PASSWORD" --multiquery', sql)
 
 
 def clickhouse_databases() -> set:
@@ -198,8 +431,7 @@ def sample_postgres(sql: str) -> subprocess.CompletedProcess:
     """SQL to the sample Postgres, on psql's input."""
     from environment import PG_CONTAINER
 
-    return subprocess.run(["docker", "exec", "-i", PG_CONTAINER, "sh", "-c", 'psql -q -t -A -v ON_ERROR_STOP=1 -U "$POSTGRES_USER" -d "$POSTGRES_DB"'],
-                          input=sql, capture_output=True, text=True)
+    return exec_in(PG_CONTAINER, 'psql -q -t -A -v ON_ERROR_STOP=1 -U "$POSTGRES_USER" -d "$POSTGRES_DB"', sql)
 
 
 def wait_run(rid, seconds=900):

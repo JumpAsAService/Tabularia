@@ -15,11 +15,10 @@ The case tables (schema.sql) are in the sample Postgres; run_all.py creates them
 usage: python3 matrix.py [--engine clickhouse|duckdb|polars] [--only duckdb|native|clickhouse] [--case PREFIX] [--keep]"""
 import json, math, os, re, subprocess, sys, time
 
-from environment import CH_CONTAINER, CH_PORT, IMAGE, HERE, NETWORK
+from environment import CH_HOST, CH_PORT
 from common import (TZ_NAME, api, sign_in, outcomes, export, read_csv, ok, connection_passwords,
-                    sample_postgres, clean_clickhouse)
+                    sample_postgres, clean_clickhouse, run_dbt_image)
 
-CH_HOST, CH_PORT = CH_CONTAINER, CH_PORT
 PG_CONN = {}   # the sample Postgres connection in Tabularia: host, database, user (to read dbt's tables)
 PG_ID = None   # its id in Tabularia (the name of its password variable): set by main, or by lifecycle.py
 
@@ -351,13 +350,8 @@ def tabularia_result(folder, name):
 
 
 def dbt(folder, *arg, variables=None):
-    cmd = ["docker", "run", "--rm", "--network", NETWORK, "--user", f"{os.getuid()}:{os.getgid()}", "-e", "HOME=/tmp",
-           "-v", f"{folder}:/project", "-v", f"{HERE}/dump.py:/dump.py:ro", "-w", "/project", "-e", "DBT_PROFILES_DIR=/project",
-           "-e", f"TZ={TZ_NAME}", "-e", f"PGTZ={TZ_NAME}"]
-    for k, v in (variables or {}).items():
-        cmd += ["-e", f"{k}={v}"]
-    r = subprocess.run(cmd + [IMAGE, *arg], capture_output=True, text=True)
-    return r.returncode, r.stdout + r.stderr
+    """`arg` is the whole command (`dbt …` or `python /dump.py …`), in the dbt image (common.run_dbt_image)."""
+    return run_dbt_image(folder, list(arg), variables)
 
 
 def read_dbt(folder, target, variables):

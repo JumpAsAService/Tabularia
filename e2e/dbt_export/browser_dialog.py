@@ -10,8 +10,8 @@ Needs Firefox (headless, with Marionette) on the machine that runs the test.
 usage: python3 browser_dialog.py"""
 import base64, io, json, os, re, subprocess, sys, time, urllib.error, urllib.request, zipfile
 
-from environment import WORKDIR, UI, env
-from marionette import Firefox, stop
+from environment import CH_HOST, WORKDIR, UI, env
+from marionette import Firefox, launch, stop
 
 BASE = UI
 PROFILE = os.path.join(WORKDIR, "firefox-dbt-dialogo")
@@ -41,6 +41,10 @@ admin = api("POST", "/auth/login", {"email": env("AUTH__ADMIN_EMAIL"), "password
 flows = {f["name"]: f for f in api("GET", "/flows", token=admin)}
 flow, crm = flows[FLOW], flows[FLOW_CRM]
 plan = api("GET", f"/flows/{flow['id']}/export/dbt/plan", token=admin)
+# where the engine's ClickHouse IS the CRM's (kind: CLICKHOUSE_EXTERNAL__HOST is the sample ClickHouse)
+# the ClickHouse target reads the CRM natively and nothing is refused: the dialog downloads instead
+SAME_CH = any(c["db_type"] == "clickhouse" and (c.get("host") or "").strip().lower() == CH_HOST.strip().lower()
+              for c in api("GET", "/connections", token=admin))
 
 
 def open_export(name):
@@ -59,9 +63,7 @@ def write(selector, value):
       el.value = {json.dumps(value)}; el.dispatchEvent(new Event('input', {{bubbles: true}})); return true""")
 
 
-os.makedirs(PROFILE, exist_ok=True)
-proc = subprocess.Popen(["firefox", "--headless", "--marionette", "--profile", PROFILE, "--window-size", "1500,1000", "about:blank"],
-                        stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+proc = launch(PROFILE)
 try:
     ff = Firefox()
     ff.send("WebDriver:SetWindowRect", {"x": 0, "y": 0, "width": 1500, "height": 1000})
@@ -161,12 +163,17 @@ try:
 
     # a refusal only the engine knows (a ClickHouse that is not its own) reads in the dialog
     ok("the dialog opens for a flow on the CRM too", open_export(FLOW_CRM))
-    ff.js("document.querySelector('.dx-card input[name=dx-target][value=clickhouse]').click(); document.querySelector('.dx-actions .primary').click(); return 1")
-    ok("the reason of the refusal is in the dialog, in plain words (not «422»)", ff.wait_for("!!document.querySelector('.dx-error')", 60) and "ClickHouse" in (ff.js("return document.querySelector('.dx-error').innerText") or "")
-       and "422" not in ff.js("return document.querySelector('.dx-error').innerText"), ff.js("return document.querySelector('.dx-error')?.innerText"))
-    time.sleep(0.3)
-    ff.shot(f"{SHOTS}/dbt-dialog-refusal.png")
-    ok("and the dialog stays open to choose another target", ff.js("return !!document.querySelector('.dx-card')"))
+    ff.js("window.__downloaded = []; window.__zip = null; document.querySelector('.dx-card input[name=dx-target][value=clickhouse]').click(); document.querySelector('.dx-actions .primary').click(); return 1")
+    if SAME_CH:
+        ok("the engine's ClickHouse is the CRM's on this stack: the ClickHouse target downloads, nothing to refuse",
+           ff.wait_for("window.__downloaded.length === 1 && !document.querySelector('.dx-card')", 120),
+           ff.js("return [window.__downloaded, document.querySelector('.dx-error')?.innerText]"))
+    else:
+        ok("the reason of the refusal is in the dialog, in plain words (not «422»)", ff.wait_for("!!document.querySelector('.dx-error')", 60) and "ClickHouse" in (ff.js("return document.querySelector('.dx-error').innerText") or "")
+           and "422" not in ff.js("return document.querySelector('.dx-error').innerText"), ff.js("return document.querySelector('.dx-error')?.innerText"))
+        time.sleep(0.3)
+        ff.shot(f"{SHOTS}/dbt-dialog-refusal.png")
+        ok("and the dialog stays open to choose another target", ff.js("return !!document.querySelector('.dx-card')"))
 
     # the AI (piece 4): the options show only if there is an enabled model; with the descriptions the project carries them
     if plan.get("ai", {}).get("available"):
@@ -200,9 +207,12 @@ try:
     reasons = ff.js("return Array.from(document.querySelectorAll('.dx-why')).map(e => e.innerText)")
     ok("the reasons of the targets not available are in Italian", reasons and all(m.startswith("Non disponibile:") for m in reasons)
        and any("DuckDB non la collega" in m for m in reasons), reasons)
-    ff.js("document.querySelector('.dx-card input[name=dx-target][value=clickhouse]').click(); document.querySelector('.dx-actions .primary').click(); return 1")
-    ok("the engine's refusal is in Italian", ff.wait_for("!!document.querySelector('.dx-error')", 60)
-       and "è un ALTRO ClickHouse" in (ff.js("return document.querySelector('.dx-error').innerText") or ""), ff.js("return document.querySelector('.dx-error')?.innerText"))
+    if SAME_CH:
+        print("  ·  the engine's refusal in Italian: not on this stack (the engine's ClickHouse is the CRM's, nothing to refuse)")
+    else:
+        ff.js("document.querySelector('.dx-card input[name=dx-target][value=clickhouse]').click(); document.querySelector('.dx-actions .primary').click(); return 1")
+        ok("the engine's refusal is in Italian", ff.wait_for("!!document.querySelector('.dx-error')", 60)
+           and "è un ALTRO ClickHouse" in (ff.js("return document.querySelector('.dx-error').innerText") or ""), ff.js("return document.querySelector('.dx-error')?.innerText"))
     time.sleep(0.3)
     ff.shot(f"{SHOTS}/dbt-dialog-it.png")
 finally:
