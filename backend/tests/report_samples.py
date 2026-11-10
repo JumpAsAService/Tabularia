@@ -8,7 +8,7 @@ import random
 from datetime import date, timedelta
 
 REGIONS = ["Nord-Ovest", "Nord-Est", "Centro", "Sud", "Isole"]
-PRODUCTS = ["Prosciutto crudo", "Salame Milano", "Mortadella IGP", "Coppa", "Bresaola", "Speck"]
+PRODUCTS = ["Penne rigate", "Spaghetti", "Frollini al burro", "Cracker", "Amaretti", "Taralli"]
 HOSTILE = ['ACME #panic("boom") *bold* $x^2$ <lab> @ref [link](x)', "<script>alert(1)</script> S.p.A.",
            '=HYPERLINK("http://x")', "Back\\slash \\n #set page(width: 1mm)",
            "Società Cooperativa Agricola Allevatori dell'Appennino Tosco-Emiliano e delle Valli a.r.l.",

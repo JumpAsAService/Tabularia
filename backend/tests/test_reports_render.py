@@ -32,7 +32,7 @@ from tests.test_export_route import Result, Storage, _play
 NOW = datetime(2026, 10, 28, 9, 0, tzinfo=timezone.utc)
 # The sample report's PDF, byte for byte. It changes with the template, the fonts, Typst's
 # version (pinned in pyproject.toml) or the model: look at the new PDF, then update the hash.
-GOLDEN_PDF_SHA256 = "cbba77076717245cb13f2ab17f30219a17e5af1021b35b79181e8524a4c396cd"
+GOLDEN_PDF_SHA256 = "ef400ac8611c8454bba3c745b27a632d2fb5271ee106617de11a127b61940db4"
 
 
 @pytest.fixture(scope="module")
@@ -202,19 +202,19 @@ def test_a_hotspot_carries_the_box_of_its_cell(tmp_path, chart_service):
 
 
 def test_a_closed_group_ends_the_repetition_of_the_header_before_it(tmp_path):
-    """The Sample margins with «Insaccati da cuocere» closed: «Insaccati cotti» ends at the foot
+    """The Sample margins with «Dolci da ricorrenza» closed: «Biscotti» ends at the foot
     of page 1, and page 2 opened again with its header — nothing under it — because a closed
     group was a plain cell, not a header ending the repetition of the one before."""
     data = json.loads((Path(__file__).parent / "report_margins.json").read_text())
     rows = [dict(zip([c["name"] for c in data["columns"]], r)) for r in data["rows"]]
-    state = {"items": {"detail": {"collapsed": [["Insaccati da cuocere"]]}}}
+    state = {"items": {"detail": {"collapsed": [["Dolci da ricorrenza"]]}}}
     r = render.render(data["definition"], {"margins": {"rows": rows, "columns": data["columns"]}},
                       {"from_month": 202401}, "svg", tmp_path, state=state, limits=render.Limits(chart_url=""),
                       now=NOW)
     toggles = [h for h in json.loads(r.path.read_text())["hotspots"] if h["kind"] == "toggle"]
     first_page = {h["key"][0] for h in toggles if h["page"] == 1}
     second_page = [h["key"][0] for h in toggles if h["page"] == 2]
-    assert "Insaccati cotti" in first_page and second_page[0] == "Insaccati da cuocere", second_page
+    assert "Biscotti" in first_page and second_page[0] == "Dolci da ricorrenza", second_page
 
 
 # ── limits ───────────────────────────────────────────────────────────────────

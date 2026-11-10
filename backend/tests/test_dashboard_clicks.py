@@ -95,12 +95,12 @@ def test_a_second_value_adds_to_the_first_and_the_rows_keep_their_order(way, row
 
 def test_two_tiles_clicked_filter_each_other_and_not_themselves(way, rows):
     d = definition(chart("by_region"), chart("by_product", category="[product]"), kpi("k"))
-    a = compute(d, spec(rows), click("by_region", "Nord-Est"), click("by_product", "Coppa"))["tiles"]
-    assert a["k"]["value"] == pytest.approx(total(where(rows, region="Nord-Est", product="Coppa")))
+    a = compute(d, spec(rows), click("by_region", "Nord-Est"), click("by_product", "Cracker"))["tiles"]
+    assert a["k"]["value"] == pytest.approx(total(where(rows, region="Nord-Est", product="Cracker")))
     regions = dict(zip(a["by_region"]["data"]["cats"], a["by_region"]["data"]["series"][0]["values"]))
-    assert regions["Centro"] == pytest.approx(total(where(rows, region="Centro", product="Coppa")))
+    assert regions["Centro"] == pytest.approx(total(where(rows, region="Centro", product="Cracker")))
     products = dict(zip(a["by_product"]["data"]["cats"], a["by_product"]["data"]["series"][0]["values"]))
-    assert products["Speck"] == pytest.approx(total(where(rows, region="Nord-Est", product="Speck")))
+    assert products["Taralli"] == pytest.approx(total(where(rows, region="Nord-Est", product="Taralli")))
 
 
 def test_a_tile_on_another_dataset_is_not_touched(way, rows):
@@ -220,9 +220,9 @@ def test_a_cell_of_a_heatmap_chooses_both_its_values_and_the_rows_are_those_of_b
     d = definition(chart("h", kind="heatmap", split_by="[product]"), kpi("k"))
     plain = compute(d, spec(rows))["tiles"]["h"]["data"]
     assert plain["keys"] == plain["xCats"] and plain["split_keys"] == plain["yCats"]
-    a = compute(d, spec(rows), click("h", ["Nord-Est", "Coppa"]))["tiles"]
-    assert a["k"]["value"] == pytest.approx(total(where(rows, region="Nord-Est", product="Coppa")))
-    assert a["h"]["chosen"] == {"rows": [["Nord-Est", "Coppa"]]}
+    a = compute(d, spec(rows), click("h", ["Nord-Est", "Cracker"]))["tiles"]
+    assert a["k"]["value"] == pytest.approx(total(where(rows, region="Nord-Est", product="Cracker")))
+    assert a["h"]["chosen"] == {"rows": [["Nord-Est", "Cracker"]]}
     assert compute(d, spec(rows), click("h", ["Nord-Est"]))["tiles"]["k"]["value"] == pytest.approx(total(where(rows, region="Nord-Est")))
 
 
@@ -250,8 +250,8 @@ def test_a_group_at_any_level_is_named_by_its_path(way, rows):
     paths = [r["path"] for r in answer["rows"] if r["kind"] == "g"]
     assert ["Nord-Est"] in paths and any(len(p) == 2 for p in paths)
     assert compute(d, spec(rows), click("t", ["Nord-Est"]))["tiles"]["k"]["value"] == pytest.approx(total(where(rows, region="Nord-Est")))
-    a = compute(d, spec(rows), click("t", ["Nord-Est", "Coppa"], ["Centro"]))["tiles"]["k"]["value"]
-    assert a == pytest.approx(total(where(rows, region="Nord-Est", product="Coppa")) + total(where(rows, region="Centro")))
+    a = compute(d, spec(rows), click("t", ["Nord-Est", "Cracker"], ["Centro"]))["tiles"]["k"]["value"]
+    assert a == pytest.approx(total(where(rows, region="Nord-Est", product="Cracker")) + total(where(rows, region="Centro")))
 
 
 def test_a_path_says_its_values_as_a_browser_holds_them_at_every_level(way):
@@ -264,9 +264,9 @@ def test_a_path_says_its_values_as_a_browser_holds_them_at_every_level(way):
 
 def test_a_group_chosen_with_one_inside_it_takes_it_whole_and_both_are_found(way, rows):
     d = definition(table("t", groups=[{"by": "[region]"}, {"by": "[product]"}], columns=[{"header": "A", "value": "[amount]"}], detail=False), kpi("k"))
-    a = compute(d, spec(rows), click("t", ["Centro"], ["Centro", "Coppa"]))["tiles"]
+    a = compute(d, spec(rows), click("t", ["Centro"], ["Centro", "Cracker"]))["tiles"]
     assert a["k"]["value"] == pytest.approx(total(where(rows, region="Centro")))
-    assert a["t"]["chosen"] == {"rows": [["Centro"], ["Centro", "Coppa"]]}
+    assert a["t"]["chosen"] == {"rows": [["Centro"], ["Centro", "Cracker"]]}
 
 
 def test_a_group_with_no_header_is_named_by_its_footer(way, rows):
@@ -369,9 +369,9 @@ def _no_time(answer: dict) -> dict:
 
 
 @pytest.mark.parametrize("clicks", [
-    [click("c", "Nord-Est")], [click("c", "Nord-Est", "Isole")], [click("c", "Centro"), click("p", "Coppa")],
-    [click("c", "Atlantide")], [click("c", "Sud"), click("m", ["Centro"])], [click("h", ["Sud", "Coppa"])],
-    [click("m", ["Coppa"], on="columns")], [click("g", ["Sud", "Coppa"], ["Centro"])], [click("d", "2026-03-04")],
+    [click("c", "Nord-Est")], [click("c", "Nord-Est", "Isole")], [click("c", "Centro"), click("p", "Cracker")],
+    [click("c", "Atlantide")], [click("c", "Sud"), click("m", ["Centro"])], [click("h", ["Sud", "Cracker"])],
+    [click("m", ["Cracker"], on="columns")], [click("g", ["Sud", "Cracker"], ["Centro"])], [click("d", "2026-03-04")],
 ])
 def test_both_ways_give_every_tile_the_same_answer(monkeypatch, rows, clicks):
     d = definition(

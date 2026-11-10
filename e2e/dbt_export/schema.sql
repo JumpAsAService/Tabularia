@@ -6,7 +6,7 @@ CREATE TABLE zzdbt.casi (
 );
 INSERT INTO zzdbt.casi VALUES
  (1, ' 5 ',  12.7,    10,      1.50,     '2024-01-15', '2024-01-15 10:30:00', true,  'A',  'x y',  1, 'Milano'),
- (2, '12.7', -3.2,    NULL,    2.25,     '2024-02-29', '2024-02-29 23:59:59', false, 'B',  NULL,   2, 'Parma'),
+ (2, '12.7', -3.2,    NULL,    2.25,     '2024-02-29', '2024-02-29 23:59:59', false, 'B',  NULL,   2, 'Pavia'),
  (3, 'abc',  NULL,    7,       NULL,     NULL,         NULL,                  NULL,  NULL, 'z',    3, NULL),
  (4, NULL,   0.5,     -4,      100.00,   '2023-12-31', '2023-12-31 00:00:00', true,  'A',  'a''b', 4, 'Città d''altri'),
  (5, '-8',   2.5,     2,       3.33,     '2024-06-01', '2024-06-01 12:00:00', false, 'C',  'w',    5, 'Milano'),

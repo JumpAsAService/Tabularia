@@ -101,11 +101,11 @@ def test_filter_contains_on_text():
 
 
 @pytest.mark.parametrize("value, expected", [
-    ("Speck+Brie", {"Speck+Brie"}), ("1.5", {"Box 1.5 kg"}), ("C++", {"C++ manuale"}), ("Vino (", {"Vino (rosso)"}),
+    ("Pasta+Sugo", {"Pasta+Sugo"}), ("1.5", {"Box 1.5 kg"}), ("C++", {"C++ manuale"}), ("Vino (", {"Vino (rosso)"}),
 ])
 def test_filter_contains_takes_the_text_as_written(value, expected):
     # as a regular expression «+», «.», «(» meant something else: 0 rows, others' rows, an error
-    df = pl.DataFrame({"p": ["Speck+Brie", "SpeckkBrie", "Box 1.5 kg", "Box 105 kg", "C++ manuale", "C manuale", "Vino (rosso)"]})
+    df = pl.DataFrame({"p": ["Pasta+Sugo", "PastaaSugo", "Box 1.5 kg", "Box 105 kg", "C++ manuale", "C manuale", "Vino (rosso)"]})
     assert set(apply("filter", {"column": "p", "operator": "contains", "value": value}, df=df)["p"]) == expected
 
 
