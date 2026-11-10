@@ -81,7 +81,7 @@ column and a **Whole table** group for row count, freshness and SQL conditions.
   list of values) as **Warning**, so the next refresh is not stopped by a case never
   seen. Review it before saving.
 - **Add rule** adds one; each rule has its own **Severity of the rule**.
-- **Contract active**, unticked, keeps the contract without checking it.
+- **Contract active**, switched off, keeps the contract without checking it.
 - **Save and check** (or **Create the contract** the first time) saves it and checks it
   on the current data. Every save that changes the rules is a new version.
 - **Remove the contract** stops the checks; the history of the checks stays.

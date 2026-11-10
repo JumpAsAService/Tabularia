@@ -66,7 +66,7 @@ and the AI assistant can read.
 
 **Example.** The sample flow **Top 20 Products by Revenue** ends with an Output named
 *Top 20 Products by Revenue* in **Sample / Private tables**, with **Overwrite if it already
-exists** ticked: its schedule (`30 5 * * *`) refreshes it every morning at 05:30. Tick **Also
+exists** on: its schedule (`30 5 * * *`) refreshes it every morning at 05:30. Switch on **Also
 copy the file to external S3**, choose an S3 connection and the path
 `published/top20/{date}.parquet`: every run also leaves a dated copy in the bucket.
 
@@ -118,7 +118,7 @@ Excel. The first run of the year creates `/outbox/2026`; each run writes
 ## An email with an attachment
 
 **Email with attachment**: **SMTP connection**, **Recipients**, **Cc**, **Subject**,
-**Message body** (HTML when **The body is HTML** is ticked), **Attachment name**,
+**Message body** (HTML when **The body is HTML** is on), **Attachment name**,
 **Format** (**Excel (.xlsx)** or **CSV**) and **Stop the flow if the send fails** (on by
 default; off, a failed send is recorded and the following steps go on). The attachment is
 made at every run, even with no rows. Every recipient must belong to the connection's

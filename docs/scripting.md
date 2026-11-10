@@ -702,7 +702,7 @@ category-months whose margin is under 25%:
    R)**, name it «Margins under target», environment «Python».
 2. Under **Inputs**, **Add a datasource** → «Margin by Category and Month», and change
    the alias it proposes to `MARGIN`.
-3. Under **Output**, tick **Also publish it as a datasource**: name «Margins under
+3. Under **Output**, switch on **Also publish it as a datasource**: name «Margins under
    target», folder «Sales analysis», **Replace it at every run**.
 4. **Edit the code**, write the code below, **Save**.
 5. **Run**: in a few seconds the run succeeds, its log says how many category-months are

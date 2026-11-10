@@ -74,7 +74,7 @@ on the folder of an SMTP connection to the people you trust to choose its domain
 
 - **Output node «Email with attachment»** in a flow: **SMTP connection**, **Recipients**,
   **Cc**, **Subject**, **Message body** (plain, or HTML when **The body is HTML** is
-  ticked), **Attachment name**, **Format** (**Excel (.xlsx)** or **CSV**), and **Stop the
+  on), **Attachment name**, **Format** (**Excel (.xlsx)** or **CSV**), and **Stop the
   flow if the send fails** (on by default). The attachment is made at every run, even with
   no rows. Subject and attachment name take [placeholders](../placeholders.md):
   `Sales {yesterday:dd/MM}`. See [Writing data out](destinations.md#an-email-with-an-attachment).

@@ -28,7 +28,7 @@ one SMTP connection is available to you; so does the picker of an empty cell.
 | **SMTP connection** | one you may send through |
 | **To**, **Cc** | addresses separated by commas; at least one in To |
 | **Subject** | text with the date placeholders, `Sales {today:yyyy-MM-dd}`; `{flow}` is the group's name |
-| **Message** | plain text, or HTML when ticked (sent with a plain-text alternative) |
+| **Message** | plain text, or HTML when **The body is HTML** is on (sent with a plain-text alternative) |
 | **Datasources** | one file each, up to 20: the datasource, the **file name** (a template, `.xlsx` added) and the **rows at most** (1 to 1,000,000; 10,000 by default) |
 | **Reports** | one file each, up to 5: the report, **PDF** or **Excel**, the **file name** (a template, the extension added), the values of its **parameters**, and **Summary in the email body** (see [Reports](#reports)) |
 | **Dashboards** | one file each, up to 5: the dashboard, **PDF** or **Image**, the **file name**, the values of its **parameters** (see [Dashboards](#dashboards)) |
