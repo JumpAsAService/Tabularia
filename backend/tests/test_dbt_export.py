@@ -3774,7 +3774,7 @@ def test_a_float32_is_a_float_and_an_instant_keeps_its_unit():
 _REALS = [0.1, 7.0, -2.5, None, 1e-7, 123456.7]
 
 
-@pytest.mark.parametrize("op", ["cast"])
+@pytest.mark.parametrize("op", ["cast", "unpivot"])
 def test_a_float32_as_text_on_clickhouse_is_what_the_clickhouse_engine_writes(op):
     from app.engine.chdb_ops import _cast_expr as cast_ch
 
@@ -3827,3 +3827,41 @@ def test_an_instant_as_text_on_native_postgres_is_what_the_flows_engine_writes(d
     files = _export_in({"id": "Int64", "t": dtype}, [{"type": "cast", "params": {"columns": {"t": "str"}}}], "native", dialect=engine)
     got = dict(_su_postgres(f"SELECT * FROM ({_model(files, values)}) AS m"))
     assert got == {**dict(enumerate(expected)), 3: None}
+
+
+_SIGNED_ZEROS = _pl.DataFrame({"id": [1, 2, 3, 4, 5], "f": [-0.0, 0.0, 7.0, None, 2.5], "s": ["a", "b", "c", "d", "e"]})
+
+
+@pytest.mark.parametrize("where", ["postgres", "clickhouse"])
+def test_an_unpivot_of_text_and_a_float_writes_the_float_as_the_engine_does(where):
+    """The value of an unpivot of a text and a float is text: 7.0 is '7.0' as in Tabularia (it
+    was '7' on both warehouses); -0.0 is '0.0' on ClickHouse, as the ClickHouse engine writes
+    it, and '-0.0' on Postgres, as Polars and DuckDB do."""
+    ops = [{"type": "unpivot", "params": {"index": ["id"], "on": ["s", "f"], "variable_name": "m", "value_name": "v"}}]
+    rows = {r[0]: r[2] for r in _native_on(where, _SIGNED_ZEROS, ops) if r[1] == "f"}
+    assert rows == {1: "0.0" if where == "clickhouse" else "-0.0", 2: "0.0", 3: "7.0", 4: None, 5: "2.5"}
+    if where == "postgres":
+        assert rows == {r[0]: r[2] for r in _engine_snapshot("polars", {"t": _SIGNED_ZEROS}, "t", ops)[1] if r[1] == "f"}
+
+
+@pytest.mark.parametrize("where", ["postgres", "clickhouse"])
+@pytest.mark.parametrize("case", ["group_by", "unique", "unique_subset", "join", "join_on", "semi"])
+def test_minus_zero_and_zero_are_one_key_as_in_the_engines(where, case):
+    """ClickHouse groups, deduplicates and hash-joins a float by its bits: -0.0 and 0.0 were two
+    groups, two distinct rows and keys that never met; the engines (the ClickHouse one adds 0.0
+    to its float keys) hold them one."""
+    df = _SIGNED_ZEROS.select("f")
+    right = {"source": {"key": "t"}, "operations": [{"type": "select", "params": {"columns": ["f", "s"]}},
+                                                    {"type": "rename", "params": {"mapping": {"s": "label"}}}]}
+    ops = {"group_by": [{"type": "group_by", "params": {"by": ["f"], "aggregations": [{"column": "f", "func": "count", "alias": "n"}]}}],
+           "unique": [{"type": "unique", "params": {}}],
+           "unique_subset": [{"type": "unique", "params": {"subset": ["f"]}}],
+           "join": [{"type": "join", "params": {"how": "inner", "on": ["f"], "right": right}}],
+           "join_on": [{"type": "join", "params": {"how": "inner", "left_on": ["f"], "right_on": ["f"], "right": right}}],
+           "semi": [{"type": "join", "params": {"how": "semi", "on": ["f"], "right": right}}]}[case]
+    rows = _native_on(where, _SIGNED_ZEROS if case.startswith("join") or case == "semi" else df, ops)
+    key = 1 if case.startswith("join") or case == "semi" else 0
+    zeros = [r for r in rows if r[key] == 0]
+    assert len(zeros) == {"group_by": 1, "unique": 1, "unique_subset": 1, "join": 4, "join_on": 4, "semi": 2}[case], rows
+    if case == "group_by":
+        assert zeros[0][1] == 2
