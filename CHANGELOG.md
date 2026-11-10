@@ -5,9 +5,6 @@ exposes at `/system/info` and in the app's settings menu.
 
 ## Unreleased
 
-- **The language menu shows each language's flag beside its name**, at sign-in, in the
-  settings menu and where a report or a dashboard chooses its language. The flags are
-  drawn in the page (no emoji: they differ, or are two letters, from one system to another).
 - **The sample company changes sector: it now makes pasta and bakery goods.** Same two
   databases, same schemas, tables and columns, same sizes at every `SAMPLES_SCALE` and the
   same eleven flows, reports, dashboard and views; what they hold is new. The catalogue has
@@ -35,6 +32,9 @@ exposes at `/system/info` and in the app's settings menu.
   gives towards the other side; released, it slides across on a short spring (260 ms, a pixel
   past its place and back) while the track's colour fades. Under reduced motion it changes
   place without the spring.
+- **The language menu shows each language's flag beside its name**, at sign-in, in the
+  settings menu and where a report or a dashboard chooses its language. The flags are
+  drawn in the page (no emoji: they differ, or are two letters, from one system to another).
 - **The Viewer's table starts empty, and you build it by dragging fields onto three
   areas**, as a report's matrix: **Rows** down the left, **Columns** across the top,
   **Measures** in the middle. Opening a datasource no longer loads every column: the page
