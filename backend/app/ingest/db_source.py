@@ -457,14 +457,32 @@ def _quiet_unverified_https() -> None:
     urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
 
 
+def _clickhouse_as_text(query: str, names, ch_types) -> str:
+    """The query with its Enum and FixedString columns made text. ClickHouse's Arrow output gives
+    an Enum as its code (1 for 'rosso': a colour read as a number) and a FixedString as bytes
+    padded with zeros (Binary, which the CSV export cannot write). An Enum is its label; a
+    FixedString its text without the zero bytes that pad it, or the hexadecimal of its bytes
+    when they are not text (a binary hash): never a byte changed silently."""
+    repl = []
+    for name, t in zip(names, ch_types):
+        cls, q = type(t).__name__, "`" + str(name).replace("\\", "\\\\").replace("`", "\\`") + "`"
+        if cls in ("Enum8", "Enum16"):
+            repl.append(f"toString({q}) AS {q}")
+        elif cls == "FixedString":
+            text = f"replaceRegexpOne(toString({q}), '\\\\x00+$', '')"
+            repl.append(f"if(isValidUTF8({text}), {text}, hex({q})) AS {q}")
+    return f"SELECT * REPLACE ({', '.join(repl)}) FROM ({query}) AS _t" if repl else query
+
+
 def _batches_clickhouse(conn: DbConnectionSpec, query: str, read_timeout: int | None = None) -> Iterator[Any]:
     # None = the library's default (300 s): connection test and table listing
     with _clickhouse_client(conn, **({"send_receive_timeout": read_timeout} if read_timeout else {})) as client:
         # ClickHouse types from a LIMIT 0 schema: they find the temporal columns (which
-        # the Arrow export makes raw integers) to convert back.
-        targets = _clickhouse_temporal_targets(
-            client.query(f"SELECT * FROM ({query}) AS _s LIMIT 0").column_types
-        )
+        # the Arrow export makes raw integers) to convert back, and the Enum and FixedString
+        # columns, read as text.
+        empty = client.query(f"SELECT * FROM ({query}) AS _s LIMIT 0")
+        targets = _clickhouse_temporal_targets(empty.column_types)
+        query = _clickhouse_as_text(query, empty.column_names, empty.column_types)
         sent_schema = False
         with client.query_arrow_stream(query) as stream:
             for chunk in stream:  # depending on the version: Table or RecordBatch

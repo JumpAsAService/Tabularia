@@ -106,3 +106,31 @@ def test_a_server_silent_past_the_limit_is_a_computing_server(storage, monkeypat
         ingest_db_to_parquet(_real(), source, "b", "k.parquet", storage=storage)
     monkeypatch.setattr(config.get_settings().ingest, "db_read_timeout_seconds", 10)
     assert ingest_db_to_parquet(_real(), source, "b", "k.parquet", storage=storage)["rows_written"] == 1
+
+
+@live
+def test_an_enum_is_read_as_its_label_and_a_fixed_string_as_text(storage):
+    """ClickHouse's Arrow output gives an Enum8 as its code (1 for 'rosso') and a FixedString as
+    bytes padded with zeros: Tabularia read a colour as a number and a code as Binary, which its
+    CSV export could not write. Now they are the text a ClickHouse user sees."""
+    import io
+    import uuid
+
+    import clickhouse_connect
+    import polars as pl
+
+    spec = _real()
+    table = f"{spec.database}.zz_enum_{uuid.uuid4().hex[:8]}"
+    cli = clickhouse_connect.get_client(host=spec.host, port=spec.port, username=spec.username, password=spec.password)
+    cli.command(f"CREATE TABLE {table} (id UInt8, en Enum8('rosso' = 1, 'verde' = 2), en_n Nullable(Enum16('alto' = 1000, 'basso' = -3)), "
+                "fs FixedString(3), fs_n Nullable(FixedString(5))) ENGINE = Memory")
+    try:
+        cli.command(f"INSERT INTO {table} VALUES (1, 'rosso', 'basso', 'EUR', 'ab'), (2, 'verde', NULL, 'IT', NULL), (3, 'rosso', 'alto', unhex('FF00AB'), 'xyz')")
+        out = ingest_db_to_parquet(spec, DbSourceSpec(mode="sql", ref=f"SELECT * FROM {table} ORDER BY id"), "b", "k.parquet", storage=storage)
+    finally:
+        cli.command(f"DROP TABLE {table}")
+    assert {c["name"]: c["dtype"] for c in out["columns"]} == {"id": "UInt8", "en": "String", "en_n": "String", "fs": "String", "fs_n": "String"}
+    df = pl.read_parquet(io.BytesIO(storage.blobs[("b", "k.parquet")]))
+    # bytes that are not text (a binary hash) are their hexadecimal, never changed silently
+    assert df.rows() == [(1, "rosso", "basso", "EUR", "ab"), (2, "verde", None, "IT", None), (3, "rosso", "alto", "FF00AB", "xyz")]
+    assert df.write_csv()       # the export of such a datasource
