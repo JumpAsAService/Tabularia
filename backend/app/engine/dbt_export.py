@@ -1857,14 +1857,16 @@ def _leading_flags(regex: str) -> tuple[str, str]:
     return (m.group(1), regex[m.end():]) if m else ("", regex)
 
 
-def _dot_without_line_break(regex: str) -> str:
-    """Every `.` outside a bracket expression → `[^\\n]`: Postgres' `.` matches a newline,
-    Tabularia's (Polars) does not. A `[^x]` keeps matching it in both, which `(?p)` would break."""
+def _dot_without_line_break(regex: str, dots: bool = True) -> str:
+    """Every `.` outside a bracket expression → `[^\\n]` (`dots`): Postgres' `.` matches a newline,
+    Tabularia's (Polars) does not. A `[^x]` keeps matching it in both, which `(?p)` would break.
+    And `\\b`, `\\B` → `\\y`, `\\Y`: a word boundary for Tabularia, a backspace for Postgres."""
     out, i, n = [], 0, len(regex)
     while i < n:
         ch = regex[i]
         if ch == "\\":
-            out.append(regex[i:i + 2])
+            pair = regex[i:i + 2]
+            out.append({"\\b": "\\y", "\\B": "\\Y"}.get(pair, pair))
             i += 2
             continue
         if ch == "[":
@@ -1884,7 +1886,7 @@ def _dot_without_line_break(regex: str) -> str:
             out.append(regex[i:j + 1])
             i = j + 1
             continue
-        out.append("[^\\n]" if ch == "." else ch)
+        out.append("[^\\n]" if ch == "." and dots else ch)
         i += 1
     return "".join(out)
 
@@ -1898,8 +1900,7 @@ def _whole_regex(regex: str, dialect: Optional[str]) -> str:
         return f"(?-s)^(?:{regex})$"
     if dialect == "postgres":
         flag, rest = _leading_flags(regex)
-        if "s" not in flag:
-            rest = _dot_without_line_break(rest)
+        rest = _dot_without_line_break(rest, dots="s" not in flag)
         return (f"(?{flag})" if flag else "") + f"^(?:{rest})$"
     return f"^(?:{regex})$"
 
@@ -1935,6 +1936,26 @@ def _among_accepted(q: str, values: list, kind: Optional[str], dialect: Optional
     return f"{_as_text(q, kind, dialect)} IN ({', '.join(_lit(str(v)) for v in values)})"
 
 
+def _range_bound(value: Any, kind: Optional[str]) -> str:
+    """A range rule's bound as Tabularia's check reads it (`evaluator._literal`): on an instant,
+    the instant in UTC (an offset or a 'Z' turned, the calendar's value without seconds
+    completed), typed; on a date, the day. ClickHouse could not read `2024-01-05T10:30` (the
+    test ERRORed) and DuckDB and Postgres read an offset each their own way."""
+    from datetime import date, datetime, timezone
+
+    fam = _family(kind)
+    try:
+        if fam.startswith("timestamp") and not isinstance(value, (int, float)):
+            v = datetime.fromisoformat(str(value).replace("Z", "+00:00"))
+            v = v.astimezone(timezone.utc).replace(tzinfo=None) if v.tzinfo else v
+            return f"CAST('{v.strftime('%Y-%m-%d %H:%M:%S.%f')}' AS TIMESTAMP)"
+        if fam == "date" and not isinstance(value, (int, float)):
+            return f"CAST('{date.fromisoformat(str(value)[:10]).isoformat()}' AS DATE)"
+    except ValueError:
+        pass
+    return _lit(value)
+
+
 def singular_test_sql(test: dict, types_: Optional[dict] = None, dialect: Optional[str] = None) -> str:
     """A contract rule that is not a generic dbt test → a query that SELECTS the
     violations (dbt fails it when it returns rows). `types_`: the
@@ -1954,9 +1975,9 @@ def singular_test_sql(test: dict, types_: Optional[dict] = None, dialect: Option
     if kind == "range":
         conds = []
         if test.get("min") is not None:
-            conds.append(f"{q(col)} < {_lit(test['min'])}")
+            conds.append(f"{q(col)} < {_range_bound(test['min'], types_.get(col))}")
         if test.get("max") is not None:
-            conds.append(f"{q(col)} > {_lit(test['max'])}")
+            conds.append(f"{q(col)} > {_range_bound(test['max'], types_.get(col))}")
         if not col or not conds:
             raise DbtExportError("range: a column and at least one bound are required", "contract_rule_invalid", rule="range")
         return f"SELECT * FROM {t} WHERE {q(col)} IS NOT NULL AND ({' OR '.join(conds)})"
