@@ -40,14 +40,37 @@ named after their email (`leonardtriv` for `leonardtriv@example.com`): first in 
 
 A row's commands (rename, duplicate, move, delete, and the ones of its kind) are in its
 **⋯** menu, also on right click. Explore works from the keyboard: `/` puts the cursor in
-the filter, ↑ ↓ move between rows, Enter opens, Backspace or Alt+↑ goes up a folder, F2
-renames, Shift+F10 opens the row's menu; each folder is a step of the browser's history.
+the filter, ↑ ↓ move between rows (**Home** and **End**, or Ctrl/⌘+↑ and ↓, go to the first
+and the last), Enter opens, Backspace or Alt+↑ goes up a folder, **F2** or `r` renames,
+**Shift+F10** or `m` opens the row's menu, **Del** (⌘+⌫ on a Mac) deletes after the usual
+confirmation, `h` opens and closes a flow's run history, `n` opens **New**; each folder is
+a step of the browser's history.
 A datasource opens in a side panel with its columns, its first rows and its contract, and
 leads on to the Viewer or to a new flow that starts from it (Ctrl/⌘ or the middle click
 opens it in the Viewer, in a new tab).
 At the top level, above the folders, a band shows what you changed last (**Recent**: the
 objects you saved a version of or own, newest first) and the **failed runs** of the last
 24 hours, two of each with «Show all»; it folds away and stays as you left it.
+
+### The keyboard, on every page
+
+The keyboard button in the top bar, beside the settings gear, lists the keys that work on
+the page you are on; **?** opens the same list (in the flow editor the button is on the
+canvas). Outside a text field:
+
+| Key | What it does |
+|---|---|
+| `g` then a letter | Goes to a section of the top bar: `g e` Explore, `g f` Flows, `g d` Datasources, `g l` Lineage, `g v` Viewer, `g p` Reports, `g b` Dashboards, `g a` Assistant, `g c` Connections, `g s` Scripting, `g r` Runs; for administrators `g m` Admin, `g q` Queue, `g o` Monitoring, `g n` Performance, `g t` Cluster, `g u` Audit. The letters are the same in every language, and only the sections you see answer. |
+| `,` and `.` | The previous and the next sub-tab of the page: the sections of Administration, Table and Chart in the editor and the Viewer, the status filter of Runs, the kind filter of Explore, the tabs of a data API. |
+| `/` | The page's own search box (Explore's filter, a list's search), or the search of the top bar where the page has none. |
+| `?` | The list of keys. **Esc** closes it. |
+
+A row of tabs or of choices is one stop of the **Tab** key: ← and → move along it (Enter
+picks a tab; in a filter the arrow chooses at once). No key acts while you type in a field
+or in a code editor, nor with a dialog or a menu open, and none uses Ctrl, ⌘ or Alt with a
+letter, which belong to the browser and the system. Every action has a way that needs no
+function key and no Home, End, Del or Menu key: on a Mac the list shows that way, with ⌘,
+⌥, ⇧, ⌫ and ↩.
 
 Permissions are granted on a folder, to a user or to a group, and hold for every folder
 below it. There are five:

@@ -41,16 +41,18 @@ The editor has five areas:
   the step goes **between the two** and the rest of the chain moves on; hold **Shift**
   while choosing to start a new branch instead (a node that already forks always gets
   one more branch). A right-click on the empty canvas puts the step where you clicked.
-  From the keyboard, the Menu key or Shift+F10 opens the ring beside the selected node.
+  From the keyboard, `m` (or Shift+F10, or the Menu key) opens the ring beside the selected node.
   **Customize**, in the ring's centre, picks up to eight transformations and their
   order, saved for your account. A flow too long to read whole opens on its outputs; the
   fit button shows all of it.
 - **The keyboard**: the keyboard button in the canvas' top right corner (or **?**) lists
-  every key. Tab moves between the nodes and Enter selects the one in focus; **Alt+←**
+  every key, the editor's and the ones of [every page](../concepts.md#the-keyboard-on-every-page)
+  (`g` then a letter to leave for a section, `,` and `.` for Table and Chart). Tab moves between the nodes and Enter selects the one in focus; **Alt+←**
   and **Alt+→** go to the step before and after, **Alt+↑** and **Alt+↓** to the branch
   above and below; **Shift+arrows** move the selected node; **Ctrl+Enter** (⌘ on a Mac)
   runs the flow, **Esc** stops a preview being computed, **Ctrl+C/X/V/D** copy, cut,
-  paste and duplicate nodes, **Del** removes them.
+  paste and duplicate nodes, **Del** or **Backspace** removes them. On a Mac the list
+  writes them as ⌘, ⌥, ⇧, ⌫ and ↩.
 - **The panel**, on the right, with the selected node's settings. Column pickers list the
   columns that reach the node, so a filter or a group-by is chosen, not typed. When an
   AI model is configured, a second tab, **Assistant**, builds the flow with you

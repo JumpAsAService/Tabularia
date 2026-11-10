@@ -23,6 +23,27 @@ exposes at `/system/info` and in the app's settings menu.
   Ctrl/⌘+Enter is Run; a bare arrow no longer nudges the selected node (Shift+arrow moves
   it). A keyboard button on the canvas, and «?», list every key of the editor. The zoom,
   fit and lock buttons have a name and a tooltip.
+- **The keyboard on every page.** `g` then a letter goes to a section of the top bar
+  (`g e` Explore, `g f` Flows, `g d` Datasources, `g r` Runs, …: the letter comes from the
+  English name and is the same in every language, and only the sections you see answer);
+  `,` and `.` go to the previous and the next sub-tab of the page (the sections of
+  Administration, Table and Chart in the editor and the Viewer, the status filter of Runs,
+  the kind filter of Explore, a data API's tabs); `/` leads to the page's search box, or to
+  the search of the top bar; `?` lists the keys. A keyboard button in the top bar opens the
+  same list: the keys of everywhere, of the page on screen and of its table. Nothing acts
+  while you type, with a modifier, or with a dialog or a menu open, and a key asks the
+  gateway exactly what the click does.
+- **Explore from the keyboard, completed**: Home and End (or Ctrl/⌘+↑ and ↓) for the first
+  and the last row, Del (⌘+⌫ on a Mac) for the delete dialog, `h` for a flow's run
+  history, `n` for **New**, and `r` and `m` beside F2 and Shift+F10.
+- **Rows of tabs and filters are one Tab stop**: the arrows move along them (the sections
+  of Administration, Table/Chart, Node/Assistant, the filters of Runs, Explore, Audit and
+  Lineage, the chart types, the periods), and a screen reader hears tabs and radio groups
+  instead of pressed buttons.
+- **Every shortcut works on a Mac and on a laptop without function keys**: `m` opens the
+  editor's ring of steps beside Shift+F10, Ctrl/⌘+↑ and ↓ reach a column's first and last
+  row in the data grid, and on a Mac the lists of keys show ⌘ ⌥ ⇧ ⌫ ↩ and only the keys a
+  Mac has.
 - **Edges move only where the engine works**: along what leads to the node being
   previewed, and during a run started in the editor. At rest they are still.
 - **Runs**: a failed run's detail links to its flow, flow group, datasource or script;

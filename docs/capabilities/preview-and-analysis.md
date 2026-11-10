@@ -105,7 +105,9 @@ nulls there ([engine differences](../engines/engine-differences.md)).
 
 The table is one stop of the **Tab** key. The arrow keys move from cell to cell and up into
 the column names; **Home** and **End** go to the row's first and last cell, **Ctrl+Home**
-and **Ctrl+End** to the table's first cell and its last, **Page Up** and **Page Down**
+and **Ctrl+End** to the table's first cell and its last, **Ctrl+↑** and **Ctrl+↓** (⌘ on a
+Mac, which has no Home nor End: there Fn with an arrow writes them) to the column's first
+and last row, **Page Up** and **Page Down**
 by a screenful, past the rows drawn too; the active cell keeps its ring whichever key moved
 it. **Ctrl+C** (**Cmd+C** on a Mac) copies the cell's exact value (the tooltip's, not the
 rounded one), or a column's name; cells selected with the mouse copy as tab-separated values a
