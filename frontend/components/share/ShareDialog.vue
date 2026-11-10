@@ -171,7 +171,7 @@ const downloadLabel = (f: string) => ({ pdf: 'PDF', xlsx: 'Excel', png: t('share
           <input v-model="label" type="text" maxlength="200" :placeholder="$t('share.labelPlaceholder')" />
         </label>
 
-        <div class="field" role="radiogroup" :aria-label="$t('share.mode')">
+        <div v-roving class="field" role="radiogroup" :aria-label="$t('share.mode')">
           <span class="lbl">{{ $t('share.mode') }}</span>
           <div class="seg">
             <button type="button" role="radio" :aria-checked="mode === 'password'" :class="{ on: mode === 'password' }" @click="mode = 'password'">

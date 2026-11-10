@@ -474,7 +474,7 @@ watch(() => route.query.id, (id) => {
           <p v-if="detail?.suspended" class="note warn small" role="status">
             <CircleAlert :size="14" /> {{ $t(`dataApi.suspended_${detail.suspended}`) }}
           </p>
-          <div v-if="detail" class="tabs" role="tablist" :aria-label="$t('dataApi.tabs')">
+          <div v-if="detail" v-roving.main class="tabs" role="tablist" :aria-label="$t('dataApi.tabs')">
             <button type="button" role="tab" :aria-selected="shownTab === 'definition'" :class="{ on: shownTab === 'definition' }"
                     data-tab="definition" @click="setTab('definition')">
               <SlidersHorizontal :size="13" /> {{ $t('dataApi.tabDefinition') }}

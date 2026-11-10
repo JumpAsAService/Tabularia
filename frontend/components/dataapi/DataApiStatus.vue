@@ -158,8 +158,8 @@ const barWidth = computed(() => 100 / Math.max(bars.value.length, 1))
       <div class="traffic" :aria-label="$t('dataApi.stTraffic')">
         <div class="thead">
           <h3><Activity :size="14" /> {{ $t('dataApi.stTraffic') }}</h3>
-          <div class="spans" role="group" :aria-label="$t('dataApi.stTraffic')">
-            <button v-for="h in spans" :key="h" type="button" class="mini" :class="{ on: hours === h }" :aria-pressed="hours === h"
+          <div v-roving class="spans" role="radiogroup" :aria-label="$t('dataApi.stTraffic')">
+            <button v-for="h in spans" :key="h" type="button" class="mini" role="radio" :class="{ on: hours === h }" :aria-checked="hours === h"
                     @click="hours = h">{{ $t(`dataApi.stSpan_${h}`) }}</button>
           </div>
         </div>

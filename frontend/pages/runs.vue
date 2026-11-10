@@ -82,12 +82,13 @@ const STATUSES = computed<{ value: 'FAILURE' | 'SUCCESS' | ''; label: string }[]
     <div class="page-head">
       <h1><History :size="18" /> {{ $t('runs.title') }} <span class="muted count">{{ total }}</span></h1>
       <div class="head-actions">
-        <div class="segmented">
+        <div v-roving.main class="segmented" role="radiogroup" :aria-label="$t('appKeys.statusFilter')">
           <button
             v-for="s in STATUSES"
             :key="s.value || 'all'"
+            role="radio"
             :class="{ on: status === s.value }"
-            :aria-pressed="status === s.value"
+            :aria-checked="status === s.value"
             @click="status = s.value"
           >{{ s.label }}</button>
         </div>
@@ -187,6 +188,8 @@ const STATUSES = computed<{ value: 'FAILURE' | 'SUCCESS' | ''; label: string }[]
 .segmented { display: inline-flex; border: 1px solid var(--border); border-radius: 7px; overflow: hidden; }
 .segmented button { padding: 5px 11px; background: var(--panel-2); color: var(--muted); border: none; border-right: 1px solid var(--border); font-size: 13px; }
 .segmented button:last-child { border-right: none; }
+/* the group clips its corners: the focus ring is drawn inside the segment */
+.segmented button:focus-visible { outline-offset: -2px; }
 /* The filter in force: the accent's tint under `accent-hi`, as every other pressed segment of
    the app (Audit, the share dialog) — 5:1 at least on the five themes. It was --on-accent on
    the plain accent: white on #4f8cff, 3.22:1 at 13px on the dark theme. */

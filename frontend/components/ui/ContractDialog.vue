@@ -420,9 +420,9 @@ function close() {
             </template>
           </span>
 
-          <span class="cd-sev" role="group" :aria-label="$t('contracts.severityOf')">
-            <button type="button" :class="{ on: r.severity === 'warning' }" :aria-pressed="r.severity === 'warning'" class="warning" @click="r.severity = 'warning'">{{ $t('contracts.severity.warning') }}</button>
-            <button type="button" :class="{ on: r.severity === 'error' }" :aria-pressed="r.severity === 'error'" class="error" @click="r.severity = 'error'">{{ $t('contracts.severity.error') }}</button>
+          <span v-roving class="cd-sev" role="radiogroup" :aria-label="$t('contracts.severityOf')">
+            <button type="button" role="radio" :class="{ on: r.severity === 'warning' }" :aria-checked="r.severity === 'warning'" class="warning" @click="r.severity = 'warning'">{{ $t('contracts.severity.warning') }}</button>
+            <button type="button" role="radio" :class="{ on: r.severity === 'error' }" :aria-checked="r.severity === 'error'" class="error" @click="r.severity = 'error'">{{ $t('contracts.severity.error') }}</button>
           </span>
           <button v-if="!readOnly" class="cd-via" :title="$t('contracts.removeRule')" :aria-label="$t('contracts.removeRule')" @click="removeIt(r.uid)"><Trash2 :size="13" /></button>
 

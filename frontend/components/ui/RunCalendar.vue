@@ -230,10 +230,12 @@ const dailyTotal = computed(() =>
           <span class="day-title">{{ selectedDay ? fmtDayIT(selectedDay) : '' }}</span>
         </template>
       </div>
-      <div v-if="view === 'calendar'" class="segmented">
+      <div v-if="view === 'calendar'" v-roving class="segmented" role="radiogroup" :aria-label="$t('appKeys.period')">
         <button
           v-for="r in RANGES"
           :key="r.days"
+          role="radio"
+          :aria-checked="rangeDays === r.days"
           :class="{ on: rangeDays === r.days }"
           @click="setRange(r.days)"
         >{{ r.label }}</button>
@@ -272,6 +274,7 @@ const dailyTotal = computed(() =>
 .segmented { display: inline-flex; border: 1px solid var(--border); border-radius: 7px; overflow: hidden; }
 .segmented button { padding: 4px 10px; background: var(--panel-2); color: var(--muted); border: none; border-right: 1px solid var(--border); font-size: 12px; cursor: pointer; }
 .segmented button:last-child { border-right: none; }
+.segmented button:focus-visible { outline-offset: -2px; }
 /* as the Runs page's filter: the accent's tint under accent-hi (white on the plain accent was 3.22:1) */
 .segmented button.on { background-image: linear-gradient(var(--tint-accent), var(--tint-accent)); color: var(--accent-hi); box-shadow: inset 0 0 0 1px var(--accent); }
 

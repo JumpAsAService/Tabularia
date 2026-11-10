@@ -408,10 +408,10 @@ function nodeIcon(t: string) {
 
           <div v-if="centerNodeId" class="ln-block">
             <label class="ln-label">{{ $t('lineage.direction') }}</label>
-            <div class="ln-seg">
-              <button :class="{ on: direction === 'upstream' }" @click="direction = 'upstream'">{{ $t('lineage.upstream') }}</button>
-              <button :class="{ on: direction === 'both' }" @click="direction = 'both'">{{ $t('lineage.both') }}</button>
-              <button :class="{ on: direction === 'downstream' }" @click="direction = 'downstream'">{{ $t('lineage.downstream') }}</button>
+            <div v-roving.main class="ln-seg" role="radiogroup" :aria-label="$t('lineage.direction')">
+              <button role="radio" :aria-checked="direction === 'upstream'" :class="{ on: direction === 'upstream' }" @click="direction = 'upstream'">{{ $t('lineage.upstream') }}</button>
+              <button role="radio" :aria-checked="direction === 'both'" :class="{ on: direction === 'both' }" @click="direction = 'both'">{{ $t('lineage.both') }}</button>
+              <button role="radio" :aria-checked="direction === 'downstream'" :class="{ on: direction === 'downstream' }" @click="direction = 'downstream'">{{ $t('lineage.downstream') }}</button>
             </div>
             <label class="ln-label" style="margin-top: 10px">{{ $t('lineage.depth', { n: depth }) }}</label>
             <input v-model.number="depth" type="range" min="1" max="8" class="ln-range" />

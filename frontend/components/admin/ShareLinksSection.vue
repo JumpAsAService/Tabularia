@@ -110,9 +110,9 @@ const objectHref = (l: ShareLink) => (l.kind === 'report' ? `/report?id=${l.obje
     <div class="tablecard">
       <div class="list-head">
         <h3>{{ $t('share.adminLinks', { n: shown.length }) }}</h3>
-        <div class="seg" role="group" :aria-label="$t('share.adminFilter')">
-          <button type="button" class="mini" :class="{ on: filter === 'live' }" :aria-pressed="filter === 'live'" @click="filter = 'live'">{{ $t('share.adminLive') }}</button>
-          <button type="button" class="mini" :class="{ on: filter === 'all' }" :aria-pressed="filter === 'all'" @click="filter = 'all'">{{ $t('share.adminAll') }}</button>
+        <div v-roving class="seg" role="radiogroup" :aria-label="$t('share.adminFilter')">
+          <button type="button" class="mini" role="radio" :class="{ on: filter === 'live' }" :aria-checked="filter === 'live'" @click="filter = 'live'">{{ $t('share.adminLive') }}</button>
+          <button type="button" class="mini" role="radio" :class="{ on: filter === 'all' }" :aria-checked="filter === 'all'" @click="filter = 'all'">{{ $t('share.adminAll') }}</button>
         </div>
       </div>
       <p v-if="!shown.length" class="muted empty">{{ $t('share.adminNone') }}</p>

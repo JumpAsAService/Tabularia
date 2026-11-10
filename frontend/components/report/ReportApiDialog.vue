@@ -122,14 +122,15 @@ watch(() => props.copied, (c) => { if (c && props.open) shownCopied() })
     <div class="api">
       <p class="lead muted">{{ $t('report.apiLead') }}</p>
 
-      <div class="fmt" role="group" :aria-label="$t('report.apiFormat')">
+      <div v-roving class="fmt" role="radiogroup" :aria-label="$t('report.apiFormat')">
         <span class="lbl">{{ $t('report.apiFormat') }}</span>
         <button
           v-for="f in FORMATS"
           :key="f.id"
           type="button"
           class="mini seg"
-          :aria-pressed="format === f.id"
+          role="radio"
+          :aria-checked="format === f.id"
           :class="{ on: format === f.id }"
           @click="format = f.id"
         >{{ $t(f.key) }}</button>
@@ -148,13 +149,14 @@ watch(() => props.copied, (c) => { if (c && props.open) shownCopied() })
 
       <div class="block">
         <span class="head">
-          <span class="fmt" role="group" :aria-label="$t('report.apiExample')">
+          <span v-roving class="fmt" role="radiogroup" :aria-label="$t('report.apiExample')">
             <button
               v-for="l in LANGS"
               :key="l.id"
               type="button"
               class="mini seg"
-              :aria-pressed="lang === l.id"
+              role="radio"
+              :aria-checked="lang === l.id"
               :class="{ on: lang === l.id }"
               @click="lang = l.id"
             >{{ $t(l.key) }}</button>

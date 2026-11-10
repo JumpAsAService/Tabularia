@@ -703,7 +703,7 @@ const option = computed(() => {
   <div class="chartpanel">
     <!-- controls in one row above the chart -->
     <div class="controls">
-      <div class="typebtns" role="group" :aria-label="$t('chartPanel.chartType')">
+      <div v-roving class="typebtns" role="radiogroup" :aria-label="$t('chartPanel.chartType')">
         <template v-for="(group, gi) in CHART_GROUPS" :key="gi">
           <span v-if="gi" class="typesep" aria-hidden="true" />
           <button
@@ -713,7 +713,8 @@ const option = computed(() => {
             :class="{ active: chartType === ct.id }"
             :title="chartTypeLabels[ct.id]"
             :aria-label="chartTypeLabels[ct.id]"
-            :aria-pressed="chartType === ct.id"
+            role="radio"
+            :aria-checked="chartType === ct.id"
             @click="chartType = ct.id"
           ><component :is="ct.icon" :size="14" aria-hidden="true" /></button>
         </template>

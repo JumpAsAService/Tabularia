@@ -700,9 +700,9 @@ onMounted(async () => {
 
       <!-- result area: table or chart -->
       <section class="result">
-        <div class="rtabs">
-          <button :class="{ active: view === 'table' }" :aria-pressed="view === 'table'" @click="view = 'table'"><Table2 :size="14" aria-hidden="true" /> {{ $t('viewer.tableTab') }}</button>
-          <button :class="{ active: view === 'chart' }" :aria-pressed="view === 'chart'" @click="view = 'chart'"><PieChart :size="14" aria-hidden="true" /> {{ $t('viewer.chartTab') }}</button>
+        <div v-roving.main class="rtabs" role="tablist" :aria-label="$t('appKeys.viewTabs')">
+          <button role="tab" :class="{ active: view === 'table' }" :aria-selected="view === 'table'" @click="view = 'table'"><Table2 :size="14" aria-hidden="true" /> {{ $t('viewer.tableTab') }}</button>
+          <button role="tab" :class="{ active: view === 'chart' }" :aria-selected="view === 'chart'" @click="view = 'chart'"><PieChart :size="14" aria-hidden="true" /> {{ $t('viewer.chartTab') }}</button>
           <button class="primary apply" :disabled="!selectedDs || loading" @click="apply"><Play :size="14" /> {{ $t('viewer.applyButton') }}</button>
           <span v-if="loading" class="muted">{{ $t('dataGrid.computing') }}</span>
           <!-- an error with a table on screen (an export): here; without one, in the table's place -->

@@ -467,11 +467,13 @@ async function toggleEngine(m: EnginePolicy) {
 
     <div class="layout">
       <!-- section navigation: for administration only -->
-      <nav class="sidenav">
+      <nav v-roving.main.vertical class="sidenav" role="tablist" aria-orientation="vertical" :aria-label="$t('appKeys.sections')">
         <button
           v-for="s in sections"
           :key="s.id"
           class="navitem"
+          role="tab"
+          :aria-selected="section === s.id"
           :class="{ on: section === s.id, 'is-off': 'off' in s && s.off }"
           :aria-disabled="'off' in s && s.off ? 'true' : undefined"
           :title="'off' in s && s.off ? $t(s.id === 'backups' ? 'backups.kubernetesOnly' : 'scripting.kubernetesOnly') : undefined"
