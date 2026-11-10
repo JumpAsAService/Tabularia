@@ -85,7 +85,10 @@ def duck_type(dtype: Optional[str]) -> Optional[str]:
     d = str(dtype)
     if d in _POLARS_INT:
         return _POLARS_INT[d]
-    if d in ("Float32", "Float64"):
+    if d == "Float32":
+        # a Postgres real, a ClickHouse Float32: as DOUBLE, 0.1 as text was '0.10000000149011612'
+        return "FLOAT"
+    if d == "Float64":
         return "DOUBLE"
     if d in ("String", "Utf8", "Categorical", "Enum") or d.startswith(("Categorical", "Enum")):
         return "VARCHAR"
@@ -94,7 +97,10 @@ def duck_type(dtype: Optional[str]) -> Optional[str]:
     if d == "Date":
         return "DATE"
     if d.startswith("Datetime"):
-        return "TIMESTAMP"
+        # the unit it was read with: an instant to the millisecond (an Excel date-time, a ClickHouse
+        # DateTime) is written as text with three digits of fraction by the engines, not six
+        unit = re.search(r"time_unit='(ms|ns)'", d)
+        return f"TIMESTAMP_{unit.group(1).upper()}" if unit else "TIMESTAMP"
     if d == "Time":
         return "TIME"
     m = re.match(r"Decimal\(precision=(\d+|None), scale=(\d+)\)", d)
@@ -627,6 +633,17 @@ def _float_as_text(q: str, dialect: Optional[str]) -> str:
             f"WHEN {q} = trunc({q}) AND abs({q}) < 1e16 THEN {integer} ELSE CAST({q} AS VARCHAR) END")
 
 
+def _instant_with_fraction(q: str, kind: Optional[str]) -> str:
+    """An instant as text with every digit of its unit's fraction, as Polars and the ClickHouse
+    engines write it (`2024-01-05 10:30:00.000000`, `….000` to the millisecond): DuckDB and
+    Postgres drop a zero fraction. In DuckDB SQL that Postgres reads (`to_char(…, '….US')`)."""
+    full = f"strftime({q}, '%Y-%m-%d %H:%M:%S.%f')"
+    unit = str(kind or "").upper()
+    if unit == "TIMESTAMP_MS":
+        return f"left({full}, 23)"
+    return f"{full} || '000'" if unit == "TIMESTAMP_NS" else full
+
+
 def _portable_cast(q: str, src: Optional[str], duck_t: str, dialect: Optional[str] = None, model: Optional["_Model"] = None) -> str:
     """The engine's own cast (failed → NULL; text with its spaces trimmed; text → integer
     only for an integer literal; number → integer by truncation) without TRY_CAST, which
@@ -637,6 +654,10 @@ def _portable_cast(q: str, src: Optional[str], duck_t: str, dialect: Optional[st
     fam = _family(src)
     if duck_t == "VARCHAR" and str(src or "").upper() in ("DOUBLE", "FLOAT", "REAL"):
         return _float_as_text(q, dialect)
+    if duck_t == "VARCHAR" and fam.startswith("timestamp") and dialect == "postgres" and model is not None \
+            and model.text in ("polars", "clickhouse"):
+        # the flow's engine writes the whole fraction (a ClickHouse target's DateTime64 prints it too)
+        return _instant_with_fraction(q, src)
     if fam == "text":
         t = f"trim({q})"
         if duck_t == "BIGINT":
@@ -1766,7 +1787,7 @@ TEST_IDENT = "__t"   # the model under test, replaced with {{ ref() }}
 
 def _as_text(q: str, kind: Optional[str], dialect: Optional[str]) -> str:
     """A column as the text Tabularia's contract check reads it (Polars' cast to String):
-    a date `2024-01-05`, an instant `2024-01-05 10:30:00.000000` (six digits, always), a
+    a date `2024-01-05`, an instant `2024-01-05 10:30:00.000000` (the digits of its unit, always), a
     boolean `true`, a decimal with all its scale digits (`1.50`), a float with `.0` when whole.
     Written in DuckDB SQL for `dialect`, the warehouse the test is translated for."""
     t = (kind or "").upper()
@@ -1777,7 +1798,7 @@ def _as_text(q: str, kind: Optional[str], dialect: Optional[str]) -> str:
         if dialect == "clickhouse":
             return f"CAST({q} AS VARCHAR)"   # a DateTime64(6) prints its six digits
         # Postgres: to_char(…, 'YYYY-MM-DD HH24:MI:SS.US'); a bare CAST drops the zeros of the fraction
-        return f"strftime({q}, '%Y-%m-%d %H:%M:%S.%f')"
+        return _instant_with_fraction(q, t)
     if t == "DATE" and dialect == "postgres":
         return f"strftime({q}, '%Y-%m-%d')"   # to_char: the same whatever the server's DateStyle
     if t in ("DOUBLE", "FLOAT", "REAL"):
@@ -1979,6 +2000,19 @@ def _without_unsigned(tree):
     return tree
 
 
+def _postgres_times(tree):
+    """DuckDB's instants to the second, millisecond or nanosecond are a Postgres timestamp (it holds
+    microseconds): sqlglot wrote TIMESTAMP_MS, a type Postgres does not have."""
+    from sqlglot import exp
+
+    T = exp.DataType.Type
+    for t in list(tree.find_all(exp.DataType)):
+        if t.this in (T.TIMESTAMP_S, T.TIMESTAMP_MS, T.TIMESTAMP_NS):
+            t.set("this", T.TIMESTAMP)
+            t.set("expressions", [])
+    return tree
+
+
 def _clickhouse_times(tree):
     """DuckDB's dates and times as the ClickHouse engine types them: DATE is a Date32 and a
     TIMESTAMP a DateTime64(6). sqlglot writes Date (1970-2149: a birth date of 1955 wrapped to
@@ -2009,6 +2043,7 @@ def _fix_for_dialect(tree, dialect: str):
             if r.args.get("decimals") is not None and not isinstance(r.this, exp.Cast):
                 r.set("this", exp.Cast(this=r.this.copy(), to=exp.DataType.build("DECIMAL")))
         _without_unsigned(tree)
+        _postgres_times(tree)
         # DuckDB's year(d), month(d)…, which Postgres does not have (sqlglot keeps them): EXTRACT,
         # an integer as in DuckDB (a second without its fraction)
         parts = {exp.Year: "YEAR", exp.Month: "MONTH", exp.Day: "DAY", exp.DayOfMonth: "DAY", exp.DayOfWeek: "DOW",
