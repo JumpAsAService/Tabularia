@@ -3737,3 +3737,21 @@ def test_the_probe_keeps_each_step_as_an_empty_table(monkeypatch):
     _, _, types = d.compile_model_sql({"key": "k"}, ops, lambda _: ("t_src", cols, {c: "BIGINT" for c in cols}, "src"))
     assert len(seen_ones) == 1 + len(ops) and {v[1] for v in seen_ones} == {"BASE TABLE"} and {v[2] for v in seen_ones} == {0}, seen_ones
     assert all(types[f"k{k}"] == "BIGINT" for k in range(10))   # what the probe reads, from the tables
+
+
+# ── the second hunt: native targets, contracts, MySQL (e2e/dbt_export/native_targets.py) ──
+def test_a_federated_mysql_source_is_read_as_tabularia_reads_it():
+    """DuckDB pushed a filter into MySQL, where a case-insensitive collation kept 'Alfa' and
+    'ALFA' for `nome = 'alfa'` (3 rows instead of 1, proved with real dbt), and read a
+    TINYINT(1) holding 2 as a boolean (1). The profile turns both off, and the folder
+    package's guide says so; a project without MySQL keeps its profile as it was."""
+    my = {"alias": "db_2", "db_type": "mariadb", "pw_env": "TABULARIA_DB_2_PASSWORD",
+          "conn": {"host": "my.x", "port": 3306, "database": "shop", "username": "web"}}
+    pg = {"alias": "db_1", "db_type": "postgresql", "pw_env": "TABULARIA_DB_1_PASSWORD",
+          "conn": {"host": "db", "port": 5432, "database": "shop", "username": "shop"}}
+    prof = _project(attachments=[pg, my])["profiles.yml"]
+    assert ("      settings:\n        TimeZone: UTC\n        mysql_experimental_filter_pushdown: false\n"
+            "        mysql_tinyint1_as_boolean: false\n") in prof
+    assert "mysql_" not in _project(attachments=[pg])["profiles.yml"]
+    guide = _project(attachments=[my], layout={"package": "folder", "folder": "f"})["INTEGRATION.md"]
+    assert "mysql_experimental_filter_pushdown: false" in guide and "mysql_tinyint1_as_boolean: false" in guide
