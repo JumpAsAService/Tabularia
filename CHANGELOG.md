@@ -5,6 +5,20 @@ exposes at `/system/info` and in the app's settings menu.
 
 ## Unreleased
 
+- **The sample company changes sector: it now makes pasta and bakery goods.** Same two
+  databases, same schemas, tables and columns, same sizes at every `SAMPLES_SCALE` and the
+  same eleven flows, reports, dashboard and views; what they hold is new. The catalogue has
+  24 products in 94 SKUs and five categories (`Pasta di semola`, `Pasta fresca`, `Biscotti`,
+  `Sostitutivi del pane`, `Dolci da ricorrenza`), sold in sacks, cartons, trays and packs at
+  a few euros a kilo, so a line moves tens of kilos or pieces; the channels are
+  `Supermercati`, `Ristorazione`, `Ingrosso`, `Negozi` and `Online`, the depots Verona,
+  Torino, Bari, Roma and Ancona. The seasons follow the new sector (panettone and pandoro in
+  December, fresh pasta at Christmas and Easter, grissini, cracker and taralli in summer),
+  and the two fulfilment anomalies are still there to find: Bari's cancelled orders grow
+  year after year, Torino has a bad spring in 2025. `catalogo.prodotti.stagionatura_mesi`
+  keeps its name and now holds the shelf life in months. An installation that already has
+  the sample data keeps it until its volumes are removed; the guides' examples and numbers
+  are those of the new data, and their screenshots will follow.
 - **Every on/off is a switch, and the switch moves.** What turns a setting or a function on
   and off was a checkbox in most places (a contract's «active», automatic backups, the
   privacy notice, share links, a scripting environment or a registry «enabled», a variable's

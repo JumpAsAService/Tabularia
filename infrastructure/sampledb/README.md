@@ -1,4 +1,4 @@
-# Sample databases — a cured-meats company
+# Sample databases — a pasta and bakery company
 
 Two realistic **external** databases to try Tabularia's connectors (Postgres and
 ClickHouse) and to build a real case: the **margin of every order line**,
@@ -13,7 +13,7 @@ are in Italian, as a real Italian ERP and CRM would have them.
 
 | table | description |
 |---|---|
-| `catalogo.prodotti` | cured-meat SKUs (Parma, San Daniele, Mortadella, Salame Milano, Culatello…) by format |
+| `catalogo.prodotti` | pasta and bakery SKUs (spaghetti, tortellini, frollini, grissini, panettone…) by format; `stagionatura_mesi` holds the shelf life in months |
 | `catalogo.listino_prezzi` | price-list history (two periods, a 2025 increase) |
 | `catalogo.costi_produzione` | raw-material, processing and packaging costs per product |
 | `vendite.ordini` | order headers (customer, agent, channel, status) |
@@ -54,9 +54,9 @@ tell a story:
 | monthly **volume** season | `MONTH_MULT` | Christmas ×1.8, Easter up, August down |
 | weekly B2B season | `build_day_weights` | full weekdays, quiet weekends |
 | prices and costs +6% from 2025 | `gen_catalogo` | two price-list and cost regimes |
-| **product mix × season** | `CATEGORY_SEASON`, `PRODUCT_SEASON` | cotechino and zampone peak in December, mortadella and würstel in summer, bresaola in the warm months, the finest hams at Christmas and Easter |
-| **channel mix × season** | `CHANNEL_SEASON` | HoReCa peaks in summer (tourism), large retail and shops at Christmas |
-| **fulfilment anomalies by depot** | `CANCEL_CHRONIC`, `CANCEL_INCIDENT` | **Napoli**: a chronic cancelled share, growing (~4% → ~24%); **Modena**: a one-off incident (autumn 2025, ~30%), then back to normal |
+| **product mix × season** | `CATEGORY_SEASON`, `PRODUCT_SEASON` | panettone and pandoro peak in December, grissini and cracker in summer, taralli in the warm months, fresh pasta at Christmas and Easter, biscuits low in summer |
+| **channel mix × season** | `CHANNEL_SEASON` | Ristorazione peaks in summer (tourism), Supermercati, Negozi and Online at Christmas |
+| **fulfilment anomalies by depot** | `CANCEL_CHRONIC`, `CANCEL_INCIDENT` | **Bari**: a chronic cancelled share, growing (~4% → ~24%); **Torino**: a one-off incident (spring 2025, ~32%), then back to normal |
 
 Good analyses to try: *category share by month* (product mix), *channel share by
 month* (channel mix), *% fulfilled / cancelled by depot over time* (anomalies), and

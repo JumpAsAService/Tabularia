@@ -1,4 +1,4 @@
--- The cured-meats company's CRM (database "analytics" on ClickHouse). A test
+-- The pasta and bakery company's CRM (database "analytics" on ClickHouse). A test
 -- source for Tabularia's ClickHouse connector. It holds the hierarchical sales
 -- network (agent → inspector → area manager), the customer registry and a
 -- fact table of CRM activities (the bulk of the volume).
@@ -29,7 +29,7 @@ CREATE TABLE analytics.clienti (
     id                UInt32,
     ragione_sociale   String,
     partita_iva       String,
-    canale            LowCardinality(String),    -- GDO, HoReCa, Grossista, Dettaglio, Gastronomia
+    canale            LowCardinality(String),    -- Supermercati, Ristorazione, Ingrosso, Negozi, Online
     indirizzo         String,
     cap               String,
     citta             String,

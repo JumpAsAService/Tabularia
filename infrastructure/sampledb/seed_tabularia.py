@@ -200,7 +200,7 @@ PRIVATE = [  # (name, connection, table, description or None = left undescribed 
     ("order_rows", "pg", "vendite.righe_ordine",
      "Order lines: one per product ordered. The fact table."),
     ("products", "pg", "catalogo.prodotti",
-     "Product catalogue: cured-meat SKUs, with format and average weight."),
+     "Product catalogue: pasta and bakery SKUs, with format and weight."),
     ("price_list", "pg", "catalogo.listino_prezzi",
      "Price list history: for each product, the price and the window it applies to."),
     ("production_costs", "pg", "catalogo.costi_produzione", None),
@@ -221,7 +221,7 @@ COLUMNS = {
     "orders": {"id": "Order identifier. Order rows link back to this.", "numero": "Human-readable order number.",
                "data_ordine": "Day the order was entered.", "cliente_id": "Customer who ordered. Refers to customers.id.",
                "agente_id": "Agent who followed the order. Refers to sales_network.id.",
-               "canale": "Sales channel: GDO, HoReCa, Grossista, Dettaglio, Gastronomia.",
+               "canale": "Sales channel: Supermercati, Ristorazione, Ingrosso, Negozi, Online.",
                "stato": "Order state: evaso (fulfilled), in_lavorazione (in progress), annullato (cancelled).",
                "deposito": "Depot the goods ship from."},
     "order_rows": {"id": "Line identifier.", "ordine_id": "Order this line belongs to. Refers to orders.id.",
@@ -230,8 +230,8 @@ COLUMNS = {
                    "prezzo_unitario": "Price charged, per kilo or per piece. Stored as text.",
                    "sconto_pct": "Discount on the line, in percent."},
     "products": {"id": "Product identifier.", "codice": "SKU code.", "nome": "Commercial name, including the format.",
-                 "categoria": "Product family.", "tipo": "Curing type: crudo, cotto, fresco, stagionato.",
-                 "formato": "Selling format.", "stagionatura_mesi": "Months of curing; zero for fresh or cooked.",
+                 "categoria": "Product family.", "tipo": "Kind of product: secca, fresca, da forno, lievitato.",
+                 "formato": "Selling format.", "stagionatura_mesi": "Shelf life: the months the product keeps.",
                  "peso_medio_kg": "Average weight of one piece, in kilos.",
                  "unita_misura": "Unit the quantity is expressed in: kg or pz."},
     "price_list": {"id": "Row identifier.", "prodotto_id": "Product the price applies to. Refers to products.id.",
@@ -390,7 +390,7 @@ def lines_with_revenue(c: Builder, y: int = 260) -> str:
 
 
 def flows(ds: dict[str, dict], outputs_in: int) -> list[dict]:
-    """Eleven flows that make sense on the cured-meats model. The expressions use
+    """Eleven flows that make sense on the pasta and bakery model. The expressions use
     only portable SQL (EXTRACT, CASE WHEN, ||, round, coalesce), so they run on
     whichever engine the installation allows."""
     out = []
@@ -1036,7 +1036,7 @@ def main() -> None:
     gw.login()
 
     sample = folder("Sample", None,
-                    "Sample data: a cured-meat company's ERP (Postgres) and CRM (ClickHouse), plus public reference tables. "
+                    "Sample data: a pasta and bakery company's ERP (Postgres) and CRM (ClickHouse), plus public reference tables. "
                     "Everything here is generated. Who can see it is up to the administrator.")
     flows_dir = folder("Flows", sample, "The sample pipelines. Three of them are scheduled.")
     private = folder("Private tables", sample, "The company's own data from the ERP and the CRM, and what the flows derive from it.")
