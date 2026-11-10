@@ -2498,12 +2498,12 @@ async function columnDetail(column: string, ask: DetailAsk): Promise<TopValuesRe
   return res
 }
 // What a value of the profile can do in the editor: a Filter step after the node on screen
-// (keep it, or leave it out), a Fill nulls step for its nulls, added through `addStep` but
-// always as a BRANCH: a value picked while looking at a step's data is a look aside, and
-// nothing downstream is rewired — the flow's other steps keep reading what they read.
+// (keep it, or leave it out), a Fill nulls step for its nulls, added through `addStep` by
+// the rule of every added step: into the chain when the node already feeds another, at
+// its end otherwise (it used to branch aside, alone among the ways to add a step).
 function addStepAfter(parentId: string, opType: string, params: Record<string, any>) {
   // a transformation: an observer may add one too, as from the palette
-  addStep(parentId, opType, params, { branch: true, reveal: true })
+  addStep(parentId, opType, params, { reveal: true })
 }
 const valueActions = computed(() => {
   const id = previewNodeId.value

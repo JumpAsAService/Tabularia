@@ -11,8 +11,9 @@ exposes at `/system/info` and in the app's settings menu.
   branch. One rule for the right-click ring (mouse and keyboard), **+ Operation** (which
   now opens the ring beside the node instead of always making the first transformation of
   the list) and a drop from the palette, which goes into the edge or after the node it is
-  dropped on. The new node never lands on the node clicked, and one Undo takes the whole
-  insertion back.
+  dropped on, and for a value picked in a column's profile (Filter to this value, Exclude,
+  Fill nulls), which used to branch aside. The new node never lands on the node clicked,
+  and one Undo takes the whole insertion back.
 - **A long flow opens readable**: at 60% on its outputs, the rest in the minimap, instead
   of fitted whole at a third of its size. The fit button still shows everything.
 - **A step not configured yet shows its input's rows**, with a line saying so, instead of
