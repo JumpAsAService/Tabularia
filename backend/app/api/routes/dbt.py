@@ -59,6 +59,7 @@ from app.engine.dbt_export import (
     _slug,
     _clickhouse_times,
     _postgres_times,
+    real_table_note,
     _typed,
 )
 
@@ -458,7 +459,12 @@ def _compile(req: ExportRequest, seeds: list[dict], ch: TargetClickHouse | None 
                            "to_review": info.get("to_review"),
                            "columns": columns, "schema": m.schema_, "alias": m.alias, "tags": m.tags,
                            "meta": {**m.meta, "ai_translated": True} if m.name in translated else m.meta,
-                           "ai_translated": m.name in translated, "ai_translated_from": translated.get(m.name)})
+                           "ai_translated": m.name in translated, "ai_translated_from": translated.get(m.name),
+                           # an output that writes the very table Tabularia writes, on the warehouse dbt runs on
+                           "real_table": f"{m.schema_}.{m.alias}" if req.mode == "native" and m.alias and m.schema_ else None,
+                           "adapter": dialect})
+            if models[-1]["real_table"] and notes is not None:
+                notes.append(real_table_note(models[-1]))
             for t in [*m.tests, *of_column]:
                 tsql = singular_test_sql(t, types_, dialect)
                 if native:
