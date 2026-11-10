@@ -296,22 +296,22 @@ table.
 
 ![The source and its preview](media/getting-started/05-source.png)
 
-**5. A filter.** Click **+ Operation** in the toolbar. A new step appears after the
-selected node, already connected, as *Change type* with a red *required parameter
-missing: 'columns'*: it is waiting for its settings. In the right panel set **Type** to
-**Filter**, then **Column** `stato`, **Operator** `equals`, **Value** `evaso` (shipped)
+**5. A filter.** Click **+ Operation** in the toolbar: a ring of transformations opens
+beside the selected node. Choose **Filter**. The step appears after the node, already
+connected; until it has its settings, the grid shows the rows of its input, with a line
+saying so. In the right panel set **Column** `stato`, **Operator** `equals`, **Value** `evaso` (shipped)
 and press Enter. The preview shows only shipped orders.
 
 ![The filter](media/getting-started/06-filter.png)
 
-**6. A computed column.** **+ Operation** again, **Type** → **Computed column**. In the
+**6. A computed column.** **+ Operation** again, then **Computed column**. In the
 first box type the column name `order_year`, in the second the SQL expression
 `EXTRACT(YEAR FROM data_ordine)`, then press Tab. The preview gains an `order_year`
 column. A wrong expression is reported in the preview while you type.
 
 ![The computed column](media/getting-started/07-computed-column.png)
 
-**7. A group by.** **+ Operation**, **Type** → **Group by**. Tick `canale` and
+**7. A group by.** **+ Operation**, then **Group by**. Tick `canale` and
 `order_year`. Under *Aggregations* click **+ add**, choose the column `id`, the function
 `count`, and type `orders` as the alias. The preview now has one row per channel and
 year.
@@ -331,7 +331,7 @@ With the Output selected, in the right panel:
 - **Datasource name**: `shipped_orders_by_channel_year`;
 - **Folder**: `My first flows`;
 - **Description**: `Shipped orders per sales channel and year`;
-- tick **Overwrite if it already exists**: every later run, the scheduled ones too,
+- switch on **Overwrite if it already exists**: every later run, the scheduled ones too,
   refreshes the same datasource.
 
 The wand button in the canvas controls (*Arrange the flow*) lines the nodes up.
@@ -350,7 +350,8 @@ completed: 20 rows → datasource "shipped_orders_by_channel_year"*.
 
 **11. The result.** **Datasources** in the top bar lists it (search `shipped`); click it
 to read and edit its description and its fields' descriptions. **Analysis → Viewer**
-opens it for filters, pivots and charts without changing it. **Runs** has the run: the
+opens it to build a table from its fields (rows, groups, a cross table), with filters
+and charts, without changing it. **Runs** has the run: the
 page opens on *Failed*, click **All**.
 
 ![The published datasource](media/getting-started/11-datasources.png)
