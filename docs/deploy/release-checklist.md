@@ -196,6 +196,14 @@ runs the deploy; the product changes are in `CHANGELOG.md`.
    20 USD a day for the whole installation (`AI__MAX_COST_PER_DAY_TOTAL_USD`); a value
    you set stays as it is. The image tag `lts` follows the line.
    **New in 1.4.3:** images only (chart 2.7.1). No migration, no new variable.
+   **New in 1.4.4:** images only (chart 2.7.2). No migration, no new variable. The step
+   cache carries the release that computed it, so the first preview of each step after
+   the upgrade computes again, once. The sample company is a new one (a pasta and bakery
+   maker): a new installation gets it, one that loaded the samples before keeps them
+   until they are loaded again.
+   **New in 1.4.5:** images only (chart 2.8.0), and of the five only the interface's
+   differs from 1.4.4: the Viewer built on three areas, the flow editor's chain, the
+   keyboard on every page. A view saved before opens as it did.
 4. **SQL Server.** The published backend images no longer contain the SQL Server
    driver (since 1.1.1): it is Microsoft's, under Microsoft's licence, and an AGPL
    image cannot carry it. If you have SQL Server connections, build or extend the
@@ -206,7 +214,7 @@ runs the deploy; the product changes are in `CHANGELOG.md`.
 
 ## Rollout order
 
-**From 1.4.2 to 1.4.3:** replace the images; nothing depends on the order.
+**From 1.4.2, 1.4.3 or 1.4.4 to a later 1.4.x:** replace the images; nothing depends on the order.
 
 **From 1.4.0 or 1.4.1 to 1.4.2:** the backup, then the migration step; nothing else
 depends on the order.
