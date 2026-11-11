@@ -126,15 +126,19 @@ def run_dbt_image(folder, command, variables=None, retry_memory=False):
 # and gets the folder back as dbt left it: target/, logs/, the .duckdb file.
 _RUN = r"""
 set -e
-rm -rf /project /e2e-result && mkdir -p /e2e-result
+find /project -mindepth 1 -delete
+rm -rf /e2e/e2e-result /e2e/e2e-env && mkdir -p /e2e/e2e-result
 tar -x -C / -f -
-set -a; . /e2e-env; set +a; rm -f /e2e-env
+set -a; . /e2e/e2e-env; set +a; rm -f /e2e/e2e-env
 cd /project
 set +e
-"$@" > /e2e-result/out 2>&1
-echo $? > /e2e-result/rc
-tar -c -C / project e2e-result >&3
+"$@" > /e2e/e2e-result/out 2>&1
+echo $? > /e2e/e2e-result/rc
+tar -c -C / project -C /e2e e2e-result >&3
 """
+# dump.py travels next to the variables, in the pod's /e2e: the oracles name it /dump.py, as the
+# docker run mounts it
+_POD_DUMP = "/e2e/dump.py"
 
 
 def _tar_add_bytes(tar, name, data, mode=0o644):
@@ -147,11 +151,14 @@ def _run_in_pod(folder, command, variables):
     ensure_runner()
     payload = io.BytesIO()
     with tarfile.open(fileobj=payload, mode="w") as tar:
-        tar.add(folder, arcname="project")
-        tar.add(os.path.join(HERE, "dump.py"), arcname="dump.py")
-        _tar_add_bytes(tar, "e2e-env", "".join(f"{k}={shlex.quote(str(v))}\n" for k, v in variables.items()).encode(), 0o600)
+        # its content, not the folder: /project is the pod's volume, whose mode is not dbt's user's to set
+        for name in sorted(os.listdir(folder)):
+            tar.add(os.path.join(folder, name), arcname=f"project/{name}")
+        tar.add(os.path.join(HERE, "dump.py"), arcname=_POD_DUMP.lstrip("/"))
+        _tar_add_bytes(tar, "e2e/e2e-env", "".join(f"{k}={shlex.quote(str(v))}\n" for k, v in variables.items()).encode(), 0o600)
     # the folder comes back on fd 3, the console of kubectl (errors) on stderr
-    r = kubectl("-n", KUBE_NAMESPACE, "exec", "-i", DBT_POD, "--", "sh", "-c", "exec 3>&1 1>&2; " + _RUN, "sh", *command,
+    r = kubectl("-n", KUBE_NAMESPACE, "exec", "-i", DBT_POD, "--", "sh", "-c", "exec 3>&1 1>&2; " + _RUN, "sh",
+                *(_POD_DUMP if c == "/dump.py" else c for c in command),
                 input=payload.getvalue(), text=False)
     try:
         back = tarfile.open(fileobj=io.BytesIO(r.stdout), mode="r")
@@ -223,8 +230,15 @@ def ensure_runner():
            "metadata": {"name": DBT_POD, "namespace": KUBE_NAMESPACE, "labels": {"app": DBT_POD, "e2e.tabularia.org/owner": "dbt-export"}},
            "spec": {"nodeSelector": {"kubernetes.io/hostname": kube_node()}, "restartPolicy": "Never", "terminationGracePeriodSeconds": 1,
                     "automountServiceAccountToken": False,
+                    # the app's namespace enforces the «restricted» Pod Security level (docs/deploy/kind.md,
+                    # step 9): not root, no privilege, and so nothing written outside its two volumes
+                    "securityContext": {"runAsNonRoot": True, "runAsUser": 1000, "runAsGroup": 1000, "fsGroup": 1000,
+                                        "seccompProfile": {"type": "RuntimeDefault"}},
+                    "volumes": [{"name": "project", "emptyDir": {}}, {"name": "e2e", "emptyDir": {}}],
                     "containers": [{"name": "dbt", "image": _image_ref(), "imagePullPolicy": "Never" if KIND_CLUSTER else "IfNotPresent",
                                     "command": ["sleep", "infinity"],
+                                    "securityContext": {"allowPrivilegeEscalation": False, "capabilities": {"drop": ["ALL"]}},
+                                    "volumeMounts": [{"name": "project", "mountPath": "/project"}, {"name": "e2e", "mountPath": "/e2e"}],
                                     "resources": {"requests": {"cpu": "100m", "memory": "256Mi"}, "limits": {"memory": DBT_MEMORY}}}]}}
     r = kubectl("apply", "-f", "-", input=json.dumps(pod))
     if r.returncode != 0:

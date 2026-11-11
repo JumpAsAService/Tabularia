@@ -181,8 +181,12 @@ try:
         ok(f"B · {target}: the tags tabularia + flow", node is not None and {"tabularia", "zzciclo_append"} <= set(node.get("tags") or []), (node or {}).get("tags"))
         rc, out = dbt(folder, "dbt", "ls", "-s", "tag:tabularia", "--resource-type", "model", "--quiet", "--no-use-colors", variables=variables)
         ok(f"B · {target}: dbt ls -s tag:tabularia finds the model", rc == 0 and "ciclo_append" in out, out[-400:])
-        head = open(f"{folder}/models/ciclo_append.sql").read().split("\n")[2:4]
-        ok(f"B · {target}: where it comes from, at the top of the file", head and head[0].startswith("-- Exported from Tabularia: flow «zzciclo append»"), head)
+        # the comments that open the file: on the native target the note on the table Tabularia writes
+        # comes first, so the line is looked for among them, not at a fixed place
+        head = open(f"{folder}/models/ciclo_append.sql").read().split("\n")[:30]
+        head = [line for line in head if line.startswith("-- ")]
+        ok(f"B · {target}: where it comes from, at the top of the file",
+           any(line.startswith("-- Exported from Tabularia: flow «zzciclo append»") for line in head), head)
         print("    " + "\n    ".join(head))
         counts = []
         for arguments in (["dbt", "run"], ["dbt", "run"], ["dbt", "run", "--full-refresh"]):
