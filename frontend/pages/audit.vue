@@ -475,9 +475,9 @@ function detailSummary(e: AuditEntry): string {
           <h2 id="sess-title" class="sess-title">{{ $t('audit.sessionsTitle') }}</h2>
           <span class="sess-count"><Circle :size="8" class="dot on" aria-hidden="true" /> {{ $t('audit.sessionsCount', { online: onlineCount, total: sessionsTotal }) }}<template v-if="sessions.length < sessionsTotal"> · {{ $t('audit.sessionsShown', { n: sessions.length }) }}</template></span>
           <div class="sess-tools">
-            <div class="seg" role="group" :aria-label="$t('audit.sessionsFilter')">
-              <button type="button" class="mini" :class="{ on: sessFilter === 'online' }" :aria-pressed="sessFilter === 'online'" @click="sessFilter = 'online'">{{ $t('audit.sessionsOnline') }}</button>
-              <button type="button" class="mini" :class="{ on: sessFilter === 'all' }" :aria-pressed="sessFilter === 'all'" @click="sessFilter = 'all'">{{ $t('audit.sessionsAll') }}</button>
+            <div v-roving.main class="seg" role="radiogroup" :aria-label="$t('audit.sessionsFilter')">
+              <button type="button" class="mini" role="radio" :class="{ on: sessFilter === 'online' }" :aria-checked="sessFilter === 'online'" @click="sessFilter = 'online'">{{ $t('audit.sessionsOnline') }}</button>
+              <button type="button" class="mini" role="radio" :class="{ on: sessFilter === 'all' }" :aria-checked="sessFilter === 'all'" @click="sessFilter = 'all'">{{ $t('audit.sessionsAll') }}</button>
             </div>
             <span class="searchbox sess-search"><Search :size="13" aria-hidden="true" /><input v-model="sessQuery" type="search" :placeholder="$t('audit.sessionsSearch')" :aria-label="$t('audit.sessionsSearch')" /></span>
           </div>
@@ -691,7 +691,11 @@ function detailSummary(e: AuditEntry): string {
 .sess-revoke:hover:not(:disabled) { color: var(--danger); border-color: var(--danger); }
 .sess-more { margin-top: 8px; }
 .empty { font-size: 12.5px; }
-@media (prefers-reduced-motion: reduce) { .sess-toggle .caret { transition: none; } }
+/* a person's sessions come in under their row instead of popping (table rows have no
+   height to grow: a short fade) */
+.sess-sub td { animation: sess-in var(--dur-2, 150ms) ease-out; }
+@keyframes sess-in { from { opacity: 0; } }
+@media (prefers-reduced-motion: reduce) { .sess-toggle .caret { transition: none; } .sess-sub td { animation: none; } }
 
 /* filters */
 .filters { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }

@@ -426,7 +426,7 @@ text = "Path prefix a reverse proxy publishes the gateway under, stripping it be
 values = "a path such as `/api`"
 
 [var.APP__GATEWAY_THREADS]
-text = "Threads serving the synchronous routes. More do not serve more (Python runs one at a time); the database pool follows this number. A different name from the engine's `APP__ENGINE_API_THREADS` because both read the same file and want opposite values."
+text = "A number kept from the Python gateway, where it was the threads serving the synchronous routes. The Go gateway (from 1.4.0) serves every request on a goroutine and does not cap them with it. It still counts, with `DB__POOL_SIZE` and `DB__MAX_OVERFLOW`, in the ceiling of `ORCHESTRATOR__MAX_CONCURRENT`. A different name from the engine's `APP__ENGINE_API_THREADS` because both read the same file."
 
 [var.APP__TIMEZONE]
 text = "Time zone in which cron schedules are read (wall-clock time, daylight saving included); they are stored in UTC. Timestamps are still shown in each viewer's own time zone."

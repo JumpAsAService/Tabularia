@@ -146,7 +146,7 @@ const fieldTitle = computed(() => {
 
 <template>
   <aside class="rds" :aria-label="$t('reportDesigner.sidebar')">
-    <div class="rds-tabs" role="tablist">
+    <div v-roving class="rds-tabs" role="tablist" :aria-label="$t('reportDesigner.sidebar')">
       <button type="button" role="tab" :aria-selected="tab === 'insert'" :class="{ on: tab === 'insert' }" @click="tab = 'insert'">
         <Plus :size="13" /> {{ $t('reportDesigner.insert.tab') }}
       </button>

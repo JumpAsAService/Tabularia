@@ -73,7 +73,9 @@ engine's ClickHouse from the app's ConfigMap and Secret (read by the scripts, ne
 nor written to a file).
 
 - dbt runs in **one pod**, `zz-dbt-e2e`, in the app's namespace (the NetworkPolicies of the
-  sample databases let that namespace in). `run_all.py` loads the image on one node only
+  sample databases let that namespace in). The pod meets the `restricted` Pod Security level
+  the kind guide puts on that namespace: not root, no privilege, the project in a volume.
+  `run_all.py` loads the image on one node only
   (`kind load docker-image … --nodes <node>`, `E2E_KUBE_NODE`), starts the pod there and, at
   each dbt call, sends the project folder in and takes it back as dbt left it (target/,
   logs/, the `.duckdb` file) with `tar` through `kubectl exec`; the variables travel in a
@@ -81,6 +83,14 @@ nor written to a file).
 - The sample databases are deployments (`sampledb-postgres`, `sampledb-clickhouse` in
   `tabularia-deps`), reached with `kubectl exec`; the engine's ClickHouse is the deployment
   behind `CLICKHOUSE_EXTERNAL__HOST` (on kind, the sample ClickHouse itself).
+- A cluster built with [the kind guide](../../docs/deploy/kind.md) and MinIO has no ClickHouse
+  engine (its step 12 is for a cloud bucket). For the oracles, give it the sample ClickHouse of
+  step 13, which reads MinIO with the keys Tabularia sends: a second values file with
+  `externalServices.clickhouse` (`enabled: true`, `host:
+  sampledb-clickhouse.tabularia-deps.svc.cluster.local`, `port: 8123`, `secure: false`,
+  `database: tabularia`, `username:` the sample's user, `transport: s3`, `s3Endpoint:` MinIO's
+  address) and `secrets.clickhousePassword`, after `CREATE DATABASE IF NOT EXISTS tabularia`
+  on that ClickHouse, then `helm upgrade` with both files.
 - The ClickHouse target needs the engine's ClickHouse to reach the sample Postgres, which
   the `sampledb` NetworkPolicy does not allow: `run_all.py` adds one of its own,
   `<dbt pod>-to-<service>` (that pod to that port, nothing else), labelled with the run's

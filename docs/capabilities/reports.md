@@ -178,8 +178,8 @@ dataset by what the reader chooses:
 1. **+ Parameter**: a name, `regione`, **Choices → From a dataset**, the dataset and, as
    **Value**, the field: `[area]`.
 2. With a datasource or a saved view, **Filter this dataset by what is chosen** is already
-   ticked: it adds the filter `area = {regione}` to the dataset (`area in {regione}` with
-   **Several values**), and takes it away when you untick it.
+   on: it adds the filter `area = {regione}` to the dataset (`area in {regione}` with
+   **Several values**), and takes it away when you switch it off.
 3. With a SQL or a SQL script the query stays as you wrote it: the dialog shows the line
    to add, `WHERE {regione} IS NULL OR area = {regione}`, with a button that copies it.
 
@@ -769,11 +769,11 @@ the first month.
    `SUM([margine]) / SUM([ricavo])`, the format `0.0%` and a **Rule**: when
    `[MarginPct] < 0.3`, red and bold. **Order of the rows**: `[anno_mese]`.
    **+ Group**: `[categoria]`. **Grand total at the end** is already on, from the first
-   total you chose; tick **Alternate row shading** and both **On screen** options. The [GIF above](#saving-and-the-preview)
+   total you chose; switch on **Alternate row shading** and both **On screen** options. The [GIF above](#saving-and-the-preview)
    shows the drag and the group.
 9. **The matrix.** Under the table a text `Margin by category and year` (size 10, bold)
    and a **Matrix**: rows grouped by `[categoria]`, **One column per value of**
-   `YEAR([Month])`, **Value of the cells** `SUM([margine])`, format `#,##0`; tick **Total
+   `YEAR([Month])`, **Value of the cells** `SUM([margine])`, format `#,##0`; switch on **Total
    column**. The years come in the order of the rows, which the query sorts by `anno_mese`
    within each category.
 10. **The footer.** Click **Page footer**, select the page number it started with and

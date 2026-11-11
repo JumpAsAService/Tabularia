@@ -186,8 +186,8 @@ every container has started. Then check:
 docker compose ps
 ```
 
-`postgres`, `redis`, `minio`, `gateway`, `sampledb-postgres` and `sampledb-clickhouse`
-must say `(healthy)`; the others `Up`
+`postgres`, `redis`, `minio`, `gateway`, `ai`, `sampledb-postgres` and
+`sampledb-clickhouse` must say `(healthy)`; the others `Up`
 (`cadvisor` reports `health: starting` for its first minute). A container that says
 `Restarting` has a problem: see [Troubleshooting](#troubleshooting).
 
@@ -281,8 +281,8 @@ With your own file, the steps are the same with your columns.
 **1. A folder.** In **Explore**, at *All folders*, click **New**, type `My first flows`
 and click **Create**. The new folder opens.
 
-**2. A flow.** In the folder, **New → New flow**, then pick the engine: **Polars**. The
-editor opens with one empty *Source* node.
+**2. A flow.** In the folder, **New → New flow**, then pick the engine: **DuckDB**, the one
+marked *Preferred*. The editor opens with one empty *Source* node.
 
 ![New flow: pick the engine](media/getting-started/04-new-flow.png)
 
@@ -296,25 +296,26 @@ table.
 
 ![The source and its preview](media/getting-started/05-source.png)
 
-**5. A filter.** Click **+ Operation** in the toolbar. A new step appears after the
-selected node, already connected, as *Change type* with a red *required parameter
-missing: 'columns'*: it is waiting for its settings. In the right panel set **Type** to
-**Filter**, then **Column** `stato`, **Operator** `equals`, **Value** `evaso` (shipped)
+**5. A filter.** Click **+ Operation** in the toolbar: a ring of transformations opens
+beside the selected node. Choose **Filter**. The step appears after the node, already
+connected; until it has its settings, the grid shows the rows of its input, with a line
+saying so. In the right panel set **Column** `stato`, **Operator** `equals`, **Value** `evaso` (shipped)
 and press Enter. The preview shows only shipped orders.
 
 ![The filter](media/getting-started/06-filter.png)
 
-**6. A computed column.** **+ Operation** again, **Type** → **Computed column**. In the
+**6. A computed column.** **+ Operation** again, then **Computed column**. In the
 first box type the column name `order_year`, in the second the SQL expression
 `EXTRACT(YEAR FROM data_ordine)`, then press Tab. The preview gains an `order_year`
 column. A wrong expression is reported in the preview while you type.
 
 ![The computed column](media/getting-started/07-computed-column.png)
 
-**7. A group by.** **+ Operation**, **Type** → **Group by**. Tick `canale` and
+**7. A group by.** **+ Operation**, then **Group by**. Tick `canale` and
 `order_year`. Under *Aggregations* click **+ add**, choose the column `id`, the function
-`count`, and type `orders` as the alias. The preview now has one row per channel and
-year.
+`count`, type `orders` as the alias and press Tab (the alias is applied when you leave
+the box; until then the column is called `id_count`). The preview now has one row per
+channel and year.
 
 ![The group by](media/getting-started/08-group-by.png)
 
@@ -331,7 +332,7 @@ With the Output selected, in the right panel:
 - **Datasource name**: `shipped_orders_by_channel_year`;
 - **Folder**: `My first flows`;
 - **Description**: `Shipped orders per sales channel and year`;
-- tick **Overwrite if it already exists**: every later run, the scheduled ones too,
+- switch on **Overwrite if it already exists**: every later run, the scheduled ones too,
   refreshes the same datasource.
 
 The wand button in the canvas controls (*Arrange the flow*) lines the nodes up.
@@ -350,7 +351,8 @@ completed: 20 rows → datasource "shipped_orders_by_channel_year"*.
 
 **11. The result.** **Datasources** in the top bar lists it (search `shipped`); click it
 to read and edit its description and its fields' descriptions. **Analysis → Viewer**
-opens it for filters, pivots and charts without changing it. **Runs** has the run: the
+opens it to build a table from its fields (rows, groups, a cross table), with filters
+and charts, without changing it. **Runs** has the run: the
 page opens on *Failed*, click **All**.
 
 ![The published datasource](media/getting-started/11-datasources.png)
@@ -370,12 +372,17 @@ click the calendar button (**Schedule run**).
   with) or another one, for example a ClickHouse or BigQuery engine once configured. The
   editor keeps working with the development engine.
 
-Click **Save**. The row gets a **scheduled** badge (hover it for the cron) and the
-*Schedule load* panel above the list places the flow's runs on the coming week.
+Click **Save**. The row gets a green **next run** label, with the date and time on your
+clock (hover it for the cron), and the *Schedule load* panel above the list places the
+flow's runs on the coming week.
 
-To see it fire now, set the cron two minutes ahead: at 18:11, `13 18 * * *`. At 18:13
-(in `APP__TIMEZONE`) **Runs** shows a new run whose author is **schedule**. Then put
-the real schedule back.
+To see it fire now, set the cron two minutes ahead **on the clock of `APP__TIMEZONE`**,
+which is UTC until you change it and may not be your own: in Italy, UTC is one hour
+behind in winter and two in summer. The dialog names the time zone (*Times in timezone
+UTC*) and, under the cron, reads it back (*At 18:13*). So when that clock says 18:11,
+type `13 18 * * *`. Within a minute after 18:13, **Runs** (click **All**) shows two new
+rows for the flow whose author is **schedule**: the launch and the run of its Output.
+Then put the real schedule back.
 
 ![A scheduled run in Runs](media/getting-started/12-runs.png)
 
@@ -527,6 +534,17 @@ the volume to the services:
 
 ```bash
 git pull
+docker compose up -d --build
+```
+
+**The gateway keeps restarting: `the database is at schema revision …, this gateway
+reads …`.** The machine already had Tabularia images from an earlier try (an older
+clone, another folder): `docker compose up -d` builds only the images that are missing
+and started the old ones. `docker compose ps` shows `gateway  Restarting (1)` and the
+first `up -d` ends with `dependency failed to start: container dataprep-gateway is
+unhealthy`. Build them from this clone:
+
+```bash
 docker compose up -d --build
 ```
 

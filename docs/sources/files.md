@@ -99,7 +99,7 @@ ORD-004103;2026-03-03;Online;Torino;412,80
    the catalog: other flows, saved views, SQL scripts and the AI assistant can read it.
 
 Next month, upload the April file into the same source and run again: with **Overwrite
-if it already exists** ticked on the Output node, the datasource keeps its id and name
+if it already exists** on in the Output node, the datasource keeps its id and name
 and its readers keep working. See [Flow and SQL script results](flow-outputs.md).
 
 ## Permissions

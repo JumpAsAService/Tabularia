@@ -216,6 +216,9 @@ test('the arrows, Home, End and the page keys move one active cell, the header o
   assert.deepEqual(m(at(7, 1), 'End'), at(7, 4))
   assert.deepEqual(m(at(7, 3), 'Home', true), at(0, 0)) // the first CELL, not the header
   assert.deepEqual(m(at(7, 1), 'End', true), at(99, 4))
+  // Ctrl or ⌘ with ↑ ↓: the column's ends, the way of a keyboard with no Home nor End
+  assert.deepEqual(m(at(7, 3), 'ArrowUp', true), at(0, 3))
+  assert.deepEqual(m(at(7, 3), 'ArrowDown', true), at(99, 3))
   assert.deepEqual(m(at(5, 1), 'PageDown'), at(15, 1))
   assert.deepEqual(m(at(95, 1), 'PageDown'), at(99, 1))
   assert.deepEqual(m(at(-1, 1), 'PageDown'), at(9, 1))
@@ -386,7 +389,9 @@ test('the Viewer offers a value as a filter only on the datasource\'s own column
   const viewer = readFileSync(new URL('../pages/viewer.vue', import.meta.url), 'utf8')
   const grid = readFileSync(new URL('../components/ui/DataGrid.vue', import.meta.url), 'utf8')
   // the filters come before the computed fields: a computed field cannot be filtered on
-  assert.match(viewer, /const valueActions = computed\(\(\) => \{[\s\S]*?columns: \(selectedDs\.value\?\.columns \?\? \[\]\)\.map/)
+  // (the same columns the filters' own pickers offer, and a field dragged onto the filters)
+  assert.match(viewer, /const filterCols = computed\(\(\) => fields\.value\.filter\(\(f\) => !f\.computed\)/)
+  assert.match(viewer, /const valueActions = computed\(\(\) => \{[\s\S]*?columns: filterCols\.value/)
   assert.match(grid, /!a\.columns \|\| a\.columns\.includes\(c\.name\)/)
   assert.doesNotMatch(grid, /v-if="valueActions"/)
 })

@@ -63,13 +63,34 @@ test('the keyboard: the shortcuts outside the fields, the browser and the contro
   assert.equal(k('F10', { shiftKey: true }), 'menu')
   assert.equal(k('F10'), null)
   assert.equal(k('ContextMenu'), 'menu')
+  // every action has a way with no function key and no Home, End, Del nor Menu key (a Mac
+  // has none; a laptop's function keys are often its media keys)
+  assert.equal(k('r'), 'rename')
+  assert.equal(k('m'), 'menu')
+  assert.equal(k('Home'), 'first')
+  assert.equal(k('End'), 'last')
+  assert.equal(k('ArrowUp', { metaKey: true }), 'first')
+  assert.equal(k('ArrowDown', { metaKey: true }), 'last')
+  assert.equal(k('ArrowDown', { ctrlKey: true }), 'last')
+  assert.equal(k('Delete'), 'delete')
+  assert.equal(k('Backspace', { metaKey: true }), 'delete') // ⌘⌫, as in the Finder
+  assert.equal(k('h'), 'history')
+  assert.equal(k('n'), 'new')
+  // a capital is not the key (Shift+N is the browser's or nobody's)
+  for (const key of ['r', 'm', 'h', 'n', 'R', 'N']) assert.equal(k(key, { shiftKey: true }), null, key)
   // typing in a field: nothing is taken from it
-  for (const key of ['/', 'Backspace', 'ArrowDown', 'Enter', 'F2']) assert.equal(k(key, { inField: true }), null, key)
-  // Ctrl/⌘ combinations are the browser's; Alt+← is history's
-  assert.equal(k('ArrowDown', { ctrlKey: true }), null)
-  assert.equal(k('Backspace', { metaKey: true }), null)
+  for (const key of ['/', 'Backspace', 'ArrowDown', 'Enter', 'F2', 'Delete', 'Home', 'r', 'm', 'h', 'n']) assert.equal(k(key, { inField: true }), null, key)
+  assert.equal(k('Backspace', { metaKey: true, inField: true }), null)
+  // the other Ctrl/⌘ combinations are the browser's (⌘N, ⌘R, ⌘H, ⌘M); Alt+← is history's,
+  // and Alt with a letter types a character on a Mac
+  for (const key of ['n', 'r', 'h', 'm', 'Enter', 'Delete', '/']) {
+    assert.equal(k(key, { ctrlKey: true }), null, key)
+    assert.equal(k(key, { metaKey: true }), null, key)
+  }
+  for (const key of ['n', 'r', 'h', 'm']) assert.equal(k(key, { altKey: true }), null, key)
   assert.equal(k('ArrowLeft', { altKey: true }), null)
   assert.equal(k('ArrowDown', { altKey: true }), null)
+  assert.equal(k('ArrowLeft', { metaKey: true }), null) // back, in Safari
 })
 
 test('↑ ↓ start from the first or the last row and hold at the ends', () => {

@@ -46,8 +46,9 @@ onMounted(async () => {
   padding: 9px 13px;
   font-size: 13px;
   line-height: 1.45;
+  /* one pixel all round, as every other notice: the level is said by the colour, the icon
+     and its name, not by a thicker left edge (kept for the canvas' nodes alone, DESIGN.md) */
   border: 1px solid;
-  border-left-width: 3px;
   border-radius: var(--radius);
   background: var(--panel);
 }

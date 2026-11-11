@@ -38,7 +38,7 @@ chDB, ClickHouse or BigQuery.</em></p>
 > *Tabularia takes its name from the Tabularium, the records office of ancient Rome —
 > the place where the state's tables were kept in order.*
 
-Current release: **1.4.4 «Romulus»**, the long-term support line ([LTS](docs/lts.md): fixes only from here on, image tag `lts`) — see [CHANGELOG.md](CHANGELOG.md).
+Current release: **1.4.5 «Romulus»**, the long-term support line ([LTS](docs/lts.md): fixes only from here on, image tag `lts`) — see [CHANGELOG.md](CHANGELOG.md).
 
 ---
 
@@ -128,7 +128,7 @@ Then: [Quickstart](#quickstart) · [How it works](#how-it-works) · [Sample data
   published images: two lines on top of the backend image add it.
   [Microsoft SQL Server](docs/sqlserver.md)
   ```dockerfile
-  FROM jumpasaservice/tabularia-backend:1.4.4
+  FROM jumpasaservice/tabularia-backend:1.4.5
   USER root
   RUN pip --python /opt/venv/bin/python install --no-cache-dir "mssql-python==1.15.0"
   USER 10001:10001
@@ -265,9 +265,10 @@ Then: [Quickstart](#quickstart) · [How it works](#how-it-works) · [Sample data
 - **Charts on all rows.** Thirteen kinds, from bars and lines to waterfall, funnel, heatmap, KPI,
   gauge and bullet, aggregated by the engine on every row: Gauge, average of `margine_pct`,
   min 0, max 50, target 30. [More chart kinds](docs/capabilities/preview-and-analysis.md#more-chart-kinds)
-- **The Viewer.** Filters, computed fields, a pivot and charts on any datasource, without
-  building a flow: computed field `ricavo_al_kg = round(ricavo / chili, 2)`, pivot rows
-  `categoria`, columns `anno_mese`, sum of `margine`. [The Viewer](docs/capabilities/preview-and-analysis.md#the-viewer)
+- **The Viewer.** A table built by dragging a datasource's fields onto Rows, Columns and
+  Measures (rows as they are, a group by, a cross table), with filters, computed fields and
+  charts, without building a flow: computed field `ricavo_al_kg = round(ricavo / chili, 2)`,
+  Rows `categoria`, Columns `anno_mese`, Measures sum of `margine`. [The Viewer](docs/capabilities/preview-and-analysis.md#the-viewer)
 - **Saved views.** A Viewer configuration saved in a folder, never its rows: reopened
   tomorrow, it reads tomorrow's data. «Margin by category — month by month».
   [Saved views](docs/capabilities/preview-and-analysis.md#saved-views)

@@ -6,6 +6,7 @@
 import { ref, computed, nextTick, onBeforeUnmount, onMounted } from 'vue'
 import { ChevronDown, Check, Search } from 'lucide-vue-next'
 import { useI18n } from 'vue-i18n'
+import FlagIcon from '~/components/ui/FlagIcon.vue'
 
 const { t } = useI18n()
 
@@ -16,6 +17,8 @@ export interface SelectOption {
   // where the option lives (a folder path): a second, quieter line under the name,
   // matched by the search too. For objects whose names repeat across folders.
   hint?: string
+  // a language's flag (its locale code), drawn before the name: where a language is chosen
+  flag?: string
 }
 
 // one root (the trigger, with the panel teleported from inside it): class, style and the
@@ -214,6 +217,7 @@ const flatIndex = (o: SelectOption) => filtered.value.indexOf(o)
   >
     <span class="sel-label" :class="{ ph: !selected }">
       <template v-if="selected">
+        <FlagIcon v-if="selected.flag" :code="selected.flag" />
         <span class="sel-name">{{ labelOf(selected) }}</span>
         <span v-if="selected.hint" class="sel-hint">{{ selected.hint }}</span>
       </template>
@@ -260,6 +264,7 @@ const flatIndex = (o: SelectOption) => filtered.value.indexOf(o)
             >
               <Check v-if="o.value === modelValue" :size="13" class="check" />
               <span v-else class="check-spacer" />
+              <FlagIcon v-if="o.flag" :code="o.flag" />
               <span v-if="o.hint" class="sel-opt-text">
                 <span class="sel-opt-label">{{ labelOf(o) }}</span>
                 <span class="sel-opt-hint" :title="o.hint">{{ o.hint }}</span>

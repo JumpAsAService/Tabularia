@@ -590,7 +590,7 @@ const unavailable = computed(() => {
             <h2><Table2 :size="15" /> {{ $t('scripts.output') }}</h2>
             <p class="muted small help">{{ $t('scripts.outputHelp') }}</p>
             <label class="check">
-              <input type="checkbox" :checked="content.output.publish" :disabled="!canEdit"
+              <input type="checkbox" role="switch" :checked="content.output.publish" :disabled="!canEdit"
                      @change="setOutput({ publish: ($event.target as HTMLInputElement).checked })" />
               {{ $t('scripts.publish') }}
             </label>
@@ -611,7 +611,7 @@ const unavailable = computed(() => {
                 />
               </label>
               <label class="check">
-                <input type="checkbox" :checked="content.output.overwrite" :disabled="!canEdit"
+                <input type="checkbox" role="switch" :checked="content.output.overwrite" :disabled="!canEdit"
                        @change="setOutput({ overwrite: ($event.target as HTMLInputElement).checked })" />
                 {{ $t('scripts.overwrite') }}
               </label>

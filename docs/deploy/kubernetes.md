@@ -5,8 +5,11 @@ Operational notes for whoever moves Tabularia from `infrastructure/docker-compos
 services exist and how they talk to each other; it is **not** a production manifest:
 it runs dev servers with hot reload and bind-mounts the sources.
 
-Everything below marked *verified* was exercised on 2026-09-12 against the real
-stack (Scaleway object storage, managed ClickHouse).
+What is marked *verified* below was exercised on 2026-09-12 against the real stack
+(Scaleway object storage, managed ClickHouse), with the images of that day. What came
+later is not covered by that mark: the Go gateway (1.4.0), the AI service, the data APIs
+and the egress proxy were tried on the cluster of the [kind guide](kind.md), not on that
+stack.
 
 ## Helm chart
 
@@ -43,13 +46,14 @@ certificate authority), follow [A company-like cluster on one computer](kind.md)
 | Object storage | any S3-compatible endpoint | — | — | — |
 | ClickHouse *(optional engine)* | managed service | — | — | — |
 
-Use the **image default command** for the gateway and the engine API. The compose file
-overrides them with `--reload`, which must not reach production.
+Use the **image default command** for the gateway, the AI service and the engine API.
+The compose file overrides the last two with `--reload`, which must not reach production.
 
 - **Gateway: two workloads from one image, told apart by `APP__ROLE`.** With `api` a
-  process only answers requests, and can be replicated freely: one process uses one
-  core (about 95 requests a second), and sessions, the sign-in throttle and the
-  editor's presence notice live in Postgres. With `orchestrator` it
+  process only answers requests, and can be replicated freely: it is a Go program
+  that uses every core its pod is given (on 2 CPUs, 7,600 requests a second on
+  `/auth/me` and 3,300 on a folder's list: `gateway-go/scripts/bench/bench.sh`), and
+  sessions, the sign-in throttle and the editor's presence notice live in Postgres. With `orchestrator` it
   only does the background work — schedules, flow executions, reconciliation,
   clean-up — and is not exposed. Several orchestrators share the work through the
   database: a schedule slot and a queued execution are each taken by exactly one, and
@@ -62,9 +66,11 @@ overrides them with `--reload`, which must not reach production.
   is fine: that is the previous version during a rolling update). It seeds the admin
   user. See [database-migrations.md](../database-migrations.md); upgrading an
   installation, step by step: [upgrading.md](upgrading.md).
-- **Database connections.** Each gateway and orchestrator process keeps its own pool,
-  up to `APP__GATEWAY_THREADS` × 1.25 + `DB__MAX_OVERFLOW` (25 with twelve threads):
-  size Postgres' `max_connections` for the sum.
+- **Database connections.** Each gateway and orchestrator process keeps its own pool.
+  Budget `APP__GATEWAY_THREADS` × 1.25 + `DB__MAX_OVERFLOW` a process (25 with twelve
+  threads) and size Postgres' `max_connections` for the sum: the figure is a ceiling
+  kept from the Python gateway, the Go gateway's pool has its driver's default size,
+  which is smaller.
 - **Beat: one replica.** Two beats enqueue every periodic task twice.
 - **Postgres** holds all control-plane metadata (users, groups, permissions, versioned
   flows, encrypted connection credentials, runs, audit log): back it up.
@@ -78,7 +84,8 @@ overrides them with `--reload`, which must not reach production.
 - **One release per namespace.** The namespaces of the users' code are named after the
   release's namespace, and the Jobs, Secrets and images made at run time after run ids:
   two releases in one namespace collide (the second install fails on the namespaces; with
-  `createNamespaces: false` they share them, and follow each other's Jobs).
+  `scripts.createNamespaces: false` and `containers.createNamespaces: false` they share
+  them, and follow each other's Jobs).
 
 ## Networking
 
@@ -253,8 +260,9 @@ applies unchanged.
 | Engine API | `GET /healthcheck/` |
 | Frontend | `GET /login` |
 
-The gateway's and the engine's answer on the event loop, apart from the threads serving
-requests, so a busy pod is not taken for a dead one; the chart gives every probe 5 s.
+The engine's answers on the event loop, apart from the threads serving requests, and the
+gateway's on a goroutine of its own, so a busy pod is not taken for a dead one; the chart
+gives every probe 5 s.
 Workers and beat expose no HTTP port; rely on the restart policy.
 
 ## Configuration
@@ -278,7 +286,7 @@ ConfigMaps or Secrets from an existing `.env`, check that no value carries a com
 | `APP__TIMEZONE` | ✓ | | timezone in which the **gateway** interprets cron schedules. Celery beat keeps its own clock (`CELERY__TIMEZONE`, UTC by default), but the gateway converts schedules to UTC before enqueuing, so leaving beat on UTC is correct |
 | `APP__ROLE` | ✓ | | what a gateway process does: `api` (answer requests), `orchestrator` (schedules, flow executions, clean-up) or `all` (both, the default). Set per workload, not in the shared ConfigMap |
 | `OPENLINEAGE__URL` | ✓ | | OpenLineage collector (Marquez, DataHub…); with `OPENLINEAGE__FILE` (JSON Lines) and `OPENLINEAGE__NAMESPACE`. Empty = off. The API key goes in the secret (`secrets.openlineageApiKey`) |
-| `APP__GATEWAY_THREADS` | ✓ | | threads per gateway process (default 40; 12 is what the chart and the measurements use: fewer serve more). The connection pool follows it |
+| `APP__GATEWAY_THREADS` | ✓ | | a number kept from the Python gateway (default 40, 12 in the chart). The Go gateway serves every request on a goroutine and does not cap them with it; it still counts, with `DB__POOL_SIZE` and `DB__MAX_OVERFLOW`, in the ceiling of `ORCHESTRATOR__MAX_CONCURRENT` |
 | `ORCHESTRATOR__DEAD_AFTER_SECONDS`, `ORCHESTRATOR__QUEUE_TIMEOUT_SECONDS`, `ORCHESTRATOR__MAX_CONCURRENT` | ✓ | | when a silent execution is given up for dead (60), when a queued one is no longer started (900), how many one orchestrator carries at once (20) |
 | `DB__HOST`, `DB__PORT`, `DB__USER`, `DB__PASSWORD` *secret*, `DB__NAME` | ✓ | | metadata Postgres |
 | `DB__AUTO_MIGRATE` | ✓ | | leave it `false` (the default): the schema is migrated by the init container (`python -m app.db.migra`) and the gateway only checks it. `true` is for the development compose |

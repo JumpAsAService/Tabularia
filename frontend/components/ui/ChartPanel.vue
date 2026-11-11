@@ -36,6 +36,7 @@ import { errMessage } from '~/composables/useApi'
 import { AGG_LABELS } from '~/composables/useFlowModel'
 import { useChartTheme } from '~/composables/useChartTheme'
 import KpiCard from '~/components/ui/KpiCard.vue'
+import { draggedField, endFieldDrag, fieldDragOf } from '~/composables/fieldDrag'
 import {
   PALETTE,
   bulletOption,
@@ -67,8 +68,16 @@ const props = defineProps<{
   query: (ops: Operation[], limit?: number) => Promise<PreviewResult | null>
   // the chart's settings, for who keeps them (a saved view): given back when it opens
   settings?: ChartSettings | null
+  // the person composes the chart (the Viewer): no column is chosen for them, so nothing is
+  // asked of the engine until they choose, and a field dragged over the chart finds two
+  // places to land, the axis and the value
+  manual?: boolean
 }>()
-const emit = defineEmits<{ (e: 'update:settings', s: ChartSettings): void }>()
+const emit = defineEmits<{
+  (e: 'update:settings', s: ChartSettings): void
+  // a field dropped on the chart found its place (for who announces it)
+  (e: 'placed', name: string, slot: 'axis' | 'value'): void
+}>()
 
 // PALETTE (chartKinds.ts): the VALIDATED categorical palette, MAX 5 series — never cycle
 // the hues past the slots, the extra ones are flagged.
@@ -401,7 +410,7 @@ watch(
   () => props.columns,
   (cols) => {
     if (!cols.length) return
-    if (!cols.some((c) => c.name === xCol.value)) xCol.value = cols[0].name
+    if (!cols.some((c) => c.name === xCol.value)) xCol.value = props.manual ? '' : cols[0].name
     for (const r of [yCol, byCol, xNumCol, yNumCol, y2Col, trendCol]) {
       if (r.value && !cols.some((c) => c.name === r.value)) r.value = ''
     }
@@ -413,6 +422,64 @@ watch(
 // (the gauge's scale and target are drawn, not asked: they do not query again)
 watch([chartType, xCol, byCol, yCol, func, xFunc, xNumCol, yFunc, yNumCol, topN, func2, y2Col, trendCol], refresh,
       { immediate: true })
+
+// ── a field put on the chart (the Viewer): dropped on one of two places, or sent by a key ──
+const isNumeric = (name: string) => numericCols.value.includes(name)
+const typeKnown = (name: string) => !!props.columns.find((c) => c.name === name)?.dtype
+/** Does the value take this field? A number, or a field whose type is not known yet. */
+function valueTakes(name: string): boolean {
+  if (isOne.value && func.value === 'n_unique') return true
+  return isNumeric(name) || !typeKnown(name)
+}
+/** The field on the axis (the X, the scatter's point, a KPI's periods) or on the value (the
+ *  Y; a count becomes a sum, which is what a number dropped on a chart asks for). Left to
+ *  the panel, a number is a value and anything else the axis. False when it has no place. */
+function placeField(name: string, where?: 'axis' | 'value'): boolean {
+  if (!props.columns.some((c) => c.name === name)) return false
+  const slot = where ?? (isNumeric(name) ? 'value' : 'axis')
+  if (slot === 'axis') {
+    if (chartType.value === 'gauge') return false
+    if (chartType.value === 'kpi') trendCol.value = name
+    else {
+      if (byCol.value === name) byCol.value = ''
+      xCol.value = name
+    }
+    return true
+  }
+  if (!valueTakes(name)) return false
+  if (isScatter.value) {
+    if (!xNumCol.value) xNumCol.value = name
+    else yNumCol.value = name
+    return true
+  }
+  if (func.value === 'count' || (func.value === 'n_unique' && !isOne.value)) func.value = 'sum'
+  yCol.value = name
+  return true
+}
+const dragging = computed(() => (props.manual ? draggedField.value : null))
+const overSlot = ref<'' | 'axis' | 'value'>('')
+watch(dragging, (d) => { if (!d) overSlot.value = '' })
+const axisLabel = computed(() => (chartType.value === 'kpi' ? t('chartPanel.trend') : isScatter.value ? t('chartPanel.point') : t('chartPanel.dropAxis')))
+function onSlotOver(e: DragEvent, slot: 'axis' | 'value') {
+  const p = fieldDragOf(e)
+  if (!p) return
+  const ok = slot === 'axis' ? chartType.value !== 'gauge' : valueTakes(p.name)
+  overSlot.value = ok ? slot : ''
+  // a place that does not take the field is no drop target: the browser says «not here»
+  if (!ok) return
+  e.preventDefault()
+  if (e.dataTransfer) e.dataTransfer.dropEffect = 'copy'
+}
+function onSlotDrop(e: DragEvent, slot: 'axis' | 'value') {
+  const p = fieldDragOf(e)
+  if (!p) return
+  e.preventDefault()
+  e.stopPropagation()
+  overSlot.value = ''
+  endFieldDrag()
+  if (placeField(p.name, slot)) emit('placed', p.name, slot)
+}
+defineExpose({ placeField, refresh })
 
 // Text → safe HTML. Needed ONLY inside ECharts' tooltip formatters, which are the only
 // point of the frontend where we build HTML from a string.
@@ -703,7 +770,7 @@ const option = computed(() => {
   <div class="chartpanel">
     <!-- controls in one row above the chart -->
     <div class="controls">
-      <div class="typebtns" role="group" :aria-label="$t('chartPanel.chartType')">
+      <div v-roving class="typebtns" role="radiogroup" :aria-label="$t('chartPanel.chartType')">
         <template v-for="(group, gi) in CHART_GROUPS" :key="gi">
           <span v-if="gi" class="typesep" aria-hidden="true" />
           <button
@@ -713,7 +780,8 @@ const option = computed(() => {
             :class="{ active: chartType === ct.id }"
             :title="chartTypeLabels[ct.id]"
             :aria-label="chartTypeLabels[ct.id]"
-            :aria-pressed="chartType === ct.id"
+            role="radio"
+            :aria-checked="chartType === ct.id"
             @click="chartType = ct.id"
           ><component :is="ct.icon" :size="14" aria-hidden="true" /></button>
         </template>
@@ -721,7 +789,7 @@ const option = computed(() => {
 
       <template v-if="!isOne">
         <label>{{ isScatter ? $t('chartPanel.point') : 'X' }}</label>
-        <Select v-model="xCol" :options="allCols" class="csel" />
+        <Select v-model="xCol" :options="allCols" class="csel" :placeholder="manual ? $t('chartPanel.columnPlaceholder') : undefined" />
       </template>
 
       <template v-if="isScatter">
@@ -790,13 +858,39 @@ const option = computed(() => {
       <span v-else-if="notDrawn && !nothingToDraw" class="muted">{{ $t('chartPanel.notDrawn', { n: notDrawn }, notDrawn) }}</span>
     </div>
 
-    <div class="plot">
+    <div class="plot" :class="{ 'cp-dragging': !!dragging }">
+      <!-- a field being dragged: its two places on the chart, over what is drawn -->
+      <div v-if="dragging" class="cp-drop">
+        <div
+          v-if="chartType !== 'gauge'"
+          class="cp-slot"
+          :class="{ over: overSlot === 'axis' }"
+          data-slot="axis"
+          @dragover="onSlotOver($event, 'axis')"
+          @dragleave="overSlot = ''"
+          @drop="onSlotDrop($event, 'axis')"
+        >
+          <span class="cp-slot-name">{{ axisLabel }}</span>
+          <span v-if="chartType !== 'kpi' && !isScatter" class="cp-slot-hint">{{ $t('chartPanel.dropAxisHint') }}</span>
+        </div>
+        <div
+          class="cp-slot"
+          :class="{ over: overSlot === 'value', no: !valueTakes(dragging.name) }"
+          data-slot="value"
+          @dragover="onSlotOver($event, 'value')"
+          @dragleave="overSlot = ''"
+          @drop="onSlotDrop($event, 'value')"
+        >
+          <span class="cp-slot-name">{{ $t('chartPanel.dropValue') }}</span>
+          <span class="cp-slot-hint">{{ valueTakes(dragging.name) ? $t('chartPanel.dropValueHint') : $t('chartPanel.dropValueNumbers') }}</span>
+        </div>
+      </div>
       <KpiCard v-if="kpi" :label="seriesName" :value="kpi.value" :change="kpi.change" :spark="kpi.spark" />
       <p v-else-if="nothingToDraw" class="muted empty">{{ $t('chartPanel.nothingAboveZero') }}</p>
       <p v-else-if="noRows && !loading && !error" class="muted empty">{{ $t('chartPanel.noRows') }}</p>
       <VChart v-else-if="drawable" :option="option" autoresize />
       <p v-else-if="!loading" class="muted empty">
-        {{ $t('chartPanel.chooseColumnsHint') }}
+        {{ manual ? $t('chartPanel.dropFieldsHint') : $t('chartPanel.chooseColumnsHint') }}
       </p>
     </div>
   </div>
@@ -823,8 +917,24 @@ const option = computed(() => {
 .numin { width: 96px; padding: 4px 8px; font-size: 12px; }
 .typebtns button.active { border-color: var(--accent); background: color-mix(in srgb, var(--accent) 12%, transparent); }
 button.mini { padding: 4px 8px; }
-.plot { flex: 1; min-height: 0; }
+.plot { flex: 1; min-height: 0; position: relative; }
 .plot > * { width: 100%; height: 100%; }
+/* a field dragged over the chart: its two places, in the report designer's drop language
+   (a dashed accent outline, tinted under the pointer) */
+.plot > .cp-drop {
+  position: absolute; inset: 0; z-index: 2; display: grid; grid-auto-flow: column; grid-auto-columns: 1fr; gap: 10px;
+  background: var(--panel);
+}
+.cp-slot {
+  display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 4px; padding: 12px;
+  border: 1.5px dashed var(--control-border); border-radius: 8px; text-align: center;
+  transition: border-color var(--dur-1) ease-out, background-color var(--dur-1) ease-out;
+}
+.cp-slot.over { border-color: var(--accent); background: color-mix(in srgb, var(--accent) 10%, transparent); }
+.cp-slot.no { opacity: 0.6; }
+.cp-slot-name { font-size: 13px; font-weight: 600; pointer-events: none; }
+.cp-slot-hint { font-size: 12px; color: var(--muted); pointer-events: none; }
+@media (prefers-reduced-motion: reduce) { .cp-slot { transition: none; } }
 .empty { padding: 18px; font-size: 12px; }
 .err { color: var(--danger); font-size: 12px; }
 </style>

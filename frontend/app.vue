@@ -1,6 +1,7 @@
 <script setup lang="ts">
 // explicit import: in the container new components are not scanned
 import IdleWarning from '~/components/ui/IdleWarning.vue'
+import AppKeys from '~/components/ui/AppKeys.vue'
 </script>
 
 <template>
@@ -10,4 +11,6 @@ import IdleWarning from '~/components/ui/IdleWarning.vue'
   <NuxtPage />
   <ToastHost />
   <IdleWarning />
+  <!-- the keys of every page: «g» and a letter, «,» «.», «/», «?» -->
+  <AppKeys />
 </template>

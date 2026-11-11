@@ -467,11 +467,13 @@ async function toggleEngine(m: EnginePolicy) {
 
     <div class="layout">
       <!-- section navigation: for administration only -->
-      <nav class="sidenav">
+      <nav v-roving.main.vertical class="sidenav" role="tablist" aria-orientation="vertical" :aria-label="$t('appKeys.sections')">
         <button
           v-for="s in sections"
           :key="s.id"
           class="navitem"
+          role="tab"
+          :aria-selected="section === s.id"
           :class="{ on: section === s.id, 'is-off': 'off' in s && s.off }"
           :aria-disabled="'off' in s && s.off ? 'true' : undefined"
           :title="'off' in s && s.off ? $t(s.id === 'backups' ? 'backups.kubernetesOnly' : 'scripting.kubernetesOnly') : undefined"
@@ -729,7 +731,7 @@ async function toggleEngine(m: EnginePolicy) {
             <p class="muted small hint">{{ $t('adminPanel.privacyHint') }}</p>
             <template v-if="privacy">
               <label class="chk">
-                <input v-model="privacy.enabled" type="checkbox" :disabled="!canWrite" />
+                <input v-model="privacy.enabled" type="checkbox" role="switch" :disabled="!canWrite" />
                 {{ $t('adminPanel.privacyEnabled') }}
               </label>
               <label class="dlabel" for="pv-sum">{{ $t('adminPanel.privacySummary') }}</label>

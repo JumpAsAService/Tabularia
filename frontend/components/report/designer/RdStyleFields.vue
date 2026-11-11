@@ -108,7 +108,7 @@ function borderPart(k: 'width' | 'color', v: number | string | null) {
     </div>
     <template v-if="has('border')">
       <label class="rsf-check">
-        <input type="checkbox" :checked="!!style.border" @change="toggleBorder(($event.target as HTMLInputElement).checked)" />
+        <input type="checkbox" role="switch" :checked="!!style.border" @change="toggleBorder(($event.target as HTMLInputElement).checked)" />
         {{ $t('reportDesigner.style.border') }}
       </label>
       <div v-if="style.border" class="rsf-row">
@@ -134,7 +134,7 @@ function borderPart(k: 'width' | 'color', v: number | string | null) {
     </div>
     <RdFormatInput v-if="has('format')" :model-value="style.format" :label="$t('reportDesigner.style.format')" :item="item" :path="`${path ? path + '.' : ''}style.format`" @update:model-value="set('format', $event)" />
     <label v-if="has('grow')" class="rsf-check">
-      <input type="checkbox" :checked="!!style.can_grow" @change="set('can_grow', ($event.target as HTMLInputElement).checked || null)" />
+      <input type="checkbox" role="switch" :checked="!!style.can_grow" @change="set('can_grow', ($event.target as HTMLInputElement).checked || null)" />
       {{ $t('reportDesigner.style.canGrow') }}
     </label>
   </div>

@@ -209,7 +209,7 @@ const situation = computed<{ tone: 'off' | 'ok' | 'error' | 'waiting'; text: str
     </div>
 
     <label class="tick">
-      <input v-model="draft.verify_tls" type="checkbox" :disabled="!editable || saving" />
+      <input v-model="draft.verify_tls" type="checkbox" role="switch" :disabled="!editable || saving" />
       <span>{{ $t('siem.verifyTls') }}</span>
     </label>
     <p v-if="!draft.verify_tls" class="notice" role="note"><TriangleAlert :size="13" /> {{ $t('siem.verifyTlsOff') }}</p>

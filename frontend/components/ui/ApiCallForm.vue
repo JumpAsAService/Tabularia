@@ -131,7 +131,7 @@ const cell = (v: unknown) => (v === null || v === undefined ? '' : typeof v === 
       </div>
       <p v-if="call.response.format === 'json'" class="ac-soft ac-note">{{ $t('apiSource.recordsPathHint') }}</p>
       <label v-if="call.response.format === 'json'" class="ac-check">
-        <input v-model="call.response.keyed" type="checkbox" /> {{ $t('apiSource.keyedLabel') }}
+        <input v-model="call.response.keyed" type="checkbox" role="switch" /> {{ $t('apiSource.keyedLabel') }}
       </label>
       <details v-if="call.response.format === 'json'" class="ac-more">
         <summary>{{ $t('apiSource.advancedTitle') }}</summary>

@@ -113,9 +113,9 @@ Run every command in **the same terminal**: the steps keep values in shell varia
 ## 1. Get Tabularia and a working folder
 
 ```bash
-git clone --branch v1.3.0 https://github.com/JumpAsAService/Tabularia.git
+git clone --branch v1.4.5 https://github.com/JumpAsAService/Tabularia.git
 cd Tabularia
-export VERSION=1.3.0 WORK="$HOME/tabularia-kind"
+export VERSION=1.4.5 WORK="$HOME/tabularia-kind"
 mkdir -p "$WORK"
 ```
 
@@ -131,9 +131,13 @@ and keep every value in a file only you can read, so a new terminal finds them:
 
 ```bash
 umask 077
-printf 'export VERSION=%q WORK=%q ADMIN_EMAIL=%q ADMIN_PASSWORD=%q\n' \
+printf 'umask 077\nexport VERSION=%q WORK=%q ADMIN_EMAIL=%q ADMIN_PASSWORD=%q\n' \
   "$VERSION" "$WORK" "$ADMIN_EMAIL" "$ADMIN_PASSWORD" > "$WORK/env"
 ```
+
+`umask 077` makes every file this terminal writes from now on readable by you alone: the
+later steps write passwords in `$WORK` (`values.yaml` among them). The file sets it again
+for a new terminal.
 
 ## 2. A certificate authority and the registry's certificate
 
@@ -297,14 +301,16 @@ curl -s -o /dev/null -w '%{http_code}\n' --cacert "$WORK/ca.crt" -u "tabularia:$
 
 ## 6. Tabularia's images in the private registry
 
-A company copies the images it runs into its own registry. Do the same with the
-published ones. The login goes in a Docker settings folder of its own, not in your
+A company copies the images it runs into its own registry. Do the same with the five
+published ones: the engine (`backend`), the gateway (`gateway-go`), the AI service and
+the database migrations (`gateway`), the interface (`frontend`) and the pods of the data
+APIs (`data-api`). The login goes in a Docker settings folder of its own, not in your
 `~/.docker`:
 
 ```bash
 export DOCKER_CONFIG="$WORK/docker"
 echo "$REGISTRY_PASSWORD" | docker login 127.0.0.1:5443 -u tabularia --password-stdin
-for c in backend gateway frontend; do
+for c in backend gateway gateway-go frontend data-api; do
   docker pull "jumpasaservice/tabularia-${c}:${VERSION}"
   docker tag "jumpasaservice/tabularia-${c}:${VERSION}" "127.0.0.1:5443/tabularia/tabularia-${c}:${VERSION}"
   docker push "127.0.0.1:5443/tabularia/tabularia-${c}:${VERSION}"
@@ -318,7 +324,7 @@ it, with the authority of step 3.
 
 > [!NOTE]
 > **The code of a branch instead of a release** (to try a change before it is released):
-> clone without `--branch`, take the version from the chart, and build the three images
+> clone without `--branch`, take the version from the chart, and build the five images
 > from the clone instead of pulling them. Then go on with step 7.
 >
 > ```bash
@@ -329,8 +335,9 @@ it, with the authority of step 3.
 > docker build -t "127.0.0.1:5443/tabularia/tabularia-backend:${VERSION}" backend/
 > docker build -t "127.0.0.1:5443/tabularia/tabularia-gateway:${VERSION}" gateway/
 > docker build -t "127.0.0.1:5443/tabularia/tabularia-gateway-go:${VERSION}" gateway-go/
+> docker build -f gateway-go/dataapi/Dockerfile -t "127.0.0.1:5443/tabularia/tabularia-data-api:${VERSION}" gateway-go/
 > docker build -f frontend/Dockerfile.prod -t "127.0.0.1:5443/tabularia/tabularia-frontend:${VERSION}" frontend/
-> for c in backend gateway gateway-go frontend; do docker push "127.0.0.1:5443/tabularia/tabularia-${c}:${VERSION}"; done
+> for c in backend gateway gateway-go frontend data-api; do docker push "127.0.0.1:5443/tabularia/tabularia-${c}:${VERSION}"; done
 > unset DOCKER_CONFIG
 > ```
 >
@@ -528,8 +535,9 @@ done
 kubectl get pods --namespace tabularia --watch
 ```
 
-When every pod is `1/1 Running`, press Ctrl+C and open **http://localhost:8080** (on
-Windows, in the browser of Windows). Sign in with `$ADMIN_EMAIL` and `$ADMIN_PASSWORD`.
+When every pod is `Running` and ready (`1/1`; `2/2` for the two `worker` pods, which carry
+the chart service next to the worker), after a minute or two, press Ctrl+C and open
+**http://localhost:8080** (on Windows, in the browser of Windows). Sign in with `$ADMIN_EMAIL` and `$ADMIN_PASSWORD`.
 
 **Administration → Cluster** shows, refreshed every three seconds, the pods of Tabularia
 and, from step 10, the Jobs of the scripts and containers while they run, each linked to
@@ -788,7 +796,8 @@ problem.
 
 ## Upgrade it
 
-Build and push the new release's images as in step 6, then follow
+Set `VERSION` to the new release (in this terminal and in `$WORK/env`), copy its five
+images into the registry as in step 6, then follow
 [Upgrading Tabularia](upgrading.md): the commands of its minikube part work here too,
 since PostgreSQL is in the same namespace `tabularia-deps`. On Windows, run them in the
 Ubuntu terminal and take the blocks for Linux and macOS, not the PowerShell ones. MinIO's

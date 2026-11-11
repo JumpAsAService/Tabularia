@@ -166,7 +166,7 @@ const unavailable = computed(() => {
       @change="emit('update', { label: ($event.target as HTMLInputElement).value.trim() || t('scripting.node.title') })"
     />
 
-    <div class="mode" role="radiogroup" :aria-label="$t('scripting.node.source')">
+    <div v-roving class="mode" role="radiogroup" :aria-label="$t('scripting.node.source')">
       <button type="button" role="radio" :aria-checked="!byRef" :class="{ on: !byRef }" :disabled="readOnly" @click="setMode('inline')">
         {{ $t('scripting.node.sourceInline') }}
       </button>

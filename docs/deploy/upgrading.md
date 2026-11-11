@@ -217,7 +217,7 @@ release's ConfigMap and Secret:
 ```yaml
 apiVersion: batch/v1
 kind: Job
-metadata: { name: tabularia-migrate-1-3-0, namespace: <namespace> }
+metadata: { name: tabularia-migrate-1-4-3, namespace: <namespace> }
 spec:
   backoffLimit: 0
   template:
@@ -225,7 +225,7 @@ spec:
       restartPolicy: Never
       containers:
         - name: migrate
-          image: <registry>/tabularia-gateway:1.3.0
+          image: <registry>/tabularia-gateway:1.4.5
           command: ["python", "-m", "app.db.migra"]
           envFrom:
             - configMapRef: { name: <release>-tabularia-config }
@@ -233,7 +233,7 @@ spec:
 ```
 
 It needs only the database's address and credentials, which the release already holds.
-Wait for it (`kubectl wait --for=condition=complete job/tabularia-migrate-1-3-0`), then
+Wait for it (`kubectl wait --for=condition=complete job/tabularia-migrate-1-4-3`), then
 upgrade.
 
 ## When something goes wrong
@@ -263,14 +263,23 @@ helm history tabularia --namespace tabularia
 helm rollback tabularia <the revision before> --namespace tabularia --wait --timeout 20m
 ```
 
-The pods go back to the previous images and values; the database stays migrated, which
-the previous release accepts: its `migrate` step finds a revision it does not know, does
-nothing, and the gateway starts with a warning that the database is newer than its code.
-This holds for **one release back**, and **from 1.2.2 on**: 1.2.1 and earlier stop on a
-database migrated by a newer release (their new pods stay in `Init:CrashLoopBackOff`, and
-the release is left half rolled back), so going back to them means restoring the backup
-taken before the upgrade, below. Further back, or when the data itself is in question,
-restore the backup too.
+The pods go back to the previous images and values; the database stays migrated. Whether
+the previous release starts on it depends on the two releases:
+
+- **Between patches of the 1.4 line, from 1.4.2 on** (1.4.3 → 1.4.2): it starts. The
+  patches migrate only by adding, the `migrate` step finds a revision it does not know and
+  does nothing, and the gateway starts with a warning that the database is newer than its
+  code.
+- **To 1.4.1 or 1.4.0**: it does not. Their gateway wants its exact revision and refuses a
+  newer database, so its pods do not become ready and the release is left half rolled
+  back. Going back means restoring the backup taken before the
+  upgrade, below.
+- **Between minor releases** (1.4 → 1.3, later 1.5 → 1.4): a migration may do more than
+  add. Restore the backup.
+
+Restore the backup too when the data itself is in question. [Long-term
+support](../lts.md#rolling-back-a-patch) and [Database
+migrations](../database-migrations.md) have the rule and the reason.
 
 **Restore the backup.** First the file: the one of step 1, or one of the automatic
 backups — **Download** in Administration → Backups while Tabularia still works, otherwise

@@ -597,7 +597,7 @@ const STRATEGY_OPTIONS = Object.entries(STRATEGY_LABELS).map(([value, label]) =>
       <!-- plain scalars -->
       <input v-else-if="f.control === 'number'" type="number" v-model="state[f.key]" @change="emitUpdate" />
       <label v-else-if="f.control === 'boolean'" class="chk">
-        <input type="checkbox" v-model="state[f.key]" @change="emitUpdate" /> {{ $t('paramForm.yesLabel') }}
+        <input type="checkbox" role="switch" v-model="state[f.key]" @change="emitUpdate" /> {{ $t('paramForm.yesLabel') }}
       </label>
       <input v-else-if="f.control === 'text'" type="text" v-model="state[f.key]" @change="emitUpdate" />
 

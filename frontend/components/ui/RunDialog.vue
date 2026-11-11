@@ -94,7 +94,7 @@ function confirm() {
 
         <template v-else>
           <label class="chk rd-toggle" :class="{ off: !canPublish }">
-            <input v-model="publishEnabled" type="checkbox" :disabled="!canPublish" />
+            <input v-model="publishEnabled" type="checkbox" role="switch" :disabled="!canPublish" />
             <Database :size="14" />
             {{ $t('runDialog.publishToggle') }}
           </label>
@@ -161,6 +161,8 @@ function confirm() {
 .rd-toggle { display: flex; align-items: center; gap: 7px; font-size: 13px; margin-top: 4px; }
 .rd-toggle input { width: auto; }
 .rd-toggle.off { opacity: 0.55; }
+/* the label is dimmed whole: the switch does not dim twice */
+.rd-toggle.off input { opacity: 1; }
 .rd-hint { font-size: 12px; margin: 0; }
 .rd-outputs { display: flex; flex-direction: column; gap: 6px; margin-top: 2px; }
 .rd-output {

@@ -13,11 +13,13 @@
 // Ctrl+C copies its exact value; the headers are its first row.
 import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
-import { Ban, Check, CircleAlert, Copy, Filter, MousePointerClick, PaintBucket } from 'lucide-vue-next'
+import { ArrowLeft, ArrowRight, Ban, Check, CircleAlert, Copy, Filter, MousePointerClick, PaintBucket, X } from 'lucide-vue-next'
 import type { ColumnStats, HistogramResult, PreviewResult, ProfileResult, TopValuesResult } from '~/composables/useApi'
 import { readableNumber } from '~/composables/readableNumber'
 import { usePopover } from '~/composables/usePopover'
 import { isSuperseded } from '~/composables/usePreviewSlots'
+import { draggedField, endFieldDrag, fieldDragOf, fieldDragOutside, startFieldDrag } from '~/composables/fieldDrag'
+import { insertionSlot, sameSlot } from '~/composables/viewerColumns'
 import {
   ariaRowCount, columnDetail, exactText, gridColumnFormatters, histogramBins, histogramEdges, histogramHeights,
   isIntegerDtype, isNumericDtype, moveCell, nullBarWidth, profileBasisText, profileStep, shareText, shortDtype, toTsv, visibleWindow,
@@ -68,11 +70,23 @@ const props = withDefaults(defineProps<{
   // adds a Filter step, the Viewer a filter), and the nulls be filled (the editor)
   // (`columns`: the only columns they apply to, all when left out)
   valueActions?: { filter: (column: string, value: unknown, exclude: boolean) => void; fillNulls?: (column: string) => void; columns?: string[] } | null
+  // the surface arranges its columns by hand (the Viewer): a name can be dragged along the
+  // header or out of the table, a field dropped between two names, a column moved with
+  // Shift+← → and removed with Del; the surface does it (`place`, `shift`, `remove`)
+  arrange?: boolean
+  // the columns whose values are on their way: named in their place, their cells waiting
+  waiting?: string[] | null
 }>(), {
   summary: undefined, summaryId: undefined, changes: null, count: null, empty: undefined, label: undefined,
   pendingColumns: null, profile: null, profileState: 'none', profileError: undefined, profileRetry: undefined,
-  columnDetail: undefined, profileWhole: undefined, valueActions: null,
+  columnDetail: undefined, profileWhole: undefined, valueActions: null, arrange: false, waiting: null,
 })
+const emit = defineEmits<{
+  // a field (or a column of the table) dropped at slot `at`: before the column that is there now
+  (e: 'place', name: string, at: number): void
+  (e: 'shift', name: string, delta: number): void
+  (e: 'remove', name: string): void
+}>()
 export type DetailAsk = { kind: 'top' } | { kind: 'histogram'; lo: number; hi: number; bins: number }
 
 const { t, locale } = useI18n()
@@ -114,11 +128,12 @@ function tip(v: unknown, name: string, dtype: string, j: number): string | undef
 // A row's cells as drawn (text, tooltip, class), made the first time the row comes into
 // view and kept for the result: scrolling back and forth only diffs, it formats nothing.
 // A plain Map, not reactive: it follows the result through `cellsFor`'s dependency on it.
-type Cell = { text: string; tip: string | undefined; cls: string }
+type Cell = { text: string; tip: string | undefined; cls: string; wait?: boolean }
 // the columns whose longest values pass the cap (see computeWidths)
 const cappedCols = ref<boolean[]>([])
 let cellMemo = new Map<number, Cell[]>()
-watch([() => props.result, formatters, () => props.readable, cappedCols, pending], () => { cellMemo = new Map() })
+const waitingSet = computed(() => new Set(props.waiting ?? []))
+watch([() => props.result, formatters, () => props.readable, cappedCols, pending, waitingSet], () => { cellMemo = new Map() })
 function cellsFor(i: number): Cell[] {
   void props.result // re-read when the result changes
   void cappedCols.value // and when the columns that take a tooltip do
@@ -126,6 +141,8 @@ function cellsFor(i: number): Cell[] {
   if (cells) return cells
   const row = rows.value[i] ?? {}
   cells = cols.value.map((c, j) => {
+    // a column named before its values came: a skeleton in its cells, never a false ∅
+    if (waitingSet.value.has(c.name)) return { text: '', tip: undefined, cls: 'dg-wait' + (isNum(c.dtype) ? ' num' : ''), wait: true }
     const v = row[c.name]
     const nul = v === null || v === undefined
     return { text: text(v, c.name, c.dtype), tip: tip(v, c.name, c.dtype, j), cls: (nul ? 'null' : '') + (isNum(c.dtype) ? ' num' : '') }
@@ -140,7 +157,7 @@ const ownSummary = computed(() => {
   if (props.summary !== undefined || !props.result) return null
   const n = props.result.rows.length.toLocaleString(locale.value)
   const rowsText = props.result.truncated ? t('dataGrid.first', { shown: n }) : t('dataGrid.rows', { n })
-  return `${rowsText} · ${t('dataGrid.columns', { n: props.result.columns.length })}`
+  return `${rowsText} · ${t('dataGrid.columns', { n: props.result.columns.length }, props.result.columns.length)}`
 })
 const hintId = `${uid}-hint`
 const describedBy = computed(() => [props.summaryId ?? (ownSummary.value ? ownSummaryId : null), hintId].filter(Boolean).join(' '))
@@ -310,7 +327,25 @@ function onGridKey(e: KeyboardEvent) {
     void copyActive()
     return
   }
-  if (mod && e.key !== 'Home' && e.key !== 'End') return // the page's shortcuts (save, undo)
+  if (props.arrange && !pending.value) {
+    const c = cols.value[active.value.c]
+    // Shift+← →: the active cell's column one place along (from a cell or from its name)
+    if (c && e.shiftKey && !mod && (e.key === 'ArrowLeft' || e.key === 'ArrowRight')) {
+      e.preventDefault()
+      e.stopPropagation()
+      shiftActive(e.key === 'ArrowLeft' ? -1 : 1)
+      return
+    }
+    // Del, or Ctrl/⌘+Backspace where there is no Del: on a column's name, the column leaves
+    if (c && inHead && !e.shiftKey && ((e.key === 'Delete' && !mod) || (e.key === 'Backspace' && mod))) {
+      e.preventDefault()
+      e.stopPropagation()
+      removeColumn(active.value.c)
+      return
+    }
+  }
+  // the page's shortcuts (save, undo) but the grid's own: Ctrl/⌘ with Home, End, ↑ and ↓
+  if (mod && !['Home', 'End', 'ArrowUp', 'ArrowDown'].includes(e.key)) return
   if (e.key === 'Enter' && inCell && profiling.value) {
     e.preventDefault()
     openProfile(active.value.c)
@@ -336,6 +371,136 @@ function onGridClick(e: MouseEvent) {
   active.value = { r: Number(td.dataset.r), c: Number(td.dataset.c) }
   nextTick(() => { if (td.isConnected) td.focus({ preventScroll: true }) })
 }
+// ── columns arranged by hand (`arrange`): moved, removed, a field dropped between two ──
+// The surface rearranges the columns, the grid follows: what to do (where the active cell and
+// the focus go) once the new columns are drawn, not a tick before them.
+let afterArrange: (() => void) | null = null
+watch(() => cols.value.map((c) => c.name).join('\u0001'), () => {
+  const then = afterArrange
+  afterArrange = null
+  then?.()
+}, { flush: 'post' })
+/** The active cell's column one place along; the active cell goes with it. */
+function shiftActive(delta: number) {
+  const at = active.value
+  const c = cols.value[at.c]
+  const to = at.c + delta
+  if (!c || to < 0 || to >= cols.value.length) return
+  emit('shift', c.name, delta)
+  afterArrange = () => {
+    active.value = { r: at.r, c: to }
+    reveal(active.value)
+    nextTick(() => cellEl(active.value)?.focus({ preventScroll: true }))
+  }
+}
+function removeColumn(j: number) {
+  const c = cols.value[j]
+  if (!c) return
+  const left = cols.value.length - 1
+  popOpen.value = false
+  emit('remove', c.name)
+  // the focus on the name that takes its place (the last one's, the one before)
+  if (left > 0) {
+    const back = scroller.value?.contains(document.activeElement) || popEl.value?.contains(document.activeElement)
+    afterArrange = () => {
+      active.value = { r: -1, c: Math.min(j, left - 1) }
+      if (back) headButton(active.value.c)?.focus({ preventScroll: true })
+    }
+  }
+}
+// the profile's buttons (the touch's way): the panel follows its column
+function shiftFromPop(delta: number) {
+  const c = popColumn.value
+  const to = popCol.value + delta
+  if (!c || to < 0 || to >= cols.value.length) return
+  emit('shift', c.name, delta)
+  afterArrange = () => {
+    popCol.value = to
+    active.value = { r: -1, c: to }
+    reveal({ r: -1, c: to })
+    nextTick(() => place(to))
+  }
+}
+// where a dragged field would land: the slot, and the line drawn there (in the frame's own
+// coordinates); null when the drop would change nothing
+const dropAt = ref<{ slot: number; x: number } | null>(null)
+const frameEl = ref<HTMLElement | null>(null)
+function headEdges(): { left: number; right: number }[] {
+  const ths = scroller.value?.querySelectorAll<HTMLElement>('thead th[aria-colindex]:not(.rn)') ?? []
+  return [...ths].map((th) => { const r = th.getBoundingClientRect(); return { left: r.left, right: r.right } })
+}
+function onFieldOver(e: DragEvent) {
+  if (!props.arrange || pending.value) return
+  const p = fieldDragOf(e)
+  if (!p) return
+  e.preventDefault()
+  fieldDragOutside.value = false
+  if (e.dataTransfer) e.dataTransfer.dropEffect = p.from === 'table' ? 'move' : 'copy'
+  const edges = headEdges()
+  const slot = insertionSlot(edges, e.clientX)
+  if (sameSlot(cols.value.map((c) => c.name), p.name, slot)) { dropAt.value = null; return }
+  const box = frameEl.value?.getBoundingClientRect()
+  const edge = slot < edges.length ? edges[slot].left : edges.length ? edges[edges.length - 1].right : (box?.left ?? 0) + rnWidth.value
+  // never under the pinned row numbers, never past the frame
+  const x = Math.max(rnWidth.value, Math.min(edge - (box?.left ?? 0), (box?.width ?? 0) - 2))
+  if (dropAt.value?.slot !== slot || dropAt.value.x !== x) dropAt.value = { slot, x }
+}
+function onFieldLeave(e: DragEvent) {
+  const to = e.relatedTarget as Node | null
+  if (!to || !scroller.value?.contains(to)) dropAt.value = null
+}
+function onFieldDrop(e: DragEvent) {
+  const p = fieldDragOf(e)
+  if (!props.arrange || !p) return
+  e.preventDefault()
+  const at = dropAt.value
+  dropAt.value = null
+  endFieldDrag()
+  if (at) emit('place', p.name, at.slot)
+}
+// A name dragged: along the header it moves its column, released anywhere outside the table
+// it removes it. The window takes the drop outside (a drag ended with Esc drops nowhere,
+// and removes nothing); a target that takes the field itself (the filters, the chart) ends
+// the drag first, and nothing is removed.
+let dragName = ''
+function inGrid(e: DragEvent): boolean {
+  const r = scroller.value?.getBoundingClientRect()
+  return !!r && e.clientX >= r.left && e.clientX <= r.right && e.clientY >= r.top && e.clientY <= r.bottom
+}
+function onWindowOver(e: DragEvent) {
+  if (draggedField.value?.from !== 'table' || inGrid(e)) return
+  e.preventDefault()
+  if (e.dataTransfer) e.dataTransfer.dropEffect = 'move'
+  fieldDragOutside.value = true
+}
+function onWindowDrop(e: DragEvent) {
+  if (draggedField.value?.from !== 'table' || inGrid(e)) return
+  e.preventDefault()
+  const name = dragName
+  endFieldDrag()
+  const j = cols.value.findIndex((c) => c.name === name)
+  if (j >= 0) removeColumn(j)
+}
+function listenOutside(on: boolean) {
+  window[on ? 'addEventListener' : 'removeEventListener']('dragover', onWindowOver as EventListener)
+  window[on ? 'addEventListener' : 'removeEventListener']('drop', onWindowDrop as EventListener)
+}
+function onHeadDragStart(e: DragEvent, j: number) {
+  const c = cols.value[j]
+  if (!props.arrange || !c) { e.preventDefault(); return }
+  popOpen.value = false
+  dragName = c.name
+  startFieldDrag(e, { name: c.name, dtype: c.dtype, from: 'table' })
+  listenOutside(true)
+}
+function onHeadDragEnd() {
+  listenOutside(false)
+  dropAt.value = null
+  dragName = ''
+  endFieldDrag()
+}
+onBeforeUnmount(() => listenOutside(false))
+
 function onHeadClick(j: number) {
   const c = cols.value[j]
   if (!c) return
@@ -538,7 +703,9 @@ function computeWidths() {
   const rs = rows.value
   const plans: Plan[] = cols.value.map((c) => {
     let cells: string[]
-    if (isNum(c.dtype) && !props.readable) {
+    if (waitingSet.value.has(c.name)) {
+      cells = []
+    } else if (isNum(c.dtype) && !props.readable) {
       // the longest number is the largest or the smallest one (one count of decimals a column)
       let lo: number | null = null; let hi: number | null = null
       for (const r of rs) {
@@ -571,7 +738,7 @@ function computeWidths() {
   if (capped.join() !== cappedCols.value.join()) cappedCols.value = capped
 }
 // the marks as text: a new object with the same marks (the editor recomputes them) measures nothing
-watch([() => props.result, cols, formatters, () => JSON.stringify(props.changes?.marks ?? {}), () => props.readable, fontsEpoch], computeWidths, { immediate: true })
+watch([() => props.result, cols, formatters, () => JSON.stringify(props.changes?.marks ?? {}), () => props.readable, fontsEpoch, waitingSet], computeWidths, { immediate: true })
 function onFontsLoaded() { refit = true; fontsEpoch.value++ }
 onMounted(() => {
   const fonts = typeof document !== 'undefined' ? document.fonts : undefined
@@ -617,6 +784,16 @@ const detail = ref<Detail | null>(null)
 // the column's name and type said when the arrows move the panel to another column
 const popSaid = ref('')
 watch(() => props.stale, (s) => { if (s) popOpen.value = false })
+// the columns rearranged under an open profile: it stays on its column, or closes with it
+let popName = ''
+watch(popColumn, (c) => { if (c) popName = c.name })
+watch(() => cols.value.map((c) => c.name).join('\u0001'), () => {
+  if (!popOpen.value || !popName) return
+  if (cols.value[popCol.value]?.name === popName) return
+  const j = cols.value.findIndex((c) => c.name === popName)
+  if (j < 0) popOpen.value = false
+  else { popCol.value = j; nextTick(() => place(j)) }
+})
 function place(j: number) {
   const th = headButton(j)?.closest('th') as HTMLElement | null
   if (!th) return
@@ -793,7 +970,7 @@ function act(kind: 'keep' | 'exclude' | 'fill', value?: unknown) {
     <template v-else>
       <div v-if="note" class="pad dg-note">{{ note }}</div>
       <div v-if="ownSummary" :id="ownSummaryId" class="dg-summary">{{ ownSummary }}</div>
-      <div class="dg-frame" :class="{ 'dg-sx': scrolledX }">
+      <div ref="frameEl" class="dg-frame" :class="{ 'dg-sx': scrolledX, 'dg-arrange': arrange }">
         <div
           ref="scroller"
           class="dg-scroll"
@@ -805,6 +982,9 @@ function act(kind: 'keep' | 'exclude' | 'fill', value?: unknown) {
           @focusin="onGridFocus"
           @click="onGridClick"
           @pointerdown="kbd = false"
+          @dragover="onFieldOver"
+          @dragleave="onFieldLeave"
+          @drop="onFieldDrop"
         >
           <table
             class="data dg-table"
@@ -827,7 +1007,7 @@ function act(kind: 'keep' | 'exclude' | 'fill', value?: unknown) {
                   :key="c.name"
                   role="columnheader"
                   :aria-colindex="j + 2"
-                  :class="{ num: isNum(c.dtype), marked: !!markOf(c.name) }"
+                  :class="{ num: isNum(c.dtype), marked: !!markOf(c.name), 'dg-lift': arrange && draggedField?.from === 'table' && draggedField.name === c.name }"
                   :title="headTitle(c)"
                 >
                   <button
@@ -838,12 +1018,25 @@ function act(kind: 'keep' | 'exclude' | 'fill', value?: unknown) {
                     :aria-describedby="hintId"
                     :aria-haspopup="profiling ? 'dialog' : undefined"
                     :aria-expanded="profiling ? popOpen && popCol === j : undefined"
+                    :draggable="arrange && !pending ? 'true' : undefined"
+                    @dragstart="onHeadDragStart($event, j)"
+                    @dragend="onHeadDragEnd"
                     @click="onHeadClick(j)"
                     @focus="active = { r: -1, c: j }"
                   >
                     <span class="cn-text">{{ c.name }}</span>
                     <Check v-if="copied === c.name" :size="11" class="cn-done" aria-hidden="true" />
                   </button>
+                  <!-- the pointer's way of removing a column (the keyboard has Del, a touch the profile's button) -->
+                  <button
+                    v-if="arrange && !pending"
+                    type="button"
+                    class="cx"
+                    tabindex="-1"
+                    :aria-label="$t('dataGrid.removeColumn', { name: c.name })"
+                    :title="$t('dataGrid.removeColumn', { name: c.name })"
+                    @click.stop="removeColumn(j)"
+                  ><X :size="12" aria-hidden="true" /></button>
                   <!-- the type, the step's mark, and the share of nulls when there is room for it
                        (a part that does not fit goes to a second line, which is not shown) -->
                   <span class="ct"><span class="ct-type">{{ shortDtype(c.dtype) }}</span><span v-if="markOf(c.name)" class="mk">· {{ markLabel(markOf(c.name)!) }}</span><span
@@ -877,7 +1070,7 @@ function act(kind: 'keep' | 'exclude' | 'fill', value?: unknown) {
                   :class="[cell.cls, { 'dg-copied': copiedCell === `${i}:${j}`, 'dg-act': active.r === i && active.c === j }]"
                   :title="cell.tip"
                   :tabindex="cellTab(i, j)"
-                >{{ cell.text }}</td>
+                ><span v-if="cell.wait" class="sk" :style="{ width: skW(i, j) }" /><template v-else>{{ cell.text }}</template></td>
               </tr>
               <tr v-if="padBottom" class="spacer" aria-hidden="true"><td :colspan="cols.length + 1" :style="{ height: `${padBottom}px` }" /></tr>
               <!-- the rows of what is being computed, under its header -->
@@ -891,7 +1084,9 @@ function act(kind: 'keep' | 'exclude' | 'fill', value?: unknown) {
           </table>
           <p v-if="!rows.length && !pending" class="dg-norows muted">{{ $t('dataGrid.noRows') }}</p>
         </div>
-        <span :id="hintId" class="sr-only">{{ profiling ? $t('dataGrid.keysHintProfile') : $t('dataGrid.keysHint') }}</span>
+        <!-- where a dragged field would land: a line between two names, the table's height -->
+        <span v-if="dropAt" class="dg-insert" :style="{ transform: `translateX(${dropAt.x - 1}px)` }" aria-hidden="true" />
+        <span :id="hintId" class="sr-only">{{ profiling ? $t('dataGrid.keysHintProfile') : $t('dataGrid.keysHint') }}<template v-if="arrange"> {{ $t('dataGrid.keysHintArrange') }}</template></span>
       </div>
     </template>
 
@@ -1002,6 +1197,12 @@ function act(kind: 'keep' | 'exclude' | 'fill', value?: unknown) {
           <button v-if="profileRetry && !profile" type="button" class="dg-pop-link" @click="profileRetry">{{ $t('dataGrid.tryAgain') }}</button>
         </p>
         <div class="dg-pop-actions">
+          <template v-if="arrange">
+            <button type="button" class="mini dg-pop-icon" :disabled="popCol <= 0" :aria-label="$t('dataGrid.moveLeft')" :title="$t('dataGrid.moveLeft')" @click="shiftFromPop(-1)"><ArrowLeft :size="12" aria-hidden="true" /></button>
+            <button type="button" class="mini dg-pop-icon" :disabled="popCol >= cols.length - 1" :aria-label="$t('dataGrid.moveRight')" :title="$t('dataGrid.moveRight')" @click="shiftFromPop(1)"><ArrowRight :size="12" aria-hidden="true" /></button>
+            <button type="button" class="mini" @click="removeColumn(popCol)"><X :size="12" aria-hidden="true" /> {{ $t('dataGrid.removeFromTable') }}</button>
+            <span class="dg-pop-gap" />
+          </template>
           <button type="button" class="mini" @click="copyName(popColumn.name)">
             <component :is="copied === popColumn.name ? Check : Copy" :size="12" aria-hidden="true" />
             {{ copied === popColumn.name ? $t('dataGrid.copiedName') : $t('dataGrid.copyName') }}
@@ -1089,6 +1290,29 @@ function act(kind: 'keep' | 'exclude' | 'fill', value?: unknown) {
 .dg-table th .cn:focus-visible,
 .dg-kbd .dg-scroll:focus-within .dg-table th .cn.dg-act:focus { outline: 2px solid var(--accent); outline-offset: 2px; border-radius: 3px; }
 .cn-text { overflow: hidden; text-overflow: ellipsis; }
+/* columns arranged by hand: the name is grabbed and dragged (a click still opens its profile),
+   the column being dragged dims in its place, the × removes it */
+.dg-arrange .dg-table th .cn[draggable="true"] { cursor: grab; }
+.dg-arrange .dg-table th .cn[draggable="true"]:active { cursor: grabbing; }
+.dg-table th.dg-lift > * { opacity: 0.42; }
+.dg-table th .cx {
+  position: absolute; top: 3px; right: 3px; display: none; align-items: center; justify-content: center;
+  width: 18px; height: 18px; margin: 0; padding: 0; border: 0; border-radius: 4px;
+  background: var(--panel-2); box-shadow: -6px 0 6px -2px var(--panel-2); color: var(--muted); cursor: pointer;
+}
+.dg-table th .cx:hover { color: var(--danger); background: var(--panel-2); box-shadow: -6px 0 6px -2px var(--panel-2); }
+.dg-table th .cx:active { transform: none; }
+@media (hover: hover) and (pointer: fine) {
+  .dg-table th:hover .cx { display: inline-flex; }
+}
+/* where a dragged field lands: a 2px line in the accent, between two names, down the table */
+.dg-insert {
+  position: absolute; top: 0; bottom: 0; left: 0; width: 2px; z-index: 4; pointer-events: none;
+  background: var(--accent); border-radius: 1px;
+  box-shadow: 0 0 0 2px color-mix(in srgb, var(--accent) 14%, transparent);
+}
+.dg-table td.dg-wait .sk { display: block; }
+.dg-table td.dg-wait.num .sk { margin-left: auto; }
 .cn-done { flex: none; color: var(--accent-2); }
 .dg-table th .mk { font-family: var(--dg-sans, inherit); font-size: 10.5px; font-weight: 600; color: var(--accent-hi); }
 /* the type's line: the type, the step's mark, the share of nulls; one line, a part with
@@ -1190,6 +1414,8 @@ function act(kind: 'keep' | 'exclude' | 'fill', value?: unknown) {
 .dg-hist-bar:hover > span { opacity: 1; }
 .dg-hist-axis { display: flex; justify-content: space-between; gap: 12px; margin-top: 3px; color: var(--muted); font-size: 11px; }
 .dg-hist-axis span { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.dg-pop-actions { display: flex; justify-content: flex-end; margin-top: 10px; }
+.dg-pop-actions { display: flex; justify-content: flex-end; flex-wrap: wrap; gap: 4px; margin-top: 10px; }
+.dg-pop-gap { flex: 1; }
+.dg-pop-actions .dg-pop-icon { padding-left: 7px; padding-right: 7px; }
 .dg-pop-actions .mini { display: inline-flex; align-items: center; gap: 5px; }
 </style>

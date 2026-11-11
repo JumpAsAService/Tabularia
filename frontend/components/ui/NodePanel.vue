@@ -246,7 +246,7 @@ function pickDatasource(id: number | null) {
       </div>
       <template v-if="node.data.parquetKey">
         <p><strong>{{ node.data.filename }}</strong><span v-if="node.data.sheet" class="muted"> · {{ $t('sheetPicker.sheet', { name: node.data.sheet }) }}</span></p>
-        <p class="muted">{{ $t('dataGrid.rows', { n: fmt.count(node.data.rows) }) }} · {{ $t('dataGrid.columns', { n: (node.data.columns || []).length }) }}</p>
+        <p class="muted">{{ $t('dataGrid.rows', { n: fmt.count(node.data.rows) }) }} · {{ $t('dataGrid.columns', { n: (node.data.columns || []).length }, (node.data.columns || []).length) }}</p>
         <p class="muted mono">{{ node.data.parquetKey }}</p>
         <div class="exportbar">
           <label>{{ $t('nodePanel.downloadNodeData') }}</label>
@@ -376,7 +376,7 @@ function pickDatasource(id: number | null) {
         />
         <label class="chk ovw">
           <input
-            type="checkbox"
+            type="checkbox" role="switch"
             :checked="node.data.overwrite ?? false"
             @change="emit('update', { overwrite: ($event.target as HTMLInputElement).checked })"
           />
@@ -403,7 +403,7 @@ function pickDatasource(id: number | null) {
              (if it fails the run stays valid) -->
         <label class="chk ovw">
           <input
-            type="checkbox"
+            type="checkbox" role="switch"
             :checked="node.data.mirrorEnabled ?? false"
             @change="emit('update', { mirrorEnabled: ($event.target as HTMLInputElement).checked })"
           />
@@ -549,7 +549,7 @@ function pickDatasource(id: number | null) {
         />
         <label class="chk ovw">
           <input
-            type="checkbox"
+            type="checkbox" role="switch"
             :checked="node.data.emailHtml ?? false"
             @change="emit('update', { emailHtml: ($event.target as HTMLInputElement).checked })"
           />
@@ -578,7 +578,7 @@ function pickDatasource(id: number | null) {
              the next steps go on -->
         <label class="chk ovw">
           <input
-            type="checkbox"
+            type="checkbox" role="switch"
             :checked="node.data.stopOnFailure !== false"
             @change="emit('update', { stopOnFailure: ($event.target as HTMLInputElement).checked })"
           />

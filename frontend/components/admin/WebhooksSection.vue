@@ -209,12 +209,11 @@ function toggleEvent(e: WebhookEvent) {
               <button
                 v-if="canWrite"
                 type="button"
-                class="switch"
                 role="switch"
                 :aria-checked="w.active"
                 :aria-label="$t('integrations.toggleAria', { name: w.name })"
                 @click="activate(w)"
-              ><span class="knob" /></button>
+              />
               <span v-else class="small">{{ w.active ? $t('integrations.on') : $t('integrations.off') }}</span>
             </td>
             <td class="right nowrap">
@@ -289,10 +288,6 @@ tr.off > td:first-child .rowpick { color: var(--muted); }
 .outcome.delivered { color: var(--accent-2); }
 .outcome.failed { color: var(--danger); }
 .outcome.pending, .outcome.sending { color: var(--warning); }
-.switch { position: relative; width: 34px; height: 20px; min-height: 0; padding: 0; border-radius: 999px; background: var(--panel-2); border: 1px solid var(--control-border); }
-.switch .knob { position: absolute; top: 2px; left: 2px; width: 14px; height: 14px; border-radius: 50%; background: var(--muted); transition: transform var(--dur-2), background var(--dur-2); }
-.switch[aria-checked="true"] { background: var(--tint-accent); border-color: var(--accent); }
-.switch[aria-checked="true"] .knob { transform: translateX(14px); background: var(--accent); }
 .reg { margin: 0 0 8px; }
 .cons { width: 100%; border-collapse: collapse; }
 .cons td { padding: 5px 4px; border-bottom: 1px solid var(--border-soft); vertical-align: top; }

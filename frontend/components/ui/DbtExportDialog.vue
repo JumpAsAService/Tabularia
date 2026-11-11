@@ -397,7 +397,7 @@ const targetHint = (id: DbtTarget) =>
                        :placeholder="target === 'duckdb' ? 'main' : 'dbt_tabularia'" />
               </label>
             </div>
-            <label class="dx-check"><input v-model="layers" type="checkbox" /> {{ $t('dbtExportDialog.layers') }}</label>
+            <label class="dx-check"><input v-model="layers" type="checkbox" role="switch" /> {{ $t('dbtExportDialog.layers') }}</label>
             <p v-if="errors.folder" id="dx-bad-folder" class="dx-bad">{{ errorText(errors.folder) }}</p>
             <p v-if="errors.prefix" id="dx-bad-prefix" class="dx-bad">{{ errorText(errors.prefix) }}</p>
             <p v-if="errors.schema" id="dx-bad-schema" class="dx-bad">{{ errorText(errors.schema) }}</p>

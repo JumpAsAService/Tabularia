@@ -745,7 +745,7 @@ const basePackages = computed(() => (form.value.language === 'python' ? 'polars,
       </fieldset>
 
       <label class="tick">
-        <input v-model="form.enabled" type="checkbox" :disabled="!editable || saving" />
+        <input v-model="form.enabled" type="checkbox" role="switch" :disabled="!editable || saving" />
         <span>{{ $t('scripting.enabled') }}</span>
       </label>
       <p v-if="env?.flows_using.length" class="hint muted small">
@@ -792,8 +792,8 @@ const basePackages = computed(() => (form.value.language === 'python' ? 'polars,
             :disabled="savingVariable"
             spellcheck="false"
           />
-          <label class="tick"><input v-model="variable.secret" type="checkbox" :disabled="variable.from_tabularia || savingVariable" /> {{ $t('scripting.secret') }}</label>
-          <label class="tick"><input v-model="variable.from_tabularia" type="checkbox" :disabled="savingVariable" /> {{ $t('scripting.fromTabulariaToggle') }}</label>
+          <label class="tick"><input v-model="variable.secret" type="checkbox" role="switch" :disabled="variable.from_tabularia || savingVariable" /> {{ $t('scripting.secret') }}</label>
+          <label class="tick"><input v-model="variable.from_tabularia" type="checkbox" role="switch" :disabled="savingVariable" /> {{ $t('scripting.fromTabulariaToggle') }}</label>
           <button type="submit" class="primary mini" :disabled="savingVariable || !variable.name.trim()">
             {{ editingVariable ? $t('scripting.save') : $t('scripting.add') }}
           </button>
@@ -839,13 +839,12 @@ const basePackages = computed(() => (form.value.language === 'python' ? 'polars,
                 <button
                   v-if="editable"
                   type="button"
-                  class="switch"
                   role="switch"
                   :aria-checked="v.internet_access"
                   :aria-label="$t('scripting.internetAria', { n: v.number })"
                   :disabled="switching !== null"
                   @click="setInternet(v)"
-                ><span class="knob" /></button>
+                />
                 <component :is="v.internet_access ? Globe : GlobeOff" v-else :size="13" />
                 {{ v.internet_access ? $t('scripting.internetAccess') : $t('scripting.noInternet') }}
               </span>
@@ -954,11 +953,6 @@ button.danger-zone { color: var(--danger-text); }
 .internet.offline { color: var(--warning); }
 /* the version's state colours its row's icons: not this one */
 .versions li > .version-row .internet svg { color: inherit; }
-.switch { position: relative; width: 34px; height: 20px; min-height: 0; padding: 0; border-radius: 999px; background: var(--panel-2); border: 1px solid var(--control-border); }
-.switch .knob { position: absolute; top: 2px; left: 2px; width: 14px; height: 14px; border-radius: 50%; background: var(--muted); transition: transform var(--dur-2), background var(--dur-2); }
-.switch[aria-checked="true"] { background: var(--tint-accent); border-color: var(--accent); }
-.switch[aria-checked="true"] .knob { transform: translateX(14px); background: var(--accent); }
-.switch:disabled { opacity: .6; }
 .version-error { margin: 0; }
 .version-error code { display: block; font-size: 11.5px; white-space: pre-wrap; overflow-wrap: anywhere; color: var(--danger); }
 details summary { cursor: pointer; font-size: 12px; color: var(--muted); }

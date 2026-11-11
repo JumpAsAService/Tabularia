@@ -171,6 +171,31 @@ runs the deploy; the product changes are in `CHANGELOG.md`.
    change (`CHANGELOG.md`, 1.3.0). With the Helm chart, `ai.max*`, `ai.comment*` and
    `ai.commentModel` now apply without `ai.enabled` too, to the providers added in
    Administration → AI models.
+   **New in 1.4.0:** the gateway is a Go program, in an image of its own. Five things
+   follow. A new image, `tabularia-gateway-go`, runs the gateway and the orchestrator:
+   a private registry must hold it before the upgrade. The `tabularia-gateway` image
+   stays, as the **AI service** (`APP__ROLE=ai`: the assistant, the SQL parsing) and
+   for the migration step; the chart (2.5.0) adds its Deployment, the Compose stack of
+   `infrastructure/` a service `ai`. The variables keep their names, but
+   `FORWARDED_ALLOW_IPS` is read as `GATEWAY_GO__FORWARDED_ALLOW_IPS`. The interface's
+   server reads `NUXT_GATEWAY_INTERNAL_URL` (the chart and the Compose stack set it).
+   Revisions 0038 (a column on `users`) and 0039 (the share links' three tables).
+   **New in 1.4.1:** revisions 0040 and 0041, and a fifth image, `tabularia-data-api`,
+   for the pods of the data APIs (chart 2.6.0). They are off by default
+   (`dataApi.enabled`, Kubernetes only): a private registry needs the image only when
+   you turn them on ([data-apis.md](../data-apis.md)).
+   **New in 1.4.2, the first release of the long-term support line:** revision 0042 (a
+   column on the versions of the scripting environments). **Take the backup of step 2
+   before upgrading from 1.4.1 or earlier**: their gateway wants its exact revision and
+   refuses the migrated database, so going back means restoring it. From 1.4.2 on, a
+   rollback to an earlier patch of the line needs no backup ([lts.md](../lts.md)). With
+   scripting on, the chart (2.7.0) runs an **egress proxy** (`scripts.noInternet.proxy`,
+   two pods of the Go gateway's image): it serves the versions of an environment whose
+   **Internet access** an administrator switches off, and changes nothing until one is.
+   The defaults of the AI assistant's limits are ten times as wide, with a ceiling of
+   20 USD a day for the whole installation (`AI__MAX_COST_PER_DAY_TOTAL_USD`); a value
+   you set stays as it is. The image tag `lts` follows the line.
+   **New in 1.4.3:** images only (chart 2.7.1). No migration, no new variable.
 4. **SQL Server.** The published backend images no longer contain the SQL Server
    driver (since 1.1.1): it is Microsoft's, under Microsoft's licence, and an AGPL
    image cannot carry it. If you have SQL Server connections, build or extend the
@@ -180,6 +205,17 @@ runs the deploy; the product changes are in `CHANGELOG.md`.
    not installed», and nothing else is affected.
 
 ## Rollout order
+
+**From 1.4.2 to 1.4.3:** replace the images; nothing depends on the order.
+
+**From 1.4.0 or 1.4.1 to 1.4.2:** the backup, then the migration step; nothing else
+depends on the order.
+
+**From 1.3.0 to 1.4.0:** copy `tabularia-gateway-go` into your registry if you use one,
+then the migration step and the rest together. With Helm, `helm upgrade` does it: the
+gateway and orchestrator pods change image, the AI service is a new Deployment. With the
+Compose stack of `infrastructure/`: `git pull`, then `docker compose up -d --build`,
+which builds the Go gateway and starts the `ai` service.
 
 **From 1.2.2 to 1.3.0:** the migration step, then the engine API, the workers and beat,
 then the gateways and orchestrators, the interface last: the new gateway calls the
@@ -253,6 +289,11 @@ below, gateway first, is for an upgrade from 1.0.x.
    line saying why there is none. Where scripting is on, open a notebook's app: it opens
    on the notebooks' own host. With the external ClickHouse before 25.3, run once the
    flows with a join and check what reads their output (above).
+7. **From 1.4.0.** The settings menu says the release and «Romulus». On Kubernetes,
+   `kubectl get pods` shows the gateway, the orchestrator and the `ai` pods `Running`;
+   with the Compose stack, `docker compose ps` shows `gateway` and `ai` `(healthy)`.
+   Ask the assistant a question where an AI model is enabled: the answer comes through
+   the AI service. From 1.4.2 with scripting on, two `egress-proxy` pods run too.
 
 ## Known limits to tell users
 

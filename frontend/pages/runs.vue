@@ -1,18 +1,22 @@
 <script setup lang="ts">
 // Runs: the global search of the runs in the readable projects, to understand why the
 // flows fail. Filter by state + text search on the reason (server-side, over the whole
-// dataset) + pagination; click on a row for the whole traceback.
+// dataset) + pagination; click on a row for the whole traceback, and from there the way to
+// the flow, datasource or script to repair. Failures that follow one another for the same
+// reason on the same object are one row (composables/runGroups.ts), on the page already
+// loaded: nothing more is asked of the server.
 import { ref, watch, computed } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { knownError } from '~/composables/knownErrors'
 import { useFormat } from '~/composables/useFormat'
-import { History, Search, RefreshCw, ChevronRight, Workflow, Database, DatabaseSearch, CalendarClock, User, Rows3, TriangleAlert, FileCode2, Container, Mail } from 'lucide-vue-next'
+import { History, Search, RefreshCw, ChevronRight, Workflow, Database, DatabaseSearch, CalendarClock, User, Rows3, TriangleAlert, FileCode2, Container, Mail, ArrowUpRight } from 'lucide-vue-next'
 import { useRuns, type RunInfo } from '~/composables/useRuns'
 import { runNotes, notesText } from '~/composables/usePlaceholders'
 import MissingValues from '~/components/ui/MissingValues.vue'
 import ScriptRunDetail from '~/components/scripting/ScriptRunDetail.vue'
 import ContainerRunDetail from '~/components/containers/ContainerRunDetail.vue'
 import { usePagedList } from '~/composables/usePagedList'
+import { groupRuns, runOpens } from '~/composables/runGroups'
 
 const { t, te } = useI18n()
 const fmtx = useFormat()
@@ -29,8 +33,12 @@ watch(status, () => {
   load()
 })
 
-function toggle(id: number) {
-  expanded.value = expanded.value === id ? null : id
+// the run whose detail is open; a group is open while it is one of its runs
+const groups = computed(() => groupRuns(items.value))
+const shown = (g: { runs: RunInfo[] }) => g.runs.find((r) => r.id === expanded.value) ?? null
+
+function toggle(g: { head: RunInfo; runs: RunInfo[] }) {
+  expanded.value = shown(g) ? null : g.head.id
 }
 
 function fmtDate(s: string | null): string {
@@ -74,11 +82,13 @@ const STATUSES = computed<{ value: 'FAILURE' | 'SUCCESS' | ''; label: string }[]
     <div class="page-head">
       <h1><History :size="18" /> {{ $t('runs.title') }} <span class="muted count">{{ total }}</span></h1>
       <div class="head-actions">
-        <div class="segmented">
+        <div v-roving.main class="segmented" role="radiogroup" :aria-label="$t('appKeys.statusFilter')">
           <button
             v-for="s in STATUSES"
             :key="s.value || 'all'"
+            role="radio"
             :class="{ on: status === s.value }"
+            :aria-checked="status === s.value"
             @click="status = s.value"
           >{{ s.label }}</button>
         </div>
@@ -99,27 +109,47 @@ const STATUSES = computed<{ value: 'FAILURE' | 'SUCCESS' | ''; label: string }[]
     </p>
 
     <div v-else class="runs">
-      <div v-for="r in items" :key="r.id" class="run" :class="{ open: expanded === r.id }">
-        <button class="run-row" @click="toggle(r.id)">
-          <ChevronRight :size="14" class="chev" :class="{ rot: expanded === r.id }" />
-          <span class="stpill" :class="r.status.toLowerCase()">{{ te(`runs.pill_${r.status}`) ? t(`runs.pill_${r.status}`) : r.status }}</span>
+      <div v-for="g in groups" :key="g.head.id" class="run" :class="{ open: !!shown(g) }">
+        <button class="run-row" :aria-expanded="!!shown(g)" @click="toggle(g)">
+          <ChevronRight :size="14" class="chev" :class="{ rot: !!shown(g) }" />
+          <span class="stpill" :class="g.head.status.toLowerCase()">{{ te(`runs.pill_${g.head.status}`) ? t(`runs.pill_${g.head.status}`) : g.head.status }}</span>
           <span class="who">
-            <component :is="r.kind === 'ingest' ? Database : r.kind === 'sql' ? DatabaseSearch : r.kind === 'script' ? FileCode2 : r.kind === 'container' ? Container : r.kind === 'pushmail' ? Mail : r.flow_group_id ? Rows3 : Workflow" :size="13" />
-            {{ r.flow_name || r.sql_script_name || r.source_name || r.group_name || (r.kind === 'ingest' ? $t('runs.refreshDatasource') : $t('runs.runNumber', { id: r.id })) }}
-            <span v-if="r.kind === 'script' || r.kind === 'container' || r.kind === 'pushmail'" class="muted">· {{ scriptLabel(r) }}</span>
+            <component :is="g.head.kind === 'ingest' ? Database : g.head.kind === 'sql' ? DatabaseSearch : g.head.kind === 'script' ? FileCode2 : g.head.kind === 'container' ? Container : g.head.kind === 'pushmail' ? Mail : g.head.flow_group_id ? Rows3 : Workflow" :size="13" />
+            {{ g.head.flow_name || g.head.sql_script_name || g.head.source_name || g.head.group_name || (g.head.kind === 'ingest' ? $t('runs.refreshDatasource') : $t('runs.runNumber', { id: g.head.id })) }}
+            <span v-if="g.head.kind === 'script' || g.head.kind === 'container' || g.head.kind === 'pushmail'" class="muted">· {{ scriptLabel(g.head) }}</span>
           </span>
-          <span v-if="r.status === 'SUCCESS' && runNotes(r.notes)" class="msg run-note">
-            <TriangleAlert :size="12" /> {{ notesText(runNotes(r.notes)!, t) }}
+          <span v-if="g.head.status === 'SUCCESS' && runNotes(g.head.notes)" class="msg run-note">
+            <TriangleAlert :size="12" /> {{ notesText(runNotes(g.head.notes)!, t) }}
           </span>
-          <span v-else class="msg muted">{{ knownError(r.error, t) || (r.status === 'SUCCESS' ? '—' : '') }}</span>
-          <span class="by muted" :class="{ sched: isScheduled(r) }" :title="isScheduled(r) ? $t('runs.triggeredByScheduler') : $t('runs.triggeredByName', { name: triggeredBy(r) })">
-            <component :is="isScheduled(r) ? CalendarClock : User" :size="12" />
-            {{ triggeredBy(r) }}
+          <span v-else class="msg muted">
+            <!-- the same failure, several times in a row: once, with how many -->
+            <span v-if="g.runs.length > 1" class="times" :title="$t('runs.repeatedTitle', { n: g.runs.length })">{{ $t('runs.repeated', { n: g.runs.length }) }}<span class="sr-only"> {{ $t('runs.repeatedTitle', { n: g.runs.length }) }}</span></span>
+            {{ knownError(g.head.error, t) || (g.head.status === 'SUCCESS' ? '—' : '') }}
           </span>
-          <span class="when muted">{{ fmtDate(r.started_at) }}</span>
+          <span class="by muted" :class="{ sched: isScheduled(g.head) }" :title="isScheduled(g.head) ? $t('runs.triggeredByScheduler') : $t('runs.triggeredByName', { name: triggeredBy(g.head) })">
+            <component :is="isScheduled(g.head) ? CalendarClock : User" :size="12" />
+            {{ triggeredBy(g.head) }}
+          </span>
+          <span class="when muted">{{ g.runs.length > 1 ? $t('runs.last', { when: fmtDate(g.head.started_at) }) : fmtDate(g.head.started_at) }}</span>
         </button>
-        <div v-if="expanded === r.id" class="detail">
-          <div v-if="r.error" class="detail-summary">{{ knownError(r.error, t) }}</div>
+        <Transition name="unfold">
+        <div v-if="shown(g)" class="detail-fold">
+        <div v-for="r in [shown(g)!]" :key="g.head.id" class="detail">
+          <!-- the runs of the group: which one the detail below is of -->
+          <div v-if="g.runs.length > 1" class="same" role="group" :aria-label="$t('runs.sameFailure', { n: g.runs.length })">
+            <span class="muted">{{ $t('runs.sameFailure', { n: g.runs.length }) }}</span>
+            <button
+              v-for="m in g.runs" :key="m.id" type="button" class="same-run" :class="{ on: m.id === r.id }"
+              :aria-pressed="m.id === r.id" :title="$t('runs.runNumber', { id: m.id })" @click="expanded = m.id"
+            >{{ fmtDate(m.started_at) }}</button>
+          </div>
+          <div class="detail-head">
+            <div v-if="r.error" class="detail-summary">{{ knownError(r.error, t) }}</div>
+            <!-- the object to repair, when the row names one that still exists -->
+            <NuxtLink v-if="runOpens(r)" :to="runOpens(r)!.to" class="open-it">
+              {{ $t(`runs.open_${runOpens(r)!.what}`) }} <ArrowUpRight :size="13" aria-hidden="true" />
+            </NuxtLink>
+          </div>
           <p v-if="r.status === 'SUCCESS' && runNotes(r.notes)?.duplicate_keys" class="run-note small">
             {{ $t('placeholders.repeatedKeys', { n: runNotes(r.notes)!.duplicate_keys }) }}
           </p>
@@ -136,6 +166,8 @@ const STATUSES = computed<{ value: 'FAILURE' | 'SUCCESS' | ''; label: string }[]
           <pre v-else-if="r.error_detail" class="trace">{{ r.error_detail }}</pre>
           <p v-else-if="!(r.status === 'SUCCESS' && runNotes(r.notes))" class="muted small">{{ $t('runs.noDetail') }}</p>
         </div>
+        </div>
+        </Transition>
       </div>
     </div>
 
@@ -156,8 +188,12 @@ const STATUSES = computed<{ value: 'FAILURE' | 'SUCCESS' | ''; label: string }[]
 .segmented { display: inline-flex; border: 1px solid var(--border); border-radius: 7px; overflow: hidden; }
 .segmented button { padding: 5px 11px; background: var(--panel-2); color: var(--muted); border: none; border-right: 1px solid var(--border); font-size: 13px; }
 .segmented button:last-child { border-right: none; }
-/* --on-accent, not #fff: on Dracula and Monokai the accent is light and wants dark text */
-.segmented button.on { background: var(--accent); color: var(--on-accent); }
+/* the group clips its corners: the focus ring is drawn inside the segment */
+.segmented button:focus-visible { outline-offset: -2px; }
+/* The filter in force: the accent's tint under `accent-hi`, as every other pressed segment of
+   the app (Audit, the share dialog) — 5:1 at least on the five themes. It was --on-accent on
+   the plain accent: white on #4f8cff, 3.22:1 at 13px on the dark theme. */
+.segmented button.on { background-image: linear-gradient(var(--tint-accent), var(--tint-accent)); color: var(--accent-hi); box-shadow: inset 0 0 0 1px var(--accent); }
 
 .runs { display: flex; flex-direction: column; gap: 6px; margin-top: 14px; }
 .run { border: 1px solid var(--border-soft); border-radius: 8px; background: var(--panel); overflow: hidden; }
@@ -172,6 +208,8 @@ const STATUSES = computed<{ value: 'FAILURE' | 'SUCCESS' | ''; label: string }[]
 .stpill.pending, .stpill.started { background: rgba(148, 163, 184, 0.15); color: var(--muted); }
 .who { display: inline-flex; align-items: center; gap: 6px; font-weight: 500; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .msg { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 13px; }
+/* how many times in a row: tabular, before the reason it counts */
+.times { display: inline-block; margin-right: 6px; padding: 0 6px; border: 1px solid var(--border); border-radius: 20px; color: var(--text); font-size: 12px; font-weight: 600; font-variant-numeric: tabular-nums; }
 .run-note { color: var(--warning); display: inline-flex; align-items: center; gap: 5px; }
 .run-note svg { flex: none; }
 .by { display: inline-flex; align-items: center; gap: 5px; font-size: 12.5px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
@@ -179,7 +217,16 @@ const STATUSES = computed<{ value: 'FAILURE' | 'SUCCESS' | ''; label: string }[]
 .when { text-align: right; font-size: 12.5px; white-space: nowrap; }
 
 .detail { border-top: 1px solid var(--border-soft); padding: 10px 12px 12px; background: var(--panel-2); }
-.detail-summary { font-size: 13px; margin-bottom: 8px; color: var(--text); }
+.detail-head { display: flex; align-items: flex-start; justify-content: space-between; gap: 8px 16px; flex-wrap: wrap; margin-bottom: 8px; }
+.detail-head:empty { display: none; }
+.detail-summary { flex: 1 1 320px; min-width: 0; font-size: 13px; color: var(--text); }
+.open-it { flex: none; margin-left: auto; display: inline-flex; align-items: center; gap: 4px; font-size: 13px; font-weight: 500; color: var(--accent-hi); text-decoration: none; }
+.open-it:hover { text-decoration: underline; }
+.open-it:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; border-radius: 4px; }
+.same { display: flex; align-items: center; flex-wrap: wrap; gap: 6px; margin-bottom: 10px; font-size: 12.5px; }
+.same-run { padding: 2px 8px; border: 1px solid var(--border); border-radius: 20px; background: var(--panel); color: var(--muted); font-size: 12px; font-variant-numeric: tabular-nums; box-shadow: none; }
+.same-run:hover { color: var(--text); border-color: var(--control-border); box-shadow: none; }
+.same-run.on { border-color: var(--accent); background: var(--tint-accent); color: var(--accent-hi); }
 .trace { margin: 0; padding: 10px; background: var(--panel); border: 1px solid var(--border-soft); border-radius: 6px; font-family: ui-monospace, monospace; font-size: 12px; line-height: 1.5; white-space: pre-wrap; word-break: break-word; max-height: 340px; overflow: auto; }
 .small { font-size: 12.5px; }
 .mini { padding: 6px 8px; }

@@ -648,7 +648,7 @@ const zones = computed(() => {
           </div>
 
           <div class="value">
-            <label v-if="v.kind === 'bool'" class="switch" :class="{ changed: toSave(v) }">
+            <label v-if="v.kind === 'bool'" class="onoff" :class="{ changed: toSave(v) }">
               <input
                 :id="fieldId(v)"
                 type="checkbox"
@@ -839,9 +839,8 @@ const zones = computed(() => {
 .field.text input { text-align: left; }
 .field input:focus { outline: none; box-shadow: none; }
 .unit { display: inline-flex; align-items: center; padding: 0 10px; font-size: 12px; color: var(--muted); border-left: 1px solid var(--border-soft); white-space: nowrap; }
-.switch { display: inline-flex; align-items: center; gap: 8px; font-size: 13px; min-height: 34px; cursor: pointer; }
-.switch.changed span { color: var(--accent-hi); }
-.switch input { width: 16px; height: 16px; accent-color: var(--accent); }
+.onoff { display: inline-flex; align-items: center; gap: 8px; font-size: 13px; min-height: 34px; cursor: pointer; }
+.onoff.changed span { color: var(--accent-hi); }
 .range { margin: 0; font-size: 11.5px; color: var(--muted); }
 .field select { flex: 1; min-width: 0; border: 0; background: transparent; box-shadow: none; padding: 7px 9px; color: var(--text); }
 .field select:focus { outline: none; box-shadow: none; }

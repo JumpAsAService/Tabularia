@@ -268,11 +268,11 @@ const pageLine = computed(() => {
             <RdNum :model-value="def.sections[band].height" unit="mm" :min="0" :max="bandMax" @update:model-value="setBandHeight" />
           </label>
           <label v-if="band === 'page_header'" class="rp-check">
-            <input type="checkbox" :checked="def.sections.page_header.on_first_page !== false" @change="def.sections.page_header.on_first_page = ($event.target as HTMLInputElement).checked" />
+            <input type="checkbox" role="switch" :checked="def.sections.page_header.on_first_page !== false" @change="def.sections.page_header.on_first_page = ($event.target as HTMLInputElement).checked" />
             {{ $t('reportDesigner.props.onFirstPage') }}
           </label>
           <label v-else class="rp-check">
-            <input type="checkbox" :checked="def.sections.page_footer.on_last_page !== false" @change="def.sections.page_footer.on_last_page = ($event.target as HTMLInputElement).checked" />
+            <input type="checkbox" role="switch" :checked="def.sections.page_footer.on_last_page !== false" @change="def.sections.page_footer.on_last_page = ($event.target as HTMLInputElement).checked" />
             {{ $t('reportDesigner.props.onLastPage') }}
           </label>
           <p class="rp-help">{{ $t('reportDesigner.props.bandHelp') }}</p>

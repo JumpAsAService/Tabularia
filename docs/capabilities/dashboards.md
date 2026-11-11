@@ -172,7 +172,7 @@ reader needs VIEW on it and on `Sample / Private tables`.
    choose «Agent Leaderboard», **Add**. Its fields show under the dataset.
 3. **The first parameter.** **+ Parameter**: name `area`, label `Area`, type **Text**,
    **Choices → From a dataset**, value `[area]`. **Filter this dataset by what is chosen** is
-   already ticked. **Add**: its list shows above the grid.
+   already on. **Add**: its list shows above the grid.
 4. **The second.** **+ Parameter** again: name `agent`, label `Agent`, **From a dataset**,
    value `[agente]`, **Add**. Because it comes after `area` and filters the same dataset, the
    agents follow the area. Nothing more is needed.
@@ -181,7 +181,7 @@ reader needs VIEW on it and on `Sample / Private tables`.
    `€ #,##0`.
 6. **The chart that filters.** **Insert → Chart**, kind **Column**: along the axis `[area]`,
    the series' value `SUM([ricavo])`, title `Revenue by area`. **A click filters the other
-   tiles** is already ticked.
+   tiles** is already on.
 7. **A table.** **Insert → Table**; it opens with columns from the fields. Give it the title
    `Agents`. Leave a column or two, or click fields in **Data** to add them.
 8. **The places.** Drag the tiles where you want them, and their handles to size them.

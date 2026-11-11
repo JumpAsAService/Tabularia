@@ -5,6 +5,104 @@ exposes at `/system/info` and in the app's settings menu.
 
 ## Unreleased
 
+## 1.4.5 «Romulus» — 2026-11-12 · long-term support
+
+The interface of the 1.4 line, renewed: the Viewer built on three areas, steps that go into
+the chain in the flow editor, the keyboard on every page, switches for every on/off. It is the
+one exception the long-term support line makes to «fixes only» ([docs/lts.md](docs/lts.md)):
+nothing changes in the engine, in the gateway, in the database or in the configuration since
+1.4.4, only the interface's image differs, and upgrading is replacing the images.
+
+- **Every on/off is a switch, and the switch moves.** What turns a setting or a function on
+  and off was a checkbox in most places (a contract's «active», automatic backups, the
+  privacy notice, share links, a scripting environment or a registry «enabled», a variable's
+  «secret», an Output node's «overwrite», the yes/no options of a step, of a report's table
+  or chart, of a dashboard tile, of a data API's runtime, the Viewer's «don't repeat row
+  dimensions»): 48 of them are now switches, with the two that already were (a webhook's
+  Active, a version's Internet access) and the panel's settings, all drawn by one rule that
+  hangs on `role="switch"`. A choice in a set (columns, sheets, values, events, groups,
+  formats, a consent) stays a checkbox. Nothing changes in what they do: same labels, same
+  keys, same saved values; a screen reader now hears «switch, on / off». Pressed, the knob
+  gives towards the other side; released, it slides across on a short spring (260 ms, a pixel
+  past its place and back) while the track's colour fades. Under reduced motion it changes
+  place without the spring.
+- **The language menu shows each language's flag beside its name**, at sign-in, in the
+  settings menu and where a report or a dashboard chooses its language. The flags are
+  drawn in the page (no emoji: they differ, or are two letters, from one system to another).
+- **The Viewer's table starts empty, and you build it by dragging fields onto three
+  areas**, as a report's matrix: **Rows** down the left, **Columns** across the top,
+  **Measures** in the middle. Opening a datasource no longer loads every column: the page
+  lists its fields (name, type, description) and says how many rows there are, from the
+  metadata, and asks the engine nothing. Fields in Rows alone are the rows as they are,
+  with those columns (the engine reads only them); with measures the table is grouped and
+  each measure aggregated (sum for a number, count otherwise; average, min, max and
+  distinct count on the chip); a field in Columns makes a cross table, with the first
+  measure and the pivot's cap of 500 columns said in words; measures alone are one row of
+  totals. The engine always aggregates. Chips are dragged within and between the areas and
+  removed with ×; a field dropped on **Filters** starts a filter, on the chart it goes to
+  the axis or to the value. The **Pivot** box of the side panel is gone: the three areas
+  are its face. The chart asks nothing until it has its columns (it used to run a count by
+  the first column of every datasource opened). On a datasource of 12 million rows and 80
+  columns: 4 requests and about 1.6 s at opening before, none now; a column of rows comes
+  in about 0.25 s, a group by on two fields in 0.5 s, a cross table in 0.7 s. All of it
+  from the keyboard too (the list under **?**), with announcements for a screen reader,
+  and by touch.
+- **Saved views keep the three areas.** A view saved before opens as it did (its pivot
+  becomes Rows, Columns and the measure; without a pivot, every field in Rows). A filter
+  left without its value is ignored instead of matching the empty text, and is not saved.
+  **CSV** and **Excel** export the table as built (every field while it is empty).
+- **Explore → New → View** starts a saved view from a folder: the Viewer asks for the
+  datasource, opens on the empty table and proposes that folder at **Save view**; nothing
+  is created before.
+- **Adding a step puts it in the chain.** In the flow editor a transformation added to a
+  node that already feeds another goes between the two, and what follows slides one step
+  on; at the end of a chain it is appended; a node that forks, or Shift, gets one more
+  branch. One rule for the right-click ring (mouse and keyboard), **+ Operation** (which
+  now opens the ring beside the node instead of always making the first transformation of
+  the list) and a drop from the palette, which goes into the edge or after the node it is
+  dropped on, and for a value picked in a column's profile (Filter to this value, Exclude,
+  Fill nulls), which used to branch aside. The new node never lands on the node clicked,
+  and one Undo takes the whole insertion back.
+- **A long flow opens readable**: at 60% on its outputs, the rest in the minimap, instead
+  of fitted whole at a third of its size. The fit button still shows everything.
+- **A step not configured yet shows its input's rows**, with a line saying so, instead of
+  an empty table, when the editor already holds them. Nothing more is asked of the engine.
+- **The canvas from the keyboard.** The panel and the preview follow a node selected with
+  Tab and Enter; Alt+←/→ walk to the step before and after, Alt+↑/↓ between branches;
+  Ctrl/⌘+Enter is Run; a bare arrow no longer nudges the selected node (Shift+arrow moves
+  it). A keyboard button on the canvas, and «?», list every key of the editor. The zoom,
+  fit and lock buttons have a name and a tooltip.
+- **The keyboard on every page.** `g` then a letter goes to a section of the top bar
+  (`g e` Explore, `g f` Flows, `g d` Datasources, `g r` Runs, …: the letter comes from the
+  English name and is the same in every language, and only the sections you see answer);
+  `,` and `.` go to the previous and the next sub-tab of the page (the sections of
+  Administration, Table and Chart in the editor and the Viewer, the status filter of Runs,
+  the kind filter of Explore, a data API's tabs); `/` leads to the page's search box, or to
+  the search of the top bar; `?` lists the keys. A keyboard button in the top bar opens the
+  same list: the keys of everywhere, of the page on screen and of its table. Nothing acts
+  while you type, with a modifier, or with a dialog or a menu open, and a key asks the
+  gateway exactly what the click does.
+- **Explore from the keyboard, completed**: Home and End (or Ctrl/⌘+↑ and ↓) for the first
+  and the last row, Del (⌘+⌫ on a Mac) for the delete dialog, `h` for a flow's run
+  history, `n` for **New**, and `r` and `m` beside F2 and Shift+F10.
+- **Rows of tabs and filters are one Tab stop**: the arrows move along them (the sections
+  of Administration, Table/Chart, Node/Assistant, the filters of Runs, Explore, Audit and
+  Lineage, the chart types, the periods), and a screen reader hears tabs and radio groups
+  instead of pressed buttons.
+- **Every shortcut works on a Mac and on a laptop without function keys**: `m` opens the
+  editor's ring of steps beside Shift+F10, Ctrl/⌘+↑ and ↓ reach a column's first and last
+  row in the data grid, and on a Mac the lists of keys show ⌘ ⌥ ⇧ ⌫ ↩ and only the keys a
+  Mac has.
+- **Edges move only where the engine works**: along what leads to the node being
+  previewed, and during a run started in the editor. At rest they are still.
+- **Runs**: a failed run's detail links to its flow, flow group, datasource or script;
+  failures that follow one another for the same reason on the same object are one row
+  («×9, last 13:14») that lists its runs. The filter in force is readable on every theme
+  (it was 3.2:1 on the dark one), in the Flows calendar too.
+- The editor's «Flow loaded» leaves the bar after a few seconds and is no longer a toast as
+  well; an installation without the memory reading is asked for it once a browser session,
+  not once a page; the announcement banners have a plain 1px border.
+
 ## 1.4.4 «Romulus» — 2026-11-11 · long-term support
 
 A patch of the 1.4 line: data-correctness fixes on ClickHouse imports and on the dbt export, a

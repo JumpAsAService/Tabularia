@@ -146,9 +146,9 @@ async function act(a: DataApiAdminRow, what: 'pause' | 'delete') {
         <div class="list-head">
           <h3>{{ $t('dataApiAdmin.count', { n: rows.length }, rows.length) }}</h3>
           <div class="tools">
-            <div class="seg" role="group" :aria-label="$t('dataApiAdmin.filter')">
-              <button type="button" class="mini" :class="{ on: filter === 'all' }" :aria-pressed="filter === 'all'" @click="filter = 'all'">{{ $t('dataApiAdmin.all') }}</button>
-              <button type="button" class="mini" :class="{ on: filter === 'active' }" :aria-pressed="filter === 'active'" @click="filter = 'active'">{{ $t('dataApiAdmin.activeOnly') }}</button>
+            <div v-roving class="seg" role="radiogroup" :aria-label="$t('dataApiAdmin.filter')">
+              <button type="button" class="mini" role="radio" :class="{ on: filter === 'all' }" :aria-checked="filter === 'all'" @click="filter = 'all'">{{ $t('dataApiAdmin.all') }}</button>
+              <button type="button" class="mini" role="radio" :class="{ on: filter === 'active' }" :aria-checked="filter === 'active'" @click="filter = 'active'">{{ $t('dataApiAdmin.activeOnly') }}</button>
             </div>
             <button type="button" class="mini" :disabled="loading" :aria-label="$t('dataApiAdmin.reload')" :title="$t('dataApiAdmin.reload')" @click="load">
               <LoaderCircle v-if="loading" :size="12" class="spin" /><RefreshCw v-else :size="12" />

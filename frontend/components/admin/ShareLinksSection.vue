@@ -82,8 +82,8 @@ const objectHref = (l: ShareLink) => (l.kind === 'report' ? `/report?id=${l.obje
     </header>
 
     <div v-if="settings" class="settings">
-      <label class="switch">
-        <input v-model="draft.enabled" type="checkbox" :disabled="!props.canWrite" />
+      <label class="onoff">
+        <input v-model="draft.enabled" type="checkbox" role="switch" :disabled="!props.canWrite" />
         <span>
           <strong>{{ $t('share.adminEnabled') }}</strong>
           <span class="muted">{{ draft.enabled ? $t('share.adminEnabledOn') : $t('share.adminEnabledOff') }}</span>
@@ -110,9 +110,9 @@ const objectHref = (l: ShareLink) => (l.kind === 'report' ? `/report?id=${l.obje
     <div class="tablecard">
       <div class="list-head">
         <h3>{{ $t('share.adminLinks', { n: shown.length }) }}</h3>
-        <div class="seg" role="group" :aria-label="$t('share.adminFilter')">
-          <button type="button" class="mini" :class="{ on: filter === 'live' }" :aria-pressed="filter === 'live'" @click="filter = 'live'">{{ $t('share.adminLive') }}</button>
-          <button type="button" class="mini" :class="{ on: filter === 'all' }" :aria-pressed="filter === 'all'" @click="filter = 'all'">{{ $t('share.adminAll') }}</button>
+        <div v-roving class="seg" role="radiogroup" :aria-label="$t('share.adminFilter')">
+          <button type="button" class="mini" role="radio" :class="{ on: filter === 'live' }" :aria-checked="filter === 'live'" @click="filter = 'live'">{{ $t('share.adminLive') }}</button>
+          <button type="button" class="mini" role="radio" :class="{ on: filter === 'all' }" :aria-checked="filter === 'all'" @click="filter = 'all'">{{ $t('share.adminAll') }}</button>
         </div>
       </div>
       <p v-if="!shown.length" class="muted empty">{{ $t('share.adminNone') }}</p>
@@ -162,9 +162,9 @@ const objectHref = (l: ShareLink) => (l.kind === 'report' ? `/report?id=${l.obje
 .sls-head h2 { margin: 0; display: flex; align-items: center; gap: 8px; font-size: 16px; }
 .sls-head p { margin: 4px 0 0; max-width: 72ch; line-height: 1.5; }
 .settings { display: flex; flex-direction: column; gap: 14px; padding: 14px 16px; border: 1px solid var(--border-soft); border-radius: 10px; background: var(--panel); max-width: 720px; }
-.switch { display: flex; gap: 10px; align-items: flex-start; }
-.switch input { margin-top: 3px; }
-.switch > span { display: flex; flex-direction: column; gap: 2px; }
+.onoff { display: flex; gap: 10px; align-items: flex-start; }
+.onoff input { margin-top: 1px; }
+.onoff > span { display: flex; flex-direction: column; gap: 2px; }
 .num { display: grid; grid-template-columns: 1fr 110px; gap: 4px 12px; align-items: center; }
 .num .hint { grid-column: 1 / -1; }
 .lbl { font-size: 13px; }

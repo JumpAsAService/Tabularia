@@ -1,5 +1,5 @@
-// Saved views: a Viewer configuration (datasource + engine + filters + computed fields +
-// pivot) put in a folder, next to flows and datasources.
+// Saved views: a Viewer configuration (datasource + engine + the table's rows, columns and
+// measures + filters + computed fields) put in a folder, next to flows and datasources.
 //
 // The view FOLLOWS the data: it holds a reference to the datasource and no rows, so
 // reopening it reads the current snapshot again. It is shared, not personal: anyone with
@@ -17,6 +17,13 @@ export interface SavedViewSpec {
   // the tab shown and the chart's settings (views saved before have neither)
   tab?: 'table' | 'chart'
   chart?: ChartSettings | null
+  // the three areas the table is built on: Rows, Columns, Measures. A view saved before
+  // them (2026-11) has none: `pivotOn` and `pivot` say them, or every field is a row
+  // (viewerColumns.shelvesOfSpec). New views still write `pivotOn` and `pivot`, for who
+  // reads a view elsewhere (the gateway builds a report's or a dashboard's chain from them)
+  rows?: string[]
+  cols?: string[]
+  measures?: { column: string; func: string }[]
 }
 
 export interface ChartSettings {

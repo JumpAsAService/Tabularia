@@ -29,7 +29,7 @@ An Output node at the end of a chain, with destination **Tabularia Datasource**,
 | Datasource name | The name in the catalog. Unique in its folder. |
 | Folder | Where the datasource lives, and so who can read it. |
 | Description (optional) | Written on the datasource at every run. |
-| Overwrite if it already exists | Ticked: a datasource with this name in the folder gets the new data, keeping its id and name. Not ticked: a run finding the name taken is refused before it starts («There is already a datasource … in this folder»). |
+| Overwrite if it already exists | On: a datasource with this name in the folder gets the new data, keeping its id and name. Off: a run finding the name taken is refused before it starts («There is already a datasource … in this folder»). |
 | Order by | Columns, in order: the result is sorted before it is written, and the datasource keeps them as its sort keys. |
 | Also copy the file to external S3 | A copy of the same Parquet file to an S3 connection, at a fixed key or one with [placeholders](../placeholders.md). If the copy fails the run still succeeds, and the error is in the run's history. |
 
@@ -111,7 +111,7 @@ With the sample datasources `orders` and `order_rows` (folder `Sample / Private 
    group by `canale` and the month of `data_ordine`, summing `ricavo_netto`.
 3. Add an **Output** node: **Tabularia Datasource**, name `revenue_by_channel_month`,
    folder `Sample / Public tables`, description *Net revenue by sales channel and
-   month, cancelled orders excluded*, **Overwrite if it already exists** ticked,
+   month, cancelled orders excluded*, **Overwrite if it already exists** on,
    **Order by** the month column.
 4. Save, **Run**. `revenue_by_channel_month` appears in `Sample / Public tables`.
 5. Schedule the flow (`0 6 * * *`), or put it in a flow group after a step that

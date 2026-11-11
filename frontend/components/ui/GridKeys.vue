@@ -1,54 +1,112 @@
 <script setup lang="ts">
 // The data grid's keys, said to whoever sees the screen too (the grid's own hint is for a
-// screen reader): a quiet button in the bar above the grid opens their list.
+// screen reader): a quiet button in the bar above the grid opens their list. The app's
+// whole list (the top bar's button, the editor's, «?») is the same button and panel, in
+// groups (`groups`, `title`, `label`): one way of saying keys in the product, not a second
+// component. While a grid's button is on screen, its keys are in that list too.
 import { computed, ref } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { Keyboard } from 'lucide-vue-next'
 import { usePopover } from '~/composables/usePopover'
+import { keyNames, platformIsMac } from '~/composables/appKeys'
+import { useKeyGroups, type KeyGroup } from '~/composables/useKeyHelp'
 
-const props = withDefaults(defineProps<{ profile?: boolean }>(), { profile: false })
+const props = withDefaults(defineProps<{
+  profile?: boolean
+  // the surface arranges its columns by hand (the Viewer): the keys that move and remove one
+  arrange?: boolean
+  // another surface's keys in place of the grid's, group by group, what the panel calls
+  // them and what the button is called
+  groups?: KeyGroup[]
+  title?: string
+  label?: string
+  // a long list with longer key names (the app's): a wider panel that scrolls
+  wide?: boolean
+  // the panel under the top bar, at the window's right edge, whatever the button's place
+  fixed?: boolean
+  // no button: a page with no bar of its own, where only «?» opens the list
+  bare?: boolean
+}>(), { profile: false, arrange: false, wide: false, fixed: false, bare: false })
 const { t } = useI18n()
 const open = ref(false)
 const panel = ref<HTMLElement | null>(null)
+const btn = ref<HTMLButtonElement | null>(null)
+// opened from the keyboard it appears without motion, as the menus do
+const byKey = ref(false)
 const uid = `gk-${Math.random().toString(36).slice(2, 8)}`
 usePopover(open, panel, () => { open.value = false }, { focus: 'panel' })
-const mac = typeof navigator !== 'undefined' && /Mac|iPhone|iPad/.test(navigator.platform || '')
-const mod = mac ? '⌘' : 'Ctrl'
+const k = keyNames(platformIsMac())
+// a Mac has no Home, End nor Page keys: Fn with an arrow is how it writes them
 const keys = computed(() => {
   const list: [string, string][] = [
     ['← ↑ → ↓', t('gridKeys.arrows')],
-    ['Home · End', t('gridKeys.homeEnd')],
-    [`${mod}+Home · ${mod}+End`, t('gridKeys.ctrlHomeEnd')],
-    ['PgUp · PgDn', t('gridKeys.page')],
-    [`${mod}+C`, t('gridKeys.copy')],
+    [k.mac ? 'fn← · fn→' : 'Home · End', t('gridKeys.homeEnd')],
+    [`${k.chord(k.mod, '↑')} · ${k.chord(k.mod, '↓')}`, t('gridKeys.columnEnds')],
+    ...(k.mac ? [] : [['Ctrl+Home · Ctrl+End', t('gridKeys.ctrlHomeEnd')] as [string, string]]),
+    [k.mac ? 'fn↑ · fn↓' : 'PgUp · PgDn', t('gridKeys.page')],
+    [k.chord(k.mod, 'C'), t('gridKeys.copy')],
   ]
   if (props.profile) {
-    list.push(['Enter', t('gridKeys.enter')], ['← →', t('gridKeys.profileArrows')], ['Esc', t('gridKeys.escape')])
+    list.push([k.enter, t('gridKeys.enter')], ['← →', t('gridKeys.profileArrows')], ['Esc', t('gridKeys.escape')])
+  }
+  if (props.arrange) {
+    list.push(
+      [`${k.chord(k.shift, '←')} · ${k.chord(k.shift, '→')}`, t('gridKeys.moveColumn')],
+      // a Mac has no Del: ⌘⌫ is its way, shown alone there and beside Del elsewhere
+      [k.ways({ pc: ['Del'], any: [k.chord(k.mod, k.backspace)] }), t('gridKeys.removeColumn')],
+    )
   }
   return list
+})
+// the grid's keys belong to the app's list while the grid is there (after the page's own)
+// Decided once, and never read from `groups` inside: the list handed to the app's button IS
+// what the surfaces declared, and a declaration that read it would turn in a circle.
+const ownKeys = props.groups === undefined
+if (ownKeys) useKeyGroups(() => [{ title: t('gridKeys.group'), keys: keys.value }], 10)
+const shown = computed(() => props.groups ?? [{ title: '', keys: keys.value }])
+function toggle(keyboard = false) {
+  byKey.value = keyboard
+  open.value = !open.value
+}
+// a key of the app («?») opens it too: the button takes the focus first, so that Esc gives
+// it back to the button, as after a click; with no button the focus goes back where it was
+defineExpose({
+  toggle: () => {
+    if (!open.value) btn.value?.focus({ preventScroll: true })
+    toggle(true)
+  },
 })
 </script>
 
 <template>
-  <span class="gk">
+  <span class="gk" :class="{ bare }">
     <button
+      v-if="!bare"
+      ref="btn"
       type="button"
       class="gk-btn"
       :aria-expanded="open"
       :aria-controls="uid"
-      :aria-label="$t('gridKeys.button')"
-      :title="$t('gridKeys.button')"
-      @click="open = !open"
+      :aria-label="label ?? $t('gridKeys.button')"
+      :title="label ?? $t('gridKeys.button')"
+      :aria-keyshortcuts="groups ? '?' : undefined"
+      @click="toggle($event.detail === 0)"
     ><Keyboard :size="14" aria-hidden="true" /></button>
-    <div v-if="open" :id="uid" ref="panel" class="gk-pop" role="dialog" tabindex="-1" :aria-label="$t('gridKeys.title')">
-      <p class="gk-title">{{ $t('gridKeys.title') }}</p>
-      <dl>
-        <div v-for="[k, what] in keys" :key="k">
-          <dt><kbd>{{ k }}</kbd></dt>
-          <dd>{{ what }}</dd>
-        </div>
-      </dl>
-    </div>
+    <Transition name="pop" :css="!byKey">
+      <div v-if="open" :id="uid" ref="panel" class="gk-pop" :class="{ wide, fixed: fixed || bare }" role="dialog" tabindex="-1" :aria-label="title ?? $t('gridKeys.title')">
+        <p class="gk-title">{{ title ?? $t('gridKeys.title') }}</p>
+        <template v-for="(g, gi) in shown" :key="gi">
+          <p v-if="g.title" class="gk-group">{{ g.title }}</p>
+          <dl v-if="g.keys.length">
+            <div v-for="([key, what], i) in g.keys" :key="i">
+              <dt><kbd>{{ key }}</kbd></dt>
+              <dd>{{ what }}</dd>
+            </div>
+          </dl>
+          <p v-if="g.note" class="gk-note">{{ g.note }}</p>
+        </template>
+      </div>
+    </Transition>
   </span>
 </template>
 
@@ -69,6 +127,15 @@ const keys = computed(() => {
 .gk-title { margin: 0 0 6px; color: var(--muted); }
 .gk-pop dl { display: grid; gap: 4px; margin: 0; }
 .gk-pop dl > div { display: grid; grid-template-columns: 118px 1fr; gap: 10px; align-items: baseline; }
+/* the app's whole list: wider, in groups, scrolling inside when the canvas is short */
+.gk-pop.wide { width: min(380px, calc(100vw - 24px)); max-height: min(70vh, 560px); overflow-y: auto; }
+/* the app's list: under the top bar at the window's edge, never cut by a narrow window */
+.gk-pop.fixed { position: fixed; top: 58px; right: 12px; z-index: 250; }
+.gk.bare { position: static; }
+.gk-pop.wide dl > div { grid-template-columns: 132px 1fr; }
+.gk-group { margin: 10px 0 5px; font-size: 11px; font-weight: 600; letter-spacing: 0.04em; text-transform: uppercase; color: var(--muted); }
+.gk-title + .gk-group { margin-top: 2px; }
+.gk-note { margin: 0; line-height: 1.4; }
 .gk-pop dt { margin: 0; }
 .gk-pop dd { margin: 0; line-height: 1.4; }
 .gk-pop kbd {
