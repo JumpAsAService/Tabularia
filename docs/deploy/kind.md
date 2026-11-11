@@ -131,9 +131,13 @@ and keep every value in a file only you can read, so a new terminal finds them:
 
 ```bash
 umask 077
-printf 'export VERSION=%q WORK=%q ADMIN_EMAIL=%q ADMIN_PASSWORD=%q\n' \
+printf 'umask 077\nexport VERSION=%q WORK=%q ADMIN_EMAIL=%q ADMIN_PASSWORD=%q\n' \
   "$VERSION" "$WORK" "$ADMIN_EMAIL" "$ADMIN_PASSWORD" > "$WORK/env"
 ```
+
+`umask 077` makes every file this terminal writes from now on readable by you alone: the
+later steps write passwords in `$WORK` (`values.yaml` among them). The file sets it again
+for a new terminal.
 
 ## 2. A certificate authority and the registry's certificate
 
@@ -531,8 +535,9 @@ done
 kubectl get pods --namespace tabularia --watch
 ```
 
-When every pod is `1/1 Running`, press Ctrl+C and open **http://localhost:8080** (on
-Windows, in the browser of Windows). Sign in with `$ADMIN_EMAIL` and `$ADMIN_PASSWORD`.
+When every pod is `Running` and ready (`1/1`; `2/2` for the two `worker` pods, which carry
+the chart service next to the worker), after a minute or two, press Ctrl+C and open
+**http://localhost:8080** (on Windows, in the browser of Windows). Sign in with `$ADMIN_EMAIL` and `$ADMIN_PASSWORD`.
 
 **Administration → Cluster** shows, refreshed every three seconds, the pods of Tabularia
 and, from step 10, the Jobs of the scripts and containers while they run, each linked to
