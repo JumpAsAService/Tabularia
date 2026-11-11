@@ -18,6 +18,10 @@
 - **No new features** and no changes of behaviour, configuration or API. A patch release
   never needs a configuration change, and its database migrations, if any, only add.
 
+One exception, said here so that it stays one: **1.4.5** renewed the interface (the Viewer
+built on three areas, the flow editor's chain, the keyboard, switches). Its engine, gateway,
+database and configuration are those of 1.4.4, and only the interface's image changed.
+
 New features land on `main` and ship in the next minor release (1.5, 1.6, …). A fix is
 made on `main` first, then brought to `release/1.4` when it qualifies.
 
@@ -39,7 +43,7 @@ details.
 | Stability: fixes only, no surprises | `lts`, or pin an exact `1.4.x` |
 | The newest features | `latest`, or pin an exact version |
 
-Pinning an exact version (`1.4.4`) is the safest choice in production; move to the next
+Pinning an exact version (`1.4.5`) is the safest choice in production; move to the next
 patch after reading its [changelog](../CHANGELOG.md).
 
 ## How long

@@ -40,7 +40,7 @@ depend on them, and both degrade quietly rather than breaking:
 ## Building the images
 
 The release images are public on Docker Hub and the chart pulls them by default, tagged
-with the release (`1.4.4`):
+with the release (`1.4.5`):
 
 | Image | Runs |
 |---|---|
@@ -59,20 +59,20 @@ to your registry, and set `image.registry` and the tags:
 
 ```bash
 # Engine, workers and beat all run this one image.
-docker build -t <registry>/tabularia-backend:1.4.4 backend/
+docker build -t <registry>/tabularia-backend:1.4.5 backend/
 #   Add --build-arg WITH_CHDB=true only if your flows use the embedded chDB
 #   engine: it takes the image from about 800 MB to about 1.4 GB.
 #   Add --build-arg WITH_MSSQL=true only if you read from SQL Server: the driver
 #   is Microsoft's, under Microsoft's licence, and not in the published images
 #   (docs/sqlserver.md).
 
-docker build -t <registry>/tabularia-gateway:1.4.4 gateway/
-docker build -t <registry>/tabularia-gateway-go:1.4.4 gateway-go/
+docker build -t <registry>/tabularia-gateway:1.4.5 gateway/
+docker build -t <registry>/tabularia-gateway-go:1.4.5 gateway-go/
 # The data APIs' pods: its own Dockerfile, built from gateway-go/.
-docker build -f gateway-go/dataapi/Dockerfile -t <registry>/tabularia-data-api:1.4.4 gateway-go/
+docker build -f gateway-go/dataapi/Dockerfile -t <registry>/tabularia-data-api:1.4.5 gateway-go/
 
 # NOTE the -f: frontend/Dockerfile is the hot-reload DEVELOPMENT server.
-docker build -f frontend/Dockerfile.prod -t <registry>/tabularia-frontend:1.4.4 frontend/
+docker build -f frontend/Dockerfile.prod -t <registry>/tabularia-frontend:1.4.5 frontend/
 ```
 
 All five run as uid 10001 with a read-only root filesystem.

@@ -5,20 +5,14 @@ exposes at `/system/info` and in the app's settings menu.
 
 ## Unreleased
 
-- **The sample company changes sector: it now makes pasta and bakery goods.** Same two
-  databases, same schemas, tables and columns, same sizes at every `SAMPLES_SCALE` and the
-  same eleven flows, reports, dashboard and views; what they hold is new. The catalogue has
-  24 products in 94 SKUs and five categories (`Pasta di semola`, `Pasta fresca`, `Biscotti`,
-  `Sostitutivi del pane`, `Dolci da ricorrenza`), sold in sacks, cartons, trays and packs at
-  a few euros a kilo, so a line moves tens of kilos or pieces; the channels are
-  `Supermercati`, `Ristorazione`, `Ingrosso`, `Negozi` and `Online`, the depots Verona,
-  Torino, Bari, Roma and Ancona. The seasons follow the new sector (panettone and pandoro in
-  December, fresh pasta at Christmas and Easter, grissini, cracker and taralli in summer),
-  and the two fulfilment anomalies are still there to find: Bari's cancelled orders grow
-  year after year, Torino has a bad spring in 2025. The products' shelf life, in months,
-  is the column `catalogo.prodotti.conservazione_mesi`. An installation that already has
-  the sample data keeps it until its volumes are removed; the guides' examples and numbers
-  are those of the new data, and their screenshots will follow.
+## 1.4.5 «Romulus» — 2026-11-12 · long-term support
+
+The interface of the 1.4 line, renewed: the Viewer built on three areas, steps that go into
+the chain in the flow editor, the keyboard on every page, switches for every on/off. It is the
+one exception the long-term support line makes to «fixes only» ([docs/lts.md](docs/lts.md)):
+nothing changes in the engine, in the gateway, in the database or in the configuration since
+1.4.4, only the interface's image differs, and upgrading is replacing the images.
+
 - **Every on/off is a switch, and the switch moves.** What turns a setting or a function on
   and off was a checkbox in most places (a contract's «active», automatic backups, the
   privacy notice, share links, a scripting environment or a registry «enabled», a variable's
@@ -60,12 +54,6 @@ exposes at `/system/info` and in the app's settings menu.
 - **Explore → New → View** starts a saved view from a folder: the Viewer asks for the
   datasource, opens on the empty table and proposes that folder at **Save view**; nothing
   is created before.
-- **Polars previews read the storage in place.** A preview, a count and a column profile
-  on the Polars engine read only the columns and row groups they need from the object
-  storage, as DuckDB and chDB already did, instead of downloading the whole file first:
-  the first 500 rows of an 830 MB datasource went from about 6.4 s to 0.5 s, three of its
-  columns to 0.05 s. A run and an export still download their source.
-  `STORAGE__DIRECT_READ=false` goes back to downloading.
 - **Adding a step puts it in the chain.** In the flow editor a transformation added to a
   node that already feeds another goes between the two, and what follows slides one step
   on; at the end of a chain it is appended; a node that forks, or Shift, gets one more
@@ -114,41 +102,6 @@ exposes at `/system/info` and in the app's settings menu.
 - The editor's «Flow loaded» leaves the bar after a few seconds and is no longer a toast as
   well; an installation without the memory reading is asked for it once a browser session,
   not once a page; the announcement banners have a plain 1px border.
-- **The dbt export's ClickHouse paths give Tabularia's data**, found by a new end-to-end
-  oracle against the ClickHouse engine (`e2e/dbt_export/clickhouse_paths.py`):
-  - a Postgres query datasource translated for the ClickHouse target keeps Postgres'
-    numbers and dates: a division of two integers stays one (`intDiv`), `::int` rounds as
-    Postgres does, `::numeric` without precision is a double (it was a `Decimal(10, 0)`:
-    decimals cut, 1e20 failed) and `date_trunc` holds dates before 1970 and after 2106. A
-    division or an integer cast whose types the query's output does not tell is refused as
-    not translatable (the AI may propose a translation), never changed silently;
-  - on ClickHouse -0.0 and 0.0 are one key in a group by, a unique and a join, as in
-    Tabularia; a filter with the editor's calendar value (`2024-01-05T10:30`) and a
-    `Decimal` cast to an integer no longer fail the model;
-  - a Postgres `real` or a ClickHouse `Float32` stays a 4-byte float (`0.1` as text was
-    `0.10000000149011612`), an instant read to the millisecond keeps three digits of
-    fraction as text, a float among texts in an unpivot keeps its `.0`, and on native
-    Postgres an instant made text has its whole fraction when the flow's engine writes it so;
-  - the ClickHouse syntax check, without chDB, read only the first model (a client error
-    turned it off): every model is read now;
-  - a file loaded in the editor with more than 50,000 rows is refused by the plan, naming
-    the file (the download failed after the plan had offered every target);
-  - a federated MySQL/MariaDB source keeps its filters in DuckDB (MySQL's case-insensitive
-    collation kept 'Alfa' for `nome = 'alfa'`) and reads a `TINYINT(1)` as a number (2 was 1);
-  - a contract's `range` on an instant with an offset, a `Z` or the calendar's value without
-    seconds gives Tabularia's verdict (it ERRORed on ClickHouse), and a pattern's `\b` is a word
-    boundary on Postgres too;
-  - a model that writes the customer's own table says, in its header and in the README, what
-    dbt does to it: it rebuilds a *replace* table (types, keys, indexes, grants, comments lost;
-    views and foreign keys dropped on Postgres), widens column types on an append, and on
-    ClickHouse appends **by position** (a table with its columns in another order gets its
-    values swapped): a warning, dbt has no standard way to append by name there.
-- **The ClickHouse engines** (chDB and an external ClickHouse) cast to datetime on a
-  `DateTime64`: a date of 1955 was 1970-01-01, one of 2150 2106, and an instant lost its
-  microseconds; a year outside 1900–2299 is `NULL`. An integer cast to float is the nearest
-  double (`2^53 + 1` was `NULL`).
-- **A ClickHouse table imported** gives an `Enum` as its label (it was its code: 'rosso'
-  was 1) and a `FixedString` as text (it was binary, which the CSV export could not write).
 
 ## 1.4.4 «Romulus» — 2026-11-11 · long-term support
 
@@ -205,14 +158,11 @@ Polars preview that no longer downloads its whole source, and the new sample com
   products' shelf life, in months, is `catalogo.prodotti.conservazione_mesi`. The guides'
   examples and numbers are those of the new data; their screenshots will follow.
 
-The same changes are on main, with the rest of what is unreleased.
-
 ## 1.4.3 «Romulus» — 2026-11-10 · long-term support
 
 A patch of the 1.4 line: data-correctness fixes found by a second hunt on the dbt export's
 ClickHouse paths and on MySQL sources, run with real dbt against a Kubernetes stack. No new
 feature, no change of configuration, no migration: upgrading from 1.4.2 is replacing the images.
-The same fixes are on main, with the rest of that hunt, under Unreleased.
 
 - **The ClickHouse engines cast a date outside 1970–2106 to an instant as it is.** A cast to an
   instant read the value as a 32-bit `DateTime`: 1955-03-12 became 1970-01-01 and 2150-06-01
