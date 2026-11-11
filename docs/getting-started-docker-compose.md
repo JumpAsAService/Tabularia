@@ -281,8 +281,8 @@ With your own file, the steps are the same with your columns.
 **1. A folder.** In **Explore**, at *All folders*, click **New**, type `My first flows`
 and click **Create**. The new folder opens.
 
-**2. A flow.** In the folder, **New → New flow**, then pick the engine: **DuckDB**, the default
-for new flows. The editor opens with one empty *Source* node.
+**2. A flow.** In the folder, **New → New flow**, then pick the engine: **DuckDB**, the one
+marked *Preferred*. The editor opens with one empty *Source* node.
 
 ![New flow: pick the engine](media/getting-started/04-new-flow.png)
 
@@ -313,8 +313,9 @@ column. A wrong expression is reported in the preview while you type.
 
 **7. A group by.** **+ Operation**, then **Group by**. Tick `canale` and
 `order_year`. Under *Aggregations* click **+ add**, choose the column `id`, the function
-`count`, and type `orders` as the alias. The preview now has one row per channel and
-year.
+`count`, type `orders` as the alias and press Tab (the alias is applied when you leave
+the box; until then the column is called `id_count`). The preview now has one row per
+channel and year.
 
 ![The group by](media/getting-started/08-group-by.png)
 
@@ -371,12 +372,17 @@ click the calendar button (**Schedule run**).
   with) or another one, for example a ClickHouse or BigQuery engine once configured. The
   editor keeps working with the development engine.
 
-Click **Save**. The row gets a **scheduled** badge (hover it for the cron) and the
-*Schedule load* panel above the list places the flow's runs on the coming week.
+Click **Save**. The row gets a green **next run** label, with the date and time on your
+clock (hover it for the cron), and the *Schedule load* panel above the list places the
+flow's runs on the coming week.
 
-To see it fire now, set the cron two minutes ahead: at 18:11, `13 18 * * *`. At 18:13
-(in `APP__TIMEZONE`) **Runs** shows a new run whose author is **schedule**. Then put
-the real schedule back.
+To see it fire now, set the cron two minutes ahead **on the clock of `APP__TIMEZONE`**,
+which is UTC until you change it and may not be your own: in Italy, UTC is one hour
+behind in winter and two in summer. The dialog names the time zone (*Times in timezone
+UTC*) and, under the cron, reads it back (*At 18:13*). So when that clock says 18:11,
+type `13 18 * * *`. Within a minute after 18:13, **Runs** (click **All**) shows two new
+rows for the flow whose author is **schedule**: the launch and the run of its Output.
+Then put the real schedule back.
 
 ![A scheduled run in Runs](media/getting-started/12-runs.png)
 
@@ -528,6 +534,17 @@ the volume to the services:
 
 ```bash
 git pull
+docker compose up -d --build
+```
+
+**The gateway keeps restarting: `the database is at schema revision …, this gateway
+reads …`.** The machine already had Tabularia images from an earlier try (an older
+clone, another folder): `docker compose up -d` builds only the images that are missing
+and started the old ones. `docker compose ps` shows `gateway  Restarting (1)` and the
+first `up -d` ends with `dependency failed to start: container dataprep-gateway is
+unhealthy`. Build them from this clone:
+
+```bash
 docker compose up -d --build
 ```
 
