@@ -180,11 +180,12 @@ minikube addons enable ingress
 
 ## Step 3 — Download Tabularia
 
-1. Open [the latest release](https://github.com/JumpAsAService/Tabularia/releases/latest).
-2. Under **Assets**, click **Source code (zip)**.
-3. Unzip it, for example in your Documents folder. You get a folder such as
+1. Download [Tabularia 1.4.5 as a zip file](https://github.com/JumpAsAService/Tabularia/archive/refs/tags/v1.4.5.zip).
+   A newer version, when there is one, is at the top of
+   [the list of versions](https://github.com/JumpAsAService/Tabularia/tags): click its **zip**.
+2. Unzip it, for example in your Documents folder. You get a folder such as
    `Tabularia-1.4.5`, with a folder `infrastructure` inside.
-4. Open your terminal **in that folder**, as below for your system.
+3. Open your terminal **in that folder**, as below for your system.
 
 #### Windows
 
@@ -193,7 +194,8 @@ Windows 10: hold Shift, right-click, **Open PowerShell window here**.
 
 #### Linux
 
-`cd` into it.
+In your file manager, right-click the folder → **Open in Terminal**. Or, in a terminal,
+type `cd ` (with the space), drag the folder onto the terminal window and press Enter.
 
 #### macOS
 
@@ -361,8 +363,9 @@ minikube now downloads Tabularia's programs, about 1.5 GB, and starts them. Foll
 kubectl get pods --namespace tabularia --watch
 ```
 
-Wait until every line shows READY `1/1` and STATUS `Running` (5 to 15 minutes the
-first time), then press **Ctrl+C** to stop watching.
+Wait until every line shows STATUS `Running` and READY with its two numbers equal:
+`1/1`, and `2/2` for the worker, which runs the chart service beside it (5 to 15 minutes
+the first time). Then press **Ctrl+C** to stop watching.
 
 **Open the door from your browser to Tabularia.** This command keeps running while you
 use Tabularia; leave its window open:
@@ -504,7 +507,7 @@ minikube addons enable metrics-server
 ```
 
 **Install a newer release**: back up the database first, then download and unzip the
-release as in step 3, copy `my-values.yaml` into the new folder, open the terminal there,
+new version as in step 3, copy `my-values.yaml` into the new folder, open the terminal there,
 and run:
 
 ```bash
@@ -532,8 +535,9 @@ cloud: delete them from your provider's console if you no longer need them.
 kubectl get pods --all-namespaces
 ```
 
-A healthy installation shows READY `1/1` and STATUS `Running` on every line of the
-namespaces `tabularia` and `tabularia-deps`. The table below starts from what you see.
+A healthy installation shows STATUS `Running` on every line of the namespaces
+`tabularia` and `tabularia-deps`, and READY with its two numbers equal (`1/1`; `2/2` for
+the worker). The table below starts from what you see.
 
 **`minikube start` fails**
 - *"Virtualization is not enabled"* or *"WSL 2 is not installed"* (Windows): turn on
@@ -551,13 +555,15 @@ namespaces `tabularia` and `tabularia-deps`. The table below starts from what yo
   `helm upgrade` (same command, `upgrade` instead of `install`, without
   `--create-namespace`).
 
-**A pod stays `Pending`**: minikube has no memory left for it. See why:
+**A pod stays `Pending`, or restarts again and again**: minikube may have no memory left
+for it. See why:
 
 ```bash
 kubectl describe pods --namespace tabularia
 ```
 
-*"Insufficient memory"* near the end means minikube is too small. Run `minikube delete`,
+*"Insufficient memory"* near the end, or *OOMKilled* or exit code *137* under *Last
+State*, means minikube is too small. Run `minikube delete`,
 start again from step 2 with more `--memory`, and repeat steps 6 and 8.
 
 **A pod shows `ErrImagePull` or `ImagePullBackOff`**: minikube cannot download it. A
