@@ -3,3 +3,6 @@ contact_links:
   - name: Documentation
     url: https://tabularia.org/docs/
     about: Getting started, configuration reference, guides.
+  - name: Report a security vulnerability
+    url: https://github.com/JumpAsAService/Tabularia/security/advisories/new
+    about: Privately, never in a public issue. See SECURITY.md.

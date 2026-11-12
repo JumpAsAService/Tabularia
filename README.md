@@ -38,7 +38,21 @@ chDB, ClickHouse or BigQuery.</em></p>
 > *Tabularia takes its name from the Tabularium, the records office of ancient Rome —
 > the place where the state's tables were kept in order.*
 
-Current release: **1.4.5 «Romulus»**, the long-term support line ([LTS](docs/lts.md): fixes only from here on, image tag `lts`) — see [CHANGELOG.md](CHANGELOG.md).
+Current release: **1.4.5 «Romulus»**, the long-term support line ([LTS](docs/lts.md), image tag `lts`) — see [CHANGELOG.md](CHANGELOG.md).
+
+**Try it in three commands** (Docker with Compose; the first start builds the images, a few minutes):
+
+```bash
+git clone https://github.com/JumpAsAService/Tabularia.git
+cd Tabularia/infrastructure
+docker compose up -d
+```
+
+Then open http://localhost:3000, create the administrator, and a sample company (an
+imaginary pasta maker, with eleven ready-made flows) appears a couple of minutes later.
+Step by step: [getting started](docs/getting-started-docker-compose.md) · on Kubernetes:
+[minikube](docs/deploy/minikube.md), [kind](docs/deploy/kind.md) · security reports:
+[SECURITY.md](SECURITY.md).
 
 ---
 
