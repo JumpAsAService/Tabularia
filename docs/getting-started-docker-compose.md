@@ -537,16 +537,19 @@ git pull
 docker compose up -d --build
 ```
 
-**The gateway keeps restarting: `the database is at schema revision …, this gateway
-reads …`.** The machine already had Tabularia images from an earlier try (an older
-clone, another folder): `docker compose up -d` builds only the images that are missing
-and started the old ones. `docker compose ps` shows `gateway  Restarting (1)` and the
-first `up -d` ends with `dependency failed to start: container dataprep-gateway is
-unhealthy`. Build them from this clone:
+**`pull access denied for tabularia-backend` (or `tabularia-gateway`), and nothing
+starts.** A copy of `infrastructure/docker-compose.yml` from before 2026-11-12 let Compose
+look for these images on Docker Hub first, where no image has these names, and some
+versions of Docker stop there instead of building them. Update the clone (`git pull`), or
+build them yourself:
 
 ```bash
 docker compose up -d --build
 ```
+
+Today the file says to build them from the clone at every start (`pull_policy: build`):
+with nothing changed it takes a second, and an image left by an earlier try, from an
+older clone, is never started in their place.
 
 **A port is already in use.**
 
