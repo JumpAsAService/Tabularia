@@ -19,7 +19,13 @@
 ########################
 #   Stage 1: builder   #
 ########################
-FROM ghcr.io/astral-sh/uv:python3.12-bookworm-slim AS builder
+# The same Python as the runtime stage, from Docker Hub, and uv from PyPI at a pinned
+# version: only Docker Hub and PyPI are needed to build (a machine that cannot reach
+# ghcr.io, where uv's own images are, builds all the same)
+FROM python:3.12-slim-bookworm AS builder
+
+ARG UV_VERSION=0.9.30
+RUN pip install --no-cache-dir --disable-pip-version-check "uv==${UV_VERSION}"
 
 ENV UV_COMPILE_BYTECODE=1 \
     UV_LINK_MODE=copy \
