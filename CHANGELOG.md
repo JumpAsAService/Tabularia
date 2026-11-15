@@ -5,6 +5,34 @@ exposes at `/system/info` and in the app's settings menu.
 
 ## Unreleased
 
+## 1.4.6 «Romulus» — 2026-11-15 · long-term support
+
+Fixes, found by installing Tabularia from zero with each guide of the site. Images only:
+no migration, no new setting.
+
+- **The trial stack starts on every machine.** `docker compose up -d` no longer tries to
+  download the `tabularia-*` images before building them (on some Docker versions it stopped
+  at «pull access denied»), and the images build from Docker Hub and PyPI alone: `uv` came
+  from an image on ghcr.io, and a machine that could not reach it failed the whole build,
+  with the sample-data loader looking like the culprit.
+- **«Last run from here: 1 hour ago» for a run just made.** The panels of the Script and
+  Container nodes and the lineage page received their times without the UTC offset, and the
+  browser read them as local time: an hour off in Italy in winter, two in summer. They carry
+  the offset now.
+- **The first click on «Run» is never lost.** In the Script and Container panels, «Run»
+  pressed straight from a field being edited saved the field, redrew the panel under the
+  pointer and lost the click. The run now starts at the first click, with what was just typed.
+- **What is typed in those panels stays while a run goes.** The «Running… 3 s» of the panel
+  redrew it every second and wrote the saved value over the text being typed.
+- **The Go gateway's image has PostgreSQL's own libpq 18 under pg_dump 18** (the database
+  backups), as intended: it read PostgreSQL's repository before it had the CA certificates,
+  and Debian's libpq 15 came in instead.
+- Documentation: a security policy ([SECURITY.md](SECURITY.md)); the size of the sample data,
+  and that it is chosen before the first start; the minikube guide downloads the tag's zip.
+
+Upgrading is replacing the five images (chart 2.8.1). The first preview of each step
+computes again, once: the step cache carries the release that computed it.
+
 ## 1.4.5 «Romulus» — 2026-11-12 · long-term support
 
 The interface of the 1.4 line, renewed: the Viewer built on three areas, steps that go into

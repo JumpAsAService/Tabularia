@@ -14,6 +14,8 @@ import { useRegistriesEditor, type ImageConfig } from '~/composables/useRegistri
 import type { ScriptOutputs } from '~/composables/useScripting'
 import { useFormat } from '~/composables/useFormat'
 import { errMessage } from '~/composables/useApi'
+import { commitFocusedField } from '~/composables/commitFocusedField'
+import { vDraft } from '~/composables/draftField'
 import Select from '~/components/ui/Select.vue'
 
 const props = defineProps<{
@@ -183,6 +185,12 @@ const unavailable = computed(() => {
   return ''
 })
 const canRun = computed(() => !props.readOnly && !!registry.value && !!(data.value.repository ?? '').trim() && !unavailable.value)
+
+// «Run» from the panel: the field still being edited is committed first (see commitFocusedField)
+async function runFromPanel() {
+  await commitFocusedField()
+  emit('run')
+}
 </script>
 
 <template>
@@ -197,7 +205,7 @@ const canRun = computed(() => !props.readOnly && !!registry.value && !!(data.val
     <label>{{ $t('containers.node.name') }}</label>
     <input
       type="text"
-      :value="data.label || ''"
+      :value="data.label || ''" v-draft="data.label || ''"
       maxlength="80"
       :disabled="readOnly"
       @change="emit('update', { label: ($event.target as HTMLInputElement).value.trim() || t('containers.node.title') })"
@@ -218,7 +226,7 @@ const canRun = computed(() => !props.readOnly && !!registry.value && !!(data.val
           <span>{{ $t('containers.node.repository') }}</span>
           <input
             type="text"
-            :value="data.repository ?? ''"
+            :value="data.repository ?? ''" v-draft="data.repository ?? ''"
             :list="listId"
             spellcheck="false"
             autocomplete="off"
@@ -233,7 +241,7 @@ const canRun = computed(() => !props.readOnly && !!registry.value && !!(data.val
           <span class="tag-row">
             <input
               type="text"
-              :value="data.tag ?? ''"
+              :value="data.tag ?? ''" v-draft="data.tag ?? ''"
               :list="tagListId"
               spellcheck="false"
               autocomplete="off"
@@ -288,7 +296,7 @@ const canRun = computed(() => !props.readOnly && !!registry.value && !!(data.val
 
     <label>{{ $t('containers.node.command') }}</label>
     <textarea
-      :value="lines(data.command)"
+      :value="lines(data.command)" v-draft="lines(data.command)"
       rows="2"
       spellcheck="false"
       class="mono"
@@ -298,7 +306,7 @@ const canRun = computed(() => !props.readOnly && !!registry.value && !!(data.val
     />
     <label>{{ $t('containers.node.args') }}</label>
     <textarea
-      :value="lines(data.args)"
+      :value="lines(data.args)" v-draft="lines(data.args)"
       rows="3"
       spellcheck="false"
       class="mono"
@@ -309,7 +317,7 @@ const canRun = computed(() => !props.readOnly && !!registry.value && !!(data.val
     <p class="muted outhint">{{ $t('containers.node.commandHint') }}</p>
 
     <div v-if="!inGroup" class="trial">
-      <button type="button" :disabled="!canRun || running" @click="emit('run')">
+      <button type="button" :disabled="!canRun || running" @mousedown.prevent @click="runFromPanel">
         <LoaderCircle v-if="running" :size="14" class="spin" /><Play v-else :size="14" />
         {{ running ? $t('containers.node.running', { s: seconds }) : flowDirty ? $t('containers.node.saveAndRun') : $t('containers.node.run') }}
       </button>
@@ -363,12 +371,12 @@ const canRun = computed(() => !props.readOnly && !!registry.value && !!(data.val
     <div class="numbers">
       <label>
         <span>{{ $t('containers.node.cpu') }}</span>
-        <input type="text" :value="data.cpu ?? '1'" :disabled="readOnly" spellcheck="false"
+        <input type="text" :value="data.cpu ?? '1'" v-draft="data.cpu ?? '1'" :disabled="readOnly" spellcheck="false"
                @change="quantity('cpu', ($event.target as HTMLInputElement).value)" />
       </label>
       <label>
         <span>{{ $t('containers.node.memory') }}</span>
-        <input type="text" :value="data.memory ?? '1Gi'" :disabled="readOnly" spellcheck="false"
+        <input type="text" :value="data.memory ?? '1Gi'" v-draft="data.memory ?? '1Gi'" :disabled="readOnly" spellcheck="false"
                @change="quantity('memory', ($event.target as HTMLInputElement).value)" />
       </label>
     </div>
@@ -376,17 +384,17 @@ const canRun = computed(() => !props.readOnly && !!registry.value && !!(data.val
     <div class="numbers three">
       <label>
         <span>{{ $t('containers.node.timeout') }}</span>
-        <input type="number" min="10" :max="timeoutMax" :value="data.timeoutSeconds ?? 900" :disabled="readOnly"
+        <input type="number" min="10" :max="timeoutMax" :value="data.timeoutSeconds ?? 900" v-draft="data.timeoutSeconds ?? 900" :disabled="readOnly"
                @change="numberField('timeoutSeconds', ($event.target as HTMLInputElement).value, 10, timeoutMax)" />
       </label>
       <label>
         <span>{{ $t('containers.node.retries') }}</span>
-        <input type="number" min="0" max="5" :value="data.retries ?? 0" :disabled="readOnly"
+        <input type="number" min="0" max="5" :value="data.retries ?? 0" v-draft="data.retries ?? 0" :disabled="readOnly"
                @change="numberField('retries', ($event.target as HTMLInputElement).value, 0, 5)" />
       </label>
       <label>
         <span>{{ $t('containers.node.retryDelay') }}</span>
-        <input type="number" min="0" max="3600" :value="data.retryDelaySeconds ?? 60" :disabled="readOnly || !(data.retries > 0)"
+        <input type="number" min="0" max="3600" :value="data.retryDelaySeconds ?? 60" v-draft="data.retryDelaySeconds ?? 60" :disabled="readOnly || !(data.retries > 0)"
                @change="numberField('retryDelaySeconds', ($event.target as HTMLInputElement).value, 0, 3600)" />
       </label>
     </div>

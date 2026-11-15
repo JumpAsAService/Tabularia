@@ -171,6 +171,9 @@ APP__TIMEZONE=Europe/Rome
 Then `docker compose up -d` again. Dates on screen follow your browser. Every setting,
 with its default: [Configuration reference](configuration.md).
 
+One setting is chosen **before** the first start, not later: the size of the sample
+data. See [More sample data](#more-sample-data).
+
 ## 4. Start
 
 ```bash
@@ -258,6 +261,47 @@ and *Public tables* (a calendar, the regions).
 
 The folder is created with no permissions on it: the administrator sees it, other users
 only once the administrator shares it. More: [the sample database](../infrastructure/sampledb/README.md).
+
+#### More sample data
+
+The sample company comes in four sizes. `small`, the default, is made to show everything
+working in a few minutes on a laptop; the larger ones are for trying Tabularia on
+millions of rows, or on a billion.
+
+| Size | Orders and order lines | CRM activities | Time to generate | Free disk |
+|---|---|---|---|---|
+| `small` | 30,000 orders, ~100,000 lines | 60,000 | seconds | under 1 GB |
+| `medium` | 1 million orders, ~3.5 million lines | 2 million | a few minutes | a few GB |
+| `robust` | 12 million orders, ~42 million lines | 60 million | longer | ~20 GB |
+| `massive` | as `robust` | **1 billion** | a couple of hours | ~50 GB |
+
+**Choose it before the first `docker compose up -d`.** `sampledb-init` generates the data
+only into empty databases: once they are filled, a new size is ignored.
+
+1. From the `infrastructure` folder, create the settings file (as in step 3):
+
+   ```bash
+   cp .env.example .env
+   ```
+
+2. Open `.env` in a text editor (on Windows, `notepad .env`), find the line
+   `#SAMPLES_SCALE=small`, remove the `#` and write the size you want, for example:
+
+   ```dotenv
+   SAMPLES_SCALE=medium
+   ```
+
+3. Save, then start as in step 4 and create the administrator as in step 5.
+   `docker compose logs -f sampledb-init` shows the generation and the import.
+
+**Already started with another size?** The sample databases keep the data of the first
+start. To begin again at a new size, reset the stack: `docker compose down -v`
+(section 10) deletes **everything**, users, flows and connections included. Then set
+`SAMPLES_SCALE` as above and run `docker compose up -d` again.
+
+With `massive`, the billion rows are in the CRM log on ClickHouse, where Tabularia reads
+large tables best; the import into the `Sample` folder takes about a quarter of an hour
+more. More detail: [the sample database](../infrastructure/sampledb/README.md).
 
 ### b. Or a file of your own
 
@@ -537,16 +581,19 @@ git pull
 docker compose up -d --build
 ```
 
-**The gateway keeps restarting: `the database is at schema revision …, this gateway
-reads …`.** The machine already had Tabularia images from an earlier try (an older
-clone, another folder): `docker compose up -d` builds only the images that are missing
-and started the old ones. `docker compose ps` shows `gateway  Restarting (1)` and the
-first `up -d` ends with `dependency failed to start: container dataprep-gateway is
-unhealthy`. Build them from this clone:
+**`pull access denied for tabularia-backend` (or `tabularia-gateway`), and nothing
+starts.** A copy of `infrastructure/docker-compose.yml` from before 2026-11-12 let Compose
+look for these images on Docker Hub first, where no image has these names, and some
+versions of Docker stop there instead of building them. Update the clone (`git pull`), or
+build them yourself:
 
 ```bash
 docker compose up -d --build
 ```
+
+Today the file says to build them from the clone at every start (`pull_policy: build`):
+with nothing changed it takes a second, and an image left by an earlier try, from an
+older clone, is never started in their place.
 
 **A port is already in use.**
 

@@ -310,15 +310,13 @@ func editorLint(d *Deps) authedFunc {
 
 // ── the outputs of a flow's Script and Container nodes ──────────────────────
 
-// naiveIso is jsonable_encoder of a naive datetime: isoformat(), no offset.
-func naiveIso(t *time.Time) any {
+// utcIso writes a timestamp column (naive, in UTC) with its offset, «+00:00», as the rest
+// of the API does: without it, the browser reads it as local time, an hour or more off.
+func utcIso(t *time.Time) any {
 	if t == nil {
 		return nil
 	}
-	if t.Nanosecond()/1000 != 0 {
-		return t.Format("2006-01-02T15:04:05.000000")
-	}
-	return t.Format("2006-01-02T15:04:05")
+	return pyjson.Isoformat(*t)
 }
 
 // jsonKey is the text pydantic's JSON mode writes for a dict's key (the route returns a dict):
@@ -395,7 +393,7 @@ func addToLatest(e *latest, run *stepRun) error {
 	if e.last == nil {
 		e.last = pyjson.Object{{Key: "run_id", Value: run.id}, {Key: "status", Value: run.status},
 			{Key: "trial", Value: pyTruthy(info.Value("trial"))}, {Key: "error", Value: run.errText},
-			{Key: "started_at", Value: naiveIso(&run.started)}, {Key: "finished_at", Value: naiveIso(run.finished)},
+			{Key: "started_at", Value: utcIso(&run.started)}, {Key: "finished_at", Value: utcIso(run.finished)},
 			{Key: "attempts", Value: info.Value("attempts")}, {Key: "exit_code", Value: info.Value("exit_code")},
 			{Key: "log", Value: pyjson.Or(info.Value("log"), "")}, {Key: "log_expired", Value: pyTruthy(info.Value("log_expired"))},
 			{Key: "fingerprint", Value: info.Value("fingerprint")}}
@@ -403,7 +401,7 @@ func addToLatest(e *latest, run *stepRun) error {
 	if e.output == nil && run.status == "SUCCESS" && str0(run.outputKey) != "" {
 		e.output = pyjson.Object{{Key: "run_id", Value: run.id}, {Key: "bucket", Value: run.outputBucket},
 			{Key: "key", Value: run.outputKey}, {Key: "rows", Value: run.rows}, {Key: "trial", Value: pyTruthy(info.Value("trial"))},
-			{Key: "finished_at", Value: naiveIso(run.finished)}, {Key: "fingerprint", Value: info.Value("fingerprint")}}
+			{Key: "finished_at", Value: utcIso(run.finished)}, {Key: "fingerprint", Value: info.Value("fingerprint")}}
 	}
 	return nil
 }

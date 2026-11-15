@@ -30,13 +30,19 @@ RUN set -e; \
     done
 
 FROM debian:bookworm-slim
-# the libraries pg_dump needs (libpq of the same version from the same repository), the CA
-# certificates and the time zones
+# the CA certificates and the time zones first: debian-slim has no CA certificates, and
+# without them apt cannot read PostgreSQL's repository over HTTPS (it would skip it with
+# a warning and take Debian's older libpq instead)
+RUN set -e; \
+    apt-get update; \
+    apt-get install -y --no-install-recommends ca-certificates tzdata; \
+    rm -rf /var/lib/apt/lists/*
+# then the libraries pg_dump needs: libpq of the same version, from the same repository
 COPY --from=pgclient /usr/share/postgresql-common/pgdg/apt.postgresql.org.asc /usr/share/postgresql-common/pgdg/
 COPY --from=pgclient /etc/apt/sources.list.d/pgdg.list /etc/apt/sources.list.d/
 RUN set -e; \
     apt-get update; \
-    apt-get install -y --no-install-recommends ca-certificates tzdata libpq5 liblz4-1 libzstd1; \
+    apt-get install -y --no-install-recommends libpq5 liblz4-1 libzstd1; \
     rm -rf /var/lib/apt/lists/*
 COPY --from=pgclient /pg /usr/lib/postgresql
 RUN ln -s /usr/lib/postgresql/18/bin/pg_dump /usr/lib/postgresql/18/bin/pg_restore /usr/local/bin/ \

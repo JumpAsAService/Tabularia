@@ -94,6 +94,9 @@ services:
         # published images; WITH_MSSQL=true docker compose build turns it on
         WITH_MSSQL: ${WITH_MSSQL:-false}
     image: tabularia-backend:dev
+    # built from this clone, never pulled: no registry has this name, and a first `up`
+    # would stop on «pull access denied» on some Docker versions instead of building it
+    pull_policy: build
     container_name: dataprep-backend
     # restarts by itself if the container dies (e.g. OOM-kill of the main process):
     # no engine down, no runs left hanging until the stale timeout
@@ -143,6 +146,9 @@ services:
     build:
       context: ../gateway-go
     image: tabularia-gateway-go:dev
+    # built from this clone, never pulled: no registry has this name, and a first `up`
+    # would stop on «pull access denied» on some Docker versions instead of building it
+    pull_policy: build
     container_name: dataprep-gateway
     restart: unless-stopped
     ports:
@@ -205,6 +211,9 @@ services:
       args:
         WITH_DEV: "true"
     image: tabularia-gateway:dev
+    # built from this clone, never pulled: no registry has this name, and a first `up`
+    # would stop on «pull access denied» on some Docker versions instead of building it
+    pull_policy: build
     container_name: dataprep-ai
     restart: unless-stopped
     env_file:
@@ -253,6 +262,9 @@ services:
         WITH_DEV: "true"
         WITH_MSSQL: ${WITH_MSSQL:-false}
     image: tabularia-backend:dev
+    # built from this clone, never pulled: no registry has this name, and a first `up`
+    # would stop on «pull access denied» on some Docker versions instead of building it
+    pull_policy: build
     # NB: no container_name → so that `docker compose up -d --scale worker=N`
     # can start several replicas (a fixed name collides and blocks scaling).
     # restarts by itself after an OOM-kill of the worker's main process:
@@ -314,6 +326,9 @@ services:
         WITH_DEV: "true"
         WITH_MSSQL: ${WITH_MSSQL:-false}
     image: tabularia-backend:dev
+    # built from this clone, never pulled: no registry has this name, and a first `up`
+    # would stop on «pull access denied» on some Docker versions instead of building it
+    pull_policy: build
     container_name: dataprep-beat
     restart: unless-stopped
     # .env is optional: with no file at all the stack starts, the Fernet key is created in the
@@ -354,6 +369,9 @@ services:
         WITH_DEV: "true"
         WITH_MSSQL: ${WITH_MSSQL:-false}
     image: tabularia-backend:dev
+    # built from this clone, never pulled: no registry has this name, and a first `up`
+    # would stop on «pull access denied» on some Docker versions instead of building it
+    pull_policy: build
     # no container_name → scalable with --scale preview-worker=N
     restart: unless-stopped
     # .env is optional: with no file at all the stack starts, the Fernet key is created in the
