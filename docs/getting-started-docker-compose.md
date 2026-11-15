@@ -171,6 +171,9 @@ APP__TIMEZONE=Europe/Rome
 Then `docker compose up -d` again. Dates on screen follow your browser. Every setting,
 with its default: [Configuration reference](configuration.md).
 
+One setting is chosen **before** the first start, not later: the size of the sample
+data. See [More sample data](#more-sample-data).
+
 ## 4. Start
 
 ```bash
@@ -258,6 +261,47 @@ and *Public tables* (a calendar, the regions).
 
 The folder is created with no permissions on it: the administrator sees it, other users
 only once the administrator shares it. More: [the sample database](../infrastructure/sampledb/README.md).
+
+#### More sample data
+
+The sample company comes in four sizes. `small`, the default, is made to show everything
+working in a few minutes on a laptop; the larger ones are for trying Tabularia on
+millions of rows, or on a billion.
+
+| Size | Orders and order lines | CRM activities | Time to generate | Free disk |
+|---|---|---|---|---|
+| `small` | 30,000 orders, ~100,000 lines | 60,000 | seconds | under 1 GB |
+| `medium` | 1 million orders, ~3.5 million lines | 2 million | a few minutes | a few GB |
+| `robust` | 12 million orders, ~42 million lines | 60 million | longer | ~20 GB |
+| `massive` | as `robust` | **1 billion** | a couple of hours | ~50 GB |
+
+**Choose it before the first `docker compose up -d`.** `sampledb-init` generates the data
+only into empty databases: once they are filled, a new size is ignored.
+
+1. From the `infrastructure` folder, create the settings file (as in step 3):
+
+   ```bash
+   cp .env.example .env
+   ```
+
+2. Open `.env` in a text editor (on Windows, `notepad .env`), find the line
+   `#SAMPLES_SCALE=small`, remove the `#` and write the size you want, for example:
+
+   ```dotenv
+   SAMPLES_SCALE=medium
+   ```
+
+3. Save, then start as in step 4 and create the administrator as in step 5.
+   `docker compose logs -f sampledb-init` shows the generation and the import.
+
+**Already started with another size?** The sample databases keep the data of the first
+start. To begin again at a new size, reset the stack: `docker compose down -v`
+(section 10) deletes **everything**, users, flows and connections included. Then set
+`SAMPLES_SCALE` as above and run `docker compose up -d` again.
+
+With `massive`, the billion rows are in the CRM log on ClickHouse, where Tabularia reads
+large tables best; the import into the `Sample` folder takes about a quarter of an hour
+more. More detail: [the sample database](../infrastructure/sampledb/README.md).
 
 ### b. Or a file of your own
 
