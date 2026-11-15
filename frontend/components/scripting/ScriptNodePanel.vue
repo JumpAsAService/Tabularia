@@ -15,6 +15,7 @@ import { starterFiles } from '~/composables/scriptTemplates'
 import { savedScriptVariables, useSavedScripts, type SavedScript, type SavedScriptDetail } from '~/composables/useSavedScripts'
 import { useFolderPaths } from '~/composables/useFolderPaths'
 import Select from '~/components/ui/Select.vue'
+import { commitFocusedField } from '~/composables/commitFocusedField'
 
 // Monaco weighs a few MB: loaded when the editor opens, not with the page
 const ScriptEditor = defineAsyncComponent(() => import('~/components/scripting/ScriptEditor.vue'))
@@ -146,6 +147,12 @@ const unavailable = computed(() => {
   if (environment.value && !environment.value.ready) return t('scripting.node.environmentNotReady', { name: environment.value.name })
   return ''
 })
+
+// «Run» from the panel: the field still being edited is committed first (see commitFocusedField)
+async function runFromPanel() {
+  await commitFocusedField()
+  emit('run')
+}
 </script>
 
 <template>
@@ -224,7 +231,7 @@ const unavailable = computed(() => {
     </template>
 
     <div class="trial">
-      <button type="button" :disabled="!canRun || running" @click="emit('run')">
+      <button type="button" :disabled="!canRun || running" @mousedown.prevent @click="runFromPanel">
         <LoaderCircle v-if="running" :size="14" class="spin" /><Play v-else :size="14" />
         {{ running ? $t('scripting.node.running', { s: seconds }) : flowDirty ? $t('scripting.node.saveAndRun') : $t('scripting.node.run') }}
       </button>

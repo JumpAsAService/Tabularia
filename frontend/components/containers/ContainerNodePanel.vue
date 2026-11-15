@@ -14,6 +14,7 @@ import { useRegistriesEditor, type ImageConfig } from '~/composables/useRegistri
 import type { ScriptOutputs } from '~/composables/useScripting'
 import { useFormat } from '~/composables/useFormat'
 import { errMessage } from '~/composables/useApi'
+import { commitFocusedField } from '~/composables/commitFocusedField'
 import Select from '~/components/ui/Select.vue'
 
 const props = defineProps<{
@@ -183,6 +184,12 @@ const unavailable = computed(() => {
   return ''
 })
 const canRun = computed(() => !props.readOnly && !!registry.value && !!(data.value.repository ?? '').trim() && !unavailable.value)
+
+// «Run» from the panel: the field still being edited is committed first (see commitFocusedField)
+async function runFromPanel() {
+  await commitFocusedField()
+  emit('run')
+}
 </script>
 
 <template>
@@ -309,7 +316,7 @@ const canRun = computed(() => !props.readOnly && !!registry.value && !!(data.val
     <p class="muted outhint">{{ $t('containers.node.commandHint') }}</p>
 
     <div v-if="!inGroup" class="trial">
-      <button type="button" :disabled="!canRun || running" @click="emit('run')">
+      <button type="button" :disabled="!canRun || running" @mousedown.prevent @click="runFromPanel">
         <LoaderCircle v-if="running" :size="14" class="spin" /><Play v-else :size="14" />
         {{ running ? $t('containers.node.running', { s: seconds }) : flowDirty ? $t('containers.node.saveAndRun') : $t('containers.node.run') }}
       </button>
