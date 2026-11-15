@@ -204,6 +204,8 @@ runs the deploy; the product changes are in `CHANGELOG.md`.
    **New in 1.4.5:** images only (chart 2.8.0), and of the five only the interface's
    differs from 1.4.4: the Viewer built on three areas, the flow editor's chain, the
    keyboard on every page. A view saved before opens as it did.
+   **New in 1.4.6:** images only (chart 2.8.1). No migration, no new variable. The first
+   preview of each step after the upgrade computes again, once.
 4. **SQL Server.** The published backend images no longer contain the SQL Server
    driver (since 1.1.1): it is Microsoft's, under Microsoft's licence, and an AGPL
    image cannot carry it. If you have SQL Server connections, build or extend the
