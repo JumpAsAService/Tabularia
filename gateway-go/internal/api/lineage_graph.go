@@ -295,7 +295,7 @@ func buildLineage(ctx context.Context, q perm.Querier, c *perm.Checker, userID i
 	for _, d := range datasources {
 		g.add(fmt.Sprintf("ds:%d", d.id), pyjson.Object{{Key: "type", Value: "datasource"}, {Key: "label", Value: d.name},
 			{Key: "project_id", Value: d.project}, {Key: "kind", Value: d.kind},
-			{Key: "meta", Value: pyjson.Object{{Key: "rows", Value: d.rows}, {Key: "refreshed_at", Value: naiveIso(d.refreshed)}}}})
+			{Key: "meta", Value: pyjson.Object{{Key: "rows", Value: d.rows}, {Key: "refreshed_at", Value: utcIso(d.refreshed)}}}})
 	}
 	type lastRun struct {
 		status string
@@ -340,7 +340,7 @@ func buildLineage(ctx context.Context, q perm.Querier, c *perm.Checker, userID i
 		lr, has := last[f.id]
 		var at, status any
 		if has {
-			at, status = naiveIso(&lr.at), lr.status
+			at, status = utcIso(&lr.at), lr.status
 		}
 		g.add(fmt.Sprintf("flow:%d", f.id), pyjson.Object{{Key: "type", Value: "flow"}, {Key: "label", Value: f.name},
 			{Key: "project_id", Value: f.project}, {Key: "meta", Value: pyjson.Object{{Key: "engine", Value: f.engine},
