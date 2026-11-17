@@ -132,7 +132,9 @@ onBeforeUnmount(() => {
 }
 .hero__cue:hover { background: var(--tile-2); }
 @media (prefers-reduced-motion: no-preference) {
-  .hero__cue svg { animation: cue 2.4s var(--ease-out) infinite; }
+  /* twice, then still: nothing on the page moves for more than five seconds without a
+     control to stop it (WCAG 2.2.2) */
+  .hero__cue svg { animation: cue 2.4s var(--ease-out) 2; }
 }
 @keyframes cue { 0%, 60%, 100% { transform: none; } 30% { transform: translateY(4px); } }
 

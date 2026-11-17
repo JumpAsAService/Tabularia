@@ -218,7 +218,7 @@ are refused), typed twice. **Create the administrator** signs you in. The page a
 only while the installation has no account at all; from then on it is the ordinary
 sign-in, with that email and password.
 
-![Creating the administrator](media/getting-started/01-sign-in.png)
+![The sign-in page of a new installation, asking for the name, email and password of the first administrator](media/getting-started/01-sign-in.png)
 
 The installation opens on **Explore**. The sample data (step 6) arrives a minute or two
 later: reload the page to see the `Sample` folder.
@@ -228,7 +228,7 @@ Dracula, Monokai, Imperium) and five languages (English, Italiano, Français, De
 Español). The choice is kept by your browser. The same menu has *Your sessions*,
 *API tokens* and *Sign out*.
 
-![The settings menu](media/getting-started/02-settings.png)
+![The settings menu opened from the gear: the signed-in account, the Theme, Language and Preferred engine lists, then Your sessions, API tokens and Sign out](media/getting-started/02-settings.png)
 
 ## 6. Load some data
 
@@ -257,7 +257,7 @@ Reload Explore: the `Sample` folder holds the two connections (*Sample ERP (Post
 three of them scheduled), *Private tables* (the company's tables and the flows' results)
 and *Public tables* (a calendar, the regions).
 
-![The Sample folder in Explore](media/getting-started/03-sample-folder.png)
+![The Sample folder in Explore: the folders Flows, Private tables and Public tables, then the connections, the saved views, the reports and the dashboard](media/getting-started/03-sample-folder.png)
 
 The folder is created with no permissions on it: the administrator sees it, other users
 only once the administrator shares it. More: [the sample database](../infrastructure/sampledb/README.md).
@@ -311,7 +311,7 @@ source and the preview shows it at once. An Excel workbook is read from its firs
 sheet; when it has more than one, a window lists them and every sheet you tick becomes a
 source of its own.
 
-![A CSV uploaded as the source of a flow](media/getting-started/14-upload-csv.png)
+![The flow editor after Upload file: the CSV is the Source node of a new flow, and the grid under the canvas previews its rows](media/getting-started/14-upload-csv.png)
 
 An uploaded file belongs to that flow. To turn it into a datasource others can use,
 publish it with an Output node, as in step 7.
@@ -328,7 +328,7 @@ and click **Create**. The new folder opens.
 **2. A flow.** In the folder, **New → New flow**, then pick the engine: **DuckDB**, the one
 marked *Preferred*. The editor opens with one empty *Source* node.
 
-![New flow: pick the engine](media/getting-started/04-new-flow.png)
+![The New flow dialog listing the engines, each with a line on what it suits; the preferred one is marked](media/getting-started/04-new-flow.png)
 
 **3. Name it.** Click the name field at the top left (*Untitled flow*) and type
 `Orders by channel and year`.
@@ -338,7 +338,7 @@ marked *Preferred*. The editor opens with one empty *Source* node.
 **orders (30000 rows)** *Sample › Private tables*. The grid at the bottom previews the
 table.
 
-![The source and its preview](media/getting-started/05-source.png)
+![The flow editor with the Source node set to the orders datasource: its name and row count on the node, its first rows in the grid under the canvas](media/getting-started/05-source.png)
 
 **5. A filter.** Click **+ Operation** in the toolbar: a ring of transformations opens
 beside the selected node. Choose **Filter**. The step appears after the node, already
@@ -346,14 +346,14 @@ connected; until it has its settings, the grid shows the rows of its input, with
 saying so. In the right panel set **Column** `stato`, **Operator** `equals`, **Value** `evaso` (shipped)
 and press Enter. The preview shows only shipped orders.
 
-![The filter](media/getting-started/06-filter.png)
+![A Filter node after the source, with Column stato, Operator equals and Value evaso in the right panel; the grid shows only shipped orders](media/getting-started/06-filter.png)
 
 **6. A computed column.** **+ Operation** again, then **Computed column**. In the
 first box type the column name `order_year`, in the second the SQL expression
 `EXTRACT(YEAR FROM data_ordine)`, then press Tab. The preview gains an `order_year`
 column. A wrong expression is reported in the preview while you type.
 
-![The computed column](media/getting-started/07-computed-column.png)
+![A Computed column node with the name order_year and the expression EXTRACT(YEAR FROM data_ordine); the grid has the new order_year column](media/getting-started/07-computed-column.png)
 
 **7. A group by.** **+ Operation**, then **Group by**. Tick `canale` and
 `order_year`. Under *Aggregations* click **+ add**, choose the column `id`, the function
@@ -361,7 +361,7 @@ column. A wrong expression is reported in the preview while you type.
 the box; until then the column is called `id_count`). The preview now has one row per
 channel and year.
 
-![The group by](media/getting-started/08-group-by.png)
+![A Group by node with canale and order_year ticked and the aggregation count of id as orders; the grid has one row per channel and year](media/getting-started/08-group-by.png)
 
 **Preview any step.** Click any node of the canvas: the grid shows that step's output.
 The steps already computed are kept in a cache (the green glow), so going back to them
@@ -381,7 +381,7 @@ With the Output selected, in the right panel:
 
 The wand button in the canvas controls (*Arrange the flow*) lines the nodes up.
 
-![The Output node](media/getting-started/09-output.png)
+![The Output node connected after Group by, with destination Tabularia Datasource, the datasource name, its folder and the overwrite option in the right panel](media/getting-started/09-output.png)
 
 **9. Save.** **Save** in the toolbar (or Ctrl+S): *Flow "Orders by channel and year"
 saved*, and the address becomes `/editor?flow=<id>`.
@@ -391,7 +391,7 @@ on a worker, and launches one run per Output. Click **Run**. A couple of seconds
 the toolbar and a notification say *Datasource "shipped_orders_by_channel_year":
 completed: 20 rows → datasource "shipped_orders_by_channel_year"*.
 
-![The run, completed](media/getting-started/10-run.png)
+![The flow of five nodes after Run: a message says the run completed and names the datasource it wrote, 20 rows](media/getting-started/10-run.png)
 
 **11. The result.** **Datasources** in the top bar lists it (search `shipped`); click it
 to read and edit its description and its fields' descriptions. **Analysis → Viewer**
@@ -399,14 +399,14 @@ opens it to build a table from its fields (rows, groups, a cross table), with fi
 and charts, without changing it. **Runs** has the run: the
 page opens on *Failed*, click **All**.
 
-![The published datasource](media/getting-started/11-datasources.png)
+![The Datasources page listing the datasource the flow published, with its folder, rows and last refresh](media/getting-started/11-datasources.png)
 
 ## 8. Schedule it
 
 **Flows** in the top bar lists every flow. On the row of *Orders by channel and year*,
 click the calendar button (**Schedule run**).
 
-![The schedule dialog](media/getting-started/13-schedule.png)
+![The Schedule dialog of the flow: a cron expression field, the presets Every 15 min, Every hour, Every night (03:00) and Every Monday (06:00), and the engine for scheduled runs](media/getting-started/13-schedule.png)
 
 - **Cron expression**: minute, hour, day of month, month, day of week, read in the time
   zone of `APP__TIMEZONE` (the dialog shows it). The presets fill it in: *Every 15 min*,
@@ -428,7 +428,7 @@ type `13 18 * * *`. Within a minute after 18:13, **Runs** (click **All**) shows 
 rows for the flow whose author is **schedule**: the launch and the run of its Output.
 Then put the real schedule back.
 
-![A scheduled run in Runs](media/getting-started/12-runs.png)
+![The Runs page: the runs of Orders by channel and year, all Success, the latest ones started by the schedule and the earlier one by the administrator](media/getting-started/12-runs.png)
 
 Every run reads the whole table, never the development sample (that is for the previews), and with
 *Overwrite if it already exists* it refreshes the same datasource each time.

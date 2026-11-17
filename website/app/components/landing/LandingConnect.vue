@@ -186,6 +186,7 @@ function onTabKey (e: KeyboardEvent, i: number) {
   background: var(--ground); color: var(--text); font-family: var(--mono); font-size: var(--fs-body); outline: none; /* taste-skill-ignore: the field takes literal placeholder code */
 }
 .connect__input:focus { border-color: var(--accent); }
+.connect__input:focus-visible { outline: 3px solid var(--focus); outline-offset: 2px; }
 .connect__zone select {
   min-height: 56px; padding: 0 14px; border: 0; border-radius: 6px; background: var(--tile-3); color: var(--text); font-size: var(--fs-small); cursor: pointer;
 }

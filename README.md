@@ -746,7 +746,7 @@ Upgrading an installation on Kubernetes or minikube (backup, rollout, rollback, 
 
 ## How it works
 
-[![Tabularia runtime architecture](docs/architecture/tabularia-runtime.png)](https://tabularia.org/architecture/runtime-architecture.html)
+[![Diagram of Tabularia at run time: the browser reaches the web interface and the gateway; the gateway hands previews and runs to the engine and its workers; PostgreSQL, the queue and the object storage sit beneath them. Opens the interactive diagram](docs/architecture/tabularia-runtime.png)](https://tabularia.org/architecture/runtime-architecture.html)
 
 A Nuxt interface talks to a **gateway** in Go, the only public entry point (sign-in,
 permissions, audit log, the metadata in PostgreSQL), which hands every preview and run to an

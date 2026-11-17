@@ -9,6 +9,7 @@ export default {
   docs: {
     copy: 'Copy',
     copyLabel: 'Copy the code',
+    codeRegion: 'Code',
     copied: 'Copied',
     copyFailed: 'Select the text and copy it',
   },

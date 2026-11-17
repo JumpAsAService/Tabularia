@@ -111,6 +111,8 @@ onBeforeUnmount(() => window.removeEventListener('keydown', onGlobalKey))
 }
 .search__input::placeholder { color: var(--muted); }
 .search__input:focus { border-color: var(--accent); background: var(--ground); }
+/* the keyboard's ring, as on every other control: the border's colour alone is too faint a sign */
+.search__input:focus-visible { outline: 3px solid var(--focus); outline-offset: 2px; }
 .search__input::-webkit-search-cancel-button { display: none; }
 .search__kbd {
   position: absolute; right: 10px; top: 50%; transform: translateY(-50%);

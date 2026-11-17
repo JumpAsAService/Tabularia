@@ -5,7 +5,7 @@ the same flow run on a laptop and on a warehouse. For the objects people work wi
 (folders, datasources, flows, runs) read [Concepts](concepts.md) first; for the settings,
 the [configuration reference](configuration.md).
 
-[![Tabularia runtime architecture](architecture/tabularia-runtime.png)](architecture/runtime-architecture.html)
+[![Diagram of Tabularia at run time: the browser reaches the web interface and the gateway; the gateway hands previews and runs to the engine and its workers; PostgreSQL, the queue and the object storage sit beneath them. Opens the interactive diagram](architecture/tabularia-runtime.png)](architecture/runtime-architecture.html)
 
 **[Open the interactive diagram](architecture/runtime-architecture.html)** (pan and zoom,
 light and dark theme, search, guided views, PNG and SVG export). It is generated with

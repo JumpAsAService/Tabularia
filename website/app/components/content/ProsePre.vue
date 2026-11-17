@@ -55,7 +55,9 @@ onBeforeUnmount(() => clearTimeout(timer))
       </button>
       <span class="sr-only" role="status">{{ state === 'copied' ? t.copied : state === 'failed' ? t.copyFailed : '' }}</span>
     </div>
-    <pre :class="props.class"><slot /></pre>
+    <!-- focusable, and a named region: a block wider than the page scrolls sideways, and the
+         keyboard must reach it to scroll it (WCAG 2.1.1) -->
+    <pre :class="props.class" tabindex="0" role="region" :aria-label="label ? `${t.codeRegion}: ${label}` : t.codeRegion"><slot /></pre>
   </div>
 </template>
 

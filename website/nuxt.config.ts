@@ -82,7 +82,9 @@ export default defineNuxtConfig({
       markdown: {
         toc: { depth: 3, searchDepth: 2 },
         highlight: {
-          theme: { default: 'github-dark-dimmed', light: 'github-light' },
+          // the light theme is the high-contrast one: github-light's red and orange fall under
+          // WCAG AA (4.5:1) on the code blocks' ground
+          theme: { default: 'github-dark-dimmed', light: 'github-light-high-contrast' },
           langs: ['bash', 'shellscript', 'dockerfile', 'dotenv', 'json', 'python', 'sql', 'yaml', 'ini', 'toml', 'js', 'ts', 'http', 'xml', 'jinja', 'diff'],
         },
       },
