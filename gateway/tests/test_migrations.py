@@ -424,3 +424,25 @@ def test_0042_adds_internet_access_to_the_versions_and_leaves_what_was_there(tem
     with pytest.raises(Exception, match="internet_access"):
         with temporary_database.begin() as c:
             c.execute(text("UPDATE script_environment_versions SET internet_access = NULL WHERE id = 2"))
+
+
+def test_0043_adds_the_home_page_tables_empty_and_they_go_with_the_account(temporary_database):
+    """Two new tables the previous version neither reads nor writes; both follow the account."""
+    with temporary_database.begin() as c:
+        command.upgrade(m._config(c), "0042")
+        c.execute(text(
+            "INSERT INTO users (id, email, full_name, hashed_password, is_active, is_superuser, is_observer, is_service, created_at) "
+            "VALUES (1, 'home@x.test', '', 'x', true, false, false, false, now())"))
+    m.migra(temporary_database)  # stops if the database and the models differ
+    with temporary_database.connect() as c:
+        assert [c.execute(text(f"SELECT count(*) FROM {t}")).scalar() for t in ("user_home", "user_favourites")] == [0, 0]
+    with temporary_database.begin() as c:
+        c.execute(text("INSERT INTO user_home (user_id, definition, updated_at) VALUES (1, '{}', now())"))
+        c.execute(text("INSERT INTO user_favourites (user_id, kind, object_id, position, created_at) VALUES (1, 'flow', 7, 0, now())"))
+    with pytest.raises(Exception, match="uq_user_favourite"):
+        with temporary_database.begin() as c:
+            c.execute(text("INSERT INTO user_favourites (user_id, kind, object_id, position, created_at) VALUES (1, 'flow', 7, 1, now())"))
+    with temporary_database.begin() as c:
+        c.execute(text("DELETE FROM users WHERE id = 1"))
+    with temporary_database.connect() as c:
+        assert [c.execute(text(f"SELECT count(*) FROM {t}")).scalar() for t in ("user_home", "user_favourites")] == [0, 0]

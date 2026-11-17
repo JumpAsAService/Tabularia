@@ -31,7 +31,7 @@ Proposed here, to confirm with the spec:
 | Question | Proposal |
 |---|---|
 | Addresses | Home at `/`, Explore moves to `/explore`; old links to `/?project=…` are redirected |
-| A first visit | A default layout, one for administrators and one for everyone else; «Reset to default» brings it back |
+| A first visit | A default layout; «Reset to default» brings it back. **The same on Docker Compose and on Kubernetes** (owner, 2026-11-17): the gateway holds it in one place, and it is made only of widgets both have. An administrator's differs by the shortcuts to the administration alone |
 | An administrator's default for everyone | Not in the first version (see Open points) |
 | On a phone | One column, in reading order, no editing |
 
@@ -77,6 +77,10 @@ migration); everything else in the Go gateway.
   the row. All three for the signed-in person only: no id in the address.
 - A widget of a type the person may not use (an administrator who is one no longer) is
   dropped from the answer, not an error.
+- The answer also lists the types the person may add (`available`), so the catalogue is the
+  server's, and says whether the layout is the default one (`is_default`).
+- Widgets that exist on one kind of installation only (the cluster's, the data APIs') may be
+  added by hand where they exist, and are never in the default layout.
 
 ### The page
 
@@ -103,8 +107,8 @@ First version:
 | **Favourites** | Objects the person pinned | Order by hand | On change |
 | **Next runs** | The schedules due in the next 24 h among the objects the person can see | Mine / all, hours ahead | 60 s |
 | **Failed runs** | The last failed runs, with the error's first line and «Open», «Run again» where allowed | Mine / all, days back | 60 s |
-| **Flow durations** | For one to five flows, the duration of their last runs as a chart, with the median | Flows, how many runs | 5 min |
-| **Shortcuts** | Buttons to pages and tabs (Flows, Viewer, Reports…); for administrators also the sections of Administration | Which, in what order | Never |
+| **Flow durations** | For one to five flows, the duration of their last runs as a chart, with the median; with no flow chosen, the flows the person ran last | Flows, how many runs | 5 min |
+| **Shortcuts** | Buttons to pages and tabs (Flows, Viewer, Reports…); for administrators also the sections of Administration. Kept as paths of the installation (`/flows`, `/admin?tab=users`), never an address of elsewhere; a path under an administration page is refused to, and hidden from, whoever is not an administrator | Which, in what order | Never |
 | **Note** | The person's own text, with links | Text (Markdown subset, no HTML) | Never |
 
 Later, each a piece of its own:

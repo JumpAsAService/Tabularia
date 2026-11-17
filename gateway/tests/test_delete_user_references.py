@@ -21,6 +21,7 @@ from tests.conftest import make_datasource, make_flow, make_project, make_user
 # share_links.creator_id is ON DELETE CASCADE: the database takes the links with the account.
 # data_apis.creator_id too (the data APIs go with their creator); data_api_versions.created_by and
 # data_api_keys.created_by are ON DELETE SET NULL.
+# user_home.user_id and user_favourites.user_id are ON DELETE CASCADE: a person's home page goes with them.
 REFERENCES = {
     ("ai_models", "updated_by"), ("ai_providers", "updated_by"), ("api_tokens", "user_id"), ("api_tokens", "created_by"),
     ("audit_logs", "actor_id"), ("banners", "created_by"), ("connections", "owner_id"),
@@ -35,6 +36,7 @@ REFERENCES = {
     ("saved_scripts", "owner_id"), ("share_links", "creator_id"), ("saved_scripts", "run_scheduled_by"), ("saved_views", "owner_id"),
     ("sql_script_versions", "created_by"), ("sql_scripts", "owner_id"), ("sql_scripts", "run_scheduled_by"), ("uploads", "owner_id"),
     ("user_groups", "user_id"), ("user_sessions", "user_id"), ("webhooks", "created_by"),
+    ("user_home", "user_id"), ("user_favourites", "user_id"),
 }
 
 

@@ -5,6 +5,15 @@ exposes at `/system/info` and in the app's settings menu.
 
 ## Unreleased
 
+Development on `main` for the next minor version. The stable line stays 1.4.x
+([long-term support](docs/lts.md)), which takes fixes only.
+
+- **The home page, first piece: each person's layout on the server.** `GET` and `PUT /home`
+  and `POST /home/reset` keep a grid of widgets per person (their types, places and options,
+  validated type by type), and answer a default layout to whoever has not arranged theirs:
+  the same on Docker Compose and on Kubernetes. Database migration 0043 adds two tables
+  (`user_home`, `user_favourites`). No page yet: [the spec](docs/specs/home.md).
+
 ## 1.4.6 «Romulus» — 2026-11-15 · long-term support
 
 Fixes, found by installing Tabularia from zero with each guide of the site. Images only:

@@ -17,7 +17,7 @@ import (
 // read here may not be there yet. One ahead of it is accepted with a warning (from 1.4.2):
 // the migrations of an LTS patch only add (docs/lts.md), so the gateway of the previous
 // patch still reads and writes what it knows, and a rollback between patches works.
-const SchemaRevision = "0042"
+const SchemaRevision = "0043"
 
 // Open makes the pool. maxConns 0 = pgx's default.
 func Open(ctx context.Context, dsn string, maxConns int32) (*pgxpool.Pool, error) {

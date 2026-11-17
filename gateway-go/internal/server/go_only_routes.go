@@ -19,8 +19,11 @@ var goOnlyRoutes = []struct {
 	{after: "/users/me/locale", route: pyRoute{path: "/users/me/flow-shortcuts", methods: []string{"GET", "PUT"}, regex: `^/users/me/flow\-shortcuts$`}},
 	// Explore's top level, the objects one changed last (api/explore_recent.go)
 	{after: "/search", route: pyRoute{path: "/explore/recent", methods: []string{"GET"}, regex: `^/explore/recent$`}},
+	// the home page, each person's grid of widgets (api/home.go)
+	{after: "/explore/recent", route: pyRoute{path: "/home", methods: []string{"GET", "PUT"}, regex: `^/home$`}},
+	{after: "/home", route: pyRoute{path: "/home/reset", methods: []string{"POST"}, regex: `^/home/reset$`}},
 	// share links: the creators' side and the admin tab (api/share_links.go)
-	{after: "/explore/recent", route: pyRoute{path: "/share-links", methods: []string{"GET", "POST"}, regex: `^/share\-links$`}},
+	{after: "/home/reset", route: pyRoute{path: "/share-links", methods: []string{"GET", "POST"}, regex: `^/share\-links$`}},
 	{after: "/share-links", route: pyRoute{path: "/share-links/{link_id}/password", methods: []string{"POST"}, regex: `^/share\-links/(?P<link_id>[^/]+)/password$`}},
 	{after: "/share-links/{link_id}/password", route: pyRoute{path: "/share-links/{link_id}/revoke", methods: []string{"POST"}, regex: `^/share\-links/(?P<link_id>[^/]+)/revoke$`}},
 	{after: "/share-links/{link_id}/revoke", route: pyRoute{path: "/admin/share-links", methods: []string{"GET"}, regex: `^/admin/share\-links$`}},
