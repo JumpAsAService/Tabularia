@@ -5859,4 +5859,95 @@ export default {
     "new": "Il menu «Nuovo»",
     "kindFilter": "Tipo",
   },
+  "home": {
+    "widgets": {
+      "clock": "Orologio",
+      "recent": "Recenti",
+      "failed_runs": "Esecuzioni fallite",
+      "shortcuts": "Scorciatoie",
+      "note": "Nota"
+    },
+    "about": {
+      "clock": "L'ora e la data, nel tuo fuso o in un altro",
+      "recent": "Ciò che hai modificato per ultimo",
+      "failed_runs": "Le ultime esecuzioni fallite",
+      "shortcuts": "Pulsanti verso le pagine che usi",
+      "note": "Un testo tuo"
+    },
+    "kinds": {
+      "flow": "Flussi",
+      "group": "Gruppi di flussi",
+      "datasource": "Datasource",
+      "view": "Viste salvate",
+      "sql": "Script SQL",
+      "script": "Script",
+      "notebook": "Notebook",
+      "report": "Report",
+      "dashboard": "Dashboard",
+      "dataapi": "API dati"
+    },
+    "customise": "Personalizza",
+    "done": "Fatto",
+    "add": "Widget",
+    "undo": "Annulla",
+    "redo": "Ripeti",
+    "reset": "Ripristina il predefinito",
+    "resetConfirm": "Riportare la home al layout predefinito? Ciò che hai disposto va perso.",
+    "resetDone": "La home è tornata al layout predefinito.",
+    "saving": "Salvataggio…",
+    "saved": "Salvato",
+    "saveFailed": "Non è stato possibile salvare la home.",
+    "loadFailed": "Non è stato possibile caricare la home.",
+    "retry": "Riprova",
+    "empty": "La tua home è vuota.",
+    "tooMany": "Una home contiene al massimo trenta widget.",
+    "editHelp": "Trascina un widget dal titolo per spostarlo, dall'angolo per ridimensionarlo. Da tastiera: le frecce spostano, Maiusc+frecce ridimensionano, Invio apre le opzioni, Canc rimuove.",
+    "keys": "Le frecce spostano il widget, Maiusc e frecce lo ridimensionano, Invio apre le opzioni, Canc lo rimuove.",
+    "editingOn": "Stai disponendo la home.",
+    "added": "{name} aggiunto.",
+    "removed": "{name} rimosso.",
+    "optionsSaved": "Opzioni di {name} salvate.",
+    "undone": "Annullato.",
+    "redone": "Ripetuto.",
+    "at": "{name}: colonna {col}, riga {row}, largo {w}, alto {h}.",
+    "edge": "{name} non può andare oltre.",
+    "options": "Opzioni",
+    "optionsOf": "Opzioni di {name}",
+    "remove": "Rimuovi",
+    "removeOf": "Rimuovi {name}",
+    "cancel": "Annulla",
+    "save": "Salva",
+    "clock": {
+      "zone": "Fuso orario",
+      "browserZone": "Quello del browser ({zone})",
+      "hour12": "Formato a 12 ore",
+      "seconds": "Mostra i secondi"
+    },
+    "recent": {
+      "empty": "Niente di tuo o salvato da te è ancora cambiato.",
+      "failed": "Non è stato possibile leggere l'elenco.",
+      "limit": "Quanti (da 5 a 20)",
+      "kinds": "Tipi",
+      "kindsHint": "Nessuno spuntato: tutti i tipi."
+    },
+    "failed": {
+      "empty": "Nessuna esecuzione fallita negli ultimi {n} giorni.",
+      "failed": "Non è stato possibile leggere le esecuzioni.",
+      "all": "Tutte le esecuzioni",
+      "scope": "Le esecuzioni di chi",
+      "scopeAll": "Tutte quelle che posso vedere",
+      "scopeMine": "Solo quelle avviate da me",
+      "days": "Giorni indietro (da 1 a 30)"
+    },
+    "shortcuts": {
+      "empty": "Ancora nessuna scorciatoia: sceglile nelle opzioni del widget.",
+      "places": "Pagine"
+    },
+    "note": {
+      "empty": "Una nota vuota: scrivila nelle opzioni del widget.",
+      "text": "Testo",
+      "placeholder": "Un promemoria, un link, chi chiamare…",
+      "hint": "Titoli, elenchi, grassetto e codice come in Markdown. Fino a 4.000 caratteri."
+    }
+  },
 }

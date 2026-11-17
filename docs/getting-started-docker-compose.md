@@ -220,8 +220,9 @@ sign-in, with that email and password.
 
 ![The sign-in page of a new installation, asking for the name, email and password of the first administrator](media/getting-started/01-sign-in.png)
 
-The installation opens on **Explore**. The sample data (step 6) arrives a minute or two
-later: reload the page to see the `Sample` folder.
+The installation opens on your [home page](capabilities/home.md), a grid of widgets you can
+arrange. **Explore**, the first item of the bar, is where the folders are: the sample data
+(step 6) arrives there a minute or two later; reload the page to see the `Sample` folder.
 
 **Theme and language** are in the gear at the top right: five themes (Dark, Light,
 Dracula, Monokai, Imperium) and five languages (English, Italiano, Français, Deutsch,

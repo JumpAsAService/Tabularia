@@ -3,6 +3,7 @@ export default {
   nav: {
     performance: "Leistung",
     cluster: 'Cluster',
+    home: 'Start',
     explore: 'Erkunden',
     flows: 'Flüsse',
     datasources: 'Datenquellen',

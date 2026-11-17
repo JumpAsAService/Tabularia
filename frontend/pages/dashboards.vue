@@ -144,7 +144,7 @@ function openRow(ev: MouseEvent, r: DashboardRow) {
       <LayoutDashboard :size="22" class="empty-icon" />
       <p class="empty-title">{{ $t('dashboardsTab.emptyTitle') }}</p>
       <p class="muted">{{ $t('dashboardsTab.emptyHint') }}</p>
-      <NuxtLink to="/" class="btn-link"><FolderTree :size="14" /> {{ $t('dashboardsTab.emptyAction') }}</NuxtLink>
+      <NuxtLink to="/explore" class="btn-link"><FolderTree :size="14" /> {{ $t('dashboardsTab.emptyAction') }}</NuxtLink>
     </div>
 
     <table v-else class="list">

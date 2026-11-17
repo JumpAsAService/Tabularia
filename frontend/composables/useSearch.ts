@@ -55,7 +55,7 @@ export function searchHitTarget(hit: SearchHit): string {
     // with the name as search: the list is paginated, and the item may sit past the first page
     case 'datasource': return `/datasources?q=${encodeURIComponent(hit.name)}&ds=${hit.id}`
     case 'connection': return `/connections?q=${encodeURIComponent(hit.name)}&conn=${hit.id}`
-    case 'folder': return `/?folder=${hit.id}`
+    case 'folder': return `/explore?folder=${hit.id}`
   }
 }
 

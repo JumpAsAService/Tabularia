@@ -132,6 +132,7 @@ const MENUS: Record<NavMenu['menu'], { label: string; icon: Component }> = {
 const items = computed<(NavLink | NavMenu)[]>(() => {
   const out: (NavLink | NavMenu)[] = []
   for (const s of keyHelp.sections.value) {
+    if (s.bar === false) continue // the home page: the brand leads there, the bar has no room for one more item
     const link: NavLink = { to: s.to, label: t(s.label), icon: ICONS[s.id], keys: `g ${s.key}` }
     if (!s.menu) { out.push(link); continue }
     const which = s.menu
@@ -210,7 +211,7 @@ onMounted(async () => {
 <template>
   <div v-label-fields class="app-shell">
     <header class="topbar">
-      <NuxtLink to="/" class="brand">
+      <NuxtLink to="/" class="brand" :title="$t('nav.home')" aria-keyshortcuts="g h">
         <BrandMark :size="28" /> <span class="brand-name">Tabularia</span>
       </NuxtLink>
 

@@ -70,7 +70,7 @@ try:
     ff.go(f"{UI}/favicon.svg")
     ff.js("localStorage.clear(); document.cookie = 'tabularia-locale=en; path=/; max-age=86400; samesite=lax'; return 1")
     ff.sign_in(UI, token)
-    ff.go(f"{UI}/?folder={PID}")
+    ff.go(f"{UI}/explore?folder={PID}")
     ok("the folder opens in Explore", ff.wait_for("document.body.innerText.includes('drop')", 30))
 
     print("— connection dialog: new SFTP connection")
@@ -108,7 +108,7 @@ try:
        f"{created} / {shown}")
 
     print("— connection dialog: editing it")
-    ff.go(f"{UI}/?folder={PID}")
+    ff.go(f"{UI}/explore?folder={PID}")
     ff.wait_for("document.body.innerText.includes('drop-ui')", 20)
     ff.js("""const row = Array.from(document.querySelectorAll('tr')).find(r => r.innerText.includes('drop-ui'));
       row.querySelector('button svg.lucide-pencil').closest('button').click(); return 1""")

@@ -485,7 +485,7 @@ useHead(() => ({ title: name.value ? `${name.value} · ${t('reportDesigner.title
 <template>
   <div class="rdz">
     <header class="rdz-top">
-      <NuxtLink :to="projectId ? `/?folder=${projectId}` : '/'" class="rdz-back" :title="$t('reportDesigner.backToExplore')" :aria-label="$t('reportDesigner.backToExplore')">
+      <NuxtLink :to="projectId ? `/explore?folder=${projectId}` : '/explore'" class="rdz-back" :title="$t('reportDesigner.backToExplore')" :aria-label="$t('reportDesigner.backToExplore')">
         <ArrowLeft :size="15" />
       </NuxtLink>
       <BrandMark :size="20" />

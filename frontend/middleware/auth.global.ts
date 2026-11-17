@@ -15,4 +15,7 @@ export default defineNuxtRouteMiddleware((to) => {
   if (!present.value) {
     return navigateTo('/login')
   }
+  // Explore lived at «/» until the home page took its place: a link kept from then
+  // (/?folder=7) still opens its folder
+  if (to.path === '/' && to.query.folder !== undefined) return navigateTo({ path: '/explore', query: to.query }, { replace: true })
 })

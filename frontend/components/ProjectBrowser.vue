@@ -215,7 +215,7 @@ function personalLabel(p: Project): string {
  */
 function openFolder(id: number | null, focus: string | null = null) {
   pendingFocus = focus
-  if (folderOfRoute() !== id) navigateTo(id == null ? '/' : `/?folder=${id}`)
+  if (folderOfRoute() !== id) navigateTo(id == null ? '/explore' : `/explore?folder=${id}`)
   currentId.value = id
   loadFolder(id)
 }
@@ -226,7 +226,7 @@ function folderOfRoute(): number | null {
 }
 // Back, Forward, a link to a folder from the search: the address leads, the list follows
 watch(() => route.query.folder, () => {
-  if (route.path !== '/') return
+  if (route.path !== '/explore') return
   const id = folderOfRoute()
   if (id === currentId.value) return
   currentId.value = id

@@ -72,23 +72,30 @@ type homeType struct {
 	clean      func(o map[string]any, admin bool) (map[string]any, error)
 }
 
-// homeTypes are the widgets of the first version, in the catalogue's order.
-var homeTypeOrder = []string{"clock", "recent", "favourites", "next_runs", "failed_runs", "flow_durations", "shortcuts", "note"}
+// homeTypeOrder are the widgets that exist, in the catalogue's order. A type enters the
+// catalogue, and the default layout, with the piece that draws it and serves its data
+// (docs/specs/home.md, «Pieces»): favourites, next_runs and flow_durations have their
+// options ready below and wait for their endpoints.
+var homeTypeOrder = []string{"clock", "recent", "failed_runs", "shortcuts", "note"}
 
 var homeTypes = map[string]homeType{
-	"clock":          {minW: 2, minH: 2, clean: cleanClock},
-	"recent":         {minW: 3, minH: 4, clean: cleanRecent},
+	"clock":       {minW: 2, minH: 2, clean: cleanClock},
+	"recent":      {minW: 3, minH: 4, clean: cleanRecent},
+	"failed_runs": {minW: 3, minH: 4, clean: cleanFailedRuns},
+	"shortcuts":   {minW: 2, minH: 2, clean: cleanShortcuts},
+	"note":        {minW: 2, minH: 2, clean: cleanNote},
+}
+
+// homeLaterTypes are the next pieces' widgets: validated already, not offered yet.
+var homeLaterTypes = map[string]homeType{
 	"favourites":     {minW: 3, minH: 4, clean: noOptions},
 	"next_runs":      {minW: 3, minH: 4, clean: cleanNextRuns},
-	"failed_runs":    {minW: 3, minH: 4, clean: cleanFailedRuns},
 	"flow_durations": {minW: 4, minH: 5, clean: cleanFlowDurations},
-	"shortcuts":      {minW: 2, minH: 2, clean: cleanShortcuts},
-	"note":           {minW: 2, minH: 2, clean: cleanNote},
 }
 
 // homeRecentKinds are Explore's kinds a «Recent» widget may be narrowed to.
-var homeRecentKinds = map[string]bool{"flow": true, "flow_group": true, "sql_script": true, "script": true,
-	"notebook": true, "report": true, "dashboard": true, "saved_view": true, "datasource": true, "data_api": true}
+var homeRecentKinds = map[string]bool{"flow": true, "group": true, "sql": true, "script": true,
+	"notebook": true, "report": true, "dashboard": true, "view": true, "datasource": true, "dataapi": true}
 
 // homeAdminPaths are the pages of the administrators: a shortcut to one of them is theirs alone.
 var homeAdminPaths = []string{"/admin", "/queue", "/monitoring", "/performance", "/cluster", "/audit"}
@@ -503,11 +510,8 @@ func defaultHome(admin bool) []HomeWidget {
 		{ID: "clock", Type: "clock", X: 0, Y: 0, W: 3, H: 3},
 		{ID: "shortcuts", Type: "shortcuts", X: 3, Y: 0, W: 9, H: 3, Options: map[string]any{"items": toAny(shortcuts)}},
 		{ID: "recent", Type: "recent", X: 0, Y: 3, W: 6, H: 8},
-		{ID: "favourites", Type: "favourites", X: 6, Y: 3, W: 6, H: 8},
-		{ID: "failed-runs", Type: "failed_runs", X: 0, Y: 11, W: 6, H: 7},
-		{ID: "next-runs", Type: "next_runs", X: 6, Y: 11, W: 6, H: 7},
-		{ID: "flow-durations", Type: "flow_durations", X: 0, Y: 18, W: 8, H: 8},
-		{ID: "note", Type: "note", X: 8, Y: 18, W: 4, H: 8},
+		{ID: "failed-runs", Type: "failed_runs", X: 6, Y: 3, W: 6, H: 8},
+		{ID: "note", Type: "note", X: 0, Y: 11, W: 12, H: 4},
 	}
 	return homeForReader(layout, admin) // the options in their canonical form
 }

@@ -75,7 +75,7 @@ try:
     ff.go(f"{UI}/favicon.svg")
     ff.js("localStorage.clear(); document.cookie = 'tabularia-locale=en; path=/; max-age=86400; samesite=lax'; return 1")
     ff.sign_in(UI, token)
-    ff.go(f"{UI}/?folder={PID}")
+    ff.go(f"{UI}/explore?folder={PID}")
     ok("the folder opens in Explore", ff.wait_for("document.body.innerText.includes('zz none')", 30))
 
     print("— connection dialog: new HTTP API connection")
@@ -115,7 +115,7 @@ try:
        and extra.get("headers") == {"Accept": "application/json"} and extra.get("test_path") == "/key-header/items", created)
 
     print("— connection dialog: editing it")
-    ff.go(f"{UI}/?folder={PID}")
+    ff.go(f"{UI}/explore?folder={PID}")
     ff.wait_for("document.body.innerText.includes('broker-ui')", 20)
     ff.js("""const row = Array.from(document.querySelectorAll('tr')).find(r => r.innerText.includes('broker-ui'));
       row.querySelector('button svg.lucide-pencil').closest('button').click(); return 1""")
@@ -170,7 +170,7 @@ try:
 
     print("— in Italian")
     ff.js("document.cookie = 'tabularia-locale=it; path=/; max-age=86400; samesite=lax'; localStorage.clear(); return 1")
-    ff.go(f"{UI}/?folder={PID}")
+    ff.go(f"{UI}/explore?folder={PID}")
     ff.wait_for("document.body.innerText.includes('broker-ui')", 20)
     ff.js("Array.from(document.querySelectorAll('button.btn-link')).find(b => b.innerText.includes('Nuov')).click(); return 1")
     ff.wait_for("!!document.querySelector('.menu-pop')", 5)

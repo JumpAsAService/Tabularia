@@ -27,7 +27,7 @@ test('every place of the bar has its own letter, taken from its English name', (
 
 test('«g» leads only where this person has a link', () => {
   const plain = K.visibleSections({ scripting: false, observe: false })
-  assert.deepEqual(plain.map((s) => s.id), ['explore', 'flows', 'datasources', 'lineage', 'viewer', 'reports', 'dashboards', 'assistant', 'connections', 'runs'])
+  assert.deepEqual(plain.map((s) => s.id), ['home', 'explore', 'flows', 'datasources', 'lineage', 'viewer', 'reports', 'dashboards', 'assistant', 'connections', 'runs'])
   assert.ok(K.visibleSections({ scripting: true, observe: false }).some((s) => s.id === 'scripting'))
   assert.ok(all.some((s) => s.to === '/admin'))
   // with Administration hidden its letter leads nowhere, and is dropped
@@ -40,7 +40,7 @@ test('«g» then a letter, within its time; anything else lets go', () => {
   const t0 = 5000
   assert.deepEqual(K.appKey({ key: 'g' }, null, t0, all), { act: 'pending', pending: true })
   assert.deepEqual(K.appKey({ key: 'f' }, t0, t0 + 400, all), { act: 'goto', to: '/flows', pending: false })
-  assert.deepEqual(K.appKey({ key: 'e' }, t0, t0 + K.SEQUENCE_MS, all), { act: 'goto', to: '/', pending: false })
+  assert.deepEqual(K.appKey({ key: 'e' }, t0, t0 + K.SEQUENCE_MS, all), { act: 'goto', to: '/explore', pending: false })
   // too late: the letter is the page's
   assert.deepEqual(K.appKey({ key: 'f' }, t0, t0 + K.SEQUENCE_MS + 1, all), { act: null, pending: false })
   // a letter alone is nothing here

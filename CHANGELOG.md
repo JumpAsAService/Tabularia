@@ -8,11 +8,16 @@ exposes at `/system/info` and in the app's settings menu.
 Development on `main` for the next minor version. The stable line stays 1.4.x
 ([long-term support](docs/lts.md)), which takes fixes only.
 
-- **The home page, first piece: each person's layout on the server.** `GET` and `PUT /home`
-  and `POST /home/reset` keep a grid of widgets per person (their types, places and options,
-  validated type by type), and answer a default layout to whoever has not arranged theirs:
-  the same on Docker Compose and on Kubernetes. Database migration 0043 adds two tables
-  (`user_home`, `user_favourites`). No page yet: [the spec](docs/specs/home.md).
+- **Tabularia opens on a home page each person arranges.** A grid of widgets on the
+  dashboards' 12 columns: Clock, Recent, Failed runs, Shortcuts and Note, each with its
+  options. **Customise** moves and resizes them by dragging or from the keyboard (arrows,
+  Shift+arrows, Enter, Delete), adds and removes them, with undo and a reset to the default;
+  every change is announced to screen readers and saved as it is made. The layout is kept
+  on the server per person (`GET`/`PUT /home`, `POST /home/reset`; database migration 0043)
+  and the default is the same on Docker Compose and on Kubernetes. A widget shows only what
+  its reader may see on the page it mirrors. **Explore moves to `/explore`**: the brand at
+  the top left leads home (`g` `h`), old links to a folder (`/?folder=7`) are redirected.
+  [The home page](docs/capabilities/home.md), [the spec](docs/specs/home.md).
 
 ## 1.4.6 «Romulus» — 2026-11-15 · long-term support
 

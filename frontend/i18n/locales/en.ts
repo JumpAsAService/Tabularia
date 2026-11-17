@@ -4,6 +4,7 @@ export default {
   nav: {
     performance: "Performance",
     cluster: 'Cluster',
+    home: 'Home',
     explore: 'Explore',
     flows: 'Flows',
     datasources: 'Datasources',

@@ -16,6 +16,7 @@ does not do, with an example on the sample data of the Docker Compose stack.
 
 | Capability | What it gives you | Page |
 |---|---|---|
+| The home page | The page Tabularia opens on, a grid of widgets each person arranges: what they changed last, what failed, their shortcuts and notes | [The home page](home.md) |
 | Low-code flows | A pipeline drawn on a canvas: sources, 19 transformations and a loop, outputs, each step previewed on the whole table | [Flows](flows.md) |
 | Preview and analysis | The data of every step as a table or a chart, the Viewer, where a table is built by dragging fields onto Rows, Columns and Measures, with filters and computed fields, saved views, CSV and Excel downloads | [Preview and analysis](preview-and-analysis.md) |
 | Lineage | How connections, datasources, flows, scripts, notebooks, flow groups and destinations depend on each other, what a change would reach, what is stale | [Lineage](lineage.md) |

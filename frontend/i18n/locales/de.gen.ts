@@ -5859,4 +5859,95 @@ export default {
     "new": "Das Menü «Neu»",
     "kindFilter": "Art",
   },
+  "home": {
+    "widgets": {
+      "clock": "Uhr",
+      "recent": "Zuletzt",
+      "failed_runs": "Fehlgeschlagene Läufe",
+      "shortcuts": "Schnellzugriffe",
+      "note": "Notiz"
+    },
+    "about": {
+      "clock": "Uhrzeit und Datum, in Ihrer Zeitzone oder einer anderen",
+      "recent": "Was Sie zuletzt geändert haben",
+      "failed_runs": "Die letzten fehlgeschlagenen Läufe",
+      "shortcuts": "Schaltflächen zu den Seiten, die Sie nutzen",
+      "note": "Ein eigener Text"
+    },
+    "kinds": {
+      "flow": "Flows",
+      "group": "Flow-Gruppen",
+      "datasource": "Datenquellen",
+      "view": "Gespeicherte Ansichten",
+      "sql": "SQL-Skripte",
+      "script": "Skripte",
+      "notebook": "Notebooks",
+      "report": "Berichte",
+      "dashboard": "Dashboards",
+      "dataapi": "Daten-APIs"
+    },
+    "customise": "Anpassen",
+    "done": "Fertig",
+    "add": "Widget",
+    "undo": "Rückgängig",
+    "redo": "Wiederholen",
+    "reset": "Standard wiederherstellen",
+    "resetConfirm": "Die Startseite auf das Standardlayout zurücksetzen? Ihre Anordnung geht verloren.",
+    "resetDone": "Die Startseite hat wieder das Standardlayout.",
+    "saving": "Speichern…",
+    "saved": "Gespeichert",
+    "saveFailed": "Die Startseite konnte nicht gespeichert werden.",
+    "loadFailed": "Die Startseite konnte nicht geladen werden.",
+    "retry": "Erneut versuchen",
+    "empty": "Ihre Startseite ist leer.",
+    "tooMany": "Eine Startseite fasst höchstens dreißig Widgets.",
+    "editHelp": "Ziehen Sie ein Widget am Titel, um es zu verschieben, an der Ecke, um die Größe zu ändern. Mit der Tastatur: Pfeile verschieben, Umschalt+Pfeile ändern die Größe, Eingabe öffnet die Optionen, Entf entfernt.",
+    "keys": "Die Pfeile verschieben das Widget, Umschalt und Pfeile ändern seine Größe, Eingabe öffnet seine Optionen, Entf entfernt es.",
+    "editingOn": "Die Startseite wird angeordnet.",
+    "added": "{name} hinzugefügt.",
+    "removed": "{name} entfernt.",
+    "optionsSaved": "Optionen von {name} gespeichert.",
+    "undone": "Rückgängig gemacht.",
+    "redone": "Wiederholt.",
+    "at": "{name}: Spalte {col}, Zeile {row}, Breite {w}, Höhe {h}.",
+    "edge": "{name} kann nicht weiter.",
+    "options": "Optionen",
+    "optionsOf": "Optionen von {name}",
+    "remove": "Entfernen",
+    "removeOf": "{name} entfernen",
+    "cancel": "Abbrechen",
+    "save": "Speichern",
+    "clock": {
+      "zone": "Zeitzone",
+      "browserZone": "Die des Browsers ({zone})",
+      "hour12": "12-Stunden-Format",
+      "seconds": "Sekunden anzeigen"
+    },
+    "recent": {
+      "empty": "Noch nichts, das Ihnen gehört oder das Sie gespeichert haben, wurde geändert.",
+      "failed": "Die Liste konnte nicht gelesen werden.",
+      "limit": "Wie viele (5 bis 20)",
+      "kinds": "Arten",
+      "kindsHint": "Keine angekreuzt: alle Arten."
+    },
+    "failed": {
+      "empty": "Kein fehlgeschlagener Lauf in den letzten {n} Tagen.",
+      "failed": "Die Läufe konnten nicht gelesen werden.",
+      "all": "Alle Läufe",
+      "scope": "Wessen Läufe",
+      "scopeAll": "Alle, die ich sehen darf",
+      "scopeMine": "Nur die von mir gestarteten",
+      "days": "Tage zurück (1 bis 30)"
+    },
+    "shortcuts": {
+      "empty": "Noch kein Schnellzugriff: Wählen Sie sie in den Optionen des Widgets.",
+      "places": "Seiten"
+    },
+    "note": {
+      "empty": "Eine leere Notiz: Schreiben Sie sie in den Optionen des Widgets.",
+      "text": "Text",
+      "placeholder": "Eine Erinnerung, ein Link, wen anrufen…",
+      "hint": "Überschriften, Listen, Fett und Code wie in Markdown. Bis zu 4.000 Zeichen."
+    }
+  },
 }

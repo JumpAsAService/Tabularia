@@ -28,6 +28,7 @@ export const DOCS_GROUPS: { title: string, icon: DocsIcon, intro: string, items:
     intro: 'What you can build: visual flows, analysis on any step, AI questions, pixel-perfect reports, dashboards, Python, R and SQL scripts, containers and the orchestration that ties them together.',
     items: [
       ['/docs/capabilities', 'All capabilities'],
+      ['/docs/capabilities/home', 'The home page'],
       ['/docs/capabilities/flows', 'Low-code flows'],
       ['/docs/capabilities/preview-and-analysis', 'Preview and analysis'],
       ['/docs/capabilities/lineage', 'Lineage'],

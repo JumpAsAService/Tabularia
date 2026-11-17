@@ -22,6 +22,11 @@ func homeTypesOf(ws []HomeWidget) []string {
 // The layout the browser sends: what is accepted comes back in its canonical form (the
 // defaults filled in), what is refused says why.
 func TestHomeLayoutValidation(t *testing.T) {
+	// the next pieces' widgets are validated by the same rules: offered here as they will be
+	for name, typ := range homeLaterTypes {
+		homeTypes[name] = typ
+		defer delete(homeTypes, name)
+	}
 	good := `{"v":1,"widgets":[
 		{"id":"a","type":"clock","x":0,"y":0,"w":3,"h":3},
 		{"id":"b","type":"recent","x":3,"y":0,"w":6,"h":6,"options":{"limit":12,"kinds":["flow","report","flow"]}},
@@ -162,6 +167,10 @@ func TestHomeDefaultLayout(t *testing.T) {
 	if !reflect.DeepEqual(homeAvailable(false), homeTypeOrder) {
 		t.Errorf("available: %v", homeAvailable(false))
 	}
+	// a widget whose piece is not there yet is refused, not saved for later
+	if _, err := cleanHome([]byte(`{"v":1,"widgets":[{"id":"a","type":"favourites","x":0,"y":0,"w":4,"h":4}]}`), true); err == nil {
+		t.Error("a widget that does not exist yet was accepted")
+	}
 }
 
 // A saved layout, read by someone whose rights changed since: what is no longer theirs is
@@ -230,7 +239,7 @@ func TestHomeStorage(t *testing.T) {
 	}
 
 	ws, err := cleanHome([]byte(`{"v":1,"widgets":[{"id":"n","type":"note","x":0,"y":0,"w":4,"h":4,"options":{"text":"ann's"}},
-		{"id":"f","type":"flow_durations","x":4,"y":0,"w":8,"h":6,"options":{"flow_ids":[3,5]}}]}`), false)
+		{"id":"f","type":"recent","x":4,"y":0,"w":8,"h":6,"options":{"kinds":["flow","view"]}}]}`), false)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -238,8 +247,8 @@ func TestHomeStorage(t *testing.T) {
 		t.Fatal(err)
 	}
 	out, err = homeAnswer(ctx, tx, ann, false)
-	if err != nil || out.IsDefault || !reflect.DeepEqual(homeTypesOf(out.Widgets), []string{"note", "flow_durations"}) ||
-		out.Widgets[0].Options["text"] != "ann's" || !reflect.DeepEqual(out.Widgets[1].Options["flow_ids"], []int64{3, 5}) {
+	if err != nil || out.IsDefault || !reflect.DeepEqual(homeTypesOf(out.Widgets), []string{"note", "recent"}) ||
+		out.Widgets[0].Options["text"] != "ann's" || !reflect.DeepEqual(out.Widgets[1].Options["kinds"], []string{"flow", "view"}) {
 		t.Fatalf("after saving: %+v %v", out, err)
 	}
 	// saved again: one row, replaced

@@ -15,13 +15,16 @@ export interface NavSection {
   key: string
   /** the item of the bar that holds it, when it sits in a menu */
   menu?: 'analysis' | 'admin'
+  /** false: reached by its key and by the brand, with no item of its own in the bar */
+  bar?: boolean
   /** what its person must have to see it */
   needs?: 'scripting' | 'observe'
 }
 
 /** In the bar's order. A menu stands where its first place stands. */
 export const NAV_SECTIONS: readonly NavSection[] = [
-  { id: 'explore', to: '/', label: 'nav.explore', key: 'e' },
+  { id: 'home', to: '/', label: 'nav.home', key: 'h', bar: false },
+  { id: 'explore', to: '/explore', label: 'nav.explore', key: 'e' },
   { id: 'flows', to: '/flows', label: 'nav.flows', key: 'f' },
   { id: 'datasources', to: '/datasources', label: 'nav.datasources', key: 'd' },
   { id: 'lineage', to: '/lineage', label: 'nav.lineage', key: 'l' },

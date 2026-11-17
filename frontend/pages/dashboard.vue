@@ -611,7 +611,7 @@ onBeforeUnmount(() => {
         <LayoutDashboard :size="28" aria-hidden="true" />
         <h1>{{ $t('dashboard.notFoundTitle') }}</h1>
         <p>{{ $t('dashboard.notFoundBody') }}</p>
-        <NuxtLink v-if="!host" to="/" class="back">{{ $t('dashboard.backToExplore') }}</NuxtLink>
+        <NuxtLink v-if="!host" to="/explore" class="back">{{ $t('dashboard.backToExplore') }}</NuxtLink>
       </div>
       <div v-else-if="loadError" class="gone" role="alert">
         <TriangleAlert :size="28" aria-hidden="true" />
@@ -623,7 +623,7 @@ onBeforeUnmount(() => {
       <template v-else-if="detail">
         <header class="head">
           <h1 :title="detail.name"><LayoutDashboard :size="18" aria-hidden="true" /><span class="name">{{ detail.name }}</span></h1>
-          <NuxtLink v-if="folderPath && !wall" :to="`/?folder=${detail.project_id}`" class="where">
+          <NuxtLink v-if="folderPath && !wall" :to="`/explore?folder=${detail.project_id}`" class="where">
             <FolderTree :size="13" aria-hidden="true" /> {{ folderPath }}
           </NuxtLink>
           <div class="actions">

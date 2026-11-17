@@ -121,7 +121,7 @@ function openTokens() {
       <FileChartColumn :size="22" class="empty-icon" />
       <p class="empty-title">{{ $t('reportsTab.emptyTitle') }}</p>
       <p class="muted">{{ $t('reportsTab.emptyHint') }}</p>
-      <NuxtLink to="/" class="btn-link"><FolderTree :size="14" /> {{ $t('reportsTab.emptyAction') }}</NuxtLink>
+      <NuxtLink to="/explore" class="btn-link"><FolderTree :size="14" /> {{ $t('reportsTab.emptyAction') }}</NuxtLink>
     </div>
 
     <table v-else class="list">

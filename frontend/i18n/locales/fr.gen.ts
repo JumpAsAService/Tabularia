@@ -5859,4 +5859,95 @@ export default {
     "new": "Le menu «Nouveau»",
     "kindFilter": "Type",
   },
+  "home": {
+    "widgets": {
+      "clock": "Horloge",
+      "recent": "Récents",
+      "failed_runs": "Exécutions en échec",
+      "shortcuts": "Raccourcis",
+      "note": "Note"
+    },
+    "about": {
+      "clock": "L'heure et la date, dans votre fuseau ou un autre",
+      "recent": "Ce que vous avez modifié en dernier",
+      "failed_runs": "Les dernières exécutions en échec",
+      "shortcuts": "Des boutons vers les pages que vous utilisez",
+      "note": "Un texte à vous"
+    },
+    "kinds": {
+      "flow": "Flux",
+      "group": "Groupes de flux",
+      "datasource": "Sources de données",
+      "view": "Vues enregistrées",
+      "sql": "Scripts SQL",
+      "script": "Scripts",
+      "notebook": "Notebooks",
+      "report": "Rapports",
+      "dashboard": "Tableaux de bord",
+      "dataapi": "API de données"
+    },
+    "customise": "Personnaliser",
+    "done": "Terminé",
+    "add": "Widget",
+    "undo": "Annuler",
+    "redo": "Rétablir",
+    "reset": "Rétablir la disposition par défaut",
+    "resetConfirm": "Remettre la page d'accueil à la disposition par défaut ? Ce que vous avez disposé est perdu.",
+    "resetDone": "La page d'accueil est revenue à la disposition par défaut.",
+    "saving": "Enregistrement…",
+    "saved": "Enregistré",
+    "saveFailed": "La page d'accueil n'a pas pu être enregistrée.",
+    "loadFailed": "La page d'accueil n'a pas pu être chargée.",
+    "retry": "Réessayer",
+    "empty": "Votre page d'accueil est vide.",
+    "tooMany": "Une page d'accueil contient trente widgets au plus.",
+    "editHelp": "Faites glisser un widget par son titre pour le déplacer, par son coin pour le redimensionner. Au clavier : les flèches déplacent, Maj+flèches redimensionnent, Entrée ouvre les options, Suppr retire.",
+    "keys": "Les flèches déplacent le widget, Maj et les flèches le redimensionnent, Entrée ouvre ses options, Suppr le retire.",
+    "editingOn": "Disposition de la page d'accueil.",
+    "added": "{name} ajouté.",
+    "removed": "{name} retiré.",
+    "optionsSaved": "Options de {name} enregistrées.",
+    "undone": "Annulé.",
+    "redone": "Rétabli.",
+    "at": "{name} : colonne {col}, ligne {row}, largeur {w}, hauteur {h}.",
+    "edge": "{name} ne peut pas aller plus loin.",
+    "options": "Options",
+    "optionsOf": "Options de {name}",
+    "remove": "Retirer",
+    "removeOf": "Retirer {name}",
+    "cancel": "Annuler",
+    "save": "Enregistrer",
+    "clock": {
+      "zone": "Fuseau horaire",
+      "browserZone": "Celui du navigateur ({zone})",
+      "hour12": "Format 12 heures",
+      "seconds": "Afficher les secondes"
+    },
+    "recent": {
+      "empty": "Rien de ce que vous possédez ou avez enregistré n'a encore changé.",
+      "failed": "La liste n'a pas pu être lue.",
+      "limit": "Combien (de 5 à 20)",
+      "kinds": "Types",
+      "kindsHint": "Aucun coché : tous les types."
+    },
+    "failed": {
+      "empty": "Aucune exécution en échec ces {n} derniers jours.",
+      "failed": "Les exécutions n'ont pas pu être lues.",
+      "all": "Toutes les exécutions",
+      "scope": "Les exécutions de qui",
+      "scopeAll": "Toutes celles que je peux voir",
+      "scopeMine": "Seulement celles que j'ai lancées",
+      "days": "Jours en arrière (de 1 à 30)"
+    },
+    "shortcuts": {
+      "empty": "Aucun raccourci pour l'instant : choisissez-les dans les options du widget.",
+      "places": "Pages"
+    },
+    "note": {
+      "empty": "Une note vide : écrivez-la dans les options du widget.",
+      "text": "Texte",
+      "placeholder": "Un rappel, un lien, qui appeler…",
+      "hint": "Titres, listes, gras et code comme en Markdown. Jusqu'à 4 000 caractères."
+    }
+  },
 }

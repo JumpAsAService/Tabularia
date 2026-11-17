@@ -465,7 +465,7 @@ const notesOpen = ref(false)
         <FileChartColumn :size="28" aria-hidden="true" />
         <h1>{{ $t('report.notFoundTitle') }}</h1>
         <p class="muted">{{ $t('report.notFoundBody') }}</p>
-        <NuxtLink v-if="!host" to="/" class="back">{{ $t('report.backToExplore') }}</NuxtLink>
+        <NuxtLink v-if="!host" to="/explore" class="back">{{ $t('report.backToExplore') }}</NuxtLink>
       </div>
       <div v-else-if="loadError" class="gone" role="alert">
         <TriangleAlert :size="28" aria-hidden="true" />

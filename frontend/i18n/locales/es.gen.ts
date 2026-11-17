@@ -5859,4 +5859,95 @@ export default {
     "new": "El menú «Nuevo»",
     "kindFilter": "Tipo",
   },
+  "home": {
+    "widgets": {
+      "clock": "Reloj",
+      "recent": "Recientes",
+      "failed_runs": "Ejecuciones fallidas",
+      "shortcuts": "Accesos directos",
+      "note": "Nota"
+    },
+    "about": {
+      "clock": "La hora y la fecha, en tu zona o en otra",
+      "recent": "Lo que cambiaste por última vez",
+      "failed_runs": "Las últimas ejecuciones fallidas",
+      "shortcuts": "Botones hacia las páginas que usas",
+      "note": "Un texto tuyo"
+    },
+    "kinds": {
+      "flow": "Flujos",
+      "group": "Grupos de flujos",
+      "datasource": "Fuentes de datos",
+      "view": "Vistas guardadas",
+      "sql": "Scripts SQL",
+      "script": "Scripts",
+      "notebook": "Notebooks",
+      "report": "Informes",
+      "dashboard": "Paneles",
+      "dataapi": "API de datos"
+    },
+    "customise": "Personalizar",
+    "done": "Listo",
+    "add": "Widget",
+    "undo": "Deshacer",
+    "redo": "Rehacer",
+    "reset": "Restablecer el predeterminado",
+    "resetConfirm": "¿Devolver la página de inicio a la disposición predeterminada? Lo que has dispuesto se pierde.",
+    "resetDone": "La página de inicio ha vuelto a la disposición predeterminada.",
+    "saving": "Guardando…",
+    "saved": "Guardado",
+    "saveFailed": "No se pudo guardar la página de inicio.",
+    "loadFailed": "No se pudo cargar la página de inicio.",
+    "retry": "Reintentar",
+    "empty": "Tu página de inicio está vacía.",
+    "tooMany": "Una página de inicio admite treinta widgets como máximo.",
+    "editHelp": "Arrastra un widget por su título para moverlo, por su esquina para cambiar su tamaño. Con el teclado: las flechas mueven, Mayús+flechas cambian el tamaño, Intro abre las opciones, Supr quita.",
+    "keys": "Las flechas mueven el widget, Mayús y las flechas cambian su tamaño, Intro abre sus opciones, Supr lo quita.",
+    "editingOn": "Disponiendo la página de inicio.",
+    "added": "{name} añadido.",
+    "removed": "{name} quitado.",
+    "optionsSaved": "Opciones de {name} guardadas.",
+    "undone": "Deshecho.",
+    "redone": "Rehecho.",
+    "at": "{name}: columna {col}, fila {row}, ancho {w}, alto {h}.",
+    "edge": "{name} no puede ir más allá.",
+    "options": "Opciones",
+    "optionsOf": "Opciones de {name}",
+    "remove": "Quitar",
+    "removeOf": "Quitar {name}",
+    "cancel": "Cancelar",
+    "save": "Guardar",
+    "clock": {
+      "zone": "Zona horaria",
+      "browserZone": "La del navegador ({zone})",
+      "hour12": "Formato de 12 horas",
+      "seconds": "Mostrar los segundos"
+    },
+    "recent": {
+      "empty": "Nada de lo tuyo o guardado por ti ha cambiado todavía.",
+      "failed": "No se pudo leer la lista.",
+      "limit": "Cuántos (de 5 a 20)",
+      "kinds": "Tipos",
+      "kindsHint": "Ninguno marcado: todos los tipos."
+    },
+    "failed": {
+      "empty": "Ninguna ejecución fallida en los últimos {n} días.",
+      "failed": "No se pudieron leer las ejecuciones.",
+      "all": "Todas las ejecuciones",
+      "scope": "Las ejecuciones de quién",
+      "scopeAll": "Todas las que puedo ver",
+      "scopeMine": "Solo las que inicié yo",
+      "days": "Días atrás (de 1 a 30)"
+    },
+    "shortcuts": {
+      "empty": "Aún no hay accesos directos: elígelos en las opciones del widget.",
+      "places": "Páginas"
+    },
+    "note": {
+      "empty": "Una nota vacía: escríbela en las opciones del widget.",
+      "text": "Texto",
+      "placeholder": "Un recordatorio, un enlace, a quién llamar…",
+      "hint": "Títulos, listas, negrita y código como en Markdown. Hasta 4.000 caracteres."
+    }
+  },
 }

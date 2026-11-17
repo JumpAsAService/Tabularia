@@ -69,7 +69,7 @@ def text(sel):
 
 
 def open_dialog(conn_name, ds_name):
-    ff.go(f"{UI}/?folder={PID}")
+    ff.go(f"{UI}/explore?folder={PID}")
     ff.wait_for("document.body.innerText.includes('zz lake')", 30)
     ff.js("Array.from(document.querySelectorAll('button.btn-link')).find(b => /New|Nuov/.test(b.innerText)).click(); return 1")
     ff.wait_for("!!document.querySelector('.menu-pop')", 5)

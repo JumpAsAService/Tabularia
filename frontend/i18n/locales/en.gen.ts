@@ -5859,4 +5859,95 @@ export default {
     "new": "The «New» menu",
     "kindFilter": "Kind",
   },
+  "home": {
+    "widgets": {
+      "clock": "Clock",
+      "recent": "Recent",
+      "failed_runs": "Failed runs",
+      "shortcuts": "Shortcuts",
+      "note": "Note"
+    },
+    "about": {
+      "clock": "The time and the date, in your zone or another",
+      "recent": "What you changed last",
+      "failed_runs": "The last runs that failed",
+      "shortcuts": "Buttons to the pages you use",
+      "note": "A text of your own"
+    },
+    "kinds": {
+      "flow": "Flows",
+      "group": "Flow groups",
+      "datasource": "Datasources",
+      "view": "Saved views",
+      "sql": "SQL scripts",
+      "script": "Scripts",
+      "notebook": "Notebooks",
+      "report": "Reports",
+      "dashboard": "Dashboards",
+      "dataapi": "Data APIs"
+    },
+    "customise": "Customise",
+    "done": "Done",
+    "add": "Widget",
+    "undo": "Undo",
+    "redo": "Redo",
+    "reset": "Reset to default",
+    "resetConfirm": "Put your home page back to the default layout? What you arranged is lost.",
+    "resetDone": "The home page is back to the default layout.",
+    "saving": "Saving…",
+    "saved": "Saved",
+    "saveFailed": "The home page could not be saved.",
+    "loadFailed": "The home page could not be loaded.",
+    "retry": "Try again",
+    "empty": "Your home page is empty.",
+    "tooMany": "A home page holds thirty widgets at most.",
+    "editHelp": "Drag a widget by its title to move it, by its corner to resize it. From the keyboard: arrows move, Shift+arrows resize, Enter opens the options, Delete removes.",
+    "keys": "Arrows move the widget, Shift and arrows resize it, Enter opens its options, Delete removes it.",
+    "editingOn": "Arranging the home page.",
+    "added": "{name} added.",
+    "removed": "{name} removed.",
+    "optionsSaved": "Options of {name} saved.",
+    "undone": "Undone.",
+    "redone": "Redone.",
+    "at": "{name}: column {col}, row {row}, {w} wide, {h} tall.",
+    "edge": "{name} cannot go further.",
+    "options": "Options",
+    "optionsOf": "Options of {name}",
+    "remove": "Remove",
+    "removeOf": "Remove {name}",
+    "cancel": "Cancel",
+    "save": "Save",
+    "clock": {
+      "zone": "Time zone",
+      "browserZone": "This browser's ({zone})",
+      "hour12": "12-hour clock",
+      "seconds": "Show the seconds"
+    },
+    "recent": {
+      "empty": "Nothing you saved or own has changed yet.",
+      "failed": "The list could not be read.",
+      "limit": "How many (5 to 20)",
+      "kinds": "Kinds",
+      "kindsHint": "None ticked: every kind."
+    },
+    "failed": {
+      "empty": "No failed run in the last {n} days.",
+      "failed": "The runs could not be read.",
+      "all": "All the runs",
+      "scope": "Whose runs",
+      "scopeAll": "All those I can see",
+      "scopeMine": "Only the ones I started",
+      "days": "Days back (1 to 30)"
+    },
+    "shortcuts": {
+      "empty": "No shortcut yet: choose them in the widget's options.",
+      "places": "Pages"
+    },
+    "note": {
+      "empty": "An empty note: write it in the widget's options.",
+      "text": "Text",
+      "placeholder": "A reminder, a link, who to call…",
+      "hint": "Headings, lists, bold and code as in Markdown. Up to 4,000 characters."
+    }
+  },
 }
