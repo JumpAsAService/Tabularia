@@ -22,14 +22,16 @@ export interface HomeAnswer {
 }
 
 /** The widgets this interface can draw. A type the gateway offers and this list lacks is left out. */
-export const HOME_TYPES = ['clock', 'recent', 'failed_runs', 'shortcuts', 'note'] as const
+export const HOME_TYPES = ['clock', 'shortcuts', 'favourites', 'recent', 'flow_runs', 'runs_by_day', 'running_now', 'failed_runs', 'next_runs', 'datasources', 'notices', 'note', 'queue', 'sessions', 'backups'] as const
 /** The smallest widget of each type, in columns and rows: the gateway's (api/home.go). */
 export const HOME_MIN: Record<string, [number, number]> = {
-  clock: [2, 2], recent: [3, 4], failed_runs: [3, 4], shortcuts: [2, 2], note: [2, 2],
+  clock: [2, 2], shortcuts: [2, 2], favourites: [3, 4], recent: [3, 4], flow_runs: [4, 5], runs_by_day: [4, 5], running_now: [3, 3],
+  failed_runs: [3, 4], next_runs: [3, 4], datasources: [3, 4], notices: [3, 2], note: [2, 2], queue: [3, 3], sessions: [3, 4], backups: [3, 3],
 }
 /** The size a new widget of each type starts with. */
 export const HOME_NEW: Record<string, [number, number]> = {
-  clock: [3, 3], recent: [6, 8], failed_runs: [6, 8], shortcuts: [6, 3], note: [4, 4],
+  clock: [3, 3], shortcuts: [6, 3], favourites: [4, 8], recent: [4, 8], flow_runs: [7, 7], runs_by_day: [5, 7], running_now: [4, 5],
+  failed_runs: [6, 6], next_runs: [4, 8], datasources: [4, 7], notices: [6, 3], note: [4, 4], queue: [4, 5], sessions: [4, 6], backups: [4, 4],
 }
 /** The gateway's limits. */
 export const HOME_MAX_WIDGETS = 30
@@ -153,4 +155,70 @@ export function failedFor<T extends RunLike>(runs: T[], o: { scope?: string; day
     const at = Date.parse((r.finished_at ?? r.started_at ?? '') as string)
     return (Number.isNaN(at) || at >= since) && (o.scope !== 'mine' || (userId !== null && r.launched_by === userId))
   })
+}
+
+// ── charts and counters ──────────────────────────────────────────────────────
+
+/** A duration for a label: «4.2 s», «1 m 05 s», «2 h 10 m». */
+export function durationText(seconds: number | null | undefined): string {
+  if (seconds == null || !Number.isFinite(seconds)) return '–'
+  if (seconds < 10) return `${Math.round(seconds * 10) / 10} s`
+  if (seconds < 60) return `${Math.round(seconds)} s`
+  const m = Math.floor(seconds / 60)
+  if (m < 60) return `${m} m ${String(Math.round(seconds - m * 60)).padStart(2, '0')} s`
+  return `${Math.floor(m / 60)} h ${String(m % 60).padStart(2, '0')} m`
+}
+
+export const median = (values: number[]): number | null => {
+  const v = values.filter((x) => Number.isFinite(x)).sort((a, b) => a - b)
+  if (!v.length) return null
+  return v.length % 2 ? v[(v.length - 1) / 2]! : (v[v.length / 2 - 1]! + v[v.length / 2]!) / 2
+}
+
+export interface FlowRunBar { id: number; status: string; trigger: string; started_at: string | null; seconds: number | null }
+/** How a run ended, for its bar's colour. */
+export const runTone = (status: string): 'ok' | 'ko' | 'live' => (status === 'SUCCESS' ? 'ok' : status === 'FAILURE' ? 'ko' : 'live')
+/** The bars of a flow's runs: each as tall as its duration against the longest (a floor so a short
+ *  one still shows; a run still going stands at the median, since it has no duration yet). */
+export function runBars(runs: FlowRunBar[]): { run: FlowRunBar; height: number; tone: 'ok' | 'ko' | 'live' }[] {
+  const done = runs.map((r) => r.seconds).filter((x): x is number => x != null)
+  const longest = Math.max(0, ...done)
+  const mid = median(done) ?? 0
+  return runs.map((run) => {
+    const s = run.seconds ?? mid
+    const height = longest > 0 ? Math.max(8, Math.round((s / longest) * 100)) : 40
+    return { run, height, tone: runTone(run.status) }
+  })
+}
+
+export interface DayBucket { key: string; total: number; success: number; failure: number }
+/** The last `days` days as columns, oldest first, with the empty days filled in: the heights in
+ *  percent of the busiest day, split into what succeeded, what failed and what is neither yet. */
+export function dayColumns(buckets: DayBucket[], days: number, today: Date): { key: string; total: number; ok: number; ko: number; other: number; okH: number; koH: number; otherH: number }[] {
+  const by = new Map(buckets.map((b) => [b.key, b]))
+  const out = []
+  for (let i = days - 1; i >= 0; i--) {
+    const d = new Date(today.getFullYear(), today.getMonth(), today.getDate() - i)
+    const key = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`
+    const b = by.get(key)
+    const ok = b?.success ?? 0
+    const ko = b?.failure ?? 0
+    const total = b?.total ?? 0
+    out.push({ key, total, ok, ko, other: Math.max(0, total - ok - ko), okH: 0, koH: 0, otherH: 0 })
+  }
+  const most = Math.max(1, ...out.map((c) => c.total))
+  for (const c of out) { c.okH = (c.ok / most) * 100; c.koH = (c.ko / most) * 100; c.otherH = (c.other / most) * 100 }
+  return out
+}
+
+/** Which greeting the hour asks for. */
+export const greetingKey = (hour: number): 'morning' | 'afternoon' | 'evening' => (hour < 5 ? 'evening' : hour < 12 ? 'morning' : hour < 18 ? 'afternoon' : 'evening')
+
+/** A size in bytes for a label. */
+export function bytesText(n: number | null | undefined): string {
+  if (n == null || !Number.isFinite(n)) return '–'
+  const units = ['B', 'KB', 'MB', 'GB', 'TB']
+  let v = n, i = 0
+  while (v >= 1024 && i < units.length - 1) { v /= 1024; i++ }
+  return `${i === 0 || v >= 100 ? Math.round(v) : Math.round(v * 10) / 10} ${units[i]}`
 }

@@ -8,16 +8,21 @@ exposes at `/system/info` and in the app's settings menu.
 Development on `main` for the next minor version. The stable line stays 1.4.x
 ([long-term support](docs/lts.md)), which takes fixes only.
 
-- **Tabularia opens on a home page each person arranges.** A grid of widgets on the
-  dashboards' 12 columns: Clock, Recent, Failed runs, Shortcuts and Note, each with its
-  options. **Customise** moves and resizes them by dragging or from the keyboard (arrows,
-  Shift+arrows, Enter, Delete), adds and removes them, with undo and a reset to the default;
-  every change is announced to screen readers and saved as it is made. The layout is kept
-  on the server per person (`GET`/`PUT /home`, `POST /home/reset`; database migration 0043)
-  and the default is the same on Docker Compose and on Kubernetes. A widget shows only what
-  its reader may see on the page it mirrors. **Explore moves to `/explore`**: the brand at
-  the top left leads home (`g` `h`), old links to a folder (`/?folder=7`) are redirected.
-  [The home page](docs/capabilities/home.md), [the spec](docs/specs/home.md).
+- **Tabularia opens on a home page each person arranges.** Under a greeting and the day in
+  four numbers (runs today, failed, running now, due in 24 hours), a grid of widgets on the
+  dashboards' 12 columns. Fifteen of them: Clock, Shortcuts, Favourites (pinned from a row's
+  menu in Explore, «Add to home»), Recent, **Flow runs** (the last runs of each flow as bars,
+  as tall as they lasted and green, red or blue as they ended), **Runs by day** (succeeded
+  and failed, per day), Running now, Failed runs, Next runs, Datasources, Notices, Note, and
+  for administrators Queue, Sessions and Backups. **Customise** moves and resizes them by
+  dragging or from the keyboard (arrows, Shift+arrows, Enter, Delete), adds and removes
+  them, with undo and a reset to the default; every change is saved as it is made. The
+  layout is kept on the server per person and the default is the same on Docker Compose and
+  on Kubernetes. A widget shows only what its reader may see on the page it mirrors.
+  **Explore moves to `/explore`**: the brand at the top left leads home (`g` `h`), old links
+  to a folder (`/?folder=7`) are redirected. New routes: `GET`/`PUT /home`,
+  `POST /home/reset`, `/home/favourites`, `/home/next-runs`, `/home/flow-runs`; database
+  migration 0043. [The home page](docs/capabilities/home.md), [the spec](docs/specs/home.md).
 
 ## 1.4.6 «Romulus» — 2026-11-15 · long-term support
 

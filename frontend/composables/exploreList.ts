@@ -19,9 +19,9 @@ export function listState(o: { treeLoaded: boolean; folderLoading: boolean; tota
  * belongs to the kind, then what every object has, Delete last and apart. The menu («⋯»,
  * right click, Shift+F10) shows them all; the row itself keeps at most its kind's main one.
  */
-export type RowAction = 'history' | 'refresh' | 'contract' | 'editConnection' | 'rename' | 'duplicate' | 'move' | 'delete'
-export const ROW_ACTION_ORDER: readonly RowAction[] = ['history', 'refresh', 'contract', 'editConnection', 'rename', 'duplicate', 'move', 'delete']
-const GROUP_OF: Record<RowAction, number> = { history: 0, refresh: 0, contract: 0, editConnection: 0, rename: 1, duplicate: 1, move: 1, delete: 2 }
+export type RowAction = 'history' | 'refresh' | 'contract' | 'editConnection' | 'favourite' | 'rename' | 'duplicate' | 'move' | 'delete'
+export const ROW_ACTION_ORDER: readonly RowAction[] = ['history', 'refresh', 'contract', 'editConnection', 'favourite', 'rename', 'duplicate', 'move', 'delete']
+const GROUP_OF: Record<RowAction, number> = { history: 0, refresh: 0, contract: 0, editConnection: 0, favourite: 0, rename: 1, duplicate: 1, move: 1, delete: 2 }
 
 export interface RowFacts {
   kind: string
@@ -39,6 +39,8 @@ function applies(a: RowAction, r: RowFacts): boolean {
     case 'refresh': return r.kind === 'datasource' && !!r.dbDatasource
     case 'contract': return r.kind === 'datasource'
     case 'editConnection': return r.kind === 'connection'
+    // pinned to the person's home page (the Favourites widget): the objects, not folders nor connections
+    case 'favourite': return r.kind !== 'folder' && r.kind !== 'connection'
     case 'rename': return r.kind !== 'connection'
     case 'duplicate': return r.kind !== 'folder'
     case 'move': return !(r.kind === 'folder' && r.fixedFolder)

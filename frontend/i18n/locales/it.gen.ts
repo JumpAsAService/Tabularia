@@ -5865,14 +5865,34 @@ export default {
       "recent": "Recenti",
       "failed_runs": "Esecuzioni fallite",
       "shortcuts": "Scorciatoie",
-      "note": "Nota"
+      "note": "Nota",
+      "favourites": "Preferiti",
+      "flow_runs": "Esecuzioni dei flussi",
+      "runs_by_day": "Esecuzioni per giorno",
+      "running_now": "In esecuzione",
+      "next_runs": "Prossime esecuzioni",
+      "datasources": "Datasource",
+      "notices": "Avvisi",
+      "queue": "Coda",
+      "sessions": "Sessioni",
+      "backups": "Backup"
     },
     "about": {
       "clock": "L'ora e la data, nel tuo fuso o in un altro",
       "recent": "Ciò che hai modificato per ultimo",
       "failed_runs": "Le ultime esecuzioni fallite",
       "shortcuts": "Pulsanti verso le pagine che usi",
-      "note": "Un testo tuo"
+      "note": "Un testo tuo",
+      "favourites": "Gli oggetti che hai fissato da Explore",
+      "flow_runs": "Le ultime esecuzioni dei tuoi flussi come barre: quanto sono durate e come sono finite",
+      "runs_by_day": "Esecuzioni per giorno, riuscite e fallite",
+      "running_now": "Cosa sta girando o aspetta di partire",
+      "next_runs": "Le schedulazioni in arrivo",
+      "datasources": "Quando sono state aggiornate le tue datasource",
+      "notices": "Ciò che hanno pubblicato gli amministratori",
+      "queue": "Lavori in corso e in attesa, worker attivi",
+      "sessions": "Chi è collegato",
+      "backups": "L'ultimo backup e il prossimo"
     },
     "kinds": {
       "flow": "Flussi",
@@ -5948,6 +5968,104 @@ export default {
       "text": "Testo",
       "placeholder": "Un promemoria, un link, chi chiamare…",
       "hint": "Titoli, elenchi, grassetto e codice come in Markdown. Fino a 4.000 caratteri."
+    },
+    "greeting": {
+      "morning": "Buongiorno",
+      "afternoon": "Buon pomeriggio",
+      "evening": "Buonasera",
+      "morningName": "Buongiorno, {name}",
+      "afternoonName": "Buon pomeriggio, {name}",
+      "eveningName": "Buonasera, {name}"
+    },
+    "pulse": {
+      "label": "Oggi",
+      "today": "esecuzioni oggi",
+      "failed": "fallite oggi",
+      "running": "in corso adesso",
+      "due": "previste in 24 ore"
+    },
+    "pin": "Aggiungi alla home",
+    "unpin": "Togli dalla home",
+    "unpinOf": "Togli {name} dalla home",
+    "pinned": "{name} è nella tua home.",
+    "unpinned": "{name} non è più nella tua home.",
+    "filter": "Filtra per nome",
+    "nothingFound": "Niente con quel nome.",
+    "favourites": {
+      "empty": "Ancora niente di fissato: in Explore apri il menu di una riga e scegli «Aggiungi alla home»."
+    },
+    "flowRuns": {
+      "empty": "Nessun flusso è ancora stato eseguito.",
+      "failed": "Non è stato possibile leggere le esecuzioni.",
+      "never": "Mai eseguito.",
+      "ok": "Riuscita",
+      "ko": "Fallita",
+      "live": "In corso",
+      "scheduled": "schedulata",
+      "manual": "a mano",
+      "median": "mediana",
+      "failures": "fallita | fallite",
+      "barsOf": "Le ultime {n} esecuzioni di {name}, dalla più vecchia",
+      "pick": "Flussi (fino a {n})",
+      "pickHint": "Nessuno spuntato: i flussi eseguiti per ultimi.",
+      "runs": "Esecuzioni per flusso (da 5 a 50)"
+    },
+    "byDay": {
+      "failed": "Non è stato possibile leggere le esecuzioni.",
+      "runs": "esecuzioni in {n} giorni",
+      "ok": "riuscite",
+      "ko": "fallita | fallite",
+      "today": "oggi",
+      "chart": "Esecuzioni per giorno, ultimi {n} giorni",
+      "col": "{day}: {n} esecuzioni, {ok} riuscite, {ko} fallite",
+      "days": "Giorni (da 7 a 90)"
+    },
+    "running": {
+      "empty": "Niente in esecuzione.",
+      "failed": "Non è stato possibile leggere le esecuzioni.",
+      "running": "in corso",
+      "waiting": "in attesa"
+    },
+    "nextRuns": {
+      "empty": "Niente previsto nelle prossime {n} ore.",
+      "failed": "Non è stato possibile leggere le schedulazioni.",
+      "scopeMine": "Solo quelle schedulate da me o mie",
+      "hours": "Ore in avanti (da 1 a 168)"
+    },
+    "datasources": {
+      "empty": "Ancora nessuna datasource.",
+      "failed": "Non è stato possibile leggere le datasource.",
+      "rows": "{n} righe",
+      "pick": "Datasource (fino a {n})",
+      "pickHint": "Nessuna spuntata: quelle aggiornate per ultime."
+    },
+    "notices": {
+      "empty": "Nessun avviso.",
+      "failed": "Non è stato possibile leggere gli avvisi."
+    },
+    "queue": {
+      "failed": "Non è stato possibile leggere la coda.",
+      "running": "in corso",
+      "waiting": "in attesa",
+      "workers": "worker",
+      "load": "{n} posti occupati su {of}",
+      "open": "Apri la coda"
+    },
+    "sessions": {
+      "empty": "Nessuno è collegato.",
+      "failed": "Non è stato possibile leggere le sessioni.",
+      "online": "in linea",
+      "open": "Tutte le sessioni"
+    },
+    "backups": {
+      "failed": "Non è stato possibile leggere i backup.",
+      "unavailable": "I backup non sono disponibili su questa installazione.",
+      "lastOk": "Ultimo backup {when}",
+      "lastFailed": "L'ultimo backup è fallito {when}",
+      "never": "Ancora nessun backup",
+      "next": "Prossimo: {when}",
+      "disabled": "I backup automatici sono spenti.",
+      "open": "Apri i backup"
     }
   },
 }

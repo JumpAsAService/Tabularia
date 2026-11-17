@@ -5865,14 +5865,34 @@ export default {
       "recent": "Récents",
       "failed_runs": "Exécutions en échec",
       "shortcuts": "Raccourcis",
-      "note": "Note"
+      "note": "Note",
+      "favourites": "Favoris",
+      "flow_runs": "Exécutions des flux",
+      "runs_by_day": "Exécutions par jour",
+      "running_now": "En cours",
+      "next_runs": "Prochaines exécutions",
+      "datasources": "Sources de données",
+      "notices": "Annonces",
+      "queue": "File d'attente",
+      "sessions": "Sessions",
+      "backups": "Sauvegardes"
     },
     "about": {
       "clock": "L'heure et la date, dans votre fuseau ou un autre",
       "recent": "Ce que vous avez modifié en dernier",
       "failed_runs": "Les dernières exécutions en échec",
       "shortcuts": "Des boutons vers les pages que vous utilisez",
-      "note": "Un texte à vous"
+      "note": "Un texte à vous",
+      "favourites": "Les objets que vous avez épinglés depuis Explore",
+      "flow_runs": "Les dernières exécutions de vos flux en barres : leur durée et leur issue",
+      "runs_by_day": "Exécutions par jour, réussies et en échec",
+      "running_now": "Ce qui tourne ou attend de démarrer",
+      "next_runs": "Les planifications à venir",
+      "datasources": "Quand vos sources de données ont été actualisées",
+      "notices": "Ce que les administrateurs ont publié",
+      "queue": "Tâches en cours et en attente, workers actifs",
+      "sessions": "Qui est connecté",
+      "backups": "La dernière sauvegarde et la prochaine"
     },
     "kinds": {
       "flow": "Flux",
@@ -5948,6 +5968,104 @@ export default {
       "text": "Texte",
       "placeholder": "Un rappel, un lien, qui appeler…",
       "hint": "Titres, listes, gras et code comme en Markdown. Jusqu'à 4 000 caractères."
+    },
+    "greeting": {
+      "morning": "Bonjour",
+      "afternoon": "Bon après-midi",
+      "evening": "Bonsoir",
+      "morningName": "Bonjour, {name}",
+      "afternoonName": "Bon après-midi, {name}",
+      "eveningName": "Bonsoir, {name}"
+    },
+    "pulse": {
+      "label": "Aujourd'hui",
+      "today": "exécutions aujourd'hui",
+      "failed": "en échec aujourd'hui",
+      "running": "en cours",
+      "due": "prévues sous 24 heures"
+    },
+    "pin": "Ajouter à l'accueil",
+    "unpin": "Retirer de l'accueil",
+    "unpinOf": "Retirer {name} de l'accueil",
+    "pinned": "{name} est sur votre page d'accueil.",
+    "unpinned": "{name} n'est plus sur votre page d'accueil.",
+    "filter": "Filtrer par nom",
+    "nothingFound": "Rien de ce nom.",
+    "favourites": {
+      "empty": "Rien d'épinglé pour l'instant : dans Explore, ouvrez le menu d'une ligne et choisissez « Ajouter à l'accueil »."
+    },
+    "flowRuns": {
+      "empty": "Aucun flux n'a encore été exécuté.",
+      "failed": "Les exécutions n'ont pas pu être lues.",
+      "never": "Jamais exécuté.",
+      "ok": "Réussie",
+      "ko": "En échec",
+      "live": "En cours",
+      "scheduled": "planifiée",
+      "manual": "à la main",
+      "median": "médiane",
+      "failures": "en échec | en échec",
+      "barsOf": "Les {n} dernières exécutions de {name}, de la plus ancienne",
+      "pick": "Flux (jusqu'à {n})",
+      "pickHint": "Aucun coché : les flux exécutés en dernier.",
+      "runs": "Exécutions par flux (de 5 à 50)"
+    },
+    "byDay": {
+      "failed": "Les exécutions n'ont pas pu être lues.",
+      "runs": "exécutions en {n} jours",
+      "ok": "réussies",
+      "ko": "en échec | en échec",
+      "today": "aujourd'hui",
+      "chart": "Exécutions par jour, {n} derniers jours",
+      "col": "{day} : {n} exécutions, {ok} réussies, {ko} en échec",
+      "days": "Jours (de 7 à 90)"
+    },
+    "running": {
+      "empty": "Rien n'est en cours.",
+      "failed": "Les exécutions n'ont pas pu être lues.",
+      "running": "en cours",
+      "waiting": "en attente"
+    },
+    "nextRuns": {
+      "empty": "Rien de prévu dans les {n} prochaines heures.",
+      "failed": "Les planifications n'ont pas pu être lues.",
+      "scopeMine": "Seulement celles que j'ai planifiées ou qui sont à moi",
+      "hours": "Heures à venir (de 1 à 168)"
+    },
+    "datasources": {
+      "empty": "Aucune source de données pour l'instant.",
+      "failed": "Les sources de données n'ont pas pu être lues.",
+      "rows": "{n} lignes",
+      "pick": "Sources de données (jusqu'à {n})",
+      "pickHint": "Aucune cochée : celles actualisées en dernier."
+    },
+    "notices": {
+      "empty": "Aucune annonce.",
+      "failed": "Les annonces n'ont pas pu être lues."
+    },
+    "queue": {
+      "failed": "La file d'attente n'a pas pu être lue.",
+      "running": "en cours",
+      "waiting": "en attente",
+      "workers": "workers",
+      "load": "{n} emplacements occupés sur {of}",
+      "open": "Ouvrir la file d'attente"
+    },
+    "sessions": {
+      "empty": "Personne n'est connecté.",
+      "failed": "Les sessions n'ont pas pu être lues.",
+      "online": "en ligne",
+      "open": "Toutes les sessions"
+    },
+    "backups": {
+      "failed": "Les sauvegardes n'ont pas pu être lues.",
+      "unavailable": "Les sauvegardes ne sont pas disponibles sur cette installation.",
+      "lastOk": "Dernière sauvegarde {when}",
+      "lastFailed": "La dernière sauvegarde a échoué {when}",
+      "never": "Aucune sauvegarde pour l'instant",
+      "next": "Prochaine : {when}",
+      "disabled": "Les sauvegardes automatiques sont désactivées.",
+      "open": "Ouvrir les sauvegardes"
     }
   },
 }

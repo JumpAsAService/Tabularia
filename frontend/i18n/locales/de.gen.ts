@@ -5865,14 +5865,34 @@ export default {
       "recent": "Zuletzt",
       "failed_runs": "Fehlgeschlagene Läufe",
       "shortcuts": "Schnellzugriffe",
-      "note": "Notiz"
+      "note": "Notiz",
+      "favourites": "Favoriten",
+      "flow_runs": "Flow-Läufe",
+      "runs_by_day": "Läufe pro Tag",
+      "running_now": "Läuft gerade",
+      "next_runs": "Nächste Läufe",
+      "datasources": "Datenquellen",
+      "notices": "Hinweise",
+      "queue": "Warteschlange",
+      "sessions": "Sitzungen",
+      "backups": "Backups"
     },
     "about": {
       "clock": "Uhrzeit und Datum, in Ihrer Zeitzone oder einer anderen",
       "recent": "Was Sie zuletzt geändert haben",
       "failed_runs": "Die letzten fehlgeschlagenen Läufe",
       "shortcuts": "Schaltflächen zu den Seiten, die Sie nutzen",
-      "note": "Ein eigener Text"
+      "note": "Ein eigener Text",
+      "favourites": "Die Objekte, die Sie in Explore angeheftet haben",
+      "flow_runs": "Die letzten Läufe Ihrer Flows als Balken: wie lange, und wie sie endeten",
+      "runs_by_day": "Läufe pro Tag, erfolgreich und fehlgeschlagen",
+      "running_now": "Was läuft oder auf den Start wartet",
+      "next_runs": "Die nächsten fälligen Zeitpläne",
+      "datasources": "Wann Ihre Datenquellen zuletzt aktualisiert wurden",
+      "notices": "Was die Administratoren veröffentlicht haben",
+      "queue": "Laufende und wartende Jobs, aktive Worker",
+      "sessions": "Wer angemeldet ist",
+      "backups": "Das letzte Backup und das nächste"
     },
     "kinds": {
       "flow": "Flows",
@@ -5948,6 +5968,104 @@ export default {
       "text": "Text",
       "placeholder": "Eine Erinnerung, ein Link, wen anrufen…",
       "hint": "Überschriften, Listen, Fett und Code wie in Markdown. Bis zu 4.000 Zeichen."
+    },
+    "greeting": {
+      "morning": "Guten Morgen",
+      "afternoon": "Guten Tag",
+      "evening": "Guten Abend",
+      "morningName": "Guten Morgen, {name}",
+      "afternoonName": "Guten Tag, {name}",
+      "eveningName": "Guten Abend, {name}"
+    },
+    "pulse": {
+      "label": "Heute",
+      "today": "Läufe heute",
+      "failed": "heute fehlgeschlagen",
+      "running": "laufen gerade",
+      "due": "fällig in 24 Stunden"
+    },
+    "pin": "Zur Startseite hinzufügen",
+    "unpin": "Von der Startseite entfernen",
+    "unpinOf": "{name} von der Startseite entfernen",
+    "pinned": "{name} ist auf Ihrer Startseite.",
+    "unpinned": "{name} ist nicht mehr auf Ihrer Startseite.",
+    "filter": "Nach Namen filtern",
+    "nothingFound": "Nichts mit diesem Namen.",
+    "favourites": {
+      "empty": "Noch nichts angeheftet: Öffnen Sie in Explore das Menü einer Zeile und wählen Sie «Zur Startseite hinzufügen»."
+    },
+    "flowRuns": {
+      "empty": "Noch ist kein Flow gelaufen.",
+      "failed": "Die Läufe konnten nicht gelesen werden.",
+      "never": "Nie gelaufen.",
+      "ok": "Erfolgreich",
+      "ko": "Fehlgeschlagen",
+      "live": "Läuft",
+      "scheduled": "geplant",
+      "manual": "von Hand",
+      "median": "Median",
+      "failures": "fehlgeschlagen | fehlgeschlagen",
+      "barsOf": "Die letzten {n} Läufe von {name}, der älteste zuerst",
+      "pick": "Flows (bis zu {n})",
+      "pickHint": "Keiner angekreuzt: die zuletzt gelaufenen Flows.",
+      "runs": "Läufe pro Flow (5 bis 50)"
+    },
+    "byDay": {
+      "failed": "Die Läufe konnten nicht gelesen werden.",
+      "runs": "Läufe in {n} Tagen",
+      "ok": "erfolgreich",
+      "ko": "fehlgeschlagen | fehlgeschlagen",
+      "today": "heute",
+      "chart": "Läufe pro Tag, die letzten {n} Tage",
+      "col": "{day}: {n} Läufe, {ok} erfolgreich, {ko} fehlgeschlagen",
+      "days": "Tage (7 bis 90)"
+    },
+    "running": {
+      "empty": "Nichts läuft.",
+      "failed": "Die Läufe konnten nicht gelesen werden.",
+      "running": "läuft",
+      "waiting": "wartet"
+    },
+    "nextRuns": {
+      "empty": "Nichts fällig in den nächsten {n} Stunden.",
+      "failed": "Die Zeitpläne konnten nicht gelesen werden.",
+      "scopeMine": "Nur die von mir geplanten oder meine eigenen",
+      "hours": "Stunden voraus (1 bis 168)"
+    },
+    "datasources": {
+      "empty": "Noch keine Datenquelle.",
+      "failed": "Die Datenquellen konnten nicht gelesen werden.",
+      "rows": "{n} Zeilen",
+      "pick": "Datenquellen (bis zu {n})",
+      "pickHint": "Keine angekreuzt: die zuletzt aktualisierten."
+    },
+    "notices": {
+      "empty": "Kein Hinweis.",
+      "failed": "Die Hinweise konnten nicht gelesen werden."
+    },
+    "queue": {
+      "failed": "Die Warteschlange konnte nicht gelesen werden.",
+      "running": "laufen",
+      "waiting": "warten",
+      "workers": "Worker",
+      "load": "{n} von {of} Plätzen belegt",
+      "open": "Warteschlange öffnen"
+    },
+    "sessions": {
+      "empty": "Niemand ist angemeldet.",
+      "failed": "Die Sitzungen konnten nicht gelesen werden.",
+      "online": "online",
+      "open": "Alle Sitzungen"
+    },
+    "backups": {
+      "failed": "Die Backups konnten nicht gelesen werden.",
+      "unavailable": "Backups sind auf dieser Installation nicht verfügbar.",
+      "lastOk": "Letztes Backup {when}",
+      "lastFailed": "Das letzte Backup ist fehlgeschlagen {when}",
+      "never": "Noch kein Backup",
+      "next": "Nächstes: {when}",
+      "disabled": "Automatische Backups sind aus.",
+      "open": "Backups öffnen"
     }
   },
 }

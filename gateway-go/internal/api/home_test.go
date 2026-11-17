@@ -22,15 +22,10 @@ func homeTypesOf(ws []HomeWidget) []string {
 // The layout the browser sends: what is accepted comes back in its canonical form (the
 // defaults filled in), what is refused says why.
 func TestHomeLayoutValidation(t *testing.T) {
-	// the next pieces' widgets are validated by the same rules: offered here as they will be
-	for name, typ := range homeLaterTypes {
-		homeTypes[name] = typ
-		defer delete(homeTypes, name)
-	}
 	good := `{"v":1,"widgets":[
 		{"id":"a","type":"clock","x":0,"y":0,"w":3,"h":3},
 		{"id":"b","type":"recent","x":3,"y":0,"w":6,"h":6,"options":{"limit":12,"kinds":["flow","report","flow"]}},
-		{"id":"c","type":"flow_durations","x":0,"y":6,"w":8,"h":8,"options":{"flow_ids":[4,9,4]}},
+		{"id":"c","type":"flow_runs","x":0,"y":6,"w":8,"h":8,"options":{"flow_ids":[4,9,4]}},
 		{"id":"d","type":"shortcuts","x":8,"y":6,"w":4,"h":3,"options":{"items":["/flows","/viewer?ds=3"]}},
 		{"id":"e","type":"note","x":0,"y":14,"w":4,"h":4,"options":{"text":"<b>hello</b>"}},
 		{"id":"f","type":"clock","x":4,"y":14,"w":3,"h":3,"options":{"zone":"Europe/Rome","hour12":true}}
@@ -76,12 +71,14 @@ func TestHomeLayoutValidation(t *testing.T) {
 		{one(`{"id":"a","type":"recent","x":0,"y":0,"w":6,"h":6,"options":{"limit":500}}`), "limit must be between 5 and 20"},
 		{one(`{"id":"a","type":"recent","x":0,"y":0,"w":6,"h":6,"options":{"kinds":["users"]}}`), "unknown kind"},
 		{one(`{"id":"a","type":"next_runs","x":0,"y":0,"w":6,"h":6,"options":{"scope":"everyone"}}`), "scope must be"},
-		{one(`{"id":"a","type":"flow_durations","x":0,"y":0,"w":6,"h":6,"options":{"flow_ids":[1,2,3,4,5,6]}}`), "at most 5"},
-		{one(`{"id":"a","type":"flow_durations","x":0,"y":0,"w":6,"h":6,"options":{"flow_ids":["1 OR 1=1"]}}`), "flows' ids"},
+		{one(`{"id":"a","type":"flow_runs","x":0,"y":0,"w":6,"h":6,"options":{"flow_ids":[1,2,3,4,5,6]}}`), "at most 5"},
+		{one(`{"id":"a","type":"flow_runs","x":0,"y":0,"w":6,"h":6,"options":{"flow_ids":["1 OR 1=1"]}}`), "flows' ids"},
 		{one(`{"id":"a","type":"shortcuts","x":0,"y":0,"w":4,"h":3,"options":{"items":["https://elsewhere.example/"]}}`), "a page of this installation"},
 		{one(`{"id":"a","type":"shortcuts","x":0,"y":0,"w":4,"h":3,"options":{"items":["//elsewhere.example"]}}`), "a page of this installation"},
 		{one(`{"id":"a","type":"shortcuts","x":0,"y":0,"w":4,"h":3,"options":{"items":["javascript:alert(1)"]}}`), "a page of this installation"},
 		{one(`{"id":"a","type":"shortcuts","x":0,"y":0,"w":4,"h":3,"options":{"items":["/admin?tab=users"]}}`), "for administrators"},
+		{one(`{"id":"a","type":"runs_by_day","x":0,"y":0,"w":6,"h":6,"options":{"days":3}}`), "days must be between 7 and 90"},
+		{one(`{"id":"a","type":"datasources","x":0,"y":0,"w":6,"h":6,"options":{"ids":[1,2,3,4,5,6,7,8,9,10,11]}}`), "at most 10"},
 		{one(`{"id":"a","type":"note","x":0,"y":0,"w":4,"h":3,"options":{"text":"` + strings.Repeat("x", homeNoteMaxChars+1) + `"}}`), "at most 4000"},
 	}
 	for _, c := range bad {
@@ -148,7 +145,7 @@ func TestHomeDefaultLayout(t *testing.T) {
 		}
 	}
 	user, admin := defaultHome(false), defaultHome(true)
-	if !reflect.DeepEqual(homeTypesOf(user), homeTypesOf(admin)) || len(user) != len(homeTypeOrder) {
+	if !reflect.DeepEqual(homeTypesOf(user), homeTypesOf(admin)) || len(user) != 9 {
 		t.Errorf("types: %v / %v", homeTypesOf(user), homeTypesOf(admin))
 	}
 	for _, w := range user {
@@ -164,12 +161,25 @@ func TestHomeDefaultLayout(t *testing.T) {
 			t.Errorf("the default holds an administration widget: %s", w.Type)
 		}
 	}
-	if !reflect.DeepEqual(homeAvailable(false), homeTypeOrder) {
-		t.Errorf("available: %v", homeAvailable(false))
+	// the administrators' widgets are offered to them alone, and are never in the default
+	if got := homeAvailable(true); len(got) != len(homeTypeOrder) || got[len(got)-1] != "backups" {
+		t.Errorf("available to an administrator: %v", got)
 	}
-	// a widget whose piece is not there yet is refused, not saved for later
-	if _, err := cleanHome([]byte(`{"v":1,"widgets":[{"id":"a","type":"favourites","x":0,"y":0,"w":4,"h":4}]}`), true); err == nil {
-		t.Error("a widget that does not exist yet was accepted")
+	for _, name := range homeAvailable(false) {
+		if homeTypes[name].admin {
+			t.Errorf("%s offered to a non-administrator", name)
+		}
+	}
+	for _, name := range homeTypeOrder {
+		if _, ok := homeTypes[name]; !ok {
+			t.Errorf("%s is in the catalogue and has no type", name)
+		}
+	}
+	if len(homeTypes) != len(homeTypeOrder) {
+		t.Errorf("%d types, %d in the catalogue", len(homeTypes), len(homeTypeOrder))
+	}
+	if _, err := cleanHome([]byte(`{"v":1,"widgets":[{"id":"a","type":"queue","x":0,"y":0,"w":4,"h":4}]}`), false); err == nil || !strings.Contains(err.Error(), "for administrators") {
+		t.Errorf("a non-administrator saved the queue: %v", err)
 	}
 }
 
@@ -230,7 +240,7 @@ func TestHomeStorage(t *testing.T) {
 	ann, bob := user("home-ann@x.test"), user("home-bob@x.test")
 
 	out, err := homeAnswer(ctx, tx, ann, false)
-	if err != nil || !out.IsDefault || len(out.Widgets) != len(homeTypeOrder) || out.V != 1 {
+	if err != nil || !out.IsDefault || len(out.Widgets) != 9 || out.V != 1 {
 		t.Fatalf("nothing saved: %+v %v", out, err)
 	}
 	var rows int
@@ -276,7 +286,7 @@ func TestHomeStorage(t *testing.T) {
 	if err := deleteHome(ctx, tx, ann); err != nil {
 		t.Fatal(err)
 	}
-	if out, _ = homeAnswer(ctx, tx, ann, false); !out.IsDefault || len(out.Widgets) != len(homeTypeOrder) {
+	if out, _ = homeAnswer(ctx, tx, ann, false); !out.IsDefault || len(out.Widgets) != 9 {
 		t.Errorf("after reset: %+v", out)
 	}
 	// the account goes, its home page with it

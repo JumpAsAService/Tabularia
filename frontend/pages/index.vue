@@ -9,25 +9,65 @@
 // A widget shows only what its reader may see elsewhere: each asks the page's own endpoint.
 import { computed, nextTick, onBeforeUnmount, onMounted, ref, type Component } from 'vue'
 import { useI18n } from 'vue-i18n'
-import { Check, GripVertical, LayoutGrid, Plus, Redo2, RotateCcw, Settings2, Undo2, X } from 'lucide-vue-next'
+import { useFormat } from '~/composables/useFormat'
+import {
+  AlarmClock, CalendarClock, ChartColumn, ChartNoAxesColumn, Check, Clock3, Cpu, Database, DatabaseBackup, GripVertical, History, LoaderCircle,
+  Megaphone, Plus, Redo2, RotateCcw, Settings2, Star, StickyNote, Undo2, Users, X, XCircle, Zap,
+} from 'lucide-vue-next'
+import HomeBackups from '~/components/home/HomeBackups.vue'
 import HomeClock from '~/components/home/HomeClock.vue'
+import HomeDatasources from '~/components/home/HomeDatasources.vue'
 import HomeFailedRuns from '~/components/home/HomeFailedRuns.vue'
+import HomeFavourites from '~/components/home/HomeFavourites.vue'
+import HomeFlowRuns from '~/components/home/HomeFlowRuns.vue'
+import HomeNextRuns from '~/components/home/HomeNextRuns.vue'
 import HomeNote from '~/components/home/HomeNote.vue'
+import HomeNotices from '~/components/home/HomeNotices.vue'
 import HomeOptions from '~/components/home/HomeOptions.vue'
+import HomePulse from '~/components/home/HomePulse.vue'
+import HomeQueue from '~/components/home/HomeQueue.vue'
 import HomeRecent from '~/components/home/HomeRecent.vue'
+import HomeRunningNow from '~/components/home/HomeRunningNow.vue'
+import HomeRunsByDay from '~/components/home/HomeRunsByDay.vue'
+import HomeSessions from '~/components/home/HomeSessions.vue'
 import HomeShortcuts from '~/components/home/HomeShortcuts.vue'
 import { GRID_GAP_PX, GRID_ROW_PX, MEDIUM_FROM_PX, WIDE_FROM_PX, cellsOf, columnsOf, gridWidth, placeTiles, type GridBox, type GridWidth } from '~/composables/dashboardGrid'
 import {
-  HOME_TYPES, added, bodyOf, history, knownWidgets, moved, removed, resized, tilesOf, withOptions,
+  HOME_TYPES, added, bodyOf, greetingKey, history, knownWidgets, moved, removed, resized, tilesOf, withOptions,
   type HomeAnswer, type HomeWidget,
 } from '~/composables/homeLayout'
 
 const { t } = useI18n()
 const { apiFetch } = useApiClient()
 const toast = useToast()
+const fmt = useFormat()
 useHead({ title: () => `${t('nav.home')} · Tabularia` })
 
-const FACES: Record<string, Component> = { clock: HomeClock, recent: HomeRecent, failed_runs: HomeFailedRuns, shortcuts: HomeShortcuts, note: HomeNote }
+const FACES: Record<string, Component> = {
+  clock: HomeClock, shortcuts: HomeShortcuts, favourites: HomeFavourites, recent: HomeRecent, flow_runs: HomeFlowRuns, runs_by_day: HomeRunsByDay,
+  running_now: HomeRunningNow, failed_runs: HomeFailedRuns, next_runs: HomeNextRuns, datasources: HomeDatasources, notices: HomeNotices,
+  note: HomeNote, queue: HomeQueue, sessions: HomeSessions, backups: HomeBackups,
+}
+// each widget's icon, and the tone it wears: the product's own category colours (assets/main.css),
+// by what the widget is about — runs, what needs care, time, the person's own, the installation
+const ICONS: Record<string, Component> = {
+  clock: Clock3, shortcuts: Zap, favourites: Star, recent: History, flow_runs: ChartNoAxesColumn, runs_by_day: ChartColumn,
+  running_now: LoaderCircle, failed_runs: XCircle, next_runs: CalendarClock, datasources: Database, notices: Megaphone,
+  note: StickyNote, queue: Cpu, sessions: Users, backups: DatabaseBackup,
+}
+const TONES: Record<string, string> = {
+  clock: 'time', next_runs: 'time', shortcuts: 'own', favourites: 'own', recent: 'own', note: 'own', flow_runs: 'runs', runs_by_day: 'runs',
+  running_now: 'runs', datasources: 'runs', failed_runs: 'care', notices: 'care', queue: 'admin', sessions: 'admin', backups: 'admin',
+}
+// widgets that have nothing to set: no gear
+const NO_OPTIONS = new Set(['favourites', 'running_now', 'notices', 'queue', 'sessions', 'backups'])
+const { user } = useAuth()
+const greeting = computed(() => {
+  const first = (user.value?.full_name || '').trim().split(/\s+/)[0]
+  const key = `home.greeting.${greetingKey(new Date().getHours())}`
+  return first ? t(`${key}Name`, { name: first }) : t(key)
+})
+const today = computed(() => fmt.date(new Date(), { weekday: 'long', day: 'numeric', month: 'long' }))
 
 const widgets = ref<HomeWidget[]>([])
 /** widgets of a type this interface cannot draw (a newer gateway's): kept as they are, and saved back */
@@ -63,7 +103,8 @@ const placed = computed(() => placeTiles(tilesOf(widgets.value), width.value))
 const byId = computed(() => new Map(widgets.value.map((w) => [w.id, w])))
 const gridStyle = computed(() => ({
   gridTemplateColumns: `repeat(${columnsOf(width.value)}, minmax(0, 1fr))`,
-  gridAutoRows: `${GRID_ROW_PX}px`,
+  // on a phone a widget is as tall as what it holds: a height drawn for twelve columns would cut it
+  gridAutoRows: width.value === 'narrow' ? 'auto' : `${GRID_ROW_PX}px`,
   gap: `${GRID_GAP_PX}px`,
 }))
 
@@ -196,7 +237,7 @@ function onWidgetKey(e: KeyboardEvent, w: HomeWidget) {
   } else if (e.key === 'Delete' || e.key === 'Backspace') {
     e.preventDefault()
     remove(w)
-  } else if (e.key === 'Enter') {
+  } else if (e.key === 'Enter' && !NO_OPTIONS.has(w.type)) {
     e.preventDefault()
     optionsOf.value = w
   }
@@ -268,7 +309,10 @@ onBeforeUnmount(() => {
     <BannerBar />
     <div class="home" @keydown="onPageKey">
       <header class="home-head">
-        <h1><LayoutGrid :size="18" aria-hidden="true" /> {{ $t('nav.home') }}</h1>
+        <div class="hello">
+          <h1>{{ greeting }}</h1>
+          <p class="today">{{ today }}</p>
+        </div>
         <span class="status" role="status">
           <template v-if="editing">{{ saving === 'saving' ? $t('home.saving') : saving === 'saved' ? $t('home.saved') : saving === 'failed' ? $t('home.saveFailed') : '' }}</template>
         </span>
@@ -279,9 +323,12 @@ onBeforeUnmount(() => {
                 <Plus :size="14" aria-hidden="true" /> {{ $t('home.add') }}
               </button>
               <div v-if="catalogue" id="home-catalogue" class="menu">
-                <button v-for="type in available" :key="type" type="button" class="menu-item" @click="add(type)">
-                  <span class="mi-name">{{ $t(`home.widgets.${type}`) }}</span>
-                  <span class="mi-what">{{ $t(`home.about.${type}`) }}</span>
+                <button v-for="type in available" :key="type" type="button" class="menu-item" :data-tone="TONES[type]" @click="add(type)">
+                  <span class="chip" aria-hidden="true"><component :is="ICONS[type]" :size="14" /></span>
+                  <span class="mi-text">
+                    <span class="mi-name">{{ $t(`home.widgets.${type}`) }}</span>
+                    <span class="mi-what">{{ $t(`home.about.${type}`) }}</span>
+                  </span>
                 </button>
               </div>
             </div>
@@ -290,9 +337,10 @@ onBeforeUnmount(() => {
             <button type="button" :disabled="isDefault" @click="reset"><RotateCcw :size="14" aria-hidden="true" /> {{ $t('home.reset') }}</button>
             <button type="button" class="primary" @click="done"><Check :size="14" aria-hidden="true" /> {{ $t('home.done') }}</button>
           </template>
-          <button v-else-if="width === 'wide'" type="button" @click="customise"><Settings2 :size="14" aria-hidden="true" /> {{ $t('home.customise') }}</button>
+          <button v-else-if="width === 'wide'" type="button" class="custom" @click="customise"><Settings2 :size="14" aria-hidden="true" /> {{ $t('home.customise') }}</button>
         </template>
       </header>
+      <HomePulse v-if="state === 'ready' && !editing" />
       <p v-if="editing" class="help">{{ $t('home.editHelp') }}</p>
       <p class="sr-only" aria-live="polite">{{ said }}</p>
 
@@ -313,18 +361,20 @@ onBeforeUnmount(() => {
           :class="{ selected: editing && selected === p.id, dragging: dragging === p.id }"
           :data-widget="p.id"
           :data-type="byId.get(p.id)!.type"
+          :data-tone="TONES[byId.get(p.id)!.type]"
           :aria-labelledby="`hw-${p.id}`"
           :aria-describedby="editing ? 'home-keys' : undefined"
           :tabindex="editing ? 0 : undefined"
-          :style="{ gridColumn: `${p.x + 1} / span ${p.w}`, gridRow: `${p.y + 1} / span ${p.h}` }"
+          :style="width === 'narrow' ? undefined : { gridColumn: `${p.x + 1} / span ${p.w}`, gridRow: `${p.y + 1} / span ${p.h}` }"
           @focus="selected = p.id"
           @keydown="onWidgetKey($event, byId.get(p.id)!)"
         >
           <header class="hw-head" @pointerdown="begin($event, byId.get(p.id)!, 'move')">
             <GripVertical v-if="editing" :size="14" class="grip" aria-hidden="true" />
+            <span class="chip" aria-hidden="true"><component :is="ICONS[byId.get(p.id)!.type]" :size="13" /></span>
             <h2 :id="`hw-${p.id}`">{{ nameOf(byId.get(p.id)!) }}</h2>
             <template v-if="editing">
-              <button type="button" class="tool" :title="$t('home.options')" :aria-label="$t('home.optionsOf', { name: nameOf(byId.get(p.id)!) })" @click="optionsOf = byId.get(p.id)!"><Settings2 :size="14" aria-hidden="true" /></button>
+              <button v-if="!NO_OPTIONS.has(byId.get(p.id)!.type)" type="button" class="tool" :title="$t('home.options')" :aria-label="$t('home.optionsOf', { name: nameOf(byId.get(p.id)!) })" @click="optionsOf = byId.get(p.id)!"><Settings2 :size="14" aria-hidden="true" /></button>
               <button type="button" class="tool" :title="$t('home.remove')" :aria-label="$t('home.removeOf', { name: nameOf(byId.get(p.id)!) })" @click="remove(byId.get(p.id)!)"><X :size="14" aria-hidden="true" /></button>
             </template>
           </header>
@@ -342,52 +392,73 @@ onBeforeUnmount(() => {
 </template>
 
 <style scoped>
-.home { flex: 1; min-width: 0; padding: 16px 20px 28px; }
-.home-head { display: flex; align-items: center; gap: 8px; margin-bottom: 12px; flex-wrap: wrap; }
-.home-head h1 { display: inline-flex; align-items: center; gap: 8px; margin: 0; font-size: 17px; font-weight: 650; }
+.home { flex: 1; min-width: 0; padding: 22px 24px 32px; }
+.home-head { display: flex; align-items: flex-end; gap: 8px; margin-bottom: 16px; flex-wrap: wrap; }
+.hello { min-width: 0; }
+.hello h1 { margin: 0; font-size: 24px; font-weight: 700; line-height: 1.15; letter-spacing: -0.015em; text-wrap: balance; }
+.today { margin: 4px 0 0; color: var(--muted); font-size: 13px; }
+.today::first-letter { text-transform: uppercase; }
 .status { flex: 1; min-width: 0; color: var(--muted); font-size: 12.5px; text-align: right; }
-.help { margin: -4px 0 12px; color: var(--muted); font-size: 12.5px; }
+.custom { color: var(--muted); }
+.help { margin: -6px 0 14px; color: var(--muted); font-size: 12.5px; }
 .msg { color: var(--muted); font-size: 13px; }
 .msg .sk { display: inline-block; height: 14px; }
 .empty { display: grid; place-items: center; gap: 12px; padding: 60px 0; color: var(--muted); font-size: 14px; }
 .empty p { margin: 0; }
 
+/* the tone of a widget: one of the product's category colours, on its icon alone */
+[data-tone="runs"] { --tone: var(--accent-2); }
+[data-tone="care"] { --tone: var(--danger); }
+[data-tone="time"] { --tone: var(--violet); }
+[data-tone="own"] { --tone: var(--accent); }
+[data-tone="admin"] { --tone: var(--warning); }
+.chip {
+  display: grid; place-items: center; width: 22px; height: 22px; border-radius: 6px; flex-shrink: 0;
+  color: var(--tone, var(--accent)); background: color-mix(in srgb, var(--tone, var(--accent)) 14%, transparent);
+}
+
 .addwrap { position: relative; }
 .menu {
-  position: absolute; right: 0; top: calc(100% + 6px); z-index: 50; width: 300px; padding: 6px;
+  position: absolute; right: 0; top: calc(100% + 6px); z-index: 50; width: 340px; max-height: min(70vh, 560px); overflow: auto; padding: 6px;
   background: var(--panel); border: 1px solid var(--border); border-radius: 12px; box-shadow: var(--shadow-2);
 }
-.menu-item {
-  display: flex; flex-direction: column; align-items: flex-start; gap: 2px; width: 100%; padding: 8px 10px;
-  border: none; border-radius: 8px; background: none; text-align: left;
-}
+.menu-item { display: flex; align-items: flex-start; gap: 10px; width: 100%; padding: 8px 10px; border: none; border-radius: 8px; background: none; text-align: left; }
 .menu-item:hover, .menu-item:focus-visible { background: var(--tint-accent); box-shadow: none; }
+.mi-text { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
 .mi-name { font-size: 13px; font-weight: 600; color: var(--text); }
 .mi-what { font-size: 12px; color: var(--muted); white-space: normal; }
 
 .board { display: grid; min-width: 0; }
 .hw {
-  display: flex; flex-direction: column; min-width: 0; min-height: 0; overflow: hidden;
-  background: var(--panel); border: 1px solid var(--border-soft); border-radius: 12px;
+  display: flex; flex-direction: column; min-width: 0; min-height: 0; overflow: hidden; container-type: inline-size;
+  background: var(--panel); border: 1px solid var(--border-soft); border-radius: 14px;
 }
-.hw-head { display: flex; align-items: center; gap: 6px; padding: 9px 12px 4px; min-height: 34px; }
-.hw-head h2 { flex: 1; min-width: 0; margin: 0; font-size: 12px; font-weight: 600; color: var(--muted); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.hw-body { flex: 1; min-height: 0; padding: 2px 12px 12px; }
+.hw-head { display: flex; align-items: center; gap: 8px; padding: 12px 14px 6px; min-height: 40px; }
+.hw-head h2 { flex: 1; min-width: 0; margin: 0; font-size: 13px; font-weight: 650; color: var(--text); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.hw-body { flex: 1; min-height: 0; padding: 4px 14px 14px; }
+.board:not(.editing) .hw:hover { border-color: var(--border); }
 .board.editing .hw { border-style: dashed; border-color: var(--border); position: relative; }
 .board.editing .hw-head { cursor: grab; touch-action: none; user-select: none; }
 .board.editing .hw.dragging { box-shadow: var(--shadow-pin, var(--shadow-2)); border-color: var(--accent); z-index: 2; }
 .board.editing .hw.dragging .hw-head { cursor: grabbing; }
 .board.editing .hw.selected, .board.editing .hw:focus-visible { border-style: solid; border-color: var(--accent); outline: 2px solid var(--accent); outline-offset: 1px; }
-.board.editing .hw-body { opacity: 0.75; }
-.grip { color: var(--muted); flex-shrink: 0; }
+.board.editing .hw-body { opacity: 0.7; }
+.grip { color: var(--muted); flex-shrink: 0; margin-left: -4px; }
 .tool { display: grid; place-items: center; width: 26px; height: 26px; min-height: 0; padding: 0; border: none; border-radius: 7px; background: none; color: var(--muted); }
 .tool:hover, .tool:focus-visible { background: var(--panel-2); color: var(--text); box-shadow: none; }
 .hw-resize {
   position: absolute; right: 0; bottom: 0; width: 18px; height: 18px; cursor: nwse-resize; touch-action: none;
   background: linear-gradient(135deg, transparent 50%, var(--muted) 50%, var(--muted) 60%, transparent 60%, transparent 72%, var(--muted) 72%, var(--muted) 82%, transparent 82%);
-  border-bottom-right-radius: 11px;
+  border-bottom-right-radius: 13px;
 }
 @media (prefers-reduced-motion: no-preference) {
   .hw { transition: border-color var(--dur-hover, 120ms) ease; }
+}
+@media (max-width: 699px) {
+  .hw-body { max-height: 440px; overflow: auto; }
+  .hw[data-type="runs_by_day"] .hw-body, .hw[data-type="clock"] .hw-body { height: 220px; }
+  .hw[data-type="clock"] .hw-body { height: 110px; }
+  .home { padding: 16px 14px 24px; }
+  .hello h1 { font-size: 20px; }
 }
 </style>

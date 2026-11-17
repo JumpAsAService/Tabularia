@@ -120,3 +120,50 @@ test('failed runs: within the widget\'s days, and the person\'s own when it says
   assert.deepEqual(H.failedFor(runs, { scope: 'mine', days: 30 }, 7, now).map((r) => r.id), [1, 3])
   assert.deepEqual(H.failedFor(runs, { scope: 'mine' }, null, now), [])
 })
+
+test('a duration and a size read as a person would say them', () => {
+  assert.deepEqual([4.23, 42.4, 65, 3725, null].map(H.durationText), ['4.2 s', '42 s', '1 m 05 s', '1 h 02 m', '–'])
+  assert.deepEqual([512, 2048, 5_000_000, 3 * 1024 ** 3, null].map(H.bytesText), ['512 B', '2 KB', '4.8 MB', '3 GB', '–'])
+  assert.equal(H.median([5, 1, 3]), 3)
+  assert.equal(H.median([4, 1, 3, 2]), 2.5)
+  assert.equal(H.median([]), null)
+})
+
+test('a flow\'s runs as bars: as tall as they lasted, coloured by how they ended', () => {
+  const runs = [
+    { id: 1, status: 'SUCCESS', trigger: 'schedule', started_at: null, seconds: 10 },
+    { id: 2, status: 'FAILURE', trigger: 'manual', started_at: null, seconds: 40 },
+    { id: 3, status: 'SUCCESS', trigger: 'schedule', started_at: null, seconds: 0.1 },
+    { id: 4, status: 'STARTED', trigger: 'manual', started_at: null, seconds: null },
+  ]
+  const bars = H.runBars(runs)
+  assert.deepEqual(bars.map((b) => b.tone), ['ok', 'ko', 'ok', 'live'])
+  assert.deepEqual(bars.map((b) => b.height), [25, 100, 8, 25]) // the shortest keeps a floor; the one going stands at the median
+  assert.deepEqual(H.runBars([{ id: 1, status: 'STARTED', trigger: 'manual', started_at: null, seconds: null }]).map((b) => b.height), [40])
+  assert.deepEqual(H.runBars([]), [])
+})
+
+test('runs by day: every day of the span, the empty ones too, against the busiest', () => {
+  const today = new Date(2026, 10, 17)
+  const cols = H.dayColumns([
+    { key: '2026-11-17', total: 10, success: 6, failure: 3 },
+    { key: '2026-11-15', total: 5, success: 5, failure: 0 },
+    { key: '2026-10-01', total: 99, success: 99, failure: 0 }, // out of the span
+  ], 4, today)
+  assert.deepEqual(cols.map((c) => c.key), ['2026-11-14', '2026-11-15', '2026-11-16', '2026-11-17'])
+  assert.deepEqual(cols.map((c) => c.total), [0, 5, 0, 10])
+  assert.deepEqual([cols[3].okH, cols[3].koH, cols[3].otherH], [60, 30, 10])
+  assert.equal(cols[1].okH, 50)
+  assert.equal(H.dayColumns([], 7, today).every((c) => c.total === 0 && c.okH === 0), true)
+})
+
+test('the greeting follows the hour', () => {
+  assert.deepEqual([3, 6, 11, 12, 17, 18, 23].map(H.greetingKey), ['evening', 'morning', 'morning', 'afternoon', 'afternoon', 'evening', 'evening'])
+})
+
+test('every widget the interface draws has its sizes, and they hold together', () => {
+  for (const t of H.HOME_TYPES) {
+    const [mw, mh] = H.HOME_MIN[t]; const [w, h] = H.HOME_NEW[t]
+    assert.ok(w >= mw && h >= mh && w <= 12, t)
+  }
+})

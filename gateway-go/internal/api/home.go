@@ -30,16 +30,17 @@ import (
 // widgets that exist on both.
 
 const (
-	homeVersion       = 1
-	homeMaxWidgets    = 30
-	homeMaxBytes      = 64 << 10
-	homeColumns       = 12
-	homeMaxRow        = 500
-	homeMaxHeight     = 40
-	homeNoteMaxChars  = 4000
-	homeMaxShortcuts  = 16
-	homeMaxFlows      = 5
-	homeShortcutChars = 200
+	homeVersion        = 1
+	homeMaxWidgets     = 30
+	homeMaxBytes       = 64 << 10
+	homeColumns        = 12
+	homeMaxRow         = 500
+	homeMaxHeight      = 40
+	homeNoteMaxChars   = 4000
+	homeMaxShortcuts   = 16
+	homeMaxFlows       = 5
+	homeMaxDatasources = 10
+	homeShortcutChars  = 200
 )
 
 // HomeWidget is one widget of the grid: its type, its place (12 columns, rows of one unit)
@@ -72,25 +73,28 @@ type homeType struct {
 	clean      func(o map[string]any, admin bool) (map[string]any, error)
 }
 
-// homeTypeOrder are the widgets that exist, in the catalogue's order. A type enters the
-// catalogue, and the default layout, with the piece that draws it and serves its data
-// (docs/specs/home.md, «Pieces»): favourites, next_runs and flow_durations have their
-// options ready below and wait for their endpoints.
-var homeTypeOrder = []string{"clock", "recent", "failed_runs", "shortcuts", "note"}
+// homeTypeOrder are the widgets, in the catalogue's order: everyone's first, then the
+// administrators'. Each reads the endpoints of the page it mirrors, or one of api/home_data.go.
+var homeTypeOrder = []string{"clock", "shortcuts", "favourites", "recent", "flow_runs", "runs_by_day", "running_now", "failed_runs",
+	"next_runs", "datasources", "notices", "note", "queue", "sessions", "backups"}
 
 var homeTypes = map[string]homeType{
 	"clock":       {minW: 2, minH: 2, clean: cleanClock},
-	"recent":      {minW: 3, minH: 4, clean: cleanRecent},
-	"failed_runs": {minW: 3, minH: 4, clean: cleanFailedRuns},
 	"shortcuts":   {minW: 2, minH: 2, clean: cleanShortcuts},
+	"favourites":  {minW: 3, minH: 4, clean: noOptions},
+	"recent":      {minW: 3, minH: 4, clean: cleanRecent},
+	"flow_runs":   {minW: 4, minH: 5, clean: cleanFlowRuns},
+	"runs_by_day": {minW: 4, minH: 5, clean: cleanRunsByDay},
+	"running_now": {minW: 3, minH: 3, clean: noOptions},
+	"failed_runs": {minW: 3, minH: 4, clean: cleanFailedRuns},
+	"next_runs":   {minW: 3, minH: 4, clean: cleanNextRuns},
+	"datasources": {minW: 3, minH: 4, clean: cleanDatasources},
+	"notices":     {minW: 3, minH: 2, clean: noOptions},
 	"note":        {minW: 2, minH: 2, clean: cleanNote},
-}
-
-// homeLaterTypes are the next pieces' widgets: validated already, not offered yet.
-var homeLaterTypes = map[string]homeType{
-	"favourites":     {minW: 3, minH: 4, clean: noOptions},
-	"next_runs":      {minW: 3, minH: 4, clean: cleanNextRuns},
-	"flow_durations": {minW: 4, minH: 5, clean: cleanFlowDurations},
+	// the administrators' (and the observers', who read the same pages): never in the default layout
+	"queue":    {admin: true, minW: 3, minH: 3, clean: noOptions},
+	"sessions": {admin: true, minW: 3, minH: 4, clean: noOptions},
+	"backups":  {admin: true, minW: 3, minH: 3, clean: noOptions},
 }
 
 // homeRecentKinds are Explore's kinds a «Recent» widget may be narrowed to.
@@ -264,9 +268,8 @@ func cleanFailedRuns(o map[string]any, _ bool) (map[string]any, error) {
 	return map[string]any{"scope": scope, "days": days}, nil
 }
 
-// cleanFlowDurations: up to five flows by id; none named means the flows the person ran
-// last. The ids are only kept here: the widget's data endpoint checks who may read them.
-func cleanFlowDurations(o map[string]any, _ bool) (map[string]any, error) {
+// cleanFlowRuns: up to five flows by id; none named means the flows that ran last. The ids are only kept here: the widget's data endpoint checks who may read them.
+func cleanFlowRuns(o map[string]any, _ bool) (map[string]any, error) {
 	if err := optionKeys(o, "flow_ids", "runs"); err != nil {
 		return nil, err
 	}
@@ -350,6 +353,45 @@ func cleanShortcuts(o map[string]any, admin bool) (map[string]any, error) {
 		}
 	}
 	return map[string]any{"items": items}, nil
+}
+
+// cleanRunsByDay: how many days of runs the chart holds.
+func cleanRunsByDay(o map[string]any, _ bool) (map[string]any, error) {
+	if err := optionKeys(o, "days"); err != nil {
+		return nil, err
+	}
+	days, err := homeInt(o, "days", 30, 7, 90)
+	if err != nil {
+		return nil, err
+	}
+	return map[string]any{"days": days}, nil
+}
+
+// cleanDatasources: up to ten datasources by id; none named means those refreshed last. The
+// ids are only kept here: the list the widget reads holds what the reader may see.
+func cleanDatasources(o map[string]any, _ bool) (map[string]any, error) {
+	if err := optionKeys(o, "ids"); err != nil {
+		return nil, err
+	}
+	ids := []int64{}
+	if v, has := o["ids"]; has && v != nil {
+		list, ok := v.([]any)
+		if !ok || len(list) > homeMaxDatasources {
+			return nil, fmt.Errorf("ids must be a list of at most %d datasources", homeMaxDatasources)
+		}
+		seen := map[int64]bool{}
+		for _, x := range list {
+			f, ok := x.(float64)
+			if !ok || f != float64(int64(f)) || f < 1 {
+				return nil, errors.New("ids must be datasources' ids")
+			}
+			if !seen[int64(f)] {
+				ids = append(ids, int64(f))
+			}
+			seen[int64(f)] = true
+		}
+	}
+	return map[string]any{"ids": ids}, nil
 }
 
 func cleanNote(o map[string]any, _ bool) (map[string]any, error) {
@@ -509,9 +551,13 @@ func defaultHome(admin bool) []HomeWidget {
 	layout := []HomeWidget{
 		{ID: "clock", Type: "clock", X: 0, Y: 0, W: 3, H: 3},
 		{ID: "shortcuts", Type: "shortcuts", X: 3, Y: 0, W: 9, H: 3, Options: map[string]any{"items": toAny(shortcuts)}},
-		{ID: "recent", Type: "recent", X: 0, Y: 3, W: 6, H: 8},
-		{ID: "failed-runs", Type: "failed_runs", X: 6, Y: 3, W: 6, H: 8},
-		{ID: "note", Type: "note", X: 0, Y: 11, W: 12, H: 4},
+		{ID: "flow-runs", Type: "flow_runs", X: 0, Y: 3, W: 7, H: 7},
+		{ID: "runs-by-day", Type: "runs_by_day", X: 7, Y: 3, W: 5, H: 7},
+		{ID: "recent", Type: "recent", X: 0, Y: 10, W: 4, H: 7},
+		{ID: "favourites", Type: "favourites", X: 4, Y: 10, W: 4, H: 7},
+		{ID: "next-runs", Type: "next_runs", X: 8, Y: 10, W: 4, H: 7},
+		{ID: "failed-runs", Type: "failed_runs", X: 0, Y: 17, W: 8, H: 5},
+		{ID: "note", Type: "note", X: 8, Y: 17, W: 4, H: 5},
 	}
 	return homeForReader(layout, admin) // the options in their canonical form
 }

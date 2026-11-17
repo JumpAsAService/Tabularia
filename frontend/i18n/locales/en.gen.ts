@@ -5865,14 +5865,34 @@ export default {
       "recent": "Recent",
       "failed_runs": "Failed runs",
       "shortcuts": "Shortcuts",
-      "note": "Note"
+      "note": "Note",
+      "favourites": "Favourites",
+      "flow_runs": "Flow runs",
+      "runs_by_day": "Runs by day",
+      "running_now": "Running now",
+      "next_runs": "Next runs",
+      "datasources": "Datasources",
+      "notices": "Notices",
+      "queue": "Queue",
+      "sessions": "Sessions",
+      "backups": "Backups"
     },
     "about": {
       "clock": "The time and the date, in your zone or another",
       "recent": "What you changed last",
       "failed_runs": "The last runs that failed",
       "shortcuts": "Buttons to the pages you use",
-      "note": "A text of your own"
+      "note": "A text of your own",
+      "favourites": "The objects you pinned from Explore",
+      "flow_runs": "The last runs of your flows as bars: how long, and how they ended",
+      "runs_by_day": "Runs per day, succeeded and failed",
+      "running_now": "What is running or waiting to start",
+      "next_runs": "The schedules due next",
+      "datasources": "When your datasources were last refreshed",
+      "notices": "What the administrators posted",
+      "queue": "Jobs running and waiting, workers alive",
+      "sessions": "Who is signed in",
+      "backups": "The last backup and the next one"
     },
     "kinds": {
       "flow": "Flows",
@@ -5948,6 +5968,104 @@ export default {
       "text": "Text",
       "placeholder": "A reminder, a link, who to call…",
       "hint": "Headings, lists, bold and code as in Markdown. Up to 4,000 characters."
+    },
+    "greeting": {
+      "morning": "Good morning",
+      "afternoon": "Good afternoon",
+      "evening": "Good evening",
+      "morningName": "Good morning, {name}",
+      "afternoonName": "Good afternoon, {name}",
+      "eveningName": "Good evening, {name}"
+    },
+    "pulse": {
+      "label": "Today",
+      "today": "runs today",
+      "failed": "failed today",
+      "running": "running now",
+      "due": "due in 24 hours"
+    },
+    "pin": "Add to home",
+    "unpin": "Remove from home",
+    "unpinOf": "Remove {name} from home",
+    "pinned": "{name} is on your home page.",
+    "unpinned": "{name} is off your home page.",
+    "filter": "Filter by name",
+    "nothingFound": "Nothing with that name.",
+    "favourites": {
+      "empty": "Nothing pinned yet: in Explore, open a row's menu and choose «Add to home»."
+    },
+    "flowRuns": {
+      "empty": "No flow has run yet.",
+      "failed": "The runs could not be read.",
+      "never": "Never run.",
+      "ok": "Succeeded",
+      "ko": "Failed",
+      "live": "Running",
+      "scheduled": "scheduled",
+      "manual": "by hand",
+      "median": "median",
+      "failures": "failed | failed",
+      "barsOf": "The last {n} runs of {name}, oldest first",
+      "pick": "Flows (up to {n})",
+      "pickHint": "None ticked: the flows that ran last.",
+      "runs": "Runs per flow (5 to 50)"
+    },
+    "byDay": {
+      "failed": "The runs could not be read.",
+      "runs": "runs in {n} days",
+      "ok": "succeeded",
+      "ko": "failed | failed",
+      "today": "today",
+      "chart": "Runs per day, the last {n} days",
+      "col": "{day}: {n} runs, {ok} succeeded, {ko} failed",
+      "days": "Days (7 to 90)"
+    },
+    "running": {
+      "empty": "Nothing is running.",
+      "failed": "The runs could not be read.",
+      "running": "running",
+      "waiting": "waiting"
+    },
+    "nextRuns": {
+      "empty": "Nothing is due in the next {n} hours.",
+      "failed": "The schedules could not be read.",
+      "scopeMine": "Only the ones I scheduled or own",
+      "hours": "Hours ahead (1 to 168)"
+    },
+    "datasources": {
+      "empty": "No datasource yet.",
+      "failed": "The datasources could not be read.",
+      "rows": "{n} rows",
+      "pick": "Datasources (up to {n})",
+      "pickHint": "None ticked: those refreshed last."
+    },
+    "notices": {
+      "empty": "No notice.",
+      "failed": "The notices could not be read."
+    },
+    "queue": {
+      "failed": "The queue could not be read.",
+      "running": "running",
+      "waiting": "waiting",
+      "workers": "workers",
+      "load": "{n} of {of} slots busy",
+      "open": "Open the queue"
+    },
+    "sessions": {
+      "empty": "Nobody is signed in.",
+      "failed": "The sessions could not be read.",
+      "online": "online",
+      "open": "All the sessions"
+    },
+    "backups": {
+      "failed": "The backups could not be read.",
+      "unavailable": "Backups are not available on this installation.",
+      "lastOk": "Last backup {when}",
+      "lastFailed": "The last backup failed {when}",
+      "never": "No backup yet",
+      "next": "Next: {when}",
+      "disabled": "Automatic backups are off.",
+      "open": "Open the backups"
     }
   },
 }

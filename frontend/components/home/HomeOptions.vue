@@ -7,6 +7,9 @@ import Modal from '~/components/ui/Modal.vue'
 import { NAV_SECTIONS } from '~/composables/appKeys'
 import type { HomeWidget } from '~/composables/homeLayout'
 import { useKeyHelp } from '~/composables/useKeyHelp'
+import { useDatasources } from '~/composables/useDatasources'
+import { useFlows } from '~/composables/useFlows'
+import { useFolderPaths } from '~/composables/useFolderPaths'
 
 const props = defineProps<{ widget: HomeWidget | null }>()
 const emit = defineEmits<{ (e: 'save', options: Record<string, any>): void; (e: 'close'): void }>()
@@ -36,6 +39,30 @@ function toggleKind(kind: string, on: boolean) {
   if (on) now.add(kind); else now.delete(kind)
   draft.value.kinds = KINDS.filter((k) => now.has(k))
 }
+// flow_runs and datasources: up to a few objects picked from those the person may see
+const pickKey = computed(() => (props.widget?.type === 'flow_runs' ? 'flow_ids' : 'ids'))
+const pickMax = computed(() => (props.widget?.type === 'flow_runs' ? 5 : 10))
+const pickFrom = ref<{ id: number; name: string; project_id: number }[] | null>(null)
+const pickFilter = ref('')
+const { pathOf } = useFolderPaths()
+watch(() => props.widget?.type, async (type) => {
+  pickFrom.value = null
+  pickFilter.value = ''
+  try {
+    if (type === 'flow_runs') pickFrom.value = (await useFlows().list()).map((f: any) => ({ id: f.id, name: f.name, project_id: f.project_id }))
+    else if (type === 'datasources') pickFrom.value = (await useDatasources().list()).map((d: any) => ({ id: d.id, name: d.name, project_id: d.project_id }))
+  } catch { pickFrom.value = [] }
+}, { immediate: true })
+const picked = computed<number[]>(() => draft.value[pickKey.value] ?? [])
+const pickShown = computed(() => {
+  const q = pickFilter.value.trim().toLowerCase()
+  return (pickFrom.value ?? []).filter((o) => !q || o.name.toLowerCase().includes(q) || picked.value.includes(o.id)).slice(0, 60)
+})
+function togglePick(id: number, on: boolean) {
+  const now = picked.value.filter((x) => x !== id)
+  if (on && now.length < pickMax.value) now.push(id)
+  draft.value[pickKey.value] = now
+}
 const clamp = (v: unknown, def: number, min: number, max: number) => {
   const n = Math.round(Number(v))
   return Number.isFinite(n) ? Math.min(max, Math.max(min, n)) : def
@@ -48,6 +75,10 @@ function save() {
     w.type === 'clock' ? { zone: d.zone ?? '', hour12: !!d.hour12, seconds: !!d.seconds }
     : w.type === 'recent' ? { limit: clamp(d.limit, 8, 5, 20), kinds: d.kinds ?? [] }
     : w.type === 'failed_runs' ? { scope: d.scope === 'mine' ? 'mine' : 'all', days: clamp(d.days, 7, 1, 30) }
+    : w.type === 'next_runs' ? { scope: d.scope === 'mine' ? 'mine' : 'all', hours: clamp(d.hours, 24, 1, 168) }
+    : w.type === 'flow_runs' ? { flow_ids: d.flow_ids ?? [], runs: clamp(d.runs, 20, 5, 50) }
+    : w.type === 'runs_by_day' ? { days: clamp(d.days, 30, 7, 90) }
+    : w.type === 'datasources' ? { ids: d.ids ?? [] }
     : w.type === 'shortcuts' ? { items: d.items ?? [] }
     : w.type === 'note' ? { text: String(d.text ?? '').slice(0, 4000) }
     : {}
@@ -97,6 +128,45 @@ function save() {
         </label>
       </template>
 
+      <template v-else-if="widget.type === 'next_runs'">
+        <fieldset>
+          <legend>{{ $t('home.failed.scope') }}</legend>
+          <label class="chk"><input v-model="draft.scope" type="radio" value="all" /> {{ $t('home.failed.scopeAll') }}</label>
+          <label class="chk"><input v-model="draft.scope" type="radio" value="mine" /> {{ $t('home.nextRuns.scopeMine') }}</label>
+        </fieldset>
+        <label class="field">
+          <span>{{ $t('home.nextRuns.hours') }}</span>
+          <input v-model.number="draft.hours" type="number" min="1" max="168" required />
+        </label>
+      </template>
+
+      <template v-else-if="widget.type === 'runs_by_day'">
+        <label class="field">
+          <span>{{ $t('home.byDay.days') }}</span>
+          <input v-model.number="draft.days" type="number" min="7" max="90" required />
+        </label>
+      </template>
+
+      <template v-else-if="widget.type === 'flow_runs' || widget.type === 'datasources'">
+        <fieldset class="pick">
+          <legend>{{ $t(widget.type === 'flow_runs' ? 'home.flowRuns.pick' : 'home.datasources.pick', { n: pickMax }) }}</legend>
+          <p class="hint">{{ $t(widget.type === 'flow_runs' ? 'home.flowRuns.pickHint' : 'home.datasources.pickHint') }}</p>
+          <input v-model="pickFilter" type="search" class="filter" :placeholder="$t('home.filter')" :aria-label="$t('home.filter')" />
+          <p v-if="pickFrom === null" class="hint">…</p>
+          <p v-else-if="!pickShown.length" class="hint">{{ $t('home.nothingFound') }}</p>
+          <div v-else class="picklist">
+            <label v-for="o in pickShown" :key="o.id" class="chk">
+              <input type="checkbox" :checked="picked.includes(o.id)" :disabled="!picked.includes(o.id) && picked.length >= pickMax" @change="togglePick(o.id, ($event.target as HTMLInputElement).checked)" />
+              <span class="pn">{{ o.name }}</span> <span class="pw">{{ pathOf(o.project_id) }}</span>
+            </label>
+          </div>
+        </fieldset>
+        <label v-if="widget.type === 'flow_runs'" class="field">
+          <span>{{ $t('home.flowRuns.runs') }}</span>
+          <input v-model.number="draft.runs" type="number" min="5" max="50" required />
+        </label>
+      </template>
+
       <template v-else-if="widget.type === 'shortcuts'">
         <fieldset>
           <legend>{{ $t('home.shortcuts.places') }}</legend>
@@ -136,4 +206,9 @@ fieldset { border: 1px solid var(--border-soft); border-radius: 10px; padding: 1
 legend { padding: 0 6px; }
 .chk, .sw { display: inline-flex; align-items: center; gap: 8px; font-size: 13px; min-height: 28px; }
 .hint { margin: 0; color: var(--muted); font-size: 12.5px; flex-basis: 100%; }
+.pick { flex-direction: column; flex-wrap: nowrap; }
+.filter { width: 100%; }
+.picklist { display: flex; flex-direction: column; max-height: 240px; overflow: auto; margin: 0 -4px; padding: 0 4px; }
+.pn { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.pw { color: var(--muted); font-size: 12px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 </style>

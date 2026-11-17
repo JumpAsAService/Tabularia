@@ -56,7 +56,10 @@ import {
   ArrowRight,
   FolderPlus,
   Ellipsis,
+  Star,
+  StarOff,
 } from 'lucide-vue-next'
+import { useHomeFavourites } from '~/composables/useHomeFavourites'
 import { errMessage, useApi } from '~/composables/useApi'
 import { useFlows, type FlowSummary } from '~/composables/useFlows'
 import { useRuns, type RunInfo } from '~/composables/useRuns'
@@ -863,6 +866,7 @@ const ACTION_LABEL: Record<RowAction, string> = {
   refresh: 'projectBrowser.refreshSnapshotTitle',
   contract: 'contracts.open',
   editConnection: 'projectBrowser.editConnectionTitle',
+  favourite: 'home.pin',
   rename: 'projectBrowser.renameTitle',
   duplicate: 'projectBrowser.duplicateTitle',
   move: 'projectBrowser.moveToFolderTitle',
@@ -870,8 +874,11 @@ const ACTION_LABEL: Record<RowAction, string> = {
 }
 const ACTION_ICON: Record<RowAction, any> = {
   history: History, refresh: RefreshCw, contract: ScrollText, editConnection: Pencil,
-  rename: PencilLine, duplicate: Copy, move: FolderInput, delete: Trash2,
+  rename: PencilLine, duplicate: Copy, move: FolderInput, delete: Trash2, favourite: Star,
 }
+// the objects pinned to the home page: the row's menu says «Add to» or «Remove from»
+const homeFavs = useHomeFavourites()
+onMounted(() => homeFavs.load())
 const ingestBusy = (r: Row) => r.kind === 'datasource' && !!ingestRuns.value[r.id] && !isTerminal(ingestRuns.value[r.id])
 
 const rowMenu = ref<{ key: string; row: Row; x: number; y: number; align: 'start' | 'end'; byKey: boolean } | null>(null)
@@ -881,8 +888,8 @@ const rowMenuItems = computed<RowMenuItem[]>(() => {
   return rowActions(rowFacts(m.row)).map(({ id, sep }) => ({
     id,
     sep,
-    label: t(ACTION_LABEL[id]),
-    icon: ACTION_ICON[id],
+    label: id === 'favourite' && homeFavs.has(m.row.kind, m.row.id) ? t('home.unpin') : t(ACTION_LABEL[id]),
+    icon: id === 'favourite' && homeFavs.has(m.row.kind, m.row.id) ? StarOff : ACTION_ICON[id],
     danger: id === 'delete',
     disabled: (id === 'duplicate' && !!duplicating.value) || (id === 'refresh' && ingestBusy(m.row)),
   }))
@@ -919,6 +926,12 @@ function runAction(id: string, r: Row) {
     case 'refresh': refreshDatasource(r.raw); break
     case 'contract': contractFor.value = r.raw; break
     case 'editConnection': openConnDialog(r.raw); break
+    case 'favourite':
+      homeFavs.toggle(r.kind, r.id).then(
+        (on) => toast.success(t(on ? 'home.pinned' : 'home.unpinned', { name: r.name })),
+        (e) => toast.error(errMessage(e)),
+      )
+      break
     case 'rename': startRename(r); break
     case 'duplicate': duplicateRow(r); break
     case 'move': moving.value = rowKey(r); break

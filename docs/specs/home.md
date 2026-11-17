@@ -1,6 +1,6 @@
 # Spec: the home page
 
-Status: approved scope, not started. Decisions taken by the owner on 2026-11-17.
+Status: built (pieces 1 to 4 and the later widgets that read existing pages), 2026-11-17/18. Decisions taken by the owner on 2026-11-17.
 
 ## Objective
 
@@ -37,6 +37,28 @@ Proposed here, to confirm with the spec:
 
 Out of the first version: sharing a home page, several home pages per person, widgets with
 custom code, a home page per group, widgets fed by external services.
+
+## As built (2026-11-18)
+
+Where the page differs from the plan below:
+
+- **No «Home» item in the bar.** At 1440 px an administrator's bar fits to the pixel; the
+  brand at the top left leads home, and `g` `h`.
+- **Fifteen widgets**: clock, shortcuts, favourites, recent, flow_runs, runs_by_day,
+  running_now, failed_runs, next_runs, datasources, notices, note, and for administrators
+  queue, sessions, backups. «Flow durations» became **Flow runs**: bars, as tall as the run
+  lasted and coloured by how it ended (owner, 2026-11-17: «like a scheduler's run bars»).
+- **A line of four numbers under the greeting** (runs today, failed, running, due), the
+  same for every layout.
+- **Endpoints**: `/home/favourites` (GET, and PUT/DELETE `/{kind}/{id}`), `/home/next-runs`,
+  `/home/flow-runs`; the other widgets read `/explore/recent`, `/runs`, `/runs/activity`,
+  `/datasources`, `/banners`, `/queue`, `/audit/sessions`, `/admin/backups`.
+- **Not built**: a number from a datasource, a dashboard's tile, shared with me, data
+  contracts, reads of reports and dashboards, the AI chat, resources, data APIs' state, AI
+  spend, cluster. Each needs an endpoint or a decision of its own.
+- **On a phone** a widget is as tall as what it holds.
+- WCAG checks inside the application are not a gate (owner, 2026-11-17); the keyboard and
+  the announcements stay.
 
 ## How it reuses what exists
 

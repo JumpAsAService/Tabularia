@@ -22,8 +22,13 @@ var goOnlyRoutes = []struct {
 	// the home page, each person's grid of widgets (api/home.go)
 	{after: "/explore/recent", route: pyRoute{path: "/home", methods: []string{"GET", "PUT"}, regex: `^/home$`}},
 	{after: "/home", route: pyRoute{path: "/home/reset", methods: []string{"POST"}, regex: `^/home/reset$`}},
+	// what its widgets read that no other page serves (api/home_data.go)
+	{after: "/home/reset", route: pyRoute{path: "/home/favourites", methods: []string{"GET"}, regex: `^/home/favourites$`}},
+	{after: "/home/favourites", route: pyRoute{path: "/home/favourites/{kind}/{object_id}", methods: []string{"PUT", "DELETE"}, regex: `^/home/favourites/(?P<kind>[^/]+)/(?P<object_id>[^/]+)$`}},
+	{after: "/home/favourites/{kind}/{object_id}", route: pyRoute{path: "/home/next-runs", methods: []string{"GET"}, regex: `^/home/next\-runs$`}},
+	{after: "/home/next-runs", route: pyRoute{path: "/home/flow-runs", methods: []string{"GET"}, regex: `^/home/flow\-runs$`}},
 	// share links: the creators' side and the admin tab (api/share_links.go)
-	{after: "/home/reset", route: pyRoute{path: "/share-links", methods: []string{"GET", "POST"}, regex: `^/share\-links$`}},
+	{after: "/home/flow-runs", route: pyRoute{path: "/share-links", methods: []string{"GET", "POST"}, regex: `^/share\-links$`}},
 	{after: "/share-links", route: pyRoute{path: "/share-links/{link_id}/password", methods: []string{"POST"}, regex: `^/share\-links/(?P<link_id>[^/]+)/password$`}},
 	{after: "/share-links/{link_id}/password", route: pyRoute{path: "/share-links/{link_id}/revoke", methods: []string{"POST"}, regex: `^/share\-links/(?P<link_id>[^/]+)/revoke$`}},
 	{after: "/share-links/{link_id}/revoke", route: pyRoute{path: "/admin/share-links", methods: []string{"GET"}, regex: `^/admin/share\-links$`}},

@@ -38,7 +38,3 @@ async function load(): Promise<RunInfo[]> {
     <li><NuxtLink to="/runs" class="row all">{{ $t('home.failed.all') }}</NuxtLink></li>
   </HomeList>
 </template>
-
-<style scoped>
-.all { color: var(--accent); font-size: 12.5px; }
-</style>

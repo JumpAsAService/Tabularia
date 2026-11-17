@@ -53,6 +53,7 @@ watch(() => props.watchKey, () => read())
   border-radius: 7px; color: var(--text); text-decoration: none; font-size: 13px;
 }
 .rows :deep(.row:hover), .rows :deep(.row:focus-visible) { background: var(--tint-accent); }
+.rows :deep(.row.all) { color: var(--accent); font-size: 12.5px; }
 .rows :deep(.ic) { color: var(--muted); flex-shrink: 0; }
 .rows :deep(.ic.ko) { color: var(--danger); }
 .rows :deep(.name) { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; min-width: 0; flex: 0 1 auto; }

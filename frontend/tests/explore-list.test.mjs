@@ -30,14 +30,14 @@ test('every kind lists its commands in the same order, Delete last and apart', (
     assert.equal(got[got.length - 1], 'delete', r.kind)
     assert.equal(L.rowActions(r).at(-1).sep, true, `${r.kind}: Delete has its own group`)
   }
-  assert.deepEqual(ids({ kind: 'flow' }), ['history', 'rename', 'duplicate', 'move', 'delete'])
-  assert.deepEqual(ids({ kind: 'datasource', dbDatasource: true }), ['refresh', 'contract', 'rename', 'duplicate', 'move', 'delete'])
+  assert.deepEqual(ids({ kind: 'flow' }), ['history', 'favourite', 'rename', 'duplicate', 'move', 'delete'])
+  assert.deepEqual(ids({ kind: 'datasource', dbDatasource: true }), ['refresh', 'contract', 'favourite', 'rename', 'duplicate', 'move', 'delete'])
   assert.deepEqual(ids({ kind: 'connection' }), ['editConnection', 'duplicate', 'move', 'delete'])
   assert.deepEqual(ids({ kind: 'folder' }), ['rename', 'move', 'delete'])
-  assert.deepEqual(ids({ kind: 'view' }), ['rename', 'duplicate', 'move', 'delete'])
+  assert.deepEqual(ids({ kind: 'view' }), ['favourite', 'rename', 'duplicate', 'move', 'delete'])
   // the separators fall between groups only
-  assert.deepEqual(L.rowActions({ kind: 'flow' }).map((a) => a.sep), [false, true, false, false, true])
-  assert.deepEqual(L.rowActions({ kind: 'view' }).map((a) => a.sep), [false, false, false, true])
+  assert.deepEqual(L.rowActions({ kind: 'flow' }).map((a) => a.sep), [false, false, true, false, false, true])
+  assert.deepEqual(L.rowActions({ kind: 'view' }).map((a) => a.sep), [false, true, false, false, true])
 })
 
 test('a personal folder keeps only Rename; a locked flow has no command; the row keeps its main one', () => {

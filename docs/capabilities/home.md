@@ -14,23 +14,47 @@ browser they sign in from.
 Sign in, or click **Tabularia** at the top left from any page (from the keyboard: `g`
 then `h`). **Explore**, where the folders are, is the first item of the bar (`g` then `e`).
 
+## The page
+
+Under the greeting, one line says the day in four numbers, each a link: the runs of
+today, how many failed, what is running now and what is due in the next 24 hours. Under
+it, your widgets.
+
 ## The widgets
 
 | Widget | What it shows | Its options |
 |---|---|---|
 | **Clock** | The time and the date, with the time zone | The zone (the browser's, or one you choose), 12 or 24 hours, the seconds |
-| **Recent** | The objects you changed last, of any kind, with their folder | How many (5 to 20), and which kinds |
-| **Failed runs** | The last runs that failed, each with the first line of its error and a link to it | Yours alone or all those you may see; how many days back (1 to 30) |
 | **Shortcuts** | Buttons to the pages you use most | Which pages |
+| **Favourites** | The objects you pinned: in Explore, a row's menu (`m`, or a right click) has **Add to home** | The star on a row unpins it |
+| **Recent** | The objects you changed last, of any kind, with their folder | How many (5 to 20), and which kinds |
+| **Flow runs** | The last runs of each flow as bars, oldest on the left: a bar is as tall as its run lasted and green, red or blue as it succeeded, failed or is still going. Beside them, the median duration and how many failed | Up to five flows (none chosen: the flows that ran most in the last 30 days); how many runs each (5 to 50) |
+| **Runs by day** | One column per day, split into runs that succeeded and runs that failed, with the total and the share that succeeded | The days (7 to 90) |
+| **Running now** | What is running or waiting to start | – |
+| **Failed runs** | The last runs that failed, each with the first line of its error | Yours alone or all those you may see; how many days back (1 to 30) |
+| **Next runs** | The schedules due next, soonest first, with their cron: flows, flow groups, scripts, SQL scripts and datasource refreshes | Yours alone or all those you may see; how many hours ahead (1 to 168) |
+| **Datasources** | When each datasource was last refreshed and how many rows it holds | Up to ten datasources (none chosen: those refreshed last) |
+| **Notices** | What the administrators posted for everyone | – |
 | **Note** | A text of your own: a reminder, a link | The text, with headings, lists, bold and code as in Markdown |
 
-A widget reads the same data as the page it mirrors, with your rights: *Failed runs*
-lists what the **Runs** page would list for you, *Recent* what Explore would. Putting a
-widget on the page never shows more than you may already see. *Recent* and *Failed runs*
-read again every minute while the page is in view.
+For administrators, three more:
 
-More widgets come with the next pieces of the feature: the objects you pin, the runs due
-next, the duration of your flows, and for administrators the state of the installation.
+| Widget | What it shows |
+|---|---|
+| **Queue** | Jobs running and waiting, the workers that answer and how busy they are |
+| **Sessions** | Who is signed in, those online first |
+| **Backups** | How the last backup of Tabularia's database went, and when the next is due |
+
+A widget reads the same data as the page it mirrors, with your rights: *Failed runs*
+lists what the **Runs** page would list for you, *Flow runs* only flows you may open,
+*Favourites* only what you may still see. Putting a widget on the page never shows more
+than you may already see, and a widget of the administrators is not offered to anyone
+else. The lists read again by themselves while the page is in view (every minute; the
+queue and what is running every ten seconds).
+
+In the charts the colour is never the only sign: every bar and every column says its
+day, its duration and how it ended when the pointer is on it and to a screen reader, and
+the numbers beside the chart say the same in words.
 
 ## Arranging it
 
@@ -54,7 +78,8 @@ A page holds up to thirty widgets.
 
 ## The default layout
 
-A new account starts with Clock, Shortcuts, Recent, Failed runs and Note. The default is
+A new account starts with Clock, Shortcuts, Flow runs, Runs by day, Recent, Favourites,
+Next runs, Failed runs and Note. The default is
 the same on every installation, Docker Compose or Kubernetes; an administrator's has the
 shortcuts to the administration too. Nothing is stored until you change something, so a
 later version's better default reaches whoever kept the default.
