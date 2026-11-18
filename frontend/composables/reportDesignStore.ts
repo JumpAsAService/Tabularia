@@ -28,6 +28,11 @@ let clipboard: string | null = null
 function readClipboard(): string | null {
   try { return localStorage.getItem(CLIPBOARD_KEY) ?? clipboard } catch { return clipboard }
 }
+/** Emptied at a sign-out (useAuth): what was copied from a report goes with who copied it. */
+export function resetReportClipboard() {
+  clipboard = null
+  try { localStorage.removeItem(CLIPBOARD_KEY) } catch { /* no storage: the page's copy was all there was */ }
+}
 function writeClipboard(text: string) {
   clipboard = text
   try {

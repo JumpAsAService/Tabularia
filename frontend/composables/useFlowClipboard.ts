@@ -113,6 +113,13 @@ export function writeClip(clip: FlowClip): void {
   }
 }
 
+/** What was copied goes with the person who copied it: emptied at a sign-out (useAuth), or the
+ *  next person on this browser could paste a flow's steps they have no right to read. */
+export function resetFlowClipboard(): void {
+  memory = null
+  try { localStorage.removeItem(STORAGE_KEY) } catch { /* no storage: the memory was all there was */ }
+}
+
 export function readClip(): FlowClip | null {
   try {
     const raw = localStorage.getItem(STORAGE_KEY)
