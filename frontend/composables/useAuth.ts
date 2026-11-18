@@ -71,12 +71,15 @@ export function syncLocale(me: Me | null, code?: string) {
 }
 
 // what the tab keeps for the whole session and depends on who is signed in (the Scripting
-// tab, the registries of the Container nodes): dropped when the person changes
+// tab, the registries of the Container nodes, the pins of the home page, the folder tree, what
+// was copied in the editors): dropped when the person changes
 function forgetPerUserCaches() {
   resetScriptingEditor()
   resetRegistriesEditor()
   resetHomeFavourites()
   resetFolderPaths()
+  resetFlowClipboard()
+  resetReportClipboard()
 }
 
 export function useAuth() {

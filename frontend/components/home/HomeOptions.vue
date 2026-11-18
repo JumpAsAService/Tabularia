@@ -32,7 +32,8 @@ const zones = computed<string[]>(() => {
 const browserZone = Intl.DateTimeFormat().resolvedOptions().timeZone
 
 // shortcuts: the places of this person's bar, ticked or not; a path of another kind stays listed
-const places = computed(() => keyHelp.sections.value.map((s) => ({ to: s.to, label: t(s.label) })))
+// not the home itself: a shortcut on the page to the page
+const places = computed(() => keyHelp.sections.value.filter((s) => s.to !== '/').map((s) => ({ to: s.to, label: t(s.label) })))
 const others = computed(() => ((draft.value.items ?? []) as string[]).filter((p) => !NAV_SECTIONS.some((s) => s.to === p)))
 function togglePlace(to: string, on: boolean) {
   const now = new Set<string>(draft.value.items ?? [])

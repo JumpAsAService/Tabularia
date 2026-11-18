@@ -141,10 +141,13 @@ export function internalPath(s: string): boolean {
 
 /** The clock's face at an instant: the time and the date in a zone ('' = the browser's), in a language. */
 export function clockFace(at: Date, o: { zone?: string; hour12?: boolean; seconds?: boolean }, locale: string): { time: string; date: string; zone: string } {
-  const zone = o.zone || undefined
+  let zone = o.zone || undefined
+  // a zone this browser does not know (saved from another one) would throw, and take the widget
+  // with it: the browser's own zone then, and its name is what the face says
+  if (zone) { try { new Intl.DateTimeFormat(locale, { timeZone: zone }) } catch { zone = undefined } }
   const time = new Intl.DateTimeFormat(locale, { hour: '2-digit', minute: '2-digit', second: o.seconds ? '2-digit' : undefined, hour12: !!o.hour12, timeZone: zone }).format(at)
   const date = new Intl.DateTimeFormat(locale, { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric', timeZone: zone }).format(at)
-  return { time, date, zone: o.zone || Intl.DateTimeFormat().resolvedOptions().timeZone }
+  return { time, date, zone: zone || Intl.DateTimeFormat().resolvedOptions().timeZone }
 }
 
 interface RunLike { launched_by: number | null; started_at: string | null; finished_at: string | null }

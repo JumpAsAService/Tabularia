@@ -36,4 +36,10 @@ const face = computed(() => (now.value ? clockFace(now.value, props.options, loc
 .date { font-size: 13px; color: var(--text); }
 .date::first-letter { text-transform: uppercase; }
 .zone { font-size: 12px; color: var(--muted); }
+/* a small clock keeps the time: the zone goes first, then the date, and nothing climbs over the
+   widget's title (a centred column that overflows does so at both ends) */
+.clock { justify-content: safe center; overflow: hidden; }
+.date, .zone { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; flex-shrink: 0; }
+@container (max-height: 63px) { .zone { display: none; } }
+@container (max-height: 45px) { .date { display: none; } .time { font-size: clamp(18px, 70cqh, 30px); } }
 </style>

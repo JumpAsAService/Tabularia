@@ -178,3 +178,10 @@ test('a flow running is one line: the rows another row speaks for are left out',
   assert.deepEqual(H.innermostRuns([run(5, 4)]).map((r) => r.id), [5])
   assert.deepEqual(H.innermostRuns([run(4)]).map((r) => r.id), [4])
 })
+
+test('a clock set to a zone this browser does not know shows the browser\'s own, and does not throw', () => {
+  const at = new Date('2026-11-18T08:00:00Z')
+  const face = H.clockFace(at, { zone: 'Nowhere/Atlantis' }, 'en')
+  assert.equal(face.zone, Intl.DateTimeFormat().resolvedOptions().timeZone)
+  assert.equal(H.clockFace(at, { zone: 'Asia/Tokyo' }, 'en').zone, 'Asia/Tokyo')
+})
