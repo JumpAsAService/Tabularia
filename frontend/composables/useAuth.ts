@@ -76,6 +76,7 @@ function forgetPerUserCaches() {
   resetScriptingEditor()
   resetRegistriesEditor()
   resetHomeFavourites()
+  resetFolderPaths()
 }
 
 export function useAuth() {

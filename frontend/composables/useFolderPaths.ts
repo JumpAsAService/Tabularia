@@ -10,23 +10,33 @@ const folders = ref<Map<number, Project>>(new Map())
 let loadedAt = 0
 let pending: Promise<void> | null = null
 
+/** The tree is what one person may read: forgotten when another signs in on this tab (useAuth),
+ *  or for up to a minute a path would name folders the new person cannot see. */
+export function resetFolderPaths() {
+  folders.value = new Map()
+  loadedAt = 0
+  pending = null
+}
+
 export function useFolderPaths() {
   const api = useProjects()
 
   function load(force = false): Promise<void> {
     if (!force && Date.now() - loadedAt < FRESH_MS) return Promise.resolve()
-    pending ??= api
+    if (pending) return pending
+    const mine: Promise<void> = pending = api
       .list()
       .then((list) => {
+        if (pending !== mine) return // asked for the person before
         folders.value = new Map(list.map((p) => [p.id, p]))
         loadedAt = Date.now()
       })
       // the path is a help, not a requirement: without it the picker shows names only
       .catch(() => {})
       .finally(() => {
-        pending = null
+        if (pending === mine) pending = null
       })
-    return pending
+    return mine
   }
 
   // Folders the user cannot read are missing from the tree: the path then starts
