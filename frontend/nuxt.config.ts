@@ -56,6 +56,19 @@ export default defineNuxtConfig({
         'monaco-editor/esm/vs/basic-languages/yaml/yaml.contribution',
         'monaco-editor/esm/vs/basic-languages/markdown/markdown.contribution',
         'monaco-editor/esm/vs/basic-languages/shell/shell.contribution',
+        // the flow editor, the charts and the schedule texts: the home page links to all
+        // of them, and a new installation would reload itself twice in its first minute
+        '@vue-flow/core',
+        '@vue-flow/background',
+        '@vue-flow/controls',
+        '@vue-flow/minimap',
+        '@vue-flow/node-resizer',
+        'echarts/core',
+        'echarts/renderers',
+        'echarts/charts',
+        'echarts/components',
+        'vue-echarts',
+        'cronstrue/i18n',
       ],
     },
     define: {
