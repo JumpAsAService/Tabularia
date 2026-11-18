@@ -118,7 +118,7 @@ export const bodyOf = (widgets: HomeWidget[]) => ({
 })
 
 /** Undo and redo of the layout while it is being arranged: whole layouts, a few dozen at most. */
-export function history<T>(limit = 50) {
+export function homeHistory<T>(limit = 50) {
   let past: T[] = []
   let future: T[] = []
   return {

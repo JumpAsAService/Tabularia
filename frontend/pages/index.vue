@@ -33,7 +33,7 @@ import HomeSessions from '~/components/home/HomeSessions.vue'
 import HomeShortcuts from '~/components/home/HomeShortcuts.vue'
 import { GRID_GAP_PX, GRID_ROW_PX, MEDIUM_FROM_PX, WIDE_FROM_PX, cellsOf, columnsOf, gridWidth, placeTiles, type GridBox, type GridWidth } from '~/composables/dashboardGrid'
 import {
-  HOME_TYPES, added, bodyOf, greetingKey, history, knownWidgets, moved, removed, resized, tilesOf, withOptions,
+  HOME_TYPES, added, bodyOf, greetingKey, homeHistory, knownWidgets, moved, removed, resized, tilesOf, withOptions,
   type HomeAnswer, type HomeWidget,
 } from '~/composables/homeLayout'
 
@@ -114,7 +114,7 @@ const selected = ref<string | null>(null)
 const optionsOf = ref<HomeWidget | null>(null)
 const said = ref('') // what a screen reader is told of a change
 const saving = ref<'idle' | 'saving' | 'saved' | 'failed'>('idle')
-const hist = history<HomeWidget[]>()
+const hist = homeHistory<HomeWidget[]>()
 const canUndo = ref(false)
 const canRedo = ref(false)
 const board = ref<HTMLElement | null>(null)

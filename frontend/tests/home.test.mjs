@@ -82,7 +82,7 @@ test('a type this interface cannot draw is left out', () => {
 })
 
 test('undo and redo go through whole layouts, and a new change forgets the redo', () => {
-  const h = H.history()
+  const h = H.homeHistory()
   assert.equal(h.undo('a'), null)
   h.record('a'); h.record('b')
   assert.equal(h.undo('c'), 'b')
