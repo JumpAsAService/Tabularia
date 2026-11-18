@@ -7,7 +7,7 @@
 // medium one, one on a phone, in reading order, which is also the order for the keyboard and for
 // whoever listens to the page. Arranging needs the 12 columns, so it is offered on a wide window.
 // A widget shows only what its reader may see elsewhere: each asks the page's own endpoint.
-import { computed, nextTick, onBeforeUnmount, onMounted, ref, type Component } from 'vue'
+import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch, type Component } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { useFormat } from '~/composables/useFormat'
 import {
@@ -62,12 +62,15 @@ const TONES: Record<string, string> = {
 // widgets that have nothing to set: no gear
 const NO_OPTIONS = new Set(['favourites', 'running_now', 'notices', 'queue', 'sessions', 'backups'])
 const { user } = useAuth()
+// a page left open says the right part of the day, and the right day after midnight
+const now = ref(new Date())
+let clock: ReturnType<typeof setInterval> | undefined
 const greeting = computed(() => {
   const first = (user.value?.full_name || '').trim().split(/\s+/)[0]
-  const key = `home.greeting.${greetingKey(new Date().getHours())}`
+  const key = `home.greeting.${greetingKey(now.value.getHours())}`
   return first ? t(`${key}Name`, { name: first }) : t(key)
 })
-const today = computed(() => fmt.date(new Date(), { weekday: 'long', day: 'numeric', month: 'long' }))
+const today = computed(() => fmt.date(now.value, { weekday: 'long', day: 'numeric', month: 'long' }))
 
 const widgets = ref<HomeWidget[]>([])
 /** widgets of a type this interface cannot draw (a newer gateway's): kept as they are, and saved back */
@@ -121,21 +124,32 @@ const board = ref<HTMLElement | null>(null)
 const addBtn = ref<HTMLElement | null>(null)
 const catalogue = ref(false)
 const nameOf = (w: HomeWidget) => t(`home.widgets.${w.type}`)
+// the catalogue is a menu: a press anywhere else closes it
+const addWrap = ref<HTMLElement | null>(null)
+const pressedOutside = (e: PointerEvent) => { if (!addWrap.value?.contains(e.target as Node)) catalogue.value = false }
+watch(catalogue, (open) => {
+  if (open) document.addEventListener('pointerdown', pressedOutside, true)
+  else document.removeEventListener('pointerdown', pressedOutside, true)
+})
 const refreshHistory = () => { canUndo.value = hist.canUndo(); canRedo.value = hist.canRedo() }
 
 let saveTimer: ReturnType<typeof setTimeout> | undefined
 let unsaved = false // a change waits for its save
 let saveAgain = false
 let inFlight = false
+let flying: Promise<void> | null = null
 function scheduleSave() {
   unsaved = true
   clearTimeout(saveTimer)
   saveTimer = setTimeout(save, 500)
 }
-async function save() {
+function save() {
   clearTimeout(saveTimer)
   unsaved = false
   if (inFlight) { saveAgain = true; return }
+  flying = put()
+}
+async function put() {
   inFlight = true
   saving.value = 'saving'
   try {
@@ -211,6 +225,8 @@ async function reset() {
   try {
     clearTimeout(saveTimer)
     unsaved = false // what waited to be saved is what the reset throws away
+    saveAgain = false
+    await flying // a save on its way lands first: after the reset it would bring the old layout back
     take(await apiFetch<HomeAnswer>('/home/reset', { method: 'POST' }))
     hist.clear(); refreshHistory()
     saving.value = 'idle'
@@ -296,9 +312,12 @@ onMounted(() => {
   queries.forEach((q) => q.addEventListener('change', measure))
   measure()
   load()
+  clock = setInterval(() => { now.value = new Date() }, 60_000)
 })
 onBeforeUnmount(() => {
   queries.forEach((q) => q.removeEventListener('change', measure))
+  clearInterval(clock)
+  document.removeEventListener('pointerdown', pressedOutside, true)
   onUp()
   if (unsaved) save() // a change made a moment before leaving is not lost
 })
@@ -318,7 +337,7 @@ onBeforeUnmount(() => {
         </span>
         <template v-if="state === 'ready'">
           <template v-if="editing">
-            <div class="addwrap">
+            <div ref="addWrap" class="addwrap">
               <button ref="addBtn" type="button" :aria-expanded="catalogue" aria-controls="home-catalogue" @click="catalogue = !catalogue">
                 <Plus :size="14" aria-hidden="true" /> {{ $t('home.add') }}
               </button>
@@ -456,8 +475,12 @@ onBeforeUnmount(() => {
 }
 @media (max-width: 699px) {
   .hw-body { max-height: 440px; overflow: auto; }
-  .hw[data-type="runs_by_day"] .hw-body, .hw[data-type="clock"] .hw-body { height: 220px; }
-  .hw[data-type="clock"] .hw-body { height: 110px; }
+  /* the charts are whole or they say nothing: the flows' bars are never cut at the fourth flow */
+  .hw[data-type="flow_runs"] .hw-body { max-height: none; }
+  /* these two fill the height they are given and have none of their own: `flex: none`, or the
+     body's `flex: 1` (a basis of zero in a widget as tall as its content) leaves them a line */
+  .hw[data-type="runs_by_day"] .hw-body { flex: none; height: 220px; }
+  .hw[data-type="clock"] .hw-body { flex: none; height: 110px; }
   .home { padding: 16px 14px 24px; }
   .hello h1 { font-size: 20px; }
 }

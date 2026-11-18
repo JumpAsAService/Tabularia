@@ -5979,10 +5979,10 @@ export default {
     },
     "pulse": {
       "label": "Heute",
-      "today": "Läufe heute",
-      "failed": "heute fehlgeschlagen",
-      "running": "laufen gerade",
-      "due": "fällig in 24 Stunden"
+      "today": "Lauf heute | Läufe heute",
+      "failed": "heute fehlgeschlagen | heute fehlgeschlagen",
+      "running": "läuft gerade | laufen gerade",
+      "due": "fällig in 24 Stunden | fällig in 24 Stunden"
     },
     "pin": "Zur Startseite hinzufügen",
     "unpin": "Von der Startseite entfernen",

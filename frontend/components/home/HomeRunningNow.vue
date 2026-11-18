@@ -4,6 +4,7 @@
 import { LoaderCircle } from 'lucide-vue-next'
 import HomeList from '~/components/home/HomeList.vue'
 import { runTarget } from '~/composables/exploreList'
+import { innermostRuns } from '~/composables/homeLayout'
 import { useFormat } from '~/composables/useFormat'
 import { useRuns, type RunInfo } from '~/composables/useRuns'
 
@@ -13,7 +14,7 @@ const runsApi = useRuns()
 const runName = (r: RunInfo) => (r as any).flow_name || (r as any).group_name || (r as any).sql_script_name || (r as any).source_name || r.publish_name || `#${r.id}`
 async function load(): Promise<RunInfo[]> {
   const [started, pending] = await Promise.all([runsApi.search({ status: 'STARTED', limit: 20 }), runsApi.search({ status: 'PENDING', limit: 20 })])
-  return [...(started.items as RunInfo[]), ...(pending.items as RunInfo[])].filter((r) => r.kind !== 'orchestration' || !(r as any).parent_run_id).slice(0, 20)
+  return innermostRuns([...(started.items as RunInfo[]), ...(pending.items as RunInfo[])]).slice(0, 20)
 }
 </script>
 

@@ -5,7 +5,7 @@ import { useI18n } from 'vue-i18n'
 import { XCircle } from 'lucide-vue-next'
 import HomeList from '~/components/home/HomeList.vue'
 import { runTarget } from '~/composables/exploreList'
-import { failedFor } from '~/composables/homeLayout'
+import { failedFor, innermostRuns } from '~/composables/homeLayout'
 import { knownError } from '~/composables/knownErrors'
 import { useFormat } from '~/composables/useFormat'
 import { useRuns, type RunInfo } from '~/composables/useRuns'
@@ -18,7 +18,7 @@ const { user } = useAuth()
 const runName = (r: RunInfo) => (r as any).flow_name || (r as any).group_name || (r as any).sql_script_name || (r as any).source_name || r.publish_name || `#${r.id}`
 async function load(): Promise<RunInfo[]> {
   const page = await runsApi.search({ status: 'FAILURE', limit: 50 })
-  return failedFor(page.items as RunInfo[], props.options, user.value?.id ?? null, Date.now()).slice(0, 20)
+  return failedFor(innermostRuns(page.items as RunInfo[]), props.options, user.value?.id ?? null, Date.now()).slice(0, 20)
 }
 </script>
 

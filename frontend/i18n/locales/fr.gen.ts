@@ -5979,10 +5979,10 @@ export default {
     },
     "pulse": {
       "label": "Aujourd'hui",
-      "today": "exécutions aujourd'hui",
-      "failed": "en échec aujourd'hui",
-      "running": "en cours",
-      "due": "prévues sous 24 heures"
+      "today": "exécution aujourd'hui | exécutions aujourd'hui",
+      "failed": "en échec aujourd'hui | en échec aujourd'hui",
+      "running": "en cours | en cours",
+      "due": "prévue sous 24 heures | prévues sous 24 heures"
     },
     "pin": "Ajouter à l'accueil",
     "unpin": "Retirer de l'accueil",

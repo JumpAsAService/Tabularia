@@ -4,6 +4,7 @@
 // the next 24 hours. One line, read as a sentence; it is the same for every layout, so the page
 // says something even with no widget on it.
 import { onBeforeUnmount, onMounted, ref } from 'vue'
+import { innermostRuns } from '~/composables/homeLayout'
 import { useFormat } from '~/composables/useFormat'
 import { useRuns } from '~/composables/useRuns'
 
@@ -16,14 +17,15 @@ async function read() {
   const key = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}`
   const [activity, running, due] = await Promise.allSettled([
     runsApi.activity({ days: 2 }),
-    runsApi.search({ status: 'STARTED', limit: 1 }),
+    runsApi.search({ status: 'STARTED', limit: 100 }),
     apiFetch<{ items: unknown[] }>('/home/next-runs?hours=24'),
   ])
   const cell = activity.status === 'fulfilled' ? activity.value.buckets.find((b) => b.key === key) : undefined
   n.value = {
     today: cell?.total ?? 0,
     failed: cell?.failure ?? 0,
-    running: running.status === 'fulfilled' ? (running.value as any).total ?? running.value.items.length : 0,
+    // a flow running is two rows, the orchestration and the flow: counted once
+    running: running.status === 'fulfilled' ? innermostRuns(running.value.items).length : 0,
     due: due.status === 'fulfilled' ? due.value.items.length : 0,
   }
 }
@@ -36,16 +38,16 @@ onBeforeUnmount(() => { clearInterval(timer); document.removeEventListener('visi
 <template>
   <nav class="pulse" :aria-label="$t('home.pulse.label')">
     <NuxtLink to="/runs" class="cell">
-      <span class="num">{{ n ? fmt.count(n.today) : '–' }}</span><span class="what">{{ $t('home.pulse.today') }}</span>
+      <span class="num">{{ n ? fmt.count(n.today) : '–' }}</span><span class="what">{{ $t('home.pulse.today', n?.today ?? 2) }}</span>
     </NuxtLink>
     <NuxtLink to="/runs" class="cell" :class="{ ko: !!n?.failed }">
-      <span class="num">{{ n ? fmt.count(n.failed) : '–' }}</span><span class="what">{{ $t('home.pulse.failed') }}</span>
+      <span class="num">{{ n ? fmt.count(n.failed) : '–' }}</span><span class="what">{{ $t('home.pulse.failed', n?.failed ?? 2) }}</span>
     </NuxtLink>
     <NuxtLink to="/runs" class="cell" :class="{ live: !!n?.running }">
-      <span class="num">{{ n ? fmt.count(n.running) : '–' }}</span><span class="what">{{ $t('home.pulse.running') }}</span>
+      <span class="num">{{ n ? fmt.count(n.running) : '–' }}</span><span class="what">{{ $t('home.pulse.running', n?.running ?? 2) }}</span>
     </NuxtLink>
     <NuxtLink to="/flows" class="cell">
-      <span class="num">{{ n ? (n.due >= 50 ? '50+' : fmt.count(n.due)) : '–' }}</span><span class="what">{{ $t('home.pulse.due') }}</span>
+      <span class="num">{{ n ? (n.due >= 50 ? '50+' : fmt.count(n.due)) : '–' }}</span><span class="what">{{ $t('home.pulse.due', n?.due ?? 2) }}</span>
     </NuxtLink>
   </nav>
 </template>

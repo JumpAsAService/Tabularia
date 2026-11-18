@@ -167,3 +167,14 @@ test('every widget the interface draws has its sizes, and they hold together', (
     assert.ok(w >= mw && h >= mh && w <= 12, t)
   }
 })
+
+test('a flow running is one line: the rows another row speaks for are left out', () => {
+  const run = (id, parent_run_id = null) => ({ id, parent_run_id })
+  // a flow: the orchestration and the flow under it
+  assert.deepEqual(H.innermostRuns([run(2, 1), run(1)]).map((r) => r.id), [2])
+  // a group: its orchestration, a flow's, the flow; and a refresh that stands alone
+  assert.deepEqual(H.innermostRuns([run(1), run(2, 1), run(3, 2), run(9)]).map((r) => r.id), [3, 9])
+  // a parent the page did not load does not hide its child, and a parent alone stays
+  assert.deepEqual(H.innermostRuns([run(5, 4)]).map((r) => r.id), [5])
+  assert.deepEqual(H.innermostRuns([run(4)]).map((r) => r.id), [4])
+})

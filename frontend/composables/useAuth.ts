@@ -75,6 +75,7 @@ export function syncLocale(me: Me | null, code?: string) {
 function forgetPerUserCaches() {
   resetScriptingEditor()
   resetRegistriesEditor()
+  resetHomeFavourites()
 }
 
 export function useAuth() {

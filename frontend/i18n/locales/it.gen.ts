@@ -5979,10 +5979,10 @@ export default {
     },
     "pulse": {
       "label": "Oggi",
-      "today": "esecuzioni oggi",
-      "failed": "fallite oggi",
-      "running": "in corso adesso",
-      "due": "previste in 24 ore"
+      "today": "esecuzione oggi | esecuzioni oggi",
+      "failed": "fallita oggi | fallite oggi",
+      "running": "in corso adesso | in corso adesso",
+      "due": "prevista in 24 ore | previste in 24 ore"
     },
     "pin": "Aggiungi alla home",
     "unpin": "Togli dalla home",

@@ -5979,10 +5979,10 @@ export default {
     },
     "pulse": {
       "label": "Today",
-      "today": "runs today",
-      "failed": "failed today",
-      "running": "running now",
-      "due": "due in 24 hours"
+      "today": "run today | runs today",
+      "failed": "failed today | failed today",
+      "running": "running now | running now",
+      "due": "due in 24 hours | due in 24 hours"
     },
     "pin": "Add to home",
     "unpin": "Remove from home",

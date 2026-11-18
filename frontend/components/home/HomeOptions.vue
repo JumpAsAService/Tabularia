@@ -17,7 +17,13 @@ const { t } = useI18n()
 const keyHelp = useKeyHelp()
 
 const draft = ref<Record<string, any>>({})
-watch(() => props.widget, (w) => { draft.value = w ? JSON.parse(JSON.stringify(w.options ?? {})) : {} }, { immediate: true })
+// what a widget does when an option is not set, so the form shows it: a widget just added has
+// none, and an empty required field would refuse «Save» until every one was typed
+const DEFAULTS: Record<string, Record<string, any>> = {
+  recent: { limit: 8 }, failed_runs: { scope: 'all', days: 7 }, next_runs: { scope: 'all', hours: 24 },
+  flow_runs: { runs: 20 }, runs_by_day: { days: 30 }, clock: { zone: '' },
+}
+watch(() => props.widget, (w) => { draft.value = w ? { ...DEFAULTS[w.type], ...JSON.parse(JSON.stringify(w.options ?? {})) } : {} }, { immediate: true })
 
 const KINDS = ['flow', 'group', 'datasource', 'view', 'sql', 'script', 'notebook', 'report', 'dashboard', 'dataapi']
 const zones = computed<string[]>(() => {

@@ -157,6 +157,14 @@ export function failedFor<T extends RunLike>(runs: T[], o: { scope?: string; day
   })
 }
 
+/** The runs of a list without the ones another row of it speaks for: a flow's run is two rows, the
+ *  orchestration and the flow under it, and a group's has a third above. One thing running is
+ *  one line and counts once: the innermost row, which holds the step's own error. */
+export function innermostRuns<T extends { id: number; parent_run_id?: number | null }>(runs: T[]): T[] {
+  const parents = new Set(runs.map((r) => r.parent_run_id).filter((x): x is number => x != null))
+  return runs.filter((r) => !parents.has(r.id))
+}
+
 // ── charts and counters ──────────────────────────────────────────────────────
 
 /** A duration for a label: «4.2 s», «1 m 05 s», «2 h 10 m». */
