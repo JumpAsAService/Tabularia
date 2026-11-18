@@ -24,6 +24,24 @@ Development on `main` for the next minor version. The stable line stays 1.4.x
   `POST /home/reset`, `/home/favourites`, `/home/next-runs`, `/home/flow-runs`; database
   migration 0043. [The home page](docs/capabilities/home.md), [the spec](docs/specs/home.md).
 
+## 1.4.7 «Romulus» — 2026-11-18 · long-term support
+
+One fix, for a browser two people use one after the other. Images only: no migration, no
+new setting.
+
+- **What the browser kept of one person no longer reaches the next.** Two things outlived
+  a sign-out on the same browser. The folder tree kept for the path under a name
+  («Sample › Flows») stayed for up to a minute: signing in as someone else within it, a
+  path could name a folder that person cannot see. And what was copied in the flow editor
+  or in the report designer stayed until something else was copied: the next person could
+  paste it. Both now go when the person changes. The gateway was never involved: every
+  answer it gives was, and is, only what the signed-in person may read.
+
+Upgrading is replacing the five images (chart 2.8.2); only the interface behaves differently from 1.4.6.
+The first preview of each step computes again, once: the step cache carries the release
+that computed it. What was copied in an editor is emptied at the sign-out, also for the
+same person signing in again.
+
 ## 1.4.6 «Romulus» — 2026-11-15 · long-term support
 
 Fixes, found by installing Tabularia from zero with each guide of the site. Images only:

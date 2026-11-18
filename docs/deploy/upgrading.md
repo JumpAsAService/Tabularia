@@ -225,7 +225,7 @@ spec:
       restartPolicy: Never
       containers:
         - name: migrate
-          image: <registry>/tabularia-gateway:1.4.6
+          image: <registry>/tabularia-gateway:1.4.7
           command: ["python", "-m", "app.db.migra"]
           envFrom:
             - configMapRef: { name: <release>-tabularia-config }
