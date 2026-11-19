@@ -2688,5 +2688,417 @@
     }
    ]
   }
+ },
+ {
+  "name": "xy",
+  "width": 340,
+  "height": 208,
+  "option": {
+   "animation": false,
+   "color": [
+    "#3b5bdb",
+    "#14a38b",
+    "#e0a23b",
+    "#c2477a",
+    "#6b7590",
+    "#8a63d2",
+    "#2f9e44",
+    "#d9480f",
+    "#1c7ed6",
+    "#868e96"
+   ],
+   "textStyle": {
+    "fontFamily": "IBM Plex Sans, Helvetica Neue, Arial, sans-serif",
+    "fontSize": 9,
+    "color": "#1f2933"
+   },
+   "grid": {
+    "left": 6,
+    "right": 10,
+    "top": 42,
+    "bottom": 6,
+    "containLabel": true
+   },
+   "legend": {
+    "show": true,
+    "top": 20,
+    "left": "center",
+    "itemWidth": 10,
+    "itemHeight": 7,
+    "itemGap": 8,
+    "textStyle": {
+     "fontSize": 9,
+     "overflow": "truncate",
+     "width": 120
+    },
+    "data": [
+     "Amount",
+     "Half",
+     "Third",
+     "Quarter",
+     "Band"
+    ]
+   },
+   "title": {
+    "text": "xy <script>",
+    "left": 0,
+    "top": 0,
+    "textStyle": {
+     "fontSize": 10,
+     "fontWeight": "bold",
+     "color": "#1f2933"
+    }
+   },
+   "xAxis": {
+    "type": "value",
+    "axisLabel": {
+     "fontSize": 9,
+     "formatter": {
+      "$fmt": "compact",
+      "locale": "en"
+     }
+    },
+    "splitLine": {
+     "show": false
+    },
+    "scale": true,
+    "axisLine": {
+     "onZero": false
+    }
+   },
+   "yAxis": {
+    "type": "value",
+    "axisLabel": {
+     "fontSize": 9,
+     "formatter": {
+      "$fmt": "compact",
+      "locale": "en"
+     }
+    },
+    "splitLine": {
+     "lineStyle": {
+      "color": "#e9ecef"
+     }
+    }
+   },
+   "series": [
+    {
+     "name": "Amount",
+     "itemStyle": {
+      "color": "#3b5bdb"
+     },
+     "z": 3,
+     "type": "scatter",
+     "symbolSize": 4.5,
+     "data": [
+      {
+       "value": [
+        1.0,
+        10.0
+       ]
+      },
+      {
+       "value": [
+        2.0,
+        20.0
+       ]
+      },
+      {
+       "value": [
+        3.0,
+        -5.0
+       ]
+      },
+      {
+       "value": [
+        4.0,
+        30.0
+       ],
+       "t": "c",
+       "label": {
+        "show": true
+       }
+      },
+      {
+       "value": [
+        5.0,
+        1.0
+       ]
+      }
+     ],
+     "label": {
+      "show": false,
+      "position": "right",
+      "distance": 3,
+      "fontSize": 7,
+      "color": "#1f2933",
+      "formatter": {
+       "$fmt": "label"
+      }
+     },
+     "labelLayout": {
+      "hideOverlap": true
+     }
+    },
+    {
+     "name": "Half",
+     "itemStyle": {
+      "color": "#14a38b"
+     },
+     "z": 3,
+     "type": "line",
+     "showSymbol": false,
+     "smooth": false,
+     "connectNulls": false,
+     "lineStyle": {
+      "width": 1.5,
+      "color": "#14a38b"
+     },
+     "data": [
+      [
+       1.0,
+       5.0
+      ],
+      [
+       2.0,
+       10.0
+      ],
+      [
+       3.0,
+       -2.5
+      ],
+      [
+       4.0,
+       15.0
+      ],
+      [
+       5.0,
+       0.5
+      ]
+     ]
+    },
+    {
+     "name": "Third",
+     "itemStyle": {
+      "color": "#e0a23b"
+     },
+     "z": 3,
+     "type": "line",
+     "showSymbol": false,
+     "smooth": false,
+     "connectNulls": false,
+     "lineStyle": {
+      "width": 1.5,
+      "color": "#e0a23b"
+     },
+     "data": [
+      [
+       1.0,
+       3.3333333333333335
+      ],
+      [
+       2.0,
+       6.666666666666667
+      ],
+      [
+       3.0,
+       -1.6666666666666667
+      ],
+      [
+       4.0,
+       10.0
+      ],
+      [
+       5.0,
+       0.3333333333333333
+      ]
+     ],
+     "step": "end"
+    },
+    {
+     "name": "Quarter",
+     "itemStyle": {
+      "color": "#c2477a"
+     },
+     "z": 3,
+     "type": "bar",
+     "barWidth": 2,
+     "barGap": "-100%",
+     "data": [
+      [
+       1.0,
+       2.5
+      ],
+      [
+       2.0,
+       5.0
+      ],
+      [
+       3.0,
+       -1.25
+      ],
+      [
+       4.0,
+       7.5
+      ],
+      [
+       5.0,
+       0.25
+      ]
+     ]
+    },
+    {
+     "type": "line",
+     "stack": "band4",
+     "stackStrategy": "all",
+     "showSymbol": false,
+     "silent": true,
+     "legendHoverLink": false,
+     "lineStyle": {
+      "opacity": 0
+     },
+     "itemStyle": {
+      "color": "#c2477a"
+     },
+     "z": 1,
+     "name": "Band",
+     "data": [
+      [
+       1.0,
+       8.0
+      ],
+      [
+       2.0,
+       16.0
+      ],
+      [
+       3.0,
+       -6.0
+      ],
+      [
+       4.0,
+       24.0
+      ],
+      [
+       5.0,
+       0.8
+      ]
+     ]
+    },
+    {
+     "type": "line",
+     "stack": "band4",
+     "stackStrategy": "all",
+     "showSymbol": false,
+     "silent": true,
+     "legendHoverLink": false,
+     "lineStyle": {
+      "opacity": 0
+     },
+     "itemStyle": {
+      "color": "#c2477a"
+     },
+     "z": 1,
+     "name": "Band",
+     "data": [
+      [
+       1.0,
+       4.0
+      ],
+      [
+       2.0,
+       8.0
+      ],
+      [
+       3.0,
+       2.0
+      ],
+      [
+       4.0,
+       12.0
+      ],
+      [
+       5.0,
+       0.3999999999999999
+      ]
+     ],
+     "areaStyle": {
+      "color": "#c2477a",
+      "opacity": 0.16
+     }
+    },
+    {
+     "type": "line",
+     "name": "",
+     "data": [],
+     "silent": true,
+     "legendHoverLink": false,
+     "markLine": {
+      "silent": true,
+      "symbol": "none",
+      "animation": false,
+      "label": {
+       "show": false
+      },
+      "lineStyle": {
+       "color": "#1f2933",
+       "width": 1,
+       "type": "dashed"
+      },
+      "data": [
+       {
+        "yAxis": 35.0
+       },
+       {
+        "yAxis": -35.0
+       },
+       {
+        "xAxis": 2.0
+       },
+       [
+        {
+         "coord": [
+          -35.0,
+          -35.0
+         ]
+        },
+        {
+         "coord": [
+          36.0,
+          36.0
+         ]
+        }
+       ]
+      ]
+     }
+    },
+    {
+     "type": "scatter",
+     "silent": true,
+     "symbolSize": 0,
+     "legendHoverLink": false,
+     "data": [
+      [
+       2.0,
+       7.145833333333333
+      ],
+      [
+       1.0,
+       35.0
+      ],
+      [
+       1.0,
+       -35.0
+      ]
+     ],
+     "itemStyle": {
+      "opacity": 0
+     },
+     "label": {
+      "show": false
+     }
+    }
+   ]
+  }
  }
 ]

@@ -28,16 +28,20 @@ MAX_IMAGE_BYTES = 512 * 1024
 MAX_MATRIX_COLUMNS = 60
 MAX_COMMENT_INSTRUCTION, MAX_COMMENT_READS = 1000, 10  # as the gateway's (services/report_definition.py)
 CHART_KINDS = ("bar", "column", "line", "area", "pie", "donut", "combo", "waterfall", "funnel", "treemap", "heatmap",
-               "scatter", "gauge", "bullet", "boxplot", "interval", "density")
+               "scatter", "gauge", "bullet", "boxplot", "interval", "density", "xy")
 # The kinds whose series are the parts of one drawing, each in its place: how many, and which.
-# (These three are the engine's only: the gateway's validator of saved reports and dashboards
-# does not list them, so only a definition built by the engine names them.)
+# (These three, and `xy`, are the engine's only: the gateway's validator of saved reports and
+# dashboards does not list them, so only a definition built by the engine names them.)
 SERIES_OF = {
     "boxplot": "exactly five series: the minimum, the first quartile, the median, the third quartile and the maximum",
     "interval": "exactly three series: the value, the low end and the high end of its interval",
     "density": "exactly one series (the height of the curve at each value of its category)",
 }
 _SERIES_COUNT = {"boxplot": 5, "interval": 3, "density": 1}
+# The marks of an `xy` chart (docs/specs/statistical-models.md, «Charts»): its series' `as`. A
+# band is a pair, its low edge then its high edge, the area between them filled.
+XY_MARKS = ("point", "line", "step", "stem", "band_low", "band_high")
+MAX_XY_TARGETS_X = 4  # the vertical lines of an `xy` chart (a cross-validation's two λ)
 _NAME = r"^[A-Za-z_][A-Za-z0-9_]{0,63}$"
 
 Mm = Annotated[float, Field(ge=-1000, le=2000, allow_inf_nan=False)]
@@ -244,9 +248,11 @@ class TableItem(_Item):
 class Series(_Model):
     value: Expr
     name: str = Field("", max_length=200)
-    as_: Literal["bar", "line"] | None = Field(None, alias="as")
+    # bar and line for a combo; the marks of XY_MARKS for an `xy` chart only
+    as_: Literal["bar", "line", "point", "step", "stem", "band_low", "band_high"] | None = Field(None, alias="as")
     axis: Literal["left", "right"] = "left"
     format: Pattern | None = None  # its values', and its axis's; none: the chart's
+    label: Expr | None = None  # `xy` only: the text written beside a point (a row's number), none for most
 
 
 class ChartOptions(_Model):
@@ -260,6 +266,19 @@ class ChartOptions(_Model):
     target: float | Expr | None = None
     bands: list[Annotated[float, Field(allow_inf_nan=False)]] = Field(default_factory=list, max_length=10)
     format: Pattern | None = None
+    # `xy` only: the target's line drawn at −target too (a correlogram's bounds); vertical lines;
+    # the line y = x; x as days since 1970-01-01, an axis of dates; a logarithmic x axis
+    mirror: bool = False
+    target_x: list[float | Expr] | float | Expr | None = None
+    diagonal: bool = False
+    x_time: bool = False
+    log_x: bool = False
+    # `interval`: its value axis on a logarithmic scale (odds and hazard ratios, a line at 1)
+    log: bool = False
+
+    def targets_x(self) -> list[float | str]:
+        t = self.target_x
+        return [] if t is None else list(t) if isinstance(t, list) else [t]
 
 
 class ChartItem(_Item):
@@ -649,7 +668,7 @@ class _Checks:
         # along the axis the category before is known, as long as the axis keeps the data's
         # order: `sort` and `top` choose it by the very values PREVIOUS would be part of
         o = it.options
-        along = it.category is not None and it.kind not in ("scatter", "density", "gauge", "bullet") and o.sort == "none" and not o.top
+        along = it.category is not None and it.kind not in ("scatter", "density", "xy", "gauge", "bullet") and o.sort == "none" and not o.top
         reason = ("PREVIOUS follows a chart's axis in the order of the data: not with its option «sort» or «top»"
                   if it.category is not None and (o.sort != "none" or o.top) else
                   "PREVIOUS follows the axis of a chart with categories, and this one has none")
@@ -658,12 +677,70 @@ class _Checks:
                       self.env(ds, previous="group" if along else None, no_previous="" if along else reason))
         if isinstance(it.options.target, str):
             self.expr(it.options.target, it.id, "options.target", self.env(ds))
+        if it.kind == "xy":
+            self.xy(it, ds)
+        else:
+            self.not_xy(it)
         self.pattern(it.options.format, it.id, "options.format")
         for i, s in enumerate(it.series):
             self.pattern(s.format, it.id, f"series[{i}].format")
         if it.category is None and it.kind not in ("gauge", "bullet"):
             self.problems.append(Problem(f"a {it.kind} chart needs a category (what goes along its axis)", it.id,
                                          "category"))
+
+
+    def xy(self, it: ChartItem, ds: str) -> None:
+        """An `xy` chart: a mark for each series, a band's two edges side by side (low, then
+        high), at most MAX_XY_TARGETS_X vertical lines; x and y are read on each row."""
+        marks = [s.as_ for s in it.series]
+        for i, (s, mark) in enumerate(zip(it.series, marks)):
+            if mark not in XY_MARKS:
+                self.problems.append(Problem(f"a series of an xy chart says how it is drawn («as»): one of {', '.join(XY_MARKS)}",
+                                             it.id, f"series[{i}].as"))
+            elif mark == "band_low" and (i + 1 >= len(marks) or marks[i + 1] != "band_high"):
+                self.problems.append(Problem("a band is two series side by side, its low edge then its high edge: "
+                                             "this band_low has no band_high after it", it.id, f"series[{i}].as"))
+            elif mark == "band_high" and (i == 0 or marks[i - 1] != "band_low"):
+                self.problems.append(Problem("a band is two series side by side, its low edge then its high edge: "
+                                             "this band_high has no band_low before it", it.id, f"series[{i}].as"))
+            if s.label is not None:
+                self.expr(s.label, it.id, f"series[{i}].label", self.env(ds))
+        if it.category and _parses(it.category) and ex.is_aggregate(parse(it.category)):
+            self.problems.append(Problem("the x of an xy chart is read on each row (a column, not a total)", it.id, "category"))
+        targets = it.options.targets_x()
+        if len(targets) > MAX_XY_TARGETS_X:
+            self.problems.append(Problem(f"an xy chart draws at most {MAX_XY_TARGETS_X} vertical lines", it.id, "options.target_x"))
+        for i, t in enumerate(targets):
+            if isinstance(t, str):
+                self.expr(t, it.id, f"options.target_x[{i}]", self.env(ds))
+        if it.options.x_time and it.options.log_x:
+            self.problems.append(Problem("an axis of dates is not logarithmic: x_time or log_x", it.id, "options.log_x"))
+
+    def not_xy(self, it: ChartItem) -> None:
+        """What only an `xy` chart reads, refused elsewhere: an option a person would expect to
+        change something must not be silently ignored."""
+        for i, s in enumerate(it.series):
+            if s.as_ in XY_MARKS and s.as_ != "line":
+                self.problems.append(Problem(f"«as»: {s.as_} is a mark of an xy chart; a {it.kind} chart draws bar or line",
+                                             it.id, f"series[{i}].as"))
+            if s.label is not None:
+                self.problems.append(Problem("a series' label is an xy chart's", it.id, f"series[{i}].label"))
+        o = it.options
+        for name in ("mirror", "diagonal", "x_time", "log_x"):
+            if getattr(o, name):
+                self.problems.append(Problem(f"the option «{name}» is an xy chart's", it.id, f"options.{name}"))
+        if o.target_x is not None:
+            self.problems.append(Problem("the option «target_x» is an xy chart's", it.id, "options.target_x"))
+        if o.log and it.kind != "interval":
+            self.problems.append(Problem("the option «log» is an interval chart's", it.id, "options.log"))
+
+
+def _parses(text: str) -> bool:
+    try:
+        parse(text)
+    except ex.ExpressionError:
+        return False
+    return True
 
 
 _NO_PREVIOUS_MATRIX = "a matrix has no row above in the rows it reads: PREVIOUS goes in the columns of a table"

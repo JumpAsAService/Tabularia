@@ -619,6 +619,130 @@ def test_a_density_is_a_curve_with_regions_under_it_and_a_marked_value():
     assert len(one["series"]) == 1 and "markLine" not in one["series"][0] and one["legend"]["show"] is False
 
 
+# the long table of a model (docs/specs/statistical-models.md, «The output table»), as `xy` reads it
+def _row(section, level, level_2, stat, value, x0=None, text=None, i=None):
+    key = "|".join((section, level or "", level_2 or "", stat)) + ("" if i is None else f"|{i}")
+    return {"section": section, "level": level, "level_2": level_2, "stat": stat, "value": value, "x0": x0, "text": text,
+            "key": key}
+
+
+MODEL = [
+    # residuals against fitted values, not in the order of x; one point named by its row
+    *(_row("point", "resid_fitted", None, "y", y, x, "17" if i == 2 else None, i)
+      for i, (x, y) in enumerate(((2.0, 0.5), (1.0, -0.4), (3.0, 2.2), (0.5, 0.1)))),
+    *(_row("curve", "resid_fitted", "lowess", "y", y, x, None, i) for i, (x, y) in enumerate(((3.0, 0.3), (0.5, 0.0), (2.0, 0.2)))),
+    # two survival curves with their bands, a step each
+    *(_row("curve", "km", s, stat, v * f * g, x, None, i)
+      for s, f in (("A", 1.0), ("B", 0.9)) for i, (x, v) in enumerate(((0.0, 1.0), (2.0, 0.8), (5.0, 0.5)))
+      for stat, g in (("surv", 1.0), ("lower", 0.9), ("upper", 1.1))),
+    # a correlogram and its bound
+    *(_row("lag", "acf", None, "acf", r, lag, None, lag) for lag, r in ((1, 0.6), (2, -0.3), (3, 0.1))),
+    _row("lag", "acf", None, "bound", 0.25),
+]
+
+
+def test_an_xy_chart_draws_points_and_a_line_with_their_names():
+    o = _chart("xy", MODEL, filter='[level] = "resid_fitted"', category="[x0]",
+               series=[{"value": 'IF([section] = "point", [value], NULL)', "name": "Residuals", "as": "point", "label": "[text]"},
+                       {"value": 'IF([section] = "curve", [value], NULL)', "name": "Lowess", "as": "line"}],
+               options={"target": 0})
+    points, line, marks, unseen = o["series"]
+    assert points["type"] == "scatter" and [p["value"] for p in points["data"]] == [[2.0, 0.5], [1.0, -0.4], [3.0, 2.2], [0.5, 0.1]]
+    # the point the runner named carries its row's number; the others nothing
+    assert points["data"][2] == {"value": [3.0, 2.2], "t": "17", "label": {"show": True}} and "t" not in points["data"][0]
+    assert points["label"]["formatter"] == {"$fmt": "label"} and points["label"]["show"] is False
+    # a line goes from left to right
+    assert line["type"] == "line" and line["data"] == [[0.5, 0.0], [2.0, 0.2], [3.0, 0.3]] and "step" not in line
+    assert points["itemStyle"]["color"] != line["itemStyle"]["color"]
+    assert marks["markLine"]["data"] == [{"yAxis": 0.0}] and marks["markLine"]["lineStyle"]["type"] == "dashed"
+    assert unseen["symbolSize"] == 0
+    assert o["xAxis"]["type"] == "value" and o["yAxis"]["scale"] is True
+    assert o["legend"]["show"] is True and o["legend"]["data"] == ["Residuals", "Lowess"]
+
+
+def test_an_xy_chart_draws_steps_with_their_bands_one_colour_a_stratum():
+    o = _chart("xy", MODEL, filter='[level] = "km"', category="[x0]", split_by="[level_2]",
+               series=[{"value": 'IF([stat] = "surv", [value], NULL)', "as": "step", "name": "Survival"},
+                       {"value": 'IF([stat] = "lower", [value], NULL)', "as": "band_low"},
+                       {"value": 'IF([stat] = "upper", [value], NULL)', "as": "band_high"}])
+    a, b, a_low, a_width, b_low, b_width = o["series"]
+    assert [s["name"] for s in (a, b)] == ["A", "B"] and o["legend"]["data"] == ["A", "B"]
+    assert a["step"] == "end" and a["data"] == [[0.0, 1.0], [2.0, 0.8], [5.0, 0.5]]
+    # a band: its low edge, then its width stacked on it, filled, stepped as its curve
+    assert a_low["stack"] == a_width["stack"] != b_low["stack"] and a_low["stackStrategy"] == "all"
+    assert [x for x, _ in a_low["data"]] == [0.0, 2.0, 5.0] and "areaStyle" not in a_low
+    assert [y for _, y in a_low["data"]] == pytest.approx([0.9, 0.72, 0.45])
+    assert [y for _, y in a_width["data"]] == pytest.approx([0.2, 0.16, 0.1]) and a_width["areaStyle"]["opacity"] > 0
+    assert a_low["step"] == "end" and a_low["itemStyle"]["color"] == a["itemStyle"]["color"] != b["itemStyle"]["color"]
+
+
+def test_an_xy_chart_draws_stems_from_zero_with_their_bounds_both_ways():
+    o = _chart("xy", MODEL, filter='[level] = "acf" AND [stat] = "acf"', category="[x0]",
+               series=[{"value": "[value]", "as": "stem", "name": "ACF"}],
+               options={"target": 'LOOKUP("lag|acf||bound", [key], [value])', "mirror": True, "target_x": [2, "1 + 2"]})
+    stems, marks, unseen = o["series"]
+    assert stems["type"] == "bar" and stems["data"] == [[1.0, 0.6], [2.0, -0.3], [3.0, 0.1]] and stems["barWidth"] == 2
+    assert marks["markLine"]["data"] == [{"yAxis": 0.25}, {"yAxis": -0.25}, {"xAxis": 2}, {"xAxis": 3.0}]
+    assert "scale" not in o["yAxis"]  # a stem stands on zero
+    assert o["legend"]["show"] is False
+
+
+def test_an_xy_chart_with_dates_a_log_axis_a_diagonal_and_no_points():
+    dated = _chart("xy", MODEL, filter='[level] = "resid_fitted"', category="[x0] * 10000",
+                   series=[{"value": "[value]", "as": "line"}], options={"x_time": True, "diagonal": True})
+    assert dated["xAxis"]["type"] == "time" and dated["series"][0]["data"][0][0] == 0.5 * 10000 * 86_400_000
+    assert dated["xAxis"]["axisLabel"]["formatter"]["month"] == "{yyyy}-{MM}"
+    diagonal = dated["series"][1]["markLine"]["data"][0]
+    assert diagonal[0]["coord"][1] == -0.4 and diagonal[1]["coord"][1] == 30000.0
+    logged = _chart("xy", MODEL, filter='[level] = "resid_fitted"', category="[x0] - 1",
+                    series=[{"value": "[value]", "as": "point"}], options={"log_x": True})
+    assert logged["xAxis"]["type"] == "log" and all(p["value"][0] > 0 for p in logged["series"][0]["data"])
+    assert _chart("xy", MODEL, filter='[level] = "nothing"', category="[x0]",
+                  series=[{"value": "[value]", "as": "point"}])["title"]["text"] == "No data"
+
+
+def test_an_xy_chart_thins_a_mark_past_its_points_keeping_the_named():
+    rows = [_row("point", "c", None, "y", float(i % 7), float(i), "7" if i == 1234 else None, i) for i in range(5000)]
+    o = _chart("xy", rows, category="[x0]", series=[{"value": "[value]", "as": "point", "label": "[text]"}])
+    data = o["series"][0]["data"]
+    assert len(data) <= 2001 and data[0]["value"][0] == 0 and data[-1]["value"][0] == 4999
+    assert any(p.get("t") == "7" for p in data)
+
+
+def test_an_interval_on_a_log_axis():
+    o = _chart("interval", STATS, filter='[section] = "group"', category="[level]",
+               series=[_stat("mean"), _stat("ci_low"), _stat("ci_high")], options={"target": 1, "log": True})
+    assert o["yAxis"]["type"] == "log" and "scale" not in o["yAxis"]
+    assert o["series"][1]["markLine"]["data"] == [{"yAxis": 1.0}]
+
+
+def test_the_checks_of_an_xy_chart():
+    def said(kind="xy", **item):
+        it = {"id": "c", "type": "chart", "dataset": "d", "kind": kind, "x": 0, "y": 0, "w": 90, "h": 55,
+              "category": "[qty]", "series": [{"value": "[amount]", "as": "point"}], **item}
+        return [(p.field, p.message) for p in rd.problems(rd.load(report(it)))]
+
+    assert said() == []
+    assert said(series=[{"value": "[amount]", "as": "band_low"}, {"value": "[amount]", "as": "band_high"}],
+                options={"target_x": [1, "AVG([qty])"], "mirror": True, "diagonal": True}, split_by="[kind]") == []
+    assert said(series=[{"value": "[amount]"}]) == [("series[0].as", (
+        "a series of an xy chart says how it is drawn («as»): one of point, line, step, stem, band_low, band_high"))]
+    assert said(series=[{"value": "[amount]", "as": "bar"}])[0][0] == "series[0].as"
+    assert said(series=[{"value": "[amount]", "as": "band_low"}, {"value": "[amount]", "as": "point"}]) == [("series[0].as", (
+        "a band is two series side by side, its low edge then its high edge: this band_low has no band_high after it"))]
+    assert said(series=[{"value": "[amount]", "as": "band_high"}])[0][1].endswith("this band_high has no band_low before it")
+    assert said(category="SUM([qty])")[0][0] == "category"
+    assert said(options={"target_x": [1, 2, 3, 4, 5]})[0][0] == "options.target_x"
+    assert said(options={"x_time": True, "log_x": True})[0][0] == "options.log_x"
+    assert said(series=[{"value": "[amount]", "as": "point", "label": "[nope"}])[0][0] == "series[0].label"
+    # what only an xy chart reads is refused elsewhere, never ignored
+    column = {"category": "[region]", "series": [{"value": "SUM([amount])", "as": "stem", "label": "[region]"}]}
+    assert [f for f, _ in said("column", **column)] == ["series[0].as", "series[0].label"]
+    assert [f for f, _ in said("scatter", series=[{"value": "[amount]"}], options={"diagonal": True, "target_x": 1, "log": True})] == [
+        "options.diagonal", "options.target_x", "options.log"]
+    assert said("combo", category="[region]", series=[{"value": "SUM([amount])"}, {"value": "SUM([qty])", "as": "line"}]) == []
+
+
 def test_a_chart_draws_the_rows_its_filter_keeps():
     """Of any kind: the categories, the values and the «No data» are those of the rows kept."""
     all_rows = _chart("column", ROWS)

@@ -125,6 +125,14 @@ def chart_item(kind: str, item: dict) -> dict:
     if kind == "interval":
         item["series"] = [{"value": "AVG([amount])", "name": "Mean"}, {"value": "MIN([amount])", "name": "Low"},
                           {"value": "MAX([amount])", "name": "High"}]
+    if kind == "xy":  # a series of each mark on the rows' quantities and amounts, the large amounts named
+        item.update(category="[qty]", series=[
+            {"value": "[amount]", "name": "Amount", "as": "point", "label": 'IF([amount] > 25, [customer], "")'},
+            {"value": "[amount] / 2", "name": "Half", "as": "line"},
+            {"value": "[amount] / 3", "name": "Third", "as": "step"},
+            {"value": "[amount] / 4", "name": "Quarter", "as": "stem"},
+            {"value": "[amount] * 0.8", "name": "Band", "as": "band_low"}, {"value": "[amount] * 1.2", "as": "band_high"}])
+        item["options"] = {**item.get("options", {}), "target_x": [2], "diagonal": True, "mirror": True}
     return item
 
 

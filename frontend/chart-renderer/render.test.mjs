@@ -15,7 +15,7 @@ const presets = JSON.parse(readFileSync(new URL('./presets.sample.json', import.
 const chart = (option, width = 300, height = 200) => ({ width, height, option })
 
 test('every kind of chart the engine builds is drawn', () => {
-  assert.equal(presets.length, 17)
+  assert.equal(presets.length, 18)
   for (const spec of presets) {
     const svg = render(spec)
     assert.match(svg, /^<svg /, spec.name)
@@ -23,6 +23,26 @@ test('every kind of chart the engine builds is drawn', () => {
     // the title has <script> in it: a text, escaped
     assert.ok(!svg.includes('<script>'), spec.name)
   }
+})
+
+test('an xy chart: a band filled between its two edges, below zero too, and dates along x', () => {
+  // the band as the engine draws it: its low edge, then its width stacked on it («stackStrategy: all»)
+  const edge = { type: 'line', stack: 'b', stackStrategy: 'all', showSymbol: false, lineStyle: { opacity: 0 } }
+  const svg = render({ width: 120, height: 120, option: { animation: false, grid: { left: 10, right: 10, top: 10, bottom: 10 },
+    xAxis: { type: 'value', min: 0, max: 10, show: false }, yAxis: { type: 'value', min: -2, max: 3, show: false },
+    series: [{ ...edge, data: [[0, -1], [4, -1], [10, -1]] },
+      { ...edge, data: [[0, 2], [4, 3], [10, 2]], areaStyle: { color: '#ff0000', opacity: 0.5 } }] } })
+  // 20 px a unit from y = 3 at the top: the high edge at 1, 2, 1, the low one at −1
+  assert.match(svg, /<path d="M10 50L50 30L110 50L110 90L50 90L10 90Z" fill="#ff0000"/)
+  const xy = presets.find((p) => p.name === 'xy')
+  const types = xy.option.series.map((s) => s.type)
+  for (const type of ['scatter', 'line', 'bar']) assert.ok(types.includes(type), type)
+  assert.ok(xy.option.series.some((s) => s.step === 'end') && xy.option.series.some((s) => s.areaStyle))
+  // an axis of dates writes them by a template of numbers (no month's name in English on an Italian page)
+  const dated = render(chart({ xAxis: { type: 'time', axisLabel: { formatter: { year: '{yyyy}', month: '{yyyy}-{MM}' } } },
+    yAxis: { type: 'value' }, series: [{ type: 'line', data: [[Date.UTC(2023, 0, 1), 1], [Date.UTC(2025, 6, 1), 2]] }] }, 400))
+  assert.match(dated, />2024</)
+  assert.ok(!/>(Jan|Feb|Mar|Apr|Jul)</.test(dated))
 })
 
 test('the named formatters write the engine\'s texts and the locale\'s numbers', () => {

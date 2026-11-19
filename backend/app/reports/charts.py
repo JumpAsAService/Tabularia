@@ -53,6 +53,18 @@ class SeriesData:
 
 
 @dataclass
+class XYSeries:
+    """A mark of an `xy` chart: its name in the legend (`legend`: it is there), how it is
+    drawn (point, line, step, stem, band), its points — (x, y, label), a band's (x, low,
+    high) — and its colour, an index of the palette."""
+    name: str
+    mark: str
+    points: list[tuple[float, float, Any]]
+    colour: int = 0
+    legend: bool = True
+
+
+@dataclass
 class ChartData:
     kind: str
     fmt: str | None = None
@@ -67,6 +79,8 @@ class ChartData:
     # dashboard's click reads them, a value on a report's chart is what it prints
     keys: list[Any] = field(default_factory=list)
     split_keys: list[Any] = field(default_factory=list)
+    xy: list[XYSeries] = field(default_factory=list)  # an `xy` chart's marks
+    targets_x: list[float | None] = field(default_factory=list)  # its vertical lines
 
 
 def _palette(theme: rd.Theme) -> list[str]:
@@ -100,7 +114,7 @@ def _legend_rows(names: list[str], width: int) -> int:
 
 def _base(data: ChartData, theme: rd.Theme, legend: bool, width: int) -> dict:
     top = 22 if data.title else 8
-    names = [s.name for s in data.series] or [name for name, _ in data.points]
+    names = [s.name for s in data.series] or [name for name, _ in data.points] or _xy_legend(data)
     lines = _legend_rows(names, width) if legend else 0
     option: dict[str, Any] = {
         "animation": False,
@@ -174,6 +188,8 @@ def _has_values(data: ChartData) -> bool:
     """Whether the chart has something to draw (a pie, a funnel, a treemap draw sizes: above zero)."""
     if data.kind in ("scatter", "density"):
         return any(x is not None and y is not None for _, pts in data.points for x, y, _ in pts)
+    if data.kind == "xy":
+        return any(s.points for s in data.xy)
     if data.kind == "boxplot":  # a box is its five numbers, or nothing
         return any(all(s.values[i] is not None for s in data.series) for i in range(len(data.categories)))
     values = [v for s in data.series for v in s.values if v is not None]
@@ -199,6 +215,8 @@ def _option(data: ChartData, it: rd.ChartItem, theme: rd.Theme, loc: formats.Loc
     o = it.options
     kind = data.kind
     many = len(data.series) > 1 or len(data.points) > 1
+    if kind == "xy":
+        many = len(_xy_legend(data)) > 1
     legend = o.legend if o.legend is not None else (many and kind not in ("pie", "donut", "funnel", "treemap", "heatmap",
                                                                           "gauge", "bullet", "boxplot", "interval"))
     width_px = max(int(it.w * MM_PX), 40)
@@ -335,6 +353,8 @@ def _option(data: ChartData, it: rd.ChartItem, theme: rd.Theme, loc: formats.Loc
         return _interval(data, it, theme, loc, base, width_px)
     if kind == "density":
         return _density(data, it, theme, loc, base)
+    if kind == "xy":
+        return _xy(data, it, theme, loc, base)
     if kind == "gauge":
         return _gauge(data, it, theme, base)
     if kind == "bullet":
@@ -488,8 +508,11 @@ def _interval(data: ChartData, it: rd.ChartItem, theme: rd.Theme, loc: formats.L
         base["grid"]["right"] = 14 + int(len(formats.display(target, value.fmt, loc)) * 8 * 0.6)  # room for its value
         if data.categories:
             series.append(_unseen([data.categories[0], target]))
-    return {**base, "xAxis": {**_x_axis(data.categories, width_px), **_AT_THE_EDGE},
-            "yAxis": {**_value_axis(data, loc, o), "scale": True}, "series": series}
+    yaxis = {**_value_axis(data, loc, o), "scale": True}
+    if o.log:  # odds and hazard ratios: a ratio and its inverse at the same distance from 1
+        yaxis.update(type="log", logBase=10)
+        yaxis.pop("scale")
+    return {**base, "xAxis": {**_x_axis(data.categories, width_px), **_AT_THE_EDGE}, "yAxis": yaxis, "series": series}
 
 
 def _density(data: ChartData, it: rd.ChartItem, theme: rd.Theme, loc: formats.Locale, base: dict) -> dict:
@@ -513,6 +536,115 @@ def _density(data: ChartData, it: rd.ChartItem, theme: rd.Theme, loc: formats.Lo
         series.append(_unseen([target, 0]))
     return {**base, "xAxis": {**_value_axis(data, loc, rd.ChartOptions()), "scale": True, "splitLine": {"show": False}},
             "yAxis": {"min": 0, **_value_axis(data, loc, it.options), "axisLine": {"onZero": False}}, "series": series}
+
+
+MAX_XY_POINTS = 2000  # the points of a mark of an `xy` chart: beyond, thinned evenly (a runner caps them already)
+_DAY_MS = 86_400_000
+_TIME_LABELS = {"year": "{yyyy}", "month": "{yyyy}-{MM}", "day": "{yyyy}-{MM}-{dd}", "hour": "{HH}:{mm}",
+                "minute": "{HH}:{mm}", "second": "{HH}:{mm}:{ss}", "millisecond": "{HH}:{mm}:{ss}"}
+
+
+def _xy_legend(data: ChartData) -> list[str]:
+    """The names an `xy` chart's legend shows, each once, in their order."""
+    return list(dict.fromkeys(s.name for s in data.xy if s.legend and s.name))
+
+
+def _thinned(points: list, keep_labelled: bool = True) -> list:
+    """At most MAX_XY_POINTS of them, evenly spaced, the first, the last and the labelled kept."""
+    n = len(points)
+    if n <= MAX_XY_POINTS:
+        return points
+    step = (n - 1) / (MAX_XY_POINTS - 1)
+    chosen = {round(i * step) for i in range(MAX_XY_POINTS)}
+    return [p for i, p in enumerate(points) if i in chosen or (keep_labelled and len(p) > 2 and p[2] and isinstance(p[2], str))]
+
+
+def _xy(data: ChartData, it: rd.ChartItem, theme: rd.Theme, loc: formats.Locale, base: dict) -> dict:
+    """Marks on two numeric axes (or dates along x): points with their labels, lines, steps
+    (a survival curve: the value holds until the next x), stems from zero (a correlogram),
+    bands (two edges, the area between filled: the low edge invisible, the width stacked on
+    it); `options.target` a dashed horizontal line (`mirror`: at −target too),
+    `options.target_x` vertical ones, `options.diagonal` the line y = x."""
+    o = it.options
+    palette = _palette(theme)
+    days = (lambda x: x * _DAY_MS) if o.x_time else (lambda x: x)
+
+    def colour(i: int) -> str:
+        return palette[i % len(palette)]
+
+    lines: list[dict] = []
+    bands: list[dict] = []
+    xs: list[float] = []
+    ys: list[float] = []
+    for k, s in enumerate(data.xy):
+        pts = [p for p in s.points if not (o.log_x and p[0] <= 0)]
+        pts = _thinned(pts) if s.mark == "point" else _thinned(pts, keep_labelled=False)
+        c = colour(s.colour)
+        xs += [p[0] for p in pts]
+        ys += [v for p in pts for v in ((p[1], p[2]) if s.mark == "band" else (p[1],))]
+        if s.mark == "band":
+            step = "end" if any(t.mark == "step" and t.colour == s.colour for t in data.xy) else False
+            edge = {"type": "line", "stack": f"band{k}", "stackStrategy": "all", "showSymbol": False, "silent": True,
+                    "legendHoverLink": False, "lineStyle": {"opacity": 0}, "itemStyle": {"color": c}, "z": 1,
+                    **({"step": step} if step else {})}
+            bands.append({**edge, "name": s.name, "data": [[days(x), lo] for x, lo, _ in pts]})
+            bands.append({**edge, "name": s.name, "data": [[days(x), hi - lo] for x, lo, hi in pts],
+                          "areaStyle": {"color": c, "opacity": 0.16}})
+            continue
+        entry: dict[str, Any] = {"name": s.name, "itemStyle": {"color": c}, "z": 3}
+        if s.mark == "point":
+            labelled = any(isinstance(p[2], str) and p[2] for p in pts)
+            entry.update(type="scatter", symbolSize=4.5,
+                         data=[{"value": [days(x), y], **({"t": t, "label": {"show": True}} if isinstance(t, str) and t else {})}
+                               for x, y, t in pts])
+            if labelled:
+                entry.update(label={"show": False, "position": "right", "distance": 3, "fontSize": 7, "color": theme.color,
+                                    "formatter": {"$fmt": "label"}}, labelLayout=HIDE_OVERLAP)
+        elif s.mark == "stem":
+            entry.update(type="bar", barWidth=2, barGap="-100%", data=[[days(x), y] for x, y, _ in pts])
+        else:
+            entry.update(type="line", showSymbol=False, smooth=False, connectNulls=False, lineStyle={"width": 1.5, "color": c},
+                         data=[[days(x), y] for x, y, _ in pts], **({"step": "end"} if s.mark == "step" else {}))
+        lines.append(entry)
+    series = lines + bands
+    marks: list[dict] = []
+    target = data.targets[0] if data.targets else None
+    if target is not None:
+        marks.append({"yAxis": target})
+        ys.append(target)
+        if o.mirror:
+            marks.append({"yAxis": -target})
+            ys.append(-target)
+    for t in data.targets_x:
+        if t is not None and not (o.log_x and t <= 0):
+            marks.append({"xAxis": days(t)})
+            xs.append(t)
+    if o.diagonal and xs and ys:
+        lo, hi = min(min(xs), min(ys)), max(max(xs), max(ys))
+        marks.append([{"coord": [days(lo), lo]}, {"coord": [days(hi), hi]}])
+    if marks:
+        # on a series of its own, that nobody sees: the reference lines are not any mark's
+        series.append({"type": "line", "name": "", "data": [], "silent": True, "legendHoverLink": False,
+                       "markLine": {"silent": True, "symbol": "none", "animation": False, "label": {"show": False},
+                                    "lineStyle": {"color": theme.color, "width": 1, "type": "dashed"}, "data": marks}})
+        # the axes count the lines, which may lie outside every point (ECharts makes no room for a markLine)
+        unseen = [[days(t), (sum(ys) / len(ys)) if ys else 0] for t in data.targets_x if t is not None] if xs or ys else []
+        if target is not None and xs:
+            unseen += [[days(xs[0]), target]] + ([[days(xs[0]), -target]] if o.mirror else [])
+        if unseen:
+            series.append({**_unseen(unseen[0]), "data": unseen})
+    x_axis: dict[str, Any] = {**_value_axis(data, loc, rd.ChartOptions()), "scale": True, "splitLine": {"show": False},
+                              "axisLine": {"onZero": False}}
+    if o.x_time:
+        x_axis.update(type="time", axisLabel={"fontSize": 9, "hideOverlap": True, "formatter": _TIME_LABELS})
+    elif o.log_x:
+        x_axis.update(type="log", logBase=10)
+        x_axis.pop("scale")
+    y_axis = {**_value_axis(data, loc, o), "scale": True}
+    if any(s.mark == "stem" for s in data.xy):
+        y_axis.pop("scale")  # a stem stands on zero: the axis has it
+    legend = {**base["legend"], "data": _xy_legend(data)}
+    return {**base, "legend": legend, "xAxis": x_axis, "yAxis": y_axis, "series": series}
 
 
 def sparkline(categories: list[str], values: list[Any], accent: str) -> dict:

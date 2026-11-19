@@ -207,6 +207,30 @@ def test_a_box_plot_an_interval_and_a_density_with_a_filter_render_to_pdf_and_sv
     assert 1 < mark["xAxis"] < 120
 
 
+def test_an_xy_chart_with_each_mark_and_a_logarithmic_interval_render_to_pdf_and_svg(tmp_path, chart_service):
+    """The kind a model's report draws: points, a line, steps, stems and a band on numeric
+    axes, with its reference lines; and an interval on a logarithmic axis (odds ratios)."""
+    d = samples.definition()
+    xy = samples.chart_item("xy", {"id": "xy", "type": "chart", "dataset": "orders", "kind": "xy", "x": 0, "y": 0, "w": 186,
+                                   "h": 70, "title": "xy", "filter": "[amount] > 0", "category": "[qty]", "series": [],
+                                   "options": {"target": 100}})
+    ratios = samples.chart_item("interval", {"id": "ratios", "type": "chart", "dataset": "orders", "kind": "interval", "x": 0,
+                                             "y": 75, "w": 186, "h": 55, "title": "ratios", "category": "[region]",
+                                             "filter": "[amount] > 0", "series": [], "options": {"target": 1, "log": True}})
+    d["sections"]["body"]["items"] = [xy, ratios]
+    del chart_service[1][:]
+    made = {fmt: run(tmp_path / fmt, chart_service, fmt, definition=d) for fmt in ("pdf", "svg")}
+    assert all(r.pages == 1 and r.warnings == [] for r in made.values())
+    assert made["pdf"].path.read_bytes().startswith(b"%PDF-")
+    asked = {spec["option"]["title"]["text"]: spec["option"] for spec in chart_service[1]}
+    marks = asked["xy"]["series"]
+    assert {s["type"] for s in marks} == {"scatter", "line", "bar"}
+    points = marks[0]["data"]
+    assert len(points) == len([r for r in samples.orders(300) if r["amount"] > 0])  # one a row the filter keeps
+    assert any(p.get("t") for p in points) and not all(p.get("t") for p in points)
+    assert asked["xy"]["xAxis"]["type"] == "value" and asked["ratios"]["yAxis"]["type"] == "log"
+
+
 def test_the_pages_on_screen_are_svg_with_where_to_click(tmp_path, chart_service):
     state = {"items": {"detail": {"sort": {"column": 4, "dir": "desc"}, "collapsed": [["Isole"]]}}}
     r = run(tmp_path, chart_service, "svg", state=state)

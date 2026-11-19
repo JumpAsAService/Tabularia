@@ -617,6 +617,8 @@ class _Builder:
             data.categories = [it.series[0].name or ""]
             data.series = [charts.SeriesData(it.series[0].name, [self._num(v)], [self.show(v, fmt)])]
             data.targets = [self._target(it, base)]
+        elif it.kind == "xy":
+            self._xy(it, rows, base, data)
         elif it.kind in ("scatter", "density"):
             groups = self.partition(it, "split_by", it.split_by, rows) if it.split_by else [(None, rows)]
             data.split_keys = [key for key, _ in groups] if it.split_by else []
@@ -640,6 +642,54 @@ class _Builder:
             if it.kind == "interval":
                 data.targets = [self._target(it, base)]
         return data
+
+    def _xy(self, it: rd.ChartItem, rows: list[dict], base: ex.Context, data: charts.ChartData) -> None:
+        """An `xy` chart's marks: each series read on each row (its x the category), a point
+        where both are numbers; a band's two edges paired by x. With `split_by`, every series
+        again for each of its values, in that value's colour and under its name; without, a
+        colour for each series, a band in the colour of the series before it."""
+        groups = self.partition(it, "split_by", it.split_by, rows) if it.split_by else [(None, rows)]
+        if len(groups) > charts.MAX_SERIES:
+            raise ReportError(f"item «{it.id}»: split_by gives {len(groups)} series, the most is {charts.MAX_SERIES}")
+        data.split_keys = [key for key, _ in groups] if it.split_by else []
+        x = rd.parse(it.category)  # type: ignore[arg-type]
+        ctx = base.at()
+
+        def read(sub: Any, s: rd.Series) -> list[tuple[float, float, str]]:
+            pairs = self.d.points(sub, x, rd.parse(s.value), ctx, it.id)
+            labels = self.d.points(sub, x, rd.parse(s.label), ctx, it.id) if s.label else [(None, None)] * len(pairs)
+            return [(self._num(a), self._num(b), "" if t is None else self.name(t))  # type: ignore[misc]
+                    for (a, b), (_, t) in zip(pairs, labels) if self._num(a) is not None and self._num(b) is not None]
+
+        colour = 0
+        for gi, (key, sub) in enumerate(groups):
+            before = None  # the colour of the last series that is not a band
+            for i, s in enumerate(it.series):
+                mark = s.as_ or "point"
+                if mark == "band_high":
+                    continue
+                if it.split_by:
+                    own, name, legend = gi, self.name(key), mark != "band_low"
+                elif mark == "band_low":
+                    own, name, legend = before if before is not None else colour, s.name, bool(s.name)
+                else:
+                    own, name, legend = colour, s.name, bool(s.name)
+                    colour += 1
+                if mark == "band_low":
+                    low = {a: b for a, b, _ in read(sub, s)}
+                    high = {a: b for a, b, _ in read(sub, it.series[i + 1])}
+                    points = [(a, min(low[a], high[a]), max(low[a], high[a])) for a in sorted(low) if a in high]
+                    data.xy.append(charts.XYSeries(name, "band", points, own, legend))  # type: ignore[arg-type]
+                    continue
+                before = own
+                points = read(sub, s)
+                if mark != "point":  # a line goes from left to right, whatever the order of its rows
+                    points = sorted(points, key=lambda p: p[0])
+                data.xy.append(charts.XYSeries(name, mark, points, own, legend))
+        o = it.options
+        data.targets = [self._target(it, base)]
+        data.targets_x = [self._num(self.value(it, f"options.target_x[{i}]", t, base)) if isinstance(t, str) else t
+                          for i, t in enumerate(o.targets_x())]
 
     @staticmethod
     def _num(v: Any) -> float | None:
