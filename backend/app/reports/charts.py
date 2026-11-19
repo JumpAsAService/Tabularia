@@ -509,8 +509,8 @@ def _interval(data: ChartData, it: rd.ChartItem, theme: rd.Theme, loc: formats.L
         if data.categories:
             series.append(_unseen([data.categories[0], target]))
     yaxis = {**_value_axis(data, loc, o), "scale": True}
-    if o.log:  # odds and hazard ratios: a ratio and its inverse at the same distance from 1
-        yaxis.update(type="log", logBase=10)
+    if o.log:  # odds and hazard ratios: a ratio and its inverse at the same distance from 1, ticks at 0.5, 1, 2…
+        yaxis.update(type="log", logBase=2)
         yaxis.pop("scale")
     return {**base, "xAxis": {**_x_axis(data.categories, width_px), **_AT_THE_EDGE}, "yAxis": yaxis, "series": series}
 
@@ -542,6 +542,19 @@ MAX_XY_POINTS = 2000  # the points of a mark of an `xy` chart: beyond, thinned e
 _DAY_MS = 86_400_000
 _TIME_LABELS = {"year": "{yyyy}", "month": "{yyyy}-{MM}", "day": "{yyyy}-{MM}-{dd}", "hour": "{HH}:{mm}",
                 "minute": "{HH}:{mm}", "second": "{HH}:{mm}:{ss}", "millisecond": "{HH}:{mm}:{ss}"}
+
+
+def _nice_bounds(lo: float, hi: float) -> dict:
+    """An axis from `lo` to `hi` with round ends: a step of 1, 2 or 5 times a power of ten,
+    about five of them."""
+    import math
+
+    if hi <= lo:
+        lo, hi = lo - 1, hi + 1
+    raw = (hi - lo) / 5
+    power = 10 ** math.floor(math.log10(raw))
+    step = next(m * power for m in (1, 2, 2.5, 5, 10) if m * power >= raw)
+    return {"min": math.floor(lo / step) * step, "max": math.ceil(hi / step) * step}
 
 
 def _xy_legend(data: ChartData) -> list[str]:
@@ -620,8 +633,10 @@ def _xy(data: ChartData, it: rd.ChartItem, theme: rd.Theme, loc: formats.Locale,
             marks.append({"xAxis": days(t)})
             xs.append(t)
     if o.diagonal and xs and ys:
-        lo, hi = min(min(xs), min(ys)), max(max(xs), max(ys))
-        marks.append([{"coord": [days(lo), lo]}, {"coord": [days(hi), hi]}])
+        # where both axes reach (ECharts draws no line with an end outside the plot)
+        lo, hi = max(min(xs), min(ys)), min(max(xs), max(ys))
+        if lo < hi:
+            marks.append([{"coord": [days(lo), lo]}, {"coord": [days(hi), hi]}])
     if marks:
         # on a series of its own, that nobody sees: the reference lines are not any mark's
         series.append({"type": "line", "name": "", "data": [], "silent": True, "legendHoverLink": False,
@@ -637,12 +652,16 @@ def _xy(data: ChartData, it: rd.ChartItem, theme: rd.Theme, loc: formats.Locale,
                               "axisLine": {"onZero": False}}
     if o.x_time:
         x_axis.update(type="time", axisLabel={"fontSize": 9, "hideOverlap": True, "formatter": _TIME_LABELS})
+        base["grid"]["right"] = 24  # the last date is written centred under its tick: room for its half
     elif o.log_x:
         x_axis.update(type="log", logBase=10)
         x_axis.pop("scale")
     y_axis = {**_value_axis(data, loc, o), "scale": True}
     if any(s.mark == "stem" for s in data.xy):
         y_axis.pop("scale")  # a stem stands on zero: the axis has it
+    elif bands and ys and o.min is None and o.max is None:
+        # a band's stack counts zero (the low edge stands on it): the axis is the marks' own, rounded
+        y_axis.update(_nice_bounds(min(ys), max(ys)))
     legend = {**base["legend"], "data": _xy_legend(data)}
     return {**base, "legend": legend, "xAxis": x_axis, "yAxis": y_axis, "series": series}
 

@@ -647,7 +647,7 @@ class _Builder:
         """An `xy` chart's marks: each series read on each row (its x the category), a point
         where both are numbers; a band's two edges paired by x. With `split_by`, every series
         again for each of its values, in that value's colour and under its name; without, a
-        colour for each series, a band in the colour of the series before it."""
+        colour for each series, a band and a series without a name in the colour of the one before."""
         groups = self.partition(it, "split_by", it.split_by, rows) if it.split_by else [(None, rows)]
         if len(groups) > charts.MAX_SERIES:
             raise ReportError(f"item «{it.id}»: split_by gives {len(groups)} series, the most is {charts.MAX_SERIES}")
@@ -672,6 +672,8 @@ class _Builder:
                     own, name, legend = gi, self.name(key), mark != "band_low"
                 elif mark == "band_low":
                     own, name, legend = before if before is not None else colour, s.name, bool(s.name)
+                elif not s.name and before is not None:  # a mark without a name is the one before's (a line's points)
+                    own, name, legend = before, "", False
                 else:
                     own, name, legend = colour, s.name, bool(s.name)
                     colour += 1

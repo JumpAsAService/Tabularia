@@ -689,11 +689,17 @@ def test_an_xy_chart_draws_stems_from_zero_with_their_bounds_both_ways():
 
 def test_an_xy_chart_with_dates_a_log_axis_a_diagonal_and_no_points():
     dated = _chart("xy", MODEL, filter='[level] = "resid_fitted"', category="[x0] * 10000",
-                   series=[{"value": "[value]", "as": "line"}], options={"x_time": True, "diagonal": True})
+                   series=[{"value": "[value]", "as": "line"}], options={"x_time": True})
     assert dated["xAxis"]["type"] == "time" and dated["series"][0]["data"][0][0] == 0.5 * 10000 * 86_400_000
     assert dated["xAxis"]["axisLabel"]["formatter"]["month"] == "{yyyy}-{MM}"
-    diagonal = dated["series"][1]["markLine"]["data"][0]
-    assert diagonal[0]["coord"][1] == -0.4 and diagonal[1]["coord"][1] == 30000.0
+    # the diagonal where both axes reach: ECharts draws no line with an end outside the plot
+    crossed = _chart("xy", MODEL, filter='[level] = "resid_fitted"', category="[x0]", series=[{"value": "[value]", "as": "point"}],
+                     options={"diagonal": True})
+    [diagonal] = crossed["series"][1]["markLine"]["data"]
+    assert diagonal == [{"coord": [0.5, 0.5]}, {"coord": [2.2, 2.2]}]
+    apart = _chart("xy", MODEL, filter='[level] = "resid_fitted"', category="[x0] + 10", series=[{"value": "[value]", "as": "point"}],
+                   options={"diagonal": True})
+    assert len(apart["series"]) == 1  # no part of y = x on the plot: no line
     logged = _chart("xy", MODEL, filter='[level] = "resid_fitted"', category="[x0] - 1",
                     series=[{"value": "[value]", "as": "point"}], options={"log_x": True})
     assert logged["xAxis"]["type"] == "log" and all(p["value"][0] > 0 for p in logged["series"][0]["data"])
