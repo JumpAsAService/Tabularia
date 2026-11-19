@@ -171,6 +171,35 @@ CASES = {
     "report_var_f_less": stat("var_f", value="big", group="g", groups=["east", "north"], alternative="less", detail="report"),
     "report_levene": stat("levene", value="x", group="g", detail="report"),
     "report_levene_near_1e9": stat("levene", value="big", group="g", center="mean", detail="report"),
+    # lot 3: proportions — a success of a text, a boolean, a whole number, a float with −0.0, a date
+    "prop_one_text": stat("prop_one_sample", value="g", success="north", p0=0.3),
+    "prop_one_text_exact": stat("prop_one_sample", value="g", success="north", p0=0.3, method="exact"),
+    "prop_one_boolean_less": stat("prop_one_sample", value="flag", success=True, p0=0.62, alternative="less", correction=False),
+    "prop_one_integer_exact_greater": stat("prop_one_sample", value="qty", success=20, p0=0.05, method="exact", alternative="greater"),
+    "prop_one_float_zero": stat("prop_one_sample", value="level", success=0.0, p0=0.5),
+    "prop_one_date": stat("prop_one_sample", value="day", success="2024-03-01", alpha=0.01),
+    "prop_two": stat("prop_two_sample", value="flag", success=True, group="g", groups=["north", "south"]),
+    "prop_two_text_by_date": stat("prop_two_sample", value="g", success="east", group="day", correction=False, alternative="greater"),
+    "prop_two_number_as_group": stat("prop_two_sample", value="flag", success="false", group="level", groups=[1.5, 0.0]),
+    # contingency tables: −0.0 and 0.0 one category, NULLs left out, every post-hoc
+    "chi2_text_boolean": stat("chi2_independence", x="g", y="flag"),
+    "chi2_cells": stat("chi2_independence", x="g", y="day", posthoc="cells", p_adjust="bonferroni"),
+    "chi2_pairs_float": stat("chi2_independence", x="level", y="g", posthoc="pairs"),
+    "chi2_pairs_sidak": stat("chi2_independence", x="g", y="qty", posthoc="pairs", p_adjust="sidak", correction=False),
+    "chi2_2x2_yates": stat("chi2_independence", x="flag", y="day"),
+    "chi2_gof_text": stat("chi2_gof", value="g"),
+    "chi2_gof_float_given": stat("chi2_gof", value="level", expected={"0.0": 0.5, "1.5": 0.5}),
+    "chi2_gof_integer": stat("chi2_gof", value="qty"),
+    "fisher": stat("fisher_exact", x="flag", y="day"),
+    "fisher_less": stat("fisher_exact", x="day", y="flag", alternative="less", alpha=0.1),
+    "fisher_float": stat("fisher_exact", x="level", y="flag", alternative="greater"),
+    # their reports' rows
+    "report_prop_one": stat("prop_one_sample", value="g", success="north", p0=0.3, detail="report"),
+    "report_prop_one_exact": stat("prop_one_sample", value="flag", success=True, p0=0.6, method="exact", detail="report"),
+    "report_prop_two": stat("prop_two_sample", value="flag", success=True, group="g", groups=["east", "south"], detail="report"),
+    "report_chi2_cells": stat("chi2_independence", x="g", y="level", posthoc="cells", detail="report"),
+    "report_chi2_gof": stat("chi2_gof", value="g", detail="report"),
+    "report_fisher": stat("fisher_exact", x="flag", y="day", detail="report"),
 }
 
 
@@ -243,6 +272,13 @@ def test_the_cases_test_something(storage, src):
     for case in ("report_one_sample", "report_paired", "report_anova_tukey", "report_var_f", "report_levene"):
         assert sum(1 for k in by[case] if k.startswith("curve|||density|")) == 201, case
     assert sum(r["value"] for r in by["report_paired"].values() if r["section"] == "hist") == by["report_paired"]["test|||n"]["value"]
+    # lot 3: −0.0 is the category 0.0 on every engine, the NULLs and the NaN are left out
+    assert {k for k in by["chi2_pairs_float"] if k.startswith("group|") and k.endswith("||row_total")} == {"group|0.0||row_total", "group|1.5||row_total"}
+    assert by["chi2_text_boolean"]["test|||n_missing"]["value"] > 100 and by["prop_one_float_zero"]["test|||successes"]["value"] > 1000
+    assert {k for k in by["chi2_gof_float_given"] if k.endswith("||observed")} == {"cell|0.0||observed", "cell|1.5||observed"}
+    assert by["chi2_2x2_yates"]["test|||yates"]["value"] == 0.5 and by["chi2_cells"]["test|||n_cells"]["value"] == 6
+    assert by["fisher"]["test|||support"]["value"] > 1000  # an exact distribution of some thousand outcomes
+    assert 0 < by["prop_two"]["test|||p_value"]["value"] <= 1 and by["prop_one_text_exact"]["test|||ci_low"]["value"] > 0
     # the two orders of a pair are the same test, mirrored
     assert by["student"]["test|||p_value"]["value"] == pytest.approx(
         2 * min(by["student_less"]["test|||p_value"]["value"], 1 - by["student_less"]["test|||p_value"]["value"]), rel=1e-9)
@@ -325,3 +361,29 @@ def test_clickhouse_own_anova_agrees(value, group, index, storage, src):
         assert math.isclose(rows["test|||p_value"]["value"], p_value, rel_tol=1e-6)
     else:
         assert p_value == 0.0 and 0.0 < rows["test|||p_value"]["value"] < 1e-12
+
+
+# ── a second witness for the lot 3: ClickHouse's own proportions z test and Cramér's V, on chDB ──
+@pytest.mark.skipif(importlib.util.find_spec("chdb") is None, reason="chdb assente")
+@pytest.mark.parametrize("first, second", [("north", "south"), ("east", "north")])
+def test_clickhouse_own_proportions_z_test_agrees(first, second, storage, src):
+    """`proportionsZTest` (pooled, no continuity correction) against the node without the
+    correction: the same z, p-value and interval (unpooled, as R's)."""
+    rows = {r["key"]: r for r in table_of("chdb", storage, src, stat("prop_two_sample", value="flag", success=True, group="g",
+                                                                    groups=[first, second], correction=False))}
+    k1, k2 = (int(rows[f"group|{g}||successes"]["value"]) for g in (first, second))
+    n1, n2 = (int(rows[f"group|{g}||n"]["value"]) for g in (first, second))
+    z, p_value, low, high = _chdb_query(storage, src, (
+        f"SELECT tupleElement(r, 1), tupleElement(r, 2), tupleElement(r, 3), tupleElement(r, 4) "
+        f"FROM (SELECT proportionsZTest({k1}, {k2}, {n1}, {n2}, 0.95, 'pooled') AS r FROM file('{{path}}', Parquet) LIMIT 1)"))
+    assert math.isclose(rows["test|||statistic"]["value"], z, rel_tol=1e-6)
+    assert math.isclose(rows["test|||p_value"]["value"], p_value, rel_tol=1e-6)
+    assert math.isclose(rows["test|||ci_low"]["value"], low, rel_tol=1e-6) and math.isclose(rows["test|||ci_high"]["value"], high, rel_tol=1e-6)
+
+
+@pytest.mark.skipif(importlib.util.find_spec("chdb") is None, reason="chdb assente")
+@pytest.mark.parametrize("x, y", [("g", "flag"), ("g", "day"), ("g", "qty")])
+def test_clickhouse_own_cramers_v_agrees(x, y, storage, src):
+    rows = {r["key"]: r for r in table_of("chdb", storage, src, stat("chi2_independence", x=x, y=y, correction=False))}
+    [v] = _chdb_query(storage, src, f"SELECT cramersV({x}, {y}) FROM file('{{path}}', Parquet) WHERE {x} IS NOT NULL AND {y} IS NOT NULL")
+    assert math.isclose(rows["test|||cramers_v"]["value"], v, rel_tol=1e-9)

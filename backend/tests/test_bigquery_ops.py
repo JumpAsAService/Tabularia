@@ -405,3 +405,39 @@ class _AnovaCtx(FakeCtx):
             return [[6.0]]
         return [["a", 8, 8, 5.6875 - 6, 0.364107142857143, 4.9, 6.7], ["b", 7, 7, 7.128571428571429 - 6, 0.365714285714286, 6.4, 8.0],
                 ["c", 6, 6, 6.266666666666667 - 6, 0.226666666666667, 5.7, 7.0]]
+
+
+def test_statistics_of_lot_3_ask_bigquery_in_googlesql():
+    """The aggregates the tests of proportions and categories add — the successes of each group
+    (A8), the table of counts of two columns (A7) — written from BigQuery's documentation and
+    the models above, and parsed as GoogleSQL. Not run: that BigQuery answers them is the live
+    suite's to say."""
+    import sqlglot
+
+    from app.engine.stats.aggregates import SqlStatSource, typed_value
+
+    asked: list[str] = []
+
+    def rows(q):
+        asked.append(q)
+        if "st_lx" in q:
+            return [["m", "x", 30], ["f", None, 2]]
+        if "GROUP BY" in q:
+            return [["a", 120, 120, 37], ["b", 110, 110, 52], [None, 1, 1, 1]]
+        return [[230, 230, 89]]
+
+    schema = [("a", "FLOAT64"), ("g", "STRING"), ("ok", "BOOL"), ("day", "DATE"), ("q", "INT64")]
+    source = SqlStatSource("bigquery", rows, lambda c: f"`{c}`", _lit, "SELECT * FROM `_src1`", schema)
+    assert source.kind_of("ok") == "boolean" and typed_value("true", "boolean") is True
+    got = source.successes("ok", True, "g", ["a", "b"])
+    assert [(s.level, s.n, s.k) for s in got] == [("a", 120, 37), ("b", 110, 52), (None, 1, 1)]
+    assert "sum(CASE WHEN `ok` IS NOT NULL AND `ok` = TRUE THEN 1 ELSE 0 END)" in asked[-1]
+    assert " WHERE `g` IS NULL OR `g` = 'a' OR `g` = 'b' GROUP BY `g`" in asked[-1]
+    source.successes("a", 1.5)
+    assert "NOT IS_NAN(`a`)" in asked[-1]  # a NaN in a column of floats is no value
+    source.successes("day", typed_value("2024-03-01", "date"), "q")
+    cells = source.crosstab("g", "day", 2602)
+    assert [(c.x, c.y, c.rows) for c in cells] == [("m", "x", 30), ("f", None, 2)]
+    assert asked[-1].endswith("GROUP BY `g`, `day` LIMIT 2602")
+    for q in asked:
+        sqlglot.parse_one(q, read="bigquery")

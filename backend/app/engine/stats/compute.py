@@ -22,15 +22,17 @@ The side a one-sided result leaves open is NULL.
 from __future__ import annotations
 
 import math
-from typing import Any, Callable
+from typing import Any, Callable, NamedTuple
 
-from app.engine.stats import dist
-from app.engine.stats.aggregates import Difference, Moments, PairMoments, Paired, Quartiles
+from app.engine.stats import dist, exact
+from app.engine.stats.aggregates import Difference, Moments, PairMoments, Paired, Quartiles, is_value, typed_value
 from app.engine.stats.catalog import (
     CURVE_POINTS,
+    EXACT_SUPPORT,
     MAX_BINS,
     MAX_POSTHOC_GROUPS,
     MAX_STAT_GROUPS,
+    MAX_STAT_LEVELS,
     MIN_BINS,
     check_params,
     label_of,
@@ -272,12 +274,12 @@ def _welch_df(va: float, na: int, vb: float, nb: int) -> float:
 
 
 # ── two groups of a numeric column ──────────────────────────────────────────
-def _two_groups(source, test: str, p: dict[str, Any]) -> tuple[list[str], list[Moments], int, list]:
+def _choose_two(source, test: str, p: dict[str, Any]) -> tuple[list[str], list, bool]:
     """The two groups a two-sample test compares, the first minus the second: their labels,
-    their moments, the rows left out (no group, or no value in one of the two), and the
-    values of the grouping column that are those two groups, typed as the engine gave them
-    (what an aggregate of the report keeps to: `quartiles`)."""
-    value, group = p["value"], p["group"]
+    the values of the grouping column that are those two, typed as the engine gave them, and
+    whether an aggregate may keep to them by those values (`chosen`: two named, of a column a
+    literal compares with; otherwise the groups were listed)."""
+    group = p["group"]
     wanted = p["groups"]
     # Two groups named: the engine reads those two (and counts the rows with no group),
     # however many the column holds — the limit on the groups is for a column whose groups
@@ -314,9 +316,19 @@ def _two_groups(source, test: str, p: dict[str, Any]) -> tuple[list[str], list[M
             if g not in labels:
                 raise refusal(test, f"the group «{g}» is not in the column «{group}» (it has: {_listed(labels)})")
         typed = [lv.value for lv in levels if label_of(lv.value) in wanted]
+    return list(wanted), typed, chosen is not None
+
+
+def _two_groups(source, test: str, p: dict[str, Any]) -> tuple[list[str], list[Moments], int, list]:
+    """The two groups a two-sample test compares, the first minus the second: their labels,
+    their moments, the rows left out (no group, or no value in one of the two), and the
+    values of the grouping column that are those two groups, typed as the engine gave them
+    (what an aggregate of the report keeps to: `quartiles`)."""
+    value, group = p["value"], p["group"]
+    wanted, typed, chosen = _choose_two(source, test, p)
     by_label: dict[str, Moments] = {}
     without_group = 0
-    for m in source.moments(value, group, typed if chosen is not None else None):
+    for m in source.moments(value, group, typed if chosen else None):
         if m.level is None:
             without_group += m.rows
         else:
@@ -825,6 +837,439 @@ def _levene(source, p: dict[str, Any], out: Rows, engine_name: str) -> None:
 
 
 
+# ── proportions ─────────────────────────────────────────────────────────────
+def _success_value(source, test: str, value: str, success: Any) -> Any:
+    """The success as the outcome column holds it, or a refusal that says why it cannot be."""
+    kind = source.kind_of(value)
+    if kind is None:
+        dtype = source.columns()[value].dtype
+        raise refusal(test, f"the column «{value}» ({dtype}) cannot be compared with a value written as text: "
+                            "a test of proportions reads a column of texts, whole or float numbers, dates or true/false; cast it first")
+    typed = typed_value(success, kind)
+    if typed is None:
+        said = {"integer": "a whole number", "float": "a number", "boolean": "true or false", "date": "a date (2024-03-01)"}[kind]
+        raise refusal(test, f"'success' («{label_of(success) if not isinstance(success, str) else success}») is not a value the column "
+                            f"«{value}» can hold: it holds {said}")
+    return typed
+
+
+def _success_label(success: Any) -> str:
+    return success if isinstance(success, str) else label_of(success)
+
+
+def _norm_tails(z: float, alternative: str, alpha: float) -> tuple[float, float | None, float | None, float]:
+    """(p-value, critical_low, critical_high, the quantile of the interval) of a normal z."""
+    if alternative == "two_sided":
+        q = dist.norm_isf(alpha / 2.0)
+        return min(1.0, 2.0 * dist.norm_sf(abs(z))), -q, q, q
+    q = dist.norm_isf(alpha)
+    if alternative == "less":
+        return dist.norm_cdf(z), -q, None, q
+    return dist.norm_sf(z), None, q, q
+
+
+def _wilson(k: int, n: int, z: float, yates: float) -> tuple[float, float]:
+    """Wilson's score interval of k successes in n with the quantile z, and the continuity
+    correction `yates` (R's `prop.test`): each bound from p ± yates/n, kept inside [0, 1]."""
+    p_hat = k / n
+    z22n = z * z / (2.0 * n)
+
+    def bound(pc: float, sign: float) -> float:
+        return (pc + z22n + sign * z * math.sqrt(pc * (1.0 - pc) / n + z22n / (2.0 * n))) / (1.0 + 2.0 * z22n)
+
+    upper = 1.0 if p_hat + yates / n >= 1.0 else min(1.0, bound(p_hat + yates / n, 1.0))
+    lower = 0.0 if p_hat - yates / n <= 0.0 else max(0.0, bound(p_hat - yates / n, -1.0))
+    return lower, upper
+
+
+def _cohen_h(p1: float, p2: float) -> float:
+    return 2.0 * math.asin(math.sqrt(p1)) - 2.0 * math.asin(math.sqrt(p2))
+
+
+_PROP_INTERVAL_TEXT = "CI = (p_c + z²/(2n) ± z·√(p_c·(1 − p_c)/n + z²/(4n²))) / (1 + z²/n), p_c = k/n ± Y/n"
+
+
+def _write_proportion_group(out: Rows, label: str, rows: int, n: int, k: int, interval: tuple[float, float]) -> None:
+    """A group of a test of proportions: its values, successes, proportion, the proportion's
+    standard error and its two-sided interval at 1 − alpha."""
+    p_hat = k / n
+    for stat, number in (("n", n), ("rows", rows), ("successes", k), ("proportion", p_hat),
+                         ("se", math.sqrt(p_hat * (1.0 - p_hat) / n)), ("ci_low", interval[0]), ("ci_high", interval[1])):
+        out.number("group", stat, number, level=label)
+
+
+def _prop_one_sample(source, p: dict[str, Any], out: Rows, engine_name: str) -> None:
+    """The test of one proportion, by the score (Wilson's interval, with or without the
+    continuity correction) or exact (the binomial, Clopper–Pearson's interval).
+    H0: P(value = success) = p0."""
+    test = "prop_one_sample"
+    value, p0, alpha, alternative = p["value"], p["p0"], p["alpha"], p["alternative"]
+    success = _success_value(source, test, value, p["success"])
+    said = _success_label(p["success"])
+    [s] = source.successes(value, success)
+    n, k = s.n, s.k
+    if n == 0:
+        raise refusal(test, f"the column «{value}» has no value on the rows that reach the step (a NULL or a NaN is left out)")
+    notes = []
+    if k == 0:
+        notes.append(f"No row of «{value}» holds «{said}»: no row counts as a success. Is it the value the column holds?")
+    p_hat = k / n
+    share = f"P({value} = {said})"
+    h0, h1 = f"{share} = {_num(p0)}", f"{share} {_RELATION[alternative]} {_num(p0)}"
+    report = p["detail"] == "report"
+    if p["method"] == "exact":
+        if n + 1 > EXACT_SUPPORT:
+            raise refusal(test, f"the exact binomial goes through n + 1 = {n + 1:,} outcomes, more than {EXACT_SUPPORT:,}: "
+                                "use method = 'score', which is as good on so many rows")
+        p_value = exact.binomial_test(k, n, p0, alternative)
+        ci_low, ci_high = exact.clopper_pearson(k, n, alpha, alternative)
+        tails = {"two_sided": "p = ∑ P(X = i), P(X = i) ≤ P(X = k)·(1 + 1e-7)", "less": "p = P(X ≤ k)", "greater": "p = P(X ≥ k)"}
+        bounds = {"two_sided": "P(X ≥ k | p_L) = α/2, P(X ≤ k | p_U) = α/2", "less": "p_L = 0, P(X ≤ k | p_U) = α",
+                  "greater": "P(X ≥ k | p_L) = α, p_U = 1"}
+        formula = f"{tails[alternative]}, P(X = i) = C(n, i)·p0^i·(1 − p0)^(n − i); CI (Clopper–Pearson): {bounds[alternative]}"
+        _write_head(out, test, "exact", p, h0, h1, formula, f"binomial({n}, {_num(p0)})", p_value, engine_name, notes)
+        _write_numbers(out, (
+            ("alpha", alpha), ("conf_level", 1.0 - alpha), ("n", n), ("n_missing", s.rows - n), ("successes", k),
+            ("estimate", p_hat), ("null_value", p0), ("p_value", p_value), ("ci_low", ci_low), ("ci_high", ci_high),
+            ("cohen_h", _cohen_h(p_hat, p0)),
+        ))
+        _write_proportion_group(out, value, s.rows, n, k, exact.clopper_pearson(k, n, alpha, "two_sided"))
+        return
+    yates = min(0.5, abs(k - n * p0)) if p["correction"] else 0.0
+    chi_square = (abs(k - n * p0) - yates) ** 2 / (n * p0 * (1.0 - p0))
+    z = math.copysign(math.sqrt(chi_square), p_hat - p0) if p_hat != p0 else 0.0
+    p_value, critical_low, critical_high, z_quantile = _norm_tails(z, alternative, alpha)
+    low, high = _wilson(k, n, z_quantile, yates)
+    ci_low = low if alternative != "less" else 0.0
+    ci_high = high if alternative != "greater" else 1.0
+    formula = (f"z = ±√χ², χ² = (|k − n·p0| − Y)² / (n·p0·(1 − p0)), Y = {'min(0.5, |k − n·p0|)' if p['correction'] else '0'}; "
+               + _PROP_INTERVAL_TEXT)
+    _write_head(out, test, "score", p, h0, h1, formula, "normal", p_value, engine_name, notes)
+    _write_numbers(out, (
+        ("alpha", alpha), ("conf_level", 1.0 - alpha), ("n", n), ("n_missing", s.rows - n), ("successes", k),
+        ("expected_successes", n * p0), ("yates", yates), ("chi_square", chi_square), ("z_quantile", z_quantile),
+        ("estimate", p_hat), ("null_value", p0), ("std_error", math.sqrt(p0 * (1.0 - p0) / n)), ("statistic", z),
+        ("critical_low", critical_low), ("critical_high", critical_high), ("p_value", p_value),
+        ("ci_low", ci_low), ("ci_high", ci_high), ("cohen_h", _cohen_h(p_hat, p0)),
+    ))
+    _write_proportion_group(out, value, s.rows, n, k, _wilson(k, n, dist.norm_isf(alpha / 2.0), yates))
+    if report:
+        _write_curve(out, dist.norm_pdf, z, critical_low, critical_high)
+
+
+def _prop_two_sample(source, p: dict[str, Any], out: Rows, engine_name: str) -> None:
+    """The test of two proportions (R's `prop.test` of two groups): the chi-square of the 2 × 2
+    table of successes and failures, as a z with the sign of the difference, with or without
+    the continuity correction. H0: P(value = success | 1) = P(value = success | 2)."""
+    test = "prop_two_sample"
+    value, group, alpha, alternative = p["value"], p["group"], p["alpha"], p["alternative"]
+    success = _success_value(source, test, value, p["success"])
+    said = _success_label(p["success"])
+    wanted, typed, chosen = _choose_two(source, test, p)
+    by_label, without_group = {}, 0
+    for s in source.successes(value, success, group, typed if chosen else None):
+        if s.level is None:
+            without_group += s.rows
+        else:
+            by_label[label_of(s.level)] = s
+    a, b = (by_label[g] for g in wanted)
+    for g, s in zip(wanted, (a, b)):
+        if s.n == 0:
+            raise refusal(test, f"the group «{g}» has no value of «{value}» (a NULL or a NaN is left out)")
+    n1, n2, k1, k2 = a.n, b.n, a.k, b.k
+    p1, p2 = k1 / n1, k2 / n2
+    pooled = (k1 + k2) / (n1 + n2)
+    if pooled in (0.0, 1.0):
+        raise refusal(test, f"{'no' if pooled == 0.0 else 'every'} value of «{value}» in the two groups is «{said}»: "
+                            "the two proportions are both " + ("0" if pooled == 0.0 else "1") + ", and there is nothing to test")
+    estimate = p1 - p2
+    inverse = 1.0 / n1 + 1.0 / n2
+    yates = min(0.5, abs(estimate) / inverse) if p["correction"] else 0.0
+    chi_square = (abs(estimate) - yates * inverse) ** 2 / (pooled * (1.0 - pooled) * inverse)
+    z = math.copysign(math.sqrt(chi_square), estimate) if estimate != 0.0 else 0.0
+    p_value, critical_low, critical_high, z_quantile = _norm_tails(z, alternative, alpha)
+    width = z_quantile * math.sqrt(p1 * (1.0 - p1) / n1 + p2 * (1.0 - p2) / n2) + yates * inverse
+    ci_low = max(estimate - width, -1.0) if alternative != "less" else -1.0
+    ci_high = min(estimate + width, 1.0) if alternative != "greater" else 1.0
+    difference = f"P({value} = {said} | {wanted[0]}) − P({value} = {said} | {wanted[1]})"
+    formula = ("z = ±√χ², χ² = (|p1 − p2| − Y·I)² / (p·(1 − p)·I), p = (k1 + k2) / (n1 + n2), I = 1/n1 + 1/n2, "
+               f"Y = {'min(0.5, |p1 − p2| / I)' if p['correction'] else '0'}; "
+               "CI = (p1 − p2) ± (z_q·√(p1·(1 − p1)/n1 + p2·(1 − p2)/n2) + Y·I)")
+    _write_head(out, test, "score", p, f"{difference} = 0", f"{difference} {_RELATION[alternative]} 0", formula, "normal",
+                p_value, engine_name, [])
+    _write_numbers(out, (
+        ("alpha", alpha), ("conf_level", 1.0 - alpha), ("n", n1 + n2), ("n_missing", without_group + a.rows - n1 + b.rows - n2),
+        ("pooled_proportion", pooled), ("inverse_sum", inverse), ("yates", yates), ("chi_square", chi_square),
+        ("z_quantile", z_quantile), ("estimate", estimate), ("null_value", 0.0),
+        ("std_error", math.sqrt(pooled * (1.0 - pooled) * inverse)), ("statistic", z),
+        ("critical_low", critical_low), ("critical_high", critical_high), ("p_value", p_value),
+        ("ci_low", ci_low), ("ci_high", ci_high), ("cohen_h", _cohen_h(p1, p2)),
+    ))
+    quantile = dist.norm_isf(alpha / 2.0)
+    for g, s in zip(wanted, (a, b)):
+        _write_proportion_group(out, g, s.rows, s.n, s.k, _wilson(s.k, s.n, quantile, 0.5 if p["correction"] else 0.0))
+    if p["detail"] == "report":
+        _write_curve(out, dist.norm_pdf, z, critical_low, critical_high)
+
+
+# ── contingency tables ──────────────────────────────────────────────────────
+class _Crosstab(NamedTuple):
+    """A contingency table read from A7: the categories of x (rows) and y (columns) in text
+    order, the counts, and the rows left out (no value in one of the two)."""
+
+    rows: list[str]
+    cols: list[str]
+    counts: list[list[int]]
+    missing: int
+
+
+def _contingency(source, test: str, x: str, y: str) -> _Crosstab:
+    if x == y:
+        raise refusal(test, f"'x' and 'y' are both the column «{x}»: choose two different columns")
+    limit = MAX_STAT_LEVELS * MAX_STAT_LEVELS + 2 * MAX_STAT_LEVELS + 2
+    cells = source.crosstab(x, y, limit)
+    counts: dict[tuple[str, str], int] = {}
+    missing = 0
+    for c in cells:
+        if not (is_value(c.x) and is_value(c.y)):
+            missing += c.rows
+            continue
+        key = (label_of(c.x), label_of(c.y))  # −0.0 and 0.0 one category, on every engine
+        counts[key] = counts.get(key, 0) + c.rows
+    rows = sorted({a for a, _ in counts})
+    cols = sorted({b for _, b in counts})
+    # at most 50 categories each: with as many, the pairs (NULLs too) are one fewer than the limit
+    for column, found in ((x, rows), (y, cols)):
+        if len(found) > MAX_STAT_LEVELS or (len(cells) >= limit and len(found) == max(len(rows), len(cols))):
+            raise refusal(test, f"the column «{column}» has more than {MAX_STAT_LEVELS} categories: a contingency table takes "
+                                f"{MAX_STAT_LEVELS} a column at most (is it the right column?)")
+    if not counts:
+        raise refusal(test, f"no row has a value in both «{x}» and «{y}» (a NULL or a NaN is left out)")
+    for column, found in ((x, rows), (y, cols)):
+        if len(found) < 2:
+            raise refusal(test, f"the column «{column}» has 1 category ({found[0]}) on the rows used: "
+                                "the table needs two at least in each column")
+    return _Crosstab(rows, cols, [[counts.get((a, b), 0) for b in cols] for a in rows], missing)
+
+
+def _chi_square(counts: list[list[int]], correction: bool) -> tuple[float, float, float, list[list[float]], list[int], list[int], int]:
+    """(statistic, the correction subtracted, statistic without it, expected counts, row totals,
+    column totals, N) of a table: Σ (|O − E| − Y)² / E, Y = min(0.5, |O − E|) for a 2 × 2 table
+    with the correction (R's `chisq.test`), else 0."""
+    row_totals = [sum(r) for r in counts]
+    col_totals = [sum(c) for c in zip(*counts)]
+    total = sum(row_totals)
+    expected = [[r * c / total for c in col_totals] for r in row_totals]
+    pairs = [(o, e) for orow, erow in zip(counts, expected) for o, e in zip(orow, erow)]
+    yates = min(0.5, min(abs(o - e) for o, e in pairs)) if correction and len(counts) == 2 and len(counts[0]) == 2 else 0.0
+    plain = math.fsum((o - e) ** 2 / e for o, e in pairs)
+    statistic = math.fsum((abs(o - e) - yates) ** 2 / e for o, e in pairs) if yates else plain
+    return statistic, yates, plain, expected, row_totals, col_totals, total
+
+
+def _sparse_note(expected: list[float]) -> list[str]:
+    small = sum(1 for e in expected if e < 5.0)
+    if small > 0.2 * len(expected) or min(expected) < 1.0:
+        return [f"{small} of the {len(expected)} expected counts are below 5{' (one below 1)' if min(expected) < 1.0 else ''}: "
+                "the chi-square distribution is a poor approximation there. Merge rare categories"
+                + (", or use Fisher's exact test (2 × 2)." if len(expected) == 4 else ".")]
+    return []
+
+
+def _write_margins(out: Rows, table: _Crosstab, row_totals: list[int], col_totals: list[int]) -> None:
+    """The margins of a contingency table, as groups: each category of x with its row total and
+    share, each of y with its column total and share."""
+    total = sum(row_totals)
+    for label, n in zip(table.rows, row_totals):
+        out.number("group", "row_total", n, level=label)
+        out.number("group", "row_share", n / total, level=label)
+    for label, n in zip(table.cols, col_totals):
+        out.number("group", "col_total", n, level=label)
+        out.number("group", "col_share", n / total, level=label)
+
+
+def _chi2_independence(source, p: dict[str, Any], out: Rows, engine_name: str) -> None:
+    """Pearson's chi-square test of independence of two categorical columns, with Yates'
+    correction on a 2 × 2 table; its post-hoc: the cells (adjusted residuals) or the pairs of
+    categories of x (a chi-square of each 2 × c table). H0: x and y are independent."""
+    test = "chi2_independence"
+    x, y, alpha, posthoc = p["x"], p["y"], p["alpha"], p["posthoc"]
+    table = _contingency(source, test, x, y)
+    r, c = len(table.rows), len(table.cols)
+    if posthoc == "pairs" and r > MAX_POSTHOC_GROUPS:
+        raise refusal(test, f"the comparisons of pairs ('posthoc') take {MAX_POSTHOC_GROUPS} categories of «{x}» at most, and it has "
+                            f"{r}: filter the categories first, or set 'posthoc' to cells or none")
+    statistic, yates, plain, expected, row_totals, col_totals, total = _chi_square(table.counts, p["correction"])
+    df = float((r - 1) * (c - 1))
+    p_value, critical_high = dist.chi2_sf(statistic, df), dist.chi2_isf(alpha, df)
+    notes = _sparse_note([e for row in expected for e in row])
+    cramers_v = math.sqrt(plain / (total * min(r - 1, c - 1)))
+    adjusted = [[(o - e) / math.sqrt(e * (1.0 - rt / total) * (1.0 - ct / total))
+                 for o, e, ct in zip(orow, erow, col_totals)]
+                for orow, erow, rt in zip(table.counts, expected, row_totals)]
+    pairs_texts, extra, cell_p, pair_rows = None, (), None, []
+    adjust = p["p_adjust"]
+    if posthoc == "cells":
+        raw = [min(1.0, 2.0 * dist.norm_sf(abs(z))) for row in adjusted for z in row]
+        cell_p = list(zip(raw, p_adjusted(raw, adjust)))
+        extra = (("n_cells", r * c),)
+        pairs_texts = (posthoc, adjust, "z = (O − E) / √(E·(1 − R/N)·(1 − C/N)), p = 2·P(Z ≥ |z|), " + _ADJUST_TEXT[adjust].format(m="n_cells"))
+    elif posthoc == "pairs":
+        for i in range(r):
+            for j in range(i + 1, r):
+                sub = [table.counts[i], table.counts[j]]
+                keep = [k for k in range(c) if sub[0][k] + sub[1][k] > 0]
+                sub = [[row[k] for k in keep] for row in sub]
+                if len(keep) < 2:  # the two categories have their rows in one column alone: nothing tells them apart
+                    stat_ij, df_ij, p_ij = 0.0, 0.0, 1.0
+                else:
+                    stat_ij = _chi_square(sub, p["correction"])[0]
+                    df_ij = float(len(keep) - 1)
+                    p_ij = dist.chi2_sf(stat_ij, df_ij)
+                pair_rows.append([table.rows[i], table.rows[j], None, None, stat_ij, df_ij, None, p_ij, None, None, None])
+        for row, adj in zip(pair_rows, p_adjusted([row[7] for row in pair_rows], adjust)):
+            row[8] = adj
+        extra = (("n_pairs", len(pair_rows)),)
+        pairs_texts = (posthoc, adjust, "χ²_ij = ∑ (|O − E| − Y)² / E over the rows i, j of x and the columns where O > 0, "
+                                        "df = c − 1, p = P(χ²(df) ≥ χ²_ij), "
+                                        + _ADJUST_TEXT[adjust].format(m="n_pairs"))
+        if p_value >= alpha:
+            notes.append(f"The chi-square test does not reject H0 at α = {_num(alpha)}: the comparisons are shown all the same, "
+                         "and a difference they find is to be read with care.")
+    formula = ("χ² = ∑ (|O − E| − Y)² / E, E = R·C / N, Y = " + ("min(0.5, |O − E|)" if yates or (p["correction"] and r == c == 2) else "0")
+               + ", df = (r − 1)·(c − 1); V = √(χ²₀ / (N·min(r − 1, c − 1))), χ²₀ = ∑ (O − E)² / E")
+    _write_head(out, test, "yates" if p["correction"] and r == c == 2 else "pearson", p,
+                f"P({x}, {y}) = P({x})·P({y})", f"P({x}, {y}) ≠ P({x})·P({y})", formula, f"chi-square({df:.6g})",
+                p_value, engine_name, notes, pairs_texts)
+    phi = ()
+    if r == c == 2:
+        (a_, b_), (c_, d_) = table.counts
+        phi = (("phi", (a_ * d_ - b_ * c_) / math.sqrt(row_totals[0] * row_totals[1] * col_totals[0] * col_totals[1])),)
+    _write_numbers(out, (
+        ("alpha", alpha), ("conf_level", 1.0 - alpha), ("n", total), ("n_missing", table.missing), ("rows", r), ("cols", c),
+        ("yates", yates), ("chi_square_plain", plain), ("statistic", statistic), ("df", df), ("critical_high", critical_high),
+        ("p_value", p_value), ("cramers_v", cramers_v), *phi, *extra,
+    ))
+    _write_margins(out, table, row_totals, col_totals)
+    for i, a in enumerate(table.rows):
+        for j, b in enumerate(table.cols):
+            o, e = table.counts[i][j], expected[i][j]
+            for stat, number in (("observed", o), ("expected", e), ("residual", (o - e) / math.sqrt(e)),
+                                 ("adj_residual", adjusted[i][j]), ("contribution", (abs(o - e) - yates) ** 2 / e)):
+                out.number("cell", stat, number, level=a, level_2=b)
+            if cell_p is not None:
+                raw_p, adj = cell_p[i * c + j]
+                out.number("cell", "p_value", raw_p, level=a, level_2=b)
+                out.number("cell", "p_adjusted", adj, level=a, level_2=b)
+                out.text("cell", "significance", significance(adj) or "", level=a, level_2=b)
+                out.text("cell", "decision", "reject_h0" if adj < alpha else "fail_to_reject_h0", level=a, level_2=b)
+    for row in pair_rows:
+        _write_pair(out, row, alpha)
+    if p["detail"] == "report":
+        _write_positive_curve(out, lambda v: dist.chi2_pdf(v, df), lambda q: dist.chi2_isf(q, df), statistic, None, critical_high)
+
+
+_ADJUST_TEXT = {
+    "holm": "p_adj = Holm's: the p sorted, p(1) ≤ ... ≤ p({m}), p_adj(r) = max over r' ≤ r of min(1, ({m} − r' + 1) · p(r'))",
+    "bonferroni": "p_adj = min(1, {m} · p)",
+    "sidak": "p_adj = 1 − (1 − p)^{m}",
+    "none": "p_adj = p",
+}
+
+
+def _chi2_gof(source, p: dict[str, Any], out: Rows, engine_name: str) -> None:
+    """The chi-square test of goodness of fit: do the categories of a column have the expected
+    proportions (all equal, or given)? H0: P(value = i) = p_i for every category."""
+    test = "chi2_gof"
+    value, alpha = p["value"], p["alpha"]
+    counts: dict[str, int] = {}
+    missing = 0
+    levels = source.levels(value, MAX_STAT_GROUPS + 2)
+    for lv in levels:
+        if not is_value(lv.value):
+            missing += lv.rows
+        else:
+            counts[label_of(lv.value)] = counts.get(label_of(lv.value), 0) + lv.rows
+    if len(counts) > MAX_STAT_GROUPS or len(levels) > MAX_STAT_GROUPS + 1:
+        raise refusal(test, f"the column «{value}» has more than {MAX_STAT_GROUPS} categories: is it the right column?")
+    labels = sorted(counts)
+    if not labels:
+        raise refusal(test, f"the column «{value}» has no value on the rows that reach the step (a NULL or a NaN is left out)")
+    if len(labels) < 2:
+        raise refusal(test, f"the column «{value}» has 1 category ({labels[0]}) on the rows used: the test needs two at least")
+    given = p["expected"]
+    if given is None:
+        shares = {g: 1.0 / len(labels) for g in labels}
+        variant = "equal"
+    else:
+        absent, unknown = [g for g in labels if g not in given], sorted(g for g in given if g not in counts)
+        if absent or unknown:
+            raise refusal(test, "'expected' must give a proportion to exactly the categories of «" + value + "» on the rows used"
+                          + (f"; it lacks {_listed(absent)}" if absent else "")
+                          + (f"; {_listed(unknown)} {'is' if len(unknown) == 1 else 'are'} not in the column" if unknown else ""))
+        shares = {g: given[g] for g in labels}
+        variant = "given"
+    total = sum(counts.values())
+    expected = {g: total * shares[g] for g in labels}
+    statistic = math.fsum((counts[g] - expected[g]) ** 2 / expected[g] for g in labels)
+    df = float(len(labels) - 1)
+    p_value, critical_high = dist.chi2_sf(statistic, df), dist.chi2_isf(alpha, df)
+    shown = labels if len(labels) <= 3 else [labels[0], labels[1], None, labels[-1]]
+    h0 = ", ".join("..." if g is None else f"P({value} = {g}) = {_num(shares[g])}" for g in shown)
+    _write_head(out, test, variant, p, h0, f"max |P({value} = i) − p_i| > 0",
+                "χ² = ∑ (O − E)² / E, E = N·p_i, df = k − 1; w = √(χ² / N)", f"chi-square({df:.6g})", p_value, engine_name,
+                _sparse_note(list(expected.values())))
+    _write_numbers(out, (
+        ("alpha", alpha), ("conf_level", 1.0 - alpha), ("n", total), ("n_missing", missing), ("k", len(labels)),
+        ("statistic", statistic), ("df", df), ("critical_high", critical_high), ("p_value", p_value),
+        ("cohen_w", math.sqrt(statistic / total)),
+    ))
+    for g in labels:
+        o, e = counts[g], expected[g]
+        for stat, number in (("observed", o), ("proportion", o / total), ("expected_share", shares[g]), ("expected", e),
+                             ("residual", (o - e) / math.sqrt(e)), ("contribution", (o - e) ** 2 / e)):
+            out.number("cell", stat, number, level=g)
+    if p["detail"] == "report":
+        _write_positive_curve(out, lambda v: dist.chi2_pdf(v, df), lambda q: dist.chi2_isf(q, df), statistic, None, critical_high)
+
+
+def _fisher_exact(source, p: dict[str, Any], out: Rows, engine_name: str) -> None:
+    """Fisher's exact test of a 2 × 2 table, with the conditional odds ratio and its interval
+    (R's `fisher.test`). H0: odds ratio = 1."""
+    test = "fisher_exact"
+    x, y, alpha, alternative = p["x"], p["y"], p["alpha"], p["alternative"]
+    table = _contingency(source, test, x, y)
+    if len(table.rows) != 2 or len(table.cols) != 2:
+        raise refusal(test, f"Fisher's exact test takes a 2 × 2 table, and «{x}» has {len(table.rows)} categories and «{y}» "
+                            f"{len(table.cols)} on the rows used: use the chi-square test of independence")
+    (a, b), (c, d) = table.counts
+    support = exact.fisher_support(a, b, c, d)
+    if support > EXACT_SUPPORT:
+        raise refusal(test, f"the exact distribution of this table goes through {support:,} outcomes, more than {EXACT_SUPPORT:,}: "
+                            "use the chi-square test of independence, which is as good on so many rows")
+    f = exact.fisher_exact(a, b, c, d, alternative, alpha)
+    row_totals, col_totals, total = [a + b, c + d], [a + c, b + d], a + b + c + d
+    sample = a * d / (b * c) if b * c else None
+    odds = f"OR({x}, {y})"
+    tails = {"two_sided": "p = ∑ P(X = i), P(X = i) ≤ P(X = a)·(1 + 1e-7)", "less": "p = P(X ≤ a)", "greater": "p = P(X ≥ a)"}
+    bounds = {"two_sided": "P(X ≥ a | OR_L) = α/2, P(X ≤ a | OR_U) = α/2", "less": "OR_L = 0, P(X ≤ a | OR_U) = α",
+              "greater": "P(X ≥ a | OR_L) = α, OR_U = ∞"}
+    formula = (f"{tails[alternative]}, P(X = i | OR) = C(C1, i)·C(C2, R1 − i)·OR^i / ∑ C(C1, j)·C(C2, R1 − j)·OR^j, P(X = i) = P(X = i | 1); OR: E(X | OR) = a; "
+               f"CI: {bounds[alternative]}; sample OR = a·d / (b·c)")
+    _write_head(out, test, "exact", p, f"{odds} = 1", f"{odds} {_RELATION[alternative]} 1", formula,
+                f"hypergeometric({col_totals[0]}, {col_totals[1]}, {row_totals[0]})", f.p_value, engine_name, [])
+    _write_numbers(out, (
+        ("alpha", alpha), ("conf_level", 1.0 - alpha), ("n", total), ("n_missing", table.missing), ("support", f.support),
+        ("sample_odds_ratio", sample), ("estimate", f.odds_ratio), ("null_value", 1.0), ("p_value", f.p_value),
+        ("ci_low", f.ci_low), ("ci_high", f.ci_high),
+    ))
+    _write_margins(out, table, row_totals, col_totals)
+    for i, ra in enumerate(table.rows):
+        for j, cb in enumerate(table.cols):
+            out.number("cell", "observed", table.counts[i][j], level=ra, level_2=cb)
+            out.number("cell", "expected", row_totals[i] * col_totals[j] / total, level=ra, level_2=cb)
+
+
 _TESTS: dict[str, Callable[..., None]] = {
     "t_one_sample": _t_one_sample,
     "t_two_sample": _t_two_sample,
@@ -833,11 +1278,17 @@ _TESTS: dict[str, Callable[..., None]] = {
     "var_f": _var_f,
     "levene": _levene,
     "pearson": _pearson,
+    "prop_one_sample": _prop_one_sample,
+    "prop_two_sample": _prop_two_sample,
+    "chi2_independence": _chi2_independence,
+    "chi2_gof": _chi2_gof,
+    "fisher_exact": _fisher_exact,
 }
 
 # The tests that write the rows of their report's charts. Until a test is here it refuses
 # `detail = report` with a sentence: it is never answered with the results alone.
-_WITH_REPORT_ROWS = frozenset({"t_one_sample", "t_two_sample", "t_paired", "anova", "var_f", "levene", "pearson"})
+_WITH_REPORT_ROWS = frozenset({"t_one_sample", "t_two_sample", "t_paired", "anova", "var_f", "levene", "pearson",
+                               "prop_one_sample", "prop_two_sample", "chi2_independence", "chi2_gof", "fisher_exact"})
 
 
 def run_hypothesis_test(source, test: str, params: dict[str, Any] | None, engine_name: str) -> list[tuple]:

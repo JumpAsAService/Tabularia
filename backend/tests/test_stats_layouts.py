@@ -59,6 +59,11 @@ REFERENCE = {
     "var_f": WELCH,
     "levene": {"value": "v", "group": "g"},
     "pearson": {"x": "px", "y": "py"},
+    "prop_one_sample": {"value": "answer", "success": "yes", "p0": 0.25},
+    "prop_two_sample": {"value": "answer", "success": "yes", "group": "g"},
+    "chi2_independence": {"x": "x", "y": "y"},
+    "chi2_gof": {"value": "cat"},
+    "fisher_exact": {"x": "x", "y": "y"},
 }
 # and the variants of each, together every row it may write
 VARIANTS = {
@@ -70,6 +75,12 @@ VARIANTS = {
     "var_f": ({}, {"alternative": "less"}, {"alternative": "greater", "ratio": 2}),
     "levene": ({}, {"center": "mean"}),
     "pearson": ({}, {"alternative": "less"}, {"alternative": "greater"}),
+    "prop_one_sample": ({}, {"correction": False, "alternative": "less"}, {"method": "exact"},
+                        {"method": "exact", "alternative": "greater"}, {"alternative": "greater", "success": "no"}),
+    "prop_two_sample": ({}, {"correction": False}, {"alternative": "less"}, {"alternative": "greater", "groups": ["b", "a"]}),
+    "chi2_independence": ({}, {"posthoc": "cells"}, {"posthoc": "pairs", "p_adjust": "bonferroni"}, {"posthoc": "cells", "p_adjust": "none"}),
+    "chi2_gof": ({}, {"expected": {"a": 0.1, "b": 0.2, "c": 0.3, "d": 0.4}}),
+    "fisher_exact": ({}, {"alternative": "less"}, {"alternative": "greater"}),
 }
 
 
@@ -86,7 +97,31 @@ def pairs() -> pl.DataFrame:
                          "px": PX + [math.nan], "py": PY + [3.0]})
 
 
+def counts_table(rows: list[str], cols: list[str], counts: list[list[int]]) -> pl.DataFrame:
+    """A contingency table as the rows that make it (x, y), and a row each column leaves out."""
+    cells = [(a, b) for a, row in zip(rows, counts) for b, n in zip(cols, row) for _ in range(n)]
+    cells += [(None, cols[0]), (rows[0], None)]
+    return pl.DataFrame({"x": [a for a, _ in cells], "y": [b for _, b in cells]}, schema={"x": pl.String, "y": pl.String})
+
+
+def proportions() -> pl.DataFrame:
+    """37 successes of 120 in «a», 52 of 110 in «b»; a row with no group, one with no answer."""
+    g = ["a"] * 120 + ["b"] * 110 + [None, "a"]
+    answer = ["yes"] * 37 + ["no"] * 83 + ["yes"] * 52 + ["no"] * 58 + ["yes", None]
+    return pl.DataFrame({"g": g, "answer": answer}, schema={"g": pl.String, "answer": pl.String})
+
+
 def frame_of(test: str) -> pl.DataFrame:
+    if test == "prop_one_sample":
+        return proportions().filter(pl.col("g") == "a")
+    if test == "prop_two_sample":
+        return proportions()
+    if test == "chi2_independence":
+        return counts_table(["x1", "x2", "x3"], ["m", "f"], [[30, 15], [20, 25], [10, 20]])
+    if test == "fisher_exact":
+        return counts_table(["a", "b"], ["x", "y"], [[12, 5], [7, 16]])
+    if test == "chi2_gof":
+        return pl.DataFrame({"cat": ["a"] * 18 + ["b"] * 22 + ["c"] * 30 + ["d"] * 30 + [None]})
     if test in ("t_paired", "pearson"):
         return pairs()
     if test == "t_one_sample":
@@ -192,8 +227,16 @@ def test_a_layout_reads_only_rows_the_test_writes(test):
         assert named and named <= written, sorted(named - written)
         # a key made of a group's label is a row of every group; of a pair's, of every pair
         groups = {r["level"] for r in rows if r["section"] == "group"}
+        # (the margins of a contingency table: a category of x has its row's numbers, one of y its column's)
+        margin = {kind: {r["level"] for r in rows if r["stat"] == f"{kind}_total"} for kind in ("row", "col")}
         for stat in re.findall(r'\\"group\|\\" & \[level\] & \\"\|\|(\w+)\\"', text):
-            assert {f"group|{g}||{stat}" for g in groups} <= written, stat
+            assert {f"group|{g}||{stat}" for g in margin.get(stat.split("_")[0]) or groups} <= written, stat
+        # a cell's key: of every cell (of a contingency table, or of the categories of a goodness of fit)
+        cells = {(r["level"], r["level_2"]) for r in rows if r["section"] == "cell"}
+        for stat in re.findall(r'\\"cell\|\\" & \[level\] & \\"\|\\" & \[level_2\] & \\"\|(\w+)\\"', text):
+            assert {f"cell|{a}|{b}|{stat}" for a, b in cells} <= written, stat
+        for stat in re.findall(r'\\"cell\|\\" & \[level\] & \\"\|\|(\w+)\\"', text):
+            assert {f"cell|{a}||{stat}" for a, _ in cells} <= written, stat
         pairs_ = {(r["level"], r["level_2"]) for r in rows if r["section"] == "pair"}
         for stat in re.findall(r'\\"pair\|\\" & \[level\] & \\"\|\\" & \[level_2\] & \\"\|(\w+)\\"', text):
             assert {f"pair|{a}|{b}|{stat}" for a, b in pairs_} <= written, stat
@@ -204,7 +247,8 @@ def test_a_layout_reads_only_rows_the_test_writes(test):
 def test_the_report_reads_as_many_rows_as_a_test_may_write():
     assert len(rows_of()) == 382  # the reference test: 27 of the test (its significance code too), 24 of its groups, 10 intervals, 321 of the curve
     assert layouts.MAX_REPORT_ROWS >= 64 + 200 * (12 + 30) + 603  # 200 groups, each with 30 intervals, and the curve
-    assert layouts.MAX_REPORT_ROWS < 20_000
+    assert layouts.MAX_REPORT_ROWS >= 64 + 2500 * 9 + 200 + 603  # a table of 50 × 50 cells, with the post-hoc of the cells
+    assert layouts.MAX_REPORT_ROWS < 25_000
 
 
 def test_the_name_of_a_report_is_its_test_and_its_columns():
@@ -378,7 +422,7 @@ def test_the_report_renders_in_the_five_languages(tmp_path, chart_service, monke
         said = set(strings(json.loads(page)))
         words = layouts.texts(locale)
         assert layouts.test_name("t_two_sample", params, locale) in said
-        assert {words["sections"][s] for s in words["sections"] if s != "comparisons"} <= said  # (no post-hoc here)
+        assert {words["sections"][s] for s in words["sections"] if s not in ("comparisons", "comparisons_cells", "table")} <= said  # (no post-hoc, no table of counts)
         assert words["stats"]["test"]["df"] in said and words["tests"]["t_two_sample"]["stats"]["test"]["estimate"] in said
     svg = draw(tmp_path / "svg", chart_service, monkeypatch, fmt="svg", locale=locale)[0]
     assert len(json.loads(svg.path.read_text())["pages"]) == 2
@@ -616,6 +660,15 @@ ON_THE_PAGE = {
     "levene": ({}, ["Brown–Forsythe test (Levene, median)", "0.2686", "2, 18", "0.7675", "3", "5.65", "var(v | a) = var(v | b) = var(v | c)"]),
     "pearson": ({}, ["Pearson's correlation", "17.0305", "< 0.0001 ***", "0.9865", "95% CI: 0.9419 to 0.9969", "cor(px, py) = 0",
                      "1.43496376e-7"]),
+    "prop_one_sample": ({}, ["Test of one proportion (score)", "1.3703", "1.8778", "0.1706", "0.3083", "95% CI: 0.2290 to 0.4002",
+                             "P(answer = yes) = 0.25", "0.1705869329", "Rows used: 120. Rows left out: 1 (no value: NULL or NaN)."]),
+    "prop_two_sample": ({}, ["Test of two proportions", "-2.4215", "0.0155 *", "-0.1644", "95% CI: -0.2977 to -0.0311",
+                             "P(answer = yes | a) − P(answer = yes | b) = 0", "0.3869565217"]),
+    "chi2_independence": ({"posthoc": "cells"}, ["Chi-square test of independence", "8.8889", "0.0117 *", "0.2722", "Table of the counts",
+                                                 "Comparisons of the cells", "x1 – m", "2.82842712", "0.02806641", "Critical region at α = 0.05: statistic ≥ 5.9915."]),
+    "chi2_gof": ({}, ["Chi-square goodness-of-fit test", "4.3200", "0.2289", "P(cat = a) = 0.25, P(cat = b) = 0.25, ..., P(cat = d) = 0.25"]),
+    "fisher_exact": ({}, ["Fisher's exact test", "5.4857", "0.0238 *", "5.2297", "95% CI: 1.1694 to 27.3059", "OR(x, y) = 1",
+                          "Distribution of the statistic under H0: hypergeometric(19, 21, 17)."]),
 }
 
 

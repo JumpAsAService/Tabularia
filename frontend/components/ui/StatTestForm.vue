@@ -14,8 +14,8 @@ import type { ColumnInfo } from '~/composables/useApi'
 import { isSuperseded } from '~/composables/usePreviewSlots'
 import { isNumericDtype } from '~/composables/previewGrid'
 import {
-  STAT_LEVELS_SHOWN, statApplies, statFieldWordKey, statFields, statForbidden, statHintKey, statLevelLabels, statNumberProblem,
-  statReasonKey, statSet, statTestOf, type StatField,
+  STAT_LEVELS_SHOWN, STAT_VALUE_CONTROLS, statApplies, statFieldWordKey, statFields, statForbidden, statHintKey, statLevelLabels,
+  statNumberProblem, statReasonKey, statSet, statShares, statSharesProblem, statTestOf, type StatField,
 } from '~/composables/statTests'
 
 const props = defineProps<{
@@ -76,11 +76,14 @@ const noUsableColumn = (f: StatField) =>
 interface Levels { column: string; state: 'loading' | 'done' | 'failed'; values: unknown[] }
 const levels = reactive<Record<string, Levels>>({})
 const draft = reactive<Record<string, string[]>>({})
+const sharesAsked = reactive<Record<string, boolean>>({}) // proportions chosen as «given», none written yet
 const known = new Map<string, unknown[]>() // per column, for this node
 // the labels are written from the values and the column's type: the type may arrive later
 const labelsOf = (f: StatField): string[] => statLevelLabels(levels[f.key]?.values, dtypeOf(levels[f.key]?.column))
 
-const levelFields = computed(() => fields.value.filter((f) => f.control === 'levels'))
+// every field whose values are some of a column's: the groups to compare, the value that is a
+// success, the categories that are given a proportion
+const levelFields = computed(() => fields.value.filter((f) => STAT_VALUE_CONTROLS.includes(f.control)))
 const columnFor = (f: StatField): string => (typeof props.params[f.of ?? ''] === 'string' ? props.params[f.of ?? ''] : '')
 const blank = (f: StatField) => Array.from({ length: f.count ?? 2 }, () => '')
 
@@ -124,8 +127,13 @@ watch(
       known.clear()
       for (const k of Object.keys(levels)) delete levels[k]
       for (const k of Object.keys(draft)) delete draft[k]
+      for (const k of Object.keys(sharesAsked)) delete sharesAsked[k]
     }
     for (const f of levelFields.value) {
+      if (f.control !== 'levels') {
+        loadLevels(f)
+        continue
+      }
       const saved = props.params[f.key]
       const half = draft[f.key]?.some(Boolean) && !draft[f.key]!.every(Boolean)
       if (Array.isArray(saved)) draft[f.key] = saved.map(String)
@@ -168,6 +176,41 @@ function levelNote(f: StatField): string {
     return t('stat.form.manyLevels', { column, n: n >= STAT_LEVELS_SHOWN ? `${STAT_LEVELS_SHOWN}+` : n, count })
   }
   return ''
+}
+
+// ── one value of a column (the success) ──────────────────────────────────────
+// A text box with the column's values as suggestions (a native list: arrows and typing, on every
+// keyboard): one of them, or another written, as the engine compares it.
+const shownValue = (f: StatField) => (props.params[f.key] === undefined || props.params[f.key] === null ? '' : String(props.params[f.key]))
+
+// ── a proportion for each category (a goodness of fit) ──────────────────────
+// All equal (nothing given), or a number for each value of the column. «Given» is remembered here
+// while nothing is written yet (`sharesAsked`): the node keeps only proportions.
+const sharesOf = (f: StatField) => statShares(props.params[f.key])
+const sharesGiven = (f: StatField) => !!sharesAsked[f.key] || Object.keys(sharesOf(f)).length > 0
+function shareLabels(f: StatField): string[] {
+  const labels = labelsOf(f)
+  return [...labels, ...Object.keys(sharesOf(f)).filter((l) => !labels.includes(l))]
+}
+function chooseShares(f: StatField, given: boolean) {
+  sharesAsked[f.key] = given
+  if (!given && props.params[f.key] !== undefined) set(f.key, undefined)
+}
+function setShare(f: StatField, label: string, raw: string) {
+  const next: Record<string, unknown> = { ...sharesOf(f) }
+  if (raw.trim() === '') delete next[label]
+  else next[label] = raw
+  set(f.key, Object.keys(next).length ? next : undefined)
+}
+function sharesNote(f: StatField): { text: string; warn: boolean } {
+  const shares = sharesOf(f)
+  const labels = shareLabels(f)
+  const sum = labels.reduce((s, l) => s + (shares[l] ?? 0), 0)
+  const shown = String(Number(sum.toFixed(9)))
+  const problem = statSharesProblem(shares, labels)
+  if (problem === 'missing') return { text: t('stat.form.sharesMissing'), warn: true }
+  if (problem === 'sum') return { text: t('stat.form.sharesNotOne', { sum: shown }), warn: true }
+  return { text: t('stat.form.sharesSum', { sum: shown }), warn: false }
 }
 
 // ── a number ─────────────────────────────────────────────────────────────────
@@ -242,6 +285,62 @@ function forbidden(f: StatField, value: unknown): string {
         <p v-if="levelNote(f)" class="note" role="status"><Info :size="13" aria-hidden="true" /> {{ levelNote(f) }}</p>
         <p v-if="hintOf(f)" :id="idOf(f.key, 'hint')" class="hint">{{ hintOf(f) }}</p>
       </div>
+
+      <!-- one value of a column: chosen among its values, or written -->
+      <div v-else-if="f.control === 'level'" class="field">
+        <label :for="idOf(f.key)" class="lbl">{{ labelOf(f) }}</label>
+        <input
+          :id="idOf(f.key)"
+          type="text"
+          autocomplete="off"
+          :list="idOf(f.key, 'values')"
+          :value="shownValue(f)"
+          :placeholder="$t('stat.form.successPlaceholder')"
+          :aria-describedby="hintOf(f) ? idOf(f.key, 'hint') : undefined"
+          @change="set(f.key, ($event.target as HTMLInputElement).value)"
+        />
+        <datalist :id="idOf(f.key, 'values')" :aria-label="$t('stat.form.successValues', { column: columnFor(f) })">
+          <option v-for="l in labelsOf(f)" :key="l" :value="l" />
+        </datalist>
+        <p v-if="hintOf(f)" :id="idOf(f.key, 'hint')" class="hint">{{ hintOf(f) }}</p>
+      </div>
+
+      <!-- a proportion for each value of a column, or all equal -->
+      <fieldset v-else-if="f.control === 'proportions'" class="field choices">
+        <legend class="lbl">{{ labelOf(f) }}</legend>
+        <label class="chk">
+          <input type="radio" :name="idOf(f.key)" :checked="!sharesGiven(f)" @change="chooseShares(f, false)" />
+          <span>{{ $t('stat.form.equalShares') }}</span>
+        </label>
+        <label class="chk">
+          <input type="radio" :name="idOf(f.key)" :checked="sharesGiven(f)" @change="chooseShares(f, true)" />
+          <span>{{ $t('stat.form.givenShares') }}</span>
+        </label>
+        <template v-if="sharesGiven(f)">
+          <p v-if="!columnFor(f)" class="note" role="status"><Info :size="13" aria-hidden="true" /> {{ levelNote(f) }}</p>
+          <span v-else-if="levels[f.key]?.state === 'loading'" class="sk" style="width: 130px" aria-busy="true" />
+          <template v-else>
+            <div v-for="(l, i) in shareLabels(f)" :key="l" class="place share">
+              <label :for="idOf(f.key, `share-${i}`)" class="sharel" :title="l">{{ l }}</label>
+              <input
+                :id="idOf(f.key, `share-${i}`)"
+                type="number"
+                step="any"
+                min="0"
+                max="1"
+                :value="sharesOf(f)[l] ?? ''"
+                :aria-label="$t('stat.form.shareOf', { level: l })"
+                @change="setShare(f, l, ($event.target as HTMLInputElement).value)"
+              />
+              <span v-if="!labelsOf(f).includes(l)" class="why warn">{{ $t('stat.form.notInData') }}</span>
+            </div>
+            <p class="note" :class="{ warn: sharesNote(f).warn }" role="status">
+              <TriangleAlert v-if="sharesNote(f).warn" :size="13" aria-hidden="true" /> {{ sharesNote(f).text }}
+            </p>
+          </template>
+        </template>
+        <p v-if="hintOf(f)" class="hint">{{ hintOf(f) }}</p>
+      </fieldset>
 
       <!-- on or off -->
       <div v-else-if="f.control === 'boolean'" class="field">
@@ -318,4 +417,7 @@ legend.lbl { margin-bottom: 4px; }
 .place { display: flex; align-items: center; gap: 6px; }
 .place > :deep(.sel-trigger) { flex: 1; min-width: 0; }
 .placen { flex-shrink: 0; width: 14px; text-align: right; font-size: 11px; color: var(--muted); font-variant-numeric: tabular-nums; }
+.share { gap: 8px; }
+.sharel { flex: 1; min-width: 0; font-size: 12.5px; color: var(--text); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.share input { width: 96px; flex-shrink: 0; }
 </style>

@@ -6120,6 +6120,60 @@ export default {
       "pearson": {
         "name": "Pearson-Korrelation",
         "hint": "Bewegen sich zwei Spalten derselben Zeilen gemeinsam? Pearsons r, sein Test und sein Konfidenzintervall."
+      },
+      "prop_one_sample": {
+        "name": "Test eines Anteils",
+        "hint": "Ist der Anteil eines Werts in einer Spalte gleich einem gegebenen Anteil? Der Score-Test mit Wilson-Intervall oder der exakte Binomialtest.",
+        "params": {
+          "value": "Spalte des Ergebnisses"
+        },
+        "hints": {
+          "value": "Eine beliebige Spalte: eine Zeile zählt als Erfolg, wenn sie den Wert unten enthält."
+        }
+      },
+      "prop_two_sample": {
+        "name": "Test zweier Anteile",
+        "hint": "Haben zwei Gruppen denselben Anteil eines Werts? Der Chi-Quadrat-Test zweier Anteile, mit dem Intervall ihrer Differenz.",
+        "params": {
+          "value": "Spalte des Ergebnisses"
+        },
+        "hints": {
+          "value": "Eine beliebige Spalte: eine Zeile zählt als Erfolg, wenn sie den Wert unten enthält."
+        }
+      },
+      "chi2_independence": {
+        "name": "Chi-Quadrat-Unabhängigkeitstest",
+        "hint": "Sind zwei kategoriale Spalten unabhängig? Pearsons Chi-Quadrat auf ihrer Häufigkeitstabelle, mit den Zellen oder Paaren, die den Unterschied machen.",
+        "params": {
+          "x": "Zeilen der Tabelle (x)",
+          "y": "Spalten der Tabelle (y)",
+          "posthoc": "Vergleiche"
+        },
+        "hints": {
+          "x": "Eine Spalte mit Kategorien (beliebiger Typ): höchstens 50.",
+          "y": "Eine Zeile, in der eine der beiden Spalten keinen Wert hat, wird ausgelassen.",
+          "correction": "Yates' Stetigkeitskorrektur, nur bei einer 2 × 2-Tabelle.",
+          "posthoc": "Welche Zellen von der Unabhängigkeit abweichen (ihre korrigierten Residuen) oder welche Paare von Kategorien von x sich unterscheiden."
+        }
+      },
+      "chi2_gof": {
+        "name": "Chi-Quadrat-Anpassungstest",
+        "hint": "Haben die Kategorien einer Spalte die erwarteten Anteile? Alle gleich oder die angegebenen Anteile.",
+        "params": {
+          "value": "Spalte der Kategorien"
+        }
+      },
+      "fisher_exact": {
+        "name": "Exakter Test nach Fisher",
+        "hint": "Sind zwei Spalten mit je zwei Kategorien unabhängig? Exakt auf einer 2 × 2-Tabelle, mit dem Odds Ratio und seinem Intervall.",
+        "params": {
+          "x": "Zeilen der Tabelle (x)",
+          "y": "Spalten der Tabelle (y)"
+        },
+        "hints": {
+          "x": "Eine Spalte mit zwei Kategorien: das Odds Ratio ist das der ersten (in Textreihenfolge).",
+          "y": "Ebenfalls zwei Kategorien; eine Zeile ohne Wert in einer der beiden wird ausgelassen."
+        }
       }
     },
     "params": {
@@ -6135,7 +6189,12 @@ export default {
       "posthoc": "Paarweise Vergleiche",
       "p_adjust": "Korrektur für multiple Vergleiche",
       "ratio": "Verhältnis unter H0",
-      "center": "Zentrum jeder Gruppe"
+      "center": "Zentrum jeder Gruppe",
+      "success": "Wert, der als Erfolg zählt",
+      "p0": "Anteil unter H0 (p0)",
+      "method": "Methode",
+      "correction": "Stetigkeitskorrektur",
+      "expected": "Erwartete Anteile"
     },
     "hints": {
       "value": "Die Spalte, die gemessen wird.",
@@ -6149,7 +6208,12 @@ export default {
       "posthoc": "Welche Gruppen sich unterscheiden: Tukeys HSD (gleiche Varianzen), Games-Howell (ungleiche Varianzen) oder ein t-Test je Paar mit Korrektur.",
       "p_adjust": "Wie die p-Werte der Paare für ihre Anzahl korrigiert werden. Holm ist nie schwächer als Bonferroni.",
       "ratio": "Das Verhältnis der ersten zur zweiten Varianz, das die Nullhypothese behauptet: 1 für «gleiche Varianzen».",
-      "center": "Der Median (Brown-Forsythe, robust bei schiefen Werten) oder der Mittelwert (Levenes Original)."
+      "center": "Der Median (Brown-Forsythe, robust bei schiefen Werten) oder der Mittelwert (Levenes Original).",
+      "success": "Wähle einen der Werte der Spalte oder schreibe ihn: ein Text, eine Zahl, true oder false.",
+      "p0": "Zwischen 0 und 1: der Anteil der Erfolge, den die Nullhypothese behauptet.",
+      "method": "Score: die Normalapproximation, Wilson-Intervall. Exakt: die Binomialverteilung, Clopper-Pearson-Intervall (bis zu einer Million Zeilen).",
+      "correction": "Yates' Stetigkeitskorrektur der Normalapproximation (wie prop.test in R).",
+      "expected": "Alle gleich oder ein Anteil für jede Kategorie der Spalte: über 0, mit Summe 1."
     },
     "choices": {
       "alternative": {
@@ -6172,6 +6236,15 @@ export default {
       "levene_center": {
         "median": "Median (Brown-Forsythe)",
         "mean": "Mittelwert (Levene)"
+      },
+      "prop_method": {
+        "score": "Score (Wilson)",
+        "exact": "Exakt (binomial)"
+      },
+      "chi2_posthoc": {
+        "none": "Keine",
+        "cells": "Die Zellen",
+        "pairs": "Die Paare von Kategorien von x"
       }
     },
     "reasons": {
@@ -6191,7 +6264,15 @@ export default {
       "notNumeric": "keine Zahl",
       "notInInput": "nicht in der Eingabe des Schritts",
       "notInData": "nicht in den Daten",
-      "noNumericColumns": "Die Eingabe des Schritts hat keine numerische Spalte: Wandeln Sie zuerst eine um."
+      "noNumericColumns": "Die Eingabe des Schritts hat keine numerische Spalte: Wandeln Sie zuerst eine um.",
+      "successPlaceholder": "ja, 1, true…",
+      "successValues": "Werte von «{column}»",
+      "equalShares": "Alle gleich",
+      "givenShares": "Für jede Kategorie angegeben",
+      "shareOf": "Anteil von «{level}»",
+      "sharesSum": "Summe: {sum}",
+      "sharesNotOne": "Die Anteile ergeben {sum}: sie müssen 1 ergeben.",
+      "sharesMissing": "Gib jeder Kategorie einen Anteil über 0."
     }
   },
   "statReport": {

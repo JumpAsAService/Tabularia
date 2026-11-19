@@ -6120,6 +6120,60 @@ export default {
       "pearson": {
         "name": "Pearson's correlation",
         "hint": "Do two columns of the same rows move together? Pearson's r, its test and its confidence interval."
+      },
+      "prop_one_sample": {
+        "name": "Test of one proportion",
+        "hint": "Is the share of a value in a column equal to a given proportion? The score test with Wilson's interval, or the exact binomial test.",
+        "params": {
+          "value": "Outcome column"
+        },
+        "hints": {
+          "value": "Any column: a row counts as a success when it holds the value below."
+        }
+      },
+      "prop_two_sample": {
+        "name": "Test of two proportions",
+        "hint": "Do two groups have the same share of a value? The chi-square test of two proportions, with the interval of their difference.",
+        "params": {
+          "value": "Outcome column"
+        },
+        "hints": {
+          "value": "Any column: a row counts as a success when it holds the value below."
+        }
+      },
+      "chi2_independence": {
+        "name": "Chi-square test of independence",
+        "hint": "Are two categorical columns independent? Pearson's chi-square on their table of counts, with the cells or the pairs that make the difference.",
+        "params": {
+          "x": "Rows of the table (x)",
+          "y": "Columns of the table (y)",
+          "posthoc": "Comparisons"
+        },
+        "hints": {
+          "x": "A column of categories (any type): 50 at most.",
+          "y": "A row where either column has no value is left out.",
+          "correction": "Yates' continuity correction, on a 2 × 2 table only.",
+          "posthoc": "Which cells depart from independence (their adjusted residuals), or which pairs of categories of x differ."
+        }
+      },
+      "chi2_gof": {
+        "name": "Chi-square goodness-of-fit test",
+        "hint": "Do the categories of a column have the expected shares? All equal, or the proportions you give.",
+        "params": {
+          "value": "Column of the categories"
+        }
+      },
+      "fisher_exact": {
+        "name": "Fisher's exact test",
+        "hint": "Are two columns of two categories each independent? Exact on a 2 × 2 table, with the odds ratio and its interval.",
+        "params": {
+          "x": "Rows of the table (x)",
+          "y": "Columns of the table (y)"
+        },
+        "hints": {
+          "x": "A column of two categories: the odds ratio is of its first (in text order).",
+          "y": "A column of two categories too; a row where either has no value is left out."
+        }
       }
     },
     "params": {
@@ -6135,7 +6189,12 @@ export default {
       "posthoc": "Pairwise comparisons",
       "p_adjust": "Correction for multiple comparisons",
       "ratio": "Ratio under H0",
-      "center": "Centre of each group"
+      "center": "Centre of each group",
+      "success": "Value that counts as a success",
+      "p0": "Proportion under H0 (p0)",
+      "method": "Method",
+      "correction": "Continuity correction",
+      "expected": "Expected proportions"
     },
     "hints": {
       "value": "The column that is measured.",
@@ -6149,7 +6208,12 @@ export default {
       "posthoc": "Which groups differ: Tukey's HSD (equal variances), Games–Howell (unequal variances), or a t test per pair with a correction.",
       "p_adjust": "How the p-values of the pairs are adjusted for their number. Holm is never less powerful than Bonferroni.",
       "ratio": "The ratio of the first variance to the second that the null hypothesis states: 1 for «equal variances».",
-      "center": "The median (Brown–Forsythe's form, robust to skewed values) or the mean (Levene's original)."
+      "center": "The median (Brown–Forsythe's form, robust to skewed values) or the mean (Levene's original).",
+      "success": "Choose one of the column's values, or write it: a text, a number, true or false.",
+      "p0": "Between 0 and 1: the share of successes the null hypothesis states.",
+      "method": "Score: the normal approximation, Wilson's interval. Exact: the binomial, Clopper–Pearson's interval (up to a million rows).",
+      "correction": "Yates' continuity correction of the normal approximation (as R's prop.test).",
+      "expected": "All equal, or a proportion for each category of the column: above 0, summing to 1."
     },
     "choices": {
       "alternative": {
@@ -6172,6 +6236,15 @@ export default {
       "levene_center": {
         "median": "Median (Brown–Forsythe)",
         "mean": "Mean (Levene)"
+      },
+      "prop_method": {
+        "score": "Score (Wilson)",
+        "exact": "Exact (binomial)"
+      },
+      "chi2_posthoc": {
+        "none": "None",
+        "cells": "The cells",
+        "pairs": "The pairs of categories of x"
       }
     },
     "reasons": {
@@ -6191,7 +6264,15 @@ export default {
       "notNumeric": "not a number",
       "notInInput": "not in the step's input",
       "notInData": "not in the data",
-      "noNumericColumns": "The step's input has no numeric column: convert one first."
+      "noNumericColumns": "The step's input has no numeric column: convert one first.",
+      "successPlaceholder": "yes, 1, true…",
+      "successValues": "Values of «{column}»",
+      "equalShares": "All equal",
+      "givenShares": "Given for each category",
+      "shareOf": "Proportion of «{level}»",
+      "sharesSum": "Sum: {sum}",
+      "sharesNotOne": "The proportions sum to {sum}: they must sum to 1.",
+      "sharesMissing": "Give every category a proportion above 0."
     }
   },
   "statReport": {

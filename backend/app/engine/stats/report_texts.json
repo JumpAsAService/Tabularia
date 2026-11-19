@@ -85,6 +85,74 @@
         "symbols": "x = «{x}», y = «{y}». r: Pearson's correlation, n: rows with both (table «Groups»); z: the normal quantile of the interval; df: degrees of freedom.",
         "left_out": "Rows used: {n}. Rows left out: {missing} (no number in one of the two columns).",
         "tables": {"extremes": "Smallest and largest"}
+      },
+      "prop_one_sample": {
+        "name": "Test of one proportion",
+        "variants": {"score": "Test of one proportion (score)", "exact": "Exact binomial test"},
+        "stats": {
+          "test": {
+            "estimate": "Proportion (k / n)",
+            "null_value": "Proportion under H0 (p0)",
+            "statistic": "z statistic",
+            "std_error": "Standard error under H0, √(p0·(1 − p0)/n)"
+          },
+          "group": {"se": "Std. error", "ci_low": "Proportion, CI low", "ci_high": "Proportion, CI high"}
+        },
+        "kpi": {
+          "statistic": "z statistic",
+          "chi_square": "Chi-square (z²)",
+          "estimate": "Proportion",
+          "successes": "Successes",
+          "n": "Rows used"
+        },
+        "symbols": "k: successes, n: rows with a value, of «{column}» (table «Groups»); p0: the proportion under H0; Y: the continuity correction; z: the normal quantile of the interval; X: the successes under H0.",
+        "left_out": "Rows used: {n}. Rows left out: {missing} (no value: NULL or NaN).",
+        "tables": {"intervals": "Intervals of the proportion"},
+        "charts": {"interval": "Proportion with its confidence interval (dashed: p0)"}
+      },
+      "prop_two_sample": {
+        "name": "Test of two proportions",
+        "stats": {
+          "test": {
+            "estimate": "Difference of the proportions (p1 − p2)",
+            "null_value": "Difference under H0",
+            "statistic": "z statistic",
+            "std_error": "Standard error under H0, √(p·(1 − p)·I)"
+          },
+          "group": {"se": "Std. error", "ci_low": "Proportion, CI low", "ci_high": "Proportion, CI high"}
+        },
+        "kpi": {"statistic": "z statistic", "chi_square": "Chi-square (z²)", "estimate": "Difference of the proportions"},
+        "symbols": "1 = «{g1}», 2 = «{g2}». k: successes, n: rows with a value, p = k/n: of each group (table «Groups»); Y: the continuity correction; z_q: the normal quantile of the interval. A group's interval: Wilson's, with Y = 0.5 when corrected.",
+        "left_out": "Rows used: {n}. Rows left out: {missing} (no group, or no value in one of the two groups).",
+        "tables": {"intervals": "Intervals of the proportions"},
+        "charts": {"interval": "Proportions with their confidence intervals"}
+      },
+      "chi2_independence": {
+        "name": "Chi-square test of independence",
+        "stats": {
+          "test": {"statistic": "Chi-square statistic (χ²)"}
+        },
+        "kpi": {"statistic": "Chi-square (χ²)", "effect": "Cramér's V"},
+        "symbols": "x = «{x}», y = «{y}». O, E: observed and expected rows of a cell (table «Observed and expected»); R, C: the totals of its row and of its column; N: rows used; r, c: the categories of x and of y; Y: Yates' correction (2 × 2 only); adjusted residual: (O − E) / √(E·(1 − R/N)·(1 − C/N)).",
+        "left_out": "Rows used: {n}. Rows left out: {missing} (no value in one of the two columns)."
+      },
+      "chi2_gof": {
+        "name": "Chi-square goodness-of-fit test",
+        "stats": {
+          "test": {"statistic": "Chi-square statistic (χ²)", "k": "Categories (k)"}
+        },
+        "kpi": {"statistic": "Chi-square (χ²)", "effect": "Cohen's w"},
+        "symbols": "The categories of «{column}». O: the rows of a category, p_i: the share H0 expects of it, E = N·p_i (tables «Observed and expected» and «Terms of the statistic»); N: rows used; k: categories; df: degrees of freedom.",
+        "left_out": "Rows used: {n}. Rows left out: {missing} (no value: NULL or NaN)."
+      },
+      "fisher_exact": {
+        "name": "Fisher's exact test",
+        "stats": {
+          "test": {"estimate": "Odds ratio, conditional estimate", "null_value": "Odds ratio under H0"}
+        },
+        "kpi": {"sample": "Odds ratio of the sample", "n": "Rows used", "estimate": "Odds ratio"},
+        "symbols": "x = «{x}», y = «{y}»: a, b the first row, c, d the second (table «Observed and expected»); R1: the first row's total; C1, C2: the columns' (tables of the rows and columns); N: rows used; X: the first cell under H0 with the same margins (hypergeometric).",
+        "left_out": "Rows used: {n}. Rows left out: {missing} (no value in one of the two columns)."
       }
     },
     "stats": {
@@ -146,7 +214,23 @@
         "z_quantile": "Normal quantile of the interval (z)",
         "r_squared": "Coefficient of determination (r²)",
         "posthoc_formula": "Formulas of a pair",
-        "significance": "Significance code (R)"
+        "significance": "Significance code (R)",
+        "successes": "Successes (k)",
+        "expected_successes": "Successes expected under H0 (n·p0)",
+        "yates": "Continuity correction (Y)",
+        "chi_square": "Chi-square (χ² = z²)",
+        "pooled_proportion": "Pooled proportion (p)",
+        "inverse_sum": "I = 1/n1 + 1/n2",
+        "cohen_h": "Effect size: Cohen's h",
+        "rows": "Categories of x (r)",
+        "cols": "Categories of y (c)",
+        "chi_square_plain": "Chi-square without the correction (χ²₀)",
+        "cramers_v": "Effect size: Cramér's V",
+        "phi": "Effect size: φ",
+        "n_cells": "Cells compared",
+        "cohen_w": "Effect size: Cohen's w",
+        "support": "Possible values of a (support)",
+        "sample_odds_ratio": "Odds ratio of the sample (a·d / b·c)"
       },
       "group": {
         "n": "n",
@@ -168,7 +252,14 @@
         "dev_sd": "Std. dev. of z",
         "dev_se": "Std. error of z",
         "dev_ci_low": "Mean of z, CI low",
-        "dev_ci_high": "Mean of z, CI high"
+        "dev_ci_high": "Mean of z, CI high",
+        "rows": "Rows",
+        "successes": "Successes",
+        "proportion": "Proportion",
+        "row_total": "Rows (R)",
+        "row_share": "Share",
+        "col_total": "Rows (C)",
+        "col_share": "Share"
       },
       "hist": {"count": "Rows"},
       "curve": {
@@ -188,6 +279,19 @@
         "ci_high": "CI high",
         "decision": "Decision",
         "significance": "Significance code"
+      },
+      "cell": {
+        "observed": "Observed (O)",
+        "expected": "Expected (E)",
+        "residual": "Residual",
+        "adj_residual": "Adjusted residual",
+        "contribution": "Term of χ²",
+        "proportion": "Share observed",
+        "expected_share": "Share expected (p_i)",
+        "p_value": "p-value",
+        "p_adjusted": "Adjusted p-value",
+        "significance": "Significance code",
+        "decision": "Decision"
       }
     },
     "note": "Note {n}",
@@ -198,7 +302,9 @@
       "groups": "Groups",
       "charts": "Charts",
       "notes": "Notes",
-      "comparisons": "Pairwise comparisons"
+      "comparisons": "Pairwise comparisons",
+      "table": "Table of the counts",
+      "comparisons_cells": "Comparisons of the cells"
     },
     "kpi": {"df": "Degrees of freedom", "p_value": "p-value"},
     "decision": {
@@ -222,7 +328,11 @@
       "notes": {"title": "Notes", "note": "Notes of the test"},
       "pairs": {"title": "Pairwise comparisons"},
       "pairs_p": {"title": "Comparisons, p-values"},
-      "pairs_ci": {"title": "Comparisons, intervals"}
+      "pairs_ci": {"title": "Comparisons, intervals"},
+      "cells": {"title": "Observed and expected"},
+      "terms": {"title": "Terms of the statistic"},
+      "rows": {"title": "Rows of the table (x)"},
+      "cols": {"title": "Columns of the table (y)"}
     },
     "charts": {
       "boxplot": "Box plot: {by}",
@@ -230,7 +340,11 @@
       "histogram": "Histogram: {by}",
       "density": "Distribution of the statistic under H0",
       "density_caption": "Shaded: the critical region. Vertical line: the statistic of the test.",
-      "pairs": "Differences of the means with their intervals"
+      "pairs": "Differences of the means with their intervals",
+      "observed": "Observed and expected counts",
+      "residuals": "Adjusted residuals (row: x, column: y)",
+      "too_many_cells": "{chart}: the table has {n} cells, and the chart is drawn up to {most}. The tables above hold every number.",
+      "too_many_rows": "{chart}: x has {n} categories, and the chart is drawn up to {most}. The tables above hold every number."
     },
     "engine": "Computed in the engine: {engine}.",
     "sample": {
@@ -249,7 +363,9 @@
       "method": {
         "tukey": "Tukey's HSD (Tukey–Kramer for groups of different sizes)",
         "games_howell": "Games–Howell (no equal variances assumed; Welch's degrees of freedom for each pair)",
-        "pairwise_t": "a t test for each pair"
+        "pairwise_t": "a t test for each pair",
+        "cells": "the cells: the adjusted residual of each against the normal distribution",
+        "pairs": "the pairs of categories of x: a chi-square test of each 2 × c table"
       },
       "adjust": {
         "studentized_range": "The adjusted p-values and the intervals come from the studentized range: they hold for all the pairs together.",
@@ -354,6 +470,74 @@
         "symbols": "x = «{x}», y = «{y}». r: correlazione di Pearson, n: righe con entrambe (tabella «Gruppi»); z: il quantile normale dell'intervallo; df: gradi di libertà.",
         "left_out": "Righe usate: {n}. Righe escluse: {missing} (senza numero in una delle due colonne).",
         "tables": {"extremes": "Minimo e massimo"}
+      },
+      "prop_one_sample": {
+        "name": "Test di una proporzione",
+        "variants": {"score": "Test di una proporzione (score)", "exact": "Test binomiale esatto"},
+        "stats": {
+          "test": {
+            "estimate": "Proporzione (k / n)",
+            "null_value": "Proporzione sotto H0 (p0)",
+            "statistic": "Statistica z",
+            "std_error": "Errore standard sotto H0, √(p0·(1 − p0)/n)"
+          },
+          "group": {"se": "Err. standard", "ci_low": "Proporzione, IC inf.", "ci_high": "Proporzione, IC sup."}
+        },
+        "kpi": {
+          "statistic": "Statistica z",
+          "chi_square": "Chi quadrato (z²)",
+          "estimate": "Proporzione",
+          "successes": "Successi",
+          "n": "Righe usate"
+        },
+        "symbols": "k: successi, n: righe con un valore, di «{column}» (tabella «Gruppi»); p0: la proporzione sotto H0; Y: la correzione di continuità; z: il quantile normale dell'intervallo; X: i successi sotto H0.",
+        "left_out": "Righe usate: {n}. Righe escluse: {missing} (nessun valore: NULL o NaN).",
+        "tables": {"intervals": "Intervalli della proporzione"},
+        "charts": {"interval": "Proporzione con il suo intervallo di confidenza (tratteggio: p0)"}
+      },
+      "prop_two_sample": {
+        "name": "Test di due proporzioni",
+        "stats": {
+          "test": {
+            "estimate": "Differenza delle proporzioni (p1 − p2)",
+            "null_value": "Differenza sotto H0",
+            "statistic": "Statistica z",
+            "std_error": "Errore standard sotto H0, √(p·(1 − p)·I)"
+          },
+          "group": {"se": "Err. standard", "ci_low": "Proporzione, IC inf.", "ci_high": "Proporzione, IC sup."}
+        },
+        "kpi": {"statistic": "Statistica z", "chi_square": "Chi quadrato (z²)", "estimate": "Differenza delle proporzioni"},
+        "symbols": "1 = «{g1}», 2 = «{g2}». k: successi, n: righe con un valore, p = k/n: di ogni gruppo (tabella «Gruppi»); Y: la correzione di continuità; z_q: il quantile normale dell'intervallo. L'intervallo di un gruppo: di Wilson, con Y = 0,5 se corretto.",
+        "left_out": "Righe usate: {n}. Righe escluse: {missing} (nessun gruppo, o nessun valore in uno dei due gruppi).",
+        "tables": {"intervals": "Intervalli delle proporzioni"},
+        "charts": {"interval": "Proporzioni con i loro intervalli di confidenza"}
+      },
+      "chi2_independence": {
+        "name": "Test chi quadrato di indipendenza",
+        "stats": {
+          "test": {"statistic": "Statistica chi quadrato (χ²)"}
+        },
+        "kpi": {"statistic": "Chi quadrato (χ²)", "effect": "V di Cramér"},
+        "symbols": "x = «{x}», y = «{y}». O, E: righe osservate e attese di una cella (tabella «Osservati e attesi»); R, C: i totali della sua riga e della sua colonna; N: righe usate; r, c: le categorie di x e di y; Y: la correzione di Yates (solo 2 × 2); residuo corretto: (O − E) / √(E·(1 − R/N)·(1 − C/N)).",
+        "left_out": "Righe usate: {n}. Righe escluse: {missing} (nessun valore in una delle due colonne)."
+      },
+      "chi2_gof": {
+        "name": "Test chi quadrato di adattamento",
+        "stats": {
+          "test": {"statistic": "Statistica chi quadrato (χ²)", "k": "Categorie (k)"}
+        },
+        "kpi": {"statistic": "Chi quadrato (χ²)", "effect": "w di Cohen"},
+        "symbols": "Le categorie di «{column}». O: le righe di una categoria, p_i: la quota che H0 se ne aspetta, E = N·p_i (tabelle «Osservati e attesi» e «Termini della statistica»); N: righe usate; k: categorie; df: gradi di libertà.",
+        "left_out": "Righe usate: {n}. Righe escluse: {missing} (nessun valore: NULL o NaN)."
+      },
+      "fisher_exact": {
+        "name": "Test esatto di Fisher",
+        "stats": {
+          "test": {"estimate": "Odds ratio, stima condizionata", "null_value": "Odds ratio sotto H0"}
+        },
+        "kpi": {"sample": "Odds ratio del campione", "n": "Righe usate", "estimate": "Odds ratio"},
+        "symbols": "x = «{x}», y = «{y}»: a, b la prima riga, c, d la seconda (tabella «Osservati e attesi»); R1: il totale della prima riga; C1, C2: quelli delle colonne (tabelle delle righe e delle colonne); N: righe usate; X: la prima cella sotto H0 con gli stessi margini (ipergeometrica).",
+        "left_out": "Righe usate: {n}. Righe escluse: {missing} (nessun valore in una delle due colonne)."
       }
     },
     "stats": {
@@ -415,7 +599,23 @@
         "z_quantile": "Quantile normale dell'intervallo (z)",
         "r_squared": "Coefficiente di determinazione (r²)",
         "posthoc_formula": "Formule di una coppia",
-        "significance": "Codice di significatività (R)"
+        "significance": "Codice di significatività (R)",
+        "successes": "Successi (k)",
+        "expected_successes": "Successi attesi sotto H0 (n·p0)",
+        "yates": "Correzione di continuità (Y)",
+        "chi_square": "Chi quadrato (χ² = z²)",
+        "pooled_proportion": "Proporzione comune (p)",
+        "inverse_sum": "I = 1/n1 + 1/n2",
+        "cohen_h": "Dimensione dell'effetto: h di Cohen",
+        "rows": "Categorie di x (r)",
+        "cols": "Categorie di y (c)",
+        "chi_square_plain": "Chi quadrato senza correzione (χ²₀)",
+        "cramers_v": "Dimensione dell'effetto: V di Cramér",
+        "phi": "Dimensione dell'effetto: φ",
+        "n_cells": "Celle confrontate",
+        "cohen_w": "Dimensione dell'effetto: w di Cohen",
+        "support": "Valori possibili di a (supporto)",
+        "sample_odds_ratio": "Odds ratio del campione (a·d / b·c)"
       },
       "group": {
         "n": "n",
@@ -437,7 +637,14 @@
         "dev_sd": "Dev. standard di z",
         "dev_se": "Err. standard di z",
         "dev_ci_low": "Media di z, IC inf.",
-        "dev_ci_high": "Media di z, IC sup."
+        "dev_ci_high": "Media di z, IC sup.",
+        "rows": "Righe",
+        "successes": "Successi",
+        "proportion": "Proporzione",
+        "row_total": "Righe (R)",
+        "row_share": "Quota",
+        "col_total": "Righe (C)",
+        "col_share": "Quota"
       },
       "hist": {"count": "Righe"},
       "curve": {
@@ -457,6 +664,19 @@
         "ci_high": "IC sup.",
         "decision": "Decisione",
         "significance": "Codice di significatività"
+      },
+      "cell": {
+        "observed": "Osservati (O)",
+        "expected": "Attesi (E)",
+        "residual": "Residuo",
+        "adj_residual": "Residuo corretto",
+        "contribution": "Termine del χ²",
+        "proportion": "Quota osservata",
+        "expected_share": "Quota attesa (p_i)",
+        "p_value": "p-value",
+        "p_adjusted": "p-value corretto",
+        "significance": "Codice di significatività",
+        "decision": "Decisione"
       }
     },
     "note": "Nota {n}",
@@ -467,7 +687,9 @@
       "groups": "Gruppi",
       "charts": "Grafici",
       "notes": "Note",
-      "comparisons": "Confronti a coppie"
+      "comparisons": "Confronti a coppie",
+      "table": "Tabella dei conteggi",
+      "comparisons_cells": "Confronti delle celle"
     },
     "kpi": {"df": "Gradi di libertà", "p_value": "p-value"},
     "decision": {
@@ -491,7 +713,11 @@
       "notes": {"title": "Note", "note": "Note del test"},
       "pairs": {"title": "Confronti a coppie"},
       "pairs_p": {"title": "Confronti, p-value"},
-      "pairs_ci": {"title": "Confronti, intervalli"}
+      "pairs_ci": {"title": "Confronti, intervalli"},
+      "cells": {"title": "Osservati e attesi"},
+      "terms": {"title": "Termini della statistica"},
+      "rows": {"title": "Righe della tabella (x)"},
+      "cols": {"title": "Colonne della tabella (y)"}
     },
     "charts": {
       "boxplot": "Box plot: {by}",
@@ -499,7 +725,11 @@
       "histogram": "Istogramma: {by}",
       "density": "Distribuzione della statistica sotto H0",
       "density_caption": "Area colorata: la regione critica. Linea verticale: la statistica del test.",
-      "pairs": "Differenze delle medie con i loro intervalli"
+      "pairs": "Differenze delle medie con i loro intervalli",
+      "observed": "Conteggi osservati e attesi",
+      "residuals": "Residui corretti (riga: x, colonna: y)",
+      "too_many_cells": "{chart}: la tabella ha {n} celle, e il grafico si disegna fino a {most}. Le tabelle qui sopra hanno ogni numero.",
+      "too_many_rows": "{chart}: x ha {n} categorie, e il grafico si disegna fino a {most}. Le tabelle qui sopra hanno ogni numero."
     },
     "engine": "Calcolato nel motore: {engine}.",
     "sample": {
@@ -518,7 +748,9 @@
       "method": {
         "tukey": "HSD di Tukey (Tukey–Kramer per gruppi di dimensioni diverse)",
         "games_howell": "Games–Howell (senza assumere varianze uguali; i gradi di libertà di Welch per ogni coppia)",
-        "pairwise_t": "un test t per ogni coppia"
+        "pairwise_t": "un test t per ogni coppia",
+        "cells": "le celle: il residuo corretto di ciascuna contro la distribuzione normale",
+        "pairs": "le coppie di categorie di x: un test chi quadrato per ogni tabella 2 × c"
       },
       "adjust": {
         "studentized_range": "I p-value corretti e gli intervalli vengono dal range studentizzato: valgono per tutte le coppie insieme.",
@@ -627,6 +859,74 @@
         "symbols": "x = «{x}», y = «{y}». r: Pearson-Korrelation, n: Zeilen mit beiden (Tabelle «Gruppen»); z: das Normalquantil des Intervalls; df: Freiheitsgrade.",
         "left_out": "Verwendete Zeilen: {n}. Ausgelassene Zeilen: {missing} (keine Zahl in einer der beiden Spalten).",
         "tables": {"extremes": "Kleinster und größter Wert"}
+      },
+      "prop_one_sample": {
+        "name": "Test eines Anteils",
+        "variants": {"score": "Test eines Anteils (Score)", "exact": "Exakter Binomialtest"},
+        "stats": {
+          "test": {
+            "estimate": "Anteil (k / n)",
+            "null_value": "Anteil unter H0 (p0)",
+            "statistic": "z-Statistik",
+            "std_error": "Standardfehler unter H0, √(p0·(1 − p0)/n)"
+          },
+          "group": {"se": "Standardfehler", "ci_low": "Anteil, KI unten", "ci_high": "Anteil, KI oben"}
+        },
+        "kpi": {
+          "statistic": "z-Statistik",
+          "chi_square": "Chi-Quadrat (z²)",
+          "estimate": "Anteil",
+          "successes": "Erfolge",
+          "n": "Verwendete Zeilen"
+        },
+        "symbols": "k: Erfolge, n: Zeilen mit einem Wert, von «{column}» (Tabelle «Gruppen»); p0: der Anteil unter H0; Y: die Stetigkeitskorrektur; z: das Normalquantil des Intervalls; X: die Erfolge unter H0.",
+        "left_out": "Verwendete Zeilen: {n}. Ausgelassene Zeilen: {missing} (kein Wert: NULL oder NaN).",
+        "tables": {"intervals": "Intervalle des Anteils"},
+        "charts": {"interval": "Anteil mit Konfidenzintervall (gestrichelt: p0)"}
+      },
+      "prop_two_sample": {
+        "name": "Test zweier Anteile",
+        "stats": {
+          "test": {
+            "estimate": "Differenz der Anteile (p1 − p2)",
+            "null_value": "Differenz unter H0",
+            "statistic": "z-Statistik",
+            "std_error": "Standardfehler unter H0, √(p·(1 − p)·I)"
+          },
+          "group": {"se": "Standardfehler", "ci_low": "Anteil, KI unten", "ci_high": "Anteil, KI oben"}
+        },
+        "kpi": {"statistic": "z-Statistik", "chi_square": "Chi-Quadrat (z²)", "estimate": "Differenz der Anteile"},
+        "symbols": "1 = «{g1}», 2 = «{g2}». k: Erfolge, n: Zeilen mit einem Wert, p = k/n: jeder Gruppe (Tabelle «Gruppen»); Y: die Stetigkeitskorrektur; z_q: das Normalquantil des Intervalls. Intervall einer Gruppe: nach Wilson, mit Y = 0,5 bei Korrektur.",
+        "left_out": "Verwendete Zeilen: {n}. Ausgelassene Zeilen: {missing} (keine Gruppe oder kein Wert in einer der beiden Gruppen).",
+        "tables": {"intervals": "Intervalle der Anteile"},
+        "charts": {"interval": "Anteile mit Konfidenzintervallen"}
+      },
+      "chi2_independence": {
+        "name": "Chi-Quadrat-Unabhängigkeitstest",
+        "stats": {
+          "test": {"statistic": "Chi-Quadrat-Statistik (χ²)"}
+        },
+        "kpi": {"statistic": "Chi-Quadrat (χ²)", "effect": "Cramérs V"},
+        "symbols": "x = «{x}», y = «{y}». O, E: beobachtete und erwartete Zeilen einer Zelle (Tabelle «Beobachtet und erwartet»); R, C: die Summen ihrer Zeile und ihrer Spalte; N: verwendete Zeilen; r, c: die Kategorien von x und y; Y: Yates-Korrektur (nur 2 × 2); korrigiertes Residuum: (O − E) / √(E·(1 − R/N)·(1 − C/N)).",
+        "left_out": "Verwendete Zeilen: {n}. Ausgelassene Zeilen: {missing} (kein Wert in einer der beiden Spalten)."
+      },
+      "chi2_gof": {
+        "name": "Chi-Quadrat-Anpassungstest",
+        "stats": {
+          "test": {"statistic": "Chi-Quadrat-Statistik (χ²)", "k": "Kategorien (k)"}
+        },
+        "kpi": {"statistic": "Chi-Quadrat (χ²)", "effect": "Cohens w"},
+        "symbols": "Die Kategorien von «{column}». O: die Zeilen einer Kategorie, p_i: der Anteil, den H0 erwartet, E = N·p_i (Tabellen «Beobachtet und erwartet» und «Summanden der Statistik»); N: verwendete Zeilen; k: Kategorien; df: Freiheitsgrade.",
+        "left_out": "Verwendete Zeilen: {n}. Ausgelassene Zeilen: {missing} (kein Wert: NULL oder NaN)."
+      },
+      "fisher_exact": {
+        "name": "Exakter Test nach Fisher",
+        "stats": {
+          "test": {"estimate": "Odds Ratio, bedingte Schätzung", "null_value": "Odds Ratio unter H0"}
+        },
+        "kpi": {"sample": "Odds Ratio der Stichprobe", "n": "Verwendete Zeilen", "estimate": "Odds Ratio"},
+        "symbols": "x = «{x}», y = «{y}»: a, b die erste Zeile, c, d die zweite (Tabelle «Beobachtet und erwartet»); R1: die Summe der ersten Zeile; C1, C2: die der Spalten (Tabellen der Zeilen und Spalten); N: verwendete Zeilen; X: die erste Zelle unter H0 mit denselben Rändern (hypergeometrisch).",
+        "left_out": "Verwendete Zeilen: {n}. Ausgelassene Zeilen: {missing} (kein Wert in einer der beiden Spalten)."
       }
     },
     "stats": {
@@ -688,7 +988,23 @@
         "z_quantile": "Normalquantil des Intervalls (z)",
         "r_squared": "Bestimmtheitsmaß (r²)",
         "posthoc_formula": "Formeln eines Paars",
-        "significance": "Signifikanzcode (R)"
+        "significance": "Signifikanzcode (R)",
+        "successes": "Erfolge (k)",
+        "expected_successes": "Unter H0 erwartete Erfolge (n·p0)",
+        "yates": "Stetigkeitskorrektur (Y)",
+        "chi_square": "Chi-Quadrat (χ² = z²)",
+        "pooled_proportion": "Gepoolter Anteil (p)",
+        "inverse_sum": "I = 1/n1 + 1/n2",
+        "cohen_h": "Effektstärke: Cohens h",
+        "rows": "Kategorien von x (r)",
+        "cols": "Kategorien von y (c)",
+        "chi_square_plain": "Chi-Quadrat ohne Korrektur (χ²₀)",
+        "cramers_v": "Effektstärke: Cramérs V",
+        "phi": "Effektstärke: φ",
+        "n_cells": "Verglichene Zellen",
+        "cohen_w": "Effektstärke: Cohens w",
+        "support": "Mögliche Werte von a (Träger)",
+        "sample_odds_ratio": "Odds Ratio der Stichprobe (a·d / b·c)"
       },
       "group": {
         "n": "n",
@@ -710,7 +1026,14 @@
         "dev_sd": "Std.-Abw. von z",
         "dev_se": "Std.-Fehler von z",
         "dev_ci_low": "Mittel von z, KI unten",
-        "dev_ci_high": "Mittel von z, KI oben"
+        "dev_ci_high": "Mittel von z, KI oben",
+        "rows": "Zeilen",
+        "successes": "Erfolge",
+        "proportion": "Anteil",
+        "row_total": "Zeilen (R)",
+        "row_share": "Anteil",
+        "col_total": "Zeilen (C)",
+        "col_share": "Anteil"
       },
       "hist": {"count": "Zeilen"},
       "curve": {
@@ -730,6 +1053,19 @@
         "ci_high": "KI oben",
         "decision": "Entscheidung",
         "significance": "Signifikanzcode"
+      },
+      "cell": {
+        "observed": "Beobachtet (O)",
+        "expected": "Erwartet (E)",
+        "residual": "Residuum",
+        "adj_residual": "Korrigiertes Residuum",
+        "contribution": "Summand von χ²",
+        "proportion": "Beobachteter Anteil",
+        "expected_share": "Erwarteter Anteil (p_i)",
+        "p_value": "p-Wert",
+        "p_adjusted": "Korrigierter p-Wert",
+        "significance": "Signifikanzcode",
+        "decision": "Entscheidung"
       }
     },
     "note": "Hinweis {n}",
@@ -740,7 +1076,9 @@
       "groups": "Gruppen",
       "charts": "Diagramme",
       "notes": "Hinweise",
-      "comparisons": "Paarweise Vergleiche"
+      "comparisons": "Paarweise Vergleiche",
+      "table": "Tabelle der Häufigkeiten",
+      "comparisons_cells": "Vergleiche der Zellen"
     },
     "kpi": {"df": "Freiheitsgrade", "p_value": "p-Wert"},
     "decision": {
@@ -764,7 +1102,11 @@
       "notes": {"title": "Hinweise", "note": "Hinweise des Tests"},
       "pairs": {"title": "Paarweise Vergleiche"},
       "pairs_p": {"title": "Vergleiche, p-Werte"},
-      "pairs_ci": {"title": "Vergleiche, Intervalle"}
+      "pairs_ci": {"title": "Vergleiche, Intervalle"},
+      "cells": {"title": "Beobachtet und erwartet"},
+      "terms": {"title": "Summanden der Statistik"},
+      "rows": {"title": "Zeilen der Tabelle (x)"},
+      "cols": {"title": "Spalten der Tabelle (y)"}
     },
     "charts": {
       "boxplot": "Boxplot: {by}",
@@ -772,7 +1114,11 @@
       "histogram": "Histogramm: {by}",
       "density": "Verteilung der Statistik unter H0",
       "density_caption": "Gefüllt: der kritische Bereich. Senkrechte Linie: die Statistik des Tests.",
-      "pairs": "Differenzen der Mittelwerte mit ihren Intervallen"
+      "pairs": "Differenzen der Mittelwerte mit ihren Intervallen",
+      "observed": "Beobachtete und erwartete Häufigkeiten",
+      "residuals": "Korrigierte Residuen (Zeile: x, Spalte: y)",
+      "too_many_cells": "{chart}: Die Tabelle hat {n} Zellen, das Diagramm wird bis {most} gezeichnet. Die Tabellen oben enthalten jede Zahl.",
+      "too_many_rows": "{chart}: x hat {n} Kategorien, das Diagramm wird bis {most} gezeichnet. Die Tabellen oben enthalten jede Zahl."
     },
     "engine": "Berechnet in der Engine: {engine}.",
     "sample": {
@@ -791,7 +1137,9 @@
       "method": {
         "tukey": "Tukeys HSD (Tukey-Kramer bei Gruppen unterschiedlicher Größe)",
         "games_howell": "Games-Howell (ohne gleiche Varianzen; Welch-Freiheitsgrade je Paar)",
-        "pairwise_t": "ein t-Test je Paar"
+        "pairwise_t": "ein t-Test je Paar",
+        "cells": "die Zellen: das korrigierte Residuum jeder Zelle gegen die Normalverteilung",
+        "pairs": "die Paare von Kategorien von x: ein Chi-Quadrat-Test je 2 × c-Tabelle"
       },
       "adjust": {
         "studentized_range": "Die korrigierten p-Werte und die Intervalle stammen aus der studentisierten Spannweite: Sie gelten für alle Paare zusammen.",
@@ -900,6 +1248,78 @@
         "symbols": "x = «{x}», y = «{y}». r: correlación de Pearson, n: filas con ambas (tabla «Grupos»); z: el cuantil normal del intervalo; gl: grados de libertad.",
         "left_out": "Filas usadas: {n}. Filas excluidas: {missing} (sin número en una de las dos columnas).",
         "tables": {"extremes": "Mínimo y máximo"}
+      },
+      "prop_one_sample": {
+        "name": "Prueba de una proporción",
+        "variants": {"score": "Prueba de una proporción (score)", "exact": "Prueba binomial exacta"},
+        "stats": {
+          "test": {
+            "estimate": "Proporción (k / n)",
+            "null_value": "Proporción bajo H0 (p0)",
+            "statistic": "Estadístico z",
+            "std_error": "Error estándar bajo H0, √(p0·(1 − p0)/n)"
+          },
+          "group": {"se": "Error estándar", "ci_low": "Proporción, IC inf.", "ci_high": "Proporción, IC sup."}
+        },
+        "kpi": {
+          "statistic": "Estadístico z",
+          "chi_square": "Chi cuadrado (z²)",
+          "estimate": "Proporción",
+          "successes": "Éxitos",
+          "n": "Filas usadas"
+        },
+        "symbols": "k: éxitos, n: filas con un valor, de «{column}» (tabla «Grupos»); p0: la proporción bajo H0; Y: la corrección de continuidad; z: el cuantil normal del intervalo; X: los éxitos bajo H0.",
+        "left_out": "Filas usadas: {n}. Filas excluidas: {missing} (sin valor: NULL o NaN).",
+        "tables": {"intervals": "Intervalos de la proporción"},
+        "charts": {"interval": "Proporción con su intervalo de confianza (discontinua: p0)"}
+      },
+      "prop_two_sample": {
+        "name": "Prueba de dos proporciones",
+        "stats": {
+          "test": {
+            "estimate": "Diferencia de las proporciones (p1 − p2)",
+            "null_value": "Diferencia bajo H0",
+            "statistic": "Estadístico z",
+            "std_error": "Error estándar bajo H0, √(p·(1 − p)·I)"
+          },
+          "group": {"se": "Error estándar", "ci_low": "Proporción, IC inf.", "ci_high": "Proporción, IC sup."}
+        },
+        "kpi": {
+          "statistic": "Estadístico z",
+          "chi_square": "Chi cuadrado (z²)",
+          "estimate": "Diferencia de las proporciones"
+        },
+        "symbols": "1 = «{g1}», 2 = «{g2}». k: éxitos, n: filas con un valor, p = k/n: de cada grupo (tabla «Grupos»); Y: la corrección de continuidad; z_q: el cuantil normal del intervalo. Intervalo de un grupo: de Wilson, con Y = 0,5 si se corrige.",
+        "left_out": "Filas usadas: {n}. Filas excluidas: {missing} (sin grupo, o sin valor en uno de los dos grupos).",
+        "tables": {"intervals": "Intervalos de las proporciones"},
+        "charts": {"interval": "Proporciones con sus intervalos de confianza"}
+      },
+      "chi2_independence": {
+        "name": "Prueba chi cuadrado de independencia",
+        "stats": {
+          "test": {"statistic": "Estadístico chi cuadrado (χ²)"}
+        },
+        "kpi": {"statistic": "Chi cuadrado (χ²)", "effect": "V de Cramér"},
+        "symbols": "x = «{x}», y = «{y}». O, E: filas observadas y esperadas de una celda (tabla «Observados y esperados»); R, C: los totales de su fila y de su columna; N: filas usadas; r, c: las categorías de x y de y; Y: corrección de Yates (solo 2 × 2); residuo ajustado: (O − E) / √(E·(1 − R/N)·(1 − C/N)).",
+        "left_out": "Filas usadas: {n}. Filas excluidas: {missing} (sin valor en una de las dos columnas)."
+      },
+      "chi2_gof": {
+        "name": "Prueba chi cuadrado de bondad de ajuste",
+        "stats": {
+          "test": {"statistic": "Estadístico chi cuadrado (χ²)", "k": "Categorías (k)"}
+        },
+        "kpi": {"statistic": "Chi cuadrado (χ²)", "effect": "w de Cohen"},
+        "symbols": "Las categorías de «{column}». O: las filas de una categoría, p_i: la proporción que H0 espera, E = N·p_i (tablas «Observados y esperados» y «Términos del estadístico»); N: filas usadas; k: categorías; df: grados de libertad.",
+        "left_out": "Filas usadas: {n}. Filas excluidas: {missing} (sin valor: NULL o NaN)."
+      },
+      "fisher_exact": {
+        "name": "Prueba exacta de Fisher",
+        "stats": {
+          "test": {"estimate": "Odds ratio, estimación condicional", "null_value": "Odds ratio bajo H0"}
+        },
+        "kpi": {"sample": "Odds ratio de la muestra", "n": "Filas usadas", "estimate": "Odds ratio"},
+        "symbols": "x = «{x}», y = «{y}»: a, b la primera fila, c, d la segunda (tabla «Observados y esperados»); R1: el total de la primera fila; C1, C2: los de las columnas (tablas de filas y columnas); N: filas usadas; X: la primera celda bajo H0 con los mismos márgenes (hipergeométrica).",
+        "left_out": "Filas usadas: {n}. Filas excluidas: {missing} (sin valor en una de las dos columnas)."
       }
     },
     "stats": {
@@ -961,7 +1381,23 @@
         "z_quantile": "Cuantil normal del intervalo (z)",
         "r_squared": "Coeficiente de determinación (r²)",
         "posthoc_formula": "Fórmulas de un par",
-        "significance": "Código de significación (R)"
+        "significance": "Código de significación (R)",
+        "successes": "Éxitos (k)",
+        "expected_successes": "Éxitos esperados bajo H0 (n·p0)",
+        "yates": "Corrección de continuidad (Y)",
+        "chi_square": "Chi cuadrado (χ² = z²)",
+        "pooled_proportion": "Proporción combinada (p)",
+        "inverse_sum": "I = 1/n1 + 1/n2",
+        "cohen_h": "Tamaño del efecto: h de Cohen",
+        "rows": "Categorías de x (r)",
+        "cols": "Categorías de y (c)",
+        "chi_square_plain": "Chi cuadrado sin corrección (χ²₀)",
+        "cramers_v": "Tamaño del efecto: V de Cramér",
+        "phi": "Tamaño del efecto: φ",
+        "n_cells": "Celdas comparadas",
+        "cohen_w": "Tamaño del efecto: w de Cohen",
+        "support": "Valores posibles de a (soporte)",
+        "sample_odds_ratio": "Odds ratio de la muestra (a·d / b·c)"
       },
       "group": {
         "n": "n",
@@ -983,7 +1419,14 @@
         "dev_sd": "Desv. típica de z",
         "dev_se": "Error est. de z",
         "dev_ci_low": "Media de z, IC inf.",
-        "dev_ci_high": "Media de z, IC sup."
+        "dev_ci_high": "Media de z, IC sup.",
+        "rows": "Filas",
+        "successes": "Éxitos",
+        "proportion": "Proporción",
+        "row_total": "Filas (R)",
+        "row_share": "Proporción",
+        "col_total": "Filas (C)",
+        "col_share": "Proporción"
       },
       "hist": {"count": "Filas"},
       "curve": {
@@ -1003,6 +1446,19 @@
         "ci_high": "IC sup.",
         "decision": "Decisión",
         "significance": "Código de significación"
+      },
+      "cell": {
+        "observed": "Observados (O)",
+        "expected": "Esperados (E)",
+        "residual": "Residuo",
+        "adj_residual": "Residuo ajustado",
+        "contribution": "Término de χ²",
+        "proportion": "Proporción observada",
+        "expected_share": "Proporción esperada (p_i)",
+        "p_value": "Valor p",
+        "p_adjusted": "p-valor ajustado",
+        "significance": "Código de significación",
+        "decision": "Decisión"
       }
     },
     "note": "Nota {n}",
@@ -1013,7 +1469,9 @@
       "groups": "Grupos",
       "charts": "Gráficos",
       "notes": "Notas",
-      "comparisons": "Comparaciones por pares"
+      "comparisons": "Comparaciones por pares",
+      "table": "Tabla de frecuencias",
+      "comparisons_cells": "Comparaciones de las celdas"
     },
     "kpi": {"df": "Grados de libertad", "p_value": "Valor p"},
     "decision": {
@@ -1037,7 +1495,11 @@
       "notes": {"title": "Notas", "note": "Notas de la prueba"},
       "pairs": {"title": "Comparaciones por pares"},
       "pairs_p": {"title": "Comparaciones, p-valores"},
-      "pairs_ci": {"title": "Comparaciones, intervalos"}
+      "pairs_ci": {"title": "Comparaciones, intervalos"},
+      "cells": {"title": "Observados y esperados"},
+      "terms": {"title": "Términos del estadístico"},
+      "rows": {"title": "Filas de la tabla (x)"},
+      "cols": {"title": "Columnas de la tabla (y)"}
     },
     "charts": {
       "boxplot": "Diagrama de caja: {by}",
@@ -1045,7 +1507,11 @@
       "histogram": "Histograma: {by}",
       "density": "Distribución del estadístico bajo H0",
       "density_caption": "Área coloreada: la región crítica. Línea vertical: el estadístico de la prueba.",
-      "pairs": "Diferencias de las medias con sus intervalos"
+      "pairs": "Diferencias de las medias con sus intervalos",
+      "observed": "Frecuencias observadas y esperadas",
+      "residuals": "Residuos ajustados (fila: x, columna: y)",
+      "too_many_cells": "{chart}: la tabla tiene {n} celdas, y el gráfico se dibuja hasta {most}. Las tablas de arriba tienen cada número.",
+      "too_many_rows": "{chart}: x tiene {n} categorías, y el gráfico se dibuja hasta {most}. Las tablas de arriba tienen cada número."
     },
     "engine": "Calculado en el motor: {engine}.",
     "sample": {
@@ -1064,7 +1530,9 @@
       "method": {
         "tukey": "HSD de Tukey (Tukey–Kramer para grupos de distinto tamaño)",
         "games_howell": "Games–Howell (sin suponer varianzas iguales; los grados de libertad de Welch para cada par)",
-        "pairwise_t": "una prueba t para cada par"
+        "pairwise_t": "una prueba t para cada par",
+        "cells": "las celdas: el residuo ajustado de cada una frente a la distribución normal",
+        "pairs": "los pares de categorías de x: una prueba chi cuadrado de cada tabla 2 × c"
       },
       "adjust": {
         "studentized_range": "Los p-valores ajustados y los intervalos vienen del rango studentizado: valen para todos los pares a la vez.",
@@ -1173,6 +1641,74 @@
         "symbols": "x = « {x} », y = « {y} ». r : corrélation de Pearson, n : lignes avec les deux (tableau « Groupes ») ; z : le quantile normal de l'intervalle ; ddl : degrés de liberté.",
         "left_out": "Lignes utilisées : {n}. Lignes écartées : {missing} (sans nombre dans l'une des deux colonnes).",
         "tables": {"extremes": "Plus petite et plus grande valeur"}
+      },
+      "prop_one_sample": {
+        "name": "Test d'une proportion",
+        "variants": {"score": "Test d'une proportion (score)", "exact": "Test binomial exact"},
+        "stats": {
+          "test": {
+            "estimate": "Proportion (k / n)",
+            "null_value": "Proportion sous H0 (p0)",
+            "statistic": "Statistique z",
+            "std_error": "Erreur type sous H0, √(p0·(1 − p0)/n)"
+          },
+          "group": {"se": "Erreur type", "ci_low": "Proportion, IC bas", "ci_high": "Proportion, IC haut"}
+        },
+        "kpi": {
+          "statistic": "Statistique z",
+          "chi_square": "Khi-deux (z²)",
+          "estimate": "Proportion",
+          "successes": "Succès",
+          "n": "Lignes utilisées"
+        },
+        "symbols": "k : succès, n : lignes avec une valeur, de «{column}» (tableau «Groupes») ; p0 : la proportion sous H0 ; Y : la correction de continuité ; z : le quantile normal de l'intervalle ; X : les succès sous H0.",
+        "left_out": "Lignes utilisées : {n}. Lignes écartées : {missing} (aucune valeur : NULL ou NaN).",
+        "tables": {"intervals": "Intervalles de la proportion"},
+        "charts": {"interval": "Proportion et son intervalle de confiance (pointillé : p0)"}
+      },
+      "prop_two_sample": {
+        "name": "Test de deux proportions",
+        "stats": {
+          "test": {
+            "estimate": "Différence des proportions (p1 − p2)",
+            "null_value": "Différence sous H0",
+            "statistic": "Statistique z",
+            "std_error": "Erreur type sous H0, √(p·(1 − p)·I)"
+          },
+          "group": {"se": "Erreur type", "ci_low": "Proportion, IC bas", "ci_high": "Proportion, IC haut"}
+        },
+        "kpi": {"statistic": "Statistique z", "chi_square": "Khi-deux (z²)", "estimate": "Différence des proportions"},
+        "symbols": "1 = «{g1}», 2 = «{g2}». k : succès, n : lignes avec une valeur, p = k/n : de chaque groupe (tableau «Groupes») ; Y : la correction de continuité ; z_q : le quantile normal de l'intervalle. Intervalle d'un groupe : de Wilson, avec Y = 0,5 si corrigé.",
+        "left_out": "Lignes utilisées : {n}. Lignes écartées : {missing} (aucun groupe, ou aucune valeur dans l'un des deux groupes).",
+        "tables": {"intervals": "Intervalles des proportions"},
+        "charts": {"interval": "Proportions et leurs intervalles de confiance"}
+      },
+      "chi2_independence": {
+        "name": "Test du khi-deux d'indépendance",
+        "stats": {
+          "test": {"statistic": "Statistique du khi-deux (χ²)"}
+        },
+        "kpi": {"statistic": "Khi-deux (χ²)", "effect": "V de Cramér"},
+        "symbols": "x = «{x}», y = «{y}». O, E : lignes observées et attendues d'une cellule (tableau «Observés et attendus») ; R, C : les totaux de sa ligne et de sa colonne ; N : lignes utilisées ; r, c : les catégories de x et de y ; Y : correction de Yates (2 × 2 seulement) ; résidu ajusté : (O − E) / √(E·(1 − R/N)·(1 − C/N)).",
+        "left_out": "Lignes utilisées : {n}. Lignes écartées : {missing} (aucune valeur dans l'une des deux colonnes)."
+      },
+      "chi2_gof": {
+        "name": "Test du khi-deux d'adéquation",
+        "stats": {
+          "test": {"statistic": "Statistique du khi-deux (χ²)", "k": "Catégories (k)"}
+        },
+        "kpi": {"statistic": "Khi-deux (χ²)", "effect": "w de Cohen"},
+        "symbols": "Les catégories de «{column}». O : les lignes d'une catégorie, p_i : la part que H0 en attend, E = N·p_i (tableaux «Observés et attendus» et «Termes de la statistique») ; N : lignes utilisées ; k : catégories ; df : degrés de liberté.",
+        "left_out": "Lignes utilisées : {n}. Lignes écartées : {missing} (aucune valeur : NULL ou NaN)."
+      },
+      "fisher_exact": {
+        "name": "Test exact de Fisher",
+        "stats": {
+          "test": {"estimate": "Odds ratio, estimation conditionnelle", "null_value": "Odds ratio sous H0"}
+        },
+        "kpi": {"sample": "Odds ratio de l'échantillon", "n": "Lignes utilisées", "estimate": "Odds ratio"},
+        "symbols": "x = «{x}», y = «{y}» : a, b la première ligne, c, d la seconde (tableau «Observés et attendus») ; R1 : le total de la première ligne ; C1, C2 : ceux des colonnes (tableaux des lignes et des colonnes) ; N : lignes utilisées ; X : la première cellule sous H0 avec les mêmes marges (hypergéométrique).",
+        "left_out": "Lignes utilisées : {n}. Lignes écartées : {missing} (aucune valeur dans l'une des deux colonnes)."
       }
     },
     "stats": {
@@ -1234,7 +1770,23 @@
         "z_quantile": "Quantile normal de l'intervalle (z)",
         "r_squared": "Coefficient de détermination (r²)",
         "posthoc_formula": "Formules d'une paire",
-        "significance": "Code de signification (R)"
+        "significance": "Code de signification (R)",
+        "successes": "Succès (k)",
+        "expected_successes": "Succès attendus sous H0 (n·p0)",
+        "yates": "Correction de continuité (Y)",
+        "chi_square": "Khi-deux (χ² = z²)",
+        "pooled_proportion": "Proportion commune (p)",
+        "inverse_sum": "I = 1/n1 + 1/n2",
+        "cohen_h": "Taille d'effet : h de Cohen",
+        "rows": "Catégories de x (r)",
+        "cols": "Catégories de y (c)",
+        "chi_square_plain": "Khi-deux sans correction (χ²₀)",
+        "cramers_v": "Taille d'effet : V de Cramér",
+        "phi": "Taille d'effet : φ",
+        "n_cells": "Cellules comparées",
+        "cohen_w": "Taille d'effet : w de Cohen",
+        "support": "Valeurs possibles de a (support)",
+        "sample_odds_ratio": "Odds ratio de l'échantillon (a·d / b·c)"
       },
       "group": {
         "n": "n",
@@ -1256,7 +1808,14 @@
         "dev_sd": "Écart type de z",
         "dev_se": "Erreur type de z",
         "dev_ci_low": "Moyenne de z, IC inf.",
-        "dev_ci_high": "Moyenne de z, IC sup."
+        "dev_ci_high": "Moyenne de z, IC sup.",
+        "rows": "Lignes",
+        "successes": "Succès",
+        "proportion": "Proportion",
+        "row_total": "Lignes (R)",
+        "row_share": "Part",
+        "col_total": "Lignes (C)",
+        "col_share": "Part"
       },
       "hist": {"count": "Lignes"},
       "curve": {
@@ -1276,6 +1835,19 @@
         "ci_high": "IC sup.",
         "decision": "Décision",
         "significance": "Code de signification"
+      },
+      "cell": {
+        "observed": "Observés (O)",
+        "expected": "Attendus (E)",
+        "residual": "Résidu",
+        "adj_residual": "Résidu ajusté",
+        "contribution": "Terme du χ²",
+        "proportion": "Part observée",
+        "expected_share": "Part attendue (p_i)",
+        "p_value": "Valeur p",
+        "p_adjusted": "p-valeur ajustée",
+        "significance": "Code de signification",
+        "decision": "Décision"
       }
     },
     "note": "Note {n}",
@@ -1286,7 +1858,9 @@
       "groups": "Groupes",
       "charts": "Graphiques",
       "notes": "Notes",
-      "comparisons": "Comparaisons par paires"
+      "comparisons": "Comparaisons par paires",
+      "table": "Tableau des effectifs",
+      "comparisons_cells": "Comparaisons des cellules"
     },
     "kpi": {"df": "Degrés de liberté", "p_value": "Valeur p"},
     "decision": {
@@ -1310,7 +1884,11 @@
       "notes": {"title": "Notes", "note": "Notes du test"},
       "pairs": {"title": "Comparaisons par paires"},
       "pairs_p": {"title": "Comparaisons, p-valeurs"},
-      "pairs_ci": {"title": "Comparaisons, intervalles"}
+      "pairs_ci": {"title": "Comparaisons, intervalles"},
+      "cells": {"title": "Observés et attendus"},
+      "terms": {"title": "Termes de la statistique"},
+      "rows": {"title": "Lignes du tableau (x)"},
+      "cols": {"title": "Colonnes du tableau (y)"}
     },
     "charts": {
       "boxplot": "Boîte à moustaches : {by}",
@@ -1318,7 +1896,11 @@
       "histogram": "Histogramme : {by}",
       "density": "Loi de la statistique sous H0",
       "density_caption": "Zone colorée : la région critique. Ligne verticale : la statistique du test.",
-      "pairs": "Différences des moyennes avec leurs intervalles"
+      "pairs": "Différences des moyennes avec leurs intervalles",
+      "observed": "Effectifs observés et attendus",
+      "residuals": "Résidus ajustés (ligne : x, colonne : y)",
+      "too_many_cells": "{chart} : le tableau a {n} cellules, et le graphique est tracé jusqu'à {most}. Les tableaux ci-dessus contiennent chaque nombre.",
+      "too_many_rows": "{chart} : x a {n} catégories, et le graphique est tracé jusqu'à {most}. Les tableaux ci-dessus contiennent chaque nombre."
     },
     "engine": "Calculé dans le moteur : {engine}.",
     "sample": {
@@ -1337,7 +1919,9 @@
       "method": {
         "tukey": "HSD de Tukey (Tukey–Kramer pour des groupes de tailles différentes)",
         "games_howell": "Games–Howell (sans supposer des variances égales ; les degrés de liberté de Welch pour chaque paire)",
-        "pairwise_t": "un test t pour chaque paire"
+        "pairwise_t": "un test t pour chaque paire",
+        "cells": "les cellules : le résidu ajusté de chacune contre la loi normale",
+        "pairs": "les paires de catégories de x : un test du khi-deux de chaque tableau 2 × c"
       },
       "adjust": {
         "studentized_range": "Les p-valeurs ajustées et les intervalles viennent de l'étendue studentisée : ils valent pour toutes les paires ensemble.",

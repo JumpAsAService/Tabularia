@@ -642,3 +642,199 @@ def test_p_adjusted_against_r():
     # Holm keeps the order of the p-values, and never passes 1
     assert p_adjusted([0.04, 0.01, 0.03, 0.5], "holm") == [0.09, 0.04, 0.09, 0.5]
     assert p_adjusted([0.6, 0.7], "bonferroni") == [1.0, 1.0] and p_adjusted([1.0], "sidak") == [1.0]
+
+
+# ── lot 3: proportions and categories ────────────────────────────────────────
+@pytest.fixture
+def answers(storage):
+    """37 «yes» of 120 in «a», 52 of 110 in «b»: the counts of the spec's proportions. And what
+    every engine leaves out: a row with no group, a row with no answer; the same answers as a
+    boolean, as a whole number and as a float with a NaN."""
+    g = ["a"] * 120 + ["b"] * 110 + [None, "a"]
+    answer = ["yes"] * 37 + ["no"] * 83 + ["yes"] * 52 + ["no"] * 58 + ["yes", None]
+    df = pl.DataFrame({
+        "g": g, "answer": answer,
+        "ok": [None if v is None else v == "yes" for v in answer],
+        "code": [None if v is None else int(v == "yes") for v in answer],
+        "score": [math.nan if v is None else (1.5 if v == "yes" else 0.0) for v in answer],
+    }, schema={"g": pl.String, "answer": pl.String, "ok": pl.Boolean, "code": pl.Int64, "score": pl.Float64})
+    return upload_df(storage, df, "datasets/stats_answers.parquet")
+
+
+ONLY_GROUP_A = {"type": "filter", "params": {"column": "g", "operator": "eq", "value": "a"}}
+
+
+@pytest.mark.parametrize("name", ENGINES)
+def test_prop_one_sample(name, storage, answers):
+    engine = _engine(name, storage)
+
+    def run(**params):
+        res = engine.preview(answers, [ONLY_GROUP_A, stat_op("prop_one_sample", **{"value": "answer", "success": "yes", "p0": 0.25, **params})],
+                             limit=1000, use_cache=False)
+        rows = sorted(res.rows, key=lambda r: r["ord"])
+        return rows, {r["key"]: r for r in rows}
+
+    rows, by_key = run(correction=False)
+    check_numbers(by_key, {"n": 120, "n_missing": 1, "successes": 37, "chi_square": 2.177777777777778, "p_value": 0.140016503197171,
+                           "ci_low": 0.232727369889163, "ci_high": 0.395829977238007, "estimate": 37 / 120, "yates": 0.0,
+                           "statistic": math.sqrt(2.177777777777778), "critical_high": 1.95996398454005})
+    assert texts_of(rows)["variant"] == "score" and texts_of(rows)["h0"] == "P(answer = yes) = 0.25"
+    assert texts_of(rows)["distribution"] == "normal" and texts_of(rows)["significance"] == ""
+    _, by_key = run()
+    check_numbers(by_key, {"chi_square": 1.877777777777778, "p_value": 0.170586932871441, "ci_low": 0.228988034190828,
+                           "ci_high": 0.400158020496785, "yates": 0.5})
+    check_numbers(by_key, {"n": 120, "successes": 37, "proportion": 37 / 120}, "group|answer||")
+    rows, by_key = run(method="exact")
+    check_numbers(by_key, {"p_value": 0.140826101479329, "ci_low": 0.227255119633832, "ci_high": 0.399136764531952})
+    assert "test|||statistic" not in by_key and texts_of(rows)["distribution"] == "binomial(120, 0.25)"
+    rows, by_key = run(method="exact", alternative="greater")
+    check_numbers(by_key, {"p_value": 0.0873786876294322, "ci_low": 0.2390137473904261, "ci_high": 1.0})
+    assert texts_of(rows)["significance"] == "."
+    # the same counts read from a boolean, a whole number and a float: the success typed as the column's
+    for value, success in (("ok", True), ("ok", "true"), ("code", 1), ("code", "1"), ("score", 1.5), ("score", "1.5")):
+        _, by_key = run(value=value, success=success, correction=False)
+        check_numbers(by_key, {"n": 120, "successes": 37, "p_value": 0.140016503197171})
+
+
+@pytest.mark.parametrize("name", ENGINES)
+def test_prop_two_sample(name, storage, answers):
+    _, rows, by_key = result(name, storage, answers, stat_op("prop_two_sample", value="answer", success="yes", group="g", correction=False))
+    check_numbers(by_key, {"n": 230, "n_missing": 2, "chi_square": 6.5382911109662265, "p_value": 0.0105576718290949,
+                           "ci_low": -0.2890199799483122, "ci_high": -0.0397678988395665, "cohen_h": -0.338830093855416,
+                           "estimate": 37 / 120 - 52 / 110, "pooled_proportion": 89 / 230})
+    assert texts_of(rows)["h0"] == "P(answer = yes | a) − P(answer = yes | b) = 0" and texts_of(rows)["significance"] == "*"
+    check_numbers(by_key, {"n": 120, "successes": 37}, "group|a||")
+    check_numbers(by_key, {"n": 110, "successes": 52, "proportion": 52 / 110}, "group|b||")
+    _, _, by_key = result(name, storage, answers, stat_op("prop_two_sample", value="ok", success=True, group="g"))
+    check_numbers(by_key, {"chi_square": 5.8636553800013065, "p_value": 0.0154566613661394, "ci_low": -0.2977321011604335,
+                           "ci_high": -0.0310557776274453})
+    # one-sided: the z with the sign of the difference (R: prop.test, alternative = "less")
+    _, _, by_key = result(name, storage, answers, stat_op("prop_two_sample", value="code", success=1, group="g", alternative="less"))
+    check_numbers(by_key, {"p_value": 0.0154566613661394 / 2, "ci_low": -1.0})
+    _, _, by_key = result(name, storage, answers, stat_op("prop_two_sample", value="answer", success="yes", group="g", groups=["b", "a"]))
+    check_numbers(by_key, {"estimate": 52 / 110 - 37 / 120, "p_value": 0.0154566613661394, "cohen_h": 0.338830093855416})
+
+
+def counts_frame(rows: list[str], cols: list[str], counts: list[list[int]]) -> pl.DataFrame:
+    cells = [(a, b) for a, row in zip(rows, counts) for b, n in zip(cols, row) for _ in range(n)]
+    cells += [(None, cols[0]), (rows[0], None)]  # a row each column leaves out
+    return pl.DataFrame({"x": [a for a, _ in cells], "y": [b for _, b in cells]}, schema={"x": pl.String, "y": pl.String})
+
+
+@pytest.fixture
+def tables(storage):
+    """The spec's tables as the rows that make them: T23 (rows m, f; columns x, y, z), T32 (rows
+    x, y, z; columns m, f), T22 (rows a, b; columns x, y: the first row's categories first in text
+    order, so that the odds ratio is R's) and the goodness of fit's counts."""
+    return {
+        "T23": upload_df(storage, counts_frame(["m", "f"], ["x", "y", "z"], [[30, 20, 10], [15, 25, 20]]), "datasets/stats_t23.parquet"),
+        "T32": upload_df(storage, counts_frame(["x", "y", "z"], ["m", "f"], [[30, 15], [20, 25], [10, 20]]), "datasets/stats_t32.parquet"),
+        "T22": upload_df(storage, counts_frame(["a", "b"], ["x", "y"], [[12, 5], [7, 16]]), "datasets/stats_t22.parquet"),
+        "GOF": upload_df(storage, pl.DataFrame({"cat": ["a"] * 18 + ["b"] * 22 + ["c"] * 30 + ["d"] * 30 + [None]}),
+                         "datasets/stats_gof.parquet"),
+    }
+
+
+@pytest.mark.parametrize("name", ENGINES)
+def test_chi2_independence(name, storage, tables):
+    _, rows, by_key = result(name, storage, tables["T23"], stat_op("chi2_independence", x="x", y="y"))
+    check_numbers(by_key, {"n": 120, "n_missing": 2, "statistic": 8.8888888888888893, "df": 2, "p_value": 0.0117436284570214,
+                           "cramers_v": 0.272165526975909, "yates": 0.0, "critical_high": 5.99146454710798})
+    for row in ("m", "f"):
+        for col, e in (("x", 22.5), ("y", 22.5), ("z", 15)):
+            check_numbers(by_key, {"expected": e}, f"cell|{row}|{col}|")
+    check_numbers(by_key, {"residual": 1.58113883008419}, "cell|m|x|")
+    check_numbers(by_key, {"residual": -0.52704627669473}, "cell|m|y|")
+    check_numbers(by_key, {"residual": -1.29099444873581}, "cell|m|z|")
+    check_numbers(by_key, {"residual": -1.58113883008419, "observed": 15}, "cell|f|x|")
+    check_numbers(by_key, {"row_total": 60, "row_share": 0.5}, "group|m||")
+    check_numbers(by_key, {"col_total": 45}, "group|x||")
+    assert texts_of(rows)["h0"] == "P(x, y) = P(x)·P(y)" and texts_of(rows)["variant"] == "pearson"
+    assert texts_of(rows)["distribution"] == "chi-square(2)" and texts_of(rows)["significance"] == "*"
+    # the cells in the text order of their categories, each with its five numbers
+    assert [(r["level"], r["level_2"]) for r in rows if r["section"] == "cell" and r["stat"] == "observed"] == [
+        (a, b) for a in ("f", "m") for b in ("x", "y", "z")]
+    assert [r["stat"] for r in rows if r["section"] == "cell" and r["level"] == "f" and r["level_2"] == "x"] == [
+        "observed", "expected", "residual", "adj_residual", "contribution"]
+    # the sum of the terms is the statistic: what the reader adds by hand
+    assert math.isclose(sum(r["value"] for r in rows if r["stat"] == "contribution"), 8.8888888888888893, rel_tol=1e-12)
+    _, rows, by_key = result(name, storage, tables["T22"], stat_op("chi2_independence", x="x", y="y"))
+    check_numbers(by_key, {"statistic": 4.8122864706523361, "df": 1, "p_value": 0.0282575285263613, "phi": 0.397488735724487,
+                           "chi_square_plain": 6.3198918011140410, "cramers_v": 0.397488735724487, "yates": 0.5})
+    assert texts_of(rows)["variant"] == "yates"
+    assert math.isclose(sum(r["value"] for r in rows if r["stat"] == "contribution"), 4.8122864706523361, rel_tol=1e-12)
+    _, _, by_key = result(name, storage, tables["T22"], stat_op("chi2_independence", x="x", y="y", correction=False))
+    check_numbers(by_key, {"statistic": 6.3198918011140410, "p_value": 0.0119390913779123, "phi": 0.397488735724487})
+
+
+T32_CELLS = {("x", "m"): (2.828427124746190, 0.00467773498104727, 0.0280664098862836, 0.0280664098862836),
+             ("y", "m"): (-0.942809041582063, 0.34577858615116025, 0.6915571723023205, 1.0),
+             ("z", "m"): (-2.108185106778920, 0.03501498101966251, 0.1400599240786500, 0.2100898861179750)}
+
+
+@pytest.mark.parametrize("name", ENGINES)
+def test_chi2_independence_cells(name, storage, tables):
+    for adjust in ("holm", "bonferroni"):
+        _, rows, by_key = result(name, storage, tables["T32"], stat_op("chi2_independence", x="x", y="y", posthoc="cells", p_adjust=adjust))
+        check_numbers(by_key, {"statistic": 8.8888888888888893, "df": 2, "n_cells": 6})
+        for (row, col), (z, p, holm, bonferroni) in T32_CELLS.items():
+            for c, sign in ((col, 1.0), ("f", -1.0)):
+                check_numbers(by_key, {"adj_residual": sign * z, "p_value": p, "p_adjusted": holm if adjust == "holm" else bonferroni},
+                              f"cell|{row}|{c}|")
+        assert by_key["cell|x|m|significance"]["text"] == "*" and by_key["cell|y|f|decision"]["text"] == "fail_to_reject_h0"
+        assert texts_of(rows)["posthoc"] == "cells" and texts_of(rows)["p_adjust"] == adjust
+        assert [r["stat"] for r in rows if r["key"].startswith("cell|x|m|")] == [
+            "observed", "expected", "residual", "adj_residual", "contribution", "p_value", "p_adjusted", "significance", "decision"]
+
+
+@pytest.mark.parametrize("name", ENGINES)
+def test_chi2_independence_pairs(name, storage, tables):
+    with_correction = {"statistic": (3.645, 6.75223214285714235, 0.520833333333333),
+                       "p_value": (0.0562378038772762, 0.00936304763753393, 0.470486422058790)}
+    for adjust, adjusted in (("holm", (0.1124756077545524, 0.0280891429126018, 0.4704864220587896)),
+                             ("bonferroni", (0.1687134116318286, 0.0280891429126018, 1.0)),
+                             ("sidak", (0.1594032026498519, 0.0278269637565374, 0.8515325317798260))):
+        _, rows, by_key = result(name, storage, tables["T32"], stat_op("chi2_independence", x="x", y="y", posthoc="pairs", p_adjust=adjust))
+        for stat, values in (*with_correction.items(), ("p_adjusted", adjusted)):
+            for (a, b), want in zip((("x", "y"), ("x", "z"), ("y", "z")), values):
+                close(by_key[f"pair|{a}|{b}|{stat}"]["value"], want)
+        assert [by_key[f"pair|{a}|{b}|df"]["value"] for a, b in (("x", "y"), ("x", "z"), ("y", "z"))] == [1.0, 1.0, 1.0]
+        assert by_key["pair|x|y|estimate"]["value"] is None and by_key["pair|x|z|ci_low"]["value"] is None
+        assert by_key["test|||n_pairs"]["value"] == 3
+    _, _, by_key = result(name, storage, tables["T32"], stat_op("chi2_independence", x="x", y="y", posthoc="pairs", correction=False))
+    for (a, b), stat, p, holm in zip((("x", "y"), ("x", "z"), ("y", "z")), (4.5, 8.03571428571428648, 0.925925925925926),
+                                     (0.0338948535246893, 0.00458639208025349, 0.335923813151736),
+                                     (0.0677897070493785, 0.0137591762407605, 0.3359238131517357)):
+        check_numbers(by_key, {"statistic": stat, "p_value": p, "p_adjusted": holm}, f"pair|{a}|{b}|")
+    assert by_key["pair|x|z|significance"]["text"] == "*"
+
+
+@pytest.mark.parametrize("name", ENGINES)
+def test_chi2_gof(name, storage, tables):
+    _, rows, by_key = result(name, storage, tables["GOF"], stat_op("chi2_gof", value="cat"))
+    check_numbers(by_key, {"n": 100, "n_missing": 1, "k": 4, "statistic": 4.32, "df": 3, "p_value": 0.228918864336105})
+    check_numbers(by_key, {"observed": 18, "expected": 25, "expected_share": 0.25, "proportion": 0.18}, "cell|a||")
+    assert texts_of(rows)["variant"] == "equal"
+    _, rows, by_key = result(name, storage, tables["GOF"], stat_op("chi2_gof", value="cat", expected={"a": 0.1, "b": 0.2, "c": 0.3, "d": 0.4}))
+    check_numbers(by_key, {"statistic": 9.1, "p_value": 0.0279904579321571, "cohen_w": 0.301662062579967})
+    check_numbers(by_key, {"expected": 40, "contribution": 2.5}, "cell|d||")
+    assert texts_of(rows)["h0"] == "P(cat = a) = 0.1, P(cat = b) = 0.2, ..., P(cat = d) = 0.4" and texts_of(rows)["variant"] == "given"
+
+
+@pytest.mark.parametrize("name", ENGINES)
+def test_fisher_exact(name, storage, tables):
+    """R's odds ratio and its interval come from a root search of tolerance 1e-4: those three
+    within 1e-4 of R's, the p-values within 1e-9."""
+    _, rows, by_key = result(name, storage, tables["T22"], stat_op("fisher_exact", x="x", y="y"))
+    check_numbers(by_key, {"n": 40, "n_missing": 2, "p_value": 0.023836895850244, "sample_odds_ratio": 5.48571428571429, "null_value": 1})
+    for stat, want in (("estimate", 5.22965523049642), ("ci_low", 1.16935473342543), ("ci_high", 27.30369774777703)):
+        close(by_key[f"test|||{stat}"]["value"], want, 1e-4)
+    assert texts_of(rows)["distribution"] == "hypergeometric(19, 21, 17)" and texts_of(rows)["significance"] == "*"
+    assert "test|||statistic" not in by_key
+    _, _, by_key = result(name, storage, tables["T22"], stat_op("fisher_exact", x="x", y="y", alternative="greater"))
+    close(by_key["test|||p_value"]["value"], 0.0135692310775737)
+    close(by_key["test|||ci_low"]["value"], 1.42562760456438, 1e-4)
+    assert by_key["test|||ci_high"]["value"] is None  # +∞
+    _, _, by_key = result(name, storage, tables["T22"], stat_op("fisher_exact", x="x", y="y", alternative="less"))
+    close(by_key["test|||p_value"]["value"], 0.997986250989588)
+    assert by_key["test|||ci_low"]["value"] == 0.0

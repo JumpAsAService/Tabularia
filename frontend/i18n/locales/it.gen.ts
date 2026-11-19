@@ -6120,6 +6120,60 @@ export default {
       "pearson": {
         "name": "Correlazione di Pearson",
         "hint": "Due colonne delle stesse righe variano insieme? La r di Pearson, il suo test e il suo intervallo di confidenza."
+      },
+      "prop_one_sample": {
+        "name": "Test di una proporzione",
+        "hint": "La quota di un valore in una colonna è uguale a una proporzione data? Il test score con l'intervallo di Wilson, o il test binomiale esatto.",
+        "params": {
+          "value": "Colonna dell'esito"
+        },
+        "hints": {
+          "value": "Qualsiasi colonna: una riga conta come successo quando ha il valore qui sotto."
+        }
+      },
+      "prop_two_sample": {
+        "name": "Test di due proporzioni",
+        "hint": "Due gruppi hanno la stessa quota di un valore? Il test chi quadrato di due proporzioni, con l'intervallo della loro differenza.",
+        "params": {
+          "value": "Colonna dell'esito"
+        },
+        "hints": {
+          "value": "Qualsiasi colonna: una riga conta come successo quando ha il valore qui sotto."
+        }
+      },
+      "chi2_independence": {
+        "name": "Test chi quadrato di indipendenza",
+        "hint": "Due colonne di categorie sono indipendenti? Il chi quadrato di Pearson sulla loro tabella dei conteggi, con le celle o le coppie che fanno la differenza.",
+        "params": {
+          "x": "Righe della tabella (x)",
+          "y": "Colonne della tabella (y)",
+          "posthoc": "Confronti"
+        },
+        "hints": {
+          "x": "Una colonna di categorie (di qualsiasi tipo): 50 al massimo.",
+          "y": "Una riga in cui una delle due colonne non ha un valore è lasciata fuori.",
+          "correction": "La correzione di continuità di Yates, solo su una tabella 2 × 2.",
+          "posthoc": "Quali celle si allontanano dall'indipendenza (i loro residui corretti), o quali coppie di categorie di x differiscono."
+        }
+      },
+      "chi2_gof": {
+        "name": "Test chi quadrato di adattamento",
+        "hint": "Le categorie di una colonna hanno le quote attese? Tutte uguali, o le proporzioni che dai.",
+        "params": {
+          "value": "Colonna delle categorie"
+        }
+      },
+      "fisher_exact": {
+        "name": "Test esatto di Fisher",
+        "hint": "Due colonne di due categorie ciascuna sono indipendenti? Esatto su una tabella 2 × 2, con l'odds ratio e il suo intervallo.",
+        "params": {
+          "x": "Righe della tabella (x)",
+          "y": "Colonne della tabella (y)"
+        },
+        "hints": {
+          "x": "Una colonna di due categorie: l'odds ratio è della prima (in ordine di testo).",
+          "y": "Anche questa di due categorie; una riga senza valore in una delle due è lasciata fuori."
+        }
       }
     },
     "params": {
@@ -6135,7 +6189,12 @@ export default {
       "posthoc": "Confronti a coppie",
       "p_adjust": "Correzione per confronti multipli",
       "ratio": "Rapporto sotto H0",
-      "center": "Centro di ogni gruppo"
+      "center": "Centro di ogni gruppo",
+      "success": "Valore che conta come successo",
+      "p0": "Proporzione sotto H0 (p0)",
+      "method": "Metodo",
+      "correction": "Correzione di continuità",
+      "expected": "Proporzioni attese"
     },
     "hints": {
       "value": "La colonna che si misura.",
@@ -6149,7 +6208,12 @@ export default {
       "posthoc": "Quali gruppi differiscono: HSD di Tukey (varianze uguali), Games–Howell (varianze diverse), o un test t per coppia con una correzione.",
       "p_adjust": "Come si correggono i p-value delle coppie per il loro numero. Holm non è mai meno potente di Bonferroni.",
       "ratio": "Il rapporto tra la prima varianza e la seconda che afferma l'ipotesi nulla: 1 per «varianze uguali».",
-      "center": "La mediana (forma di Brown–Forsythe, robusta ai valori asimmetrici) o la media (l'originale di Levene)."
+      "center": "La mediana (forma di Brown–Forsythe, robusta ai valori asimmetrici) o la media (l'originale di Levene).",
+      "success": "Scegli uno dei valori della colonna, o scrivilo: un testo, un numero, true o false.",
+      "p0": "Tra 0 e 1: la quota di successi che afferma l'ipotesi nulla.",
+      "method": "Score: l'approssimazione normale, l'intervallo di Wilson. Esatto: la binomiale, l'intervallo di Clopper–Pearson (fino a un milione di righe).",
+      "correction": "La correzione di continuità di Yates dell'approssimazione normale (come prop.test di R).",
+      "expected": "Tutte uguali, o una proporzione per ogni categoria della colonna: sopra 0, con somma 1."
     },
     "choices": {
       "alternative": {
@@ -6172,6 +6236,15 @@ export default {
       "levene_center": {
         "median": "Mediana (Brown–Forsythe)",
         "mean": "Media (Levene)"
+      },
+      "prop_method": {
+        "score": "Score (Wilson)",
+        "exact": "Esatto (binomiale)"
+      },
+      "chi2_posthoc": {
+        "none": "Nessuno",
+        "cells": "Le celle",
+        "pairs": "Le coppie di categorie di x"
       }
     },
     "reasons": {
@@ -6191,7 +6264,15 @@ export default {
       "notNumeric": "non è un numero",
       "notInInput": "non è nell'ingresso del passo",
       "notInData": "non è nei dati",
-      "noNumericColumns": "L'ingresso del passo non ha colonne numeriche: convertine una prima."
+      "noNumericColumns": "L'ingresso del passo non ha colonne numeriche: convertine una prima.",
+      "successPlaceholder": "sì, 1, true…",
+      "successValues": "Valori di «{column}»",
+      "equalShares": "Tutte uguali",
+      "givenShares": "Date per ogni categoria",
+      "shareOf": "Proporzione di «{level}»",
+      "sharesSum": "Somma: {sum}",
+      "sharesNotOne": "Le proporzioni sommano {sum}: devono sommare 1.",
+      "sharesMissing": "Dai a ogni categoria una proporzione sopra 0."
     }
   },
   "statReport": {

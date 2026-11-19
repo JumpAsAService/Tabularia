@@ -10,6 +10,8 @@ from typing import Any
 
 from app.engine.stats.aggregates import (
     CENTRE_ROWS,
+    Cell,
+    Successes,
     Deviations,
     Difference,
     HistogramBin,
@@ -77,6 +79,38 @@ class PolarsStatSource:
 
     def columns(self) -> dict[str, Column]:
         return {name: Column(str(dtype), dtype.is_numeric()) for name, dtype in self._schema.items()}
+
+    def kind_of(self, column: str) -> str | None:
+        """The kind of a column whose values a test compares with one written (`typed_value`)."""
+        return _kind(self._schema[column])
+
+    def successes(self, value: str, success: Any, group: str | None = None, levels: list | None = None) -> list[Successes]:
+        """A8: per group (the NULL one too), or over every row, the rows, the values (not NULL,
+        not NaN) and those equal to `success` (see SqlStatSource)."""
+        col = pl.col(value)
+        ok = col.is_not_null()
+        if self._schema[value].is_float():
+            ok = ok & ~col.is_nan()
+        hit = ok & (col == pl.lit(success))
+        aggregates = [pl.len().alias(_ROWS), ok.cast(pl.Int64).sum().alias(_N), hit.fill_null(False).cast(pl.Int64).sum().alias("__stat_k__")]
+        if group is None:
+            df = self.lf.select(pl.lit(None).alias(_LEVEL), *aggregates).collect(engine="streaming")
+        else:
+            lf = self.lf
+            if comparable(levels):
+                lf = lf.filter(pl.any_horizontal([pl.col(group).is_null()] + [pl.col(group) == pl.lit(v) for v in levels]))
+            df = lf.group_by(pl.col(group).alias(_LEVEL)).agg(aggregates).collect(engine="streaming")
+        return [Successes(lv, int(rows), int(n or 0), int(k or 0)) for lv, rows, n, k in df.iter_rows()]
+
+    def crosstab(self, x: str, y: str, limit: int) -> list[Cell]:
+        """A7: the rows of each pair of values of `x` and `y`, NULL ones too; `limit` at most."""
+        df = (
+            self.lf.group_by(pl.col(x).alias("__stat_lx__"), pl.col(y).alias("__stat_ly__"))
+            .agg(pl.len().alias(_ROWS))
+            .head(limit)
+            .collect(engine="streaming")
+        )
+        return [Cell(a, b, int(rows)) for a, b, rows in df.iter_rows()]
 
     def levels(self, group: str, limit: int) -> list[Level]:
         """A1: the values of `group` with their rows, the NULL one too; `limit` at most."""

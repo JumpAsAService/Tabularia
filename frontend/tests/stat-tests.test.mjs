@@ -349,3 +349,45 @@ test('the tests of the means and variances: their fields, their defaults', () =>
   assert.equal(s.statForbidden(anova, 'posthoc', 'tukey', { var_equal: false })?.reason, 'tukey_equal_variances')
   assert.equal(s.statForbidden(anova, 'posthoc', 'games_howell', {})?.reason, 'games_howell_unequal_variances')
 })
+
+test('the tests of proportions and categories: their fields, their defaults, what survives another column', () => {
+  const fields = (op) => s.statFields(s.statTestOf(op)).map((f) => `${f.key}:${f.control}`)
+  assert.deepEqual(fields('stat_prop_one_sample'), ['value:column', 'success:level', 'p0:number', 'method:choice', 'correction:boolean',
+    'alternative:choice', 'alpha:number'])
+  assert.deepEqual(fields('stat_prop_two_sample'), ['value:column', 'success:level', 'group:column', 'groups:levels', 'correction:boolean',
+    'alternative:choice', 'alpha:number'])
+  assert.deepEqual(fields('stat_chi2_independence'), ['x:column', 'y:column', 'correction:boolean', 'posthoc:choice', 'p_adjust:choice', 'alpha:number'])
+  assert.deepEqual(fields('stat_chi2_gof'), ['value:column', 'expected:proportions', 'alpha:number'])
+  assert.deepEqual(fields('stat_fisher_exact'), ['x:column', 'y:column', 'alternative:choice', 'alpha:number'])
+  // any column is an outcome or a category: none is asked to be a number
+  assert.ok(s.statFields(s.statTestOf('stat_prop_one_sample')).every((f) => !f.numeric))
+  assert.deepEqual(defaultParams('stat_prop_one_sample'), { p0: 0.5, method: 'score', correction: true, alternative: 'two_sided', alpha: 0.05 })
+  assert.deepEqual(defaultParams('stat_chi2_gof'), { alpha: 0.05 }) // no proportions: all equal
+  const one = s.statTestOf('stat_prop_one_sample')
+  assert.equal(s.statApplies(one, 'correction', {}), true)
+  assert.equal(s.statApplies(one, 'correction', { method: 'exact' }), false)
+  assert.equal(s.statApplies(s.statTestOf('stat_chi2_independence'), 'p_adjust', { posthoc: 'cells' }), true)
+  // the success is kept as written, a value of another column is not
+  const p = { value: 'answer', success: 'yes', p0: 0.25 }
+  assert.deepEqual(s.statParams(one, { ...p, success: '  ' }), { value: 'answer', p0: 0.25 })
+  assert.deepEqual(s.statParams(one, { ...p, success: true }).success, true)
+  assert.deepEqual(s.statSet(one, p, 'value', 'other'), { value: 'other', p0: 0.25 })
+  assert.deepEqual(s.statSet(one, p, 'p0', '0,3'), { ...p, p0: 0.3 })
+  const gof = s.statTestOf('stat_chi2_gof')
+  assert.deepEqual(s.statSet(gof, { value: 'cat', expected: { a: 0.5, b: 0.5 } }, 'value', 'other'), { value: 'other' })
+  assert.equal(opSummary('stat_chi2_independence', { x: 'region', y: 'channel' }), 'region ~ channel')
+})
+
+test('the proportions of a goodness of fit: numbers as written, and what is wrong with them', () => {
+  assert.deepEqual(s.statShares({ a: '0,25', b: 0.75, c: '', d: 'x' }), { a: 0.25, b: 0.75 })
+  assert.deepEqual(s.statShares(null), {})
+  assert.deepEqual(s.statShares([0.5]), {})
+  const gof = s.statTestOf('stat_chi2_gof')
+  assert.deepEqual(s.statParams(gof, { value: 'cat', expected: { a: '0.1', b: 0.9 } }), { value: 'cat', expected: { a: 0.1, b: 0.9 } })
+  assert.deepEqual(s.statParams(gof, { value: 'cat', expected: {} }), { value: 'cat' })
+  assert.equal(s.statSharesProblem({ a: 0.1, b: 0.2, c: 0.3, d: 0.4 }, ['a', 'b', 'c', 'd']), '') // 1.0000000000000002: within 1e-9
+  assert.equal(s.statSharesProblem({ a: 0.5, b: 0.6 }, ['a', 'b']), 'sum')
+  assert.equal(s.statSharesProblem({ a: 1 }, ['a', 'b']), 'missing')
+  assert.equal(s.statSharesProblem({ a: 1, b: 0 }, ['a', 'b']), 'missing')
+  assert.equal(s.statSharesProblem({}, []), '')
+})

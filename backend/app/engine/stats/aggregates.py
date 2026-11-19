@@ -124,6 +124,24 @@ class Deviations(NamedTuple):
     max: float | None
 
 
+class Successes(NamedTuple):
+    """A group's rows (A8), its values (`n`: not NULL, not NaN) and its successes (`k`: the
+    values equal to the success)."""
+
+    level: Any
+    rows: int
+    n: int
+    k: int
+
+
+class Cell(NamedTuple):
+    """A pair of values of two columns and its rows (A7); None where a column is NULL."""
+
+    x: Any
+    y: Any
+    rows: int
+
+
 class Difference(NamedTuple):
     """A measure that is not a column: the difference x − y of two columns of the same row,
     where both are numbers (NULL elsewhere)."""
@@ -183,6 +201,43 @@ def typed_labels(labels: list[str], kind: str | None) -> list | None:
         if v is not None:
             out.append(v)
     return out
+
+
+def typed_value(raw: Any, kind: str | None) -> Any:
+    """A value written by a person (a success), as a column of `kind` holds it: a text, a whole
+    or a float number, a date, a boolean. None when the column's kind cannot be compared with
+    a value (a datetime, a decimal) or the value is none of its kind («yes» in a column of
+    numbers)."""
+    from app.engine.stats.catalog import label_of
+
+    text = raw if isinstance(raw, str) else label_of(raw)
+    try:
+        if kind == "text":
+            return text
+        if kind == "integer":
+            if isinstance(raw, bool):
+                return None
+            number = float(raw) if isinstance(raw, (int, float)) else float(text.strip())
+            return int(number) if math.isfinite(number) and number == int(number) and abs(number) < 2**63 else None
+        if kind == "float":
+            if isinstance(raw, bool):
+                return None
+            number = float(raw) if isinstance(raw, (int, float)) else float(text.strip())
+            return number if math.isfinite(number) else None
+        if kind == "boolean":
+            if isinstance(raw, bool):
+                return raw
+            return {"true": True, "false": False, "1": True, "0": False}.get(text.strip().lower())
+        if kind == "date":
+            return raw if isinstance(raw, _dt.date) and not isinstance(raw, _dt.datetime) else _dt.date.fromisoformat(text.strip())
+    except (ValueError, OverflowError):
+        return None
+    return None
+
+
+def is_value(v: Any) -> bool:
+    """Whether a value of a column is one (not NULL, not NaN)."""
+    return v is not None and not (isinstance(v, float) and math.isnan(v))
 
 
 # the rows the centre is the mean of: the chain's first ones, which an engine stops at
@@ -311,6 +366,10 @@ class SqlStatSource:
 
     def _centred(self, expr: str, centre: float) -> str:
         return _CENTRED[self.dialect].format(x=expr, c=repr(centre)) if centre else expr
+
+    def kind_of(self, column: str) -> str | None:
+        """The kind of a column whose values a test compares with one written (`typed_value`)."""
+        return self._kind(column)
 
     def _kind(self, column: str) -> str | None:
         """The kind of a grouping column, as `typed_labels` reads it, or None."""
@@ -471,6 +530,35 @@ class SqlStatSource:
         rows = self._rows(f"SELECT {distinct}{quantiles} FROM {self._source}")
         row = list(rows[0]) if rows else [None] * (3 * len(measures))
         return [quartiles_of(i, *row[3 * i:3 * i + 3]) for i in range(len(measures))]
+
+    def successes(self, value: str, success: Any, group: str | None = None, levels: list | None = None) -> list[Successes]:
+        """A8: for each value of `group` (the NULL one too), or over every row without one,
+        the rows, the values of `value` (not NULL, and not NaN in a column of floats) and those
+        equal to `success` (a value typed as the column's, `typed_value`). `levels`: the groups
+        to answer for (typed values), and the rows with no group. Nothing is summed but ones."""
+        q = self._quote(value)
+        ok = f"{q} IS NOT NULL" + (f" AND NOT {_IS_NAN[self.dialect].format(e=q)}" if self._kind(value) == "float" else "")
+        aggregates = (
+            f"count(*) AS {self._fresh('rows')}, sum(CASE WHEN {ok} THEN 1 ELSE 0 END) AS {self._fresh('n')}, "
+            f"sum(CASE WHEN {ok} AND {q} = {self._lit(success)} THEN 1 ELSE 0 END) AS {self._fresh('k')}"
+        )
+        if group is None:
+            rows = [[None, *r] for r in self._rows(f"SELECT {aggregates} FROM {self._source}")]
+        else:
+            g = self._quote(group)
+            only = self._only(group, levels, nulls=True)
+            rows = self._rows(f"SELECT {g} AS {self._fresh('lv')}, {aggregates} FROM {self._source}{only} GROUP BY {g}")
+        return [Successes(r[0], int(r[1] or 0), int(r[2] or 0), int(r[3] or 0)) for r in rows]
+
+    def crosstab(self, x: str, y: str, limit: int) -> list[Cell]:
+        """A7: the rows of each pair of values of `x` and `y`, NULL ones too; `limit` pairs at
+        most, in no order (the caller asks for one more than a table may have)."""
+        qx, qy = self._quote(x), self._quote(y)
+        rows = self._rows(
+            f"SELECT {qx} AS {self._fresh('lx')}, {qy} AS {self._fresh('ly')}, count(*) AS {self._fresh('rows')} "
+            f"FROM {self._source} GROUP BY {qx}, {qy} LIMIT {int(limit)}"
+        )
+        return [Cell(r[0], r[1], int(r[2])) for r in rows]
 
     def histogram(self, value: Any, group: str | None, lo: float, hi: float, bins: int) -> list[HistogramBin]:
         """A13: the rows whose `value` falls in each of `bins` equal intervals between `lo`

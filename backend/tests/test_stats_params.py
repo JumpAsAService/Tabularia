@@ -6,6 +6,7 @@ Also here: the catalogue as the one table the four registries are filled from.
 from __future__ import annotations
 
 import datetime as dt
+import decimal
 import math
 
 import polars as pl
@@ -474,3 +475,139 @@ def test_lot_2_notes(name, storage, plants):
     assert notes(*three, value="spread", group="plant", var_equal=False) == []
     assert notes(*three, value="a", group="plant", posthoc="tukey") == [
         "The ANOVA does not reject H0 at α = 0.05: the pairwise comparisons are shown all the same, and a difference they find is to be read with care."]
+
+
+# ── lot 3: proportions and categories ────────────────────────────────────────
+CATEGORIES = {"answer": Column("String", False), "g": Column("String", False), "amount": Column("Float64", True)}
+
+
+@pytest.mark.parametrize("test, params, sentence", [
+    ("prop_one_sample", {"value": "answer"}, "stat_prop_one_sample: 'success' is required"),
+    ("prop_one_sample", {"value": "answer", "success": "  "}, "stat_prop_one_sample: 'success' must be the value that counts as a success"),
+    ("prop_one_sample", {"value": "answer", "success": ["yes"]},
+     "stat_prop_one_sample: 'success' must be the value that counts as a success: a text, a number, true or false"),
+    ("prop_one_sample", {"value": "answer", "success": "yes", "p0": 0}, "stat_prop_one_sample: 'p0' must be a proportion between 0 and 1, both excluded"),
+    ("prop_one_sample", {"value": "answer", "success": "yes", "p0": 1}, "stat_prop_one_sample: 'p0' must be a proportion between 0 and 1, both excluded"),
+    ("prop_one_sample", {"value": "answer", "success": "yes", "method": "wald"}, "stat_prop_one_sample: 'method' must be one of score, exact"),
+    ("prop_two_sample", {"value": "answer", "success": "yes"}, "stat_prop_two_sample: 'group' is required"),
+    ("prop_two_sample", {"value": "answer", "success": "yes", "group": "g", "p0": 0.5},
+     "stat_prop_two_sample: there is no parameter 'p0' (it takes: value, success, group, groups, correction, alternative, alpha, detail)"),
+    ("chi2_independence", {"x": "answer"}, "stat_chi2_independence: 'y' is required"),
+    ("chi2_independence", {"x": "answer", "y": "g", "posthoc": "tukey"}, "stat_chi2_independence: 'posthoc' must be one of none, cells, pairs"),
+    ("chi2_independence", {"x": "answer", "y": "g", "alternative": "less"},
+     "stat_chi2_independence: there is no parameter 'alternative' (it takes: x, y, correction, posthoc, p_adjust, alpha, detail)"),
+    ("chi2_gof", {"value": "answer", "expected": [0.5, 0.5]},
+     "stat_chi2_gof: 'expected' must give each category its expected proportion, as {category: proportion}"),
+    ("chi2_gof", {"value": "answer", "expected": {"yes": 0.5, "no": 0}}, "stat_chi2_gof: 'expected': the proportion of «no» must be a number above 0"),
+    ("chi2_gof", {"value": "answer", "expected": {"yes": 0.5, "no": "0.5"}}, "stat_chi2_gof: 'expected': the proportion of «no» must be a number above 0"),
+    ("chi2_gof", {"value": "answer", "expected": {"yes": 0.5, "no": 0.6}}, "stat_chi2_gof: 'expected': the proportions sum to 1.1, and must sum to 1"),
+    ("fisher_exact", {"x": "answer", "y": "g", "correction": True},
+     "stat_fisher_exact: there is no parameter 'correction' (it takes: x, y, alternative, alpha, detail)"),
+])
+def test_lot_3_parameters_refused(test, params, sentence):
+    with pytest.raises(EngineError) as e:
+        check_params(test, params, CATEGORIES)
+    assert str(e.value) == sentence
+
+
+def test_lot_3_defaults():
+    assert check_params("prop_one_sample", {"value": "answer", "success": True}, CATEGORIES) == {
+        "value": "answer", "success": True, "p0": 0.5, "method": "score", "correction": True, "alternative": "two_sided",
+        "alpha": 0.05, "detail": "results"}
+    assert check_params("chi2_independence", {"x": "answer", "y": "g"}, CATEGORIES)["posthoc"] == "none"
+    # the proportions of a goodness of fit sum to 1 within 1e-9: 0.1 + 0.2 + 0.3 + 0.4 is not 1 in doubles
+    assert check_params("chi2_gof", {"value": "answer", "expected": {"a": 0.1, "b": 0.2, "c": 0.3, "d": 0.4}}, CATEGORIES)["expected"]["d"] == 0.4
+    assert check_params("chi2_gof", {"value": "answer"}, CATEGORIES)["expected"] is None
+    assert catalog.applies("prop_one_sample", "correction", {"method": "score"})
+    assert not catalog.applies("prop_one_sample", "correction", {"method": "exact"})
+    assert catalog.applies("chi2_independence", "p_adjust", {"posthoc": "cells"})
+    assert not catalog.applies("chi2_independence", "p_adjust", {"posthoc": "none"})
+
+
+@pytest.fixture
+def survey(storage):
+    """Answers of a survey: a text, a boolean, a date-time; a column that is one category alone;
+    60 categories; a third answer for a 3 × 2 table; a column that is never a value."""
+    n = 120
+    answer = ["yes", "no"] * 50 + ["maybe"] * 20
+    df = pl.DataFrame({
+        "answer": answer, "two": ["yes", "no"] * 60, "g": ["a", "b", "c"] * 40, "one": ["x"] * n,
+        "many": [f"k{i % 60:02d}" for i in range(n)], "at": [dt.datetime(2024, 1, 1, i % 24) for i in range(n)],
+        "price": [decimal.Decimal(i) for i in range(n)], "none": [None] * n, "lines": [f"l{i % 25:02d}" for i in range(n)],
+        "flag": [i % 3 == 0 for i in range(n)],
+    }, schema={"answer": pl.String, "two": pl.String, "g": pl.String, "one": pl.String, "many": pl.String,
+               "at": pl.Datetime("us"), "price": pl.Decimal(10, 0), "none": pl.String, "lines": pl.String, "flag": pl.Boolean})
+    return upload_df(storage, df, "datasets/stats_survey.parquet")
+
+
+@pytest.mark.parametrize("name", ENGINES)
+def test_lot_3_data_refused(name, storage, survey):
+    def say(test, *before, **params):
+        with pytest.raises(EngineError) as e:
+            _engine(name, storage).preview(survey, [*before, {"type": f"stat_{test}", "params": params}], limit=100, use_cache=False)
+        return str(e.value)
+
+    assert say("prop_one_sample", value="flag", success="yes") == (
+        "stat_prop_one_sample: 'success' («yes») is not a value the column «flag» can hold: it holds true or false")
+    assert say("prop_one_sample", value="at", success="2024-01-01").startswith(
+        "stat_prop_one_sample: the column «at» (")
+    assert say("prop_one_sample", value="none", success="yes") == (
+        "stat_prop_one_sample: the column «none» has no value on the rows that reach the step (a NULL or a NaN is left out)")
+    assert say("prop_two_sample", value="one", success="x", group="two") == (
+        "stat_prop_two_sample: every value of «one» in the two groups is «x»: the two proportions are both 1, and there is nothing to test")
+    assert say("chi2_independence", x="answer", y="answer") == (
+        "stat_chi2_independence: 'x' and 'y' are both the column «answer»: choose two different columns")
+    assert say("chi2_independence", x="answer", y="one") == (
+        "stat_chi2_independence: the column «one» has 1 category (x) on the rows used: the table needs two at least in each column")
+    assert say("chi2_independence", x="many", y="answer") == (
+        "stat_chi2_independence: the column «many» has more than 50 categories: a contingency table takes 50 a column at most "
+        "(is it the right column?)")
+    assert say("chi2_independence", x="answer", y="none") == (
+        "stat_chi2_independence: no row has a value in both «answer» and «none» (a NULL or a NaN is left out)")
+    assert say("chi2_independence", x="lines", y="answer", posthoc="pairs") == (
+        "stat_chi2_independence: the comparisons of pairs ('posthoc') take 20 categories of «lines» at most, and it has 25: "
+        "filter the categories first, or set 'posthoc' to cells or none")
+    assert say("chi2_gof", value="one") == "stat_chi2_gof: the column «one» has 1 category (x) on the rows used: the test needs two at least"
+    assert say("chi2_gof", value="answer", expected={"yes": 0.5, "no": 0.5}) == (
+        "stat_chi2_gof: 'expected' must give a proportion to exactly the categories of «answer» on the rows used; it lacks maybe")
+    assert say("chi2_gof", value="two", expected={"yes": 0.4, "no": 0.4, "perhaps": 0.2}) == (
+        "stat_chi2_gof: 'expected' must give a proportion to exactly the categories of «two» on the rows used; perhaps is not in the column")
+    assert say("fisher_exact", x="answer", y="two") == (
+        "stat_fisher_exact: Fisher's exact test takes a 2 × 2 table, and «answer» has 3 categories and «two» 2 on the rows used: "
+        "use the chi-square test of independence")
+
+
+@pytest.mark.parametrize("name", ENGINES)
+def test_lot_3_exact_limits_and_notes(name, storage, survey, monkeypatch):
+    """Past `EXACT_SUPPORT` outcomes an exact test is refused, with the way out; a success the
+    column never holds is a note, not an error."""
+    from app.engine.stats import compute
+
+    def run(test, **params):
+        return _engine(name, storage).preview(survey, [{"type": f"stat_{test}", "params": params}], limit=1000, use_cache=False).rows
+
+    monkeypatch.setattr(compute, "EXACT_SUPPORT", 40)
+    with pytest.raises(EngineError) as e:
+        run("prop_one_sample", value="two", success="yes", method="exact")
+    assert str(e.value) == ("stat_prop_one_sample: the exact binomial goes through n + 1 = 121 outcomes, more than 40: "
+                            "use method = 'score', which is as good on so many rows")
+    with pytest.raises(EngineError) as e:
+        run("fisher_exact", x="two", y="flag")
+    assert str(e.value) == ("stat_fisher_exact: the exact distribution of this table goes through 41 outcomes, more than 40: "
+                            "use the chi-square test of independence, which is as good on so many rows")
+    monkeypatch.setattr(compute, "EXACT_SUPPORT", 1_000_000)
+    assert {r["key"]: r["value"] for r in run("fisher_exact", x="two", y="flag")}["test|||support"] == 41
+    rows = run("prop_one_sample", value="answer", success="perhaps")
+    by_key = {r["key"]: r for r in rows}
+    assert by_key["test|||successes"]["value"] == 0
+    assert by_key["test|||note_1"]["text"] == "No row of «answer» holds «perhaps»: no row counts as a success. Is it the value the column holds?"
+    # a note when the expected counts are small
+    rows = run("chi2_independence", x="answer", y="g", posthoc="pairs")
+    assert [r["text"] for r in rows if r["stat"].startswith("note_")] == [
+        "The chi-square test does not reject H0 at α = 0.05: the comparisons are shown all the same, "
+        "and a difference they find is to be read with care."]
+    rows = _engine(name, storage).preview(survey, [{"type": "limit", "params": {"n": 12}},
+                                                   {"type": "stat_chi2_independence", "params": {"x": "answer", "y": "g"}}],
+                                          limit=1000, use_cache=False).rows
+    [note] = [r["text"] for r in rows if r["stat"].startswith("note_")]
+    assert note.startswith("6 of the 6 expected counts are below 5: the chi-square distribution is a poor approximation there.")

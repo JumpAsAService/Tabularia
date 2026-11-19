@@ -186,3 +186,38 @@ test('a paired test asks for two numeric columns; the F test of variances for a 
   html = await render(Form, { nodeId: 'op-11', opType: 'stat_var_f', params: { value: 'amount', group: 'channel', ratio: 0 }, inputColumns: COLUMNS })
   assert.ok(text(html).includes('A number above 0.') && text(html).includes('Ratio under H0'))
 })
+
+test('a test of one proportion: the success is written or chosen among the column\'s values; the correction with the score only', async () => {
+  const Form = await component('components/ui/StatTestForm.vue')
+  const asked = []
+  const fetchDistinct = (column) => { asked.push(column); return Promise.resolve(['yes', 'no', null]) }
+  let html = await render(Form, { nodeId: 'op-20', opType: 'stat_prop_one_sample', params: { value: 'channel', success: 'yes', p0: 0.25 },
+    inputColumns: COLUMNS, fetchDistinct })
+  let page = text(html)
+  assert.deepEqual(asked, ['channel'])
+  for (const words of ['Outcome column', 'Value that counts as a success', 'Proportion under H0 (p0)', 'Score (Wilson)', 'Exact (binomial)',
+    'Continuity correction']) assert.ok(page.includes(words), words)
+  assert.match(html, /<input id="stat-op-20-success" type="text" autocomplete="off" list="stat-op-20-success-values" value="yes"/)
+  assert.ok(html.includes('<datalist id="stat-op-20-success-values"'))
+  // any column may be the outcome: the texts are offered too
+  const selects = [...html.matchAll(/<div class="select"[^>]*>(.*?)<\/div>/g)].map((m) => text(m[1]))
+  assert.deepEqual(selects, ['amount channel qty day'])
+  html = await render(Form, { nodeId: 'op-20', opType: 'stat_prop_one_sample', params: { value: 'channel', success: 'yes', method: 'exact' },
+    inputColumns: COLUMNS })
+  assert.ok(!text(html).includes('Continuity correction'))
+})
+
+test('a goodness of fit: all equal until proportions are given, a box for each category, their sum said', async () => {
+  const Form = await component('components/ui/StatTestForm.vue')
+  let html = await render(Form, { nodeId: 'op-21', opType: 'stat_chi2_gof', params: { value: 'channel' }, inputColumns: COLUMNS })
+  let page = text(html)
+  assert.ok(page.includes('Expected proportions') && page.includes('All equal') && page.includes('Given for each category'))
+  assert.match(html, /<input type="radio" name="stat-op-21-expected" checked/)
+  assert.ok(!html.includes('stat-op-21-expected-share-0'))
+  // proportions given (one not in the data any more): a box each, the sum and what is wrong
+  html = await render(Form, { nodeId: 'op-21', opType: 'stat_chi2_gof', params: { value: 'channel', expected: { web: 0.5, shop: 0.6 } },
+    inputColumns: COLUMNS })
+  page = text(html)
+  assert.ok(html.includes('id="stat-op-21-expected-share-0"') && html.includes('aria-label="Proportion of «web»"'))
+  assert.ok(page.includes('The proportions sum to 1.1: they must sum to 1.'), page)
+})

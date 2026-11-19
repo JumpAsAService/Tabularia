@@ -6120,6 +6120,60 @@ export default {
       "pearson": {
         "name": "Corrélation de Pearson",
         "hint": "Deux colonnes des mêmes lignes varient-elles ensemble ? Le r de Pearson, son test et son intervalle de confiance."
+      },
+      "prop_one_sample": {
+        "name": "Test d'une proportion",
+        "hint": "La part d'une valeur dans une colonne est-elle égale à une proportion donnée ? Le test score avec l'intervalle de Wilson, ou le test binomial exact.",
+        "params": {
+          "value": "Colonne du résultat"
+        },
+        "hints": {
+          "value": "N'importe quelle colonne : une ligne compte comme un succès quand elle a la valeur ci-dessous."
+        }
+      },
+      "prop_two_sample": {
+        "name": "Test de deux proportions",
+        "hint": "Deux groupes ont-ils la même part d'une valeur ? Le test du khi-deux de deux proportions, avec l'intervalle de leur différence.",
+        "params": {
+          "value": "Colonne du résultat"
+        },
+        "hints": {
+          "value": "N'importe quelle colonne : une ligne compte comme un succès quand elle a la valeur ci-dessous."
+        }
+      },
+      "chi2_independence": {
+        "name": "Test du khi-deux d'indépendance",
+        "hint": "Deux colonnes de catégories sont-elles indépendantes ? Le khi-deux de Pearson sur leur tableau d'effectifs, avec les cellules ou les paires qui font la différence.",
+        "params": {
+          "x": "Lignes du tableau (x)",
+          "y": "Colonnes du tableau (y)",
+          "posthoc": "Comparaisons"
+        },
+        "hints": {
+          "x": "Une colonne de catégories (de tout type) : 50 au plus.",
+          "y": "Une ligne où l'une des deux colonnes n'a pas de valeur est écartée.",
+          "correction": "La correction de continuité de Yates, sur un tableau 2 × 2 seulement.",
+          "posthoc": "Quelles cellules s'écartent de l'indépendance (leurs résidus ajustés), ou quelles paires de catégories de x diffèrent."
+        }
+      },
+      "chi2_gof": {
+        "name": "Test du khi-deux d'adéquation",
+        "hint": "Les catégories d'une colonne ont-elles les parts attendues ? Toutes égales, ou les proportions que vous donnez.",
+        "params": {
+          "value": "Colonne des catégories"
+        }
+      },
+      "fisher_exact": {
+        "name": "Test exact de Fisher",
+        "hint": "Deux colonnes de deux catégories chacune sont-elles indépendantes ? Exact sur un tableau 2 × 2, avec l'odds ratio et son intervalle.",
+        "params": {
+          "x": "Lignes du tableau (x)",
+          "y": "Colonnes du tableau (y)"
+        },
+        "hints": {
+          "x": "Une colonne de deux catégories : l'odds ratio est celui de la première (dans l'ordre du texte).",
+          "y": "Aussi de deux catégories ; une ligne sans valeur dans l'une des deux est écartée."
+        }
       }
     },
     "params": {
@@ -6135,7 +6189,12 @@ export default {
       "posthoc": "Comparaisons par paires",
       "p_adjust": "Correction des comparaisons multiples",
       "ratio": "Rapport sous H0",
-      "center": "Centre de chaque groupe"
+      "center": "Centre de chaque groupe",
+      "success": "Valeur qui compte comme un succès",
+      "p0": "Proportion sous H0 (p0)",
+      "method": "Méthode",
+      "correction": "Correction de continuité",
+      "expected": "Proportions attendues"
     },
     "hints": {
       "value": "La colonne mesurée.",
@@ -6149,7 +6208,12 @@ export default {
       "posthoc": "Quels groupes diffèrent : HSD de Tukey (variances égales), Games–Howell (variances inégales) ou un test t par paire avec une correction.",
       "p_adjust": "Comment les p-valeurs des paires sont ajustées à leur nombre. Holm n'est jamais moins puissant que Bonferroni.",
       "ratio": "Le rapport de la première variance à la seconde qu'affirme l'hypothèse nulle : 1 pour « variances égales ».",
-      "center": "La médiane (forme de Brown–Forsythe, robuste aux valeurs asymétriques) ou la moyenne (l'originale de Levene)."
+      "center": "La médiane (forme de Brown–Forsythe, robuste aux valeurs asymétriques) ou la moyenne (l'originale de Levene).",
+      "success": "Choisissez une des valeurs de la colonne, ou écrivez-la : un texte, un nombre, true ou false.",
+      "p0": "Entre 0 et 1 : la part de succès que pose l'hypothèse nulle.",
+      "method": "Score : l'approximation normale, l'intervalle de Wilson. Exact : la binomiale, l'intervalle de Clopper–Pearson (jusqu'à un million de lignes).",
+      "correction": "La correction de continuité de Yates de l'approximation normale (comme prop.test de R).",
+      "expected": "Toutes égales, ou une proportion pour chaque catégorie de la colonne : au-dessus de 0, de somme 1."
     },
     "choices": {
       "alternative": {
@@ -6172,6 +6236,15 @@ export default {
       "levene_center": {
         "median": "Médiane (Brown–Forsythe)",
         "mean": "Moyenne (Levene)"
+      },
+      "prop_method": {
+        "score": "Score (Wilson)",
+        "exact": "Exact (binomial)"
+      },
+      "chi2_posthoc": {
+        "none": "Aucune",
+        "cells": "Les cellules",
+        "pairs": "Les paires de catégories de x"
       }
     },
     "reasons": {
@@ -6191,7 +6264,15 @@ export default {
       "notNumeric": "pas un nombre",
       "notInInput": "absente de l'entrée de l'étape",
       "notInData": "absent des données",
-      "noNumericColumns": "L'entrée de l'étape n'a aucune colonne numérique : convertissez-en une d'abord."
+      "noNumericColumns": "L'entrée de l'étape n'a aucune colonne numérique : convertissez-en une d'abord.",
+      "successPlaceholder": "oui, 1, true…",
+      "successValues": "Valeurs de «{column}»",
+      "equalShares": "Toutes égales",
+      "givenShares": "Données pour chaque catégorie",
+      "shareOf": "Proportion de «{level}»",
+      "sharesSum": "Somme : {sum}",
+      "sharesNotOne": "Les proportions font {sum} : elles doivent faire 1.",
+      "sharesMissing": "Donnez à chaque catégorie une proportion au-dessus de 0."
     }
   },
   "statReport": {

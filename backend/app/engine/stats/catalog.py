@@ -97,6 +97,42 @@ TESTS: dict[str, dict[str, Any]] = {
         "takes": {"center": "levene_center", "alpha": "alpha", "detail": "detail"},
         "defaults": {"center": "median", "alpha": 0.05, "detail": "results"},
     },
+    "prop_one_sample": {
+        "family": "proportions",
+        "needs": {"value": "column", "success": "success"},
+        "takes": {"p0": "proportion", "method": "prop_method", "correction": "boolean", "alternative": "alternative",
+                  "alpha": "alpha", "detail": "detail"},
+        "defaults": {"p0": 0.5, "method": "score", "correction": True, "alternative": "two_sided", "alpha": 0.05,
+                     "detail": "results"},
+        "applies": {"correction": {"method": ["score"]}},
+    },
+    "prop_two_sample": {
+        "family": "proportions",
+        "needs": {"value": "column", "success": "success", "group": "column"},
+        "takes": {"groups": "two_groups", "correction": "boolean", "alternative": "alternative", "alpha": "alpha",
+                  "detail": "detail"},
+        "defaults": {"groups": None, "correction": True, "alternative": "two_sided", "alpha": 0.05, "detail": "results"},
+    },
+    "chi2_independence": {
+        "family": "proportions",
+        "needs": {"x": "column", "y": "column"},
+        "takes": {"correction": "boolean", "posthoc": "chi2_posthoc", "p_adjust": "p_adjust", "alpha": "alpha",
+                  "detail": "detail"},
+        "defaults": {"correction": True, "posthoc": "none", "p_adjust": "holm", "alpha": 0.05, "detail": "results"},
+        "applies": {"p_adjust": {"posthoc": ["cells", "pairs"]}},
+    },
+    "chi2_gof": {
+        "family": "proportions",
+        "needs": {"value": "column"},
+        "takes": {"expected": "expected_proportions", "alpha": "alpha", "detail": "detail"},
+        "defaults": {"expected": None, "alpha": 0.05, "detail": "results"},
+    },
+    "fisher_exact": {
+        "family": "proportions",
+        "needs": {"x": "column", "y": "column"},
+        "takes": {"alternative": "alternative", "alpha": "alpha", "detail": "detail"},
+        "defaults": {"alternative": "two_sided", "alpha": 0.05, "detail": "results"},
+    },
     "pearson": {
         "family": "correlation",
         "needs": {"x": "number_column", "y": "number_column"},
@@ -109,12 +145,19 @@ TESTS: dict[str, dict[str, Any]] = {
 ANOVA_POSTHOC = ("none", "tukey", "games_howell", "pairwise_t")
 P_ADJUST = ("holm", "bonferroni", "sidak", "none")
 LEVENE_CENTER = ("median", "mean")
+PROP_METHOD = ("score", "exact")
+CHI2_POSTHOC = ("none", "cells", "pairs")
 
 # Beyond this many groups the column is almost surely the wrong one. It bounds what a test
 # reads back from the engine too: a row per group, never more.
 MAX_STAT_GROUPS = 200
 # Groups compared two by two: 190 pairs at most.
 MAX_POSTHOC_GROUPS = 20
+# Levels of each variable of a contingency table: 2,500 cells at most.
+MAX_STAT_LEVELS = 50
+# The most outcomes an exact binomial or Fisher computation goes through (n + 1; the values
+# the first cell of a 2×2 table may take with its margins).
+EXACT_SUPPORT = 1_000_000
 
 # The rows a report's charts draw (`detail = report`): the points of the reference
 # distribution's curve, and the intervals of a histogram, between the two whatever the rows.
@@ -220,6 +263,42 @@ def _alpha(test: str, key: str, v: Any, columns: Mapping[str, Column]) -> float:
     return float(v)
 
 
+def _proportion(test: str, key: str, v: Any, columns: Mapping[str, Column]) -> float:
+    if isinstance(v, bool) or not isinstance(v, (int, float)) or not 0.0 < v < 1.0:
+        raise refusal(test, f"'{key}' must be a proportion between 0 and 1, both excluded")
+    return float(v)
+
+
+def _success(test: str, key: str, v: Any, columns: Mapping[str, Column]) -> Any:
+    """The value of the outcome column that counts as a success: a text, a number or true or
+    false, as a person writes it or a column holds it. It is typed by the column's kind when
+    the engine is asked (`aggregates.typed_value`)."""
+    if isinstance(v, str):
+        if not v.strip():
+            raise refusal(test, f"'{key}' must be the value that counts as a success")
+        return v
+    if isinstance(v, bool) or (isinstance(v, (int, float)) and math.isfinite(v)):
+        return v
+    raise refusal(test, f"'{key}' must be the value that counts as a success: a text, a number, true or false")
+
+
+def _expected_proportions(test: str, key: str, v: Any, columns: Mapping[str, Column]) -> dict[str, float]:
+    """The proportion each category is expected to have: {category: proportion}, each above 0,
+    summing to 1 (within 1e-9). Whether they are exactly the categories found is the data's
+    to say."""
+    if not isinstance(v, dict) or not v:
+        raise refusal(test, f"'{key}' must give each category its expected proportion, as {{category: proportion}}")
+    out: dict[str, float] = {}
+    for label, share in v.items():
+        if isinstance(share, bool) or not isinstance(share, (int, float)) or not math.isfinite(share) or share <= 0:
+            raise refusal(test, f"'{key}': the proportion of «{label}» must be a number above 0")
+        out[str(label)] = float(share)
+    total = math.fsum(out.values())
+    if abs(total - 1.0) > 1e-9:
+        raise refusal(test, f"'{key}': the proportions sum to {total:.12g}, and must sum to 1")
+    return out
+
+
 def _one_of(choices: tuple[str, ...]) -> Callable[..., str]:
     def read(test: str, key: str, v: Any, columns: Mapping[str, Column]) -> str:
         if not isinstance(v, str) or v not in choices:
@@ -241,18 +320,27 @@ _READERS: dict[str, Callable[..., Any]] = {
     "anova_posthoc": _one_of(ANOVA_POSTHOC),
     "p_adjust": _one_of(P_ADJUST),
     "levene_center": _one_of(LEVENE_CENTER),
+    "proportion": _proportion,
+    "success": _success,
+    "prop_method": _one_of(PROP_METHOD),
+    "chi2_posthoc": _one_of(CHI2_POSTHOC),
+    "expected_proportions": _expected_proportions,
     "detail": _one_of(DETAILS),
 }
 
 # The controls a form has to draw: a column of the step's input, some of the values a column
-# holds, a switch, a number, one of a few choices.
-CONTROLS = ("column", "levels", "boolean", "number", "choice")
+# holds, a switch, a number, one of a few choices; one value of a column (chosen among its
+# values or written), a proportion for each value of a column.
+CONTROLS = ("column", "levels", "boolean", "number", "choice", "level", "proportions")
 
 # How a form asks for each kind of value: its control, and what the control needs to know.
-#   column   `numeric`: only the columns that are numbers
-#   levels   `count` values of the column the key `of` names (its groups)
-#   number   `above`, `below`: the bounds, both excluded
-#   choice   `choices`, in the order shown
+#   column       `numeric`: only the columns that are numbers
+#   levels       `count` values of the column the key `of` names (its groups)
+#   number       `above`, `below`: the bounds, both excluded
+#   choice       `choices`, in the order shown
+#   level        one value of the column the key `of` names: one of those it holds, or written
+#   proportions  a proportion above 0 for each value of the column `of` names, summing to 1;
+#                nothing given: all equal
 # `hidden`: a key the node sets by itself, never asked in the form.
 KINDS: dict[str, dict[str, Any]] = {
     "column": {"control": "column"},
@@ -266,6 +354,11 @@ KINDS: dict[str, dict[str, Any]] = {
     "anova_posthoc": {"control": "choice", "choices": list(ANOVA_POSTHOC)},
     "p_adjust": {"control": "choice", "choices": list(P_ADJUST)},
     "levene_center": {"control": "choice", "choices": list(LEVENE_CENTER)},
+    "proportion": {"control": "number", "above": 0, "below": 1},
+    "success": {"control": "level", "of": "value"},
+    "prop_method": {"control": "choice", "choices": list(PROP_METHOD)},
+    "chi2_posthoc": {"control": "choice", "choices": list(CHI2_POSTHOC)},
+    "expected_proportions": {"control": "proportions", "of": "value"},
     "detail": {"control": "choice", "choices": list(DETAILS), "hidden": True},
 }
 

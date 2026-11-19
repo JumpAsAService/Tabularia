@@ -13,7 +13,7 @@
 
 import raw from '~/assets/stat-catalog.json'
 
-export type StatControl = 'column' | 'levels' | 'boolean' | 'number' | 'choice'
+export type StatControl = 'column' | 'levels' | 'boolean' | 'number' | 'choice' | 'level' | 'proportions'
 
 /** How a form asks for one kind of value (the catalogue's `KINDS`). */
 export interface StatKind {
@@ -73,7 +73,11 @@ export interface StatFamilyGroup {
 export const STAT_CATALOG: StatCatalog = raw as unknown as StatCatalog
 
 /** The controls components/ui/StatTestForm.vue draws: a kind with another one has no field. */
-export const STAT_CONTROLS: readonly StatControl[] = ['column', 'levels', 'boolean', 'number', 'choice']
+export const STAT_CONTROLS: readonly StatControl[] = ['column', 'levels', 'boolean', 'number', 'choice', 'level', 'proportions']
+
+/** The controls whose values are some of a column's (the key `of` names it): they are read at the
+ *  node's input, and they do not survive another column. */
+export const STAT_VALUE_CONTROLS: readonly StatControl[] = ['levels', 'level', 'proportions']
 
 /** Past this many values a column's groups are not all listed (the editor reads 200). */
 export const STAT_LEVELS_SHOWN = 200
@@ -137,9 +141,42 @@ export function statParams(test: StatTest, params: Params | null | undefined, ca
       case 'choice':
         if (f.choices.includes(v)) out[f.key] = v
         break
+      case 'level':
+        // a value of the column, as chosen or written: a text, or the number or boolean a column holds
+        if (typeof v === 'string' ? v.trim() !== '' : typeof v === 'boolean' || (typeof v === 'number' && Number.isFinite(v))) out[f.key] = v
+        break
+      case 'proportions': {
+        // a proportion for each category; nothing given (or nothing usable): all equal
+        const shares = statShares(v)
+        if (Object.keys(shares).length) out[f.key] = shares
+        break
+      }
     }
   }
   return out
+}
+
+/** The proportions of a goodness of fit as the engine reads them: {category: number}, the
+ *  entries that are numbers kept (a box being written may hold «0,25»), the others left out. */
+export function statShares(value: unknown): Record<string, number> {
+  const out: Record<string, number> = {}
+  if (!value || typeof value !== 'object' || Array.isArray(value)) return out
+  for (const [label, raw] of Object.entries(value as Record<string, unknown>)) {
+    if (isEmpty(raw)) continue
+    const n = typeof raw === 'number' ? raw : Number(String(raw).trim().replace(',', '.'))
+    if (Number.isFinite(n)) out[label] = n
+  }
+  return out
+}
+
+/** What is wrong with the proportions given for `labels` (the column's categories): '' when they
+ *  are a proportion above 0 for each and sum to 1 (within 1e-9, as the engine), 'missing' when one
+ *  lacks or is not above 0, 'sum' when they do not sum to 1. */
+export function statSharesProblem(shares: Record<string, number>, labels: readonly string[]): '' | 'missing' | 'sum' {
+  if (!labels.length) return ''
+  if (labels.some((l) => !(shares[l] > 0))) return 'missing'
+  const sum = labels.reduce((s, l) => s + shares[l]!, 0)
+  return Math.abs(sum - 1) > 1e-9 ? 'sum' : ''
 }
 
 /** What a new node of the test starts with: the catalogue's defaults of its form's fields. */
@@ -153,7 +190,7 @@ export function statDefaults(operation: string, catalog: StatCatalog = STAT_CATA
 export function statSet(test: StatTest, params: Params | null | undefined, key: string, value: unknown, catalog: StatCatalog = STAT_CATALOG): Params {
   const next: Params = { ...(params ?? {}), [key]: value }
   if ((params ?? {})[key] !== value) {
-    for (const f of statFields(test, catalog)) if (f.control === 'levels' && f.of === key) delete next[f.key]
+    for (const f of statFields(test, catalog)) if (STAT_VALUE_CONTROLS.includes(f.control) && f.of === key) delete next[f.key]
   }
   return statParams(test, next, catalog)
 }

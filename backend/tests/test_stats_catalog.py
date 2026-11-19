@@ -74,7 +74,7 @@ def test_a_form_can_draw_every_key_of_every_test():
         kinds = {**spec["needs"], **spec["takes"]}
         for key, kind in kinds.items():
             how = catalog.KINDS[kind]
-            if how["control"] == "levels":
+            if how["control"] in ("levels", "level", "proportions"):
                 # the column whose values are listed is a key of the same test
                 assert catalog.KINDS[kinds[how["of"]]]["control"] == "column", (test, key)
             # a key the form never asks must have a default the node can run with
@@ -141,3 +141,15 @@ def test_the_tests_of_the_first_lots_in_their_families():
         by_family.setdefault(spec["family"], []).append(test)
     assert by_family["means"] == ["t_one_sample", "t_two_sample", "t_paired", "anova"]
     assert by_family["variances"] == ["var_f", "levene"] and by_family["correlation"] == ["pearson"]
+    assert by_family["proportions"] == ["prop_one_sample", "prop_two_sample", "chi2_independence", "chi2_gof", "fisher_exact"]
+
+
+def test_the_kinds_of_the_proportions_read_what_a_form_writes():
+    read = catalog._READERS
+    assert read["success"]("prop_one_sample", "success", "yes", {}) == "yes"
+    assert read["success"]("prop_one_sample", "success", 1, {}) == 1 and read["success"]("prop_one_sample", "success", False, {}) is False
+    assert read["proportion"]("prop_one_sample", "p0", 0.25, {}) == 0.25
+    assert read["expected_proportions"]("chi2_gof", "expected", {"a": 0.1, "b": 0.2, "c": 0.3, "d": 0.4}, {})["c"] == 0.3
+    assert catalog.KINDS["success"] == {"control": "level", "of": "value"}
+    assert catalog.KINDS["expected_proportions"] == {"control": "proportions", "of": "value"}
+    assert catalog.MAX_STAT_LEVELS == 50 and catalog.EXACT_SUPPORT == 1_000_000
