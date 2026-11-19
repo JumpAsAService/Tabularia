@@ -21,7 +21,7 @@ var (
 	// RSystemLibraries are the Debian packages an R image compiles its packages with.
 	RSystemLibraries = []string{
 		"build-essential", "gfortran", "cmake", "pkg-config", "libcurl4-openssl-dev", "libssl-dev", "libxml2-dev",
-		"zlib1g-dev", "libbz2-dev", "liblzma-dev", "libzstd-dev", "libicu-dev", "libgit2-dev", "libfontconfig1-dev",
+		"zlib1g-dev", "libbz2-dev", "liblzma-dev", "libzstd-dev", "libicu-dev", "libgit2-dev", "libuv1-dev", "libfontconfig1-dev",
 		"libfreetype-dev", "libharfbuzz-dev", "libfribidi-dev", "libpng-dev", "libjpeg-dev", "libtiff-dev",
 	}
 	// BasePackages are installed in every image of the language, before its own.
