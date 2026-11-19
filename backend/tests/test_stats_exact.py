@@ -122,3 +122,77 @@ def test_fisher_rxc_against_r(table, want):
 def test_fisher_rxc_has_a_ceiling():
     with pytest.raises(exact.TooMuchWork):
         exact.fisher_rxc([[20, 12, 6, 4], [9, 15, 12, 6], [5, 8, 16, 14]], 10_000)
+
+
+# ── ranks: Mann–Whitney's U, the signed rank (lot 4) ─────────────────────────
+def test_mann_whitney_exact_against_r():
+    """R 4.6.1's `pwilcox` (and `wilcox.test` on the spec's samples), up to the largest samples
+    the exact distribution takes (49 and 49): within 1e-13. R adds doubles; here they are whole
+    numbers divided once."""
+    assert exact.mann_whitney_exact(2, 8, 7, "two_sided") == pytest.approx(0.0012432012432012432, rel=1e-14)
+    assert exact.mann_whitney_exact(2, 8, 7, "less") == pytest.approx(0.0006216006216006216, rel=1e-14)
+    assert exact.mann_whitney_exact(2, 8, 7, "greater") == pytest.approx(0.99968919968919967, rel=1e-14)
+    for got, want in ((exact.mann_whitney_exact(1000, 49, 49, "less"), 0.077968162023427601),
+                      (exact.mann_whitney_exact(1201, 49, 49, "greater"), 0.50000000000000222),
+                      (exact.mann_whitney_exact(300, 49, 49, "less"), 2.611566225232158e-12),
+                      (exact.mann_whitney_exact(10, 3, 40, "less"), 0.0054290576128352653)):
+        assert rel(got, want) < 1e-13, (got, want)
+    counts = exact.mann_whitney_counts(8, 7)
+    assert sum(counts) == math.comb(15, 8) and counts == counts[::-1] and len(counts) == 57
+    assert exact.mann_whitney_exact(28, 8, 7, "two_sided") == 1.0  # the middle: never above 1
+
+
+def test_signed_rank_exact_against_r():
+    """R 4.6.1's `psignrank`, up to 49 differences: within 1e-13."""
+    assert exact.signed_rank_exact(40, 9, "two_sided") == 0.0390625 and exact.signed_rank_exact(40, 9, "greater") == 0.01953125
+    for got, want in ((exact.signed_rank_exact(400, 49, "less"), 0.017063075357777183),
+                      (exact.signed_rank_exact(801, 49, "greater"), 0.030532955934383214),
+                      (exact.signed_rank_exact(100, 49, "less"), 8.9142986325896444e-09),
+                      (exact.signed_rank_exact(3, 12, "less"), 0.0012207031250000009)):
+        assert rel(got, want) < 1e-13, (got, want)
+    assert sum(exact.signed_rank_counts(20)) == 2 ** 20
+
+
+def test_ks_exact_against_r():
+    """R 4.6.1's `psmirnov` (exact, no ties) and `ks.test` on the spec's samples: the paths that
+    stay inside the band, counted in whole numbers."""
+    assert exact.ks_exact(49, 8, 7, "two_sided") == pytest.approx(0.0024864024864024864, rel=1e-14)
+    assert exact.ks_exact(49, 8, 7, "greater") == pytest.approx(0.0012432012432012432, rel=1e-14)
+    assert exact.ks_exact(0, 8, 7, "less") == 1.0  # D− = 0: every path reaches it
+    assert exact.ks_exact(24, 8, 6, "two_sided") == pytest.approx(0.30169830169830159, rel=1e-14)
+    for got, want in ((exact.ks_exact(3000, 99, 101, "two_sided"), 0.00017003811634117797),
+                      (exact.ks_exact(360, 40, 60, "two_sided"), 0.61768965052950953),
+                      (exact.ks_exact(150, 20, 30, "greater"), 0.20103771118846292)):
+        assert rel(got, want) < 1e-13, (got, want)
+    # the two directions mirror each other when the samples swap
+    assert exact.ks_exact(150, 20, 30, "greater") == exact.ks_exact(150, 30, 20, "less")
+
+
+def test_ks_asymptotic_and_kolmogorov_against_mpmath():
+    """Kolmogorov's limit, both series summed to the end: within 1e-14 of mpmath at 40 digits
+    (SciPy's `kstwobign.sf` agrees; its `pdf` is 5e-10 off near λ = 1, ours is not). R prints
+    0.358087601395282 for the spec's (A, C): its series stops at 1e-6."""
+    for lam, sf, pdf in ((0.3, 0.99999069419866543338, 0.00081939341969312957099), (0.9, 0.39273070794065434327, 1.3807270542377327318),
+                         (0.99, 0.28087383922554892176, 1.102915687427821849), (1.0, 0.2699996716773545212, 1.0719485583569417625),
+                         (1.6907, 0.0065795703308206933275, None), (5.0, 3.857499695927835566e-22, None)):
+        assert rel(dist.kolmogorov_sf(lam), sf) < 1e-14, lam
+        if pdf is not None:
+            assert rel(dist.kolmogorov_pdf(lam), pdf) < 1e-13, lam
+    assert rel(dist.kolmogorov_isf(0.05), 1.3580986393225507) < 1e-12 and rel(dist.kolmogorov_isf(0.01), 1.6276236115189504) < 1e-12
+    assert dist.kolmogorov_isf(0.05, two_sided=False) == pytest.approx(math.sqrt(-0.5 * math.log(0.05)), rel=1e-15)
+    assert exact.ks_asymptotic(0.5, 8, 6, "two_sided") == pytest.approx(0.358081192617015, rel=1e-13)
+    assert exact.ks_asymptotic(0.875, 8, 7, "two_sided") == pytest.approx(0.0065813227912815799, rel=1e-13)
+    assert exact.ks_asymptotic(0.875, 8, 7, "greater") == pytest.approx(0.0032906615128961425, rel=1e-14)
+    assert exact.ks_asymptotic(0.0, 8, 7, "less") == 1.0
+
+
+def test_the_exact_distributions_are_quick_at_their_ceilings():
+    """At their ceilings (49 and 49 values; 49 differences; n1·n2 = 9,999), on any table: the
+    support does not depend on the rows. Measured on 2026-11-19 (Python 3.12, one core of an
+    old CPU): Mann–Whitney 0.02 s, the signed rank 0.005 s, Kolmogorov–Smirnov 0.003 s (99 × 101)
+    and 0.005 s (1 × 9,999)."""
+    for run in (lambda: exact.mann_whitney_exact(1200, 49, 49, "two_sided"), lambda: exact.signed_rank_exact(612, 49, "two_sided"),
+                lambda: exact.ks_exact(5000, 99, 101, "two_sided"), lambda: exact.ks_exact(5000, 1, 9999, "two_sided")):
+        start = time.perf_counter()
+        run()
+        assert time.perf_counter() - start < 2.0

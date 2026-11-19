@@ -1,7 +1,10 @@
-"""The exact distributions of the tests on counts: the binomial test and Clopper–Pearson's
-interval of a proportion, Fisher's exact test of a 2×2 table with its conditional odds ratio
-and interval. Python's standard library only, on the handful of counts the engine returned
-(the successes and the rows; the four cells): never a row of the data.
+"""The exact distributions of the tests on counts and on ranks: the binomial test and
+Clopper–Pearson's interval of a proportion, Fisher's exact test of a 2×2 table with its
+conditional odds ratio and interval (and of an r × c table), the distributions of
+Mann–Whitney's U, of the signed rank and of the two-sample Kolmogorov–Smirnov distance on
+small samples. Python's standard library only, on the handful of numbers the engine returned
+(the successes and the rows; the cells; a rank sum, a distance as a whole number): never a row
+of the data.
 
 The rules are R's (`binom.test`, `fisher.test`), so that a reader can check a number there:
 
@@ -390,3 +393,94 @@ def fisher_rxc(table: list[list[int]], max_nodes: int) -> tuple[float, int]:
             if past <= limit:
                 p_value += count * math.exp(past - log_all)
     return min(1.0, p_value), nodes
+
+
+# ── ranks: Mann–Whitney's U, the signed rank ────────────────────────────────
+# Without ties every arrangement of the ranks is as likely under H0, and a p-value is a count of
+# arrangements over their number: whole numbers (Python's), divided once at the end, so that a
+# p-value is the double nearest to the exact fraction. The two-sided one is R's: twice the
+# smaller tail, at most 1.
+def _from_counts(counts: list[int], v: int, alternative: str) -> float:
+    total = sum(counts)
+    lower = sum(counts[:v + 1])  # P(V ≤ v)
+    upper = total - lower + counts[v]  # P(V ≥ v)
+    if alternative == "less":
+        return lower / total
+    if alternative == "greater":
+        return upper / total
+    return min(1.0, 2 * min(lower, upper) / total)
+
+
+def mann_whitney_counts(n1: int, n2: int) -> list[int]:
+    """How many of the C(n1 + n2, n1) arrangements of two samples give each U, 0 to n1·n2: the
+    coefficients of the Gaussian binomial ∏ (1 − q^(n2 + i)) / (1 − q^i), i = 1…n1, each factor
+    multiplied then divided on an array of whole numbers (every division is exact)."""
+    top = n1 * n2
+    poly = [1] + [0] * (top + n1 + 1)
+    for i in range(1, n1 + 1):
+        s = n2 + i
+        for k in range(len(poly) - 1, s - 1, -1):  # × (1 − q^s)
+            poly[k] -= poly[k - s]
+        for k in range(i, len(poly)):  # ÷ (1 − q^i): b[k] = a[k] + b[k − i]
+            poly[k] += poly[k - i]
+    return poly[:top + 1]
+
+
+def mann_whitney_exact(u: int, n1: int, n2: int, alternative: str) -> float:
+    """The p-value of U = u (R's W: the first sample's rank sum less n1(n1 + 1)/2), without ties:
+    `less` P(U ≤ u), `greater` P(U ≥ u), two-sided min(1, 2·min of the two)."""
+    return _from_counts(mann_whitney_counts(n1, n2), int(u), alternative)
+
+
+def signed_rank_counts(n: int) -> list[int]:
+    """How many of the 2^n subsets of {1, …, n} have each sum, 0 to n(n + 1)/2: a 0/1 knapsack on
+    an array of whole numbers."""
+    top = n * (n + 1) // 2
+    counts = [1] + [0] * top
+    for k in range(1, n + 1):
+        for s in range(top, k - 1, -1):
+            counts[s] += counts[s - k]
+    return counts
+
+
+def signed_rank_exact(v: int, n: int, alternative: str) -> float:
+    """The p-value of the signed rank V = v (the sum of the ranks of the positive differences),
+    n differences, no zero, no tie: as `mann_whitney_exact`."""
+    return _from_counts(signed_rank_counts(n), int(v), alternative)
+
+
+# ── the two-sample Kolmogorov–Smirnov distance ──────────────────────────────
+def ks_exact(distance: int, n1: int, n2: int, alternative: str) -> float:
+    """P(D ≥ d) for two samples of n1 and n2 values with no tie, `distance` = d·n1·n2 (a whole
+    number: the engine returns the distance so). Every order of the pooled values is a path from
+    (0, 0) to (n1, n2), a step right for a value of the first sample, up for one of the second;
+    at (i, j) the two distribution functions differ by (i·n2 − j·n1)/(n1·n2). The paths that
+    never reach the distance — |i·n2 − j·n1| < distance (`two_sided`), i·n2 − j·n1 < distance
+    (`greater`: F1 − F2), j·n1 − i·n2 < distance (`less`) — are counted row by row in whole
+    numbers; P(D ≥ d) = 1 − their share, as one fraction (R's `psmirnov` counts the same paths
+    in doubles)."""
+    def inside(i: int, j: int) -> bool:
+        gap = i * n2 - j * n1
+        if alternative == "greater":
+            return gap < distance
+        if alternative == "less":
+            return -gap < distance
+        return abs(gap) < distance
+
+    row = [0] * (n2 + 1)
+    for j in range(n2 + 1):
+        row[j] = (row[j - 1] if j else 1) if inside(0, j) else 0
+    for i in range(1, n1 + 1):
+        row[0] = row[0] if inside(i, 0) else 0
+        for j in range(1, n2 + 1):
+            row[j] = row[j] + row[j - 1] if inside(i, j) else 0
+    total = math.comb(n1 + n2, n1)
+    return (total - row[n2]) / total
+
+
+def ks_asymptotic(d: float, n1: int, n2: int, alternative: str) -> float:
+    """P(D ≥ d) by Kolmogorov's limit at λ = d·√(n1·n2/(n1 + n2)) (`dist.kolmogorov_sf`), one-sided
+    exp(−2λ²) (λ² written as d²·n1·n2/(n1 + n2), as R's `ks.test` does)."""
+    if alternative != "two_sided":
+        return math.exp(-2.0 * (n1 * n2 / (n1 + n2)) * (d * d)) if d > 0.0 else 1.0
+    return dist.kolmogorov_sf(d * math.sqrt(n1 * n2 / (n1 + n2)))

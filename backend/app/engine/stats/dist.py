@@ -377,6 +377,75 @@ def chi2_pdf(x: float, df: float) -> float:
     return math.exp(_gamma_front(a, 0.5 * x)) / x
 
 
+# ── Kolmogorov's limit (the two-sample Kolmogorov–Smirnov test on large samples) ──
+# λ = D·√(n₁·n₂/(n₁ + n₂)). Two-sided: P(K ≥ λ) = 2·∑ (−1)^(k−1)·exp(−2k²λ²), a series whose terms
+# fall fast for λ ≥ 1; below 1 it is read from the other form of the same function (Jacobi's
+# theta), P(K < λ) = √(2π)/λ·∑ exp(−(2k − 1)²π²/(8λ²)), whose terms fall fast there. Each is
+# summed to the end (R's `ks.test` stops the first series early, at 1e-6: its asymptotic
+# p-values differ from these in the sixth digit). One-sided: P(K⁺ ≥ λ) = exp(−2λ²).
+def _kolmogorov_theta(lam: float) -> tuple[float, float]:
+    """(P(K < λ), its derivative) by the theta form, for 0 < λ < 1."""
+    total = slope = 0.0
+    k = 1
+    while True:
+        a = (2 * k - 1) ** 2 * math.pi ** 2 / 8.0
+        term = math.exp(-a / (lam * lam))
+        total += term
+        slope += term * (2.0 * a / lam ** 3 - 1.0 / lam)
+        if term < 1e-17 * total or k > 1000:
+            break
+        k += 1
+    c = math.sqrt(2.0 * math.pi)
+    return c / lam * total, c / lam * slope
+
+
+def kolmogorov_sf(lam: float, two_sided: bool = True) -> float:
+    """P(K ≥ λ) of Kolmogorov's limit (two-sided), or of Smirnov's one-sided one, exp(−2λ²)."""
+    if math.isnan(lam):
+        return math.nan
+    if lam <= 0.0:
+        return 1.0
+    if not two_sided:
+        return math.exp(-2.0 * lam * lam)
+    if lam < 1.0:
+        return min(1.0, max(0.0, 1.0 - _kolmogorov_theta(lam)[0]))
+    total, k = 0.0, 1
+    while True:
+        term = math.exp(-2.0 * k * k * lam * lam)
+        total += term if k % 2 else -term
+        if term < 1e-17 * abs(total) or k > 1000:
+            break
+        k += 1
+    return min(1.0, 2.0 * total)
+
+
+def kolmogorov_pdf(lam: float, two_sided: bool = True) -> float:
+    """The density of Kolmogorov's limit (or of Smirnov's one-sided, 4λ·exp(−2λ²)) at λ."""
+    if math.isnan(lam):
+        return math.nan
+    if lam <= 0.0 or math.isinf(lam):
+        return 0.0
+    if not two_sided:
+        return 4.0 * lam * math.exp(-2.0 * lam * lam)
+    if lam < 1.0:
+        return _kolmogorov_theta(lam)[1]
+    total, k = 0.0, 1
+    while True:
+        term = k * k * math.exp(-2.0 * k * k * lam * lam)
+        total += term if k % 2 else -term
+        if term < 1e-17 * abs(total) or k > 1000:
+            break
+        k += 1
+    return 8.0 * lam * total
+
+
+def kolmogorov_isf(q: float, two_sided: bool = True) -> float:
+    """The λ with P(K ≥ λ) = q, asked by its tail."""
+    if not two_sided and 0.0 < q <= 1.0:
+        return math.sqrt(-0.5 * math.log(q))
+    return _inverse_positive(lambda x: kolmogorov_sf(x, two_sided), q)
+
+
 # ── the studentized range (Tukey's HSD, Games–Howell) ───────────────────────
 # Q = (range of k standard normals) / S, S = √(χ²_df / df) independent of them. No engine has
 # it: two nested integrals, with the standard library. Only the upper tail is computed,
