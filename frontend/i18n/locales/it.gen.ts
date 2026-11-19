@@ -6125,4 +6125,41 @@ export default {
       "noNumericColumns": "L'ingresso del passo non ha colonne numeriche: convertine una prima."
     }
   },
+  "statReport": {
+    "tab": "Report",
+    "region": "Report del test",
+    "pagesOf": "Pagine del report di {name}",
+    "zoomGroup": "Zoom",
+    "zoomIn": "Ingrandisci",
+    "zoomOut": "Riduci",
+    "zoomActual": "Dimensione reale",
+    "zoomLevel": "Zoom {pct}: seleziona per la dimensione reale",
+    "fitWidth": "Adatta alla larghezza",
+    "fitWidthTitle": "Adatta la pagina alla larghezza del pannello",
+    "pageOf": "Pagina {n} di {total}",
+    "drawing": "Disegno il report…",
+    "drawn": "Il report è pronto: {n} pagina | Il report è pronto: {n} pagine",
+    "stale": "Non aggiornato",
+    "staleTitle": "Il passo, o qualcosa prima, è cambiato dopo che queste pagine sono state disegnate",
+    "update": "Aggiorna",
+    "updateTitle": "Ridisegna il report per il passo com'è adesso",
+    "pdfTitle": "Scarica queste pagine in PDF",
+    "excelTitle": "Scarica le tabelle di queste pagine in un file Excel",
+    "expand": "Espandi il report",
+    "restore": "Torna all'altezza di prima",
+    "unset": "Imposta il test nel pannello a destra per vederne il report.",
+    "noData": "Questo passo non ha ancora dati da leggere: il report si disegna quando una sorgente lo raggiunge.",
+    "empty": "Il report non è ancora stato disegnato.",
+    "draw": "Disegna il report",
+    "tryAgain": "Riprova",
+    "downloaded": "Scaricato {filename}",
+    "problems": {
+      "forbidden": "Non puoi leggere i dati che questo passo legge.",
+      "busy": "Hai troppe esportazioni in corso.",
+      "size": "Il report è troppo grande.",
+      "timeout": "Il report ha richiesto troppo tempo.",
+      "charts": "Non è stato possibile disegnare i grafici.",
+      "gone": "I dati che questo passo legge non ci sono più."
+    }
+  },
 }

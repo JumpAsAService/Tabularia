@@ -6125,4 +6125,41 @@ export default {
       "noNumericColumns": "La entrada del paso no tiene columnas numéricas: convierte una primero."
     }
   },
+  "statReport": {
+    "tab": "Informe",
+    "region": "Informe de la prueba",
+    "pagesOf": "Páginas del informe de {name}",
+    "zoomGroup": "Zoom",
+    "zoomIn": "Acercar",
+    "zoomOut": "Alejar",
+    "zoomActual": "Tamaño real",
+    "zoomLevel": "Zoom {pct}: selecciona para el tamaño real",
+    "fitWidth": "Ajustar al ancho",
+    "fitWidthTitle": "Ajustar la página al ancho del panel",
+    "pageOf": "Página {n} de {total}",
+    "drawing": "Dibujando el informe…",
+    "drawn": "El informe está listo: {n} página | El informe está listo: {n} páginas",
+    "stale": "No actualizado",
+    "staleTitle": "El paso, o algo anterior, cambió después de dibujar estas páginas",
+    "update": "Actualizar",
+    "updateTitle": "Volver a dibujar el informe para el paso tal como está ahora",
+    "pdfTitle": "Descargar estas páginas en PDF",
+    "excelTitle": "Descargar las tablas de estas páginas en un archivo Excel",
+    "expand": "Ampliar el informe",
+    "restore": "Volver a la altura anterior",
+    "unset": "Configura la prueba en el panel de la derecha para ver su informe.",
+    "noData": "Este paso aún no tiene datos que leer: su informe se dibuja cuando una fuente llega hasta él.",
+    "empty": "El informe aún no se ha dibujado.",
+    "draw": "Dibujar el informe",
+    "tryAgain": "Reintentar",
+    "downloaded": "Descargado {filename}",
+    "problems": {
+      "forbidden": "No puedes leer los datos que lee este paso.",
+      "busy": "Tienes demasiadas exportaciones en curso.",
+      "size": "El informe es demasiado grande.",
+      "timeout": "El informe ha tardado demasiado.",
+      "charts": "No se han podido dibujar los gráficos.",
+      "gone": "Los datos que lee este paso ya no existen."
+    }
+  },
 }

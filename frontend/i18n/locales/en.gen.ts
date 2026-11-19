@@ -6125,4 +6125,41 @@ export default {
       "noNumericColumns": "The step's input has no numeric column: convert one first."
     }
   },
+  "statReport": {
+    "tab": "Report",
+    "region": "Report of the test",
+    "pagesOf": "Report pages of {name}",
+    "zoomGroup": "Zoom",
+    "zoomIn": "Zoom in",
+    "zoomOut": "Zoom out",
+    "zoomActual": "Actual size",
+    "zoomLevel": "Zoom {pct}: select for the actual size",
+    "fitWidth": "Fit width",
+    "fitWidthTitle": "Fit the page to the panel's width",
+    "pageOf": "Page {n} of {total}",
+    "drawing": "Drawing the report…",
+    "drawn": "The report is ready: {n} page | The report is ready: {n} pages",
+    "stale": "Not up to date",
+    "staleTitle": "The step or something before it changed after these pages were drawn",
+    "update": "Update",
+    "updateTitle": "Draw the report again, for the step as it is now",
+    "pdfTitle": "Download these pages as a PDF",
+    "excelTitle": "Download the tables of these pages as an Excel file",
+    "expand": "Expand the report",
+    "restore": "Back to the height it had",
+    "unset": "Set the test in the panel on the right to see its report.",
+    "noData": "This step has no data to read yet: its report is drawn once a source reaches it.",
+    "empty": "The report has not been drawn yet.",
+    "draw": "Draw the report",
+    "tryAgain": "Try again",
+    "downloaded": "Downloaded {filename}",
+    "problems": {
+      "forbidden": "You may not read the data this step reads.",
+      "busy": "Too many of your exports are running.",
+      "size": "The report is too large.",
+      "timeout": "The report took too long.",
+      "charts": "The charts could not be drawn.",
+      "gone": "The data this step reads is no longer there."
+    }
+  },
 }

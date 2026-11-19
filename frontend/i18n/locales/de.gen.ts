@@ -6125,4 +6125,41 @@ export default {
       "noNumericColumns": "Die Eingabe des Schritts hat keine numerische Spalte: Wandeln Sie zuerst eine um."
     }
   },
+  "statReport": {
+    "tab": "Bericht",
+    "region": "Bericht des Tests",
+    "pagesOf": "Berichtsseiten von {name}",
+    "zoomGroup": "Zoom",
+    "zoomIn": "Vergrößern",
+    "zoomOut": "Verkleinern",
+    "zoomActual": "Originalgröße",
+    "zoomLevel": "Zoom {pct}: für die Originalgröße wählen",
+    "fitWidth": "Breite einpassen",
+    "fitWidthTitle": "Seite an die Breite des Bereichs anpassen",
+    "pageOf": "Seite {n} von {total}",
+    "drawing": "Bericht wird gezeichnet…",
+    "drawn": "Der Bericht ist fertig: {n} Seite | Der Bericht ist fertig: {n} Seiten",
+    "stale": "Nicht aktuell",
+    "staleTitle": "Der Schritt oder etwas davor wurde geändert, nachdem diese Seiten gezeichnet wurden",
+    "update": "Aktualisieren",
+    "updateTitle": "Den Bericht für den Schritt, wie er jetzt ist, neu zeichnen",
+    "pdfTitle": "Diese Seiten als PDF herunterladen",
+    "excelTitle": "Die Tabellen dieser Seiten als Excel-Datei herunterladen",
+    "expand": "Bericht vergrößern",
+    "restore": "Zurück zur vorherigen Höhe",
+    "unset": "Stellen Sie den Test im Bereich rechts ein, um seinen Bericht zu sehen.",
+    "noData": "Dieser Schritt hat noch keine Daten zu lesen: Sein Bericht wird gezeichnet, sobald eine Quelle ihn erreicht.",
+    "empty": "Der Bericht wurde noch nicht gezeichnet.",
+    "draw": "Bericht zeichnen",
+    "tryAgain": "Erneut versuchen",
+    "downloaded": "{filename} heruntergeladen",
+    "problems": {
+      "forbidden": "Sie dürfen die Daten, die dieser Schritt liest, nicht lesen.",
+      "busy": "Zu viele Ihrer Exporte laufen gerade.",
+      "size": "Der Bericht ist zu groß.",
+      "timeout": "Der Bericht hat zu lange gedauert.",
+      "charts": "Die Diagramme konnten nicht gezeichnet werden.",
+      "gone": "Die Daten, die dieser Schritt liest, sind nicht mehr vorhanden."
+    }
+  },
 }

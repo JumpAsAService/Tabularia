@@ -7,7 +7,7 @@ import { Controls, ControlButton } from '@vue-flow/controls'
 import { MiniMap } from '@vue-flow/minimap'
 import { opMeta } from '~/composables/useOpIcons'
 
-import { Table2, BarChart3, Wand2, Users, Undo2, Redo2, Sparkles, SlidersHorizontal, ShieldAlert, FlaskConical, X, RotateCw, RefreshCw, MoreHorizontal, Plus, Minus, Maximize, Lock, LockOpen } from 'lucide-vue-next'
+import { Table2, BarChart3, FileChartColumn, Wand2, Users, Undo2, Redo2, Sparkles, SlidersHorizontal, ShieldAlert, FlaskConical, X, RotateCw, RefreshCw, MoreHorizontal, Plus, Minus, Maximize, Lock, LockOpen } from 'lucide-vue-next'
 import FlowAssistant from '~/components/FlowAssistant.vue'
 import { useAi, type AiStatus } from '~/composables/useAi'
 import { useApi, errMessage } from '~/composables/useApi'
@@ -32,7 +32,9 @@ import { useKeyGroups, useKeyHelp } from '~/composables/useKeyHelp'
 import { SOURCE_ID, buildIncoming, resolveChain, leafNodeId, defaultParams, sampleLabel } from '~/composables/useFlowModel'
 import { Recent, previewKey, columnChanges, consumedColumns, nodeRowsPhrase, rowsPhrase, suggestSample, type RowCount } from '~/composables/previewGrid'
 import { opSubject } from '~/composables/opSummary'
-import { statIsUnset } from '~/composables/statTests'
+import { statIsOp, statIsUnset } from '~/composables/statTests'
+import { STAT_REPORT_REMEMBERED, type StatReportChain, type StatReportShown } from '~/composables/statReport'
+import StatReportView from '~/components/ui/StatReportView.vue'
 import { profileOpen, profileStart } from '~/composables/profileAsk'
 import { usePopover } from '~/composables/usePopover'
 import { computeAutoLayout } from '~/composables/useFlowLayout'
@@ -137,7 +139,7 @@ let sourceCounter = 0
 let outputCounter = 0
 let commentCounter = 0
 
-const viewTab = ref<'table' | 'chart'>('table') // view under the canvas
+const viewTab = ref<'table' | 'chart' | 'report'>('table') // view under the canvas (Report: a statistics node's)
 
 // ── Observer in the editor ────────────────────────────────────────────────
 // An observer comes in, adds TRANSFORMATION nodes and looks at their preview. They do
@@ -249,6 +251,19 @@ function viewKeys(e: KeyboardEvent) {
   e.preventDefault()
   gridHeight.value = clampGrid(gridHeight.value + d * (e.shiftKey ? 10 : 1))
   localStorage.setItem('tabularia.gridHeight', String(gridHeight.value))
+}
+// «Expand» of the Report tab: the preview to its largest height (the resizer's own limit),
+// and back to the height it had. Not remembered: the next visit opens at the kept height.
+const gridBefore = ref<number | null>(null)
+const gridExpanded = computed(() => gridBefore.value !== null && gridHeight.value >= gridMax() - 1)
+function toggleGridExpanded() {
+  if (gridExpanded.value) {
+    gridHeight.value = clampGrid(gridBefore.value ?? Math.round(window.innerHeight * 0.34))
+    gridBefore.value = null
+  } else {
+    gridBefore.value = gridHeight.value
+    gridHeight.value = gridMax()
+  }
 }
 // null = nothing has happened yet: the bar describes the canvas instead. A fixed
 // «Load a file to get started.» stayed there after a datasource had been picked
@@ -2656,6 +2671,24 @@ const shownSource = computed(() => {
   return id ? resolveChain(getNodes.value, getEdges.value, id, scriptSources.value).sourceNode : null
 })
 const shownSample = computed(() => (shownSource.value?.type === 'source' ? sampleLabel(shownSource.value.data, t, fmt.count) : null))
+
+// ── The Report tab: a statistics node's report, on the chain its preview reads ───────
+// the node the panel is about (selected; else the one computed or on screen), when it is a
+// hypothesis test: only then is there a third tab. With any other node: back to Table.
+const statNodeId = computed(() => {
+  const id = selectedId.value ?? computingNodeId.value ?? inputShownFor.value ?? previewNodeId.value
+  const n = id ? findNode(id) : null
+  return id && n?.type === 'operation' && statIsOp(n.data?.opType) ? id : null
+})
+const statReportChain = computed<StatReportChain | null>(() => {
+  const body = statNodeId.value ? previewBody(statNodeId.value).body : null
+  return body ? { engine: flowEngine.value, bucket: body.bucket, input_key: body.input_key, operations: body.operations } : null
+})
+// the header band names the step only when the person named it: the name the editor makes
+// up («Two-sample t test amount ~ channel») is the page's own title and subject again
+const statReportStep = computed(() => String((statNodeId.value ? findNode(statNodeId.value)?.data?.label : '') ?? '').trim())
+const statReportMemory = new Recent<StatReportShown>(STAT_REPORT_REMEMBERED)
+watch(statNodeId, (id) => { if (!id && viewTab.value === 'report') viewTab.value = 'table' })
 // the step's changes against its input: the selected node's own preview only. Compared with
 // the columns of the node before as this page knows them already (a source's, or that node's
 // own preview), so the marks come with the rows; when they are not known yet the input's
@@ -3594,6 +3627,14 @@ async function pollTask(id: string) {
           :aria-label="$t('flowEditor.chartTab')"
           @click="viewTab = 'chart'"
         ><BarChart3 :size="13" aria-hidden="true" /><span class="vt-label">{{ $t('flowEditor.chartTab') }}</span></button>
+        <button
+          v-if="statNodeId"
+          role="tab"
+          :class="{ active: viewTab === 'report' }"
+          :aria-selected="viewTab === 'report'"
+          :aria-label="$t('statReport.tab')"
+          @click="viewTab = 'report'"
+        ><FileChartColumn :size="13" aria-hidden="true" /><span class="vt-label">{{ $t('statReport.tab') }}</span></button>
       </div>
         <!-- what the rows on screen are: whose (always first, where it stays), how many of how
              many, what the step removed; while a node computes, its name, the seconds, and
@@ -3741,6 +3782,15 @@ async function pollTask(id: string) {
             </button>
           </template>
         </DataGrid>
+        <StatReportView
+          v-else-if="viewTab === 'report' && statNodeId"
+          :node-id="statNodeId"
+          :chain="statReportChain"
+          :step="statReportStep"
+          :expanded="gridExpanded"
+          :memory="statReportMemory"
+          @expand="toggleGridExpanded"
+        />
         <ChartPanel v-else :columns="preview?.columns ?? []" :query="chartQuery" />
       </div>
     </div>

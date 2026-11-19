@@ -6125,4 +6125,41 @@ export default {
       "noNumericColumns": "L'entrée de l'étape n'a aucune colonne numérique : convertissez-en une d'abord."
     }
   },
+  "statReport": {
+    "tab": "Rapport",
+    "region": "Rapport du test",
+    "pagesOf": "Pages du rapport de {name}",
+    "zoomGroup": "Zoom",
+    "zoomIn": "Zoom avant",
+    "zoomOut": "Zoom arrière",
+    "zoomActual": "Taille réelle",
+    "zoomLevel": "Zoom {pct} : sélectionner pour la taille réelle",
+    "fitWidth": "Ajuster à la largeur",
+    "fitWidthTitle": "Ajuster la page à la largeur du panneau",
+    "pageOf": "Page {n} sur {total}",
+    "drawing": "Dessin du rapport…",
+    "drawn": "Le rapport est prêt : {n} page | Le rapport est prêt : {n} pages",
+    "stale": "Pas à jour",
+    "staleTitle": "L'étape, ou quelque chose avant elle, a changé après le dessin de ces pages",
+    "update": "Mettre à jour",
+    "updateTitle": "Redessiner le rapport pour l'étape telle qu'elle est maintenant",
+    "pdfTitle": "Télécharger ces pages en PDF",
+    "excelTitle": "Télécharger les tableaux de ces pages dans un fichier Excel",
+    "expand": "Agrandir le rapport",
+    "restore": "Revenir à la hauteur précédente",
+    "unset": "Configurez le test dans le panneau de droite pour voir son rapport.",
+    "noData": "Cette étape n'a pas encore de données à lire : son rapport est dessiné dès qu'une source l'atteint.",
+    "empty": "Le rapport n'a pas encore été dessiné.",
+    "draw": "Dessiner le rapport",
+    "tryAgain": "Réessayer",
+    "downloaded": "{filename} téléchargé",
+    "problems": {
+      "forbidden": "Vous ne pouvez pas lire les données que cette étape lit.",
+      "busy": "Trop de vos exports sont en cours.",
+      "size": "Le rapport est trop volumineux.",
+      "timeout": "Le rapport a pris trop de temps.",
+      "charts": "Les graphiques n'ont pas pu être dessinés.",
+      "gone": "Les données que cette étape lit n'existent plus."
+    }
+  },
 }
