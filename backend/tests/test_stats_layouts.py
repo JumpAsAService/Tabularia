@@ -40,7 +40,7 @@ NOW = datetime(2026, 11, 19, 15, 30, tzinfo=timezone.utc)
 # The reference test's report (Welch, two-sided, English), byte for byte. It changes with the
 # layout, its words, the template, the fonts or Typst's version: look at the new PDF with the
 # real chart service, then update the hash.
-GOLDEN_PDF_SHA256 = "8bebf75d38b6d0ae299ed1c56fdb7ed273d48234a406fd8c853a42b26a2b34f7"
+GOLDEN_PDF_SHA256 = "ee2bd2ace67183fcf5d2cba882db10983626863650c2ef6b9677e14a279f8b2b"
 
 A = [5.1, 4.9, 6.2, 5.8, 6.0, 5.5, 5.3, 6.7]
 B = [6.9, 7.2, 6.5, 7.8, 7.1, 6.4, 8.0]
@@ -246,7 +246,7 @@ def test_the_reference_report_holds_the_welch_numbers(tmp_path, chart_service, m
     means = charts["Means with their confidence intervals"]
     assert [round(x, 6) for x in means["series"][0]["data"][0]["value"]] == [5.183034, 5.6875, 5.6875, 5.6875, 6.191966]
     hist = charts["Histogram: v by g"]
-    assert hist["xAxis"]["data"] == ["[4.9, 5.52)", "[5.52, 6.14)", "[6.14, 6.76)", "[6.76, 7.38)", "[7.38, 8]"]
+    assert hist["xAxis"]["data"] == ["[4.9 – 5.52)", "[5.52 – 6.14)", "[6.14 – 6.76)", "[6.76 – 7.38)", "[7.38 – 8]"]
     assert {s["name"]: [p and p["value"] for p in s["data"]] for s in hist["series"]} == {"a": [4, 2, 2, 0, 0], "b": [0, 0, 2, 3, 2]}
     curve = charts["Distribution of the statistic under H0"]
     line, low, high = (s for s in curve["series"] if s["type"] == "line")
@@ -355,7 +355,7 @@ def test_excel_holds_the_tables_one_sheet_each(tmp_path, chart_service, monkeypa
         book = z.read("xl/workbook.xml").decode()
         cells = "".join(z.read(n).decode() for n in z.namelist() if n.startswith("xl/worksheets/"))
     # the variances differ by less than four times: no note, so no sheet of notes
-    assert re.findall(r'<sheet name="([^"]+)"', book) == ["Numbers of the test", "Groups", "Five-number summary", "Parameters"]
+    assert re.findall(r'<sheet name="([^"]+)"', book) == ["Numbers of the test", "Groups", "Intervals of the means", "Five-number summary", "Parameters"]
     # the numbers as numbers, whole (an engine's last digit may differ between two runs)
     [written] = re.findall(r"<t>Pooled variance \(sp²\)</t></is></c><c [^>]*><is><t>pooled_var</t></is></c><c [^>]*><v>([^<]+)</v>", cells)
     assert math.isclose(float(written), pooled, rel_tol=1e-12)

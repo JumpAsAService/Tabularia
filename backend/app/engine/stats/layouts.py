@@ -21,6 +21,7 @@ A new test is an entry of `LAYOUTS` and its words under `tests.<id>`.
 from __future__ import annotations
 
 import json
+import math
 import re
 from functools import lru_cache
 from pathlib import Path
@@ -90,11 +91,47 @@ def tiny(value: Any, locale: str | None) -> str | None:
     return mantissa.replace(".", formats.locale(locale if locale in LOCALES else "en").decimal) + "e" + str(int(exponent))
 
 
+def _edges_text(low: float, high: float, last: bool, decimal: str, group: str) -> str:
+    """A histogram interval as the page writes it, «[59,780 – 258,011)»: the decimals the
+    interval's width needs to tell its two edges apart, the language's separators. The
+    output's own text keeps six significant digits («[1.05094e+06, 1.24917e+06]»), which
+    a chart's axis has no room for and no language writes."""
+    width = abs(high - low)
+    places = 0 if not math.isfinite(width) or width <= 0 else max(0, min(10, 1 - math.floor(math.log10(width))))
+
+    def said(x: float) -> str:
+        whole, _, fraction = f"{x + 0.0:,.{places}f}".partition(".")
+        fraction = fraction.rstrip("0")
+        return whole.replace(",", group) + (decimal + fraction if fraction else "")
+
+    return f"[{said(low)} – {said(high)}{']' if last else ')'}"
+
+
+def _said(test: str, rows: list[dict], locale: str | None) -> list[dict]:
+    """The texts of the rows that hold a number written as text, in the language of the page:
+    the histogram's intervals, and the reference distribution («t(12,7279)»; with a decimal
+    comma its parameters are set apart by a semicolon, «F(2; 18,5)»)."""
+    from app.reports import formats
+
+    loc = formats.locale(locale if locale in LOCALES else "en")
+    out = []
+    for r in rows:
+        text = r.get("text")
+        if r["section"] == "hist" and isinstance(r.get("x0"), (int, float)) and isinstance(r.get("x1"), (int, float)):
+            r = {**r, "text": _edges_text(r["x0"], r["x1"], str(text or "").endswith("]"), loc.decimal, loc.group)}
+        elif r["section"] == "test" and r["stat"] == "distribution" and isinstance(text, str) and loc.decimal != ".":
+            r = {**r, "text": text.replace(", ", "; ").replace(".", loc.decimal)}
+        out.append(r)
+    return out
+
+
 def with_labels(test: str, rows: list[dict], locale: str | None) -> list[dict]:
     """The rows as the page reads them, with two more columns: `label`, the translated name
     of each `stat`, and `tiny`, a very small number written by its exponent (nothing for the
-    others). Neither is a computation: they are how a row is said."""
-    return [{**r, "label": stat_label(test, r["section"], r["stat"], locale), "tiny": tiny(r.get("value"), locale)} for r in rows]
+    others); the numbers written as text are in the page's language (`_said`). None of it is
+    a computation: it is how a row is said."""
+    return [{**r, "label": stat_label(test, r["section"], r["stat"], locale), "tiny": tiny(r.get("value"), locale)}
+            for r in _said(test, rows, locale)]
 
 
 def columns() -> list[dict[str, str]]:
@@ -431,11 +468,18 @@ def _two_groups(test: str, params: dict[str, Any], locale: str, sample: str | No
     p.heading("s_groups", t["sections"]["groups"])
     g = t["stats"]["group"]
     one_row_a_group = '[section] = "group" AND [stat] = "n"'
+    # two tables, not one of eight columns: a variance of eleven digits ran into the mean
+    # beside it, and a header of two words («Mean, CI low») broke on two lines
     p.add(_table("groups", t["tables"]["groups"]["title"], one_row_a_group, [
         {"header": t["tables"]["groups"]["group"], "value": "[level]"},
-        {"header": g["n"], "value": "[value]", "width": 14, "align": "right", "format": "#,##0"},
-        *({"header": g[s], "value": _group_number(s), "width": 25, "align": "right", "format": "0.########"}
-          for s in ("mean", "var", "sd", "se", "ci_low", "ci_high")),
+        {"header": g["n"], "value": "[value]", "width": 20, "align": "right", "format": "#,##0"},
+        *({"header": g[s], "value": _group_number(s), "width": 40, "align": "right", "format": "0.########"}
+          for s in ("mean", "var", "sd")),
+    ], p.y), 10)
+    p.add(_table("intervals", t["tables"]["intervals"]["title"], one_row_a_group, [
+        {"header": t["tables"]["groups"]["group"], "value": "[level]"},
+        *({"header": g[s], "value": _group_number(s), "width": 40, "align": "right", "format": "0.########"}
+          for s in ("se", "ci_low", "ci_high")),
     ], p.y), 10)
     p.add(_table("quartiles", t["tables"]["quartiles"]["title"], one_row_a_group, [
         {"header": t["tables"]["groups"]["group"], "value": "[level]"},

@@ -95,6 +95,7 @@
       "numbers": {"title": "Numbers of the test", "quantity": "Quantity", "name": "Name in the table", "value": "Value"},
       "groups": {"title": "Groups", "group": "Group"},
       "quartiles": {"title": "Five-number summary"},
+      "intervals": {"title": "Intervals of the means"},
       "notes": {"title": "Notes", "note": "Notes of the test"}
     },
     "charts": {
@@ -209,6 +210,7 @@
       "numbers": {"title": "Numeri del test", "quantity": "Grandezza", "name": "Nome nella tabella", "value": "Valore"},
       "groups": {"title": "Gruppi", "group": "Gruppo"},
       "quartiles": {"title": "Sintesi a cinque numeri"},
+      "intervals": {"title": "Intervalli delle medie"},
       "notes": {"title": "Note", "note": "Note del test"}
     },
     "charts": {
@@ -323,6 +325,7 @@
       "numbers": {"title": "Zahlen des Tests", "quantity": "Größe", "name": "Name in der Tabelle", "value": "Wert"},
       "groups": {"title": "Gruppen", "group": "Gruppe"},
       "quartiles": {"title": "Fünf-Punkte-Zusammenfassung"},
+      "intervals": {"title": "Intervalle der Mittelwerte"},
       "notes": {"title": "Hinweise", "note": "Hinweise des Tests"}
     },
     "charts": {
@@ -437,6 +440,7 @@
       "numbers": {"title": "Números de la prueba", "quantity": "Magnitud", "name": "Nombre en la tabla", "value": "Valor"},
       "groups": {"title": "Grupos", "group": "Grupo"},
       "quartiles": {"title": "Resumen de cinco números"},
+      "intervals": {"title": "Intervalos de las medias"},
       "notes": {"title": "Notas", "note": "Notas de la prueba"}
     },
     "charts": {
@@ -551,6 +555,7 @@
       "numbers": {"title": "Nombres du test", "quantity": "Grandeur", "name": "Nom dans la table", "value": "Valeur"},
       "groups": {"title": "Groupes", "group": "Groupe"},
       "quartiles": {"title": "Résumé en cinq nombres"},
+      "intervals": {"title": "Intervalles des moyennes"},
       "notes": {"title": "Notes", "note": "Notes du test"}
     },
     "charts": {
