@@ -21,6 +21,7 @@ import (
 	"github.com/JumpAsAService/Tabularia/gateway-go/internal/objects"
 	"github.com/JumpAsAService/Tabularia/gateway-go/internal/pyjson"
 	"github.com/JumpAsAService/Tabularia/gateway-go/internal/server"
+	"github.com/JumpAsAService/Tabularia/gateway-go/internal/statcatalog"
 )
 
 // routes/proxy.py: the routes forwarded to the engine, with the per-object checks of the
@@ -44,6 +45,7 @@ func init() {
 			{Method: http.MethodPost, Pattern: "/tasks/exports", Handler: a("/tasks/exports", d.proxyStartExport)},
 			{Method: http.MethodGet, Pattern: "/tasks/exports/{task_id}", Handler: a("/tasks/exports/{task_id}", d.proxyExportStatus)},
 			{Method: http.MethodGet, Pattern: "/tasks/exports/{task_id}/file", Handler: a("/tasks/exports/{task_id}/file", d.proxyExportFile)},
+			{Method: http.MethodPost, Pattern: "/tasks/stat-report", Handler: a("/tasks/stat-report", d.proxyStatReport)},
 			{Method: http.MethodGet, Pattern: "/tasks/{task_id}", Handler: a("/tasks/{task_id}", d.proxyTaskStatus)},
 			{Method: http.MethodPost, Pattern: "/files", Handler: a("/files", d.proxyUpload)},
 		}
@@ -584,6 +586,77 @@ func (d *Deps) proxyStartExport(w http.ResponseWriter, r *http.Request, p *auth.
 	}
 	o = o.Set("wait_seconds", wait)
 	d.forward(w, r, http.MethodPost, withQuery("/tasks/exports", parseQSL(r.URL.RawQuery)), dumps(o), false)
+}
+
+// statReportKeys are what a statistics step's report is asked with: nothing else of the
+// request reaches the engine (the layout is the engine's own: no definition is taken from a
+// browser). `step` is the step's name, written in the page's header.
+var statReportKeys = []string{"engine", "bucket", "input_key", "operations", "format", "locale", "filename", "step"}
+
+var statReportFormats = map[string]bool{"svg": true, "pdf": true, "xlsx": true}
+
+var statReportLocales = map[string]bool{"en": true, "it": true, "de": true, "es": true, "fr": true}
+
+// proxyStatReport is POST /tasks/stat-report: the report of the hypothesis test a flow's
+// chain ends with (docs/specs/statistics.md, «The report»), drawn by the engine from the
+// rows the test writes, with the layout preset for that test. The body is the chain a
+// preview of the step would send, and it is forwarded as it came: the report is computed
+// on the rows that reach the node, the same as its preview's.
+//
+// Checked as a step's download: every key the chain reads pinned to the engine's bucket
+// and readable by the person, the download audited, the result owned by the person — whoever
+// may download the step's rows may draw its report, nobody else. The answer is the engine's
+// {task_id, filename}; the render is followed and taken as every export
+// (/tasks/exports/{task_id}, …/file). A route of the Go gateway only.
+func (d *Deps) proxyStatReport(w http.ResponseWriter, r *http.Request, p *auth.Principal) {
+	_, payload, ok := readJSON(w, r)
+	if !ok {
+		return
+	}
+	refuse := func(detail string) {
+		server.JSON(w, http.StatusUnprocessableEntity, map[string]string{"detail": detail})
+	}
+	given, isObj := payload.(pyjson.Object)
+	if !isObj {
+		refuse("The request body must be a JSON object")
+		return
+	}
+	o := pyjson.Object{}
+	for _, key := range statReportKeys {
+		if v, has := given.Get(key); has && v != nil {
+			o = o.Set(key, v)
+		}
+	}
+	operations, _ := o.Value("operations").([]any)
+	if len(operations) == 0 {
+		refuse("The report of a statistics step needs its chain: «operations», ending with the test")
+		return
+	}
+	last, _ := pyjson.Obj(operations[len(operations)-1]).Value("type").(string)
+	if !statcatalog.Is(last) {
+		refuse("The last step of the chain is not a statistical test: only a statistics step has a report")
+		return
+	}
+	format, isText := pyjson.Or(o.Value("format"), "svg").(string)
+	if !isText || !statReportFormats[format] {
+		refuse("The format of a statistics report is svg (the pages on screen), pdf or xlsx")
+		return
+	}
+	locale, _ := o.Value("locale").(string)
+	if !statReportLocales[locale] {
+		locale = "en"
+	}
+	o = o.Set("format", format).Set("locale", locale)
+	if !d.req(w, r, p).authorizeExport(o) {
+		return
+	}
+	// as an export: code (an API token) waits its turn, the interface is told at once
+	var wait int64
+	if p.TokenName != "" {
+		wait = d.Config.Flows.ReportsAPIWaitSeconds
+	}
+	o = o.Set("owner", exportOwner(p.User.ID)).Set("wait_seconds", wait)
+	d.forward(w, r, http.MethodPost, "/reports/stat", dumps(o), false)
 }
 
 var taskIDRe = regexp.MustCompile(`^[0-9a-f-]{36}\n?\z`)
