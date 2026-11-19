@@ -101,6 +101,8 @@ CASES = {
     "report_boolean_as_group": t_two(value="x", group="flag", detail="report"),
     "report_number_as_group": t_two(value="qty", group="level", groups=[1.5, 0.0], detail="report"),
     "report_date_as_group": t_two(value="price", group="day", detail="report"),
+    # a group the query cannot tell apart by a literal: the quartiles of every group are read, and the two kept
+    "report_datetime_as_group": t_two(value="x", group="at", groups=["2024-03-01 20:30:15", "2024-03-01 08:00:00"], detail="report"),
     "after_a_filter": [
         {"type": "filter", "params": {"column": "g", "operator": "ne", "value": "east"}},
         *t_two(value="x", group="g"),

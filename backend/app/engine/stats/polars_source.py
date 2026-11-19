@@ -12,6 +12,7 @@ from app.engine.stats.aggregates import (
     Level,
     Moments,
     Quartiles,
+    comparable,
     moments_of,
     quartiles_of,
     usable_centre,
@@ -62,16 +63,22 @@ class PolarsStatSource:
             df = self.lf.group_by(pl.col(group).alias(_LEVEL)).agg(aggregates).collect(engine="streaming")
         return [moments_of(centre, *row) for row in df.iter_rows()]
 
-    def quartiles(self, value: str, group: str | None = None) -> list[Quartiles]:
+    def quartiles(self, value: str, group: str | None = None, levels: list | None = None) -> list[Quartiles]:
         """A12: the first quartile, the median and the third quartile of `value` per group,
-        linearly interpolated (R's type 7), of the values that are numbers."""
+        linearly interpolated (R's type 7), of the values that are numbers. `levels`: the
+        groups to answer for (the typed values A1 returned), so that the values of the
+        others are never gathered; every group when they cannot be compared in the query
+        (`aggregates.comparable`)."""
         x = pl.col(value).cast(pl.Float64).fill_nan(None)
         finite = pl.when(x.is_finite()).then(x)
         quantiles = [finite.quantile(q, "linear").alias(name) for q, name in ((0.25, _Q1), (0.5, _MEDIAN), (0.75, _Q3))]
         if group is None:
             df = self.lf.select(pl.lit(None).alias(_LEVEL), *quantiles).collect(engine="streaming")
         else:
-            df = self.lf.group_by(pl.col(group).alias(_LEVEL)).agg(quantiles).collect(engine="streaming")
+            lf = self.lf
+            if comparable(levels):
+                lf = lf.filter(pl.any_horizontal([pl.col(group) == pl.lit(v) for v in levels]))
+            df = lf.group_by(pl.col(group).alias(_LEVEL)).agg(quantiles).collect(engine="streaming")
         return [quartiles_of(*row) for row in df.iter_rows()]
 
     def histogram(self, value: str, group: str | None, lo: float, hi: float, bins: int) -> list[HistogramBin]:

@@ -314,7 +314,9 @@ def test_statistics_report_rows_ask_bigquery_for_quartiles_and_a_histogram():
     assert quartiles == (
         f"SELECT DISTINCT `nome` AS st_lv, PERCENTILE_CONT({finite}, 0.25) OVER (PARTITION BY `nome`) AS st_q1, "
         f"PERCENTILE_CONT({finite}, 0.5) OVER (PARTITION BY `nome`) AS st_median, "
-        f"PERCENTILE_CONT({finite}, 0.75) OVER (PARTITION BY `nome`) AS st_q3 FROM (SELECT * FROM `_src1`) AS st_t"
+        f"PERCENTILE_CONT({finite}, 0.75) OVER (PARTITION BY `nome`) AS st_q3 FROM (SELECT * FROM `_src1`) AS st_t "
+        # the two groups compared, as A1 gave them: the values of any other group are never partitioned
+        "WHERE `nome` = 'a' OR `nome` = 'b'"
     )
     width = repr((8.0 - 4.9) / 5)
     b = f"LEAST(4, GREATEST(0, CAST(floor((CAST(`prezzo` AS FLOAT64) - (4.9)) / {width}) AS INT64)))"

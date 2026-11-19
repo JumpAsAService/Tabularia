@@ -1,0 +1,521 @@
+"""The report of a hypothesis test (app/engine/stats/layouts.py): every test of the catalogue
+has a layout and its words in five languages; a layout is a definition the report engine
+accepts, reads only rows the test writes, and renders on the reference data; the page says
+when its rows are a development sample's; the route and the task that draw it from a flow's
+chain, and the rows they remember. The chart service is the fake of test_reports_render.py
+(the real one is Node): what it is asked is checked here, what it draws was looked at."""
+from __future__ import annotations
+
+import hashlib
+import json
+import math
+import re
+import zipfile
+from datetime import datetime, timezone
+
+import polars as pl
+import pytest
+from fastapi import HTTPException
+
+from app.api import exports
+from app.api.routes import reports as report_routes
+from app.api.routes import tasks
+from app.engine import rowcount
+from app.engine.stats import layouts
+from app.engine.stats.catalog import TESTS, operation_name
+from app.engine.stats.compute import run_hypothesis_test
+from app.engine.stats.output import OUTPUT_NAMES
+from app.engine.stats.polars_source import PolarsStatSource
+from app.reports import definition as rd
+from app.reports import glyphs, pdf, render
+from app.tasks import jobs, report_jobs
+from tests.conftest import BUCKET, upload_df
+from tests.fakes import FakeRedis
+from tests.test_data_correctness import _engine
+from tests.test_export_route import Result, Storage, _play
+from tests.reports_both_ways import both_ways  # noqa: F401 — every report, both ways
+from tests.test_reports_render import chart_service  # noqa: F401 — the fake chart service
+
+NOW = datetime(2026, 11, 19, 15, 30, tzinfo=timezone.utc)
+# The reference test's report (Welch, two-sided, English), byte for byte. It changes with the
+# layout, its words, the template, the fonts or Typst's version: look at the new PDF with the
+# real chart service, then update the hash.
+GOLDEN_PDF_SHA256 = "8bebf75d38b6d0ae299ed1c56fdb7ed273d48234a406fd8c853a42b26a2b34f7"
+
+A = [5.1, 4.9, 6.2, 5.8, 6.0, 5.5, 5.3, 6.7]
+B = [6.9, 7.2, 6.5, 7.8, 7.1, 6.4, 8.0]
+C = [5.9, 6.1, 7.0, 6.6, 5.7, 6.3]
+WELCH = {"value": "v", "group": "g", "groups": ["a", "b"]}
+# what each test of the catalogue is asked on the reference data
+REFERENCE = {"t_two_sample": WELCH}
+
+
+def abc() -> pl.DataFrame:
+    """The reference samples, with what every engine leaves out (test_stats_reference.py)."""
+    rows = [("a", v) for v in A] + [("b", v) for v in B] + [("c", v) for v in C]
+    rows += [("a", None), ("b", math.nan), (None, 9.9)]
+    return pl.DataFrame({"g": [g for g, _ in rows], "v": [v for _, v in rows]}, schema={"g": pl.String, "v": pl.Float64})
+
+
+def rows_of(test: str = "t_two_sample", **params) -> list[dict]:
+    out = run_hypothesis_test(PolarsStatSource(abc().lazy()), test, {**REFERENCE[test], **params, "detail": "report"}, "polars")
+    return [dict(zip(OUTPUT_NAMES, r)) for r in out]
+
+
+def strings(node) -> list[str]:
+    if isinstance(node, str):
+        return [node]
+    if isinstance(node, dict):
+        return [s for v in node.values() for s in strings(v)]
+    if isinstance(node, list):
+        return [s for v in node for s in strings(v)]
+    return []
+
+
+def draw(tmp_path, chart_service, monkeypatch, fmt="pdf", locale="en", sample=None, step=None, test="t_two_sample", **params):  # noqa: F811
+    """The report of the reference test, and what the template was handed (the page's texts)."""
+    handed: list[str] = []
+    run = pdf.run
+
+    def spy(job, *args, **kwargs):
+        if "inputs" in job:
+            handed.append(job["inputs"]["model"])
+        return run(job, *args, **kwargs)
+
+    monkeypatch.setattr(pdf, "run", spy)
+    asked = {**REFERENCE[test], **params}
+    datasets = {"result": {"rows": layouts.with_labels(test, rows_of(test, **params), locale), "columns": layouts.columns()}}
+    out = render.render(layouts.definition(test, asked, locale, sample, step), datasets, {}, fmt, tmp_path,
+                        title=layouts.title(test, asked, locale), now=NOW,
+                        limits=render.Limits(chart_url=chart_service[0], max_rows=layouts.MAX_REPORT_ROWS))
+    return out, (handed[0] if handed else "")
+
+
+# ── the catalogue, the words ─────────────────────────────────────────────────
+def test_every_test_of_the_catalogue_has_a_layout_and_its_reference():
+    assert set(layouts.LAYOUTS) == set(TESTS) == set(REFERENCE)
+
+
+def _keys(node, prefix=""):
+    if isinstance(node, dict):
+        return {k for name, v in node.items() for k in _keys(v, f"{prefix}{name}.")}
+    return {prefix.rstrip(".")}
+
+
+def test_the_words_are_complete_in_the_five_languages():
+    words = layouts.all_texts()
+    assert tuple(words) == layouts.LOCALES
+    english = _keys(words["en"])
+    for code in layouts.LOCALES:
+        assert _keys(words[code]) == english, f"{code}: {sorted(_keys(words[code]) ^ english)}"
+        assert all(isinstance(s, str) and s.strip() for s in strings(words[code])), code
+    # every test has its name, and every number it writes a name of its own in each language
+    for test in TESTS:
+        written = {(r["section"], r["stat"]) for r in rows_of(test)} | {(r["section"], r["stat"]) for r in rows_of(test, var_equal=True)}
+        for code in layouts.LOCALES:
+            assert words[code]["tests"][test]["name"]
+            unnamed = sorted(s for s in written if layouts.stat_label(test, *s, code) == s[1] and s != ("group", "n"))
+            assert unnamed == [], f"{code}: no word for {unnamed}"
+    assert layouts.stat_label("t_two_sample", "test", "note_2", "it") == "Nota 2"
+    assert layouts.stat_label("t_two_sample", "test", "estimate", "en") == "Difference of the means (m1 − m2)"
+    assert layouts.stat_label("t_two_sample", "test", "newer_than_the_words", "de") == "newer_than_the_words"
+    assert layouts.texts("xx") is words["en"]
+
+
+def test_the_words_and_the_formulas_use_only_characters_the_pdf_font_has():
+    for code, words in layouts.all_texts().items():
+        assert glyphs.missing(set("".join(strings(words)))) == set(), code
+    engine_texts = "".join(r["text"] for p in ({}, {"var_equal": True}, {"alternative": "less"}) for r in rows_of(**p) if r["text"])
+    assert glyphs.missing(set(engine_texts) | set("−∞+∞ · —")) == set()
+
+
+# ── the definition ───────────────────────────────────────────────────────────
+@pytest.mark.parametrize("test", sorted(TESTS))
+@pytest.mark.parametrize("locale", layouts.LOCALES)
+def test_a_layout_is_a_definition_the_report_engine_accepts(test, locale):
+    columns = {"result": {c["name"]: c["type"] for c in layouts.columns()}}
+    for sample in (None, [{"first": 100_000}]):
+        d = layouts.definition(test, REFERENCE[test], locale, sample, "Channels compared")
+        assert [str(p) for p in rd.check(d, columns)] == []
+        assert d["locale"] == locale and d["parameters"] == [] and [x["name"] for x in d["datasets"]] == ["result"]
+        assert d["page"]["size"] == "A4" and d["page"]["orientation"] == "portrait"
+        ids = [it["id"] for band in d["sections"].values() for it in band["items"]]
+        assert len(ids) == len(set(ids))
+
+
+@pytest.mark.parametrize("test", sorted(TESTS))
+def test_a_layout_reads_only_rows_the_test_writes(test):
+    """Every row a layout names by its key is a row of the test, in every variant (the side a
+    one-sided alternative leaves open is a row too, with no number)."""
+    for params in ({}, {"alternative": "less"}, {"alternative": "greater", "var_equal": True}):
+        written = {r["key"] for r in rows_of(test, **params)}
+        text = json.dumps(layouts.definition(test, {**REFERENCE[test], **params}, "en"), ensure_ascii=False)
+        named = set(re.findall(r'LOOKUP\(\\"([^"\\]+)\\", \[key\]', text))
+        assert named and named <= written, sorted(named - written)
+        # a key made of a group's label is a row of that group
+        for stat in re.findall(r'\\"group\|\\" & \[level\] & \\"\|\|(\w+)\\"', text):
+            assert {f"group|{g}||{stat}" for g in ("a", "b")} <= written
+        sections = set(re.findall(r'\[section\] = \\"(\w+)\\"', text))
+        assert sections == {"test", "group", "hist", "curve"} == {r["section"] for r in rows_of(test, **params)}
+
+
+def test_the_report_reads_as_many_rows_as_a_test_may_write():
+    assert len(rows_of()) == 381  # the reference test: 26 of the test, 24 of its groups, 10 intervals, 321 of the curve
+    assert layouts.MAX_REPORT_ROWS >= 64 + 200 * (12 + 30) + 603  # 200 groups, each with 30 intervals, and the curve
+    assert layouts.MAX_REPORT_ROWS < 20_000
+
+
+def test_the_name_of_a_report_is_its_test_and_its_columns():
+    assert layouts.title("t_two_sample", {"value": "amount", "group": "channel"}, "en") == "Welch's t test — amount by channel"
+    assert layouts.title("t_two_sample", {"value": "amount", "group": "channel", "var_equal": True}, "it") == \
+        "Test t di Student — amount per channel"
+    assert layouts.title("t_two_sample", {"value": "amount", "group": "channel", "var_equal": None}, "de") == \
+        "Welch-t-Test — amount nach channel"
+    assert layouts.title("t_two_sample", {}, "xx") == "Welch's t test"
+
+
+# ── the development sample ───────────────────────────────────────────────────
+def test_a_chain_says_its_development_samples_in_the_main_chain_or_in_a_branch():
+    test = {"type": "stat_t_two_sample", "params": WELCH}
+    first = {"type": "limit", "params": {"n": 100000, "_dev_sample": True}}
+    random = {"type": "sample", "params": {"fraction": 0.1, "seed": 42, "_dev_sample": True}}
+    branch = {"type": "join", "params": {"on": ["k"], "right": {"source": {"bucket": "b", "key": "k"}, "operations": [random]}}}
+    assert layouts.samples_of([test]) == []
+    # a limit or a sample of the person's own is a step, not a development sample
+    assert layouts.samples_of([{"type": "limit", "params": {"n": 5}}, {"type": "sample", "params": {"fraction": 0.5}}, test]) == []
+    assert layouts.samples_of([first, test]) == [{"first": 100000}]
+    assert layouts.samples_of([random, test]) == [{"fraction": 0.1}]
+    assert layouts.samples_of([branch, test]) == [{"fraction": 0.1}]
+    assert layouts.samples_of([first, {**branch, "params": {**branch["params"], "right": {"operations": [first]}}}, test]) == [{"first": 100000}]
+    assert layouts.samples_of([first, branch, test]) == [{"first": 100000}, {"fraction": 0.1}]
+    assert layouts.sample_line(None, "en") is None and layouts.sample_line([], "it") is None
+    assert layouts.sample_line([{"first": 100000}], "en") == "Rows: a development sample of the source — the first 100,000 rows"
+    assert layouts.sample_line([{"first": 100000}], "it") == "Righe: un campione di sviluppo della sorgente — le prime 100.000 righe"
+    assert layouts.sample_line([{"fraction": 0.1}], "en") == "Rows: a development sample of the source — a random 10% of the rows"
+    assert layouts.sample_line([{"first": 500}, {"fraction": 0.025}], "en") == \
+        "Rows: a development sample of the source — the first 500 rows; a random 2.5% of the rows"
+    assert layouts.sample_line([{}], "en") == "Rows: a development sample of the source"
+
+
+def test_the_page_says_a_development_sample_only_when_the_chain_has_one(tmp_path, chart_service, monkeypatch):  # noqa: F811
+    plain, page = draw(tmp_path / "plain", chart_service, monkeypatch)
+    assert plain.warnings == [] and "development sample" not in page and "Channels compared" not in page
+    sampled, page = draw(tmp_path / "sampled", chart_service, monkeypatch, sample=[{"first": 100000}], step="Channels compared")
+    line = "Rows: a development sample of the source — the first 100,000 rows"
+    model = json.loads(page)
+    assert sampled.warnings == [] and line in strings(model["header"])  # in the header band, and again in the footer
+    assert f"Computed by Tabularia · {line}" in strings(model["footer"])
+    assert "v by g · Channels compared" in strings(model["header"])
+    # the header is taller by the line, and the body starts under it
+    assert model["header"]["h"] > json.loads(draw(tmp_path / "again", chart_service, monkeypatch)[1])["header"]["h"]
+
+
+# ── the pages ────────────────────────────────────────────────────────────────
+def test_the_reference_report_holds_the_welch_numbers(tmp_path, chart_service, monkeypatch):  # noqa: F811
+    """Every piece needed to redo the computation by hand is on the page, with R's numbers."""
+    del chart_service[1][:]
+    out, page = draw(tmp_path, chart_service, monkeypatch)
+    assert out.pages == 2 and out.warnings == []
+    said = set(strings(json.loads(page)))
+    for text in (
+        "Welch's t test", "v by g", "-4.6090", "12.7279", "0.0005", "-1.4411", "95% CI: -2.1180 to -0.7641",
+        "At α = 0.05 the null hypothesis is rejected (p = 0.0005).",  # (the sentence's «p {p}»: «= 0.0005», or «< 0.0001»)
+        "mean(v | a) − mean(v | b) = 0", "mean(v | a) − mean(v | b) ≠ 0", "two-sided",
+        "t = (m1 − m2 − mu) / √(s1²/n1 + s2²/n2), df = (s1²/n1 + s2²/n2)² / ((s1²/n1)²/(n1 − 1) + (s2²/n2)²/(n2 − 1))",
+        "Distribution of the statistic under H0: t(12.7279).",
+        "Critical region at α = 0.05: statistic ≤ -2.1651 or statistic ≥ 2.1651.",
+        # the numbers of the test, to ten decimals
+        "0.05", "0.95", "15", "3", "0.3648489011", "-1.4410714286", "0.3126632227", "-4.6090212217", "12.7278927075",
+        "-2.1650730211", "2.1650730211", "0.0005168703", "-2.1180101367", "-0.7641327205", "-2.3857722701", "-2.2454327248",
+        # the groups: n, mean, variance, standard deviation, standard error, the interval of the mean; the quartiles
+        "8", "5.6875", "0.36410714", "0.60341291", "0.21333868", "5.18303418", "6.19196582",
+        "7", "7.12857143", "0.36571429", "0.60474316", "0.22857143", "6.56927729", "7.68786557",
+        "4.9", "5.25", "5.65", "6.05", "6.7", "6.4", "7.1", "7.5",
+        "Rows used: 15. Rows left out: 3 (no group, or no value in one of the two groups).",
+        "Computed in the engine: polars.", "Computed by Tabularia",
+    ):
+        assert text in said, text
+    assert any(s.startswith("1 = «a», 2 = «b». m: mean, s²: variance, n: rows used") for s in said)
+    # the charts, as the chart service was asked for them
+    charts = {spec["option"]["title"]["text"]: spec["option"] for spec in chart_service[1] if "title" in spec["option"]}
+    assert sorted(charts) == ["Box plot: v by g", "Distribution of the statistic under H0", "Histogram: v by g",
+                              "Means with their confidence intervals"]
+    box = charts["Box plot: v by g"]
+    assert box["xAxis"]["data"] == ["a", "b"]
+    assert [b["value"] for b in box["series"][0]["data"]] == [[4.9, 5.25, 5.65, 6.05, 6.7], [6.4, 6.7, 7.1, 7.5, 8.0]]
+    means = charts["Means with their confidence intervals"]
+    assert [round(x, 6) for x in means["series"][0]["data"][0]["value"]] == [5.183034, 5.6875, 5.6875, 5.6875, 6.191966]
+    hist = charts["Histogram: v by g"]
+    assert hist["xAxis"]["data"] == ["[4.9, 5.52)", "[5.52, 6.14)", "[6.14, 6.76)", "[6.76, 7.38)", "[7.38, 8]"]
+    assert {s["name"]: [p and p["value"] for p in s["data"]] for s in hist["series"]} == {"a": [4, 2, 2, 0, 0], "b": [0, 0, 2, 3, 2]}
+    curve = charts["Distribution of the statistic under H0"]
+    line, low, high = (s for s in curve["series"] if s["type"] == "line")
+    assert (line["name"], low["name"], high["name"]) == ("density", "reject_low", "reject_high")  # the line first: the rows' order
+    assert len(line["data"]) == 201 and "areaStyle" not in line and "areaStyle" in low and "areaStyle" in high
+    assert max(x for x, _ in low["data"]) <= -2.1650730211 and min(x for x, _ in high["data"]) >= 2.1650730211
+    assert abs(line["markLine"]["data"][0]["xAxis"] - -4.609021221688905) < 1e-12
+    assert curve["legend"]["show"] is False  # its series have the rows' raw names: the caption says what they are
+
+
+def test_a_one_sided_report_leaves_its_open_side_open(tmp_path, chart_service, monkeypatch):  # noqa: F811
+    del chart_service[1][:]
+    out, page = draw(tmp_path, chart_service, monkeypatch, alternative="less")
+    said = set(strings(json.loads(page)))
+    assert out.warnings == []
+    for text in ("0.0003", "95% CI: −∞ to -0.8865", "mean(v | a) − mean(v | b) < 0", "one-sided, less",
+                 "Critical region at α = 0.05: statistic ≤ -1.7738.", "0.0002584351", "-1.7738331494", "-0.8864590396"):
+        assert text in said, text
+    assert "critical_high" not in said and "ci_low" not in said  # no row for a number that is not there
+    curve = next(spec["option"] for spec in chart_service[1] if spec["option"].get("title", {}).get("text") == "Distribution of the statistic under H0")
+    assert [s["name"] for s in curve["series"] if s["type"] == "line"] == ["density", "reject_low"]
+    out, page = draw(tmp_path / "greater", chart_service, monkeypatch, groups=["a", "c"], alternative="greater", alpha=0.01)
+    said = set(strings(json.loads(page)))
+    assert "At α = 0.01 the null hypothesis is not rejected (p = 0.9660)." in said and "99% CI: -1.3536 to +∞" in said
+    assert any(s.startswith("1 = «a», 2 = «c».") for s in said)
+
+
+def test_a_very_small_p_value_is_never_printed_as_zero(tmp_path, chart_service, monkeypatch):  # noqa: F811
+    """On a very large table a p-value is tiny more often than not: the card says «< 0.0001»,
+    the sentence too, and the table of the numbers writes it by its exponent."""
+    [p_value] = [r["value"] for r in rows_of(mu=40.0) if r["key"] == "test|||p_value"]
+    assert 0 < p_value < 1e-15
+    _, page = draw(tmp_path / "en", chart_service, monkeypatch, mu=40.0)
+    said = set(strings(json.loads(page)))
+    assert {"< 0.0001", "At α = 0.05 the null hypothesis is rejected (p < 0.0001).", layouts.tiny(p_value, "en")} <= said
+    assert re.fullmatch(r"\d\.\d{1,9}e-\d+", layouts.tiny(p_value, "en")) and "0.0000" not in said
+    _, page = draw(tmp_path / "it", chart_service, monkeypatch, locale="it", mu=40.0)
+    said = set(strings(json.loads(page)))
+    assert {"< 0,0001", "Con α = 0,05 l'ipotesi nulla è rifiutata (p < 0,0001).", layouts.tiny(p_value, "it")} <= said
+    assert layouts.tiny(5.168702726e-12, "en") == "5.168702726e-12" and layouts.tiny(-2.5e-7, "it") == "-2,5e-7"
+    assert layouts.tiny(1e-300, "de") == "1e-300" and layouts.tiny(3.0e-9, "fr") == "3e-9"
+    for plain in (0, 0.0, 1e-6, 0.000516870272598936, -4.6, 15, None, "text", True):
+        assert layouts.tiny(plain, "en") is None
+    labelled = layouts.with_labels("t_two_sample", rows_of(), "it")
+    assert all(set(r) == {*OUTPUT_NAMES, "label", "tiny"} for r in labelled) and {r["tiny"] for r in labelled} == {None}
+    assert [c["name"] for c in layouts.columns()] == [*OUTPUT_NAMES, "label", "tiny"]
+
+
+def test_large_numbers_and_long_names_fit_the_page(tmp_path, chart_service, monkeypatch):  # noqa: F811
+    """A measure near a billion, a difference of millions, columns and a step with long names:
+    nothing is wider than its place (the render would say so), nothing is read as an expression."""
+    value, group = "net amount of the invoices issued in the fiscal year, in euro " * 3, "sales channel of the order " * 4
+    frame = pl.DataFrame({group: ["a"] * 8 + ["b"] * 7, value: [1e9 + v for v in A] + [1e9 + 2.5e6 + v for v in B]})
+    params = {"value": value, "group": group}
+    out = run_hypothesis_test(PolarsStatSource(frame.lazy()), "t_two_sample", {**params, "detail": "report"}, "polars")
+    rows = [dict(zip(OUTPUT_NAMES, r)) for r in out]
+    d = layouts.definition("t_two_sample", params, "en", [{"first": 10**9}, {"fraction": 0.123456}], "=SUM([value]) " + "a very long name " * 12)
+    handed: list[str] = []
+    run = pdf.run
+    monkeypatch.setattr(pdf, "run", lambda job, *a, **k: (handed.append(job.get("inputs", {}).get("model", "")), run(job, *a, **k))[1])
+    del chart_service[1][:]
+    done = render.render(d, {"result": {"rows": layouts.with_labels("t_two_sample", rows, "en"), "columns": layouts.columns()}}, {}, "pdf",
+                         tmp_path, title="t", now=NOW, limits=render.Limits(chart_url=chart_service[0]))
+    assert done.warnings == []
+    model = json.loads(handed[0])
+    said = set(strings(model))
+    assert {"-2,500,001", "95% CI: -2,500,002 to -2,500,001", "1000000005.7", "1002500007.1", "1000000004.9", "1002500008"} <= said
+    assert any(re.fullmatch(r"0\.3641\d{4}", x) for x in said)  # a variance keeps its eight decimals
+    [subtitle] = [s for s in strings(model["header"]) if s.startswith("net amount")]
+    assert subtitle.endswith("…") and glyphs.width_mm(subtitle, 9) <= 136
+    titles = [spec["option"]["title"]["text"] for spec in chart_service[1] if "title" in spec["option"]]
+    assert len(set(titles)) == 4 and all(glyphs.width_mm(t, 7.5, 700) <= 91 for t in titles)
+    # a step whose name starts as an expression does is a name
+    named = layouts.definition("t_two_sample", {"value": "=v", "group": "g"}, "en", None, None)
+    assert [it["value"] for it in named["sections"]["page_header"]["items"] if it["id"] == "h_step"] == ['="=v by g"']
+    assert [str(p) for p in rd.check(named, {"result": {c["name"]: c["type"] for c in layouts.columns()}})] == []
+
+
+@pytest.mark.parametrize("locale", layouts.LOCALES)
+def test_the_report_renders_in_the_five_languages(tmp_path, chart_service, monkeypatch, locale):  # noqa: F811
+    for i, params in enumerate(({}, {"var_equal": True, "alternative": "greater"})):
+        out, page = draw(tmp_path / str(i), chart_service, monkeypatch, locale=locale, sample=[{"fraction": 0.1}], **params)
+        assert out.pages == 2 and out.warnings == []  # no character the font lacks, no value wider than its card
+        said = set(strings(json.loads(page)))
+        words = layouts.texts(locale)
+        assert layouts.test_name("t_two_sample", params, locale) in said
+        assert {words["sections"][s] for s in words["sections"]} <= said
+        assert words["stats"]["test"]["df"] in said and words["tests"]["t_two_sample"]["stats"]["test"]["estimate"] in said
+    svg = draw(tmp_path / "svg", chart_service, monkeypatch, fmt="svg", locale=locale)[0]
+    assert len(json.loads(svg.path.read_text())["pages"]) == 2
+
+
+def test_the_reference_report_matches_its_golden_pdf(tmp_path, chart_service, monkeypatch):  # noqa: F811
+    a, _ = draw(tmp_path / "a", chart_service, monkeypatch)
+    b, _ = draw(tmp_path / "b", chart_service, monkeypatch)
+    first = a.path.read_bytes()
+    assert first.startswith(b"%PDF-") and first == b.path.read_bytes()
+    assert hashlib.sha256(first).hexdigest() == GOLDEN_PDF_SHA256
+
+
+def test_excel_holds_the_tables_one_sheet_each(tmp_path, chart_service, monkeypatch):  # noqa: F811
+    params = {"var_equal": True, "groups": ["c", "b"]}
+    [pooled] = [r["value"] for r in rows_of(**params) if r["key"] == "test|||pooled_var"]
+    out, _ = draw(tmp_path, chart_service, monkeypatch, fmt="xlsx", **params)
+    with zipfile.ZipFile(out.path) as z:
+        book = z.read("xl/workbook.xml").decode()
+        cells = "".join(z.read(n).decode() for n in z.namelist() if n.startswith("xl/worksheets/"))
+    # the variances differ by less than four times: no note, so no sheet of notes
+    assert re.findall(r'<sheet name="([^"]+)"', book) == ["Numbers of the test", "Groups", "Five-number summary", "Parameters"]
+    # the numbers as numbers, whole (an engine's last digit may differ between two runs)
+    [written] = re.findall(r"<t>Pooled variance \(sp²\)</t></is></c><c [^>]*><is><t>pooled_var</t></is></c><c [^>]*><v>([^<]+)</v>", cells)
+    assert math.isclose(float(written), pooled, rel_tol=1e-12)
+
+
+# ── the route and the task ───────────────────────────────────────────────────
+@pytest.fixture
+def stack(monkeypatch, chart_service, storage):  # noqa: F811
+    """The engine's side of a request: the export routes, the task run in place, a Polars
+    engine on the fake storage, Valkey as a dict. `reads`: the chains the engine was asked."""
+    files, results, reads, copies = Storage(), {}, [], []
+    monkeypatch.setattr(jobs.materialize_step_task, "apply_async", lambda args, **kwargs: copies.append((args, kwargs)))
+    monkeypatch.setattr(jobs, "get_storage_service", lambda: files)
+    monkeypatch.setattr(exports, "get_storage_service", lambda: files)
+    monkeypatch.setattr(exports, "_client", FakeRedis())
+    monkeypatch.setattr(rowcount, "_client", FakeRedis())
+    monkeypatch.setattr(render.Limits, "from_settings", classmethod(lambda cls: cls(chart_url=chart_service[0], max_rows=10)))
+    engine = _engine("polars", storage)
+    preview = engine.preview
+
+    def spy(source, operations, **kwargs):
+        reads.append((operations, kwargs))
+        return preview(source=source, operations=operations, **kwargs)
+
+    monkeypatch.setattr(engine, "preview", spy)
+    import app.engine as engines
+
+    monkeypatch.setattr(engines, "get_engine", lambda name=None: engine)
+
+    def send_task(name, kwargs, task_id):
+        assert name == "app.tasks.report_jobs.render_stat_report_task"
+        results[task_id] = Result(report_jobs.render_stat_report_task.apply(kwargs=kwargs, task_id=task_id).get())
+        return results[task_id]
+
+    def lookup(task_id, app=None):
+        return results.get(task_id) or Result(None, state="PENDING")
+
+    monkeypatch.setattr(report_routes.celery_app, "send_task", send_task)
+    monkeypatch.setattr(tasks, "AsyncResult", lookup)
+    monkeypatch.setattr(exports, "AsyncResult", lookup)
+    upload_df(storage, abc(), "datasets/stats_abc.parquet")
+    return files, reads, copies
+
+
+def ask(operations=None, **body):
+    chain = [{"type": "stat_t_two_sample", "params": WELCH}] if operations is None else operations
+    return report_routes.stat_report(report_routes.StatReport(**{
+        "bucket": BUCKET, "input_key": "datasets/stats_abc.parquet", "operations": chain, "engine": "polars", "owner": "u1", **body}))
+
+
+def test_a_report_of_a_step_is_followed_and_taken_as_an_export(stack, monkeypatch):
+    files, reads, _ = stack
+    handed: list[str] = []
+    run = pdf.run
+    monkeypatch.setattr(pdf, "run", lambda job, *a, **k: (handed.append(job.get("inputs", {}).get("model", "")), run(job, *a, **k))[1])
+    started = ask(format="svg", locale="en")
+    assert started.filename == "Welch's t test — v by g.json" and started.status == "submitted"
+    status = tasks.export_status(started.task_id, owner="u1")
+    assert status == {"status": "ready", "filename": started.filename, "size": status["size"], "pages": 2}
+    with pytest.raises(HTTPException) as e:
+        tasks.export_file(started.task_id, owner="u2")
+    assert e.value.status_code == 404
+    headers, body = _play(tasks.export_file(started.task_id, owner="u1"))
+    screen = json.loads(body)
+    assert headers["content-type"] == "application/json" and len(screen["pages"]) == 2 and screen["pages"][0].startswith("<svg")
+    assert files.keys("exports/") == []
+    # the pages hold the Welch numbers: what the template was handed
+    said = set(strings(json.loads(handed[0])))
+    assert {"-4.6090", "12.7279", "0.0005", "-1.4411", "-4.6090212217", "0.0005168703", "Computed in the engine: polars."} <= said
+    # the chain was read once, as it came but for the rows of the report, with room for every row
+    [(operations, kwargs)] = reads
+    assert operations == [{"type": "stat_t_two_sample", "params": {**WELCH, "detail": "report"}}]
+    assert kwargs == {"limit": layouts.MAX_REPORT_ROWS, "use_cache": True}
+
+
+def test_the_pdf_and_the_excel_asked_after_the_pages_read_no_data(stack):
+    files, reads, _ = stack
+    first = ask(format="svg", locale="it")
+    assert first.filename == "Test t di Welch — v per g.json" and len(reads) == 1
+    pdf_ = ask(format="pdf", locale="it", filename="Canali a confronto", step="Canali")
+    assert pdf_.filename == "Canali a confronto.pdf"
+    headers, body = _play(tasks.export_file(pdf_.task_id, owner="u1"))
+    assert headers["content-type"] == "application/pdf" and body.startswith(b"%PDF-")
+    xlsx = ask(format="xlsx", locale="de")
+    assert tasks.export_status(xlsx.task_id, owner="u1")["status"] == "ready" and xlsx.filename.endswith(".xlsx")
+    assert len(reads) == 1  # another format, another language: the rows are remembered
+    [key] = [k for k in rowcount._client.strings if k.startswith("dataprep:statreport:")]
+    remembered = json.loads(rowcount._client.strings[key])["rows"]
+    assert len(remembered) == 381 and [r[8] for r in remembered] == list(range(381))
+    # other parameters are another test: read again
+    ask(format="svg", operations=[{"type": "stat_t_two_sample", "params": {**WELCH, "alternative": "less"}}])
+    assert len(reads) == 2
+    # Valkey that holds something else there, or nothing, is rows not remembered: never an error
+    rowcount._client.strings[key] = "not json"
+    assert tasks.export_status(ask(format="svg").task_id, owner="u1")["status"] == "ready" and len(reads) == 3
+
+
+def test_rows_too_heavy_are_not_remembered(stack, monkeypatch):
+    _, reads, copies = stack
+    monkeypatch.setattr(report_jobs, "STAT_ROWS_MAX_BYTES", 1000)
+    ask(format="svg")
+    ask(format="svg")
+    assert len(reads) == 2 and not [k for k in getattr(rowcount._client, "strings", {}) if k.startswith("dataprep:statreport:")]
+
+
+def test_the_report_of_a_sampled_chain_says_so_and_keeps_the_chain(stack, monkeypatch):
+    _, reads, copies = stack
+    handed: list[str] = []
+    run = pdf.run
+    monkeypatch.setattr(pdf, "run", lambda job, *a, **k: (handed.append(job.get("inputs", {}).get("model", "")), run(job, *a, **k))[1])
+    sample = {"type": "limit", "params": {"n": 20, "_dev_sample": True}}
+    started = ask(format="svg", operations=[sample, {"type": "stat_t_two_sample", "params": WELCH}])
+    assert tasks.export_status(started.task_id, owner="u1")["status"] == "ready"
+    assert reads[-1][0][0] == sample  # nothing added to the chain, nothing taken out of it
+    # the step cache is on for what is before the test: its copy is queued for later, as after a preview
+    assert copies == [(["polars", BUCKET, "datasets/stats_abc.parquet", [sample]], {"queue": "preview", "priority": 9})]
+    model = json.loads(handed[-1])
+    assert "Rows: a development sample of the source — the first 20 rows" in strings(model["header"])
+    # the test ran on the sample's rows: the first 20 of the table are those of a, b and five of c
+    assert "15" in strings(model) and "Rows used: 15. Rows left out: 0 (no group, or no value in one of the two groups)." in strings(model)
+    ask(format="svg")
+    assert "development sample" not in handed[-1]
+
+
+def test_what_is_not_a_test_is_refused_before_the_queue_and_a_test_s_refusal_is_the_task_s(stack):
+    _, reads, copies = stack
+    for chain, said in (
+        ([{"type": "filter", "params": {"column": "g", "operator": "eq", "value": "a"}}], "is not a statistical test (it is «filter»)"),
+        ([{"type": "stat_t_two_sample", "params": WELCH}, {"type": "limit", "params": {"n": 5}}], "is not a statistical test (it is «limit»)"),
+        ([{"type": "stat_no_such_test", "params": {}}], "is not a statistical test"),
+    ):
+        with pytest.raises(HTTPException) as e:
+            ask(operations=chain)
+        assert e.value.status_code == 422 and said in e.value.detail
+    with pytest.raises(Exception):  # no chain at all, a format that is not a report's
+        ask(operations=[])
+    with pytest.raises(Exception):
+        ask(format="html")
+    assert reads == []
+    # three groups and none chosen: the test's own sentence, as a failed export
+    refused = ask(operations=[{"type": "stat_t_two_sample", "params": {"value": "v", "group": "g"}}])
+    status = tasks.export_status(refused.task_id, owner="u1")
+    assert status["status"] == "failed" and status["code"] == 400
+    assert status["detail"] == ("stat_t_two_sample: the test compares two groups and the column «g» has 3 (a, b, c): "
+                                "choose the two to compare in 'groups'")
+
+
+def test_a_test_that_runs_out_of_time_says_what_to_do(stack, monkeypatch):
+    from celery.exceptions import SoftTimeLimitExceeded
+
+    def slow(*args, **kwargs):
+        raise SoftTimeLimitExceeded()
+
+    monkeypatch.setattr(report_jobs, "stat_rows", slow)
+    status = tasks.export_status(ask().task_id, owner="u1")
+    assert status == {"status": "failed", "code": 504, "detail": (
+        "The test took longer than the workers allow: give the source a development sample, or filter before the test")}
+
+
+def test_every_statistics_operation_has_its_report_route():
+    """A test of the catalogue without a layout would be refused with a sentence, not an error."""
+    assert all(operation_name(t).startswith("stat_") for t in layouts.LAYOUTS)
+    assert "app.tasks.report_jobs.render_stat_report_task" in __import__("app.core.export_slots", fromlist=["TASKS"]).TASKS

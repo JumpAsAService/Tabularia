@@ -96,9 +96,12 @@ def _edge(x: float) -> str:
     return format(x + 0.0, ".6g")
 
 
-def _quartiles_by_label(source, value: str, group: str | None) -> dict[str, Quartiles]:
-    """A12 for every group, by label (the rows with no group left out)."""
-    return {label_of(q.level): q for q in source.quartiles(value, group) if q.level is not None}
+def _quartiles_by_label(source, value: str, group: str | None, levels: list | None = None) -> dict[str, Quartiles]:
+    """A12 by label (the rows with no group left out): for every group, or with `levels`
+    (typed values of the grouping column) for those groups only — a test of two groups asks
+    for its two, so that the engine never keeps the values of the others to find quantiles
+    nobody reads."""
+    return {label_of(q.level): q for q in source.quartiles(value, group, levels) if q.level is not None}
 
 
 def _write_histogram(out: Rows, source, value: str, group: str, labels: list[str], groups: list[Moments]) -> None:
@@ -148,9 +151,11 @@ def _write_curve(out: Rows, pdf: Callable[[float], float], statistic: float,
 
 
 # ── two groups of a numeric column ──────────────────────────────────────────
-def _two_groups(source, test: str, p: dict[str, Any]) -> tuple[list[str], list[Moments], int]:
+def _two_groups(source, test: str, p: dict[str, Any]) -> tuple[list[str], list[Moments], int, list]:
     """The two groups a two-sample test compares, the first minus the second: their labels,
-    their moments, and the rows left out (no group, or no value in one of the two)."""
+    their moments, the rows left out (no group, or no value in one of the two), and the
+    values of the grouping column that are those two groups, typed as the engine gave them
+    (what an aggregate of the report keeps to: `quartiles`)."""
     value, group = p["value"], p["group"]
     levels = [lv for lv in source.levels(group, MAX_STAT_GROUPS + 2) if lv.value is not None]
     if len(levels) > MAX_STAT_GROUPS:
@@ -188,13 +193,14 @@ def _two_groups(source, test: str, p: dict[str, Any]) -> tuple[list[str], list[M
         if not all(v is not None and math.isfinite(v) for v in (m.min, m.max, m.mean, m.var)):
             raise refusal(test, f"the column «{value}» holds infinite values in the group «{g}»: the test cannot be computed")
     missing = without_group + sum(m.rows - m.n for m in pair)
-    return list(wanted), pair, missing
+    typed = [lv.value for lv in levels if label_of(lv.value) in wanted]
+    return list(wanted), pair, missing, typed
 
 
 def _t_two_sample(source, p: dict[str, Any], out: Rows, engine_name: str) -> None:
     """Student's and Welch's t for two independent samples. H0: mean₁ − mean₂ = mu."""
     test = "t_two_sample"
-    (g1, g2), (a, b), missing = _two_groups(source, test, p)
+    (g1, g2), (a, b), missing, typed = _two_groups(source, test, p)
     value, mu, alpha, alternative = p["value"], p["mu"], p["alpha"], p["alternative"]
     if a.var == 0.0 and b.var == 0.0:
         raise refusal(test, f"all the values of «{value}» are equal inside each of the two groups (both variances are 0): there is no t statistic")
@@ -232,7 +238,7 @@ def _t_two_sample(source, p: dict[str, Any], out: Rows, engine_name: str) -> Non
     ):
         out.number("test", stat, number)
     report = p["detail"] == "report"
-    quartiles = _quartiles_by_label(source, value, p["group"]) if report else {}
+    quartiles = _quartiles_by_label(source, value, p["group"], typed) if report else {}
     _write_group(out, g1, a, alpha, quartiles.get(g1))
     _write_group(out, g2, b, alpha, quartiles.get(g2))
     if report:

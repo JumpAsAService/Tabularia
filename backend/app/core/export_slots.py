@@ -37,6 +37,7 @@ TASKS = frozenset({
     "app.tasks.jobs.db_export_task",
     "app.tasks.report_jobs.render_report_task",
     "app.tasks.report_jobs.render_dashboard_task",
+    "app.tasks.report_jobs.render_stat_report_task",
 })
 # waiting in the queue and running: past this a place is given back by itself
 _QUEUE_WAIT_SECONDS = 600

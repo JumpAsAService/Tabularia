@@ -5,6 +5,9 @@
   exports (GET /tasks/exports/{id}, …/file), by its owner.
 - POST /reports/dashboard-render: the same for a dashboard, as a PDF or an image
   (app/reports/dashboard_layout.py), with what this reader may read and the clicks of the moment.
+- POST /reports/stat: the report of the hypothesis test a flow's chain ends with (docs/specs/
+  statistics.md, «The report»): no definition comes with it, the layout is the engine's own for
+  that test; followed and taken as a report's render.
 - POST /reports/check: the mistakes of a definition, each with its item, its property and
   the position inside the expression — what the editor shows when a report is saved.
 - POST /reports/choices: the choices of a parameter taken from a dataset, for the form; on
@@ -26,7 +29,7 @@ from pydantic import BaseModel, Field
 from starlette.concurrency import run_in_threadpool
 
 from app.api import exports
-from app.api.models import TaskResponse
+from app.api.models import TaskResponse, TransformOperation
 from app.reports import definition as rd
 from app.reports import errors, formats, tile_cache
 from app.reports import tiles as rtiles
@@ -58,6 +61,21 @@ class ReportRender(BaseModel):
 
 class ReportStarted(TaskResponse):
     filename: str  # with the extension of what the file holds (.mhtml, .json for svg)
+
+
+class StatReport(BaseModel):
+    """The report of a statistics step: the chain a preview of the step would send, as it is.
+    Rights were checked before this, with the person's: the chain is theirs to read."""
+    bucket: str = Field(..., min_length=1)
+    input_key: str = Field(..., min_length=1)
+    operations: list[TransformOperation] = Field(..., min_length=1)  # ending with the stat_* step
+    engine: Optional[str] = Field(default=None, max_length=64)
+    format: Literal["svg", "pdf", "xlsx"] = "svg"
+    locale: Optional[Literal[formats.LOCALES]] = None  # type: ignore[valid-type]
+    filename: Optional[str] = Field(default=None, max_length=255)  # none: the test and its columns
+    step: Optional[str] = Field(default=None, max_length=200)  # the step's name, for the page's header
+    owner: str = Field(..., min_length=1, description="Who asked for the report, as the gateway names them")
+    wait_seconds: float = Field(default=0, ge=0, le=3600)  # as a render's
 
 
 class DashboardCache(BaseModel):
@@ -271,4 +289,37 @@ def render(request: ReportRender):
                                      ("comments", request.comments), ("reading", request.reading)) if v is not None})
     celery_app.send_task("app.tasks.report_jobs.render_report_task", kwargs=kwargs, task_id=task_id)
     return ReportStarted(task_id=task_id, status="submitted", message=f"Rendering a report as {request.format}",
+                         filename=name)
+
+
+STAT_OUT_OF_MEMORY = ("The test needed more than the worker's memory and was stopped: give the source a development "
+                      "sample, or filter before the test")
+
+
+@router.post("/stat", response_model=ReportStarted)
+def stat_report(request: StatReport):
+    """Queues the report of the test the chain ends with, on the export queue with the cap
+    every export has. A chain that does not end with a test that has a report is refused
+    here; what the test itself refuses (three groups for two samples) is the task's answer."""
+    from app.engine.stats import layouts
+    from app.engine.stats.catalog import stat_operations
+
+    last = request.operations[-1]
+    test = stat_operations().get(last.type)
+    if test is None:
+        raise HTTPException(status_code=422, detail=f"The last step of the chain is not a statistical test (it is «{last.type}»)")
+    if test not in layouts.LAYOUTS:
+        raise HTTPException(status_code=422, detail=f"The test «{last.type}» has no report yet")
+    task_id = str(uuid.uuid4())
+    exports.start(task_id, request.owner, wait=request.wait_seconds)
+    exports.remember_if_killed(task_id, STAT_OUT_OF_MEMORY)
+    params = {k: v for k, v in last.params.items() if k != "detail"}
+    name = file_name(request.filename or layouts.title(test, params, request.locale), request.format)
+    kwargs: dict[str, Any] = {"bucket": request.bucket, "input_key": request.input_key,
+                              "operations": [op.model_dump() for op in request.operations],
+                              "format": request.format, "filename": name}
+    kwargs.update({k: v for k, v in (("engine", request.engine), ("locale", request.locale), ("step", request.step))
+                   if v is not None})
+    celery_app.send_task("app.tasks.report_jobs.render_stat_report_task", kwargs=kwargs, task_id=task_id)
+    return ReportStarted(task_id=task_id, status="submitted", message=f"Rendering the report of {last.type} as {request.format}",
                          filename=name)

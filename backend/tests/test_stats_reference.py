@@ -229,6 +229,65 @@ def test_report_quartiles_and_histogram(name, storage, abc):
 
 
 @pytest.mark.parametrize("name", ENGINES)
+def test_report_quartiles_are_asked_for_the_two_groups_compared_only(name, storage, abc, monkeypatch):
+    """An exact quantile keeps the column's values in the engine's memory: with other groups in
+    the column (here c, and a row with no group), a test of a and b asks for the quartiles of
+    a and b, and the engine answers for no other."""
+    from app.engine.stats.aggregates import SqlStatSource
+    from app.engine.stats.polars_source import PolarsStatSource
+
+    answered: list[tuple] = []
+    for cls in (SqlStatSource, PolarsStatSource):
+        def spy(self, value, group=None, levels=None, _asked=cls.quartiles):
+            out = _asked(self, value, group, levels)
+            answered.append((sorted(levels), sorted(str(q.level) for q in out)))
+            return out
+
+        monkeypatch.setattr(cls, "quartiles", spy)
+    _, _, by_key = result(name, storage, abc, report_op())
+    assert answered == [(["a", "b"], ["a", "b"])]
+    for g, (q1, median, q3) in QUARTILES.items():
+        check_numbers(by_key, {"q1": q1, "median": median, "q3": q3}, f"group|{g}||")
+    # the two groups in the other order, and the third one: still its two, and their numbers
+    del answered[:]
+    _, _, by_key = result(name, storage, abc, stat_op("t_two_sample", value="v", group="g", groups=["c", "a"], detail="report"))
+    assert answered == [(["a", "c"], ["a", "c"])]
+    check_numbers(by_key, {"q1": 5.95, "median": 6.2, "q3": 6.525}, "group|c||")
+    check_numbers(by_key, {"q1": 5.25, "median": 5.65, "q3": 6.05}, "group|a||")
+
+
+def test_groups_are_told_apart_in_a_query_only_when_every_engine_reads_their_literal():
+    """Texts, booleans, whole numbers, finite floats and dates are compared with the column
+    in the query; for anything else the aggregate answers for every group, as it did."""
+    import datetime as dt
+    from decimal import Decimal
+
+    from app.engine.stats.aggregates import SqlStatSource, comparable
+    from app.engine.stats.polars_source import PolarsStatSource
+
+    for levels in (["a", "b"], [True, False], [1, 2], [1.5, 0.0], [dt.date(2024, 3, 1), dt.date(2024, 11, 30)]):
+        assert comparable(levels), levels
+    for levels in (None, [], [math.nan, 1.0], [math.inf, 1.0], [dt.datetime(2024, 3, 1, 8), dt.datetime(2024, 3, 1, 20)],
+                   [Decimal("1.5"), Decimal("2")], ["a", None], [b"a", b"b"]):
+        assert not comparable(levels), levels
+    lf = pl.DataFrame({"g": ["a", "a", "b", "b", "c", "c", None], "v": [1.0, 3.0, 5.0, 7.0, 9.0, 11.0, 13.0]}).lazy()
+    by_level = lambda rows: {q.level: (q.q1, q.median, q.q3) for q in rows}  # noqa: E731
+    source = PolarsStatSource(lf)
+    assert by_level(source.quartiles("v", "g", ["a", "c"])) == {"a": (1.5, 2.0, 2.5), "c": (9.5, 10.0, 10.5)}
+    assert set(by_level(source.quartiles("v", "g"))) == {"a", "b", "c", None}
+    assert set(by_level(source.quartiles("v", "g", [dt.datetime(2024, 3, 1, 8)]))) == {"a", "b", "c", None}
+    # the SQL engines: an equality for each group (a set would hold a float by its bits on ClickHouse)
+    asked: list[str] = []
+    for dialect, lit in (("duckdb", lambda v: f"'{v}'"), ("clickhouse", lambda v: f"'{v}'")):
+        sql = SqlStatSource(dialect, lambda q: asked.append(q) or [], lambda c: f'"{c}"', lit, "SELECT 1", [("g", "VARCHAR"), ("v", "DOUBLE")])
+        sql.quartiles("v", "g", ["a", "c"])
+        assert ' AS st_t WHERE "g" = \'a\' OR "g" = \'c\' GROUP BY "g"' in asked[-1]
+        sql.quartiles("v", "g")
+        sql.quartiles("v", "g", [dt.datetime(2024, 3, 1, 8)])
+        assert all(" WHERE " not in q for q in asked[-2:])
+
+
+@pytest.mark.parametrize("name", ENGINES)
 def test_report_curve_and_critical_region(name, storage, abc):
     _, rows, by_key = result(name, storage, abc, report_op())
     t, low, high = (by_key[f"test|||{s}"]["value"] for s in ("statistic", "critical_low", "critical_high"))

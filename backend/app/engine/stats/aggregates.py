@@ -29,6 +29,7 @@ Rules of every query:
 """
 from __future__ import annotations
 
+import datetime as _dt
 import math
 import re
 from typing import Any, Callable, NamedTuple
@@ -82,6 +83,24 @@ class HistogramBin(NamedTuple):
 
 # the rows the centre is the mean of: the chain's first ones, which an engine stops at
 CENTRE_ROWS = 100_000
+
+
+def comparable(levels: list | tuple | None) -> bool:
+    """Whether an aggregate may keep to the rows of these groups by comparing the grouping
+    column with them (`g = a OR g = b`): typed values A1 returned whose literal every engine
+    reads as the column's own type — texts, booleans, whole numbers, finite floats, dates.
+    For anything else (a datetime with its zone, a decimal, a NaN) the aggregate reads every
+    group, as it did, and the caller keeps the ones it wants: the same answer, at a higher
+    cost."""
+    if not levels:
+        return False
+    for v in levels:
+        if isinstance(v, float):
+            if not math.isfinite(v):
+                return False
+        elif isinstance(v, _dt.datetime) or not isinstance(v, (str, bool, int, _dt.date)):
+            return False
+    return True
 
 
 # the types that are numbers, as each engine names them (ClickHouse's without their
@@ -206,15 +225,22 @@ class SqlStatSource:
             rows = self._rows(f"SELECT {g} AS {self._fresh('lv')}, {aggregates} FROM {self._source} GROUP BY {g}")
         return [moments_of(centre, *r) for r in rows]
 
-    def quartiles(self, value: str, group: str | None = None) -> list[Quartiles]:
+    def quartiles(self, value: str, group: str | None = None, levels: list | None = None) -> list[Quartiles]:
         """A12: the first quartile, the median and the third quartile of `value`, for each
         value of `group` (the NULL one too), or over every row without one. Exact: the
-        engine keeps the column's values to find them, which is why only a report asks.
+        engine keeps the column's values to find them, which is why only a report asks —
+        and why a test of two groups names them in `levels` (the typed values A1 returned):
+        the values of the other groups are then never kept (`comparable` says when they can
+        be told apart in the query; otherwise every group is answered, as without `levels`).
         Nothing is summed, so nothing is centred."""
         x = self._value(value, finite=True)
         names = [self._fresh(name) for name in ("q1", "median", "q3")]
         g = None if group is None else self._quote(group)
         over = "" if g is None else f"PARTITION BY {g}"
+        only = ""
+        if g is not None and comparable(levels):
+            # an equality, not IN: ClickHouse's sets hold a float by its bits (−0.0 is not in (0.0))
+            only = " WHERE " + " OR ".join(f"{g} = {self._lit(v)}" for v in levels)
         quantiles = ", ".join(
             f"{_QUANTILE[self.dialect].format(e=x, q=q, over=over)} AS {name}"
             for q, name in zip((0.25, 0.5, 0.75), names)
@@ -222,11 +248,11 @@ class SqlStatSource:
         if self.dialect == "bigquery":
             # a window function: every row carries its group's quantiles, one is kept
             lv = "" if g is None else f"{g} AS {self._fresh('lv')}, "
-            rows = self._rows(f"SELECT DISTINCT {lv}{quantiles} FROM {self._source}")
+            rows = self._rows(f"SELECT DISTINCT {lv}{quantiles} FROM {self._source}{only}")
         elif g is None:
             rows = self._rows(f"SELECT {quantiles} FROM {self._source}")
         else:
-            rows = self._rows(f"SELECT {g} AS {self._fresh('lv')}, {quantiles} FROM {self._source} GROUP BY {g}")
+            rows = self._rows(f"SELECT {g} AS {self._fresh('lv')}, {quantiles} FROM {self._source}{only} GROUP BY {g}")
         if g is None:
             rows = [[None, *r] for r in rows]
         return [quartiles_of(*r) for r in rows]

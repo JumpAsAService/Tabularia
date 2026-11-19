@@ -1,0 +1,572 @@
+{
+  "en": {
+    "by": "{value} by {group}",
+    "tests": {
+      "t_two_sample": {
+        "name": "Two-sample t test",
+        "variants": {"welch": "Welch's t test", "student": "Student's t test"},
+        "stats": {
+          "test": {
+            "pooled_var": "Pooled variance (sp²)",
+            "estimate": "Difference of the means (m1 − m2)",
+            "null_value": "Difference under H0 (mu)",
+            "statistic": "t statistic"
+          }
+        },
+        "kpi": {"statistic": "t statistic", "estimate": "Difference of the means"},
+        "symbols": "1 = «{g1}», 2 = «{g2}». m: mean, s²: variance, n: rows used, of each group (table «Groups»); sp²: pooled variance; mu: the difference under H0; df: degrees of freedom.",
+        "left_out": "Rows used: {n}. Rows left out: {missing} (no group, or no value in one of the two groups)."
+      }
+    },
+    "stats": {
+      "test": {
+        "test": "Test",
+        "variant": "Variant",
+        "alternative": "Alternative",
+        "h0": "Null hypothesis (H0)",
+        "h1": "Alternative hypothesis (H1)",
+        "formula": "Formula",
+        "distribution": "Distribution under H0",
+        "decision": "Decision",
+        "engine": "Engine",
+        "alpha": "Significance level (α)",
+        "conf_level": "Confidence level (1 − α)",
+        "n": "Rows used",
+        "n_missing": "Rows left out",
+        "pooled_var": "Pooled variance",
+        "estimate": "Estimate",
+        "null_value": "Value under H0",
+        "std_error": "Standard error of the estimate",
+        "statistic": "Statistic",
+        "df": "Degrees of freedom (df)",
+        "critical_low": "Critical value, lower",
+        "critical_high": "Critical value, upper",
+        "p_value": "p-value",
+        "ci_low": "Confidence interval of the estimate, lower bound",
+        "ci_high": "Confidence interval of the estimate, upper bound",
+        "cohen_d": "Effect size: Cohen's d",
+        "hedges_g": "Effect size: Hedges' g"
+      },
+      "group": {
+        "n": "n",
+        "mean": "Mean",
+        "var": "Variance",
+        "sd": "Std. deviation",
+        "se": "Std. error",
+        "ci_low": "Mean, CI low",
+        "ci_high": "Mean, CI high",
+        "min": "Minimum",
+        "max": "Maximum",
+        "q1": "1st quartile",
+        "median": "Median",
+        "q3": "3rd quartile"
+      },
+      "hist": {"count": "Rows"},
+      "curve": {
+        "density": "Density under H0",
+        "reject_low": "Critical region, lower",
+        "reject_high": "Critical region, upper"
+      }
+    },
+    "note": "Note {n}",
+    "sections": {
+      "result": "Result",
+      "hypotheses": "Hypotheses",
+      "computed": "How it is computed",
+      "groups": "Groups",
+      "charts": "Charts",
+      "notes": "Notes"
+    },
+    "kpi": {"df": "Degrees of freedom", "p_value": "p-value"},
+    "decision": {
+      "reject_h0": "At α = {alpha} the null hypothesis is rejected (p {p}).",
+      "fail_to_reject_h0": "At α = {alpha} the null hypothesis is not rejected (p {p})."
+    },
+    "interval": "{level} CI: {low} to {high}",
+    "alternatives": {"two_sided": "two-sided", "less": "one-sided, less", "greater": "one-sided, greater"},
+    "distribution": "Distribution of the statistic under H0: {distribution}.",
+    "critical": {
+      "region": "Critical region at α = {alpha}: {region}.",
+      "low": "statistic ≤ {x}",
+      "high": "statistic ≥ {x}",
+      "or": " or "
+    },
+    "tables": {
+      "numbers": {"title": "Numbers of the test", "quantity": "Quantity", "name": "Name in the table", "value": "Value"},
+      "groups": {"title": "Groups", "group": "Group"},
+      "quartiles": {"title": "Five-number summary"},
+      "notes": {"title": "Notes", "note": "Notes of the test"}
+    },
+    "charts": {
+      "boxplot": "Box plot: {by}",
+      "interval": "Means with their confidence intervals",
+      "histogram": "Histogram: {by}",
+      "density": "Distribution of the statistic under H0",
+      "density_caption": "Shaded: the critical region. Vertical line: the statistic of the test."
+    },
+    "engine": "Computed in the engine: {engine}.",
+    "sample": {
+      "line": "Rows: a development sample of the source — {what}",
+      "first": "the first {n} rows",
+      "random": "a random {percent}% of the rows",
+      "and": "; "
+    },
+    "footer": "Computed by Tabularia"
+  },
+  "it": {
+    "by": "{value} per {group}",
+    "tests": {
+      "t_two_sample": {
+        "name": "Test t a due campioni",
+        "variants": {"welch": "Test t di Welch", "student": "Test t di Student"},
+        "stats": {
+          "test": {
+            "pooled_var": "Varianza combinata (sp²)",
+            "estimate": "Differenza delle medie (m1 − m2)",
+            "null_value": "Differenza sotto H0 (mu)",
+            "statistic": "Statistica t"
+          }
+        },
+        "kpi": {"statistic": "Statistica t", "estimate": "Differenza delle medie"},
+        "symbols": "1 = «{g1}», 2 = «{g2}». m: media, s²: varianza, n: righe usate, di ciascun gruppo (tabella «Gruppi»); sp²: varianza combinata; mu: la differenza sotto H0; df: gradi di libertà.",
+        "left_out": "Righe usate: {n}. Righe escluse: {missing} (senza gruppo, o senza valore in uno dei due gruppi)."
+      }
+    },
+    "stats": {
+      "test": {
+        "test": "Test",
+        "variant": "Variante",
+        "alternative": "Alternativa",
+        "h0": "Ipotesi nulla (H0)",
+        "h1": "Ipotesi alternativa (H1)",
+        "formula": "Formula",
+        "distribution": "Distribuzione sotto H0",
+        "decision": "Decisione",
+        "engine": "Motore",
+        "alpha": "Livello di significatività (α)",
+        "conf_level": "Livello di confidenza (1 − α)",
+        "n": "Righe usate",
+        "n_missing": "Righe escluse",
+        "pooled_var": "Varianza combinata",
+        "estimate": "Stima",
+        "null_value": "Valore sotto H0",
+        "std_error": "Errore standard della stima",
+        "statistic": "Statistica",
+        "df": "Gradi di libertà (df)",
+        "critical_low": "Valore critico inferiore",
+        "critical_high": "Valore critico superiore",
+        "p_value": "p-value",
+        "ci_low": "Intervallo di confidenza della stima, estremo inferiore",
+        "ci_high": "Intervallo di confidenza della stima, estremo superiore",
+        "cohen_d": "Dimensione dell'effetto: d di Cohen",
+        "hedges_g": "Dimensione dell'effetto: g di Hedges"
+      },
+      "group": {
+        "n": "n",
+        "mean": "Media",
+        "var": "Varianza",
+        "sd": "Dev. standard",
+        "se": "Err. standard",
+        "ci_low": "Media, IC inf.",
+        "ci_high": "Media, IC sup.",
+        "min": "Minimo",
+        "max": "Massimo",
+        "q1": "1° quartile",
+        "median": "Mediana",
+        "q3": "3° quartile"
+      },
+      "hist": {"count": "Righe"},
+      "curve": {
+        "density": "Densità sotto H0",
+        "reject_low": "Regione critica inferiore",
+        "reject_high": "Regione critica superiore"
+      }
+    },
+    "note": "Nota {n}",
+    "sections": {
+      "result": "Risultato",
+      "hypotheses": "Ipotesi",
+      "computed": "Come si calcola",
+      "groups": "Gruppi",
+      "charts": "Grafici",
+      "notes": "Note"
+    },
+    "kpi": {"df": "Gradi di libertà", "p_value": "p-value"},
+    "decision": {
+      "reject_h0": "Con α = {alpha} l'ipotesi nulla è rifiutata (p {p}).",
+      "fail_to_reject_h0": "Con α = {alpha} l'ipotesi nulla non è rifiutata (p {p})."
+    },
+    "interval": "IC {level}: da {low} a {high}",
+    "alternatives": {"two_sided": "bilaterale", "less": "unilaterale, minore", "greater": "unilaterale, maggiore"},
+    "distribution": "Distribuzione della statistica sotto H0: {distribution}.",
+    "critical": {
+      "region": "Regione critica con α = {alpha}: {region}.",
+      "low": "statistica ≤ {x}",
+      "high": "statistica ≥ {x}",
+      "or": " oppure "
+    },
+    "tables": {
+      "numbers": {"title": "Numeri del test", "quantity": "Grandezza", "name": "Nome nella tabella", "value": "Valore"},
+      "groups": {"title": "Gruppi", "group": "Gruppo"},
+      "quartiles": {"title": "Sintesi a cinque numeri"},
+      "notes": {"title": "Note", "note": "Note del test"}
+    },
+    "charts": {
+      "boxplot": "Box plot: {by}",
+      "interval": "Medie con i loro intervalli di confidenza",
+      "histogram": "Istogramma: {by}",
+      "density": "Distribuzione della statistica sotto H0",
+      "density_caption": "Area colorata: la regione critica. Linea verticale: la statistica del test."
+    },
+    "engine": "Calcolato nel motore: {engine}.",
+    "sample": {
+      "line": "Righe: un campione di sviluppo della sorgente — {what}",
+      "first": "le prime {n} righe",
+      "random": "un {percent}% casuale delle righe",
+      "and": "; "
+    },
+    "footer": "Calcolato da Tabularia"
+  },
+  "de": {
+    "by": "{value} nach {group}",
+    "tests": {
+      "t_two_sample": {
+        "name": "Zweistichproben-t-Test",
+        "variants": {"welch": "Welch-t-Test", "student": "Student-t-Test"},
+        "stats": {
+          "test": {
+            "pooled_var": "Gepoolte Varianz (sp²)",
+            "estimate": "Differenz der Mittelwerte (m1 − m2)",
+            "null_value": "Differenz unter H0 (mu)",
+            "statistic": "t-Statistik"
+          }
+        },
+        "kpi": {"statistic": "t-Statistik", "estimate": "Differenz der Mittelwerte"},
+        "symbols": "1 = «{g1}», 2 = «{g2}». m: Mittelwert, s²: Varianz, n: verwendete Zeilen, je Gruppe (Tabelle «Gruppen»); sp²: gepoolte Varianz; mu: die Differenz unter H0; df: Freiheitsgrade.",
+        "left_out": "Verwendete Zeilen: {n}. Ausgelassene Zeilen: {missing} (ohne Gruppe oder ohne Wert in einer der beiden Gruppen)."
+      }
+    },
+    "stats": {
+      "test": {
+        "test": "Test",
+        "variant": "Variante",
+        "alternative": "Alternative",
+        "h0": "Nullhypothese (H0)",
+        "h1": "Alternativhypothese (H1)",
+        "formula": "Formel",
+        "distribution": "Verteilung unter H0",
+        "decision": "Entscheidung",
+        "engine": "Engine",
+        "alpha": "Signifikanzniveau (α)",
+        "conf_level": "Konfidenzniveau (1 − α)",
+        "n": "Verwendete Zeilen",
+        "n_missing": "Ausgelassene Zeilen",
+        "pooled_var": "Gepoolte Varianz",
+        "estimate": "Schätzwert",
+        "null_value": "Wert unter H0",
+        "std_error": "Standardfehler des Schätzwerts",
+        "statistic": "Statistik",
+        "df": "Freiheitsgrade (df)",
+        "critical_low": "Unterer kritischer Wert",
+        "critical_high": "Oberer kritischer Wert",
+        "p_value": "p-Wert",
+        "ci_low": "Konfidenzintervall des Schätzwerts, untere Grenze",
+        "ci_high": "Konfidenzintervall des Schätzwerts, obere Grenze",
+        "cohen_d": "Effektstärke: Cohens d",
+        "hedges_g": "Effektstärke: Hedges' g"
+      },
+      "group": {
+        "n": "n",
+        "mean": "Mittelwert",
+        "var": "Varianz",
+        "sd": "Std.-Abw.",
+        "se": "Std.-Fehler",
+        "ci_low": "Mittelw., KI unten",
+        "ci_high": "Mittelw., KI oben",
+        "min": "Minimum",
+        "max": "Maximum",
+        "q1": "1. Quartil",
+        "median": "Median",
+        "q3": "3. Quartil"
+      },
+      "hist": {"count": "Zeilen"},
+      "curve": {
+        "density": "Dichte unter H0",
+        "reject_low": "Unterer kritischer Bereich",
+        "reject_high": "Oberer kritischer Bereich"
+      }
+    },
+    "note": "Hinweis {n}",
+    "sections": {
+      "result": "Ergebnis",
+      "hypotheses": "Hypothesen",
+      "computed": "So wird gerechnet",
+      "groups": "Gruppen",
+      "charts": "Diagramme",
+      "notes": "Hinweise"
+    },
+    "kpi": {"df": "Freiheitsgrade", "p_value": "p-Wert"},
+    "decision": {
+      "reject_h0": "Bei α = {alpha} wird die Nullhypothese verworfen (p {p}).",
+      "fail_to_reject_h0": "Bei α = {alpha} wird die Nullhypothese nicht verworfen (p {p})."
+    },
+    "interval": "{level}-KI: {low} bis {high}",
+    "alternatives": {"two_sided": "zweiseitig", "less": "einseitig, kleiner", "greater": "einseitig, größer"},
+    "distribution": "Verteilung der Statistik unter H0: {distribution}.",
+    "critical": {
+      "region": "Kritischer Bereich bei α = {alpha}: {region}.",
+      "low": "Statistik ≤ {x}",
+      "high": "Statistik ≥ {x}",
+      "or": " oder "
+    },
+    "tables": {
+      "numbers": {"title": "Zahlen des Tests", "quantity": "Größe", "name": "Name in der Tabelle", "value": "Wert"},
+      "groups": {"title": "Gruppen", "group": "Gruppe"},
+      "quartiles": {"title": "Fünf-Punkte-Zusammenfassung"},
+      "notes": {"title": "Hinweise", "note": "Hinweise des Tests"}
+    },
+    "charts": {
+      "boxplot": "Boxplot: {by}",
+      "interval": "Mittelwerte mit ihren Konfidenzintervallen",
+      "histogram": "Histogramm: {by}",
+      "density": "Verteilung der Statistik unter H0",
+      "density_caption": "Gefüllt: der kritische Bereich. Senkrechte Linie: die Statistik des Tests."
+    },
+    "engine": "Berechnet in der Engine: {engine}.",
+    "sample": {
+      "line": "Zeilen: eine Entwicklungsstichprobe der Quelle — {what}",
+      "first": "die ersten {n} Zeilen",
+      "random": "zufällige {percent} % der Zeilen",
+      "and": "; "
+    },
+    "footer": "Berechnet von Tabularia"
+  },
+  "es": {
+    "by": "{value} por {group}",
+    "tests": {
+      "t_two_sample": {
+        "name": "Prueba t de dos muestras",
+        "variants": {"welch": "Prueba t de Welch", "student": "Prueba t de Student"},
+        "stats": {
+          "test": {
+            "pooled_var": "Varianza combinada (sp²)",
+            "estimate": "Diferencia de las medias (m1 − m2)",
+            "null_value": "Diferencia bajo H0 (mu)",
+            "statistic": "Estadístico t"
+          }
+        },
+        "kpi": {"statistic": "Estadístico t", "estimate": "Diferencia de las medias"},
+        "symbols": "1 = «{g1}», 2 = «{g2}». m: media, s²: varianza, n: filas usadas, de cada grupo (tabla «Grupos»); sp²: varianza combinada; mu: la diferencia bajo H0; df: grados de libertad.",
+        "left_out": "Filas usadas: {n}. Filas excluidas: {missing} (sin grupo, o sin valor en uno de los dos grupos)."
+      }
+    },
+    "stats": {
+      "test": {
+        "test": "Prueba",
+        "variant": "Variante",
+        "alternative": "Alternativa",
+        "h0": "Hipótesis nula (H0)",
+        "h1": "Hipótesis alternativa (H1)",
+        "formula": "Fórmula",
+        "distribution": "Distribución bajo H0",
+        "decision": "Decisión",
+        "engine": "Motor",
+        "alpha": "Nivel de significación (α)",
+        "conf_level": "Nivel de confianza (1 − α)",
+        "n": "Filas usadas",
+        "n_missing": "Filas excluidas",
+        "pooled_var": "Varianza combinada",
+        "estimate": "Estimación",
+        "null_value": "Valor bajo H0",
+        "std_error": "Error estándar de la estimación",
+        "statistic": "Estadístico",
+        "df": "Grados de libertad (df)",
+        "critical_low": "Valor crítico inferior",
+        "critical_high": "Valor crítico superior",
+        "p_value": "Valor p",
+        "ci_low": "Intervalo de confianza de la estimación, límite inferior",
+        "ci_high": "Intervalo de confianza de la estimación, límite superior",
+        "cohen_d": "Tamaño del efecto: d de Cohen",
+        "hedges_g": "Tamaño del efecto: g de Hedges"
+      },
+      "group": {
+        "n": "n",
+        "mean": "Media",
+        "var": "Varianza",
+        "sd": "Desv. estándar",
+        "se": "Error estándar",
+        "ci_low": "Media, IC inf.",
+        "ci_high": "Media, IC sup.",
+        "min": "Mínimo",
+        "max": "Máximo",
+        "q1": "1.er cuartil",
+        "median": "Mediana",
+        "q3": "3.er cuartil"
+      },
+      "hist": {"count": "Filas"},
+      "curve": {
+        "density": "Densidad bajo H0",
+        "reject_low": "Región crítica inferior",
+        "reject_high": "Región crítica superior"
+      }
+    },
+    "note": "Nota {n}",
+    "sections": {
+      "result": "Resultado",
+      "hypotheses": "Hipótesis",
+      "computed": "Cómo se calcula",
+      "groups": "Grupos",
+      "charts": "Gráficos",
+      "notes": "Notas"
+    },
+    "kpi": {"df": "Grados de libertad", "p_value": "Valor p"},
+    "decision": {
+      "reject_h0": "Con α = {alpha} se rechaza la hipótesis nula (p {p}).",
+      "fail_to_reject_h0": "Con α = {alpha} no se rechaza la hipótesis nula (p {p})."
+    },
+    "interval": "IC del {level}: de {low} a {high}",
+    "alternatives": {"two_sided": "bilateral", "less": "unilateral, menor", "greater": "unilateral, mayor"},
+    "distribution": "Distribución del estadístico bajo H0: {distribution}.",
+    "critical": {
+      "region": "Región crítica con α = {alpha}: {region}.",
+      "low": "estadístico ≤ {x}",
+      "high": "estadístico ≥ {x}",
+      "or": " o "
+    },
+    "tables": {
+      "numbers": {"title": "Números de la prueba", "quantity": "Magnitud", "name": "Nombre en la tabla", "value": "Valor"},
+      "groups": {"title": "Grupos", "group": "Grupo"},
+      "quartiles": {"title": "Resumen de cinco números"},
+      "notes": {"title": "Notas", "note": "Notas de la prueba"}
+    },
+    "charts": {
+      "boxplot": "Diagrama de caja: {by}",
+      "interval": "Medias con sus intervalos de confianza",
+      "histogram": "Histograma: {by}",
+      "density": "Distribución del estadístico bajo H0",
+      "density_caption": "Área coloreada: la región crítica. Línea vertical: el estadístico de la prueba."
+    },
+    "engine": "Calculado en el motor: {engine}.",
+    "sample": {
+      "line": "Filas: una muestra de desarrollo del origen — {what}",
+      "first": "las primeras {n} filas",
+      "random": "un {percent} % aleatorio de las filas",
+      "and": "; "
+    },
+    "footer": "Calculado por Tabularia"
+  },
+  "fr": {
+    "by": "{value} par {group}",
+    "tests": {
+      "t_two_sample": {
+        "name": "Test t à deux échantillons",
+        "variants": {"welch": "Test t de Welch", "student": "Test t de Student"},
+        "stats": {
+          "test": {
+            "pooled_var": "Variance commune (sp²)",
+            "estimate": "Différence des moyennes (m1 − m2)",
+            "null_value": "Différence sous H0 (mu)",
+            "statistic": "Statistique t"
+          }
+        },
+        "kpi": {"statistic": "Statistique t", "estimate": "Différence des moyennes"},
+        "symbols": "1 = «{g1}», 2 = «{g2}». m : moyenne, s² : variance, n : lignes utilisées, de chaque groupe (tableau «Groupes») ; sp² : variance commune ; mu : la différence sous H0 ; df : degrés de liberté.",
+        "left_out": "Lignes utilisées : {n}. Lignes écartées : {missing} (sans groupe, ou sans valeur dans l'un des deux groupes)."
+      }
+    },
+    "stats": {
+      "test": {
+        "test": "Test",
+        "variant": "Variante",
+        "alternative": "Alternative",
+        "h0": "Hypothèse nulle (H0)",
+        "h1": "Hypothèse alternative (H1)",
+        "formula": "Formule",
+        "distribution": "Loi sous H0",
+        "decision": "Décision",
+        "engine": "Moteur",
+        "alpha": "Seuil de signification (α)",
+        "conf_level": "Niveau de confiance (1 − α)",
+        "n": "Lignes utilisées",
+        "n_missing": "Lignes écartées",
+        "pooled_var": "Variance commune",
+        "estimate": "Estimation",
+        "null_value": "Valeur sous H0",
+        "std_error": "Erreur type de l'estimation",
+        "statistic": "Statistique",
+        "df": "Degrés de liberté (df)",
+        "critical_low": "Valeur critique inférieure",
+        "critical_high": "Valeur critique supérieure",
+        "p_value": "Valeur p",
+        "ci_low": "Intervalle de confiance de l'estimation, borne inférieure",
+        "ci_high": "Intervalle de confiance de l'estimation, borne supérieure",
+        "cohen_d": "Taille d'effet : d de Cohen",
+        "hedges_g": "Taille d'effet : g de Hedges"
+      },
+      "group": {
+        "n": "n",
+        "mean": "Moyenne",
+        "var": "Variance",
+        "sd": "Écart type",
+        "se": "Erreur type",
+        "ci_low": "Moyenne, IC inf.",
+        "ci_high": "Moyenne, IC sup.",
+        "min": "Minimum",
+        "max": "Maximum",
+        "q1": "1er quartile",
+        "median": "Médiane",
+        "q3": "3e quartile"
+      },
+      "hist": {"count": "Lignes"},
+      "curve": {
+        "density": "Densité sous H0",
+        "reject_low": "Région critique inférieure",
+        "reject_high": "Région critique supérieure"
+      }
+    },
+    "note": "Note {n}",
+    "sections": {
+      "result": "Résultat",
+      "hypotheses": "Hypothèses",
+      "computed": "Comment c'est calculé",
+      "groups": "Groupes",
+      "charts": "Graphiques",
+      "notes": "Notes"
+    },
+    "kpi": {"df": "Degrés de liberté", "p_value": "Valeur p"},
+    "decision": {
+      "reject_h0": "Au seuil α = {alpha}, l'hypothèse nulle est rejetée (p {p}).",
+      "fail_to_reject_h0": "Au seuil α = {alpha}, l'hypothèse nulle n'est pas rejetée (p {p})."
+    },
+    "interval": "IC à {level} : de {low} à {high}",
+    "alternatives": {"two_sided": "bilatérale", "less": "unilatérale, inférieure", "greater": "unilatérale, supérieure"},
+    "distribution": "Loi de la statistique sous H0 : {distribution}.",
+    "critical": {
+      "region": "Région critique au seuil α = {alpha} : {region}.",
+      "low": "statistique ≤ {x}",
+      "high": "statistique ≥ {x}",
+      "or": " ou "
+    },
+    "tables": {
+      "numbers": {"title": "Nombres du test", "quantity": "Grandeur", "name": "Nom dans la table", "value": "Valeur"},
+      "groups": {"title": "Groupes", "group": "Groupe"},
+      "quartiles": {"title": "Résumé en cinq nombres"},
+      "notes": {"title": "Notes", "note": "Notes du test"}
+    },
+    "charts": {
+      "boxplot": "Boîte à moustaches : {by}",
+      "interval": "Moyennes avec leurs intervalles de confiance",
+      "histogram": "Histogramme : {by}",
+      "density": "Loi de la statistique sous H0",
+      "density_caption": "Zone colorée : la région critique. Ligne verticale : la statistique du test."
+    },
+    "engine": "Calculé dans le moteur : {engine}.",
+    "sample": {
+      "line": "Lignes : un échantillon de développement de la source — {what}",
+      "first": "les {n} premières lignes",
+      "random": "{percent} % des lignes, au hasard",
+      "and": " ; "
+    },
+    "footer": "Calculé par Tabularia"
+  }
+}
