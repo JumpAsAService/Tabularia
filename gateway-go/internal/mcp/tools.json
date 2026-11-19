@@ -1503,7 +1503,7 @@
       "type": "string"
      },
      "operation": {
-      "description": "One of: select, reorder, drop, rename, cast, filter, sort, limit, unique, fill_null, drop_nulls, group_by, pivot, unpivot, compute, sql, join, union, stat_t_one_sample, stat_t_two_sample, stat_t_paired, stat_anova, stat_var_f, stat_levene, stat_prop_one_sample, stat_prop_two_sample, stat_chi2_independence, stat_chi2_gof, stat_fisher_exact, stat_pearson.",
+      "description": "One of: select, reorder, drop, rename, cast, filter, sort, limit, unique, fill_null, drop_nulls, group_by, pivot, unpivot, compute, sql, join, union, stat_t_one_sample, stat_t_two_sample, stat_t_paired, stat_anova, stat_var_f, stat_levene, stat_prop_one_sample, stat_prop_two_sample, stat_chi2_independence, stat_chi2_gof, stat_fisher_exact, stat_mcnemar, stat_cmh, stat_g_test, stat_pearson, stat_spearman, stat_mann_whitney, stat_wilcoxon_signed_rank, stat_kruskal_wallis, stat_ks_two_sample, stat_normality.",
       "type": "string"
      },
      "params": {
@@ -4772,7 +4772,7 @@
       "type": "string"
      },
      "operation": {
-      "description": "One of: select, reorder, drop, rename, cast, filter, sort, limit, unique, fill_null, drop_nulls, group_by, pivot, unpivot, compute, sql, join, union, stat_t_one_sample, stat_t_two_sample, stat_t_paired, stat_anova, stat_var_f, stat_levene, stat_prop_one_sample, stat_prop_two_sample, stat_chi2_independence, stat_chi2_gof, stat_fisher_exact, stat_pearson.",
+      "description": "One of: select, reorder, drop, rename, cast, filter, sort, limit, unique, fill_null, drop_nulls, group_by, pivot, unpivot, compute, sql, join, union, stat_t_one_sample, stat_t_two_sample, stat_t_paired, stat_anova, stat_var_f, stat_levene, stat_prop_one_sample, stat_prop_two_sample, stat_chi2_independence, stat_chi2_gof, stat_fisher_exact, stat_mcnemar, stat_cmh, stat_g_test, stat_pearson, stat_spearman, stat_mann_whitney, stat_wilcoxon_signed_rank, stat_kruskal_wallis, stat_ks_two_sample, stat_normality.",
       "type": "string"
      },
      "params": {
