@@ -22,6 +22,10 @@ import type { NodeStats } from '~/composables/useNodeStats'
 import FlowEdge from '~/components/edges/FlowEdge.vue'
 import ScriptNode from '~/components/nodes/ScriptNode.vue'
 import ContainerNode from '~/components/nodes/ContainerNode.vue'
+import ModelNode from '~/components/nodes/ModelNode.vue'
+import PredictNode from '~/components/nodes/PredictNode.vue'
+import { MODEL_COLOR, modelArimaTitle, modelFromKind, modelNameKey, modelNodeData, modelOf, predictNodeData } from '~/composables/modelCatalog'
+import { useModelGroups } from '~/composables/useModelGroups'
 import { useScriptingEditor, type ScriptOutputs } from '~/composables/useScripting'
 import { useRegistriesEditor } from '~/composables/useRegistries'
 import { useFormat } from '~/composables/useFormat'
@@ -420,9 +424,9 @@ const fresh = <V extends { at: number }>(e: V | undefined): V | undefined =>
   e && Date.now() - e.at < PREVIEW_MEMO_MS ? e : undefined
 
 // the nodes that run outside the engine and hand their output to the nodes after them
-const STEP_TYPES = new Set(['script', 'container'])
+const STEP_TYPES = new Set(['script', 'container', 'model', 'model_predict'])
 // the nodes only a run of the flow carries out (an orchestration on the server)
-const CONTROL_TYPES = new Set(['refresh', 'runflow', 'script', 'container'])
+const CONTROL_TYPES = new Set(['refresh', 'runflow', 'script', 'container', 'model', 'model_predict'])
 const selectedNode = computed(() => (selectedId.value ? findNode(selectedId.value) ?? null : null))
 // a data edge leaves the selected node (not a sequence edge): a Script node must write its output
 const selectedHasDataOut = computed(() => !!selectedId.value
@@ -448,9 +452,14 @@ onMounted(() => { scriptingEditor.load(true) })
 const registriesEditor = useRegistriesEditor()
 const containersAvailable = registriesEditor.available
 onMounted(() => { registriesEditor.load(true) })
+// Model nodes: the groups the administrator turned on and this person may use (the palette offers
+// the Models group only for those; the nodes of the others are greyed out with the reason)
+const modelGroups = useModelGroups()
+onMounted(() => { modelGroups.load(true) })
 // the texts of the preview after a step node, by its kind
 function stepTexts(nodeId: string): string {
-  return findNode(nodeId)?.type === 'container' ? 'containers.node' : 'scripting.node'
+  const type = findNode(nodeId)?.type
+  return type === 'container' ? 'containers.node' : type === 'model' || type === 'model_predict' ? 'models.node' : 'scripting.node'
 }
 
 // What each Script or Container node wrote last (a run of the flow, or «Run» in its panel): the
@@ -1365,18 +1374,20 @@ function addSource(): string {
 // chain it is appended; a node that forks already, or Shift, takes one more branch.
 // Before, the three ways gave three outcomes, and always a branch (critique of 2026-11-10).
 // Everything happens in one go: ONE step of the history undoes the whole insertion.
-function addStep(parentId: string, opType: string, params: Record<string, any>, opts: StepOptions & { reveal?: boolean } = {}): string | null {
+function addStep(parentId: string, opType: string, params: Record<string, any>, opts: StepOptions & { reveal?: boolean; step?: { type: string; data: Record<string, any> } } = {}): string | null {
   finishSlide() // a slide still going: the plan is made on where the nodes end up
-  const id = `op-${opCounter + 1}`
+  // a step node (a model, a prediction) is the same step with a node of its own kind: its ids are the control nodes'
+  const id = opts.step ? `ctl-${outputCounter + 1}` : `op-${opCounter + 1}`
   const plan = planStep(chainNodes(), chainEdges(), parentId, id, opts)
   if (!plan) return null
-  opCounter++
+  if (opts.step) outputCounter++
+  else opCounter++
   fitView_ = false // the node goes where it was put: a new flow's pending fit must not move the view
   history.flush() // what the person was doing stays a step of its own
   addNodes({
-    id, type: 'operation', position: plan.position,
+    id, type: opts.step?.type ?? 'operation', position: plan.position,
     ...(plan.parentNode ? { parentNode: plan.parentNode, extent: 'parent' as const } : {}),
-    data: { opType, params },
+    data: opts.step?.data ?? { opType, params },
   })
   if (plan.removeEdgeIds.length) removeEdges(plan.removeEdgeIds)
   addEdges(plan.addEdges.map((e) => ({ ...e, sourceHandle: e.sourceHandle ?? undefined, targetHandle: e.targetHandle ?? undefined })))
@@ -1414,10 +1425,29 @@ function revealNode(id: string) {
   setCenter(n.computedPosition.x + w / 2, n.computedPosition.y + h / 2, { zoom, duration: reducedMotion() ? 0 : 300 })
 }
 
+/** The node a Models palette item makes («model:linear», «model:arima:sarima», «model_predict»), or null. */
+function modelStepOf(kind: string): { type: string; data: Record<string, any> } | null {
+  if (kind === 'model_predict') return { type: 'model_predict', data: predictNodeData() }
+  const pick = modelFromKind(kind)
+  if (!pick) return null
+  return { type: 'model', data: modelNodeData(pick.model, pick.preset) }
+}
+
 // A test of the palette's Statistics group chosen without dragging (Enter on its item): a
 // step after the selected node, or after the flow's last one, as «+ Operation» places it.
 function addFromPalette(opType: string) {
-  if (loadBlocked.value || !operations.value.includes(opType)) return
+  if (loadBlocked.value) return
+  // a model, a preset of ARIMA or a prediction of the Models group: a step node of its own kind
+  const step = modelStepOf(opType)
+  if (step) {
+    if (deniedToObserver()) return
+    const parents = [selectedId.value, leafNodeId(getNodes.value, getEdges.value)]
+    for (const parentId of parents) {
+      if (parentId && findNode(parentId) && addStep(parentId, opType, {}, { reveal: true, step })) return
+    }
+    return
+  }
+  if (!operations.value.includes(opType)) return
   const leaf = leafNodeId(getNodes.value, getEdges.value)
   for (const parentId of [selectedId.value, leaf]) {
     if (parentId && findNode(parentId) && addStep(parentId, opType, defaultParams(opType), { reveal: true })) return
@@ -1453,7 +1483,7 @@ let quickAt: { x: number; y: number } | null = null // the click, in flow coordi
 let quickParent: string | null = null
 let quickBeside = false
 // node types whose data output an operation can read (the «out» handle)
-const DATA_PARENTS = new Set(['source', 'operation', 'foreach', 'script', 'container'])
+const DATA_PARENTS = new Set(['source', 'operation', 'foreach', 'script', 'container', 'model', 'model_predict'])
 
 onMounted(() => {
   api.myFlowShortcuts().then((s) => { savedShortcuts.value = s }, () => { /* the defaults */ })
@@ -1653,6 +1683,8 @@ const NODE_TYPE_COLOR: Record<string, string> = {
   runflow: '#c084fc',
   script: '#34d399',
   container: '#818cf8',
+  model: MODEL_COLOR,
+  model_predict: MODEL_COLOR,
   foreach: '#f472b6',
   comment: 'var(--border)',
 }
@@ -1762,6 +1794,18 @@ function onCanvasDrop(ev: DragEvent) {
       id, type: 'script', position,
       data: { label: t('scripting.node.title'), files: [], entrypoint: '', timeoutSeconds: 900, retries: 0, retryDelaySeconds: 60 },
     })
+    selectedId.value = id
+    return
+  }
+
+  const modelStep = modelStepOf(kind)
+  if (modelStep) {
+    // a statistical model fitted by the gateway as a Kubernetes Job (or a prediction by one of its
+    // fitted models): its model, then its columns, are chosen in the node panel; input and output
+    // come from its edges
+    if (deniedToObserver()) return
+    const id = `ctl-${++outputCounter}`
+    addNodes({ id, type: modelStep.type, position, data: modelStep.data })
     selectedId.value = id
     return
   }
@@ -2240,6 +2284,11 @@ function nodeFullName(id: string | null): string {
     return op === 'join' ? t('dataGrid.joinOn', { name, keys: what }) : `${name} ${what}`
   }
   if (n.type === 'source') return String(n.data?.filename || n.data?.dsName || t('dataGrid.sourceNode'))
+  if (n.type === 'model' && !given) {
+    const model = modelOf(n.data?.model)
+    if (model) return model.id === 'arima' ? modelArimaTitle(n.data?.params) : t(modelNameKey(model.id))
+  }
+  if (n.type === 'model_predict' && !given) return t('models.predict.title')
   return String(given || n.data?.name || n.type || '')
 }
 function nodeName(id: string | null): string {
@@ -3406,6 +3455,7 @@ async function pollTask(id: string) {
         :operations="operations" :read-only="observerOnly" :scripting="scriptingAvailable" :containers="containersAvailable"
         :scripting-off="scriptingEditor.state.value?.disabled_reason === 'kubernetes'"
         :containers-off="registriesEditor.state.value?.disabled_reason === 'kubernetes'"
+        :mlflow-connections="connectionsList.filter((c) => c.db_type === 'mlflow').length"
         @add="addFromPalette"
       />
     </div>
@@ -3453,6 +3503,12 @@ async function pollTask(id: string) {
         </template>
         <template #node-container="props">
           <ContainerNode :id="props.id" :data="props.data" />
+        </template>
+        <template #node-model="props">
+          <ModelNode :id="props.id" :data="props.data" />
+        </template>
+        <template #node-model_predict="props">
+          <PredictNode :id="props.id" :data="props.data" />
         </template>
         <template #node-comment="props">
           <CommentNode :id="props.id" :data="props.data" />

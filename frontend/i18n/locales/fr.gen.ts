@@ -6474,4 +6474,358 @@ export default {
       "gone": "Les données que cette étape lit n'existent plus."
     }
   },
+  "models": {
+    "palette": {
+      "group": "Modèles",
+      "itemTitle": "{hint} Faites-le glisser sur le canevas, ou appuyez sur Entrée pour l'ajouter après l'étape sélectionnée."
+    },
+    "groups": {
+      "regression": "Régression",
+      "survival": "Survie",
+      "timeseries": "Séries temporelles"
+    },
+    "linear": {
+      "name": "Régression linéaire",
+      "hint": "Explique un nombre par d'autres colonnes : moindres carrés, pondérés, avec erreurs robustes, ou avec une pénalité ridge, lasso ou elastic net.",
+      "params": {
+        "outcome": "Résultat (un nombre)"
+      }
+    },
+    "logistic": {
+      "name": "Régression logistique",
+      "hint": "Explique un résultat oui/non par d'autres colonnes : les chances de l'événement. Maximum de vraisemblance, correction de Firth ou pénalité.",
+      "params": {
+        "outcome": "Résultat (deux valeurs)",
+        "event_value": "Valeur qui est l'événement"
+      }
+    },
+    "kaplan_meier": {
+      "name": "Kaplan–Meier",
+      "hint": "La probabilité de ne pas avoir encore eu l'événement au fil du temps, avec les groupes comparés par le test du log-rank.",
+      "params": {
+        "time": "Durée de suivi (un nombre)",
+        "event": "Colonne de l'événement",
+        "event_value": "Valeur qui signifie que l'événement a eu lieu"
+      }
+    },
+    "cox": {
+      "name": "Risques proportionnels de Cox",
+      "hint": "Comment les colonnes modifient le taux d'un événement au fil du temps : rapports de risque, avec la vérification de la proportionnalité.",
+      "params": {
+        "time": "Durée de suivi (un nombre)",
+        "event": "Colonne de l'événement",
+        "event_value": "Valeur qui signifie que l'événement a eu lieu"
+      }
+    },
+    "arima": {
+      "name": "ARIMA",
+      "hint": "Une série temporelle modélisée sur son propre passé, et prévue : de AR à SARIMAX, avec les ordres choisis ou recherchés.",
+      "params": {
+        "time": "Colonne du temps",
+        "value": "Série (un nombre)"
+      }
+    },
+    "presets": {
+      "ar": {
+        "name": "AR",
+        "hint": "Autorégressif : une valeur expliquée par son propre passé. Le nœud ARIMA avec p seulement."
+      },
+      "ma": {
+        "name": "MA",
+        "hint": "Moyenne mobile : une valeur expliquée par les erreurs passées. Le nœud ARIMA avec q seulement."
+      },
+      "arma": {
+        "name": "ARMA",
+        "hint": "Autorégressif et moyenne mobile, sur une série sans différenciation. Le nœud ARIMA avec d = 0."
+      },
+      "arima": {
+        "name": "ARIMA (p, d, q)",
+        "hint": "Avec différenciation pour une tendance, sans partie saisonnière. Le nœud ARIMA avec ses trois ordres."
+      },
+      "sarima": {
+        "name": "SARIMA",
+        "hint": "Avec une partie saisonnière (P, D, Q) pour une série qui se répète chaque année ou semaine. Le nœud ARIMA sans colonnes exogènes."
+      },
+      "sarimax": {
+        "name": "SARIMAX",
+        "hint": "SARIMA avec d'autres colonnes qui expliquent la série (exogènes). Le nœud ARIMA avec toutes ses parties : cochez les colonnes dans « Colonnes exogènes »."
+      }
+    },
+    "params": {
+      "outcome": "Résultat",
+      "event_value": "Valeur qui est l'événement",
+      "predictors": "Prédicteurs",
+      "estimation": "Estimation",
+      "penalty": "Pénalité",
+      "link": "Fonction de lien",
+      "reference": "Niveaux de référence",
+      "interactions": "Interactions",
+      "intercept": "Ordonnée à l'origine",
+      "weights": "Colonne des poids",
+      "se": "Erreurs standard",
+      "cluster": "Colonne des grappes",
+      "order_by": "Ordre des lignes",
+      "ci": "Intervalles de confiance",
+      "threshold": "Seuil de classification",
+      "mixing": "Part de lasso",
+      "lambda": "Force de la pénalité (λ)",
+      "folds": "Blocs de la validation croisée",
+      "fold_by": "Garder ensemble par",
+      "measure": "Mesure de l'erreur",
+      "standardize": "Standardiser les prédicteurs",
+      "alpha": "Niveau de signification",
+      "seed": "Graine",
+      "output": "Sortie",
+      "time": "Colonne du temps",
+      "value": "Série (un nombre)",
+      "event": "Colonne de l'événement",
+      "strata": "Colonne des strates",
+      "conf_type": "Bande de confiance",
+      "test": "Test entre les strates",
+      "pairwise": "Comparer chaque paire de strates",
+      "times": "Survie à certains temps",
+      "rmst_tau": "Moyenne restreinte jusqu'à",
+      "start": "Colonne du temps de début",
+      "ties": "Temps ex æquo",
+      "frequency": "Fréquence de la série",
+      "s": "Période saisonnière",
+      "orders": "Ordres",
+      "p": "Ordre AR (p)",
+      "d": "Différences (d)",
+      "q": "Ordre MA (q)",
+      "P": "Ordre AR saisonnier (P)",
+      "D": "Différences saisonnières (D)",
+      "Q": "Ordre MA saisonnier (Q)",
+      "criterion": "Critère",
+      "stepwise": "Recherche pas à pas",
+      "max_p": "p maximal",
+      "max_q": "q maximal",
+      "max_P": "P maximal",
+      "max_Q": "Q maximal",
+      "max_d": "d maximal",
+      "max_D": "D maximal",
+      "unit_root_test": "Test pour les différences",
+      "seasonal_test": "Test pour les différences saisonnières",
+      "drift": "Dérive (une tendance)",
+      "mean": "Moyenne (une constante)",
+      "exog": "Colonnes exogènes",
+      "transform": "Transformer la série",
+      "box_cox_lambda": "λ de Box–Cox",
+      "horizon": "Pas de prévision",
+      "holdout": "Lignes mises de côté pour tester la prévision"
+    },
+    "hints": {
+      "outcome": "La colonne à expliquer.",
+      "event_value": "Quelle valeur de la colonne est l'événement ; les autres non.",
+      "predictors": "Les colonnes qui l'expliquent, nombres ou catégories. Une date n'est pas acceptée : calculez d'abord le mois, ou les jours depuis un début.",
+      "reference": "À quoi chaque catégorie est comparée. Par défaut la première dans l'ordre du texte.",
+      "interactions": "L'effet d'un prédicteur dépend d'un autre : leur produit est ajouté.",
+      "intercept": "Laissez-la active, sauf si la droite doit passer par zéro.",
+      "weights": "Un nombre par ligne : son poids. Zéro ou plus.",
+      "se": "Le classique suppose la même dispersion partout ; les robustes non.",
+      "cluster": "Les lignes d'une même grappe ne sont pas indépendantes : leurs erreurs sont prises ensemble.",
+      "order_by": "La colonne qui ordonne les lignes, pour les tests qui en dépendent (Durbin–Watson).",
+      "ci": "Wald est rapide ; la vraisemblance profilée est meilleure avec peu d'événements.",
+      "threshold": "La probabilité prévue à partir de laquelle une ligne compte comme l'événement.",
+      "mixing": "0 est ridge, 1 est lasso. « cv » essaie une grille et garde la meilleure.",
+      "lambda": "« Le plus grand à une erreur près » est le modèle le plus simple, presque aussi bon que le meilleur.",
+      "folds": "En combien de parties les lignes sont réparties pour choisir la pénalité. 3 à 20.",
+      "fold_by": "Les lignes de même valeur vont dans la même partie (un client, un patient).",
+      "standardize": "Sur la même échelle, pour que la pénalité traite chaque prédicteur pareillement. Les résultats reviennent à l'échelle d'origine.",
+      "alpha": "Les intervalles sont à 1 − cette valeur, et les tests sont jugés par rapport à elle.",
+      "seed": "Tout choix aléatoire (les blocs de validation) l'utilise : mêmes données, mêmes nombres.",
+      "output": "Ce que le nœud transmet à l'étape suivante.",
+      "strata": "Une courbe par valeur de cette colonne ; laissez vide pour une seule courbe.",
+      "times": "Jusqu'à 10 temps, séparés par des virgules : la survie à chacun est rapportée.",
+      "rmst_tau": "Le temps jusqu'auquel la durée moyenne de survie est calculée.",
+      "start": "Pour des lignes qui donnent un intervalle (début, fin) au lieu d'une seule durée.",
+      "ties": "Comment les événements simultanés sont traités. Efron est le choix habituel.",
+      "frequency": "L'écart entre les lignes. Une ligne par période ; aucune deux fois.",
+      "s": "Lignes par cycle : 12 pour les mois, 4 pour les trimestres, 7 pour les jours. Vide : selon la fréquence.",
+      "orders": "Manuel : vous donnez p, d, q. Automatique : Tabularia cherche les meilleurs ordres et dit pourquoi.",
+      "p": "Combien de valeurs passées expliquent la suivante.",
+      "d": "Combien de fois la série est différenciée pour retirer une tendance.",
+      "q": "Combien d'erreurs passées expliquent la valeur suivante.",
+      "criterion": "Ce que « meilleur » veut dire quand on compare des ordres : l'AICc est le choix habituel.",
+      "stepwise": "Plus rapide : passe d'un candidat à ses voisins. Désactivé : les essaie tous.",
+      "drift": "Une tendance linéaire, quand il y a des différences.",
+      "mean": "Un niveau constant, quand la série n'est pas différenciée.",
+      "exog": "D'autres colonnes qui expliquent la série. Leurs valeurs futures doivent figurer dans les lignes après la dernière observée.",
+      "transform": "Log ou Box–Cox quand les variations croissent avec le niveau.",
+      "horizon": "Combien de périodes après la fin de la série. Avec des colonnes exogènes : les lignes après la dernière valeur observée.",
+      "holdout": "Les dernières lignes restent hors de l'ajustement et sont prévues, pour mesurer la qualité de la prévision. 0 : aucune."
+    },
+    "choice": {
+      "ols": "Moindres carrés ordinaires",
+      "wls": "Moindres carrés pondérés",
+      "ml": "Maximum de vraisemblance",
+      "firth": "Correction de Firth",
+      "none": "Aucune",
+      "ridge": "Ridge",
+      "lasso": "Lasso",
+      "elastic_net": "Elastic net",
+      "classical": "Classiques",
+      "hc0": "Robustes (HC0)",
+      "hc1": "Robustes (HC1)",
+      "hc2": "Robustes (HC2)",
+      "hc3": "Robustes (HC3)",
+      "hac": "Robustes à l'autocorrélation (HAC)",
+      "cluster": "Par grappes",
+      "robust": "Robustes",
+      "mse": "Erreur quadratique",
+      "mae": "Erreur absolue",
+      "deviance": "Déviance",
+      "auc": "Aire sous la courbe ROC",
+      "class": "Taux de mauvaise classification",
+      "logit": "Logit",
+      "probit": "Probit",
+      "wald": "Wald",
+      "profile": "Vraisemblance profilée",
+      "log": "Logarithme",
+      "log-log": "Log–log",
+      "plain": "Simple",
+      "logrank": "Log-rank",
+      "peto": "Peto–Peto (les écarts précoces pèsent plus)",
+      "efron": "Efron",
+      "breslow": "Breslow",
+      "exact": "Exact",
+      "hour": "Horaire",
+      "day": "Quotidien",
+      "week": "Hebdomadaire",
+      "month": "Mensuel",
+      "quarter": "Trimestriel",
+      "year": "Annuel",
+      "index": "Nombres entiers (pas)",
+      "manual": "Manuels",
+      "auto": "Automatique",
+      "aicc": "AICc",
+      "aic": "AIC",
+      "bic": "BIC",
+      "kpss": "KPSS",
+      "adf": "ADF",
+      "pp": "Phillips–Perron",
+      "seas": "Force saisonnière",
+      "ocsb": "OCSB",
+      "box_cox": "Box–Cox",
+      "results": "Le tableau des résultats",
+      "rows": "Les lignes, avec les valeurs ajustées ajoutées",
+      "table": "Le tableau de survie",
+      "forecast": "La série et sa prévision",
+      "cv": "Choisir par validation croisée",
+      "cv_1se": "La plus grande à une erreur de la meilleure",
+      "cv_min": "Celle à l'erreur minimale"
+    },
+    "choices": {
+      "penalty": {
+        "none": "Aucune pénalité"
+      },
+      "transform": {
+        "none": "Aucune transformation"
+      },
+      "conf_type": {
+        "log": "Log (défaut de R)"
+      }
+    },
+    "reasons": {
+      "wls_needs_weights": "Les moindres carrés pondérés demandent la colonne des poids.",
+      "cluster_needs_column": "Les erreurs standard par grappes demandent la colonne des grappes.",
+      "firth_needs_logit": "La correction de Firth vaut pour le lien logit : choisissez logit, ou le maximum de vraisemblance.",
+      "profile_needs_classical_se": "Les intervalles de vraisemblance profilée vont avec les erreurs standard classiques : avec des robustes, utilisez Wald."
+    },
+    "form": {
+      "notUsable": "inutilisable ici",
+      "notInInput": "absente de l'entrée de l'étape",
+      "notInData": "absent des données",
+      "noNumericColumns": "L'entrée de l'étape n'a aucune colonne numérique : convertissez-en une d'abord.",
+      "noTimeColumns": "L'entrée de l'étape n'a aucune colonne date, datetime ou entière à utiliser comme temps.",
+      "noColumnsLeft": "Aucune autre colonne à choisir.",
+      "filterColumns": "Filtrer les colonnes",
+      "toSet": "Reste à définir : {keys}.",
+      "overlap": "La colonne « {column} » est à la fois « {keys} » : choisissez-en une autre.",
+      "levelPlaceholder": "oui, 1, true…",
+      "chooseColumnFirst": "Choisissez d'abord « {field} ».",
+      "valuesOf": "Valeurs de « {column} »",
+      "levelsFailed": "Les valeurs de la colonne n'ont pas pu être lues : écrivez la valeur.",
+      "firstLevel": "Automatique : le premier, {level}",
+      "first": "premier prédicteur",
+      "second": "second prédicteur",
+      "addPair": "Ajouter une interaction",
+      "removePair": "Retirer cette interaction",
+      "pairsNeedPredictors": "Choisissez d'abord au moins deux prédicteurs.",
+      "aValue": "Une valeur",
+      "numbersPlaceholder": "p. ex. 12, 24, 36",
+      "between": "Un nombre entre {above} et {below}, bornes exclues.",
+      "above": "Un nombre supérieur à {above}.",
+      "below": "Un nombre inférieur à {below}.",
+      "range": "Un nombre de {min} à {max}.",
+      "atLeast": "Au moins {min}.",
+      "atMost": "Au plus {max}.",
+      "whole": "Un nombre entier.",
+      "tooMany": "Au plus {n} nombres."
+    },
+    "mlflow": {
+      "title": "MLflow",
+      "connection": "Connexion MLflow",
+      "none": "Pas de MLflow : les résultats restent avec l'exécution",
+      "noConnection": "Aucune connexion MLflow n'est disponible pour vous : créez-en une dans un dossier que vous pouvez utiliser.",
+      "hint": "Journaliser chaque exécution du flux sur un serveur MLflow : paramètres, métriques, le rapport et le modèle.",
+      "experiment": "Expérience",
+      "experimentPlaceholder": "p. ex. Pâtes/élasticité du prix",
+      "experimentNeeded": "Donnez un nom à l'expérience.",
+      "registerAs": "Enregistrer le modèle sous",
+      "registerPlaceholder": "p. ex. elasticite-prix",
+      "registerHint": "Facultatif. Chaque exécution ajoute une version du modèle sous ce nom, qu'une étape Prédiction peut appliquer.",
+      "continueWithout": "Continuer sans MLflow",
+      "continueHint": "Si MLflow est injoignable, l'étape continue et le signale, au lieu d'échouer.",
+      "unknownConnection": "Connexion #{id} (indisponible pour vous)"
+    },
+    "run": {
+      "title": "Exécution",
+      "timeout": "Durée maximale (secondes)",
+      "retries": "Nouvelles tentatives",
+      "timeoutMax": "Au plus {n} secondes pour ce groupe."
+    },
+    "node": {
+      "title": "Modèle statistique",
+      "setIt": "Définissez ses colonnes dans le panneau.",
+      "unknownModel": "Le modèle « {model} » n'est pas connu de cette version de Tabularia.",
+      "groupOff": "Le groupe de modèles « {group} » n'est pas activé : demandez à un administrateur. L'étape ne s'exécute pas d'ici là.",
+      "groupNotAllowed": "Vous ne pouvez pas utiliser ce groupe de modèles : demandez à un administrateur.",
+      "notConfigured": "Les modèles statistiques demandent la partie scripting, qui n'est pas configurée sur cette installation.",
+      "previewAfterRun": "Pas encore de données de ce modèle : exécutez le flux.",
+      "previewFromTrial": "De l'exécution du modèle du {when}, sur l'échantillon.",
+      "previewFromRun": "De l'exécution du flux du {when}.",
+      "previewStale": "Le modèle a changé depuis."
+    },
+    "predict": {
+      "title": "Prédiction",
+      "hint": "Applique à ces lignes un modèle enregistré dans MLflow et ajoute la colonne prédite. Seuls les nombres enregistrés du modèle sont utilisés ; rien n'est exécuté depuis le serveur.",
+      "chooseModel": "Choisissez un modèle.",
+      "latest": "{model}, dernière version",
+      "version": "{model} · version {version}",
+      "notListed": "plus listée par le serveur",
+      "noGroup": "Aucun groupe de modèles n'est activé pour vous : Prédiction s'exécute dans le groupe du modèle appliqué.",
+      "listFailed": "La liste du serveur n'a pas pu être lue : vérifiez la connexion.",
+      "noExperiments": "Ce serveur n'a pas encore d'expérience.",
+      "noVersions": "Tabularia n'a pas encore enregistré de version de modèle dans cette expérience.",
+      "versionLabel": "Version du modèle",
+      "latestHint": "Relue à chaque exécution : la version qui est alors la dernière est utilisée, et l'exécution l'enregistre.",
+      "adds": "Ajoute : {columns}.",
+      "clash": "L'entrée a déjà : {columns}. Renommez-les d'abord."
+    }
+  },
+  "predict": {
+    "params": {
+      "interval": "Intervalle de prédiction",
+      "threshold": "Seuil de classe",
+      "horizon": "Pas de prévision",
+      "at_times": "Survie à certains temps"
+    },
+    "hints": {
+      "interval": "Ajoute les bornes inférieure et supérieure de chaque prédiction.",
+      "threshold": "Ajoute la classe prédite : l'événement à partir de cette probabilité. 0,5 si vide.",
+      "horizon": "Combien de pas après la fin de la série. Vide : celui du modèle.",
+      "at_times": "Une colonne de survie par temps, p. ex. 12, 24."
+    }
+  },
 }

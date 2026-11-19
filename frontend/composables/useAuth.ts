@@ -75,6 +75,7 @@ export function syncLocale(me: Me | null, code?: string) {
 // was copied in the editors): dropped when the person changes
 function forgetPerUserCaches() {
   resetScriptingEditor()
+  resetModelGroups()
   resetRegistriesEditor()
   resetHomeFavourites()
   resetFolderPaths()

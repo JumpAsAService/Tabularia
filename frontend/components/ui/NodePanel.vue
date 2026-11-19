@@ -16,6 +16,7 @@ import TemplatePreview from '~/components/ui/TemplatePreview.vue'
 import PlaceholderCheat from '~/components/ui/PlaceholderCheat.vue'
 import ScriptNodePanel from '~/components/scripting/ScriptNodePanel.vue'
 import ContainerNodePanel from '~/components/containers/ContainerNodePanel.vue'
+import ModelNodePanel from '~/components/models/ModelNodePanel.vue'
 
 const props = defineProps<{
   node: Node | null
@@ -783,6 +784,20 @@ function pickDatasource(id: number | null) {
         @update="emit('update', $event)"
         @delete="emit('delete')"
         @run="emit('script-run', node.id)"
+      />
+    </template>
+
+    <!-- Model node and Predict node: a statistical model fitted, or applied, as a Kubernetes Job -->
+    <template v-else-if="node.type === 'model' || node.type === 'model_predict'">
+      <ModelNodePanel
+        :node="node"
+        :input-columns="inputColumns"
+        :columns-loading="columnsLoading"
+        :fetch-distinct="fetchDistinct"
+        :connections="connections"
+        :read-only="!!readOnly"
+        @update="emit('update', $event)"
+        @delete="emit('delete')"
       />
     </template>
 

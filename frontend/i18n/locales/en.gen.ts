@@ -6474,4 +6474,358 @@ export default {
       "gone": "The data this step reads is no longer there."
     }
   },
+  "models": {
+    "palette": {
+      "group": "Models",
+      "itemTitle": "{hint} Drag it onto the canvas, or press Enter to add it after the selected step."
+    },
+    "groups": {
+      "regression": "Regression",
+      "survival": "Survival",
+      "timeseries": "Time series"
+    },
+    "linear": {
+      "name": "Linear regression",
+      "hint": "Explains a number with other columns: least squares, weighted, with robust errors, or with a ridge, lasso or elastic net penalty.",
+      "params": {
+        "outcome": "Outcome (a number)"
+      }
+    },
+    "logistic": {
+      "name": "Logistic regression",
+      "hint": "Explains a yes/no outcome with other columns: the odds of the event. Maximum likelihood, Firth's correction, or a penalty.",
+      "params": {
+        "outcome": "Outcome (two values)",
+        "event_value": "Value that is the event"
+      }
+    },
+    "kaplan_meier": {
+      "name": "Kaplan–Meier",
+      "hint": "The probability of still waiting for an event over time, with groups compared by the log-rank test.",
+      "params": {
+        "time": "Follow-up time (a number)",
+        "event": "Event column",
+        "event_value": "Value that means the event happened"
+      }
+    },
+    "cox": {
+      "name": "Cox proportional hazards",
+      "hint": "How columns change the rate of an event over time: hazard ratios, with the proportional hazards check.",
+      "params": {
+        "time": "Follow-up time (a number)",
+        "event": "Event column",
+        "event_value": "Value that means the event happened"
+      }
+    },
+    "arima": {
+      "name": "ARIMA",
+      "hint": "A time series modelled on its own past, and forecast: from AR to SARIMAX, with the orders chosen or searched for.",
+      "params": {
+        "time": "Time column",
+        "value": "Series (a number)"
+      }
+    },
+    "presets": {
+      "ar": {
+        "name": "AR",
+        "hint": "Autoregressive: a value explained by its own past. The ARIMA node with only p."
+      },
+      "ma": {
+        "name": "MA",
+        "hint": "Moving average: a value explained by the past errors. The ARIMA node with only q."
+      },
+      "arma": {
+        "name": "ARMA",
+        "hint": "Autoregressive and moving average, on a series that needs no differencing. The ARIMA node with d = 0."
+      },
+      "arima": {
+        "name": "ARIMA (p, d, q)",
+        "hint": "With differencing for a trend, no seasonal part. The ARIMA node with its three orders."
+      },
+      "sarima": {
+        "name": "SARIMA",
+        "hint": "With a seasonal part (P, D, Q) for a series that repeats each year or week. The ARIMA node without exogenous columns."
+      },
+      "sarimax": {
+        "name": "SARIMAX",
+        "hint": "SARIMA with other columns that explain the series (exogenous). The ARIMA node with all its parts: tick the columns in «Exogenous columns»."
+      }
+    },
+    "params": {
+      "outcome": "Outcome",
+      "event_value": "Value that is the event",
+      "predictors": "Predictors",
+      "estimation": "Estimation",
+      "penalty": "Penalty",
+      "link": "Link",
+      "reference": "Reference levels",
+      "interactions": "Interactions",
+      "intercept": "Intercept",
+      "weights": "Weights column",
+      "se": "Standard errors",
+      "cluster": "Cluster column",
+      "order_by": "Order of the rows",
+      "ci": "Confidence intervals",
+      "threshold": "Classification threshold",
+      "mixing": "Lasso share",
+      "lambda": "Penalty strength (λ)",
+      "folds": "Cross-validation folds",
+      "fold_by": "Keep together by",
+      "measure": "Error measure",
+      "standardize": "Standardize the predictors",
+      "alpha": "Significance level",
+      "seed": "Seed",
+      "output": "Output",
+      "time": "Time column",
+      "value": "Series (a number)",
+      "event": "Event column",
+      "strata": "Strata column",
+      "conf_type": "Confidence band",
+      "test": "Test between strata",
+      "pairwise": "Compare each pair of strata",
+      "times": "Survival at times",
+      "rmst_tau": "Restricted mean up to",
+      "start": "Start time column",
+      "ties": "Tied times",
+      "frequency": "Frequency of the series",
+      "s": "Seasonal period",
+      "orders": "Orders",
+      "p": "AR order (p)",
+      "d": "Differences (d)",
+      "q": "MA order (q)",
+      "P": "Seasonal AR order (P)",
+      "D": "Seasonal differences (D)",
+      "Q": "Seasonal MA order (Q)",
+      "criterion": "Criterion",
+      "stepwise": "Stepwise search",
+      "max_p": "Largest p",
+      "max_q": "Largest q",
+      "max_P": "Largest P",
+      "max_Q": "Largest Q",
+      "max_d": "Largest d",
+      "max_D": "Largest D",
+      "unit_root_test": "Test for differences",
+      "seasonal_test": "Test for seasonal differences",
+      "drift": "Drift (a trend)",
+      "mean": "Mean (a constant)",
+      "exog": "Exogenous columns",
+      "transform": "Transform the series",
+      "box_cox_lambda": "Box–Cox λ",
+      "horizon": "Forecast steps",
+      "holdout": "Rows kept out to test the forecast"
+    },
+    "hints": {
+      "outcome": "The column to explain.",
+      "event_value": "Which value of the column is the event; the others are not.",
+      "predictors": "The columns that explain it, numbers or categories. A date is not accepted: compute the month, or the days since a start, first.",
+      "reference": "What each category is compared with. By default the first in text order.",
+      "interactions": "The effect of one predictor depends on another: their product is added.",
+      "intercept": "Leave it on unless you know the line must pass through zero.",
+      "weights": "A number for each row: how much it counts. Zero or more.",
+      "se": "Classical assumes the same spread everywhere; the robust ones do not.",
+      "cluster": "Rows of the same cluster are not independent: their errors are taken together.",
+      "order_by": "The column that puts the rows in order, for the tests that depend on it (Durbin–Watson).",
+      "ci": "Wald is quick; profile likelihood is better with few events.",
+      "threshold": "The predicted probability from which a row counts as the event.",
+      "mixing": "0 is ridge, 1 is lasso. «cv» tries a grid and keeps the best.",
+      "lambda": "«Largest within one error» is the simplest model about as good as the best.",
+      "folds": "How many parts the rows are split in to choose the penalty. 3 to 20.",
+      "fold_by": "Rows with the same value go to the same part (a customer, a patient).",
+      "standardize": "On the same scale, so that the penalty treats every predictor alike. Results come back on the original scale.",
+      "alpha": "Intervals are drawn at 1 − this, and tests are judged against it.",
+      "seed": "Every random choice (the cross-validation parts) uses it: the same data give the same numbers.",
+      "output": "What the node hands to the step after it.",
+      "strata": "One curve per value of this column; leave empty for a single curve.",
+      "times": "Up to 10 times, separated by commas: the survival at each is reported.",
+      "rmst_tau": "The time up to which the average survival time is computed.",
+      "start": "For rows that give an interval (start, stop) instead of a single follow-up time.",
+      "ties": "How events at the same time are handled. Efron is the usual choice.",
+      "frequency": "How far apart the rows are. One row per period; no row twice.",
+      "s": "Rows in a cycle: 12 for months, 4 for quarters, 7 for days. Empty: from the frequency.",
+      "orders": "Manual: you give p, d, q. Automatic: Tabularia searches for the best orders and says why.",
+      "p": "How many past values explain the next one.",
+      "d": "How many times the series is differenced to remove a trend.",
+      "q": "How many past errors explain the next value.",
+      "criterion": "What «best» means when orders are compared: AICc is the usual choice.",
+      "stepwise": "Faster: moves from one candidate to its neighbours. Off tries them all.",
+      "drift": "A straight-line trend, when there are differences.",
+      "mean": "A constant level, when the series is not differenced.",
+      "exog": "Other columns that explain the series. Their future values must be in the rows after the last observed one.",
+      "transform": "Log or Box–Cox when the swings grow with the level.",
+      "horizon": "How many periods after the series ends. With exogenous columns: the rows after the last observed value.",
+      "holdout": "The last rows are left out of the fit and forecast, to measure how good the forecast is. 0: none."
+    },
+    "choice": {
+      "ols": "Ordinary least squares",
+      "wls": "Weighted least squares",
+      "ml": "Maximum likelihood",
+      "firth": "Firth's correction",
+      "none": "None",
+      "ridge": "Ridge",
+      "lasso": "Lasso",
+      "elastic_net": "Elastic net",
+      "classical": "Classical",
+      "hc0": "Robust (HC0)",
+      "hc1": "Robust (HC1)",
+      "hc2": "Robust (HC2)",
+      "hc3": "Robust (HC3)",
+      "hac": "Robust to autocorrelation (HAC)",
+      "cluster": "Clustered",
+      "robust": "Robust",
+      "mse": "Squared error",
+      "mae": "Absolute error",
+      "deviance": "Deviance",
+      "auc": "Area under the ROC curve",
+      "class": "Misclassification rate",
+      "logit": "Logit",
+      "probit": "Probit",
+      "wald": "Wald",
+      "profile": "Profile likelihood",
+      "log": "Logarithm",
+      "log-log": "Log–log",
+      "plain": "Plain",
+      "logrank": "Log-rank",
+      "peto": "Peto–Peto (early differences weigh more)",
+      "efron": "Efron",
+      "breslow": "Breslow",
+      "exact": "Exact",
+      "hour": "Hourly",
+      "day": "Daily",
+      "week": "Weekly",
+      "month": "Monthly",
+      "quarter": "Quarterly",
+      "year": "Yearly",
+      "index": "Whole numbers (steps)",
+      "manual": "Manual",
+      "auto": "Automatic",
+      "aicc": "AICc",
+      "aic": "AIC",
+      "bic": "BIC",
+      "kpss": "KPSS",
+      "adf": "ADF",
+      "pp": "Phillips–Perron",
+      "seas": "Seasonal strength",
+      "ocsb": "OCSB",
+      "box_cox": "Box–Cox",
+      "results": "The results table",
+      "rows": "The rows, with the fitted values added",
+      "table": "The survival table",
+      "forecast": "The series and its forecast",
+      "cv": "Choose by cross-validation",
+      "cv_1se": "Largest within one error of the best",
+      "cv_min": "The one with the smallest error"
+    },
+    "choices": {
+      "penalty": {
+        "none": "No penalty"
+      },
+      "transform": {
+        "none": "No transformation"
+      },
+      "conf_type": {
+        "log": "Log (R's default)"
+      }
+    },
+    "reasons": {
+      "wls_needs_weights": "Weighted least squares need the column of the weights.",
+      "cluster_needs_column": "Clustered standard errors need the column of the clusters.",
+      "firth_needs_logit": "Firth's correction is for the logit link: choose logit, or maximum likelihood.",
+      "profile_needs_classical_se": "Profile likelihood intervals go with classical standard errors: use Wald with robust ones."
+    },
+    "form": {
+      "notUsable": "not usable here",
+      "notInInput": "not in the step's input",
+      "notInData": "not in the data",
+      "noNumericColumns": "The step's input has no numeric column: convert one first.",
+      "noTimeColumns": "The step's input has no date, datetime or integer column to use as time.",
+      "noColumnsLeft": "No other column to choose.",
+      "filterColumns": "Filter the columns",
+      "toSet": "Still to set: {keys}.",
+      "overlap": "The column «{column}» is both «{keys}»: choose another.",
+      "levelPlaceholder": "yes, 1, true…",
+      "chooseColumnFirst": "Choose «{field}» first.",
+      "valuesOf": "Values of «{column}»",
+      "levelsFailed": "The column's values could not be read: write the value.",
+      "firstLevel": "Automatic: the first, {level}",
+      "first": "first predictor",
+      "second": "second predictor",
+      "addPair": "Add an interaction",
+      "removePair": "Remove this interaction",
+      "pairsNeedPredictors": "Choose at least two predictors first.",
+      "aValue": "A value",
+      "numbersPlaceholder": "e.g. 12, 24, 36",
+      "between": "A number between {above} and {below}, both excluded.",
+      "above": "A number above {above}.",
+      "below": "A number below {below}.",
+      "range": "A number from {min} to {max}.",
+      "atLeast": "At least {min}.",
+      "atMost": "At most {max}.",
+      "whole": "A whole number.",
+      "tooMany": "At most {n} numbers."
+    },
+    "mlflow": {
+      "title": "MLflow",
+      "connection": "MLflow connection",
+      "none": "No MLflow: the results stay with the run",
+      "noConnection": "No MLflow connection is available to you: create one in a folder you may use.",
+      "hint": "Log each run of the flow to an MLflow server: parameters, metrics, the report, and the model.",
+      "experiment": "Experiment",
+      "experimentPlaceholder": "e.g. Pasta/price elasticity",
+      "experimentNeeded": "Give the experiment a name.",
+      "registerAs": "Register the model as",
+      "registerPlaceholder": "e.g. price-elasticity",
+      "registerHint": "Optional. Each run adds a version of the model under this name, which a Predict step can apply.",
+      "continueWithout": "Continue without MLflow",
+      "continueHint": "If MLflow cannot be reached the step goes on and says so, instead of failing.",
+      "unknownConnection": "Connection #{id} (not available to you)"
+    },
+    "run": {
+      "title": "Run",
+      "timeout": "Longest run (seconds)",
+      "retries": "Retries",
+      "timeoutMax": "At most {n} seconds for this group."
+    },
+    "node": {
+      "title": "Statistical model",
+      "setIt": "Set its columns in the panel.",
+      "unknownModel": "The model «{model}» is not known to this version of Tabularia.",
+      "groupOff": "The model group «{group}» is not enabled: ask an administrator. The step does not run until it is.",
+      "groupNotAllowed": "You may not use this model group: ask an administrator.",
+      "notConfigured": "Statistical models need the scripting machinery, which is not set up on this installation.",
+      "previewAfterRun": "No data from this model yet: run the flow.",
+      "previewFromTrial": "From the model's run of {when}, on the sample.",
+      "previewFromRun": "From the flow's run of {when}.",
+      "previewStale": "The model changed since."
+    },
+    "predict": {
+      "title": "Predict",
+      "hint": "Applies a model registered in MLflow to these rows and adds the predicted column. Only the model's saved numbers are used; nothing is run from the server.",
+      "chooseModel": "Choose a model.",
+      "latest": "{model}, latest version",
+      "version": "{model} · version {version}",
+      "notListed": "no longer listed by the server",
+      "noGroup": "No model group is enabled for you: Predict runs in the group of the model it applies.",
+      "listFailed": "The server's list could not be read: check the connection.",
+      "noExperiments": "This server has no experiment yet.",
+      "noVersions": "Tabularia has registered no model version in this experiment yet.",
+      "versionLabel": "Model version",
+      "latestHint": "Read again at each run: the version that is the latest then is the one used, and the run records it.",
+      "adds": "Adds: {columns}.",
+      "clash": "The input already has: {columns}. Rename them first."
+    }
+  },
+  "predict": {
+    "params": {
+      "interval": "Prediction interval",
+      "threshold": "Class threshold",
+      "horizon": "Forecast steps",
+      "at_times": "Survival at times"
+    },
+    "hints": {
+      "interval": "Adds the lower and upper bounds of each prediction.",
+      "threshold": "Adds the predicted class: the event from this probability up. 0.5 when empty.",
+      "horizon": "How many steps after the series ends. Empty: the model's own.",
+      "at_times": "A survival column for each time, e.g. 12, 24."
+    }
+  },
 }

@@ -31,7 +31,7 @@ const STEP_GAP = 60
 // a child this much closer than a whole step to the new node still has room: nothing moves
 const ROOM_SLACK = 40
 // node types whose data output a transformation can read (the «out» handle)
-const READABLE = new Set(['source', 'operation', 'foreach', 'script', 'container'])
+const READABLE = new Set(['source', 'operation', 'foreach', 'script', 'container', 'model', 'model_predict'])
 
 const isSequence = (e: ChainEdge) => e.targetHandle === 'seq-in' || e.sourceHandle === 'seq-out'
 const dataEdges = (edges: ChainEdge[]) => edges.filter((e) => !isSequence(e))
@@ -95,7 +95,7 @@ export function planStep(
   const onEdge = opts.edgeId ? outs.find((e) => e.id === opts.edgeId) : undefined
   const edge = onEdge ?? (!opts.branch && !opts.edgeId && outs.length === 1 ? outs[0] : undefined)
   const child = edge ? nodes.find((n) => n.id === edge.target) : undefined
-  const outHandle = parent.type === 'script' || parent.type === 'container' ? 'out' : undefined
+  const outHandle = parent.type === 'script' || parent.type === 'container' || parent.type === 'model' || parent.type === 'model_predict' ? 'out' : undefined
   // beside the parent, clear of its right edge; on the child's row when the parent forks
   // (the parent's own row is another branch's there)
   const beside = {

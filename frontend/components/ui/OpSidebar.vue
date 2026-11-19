@@ -3,9 +3,11 @@
 // travels in the dataTransfer (application/tabularia), read by FlowEditor's drop handler.
 import { computed, onMounted, ref } from 'vue'
 import { useI18n } from 'vue-i18n'
-import { ChevronRight, Container, FileCode2, GripVertical, HardDriveDownload, StickyNote, Search } from 'lucide-vue-next'
+import { ChartScatter, ChartSpline, ChevronRight, Container, FileCode2, GripVertical, HardDriveDownload, HeartPulse, Sparkles, StickyNote, Search } from 'lucide-vue-next'
 import { opMeta, SOURCE_META } from '~/composables/useOpIcons'
 import { statHintKey, statIsOp, statNameKey, statPalette } from '~/composables/statTests'
+import { MODEL_COLOR, modelGroupKey, modelOf, modelPalette, modelShownGroups, predictAvailable } from '~/composables/modelCatalog'
+import { useModelGroups } from '~/composables/useModelGroups'
 
 const { t } = useI18n()
 // a statistics item chosen without dragging (Enter or Space on it): the editor adds the
@@ -17,9 +19,10 @@ const emit = defineEmits<{ (e: 'add', opType: string): void }>()
 // containers: the person may use Container nodes (a registry is granted to them)
 // scriptingOff / containersOff: an installation without Kubernetes (Docker Compose): the
 // two nodes are shown greyed out, not dragged, with the reason
+// mlflowConnections: how many `mlflow` connections the person may use (Predict needs one)
 const props = defineProps<{
   operations: string[]; readOnly?: boolean; scripting?: boolean; containers?: boolean
-  scriptingOff?: boolean; containersOff?: boolean
+  scriptingOff?: boolean; containersOff?: boolean; mlflowConnections?: number
 }>()
 
 // ── search: filters the palette's items by label (or operation name) ──
@@ -53,6 +56,33 @@ function toggleStat() {
   statOpenSaved.value = !statOpenSaved.value
   try { localStorage.setItem(STAT_OPEN_KEY, statOpenSaved.value ? 'open' : 'closed') } catch { /* not remembered */ }
 }
+// ── Models: the statistical models, by group ────────────────────────────────
+// A group of its own, after Statistics, closed until opened and remembered in this browser, with
+// one subtitle per group the administrator turned on and this person may use; a group not turned on
+// does not appear, and none turned on hides the whole thing. On Compose (no Kubernetes) the groups
+// are shown greyed out, not dragged, with the reason. Predict is above the subtitles. Enter or
+// Space on an item adds it after the selected node, as on a statistics item: nothing needs a
+// pointer, nor a key a laptop may lack.
+const MODEL_OPEN_KEY = 'tabularia.palette.models'
+const modelOpenSaved = ref(false)
+onMounted(() => {
+  try { modelOpenSaved.value = localStorage.getItem(MODEL_OPEN_KEY) === 'open' } catch { /* no storage: closed */ }
+})
+const modelGroups = useModelGroups()
+onMounted(() => { modelGroups.load() })
+const modelsOff = computed(() => modelGroups.state.value?.disabled_reason === 'kubernetes')
+const modelShown = computed(() => modelShownGroups(modelGroups.state.value))
+const modelEntries = computed(() => (props.readOnly ? [] : modelPalette(modelShown.value, query.value, t)))
+const showPredict = computed(() => !props.readOnly && predictAvailable(modelGroups.state.value, props.mlflowConnections ?? 0)
+  && match(t('models.predict.title'), 'predict', 'prediction', 'mlflow'))
+const modelCount = computed(() => modelEntries.value.reduce((n, g) => n + g.items.length, 0) + (showPredict.value ? 1 : 0))
+const showModels = computed(() => modelEntries.value.length > 0 || showPredict.value)
+const modelOpen = computed(() => searching.value || modelOpenSaved.value)
+function toggleModels() {
+  modelOpenSaved.value = !modelOpenSaved.value
+  try { localStorage.setItem(MODEL_OPEN_KEY, modelOpenSaved.value ? 'open' : 'closed') } catch { /* not remembered */ }
+}
+const familyIcon = (model: string) => (modelOf(model)?.family === 'survival' ? HeartPulse : modelOf(model)?.family === 'timeseries' ? ChartSpline : ChartScatter)
 const hasForeach = computed(() => props.operations.includes('foreach'))
 
 // visibility of the single fixed items and of their groups
@@ -70,6 +100,7 @@ const noResults = computed(
     !showSource.value &&
     !transformOps.value.length &&
     !statGroups.value.length &&
+    !showModels.value &&
     !showControl.value &&
     !showOutput.value &&
     !showComment.value,
@@ -158,6 +189,65 @@ function onDragStart(ev: DragEvent, kind: string) {
       </div>
     </template>
 
+    <template v-if="showModels">
+      <!-- while a search has text the group is open by itself: a title, as the others -->
+      <div v-if="searching" class="group-title">{{ $t('models.palette.group') }}</div>
+      <button
+        v-else
+        type="button"
+        class="group-title group-toggle"
+        :aria-expanded="modelOpen"
+        aria-controls="palette-models"
+        @click="toggleModels"
+      >
+        <ChevronRight :size="12" class="chev" :class="{ open: modelOpen }" aria-hidden="true" />
+        <span>{{ $t('models.palette.group') }}</span>
+        <span class="group-count" aria-hidden="true">{{ modelCount }}</span>
+      </button>
+      <div v-show="modelOpen" id="palette-models" class="stat-group" role="group" :aria-label="$t('models.palette.group')">
+        <div
+          v-if="showPredict"
+          class="item"
+          :class="{ off: modelsOff }"
+          :draggable="!modelsOff"
+          role="button"
+          tabindex="0"
+          :title="modelsOff ? $t('scripting.kubernetesOnly') : $t('models.palette.itemTitle', { hint: $t('models.predict.hint') })"
+          :aria-disabled="modelsOff ? 'true' : undefined"
+          :style="{ '--item-color': MODEL_COLOR }"
+          @dragstart="!modelsOff && onDragStart($event, 'model_predict')"
+          @keydown.enter.prevent="!modelsOff && emit('add', 'model_predict')"
+          @keydown.space.prevent="!modelsOff && emit('add', 'model_predict')"
+        >
+          <Sparkles :size="15" class="item-icon" aria-hidden="true" />
+          <span>{{ $t('models.predict.title') }}</span>
+          <GripVertical :size="13" class="grip" aria-hidden="true" />
+        </div>
+        <div v-for="g in modelEntries" :key="g.group" class="stat-family" role="group" :aria-labelledby="`palette-model-${g.group}`">
+          <div :id="`palette-model-${g.group}`" class="family-title">{{ $t(modelGroupKey(g.group)) }}</div>
+          <div
+            v-for="item in g.items"
+            :key="item.kind"
+            class="item"
+            :class="{ off: modelsOff, preset: !!item.preset }"
+            :draggable="!modelsOff"
+            role="button"
+            tabindex="0"
+            :title="modelsOff ? $t('scripting.kubernetesOnly') : $t('models.palette.itemTitle', { hint: $t(item.hintKey) })"
+            :aria-disabled="modelsOff ? 'true' : undefined"
+            :style="{ '--item-color': MODEL_COLOR }"
+            @dragstart="!modelsOff && onDragStart($event, item.kind)"
+            @keydown.enter.prevent="!modelsOff && emit('add', item.kind)"
+            @keydown.space.prevent="!modelsOff && emit('add', item.kind)"
+          >
+            <component :is="familyIcon(item.model)" :size="15" class="item-icon" aria-hidden="true" />
+            <span>{{ $t(item.nameKey) }}</span>
+            <GripVertical :size="13" class="grip" aria-hidden="true" />
+          </div>
+        </div>
+      </div>
+    </template>
+
     <template v-if="showControl">
       <div class="group-title">{{ $t('opSidebar.controlGroup') }}</div>
       <div
@@ -236,6 +326,7 @@ function onDragStart(ev: DragEvent, kind: string) {
 
 <style scoped>
 .item.off { opacity: .45; cursor: not-allowed; }
+.item.preset { padding-left: 22px; }
 .opsidebar {
   height: 100%;
   overflow-y: auto;

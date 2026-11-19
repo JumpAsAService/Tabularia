@@ -1,0 +1,86 @@
+<script setup lang="ts">
+// The node panel of a Model node and of a Predict node: the title (an ARIMA node says what its orders
+// make), the delete button, and the form drawn from the catalogue (ui/ModelForm.vue, ui/PredictForm.vue).
+// What the node reads and writes comes from its edges, as on a Script node. The slot `run` is where
+// the trial's button and its outcome go (Run on the sample, the latest output, «stale»): the panel
+// hands the form what the trial needs and nothing more is here.
+import { computed, onMounted } from 'vue'
+import { useI18n } from 'vue-i18n'
+import { ChartScatter, ChartSpline, HeartPulse, Sparkles, Trash2 } from 'lucide-vue-next'
+import type { Node } from '@vue-flow/core'
+import type { ColumnInfo } from '~/composables/useApi'
+import { modelArimaTitle, modelNameKey, modelOff, modelOf } from '~/composables/modelCatalog'
+import { useModelGroups } from '~/composables/useModelGroups'
+import ModelForm from '~/components/ui/ModelForm.vue'
+import PredictForm from '~/components/ui/PredictForm.vue'
+
+const props = defineProps<{
+  node: Node
+  inputColumns: ColumnInfo[]
+  columnsLoading?: boolean
+  fetchDistinct?: (column: string) => Promise<any[]>
+  connections?: { id: number; name: string; db_type: string; project_id?: number }[]
+  readOnly?: boolean
+}>()
+const emit = defineEmits<{
+  (e: 'update', patch: Record<string, any>): void
+  (e: 'delete'): void
+}>()
+const { t } = useI18n()
+const groups = useModelGroups()
+onMounted(() => { groups.load() })
+
+const isPredict = computed(() => props.node.type === 'model_predict')
+const model = computed(() => modelOf(props.node.data?.model))
+const off = computed(() => (model.value ? modelOff(model.value.group, groups.state.value) : ''))
+const maxTimeout = computed(() => groups.state.value?.groups.find((g) => g.id === model.value?.group)?.max_timeout_seconds ?? null)
+const title = computed(() => {
+  if (isPredict.value) return t('models.predict.title')
+  if (!model.value) return t('models.node.title')
+  return model.value.id === 'arima' ? modelArimaTitle(props.node.data?.params) : t(modelNameKey(model.value.id))
+})
+const icon = computed(() => (isPredict.value ? Sparkles : model.value?.family === 'survival' ? HeartPulse : model.value?.family === 'timeseries' ? ChartSpline : ChartScatter))
+</script>
+
+<template>
+  <div class="model-panel">
+    <div class="row">
+      <h3><component :is="icon" :size="15" aria-hidden="true" /> {{ title }}</h3>
+      <button v-if="!readOnly" class="del" :title="$t('nodePanel.deleteNodeTitle')" :aria-label="$t('nodePanel.deleteNodeTitle')" @click="emit('delete')"><Trash2 :size="14" /></button>
+    </div>
+    <PredictForm
+      v-if="isPredict"
+      :node-id="node.id"
+      :data="node.data ?? {}"
+      :input-columns="inputColumns"
+      :connections="connections"
+      :read-only="readOnly"
+      @update="emit('update', $event)"
+    />
+    <p v-else-if="!model" class="muted unknown">{{ $t('models.node.unknownModel', { model: String(node.data?.model ?? '') }) }}</p>
+    <ModelForm
+      v-else
+      :node-id="node.id"
+      :data="node.data ?? {}"
+      :input-columns="inputColumns"
+      :columns-loading="columnsLoading"
+      :fetch-distinct="fetchDistinct"
+      :connections="connections"
+      :off="off"
+      :max-timeout="maxTimeout"
+      :read-only="readOnly"
+      @update="emit('update', $event)"
+    >
+      <template #run><slot name="run" /></template>
+    </ModelForm>
+  </div>
+</template>
+
+<style scoped>
+.model-panel { display: flex; flex-direction: column; gap: 10px; }
+.row { display: flex; align-items: center; gap: 8px; }
+.row h3 { flex: 1; margin: 0; display: inline-flex; align-items: center; gap: 7px; font-size: 14px; }
+.del { border: 0; background: none; color: var(--muted); cursor: pointer; padding: 4px; border-radius: 6px; }
+.del:hover { color: var(--danger); background: var(--bg-soft); }
+.unknown { margin: 0; font-size: 12px; }
+</style>
