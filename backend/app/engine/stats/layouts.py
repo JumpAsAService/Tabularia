@@ -1202,3 +1202,23 @@ def definition(test: str, params: dict[str, Any] | None, locale: str | None = "e
     code = locale if locale in LOCALES else "en"
     step = " ".join(str(step).split())[:120] if step else None
     return LAYOUTS[test](test, dict(params or {}), code, sample_line(sample, code), step)
+
+
+# ── what the reports of the statistical models build on ─────────────────────
+# (app/engine/models/layouts/common.py: the same page, bands, tables and expressions, not a
+# copy of them; docs/specs/statistical-models.md, «The layouts»)
+Page = _Page
+table = _table
+value_of = _value
+text_of = _text
+shown = _shown
+static = _static
+fit = _fit
+join = _join
+quoted = _q
+with_stars = _with_stars
+signif_legend = _signif_legend
+bands = _bands
+document = _document
+rounded = _rounded
+edges_text = _edges_text

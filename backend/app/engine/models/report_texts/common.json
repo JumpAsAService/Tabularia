@@ -1,0 +1,917 @@
+{
+ "en": {
+  "footer": "Computed by Tabularia",
+  "signif": {
+   "column": "Signif.",
+   "legend": "Signif. codes: {codes}"
+  },
+  "sections": {
+   "summary": "Summary",
+   "assumptions": "Assumptions",
+   "coefficients": "Coefficients",
+   "fit": "Fit",
+   "diagnostics": "Diagnostics",
+   "notes": "Notes",
+   "confusion": "Classification",
+   "curves": "Survival curves",
+   "strata": "Strata",
+   "forecast": "Forecast",
+   "candidates": "Choice of the orders"
+  },
+  "assumptions": {
+   "title": "Checks of the assumptions",
+   "check": "Check",
+   "h0": "Null hypothesis",
+   "statistic": "Statistic",
+   "df": "df",
+   "p_value": "p-value",
+   "value": "Value",
+   "verdict": "Verdict",
+   "none": "This model has no check of its assumptions.",
+   "many_rows": "With {n} rows the tests reject very small departures: read the charts as well.",
+   "advice_title": "What to do",
+   "advice": "Advice",
+   "rows": "Rows to look at"
+  },
+  "verdicts": {
+   "ok": "✓ ok",
+   "doubtful": "! doubtful",
+   "failed": "× failed",
+   "not_computed": "– not computed"
+  },
+  "coef": {
+   "term": "Term",
+   "yes": "yes",
+   "no": "no"
+  },
+  "tables": {
+   "estimates": "Estimates and tests",
+   "intervals": "Intervals and collinearity"
+  },
+  "fit": {
+   "title": "Numbers of the fit",
+   "quantity": "Quantity",
+   "name": "Name in the table",
+   "value": "Value",
+   "settings_title": "How it was fitted",
+   "setting": "Setting"
+  },
+  "illustrates": "{check} — {verdict}",
+  "notes": {
+   "title": "Notes of the model",
+   "note": "Note",
+   "trial": "These results are a trial's (Run in the editor): the rows before the node came from the development sample.",
+   "run": "These results are a flow run's.",
+   "rows": "{n} rows were used; {missing} were left out because a column the model uses was empty.",
+   "software": "Software: {software}. Version of the model group: {version}."
+  },
+  "patterns": {
+   "note": "Note {x}",
+   "surv_at": "Survival at {x}",
+   "surv_at_low": "Survival at {x}, low end",
+   "surv_at_high": "Survival at {x}, high end",
+   "ar_root": "Modulus of AR root {x}",
+   "ma_root": "Modulus of MA root {x}",
+   "orders_reason": "Step {x}",
+   "order_test": "Test of the orders: {x}"
+  },
+  "series": {
+   "points": "Points",
+   "lowess": "Smooth (lowess)",
+   "qq_line": "Normal line",
+   "count": "Count",
+   "estimate": "Estimate",
+   "ci_low": "Low end",
+   "ci_high": "High end",
+   "residuals": "Residuals"
+  },
+  "stats": {
+   "model": {
+    "n": "Rows used",
+    "n_missing": "Rows left out",
+    "log_lik": "Log-likelihood",
+    "aic": "AIC",
+    "bic": "BIC",
+    "rmse": "Root mean squared error",
+    "mae": "Mean absolute error",
+    "family": "Family",
+    "link": "Link",
+    "se_type": "Standard errors",
+    "estimation": "Estimation",
+    "event_value": "Event",
+    "penalty": "Penalty",
+    "cv_measure": "Measure of the cross-validation",
+    "threshold": "Threshold"
+   },
+   "coef": {
+    "estimate": "Estimate",
+    "std_error": "Std. error",
+    "statistic": "Statistic",
+    "df": "df",
+    "p_value": "p-value",
+    "ci_low": "CI low",
+    "ci_high": "CI high",
+    "vif": "VIF",
+    "odds_ratio": "Odds ratio",
+    "or_ci_low": "OR, CI low",
+    "or_ci_high": "OR, CI high",
+    "selected": "Selected",
+    "hazard_ratio": "Hazard ratio",
+    "hr_ci_low": "HR, CI low",
+    "hr_ci_high": "HR, CI high",
+    "robust_se": "Robust SE"
+   }
+  },
+  "values": {
+   "se_type": {
+    "classical": "classical",
+    "hc0": "HC0 (heteroscedasticity-consistent)",
+    "hc1": "HC1 (heteroscedasticity-consistent)",
+    "hc2": "HC2 (heteroscedasticity-consistent)",
+    "hc3": "HC3 (heteroscedasticity-consistent)",
+    "hac": "HAC (Newey–West)",
+    "cluster": "clustered",
+    "robust": "robust"
+   },
+   "estimation": {
+    "ols": "ordinary least squares",
+    "wls": "weighted least squares",
+    "ml": "maximum likelihood",
+    "firth": "Firth's penalized likelihood"
+   },
+   "penalty": {
+    "ridge": "ridge",
+    "lasso": "lasso",
+    "elastic_net": "elastic net"
+   },
+   "family": {
+    "gaussian": "gaussian (normal)",
+    "binomial": "binomial"
+   },
+   "link": {
+    "identity": "identity",
+    "logit": "logit",
+    "probit": "probit"
+   }
+  },
+  "checks": {
+   "vif": {
+    "name": "Multicollinearity: VIF",
+    "h0": "Each term is not explained by the other terms (VIF 1).",
+    "advice": "Drop or combine the correlated predictors, or turn on a penalty."
+   },
+   "epv": {
+    "name": "Enough events: events per variable",
+    "h0": "At least 10 events for each term of the model.",
+    "advice": "Few events for the number of terms: fewer terms, or Firth or a penalty help."
+   },
+   "cooks_distance": {
+    "name": "Influence: Cook's distance",
+    "h0": "No row moves the fit much (Cook's distance under 4/n).",
+    "advice": "Look at the rows named: a mistake in the data, or a case the model does not describe."
+   },
+   "leverage": {
+    "name": "Influence: leverage",
+    "h0": "No row has an unusual combination of predictors (leverage under 2p/n).",
+    "advice": "Look at the rows named: their predictors are far from the others'."
+   },
+   "jarque_bera": {
+    "name": "Normality of residuals: Jarque–Bera",
+    "h0": "The residuals' skewness and kurtosis are a normal distribution's.",
+    "advice": "The intervals rely on normal errors: with few rows read them with care, or transform the outcome."
+   }
+  }
+ },
+ "it": {
+  "footer": "Calcolato da Tabularia",
+  "signif": {
+   "column": "Signif.",
+   "legend": "Codici di significatività: {codes}"
+  },
+  "sections": {
+   "summary": "Sintesi",
+   "assumptions": "Assunzioni",
+   "coefficients": "Coefficienti",
+   "fit": "Adattamento",
+   "diagnostics": "Diagnostica",
+   "notes": "Note",
+   "confusion": "Classificazione",
+   "curves": "Curve di sopravvivenza",
+   "strata": "Strati",
+   "forecast": "Previsione",
+   "candidates": "Scelta degli ordini"
+  },
+  "assumptions": {
+   "title": "Verifiche delle assunzioni",
+   "check": "Verifica",
+   "h0": "Ipotesi nulla",
+   "statistic": "Statistica",
+   "df": "gdl",
+   "p_value": "p-value",
+   "value": "Valore",
+   "verdict": "Esito",
+   "none": "Questo modello non ha verifiche delle assunzioni.",
+   "many_rows": "Con {n} righe i test rifiutano anche scostamenti minimi: leggete anche i grafici.",
+   "advice_title": "Cosa fare",
+   "advice": "Consiglio",
+   "rows": "Righe da guardare"
+  },
+  "verdicts": {
+   "ok": "✓ ok",
+   "doubtful": "! dubbio",
+   "failed": "× non rispettata",
+   "not_computed": "– non calcolata"
+  },
+  "coef": {
+   "term": "Termine",
+   "yes": "sì",
+   "no": "no"
+  },
+  "tables": {
+   "estimates": "Stime e test",
+   "intervals": "Intervalli e collinearità"
+  },
+  "fit": {
+   "title": "Numeri dell'adattamento",
+   "quantity": "Grandezza",
+   "name": "Nome nella tabella",
+   "value": "Valore",
+   "settings_title": "Come è stato stimato",
+   "setting": "Impostazione"
+  },
+  "illustrates": "{check} — {verdict}",
+  "notes": {
+   "title": "Note del modello",
+   "note": "Nota",
+   "trial": "Questi risultati sono di una prova (Esegui nell'editor): le righe prima del nodo venivano dal campione di sviluppo.",
+   "run": "Questi risultati sono di un'esecuzione del flusso.",
+   "rows": "Sono state usate {n} righe; {missing} sono state escluse perché una colonna usata dal modello era vuota.",
+   "software": "Software: {software}. Versione del gruppo di modelli: {version}."
+  },
+  "patterns": {
+   "note": "Nota {x}",
+   "surv_at": "Sopravvivenza a {x}",
+   "surv_at_low": "Sopravvivenza a {x}, estremo inferiore",
+   "surv_at_high": "Sopravvivenza a {x}, estremo superiore",
+   "ar_root": "Modulo della radice AR {x}",
+   "ma_root": "Modulo della radice MA {x}",
+   "orders_reason": "Passo {x}",
+   "order_test": "Test degli ordini: {x}"
+  },
+  "series": {
+   "points": "Punti",
+   "lowess": "Smussamento (lowess)",
+   "qq_line": "Retta normale",
+   "count": "Conteggio",
+   "estimate": "Stima",
+   "ci_low": "Estremo inferiore",
+   "ci_high": "Estremo superiore",
+   "residuals": "Residui"
+  },
+  "stats": {
+   "model": {
+    "n": "Righe usate",
+    "n_missing": "Righe escluse",
+    "log_lik": "Log-verosimiglianza",
+    "aic": "AIC",
+    "bic": "BIC",
+    "rmse": "Radice dell'errore quadratico medio",
+    "mae": "Errore assoluto medio",
+    "family": "Famiglia",
+    "link": "Funzione di legame",
+    "se_type": "Errori standard",
+    "estimation": "Stima",
+    "event_value": "Evento",
+    "penalty": "Penalizzazione",
+    "cv_measure": "Misura della convalida incrociata",
+    "threshold": "Soglia"
+   },
+   "coef": {
+    "estimate": "Stima",
+    "std_error": "Errore std.",
+    "statistic": "Statistica",
+    "df": "gdl",
+    "p_value": "p-value",
+    "ci_low": "IC inf.",
+    "ci_high": "IC sup.",
+    "vif": "VIF",
+    "odds_ratio": "Odds ratio",
+    "or_ci_low": "OR, IC inf.",
+    "or_ci_high": "OR, IC sup.",
+    "selected": "Selezionato",
+    "hazard_ratio": "Hazard ratio",
+    "hr_ci_low": "HR, IC inf.",
+    "hr_ci_high": "HR, IC sup.",
+    "robust_se": "ES robusto"
+   }
+  },
+  "values": {
+   "se_type": {
+    "classical": "classici",
+    "hc0": "HC0 (robusti all'eteroschedasticità)",
+    "hc1": "HC1 (robusti all'eteroschedasticità)",
+    "hc2": "HC2 (robusti all'eteroschedasticità)",
+    "hc3": "HC3 (robusti all'eteroschedasticità)",
+    "hac": "HAC (Newey–West)",
+    "cluster": "per cluster",
+    "robust": "robusti"
+   },
+   "estimation": {
+    "ols": "minimi quadrati ordinari",
+    "wls": "minimi quadrati pesati",
+    "ml": "massima verosimiglianza",
+    "firth": "verosimiglianza penalizzata di Firth"
+   },
+   "penalty": {
+    "ridge": "ridge",
+    "lasso": "lasso",
+    "elastic_net": "elastic net"
+   },
+   "family": {
+    "gaussian": "gaussiana (normale)",
+    "binomial": "binomiale"
+   },
+   "link": {
+    "identity": "identità",
+    "logit": "logit",
+    "probit": "probit"
+   }
+  },
+  "checks": {
+   "vif": {
+    "name": "Multicollinearità: VIF",
+    "h0": "Nessun termine è spiegato dagli altri termini (VIF 1).",
+    "advice": "Togliete o combinate i predittori correlati, oppure attivate una penalizzazione."
+   },
+   "epv": {
+    "name": "Eventi sufficienti: eventi per variabile",
+    "h0": "Almeno 10 eventi per ogni termine del modello.",
+    "advice": "Pochi eventi per il numero di termini: meno termini, oppure Firth o una penalizzazione."
+   },
+   "cooks_distance": {
+    "name": "Influenza: distanza di Cook",
+    "h0": "Nessuna riga sposta di molto la stima (distanza di Cook sotto 4/n).",
+    "advice": "Guardate le righe indicate: un errore nei dati, o un caso che il modello non descrive."
+   },
+   "leverage": {
+    "name": "Influenza: leva",
+    "h0": "Nessuna riga ha una combinazione insolita di predittori (leva sotto 2p/n).",
+    "advice": "Guardate le righe indicate: i loro predittori sono lontani da quelli delle altre."
+   },
+   "jarque_bera": {
+    "name": "Normalità dei residui: Jarque–Bera",
+    "h0": "Asimmetria e curtosi dei residui sono quelle di una normale.",
+    "advice": "Gli intervalli presuppongono errori normali: con poche righe leggeteli con cautela, o trasformate la risposta."
+   }
+  }
+ },
+ "de": {
+  "footer": "Berechnet von Tabularia",
+  "signif": {
+   "column": "Signif.",
+   "legend": "Signifikanzcodes: {codes}"
+  },
+  "sections": {
+   "summary": "Überblick",
+   "assumptions": "Annahmen",
+   "coefficients": "Koeffizienten",
+   "fit": "Anpassung",
+   "diagnostics": "Diagnose",
+   "notes": "Hinweise",
+   "confusion": "Klassifikation",
+   "curves": "Überlebenskurven",
+   "strata": "Schichten",
+   "forecast": "Prognose",
+   "candidates": "Wahl der Ordnungen"
+  },
+  "assumptions": {
+   "title": "Prüfungen der Annahmen",
+   "check": "Prüfung",
+   "h0": "Nullhypothese",
+   "statistic": "Statistik",
+   "df": "FG",
+   "p_value": "p-Wert",
+   "value": "Wert",
+   "verdict": "Ergebnis",
+   "none": "Dieses Modell hat keine Prüfung seiner Annahmen.",
+   "many_rows": "Bei {n} Zeilen verwerfen die Tests schon kleinste Abweichungen: Lesen Sie auch die Diagramme.",
+   "advice_title": "Was zu tun ist",
+   "advice": "Rat",
+   "rows": "Zu prüfende Zeilen"
+  },
+  "verdicts": {
+   "ok": "✓ erfüllt",
+   "doubtful": "! fraglich",
+   "failed": "× verletzt",
+   "not_computed": "– nicht berechnet"
+  },
+  "coef": {
+   "term": "Term",
+   "yes": "ja",
+   "no": "nein"
+  },
+  "tables": {
+   "estimates": "Schätzungen und Tests",
+   "intervals": "Intervalle und Kollinearität"
+  },
+  "fit": {
+   "title": "Kennzahlen der Anpassung",
+   "quantity": "Größe",
+   "name": "Name in der Tabelle",
+   "value": "Wert",
+   "settings_title": "Wie geschätzt wurde",
+   "setting": "Einstellung"
+  },
+  "illustrates": "{check} — {verdict}",
+  "notes": {
+   "title": "Hinweise zum Modell",
+   "note": "Hinweis",
+   "trial": "Diese Ergebnisse stammen aus einem Probelauf (Ausführen im Editor): Die Zeilen vor dem Knoten kamen aus der Entwicklungsstichprobe.",
+   "run": "Diese Ergebnisse stammen aus einer Ausführung des Flows.",
+   "rows": "{n} Zeilen wurden verwendet; {missing} wurden ausgelassen, weil eine vom Modell verwendete Spalte leer war.",
+   "software": "Software: {software}. Version der Modellgruppe: {version}."
+  },
+  "patterns": {
+   "note": "Hinweis {x}",
+   "surv_at": "Überleben bei {x}",
+   "surv_at_low": "Überleben bei {x}, untere Grenze",
+   "surv_at_high": "Überleben bei {x}, obere Grenze",
+   "ar_root": "Betrag der AR-Wurzel {x}",
+   "ma_root": "Betrag der MA-Wurzel {x}",
+   "orders_reason": "Schritt {x}",
+   "order_test": "Test der Ordnungen: {x}"
+  },
+  "series": {
+   "points": "Punkte",
+   "lowess": "Glättung (lowess)",
+   "qq_line": "Normalgerade",
+   "count": "Anzahl",
+   "estimate": "Schätzung",
+   "ci_low": "Untere Grenze",
+   "ci_high": "Obere Grenze",
+   "residuals": "Residuen"
+  },
+  "stats": {
+   "model": {
+    "n": "Verwendete Zeilen",
+    "n_missing": "Ausgelassene Zeilen",
+    "log_lik": "Log-Likelihood",
+    "aic": "AIC",
+    "bic": "BIC",
+    "rmse": "Wurzel des mittleren quadratischen Fehlers",
+    "mae": "Mittlerer absoluter Fehler",
+    "family": "Familie",
+    "link": "Linkfunktion",
+    "se_type": "Standardfehler",
+    "estimation": "Schätzung",
+    "event_value": "Ereignis",
+    "penalty": "Penalisierung",
+    "cv_measure": "Maß der Kreuzvalidierung",
+    "threshold": "Schwelle"
+   },
+   "coef": {
+    "estimate": "Schätzung",
+    "std_error": "Std.-Fehler",
+    "statistic": "Statistik",
+    "df": "FG",
+    "p_value": "p-Wert",
+    "ci_low": "KI unten",
+    "ci_high": "KI oben",
+    "vif": "VIF",
+    "odds_ratio": "Odds Ratio",
+    "or_ci_low": "OR, KI unten",
+    "or_ci_high": "OR, KI oben",
+    "selected": "Ausgewählt",
+    "hazard_ratio": "Hazard Ratio",
+    "hr_ci_low": "HR, KI unten",
+    "hr_ci_high": "HR, KI oben",
+    "robust_se": "Robuster SF"
+   }
+  },
+  "values": {
+   "se_type": {
+    "classical": "klassisch",
+    "hc0": "HC0 (heteroskedastizitätskonsistent)",
+    "hc1": "HC1 (heteroskedastizitätskonsistent)",
+    "hc2": "HC2 (heteroskedastizitätskonsistent)",
+    "hc3": "HC3 (heteroskedastizitätskonsistent)",
+    "hac": "HAC (Newey–West)",
+    "cluster": "geclustert",
+    "robust": "robust"
+   },
+   "estimation": {
+    "ols": "gewöhnliche kleinste Quadrate",
+    "wls": "gewichtete kleinste Quadrate",
+    "ml": "Maximum Likelihood",
+    "firth": "penalisierte Likelihood nach Firth"
+   },
+   "penalty": {
+    "ridge": "Ridge",
+    "lasso": "Lasso",
+    "elastic_net": "Elastic Net"
+   },
+   "family": {
+    "gaussian": "Gauß (normal)",
+    "binomial": "binomial"
+   },
+   "link": {
+    "identity": "Identität",
+    "logit": "logit",
+    "probit": "probit"
+   }
+  },
+  "checks": {
+   "vif": {
+    "name": "Multikollinearität: VIF",
+    "h0": "Kein Term wird von den anderen Termen erklärt (VIF 1).",
+    "advice": "Entfernen oder kombinieren Sie korrelierte Prädiktoren, oder schalten Sie eine Penalisierung ein."
+   },
+   "epv": {
+    "name": "Genug Ereignisse: Ereignisse pro Variable",
+    "h0": "Mindestens 10 Ereignisse je Term des Modells.",
+    "advice": "Wenige Ereignisse für die Zahl der Terme: weniger Terme, oder Firth bzw. eine Penalisierung."
+   },
+   "cooks_distance": {
+    "name": "Einfluss: Cook-Distanz",
+    "h0": "Keine Zeile verschiebt die Schätzung stark (Cook-Distanz unter 4/n).",
+    "advice": "Prüfen Sie die genannten Zeilen: ein Fehler in den Daten oder ein Fall, den das Modell nicht beschreibt."
+   },
+   "leverage": {
+    "name": "Einfluss: Hebelwert",
+    "h0": "Keine Zeile hat eine ungewöhnliche Kombination von Prädiktoren (Hebelwert unter 2p/n).",
+    "advice": "Prüfen Sie die genannten Zeilen: Ihre Prädiktoren liegen weit von denen der anderen."
+   },
+   "jarque_bera": {
+    "name": "Normalverteilung der Residuen: Jarque–Bera",
+    "h0": "Schiefe und Wölbung der Residuen sind die einer Normalverteilung.",
+    "advice": "Die Intervalle setzen normalverteilte Fehler voraus: bei wenigen Zeilen mit Vorsicht lesen, oder die Zielgröße transformieren."
+   }
+  }
+ },
+ "es": {
+  "footer": "Calculado por Tabularia",
+  "signif": {
+   "column": "Signif.",
+   "legend": "Códigos de significación: {codes}"
+  },
+  "sections": {
+   "summary": "Resumen",
+   "assumptions": "Supuestos",
+   "coefficients": "Coeficientes",
+   "fit": "Ajuste",
+   "diagnostics": "Diagnóstico",
+   "notes": "Notas",
+   "confusion": "Clasificación",
+   "curves": "Curvas de supervivencia",
+   "strata": "Estratos",
+   "forecast": "Pronóstico",
+   "candidates": "Elección de los órdenes"
+  },
+  "assumptions": {
+   "title": "Comprobaciones de los supuestos",
+   "check": "Comprobación",
+   "h0": "Hipótesis nula",
+   "statistic": "Estadístico",
+   "df": "gl",
+   "p_value": "p-valor",
+   "value": "Valor",
+   "verdict": "Resultado",
+   "none": "Este modelo no tiene comprobaciones de sus supuestos.",
+   "many_rows": "Con {n} filas las pruebas rechazan desviaciones mínimas: lea también los gráficos.",
+   "advice_title": "Qué hacer",
+   "advice": "Consejo",
+   "rows": "Filas que revisar"
+  },
+  "verdicts": {
+   "ok": "✓ se cumple",
+   "doubtful": "! dudoso",
+   "failed": "× no se cumple",
+   "not_computed": "– no calculado"
+  },
+  "coef": {
+   "term": "Término",
+   "yes": "sí",
+   "no": "no"
+  },
+  "tables": {
+   "estimates": "Estimaciones y pruebas",
+   "intervals": "Intervalos y colinealidad"
+  },
+  "fit": {
+   "title": "Cifras del ajuste",
+   "quantity": "Magnitud",
+   "name": "Nombre en la tabla",
+   "value": "Valor",
+   "settings_title": "Cómo se estimó",
+   "setting": "Ajuste"
+  },
+  "illustrates": "{check} — {verdict}",
+  "notes": {
+   "title": "Notas del modelo",
+   "note": "Nota",
+   "trial": "Estos resultados son de una prueba (Ejecutar en el editor): las filas anteriores al nodo venían de la muestra de desarrollo.",
+   "run": "Estos resultados son de una ejecución del flujo.",
+   "rows": "Se usaron {n} filas; {missing} se excluyeron porque una columna que usa el modelo estaba vacía.",
+   "software": "Software: {software}. Versión del grupo de modelos: {version}."
+  },
+  "patterns": {
+   "note": "Nota {x}",
+   "surv_at": "Supervivencia en {x}",
+   "surv_at_low": "Supervivencia en {x}, extremo inferior",
+   "surv_at_high": "Supervivencia en {x}, extremo superior",
+   "ar_root": "Módulo de la raíz AR {x}",
+   "ma_root": "Módulo de la raíz MA {x}",
+   "orders_reason": "Paso {x}",
+   "order_test": "Prueba de los órdenes: {x}"
+  },
+  "series": {
+   "points": "Puntos",
+   "lowess": "Suavizado (lowess)",
+   "qq_line": "Recta normal",
+   "count": "Recuento",
+   "estimate": "Estimación",
+   "ci_low": "Extremo inferior",
+   "ci_high": "Extremo superior",
+   "residuals": "Residuos"
+  },
+  "stats": {
+   "model": {
+    "n": "Filas usadas",
+    "n_missing": "Filas excluidas",
+    "log_lik": "Log-verosimilitud",
+    "aic": "AIC",
+    "bic": "BIC",
+    "rmse": "Raíz del error cuadrático medio",
+    "mae": "Error absoluto medio",
+    "family": "Familia",
+    "link": "Función de enlace",
+    "se_type": "Errores estándar",
+    "estimation": "Estimación",
+    "event_value": "Evento",
+    "penalty": "Penalización",
+    "cv_measure": "Medida de la validación cruzada",
+    "threshold": "Umbral"
+   },
+   "coef": {
+    "estimate": "Estimación",
+    "std_error": "Error est.",
+    "statistic": "Estadístico",
+    "df": "gl",
+    "p_value": "p-valor",
+    "ci_low": "IC inf.",
+    "ci_high": "IC sup.",
+    "vif": "VIF",
+    "odds_ratio": "Odds ratio",
+    "or_ci_low": "OR, IC inf.",
+    "or_ci_high": "OR, IC sup.",
+    "selected": "Seleccionado",
+    "hazard_ratio": "Hazard ratio",
+    "hr_ci_low": "HR, IC inf.",
+    "hr_ci_high": "HR, IC sup.",
+    "robust_se": "EE robusto"
+   }
+  },
+  "values": {
+   "se_type": {
+    "classical": "clásicos",
+    "hc0": "HC0 (robustos a la heterocedasticidad)",
+    "hc1": "HC1 (robustos a la heterocedasticidad)",
+    "hc2": "HC2 (robustos a la heterocedasticidad)",
+    "hc3": "HC3 (robustos a la heterocedasticidad)",
+    "hac": "HAC (Newey–West)",
+    "cluster": "por conglomerados",
+    "robust": "robustos"
+   },
+   "estimation": {
+    "ols": "mínimos cuadrados ordinarios",
+    "wls": "mínimos cuadrados ponderados",
+    "ml": "máxima verosimilitud",
+    "firth": "verosimilitud penalizada de Firth"
+   },
+   "penalty": {
+    "ridge": "ridge",
+    "lasso": "lasso",
+    "elastic_net": "elastic net"
+   },
+   "family": {
+    "gaussian": "gaussiana (normal)",
+    "binomial": "binomial"
+   },
+   "link": {
+    "identity": "identidad",
+    "logit": "logit",
+    "probit": "probit"
+   }
+  },
+  "checks": {
+   "vif": {
+    "name": "Multicolinealidad: VIF",
+    "h0": "Ningún término se explica por los demás términos (VIF 1).",
+    "advice": "Quite o combine los predictores correlacionados, o active una penalización."
+   },
+   "epv": {
+    "name": "Eventos suficientes: eventos por variable",
+    "h0": "Al menos 10 eventos por cada término del modelo.",
+    "advice": "Pocos eventos para el número de términos: menos términos, o Firth o una penalización."
+   },
+   "cooks_distance": {
+    "name": "Influencia: distancia de Cook",
+    "h0": "Ninguna fila mueve mucho el ajuste (distancia de Cook por debajo de 4/n).",
+    "advice": "Revise las filas indicadas: un error en los datos, o un caso que el modelo no describe."
+   },
+   "leverage": {
+    "name": "Influencia: apalancamiento",
+    "h0": "Ninguna fila tiene una combinación inusual de predictores (apalancamiento por debajo de 2p/n).",
+    "advice": "Revise las filas indicadas: sus predictores están lejos de los de las demás."
+   },
+   "jarque_bera": {
+    "name": "Normalidad de los residuos: Jarque–Bera",
+    "h0": "La asimetría y la curtosis de los residuos son las de una normal.",
+    "advice": "Los intervalos suponen errores normales: con pocas filas léalos con cautela, o transforme la respuesta."
+   }
+  }
+ },
+ "fr": {
+  "footer": "Calculé par Tabularia",
+  "signif": {
+   "column": "Signif.",
+   "legend": "Codes de signification : {codes}"
+  },
+  "sections": {
+   "summary": "Synthèse",
+   "assumptions": "Hypothèses",
+   "coefficients": "Coefficients",
+   "fit": "Ajustement",
+   "diagnostics": "Diagnostics",
+   "notes": "Notes",
+   "confusion": "Classification",
+   "curves": "Courbes de survie",
+   "strata": "Strates",
+   "forecast": "Prévision",
+   "candidates": "Choix des ordres"
+  },
+  "assumptions": {
+   "title": "Vérifications des hypothèses",
+   "check": "Vérification",
+   "h0": "Hypothèse nulle",
+   "statistic": "Statistique",
+   "df": "ddl",
+   "p_value": "p-valeur",
+   "value": "Valeur",
+   "verdict": "Résultat",
+   "none": "Ce modèle n'a pas de vérification de ses hypothèses.",
+   "many_rows": "Avec {n} lignes, les tests rejettent des écarts minimes : lisez aussi les graphiques.",
+   "advice_title": "Que faire",
+   "advice": "Conseil",
+   "rows": "Lignes à examiner"
+  },
+  "verdicts": {
+   "ok": "✓ respectée",
+   "doubtful": "! douteuse",
+   "failed": "× non respectée",
+   "not_computed": "– non calculée"
+  },
+  "coef": {
+   "term": "Terme",
+   "yes": "oui",
+   "no": "non"
+  },
+  "tables": {
+   "estimates": "Estimations et tests",
+   "intervals": "Intervalles et colinéarité"
+  },
+  "fit": {
+   "title": "Chiffres de l'ajustement",
+   "quantity": "Grandeur",
+   "name": "Nom dans la table",
+   "value": "Valeur",
+   "settings_title": "Comment il a été estimé",
+   "setting": "Réglage"
+  },
+  "illustrates": "{check} — {verdict}",
+  "notes": {
+   "title": "Notes du modèle",
+   "note": "Note",
+   "trial": "Ces résultats sont ceux d'un essai (Exécuter dans l'éditeur) : les lignes avant le nœud venaient de l'échantillon de développement.",
+   "run": "Ces résultats sont ceux d'une exécution du flux.",
+   "rows": "{n} lignes ont été utilisées ; {missing} ont été exclues parce qu'une colonne utilisée par le modèle était vide.",
+   "software": "Logiciels : {software}. Version du groupe de modèles : {version}."
+  },
+  "patterns": {
+   "note": "Note {x}",
+   "surv_at": "Survie à {x}",
+   "surv_at_low": "Survie à {x}, borne inférieure",
+   "surv_at_high": "Survie à {x}, borne supérieure",
+   "ar_root": "Module de la racine AR {x}",
+   "ma_root": "Module de la racine MA {x}",
+   "orders_reason": "Étape {x}",
+   "order_test": "Test des ordres : {x}"
+  },
+  "series": {
+   "points": "Points",
+   "lowess": "Lissage (lowess)",
+   "qq_line": "Droite normale",
+   "count": "Effectif",
+   "estimate": "Estimation",
+   "ci_low": "Borne inférieure",
+   "ci_high": "Borne supérieure",
+   "residuals": "Résidus"
+  },
+  "stats": {
+   "model": {
+    "n": "Lignes utilisées",
+    "n_missing": "Lignes exclues",
+    "log_lik": "Log-vraisemblance",
+    "aic": "AIC",
+    "bic": "BIC",
+    "rmse": "Racine de l'erreur quadratique moyenne",
+    "mae": "Erreur absolue moyenne",
+    "family": "Famille",
+    "link": "Fonction de lien",
+    "se_type": "Erreurs types",
+    "estimation": "Estimation",
+    "event_value": "Événement",
+    "penalty": "Pénalisation",
+    "cv_measure": "Mesure de la validation croisée",
+    "threshold": "Seuil"
+   },
+   "coef": {
+    "estimate": "Estimation",
+    "std_error": "Erreur type",
+    "statistic": "Statistique",
+    "df": "ddl",
+    "p_value": "p-valeur",
+    "ci_low": "IC inf.",
+    "ci_high": "IC sup.",
+    "vif": "VIF",
+    "odds_ratio": "Odds ratio",
+    "or_ci_low": "OR, IC inf.",
+    "or_ci_high": "OR, IC sup.",
+    "selected": "Retenu",
+    "hazard_ratio": "Hazard ratio",
+    "hr_ci_low": "HR, IC inf.",
+    "hr_ci_high": "HR, IC sup.",
+    "robust_se": "ET robuste"
+   }
+  },
+  "values": {
+   "se_type": {
+    "classical": "classiques",
+    "hc0": "HC0 (robustes à l'hétéroscédasticité)",
+    "hc1": "HC1 (robustes à l'hétéroscédasticité)",
+    "hc2": "HC2 (robustes à l'hétéroscédasticité)",
+    "hc3": "HC3 (robustes à l'hétéroscédasticité)",
+    "hac": "HAC (Newey–West)",
+    "cluster": "par grappes",
+    "robust": "robustes"
+   },
+   "estimation": {
+    "ols": "moindres carrés ordinaires",
+    "wls": "moindres carrés pondérés",
+    "ml": "maximum de vraisemblance",
+    "firth": "vraisemblance pénalisée de Firth"
+   },
+   "penalty": {
+    "ridge": "ridge",
+    "lasso": "lasso",
+    "elastic_net": "elastic net"
+   },
+   "family": {
+    "gaussian": "gaussienne (normale)",
+    "binomial": "binomiale"
+   },
+   "link": {
+    "identity": "identité",
+    "logit": "logit",
+    "probit": "probit"
+   }
+  },
+  "checks": {
+   "vif": {
+    "name": "Multicolinéarité : VIF",
+    "h0": "Aucun terme n'est expliqué par les autres termes (VIF 1).",
+    "advice": "Retirez ou combinez les prédicteurs corrélés, ou activez une pénalisation."
+   },
+   "epv": {
+    "name": "Assez d'événements : événements par variable",
+    "h0": "Au moins 10 événements pour chaque terme du modèle.",
+    "advice": "Peu d'événements pour le nombre de termes : moins de termes, ou Firth ou une pénalisation."
+   },
+   "cooks_distance": {
+    "name": "Influence : distance de Cook",
+    "h0": "Aucune ligne ne déplace beaucoup l'ajustement (distance de Cook sous 4/n).",
+    "advice": "Examinez les lignes indiquées : une erreur dans les données, ou un cas que le modèle ne décrit pas."
+   },
+   "leverage": {
+    "name": "Influence : effet de levier",
+    "h0": "Aucune ligne n'a une combinaison inhabituelle de prédicteurs (levier sous 2p/n).",
+    "advice": "Examinez les lignes indiquées : leurs prédicteurs sont loin de ceux des autres."
+   },
+   "jarque_bera": {
+    "name": "Normalité des résidus : Jarque–Bera",
+    "h0": "L'asymétrie et l'aplatissement des résidus sont ceux d'une loi normale.",
+    "advice": "Les intervalles supposent des erreurs normales : avec peu de lignes lisez-les avec prudence, ou transformez la réponse."
+   }
+  }
+ }
+}

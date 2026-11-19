@@ -164,9 +164,9 @@ def build(model: str, variant: str) -> dict[str, Any]:
         d = sections[section]
         for chart in d["levels"]:
             for series, stat in _series(model, section, chart, d["numbers"]):
-                for i in range(12):
-                    x = i / 2.0
-                    y = _curve_y(stat, x, i)
+                for i in _indices(chart, stat):
+                    x = _x(chart, i)
+                    y = _curve_y(stat, x, i, chart)
                     label = str(17 + i) if section == "point" and i == 0 else None
                     t.add(section, stat, y, text=label, level=chart, level_2=series, x0=x, index=i)
     if "lag" in sections:
@@ -228,7 +228,31 @@ def _series(model: str, section: str, chart: str, stats: list[str]) -> list[tupl
     return [(None, "y")]
 
 
-def _curve_y(stat: str, x: float, i: int) -> float:
+# a series' observations: the first nine; its forecast and bands: the last four (they meet at the ninth)
+_OBSERVED, _FORECAST = ("observed", "fitted"), ("forecast", "lower_80", "upper_80", "lower", "upper")
+
+
+def _indices(chart: str, stat: str) -> range:
+    if chart == "forecast":
+        return range(9) if stat in _OBSERVED else range(8, 12)
+    return range(12)
+
+
+def _x(chart: str, i: int) -> float:
+    """A chart's x: a month's first day (days since 1970-01-01) for a series, else i / 2."""
+    if chart in ("forecast", "residuals"):
+        from datetime import date
+
+        return float((date(2025 + (i // 12), 1 + i % 12, 1) - date(1970, 1, 1)).days)
+    return i / 2.0
+
+
+def _curve_y(stat: str, x: float, i: int, chart: str = "") -> float:
+    if chart == "schoenfeld" and stat in ("lower", "upper"):
+        return round(math.sin(i * 1.3) * (1 + i / 12) + (-0.6 if stat == "lower" else 0.6), 6)
+    if chart == "forecast" or stat in ("observed", "fitted", "forecast", "lower_80", "upper_80"):
+        level = 100 + 10 * math.sin(i / 2)
+        return level + {"lower_80": -5 - i / 2, "upper_80": 5 + i / 2, "lower": -9 - i, "upper": 9 + i, "fitted": 1}.get(stat, 0)
     if stat in ("surv", "lower", "upper"):
         base = math.exp(-0.15 * x)
         return base * (0.9 if stat == "lower" else 1.1 if stat == "upper" else 1.0)
@@ -236,19 +260,21 @@ def _curve_y(stat: str, x: float, i: int) -> float:
         return 0.15 * x
     if stat == "n_risk":
         return float(60 - 4 * i)
-    if stat in ("observed", "fitted", "forecast", "lower_80", "upper_80", "lower", "upper"):
-        level = 100 + 10 * math.sin(i / 2)
-        return level + {"lower_80": -5, "upper_80": 5, "lower": -9, "upper": 9, "fitted": 1}.get(stat, 0)
-    return round(math.sin(i * 1.3) * (1 + x / 6), 6)
+    return round(math.sin(i * 1.3) * (1 + i / 12), 6)  # (i / 12 = x / 6 where x is i / 2)
 
 
-def main() -> None:
+def main(only: list[str] | None = None) -> None:
+    """Every fixture, or those of the models named (`python -m tests.models_fixtures arima`)."""
     HERE.mkdir(parents=True, exist_ok=True)
     for model, variant in PARAMS:
+        if only and model not in only:
+            continue
         path = HERE / f"{model}-{variant}.json"
         path.write_text(json.dumps(build(model, variant), ensure_ascii=False, indent=1) + "\n", encoding="utf-8")
         print(f"{path.name} written")
 
 
 if __name__ == "__main__":
-    main()
+    import sys
+
+    main(sys.argv[1:])

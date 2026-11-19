@@ -1,0 +1,697 @@
+{
+ "en": {
+  "auto_name": "ARIMA (automatic orders)",
+  "series_of": "{value} over {time}",
+  "kpi": {
+   "n": "Observations",
+   "aicc": "AICc",
+   "aic_bic": "AIC {aic} · BIC {bic}",
+   "sigma2": "σ²",
+   "holdout_mape": "MAPE on the holdout (%)",
+   "mape": "MAPE in sample (%)"
+  },
+  "charts": {
+   "forecast": "The series, the fitted values and the forecast with its bands",
+   "acf": "ACF of the differenced series",
+   "pacf": "PACF of the differenced series",
+   "resid_acf": "ACF of the residuals",
+   "resid_pacf": "PACF of the residuals",
+   "residuals": "Residuals over time",
+   "residual": "Histogram of the residuals",
+   "qq": "Normal Q–Q of the residuals"
+  },
+  "series": {
+   "observed": "Observed",
+   "fitted": "Fitted",
+   "forecast": "Forecast",
+   "band": "{level}% band",
+   "acf": "ACF",
+   "pacf": "PACF"
+  },
+  "tables": {
+   "holdout": "The last {k} observations were kept out: on them the forecast's RMSE is {rmse} and its MAPE {mape}%.",
+   "reasons": "Why these orders",
+   "reason": "Step",
+   "candidates": "Candidates, by the criterion",
+   "candidate": "Model"
+  },
+  "stats": {
+   "model": {
+    "p": "p (AR order)",
+    "d": "d (differences)",
+    "q": "q (MA order)",
+    "P": "P (seasonal AR order)",
+    "D": "D (seasonal differences)",
+    "Q": "Q (seasonal MA order)",
+    "s": "s (seasonal period)",
+    "aicc": "AICc",
+    "sigma2": "σ² (innovations' variance)",
+    "mape": "MAPE in sample (%)",
+    "mase": "MASE in sample",
+    "holdout": "Observations held out",
+    "holdout_rmse": "RMSE on the holdout",
+    "holdout_mae": "MAE on the holdout",
+    "holdout_mape": "MAPE on the holdout (%)",
+    "holdout_mase": "MASE on the holdout",
+    "box_cox_lambda": "Box–Cox λ",
+    "horizon": "Horizon",
+    "candidates": "Candidates compared",
+    "model_name": "Model",
+    "frequency": "Frequency",
+    "transform": "Transform",
+    "criterion": "Criterion",
+    "rmse": "RMSE in sample",
+    "mae": "MAE in sample"
+   },
+   "candidate": {
+    "aicc": "AICc",
+    "aic": "AIC",
+    "bic": "BIC",
+    "converged": "Converged",
+    "chosen": "Chosen"
+   }
+  },
+  "values": {
+   "frequency": {
+    "hour": "hour",
+    "day": "day",
+    "week": "week",
+    "month": "month",
+    "quarter": "quarter",
+    "year": "year",
+    "index": "steps"
+   },
+   "transform": {
+    "none": "none",
+    "log": "log",
+    "box_cox": "Box–Cox"
+   },
+   "criterion": {
+    "aicc": "AICc",
+    "aic": "AIC",
+    "bic": "BIC"
+   }
+  },
+  "checks": {
+   "adf": {
+    "name": "Stationarity: augmented Dickey–Fuller",
+    "h0": "The differenced series has a unit root.",
+    "advice": "ADF does not reject a unit root: difference once more (d + 1), or let orders = auto choose."
+   },
+   "kpss": {
+    "name": "Stationarity: KPSS",
+    "h0": "The differenced series is stationary.",
+    "advice": "KPSS rejects stationarity: difference once more (d + 1), or let orders = auto choose."
+   },
+   "stationarity": {
+    "name": "Stationarity: ADF and KPSS together",
+    "h0": "ADF rejects a unit root and KPSS keeps stationarity.",
+    "advice": "The two tests disagree: a trend or a break, look at the series."
+   },
+   "roots": {
+    "name": "Stationarity and invertibility of the fit",
+    "h0": "Every root of the AR and MA polynomials is outside the unit circle.",
+    "advice": "A root near the unit circle: an order too many, or a difference missing."
+   },
+   "ljung_box_10": {
+    "name": "White-noise residuals: Ljung–Box, 10 lags",
+    "h0": "The residuals are not autocorrelated up to lag 10.",
+    "advice": "Structure left in the residuals: raise an order, or try orders = auto."
+   },
+   "ljung_box_2s": {
+    "name": "White-noise residuals: Ljung–Box, 2·s lags",
+    "h0": "The residuals are not autocorrelated up to two seasons.",
+    "advice": "Seasonal structure left in the residuals: raise a seasonal order, or try orders = auto."
+   },
+   "arch_lm": {
+    "name": "Constant variance: ARCH LM",
+    "h0": "The residuals' variance does not depend on the past residuals.",
+    "advice": "The variance changes: try transform = log or box_cox."
+   },
+   "variance_ratio": {
+    "name": "Constant variance: first third against last third",
+    "h0": "The residuals' variance is the same at the start and at the end.",
+    "advice": "The variance changes: try transform = log or box_cox."
+   },
+   "jarque_bera": {
+    "advice": "The bands assume normal errors: read them with care."
+   }
+  }
+ },
+ "it": {
+  "auto_name": "ARIMA (ordini automatici)",
+  "series_of": "{value} nel tempo ({time})",
+  "kpi": {
+   "n": "Osservazioni",
+   "aicc": "AICc",
+   "aic_bic": "AIC {aic} · BIC {bic}",
+   "sigma2": "σ²",
+   "holdout_mape": "MAPE sul periodo di verifica (%)",
+   "mape": "MAPE nel campione (%)"
+  },
+  "charts": {
+   "forecast": "La serie, i valori stimati e la previsione con le sue bande",
+   "acf": "ACF della serie differenziata",
+   "pacf": "PACF della serie differenziata",
+   "resid_acf": "ACF dei residui",
+   "resid_pacf": "PACF dei residui",
+   "residuals": "Residui nel tempo",
+   "residual": "Istogramma dei residui",
+   "qq": "Q–Q normale dei residui"
+  },
+  "series": {
+   "observed": "Osservato",
+   "fitted": "Stimato",
+   "forecast": "Previsione",
+   "band": "Banda al {level}%",
+   "acf": "ACF",
+   "pacf": "PACF"
+  },
+  "tables": {
+   "holdout": "Le ultime {k} osservazioni sono state tenute da parte: su di esse l'RMSE della previsione è {rmse} e il MAPE {mape}%.",
+   "reasons": "Perché questi ordini",
+   "reason": "Passo",
+   "candidates": "Candidati, per criterio",
+   "candidate": "Modello"
+  },
+  "stats": {
+   "model": {
+    "p": "p (ordine AR)",
+    "d": "d (differenze)",
+    "q": "q (ordine MA)",
+    "P": "P (ordine AR stagionale)",
+    "D": "D (differenze stagionali)",
+    "Q": "Q (ordine MA stagionale)",
+    "s": "s (periodo stagionale)",
+    "aicc": "AICc",
+    "sigma2": "σ² (varianza delle innovazioni)",
+    "mape": "MAPE nel campione (%)",
+    "mase": "MASE nel campione",
+    "holdout": "Osservazioni tenute da parte",
+    "holdout_rmse": "RMSE sul periodo di verifica",
+    "holdout_mae": "MAE sul periodo di verifica",
+    "holdout_mape": "MAPE sul periodo di verifica (%)",
+    "holdout_mase": "MASE sul periodo di verifica",
+    "box_cox_lambda": "λ di Box–Cox",
+    "horizon": "Orizzonte",
+    "candidates": "Candidati confrontati",
+    "model_name": "Modello",
+    "frequency": "Frequenza",
+    "transform": "Trasformazione",
+    "criterion": "Criterio",
+    "rmse": "RMSE nel campione",
+    "mae": "MAE nel campione"
+   },
+   "candidate": {
+    "aicc": "AICc",
+    "aic": "AIC",
+    "bic": "BIC",
+    "converged": "Convergenza",
+    "chosen": "Scelto"
+   }
+  },
+  "values": {
+   "frequency": {
+    "hour": "ora",
+    "day": "giorno",
+    "week": "settimana",
+    "month": "mese",
+    "quarter": "trimestre",
+    "year": "anno",
+    "index": "passi"
+   },
+   "transform": {
+    "none": "nessuna",
+    "log": "log",
+    "box_cox": "Box–Cox"
+   },
+   "criterion": {
+    "aicc": "AICc",
+    "aic": "AIC",
+    "bic": "BIC"
+   }
+  },
+  "checks": {
+   "adf": {
+    "name": "Stazionarietà: Dickey–Fuller aumentato",
+    "h0": "La serie differenziata ha una radice unitaria.",
+    "advice": "L'ADF non rifiuta la radice unitaria: differenziate ancora (d + 1), oppure lasciate scegliere a orders = auto."
+   },
+   "kpss": {
+    "name": "Stazionarietà: KPSS",
+    "h0": "La serie differenziata è stazionaria.",
+    "advice": "Il KPSS rifiuta la stazionarietà: differenziate ancora (d + 1), oppure lasciate scegliere a orders = auto."
+   },
+   "stationarity": {
+    "name": "Stazionarietà: ADF e KPSS insieme",
+    "h0": "L'ADF rifiuta la radice unitaria e il KPSS non rifiuta la stazionarietà.",
+    "advice": "I due test non sono d'accordo: un trend o una rottura, guardate la serie."
+   },
+   "roots": {
+    "name": "Stazionarietà e invertibilità della stima",
+    "h0": "Ogni radice dei polinomi AR e MA sta fuori dal cerchio unitario.",
+    "advice": "Una radice vicina al cerchio unitario: un ordine di troppo, o manca una differenza."
+   },
+   "ljung_box_10": {
+    "name": "Residui come rumore bianco: Ljung–Box, 10 ritardi",
+    "h0": "I residui non sono autocorrelati fino al ritardo 10.",
+    "advice": "Nei residui resta struttura: alzate un ordine, oppure provate orders = auto."
+   },
+   "ljung_box_2s": {
+    "name": "Residui come rumore bianco: Ljung–Box, 2·s ritardi",
+    "h0": "I residui non sono autocorrelati fino a due stagioni.",
+    "advice": "Nei residui resta struttura stagionale: alzate un ordine stagionale, oppure provate orders = auto."
+   },
+   "arch_lm": {
+    "name": "Varianza costante: ARCH LM",
+    "h0": "La varianza dei residui non dipende dai residui passati.",
+    "advice": "La varianza cambia: provate transform = log o box_cox."
+   },
+   "variance_ratio": {
+    "name": "Varianza costante: primo terzo contro ultimo terzo",
+    "h0": "La varianza dei residui è la stessa all'inizio e alla fine.",
+    "advice": "La varianza cambia: provate transform = log o box_cox."
+   },
+   "jarque_bera": {
+    "advice": "Le bande presuppongono errori normali: leggetele con cautela."
+   }
+  }
+ },
+ "de": {
+  "auto_name": "ARIMA (automatische Ordnungen)",
+  "series_of": "{value} über {time}",
+  "kpi": {
+   "n": "Beobachtungen",
+   "aicc": "AICc",
+   "aic_bic": "AIC {aic} · BIC {bic}",
+   "sigma2": "σ²",
+   "holdout_mape": "MAPE im Testzeitraum (%)",
+   "mape": "MAPE in der Stichprobe (%)"
+  },
+  "charts": {
+   "forecast": "Die Reihe, die angepassten Werte und die Prognose mit ihren Bändern",
+   "acf": "ACF der differenzierten Reihe",
+   "pacf": "PACF der differenzierten Reihe",
+   "resid_acf": "ACF der Residuen",
+   "resid_pacf": "PACF der Residuen",
+   "residuals": "Residuen über die Zeit",
+   "residual": "Histogramm der Residuen",
+   "qq": "Normal-Q–Q der Residuen"
+  },
+  "series": {
+   "observed": "Beobachtet",
+   "fitted": "Angepasst",
+   "forecast": "Prognose",
+   "band": "{level}-%-Band",
+   "acf": "ACF",
+   "pacf": "PACF"
+  },
+  "tables": {
+   "holdout": "Die letzten {k} Beobachtungen wurden zurückgehalten: Auf ihnen beträgt der RMSE der Prognose {rmse}, der MAPE {mape} %.",
+   "reasons": "Warum diese Ordnungen",
+   "reason": "Schritt",
+   "candidates": "Kandidaten nach dem Kriterium",
+   "candidate": "Modell"
+  },
+  "stats": {
+   "model": {
+    "p": "p (AR-Ordnung)",
+    "d": "d (Differenzen)",
+    "q": "q (MA-Ordnung)",
+    "P": "P (saisonale AR-Ordnung)",
+    "D": "D (saisonale Differenzen)",
+    "Q": "Q (saisonale MA-Ordnung)",
+    "s": "s (Saisonperiode)",
+    "aicc": "AICc",
+    "sigma2": "σ² (Varianz der Innovationen)",
+    "mape": "MAPE in der Stichprobe (%)",
+    "mase": "MASE in der Stichprobe",
+    "holdout": "Zurückgehaltene Beobachtungen",
+    "holdout_rmse": "RMSE im Testzeitraum",
+    "holdout_mae": "MAE im Testzeitraum",
+    "holdout_mape": "MAPE im Testzeitraum (%)",
+    "holdout_mase": "MASE im Testzeitraum",
+    "box_cox_lambda": "Box–Cox-λ",
+    "horizon": "Horizont",
+    "candidates": "Verglichene Kandidaten",
+    "model_name": "Modell",
+    "frequency": "Frequenz",
+    "transform": "Transformation",
+    "criterion": "Kriterium",
+    "rmse": "RMSE in der Stichprobe",
+    "mae": "MAE in der Stichprobe"
+   },
+   "candidate": {
+    "aicc": "AICc",
+    "aic": "AIC",
+    "bic": "BIC",
+    "converged": "Konvergiert",
+    "chosen": "Gewählt"
+   }
+  },
+  "values": {
+   "frequency": {
+    "hour": "Stunde",
+    "day": "Tag",
+    "week": "Woche",
+    "month": "Monat",
+    "quarter": "Quartal",
+    "year": "Jahr",
+    "index": "Schritte"
+   },
+   "transform": {
+    "none": "keine",
+    "log": "log",
+    "box_cox": "Box–Cox"
+   },
+   "criterion": {
+    "aicc": "AICc",
+    "aic": "AIC",
+    "bic": "BIC"
+   }
+  },
+  "checks": {
+   "adf": {
+    "name": "Stationarität: erweiterter Dickey–Fuller",
+    "h0": "Die differenzierte Reihe hat eine Einheitswurzel.",
+    "advice": "ADF verwirft die Einheitswurzel nicht: Differenzieren Sie noch einmal (d + 1), oder lassen Sie orders = auto wählen."
+   },
+   "kpss": {
+    "name": "Stationarität: KPSS",
+    "h0": "Die differenzierte Reihe ist stationär.",
+    "advice": "KPSS verwirft die Stationarität: Differenzieren Sie noch einmal (d + 1), oder lassen Sie orders = auto wählen."
+   },
+   "stationarity": {
+    "name": "Stationarität: ADF und KPSS zusammen",
+    "h0": "ADF verwirft die Einheitswurzel und KPSS behält die Stationarität.",
+    "advice": "Die beiden Tests widersprechen sich: ein Trend oder ein Bruch, sehen Sie sich die Reihe an."
+   },
+   "roots": {
+    "name": "Stationarität und Invertierbarkeit der Anpassung",
+    "h0": "Jede Wurzel der AR- und MA-Polynome liegt außerhalb des Einheitskreises.",
+    "advice": "Eine Wurzel nahe dem Einheitskreis: eine Ordnung zu viel, oder eine Differenz fehlt."
+   },
+   "ljung_box_10": {
+    "name": "Residuen als weißes Rauschen: Ljung–Box, 10 Lags",
+    "h0": "Die Residuen sind bis Lag 10 nicht autokorreliert.",
+    "advice": "In den Residuen bleibt Struktur: Erhöhen Sie eine Ordnung, oder versuchen Sie orders = auto."
+   },
+   "ljung_box_2s": {
+    "name": "Residuen als weißes Rauschen: Ljung–Box, 2·s Lags",
+    "h0": "Die Residuen sind über zwei Saisons nicht autokorreliert.",
+    "advice": "In den Residuen bleibt saisonale Struktur: Erhöhen Sie eine saisonale Ordnung, oder versuchen Sie orders = auto."
+   },
+   "arch_lm": {
+    "name": "Konstante Varianz: ARCH-LM",
+    "h0": "Die Varianz der Residuen hängt nicht von vergangenen Residuen ab.",
+    "advice": "Die Varianz ändert sich: Versuchen Sie transform = log oder box_cox."
+   },
+   "variance_ratio": {
+    "name": "Konstante Varianz: erstes gegen letztes Drittel",
+    "h0": "Die Varianz der Residuen ist am Anfang und am Ende gleich.",
+    "advice": "Die Varianz ändert sich: Versuchen Sie transform = log oder box_cox."
+   },
+   "jarque_bera": {
+    "advice": "Die Bänder setzen normalverteilte Fehler voraus: Lesen Sie sie mit Vorsicht."
+   }
+  }
+ },
+ "es": {
+  "auto_name": "ARIMA (órdenes automáticos)",
+  "series_of": "{value} en el tiempo ({time})",
+  "kpi": {
+   "n": "Observaciones",
+   "aicc": "AICc",
+   "aic_bic": "AIC {aic} · BIC {bic}",
+   "sigma2": "σ²",
+   "holdout_mape": "MAPE en el periodo de prueba (%)",
+   "mape": "MAPE en la muestra (%)"
+  },
+  "charts": {
+   "forecast": "La serie, los valores ajustados y el pronóstico con sus bandas",
+   "acf": "ACF de la serie diferenciada",
+   "pacf": "PACF de la serie diferenciada",
+   "resid_acf": "ACF de los residuos",
+   "resid_pacf": "PACF de los residuos",
+   "residuals": "Residuos en el tiempo",
+   "residual": "Histograma de los residuos",
+   "qq": "Q–Q normal de los residuos"
+  },
+  "series": {
+   "observed": "Observado",
+   "fitted": "Ajustado",
+   "forecast": "Pronóstico",
+   "band": "Banda del {level}%",
+   "acf": "ACF",
+   "pacf": "PACF"
+  },
+  "tables": {
+   "holdout": "Las últimas {k} observaciones se reservaron: en ellas el RMSE del pronóstico es {rmse} y su MAPE {mape}%.",
+   "reasons": "Por qué estos órdenes",
+   "reason": "Paso",
+   "candidates": "Candidatos, por el criterio",
+   "candidate": "Modelo"
+  },
+  "stats": {
+   "model": {
+    "p": "p (orden AR)",
+    "d": "d (diferencias)",
+    "q": "q (orden MA)",
+    "P": "P (orden AR estacional)",
+    "D": "D (diferencias estacionales)",
+    "Q": "Q (orden MA estacional)",
+    "s": "s (periodo estacional)",
+    "aicc": "AICc",
+    "sigma2": "σ² (varianza de las innovaciones)",
+    "mape": "MAPE en la muestra (%)",
+    "mase": "MASE en la muestra",
+    "holdout": "Observaciones reservadas",
+    "holdout_rmse": "RMSE en el periodo de prueba",
+    "holdout_mae": "MAE en el periodo de prueba",
+    "holdout_mape": "MAPE en el periodo de prueba (%)",
+    "holdout_mase": "MASE en el periodo de prueba",
+    "box_cox_lambda": "λ de Box–Cox",
+    "horizon": "Horizonte",
+    "candidates": "Candidatos comparados",
+    "model_name": "Modelo",
+    "frequency": "Frecuencia",
+    "transform": "Transformación",
+    "criterion": "Criterio",
+    "rmse": "RMSE en la muestra",
+    "mae": "MAE en la muestra"
+   },
+   "candidate": {
+    "aicc": "AICc",
+    "aic": "AIC",
+    "bic": "BIC",
+    "converged": "Convergió",
+    "chosen": "Elegido"
+   }
+  },
+  "values": {
+   "frequency": {
+    "hour": "hora",
+    "day": "día",
+    "week": "semana",
+    "month": "mes",
+    "quarter": "trimestre",
+    "year": "año",
+    "index": "pasos"
+   },
+   "transform": {
+    "none": "ninguna",
+    "log": "log",
+    "box_cox": "Box–Cox"
+   },
+   "criterion": {
+    "aicc": "AICc",
+    "aic": "AIC",
+    "bic": "BIC"
+   }
+  },
+  "checks": {
+   "adf": {
+    "name": "Estacionariedad: Dickey–Fuller aumentada",
+    "h0": "La serie diferenciada tiene una raíz unitaria.",
+    "advice": "La ADF no rechaza la raíz unitaria: diferencie una vez más (d + 1), o deje elegir a orders = auto."
+   },
+   "kpss": {
+    "name": "Estacionariedad: KPSS",
+    "h0": "La serie diferenciada es estacionaria.",
+    "advice": "La KPSS rechaza la estacionariedad: diferencie una vez más (d + 1), o deje elegir a orders = auto."
+   },
+   "stationarity": {
+    "name": "Estacionariedad: ADF y KPSS juntas",
+    "h0": "La ADF rechaza la raíz unitaria y la KPSS mantiene la estacionariedad.",
+    "advice": "Las dos pruebas no coinciden: una tendencia o una ruptura, mire la serie."
+   },
+   "roots": {
+    "name": "Estacionariedad e invertibilidad del ajuste",
+    "h0": "Todas las raíces de los polinomios AR y MA están fuera del círculo unidad.",
+    "advice": "Una raíz cerca del círculo unidad: un orden de más, o falta una diferencia."
+   },
+   "ljung_box_10": {
+    "name": "Residuos como ruido blanco: Ljung–Box, 10 retardos",
+    "h0": "Los residuos no están autocorrelacionados hasta el retardo 10.",
+    "advice": "Queda estructura en los residuos: suba un orden, o pruebe orders = auto."
+   },
+   "ljung_box_2s": {
+    "name": "Residuos como ruido blanco: Ljung–Box, 2·s retardos",
+    "h0": "Los residuos no están autocorrelacionados hasta dos estaciones.",
+    "advice": "Queda estructura estacional en los residuos: suba un orden estacional, o pruebe orders = auto."
+   },
+   "arch_lm": {
+    "name": "Varianza constante: ARCH LM",
+    "h0": "La varianza de los residuos no depende de los residuos pasados.",
+    "advice": "La varianza cambia: pruebe transform = log o box_cox."
+   },
+   "variance_ratio": {
+    "name": "Varianza constante: primer tercio frente al último",
+    "h0": "La varianza de los residuos es la misma al principio y al final.",
+    "advice": "La varianza cambia: pruebe transform = log o box_cox."
+   },
+   "jarque_bera": {
+    "advice": "Las bandas suponen errores normales: léalas con cautela."
+   }
+  }
+ },
+ "fr": {
+  "auto_name": "ARIMA (ordres automatiques)",
+  "series_of": "{value} dans le temps ({time})",
+  "kpi": {
+   "n": "Observations",
+   "aicc": "AICc",
+   "aic_bic": "AIC {aic} · BIC {bic}",
+   "sigma2": "σ²",
+   "holdout_mape": "MAPE sur la période de test (%)",
+   "mape": "MAPE dans l'échantillon (%)"
+  },
+  "charts": {
+   "forecast": "La série, les valeurs ajustées et la prévision avec ses bandes",
+   "acf": "ACF de la série différenciée",
+   "pacf": "PACF de la série différenciée",
+   "resid_acf": "ACF des résidus",
+   "resid_pacf": "PACF des résidus",
+   "residuals": "Résidus dans le temps",
+   "residual": "Histogramme des résidus",
+   "qq": "Q–Q normal des résidus"
+  },
+  "series": {
+   "observed": "Observé",
+   "fitted": "Ajusté",
+   "forecast": "Prévision",
+   "band": "Bande à {level} %",
+   "acf": "ACF",
+   "pacf": "PACF"
+  },
+  "tables": {
+   "holdout": "Les {k} dernières observations ont été mises de côté : sur elles, le RMSE de la prévision est {rmse} et son MAPE {mape} %.",
+   "reasons": "Pourquoi ces ordres",
+   "reason": "Étape",
+   "candidates": "Candidats, selon le critère",
+   "candidate": "Modèle"
+  },
+  "stats": {
+   "model": {
+    "p": "p (ordre AR)",
+    "d": "d (différences)",
+    "q": "q (ordre MA)",
+    "P": "P (ordre AR saisonnier)",
+    "D": "D (différences saisonnières)",
+    "Q": "Q (ordre MA saisonnier)",
+    "s": "s (période saisonnière)",
+    "aicc": "AICc",
+    "sigma2": "σ² (variance des innovations)",
+    "mape": "MAPE dans l'échantillon (%)",
+    "mase": "MASE dans l'échantillon",
+    "holdout": "Observations mises de côté",
+    "holdout_rmse": "RMSE sur la période de test",
+    "holdout_mae": "MAE sur la période de test",
+    "holdout_mape": "MAPE sur la période de test (%)",
+    "holdout_mase": "MASE sur la période de test",
+    "box_cox_lambda": "λ de Box–Cox",
+    "horizon": "Horizon",
+    "candidates": "Candidats comparés",
+    "model_name": "Modèle",
+    "frequency": "Fréquence",
+    "transform": "Transformation",
+    "criterion": "Critère",
+    "rmse": "RMSE dans l'échantillon",
+    "mae": "MAE dans l'échantillon"
+   },
+   "candidate": {
+    "aicc": "AICc",
+    "aic": "AIC",
+    "bic": "BIC",
+    "converged": "Convergé",
+    "chosen": "Retenu"
+   }
+  },
+  "values": {
+   "frequency": {
+    "hour": "heure",
+    "day": "jour",
+    "week": "semaine",
+    "month": "mois",
+    "quarter": "trimestre",
+    "year": "année",
+    "index": "pas"
+   },
+   "transform": {
+    "none": "aucune",
+    "log": "log",
+    "box_cox": "Box–Cox"
+   },
+   "criterion": {
+    "aicc": "AICc",
+    "aic": "AIC",
+    "bic": "BIC"
+   }
+  },
+  "checks": {
+   "adf": {
+    "name": "Stationnarité : Dickey–Fuller augmenté",
+    "h0": "La série différenciée a une racine unitaire.",
+    "advice": "L'ADF ne rejette pas la racine unitaire : différenciez encore (d + 1), ou laissez orders = auto choisir."
+   },
+   "kpss": {
+    "name": "Stationnarité : KPSS",
+    "h0": "La série différenciée est stationnaire.",
+    "advice": "Le KPSS rejette la stationnarité : différenciez encore (d + 1), ou laissez orders = auto choisir."
+   },
+   "stationarity": {
+    "name": "Stationnarité : ADF et KPSS ensemble",
+    "h0": "L'ADF rejette la racine unitaire et le KPSS garde la stationnarité.",
+    "advice": "Les deux tests se contredisent : une tendance ou une rupture, regardez la série."
+   },
+   "roots": {
+    "name": "Stationnarité et inversibilité de l'ajustement",
+    "h0": "Toutes les racines des polynômes AR et MA sont hors du cercle unité.",
+    "advice": "Une racine près du cercle unité : un ordre de trop, ou une différence manquante."
+   },
+   "ljung_box_10": {
+    "name": "Résidus en bruit blanc : Ljung–Box, 10 retards",
+    "h0": "Les résidus ne sont pas autocorrélés jusqu'au retard 10.",
+    "advice": "Il reste de la structure dans les résidus : augmentez un ordre, ou essayez orders = auto."
+   },
+   "ljung_box_2s": {
+    "name": "Résidus en bruit blanc : Ljung–Box, 2·s retards",
+    "h0": "Les résidus ne sont pas autocorrélés jusqu'à deux saisons.",
+    "advice": "Il reste une structure saisonnière dans les résidus : augmentez un ordre saisonnier, ou essayez orders = auto."
+   },
+   "arch_lm": {
+    "name": "Variance constante : ARCH LM",
+    "h0": "La variance des résidus ne dépend pas des résidus passés.",
+    "advice": "La variance change : essayez transform = log ou box_cox."
+   },
+   "variance_ratio": {
+    "name": "Variance constante : premier tiers contre dernier tiers",
+    "h0": "La variance des résidus est la même au début et à la fin.",
+    "advice": "La variance change : essayez transform = log ou box_cox."
+   },
+   "jarque_bera": {
+    "advice": "Les bandes supposent des erreurs normales : lisez-les avec prudence."
+   }
+  }
+ }
+}

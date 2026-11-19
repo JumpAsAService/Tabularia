@@ -1,0 +1,472 @@
+{
+ "en": {
+  "name": "Kaplan–Meier",
+  "by": "{what} by {strata}",
+  "kpi": {
+   "n_strata": "Strata",
+   "events": "Events",
+   "of_n": "of {n} rows",
+   "censored": "Censored",
+   "logrank": "Log-rank test: p",
+   "peto": "Peto's test: p"
+  },
+  "charts": {
+   "km": "Survival by stratum, with its confidence band; dots: censored times",
+   "cumhaz": "Cumulative hazard",
+   "loglog": "log(−log survival) against log time"
+  },
+  "km_caption": "A step down at each event; the band is the pointwise confidence interval.",
+  "series": {
+   "survival": "Survival",
+   "censored": "Censored"
+  },
+  "tables": {
+   "at_risk": "Number at risk",
+   "stratum_time": "Stratum \\ time",
+   "stratum": "Stratum",
+   "strata": "Events and medians",
+   "rmst": "Restricted mean survival, observed and expected events",
+   "surv_at": "Survival at the times asked",
+   "time": "Time",
+   "survival": "Survival",
+   "low": "Low end",
+   "high": "High end",
+   "pairs": "Pairs of strata (Holm)",
+   "pair": "Pair"
+  },
+  "stats": {
+   "model": {
+    "events": "Events",
+    "censored": "Censored",
+    "n_strata": "Strata",
+    "rmst_tau": "Horizon of the restricted mean",
+    "test_statistic": "Test statistic (chi-square)",
+    "test_df": "Test df",
+    "test_p_value": "Test p-value",
+    "conf_type": "Confidence interval",
+    "test": "Test"
+   },
+   "stratum": {
+    "n": "Rows",
+    "events": "Events",
+    "censored": "Censored",
+    "median": "Median",
+    "median_ci_low": "Median, CI low",
+    "median_ci_high": "Median, CI high",
+    "rmst": "Restricted mean",
+    "rmst_se": "Its std. error",
+    "observed": "Observed events",
+    "expected": "Expected events"
+   },
+   "pair": {
+    "statistic": "Chi-square",
+    "p_value": "p-value",
+    "p_adjusted": "p adjusted (Holm)"
+   }
+  },
+  "values": {
+   "conf_type": {
+    "log": "log",
+    "log-log": "log-log",
+    "plain": "plain"
+   },
+   "test": {
+    "logrank": "log-rank",
+    "peto": "Peto"
+   }
+  },
+  "checks": {
+   "censoring_informative": {
+    "name": "Non-informative censoring",
+    "h0": "Being censored says nothing of the time to the event.",
+    "not_computed": "It cannot be tested from the data: ask how the rows came to be censored."
+   },
+   "proportional_hazards": {
+    "name": "Proportional hazards",
+    "h0": "The strata's hazards keep the same ratio over time (the curves do not cross).",
+    "advice": "The curves cross: compare with test = peto, or with the restricted mean."
+   },
+   "censoring_by_stratum": {
+    "name": "Censoring by stratum",
+    "h0": "The share censored is the same in every stratum.",
+    "advice": "Censoring differs between strata: read the comparison with care."
+   }
+  }
+ },
+ "it": {
+  "name": "Kaplan–Meier",
+  "by": "{what} per {strata}",
+  "kpi": {
+   "n_strata": "Strati",
+   "events": "Eventi",
+   "of_n": "su {n} righe",
+   "censored": "Censurati",
+   "logrank": "Test log-rank: p",
+   "peto": "Test di Peto: p"
+  },
+  "charts": {
+   "km": "Sopravvivenza per strato, con la sua banda di confidenza; punti: tempi censurati",
+   "cumhaz": "Rischio cumulato",
+   "loglog": "log(−log sopravvivenza) rispetto a log tempo"
+  },
+  "km_caption": "Un gradino in giù a ogni evento; la banda è l'intervallo di confidenza punto per punto.",
+  "series": {
+   "survival": "Sopravvivenza",
+   "censored": "Censurati"
+  },
+  "tables": {
+   "at_risk": "Numero a rischio",
+   "stratum_time": "Strato \\ tempo",
+   "stratum": "Strato",
+   "strata": "Eventi e mediane",
+   "rmst": "Sopravvivenza media ristretta, eventi osservati e attesi",
+   "surv_at": "Sopravvivenza ai tempi richiesti",
+   "time": "Tempo",
+   "survival": "Sopravvivenza",
+   "low": "Estremo inferiore",
+   "high": "Estremo superiore",
+   "pairs": "Coppie di strati (Holm)",
+   "pair": "Coppia"
+  },
+  "stats": {
+   "model": {
+    "events": "Eventi",
+    "censored": "Censurati",
+    "n_strata": "Strati",
+    "rmst_tau": "Orizzonte della media ristretta",
+    "test_statistic": "Statistica del test (chi quadrato)",
+    "test_df": "Gdl del test",
+    "test_p_value": "p-value del test",
+    "conf_type": "Intervallo di confidenza",
+    "test": "Test"
+   },
+   "stratum": {
+    "n": "Righe",
+    "events": "Eventi",
+    "censored": "Censurati",
+    "median": "Mediana",
+    "median_ci_low": "Mediana, IC inf.",
+    "median_ci_high": "Mediana, IC sup.",
+    "rmst": "Media ristretta",
+    "rmst_se": "Il suo errore std.",
+    "observed": "Eventi osservati",
+    "expected": "Eventi attesi"
+   },
+   "pair": {
+    "statistic": "Chi quadrato",
+    "p_value": "p-value",
+    "p_adjusted": "p corretto (Holm)"
+   }
+  },
+  "values": {
+   "conf_type": {
+    "log": "log",
+    "log-log": "log-log",
+    "plain": "semplice"
+   },
+   "test": {
+    "logrank": "log-rank",
+    "peto": "Peto"
+   }
+  },
+  "checks": {
+   "censoring_informative": {
+    "name": "Censura non informativa",
+    "h0": "Essere censurati non dice nulla del tempo all'evento.",
+    "not_computed": "Non si può verificare dai dati: chiedetevi perché le righe sono state censurate."
+   },
+   "proportional_hazards": {
+    "name": "Rischi proporzionali",
+    "h0": "I rischi degli strati mantengono lo stesso rapporto nel tempo (le curve non si incrociano).",
+    "advice": "Le curve si incrociano: confrontate con test = peto, oppure con la media ristretta."
+   },
+   "censoring_by_stratum": {
+    "name": "Censura per strato",
+    "h0": "La quota di censurati è la stessa in ogni strato.",
+    "advice": "La censura cambia tra gli strati: leggete il confronto con cautela."
+   }
+  }
+ },
+ "de": {
+  "name": "Kaplan–Meier",
+  "by": "{what} nach {strata}",
+  "kpi": {
+   "n_strata": "Schichten",
+   "events": "Ereignisse",
+   "of_n": "von {n} Zeilen",
+   "censored": "Zensiert",
+   "logrank": "Log-Rank-Test: p",
+   "peto": "Peto-Test: p"
+  },
+  "charts": {
+   "km": "Überleben je Schicht mit Konfidenzband; Punkte: zensierte Zeiten",
+   "cumhaz": "Kumulierte Hazardrate",
+   "loglog": "log(−log Überleben) gegen log Zeit"
+  },
+  "km_caption": "Eine Stufe nach unten bei jedem Ereignis; das Band ist das punktweise Konfidenzintervall.",
+  "series": {
+   "survival": "Überleben",
+   "censored": "Zensiert"
+  },
+  "tables": {
+   "at_risk": "Anzahl unter Risiko",
+   "stratum_time": "Schicht \\ Zeit",
+   "stratum": "Schicht",
+   "strata": "Ereignisse und Mediane",
+   "rmst": "Restricted Mean Survival, beobachtete und erwartete Ereignisse",
+   "surv_at": "Überleben zu den gewünschten Zeiten",
+   "time": "Zeit",
+   "survival": "Überleben",
+   "low": "Untere Grenze",
+   "high": "Obere Grenze",
+   "pairs": "Paare von Schichten (Holm)",
+   "pair": "Paar"
+  },
+  "stats": {
+   "model": {
+    "events": "Ereignisse",
+    "censored": "Zensiert",
+    "n_strata": "Schichten",
+    "rmst_tau": "Horizont des eingeschränkten Mittels",
+    "test_statistic": "Teststatistik (Chi-Quadrat)",
+    "test_df": "FG des Tests",
+    "test_p_value": "p-Wert des Tests",
+    "conf_type": "Konfidenzintervall",
+    "test": "Test"
+   },
+   "stratum": {
+    "n": "Zeilen",
+    "events": "Ereignisse",
+    "censored": "Zensiert",
+    "median": "Median",
+    "median_ci_low": "Median, KI unten",
+    "median_ci_high": "Median, KI oben",
+    "rmst": "Eingeschränktes Mittel",
+    "rmst_se": "Sein Std.-Fehler",
+    "observed": "Beobachtete Ereignisse",
+    "expected": "Erwartete Ereignisse"
+   },
+   "pair": {
+    "statistic": "Chi-Quadrat",
+    "p_value": "p-Wert",
+    "p_adjusted": "p korrigiert (Holm)"
+   }
+  },
+  "values": {
+   "conf_type": {
+    "log": "log",
+    "log-log": "log-log",
+    "plain": "einfach"
+   },
+   "test": {
+    "logrank": "Log-Rank",
+    "peto": "Peto"
+   }
+  },
+  "checks": {
+   "censoring_informative": {
+    "name": "Nicht-informative Zensierung",
+    "h0": "Zensiert zu sein sagt nichts über die Zeit bis zum Ereignis.",
+    "not_computed": "Aus den Daten nicht prüfbar: Klären Sie, warum Zeilen zensiert wurden."
+   },
+   "proportional_hazards": {
+    "name": "Proportionale Hazards",
+    "h0": "Die Hazards der Schichten behalten über die Zeit dasselbe Verhältnis (die Kurven kreuzen sich nicht).",
+    "advice": "Die Kurven kreuzen sich: Vergleichen Sie mit test = peto oder mit dem eingeschränkten Mittel."
+   },
+   "censoring_by_stratum": {
+    "name": "Zensierung je Schicht",
+    "h0": "Der Anteil zensierter Zeilen ist in jeder Schicht gleich.",
+    "advice": "Die Zensierung unterscheidet sich zwischen den Schichten: Lesen Sie den Vergleich mit Vorsicht."
+   }
+  }
+ },
+ "es": {
+  "name": "Kaplan–Meier",
+  "by": "{what} por {strata}",
+  "kpi": {
+   "n_strata": "Estratos",
+   "events": "Eventos",
+   "of_n": "de {n} filas",
+   "censored": "Censurados",
+   "logrank": "Prueba log-rank: p",
+   "peto": "Prueba de Peto: p"
+  },
+  "charts": {
+   "km": "Supervivencia por estrato, con su banda de confianza; puntos: tiempos censurados",
+   "cumhaz": "Riesgo acumulado",
+   "loglog": "log(−log supervivencia) frente a log tiempo"
+  },
+  "km_caption": "Un escalón hacia abajo en cada evento; la banda es el intervalo de confianza punto a punto.",
+  "series": {
+   "survival": "Supervivencia",
+   "censored": "Censurados"
+  },
+  "tables": {
+   "at_risk": "Número en riesgo",
+   "stratum_time": "Estrato \\ tiempo",
+   "stratum": "Estrato",
+   "strata": "Eventos y medianas",
+   "rmst": "Supervivencia media restringida, eventos observados y esperados",
+   "surv_at": "Supervivencia en los tiempos pedidos",
+   "time": "Tiempo",
+   "survival": "Supervivencia",
+   "low": "Extremo inferior",
+   "high": "Extremo superior",
+   "pairs": "Pares de estratos (Holm)",
+   "pair": "Par"
+  },
+  "stats": {
+   "model": {
+    "events": "Eventos",
+    "censored": "Censurados",
+    "n_strata": "Estratos",
+    "rmst_tau": "Horizonte de la media restringida",
+    "test_statistic": "Estadístico de la prueba (chi cuadrado)",
+    "test_df": "Gl de la prueba",
+    "test_p_value": "p-valor de la prueba",
+    "conf_type": "Intervalo de confianza",
+    "test": "Prueba"
+   },
+   "stratum": {
+    "n": "Filas",
+    "events": "Eventos",
+    "censored": "Censurados",
+    "median": "Mediana",
+    "median_ci_low": "Mediana, IC inf.",
+    "median_ci_high": "Mediana, IC sup.",
+    "rmst": "Media restringida",
+    "rmst_se": "Su error est.",
+    "observed": "Eventos observados",
+    "expected": "Eventos esperados"
+   },
+   "pair": {
+    "statistic": "Chi cuadrado",
+    "p_value": "p-valor",
+    "p_adjusted": "p ajustado (Holm)"
+   }
+  },
+  "values": {
+   "conf_type": {
+    "log": "log",
+    "log-log": "log-log",
+    "plain": "simple"
+   },
+   "test": {
+    "logrank": "log-rank",
+    "peto": "Peto"
+   }
+  },
+  "checks": {
+   "censoring_informative": {
+    "name": "Censura no informativa",
+    "h0": "Estar censurado no dice nada del tiempo hasta el evento.",
+    "not_computed": "No se puede comprobar con los datos: pregúntese por qué se censuraron las filas."
+   },
+   "proportional_hazards": {
+    "name": "Riesgos proporcionales",
+    "h0": "Los riesgos de los estratos mantienen la misma razón en el tiempo (las curvas no se cruzan).",
+    "advice": "Las curvas se cruzan: compare con test = peto, o con la media restringida."
+   },
+   "censoring_by_stratum": {
+    "name": "Censura por estrato",
+    "h0": "La proporción de censurados es la misma en cada estrato.",
+    "advice": "La censura difiere entre estratos: lea la comparación con cautela."
+   }
+  }
+ },
+ "fr": {
+  "name": "Kaplan–Meier",
+  "by": "{what} par {strata}",
+  "kpi": {
+   "n_strata": "Strates",
+   "events": "Événements",
+   "of_n": "sur {n} lignes",
+   "censored": "Censurés",
+   "logrank": "Test du log-rank : p",
+   "peto": "Test de Peto : p"
+  },
+  "charts": {
+   "km": "Survie par strate, avec sa bande de confiance ; points : temps censurés",
+   "cumhaz": "Risque cumulé",
+   "loglog": "log(−log survie) selon log temps"
+  },
+  "km_caption": "Une marche vers le bas à chaque événement ; la bande est l'intervalle de confiance point par point.",
+  "series": {
+   "survival": "Survie",
+   "censored": "Censurés"
+  },
+  "tables": {
+   "at_risk": "Nombre à risque",
+   "stratum_time": "Strate \\ temps",
+   "stratum": "Strate",
+   "strata": "Événements et médianes",
+   "rmst": "Survie moyenne restreinte, événements observés et attendus",
+   "surv_at": "Survie aux temps demandés",
+   "time": "Temps",
+   "survival": "Survie",
+   "low": "Borne inférieure",
+   "high": "Borne supérieure",
+   "pairs": "Paires de strates (Holm)",
+   "pair": "Paire"
+  },
+  "stats": {
+   "model": {
+    "events": "Événements",
+    "censored": "Censurés",
+    "n_strata": "Strates",
+    "rmst_tau": "Horizon de la moyenne restreinte",
+    "test_statistic": "Statistique du test (khi-deux)",
+    "test_df": "Ddl du test",
+    "test_p_value": "p-valeur du test",
+    "conf_type": "Intervalle de confiance",
+    "test": "Test"
+   },
+   "stratum": {
+    "n": "Lignes",
+    "events": "Événements",
+    "censored": "Censurés",
+    "median": "Médiane",
+    "median_ci_low": "Médiane, IC inf.",
+    "median_ci_high": "Médiane, IC sup.",
+    "rmst": "Moyenne restreinte",
+    "rmst_se": "Son erreur type",
+    "observed": "Événements observés",
+    "expected": "Événements attendus"
+   },
+   "pair": {
+    "statistic": "Khi-deux",
+    "p_value": "p-valeur",
+    "p_adjusted": "p ajustée (Holm)"
+   }
+  },
+  "values": {
+   "conf_type": {
+    "log": "log",
+    "log-log": "log-log",
+    "plain": "simple"
+   },
+   "test": {
+    "logrank": "log-rank",
+    "peto": "Peto"
+   }
+  },
+  "checks": {
+   "censoring_informative": {
+    "name": "Censure non informative",
+    "h0": "Être censuré ne dit rien du temps jusqu'à l'événement.",
+    "not_computed": "Cela ne se vérifie pas sur les données : demandez-vous pourquoi les lignes ont été censurées."
+   },
+   "proportional_hazards": {
+    "name": "Risques proportionnels",
+    "h0": "Les risques des strates gardent le même rapport dans le temps (les courbes ne se croisent pas).",
+    "advice": "Les courbes se croisent : comparez avec test = peto, ou avec la moyenne restreinte."
+   },
+   "censoring_by_stratum": {
+    "name": "Censure par strate",
+    "h0": "La part de censurés est la même dans chaque strate.",
+    "advice": "La censure diffère entre les strates : lisez la comparaison avec prudence."
+   }
+  }
+ }
+}

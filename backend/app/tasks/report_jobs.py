@@ -1,6 +1,7 @@
 """The render of a report, on the export queue (docs/specs/reports.md, «Rendering (engine)»),
-and of the report of a hypothesis test, drawn from the rows the test wrote
-(docs/specs/statistics.md, «The report»).
+of the report of a hypothesis test, drawn from the rows the test wrote (docs/specs/
+statistics.md, «The report»), and of the report of a statistical model, drawn from the
+results its run kept (docs/specs/statistical-models.md, «Report»).
 
 The file is left under `exports/` as the Viewer's exports are, and its owner was recorded
 by the route that started it: the gateway follows it and takes it, once, through
@@ -201,6 +202,94 @@ def render_stat_report_task(
     if result.pages is not None:
         payload["pages"] = result.pages
     logger.info("statistics report rendered: %s, %s, %s bytes, %s pages", test, format, payload.get("size"), result.pages)
+    return payload
+
+
+# ── the report of a statistical model (docs/specs/statistical-models.md, «Report») ──
+MODEL_RESULTS_GONE = "The results of this run are no longer in the storage: run the node again"
+
+
+class ModelResultsGone(Exception):
+    """The results a run kept are not in the storage (removed with the run, or the run's)."""
+
+
+def model_rows(bucket: str, key: str, model: str, params: dict) -> list[dict]:
+    """The rows of a model step's results, in their order, as the report reads them: the file
+    the run kept (`runs.model_results_key`), checked against the catalogue's declaration for
+    the variant before anything is drawn (`app/engine/models/results.py`). Small by
+    construction (at most `max_result_rows`): read whole, no query, no Job."""
+    import pyarrow.parquet as pq
+    from botocore.exceptions import ClientError
+
+    from app.engine.models import results
+    from app.tasks import jobs
+
+    storage = jobs.get_storage_service()
+    with tempfile.TemporaryDirectory(prefix="model-results-") as work:
+        path = Path(work) / "results.parquet"
+        try:
+            storage.download_file(bucket, key, str(path))
+        except ClientError as e:
+            raise ModelResultsGone(MODEL_RESULTS_GONE) from e
+        table = pq.read_table(path)
+    results.check_table(model, params, table)
+    return sorted(table.to_pylist(), key=lambda r: r["ord"])
+
+
+@celery_app.task(name="app.tasks.report_jobs.render_model_report_task", bind=True)
+def render_model_report_task(
+    self,
+    bucket: str,
+    results_key: str,
+    model: str,
+    params: dict,
+    format: str = "svg",
+    filename: str | None = None,
+    locale: str | None = None,
+    step: str | None = None,
+    sample: list[dict] | None = None,
+) -> dict:
+    """The report of a model step's run, left for its owner as a report's render: its results
+    (`model_rows`), the model's layout in the language asked (app/engine/models/layouts/),
+    then the report engine. A drawing of the results: nothing reaches the data, no Job
+    starts. Tagged as export_task's answer."""
+    import dataclasses
+
+    from celery.exceptions import SoftTimeLimitExceeded
+
+    from app.engine.exceptions import EngineError
+    from app.engine.models import catalog, layouts
+    from app.reports import render
+    from app.reports.errors import ReportError
+    from app.tasks.jobs import _deliver_export
+
+    if model not in layouts.LAYOUTS:
+        return {"ok": False, "error": "unprocessable", "detail": f"The model «{model}» has no report"}
+    name = render.filename(filename or layouts.title(model, params, locale), format)
+    try:
+        checked = catalog.check_params(model, params)
+        rows = model_rows(bucket, results_key, model, checked)
+        definition = layouts.definition(model, params, locale, sample, step)
+        datasets = {"result": {"rows": layouts.with_labels(model, params, rows, locale), "columns": layouts.columns()}}
+        limits = render.Limits.from_settings()
+        limits = dataclasses.replace(limits, max_rows=max(limits.max_rows, layouts.MAX_REPORT_ROWS))
+        with tempfile.TemporaryDirectory(prefix="model-report-") as work:
+            result = render.render(definition, datasets, {}, format, Path(work), locale=locale,
+                                   title=name.rsplit(".", 1)[0], limits=limits)
+            payload = _deliver_export(self.request.id, str(result.path), format, name)
+    except ReportError as e:
+        return {"ok": False, "error": e.tag, "detail": e.message}
+    except ModelResultsGone as e:
+        return {"ok": False, "error": "not_found", "detail": str(e)}
+    except EngineError as e:  # results of another shape (a runner's bug), parameters the catalogue refuses
+        return {"ok": False, "error": "unprocessable", "detail": str(e)}
+    except SoftTimeLimitExceeded:
+        return {"ok": False, "error": "timeout", "detail": "The report took longer than the time limit of the workers"}
+    if result.warnings:
+        payload["warnings"] = result.warnings
+    if result.pages is not None:
+        payload["pages"] = result.pages
+    logger.info("model report rendered: %s, %s, %s bytes, %s pages", model, format, payload.get("size"), result.pages)
     return payload
 
 

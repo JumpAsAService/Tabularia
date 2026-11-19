@@ -1,0 +1,495 @@
+"""The blocks every model's report has (docs/specs/statistical-models.md, «The layouts»): the
+bands, the summary cards and the formula, the assumptions' table with R's stars, the
+coefficients' tables, the numbers of the fit, the diagnostics' charts, the notes. Built on
+the statistics' page (`app/engine/stats/layouts.py`: its page, bands, tables and
+expressions), so the two reports look and read alike.
+
+A model's own file (`linear.py`, `logistic.py`, …) says what is its: its name, its four
+cards, its tables of coefficients, its charts and its own blocks, and calls `page`. The page
+does no computation on the data: every number is read from the model's rows, by their key
+(`num("model|||r_squared")`) or by their section (a table's or a chart's `filter`).
+
+The words are in `report_texts/common.json` and in one file per model, five languages each,
+the same keys in each; a model's words take precedence over the common ones. Only
+characters the PDF's font has (`app/reports/glyphs.py`).
+"""
+from __future__ import annotations
+
+import json
+import re
+from functools import lru_cache
+from pathlib import Path
+from typing import Any, Callable, Mapping, NamedTuple
+
+from app.engine.models import catalog
+from app.engine.stats import layouts as stats
+from app.engine.stats.layouts import ACCENT, DATASET, EXACT, LOCALES, MUTED, P4, PANEL, WIDTH
+
+TEXTS = Path(__file__).resolve().parent.parent / "report_texts"
+# the most rows a model's results hold (`results.py` refuses more): the report reads them whole
+MAX_REPORT_ROWS = catalog.LIMITS["max_result_rows"]
+# above this many rows every test rejects very small departures: the assumptions say so
+MANY_ROWS = 5000
+GOOD, BAD, MID = "#2b8a3e", "#c92a2a", "#b06f00"
+VERDICT_COLOURS = {"ok": GOOD, "doubtful": MID, "failed": BAD, "not_computed": MUTED}
+NUMBER = "0.######"  # a number of a table: six decimals at most, none it does not have
+
+
+# ── words ───────────────────────────────────────────────────────────────────
+@lru_cache(maxsize=16)
+def _file(name: str) -> dict[str, dict]:
+    path = TEXTS / f"{name}.json"
+    return json.loads(path.read_text(encoding="utf-8")) if path.exists() else {}
+
+
+def _merged(a: Mapping[str, Any], b: Mapping[str, Any]) -> dict[str, Any]:
+    """`b` over `a`, object by object."""
+    out = dict(a)
+    for k, v in b.items():
+        out[k] = _merged(out[k], v) if isinstance(v, Mapping) and isinstance(out.get(k), Mapping) else v
+    return out
+
+
+def _lang(name: str, locale: str | None) -> dict:
+    texts = _file(name)
+    return texts.get(locale or "en") or texts.get("en") or {}
+
+
+@lru_cache(maxsize=64)
+def _words(model: str, variant: str, locale: str) -> dict:
+    own = _lang(model, locale)
+    if variant == "penalized":  # the blocks both regressions share when a penalty is on
+        own = _merged(own, _lang("penalized", locale))
+    return _merged(_lang("common", locale), own)
+
+
+def words(model: str, variant: str, locale: str | None) -> dict:
+    """The words of a model's report in a language (English for one that is not there): the
+    common ones, the model's over them, and with a penalty the penalized ones over those."""
+    return _words(model, variant, locale if locale in LOCALES else "en")
+
+
+def code(locale: str | None) -> str:
+    return locale if locale in LOCALES else "en"
+
+
+# ── the names of the numbers, of the checks, of the settings ────────────────
+_WILDCARDS = (
+    (re.compile(r"^note_(\d+)$"), "note"),
+    (re.compile(r"^surv_at_(.+)_low$"), "surv_at_low"),
+    (re.compile(r"^surv_at_(.+)_high$"), "surv_at_high"),
+    (re.compile(r"^surv_at_(.+)$"), "surv_at"),
+    (re.compile(r"^ar_root_modulus_(\d+)$"), "ar_root"),
+    (re.compile(r"^ma_root_modulus_(\d+)$"), "ma_root"),
+    (re.compile(r"^orders_reason_(\d+)$"), "orders_reason"),
+    (re.compile(r"^order_test_(.+)$"), "order_test"),
+)
+
+
+def stat_label(w: dict, section: str, stat: str) -> str:
+    """How a row's `stat` is called on the page: its name in the words of its section, a
+    numbered one by its pattern («Note 2», «Survival at 30»), else its raw name (a number
+    newer than the words)."""
+    named = w.get("stats", {}).get(section, {}).get(stat)
+    if named:
+        return named
+    for pattern, key in _WILDCARDS:
+        m = pattern.match(stat)
+        if m and key in w.get("patterns", {}):
+            return w["patterns"][key].replace("{x}", m.group(1))
+    return stat
+
+
+def check_name(w: dict, check: str) -> str:
+    """What an assumption's check is called: «Homoscedasticity: Breusch–Pagan»."""
+    return w.get("checks", {}).get(check, {}).get("name") or check
+
+
+def with_labels(model: str, params: Mapping[str, Any] | None, rows: list[dict], locale: str | None) -> list[dict]:
+    """The rows as the page reads them, with `label` (the translated name of each `stat`; of
+    an assumption's `verdict` row, the check's name) and `tiny` (a very small number by its
+    exponent). What the runner writes in English is said in the page's language where the
+    words have it: an assumption's H0, its advice (only when the check failed, is doubtful or
+    was not computed), a setting's value («hc3»). A histogram's interval gets its edges as
+    text. None of it is a computation: it is how a row is said."""
+    from app.reports import formats
+
+    checked = catalog.check_params(model, dict(params or {}))
+    w = words(model, catalog.variant(model, checked), locale)
+    loc = formats.locale(code(locale))
+    verdicts = {(r["level"], r["level_2"]): r.get("text") for r in rows
+                if r["section"] == "assumption" and r["stat"] == "verdict"}
+    out = []
+    for r in rows:
+        section, stat, text = r["section"], r["stat"], r.get("text")
+        label = stat_label(w, section, stat)
+        if section == "assumption":
+            check = w.get("checks", {}).get(r["level"], {})
+            verdict = verdicts.get((r["level"], r["level_2"]))
+            if stat == "verdict":
+                label = check_name(w, r["level"])
+            elif stat == "h0" and check.get("h0"):
+                text = check["h0"]
+            elif stat == "advice":
+                said = check.get("not_computed") if verdict == "not_computed" else check.get("advice")
+                text = (said or text) if verdict in ("failed", "doubtful", "not_computed") else None
+        elif section == "model" and isinstance(text, str):
+            text = w.get("values", {}).get(stat, {}).get(text, text)
+        elif section == "hist" and isinstance(r.get("x0"), (int, float)) and isinstance(r.get("x1"), (int, float)):
+            text = stats.edges_text(r["x0"], r["x1"], False, loc.decimal, loc.group)
+        out.append({**r, "text": text, "label": label, "tiny": stats.tiny(r.get("value"), code(locale))})
+    return out
+
+
+def columns() -> list[dict[str, str]]:
+    """The columns of the dataset `result`: the ten, `label` and `tiny` (the statistics')."""
+    return stats.columns()
+
+
+# ── expressions ─────────────────────────────────────────────────────────────
+q = stats.quoted
+num = stats.value_of
+txt = stats.text_of
+shown = stats.shown
+join = stats.join
+
+
+def model_key(stat: str) -> str:
+    return f"model|||{stat}"
+
+
+def row_key(section: str, stat: str) -> str:
+    """The key of the row `stat` of the term (check, stratum, pair) of the row at hand: its
+    section, its level and its level_2 (empty when null: `&` writes NULL as nothing)."""
+    return f'"{section}|" & [level] & "|" & [level_2] & "|{stat}"'
+
+
+def of_row(section: str, stat: str, column: str = "value") -> str:
+    return f"LOOKUP({row_key(section, stat)}, [key], [{column}])"
+
+
+def number_of_row(section: str, stat: str) -> str:
+    """A number of the row at hand's term, with the decimals its column has room for; a very
+    small one by its exponent."""
+    x = of_row(section, stat)
+    return f"IF(ISNULL({of_row(section, stat, 'tiny')}), {stats.rounded(x)}, {of_row(section, stat, 'tiny')})"
+
+
+def p_said(x: str) -> str:
+    """A p-value as a result is written: four decimals, «< 0.0001» below; nothing when there is none."""
+    return f'IF(ISNULL({x}), "", IF({x} < 0.0001, "< " & {shown("0.0001", P4)}, {shown(x, P4)}))'
+
+
+def p_with_stars(stat: str) -> str:
+    """A p-value of the `model` section with its significance code after it: «0.0004 ***»."""
+    sig = stat[: -len("p_value")] + "significance"
+    return stats.with_stars(p_said(num(model_key(stat))), txt(model_key(sig)))
+
+
+def term() -> str:
+    """A coefficient's term as the page writes it: «price», «channel: web»."""
+    return '[level] & IF(ISNULL([level_2]) OR [level_2] = "", "", ": " & [level_2])'
+
+
+def exists(condition: str) -> str:
+    return f"=COUNTIF({condition}) > 0"
+
+
+# ── the parts of a page ─────────────────────────────────────────────────────
+class Card(NamedTuple):
+    """A card of the summary: its label, the expression of its value, its format, `visible`;
+    `under`: a short line under it (an interval)."""
+
+    id: str
+    label: str
+    value: str
+    format: str | None = None
+    visible: str | None = None
+    under: str | None = None
+
+
+class Chart(NamedTuple):
+    """A chart of the diagnostics: its kind (`xy`, `column`, `interval`, `heatmap`…), its
+    title, the rest of its item (`more`: filter, category, series, options, visible), the
+    check it illustrates (`under`, a caption under it says its verdict), `wide`: across the
+    page."""
+
+    id: str
+    kind: str
+    title: str
+    more: dict
+    under: str | None = None
+    wide: bool = False
+
+
+class CoefTable(NamedTuple):
+    """A table of the coefficients: one row a term, a column for each stat."""
+
+    id: str
+    title: str
+    stats: tuple[str, ...]
+    width: float = 24.0
+
+
+Block = Callable[["stats.Page", dict], None]
+
+
+def xy(id_: str, title: str, filter_: str, series: list[dict], options: dict | None = None, under: str | None = None,
+       split_by: str | None = None, wide: bool = False, visible: str | None = None) -> Chart:
+    """An `xy` chart of the rows `filter_` keeps, x their `x0`."""
+    more: dict[str, Any] = {"filter": filter_, "category": "[x0]", "series": series, "options": {"format": "0.###", **(options or {})}}
+    if split_by:
+        more["split_by"] = split_by
+    more["visible"] = visible or exists(filter_)
+    return Chart(id_, "xy", title, more, under, wide)
+
+
+def mark(stat: str, as_: str, name: str = "", label: bool = False) -> dict:
+    """A series of an `xy` chart: the rows whose `stat` is `stat`, drawn as `as_`."""
+    s: dict[str, Any] = {"value": f'IF([stat] = "{stat}", [value], NULL)', "as": as_, "name": name}
+    if label:
+        s["label"] = "[text]"
+    return s
+
+
+def histogram(id_: str, title: str, level: str, name: str, under: str | None = None, split: bool = False) -> Chart:
+    """The counts of a histogram's intervals (section `hist`), one bar an interval."""
+    f = f'[section] = "hist" AND [level] = "{level}"'
+    more: dict[str, Any] = {"filter": f, "category": "[text]", "series": [{"value": "SUM([value])", "name": name}],
+                            "options": {"legend": split, "format": "#,##0"}, "visible": exists(f)}
+    if split:
+        more["split_by"] = "[level_2]"
+    return Chart(id_, "column", title, more, under)
+
+
+def coef_interval(id_: str, title: str, stats_: tuple[str, str, str], names: tuple[str, str, str], target: float,
+                  log: bool = False, filter_: str = '[section] = "coef"') -> Chart:
+    """The coefficients (or their ratios) with their intervals, a line at `target`."""
+    more = {"filter": filter_, "category": term(), "options": {"labels": True, "format": "0.###", "target": target, "log": log},
+            "series": [{"value": f'SUMIF([stat] = "{s}", [value])', "name": n} for s, n in zip(stats_, names)],
+            "visible": exists(f'{filter_} AND [stat] = "{stats_[0]}"')}
+    return Chart(id_, "interval", title, more)
+
+
+# ── the page ────────────────────────────────────────────────────────────────
+def subject(params: Mapping[str, Any], outcome: str = "outcome", predictors: str = "predictors") -> str:
+    """«quantity ~ price + channel», from the node's columns."""
+    left = str(params.get(outcome) or "")
+    right = " + ".join(str(p) for p in params.get(predictors) or [])
+    return f"{left} ~ {right}" if left and right else left or right
+
+
+def page(model: str, params: Mapping[str, Any], locale: str, sample: list[dict] | None, step: str | None, *,
+         name: str, about: str, cards: tuple[Card | tuple[Card, ...], ...], coef_tables: tuple[CoefTable, ...] = (),
+         coef_note: str | None = None, blocks: tuple[Block, ...] = (), charts: tuple[Chart, ...] = ()) -> dict:
+    """A model's report: the summary (four cards, the formula), the assumptions (first page),
+    the coefficients, the fit, the model's own blocks (strata, forecast…), the diagnostics,
+    the notes. `name`: the model as the header says it; `about`: what it is about."""
+    from app.reports import formats
+
+    lang = code(locale)
+    checked = catalog.check_params(model, dict(params))
+    variant = catalog.variant(model, checked)
+    w = words(model, variant, lang)
+    sample_text = stats.sample_line(sample, lang)
+    header, footer = stats.bands(name, " · ".join(x for x in (about, step) if x), w, formats.locale(lang).texts, sample_text)
+    p = stats.Page()
+    _summary(p, w, cards)
+    _assumptions(p, w, lang)
+    if coef_tables:
+        _coefficients(p, w, lang, coef_tables, coef_note)
+    _fit(p, w)
+    for block in blocks:
+        block(p, w)
+    if charts:
+        _diagnostics(p, w, charts)
+    _notes(p, w)
+    return stats.document(header, p.items, footer, lang)
+
+
+def _summary(p: stats.Page, w: dict, cards: tuple[Card | tuple[Card, ...], ...]) -> None:
+    """Four places of cards; a place may hold alternatives, each `visible` when its rows say
+    (the MAPE on the holdout, or in sample without one)."""
+    p.heading("s_summary", w["sections"]["summary"])
+    for place, x in zip(cards, (0, 47, 94, 141)):
+        for card in ((place,) if isinstance(place, Card) else place):
+            item: dict[str, Any] = {"id": card.id, "type": "kpi", "dataset": DATASET, "x": x, "y": p.y, "w": 45, "h": 20,
+                                    "label": card.label, "value": card.value}
+            if card.format:
+                item["format"] = card.format
+            if card.visible:
+                item["visible"] = card.visible
+            p.add(item)
+            if card.under:
+                p.text(card.id + "_under", "=" + card.under, h=4.5, x=x + 2, w=43, advance=False, size=7.5, color=MUTED,
+                       visible=card.visible)
+                p.items[-1]["y"] = p.y + 14.6
+    p.y += 21.5
+    p.keep()
+    p.text("formula", "=" + txt(model_key("formula")), h=6.5, size=9.5, weight="semibold", background=PANEL, padding=1.5,
+           can_grow=True, visible=exists('[key] = "model|||formula"'))
+
+
+def _assumptions(p: stats.Page, w: dict, lang: str) -> None:
+    """One row a check: what it checks, H0, the statistic, df, p with R's stars, the value it
+    reads (a VIF, an EPV, a count), the verdict in words and with a mark; then what to do
+    about those that failed, are doubtful or were not computed."""
+    a = w["assumptions"]
+    p.heading("s_assumptions", w["sections"]["assumptions"])
+    verdict = "LOOKUP(" + row_key("assumption", "verdict") + ", [key], [text])"
+    said = "IFS(" + ", ".join(f'[text] = "{v}", {q(w["verdicts"][v])}' for v in catalog.VERDICTS) + ', "")'
+    df = of_row("assumption", "df")
+    df2 = of_row("assumption", "df_2")
+    count = of_row("assumption", "count")
+    value = of_row("assumption", "value")
+    one_row = '[section] = "assumption" AND [stat] = "verdict"'
+    cols = [
+        {"header": a["check"], "value": '[label] & IF(ISNULL([level_2]) OR [level_2] = "", "", " — " & [level_2])', "width": 42},
+        {"header": a["h0"], "value": of_row("assumption", "h0", "text"), "style": {"size": 7}},
+        {"header": a["statistic"], "value": number_of_row("assumption", "statistic"), "width": 17, "align": "right",
+         "format": "0.####"},
+        {"header": a["df"], "value": f'IF(ISNULL({df}), "", FORMAT({df}, "0.##") & IF(ISNULL({df2}), "", "; " & FORMAT({df2}, "0.##")))',
+         "width": 12, "align": "right"},
+        {"header": a["p_value"], "value": p_said(of_row("assumption", "p_value")), "width": 17, "align": "right"},
+        {"header": w["signif"]["column"], "value": of_row("assumption", "significance", "text"), "width": 10},
+        {"header": a["value"], "value": f"IF(ISNULL({value}), {stats.rounded(count)}, {stats.rounded(value)})", "width": 14,
+         "align": "right", "format": "0.##"},
+        {"header": a["verdict"], "value": said, "width": 30,
+         "rules": [{"when": f'[text] = "{v}"', "style": {"color": c, "weight": "semibold"}} for v, c in VERDICT_COLOURS.items()]},
+    ]
+    p.add(stats.table("assumptions", a["title"], one_row, cols, p.y, visible=exists(one_row)), 10)
+    p.text("assumptions_none", a["none"], h=5, color=MUTED, visible=f"=COUNTIF({one_row}) = 0")
+    p.text("signif_legend", stats.static(stats.signif_legend(w, lang)), h=4.5, size=7, color=MUTED)
+    p.text("many_rows", "=" + join(a["many_rows"], n=shown(num(model_key("n")), "#,##0")), h=5, size=8, color=MID,
+           can_grow=True, visible=f"={num(model_key('n'))} > {MANY_ROWS}")
+    p.y += 1.0
+    advised = '[section] = "assumption" AND [stat] = "advice" AND NOT ISNULL([text]) AND [text] <> ""'
+    p.add(stats.table("advice", a["advice_title"], advised, [
+        {"header": a["check"], "value": f'LOOKUP({row_key("assumption", "verdict")}, [key], [label]) & '
+                                        f'IF(ISNULL([level_2]) OR [level_2] = "", "", " — " & [level_2])', "width": 46},
+        {"header": a["verdict"], "value": f'IFS({verdict} = "doubtful", {q(w["verdicts"]["doubtful"])}, '
+                                          f'{verdict} = "failed", {q(w["verdicts"]["failed"])}, {q(w["verdicts"]["not_computed"])})',
+         "width": 30},
+        {"header": a["advice"], "value": "[text]"},
+        {"header": a["rows"], "value": of_row("assumption", "rows", "text"), "width": 30, "style": {"size": 7}},
+    ], p.y, visible=exists(advised)), 10)
+
+
+def _coefficients(p: stats.Page, w: dict, lang: str, tables: tuple[CoefTable, ...], note: str | None) -> None:
+    c = w["coef"]
+    p.heading("s_coef", w["sections"]["coefficients"])
+    if note:
+        p.text("coef_note", note, h=5, color=MUTED, can_grow=True)
+        p.keep()
+        p.y += 1.0
+    for t in tables:
+        one_row = f'[section] = "coef" AND [stat] = "{t.stats[0]}"'
+        cols: list[dict] = [{"header": c["term"], "value": term()}]
+        for s in t.stats:
+            header = stat_label(w, "coef", s)
+            if s == "p_value":
+                cols.append({"header": header, "value": p_said(of_row("coef", "p_value")), "width": 18, "align": "right"})
+                cols.append({"header": w["signif"]["column"], "value": of_row("coef", "significance", "text"), "width": 11})
+            elif s == "selected":
+                cols.append({"header": header, "value": f'IF({of_row("coef", "selected")} = 1, {q(c["yes"])}, {q(c["no"])})',
+                             "width": t.width})
+            else:
+                cols.append({"header": header, "value": number_of_row("coef", s), "width": t.width, "align": "right",
+                             "format": NUMBER})
+        p.add(stats.table(t.id, t.title, one_row, cols, p.y, visible=exists(one_row)), 10)
+    if any("p_value" in t.stats for t in tables):
+        p.text("coef_signif_legend", stats.static(stats.signif_legend(w, lang)), h=4.5, size=7, color=MUTED)
+
+
+def _fit(p: stats.Page, w: dict) -> None:
+    """Every number of the `model` section, then how it was fitted (its settings in words)."""
+    f = w["fit"]
+    p.heading("s_fit", w["sections"]["fit"])
+    sig = f'LOOKUP("model|||" & LEFT([stat], LEN([stat]) - 7) & "significance", [key], [text])'
+    numbers = '[section] = "model" AND NOT ISNULL([value])'
+    p.add(stats.table("fit", f["title"], numbers, [
+        {"header": f["quantity"], "value": "[label]"},
+        {"header": f["name"], "value": "[stat]", "width": 50, "style": {"color": MUTED}},
+        {"header": f["value"], "value": "IF(ISNULL([tiny]), [value], [tiny])", "width": 34, "align": "right", "format": EXACT},
+        {"header": w["signif"]["column"], "value": f'IF(RIGHT([stat], 7) = "p_value", {sig}, "")', "width": 14},
+    ], p.y), 10)
+    hidden = ("model", "variant", "formula", "software", "group_version", "rows_from")
+    settings = ('[section] = "model" AND ISNULL([value]) AND NOT ISNULL([text]) AND [text] <> "" AND '
+                + " AND ".join(f'[stat] <> "{s}"' for s in hidden)
+                + ' AND NOT STARTSWITH([stat], "note_") AND NOT STARTSWITH([stat], "orders_reason_") AND RIGHT([stat], 12) <> "significance"')
+    p.add(stats.table("settings", f["settings_title"], settings, [
+        {"header": f["setting"], "value": "[label]", "width": 70},
+        {"header": f["value"], "value": "[text]"},
+    ], p.y, visible=exists(settings)), 10)
+
+
+def _diagnostics(p: stats.Page, w: dict, charts: tuple[Chart, ...]) -> None:
+    """The charts two by two (a wide one across the page), each with the verdict of the check
+    it illustrates under it. A row of charts and its captions stay on one page (an invisible
+    rectangle as tall as both makes them one row of the body), the heading with the first."""
+    p.heading("s_diagnostics", w["sections"]["diagnostics"])
+    half, gap, tall, caption = 91.0, 4.0, 62.0, 4.5
+    column, top, first = 0, p.y, True
+
+    def close_row() -> None:
+        nonlocal column, first, top
+        p.y = top + tall + caption + 3
+        if first:
+            p.keep()
+            first = False
+        else:
+            p.items.append({"id": f"row_{len(p.items)}_keep", "type": "rect", "x": 0, "y": top, "w": 0.1,
+                            "h": round(tall + caption, 2), "style": {}})
+        column, top = 0, p.y
+
+    for chart in charts:
+        if chart.wide and column == 1:  # a wide chart starts a row of its own
+            close_row()
+        x = 0.0 if column == 0 or chart.wide else half + gap
+        width = WIDTH if chart.wide else half
+        item: dict[str, Any] = {"id": chart.id, "type": "chart", "dataset": DATASET, "kind": chart.kind, "x": x, "y": top,
+                                "w": width, "h": tall, "title": stats.fit(chart.title, 7.5, width - 4, 700), **chart.more}
+        p.add(item)
+        if chart.under:  # «check», or «check|term» for a check of each term
+            key = f"assumption|{chart.under}|verdict" if "|" in chart.under else f"assumption|{chart.under}||verdict"
+            said = "IFS(" + ", ".join(f'{txt(key)} = "{v}", {q(w["verdicts"][v])}' for v in catalog.VERDICTS) + ', "")'
+            p.items.append({"id": chart.id + "_caption", "type": "text", "x": x, "y": top + tall + 0.3, "w": width, "h": caption,
+                            "value": "=" + join(w["illustrates"], check=f'LOOKUP({q(key)}, [key], [label])', verdict=said),
+                            "style": {"size": 7, "color": MUTED},
+                            "visible": f'=COUNTIF([key] = {q(key)}) > 0 AND ' + (chart.more.get("visible") or "=TRUE").lstrip("=")})
+        if chart.wide or column == 1:
+            close_row()
+        else:
+            column = 1
+    if column == 1:
+        close_row()
+
+
+def _notes(p: stats.Page, w: dict) -> None:
+    n = w["notes"]
+    p.heading("s_notes", w["sections"]["notes"])
+    rows_from = txt(model_key("rows_from"))
+    p.text("rows_from", f'=IF({rows_from} = "trial", {q(n["trial"])}, {q(n["run"])})', can_grow=True)
+    p.keep()
+    p.text("left_out", "=" + join(n["rows"], n=shown(num(model_key("n")), "#,##0"),
+                                  missing=shown(f"COALESCE({num(model_key('n_missing'))}, 0)", "#,##0")), can_grow=True)
+    p.text("software", "=" + join(n["software"], software=txt(model_key("software")), version=txt(model_key("group_version"))),
+           can_grow=True)
+    p.y += 1.5
+    is_note = '[section] = "model" AND STARTSWITH([stat], "note_")'
+    p.add(stats.table("notes", n["title"], is_note, [{"header": n["note"], "value": "[text]"}], p.y,
+                      visible=exists(is_note)), 10)
+
+
+# ── shared pieces of the models' own blocks ─────────────────────────────────
+def heading(p: stats.Page, id_: str, title: str) -> None:
+    p.heading(id_, title)
+
+
+def text_rows(p: stats.Page, id_: str, title: str, filter_: str, header: str) -> None:
+    """A table of the texts of the rows `filter_` keeps (the sentences of a choice)."""
+    p.add(stats.table(id_, title, filter_, [{"header": header, "value": "[text]"}], p.y, visible=exists(filter_)), 10)
+
+
+def accent() -> str:
+    return ACCENT

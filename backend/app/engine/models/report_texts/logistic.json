@@ -1,0 +1,437 @@
+{
+ "en": {
+  "name": "Logistic regression",
+  "variants": {
+   "probit": "probit",
+   "firth": "Firth"
+  },
+  "kpi": {
+   "n_events": "Rows / events",
+   "auc": "AUC",
+   "auc_ci": "CI {low} – {high}",
+   "mcfadden_r2": "McFadden's R²",
+   "lr_test": "LR test: p {p}",
+   "brier": "Brier score"
+  },
+  "charts": {
+   "roc": "ROC curve",
+   "calibration": "Calibration: observed rate against predicted risk, by deciles",
+   "prob": "Predicted probabilities by observed outcome",
+   "confusion": "Confusion matrix at the threshold",
+   "resid_linear": "Deviance residuals against the linear predictor",
+   "odds_ratio_interval": "Odds ratios with their intervals (logarithmic axis)"
+  },
+  "series": {
+   "roc": "ROC",
+   "deciles": "Deciles",
+   "observed": "Rows",
+   "odds_ratio": "Odds ratio"
+  },
+  "tables": {
+   "odds_ratios": "Odds ratios",
+   "confusion": "Confusion matrix",
+   "observed_predicted": "Observed \\ predicted",
+   "confusion_line": "At the threshold {threshold}: accuracy {accuracy}, sensitivity {sensitivity}, specificity {specificity}."
+  },
+  "stats": {
+   "model": {
+    "events": "Events",
+    "auc": "AUC",
+    "auc_ci_low": "AUC, CI low (DeLong)",
+    "auc_ci_high": "AUC, CI high (DeLong)",
+    "brier": "Brier score",
+    "accuracy": "Accuracy",
+    "sensitivity": "Sensitivity",
+    "specificity": "Specificity",
+    "precision": "Precision",
+    "deviance": "Residual deviance",
+    "null_deviance": "Null deviance",
+    "lr_statistic": "Likelihood-ratio statistic",
+    "lr_df": "Likelihood-ratio df",
+    "lr_p_value": "Likelihood-ratio p-value",
+    "mcfadden_r2": "McFadden's R²",
+    "nagelkerke_r2": "Nagelkerke's R²",
+    "tjur_r2": "Tjur's R²"
+   }
+  },
+  "values": {
+   "family": {
+    "binomial": "binomial"
+   },
+   "link": {
+    "logit": "logit",
+    "probit": "probit"
+   }
+  },
+  "checks": {
+   "separation": {
+    "name": "No separation",
+    "h0": "No combination of predictors separates the outcome completely.",
+    "advice": "A predictor separates the outcome: use estimation = firth, or a penalty."
+   },
+   "hosmer_lemeshow": {
+    "name": "Calibration: Hosmer–Lemeshow",
+    "h0": "The predicted probabilities match the observed rates in 10 groups of risk.",
+    "advice": "The predicted probabilities do not match the observed rates: add the missing terms, read the calibration chart."
+   },
+   "box_tidwell": {
+    "name": "Linearity of the logit: Box–Tidwell",
+    "h0": "The predictor's effect is linear in the logit (its x·log(x) term adds nothing).",
+    "advice": "That predictor's effect is not linear in the logit: transform it."
+   },
+   "deviance_residuals": {
+    "name": "Influence: deviance residuals",
+    "h0": "No row is far from what the model predicts for it.",
+    "advice": "Look at the rows named: the model predicts them badly."
+   }
+  }
+ },
+ "it": {
+  "name": "Regressione logistica",
+  "variants": {
+   "probit": "probit",
+   "firth": "Firth"
+  },
+  "kpi": {
+   "n_events": "Righe / eventi",
+   "auc": "AUC",
+   "auc_ci": "IC {low} – {high}",
+   "mcfadden_r2": "R² di McFadden",
+   "lr_test": "Test LR: p {p}",
+   "brier": "Punteggio di Brier"
+  },
+  "charts": {
+   "roc": "Curva ROC",
+   "calibration": "Calibrazione: tasso osservato rispetto al rischio stimato, per decili",
+   "prob": "Probabilità stimate per esito osservato",
+   "confusion": "Matrice di confusione alla soglia",
+   "resid_linear": "Residui di devianza rispetto al predittore lineare",
+   "odds_ratio_interval": "Odds ratio con i loro intervalli (asse logaritmico)"
+  },
+  "series": {
+   "roc": "ROC",
+   "deciles": "Decili",
+   "observed": "Righe",
+   "odds_ratio": "Odds ratio"
+  },
+  "tables": {
+   "odds_ratios": "Odds ratio",
+   "confusion": "Matrice di confusione",
+   "observed_predicted": "Osservato \\ previsto",
+   "confusion_line": "Alla soglia {threshold}: accuratezza {accuracy}, sensibilità {sensitivity}, specificità {specificity}."
+  },
+  "stats": {
+   "model": {
+    "events": "Eventi",
+    "auc": "AUC",
+    "auc_ci_low": "AUC, IC inf. (DeLong)",
+    "auc_ci_high": "AUC, IC sup. (DeLong)",
+    "brier": "Punteggio di Brier",
+    "accuracy": "Accuratezza",
+    "sensitivity": "Sensibilità",
+    "specificity": "Specificità",
+    "precision": "Precisione",
+    "deviance": "Devianza dei residui",
+    "null_deviance": "Devianza nulla",
+    "lr_statistic": "Statistica del rapporto di verosimiglianza",
+    "lr_df": "Gdl del rapporto di verosimiglianza",
+    "lr_p_value": "p-value del rapporto di verosimiglianza",
+    "mcfadden_r2": "R² di McFadden",
+    "nagelkerke_r2": "R² di Nagelkerke",
+    "tjur_r2": "R² di Tjur"
+   }
+  },
+  "values": {
+   "family": {
+    "binomial": "binomiale"
+   },
+   "link": {
+    "logit": "logit",
+    "probit": "probit"
+   }
+  },
+  "checks": {
+   "separation": {
+    "name": "Assenza di separazione",
+    "h0": "Nessuna combinazione di predittori separa del tutto l'esito.",
+    "advice": "Un predittore separa l'esito: usate estimation = firth, oppure una penalizzazione."
+   },
+   "hosmer_lemeshow": {
+    "name": "Calibrazione: Hosmer–Lemeshow",
+    "h0": "Le probabilità stimate corrispondono ai tassi osservati in 10 gruppi di rischio.",
+    "advice": "Le probabilità stimate non corrispondono ai tassi osservati: aggiungete i termini che mancano, leggete il grafico di calibrazione."
+   },
+   "box_tidwell": {
+    "name": "Linearità del logit: Box–Tidwell",
+    "h0": "L'effetto del predittore è lineare nel logit (il termine x·log(x) non aggiunge nulla).",
+    "advice": "L'effetto di quel predittore non è lineare nel logit: trasformatelo."
+   },
+   "deviance_residuals": {
+    "name": "Influenza: residui di devianza",
+    "h0": "Nessuna riga è lontana da ciò che il modello prevede per lei.",
+    "advice": "Guardate le righe indicate: il modello le prevede male."
+   }
+  }
+ },
+ "de": {
+  "name": "Logistische Regression",
+  "variants": {
+   "probit": "Probit",
+   "firth": "Firth"
+  },
+  "kpi": {
+   "n_events": "Zeilen / Ereignisse",
+   "auc": "AUC",
+   "auc_ci": "KI {low} – {high}",
+   "mcfadden_r2": "R² nach McFadden",
+   "lr_test": "LR-Test: p {p}",
+   "brier": "Brier-Score"
+  },
+  "charts": {
+   "roc": "ROC-Kurve",
+   "calibration": "Kalibrierung: beobachtete Rate gegen Risiko, nach Dezilen",
+   "prob": "Geschätzte Wahrscheinlichkeiten nach beobachtetem Ergebnis",
+   "confusion": "Konfusionsmatrix an der Schwelle",
+   "resid_linear": "Devianzresiduen gegen den linearen Prädiktor",
+   "odds_ratio_interval": "Odds Ratios mit ihren Intervallen (logarithmische Achse)"
+  },
+  "series": {
+   "roc": "ROC",
+   "deciles": "Dezile",
+   "observed": "Zeilen",
+   "odds_ratio": "Odds Ratio"
+  },
+  "tables": {
+   "odds_ratios": "Odds Ratios",
+   "confusion": "Konfusionsmatrix",
+   "observed_predicted": "Beobachtet \\ vorhergesagt",
+   "confusion_line": "An der Schwelle {threshold}: Genauigkeit {accuracy}, Sensitivität {sensitivity}, Spezifität {specificity}."
+  },
+  "stats": {
+   "model": {
+    "events": "Ereignisse",
+    "auc": "AUC",
+    "auc_ci_low": "AUC, KI unten (DeLong)",
+    "auc_ci_high": "AUC, KI oben (DeLong)",
+    "brier": "Brier-Score",
+    "accuracy": "Genauigkeit",
+    "sensitivity": "Sensitivität",
+    "specificity": "Spezifität",
+    "precision": "Präzision",
+    "deviance": "Residuendevianz",
+    "null_deviance": "Nulldevianz",
+    "lr_statistic": "Likelihood-Quotienten-Statistik",
+    "lr_df": "FG des Likelihood-Quotienten",
+    "lr_p_value": "p-Wert des Likelihood-Quotienten",
+    "mcfadden_r2": "R² nach McFadden",
+    "nagelkerke_r2": "R² nach Nagelkerke",
+    "tjur_r2": "R² nach Tjur"
+   }
+  },
+  "values": {
+   "family": {
+    "binomial": "binomial"
+   },
+   "link": {
+    "logit": "Logit",
+    "probit": "Probit"
+   }
+  },
+  "checks": {
+   "separation": {
+    "name": "Keine Separation",
+    "h0": "Keine Kombination von Prädiktoren trennt das Ergebnis vollständig.",
+    "advice": "Ein Prädiktor trennt das Ergebnis: Verwenden Sie estimation = firth oder eine Penalisierung."
+   },
+   "hosmer_lemeshow": {
+    "name": "Kalibrierung: Hosmer–Lemeshow",
+    "h0": "Die geschätzten Wahrscheinlichkeiten entsprechen den beobachteten Raten in 10 Risikogruppen.",
+    "advice": "Die geschätzten Wahrscheinlichkeiten passen nicht zu den beobachteten Raten: Ergänzen Sie fehlende Terme, lesen Sie das Kalibrierungsdiagramm."
+   },
+   "box_tidwell": {
+    "name": "Linearität des Logits: Box–Tidwell",
+    "h0": "Der Effekt des Prädiktors ist im Logit linear (sein Term x·log(x) fügt nichts hinzu).",
+    "advice": "Der Effekt dieses Prädiktors ist im Logit nicht linear: transformieren Sie ihn."
+   },
+   "deviance_residuals": {
+    "name": "Einfluss: Devianzresiduen",
+    "h0": "Keine Zeile liegt weit von dem, was das Modell für sie vorhersagt.",
+    "advice": "Prüfen Sie die genannten Zeilen: Das Modell sagt sie schlecht vorher."
+   }
+  }
+ },
+ "es": {
+  "name": "Regresión logística",
+  "variants": {
+   "probit": "probit",
+   "firth": "Firth"
+  },
+  "kpi": {
+   "n_events": "Filas / eventos",
+   "auc": "AUC",
+   "auc_ci": "IC {low} – {high}",
+   "mcfadden_r2": "R² de McFadden",
+   "lr_test": "Prueba LR: p {p}",
+   "brier": "Puntuación de Brier"
+  },
+  "charts": {
+   "roc": "Curva ROC",
+   "calibration": "Calibración: tasa observada frente al riesgo estimado, por deciles",
+   "prob": "Probabilidades estimadas por resultado observado",
+   "confusion": "Matriz de confusión en el umbral",
+   "resid_linear": "Residuos de devianza frente al predictor lineal",
+   "odds_ratio_interval": "Odds ratios con sus intervalos (eje logarítmico)"
+  },
+  "series": {
+   "roc": "ROC",
+   "deciles": "Deciles",
+   "observed": "Filas",
+   "odds_ratio": "Odds ratio"
+  },
+  "tables": {
+   "odds_ratios": "Odds ratios",
+   "confusion": "Matriz de confusión",
+   "observed_predicted": "Observado \\ previsto",
+   "confusion_line": "En el umbral {threshold}: exactitud {accuracy}, sensibilidad {sensitivity}, especificidad {specificity}."
+  },
+  "stats": {
+   "model": {
+    "events": "Eventos",
+    "auc": "AUC",
+    "auc_ci_low": "AUC, IC inf. (DeLong)",
+    "auc_ci_high": "AUC, IC sup. (DeLong)",
+    "brier": "Puntuación de Brier",
+    "accuracy": "Exactitud",
+    "sensitivity": "Sensibilidad",
+    "specificity": "Especificidad",
+    "precision": "Precisión",
+    "deviance": "Devianza residual",
+    "null_deviance": "Devianza nula",
+    "lr_statistic": "Estadístico de razón de verosimilitud",
+    "lr_df": "Gl de la razón de verosimilitud",
+    "lr_p_value": "p-valor de la razón de verosimilitud",
+    "mcfadden_r2": "R² de McFadden",
+    "nagelkerke_r2": "R² de Nagelkerke",
+    "tjur_r2": "R² de Tjur"
+   }
+  },
+  "values": {
+   "family": {
+    "binomial": "binomial"
+   },
+   "link": {
+    "logit": "logit",
+    "probit": "probit"
+   }
+  },
+  "checks": {
+   "separation": {
+    "name": "Sin separación",
+    "h0": "Ninguna combinación de predictores separa del todo el resultado.",
+    "advice": "Un predictor separa el resultado: use estimation = firth, o una penalización."
+   },
+   "hosmer_lemeshow": {
+    "name": "Calibración: Hosmer–Lemeshow",
+    "h0": "Las probabilidades estimadas coinciden con las tasas observadas en 10 grupos de riesgo.",
+    "advice": "Las probabilidades estimadas no coinciden con las tasas observadas: añada los términos que faltan, lea el gráfico de calibración."
+   },
+   "box_tidwell": {
+    "name": "Linealidad del logit: Box–Tidwell",
+    "h0": "El efecto del predictor es lineal en el logit (su término x·log(x) no añade nada).",
+    "advice": "El efecto de ese predictor no es lineal en el logit: transfórmelo."
+   },
+   "deviance_residuals": {
+    "name": "Influencia: residuos de devianza",
+    "h0": "Ninguna fila está lejos de lo que el modelo predice para ella.",
+    "advice": "Revise las filas indicadas: el modelo las predice mal."
+   }
+  }
+ },
+ "fr": {
+  "name": "Régression logistique",
+  "variants": {
+   "probit": "probit",
+   "firth": "Firth"
+  },
+  "kpi": {
+   "n_events": "Lignes / événements",
+   "auc": "AUC",
+   "auc_ci": "IC {low} – {high}",
+   "mcfadden_r2": "R² de McFadden",
+   "lr_test": "Test LR : p {p}",
+   "brier": "Score de Brier"
+  },
+  "charts": {
+   "roc": "Courbe ROC",
+   "calibration": "Calibration : taux observé selon le risque prédit, par déciles",
+   "prob": "Probabilités prédites selon le résultat observé",
+   "confusion": "Matrice de confusion au seuil",
+   "resid_linear": "Résidus de déviance selon le prédicteur linéaire",
+   "odds_ratio_interval": "Odds ratios avec leurs intervalles (axe logarithmique)"
+  },
+  "series": {
+   "roc": "ROC",
+   "deciles": "Déciles",
+   "observed": "Lignes",
+   "odds_ratio": "Odds ratio"
+  },
+  "tables": {
+   "odds_ratios": "Odds ratios",
+   "confusion": "Matrice de confusion",
+   "observed_predicted": "Observé \\ prédit",
+   "confusion_line": "Au seuil {threshold} : exactitude {accuracy}, sensibilité {sensitivity}, spécificité {specificity}."
+  },
+  "stats": {
+   "model": {
+    "events": "Événements",
+    "auc": "AUC",
+    "auc_ci_low": "AUC, IC inf. (DeLong)",
+    "auc_ci_high": "AUC, IC sup. (DeLong)",
+    "brier": "Score de Brier",
+    "accuracy": "Exactitude",
+    "sensitivity": "Sensibilité",
+    "specificity": "Spécificité",
+    "precision": "Précision",
+    "deviance": "Déviance résiduelle",
+    "null_deviance": "Déviance nulle",
+    "lr_statistic": "Statistique du rapport de vraisemblance",
+    "lr_df": "Ddl du rapport de vraisemblance",
+    "lr_p_value": "p-valeur du rapport de vraisemblance",
+    "mcfadden_r2": "R² de McFadden",
+    "nagelkerke_r2": "R² de Nagelkerke",
+    "tjur_r2": "R² de Tjur"
+   }
+  },
+  "values": {
+   "family": {
+    "binomial": "binomiale"
+   },
+   "link": {
+    "logit": "logit",
+    "probit": "probit"
+   }
+  },
+  "checks": {
+   "separation": {
+    "name": "Pas de séparation",
+    "h0": "Aucune combinaison de prédicteurs ne sépare complètement le résultat.",
+    "advice": "Un prédicteur sépare le résultat : utilisez estimation = firth, ou une pénalisation."
+   },
+   "hosmer_lemeshow": {
+    "name": "Calibration : Hosmer–Lemeshow",
+    "h0": "Les probabilités prédites correspondent aux taux observés dans 10 groupes de risque.",
+    "advice": "Les probabilités prédites ne correspondent pas aux taux observés : ajoutez les termes manquants, lisez le graphique de calibration."
+   },
+   "box_tidwell": {
+    "name": "Linéarité du logit : Box–Tidwell",
+    "h0": "L'effet du prédicteur est linéaire dans le logit (son terme x·log(x) n'apporte rien).",
+    "advice": "L'effet de ce prédicteur n'est pas linéaire dans le logit : transformez-le."
+   },
+   "deviance_residuals": {
+    "name": "Influence : résidus de déviance",
+    "h0": "Aucune ligne n'est loin de ce que le modèle prédit pour elle.",
+    "advice": "Examinez les lignes indiquées : le modèle les prédit mal."
+   }
+  }
+ }
+}

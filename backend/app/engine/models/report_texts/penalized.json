@@ -1,0 +1,312 @@
+{
+ "en": {
+  "penalties": {
+   "ridge": "ridge",
+   "lasso": "lasso",
+   "elastic_net": "elastic net"
+  },
+  "kpi": {
+   "n": "Rows used",
+   "lambda": "λ chosen",
+   "log_lambda": "log λ = {x}",
+   "n_selected": "Terms selected",
+   "r_squared_oof": "R² out of fold",
+   "auc_oof": "AUC out of fold",
+   "brier": "Brier score",
+   "n_events": "Rows / events",
+   "auc_ci": "CI {low} – {high}"
+  },
+  "coef": {
+   "no_inference": "No standard error, p-value or interval: inference after a penalized selection is out of scope.",
+   "dummies": "The dummies of a categorical predictor are penalized one by one."
+  },
+  "tables": {
+   "at_lambda": "Coefficients at the chosen λ (original scale)"
+  },
+  "charts": {
+   "cv": "Cross-validation: the error against log λ, the chosen λ marked",
+   "paths": "Paths of the coefficients against log λ",
+   "coef_selected": "Coefficients at the chosen λ",
+   "resid_fitted_oof": "Residuals against fitted values, out of fold",
+   "qq_oof": "Normal Q–Q of the residuals, out of fold",
+   "roc_oof": "ROC curve, out of fold",
+   "calibration_oof": "Calibration by deciles, out of fold",
+   "prob_oof": "Predicted probabilities by observed outcome, out of fold",
+   "confusion_oof": "Confusion matrix at the threshold, out of fold"
+  },
+  "series": {
+   "cv_mean": "Error",
+   "cv_band": "± 1 SE"
+  },
+  "stats": {
+   "model": {
+    "lambda": "λ chosen",
+    "log_lambda": "log λ chosen",
+    "lambda_min": "λ of the least error",
+    "lambda_1se": "Largest λ within 1 SE",
+    "mixing": "Mixing (α of the elastic net)",
+    "cv_value": "Error at the chosen λ",
+    "cv_se": "Its standard error",
+    "n_selected": "Terms selected",
+    "r_squared": "R² out of fold",
+    "rmse": "RMSE out of fold",
+    "mae": "MAE out of fold"
+   }
+  },
+  "checks": {
+   "lambda_choice": {
+    "name": "The choice of λ",
+    "h0": "The chosen λ is inside the path, not at its edge, and keeps some terms.",
+    "advice": "Widen the path: the best λ is at its edge; or every coefficient is zero."
+   }
+  }
+ },
+ "it": {
+  "penalties": {
+   "ridge": "ridge",
+   "lasso": "lasso",
+   "elastic_net": "elastic net"
+  },
+  "kpi": {
+   "n": "Righe usate",
+   "lambda": "λ scelto",
+   "log_lambda": "log λ = {x}",
+   "n_selected": "Termini selezionati",
+   "r_squared_oof": "R² fuori campione",
+   "auc_oof": "AUC fuori campione",
+   "brier": "Punteggio di Brier",
+   "n_events": "Righe / eventi",
+   "auc_ci": "IC {low} – {high}"
+  },
+  "coef": {
+   "no_inference": "Né errore standard, né p-value, né intervallo: l'inferenza dopo una selezione penalizzata non è prevista.",
+   "dummies": "Le variabili indicatrici di un predittore categoriale sono penalizzate una a una."
+  },
+  "tables": {
+   "at_lambda": "Coefficienti al λ scelto (scala originale)"
+  },
+  "charts": {
+   "cv": "Convalida incrociata: l'errore rispetto a log λ, il λ scelto segnato",
+   "paths": "Percorsi dei coefficienti rispetto a log λ",
+   "coef_selected": "Coefficienti al λ scelto",
+   "resid_fitted_oof": "Residui rispetto ai valori stimati, fuori campione",
+   "qq_oof": "Q–Q normale dei residui, fuori campione",
+   "roc_oof": "Curva ROC, fuori campione",
+   "calibration_oof": "Calibrazione per decili, fuori campione",
+   "prob_oof": "Probabilità stimate per esito osservato, fuori campione",
+   "confusion_oof": "Matrice di confusione alla soglia, fuori campione"
+  },
+  "series": {
+   "cv_mean": "Errore",
+   "cv_band": "± 1 ES"
+  },
+  "stats": {
+   "model": {
+    "lambda": "λ scelto",
+    "log_lambda": "log λ scelto",
+    "lambda_min": "λ dell'errore minimo",
+    "lambda_1se": "λ più grande entro 1 ES",
+    "mixing": "Miscela (α dell'elastic net)",
+    "cv_value": "Errore al λ scelto",
+    "cv_se": "Il suo errore standard",
+    "n_selected": "Termini selezionati",
+    "r_squared": "R² fuori campione",
+    "rmse": "RMSE fuori campione",
+    "mae": "MAE fuori campione"
+   }
+  },
+  "checks": {
+   "lambda_choice": {
+    "name": "La scelta di λ",
+    "h0": "Il λ scelto è dentro il percorso, non al suo bordo, e tiene qualche termine.",
+    "advice": "Allargate il percorso: il λ migliore è al suo bordo; oppure tutti i coefficienti sono zero."
+   }
+  }
+ },
+ "de": {
+  "penalties": {
+   "ridge": "Ridge",
+   "lasso": "Lasso",
+   "elastic_net": "Elastic Net"
+  },
+  "kpi": {
+   "n": "Verwendete Zeilen",
+   "lambda": "Gewähltes λ",
+   "log_lambda": "log λ = {x}",
+   "n_selected": "Ausgewählte Terme",
+   "r_squared_oof": "R² außerhalb der Falte",
+   "auc_oof": "AUC außerhalb der Falte",
+   "brier": "Brier-Score",
+   "n_events": "Zeilen / Ereignisse",
+   "auc_ci": "KI {low} – {high}"
+  },
+  "coef": {
+   "no_inference": "Kein Standardfehler, kein p-Wert, kein Intervall: Inferenz nach einer penalisierten Auswahl ist nicht vorgesehen.",
+   "dummies": "Die Indikatorvariablen eines kategorialen Prädiktors werden einzeln penalisiert."
+  },
+  "tables": {
+   "at_lambda": "Koeffizienten beim gewählten λ (ursprüngliche Skala)"
+  },
+  "charts": {
+   "cv": "Kreuzvalidierung: der Fehler gegen log λ, das gewählte λ markiert",
+   "paths": "Pfade der Koeffizienten gegen log λ",
+   "coef_selected": "Koeffizienten beim gewählten λ",
+   "resid_fitted_oof": "Residuen gegen angepasste Werte, außerhalb der Falte",
+   "qq_oof": "Normal-Q–Q der Residuen, außerhalb der Falte",
+   "roc_oof": "ROC-Kurve, außerhalb der Falte",
+   "calibration_oof": "Kalibrierung nach Dezilen, außerhalb der Falte",
+   "prob_oof": "Geschätzte Wahrscheinlichkeiten nach Ergebnis, außerhalb der Falte",
+   "confusion_oof": "Konfusionsmatrix an der Schwelle, außerhalb der Falte"
+  },
+  "series": {
+   "cv_mean": "Fehler",
+   "cv_band": "± 1 SF"
+  },
+  "stats": {
+   "model": {
+    "lambda": "Gewähltes λ",
+    "log_lambda": "log des gewählten λ",
+    "lambda_min": "λ des kleinsten Fehlers",
+    "lambda_1se": "Größtes λ innerhalb 1 SF",
+    "mixing": "Mischung (α des Elastic Net)",
+    "cv_value": "Fehler beim gewählten λ",
+    "cv_se": "Sein Standardfehler",
+    "n_selected": "Ausgewählte Terme",
+    "r_squared": "R² außerhalb der Falte",
+    "rmse": "RMSE außerhalb der Falte",
+    "mae": "MAE außerhalb der Falte"
+   }
+  },
+  "checks": {
+   "lambda_choice": {
+    "name": "Die Wahl von λ",
+    "h0": "Das gewählte λ liegt innerhalb des Pfads, nicht an seinem Rand, und behält Terme.",
+    "advice": "Erweitern Sie den Pfad: Das beste λ liegt an seinem Rand; oder alle Koeffizienten sind null."
+   }
+  }
+ },
+ "es": {
+  "penalties": {
+   "ridge": "ridge",
+   "lasso": "lasso",
+   "elastic_net": "elastic net"
+  },
+  "kpi": {
+   "n": "Filas usadas",
+   "lambda": "λ elegido",
+   "log_lambda": "log λ = {x}",
+   "n_selected": "Términos seleccionados",
+   "r_squared_oof": "R² fuera de pliegue",
+   "auc_oof": "AUC fuera de pliegue",
+   "brier": "Puntuación de Brier",
+   "n_events": "Filas / eventos",
+   "auc_ci": "IC {low} – {high}"
+  },
+  "coef": {
+   "no_inference": "Ni error estándar, ni p-valor, ni intervalo: la inferencia tras una selección penalizada no está prevista.",
+   "dummies": "Las variables indicadoras de un predictor categórico se penalizan una a una."
+  },
+  "tables": {
+   "at_lambda": "Coeficientes en el λ elegido (escala original)"
+  },
+  "charts": {
+   "cv": "Validación cruzada: el error frente a log λ, el λ elegido marcado",
+   "paths": "Trayectorias de los coeficientes frente a log λ",
+   "coef_selected": "Coeficientes en el λ elegido",
+   "resid_fitted_oof": "Residuos frente a valores ajustados, fuera de pliegue",
+   "qq_oof": "Q–Q normal de los residuos, fuera de pliegue",
+   "roc_oof": "Curva ROC, fuera de pliegue",
+   "calibration_oof": "Calibración por deciles, fuera de pliegue",
+   "prob_oof": "Probabilidades estimadas por resultado, fuera de pliegue",
+   "confusion_oof": "Matriz de confusión en el umbral, fuera de pliegue"
+  },
+  "series": {
+   "cv_mean": "Error",
+   "cv_band": "± 1 EE"
+  },
+  "stats": {
+   "model": {
+    "lambda": "λ elegido",
+    "log_lambda": "log del λ elegido",
+    "lambda_min": "λ del error mínimo",
+    "lambda_1se": "Mayor λ dentro de 1 EE",
+    "mixing": "Mezcla (α del elastic net)",
+    "cv_value": "Error en el λ elegido",
+    "cv_se": "Su error estándar",
+    "n_selected": "Términos seleccionados",
+    "r_squared": "R² fuera de pliegue",
+    "rmse": "RMSE fuera de pliegue",
+    "mae": "MAE fuera de pliegue"
+   }
+  },
+  "checks": {
+   "lambda_choice": {
+    "name": "La elección de λ",
+    "h0": "El λ elegido está dentro de la trayectoria, no en su borde, y conserva términos.",
+    "advice": "Amplíe la trayectoria: el mejor λ está en su borde; o todos los coeficientes son cero."
+   }
+  }
+ },
+ "fr": {
+  "penalties": {
+   "ridge": "ridge",
+   "lasso": "lasso",
+   "elastic_net": "elastic net"
+  },
+  "kpi": {
+   "n": "Lignes utilisées",
+   "lambda": "λ retenu",
+   "log_lambda": "log λ = {x}",
+   "n_selected": "Termes retenus",
+   "r_squared_oof": "R² hors pli",
+   "auc_oof": "AUC hors pli",
+   "brier": "Score de Brier",
+   "n_events": "Lignes / événements",
+   "auc_ci": "IC {low} – {high}"
+  },
+  "coef": {
+   "no_inference": "Ni erreur type, ni p-valeur, ni intervalle : l'inférence après une sélection pénalisée n'est pas prévue.",
+   "dummies": "Les indicatrices d'un prédicteur catégoriel sont pénalisées une à une."
+  },
+  "tables": {
+   "at_lambda": "Coefficients au λ retenu (échelle d'origine)"
+  },
+  "charts": {
+   "cv": "Validation croisée : l'erreur selon log λ, le λ retenu marqué",
+   "paths": "Chemins des coefficients selon log λ",
+   "coef_selected": "Coefficients au λ retenu",
+   "resid_fitted_oof": "Résidus selon les valeurs ajustées, hors pli",
+   "qq_oof": "Q–Q normal des résidus, hors pli",
+   "roc_oof": "Courbe ROC, hors pli",
+   "calibration_oof": "Calibration par déciles, hors pli",
+   "prob_oof": "Probabilités prédites selon le résultat, hors pli",
+   "confusion_oof": "Matrice de confusion au seuil, hors pli"
+  },
+  "series": {
+   "cv_mean": "Erreur",
+   "cv_band": "± 1 ET"
+  },
+  "stats": {
+   "model": {
+    "lambda": "λ retenu",
+    "log_lambda": "log du λ retenu",
+    "lambda_min": "λ de l'erreur minimale",
+    "lambda_1se": "Plus grand λ à 1 ET",
+    "mixing": "Mélange (α de l'elastic net)",
+    "cv_value": "Erreur au λ retenu",
+    "cv_se": "Son erreur type",
+    "n_selected": "Termes retenus",
+    "r_squared": "R² hors pli",
+    "rmse": "RMSE hors pli",
+    "mae": "MAE hors pli"
+   }
+  },
+  "checks": {
+   "lambda_choice": {
+    "name": "Le choix de λ",
+    "h0": "Le λ retenu est à l'intérieur du chemin, pas à son bord, et garde des termes.",
+    "advice": "Élargissez le chemin : le meilleur λ est à son bord ; ou tous les coefficients sont nuls."
+   }
+  }
+ }
+}

@@ -1,0 +1,367 @@
+{
+ "en": {
+  "name": "Cox proportional hazards",
+  "kpi": {
+   "n_events": "Rows / events",
+   "concordance": "Concordance",
+   "se": "SE {se}",
+   "lr_p": "Likelihood-ratio test: p",
+   "aic": "AIC"
+  },
+  "charts": {
+   "hazard_ratio_interval": "Hazard ratios with their intervals (logarithmic axis)",
+   "schoenfeld": "Scaled Schoenfeld residuals of {term} against time",
+   "martingale": "Martingale residuals against {term}",
+   "deviance_linear": "Deviance residuals against the linear predictor",
+   "adjusted_survival": "Adjusted survival at the predictors' means"
+  },
+  "series": {
+   "smooth": "Smooth",
+   "hazard_ratio": "Hazard ratio"
+  },
+  "tables": {
+   "hazard_ratios": "Hazard ratios and collinearity"
+  },
+  "stats": {
+   "model": {
+    "events": "Events",
+    "lr_statistic": "Likelihood-ratio statistic",
+    "lr_df": "Likelihood-ratio df",
+    "lr_p_value": "Likelihood-ratio p-value",
+    "wald_statistic": "Wald statistic",
+    "wald_df": "Wald df",
+    "wald_p_value": "Wald p-value",
+    "score_statistic": "Score (log-rank) statistic",
+    "score_df": "Score df",
+    "score_p_value": "Score p-value",
+    "concordance": "Concordance",
+    "concordance_se": "Concordance, std. error",
+    "ties": "Ties"
+   },
+   "coef": {
+    "estimate": "log HR"
+   }
+  },
+  "values": {
+   "ties": {
+    "efron": "Efron",
+    "breslow": "Breslow",
+    "exact": "exact"
+   }
+  },
+  "checks": {
+   "schoenfeld": {
+    "name": "Proportional hazards: Schoenfeld",
+    "h0": "The effect of the term does not change over time.",
+    "advice": "The effect changes over time: stratify by it, or let it interact with time."
+   },
+   "schoenfeld_global": {
+    "name": "Proportional hazards: global test",
+    "h0": "No effect of the model changes over time.",
+    "advice": "Some effect changes over time: look at the terms' tests and charts."
+   },
+   "martingale_form": {
+    "name": "Linear form: martingale residuals",
+    "h0": "The numeric predictor acts linearly on the log hazard.",
+    "advice": "Read its chart: a curved smooth asks for a transformation or a spline."
+   },
+   "dfbeta": {
+    "name": "Influence: dfbeta",
+    "h0": "No row moves a coefficient much.",
+    "advice": "Look at the rows named: each moves a coefficient by much."
+   }
+  }
+ },
+ "it": {
+  "name": "Rischi proporzionali di Cox",
+  "kpi": {
+   "n_events": "Righe / eventi",
+   "concordance": "Concordanza",
+   "se": "ES {se}",
+   "lr_p": "Test del rapporto di verosimiglianza: p",
+   "aic": "AIC"
+  },
+  "charts": {
+   "hazard_ratio_interval": "Hazard ratio con i loro intervalli (asse logaritmico)",
+   "schoenfeld": "Residui di Schoenfeld scalati di {term} rispetto al tempo",
+   "martingale": "Residui martingala rispetto a {term}",
+   "deviance_linear": "Residui di devianza rispetto al predittore lineare",
+   "adjusted_survival": "Sopravvivenza aggiustata alle medie dei predittori"
+  },
+  "series": {
+   "smooth": "Smussamento",
+   "hazard_ratio": "Hazard ratio"
+  },
+  "tables": {
+   "hazard_ratios": "Hazard ratio e collinearità"
+  },
+  "stats": {
+   "model": {
+    "events": "Eventi",
+    "lr_statistic": "Statistica del rapporto di verosimiglianza",
+    "lr_df": "Gdl del rapporto di verosimiglianza",
+    "lr_p_value": "p-value del rapporto di verosimiglianza",
+    "wald_statistic": "Statistica di Wald",
+    "wald_df": "Gdl di Wald",
+    "wald_p_value": "p-value di Wald",
+    "score_statistic": "Statistica score (log-rank)",
+    "score_df": "Gdl dello score",
+    "score_p_value": "p-value dello score",
+    "concordance": "Concordanza",
+    "concordance_se": "Concordanza, errore std.",
+    "ties": "Pareggi"
+   },
+   "coef": {
+    "estimate": "log HR"
+   }
+  },
+  "values": {
+   "ties": {
+    "efron": "Efron",
+    "breslow": "Breslow",
+    "exact": "esatto"
+   }
+  },
+  "checks": {
+   "schoenfeld": {
+    "name": "Rischi proporzionali: Schoenfeld",
+    "h0": "L'effetto del termine non cambia nel tempo.",
+    "advice": "L'effetto cambia nel tempo: stratificate per quel termine, oppure fatelo interagire con il tempo."
+   },
+   "schoenfeld_global": {
+    "name": "Rischi proporzionali: test globale",
+    "h0": "Nessun effetto del modello cambia nel tempo.",
+    "advice": "Qualche effetto cambia nel tempo: guardate i test e i grafici dei termini."
+   },
+   "martingale_form": {
+    "name": "Forma lineare: residui martingala",
+    "h0": "Il predittore numerico agisce in modo lineare sul log del rischio.",
+    "advice": "Leggete il suo grafico: uno smussamento curvo chiede una trasformazione o una spline."
+   },
+   "dfbeta": {
+    "name": "Influenza: dfbeta",
+    "h0": "Nessuna riga sposta di molto un coefficiente.",
+    "advice": "Guardate le righe indicate: ognuna sposta molto un coefficiente."
+   }
+  }
+ },
+ "de": {
+  "name": "Cox-Modell der proportionalen Hazards",
+  "kpi": {
+   "n_events": "Zeilen / Ereignisse",
+   "concordance": "Konkordanz",
+   "se": "SF {se}",
+   "lr_p": "Likelihood-Quotienten-Test: p",
+   "aic": "AIC"
+  },
+  "charts": {
+   "hazard_ratio_interval": "Hazard Ratios mit ihren Intervallen (logarithmische Achse)",
+   "schoenfeld": "Skalierte Schoenfeld-Residuen von {term} gegen die Zeit",
+   "martingale": "Martingal-Residuen gegen {term}",
+   "deviance_linear": "Devianzresiduen gegen den linearen Prädiktor",
+   "adjusted_survival": "Adjustiertes Überleben bei den Mittelwerten der Prädiktoren"
+  },
+  "series": {
+   "smooth": "Glättung",
+   "hazard_ratio": "Hazard Ratio"
+  },
+  "tables": {
+   "hazard_ratios": "Hazard Ratios und Kollinearität"
+  },
+  "stats": {
+   "model": {
+    "events": "Ereignisse",
+    "lr_statistic": "Likelihood-Quotienten-Statistik",
+    "lr_df": "FG des Likelihood-Quotienten",
+    "lr_p_value": "p-Wert des Likelihood-Quotienten",
+    "wald_statistic": "Wald-Statistik",
+    "wald_df": "Wald-FG",
+    "wald_p_value": "p-Wert nach Wald",
+    "score_statistic": "Score-Statistik (Log-Rank)",
+    "score_df": "Score-FG",
+    "score_p_value": "p-Wert des Scores",
+    "concordance": "Konkordanz",
+    "concordance_se": "Konkordanz, Std.-Fehler",
+    "ties": "Bindungen"
+   },
+   "coef": {
+    "estimate": "log HR"
+   }
+  },
+  "values": {
+   "ties": {
+    "efron": "Efron",
+    "breslow": "Breslow",
+    "exact": "exakt"
+   }
+  },
+  "checks": {
+   "schoenfeld": {
+    "name": "Proportionale Hazards: Schoenfeld",
+    "h0": "Der Effekt des Terms ändert sich nicht über die Zeit.",
+    "advice": "Der Effekt ändert sich über die Zeit: Schichten Sie danach, oder lassen Sie ihn mit der Zeit wechselwirken."
+   },
+   "schoenfeld_global": {
+    "name": "Proportionale Hazards: globaler Test",
+    "h0": "Kein Effekt des Modells ändert sich über die Zeit.",
+    "advice": "Ein Effekt ändert sich über die Zeit: Lesen Sie die Tests und Diagramme der Terme."
+   },
+   "martingale_form": {
+    "name": "Lineare Form: Martingal-Residuen",
+    "h0": "Der numerische Prädiktor wirkt linear auf das log-Hazard.",
+    "advice": "Lesen Sie sein Diagramm: Eine gekrümmte Glättung verlangt eine Transformation oder einen Spline."
+   },
+   "dfbeta": {
+    "name": "Einfluss: dfbeta",
+    "h0": "Keine Zeile verschiebt einen Koeffizienten stark.",
+    "advice": "Prüfen Sie die genannten Zeilen: Jede verschiebt einen Koeffizienten stark."
+   }
+  }
+ },
+ "es": {
+  "name": "Riesgos proporcionales de Cox",
+  "kpi": {
+   "n_events": "Filas / eventos",
+   "concordance": "Concordancia",
+   "se": "EE {se}",
+   "lr_p": "Prueba de razón de verosimilitud: p",
+   "aic": "AIC"
+  },
+  "charts": {
+   "hazard_ratio_interval": "Hazard ratios con sus intervalos (eje logarítmico)",
+   "schoenfeld": "Residuos de Schoenfeld escalados de {term} frente al tiempo",
+   "martingale": "Residuos martingala frente a {term}",
+   "deviance_linear": "Residuos de devianza frente al predictor lineal",
+   "adjusted_survival": "Supervivencia ajustada en las medias de los predictores"
+  },
+  "series": {
+   "smooth": "Suavizado",
+   "hazard_ratio": "Hazard ratio"
+  },
+  "tables": {
+   "hazard_ratios": "Hazard ratios y colinealidad"
+  },
+  "stats": {
+   "model": {
+    "events": "Eventos",
+    "lr_statistic": "Estadístico de razón de verosimilitud",
+    "lr_df": "Gl de la razón de verosimilitud",
+    "lr_p_value": "p-valor de la razón de verosimilitud",
+    "wald_statistic": "Estadístico de Wald",
+    "wald_df": "Gl de Wald",
+    "wald_p_value": "p-valor de Wald",
+    "score_statistic": "Estadístico score (log-rank)",
+    "score_df": "Gl del score",
+    "score_p_value": "p-valor del score",
+    "concordance": "Concordancia",
+    "concordance_se": "Concordancia, error est.",
+    "ties": "Empates"
+   },
+   "coef": {
+    "estimate": "log HR"
+   }
+  },
+  "values": {
+   "ties": {
+    "efron": "Efron",
+    "breslow": "Breslow",
+    "exact": "exacto"
+   }
+  },
+  "checks": {
+   "schoenfeld": {
+    "name": "Riesgos proporcionales: Schoenfeld",
+    "h0": "El efecto del término no cambia en el tiempo.",
+    "advice": "El efecto cambia en el tiempo: estratifique por él, o hágalo interactuar con el tiempo."
+   },
+   "schoenfeld_global": {
+    "name": "Riesgos proporcionales: prueba global",
+    "h0": "Ningún efecto del modelo cambia en el tiempo.",
+    "advice": "Algún efecto cambia en el tiempo: mire las pruebas y los gráficos de los términos."
+   },
+   "martingale_form": {
+    "name": "Forma lineal: residuos martingala",
+    "h0": "El predictor numérico actúa de forma lineal sobre el log del riesgo.",
+    "advice": "Lea su gráfico: un suavizado curvo pide una transformación o un spline."
+   },
+   "dfbeta": {
+    "name": "Influencia: dfbeta",
+    "h0": "Ninguna fila mueve mucho un coeficiente.",
+    "advice": "Revise las filas indicadas: cada una mueve mucho un coeficiente."
+   }
+  }
+ },
+ "fr": {
+  "name": "Risques proportionnels de Cox",
+  "kpi": {
+   "n_events": "Lignes / événements",
+   "concordance": "Concordance",
+   "se": "ET {se}",
+   "lr_p": "Test du rapport de vraisemblance : p",
+   "aic": "AIC"
+  },
+  "charts": {
+   "hazard_ratio_interval": "Hazard ratios avec leurs intervalles (axe logarithmique)",
+   "schoenfeld": "Résidus de Schoenfeld mis à l'échelle de {term} selon le temps",
+   "martingale": "Résidus de martingale selon {term}",
+   "deviance_linear": "Résidus de déviance selon le prédicteur linéaire",
+   "adjusted_survival": "Survie ajustée aux moyennes des prédicteurs"
+  },
+  "series": {
+   "smooth": "Lissage",
+   "hazard_ratio": "Hazard ratio"
+  },
+  "tables": {
+   "hazard_ratios": "Hazard ratios et colinéarité"
+  },
+  "stats": {
+   "model": {
+    "events": "Événements",
+    "lr_statistic": "Statistique du rapport de vraisemblance",
+    "lr_df": "Ddl du rapport de vraisemblance",
+    "lr_p_value": "p-valeur du rapport de vraisemblance",
+    "wald_statistic": "Statistique de Wald",
+    "wald_df": "Ddl de Wald",
+    "wald_p_value": "p-valeur de Wald",
+    "score_statistic": "Statistique du score (log-rank)",
+    "score_df": "Ddl du score",
+    "score_p_value": "p-valeur du score",
+    "concordance": "Concordance",
+    "concordance_se": "Concordance, erreur type",
+    "ties": "Ex aequo"
+   },
+   "coef": {
+    "estimate": "log HR"
+   }
+  },
+  "values": {
+   "ties": {
+    "efron": "Efron",
+    "breslow": "Breslow",
+    "exact": "exacte"
+   }
+  },
+  "checks": {
+   "schoenfeld": {
+    "name": "Risques proportionnels : Schoenfeld",
+    "h0": "L'effet du terme ne change pas dans le temps.",
+    "advice": "L'effet change dans le temps : stratifiez selon lui, ou faites-le interagir avec le temps."
+   },
+   "schoenfeld_global": {
+    "name": "Risques proportionnels : test global",
+    "h0": "Aucun effet du modèle ne change dans le temps.",
+    "advice": "Un effet change dans le temps : regardez les tests et les graphiques des termes."
+   },
+   "martingale_form": {
+    "name": "Forme linéaire : résidus de martingale",
+    "h0": "Le prédicteur numérique agit linéairement sur le log du risque.",
+    "advice": "Lisez son graphique : un lissage courbé demande une transformation ou une spline."
+   },
+   "dfbeta": {
+    "name": "Influence : dfbeta",
+    "h0": "Aucune ligne ne déplace beaucoup un coefficient.",
+    "advice": "Examinez les lignes indiquées : chacune déplace beaucoup un coefficient."
+   }
+  }
+ }
+}

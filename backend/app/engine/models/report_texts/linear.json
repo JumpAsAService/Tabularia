@@ -1,0 +1,472 @@
+{
+ "en": {
+  "name": "Linear regression",
+  "variants": {
+   "wls": "Linear regression — weighted least squares"
+  },
+  "kpi": {
+   "n": "Rows used",
+   "r_squared": "R²",
+   "adj_r_squared": "Adjusted R²",
+   "sigma": "Residual std. error (σ)",
+   "f_test": "F test: p {p}"
+  },
+  "charts": {
+   "resid_fitted": "Residuals against fitted values",
+   "qq": "Normal Q–Q of the standardized residuals",
+   "scale_location": "Scale–location: √|standardized residuals| against fitted values",
+   "resid_leverage": "Standardized residuals against leverage",
+   "residual": "Histogram of the residuals",
+   "observed_fitted": "Observed against fitted values",
+   "coef_interval": "Coefficients with their intervals"
+  },
+  "stats": {
+   "model": {
+    "df_model": "Degrees of freedom of the model",
+    "df_residual": "Residual degrees of freedom",
+    "r_squared": "R²",
+    "adj_r_squared": "Adjusted R²",
+    "sigma": "Residual standard error (σ)",
+    "f_statistic": "F statistic",
+    "f_df_1": "F, numerator df",
+    "f_df_2": "F, denominator df",
+    "f_p_value": "F test p-value",
+    "condition_number": "Condition number"
+   }
+  },
+  "checks": {
+   "reset": {
+    "name": "Linearity: Ramsey RESET",
+    "h0": "No curvature is missing from the model (powers 2 and 3 of the fitted values add nothing).",
+    "advice": "Add the missing curvature: a square, a log, an interaction."
+   },
+   "breusch_pagan": {
+    "name": "Homoscedasticity: Breusch–Pagan",
+    "h0": "The residuals' variance does not change with the predictors.",
+    "advice": "Use robust standard errors (se = hc3)."
+   },
+   "white": {
+    "name": "Homoscedasticity: White",
+    "h0": "The residuals' variance does not change with the fitted values or their squares.",
+    "advice": "Use robust standard errors (se = hc3)."
+   },
+   "shapiro_wilk": {
+    "name": "Normality of residuals: Shapiro–Wilk",
+    "h0": "The residuals come from a normal distribution.",
+    "advice": "The intervals rely on n being large; with few rows, transform the outcome."
+   },
+   "anderson_darling": {
+    "name": "Normality of residuals: Anderson–Darling",
+    "h0": "The residuals come from a normal distribution.",
+    "advice": "The intervals rely on n being large; with few rows, transform the outcome."
+   },
+   "jarque_bera": {
+    "name": "Normality of residuals: Jarque–Bera"
+   },
+   "durbin_watson": {
+    "name": "Independence: Durbin–Watson",
+    "h0": "Residuals next to each other in the order of the rows are not correlated.",
+    "advice": "Use se = hac, or model the time.",
+    "not_computed": "It depends on the order of the rows: choose the column that orders them (order_by)."
+   },
+   "breusch_godfrey_1": {
+    "name": "Independence: Breusch–Godfrey, order 1",
+    "h0": "No autocorrelation of order 1 in the residuals.",
+    "advice": "Use se = hac, or model the time.",
+    "not_computed": "It depends on the order of the rows: choose the column that orders them (order_by)."
+   },
+   "breusch_godfrey_4": {
+    "name": "Independence: Breusch–Godfrey, order 4",
+    "h0": "No autocorrelation up to order 4 in the residuals.",
+    "advice": "Use se = hac, or model the time.",
+    "not_computed": "It depends on the order of the rows: choose the column that orders them (order_by)."
+   },
+   "condition_number": {
+    "name": "Multicollinearity: condition number",
+    "h0": "The design is well conditioned (condition number under 30).",
+    "advice": "Drop or combine the correlated predictors, centre them, or turn on a penalty."
+   },
+   "outlier_test": {
+    "name": "Outliers: Bonferroni test",
+    "h0": "No studentized residual is larger than chance allows.",
+    "advice": "Look at the rows named: an outlier pulls the fit towards itself."
+   }
+  }
+ },
+ "it": {
+  "name": "Regressione lineare",
+  "variants": {
+   "wls": "Regressione lineare — minimi quadrati pesati"
+  },
+  "kpi": {
+   "n": "Righe usate",
+   "r_squared": "R²",
+   "adj_r_squared": "R² corretto",
+   "sigma": "Errore std. dei residui (σ)",
+   "f_test": "Test F: p {p}"
+  },
+  "charts": {
+   "resid_fitted": "Residui rispetto ai valori stimati",
+   "qq": "Q–Q normale dei residui standardizzati",
+   "scale_location": "Scala–posizione: √|residui standardizzati| rispetto ai valori stimati",
+   "resid_leverage": "Residui standardizzati rispetto alla leva",
+   "residual": "Istogramma dei residui",
+   "observed_fitted": "Valori osservati rispetto a quelli stimati",
+   "coef_interval": "Coefficienti con i loro intervalli"
+  },
+  "stats": {
+   "model": {
+    "df_model": "Gradi di libertà del modello",
+    "df_residual": "Gradi di libertà dei residui",
+    "r_squared": "R²",
+    "adj_r_squared": "R² corretto",
+    "sigma": "Errore standard dei residui (σ)",
+    "f_statistic": "Statistica F",
+    "f_df_1": "F, gdl al numeratore",
+    "f_df_2": "F, gdl al denominatore",
+    "f_p_value": "p-value del test F",
+    "condition_number": "Numero di condizionamento"
+   }
+  },
+  "checks": {
+   "reset": {
+    "name": "Linearità: RESET di Ramsey",
+    "h0": "Al modello non manca curvatura (le potenze 2 e 3 dei valori stimati non aggiungono nulla).",
+    "advice": "Aggiungete la curvatura che manca: un quadrato, un logaritmo, un'interazione."
+   },
+   "breusch_pagan": {
+    "name": "Omoschedasticità: Breusch–Pagan",
+    "h0": "La varianza dei residui non cambia con i predittori.",
+    "advice": "Usate errori standard robusti (se = hc3)."
+   },
+   "white": {
+    "name": "Omoschedasticità: White",
+    "h0": "La varianza dei residui non cambia con i valori stimati né con i loro quadrati.",
+    "advice": "Usate errori standard robusti (se = hc3)."
+   },
+   "shapiro_wilk": {
+    "name": "Normalità dei residui: Shapiro–Wilk",
+    "h0": "I residui vengono da una distribuzione normale.",
+    "advice": "Gli intervalli si reggono su un n grande; con poche righe, trasformate la risposta."
+   },
+   "anderson_darling": {
+    "name": "Normalità dei residui: Anderson–Darling",
+    "h0": "I residui vengono da una distribuzione normale.",
+    "advice": "Gli intervalli si reggono su un n grande; con poche righe, trasformate la risposta."
+   },
+   "jarque_bera": {
+    "name": "Normalità dei residui: Jarque–Bera"
+   },
+   "durbin_watson": {
+    "name": "Indipendenza: Durbin–Watson",
+    "h0": "Residui vicini nell'ordine delle righe non sono correlati.",
+    "advice": "Usate se = hac, oppure modellate il tempo.",
+    "not_computed": "Dipende dall'ordine delle righe: scegliete la colonna che le ordina (order_by)."
+   },
+   "breusch_godfrey_1": {
+    "name": "Indipendenza: Breusch–Godfrey, ordine 1",
+    "h0": "Nessuna autocorrelazione di ordine 1 nei residui.",
+    "advice": "Usate se = hac, oppure modellate il tempo.",
+    "not_computed": "Dipende dall'ordine delle righe: scegliete la colonna che le ordina (order_by)."
+   },
+   "breusch_godfrey_4": {
+    "name": "Indipendenza: Breusch–Godfrey, ordine 4",
+    "h0": "Nessuna autocorrelazione fino all'ordine 4 nei residui.",
+    "advice": "Usate se = hac, oppure modellate il tempo.",
+    "not_computed": "Dipende dall'ordine delle righe: scegliete la colonna che le ordina (order_by)."
+   },
+   "condition_number": {
+    "name": "Multicollinearità: numero di condizionamento",
+    "h0": "Il disegno è ben condizionato (numero di condizionamento sotto 30).",
+    "advice": "Togliete o combinate i predittori correlati, centrateli, oppure attivate una penalizzazione."
+   },
+   "outlier_test": {
+    "name": "Valori anomali: test di Bonferroni",
+    "h0": "Nessun residuo studentizzato è più grande di quanto il caso consenta.",
+    "advice": "Guardate le righe indicate: un valore anomalo tira la stima verso di sé."
+   }
+  }
+ },
+ "de": {
+  "name": "Lineare Regression",
+  "variants": {
+   "wls": "Lineare Regression — gewichtete kleinste Quadrate"
+  },
+  "kpi": {
+   "n": "Verwendete Zeilen",
+   "r_squared": "R²",
+   "adj_r_squared": "Korrigiertes R²",
+   "sigma": "Residuen-Std.-Fehler (σ)",
+   "f_test": "F-Test: p {p}"
+  },
+  "charts": {
+   "resid_fitted": "Residuen gegen angepasste Werte",
+   "qq": "Normal-Q–Q der standardisierten Residuen",
+   "scale_location": "Scale–Location: √|standardisierte Residuen| gegen angepasste Werte",
+   "resid_leverage": "Standardisierte Residuen gegen Hebelwerte",
+   "residual": "Histogramm der Residuen",
+   "observed_fitted": "Beobachtete gegen angepasste Werte",
+   "coef_interval": "Koeffizienten mit ihren Intervallen"
+  },
+  "stats": {
+   "model": {
+    "df_model": "Freiheitsgrade des Modells",
+    "df_residual": "Freiheitsgrade der Residuen",
+    "r_squared": "R²",
+    "adj_r_squared": "Korrigiertes R²",
+    "sigma": "Standardfehler der Residuen (σ)",
+    "f_statistic": "F-Statistik",
+    "f_df_1": "F, Zähler-FG",
+    "f_df_2": "F, Nenner-FG",
+    "f_p_value": "p-Wert des F-Tests",
+    "condition_number": "Konditionszahl"
+   }
+  },
+  "checks": {
+   "reset": {
+    "name": "Linearität: Ramsey-RESET",
+    "h0": "Dem Modell fehlt keine Krümmung (Potenzen 2 und 3 der angepassten Werte fügen nichts hinzu).",
+    "advice": "Ergänzen Sie die fehlende Krümmung: ein Quadrat, einen Logarithmus, eine Wechselwirkung."
+   },
+   "breusch_pagan": {
+    "name": "Homoskedastizität: Breusch–Pagan",
+    "h0": "Die Varianz der Residuen ändert sich nicht mit den Prädiktoren.",
+    "advice": "Verwenden Sie robuste Standardfehler (se = hc3)."
+   },
+   "white": {
+    "name": "Homoskedastizität: White",
+    "h0": "Die Varianz der Residuen ändert sich weder mit den angepassten Werten noch mit ihren Quadraten.",
+    "advice": "Verwenden Sie robuste Standardfehler (se = hc3)."
+   },
+   "shapiro_wilk": {
+    "name": "Normalverteilung der Residuen: Shapiro–Wilk",
+    "h0": "Die Residuen stammen aus einer Normalverteilung.",
+    "advice": "Die Intervalle stützen sich auf ein großes n; bei wenigen Zeilen die Zielgröße transformieren."
+   },
+   "anderson_darling": {
+    "name": "Normalverteilung der Residuen: Anderson–Darling",
+    "h0": "Die Residuen stammen aus einer Normalverteilung.",
+    "advice": "Die Intervalle stützen sich auf ein großes n; bei wenigen Zeilen die Zielgröße transformieren."
+   },
+   "jarque_bera": {
+    "name": "Normalverteilung der Residuen: Jarque–Bera"
+   },
+   "durbin_watson": {
+    "name": "Unabhängigkeit: Durbin–Watson",
+    "h0": "Benachbarte Residuen in der Reihenfolge der Zeilen sind nicht korreliert.",
+    "advice": "Verwenden Sie se = hac, oder modellieren Sie die Zeit.",
+    "not_computed": "Hängt von der Reihenfolge der Zeilen ab: Wählen Sie die Spalte, die sie ordnet (order_by)."
+   },
+   "breusch_godfrey_1": {
+    "name": "Unabhängigkeit: Breusch–Godfrey, Ordnung 1",
+    "h0": "Keine Autokorrelation der Ordnung 1 in den Residuen.",
+    "advice": "Verwenden Sie se = hac, oder modellieren Sie die Zeit.",
+    "not_computed": "Hängt von der Reihenfolge der Zeilen ab: Wählen Sie die Spalte, die sie ordnet (order_by)."
+   },
+   "breusch_godfrey_4": {
+    "name": "Unabhängigkeit: Breusch–Godfrey, Ordnung 4",
+    "h0": "Keine Autokorrelation bis zur Ordnung 4 in den Residuen.",
+    "advice": "Verwenden Sie se = hac, oder modellieren Sie die Zeit.",
+    "not_computed": "Hängt von der Reihenfolge der Zeilen ab: Wählen Sie die Spalte, die sie ordnet (order_by)."
+   },
+   "condition_number": {
+    "name": "Multikollinearität: Konditionszahl",
+    "h0": "Das Design ist gut konditioniert (Konditionszahl unter 30).",
+    "advice": "Entfernen oder kombinieren Sie korrelierte Prädiktoren, zentrieren Sie sie, oder schalten Sie eine Penalisierung ein."
+   },
+   "outlier_test": {
+    "name": "Ausreißer: Bonferroni-Test",
+    "h0": "Kein studentisiertes Residuum ist größer, als der Zufall erlaubt.",
+    "advice": "Prüfen Sie die genannten Zeilen: Ein Ausreißer zieht die Anpassung zu sich."
+   }
+  }
+ },
+ "es": {
+  "name": "Regresión lineal",
+  "variants": {
+   "wls": "Regresión lineal — mínimos cuadrados ponderados"
+  },
+  "kpi": {
+   "n": "Filas usadas",
+   "r_squared": "R²",
+   "adj_r_squared": "R² ajustado",
+   "sigma": "Error est. de los residuos (σ)",
+   "f_test": "Prueba F: p {p}"
+  },
+  "charts": {
+   "resid_fitted": "Residuos frente a valores ajustados",
+   "qq": "Q–Q normal de los residuos estandarizados",
+   "scale_location": "Escala–posición: √|residuos estandarizados| frente a ajustados",
+   "resid_leverage": "Residuos estandarizados frente al apalancamiento",
+   "residual": "Histograma de los residuos",
+   "observed_fitted": "Valores observados frente a ajustados",
+   "coef_interval": "Coeficientes con sus intervalos"
+  },
+  "stats": {
+   "model": {
+    "df_model": "Grados de libertad del modelo",
+    "df_residual": "Grados de libertad de los residuos",
+    "r_squared": "R²",
+    "adj_r_squared": "R² ajustado",
+    "sigma": "Error estándar de los residuos (σ)",
+    "f_statistic": "Estadístico F",
+    "f_df_1": "F, gl del numerador",
+    "f_df_2": "F, gl del denominador",
+    "f_p_value": "p-valor de la prueba F",
+    "condition_number": "Número de condición"
+   }
+  },
+  "checks": {
+   "reset": {
+    "name": "Linealidad: RESET de Ramsey",
+    "h0": "Al modelo no le falta curvatura (las potencias 2 y 3 de los ajustados no añaden nada).",
+    "advice": "Añada la curvatura que falta: un cuadrado, un logaritmo, una interacción."
+   },
+   "breusch_pagan": {
+    "name": "Homocedasticidad: Breusch–Pagan",
+    "h0": "La varianza de los residuos no cambia con los predictores.",
+    "advice": "Use errores estándar robustos (se = hc3)."
+   },
+   "white": {
+    "name": "Homocedasticidad: White",
+    "h0": "La varianza de los residuos no cambia con los ajustados ni con sus cuadrados.",
+    "advice": "Use errores estándar robustos (se = hc3)."
+   },
+   "shapiro_wilk": {
+    "name": "Normalidad de los residuos: Shapiro–Wilk",
+    "h0": "Los residuos vienen de una distribución normal.",
+    "advice": "Los intervalos se apoyan en un n grande; con pocas filas, transforme la respuesta."
+   },
+   "anderson_darling": {
+    "name": "Normalidad de los residuos: Anderson–Darling",
+    "h0": "Los residuos vienen de una distribución normal.",
+    "advice": "Los intervalos se apoyan en un n grande; con pocas filas, transforme la respuesta."
+   },
+   "jarque_bera": {
+    "name": "Normalidad de los residuos: Jarque–Bera"
+   },
+   "durbin_watson": {
+    "name": "Independencia: Durbin–Watson",
+    "h0": "Los residuos contiguos en el orden de las filas no están correlacionados.",
+    "advice": "Use se = hac, o modele el tiempo.",
+    "not_computed": "Depende del orden de las filas: elija la columna que las ordena (order_by)."
+   },
+   "breusch_godfrey_1": {
+    "name": "Independencia: Breusch–Godfrey, orden 1",
+    "h0": "Sin autocorrelación de orden 1 en los residuos.",
+    "advice": "Use se = hac, o modele el tiempo.",
+    "not_computed": "Depende del orden de las filas: elija la columna que las ordena (order_by)."
+   },
+   "breusch_godfrey_4": {
+    "name": "Independencia: Breusch–Godfrey, orden 4",
+    "h0": "Sin autocorrelación hasta el orden 4 en los residuos.",
+    "advice": "Use se = hac, o modele el tiempo.",
+    "not_computed": "Depende del orden de las filas: elija la columna que las ordena (order_by)."
+   },
+   "condition_number": {
+    "name": "Multicolinealidad: número de condición",
+    "h0": "El diseño está bien condicionado (número de condición por debajo de 30).",
+    "advice": "Quite o combine los predictores correlacionados, céntrelos, o active una penalización."
+   },
+   "outlier_test": {
+    "name": "Valores atípicos: prueba de Bonferroni",
+    "h0": "Ningún residuo estudentizado es mayor de lo que permite el azar.",
+    "advice": "Revise las filas indicadas: un atípico atrae el ajuste hacia sí."
+   }
+  }
+ },
+ "fr": {
+  "name": "Régression linéaire",
+  "variants": {
+   "wls": "Régression linéaire — moindres carrés pondérés"
+  },
+  "kpi": {
+   "n": "Lignes utilisées",
+   "r_squared": "R²",
+   "adj_r_squared": "R² ajusté",
+   "sigma": "Erreur type résiduelle (σ)",
+   "f_test": "Test F : p {p}"
+  },
+  "charts": {
+   "resid_fitted": "Résidus selon les valeurs ajustées",
+   "qq": "Q–Q normal des résidus standardisés",
+   "scale_location": "Échelle–position : √|résidus standardisés| selon les valeurs ajustées",
+   "resid_leverage": "Résidus standardisés selon l'effet de levier",
+   "residual": "Histogramme des résidus",
+   "observed_fitted": "Valeurs observées selon les valeurs ajustées",
+   "coef_interval": "Coefficients avec leurs intervalles"
+  },
+  "stats": {
+   "model": {
+    "df_model": "Degrés de liberté du modèle",
+    "df_residual": "Degrés de liberté des résidus",
+    "r_squared": "R²",
+    "adj_r_squared": "R² ajusté",
+    "sigma": "Erreur type résiduelle (σ)",
+    "f_statistic": "Statistique F",
+    "f_df_1": "F, ddl du numérateur",
+    "f_df_2": "F, ddl du dénominateur",
+    "f_p_value": "p-valeur du test F",
+    "condition_number": "Conditionnement"
+   }
+  },
+  "checks": {
+   "reset": {
+    "name": "Linéarité : RESET de Ramsey",
+    "h0": "Il ne manque pas de courbure au modèle (les puissances 2 et 3 des valeurs ajustées n'apportent rien).",
+    "advice": "Ajoutez la courbure qui manque : un carré, un logarithme, une interaction."
+   },
+   "breusch_pagan": {
+    "name": "Homoscédasticité : Breusch–Pagan",
+    "h0": "La variance des résidus ne change pas avec les prédicteurs.",
+    "advice": "Utilisez des erreurs types robustes (se = hc3)."
+   },
+   "white": {
+    "name": "Homoscédasticité : White",
+    "h0": "La variance des résidus ne change ni avec les valeurs ajustées ni avec leurs carrés.",
+    "advice": "Utilisez des erreurs types robustes (se = hc3)."
+   },
+   "shapiro_wilk": {
+    "name": "Normalité des résidus : Shapiro–Wilk",
+    "h0": "Les résidus viennent d'une loi normale.",
+    "advice": "Les intervalles reposent sur un grand n ; avec peu de lignes, transformez la réponse."
+   },
+   "anderson_darling": {
+    "name": "Normalité des résidus : Anderson–Darling",
+    "h0": "Les résidus viennent d'une loi normale.",
+    "advice": "Les intervalles reposent sur un grand n ; avec peu de lignes, transformez la réponse."
+   },
+   "jarque_bera": {
+    "name": "Normalité des résidus : Jarque–Bera"
+   },
+   "durbin_watson": {
+    "name": "Indépendance : Durbin–Watson",
+    "h0": "Des résidus voisins dans l'ordre des lignes ne sont pas corrélés.",
+    "advice": "Utilisez se = hac, ou modélisez le temps.",
+    "not_computed": "Il dépend de l'ordre des lignes : choisissez la colonne qui les ordonne (order_by)."
+   },
+   "breusch_godfrey_1": {
+    "name": "Indépendance : Breusch–Godfrey, ordre 1",
+    "h0": "Pas d'autocorrélation d'ordre 1 dans les résidus.",
+    "advice": "Utilisez se = hac, ou modélisez le temps.",
+    "not_computed": "Il dépend de l'ordre des lignes : choisissez la colonne qui les ordonne (order_by)."
+   },
+   "breusch_godfrey_4": {
+    "name": "Indépendance : Breusch–Godfrey, ordre 4",
+    "h0": "Pas d'autocorrélation jusqu'à l'ordre 4 dans les résidus.",
+    "advice": "Utilisez se = hac, ou modélisez le temps.",
+    "not_computed": "Il dépend de l'ordre des lignes : choisissez la colonne qui les ordonne (order_by)."
+   },
+   "condition_number": {
+    "name": "Multicolinéarité : conditionnement",
+    "h0": "Le plan est bien conditionné (conditionnement sous 30).",
+    "advice": "Retirez ou combinez les prédicteurs corrélés, centrez-les, ou activez une pénalisation."
+   },
+   "outlier_test": {
+    "name": "Valeurs aberrantes : test de Bonferroni",
+    "h0": "Aucun résidu studentisé n'est plus grand que le hasard ne le permet.",
+    "advice": "Examinez les lignes indiquées : une valeur aberrante attire l'ajustement vers elle."
+   }
+  }
+ }
+}

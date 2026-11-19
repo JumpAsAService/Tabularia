@@ -8,6 +8,9 @@
 - POST /reports/stat: the report of the hypothesis test a flow's chain ends with (docs/specs/
   statistics.md, «The report»): no definition comes with it, the layout is the engine's own for
   that test; followed and taken as a report's render.
+- POST /reports/model: the report of a model step's run (docs/specs/statistical-models.md,
+  «Report»): the results its run kept, drawn with the engine's layout for that model; no
+  query reaches the data, no Job starts. Followed and taken as a report's render.
 - POST /reports/check: the mistakes of a definition, each with its item, its property and
   the position inside the expression — what the editor shows when a report is saved.
 - POST /reports/choices: the choices of a parameter taken from a dataset, for the form; on
@@ -74,6 +77,24 @@ class StatReport(BaseModel):
     locale: Optional[Literal[formats.LOCALES]] = None  # type: ignore[valid-type]
     filename: Optional[str] = Field(default=None, max_length=255)  # none: the test and its columns
     step: Optional[str] = Field(default=None, max_length=200)  # the step's name, for the page's header
+    owner: str = Field(..., min_length=1, description="Who asked for the report, as the gateway names them")
+    wait_seconds: float = Field(default=0, ge=0, le=3600)  # as a render's
+
+
+class ModelReport(BaseModel):
+    """The report of a model step's run: where its results are, the model and the parameters
+    it ran with. Rights were checked before this, with the person's: the run is one of a node
+    of a flow they may open (the gateway's /tasks/model-report)."""
+    bucket: str = Field(..., min_length=1)
+    results_key: str = Field(..., min_length=1)  # runs.model_results_key
+    model: str = Field(..., min_length=1, max_length=64)
+    params: dict[str, Any] = Field(default_factory=dict)
+    format: Literal["svg", "pdf", "xlsx"] = "svg"
+    locale: Optional[Literal[formats.LOCALES]] = None  # type: ignore[valid-type]
+    filename: Optional[str] = Field(default=None, max_length=255)  # none: the model and its columns
+    step: Optional[str] = Field(default=None, max_length=200)  # the node's name, for the page's header
+    # the development samples of the chain the run read (stats.layouts.samples_of): the page says so
+    sample: Optional[list[dict[str, Any]]] = Field(default=None, max_length=20)
     owner: str = Field(..., min_length=1, description="Who asked for the report, as the gateway names them")
     wait_seconds: float = Field(default=0, ge=0, le=3600)  # as a render's
 
@@ -322,4 +343,30 @@ def stat_report(request: StatReport):
                    if v is not None})
     celery_app.send_task("app.tasks.report_jobs.render_stat_report_task", kwargs=kwargs, task_id=task_id)
     return ReportStarted(task_id=task_id, status="submitted", message=f"Rendering the report of {last.type} as {request.format}",
+                         filename=name)
+
+
+@router.post("/model", response_model=ReportStarted)
+def model_report(request: ModelReport):
+    """Queues the report of a model step's run on the export queue, with the cap every
+    export has. A model without a report, or parameters the catalogue refuses, are refused
+    here; results of another shape are the task's answer."""
+    from app.engine.exceptions import EngineError
+    from app.engine.models import catalog, layouts
+
+    if request.model not in layouts.LAYOUTS:
+        raise HTTPException(status_code=422, detail=f"The model «{request.model}» has no report")
+    try:
+        catalog.check_params(request.model, request.params)
+    except EngineError as e:
+        raise HTTPException(status_code=422, detail=str(e)) from None
+    task_id = str(uuid.uuid4())
+    exports.start(task_id, request.owner, wait=request.wait_seconds)
+    name = file_name(request.filename or layouts.title(request.model, request.params, request.locale), request.format)
+    kwargs: dict[str, Any] = {"bucket": request.bucket, "results_key": request.results_key, "model": request.model,
+                              "params": request.params, "format": request.format, "filename": name}
+    kwargs.update({k: v for k, v in (("locale", request.locale), ("step", request.step), ("sample", request.sample))
+                   if v is not None})
+    celery_app.send_task("app.tasks.report_jobs.render_model_report_task", kwargs=kwargs, task_id=task_id)
+    return ReportStarted(task_id=task_id, status="submitted", message=f"Rendering the report of {request.model} as {request.format}",
                          filename=name)
