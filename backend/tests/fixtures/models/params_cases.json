@@ -1,0 +1,1174 @@
+{
+ "about": "The parameters of model nodes and what the catalogue's check answers: the engine (backend/tests/test_models_catalog.py) and the Go gateway (internal/modelcatalog) give the same answer, word for word. Written by hand; the answers come from app.engine.models.catalog.check_params.",
+ "cases": [
+  {
+   "what": "the smallest linear model",
+   "model": "linear",
+   "params": {
+    "outcome": "quantity",
+    "predictors": [
+     "price",
+     "channel"
+    ]
+   },
+   "checked": {
+    "outcome": "quantity",
+    "predictors": [
+     "price",
+     "channel"
+    ],
+    "estimation": "ols",
+    "penalty": "none",
+    "reference": {},
+    "interactions": [],
+    "intercept": true,
+    "weights": null,
+    "se": "classical",
+    "order_by": null,
+    "alpha": 0.05,
+    "seed": 1,
+    "output": "results"
+   }
+  },
+  {
+   "what": "a key the model does not take",
+   "model": "linear",
+   "params": {
+    "outcome": "quantity",
+    "predictors": [
+     "price",
+     "channel"
+    ],
+    "nope": 1
+   },
+   "error": "linear: there is no parameter 'nope' (it takes: outcome, predictors, estimation, penalty, reference, interactions, intercept, weights, se, cluster, order_by, mixing, lambda, folds, fold_by, measure, standardize, alpha, seed, output)"
+  },
+  {
+   "what": "a key it needs",
+   "model": "linear",
+   "params": {
+    "predictors": [
+     "price"
+    ]
+   },
+   "error": "linear: 'outcome' is required"
+  },
+  {
+   "what": "a penalty's key without a penalty",
+   "model": "linear",
+   "params": {
+    "outcome": "quantity",
+    "predictors": [
+     "price",
+     "channel"
+    ],
+    "lambda": "cv_min"
+   },
+   "error": "linear: 'lambda' only applies when penalty = ridge or lasso or elastic_net"
+  },
+  {
+   "what": "wls without weights",
+   "model": "linear",
+   "params": {
+    "outcome": "quantity",
+    "predictors": [
+     "price",
+     "channel"
+    ],
+    "estimation": "wls"
+   },
+   "error": "linear: weighted least squares need the column of the weights ('weights')"
+  },
+  {
+   "what": "wls with weights",
+   "model": "linear",
+   "params": {
+    "outcome": "quantity",
+    "predictors": [
+     "price",
+     "channel"
+    ],
+    "estimation": "wls",
+    "weights": "w"
+   },
+   "checked": {
+    "outcome": "quantity",
+    "predictors": [
+     "price",
+     "channel"
+    ],
+    "estimation": "wls",
+    "penalty": "none",
+    "reference": {},
+    "interactions": [],
+    "intercept": true,
+    "weights": "w",
+    "se": "classical",
+    "order_by": null,
+    "alpha": 0.05,
+    "seed": 1,
+    "output": "results"
+   }
+  },
+  {
+   "what": "clustered errors without the column",
+   "model": "linear",
+   "params": {
+    "outcome": "quantity",
+    "predictors": [
+     "price",
+     "channel"
+    ],
+    "se": "cluster"
+   },
+   "error": "linear: clustered standard errors need the column of the clusters ('cluster')"
+  },
+  {
+   "what": "clustered errors with the column",
+   "model": "linear",
+   "params": {
+    "outcome": "quantity",
+    "predictors": [
+     "price",
+     "channel"
+    ],
+    "se": "cluster",
+    "cluster": "shop"
+   },
+   "checked": {
+    "outcome": "quantity",
+    "predictors": [
+     "price",
+     "channel"
+    ],
+    "estimation": "ols",
+    "penalty": "none",
+    "reference": {},
+    "interactions": [],
+    "intercept": true,
+    "weights": null,
+    "se": "cluster",
+    "cluster": "shop",
+    "order_by": null,
+    "alpha": 0.05,
+    "seed": 1,
+    "output": "results"
+   }
+  },
+  {
+   "what": "se with a penalty",
+   "model": "linear",
+   "params": {
+    "outcome": "quantity",
+    "predictors": [
+     "price",
+     "channel"
+    ],
+    "penalty": "lasso",
+    "se": "hc3"
+   },
+   "error": "linear: 'se' only applies when penalty = none"
+  },
+  {
+   "what": "a fixed lambda",
+   "model": "linear",
+   "params": {
+    "outcome": "quantity",
+    "predictors": [
+     "price",
+     "channel"
+    ],
+    "penalty": "lasso",
+    "lambda": 0.1,
+    "fold_by": "shop"
+   },
+   "checked": {
+    "outcome": "quantity",
+    "predictors": [
+     "price",
+     "channel"
+    ],
+    "penalty": "lasso",
+    "reference": {},
+    "interactions": [],
+    "intercept": true,
+    "weights": null,
+    "lambda": 0.1,
+    "folds": 10,
+    "fold_by": "shop",
+    "measure": "mse",
+    "standardize": true,
+    "alpha": 0.05,
+    "seed": 1,
+    "output": "results"
+   }
+  },
+  {
+   "what": "a negative lambda",
+   "model": "linear",
+   "params": {
+    "outcome": "quantity",
+    "predictors": [
+     "price",
+     "channel"
+    ],
+    "penalty": "lasso",
+    "lambda": -1
+   },
+   "error": "linear: 'lambda' must be one of cv_1se, cv_min, or a number above 0"
+  },
+  {
+   "what": "too few folds",
+   "model": "linear",
+   "params": {
+    "outcome": "quantity",
+    "predictors": [
+     "price",
+     "channel"
+    ],
+    "penalty": "ridge",
+    "folds": 2
+   },
+   "error": "linear: 'folds' must be a whole number from 3 to 20"
+  },
+  {
+   "what": "folds not whole",
+   "model": "linear",
+   "params": {
+    "outcome": "quantity",
+    "predictors": [
+     "price",
+     "channel"
+    ],
+    "penalty": "ridge",
+    "folds": 3.5
+   },
+   "error": "linear: 'folds' must be a whole number from 3 to 20"
+  },
+  {
+   "what": "whole numbers written as decimals",
+   "model": "linear",
+   "params": {
+    "outcome": "quantity",
+    "predictors": [
+     "price",
+     "channel"
+    ],
+    "penalty": "ridge",
+    "folds": 4.0,
+    "seed": 7.0
+   },
+   "checked": {
+    "outcome": "quantity",
+    "predictors": [
+     "price",
+     "channel"
+    ],
+    "penalty": "ridge",
+    "reference": {},
+    "interactions": [],
+    "intercept": true,
+    "weights": null,
+    "lambda": "cv_1se",
+    "folds": 4,
+    "fold_by": null,
+    "measure": "mse",
+    "standardize": true,
+    "alpha": 0.05,
+    "seed": 7,
+    "output": "results"
+   }
+  },
+  {
+   "what": "alpha at its bound",
+   "model": "linear",
+   "params": {
+    "outcome": "quantity",
+    "predictors": [
+     "price",
+     "channel"
+    ],
+    "alpha": 1
+   },
+   "error": "linear: 'alpha' must be a number above 0 and below 1"
+  },
+  {
+   "what": "no predictor",
+   "model": "linear",
+   "params": {
+    "outcome": "quantity",
+    "predictors": []
+   },
+   "error": "linear: 'predictors' must name at least 1 column"
+  },
+  {
+   "what": "a predictor twice",
+   "model": "linear",
+   "params": {
+    "outcome": "quantity",
+    "predictors": [
+     "price",
+     "price"
+    ]
+   },
+   "error": "linear: 'predictors' names a column twice"
+  },
+  {
+   "what": "predictors not a list",
+   "model": "linear",
+   "params": {
+    "outcome": "quantity",
+    "predictors": "price"
+   },
+   "error": "linear: 'predictors' must be a list of column names"
+  },
+  {
+   "what": "a reference level of a column that is no predictor",
+   "model": "linear",
+   "params": {
+    "outcome": "quantity",
+    "predictors": [
+     "price",
+     "channel"
+    ],
+    "reference": {
+     "shop": "north"
+    }
+   },
+   "error": "linear: 'reference' names «shop», which is not one of the 'predictors'"
+  },
+  {
+   "what": "a reference level",
+   "model": "linear",
+   "params": {
+    "outcome": "quantity",
+    "predictors": [
+     "price",
+     "channel"
+    ],
+    "reference": {
+     "channel": "shop"
+    }
+   },
+   "checked": {
+    "outcome": "quantity",
+    "predictors": [
+     "price",
+     "channel"
+    ],
+    "estimation": "ols",
+    "penalty": "none",
+    "reference": {
+     "channel": "shop"
+    },
+    "interactions": [],
+    "intercept": true,
+    "weights": null,
+    "se": "classical",
+    "order_by": null,
+    "alpha": 0.05,
+    "seed": 1,
+    "output": "results"
+   }
+  },
+  {
+   "what": "a reference level that is a list",
+   "model": "linear",
+   "params": {
+    "outcome": "quantity",
+    "predictors": [
+     "price",
+     "channel"
+    ],
+    "reference": {
+     "channel": [
+      "shop"
+     ]
+    }
+   },
+   "error": "linear: 'reference.channel' must be a value of the column: a text, a number, true or false"
+  },
+  {
+   "what": "a pair of one column",
+   "model": "linear",
+   "params": {
+    "outcome": "quantity",
+    "predictors": [
+     "price",
+     "channel"
+    ],
+    "interactions": [
+     [
+      "price",
+      "price"
+     ]
+    ]
+   },
+   "error": "linear: 'interactions' must be a list of pairs of two different columns"
+  },
+  {
+   "what": "a pair twice",
+   "model": "linear",
+   "params": {
+    "outcome": "quantity",
+    "predictors": [
+     "price",
+     "channel"
+    ],
+    "interactions": [
+     [
+      "price",
+      "channel"
+     ],
+     [
+      "channel",
+      "price"
+     ]
+    ]
+   },
+   "error": "linear: 'interactions' names the pair «channel», «price» twice"
+  },
+  {
+   "what": "a pair with a column that is no predictor",
+   "model": "linear",
+   "params": {
+    "outcome": "quantity",
+    "predictors": [
+     "price",
+     "channel"
+    ],
+    "interactions": [
+     [
+      "price",
+      "shop"
+     ]
+    ]
+   },
+   "error": "linear: 'interactions' names «shop», which is not one of the 'predictors'"
+  },
+  {
+   "what": "the outcome is a predictor",
+   "model": "linear",
+   "params": {
+    "outcome": "price",
+    "predictors": [
+     "price",
+     "channel"
+    ]
+   },
+   "error": "linear: the column «price» is both 'outcome' and 'predictors': choose another"
+  },
+  {
+   "what": "a boolean that is a text",
+   "model": "linear",
+   "params": {
+    "outcome": "quantity",
+    "predictors": [
+     "price",
+     "channel"
+    ],
+    "intercept": "yes"
+   },
+   "error": "linear: 'intercept' must be true or false"
+  },
+  {
+   "what": "a choice that is not one",
+   "model": "linear",
+   "params": {
+    "outcome": "quantity",
+    "predictors": [
+     "price",
+     "channel"
+    ],
+    "se": "robust"
+   },
+   "error": "linear: 'se' must be one of classical, hc0, hc1, hc2, hc3, hac, cluster"
+  },
+  {
+   "what": "rows, and a null that is a key not given",
+   "model": "linear",
+   "params": {
+    "outcome": "quantity",
+    "predictors": [
+     "price",
+     "channel"
+    ],
+    "output": "rows",
+    "order_by": "day",
+    "seed": null
+   },
+   "checked": {
+    "outcome": "quantity",
+    "predictors": [
+     "price",
+     "channel"
+    ],
+    "estimation": "ols",
+    "penalty": "none",
+    "reference": {},
+    "interactions": [],
+    "intercept": true,
+    "weights": null,
+    "se": "classical",
+    "order_by": "day",
+    "alpha": 0.05,
+    "seed": 1,
+    "output": "rows"
+   }
+  },
+  {
+   "what": "the smallest logistic model",
+   "model": "logistic",
+   "params": {
+    "outcome": "churned",
+    "event_value": "yes",
+    "predictors": [
+     "tenure",
+     "plan"
+    ]
+   },
+   "checked": {
+    "outcome": "churned",
+    "event_value": "yes",
+    "predictors": [
+     "tenure",
+     "plan"
+    ],
+    "estimation": "ml",
+    "penalty": "none",
+    "link": "logit",
+    "reference": {},
+    "interactions": [],
+    "intercept": true,
+    "weights": null,
+    "se": "classical",
+    "ci": "wald",
+    "threshold": 0.5,
+    "alpha": 0.05,
+    "seed": 1,
+    "output": "results"
+   }
+  },
+  {
+   "what": "Firth with probit",
+   "model": "logistic",
+   "params": {
+    "outcome": "churned",
+    "event_value": "yes",
+    "predictors": [
+     "tenure",
+     "plan"
+    ],
+    "estimation": "firth",
+    "link": "probit"
+   },
+   "error": "logistic: Firth's penalized likelihood is for the logit link: use link = logit, or estimation = ml"
+  },
+  {
+   "what": "profile intervals with robust errors",
+   "model": "logistic",
+   "params": {
+    "outcome": "churned",
+    "event_value": "yes",
+    "predictors": [
+     "tenure",
+     "plan"
+    ],
+    "ci": "profile",
+    "se": "hc3"
+   },
+   "error": "logistic: profile likelihood intervals go with the classical standard errors: use ci = wald with robust ones"
+  },
+  {
+   "what": "profile intervals",
+   "model": "logistic",
+   "params": {
+    "outcome": "churned",
+    "event_value": "yes",
+    "predictors": [
+     "tenure",
+     "plan"
+    ],
+    "ci": "profile"
+   },
+   "checked": {
+    "outcome": "churned",
+    "event_value": "yes",
+    "predictors": [
+     "tenure",
+     "plan"
+    ],
+    "estimation": "ml",
+    "penalty": "none",
+    "link": "logit",
+    "reference": {},
+    "interactions": [],
+    "intercept": true,
+    "weights": null,
+    "se": "classical",
+    "ci": "profile",
+    "threshold": 0.5,
+    "alpha": 0.05,
+    "seed": 1,
+    "output": "results"
+   }
+  },
+  {
+   "what": "elastic net with mixing by CV",
+   "model": "logistic",
+   "params": {
+    "outcome": "churned",
+    "event_value": "yes",
+    "predictors": [
+     "tenure",
+     "plan"
+    ],
+    "penalty": "elastic_net",
+    "mixing": "cv",
+    "measure": "auc"
+   },
+   "checked": {
+    "outcome": "churned",
+    "event_value": "yes",
+    "predictors": [
+     "tenure",
+     "plan"
+    ],
+    "penalty": "elastic_net",
+    "reference": {},
+    "interactions": [],
+    "intercept": true,
+    "weights": null,
+    "threshold": 0.5,
+    "mixing": "cv",
+    "lambda": "cv_1se",
+    "folds": 10,
+    "fold_by": null,
+    "measure": "auc",
+    "standardize": true,
+    "alpha": 0.05,
+    "seed": 1,
+    "output": "results"
+   }
+  },
+  {
+   "what": "a mixing that is neither",
+   "model": "logistic",
+   "params": {
+    "outcome": "churned",
+    "event_value": "yes",
+    "predictors": [
+     "tenure",
+     "plan"
+    ],
+    "penalty": "elastic_net",
+    "mixing": "half"
+   },
+   "error": "logistic: 'mixing' must be one of cv, or a number above 0 and below 1"
+  },
+  {
+   "what": "a link with a penalty",
+   "model": "logistic",
+   "params": {
+    "outcome": "churned",
+    "event_value": "yes",
+    "predictors": [
+     "tenure",
+     "plan"
+    ],
+    "penalty": "lasso",
+    "link": "probit"
+   },
+   "error": "logistic: 'link' only applies when penalty = none"
+  },
+  {
+   "what": "an event value that is an object",
+   "model": "logistic",
+   "params": {
+    "outcome": "churned",
+    "event_value": {
+     "a": 1
+    },
+    "predictors": [
+     "tenure",
+     "plan"
+    ]
+   },
+   "error": "logistic: 'event_value' must be a value of the column: a text, a number, true or false"
+  },
+  {
+   "what": "an event value that is a boolean",
+   "model": "logistic",
+   "params": {
+    "outcome": "churned",
+    "event_value": true,
+    "predictors": [
+     "tenure",
+     "plan"
+    ],
+    "threshold": 0.3
+   },
+   "checked": {
+    "outcome": "churned",
+    "event_value": true,
+    "predictors": [
+     "tenure",
+     "plan"
+    ],
+    "estimation": "ml",
+    "penalty": "none",
+    "link": "logit",
+    "reference": {},
+    "interactions": [],
+    "intercept": true,
+    "weights": null,
+    "se": "classical",
+    "ci": "wald",
+    "threshold": 0.3,
+    "alpha": 0.05,
+    "seed": 1,
+    "output": "results"
+   }
+  },
+  {
+   "what": "the smallest Kaplan-Meier",
+   "model": "kaplan_meier",
+   "params": {
+    "time": "days",
+    "event": "status",
+    "event_value": "failed"
+   },
+   "checked": {
+    "time": "days",
+    "event": "status",
+    "event_value": "failed",
+    "strata": null,
+    "conf_type": "log",
+    "times": [],
+    "rmst_tau": null,
+    "alpha": 0.05,
+    "seed": 1,
+    "output": "results"
+   }
+  },
+  {
+   "what": "pairs without strata",
+   "model": "kaplan_meier",
+   "params": {
+    "time": "days",
+    "event": "status",
+    "event_value": "failed",
+    "pairwise": true
+   },
+   "error": "kaplan_meier: 'pairwise' only applies when 'strata' is given"
+  },
+  {
+   "what": "with strata",
+   "model": "kaplan_meier",
+   "params": {
+    "time": "days",
+    "event": "status",
+    "event_value": "failed",
+    "strata": "line",
+    "pairwise": true,
+    "test": "peto",
+    "times": [
+     90,
+     30
+    ],
+    "rmst_tau": 180
+   },
+   "checked": {
+    "time": "days",
+    "event": "status",
+    "event_value": "failed",
+    "strata": "line",
+    "conf_type": "log",
+    "test": "peto",
+    "pairwise": true,
+    "times": [
+     30.0,
+     90.0
+    ],
+    "rmst_tau": 180.0,
+    "alpha": 0.05,
+    "seed": 1,
+    "output": "results"
+   }
+  },
+  {
+   "what": "a negative time",
+   "model": "kaplan_meier",
+   "params": {
+    "time": "days",
+    "event": "status",
+    "event_value": "failed",
+    "times": [
+     -1
+    ]
+   },
+   "error": "kaplan_meier: 'times' must be a list of numbers, each at least 0"
+  },
+  {
+   "what": "too many times",
+   "model": "kaplan_meier",
+   "params": {
+    "time": "days",
+    "event": "status",
+    "event_value": "failed",
+    "times": [
+     0,
+     1,
+     2,
+     3,
+     4,
+     5,
+     6,
+     7,
+     8,
+     9,
+     10
+    ]
+   },
+   "error": "kaplan_meier: 'times' may hold at most 10 numbers"
+  },
+  {
+   "what": "a time twice",
+   "model": "kaplan_meier",
+   "params": {
+    "time": "days",
+    "event": "status",
+    "event_value": "failed",
+    "times": [
+     3,
+     3
+    ]
+   },
+   "error": "kaplan_meier: 'times' holds a number twice"
+  },
+  {
+   "what": "strata the time column",
+   "model": "kaplan_meier",
+   "params": {
+    "time": "days",
+    "event": "status",
+    "event_value": "failed",
+    "strata": "days"
+   },
+   "error": "kaplan_meier: the column «days» is both 'time' and 'strata': choose another"
+  },
+  {
+   "what": "the smallest Cox",
+   "model": "cox",
+   "params": {
+    "time": "days",
+    "event": "status",
+    "event_value": "failed",
+    "predictors": [
+     "load",
+     "line"
+    ]
+   },
+   "checked": {
+    "time": "days",
+    "event": "status",
+    "event_value": "failed",
+    "predictors": [
+     "load",
+     "line"
+    ],
+    "start": null,
+    "reference": {},
+    "interactions": [],
+    "strata": null,
+    "ties": "efron",
+    "se": "classical",
+    "alpha": 0.05,
+    "seed": 1,
+    "output": "results"
+   }
+  },
+  {
+   "what": "a cluster without robust errors",
+   "model": "cox",
+   "params": {
+    "time": "days",
+    "event": "status",
+    "event_value": "failed",
+    "predictors": [
+     "load",
+     "line"
+    ],
+    "cluster": "plant"
+   },
+   "error": "cox: 'cluster' only applies when se = robust"
+  },
+  {
+   "what": "a full Cox",
+   "model": "cox",
+   "params": {
+    "time": "days",
+    "event": "status",
+    "event_value": "failed",
+    "predictors": [
+     "load",
+     "line"
+    ],
+    "se": "robust",
+    "cluster": "plant",
+    "start": "entry",
+    "strata": "site",
+    "ties": "breslow"
+   },
+   "checked": {
+    "time": "days",
+    "event": "status",
+    "event_value": "failed",
+    "predictors": [
+     "load",
+     "line"
+    ],
+    "start": "entry",
+    "reference": {},
+    "interactions": [],
+    "strata": "site",
+    "ties": "breslow",
+    "se": "robust",
+    "cluster": "plant",
+    "alpha": 0.05,
+    "seed": 1,
+    "output": "results"
+   }
+  },
+  {
+   "what": "the smallest ARIMA",
+   "model": "arima",
+   "params": {
+    "time": "month",
+    "value": "boxes",
+    "frequency": "month"
+   },
+   "checked": {
+    "time": "month",
+    "value": "boxes",
+    "frequency": "month",
+    "s": null,
+    "orders": "manual",
+    "p": 1,
+    "d": 0,
+    "q": 0,
+    "P": 0,
+    "D": 0,
+    "Q": 0,
+    "drift": false,
+    "mean": true,
+    "exog": [],
+    "transform": "none",
+    "horizon": 12,
+    "holdout": 0,
+    "alpha": 0.05,
+    "seed": 1,
+    "output": "results"
+   }
+  },
+  {
+   "what": "an order with automatic orders",
+   "model": "arima",
+   "params": {
+    "time": "month",
+    "value": "boxes",
+    "frequency": "month",
+    "orders": "auto",
+    "p": 2
+   },
+   "error": "arima: 'p' only applies when orders = manual"
+  },
+  {
+   "what": "automatic orders",
+   "model": "arima",
+   "params": {
+    "time": "month",
+    "value": "boxes",
+    "frequency": "month",
+    "orders": "auto",
+    "criterion": "bic",
+    "max_p": 3,
+    "stepwise": false
+   },
+   "checked": {
+    "time": "month",
+    "value": "boxes",
+    "frequency": "month",
+    "s": null,
+    "orders": "auto",
+    "criterion": "bic",
+    "stepwise": false,
+    "max_p": 3,
+    "max_q": 5,
+    "max_P": 2,
+    "max_Q": 2,
+    "max_d": 2,
+    "max_D": 1,
+    "unit_root_test": "kpss",
+    "seasonal_test": "seas",
+    "drift": false,
+    "mean": true,
+    "exog": [],
+    "transform": "none",
+    "horizon": 12,
+    "holdout": 0,
+    "alpha": 0.05,
+    "seed": 1,
+    "output": "results"
+   }
+  },
+  {
+   "what": "a horizon with exogenous columns",
+   "model": "arima",
+   "params": {
+    "time": "month",
+    "value": "boxes",
+    "frequency": "month",
+    "exog": [
+     "promo"
+    ],
+    "horizon": 6
+   },
+   "error": "arima: 'horizon' only applies when 'exog' is not given"
+  },
+  {
+   "what": "SARIMAX",
+   "model": "arima",
+   "params": {
+    "time": "month",
+    "value": "boxes",
+    "frequency": "month",
+    "exog": [
+     "promo"
+    ],
+    "s": 12,
+    "D": 1,
+    "Q": 1
+   },
+   "checked": {
+    "time": "month",
+    "value": "boxes",
+    "frequency": "month",
+    "s": 12,
+    "orders": "manual",
+    "p": 1,
+    "d": 0,
+    "q": 0,
+    "P": 0,
+    "D": 1,
+    "Q": 1,
+    "drift": false,
+    "mean": true,
+    "exog": [
+     "promo"
+    ],
+    "transform": "none",
+    "holdout": 0,
+    "alpha": 0.05,
+    "seed": 1,
+    "output": "results"
+   }
+  },
+  {
+   "what": "a Box-Cox lambda without the transform",
+   "model": "arima",
+   "params": {
+    "time": "month",
+    "value": "boxes",
+    "frequency": "month",
+    "box_cox_lambda": 0.5
+   },
+   "error": "arima: 'box_cox_lambda' only applies when transform = box_cox"
+  },
+  {
+   "what": "a Box-Cox lambda out of bounds",
+   "model": "arima",
+   "params": {
+    "time": "month",
+    "value": "boxes",
+    "frequency": "month",
+    "transform": "box_cox",
+    "box_cox_lambda": 9
+   },
+   "error": "arima: 'box_cox_lambda' must be one of auto, or a number at least -5 and at most 5"
+  },
+  {
+   "what": "a season too long",
+   "model": "arima",
+   "params": {
+    "time": "month",
+    "value": "boxes",
+    "frequency": "month",
+    "s": 61
+   },
+   "error": "arima: 's' must be a whole number from 1 to 60"
+  },
+  {
+   "what": "a frequency that is not one",
+   "model": "arima",
+   "params": {
+    "time": "month",
+    "value": "boxes",
+    "frequency": "decade"
+   },
+   "error": "arima: 'frequency' must be one of hour, day, week, month, quarter, year, index"
+  },
+  {
+   "what": "two unknown keys: the first in text order",
+   "model": "linear",
+   "params": {
+    "outcome": "quantity",
+    "predictors": [
+     "price",
+     "channel"
+    ],
+    "zzz": 1,
+    "aaa": 2
+   },
+   "error": "linear: there is no parameter 'aaa' (it takes: outcome, predictors, estimation, penalty, reference, interactions, intercept, weights, se, cluster, order_by, mixing, lambda, folds, fold_by, measure, standardize, alpha, seed, output)"
+  },
+  {
+   "what": "two wrong values: the first in the catalogue's order",
+   "model": "linear",
+   "params": {
+    "outcome": "quantity",
+    "predictors": [
+     "price",
+     "channel"
+    ],
+    "seed": -1,
+    "alpha": 5
+   },
+   "error": "linear: 'alpha' must be a number above 0 and below 1"
+  },
+  {
+   "what": "two wrong reference levels: the first column in text order",
+   "model": "linear",
+   "params": {
+    "outcome": "quantity",
+    "predictors": [
+     "price",
+     "channel"
+    ],
+    "reference": {
+     "price": {
+      "x": 1
+     },
+     "channel": []
+    }
+   },
+   "error": "linear: 'reference.channel' must be a value of the column: a text, a number, true or false"
+  },
+  {
+   "what": "a model that does not exist",
+   "model": "survival_forest",
+   "params": {},
+   "error": "there is no model 'survival_forest' (the models: linear, logistic, kaplan_meier, cox, arima)"
+  }
+ ]
+}

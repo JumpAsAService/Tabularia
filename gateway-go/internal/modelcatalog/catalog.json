@@ -1,0 +1,2544 @@
+{
+  "format_version": 1,
+  "nodes": {
+    "model": {
+      "data": [
+        "model",
+        "params",
+        "mlflow",
+        "timeoutSeconds",
+        "retries"
+      ],
+      "mlflow": [
+        "connectionId",
+        "experiment",
+        "registerAs",
+        "continueWithout"
+      ]
+    },
+    "model_predict": {
+      "data": [
+        "connectionId",
+        "experiment",
+        "registeredModel",
+        "version",
+        "params",
+        "timeoutSeconds",
+        "retries"
+      ]
+    }
+  },
+  "limits": {
+    "max_terms": 200,
+    "max_levels": 50,
+    "max_strata": 20,
+    "max_interactions": 20,
+    "max_times": 10,
+    "max_season": 60,
+    "max_horizon": 1000,
+    "max_chart_points": 2000,
+    "extreme_points": 10,
+    "qq_points": 200,
+    "max_lags": 40,
+    "max_result_rows": 100000,
+    "max_card_bytes": 1048576,
+    "max_vcov_terms": 200,
+    "max_baseline_times": 5000,
+    "max_paths_terms": 20
+  },
+  "controls": [
+    "column",
+    "columns",
+    "level",
+    "reference",
+    "pairs",
+    "choice",
+    "number",
+    "integer",
+    "boolean",
+    "numbers",
+    "number_or_choice"
+  ],
+  "column_kinds": [
+    "integer",
+    "number",
+    "text",
+    "boolean",
+    "date",
+    "datetime",
+    "other"
+  ],
+  "kinds": {
+    "column": {
+      "control": "column"
+    },
+    "number_column": {
+      "control": "column",
+      "numeric": true
+    },
+    "time_column": {
+      "control": "column",
+      "types": [
+        "date",
+        "datetime",
+        "integer"
+      ]
+    },
+    "predictors": {
+      "control": "columns",
+      "min": 1,
+      "predictor": true
+    },
+    "number_columns": {
+      "control": "columns",
+      "min": 1,
+      "numeric": true
+    },
+    "outcome_level": {
+      "control": "level",
+      "of": "outcome"
+    },
+    "event_level": {
+      "control": "level",
+      "of": "event"
+    },
+    "reference": {
+      "control": "reference",
+      "of": "predictors"
+    },
+    "interactions": {
+      "control": "pairs",
+      "of": "predictors",
+      "max": 20
+    },
+    "boolean": {
+      "control": "boolean"
+    },
+    "alpha": {
+      "control": "number",
+      "above": 0,
+      "below": 1
+    },
+    "proportion": {
+      "control": "number",
+      "above": 0,
+      "below": 1
+    },
+    "positive": {
+      "control": "number",
+      "above": 0
+    },
+    "seed": {
+      "control": "integer",
+      "min": 0,
+      "max": 2147483647
+    },
+    "folds": {
+      "control": "integer",
+      "min": 3,
+      "max": 20
+    },
+    "season": {
+      "control": "integer",
+      "min": 1,
+      "max": 60
+    },
+    "order_pq": {
+      "control": "integer",
+      "min": 0,
+      "max": 5
+    },
+    "order_d": {
+      "control": "integer",
+      "min": 0,
+      "max": 2
+    },
+    "order_seasonal": {
+      "control": "integer",
+      "min": 0,
+      "max": 2
+    },
+    "order_seasonal_d": {
+      "control": "integer",
+      "min": 0,
+      "max": 1
+    },
+    "horizon": {
+      "control": "integer",
+      "min": 1,
+      "max": 1000
+    },
+    "holdout": {
+      "control": "integer",
+      "min": 0,
+      "max": 1000
+    },
+    "times": {
+      "control": "numbers",
+      "min": 0,
+      "max_count": 10
+    },
+    "mixing": {
+      "control": "number_or_choice",
+      "choices": [
+        "cv"
+      ],
+      "above": 0,
+      "below": 1
+    },
+    "lambda": {
+      "control": "number_or_choice",
+      "choices": [
+        "cv_1se",
+        "cv_min"
+      ],
+      "above": 0
+    },
+    "box_cox_lambda": {
+      "control": "number_or_choice",
+      "choices": [
+        "auto"
+      ],
+      "min": -5,
+      "max": 5
+    },
+    "estimation_linear": {
+      "control": "choice",
+      "choices": [
+        "ols",
+        "wls"
+      ]
+    },
+    "estimation_logistic": {
+      "control": "choice",
+      "choices": [
+        "ml",
+        "firth"
+      ]
+    },
+    "penalty": {
+      "control": "choice",
+      "choices": [
+        "none",
+        "ridge",
+        "lasso",
+        "elastic_net"
+      ]
+    },
+    "se_linear": {
+      "control": "choice",
+      "choices": [
+        "classical",
+        "hc0",
+        "hc1",
+        "hc2",
+        "hc3",
+        "hac",
+        "cluster"
+      ]
+    },
+    "se_logistic": {
+      "control": "choice",
+      "choices": [
+        "classical",
+        "hc0",
+        "hc1",
+        "hc2",
+        "hc3",
+        "cluster"
+      ]
+    },
+    "se_cox": {
+      "control": "choice",
+      "choices": [
+        "classical",
+        "robust"
+      ]
+    },
+    "measure_linear": {
+      "control": "choice",
+      "choices": [
+        "mse",
+        "mae"
+      ]
+    },
+    "measure_logistic": {
+      "control": "choice",
+      "choices": [
+        "deviance",
+        "auc",
+        "class"
+      ]
+    },
+    "link": {
+      "control": "choice",
+      "choices": [
+        "logit",
+        "probit"
+      ]
+    },
+    "ci": {
+      "control": "choice",
+      "choices": [
+        "wald",
+        "profile"
+      ]
+    },
+    "conf_type": {
+      "control": "choice",
+      "choices": [
+        "log",
+        "log-log",
+        "plain"
+      ]
+    },
+    "km_test": {
+      "control": "choice",
+      "choices": [
+        "logrank",
+        "peto"
+      ]
+    },
+    "ties": {
+      "control": "choice",
+      "choices": [
+        "efron",
+        "breslow",
+        "exact"
+      ]
+    },
+    "frequency": {
+      "control": "choice",
+      "choices": [
+        "hour",
+        "day",
+        "week",
+        "month",
+        "quarter",
+        "year",
+        "index"
+      ]
+    },
+    "orders": {
+      "control": "choice",
+      "choices": [
+        "manual",
+        "auto"
+      ]
+    },
+    "criterion": {
+      "control": "choice",
+      "choices": [
+        "aicc",
+        "aic",
+        "bic"
+      ]
+    },
+    "unit_root_test": {
+      "control": "choice",
+      "choices": [
+        "kpss",
+        "adf",
+        "pp"
+      ]
+    },
+    "seasonal_test": {
+      "control": "choice",
+      "choices": [
+        "seas",
+        "ocsb"
+      ]
+    },
+    "transform": {
+      "control": "choice",
+      "choices": [
+        "none",
+        "log",
+        "box_cox"
+      ]
+    },
+    "output_rows": {
+      "control": "choice",
+      "choices": [
+        "results",
+        "rows"
+      ]
+    },
+    "output_table": {
+      "control": "choice",
+      "choices": [
+        "results",
+        "table"
+      ]
+    },
+    "output_forecast": {
+      "control": "choice",
+      "choices": [
+        "results",
+        "forecast"
+      ]
+    }
+  },
+  "season_of_frequency": {
+    "hour": 24,
+    "day": 7,
+    "week": 52,
+    "month": 12,
+    "quarter": 4,
+    "year": 1,
+    "index": 1
+  },
+  "section_shapes": {
+    "model": {
+      "level": "null",
+      "level_2": "null",
+      "indexed": false
+    },
+    "coef": {
+      "level": "required",
+      "level_2": "optional",
+      "indexed": false
+    },
+    "cv": {
+      "level": "optional",
+      "level_2": "null",
+      "indexed": true
+    },
+    "candidate": {
+      "level": "required",
+      "level_2": "null",
+      "indexed": false
+    },
+    "assumption": {
+      "level": "required",
+      "level_2": "optional",
+      "indexed": false
+    },
+    "stratum": {
+      "level": "required",
+      "level_2": "null",
+      "indexed": false
+    },
+    "pair": {
+      "level": "required",
+      "level_2": "required",
+      "indexed": false
+    },
+    "cell": {
+      "level": "required",
+      "level_2": "required",
+      "indexed": false
+    },
+    "point": {
+      "level": "required",
+      "level_2": "optional",
+      "indexed": true
+    },
+    "curve": {
+      "level": "required",
+      "level_2": "optional",
+      "indexed": true
+    },
+    "lag": {
+      "level": "required",
+      "level_2": "null",
+      "indexed": true,
+      "unindexed": [
+        "bound"
+      ]
+    },
+    "hist": {
+      "level": "required",
+      "level_2": "optional",
+      "indexed": true
+    }
+  },
+  "verdicts": [
+    "ok",
+    "doubtful",
+    "failed",
+    "not_computed"
+  ],
+  "groups": [
+    {
+      "id": "regression",
+      "language": "r",
+      "label": "models.groups.regression",
+      "models": [
+        "linear",
+        "logistic"
+      ]
+    },
+    {
+      "id": "survival",
+      "language": "r",
+      "label": "models.groups.survival",
+      "models": [
+        "kaplan_meier",
+        "cox"
+      ]
+    },
+    {
+      "id": "timeseries",
+      "language": "r",
+      "label": "models.groups.timeseries",
+      "models": [
+        "arima"
+      ]
+    }
+  ],
+  "models": [
+    {
+      "id": "linear",
+      "group": "regression",
+      "family": "regression",
+      "label": "models.linear.name",
+      "needs": {
+        "outcome": "number_column",
+        "predictors": "predictors"
+      },
+      "takes": {
+        "estimation": "estimation_linear",
+        "penalty": "penalty",
+        "reference": "reference",
+        "interactions": "interactions",
+        "intercept": "boolean",
+        "weights": "number_column",
+        "se": "se_linear",
+        "cluster": "column",
+        "order_by": "column",
+        "mixing": "mixing",
+        "lambda": "lambda",
+        "folds": "folds",
+        "fold_by": "column",
+        "measure": "measure_linear",
+        "standardize": "boolean",
+        "alpha": "alpha",
+        "seed": "seed",
+        "output": "output_rows"
+      },
+      "defaults": {
+        "estimation": "ols",
+        "penalty": "none",
+        "reference": {},
+        "interactions": [],
+        "intercept": true,
+        "weights": null,
+        "se": "classical",
+        "cluster": null,
+        "order_by": null,
+        "mixing": 0.5,
+        "lambda": "cv_1se",
+        "folds": 10,
+        "fold_by": null,
+        "measure": "mse",
+        "standardize": true,
+        "alpha": 0.05,
+        "seed": 1,
+        "output": "results"
+      },
+      "applies": {
+        "estimation": {
+          "penalty": [
+            "none"
+          ]
+        },
+        "se": {
+          "penalty": [
+            "none"
+          ]
+        },
+        "cluster": {
+          "se": [
+            "cluster"
+          ],
+          "penalty": [
+            "none"
+          ]
+        },
+        "mixing": {
+          "penalty": [
+            "elastic_net"
+          ]
+        },
+        "lambda": {
+          "penalty": [
+            "ridge",
+            "lasso",
+            "elastic_net"
+          ]
+        },
+        "folds": {
+          "penalty": [
+            "ridge",
+            "lasso",
+            "elastic_net"
+          ]
+        },
+        "fold_by": {
+          "penalty": [
+            "ridge",
+            "lasso",
+            "elastic_net"
+          ]
+        },
+        "measure": {
+          "penalty": [
+            "ridge",
+            "lasso",
+            "elastic_net"
+          ]
+        },
+        "standardize": {
+          "penalty": [
+            "ridge",
+            "lasso",
+            "elastic_net"
+          ]
+        },
+        "order_by": {
+          "penalty": [
+            "none"
+          ]
+        }
+      },
+      "requires": [
+        {
+          "key": "weights",
+          "when": {
+            "estimation": "wls",
+            "penalty": "none"
+          },
+          "reason": "wls_needs_weights",
+          "message": "weighted least squares need the column of the weights ('weights')"
+        },
+        {
+          "key": "cluster",
+          "when": {
+            "se": "cluster",
+            "penalty": "none"
+          },
+          "reason": "cluster_needs_column",
+          "message": "clustered standard errors need the column of the clusters ('cluster')"
+        }
+      ],
+      "forbids": [],
+      "disjoint": [
+        "outcome",
+        "predictors",
+        "weights"
+      ],
+      "presets": {},
+      "variants": [
+        {
+          "id": "unpenalized",
+          "when": {
+            "penalty": [
+              "none"
+            ]
+          },
+          "sections": {
+            "model": {
+              "levels": null,
+              "texts": [
+                "model",
+                "variant",
+                "formula",
+                "software",
+                "group_version",
+                "rows_from",
+                "note_*",
+                "family",
+                "link",
+                "se_type",
+                "f_significance"
+              ],
+              "numbers": [
+                "n",
+                "n_missing",
+                "df_model",
+                "df_residual",
+                "r_squared",
+                "adj_r_squared",
+                "sigma",
+                "f_statistic",
+                "f_df_1",
+                "f_df_2",
+                "f_p_value",
+                "log_lik",
+                "aic",
+                "bic",
+                "rmse",
+                "mae",
+                "condition_number"
+              ]
+            },
+            "coef": {
+              "levels": null,
+              "numbers": [
+                "estimate",
+                "std_error",
+                "statistic",
+                "df",
+                "p_value",
+                "ci_low",
+                "ci_high",
+                "vif"
+              ],
+              "texts": [
+                "significance"
+              ]
+            },
+            "assumption": {
+              "levels": [
+                "reset",
+                "breusch_pagan",
+                "white",
+                "shapiro_wilk",
+                "anderson_darling",
+                "jarque_bera",
+                "durbin_watson",
+                "breusch_godfrey_1",
+                "breusch_godfrey_4",
+                "vif",
+                "condition_number",
+                "cooks_distance",
+                "leverage",
+                "outlier_test"
+              ],
+              "numbers": [
+                "statistic",
+                "df",
+                "df_2",
+                "p_value",
+                "threshold",
+                "value",
+                "count"
+              ],
+              "texts": [
+                "h0",
+                "verdict",
+                "advice",
+                "significance",
+                "rows"
+              ]
+            },
+            "point": {
+              "levels": [
+                "resid_fitted",
+                "qq",
+                "scale_location",
+                "resid_leverage",
+                "observed_fitted"
+              ],
+              "numbers": [
+                "y"
+              ],
+              "texts": []
+            },
+            "curve": {
+              "levels": [
+                "resid_fitted",
+                "qq",
+                "scale_location"
+              ],
+              "numbers": [
+                "y"
+              ],
+              "texts": []
+            },
+            "hist": {
+              "levels": [
+                "residual"
+              ],
+              "numbers": [
+                "count"
+              ],
+              "texts": []
+            }
+          },
+          "charts": [
+            {
+              "id": "resid_fitted",
+              "under": "breusch_pagan"
+            },
+            {
+              "id": "qq",
+              "under": "shapiro_wilk"
+            },
+            {
+              "id": "scale_location",
+              "under": "white"
+            },
+            {
+              "id": "resid_leverage",
+              "under": "cooks_distance"
+            },
+            {
+              "id": "residual",
+              "under": "jarque_bera"
+            },
+            {
+              "id": "observed_fitted",
+              "under": null
+            },
+            {
+              "id": "coef_interval",
+              "under": null
+            }
+          ],
+          "outputs": {
+            "rows": [
+              "pred_fitted",
+              "pred_residual",
+              "pred_std_residual",
+              "pred_leverage",
+              "pred_cooks_distance",
+              "pred_low",
+              "pred_high"
+            ]
+          }
+        },
+        {
+          "id": "penalized",
+          "when": {
+            "penalty": [
+              "ridge",
+              "lasso",
+              "elastic_net"
+            ]
+          },
+          "sections": {
+            "model": {
+              "levels": null,
+              "texts": [
+                "model",
+                "variant",
+                "formula",
+                "software",
+                "group_version",
+                "rows_from",
+                "note_*",
+                "family",
+                "penalty",
+                "cv_measure"
+              ],
+              "numbers": [
+                "n",
+                "n_missing",
+                "lambda",
+                "log_lambda",
+                "lambda_min",
+                "lambda_1se",
+                "mixing",
+                "cv_value",
+                "cv_se",
+                "n_selected",
+                "rmse",
+                "mae",
+                "r_squared"
+              ]
+            },
+            "coef": {
+              "levels": null,
+              "numbers": [
+                "estimate",
+                "selected"
+              ],
+              "texts": []
+            },
+            "cv": {
+              "levels": null,
+              "numbers": [
+                "cv_mean",
+                "cv_low",
+                "cv_high",
+                "n_selected"
+              ],
+              "texts": []
+            },
+            "assumption": {
+              "levels": [
+                "lambda_choice"
+              ],
+              "numbers": [
+                "statistic",
+                "df",
+                "df_2",
+                "p_value",
+                "threshold",
+                "value",
+                "count"
+              ],
+              "texts": [
+                "h0",
+                "verdict",
+                "advice",
+                "significance",
+                "rows"
+              ]
+            },
+            "point": {
+              "levels": [
+                "resid_fitted",
+                "qq"
+              ],
+              "numbers": [
+                "y"
+              ],
+              "texts": []
+            },
+            "curve": {
+              "levels": [
+                "paths",
+                "resid_fitted",
+                "qq"
+              ],
+              "numbers": [
+                "y"
+              ],
+              "texts": []
+            },
+            "hist": {
+              "levels": [
+                "residual"
+              ],
+              "numbers": [
+                "count"
+              ],
+              "texts": []
+            }
+          },
+          "charts": [
+            {
+              "id": "cv",
+              "under": "lambda_choice"
+            },
+            {
+              "id": "paths",
+              "under": "lambda_choice"
+            },
+            {
+              "id": "coef_selected",
+              "under": null
+            },
+            {
+              "id": "resid_fitted",
+              "under": null
+            },
+            {
+              "id": "qq",
+              "under": null
+            }
+          ],
+          "outputs": {
+            "rows": [
+              "pred_fitted",
+              "pred_residual"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "id": "logistic",
+      "group": "regression",
+      "family": "regression",
+      "label": "models.logistic.name",
+      "needs": {
+        "outcome": "column",
+        "event_value": "outcome_level",
+        "predictors": "predictors"
+      },
+      "takes": {
+        "estimation": "estimation_logistic",
+        "penalty": "penalty",
+        "link": "link",
+        "reference": "reference",
+        "interactions": "interactions",
+        "intercept": "boolean",
+        "weights": "number_column",
+        "se": "se_logistic",
+        "cluster": "column",
+        "ci": "ci",
+        "threshold": "proportion",
+        "mixing": "mixing",
+        "lambda": "lambda",
+        "folds": "folds",
+        "fold_by": "column",
+        "measure": "measure_logistic",
+        "standardize": "boolean",
+        "alpha": "alpha",
+        "seed": "seed",
+        "output": "output_rows"
+      },
+      "defaults": {
+        "estimation": "ml",
+        "penalty": "none",
+        "link": "logit",
+        "reference": {},
+        "interactions": [],
+        "intercept": true,
+        "weights": null,
+        "se": "classical",
+        "cluster": null,
+        "ci": "wald",
+        "threshold": 0.5,
+        "mixing": 0.5,
+        "lambda": "cv_1se",
+        "folds": 10,
+        "fold_by": null,
+        "measure": "deviance",
+        "standardize": true,
+        "alpha": 0.05,
+        "seed": 1,
+        "output": "results"
+      },
+      "applies": {
+        "estimation": {
+          "penalty": [
+            "none"
+          ]
+        },
+        "se": {
+          "penalty": [
+            "none"
+          ]
+        },
+        "cluster": {
+          "se": [
+            "cluster"
+          ],
+          "penalty": [
+            "none"
+          ]
+        },
+        "mixing": {
+          "penalty": [
+            "elastic_net"
+          ]
+        },
+        "lambda": {
+          "penalty": [
+            "ridge",
+            "lasso",
+            "elastic_net"
+          ]
+        },
+        "folds": {
+          "penalty": [
+            "ridge",
+            "lasso",
+            "elastic_net"
+          ]
+        },
+        "fold_by": {
+          "penalty": [
+            "ridge",
+            "lasso",
+            "elastic_net"
+          ]
+        },
+        "measure": {
+          "penalty": [
+            "ridge",
+            "lasso",
+            "elastic_net"
+          ]
+        },
+        "standardize": {
+          "penalty": [
+            "ridge",
+            "lasso",
+            "elastic_net"
+          ]
+        },
+        "link": {
+          "penalty": [
+            "none"
+          ]
+        },
+        "ci": {
+          "penalty": [
+            "none"
+          ]
+        }
+      },
+      "requires": [
+        {
+          "key": "cluster",
+          "when": {
+            "se": "cluster",
+            "penalty": "none"
+          },
+          "reason": "cluster_needs_column",
+          "message": "clustered standard errors need the column of the clusters ('cluster')"
+        }
+      ],
+      "forbids": [
+        {
+          "key": "estimation",
+          "value": "firth",
+          "when": {
+            "link": "probit"
+          },
+          "reason": "firth_needs_logit",
+          "message": "Firth's penalized likelihood is for the logit link: use link = logit, or estimation = ml"
+        },
+        {
+          "key": "ci",
+          "value": "profile",
+          "when": {
+            "se": [
+              "hc0",
+              "hc1",
+              "hc2",
+              "hc3",
+              "cluster"
+            ]
+          },
+          "reason": "profile_needs_classical_se",
+          "message": "profile likelihood intervals go with the classical standard errors: use ci = wald with robust ones"
+        }
+      ],
+      "disjoint": [
+        "outcome",
+        "predictors",
+        "weights"
+      ],
+      "presets": {},
+      "variants": [
+        {
+          "id": "unpenalized",
+          "when": {
+            "penalty": [
+              "none"
+            ]
+          },
+          "sections": {
+            "model": {
+              "levels": null,
+              "texts": [
+                "model",
+                "variant",
+                "formula",
+                "software",
+                "group_version",
+                "rows_from",
+                "note_*",
+                "family",
+                "link",
+                "estimation",
+                "se_type",
+                "event_value",
+                "lr_significance"
+              ],
+              "numbers": [
+                "n",
+                "events",
+                "n_missing",
+                "auc",
+                "auc_ci_low",
+                "auc_ci_high",
+                "brier",
+                "threshold",
+                "accuracy",
+                "sensitivity",
+                "specificity",
+                "precision",
+                "deviance",
+                "null_deviance",
+                "lr_statistic",
+                "lr_df",
+                "lr_p_value",
+                "log_lik",
+                "aic",
+                "bic",
+                "mcfadden_r2",
+                "nagelkerke_r2",
+                "tjur_r2"
+              ]
+            },
+            "coef": {
+              "levels": null,
+              "numbers": [
+                "estimate",
+                "std_error",
+                "statistic",
+                "p_value",
+                "ci_low",
+                "ci_high",
+                "odds_ratio",
+                "or_ci_low",
+                "or_ci_high",
+                "vif"
+              ],
+              "texts": [
+                "significance"
+              ]
+            },
+            "assumption": {
+              "levels": [
+                "separation",
+                "hosmer_lemeshow",
+                "box_tidwell",
+                "vif",
+                "epv",
+                "cooks_distance",
+                "leverage",
+                "deviance_residuals"
+              ],
+              "numbers": [
+                "statistic",
+                "df",
+                "df_2",
+                "p_value",
+                "threshold",
+                "value",
+                "count"
+              ],
+              "texts": [
+                "h0",
+                "verdict",
+                "advice",
+                "significance",
+                "rows"
+              ]
+            },
+            "point": {
+              "levels": [
+                "calibration",
+                "resid_linear"
+              ],
+              "numbers": [
+                "y"
+              ],
+              "texts": []
+            },
+            "curve": {
+              "levels": [
+                "roc"
+              ],
+              "numbers": [
+                "y"
+              ],
+              "texts": []
+            },
+            "hist": {
+              "levels": [
+                "prob"
+              ],
+              "numbers": [
+                "count"
+              ],
+              "texts": []
+            },
+            "cell": {
+              "levels": null,
+              "numbers": [
+                "observed"
+              ],
+              "texts": []
+            }
+          },
+          "charts": [
+            {
+              "id": "roc",
+              "under": null
+            },
+            {
+              "id": "calibration",
+              "under": "hosmer_lemeshow"
+            },
+            {
+              "id": "prob",
+              "under": null
+            },
+            {
+              "id": "confusion",
+              "under": null
+            },
+            {
+              "id": "resid_linear",
+              "under": "deviance_residuals"
+            },
+            {
+              "id": "odds_ratio_interval",
+              "under": null
+            }
+          ],
+          "outputs": {
+            "rows": [
+              "pred_prob",
+              "pred_class",
+              "pred_linear",
+              "pred_deviance_residual",
+              "pred_pearson_residual",
+              "pred_leverage",
+              "pred_cooks_distance"
+            ]
+          }
+        },
+        {
+          "id": "penalized",
+          "when": {
+            "penalty": [
+              "ridge",
+              "lasso",
+              "elastic_net"
+            ]
+          },
+          "sections": {
+            "model": {
+              "levels": null,
+              "texts": [
+                "model",
+                "variant",
+                "formula",
+                "software",
+                "group_version",
+                "rows_from",
+                "note_*",
+                "family",
+                "link",
+                "penalty",
+                "cv_measure",
+                "event_value"
+              ],
+              "numbers": [
+                "n",
+                "events",
+                "n_missing",
+                "auc",
+                "auc_ci_low",
+                "auc_ci_high",
+                "brier",
+                "threshold",
+                "accuracy",
+                "sensitivity",
+                "specificity",
+                "precision",
+                "lambda",
+                "log_lambda",
+                "lambda_min",
+                "lambda_1se",
+                "mixing",
+                "cv_value",
+                "cv_se",
+                "n_selected"
+              ]
+            },
+            "coef": {
+              "levels": null,
+              "numbers": [
+                "estimate",
+                "odds_ratio",
+                "selected"
+              ],
+              "texts": []
+            },
+            "cv": {
+              "levels": null,
+              "numbers": [
+                "cv_mean",
+                "cv_low",
+                "cv_high",
+                "n_selected"
+              ],
+              "texts": []
+            },
+            "assumption": {
+              "levels": [
+                "separation",
+                "hosmer_lemeshow",
+                "epv",
+                "lambda_choice"
+              ],
+              "numbers": [
+                "statistic",
+                "df",
+                "df_2",
+                "p_value",
+                "threshold",
+                "value",
+                "count"
+              ],
+              "texts": [
+                "h0",
+                "verdict",
+                "advice",
+                "significance",
+                "rows"
+              ]
+            },
+            "point": {
+              "levels": [
+                "calibration"
+              ],
+              "numbers": [
+                "y"
+              ],
+              "texts": []
+            },
+            "curve": {
+              "levels": [
+                "roc",
+                "paths"
+              ],
+              "numbers": [
+                "y"
+              ],
+              "texts": []
+            },
+            "hist": {
+              "levels": [
+                "prob"
+              ],
+              "numbers": [
+                "count"
+              ],
+              "texts": []
+            },
+            "cell": {
+              "levels": null,
+              "numbers": [
+                "observed"
+              ],
+              "texts": []
+            }
+          },
+          "charts": [
+            {
+              "id": "cv",
+              "under": "lambda_choice"
+            },
+            {
+              "id": "paths",
+              "under": "lambda_choice"
+            },
+            {
+              "id": "roc",
+              "under": null
+            },
+            {
+              "id": "calibration",
+              "under": "hosmer_lemeshow"
+            },
+            {
+              "id": "prob",
+              "under": null
+            },
+            {
+              "id": "confusion",
+              "under": null
+            }
+          ],
+          "outputs": {
+            "rows": [
+              "pred_prob",
+              "pred_class",
+              "pred_linear"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "id": "kaplan_meier",
+      "group": "survival",
+      "family": "survival",
+      "label": "models.kaplan_meier.name",
+      "needs": {
+        "time": "number_column",
+        "event": "column",
+        "event_value": "event_level"
+      },
+      "takes": {
+        "strata": "column",
+        "conf_type": "conf_type",
+        "test": "km_test",
+        "pairwise": "boolean",
+        "times": "times",
+        "rmst_tau": "positive",
+        "alpha": "alpha",
+        "seed": "seed",
+        "output": "output_table"
+      },
+      "defaults": {
+        "strata": null,
+        "conf_type": "log",
+        "test": "logrank",
+        "pairwise": false,
+        "times": [],
+        "rmst_tau": null,
+        "alpha": 0.05,
+        "seed": 1,
+        "output": "results"
+      },
+      "applies": {
+        "test": {
+          "strata": true
+        },
+        "pairwise": {
+          "strata": true
+        }
+      },
+      "requires": [],
+      "forbids": [],
+      "disjoint": [
+        "time",
+        "event",
+        "strata"
+      ],
+      "presets": {},
+      "variants": [
+        {
+          "id": "default",
+          "when": {},
+          "sections": {
+            "model": {
+              "levels": null,
+              "texts": [
+                "model",
+                "variant",
+                "formula",
+                "software",
+                "group_version",
+                "rows_from",
+                "note_*",
+                "event_value",
+                "conf_type",
+                "test",
+                "test_significance"
+              ],
+              "numbers": [
+                "n",
+                "events",
+                "censored",
+                "n_missing",
+                "n_strata",
+                "rmst_tau",
+                "test_statistic",
+                "test_df",
+                "test_p_value"
+              ]
+            },
+            "stratum": {
+              "levels": null,
+              "numbers": [
+                "n",
+                "events",
+                "censored",
+                "median",
+                "median_ci_low",
+                "median_ci_high",
+                "surv_at_*",
+                "rmst",
+                "rmst_se",
+                "observed",
+                "expected"
+              ],
+              "texts": []
+            },
+            "pair": {
+              "levels": null,
+              "numbers": [
+                "statistic",
+                "p_value",
+                "p_adjusted"
+              ],
+              "texts": [
+                "significance"
+              ]
+            },
+            "assumption": {
+              "levels": [
+                "censoring_informative",
+                "proportional_hazards",
+                "censoring_by_stratum"
+              ],
+              "numbers": [
+                "statistic",
+                "df",
+                "df_2",
+                "p_value",
+                "threshold",
+                "value",
+                "count"
+              ],
+              "texts": [
+                "h0",
+                "verdict",
+                "advice",
+                "significance",
+                "rows"
+              ]
+            },
+            "curve": {
+              "levels": [
+                "km",
+                "cumhaz",
+                "loglog"
+              ],
+              "numbers": [
+                "surv",
+                "lower",
+                "upper",
+                "cumhaz",
+                "y"
+              ],
+              "texts": []
+            },
+            "point": {
+              "levels": [
+                "censored",
+                "at_risk"
+              ],
+              "numbers": [
+                "surv",
+                "n_risk"
+              ],
+              "texts": []
+            }
+          },
+          "charts": [
+            {
+              "id": "km",
+              "under": null
+            },
+            {
+              "id": "at_risk",
+              "under": null
+            },
+            {
+              "id": "cumhaz",
+              "under": null
+            },
+            {
+              "id": "loglog",
+              "under": "proportional_hazards"
+            }
+          ],
+          "outputs": {
+            "table": [
+              "stratum",
+              "time",
+              "n_risk",
+              "n_event",
+              "n_censor",
+              "surv",
+              "lower",
+              "upper"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "id": "cox",
+      "group": "survival",
+      "family": "survival",
+      "label": "models.cox.name",
+      "needs": {
+        "time": "number_column",
+        "event": "column",
+        "event_value": "event_level",
+        "predictors": "predictors"
+      },
+      "takes": {
+        "start": "number_column",
+        "reference": "reference",
+        "interactions": "interactions",
+        "strata": "column",
+        "ties": "ties",
+        "se": "se_cox",
+        "cluster": "column",
+        "alpha": "alpha",
+        "seed": "seed",
+        "output": "output_rows"
+      },
+      "defaults": {
+        "start": null,
+        "reference": {},
+        "interactions": [],
+        "strata": null,
+        "ties": "efron",
+        "se": "classical",
+        "cluster": null,
+        "alpha": 0.05,
+        "seed": 1,
+        "output": "results"
+      },
+      "applies": {
+        "cluster": {
+          "se": [
+            "robust"
+          ]
+        }
+      },
+      "requires": [],
+      "forbids": [],
+      "disjoint": [
+        "time",
+        "event",
+        "start",
+        "predictors",
+        "strata"
+      ],
+      "presets": {},
+      "variants": [
+        {
+          "id": "default",
+          "when": {},
+          "sections": {
+            "model": {
+              "levels": null,
+              "texts": [
+                "model",
+                "variant",
+                "formula",
+                "software",
+                "group_version",
+                "rows_from",
+                "note_*",
+                "event_value",
+                "ties",
+                "se_type",
+                "lr_significance",
+                "wald_significance",
+                "score_significance"
+              ],
+              "numbers": [
+                "n",
+                "events",
+                "n_missing",
+                "lr_statistic",
+                "lr_df",
+                "lr_p_value",
+                "wald_statistic",
+                "wald_df",
+                "wald_p_value",
+                "score_statistic",
+                "score_df",
+                "score_p_value",
+                "concordance",
+                "concordance_se",
+                "log_lik",
+                "aic"
+              ]
+            },
+            "coef": {
+              "levels": null,
+              "numbers": [
+                "estimate",
+                "hazard_ratio",
+                "hr_ci_low",
+                "hr_ci_high",
+                "std_error",
+                "robust_se",
+                "statistic",
+                "p_value",
+                "vif"
+              ],
+              "texts": [
+                "significance"
+              ]
+            },
+            "assumption": {
+              "levels": [
+                "schoenfeld",
+                "schoenfeld_global",
+                "martingale_form",
+                "dfbeta",
+                "vif",
+                "epv"
+              ],
+              "numbers": [
+                "statistic",
+                "df",
+                "df_2",
+                "p_value",
+                "threshold",
+                "value",
+                "count"
+              ],
+              "texts": [
+                "h0",
+                "verdict",
+                "advice",
+                "significance",
+                "rows"
+              ]
+            },
+            "point": {
+              "levels": [
+                "schoenfeld",
+                "martingale",
+                "deviance_linear"
+              ],
+              "numbers": [
+                "y"
+              ],
+              "texts": []
+            },
+            "curve": {
+              "levels": [
+                "schoenfeld",
+                "martingale",
+                "adjusted_survival"
+              ],
+              "numbers": [
+                "smooth",
+                "lower",
+                "upper",
+                "lowess",
+                "surv"
+              ],
+              "texts": []
+            }
+          },
+          "charts": [
+            {
+              "id": "hazard_ratio_interval",
+              "under": null
+            },
+            {
+              "id": "schoenfeld",
+              "under": "schoenfeld"
+            },
+            {
+              "id": "martingale",
+              "under": "martingale_form"
+            },
+            {
+              "id": "deviance_linear",
+              "under": "dfbeta"
+            },
+            {
+              "id": "adjusted_survival",
+              "under": null
+            }
+          ],
+          "outputs": {
+            "rows": [
+              "pred_linear",
+              "pred_risk",
+              "pred_martingale",
+              "pred_deviance"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "id": "arima",
+      "group": "timeseries",
+      "family": "timeseries",
+      "label": "models.arima.name",
+      "needs": {
+        "time": "time_column",
+        "value": "number_column",
+        "frequency": "frequency"
+      },
+      "takes": {
+        "s": "season",
+        "orders": "orders",
+        "p": "order_pq",
+        "d": "order_d",
+        "q": "order_pq",
+        "P": "order_seasonal",
+        "D": "order_seasonal_d",
+        "Q": "order_seasonal",
+        "criterion": "criterion",
+        "stepwise": "boolean",
+        "max_p": "order_pq",
+        "max_q": "order_pq",
+        "max_P": "order_seasonal",
+        "max_Q": "order_seasonal",
+        "max_d": "order_d",
+        "max_D": "order_seasonal_d",
+        "unit_root_test": "unit_root_test",
+        "seasonal_test": "seasonal_test",
+        "drift": "boolean",
+        "mean": "boolean",
+        "exog": "number_columns",
+        "transform": "transform",
+        "box_cox_lambda": "box_cox_lambda",
+        "horizon": "horizon",
+        "holdout": "holdout",
+        "alpha": "alpha",
+        "seed": "seed",
+        "output": "output_forecast"
+      },
+      "defaults": {
+        "s": null,
+        "orders": "manual",
+        "p": 1,
+        "d": 0,
+        "q": 0,
+        "P": 0,
+        "D": 0,
+        "Q": 0,
+        "criterion": "aicc",
+        "stepwise": true,
+        "max_p": 5,
+        "max_q": 5,
+        "max_P": 2,
+        "max_Q": 2,
+        "max_d": 2,
+        "max_D": 1,
+        "unit_root_test": "kpss",
+        "seasonal_test": "seas",
+        "drift": false,
+        "mean": true,
+        "exog": [],
+        "transform": "none",
+        "box_cox_lambda": "auto",
+        "horizon": 12,
+        "holdout": 0,
+        "alpha": 0.05,
+        "seed": 1,
+        "output": "results"
+      },
+      "applies": {
+        "p": {
+          "orders": [
+            "manual"
+          ]
+        },
+        "d": {
+          "orders": [
+            "manual"
+          ]
+        },
+        "q": {
+          "orders": [
+            "manual"
+          ]
+        },
+        "P": {
+          "orders": [
+            "manual"
+          ]
+        },
+        "D": {
+          "orders": [
+            "manual"
+          ]
+        },
+        "Q": {
+          "orders": [
+            "manual"
+          ]
+        },
+        "criterion": {
+          "orders": [
+            "auto"
+          ]
+        },
+        "stepwise": {
+          "orders": [
+            "auto"
+          ]
+        },
+        "max_p": {
+          "orders": [
+            "auto"
+          ]
+        },
+        "max_q": {
+          "orders": [
+            "auto"
+          ]
+        },
+        "max_P": {
+          "orders": [
+            "auto"
+          ]
+        },
+        "max_Q": {
+          "orders": [
+            "auto"
+          ]
+        },
+        "max_d": {
+          "orders": [
+            "auto"
+          ]
+        },
+        "max_D": {
+          "orders": [
+            "auto"
+          ]
+        },
+        "unit_root_test": {
+          "orders": [
+            "auto"
+          ]
+        },
+        "seasonal_test": {
+          "orders": [
+            "auto"
+          ]
+        },
+        "box_cox_lambda": {
+          "transform": [
+            "box_cox"
+          ]
+        },
+        "horizon": {
+          "exog": false
+        }
+      },
+      "requires": [],
+      "forbids": [],
+      "disjoint": [
+        "time",
+        "value",
+        "exog"
+      ],
+      "presets": {
+        "ar": {
+          "orders": "manual",
+          "p": 1,
+          "d": 0,
+          "q": 0,
+          "P": 0,
+          "D": 0,
+          "Q": 0
+        },
+        "ma": {
+          "orders": "manual",
+          "p": 0,
+          "d": 0,
+          "q": 1,
+          "P": 0,
+          "D": 0,
+          "Q": 0
+        },
+        "arma": {
+          "orders": "manual",
+          "p": 1,
+          "d": 0,
+          "q": 1,
+          "P": 0,
+          "D": 0,
+          "Q": 0
+        },
+        "arima": {
+          "orders": "manual",
+          "p": 1,
+          "d": 1,
+          "q": 1,
+          "P": 0,
+          "D": 0,
+          "Q": 0
+        },
+        "sarima": {
+          "orders": "manual",
+          "p": 1,
+          "d": 1,
+          "q": 1,
+          "P": 0,
+          "D": 1,
+          "Q": 1
+        },
+        "sarimax": {
+          "orders": "manual",
+          "p": 1,
+          "d": 1,
+          "q": 1,
+          "P": 0,
+          "D": 1,
+          "Q": 1
+        }
+      },
+      "variants": [
+        {
+          "id": "manual",
+          "when": {
+            "orders": [
+              "manual"
+            ]
+          },
+          "sections": {
+            "model": {
+              "levels": null,
+              "texts": [
+                "model",
+                "variant",
+                "formula",
+                "software",
+                "group_version",
+                "rows_from",
+                "note_*",
+                "model_name",
+                "frequency",
+                "transform"
+              ],
+              "numbers": [
+                "n",
+                "n_missing",
+                "p",
+                "d",
+                "q",
+                "P",
+                "D",
+                "Q",
+                "s",
+                "log_lik",
+                "aic",
+                "aicc",
+                "bic",
+                "sigma2",
+                "rmse",
+                "mae",
+                "mape",
+                "mase",
+                "holdout",
+                "holdout_rmse",
+                "holdout_mae",
+                "holdout_mape",
+                "holdout_mase",
+                "box_cox_lambda",
+                "horizon",
+                "ar_root_modulus_*",
+                "ma_root_modulus_*"
+              ]
+            },
+            "coef": {
+              "levels": null,
+              "numbers": [
+                "estimate",
+                "std_error",
+                "statistic",
+                "p_value",
+                "ci_low",
+                "ci_high"
+              ],
+              "texts": [
+                "significance"
+              ]
+            },
+            "assumption": {
+              "levels": [
+                "adf",
+                "kpss",
+                "stationarity",
+                "roots",
+                "ljung_box_10",
+                "ljung_box_2s",
+                "arch_lm",
+                "variance_ratio",
+                "jarque_bera"
+              ],
+              "numbers": [
+                "statistic",
+                "df",
+                "df_2",
+                "p_value",
+                "threshold",
+                "value",
+                "count"
+              ],
+              "texts": [
+                "h0",
+                "verdict",
+                "advice",
+                "significance",
+                "rows"
+              ]
+            },
+            "curve": {
+              "levels": [
+                "forecast",
+                "residuals",
+                "qq"
+              ],
+              "numbers": [
+                "observed",
+                "fitted",
+                "forecast",
+                "lower_80",
+                "upper_80",
+                "lower",
+                "upper",
+                "y"
+              ],
+              "texts": []
+            },
+            "point": {
+              "levels": [
+                "qq"
+              ],
+              "numbers": [
+                "y"
+              ],
+              "texts": []
+            },
+            "lag": {
+              "levels": [
+                "acf",
+                "pacf",
+                "resid_acf",
+                "resid_pacf"
+              ],
+              "numbers": [
+                "acf",
+                "pacf",
+                "bound"
+              ],
+              "texts": []
+            },
+            "hist": {
+              "levels": [
+                "residual"
+              ],
+              "numbers": [
+                "count"
+              ],
+              "texts": []
+            }
+          },
+          "charts": [
+            {
+              "id": "forecast",
+              "under": null
+            },
+            {
+              "id": "acf",
+              "under": "stationarity"
+            },
+            {
+              "id": "pacf",
+              "under": "stationarity"
+            },
+            {
+              "id": "resid_acf",
+              "under": "ljung_box_10"
+            },
+            {
+              "id": "resid_pacf",
+              "under": "ljung_box_10"
+            },
+            {
+              "id": "residuals",
+              "under": "arch_lm"
+            },
+            {
+              "id": "residual",
+              "under": "jarque_bera"
+            },
+            {
+              "id": "qq",
+              "under": "jarque_bera"
+            }
+          ],
+          "outputs": {
+            "forecast": [
+              "time",
+              "observed",
+              "fitted",
+              "forecast",
+              "lower_80",
+              "upper_80",
+              "lower",
+              "upper",
+              "is_forecast"
+            ]
+          }
+        },
+        {
+          "id": "auto",
+          "when": {
+            "orders": [
+              "auto"
+            ]
+          },
+          "sections": {
+            "model": {
+              "levels": null,
+              "texts": [
+                "model",
+                "variant",
+                "formula",
+                "software",
+                "group_version",
+                "rows_from",
+                "note_*",
+                "model_name",
+                "frequency",
+                "transform",
+                "criterion",
+                "orders_reason_*"
+              ],
+              "numbers": [
+                "n",
+                "n_missing",
+                "p",
+                "d",
+                "q",
+                "P",
+                "D",
+                "Q",
+                "s",
+                "log_lik",
+                "aic",
+                "aicc",
+                "bic",
+                "sigma2",
+                "rmse",
+                "mae",
+                "mape",
+                "mase",
+                "holdout",
+                "holdout_rmse",
+                "holdout_mae",
+                "holdout_mape",
+                "holdout_mase",
+                "box_cox_lambda",
+                "horizon",
+                "ar_root_modulus_*",
+                "ma_root_modulus_*",
+                "candidates",
+                "order_test_*"
+              ]
+            },
+            "coef": {
+              "levels": null,
+              "numbers": [
+                "estimate",
+                "std_error",
+                "statistic",
+                "p_value",
+                "ci_low",
+                "ci_high"
+              ],
+              "texts": [
+                "significance"
+              ]
+            },
+            "assumption": {
+              "levels": [
+                "adf",
+                "kpss",
+                "stationarity",
+                "roots",
+                "ljung_box_10",
+                "ljung_box_2s",
+                "arch_lm",
+                "variance_ratio",
+                "jarque_bera"
+              ],
+              "numbers": [
+                "statistic",
+                "df",
+                "df_2",
+                "p_value",
+                "threshold",
+                "value",
+                "count"
+              ],
+              "texts": [
+                "h0",
+                "verdict",
+                "advice",
+                "significance",
+                "rows"
+              ]
+            },
+            "curve": {
+              "levels": [
+                "forecast",
+                "residuals",
+                "qq"
+              ],
+              "numbers": [
+                "observed",
+                "fitted",
+                "forecast",
+                "lower_80",
+                "upper_80",
+                "lower",
+                "upper",
+                "y"
+              ],
+              "texts": []
+            },
+            "point": {
+              "levels": [
+                "qq"
+              ],
+              "numbers": [
+                "y"
+              ],
+              "texts": []
+            },
+            "lag": {
+              "levels": [
+                "acf",
+                "pacf",
+                "resid_acf",
+                "resid_pacf"
+              ],
+              "numbers": [
+                "acf",
+                "pacf",
+                "bound"
+              ],
+              "texts": []
+            },
+            "hist": {
+              "levels": [
+                "residual"
+              ],
+              "numbers": [
+                "count"
+              ],
+              "texts": []
+            },
+            "candidate": {
+              "levels": null,
+              "numbers": [
+                "aicc",
+                "aic",
+                "bic",
+                "converged",
+                "chosen"
+              ],
+              "texts": []
+            }
+          },
+          "charts": [
+            {
+              "id": "forecast",
+              "under": null
+            },
+            {
+              "id": "acf",
+              "under": "stationarity"
+            },
+            {
+              "id": "pacf",
+              "under": "stationarity"
+            },
+            {
+              "id": "resid_acf",
+              "under": "ljung_box_10"
+            },
+            {
+              "id": "resid_pacf",
+              "under": "ljung_box_10"
+            },
+            {
+              "id": "residuals",
+              "under": "arch_lm"
+            },
+            {
+              "id": "residual",
+              "under": "jarque_bera"
+            },
+            {
+              "id": "qq",
+              "under": "jarque_bera"
+            },
+            {
+              "id": "candidates",
+              "under": null
+            }
+          ],
+          "outputs": {
+            "forecast": [
+              "time",
+              "observed",
+              "fitted",
+              "forecast",
+              "lower_80",
+              "upper_80",
+              "lower",
+              "upper",
+              "is_forecast"
+            ]
+          }
+        }
+      ]
+    }
+  ],
+  "predict": {
+    "takes": {
+      "interval": "boolean",
+      "threshold": "proportion",
+      "horizon": "horizon",
+      "at_times": "times"
+    },
+    "defaults": {
+      "interval": false,
+      "threshold": null,
+      "horizon": null,
+      "at_times": []
+    },
+    "applies_to": {
+      "interval": [
+        "linear",
+        "kaplan_meier",
+        "arima"
+      ],
+      "threshold": [
+        "logistic"
+      ],
+      "horizon": [
+        "arima"
+      ],
+      "at_times": [
+        "cox"
+      ]
+    },
+    "columns": {
+      "linear": {
+        "always": [
+          "prediction"
+        ],
+        "interval": [
+          "prediction_low",
+          "prediction_high"
+        ]
+      },
+      "logistic": {
+        "always": [
+          "prediction"
+        ],
+        "threshold": [
+          "prediction_class"
+        ]
+      },
+      "kaplan_meier": {
+        "always": [
+          "prediction"
+        ],
+        "interval": [
+          "prediction_low",
+          "prediction_high"
+        ]
+      },
+      "cox": {
+        "always": [
+          "prediction"
+        ],
+        "at_times": [
+          "survival_at_*"
+        ]
+      },
+      "arima": {
+        "always": [
+          "prediction"
+        ],
+        "interval": [
+          "lower_80",
+          "upper_80",
+          "lower",
+          "upper"
+        ]
+      }
+    }
+  }
+}
