@@ -23,11 +23,11 @@ Development on `main` for the next minor version. The stable line stays 1.4.x
   to a folder (`/?folder=7`) are redirected. New routes: `GET`/`PUT /home`,
   `POST /home/reset`, `/home/favourites`, `/home/next-runs`, `/home/flow-runs`; database
   migration 0043. [The home page](docs/capabilities/home.md), [the spec](docs/specs/home.md).
-- **Hypothesis tests in the flow editor.** A **Statistics** group in the palette holds 18
+- **Hypothesis tests in the flow editor.** A **Statistics** group in the palette holds 21
   tests, one node each, in six families: means (one-sample, two-sample and paired t tests,
   one-way ANOVA classic or Welch), variances (F test, Levene), proportions and categories
   (one and two proportions, chi-square of independence and goodness of fit, Fisher's exact
-  test), correlation (Pearson, Spearman), ranks (Mann–Whitney, Wilcoxon signed-rank,
+  test for 2 × 2 and r × c tables, McNemar and Bowker, Cochran–Mantel–Haenszel, G test), correlation (Pearson, Spearman), ranks (Mann–Whitney, Wilcoxon signed-rank,
   Kruskal–Wallis) and distributions (two-sample Kolmogorov–Smirnov, normality). The
   comparisons between groups come with the test: Tukey's HSD, Games–Howell and a t test per
   pair after an ANOVA, Dunn after Kruskal–Wallis, the cells or the pairs after a chi-square,
@@ -40,7 +40,7 @@ Development on `main` for the next minor version. The stable line stays 1.4.x
   the rows that reach the node, and says so when they come from a development sample.
   The counting passes run in the engine the flow uses, the last step (p-values, quantiles,
   exact distributions) in one module on the aggregates, so every engine gives the same
-  numbers, equal within a relative 1e-9. New operations `stat_<test>` (18); new route
+  numbers, equal within a relative 1e-9. New operations `stat_<test>` (21); new route
   `POST /tasks/stat-report`; saved reports and dashboards do not change; a flow with a test
   cannot be exported to dbt (`op_not_exportable`). [Statistics](docs/capabilities/statistics.md).
 

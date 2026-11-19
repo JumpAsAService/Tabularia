@@ -24,13 +24,13 @@ run history when a number surprises you.
 
 | Engine | id | Operations | Notes |
 |---|---|---|---|
-| DuckDB | `duckdb` | all 38 | Default. Out-of-core SQL, spills to disk. Good for very large joins and aggregations. |
-| Polars | `polars` | all 38 | In-process, lazy, streaming; a group is held in memory, so very large aggregations may need more of it than DuckDB. |
-| chDB | `chdb` | 37 — no `foreach` | Out-of-core SQL, ClickHouse dialect, in-process. |
-| ClickHouse (external) | `clickhouse` | 37 — no `foreach` | Same dialect and operation set as chDB, executed on a remote server. |
-| BigQuery | `bigquery` | 37 — no `foreach`; no `median` inside `pivot` | GoogleSQL over temporary external tables on Google Cloud Storage; results through the Storage Read API. |
+| DuckDB | `duckdb` | all 41 | Default. Out-of-core SQL, spills to disk. Good for very large joins and aggregations. |
+| Polars | `polars` | all 41 | In-process, lazy, streaming; a group is held in memory, so very large aggregations may need more of it than DuckDB. |
+| chDB | `chdb` | 40 — no `foreach` | Out-of-core SQL, ClickHouse dialect, in-process. |
+| ClickHouse (external) | `clickhouse` | 40 — no `foreach` | Same dialect and operation set as chDB, executed on a remote server. |
+| BigQuery | `bigquery` | 40 — no `foreach`; no `median` inside `pivot` | GoogleSQL over temporary external tables on Google Cloud Storage; results through the Storage Read API. |
 
-The count is the 19 transformations and the loop, plus the 18 [statistical tests](../capabilities/statistics.md)
+The count is the 19 transformations and the loop, plus the 21 [statistical tests](../capabilities/statistics.md)
 (`stat_t_two_sample`, `stat_anova`, `stat_chi2_independence`… one operation per test), which run on every
 engine.
 
@@ -88,7 +88,7 @@ own functions are deliberately not used for the result. They split the work in t
   small samples and the curve the report draws. It sees aggregates, never the rows.
 
 Why not in the engine: DuckDB, Polars and BigQuery have no distribution function, and
-ClickHouse has whole tests for only some of the eighteen, with its own approximations. One
+ClickHouse has whole tests for only some of the 21, with its own approximations. One
 implementation of the last step is what makes the answer the same on every engine.
 
 What you may notice:

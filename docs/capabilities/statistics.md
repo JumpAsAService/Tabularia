@@ -8,7 +8,7 @@ results** that the next nodes can use, and a **Report**, a few pages drawn for t
 with its charts and every number needed to redo the computation by hand, that you download
 as PDF or Excel.
 
-There are 18 tests in six families, one node each. The numbers are the same on every
+There are 21 tests in six families, one node each. The numbers are the same on every
 engine, so a flow designed on Polars gives the same results in production on ClickHouse.
 
 ## At a glance

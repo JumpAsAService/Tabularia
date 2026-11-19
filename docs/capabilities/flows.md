@@ -17,7 +17,7 @@ or an email.
 | | |
 |---|---|
 | Where | **Explore** → a folder → **New** → **New flow**, or the **Flows** tab → **New flow**. Both ask for the **Execution engine** first. |
-| What a flow holds | Source nodes, transformations (19 operations plus the **Foreach loop**), 18 statistical tests, Script and Container nodes, Output nodes, notes |
+| What a flow holds | Source nodes, transformations (19 operations plus the **Foreach loop**), 21 statistical tests, Script and Container nodes, Output nodes, notes |
 | What you see | The selected node's first 100 rows as a table, or a chart computed on all its rows |
 | Engines | Polars, DuckDB, chDB, ClickHouse (external), BigQuery: one for the editor, optionally another for production ([Engines](engines.md)) |
 | Permissions | VIEW to open, EDIT to save, RUN to run; publishing and connections need more ([Permissions](#permissions)) |
@@ -136,7 +136,7 @@ them, on the rows that reach it.
 |---|---|
 | **Means** | **One-sample t test**, **Two-sample t test** (Welch or Student), **Paired t test**, **One-way ANOVA** (classic or Welch, with Tukey's HSD, Games–Howell or a t test per pair) |
 | **Variances** | **F test of two variances**, **Levene's test** |
-| **Proportions and categories** | **One-sample proportion**, **Two-sample proportion**, **Chi-square test of independence** (with post-hoc on the cells or the pairs), **Chi-square goodness of fit**, **Fisher's exact test** |
+| **Proportions and categories** | **One-sample proportion**, **Two-sample proportion**, **Chi-square test of independence** (with post-hoc on the cells or the pairs), **Chi-square goodness of fit**, **Fisher's exact test** (2 × 2, or r × c with the Freeman–Halton test), **McNemar's test** (Bowker's on larger tables), **Cochran–Mantel–Haenszel test**, **G test** |
 | **Correlation** | **Pearson's correlation**, **Spearman's correlation** |
 | **Ranks** | **Mann–Whitney test**, **Wilcoxon signed-rank test**, **Kruskal–Wallis test** (with Dunn's comparisons) |
 | **Distributions** | **Two-sample Kolmogorov–Smirnov test**, **Normality test** |

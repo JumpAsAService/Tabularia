@@ -485,8 +485,8 @@ Lineage needs nothing: it works by dataset, and a step neither reads nor writes 
   Combining and reshaping), in the voice of its neighbours:
   `| **Reorder columns** | Puts the listed columns first, in the order you drag them; the others follow. |`
 - `docs/engines/engine-differences.md`: the counts in the table "Operation coverage"
-  (`all 38`, `37 — no foreach`) and the sentence under it ("the 19 transformations and the
-  loop, plus the 18 statistical tests"); a row in "What differs" if the engines differ in
+  (`all 41`, `40 — no foreach`) and the sentence under it ("the 19 transformations and the
+  loop, plus the 21 statistical tests"); a row in "What differs" if the engines differ in
   some way a person can see.
 - The same counts are written in `README.md` and `docs/capabilities/README.md`
   ("19 transformations and a loop"); change them together:
@@ -722,10 +722,10 @@ catalogue (`test_every_test_of_the_catalogue_is_an_operation_with_a_line_of_refe
 - `docs/capabilities/statistics.md`: a paragraph in its family's section,
   `**`stat_pearson`**: ...` with an example on the sample data. The name in backticks is
   what `stat_catalog.py --check` looks for.
-- The number of tests: `git grep -n "18 \(hypothesis \)\?tests\|18 statistical\|Eighteen"`
+- The number of tests: `git grep -n "21 \(hypothesis \)\?tests\|21 statistical\|Twenty-one"`
   finds it in `README.md`, `docs/capabilities/README.md`, `docs/capabilities/flows.md`,
   `docs/capabilities/statistics.md`, `docs/engines/engine-differences.md` and `CHANGELOG.md`;
-  the operation counts in the table "Operation coverage" move with it (`all 38`, `37`).
+  the operation counts in the table "Operation coverage" move with it (`all 41`, `40`).
 - `CHANGELOG.md`, under `## Unreleased`.
 
 ## What CI runs
