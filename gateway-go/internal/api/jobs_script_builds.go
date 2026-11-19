@@ -30,6 +30,7 @@ import (
 	"github.com/JumpAsAService/Tabularia/gateway-go/internal/pyjson"
 	"github.com/JumpAsAService/Tabularia/gateway-go/internal/pystr"
 	"github.com/JumpAsAService/Tabularia/gateway-go/internal/scriptcfg"
+	"github.com/JumpAsAService/Tabularia/gateway-go/internal/scriptimage"
 	"github.com/JumpAsAService/Tabularia/gateway-go/internal/scriptnodes"
 	"github.com/JumpAsAService/Tabularia/gateway-go/internal/settings"
 )
@@ -52,16 +53,9 @@ var (
 	// `uname -m` of the build's node → the kubernetes.io/arch label of the nodes
 	sbArches = map[string]string{"x86_64": "amd64", "amd64": "amd64", "aarch64": "arm64", "arm64": "arm64",
 		"armv7l": "arm", "ppc64le": "ppc64le", "s390x": "s390x"}
-	sbRSystemLibraries = []string{
-		"build-essential", "gfortran", "cmake", "pkg-config", "libcurl4-openssl-dev", "libssl-dev", "libxml2-dev",
-		"zlib1g-dev", "libbz2-dev", "liblzma-dev", "libzstd-dev", "libicu-dev", "libgit2-dev", "libfontconfig1-dev",
-		"libfreetype-dev", "libharfbuzz-dev", "libfribidi-dev", "libpng-dev", "libjpeg-dev", "libtiff-dev",
-	}
-	sbBasePackages = map[string][]string{"python": {"polars", "pyarrow", "marimo"}, "r": {"arrow"}}
-	sbURL          = regexp.MustCompile(`^https?://[^\s"'\\]+\n?$`)
-	sbRegistry     = regexp.MustCompile(`^[a-z0-9]([a-z0-9.:_/-]*[a-z0-9])?\n?$`)
-	sbMemoryParts  = regexp.MustCompile(`^([0-9]+(?:\.[0-9]+)?)([A-Za-z]*)$`)
-	sbBytes        = map[string]float64{"": 1, "K": 1e3, "M": 1e6, "G": 1e9, "T": 1e12,
+	sbRegistry    = regexp.MustCompile(`^[a-z0-9]([a-z0-9.:_/-]*[a-z0-9])?\n?$`)
+	sbMemoryParts = regexp.MustCompile(`^([0-9]+(?:\.[0-9]+)?)([A-Za-z]*)$`)
+	sbBytes       = map[string]float64{"": 1, "K": 1e3, "M": 1e6, "G": 1e9, "T": 1e12,
 		"Ki": 1 << 10, "Mi": 1 << 20, "Gi": 1 << 30, "Ti": 1 << 40}
 	sbLockLine = regexp.MustCompile(`^[A-Za-z0-9][A-Za-z0-9._-]*(==|@)\S+$`)
 	sbDigest   = regexp.MustCompile(`^sha256:[0-9a-f]{64}$`)
@@ -183,46 +177,17 @@ func (b *scriptBuilds) buildJobs() int64 {
 	return max(1, int64(min(sbCores(b.panel.BuildCPU()), compilers)))
 }
 
-func sbHeredoc(path string, lines []string, mark string) string {
-	var sb strings.Builder
-	fmt.Fprintf(&sb, "COPY <<'%s' %s\n", mark, path)
-	for _, x := range lines {
-		sb.WriteString(x + "\n")
-	}
-	return sb.String() + mark + "\n"
-}
-
-// dockerfile is script_builds.dockerfile.
+// dockerfile is script_builds.dockerfile (internal/scriptimage, which cmd/modelgroup reads
+// too).
 func (b *scriptBuilds) dockerfile(language, baseImage string, packages []string) (string, error) {
-	user := fmt.Sprintf("RUN useradd --uid %d --create-home --shell /usr/sbin/nologin tabularia\nUSER %d\nWORKDIR /home/tabularia\n",
-		sbScriptUID, sbScriptUID)
-	wanted := append(append([]string{}, sbBasePackages[language]...), packages...)
-	if language == "python" {
-		index := pyd.Strip(b.s.Scripts.PyPIIndexURL)
-		if index != "" && !sbURL.MatchString(index) {
-			return "", sbValueError("SCRIPTS__PYPI_INDEX_URL is not an http(s) address")
-		}
-		env := "ENV PYTHONUNBUFFERED=1 PYTHONDONTWRITEBYTECODE=1 PIP_DISABLE_PIP_VERSION_CHECK=1 PIP_NO_CACHE_DIR=1"
-		if index != "" {
-			env += ` PIP_INDEX_URL="` + index + `"`
-		}
-		return "FROM " + baseImage + "\n" + env + "\n" +
-			sbHeredoc("/opt/tabularia/requirements.txt", wanted, "TABULARIA_PACKAGES") +
-			fmt.Sprintf("RUN MAKEFLAGS=-j%d pip install -r /opt/tabularia/requirements.txt\n", b.buildJobs()) + user, nil
+	d, err := scriptimage.Dockerfile(language, baseImage, packages, scriptimage.Settings{
+		PyPIIndexURL: b.s.Scripts.PyPIIndexURL, CRANURL: b.s.Scripts.CRANURL, Jobs: b.buildJobs()})
+	var bad scriptimage.ValueError
+	if errors.As(err, &bad) {
+		// a setting that cannot become a Dockerfile fails the version (advance), as before
+		return "", sbValueError(bad)
 	}
-	cran := pyd.Strip(b.s.Scripts.CRANURL)
-	if !sbURL.MatchString(cran) {
-		return "", sbValueError("SCRIPTS__CRAN_URL is not an http(s) address")
-	}
-	// NOT_CRAN and LIBARROW_MINIMAL: arrow, built from source, gets S3 support. rocker's
-	// images point R at a package manager of their own; CRAN replaces it
-	return "FROM " + baseImage + "\nENV NOT_CRAN=true LIBARROW_MINIMAL=false CRAN=\"" + cran + "\"\n" +
-		"RUN apt-get update && apt-get install -y --no-install-recommends " + strings.Join(sbRSystemLibraries, " ") +
-		" && rm -rf /var/lib/apt/lists/*\n" +
-		`RUN printf 'options(repos = c(CRAN = "%s"))\n' "$CRAN" >> "$(R RHOME)/etc/Rprofile.site"` + "\n" +
-		sbHeredoc("/opt/tabularia/packages.txt", wanted, "TABULARIA_PACKAGES") +
-		sbHeredoc("/opt/tabularia/install.R", scriptnodes.SplitLines(sbRInstall), "TABULARIA_INSTALL") +
-		fmt.Sprintf("RUN TABULARIA_JOBS=%d Rscript /opt/tabularia/install.R\n", b.buildJobs()) + user, nil
+	return d, err
 }
 
 // sbShellQuote is shlex.quote.
@@ -761,9 +726,6 @@ func (b *scriptBuilds) loop(ctx context.Context) {
 		}
 	}
 }
-
-// sbRInstall is script_builds._R_INSTALL.
-const sbRInstall = "lines <- trimws(readLines(\"/opt/tabularia/packages.txt\"))\nlines <- lines[nzchar(lines)]\nname <- sub(\"@.*$\", \"\", lines)\npinned <- grepl(\"@\", lines, fixed = TRUE)\n# CRAN has sources only: the packages compile. At most TABULARIA_JOBS compilers at\n# once, whatever the cores of the node (a C++ compiler of arrow takes over 1 GB): a\n# package alone gets them all, packages side by side one each\njobs <- max(1L, suppressWarnings(as.integer(Sys.getenv(\"TABULARIA_JOBS\", \"1\"))), na.rm = TRUE)\nSys.setenv(MAKEFLAGS = paste0(\"-j\", jobs))\n# the pinned ones first: installing the others afterwards does not replace them\nif (any(pinned)) {\n  install.packages(\"remotes\", Ncpus = 1L)\n  for (i in which(pinned)) {\n    remotes::install_version(name[i], version = sub(\"^[^@]*@\", \"\", lines[i]), upgrade = \"never\", Ncpus = 1L)\n  }\n}\n# arrow, the heaviest, alone\nif (!requireNamespace(\"arrow\", quietly = TRUE)) install.packages(\"arrow\", Ncpus = 1L)\nrest <- setdiff(unique(name[!pinned]), \"arrow\")\nSys.setenv(MAKEFLAGS = \"-j1\")\nif (length(rest)) install.packages(rest, Ncpus = jobs)\n# install.packages only warns about a package it could not install\nmissing <- name[!vapply(name, requireNamespace, logical(1), quietly = TRUE)]\nif (length(missing)) stop(\"not installed: \", paste(unique(missing), collapse = \", \"))\n"
 
 // sbPyCheck is script_builds._PY_CHECK.
 const sbPyCheck = "import importlib, importlib.metadata as m, json, signal\nimport polars, pyarrow\nnames = {f\"{d.metadata['Name']}=={d.version}\" for d in m.distributions() if d.metadata['Name']}\nprint('\\n'.join(sorted(names, key=str.lower)))\ndef too_long(*_):\n    raise TimeoutError\nsignal.signal(signal.SIGALRM, too_long)\napi = {}\nfor mod in sorted(x for x in m.packages_distributions() if x.isidentifier() and not x.startswith('_')):\n    signal.alarm(15)  # a module that takes longer to import is left out of the completions\n    api[mod] = []  # listed even when it cannot be imported here: the editor knows it is installed\n    try:\n        api[mod] = sorted(n for n in dir(importlib.import_module(mod)) if not n.startswith('_'))[:400]\n    except BaseException:\n        pass\n    finally:\n        signal.alarm(0)\nprint('TABULARIA_COMPLETIONS ' + json.dumps(api))\n"
