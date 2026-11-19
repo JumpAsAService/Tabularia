@@ -24,11 +24,15 @@ run history when a number surprises you.
 
 | Engine | id | Operations | Notes |
 |---|---|---|---|
-| DuckDB | `duckdb` | all 20 | Default. Out-of-core SQL, spills to disk. Good for very large joins and aggregations. |
-| Polars | `polars` | all 20 | In-process, lazy, streaming; a group is held in memory, so very large aggregations may need more of it than DuckDB. |
-| chDB | `chdb` | 19 — no `foreach` | Out-of-core SQL, ClickHouse dialect, in-process. |
-| ClickHouse (external) | `clickhouse` | 19 — no `foreach` | Same dialect and operation set as chDB, executed on a remote server. |
-| BigQuery | `bigquery` | 19 — no `foreach`; no `median` inside `pivot` | GoogleSQL over temporary external tables on Google Cloud Storage; results through the Storage Read API. |
+| DuckDB | `duckdb` | all 38 | Default. Out-of-core SQL, spills to disk. Good for very large joins and aggregations. |
+| Polars | `polars` | all 38 | In-process, lazy, streaming; a group is held in memory, so very large aggregations may need more of it than DuckDB. |
+| chDB | `chdb` | 37 — no `foreach` | Out-of-core SQL, ClickHouse dialect, in-process. |
+| ClickHouse (external) | `clickhouse` | 37 — no `foreach` | Same dialect and operation set as chDB, executed on a remote server. |
+| BigQuery | `bigquery` | 37 — no `foreach`; no `median` inside `pivot` | GoogleSQL over temporary external tables on Google Cloud Storage; results through the Storage Read API. |
+
+The count is the 19 transformations and the loop, plus the 18 [statistical tests](../capabilities/statistics.md)
+(`stat_t_two_sample`, `stat_anova`, `stat_chi2_independence`… one operation per test), which run on every
+engine.
 
 **There is no silent fallback.** If an engine does not implement an operation, the run
 fails with an explicit message naming the engine and suggesting another one — it does not
@@ -60,6 +64,45 @@ five engines (BigQuery live, against a real project):
 - in a join, a `NULL` key never matches; a missing side is `NULL`, never a default value;
   a non-key column with the same name on the right gets the `_right` suffix;
 - a datetime without timezone is an instant in **UTC**.
+- **statistics**: a hypothesis test gives, on every engine, the same rows: the same
+  texts, the same counts, and every number equal within a relative **1e-9** (tested on a table of
+  5,000 rows with ties, empty values, `NaN`, `-0.0` and a column near 1e9). A row with an empty or
+  `NaN` value in a column the test uses is left out on every engine, and the p-value of a test
+  never depends on the engine (see below).
+
+## Statistics
+
+The [hypothesis tests](../capabilities/statistics.md) are the one place where the engines'
+own functions are deliberately not used for the result. They split the work in two:
+
+- **In the engine**, on the rows and however large the table: the passes that read them
+  (counts, means, variances and covariances, quantiles, rank sums, contingency tables,
+  histograms, the distance between two distribution functions). They are written in each
+  engine's own dialect and read at most one row per group, cell or interval. Means and
+  variances are taken of the values less a centre read first, and the stable forms of
+  ClickHouse's variance (`varSampStable`) are used, so that a column near 1e9 gives the same
+  variance everywhere.
+- **In Tabularia's worker**, in one Python module that uses only the standard library,
+  **from those numbers to the result**: the statistic, the degrees of freedom, the p-value, the
+  critical values, the intervals, the comparisons between pairs, the exact distributions of
+  small samples and the curve the report draws. It sees aggregates, never the rows.
+
+Why not in the engine: DuckDB, Polars and BigQuery have no distribution function, and
+ClickHouse has whole tests for only some of the eighteen, with its own approximations. One
+implementation of the last step is what makes the answer the same on every engine.
+
+What you may notice:
+
+- The functions of an engine that look like these tests (`welchTTest`, `studentTTest`, `mannWhitneyUTest`
+  on ClickHouse) are not used for the result.
+- The p-value is accurate to a relative 1e-12 even with a billion rows; the adjusted p-values of the
+  Tukey and Games–Howell comparisons to an absolute 2e-10, so one below 1e-8 is right in size and
+  not in its digits.
+- The work of a test on a very large table is its aggregation passes, on the engine: the
+  rank tests sort the *distinct* values, and the report's quartiles keep a column's values
+  in the engine's memory. A development sample or a Filter before the test bounds the cost.
+- BigQuery computes a group's quartiles through a window function, because it has no exact
+  quantile aggregate.
 
 ## What differs
 

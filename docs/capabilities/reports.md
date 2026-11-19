@@ -829,6 +829,11 @@ outcome and where it came from: the interface, the API, a notebook or a flow gro
   it again, which takes as long as a render.
 - No subreports and no Word output. A report has no lineage of its own: it writes no
   dataset. Its schedule is that of the flow group that sends it.
+- The report a [statistical test](statistics.md#the-report-tab) shows in the flow editor is
+  drawn by this same engine, with a layout preset per test and three kinds of chart (box plot,
+  interval, density) that only those pages use. For saved reports, the designer and
+  dashboards **nothing changes**: they offer the same 14 kinds of chart, and a test's report
+  cannot be saved as a report or put on a dashboard.
 
 ## Related
 
@@ -841,4 +846,5 @@ outcome and where it came from: the interface, the API, a notebook or a flow gro
   [marimo notebooks](notebooks.md#reports)
 - [SQL scripts](../sql-scripts.md), [Preview and analysis](preview-and-analysis.md)
 - [Date placeholders](../placeholders.md)
+- [Statistics](statistics.md): the report of a hypothesis test, drawn by this engine in the flow editor
 - [Configuration: reports](../configuration.md#reports-1)

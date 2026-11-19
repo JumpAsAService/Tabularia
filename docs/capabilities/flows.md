@@ -17,7 +17,7 @@ or an email.
 | | |
 |---|---|
 | Where | **Explore** → a folder → **New** → **New flow**, or the **Flows** tab → **New flow**. Both ask for the **Execution engine** first. |
-| What a flow holds | Source nodes, transformations (19 operations plus the **Foreach loop**), Script and Container nodes, Output nodes, notes |
+| What a flow holds | Source nodes, transformations (19 operations plus the **Foreach loop**), 18 statistical tests, Script and Container nodes, Output nodes, notes |
 | What you see | The selected node's first 100 rows as a table, or a chart computed on all its rows |
 | Engines | Polars, DuckDB, chDB, ClickHouse (external), BigQuery: one for the editor, optionally another for production ([Engines](engines.md)) |
 | Permissions | VIEW to open, EDIT to save, RUN to run; publishing and connections need more ([Permissions](#permissions)) |
@@ -27,7 +27,8 @@ or an email.
 The editor has five areas:
 
 - **The palette**, on the left, with a search box. Its groups are **Sources**,
-  **Transforms**, **Control** (the **Foreach loop**, **Script** and **Container**),
+  **Transforms**, **Statistics** (the hypothesis tests, a group you open when you need it),
+  **Control** (the **Foreach loop**, **Script** and **Container**),
   **Output** and **Notes**. Drag an item onto the canvas to create the node: a
   transformation dropped on a node becomes its next step, dropped on a connection it
   goes into that connection (both light up under it), dropped on the empty canvas it
@@ -74,7 +75,7 @@ it arrives, like any chain.
 
 ## The node catalogue
 
-Every transformation below is part of the flow's declarative definition and runs on
+Every transformation below (the statistical tests included) is part of the flow's declarative definition and runs on
 every engine, with the exceptions listed in [Engine differences](../engines/engine-differences.md).
 
 ### Sources and outputs
@@ -118,6 +119,30 @@ every engine, with the exceptions listed in [Engine differences](../engines/engi
 | **Union (append rows)** | Appends the right branch's rows: **align by name** (missing columns become null) or **require identical schemas**. Chain several unions to append more sources. |
 | **Pivot (rows→columns)** | Turns the values of a column into columns, aggregated with one function. Column names are the values as text; at most 500 new columns. **Row keys** or **Columns from the values of** may be left empty, not both: with row keys only, one row per key and one column `values` with the aggregate; with columns only, one row whose first column `values` names the measure (`sum(amount)`), then one column per value. A row key named `values` is refused. |
 | **Unpivot (columns→rows)** | Turns columns into a label column and a value column. |
+
+### Statistics
+
+Eighteen hypothesis tests, one node each, in the palette's **Statistics** group, in six
+families: means, variances, proportions and categories, correlation, ranks, distributions.
+Drop one after any step, choose its columns and options, and the step outputs a table of
+results (statistic, degrees of freedom, p-value, confidence interval, effect size, the
+numbers of each group, the comparisons between pairs) that the next nodes read like any
+other data. A **Report** tab beside **Table** and **Chart** shows the test as pages, with
+its charts and every number needed to redo it by hand, downloadable as PDF or Excel. Like
+every transformation, a test runs on every engine and gives the same numbers on all of
+them, on the rows that reach it.
+
+| Family | Nodes |
+|---|---|
+| **Means** | **One-sample t test**, **Two-sample t test** (Welch or Student), **Paired t test**, **One-way ANOVA** (classic or Welch, with Tukey's HSD, Games–Howell or a t test per pair) |
+| **Variances** | **F test of two variances**, **Levene's test** |
+| **Proportions and categories** | **One-sample proportion**, **Two-sample proportion**, **Chi-square test of independence** (with post-hoc on the cells or the pairs), **Chi-square goodness of fit**, **Fisher's exact test** |
+| **Correlation** | **Pearson's correlation**, **Spearman's correlation** |
+| **Ranks** | **Mann–Whitney test**, **Wilcoxon signed-rank test**, **Kruskal–Wallis test** (with Dunn's comparisons) |
+| **Distributions** | **Two-sample Kolmogorov–Smirnov test**, **Normality test** |
+
+Every test, its options, its output and its report are in [Statistics](statistics.md). A
+flow with a statistics node cannot be exported to dbt.
 
 ### Control
 

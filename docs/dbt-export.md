@@ -764,6 +764,12 @@ before a release.
   ClickHouse 24; planning a long chain of steps grows faster than the steps (150 columns ×
   40 steps: about 96 s on 24.8, under dbt-clickhouse's 300 s).
 - `foreach` cannot be exported; `pivot` only in the federated target.
+- **The statistical tests cannot be exported**: a flow with one of the eighteen
+  [statistics](capabilities/statistics.md) nodes (`stat_t_two_sample`, `stat_anova`…) is refused
+  with `op_not_exportable`, the message «The operation «stat_t_two_sample» cannot be exported to dbt».
+  A test ends in a p-value, a quantile or an exact distribution that no SQL model computes the same
+  way on every target, so the export does not guess. Export the flow up to the step before the
+  test, and run the test in Tabularia.
 - A **Script** node (Python or R) is not dbt: an Output that reads what a script writes,
   however far down, cannot be exported, and the export says which. A Script node that
   feeds no exported Output is left out of the project, with a note: Tabularia keeps
